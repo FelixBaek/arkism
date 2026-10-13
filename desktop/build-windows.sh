@@ -62,7 +62,7 @@ GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/arkism.exe" ./cmd/arki
 run ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemType Directory '$REMOTE/stage/integration' | Out-Null\""
 SUPPORT=()
 for f in install_arkism_export_task.ps1 install_arkism_work_task.ps1; do
-  if [ -f "$DIR/../tools/$f" ]; then SUPPORT+=("$DIR/../tools/$f"); else echo "warning: tools/$f not found, skipping" >&2; fi
+  if [[ -f "$DIR/../tools/$f" ]]; then SUPPORT+=("$DIR/../tools/$f"); else echo "warning: tools/$f not found, skipping" >&2; fi
 done
 run scp -q -o BatchMode=yes "$WORK/arkism.exe" ${SUPPORT[@]+"${SUPPORT[@]}"} "$HOST:$REMOTE/stage/integration/"
 
