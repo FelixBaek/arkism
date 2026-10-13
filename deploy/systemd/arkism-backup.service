@@ -1,0 +1,10 @@
+[Unit]
+Description=Arkism encrypted daily backup
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/srv/arkism/config/arkism.env
+ExecStart=/srv/arkism/tools/backup_postgres.sh
+TimeoutStartSec=20min

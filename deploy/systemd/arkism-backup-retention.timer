@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Arkism backup expiration hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=arkism-backup-retention.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,18 @@
+{
+ "id": "mc1",
+ "text": "운영 배포는 사용자가 ./deploy.sh로 실행한다.",
+ "kind": "lesson",
+ "status": "candidate",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-14T05:02:00Z",
+ "updated_at": "2026-10-14T05:02:00Z",
+ "tags": [
+  "event_id:codex:s9"
+ ],
+ "created_by_type": "agent"
+}

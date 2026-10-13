@@ -1,0 +1,408 @@
+[
+ {
+  "name": "models_listing",
+  "method": "GET",
+  "target": "/v1/models",
+  "body": null,
+  "reply": null,
+  "status": 200,
+  "ctype": "application/json",
+  "want": "{\"object\": \"list\", \"data\": [{\"type\": \"model\", \"object\": \"model\", \"id\": \"group/test\", \"display_name\": \"\\ud14c\\uc2a4\\ud2b8\", \"created_at\": \"2026-01-01T00:00:00Z\", \"created\": 1767225600, \"owned_by\": \"group\"}, {\"type\": \"model\", \"object\": \"model\", \"id\": \"custom-x/m\", \"display_name\": \"custom-x/m\", \"created_at\": \"2026-01-01T00:00:00Z\", \"created\": 1767225600, \"owned_by\": \"custom-x\"}, {\"type\": \"model\", \"object\": \"model\", \"id\": \"google/gemini-2.5-pro\", \"display_name\": \"Gemini\", \"created_at\": \"2026-01-01T00:00:00Z\", \"created\": 1767225600, \"owned_by\": \"google\"}], \"has_more\": false, \"first_id\": null, \"last_id\": null}"
+ },
+ {
+  "name": "gemini_listing_page",
+  "method": "GET",
+  "target": "/v1beta/models?pageSize=1",
+  "body": null,
+  "reply": null,
+  "status": 200,
+  "ctype": "application/json",
+  "want": "{\"models\": [{\"name\": \"models/group/test\", \"baseModelId\": \"group/test\", \"displayName\": \"\\ud14c\\uc2a4\\ud2b8\", \"supportedGenerationMethods\": [\"generateContent\"]}], \"nextPageToken\": \"1\"}"
+ },
+ {
+  "name": "gemini_listing_second_page",
+  "method": "GET",
+  "target": "/v1beta/models?pageSize=2&pageToken=1",
+  "body": null,
+  "reply": null,
+  "status": 200,
+  "ctype": "application/json",
+  "want": "{\"models\": [{\"name\": \"models/custom-x/m\", \"baseModelId\": \"custom-x/m\", \"displayName\": \"custom-x/m\", \"supportedGenerationMethods\": [\"generateContent\"]}, {\"name\": \"models/google/gemini-2.5-pro\", \"baseModelId\": \"google/gemini-2.5-pro\", \"displayName\": \"Gemini\", \"supportedGenerationMethods\": [\"generateContent\", \"countTokens\"]}]}"
+ },
+ {
+  "name": "gemini_model_lookup",
+  "method": "GET",
+  "target": "/v1beta/models/custom-x/m",
+  "body": null,
+  "reply": null,
+  "status": 200,
+  "ctype": "application/json",
+  "want": "{\"name\": \"models/custom-x/m\", \"baseModelId\": \"custom-x/m\", \"displayName\": \"custom-x/m\", \"supportedGenerationMethods\": [\"generateContent\"]}"
+ },
+ {
+  "name": "gemini_model_missing",
+  "method": "GET",
+  "target": "/v1beta/models/none/x",
+  "body": null,
+  "reply": null,
+  "status": 404,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"code\": 404, \"message\": \"model_not_found\", \"status\": \"NOT_FOUND\"}}"
+ },
+ {
+  "name": "gemini_listing_bad_query",
+  "method": "GET",
+  "target": "/v1beta/models?bad=1",
+  "body": null,
+  "reply": null,
+  "status": 400,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"code\": 400, \"message\": \"invalid_request\", \"status\": \"INVALID_ARGUMENT\"}}"
+ },
+ {
+  "name": "gemini_unsupported_resource",
+  "method": "GET",
+  "target": "/v1beta/files",
+  "body": null,
+  "reply": null,
+  "status": 501,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"code\": 501, \"message\": \"unsupported_resource\", \"status\": \"UNIMPLEMENTED\"}}"
+ },
+ {
+  "name": "responses_get_unsupported",
+  "method": "GET",
+  "target": "/v1/responses/abc",
+  "body": null,
+  "reply": null,
+  "status": 501,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"message\": \"unsupported_field\", \"type\": \"api_error\", \"param\": null, \"code\": \"unsupported_field\"}}"
+ },
+ {
+  "name": "health_query",
+  "method": "GET",
+  "target": "/healthz?x=1",
+  "body": null,
+  "reply": null,
+  "status": 400,
+  "ctype": "application/json",
+  "want": "{\"error\":\"invalid_request\"}"
+ },
+ {
+  "name": "chat_bad_json",
+  "method": "POST",
+  "target": "/v1/chat/completions",
+  "body": "{",
+  "reply": null,
+  "status": 400,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"message\": \"invalid_request\", \"type\": \"invalid_request_error\", \"param\": null, \"code\": \"invalid_request\"}}"
+ },
+ {
+  "name": "chat_not_object",
+  "method": "POST",
+  "target": "/v1/chat/completions",
+  "body": "[]",
+  "reply": null,
+  "status": 400,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"message\": \"invalid_request\", \"type\": \"invalid_request_error\", \"param\": null, \"code\": \"invalid_request\"}}"
+ },
+ {
+  "name": "chat_text",
+  "method": "POST",
+  "target": "/v1/chat/completions",
+  "body": "{\"model\": \"custom-test/first\", \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}",
+  "reply": {
+   "status": 200,
+   "ctype": "application/json",
+   "data": "{\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [{\"type\": \"text\", \"text\": \"\\uc548\\ub155\\ud558\\uc138\\uc694\"}], \"stop_reason\": \"end_turn\", \"usage\": {\"input_tokens\": 4, \"output_tokens\": 2}}"
+  },
+  "status": 200,
+  "ctype": "application/json",
+  "want": "{\"id\": \"msg_test\", \"object\": \"chat.completion\", \"created\": 1700000000, \"model\": \"custom-test/first\", \"choices\": [{\"index\": 0, \"message\": {\"role\": \"assistant\", \"content\": \"\\uc548\\ub155\\ud558\\uc138\\uc694\"}, \"finish_reason\": \"stop\"}], \"usage\": {\"prompt_tokens\": 4, \"completion_tokens\": 2, \"total_tokens\": 6}}"
+ },
+ {
+  "name": "chat_stream",
+  "method": "POST",
+  "target": "/v1/chat/completions",
+  "body": "{\"model\": \"custom-test/first\", \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stream\": true}",
+  "reply": {
+   "status": 200,
+   "ctype": "text/event-stream",
+   "data": "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [], \"stop_reason\": null, \"usage\": {\"input_tokens\": 4, \"output_tokens\": 0}}}\n\nevent: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"text\", \"text\": \"\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"안녕\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"하세요\"}}\n\nevent: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\nevent: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\"}, \"usage\": {\"output_tokens\": 2}}\n\nevent: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+  },
+  "status": 200,
+  "ctype": "text/event-stream",
+  "want": "data: {\"id\":\"msg_test\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"custom-test/first\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"msg_test\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"custom-test/first\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"안녕\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"msg_test\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"custom-test/first\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"하세요\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"msg_test\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"custom-test/first\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+ },
+ {
+  "name": "chat_stream_usage",
+  "method": "POST",
+  "target": "/v1/chat/completions",
+  "body": "{\"model\": \"custom-test/first\", \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stream\": true, \"stream_options\": {\"include_usage\": true}}",
+  "reply": {
+   "status": 200,
+   "ctype": "text/event-stream",
+   "data": "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [], \"stop_reason\": null, \"usage\": {\"input_tokens\": 4, \"output_tokens\": 0}}}\n\nevent: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"text\", \"text\": \"\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"안녕\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"하세요\"}}\n\nevent: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\nevent: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\"}, \"usage\": {\"output_tokens\": 2}}\n\nevent: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+  },
+  "status": 200,
+  "ctype": "text/event-stream",
+  "want": "data: {\"id\":\"msg_test\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"custom-test/first\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"msg_test\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"custom-test/first\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"안녕\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"msg_test\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"custom-test/first\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"하세요\"},\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"msg_test\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"custom-test/first\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":null}\n\ndata: {\"id\":\"msg_test\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"custom-test/first\",\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":2,\"total_tokens\":6}}\n\ndata: [DONE]\n\n"
+ },
+ {
+  "name": "chat_stream_wrong_type",
+  "method": "POST",
+  "target": "/v1/chat/completions",
+  "body": "{\"model\": \"custom-test/first\", \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stream\": true}",
+  "reply": {
+   "status": 200,
+   "ctype": "application/json",
+   "data": "{\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [{\"type\": \"text\", \"text\": \"\\uc548\\ub155\\ud558\\uc138\\uc694\"}], \"stop_reason\": \"end_turn\", \"usage\": {\"input_tokens\": 4, \"output_tokens\": 2}}"
+  },
+  "status": 502,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"message\": \"upstream_invalid_response\", \"type\": \"api_error\", \"param\": null, \"code\": \"upstream_invalid_response\"}}"
+ },
+ {
+  "name": "chat_upstream_limited",
+  "method": "POST",
+  "target": "/v1/chat/completions",
+  "body": "{\"model\": \"custom-test/first\", \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}",
+  "reply": {
+   "status": 429,
+   "ctype": "application/json",
+   "data": "{\"error\":\"caller-secret host-secret\"}"
+  },
+  "status": 429,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"message\": \"invalid_request\", \"type\": \"rate_limit_error\", \"param\": null, \"code\": \"invalid_request\"}}"
+ },
+ {
+  "name": "chat_upstream_broken",
+  "method": "POST",
+  "target": "/v1/chat/completions",
+  "body": "{\"model\": \"custom-test/first\", \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}",
+  "reply": {
+   "status": 500,
+   "ctype": "application/json",
+   "data": "{\"error\":\"private\"}"
+  },
+  "status": 500,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"message\": \"upstream_error\", \"type\": \"api_error\", \"param\": null, \"code\": \"upstream_error\"}}"
+ },
+ {
+  "name": "chat_group_invalid",
+  "method": "POST",
+  "target": "/v1/chat/completions",
+  "body": "{\"model\": \"group/BAD\", \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}",
+  "reply": null,
+  "status": 400,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"message\": \"invalid_request\", \"type\": \"invalid_request_error\", \"param\": null, \"code\": \"invalid_request\"}}"
+ },
+ {
+  "name": "responses_text",
+  "method": "POST",
+  "target": "/v1/responses",
+  "body": "{\"model\": \"custom-test/first\", \"input\": \"\\uc548\\ub155\", \"store\": false}",
+  "reply": {
+   "status": 200,
+   "ctype": "application/json",
+   "data": "{\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [{\"type\": \"text\", \"text\": \"\\uc548\\ub155\\ud558\\uc138\\uc694\"}], \"stop_reason\": \"end_turn\", \"usage\": {\"input_tokens\": 4, \"output_tokens\": 2}}"
+  },
+  "status": 200,
+  "ctype": "application/json",
+  "want": "{\"parallel_tool_calls\": true, \"tool_choice\": \"auto\", \"tools\": [], \"model\": \"custom-test/first\", \"store\": false, \"id\": \"resp_00000000000000000000000000000001\", \"object\": \"response\", \"created_at\": 1700000000, \"status\": \"completed\", \"error\": null, \"incomplete_details\": null, \"output\": [{\"id\": \"msg_00000000000000000000000000000002\", \"type\": \"message\", \"status\": \"completed\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"\\uc548\\ub155\\ud558\\uc138\\uc694\", \"annotations\": [], \"logprobs\": []}]}], \"usage\": {\"input_tokens\": 4, \"output_tokens\": 2, \"total_tokens\": 6}}"
+ },
+ {
+  "name": "responses_stream",
+  "method": "POST",
+  "target": "/v1/responses",
+  "body": "{\"model\": \"custom-test/first\", \"input\": \"\\uc548\\ub155\", \"store\": false, \"stream\": true}",
+  "reply": {
+   "status": 200,
+   "ctype": "text/event-stream",
+   "data": "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [], \"stop_reason\": null, \"usage\": {\"input_tokens\": 4, \"output_tokens\": 0}}}\n\nevent: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"text\", \"text\": \"\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"안녕\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"하세요\"}}\n\nevent: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\nevent: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\"}, \"usage\": {\"output_tokens\": 2}}\n\nevent: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+  },
+  "status": 200,
+  "ctype": "text/event-stream",
+  "want": "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"parallel_tool_calls\":true,\"tool_choice\":\"auto\",\"tools\":[],\"model\":\"custom-test/first\",\"store\":false,\"id\":\"resp_00000000000000000000000000000001\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"error\":null,\"incomplete_details\":null,\"output\":[],\"usage\":null}}\n\nevent: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"sequence_number\":1,\"response\":{\"parallel_tool_calls\":true,\"tool_choice\":\"auto\",\"tools\":[],\"model\":\"custom-test/first\",\"store\":false,\"id\":\"resp_00000000000000000000000000000001\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"in_progress\",\"error\":null,\"incomplete_details\":null,\"output\":[],\"usage\":null}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"id\":\"msg_00000000000000000000000000000002\",\"type\":\"message\",\"status\":\"in_progress\",\"role\":\"assistant\",\"content\":[]}}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":3,\"item_id\":\"msg_00000000000000000000000000000002\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[],\"logprobs\":[]}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":4,\"item_id\":\"msg_00000000000000000000000000000002\",\"output_index\":0,\"content_index\":0,\"delta\":\"안녕\",\"logprobs\":[]}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":5,\"item_id\":\"msg_00000000000000000000000000000002\",\"output_index\":0,\"content_index\":0,\"delta\":\"하세요\",\"logprobs\":[]}\n\nevent: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":6,\"item_id\":\"msg_00000000000000000000000000000002\",\"output_index\":0,\"content_index\":0,\"text\":\"안녕하세요\",\"logprobs\":[]}\n\nevent: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":7,\"item_id\":\"msg_00000000000000000000000000000002\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"안녕하세요\",\"annotations\":[],\"logprobs\":[]}}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":8,\"output_index\":0,\"item\":{\"id\":\"msg_00000000000000000000000000000002\",\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"안녕하세요\",\"annotations\":[],\"logprobs\":[]}]}}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":9,\"response\":{\"parallel_tool_calls\":true,\"tool_choice\":\"auto\",\"tools\":[],\"model\":\"custom-test/first\",\"store\":false,\"id\":\"resp_00000000000000000000000000000001\",\"object\":\"response\",\"created_at\":1700000000,\"status\":\"completed\",\"error\":null,\"incomplete_details\":null,\"output\":[{\"id\":\"msg_00000000000000000000000000000002\",\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"안녕하세요\",\"annotations\":[],\"logprobs\":[]}]}],\"usage\":{\"input_tokens\":4,\"output_tokens\":2,\"total_tokens\":6}}}\n\n"
+ },
+ {
+  "name": "responses_upstream_limited",
+  "method": "POST",
+  "target": "/v1/responses",
+  "body": "{\"model\": \"custom-test/first\", \"input\": \"\\uc548\\ub155\", \"store\": false}",
+  "reply": {
+   "status": 429,
+   "ctype": "application/json",
+   "data": "{\"error\":\"caller-secret host-secret\"}"
+  },
+  "status": 429,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"message\": \"invalid_request\", \"type\": \"rate_limit_error\", \"param\": null, \"code\": \"invalid_request\"}}"
+ },
+ {
+  "name": "responses_subpath",
+  "method": "POST",
+  "target": "/v1/responses/abc",
+  "body": "{\"model\": \"custom-test/first\", \"input\": \"\\uc548\\ub155\", \"store\": false}",
+  "reply": null,
+  "status": 501,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"message\": \"unsupported_field\", \"type\": \"api_error\", \"param\": null, \"code\": \"unsupported_field\"}}"
+ },
+ {
+  "name": "gemini_generate",
+  "method": "POST",
+  "target": "/v1beta/models/custom-test/first:generateContent",
+  "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc548\\ub155\"}]}]}",
+  "reply": {
+   "status": 200,
+   "ctype": "application/json",
+   "data": "{\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [{\"type\": \"text\", \"text\": \"\\uc548\\ub155\\ud558\\uc138\\uc694\"}], \"stop_reason\": \"end_turn\", \"usage\": {\"input_tokens\": 4, \"output_tokens\": 2}}"
+  },
+  "status": 200,
+  "ctype": "application/json",
+  "want": "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"\\uc548\\ub155\\ud558\\uc138\\uc694\"}]}, \"finishReason\": \"STOP\"}], \"responseId\": \"msg_test\", \"usageMetadata\": {\"promptTokenCount\": 4, \"candidatesTokenCount\": 2, \"totalTokenCount\": 6}}"
+ },
+ {
+  "name": "gemini_stream",
+  "method": "POST",
+  "target": "/v1beta/models/custom-test/first:streamGenerateContent?alt=sse",
+  "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc548\\ub155\"}]}]}",
+  "reply": {
+   "status": 200,
+   "ctype": "text/event-stream",
+   "data": "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [], \"stop_reason\": null, \"usage\": {\"input_tokens\": 4, \"output_tokens\": 0}}}\n\nevent: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"text\", \"text\": \"\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"안녕\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"하세요\"}}\n\nevent: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\nevent: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\"}, \"usage\": {\"output_tokens\": 2}}\n\nevent: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+  },
+  "status": 200,
+  "ctype": "text/event-stream",
+  "want": "data: {\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\"}]}}],\"responseId\":\"msg_test\"}\n\ndata: {\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"안녕\"}]}}],\"responseId\":\"msg_test\"}\n\ndata: {\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"하세요\"}]}}],\"responseId\":\"msg_test\"}\n\ndata: {\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"\"}]},\"finishReason\":\"STOP\"}],\"responseId\":\"msg_test\",\"usageMetadata\":{\"promptTokenCount\":4,\"candidatesTokenCount\":2,\"totalTokenCount\":6}}\n\n"
+ },
+ {
+  "name": "gemini_upstream_broken",
+  "method": "POST",
+  "target": "/v1beta/models/custom-test/first:generateContent",
+  "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc548\\ub155\"}]}]}",
+  "reply": {
+   "status": 500,
+   "ctype": "application/json",
+   "data": "{\"error\":\"private\"}"
+  },
+  "status": 500,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"code\": 500, \"message\": \"upstream_http_500\", \"status\": \"INTERNAL\"}}"
+ },
+ {
+  "name": "gemini_count_not_google",
+  "method": "POST",
+  "target": "/v1beta/models/custom-test/first:countTokens",
+  "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc548\\ub155\"}]}]}",
+  "reply": null,
+  "status": 501,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"code\": 501, \"message\": \"unsupported_method\", \"status\": \"UNIMPLEMENTED\"}}"
+ },
+ {
+  "name": "gemini_wrong_alt",
+  "method": "POST",
+  "target": "/v1beta/models/custom-test/first:streamGenerateContent",
+  "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc548\\ub155\"}]}]}",
+  "reply": null,
+  "status": 400,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"code\": 400, \"message\": \"invalid_request\", \"status\": \"INVALID_ARGUMENT\"}}"
+ },
+ {
+  "name": "gemini_unknown_method",
+  "method": "POST",
+  "target": "/v1beta/models/custom-test/first:embedContent",
+  "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc548\\ub155\"}]}]}",
+  "reply": null,
+  "status": 501,
+  "ctype": "application/json",
+  "want": "{\"error\": {\"code\": 501, \"message\": \"unsupported_method\", \"status\": \"UNIMPLEMENTED\"}}"
+ },
+ {
+  "name": "messages_relay",
+  "method": "POST",
+  "target": "/v1/messages",
+  "body": "{\"model\": \"custom-test/first\", \"max_tokens\": 64, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}",
+  "reply": {
+   "status": 200,
+   "ctype": "application/json",
+   "data": "{\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [{\"type\": \"text\", \"text\": \"\\uc548\\ub155\\ud558\\uc138\\uc694\"}], \"stop_reason\": \"end_turn\", \"usage\": {\"input_tokens\": 4, \"output_tokens\": 2}}"
+  },
+  "status": 200,
+  "ctype": "application/json",
+  "want": "{\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [{\"type\": \"text\", \"text\": \"\\uc548\\ub155\\ud558\\uc138\\uc694\"}], \"stop_reason\": \"end_turn\", \"usage\": {\"input_tokens\": 4, \"output_tokens\": 2}}"
+ },
+ {
+  "name": "messages_relay_stream",
+  "method": "POST",
+  "target": "/v1/messages",
+  "body": "{\"model\": \"custom-test/first\", \"max_tokens\": 64, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stream\": true}",
+  "reply": {
+   "status": 200,
+   "ctype": "text/event-stream",
+   "data": "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [], \"stop_reason\": null, \"usage\": {\"input_tokens\": 4, \"output_tokens\": 0}}}\n\nevent: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"text\", \"text\": \"\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"안녕\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"하세요\"}}\n\nevent: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\nevent: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\"}, \"usage\": {\"output_tokens\": 2}}\n\nevent: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+  },
+  "status": 200,
+  "ctype": "text/event-stream",
+  "want": "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_test\", \"type\": \"message\", \"role\": \"assistant\", \"model\": \"upstream\", \"content\": [], \"stop_reason\": null, \"usage\": {\"input_tokens\": 4, \"output_tokens\": 0}}}\n\nevent: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"text\", \"text\": \"\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"안녕\"}}\n\nevent: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"하세요\"}}\n\nevent: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\nevent: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\"}, \"usage\": {\"output_tokens\": 2}}\n\nevent: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+ },
+ {
+  "name": "messages_response_format",
+  "method": "POST",
+  "target": "/v1/messages",
+  "body": "{\"model\": \"custom-test/first\", \"max_tokens\": 64, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"response_format\": {\"type\": \"text\"}}",
+  "reply": null,
+  "status": 400,
+  "ctype": "application/json",
+  "want": "{\"type\": \"error\", \"error\": {\"type\": \"api_error\", \"message\": \"unsupported_field\"}}"
+ },
+ {
+  "name": "messages_group_bad_id",
+  "method": "POST",
+  "target": "/v1/messages",
+  "body": "{\"model\": \"group/BAD\", \"max_tokens\": 64, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}",
+  "reply": null,
+  "status": 400,
+  "ctype": "application/json",
+  "want": "{\"type\": \"error\", \"error\": {\"type\": \"api_error\", \"message\": \"invalid_group\"}}"
+ },
+ {
+  "name": "messages_group_no_task",
+  "method": "POST",
+  "target": "/v1/messages",
+  "body": "{\"model\": \"group/test\", \"max_tokens\": 64, \"messages\": [{\"role\": \"assistant\", \"content\": \"x\"}]}",
+  "reply": null,
+  "status": 400,
+  "ctype": "application/json",
+  "want": "{\"type\": \"error\", \"error\": {\"type\": \"api_error\", \"message\": \"group_task_missing\"}}"
+ },
+ {
+  "name": "messages_count_custom",
+  "method": "POST",
+  "target": "/v1/messages/count_tokens",
+  "body": "{\"model\": \"custom-test/first\", \"max_tokens\": 64, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}",
+  "reply": null,
+  "status": 200,
+  "ctype": "application/json",
+  "want": "{\"input_tokens\": 26}"
+ },
+ {
+  "name": "messages_oversized_declared",
+  "method": "POST",
+  "target": "/v1/messages",
+  "body": null,
+  "reply": null,
+  "status": 413,
+  "ctype": "application/json",
+  "want": "{\"type\": \"error\", \"error\": {\"type\": \"api_error\", \"message\": \"input_too_large\"}}"
+ }
+]

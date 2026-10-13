@@ -1,0 +1,22 @@
+{
+ "items": [
+  {
+   "id": "skill-old-deploy",
+   "name": "old-deploy",
+   "description": "예전 배포 스크립트를 돌려요.",
+   "source_path": "~/.agents/skills/old-deploy/SKILL.md",
+   "skill_compatibility": {},
+   "updated_at": "2026-09-01T00:00:00Z"
+  },
+  {
+   "id": "skill-legacy-docs",
+   "name": "legacy-docs",
+   "description": "옛 문서 형식으로 써요.",
+   "source_path": "~/.agents/skills/legacy-docs/SKILL.md",
+   "skill_compatibility": {
+    "codex": "unsupported"
+   },
+   "updated_at": "2026-08-20T00:00:00Z"
+  }
+ ]
+}

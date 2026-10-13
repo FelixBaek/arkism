@@ -1,0 +1,10 @@
+[Unit]
+Description=Retry Arkism capture spool for %i
+After=network-online.target
+
+[Service]
+Type=oneshot
+UMask=0077
+EnvironmentFile=/srv/arkism/config/capture-%i.env
+ExecStart=/srv/arkism/bin/arkism capture drain --all-work-origins
+TimeoutStartSec=30min

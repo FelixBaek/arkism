@@ -1,0 +1,8 @@
+[Unit]
+Description=Expire stale Arkism candidates
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/srv/arkism/tools/expire_live.sh
+TimeoutStartSec=5min

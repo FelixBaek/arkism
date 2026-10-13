@@ -1,0 +1,36 @@
+{
+ "items": [
+  {
+   "id": "mp1",
+   "revision": 1,
+   "maintenance": {
+    "type": "duplicate",
+    "reason": "more_specific",
+    "keep": {
+     "id": "m1",
+     "revision": 1
+    },
+    "retire": {
+     "id": "m2",
+     "revision": 1
+    }
+   }
+  },
+  {
+   "id": "mp2",
+   "revision": 1,
+   "maintenance": {
+    "type": "contradiction",
+    "reason": "newer_replaces_older",
+    "keep": {
+     "id": "m5",
+     "revision": 2
+    },
+    "retire": {
+     "id": "m4",
+     "revision": 1
+    }
+   }
+  }
+ ]
+}

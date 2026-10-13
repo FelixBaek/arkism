@@ -1,0 +1,41 @@
+# CodeRabbit = AI review of logic, design and intent only.
+# Other jobs belong to other tools, so their overlapping scanners are off here:
+#   security and secrets -> CodeQL, GitHub secret scanning, Dependabot
+#   code quality rules   -> SonarCloud
+#   coverage             -> Codecov
+language: ko-KR
+reviews:
+  profile: chill
+  auto_review:
+    # Stop re-reviewing after a few bot fix commits so CodeRabbit and Gitar cannot loop.
+    auto_pause_after_reviewed_commits: 5
+  poem: false
+  in_progress_fortune: false
+  path_filters:
+    - "!**/Cargo.lock"
+    - "!**/go.sum"
+    - "!desktop/ui/fonts/**"
+    - "!desktop/src-tauri/icons/**"
+  tools:
+    # Security and secrets (CodeQL, secret scanning, Dependabot).
+    gitleaks: {enabled: false}
+    trufflehog: {enabled: false}
+    semgrep: {enabled: false}
+    opengrep: {enabled: false}
+    osvScanner: {enabled: false}
+    trivy: {enabled: false}
+    checkov: {enabled: false}
+    zizmor: {enabled: false}
+    hadolint: {enabled: false}
+    # Rule-based code quality (SonarCloud).
+    eslint: {enabled: false}
+    biome: {enabled: false}
+    oxc: {enabled: false}
+    golangci-lint: {enabled: false}
+    clippy: {enabled: false}
+    stylelint: {enabled: false}
+    htmlhint: {enabled: false}
+    ruff: {enabled: false}
+    pylint: {enabled: false}
+    shellcheck: {enabled: false}
+    actionlint: {enabled: false}

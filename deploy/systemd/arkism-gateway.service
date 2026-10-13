@@ -1,0 +1,23 @@
+[Unit]
+Description=Arkism gateway: Claude Code 1:1 chat on Arkism 라우팅 models
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=%h
+Environment=ARKISM_URL=http://127.0.0.1:8091
+Environment=ARKISM_GATEWAY_LISTEN=127.0.0.1:8099
+# Calls need the x-arkism-gateway-token header (token: ~/.config/arkism/gateway.token, made on
+# first start; install-arkism puts it in Claude Code's ANTHROPIC_CUSTOM_HEADERS). For this one
+# release a call without the header still passes and is counted (/healthz tokenless_calls); rerun
+# install-arkism, then delete this line. A wrong token is refused either way.
+Environment=ARKISM_GATEWAY_TOKEN_OPTIONAL=1
+WorkingDirectory=/srv/arkism
+ExecStart=/srv/arkism/bin/arkism gateway
+# Every Claude Code session on this host goes through it: come back fast.
+Restart=always
+RestartSec=1s
+
+[Install]
+WantedBy=multi-user.target

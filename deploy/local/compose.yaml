@@ -1,0 +1,67 @@
+# Arkism on your own PC: Postgres (pgvector), the API and the worker.
+# Start it with start.sh (macOS/Linux) or start.ps1 (Windows). They create .env (passwords and tokens) on first run.
+name: arkism-local
+
+x-arkism: &arkism
+  image: arkism-local:latest
+  pull_policy: never
+  read_only: true
+  user: "65532:65532"
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  init: true
+  depends_on:
+    db:
+      condition: service_healthy
+
+services:
+  db:
+    image: supabase/postgres:17.6.1.136@sha256:5a4314708484bec672de2c09653a5c01fb1c84a998564ac231b0325e2238ed5b
+    environment:
+      POSTGRES_PASSWORD: ${ARKISM_DB_ADMIN_PASSWORD:?run start.sh or start.ps1 first}
+      POSTGRES_DB: arkism
+    ports:
+      - "127.0.0.1:${ARKISM_DB_PORT:-55491}:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "arkism", "-h", "127.0.0.1"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+    restart: unless-stopped
+
+  # One-shot: creates the schema (and, with another entrypoint, registers tokens).
+  setup:
+    <<: *arkism
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    profiles: [setup]
+    command: ["--init-db"]
+    environment:
+      MEMORY_STORE: postgres
+      MEMORY_DATABASE_URL: postgres://arkism_init:${ARKISM_INIT_PASSWORD:?}@db:5432/arkism?sslmode=disable
+
+  api:
+    <<: *arkism
+    command: ["--listen", "0.0.0.0:8091"]
+    environment: &runtime
+      MEMORY_STORE: postgres
+      MEMORY_DATABASE_URL: postgres://arkism_app:${ARKISM_APP_PASSWORD:?}@db:5432/arkism?sslmode=disable
+      MEMORY_EMBEDDER: none
+      MEMORY_WORKER_TOKEN: ${ARKISM_WORKER_TOKEN:?}
+      MEMORY_CANDIDATE_DAILY_LIMIT: "50"
+    # Only this PC can reach the API.
+    ports:
+      - "127.0.0.1:${ARKISM_API_PORT:-8091}:8091"
+    restart: unless-stopped
+
+  worker:
+    <<: *arkism
+    command: ["--worker"]
+    environment: *runtime
+    restart: unless-stopped
+
+volumes:
+  db:

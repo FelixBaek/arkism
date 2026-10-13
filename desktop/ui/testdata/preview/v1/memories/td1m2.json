@@ -1,0 +1,15 @@
+{
+ "id": "td1m2",
+ "text": "다른 세션 배포가 브랜치 코드를 올린 사고",
+ "kind": "lesson",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-03T05:00:00Z",
+ "updated_at": "2026-10-03T05:00:00Z",
+ "tags": []
+}

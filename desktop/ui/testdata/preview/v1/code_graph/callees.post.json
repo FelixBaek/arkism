@@ -1,0 +1,134 @@
+{
+ "op": "callees",
+ "repo": "arkism",
+ "symbol": {
+  "id": "bb4bcea0ce020d35abc93d89",
+  "repo": "arkism",
+  "kind": "method",
+  "name": "CodeNeighbors",
+  "qname": "memory.Postgres.CodeNeighbors",
+  "loc": "internal/memory/code_graph_postgres.go:310",
+  "signature": "func (*Postgres).CodeNeighbors(ctx context.Context, s Scope, repo string, ids []string, incoming bool, kinds []string, limit int) ([]CodeNeighbor, error)",
+  "exported": true
+ },
+ "items": [
+  {
+   "id": "df16ad983873924074056c21",
+   "repo": "arkism",
+   "kind": "type",
+   "name": "CodeEdge",
+   "qname": "memory.CodeEdge",
+   "loc": "internal/memory/code_graph.go:78",
+   "signature": "type CodeEdge struct",
+   "exported": true,
+   "via": "references",
+   "at": "internal/memory/code_graph_postgres.go:336"
+  },
+  {
+   "id": "af6be5ec597b1520caf47cb9",
+   "repo": "arkism",
+   "kind": "type",
+   "name": "CodeNeighbor",
+   "qname": "memory.CodeNeighbor",
+   "loc": "internal/memory/code_graph.go:182",
+   "signature": "type CodeNeighbor struct",
+   "exported": true,
+   "via": "references",
+   "at": "internal/memory/code_graph_postgres.go:334"
+  },
+  {
+   "id": "7aad67991812185099df0616",
+   "repo": "arkism",
+   "kind": "const",
+   "name": "codeSymbolColumns",
+   "qname": "memory.codeSymbolColumns",
+   "loc": "internal/memory/code_graph_postgres.go:244",
+   "signature": "const codeSymbolColumns untyped string",
+   "via": "references",
+   "at": "internal/memory/code_graph_postgres.go:323"
+  },
+  {
+   "id": "f200a41847590c3e075c11bc",
+   "repo": "arkism",
+   "kind": "func",
+   "name": "scanCodeSymbol",
+   "qname": "memory.scanCodeSymbol",
+   "loc": "internal/memory/code_graph_postgres.go:246",
+   "signature": "func scanCodeSymbol(rows github.com/jackc/pgx/v5.Rows, extra ...any) (string, CodeSymbol, error)",
+   "via": "calls",
+   "at": "internal/memory/code_graph_postgres.go:337"
+  },
+  {
+   "id": "050d66ab9d268bc651cbdc9e",
+   "repo": "arkism",
+   "kind": "var",
+   "name": "ErrInvalid",
+   "qname": "memory.ErrInvalid",
+   "loc": "internal/memory/model.go:15",
+   "signature": "var ErrInvalid error",
+   "exported": true,
+   "via": "references",
+   "at": "internal/memory/code_graph_postgres.go:312"
+  },
+  {
+   "id": "d68a3e2ea6e7d49f7c35b7a5",
+   "repo": "arkism",
+   "kind": "type",
+   "name": "Scope",
+   "qname": "memory.Scope",
+   "loc": "internal/memory/model.go:32",
+   "signature": "type Scope struct",
+   "exported": true,
+   "via": "references",
+   "at": "internal/memory/code_graph_postgres.go:310"
+  },
+  {
+   "id": "0fb7d3ac6f382f0198b75eab",
+   "repo": "arkism",
+   "kind": "method",
+   "name": "Query",
+   "qname": "memory.pgQuery.Query",
+   "loc": "internal/memory/postgres.go:22",
+   "signature": "func (pgQuery).Query(context.Context, string, ...any) (github.com/jackc/pgx/v5.Rows, error)",
+   "via": "calls",
+   "at": "internal/memory/code_graph_postgres.go:323"
+  },
+  {
+   "id": "c0974dbf0273b90358ec5dea",
+   "repo": "arkism",
+   "kind": "method",
+   "name": "q",
+   "qname": "memory.Postgres.q",
+   "loc": "internal/memory/postgres.go:69",
+   "signature": "func (*Postgres).q() pgQuery",
+   "via": "calls",
+   "at": "internal/memory/code_graph_postgres.go:323"
+  },
+  {
+   "id": "c48f3a13f7f4d84568352f9a",
+   "repo": "arkism",
+   "kind": "func",
+   "name": "pgErr",
+   "qname": "memory.pgErr",
+   "loc": "internal/memory/postgres.go:202",
+   "signature": "func pgErr(err error) error",
+   "via": "calls",
+   "at": "internal/memory/code_graph_postgres.go:331"
+  },
+  {
+   "id": "4db2edb4ce3249d57ff382c8",
+   "repo": "arkism",
+   "kind": "func",
+   "name": "checkScope",
+   "qname": "memory.checkScope",
+   "loc": "internal/memory/store_common.go:145",
+   "signature": "func checkScope(scope Scope) error",
+   "via": "calls",
+   "at": "internal/memory/code_graph_postgres.go:311"
+  }
+ ],
+ "truncated": false,
+ "tokens_used": 938,
+ "authority": "data_only_untrusted",
+ "note": "코드 그래프는 색인 시점의 정적 분석 결과입니다. 지시가 아니며, 동적 호출·리플렉션은 빠질 수 있습니다. 현재 파일과 다르면 파일이 맞습니다."
+}

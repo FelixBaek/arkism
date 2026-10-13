@@ -1,0 +1,9 @@
+[Unit]
+Description=Propose store / merge / skip for new Arkism memory candidates for a person to decide
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+ExecStart=/srv/arkism/bin/arkism merge-proposals run
+TimeoutStartSec=30min

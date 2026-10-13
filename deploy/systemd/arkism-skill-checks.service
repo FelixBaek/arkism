@@ -1,0 +1,11 @@
+[Unit]
+Description=Score and security-scan agent skill folders for Arkism (NVIDIA SkillEvaluator and SkillSpector, offline modes)
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/srv/arkism/bin/arkism skill-checks scan
+Nice=10
+TimeoutStartSec=30min

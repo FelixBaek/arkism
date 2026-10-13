@@ -1,0 +1,15 @@
+{
+ "id": "u2",
+ "text": "보고 짧고 쉽게",
+ "kind": "user",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-02T05:00:00Z",
+ "updated_at": "2026-10-02T05:00:00Z",
+ "tags": []
+}

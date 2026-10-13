@@ -1,0 +1,322 @@
+{
+ "items": [
+  {
+   "id": "pr-image-1",
+   "revision": 1,
+   "updated_at": "2026-10-12T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "기억의 결정",
+    "kind": "image",
+    "engine": "comfyui",
+    "tags": [
+     "블로그"
+    ],
+    "prompt": "Fine engraved triangular forms inspired by {주제}, layered edges, divided planes, charcoal black, soft silver and yellow accents, quiet editorial composition.",
+    "images": [
+     "testdata/preview/img/p1.svg"
+    ],
+    "negative": "문자 · 로고 · 강한 그림자",
+    "size": "1024 × 1024",
+    "count": 4,
+    "seed": "무작위",
+    "script_name": "portrait.workflow.json",
+    "script": "{\n  \"3\": {\n    \"class_type\": \"KSampler\",\n    \"inputs\": {\n      \"seed\": \"{seed}\",\n      \"steps\": 28, \"cfg\": 5.5\n    }\n  },\n  \"6\": { \"class_type\": \"CLIPTextEncode\", \"inputs\": { \"text\": \"{prompt}\" } }\n}",
+    "experts": [
+     "$글쓰기",
+     "$앱개발"
+    ]
+   },
+   "created_at": "2026-09-20T09:00:00Z"
+  },
+  {
+   "id": "pr-image-2",
+   "revision": 1,
+   "updated_at": "2026-10-11T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "고요한 지형",
+    "kind": "image",
+    "engine": "gpt",
+    "tags": [
+     "배경"
+    ],
+    "prompt": "Quiet layered terrain drawn as fine triangular lines, charcoal and silver.",
+    "images": [
+     "testdata/preview/img/p2.svg"
+    ],
+    "negative": "",
+    "size": "",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-21T09:00:00Z"
+  },
+  {
+   "id": "pr-image-3",
+   "revision": 1,
+   "updated_at": "2026-10-10T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "겹침의 구조",
+    "kind": "image",
+    "engine": "gpt",
+    "tags": [
+     "일러스트"
+    ],
+    "prompt": "Overlapping translucent triangles, engraved line work, yellow edge light.",
+    "images": [
+     "testdata/preview/img/p3.svg"
+    ],
+    "negative": "",
+    "size": "",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-22T09:00:00Z"
+  },
+  {
+   "id": "pr-image-4",
+   "revision": 1,
+   "updated_at": "2026-10-09T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "삼각형의 질서",
+    "kind": "image",
+    "engine": "gemini",
+    "tags": [
+     "아이콘"
+    ],
+    "prompt": "Sierpinski triangle icon set, thin yellow outline, dark ground.",
+    "images": [
+     "testdata/preview/img/p4.svg"
+    ],
+    "negative": "",
+    "size": "",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-23T09:00:00Z"
+  },
+  {
+   "id": "pr-image-5",
+   "revision": 1,
+   "updated_at": "2026-10-08T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "연결의 매듭",
+    "kind": "image",
+    "engine": "gpt",
+    "tags": [
+     "일러스트"
+    ],
+    "prompt": "Knotted triangular ribbon, fine engraving, editorial calm.",
+    "images": [
+     "testdata/preview/img/p5.svg"
+    ],
+    "negative": "",
+    "size": "",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-24T09:00:00Z"
+  },
+  {
+   "id": "pr-image-6",
+   "revision": 1,
+   "updated_at": "2026-10-07T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "분할의 기록",
+    "kind": "image",
+    "engine": "gpt",
+    "tags": [
+     "배경"
+    ],
+    "prompt": "Three nested triangles as a background pattern, charcoal and silver.",
+    "images": [
+     "testdata/preview/img/p6.svg"
+    ],
+    "negative": "",
+    "size": "",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-25T09:00:00Z"
+  },
+  {
+   "id": "pr-slide-1",
+   "revision": 1,
+   "updated_at": "2026-10-12T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "발표 표지",
+    "kind": "slide",
+    "engine": "claude",
+    "tags": [
+     "표지"
+    ],
+    "prompt": "The beginning. 발표 표지를 {주제}로 만들어 주세요.",
+    "images": [
+     "testdata/preview/img/s1.svg"
+    ],
+    "negative": "",
+    "size": "16:9",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-20T09:00:00Z"
+  },
+  {
+   "id": "pr-slide-2",
+   "revision": 1,
+   "updated_at": "2026-10-11T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "3단 비교",
+    "kind": "slide",
+    "engine": "claude",
+    "tags": [
+     "비교"
+    ],
+    "prompt": "세 가지 관점을 나란히 비교하는 슬라이드를 만들어 주세요.",
+    "images": [
+     "testdata/preview/img/s2.svg"
+    ],
+    "negative": "",
+    "size": "16:9",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-21T09:00:00Z"
+  },
+  {
+   "id": "pr-slide-3",
+   "revision": 1,
+   "updated_at": "2026-10-10T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "로드맵 슬라이드",
+    "kind": "slide",
+    "engine": "claude",
+    "tags": [
+     "로드맵"
+    ],
+    "prompt": "단계별 날짜와 한 줄 설명을 담은 로드맵을 만듭니다. 현재 단계는 진하게 표시합니다. 단계 수: {단계}",
+    "images": [
+     "testdata/preview/img/s3.svg"
+    ],
+    "negative": "",
+    "size": "16:9",
+    "count": 1,
+    "seed": "",
+    "script_name": "make_roadmap.py",
+    "script": "from pptx import Presentation\nprs = Presentation(\"theme.pptx\")\nslide = prs.slides.add_slide(\n    prs.slide_layouts[5]\n)\nslide.shapes.title.text = \"로드맵\"\nprs.save(\"roadmap.pptx\")",
+    "experts": [
+     "$릴리스점검",
+     "$글쓰기"
+    ]
+   },
+   "created_at": "2026-09-22T09:00:00Z"
+  },
+  {
+   "id": "pr-slide-4",
+   "revision": 1,
+   "updated_at": "2026-10-09T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "데이터 차트",
+    "kind": "slide",
+    "engine": "gpt",
+    "tags": [
+     "차트"
+    ],
+    "prompt": "숫자로 보는 이야기 차트 슬라이드.",
+    "images": [
+     "testdata/preview/img/s4.svg"
+    ],
+    "negative": "",
+    "size": "16:9",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-23T09:00:00Z"
+  },
+  {
+   "id": "pr-slide-5",
+   "revision": 1,
+   "updated_at": "2026-10-08T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "팀 소개",
+    "kind": "slide",
+    "engine": "claude",
+    "tags": [
+     "소개"
+    ],
+    "prompt": "팀원을 소개하는 슬라이드.",
+    "images": [
+     "testdata/preview/img/s5.svg"
+    ],
+    "negative": "",
+    "size": "16:9",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-24T09:00:00Z"
+  },
+  {
+   "id": "pr-slide-6",
+   "revision": 1,
+   "updated_at": "2026-10-07T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "마무리 Q&A",
+    "kind": "slide",
+    "engine": "claude",
+    "tags": [
+     "마무리"
+    ],
+    "prompt": "마무리 질문 받기 슬라이드.",
+    "images": [
+     "testdata/preview/img/s6.svg"
+    ],
+    "negative": "",
+    "size": "16:9",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-25T09:00:00Z"
+  }
+ ]
+}

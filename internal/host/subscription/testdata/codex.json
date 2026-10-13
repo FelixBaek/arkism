@@ -1,0 +1,1055 @@
+{
+ "iter": [
+  {
+   "chunks": [
+    {
+     "content": [
+      {
+       "text": "안녕하세요 🌱",
+       "type": "text"
+      }
+     ],
+     "id": "msg_X",
+     "model": "synthetic-model",
+     "role": "assistant",
+     "stop_reason": "end_turn",
+     "stop_sequence": null,
+     "type": "message",
+     "usage": {
+      "input_tokens": 27,
+      "output_tokens": 9
+     }
+    }
+   ],
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": false,
+   "wire": "event: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 0, \"item\": {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"안녕하세요 🌱\", \"annotations\": []}]}}\r\n\r\nevent: response.completed\r\ndata: {\"type\": \"response.completed\", \"response\": {\"status\": \"completed\", \"output\": [], \"usage\": {\"input_tokens\": 27, \"output_tokens\": 9}}}\r\n\r\n"
+  },
+  {
+   "chunks": [
+    {
+     "message": {
+      "content": [],
+      "id": "msg_X",
+      "model": "synthetic-model",
+      "role": "assistant",
+      "stop_reason": null,
+      "stop_sequence": null,
+      "type": "message",
+      "usage": {
+       "input_tokens": 0,
+       "output_tokens": 0
+      }
+     },
+     "type": "message_start"
+    },
+    {
+     "content_block": {
+      "text": "",
+      "type": "text"
+     },
+     "index": 0,
+     "type": "content_block_start"
+    },
+    {
+     "delta": {
+      "text": "안녕하세요 🌱",
+      "type": "text_delta"
+     },
+     "index": 0,
+     "type": "content_block_delta"
+    },
+    {
+     "index": 0,
+     "type": "content_block_stop"
+    },
+    {
+     "delta": {
+      "stop_reason": "end_turn",
+      "stop_sequence": null
+     },
+     "type": "message_delta",
+     "usage": {
+      "input_tokens": 27,
+      "output_tokens": 9
+     }
+    },
+    {
+     "type": "message_stop"
+    }
+   ],
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": true,
+   "wire": "event: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 0, \"item\": {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"안녕하세요 🌱\", \"annotations\": []}]}}\r\n\r\nevent: response.completed\r\ndata: {\"type\": \"response.completed\", \"response\": {\"status\": \"completed\", \"output\": [], \"usage\": {\"input_tokens\": 27, \"output_tokens\": 9}}}\r\n\r\n"
+  },
+  {
+   "chunks": [
+    {
+     "content": [
+      {
+       "text": "안녕 ***",
+       "type": "text"
+      }
+     ],
+     "id": "msg_X",
+     "model": "synthetic-model",
+     "role": "assistant",
+     "stop_reason": "end_turn",
+     "stop_sequence": null,
+     "type": "message",
+     "usage": {
+      "input_tokens": 27,
+      "output_tokens": 9
+     }
+    }
+   ],
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": false,
+   "wire": "event: response.output_text.delta\r\ndata: {\"type\": \"response.output_text.delta\", \"output_index\": 0, \"content_index\": 0, \"delta\": \"안\"}\r\n\r\nevent: response.output_text.delta\r\ndata: {\"type\": \"response.output_text.delta\", \"output_index\": 0, \"content_index\": 0, \"delta\": \"녕 synthetic-oauth-never-print\"}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 0, \"item\": {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"안녕 synthetic-oauth-never-print\", \"annotations\": []}]}}\r\n\r\nevent: response.completed\r\ndata: {\"type\": \"response.completed\", \"response\": {\"status\": \"completed\", \"output\": [], \"usage\": {\"input_tokens\": 27, \"output_tokens\": 9}}}\r\n\r\n"
+  },
+  {
+   "chunks": [
+    {
+     "message": {
+      "content": [],
+      "id": "msg_X",
+      "model": "synthetic-model",
+      "role": "assistant",
+      "stop_reason": null,
+      "stop_sequence": null,
+      "type": "message",
+      "usage": {
+       "input_tokens": 0,
+       "output_tokens": 0
+      }
+     },
+     "type": "message_start"
+    },
+    {
+     "content_block": {
+      "text": "",
+      "type": "text"
+     },
+     "index": 0,
+     "type": "content_block_start"
+    },
+    {
+     "delta": {
+      "text": "안",
+      "type": "text_delta"
+     },
+     "index": 0,
+     "type": "content_block_delta"
+    },
+    {
+     "delta": {
+      "text": "녕 ***",
+      "type": "text_delta"
+     },
+     "index": 0,
+     "type": "content_block_delta"
+    },
+    {
+     "index": 0,
+     "type": "content_block_stop"
+    },
+    {
+     "delta": {
+      "stop_reason": "end_turn",
+      "stop_sequence": null
+     },
+     "type": "message_delta",
+     "usage": {
+      "input_tokens": 27,
+      "output_tokens": 9
+     }
+    },
+    {
+     "type": "message_stop"
+    }
+   ],
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": true,
+   "wire": "event: response.output_text.delta\r\ndata: {\"type\": \"response.output_text.delta\", \"output_index\": 0, \"content_index\": 0, \"delta\": \"안\"}\r\n\r\nevent: response.output_text.delta\r\ndata: {\"type\": \"response.output_text.delta\", \"output_index\": 0, \"content_index\": 0, \"delta\": \"녕 synthetic-oauth-never-print\"}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 0, \"item\": {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"안녕 synthetic-oauth-never-print\", \"annotations\": []}]}}\r\n\r\nevent: response.completed\r\ndata: {\"type\": \"response.completed\", \"response\": {\"status\": \"completed\", \"output\": [], \"usage\": {\"input_tokens\": 27, \"output_tokens\": 9}}}\r\n\r\n"
+  },
+  {
+   "chunks": [
+    {
+     "content": [
+      {
+       "id": "call_1",
+       "input": {
+        "nested": {
+         "a": [
+          1,
+          true
+         ]
+        },
+        "query": "한글"
+       },
+       "name": "lookup",
+       "type": "tool_use"
+      },
+      {
+       "text": "둘",
+       "type": "text"
+      },
+      {
+       "text": "no",
+       "type": "text"
+      }
+     ],
+     "id": "msg_X",
+     "model": "synthetic-model",
+     "role": "assistant",
+     "stop_reason": "tool_use",
+     "stop_sequence": null,
+     "type": "message",
+     "usage": {
+      "input_tokens": 1,
+      "output_tokens": 5,
+      "output_tokens_details": {
+       "reasoning_tokens": 2
+      }
+     }
+    }
+   ],
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": false,
+   "wire": "event: response.output_item.added\r\ndata: {\"type\": \"response.output_item.added\", \"output_index\": 0, \"item\": {\"id\": \"r\", \"type\": \"reasoning\", \"summary\": []}}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 0, \"item\": {\"id\": \"r\", \"type\": \"reasoning\", \"summary\": []}}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 1, \"item\": {\"id\": \"item_call_1\", \"type\": \"function_call\", \"call_id\": \"call_1\", \"name\": \"lookup\", \"arguments\": \"{\\\"query\\\":\\\"한글\\\",\\\"nested\\\":{\\\"a\\\":[1,true]}}\"}}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 2, \"item\": {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"둘\", \"annotations\": []}, {\"type\": \"refusal\", \"refusal\": \"no\"}]}}\r\n\r\nevent: response.completed\r\ndata: {\"type\": \"response.completed\", \"response\": {\"status\": \"completed\", \"output\": [{\"id\": \"r\", \"type\": \"reasoning\", \"summary\": []}, {\"id\": \"item_call_1\", \"type\": \"function_call\", \"call_id\": \"call_1\", \"name\": \"lookup\", \"arguments\": \"{\\\"query\\\":\\\"한글\\\",\\\"nested\\\":{\\\"a\\\":[1,true]}}\"}, {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"둘\", \"annotations\": []}, {\"type\": \"refusal\", \"refusal\": \"no\"}]}], \"usage\": {\"input_tokens\": 1, \"output_tokens\": 5, \"output_tokens_details\": {\"reasoning_tokens\": 2}}}}\r\n\r\n"
+  },
+  {
+   "chunks": [
+    {
+     "message": {
+      "content": [],
+      "id": "msg_X",
+      "model": "synthetic-model",
+      "role": "assistant",
+      "stop_reason": null,
+      "stop_sequence": null,
+      "type": "message",
+      "usage": {
+       "input_tokens": 0,
+       "output_tokens": 0
+      }
+     },
+     "type": "message_start"
+    },
+    {
+     "content_block": {
+      "id": "call_1",
+      "input": {},
+      "name": "lookup",
+      "type": "tool_use"
+     },
+     "index": 0,
+     "type": "content_block_start"
+    },
+    {
+     "delta": {
+      "partial_json": "{\"query\":\"한글\",\"nested\":{\"a\":[1,true]}}",
+      "type": "input_json_delta"
+     },
+     "index": 0,
+     "type": "content_block_delta"
+    },
+    {
+     "index": 0,
+     "type": "content_block_stop"
+    },
+    {
+     "content_block": {
+      "text": "",
+      "type": "text"
+     },
+     "index": 1,
+     "type": "content_block_start"
+    },
+    {
+     "delta": {
+      "text": "둘",
+      "type": "text_delta"
+     },
+     "index": 1,
+     "type": "content_block_delta"
+    },
+    {
+     "index": 1,
+     "type": "content_block_stop"
+    },
+    {
+     "content_block": {
+      "text": "",
+      "type": "text"
+     },
+     "index": 2,
+     "type": "content_block_start"
+    },
+    {
+     "delta": {
+      "text": "no",
+      "type": "text_delta"
+     },
+     "index": 2,
+     "type": "content_block_delta"
+    },
+    {
+     "index": 2,
+     "type": "content_block_stop"
+    },
+    {
+     "delta": {
+      "stop_reason": "tool_use",
+      "stop_sequence": null
+     },
+     "type": "message_delta",
+     "usage": {
+      "input_tokens": 1,
+      "output_tokens": 5,
+      "output_tokens_details": {
+       "reasoning_tokens": 2
+      }
+     }
+    },
+    {
+     "type": "message_stop"
+    }
+   ],
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": true,
+   "wire": "event: response.output_item.added\r\ndata: {\"type\": \"response.output_item.added\", \"output_index\": 0, \"item\": {\"id\": \"r\", \"type\": \"reasoning\", \"summary\": []}}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 0, \"item\": {\"id\": \"r\", \"type\": \"reasoning\", \"summary\": []}}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 1, \"item\": {\"id\": \"item_call_1\", \"type\": \"function_call\", \"call_id\": \"call_1\", \"name\": \"lookup\", \"arguments\": \"{\\\"query\\\":\\\"한글\\\",\\\"nested\\\":{\\\"a\\\":[1,true]}}\"}}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 2, \"item\": {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"둘\", \"annotations\": []}, {\"type\": \"refusal\", \"refusal\": \"no\"}]}}\r\n\r\nevent: response.completed\r\ndata: {\"type\": \"response.completed\", \"response\": {\"status\": \"completed\", \"output\": [{\"id\": \"r\", \"type\": \"reasoning\", \"summary\": []}, {\"id\": \"item_call_1\", \"type\": \"function_call\", \"call_id\": \"call_1\", \"name\": \"lookup\", \"arguments\": \"{\\\"query\\\":\\\"한글\\\",\\\"nested\\\":{\\\"a\\\":[1,true]}}\"}, {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"둘\", \"annotations\": []}, {\"type\": \"refusal\", \"refusal\": \"no\"}]}], \"usage\": {\"input_tokens\": 1, \"output_tokens\": 5, \"output_tokens_details\": {\"reasoning_tokens\": 2}}}}\r\n\r\n"
+  },
+  {
+   "chunks": [
+    {
+     "content": [
+      {
+       "text": "부분",
+       "type": "text"
+      }
+     ],
+     "id": "msg_X",
+     "model": "synthetic-model",
+     "role": "assistant",
+     "stop_reason": "refusal",
+     "stop_sequence": null,
+     "type": "message",
+     "usage": {
+      "input_tokens": 27,
+      "output_tokens": 9
+     }
+    }
+   ],
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": false,
+   "wire": "event: response.output_text.delta\r\ndata: {\"type\": \"response.output_text.delta\", \"output_index\": 0, \"content_index\": 0, \"delta\": \"부분\"}\r\n\r\nevent: response.incomplete\r\ndata: {\"type\": \"response.incomplete\", \"response\": {\"status\": \"incomplete\", \"output\": [{\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"부분\", \"annotations\": []}], \"status\": \"incomplete\"}], \"usage\": {\"input_tokens\": 27, \"output_tokens\": 9}, \"incomplete_details\": {\"reason\": \"content_filter\"}}}\r\n\r\n"
+  },
+  {
+   "chunks": [
+    {
+     "message": {
+      "content": [],
+      "id": "msg_X",
+      "model": "synthetic-model",
+      "role": "assistant",
+      "stop_reason": null,
+      "stop_sequence": null,
+      "type": "message",
+      "usage": {
+       "input_tokens": 0,
+       "output_tokens": 0
+      }
+     },
+     "type": "message_start"
+    },
+    {
+     "content_block": {
+      "text": "",
+      "type": "text"
+     },
+     "index": 0,
+     "type": "content_block_start"
+    },
+    {
+     "delta": {
+      "text": "부분",
+      "type": "text_delta"
+     },
+     "index": 0,
+     "type": "content_block_delta"
+    },
+    {
+     "index": 0,
+     "type": "content_block_stop"
+    },
+    {
+     "delta": {
+      "stop_reason": "refusal",
+      "stop_sequence": null
+     },
+     "type": "message_delta",
+     "usage": {
+      "input_tokens": 27,
+      "output_tokens": 9
+     }
+    },
+    {
+     "type": "message_stop"
+    }
+   ],
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": true,
+   "wire": "event: response.output_text.delta\r\ndata: {\"type\": \"response.output_text.delta\", \"output_index\": 0, \"content_index\": 0, \"delta\": \"부분\"}\r\n\r\nevent: response.incomplete\r\ndata: {\"type\": \"response.incomplete\", \"response\": {\"status\": \"incomplete\", \"output\": [{\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"부분\", \"annotations\": []}], \"status\": \"incomplete\"}], \"usage\": {\"input_tokens\": 27, \"output_tokens\": 9}, \"incomplete_details\": {\"reason\": \"content_filter\"}}}\r\n\r\n"
+  },
+  {
+   "chunks": [],
+   "error": "upstream_protocol",
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": false,
+   "wire": "event: response.output_text.delta\r\ndata: {\"type\": \"response.output_text.delta\", \"output_index\": 0, \"content_index\": 0, \"delta\": \"x\"}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 0, \"item\": {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"y\", \"annotations\": []}]}}\r\n\r\n"
+  },
+  {
+   "chunks": [
+    {
+     "message": {
+      "content": [],
+      "id": "msg_X",
+      "model": "synthetic-model",
+      "role": "assistant",
+      "stop_reason": null,
+      "stop_sequence": null,
+      "type": "message",
+      "usage": {
+       "input_tokens": 0,
+       "output_tokens": 0
+      }
+     },
+     "type": "message_start"
+    },
+    {
+     "content_block": {
+      "text": "",
+      "type": "text"
+     },
+     "index": 0,
+     "type": "content_block_start"
+    },
+    {
+     "delta": {
+      "text": "x",
+      "type": "text_delta"
+     },
+     "index": 0,
+     "type": "content_block_delta"
+    }
+   ],
+   "error": "upstream_protocol",
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": true,
+   "wire": "event: response.output_text.delta\r\ndata: {\"type\": \"response.output_text.delta\", \"output_index\": 0, \"content_index\": 0, \"delta\": \"x\"}\r\n\r\nevent: response.output_item.done\r\ndata: {\"type\": \"response.output_item.done\", \"output_index\": 0, \"item\": {\"id\": \"item_text\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [{\"type\": \"output_text\", \"text\": \"y\", \"annotations\": []}]}}\r\n\r\n"
+  },
+  {
+   "chunks": [],
+   "error": "upstream_protocol",
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": false,
+   "wire": "event: response.completed\r\ndata: {\"type\": \"response.completed\", \"response\": {\"status\": \"completed\", \"output\": [{\"id\": \"item_call_1\", \"type\": \"function_call\", \"call_id\": \"call_1\", \"name\": \"lookup\", \"arguments\": \"[]\"}], \"usage\": {\"input_tokens\": 27, \"output_tokens\": 9}}}\r\n\r\n"
+  },
+  {
+   "chunks": [],
+   "error": "upstream_protocol",
+   "request": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "synthetic-model",
+    "store": false,
+    "stream": true
+   },
+   "stream": true,
+   "wire": "event: response.completed\r\ndata: {\"type\": \"response.completed\", \"response\": {\"status\": \"completed\", \"output\": [{\"id\": \"item_call_1\", \"type\": \"function_call\", \"call_id\": \"call_1\", \"name\": \"lookup\", \"arguments\": \"[]\"}], \"usage\": {\"input_tokens\": 27, \"output_tokens\": 9}}}\r\n\r\n"
+  }
+ ],
+ "translate": [
+  {
+   "in": {
+    "max_tokens": 100,
+    "messages": [
+     {
+      "content": "안녕",
+      "role": "user"
+     },
+     {
+      "content": [
+       {
+        "text": "a",
+        "type": "text"
+       },
+       {
+        "text": "b",
+        "type": "text"
+       },
+       {
+        "id": "c1",
+        "input": {
+         "a": [
+          1.5,
+          null,
+          "한"
+         ],
+         "z": 1
+        },
+        "name": "lookup",
+        "type": "tool_use"
+       }
+      ],
+      "role": "assistant"
+     },
+     {
+      "content": [
+       {
+        "content": [
+         {
+          "text": "r",
+          "type": "text"
+         },
+         {
+          "source": {
+           "data": "eHl6",
+           "media_type": "image/png",
+           "type": "base64"
+          },
+          "type": "image"
+         }
+        ],
+        "is_error": true,
+        "tool_use_id": "c1",
+        "type": "tool_result"
+       },
+       {
+        "text": "x",
+        "type": "text"
+       },
+       {
+        "source": {
+         "data": "eHl6",
+         "media_type": "image/png",
+         "type": "base64"
+        },
+        "type": "image"
+       },
+       {
+        "cache_control": {
+         "type": "ephemeral"
+        },
+        "text": "y",
+        "type": "text"
+       }
+      ],
+      "role": "user"
+     },
+     {
+      "content": "next",
+      "role": "user"
+     }
+    ],
+    "metadata": {
+     "user_id": "u"
+    },
+    "model": "openai/synthetic-model",
+    "stream": false,
+    "system": [
+     {
+      "text": "one <&>",
+      "type": "text"
+     },
+     {
+      "text": "two",
+      "type": "text"
+     }
+    ],
+    "tool_choice": {
+     "disable_parallel_tool_use": false,
+     "name": "lookup",
+     "type": "tool"
+    },
+    "tools": [
+     {
+      "description": "d",
+      "input_schema": {
+       "type": "object"
+      },
+      "name": "lookup"
+     },
+     {
+      "input_schema": {},
+      "name": "other"
+     }
+    ]
+   },
+   "model": "m",
+   "out": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     },
+     {
+      "content": [
+       {
+        "text": "a",
+        "type": "output_text"
+       },
+       {
+        "text": "b",
+        "type": "output_text"
+       }
+      ],
+      "role": "assistant",
+      "type": "message"
+     },
+     {
+      "arguments": "{\"z\":1,\"a\":[1.5,null,\"한\"]}",
+      "call_id": "c1",
+      "name": "lookup",
+      "type": "function_call"
+     },
+     {
+      "call_id": "c1",
+      "output": [
+       {
+        "text": "[tool_result is_error=true]",
+        "type": "input_text"
+       },
+       {
+        "text": "r",
+        "type": "input_text"
+       },
+       {
+        "image_url": "data:image/png;base64,eHl6",
+        "type": "input_image"
+       }
+      ],
+      "type": "function_call_output"
+     },
+     {
+      "content": [
+       {
+        "text": "x",
+        "type": "input_text"
+       },
+       {
+        "image_url": "data:image/png;base64,eHl6",
+        "type": "input_image"
+       },
+       {
+        "text": "y",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     },
+     {
+      "content": [
+       {
+        "text": "next",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "one <&>\ntwo",
+    "model": "m",
+    "parallel_tool_calls": true,
+    "store": false,
+    "stream": true,
+    "tool_choice": {
+     "name": "lookup",
+     "type": "function"
+    },
+    "tools": [
+     {
+      "description": "d",
+      "name": "lookup",
+      "parameters": {
+       "type": "object"
+      },
+      "strict": false,
+      "type": "function"
+     },
+     {
+      "description": "",
+      "name": "other",
+      "parameters": {},
+      "strict": false,
+      "type": "function"
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "max_tokens": 100,
+    "messages": [
+     {
+      "content": "안녕",
+      "role": "user"
+     }
+    ],
+    "model": "openai/synthetic-model",
+    "stream": false,
+    "system": "plain"
+   },
+   "model": "m",
+   "out": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "plain",
+    "model": "m",
+    "store": false,
+    "stream": true
+   }
+  },
+  {
+   "in": {
+    "max_tokens": 100,
+    "messages": [
+     {
+      "content": "안녕",
+      "role": "user"
+     }
+    ],
+    "model": "openai/synthetic-model",
+    "stream": false,
+    "tool_choice": {
+     "type": "auto"
+    },
+    "tools": []
+   },
+   "model": "m",
+   "out": {
+    "input": [
+     {
+      "content": [
+       {
+        "text": "안녕",
+        "type": "input_text"
+       }
+      ],
+      "role": "user",
+      "type": "message"
+     }
+    ],
+    "instructions": "",
+    "model": "m",
+    "store": false,
+    "stream": true,
+    "tool_choice": "auto"
+   }
+  },
+  {
+   "error": "invalid_request",
+   "in": {
+    "max_tokens": 100,
+    "messages": [
+     {
+      "content": "안녕",
+      "role": "user"
+     }
+    ],
+    "model": "openai/synthetic-model",
+    "stream": false,
+    "tool_choice": {
+     "name": [
+      "x"
+     ],
+     "type": "tool"
+    },
+    "tools": [
+     {
+      "input_schema": {},
+      "name": "f"
+     }
+    ]
+   },
+   "model": "m"
+  },
+  {
+   "error": "unsupported_request",
+   "in": {
+    "max_tokens": 100,
+    "messages": [
+     {
+      "content": "안녕",
+      "role": "user"
+     }
+    ],
+    "model": "openai/synthetic-model",
+    "stream": false,
+    "tool_choice": {
+     "name": 3,
+     "type": "tool"
+    },
+    "tools": [
+     {
+      "input_schema": {},
+      "name": "f"
+     }
+    ]
+   },
+   "model": "m"
+  },
+  {
+   "error": "invalid_request",
+   "in": {
+    "max_tokens": 1.0,
+    "messages": [
+     {
+      "content": "안녕",
+      "role": "user"
+     }
+    ],
+    "model": "openai/synthetic-model",
+    "stream": false
+   },
+   "model": "m"
+  },
+  {
+   "error": "invalid_request",
+   "in": {
+    "max_tokens": 100,
+    "messages": [
+     {
+      "content": [
+       {
+        "text": 3,
+        "type": "text"
+       }
+      ],
+      "role": "user"
+     }
+    ],
+    "model": "openai/synthetic-model",
+    "stream": false
+   },
+   "model": "m"
+  }
+ ]
+}

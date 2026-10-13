@@ -1,0 +1,36 @@
+{
+  "services": {
+    "api": {
+      "environment": {
+        "MEMORY_BLOB_DIRECTORY": "/var/lib/arkism/blobs"
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "${MEMORY_BLOB_HOST_ROOT:?set an absolute private storage parent}/${MEMORY_ENV:?select dev, test or prod}",
+          "target": "/var/lib/arkism/blobs",
+          "read_only": false,
+          "bind": {
+            "create_host_path": false
+          }
+        }
+      ]
+    },
+    "worker": {
+      "environment": {
+        "MEMORY_BLOB_DIRECTORY": "/var/lib/arkism/blobs"
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "${MEMORY_BLOB_HOST_ROOT:?set an absolute private storage parent}/${MEMORY_ENV:?select dev, test or prod}",
+          "target": "/var/lib/arkism/blobs",
+          "read_only": false,
+          "bind": {
+            "create_host_path": false
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,25 @@
+[Unit]
+Description=Connect Arkism Discord bots (team meetings, agent answers, workflow runs in threads)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=%h
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=ARKISM_URL=http://127.0.0.1:8091
+# Service token with read/write on crew, crew_meetings, crew_runs, crew_assists and handoff:discord.
+Environment=ARKISM_DISCORD_TOKEN_FILE=/srv/arkism/config/discord.token
+# Bot tokens go to the OS keyring (service "arkism-discord"); without a session bus they fall back to this 0600 file.
+Environment=ARKISM_DISCORD_TOKENS=%h/.config/arkism/discord-tokens.json
+WorkingDirectory=/srv/arkism
+# Build: go build -o /srv/arkism/bin/arkism ./cmd/arkism
+ExecStart=/srv/arkism/bin/arkism discord run
+Restart=on-failure
+RestartSec=10s
+KillMode=mixed
+TimeoutStopSec=20s
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

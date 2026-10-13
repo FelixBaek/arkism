@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Build and test output
+/bin/
+/memoryd
+/arkism-crew
+/memory-principal
+go-coverage.out
+coverage.xml
+.coverage
+.scannerwork/
+*.log
+
+# Secrets and per-machine settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.token
+desktop/local.env
+
+# Local data and run output
+/data/
+/local/
+
+# Local-only working notes: docs/ is ours only (public guides live in guide/)
+/docs/
+/DESIGN.md
+/PRODUCT.md
+/AGENTS.md
+/CLAUDE.md
+/.arkism/
+/.impeccable/
+
+# build outputs
+target/
+desktop/dist/
+ui-lcov.info

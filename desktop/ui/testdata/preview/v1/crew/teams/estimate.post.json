@@ -1,0 +1,6 @@
+{
+ "tokens": 60000,
+ "cost_usd": 0.5,
+ "minutes_min": 3,
+ "minutes_max": 5
+}

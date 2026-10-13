@@ -1,0 +1,78 @@
+[
+ {
+  "in": "C:\\Users\\User\\Project",
+  "out": "c:\\users\\user\\project"
+ },
+ {
+  "in": "c:/users/user/project",
+  "out": "c:\\users\\user\\project"
+ },
+ {
+  "in": "C:\\a\\..\\B\\.\\c\\\\",
+  "out": "c:\\b\\c"
+ },
+ {
+  "in": "C:/",
+  "out": "c:\\"
+ },
+ {
+  "in": "C:",
+  "out": "work_pc_folder_invalid"
+ },
+ {
+  "in": "C:rel",
+  "out": "work_pc_folder_invalid"
+ },
+ {
+  "in": "\\\\Server\\Share\\Dir\\..\\X",
+  "out": "\\\\server\\share\\x"
+ },
+ {
+  "in": "\\\\server",
+  "out": "\\\\server"
+ },
+ {
+  "in": "\\rooted",
+  "out": "work_pc_folder_invalid"
+ },
+ {
+  "in": "/home/u/proj/",
+  "out": "/home/u/proj"
+ },
+ {
+  "in": "/a/./b/../c",
+  "out": "/a/c"
+ },
+ {
+  "in": "//net/x",
+  "out": "\\\\net\\x"
+ },
+ {
+  "in": "///x//y",
+  "out": "\\\\\\x\\y"
+ },
+ {
+  "in": "relative",
+  "out": "work_pc_folder_invalid"
+ },
+ {
+  "in": "",
+  "out": "work_pc_folder_invalid"
+ },
+ {
+  "in": "D:\\..\\..\\x",
+  "out": "d:\\x"
+ },
+ {
+  "in": "Z:/한글/폴더",
+  "out": "z:\\한글\\폴더"
+ },
+ {
+  "in": "\\\\?\\UNC\\srv\\sh\\p",
+  "out": "\\\\?\\unc\\srv\\sh\\p"
+ },
+ {
+  "in": "\\\\?\\C:\\x\\..\\y",
+  "out": "\\\\?\\c:\\y"
+ }
+]

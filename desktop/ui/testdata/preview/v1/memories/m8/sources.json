@@ -1,0 +1,15 @@
+{
+ "authority": "data_only_untrusted",
+ "memory": {
+  "id": "m8",
+  "revision": 1
+ },
+ "sources": [
+  {
+   "origin_product": "claude_code",
+   "collected_at": "2026-10-10T13:16:34.299802Z",
+   "excerpt": "Orbit 로컬 개발 서버는 Node 20 이상에서 pnpm dev로 띄운다.",
+   "archive_messages": []
+  }
+ ]
+}

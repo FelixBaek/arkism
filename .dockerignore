@@ -1,0 +1,10 @@
+**
+!go.mod
+!go.sum
+!cmd/
+!cmd/memoryd/
+!cmd/memoryd/*.go
+!internal/
+!internal/memory/
+!internal/memory/*.go
+**/*_test.go

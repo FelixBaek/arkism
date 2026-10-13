@@ -1,0 +1,9 @@
+[Unit]
+Description=Look for memory merge proposals every night
+
+[Timer]
+OnCalendar=*-*-* 04:40:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

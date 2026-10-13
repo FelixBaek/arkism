@@ -1,0 +1,15 @@
+{
+ "id": "td1m3",
+ "text": "롤백은 rollback.sh로 한다",
+ "kind": "procedural",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-11T05:00:00Z",
+ "updated_at": "2026-10-11T05:00:00Z",
+ "tags": []
+}

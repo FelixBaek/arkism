@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Arkism backup daily at 03:30 KST
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+Unit=arkism-backup.service
+
+[Install]
+WantedBy=timers.target

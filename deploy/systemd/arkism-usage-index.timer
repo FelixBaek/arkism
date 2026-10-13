@@ -1,0 +1,9 @@
+[Unit]
+Description=Count agent session usage every minute (only changed files are read again)
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+
+[Install]
+WantedBy=timers.target

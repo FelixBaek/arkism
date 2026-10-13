@@ -1,0 +1,9 @@
+[Unit]
+Description=Propose Arkism memory cleanups (same meaning or contradiction) for a person to decide
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+ExecStart=/srv/arkism/bin/arkism maintain run
+TimeoutStartSec=30min

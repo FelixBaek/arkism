@@ -1,0 +1,95 @@
+{
+ "authority": "data_only_untrusted",
+ "items": [
+  {
+   "id": "claude-opus-5-5",
+   "name": "Claude Opus 5.5",
+   "family": "CLAUDE",
+   "provider": "Anthropic",
+   "enabled": true,
+   "order": 1,
+   "when": "규칙에 안 걸린 것",
+   "rpm_limit": 60,
+   "concurrency": 4,
+   "revision": 3,
+   "connection": {
+    "state": "ok"
+   }
+  },
+  {
+   "id": "claude-sonnet-5-5",
+   "name": "Claude Sonnet 5.5",
+   "family": "CLAUDE",
+   "provider": "Anthropic",
+   "enabled": true,
+   "order": 2,
+   "when": "빌드·코딩",
+   "rpm_limit": 60,
+   "concurrency": 4,
+   "revision": 3,
+   "connection": {
+    "state": "ok"
+   }
+  },
+  {
+   "id": "gpt-5-5",
+   "name": "GPT-5.5",
+   "family": "GPT",
+   "provider": "OpenAI",
+   "enabled": true,
+   "order": 3,
+   "when": "빠른 질문",
+   "rpm_limit": 60,
+   "concurrency": 4,
+   "revision": 3,
+   "connection": {
+    "state": "ok"
+   }
+  },
+  {
+   "id": "glm-5",
+   "name": "GLM-5",
+   "family": "GLM",
+   "provider": "Z.ai",
+   "enabled": true,
+   "order": 4,
+   "when": "테스트 쓰고 고치기",
+   "rpm_limit": 60,
+   "concurrency": 4,
+   "revision": 3,
+   "connection": {
+    "state": "watch"
+   }
+  },
+  {
+   "id": "qwen3-coder",
+   "name": "Qwen3 Coder",
+   "family": "QWEN",
+   "provider": "Alibaba Cloud",
+   "enabled": true,
+   "order": 5,
+   "when": "diff 검토",
+   "rpm_limit": 60,
+   "concurrency": 4,
+   "revision": 3,
+   "connection": {
+    "state": "ok"
+   }
+  },
+  {
+   "id": "gemini-3-pro",
+   "name": "Gemini 3 Pro",
+   "family": "GEMINI",
+   "provider": "Google",
+   "enabled": false,
+   "order": 6,
+   "when": "",
+   "rpm_limit": 60,
+   "concurrency": 4,
+   "revision": 3,
+   "connection": {
+    "state": "ok"
+   }
+  }
+ ]
+}

@@ -1,0 +1,9 @@
+[Unit]
+Description=Propose Arkism topic and user summaries (from approved memories) for a person to approve
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+ExecStart=/srv/arkism/bin/arkism digests run
+TimeoutStartSec=30min

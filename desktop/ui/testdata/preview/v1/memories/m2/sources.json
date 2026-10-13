@@ -1,0 +1,15 @@
+{
+ "authority": "data_only_untrusted",
+ "memory": {
+  "id": "m2",
+  "revision": 1
+ },
+ "sources": [
+  {
+   "origin_product": "claude_code",
+   "collected_at": "2026-10-13T10:16:34.299802Z",
+   "excerpt": "Orbit PR은 설명을 짧게 쓰고, 리뷰 승인 한 번이면 스쿼시 병합한다.",
+   "archive_messages": []
+  }
+ ]
+}

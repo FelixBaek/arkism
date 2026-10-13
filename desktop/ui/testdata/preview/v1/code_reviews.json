@@ -1,0 +1,294 @@
+{
+ "code_reviews": {
+  "collected_at": "2026-10-13T13:25:25Z",
+  "repos": [
+   {
+    "name": "acme/arkism",
+    "prs": 3
+   },
+   {
+    "name": "acme/notes-app",
+    "prs": 2
+   },
+   {
+    "name": "acme/orbit-design",
+    "prs": 0
+   }
+  ],
+  "settings": {
+   "provider": "codex",
+   "on_blocking": "block",
+   "repos_off": [
+    "acme/orbit-design"
+   ]
+  },
+  "items": [
+   {
+    "repo": "acme/notes-app",
+    "number": 13,
+    "title": "fix(ui): 탐색 폴더 펼침 상태를 새로고침 후에도 유지",
+    "branch": "claude/project-thread-8q2x",
+    "base": "main",
+    "head_sha": "a1b2c3d4e5",
+    "state": "running",
+    "pr_state": "open",
+    "started_at": "2026-10-13T13:29:25Z",
+    "model": "codex / gpt-6.1-sol",
+    "steps": [
+     {
+      "name": "runner",
+      "status": "success",
+      "started_at": "2026-10-13T13:29:25Z",
+      "finished_at": "2026-10-13T13:29:25Z"
+     },
+     {
+      "name": "quality",
+      "status": "success"
+     },
+     {
+      "name": "ai",
+      "status": "running"
+     },
+     {
+      "name": "comment",
+      "status": "waiting"
+     }
+    ],
+    "findings": [],
+    "url": "https://github.com",
+    "quality": "success"
+   },
+   {
+    "repo": "acme/arkism",
+    "number": 36,
+    "title": "desktop 0.5.0: 설정에 앱 업데이트",
+    "branch": "feat/desktop-update",
+    "base": "main",
+    "head_sha": "40e24fa000",
+    "state": "done",
+    "pr_state": "open",
+    "started_at": "2026-10-13T10:28:25Z",
+    "finished_at": "2026-10-13T10:30:25Z",
+    "model": "codex / gpt-6.1-sol",
+    "quality": "success",
+    "steps": [
+     {
+      "name": "runner",
+      "status": "success",
+      "started_at": "2026-10-13T10:28:25Z",
+      "finished_at": "2026-10-13T10:28:25Z"
+     },
+     {
+      "name": "quality",
+      "status": "success",
+      "started_at": "2026-10-13T10:28:25Z",
+      "finished_at": "2026-10-13T10:29:25Z"
+     },
+     {
+      "name": "ai",
+      "status": "success",
+      "started_at": "2026-10-13T10:29:25Z",
+      "finished_at": "2026-10-13T10:30:25Z"
+     },
+     {
+      "name": "comment",
+      "status": "success",
+      "started_at": "2026-10-13T10:30:25Z",
+      "finished_at": "2026-10-13T10:30:25Z"
+     }
+    ],
+    "findings": [
+     {
+      "severity": "advisory",
+      "path": "desktop/ui/pages.js",
+      "line": 31,
+      "text": "‘경로에’ 규칙이 실제 경로(source_path) 대신 스킬 ID를 검사해요. 경로에 engineering이 있어도 분류되지 않아요."
+     },
+     {
+      "severity": "advisory",
+      "path": "desktop/ui/pages.js",
+      "line": 190,
+      "text": "카테고리를 삭제해도 선택 상태(skillCat)가 남아, 스킬 표가 빈 화면이 돼요."
+     }
+    ],
+    "url": "https://github.com"
+   },
+   {
+    "repo": "acme/arkism",
+    "number": 35,
+    "title": "MCP·플러그인 켜고 끄기 + 이미지 프롬프트 보관함",
+    "branch": "feat/agent-tools-and-prompts",
+    "base": "main",
+    "head_sha": "b000000000",
+    "state": "done",
+    "pr_state": "merged",
+    "started_at": "2026-10-13T02:28:25Z",
+    "finished_at": "2026-10-13T02:30:25Z",
+    "model": "codex / gpt-6.1-sol",
+    "quality": "success",
+    "steps": [
+     {
+      "name": "runner",
+      "status": "success",
+      "started_at": "2026-10-13T02:28:25Z",
+      "finished_at": "2026-10-13T02:28:25Z"
+     },
+     {
+      "name": "quality",
+      "status": "success",
+      "started_at": "2026-10-13T02:28:25Z",
+      "finished_at": "2026-10-13T02:29:25Z"
+     },
+     {
+      "name": "ai",
+      "status": "success",
+      "started_at": "2026-10-13T02:29:25Z",
+      "finished_at": "2026-10-13T02:30:25Z"
+     },
+     {
+      "name": "comment",
+      "status": "success",
+      "started_at": "2026-10-13T02:30:25Z",
+      "finished_at": "2026-10-13T02:30:25Z"
+     }
+    ],
+    "findings": [],
+    "url": "https://github.com"
+   },
+   {
+    "repo": "acme/orbit-app",
+    "number": 191,
+    "title": "fix: prevent fenced stream finalization from stop events",
+    "branch": "fix/fenced-stream-finalization",
+    "base": "main",
+    "head_sha": "c000000000",
+    "state": "done",
+    "pr_state": "merged",
+    "started_at": "2026-10-12T12:30:25Z",
+    "finished_at": "2026-10-12T12:32:25Z",
+    "model": "codex / gpt-6.1-sol",
+    "quality": "success",
+    "steps": [
+     {
+      "name": "runner",
+      "status": "success",
+      "started_at": "2026-10-12T12:30:25Z",
+      "finished_at": "2026-10-12T12:30:25Z"
+     },
+     {
+      "name": "quality",
+      "status": "success",
+      "started_at": "2026-10-12T12:30:25Z",
+      "finished_at": "2026-10-12T12:31:25Z"
+     },
+     {
+      "name": "ai",
+      "status": "success",
+      "started_at": "2026-10-12T12:31:25Z",
+      "finished_at": "2026-10-12T12:32:25Z"
+     },
+     {
+      "name": "comment",
+      "status": "success",
+      "started_at": "2026-10-12T12:32:25Z",
+      "finished_at": "2026-10-12T12:32:25Z"
+     }
+    ],
+    "findings": [],
+    "url": "https://github.com"
+   },
+   {
+    "repo": "acme/orbit-app",
+    "number": 190,
+    "title": "릴리스 캐시 계정 경계 및 브라우저 회귀 보완",
+    "branch": "fix/release-cache-boundary",
+    "base": "main",
+    "head_sha": "d000000000",
+    "state": "done",
+    "pr_state": "merged",
+    "started_at": "2026-10-12T11:30:25Z",
+    "finished_at": "2026-10-12T11:32:25Z",
+    "model": "codex / gpt-6.1-sol",
+    "quality": "success",
+    "steps": [
+     {
+      "name": "runner",
+      "status": "success",
+      "started_at": "2026-10-12T11:30:25Z",
+      "finished_at": "2026-10-12T11:30:25Z"
+     },
+     {
+      "name": "quality",
+      "status": "success",
+      "started_at": "2026-10-12T11:30:25Z",
+      "finished_at": "2026-10-12T11:31:25Z"
+     },
+     {
+      "name": "ai",
+      "status": "success",
+      "started_at": "2026-10-12T11:31:25Z",
+      "finished_at": "2026-10-12T11:32:25Z"
+     },
+     {
+      "name": "comment",
+      "status": "success",
+      "started_at": "2026-10-12T11:32:25Z",
+      "finished_at": "2026-10-12T11:32:25Z"
+     }
+    ],
+    "findings": [
+     {
+      "severity": "advisory",
+      "path": "web/cache.ts",
+      "line": 12,
+      "text": "캐시 키에 계정 ID가 빠져 있어요."
+     }
+    ],
+    "url": "https://github.com"
+   },
+   {
+    "repo": "acme/arkism",
+    "number": 34,
+    "title": "desktop 0.3.1: 품질 점검 스타일 지적 정리",
+    "branch": "fix/desktop-style-0.3.1",
+    "base": "main",
+    "head_sha": "e000000000",
+    "state": "done",
+    "pr_state": "merged",
+    "started_at": "2026-10-12T10:50:25Z",
+    "finished_at": "2026-10-12T10:52:25Z",
+    "model": "codex / gpt-6.1-sol",
+    "quality": "success",
+    "steps": [
+     {
+      "name": "runner",
+      "status": "success",
+      "started_at": "2026-10-12T10:50:25Z",
+      "finished_at": "2026-10-12T10:50:25Z"
+     },
+     {
+      "name": "quality",
+      "status": "success",
+      "started_at": "2026-10-12T10:50:25Z",
+      "finished_at": "2026-10-12T10:51:25Z"
+     },
+     {
+      "name": "ai",
+      "status": "success",
+      "started_at": "2026-10-12T10:51:25Z",
+      "finished_at": "2026-10-12T10:52:25Z"
+     },
+     {
+      "name": "comment",
+      "status": "success",
+      "started_at": "2026-10-12T10:52:25Z",
+      "finished_at": "2026-10-12T10:52:25Z"
+     }
+    ],
+    "findings": [],
+    "url": "https://github.com"
+   }
+  ],
+  "reruns": []
+ }
+}

@@ -1,0 +1,197 @@
+{
+ "items": [
+  {
+   "id": "mp1",
+   "kind": "merge_proposal",
+   "status": "open",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "text": "",
+   "created_at": "2026-10-14T05:02:00Z",
+   "updated_at": "2026-10-14T05:02:00Z",
+   "merge": {
+    "proposal": {
+     "candidate": {
+      "collection": "memory_candidates",
+      "id": "mc1",
+      "revision": 1
+     },
+     "action": "merge",
+     "targets": [
+      {
+       "collection": "memories",
+       "id": "mt1",
+       "revision": 1
+      }
+     ],
+     "reason_code": "more_specific",
+     "reason": "같은 대상(운영 배포 명령)에 같은 결정이에요. 새 내용이 스크립트 경로를 더 정확히 적어서, 대상 기억에 합치면 좋아요.",
+     "pool_id": "pool1"
+    }
+   }
+  },
+  {
+   "id": "mp2",
+   "kind": "merge_proposal",
+   "status": "open",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "text": "",
+   "created_at": "2026-10-14T04:02:00Z",
+   "updated_at": "2026-10-14T04:02:00Z",
+   "merge": {
+    "proposal": {
+     "candidate": {
+      "collection": "memory_candidates",
+      "id": "mc2",
+      "revision": 1
+     },
+     "action": "merge",
+     "targets": [
+      {
+       "collection": "memories",
+       "id": "mt2",
+       "revision": 1
+      }
+     ],
+     "reason_code": "adds_detail",
+     "reason": "같은 사고에서 나온 교훈이에요. 확인 방법을 더 적었어요.",
+     "pool_id": "pool1"
+    }
+   }
+  },
+  {
+   "id": "mp3",
+   "kind": "merge_proposal",
+   "status": "open",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "text": "",
+   "created_at": "2026-10-14T03:02:00Z",
+   "updated_at": "2026-10-14T03:02:00Z",
+   "merge": {
+    "proposal": {
+     "candidate": {
+      "collection": "memory_candidates",
+      "id": "mc3",
+      "revision": 1
+     },
+     "action": "store",
+     "targets": [],
+     "reason_code": "new_information",
+     "reason": "비슷한 기억이 없어요.",
+     "pool_id": "pool1"
+    }
+   }
+  },
+  {
+   "id": "mp4",
+   "kind": "merge_proposal",
+   "status": "open",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "text": "",
+   "created_at": "2026-10-14T02:02:00Z",
+   "updated_at": "2026-10-14T02:02:00Z",
+   "merge": {
+    "proposal": {
+     "candidate": {
+      "collection": "memory_candidates",
+      "id": "mc4",
+      "revision": 1
+     },
+     "action": "skip",
+     "targets": [
+      {
+       "collection": "memories",
+       "id": "mt4",
+       "revision": 1
+      }
+     ],
+     "reason_code": "already_covered",
+     "reason": "이미 같은 기억이 있어요.",
+     "pool_id": "pool1"
+    }
+   }
+  },
+  {
+   "id": "mp5",
+   "kind": "merge_proposal",
+   "status": "open",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "text": "",
+   "created_at": "2026-10-14T01:02:00Z",
+   "updated_at": "2026-10-14T01:02:00Z",
+   "merge": {
+    "proposal": {
+     "candidate": {
+      "collection": "memory_candidates",
+      "id": "mc5",
+      "revision": 1
+     },
+     "action": "merge",
+     "targets": [
+      {
+       "collection": "memories",
+       "id": "mt5",
+       "revision": 1
+      }
+     ],
+     "reason_code": "updates_older",
+     "reason": "러너 수가 바뀌었어요.",
+     "pool_id": "pool1"
+    }
+   }
+  },
+  {
+   "id": "mp6",
+   "kind": "merge_proposal",
+   "status": "open",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "text": "",
+   "created_at": "2026-10-14T01:02:00Z",
+   "updated_at": "2026-10-14T01:02:00Z",
+   "merge": {
+    "proposal": {
+     "candidate": {
+      "collection": "memory_candidates",
+      "id": "mc6",
+      "revision": 1
+     },
+     "action": "store",
+     "targets": [],
+     "reason_code": "new_information",
+     "reason": "비슷하지만 다른 대상이에요.",
+     "pool_id": "pool1"
+    }
+   }
+  }
+ ],
+ "authority": "data_only_untrusted"
+}

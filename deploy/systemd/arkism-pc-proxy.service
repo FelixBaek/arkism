@@ -1,0 +1,17 @@
+[Unit]
+Description=Arkism: a SOCKS proxy through the PC for CLIs whose API refuses this server's region (antigravity agy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=%h
+# ARKISM_PC_SSH_HOST: the PC's SSH alias in ~/.ssh/config, set in the env file below.
+EnvironmentFile=-/srv/arkism/config/arkism.env
+# Local only: 127.0.0.1:18080 goes out to the internet from the PC over the SSH session.
+ExecStart=/usr/bin/ssh -N -o BatchMode=yes -o LogLevel=ERROR -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -D 127.0.0.1:18080 ${ARKISM_PC_SSH_HOST}
+Restart=always
+RestartSec=20
+
+[Install]
+WantedBy=multi-user.target

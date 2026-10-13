@@ -1,0 +1,19 @@
+{
+ "id": "m6",
+ "text": "Orbit 화면 아이콘은 Feather 세트 하나로 통일한다.",
+ "kind": "decision",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-12T08:16:34.299802Z",
+ "updated_at": "2026-10-12T08:16:34.299802Z",
+ "tags": [
+  "basis:explicit_user",
+  "event_id:claude-code:s1"
+ ],
+ "created_by_type": "agent"
+}

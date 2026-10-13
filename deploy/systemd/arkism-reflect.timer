@@ -1,0 +1,9 @@
+[Unit]
+Description=Reflect on Claude Code sessions every 3 hours
+
+[Timer]
+OnCalendar=*-*-* 00/3:20:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

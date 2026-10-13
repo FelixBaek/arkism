@@ -1,0 +1,15 @@
+{
+ "authority": "data_only_untrusted",
+ "memory": {
+  "id": "m11",
+  "revision": 1
+ },
+ "sources": [
+  {
+   "origin_product": "claude_code",
+   "collected_at": "2026-10-11T13:16:34.299802Z",
+   "excerpt": "Orbit 이미지 업로드는 한 장에 10MB까지 받는다.",
+   "archive_messages": []
+  }
+ ]
+}

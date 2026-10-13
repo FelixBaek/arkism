@@ -1,0 +1,19 @@
+{
+ "id": "o4",
+ "text": "Orbit PR은 리뷰 승인 한 번이면 병합한다.",
+ "kind": "procedural",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-09-28T03:00:00Z",
+ "updated_at": "2026-09-28T03:00:00Z",
+ "tags": [
+  "basis:explicit_user",
+  "event_id:claude-code:s1"
+ ],
+ "created_by_type": "agent"
+}

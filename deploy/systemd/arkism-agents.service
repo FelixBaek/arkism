@@ -1,0 +1,10 @@
+[Unit]
+Description=Sync agent MCP servers and plugins with Arkism (apply owner switches, report inventory)
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/srv/arkism/bin/arkism agents sync
+TimeoutStartSec=5min

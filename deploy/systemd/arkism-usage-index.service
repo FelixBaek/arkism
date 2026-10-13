@@ -1,0 +1,10 @@
+[Unit]
+Description=Count agent session usage for the Arkism 사용량·세션 screens
+After=network-online.target
+
+[Service]
+Type=oneshot
+UMask=0077
+Nice=10
+ExecStart=/srv/arkism/bin/arkism usage-index --execute
+TimeoutStartSec=30min

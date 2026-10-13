@@ -1,0 +1,7 @@
+/* 들어가는 기억 panel (inject.js) */
+.section h4 { margin: 4px 0 0; font-size: calc(12px * var(--fs, 1)); font-weight: 600; color: var(--text-2); }
+.inject-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: calc(12.5px * var(--fs, 1)); overflow-wrap: anywhere; }
+.inject-list small { color: var(--text-3); }
+.inject-try { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.inject-try textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); color: var(--text-1); font: 13px var(--sans); resize: vertical; }
+.code-box code[data-no-i18n] { max-height: 320px; }

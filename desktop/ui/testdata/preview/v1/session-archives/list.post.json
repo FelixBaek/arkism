@@ -1,0 +1,30 @@
+{
+ "authority": "data_only_untrusted",
+ "items": [
+  {
+   "id": "a1",
+   "origin": "claude_code",
+   "device": "my-pc",
+   "observed_at": "2026-10-13T10:16:34.299802Z",
+   "expires_at": "2026-10-17T13:16:34.299802Z",
+   "state": "active"
+  },
+  {
+   "id": "a2",
+   "origin": "codex",
+   "device": "my-server",
+   "observed_at": "2026-10-12T13:16:34.299802Z",
+   "expires_at": "2026-10-19T13:16:34.299802Z",
+   "state": "active"
+  },
+  {
+   "id": "a3",
+   "origin": "zcode",
+   "device": "my-server",
+   "observed_at": "2026-10-08T13:16:34.299802Z",
+   "expires_at": "2026-10-15T13:16:34.299802Z",
+   "state": "restricted"
+  }
+ ],
+ "next_cursor": ""
+}

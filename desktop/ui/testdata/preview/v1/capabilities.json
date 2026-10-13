@@ -1,0 +1,2 @@
+{"scope": {"workspace_id": "default", "project_id": "default"}, "principal_id": "preview-owner", "role": "human",
+ "actions": {"context": true, "propose": true, "review_list": true, "review_decide": true, "read_memories": true, "delete_memories": true, "delete_sources": true, "read_artifacts": true}}

@@ -1,0 +1,8 @@
+[Unit]
+Description=Expire Arkism encrypted backup bundles after seven days
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock --nonblock --conflict-exit-code 75 /run/lock/arkism-backup.lock /srv/arkism/bin/arkism backup-retention --directory /srv/arkism/backups --execute
+SuccessExitStatus=75
+TimeoutStartSec=5min

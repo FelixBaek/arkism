@@ -1,0 +1,54 @@
+{
+ "id": "mt-cost",
+ "revision": 6,
+ "crew_meeting": {
+  "status": "concluded",
+  "team_id": "team-research",
+  "team_snapshot": {
+   "team": {
+    "type": "team",
+    "name": "리서치 팀",
+    "members": [
+     {
+      "agent_id": "ag-research",
+      "order": 1,
+      "role": "moderator"
+     },
+     {
+      "agent_id": "ag-notes",
+      "order": 4,
+      "role": "scribe"
+     }
+    ]
+   },
+   "agents": {
+    "ag-research": {
+     "type": "agent",
+     "name": "리서처",
+     "handle": "리서처",
+     "model_mode": "fixed",
+     "model": "claude opus 5.5"
+    },
+    "ag-notes": {
+     "type": "agent",
+     "name": "기록관",
+     "handle": "기록관",
+     "model_mode": "fixed",
+     "model": "gemini-3-pro"
+    }
+   }
+  },
+  "title": "라우팅 비용 줄이기",
+  "round": 3,
+  "max_rounds": 3,
+  "turns": [],
+  "tokens_used": 40100,
+  "token_cap": 60000,
+  "cost_usd": 0.33,
+  "ended_reason": "max_rounds",
+  "conclusion": {
+   "summary": "쉬운 요청은 Clef가 작은 모델로 보내요."
+  },
+  "finished_at": "2026-10-11T14:35:37Z"
+ }
+}

@@ -1,0 +1,648 @@
+{
+ "fixture": [
+  [
+   "skills/a/code-review/SKILL.md",
+   "LS0tCm5hbWU6IGNvZGUtcmV2aWV3CmRlc2NyaXB0aW9uOiBSZXZpZXcgY29kZSBjaGFuZ2VzLgotLS0KVXNlIFRvZG9Xcml0ZSBhbmQgbWNwX194X195IHRoZW4gbWNwX19hLWIuCg=="
+  ],
+  [
+   "skills/b/code-review/SKILL.md",
+   "LS0tCm5hbWU6IGNvZGUtcmV2aWV3CmRlc2NyaXB0aW9uOiBSZXZpZXcgY29kZSBjaGFuZ2VzLgotLS0KVXNlIFRvZG9Xcml0ZSBhbmQgbWNwX194X195IHRoZW4gbWNwX19hLWIuCg=="
+  ],
+  [
+   "skills/c/code-review/SKILL.md",
+   "LS0tCm5hbWU6IGNvZGUtcmV2aWV3DQpkZXNjcmlwdGlvbjogIlF1b3RlZCDshKTrqoUiDQotLS0NCmFwcGx5X3BhdGNoIH4vLmNvZGV4LyB0b2tlbiA9IGFiY2RlZmdoaWprbG1ub3AxMjM0IC9yb290L3gK"
+  ],
+  [
+   "skills/c/code-review/scripts/run.sh",
+   "IyEvYmluL3NoCmVjaG8gaGkK"
+  ],
+  [
+   "skills/d/plain/SKILL.md",
+   "bm8gZnJvbnRtYXR0ZXIg/w=="
+  ],
+  [
+   "skills/.git/x/SKILL.md",
+   "LS0tCm5hbWU6IGhpZGRlbgotLS0K"
+  ],
+  [
+   "skills/build/y/SKILL.md",
+   "LS0tCm5hbWU6IGJ1aWx0Ci0tLQo="
+  ],
+  [
+   "skills/SKILL.md",
+   "LS0tCm5hbWU6IHRvcApkZXNjcmlwdGlvbjogZAogIC0gbmVzdGVkOiBubwotLS0KYm9keQ=="
+  ],
+  [
+   "skills/e.f/SKILL.md",
+   "LS0tCm5hbWU6IGRvdApkZXNjcmlwdGlvbjogeAotLS0K"
+  ],
+  [
+   "skills/e/f/SKILL.md",
+   "LS0tCm5hbWU6IHNsYXNoCmRlc2NyaXB0aW9uOiB5Ci0tLQpzay1hYmNkZWZnaGlqa2xtbm9wCg=="
+  ],
+  [
+   "plug/.claude-plugin/plugin.json",
+   "e30="
+  ],
+  [
+   "plug/skills/demo/SKILL.md",
+   "LS0tCm5hbWU6IGRlbW8KZGVzY3JpcHRpb246IGRlbW8KLS0tClJlYWQgc2NyaXB0cy9ydW4ucHkuCg=="
+  ],
+  [
+   "plug/skills/demo/references/a.md",
+   "QQ=="
+  ],
+  [
+   "plug/skills/demo/.env",
+   "cGFzc3dvcmQ9c3ludGhldGlj"
+  ],
+  [
+   "plug/skills/other/SKILL.md",
+   "LS0tCm5hbWU6IG90aGVyCi0tLQo="
+  ],
+  [
+   "plug/scripts/run.py",
+   "cHJpbnQoJ+2VnOq4gCcpDQo="
+  ],
+  [
+   "plug/scripts/logo.png",
+   "iVBORwA="
+  ],
+  [
+   "plug/scripts/bad.txt",
+   "/w=="
+  ],
+  [
+   "plug/scripts/empty.txt",
+   ""
+  ],
+  [
+   "plug/scripts/a.txt",
+   "YQ=="
+  ],
+  [
+   "plug/scripts/a/b.txt",
+   "Yg=="
+  ],
+  [
+   "plug/scripts/B.txt",
+   "Qg=="
+  ],
+  [
+   "plug/agents/x.toml",
+   "eA=="
+  ],
+  [
+   "plug/README.md",
+   "cmVhZG1l"
+  ],
+  [
+   "tree/a.txt",
+   "MQ=="
+  ],
+  [
+   "tree/a/b",
+   "Mg=="
+  ],
+  [
+   "tree/A",
+   "Mw=="
+  ],
+  [
+   "tree/a-b/c",
+   "NA=="
+  ],
+  [
+   "tree/evals/x",
+   "NQ=="
+  ],
+  [
+   "tree/sub/__pycache__/x.pyc",
+   "Ng=="
+  ],
+  [
+   "tree/.arkism.json",
+   "e30="
+  ],
+  [
+   "tree/ä",
+   "Nw=="
+  ]
+ ],
+ "rows": [
+  {
+   "source": "test",
+   "original_runtime": "codex",
+   "path": "ROOT/skills/SKILL.md",
+   "inventory_root": "ROOT/skills",
+   "skill_id": ".",
+   "name": "top",
+   "description": "d",
+   "content_hash": "463eca1251e3f52f9fd9b07f3ebeb0f252282d6f2cfeecf300f8739abc5046a1",
+   "bytes": 52,
+   "has_frontmatter": true,
+   "credential_like": false,
+   "hardcoded_root_path": false,
+   "vendor_markers": [],
+   "mcp_tools": [],
+   "has_scripts": false
+  },
+  {
+   "source": "test",
+   "original_runtime": "codex",
+   "path": "ROOT/skills/a/code-review/SKILL.md",
+   "inventory_root": "ROOT/skills",
+   "skill_id": "a/code-review",
+   "name": "code-review",
+   "description": "Review code changes.",
+   "content_hash": "8fefc7cc0c04b74f7b2f0ec10d8738be955e91e8214af5a26bd713f2552f2276",
+   "bytes": 103,
+   "has_frontmatter": true,
+   "credential_like": false,
+   "hardcoded_root_path": false,
+   "vendor_markers": [
+    "claude_code"
+   ],
+   "mcp_tools": [
+    "mcp__a-b",
+    "mcp__x__y"
+   ],
+   "has_scripts": false
+  },
+  {
+   "source": "test",
+   "original_runtime": "codex",
+   "path": "ROOT/skills/b/code-review/SKILL.md",
+   "inventory_root": "ROOT/skills",
+   "skill_id": "b/code-review",
+   "name": "code-review",
+   "description": "Review code changes.",
+   "content_hash": "8fefc7cc0c04b74f7b2f0ec10d8738be955e91e8214af5a26bd713f2552f2276",
+   "bytes": 103,
+   "has_frontmatter": true,
+   "credential_like": false,
+   "hardcoded_root_path": false,
+   "vendor_markers": [
+    "claude_code"
+   ],
+   "mcp_tools": [
+    "mcp__a-b",
+    "mcp__x__y"
+   ],
+   "has_scripts": false
+  },
+  {
+   "source": "test",
+   "original_runtime": "codex",
+   "path": "ROOT/skills/c/code-review/SKILL.md",
+   "inventory_root": "ROOT/skills",
+   "skill_id": "c/code-review",
+   "name": "code-review",
+   "description": "Quoted 설명",
+   "content_hash": "48e0f8a35b153d9fffea3c0b0c0d0482f27ae6df6bc9b91ad5b3a9fa06294bbe",
+   "bytes": 117,
+   "has_frontmatter": true,
+   "credential_like": true,
+   "hardcoded_root_path": true,
+   "vendor_markers": [
+    "codex"
+   ],
+   "mcp_tools": [],
+   "has_scripts": true
+  },
+  {
+   "source": "test",
+   "original_runtime": "codex",
+   "path": "ROOT/skills/d/plain/SKILL.md",
+   "inventory_root": "ROOT/skills",
+   "skill_id": "d/plain",
+   "name": "plain",
+   "description": "",
+   "content_hash": "f428c7c88beb9ec679696945554bf49895159a8610af2b7bbe322e1b915caba1",
+   "bytes": 16,
+   "has_frontmatter": false,
+   "credential_like": false,
+   "hardcoded_root_path": false,
+   "vendor_markers": [],
+   "mcp_tools": [],
+   "has_scripts": false
+  },
+  {
+   "source": "test",
+   "original_runtime": "codex",
+   "path": "ROOT/skills/e/f/SKILL.md",
+   "inventory_root": "ROOT/skills",
+   "skill_id": "e/f",
+   "name": "slash",
+   "description": "y",
+   "content_hash": "58c656ddcb8bd31b5de97d16026b7c47c0d68f39ef7e9ebb806add14f4e6d112",
+   "bytes": 55,
+   "has_frontmatter": true,
+   "credential_like": true,
+   "hardcoded_root_path": false,
+   "vendor_markers": [],
+   "mcp_tools": [],
+   "has_scripts": false
+  },
+  {
+   "source": "test",
+   "original_runtime": "codex",
+   "path": "ROOT/skills/e.f/SKILL.md",
+   "inventory_root": "ROOT/skills",
+   "skill_id": "e.f",
+   "name": "dot",
+   "description": "x",
+   "content_hash": "157af20b7e4eb11ba118681d1647129df3239f0fe1b12d28bc77eb7220203e82",
+   "bytes": 33,
+   "has_frontmatter": true,
+   "credential_like": false,
+   "hardcoded_root_path": false,
+   "vendor_markers": [],
+   "mcp_tools": [],
+   "has_scripts": false
+  },
+  {
+   "source": "plug",
+   "original_runtime": "claude_code",
+   "path": "ROOT/plug/skills/demo/SKILL.md",
+   "inventory_root": "ROOT/plug",
+   "skill_id": "skills/demo",
+   "name": "demo",
+   "description": "demo",
+   "content_hash": "e05dd2f72b2caaf9e49b13d5e99d473332143920a4b0a2959d820940c0d0eed2",
+   "bytes": 58,
+   "has_frontmatter": true,
+   "credential_like": false,
+   "hardcoded_root_path": false,
+   "vendor_markers": [],
+   "mcp_tools": [],
+   "has_scripts": false
+  },
+  {
+   "source": "plug",
+   "original_runtime": "claude_code",
+   "path": "ROOT/plug/skills/other/SKILL.md",
+   "inventory_root": "ROOT/plug",
+   "skill_id": "skills/other",
+   "name": "other",
+   "description": "",
+   "content_hash": "92f1cb57fd990e6eaa92dd14e527eb6471f46fcc814a664f4829dc8f6f717408",
+   "bytes": 20,
+   "has_frontmatter": false,
+   "credential_like": false,
+   "hardcoded_root_path": false,
+   "vendor_markers": [],
+   "mcp_tools": [],
+   "has_scripts": false
+  }
+ ],
+ "inventory": "{\n  \"files\": 9,\n  \"distinct_contents\": 8,\n  \"exact_duplicate_groups\": {\n    \"8fefc7cc0c04b74f7b2f0ec10d8738be955e91e8214af5a26bd713f2552f2276\": [\n      \"ROOT/skills/a/code-review/SKILL.md\",\n      \"ROOT/skills/b/code-review/SKILL.md\"\n    ]\n  },\n  \"name_collisions\": {\n    \"code-review\": [\n      \"48e0f8a35b153d9fffea3c0b0c0d0482f27ae6df6bc9b91ad5b3a9fa06294bbe\",\n      \"8fefc7cc0c04b74f7b2f0ec10d8738be955e91e8214af5a26bd713f2552f2276\"\n    ]\n  },\n  \"by_source\": {\n    \"test\": 7,\n    \"plug\": 2\n  },\n  \"credential_like_files\": 2,\n  \"hardcoded_root_path_files\": 1,\n  \"missing_frontmatter\": 2,\n  \"vendor_specific\": {\n    \"claude_code\": 2,\n    \"codex\": 1\n  },\n  \"mcp_tool_dependent_files\": 2,\n  \"script_dependent_files\": 1\n}",
+ "tree_hash": "c4beabb648497890ab6794512187358f64ef084b18c09a904a3e5b031bfaad5f",
+ "bundle": {
+  "sha256": "7cab60278c954b58e6e373ab365f0ab69b80229b5bcf77a7226876aa7b061111",
+  "files": [
+   {
+    "path": "agents/x.toml",
+    "sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+    "content": "x"
+   },
+   {
+    "path": "scripts/B.txt",
+    "sha256": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c",
+    "content": "B"
+   },
+   {
+    "path": "scripts/a.txt",
+    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+    "content": "a"
+   },
+   {
+    "path": "scripts/a/b.txt",
+    "sha256": "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+    "content": "b"
+   },
+   {
+    "path": "scripts/bad.txt",
+    "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89",
+    "size": 1,
+    "omitted": "binary"
+   },
+   {
+    "path": "scripts/empty.txt",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "content": ""
+   },
+   {
+    "path": "scripts/logo.png",
+    "sha256": "ad91235e882292469812e16da0b8fc77075a7c6d6f8760c24be14a5c792508cf",
+    "size": 5,
+    "omitted": "binary"
+   },
+   {
+    "path": "scripts/run.py",
+    "sha256": "1e9bdc972230d7b5e54810dc84458a7cbf4932a5a95efe81982e94d90dc062c9",
+    "content": "print('한글')\r\n"
+   },
+   {
+    "path": "skills/demo/references/a.md",
+    "sha256": "559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd",
+    "content": "A"
+   }
+  ]
+ },
+ "bundle_skill_only": {
+  "sha256": "daf064032d5d23b48885b806f92284143d80cb071c8accb800e17faa46a53a01",
+  "files": [
+   {
+    "path": "scripts/run.sh",
+    "sha256": "299001868fb8c02fd431c336c6d058f5558c5dff5b5af5e6fe04b870a6a9cbba",
+    "content": "#!/bin/sh\necho hi\n"
+   }
+  ]
+ },
+ "materialized_meta": "{\n  \"ref\": \"team/code-review@3\",\n  \"version_id\": \"skill-v3\",\n  \"content_hash\": \"db271d97a8818580d33f56cb052c1656617b0068809d91554915bbe89b5e195e\",\n  \"validation_status\": \"active\",\n  \"resolution_mode\": \"hub\",\n  \"bundle_sha256\": \"7cab60278c954b58e6e373ab365f0ab69b80229b5bcf77a7226876aa7b061111\",\n  \"tree_hash\": \"cad641a7ad0338244164abe4f35cd867a233eb395c9e678f42169751eddd4b42\",\n  \"source\": \"src\",\n  \"note\": \"배포된 사본\"\n}\n",
+ "materialized_tree": "cad641a7ad0338244164abe4f35cd867a233eb395c9e678f42169751eddd4b42",
+ "materialize_item": {
+  "ref": "code-review@latest-approved",
+  "skill_id": "team/code-review",
+  "name": "code-review",
+  "description": "Review.",
+  "resolved_version": 3,
+  "version_id": "skill-v3",
+  "content_hash": "db271d97a8818580d33f56cb052c1656617b0068809d91554915bbe89b5e195e",
+  "instructions": "---\nname: code-review\ndescription: Review.\n---\nv1\n",
+  "validation_status": "active",
+  "requirements": {
+   "authority": "requirements_only",
+   "tools": [
+    "shell"
+   ],
+   "reads": true
+  },
+  "compatibility": {
+   "codex": "supported"
+  },
+  "bundle": {
+   "sha256": "7cab60278c954b58e6e373ab365f0ab69b80229b5bcf77a7226876aa7b061111",
+   "files": [
+    {
+     "path": "agents/x.toml",
+     "sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+     "content": "x"
+    },
+    {
+     "path": "scripts/B.txt",
+     "sha256": "df7e70e5021544f4834bbee64a9e3789febc4be81470df629cad6ddb03320a5c",
+     "content": "B"
+    },
+    {
+     "path": "scripts/a.txt",
+     "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+     "content": "a"
+    },
+    {
+     "path": "scripts/a/b.txt",
+     "sha256": "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+     "content": "b"
+    },
+    {
+     "path": "scripts/bad.txt",
+     "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89",
+     "size": 1,
+     "omitted": "binary"
+    },
+    {
+     "path": "scripts/empty.txt",
+     "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "content": ""
+    },
+    {
+     "path": "scripts/logo.png",
+     "sha256": "ad91235e882292469812e16da0b8fc77075a7c6d6f8760c24be14a5c792508cf",
+     "size": 5,
+     "omitted": "binary"
+    },
+    {
+     "path": "scripts/run.py",
+     "sha256": "1e9bdc972230d7b5e54810dc84458a7cbf4932a5a95efe81982e94d90dc062c9",
+     "content": "print('한글')\r\n"
+    },
+    {
+     "path": "skills/demo/references/a.md",
+     "sha256": "559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd",
+     "content": "A"
+    }
+   ]
+  }
+ },
+ "canonical": "{\"skill_id\": \"team/code-review\", \"version\": 3, \"version_id\": \"skill-v3\", \"content_hash\": \"db271d97a8818580d33f56cb052c1656617b0068809d91554915bbe89b5e195e\", \"name\": \"code-review\", \"description\": \"Review.\", \"instructions\": \"---\\nname: code-review\\ndescription: Review.\\n---\\nv1\\n\", \"category\": \"team\", \"tags\": [\"a\", \"b\", \"c\"], \"inputs\": \"i\", \"outputs\": \"\", \"capabilities\": {\"reads\": true, \"writes\": false, \"external_transfer\": false}, \"tool_requirements\": {\"tools\": [\"shell\"], \"apis\": [], \"permissions\": [], \"secret_names\": [], \"irreversible_actions\": []}, \"runtime_requirements\": {\"environments\": [], \"authority\": \"requirements_only\"}, \"dependencies\": [], \"compatibility\": {\"codex\": \"supported\"}, \"provenance\": {}, \"validation\": {\"status\": \"approved\", \"hub_status\": \"active\", \"latest_approved\": false, \"resolution_mode\": \"hub\"}, \"visibility\": {\"scope\": {\"w\": 1}}}",
+ "usage": "{\"id\": \"e1\", \"kind\": \"skill.usage\", \"occurred_at\": \"c\", \"payload\": {\"skill_id\": \"team/code-review\", \"version\": 3, \"version_id\": \"skill-v3\", \"content_hash\": \"db271d97a8818580d33f56cb052c1656617b0068809d91554915bbe89b5e195e\", \"runtime\": \"codex\", \"status\": \"failure\", \"started_at\": \"s\", \"completed_at\": \"c\", \"retry_count\": 0, \"tool_failures\": 0, \"runtime_errors\": 0, \"trial_id\": \"t\", \"profile_id\": \"p\", \"error_code\": \"tool_timeout\", \"offline_cache\": true}, \"sensitivity\": \"internal\"}",
+ "binding": [
+  {
+   "url": "http://127.0.0.1:8091/",
+   "token": "t",
+   "scope": {
+    "workspace_id": "w",
+    "project_id": "p",
+    "user_id": "u",
+    "agent_id": "a"
+   },
+   "dir": "cf0a15fd43847e6e3af04f4cf088d531",
+   "file": "f07c268ee3164ebd9edecebbc5c2cf75.json"
+  },
+  {
+   "url": "https://hub.example",
+   "token": "토큰",
+   "scope": {
+    "z": "한",
+    "a": [
+     1,
+     2.5,
+     null,
+     true
+    ]
+   },
+   "dir": "818dcb204cf84b17238fd0ecae2c4f97",
+   "file": "f07c268ee3164ebd9edecebbc5c2cf75.json"
+  }
+ ],
+ "frontmatter": [
+  [
+   "---\nname: a\ndescription:  'b: c' \n---\n",
+   {
+    "name": "a",
+    "description": "b: c"
+   }
+  ],
+  [
+   "---\r\nname: x\r\n---\r\n",
+   {
+    "name": "x"
+   }
+  ],
+  [
+   "---\nname: a\n---",
+   {}
+  ],
+  [
+   "--- \nname: a\n---\n",
+   {}
+  ],
+  [
+   "---\n  name: indented\n-name: dash\nname:　spaced　\nkey\n---\nbody",
+   {
+    "name": "spaced"
+   }
+  ],
+  [
+   "---\n\n---\n",
+   {}
+  ]
+ ],
+ "secret": [
+  [
+   "-----BEGIN RSA PRIVATE KEY",
+   true
+  ],
+  [
+   "x sk-abcdefghijkl",
+   true
+  ],
+  [
+   "xsk-abcdefghijkl",
+   false
+  ],
+  [
+   "AIzaaaaaaaaaaaaaaaaaaaaa",
+   true
+  ],
+  [
+   "api_key = 'abcdefghijklmnop'",
+   true
+  ],
+  [
+   "Token: ABCDEFGHIJKLMNOPQ",
+   true
+  ],
+  [
+   "password=short",
+   false
+  ],
+  [
+   "SECRET\"=\"aaaaaaaaaaaaaaaa",
+   true
+  ],
+  [
+   "al-123456789012",
+   true
+  ]
+ ],
+ "quote": [
+  [
+   "a b",
+   "a%20b",
+   "a+b"
+  ],
+  [
+   "한/글?&=",
+   "%ED%95%9C%2F%EA%B8%80%3F%26%3D",
+   "%ED%95%9C%2F%EA%B8%80%3F%26%3D"
+  ],
+  [
+   "~-._",
+   "~-._",
+   "~-._"
+  ],
+  [
+   "",
+   "",
+   ""
+  ],
+  [
+   "x+y%",
+   "x%2By%25",
+   "x%2By%25"
+  ]
+ ],
+ "indent": [
+  [
+   {
+    "a": [],
+    "b": {},
+    "c": [
+     1,
+     {
+      "d": "한"
+     }
+    ]
+   },
+   "{\n  \"a\": [],\n  \"b\": {},\n  \"c\": [\n    1,\n    {\n      \"d\": \"한\"\n    }\n  ]\n}",
+   2
+  ],
+  [
+   [
+    1,
+    "x "
+   ],
+   "[\n 1,\n \"x \"\n]",
+   1
+  ],
+  [
+   {},
+   "{}",
+   2
+  ]
+ ],
+ "splitlines": [
+  [
+   "a\nb\r\nc\rd\u000be\ff\u001cg hi",
+   [
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i"
+   ],
+   [
+    "a\n",
+    "b\r\n",
+    "c\r",
+    "d\u000b",
+    "e\f",
+    "f\u001c",
+    "g ",
+    "h",
+    "i"
+   ]
+  ],
+  [
+   "",
+   [],
+   []
+  ],
+  [
+   "x\n",
+   [
+    "x"
+   ],
+   [
+    "x\n"
+   ]
+  ],
+  [
+   "\n\n",
+   [
+    "",
+    ""
+   ],
+   [
+    "\n",
+    "\n"
+   ]
+  ]
+ ]
+}

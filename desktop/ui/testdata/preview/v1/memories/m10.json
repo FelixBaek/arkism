@@ -1,0 +1,19 @@
+{
+ "id": "m10",
+ "text": "Orbit 모바일 앱은 웹 뷰로 먼저 출시한다.",
+ "kind": "decision",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-04T13:16:34.299802Z",
+ "updated_at": "2026-10-04T13:16:34.299802Z",
+ "tags": [
+  "basis:explicit_user",
+  "event_id:claude-code:s1"
+ ],
+ "created_by_type": "agent"
+}

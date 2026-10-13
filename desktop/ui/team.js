@@ -1,0 +1,1412 @@
+// AGENT › 팀 · 회의 · 디스코드 · 사용량 (Figma v4: 208:18425 팀, 310:19981 팀 — 새로 만들기, 208:19103 회의,
+// 208:19677 디스코드, 325:37545 사용량). Interface: the team/meeting/discord contract (2026-10-13).
+// A team is a crew record of type "team" (called @이름, same namespace as work agents; workflows keep $이름).
+// Meetings live in /v1/crew/meetings (the host engine runs the turns; this screen polls every 2 s while one runs),
+// Discord bots in /v1/discord (tokens go to the host keyring; the record keeps only the last four characters),
+// and AGENT › 사용량 reads /v1/crew/usage. Every cost here is an estimate from public list prices (marked 추정).
+window.ArkismTeams = (ctx) => {
+  "use strict";
+  const { state, $, el, icon, button, go, render, request, query, notice, ago } = ctx;
+  const raw = (n) => { n.setAttribute("data-no-i18n", ""); return n; };
+  // 화면 문구가 데이터와 한 줄에 섞여 raw()로 감쌀 때: 만들 때 번역한다 (한국어 화면이면 그대로).
+  const tr = (s) => (window.ArkismI18n ? window.ArkismI18n.translate(s) : s);
+  const pins = window.ArkismPins?.(ctx); // 항상 넣는 자료 (pins.js)
+
+  // ---------------------------------------------------------------- vocabulary (mirrors the contract)
+  const ROLES = [["moderator", "진행자"], ["worker", "작업자"], ["reviewer", "리뷰어"], ["scribe", "정리 담당"]];
+  const roleText = (r) => ROLES.find(([k]) => k === r)?.[1] || "작업자";
+  const MODES = [
+    ["round_robin", "정해진 순서대로", "적힌 순서로 한 사람씩 말하고, 다 돌면 처음부터 다시 돌아요."],
+    ["moderator_picks", "진행자가 다음 사람 지명", "진행자가 매번 다음에 말할 사람을 골라요. 필요한 사람만 다시 부를 수 있어요."]
+  ];
+  const STANCE = { agree: "찬성", disagree: "반대", opinion: "의견", approve: "승인" };
+  const MEETING_STATUS = {
+    pending: ["시작 전", "line"], running: ["진행 중", "warn"], stopping: ["멈추는 중", "warn"], waiting: ["확인 필요", "warn"],
+    concluded: ["결론 남", "line"], no_conclusion: ["결론 없음", "line"], stopped: ["멈춤", "line"], failed: ["실패", "warn"]
+  };
+  const LIVE = new Set(["pending", "running", "stopping", "waiting"]);
+  const ENDED = {
+    max_rounds: "최대 라운드까지 했어요", token_cap: "토큰 상한에 닿았어요", all_approved: "리뷰어가 모두 승인했어요", moderator: "진행자가 끝냈어요",
+    human_stop: "직접 멈췄어요", budget: "예산 확인에서 멈췄어요", error: "오류로 멈췄어요"
+  };
+  const BOT_STATE = {
+    waiting_token: ["토큰 기다림", "line"], connecting: ["연결 중", "line"], connected: ["연결됨", "line"],
+    needs_permission: ["권한 필요", "warn"], offline: ["꺼짐", "line"], token_invalid: ["토큰 오류", "warn"]
+  };
+  const BOT_MODES = [
+    ["shared", "봇 하나로 나눠 쓰기", "봇 하나를 서버에 초대하고, 채널마다 부를 팀·워크플로우를 정해요. 설정이 가장 간단해요."],
+    ["per_target", "팀마다 봇", "팀이나 워크플로우마다 봇을 따로 만들어요. 디스코드에서 이름과 프로필이 따로 보여요."]
+  ];
+  // Invite: scopes bot + applications.commands; never Administrator (contract › Discord behaviour).
+  const PERMS = [["View Channels", "채널 보기", 10], ["Read Message History", "메시지 기록 보기", 16], ["Send Messages", "메시지 보내기", 11],
+    ["Send Messages in Threads", "스레드에서 메시지 보내기", 38], ["Create Public Threads", "공개 스레드 만들기", 35], ["Use Application Commands", "앱 명령어 사용", 31]];
+  const PERM_BITS = PERMS.reduce((s, [, , bit]) => s + (1n << BigInt(bit)), 0n).toString(); // 311385197568
+  const inviteURL = (appId) => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(appId)}&scope=bot%20applications.commands&permissions=${PERM_BITS}`;
+  const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
+  const USAGE_KINDS = [["all", "전체"], ["workflow", "워크플로우"], ["agent", "작업 에이전트"], ["team", "팀"]];
+  const ERRORS = {
+    secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요.",
+    invalid_request: "빈 칸이나 형식을 확인해 주세요. @이름은 띄어쓰기 없이 글자·숫자·_·-만 써요.",
+    revision_conflict: "다른 곳에서 먼저 고쳤어요. 다시 불러와 주세요.",
+    conflict: "같은 @이름이 이미 있어요. 작업 에이전트와 팀은 이름을 함께 써요."
+  };
+  const errorText = (e) => ERRORS[e.message] || (e.message === "HTTP 409" ? ERRORS.conflict : `처리하지 못했어요 (${e.message}).`);
+  const unsupported = (e) => /HTTP 404|not_found|HTTP 501|not_implemented/.test(e?.message || "");
+
+  // ---------------------------------------------------------------- data
+  const items = () => state.data.crew || [];
+  const agents = () => items().filter((r) => r.crew?.type === "agent");
+  const teams = () => items().filter((r) => r.crew?.type === "team");
+  const workflows = () => items().filter((r) => r.crew?.type === "workflow");
+  const byId = (id) => items().find((r) => r.id === id);
+  const sorted = (members) => [...(members || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+  const agentModel = (a) => (a?.crew?.model_mode === "auto" ? "auto" : a?.crew?.model || "");
+  const memberModel = (m) => m.model_override || agentModel(byId(m.agent_id));
+  const memberName = (m) => byId(m.agent_id)?.crew?.name || m.name || m.agent_id;
+  const handleFrom = (name) => (name || "").replace(/\s+/g, "").replace(/[^\p{L}\p{N}_-]/gu, "").slice(0, 32);
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  // Records carry their body under crew_meeting / discord_bot / discord_settings (memoryd Record); requests send meeting / bot / settings.
+  const unwrap = (r, key) => (r?.[key] ? { ...r[key], id: r.id, revision: r.revision } : r);
+  const mt = (r) => unwrap(r, "crew_meeting");
+  const bt = (r) => unwrap(r, "discord_bot");
+  const body = (extra) => JSON.stringify({ scope: state.scope, ...extra });
+
+  const num = (n) => {
+    n = Number(n || 0);
+    if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 2).replace(/\.?0+$/, "")}M`;
+    if (n >= 1e3) return `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1).replace(/\.0$/, "")}K`;
+    return String(Math.round(n));
+  };
+  const usd = (n) => `$${Number(n || 0).toFixed(2)}`;
+  const pad2 = (n) => String(n || 0).padStart(2, "0");
+  const pct = (r) => (r == null ? "—" : `${Number(r).toFixed(1)}%`); // the server sends percentages (0–100)
+  const est = () => el("span", "tm-est", "추정");
+  function modelLabel(m) {
+    const s = (m || "").trim();
+    if (!s) return "모델 없음";
+    if (s === "auto") return "자동 (Clef)";
+    const l = s.toLowerCase();
+    if (/^(claude )?opus/.test(l)) return `Claude Opus ${s.match(/[\d.]+/)?.[0] || ""}`.trim();
+    if (/^(claude )?sonnet/.test(l)) return `Claude Sonnet ${s.match(/[\d.]+/)?.[0] || ""}`.trim();
+    if (l.startsWith("deepseek")) return `DeepSeek ${(s.match(/v\d+/i)?.[0] || "").toUpperCase()}`.trim();
+    if (l.startsWith("gpt")) return s.toUpperCase().replace(/^GPT/, "GPT");
+    if (l.startsWith("glm")) return s.toUpperCase();
+    if (l.startsWith("gemini")) return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return s;
+  }
+  // The maker's mark for a model (Figma uses the agent logos at 16 px); a robot when the app has no logo.
+  function mark(model) {
+    const m = (model || "").toLowerCase();
+    const box = el("span", "tm-mark");
+    if (/^(claude|opus|sonnet|haiku|fable)/.test(m)) { const img = el("img"); img.src = "img/claude.svg"; img.alt = ""; box.append(img); return box; }
+    const ref = /^(gpt|o\d|codex)/.test(m) ? "a-codex" : m.startsWith("glm") ? "a-zcode" : m.startsWith("gemini") ? "a-gemini" : m.startsWith("grok") ? "i-x" : "";
+    if (!ref) { box.append(icon(m === "auto" ? "sparkle" : "robot")); return box; }
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#${ref}`);
+    svg.append(use); box.append(svg);
+    return box;
+  }
+  const badge = (text, tone = "line") => el("span", `tm-badge ${tone}`, text);
+  function sw(on, label, onFlip) {
+    const s = el("button", "switch");
+    s.type = "button";
+    s.setAttribute("role", "switch");
+    s.setAttribute("aria-checked", String(!!on));
+    s.setAttribute("aria-label", label);
+    s.append(el("i"));
+    s.addEventListener("click", (e) => { e.stopPropagation(); onFlip(!on); });
+    return s;
+  }
+  function card(cls, title, sub) {
+    const c = el("section", `tm-card ${cls || ""}`.trim());
+    if (title) { const h = el("div", "tm-card-head"); h.append(el("h3", "", title)); if (sub) h.append(el("p", "", sub)); c.append(h); }
+    return c;
+  }
+  function field(label, input, cls) { const f = el("label", `tm-field ${cls || ""}`.trim()); f.append(el("span", "", label), input); return f; }
+  function input(value, onInput, attrs = {}) {
+    const i = el(attrs.tag || "input", "tm-input");
+    if (attrs.type) i.type = attrs.type;
+    if (attrs.placeholder) i.placeholder = attrs.placeholder;
+    if (attrs.max) i.maxLength = attrs.max;
+    if (attrs.rows) i.rows = attrs.rows;
+    i.value = value ?? "";
+    i.addEventListener("input", () => onInput(i.value));
+    return i;
+  }
+  function select(options, value, onChange, cls = "tm-select") {
+    const s = el("select", cls);
+    for (const [v, l] of options) { const o = el("option", "", l); o.value = v; o.selected = v === value; s.append(o); }
+    s.addEventListener("change", () => onChange(s.value));
+    return s;
+  }
+  function link(text, onClick, cls = "tm-link") { const b = el("button", cls, text); b.type = "button"; b.addEventListener("click", onClick); return b; }
+  const empty = (text) => el("p", "tm-empty", text);
+  const sideLabel = (text, aside) => { const h = el("div", "tm-side-head"); h.append(el("h4", "", text)); if (aside) h.append(el("span", "", aside)); return h; };
+  function kv(pairs) {
+    const box = el("div", "tm-kv");
+    for (const [k, v] of pairs) { if (v == null || v === "") continue; const r = el("div", ""); r.append(el("span", "", k)); r.append(typeof v === "string" ? el("b", "", v) : v); box.append(r); }
+    return box;
+  }
+  const side = (...kids) => { const s = el("div", "tm-side"); s.append(...kids); $("#detail").replaceChildren(s); };
+
+  const S = {
+    team: null, draft: null, draftFor: null, dirty: false, tpl: null, stats: new Map(), adding: false, ctxAdding: false, drag: -1,
+    nd: null, ndFrom: "", estimate: null, estTimer: 0, estKey: "",
+    meetTab: "running", meetings: null, counts: {}, meetErr: "", meetSel: null, meeting: null, note: "", noteFocus: false, newMeeting: null, tick: 0, timer: 0,
+    discord: null, discordErr: "", discordLoading: false, bot: null, settingsOpen: false, connect: null, channels: new Map(), botDraft: null, botDraftFor: null, connectTimer: 0,
+    usage: null, uState: "idle", uErr: "", uRange: "30d", uKind: "all", agentStatus: null
+  };
+  const here = (view) => state.view === view;
+
+  async function reloadCrew() { state.data.crew = (await request(`/v1/crew?${query()}`)).items || []; }
+  function replaceRecord(rec) {
+    if (!rec?.id) return;
+    const i = items().findIndex((r) => r.id === rec.id);
+    if (i >= 0) state.data.crew[i] = { ...state.data.crew[i], ...rec }; else state.data.crew = [...items(), rec];
+  }
+
+  // ---------------------------------------------------------------- discord data (shared by 팀 and 디스코드)
+  async function loadDiscord(quiet) {
+    if (S.discordLoading) return;
+    S.discordLoading = true;
+    try {
+      const d = await request(`/v1/discord?${query()}`);
+      const s = d.settings || {};
+      S.discord = { bots: (d.bots || []).map(bt), settings: unwrap(s, "discord_settings"), stats: d.stats || {} };
+      S.discordErr = "";
+    } catch (e) {
+      if (!quiet || !S.discord) { S.discord = S.discord || { bots: [], settings: {}, stats: {} }; S.discordErr = unsupported(e) ? "unsupported" : e.message; }
+    } finally { S.discordLoading = false; }
+    if (["teams", "discord", "teamNew"].includes(state.view)) render(false);
+  }
+  const bots = () => S.discord?.bots || [];
+  const botById = (id) => bots().find((b) => b.id === id);
+  const channelsFor = (teamId) => bots().flatMap((b) => (b.channels || []).filter((c) => c.action?.kind === "meeting" && c.action.id === teamId).map((c) => ({ ...c, bot: b })));
+  function targetLabel(action, short) {
+    if (!action?.kind) return "정하지 않음";
+    const r = byId(action.id);
+    if (action.kind === "meeting") { const tpl = r?.crew?.templates?.find((t) => t.key === action.template_key); return `${r?.crew?.name || "팀"}${short ? "" : ` ${tpl ? `· ${tpl.name}` : "회의"}`}`; }
+    if (action.kind === "workflow") return `$${r?.crew?.handle || action.id}`;
+    return `@${r?.crew?.handle || action.id}`;
+  }
+
+  // ================================================================ 팀 (208:18425)
+  function teamBadge(rec) {
+    const ch = channelsFor(rec.id);
+    if (!ch.length) return null;
+    if (ch.some((c) => ["needs_permission", "token_invalid"].includes(c.bot.state))) return ["확인 필요", "warn"];
+    return ch.some((c) => c.bot.state === "connected") ? ["연결됨", "on"] : null;
+  }
+  function pickTeam(id) {
+    if (S.dirty && S.draftFor !== id && !confirm("저장하지 않은 변경이 있어요. 버리고 다른 팀을 볼까요?")) return;
+    S.team = id; S.dirty = false; S.draftFor = null; S.tpl = null; S.adding = false; S.ctxAdding = false;
+    render(false);
+  }
+  async function loadStats(id) {
+    if (S.stats.has(id)) return;
+    S.stats.set(id, null);
+    try { S.stats.set(id, await request(`/v1/crew/teams/${encodeURIComponent(id)}/stats?${query({ days: 30 })}`)); } catch { S.stats.set(id, { error: true }); }
+    if (here("teams") && S.team === id) render(false);
+  }
+  function renderTeams() {
+    $("#controls").replaceChildren();
+    const table = $("#table");
+    table.className = "tm-wrap";
+    if (!S.discord) loadDiscord(true);
+    const list = teams();
+    if (!S.team || !byId(S.team)) S.team = list[0]?.id || null;
+    const rail = el("div", "tm-list");
+    const add = el("button", "tm-new", "+ 새 팀"); add.type = "button"; add.addEventListener("click", () => openNew());
+    rail.append(add);
+    for (const r of list) {
+      const row = el("button", `tm-team${r.id === S.team ? " selected" : ""}`); row.type = "button";
+      const top = el("div", "tm-team-top"); top.append(raw(el("b", "", r.crew.name)));
+      const b = teamBadge(r); if (b) top.append(badge(b[0], b[1]));
+      const ch = channelsFor(r.id)[0];
+      const meta = [ch?.bot?.name, tr(`에이전트 ${(r.crew.members || []).length}`)].filter(Boolean).join(" · ");
+      row.append(top, raw(el("small", "", meta)));
+      row.addEventListener("click", () => pickTeam(r.id));
+      rail.append(row);
+    }
+    const main = el("div", "tm-edit");
+    const rec = byId(S.team);
+    if (!rec) {
+      main.append(empty(agents().length ? "아직 팀이 없어요. 새 팀을 만들어 작업 에이전트 여럿이 함께 회의하게 해 보세요." : "팀은 작업 에이전트로 만들어요. 먼저 작업 에이전트를 만들어 주세요."));
+    } else {
+      if (S.draftFor !== rec.id) { S.draft = clone(rec.crew); S.draftFor = rec.id; S.dirty = false; }
+      loadStats(rec.id);
+      main.append(...teamEditor(rec));
+    }
+    const split = el("div", "tm-split"); split.append(rail, main);
+    table.replaceChildren(split);
+  }
+  function teamEditor(rec) {
+    const d = S.draft;
+    const changed = (structural) => { S.dirty = true; if (structural) render(false); else if (S.saveBtn) S.saveBtn.disabled = false; };
+    // title line: name, badge and purpose are the team's own words, edited in place
+    const head = el("div", "tm-edit-head");
+    const words = el("div", "tm-edit-words");
+    const line = el("div", "tm-edit-title");
+    const name = raw(input(d.name, (v) => { d.name = v; changed(); }, { max: 80 })); name.className = "tm-plain tm-plain-title"; name.setAttribute("aria-label", "팀 이름");
+    line.append(name);
+    const b = teamBadge(rec); if (b) line.append(badge(b[0], b[1]));
+    const purpose = raw(input(d.role, (v) => { d.role = v; changed(); }, { max: 200, placeholder: "이 팀이 하는 일" })); purpose.className = "tm-plain tm-plain-sub"; purpose.setAttribute("aria-label", "목적");
+    words.append(line, purpose, raw(el("small", "tm-handle", `@${d.handle || handleFrom(d.name)}`)));
+    const acts = el("div", "tm-edit-acts");
+    acts.append(button("보관", "ghost", null, () => archiveTeam(rec)), button("회의 시작", "", null, () => { S.newMeeting = { team_id: rec.id }; S.meetTab = "running"; go("meetings"); }));
+    S.saveBtn = button("저장", "primary", null, () => saveTeam(rec));
+    S.saveBtn.disabled = !S.dirty;
+    acts.append(S.saveBtn);
+    head.append(words, acts);
+
+    // 회의 템플릿
+    const tpl = el("div", "tm-block");
+    tpl.append(el("h4", "tm-label", "회의 템플릿"));
+    const chips = el("div", "tm-chips");
+    (d.templates || []).forEach((t) => {
+      const c = raw(el("button", `tm-chip${S.tpl === t.key ? " active" : ""}`, t.name || "이름 없음")); c.type = "button";
+      c.addEventListener("click", () => { S.tpl = S.tpl === t.key ? null : t.key; render(false); });
+      chips.append(c);
+    });
+    const addTpl = el("button", "tm-chip add", "+ 새 템플릿"); addTpl.type = "button";
+    addTpl.addEventListener("click", () => {
+      const key = `t${Date.now().toString(36)}`;
+      d.templates = [...(d.templates || []), { key, name: "새 템플릿", prompt: "", overrides: {} }];
+      S.tpl = key; changed(true);
+    });
+    chips.append(addTpl);
+    tpl.append(chips);
+    const open = (d.templates || []).find((t) => t.key === S.tpl);
+    if (open) {
+      const ed = el("div", "tm-tpl");
+      ed.append(field("이름", raw(input(open.name, (v) => { open.name = v; changed(); }, { max: 60 }))),
+        field("회의 주제 틀", raw(input(open.prompt, (v) => { open.prompt = v; changed(); }, { tag: "textarea", rows: 3, max: 4000, placeholder: "예: {주제} 화면을 접근성·토큰 기준으로 검토하고 고칠 목록을 만들어 주세요." }))));
+      const del = link("이 템플릿 지우기", () => { d.templates = d.templates.filter((t) => t.key !== open.key); S.tpl = null; changed(true); }, "tm-link quiet");
+      ed.append(del);
+      tpl.append(ed);
+    }
+
+    // numbers for the last 30 days
+    const st = S.stats.get(rec.id);
+    const kpis = el("div", "tm-kpis");
+    const k = (label, value, unit, sub, mark) => {
+      const c = el("div", "tm-kpi"); c.append(el("p", "", label));
+      const v = el("div", "tm-kpi-value"); v.append(el("strong", "", value)); if (unit) v.append(el("span", "", unit)); if (mark) v.append(est());
+      c.append(v, el("small", "", sub)); return c;
+    };
+    const none = !st || st.error;
+    kpis.append(k("최근 30일", none ? "—" : String(st.meetings_done || 0), "회", "완료된 회의"), k("사용량", none ? "—" : num(st.tokens), "", "전체 토큰"),
+      k("추정 비용", none ? "—" : usd(st.cost_usd), "", "공시 단가 기준", true));
+
+    const pinCard = pins?.card({ rec, draft: d, cls: "tm-card", sub: tr(`회의를 열 때마다 ${d.name || rec.crew.name}에게 먼저 넣어요. 위에 있을수록 먼저 들어가요.`), noun: tr("이 팀은"), onChange: () => changed() });
+    return [head, tpl, kpis, membersCard(d, changed, false), ...(pinCard ? [pinCard] : []), modeCard(d, changed, "회의 방식", "누가 언제 말하고, 언제 끝낼지 정해요."), contextCard(rec, d, changed)];
+  }
+
+  // 참여자와 발언 순서: a table you can drag to reorder (editor) or a list with focus pills (new team, 310:19981).
+  function membersCard(d, changed, compact) {
+    const c = card("", compact ? null : "참여자와 발언 순서", compact ? null : "끌어서 순서를 바꿔요. 각자의 역할로 하나의 결과를 만들어요.");
+    const members = sorted(d.members);
+    const renumber = (list) => { list.forEach((m, i) => { m.order = i + 1; }); d.members = list; };
+    const box = el("div", compact ? "tm-mlist" : "tm-mtable");
+    if (!compact) {
+      const h = el("div", "tm-mrow head");
+      ["순서", "참여자", "모델", "역할", ""].forEach((t) => h.append(el("span", "", t)));
+      box.append(h);
+    }
+    members.forEach((m, i) => {
+      const row = el("div", "tm-mrow");
+      row.draggable = true;
+      row.addEventListener("dragstart", (e) => { S.drag = i; e.dataTransfer.effectAllowed = "move"; row.classList.add("dragging"); });
+      row.addEventListener("dragend", () => row.classList.remove("dragging"));
+      row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("over"); });
+      row.addEventListener("dragleave", () => row.classList.remove("over"));
+      row.addEventListener("drop", (e) => {
+        e.preventDefault();
+        if (S.drag < 0 || S.drag === i) return;
+        const list = [...members]; const [moved] = list.splice(S.drag, 1); list.splice(i, 0, moved);
+        S.drag = -1; renumber(list); changed(true);
+      });
+      const model = memberModel(m);
+      const roleSel = select(ROLES, m.role || "worker", (v) => { m.role = v; changed(); }, compact ? "tm-pill-select" : "tm-plain-select");
+      roleSel.setAttribute("aria-label", "역할");
+      const remove = el("button", "icon-btn plain tm-x"); remove.type = "button"; remove.setAttribute("aria-label", "빼기"); remove.append(icon("x"));
+      remove.addEventListener("click", () => { renumber(members.filter((x) => x !== m)); changed(true); });
+      if (compact) {
+        const who = el("div", "tm-mwho"); who.append(raw(el("b", "", memberName(m))), el("small", "", modelLabel(model)));
+        const focus = raw(input(m.focus, (v) => { m.focus = v; changed(); }, { max: 120, placeholder: "맡을 일" })); focus.className = "tm-pill-input"; focus.setAttribute("aria-label", "맡을 일");
+        row.append(el("span", "tm-grip", "⠿"), el("span", "tm-ord", String(i + 1)), mark(model), who, focus, roleSel, remove);
+      } else {
+        const mc = el("span", "tm-mmodel"); mc.append(mark(model), el("span", "", modelLabel(model)));
+        row.append(el("span", "tm-ord", pad2(i + 1)), raw(el("span", "tm-mname", memberName(m))), mc, roleSel, remove);
+      }
+      box.append(row);
+    });
+    if (!members.length) box.append(empty("아직 참여자가 없어요. 작업 에이전트를 넣어 주세요."));
+    c.append(box);
+    const acts = el("div", "tm-row-acts");
+    const free = agents().filter((a) => !members.some((m) => m.agent_id === a.id));
+    if (S.adding && free.length) {
+      const pick = select([["", "넣을 작업 에이전트 고르기"], ...free.map((a) => [a.id, `${a.crew.name} · ${modelLabel(agentModel(a))}`])], "", (v) => {
+        if (!v) return;
+        S.adding = false;
+        renumber([...members, { agent_id: v, order: members.length + 1, role: members.length ? "worker" : "moderator", focus: "" }]);
+        changed(true);
+      });
+      acts.append(pick, link("취소", () => { S.adding = false; render(false); }, "tm-link quiet"));
+      queueMicrotask(() => pick.focus());
+    } else {
+      const add = button(compact ? "+ 작업 에이전트 추가" : "에이전트 추가", "", null, () => { if (!free.length) { notice(agents().length ? "넣을 수 있는 작업 에이전트를 모두 넣었어요." : "먼저 작업 에이전트를 만들어 주세요."); return; } S.adding = true; render(false); });
+      acts.append(add);
+      if (compact) acts.append(link("+ 새로 만들기", () => { if (ctx.hasView?.("workers")) { state.workerNew = true; go("workers"); } else notice("작업 에이전트 화면에서 만들어 주세요."); }, "tm-link plain"));
+    }
+    c.append(acts);
+    return c;
+  }
+
+  // 회의 방식: how turns go round and when the meeting ends.
+  function modeCard(d, changed, title, sub, bare) {
+    const c = bare ? el("div", "tm-mode-wrap") : card("", title, sub);
+    d.ending = { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(d.ending || {}) };
+    const members = sorted(d.members);
+    const pick = el("div", "tm-block");
+    pick.append(el("h4", "tm-label", "진행 방식"));
+    const opts = el("div", "tm-modes");
+    for (const [key, label, text] of MODES) {
+      const o = el("button", `tm-mode${(d.mode || "round_robin") === key ? " active" : ""}`); o.type = "button";
+      o.setAttribute("role", "radio"); o.setAttribute("aria-checked", String((d.mode || "round_robin") === key));
+      const t = el("div", "tm-mode-title"); t.append(el("i", "tm-radio"), el("b", "", label));
+      o.append(t, el("p", "", text), key === "round_robin" ? diagramRound(members, d.ending.max_rounds) : diagramPick(members));
+      o.addEventListener("click", () => { if (d.mode !== key) { d.mode = key; changed(true); } });
+      opts.append(o);
+    }
+    pick.append(opts);
+    const end = el("div", "tm-block tm-ending");
+    const eh = el("div", "tm-label-row"); eh.append(el("h4", "tm-label", "끝나는 조건"), el("span", "", "먼저 닿는 조건에서 끝나요"));
+    const grid = el("div", "tm-two");
+    const rounds = el("div", "tm-stepper");
+    const rIn = input(d.ending.max_rounds, (v) => { const n = Math.max(1, Math.min(10, Number(v) || 1)); d.ending.max_rounds = n; changed(); }, { type: "number" });
+    rIn.min = 1; rIn.max = 10;
+    const step = (dx) => { d.ending.max_rounds = Math.max(1, Math.min(10, (Number(d.ending.max_rounds) || 1) + dx)); changed(true); };
+    const minus = el("button", "", "−"); minus.type = "button"; minus.setAttribute("aria-label", "한 라운드 줄이기"); minus.addEventListener("click", () => step(-1));
+    const plus = el("button", "", "+"); plus.type = "button"; plus.setAttribute("aria-label", "한 라운드 늘리기"); plus.addEventListener("click", () => step(1));
+    rounds.append(rIn, minus, plus);
+    const cap = el("div", "tm-suffix");
+    const cIn = input(Number(d.ending.token_cap || 0).toLocaleString("en-US"), (v) => { d.ending.token_cap = Number(String(v).replace(/[^\d]/g, "")) || 0; changed(); });
+    cIn.inputMode = "numeric"; cIn.classList.add("mono");
+    cap.append(cIn, el("span", "", "토큰"));
+    grid.append(field("최대 라운드", rounds), field("토큰 상한", cap));
+    const toggles = el("div", "tm-toggles");
+    for (const [k, label] of [["end_on_all_approved", "리뷰어가 모두 승인하면 끝"], ["end_on_moderator", "진행자가 끝내면 끝"]]) {
+      const r = el("div", "tm-toggle"); r.append(el("span", "", label), sw(d.ending[k], label, (v) => { d.ending[k] = v; changed(true); }));
+      toggles.append(r);
+    }
+    end.append(eh, grid, toggles);
+    c.append(pick, end);
+    return c;
+  }
+  // Little pictures of the two modes (Figma draws them with vectors; same layout, drawn here as SVG).
+  const NS = "http://www.w3.org/2000/svg";
+  function svgEl(tag, attrs, text) { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v); if (text != null) n.textContent = text; return n; }
+  function nodeLogo(g, model, x, y) {
+    const m = (model || "").toLowerCase();
+    if (/^(claude|opus|sonnet|haiku|fable)/.test(m)) { g.append(svgEl("image", { href: "img/claude.svg", x: x - 6, y: y - 6, width: 12, height: 12 })); return; }
+    const ref = /^(gpt|o\d|codex)/.test(m) ? "a-codex" : m.startsWith("glm") ? "a-zcode" : m.startsWith("gemini") ? "a-gemini" : "";
+    if (ref) g.append(svgEl("use", { href: `#${ref}`, x: x - 6, y: y - 6, width: 12, height: 12, class: "tm-svg-logo" }));
+    else g.append(svgEl("circle", { cx: x, cy: y, r: 3, class: "tm-svg-dot" }));
+  }
+  function arrowDefs(svg) {
+    const defs = svgEl("defs");
+    for (const [id, cls] of [["tm-ah", "tm-svg-ah"], ["tm-ah-on", "tm-svg-ah on"]]) {
+      const mk = svgEl("marker", { id, viewBox: "0 0 6 6", refX: 5, refY: 3, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" });
+      mk.append(svgEl("path", { d: "M0 0L6 3L0 6z", class: cls })); defs.append(mk);
+    }
+    svg.append(defs);
+  }
+  function diagramRound(members, maxRounds) {
+    const list = members.slice(0, 5);
+    const svg = svgEl("svg", { viewBox: "0 0 371 112", class: "tm-diagram", "aria-hidden": "true" });
+    arrowDefs(svg);
+    if (!list.length) { svg.append(svgEl("text", { x: 185, y: 60, class: "tm-svg-cap", "text-anchor": "middle" }, "참여자를 넣으면 순서가 보여요")); return svg; }
+    const xs = list.map((_, i) => (list.length === 1 ? 185 : 28 + (i * (343 - 28)) / (list.length - 1)));
+    const now = list.length > 1 ? 1 : 0;
+    for (let i = 0; i < list.length - 1; i++) svg.append(svgEl("line", { x1: xs[i] + 18, y1: 34, x2: xs[i + 1] - 18, y2: 34, class: "tm-svg-line", "marker-end": "url(#tm-ah)" }));
+    if (list.length > 1) svg.append(svgEl("path", { d: `M${xs[xs.length - 1]} 64 V86 H${xs[0]} V66`, class: "tm-svg-line dash", "marker-end": "url(#tm-ah)" }));
+    list.forEach((m, i) => {
+      const g = svgEl("g");
+      g.append(svgEl("circle", { cx: xs[i], cy: 34, r: 13, class: `tm-svg-node${i === now ? " on" : ""}` }));
+      nodeLogo(g, memberModel(m), xs[i], 34);
+      const name = svgEl("text", { x: xs[i], y: 61, "text-anchor": "middle", class: `tm-svg-name${i === now ? " on" : ""}` }, memberName(m)); name.setAttribute("data-no-i18n", "");
+      g.append(name);
+      if (i === now) g.append(svgEl("text", { x: xs[i], y: 14, "text-anchor": "middle", class: "tm-svg-tag" }, "지금"));
+      svg.append(g);
+    });
+    svg.append(svgEl("text", { x: 185, y: 104, "text-anchor": "middle", class: "tm-svg-cap" }, `다 돌면 처음부터 · 라운드 1/${maxRounds || 4}`));
+    return svg;
+  }
+  function diagramPick(members) {
+    const svg = svgEl("svg", { viewBox: "0 0 371 112", class: "tm-diagram", "aria-hidden": "true" });
+    arrowDefs(svg);
+    const mod = members.find((m) => m.role === "moderator") || members[0];
+    const rest = members.filter((m) => m !== mod).slice(0, 3);
+    if (!mod) { svg.append(svgEl("text", { x: 185, y: 60, class: "tm-svg-cap", "text-anchor": "middle" }, "참여자를 넣으면 순서가 보여요")); return svg; }
+    const ys = rest.length === 1 ? [56] : rest.map((_, i) => 16 + (i * 80) / (rest.length - 1));
+    const on = rest.length > 1 ? 1 : 0;
+    rest.forEach((m, i) => {
+      const y = ys[i];
+      svg.append(svgEl("path", { d: `M54 56 C150 56 180 ${y} 272 ${y}`, class: `tm-svg-line${i === on ? " on" : " dash"}`, "marker-end": i === on ? "url(#tm-ah-on)" : "url(#tm-ah)" }));
+    });
+    const g = svgEl("g");
+    g.append(svgEl("circle", { cx: 38, cy: 56, r: 13, class: "tm-svg-node" }));
+    nodeLogo(g, memberModel(mod), 38, 56);
+    g.append(svgEl("rect", { x: 24, y: 28, width: 28, height: 12, rx: 3, class: "tm-svg-pill" }), svgEl("text", { x: 38, y: 37, "text-anchor": "middle", class: "tm-svg-pilltext" }, "진행"));
+    const mn = svgEl("text", { x: 38, y: 84, "text-anchor": "middle", class: "tm-svg-name" }, memberName(mod)); mn.setAttribute("data-no-i18n", ""); g.append(mn);
+    svg.append(g);
+    rest.forEach((m, i) => {
+      const y = ys[i], gg = svgEl("g");
+      gg.append(svgEl("circle", { cx: 288, cy: y, r: 13, class: `tm-svg-node${i === on ? " on" : ""}` }));
+      nodeLogo(gg, memberModel(m), 288, y);
+      const t = svgEl("text", { x: 308, y: y + (i === on ? 0 : 4), class: `tm-svg-name${i === on ? " on" : ""}` }, memberName(m)); t.setAttribute("data-no-i18n", "");
+      gg.append(t);
+      if (i === on) gg.append(svgEl("text", { x: 308, y: y + 12, class: "tm-svg-tag left" }, "지금 차례"));
+      svg.append(gg);
+    });
+    return svg;
+  }
+
+  // 함께 보는 자료와 채널: shared context for every member and the Discord channels that start this team's meetings.
+  function contextSources() {
+    const out = [];
+    for (const m of state.data.memories || []) if (["procedural", "decision", "user"].includes(m.kind)) out.push(["memories", m.id, (m.title || m.text || "").slice(0, 60)]);
+    for (const ds of state.data.designSystems || []) out.push(["design_systems", ds.id, ds.name || ds.title || ds.id]);
+    for (const sk of state.data.skills || []) out.push(["skills", sk.id, sk.name]);
+    return out.slice(0, 300);
+  }
+  function contextAdder(d, changed) {
+    const used = new Set((d.context || []).map((c) => `${c.collection}:${c.id}`));
+    const opts = contextSources().filter(([col, id]) => !used.has(`${col}:${id}`));
+    const kindText = { memories: "기억", design_systems: "디자인 시스템", skills: "스킬" };
+    const s = select([["", opts.length ? "넣을 자료 고르기" : "넣을 자료가 없어요"], ...opts.map(([col, id, title]) => [`${col}\u0000${id}`, `${kindText[col]} · ${title}`])], "", (v) => {
+      if (!v) return;
+      const [col, id] = v.split("\u0000");
+      const src = opts.find((o) => o[0] === col && o[1] === id);
+      d.context = [...(d.context || []), { collection: col, id, title: src?.[2] || id, share: "team" }];
+      S.ctxAdding = false; changed(true);
+    });
+    queueMicrotask(() => s.focus());
+    return s;
+  }
+  function contextCard(rec, d, changed) {
+    const c = card("", "함께 보는 자료와 채널");
+    const grid = el("div", "tm-ctx");
+    const left = el("div", "tm-block");
+    left.append(el("h4", "tm-label", "공유하는 맥락"));
+    const list = el("div", "tm-ctx-list");
+    (d.context || []).forEach((x) => {
+      const r = el("div", "tm-ctx-row");
+      const pill = el("button", "tm-badge line", x.share === "shared" ? "다른 팀과 공유" : "팀 전용"); pill.type = "button";
+      pill.title = "누르면 바뀌어요";
+      pill.addEventListener("click", () => { x.share = x.share === "shared" ? "team" : "shared"; changed(true); });
+      const del = el("button", "icon-btn plain tm-x"); del.type = "button"; del.setAttribute("aria-label", "빼기"); del.append(icon("x"));
+      del.addEventListener("click", () => { d.context = d.context.filter((y) => y !== x); changed(true); });
+      r.append(raw(el("span", "", x.title || x.id)), pill, del);
+      list.append(r);
+    });
+    if (!(d.context || []).length) list.append(empty("아직 없어요. 회의 내내 모두가 볼 자료를 넣어 주세요."));
+    left.append(list, S.ctxAdding ? contextAdder(d, changed) : link("+ 자료 추가", () => { S.ctxAdding = true; render(false); }));
+    const right = el("div", "tm-block");
+    right.append(el("h4", "tm-label", "연결된 채널"));
+    const ch = channelsFor(rec.id);
+    if (ch.length) {
+      for (const x of ch) { const r = el("div", "tm-channel"); r.append(raw(el("span", "", `#${x.name || x.channel_id}`)), el("small", "", x.bot.name || "")); right.append(r); }
+      right.append(el("p", "tm-note", "채널에 글을 쓰면 회의가 시작돼요."));
+    } else {
+      right.append(el("p", "tm-note", "연결된 채널이 없어요."), link("디스코드에서 채널 정하기 →", () => go("discord")));
+    }
+    const mirror = el("div", "tm-toggle");
+    mirror.append(el("span", "", "회의 진행을 디스코드 스레드에도 올리기"), sw(d.discord_mirror, "디스코드에도 올리기", (v) => { d.discord_mirror = v; changed(true); }));
+    right.append(mirror);
+    grid.append(left, right);
+    c.append(grid);
+    return c;
+  }
+  function validTeam(d) {
+    if (!d.name?.trim()) return "팀 이름을 넣어 주세요.";
+    if (!(d.members || []).length) return "참여자를 한 명 이상 넣어 주세요.";
+    return "";
+  }
+  async function saveTeam(rec) {
+    const d = S.draft;
+    const bad = validTeam(d); if (bad) { notice(bad); return; }
+    d.handle = d.handle || handleFrom(d.name);
+    try {
+      const saved = await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "POST", body: body({ expected_revision: rec.revision, crew: d }) });
+      replaceRecord(saved?.id ? saved : { ...rec, revision: (rec.revision || 0) + 1, crew: clone(d) });
+      S.dirty = false; S.draftFor = null;
+      notice("저장했어요.");
+      render(false);
+    } catch (e) { notice(errorText(e)); }
+  }
+  async function archiveTeam(rec) {
+    if (!confirm(`'${rec.crew.name}' 팀을 보관할까요? 지난 회의 기록은 남아요.`)) return;
+    try {
+      await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "POST", body: body({ expected_revision: rec.revision, archive: true }) });
+      state.data.crew = items().filter((r) => r.id !== rec.id);
+      S.team = null; S.dirty = false; S.draftFor = null;
+      notice("보관했어요.");
+      render(false);
+    } catch (e) { notice(errorText(e)); }
+  }
+
+  // ================================================================ 팀 — 새로 만들기 (310:19981)
+  const blankTeam = () => ({ type: "team", name: "", handle: "", role: "", members: [], mode: "moderator_picks",
+    ending: { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true }, context: [], templates: [], discord_mirror: false });
+  function openNew() {
+    if (S.dirty && !confirm("저장하지 않은 변경이 있어요. 버리고 새 팀을 만들까요?")) return;
+    S.dirty = false; S.draftFor = null; S.nd = blankTeam(); S.ndFrom = ""; S.estimate = null; S.estKey = ""; S.adding = false; S.ctxAdding = false;
+    go("teamNew");
+  }
+  function startFrom(id) {
+    const src = byId(id);
+    const keep = { name: S.nd.name, role: S.nd.role, handle: S.nd.handle };
+    S.nd = src ? { ...blankTeam(), ...clone(src.crew), ...keep, discord_mirror: false } : { ...blankTeam(), ...keep };
+    delete S.nd.id;
+    S.ndFrom = id; render(false);
+  }
+  function section(n, title, sub) {
+    const c = el("section", "tm-card tm-step");
+    const h = el("div", "tm-step-head"); h.append(el("span", "tm-step-n", String(n)), el("h3", "", title));
+    c.append(h);
+    if (sub) c.append(el("p", "tm-step-sub", sub));
+    return c;
+  }
+  function renderTeamNew() {
+    if (!S.nd) S.nd = blankTeam();
+    ctx.headExtras?.({ back: ["팀", () => go("teams")] });
+    $("#controls").replaceChildren();
+    const table = $("#table");
+    table.className = "tm-wrap tm-form";
+    const d = S.nd;
+    const changed = (structural) => { if (structural) render(false); else paintNewSide(); };
+    const s1 = section(1, "무슨 팀인가요");
+    const two = el("div", "tm-two");
+    const handleIn = raw(input(d.handle, (v) => { d.handle = v.replace(/^@/, ""); changed(); }, { max: 32, placeholder: handleFrom(d.name) || "디자인리뷰" }));
+    two.append(field("팀 이름", raw(input(d.name, (v) => { d.name = v; handleIn.placeholder = handleFrom(v) || "디자인리뷰"; changed(); }, { max: 80, placeholder: "디자인 리뷰 팀" }))),
+      field("목적", raw(input(d.role, (v) => { d.role = v; changed(); }, { max: 200, placeholder: "시안을 여러 관점에서 검토해 고칠 목록을 만들어요" }))));
+    const hf = el("div", "tm-at"); hf.append(el("span", "", "@"), handleIn);
+    s1.append(two, field("부르는 이름 (작업 에이전트와 같은 @이름 칸을 써요)", hf, "tm-handle-field"));
+    const from = el("div", "tm-block"); from.append(el("h4", "tm-label", "비슷한 팀에서 시작"));
+    const chips = el("div", "tm-chips");
+    for (const [id, label] of [["", "빈 팀"], ...teams().map((t) => [t.id, t.crew.name])]) {
+      const c = el("button", `tm-chip${S.ndFrom === id ? " active" : ""}`, label); c.type = "button"; if (id) raw(c);
+      c.addEventListener("click", () => startFrom(id)); chips.append(c);
+    }
+    from.append(chips); s1.append(from);
+    const s2 = section(2, "누가 참여하나요", "위에서부터 순서대로 말해요. 끌어서 순서를 바꿀 수 있어요.");
+    s2.append(...membersCard(d, changed, true).childNodes);
+    const s3 = section(3, "어떻게 회의하나요");
+    s3.append(modeCard(d, changed, null, null, true));
+    const s4 = section(4, "함께 보는 자료", "회의 내내 모든 멤버가 보는 자료예요.");
+    const docs = el("div", "tm-chips");
+    (d.context || []).forEach((x) => {
+      const c = raw(el("button", "tm-chip doc", x.title || x.id)); c.type = "button"; c.title = "누르면 빠져요";
+      c.addEventListener("click", () => { d.context = d.context.filter((y) => y !== x); changed(true); }); docs.append(c);
+    });
+    if (S.ctxAdding) docs.append(contextAdder(d, changed));
+    else { const a = el("button", "tm-chip add", "+ 문서 추가"); a.type = "button"; a.addEventListener("click", () => { S.ctxAdding = true; render(false); }); docs.append(a); }
+    const mirror = el("div", "tm-toggle bare");
+    const mt2 = el("div", ""); mt2.append(el("b", "", "디스코드에서도 회의"), el("small", "", "연결된 디스코드 채널의 스레드에 진행 상황을 올려요"));
+    mirror.append(mt2, sw(d.discord_mirror, "디스코드에서도 회의", (v) => { d.discord_mirror = v; changed(true); }));
+    s4.append(docs, mirror);
+    const foot = el("div", "tm-foot");
+    foot.append(button("팀 만들기", "primary", null, createTeam), link("취소", () => go("teams"), "tm-link plain"));
+    const main = el("div", "tm-form-main");
+    main.append(s1, s2, s3, s4, foot);
+    table.replaceChildren(main);
+    paintNewSide();
+  }
+  function paintNewSide() {
+    if (!here("teamNew")) return;
+    const d = S.nd, members = sorted(d.members);
+    const prev = el("div", "tm-preview");
+    prev.append(raw(el("b", "", d.name || "새 팀")));
+    const logos = el("div", "tm-logos"); members.forEach((m) => logos.append(mark(memberModel(m)))); prev.append(logos);
+    prev.append(el("small", "", `${members.length}명 · ${d.mode === "round_robin" ? "정해진 순서" : "진행자 지명"} · 최대 ${d.ending?.max_rounds || 4}라운드`));
+    const e = S.estimate;
+    const costV = el("b", ""); costV.append(e ? `약 ${usd(e.cost_usd)}` : "—"); if (e) costV.append(est());
+    const once = kv([["예상 토큰", e ? `약 ${num(e.tokens)}` : "—"], ["예상 비용", costV], ["걸리는 시간", e ? `${e.minutes_min}~${e.minutes_max}분` : "—"]]);
+    const handle = d.handle || handleFrom(d.name) || "팀이름";
+    side(el("p", "tm-side-kind", "미리보기"), prev, sideLabel("한 번 회의할 때"), once,
+      sideLabel("회의 시작하는 곳"), raw(el("p", "tm-side-text", tr(`회의 화면, 디스코드 채널, 또는 에이전트에서 @${handle} 으로 불러요.`))));
+    queueEstimate();
+  }
+  function queueEstimate() {
+    const d = S.nd;
+    const key = JSON.stringify([d.members, d.mode, d.ending]);
+    if (key === S.estKey) return;
+    S.estKey = key;
+    clearTimeout(S.estTimer);
+    if (!(d.members || []).length) { S.estimate = null; return; }
+    S.estTimer = setTimeout(async () => {
+      try {
+        const r = await request("/v1/crew/teams/estimate", { method: "POST", body: body({ team: d }) });
+        if (S.estKey !== key) return;
+        S.estimate = r && r.tokens != null ? r : null;
+      } catch { S.estimate = null; }
+      if (here("teamNew")) paintNewSide();
+    }, 500);
+  }
+  async function createTeam() {
+    const d = S.nd;
+    const bad = validTeam(d); if (bad) { notice(bad); return; }
+    d.handle = d.handle || handleFrom(d.name);
+    try {
+      const saved = await request("/v1/crew", { method: "POST", body: body({ crew: d }) });
+      await reloadCrew().catch(() => replaceRecord(saved));
+      S.team = saved?.id || S.team; S.nd = null;
+      go("teams");
+      notice("팀을 만들었어요.");
+    } catch (e) { notice(errorText(e)); }
+  }
+
+  // ================================================================ 회의 (208:19103)
+  async function loadMeetings(quiet) {
+    try {
+      const r = await request(`/v1/crew/meetings?${query({ status: S.meetTab === "ended" ? "ended" : S.meetTab, limit: 50 })}`);
+      S.meetings = (r.items || []).map(mt); S.counts = r.counts || S.counts || {}; S.meetErr = "";
+    } catch (e) {
+      if (quiet) return;
+      S.meetings = []; S.meetErr = unsupported(e) ? "unsupported" : e.message;
+    }
+    if (!S.meetSel || !S.meetings.some((m) => m.id === S.meetSel)) S.meetSel = S.meetings[0]?.id || (S.meeting?.id ?? null);
+    if (S.meetSel && S.meeting?.id !== S.meetSel) await loadMeeting(S.meetSel, true);
+    if (here("meetings")) repaintMeetings();
+  }
+  async function loadMeeting(id, silent) {
+    try {
+      const m = mt(await request(`/v1/crew/meetings/${encodeURIComponent(id)}?${query()}`));
+      const same = S.meeting && S.meeting.id === m.id && JSON.stringify(S.meeting) === JSON.stringify(m);
+      S.meeting = m;
+      const i = (S.meetings || []).findIndex((x) => x.id === m.id);
+      if (i >= 0) S.meetings[i] = { ...S.meetings[i], ...m };
+      if (!silent && !same && here("meetings")) repaintMeetings();
+    } catch (e) {
+      if (!silent) notice(`회의를 불러오지 못했어요 (${e.message}).`);
+    }
+    schedule();
+  }
+  // Poll GET /v1/crew/meetings/{id} every 2 s while the meeting on screen is still going (contract).
+  function schedule() {
+    clearTimeout(S.timer);
+    if (!here("meetings") || !S.meeting || !LIVE.has(S.meeting.status)) return;
+    S.timer = setTimeout(async () => {
+      if (!here("meetings") || !S.meeting) return;
+      S.tick++;
+      if (S.tick % 5 === 0) loadMeetings(true);
+      await loadMeeting(S.meeting.id, false);
+    }, 2000);
+  }
+  // Re-draw the meeting screen without losing what the person is typing in the note box.
+  function repaintMeetings() {
+    const focused = document.activeElement?.classList?.contains("tm-note-input");
+    const pos = focused ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
+    render(false);
+    if (focused) { const n = $(".tm-note-input"); if (n) { n.focus(); try { n.setSelectionRange(...pos); } catch { /* number input */ } } }
+  }
+  function renderMeetings() {
+    ctx.headExtras?.({ aside: [button("새 회의", "primary", null, () => { S.newMeeting = { team_id: S.meeting?.team_id || teams()[0]?.id || "" }; render(false); })] });
+    $("#controls").replaceChildren();
+    const table = $("#table");
+    table.className = "tm-wrap tm-meet";
+    if (S.meetings == null) { S.meetings = []; S.meetLoading = true; loadMeetings().finally(() => { S.meetLoading = false; }); }
+    if (S.meetErr) {
+      table.replaceChildren(empty(S.meetErr === "unsupported" ? "이 서버는 아직 회의를 지원하지 않아요. 서버를 새 버전으로 올리면 팀 회의를 여기서 볼 수 있어요." : `회의를 불러오지 못했어요 (${S.meetErr}).`));
+      meetingSide(null);
+      return;
+    }
+    const c = S.counts || {};
+    const seg = el("div", "tm-seg"); seg.setAttribute("role", "tablist");
+    for (const [k, label] of [["running", "진행 중"], ["ended", "끝남"], ["all", "전체"]]) {
+      const t = el("button", `tm-seg-tab${S.meetTab === k ? " active" : ""}`); t.type = "button"; t.setAttribute("role", "tab");
+      t.append(el("span", "", label), el("output", "", String(c[k] ?? "")));
+      t.addEventListener("click", () => { if (S.meetTab !== k) { S.meetTab = k; S.meetSel = null; loadMeetings(); } });
+      seg.append(t);
+    }
+    const list = el("div", "tm-mlist2");
+    for (const m of S.meetings || []) {
+      const row = el("button", `tm-meet-row${m.id === S.meetSel ? " selected" : ""}`); row.type = "button";
+      const t = el("div", ""); t.append(raw(el("b", "", m.title || "(제목 없음)")), raw(el("small", "", meetingMeta(m))));
+      const [label, tone] = MEETING_STATUS[m.status] || [m.status, "line"];
+      row.append(t, badge(label, tone));
+      row.addEventListener("click", () => { S.meetSel = m.id; S.newMeeting = null; S.meeting = m; render(false); loadMeeting(m.id); });
+      list.append(row);
+    }
+    if (!(S.meetings || []).length) list.append(empty(S.meetLoading ? "불러오는 중…" : S.meetTab === "running" ? "지금 진행 중인 회의는 없어요. 새 회의를 열어 보세요." : "아직 회의 기록이 없어요."));
+    const kids = [seg, list];
+    const m = S.meeting && S.meeting.id === S.meetSel ? S.meeting : (S.meetings || []).find((x) => x.id === S.meetSel);
+    if (m) {
+      if (m.status === "waiting") kids.push(waitingCard(m));
+      kids.push(transcript(m));
+      if (m.conclusion && Object.keys(m.conclusion).length) kids.push(conclusionCard(m));
+      if (LIVE.has(m.status) && m.status !== "stopping") kids.push(noteBox(m));
+    }
+    table.replaceChildren(...kids);
+    meetingSide(m);
+    schedule();
+  }
+  const teamName = (m) => m.team_snapshot?.team?.name || m.team_snapshot?.name || byId(m.team_id)?.crew?.name || "팀";
+  function meetingMeta(m) {
+    // 팀 이름은 데이터라 그대로, 나머지만 번역 (raw 안에 들어간다)
+    if (LIVE.has(m.status)) return `${teamName(m)} · ${tr(`라운드 ${m.round || 0}/${m.max_rounds || "?"}`)}`;
+    return `${teamName(m)} · ${tr(ago(m.finished_at || m.updated_at || m.created_at))}`;
+  }
+  // team_snapshot = {team, agents:{id: agent}} copied when the meeting started; fall back to the live team record.
+  function membersOf(m) {
+    const snap = m.team_snapshot;
+    const list = snap?.team?.members || snap?.members || byId(m.team_id)?.crew?.members || [];
+    return sorted(list).map((x) => {
+      const a = snap?.agents?.[x.agent_id];
+      return a ? { ...x, name: x.name || a.name, model: x.model_override || x.model || (a.model_mode === "auto" ? "auto" : a.model) } : x;
+    });
+  }
+  function speakerModel(m, turn) {
+    if (turn.model) return turn.model;
+    const mem = membersOf(m).find((x) => x.agent_id === turn.agent_id);
+    return mem ? (mem.model || memberModel(mem)) : "";
+  }
+  // Notes the Discord bot relays come in as by = "discord" (the person's name is in the text).
+  const who = (by) => (by === "discord" ? tr("디스코드") : !by || by === "human" || by === "owner" ? tr("나") : by); // raw 안에 들어간다
+  function turnMeta(t) {
+    if (t.kind === "brief") return "브리프";
+    if (t.kind === "human") return "내 의견";
+    if (t.kind === "conclusion") return "결론";
+    return `라운드 ${t.round || 0}${t.stance && STANCE[t.stance] ? ` · ${STANCE[t.stance]}` : ""}`;
+  }
+  function transcript(m) {
+    const c = el("section", "tm-trans");
+    const h = el("div", "tm-trans-head"); h.append(raw(el("h3", "", m.title || "(제목 없음)")), el("span", "mono", `라운드 ${m.round || 0} / ${m.max_rounds || "?"}`));
+    c.append(h);
+    if (m.topic) { const tp = raw(el("p", "tm-topic", m.topic)); c.append(tp); }
+    for (const t of m.turns || []) {
+      if (t.kind === "conclusion") continue; // shown in its own card below
+      const row = el("div", `tm-turn${t.kind === "human" ? " human" : ""}`);
+      row.append(t.kind === "human" ? Object.assign(el("span", "tm-mark"), { textContent: "•" }) : mark(speakerModel(m, t)));
+      const b = el("div", "");
+      const top = el("div", "tm-turn-top"); top.append(raw(el("b", "", t.kind === "human" ? who(t.speaker) : t.speaker || t.agent_id)), el("small", "", turnMeta(t)));
+      if (t.ok === false) top.append(el("small", "amber", " · 실패"));
+      b.append(top, raw(el("p", "", t.ok === false ? (t.error || "답을 받지 못했어요.") : t.text || "")));
+      row.append(b);
+      c.append(row);
+    }
+    if (m.status === "running" && m.speaking) {
+      const mem = membersOf(m).find((x) => x.agent_id === m.speaking || memberName(x) === m.speaking);
+      const row = el("div", "tm-turn speaking");
+      row.append(mark(mem ? mem.model || memberModel(mem) : ""));
+      const top = el("div", "tm-turn-top"); top.append(raw(el("b", "", mem ? memberName(mem) : m.speaking)), el("small", "amber", `라운드 ${m.round || 0} · 말하는 중…`));
+      const b = el("div", ""); b.append(top); row.append(b); c.append(row);
+    }
+    if (m.status === "pending" && !(m.turns || []).length) c.append(empty("곧 시작해요. 기록관이 먼저 브리프를 써요."));
+    for (const n of m.notes_pending || []) {
+      const row = el("div", "tm-turn human pending");
+      row.append(Object.assign(el("span", "tm-mark"), { textContent: "•" }));
+      const b = el("div", ""); const top = el("div", "tm-turn-top"); top.append(raw(el("b", "", who(n.by))), el("small", "", "다음 라운드에 반영"));
+      b.append(top, raw(el("p", "", n.text || ""))); row.append(b); c.append(row);
+    }
+    if (m.ended_reason && !LIVE.has(m.status)) c.append(el("p", "tm-ended", ENDED[m.ended_reason] || m.ended_reason));
+    return c;
+  }
+  function conclusionCard(m) {
+    const k = m.conclusion;
+    const c = el("section", "tm-trans tm-concl");
+    const h = el("div", "tm-trans-head"); h.append(el("h3", "", "결론"));
+    c.append(h);
+    if (k.summary) c.append(raw(el("p", "tm-concl-sum", k.summary)));
+    for (const [key, label] of [["decisions", "정한 것"], ["todos", "할 일"], ["open_questions", "남은 질문"]]) {
+      const list = (k[key] || []).filter(Boolean);
+      if (!list.length) continue;
+      const box = el("div", "tm-concl-list"); box.append(el("h4", "", label));
+      const ul = el("ul", ""); list.forEach((x) => ul.append(raw(el("li", "", typeof x === "string" ? x : x.text || JSON.stringify(x))))); box.append(ul);
+      c.append(box);
+    }
+    const n = m.saved?.candidate_ids?.length || 0;
+    const save = el("div", "tm-saved");
+    if (n) { save.append(el("span", "", `기억 후보 ${n}개로 보냈어요.`), link("검토하기 →", () => go("memories", "candidate"))); }
+    else save.append(el("span", "", m.status === "concluded" ? "결정과 교훈은 기억 후보로 보내져요. 검토 화면에서 승인해야 기억이 돼요." : ""));
+    c.append(save);
+    return c;
+  }
+  function waitingCard(m) {
+    const a = el("div", "wf-attn tm-wait");
+    const t = el("div", ""); t.append(el("strong", "", "확인해 주세요"), el("p", "", m.waiting?.reason || "예산 한도에 닿아 회의를 잠시 멈췄어요. 계속할까요?"));
+    const acts = el("div", "wf-attn-actions");
+    acts.append(button("계속", "primary", null, () => decide(m, true)), button("멈춤", "", null, () => decide(m, false)));
+    a.append(t, acts);
+    return a;
+  }
+  function noteBox(m) {
+    const row = el("form", "tm-note-row");
+    const i = el("input", "tm-input tm-note-input"); i.placeholder = "다음 라운드에 반영할 의견을 남겨요"; i.maxLength = 4000; i.value = S.note;
+    i.addEventListener("input", () => { S.note = i.value; });
+    const send = el("button", "btn primary", "보내기"); send.type = "submit";
+    row.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = S.note.trim(); if (!text) return;
+      send.disabled = true;
+      try {
+        const r = await request(`/v1/crew/meetings/${encodeURIComponent(m.id)}/notes`, { method: "POST", body: body({ expected_revision: m.revision, text }) });
+        S.note = "";
+        if (r?.id) S.meeting = mt(r); else S.meeting = { ...m, notes_pending: [...(m.notes_pending || []), { by: "나", text, at: new Date().toISOString() }] };
+        notice("다음 라운드에 반영할게요.");
+        repaintMeetings();
+        loadMeeting(m.id, true);
+      } catch (err) { notice(errorText(err)); send.disabled = false; }
+    });
+    row.append(i, send);
+    return row;
+  }
+  async function decide(m, approve) {
+    try {
+      const r = await request(`/v1/crew/meetings/${encodeURIComponent(m.id)}/decision`, { method: "POST", body: body({ expected_revision: m.revision, approve }) });
+      if (r?.id) S.meeting = mt(r);
+      notice(approve ? "회의를 이어서 해요." : "회의를 멈췄어요.");
+      await loadMeeting(m.id, false);
+    } catch (e) { notice(errorText(e)); }
+  }
+  async function stopMeeting(m) {
+    if (!confirm("회의를 멈출까요? 지금까지의 기록은 남아요.")) return;
+    try {
+      await request(`/v1/crew/meetings/${encodeURIComponent(m.id)}/stop`, { method: "POST", body: body({}) });
+      notice("멈추는 중이에요. 지금 말하는 차례가 끝나면 멈춰요.");
+      await loadMeeting(m.id, false);
+    } catch (e) { notice(errorText(e)); }
+  }
+  function bar(value, max) { const b = el("div", "tm-bar"); const i = el("i"); i.style.width = `${Math.min(100, max ? (value / max) * 100 : 0)}%`; b.append(i); return b; }
+  function meetingSide(m) {
+    if (S.newMeeting) { side(...newMeetingForm()); return; }
+    if (!m) { side(empty("회의를 고르면 진행 상황이 여기 보여요.")); return; }
+    const prog = el("div", "tm-side-sec");
+    prog.append(sideLabel("진행"));
+    const r1 = el("div", "tm-prog"); r1.append(el("span", "", "라운드"), el("b", "mono", `${pad2(m.round)} / ${pad2(m.max_rounds)}`));
+    const r2 = el("div", "tm-prog"); r2.append(el("span", "", "토큰"), el("b", "mono", `${Number(m.tokens_used || 0).toLocaleString("en-US")} / ${Number(m.token_cap || 0).toLocaleString("en-US")}`));
+    prog.append(r1, bar(m.round || 0, m.max_rounds || 1), r2, bar(m.tokens_used || 0, m.token_cap || 1));
+    const ppl = el("div", "tm-side-sec");
+    const members = membersOf(m);
+    ppl.append(sideLabel("참여자", `${members.length}명`));
+    for (const mem of members) {
+      const name = mem.name || memberName(mem);
+      const spoke = (m.turns || []).some((t) => t.agent_id === mem.agent_id && t.kind === "turn");
+      const now = m.status === "running" && (m.speaking === mem.agent_id || m.speaking === name);
+      const row = el("div", "tm-person");
+      row.append(mark(mem.model || memberModel(mem)), raw(el("span", "", name)), el("small", now ? "amber" : "", now ? "말하는 중" : spoke ? "말함" : LIVE.has(m.status) ? "대기" : "말 안 함"));
+      ppl.append(row);
+    }
+    const cost = el("div", "tm-side-sec");
+    cost.append(sideLabel("비용"));
+    const now = el("b", ""); now.append(usd(m.cost_usd)); now.append(est());
+    cost.append(kv([["지금까지", now], ["예상 전체", m.cost_estimate_usd ? `약 ${usd(m.cost_estimate_usd)}` : "—"], ["예산 넘김", m.budget_approved?.at ? `${ago(m.budget_approved.at)} 승인` : ""]]));
+    const acts = el("div", "tm-side-acts");
+    if (m.discord?.thread_url) { const a = el("a", "btn", "디스코드에서 열기"); a.href = m.discord.thread_url; a.target = "_blank"; a.rel = "noreferrer"; acts.append(a); }
+    if (LIVE.has(m.status) && m.status !== "stopping") acts.append(button("회의 멈춤", "ghost", null, () => stopMeeting(m)));
+    side(prog, ppl, cost, acts);
+  }
+  function newMeetingForm() {
+    const f = S.newMeeting;
+    const team = byId(f.team_id);
+    const head = el("div", "tm-side-sec"); head.append(el("p", "tm-side-kind", "새 회의"));
+    if (!teams().length) return [head, empty("먼저 팀을 만들어 주세요."), link("팀 만들기 →", () => openNew())];
+    const teamSel = select(teams().map((t) => [t.id, t.crew.name]), f.team_id, (v) => { f.team_id = v; f.template_key = ""; render(false); });
+    const tpls = team?.crew?.templates || [];
+    const topic = raw(input(f.topic, (v) => { f.topic = v; }, { tag: "textarea", rows: 6, max: 20000, placeholder: "무엇을 이야기할지 적어 주세요. 링크나 붙여 넣은 글도 돼요." }));
+    const tplSel = select([["", "템플릿 없이"], ...tpls.map((t) => [t.key, t.name])], f.template_key || "", (v) => {
+      f.template_key = v;
+      const t = tpls.find((x) => x.key === v);
+      if (t?.prompt && !f.topic) { f.topic = t.prompt; topic.value = t.prompt; }
+    });
+    const title = raw(input(f.title, (v) => { f.title = v; }, { max: 120, placeholder: "로그인 화면 다크 테마 검토" }));
+    const facts = team ? el("p", "tm-side-text", `${(team.crew.members || []).length}명 · ${team.crew.mode === "round_robin" ? "정해진 순서" : "진행자 지명"} · 최대 ${team.crew.ending?.max_rounds || 4}라운드 · 파일은 고치지 않아요`) : null;
+    const acts = el("div", "tm-side-acts");
+    acts.append(button("시작", "primary", null, () => startMeeting()), button("취소", "ghost", null, () => { S.newMeeting = null; render(false); }));
+    return [head, field("팀", teamSel), ...(facts ? [facts] : []), field("템플릿", tplSel), field("제목", title), field("주제", topic), acts];
+  }
+  async function startMeeting() {
+    const f = S.newMeeting;
+    if (!f.team_id) { notice("팀을 골라 주세요."); return; }
+    if (!(f.title || "").trim()) { notice("제목을 넣어 주세요."); return; }
+    try {
+      const r = mt(await request("/v1/crew/meetings", { method: "POST", body: body({ meeting: { team_id: f.team_id, template_key: f.template_key || undefined, title: f.title.trim(), topic: (f.topic || "").trim() } }) }));
+      S.newMeeting = null; S.meetTab = "running";
+      if (r?.id) { S.meetSel = r.id; S.meeting = r; }
+      notice("회의를 열었어요. 곧 시작해요.");
+      await loadMeetings();
+    } catch (e) { notice(errorText(e)); }
+  }
+
+  // ================================================================ 디스코드 (208:19677)
+  function renderDiscord() {
+    ctx.headExtras?.({ aside: [button("봇 연결", "primary", null, () => startConnect())] });
+    $("#controls").replaceChildren();
+    const table = $("#table");
+    table.className = "tm-wrap tm-discord";
+    if (!S.discord) { loadDiscord(); table.replaceChildren(empty("불러오는 중…")); $("#detail").replaceChildren(); return; }
+    if (S.discordErr === "unsupported") { table.replaceChildren(empty("이 서버는 아직 디스코드 연결을 지원하지 않아요. 서버를 새 버전으로 올려 주세요.")); $("#detail").replaceChildren(); return; }
+    if (S.connect) { table.replaceChildren(...connectSteps()); connectSide(); return; }
+    const kids = [];
+    if (S.discordErr) kids.push(empty(`디스코드 상태를 불러오지 못했어요 (${S.discordErr}).`));
+    for (const b of bots().filter((x) => ["needs_permission", "token_invalid"].includes(x.state))) {
+      const a = el("div", "wf-attn");
+      const miss = (b.missing || []).map((m) => `#${channelName(b, m.channel_id)}`).join(", ");
+      const t = el("div", "");
+      t.append(raw(el("strong", "", tr(b.state === "token_invalid" ? `${b.name} 토큰을 다시 넣어 주세요` : `${b.name} 권한을 다시 확인해 주세요`))),
+        raw(el("p", "", tr(b.state === "token_invalid" ? "디스코드가 토큰을 받아 주지 않아요. 개발자 포털에서 토큰을 새로 만들어 넣어 주세요." : `${miss || "채널"}에 글을 쓸 권한이 빠졌어요. 서버 관리자가 역할을 다시 줘야 해요.`))));
+      const acts = el("div", "wf-attn-actions");
+      acts.append(b.state === "token_invalid" ? button("토큰 다시 넣기", "primary", null, () => startConnect(b)) : button("권한 다시 확인", "primary", null, () => checkBot(b)));
+      a.append(t, acts); kids.push(a);
+    }
+    const st = S.discord.stats || {};
+    const kp = el("div", "tm-kpis");
+    const k = (label, value, sub) => { const c = el("div", "tm-kpi"); c.append(el("p", "", label), el("div", "tm-kpi-value"), raw(el("small", "", tr(sub || "")))); c.children[1].append(el("strong", "", value)); return c; };
+    const byTarget = (st.by_target || []).slice(0, 3).map((t) => `${t.label || t.name || targetLabel(t, true)} ${t.calls ?? t.count ?? 0}`).join(" · ");
+    kp.append(k("연결된 봇", String(st.bots ?? bots().length), bots().map((b) => b.name.replace(/-?bot$/i, "")).join(" · ")),
+      k("열린 회의", String(st.open_threads ?? 0), "채널 스레드"), k("이번 주 호출", String(st.calls_week ?? 0), byTarget));
+    kids.push(kp);
+    for (const b of bots()) kids.push(botCard(b));
+    if (!bots().length) kids.push(empty("아직 연결한 봇이 없어요. 봇 연결을 눌러 디스코드 서버에 Arkism 봇을 넣어 보세요."));
+    table.replaceChildren(...kids);
+    if (S.settingsOpen) settingsSide();
+    else if (S.bot && botById(S.bot)) botSide(botById(S.bot));
+    else discordOverview();
+  }
+  const channelName = (b, id) => (b.channels || []).find((c) => c.channel_id === id)?.name || id;
+  function botCard(b) {
+    const c = el("article", `tm-bot${S.bot === b.id ? " selected" : ""}`);
+    c.tabIndex = 0;
+    const h = el("div", "tm-bot-head");
+    const t = el("div", "");
+    const first = (b.channels || [])[0];
+    t.append(raw(el("b", "", b.name)), raw(el("small", "", tr([first ? targetLabel(first.action, true) : "채널을 정해 주세요", b.last_seen_at ? ago(b.last_seen_at) : ""].filter(Boolean).join(" · ")))));
+    const [label, tone] = BOT_STATE[b.state] || [b.state || "—", "line"];
+    h.append(t, badge(label, tone));
+    c.append(h);
+    for (const ch of b.channels || []) {
+      const r = el("div", "tm-bot-ch");
+      const auto = el("button", `tm-auto${ch.auto_start ? " on" : ""}`, ch.auto_start ? "자동 시작 켜짐" : "자동 시작 꺼짐"); auto.type = "button";
+      auto.title = "누르면 바뀌어요";
+      auto.addEventListener("click", (e) => { e.stopPropagation(); saveBot(b, { channels: b.channels.map((x) => (x === ch ? { ...x, auto_start: !x.auto_start } : x)) }); });
+      r.append(raw(el("span", "mono", `#${ch.name || ch.channel_id}`)), raw(el("span", "", ch.label || tr(targetLabel(ch.action)))), auto);
+      c.append(r);
+    }
+    const open = () => { S.bot = b.id; S.settingsOpen = false; S.botDraft = null; render(false); };
+    c.addEventListener("click", open);
+    c.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); });
+    return c;
+  }
+  function discordOverview() {
+    const how = el("div", "tm-side-sec");
+    how.append(el("h3", "tm-side-title", "채널에서 하는 네 가지"));
+    const steps = [["채널에 글 쓰기", "질문을 올리면 연결된 워크플로우가 시작돼요"], ["@이름으로 부르기", "작업 에이전트에게 바로 물어봐요"], ["스레드로 회의", "팀 회의가 스레드에서 진행돼요"], ["/회의 멈춤", "진행 중인 회의를 멈춰요"]];
+    const ol = el("ol", "tm-four");
+    steps.forEach(([a, b], i) => { const li = el("li", ""); li.append(el("span", "mono", pad2(i + 1))); const t = el("div", ""); t.append(el("b", "", a), el("small", "", b)); li.append(t); ol.append(li); });
+    how.append(ol);
+    const s = S.discord.settings || {};
+    const set = el("div", "tm-side-sec");
+    set.append(sideLabel("설정"));
+    const daily = el("b", ""); daily.append(s.daily_usd ? `하루 $${s.daily_usd}` : "없음"); if (s.daily_usd) daily.append(est());
+    set.append(kv([["서버", s.guild_name || "아직 없음"], ["봇 쓰는 방식", BOT_MODES.find(([k]) => k === (s.bot_mode || "shared"))[1]], ["결과 보내는 곳", s.reply_to === "channel" ? "채널" : "같은 스레드"], ["비용 한도", daily]]));
+    const acts = el("div", "tm-side-acts");
+    acts.append(button("봇 설정", "", null, () => { S.settingsOpen = true; S.bot = null; render(false); }), button("권한 다시 확인", "ghost", null, () => Promise.all(bots().map((b) => checkBot(b, true))).then(() => notice("봇 권한을 다시 확인하라고 보냈어요. 5분 안에 결과가 와요."))));
+    side(how, set, acts, el("p", "tm-side-text", "디스코드에서 시작한 일은 파일을 고치지 않고, 개인 선호 기억은 넣지 않아요. 허락한 사람의 글에만 답해요."));
+  }
+  async function checkBot(b, quiet) {
+    try {
+      await request(`/v1/discord/bots/${encodeURIComponent(b.id)}/check`, { method: "POST", body: body({}) });
+      if (!quiet) notice(`${b.name} 권한을 다시 확인하는 중이에요.`);
+      setTimeout(() => loadDiscord(true), 4000);
+    } catch (e) { if (!quiet) notice(errorText(e)); }
+  }
+  // POST /v1/discord/bots/{id}/update takes only the editable fields (DiscordBotInput).
+  const botFields = (b) => ({ name: b.name, channels: b.channels || [], ...(b.target ? { target: b.target } : {}), allowed: b.allowed || { user_ids: [], role_ids: [] }, ...(b.guild_id ? { guild_id: b.guild_id } : {}) });
+  const botURL = (b) => `/v1/discord/bots/${encodeURIComponent(b.id)}/update`;
+  async function saveBot(b, patch, okText) {
+    try {
+      const saved = await request(botURL(b), { method: "POST", body: body({ expected_revision: b.revision, bot: { ...botFields(b), ...patch } }) });
+      const i = bots().findIndex((x) => x.id === b.id);
+      if (i >= 0) S.discord.bots[i] = saved?.id ? bt(saved) : { ...b, ...patch, revision: (b.revision || 0) + 1 };
+      S.botDraft = null;
+      if (okText) notice(okText);
+      render(false);
+    } catch (e) { notice(errorText(e)); }
+  }
+  async function loadChannels(b) {
+    if (S.channels.has(b.id)) return;
+    S.channels.set(b.id, null);
+    try { S.channels.set(b.id, (await request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${query()}`)).items || []); } catch { S.channels.set(b.id, []); }
+    if (here("discord") && S.bot === b.id) render(false);
+  }
+  function targetOptions() {
+    const out = [["", "정하지 않음"]];
+    for (const t of teams()) out.push([`meeting:${t.id}`, `팀 회의 · ${t.crew.name}`]);
+    for (const w of workflows()) out.push([`workflow:${w.id}`, `워크플로우 · $${w.crew.handle}`]);
+    for (const a of agents()) out.push([`agent:${a.id}`, `작업 에이전트 · @${a.crew.handle}`]);
+    return out;
+  }
+  const actionKey = (a) => (a?.kind ? `${a.kind}:${a.id}` : "");
+  const actionOf = (key) => { if (!key) return null; const [kind, ...id] = key.split(":"); return { kind, id: id.join(":") }; };
+  function botSide(b) {
+    if (S.botDraftFor !== b.id || !S.botDraft) { S.botDraft = clone({ channels: b.channels || [], allowed: b.allowed || { user_ids: [], role_ids: [] }, name: b.name }); S.botDraftFor = b.id; }
+    const d = S.botDraft;
+    loadChannels(b);
+    const head = el("div", "tm-side-sec");
+    const [label, tone] = BOT_STATE[b.state] || [b.state || "—", "line"];
+    const t = el("div", "tm-side-titlerow"); t.append(raw(el("h3", "tm-side-title", b.name)), badge(label, tone));
+    head.append(el("p", "tm-side-kind", "봇"), t, kv([["서버", b.guild_name || S.discord.settings?.guild_name || "아직 초대 전"], ["토큰", b.token_last4 ? `••••${b.token_last4}` : "—"], ["마지막 확인", b.last_seen_at ? ago(b.last_seen_at) : "—"]]));
+    const parts = [head];
+    if ((b.missing || []).length) {
+      const miss = el("div", "wf-attn small");
+      const mt3 = el("div", ""); mt3.append(el("strong", "", "빠진 권한"), raw(el("p", "", b.missing.map((m) => `#${channelName(b, m.channel_id)}: ${(m.perms || []).join(", ")}`).join(" · "))));
+      miss.append(mt3, button("권한 다시 확인", "", null, () => checkBot(b)));
+      parts.push(miss);
+    }
+    if (!b.guild_id && b.application_id) parts.push(inviteBlock(b.application_id));
+    const chs = el("div", "tm-side-sec");
+    chs.append(sideLabel("채널", `${d.channels.length}개`));
+    d.channels.forEach((ch, i) => {
+      const box = el("div", "tm-chan-edit");
+      const top = el("div", "tm-chan-top"); top.append(raw(el("b", "mono", `#${ch.name || ch.channel_id}`)));
+      const del = el("button", "icon-btn plain tm-x"); del.type = "button"; del.setAttribute("aria-label", "채널 빼기"); del.append(icon("x"));
+      del.addEventListener("click", () => { d.channels.splice(i, 1); render(false); });
+      top.append(del);
+      const tsel = select(targetOptions(), actionKey(ch.action), (v) => { ch.action = actionOf(v); ch.template_key = undefined; });
+      tsel.setAttribute("aria-label", "부를 대상");
+      const lab = raw(input(ch.label, (v) => { ch.label = v; }, { max: 60, placeholder: "보이는 이름 (비우면 대상 이름)" }));
+      const auto = el("div", "tm-toggle bare"); auto.append(el("span", "", "글이 올라오면 바로 시작"), sw(ch.auto_start, "자동 시작", (v) => { ch.auto_start = v; render(false); }));
+      box.append(top, tsel, lab, auto);
+      chs.append(box);
+    });
+    const avail = (S.channels.get(b.id) || []).filter((c) => !d.channels.some((x) => x.channel_id === c.channel_id));
+    if (S.channels.get(b.id) === null) chs.append(el("p", "tm-side-text", "채널 목록을 불러오는 중…"));
+    else if (avail.length) chs.append(select([["", "+ 채널 추가"], ...avail.map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], "", (v) => {
+      const c = avail.find((x) => x.channel_id === v); if (!c) return;
+      d.channels.push({ channel_id: c.channel_id, name: c.name, label: "", action: null, auto_start: false }); render(false);
+    }));
+    else chs.append(el("p", "tm-side-text", b.guild_id ? "봇이 볼 수 있는 채널을 모두 넣었어요." : "서버에 초대하면 채널을 고를 수 있어요."));
+    const who = el("div", "tm-side-sec");
+    who.append(sideLabel("부를 수 있는 사람"));
+    const ids = raw(input((d.allowed.user_ids || []).join(", "), (v) => { d.allowed.user_ids = v.split(/[\s,]+/).filter(Boolean); }, { placeholder: "디스코드 사용자 ID, 쉼표로 나눠요" }));
+    who.append(ids, el("p", "tm-side-text", "비우면 서버 주인만 불러요. 다른 봇의 글에는 답하지 않아요."));
+    const acts = el("div", "tm-side-acts");
+    acts.append(button("저장", "primary", null, () => saveBot(b, { channels: d.channels, allowed: d.allowed }, "봇 설정을 저장했어요.")),
+      button("권한 다시 확인", "", null, () => checkBot(b)), button("연결 끊기", "ghost", null, () => removeBot(b)));
+    const back = link("← 디스코드 전체", () => { S.bot = null; S.botDraft = null; render(false); }, "tm-link quiet");
+    side(back, ...parts, chs, who, acts);
+  }
+  async function removeBot(b) {
+    if (!confirm(`'${b.name}' 봇 연결을 끊을까요? 디스코드 서버에서 봇이 나가지는 않아요.`)) return;
+    try {
+      await request(botURL(b), { method: "POST", body: body({ expected_revision: b.revision, archive: true }) });
+      S.discord.bots = bots().filter((x) => x.id !== b.id); S.bot = null;
+      notice("연결을 끊었어요."); render(false);
+    } catch (e) { notice(errorText(e)); }
+  }
+  function modeChooser(value, onPick) {
+    const box = el("div", "tm-modes two");
+    for (const [k, label, text] of BOT_MODES) {
+      const o = el("button", `tm-mode${value === k ? " active" : ""}`); o.type = "button";
+      o.setAttribute("role", "radio"); o.setAttribute("aria-checked", String(value === k));
+      const t = el("div", "tm-mode-title"); t.append(el("i", "tm-radio"), el("b", "", label));
+      o.append(t, el("p", "", text));
+      o.addEventListener("click", () => onPick(k));
+      box.append(o);
+    }
+    return box;
+  }
+  function settingsSide() {
+    const s0 = S.discord.settings || {};
+    if (!S.setDraft) S.setDraft = { bot_mode: s0.bot_mode || "shared", reply_to: s0.reply_to || "same_thread", daily_usd: s0.daily_usd ?? 5, guild_id: s0.guild_id, guild_name: s0.guild_name };
+    const d = S.setDraft;
+    const head = el("div", "tm-side-sec"); head.append(el("p", "tm-side-kind", "봇 설정"), kv([["서버", s0.guild_name || "아직 없음"]]));
+    const mode = el("div", "tm-side-sec"); mode.append(sideLabel("봇 쓰는 방식"), modeChooser(d.bot_mode, (k) => { d.bot_mode = k; render(false); }));
+    const reply = el("div", "tm-side-sec"); reply.append(sideLabel("결과 보내는 곳"), select([["same_thread", "같은 스레드"], ["channel", "채널"]], d.reply_to, (v) => { d.reply_to = v; }));
+    const daily = el("div", "tm-side-sec");
+    const di = input(d.daily_usd, (v) => { d.daily_usd = Math.max(0, Number(v) || 0); }, { type: "number" }); di.min = 0; di.step = "0.5";
+    const sfx = el("div", "tm-suffix"); sfx.append(el("span", "pre", "$"), di, el("span", "", "하루"));
+    daily.append(sideLabel("비용 한도 (추정)"), sfx, el("p", "tm-side-text", "한도에 닿으면 멈추지 않고 스레드에서 먼저 물어봐요."));
+    const acts = el("div", "tm-side-acts");
+    acts.append(button("저장", "primary", null, saveSettings), button("닫기", "ghost", null, () => { S.settingsOpen = false; S.setDraft = null; render(false); }));
+    side(head, mode, reply, daily, acts);
+  }
+  async function saveSettings(extra) {
+    const s0 = S.discord.settings || {};
+    const settings = { ...(S.setDraft || { bot_mode: s0.bot_mode, reply_to: s0.reply_to, daily_usd: s0.daily_usd, guild_id: s0.guild_id, guild_name: s0.guild_name }), ...(extra?.bot_mode ? extra : {}) };
+    try {
+      const r = await request("/v1/discord/settings", { method: "POST", body: body({ ...(s0.revision != null ? { expected_revision: s0.revision } : {}), settings }) });
+      S.discord.settings = r?.discord_settings ? unwrap(r, "discord_settings") : { ...s0, ...settings, revision: (s0.revision || 0) + 1 };
+      if (!extra?.bot_mode) { S.settingsOpen = false; S.setDraft = null; notice("설정을 저장했어요."); render(false); }
+      return true;
+    } catch (e) { notice(errorText(e)); return false; }
+  }
+
+  // 봇 연결: pick how bots are used, make one in the Developer Portal, turn on Message Content Intent, paste the
+  // token (it goes to the host keyring through a short handoff), invite it with exactly the permissions it needs.
+  function startConnect(retry) {
+    const s0 = S.discord?.settings || {};
+    S.connect = { mode: s0.bot_mode || "shared", name: retry?.name || "", token: "", appId: retry?.application_id || "", intent: false, target: "", bot: null, busy: false, retry: retry?.id || null };
+    S.bot = null; S.settingsOpen = false;
+    if (!here("discord")) go("discord"); else render(false);
+  }
+  function connectSteps() {
+    const c = S.connect;
+    const back = link("← 디스코드", () => { S.connect = null; clearTimeout(S.connectTimer); render(false); }, "tm-link quiet");
+    const s1 = section(1, "봇 쓰는 방식");
+    s1.append(modeChooser(c.mode, (k) => { c.mode = k; render(false); }));
+    const s2 = section(2, "디스코드에서 봇 만들기");
+    const ol = el("ol", "tm-howto");
+    const portal = el("a", "tm-link", "Discord 개발자 포털"); portal.href = "https://discord.com/developers/applications"; portal.target = "_blank"; portal.rel = "noreferrer";
+    const li1 = el("li", ""); li1.append(portal, " 에서 New Application을 눌러 앱을 만들어요.");
+    ol.append(li1, el("li", "", "General Information에서 Application ID를 복사해 아래에 넣어요."), el("li", "", "Bot 탭에서 Reset Token을 눌러 토큰을 복사해요."));
+    s2.append(ol, field("Application ID", raw(input(c.appId, (v) => { c.appId = v.trim(); paintInvite(); }, { max: 24, placeholder: "1234567890123456789" })), "tm-mono-field"));
+    const s3 = section(3, "Message Content Intent 켜기", "채널 글을 읽으려면 꼭 켜야 해요. 끄면 @이름과 자동 시작이 동작하지 않아요.");
+    const path = el("p", "tm-path mono", "Bot › Privileged Gateway Intents › MESSAGE CONTENT INTENT");
+    const chk = el("label", "tm-check"); const cb = el("input"); cb.type = "checkbox"; cb.checked = c.intent; cb.addEventListener("change", () => { c.intent = cb.checked; paintConnectButton(); });
+    chk.append(cb, el("span", "", "켰어요"));
+    s3.append(path, chk);
+    const s4 = section(4, "토큰 넣기");
+    const two = el("div", "tm-two");
+    const tok = input(c.token, (v) => { c.token = v.trim(); paintConnectButton(); }, { type: "password", placeholder: "MTEx…" }); tok.autocomplete = "off"; tok.spellcheck = false;
+    two.append(field("봇 이름", raw(input(c.name, (v) => { c.name = v; }, { max: 60, placeholder: c.mode === "per_target" ? "Design-Bot" : "Arkism" }))), field("봇 토큰", tok));
+    s4.append(two);
+    if (c.mode === "per_target") s4.append(field("이 봇이 부를 대상", select(targetOptions(), c.target, (v) => { c.target = v; })));
+    s4.append(el("p", "tm-step-sub", "토큰은 서버 기록에 남지 않아요. 10분 안에 서버 PC의 키 저장소로 옮겨지고, 화면에는 끝 네 자리만 보여요."));
+    const s5 = section(5, "서버에 초대하기", "아래 권한만 받아요. 관리자 권한은 받지 않아요.");
+    const perms = el("ul", "tm-perms");
+    for (const [en, ko] of PERMS) { const li = el("li", ""); li.append(el("b", "", ko), el("small", "", en)); perms.append(li); }
+    S.inviteBox = el("div", "tm-invite");
+    s5.append(perms, S.inviteBox);
+    const foot = el("div", "tm-foot");
+    S.connectBtn = button(c.bot ? "다시 연결" : "연결", "primary", null, submitConnect);
+    foot.append(S.connectBtn, link("취소", () => { S.connect = null; clearTimeout(S.connectTimer); render(false); }, "tm-link plain"));
+    S.connectState = el("span", "tm-connect-state");
+    foot.append(S.connectState);
+    const main = el("div", "tm-form-main");
+    main.append(back, s1, s2, s3, s4, s5, foot);
+    queueMicrotask(() => { paintInvite(); paintConnectButton(); });
+    return [main];
+  }
+  function inviteBlock(appId) {
+    const box = el("div", "tm-invite");
+    const url = inviteURL(appId);
+    const a = el("a", "btn", "초대 링크 열기"); a.href = url; a.target = "_blank"; a.rel = "noreferrer";
+    box.append(raw(el("code", "tm-url", url)), a);
+    return box;
+  }
+  function paintInvite() {
+    if (!S.inviteBox || !S.connect) return;
+    const id = S.connect.bot?.application_id || S.connect.appId;
+    S.inviteBox.replaceChildren(...(/^\d{5,24}$/.test(id || "") ? inviteBlock(id).childNodes : [el("p", "tm-step-sub", "Application ID를 넣거나 봇을 연결하면 초대 링크가 생겨요.")]));
+  }
+  function paintConnectButton() {
+    const c = S.connect;
+    if (!S.connectBtn || !c) return;
+    S.connectBtn.disabled = c.busy || !c.intent || c.token.length < 20;
+    const b = c.bot;
+    if (S.connectState) {
+      S.connectState.replaceChildren();
+      if (b) { const [label, tone] = BOT_STATE[b.state] || [b.state, "line"]; S.connectState.append(badge(label, tone)); if (b.state === "connected") S.connectState.append(link("채널 정하기 →", () => { S.connect = null; S.bot = b.id; render(false); })); }
+      else if (!c.intent) S.connectState.append(el("small", "", "3번을 켜면 연결할 수 있어요."));
+    }
+  }
+  async function submitConnect() {
+    const c = S.connect;
+    c.busy = true; paintConnectButton();
+    try {
+      const s0 = S.discord.settings || {};
+      if ((s0.bot_mode || "shared") !== c.mode && !(await saveSettings({ bot_mode: c.mode }))) return;
+      const bot = { name: (c.name || "").trim() || (c.mode === "per_target" ? "Team-Bot" : "Arkism"), token: c.token, ...(c.appId ? { application_id: c.appId } : {}) };
+      const target = actionOf(c.target);
+      if (c.mode === "per_target" && target) bot.target = target;
+      const old = c.retry && botById(c.retry);
+      const r = bt(old ? await request(botURL(old), { method: "POST", body: body({ expected_revision: old.revision, bot: { ...botFields(old), name: bot.name, token: bot.token } }) })
+        : await request("/v1/discord/bots", { method: "POST", body: body({ bot }) }));
+      c.token = ""; c.bot = r?.id ? r : { state: "waiting_token", name: bot.name };
+      notice("토큰을 넘겼어요. 서버가 디스코드에 붙는 중이에요.");
+      render(false);
+      watchConnect();
+    } catch (e) { notice(errorText(e)); } finally { c.busy = false; paintConnectButton(); }
+  }
+  function watchConnect() {
+    clearTimeout(S.connectTimer);
+    const c = S.connect;
+    if (!c?.bot?.id || !here("discord")) return;
+    S.connectTimer = setTimeout(async () => {
+      await loadDiscord(true);
+      const b = botById(c.bot.id);
+      if (!S.connect || S.connect !== c) return;
+      if (b) c.bot = b;
+      paintInvite(); paintConnectButton();
+      if (!b || ["waiting_token", "connecting"].includes(b.state)) watchConnect();
+    }, 2000);
+  }
+  function connectSide() {
+    const s = el("div", "tm-side-sec");
+    s.append(el("h3", "tm-side-title", "봇 연결은 이렇게 돼요"));
+    const ol = el("ol", "tm-four");
+    [["토큰을 넘겨요", "이 앱 → 서버 Arkism, 10분만 메모리에"], ["키 저장소에 넣어요", "서버 PC의 키 저장소(arkism-discord)"], ["디스코드에 붙어요", "5분마다 권한을 확인해요"], ["채널을 정해요", "채널마다 팀·워크플로우·에이전트"]]
+      .forEach(([a, b], i) => { const li = el("li", ""); li.append(el("span", "mono", pad2(i + 1))); const t = el("div", ""); t.append(el("b", "", a), el("small", "", b)); li.append(t); ol.append(li); });
+    s.append(ol);
+    side(s, el("p", "tm-side-text", "디스코드는 서버 하나만 연결해요. 디스코드에서 부른 일은 읽기만 하고 파일을 고치지 않아요."));
+  }
+
+  // ================================================================ 사용량 (325:37545)
+  async function loadUsage() {
+    S.uState = "loading"; paintUsage();
+    const ticket = (S.uTicket = (S.uTicket || 0) + 1);
+    try {
+      const doc = await request(`/v1/crew/usage?${query({ range: S.uRange, kind: S.uKind })}`);
+      if (ticket !== S.uTicket) return;
+      if (!doc || !doc.kpi) throw new Error("invalid_response");
+      S.usage = doc; S.uState = "ready";
+    } catch (e) {
+      if (ticket !== S.uTicket) return;
+      S.usage = null; S.uState = unsupported(e) ? "unsupported" : "error"; S.uErr = e.message;
+    }
+    paintUsage();
+  }
+  const paintUsage = () => { if (here("crewUsage")) render(false); };
+  function segBox(tabs, cur, onPick) {
+    const s = el("div", "tm-seg"); s.setAttribute("role", "tablist");
+    for (const [k, l] of tabs) { const t = el("button", `tm-seg-tab${k === cur ? " active" : ""}`, l); t.type = "button"; t.setAttribute("role", "tab"); t.addEventListener("click", () => onPick(k)); s.append(t); }
+    return s;
+  }
+  function renderUsage() {
+    const ctl = el("div", "tm-uctl");
+    ctl.append(segBox(RANGES, S.uRange, (k) => { if (S.uRange !== k) { S.uRange = k; loadUsage(); } }), segBox(USAGE_KINDS, S.uKind, (k) => { if (S.uKind !== k) { S.uKind = k; loadUsage(); } }));
+    const span = el("span", "tm-urange mono");
+    const days = { today: 1, "7d": 7, "30d": 30, "90d": 90 }[S.uRange];
+    if (days) { const to = new Date(), from = new Date(Date.now() - (days - 1) * 86400000); const f = (x) => x.toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" }); span.textContent = days === 1 ? f(to) : `${f(from)} – ${f(to)}`; }
+    ctl.append(span);
+    $("#controls").replaceChildren(ctl);
+    const table = $("#table");
+    table.className = "tm-wrap tm-usage";
+    if (S.uState === "idle") queueMicrotask(loadUsage);
+    if (S.uState !== "ready") {
+      table.replaceChildren(empty(S.uState === "unsupported" ? "이 서버는 아직 워크플로우·에이전트 사용량을 지원하지 않아요." : S.uState === "error" ? `사용량을 불러오지 못했어요 (${S.uErr}).` : "불러오는 중…"));
+      return;
+    }
+    const d = S.usage, k = d.kpi;
+    const runs = (d.by_day || []).reduce((s, x) => s + (x.ok || 0) + (x.failed || 0), 0);
+    const failed = (d.by_day || []).reduce((s, x) => s + (x.failed || 0), 0);
+    const kp = el("div", "tm-ukpis");
+    const tile = (value, label, sub, cls, extra) => { const c = el("div", `tm-ukpi ${cls || ""}`.trim()); const v = el("strong", "", value); if (extra) v.append(extra); c.append(v, el("p", "", label)); if (sub) c.append(sub); return c; };
+    const waitSub = el("small", "");
+    if (k.waiting) { waitSub.append(k.oldest_waiting_at ? `가장 오래된 것 ${ago(k.oldest_waiting_at)} ` : ""); waitSub.append(link("확인하기 →", () => go("crew"))); } else waitSub.append("기다리는 일이 없어요");
+    kp.append(tile(Number(k.runs || 0).toLocaleString("en-US"), "실행", el("small", "", `실패 ${failed}번`)),
+      tile(pct(k.success_rate), "성공률", el("small", "", runs ? `기록 ${runs}번 중` : "")),
+      tile(`≈${k.cost_usd >= 100 ? `$${Math.round(k.cost_usd).toLocaleString("en-US")}` : usd(k.cost_usd)}`, "비용", el("small", "", k.runs ? `실행당 평균 ${usd((k.cost_usd || 0) / k.runs)}` : ""), "", k.cost_estimated !== false ? est() : null),
+      tile(String(k.waiting || 0), "사람 확인 대기", waitSub, k.waiting ? "amber" : ""));
+    const kids = [kp, dayChart(d.by_day || [])];
+    if (S.uKind === "all" || S.uKind === "workflow") kids.push(workflowTable(d.workflows || []));
+    const two = el("div", "tm-utwo");
+    if (S.uKind === "all" || S.uKind === "workflow") two.append(failingCard(d.failing_nodes || []));
+    if (S.uKind === "all" || S.uKind === "agent") two.append(agentCard(d.agents || []));
+    if (two.children.length) kids.push(two);
+    if (S.uKind === "all" || S.uKind === "team") kids.push(teamStrip(d.teams || []));
+    table.replaceChildren(...kids);
+  }
+  function dayChart(days) {
+    const c = card("tm-chart", "날짜별 실행");
+    const ok = days.reduce((s, x) => s + (x.ok || 0), 0), bad = days.reduce((s, x) => s + (x.failed || 0), 0);
+    const head = c.firstChild;
+    head.append(el("p", "", `${RANGES.find(([k2]) => k2 === S.uRange)?.[1] || ""} · 성공 ${ok} · 실패 ${bad}`));
+    const legend = el("div", "tm-legend"); legend.append(el("span", "ok", "성공"), el("span", "bad", "실패")); head.append(legend);
+    const max = Math.max(1, ...days.map((x) => (x.ok || 0) + (x.failed || 0)));
+    const top = Math.ceil(max / 10) * 10 || 10;
+    const plot = el("div", "tm-plot");
+    const axis = el("div", "tm-axis"); [top, Math.round(top / 2), 0].forEach((v) => axis.append(el("span", "mono", String(v))));
+    const cols = el("div", "tm-cols");
+    const step = Math.max(1, Math.ceil(days.length / 5));
+    days.forEach((x, i) => {
+      const col = el("div", `tm-col${i === days.length - 1 ? " last" : ""}`);
+      const f = el("i", "bad"), o = el("i", "ok");
+      f.style.height = `${((x.failed || 0) / top) * 100}%`; o.style.height = `${((x.ok || 0) / top) * 100}%`;
+      col.title = `${x.date} · 성공 ${x.ok || 0} · 실패 ${x.failed || 0}`;
+      col.append(f, o, el("small", "mono", i % step === 0 || i === days.length - 1 ? (x.date || "").slice(5).replace("-", ".").replace(/^0/, "") : ""));
+      cols.append(col);
+    });
+    if (!days.length) cols.append(empty("이 기간에는 실행 기록이 없어요."));
+    plot.append(axis, cols);
+    c.append(plot);
+    return c;
+  }
+  function workflowTable(rows) {
+    const c = card("", "워크플로우", `${rows.length}개 · 줄을 누르면 실행 기록으로 가요`);
+    c.firstChild.append(link("실행 기록 전체 보기 →", () => go("crew")));
+    const t = el("div", "tm-utable");
+    const h = el("div", "tm-urow head"); ["이름", "실행", "성공률", "비용"].forEach((x) => h.append(el("span", "", x))); t.append(h);
+    for (const w of rows) {
+      const r = el("button", "tm-urow"); r.type = "button";
+      const handle = byId(w.id)?.crew?.handle || w.name;
+      const rate = el("span", `mono${w.success_rate != null && w.success_rate < 90 ? " amber" : ""}`, pct(w.success_rate));
+      r.append(raw(el("span", "", `$${handle}`)), el("span", "mono", String(w.runs || 0)), rate, el("span", "mono", `≈${usd(w.cost_usd)}`));
+      r.addEventListener("click", () => { go("crew"); state.selected = `crew:${w.id}`; render(); });
+      t.append(r);
+    }
+    if (!rows.length) t.append(empty("이 기간에 돈 워크플로우가 없어요."));
+    c.append(t);
+    return c;
+  }
+  function failingCard(rows) {
+    const total = rows.reduce((s, x) => s + (x.failures || 0), 0);
+    const c = card("", "실패가 많은 노드", `실패 ${total}번이 ${rows.length}곳에서`);
+    for (const f of rows) {
+      const wf = byId(f.workflow_id);
+      const node = (wf?.crew?.graph?.nodes || []).find((n) => n.id === f.node_id);
+      const r = el("div", "tm-ulist");
+      const t = el("div", ""); t.append(raw(el("b", "", node?.title || f.node_id)), raw(el("small", "", `$${wf?.crew?.handle || f.workflow_id}`)));
+      const right = el("div", "tm-ulist-right"); right.append(el("span", "amber mono", `${f.failures}번`), link("열기", () => { go("crew"); state.selected = `crew:${f.workflow_id}`; render(); }));
+      r.append(t, right); c.append(r);
+    }
+    if (!rows.length) c.append(empty("실패한 노드가 없어요."));
+    return c;
+  }
+  function agentCard(rows) {
+    const calls = rows.reduce((s, x) => s + (x.calls || 0), 0);
+    const c = card("", "작업 에이전트 호출", `${calls}번 호출`);
+    for (const a of rows) {
+      const rec = byId(a.id);
+      const r = el("div", "tm-ulist");
+      const t = el("div", "");
+      const limit = a.limit_usd ? ` · 이번 달 한도 ${Math.round(a.pct || 0)}%` : "";
+      t.append(raw(el("b", "", `@${rec?.crew?.handle || a.name}`)), raw(el("small", "", tr(`${modelLabel(agentModel(rec))}${limit}`))));
+      if (a.limit_usd) t.append(bar(a.cost_usd || 0, a.limit_usd));
+      const right = el("div", "tm-ulist-right col");
+      const cost = el("small", "mono"); cost.append(`≈${usd(a.cost_usd)}`, est());
+      right.append(el("b", "mono", `${a.calls || 0}번`), el("small", "accent mono", `평균 ${num(a.calls ? a.tokens / a.calls : 0)} 토큰`), cost);
+      r.append(mark(agentModel(rec)), t, right);
+      c.append(r);
+    }
+    if (!rows.length) c.append(empty("이 기간에 부른 작업 에이전트가 없어요."));
+    return c;
+  }
+  function teamStrip(rows) {
+    const c = el("section", "tm-card tm-ustrip");
+    const meetings = rows.reduce((s, x) => s + (x.meetings || 0), 0);
+    const w = (key) => (meetings ? rows.reduce((s, x) => s + (x[key] || 0) * (x.meetings || 0), 0) / meetings : 0);
+    const t = el("div", "tm-card-head"); t.append(el("h3", "", "팀 회의"), el("p", "", `${RANGES.find(([k]) => k === S.uRange)?.[1] || ""} · 팀 ${rows.length}개`));
+    const box = (v, l, e) => { const b = el("div", "tm-ubox"); const s = el("strong", "mono", v); if (e) s.append(est()); b.append(s, el("small", "", l)); return b; };
+    const rate = w("concluded_rate");
+    c.append(t, box(String(meetings), "회의"), box(w("avg_rounds").toFixed(1), "평균 라운드"), box(usd(w("avg_cost_usd")), "평균 비용", true), box(meetings ? pct(rate) : "—", "결론 난 비율"));
+    return c;
+  }
+
+  // ---------------------------------------------------------------- pages (registered like crew.js pages)
+  const pages = {
+    teams: { title: "팀", count: () => `${teams().length}개`, sub: () => "작업 에이전트 여럿이 정한 순서대로 말하며 하나의 결과를 만들어요. 연결된 채널에 글을 쓰면 회의가 시작돼요.",
+      head: () => [], render: renderTeams },
+    teamNew: { title: "새 팀", sub: () => "작업 에이전트 여러 명을 모아, 정한 순서와 규칙으로 회의하며 하나의 결과를 만들어요.", keepDetail: true, head: () => [], render: renderTeamNew },
+    meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [], render: renderMeetings },
+    discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord },
+    crewUsage: { title: "사용량", sub: () => "워크플로우·작업 에이전트·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.",
+      head: () => [button("새로고침", "ghost", null, loadUsage)], render: renderUsage }
+  };
+  return { pages, _test: { inviteURL, PERM_BITS, modelLabel, handleFrom } };
+};

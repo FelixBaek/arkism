@@ -1,0 +1,193 @@
+{
+ "items": [
+  {
+   "id": "run-live",
+   "revision": 4,
+   "created_at": "2026-10-13T05:02:00Z",
+   "crew_run": {
+    "crew_id": "wf-research",
+    "crew_revision": 3,
+    "trigger": "manual",
+    "status": "running",
+    "input": "{\"request\": \"그래프 엔지니어링 리서치\"}",
+    "nodes": {
+     "start": {
+      "status": "done"
+     },
+     "plan": {
+      "status": "done",
+      "started_at": "2026-10-13T05:02:00Z",
+      "finished_at": "2026-10-13T05:02:00Z",
+      "output": "검색어 5개"
+     },
+     "collect": {
+      "status": "done",
+      "started_at": "2026-10-13T05:02:00Z",
+      "finished_at": "2026-10-13T05:03:00Z"
+     },
+     "research": {
+      "status": "running",
+      "runs": 2,
+      "started_at": "2026-10-13T05:04:00Z"
+     },
+     "verify": {
+      "status": "done",
+      "port": "fail",
+      "started_at": "2026-10-13T05:03:00Z",
+      "finished_at": "2026-10-13T05:03:00Z"
+     },
+     "check": {
+      "status": "pending"
+     },
+     "write": {
+      "status": "pending"
+     },
+     "end": {
+      "status": "pending"
+     }
+    },
+    "loops": {
+     "verify>research:fail": 1
+    }
+   }
+  },
+  {
+   "id": "run-ok",
+   "revision": 9,
+   "created_at": "2026-10-13T03:10:00Z",
+   "crew_run": {
+    "crew_id": "wf-research",
+    "crew_revision": 3,
+    "trigger": "manual",
+    "status": "succeeded",
+    "input": "{\"request\": \"그래프 엔지니어링 리서치\"}",
+    "summary": "보고서 1개 · 출처 8개",
+    "nodes": {
+     "start": {
+      "status": "done",
+      "started_at": "2026-10-13T03:10:00Z",
+      "finished_at": "2026-10-13T03:11:00Z"
+     },
+     "plan": {
+      "status": "done",
+      "started_at": "2026-10-13T03:10:00Z",
+      "finished_at": "2026-10-13T03:11:00Z"
+     },
+     "collect": {
+      "status": "done",
+      "started_at": "2026-10-13T03:10:00Z",
+      "finished_at": "2026-10-13T03:11:00Z"
+     },
+     "research": {
+      "status": "done",
+      "started_at": "2026-10-13T03:10:00Z",
+      "finished_at": "2026-10-13T03:11:00Z"
+     },
+     "verify": {
+      "status": "done",
+      "started_at": "2026-10-13T03:10:00Z",
+      "finished_at": "2026-10-13T03:11:00Z"
+     },
+     "check": {
+      "status": "done",
+      "started_at": "2026-10-13T03:10:00Z",
+      "finished_at": "2026-10-13T03:11:00Z"
+     },
+     "write": {
+      "status": "done",
+      "started_at": "2026-10-13T03:10:00Z",
+      "finished_at": "2026-10-13T03:11:00Z"
+     },
+     "end": {
+      "status": "done",
+      "started_at": "2026-10-13T03:10:00Z",
+      "finished_at": "2026-10-13T03:11:00Z"
+     }
+    }
+   }
+  },
+  {
+   "id": "run-fail",
+   "revision": 6,
+   "created_at": "2026-10-12T09:30:00Z",
+   "crew_run": {
+    "crew_id": "wf-research",
+    "crew_revision": 3,
+    "trigger": "manual",
+    "status": "failed",
+    "input": "{\"request\": \"GraphRAG 비용 조사\"}",
+    "summary": "최대 실행시간을 넘겨 멈췄어요. 앞 단계 결과는 남아 있어요.",
+    "nodes": {
+     "start": {
+      "status": "done"
+     },
+     "plan": {
+      "status": "done",
+      "started_at": "2026-10-12T09:30:00Z",
+      "finished_at": "2026-10-12T09:30:00Z"
+     },
+     "collect": {
+      "status": "done",
+      "started_at": "2026-10-12T09:30:00Z",
+      "finished_at": "2026-10-12T09:31:00Z"
+     },
+     "research": {
+      "status": "failed",
+      "error": "최대 실행시간 초과",
+      "started_at": "2026-10-12T09:31:00Z",
+      "finished_at": "2026-10-12T10:00:00Z"
+     },
+     "verify": {
+      "status": "pending"
+     },
+     "check": {
+      "status": "pending"
+     },
+     "write": {
+      "status": "pending"
+     },
+     "end": {
+      "status": "pending"
+     }
+    }
+   }
+  },
+  {
+   "id": "run-wait",
+   "revision": 3,
+   "created_at": "2026-10-13T00:00:00Z",
+   "crew_run": {
+    "crew_id": "wf-release",
+    "crew_revision": 2,
+    "trigger": "schedule",
+    "status": "waiting",
+    "input": "{\"request\": \"릴리스 점검\"}",
+    "nodes": {
+     "start": {
+      "status": "done"
+     },
+     "tags": {
+      "status": "done",
+      "started_at": "2026-10-13T00:00:00Z",
+      "finished_at": "2026-10-13T00:01:00Z"
+     },
+     "ok": {
+      "status": "waiting",
+      "started_at": "2026-10-13T00:01:00Z"
+     },
+     "ship": {
+      "status": "pending"
+     },
+     "end": {
+      "status": "pending"
+     }
+    },
+    "waiting": {
+     "node_id": "ok",
+     "kind": "approval",
+     "question": "검토한 보고서를 전송할까요?"
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "links": [
+  {
+   "relation": "supersedes",
+   "record": {
+    "text": "설계 문서와 회의 메모를 모두 팀 위키에 쓴다",
+    "updated_at": "2026-09-24T05:12:00Z"
+   }
+  }
+ ]
+}

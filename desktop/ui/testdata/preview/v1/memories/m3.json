@@ -1,0 +1,19 @@
+{
+ "id": "m3",
+ "text": "Orbit 설계 문서는 docs/ 폴더에 두고, 회의 메모는 팀 위키에 둔다.",
+ "kind": "decision",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-09-24T13:16:34.299802Z",
+ "updated_at": "2026-09-24T13:16:34.299802Z",
+ "tags": [
+  "basis:explicit_user",
+  "event_id:claude-code:s1"
+ ],
+ "created_by_type": "agent"
+}

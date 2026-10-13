@@ -1,0 +1,11 @@
+[Unit]
+Description=Expire and collect agent session originals in Arkism
+After=network-online.target
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/srv/arkism/bin/arkism session-archive expire --execute
+ExecStart=/srv/arkism/bin/arkism session-archive collect --execute
+TimeoutStartSec=90min
+

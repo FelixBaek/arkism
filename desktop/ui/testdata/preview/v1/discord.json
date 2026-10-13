@@ -1,0 +1,154 @@
+{
+ "bots": [
+  {
+   "id": "bot-design",
+   "revision": 3,
+   "discord_bot": {
+    "name": "Design-Bot",
+    "application_id": "1290000000000000001",
+    "bot_user_id": "1290000000000000001",
+    "token_last4": "x9Qa",
+    "guild_id": "g1",
+    "guild_name": "Example Lab",
+    "state": "connected",
+    "missing": [],
+    "channels": [
+     {
+      "channel_id": "c-review",
+      "name": "디자인-리뷰",
+      "label": "디자인 리뷰 팀 회의",
+      "action": {
+       "kind": "meeting",
+       "id": "team-design",
+       "template_key": "review"
+      },
+      "auto_start": true
+     },
+     {
+      "channel_id": "c-share",
+      "name": "시안-공유",
+      "label": "새 시안 요약",
+      "action": {
+       "kind": "agent",
+       "id": "ag-designer"
+      },
+      "auto_start": true
+     }
+    ],
+    "allowed": {
+     "user_ids": [],
+     "role_ids": []
+    },
+    "last_seen_at": "2026-10-13T14:34:37Z"
+   }
+  },
+  {
+   "id": "bot-plan",
+   "revision": 2,
+   "discord_bot": {
+    "name": "Plan-Bot",
+    "application_id": "1290000000000000002",
+    "token_last4": "p0Lk",
+    "guild_id": "g1",
+    "guild_name": "Example Lab",
+    "state": "connected",
+    "missing": [],
+    "channels": [
+     {
+      "channel_id": "c-plan",
+      "name": "기획",
+      "label": "회의 기록",
+      "action": {
+       "kind": "meeting",
+       "id": "team-plan"
+      },
+      "auto_start": true
+     },
+     {
+      "channel_id": "c-idea",
+      "name": "아이디어",
+      "label": "투표 정리",
+      "action": {
+       "kind": "workflow",
+       "id": "wf-release"
+      },
+      "auto_start": false
+     }
+    ],
+    "allowed": {
+     "user_ids": [],
+     "role_ids": []
+    },
+    "last_seen_at": "2026-10-13T14:33:37Z"
+   }
+  },
+  {
+   "id": "bot-research",
+   "revision": 5,
+   "discord_bot": {
+    "name": "Research-Bot",
+    "application_id": "1290000000000000003",
+    "token_last4": "r7Zm",
+    "guild_id": "g1",
+    "guild_name": "Example Lab",
+    "state": "needs_permission",
+    "missing": [
+     {
+      "channel_id": "c-research",
+      "perms": [
+       "Send Messages",
+       "Send Messages in Threads"
+      ]
+     }
+    ],
+    "channels": [
+     {
+      "channel_id": "c-research",
+      "name": "리서치",
+      "label": "포럼 질문에 답하기",
+      "action": {
+       "kind": "meeting",
+       "id": "team-research"
+      },
+      "auto_start": true
+     }
+    ],
+    "allowed": {
+     "user_ids": [],
+     "role_ids": []
+    },
+    "last_seen_at": "2026-10-13T14:34:37Z"
+   }
+  }
+ ],
+ "settings": {
+  "id": "discord-settings",
+  "revision": 1,
+  "discord_settings": {
+   "kind": "settings",
+   "guild_id": "g1",
+   "guild_name": "Example Lab",
+   "reply_to": "same_thread",
+   "daily_usd": 5,
+   "bot_mode": "per_target"
+  }
+ },
+ "stats": {
+  "bots": 3,
+  "open_threads": 5,
+  "calls_week": 128,
+  "by_target": [
+   {
+    "kind": "workflow",
+    "id": "wf-research",
+    "label": "$리서치",
+    "calls": 74
+   },
+   {
+    "kind": "meeting",
+    "label": "회의",
+    "calls": 31
+   }
+  ]
+ }
+}

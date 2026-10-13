@@ -1,0 +1,26 @@
+{
+ "sha": "d2d142f000000000000000000000000000000000",
+ "message": "perf(git): draw the graph first; split and cache PR and check reads\n\nThe screen waited for the PR list, which read check status for 60 PRs (7.4s). Open PRs keep their checks, recent closed ones come without, both in parallel; PR and check lists are cached 60s and dropped on any write or refresh.",
+ "author": "Alex Kim",
+ "time": 1791871200,
+ "parents": [
+  "9429b87000000000000000000000000000000000"
+ ],
+ "branches": [
+  "feat/arkism-completion",
+  "main"
+ ],
+ "files": [
+  {
+   "path": "desktop/ui/git.js",
+   "added": 10,
+   "deleted": 3
+  },
+  {
+   "path": "tools/arkism_git.py",
+   "added": 25,
+   "deleted": 7
+  }
+ ],
+ "more_files": 0
+}

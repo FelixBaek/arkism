@@ -1,0 +1,1 @@
+{"id": "ver-figma-to-code-3", "skill_id": "skill-figma-to-code", "revision": 1, "status": "active", "text": "# figma-to-code", "analysis": {"problem": "x", "use_when": ["커밋·PR 올리기 전"], "avoid_when": ["설계 검토·문서 교정"], "output_format": "목록", "success_criteria": "x", "verification": "x", "tools": ["git diff", "테스트 실행"]}, "inspection": {}}

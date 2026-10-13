@@ -1,0 +1,9 @@
+[Unit]
+Description=Retry Arkism capture spool for %i every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,36 @@
+{
+ "authority": "data_only_untrusted",
+ "binding_ids": [
+  "kb-1-design_consultant"
+ ],
+ "receipt": {
+  "retrieval_log_id": "klog-7f3a",
+  "retrieval_mode": "deterministic",
+  "candidate_count": 5,
+  "selected_count": 2,
+  "excluded_count": 3,
+  "exclusion_summary": {
+   "token_budget": 2,
+   "trust_below_requirement": 1
+  },
+  "context": {
+   "authority": "data_only_untrusted",
+   "items": [
+    {
+     "source_id": "knowledge-1",
+     "section_path": "롤백",
+     "content": "배포 전 이미지 태그를 배포 기록에 적어 둔다.\n문제가 생기면 ./rollback.sh 로 이전 태그를 띄운다.",
+     "citation": "docs/10-test-deploy-ops.md:40-72",
+     "token_estimate": 241
+    },
+    {
+     "source_id": "knowledge-1",
+     "section_path": "롤백 › nginx reload",
+     "content": "롤백 뒤에는 nginx를 다시 읽힌다.",
+     "citation": "docs/10-test-deploy-ops.md:73-81",
+     "token_estimate": 96
+    }
+   ]
+  }
+ }
+}

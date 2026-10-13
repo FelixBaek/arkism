@@ -1,0 +1,24 @@
+[Unit]
+Description=Run Arkism workflow graphs (schedules, webhooks, n8n callbacks, approvals)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=%h
+Environment=PATH=%h/.local/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+# Schedules use the host time zone; set TZ here to pin one, e.g. Environment=TZ=Asia/Seoul
+Environment=ARKISM_URL=http://127.0.0.1:8091
+Environment=ARKISM_TOKEN_FILE=/srv/arkism/config/crew.token
+Environment=ARKISM_CREW_LISTEN=127.0.0.1:8095
+Environment="ARKISM_CREW_RUNNER=/srv/arkism/bin/arkism crew"
+WorkingDirectory=/srv/arkism
+# Build: go build -o /srv/arkism/bin/arkism-crew ./cmd/arkism-crew
+ExecStart=/srv/arkism/bin/arkism-crew serve
+Restart=on-failure
+RestartSec=10s
+KillMode=mixed
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target

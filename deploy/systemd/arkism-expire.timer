@@ -1,0 +1,10 @@
+[Unit]
+Description=Expire Arkism candidates daily at 03:15 KST
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+Unit=arkism-expire.service
+
+[Install]
+WantedBy=timers.target

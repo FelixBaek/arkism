@@ -1,0 +1,102 @@
+{
+ "items": [
+  {
+   "id": "udc1",
+   "kind": "user",
+   "status": "candidate",
+   "revision": 1,
+   "body": "한국어로 결론부터 짧게 받는 걸 좋아해요. 10월 13일부터 alex 계정으로 작업해요. 긴 글보다 결론 1~2줄과 핵심 3~5줄을 원해요.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "u1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "u2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "u3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "u4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "u5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "u6",
+     "revision": 1
+    }
+   ],
+   "replaces": [
+    {
+     "collection": "user_digests",
+     "id": "ud1",
+     "revision": 6
+    }
+   ],
+   "judge": "conflict",
+   "heat": {
+    "injected": 0,
+    "used": 0,
+    "score": 0
+   },
+   "fresh": true,
+   "diff": {
+    "base": [
+     {
+      "collection": "user_digests",
+      "id": "ud1",
+      "revision": 6
+     }
+    ],
+    "lines": [
+     {
+      "op": "=",
+      "text": "한국어로 결론부터 짧게 받는 걸 좋아해요."
+     },
+     {
+      "op": "-",
+      "text": "작업은 root 계정으로 해요."
+     },
+     {
+      "op": "+",
+      "text": "10월 13일부터 alex 계정으로 작업해요."
+     },
+     {
+      "op": "+",
+      "text": "긴 글보다 결론 1~2줄과 핵심 3~5줄을 원해요."
+     }
+    ],
+    "members_added": [
+     {
+      "collection": "memories",
+      "id": "u1",
+      "revision": 1
+     }
+    ],
+    "members_removed": []
+   },
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-user-v1"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-10-14T03:00:00Z",
+   "updated_at": "2026-10-14T03:00:00Z",
+   "authority": "data_only_untrusted"
+  }
+ ],
+ "active": 1,
+ "authority": "data_only_untrusted"
+}

@@ -1,0 +1,21 @@
+[Unit]
+Description=Arkism model settings on the host: store or test provider keys, report CLI logins and quota
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=%h
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=ARKISM_URL=http://127.0.0.1:8091
+# Same service principal as arkism-crew: read:crew, write:crew_runs, read:providers, handoff:providers.
+Environment=ARKISM_TOKEN_FILE=/srv/arkism/config/crew.token
+Environment=ARKISM_CREW_TOKEN_FILE=/srv/arkism/config/crew.token
+WorkingDirectory=/srv/arkism
+# Keys land in ~/.config/arkism/provider-keys.json (0600).
+ExecStart=/srv/arkism/bin/arkism crew providers watch
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

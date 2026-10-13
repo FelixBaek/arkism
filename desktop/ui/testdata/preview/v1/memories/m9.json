@@ -1,0 +1,19 @@
+{
+ "id": "m9",
+ "text": "Alex는 지난 분기에 Orbit 온보딩 화면을 새로 만들었다.",
+ "kind": "episodic",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-09-03T13:16:34.299802Z",
+ "updated_at": "2026-09-03T13:16:34.299802Z",
+ "tags": [
+  "basis:explicit_user",
+  "event_id:claude-code:s1"
+ ],
+ "created_by_type": "agent"
+}

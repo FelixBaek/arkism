@@ -1,0 +1,1 @@
+{"id": "ver-code-review-copy", "skill_id": "skill-code-review-13", "revision": 1, "status": "active", "text": "# code-review", "analysis": {"problem": "x", "use_when": ["커밋·PR 올리기 전"], "avoid_when": ["설계 검토·문서 교정"], "output_format": "목록", "success_criteria": "x", "verification": "x", "tools": ["git diff", "테스트 실행"]}, "inspection": {}}

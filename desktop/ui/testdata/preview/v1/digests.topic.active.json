@@ -1,0 +1,1317 @@
+{
+ "items": [
+  {
+   "id": "td1",
+   "kind": "topic",
+   "status": "active",
+   "revision": 3,
+   "title": "배포·운영 절차",
+   "body": "운영 배포는 PR 병합 뒤 Claude가 직접 실행한다. 롤백 이미지 태그는 배포 기록에 적어 둔다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td1m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m12",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m13",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m14",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m15",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m16",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m17",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m18",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m19",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m20",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m21",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m22",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m23",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m24",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m25",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m26",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m27",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m28",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m29",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m30",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m31",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m32",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m33",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m34",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m35",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m36",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m37",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m38",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m39",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m40",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m41",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m42",
+     "revision": 1
+    }
+   ],
+   "heat": {
+    "injected": 14,
+    "used": 9,
+    "score": 92
+   },
+   "fresh": true,
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "review": {
+    "action": "approve",
+    "by": "management:owner",
+    "at": "2026-10-12T05:00:00Z"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-09-20T05:00:00Z",
+   "updated_at": "2026-10-14T03:10:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "td2",
+   "kind": "topic",
+   "status": "active",
+   "revision": 2,
+   "title": "Figma 작업 함정",
+   "body": "인스턴스를 바꾼 뒤에는 문구를 원본과 비교한다. 변수 색은 투명도가 빠질 수 있으니 확인한다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td2m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m12",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m13",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m14",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m15",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m16",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m17",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m18",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m19",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m20",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m21",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m22",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m23",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m24",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m25",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m26",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m27",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m28",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m29",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m30",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td2m31",
+     "revision": 1
+    }
+   ],
+   "heat": {
+    "injected": 12,
+    "used": 8,
+    "score": 88
+   },
+   "fresh": true,
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "review": {
+    "action": "approve",
+    "by": "management:owner",
+    "at": "2026-10-12T05:00:00Z"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-09-20T05:00:00Z",
+   "updated_at": "2026-10-13T05:00:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "td3",
+   "kind": "topic",
+   "status": "active",
+   "revision": 4,
+   "title": "디자인 결정",
+   "body": "선택 상태는 강조선 대신 포인트 컬러를 글자에 쓴다. 아이콘은 Phosphor Regular를 쓴다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td3m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m12",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m13",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m14",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m15",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m16",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m17",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m18",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m19",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m20",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m21",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m22",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m23",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m24",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m25",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m26",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m27",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m28",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m29",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m30",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m31",
+     "revision": 1
+    }
+   ],
+   "heat": {
+    "injected": 10,
+    "used": 7,
+    "score": 74
+   },
+   "fresh": true,
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "review": {
+    "action": "approve",
+    "by": "management:owner",
+    "at": "2026-10-12T05:00:00Z"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-09-20T05:00:00Z",
+   "updated_at": "2026-10-11T05:00:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "td4",
+   "kind": "topic",
+   "status": "active",
+   "revision": 1,
+   "title": "모델 라우팅",
+   "body": "하위 에이전트는 라우터 훅이 모델을 고른다. 1:1 대화는 사람이 고른 모델을 쓴다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td4m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m12",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m13",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m14",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m15",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m16",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m17",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m18",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td4m19",
+     "revision": 1
+    }
+   ],
+   "heat": {
+    "injected": 9,
+    "used": 6,
+    "score": 66
+   },
+   "fresh": true,
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "review": {
+    "action": "approve",
+    "by": "management:owner",
+    "at": "2026-10-12T05:00:00Z"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-09-20T05:00:00Z",
+   "updated_at": "2026-10-13T05:00:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "td5",
+   "kind": "topic",
+   "status": "active",
+   "revision": 2,
+   "title": "Arkism 서버 운영",
+   "body": "arkism-db는 55492 포트를 쓴다. 롤백은 rollback.sh로 한다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td5m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m12",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m13",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m14",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m15",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m16",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m17",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m18",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m19",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m20",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m21",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m22",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m23",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m24",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m25",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m26",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m27",
+     "revision": 1
+    }
+   ],
+   "heat": {
+    "injected": 8,
+    "used": 5,
+    "score": 61
+   },
+   "fresh": true,
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "review": {
+    "action": "approve",
+    "by": "management:owner",
+    "at": "2026-10-12T05:00:00Z"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-09-20T05:00:00Z",
+   "updated_at": "2026-10-14T01:00:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "td6",
+   "kind": "topic",
+   "status": "active",
+   "revision": 1,
+   "title": "Inkism 공개 준비",
+   "body": "공개 저장소에는 새 이력 한 커밋만 올린다. README에 참고 앱 이름을 쓰지 않는다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td6m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td6m12",
+     "revision": 1
+    }
+   ],
+   "heat": {
+    "injected": 5,
+    "used": 3,
+    "score": 40
+   },
+   "fresh": true,
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "review": {
+    "action": "approve",
+    "by": "management:owner",
+    "at": "2026-10-12T05:00:00Z"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-09-20T05:00:00Z",
+   "updated_at": "2026-10-09T05:00:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "td7",
+   "kind": "topic",
+   "status": "active",
+   "revision": 1,
+   "title": "입시 PDF 판독",
+   "body": "산식 원문은 PDF 쪽 번호와 함께 남긴다. 표 셀 귀속은 산문 조항으로 확인한다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td7m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m12",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m13",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m14",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m15",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m16",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m17",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m18",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m19",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m20",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m21",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m22",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m23",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m24",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m25",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m26",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m27",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m28",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m29",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m30",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m31",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m32",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m33",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m34",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m35",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m36",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m37",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m38",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m39",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m40",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m41",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m42",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m43",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m44",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m45",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m46",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m47",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m48",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m49",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m50",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m51",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m52",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m53",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m54",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m55",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m56",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m57",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td7m58",
+     "revision": 1
+    }
+   ],
+   "heat": {
+    "injected": 2,
+    "used": 1,
+    "score": 12
+   },
+   "fresh": true,
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "review": {
+    "action": "approve",
+    "by": "management:owner",
+    "at": "2026-10-12T05:00:00Z"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-09-20T05:00:00Z",
+   "updated_at": "2026-09-23T05:00:00Z",
+   "authority": "data_only_untrusted"
+  }
+ ],
+ "cap": 15,
+ "active": 7,
+ "authority": "data_only_untrusted"
+}

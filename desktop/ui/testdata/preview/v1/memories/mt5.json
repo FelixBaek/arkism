@@ -1,0 +1,15 @@
+{
+ "id": "mt5",
+ "text": "CI 러너",
+ "kind": "procedural",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-09-24T05:00:00Z",
+ "updated_at": "2026-09-24T05:00:00Z",
+ "tags": []
+}

@@ -1,0 +1,55 @@
+{
+ "id": "run-ok",
+ "revision": 9,
+ "created_at": "2026-10-13T03:10:00Z",
+ "crew_run": {
+  "crew_id": "wf-research",
+  "crew_revision": 3,
+  "trigger": "manual",
+  "status": "succeeded",
+  "input": "{\"request\": \"그래프 엔지니어링 리서치\"}",
+  "summary": "보고서 1개 · 출처 8개",
+  "nodes": {
+   "start": {
+    "status": "done",
+    "started_at": "2026-10-13T03:10:00Z",
+    "finished_at": "2026-10-13T03:11:00Z"
+   },
+   "plan": {
+    "status": "done",
+    "started_at": "2026-10-13T03:10:00Z",
+    "finished_at": "2026-10-13T03:11:00Z"
+   },
+   "collect": {
+    "status": "done",
+    "started_at": "2026-10-13T03:10:00Z",
+    "finished_at": "2026-10-13T03:11:00Z"
+   },
+   "research": {
+    "status": "done",
+    "started_at": "2026-10-13T03:10:00Z",
+    "finished_at": "2026-10-13T03:11:00Z"
+   },
+   "verify": {
+    "status": "done",
+    "started_at": "2026-10-13T03:10:00Z",
+    "finished_at": "2026-10-13T03:11:00Z"
+   },
+   "check": {
+    "status": "done",
+    "started_at": "2026-10-13T03:10:00Z",
+    "finished_at": "2026-10-13T03:11:00Z"
+   },
+   "write": {
+    "status": "done",
+    "started_at": "2026-10-13T03:10:00Z",
+    "finished_at": "2026-10-13T03:11:00Z"
+   },
+   "end": {
+    "status": "done",
+    "started_at": "2026-10-13T03:10:00Z",
+    "finished_at": "2026-10-13T03:11:00Z"
+   }
+  }
+ }
+}

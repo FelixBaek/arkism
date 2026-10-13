@@ -1,0 +1,19 @@
+{
+ "id": "o3",
+ "text": "Orbit 아이콘은 Feather 세트를 쓴다.",
+ "kind": "decision",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-09-28T03:00:00Z",
+ "updated_at": "2026-09-28T03:00:00Z",
+ "tags": [
+  "basis:explicit_user",
+  "event_id:claude-code:s1"
+ ],
+ "created_by_type": "agent"
+}

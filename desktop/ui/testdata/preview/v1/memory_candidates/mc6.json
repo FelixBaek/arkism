@@ -1,0 +1,18 @@
+{
+ "id": "mc6",
+ "text": "tmpfs /tmp는 매일 04:40에 정리한다.",
+ "kind": "decision",
+ "status": "candidate",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-14T01:02:00Z",
+ "updated_at": "2026-10-14T01:02:00Z",
+ "tags": [
+  "event_id:codex:s9"
+ ],
+ "created_by_type": "agent"
+}

@@ -1,0 +1,15 @@
+{
+ "authority": "data_only_untrusted",
+ "memory": {
+  "id": "m3",
+  "revision": 1
+ },
+ "sources": [
+  {
+   "origin_product": "claude_code",
+   "collected_at": "2026-09-24T05:12:00Z",
+   "excerpt": "“설계 문서는 저장소 docs/에 두고, 회의 메모는 팀 위키에 둬. 같은 내용을 두 군데 쓰지 말자.”",
+   "archive_messages": []
+  }
+ ]
+}

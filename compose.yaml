@@ -1,0 +1,68 @@
+{
+  "name": "arkism-${MEMORY_ENV:?select dev, test or prod}",
+  "services": {
+    "api": {
+      "image": "${MEMORY_IMAGE:?set an immutable local image tag}",
+      "read_only": true,
+      "user": "65532:65532",
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "init": true,
+      "stop_grace_period": "20s",
+      "restart": "unless-stopped",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      },
+      "command": [
+        "--listen",
+        "127.0.0.1:8091"
+      ],
+      "network_mode": "host",
+      "env_file": [
+        {
+          "path": "${MEMORY_API_ENV_FILE:?set the API secret file}",
+          "format": "raw"
+        }
+      ]
+    },
+    "worker": {
+      "image": "${MEMORY_IMAGE:?set an immutable local image tag}",
+      "read_only": true,
+      "user": "65532:65532",
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "init": true,
+      "stop_grace_period": "20s",
+      "restart": "unless-stopped",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      },
+      "command": [
+        "--worker"
+      ],
+      "network_mode": "host",
+      "env_file": [
+        {
+          "path": "${MEMORY_WORKER_ENV_FILE:?set the worker secret file}",
+          "format": "raw"
+        }
+      ]
+    }
+  }
+}

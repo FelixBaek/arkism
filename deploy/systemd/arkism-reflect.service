@@ -1,0 +1,9 @@
+[Unit]
+Description=Save lessons from recent Claude Code, Codex and ZCode sessions to Arkism
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HOME=%h
+ExecStart=/srv/arkism/bin/arkism capture reflect
+TimeoutStartSec=90min

@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arkism</title>
+  <link rel="icon" href="data:,">
+  <link rel="preload" href="fonts/PlexKR-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="crew.css">
+  <link rel="stylesheet" href="inject.css">
+  <link rel="stylesheet" href="shell.css">
+  <link rel="stylesheet" href="v4-home.css">
+  <link rel="stylesheet" href="v4-memory.css">
+  <link rel="stylesheet" href="v4-skills.css">
+  <link rel="stylesheet" href="v4-agent.css">
+  <link rel="stylesheet" href="v4-team.css">
+  <link rel="stylesheet" href="v4-router.css">
+  <link rel="stylesheet" href="v4-connect.css">
+  <link rel="stylesheet" href="v4-gallery.css">
+  <link rel="stylesheet" href="v4-gallery-delete.css">
+  <link rel="stylesheet" href="v4-digests.css">
+  <link rel="stylesheet" href="v4-knowledge.css">
+  <link rel="stylesheet" href="v4-pins.css">
+  <link rel="stylesheet" href="v4-gateway.css">
+  <link rel="stylesheet" href="v4-codegraph.css">
+  <script src="look.js"></script>
+  <script src="i18n-en.js"></script>
+  <script src="i18n.js"></script>
+  <script src="preference-transfer.js" defer></script>
+  <script src="pages.js" defer></script>
+  <script src="assist.js" defer></script>
+  <script src="pins.js" defer></script>
+  <script src="gateway-token.js" defer></script>
+  <script src="crew.js" defer></script>
+  <script src="team.js" defer></script>
+  <script src="models.js" defer></script>
+  <script src="reviews.js" defer></script>
+  <script src="codegraph.js" defer></script>
+  <script src="git.js" defer></script>
+  <script src="routing-turns.js" defer></script>
+  <script src="routing.js" defer></script>
+  <script src="usage.js" defer></script>
+  <script src="sessions.js" defer></script>
+  <script src="gallery-delete.js" defer></script>
+  <script src="knowledge.js" defer></script>
+  <script src="originals.js" defer></script>
+  <script src="memory-time.js" defer></script>
+  <script src="inject.js" defer></script>
+  <script src="privacy.js" defer></script>
+  <script src="intelligence.js" defer></script>
+  <script src="digests.js" defer></script>
+  <script src="skill-execution.js" defer></script>
+  <script src="skill-trial.js" defer></script>
+  <script src="skill-review.js" defer></script>
+  <script src="skill-generate.js" defer></script>
+  <script src="catalog.js" defer></script>
+  <script src="shell.js" defer></script>
+  <script src="home.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" hidden>
+<symbol id="i-desktop" viewBox="0 0 256 256"><path d="M208,40H48A24,24,0,0,0,24,64V176a24,24,0,0,0,24,24H208a24,24,0,0,0,24-24V64A24,24,0,0,0,208,40Zm8,136a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V64a8,8,0,0,1,8-8H208a8,8,0,0,1,8,8Zm-48,48a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,224Z"/></symbol>
+<symbol id="i-flow-arrow" viewBox="0 0 256 256"><path d="M245.66,74.34l-32-32a8,8,0,0,0-11.32,11.32L220.69,72H208c-49.33,0-61.05,28.12-71.38,52.92-9.38,22.51-16.92,40.59-49.48,42.84a40,40,0,1,0,.1,16c43.26-2.65,54.34-29.15,64.14-52.69C161.41,107,169.33,88,208,88h12.69l-18.35,18.34a8,8,0,0,0,11.32,11.32l32-32A8,8,0,0,0,245.66,74.34ZM48,200a24,24,0,1,1,24-24A24,24,0,0,1,48,200Z"/></symbol>
+<symbol id="i-tree-structure" viewBox="0 0 256 256"><path d="M160,112h48a16,16,0,0,0,16-16V48a16,16,0,0,0-16-16H160a16,16,0,0,0-16,16V64H128a24,24,0,0,0-24,24v32H72v-8A16,16,0,0,0,56,96H24A16,16,0,0,0,8,112v32a16,16,0,0,0,16,16H56a16,16,0,0,0,16-16v-8h32v32a24,24,0,0,0,24,24h16v16a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V160a16,16,0,0,0-16-16H160a16,16,0,0,0-16,16v16H128a8,8,0,0,1-8-8V88a8,8,0,0,1,8-8h16V96A16,16,0,0,0,160,112ZM56,144H24V112H56v32Zm104,16h48v48H160Zm0-112h48V96H160Z"/></symbol>
+<symbol id="i-stop-circle" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216ZM160,88H96a8,8,0,0,0-8,8v64a8,8,0,0,0,8,8h64a8,8,0,0,0,8-8V96A8,8,0,0,0,160,88Zm-8,64H104V104h48Z"/></symbol>
+<symbol id="i-arrow-counter-clockwise" viewBox="0 0 256 256"><path d="M224,128a96,96,0,0,1-94.71,96H128A95.38,95.38,0,0,1,62.1,197.8a8,8,0,0,1,11-11.63A80,80,0,1,0,71.43,71.39a3.07,3.07,0,0,1-.26.25L44.59,96H72a8,8,0,0,1,0,16H24a8,8,0,0,1-8-8V56a8,8,0,0,1,16,0V85.8L60.25,60A96,96,0,0,1,224,128Z"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 256 256"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></symbol>
+<symbol id="i-arrows-clockwise" viewBox="0 0 256 256"><path d="M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1,0-16h28.69L182.06,73.37a79.56,79.56,0,0,0-56.13-23.43h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27a96,96,0,0,1,135,.79L208,76.69V48a8,8,0,0,1,16,0ZM186.41,183.29a80,80,0,0,1-112.47-.66L59.31,168H88a8,8,0,0,0,0-16H40a8,8,0,0,0-8,8v48a8,8,0,0,0,16,0V179.31l14.63,14.63A95.43,95.43,0,0,0,130,222.06h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z"/></symbol>
+<symbol id="i-brain" viewBox="0 0 256 256"><path d="M248,124a56.11,56.11,0,0,0-32-50.61V72a48,48,0,0,0-88-26.49A48,48,0,0,0,40,72v1.39a56,56,0,0,0,0,101.2V176a48,48,0,0,0,88,26.49A48,48,0,0,0,216,176v-1.41A56.09,56.09,0,0,0,248,124ZM88,208a32,32,0,0,1-31.81-28.56A55.87,55.87,0,0,0,64,180h8a8,8,0,0,0,0-16H64A40,40,0,0,1,50.67,86.27,8,8,0,0,0,56,78.73V72a32,32,0,0,1,64,0v68.26A47.8,47.8,0,0,0,88,128a8,8,0,0,0,0,16,32,32,0,0,1,0,64Zm104-44h-8a8,8,0,0,0,0,16h8a55.87,55.87,0,0,0,7.81-.56A32,32,0,1,1,168,144a8,8,0,0,0,0-16,47.8,47.8,0,0,0-32,12.26V72a32,32,0,0,1,64,0v6.73a8,8,0,0,0,5.33,7.54A40,40,0,0,1,192,164Zm16-52a8,8,0,0,1-8,8h-4a36,36,0,0,1-36-36V80a8,8,0,0,1,16,0v4a20,20,0,0,0,20,20h4A8,8,0,0,1,208,112ZM60,120H56a8,8,0,0,1,0-16h4A20,20,0,0,0,80,84V80a8,8,0,0,1,16,0v4A36,36,0,0,1,60,120Z"/></symbol>
+<symbol id="i-caret-down" viewBox="0 0 256 256"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></symbol>
+<symbol id="i-chat-circle" viewBox="0 0 256 256"><path d="M128,24A104,104,0,0,0,36.18,176.88L24.83,210.93a16,16,0,0,0,20.24,20.24l34.05-11.35A104,104,0,1,0,128,24Zm0,192a87.87,87.87,0,0,1-44.06-11.81,8,8,0,0,0-6.54-.67L40,216,52.47,178.6a8,8,0,0,0-.66-6.54A88,88,0,1,1,128,216Z"/></symbol>
+<symbol id="i-check" viewBox="0 0 256 256"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></symbol>
+<symbol id="i-clock-counter-clockwise" viewBox="0 0 256 256"><path d="M136,80v43.47l36.12,21.67a8,8,0,0,1-8.24,13.72l-40-24A8,8,0,0,1,120,128V80a8,8,0,0,1,16,0Zm-8-48A95.44,95.44,0,0,0,60.08,60.15C52.81,67.51,46.35,74.59,40,82V64a8,8,0,0,0-16,0v40a8,8,0,0,0,8,8H72a8,8,0,0,0,0-16H49c7.15-8.42,14.27-16.35,22.39-24.57a80,80,0,1,1,1.66,114.75,8,8,0,1,0-11,11.64A96,96,0,1,0,128,32Z"/></symbol>
+<symbol id="i-file-text" viewBox="0 0 256 256"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48V216Zm-32-80a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,136Zm0,32a8,8,0,0,1-8,8H96a8,8,0,0,1,0-16h64A8,8,0,0,1,168,168Z"/></symbol>
+<symbol id="i-gear-six" viewBox="0 0 256 256"><path d="M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z"/></symbol>
+<symbol id="i-git-merge" viewBox="0 0 256 256"><path d="M208,112a32.05,32.05,0,0,0-30.69,23l-42.21-6a8,8,0,0,1-4.95-2.71L94.43,84.55A32,32,0,1,0,72,87v82a32,32,0,1,0,16,0V101.63l30,35a24,24,0,0,0,14.83,8.14l44,6.28A32,32,0,1,0,208,112ZM64,56A16,16,0,1,1,80,72,16,16,0,0,1,64,56ZM96,200a16,16,0,1,1-16-16A16,16,0,0,1,96,200Zm112-40a16,16,0,1,1,16-16A16,16,0,0,1,208,160Z"/></symbol>
+<symbol id="i-lightbulb" viewBox="0 0 256 256"><path d="M176,232a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,232Zm40-128a87.55,87.55,0,0,1-33.64,69.21A16.24,16.24,0,0,0,176,186v6a16,16,0,0,1-16,16H96a16,16,0,0,1-16-16v-6a16,16,0,0,0-6.23-12.66A87.59,87.59,0,0,1,40,104.49C39.74,56.83,78.26,17.14,125.88,16A88,88,0,0,1,216,104Zm-16,0a72,72,0,0,0-73.74-72c-39,.92-70.47,33.39-70.26,72.39a71.65,71.65,0,0,0,27.64,56.3A32,32,0,0,1,96,186v6h64v-6a32.15,32.15,0,0,1,12.47-25.35A71.65,71.65,0,0,0,200,104Zm-16.11-9.34a57.6,57.6,0,0,0-46.56-46.55,8,8,0,0,0-2.66,15.78c16.57,2.79,30.63,16.85,33.44,33.45A8,8,0,0,0,176,104a9,9,0,0,0,1.35-.11A8,8,0,0,0,183.89,94.66Z"/></symbol>
+<symbol id="i-lock-simple" viewBox="0 0 256 256"><path d="M208,80H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z"/></symbol>
+<symbol id="i-magnifying-glass" viewBox="0 0 256 256"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></symbol>
+<symbol id="i-pencil-simple" viewBox="0 0 256 256"><path d="M227.31,73.37,182.63,28.68a16,16,0,0,0-22.63,0L36.69,152A15.86,15.86,0,0,0,32,163.31V208a16,16,0,0,0,16,16H92.69A15.86,15.86,0,0,0,104,219.31L227.31,96a16,16,0,0,0,0-22.63ZM92.69,208H48V163.31l88-88L180.69,120ZM192,108.68,147.31,64l24-24L216,84.68Z"/></symbol>
+<symbol id="i-plus" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></symbol>
+<symbol id="i-sidebar-simple" viewBox="0 0 256 256"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM40,56H80V200H40ZM216,200H96V56H216V200Z"/></symbol>
+<symbol id="i-sort-descending" viewBox="0 0 256 256"><path d="M40,128a8,8,0,0,1,8-8h72a8,8,0,0,1,0,16H48A8,8,0,0,1,40,128Zm8-56h56a8,8,0,0,0,0-16H48a8,8,0,0,0,0,16ZM184,184H48a8,8,0,0,0,0,16H184a8,8,0,0,0,0-16ZM229.66,82.34l-40-40a8,8,0,0,0-11.32,0l-40,40a8,8,0,0,0,11.32,11.32L176,67.31V144a8,8,0,0,0,16,0V67.31l26.34,26.35a8,8,0,0,0,11.32-11.32Z"/></symbol>
+<symbol id="i-shuffle" viewBox="0 0 256 256"><path d="M237.66,178.34a8,8,0,0,1,0,11.32l-24,24a8,8,0,0,1-11.32-11.32L212.69,192H200.94a72.12,72.12,0,0,1-58.59-30.15l-41.72-58.4A56.1,56.1,0,0,0,55.06,80H32a8,8,0,0,1,0-16H55.06a72.12,72.12,0,0,1,58.59,30.15l41.72,58.4A56.1,56.1,0,0,0,200.94,176h11.75l-10.35-10.34a8,8,0,0,1,11.32-11.32ZM143,107a8,8,0,0,0,11.16-1.86l1.2-1.67A56.1,56.1,0,0,1,200.94,80h11.75L202.34,90.34a8,8,0,0,0,11.32,11.32l24-24a8,8,0,0,0,0-11.32l-24-24a8,8,0,0,0-11.32,11.32L212.69,64H200.94a72.12,72.12,0,0,0-58.59,30.15l-1.2,1.67A8,8,0,0,0,143,107Zm-30,42a8,8,0,0,0-11.16,1.86l-1.2,1.67A56.1,56.1,0,0,1,55.06,176H32a8,8,0,0,0,0,16H55.06a72.12,72.12,0,0,0,58.59-30.15l1.2-1.67A8,8,0,0,0,113,149Z"/></symbol><symbol id="i-user-plus" viewBox="0 0 256 256"><path d="M256,136a8,8,0,0,1-8,8H232v16a8,8,0,0,1-16,0V144H200a8,8,0,0,1,0-16h16V112a8,8,0,0,1,16,0v16h16A8,8,0,0,1,256,136Zm-57.87,58.85a8,8,0,0,1-12.26,10.3C165.75,181.19,138.09,168,108,168s-57.75,13.19-77.87,37.15a8,8,0,0,1-12.25-10.3c14.94-17.78,33.52-30.41,54.17-37.17a68,68,0,1,1,71.9,0C164.6,164.44,183.18,177.07,198.13,194.85ZM108,152a52,52,0,1,0-52-52A52.06,52.06,0,0,0,108,152Z"/></symbol><symbol id="i-chat-text" viewBox="0 0 256 256"><path d="M216,48H40A16,16,0,0,0,24,64V224a15.85,15.85,0,0,0,9.24,14.5A16.13,16.13,0,0,0,40,240a15.89,15.89,0,0,0,10.25-3.78l.09-.07L83,208H216a16,16,0,0,0,16-16V64A16,16,0,0,0,216,48ZM40,224h0ZM216,192H80a8,8,0,0,0-5.23,1.95L40,224V64H216ZM88,112a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H96A8,8,0,0,1,88,112Zm0,32a8,8,0,0,1,8-8h64a8,8,0,1,1,0,16H96A8,8,0,0,1,88,144Z"/></symbol><symbol id="i-eye" viewBox="0 0 256 256"><path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z"/></symbol><symbol id="i-list-bullets" viewBox="0 0 256 256"><path d="M80,64a8,8,0,0,1,8-8H216a8,8,0,0,1,0,16H88A8,8,0,0,1,80,64Zm136,56H88a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Zm0,64H88a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16ZM44,52A12,12,0,1,0,56,64,12,12,0,0,0,44,52Zm0,64a12,12,0,1,0,12,12A12,12,0,0,0,44,116Zm0,64a12,12,0,1,0,12,12A12,12,0,0,0,44,180Z"/></symbol><symbol id="i-robot" viewBox="0 0 256 256"><path d="M200,48H136V16a8,8,0,0,0-16,0V48H56A32,32,0,0,0,24,80V192a32,32,0,0,0,32,32H200a32,32,0,0,0,32-32V80A32,32,0,0,0,200,48Zm16,144a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V80A16,16,0,0,1,56,64H200a16,16,0,0,1,16,16Zm-52-56H92a28,28,0,0,0,0,56h72a28,28,0,0,0,0-56Zm-24,16v24H116V152ZM80,164a12,12,0,0,1,12-12h8v24H92A12,12,0,0,1,80,164Zm84,12h-8V152h8a12,12,0,0,1,0,24ZM72,108a12,12,0,1,1,12,12A12,12,0,0,1,72,108Zm88,0a12,12,0,1,1,12,12A12,12,0,0,1,160,108Z"/></symbol><symbol id="i-sliders-horizontal" viewBox="0 0 256 256"><path d="M40,88H73a32,32,0,0,0,62,0h81a8,8,0,0,0,0-16H135a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16Zm64-24A16,16,0,1,1,88,80,16,16,0,0,1,104,64ZM216,168H199a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16h97a32,32,0,0,0,62,0h17a8,8,0,0,0,0-16Zm-48,24a16,16,0,1,1,16-16A16,16,0,0,1,168,192Z"/></symbol><symbol id="i-tag" viewBox="0 0 256 256"><path d="M243.31,136,144,36.69A15.86,15.86,0,0,0,132.69,32H40a8,8,0,0,0-8,8v92.69A15.86,15.86,0,0,0,36.69,144L136,243.31a16,16,0,0,0,22.63,0l84.68-84.68a16,16,0,0,0,0-22.63Zm-96,96L48,132.69V48h84.69L232,147.31ZM96,84A12,12,0,1,1,84,72,12,12,0,0,1,96,84Z"/></symbol><symbol id="i-sparkle" viewBox="0 0 256 256"><path d="M197.58,129.06,146,110l-19-51.62a15.92,15.92,0,0,0-29.88,0L78,110l-51.62,19a15.92,15.92,0,0,0,0,29.88L78,178l19,51.62a15.92,15.92,0,0,0,29.88,0L146,178l51.62-19a15.92,15.92,0,0,0,0-29.88ZM137,164.22a8,8,0,0,0-4.74,4.74L112,223.85,91.78,169A8,8,0,0,0,87,164.22L32.15,144,87,123.78A8,8,0,0,0,91.78,119L112,64.15,132.22,119a8,8,0,0,0,4.74,4.74L191.85,144ZM144,40a8,8,0,0,1,8-8h16V16a8,8,0,0,1,16,0V32h16a8,8,0,0,1,0,16H184V64a8,8,0,0,1-16,0V48H152A8,8,0,0,1,144,40ZM248,88a8,8,0,0,1-8,8h-8v8a8,8,0,0,1-16,0V96h-8a8,8,0,0,1,0-16h8V72a8,8,0,0,1,16,0v8h8A8,8,0,0,1,248,88Z"/></symbol>
+<symbol id="i-stack" viewBox="0 0 256 256"><path d="M230.91,172A8,8,0,0,1,228,182.91l-96,56a8,8,0,0,1-8.06,0l-96-56A8,8,0,0,1,36,169.09l92,53.65,92-53.65A8,8,0,0,1,230.91,172ZM220,121.09l-92,53.65L36,121.09A8,8,0,0,0,28,134.91l96,56a8,8,0,0,0,8.06,0l96-56A8,8,0,1,0,220,121.09ZM24,80a8,8,0,0,1,4-6.91l96-56a8,8,0,0,1,8.06,0l96,56a8,8,0,0,1,0,13.82l-96,56a8,8,0,0,1-8.06,0l-96-56A8,8,0,0,1,24,80Zm23.88,0L128,126.74,208.12,80,128,33.26Z"/></symbol>
+<symbol id="i-trash" viewBox="0 0 256 256"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></symbol>
+<symbol id="i-tray" viewBox="0 0 256 256"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32Zm0,16V152h-28.7A15.86,15.86,0,0,0,168,156.69L148.69,176H107.31L88,156.69A15.86,15.86,0,0,0,76.69,152H48V48Zm0,160H48V168H76.69L96,187.31A15.86,15.86,0,0,0,107.31,192h41.38A15.86,15.86,0,0,0,160,187.31L179.31,168H208v40Z"/></symbol>
+<symbol id="i-users-three" viewBox="0 0 256 256"><path d="M244.8,150.4a8,8,0,0,1-11.2-1.6A51.6,51.6,0,0,0,192,128a8,8,0,0,1-7.37-4.89,8,8,0,0,1,0-6.22A8,8,0,0,1,192,112a24,24,0,1,0-23.24-30,8,8,0,1,1-15.5-4A40,40,0,1,1,219,117.51a67.94,67.94,0,0,1,27.43,21.68A8,8,0,0,1,244.8,150.4ZM190.92,212a8,8,0,1,1-13.84,8,57,57,0,0,0-98.16,0,8,8,0,1,1-13.84-8,72.06,72.06,0,0,1,33.74-29.92,48,48,0,1,1,58.36,0A72.06,72.06,0,0,1,190.92,212ZM128,176a32,32,0,1,0-32-32A32,32,0,0,0,128,176ZM72,120a8,8,0,0,0-8-8A24,24,0,1,1,87.24,82a8,8,0,1,0,15.5-4A40,40,0,1,0,37,117.51,67.94,67.94,0,0,0,9.6,139.19a8,8,0,1,0,12.8,9.61A51.6,51.6,0,0,1,64,128,8,8,0,0,0,72,120Z"/></symbol>
+<symbol id="i-warning-circle" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm-8-80V80a8,8,0,0,1,16,0v56a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,172Z"/></symbol>
+<symbol id="i-x" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></symbol>
+<symbol id="i-database" viewBox="0 0 256 256"><path d="M128,24C74.17,24,32,48.6,32,80v96c0,31.4,42.17,56,96,56s96-24.6,96-56V80C224,48.6,181.83,24,128,24Zm80,104c0,9.62-7.88,19.43-21.61,26.92C170.93,163.35,150.19,168,128,168s-42.93-4.65-58.39-13.08C55.88,147.43,48,137.62,48,128V111.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64ZM69.61,53.08C85.07,44.65,105.81,40,128,40s42.93,4.65,58.39,13.08C200.12,60.57,208,70.38,208,80s-7.88,19.43-21.61,26.92C170.93,115.35,150.19,120,128,120s-42.93-4.65-58.39-13.08C55.88,99.43,48,89.62,48,80S55.88,60.57,69.61,53.08ZM186.39,202.92C170.93,211.35,150.19,216,128,216s-42.93-4.65-58.39-13.08C55.88,195.43,48,185.62,48,176V159.36c17.06,15,46.23,24.64,80,24.64s62.94-9.68,80-24.64V176C208,185.62,200.12,195.43,186.39,202.92Z"/></symbol>
+<symbol id="i-plug" viewBox="0 0 256 256"><path d="M237.66,66.34a8,8,0,0,0-11.32,0L192,100.69,155.31,64l34.35-34.34a8,8,0,1,0-11.32-11.32L144,52.69,117.66,26.34a8,8,0,0,0-11.32,11.32L112.69,44l-53,53a40,40,0,0,0,0,56.57l15.71,15.71L26.34,218.34a8,8,0,0,0,11.32,11.32l49.09-49.09,15.71,15.71a40,40,0,0,0,56.57,0l53-53,6.34,6.35a8,8,0,0,0,11.32-11.32L203.31,112l34.35-34.34A8,8,0,0,0,237.66,66.34ZM147.72,185a24,24,0,0,1-33.95,0L71,142.23a24,24,0,0,1,0-33.95l53-53L200.69,132Z"/></symbol>
+<symbol id="i-dots-three" viewBox="0 0 256 256"><path d="M140,128a12,12,0,1,1-12-12A12,12,0,0,1,140,128Zm56-12a12,12,0,1,0,12,12A12,12,0,0,0,196,116ZM60,116a12,12,0,1,0,12,12A12,12,0,0,0,60,116Z"/></symbol>
+<symbol id="i-caret-right" viewBox="0 0 256 256"><path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/></symbol>
+<symbol id="i-minus" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></symbol>
+<symbol id="a-codex" viewBox="0 0 13 13"><path fill-rule="evenodd" clip-rule="evenodd" d="M4.98604 4.68975V3.46558C4.98604 3.36267 5.02504 3.28521 5.11496 3.23375L7.57575 1.81675C7.91104 1.62338 8.31025 1.53346 8.72246 1.53346C10.2684 1.53346 11.2477 2.73163 11.2477 4.00671C11.2477 4.09717 11.2477 4.20008 11.2347 4.303L8.68346 2.80854C8.61418 2.76444 8.53375 2.74101 8.45162 2.74101C8.3695 2.74101 8.28907 2.76444 8.21979 2.80854L4.98604 4.68975ZM10.7326 9.45642V6.5325C10.7326 6.35213 10.6551 6.22375 10.5002 6.13329L7.26646 4.25208L8.32271 3.6465C8.36099 3.62131 8.4058 3.60789 8.45162 3.60789C8.49745 3.60789 8.54226 3.62131 8.58054 3.6465L11.0413 5.06404C11.7504 5.47571 12.227 6.35213 12.227 7.20254C12.227 8.18188 11.6475 9.08375 10.732 9.4575L10.7326 9.45642ZM4.22608 6.88079L3.16983 6.26221C3.07938 6.21075 3.04037 6.13329 3.04037 6.03038V3.19529C3.04037 1.81675 4.09663 0.772958 5.52717 0.772958C6.06883 0.772958 6.57096 0.953333 6.99617 1.27563L4.45792 2.74463C4.30354 2.83454 4.22608 2.96346 4.22608 3.14383V6.88025V6.88079ZM6.5 8.19433L4.98604 7.34392V5.54017L6.5 4.68975L8.01396 5.54017V7.34392L6.5 8.19433ZM7.47283 12.1106C6.93117 12.1106 6.42904 11.9307 6.00383 11.6085L8.54208 10.1395C8.69646 10.0495 8.77392 9.92063 8.77392 9.74025V6.00383L9.84317 6.62242C9.93363 6.67388 9.97208 6.75133 9.97208 6.85425V9.68879C9.97208 11.0673 8.90283 12.1106 7.47283 12.1106ZM4.41946 9.23813L1.95813 7.82058C1.24963 7.40838 0.772958 6.5325 0.772958 5.68208C0.771288 5.19887 0.913852 4.72616 1.1824 4.32445C1.45095 3.92273 1.83327 3.61029 2.28042 3.42713V6.36458C2.28042 6.54496 2.35788 6.67388 2.51225 6.76433L5.73354 8.63254L4.67729 9.23813C4.63904 9.26338 4.59421 9.27684 4.54838 9.27684C4.50254 9.27684 4.45771 9.26338 4.41946 9.23813ZM4.27754 11.3506C2.82154 11.3506 1.75229 10.2559 1.75229 8.90283C1.75229 8.79992 1.76529 8.697 1.77775 8.59408L4.316 10.062C4.47092 10.1525 4.62529 10.1525 4.77967 10.062L8.01342 8.19433V9.4185C8.01342 9.52142 7.9755 9.59888 7.88504 9.65033L5.42425 11.0673C5.08896 11.2607 4.68975 11.3506 4.27754 11.3506ZM7.47283 12.8835C8.21522 12.8836 8.93484 12.6272 9.50997 12.1578C10.0851 11.6884 10.4804 11.0347 10.6291 10.3074C12.0721 9.93363 13 8.58 13 7.202C13 6.30013 12.6138 5.42425 11.9178 4.79267C11.9822 4.52183 12.0207 4.25154 12.0207 3.98125C12.0207 2.13904 10.5262 0.759958 8.79992 0.759958C8.45217 0.759958 8.11742 0.811417 7.78158 0.927875C7.18033 0.336055 6.37136 0.00301633 5.52771 3.47975e-09C4.78525 -3.44923e-05 4.06557 0.256406 3.49042 0.725938C2.91528 1.19547 2.51998 1.84926 2.37142 2.57671C0.927875 2.95046 0 4.30354 0 5.68208C0 6.5845 0.386208 7.46038 1.08225 8.09142C1.01779 8.36225 0.979333 8.63308 0.979333 8.90338C0.979333 10.7456 2.47379 12.1241 4.20008 12.1241C4.54783 12.1241 4.88258 12.0727 5.21842 11.9567C5.81974 12.5488 6.62897 12.8819 7.47283 12.8846V12.8835Z"/></symbol>
+<symbol id="a-zcode" viewBox="0 0 13 13"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.55688 1.0835L5.37713 2.68304H0.353708L1.53292 1.0835H6.55742H6.55688ZM12.5959 10.3178L11.4172 11.9168H6.41117L7.58875 10.3178H12.5959ZM13 1.0835L5.018 11.9168H0L7.982 1.0835H13Z"/></symbol>
+<symbol id="i-image" viewBox="0 0 256 256"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,16V158.75l-26.07-26.06a16,16,0,0,0-22.63,0l-20,20-44-44a16,16,0,0,0-22.62,0L40,149.37V56ZM40,172l52-52,80,80H40Zm176,28H194.63l-36-36,20-20L216,181.38V200ZM144,100a12,12,0,1,1,12,12A12,12,0,0,1,144,100Z"/></symbol>
+<symbol id="i-copy" viewBox="0 0 256 256"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></symbol>
+<symbol id="i-archive" viewBox="0 0 256 256"><path d="M224,48H32A16,16,0,0,0,16,64V88a16,16,0,0,0,16,16v88a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V104a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48ZM208,192H48V104H208ZM224,88H32V64H224V88ZM96,136a8,8,0,0,1,8-8h48a8,8,0,0,1,0,16H104A8,8,0,0,1,96,136Z"/></symbol>
+<symbol id="i-presentation" viewBox="0 0 256 256"><path d="M216,40H136V24a8,8,0,0,0-16,0V40H40A16,16,0,0,0,24,56V176a16,16,0,0,0,16,16H79.36L57.75,219a8,8,0,0,0,12.5,10l29.59-37h56.32l29.59,37a8,8,0,1,0,12.5-10l-21.61-27H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,136H40V56H216V176Z"/></symbol>
+<symbol id="i-code" viewBox="0 0 256 256"><path d="M69.12,94.15,28.5,128l40.62,33.85a8,8,0,1,1-10.24,12.29l-48-40a8,8,0,0,1,0-12.29l48-40a8,8,0,0,1,10.24,12.3Zm176,27.7-48-40a8,8,0,1,0-10.24,12.3L227.5,128l-40.62,33.85a8,8,0,1,0,10.24,12.29l48-40a8,8,0,0,0,0-12.29ZM162.73,32.48a8,8,0,0,0-10.25,4.79l-64,176a8,8,0,0,0,4.79,10.26A8.14,8.14,0,0,0,96,224a8,8,0,0,0,7.52-5.27l64-176A8,8,0,0,0,162.73,32.48Z"/></symbol>
+<symbol id="i-palette" viewBox="0 0 256 256"><path d="M200.77,53.89A103.27,103.27,0,0,0,128,24h-1.07A104,104,0,0,0,24,128c0,43,26.58,79.06,69.36,94.17A32,32,0,0,0,136,192a16,16,0,0,1,16-16h46.21a31.81,31.81,0,0,0,31.2-24.88,104.43,104.43,0,0,0,2.59-24A103.28,103.28,0,0,0,200.77,53.89Zm13,93.71A15.89,15.89,0,0,1,198.21,160H152a32,32,0,0,0-32,32,16,16,0,0,1-21.31,15.07C62.49,194.3,40,164,40,128a88,88,0,0,1,87.09-88h.9a88.35,88.35,0,0,1,88,87.25A88.86,88.86,0,0,1,213.81,147.6ZM140,76a12,12,0,1,1-12-12A12,12,0,0,1,140,76ZM96,100A12,12,0,1,1,84,88,12,12,0,0,1,96,100Zm0,56a12,12,0,1,1-12-12A12,12,0,0,1,96,156Zm88-56a12,12,0,1,1-12-12A12,12,0,0,1,184,100Z"/></symbol>
+<symbol id="i-puzzle-piece" viewBox="0 0 256 256"><path d="M220.27,158.54a8,8,0,0,0-7.7-.46,20,20,0,1,1,0-36.16A8,8,0,0,0,224,114.69V72a16,16,0,0,0-16-16H171.78a35.36,35.36,0,0,0,.22-4,36.11,36.11,0,0,0-11.36-26.24,36,36,0,0,0-60.55,23.62,36.56,36.56,0,0,0,.14,6.62H64A16,16,0,0,0,48,72v32.22a35.36,35.36,0,0,0-4-.22,36.12,36.12,0,0,0-26.24,11.36,35.7,35.7,0,0,0-9.69,27,36.08,36.08,0,0,0,33.31,33.6,35.68,35.68,0,0,0,6.62-.14V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V165.31A8,8,0,0,0,220.27,158.54ZM208,208H64V165.31a8,8,0,0,0-11.43-7.23,20,20,0,1,1,0-36.16A8,8,0,0,0,64,114.69V72h46.69a8,8,0,0,0,7.23-11.43,20,20,0,1,1,36.16,0A8,8,0,0,0,161.31,72H208v32.23a35.68,35.68,0,0,0-6.62-.14A36,36,0,0,0,204,176a35.36,35.36,0,0,0,4-.22Z"/></symbol>
+<symbol id="i-play" viewBox="0 0 256 256"><path fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" d="M80 48v160l128-80z"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><rect x="40" y="48" width="176" height="168" rx="12"/><path d="M40 96h176M88 32v32M168 32v32"/></g></symbol>
+<symbol id="i-link" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M136 72l20-20a40 40 0 0 1 56 56l-28 28a40 40 0 0 1-56 0"/><path d="M120 184l-20 20a40 40 0 0 1-56-56l28-28a40 40 0 0 1 56 0"/></g></symbol>
+<symbol id="i-globe" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="128" cy="128" r="96"/><path d="M32 128h192M128 32c-48 56-48 136 0 192M128 32c48 56 48 136 0 192"/></g></symbol>
+<symbol id="i-check-circle" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="128" cy="128" r="96"/><path d="M88 132l28 28 56-56"/></g></symbol>
+<symbol id="i-git-pull-request" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="68" cy="60" r="20"/><circle cx="68" cy="196" r="20"/><circle cx="188" cy="196" r="20"/><path d="M68 80v96M188 176v-68a32 32 0 0 0-32-32h-40M136 52l-24 24 24 24"/></g></symbol>
+<symbol id="i-arrow-square-out" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M200 144v56a8 8 0 0 1-8 8H56a8 8 0 0 1-8-8V64a8 8 0 0 1 8-8h56M152 40h64v64M216 40l-88 88"/></g></symbol>
+<symbol id="i-arrows-split" viewBox="0 0 256 256"><path d="M229.66,189.66l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L184,196.69V139.31l-56-56-56,56v57.38l18.34-18.35a8,8,0,0,1,11.32,11.32l-32,32a8,8,0,0,1-11.32,0l-32-32a8,8,0,0,1,11.32-11.32L56,196.69V136a8,8,0,0,1,2.34-5.66L120,68.69V24a8,8,0,0,1,16,0V68.69l61.66,61.65A8,8,0,0,1,200,136v60.69l18.34-18.35a8,8,0,0,1,11.32,11.32Z"/></symbol>
+<symbol id="i-chart-bar" viewBox="0 0 256 256"><path d="M224,200h-8V40a8,8,0,0,0-8-8H152a8,8,0,0,0-8,8V80H96a8,8,0,0,0-8,8v40H48a8,8,0,0,0-8,8v64H32a8,8,0,0,0,0,16H224a8,8,0,0,0,0-16ZM160,48h40V200H160ZM104,96h40V200H104ZM56,144H88v56H56Z"/></symbol>
+<symbol id="i-git-branch" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="68" cy="196" r="20"/><circle cx="68" cy="60" r="20"/><circle cx="188" cy="76" r="20"/><path d="M68 80v96M188 96c0 48-120 32-120 80"/></g></symbol>
+<symbol id="i-paper-plane" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M224 32L32 112l80 32 32 80z"/><path d="M112 144l112-112"/></g></symbol>
+<symbol id="i-flag" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M48 224V48"/><path d="M48 168c64-48 96 32 160 0V48c-64 32-96-48-160 0"/></g></symbol>
+<symbol id="i-terminal" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><rect x="32" y="48" width="192" height="160" rx="12"/><path d="M72 104l32 24-32 24M128 160h48"/></g></symbol>
+<symbol id="i-arrow-left" viewBox="0 0 256 256"><path fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" d="M216 128H40M112 56l-72 72 72 72"/></symbol>
+<symbol id="a-gemini" viewBox="0 0 24 24"><path fill="#3186ff" d="M12 1c.6 5.6 4.4 10.4 11 11-6.6.6-10.4 5.4-11 11-.6-5.6-4.4-10.4-11-11 6.6-.6 10.4-5.4 11-11z"/></symbol>
+  </svg>
+
+  <div id="app" class="app" inert aria-hidden="true">
+    <aside class="sidebar" aria-label="Arkism 메뉴">
+      <div class="brand"><img class="brand-mark" src="img/arkism-triangle.svg" alt="" width="16" height="15"><span class="brand-word">arkism</span>
+        <button id="status-toggle" class="status-dot" type="button" aria-expanded="false" aria-controls="status-card" title="연결 상태"><i id="status-dot" class="dot"></i><span id="status-badge" class="sr-only">자세히</span></button></div>
+      <section id="status-card" class="status-card" aria-label="연결 상태" hidden>
+        <div class="status-head">
+          <strong>연결 상태</strong>
+        </div>
+        <div class="status-summary"><i class="dot"></i><span id="status-text">연결 중</span></div>
+        <ul id="status-list" class="status-list"></ul>
+        <div id="status-agents" class="agent-row" aria-label="함께 쓰는 에이전트 연결">
+          <span class="agent-tile" data-agent="claude_code" title="Claude Code"><img src="img/claude.svg" alt="Claude Code"></span>
+          <span class="agent-tile mono-logo" data-agent="codex" title="Codex"><svg aria-label="Codex"><use href="#a-codex"/></svg></span>
+          <span class="agent-tile mono-logo" data-agent="zcode" title="ZCode"><svg aria-label="ZCode"><use href="#a-zcode"/></svg></span>
+          <span class="agent-tile mono-logo" data-agent="gemini" title="Gemini CLI"><svg aria-label="Gemini CLI"><use href="#a-gemini"/></svg></span>
+          <span class="agent-tile mono-logo" data-agent="grok" title="Grok"><svg aria-label="Grok"><use href="#i-x"/></svg></span>
+        </div>
+        <div id="status-meta" class="status-meta"></div>
+      </section>
+      <div class="rail-line"></div>
+      <nav class="nav">
+        <button class="nav-item" data-menu="home" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>HOME</span></button>
+        <button class="nav-item" data-menu="memory" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg><span>MEMORY</span></button>
+        <button class="nav-item" data-menu="agent" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg><span>AGENT</span></button>
+        <button class="nav-item" data-menu="router" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span>ROUTER</span></button>
+        <button class="nav-item" data-menu="connect" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="m2 22 3-3"/><path d="M7.5 13.5 10 11"/><path d="M10.5 16.5 13 14"/><path d="m18 3-4 4h6l-4 4"/></svg><span>CONNECT</span></button>
+        <button class="nav-item" data-menu="gallery" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 11.994 2z"/></svg><span>GALLERY</span></button>
+      </nav>
+      <div class="rail-counts" hidden><output id="count-todo"></output> <output id="count-sessions"></output> <output id="count-memories"></output> <output id="count-skills"></output> <output id="count-tools"></output> <output id="count-crew"></output> <output id="count-routing"></output> <output id="count-usage"></output> <output id="count-design"></output> <output id="count-image"></output> <output id="count-slide"></output></div>
+      <div class="rail-space"></div>
+      <img class="rail-art" src="img/arkism-art.svg" alt="" width="178" height="118">
+      <button id="settings-button" class="nav-item rail-settings" data-menu="settings" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>설정</span></button>
+    </aside>
+
+    <main class="main">
+      <div class="area-bar">
+        <div id="area-tabs" class="area-tabs" role="tablist" aria-label="영역 메뉴"></div>
+        <label class="search"><svg class="icon" aria-hidden="true"><use href="#i-magnifying-glass"/></svg><input id="search" type="search" placeholder="검색" aria-label="검색"><kbd>Ctrl K</kbd></label>
+        <div id="head-actions" class="head-actions"></div>
+      </div>
+      <header class="page-head">
+        <div class="title-line"><h1 id="title">Arkism</h1><span id="title-count" class="title-count"></span></div>
+        <p id="subtitle"></p>
+      </header>
+      <section class="panel">
+        <div class="panel-main">
+          <div id="controls" class="controls"></div>
+          <div id="chips" class="chips"></div>
+          <div id="stats" class="stats"></div>
+          <output id="notice" class="notice" hidden></output>
+          <div class="table-wrap"><div id="table" class="table"></div></div>
+          <div id="change-bar" class="change-bar" hidden>
+            <svg class="icon" aria-hidden="true"><use href="#i-pencil-simple"/></svg>
+            <strong id="change-count"></strong><span id="change-text"></span>
+            <button id="change-revert" class="btn ghost" type="button">되돌리기</button>
+            <button id="change-apply" class="btn primary" type="button">적용</button>
+          </div>
+        </div>
+        <aside id="detail" class="detail" aria-label="상세"></aside>
+      </section>
+      <footer class="page-foot"><span>arkism. / 기억은 저장이 아니라 전승이다</span><span class="mono">NOCTURNE</span></footer>
+    </main>
+  </div>
+
+  <div id="unlock" class="unlock">
+    <form id="unlock-form" class="unlock-card">
+      <header class="unlock-head">
+        <h1>서버의 Arkism에 연결</h1>
+        <p id="unlock-intro">SSH로 접속하듯 서버 주소만 넣으면 돼요. 토큰이나 로그인은 필요 없어요.</p>
+      </header>
+      <div class="unlock-panel">
+        <div class="unlock-main">
+          <div class="unlock-box">
+            <div id="ssh-form"></div>
+            <p id="ssh-test-result" class="unlock-hint" role="status"></p>
+            <p id="unlock-error" class="form-error" role="alert"></p>
+            <div id="ssh-actions" class="unlock-actions"><button id="ssh-button" class="btn primary" type="submit">연결하기</button><button id="ssh-test" class="btn" type="button">SSH 테스트</button></div>
+            <div class="unlock-actions"><button id="local-retry" class="btn primary" type="button" hidden>다시 시도</button><button id="remote-link" class="btn" type="button" hidden>서버에 연결하기</button></div>
+          </div>
+          <button id="local-link" class="unlock-link" type="button" hidden>서버 없이 이 PC에서 쓰기 ›</button>
+        </div>
+        <aside id="ssh-hint" class="unlock-side" aria-label="연결 방법">
+          <h2>이렇게 연결돼요</h2>
+          <ol>
+            <li>이 PC에서 ssh로 서버에 접속해요</li>
+            <li>서버 Arkism이 연결 정보를 알려 줘요</li>
+            <li>SSH 터널로 이 앱과 이어요</li>
+          </ol>
+          <p>서버에서 따로 켜거나 포트를 열 것은 없어요. 키로 접속되는 SSH만 있으면 돼요.</p>
+          <p class="quiet">OpenSSH(또는 Git for Windows)가 이 PC에 있어야 해요.</p>
+        </aside>
+      </div>
+      <footer class="page-foot"><span>arkism. / 기억은 저장이 아니라 전승이다</span><span class="mono">NOCTURNE</span></footer>
+    </form>
+  </div>
+  <dialog id="prompt-dialog" class="page-dialog">
+    <form id="prompt-form" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <button id="prompt-dialog-back" class="page-back" value="cancel"><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"/></svg><span>이미지</span></button>
+          <h2 id="prompt-dialog-title">프롬프트 추가</h2>
+          <p>이름·모델·프롬프트를 적어 주세요. 제외할 것이나 스크립트는 오른쪽에서 더할 수 있어요. {변수}처럼 중괄호로 쓰면 변수가 돼요.</p>
+        </div>
+        <div class="dialog-actions"><button class="btn" value="cancel">취소</button><button class="btn primary" value="save">저장</button></div>
+      </div>
+      <div class="dialog-body">
+        <div class="dialog-main">
+          <div class="field">이름
+            <span class="input-ai"><input id="p-title" required maxlength="120" aria-label="이름"><button id="p-title-ai" class="btn" type="button" title="프롬프트를 읽고 이름을 정해요 · 빈 칸도 채워요">AI로 이름 짓기</button></span>
+            <small class="field-hint">최대 120자</small>
+          </div>
+          <div class="field">종류
+            <select id="p-kind" class="pill-select" aria-label="종류"><option value="image">이미지</option><option value="slide">슬라이드</option></select>
+            <div id="p-kind-pills" class="pill-row" role="radiogroup" aria-label="종류"></div>
+          </div>
+          <div class="field">모델
+            <select id="p-engine" class="pill-select" aria-label="모델"><option value="gemini">Gemini</option><option value="gpt">GPT</option><option value="claude">Claude</option><option value="grok">Grok</option><option value="comfyui">ComfyUI (로컬 모델)</option><option value="other">기타</option></select>
+            <div id="p-engine-pills" class="pill-row" role="radiogroup" aria-label="모델"></div>
+          </div>
+          <label class="field">카테고리<input id="p-tags" list="p-tag-list" maxlength="200" placeholder="풍경, 인물"></label>
+          <datalist id="p-tag-list"></datalist>
+          <div class="field">이미지 · 최대 4장
+            <div id="p-images" class="img-picker"></div>
+            <input id="p-image-file" type="file" aria-label="이미지 파일 고르기" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>
+            <small class="field-hint">파일을 고르거나 이미지를 붙여 넣어요. 저장할 때 512KB 이하 WebP로 줄여요.</small>
+          </div>
+          <label class="field">프롬프트<textarea id="p-prompt" required rows="5" maxlength="8000"></textarea><small class="field-hint">필수 · 최대 8,000자 · 키·토큰은 넣지 마세요.</small></label>
+          <p id="prompt-auto" class="meta" aria-live="polite"></p>
+        </div>
+        <div class="dialog-side">
+          <h3>추가 설정</h3>
+          <p class="field-hint">비워 두면 모델 기본값으로 만들어요.</p>
+          <label class="field">제외할 것<input id="p-negative" maxlength="2000" placeholder="color, gradient, 3d, text"></label>
+          <div class="scope-fields three">
+            <label class="field">크기<input id="p-size" maxlength="32" placeholder="1024×1024"></label>
+            <label class="field">한 번에<input id="p-count" type="number" min="0" max="16" placeholder="4"></label>
+            <label class="field">시드<input id="p-seed" maxlength="32" placeholder="무작위"></label>
+          </div>
+          <hr>
+          <h3>스크립트</h3>
+          <label class="field">스크립트 이름<input id="p-script-name" class="code" maxlength="128" placeholder="portrait.workflow.json"></label>
+          <label class="field">스크립트<textarea id="p-script" rows="6" class="code" maxlength="60000"></textarea><small class="field-hint">최대 60,000자</small></label>
+          <label class="field">쓰는 워크플로우 ($이름, 쉼표로 구분)<input id="p-experts" placeholder="$수채화, $블로그초안"></label>
+          <p id="prompt-error" class="form-error" role="alert"></p>
+        </div>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="ds-dialog" class="page-dialog">
+    <form id="ds-form" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <button class="page-back" value="cancel"><svg class="icon" aria-hidden="true"><use href="#i-arrow-left"/></svg><span>디자인 시스템</span></button>
+          <h2 id="ds-dialog-title">디자인 시스템 추가</h2>
+          <p>이름·출처·색·글꼴을 적고, 오른쪽에 쓰는 법과 규칙을 남겨 주세요. 키·토큰은 넣지 마세요.</p>
+        </div>
+        <div class="dialog-actions"><button class="btn" value="cancel">취소</button><button class="btn primary" value="save">저장</button></div>
+      </div>
+      <div class="dialog-body">
+        <div class="dialog-main">
+          <div class="dialog-group"><h3>기본 정보</h3><p class="field-hint">갤러리 카드에 보이는 이름과 설명이에요. 제품과 목적이 같은 것끼리 묶여요.</p></div>
+          <div class="scope-fields three">
+            <label class="field">이름<input id="ds-title" required maxlength="80"><small class="field-hint">필수 · 최대 80자</small></label>
+            <label class="field">제품<input id="ds-product" maxlength="60" list="ds-products" placeholder="예: 메일 앱"></label>
+            <label class="field">목적<input id="ds-purpose" maxlength="60" list="ds-purposes" placeholder="앱 화면"></label>
+          </div>
+          <datalist id="ds-products"></datalist>
+          <datalist id="ds-purposes"></datalist>
+          <label class="field">설명<input id="ds-description" maxlength="2000"></label>
+          <label class="field">출처 (Figma·웹 주소, 저장소 경로)<input id="ds-source" maxlength="500" placeholder="https://www.figma.com/design/…"></label>
+          <hr>
+          <div class="dialog-group"><h3>색과 글꼴</h3><p class="field-hint">색은 "이름 #값"을 한 줄에 하나씩 적어요.</p></div>
+          <label class="field">색 · 한 줄에 하나<textarea id="ds-colors" rows="4" class="code" placeholder="accent #e4e1db&#10;bg-window #232221"></textarea></label>
+          <div id="ds-color-chips" class="color-chips" aria-live="polite"></div>
+          <small class="field-hint">최대 64개</small>
+          <label class="field">글꼴 (쉼표로 구분)<input id="ds-fonts" placeholder="IBM Plex Sans KR, JetBrains Mono"></label>
+        </div>
+        <div class="dialog-side">
+          <h3>쓰는 법·규칙</h3>
+          <p class="field-hint">이 디자인 시스템으로 화면을 만들 때 AI가 지킬 규칙이에요.</p>
+          <label class="field">규칙<textarea id="ds-guide" rows="8" maxlength="20000" placeholder="강조 버튼은 화면에 하나만 둬요."></textarea><small class="field-hint">최대 20,000자</small></label>
+          <hr>
+          <p id="ds-meta" class="field-hint" hidden></p>
+          <p class="dialog-note">다른 곳에서 수정됐으면 최신 내용을 확인한 뒤 다시 저장하세요.</p>
+          <p id="ds-error" class="form-error" role="alert"></p>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+</body>
+</html>

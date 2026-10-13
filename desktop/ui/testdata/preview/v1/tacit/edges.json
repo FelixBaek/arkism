@@ -1,0 +1,120 @@
+{
+ "authority": "data_only_untrusted",
+ "items": [
+  {
+   "source": "code-review",
+   "target": "commit-and-push",
+   "relation_type": "often_followed_by",
+   "occurrence_count": 5,
+   "confidence": 0.72,
+   "status": "inferred",
+   "last_seen": "2026-10-07T12:12:00Z",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "evidence_refs": [
+    {
+     "collection": "agent_runs",
+     "id": "run_7f3e91",
+     "revision": 1
+    },
+    {
+     "collection": "agent_runs",
+     "id": "run_83bc02",
+     "revision": 1
+    },
+    {
+     "collection": "execution_traces",
+     "id": "tr_2d49e7",
+     "revision": 2
+    }
+   ]
+  },
+  {
+   "source": "test-first",
+   "target": "code-review",
+   "relation_type": "often_followed_by",
+   "occurrence_count": 3,
+   "confidence": 0.5,
+   "status": "candidate",
+   "last_seen": "2026-10-05T03:00:00Z",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "evidence_refs": [
+    {
+     "collection": "agent_runs",
+     "id": "run_11aa",
+     "revision": 1
+    }
+   ]
+  },
+  {
+   "source": "release-notes",
+   "target": "code-review",
+   "relation_type": "often_followed_by",
+   "occurrence_count": 6,
+   "confidence": 0.8,
+   "status": "confirmed",
+   "last_seen": "2026-10-06T03:00:00Z",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "evidence_refs": [
+    {
+     "collection": "agent_runs",
+     "id": "run_22bb",
+     "revision": 1
+    }
+   ]
+  },
+  {
+   "source": "writing-style",
+   "target": "astro-blog-post",
+   "relation_type": "often_followed_by",
+   "occurrence_count": 6,
+   "confidence": 0.78,
+   "status": "confirmed",
+   "last_seen": "2026-10-02T03:00:00Z",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "evidence_refs": [
+    {
+     "collection": "agent_runs",
+     "id": "run_33cc",
+     "revision": 1
+    }
+   ]
+  },
+  {
+   "source": "cloudflare-deploy",
+   "target": "release-notes",
+   "relation_type": "often_followed_by",
+   "occurrence_count": 2,
+   "confidence": 0.4,
+   "status": "candidate",
+   "last_seen": "2026-09-30T03:00:00Z",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "evidence_refs": [
+    {
+     "collection": "agent_runs",
+     "id": "run_44dd",
+     "revision": 1
+    }
+   ]
+  }
+ ]
+}

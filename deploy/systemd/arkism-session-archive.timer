@@ -1,0 +1,9 @@
+[Unit]
+Description=Maintain Arkism session originals every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+
+[Install]
+WantedBy=timers.target

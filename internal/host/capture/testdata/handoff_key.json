@@ -1,0 +1,18 @@
+{
+ "scope": {
+  "workspace_id": "w",
+  "project_id": "p",
+  "user_id": "u",
+  "agent_id": ""
+ },
+ "context": {
+  "path": "/home/u/.claude/projects/작업/s.jsonl",
+  "logical": "작업/s.jsonl",
+  "device": "server",
+  "origin": "claude_code",
+  "session_id": "s",
+  "archive_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "cwd": "/home/u/작업"
+ },
+ "key": "caaf8a6998c29bb8d4ebdf96cd5f0a60a27ec9481d8f2dc19d18cb9dc68b7266"
+}
