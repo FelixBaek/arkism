@@ -38,7 +38,7 @@ On a server with systemd:
 
 1. Create a service token with `memory-principal --role service` that has `handoff:discord` and write access to crew meetings, runs and assists.
 2. Save it as `/srv/arkism/config/discord.token`, the path the unit sets in `ARKISM_DISCORD_TOKEN_FILE` (the default outside the unit is `~/.config/arkism/discord.token`). Without a token file, the owner token is used.
-3. Install [`deploy/systemd/arkism-discord.service`](../deploy/systemd/arkism-discord.service) and run `systemctl enable --now arkism-discord`.
+3. Write a systemd unit named `arkism-discord` that runs `arkism discord run` with `ARKISM_DISCORD_TOKEN_FILE` set, then run `systemctl enable --now arkism-discord`.
 
 Other commands:
 

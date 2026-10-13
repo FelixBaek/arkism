@@ -60,14 +60,18 @@ WORK="$(mktemp -d)"; trap 'rm -rf -- "$WORK"' EXIT
 # binary plus the scheduled-task scripts it installs beside itself.
 GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/arkism.exe" ./cmd/arkism
 run ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemType Directory '$REMOTE/stage/integration' | Out-Null\""
-run scp -q -o BatchMode=yes "$WORK/arkism.exe" "$DIR/../tools/install_arkism_export_task.ps1" "$DIR/../tools/install_arkism_work_task.ps1" "$HOST:$REMOTE/stage/integration/"
+SUPPORT=()
+for f in install_arkism_export_task.ps1 install_arkism_work_task.ps1; do
+  if [[ -f "$DIR/../tools/$f" ]]; then SUPPORT+=("$DIR/../tools/$f"); else echo "warning: tools/$f not found, skipping" >&2; fi
+done
+run scp -q -o BatchMode=yes "$WORK/arkism.exe" ${SUPPORT[@]+"${SUPPORT[@]}"} "$HOST:$REMOTE/stage/integration/"
 
 # Built-in Arkism: the server programs (built here) and the database roles. The build PC adds
 # Postgres and pgvector (installer/prepare-runtime.ps1) because pgvector needs its C compiler.
 GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/memoryd.exe" ./cmd/memoryd
 GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/memory-principal.exe" ./cmd/memory-principal
 run ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemType Directory '$REMOTE/stage/runtime' | Out-Null\""
-run scp -q -o BatchMode=yes "$WORK/memoryd.exe" "$WORK/memory-principal.exe" "$DIR/../deploy/local/roles.sql" "$HOST:$REMOTE/stage/runtime/"
+run scp -q -o BatchMode=yes "$WORK/memoryd.exe" "$WORK/memory-principal.exe" "$DIR/../tools/roles.sql" "$HOST:$REMOTE/stage/runtime/"
 
 cat > "$WORK/remote.ps1" <<PS1
 \$ErrorActionPreference = 'Stop'
