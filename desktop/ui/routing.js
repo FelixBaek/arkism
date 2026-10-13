@@ -620,6 +620,39 @@ window.ArkismRouting = (ctx) => {
     box.append(note);
     return box;
   }
+  // 에이전트 연결 (built-in Arkism only): Claude Code, Codex and Gemini CLI send their model requests to the
+  // gateway on this computer and use the 자동 group, every model turned on in 모델 설정. Their logins stay theirs.
+  const AGENT_LINKS = [["claude_code", "img:claude.svg", "Claude Code", "기본 모델이 ‘자동’이 돼요. /model에서 다른 모델도 고를 수 있어요."],
+    ["codex", "sym:a-codex", "Codex", "~/.codex/config.toml에 Arkism 공급자를 넣고 모델을 ‘자동’으로 바꿔요."],
+    ["gemini", "sym:a-gemini", "Gemini CLI", "API 키로 로그인한 Gemini CLI만 돼요. Google 로그인은 주소 설정을 무시해요."]];
+  async function agentLinkSet(agent, on) {
+    if (S.busy) return;
+    S.busy = agent; render(false);
+    try { S.links = await window.__TAURI__.core.invoke("agent_link_set", { agent, on }); notice(on ? "연결했어요. 에이전트를 다시 시작하면 적용돼요." : "연결을 끊고 원래 설정으로 돌려놨어요."); }
+    catch (e) { notice(String(e).includes("codex_provider_exists") ? "Codex 설정에 이미 arkism 공급자가 있어요. 직접 지운 뒤 다시 해 주세요." : String(e).includes("unreadable") ? "에이전트 설정 파일을 읽지 못했어요." : "연결하지 못했어요."); }
+    finally { S.busy = ""; render(false); }
+  }
+  function agentLinks() {
+    const tauri = window.__TAURI__?.core;
+    if (!tauri || state.mode !== "local") return null;
+    if (!S.links) { S.links = { agents: {} }; tauri.invoke("gateway_info").then((r) => { S.links = r; render(false); }, () => {}); }
+    const c = el("div", "rt-card pad rt-links");
+    const head = el("div", "rt-card-head");
+    head.append(el("strong", "", "에이전트 연결"), el("span", "", S.links.url ? `중계기 ${S.links.url.replace("http://", "")} · 켜짐` : "중계기 꺼짐"));
+    c.append(head, el("p", "dim", "연결한 에이전트는 이 PC의 Arkism 중계기로 요청을 보내고, 모델 설정에 켠 모델 중에서 자동으로 골라 답해요. 각자 로그인은 그대로 써요."));
+    for (const [id, logo, name, hint] of AGENT_LINKS) {
+      const a = S.links.agents?.[id] || {};
+      const row = el("div", "rt-link-row");
+      const t = el("div", "rt-link-text"); t.append(el("strong", "", name), el("small", "", a.installed === false ? "이 PC에서 찾지 못했어요." : hint));
+      const state2 = a.current ? ["ok", "연결됨"] : a.connected ? ["warn", "다시 연결 필요"] : ["off", "연결 안 됨"];
+      const sb = el("span", `rt-status ${state2[0]}`); sb.append(el("i"), state2[1]);
+      const btn = a.connected && a.current ? button("끊기", "small", null, () => agentLinkSet(id, false)) : button(a.connected ? "다시 연결" : "연결", "small primary", null, () => agentLinkSet(id, true));
+      btn.disabled = !!S.busy || a.installed === false;
+      row.append(agentLogo(logo, name), t, sb, btn);
+      c.append(row);
+    }
+    return c;
+  }
   function tab(kit) {
     kit.head(button("새로고침", "ghost", null, loadSettings)); // models come from 모델 설정; this reads them again
     if (S.settingsState === "idle") queueMicrotask(loadSettings);
@@ -632,7 +665,8 @@ window.ArkismRouting = (ctx) => {
     const grp = S.group && groupsNow().find((g) => g.id === S.group);
     kit.side(grp ? groupDetail(grp, items) : sel ? modelDetail(sel) : kit.sideNote("모델을 고르세요."));
     const [auto, failover] = policyCards(items);
-    return [auto, groupsCard(items), modelList(items), failover];
+    const links = agentLinks();
+    return [auto, groupsCard(items), modelList(items), failover, ...(links ? [links] : [])];
   }
 
   return {

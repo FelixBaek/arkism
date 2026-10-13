@@ -819,6 +819,10 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .rt-status { display: inline-flex; align-items: center; gap: 6px; font-size: calc(12px * var(--fs, 1)); color: var(--text-2); white-space: nowrap; }
 .rt-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--status-ok); }
 .rt-status.warn { color: var(--warn); }
+.rt-links { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+.rt-link-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.rt-link-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rt-link-text small { color: var(--text-2); font-size: calc(12px * var(--fs, 1)); }
 .rt-status.warn i { background: var(--warn); }
 .rt-status.off { color: var(--text-3); }
 .rt-status.off i { background: none; box-shadow: inset 0 0 0 1.25px var(--text-3); }

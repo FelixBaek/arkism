@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -165,6 +166,11 @@ func claudePrefixEqual(messages, history []any) bool {
 	return len(messages) >= len(history) && claudeEqual(messages[:len(history)], history)
 }
 
+var (
+	claudeModelPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@\[\]-]{0,199}$`)
+	claudeToolNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+)
+
 var claudeRequestKeys = set("model", "messages", "system", "tools", "tool_choice", "max_tokens", "stream", "metadata")
 
 // claudePrepare validates body and returns an independent copy plus the settings text runs
@@ -208,6 +214,18 @@ func claudePrepare(body host.Obj) (result host.Obj, settings string, err error) 
 	}
 	if tools, _ := get(body, "tools").([]any); len(tools) > 128 {
 		return nil, "", unsupported
+	}
+	// The model and tool names become CLI argument values (no shell); keep them to plain
+	// identifiers so none can read as a flag or widen the comma-joined --allowedTools list.
+	if model, _ := get(body, "model").(string); !claudeModelPattern.MatchString(model) {
+		return nil, "", claudeErr("unsupported_or_invalid_request", 400)
+	}
+	if tools, _ := get(body, "tools").([]any); tools != nil {
+		for _, tool := range tools {
+			if name, _ := get(tool, "name").(string); !claudeToolNamePattern.MatchString(name) {
+				return nil, "", claudeErr("unsupported_or_invalid_request", 400)
+			}
+		}
 	}
 	result = clone(body).(host.Obj)
 	result.Set("messages", claudeHistory(get(result, "messages")))

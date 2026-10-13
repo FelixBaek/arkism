@@ -324,6 +324,11 @@ func run() error {
 			svc.ModelPicker = clef // 라우팅: Clef picks the model; without it tasks go to the fixed or first model
 		} else if jev != nil {
 			svc.Router = jev
+			svc.ModelPicker = jev.(*memory.JevJudge)
+		}
+		// 라우팅 with the user's own chat model (Ollama, OpenAI, OpenRouter…): replaces Clef or Jev for picking models.
+		if endpoint, model := os.Getenv("ARKISM_ROUTING_PICKER_URL"), os.Getenv("ARKISM_ROUTING_PICKER_MODEL"); endpoint != "" && model != "" {
+			svc.ModelPicker = &memory.ChatModelPicker{Endpoint: endpoint, APIKey: os.Getenv("ARKISM_ROUTING_PICKER_KEY"), Model: model}
 		}
 	}
 	if *worker {

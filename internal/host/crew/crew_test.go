@@ -1089,6 +1089,13 @@ func TestModelTestNoteAndFailure(t *testing.T) {
 }
 
 func TestAntigravityRunsThroughThePCProxy(t *testing.T) {
+	old := host.PCProxy
+	t.Cleanup(func() { host.PCProxy = old })
+	host.PCProxy = ""
+	if env, _ := childEnv(row(t, "antigravity-gemini-3.8-pro"), []map[string]any{}, "", nil); env["HTTPS_PROXY"] == "socks5://127.0.0.1:18080" {
+		t.Fatal("no proxy set, but agy still got one")
+	}
+	host.PCProxy = "socks5://127.0.0.1:18080"
 	r := row(t, "antigravity-gemini-3.8-flash-high")
 	if r.Name != "agy" || r.Provider != "google" || row(t, "gemini-3.8-flash-high").Name != "gemini" {
 		t.Fatal(r)
@@ -1104,7 +1111,7 @@ func TestAntigravityRunsThroughThePCProxy(t *testing.T) {
 		t.Fatal(env["HTTPS_PROXY"])
 	}
 	if env, _ := childEnv(row(t, "grok-4.7"), []map[string]any{}, "", nil); env["HTTPS_PROXY"] == host.PCProxy {
-		t.Fatal("grok goes through the PC")
+		t.Fatal("grok goes through the proxy")
 	}
 }
 

@@ -14,6 +14,8 @@ use std::time::{Duration, Instant};
 
 const PG_PORT: u16 = 55491;
 const API_PORT: u16 = 8091;
+/// The model gateway agents point at (`arkism gateway`): Claude Code, Codex and Gemini CLI.
+const GATEWAY_PORT: u16 = 8099;
 const DATABASE: &str = "arkism";
 const SCOPE: [&str; 4] = ["--organization", "default", "--project", "default"];
 
@@ -35,6 +37,9 @@ struct Secrets {
     /// The embedder the stored vectors were last indexed for ("none" or "ollama:<model>").
     #[serde(default)]
     embedder: String,
+    /// Where the built-in model gateway listens (0 until it first starts).
+    #[serde(default)]
+    gateway_port: u16,
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -49,6 +54,8 @@ pub struct Runtime {
     children: Mutex<Vec<Child>>,
     /// `arkism crew providers watch`: model accounts, quotas, model tests and AI help.
     watcher: Mutex<Option<Child>>,
+    /// `arkism gateway`: the agents connected in 라우팅 send their model requests here.
+    gateway: Mutex<Option<Child>>,
     /// Start, backup, restore and erase take turns.
     busy: Mutex<()>,
     /// The user's home: the agents' capture queues are under `.config/arkism`.
@@ -58,7 +65,7 @@ pub struct Runtime {
 impl Runtime {
     /// `programs` is the folder with the bundled programs; None when this build has none.
     pub fn new(programs: Option<PathBuf>, data: PathBuf) -> Self {
-        Runtime { programs, data, children: Mutex::new(Vec::new()), watcher: Mutex::new(None), busy: Mutex::new(()), home: home_dir() }
+        Runtime { programs, data, children: Mutex::new(Vec::new()), watcher: Mutex::new(None), gateway: Mutex::new(None), busy: Mutex::new(()), home: home_dir() }
     }
 
     /// Leaves the user's home alone (no capture queues read or erased): `--runtime-check`.
@@ -70,6 +77,11 @@ impl Runtime {
     /// The bundled agent client (`arkism`), if this build has one.
     pub fn agent_client(&self) -> Option<PathBuf> {
         find_agent_client(self.programs.as_deref())
+    }
+
+    /// The user's home folder (None in `--runtime-check`, which leaves the agents alone).
+    pub fn home(&self) -> Option<&Path> {
+        self.home.as_deref()
     }
 
     pub fn data_dir(&self) -> &Path {
@@ -107,7 +119,40 @@ impl Runtime {
         self.prepare_database(&mut secrets)?;
         let server = self.start_server(&mut secrets)?;
         self.write_agent_connection(Some(&server), Some(&secrets), None)?;
+        // The gateway is part of the built-in Arkism; routing still works without it, so a failure only logs.
+        let _ = self.ensure_gateway();
         Ok(Started { server, token: secrets.owner.clone() })
+    }
+
+    /// Starts the model gateway on this computer if it is not running. It serves the models in
+    /// 모델 설정 with the user's own logins and keys; nothing leaves for an Arkism server.
+    pub fn ensure_gateway(&self) -> Result<String, String> {
+        let mut gateway = self.gateway.lock().map_err(|_| "local_busy".to_string())?;
+        let mut secrets = self.secrets()?;
+        let alive = gateway.as_mut().is_some_and(|c| matches!(c.try_wait(), Ok(None)));
+        if alive && secrets.gateway_port != 0 {
+            return Ok(gateway_url(secrets.gateway_port));
+        }
+        if secrets.gateway_port == 0 || !port_free(secrets.gateway_port) {
+            secrets.gateway_port = free_port(GATEWAY_PORT)?;
+            self.save(&secrets)?;
+        }
+        let listen = format!("127.0.0.1:{}", secrets.gateway_port);
+        let mut cmd = self.host_command(&["gateway"]).ok_or("local_unavailable")?;
+        let log = fs::OpenOptions::new().create(true).append(true).open(self.data.join("logs").join("gateway.log")).map_err(|e| e.to_string())?;
+        let err = log.try_clone().map_err(|e| e.to_string())?;
+        cmd.env("ARKISM_GATEWAY_LISTEN", &listen).stdin(Stdio::null()).stdout(log).stderr(err);
+        no_window(&mut cmd);
+        *gateway = Some(cmd.spawn().map_err(|e| format!("gateway_start_failed: {e}"))?);
+        Ok(gateway_url(secrets.gateway_port))
+    }
+
+    /// The gateway's address while it runs.
+    pub fn gateway_address(&self) -> Option<String> {
+        let mut gateway = self.gateway.lock().ok()?;
+        let alive = gateway.as_mut().is_some_and(|c| matches!(c.try_wait(), Ok(None)));
+        let port = self.secrets().ok()?.gateway_port;
+        (alive && port != 0).then(|| gateway_url(port))
     }
 
     /// What the PC agent client (`arkism windows hook|mcp`) reads to talk to this Arkism instead
@@ -213,6 +258,7 @@ impl Runtime {
             }
             let _ = quiet(&mut cmd).status();
         };
+        let _ = self.ensure_gateway();
         // Keep the provider watcher running (restart it if it stopped).
         if let Ok(mut watcher) = self.watcher.lock() {
             let alive = watcher.as_mut().is_some_and(|c| matches!(c.try_wait(), Ok(None)));
@@ -297,8 +343,11 @@ impl Runtime {
     /// Saves the roles and restarts the server so the embedder and judge take effect (a new embedder
     /// re-indexes once). The token is never sent back to the page: the UI only learns whether one is set.
     pub fn set_model_roles(&self, mut roles: ModelRoles) -> Result<(), String> {
-        if roles.cloudflare_token.is_empty() {
-            roles.cloudflare_token = self.model_roles().cloudflare_token; // empty field = keep the saved one
+        let saved = self.model_roles(); // an empty secret field keeps the saved one
+        for (field, old) in [(&mut roles.cloudflare_token, saved.cloudflare_token), (&mut roles.jev_key, saved.jev_key), (&mut roles.picker_key, saved.picker_key)] {
+            if field.is_empty() {
+                *field = old;
+            }
         }
         if !roles.valid() {
             return Err("model_roles_invalid".into());
@@ -351,10 +400,12 @@ impl Runtime {
 
     /// Stops the server, its worker and the provider watcher; Postgres keeps running.
     fn stop_server(&self) {
-        if let Ok(mut watcher) = self.watcher.lock() {
-            if let Some(mut child) = watcher.take() {
-                let _ = child.kill();
-                let _ = child.wait();
+        for slot in [&self.watcher, &self.gateway] {
+            if let Ok(mut slot) = slot.lock() {
+                if let Some(mut child) = slot.take() {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
             }
         }
         if let Ok(mut children) = self.children.lock() {
@@ -387,6 +438,7 @@ impl Runtime {
             registered: false,
             archive_key: secret()?,
             embedder: String::new(),
+            gateway_port: 0,
         };
         self.save(&secrets)?;
         Ok(secrets)
@@ -524,10 +576,22 @@ impl Runtime {
         } else {
             vec![("MEMORY_EMBEDDER", "ollama".into()), ("OLLAMA_ENDPOINT_URL", OLLAMA_URL.into()), ("OLLAMA_MODEL", roles.embed_model.clone())]
         };
-        // The judge: Clef on Cloudflare Workers AI when chosen and configured, otherwise the fixed model.
-        if roles.judge == "clef" && !roles.cloudflare_account.is_empty() && !roles.cloudflare_token.is_empty() {
-            embed_env.push(("CLOUDFLARE_ACCOUNT_ID", roles.cloudflare_account.clone()));
-            embed_env.push(("CLOUDFLARE_AI_TOKEN", roles.cloudflare_token.clone()));
+        // The judge that picks a model for 라우팅 (and skills): Clef on Cloudflare Workers AI, Jev, or a
+        // chat model the user already has (Ollama, OpenAI…). Without one, tasks go to the fixed or first model.
+        match roles.judge.as_str() {
+            "clef" if !roles.cloudflare_account.is_empty() && !roles.cloudflare_token.is_empty() => {
+                embed_env.push(("CLOUDFLARE_ACCOUNT_ID", roles.cloudflare_account.clone()));
+                embed_env.push(("CLOUDFLARE_AI_TOKEN", roles.cloudflare_token.clone()));
+            }
+            "jev" if !roles.jev_key.is_empty() => embed_env.push(("TYPESAFE_API_KEY", roles.jev_key.clone())),
+            "chat" if !roles.picker_url.is_empty() && !roles.picker_model.is_empty() => {
+                embed_env.push(("ARKISM_ROUTING_PICKER_URL", roles.picker_url.clone()));
+                embed_env.push(("ARKISM_ROUTING_PICKER_MODEL", roles.picker_model.clone()));
+                if !roles.picker_key.is_empty() {
+                    embed_env.push(("ARKISM_ROUTING_PICKER_KEY", roles.picker_key.clone()));
+                }
+            }
+            _ => {}
         }
         if embedder != "none" && secrets.embedder != embedder {
             let init_url = self.url("arkism_init", &secrets.init, secrets.pg_port);
@@ -764,7 +828,8 @@ pub struct ModelRoles {
     pub embedder: String,
     #[serde(default = "default_embed_model")]
     pub embed_model: String,
-    /// Routing and skill judge: "fixed" (the fixed model) or "clef" (Cloudflare Workers AI).
+    /// Routing and skill judge: "fixed" (the fixed model), "clef" (Cloudflare Workers AI), "jev"
+    /// (TypeSafe Jev) or "chat" (any OpenAI-compatible chat model: Ollama, OpenAI, OpenRouter…).
     #[serde(default = "default_fixed")]
     pub judge: String,
     #[serde(default)]
@@ -772,6 +837,15 @@ pub struct ModelRoles {
     /// Kept only in this user's data folder (0600), like the other built-in secrets.
     #[serde(default)]
     pub cloudflare_token: String,
+    #[serde(default)]
+    pub jev_key: String,
+    /// "chat": the base URL (https, or http on this computer), the model and its key (empty for Ollama).
+    #[serde(default)]
+    pub picker_url: String,
+    #[serde(default)]
+    pub picker_model: String,
+    #[serde(default)]
+    pub picker_key: String,
     /// The Claude CLI model that extracts memories, and the one that reflects, reviews and suggests cleanups.
     #[serde(default = "default_haiku")]
     pub extract_model: String,
@@ -780,6 +854,17 @@ pub struct ModelRoles {
 }
 
 fn default_auto() -> String { "auto".into() }
+
+/// https anywhere, plain http only on this computer (the server refuses anything else too).
+fn picker_url_ok(url: &str) -> bool {
+    url.len() <= 512
+        && !url.chars().any(char::is_whitespace)
+        && (url.starts_with("https://") || ["http://127.0.0.1:", "http://localhost:", "http://127.0.0.1/", "http://localhost/"].iter().any(|p| url.starts_with(p)))
+}
+
+fn gateway_url(port: u16) -> String {
+    format!("http://127.0.0.1:{port}")
+}
 fn default_embed_model() -> String { OLLAMA_MODEL.into() }
 fn default_fixed() -> String { "fixed".into() }
 fn default_haiku() -> String { "haiku".into() }
@@ -796,10 +881,11 @@ impl ModelRoles {
         let model = |m: &str| !m.is_empty() && m.len() <= 128 && m.chars().all(|c| c.is_ascii_alphanumeric() || "._:-/".contains(c));
         ["auto", "ollama", "none"].contains(&self.embedder.as_str())
             && model(&self.embed_model)
-            && ["fixed", "clef"].contains(&self.judge.as_str())
+            && ["fixed", "clef", "jev", "chat"].contains(&self.judge.as_str())
             && self.cloudflare_account.len() <= 128
-            && self.cloudflare_token.len() <= 512
-            && !self.cloudflare_token.contains(['\n', '\r'])
+            && [&self.cloudflare_token, &self.jev_key, &self.picker_key].iter().all(|k| k.len() <= 512 && !k.contains(['\n', '\r']))
+            && (self.picker_url.is_empty() || picker_url_ok(&self.picker_url))
+            && (self.picker_model.is_empty() || model(&self.picker_model))
             && model(&self.extract_model)
             && model(&self.reflect_model)
     }

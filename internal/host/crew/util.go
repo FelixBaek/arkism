@@ -493,7 +493,7 @@ func pySplitlines(s string) []string {
 
 // withKey is {**m, k: v}: a copy of m with k set.
 func withKey(m map[string]any, k string, v any) map[string]any {
-	out := make(map[string]any, len(m)+1)
+	out := make(map[string]any, len(m))
 	for mk, mv := range m {
 		out[mk] = mv
 	}

@@ -783,3 +783,20 @@ func TestClaudeArgvGolden(t *testing.T) {
 		}
 	}
 }
+
+func TestClaudePrepareRejectsArgumentShapedNames(t *testing.T) {
+	msgs := `"messages":[{"role":"user","content":"hi"}],"max_tokens":8`
+	for _, body := range []string{
+		`{"model":"--settings",` + msgs + `}`,
+		`{"model":"",` + msgs + `}`,
+		`{"model":"claude-opus-4-1",` + msgs + `,"tools":[{"name":"a,Bash","input_schema":{"type":"object"}}]}`,
+	} {
+		if _, _, err := claudePrepare(claudeParse(t, body)); err == nil {
+			t.Errorf("%s: accepted", body)
+		}
+	}
+	ok := `{"model":"claude-opus-4-1[1m]",` + msgs + `,"tools":[{"name":"get_weather","input_schema":{"type":"object"}}]}`
+	if _, _, err := claudePrepare(claudeParse(t, ok)); err != nil {
+		t.Errorf("valid body rejected: %v", err)
+	}
+}

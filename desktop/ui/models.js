@@ -84,7 +84,7 @@ window.ArkismModels = (ctx) => {
   }
   // 계정 추가: a CLI login happens on the server, so the window shows the command to run there.
   const LOGIN = { codex: "codex login", claude: "claude  →  /login", gemini: "gemini  →  로그인 선택", glm: "claude-glm 키는 아래 'API 키'로 넣어요",
-    grok: "grok  →  /login", agy: "agy  →  로그인 (실행은 PC를 거쳐 나가요)" };
+    grok: "grok  →  /login", agy: "agy  →  로그인" };
   function openAccountHelp(p) {
     const clis = [...new Set([...(p.accounts || []).map((a) => a.cli), { openai: "codex", anthropic: "claude", google: "gemini", zai: "glm" }[p.id]].filter(Boolean))];
     const dlg = el("dialog", "crew-dialog");

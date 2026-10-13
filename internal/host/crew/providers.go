@@ -212,7 +212,7 @@ func zaiModels() []string {
 	return cached
 }
 
-// agyModels is antigravity's model list (agy models, through the PC), asked once a day, each with the antigravity- prefix.
+// agyModels is antigravity's model list (agy models, through PCProxy when set), asked once a day, each with the antigravity- prefix.
 func agyModels() []string {
 	path := stateFile("agy-models.json")
 	cached, fresh := cachedModels(path)
@@ -227,7 +227,9 @@ func agyModels() []string {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, exe, "models")
 	env := osEnv()
-	env["HTTPS_PROXY"], env["HTTP_PROXY"], env["ALL_PROXY"] = host.PCProxy, host.PCProxy, host.PCProxy
+	if host.PCProxy != "" {
+		env["HTTPS_PROXY"], env["HTTP_PROXY"], env["ALL_PROXY"] = host.PCProxy, host.PCProxy, host.PCProxy
+	}
 	cmd.Env = envList(env)
 	raw, err := cmd.Output()
 	var exit *exec.ExitError
@@ -253,7 +255,7 @@ func modelsFor(provider string) []string {
 	if v, err := host.Loads(host.Env("ARKISM_PROVIDER_MODELS", "{}")); err == nil {
 		extra = obj(v)
 	}
-	// A list set by hand wins without asking the CLI (agy goes out through the PC and may be slow).
+	// A list set by hand wins without asking the CLI (agy may go out through a proxy and be slow).
 	var found []string
 	if truthy(extra[provider]) {
 		for _, m := range list(extra[provider]) {

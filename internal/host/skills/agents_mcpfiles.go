@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/FelixBaek/arkism/internal/host"
 )
@@ -1316,7 +1317,7 @@ func tomlToJSONEscapes(q string) string {
 			switch q[i+1] {
 			case 'U':
 				if i+10 <= len(q) {
-					if r, err := strconv.ParseUint(q[i+2:i+10], 16, 32); err == nil {
+					if r, err := strconv.ParseUint(q[i+2:i+10], 16, 32); err == nil && r <= unicode.MaxRune {
 						b.WriteString(strings.Trim(host.MustDumps(string(rune(r)), host.DumpOpts{}), `"`))
 						i += 9
 						continue

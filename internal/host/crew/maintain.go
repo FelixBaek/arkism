@@ -353,7 +353,10 @@ func pairIndex(v any, n int) (int, bool) {
 		}
 		i = parsed
 	}
-	return int(i), i >= 0 && i < int64(n)
+	if i < 0 || i >= int64(n) {
+		return 0, false
+	}
+	return int(i), true
 }
 
 type proposal struct {

@@ -11,6 +11,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, RunEvent, WindowEvent};
 
+mod agent_link;
 mod gateway_token;
 mod runtime;
 mod ssh_tunnel;
@@ -156,8 +157,10 @@ async fn doctor(rt: tauri::State<'_, Arc<runtime::Runtime>>, fix: bool) -> Resul
 fn model_roles(rt: tauri::State<Arc<runtime::Runtime>>) -> serde_json::Value {
     let roles = rt.model_roles();
     let mut v = serde_json::to_value(&roles).unwrap_or_default();
-    v["cloudflare_token"] = serde_json::Value::String(String::new());
-    v["cloudflare_token_saved"] = serde_json::Value::Bool(!roles.cloudflare_token.is_empty());
+    for (key, secret) in [("cloudflare_token", &roles.cloudflare_token), ("jev_key", &roles.jev_key), ("picker_key", &roles.picker_key)] {
+        v[key] = serde_json::Value::String(String::new());
+        v[format!("{key}_saved")] = serde_json::Value::Bool(!secret.is_empty());
+    }
     v
 }
 
@@ -165,6 +168,23 @@ fn model_roles(rt: tauri::State<Arc<runtime::Runtime>>) -> serde_json::Value {
 async fn set_model_roles(rt: tauri::State<'_, Arc<runtime::Runtime>>, roles: runtime::ModelRoles) -> Result<(), String> {
     let rt = Arc::clone(&rt);
     tauri::async_runtime::spawn_blocking(move || rt.set_model_roles(roles)).await.map_err(|e| e.to_string())?
+}
+
+/// 라우팅 › 에이전트 연결: the built-in gateway's address and which agents point at it.
+#[tauri::command]
+fn gateway_info(rt: tauri::State<Arc<runtime::Runtime>>) -> Result<serde_json::Value, String> {
+    let home = rt.home().ok_or("local_unavailable")?;
+    let url = rt.gateway_address();
+    Ok(serde_json::json!({ "url": url, "agents": agent_link::status(home, url.as_deref()) }))
+}
+
+/// Connects an agent (Claude Code, Codex, Gemini CLI) to the gateway, starting it if needed, or disconnects it.
+#[tauri::command]
+fn agent_link_set(rt: tauri::State<Arc<runtime::Runtime>>, agent: String, on: bool) -> Result<serde_json::Value, String> {
+    let home = rt.home().ok_or("local_unavailable")?;
+    let url = if on { Some(rt.ensure_gateway()?) } else { None };
+    agent_link::set(home, &rt.data_dir().join("agent-links.json"), &agent, url.as_deref())?;
+    gateway_info(rt)
 }
 
 /// Opens the backup folder in the file manager.
@@ -688,7 +708,7 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_disconnect, ssh_keys, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate])
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_disconnect, ssh_keys, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {

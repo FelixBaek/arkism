@@ -627,10 +627,18 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 	if in.Group != "" {
 		groups := routingGroupsView(p, doc, 0).Items
 		i := slices.IndexFunc(groups, func(g RoutingGroup) bool { return g.ID == in.Group })
-		if i < 0 {
+		switch {
+		case i >= 0:
+			group = &groups[i]
+		case in.Group == AutoGroupID:
+			auto := RoutingGroup{ID: AutoGroupID, Name: "자동", Enabled: true, Strategy: "smart"}
+			for _, m := range routingModels(p, doc, 0) {
+				auto.Members = append(auto.Members, m.ID)
+			}
+			group = &auto
+		default:
 			return RoutingDecision{}, ErrNotFound
 		}
-		group = &groups[i]
 		if !group.Enabled {
 			return RoutingDecision{}, ErrUnavailable
 		}
@@ -697,12 +705,20 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 	return out, nil
 }
 
+// pickerIdentity names the provider and model a routing decision is billed under (Clef when unknown).
+func pickerIdentity(p ModelPicker) (string, string) {
+	if j, ok := p.(interface {
+		provider() string
+		model() string
+	}); ok {
+		return j.provider(), j.model()
+	}
+	return "cloudflare", "clef-flash"
+}
+
 // pickModel asks Clef and records the call's cost; false means fall back to the fixed model.
 func (s *Service) pickModel(ctx context.Context, scope Scope, task string, options []ModelOption) (string, bool) {
-	provider, model := "cloudflare", "clef-flash"
-	if j, ok := s.ModelPicker.(*JevJudge); ok {
-		provider, model = j.provider(), j.model()
-	}
+	provider, model := pickerIdentity(s.ModelPicker)
 	op, cancel := context.WithTimeout(ctx, jevTimeout)
 	defer cancel()
 	reserved, err := s.beginProviderCall(op, scope, "model_routing", provider, model)
@@ -946,7 +962,7 @@ func (s *Service) RoutingOverview(ctx context.Context, token string, scope Scope
 	}
 	classifierName := ""
 	if s.ModelPicker != nil {
-		classifierName = "clef-flash"
+		_, classifierName = pickerIdentity(s.ModelPicker)
 	}
 	lastDecision := ""
 	for _, r := range rows { // newest first

@@ -37,6 +37,11 @@ type RoutingGroupsInput struct {
 
 var routingGroupIDRe = regexp.MustCompile(`^group/[a-z0-9-]{1,64}$`)
 
+// AutoGroupID is the built-in group of every model turned on in 모델 설정. Agents connected to the
+// gateway use it, so routing works before anyone makes a group; a saved group with this id replaces it.
+// It is not listed with the groups: DecideRoute and the gateway know it.
+const AutoGroupID = "group/auto"
+
 func cloneRoutingGroups(groups []RoutingGroup) []RoutingGroup {
 	out := make([]RoutingGroup, len(groups))
 	for i, g := range groups {

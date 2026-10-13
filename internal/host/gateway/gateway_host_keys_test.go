@@ -250,11 +250,11 @@ func TestHostKeysRoutingListUsesRealTargetAndFiltersDisabledOrUnavailableModels(
 		mode   []string
 		broken bool
 		want   string
-	}{{nil, false, `["openai/gpt-test","anthropic/claude-test"]`},
-		{[]string{"codex"}, false, `["openai/gpt-test","anthropic/claude-test"]`},
-		{[]string{"grok"}, false, `["openai/gpt-test","xai/grok-test","anthropic/claude-test","group/api"]`},
-		{[]string{"all"}, false, `["openai/gpt-test","xai/grok-test","anthropic/claude-test","group/api"]`},
-		{[]string{"all"}, true, `["anthropic/claude-test"]`}} {
+	}{{nil, false, `["openai/gpt-test","anthropic/claude-test","group/auto"]`},
+		{[]string{"codex"}, false, `["openai/gpt-test","anthropic/claude-test","group/auto"]`},
+		{[]string{"grok"}, false, `["openai/gpt-test","xai/grok-test","anthropic/claude-test","group/api","group/auto"]`},
+		{[]string{"all"}, false, `["openai/gpt-test","xai/grok-test","anthropic/claude-test","group/api","group/auto"]`},
+		{[]string{"all"}, true, `["anthropic/claude-test","group/auto"]`}} {
 		key := gxHostKey
 		if c.broken {
 			key = `bad\r\nkey`

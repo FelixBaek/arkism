@@ -76,15 +76,17 @@ var (
 	retryStatuses = map[int]bool{401: true, 402: true, 403: true, 429: true, 503: true}
 	// Our own checks refused these before any egress: the candidate was skipped, not called (a
 	// login, capacity or provider rejection stays a real attempt signal).
-	noCall    = set("unsupported_field", "unsupported_request", "unsupported_or_invalid_request")
-	groupID   = regexp.MustCompile(`^group/[a-z0-9-]{1,64}$`)
-	modelID   = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}/[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}$`)
-	betaPart  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,99}$`)
-	geminiURL = regexp.MustCompile(`^/v1beta/models/(.+):(generateContent|streamGenerateContent|countTokens)$`)
-	zaiKeyRe  = regexp.MustCompile(`(?m)^KEY=['"]?([^'"\s]+)`)
-	sizeRe    = regexp.MustCompile(`^[0-9]{1,6}$`)
-	offsetRe  = regexp.MustCompile(`^[0-9]{1,9}$`)
-	entrances = set("/v1/messages", "/v1/messages/count_tokens", "/v1/chat/completions", "/v1/responses")
+	noCall     = set("unsupported_field", "unsupported_request", "unsupported_or_invalid_request")
+	groupID    = regexp.MustCompile(`^group/[a-z0-9-]{1,64}$`)
+	modelID    = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}/[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}$`)
+	betaPart   = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,99}$`)
+	geminiURL  = regexp.MustCompile(`^/v1beta/models/(.+):(generateContent|streamGenerateContent|countTokens)$`)
+	autoGroup  = "group/auto"
+	bareOpenAI = regexp.MustCompile(`^(gpt-|o[0-9]|codex-)[A-Za-z0-9._-]{0,60}$`)
+	zaiKeyRe   = regexp.MustCompile(`(?m)^KEY=['"]?([^'"\s]+)`)
+	sizeRe     = regexp.MustCompile(`^[0-9]{1,6}$`)
+	offsetRe   = regexp.MustCompile(`^[0-9]{1,9}$`)
+	entrances  = set("/v1/messages", "/v1/messages/count_tokens", "/v1/chat/completions", "/v1/responses")
 )
 
 // direct never uses an environment proxy, never follows a redirect (a 3xx reaches the caller's
@@ -299,6 +301,10 @@ func customKey(pid string) (map[string]any, error) {
 // resolve is target: where a model's request goes, nil when nothing can serve it.
 func resolve(model string) (*where, error) {
 	provider, name, found := strings.Cut(model, "/")
+	// A bare OpenAI model name comes from Codex pointed here: its own login serves it.
+	if !found && bareOpenAI.MatchString(model) {
+		provider, name, found = "openai", model, true
+	}
 	if !found || name == "" || provider == "anthropic" {
 		return &where{kind: "anthropic"}, nil
 	}
@@ -423,6 +429,10 @@ func listModels() []host.Obj {
 				break
 			}
 		}
+	}
+	// The built-in group of every model in 모델 설정 (memory.AutoGroupID), unless a saved group took its id.
+	if len(supported) > 0 && !slices.ContainsFunc(keep, func(m host.Obj) bool { return get(m, "id") == autoGroup }) {
+		keep = append(keep, host.Obj{{Key: "id", Value: autoGroup}, {Key: "label", Value: "자동 · 모든 모델"}})
 	}
 	models.at, models.items = time.Now(), keep
 	return keep

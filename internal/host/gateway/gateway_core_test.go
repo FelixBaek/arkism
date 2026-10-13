@@ -416,7 +416,7 @@ func TestCoreModelDiscoveryIncludesOnlyActiveSupportedGroups(t *testing.T) {
 	for _, m := range data {
 		ids = append(ids, get(m, "id").(string))
 	}
-	if !slices.Equal(ids, []string{"anthropic/opus 5.5", "custom-aaaaaaaaaaaa/deepseek-v4-pro", "group/claude", "group/custom"}) {
+	if !slices.Equal(ids, []string{"anthropic/opus 5.5", "custom-aaaaaaaaaaaa/deepseek-v4-pro", "group/claude", "group/custom", "group/auto"}) {
 		t.Fatal(ids)
 	}
 	if get(data[2], "display_name") != "Claude group" {

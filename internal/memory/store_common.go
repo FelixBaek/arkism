@@ -181,7 +181,7 @@ func newLeaseToken() (string, error) {
 // summary. A caller's list never hides what the text itself names, and a
 // document may carry far more keywords than a query may carry tokens.
 func DocumentKeywords(text, summary string, provided []string) []string {
-	out := make([]string, 0, min(len(provided)+32, maxDocumentKeywords))
+	out := make([]string, 0, min(len(provided), maxDocumentKeywords)) // grows for text-found keywords
 	seen := make(map[string]bool, cap(out))
 	add := func(token string) bool {
 		token = strings.TrimSpace(token)
