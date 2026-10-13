@@ -325,7 +325,8 @@ fn valid_base(base: &str) -> bool {
 
 fn api_agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(|| ureq::AgentBuilder::new().timeout(Duration::from_secs(30)).build())
+    // Error statuses are replies the UI reads, not transport failures.
+    AGENT.get_or_init(|| ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(30))).http_status_as_error(false).build().into())
 }
 
 #[tauri::command]
@@ -337,22 +338,19 @@ async fn api(base: String, token: String, method: String, path: String, body: Op
         return Err("path_not_allowed".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
-        let req = api_agent()
-            .request(&method, &format!("{base}{path}"))
-            .set("Authorization", &format!("Bearer {token}"))
-            .set("Content-Type", "application/json");
+        let req = ureq::http::Request::builder()
+            .method(method.as_str())
+            .uri(format!("{base}{path}"))
+            .header("Authorization", format!("Bearer {token}"))
+            .header("Content-Type", "application/json");
         let res = match body {
-            Some(b) => req.send_string(&b),
-            None => req.call(),
+            Some(b) => req.body(b).map_err(|e| e.to_string()).and_then(|r| api_agent().run(r).map_err(|e| format!("server_unreachable: {e}"))),
+            None => req.body(()).map_err(|e| e.to_string()).and_then(|r| api_agent().run(r).map_err(|e| format!("server_unreachable: {e}"))),
         };
-        match res {
-            Ok(r) | Err(ureq::Error::Status(_, r)) => {
-                let status = r.status();
-                let body = r.into_string().map_err(|e| e.to_string())?;
-                Ok(Reply { status, body })
-            }
-            Err(e) => Err(format!("server_unreachable: {e}")),
-        }
+        let mut r = res?;
+        let status = r.status().as_u16();
+        let body = r.body_mut().read_to_string().map_err(|e| e.to_string())?;
+        Ok(Reply { status, body })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -510,12 +508,12 @@ fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
 
 fn fetch_latest() -> Result<Latest, String> {
     let feed = feed()?;
-    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(30)).build();
-    let latest: Latest = agent
+    let latest: Latest = runtime::http_agent(Duration::from_secs(30))
         .get(&format!("{feed}/latest.json"))
         .call()
         .map_err(|e| format!("update_feed_unreachable: {e}"))?
-        .into_json()
+        .body_mut()
+        .read_json()
         .map_err(|e| format!("update_feed_invalid: {e}"))?;
     // The file name is built from the version, so a feed entry cannot name another path.
     if parse_version(&latest.version).is_none() || latest.file != format!("Arkism-{}-setup.exe", latest.version) {
@@ -543,12 +541,12 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
     let rt = Arc::clone(&app.state::<Arc<runtime::Runtime>>());
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
         let latest = fetch_latest()?;
-        let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(300)).build();
         let mut bytes = Vec::new();
-        agent
+        runtime::http_agent(Duration::from_secs(300))
             .get(&format!("{}/{}", feed()?, latest.file))
             .call()
             .map_err(|e| format!("update_download_failed: {e}"))?
+            .into_body()
             .into_reader()
             .take(512 << 20)
             .read_to_end(&mut bytes)
@@ -578,10 +576,11 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
     let started = Instant::now();
     let outcome = rt.start().and_then(|s| {
         let caps = ureq::get(&format!("{}/v1/capabilities?workspace_id=default&project_id=default&user_id=management%3Aowner", s.server))
-            .set("Authorization", &format!("Bearer {}", s.token))
+            .header("Authorization", &format!("Bearer {}", s.token))
             .call()
             .map_err(|e| format!("capabilities: {e}"))?
-            .status();
+            .status()
+            .as_u16();
         let again = rt.start()?; // a second start reuses what runs
         // Backup, erase everything, restore: the old owner token opens the restored Arkism again.
         let backups = dir.join("backups");
@@ -591,10 +590,11 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
         // The hourly expiry runs against the built-in Arkism (needs the bundled agent client).
         let expiry = if rt.agent_client().is_some() { rt.expire().map(|_| "ok".to_string()).unwrap_or_else(|e| e) } else { "no_client".into() };
         let after = ureq::get(&format!("{}/v1/capabilities?workspace_id=default&project_id=default&user_id=management%3Aowner", restored.started.server))
-            .set("Authorization", &format!("Bearer {}", s.token))
+            .header("Authorization", &format!("Bearer {}", s.token))
             .call()
             .map_err(|e| format!("capabilities after restore: {e}"))?
-            .status();
+            .status()
+            .as_u16();
         Ok(serde_json::json!({ "server": s.server, "capabilities": caps, "reused": again.server == s.server,
             "backup_bytes": backup.bytes, "restored_capabilities": after, "safety_copy": restored.safety_copy.is_some(), "expiry": expiry }))
     });
@@ -703,6 +703,50 @@ fn main() {
 mod tests {
     use super::*;
 
+    /// One HTTP exchange on a local port: returns the raw request and replies with `reply`.
+    fn serve_once(reply: &'static str) -> (String, std::thread::JoinHandle<String>) {
+        use std::io::{BufRead, BufReader, Write};
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let handle = std::thread::spawn(move || {
+            let (mut conn, _) = listener.accept().unwrap();
+            let mut reader = BufReader::new(conn.try_clone().unwrap());
+            let (mut head, mut len) = (String::new(), 0);
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    len = v.trim().parse().unwrap();
+                }
+                head.push_str(&line);
+                if line == "\r\n" {
+                    break;
+                }
+            }
+            let mut body = vec![0; len];
+            reader.read_exact(&mut body).unwrap();
+            conn.write_all(reply.as_bytes()).unwrap();
+            head + &String::from_utf8(body).unwrap()
+        });
+        (base, handle)
+    }
+
+    #[test]
+    fn api_returns_error_status_body_and_sends_json() {
+        let (base, server) = serve_once("HTTP/1.1 404 Not Found\r\nContent-Length: 13\r\nConnection: close\r\n\r\n{\"error\":\"x\"}");
+        let reply = tauri::async_runtime::block_on(api(base, "t0k".into(), "POST".into(), "/v1/memories".into(), Some("{\"a\":1}".into()))).unwrap();
+        assert_eq!((reply.status, reply.body.as_str()), (404, "{\"error\":\"x\"}"));
+        let request = server.join().unwrap();
+        assert!(request.starts_with("POST /v1/memories HTTP/1.1\r\n"), "{request}");
+        assert!(request.contains("authorization: Bearer t0k") || request.contains("Authorization: Bearer t0k"), "{request}");
+        assert!(request.ends_with("{\"a\":1}"), "{request}");
+
+        let (base, server) = serve_once("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
+        let reply = tauri::async_runtime::block_on(api(base, "t".into(), "GET".into(), "/readyz".into(), None)).unwrap();
+        assert_eq!((reply.status, reply.body.as_str()), (200, "ok"));
+        assert!(server.join().unwrap().starts_with("GET /readyz HTTP/1.1"));
+    }
+
     #[test]
     fn only_api_paths_pass() {
         assert!(allowed("GET", "/v1/memories?status=active"));
@@ -761,9 +805,9 @@ mod tests {
             }
         });
         for token in ["synthetic-a", "synthetic-b"] {
-            let body = api_agent().get(&url).timeout(Duration::from_secs(3))
-                .set("Authorization", &format!("Bearer {token}"))
-                .call().unwrap().into_string().unwrap();
+            let body = api_agent().get(&url).config().timeout_global(Some(Duration::from_secs(3))).build()
+                .header("Authorization", &format!("Bearer {token}"))
+                .call().unwrap().body_mut().read_to_string().unwrap();
             assert_eq!(body, "{}");
         }
         server.join().unwrap();
