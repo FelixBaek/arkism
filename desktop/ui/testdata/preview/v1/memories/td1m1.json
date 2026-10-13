@@ -1,0 +1,15 @@
+{
+ "id": "td1m1",
+ "text": "배포 명령은 사용자에게 넘긴다",
+ "kind": "lesson",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-14T04:00:00Z",
+ "updated_at": "2026-10-14T04:00:00Z",
+ "tags": []
+}

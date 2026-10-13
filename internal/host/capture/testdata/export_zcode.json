@@ -1,0 +1,18 @@
+{
+ "now": 1760000200.0,
+ "plan": {
+  "planned": 1
+ },
+ "counts": {
+  "exported": 1
+ },
+ "again": {
+  "unchanged": 1
+ },
+ "files": {
+  "e8bc163c82eee18733288c7d4ac636db3a6deb013ef2d37b68322be20edc45cc.jsonl": "9d18c68b073acf9df37611c0d77557db6f419f9532c1ced9d050fcfa282d0942"
+ },
+ "mtimes": {
+  "e8bc163c82eee18733288c7d4ac636db3a6deb013ef2d37b68322be20edc45cc.jsonl": 1760000123456000089
+ }
+}

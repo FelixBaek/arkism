@@ -1,0 +1,88 @@
+{
+ "items": [
+  {
+   "id": "pr-arch-1",
+   "revision": 2,
+   "updated_at": "2026-10-05T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "옛 기억 결정 v1",
+    "kind": "image",
+    "engine": "comfyui",
+    "tags": [
+     "블로그"
+    ],
+    "prompt": "Fine engraved triangular forms inspired by {주제}, layered edges, divided planes, charcoal black, soft silver and yellow accents, quiet editorial composition.",
+    "images": [
+     "testdata/preview/img/p1.svg"
+    ],
+    "negative": "문자 · 로고 · 강한 그림자",
+    "size": "1024 × 1024",
+    "count": 4,
+    "seed": "무작위",
+    "script_name": "portrait.workflow.json",
+    "script": "{\n  \"3\": {\n    \"class_type\": \"KSampler\",\n    \"inputs\": {\n      \"seed\": \"{seed}\",\n      \"steps\": 28, \"cfg\": 5.5\n    }\n  },\n  \"6\": { \"class_type\": \"CLIPTextEncode\", \"inputs\": { \"text\": \"{prompt}\" } }\n}",
+    "experts": [
+     "$글쓰기",
+     "$앱개발"
+    ]
+   },
+   "created_at": "2026-09-20T09:00:00Z",
+   "status": "archived"
+  },
+  {
+   "id": "pr-arch-2",
+   "revision": 2,
+   "updated_at": "2026-10-06T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "흐린 숲 표지",
+    "kind": "image",
+    "engine": "gpt",
+    "tags": [
+     "배경"
+    ],
+    "prompt": "Quiet layered terrain drawn as fine triangular lines, charcoal and silver.",
+    "images": [
+     "testdata/preview/img/p2.svg"
+    ],
+    "negative": "",
+    "size": "",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-21T09:00:00Z",
+   "status": "archived"
+  },
+  {
+   "id": "pr-arch-3",
+   "revision": 2,
+   "updated_at": "2026-10-12T09:00:00Z",
+   "created_by": "Alex",
+   "image_prompt": {
+    "title": "분기 보고 슬라이드 (옛)",
+    "kind": "slide",
+    "engine": "claude",
+    "tags": [
+     "표지"
+    ],
+    "prompt": "The beginning. 발표 표지를 {주제}로 만들어 주세요.",
+    "images": [
+     "testdata/preview/img/s1.svg"
+    ],
+    "negative": "",
+    "size": "16:9",
+    "count": 0,
+    "seed": "",
+    "script_name": "",
+    "script": "",
+    "experts": []
+   },
+   "created_at": "2026-09-20T09:00:00Z",
+   "status": "archived"
+  }
+ ]
+}

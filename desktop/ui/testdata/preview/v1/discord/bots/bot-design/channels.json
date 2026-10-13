@@ -1,0 +1,24 @@
+{
+ "items": [
+  {
+   "channel_id": "c-review",
+   "name": "디자인-리뷰",
+   "parent": "작업"
+  },
+  {
+   "channel_id": "c-share",
+   "name": "시안-공유",
+   "parent": "작업"
+  },
+  {
+   "channel_id": "c-general",
+   "name": "일반",
+   "parent": ""
+  },
+  {
+   "channel_id": "c-qa",
+   "name": "질문",
+   "parent": "작업"
+  }
+ ]
+}

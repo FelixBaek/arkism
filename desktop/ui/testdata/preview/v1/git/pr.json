@@ -1,0 +1,77 @@
+{
+ "number": 118,
+ "title": "fix(capture): exclude Codex ambient prompts and resolve pending capture",
+ "state": "open",
+ "draft": false,
+ "check_summary": "pending",
+ "head": "fix/arkism-pending-20261006",
+ "base": "main",
+ "author": "Alex Kim",
+ "additions": 142,
+ "deletions": 37,
+ "changed_files": 6,
+ "commits": 2,
+ "mergeable": "mergeable",
+ "review": "review_required",
+ "updated_at": "2026-10-13T07:00:00Z",
+ "url": "https://github.com",
+ "head_sha": "23e23ce000000000000000000000000000000000",
+ "checks": [
+  {
+   "name": "CI · test",
+   "state": "pending"
+  },
+  {
+   "name": "Semgrep",
+   "state": "success"
+  },
+  {
+   "name": "SonarQube",
+   "state": "success"
+  },
+  {
+   "name": "AI 리뷰",
+   "state": "pending"
+  }
+ ],
+ "reviews": [
+  {
+   "author": "claude-review",
+   "state": "COMMENTED",
+   "body": "품질 점검은 통과했어요. 권고 2건은 위 AI 리뷰에 적었어요."
+  }
+ ],
+ "body": "## 요약\n- Codex가 자동으로 넣는 안내문을 기억 후보에서 제외\n- 대기 중이던 capture를 resolve\n- 안내문 판별 테스트 추가",
+ "files": [
+  {
+   "path": "tools/arkism_capture.py",
+   "added": 58,
+   "deleted": 12
+  },
+  {
+   "path": "tools/arkism_store.py",
+   "added": 31,
+   "deleted": 9
+  },
+  {
+   "path": "tools/arkism_pending.py",
+   "added": 27,
+   "deleted": 6
+  },
+  {
+   "path": "desktop/ui/app.js",
+   "added": 10,
+   "deleted": 4
+  },
+  {
+   "path": "docs/ARCHITECTURE.md",
+   "added": 8,
+   "deleted": 6
+  },
+  {
+   "path": "tests/test_capture_ambient.py",
+   "added": 8,
+   "deleted": 0
+  }
+ ]
+}

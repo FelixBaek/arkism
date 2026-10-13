@@ -1,0 +1,115 @@
+{
+ "authority": "data_only_untrusted",
+ "items": [
+  {
+   "id": "t0",
+   "claim": "리뷰 코멘트는 파일별 목록으로 받길 원한다",
+   "revision": 1,
+   "type": "preference",
+   "status": "confirmed",
+   "distinct_runs": 12,
+   "confidence": 0.91,
+   "last_confirmed": "2026-10-06T14:20:00Z",
+   "evidence_refs": [
+    {
+     "collection": "sources",
+     "id": "src_a19c",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "mem_5d2e",
+     "revision": 3
+    }
+   ]
+  },
+  {
+   "id": "t1",
+   "claim": "변수 이름은 줄임말 없이 풀어 쓰는 걸 선호한다",
+   "revision": 1,
+   "type": "preference",
+   "status": "confirmed",
+   "distinct_runs": 9,
+   "confidence": 0.86,
+   "last_confirmed": "2026-10-06T14:20:00Z",
+   "evidence_refs": [
+    {
+     "collection": "sources",
+     "id": "src_a19c",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "mem_5d2e",
+     "revision": 3
+    }
+   ]
+  },
+  {
+   "id": "t2",
+   "claim": "새 기능은 테스트를 먼저 쓰고 구현한다",
+   "revision": 1,
+   "type": "working_style",
+   "status": "inferred",
+   "distinct_runs": 6,
+   "confidence": 0.7,
+   "last_confirmed": "2026-10-06T14:20:00Z",
+   "evidence_refs": [
+    {
+     "collection": "sources",
+     "id": "src_a19c",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "mem_5d2e",
+     "revision": 3
+    }
+   ]
+  },
+  {
+   "id": "t3",
+   "claim": "금요일 오후에는 배포하지 않길 원한다",
+   "revision": 1,
+   "type": "constraint",
+   "status": "candidate",
+   "distinct_runs": 3,
+   "confidence": 0.5,
+   "last_confirmed": "2026-10-06T14:20:00Z",
+   "evidence_refs": [
+    {
+     "collection": "sources",
+     "id": "src_a19c",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "mem_5d2e",
+     "revision": 3
+    }
+   ]
+  },
+  {
+   "id": "t4",
+   "claim": "날짜는 YYYY-MM-DD로 표기한다",
+   "revision": 1,
+   "type": "constraint",
+   "status": "confirmed",
+   "distinct_runs": 4,
+   "confidence": 0.8,
+   "last_confirmed": "2026-10-06T14:20:00Z",
+   "evidence_refs": [
+    {
+     "collection": "sources",
+     "id": "src_a19c",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "mem_5d2e",
+     "revision": 3
+    }
+   ]
+  }
+ ]
+}

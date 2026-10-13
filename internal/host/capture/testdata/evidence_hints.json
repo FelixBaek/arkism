@@ -1,0 +1,32 @@
+{
+ "raw": "{\"type\": \"user\", \"message\": {\"role\": \"user\", \"content\": \"한글\"}}\n",
+ "offset": 2097149,
+ "row_hint": {
+  "archive_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "chunk_index": 1,
+  "chunk_offset": 1048573,
+  "message_sha256": "06fce1852f9fa7d6ea807b198215970a93844a01704ad83ae209b800346b8111"
+ },
+ "locator": {
+  "origin": "zcode",
+  "device": "pc",
+  "session_id": "s",
+  "prompt_sha256": "467e63121e2d00162e1ecc0cd382619eb76c02d2316747b3483c7156ec1fbe73"
+ },
+ "zcode_hints": [
+  {
+   "archive_id": "4285930e97b2fc5b3fb07607e3112aa19847a926a20c2506b2aba63e25f50f0d",
+   "chunk_index": 0,
+   "chunk_offset": 296,
+   "message_sha256": "c6e25a902acd172c2ede3189b3e3884a298a21c3886e3886b3236c858c41a42c",
+   "record_key": "91c337b397680a8a8ebc1a7b81e15638a89894690d46aaefc54c5f7fbbe825a6"
+  },
+  {
+   "archive_id": "4285930e97b2fc5b3fb07607e3112aa19847a926a20c2506b2aba63e25f50f0d",
+   "chunk_index": 0,
+   "chunk_offset": 165,
+   "message_sha256": "00124ba95668231faaf8ad9c8e3a9583008235f93c1cb2bc37e8692479f288b8",
+   "record_key": "6aaf09ac4bca9b800b5dcf9f0bc65ec16762fbd02ee80b096e63e78462cd2299"
+  }
+ ]
+}

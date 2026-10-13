@@ -1,0 +1,41 @@
+{
+ "items": [
+  {
+   "id": "wjob-1",
+   "revision": 4,
+   "status": "done",
+   "attempts": 1,
+   "created_at": "2026-10-14T07:00:00Z",
+   "updated_at": "2026-10-14T08:00:00Z",
+   "job": {
+    "knowledge_source_id": "knowledge-1",
+    "source_version": "v1abc123",
+    "max_total_tokens": 40000,
+    "calls": 2,
+    "tokens": 18420,
+    "generator": {
+     "model": "claude-haiku"
+    },
+    "requested_by": "me",
+    "result": {
+     "created": [
+      "wiki-1"
+     ],
+     "updated": [
+      "wiki-8"
+     ],
+     "unchanged": [],
+     "skipped_locked": [
+      "wiki-7"
+     ],
+     "rejected": [
+      {
+       "path": "wiki/../etc/passwd",
+       "reason": "path_outside_wiki"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

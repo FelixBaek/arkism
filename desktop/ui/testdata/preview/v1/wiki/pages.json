@@ -1,0 +1,218 @@
+{
+ "items": [
+  {
+   "id": "wiki-1",
+   "revision": 3,
+   "status": "active",
+   "slug": "배포-절차",
+   "type": "concept",
+   "locked": false,
+   "review_state": "draft",
+   "knowledge_source_ids": [
+    "knowledge-1",
+    "knowledge-3"
+   ],
+   "last_merge": "rewrite",
+   "last_job_id": "wjob-1",
+   "updated_at": "2026-10-14T10:00:00Z",
+   "authority": "data_only_untrusted",
+   "draft": {
+    "title": "배포 절차",
+    "text": "운영 배포는 [[PR 병합]] 뒤 ./deploy.sh 스크립트로 하고, 실행은 사용자가 해요.\n\n배포 전에는 [[병행 세션 확인]]을 하고, 롤백 이미지 태그는 [[배포 기록]]에 적어 둬요.\n\n문제가 생기면 [[롤백 절차]]대로 이전 태그를 띄워요.",
+    "links": [
+     "PR 병합",
+     "병행 세션 확인",
+     "배포 기록",
+     "롤백 절차"
+    ],
+    "by": "ai",
+    "at": "2026-10-14T10:00:00Z"
+   },
+   "reviewed": {
+    "title": "배포 절차",
+    "text": "운영 배포는 PR 병합 뒤 스크립트로 해요.",
+    "links": [
+     "PR 병합",
+     "병행 세션 확인",
+     "배포 기록",
+     "롤백 절차"
+    ],
+    "by": "me",
+    "at": "2026-10-14T10:00:00Z"
+   }
+  },
+  {
+   "id": "wiki-2",
+   "revision": 3,
+   "status": "active",
+   "slug": "figma-플러그인-함정",
+   "type": "concept",
+   "locked": false,
+   "review_state": "reviewed",
+   "knowledge_source_ids": [
+    "knowledge-2"
+   ],
+   "last_merge": "create",
+   "last_job_id": "wjob-1",
+   "updated_at": "2026-10-13T10:00:00Z",
+   "authority": "data_only_untrusted",
+   "reviewed": {
+    "title": "Figma 플러그인 함정",
+    "text": "변수 색 투명도가 사라지는 문제가 있어요. [[배포 절차]]와는 관계없어요.",
+    "links": [
+     "배포 절차"
+    ],
+    "by": "me",
+    "at": "2026-10-13T10:00:00Z"
+   }
+  },
+  {
+   "id": "wiki-3",
+   "revision": 3,
+   "status": "active",
+   "slug": "ci-러너-구성",
+   "type": "concept",
+   "locked": true,
+   "review_state": "reviewed",
+   "knowledge_source_ids": [
+    "knowledge-3"
+   ],
+   "last_merge": "human_edit",
+   "last_job_id": "wjob-1",
+   "updated_at": "2026-09-30T10:00:00Z",
+   "authority": "data_only_untrusted",
+   "reviewed": {
+    "title": "CI 러너 구성",
+    "text": "러너는 10개, 조직 단위예요.",
+    "links": [
+     "배포 절차"
+    ],
+    "by": "me",
+    "at": "2026-09-30T10:00:00Z"
+   }
+  },
+  {
+   "id": "wiki-4",
+   "revision": 3,
+   "status": "active",
+   "slug": "모델-중계기와-하위-에이전트",
+   "type": "concept",
+   "locked": false,
+   "review_state": "reviewed",
+   "knowledge_source_ids": [
+    "knowledge-6"
+   ],
+   "last_merge": "create",
+   "last_job_id": "wjob-1",
+   "updated_at": "2026-10-10T10:00:00Z",
+   "authority": "data_only_untrusted",
+   "reviewed": {
+    "title": "모델 중계기와 하위 에이전트",
+    "text": "중계기는 :8099 를 거쳐요.",
+    "links": [],
+    "by": "me",
+    "at": "2026-10-10T10:00:00Z"
+   },
+   "stale_sources": [
+    "knowledge-old-9"
+   ]
+  },
+  {
+   "id": "wiki-5",
+   "revision": 3,
+   "status": "active",
+   "slug": "orbit-디자인-토큰",
+   "type": "concept",
+   "locked": false,
+   "review_state": "reviewed",
+   "knowledge_source_ids": [
+    "knowledge-4"
+   ],
+   "last_merge": "create",
+   "last_job_id": "wjob-1",
+   "updated_at": "2026-10-11T10:00:00Z",
+   "authority": "data_only_untrusted",
+   "reviewed": {
+    "title": "Orbit 디자인 토큰",
+    "text": "Zinc Amber 색과 Plex 글꼴.",
+    "links": [],
+    "by": "me",
+    "at": "2026-10-11T10:00:00Z"
+   }
+  },
+  {
+   "id": "wiki-6",
+   "revision": 3,
+   "status": "active",
+   "slug": "orbit-mail-windows-빌드",
+   "type": "entity",
+   "locked": false,
+   "review_state": "draft",
+   "knowledge_source_ids": [
+    "knowledge-3"
+   ],
+   "last_merge": "rewrite",
+   "last_job_id": "wjob-1",
+   "updated_at": "2026-10-14T10:00:00Z",
+   "authority": "data_only_untrusted",
+   "draft": {
+    "title": "Orbit Mail Windows 빌드",
+    "text": "서버에서 교차 빌드해요. [[배포 절차]]를 따라요.",
+    "links": [
+     "배포 절차"
+    ],
+    "by": "ai",
+    "at": "2026-10-14T10:00:00Z"
+   }
+  },
+  {
+   "id": "wiki-7",
+   "revision": 3,
+   "status": "active",
+   "slug": "arkism-공개-준비",
+   "type": "concept",
+   "locked": true,
+   "review_state": "reviewed",
+   "knowledge_source_ids": [
+    "knowledge-1"
+   ],
+   "last_merge": "human_edit",
+   "last_job_id": "wjob-1",
+   "updated_at": "2026-10-13T10:00:00Z",
+   "authority": "data_only_untrusted",
+   "reviewed": {
+    "title": "Arkism 공개 준비",
+    "text": "공개 전 남은 일 목록.",
+    "links": [
+     "배포 절차"
+    ],
+    "by": "me",
+    "at": "2026-10-13T10:00:00Z"
+   }
+  },
+  {
+   "id": "wiki-8",
+   "revision": 3,
+   "status": "active",
+   "slug": "롤백-절차",
+   "type": "concept",
+   "locked": false,
+   "review_state": "reviewed",
+   "knowledge_source_ids": [
+    "knowledge-1"
+   ],
+   "last_merge": "create",
+   "last_job_id": "wjob-1",
+   "updated_at": "2026-10-12T10:00:00Z",
+   "authority": "data_only_untrusted",
+   "reviewed": {
+    "title": "롤백 절차",
+    "text": "rollback.sh 로 이전 태그를 띄워요.",
+    "links": [],
+    "by": "me",
+    "at": "2026-10-12T10:00:00Z"
+   }
+  }
+ ],
+ "authority": "data_only_untrusted"
+}

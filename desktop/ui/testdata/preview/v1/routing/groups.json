@@ -1,0 +1,10 @@
+{
+  "authority": "data_only_untrusted",
+  "revision": 12,
+  "auto_discover": true,
+  "items": [
+    { "id": "group/coding", "name": "코딩 그룹", "enabled": true, "strategy": "smart", "members": ["claude-opus-5-5", "glm-5", "qwen3-coder"] },
+    { "id": "group/cheap", "name": "저비용 그룹", "enabled": true, "strategy": "ordered", "members": ["glm-5", "gpt-5-5"] },
+    { "id": "group/auto-3f9a1c", "name": "claude-sonnet-5-5", "enabled": true, "strategy": "smart", "members": ["claude-sonnet-5-5"], "discovered": true }
+  ]
+}

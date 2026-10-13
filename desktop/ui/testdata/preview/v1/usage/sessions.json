@@ -1,0 +1,241 @@
+{
+ "authority": "data_only_untrusted",
+ "total": 386,
+ "items": [
+  {
+   "id": "ss-1",
+   "agent": "codex",
+   "device": "my-pc",
+   "session_id": "session_01JX8K2M1QWERTY",
+   "title": "Arkism UI 정리",
+   "project": "arkism",
+   "started_at": "2026-10-13T01:12:00Z",
+   "ended_at": "2026-10-13T02:04:00Z",
+   "messages": 42,
+   "active_seconds": 3120,
+   "tokens": 128000,
+   "input": 110080,
+   "output": 17920,
+   "cache_read": 96000,
+   "cache_write": 12800,
+   "requests": 21,
+   "cost_usd": 0.84,
+   "priced": true,
+   "models": [
+    {
+     "name": "GPT-6.1-Sol",
+     "tokens": 128000,
+     "cost_usd": 0.84,
+     "priced": true
+    }
+   ],
+   "tools": [
+    {
+     "name": "exec",
+     "count": 18,
+     "sessions": 1
+    },
+    {
+     "name": "use_figma",
+     "count": 12,
+     "sessions": 1
+    }
+   ],
+   "skills": [
+    {
+     "name": "figma-use",
+     "count": 6,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "id": "ss-2",
+   "agent": "claude_code",
+   "device": "my-server",
+   "session_id": "session_01JX8K2M2QWERTY",
+   "title": "워크플로우 검토",
+   "project": "orbit-app",
+   "started_at": "2026-10-12T23:38:00Z",
+   "ended_at": "2026-10-13T00:30:00Z",
+   "messages": 26,
+   "active_seconds": 3120,
+   "tokens": 84000,
+   "input": 72240,
+   "output": 11760,
+   "cache_read": 63000,
+   "cache_write": 8400,
+   "requests": 21,
+   "cost_usd": 0.52,
+   "priced": true,
+   "models": [
+    {
+     "name": "claude-opus-5-5",
+     "tokens": 84000,
+     "cost_usd": 0.52,
+     "priced": true
+    }
+   ],
+   "tools": [
+    {
+     "name": "exec",
+     "count": 18,
+     "sessions": 1
+    },
+    {
+     "name": "use_figma",
+     "count": 12,
+     "sessions": 1
+    }
+   ],
+   "skills": [
+    {
+     "name": "figma-use",
+     "count": 6,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "id": "ss-3",
+   "agent": "claude_code",
+   "device": "my-server",
+   "session_id": "session_01JX8K2M3QWERTY",
+   "title": "기억 후보 확인",
+   "project": "arkism",
+   "started_at": "2026-10-12T00:12:00Z",
+   "ended_at": "2026-10-12T01:04:00Z",
+   "messages": 12,
+   "active_seconds": 3120,
+   "tokens": 32000,
+   "input": 27520,
+   "output": 4480,
+   "cache_read": 24000,
+   "cache_write": 3200,
+   "requests": 21,
+   "cost_usd": 0.18,
+   "priced": true,
+   "models": [
+    {
+     "name": "claude-opus-5-5",
+     "tokens": 32000,
+     "cost_usd": 0.18,
+     "priced": true
+    }
+   ],
+   "tools": [
+    {
+     "name": "exec",
+     "count": 18,
+     "sessions": 1
+    },
+    {
+     "name": "use_figma",
+     "count": 12,
+     "sessions": 1
+    }
+   ],
+   "skills": [
+    {
+     "name": "figma-use",
+     "count": 6,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "id": "ss-4",
+   "agent": "codex",
+   "device": "my-server",
+   "session_id": "session_01JX8K2M4QWERTY",
+   "title": "배포 스크립트 만들기",
+   "project": "orbit-app",
+   "started_at": "2026-10-09T23:52:00Z",
+   "ended_at": "2026-10-10T00:44:00Z",
+   "messages": 31,
+   "active_seconds": 3120,
+   "tokens": 61000,
+   "input": 52460,
+   "output": 8540,
+   "cache_read": 45750,
+   "cache_write": 6100,
+   "requests": 21,
+   "cost_usd": 0.4,
+   "priced": true,
+   "models": [
+    {
+     "name": "gpt-6-astra",
+     "tokens": 61000,
+     "cost_usd": 0.4,
+     "priced": true
+    }
+   ],
+   "tools": [
+    {
+     "name": "exec",
+     "count": 18,
+     "sessions": 1
+    },
+    {
+     "name": "use_figma",
+     "count": 12,
+     "sessions": 1
+    }
+   ],
+   "skills": [
+    {
+     "name": "figma-use",
+     "count": 6,
+     "sessions": 1
+    }
+   ]
+  },
+  {
+   "id": "ss-5",
+   "agent": "claude_code",
+   "device": "my-pc",
+   "session_id": "session_01JX8K2M5QWERTY",
+   "title": "PC 빌드 폴더 정리",
+   "project": "home",
+   "started_at": "2026-10-07T00:12:00Z",
+   "ended_at": "2026-10-07T01:04:00Z",
+   "messages": 18,
+   "active_seconds": 3120,
+   "tokens": 47000,
+   "input": 40420,
+   "output": 6580,
+   "cache_read": 35250,
+   "cache_write": 4700,
+   "requests": 21,
+   "cost_usd": 0.29,
+   "priced": true,
+   "models": [
+    {
+     "name": "claude-opus-5-5",
+     "tokens": 47000,
+     "cost_usd": 0.29,
+     "priced": true
+    }
+   ],
+   "tools": [
+    {
+     "name": "exec",
+     "count": 18,
+     "sessions": 1
+    },
+    {
+     "name": "use_figma",
+     "count": 12,
+     "sessions": 1
+    }
+   ],
+   "skills": [
+    {
+     "name": "figma-use",
+     "count": 6,
+     "sessions": 1
+    }
+   ]
+  }
+ ]
+}

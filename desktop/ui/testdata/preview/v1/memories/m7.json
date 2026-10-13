@@ -1,0 +1,21 @@
+{
+ "id": "m7",
+ "text": "Orbit 테스트는 시간대를 UTC로 고정해야 날짜 비교가 깨지지 않는다.",
+ "kind": "lesson",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-13T08:16:34.299802Z",
+ "updated_at": "2026-10-13T08:16:34.299802Z",
+ "tags": [
+  "event_id:claude-code:s3"
+ ],
+ "created_by_type": "agent",
+ "generator": {
+  "prompt_version": "session-reflect-v2"
+ }
+}

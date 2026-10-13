@@ -1,0 +1,43 @@
+{
+ "items": [
+  {
+   "id": "ds-arch-1",
+   "revision": 3,
+   "updated_at": "2026-09-30T09:00:00Z",
+   "created_by": "Alex",
+   "design_system": {
+    "title": "Orbit Mail (2025)",
+    "product": "Orbit",
+    "purpose": "메일 앱 화면",
+    "description": "메일 앱 화면의 색과 글꼴",
+    "source": "https://www.figma.com/design/example-mail",
+    "colors": [
+     {
+      "name": "black",
+      "value": "#111111"
+     },
+     {
+      "name": "graphite",
+      "value": "#b8b7b2"
+     },
+     {
+      "name": "yellow",
+      "value": "#f2d14b"
+     },
+     {
+      "name": "paper",
+      "value": "#f0efeb"
+     }
+    ],
+    "fonts": [
+     "Cormorant",
+     "Noto Sans KR",
+     "IBM Plex Mono"
+    ],
+    "guide": "다크를 기본으로 설계합니다.\n장식은 주요 콘텐츠를 돕습니다.\n상태는 색과 문장으로 알립니다.\n간격은 4의 배수로 맞춥니다.",
+    "tags": []
+   },
+   "status": "archived"
+  }
+ ]
+}

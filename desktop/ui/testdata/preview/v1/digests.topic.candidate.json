@@ -1,0 +1,722 @@
+{
+ "items": [
+  {
+   "id": "tdc1",
+   "kind": "topic",
+   "status": "candidate",
+   "revision": 1,
+   "title": "배포·운영 절차",
+   "body": "운영 배포는 PR 병합 뒤 사용자가 ./deploy.sh로 실행한다. 배포 전 다른 세션의 worktree·컨테이너를 먼저 확인한다. 롤백 이미지 태그는 배포 기록에 적어 둔다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td1m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m12",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m13",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m14",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m15",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m16",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m17",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m18",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m19",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m20",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m21",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m22",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m23",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m24",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m25",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m26",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m27",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m28",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m29",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m30",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m31",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m32",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m33",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m34",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m35",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m36",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m37",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m38",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m39",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m40",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m41",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td1m42",
+     "revision": 1
+    }
+   ],
+   "replaces": [
+    {
+     "collection": "topic_digests",
+     "id": "td1",
+     "revision": 3
+    }
+   ],
+   "proposal": "update",
+   "heat": {
+    "injected": 0,
+    "used": 0,
+    "score": 0
+   },
+   "fresh": true,
+   "diff": {
+    "base": [
+     {
+      "collection": "topic_digests",
+      "id": "td1",
+      "revision": 3
+     }
+    ],
+    "title_before": "배포·운영 절차",
+    "title_after": "배포·운영 절차",
+    "lines": [
+     {
+      "op": "-",
+      "text": "운영 배포는 PR 병합 뒤 Claude가 직접 실행한다."
+     },
+     {
+      "op": "+",
+      "text": "운영 배포는 PR 병합 뒤 사용자가 ./deploy.sh로 실행한다."
+     },
+     {
+      "op": "+",
+      "text": "배포 전 다른 세션의 worktree·컨테이너를 먼저 확인한다."
+     },
+     {
+      "op": "=",
+      "text": "롤백 이미지 태그는 배포 기록에 적어 둔다."
+     }
+    ],
+    "members_added": [
+     {
+      "collection": "memories",
+      "id": "td1m1",
+      "revision": 1
+     }
+    ],
+    "members_removed": []
+   },
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-10-14T02:00:00Z",
+   "updated_at": "2026-10-14T02:00:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "tdc2",
+   "kind": "topic",
+   "status": "candidate",
+   "revision": 1,
+   "title": "디자인 결정",
+   "body": "선택 상태는 강조선 대신 포인트 컬러를 글자에 쓴다. 아이콘은 Phosphor Regular를 쓴다. 색은 --nc-* 토큰만 쓴다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td3m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m12",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m13",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m14",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m15",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m16",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m17",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m18",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m19",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m20",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m21",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m22",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m23",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m24",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m25",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m26",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m27",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m28",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m29",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m30",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td3m31",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "m7",
+     "revision": 1
+    }
+   ],
+   "replaces": [
+    {
+     "collection": "topic_digests",
+     "id": "td3",
+     "revision": 4
+    }
+   ],
+   "proposal": "update",
+   "heat": {
+    "injected": 0,
+    "used": 0,
+    "score": 0
+   },
+   "fresh": true,
+   "diff": {
+    "base": [
+     {
+      "collection": "topic_digests",
+      "id": "td3",
+      "revision": 4
+     }
+    ],
+    "title_before": "디자인 결정",
+    "title_after": "디자인 결정",
+    "lines": [
+     {
+      "op": "=",
+      "text": "선택 상태는 강조선 대신 포인트 컬러를 글자에 쓴다."
+     },
+     {
+      "op": "=",
+      "text": "아이콘은 Phosphor Regular를 쓴다."
+     },
+     {
+      "op": "+",
+      "text": "색은 --nc-* 토큰만 쓴다."
+     }
+    ],
+    "members_added": [
+     {
+      "collection": "memories",
+      "id": "m7",
+      "revision": 1
+     }
+    ],
+    "members_removed": []
+   },
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-10-11T02:00:00Z",
+   "updated_at": "2026-10-11T02:00:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "tdc3",
+   "kind": "topic",
+   "status": "candidate",
+   "revision": 1,
+   "title": "Arkism 서버 운영",
+   "body": "arkism-db는 55492 포트를 쓴다. 롤백은 rollback.sh로 한다. 백업은 서버 밖으로 보낸다.",
+   "members": [
+    {
+     "collection": "memories",
+     "id": "td5m1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m2",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m3",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m6",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m7",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m8",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m10",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m11",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m12",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m13",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m14",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m15",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m16",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m17",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m18",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m19",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m20",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m21",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m22",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m23",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m24",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m25",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m26",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "td5m27",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "m8",
+     "revision": 1
+    }
+   ],
+   "replaces": [
+    {
+     "collection": "topic_digests",
+     "id": "td5",
+     "revision": 2
+    }
+   ],
+   "proposal": "update",
+   "tags": [
+    "review:instruction_like"
+   ],
+   "heat": {
+    "injected": 0,
+    "used": 0,
+    "score": 0
+   },
+   "fresh": true,
+   "diff": {
+    "base": [
+     {
+      "collection": "topic_digests",
+      "id": "td5",
+      "revision": 2
+     }
+    ],
+    "title_before": "Arkism 서버 운영",
+    "title_after": "Arkism 서버 운영",
+    "lines": [
+     {
+      "op": "=",
+      "text": "arkism-db는 55492 포트를 쓴다."
+     },
+     {
+      "op": "=",
+      "text": "롤백은 rollback.sh로 한다."
+     },
+     {
+      "op": "+",
+      "text": "백업은 서버 밖으로 보낸다."
+     }
+    ],
+    "members_added": [
+     {
+      "collection": "memories",
+      "id": "m8",
+      "revision": 1
+     }
+    ],
+    "members_removed": []
+   },
+   "generator": {
+    "model": "sonnet",
+    "prompt_version": "digest-topic-v1",
+    "pipeline_version": "1"
+   },
+   "created_by": "digest-worker",
+   "created_at": "2026-10-14T01:00:00Z",
+   "updated_at": "2026-10-14T01:00:00Z",
+   "authority": "data_only_untrusted"
+  }
+ ],
+ "cap": 15,
+ "active": 7,
+ "authority": "data_only_untrusted"
+}

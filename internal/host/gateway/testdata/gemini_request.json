@@ -1,0 +1,3202 @@
+[
+{
+"test": "gemini_request.GeminiRequestTests.test_anonymous_ids_deterministic_and_reserved_future_ids",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"gemini_call_1_0\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"gemini_call_1_0\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"gemini_call_1_0_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"gemini_call_1_0_1\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"gemini_call_1_0\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"gemini_call_1_0\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_anonymous_ids_deterministic_and_reserved_future_ids",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"a\", \"args\": {}}}, {\"functionCall\": {\"name\": \"b\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"b\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}, {\"functionResponse\": {\"name\": \"a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"gemini_call_1_0\", \"type\": \"function\", \"function\": {\"name\": \"a\", \"arguments\": \"{}\"}}, {\"id\": \"gemini_call_1_1\", \"type\": \"function\", \"function\": {\"name\": \"b\", \"arguments\": \"{}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"gemini_call_1_1\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}, {\"role\": \"tool\", \"tool_call_id\": \"gemini_call_1_0\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_formal_candidate_content_reinput",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {\"query\": \"\\uc6d0\\ubb38\"}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"query\\\":\\\"원문\\\"}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_formal_candidate_content_reinput",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"content\": {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {\"query\": \"\\uc6d0\\ubb38\"}}}]}, \"finishReason\": \"STOP\"}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"AUTO\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"a\", \"parameters\": {\"type\": \"object\"}}}, {\"type\": \"function\", \"function\": {\"name\": \"b\", \"parameters\": {\"type\": \"object\"}}}], \"tool_choice\": \"auto\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"NONE\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"a\", \"parameters\": {\"type\": \"object\"}}}, {\"type\": \"function\", \"function\": {\"name\": \"b\", \"parameters\": {\"type\": \"object\"}}}], \"tool_choice\": \"none\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"a\", \"parameters\": {\"type\": \"object\"}}}, {\"type\": \"function\", \"function\": {\"name\": \"b\", \"parameters\": {\"type\": \"object\"}}}], \"tool_choice\": \"required\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"NONE\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tool_choice\": \"none\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"AUTO\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"c\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [\"b\"]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"a\", \"parameters\": {\"type\": \"object\"}}}, {\"type\": \"function\", \"function\": {\"name\": \"b\", \"parameters\": {\"type\": \"object\"}}}, {\"type\": \"function\", \"function\": {\"name\": \"c\", \"parameters\": {\"type\": \"object\"}}}], \"tool_choice\": {\"type\": \"function\", \"function\": {\"name\": \"b\"}}, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"c\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [\"c\", \"a\"]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"a\", \"parameters\": {\"type\": \"object\"}}}, {\"type\": \"function\", \"function\": {\"name\": \"c\", \"parameters\": {\"type\": \"object\"}}}], \"tool_choice\": \"required\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"VALIDATED\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"COMPOSITIONAL\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"MODE_UNSPECIFIED\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"new\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": []}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_choice"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": \"a\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_choice"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [\"missing\"]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_choice"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [\"a\", \"a\"]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_choice"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [null]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_choice"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [\"bad name\"]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_choice"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"AUTO\", \"allowedFunctionNames\": [\"a\"]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"NONE\", \"allowedFunctionNames\": [\"a\"]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_function_modes_and_allowlist",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\"}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_choice"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inline_data\": {\"mime_type\": \"image/png\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,aW1hZ2U=\"}}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inline_data\": {\"mime_type\": \"image/jpeg\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,aW1hZ2U=\"}}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inline_data\": {\"mime_type\": \"image/gif\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/gif;base64,aW1hZ2U=\"}}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inline_data\": {\"mime_type\": \"image/webp\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/webp;base64,aW1hZ2U=\"}}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"audio/wav\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"video/mp4\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"application/pdf\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/heic\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/svg+xml\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/png\", \"data\": null}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_image"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/png\", \"data\": 1}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_image"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/png\", \"data\": \"\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_image"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/png\", \"data\": \"%%%secret\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_image"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/png\", \"data\": \"aW1h Z2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_image"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/png\", \"data\": \"\\ud800\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_images_only_supported_user_inline_bytes",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/png\", \"data\": \"aW1hZ2U=\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"null",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"[]",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_messages"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": null}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_messages"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": []}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_messages"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [null]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_messages"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": [], \"parts\": []}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_messages"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"assistant\", \"parts\": []}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_messages"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"parts\": []}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_content"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [null]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_content"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_content"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"x\", \"inlineData\": {}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_content"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"systemInstruction\": null}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_content"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"systemInstruction\": {\"parts\": [{\"text\": 1}]}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_content"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"model\": \"other\"}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"model\": null}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": null}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": null}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [null]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"parameters\": {\"type\": \"OBJECT\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}]}",
+"\"group/local\"",
+"null"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}]}",
+"\"group/local\"",
+"0"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}]}",
+"\"group/local\"",
+"1"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}]}",
+"\"group/local\"",
+"\"true\""
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": null}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_arguments"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": null}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_arguments"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": []}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_arguments"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": []}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_arguments"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": \"{}\"}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_arguments"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": \"{}\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_arguments"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {\"key\": NaN}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"key\": NaN}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {\"key\": Infinity}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"key\": Infinity}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {\"key\": \"\\ud800\"}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_json_and_shapes_have_fixed_errors",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"key\": \"\\ud800\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": null}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": []}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"UNKNOWN\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"object\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"nullable\": 1}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"items\": []}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"properties\": []}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"anyOf\": []}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"minItems\": \"-1\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"min_items\": true}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"required\": \"a\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"maximum\": true}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"additionalProperties\": false}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {}, \"parametersJsonSchema\": {}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_invalid_schema_and_mutation_on_failure",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parametersJsonSchema\": []}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_json_schema_is_only_copied",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"lookup\", \"parameters_json_schema\": {\"type\": \"object\", \"$defs\": {\"function_call\": {\"type\": [\"string\", \"null\"]}}, \"properties\": {\"system_instruction\": {\"$ref\": \"#/$defs/function_call\"}}, \"additionalProperties\": false, \"x_custom\": {\"type\": \"STRING\", \"nullable\": true}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"$defs\": {\"function_call\": {\"type\": [\"string\", \"null\"]}}, \"properties\": {\"system_instruction\": {\"$ref\": \"#/$defs/function_call\"}}, \"additionalProperties\": false, \"x_custom\": {\"type\": \"STRING\", \"nullable\": true}}}}], \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_json_schema_is_only_copied",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"lookup\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"function_call\": {\"id\": \"a\", \"name\": \"a\", \"args\": {\"topP\": 1}}}]}, {\"role\": \"user\", \"parts\": [{\"function_response\": {\"id\": \"a\", \"name\": \"a\", \"response\": {\"top_p\": 2}}}]}], \"system_instruction\": {\"parts\": [{\"text\": \"\\u898f\\u5247\"}]}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}, {\"name\": \"b\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"tool_config\": {\"function_calling_config\": {\"mode\": \"ANY\", \"allowed_function_names\": [\"a\", \"b\"]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"a\", \"parameters\": {\"type\": \"object\"}}}, {\"type\": \"function\", \"function\": {\"name\": \"b\", \"parameters\": {\"type\": \"object\"}}}], \"tool_choice\": \"required\", \"messages\": [{\"role\": \"system\", \"content\": [{\"type\": \"text\", \"text\": \"規則\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"a\", \"type\": \"function\", \"function\": {\"name\": \"a\", \"arguments\": \"{\\\"topP\\\":1}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"a\", \"content\": \"{\\\"top_p\\\":2}\"}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"systemInstruction\": {}, \"system_instruction\": {}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {}, \"generation_config\": {}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"toolConfig\": {}, \"tool_config\": {}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"topP\": 0.5, \"top_p\": 0.5}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {}, \"inline_data\": {}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_content"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/png\", \"mime_type\": \"image/png\", \"data\": \"aA==\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_image"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [], \"function_declarations\": []}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parametersJsonSchema\": {}, \"parameters_json_schema\": {}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {}, \"function_calling_config\": {}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_choice"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"type\": \"OBJECT\"}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"allowedFunctionNames\": [\"a\"], \"allowed_function_names\": [\"a\"]}}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_choice"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_known_aliases_and_duplicate_alias_rejection",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"parameters\": {\"anyOf\": [], \"any_of\": []}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"unknown\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"other\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}, {\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}, {\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}, {\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_b\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"text\": \"interruption\"}, {\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}, {\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_b\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}, {\"text\": \"interruption\"}, {\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_b\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"interruption\"}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": null, \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": [], \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": {}, \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_orphans_duplicates_mismatches_unfinished_and_interruptions",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": 3, \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_parallel_calls_results_and_multiple_turns",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {\"function_call\": {\"topP\": 0.2}, \"system_instruction\": [1, null]}}}, {\"functionCall\": {\"name\": \"other\", \"id\": \"call_b\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"other\", \"id\": \"call_b\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}, {\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"inline_data\": {\"mimeType\": \"original\"}, \"error\": {\"code\": 7}}}}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_c\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_c\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"\\u5b8c\\u4e86\"}]}, {\"role\": \"user\", \"parts\": [{\"text\": \"\\uc774\\uc5b4\\uc11c\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"function_call\\\":{\\\"topP\\\":0.2},\\\"system_instruction\\\":[1,null]}\"}}, {\"id\": \"call_b\", \"type\": \"function\", \"function\": {\"name\": \"other\", \"arguments\": \"{}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_b\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"{\\\"inline_data\\\":{\\\"mimeType\\\":\\\"original\\\"},\\\"error\\\":{\\\"code\\\":7}}\"}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_c\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_c\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"完了\"}]}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"이어서\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_part_order_rejects_unrepresentable_text_after_call",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}, {\"text\": \"\\ub4a4 \\ud14d\\uc2a4\\ud2b8\"}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_part_order_rejects_unrepresentable_text_after_call",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"\\uc55e \\ud14d\\uc2a4\\ud2b8\"}, {\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}, {\"text\": \"\\ud6c4\\uc18d\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"앞 텍스트\"}], \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"후속\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_same_name_only_unambiguous_pending_result",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}, {\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_b\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_b\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}, {\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{}\"}}, {\"id\": \"call_b\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_b\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"{\\\"output\\\":\\\"결과\\\"}\"}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_same_name_only_unambiguous_pending_result",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}, {\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_b\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}, {\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_b\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tool_sequence"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generation_config\": {\"temperature\": 0.75, \"top_p\": 0.9, \"max_output_tokens\": 123, \"stop_sequences\": [\"END\", \"\\ub05d\"], \"candidate_count\": 1}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"temperature\": 0.75, \"top_p\": 0.9, \"max_completion_tokens\": 123, \"stop\": [\"END\", \"끝\"], \"n\": 1, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"temperature\": null}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"temperature\": true}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"temperature\": -1}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"temperature\": 1.1}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"temperature\": 2}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"topP\": null}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"topP\": true}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"topP\": -0.1}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"topP\": 1.1}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"maxOutputTokens\": null}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"maxOutputTokens\": true}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"maxOutputTokens\": 0}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"maxOutputTokens\": 1.1}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"maxOutputTokens\": \"5\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"candidateCount\": null}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"candidateCount\": true}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"candidateCount\": 0}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"candidateCount\": 2}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"candidateCount\": 1.0}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"stopSequences\": null}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"stopSequences\": \"stop\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"stopSequences\": []}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"stopSequences\": [\"\"]}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"stopSequences\": [1]}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_sampling_generation_options_and_shared_limits",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"stopSequences\": [\"a\", \"a\", \"a\", \"a\", \"a\"]}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_option"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_schema_types_nullable_and_user_property_names",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"function_declarations\": [{\"name\": \"lookup\", \"description\": \"\\ucc3e\\uae30\", \"parameters\": {\"type\": \"OBJECT\", \"description\": \"\\uc785\\ub825\", \"required\": [\"function_call\"], \"properties\": {\"function_call\": {\"type\": \"STRING\", \"nullable\": true, \"enum\": [\"AUTO\", \"NONE\"]}, \"inlineData\": {\"type\": \"ARRAY\", \"min_items\": \"1\", \"items\": {\"type\": \"INTEGER\"}}, \"nullable\": {\"type\": \"BOOLEAN\", \"nullable\": false}, \"any_of\": {\"any_of\": [{\"type\": \"NUMBER\"}, {\"type\": \"NULL\"}], \"nullable\": true}}, \"property_ordering\": [\"inlineData\", \"function_call\"], \"example\": {\"top_p\": 1}, \"default\": {\"inlineData\": []}}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"찾기\", \"parameters\": {\"type\": \"object\", \"description\": \"입력\", \"required\": [\"function_call\"], \"properties\": {\"function_call\": {\"anyOf\": [{\"type\": \"string\", \"enum\": [\"AUTO\", \"NONE\"]}, {\"type\": \"null\"}]}, \"inlineData\": {\"type\": \"array\", \"minItems\": 1, \"items\": {\"type\": \"integer\"}}, \"nullable\": {\"type\": \"boolean\"}, \"any_of\": {\"anyOf\": [{\"anyOf\": [{\"type\": \"number\"}, {\"type\": \"null\"}]}, {\"type\": \"null\"}]}}, \"propertyOrdering\": [\"inlineData\", \"function_call\"], \"examples\": [{\"top_p\": 1}], \"default\": {\"inlineData\": []}}}}], \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_text_system_history_stream_and_final_validation",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"\\ub2f5\"}]}, {\"parts\": [{\"text\": \"\\ub2e4\\uc74c\"}]}], \"model\": \"group/local\", \"systemInstruction\": {\"role\": \"system\", \"parts\": [{\"text\": \"\\uaddc\\uce59\"}, {\"text\": \"\\ub450 \\ubc88\\uc9f8\"}]}}",
+"\"group/local\"",
+"true"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": true, \"parallel_tool_calls\": true, \"stream_options\": {\"include_usage\": true}, \"messages\": [{\"role\": \"system\", \"content\": [{\"type\": \"text\", \"text\": \"규칙\"}, {\"type\": \"text\", \"text\": \"두 번째\"}]}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}, {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"답\"}]}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"다음\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_text_system_history_stream_and_final_validation",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"group/local\", \"stream\": false, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"질문\"}]}]}"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"safetySettings\": \"secret\"}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"safety_settings\": \"secret\"}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"cachedContent\": \"secret\"}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"cached_content\": \"secret\"}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"cache\": \"secret\"}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"labels\": \"secret\"}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"thought\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"thoughtSignature\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"thought_signature\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"fileData\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"file_data\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"videoMetadata\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"audioTranscription\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"executableCode\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"codeExecutionResult\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"model\", \"parts\": [{\"text\": \"secret\", \"signature\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"responseMimeType\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"responseSchema\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"responseJsonSchema\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"response_schema\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"topK\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"seed\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"thinkingConfig\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"responseModalities\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"speechConfig\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"presencePenalty\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"generationConfig\": {\"frequencyPenalty\": \"secret\"}}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"googleSearch\": {}}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"google_search\": {}}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"codeExecution\": {}}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"urlContext\": {}}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"computerUse\": {}}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"behavior\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"response\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}], \"tools\": [{\"functionDeclarations\": [{\"name\": \"a\", \"responseJsonSchema\": \"secret\"}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}, \"willContinue\": \"secret\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}, \"scheduling\": \"secret\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "gemini_request.GeminiRequestTests.test_unsupported_meanings_are_never_silently_dropped",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"\\uc9c8\\ubb38\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"id\": \"call_a\", \"args\": {}}}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"id\": \"call_a\", \"response\": {\"output\": \"\\uacb0\\uacfc\"}, \"parts\": \"secret\"}}]}]}",
+"\"group/local\"",
+"false"
+],
+"events": [
+[
+"err",
+"unsupported_field"
+]
+]
+},
+{
+"test": "extra.gemini_schema",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\":[{\"parts\":[{\"text\":\"x\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"f\",\"parameters\":{\"type\":\"OBJECT\",\"properties\":{\"b\":{\"type\":\"STRING\",\"minLength\":\"0007\",\"maxLength\":\"9223372036854775807\"},\"a\":{\"type\":\"NUMBER\",\"minimum\":0.50,\"maximum\":1E3,\"example\":{\"y\":1,\"x\":[2.0]},\"nullable\":true}}}}]}]}",
+"\"m\"",
+"false"
+],
+"events": [
+[
+"out",
+"{\"model\": \"m\", \"stream\": false, \"parallel_tool_calls\": true, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"f\", \"parameters\": {\"type\": \"object\", \"properties\": {\"b\": {\"type\": \"string\", \"minLength\": 7, \"maxLength\": 9223372036854775807}, \"a\": {\"anyOf\": [{\"type\": \"number\", \"minimum\": 0.5, \"maximum\": 1000.0, \"examples\": [{\"y\": 1, \"x\": [2.0]}]}, {\"type\": \"null\"}]}}}}}], \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"x\"}]}]}"
+]
+]
+},
+{
+"test": "extra.gemini_schema",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\":[{\"parts\":[{\"text\":\"x\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"f\",\"parameters\":{\"type\":\"OBJECT\",\"properties\":{\"b\":{\"minLength\":\"１\"}}}}]}]}",
+"\"m\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "extra.gemini_schema",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\":[{\"parts\":[{\"text\":\"x\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"f\",\"parameters\":{\"type\":\"OBJECT\",\"properties\":{\"b\":{\"minLength\":\"\"}}}}]}]}",
+"\"m\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+},
+{
+"test": "extra.gemini_schema",
+"fn": "gemini_request.to_chat",
+"limits": {},
+"args": [
+"{\"contents\":[{\"parts\":[{\"text\":\"x\"}]}],\"tools\":[{\"functionDeclarations\":[{\"name\":\"f\",\"parameters\":{\"type\":\"OBJECT\",\"properties\":{\"b\":{\"minLength\":\"12345678901234567890\"}}}}]}]}",
+"\"m\"",
+"false"
+],
+"events": [
+[
+"err",
+"invalid_tools"
+]
+]
+}
+]

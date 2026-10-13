@@ -1,0 +1,438 @@
+/* v4 · NOCTURNE — connect screens (Figma 05 · 연결: 에이전트, MCP, 플러그인, 저장소, 코드 리뷰).
+   Shared frame lives in shell.css; colours are --nc-* in tokens.css. Everything here is scoped to .app.v4-connect
+   (app.js sets it for the tools, agent, git and reviews views) or to parts only these screens build (cn-*). */
+
+/* ---------------------------------------------------------------- title line: ← back, count, buttons on the right */
+.page-head { position: relative; }
+.page-head .head-back { align-self: flex-start; margin-bottom: 4px; padding: 0; border: 0; background: none; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
+.page-head .head-back:hover { color: var(--nc-text); }
+.page-head .head-aside { position: absolute; right: 0; bottom: 0; display: flex; align-items: center; gap: 8px; }
+.page-head:has(.head-aside) > p { padding-right: 420px; }
+.page-head .head-aside .btn { height: 36px; padding: 0 14px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.page-head .head-aside select { height: 36px; padding: 0 28px 0 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--mono); }
+.app.v4-connect .title-count { font-family: var(--sans); }
+
+/* Segment (v3 Segment): a bordered box with pill tabs inside. */
+.app.v4-connect .segment { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
+.app.v4-connect .segment .tab { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.app.v4-connect .segment .tab.active { background: var(--nc-raised); color: var(--nc-accent); }
+.app.v4-connect .segment .tab output { font: 400 calc(12px * var(--fs, 1)) var(--mono); color: var(--nc-quiet); }
+.app.v4-connect .segment .tab output.warn { color: var(--nc-amber); }
+
+/* Buttons inside the panel: 7px 14px, 13px medium. Primary = action yellow. */
+.app.v4-connect .panel .btn, .cn-confirm .btn, .app.v4-connect ~ dialog .btn { height: auto; min-height: 34px; padding: 7px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.app.v4-connect .panel .btn:hover { background: var(--nc-raised); }
+.app.v4-connect .panel .btn.primary { background: var(--nc-action); border-color: var(--nc-action); color: var(--nc-on-accent); }
+.app.v4-connect .panel .btn:disabled { opacity: .5; cursor: default; }
+.app.v4-connect .panel .btn.cn-link, .app.v4-connect .panel .btn.ghost { min-height: 0; padding: 7px 0; border: 0; background: none; color: var(--nc-muted); }
+.app.v4-connect .panel .btn.cn-link:hover { color: var(--nc-text); background: none; }
+.app.v4-connect .area-bar .head-actions .btn.ghost { color: var(--nc-muted); border-color: transparent; background: none; }
+
+/* ---------------------------------------------------------------- panel: hide the old detail bar, keep its body */
+@media (min-width: 1181px) { .app.v4-connect .panel > .detail .detail-bar { display: none; } } /* narrow: the drawer keeps its 닫기 */
+.app.v4-connect .panel > .detail .detail-body { padding: 0; gap: 0; }
+.app.v4-connect .panel-main > .stats { display: block; }
+.app.v4-connect .panel-main > .stats:empty, .app.v4-connect .panel-main > .controls:empty, .app.v4-connect .panel-main > .chips:empty { display: none; }
+.app.v4-connect .panel-main { overflow: auto; }
+.app.v4-connect .table-wrap { overflow: visible; flex: none; }
+
+/* ---------------------------------------------------------------- summary tiles */
+.cn-tiles { display: flex; gap: 8px; }
+.cn-tile { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); text-align: left; color: inherit; font: inherit; }
+.cn-tile.link { cursor: pointer; }
+.cn-tile.link:hover { background: var(--nc-raised); }
+.cn-tile p { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.cn-tile-value { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.cn-tile-value strong { font: 400 calc(20px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-text); white-space: nowrap; }
+.cn-tile-value strong.warn { color: var(--nc-amber); }
+.cn-tile-value span { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cn-tile small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.cn-tile.link .cn-tile-value strong { font: 400 calc(14px * var(--fs, 1))/1.5 var(--sans); }
+
+/* ---------------------------------------------------------------- list (surface, line border, radius 8) */
+.cn-list { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
+.cn-list:empty { display: none; }
+.cn-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--nc-line); cursor: pointer; min-width: 0; }
+.cn-row:last-child { border-bottom: 0; }
+.cn-row:hover { background: var(--nc-raised); }
+.cn-row.selected { background: var(--nc-raised); }
+.cn-row:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: -2px; }
+.cn-row-icon { display: inline-grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--nc-muted); }
+.cn-row-icon .icon { width: 16px; height: 16px; }
+.cn-row-icon .agent-tile, .cn-logos .agent-tile, .cn-chip .agent-tile, .cn-call .agent-tile { width: 16px; height: 16px; border: 0; background: none; border-radius: 4px; }
+.cn-row-icon .agent-tile img, .cn-row-icon .agent-tile svg, .cn-logos .agent-tile img, .cn-logos .agent-tile svg { width: 16px; height: 16px; }
+.cn-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cn-row-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; font: 400 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.cn-row-title > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cn-row-title .mono { font-family: var(--mono); }
+.cn-ver { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-quiet); flex: none; }
+.cn-row-desc { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cn-row-meta { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cn-row-meta.mono { font-family: var(--mono); }
+.cn-logos { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.cn-quiet { color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; }
+.cn-muted { color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; }
+.cn-warn { color: var(--nc-amber); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; }
+.cn-grow { flex: 1; min-width: 0; }
+
+.cn-badge { flex: none; display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid var(--nc-line); border-radius: 999px; font: 500 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); white-space: nowrap; }
+.cn-badge.warn { border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-amber); }
+.cn-badge.off { color: var(--nc-quiet); }
+.cn-badge.accent { border-color: transparent; color: var(--nc-accent); padding: 2px 0; }
+.cn-mini { flex: none; padding: 4px 10px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 500 calc(12px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
+.cn-mini:hover { background: var(--nc-subtle); }
+
+/* ---------------------------------------------------------------- right detail (366px): kind · title · actions · sections */
+.cn-detail { display: flex; flex-direction: column; gap: 22px; padding: 24px 20px; min-width: 0; }
+.cn-head { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cn-kind { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.cn-kind.mono { font-family: var(--mono); }
+.cn-title { margin: 0; font: 400 calc(16px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
+.cn-title.mono { font-family: var(--mono); }
+.cn-desc { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); overflow-wrap: anywhere; }
+.cn-desc.mono { font-family: var(--mono); }
+.cn-text { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.cn-note { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.cn-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.cn-foot { display: flex; align-items: center; gap: 12px; }
+.cn-sec { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cn-sec-head { display: flex; align-items: center; gap: 8px; }
+.cn-sec-head h3 { flex: 1; margin: 0; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.cn-sec-head small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.cn-facts { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px 12px; margin: 0; }
+.cn-facts dt { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.cn-facts dd { margin: 0; min-width: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
+.cn-facts dd.mono { font: 400 calc(12px * var(--fs, 1))/1.6 var(--mono); }
+.cn-facts dd.warn { color: var(--nc-amber); }
+.cn-callout { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border-radius: var(--nc-radius-control); background: var(--nc-amber-bg); }
+.cn-callout p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.cn-callout strong { font-weight: 500; }
+
+.cn-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cn-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid transparent; border-radius: 6px; background: var(--nc-raised); color: var(--nc-text); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
+.cn-chip .agent-tile, .cn-chip .agent-tile img, .cn-chip .agent-tile svg { width: 14px; height: 14px; }
+.cn-chip.off { background: none; border-color: var(--nc-line); color: var(--nc-quiet); }
+.cn-chip.staged { background: var(--nc-amber-bg); color: var(--nc-amber); }
+.cn-chip:disabled { cursor: default; }
+.cn-chip:not(:disabled):hover { border-color: var(--nc-quiet); }
+
+.cn-sublist { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
+.cn-subrow { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--nc-line); min-width: 0; }
+.cn-subrow:last-child { border-bottom: 0; }
+.cn-subrow-body { flex: 1; min-width: 0; display: flex; flex-direction: column; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.cn-subrow-body code { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: none; padding: 0; }
+.cn-subrow-body small { font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); overflow-wrap: anywhere; }
+.cn-kindtag { flex: none; align-self: flex-start; padding: 0 6px; border-radius: 4px; background: var(--nc-raised); font: 400 calc(11px * var(--fs, 1))/18px var(--sans); color: var(--nc-muted); }
+.cn-call { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cn-call code { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-text); background: none; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cn-call .agent-tile, .cn-call .agent-tile img, .cn-call .agent-tile svg { width: 14px; height: 14px; }
+
+/* ---------------------------------------------------------------- 확인 팝업 (253:18954) */
+dialog.cn-confirm { width: min(420px, calc(100vw - 32px)); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); background: var(--nc-surface); color: var(--nc-text); }
+dialog.cn-confirm form { display: flex; flex-direction: column; gap: 20px; padding: 24px; }
+dialog.cn-confirm h2 { margin: 0; font: 500 calc(17px * var(--fs, 1))/1.5 var(--sans); }
+dialog.cn-confirm p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.cn-confirm-btns { display: flex; gap: 8px; }
+dialog.cn-confirm .btn.danger { border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-amber); }
+.app.v4-connect .table-wrap { width: 100%; }
+.app.v4-connect .table-wrap > .cn-list { width: 100%; }
+
+/* ---------------------------------------------------------------- 확인해 주세요 card (amber-bg) */
+.cn-alert { display: flex; align-items: center; gap: 16px; width: 100%; padding: 14px 16px; border-radius: var(--nc-radius-control); background: var(--nc-amber-bg); }
+.cn-alert-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cn-alert-text p { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cn-alert-text .cn-alert-title { display: flex; gap: 8px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.cn-alert-title span { font-family: var(--mono); color: var(--nc-amber); }
+.app.v4-connect .panel-main > .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.app.v4-connect .head-aside .cn-agent-pick { font-family: var(--sans); }
+
+/* ---------------------------------------------------------------- 저장소 (Figma 198:1146): search row · side lists | commit list; detail on the right */
+.app.v4-connect .git-wrap { display: flex; flex-direction: column; gap: 20px; overflow: visible; border: 0; background: none; }
+.app.v4-connect .git-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.app.v4-connect .git-search { flex: 1; min-width: 120px; height: 36px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--sans); }
+.app.v4-connect .git-search::placeholder { color: var(--nc-quiet); }
+.app.v4-connect .git-busy { color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1)) var(--sans); white-space: nowrap; }
+.page-head .head-aside .git-repo { min-width: 86px; height: 36px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--mono); }
+.app.v4-connect .git-grid { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; border: 0; border-radius: 0; background: none; overflow: visible; }
+.app.v4-connect .git-side { display: flex; flex-direction: column; gap: 20px; padding: 0; border: 0; background: none; overflow: visible; }
+.app.v4-connect .git-side-head { display: flex; align-items: center; width: 100%; padding: 0 0 6px; border: 0; background: none; color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); text-transform: none; letter-spacing: 0; cursor: pointer; }
+.app.v4-connect .git-side-head output { margin-left: auto; font: 400 calc(12px * var(--fs, 1)) var(--sans); color: var(--nc-quiet); }
+.app.v4-connect .git-side-list { display: flex; flex-direction: column; gap: 2px; padding: 0; }
+.app.v4-connect .git-side-item { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 4px 8px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); text-align: left; }
+.app.v4-connect .git-side-item.mono { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); }
+.app.v4-connect .git-side-item:hover { background: var(--nc-raised); color: var(--nc-text); }
+.app.v4-connect .git-side-item.on { background: var(--nc-raised); color: var(--nc-accent); }
+.app.v4-connect .git-folder summary { display: flex; align-items: center; min-height: 28px; padding: 4px 8px; list-style: none; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); cursor: pointer; }
+.app.v4-connect .git-folder summary::-webkit-details-marker { display: none; }
+.app.v4-connect .git-folder summary output { margin-left: auto; font: 400 calc(11px * var(--fs, 1)) var(--sans); color: var(--nc-quiet); }
+.app.v4-connect .git-folder .git-side-item { padding-left: 22px; }
+.app.v4-connect .git-tag { flex: none; padding: 0 6px; border: 1px solid var(--nc-line); border-radius: 4px; font: 400 calc(11px * var(--fs, 1))/18px var(--sans); color: var(--nc-quiet); }
+.app.v4-connect .git-pr-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 0 6px; }
+.app.v4-connect .git-chip { padding: 2px 8px; border: 1px solid var(--nc-line); border-radius: 6px; background: none; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
+.app.v4-connect .git-chip.on { border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-accent); }
+.app.v4-connect .git-side-pr { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: none; text-align: left; cursor: pointer; }
+.app.v4-connect .git-side-pr:hover, .app.v4-connect .git-side-pr.on { background: var(--nc-raised); }
+.app.v4-connect .git-side-pr .git-dot { margin-top: 6px; }
+.app.v4-connect .git-side-pr-text { display: flex; flex-direction: column; min-width: 0; }
+.app.v4-connect .git-side-pr-text small { font: 400 calc(11px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-quiet); }
+.app.v4-connect .git-side-pr-text span { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.app.v4-connect .git-side-pr.on .git-side-pr-text span { color: var(--nc-accent); }
+.app.v4-connect .git-history { gap: 3px; }
+.app.v4-connect .git-dot { width: 6px; height: 6px; background: var(--nc-quiet); }
+.app.v4-connect .git-dot.ok { background: var(--nc-muted); }
+.app.v4-connect .git-dot.bad { background: var(--nc-amber); }
+.app.v4-connect .git-dot.run { background: var(--nc-accent); }
+.app.v4-connect .git-dot.merged { background: var(--nc-quiet); }
+.app.v4-connect .git-empty { margin: 0; padding: 8px 0; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
+.app.v4-connect .table-wrap > .git-wrap > .git-empty { padding: 24px 0; font-size: calc(13px * var(--fs, 1)); }
+
+.app.v4-connect .git-center { border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
+.app.v4-connect .git-row { --lane: var(--nc-quiet); display: grid; grid-template-columns: auto minmax(0, 1fr) 64px 64px; align-items: center; gap: 0 10px; width: 100%; height: auto; min-height: 37px; padding: 0 16px 0 10px; border: 0; border-bottom: 1px solid var(--nc-line); background: none; color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); text-align: left; }
+.app.v4-connect .git-rows .git-row:last-child { border-bottom: 0; }
+.app.v4-connect .git-rows .git-row:hover { background: var(--nc-raised); }
+.app.v4-connect .git-row.on { background: var(--nc-raised); }
+.app.v4-connect .git-row.on .git-subject { color: var(--nc-accent); }
+.app.v4-connect .git-row-head { position: sticky; top: 0; z-index: 1; min-height: 36px; background: var(--nc-surface); color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); text-transform: none; }
+.app.v4-connect .git-graph { height: 36px; }
+.app.v4-connect .git-row-head .git-graph { height: auto; }
+.app.v4-connect .git-msg { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 8px 0; border-left: 0; height: auto; }
+.app.v4-connect .git-row-head .git-msg { padding: 0; }
+.app.v4-connect .git-refs { display: flex; gap: 4px; min-width: 0; max-width: 100%; overflow: hidden; }
+.app.v4-connect .git-ref { flex: none; max-width: 240px; padding: 0 6px; border: 1px solid var(--nc-line); border-radius: 4px; background: none; color: var(--nc-muted); font: 400 calc(11px * var(--fs, 1))/18px var(--mono); }
+.app.v4-connect .git-msg .git-ellipsis { width: 100%; }
+.app.v4-connect .git-sha { font: 400 calc(11px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-quiet); text-align: right; }
+.app.v4-connect .git-time { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); text-align: right; }
+.app.v4-connect .git-center > .btn { margin: 10px 16px; }
+
+/* right column */
+.app.v4-connect .panel > .detail .git-right { display: flex; flex-direction: column; gap: 14px; padding: 24px 20px; border: 0; overflow: visible; }
+.app.v4-connect .git-right h3 { margin: 0; font: 400 calc(16px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
+.app.v4-connect .git-right h3.mono { font-family: var(--mono); }
+.app.v4-connect .git-kicker { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.app.v4-connect .git-kicker.mono { font-family: var(--mono); }
+.app.v4-connect .git-note { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.55 var(--sans); color: var(--nc-quiet); white-space: pre-wrap; overflow-wrap: anywhere; }
+.app.v4-connect .git-msgbody { color: var(--nc-muted); }
+.app.v4-connect .git-sec { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 0; }
+.app.v4-connect .git-sec-head, .app.v4-connect .git-card-head { display: flex; align-items: center; gap: 8px; }
+.app.v4-connect .git-sec-head h4, .app.v4-connect .git-card-head h4 { flex: 1; margin: 0; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.app.v4-connect .git-card-head h4 { color: var(--nc-text); }
+.app.v4-connect .git-sec-head small, .app.v4-connect .git-card-head small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.app.v4-connect .git-facts { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px 12px; margin: 0; }
+.app.v4-connect .git-facts dt { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.app.v4-connect .git-facts dd { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
+.app.v4-connect .git-facts dd.mono { font: 400 calc(12px * var(--fs, 1))/1.6 var(--mono); }
+.app.v4-connect .git-facts dd.warn { color: var(--nc-amber); }
+.app.v4-connect .git-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
+.app.v4-connect .git-files { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
+.app.v4-connect .git-file { display: flex; align-items: center; gap: 8px; min-height: 0; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--nc-line); border-radius: 0; background: none; color: var(--nc-text); font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); }
+.app.v4-connect .git-file:last-child { border-bottom: 0; }
+.app.v4-connect .git-file:not(:disabled):hover, .app.v4-connect .git-file.on { background: var(--nc-raised); }
+.app.v4-connect .git-file:disabled { cursor: default; opacity: 1; }
+.app.v4-connect .git-num { gap: 8px; font: 400 calc(12px * var(--fs, 1)) var(--mono); }
+.app.v4-connect .git-num .add { color: var(--nc-muted); }
+.app.v4-connect .git-num .del { color: var(--nc-amber); }
+.app.v4-connect .git-diff { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 0; padding: 0; border: 0; }
+.app.v4-connect .git-diff-path { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-muted); }
+.app.v4-connect .git-patch { max-height: 420px; padding: 6px 0; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); font: 400 calc(11.5px * var(--fs, 1))/1.6 var(--mono); color: var(--nc-text); }
+.app.v4-connect .git-patch span { padding: 2px 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.app.v4-connect .git-patch .add { background: none; }
+.app.v4-connect .git-patch .del { background: var(--nc-amber-bg); }
+.app.v4-connect .git-patch .hunk { color: var(--nc-quiet); }
+.app.v4-connect .git-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.app.v4-connect .git-badge { display: inline-flex; align-items: center; padding: 1px 8px; border: 0; border-radius: 999px; background: var(--nc-raised); color: var(--nc-text); font: 500 calc(12px * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; flex: none; }
+.app.v4-connect .git-badge.warn { background: var(--nc-amber-bg); color: var(--nc-amber); }
+.app.v4-connect .git-badge.accent { background: none; color: var(--nc-accent); padding: 1px 0; }
+.app.v4-connect .git-check-state { display: inline-flex; align-items: center; gap: 6px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.app.v4-connect .git-body { margin: 0; padding: 12px; max-height: 260px; overflow: auto; border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 400 calc(12px * var(--fs, 1))/1.65 var(--sans); white-space: pre-wrap; overflow-wrap: anywhere; }
+.app.v4-connect .git-error-box { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 0; max-width: 420px; }
+.app.v4-connect .git-error-box h4 { margin: 0; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.app.v4-connect .git-error { margin: 0; color: var(--nc-amber); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.app.v4-connect .git-error-box .git-field { width: 100%; }
+
+/* PR 상세 (198:2694) */
+.app.v4-connect .git-prs { display: flex; flex-direction: column; gap: 20px; }
+.app.v4-connect .git-prbar { display: flex; align-items: center; gap: 8px; }
+.app.v4-connect .git-prbar .git-pr-tabs { padding: 0; flex-wrap: nowrap; }
+.app.v4-connect .git-prbar .git-chip { padding: 6px 12px; border-radius: var(--nc-radius-control); font-size: calc(13px * var(--fs, 1)); font-weight: 500; color: var(--nc-text); }
+.app.v4-connect .git-prbar .git-chip.on { color: var(--nc-accent); }
+.app.v4-connect .git-prlist { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
+.app.v4-connect .git-pr { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--nc-line); background: none; text-align: left; cursor: pointer; }
+.app.v4-connect .git-pr:last-child { border-bottom: 0; }
+.app.v4-connect .git-pr:hover, .app.v4-connect .git-pr.on { background: var(--nc-raised); }
+.app.v4-connect .git-pr-num { flex: none; width: 36px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-quiet); }
+.app.v4-connect .git-pr-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.app.v4-connect .git-pr-text > span { font: 400 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.app.v4-connect .git-pr-text small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.app.v4-connect .git-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
+.app.v4-connect .git-check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.app.v4-connect .git-check { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 6px; background: var(--nc-raised); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.app.v4-connect .git-finding { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 0; border-radius: var(--nc-radius-control); background: var(--nc-raised); }
+.app.v4-connect .git-finding-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.app.v4-connect .git-finding code { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-muted); background: none; padding: 0; overflow-wrap: anywhere; }
+.app.v4-connect .git-finding p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.app.v4-connect .git-card > .btn { align-self: flex-start; }
+.app.v4-connect .git-review { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.app.v4-connect .git-review code { font: 400 calc(12px * var(--fs, 1)) var(--mono); background: none; padding: 0; color: var(--nc-text); }
+.app.v4-connect .git-review p { flex-basis: 100%; margin: 0; color: var(--nc-muted); }
+.app.v4-connect .git-card .git-files { background: none; }
+
+/* git forms (브랜치·PR 만들기 198:4758 · 커밋·병합 198:4844 · 브랜치 지우기 241:27867) */
+dialog.git-dialog { width: min(560px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); background: var(--nc-surface); color: var(--nc-text); }
+dialog.git-dialog.confirm { width: min(420px, calc(100vw - 32px)); }
+dialog.git-dialog form { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
+.git-dialog-head { display: flex; flex-direction: column; gap: 4px; }
+dialog.git-dialog h3 { margin: 0; font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); }
+dialog.git-dialog.confirm h3 { font-size: calc(17px * var(--fs, 1)); }
+.git-dialog-head p { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+dialog.git-dialog.confirm .git-dialog-head p { font-size: calc(13px * var(--fs, 1)); color: var(--nc-muted); margin-top: 8px; }
+dialog.git-dialog .git-field { display: flex; flex-direction: column; gap: 8px; color: var(--nc-text); }
+.git-field-label { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+dialog.git-dialog .git-field input:not([type="checkbox"]), dialog.git-dialog .git-field select, dialog.git-dialog .git-field textarea,
+.app.v4-connect .git-error-box .git-field input { width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--mono); }
+dialog.git-dialog .git-field textarea { min-height: 96px; font-family: var(--sans); resize: vertical; }
+dialog.git-dialog .git-hint { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.git-pair { display: flex; align-items: flex-end; gap: 12px; }
+.git-pair .git-field { flex: 1; min-width: 0; }
+.git-pair-arrow { padding-bottom: 10px; color: var(--nc-quiet); }
+dialog.git-dialog .git-field.toggle { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+.git-field-text { display: flex; flex-direction: column; gap: 2px; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.git-field-text small { font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); }
+dialog.git-dialog .git-field.toggle input { appearance: none; position: relative; flex: none; width: 36px; height: 20px; margin: 0; border-radius: 999px; background: var(--nc-subtle); cursor: pointer; }
+dialog.git-dialog .git-field.toggle input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--nc-quiet); transition: left .15s; }
+dialog.git-dialog .git-field.toggle input:checked { background: var(--nc-action); }
+dialog.git-dialog .git-field.toggle input:checked::after { left: 19px; background: var(--nc-on-accent); }
+.git-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+dialog.git-dialog.confirm .git-dialog-actions { justify-content: flex-start; }
+dialog.git-dialog .btn, dialog.cn-confirm .btn { min-height: 34px; padding: 7px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+dialog.git-dialog .btn.primary { background: var(--nc-action); border-color: var(--nc-action); color: var(--nc-on-accent); }
+dialog.git-dialog .btn.danger, dialog.cn-confirm .btn.danger { border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-amber); }
+.app.v4-connect .git-rows .git-graph { align-self: stretch; height: auto; min-height: 36px; }
+.git-lanes { position: relative; display: block; height: 100%; }
+.git-lanes svg { display: block; height: 100%; }
+.git-node { position: absolute; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--nc-quiet); }
+.git-node.tip { width: 8px; height: 8px; margin: -4px 0 0 -4px; background: var(--nc-amber); }
+.git-row.on .git-node { background: var(--nc-accent) !important; }
+
+/* ---------------------------------------------------------------- 코드 리뷰 (Figma 198:2780) */
+.app.v4-connect .rv-wrap { display: flex; flex-direction: column; gap: 12px; border: 0; background: none; overflow: visible; }
+.app.v4-connect .rv-head { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.app.v4-connect .rv-head output { font: 400 calc(12px * var(--fs, 1)) var(--sans); color: var(--nc-quiet); }
+.app.v4-connect .rv-list { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; margin-bottom: 8px; }
+.app.v4-connect .rv-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 64px; align-items: center; gap: 16px; width: 100%; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--nc-line); background: none; text-align: left; cursor: pointer; }
+.app.v4-connect .rv-row:last-child { border-bottom: 0; }
+.app.v4-connect .rv-row:hover, .app.v4-connect .rv-row.selected { background: var(--nc-raised); }
+.app.v4-connect .rv-title { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.app.v4-connect .rv-title strong { font: 400 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app.v4-connect .rv-title small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app.v4-connect .rv-dots { display: inline-flex; gap: 10px; }
+.app.v4-connect .rv-dot { display: inline-flex; align-items: center; gap: 4px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.app.v4-connect .rv-dot i { width: 6px; height: 6px; border-radius: 50%; background: var(--nc-quiet); }
+.app.v4-connect .rv-dot.ok i { background: var(--nc-muted); }
+.app.v4-connect .rv-dot.run i { background: var(--nc-accent); }
+.app.v4-connect .rv-dot.bad i { background: var(--nc-amber); }
+.app.v4-connect .rv-when { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); text-align: right; white-space: nowrap; }
+.cn-badge.soft { border-color: transparent; background: var(--nc-raised); }
+.app.v4-connect .rv-steps { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.app.v4-connect .rv-steps li { display: flex; gap: 12px; align-items: flex-start; }
+.app.v4-connect .rv-step-dot { flex: none; width: 6px; height: 6px; margin-top: 8px; border-radius: 50%; background: var(--nc-quiet); }
+.app.v4-connect .rv-steps li.ok .rv-step-dot { background: var(--nc-muted); }
+.app.v4-connect .rv-steps li.warn .rv-step-dot { background: var(--nc-amber); }
+.app.v4-connect .rv-step-text { display: flex; flex-direction: column; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.app.v4-connect .rv-step-text .rv-note { font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); }
+.app.v4-connect .rv-finding { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
+.app.v4-connect .rv-finding-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.app.v4-connect .rv-finding-top code { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-muted); background: none; padding: 0; overflow-wrap: anywhere; }
+.app.v4-connect .rv-finding > p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.55 var(--sans); color: var(--nc-text); }
+.app.v4-connect .rv-finding-acts { display: flex; gap: 6px; }
+.app.v4-connect .panel .rv-finding-acts .btn { min-height: 0; padding: 4px 10px; font-size: calc(12px * var(--fs, 1)); }
+.app.v4-connect .panel .rv-finding-acts .btn.ghost { border: 1px solid var(--nc-line); background: var(--nc-surface); color: var(--nc-text); }
+
+/* 코드 리뷰 설정 (198:4930) */
+dialog.rv-settings { width: min(640px, calc(100vw - 32px)); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); background: var(--nc-surface); }
+dialog.rv-settings .dialog-head { padding: 24px 24px 8px; }
+dialog.rv-settings .dialog-head h2 { font: 500 calc(17px * var(--fs, 1))/1.5 var(--sans); }
+dialog.rv-settings .dialog-head p { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+dialog.rv-settings .dialog-body { gap: 8px; padding: 8px 24px 16px; }
+dialog.rv-settings .dialog-body h3 { margin: 12px 0 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+dialog.rv-settings .pg-hint { margin: 0 0 4px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+dialog.rv-settings .rv-choice { display: inline-flex; gap: 2px; align-self: flex-start; padding: 3px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
+dialog.rv-settings .start-card { display: flex; padding: 6px 14px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); text-align: left; cursor: pointer; }
+dialog.rv-settings .start-card strong { display: block; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+dialog.rv-settings .start-card small { display: block; font: 400 calc(11px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-quiet); }
+dialog.rv-settings .start-card.on { background: var(--nc-raised); color: var(--nc-accent); }
+dialog.rv-settings .pg-card { display: flex; flex-direction: column; padding: 0; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
+dialog.rv-settings .setting { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--nc-line); }
+dialog.rv-settings .setting:last-child { border-bottom: 0; }
+dialog.rv-settings .setting > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+dialog.rv-settings .setting strong { font: 400 calc(14px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-text); }
+dialog.rv-settings .setting small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+dialog.rv-settings .dialog-foot { padding: 12px 24px 20px; border-top: 0; }
+dialog.rv-settings .dialog-foot .btn { min-height: 34px; padding: 7px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+dialog.rv-settings .dialog-foot .btn.primary { background: var(--nc-action); border-color: var(--nc-action); color: var(--nc-on-accent); }
+.app.v4-connect .table-wrap > * { flex: 1 1 auto; min-width: 0; }
+dialog.cn-confirm p { white-space: pre-line; }
+
+/* ---------------------------------------------------------------- MCP 서버 추가 (Figma 198:4586): form | 최근 요청 · 방식 고르기 */
+dialog.mcp-add { width: min(960px, calc(100vw - 32px)); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); background: var(--nc-canvas); }
+dialog.mcp-add .dialog-head { padding: 24px 24px 8px; }
+dialog.mcp-add .dialog-head h2 { font: 500 calc(20px * var(--fs, 1))/1.5 var(--sans); }
+dialog.mcp-add .dialog-head p { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+dialog.mcp-add .dialog-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; padding: 0; margin: 12px 24px 0; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); max-height: calc(100vh - 230px); overflow: auto; }
+.mcp-main { display: flex; flex-direction: column; gap: 20px; padding: 24px; min-width: 0; }
+.mcp-side { display: flex; flex-direction: column; gap: 10px; padding: 24px 20px; border-left: 1px solid var(--nc-line); min-width: 0; }
+.mcp-side .cn-sec-head + * { margin-bottom: 0; }
+.mcp-side .cn-note { margin-bottom: 18px; }
+dialog.mcp-add .field { display: flex; flex-direction: column; gap: 8px; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+dialog.mcp-add .field > small, dialog.mcp-add .field > .meta { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); margin: 0; }
+dialog.mcp-add .field input { min-height: 40px; padding: 8px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--mono); }
+.mcp-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.mcp-preset { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border: 1px solid var(--nc-line); border-radius: 6px; background: var(--nc-surface); color: var(--nc-text); cursor: pointer; }
+.mcp-preset code { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); background: none; padding: 0; }
+.mcp-preset small { font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.mcp-preset:hover { background: var(--nc-raised); }
+.mcp-preset.on { border-color: transparent; background: var(--nc-amber-bg); }
+.mcp-preset.on code { color: var(--nc-accent); }
+dialog.mcp-add .segment.mcp-how { display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
+dialog.mcp-add .mcp-how .tab { display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); }
+dialog.mcp-add .mcp-how .tab code { font: 400 calc(13px * var(--fs, 1))/1.5 var(--mono); background: none; padding: 0; color: inherit; }
+dialog.mcp-add .mcp-how .tab small { font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+dialog.mcp-add .mcp-how .tab.active { background: var(--nc-raised); color: var(--nc-accent); }
+.mcp-agents { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
+.mcp-agent { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--nc-line); }
+.mcp-agent:last-child { border-bottom: 0; }
+.mcp-agent > div { flex: 1; min-width: 0; display: flex; flex-direction: column; font: 400 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.mcp-agent small { font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); }
+.mcp-agent .agent-tile { width: 16px; height: 16px; border: 0; background: none; }
+.mcp-agent .agent-tile img, .mcp-agent .agent-tile svg { width: 16px; height: 16px; }
+dialog .switch[aria-checked="true"], .app.v4-connect .switch[aria-checked="true"] { background: var(--nc-action); border-color: var(--nc-action); }
+dialog .switch[aria-checked="true"] i { background: var(--nc-on-accent); }
+.mcp-warn { margin: 0; padding: 12px 16px; border-radius: var(--nc-radius-control); background: var(--nc-amber-bg); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.mcp-ways { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; margin: 0; }
+.mcp-ways dt { font: 400 calc(12px * var(--fs, 1))/1.6 var(--mono); color: var(--nc-accent); }
+.mcp-ways dd { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.6 var(--sans); color: var(--nc-muted); }
+dialog.mcp-add .dialog-foot { padding: 16px 24px 20px; border-top: 0; }
+dialog.mcp-add .dialog-foot .btn, dialog.apply-pop .btn { min-height: 34px; padding: 7px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+dialog.mcp-add .dialog-foot .btn.primary, dialog.apply-pop .btn.primary { background: var(--nc-action); border-color: var(--nc-action); color: var(--nc-on-accent); }
+@media (max-width: 860px) { dialog.mcp-add .dialog-body { grid-template-columns: minmax(0, 1fr); } .mcp-side { border-left: 0; border-top: 1px solid var(--nc-line); } }
+dialog.mcp-add .field .meta a { color: var(--nc-accent); }
+
+/* ---------------------------------------------------------------- 켜기·끄기·로그인 창 (MCP 로그인 198:4672) */
+dialog.apply-pop { width: min(520px, calc(100vw - 32px)); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); background: var(--nc-surface); color: var(--nc-text); }
+dialog.apply-pop .dialog-head { padding: 24px 24px 12px; }
+dialog.apply-pop .dialog-head h2 { font: 500 calc(17px * var(--fs, 1))/1.5 var(--sans); }
+dialog.apply-pop .dialog-head p { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+dialog.apply-pop .dialog-body { padding: 0 24px 12px; gap: 12px; }
+dialog.apply-pop .apply-steps { counter-reset: step; display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
+dialog.apply-pop .apply-steps li { counter-increment: step; display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-bottom: 1px solid var(--nc-line); font: 400 calc(13px * var(--fs, 1))/1.55 var(--sans); color: var(--nc-text); }
+dialog.apply-pop .apply-steps li:last-child { border-bottom: 0; }
+dialog.apply-pop .apply-steps li::before { content: counter(step); flex: none; display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--nc-line); border-radius: 50%; font: 400 calc(11px * var(--fs, 1)) var(--mono); color: var(--nc-quiet); }
+dialog.apply-pop .apply-status { margin: 0; padding: 12px 16px; border-radius: var(--nc-radius-control); background: var(--nc-raised); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+dialog.apply-pop .apply-status.error { background: var(--nc-amber-bg); }
+dialog.apply-pop .apply-status.ok { color: var(--nc-accent); }
+dialog.apply-pop .apply-paste { display: flex; flex-direction: column; gap: 8px; }
+dialog.apply-pop .apply-paste a { color: var(--nc-accent); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+dialog.apply-pop .apply-paste input { min-height: 40px; padding: 8px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--mono); }
+dialog.apply-pop .dialog-foot { padding: 12px 24px 20px; border-top: 0; }
+.cn-callout strong { display: block; margin-bottom: 2px; }
+/* round 3: AI가 고쳐서 올리기 above the findings */
+.app.v4-connect .rv-fix-all { align-self: flex-start; width: auto; margin-bottom: 4px; }

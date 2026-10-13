@@ -1,0 +1,608 @@
+{
+ "authority": "data_only_untrusted",
+ "range": "24h",
+ "kpi": {
+  "requests": 18420,
+  "requests_delta_pct": 8,
+  "requests_now_per_min": 14,
+  "p50_ms": 1900,
+  "p50_delta_ms": -200,
+  "p95_ms": 6200,
+  "success_rate": 99.1,
+  "success_rate_delta_pp": -0.6,
+  "failures": 158,
+  "cost_usd": 42.6,
+  "cost_delta_pct": 6,
+  "budget_usd": 60
+ },
+ "series": {
+  "points": [
+   {
+    "t": "2026-10-12T09:41:05+09:00",
+    "traffic": 18,
+    "p50": 1900,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T10:34:25+09:00",
+    "traffic": 20,
+    "p50": 1800,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T11:27:45+09:00",
+    "traffic": 17,
+    "p50": 1800,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T12:21:05+09:00",
+    "traffic": 15,
+    "p50": 2000,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T13:14:25+09:00",
+    "traffic": 16,
+    "p50": 1700,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T14:07:45+09:00",
+    "traffic": 13,
+    "p50": 1800,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T15:01:05+09:00",
+    "traffic": 12,
+    "p50": 2000,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T15:54:25+09:00",
+    "traffic": 11,
+    "p50": 1800,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T16:47:45+09:00",
+    "traffic": 13,
+    "p50": 1700,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T17:41:05+09:00",
+    "traffic": 10,
+    "p50": 2000,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T18:34:25+09:00",
+    "traffic": 9,
+    "p50": 1800,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T19:27:45+09:00",
+    "traffic": 8,
+    "p50": 1800,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T20:21:05+09:00",
+    "traffic": 9,
+    "p50": 1900,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T21:14:25+09:00",
+    "traffic": 11,
+    "p50": 1800,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T22:07:45+09:00",
+    "traffic": 12,
+    "p50": 1800,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T23:01:05+09:00",
+    "traffic": 14,
+    "p50": 2000,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-12T23:54:25+09:00",
+    "traffic": 13,
+    "p50": 1700,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T00:47:45+09:00",
+    "traffic": 15,
+    "p50": 3100,
+    "p95": 11800,
+    "success_rate": 96.0,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T01:41:05+09:00",
+    "traffic": 17,
+    "p50": 2000,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T02:34:25+09:00",
+    "traffic": 16,
+    "p50": 1800,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T03:27:45+09:00",
+    "traffic": 19,
+    "p50": 1700,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T04:21:05+09:00",
+    "traffic": 21,
+    "p50": 2000,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T05:14:25+09:00",
+    "traffic": 20,
+    "p50": 1800,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T06:07:45+09:00",
+    "traffic": 24,
+    "p50": 1800,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T07:01:05+09:00",
+    "traffic": 19,
+    "p50": 1900,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T07:54:25+09:00",
+    "traffic": 22,
+    "p50": 1800,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T08:47:45+09:00",
+    "traffic": 21,
+    "p50": 1800,
+    "p95": 8200,
+    "success_rate": 99.4,
+    "cost": 1.5
+   },
+   {
+    "t": "2026-10-13T09:41:05+09:00",
+    "traffic": 20,
+    "p50": 2000,
+    "p95": 8700,
+    "success_rate": 99.4,
+    "cost": 1.5
+   }
+  ],
+  "incident": {
+   "index": 17,
+   "label": "03:12 GLM-5 장애"
+  }
+ },
+ "families": [
+  {
+   "family": "CLAUDE",
+   "share": 38.3,
+   "requests": 7000
+  },
+  {
+   "family": "GPT",
+   "share": 27.0,
+   "requests": 4970
+  },
+  {
+   "family": "GLM",
+   "share": 14.0,
+   "requests": 2580,
+   "note": "오류 늘어 비중 줄임"
+  },
+  {
+   "family": "QWEN",
+   "share": 9.0,
+   "requests": 1660
+  },
+  {
+   "family": "OPENCODE",
+   "share": 7.0,
+   "requests": 1290
+  },
+  {
+   "family": "GEMINI",
+   "share": 5.0,
+   "requests": 920
+  }
+ ],
+ "models": [
+  {
+   "id": "claude-sonnet-5-5",
+   "name": "Claude Sonnet 5.5",
+   "family": "CLAUDE",
+   "provider": "Anthropic",
+   "requests": 4300,
+   "p50_ms": 1600,
+   "p95_ms": 4800,
+   "success_rate": 99.8,
+   "cost_usd": 12.9,
+   "status": "ok"
+  },
+  {
+   "id": "claude-opus-5-5",
+   "name": "Claude Opus 5.5",
+   "family": "CLAUDE",
+   "provider": "Anthropic",
+   "requests": 1150,
+   "p50_ms": 4900,
+   "p95_ms": 14100,
+   "success_rate": 99.6,
+   "cost_usd": 9.4,
+   "status": "ok"
+  },
+  {
+   "id": "claude-haiku-4-5",
+   "name": "Claude Haiku 4.5",
+   "family": "CLAUDE",
+   "provider": "Anthropic",
+   "requests": 1550,
+   "p50_ms": 900,
+   "p95_ms": 2400,
+   "success_rate": 99.9,
+   "cost_usd": 1.1,
+   "status": "ok"
+  },
+  {
+   "id": "gpt-5-5",
+   "name": "GPT-5.5",
+   "family": "GPT",
+   "provider": "OpenAI",
+   "requests": 3100,
+   "p50_ms": 2200,
+   "p95_ms": 6900,
+   "success_rate": 99.7,
+   "cost_usd": 8.1,
+   "status": "ok"
+  },
+  {
+   "id": "gpt-5-5-mini",
+   "name": "GPT-5.5 mini",
+   "family": "GPT",
+   "provider": "OpenAI",
+   "requests": 1870,
+   "p50_ms": 1000,
+   "p95_ms": 2900,
+   "success_rate": 99.8,
+   "cost_usd": 0.7,
+   "status": "ok"
+  },
+  {
+   "id": "glm-5",
+   "name": "GLM-5",
+   "family": "GLM",
+   "provider": "Z.ai",
+   "requests": 2580,
+   "p50_ms": 2400,
+   "p95_ms": 9800,
+   "success_rate": 96.3,
+   "cost_usd": 1.6,
+   "status": "watch"
+  },
+  {
+   "id": "qwen3-coder",
+   "name": "Qwen3 Coder",
+   "family": "QWEN",
+   "provider": "Alibaba Cloud",
+   "requests": 1660,
+   "p50_ms": 1800,
+   "p95_ms": 5600,
+   "success_rate": 99.0,
+   "cost_usd": 1.1,
+   "status": "ok"
+  },
+  {
+   "id": "opencode-zen",
+   "name": "OpenCode Zen",
+   "family": "OPENCODE",
+   "provider": "OpenCode",
+   "requests": 1290,
+   "p50_ms": 3100,
+   "p95_ms": 12400,
+   "success_rate": 98.9,
+   "cost_usd": 2.3,
+   "status": "slow"
+  },
+  {
+   "id": "gemini-3-pro",
+   "name": "Gemini 3 Pro",
+   "family": "GEMINI",
+   "provider": "Google",
+   "requests": 920,
+   "p50_ms": 1700,
+   "p95_ms": 5200,
+   "success_rate": 99.7,
+   "cost_usd": 5.4,
+   "status": "ok"
+  }
+ ],
+ "events": [
+  {
+   "kind": "recovery",
+   "family": "GLM",
+   "title": "GLM-5가 정상으로 돌아왔어요",
+   "detail": "오류율 0.4% · 원래 비중으로 복귀",
+   "at": "2026-10-13T03:41:00+09:00"
+  },
+  {
+   "kind": "incident",
+   "family": "GLM",
+   "title": "GLM-5 → Claude Haiku로 우회",
+   "detail": "오류율 18%가 2분 넘게 이어져 자동 전환",
+   "at": "2026-10-13T03:14:00+09:00"
+  },
+  {
+   "kind": "incident",
+   "family": "GLM",
+   "title": "GLM-5 오류 급증 (18%)",
+   "detail": "5xx 응답이 늘어 요청 26건 실패",
+   "at": "2026-10-13T03:12:00+09:00"
+  },
+  {
+   "kind": "policy",
+   "family": "CLAUDE",
+   "title": "코딩 요청 비중 Claude 45 → 50%",
+   "detail": "Alex가 정책을 고쳤어요",
+   "at": "2026-10-12T22:05:00+09:00"
+  },
+  {
+   "kind": "incident",
+   "family": "OPENCODE",
+   "title": "OpenCode Zen 키 만료 임박",
+   "detail": "7일 뒤 만료 · 키를 새로 넣어 주세요",
+   "at": "2026-10-12T17:30:00+09:00"
+  },
+  {
+   "kind": "recovery",
+   "title": "Gemini 3 Pro 키 다시 연결",
+   "detail": "키를 새로 넣었어요",
+   "at": "2026-10-12T14:20:00+09:00"
+  },
+  {
+   "kind": "policy",
+   "title": "라우팅 모델 켬",
+   "detail": "qwen3-coder",
+   "at": "2026-10-12T11:02:00+09:00"
+  }
+ ],
+ "policy": {
+  "auto_routing": true,
+  "classifier": "clef-flash",
+  "classifier_ms": 400,
+  "auto_failover": true,
+  "last_decision": "빌드·코딩 → CLAUDE",
+  "default_model": "",
+  "revision": 7,
+  "failover": {
+   "error_rate_pct": 5,
+   "p95_ms": 10000,
+   "order": [
+    "gpt-5-5",
+    "glm-5"
+   ]
+  }
+ },
+ "gateway": {
+  "main": {
+   "requests": 1240,
+   "failures": 9,
+   "input_tokens": 18400000,
+   "output_tokens": 920000,
+   "cost_usd": 21.4,
+   "estimated": true
+  },
+  "side": {
+   "requests": 410,
+   "failures": 1,
+   "input_tokens": 1900000,
+   "output_tokens": 120000,
+   "cost_usd": 1.8,
+   "estimated": true,
+   "by_side": {
+    "compaction": 38,
+    "query": 214,
+    "auxiliary": 120,
+    "fork": 30,
+    "side_reply": 8
+   }
+  },
+  "turns": [
+   {
+    "session_id": "7f3c2a91e4b04d55",
+    "turn_seq": 14,
+    "at": "2026-10-14T05:58:10Z",
+    "main_calls": 3,
+    "side_calls": 2,
+    "calls": [
+     {
+      "at": "2026-10-14T05:55:02Z",
+      "model": "anthropic/claude-sonnet-5.5",
+      "ok": true,
+      "latency_ms": 4200,
+      "input_tokens": 38000,
+      "output_tokens": 900,
+      "cost_usd": 0.13
+     },
+     {
+      "at": "2026-10-14T05:55:09Z",
+      "model": "anthropic/claude-haiku-4.5",
+      "ok": true,
+      "latency_ms": 800,
+      "input_tokens": 1200,
+      "output_tokens": 40,
+      "cost_usd": 0.001,
+      "side": "query"
+     },
+     {
+      "at": "2026-10-14T05:56:30Z",
+      "model": "anthropic/claude-sonnet-5.5",
+      "ok": false,
+      "latency_ms": 12000,
+      "input_tokens": 39000,
+      "output_tokens": 0,
+      "cost_usd": 0.12,
+      "error": "upstream 529 overloaded"
+     },
+     {
+      "at": "2026-10-14T05:57:01Z",
+      "model": "deepseek/deepseek-v4",
+      "ok": true,
+      "latency_ms": 3900,
+      "input_tokens": 39500,
+      "output_tokens": 1200,
+      "cost_usd": 0.02
+     },
+     {
+      "at": "2026-10-14T05:58:10Z",
+      "model": "anthropic/claude-haiku-4.5",
+      "ok": true,
+      "latency_ms": 1100,
+      "input_tokens": 2400,
+      "output_tokens": 80,
+      "cost_usd": 0.002,
+      "side": "auxiliary"
+     }
+    ]
+   },
+   {
+    "session_id": "7f3c2a91e4b04d55",
+    "turn_seq": 13,
+    "at": "2026-10-14T05:41:00Z",
+    "main_calls": 2,
+    "side_calls": 1,
+    "calls": [
+     {
+      "at": "2026-10-14T05:39:40Z",
+      "model": "anthropic/claude-sonnet-5.5",
+      "ok": true,
+      "latency_ms": 3100,
+      "input_tokens": 36000,
+      "output_tokens": 600,
+      "cost_usd": 0.11
+     },
+     {
+      "at": "2026-10-14T05:40:20Z",
+      "model": "anthropic/claude-sonnet-5.5",
+      "ok": true,
+      "latency_ms": 2800,
+      "input_tokens": 36600,
+      "output_tokens": 500,
+      "cost_usd": 0.11
+     },
+     {
+      "at": "2026-10-14T05:41:00Z",
+      "model": "anthropic/claude-haiku-4.5",
+      "ok": true,
+      "latency_ms": 5200,
+      "input_tokens": 90000,
+      "output_tokens": 2000,
+      "cost_usd": 0.03,
+      "side": "compaction"
+     }
+    ]
+   },
+   {
+    "session_id": "a04d19c2b7e8f310",
+    "turn_seq": 3,
+    "at": "2026-10-14T05:20:00Z",
+    "main_calls": 1,
+    "side_calls": 1,
+    "calls": [
+     {
+      "at": "2026-10-14T05:19:30Z",
+      "model": "openai/gpt-5.5",
+      "ok": true,
+      "latency_ms": 2600,
+      "input_tokens": 12000,
+      "output_tokens": 700,
+      "cost_usd": 0.04
+     },
+     {
+      "at": "2026-10-14T05:20:00Z",
+      "model": "anthropic/claude-haiku-4.5",
+      "ok": true,
+      "latency_ms": 700,
+      "input_tokens": 900,
+      "output_tokens": 30,
+      "cost_usd": 0.001,
+      "side": "query"
+     }
+    ]
+   }
+  ]
+ }
+}

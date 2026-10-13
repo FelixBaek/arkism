@@ -1,0 +1,18 @@
+{
+ "id": "mc2",
+ "text": "Figma 인스턴스 교체 뒤 문구를 비교해 확인한다.",
+ "kind": "lesson",
+ "status": "candidate",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-14T04:02:00Z",
+ "updated_at": "2026-10-14T04:02:00Z",
+ "tags": [
+  "event_id:codex:s9"
+ ],
+ "created_by_type": "agent"
+}

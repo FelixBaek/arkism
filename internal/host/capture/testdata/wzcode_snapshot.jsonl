@@ -1,0 +1,12 @@
+{"session": {"id": "s", "directory": "C:/repo", "parent_id": null, "time_updated": 1000}}
+{"table": "message", "record": {"id": "u1", "session_id": "s", "sequence": 100000.0, "data": "{\"role\": \"user\", \"semantics\": {\"origin\": \"real_user\"}, \"cost\": 2.5}"}}
+{"table": "part", "record": {"id": "u1-part", "message_id": "u1", "data": "{\"type\": \"text\", \"text\": \"\ud55c\uae00 \uc9c8\ubb38\"}"}}
+{"table": "message", "record": {"id": "a1", "session_id": "s", "sequence": 100000.0, "data": "{\"role\":\"assistant\",\"time\":{\"completed\":1},\"anchor\":{\"turnId\":\"t-a1\",\"historyRoundCount\":1,\"orderedMessageIds\":[\"u1\",\"a1\"],\"boundaryMessageId\":\"a1\",\"goalBoundary\":{\"kind\":\"none\"}},\"note\":\"\ub05d\"}"}}
+{"table": "part", "record": {"id": "a1-part", "message_id": "a1", "data": "{\"type\": \"text\", \"text\": \"\ub2f5 a1\"}"}}
+{"table": "message", "record": {"id": "a2", "session_id": "s", "sequence": 100000.0, "data": "{\"role\":\"assistant\",\"time\":{\"completed\":1},\"anchor\":{\"turnId\":\"t-a2\",\"historyRoundCount\":1,\"orderedMessageIds\":[\"u1\",\"a2\"],\"boundaryMessageId\":\"a2\",\"goalBoundary\":{\"kind\":\"none\"}},\"note\":\"\ub05d\"}"}}
+{"table": "part", "record": {"id": "a2-part", "message_id": "a2", "data": "{\"type\": \"text\", \"text\": \"\ub2f5 a2\"}"}}
+{"table": "message", "record": {"id": "u2", "session_id": "s", "sequence": 100000.0, "data": "{\"role\": \"user\", \"semantics\": {\"origin\": \"real_user\"}}"}}
+{"table": "part", "record": {"id": "u2-part", "message_id": "u2", "data": "{\"type\": \"text\", \"text\": \"new\"}"}}
+{"table": "part", "record": {"id": "u2-synthetic", "message_id": "u2", "data": "{\"type\": \"text\", \"text\": \"x\", \"synthetic\": true}"}}
+{"table": "message", "record": {"id": "r1", "session_id": "s", "sequence": 100000.0, "data": "{\"role\": \"user\", \"semantics\": {\"origin\": \"agent_runtime\"}}"}}
+{"table": "part", "record": {"id": "r1-part", "message_id": "r1", "data": "{\"type\": \"text\", \"text\": \"runtime\"}"}}

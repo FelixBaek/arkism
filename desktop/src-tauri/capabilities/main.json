@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "메인 창이 Arkism API 호출 명령을 씁니다.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

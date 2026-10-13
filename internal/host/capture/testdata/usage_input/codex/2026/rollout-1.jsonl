@@ -1,0 +1,12 @@
+{"type": "session_meta", "timestamp": "2026-10-08T14:00:00Z", "payload": {"id": "c1", "cwd": "/opt/arkism/proj"}}
+{"type": "turn_context", "timestamp": "2026-10-08T14:00:01Z", "payload": {"model": "gpt-6.1-sol"}}
+{"type": "event_msg", "timestamp": "2026-10-08T14:00:01Z", "payload": {"type": "user_message"}}
+{"type": "response_item", "timestamp": "2026-10-08T14:00:02Z", "payload": {"type": "function_call", "name": "shell"}}
+{"type": "response_item", "timestamp": "2026-10-08T14:00:03Z", "payload": {"type": "custom_tool_call"}}
+{"type": "event_msg", "timestamp": "2026-10-08T14:00:05Z", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 100, "cached_input_tokens": 40, "output_tokens": 10}}}}
+{"type": "event_msg", "timestamp": "2026-10-08T14:00:06Z", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 100, "cached_input_tokens": 40, "output_tokens": 10}}}}
+{"type": "event_msg", "timestamp": "2026-10-08T14:00:07Z", "payload": {"type": "token_count", "info": null}}
+{"type": "event_msg", "timestamp": "2026-10-08T15:30:00Z", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 300, "cached_input_tokens": 200, "output_tokens": 30}}}}
+{"type": "event_msg", "timestamp": "2026-10-08T15:31:00Z", "payload": {"type": "thread_settings_applied", "thread_settings": {"model": "gpt-6.2"}}}
+{"type": "event_msg", "timestamp": "2026-10-08T15:32:00Z", "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 50, "cached_input_tokens": 60, "output_tokens": 5}}}}
+{"type": "event_msg", "timestamp": null, "payload": {"type": "token_count", "info": {"total_token_usage": {"input_tokens": 999, "cached_input_tokens": 0, "output_tokens": 999}}}}

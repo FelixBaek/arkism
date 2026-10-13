@@ -1,0 +1,16 @@
+{
+ "id": "r3",
+ "revision": 1,
+ "relations": [
+  {
+   "collection": "memories",
+   "id": "o3",
+   "revision": 1
+  },
+  {
+   "collection": "memory_candidates",
+   "id": "k3",
+   "revision": 1
+  }
+ ]
+}

@@ -1,0 +1,50 @@
+/* GALLERY 삭제·보관함 (gallery-delete.js). Nocturne has no red: 삭제 uses the confirm popups' amber treatment. */
+.gallery-mode .btn.danger.gd-delete, .gallery-mode .gd-archive .btn.danger, .gallery-mode .gd-bulk .btn.danger,
+.gallery-mode .v4g-foot .btn.ghost.gd-delete {
+  border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-amber);
+}
+.gallery-mode .btn.danger:disabled { opacity: .5; cursor: default; }
+.gallery-mode .v4g-foot .btn.ghost.gd-delete:hover { background: var(--nc-amber-bg); filter: brightness(1.08); }
+
+/* Card corner shortcut */
+.gallery-mode .gd-card { position: relative; }
+.gd-card-del {
+  position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 28px; height: 28px;
+  border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); color: var(--nc-amber);
+  opacity: 0; transition: opacity .12s; cursor: pointer;
+}
+.gd-card-del .icon { width: 15px; height: 15px; }
+.gd-card:hover .gd-card-del, .gd-card:focus-within .gd-card-del, .gd-card-del:focus-visible { opacity: 1; }
+.gd-card-del:hover { background: var(--nc-amber-bg); border-color: transparent; }
+
+/* 보관함 toggle */
+.gallery-mode .chips .chip.gd-archive-chip { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.gallery-mode .chips .chip.gd-archive-chip .icon, .gallery-mode .btn.gd-archive-btn .icon { display: inline-block; width: 14px; height: 14px; color: currentColor; }
+.gallery-mode .btn.gd-archive-btn.active { background: var(--nc-raised); color: var(--nc-accent); }
+
+/* 디자인 시스템 고르기 */
+.gd-bulk { display: flex; gap: 8px; align-items: center; }
+.ds-card.gd-pickable { position: relative; }
+.gd-check {
+  position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 22px; height: 22px;
+  border: 1px solid var(--nc-quiet); border-radius: 6px; background: var(--nc-surface); color: transparent;
+}
+.gd-check .icon { width: 14px; height: 14px; }
+.ds-card.gd-picked { border-color: var(--nc-accent); background: var(--nc-subtle); }
+.ds-card.gd-picked .gd-check { border-color: transparent; background: var(--nc-action); color: var(--nc-on-accent); }
+.ds-card.gd-picked .ds-num { color: var(--nc-accent); }
+
+/* 보관함 list */
+.gd-archive { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 16px; }
+.gd-archive-head { display: flex; flex-direction: column; gap: 6px; }
+.gd-archive-head h2 { margin: 0; font: 500 16px/1.5 var(--sans); color: var(--nc-text); }
+.gd-archive-head h2 small { margin-left: 8px; font: 400 12px var(--sans); color: var(--nc-quiet); }
+.gd-archive-head p { margin: 0; font: 400 13px/1.5 var(--sans); color: var(--nc-muted); }
+.gd-archive-head .actions { display: flex; gap: 8px; margin-top: 6px; }
+.gd-archive-list { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); }
+.gd-archive-row { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-top: 1px solid var(--nc-line); }
+.gd-archive-row:first-child { border-top: 0; }
+.gd-archive-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gd-archive-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 14px/1.5 var(--sans); color: var(--nc-text); }
+.gd-archive-text span { font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
+.gd-archive-row .actions { display: flex; gap: 8px; }

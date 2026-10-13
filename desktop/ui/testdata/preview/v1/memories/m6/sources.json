@@ -1,0 +1,15 @@
+{
+ "authority": "data_only_untrusted",
+ "memory": {
+  "id": "m6",
+  "revision": 1
+ },
+ "sources": [
+  {
+   "origin_product": "claude_code",
+   "collected_at": "2026-10-12T08:16:34.299802Z",
+   "excerpt": "Orbit 화면 아이콘은 Feather 세트 하나로 통일한다.",
+   "archive_messages": []
+  }
+ ]
+}

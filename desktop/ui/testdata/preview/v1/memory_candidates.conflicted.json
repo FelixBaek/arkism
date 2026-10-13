@@ -1,0 +1,80 @@
+{
+ "items": [
+  {
+   "id": "k1",
+   "text": "출시일은 2026년 10월 9일(금)로 정했다. 10월 15일이 아니다.",
+   "kind": "decision",
+   "status": "conflicted",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-10-13T12:06:34.299802Z",
+   "updated_at": "2026-10-13T12:06:34.299802Z",
+   "tags": [
+    "event_id:codex:s10"
+   ],
+   "created_by_type": "agent",
+   "conflict_id": "r1"
+  },
+  {
+   "id": "k2",
+   "text": "Orbit 검색은 별도 검색 서버로 옮긴다.",
+   "kind": "decision",
+   "status": "conflicted",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-10-13T07:16:34.299802Z",
+   "updated_at": "2026-10-13T07:16:34.299802Z",
+   "tags": [
+    "event_id:codex:s10"
+   ],
+   "created_by_type": "agent",
+   "conflict_id": "r2"
+  },
+  {
+   "id": "k3",
+   "text": "Orbit 아이콘은 Lucide 세트로 바꾼다.",
+   "kind": "decision",
+   "status": "conflicted",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-10-12T13:16:34.299802Z",
+   "updated_at": "2026-10-12T13:16:34.299802Z",
+   "tags": [
+    "event_id:codex:s10"
+   ],
+   "created_by_type": "agent",
+   "conflict_id": "r3"
+  },
+  {
+   "id": "k4",
+   "text": "Orbit PR은 리뷰 승인을 두 번 받아야 병합한다.",
+   "kind": "procedural",
+   "status": "conflicted",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-10-11T13:16:34.299802Z",
+   "updated_at": "2026-10-11T13:16:34.299802Z",
+   "tags": [
+    "event_id:codex:s10"
+   ],
+   "created_by_type": "agent",
+   "conflict_id": "r4"
+  }
+ ]
+}

@@ -1,0 +1,1 @@
+{ "authority": "data_only_untrusted", "group": "group/coding", "id": "glm-5", "model": "glm-5", "provider": "zai", "family": "GLM", "decision": "clef", "classifier_ms": 420, "fallbacks": ["claude-opus-5-5", "qwen3-coder"] }

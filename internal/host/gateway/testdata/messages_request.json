@@ -1,0 +1,1892 @@
+[
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"auto\", \"disable_parallel_tool_use\": true}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"tool_choice\": \"auto\", \"parallel_tool_calls\": false, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"auto\", \"disable_parallel_tool_use\": false}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"tool_choice\": \"auto\", \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"any\", \"disable_parallel_tool_use\": true}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"tool_choice\": \"required\", \"parallel_tool_calls\": false, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"any\", \"disable_parallel_tool_use\": false}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"tool_choice\": \"required\", \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"none\", \"disable_parallel_tool_use\": true}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"tool_choice\": \"none\", \"parallel_tool_calls\": false, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"none\", \"disable_parallel_tool_use\": false}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"tool_choice\": \"none\", \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"tool\", \"disable_parallel_tool_use\": true, \"name\": \"lookup\"}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"tool_choice\": {\"type\": \"function\", \"function\": {\"name\": \"lookup\"}}, \"parallel_tool_calls\": false, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"tool\", \"disable_parallel_tool_use\": false, \"name\": \"lookup\"}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"tool_choice\": {\"type\": \"function\", \"function\": {\"name\": \"lookup\"}}, \"parallel_tool_calls\": true, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tool_choice\": {\"type\": \"none\", \"disable_parallel_tool_use\": true}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tool_choice\": \"none\", \"parallel_tool_calls\": false, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_all_choices_preserve_explicit_parallel_false_and_true",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"auto\"}}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"tool_choice\": \"auto\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_cache_hints_only_ignore_known_inert_values",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"\\u539f\\u6587\", \"cache_control\": {\"type\": \"ephemeral\"}}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"原文\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_cache_hints_only_ignore_known_inert_values",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"\\u539f\\u6587\", \"cache_control\": {\"type\": \"ephemeral\", \"ttl\": \"5m\"}}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"原文\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_cache_hints_only_ignore_known_inert_values",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"\\u539f\\u6587\", \"cache_control\": {\"type\": \"ephemeral\", \"ttl\": \"1h\"}}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"原文\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_cache_hints_only_ignore_known_inert_values",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"system\": [{\"type\": \"text\", \"text\": \"secret\", \"cache_control\": null}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_cache_hints_only_ignore_known_inert_values",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"system\": [{\"type\": \"text\", \"text\": \"secret\", \"cache_control\": {\"type\": \"other\"}}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_cache_hints_only_ignore_known_inert_values",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"system\": [{\"type\": \"text\", \"text\": \"secret\", \"cache_control\": {\"type\": \"ephemeral\", \"ttl\": \"forever\"}}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_cache_hints_only_ignore_known_inert_values",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"system\": [{\"type\": \"text\", \"text\": \"secret\", \"cache_control\": {\"type\": \"ephemeral\", \"semantic_flag\": true}}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"type\": \"web_search_20250305\", \"name\": \"web_search\"}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}, \"strict\": true}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://example.invalid/a.png\"}}]}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"document\", \"source\": {}}]}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"system\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://example.invalid/a.png\"}}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://example.invalid/a.png\"}}]}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://example.invalid/a.png\"}}], \"is_error\": true}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"base64\", \"media_type\": \"image/svg+xml\", \"data\": \"aW1hZ2U=\"}}]}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": {\"nested\": \"json\"}, \"is_error\": true}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": 1, \"is_error\": true}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": null, \"is_error\": true}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": [[{\"type\": \"text\", \"text\": \"nested\"}]], \"is_error\": true}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_complex_tools_results_and_images_fail_closed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": \"\\uacb0\\uacfc\", \"is_error\": \"true\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_error_results_keep_nested_json_text_verbatim",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": \" {\\\"error\\\":false,\\\"nested\\\":{\\\"content\\\":\\\"\\uc6d0\\ubb38\\\",\\\"is_error\\\":false},\\\"n\\\":1e3} \\n\", \"is_error\": true}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\", \"is_error\": false}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"실행\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}, {\"id\": \"call_b\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_b\", \"content\": \"[tool_result is_error=true]\\n {\\\"error\\\":false,\\\"nested\\\":{\\\"content\\\":\\\"원문\\\",\\\"is_error\\\":false},\\\"n\\\":1e3} \\n\"}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"결과\"}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_error_results_keep_nested_json_text_verbatim",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": [{\"type\": \"text\", \"text\": \" {\\\"error\\\":false,\\\"nested\\\":{\\\"content\\\":\\\"\\uc6d0\\ubb38\\\",\\\"is_error\\\":false},\\\"n\\\":1e3} \\n\"}, {\"type\": \"text\", \"text\": \"\\ucd94\\uac00\\n\\uc6d0\\ubb38\"}], \"is_error\": true}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\", \"is_error\": false}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"실행\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}, {\"id\": \"call_b\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_b\", \"content\": [{\"type\": \"text\", \"text\": \"[tool_result is_error=true]\"}, {\"type\": \"text\", \"text\": \" {\\\"error\\\":false,\\\"nested\\\":{\\\"content\\\":\\\"원문\\\",\\\"is_error\\\":false},\\\"n\\\":1e3} \\n\"}, {\"type\": \"text\", \"text\": \"추가\\n원문\"}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"결과\"}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_error_results_keep_nested_json_text_verbatim",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": \"\", \"is_error\": true}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\", \"is_error\": false}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"실행\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}, {\"id\": \"call_b\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_b\", \"content\": \"[tool_result is_error=true]\\n\"}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"결과\"}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_error_results_keep_nested_json_text_verbatim",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": [], \"is_error\": true}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\", \"is_error\": false}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"실행\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}, {\"id\": \"call_b\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_b\", \"content\": [{\"type\": \"text\", \"text\": \"[tool_result is_error=true]\"}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"결과\"}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"base64\", \"media_type\": \"image/png\", \"data\": \"%%%secret\"}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"base64\", \"media_type\": \"image/png\", \"data\": \"\"}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://user:secret@example.invalid/a.png\"}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://example.invalid:bad/a.png\"}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://[invalid/a.png\"}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://example.invalid/with space\"}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"data:image/png;base64,aW1hZ2U=\"}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"file:///secret\"}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": []}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": null}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"base64\", \"media_type\": \"image/png\", \"data\": \"aW1hZ2U=\"}}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,aW1hZ2U=\"}}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"base64\", \"media_type\": \"image/jpeg\", \"data\": \"aW1hZ2U=\"}}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/jpeg;base64,aW1hZ2U=\"}}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"base64\", \"media_type\": \"image/gif\", \"data\": \"aW1hZ2U=\"}}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/gif;base64,aW1hZ2U=\"}}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_images_validate_without_fetching",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"base64\", \"media_type\": \"image/webp\", \"data\": \"aW1hZ2U=\"}}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/webp;base64,aW1hZ2U=\"}}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"null"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"[]"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": [], \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": null}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": []}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [null]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": [], \"content\": \"x\"}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"system\", \"content\": \"x\"}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": []}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [null]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"system\": null}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"system\": [{\"type\": \"text\", \"text\": 1}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stream\": 1}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": true, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 0, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 1.0, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"temperature\": true}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"temperature\": 1.1}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"top_p\": -1}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"top_p\": null}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stop_sequences\": \"stop\"}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stop_sequences\": [null]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stop_sequences\": [\"\"]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stop_sequences\": [\"a\", \"a\", \"a\", \"a\", \"a\"]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_request_shapes_and_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"stop_sequences\": []}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"stop\": [], \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_tool_argument_json_shapes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": null}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_tool_argument_json_shapes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": []}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_tool_argument_json_shapes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": \"{}\"}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_tool_argument_json_shapes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": 1}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_tool_argument_json_shapes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"x\": NaN}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_tool_argument_json_shapes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"x\": Infinity}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_invalid_tool_argument_json_shapes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"x\": \"\\ud800\"}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_system_string_stream_false_and_no_invented_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"system\": \"\\uaddc\\uce59\", \"stream\": false}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"stream\": false, \"messages\": [{\"role\": \"system\", \"content\": \"규칙\"}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_system_string_stream_false_and_no_invented_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_system_string_stream_false_and_no_invented_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"system\": []}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"system\", \"content\": \"\"}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"안녕\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_system_string_stream_false_and_no_invented_options",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": []}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"실행\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}, {\"id\": \"call_b\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_b\", \"content\": \"\"}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"결과\"}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_text_system_images_options_and_independent_schema",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"\\uc0ac\\uc9c4 \\uc804\"}, {\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://example.invalid/a.png\"}}, {\"type\": \"image\", \"source\": {\"type\": \"base64\", \"media_type\": \"image/png\", \"data\": \"aW1hZ2U=\"}}, {\"type\": \"text\", \"text\": \"\\uc0ac\\uc9c4 \\ud6c4\"}]}, {\"role\": \"assistant\", \"content\": \"\\ud655\\uc778\"}, {\"role\": \"user\", \"content\": \"\\uc9c4\\ud589\"}], \"system\": [{\"type\": \"text\", \"text\": \"\\uaddc\\uce59\", \"cache_control\": {\"type\": \"ephemeral\", \"ttl\": \"1h\"}}, {\"type\": \"text\", \"text\": \"\\uc9c0\\uce68\"}], \"tools\": [{\"name\": \"lookup\", \"description\": \"\\uc870\\ud68c\", \"input_schema\": {\"type\": \"object\", \"$defs\": {\"value\": {\"type\": \"string\", \"pattern\": \"^[^\\\\0]*$\"}}, \"properties\": {\"value\": {\"$ref\": \"#/$defs/value\"}}, \"additionalProperties\": false, \"required\": [\"value\"]}, \"cache_control\": {\"type\": \"ephemeral\", \"ttl\": \"1h\"}}], \"tool_choice\": {\"type\": \"tool\", \"name\": \"lookup\", \"disable_parallel_tool_use\": true}, \"temperature\": 0, \"top_p\": 0.9, \"stop_sequences\": [\"\\ub05d\", \"STOP\"], \"stream\": true}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"temperature\": 0, \"top_p\": 0.9, \"stop\": [\"끝\", \"STOP\"], \"stream\": true, \"stream_options\": {\"include_usage\": true}, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"$defs\": {\"value\": {\"type\": \"string\", \"pattern\": \"^[^\\\\0]*$\"}}, \"properties\": {\"value\": {\"$ref\": \"#/$defs/value\"}}, \"additionalProperties\": false, \"required\": [\"value\"]}, \"description\": \"조회\"}}], \"tool_choice\": {\"type\": \"function\", \"function\": {\"name\": \"lookup\"}}, \"parallel_tool_calls\": false, \"messages\": [{\"role\": \"system\", \"content\": [{\"type\": \"text\", \"text\": \"규칙\"}, {\"type\": \"text\", \"text\": \"지침\"}]}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"사진 전\"}, {\"type\": \"image_url\", \"image_url\": {\"url\": \"https://example.invalid/a.png\"}}, {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,aW1hZ2U=\"}}, {\"type\": \"text\", \"text\": \"사진 후\"}]}, {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"확인\"}]}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"진행\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": null}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": {}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [null]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"bad name\", \"input_schema\": {}}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": []}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\"}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}, {\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}, \"description\": null}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": null}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": \"auto\"}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": []}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"tool\"}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"tool\", \"name\": \"unknown\"}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"auto\", \"name\": \"lookup\"}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"any\", \"disable_parallel_tool_use\": 0}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tool_choice\": {\"type\": \"auto\"}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tool_choice\": {\"type\": \"any\"}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tool_choice\": {\"type\": \"tool\", \"name\": \"lookup\"}}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_and_choice_validation",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}], \"tool_choice\": {\"type\": \"new-mode\"}}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"orphan\", \"content\": \"\\uacb0\\uacfc\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"interrupt\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": \"\\uacb0\\uacfc\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}, {\"type\": \"text\", \"text\": \"interrupt\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": \"\\uacb0\\uacfc\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"assistant\", \"content\": \"interrupt\"}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": \"\\uacb0\\uacfc\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": null, \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": null, \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": [], \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": [], \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": {}, \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": {}, \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": 1, \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": 1, \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_ids_are_unique_pending_and_completed",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_tool_order_and_id_pairing_across_turns",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"\\uc870\\ud68c\\ud569\\ub2c8\\ub2e4\"}, {\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": [{\"type\": \"text\", \"text\": \"\\ub458\"}, {\"type\": \"text\", \"text\": \"\\ub458 \\ub05d\"}]}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}, {\"type\": \"text\", \"text\": \"\\uacc4\\uc18d\"}]}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_c\", \"name\": \"lookup\", \"input\": {\"nested\": {\"x\": [1, false, null]}}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_c\", \"content\": \"\\uacb0\\uacfc\"}]}, {\"role\": \"assistant\", \"content\": \"\\uc644\\ub8cc\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}}]}"
+],
+"events": [
+[
+"out",
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"parameters\": {\"type\": \"object\", \"properties\": {}}}}], \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"실행\"}]}, {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"조회합니다\"}], \"tool_calls\": [{\"id\": \"call_a\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}, {\"id\": \"call_b\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"한글\\\":1}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_b\", \"content\": [{\"type\": \"text\", \"text\": \"둘\"}, {\"type\": \"text\", \"text\": \"둘 끝\"}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_a\", \"content\": \"결과\"}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"계속\"}]}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_c\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"nested\\\":{\\\"x\\\":[1,false,null]}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_c\", \"content\": \"결과\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"완료\"}]}]}"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unknown_fields_and_safe_error_codes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"metadata\": {\"secret\": \"api-token\"}}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unknown_fields_and_safe_error_codes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"top_k\": 3}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unknown_fields_and_safe_error_codes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tools\": [{\"name\": \"lookup\", \"input_schema\": {\"type\": \"object\", \"properties\": {}}, \"unknown\": \"secret\"}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unknown_fields_and_safe_error_codes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}], \"tool_choice\": {\"type\": \"none\", \"unknown\": \"secret\"}}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unknown_fields_and_safe_error_codes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"secret\", \"citations\": []}]}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unknown_fields_and_safe_error_codes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"secret\", \"unknown\": \"secret\"}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unknown_fields_and_safe_error_codes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": \"\\uacb0\\uacfc\", \"unknown\": \"secret\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unknown_fields_and_safe_error_codes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc2e4\\ud589\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}, \"unknown\": \"secret\"}, {\"type\": \"tool_use\", \"id\": \"call_b\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_b\", \"content\": \"\\uacb0\\uacfc\"}, {\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unknown_fields_and_safe_error_codes",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"secret\\ud800\", \"max_tokens\": 23, \"messages\": [{\"role\": \"user\", \"content\": \"\\uc548\\ub155\"}]}"
+],
+"events": [
+[
+"err",
+"invalid_request"
+]
+]
+},
+{
+"test": "messages_request.RequestTests.test_unrepresentable_assistant_order_is_rejected",
+"fn": "messages_request.to_chat",
+"limits": {},
+"args": [
+"{\"model\": \"selected-model\", \"max_tokens\": 23, \"messages\": [{\"role\": \"assistant\", \"content\": [{\"type\": \"tool_use\", \"id\": \"call_a\", \"name\": \"lookup\", \"input\": {\"\\ud55c\\uae00\": 1}}, {\"type\": \"text\", \"text\": \"\\ub3c4\\uad6c \\ub4a4 \\ud14d\\uc2a4\\ud2b8\"}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"call_a\", \"content\": \"\\uacb0\\uacfc\"}]}]}"
+],
+"events": [
+[
+"err",
+"unsupported_request"
+]
+]
+}
+]

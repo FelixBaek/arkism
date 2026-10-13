@@ -1,0 +1,19 @@
+{
+ "id": "o1",
+ "text": "출시일은 2026년 10월 15일이다.",
+ "kind": "decision",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-09-28T03:00:00Z",
+ "updated_at": "2026-09-28T03:00:00Z",
+ "tags": [
+  "basis:explicit_user",
+  "event_id:claude-code:s1"
+ ],
+ "created_by_type": "agent"
+}

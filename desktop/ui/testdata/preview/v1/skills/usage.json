@@ -1,0 +1,85 @@
+{
+ "items": [
+  {
+   "skill_id": "skill-writing-style",
+   "count": 64,
+   "last_used_at": "2026-10-13T06:00:00Z",
+   "by_runtime": {
+    "claude_code": 32,
+    "codex": 32
+   }
+  },
+  {
+   "skill_id": "skill-commit-and-push",
+   "count": 41,
+   "last_used_at": "2026-10-13T05:00:00Z",
+   "by_runtime": {
+    "claude_code": 20,
+    "codex": 21
+   }
+  },
+  {
+   "skill_id": "skill-code-review",
+   "count": 27,
+   "last_used_at": "2026-10-13T04:00:00Z",
+   "by_runtime": {
+    "claude_code": 13,
+    "codex": 14
+   }
+  },
+  {
+   "skill_id": "skill-cloudflare-deploy",
+   "count": 18,
+   "last_used_at": "2026-10-13T03:00:00Z",
+   "by_runtime": {
+    "claude_code": 9,
+    "codex": 9
+   }
+  },
+  {
+   "skill_id": "skill-release-notes",
+   "count": 12,
+   "last_used_at": "2026-10-13T02:00:00Z",
+   "by_runtime": {
+    "claude_code": 6,
+    "codex": 6
+   }
+  },
+  {
+   "skill_id": "skill-test-first",
+   "count": 9,
+   "last_used_at": "2026-10-13T01:00:00Z",
+   "by_runtime": {
+    "claude_code": 4,
+    "codex": 5
+   }
+  },
+  {
+   "skill_id": "skill-astro-blog-post",
+   "count": 7,
+   "last_used_at": "2026-10-13T01:00:00Z",
+   "by_runtime": {
+    "claude_code": 3,
+    "codex": 4
+   }
+  },
+  {
+   "skill_id": "skill-sql-migration",
+   "count": 4,
+   "last_used_at": "2026-10-13T01:00:00Z",
+   "by_runtime": {
+    "claude_code": 2,
+    "codex": 2
+   }
+  },
+  {
+   "skill_id": "skill-stripe-webhooks",
+   "count": 2,
+   "last_used_at": "2026-10-13T01:00:00Z",
+   "by_runtime": {
+    "claude_code": 1,
+    "codex": 1
+   }
+  }
+ ]
+}

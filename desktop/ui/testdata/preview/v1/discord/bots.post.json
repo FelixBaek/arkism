@@ -1,0 +1,10 @@
+{
+ "id": "bot-new",
+ "revision": 1,
+ "discord_bot": {
+  "name": "Arkism",
+  "state": "waiting_token",
+  "channels": [],
+  "missing": []
+ }
+}

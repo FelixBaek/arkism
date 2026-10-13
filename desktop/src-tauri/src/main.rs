@@ -1,0 +1,781 @@
+// Arkism desktop: shows the bundled UI and forwards its API calls.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpListener;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
+
+use sha2::{Digest, Sha256};
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
+
+mod gateway_token;
+mod runtime;
+mod ssh_tunnel;
+mod work_handoff;
+
+// Build-time settings, read from desktop/local.env by build-windows.sh. A build without them
+// talks to a local server and has no update feed. The WebView can read them (app_defaults)
+// but never change them, so it cannot point downloads elsewhere.
+const DEFAULT_SERVER: &str = match option_env!("ARKISM_DEFAULT_SERVER") {
+    Some(value) => value,
+    None => "http://127.0.0.1:8091",
+};
+const SSH_HOST: &str = match option_env!("ARKISM_SSH_HOST") {
+    Some(value) => value,
+    None => "localhost",
+};
+const FEED: Option<&str> = option_env!("ARKISM_UPDATE_FEED");
+// The scope a server connection opens first (until the user changes it in Settings > Advanced).
+const DEFAULT_WORKSPACE: &str = match option_env!("ARKISM_DEFAULT_WORKSPACE") {
+    Some(value) => value,
+    None => "default",
+};
+const DEFAULT_PROJECT: &str = match option_env!("ARKISM_DEFAULT_PROJECT") {
+    Some(value) => value,
+    None => "default",
+};
+
+#[derive(serde::Serialize)]
+struct Defaults {
+    server: &'static str,
+    ssh_host: &'static str,
+    updates: bool,
+    /// This build carries the built-in Arkism (Postgres and server) and can run without a server.
+    local: bool,
+    workspace: &'static str,
+    project: &'static str,
+}
+
+#[tauri::command]
+fn app_defaults(rt: tauri::State<Arc<runtime::Runtime>>) -> Defaults {
+    Defaults { server: DEFAULT_SERVER, ssh_host: SSH_HOST, updates: FEED.is_some(), local: rt.available(), workspace: DEFAULT_WORKSPACE, project: DEFAULT_PROJECT }
+}
+
+/// Starts (or reuses) the built-in Arkism and returns its address and owner token.
+#[tauri::command]
+async fn local_start(rt: tauri::State<'_, Arc<runtime::Runtime>>) -> Result<runtime::Started, String> {
+    let rt = Arc::clone(&rt);
+    let started = tauri::async_runtime::spawn_blocking({
+        let rt = Arc::clone(&rt);
+        move || rt.start()
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    // While the app runs (window or tray): right away, then every minute, what the server's timers
+    // would do — agents, sessions, skills and the capture queues.
+    static WORK: OnceLock<()> = OnceLock::new();
+    WORK.get_or_init(|| {
+        std::thread::spawn(move || {
+            for tick in 0u64.. {
+                rt.background_work(tick);
+                std::thread::sleep(Duration::from_secs(60));
+            }
+        });
+    });
+    Ok(started)
+}
+
+/// 설정 › 데이터: back up the built-in Arkism now.
+#[tauri::command]
+async fn local_backup(rt: tauri::State<'_, Arc<runtime::Runtime>>) -> Result<runtime::Backup, String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || rt.backup()).await.map_err(|e| e.to_string())?
+}
+
+/// The backups in `Documents/Arkism Backups`, newest first, and that folder.
+#[tauri::command]
+fn local_backups() -> Result<serde_json::Value, String> {
+    let folder = runtime::Runtime::backup_dir()?;
+    Ok(serde_json::json!({ "folder": folder, "backups": runtime::Runtime::backups()? }))
+}
+
+/// Replaces the built-in Arkism's data with a backup (the current data is backed up first).
+#[tauri::command]
+async fn local_restore(rt: tauri::State<'_, Arc<runtime::Runtime>>, name: String) -> Result<runtime::Restored, String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || rt.restore(&name)).await.map_err(|e| e.to_string())?
+}
+
+/// Deletes all of the built-in Arkism's data; backups stay.
+#[tauri::command]
+async fn local_erase(rt: tauri::State<'_, Arc<runtime::Runtime>>) -> Result<(), String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || rt.erase()).await.map_err(|e| e.to_string())?
+}
+
+/// 설정 › 고급 › 수집: whether Arkism captures, and the folders it leaves alone.
+#[tauri::command]
+fn capture_settings(rt: tauri::State<Arc<runtime::Runtime>>) -> Result<runtime::CaptureSettings, String> {
+    rt.capture_settings()
+}
+
+#[tauri::command]
+fn set_capture_settings(rt: tauri::State<Arc<runtime::Runtime>>, settings: runtime::CaptureSettings) -> Result<(), String> {
+    rt.set_capture_settings(&settings)
+}
+
+/// 설정 › 고급 › 데이터: whether the built-in Arkism searches by meaning (Ollama) or by keywords.
+#[tauri::command]
+fn search_mode(rt: tauri::State<Arc<runtime::Runtime>>) -> String {
+    rt.search_mode()
+}
+
+/// 설정 › 일반: whether Arkism starts (in the tray) when the user signs in.
+#[tauri::command]
+fn autostart_get(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn autostart_set(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let launcher = app.autolaunch();
+    if on { launcher.enable() } else { launcher.disable() }.map_err(|e| e.to_string())
+}
+
+/// Imports the agents' own memory files as review candidates (dry run: count only).
+#[tauri::command]
+async fn import_agent_memories(rt: tauri::State<'_, Arc<runtime::Runtime>>, dry_run: bool) -> Result<serde_json::Value, String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || rt.import_agent_memories(dry_run)).await.map_err(|e| e.to_string())?
+}
+
+/// 설정 › 고급 › 진단: checks (and with `fix`, safe repairs) of this PC's Arkism setup.
+#[tauri::command]
+async fn doctor(rt: tauri::State<'_, Arc<runtime::Runtime>>, fix: bool) -> Result<serde_json::Value, String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || rt.doctor(fix)).await.map_err(|e| e.to_string())?
+}
+
+/// 설정 › 고급 › 역할별 모델. The Cloudflare token never goes back to the page: only whether one is saved.
+#[tauri::command]
+fn model_roles(rt: tauri::State<Arc<runtime::Runtime>>) -> serde_json::Value {
+    let roles = rt.model_roles();
+    let mut v = serde_json::to_value(&roles).unwrap_or_default();
+    v["cloudflare_token"] = serde_json::Value::String(String::new());
+    v["cloudflare_token_saved"] = serde_json::Value::Bool(!roles.cloudflare_token.is_empty());
+    v
+}
+
+#[tauri::command]
+async fn set_model_roles(rt: tauri::State<'_, Arc<runtime::Runtime>>, roles: runtime::ModelRoles) -> Result<(), String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || rt.set_model_roles(roles)).await.map_err(|e| e.to_string())?
+}
+
+/// Opens the backup folder in the file manager.
+#[tauri::command]
+fn open_backups() -> Result<(), String> {
+    let folder = runtime::Runtime::backup_dir()?;
+    std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    let opener = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    std::process::Command::new(opener).arg(&folder).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// 서버에 연결: the SSH address is all the user types. The app reads the server's connection
+/// details over that login, forwards its API here, and points the PC agents at the same address.
+#[tauri::command]
+async fn ssh_connect(rt: tauri::State<'_, Arc<runtime::Runtime>>, form: SshForm) -> Result<ssh_tunnel::Connected, String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || {
+        let target = ssh_tunnel::target_from_form(&form.into())?;
+        let c = ssh_tunnel::connect(target)?;
+        // Stop the built-in Arkism's agents file pointing at this PC; capture follows the server.
+        let _ = rt.agents_use_server(&c.ssh_host, c.ssh_port, c.ssh_key.as_deref());
+        Ok(c)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(serde::Deserialize)]
+struct SshForm {
+    host: String,
+    user: Option<String>,
+    port: Option<u16>,
+    key: Option<String>,
+    bin: Option<String>,
+}
+
+impl From<SshForm> for ssh_tunnel::Form {
+    fn from(f: SshForm) -> Self {
+        ssh_tunnel::Form { host: f.host, user: f.user, port: f.port, key: f.key, bin: f.bin }
+    }
+}
+
+/// SSH 테스트: logs in and asks the server's Arkism for its details, without connecting.
+#[tauri::command]
+async fn ssh_test(form: SshForm) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let target = ssh_tunnel::target_from_form(&form.into())?;
+        let (api, workspace) = ssh_tunnel::connect_info_for(&target)?;
+        Ok(serde_json::json!({ "host": target.host, "api": api, "workspace_id": workspace }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 인증 키 파일 choices: the private keys in ~/.ssh.
+#[tauri::command]
+fn ssh_keys() -> Vec<String> {
+    ssh_tunnel::list_keys()
+}
+
+#[tauri::command]
+fn ssh_disconnect() {
+    ssh_tunnel::stop();
+}
+
+/// Runs the bundled agent client with one setup command (`install-arkism`).
+fn run_agent_setup(rt: &runtime::Runtime, command: &'static str) -> Result<String, String> {
+    let client = rt.agent_client().ok_or("agents_connect_unavailable")?;
+    let mut cmd = std::process::Command::new(client);
+    cmd.arg(command).stdin(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let out = cmd.output().map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    } else {
+        Err(format!("agents_setup_failed: {}", String::from_utf8_lossy(&out.stderr).trim()))
+    }
+}
+
+/// 설정 › 연결 › 모델 중계기: whether this PC has a usable gateway token (never the value itself).
+#[tauri::command]
+fn gateway_token_status() -> Result<gateway_token::Status, String> {
+    gateway_token::status()
+}
+
+/// 다시 만들기: a new token, then install-arkism puts it in the agents' settings (Claude Code headers).
+#[tauri::command]
+async fn gateway_token_regenerate(rt: tauri::State<'_, Arc<runtime::Runtime>>) -> Result<serde_json::Value, String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || {
+        gateway_token::regenerate()?;
+        let agents_updated = run_agent_setup(&rt, "install-arkism").is_ok();
+        Ok(serde_json::json!({ "status": gateway_token::status()?, "agents_updated": agents_updated }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 설정 › 모델 설정 refresh: a fresh usage reading of every account, then the new report.
+#[tauri::command]
+async fn providers_refresh(rt: tauri::State<'_, Arc<runtime::Runtime>>) -> Result<(), String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || rt.refresh_providers()).await.map_err(|e| e.to_string())?
+}
+
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+/// Really quit: stop the built-in Arkism first so Postgres shuts down cleanly.
+fn quit(app: &tauri::AppHandle) {
+    app.state::<Arc<runtime::Runtime>>().stop();
+    app.exit(0);
+}
+
+#[tauri::command]
+async fn git_op(host: String, request: serde_json::Value) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || work_handoff::git(&host, request))
+        .await.map_err(|_| "git_unavailable".to_string())?
+}
+
+#[tauri::command]
+async fn skill_execution(host: String, request: serde_json::Value) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || work_handoff::skill_execution(&host, request))
+        .await.map_err(|_| "skill_execution_unavailable".to_string())?
+}
+
+#[derive(serde::Serialize)]
+struct Reply {
+    status: u16,
+    body: String,
+}
+
+/// Only the Arkism API surface the UI uses; anything else is refused here,
+/// so a script running in the WebView cannot turn this into a general proxy.
+fn allowed(method: &str, path: &str) -> bool {
+    let api = path.starts_with("/v1/") || path == "/readyz" || path.starts_with("/readyz?");
+    // DELETE only for 기억 잊기 (DELETE /v1/memories/{id}), 워크플로우 지우기 (DELETE /v1/crew/{id}) and the
+    // gallery's 삭제 (DELETE /v1/prompts/{id}, /v1/design_systems/{id}); every other change goes through POST.
+    // desktop/ui/delete-allowlist.test.js checks every DELETE the UI sends is listed here.
+    let one_id = |prefix: &str| path.strip_prefix(prefix).is_some_and(|id| !id.is_empty() && !id.contains('/') && !id.contains('?'));
+    let delete = method == "DELETE"
+        && (path.starts_with("/v1/memories/") || one_id("/v1/crew/") || one_id("/v1/prompts/") || one_id("/v1/design_systems/"));
+    api && !path.contains("..") && (method == "GET" || method == "POST" || delete)
+}
+
+fn valid_base(base: &str) -> bool {
+    (base.starts_with("http://") || base.starts_with("https://")) && !base.ends_with('/') && !base.contains('?') && !base.contains('#')
+}
+
+fn api_agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| ureq::AgentBuilder::new().timeout(Duration::from_secs(30)).build())
+}
+
+#[tauri::command]
+async fn api(base: String, token: String, method: String, path: String, body: Option<String>) -> Result<Reply, String> {
+    if !valid_base(&base) {
+        return Err("server_address_invalid".into());
+    }
+    if !allowed(&method, &path) {
+        return Err("path_not_allowed".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let req = api_agent()
+            .request(&method, &format!("{base}{path}"))
+            .set("Authorization", &format!("Bearer {token}"))
+            .set("Content-Type", "application/json");
+        let res = match body {
+            Some(b) => req.send_string(&b),
+            None => req.call(),
+        };
+        match res {
+            Ok(r) | Err(ureq::Error::Status(_, r)) => {
+                let status = r.status();
+                let body = r.into_string().map_err(|e| e.to_string())?;
+                Ok(Reply { status, body })
+            }
+            Err(e) => Err(format!("server_unreachable: {e}")),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn pct_encode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+fn pct_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = b.get(i + 1..i + 3).and_then(|h| std::str::from_utf8(h).ok()).and_then(|h| u8::from_str_radix(h, 16).ok());
+        match (b[i], hex) {
+            (b'%', Some(v)) => {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+            (b'+', _) => out.push(b' '),
+            (c, _) => out.push(c),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The query of the browser's redirect: GET /callback?code=..&state=.. HTTP/1.1
+fn callback_params(request_line: &str) -> Vec<(String, String)> {
+    let target = request_line.split_whitespace().nth(1).unwrap_or("");
+    let query = target.split_once('?').map(|(_, q)| q).unwrap_or("");
+    query
+        .split('&')
+        .filter_map(|kv| kv.split_once('='))
+        .map(|(k, v)| (k.to_string(), pct_decode(v)))
+        .collect()
+}
+
+fn open_browser(url: &str) -> std::io::Result<()> {
+    #[cfg(windows)]
+    let mut cmd = std::process::Command::new("rundll32");
+    #[cfg(windows)]
+    cmd.args(["url.dll,FileProtocolHandler", url]);
+    #[cfg(target_os = "macos")]
+    let mut cmd = std::process::Command::new("open");
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut cmd = std::process::Command::new("xdg-open");
+    #[cfg(unix)]
+    cmd.arg(url);
+    cmd.spawn().map(|_| ())
+}
+
+/// Waits on a loopback listener for the browser's redirect whose `state` matches, answers it
+/// with DONE_PAGE, and returns the request target (path and query). Stray requests get a 404.
+fn wait_redirect(listener: &TcpListener, state: &str, timeout: Duration) -> Result<String, String> {
+    listener.set_nonblocking(true).map_err(|e| e.to_string())?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        if Instant::now() > deadline {
+            return Err("login_timeout".into());
+        }
+        let (mut stream, _) = match listener.accept() {
+            Ok(c) => c,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(200));
+                continue;
+            }
+            Err(e) => return Err(e.to_string()),
+        };
+        stream.set_nonblocking(false).ok();
+        stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
+        let mut line = String::new();
+        BufReader::new(&stream).read_line(&mut line).ok();
+        let params = callback_params(&line);
+        if !params.iter().any(|(k, v)| k == "state" && v == state) {
+            // A stray request (favicon, another tab): answer and keep waiting.
+            let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            continue;
+        }
+        let page = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", DONE_PAGE.len(), DONE_PAGE);
+        let _ = stream.write_all(page.as_bytes());
+        return Ok(line.split_whitespace().nth(1).unwrap_or("").to_string());
+    }
+}
+
+const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Arkism</title><body style=\"font:16px system-ui;background:#232221;color:#f2f0ec;display:grid;place-items:center;height:90vh\"><p>로그인했어요. 이 창을 닫고 Arkism으로 돌아가세요.</p>";
+
+/// MCP sign-in for an agent CLI running on the server: open its sign-in address in the
+/// browser and catch the redirect on this PC's loopback, on the port the CLI chose. The
+/// returned path and query go back to the server, which replays them where the CLI waits.
+fn mcp_login_blocking(auth_url: &str) -> Result<String, String> {
+    if !auth_url.starts_with("https://") || auth_url.len() > 8000 || auth_url.contains(char::is_whitespace) {
+        return Err("login_address_invalid".into());
+    }
+    let params = callback_params(&format!("GET {auth_url} HTTP/1.1"));
+    let get = |k: &str| params.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone()).unwrap_or_default();
+    let (redirect, state) = (get("redirect_uri"), get("state"));
+    let port = redirect
+        .strip_prefix("http://localhost:")
+        .or_else(|| redirect.strip_prefix("http://127.0.0.1:"))
+        .and_then(|rest| rest.split('/').next())
+        .and_then(|p| p.parse::<u16>().ok())
+        .ok_or("login_address_invalid")?;
+    if state.is_empty() {
+        return Err("login_address_invalid".into());
+    }
+    let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|_| "login_port_busy".to_string())?;
+    open_browser(auth_url).map_err(|e| e.to_string())?;
+    wait_redirect(&listener, &state, Duration::from_secs(600))
+}
+
+#[tauri::command]
+async fn mcp_login(app: tauri::AppHandle, auth_url: String) -> Result<String, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || mcp_login_blocking(&auth_url))
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_focus();
+    }
+    result
+}
+
+// Updates come from a static feed (latest.json + the installer) fixed at build time
+// (ARKISM_UPDATE_FEED above), so the WebView cannot point the app at another download.
+fn feed() -> Result<&'static str, String> {
+    FEED.ok_or_else(|| "update_feed_disabled".to_string())
+}
+
+#[derive(serde::Deserialize)]
+struct Latest {
+    version: String,
+    file: String,
+    sha256: String,
+}
+
+#[derive(serde::Serialize)]
+struct Update {
+    current: String,
+    latest: String,
+    newer: bool,
+}
+
+fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
+    let mut p = s.split('.').map(|n| n.parse::<u32>().ok());
+    let v = (p.next()??, p.next()??, p.next()??);
+    p.next().is_none().then_some(v)
+}
+
+fn fetch_latest() -> Result<Latest, String> {
+    let feed = feed()?;
+    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(30)).build();
+    let latest: Latest = agent
+        .get(&format!("{feed}/latest.json"))
+        .call()
+        .map_err(|e| format!("update_feed_unreachable: {e}"))?
+        .into_json()
+        .map_err(|e| format!("update_feed_invalid: {e}"))?;
+    // The file name is built from the version, so a feed entry cannot name another path.
+    if parse_version(&latest.version).is_none() || latest.file != format!("Arkism-{}-setup.exe", latest.version) {
+        return Err("update_feed_invalid".into());
+    }
+    Ok(latest)
+}
+
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle) -> Result<Update, String> {
+    let current = app.package_info().version.to_string();
+    let latest = tauri::async_runtime::spawn_blocking(fetch_latest).await.map_err(|e| e.to_string())??;
+    let newer = parse_version(&latest.version) > parse_version(&current);
+    Ok(Update { current, latest: latest.version, newer })
+}
+
+/// Downloads the installer, checks its hash, starts it silently (it closes this
+/// window, replaces the exe and reopens Arkism) and exits.
+#[tauri::command]
+async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
+    // macOS and Linux bundles are replaced by downloading the new one (the release page).
+    if !cfg!(windows) {
+        return Err("update_manual".into());
+    }
+    let rt = Arc::clone(&app.state::<Arc<runtime::Runtime>>());
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let latest = fetch_latest()?;
+        let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(300)).build();
+        let mut bytes = Vec::new();
+        agent
+            .get(&format!("{}/{}", feed()?, latest.file))
+            .call()
+            .map_err(|e| format!("update_download_failed: {e}"))?
+            .into_reader()
+            .take(512 << 20)
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("update_download_failed: {e}"))?;
+        let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+        if !hash.eq_ignore_ascii_case(&latest.sha256) {
+            return Err("update_hash_mismatch".into());
+        }
+        let path = std::env::temp_dir().join(&latest.file);
+        std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+        // The installer replaces the built-in programs, so they must not be running.
+        rt.stop();
+        std::process::Command::new(&path).arg("/S").spawn().map_err(|e| format!("update_start_failed: {e}"))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    app.exit(0);
+    Ok(())
+}
+
+/// `Arkism --runtime-check DIR`: starts the built-in Arkism with its data in DIR, checks that it
+/// answers with the owner token, stops it and writes the outcome to DIR/check.json. No window;
+/// used to test an installer (and CI) without touching the user's data.
+fn runtime_check(dir: &std::path::Path) -> i32 {
+    let rt = runtime::Runtime::new(runtime::find_programs(None), dir.to_path_buf()).isolated();
+    let started = Instant::now();
+    let outcome = rt.start().and_then(|s| {
+        let caps = ureq::get(&format!("{}/v1/capabilities?workspace_id=default&project_id=default&user_id=management%3Aowner", s.server))
+            .set("Authorization", &format!("Bearer {}", s.token))
+            .call()
+            .map_err(|e| format!("capabilities: {e}"))?
+            .status();
+        let again = rt.start()?; // a second start reuses what runs
+        // Backup, erase everything, restore: the old owner token opens the restored Arkism again.
+        let backups = dir.join("backups");
+        let backup = rt.backup_into(&backups)?;
+        rt.erase()?;
+        let restored = rt.restore_from(&backups, &backup.name)?;
+        // The hourly expiry runs against the built-in Arkism (needs the bundled agent client).
+        let expiry = if rt.agent_client().is_some() { rt.expire().map(|_| "ok".to_string()).unwrap_or_else(|e| e) } else { "no_client".into() };
+        let after = ureq::get(&format!("{}/v1/capabilities?workspace_id=default&project_id=default&user_id=management%3Aowner", restored.started.server))
+            .set("Authorization", &format!("Bearer {}", s.token))
+            .call()
+            .map_err(|e| format!("capabilities after restore: {e}"))?
+            .status();
+        Ok(serde_json::json!({ "server": s.server, "capabilities": caps, "reused": again.server == s.server,
+            "backup_bytes": backup.bytes, "restored_capabilities": after, "safety_copy": restored.safety_copy.is_some(), "expiry": expiry }))
+    });
+    rt.stop();
+    let (code, report) = match outcome {
+        Ok(mut v) => {
+            v["ok"] = true.into();
+            (0, v)
+        }
+        Err(e) => (1, serde_json::json!({ "ok": false, "error": e })),
+    };
+    let mut report = report;
+    report["seconds"] = started.elapsed().as_secs_f64().into();
+    let _ = std::fs::create_dir_all(dir);
+    let _ = std::fs::write(dir.join("check.json"), report.to_string());
+    code
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--runtime-check") {
+        let dir = args.get(i + 1).map(std::path::PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("arkism-runtime-check"));
+        std::process::exit(runtime_check(&dir));
+    }
+    let app = tauri::Builder::default()
+        // A second launch only brings the running window forward; two copies would share one database.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| show_main(app)))
+        // Capture and the timers run only while the app does: it starts with the user's session,
+        // in the tray (`--hidden`), unless the user turned that off in 설정 › 일반.
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
+        .setup(|app| {
+            if std::env::args().any(|a| a == "--hidden") {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
+            let data = app.path().app_local_data_dir()?.join("runtime");
+            let programs = runtime::find_programs(app.path().resource_dir().ok());
+            let rt = Arc::new(runtime::Runtime::new(programs, data));
+            // The PC's agents are connected without asking, whether the app uses the built-in Arkism
+            // or a server: on the first start and after each update (the client they run is refreshed
+            // then). Uninstalling the app disconnects them again.
+            // Start at login by default, once: after that the user's choice in 설정 › 일반 stays.
+            let autostart_marker = rt.data_dir().join("autostart-default");
+            if !autostart_marker.exists() {
+                use tauri_plugin_autostart::ManagerExt;
+                if app.autolaunch().enable().is_ok() {
+                    let _ = std::fs::create_dir_all(rt.data_dir());
+                    let _ = std::fs::write(&autostart_marker, "on");
+                }
+            }
+            let version = app.package_info().version.to_string();
+            let marker = rt.data_dir().join("agents-connected");
+            if std::fs::read_to_string(&marker).ok().as_deref() != Some(version.as_str()) {
+                let rt = Arc::clone(&rt);
+                std::thread::spawn(move || {
+                    if run_agent_setup(&rt, "install-arkism").is_ok() {
+                        let _ = std::fs::create_dir_all(marker.parent().unwrap_or(&marker));
+                        let _ = std::fs::write(&marker, version);
+                    }
+                });
+            }
+            app.manage(rt);
+            let open = MenuItem::with_id(app, "open", "Arkism 열기", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "끝내기", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &quit_item])?;
+            let mut tray = TrayIconBuilder::with_id("main")
+                .tooltip("Arkism")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "open" => show_main(app),
+                    "quit" => quit(app),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                        show_main(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
+            Ok(())
+        })
+        // Closing the window keeps Arkism in the tray, so agents can keep saving memories.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_disconnect, ssh_keys, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate])
+        .build(tauri::generate_context!())
+        .expect("Arkism failed to start");
+    app.run(|app, event| {
+        if let RunEvent::Exit = event {
+            ssh_tunnel::stop();
+            app.state::<Arc<runtime::Runtime>>().stop();
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_api_paths_pass() {
+        assert!(allowed("GET", "/v1/memories?status=active"));
+        assert_eq!(mcp_login_blocking("http://x/authorize?state=s"), Err("login_address_invalid".to_string()));
+        assert_eq!(mcp_login_blocking("https://x/a?redirect_uri=https%3A%2F%2Fevil.example%2Fcb&state=s"), Err("login_address_invalid".to_string()));
+        assert_eq!(mcp_login_blocking("https://x/a?redirect_uri=http%3A%2F%2Flocalhost%3A5%2Fcb"), Err("login_address_invalid".to_string()));
+        assert!(allowed("POST", "/v1/memory_candidates/x/review"));
+        // 들어가는 기억 미리보기: the hooks' own calls plus the token count.
+        assert!(allowed("POST", "/v1/search"));
+        assert!(allowed("POST", "/v1/context/tokens"));
+        assert!(!allowed("DELETE", "/v1/context/tokens"));
+        assert!(allowed("DELETE", "/v1/memories/x"));
+        assert!(allowed("DELETE", "/v1/crew/x"));
+        assert!(!allowed("DELETE", "/v1/crew/x/runs"));
+        assert!(!allowed("DELETE", "/v1/crew/"));
+        assert!(allowed("DELETE", "/v1/prompts/p1"));
+        assert!(allowed("DELETE", "/v1/design_systems/ds1"));
+        assert!(!allowed("DELETE", "/v1/design_systems/ds1/restore"));
+        assert!(!allowed("DELETE", "/v1/prompts/"));
+        assert!(!allowed("DELETE", "/v1/crew_runs/x"));
+        assert!(!allowed("GET", "/metrics"));
+        assert!(!allowed("GET", "/v1/../metrics"));
+        assert!(valid_base("http://arkism.example.internal:8092"));
+        assert!(valid_base(DEFAULT_SERVER));
+        assert!(!valid_base("file:///etc"));
+        assert!(!valid_base("http://x/"));
+    }
+
+    #[test]
+    fn versions_compare_numerically() {
+        assert!(parse_version("0.10.0") > parse_version("0.9.9"));
+        assert!(parse_version("0.5.0") > parse_version("0.4.0"));
+        assert_eq!(parse_version("1.2"), None);
+        assert_eq!(parse_version("1.2.3.4"), None);
+        assert_eq!(parse_version("a.b.c"), None);
+    }
+
+    #[test]
+    fn api_reuses_connection_with_request_scoped_auth() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/v1/capabilities", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            for expected in ["synthetic-a", "synthetic-b"] {
+                let mut headers = String::new();
+                loop {
+                    let mut line = String::new();
+                    assert!(reader.read_line(&mut line).unwrap() > 0, "connection closed between requests");
+                    if line == "\r\n" { break; }
+                    headers.push_str(&line);
+                }
+                assert!(headers.to_lowercase().contains(&format!("authorization: bearer {expected}\r\n")));
+                stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}").unwrap();
+            }
+        });
+        for token in ["synthetic-a", "synthetic-b"] {
+            let body = api_agent().get(&url).timeout(Duration::from_secs(3))
+                .set("Authorization", &format!("Bearer {token}"))
+                .call().unwrap().into_string().unwrap();
+            assert_eq!(body, "{}");
+        }
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn callback_query_is_decoded() {
+        let p = callback_params("GET /callback?state=abc&code=4%2F0Ab_c-d&scope=email+openid HTTP/1.1\r\n");
+        assert_eq!(p[0], ("state".into(), "abc".into()));
+        assert_eq!(p[1], ("code".into(), "4/0Ab_c-d".into()));
+        assert_eq!(p[2].1, "email openid");
+        assert_eq!(pct_encode("http://127.0.0.1:5/callback"), "http%3A%2F%2F127.0.0.1%3A5%2Fcallback");
+        assert_eq!(pct_decode("50%"), "50%");
+    }
+}

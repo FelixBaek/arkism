@@ -1,0 +1,47 @@
+{
+ "scope": {},
+ "source_id": "knowledge-1",
+ "items": [
+  {
+   "id": "doc-1",
+   "revision": 1,
+   "status": "active",
+   "current": true,
+   "filename": "10-test-deploy-ops.md",
+   "mime_type": "text/markdown",
+   "content_hash": "e41a2b0c9f",
+   "source_version": "v1abc123",
+   "parser_version": "md-v2",
+   "chunker_version": "heading-400-v2",
+   "extraction_status": "done",
+   "chunk_count": 14,
+   "indexed_chunks": 12,
+   "sections": [
+    "배포 전에",
+    "배포 전에 › 병행 세션 확인",
+    "롤백",
+    "롤백 › nginx reload",
+    "인증서 갱신 타이머 확인",
+    "배포 기록 남기기"
+   ],
+   "created_at": "2026-10-11T10:00:00Z"
+  },
+  {
+   "id": "doc-0",
+   "revision": 1,
+   "status": "active",
+   "current": false,
+   "filename": "10-test-deploy-ops.md",
+   "mime_type": "text/markdown",
+   "content_hash": "9c0d11aa21",
+   "source_version": "v0aaa111",
+   "parser_version": "md-v1",
+   "chunker_version": "runes-512-v1",
+   "extraction_status": "done",
+   "chunk_count": 11,
+   "indexed_chunks": 0,
+   "sections": [],
+   "created_at": "2026-10-02T10:00:00Z"
+  }
+ ]
+}

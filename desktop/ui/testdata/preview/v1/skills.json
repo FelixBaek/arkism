@@ -1,0 +1,412 @@
+{
+ "items": [
+  {
+   "id": "skill-writing-style",
+   "name": "writing-style",
+   "description": "내 말투로 문서·README·블로그 글을 써요.",
+   "status": "active",
+   "version_id": "ver-writing-style-3",
+   "active_version": "ver-writing-style-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/writing/writing-style/SKILL.md",
+   "skill_compatibility": {},
+   "updated_at": "2026-10-13T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-writing-style-1",
+    "ver-writing-style-2",
+    "ver-writing-style-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-commit-and-push",
+   "name": "commit-and-push",
+   "description": "바뀐 내용을 알기 쉽게 커밋하고 푸시해요.",
+   "status": "active",
+   "version_id": "ver-commit-and-push-3",
+   "active_version": "ver-commit-and-push-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/git/commit-and-push/SKILL.md",
+   "skill_compatibility": {},
+   "updated_at": "2026-10-12T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-commit-and-push-1",
+    "ver-commit-and-push-2",
+    "ver-commit-and-push-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-code-review",
+   "name": "code-review",
+   "description": "diff에서 버그·빠진 테스트·애매한 이름을 찾아요. 커밋 전에 지금 diff를 보고, 고칠 것을 중요한 순서로 정리해요.",
+   "status": "active",
+   "version_id": "ver-code-review-3",
+   "active_version": "ver-code-review-3",
+   "version": "2.1.0",
+   "source_path": "~/.agents/skills/code-review/SKILL.md",
+   "skill_compatibility": {
+    "zcode": "unsupported",
+    "grok": "requires_adapter"
+   },
+   "updated_at": "2026-10-13T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-code-review-1",
+    "ver-code-review-2",
+    "ver-code-review-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-cloudflare-deploy",
+   "name": "cloudflare-deploy",
+   "description": "wrangler로 Workers에 배포하고 로그를 확인해요.",
+   "status": "active",
+   "version_id": "ver-cloudflare-deploy-3",
+   "active_version": "ver-cloudflare-deploy-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/infra/cloudflare-deploy/SKILL.md",
+   "skill_compatibility": {
+    "grok": "unsupported"
+   },
+   "updated_at": "2026-10-10T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-cloudflare-deploy-1",
+    "ver-cloudflare-deploy-2",
+    "ver-cloudflare-deploy-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-release-notes",
+   "name": "release-notes",
+   "description": "마지막 태그 뒤 커밋으로 릴리스 노트를 써요.",
+   "status": "active",
+   "version_id": "ver-release-notes-3",
+   "active_version": "ver-release-notes-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/git/release-notes/SKILL.md",
+   "skill_compatibility": {
+    "gemini": "unsupported",
+    "zcode": "unsupported",
+    "grok": "unsupported"
+   },
+   "updated_at": "2026-10-08T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-release-notes-1",
+    "ver-release-notes-2",
+    "ver-release-notes-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-test-first",
+   "name": "test-first",
+   "description": "실패하는 테스트부터 만들고 버그를 고쳐요.",
+   "status": "active",
+   "version_id": "ver-test-first-3",
+   "active_version": "ver-test-first-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/quality/test-first/SKILL.md",
+   "skill_compatibility": {
+    "zcode": "unsupported"
+   },
+   "updated_at": "2026-10-07T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-test-first-1",
+    "ver-test-first-2",
+    "ver-test-first-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-astro-blog-post",
+   "name": "astro-blog-post",
+   "description": "Astro 콘텐츠 컬렉션에 새 글을 만들어요.",
+   "status": "active",
+   "version_id": "ver-astro-blog-post-3",
+   "active_version": "ver-astro-blog-post-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/writing/astro-blog-post/SKILL.md",
+   "skill_compatibility": {
+    "gemini": "unsupported",
+    "zcode": "unsupported",
+    "grok": "unsupported"
+   },
+   "updated_at": "2026-10-05T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-astro-blog-post-1",
+    "ver-astro-blog-post-2",
+    "ver-astro-blog-post-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-sql-migration",
+   "name": "sql-migration",
+   "description": "되돌릴 수 있는 Postgres 마이그레이션을 써요.",
+   "status": "active",
+   "version_id": "ver-sql-migration-3",
+   "active_version": "ver-sql-migration-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/data/sql-migration/SKILL.md",
+   "skill_compatibility": {
+    "zcode": "unsupported",
+    "grok": "unsupported"
+   },
+   "updated_at": "2026-10-01T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-sql-migration-1",
+    "ver-sql-migration-2",
+    "ver-sql-migration-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-stripe-webhooks",
+   "name": "stripe-webhooks",
+   "description": "서명 확인까지 하는 Stripe 웹훅을 만들어요.",
+   "status": "active",
+   "version_id": "ver-stripe-webhooks-3",
+   "active_version": "ver-stripe-webhooks-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/data/stripe-webhooks/SKILL.md",
+   "skill_compatibility": {
+    "claude_code": "unsupported",
+    "gemini": "unsupported",
+    "grok": "unsupported"
+   },
+   "updated_at": "2026-09-28T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-stripe-webhooks-1",
+    "ver-stripe-webhooks-2",
+    "ver-stripe-webhooks-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-k8s-rollout",
+   "name": "k8s-rollout",
+   "description": "Kubernetes 배포를 새 이미지로 바꿔요.",
+   "status": "active",
+   "version_id": "ver-k8s-rollout-3",
+   "active_version": "ver-k8s-rollout-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/infra/k8s-rollout/SKILL.md",
+   "skill_compatibility": {
+    "codex": "unsupported",
+    "gemini": "unsupported",
+    "zcode": "unsupported",
+    "grok": "unsupported"
+   },
+   "updated_at": "2026-09-20T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-k8s-rollout-1",
+    "ver-k8s-rollout-2",
+    "ver-k8s-rollout-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-figma-to-code",
+   "name": "figma-to-code",
+   "description": "Figma 화면을 지금 앱 코드로 옮겨요.",
+   "status": "active",
+   "version_id": "ver-figma-to-code-3",
+   "active_version": "ver-figma-to-code-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/app/figma-to-code/SKILL.md",
+   "skill_compatibility": {
+    "grok": "unsupported"
+   },
+   "updated_at": "2026-09-18T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-figma-to-code-1",
+    "ver-figma-to-code-2",
+    "ver-figma-to-code-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-ui-check",
+   "name": "ui-check",
+   "description": "바뀐 화면을 스크린샷으로 확인해요.",
+   "status": "active",
+   "version_id": "ver-ui-check-3",
+   "active_version": "ver-ui-check-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/app/ui-check/SKILL.md",
+   "skill_compatibility": {
+    "grok": "requires_adapter"
+   },
+   "updated_at": "2026-09-15T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-ui-check-1",
+    "ver-ui-check-2",
+    "ver-ui-check-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-csv-report",
+   "name": "csv-report",
+   "description": "CSV를 읽어 요약 표를 만들어요.",
+   "status": "active",
+   "version_id": "ver-csv-report-3",
+   "active_version": "ver-csv-report-3",
+   "version": "1.0.0",
+   "source_path": "~/.agents/skills/data/csv-report/SKILL.md",
+   "skill_compatibility": {},
+   "updated_at": "2026-09-12T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-csv-report-1",
+    "ver-csv-report-2",
+    "ver-csv-report-3"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-code-review-13",
+   "name": "code-review",
+   "description": "diff에서 버그·빠진 테스트·애매한 이름을 찾아요.",
+   "status": "active",
+   "version_id": "ver-code-review-copy",
+   "active_version": "ver-code-review-copy",
+   "version": "2.1.0",
+   "source_path": "~/.claude/skills/code-review/SKILL.md",
+   "skill_compatibility": {},
+   "updated_at": "2026-09-30T06:00:00Z",
+   "created_at": "2026-08-01T00:00:00Z",
+   "revision": 3,
+   "version_history": [
+    "ver-code-review-1",
+    "ver-code-review-2",
+    "ver-code-review-copy"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  },
+  {
+   "id": "skill-design-critique",
+   "name": "design-critique",
+   "description": "화면을 사용성·위계·일관성 기준으로 검토하고 고칠 곳을 짚어요.",
+   "status": "active",
+   "version_id": "ver-design-critique-5",
+   "active_version": "ver-design-critique-5",
+   "version": "1.4.0",
+   "source_path": "~/.agents/skills/design/design-critique/SKILL.md",
+   "skill_compatibility": {},
+   "updated_at": "2026-10-13T08:00:00Z",
+   "created_at": "2026-08-20T00:00:00Z",
+   "revision": 5,
+   "version_history": [
+    "ver-design-critique-1",
+    "ver-design-critique-2",
+    "ver-design-critique-3",
+    "ver-design-critique-4",
+    "ver-design-critique-5"
+   ],
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner",
+    "agent_id": ""
+   }
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+# gitleaks: real secrets must never be in this repo. Only test code and test fixtures carry fake values
+# (sk-test-…, AKIA…EXAMPLE, FAKEKEYDATA, sha256 record keys) — they are allowed here and nowhere else.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake values in tests and test fixtures"
+paths = [
+  '''(^|/)[^/]+_test\.go$''',
+  '''(^|/)internal/host/capture/testdata/(autosave_extract|evidence_hints|handoff_key)\.json$''',
+  '''(^|/)internal/host/skills/testdata/hub\.json$''',
+]

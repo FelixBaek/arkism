@@ -1,0 +1,20 @@
+{
+ "id": "m11",
+ "text": "Orbit 이미지 업로드는 한 장에 10MB까지 받는다.",
+ "kind": "decision",
+ "status": "active",
+ "revision": 1,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-11T13:16:34.299802Z",
+ "updated_at": "2026-10-11T13:16:34.299802Z",
+ "tags": [
+  "basis:explicit_user",
+  "event_id:claude-code:s1",
+  "repo:acme/arkism"
+ ],
+ "created_by_type": "agent"
+}

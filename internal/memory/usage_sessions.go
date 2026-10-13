@@ -1,0 +1,584 @@
+package memory
+
+import (
+	"context"
+	"errors"
+	"math"
+	"net/http"
+	"regexp"
+	"slices"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// 사용량 (magpie Usage 화면): the host collector reads every agent's session log,
+// keeps only counts (tokens, cost, tools, skills, timing) and reports one row per
+// session. No prompt, output or file content is stored here.
+const (
+	colUsageSessions = "usage_sessions"
+	// shortcut: the summary reads up to 20000 sessions in Go; aggregate in SQL if one scope ever holds more.
+	usageSessionsRead = 20000
+	usageBatchMax     = 200
+)
+
+type UsageTokens struct {
+	Input      int64    `json:"input" bson:"input"`
+	Output     int64    `json:"output" bson:"output"`
+	CacheRead  int64    `json:"cache_read" bson:"cache_read"`
+	CacheWrite int64    `json:"cache_write" bson:"cache_write"`
+	Requests   int      `json:"requests" bson:"requests"`
+	CostUSD    *float64 `json:"cost_usd,omitempty" bson:"cost_usd,omitempty"`
+}
+
+// total is in+out, as magpie counts tokens; cache reads and writes are reported beside it.
+func (t UsageTokens) total() int64 { return t.Input + t.Output }
+
+func (t *UsageTokens) add(o UsageTokens) {
+	t.Input += o.Input
+	t.Output += o.Output
+	t.CacheRead += o.CacheRead
+	t.CacheWrite += o.CacheWrite
+	t.Requests += o.Requests
+	if o.CostUSD != nil {
+		c := *o.CostUSD
+		if t.CostUSD != nil {
+			c += *t.CostUSD
+		}
+		t.CostUSD = &c
+	}
+}
+
+// UsageSession is one agent session as counted on the host.
+// Days is "YYYY-MM-DD" (Asia/Seoul) → model → tokens, so every range is exact by day.
+type UsageSession struct {
+	Agent         string                            `json:"agent" bson:"agent"`
+	Device        string                            `json:"device" bson:"device"`
+	SessionID     string                            `json:"session_id" bson:"session_id"`
+	Title         string                            `json:"title,omitempty" bson:"title,omitempty"`
+	Project       string                            `json:"project,omitempty" bson:"project,omitempty"`
+	StartedAt     time.Time                         `json:"started_at" bson:"started_at"`
+	EndedAt       time.Time                         `json:"ended_at" bson:"ended_at"`
+	Messages      int                               `json:"messages" bson:"messages"`
+	ActiveSeconds int64                             `json:"active_seconds" bson:"active_seconds"`
+	Days          map[string]map[string]UsageTokens `json:"days" bson:"days"`
+	Hours         []int                             `json:"hours,omitempty" bson:"hours,omitempty"` // 168 = Mon 0시 … Sun 23시, Asia/Seoul
+	Tools         map[string]int                    `json:"tools,omitempty" bson:"tools,omitempty"`
+	Skills        map[string]int                    `json:"skills,omitempty" bson:"skills,omitempty"`
+}
+
+type UsageSessionsInput struct {
+	Scope Scope          `json:"scope"`
+	Items []UsageSession `json:"items"`
+}
+
+var (
+	usageNameRe = regexp.MustCompile(`^[A-Za-z0-9_.:/@+-]{1,120}$`)
+	usageDayRe  = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+)
+
+func validUsageSession(u UsageSession) bool {
+	ok := usageNameRe.MatchString(u.Agent) && usageNameRe.MatchString(u.Device) && usageNameRe.MatchString(u.SessionID) &&
+		len(u.Title) <= 300 && len(u.Project) <= 200 && u.Messages >= 0 && u.ActiveSeconds >= 0 &&
+		!u.StartedAt.IsZero() && !u.EndedAt.Before(u.StartedAt) && len(u.Days) <= 400 &&
+		(len(u.Hours) == 0 || len(u.Hours) == 168) && len(u.Tools) <= 500 && len(u.Skills) <= 500
+	if !ok {
+		return false
+	}
+	for day, models := range u.Days {
+		if !usageDayRe.MatchString(day) || len(models) > 50 {
+			return false
+		}
+		for m, t := range models {
+			if !usageNameRe.MatchString(m) || t.Input < 0 || t.Output < 0 || t.CacheRead < 0 || t.CacheWrite < 0 || t.Requests < 0 ||
+				t.CostUSD != nil && (math.IsNaN(*t.CostUSD) || *t.CostUSD < 0 || *t.CostUSD > 1e6) {
+				return false
+			}
+		}
+	}
+	for _, m := range []map[string]int{u.Tools, u.Skills} {
+		for k, n := range m {
+			if len(k) == 0 || len(k) > 200 || n < 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func usageSessionID(u UsageSession) string {
+	return ContentHash(strings.Join([]string{u.Device, u.Agent, u.SessionID}, "\x00"))
+}
+
+// RecordUsageSessions upserts each session by device+agent+session id.
+func (s *Service) RecordUsageSessions(ctx context.Context, token string, in UsageSessionsInput) (map[string]int, error) {
+	if !validScope(in.Scope) || len(in.Items) == 0 || len(in.Items) > usageBatchMax {
+		return nil, ErrInvalid
+	}
+	for _, u := range in.Items {
+		if !validUsageSession(u) {
+			return nil, ErrInvalid
+		}
+	}
+	d, err := s.authorize(ctx, token, "write:"+colRoutingCalls, in.Scope, "", "")
+	if err != nil {
+		return nil, err
+	}
+	saved := 0
+	for _, u := range in.Items {
+		u := u
+		if containsSecret(u.Title) || containsSecret(u.Project) {
+			u.Title, u.Project = "", "" // a pasted key in a title must not stop the rest of the batch
+		}
+		id := usageSessionID(u)
+		if s.usageSessionDeleted(ctx, in.Scope, id) {
+			continue // the user deleted this session (세션 지우기); the collector must not bring it back
+		}
+		now := time.Now().UTC().Truncate(time.Millisecond)
+		cur, err := s.Repo.Get(ctx, colUsageSessions, in.Scope, id)
+		switch {
+		case errors.Is(err, ErrNotFound):
+			r := Record{ID: id, Scope: in.Scope, Kind: colUsageSessions, Status: statusActive, Revision: 1, Text: u.Title, UsageSession: &u,
+				CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
+			err = s.Repo.Insert(ctx, colUsageSessions, r)
+		case err == nil:
+			prev := cur.Revision
+			cur.UsageSession, cur.Text, cur.UpdatedAt, cur.Revision = &u, u.Title, now, prev+1
+			err = s.Repo.Replace(ctx, colUsageSessions, cur, prev)
+		}
+		if err != nil {
+			return nil, err
+		}
+		saved++
+	}
+	return map[string]int{"saved": saved}, nil
+}
+
+// ------------------------------------------------------------------ summary
+
+var usageRanges = map[string]int{"today": 1, "7d": 7, "30d": 30, "90d": 90, "all": 0}
+
+type usageAcc struct {
+	UsageTokens
+	sessions map[string]bool
+}
+
+func (a *usageAcc) put(id string, t UsageTokens) {
+	a.add(t)
+	if a.sessions == nil {
+		a.sessions = map[string]bool{}
+	}
+	a.sessions[id] = true
+}
+
+func cost(c *float64) float64 {
+	if c == nil {
+		return 0
+	}
+	return math.Round(*c*1e4) / 1e4
+}
+
+type usageRow struct {
+	ID       string    `json:"id"`
+	Title    string    `json:"title"`
+	Agent    string    `json:"agent"`
+	Device   string    `json:"device"`
+	Project  string    `json:"project"`
+	Models   []string  `json:"models"`
+	Tokens   int64     `json:"tokens"`
+	Input    int64     `json:"input"`
+	Output   int64     `json:"output"`
+	Cached   int64     `json:"cached"`
+	CostUSD  float64   `json:"cost_usd"`
+	Priced   bool      `json:"priced"`
+	Messages int       `json:"messages"`
+	Active   int64     `json:"active_seconds"`
+	Started  time.Time `json:"started_at"`
+	Ended    time.Time `json:"ended_at"`
+}
+
+func ranked(m map[string]*usageAcc, limit int) []map[string]any {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		a, b := m[keys[i]].total(), m[keys[j]].total()
+		return a > b || a == b && keys[i] < keys[j]
+	})
+	out := []map[string]any{}
+	for _, k := range keys {
+		if limit > 0 && len(out) == limit {
+			break
+		}
+		a := m[k]
+		out = append(out, map[string]any{"name": k, "tokens": a.total(), "input": a.Input, "output": a.Output, "cache_read": a.CacheRead,
+			"cache_write": a.CacheWrite, "requests": a.Requests, "cost_usd": cost(a.CostUSD), "priced": a.CostUSD != nil, "sessions": len(a.sessions)})
+	}
+	return out
+}
+
+func counted(m map[string][2]int, limit int) []map[string]any {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return m[keys[i]][0] > m[keys[j]][0] || m[keys[i]][0] == m[keys[j]][0] && keys[i] < keys[j]
+	})
+	out := []map[string]any{}
+	for _, k := range keys {
+		if len(out) == limit {
+			break
+		}
+		out = append(out, map[string]any{"name": k, "count": m[k][0], "sessions": m[k][1]})
+	}
+	return out
+}
+
+func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, rangeKey, agent string) (map[string]any, error) {
+	days, ok := usageRanges[rangeKey]
+	if !validScope(scope) || !ok || agent != "" && !usageNameRe.MatchString(agent) {
+		return nil, ErrInvalid
+	}
+	if _, err := s.authorize(ctx, token, "read:"+colRouting, scope, routingID(scope), ""); err != nil {
+		return nil, err
+	}
+	rows, err := s.usageRows(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	seoul := usageZone()
+	now := time.Now().In(seoul)
+	from := ""
+	if days > 0 {
+		from = now.AddDate(0, 0, 1-days).Format("2006-01-02")
+	}
+
+	var all usageAcc
+	byDay, byModel, byProject, byAgent, allAgents := map[string]*usageAcc{}, map[string]*usageAcc{}, map[string]*usageAcc{}, map[string]*usageAcc{}, map[string]int{}
+	dayMsgs := map[string]int{}
+	tools, skills := map[string][2]int{}, map[string][2]int{}
+	hours := make([]int, 168)
+	shape := make([]int, 6)
+	sessions := []usageRow{}
+	var active int64
+	activeDays := map[string]bool{}
+	get := func(m map[string]*usageAcc, k string) *usageAcc {
+		if m[k] == nil {
+			m[k] = &usageAcc{}
+		}
+		return m[k]
+	}
+	for _, r := range rows {
+		u := r.UsageSession
+		if u == nil {
+			continue
+		}
+		allAgents[u.Agent]++
+		if agent != "" && u.Agent != agent {
+			continue
+		}
+		row := usageRow{ID: r.ID, Title: u.Title, Agent: u.Agent, Device: u.Device, Project: u.Project, Messages: u.Messages,
+			Active: u.ActiveSeconds, Started: u.StartedAt, Ended: u.EndedAt}
+		var sum UsageTokens
+		models := map[string]bool{}
+		for day, perModel := range u.Days {
+			if day < from {
+				continue
+			}
+			for m, t := range perModel {
+				if t.total()+t.CacheRead+t.CacheWrite == 0 && t.Requests == 0 {
+					continue
+				}
+				sum.add(t)
+				models[m] = true
+				get(byDay, day).put(r.ID, t)
+				get(byModel, m).put(r.ID, t)
+			}
+		}
+		inRange := from == "" || u.EndedAt.In(seoul).Format("2006-01-02") >= from
+		if !inRange && sum.total()+sum.CacheRead+sum.CacheWrite == 0 {
+			continue
+		}
+		row.Tokens, row.Input, row.Output, row.Cached = sum.total(), sum.Input, sum.Output, sum.CacheRead+sum.CacheWrite
+		row.CostUSD, row.Priced = cost(sum.CostUSD), sum.CostUSD != nil
+		for m := range models {
+			row.Models = append(row.Models, m)
+		}
+		slices.Sort(row.Models)
+		sessions = append(sessions, row)
+		all.put(r.ID, sum)
+		project := u.Project
+		if project == "" {
+			project = "(없음)"
+		}
+		get(byProject, project).put(r.ID, sum)
+		get(byAgent, u.Agent).put(r.ID, sum)
+		active += u.ActiveSeconds
+		for d := u.StartedAt.In(seoul); !d.After(u.EndedAt.In(seoul).Add(24 * time.Hour)); d = d.AddDate(0, 0, 1) {
+			if k := d.Format("2006-01-02"); k >= from && k <= u.EndedAt.In(seoul).Format("2006-01-02") {
+				activeDays[k] = true
+			}
+		}
+		dayMsgs[u.EndedAt.In(seoul).Format("2006-01-02")] += u.Messages
+		for i, n := range u.Hours {
+			if i < 168 {
+				hours[i] += n
+			}
+		}
+		for k, n := range u.Tools {
+			v := tools[k]
+			tools[k] = [2]int{v[0] + n, v[1] + 1}
+		}
+		for k, n := range u.Skills {
+			v := skills[k]
+			skills[k] = [2]int{v[0] + n, v[1] + 1}
+		}
+		switch m := u.Messages; {
+		case m <= 5:
+			shape[0]++
+		case m <= 15:
+			shape[1]++
+		case m <= 30:
+			shape[2]++
+		case m <= 60:
+			shape[3]++
+		case m <= 120:
+			shape[4]++
+		default:
+			shape[5]++
+		}
+	}
+
+	// by day: every day of the range, empty ones included
+	series := []map[string]any{}
+	first := from
+	if first == "" {
+		for k := range byDay {
+			if first == "" || k < first {
+				first = k
+			}
+		}
+	}
+	if first != "" {
+		start, _ := time.ParseInLocation("2006-01-02", first, seoul)
+		for d := start; d.Format("2006-01-02") <= now.Format("2006-01-02"); d = d.AddDate(0, 0, 1) {
+			k := d.Format("2006-01-02")
+			a := get(byDay, k)
+			series = append(series, map[string]any{"date": k, "tokens": a.total(), "output": a.Output, "cost_usd": cost(a.CostUSD),
+				"sessions": len(a.sessions), "messages": dayMsgs[k]})
+		}
+	}
+
+	tokensOf := make([]int64, 0, len(sessions))
+	for _, r := range sessions {
+		tokensOf = append(tokensOf, r.Tokens)
+	}
+	slices.Sort(tokensOf)
+	pick := func(q float64) int64 {
+		if len(tokensOf) == 0 {
+			return 0
+		}
+		return tokensOf[int(math.Ceil(q*float64(len(tokensOf))))-1]
+	}
+	hitBase := all.Input + all.CacheRead + all.CacheWrite
+	hit := 0.0
+	if hitBase > 0 {
+		hit = math.Round(1000*float64(all.CacheRead)/float64(hitBase)) / 10
+	}
+	top := slices.Clone(sessions)
+	sort.SliceStable(top, func(i, j int) bool { return top[i].Tokens > top[j].Tokens })
+	latest := slices.Clone(sessions)
+	sort.SliceStable(latest, func(i, j int) bool { return latest[i].Ended.After(latest[j].Ended) })
+	agents := []map[string]any{}
+	for name, n := range allAgents {
+		agents = append(agents, map[string]any{"name": name, "all_sessions": n})
+	}
+	sort.Slice(agents, func(i, j int) bool { return agents[i]["all_sessions"].(int) > agents[j]["all_sessions"].(int) })
+	inRoot := 0
+	if a := byProject["root"]; a != nil {
+		inRoot = len(a.sessions)
+	}
+
+	out := map[string]any{
+		"range": rangeKey, "agent": agent, "agents": agents, "authority": AuthorityDataOnly,
+		"kpi": map[string]any{
+			"sessions": len(sessions), "tokens": all.total(), "input": all.Input, "output": all.Output, "cache_read": all.CacheRead,
+			"cache_write": all.CacheWrite, "cost_usd": cost(all.CostUSD), "priced": all.CostUSD != nil, "cache_hit_pct": hit,
+			"active_seconds": active, "active_days": len(activeDays), "projects": len(byProject), "root_sessions": inRoot,
+			"median_tokens": pick(0.5), "p90_tokens": pick(0.9),
+		},
+		"by_day": series, "projects": ranked(byProject, 0), "models": ranked(byModel, 0), "by_agent": ranked(byAgent, 0),
+		"hours": hours, "shape": shape, "tools": counted(tools, 12), "skills": counted(skills, 12),
+		"top_sessions": top[:min(len(top), 8)], "latest": latest[:min(len(latest), 50)],
+	}
+	req, err := s.usageRequests(ctx, scope, days, now)
+	if err != nil {
+		return nil, err
+	}
+	out["requests"] = req
+	return out, nil
+}
+
+// UsageSessionList is 세션 메뉴: newest first, optionally one agent and a literal title/project/id match.
+func (s *Service) UsageSessionList(ctx context.Context, token string, scope Scope, rangeKey, agent, q string, limit int) (map[string]any, error) {
+	days, ok := usageRanges[rangeKey]
+	if !validScope(scope) || !ok || agent != "" && !usageNameRe.MatchString(agent) || len(q) > 200 || limit < 1 || limit > 500 {
+		return nil, ErrInvalid
+	}
+	if _, err := s.authorize(ctx, token, "read:"+colRouting, scope, routingID(scope), ""); err != nil {
+		return nil, err
+	}
+	rows, err := s.usageRows(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	var since time.Time
+	if days > 0 {
+		y, m, d := time.Now().In(usageZone()).AddDate(0, 0, 1-days).Date()
+		since = time.Date(y, m, d, 0, 0, 0, 0, usageZone())
+	}
+	q = strings.ToLower(q)
+	items := []map[string]any{}
+	total := 0
+	for _, r := range rows {
+		u := r.UsageSession
+		if u == nil || u.EndedAt.Before(since) || agent != "" && u.Agent != agent ||
+			q != "" && !strings.Contains(strings.ToLower(u.Title+"\x00"+u.Project+"\x00"+u.SessionID), q) {
+			continue
+		}
+		total++
+		var sum UsageTokens
+		models := map[string]*UsageTokens{}
+		for _, perModel := range u.Days {
+			for m, t := range perModel {
+				sum.add(t)
+				if models[m] == nil {
+					models[m] = &UsageTokens{}
+				}
+				models[m].add(t)
+			}
+		}
+		byModel := []map[string]any{}
+		for m, t := range models {
+			byModel = append(byModel, map[string]any{"name": m, "tokens": t.total(), "input": t.Input, "output": t.Output, "cache_read": t.CacheRead,
+				"cache_write": t.CacheWrite, "requests": t.Requests, "cost_usd": cost(t.CostUSD), "priced": t.CostUSD != nil})
+		}
+		sort.Slice(byModel, func(i, j int) bool { return byModel[i]["tokens"].(int64) > byModel[j]["tokens"].(int64) })
+		items = append(items, map[string]any{"id": r.ID, "agent": u.Agent, "device": u.Device, "session_id": u.SessionID, "title": u.Title,
+			"project": u.Project, "started_at": u.StartedAt, "ended_at": u.EndedAt, "messages": u.Messages, "active_seconds": u.ActiveSeconds,
+			"tokens": sum.total(), "input": sum.Input, "output": sum.Output, "cache_read": sum.CacheRead, "cache_write": sum.CacheWrite,
+			"requests": sum.Requests, "cost_usd": cost(sum.CostUSD), "priced": sum.CostUSD != nil, "models": byModel,
+			"tools": counted(pairs(u.Tools), 50), "skills": counted(pairs(u.Skills), 50)})
+	}
+	sort.SliceStable(items, func(i, j int) bool { return items[i]["ended_at"].(time.Time).After(items[j]["ended_at"].(time.Time)) })
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return map[string]any{"items": items, "total": total, "authority": AuthorityDataOnly}, nil
+}
+
+func pairs(m map[string]int) map[string][2]int {
+	out := make(map[string][2]int, len(m))
+	for k, n := range m {
+		out[k] = [2]int{n, 1}
+	}
+	return out
+}
+
+func usageZone() *time.Location {
+	if z, err := time.LoadLocation("Asia/Seoul"); err == nil {
+		return z
+	}
+	return time.FixedZone("KST", 9*3600)
+}
+
+func (s *Service) usageRows(ctx context.Context, scope Scope) ([]Record, error) {
+	if all, ok := s.Repo.(interface {
+		UsageSessionRows(context.Context, Scope) ([]Record, error)
+	}); ok {
+		return all.UsageSessionRows(ctx, scope)
+	}
+	return s.Repo.ListRecords(ctx, scope, colUsageSessions, 1000)
+}
+
+func (p *Postgres) UsageSessionRows(ctx context.Context, scope Scope) ([]Record, error) {
+	return p.selectRecords(ctx, colUsageSessions, scope, "", nil, "updated_at DESC, id ASC", usageSessionsRead)
+}
+
+// usageRequests is 요청 탭: the routed calls the host runner reported (POST /v1/routing/calls).
+func (s *Service) usageRequests(ctx context.Context, scope Scope, days int, now time.Time) (map[string]any, error) {
+	rows, err := s.Repo.ListRecords(ctx, scope, colRoutingCalls, routingCallsRead)
+	if err != nil {
+		return nil, err
+	}
+	var since time.Time
+	if days > 0 {
+		y, m, d := now.AddDate(0, 0, 1-days).Date()
+		since = time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	}
+	items := []map[string]any{}
+	var n, fails int
+	var in, outTok int64
+	var total float64
+	byModel := map[string]*usageAcc{}
+	for _, r := range rows {
+		c := r.RoutingCall
+		if c == nil || systemCall(c) || r.CreatedAt.Before(since) {
+			continue
+		}
+		n++
+		if !c.OK {
+			fails++
+		}
+		in += c.InputTokens
+		outTok += c.OutputTokens
+		t := UsageTokens{Input: c.InputTokens, Output: c.OutputTokens, Requests: 1, CostUSD: c.CostUSD}
+		if byModel[c.Model] == nil {
+			byModel[c.Model] = &usageAcc{}
+		}
+		byModel[c.Model].put(r.ID, t)
+		if c.CostUSD != nil {
+			total += *c.CostUSD
+		}
+		if len(items) < 200 {
+			items = append(items, map[string]any{"at": r.CreatedAt, "model": c.Model, "replaced": c.Replaced, "decision": c.Decision,
+				"ok": c.OK, "latency_ms": c.LatencyMS, "input": c.InputTokens, "output": c.OutputTokens, "cost_usd": cost(c.CostUSD), "error": c.Error})
+		}
+	}
+	return map[string]any{"count": n, "failed": fails, "input": in, "output": outTok, "cost_usd": math.Round(total*1e4) / 1e4,
+		"models": ranked(byModel, 0), "items": items}, nil
+}
+
+func usageRoutes(mux *http.ServeMux, s *Service) {
+	mux.HandleFunc("GET /v1/usage/summary", func(w http.ResponseWriter, r *http.Request) {
+		rg := r.URL.Query().Get("range")
+		if rg == "" {
+			rg = "30d"
+		}
+		out, e := s.UsageSummary(r.Context(), bearer(r), scopeQuery(r), rg, r.URL.Query().Get("source"))
+		respond(w, out, e)
+	})
+	mux.HandleFunc("GET /v1/usage/sessions", func(w http.ResponseWriter, r *http.Request) {
+		v := r.URL.Query()
+		rg, limit := v.Get("range"), 200
+		if rg == "" {
+			rg = "30d"
+		}
+		if n, err := strconv.Atoi(v.Get("limit")); err == nil {
+			limit = n
+		}
+		out, e := s.UsageSessionList(r.Context(), bearer(r), scopeQuery(r), rg, v.Get("source"), v.Get("q"), limit)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("POST /v1/usage/sessions", func(w http.ResponseWriter, r *http.Request) {
+		var in UsageSessionsInput
+		if !decodeLimit(w, r, &in, 8<<20) {
+			return
+		}
+		out, e := s.RecordUsageSessions(r.Context(), bearer(r), in)
+		respond(w, out, e)
+	})
+}

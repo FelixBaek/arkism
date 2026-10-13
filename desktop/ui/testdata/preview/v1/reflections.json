@@ -1,0 +1,68 @@
+{
+ "authority": "data_only_untrusted",
+ "items": [
+  {
+   "id": "f0",
+   "subject": "figma",
+   "interpretation": "Orbit 화면은 Figma 시안의 간격 토큰을 그대로 코드에 옮긴다",
+   "observation": "간격을 눈대중으로 맞췄다가 시안과 4px씩 어긋나 두 번 다시 고쳤다.",
+   "status": "validated",
+   "distinct_runs": 4,
+   "confidence": 0.8,
+   "evidence_refs": [
+    {
+     "collection": "reflections",
+     "id": "ref_c41a",
+     "revision": 1
+    },
+    {
+     "collection": "agent_runs",
+     "id": "run_6b09d3",
+     "revision": 1
+    }
+   ]
+  },
+  {
+   "id": "f1",
+   "subject": "figma",
+   "interpretation": "Figma에서 내보낸 SVG는 viewBox를 확인한 뒤 쓴다",
+   "observation": "내보낸 아이콘의 viewBox가 달라 버튼 안에서 흐리게 보였다.",
+   "status": "validated",
+   "distinct_runs": 3,
+   "confidence": 0.7,
+   "evidence_refs": [
+    {
+     "collection": "reflections",
+     "id": "ref_c41a",
+     "revision": 1
+    },
+    {
+     "collection": "agent_runs",
+     "id": "run_6b09d3",
+     "revision": 1
+    }
+   ]
+  },
+  {
+   "id": "f2",
+   "subject": "figma",
+   "interpretation": "시안의 영문 문구를 한국어로 바꾼 뒤 줄바꿈을 다시 본다",
+   "observation": "번역 뒤 버튼 문구가 두 줄로 넘쳤다.",
+   "status": "candidate",
+   "distinct_runs": 2,
+   "confidence": 0.5,
+   "evidence_refs": [
+    {
+     "collection": "reflections",
+     "id": "ref_c41a",
+     "revision": 1
+    },
+    {
+     "collection": "agent_runs",
+     "id": "run_6b09d3",
+     "revision": 1
+    }
+   ]
+  }
+ ]
+}

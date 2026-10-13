@@ -1,0 +1,483 @@
+{
+ "prepare": [
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}",
+   "model": "gemini-synthetic-model",
+   "out": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"id\": \"call-a\", \"name\": \"lookup\", \"args\": {\"top_p\": 0.9, \"function_call\": {\"any_of\": [1, true, \"한글\"]}}}, \"thoughtSignature\": \"synthetic-thought-signature==\"}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"id\": \"call-a\", \"name\": \"lookup\", \"response\": {\"top_p\": 0.9, \"function_call\": {\"any_of\": [1, true, \"한글\"]}}}}]}], \"systemInstruction\": {\"parts\": [{\"text\": \"규칙\"}]}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"top_p\": {\"type\": \"number\"}}}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [\"lookup\"]}}, \"generationConfig\": {\"temperature\": 1.7, \"topP\": 0.91, \"topK\": 23, \"maxOutputTokens\": 123, \"candidateCount\": 2, \"responseMimeType\": \"application/json\", \"responseSchema\": {\"type\": \"OBJECT\"}, \"thinkingConfig\": {\"thinkingBudget\": 1024, \"includeThoughts\": true}, \"stopSequences\": [\"END\"]}, \"safetySettings\": [{\"category\": \"HARM_CATEGORY_HATE_SPEECH\", \"threshold\": \"BLOCK_NONE\"}], \"cachedContent\": \"cachedContents/synthetic\", \"labels\": {\"purpose\": \"test\"}}",
+   "model": "gemini-synthetic-model",
+   "out": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}, {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"id\": \"call-a\", \"name\": \"lookup\", \"args\": {\"top_p\": 0.9, \"function_call\": {\"any_of\": [1, true, \"한글\"]}}}, \"thoughtSignature\": \"synthetic-thought-signature==\"}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"id\": \"call-a\", \"name\": \"lookup\", \"response\": {\"top_p\": 0.9, \"function_call\": {\"any_of\": [1, true, \"한글\"]}}}}]}], \"systemInstruction\": {\"parts\": [{\"text\": \"규칙\"}]}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"top_p\": {\"type\": \"number\"}}}}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [\"lookup\"]}}, \"generationConfig\": {\"temperature\": 1.7, \"topP\": 0.91, \"topK\": 23, \"maxOutputTokens\": 123, \"candidateCount\": 2, \"responseMimeType\": \"application/json\", \"responseSchema\": {\"type\": \"OBJECT\"}, \"thinkingConfig\": {\"thinkingBudget\": 1024, \"includeThoughts\": true}, \"stopSequences\": [\"END\"]}, \"safetySettings\": [{\"category\": \"HARM_CATEGORY_HATE_SPEECH\", \"threshold\": \"BLOCK_NONE\"}], \"cachedContent\": \"cachedContents/synthetic\", \"labels\": {\"purpose\": \"test\"}}"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}], \"generation_config\": {\"top_p\": 0.7}, \"system_instruction\": {\"parts\": [{\"text\": \"규칙\"}]}}",
+   "model": "gemini",
+   "out": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}], \"generationConfig\": {\"top_p\": 0.7}, \"systemInstruction\": {\"parts\": [{\"text\": \"규칙\"}]}}"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}], \"generation_config\": {\"top_p\": 0.7}, \"system_instruction\": {\"parts\": [{\"text\": \"규칙\"}]}, \"generationConfig\": {}}",
+   "model": "gemini",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"parts\": [{\"text\": \"한글\"}]}]}",
+   "model": "m",
+   "out": "{\"contents\": [{\"parts\": [{\"text\": \"한글\"}]}]}"
+  },
+  {
+   "body": "null",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "[]",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": []}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"system\", \"parts\": [{\"text\": \"x\"}]}]}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"parts\": []}]}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"parts\": [null]}]}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"parts\": [{}]}]}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": null, \"parts\": [{\"text\": \"x\"}]}]}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}], \"callerAuthorization\": \"k\"}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}], \"generationConfig\": {\"temperature\": NaN}}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"parts\": [{\"text\": \"x\"}]}], \"contents_\": 1}",
+   "model": "m",
+   "err": "unsupported_or_invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}",
+   "model": "../escape",
+   "err": "invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}",
+   "model": "models/gemini",
+   "err": "invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}",
+   "model": "gemini?key=caller",
+   "err": "invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}",
+   "model": "gemini\n",
+   "err": "invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}",
+   "model": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "err": "invalid_request:400:false"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}",
+   "model": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "out": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}"
+  },
+  {
+   "body": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]}",
+   "model": "",
+   "err": "invalid_request:400:false"
+  }
+ ],
+ "count": [
+  {
+   "in": "[{\"role\": \"model\", \"parts\": [{\"text\": \"생각 🌱\", \"thought\": true, \"thoughtSignature\": \"text-signature==\"}, {\"text\": \"\", \"thought\": true}, {\"thought\": true, \"thoughtSignature\": \"empty-signature==\"}, {\"text\": \"보통 텍스트\", \"thought\": false}, {\"text\": \"그대로\"}, {\"functionCall\": {\"name\": \"lookup\", \"args\": {\"thought\": true, \"text\": \"사용자 JSON\"}}, \"text\": \"도구 텍스트\", \"thought\": true, \"thoughtSignature\": \"call-signature==\"}, {\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"thought\": true, \"value\": \"결과\"}}, \"thought\": true, \"thoughtSignature\": \"response-signature==\"}, {\"inlineData\": {\"mimeType\": \"image/png\", \"data\": \"c3ludGhldGlj\"}, \"thought\": true, \"thoughtSignature\": \"inline-signature==\"}, {\"fileData\": {\"mimeType\": \"image/png\", \"fileUri\": \"gs://synthetic/image.png\"}, \"thought\": true, \"thoughtSignature\": \"file-signature==\"}]}, {\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]",
+   "out": "[{\"role\": \"model\", \"parts\": [{\"text\": \"생각 🌱\\n[Thought: true]\", \"thoughtSignature\": \"text-signature==\"}, {\"text\": \"[Thought: true]\"}, {\"thoughtSignature\": \"empty-signature==\", \"text\": \"[Thought: true]\"}, {\"text\": \"보통 텍스트\", \"thought\": false}, {\"text\": \"그대로\"}, {\"functionCall\": {\"name\": \"lookup\", \"args\": {\"thought\": true, \"text\": \"사용자 JSON\"}}, \"text\": \"도구 텍스트\", \"thoughtSignature\": \"call-signature==\"}, {\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"thought\": true, \"value\": \"결과\"}}, \"thoughtSignature\": \"response-signature==\"}, {\"inlineData\": {\"mimeType\": \"image/png\", \"data\": \"c3ludGhldGlj\"}, \"thoughtSignature\": \"inline-signature==\"}, {\"fileData\": {\"mimeType\": \"image/png\", \"fileUri\": \"gs://synthetic/image.png\"}, \"thoughtSignature\": \"file-signature==\"}]}, {\"role\": \"user\", \"parts\": [{\"text\": \"안녕하세요 🌱\"}]}]"
+  },
+  {
+   "in": "[{\"parts\": [{\"text\": 7, \"thought\": false}, {\"thought\": 1, \"text\": \"x\"}]}]",
+   "out": "[{\"parts\": [{\"text\": 7, \"thought\": false}, {\"thought\": 1, \"text\": \"x\"}]}]"
+  },
+  {
+   "in": "[{\"parts\": [{\"text\": 7, \"thought\": true}]}]",
+   "err": "invalid_request:400:false"
+  },
+  {
+   "in": "[{\"parts\": [{\"text\": null, \"thought\": true}]}]",
+   "err": "invalid_request:400:false"
+  }
+ ],
+ "completion": [
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "ok",
+   "holds": [
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    false
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}]}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    false
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [null]}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"FINISH_REASON_UNSPECIFIED\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"args\": []}}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"\", \"args\": {}}}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"args\": {}}}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": true, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 16, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": -1, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 15, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "ok",
+   "holds": [
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 1.0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}}]}",
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"args\": {\"x\": 1}}, \"thoughtSignature\": \"s==\"}]}}]}",
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": []}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "ok",
+   "holds": [
+    false,
+    true,
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}}]}",
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"args\": {\"x\": 1}}, \"thoughtSignature\": \"s==\"}]}}]}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    false,
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}}]}",
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"args\": {\"x\": 1}}, \"thoughtSignature\": \"s==\"}]}}]}",
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": []}, \"finishReason\": \"STOP\"}]}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    false,
+    true,
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"args\": {}}}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}",
+    "{\"candidates\": [{\"index\": 1, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}}]}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    true,
+    false
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"functionCall\": {\"name\": \"lookup\", \"args\": {}}}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}",
+    "{\"candidates\": [{\"index\": 1, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}}]}",
+    "{\"candidates\": [{\"index\": 1, \"content\": {\"role\": \"model\", \"parts\": []}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "ok",
+   "holds": [
+    true,
+    false,
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}",
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": [
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"promptFeedback\": {\"blockReason\": \"SAFETY\"}}"
+   ],
+   "end": "ok",
+   "holds": [
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"promptFeedback\": {\"blockReason\": \"\"}}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    false
+   ]
+  },
+  {
+   "pages": [
+    "{\"promptFeedback\": {\"blockReason\": \"SAFETY\"}}",
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": [
+    true,
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}}]}",
+    "{\"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    false,
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": null}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"usageMetadata\": []}"
+   ],
+   "end": "invalid_usage",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"usageMetadata\": {\"totalTokenCount\": true}}"
+   ],
+   "end": "invalid_usage",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"usageMetadata\": {\"totalTokenCount\": 1.5}}"
+   ],
+   "end": "invalid_usage",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"usageMetadata\": {\"totalTokenCount\": -1}}"
+   ],
+   "end": "invalid_usage",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"usageMetadata\": {\"promptTokenCount\": 1}}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    true
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": 1}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"thoughtSignature\": \"\"}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"thoughtSignature\": null}]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [null]}, \"finishReason\": \"STOP\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"content\": []}]}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"content\": {\"parts\": {}}}]}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": \"\"}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"index\": 0, \"content\": {\"role\": \"model\", \"parts\": [{\"text\": \"답변 🌱\"}]}, \"finishReason\": 7}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "invalid_response",
+   "holds": []
+  },
+  {
+   "pages": [
+    "{\"candidates\": [{\"finishReason\": null}], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    false
+   ]
+  },
+  {
+   "pages": [
+    "{\"candidates\": [], \"usageMetadata\": {\"promptTokenCount\": 13, \"candidatesTokenCount\": 7, \"totalTokenCount\": 25, \"thoughtsTokenCount\": 5, \"cachedContentTokenCount\": 3}}"
+   ],
+   "end": "truncated_stream",
+   "holds": [
+    true
+   ]
+  }
+ ]
+}

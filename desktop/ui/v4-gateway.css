@@ -1,0 +1,43 @@
+/* 설정 › 연결 › 모델 중계기 (Figma 380:28051, 380:28336; gateway-token.js) and ROUTER 본대화·부속 호출 (routing-turns.js). */
+.gw-alert { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border-radius: 8px; background: var(--nc-amber-bg); }
+.gw-alert[hidden] { display: none; }
+.gw-alert p { margin: 0; color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.gw-alert-acts { display: flex; gap: 6px; }
+.gw-alert-acts .btn { height: auto; padding: 7px 14px; border-radius: 8px; font: 500 calc(13px * var(--fs, 1))/1.4 var(--sans); }
+.gw-alert-acts .btn.primary { border: 0; background: var(--nc-action); color: var(--nc-on-accent); }
+.gw-alert-acts .btn.ghost { border: 0; background: none; color: var(--nc-muted); }
+.gw-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.gw-label { color: var(--nc-quiet); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.gw-chip { padding: 1px 8px; border-radius: 999px; background: var(--nc-subtle); color: var(--nc-muted); font: 500 calc(12px * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; }
+.gw-chip.warn { background: var(--nc-amber-bg); color: var(--nc-amber); }
+.gw-when { color: var(--nc-quiet); font: 400 calc(12.5px * var(--fs, 1))/1.5 var(--sans); }
+.gw-remake { margin-left: auto; padding: 0; border: 0; background: none; color: var(--nc-accent); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; white-space: nowrap; }
+.gw-note { margin: 0; }
+
+/* ROUTER › 라우팅 현황 › Claude Code 호출 */
+.rtg-card { gap: 10px; }
+.rtg-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.rtg-tile { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-canvas); min-width: 0; }
+.rtg-tile > p { margin: 0; color: var(--nc-muted); font: 500 calc(12.5px * var(--fs, 1))/1.4 var(--sans); }
+.rtg-value { display: flex; align-items: baseline; gap: 4px; }
+.rtg-value strong { color: var(--nc-text); font: 500 calc(22px * var(--fs, 1))/1.2 var(--mono); }
+.rtg-value span, .rtg-tile > small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.rtg-sides { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.rtg-chip { padding: 1px 8px; border-radius: 999px; background: var(--nc-subtle); color: var(--nc-muted); font-size: calc(11.5px * var(--fs, 1)); }
+.rtg-label { margin: 4px 0 0; color: var(--nc-muted); font: 500 calc(12.5px * var(--fs, 1))/1.4 var(--sans); }
+.rtg-turns { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: 8px; overflow: hidden; }
+.rtg-turn + .rtg-turn { border-top: 1px solid var(--nc-line); }
+.rtg-turn-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 0; background: none; color: var(--nc-text); text-align: left; cursor: pointer; font: 400 calc(12.5px * var(--fs, 1))/1.4 var(--sans); }
+.rtg-turn-head:hover { background: var(--nc-subtle); }
+.rtg-turn-head[aria-expanded="true"] { background: var(--nc-raised); }
+.rtg-session { color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
+.rtg-count { color: var(--nc-quiet); }
+.rtg-fail { color: var(--nc-amber); }
+.rtg-when { margin-left: auto; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.rtg-calls { display: flex; flex-direction: column; padding: 4px 12px 8px 24px; background: var(--nc-raised); }
+.rtg-call { display: grid; grid-template-columns: 84px minmax(0, 1fr) 40px 52px 92px; align-items: center; gap: 10px; padding: 5px 0; font: 400 calc(12px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-muted); }
+.rtg-tag { color: var(--nc-text); }
+.rtg-tag.side { color: var(--nc-quiet); }
+.rtg-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nc-text); }
+.rtg-call.bad .rtg-ok { color: var(--nc-amber); }
+.rtg-num { text-align: right; font-family: var(--mono); }

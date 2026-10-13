@@ -1,0 +1,6 @@
+{"selected_id": "ver-code-review-3", "provider": "clef-flash", "authority": "data_only_untrusted",
+ "judgments": [
+  {"id": "ver-code-review-3", "suitability": 0.91, "confidence": 0.86, "conflict": false, "needs_verification": false, "needs_human_review": false},
+  {"id": "ver-test-first-3", "suitability": 0.42, "confidence": 0.7, "conflict": false, "needs_verification": true, "needs_human_review": false},
+  {"id": "ver-commit-and-push-3", "suitability": 0.18, "confidence": 0.8, "conflict": false, "needs_verification": false, "needs_human_review": false}
+ ]}

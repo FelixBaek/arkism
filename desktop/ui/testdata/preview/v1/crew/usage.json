@@ -1,0 +1,279 @@
+{
+ "kpi": {
+  "runs": 642,
+  "success_rate": 94.1,
+  "cost_usd": 212,
+  "cost_estimated": true,
+  "waiting": 3,
+  "oldest_waiting_at": "2026-10-13T12:35:37Z"
+ },
+ "by_day": [
+  {
+   "date": "2026-09-14",
+   "ok": 22,
+   "failed": 0
+  },
+  {
+   "date": "2026-09-15",
+   "ok": 24,
+   "failed": 3
+  },
+  {
+   "date": "2026-09-16",
+   "ok": 8,
+   "failed": 0
+  },
+  {
+   "date": "2026-09-17",
+   "ok": 18,
+   "failed": 0
+  },
+  {
+   "date": "2026-09-18",
+   "ok": 22,
+   "failed": 2
+  },
+  {
+   "date": "2026-09-19",
+   "ok": 8,
+   "failed": 2
+  },
+  {
+   "date": "2026-09-20",
+   "ok": 18,
+   "failed": 0
+  },
+  {
+   "date": "2026-09-21",
+   "ok": 10,
+   "failed": 1
+  },
+  {
+   "date": "2026-09-22",
+   "ok": 24,
+   "failed": 0
+  },
+  {
+   "date": "2026-09-23",
+   "ok": 18,
+   "failed": 0
+  },
+  {
+   "date": "2026-09-24",
+   "ok": 18,
+   "failed": 1
+  },
+  {
+   "date": "2026-09-25",
+   "ok": 8,
+   "failed": 2
+  },
+  {
+   "date": "2026-09-26",
+   "ok": 10,
+   "failed": 0
+  },
+  {
+   "date": "2026-09-27",
+   "ok": 9,
+   "failed": 0
+  },
+  {
+   "date": "2026-09-28",
+   "ok": 9,
+   "failed": 2
+  },
+  {
+   "date": "2026-09-29",
+   "ok": 24,
+   "failed": 0
+  },
+  {
+   "date": "2026-09-30",
+   "ok": 18,
+   "failed": 0
+  },
+  {
+   "date": "2026-10-01",
+   "ok": 18,
+   "failed": 0
+  },
+  {
+   "date": "2026-10-02",
+   "ok": 20,
+   "failed": 1
+  },
+  {
+   "date": "2026-10-03",
+   "ok": 14,
+   "failed": 2
+  },
+  {
+   "date": "2026-10-04",
+   "ok": 10,
+   "failed": 2
+  },
+  {
+   "date": "2026-10-05",
+   "ok": 20,
+   "failed": 2
+  },
+  {
+   "date": "2026-10-06",
+   "ok": 14,
+   "failed": 0
+  },
+  {
+   "date": "2026-10-07",
+   "ok": 9,
+   "failed": 2
+  },
+  {
+   "date": "2026-10-08",
+   "ok": 18,
+   "failed": 1
+  },
+  {
+   "date": "2026-10-09",
+   "ok": 10,
+   "failed": 2
+  },
+  {
+   "date": "2026-10-10",
+   "ok": 10,
+   "failed": 2
+  },
+  {
+   "date": "2026-10-11",
+   "ok": 8,
+   "failed": 2
+  },
+  {
+   "date": "2026-10-12",
+   "ok": 18,
+   "failed": 1
+  },
+  {
+   "date": "2026-10-13",
+   "ok": 18,
+   "failed": 1
+  }
+ ],
+ "workflows": [
+  {
+   "id": "wf-research",
+   "name": "리서치",
+   "runs": 212,
+   "success_rate": 96.2,
+   "cost_usd": 68.4
+  },
+  {
+   "id": "wf-release",
+   "name": "릴리스점검",
+   "runs": 148,
+   "success_rate": 97.3,
+   "cost_usd": 12.9
+  },
+  {
+   "id": "wf-review",
+   "name": "코드리뷰",
+   "runs": 121,
+   "success_rate": 93.4,
+   "cost_usd": 41.7
+  },
+  {
+   "id": "wf-daily",
+   "name": "데일리브리핑",
+   "runs": 84,
+   "success_rate": 98.8,
+   "cost_usd": 6.1
+  },
+  {
+   "id": "wf-issue",
+   "name": "이슈분류",
+   "runs": 47,
+   "success_rate": 87.2,
+   "cost_usd": 9.8
+  },
+  {
+   "id": "wf-water",
+   "name": "수채화",
+   "runs": 30,
+   "success_rate": 83.3,
+   "cost_usd": 24.6
+  }
+ ],
+ "failing_nodes": [
+  {
+   "workflow_id": "wf-research",
+   "node_id": "research",
+   "failures": 9
+  },
+  {
+   "workflow_id": "wf-release",
+   "node_id": "tags",
+   "failures": 7
+  },
+  {
+   "workflow_id": "wf-water",
+   "node_id": "ai1",
+   "failures": 5
+  }
+ ],
+ "agents": [
+  {
+   "id": "ag-review",
+   "name": "코드리뷰어",
+   "calls": 186,
+   "tokens": 7812000,
+   "cost_usd": 14.2,
+   "limit_usd": 20,
+   "pct": 71
+  },
+  {
+   "id": "ag-research",
+   "name": "리서처",
+   "calls": 154,
+   "tokens": 9394000,
+   "cost_usd": 18.9,
+   "limit_usd": null,
+   "pct": null
+  },
+  {
+   "id": "ag-designer",
+   "name": "디자이너",
+   "calls": 72,
+   "tokens": 2736000,
+   "cost_usd": 6.2,
+   "limit_usd": 20,
+   "pct": 31
+  },
+  {
+   "id": "ag-notes",
+   "name": "기록관",
+   "calls": 58,
+   "tokens": 696000,
+   "cost_usd": 0.9,
+   "limit_usd": null,
+   "pct": null
+  }
+ ],
+ "teams": [
+  {
+   "id": "team-design",
+   "name": "디자인 리뷰 팀",
+   "meetings": 9,
+   "avg_rounds": 3.4,
+   "avg_cost_usd": 0.52,
+   "concluded_rate": 88.9
+  },
+  {
+   "id": "team-plan",
+   "name": "제품 기획 팀",
+   "meetings": 5,
+   "avg_rounds": 2.8,
+   "avg_cost_usd": 0.41,
+   "concluded_rate": 80.0
+  }
+ ]
+}

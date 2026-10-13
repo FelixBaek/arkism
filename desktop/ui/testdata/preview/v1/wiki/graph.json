@@ -1,0 +1,17 @@
+{
+ "links": [
+  {
+   "from_id": "wiki-2",
+   "to_id": "wiki-1"
+  },
+  {
+   "from_id": "wiki-3",
+   "to_id": "wiki-1"
+  },
+  {
+   "from_id": "wiki-1",
+   "to_id": "wiki-8"
+  }
+ ],
+ "authority": "data_only_untrusted"
+}

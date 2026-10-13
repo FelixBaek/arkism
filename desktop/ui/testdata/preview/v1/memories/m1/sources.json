@@ -1,0 +1,15 @@
+{
+ "authority": "data_only_untrusted",
+ "memory": {
+  "id": "m1",
+  "revision": 1
+ },
+ "sources": [
+  {
+   "origin_product": "claude_code",
+   "collected_at": "2026-10-13T11:16:34.299802Z",
+   "excerpt": "Orbit 백엔드는 Postgres 하나로 두고, 검색도 Postgres 전문 검색으로 시작한다.",
+   "archive_messages": []
+  }
+ ]
+}

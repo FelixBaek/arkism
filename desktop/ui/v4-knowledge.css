@@ -1,0 +1,115 @@
+/* v4 · NOCTURNE — MEMORY › 지식 (knowledge.js). Figma 384:30031 자료 · 384:30671 조각 · 384:31269 위키.
+   Reuses the v4s-* list/row/badge/attn/search parts from v4-skills.css; colours are --nc-* only. */
+
+.table-wrap > .v4k-wrap { gap: 20px; }
+.v4k-wrap > *, .v4k-main > * { flex: none; }
+.v4k-seg { flex: none; }
+.v4k-seg button { padding: 5px 12px; }
+.v4k-notice { margin: -8px 0 0; }
+
+/* 자료: format groups on the left, sources on the right */
+.v4k-cols { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: start; }
+.v4k-groups { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.v4k-label { margin: 0 0 4px; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
+.v4k-group { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 0; border-radius: var(--nc-radius-control); background: none; text-align: left; cursor: pointer; color: var(--nc-text); }
+.v4k-group:hover { background: var(--nc-subtle); }
+.v4k-group.on { background: var(--nc-raised); }
+.v4k-group.on b { color: var(--nc-accent); }
+.v4k-group-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.v4k-group b { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); }
+.v4k-group small { font: 400 11px/1.5 var(--sans); color: var(--nc-quiet); }
+.v4k-group output { font: 11px/1.5 var(--mono); color: var(--nc-quiet); }
+.btn.v4k-add { justify-content: flex-start; height: auto; margin-top: 4px; padding: 7px 10px; border: 1px solid var(--nc-line); background: none; font: 500 13px/1.5 var(--sans); color: var(--nc-text); }
+.v4k-main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.row.v4s-row.v4k-row { cursor: pointer; padding: 10px 16px; }
+.v4k-row .v4s-text { gap: 2px; }
+.v4k-uses { width: auto; }
+.v4k-num { flex: none; width: 28px; font: 400 11px/1.5 var(--mono); color: var(--nc-quiet); }
+
+/* kind chips (전체 · 초안 · 검토됨 · 잠금 / 목차 · 버전 · 시험 검색) */
+.v4k-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.v4k-chips .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 0; border-radius: 999px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
+.v4k-chips .chip:hover { color: var(--nc-text); }
+.v4k-chips .chip.active { background: var(--nc-raised); color: var(--nc-accent); font-weight: 500; }
+.v4k-chips .chip output { font: 11px/1.5 var(--mono); color: var(--nc-quiet); }
+.v4s-badge.line { background: none; border-color: var(--nc-text); }
+
+/* 시험 검색 */
+.v4k-searchpane { display: flex; flex-direction: column; gap: 12px; }
+.v4k-searchpane .btn { height: 38px; padding: 0 16px; }
+.v4k-evidence { display: flex; flex-direction: column; gap: 8px; }
+.v4k-ev { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
+.v4k-ev-top { display: flex; justify-content: space-between; gap: 8px; font: 500 12px/1.5 var(--sans); color: var(--nc-muted); }
+.v4k-ev-top small { font: 400 11px/1.5 var(--mono); color: var(--nc-quiet); }
+.v4k-ev p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 13px/1.5 var(--sans); color: var(--nc-text); }
+.v4k-ev .mono { font: 400 11px/1.5 var(--mono); color: var(--nc-quiet); }
+
+/* ---------------------------------------------------------------- right detail */
+.knowledge-mode .detail-bar { padding: 24px 20px 0; border-bottom: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
+.knowledge-mode .detail-body { padding: 8px 20px 20px; gap: 22px; }
+.knowledge-mode .detail h2 { margin: 0; font: 500 calc(16px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
+.knowledge-mode .detail h2.v4k-h2 { font: 400 calc(16px * var(--fs, 1))/1.5 var(--mono); }
+.knowledge-mode .detail .btn, .v4k-card .btn { height: auto; padding: 7px 14px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.knowledge-mode .detail .v4s-lead { overflow-wrap: anywhere; }
+.knowledge-mode .detail .meta { margin: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
+.v4k-link { padding: 0; border: 0; background: none; font: 500 12px/1.5 var(--sans); color: var(--nc-accent); cursor: pointer; }
+.v4s-actions .v4k-link { padding: 7px 10px; color: var(--nc-muted); font-size: 13px; }
+.v4s-actions .v4k-link:hover { color: var(--nc-text); }
+.v4k-aside { font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
+
+.v4k-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-amber-bg); }
+.v4k-card > p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.v4k-card > p.v4k-card-note { font-size: 12px; color: var(--nc-muted); }
+
+.v4k-chunks, .v4k-near { display: flex; flex-direction: column; gap: 8px; }
+.v4k-near { gap: 0; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); overflow: hidden; }
+.v4k-chunk { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 0; border-radius: var(--nc-radius-control); background: var(--nc-raised); text-align: left; cursor: pointer; color: var(--nc-text); }
+.v4k-near .v4k-chunk { border-radius: 0; background: none; }
+.v4k-near .v4k-chunk + .v4k-chunk { border-top: 1px solid var(--nc-line); }
+.v4k-chunk:hover { background: var(--nc-subtle); }
+.v4k-chunk small { font: 400 11px/1.5 var(--sans); color: var(--nc-quiet); }
+.v4k-chunk span { font: 400 13px/1.5 var(--sans); overflow-wrap: anywhere; }
+
+.v4k-binds { display: flex; flex-direction: column; gap: 6px; }
+.v4k-bind { display: flex; align-items: center; gap: 8px; font: 400 13px/1.5 var(--sans); color: var(--nc-text); }
+.v4k-bind > span { flex: 1; min-width: 0; }
+.v4k-bind > small { font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
+.v4k-bind.add .v4s-select { flex: 1; height: 34px; max-width: none; }
+.v4k-cap { width: 96px; padding: 6px 8px; }
+.v4k-job { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); }
+.v4k-job-line { margin: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-text); }
+.v4k-rejects { margin: 0; padding-left: 16px; font: 400 12px/1.5 var(--sans); color: var(--nc-muted); }
+.v4k-rejects .mono { font: 400 11px/1.5 var(--mono); }
+.v4k-warn { margin: 0; font: 500 12px/1.5 var(--sans); color: var(--nc-amber); }
+
+/* 위키 본문 · [[링크]] */
+.v4k-prose { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--nc-radius-control); background: var(--nc-raised); }
+.v4k-prose p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.55 var(--sans); color: var(--nc-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+.v4k-wlink { display: inline; padding: 0; border: 0; background: none; font: inherit; color: var(--nc-accent); cursor: pointer; }
+.v4k-wlink.missing, .v4k-wchip.missing { color: var(--nc-quiet); cursor: default; }
+.v4k-wlinks { display: flex; flex-wrap: wrap; gap: 6px; }
+.v4k-wchip { padding: 2px 10px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; font: 400 12px/1.5 var(--sans); color: var(--nc-accent); cursor: pointer; }
+.v4k-wchip:hover:not(.missing) { background: var(--nc-subtle); }
+.v4k-compare { display: flex; flex-direction: column; gap: 10px; }
+.v4k-side { display: flex; flex-direction: column; gap: 4px; }
+.v4k-side small { font: 400 11px/1.5 var(--sans); color: var(--nc-quiet); }
+.v4k-edit { font: 12px/1.6 var(--mono); resize: vertical; }
+
+.v4k-srcs { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); overflow: hidden; }
+.v4k-srcs > .meta { padding: 10px 12px; }
+.v4k-src { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 0; background: none; text-align: left; color: var(--nc-text); cursor: pointer; }
+.v4k-src + .v4k-src { border-top: 1px solid var(--nc-line); }
+button.v4k-src:hover { background: var(--nc-subtle); }
+.v4k-src.stale { cursor: default; }
+.v4k-src-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.v4k-src b { font: 400 13px/1.5 var(--sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v4k-src small { font: 400 11px/1.5 var(--sans); color: var(--nc-quiet); }
+.v4k-lock { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+@media (max-width: 900px) {
+  .v4k-cols { grid-template-columns: minmax(0, 1fr); }
+  .v4k-groups { flex-direction: row; flex-wrap: wrap; }
+}
+.v4k-excl { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font: 400 13px/1.5 var(--sans); }
+.v4k-excl li { display: flex; justify-content: space-between; gap: 12px; color: var(--nc-quiet); overflow-wrap: anywhere; }
+.v4k-excl b { flex: none; font-weight: 400; color: var(--nc-text); }

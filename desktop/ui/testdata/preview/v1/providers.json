@@ -1,0 +1,161 @@
+{
+ "providers": {
+  "providers": [
+   {
+    "id": "openai",
+    "name": "OpenAI",
+    "kind": "subscription",
+    "accounts": [
+     {
+      "id": "codex-main",
+      "cli": "codex",
+      "label": "Codex",
+      "status": "connected",
+      "quotas": [
+       {
+        "window": "5h",
+        "left_pct": 86,
+        "resets_at": "2026-10-13T03:28:00+09:00"
+       },
+       {
+        "window": "week",
+        "left_pct": 86,
+        "resets_at": "2026-10-19T14:29:00+09:00"
+       }
+      ]
+     }
+    ],
+    "keys": [
+     {
+      "id": "key_1",
+      "name": "업무용",
+      "last4": "1234",
+      "monthly_budget_usd": 50,
+      "created_at": "2026-10-01T10:00:00+09:00"
+     }
+    ],
+    "models": [
+     "GPT-6.1-Sol",
+     "GPT-6-Astra",
+     "GPT-6-Sol",
+     "GPT-6-Luna",
+     "GPT-5.5-Sol",
+     "GPT-5.5-Terra"
+    ]
+   },
+   {
+    "id": "anthropic",
+    "name": "Anthropic",
+    "kind": "subscription",
+    "accounts": [
+     {
+      "id": "claude-main",
+      "cli": "claude",
+      "label": "Claude Code",
+      "status": "connected",
+      "cli_info": { "version": "2.1.4", "latest": "2.2.0", "via": "npm", "update": true },
+      "quotas": [
+       {
+        "window": "5h",
+        "left_pct": 28
+       }
+      ]
+     }
+    ],
+    "keys": [],
+    "models": [
+     "claude-opus-5-5",
+     "claude-sonnet-5-5",
+     "claude-haiku-4-5"
+    ]
+   },
+   {
+    "id": "xai",
+    "name": "xAI",
+    "kind": "subscription",
+    "accounts": [
+     {
+      "id": "grok",
+      "cli": "grok",
+      "label": "Grok",
+      "status": "connected"
+     }
+    ],
+    "keys": [],
+    "models": [
+     "grok-5"
+    ]
+   },
+   {
+    "id": "antigravity",
+    "name": "antigravity",
+    "kind": "subscription",
+    "accounts": [
+     {
+      "id": "agy",
+      "cli": "agy",
+      "label": "antigravity",
+      "status": "expired"
+     }
+    ],
+    "keys": [],
+    "models": [
+     "antigravity-gemini-3-pro"
+    ]
+   },
+   {
+    "id": "zai",
+    "name": "Z.ai",
+    "kind": "api",
+    "accounts": [],
+    "keys": [
+     {
+      "id": "key_2",
+      "name": "업무용 Z.ai",
+      "last4": "41c9",
+      "created_at": "2026-10-10T10:00:00+09:00"
+     }
+    ],
+    "models": [
+     "glm-5.3",
+     "glm-5.3-flashx",
+     "glm-4.6"
+    ]
+   },
+   {
+    "id": "custom-deepseek01",
+    "name": "DeepSeek",
+    "kind": "api",
+    "custom": true,
+    "accounts": [],
+    "keys": [
+     {
+      "id": "key_deepseek01",
+      "name": "DeepSeek",
+      "last4": "9a0b",
+      "base_url": "https://api.deepseek.com/v1"
+     }
+    ],
+    "models": [
+     "deepseek-v4",
+     "deepseek-v4-flash"
+    ]
+   }
+  ],
+  "requests": [],
+  "disabled": [
+   "openai/GPT-6-Sol",
+   "openai/GPT-5.5-Sol",
+   "openai/GPT-5.5-Terra",
+   "zai/glm-4.6"
+  ],
+  "extra": [
+   "custom-deepseek01/deepseek-v4-flash"
+  ],
+  "labels": {
+   "account:openai/codex-main": "내 Codex 계정"
+  },
+  "collected_at": "2026-10-13T09:40:00+09:00",
+  "assist_model": ""
+ }
+}

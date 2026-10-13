@@ -1,0 +1,48 @@
+name: SonarCloud
+
+# Quality gate. CI-based analysis so sonar-project.properties (exclusions and reviewed ignores)
+# applies; automatic analysis must stay OFF in the SonarCloud project settings.
+# Coverage is Codecov's job, so it is excluded from the SonarCloud quality gate.
+# TODO(owner): create the SonarCloud project FelixBaek_arkism (organization felixbaek) and add
+# the repository secret SONAR_TOKEN before making this check required.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: sonarcloud-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    # Fork pull requests get no SONAR_TOKEN.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # New code is measured from the last version change, so tag analyses with the app version.
+      - name: Read app version
+        id: version
+        run: |
+          version=$(jq -er '.version | select(type == "string" and length > 0)' desktop/src-tauri/tauri.conf.json)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: >
+            -Dsonar.organization=felixbaek
+            -Dsonar.projectKey=FelixBaek_arkism
+            -Dsonar.projectVersion=${{ steps.version.outputs.version }}
+            -Dsonar.coverage.exclusions=**/*

@@ -1,0 +1,116 @@
+{
+ "items": [
+  {
+   "id": "ds-1",
+   "revision": 1,
+   "updated_at": "2026-10-12T09:00:00Z",
+   "created_by": "Alex",
+   "design_system": {
+    "title": "Orbit Mail",
+    "product": "Orbit",
+    "purpose": "메일 앱 화면",
+    "description": "메일 앱 화면의 색과 글꼴",
+    "source": "https://www.figma.com/design/example-mail",
+    "colors": [
+     {
+      "name": "black",
+      "value": "#111111"
+     },
+     {
+      "name": "graphite",
+      "value": "#b8b7b2"
+     },
+     {
+      "name": "yellow",
+      "value": "#f2d14b"
+     },
+     {
+      "name": "paper",
+      "value": "#f0efeb"
+     }
+    ],
+    "fonts": [
+     "Cormorant",
+     "Noto Sans KR",
+     "IBM Plex Mono"
+    ],
+    "guide": "다크를 기본으로 설계합니다.\n장식은 주요 콘텐츠를 돕습니다.\n상태는 색과 문장으로 알립니다.\n간격은 4의 배수로 맞춥니다.",
+    "tags": []
+   }
+  },
+  {
+   "id": "ds-2",
+   "revision": 1,
+   "updated_at": "2026-10-12T09:00:00Z",
+   "created_by": "Alex",
+   "design_system": {
+    "title": "Orbit Web",
+    "product": "Orbit",
+    "purpose": "브랜드 웹사이트",
+    "description": "Orbit 웹 화면의 색과 글꼴",
+    "source": "https://www.figma.com/design/example-web",
+    "colors": [
+     {
+      "name": "accent",
+      "value": "#E9B828"
+     },
+     {
+      "name": "bg",
+      "value": "#1C1B19"
+     },
+     {
+      "name": "text",
+      "value": "#F3EEE3"
+     },
+     {
+      "name": "line",
+      "value": "#3a3936"
+     }
+    ],
+    "fonts": [
+     "IBM Plex Sans KR",
+     "Geist Mono"
+    ],
+    "guide": "강조 버튼은 화면에 하나만 두세요.\n관련 항목은 구분선과 간격으로 묶으세요.",
+    "tags": []
+   }
+  },
+  {
+   "id": "ds-3",
+   "revision": 1,
+   "updated_at": "2026-10-12T09:00:00Z",
+   "created_by": "Alex",
+   "design_system": {
+    "title": "The Editorial",
+    "product": "Editorial",
+    "purpose": "콘텐츠 · 문서",
+    "description": "읽기 좋은 문서용",
+    "source": "docs/editorial.md",
+    "colors": [
+     {
+      "name": "black",
+      "value": "#111111"
+     },
+     {
+      "name": "graphite",
+      "value": "#b8b7b2"
+     },
+     {
+      "name": "yellow",
+      "value": "#f2d14b"
+     },
+     {
+      "name": "paper",
+      "value": "#f0efeb"
+     }
+    ],
+    "fonts": [
+     "Cormorant",
+     "Noto Serif KR"
+    ],
+    "guide": "본문은 18px 이상.\n한 줄은 40자 안팎.",
+    "tags": []
+   }
+  }
+ ]
+}

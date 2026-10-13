@@ -1,0 +1,584 @@
+[
+ {
+  "name": "rich_native",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"system\", \"content\": \"규칙 \"}, {\"role\": \"developer\", \"content\": [{\"type\": \"text\", \"text\": \"지침\"}]}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"사진\"}, {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,aW1hZ2U=\"}}]}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"설명\", \"parameters\": {\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", \"type\": \"object\", \"$defs\": {\"entry\": {\"type\": \"string\"}}, \"properties\": {\"inline_data\": {\"$ref\": \"#/$defs/entry\"}, \"function_call\": {\"type\": \"object\", \"additionalProperties\": false}}, \"required\": [\"inline_data\"], \"additionalProperties\": false}}}], \"tool_choice\": {\"type\": \"function\", \"function\": {\"name\": \"echo\"}}, \"parallel_tool_calls\": true, \"max_completion_tokens\": 128, \"temperature\": 0.25, \"top_p\": 0.8, \"stop\": [\"끝\", \"STOP\"], \"stream\": true, \"stream_options\": {\"include_usage\": true}, \"n\": 1}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"사진\"}, {\"inlineData\": {\"mimeType\": \"image/png\", \"data\": \"aW1hZ2U=\"}}]}], \"generationConfig\": {\"maxOutputTokens\": 128, \"temperature\": 0.25, \"topP\": 0.8, \"stopSequences\": [\"끝\", \"STOP\"]}, \"systemInstruction\": {\"parts\": [{\"text\": \"규칙 \"}, {\"text\": \"지침\"}]}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"$schema\": \"https://json-schema.org/draft/2020-12/schema\", \"type\": \"object\", \"$defs\": {\"entry\": {\"type\": \"string\"}}, \"properties\": {\"inline_data\": {\"$ref\": \"#/$defs/entry\"}, \"function_call\": {\"type\": \"object\", \"additionalProperties\": false}}, \"required\": [\"inline_data\"], \"additionalProperties\": false}, \"description\": \"설명\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [\"echo\"]}}}",
+    "pinned": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "default_limit",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": null, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}]}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}], \"generationConfig\": {\"maxOutputTokens\": 4096}}",
+    "pinned": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "scalar_stop_webp",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/webp;base64,YQ==\"}}]}], \"stop\": \"끝\"}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"inlineData\": {\"mimeType\": \"image/webp\", \"data\": \"YQ==\"}}]}], \"generationConfig\": {\"maxOutputTokens\": 128, \"stopSequences\": [\"끝\"]}}",
+    "pinned": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "choice_auto",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"tool_choice\": \"auto\"}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"AUTO\"}}}",
+    "pinned": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "choice_none",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"tool_choice\": \"none\"}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"NONE\"}}}",
+    "pinned": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "choice_required",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"tool_choice\": \"required\"}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\"}}}",
+    "pinned": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "choice_function",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"tool_choice\": {\"type\": \"function\", \"function\": {\"name\": \"echo\"}}}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"ANY\", \"allowedFunctionNames\": [\"echo\"]}}}",
+    "pinned": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "no_tools_parallel_false",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"parallel_tool_calls\": false}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}}",
+    "pinned": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "none_parallel_false",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"tool_choice\": \"none\", \"parallel_tool_calls\": false}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"NONE\"}}}",
+    "pinned": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "parallel_false_rejected",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"parallel_tool_calls\": false}",
+    "owner": "synthetic-owner",
+    "result": "unsupported_field:400:false"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"parallel_tool_calls\": false, \"tool_choice\": \"required\"}",
+    "owner": "synthetic-owner",
+    "result": "unsupported_field:400:false"
+   }
+  ]
+ },
+ {
+  "name": "url_image_rejected",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image_url\", \"image_url\": {\"url\": \"https://example.invalid/image.png\"}}]}]}",
+    "owner": "synthetic-owner",
+    "result": "unsupported_field:400:false"
+   }
+  ]
+ },
+ {
+  "name": "response_format",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"response_format\": {\"type\": \"json_object\"}}",
+    "owner": "synthetic-owner",
+    "result": "unsupported_field:400:false"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"response_format\": {\"type\": \"json_object\"}}",
+    "owner": "synthetic-owner",
+    "model_out": null,
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "codec_refusal",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"top_k\": 3}",
+    "owner": "synthetic-owner",
+    "result": "unsupported_or_invalid_request:400:false"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"top_k\": 3}",
+    "owner": "synthetic-owner",
+    "result": "code:unsupported_field"
+   }
+  ]
+ },
+ {
+  "name": "tool_roundtrip",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}",
+    "parts": "[{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "model_out": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"output\": \"둘\"}, \"id\": \"native-b\"}}, {\"functionResponse\": {\"name\": \"echo\", \"response\": {\"output\": \"하나\"}, \"id\": \"native-a\"}}, {\"text\": \"계속\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}]}",
+    "pinned": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "other-owner",
+    "result": "conversation_mismatch:409:false"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "other-owner",
+    "result": "conversation_mismatch:409:false"
+   }
+  ]
+ },
+ {
+  "name": "no_native_id",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}",
+    "parts": "[{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"output\": \"둘\"}}}, {\"functionResponse\": {\"name\": \"echo\", \"response\": {\"output\": \"하나\"}, \"id\": \"native-a\"}}, {\"text\": \"계속\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}]}",
+    "pinned": "google/gemini-synthetic-member",
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "odd_tool_outputs",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}",
+    "parts": "[{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \" {\\\"output\\\":false}\\n\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"output\": \"\"}, \"id\": \"native-b\"}}, {\"functionResponse\": {\"name\": \"echo\", \"response\": {\"output\": \" {\\\"output\\\":false}\\n\"}, \"id\": \"native-a\"}}, {\"text\": \"계속\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}]}",
+    "pinned": "google/gemini-synthetic-member",
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "split_text_and_key_order",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}",
+    "parts": "[{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"첫 \"}, {\"type\": \"text\", \"text\": \"\"}, {\"type\": \"text\", \"text\": \"답변\"}], \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\n  \\\"inline_data\\\": {\\n    \\\"function_call\\\": [\\n      1,\\n      true,\\n      null\\n    ]\\n  },\\n  \\\"value\\\": \\\"\\\\ud55c\\\\uae00\\\"\\n}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\n  \\\"nested\\\": {\\n    \\\"thought_signature\\\": \\\"ordinary-json-key\\\"\\n  },\\n  \\\"value\\\": \\\"\\\\ub458\\\"\\n}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"tool_choice\": \"auto\", \"parallel_tool_calls\": true}",
+    "owner": "synthetic-owner",
+    "model_out": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"첫 \"}, {\"type\": \"text\", \"text\": \"\"}, {\"type\": \"text\", \"text\": \"답변\"}], \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\n  \\\"inline_data\\\": {\\n    \\\"function_call\\\": [\\n      1,\\n      true,\\n      null\\n    ]\\n  },\\n  \\\"value\\\": \\\"\\\\ud55c\\\\uae00\\\"\\n}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\n  \\\"nested\\\": {\\n    \\\"thought_signature\\\": \\\"ordinary-json-key\\\"\\n  },\\n  \\\"value\\\": \\\"\\\\ub458\\\"\\n}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"tool_choice\": \"auto\", \"parallel_tool_calls\": true}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"output\": \"둘\"}, \"id\": \"native-b\"}}, {\"functionResponse\": {\"name\": \"echo\", \"response\": {\"output\": \"하나\"}, \"id\": \"native-a\"}}, {\"text\": \"계속\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}], \"toolConfig\": {\"functionCallingConfig\": {\"mode\": \"AUTO\"}}}",
+    "pinned": "google/gemini-synthetic-member",
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "changed_arguments",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}",
+    "parts": "[{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\":\\\"변경\\\"}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\":\\\"변경\\\"}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   }
+  ]
+ },
+ {
+  "name": "reordered_tools",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}",
+    "parts": "[{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}, {\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}, {\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   }
+  ]
+ },
+ {
+  "name": "changed_public_model",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}",
+    "parts": "[{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/different-public-model\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/different-public-model\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   }
+  ]
+ },
+ {
+  "name": "followup_options",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}",
+    "parts": "[{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 64, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}], \"temperature\": 0.5, \"top_p\": 0.75, \"stop\": \"끝\", \"stream\": true}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]}, {\"role\": \"user\", \"parts\": [{\"functionResponse\": {\"name\": \"lookup\", \"response\": {\"output\": \"둘\"}, \"id\": \"native-b\"}}, {\"functionResponse\": {\"name\": \"echo\", \"response\": {\"output\": \"하나\"}, \"id\": \"native-a\"}}, {\"text\": \"계속\"}]}], \"generationConfig\": {\"maxOutputTokens\": 64, \"temperature\": 0.5, \"topP\": 0.75, \"stopSequences\": [\"끝\"]}, \"tools\": [{\"functionDeclarations\": [{\"name\": \"echo\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}, {\"name\": \"lookup\", \"parametersJsonSchema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}, \"description\": \"합성 도구\"}]}]}",
+    "pinned": "google/gemini-synthetic-member",
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "unknown_history",
+  "steps": [
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   }
+  ]
+ },
+ {
+  "name": "unrelated_history",
+  "steps": [
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"other_provider_call\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"other_provider_call\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "model_out": null,
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"other_provider_call\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"other_provider_call\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   }
+  ]
+ },
+ {
+  "name": "mixed_models",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}",
+    "parts": "[{\"text\": \"비공개 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-thought\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-text-a\"}, {\"thoughtSignature\": \"synthetic-boundary\"}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-text-b\"}, {\"functionCall\": {\"id\": \"native-a\", \"name\": \"echo\", \"args\": {\"value\": \"한글\", \"inline_data\": {\"function_call\": [1, true, null]}}}, \"thoughtSignature\": \"synthetic-tool-a\"}, {\"text\": \"도구 사이 합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-middle\"}, {\"functionCall\": {\"id\": \"native-b\", \"name\": \"lookup\", \"args\": {\"value\": \"둘\", \"nested\": {\"thought_signature\": \"ordinary-json-key\"}}}, \"thoughtSignature\": \"synthetic-tool-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"둘째 답변\"}",
+    "parts": "[{\"text\": \"둘째 답변\"}]",
+    "model": "google/different-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}, {\"role\": \"assistant\", \"content\": \"둘째 답변\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\", \"tool_calls\": [{\"id\": \"mggoogle_synthetic_0\", \"type\": \"function\", \"function\": {\"name\": \"echo\", \"arguments\": \"{\\\"value\\\": \\\"한글\\\", \\\"inline_data\\\": {\\\"function_call\\\": [1, true, null]}}\"}}, {\"id\": \"mggoogle_synthetic_1\", \"type\": \"function\", \"function\": {\"name\": \"lookup\", \"arguments\": \"{\\\"value\\\": \\\"둘\\\", \\\"nested\\\": {\\\"thought_signature\\\": \\\"ordinary-json-key\\\"}}\"}}]}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_1\", \"content\": \"둘\"}, {\"role\": \"tool\", \"tool_call_id\": \"mggoogle_synthetic_0\", \"content\": \"하나\"}, {\"role\": \"user\", \"content\": \"계속\"}, {\"role\": \"assistant\", \"content\": \"둘째 답변\"}, {\"role\": \"user\", \"content\": \"계속\"}], \"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"echo\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}, {\"type\": \"function\", \"function\": {\"name\": \"lookup\", \"description\": \"합성 도구\", \"parameters\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"string\"}}}}}]}",
+    "owner": "synthetic-owner",
+    "result": "conversation_mismatch:409:false"
+   }
+  ]
+ },
+ {
+  "name": "plain_multi_turn",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 답변\"}",
+    "parts": "[{\"text\": \"합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-hidden\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-first\"}, {\"text\": \"답변\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\"}, {\"role\": \"user\", \"content\": \"계속\"}]}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-hidden\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-first\"}, {\"text\": \"답변\"}]}, {\"role\": \"user\", \"parts\": [{\"text\": \"계속\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}}",
+    "pinned": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\"}, {\"role\": \"user\", \"content\": \"계속\"}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"둘째 답변\"}",
+    "parts": "[{\"text\": \"둘째 답변\", \"thoughtSignature\": \"synthetic-second\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 답변\"}, {\"role\": \"user\", \"content\": \"계속\"}, {\"role\": \"assistant\", \"content\": \"둘째 답변\"}, {\"role\": \"user\", \"content\": \"계속\"}]}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"합성 생각\", \"thought\": true, \"thoughtSignature\": \"synthetic-hidden\"}, {\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-first\"}, {\"text\": \"답변\"}]}, {\"role\": \"user\", \"parts\": [{\"text\": \"계속\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"둘째 답변\", \"thoughtSignature\": \"synthetic-second\"}]}, {\"role\": \"user\", \"parts\": [{\"text\": \"계속\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}}",
+    "pinned": "google/gemini-synthetic-member",
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "consecutive_assistant",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"첫 \"}",
+    "parts": "[{\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-a\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 \"}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"답변\"}",
+    "parts": "[{\"text\": \"숨김\", \"thought\": true}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-b\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "continuation",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 \"}, {\"role\": \"assistant\", \"content\": \"답변\"}, {\"role\": \"user\", \"content\": \"계속\"}]}",
+    "owner": "synthetic-owner",
+    "model_out": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "prepare",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}, {\"role\": \"assistant\", \"content\": \"첫 \"}, {\"role\": \"assistant\", \"content\": \"답변\"}, {\"role\": \"user\", \"content\": \"계속\"}]}",
+    "owner": "synthetic-owner",
+    "native": "{\"contents\": [{\"role\": \"user\", \"parts\": [{\"text\": \"질문\"}]}, {\"role\": \"model\", \"parts\": [{\"text\": \"첫 \", \"thoughtSignature\": \"synthetic-a\"}, {\"text\": \"숨김\", \"thought\": true}, {\"text\": \"답변\", \"thoughtSignature\": \"synthetic-b\"}]}, {\"role\": \"user\", \"parts\": [{\"text\": \"계속\"}]}], \"generationConfig\": {\"maxOutputTokens\": 128}}",
+    "pinned": "google/gemini-synthetic-member",
+    "result": "ok"
+   }
+  ]
+ },
+ {
+  "name": "collision",
+  "steps": [
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"same\"}",
+    "parts": "[{\"text\": \"same\", \"thoughtSignature\": \"first\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   },
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"same\"}",
+    "parts": "[{\"text\": \"same\", \"thoughtSignature\": \"second\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "conversation_collision:409:true"
+   },
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"same\"}",
+    "parts": "[{\"text\": \"same\", \"thoughtSignature\": \"first\"}]",
+    "model": "google/other",
+    "result": "conversation_collision:409:true"
+   },
+   {
+    "op": "remember",
+    "chat": "{\"model\": \"google/synthetic-group\", \"max_tokens\": 128, \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}]}",
+    "owner": "synthetic-owner",
+    "message": "{\"role\": \"assistant\", \"content\": \"same\"}",
+    "parts": "[{\"thoughtSignature\": \"first\", \"text\": \"same\"}]",
+    "model": "google/gemini-synthetic-member",
+    "result": "ok"
+   }
+  ]
+ }
+]

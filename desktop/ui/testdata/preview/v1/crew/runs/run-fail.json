@@ -1,0 +1,46 @@
+{
+ "id": "run-fail",
+ "revision": 6,
+ "created_at": "2026-10-12T09:30:00Z",
+ "crew_run": {
+  "crew_id": "wf-research",
+  "crew_revision": 3,
+  "trigger": "manual",
+  "status": "failed",
+  "input": "{\"request\": \"GraphRAG 비용 조사\"}",
+  "summary": "최대 실행시간을 넘겨 멈췄어요. 앞 단계 결과는 남아 있어요.",
+  "nodes": {
+   "start": {
+    "status": "done"
+   },
+   "plan": {
+    "status": "done",
+    "started_at": "2026-10-12T09:30:00Z",
+    "finished_at": "2026-10-12T09:30:00Z"
+   },
+   "collect": {
+    "status": "done",
+    "started_at": "2026-10-12T09:30:00Z",
+    "finished_at": "2026-10-12T09:31:00Z"
+   },
+   "research": {
+    "status": "failed",
+    "error": "최대 실행시간 초과",
+    "started_at": "2026-10-12T09:31:00Z",
+    "finished_at": "2026-10-12T10:00:00Z"
+   },
+   "verify": {
+    "status": "pending"
+   },
+   "check": {
+    "status": "pending"
+   },
+   "write": {
+    "status": "pending"
+   },
+   "end": {
+    "status": "pending"
+   }
+  }
+ }
+}

@@ -1,0 +1,5 @@
+{
+ "path": "desktop/ui/git.js",
+ "patch": "@@ -39,10 +39,15 @@ window.ArkismGit\n-  const [graph, prs, runs] = await Promise.all([\n+  // The graph draws as soon as it arrives;\n+  const repo = S.repo;\n+  S.prs = null; S.runs = null;\n+  side(\"prs\", \"prs\"); side(\"runs\", \"runs\");\n+  const graph = await call(\"graph\", { repo,\n-  Object.assign(S, { graph, prs, runs, busy: \"\" });\n+  Object.assign(S, { graph, busy: \"\" });",
+ "truncated": false
+}

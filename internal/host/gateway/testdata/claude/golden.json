@@ -1,0 +1,327 @@
+{
+ "prepare": [
+  {
+   "name": "basic",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}]}",
+   "result": "{\"model\":\"claude-test\",\"max_tokens\":128,\"system\":\"지시\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"질문\"}]}],\"tools\":[{\"name\":\"echo\",\"description\":\"에코\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"integer\",\"minimum\":1.5}}}}]}",
+   "settings": "{\"max_tokens\":128,\"model\":\"claude-test\",\"system\":\"지시\",\"tools\":[{\"description\":\"에코\",\"input_schema\":{\"properties\":{\"value\":{\"minimum\":1.5,\"type\":\"integer\"}},\"type\":\"object\"},\"name\":\"echo\"}]}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"질문\"}]"
+  },
+  {
+   "name": "stream",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"stream\": true}",
+   "result": "{\"model\":\"claude-test\",\"max_tokens\":128,\"system\":\"지시\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"질문\"}]}],\"tools\":[{\"name\":\"echo\",\"description\":\"에코\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"integer\",\"minimum\":1.5}}}}],\"stream\":true}",
+   "settings": "{\"max_tokens\":128,\"model\":\"claude-test\",\"system\":\"지시\",\"tools\":[{\"description\":\"에코\",\"input_schema\":{\"properties\":{\"value\":{\"minimum\":1.5,\"type\":\"integer\"}},\"type\":\"object\"},\"name\":\"echo\"}]}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"질문\"}]"
+  },
+  {
+   "name": "no_tools",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 1, \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+   "result": "{\"model\":\"claude-test\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}]}",
+   "settings": "{\"max_tokens\":1,\"model\":\"claude-test\"}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"hi\"}]"
+  },
+  {
+   "name": "choice_none",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"tool_choice\": {\"type\": \"none\"}}",
+   "result": "{\"model\":\"claude-test\",\"max_tokens\":128,\"system\":\"지시\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"질문\"}]}],\"tools\":[],\"tool_choice\":{\"type\":\"none\"}}",
+   "settings": "{\"max_tokens\":128,\"model\":\"claude-test\",\"system\":\"지시\",\"tool_choice\":{\"type\":\"none\"},\"tools\":[]}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"질문\"}]"
+  },
+  {
+   "name": "choice_none_without_tools",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 5, \"tool_choice\": {\"type\": \"none\"}, \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+   "result": "{\"model\":\"claude-test\",\"max_tokens\":5,\"tool_choice\":{\"type\":\"none\"},\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"tools\":[]}",
+   "settings": "{\"max_tokens\":5,\"model\":\"claude-test\",\"tool_choice\":{\"type\":\"none\"},\"tools\":[]}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"hi\"}]"
+  },
+  {
+   "name": "choice_auto",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"tool_choice\": {\"type\": \"auto\"}}",
+   "result": "{\"model\":\"claude-test\",\"max_tokens\":128,\"system\":\"지시\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"질문\"}]}],\"tools\":[{\"name\":\"echo\",\"description\":\"에코\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"integer\",\"minimum\":1.5}}}}],\"tool_choice\":{\"type\":\"auto\"}}",
+   "settings": "{\"max_tokens\":128,\"model\":\"claude-test\",\"system\":\"지시\",\"tool_choice\":{\"type\":\"auto\"},\"tools\":[{\"description\":\"에코\",\"input_schema\":{\"properties\":{\"value\":{\"minimum\":1.5,\"type\":\"integer\"}},\"type\":\"object\"},\"name\":\"echo\"}]}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"질문\"}]"
+  },
+  {
+   "name": "system_parts",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": [{\"type\": \"text\", \"text\": \"하나\", \"cache_control\": {\"type\": \"ephemeral\"}}, {\"type\": \"text\", \"text\": \"둘\"}], \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}]}",
+   "result": "{\"model\":\"claude-test\",\"max_tokens\":128,\"system\":[{\"type\":\"text\",\"text\":\"하나\",\"cache_control\":{\"type\":\"ephemeral\"}},{\"type\":\"text\",\"text\":\"둘\"}],\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"질문\"}]}],\"tools\":[{\"name\":\"echo\",\"description\":\"에코\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"integer\",\"minimum\":1.5}}}}]}",
+   "settings": "{\"max_tokens\":128,\"model\":\"claude-test\",\"system\":[{\"cache_control\":{\"type\":\"ephemeral\"},\"text\":\"하나\",\"type\":\"text\"},{\"text\":\"둘\",\"type\":\"text\"}],\"tools\":[{\"description\":\"에코\",\"input_schema\":{\"properties\":{\"value\":{\"minimum\":1.5,\"type\":\"integer\"}},\"type\":\"object\"},\"name\":\"echo\"}]}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"질문\"}]"
+  },
+  {
+   "name": "turns",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"앞\", \"cache_control\": {\"type\": \"ephemeral\"}}, {\"type\": \"image\", \"source\": {\"type\": \"base64\", \"media_type\": \"image/png\", \"data\": \"iVBORw0KGgo=\"}}]}, {\"role\": \"assistant\", \"content\": [{\"type\": \"text\", \"text\": \"호출\"}, {\"type\": \"tool_use\", \"id\": \"toolu_mem_x_0\", \"name\": \"echo\", \"input\": {\"value\": 2}}]}, {\"role\": \"user\", \"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_mem_x_0\", \"content\": \"ok\", \"cache_control\": {\"type\": \"ephemeral\"}}]}, {\"role\": \"assistant\", \"content\": \"답\"}, {\"role\": \"user\", \"content\": \"후속\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}]}",
+   "result": "{\"model\":\"claude-test\",\"max_tokens\":128,\"system\":\"지시\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"앞\"},{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"iVBORw0KGgo=\"}}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"호출\"},{\"type\":\"tool_use\",\"id\":\"toolu_mem_x_0\",\"name\":\"echo\",\"input\":{\"value\":2}}]},{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_mem_x_0\",\"content\":\"ok\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"답\"}]},{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"후속\"}]}],\"tools\":[{\"name\":\"echo\",\"description\":\"에코\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"value\":{\"type\":\"integer\",\"minimum\":1.5}}}}]}",
+   "settings": "{\"max_tokens\":128,\"model\":\"claude-test\",\"system\":\"지시\",\"tools\":[{\"description\":\"에코\",\"input_schema\":{\"properties\":{\"value\":{\"minimum\":1.5,\"type\":\"integer\"}},\"type\":\"object\"},\"name\":\"echo\"}]}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"Conversation role: user\"},{\"type\":\"text\",\"text\":\"앞\"},{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"iVBORw0KGgo=\"}},{\"type\":\"text\",\"text\":\"Conversation role: assistant\"},{\"type\":\"text\",\"text\":\"호출\"},{\"type\":\"text\",\"text\":\"{\\\"id\\\":\\\"toolu_mem_x_0\\\",\\\"input\\\":{\\\"value\\\":2},\\\"name\\\":\\\"echo\\\",\\\"type\\\":\\\"tool_use\\\"}\"},{\"type\":\"text\",\"text\":\"Conversation role: user\"},{\"type\":\"text\",\"text\":\"{\\\"content\\\":\\\"ok\\\",\\\"tool_use_id\\\":\\\"toolu_mem_x_0\\\",\\\"type\\\":\\\"tool_result\\\"}\"},{\"type\":\"text\",\"text\":\"Conversation role: assistant\"},{\"type\":\"text\",\"text\":\"답\"},{\"type\":\"text\",\"text\":\"Conversation role: user\"},{\"type\":\"text\",\"text\":\"후속\"}]"
+  },
+  {
+   "name": "metadata",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"metadata\": {\"user_id\": \"u\"}}",
+   "error": [
+    "unsupported_or_invalid_request",
+    400
+   ]
+  },
+  {
+   "name": "temperature",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"temperature\": 0.1}",
+   "error": [
+    "unsupported_request",
+    400
+   ]
+  },
+  {
+   "name": "top_p",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"top_p\": 0.5}",
+   "error": [
+    "unsupported_request",
+    400
+   ]
+  },
+  {
+   "name": "stop_sequences",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"stop_sequences\": [\"x\"]}",
+   "error": [
+    "unsupported_request",
+    400
+   ]
+  },
+  {
+   "name": "choice_any",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"tool_choice\": {\"type\": \"any\"}}",
+   "error": [
+    "unsupported_request",
+    400
+   ]
+  },
+  {
+   "name": "choice_tool",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"tool_choice\": {\"type\": \"tool\", \"name\": \"echo\"}}",
+   "error": [
+    "unsupported_request",
+    400
+   ]
+  },
+  {
+   "name": "disable_parallel",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"tool_choice\": {\"type\": \"auto\", \"disable_parallel_tool_use\": true}}",
+   "error": [
+    "unsupported_request",
+    400
+   ]
+  },
+  {
+   "name": "max_tokens_bool",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": true, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}]}",
+   "error": [
+    "unsupported_or_invalid_request",
+    400
+   ]
+  },
+  {
+   "name": "max_tokens_float",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128.0, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}]}",
+   "error": [
+    "unsupported_or_invalid_request",
+    400
+   ]
+  },
+  {
+   "name": "last_assistant",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"a\"}, {\"role\": \"assistant\", \"content\": \"b\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}]}",
+   "error": [
+    "unsupported_request",
+    400
+   ]
+  },
+  {
+   "name": "image_url",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": [{\"type\": \"image\", \"source\": {\"type\": \"url\", \"url\": \"https://example.com/a.png\"}}]}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}]}",
+   "error": [
+    "unsupported_request",
+    400
+   ]
+  },
+  {
+   "name": "too_many_tools",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"t0\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t1\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t2\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t3\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t4\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t5\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t6\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t7\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t8\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t9\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t10\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t11\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t12\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t13\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t14\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t15\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t16\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t17\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t18\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t19\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t20\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t21\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t22\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t23\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t24\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t25\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t26\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t27\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t28\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t29\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t30\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t31\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t32\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t33\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t34\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t35\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t36\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t37\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t38\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t39\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t40\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t41\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t42\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t43\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t44\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t45\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t46\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t47\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t48\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t49\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t50\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t51\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t52\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t53\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t54\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t55\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t56\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t57\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t58\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t59\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t60\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t61\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t62\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t63\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t64\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t65\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t66\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t67\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t68\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t69\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t70\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t71\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t72\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t73\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t74\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t75\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t76\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t77\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t78\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t79\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t80\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t81\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t82\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t83\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t84\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t85\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t86\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t87\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t88\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t89\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t90\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t91\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t92\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t93\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t94\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t95\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t96\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t97\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t98\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t99\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t100\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t101\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t102\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t103\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t104\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t105\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t106\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t107\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t108\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t109\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t110\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t111\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t112\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t113\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t114\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t115\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t116\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t117\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t118\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t119\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t120\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t121\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t122\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t123\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t124\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t125\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t126\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t127\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t128\", \"input_schema\": {\"type\": \"object\"}}]}",
+   "error": [
+    "unsupported_request",
+    400
+   ]
+  },
+  {
+   "name": "max_tools",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"t0\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t1\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t2\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t3\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t4\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t5\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t6\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t7\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t8\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t9\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t10\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t11\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t12\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t13\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t14\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t15\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t16\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t17\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t18\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t19\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t20\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t21\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t22\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t23\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t24\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t25\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t26\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t27\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t28\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t29\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t30\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t31\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t32\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t33\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t34\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t35\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t36\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t37\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t38\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t39\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t40\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t41\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t42\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t43\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t44\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t45\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t46\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t47\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t48\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t49\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t50\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t51\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t52\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t53\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t54\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t55\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t56\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t57\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t58\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t59\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t60\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t61\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t62\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t63\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t64\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t65\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t66\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t67\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t68\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t69\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t70\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t71\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t72\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t73\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t74\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t75\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t76\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t77\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t78\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t79\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t80\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t81\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t82\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t83\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t84\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t85\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t86\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t87\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t88\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t89\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t90\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t91\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t92\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t93\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t94\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t95\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t96\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t97\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t98\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t99\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t100\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t101\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t102\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t103\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t104\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t105\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t106\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t107\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t108\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t109\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t110\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t111\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t112\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t113\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t114\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t115\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t116\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t117\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t118\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t119\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t120\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t121\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t122\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t123\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t124\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t125\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t126\", \"input_schema\": {\"type\": \"object\"}}, {\"name\": \"t127\", \"input_schema\": {\"type\": \"object\"}}]}",
+   "result": "{\"model\":\"claude-test\",\"max_tokens\":128,\"system\":\"지시\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"질문\"}]}],\"tools\":[{\"name\":\"t0\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t1\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t2\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t3\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t4\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t5\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t6\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t7\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t8\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t9\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t10\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t11\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t12\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t13\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t14\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t15\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t16\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t17\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t18\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t19\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t20\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t21\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t22\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t23\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t24\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t25\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t26\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t27\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t28\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t29\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t30\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t31\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t32\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t33\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t34\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t35\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t36\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t37\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t38\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t39\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t40\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t41\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t42\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t43\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t44\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t45\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t46\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t47\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t48\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t49\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t50\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t51\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t52\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t53\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t54\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t55\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t56\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t57\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t58\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t59\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t60\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t61\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t62\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t63\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t64\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t65\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t66\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t67\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t68\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t69\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t70\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t71\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t72\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t73\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t74\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t75\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t76\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t77\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t78\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t79\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t80\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t81\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t82\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t83\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t84\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t85\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t86\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t87\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t88\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t89\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t90\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t91\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t92\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t93\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t94\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t95\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t96\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t97\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t98\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t99\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t100\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t101\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t102\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t103\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t104\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t105\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t106\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t107\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t108\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t109\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t110\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t111\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t112\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t113\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t114\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t115\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t116\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t117\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t118\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t119\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t120\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t121\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t122\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t123\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t124\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t125\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t126\",\"input_schema\":{\"type\":\"object\"}},{\"name\":\"t127\",\"input_schema\":{\"type\":\"object\"}}]}",
+   "settings": "{\"max_tokens\":128,\"model\":\"claude-test\",\"system\":\"지시\",\"tools\":[{\"input_schema\":{\"type\":\"object\"},\"name\":\"t0\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t1\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t2\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t3\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t4\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t5\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t6\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t7\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t8\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t9\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t10\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t11\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t12\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t13\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t14\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t15\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t16\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t17\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t18\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t19\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t20\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t21\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t22\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t23\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t24\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t25\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t26\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t27\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t28\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t29\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t30\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t31\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t32\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t33\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t34\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t35\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t36\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t37\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t38\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t39\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t40\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t41\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t42\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t43\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t44\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t45\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t46\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t47\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t48\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t49\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t50\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t51\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t52\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t53\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t54\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t55\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t56\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t57\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t58\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t59\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t60\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t61\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t62\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t63\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t64\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t65\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t66\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t67\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t68\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t69\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t70\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t71\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t72\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t73\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t74\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t75\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t76\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t77\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t78\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t79\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t80\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t81\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t82\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t83\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t84\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t85\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t86\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t87\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t88\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t89\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t90\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t91\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t92\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t93\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t94\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t95\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t96\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t97\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t98\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t99\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t100\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t101\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t102\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t103\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t104\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t105\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t106\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t107\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t108\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t109\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t110\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t111\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t112\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t113\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t114\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t115\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t116\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t117\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t118\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t119\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t120\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t121\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t122\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t123\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t124\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t125\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t126\"},{\"input_schema\":{\"type\":\"object\"},\"name\":\"t127\"}]}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"질문\"}]"
+  },
+  {
+   "name": "unknown_key",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}], \"foo\": 1}",
+   "error": [
+    "unsupported_or_invalid_request",
+    400
+   ]
+  },
+  {
+   "name": "no_messages",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 5}",
+   "error": [
+    "unsupported_or_invalid_request",
+    400
+   ]
+  },
+  {
+   "name": "not_object",
+   "body": "[\"x\"]",
+   "error": [
+    "unsupported_or_invalid_request",
+    400
+   ]
+  },
+  {
+   "name": "too_large",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"description\": \"에코\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}]}",
+   "max_input": 200,
+   "error": [
+    "input_too_large",
+    413
+   ]
+  },
+  {
+   "name": "fits",
+   "body": "{\"model\": \"m\", \"max_tokens\": 1, \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+   "max_input": 200,
+   "result": "{\"model\":\"m\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}]}",
+   "settings": "{\"max_tokens\":1,\"model\":\"m\"}",
+   "prompt": "[{\"type\":\"text\",\"text\":\"hi\"}]"
+  }
+ ],
+ "environment": {
+  "child": {
+   "PATH": "/usr/bin",
+   "HOME": "/home/u",
+   "LANG": "C.UTF-8",
+   "ANTHROPIC_BASE_URL": "http://bad",
+   "ANTHROPIC_API_KEY": "k",
+   "CLAUDE_CODE_OAUTH_TOKEN": "t",
+   "ARKISM_CONTEXT": "c",
+   "OTEL_LOG_RAW_API_BODIES": "1",
+   "CLAUDECODE": "1",
+   "CLAUDE_SECURESTORAGE_CONFIG_DIR": "/s",
+   "OPENAI_API_KEY": "k",
+   "CODEX_HOME": "/c",
+   "GEMINI_X": "g",
+   "GOOGLE_Y": "g",
+   "LANGCHAIN_Z": "l",
+   "LANGSMITH_Z": "l",
+   "GITHUB_TOKEN": "t",
+   "my_secret": "s",
+   "DB_PASSWORD": "p",
+   "X_API_KEY": "k",
+   "CLAUDE_CONFIG_DIR": "/wrong",
+   "KEEP_ME": "yes"
+  },
+  "selected": {
+   "cli": "claude",
+   "id": "fixture",
+   "config_dir": "/synthetic/account"
+  },
+  "max_tokens": 128,
+  "env": {
+   "PATH": "/usr/bin",
+   "HOME": "/home/u",
+   "LANG": "C.UTF-8",
+   "CLAUDE_CONFIG_DIR": "/synthetic/account",
+   "KEEP_ME": "yes",
+   "ARKISM_CAPTURE_CHILD": "1",
+   "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+   "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128",
+   "MCP_TOOL_TIMEOUT": "900000",
+   "ENABLE_CLAUDEAI_MCP_SERVERS": "false",
+   "ENABLE_TOOL_SEARCH": "false",
+   "MAX_MCP_OUTPUT_TOKENS": "8388608",
+   "CLAUDE_CODE_MAX_RETRIES": "0",
+   "CLAUDE_CODE_NONSTREAMING_TIMEOUT_RETRIES": "0",
+   "CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK": "1"
+  }
+ },
+ "argv": [
+  {
+   "name": "tools",
+   "body": "{\"model\": \"claude-test\", \"max_tokens\": 128, \"system\": \"지시\", \"messages\": [{\"role\": \"user\", \"content\": \"질문\"}], \"tools\": [{\"name\": \"echo\", \"input_schema\": {\"type\": \"object\", \"properties\": {\"value\": {\"type\": \"integer\", \"minimum\": 1.5}}}}, {\"name\": \"b\", \"input_schema\": {\"type\": \"object\"}}]}",
+   "args": [
+    "/x/claude",
+    "-p",
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--include-partial-messages",
+    "--model",
+    "claude-test",
+    "--tools",
+    "",
+    "--strict-mcp-config",
+    "--mcp-config",
+    "{\"mcpServers\":{\"arkism\":{\"name\":\"arkism\",\"type\":\"sdk\"}}}",
+    "--setting-sources",
+    "",
+    "--settings",
+    "{\"disableAllHooks\":true,\"autoMemoryEnabled\":false}",
+    "--no-session-persistence",
+    "--disable-slash-commands",
+    "--system-prompt-file",
+    "<tmp>/system.txt",
+    "--permission-prompt-tool",
+    "stdio",
+    "--allowedTools",
+    "mcp__arkism__echo,mcp__arkism__b"
+   ],
+   "env": {
+    "A": "1",
+    "CLAUDE_CODE_TMPDIR": "<tmp>"
+   }
+  },
+  {
+   "name": "no_tools",
+   "body": "{\"model\": \"claude-x\", \"max_tokens\": 7, \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+   "args": [
+    "/x/claude",
+    "-p",
+    "--input-format",
+    "stream-json",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--include-partial-messages",
+    "--model",
+    "claude-x",
+    "--tools",
+    "",
+    "--strict-mcp-config",
+    "--mcp-config",
+    "{\"mcpServers\":{\"arkism\":{\"name\":\"arkism\",\"type\":\"sdk\"}}}",
+    "--setting-sources",
+    "",
+    "--settings",
+    "{\"disableAllHooks\":true,\"autoMemoryEnabled\":false}",
+    "--no-session-persistence",
+    "--disable-slash-commands",
+    "--system-prompt-file",
+    "<tmp>/system.txt",
+    "--permission-prompt-tool",
+    "stdio"
+   ],
+   "env": {
+    "A": "1",
+    "CLAUDE_CODE_TMPDIR": "<tmp>"
+   }
+  }
+ ]
+}
