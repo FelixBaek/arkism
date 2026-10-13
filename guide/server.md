@@ -4,25 +4,6 @@ Most people only need the desktop app in built-in mode. Run a server when severa
 
 A server is the same Arkism API (`memoryd`) and worker, backed by Postgres with pgvector. The desktop app reaches it over SSH.
 
-## Start with Docker
-
-```bash
-./deploy/local/start.sh          # Windows: .\deploy\local\start.ps1
-```
-
-The script:
-
-- builds the Arkism image,
-- creates `deploy/local/.env` with random passwords and tokens (keep it private),
-- starts Postgres, creates the schema, then starts the API and the worker,
-- prints the API address (`http://127.0.0.1:8091`) and the **owner token**.
-
-Running it again keeps `.env` and the data and only starts what is stopped. Stop it with:
-
-```bash
-docker compose -f deploy/local/compose.yaml down    # data is kept
-```
-
 ## Connect the desktop app over SSH
 
 The app connects with one SSH address and nothing else. It runs `arkism connect-info` on the server over SSH, reads the API address, owner token and scope, and forwards the API port to the PC through the same SSH login. The forward restarts on its own if it drops.
@@ -76,17 +57,15 @@ A new host key is accepted on first use, like answering "yes" once in `ssh`.
      --principal worker --role service --organization default --project default --actions '*'
    ```
 
-4. Copy [`.env.example`](../.env.example) to `.env`, fill it in with the `arkism_app` connection, and start the API and the worker. `memoryd` does not read `.env` by itself.
+4. Put the settings in an env file of your own, with `MEMORY_DATABASE_URL` set to the `arkism_app` connection, and start the API and the worker. `memoryd` does not read the file by itself.
 
    ```bash
-   set -a; . ./.env; set +a
+   set -a; . ./arkism.env; set +a
    go run ./cmd/memoryd             # API, default 127.0.0.1:8091
    go run ./cmd/memoryd --worker    # embedding and index worker (needs MEMORY_EMBEDDER)
    ```
 
 `/healthz` says the process is alive. `/readyz` says the schema, extensions and indexes are ready. Indexes are never created at startup.
-
-To run in containers, build the image from `Dockerfile` and use `compose.yaml` (add `compose.files.yaml` for file storage). Compose needs `MEMORY_ENV`, `MEMORY_IMAGE`, `MEMORY_API_ENV_FILE` and `MEMORY_WORKER_ENV_FILE`; `compose.files.yaml` also needs `MEMORY_BLOB_HOST_ROOT`.
 
 ## Use Supabase Cloud as the database
 
@@ -116,7 +95,17 @@ Arkism only needs Postgres with pgvector, so a Supabase project works as a manag
 
 ## Configuration
 
-`memoryd` settings, with fake values, are in [`.env.example`](../.env.example).
+A minimal env file, with fake values:
+
+```sh
+MEMORY_STORE=postgres
+MEMORY_DATABASE_URL=postgres://arkism_app:change-me@127.0.0.1:5432/arkism?sslmode=disable
+MEMORY_EMBEDDER=none                  # none | tei | gemini; the worker needs one
+MEMORY_LOCAL_STANDALONE=true          # API listens on loopback only
+MEMORY_WORKER_TOKEN=example-worker-token
+```
+
+Keep the file out of Git. All settings:
 
 | Name | Meaning |
 |---|---|
@@ -150,6 +139,6 @@ go build -o arkism-crew ./cmd/arkism-crew && sudo install -m 0755 arkism-crew /s
 
 The binary must be executable by uid 65532, because the backup job runs part of it as that user.
 
-The units in [`deploy/systemd/`](../deploy/systemd) expect binaries in `/srv/arkism/bin`, scripts in `/srv/arkism/tools` (copy `tools/*.sh` there), and settings and tokens in `/srv/arkism/config`. Change paths, `HOME`, `User=` and ports for your machine, then copy the units to `/etc/systemd/system`. Machine-specific values go in `/srv/arkism/config/arkism.env` (see the last section of `.env.example`).
+To keep these running, write a systemd unit for each long-running command (`memoryd`, `memoryd --worker`, `arkism-crew serve`, `arkism discord run`). Keep binaries in `/srv/arkism/bin` and settings and tokens in `/srv/arkism/config`, and load machine-specific values with `EnvironmentFile=/srv/arkism/config/arkism.env`. The repository does not ship unit files.
 
 Backups for a server: [backup-restore.md](backup-restore.md). Discord bots: [discord.md](discord.md).

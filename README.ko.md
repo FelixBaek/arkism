@@ -106,17 +106,11 @@ Claude Code, Codex, Gemini CLI 같은 에이전트는 어제 알려 준 것을 �
 
 Arkism을 한 컴퓨터에서 돌리고 모든 PC를 거기에 잇습니다. 집 서버나 작은 팀에 알맞습니다.
 
-1. 서버에서 Docker로 Arkism을 띄웁니다.
-
-   ```bash
-   ./deploy/local/start.sh
-   ```
-
-   이미지를 만들고, 무작위 비밀번호와 토큰으로 `deploy/local/.env`를 만들고, 소유자 토큰을 보여 줍니다. 다시 실행해도 데이터는 그대로입니다.
+1. 서버에 pgvector가 든 Postgres 17을 설치하고 API와 워커를 띄웁니다: [guide/server.md](guide/server.md#install-by-hand)(영어).
 2. 서버에 `arkism` 도구를 설치하고 소유자 토큰을 읽을 수 있는 곳에 저장합니다. 자세한 내용: [guide/server.md](guide/server.md#connect-the-desktop-app-over-ssh)(영어).
 3. 앱의 **설정 › 연결**에서 서버의 SSH 주소(예: `me@my-server`)만 적습니다. 앱이 평소 SSH 키로 로그인해 서버에서 연결 정보를 읽고, 그 SSH 연결로 API를 넘겨받습니다.
 
-직접 설치, 설정 값, systemd 유닛, 백업: [guide/server.md](guide/server.md), [guide/backup-restore.md](guide/backup-restore.md)(영어).
+설정 값, systemd, 백업: [guide/server.md](guide/server.md), [guide/backup-restore.md](guide/backup-restore.md)(영어).
 - Postgres를 직접 운영하지 않고 Supabase Cloud를 DB로 쓰는 방법: [guide/server.md](guide/server.md#use-supabase-cloud-as-the-database)(영어).
 
 ## 디스코드 봇
@@ -136,7 +130,6 @@ Arkism을 한 컴퓨터에서 돌리고 모든 PC를 거기에 잇습니다. 집
 Go(`go.mod`의 버전)와 C 컴파일러, Node.js 22, Python 3이 필요합니다. Rust(stable)는 데스크톱 앱에만 필요합니다.
 
 ```bash
-python3 tools/check_local.py        # 로컬 검사 전체
 go vet ./...
 go test -race ./...
 node --test desktop/ui/*.test.js
