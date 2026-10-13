@@ -133,9 +133,9 @@ impl Runtime {
         if alive && secrets.gateway_port != 0 {
             return Ok(gateway_url(secrets.gateway_port));
         }
+        let old_port = secrets.gateway_port;
         if secrets.gateway_port == 0 || !port_free(secrets.gateway_port) {
             secrets.gateway_port = free_port(GATEWAY_PORT)?;
-            self.save(&secrets)?;
         }
         let listen = format!("127.0.0.1:{}", secrets.gateway_port);
         let mut cmd = self.host_command(&["gateway"]).ok_or("local_unavailable")?;
@@ -143,7 +143,25 @@ impl Runtime {
         let err = log.try_clone().map_err(|e| e.to_string())?;
         cmd.env("ARKISM_GATEWAY_LISTEN", &listen).stdin(Stdio::null()).stdout(log).stderr(err);
         no_window(&mut cmd);
-        *gateway = Some(cmd.spawn().map_err(|e| format!("gateway_start_failed: {e}"))?);
+        let mut child = cmd.spawn().map_err(|e| format!("gateway_start_failed: {e}"))?;
+        // A gateway that exits at once (bad config, port taken) is not reported as running.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        if !matches!(child.try_wait(), Ok(None)) {
+            return Err("gateway_start_failed".into());
+        }
+        *gateway = Some(child);
+        if secrets.gateway_port != old_port {
+            self.save(&secrets)?;
+            // Agents linked to the old address follow the gateway to its new port.
+            if let Some(home) = self.home() {
+                let saved = self.data_dir().join("agent-links.json");
+                for agent in crate::agent_link::AGENTS {
+                    if old_port != 0 && crate::agent_link::status(home, Some(&gateway_url(old_port)))[agent]["current"] == true {
+                        let _ = crate::agent_link::set(home, &saved, agent, Some(&gateway_url(secrets.gateway_port)));
+                    }
+                }
+            }
+        }
         Ok(gateway_url(secrets.gateway_port))
     }
 

@@ -35,10 +35,19 @@ pub fn status(home: &Path, url: Option<&str>) -> serde_json::Value {
             "claude_code" => serde_json::from_str::<serde_json::Value>(&text).ok().and_then(|v| v["env"]["ANTHROPIC_BASE_URL"].as_str().map(str::to_string)).is_some_and(|u| u.starts_with("http://127.0.0.1:")) && text.contains(MODEL),
             _ => text.contains(MARK),
         };
-        let current = url.is_some_and(|u| text.contains(u));
+        let current = url.is_some_and(|u| points_at(agent, &text, u));
         out.insert(agent.into(), serde_json::json!({ "installed": installed, "connected": connected, "current": connected && current }));
     }
     serde_json::Value::Object(out)
+}
+
+/// Whether the agent's file sends requests to exactly `url` (not a URL that merely starts with it).
+fn points_at(agent: &str, text: &str, url: &str) -> bool {
+    match agent {
+        "claude_code" => serde_json::from_str::<serde_json::Value>(text).ok().is_some_and(|v| v["env"]["ANTHROPIC_BASE_URL"].as_str() == Some(url)),
+        "codex" => text.lines().any(|l| l.trim() == format!("base_url = \"{url}/v1\"")),
+        _ => text.lines().any(|l| l.trim() == format!("GOOGLE_GEMINI_BASE_URL={url}")),
+    }
 }
 
 /// Connects (`url` Some) or disconnects (`None`) one agent. `saved` is the app's `agent-links.json`.
@@ -49,7 +58,8 @@ pub fn set(home: &Path, saved: &Path, agent: &str, url: Option<&str>) -> Result<
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(e) => return Err(format!("agent_settings_read: {e}")),
     };
-    let mut links: serde_json::Value = fs::read_to_string(saved).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
+    let saved_before = fs::read(saved).ok();
+    let mut links: serde_json::Value = saved_before.as_deref().and_then(|t| serde_json::from_slice(t).ok()).unwrap_or_else(|| serde_json::json!({}));
     let next = match agent {
         "claude_code" => claude(&text, url, &mut links)?,
         "codex" => codex(&text, url)?,
@@ -66,8 +76,16 @@ pub fn set(home: &Path, saved: &Path, agent: &str, url: Option<&str>) -> Result<
             fs::write(&backup, &text).map_err(|e| e.to_string())?;
         }
     }
-    fs::write(&path, next).map_err(|e| format!("agent_settings_write: {e}"))?;
-    fs::write(saved, links.to_string()).map_err(|e| e.to_string())
+    // The saved links go first; if the agent's file can't be written, they are put back as they were.
+    fs::write(saved, links.to_string()).map_err(|e| e.to_string())?;
+    if let Err(e) = fs::write(&path, next) {
+        let _ = match &saved_before {
+            Some(b) => fs::write(saved, b),
+            None => fs::remove_file(saved),
+        };
+        return Err(format!("agent_settings_write: {e}"));
+    }
+    Ok(())
 }
 
 fn claude(text: &str, url: Option<&str>, links: &mut serde_json::Value) -> Result<String, String> {
@@ -200,6 +218,16 @@ mod tests {
         let mut fresh = serde_json::json!({});
         let off: serde_json::Value = serde_json::from_str(&claude(&claude("", Some("http://127.0.0.1:1"), &mut fresh).unwrap(), None, &mut fresh).unwrap()).unwrap();
         assert_eq!(off, serde_json::json!({}));
+    }
+
+    #[test]
+    fn current_needs_the_exact_url() {
+        let on = codex("", Some("http://127.0.0.1:8099")).unwrap();
+        assert!(points_at("codex", &on, "http://127.0.0.1:8099") && !points_at("codex", &on, "http://127.0.0.1:809"));
+        let on = gemini("", Some("http://127.0.0.1:8099"));
+        assert!(points_at("gemini", &on, "http://127.0.0.1:8099") && !points_at("gemini", &on, "http://127.0.0.1:809"));
+        let on = claude("", Some("http://127.0.0.1:8099"), &mut serde_json::json!({})).unwrap();
+        assert!(points_at("claude_code", &on, "http://127.0.0.1:8099") && !points_at("claude_code", &on, "http://127.0.0.1:809"));
     }
 
     #[test]

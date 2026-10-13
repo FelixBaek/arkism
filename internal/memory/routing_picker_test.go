@@ -45,6 +45,14 @@ func TestChatModelPickerAnswersWithOptionKey(t *testing.T) {
 	if prov, model := pickerIdentity(p); prov != "chat" || model != "qwen3:4b" {
 		t.Fatal("identity", prov, model)
 	}
+	reply = `{"choices":[{"message":{"content":"<think>m0 or m1? m0</think>\nm1."}}],"usage":{"prompt_tokens":40,"completion_tokens":9,"total_tokens":49}}`
+	if id, _, err = p.PickModel(testCtx, "write the tests", options); err != nil || id != "b/y" {
+		t.Fatal("thinking is skipped", id, err)
+	}
+	reply = `{"choices":[{"message":{"content":"Not m0, use m1"}}]}`
+	if _, _, err = p.PickModel(testCtx, "write the tests", options); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("prose around keys is refused", err)
+	}
 	reply = `{"choices":[{"message":{"content":"m7"}}]}`
 	if _, _, err = p.PickModel(testCtx, "write the tests", options); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("an answer outside the options is refused", err)

@@ -347,7 +347,7 @@ func pairIndex(v any, n int) (int, bool) {
 		if !ok {
 			return 0, false
 		}
-		parsed, err := strconv.ParseInt(s.String(), 10, 64)
+		parsed, err := strconv.ParseInt(s.String(), 10, 32)
 		if err != nil {
 			return 0, false
 		}

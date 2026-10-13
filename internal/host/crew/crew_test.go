@@ -1091,6 +1091,9 @@ func TestModelTestNoteAndFailure(t *testing.T) {
 func TestAntigravityRunsThroughThePCProxy(t *testing.T) {
 	old := host.PCProxy
 	t.Cleanup(func() { host.PCProxy = old })
+	for _, k := range []string{"HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"} {
+		t.Setenv(k, "")
+	}
 	host.PCProxy = ""
 	if env, _ := childEnv(row(t, "antigravity-gemini-3.8-pro"), []map[string]any{}, "", nil); env["HTTPS_PROXY"] == "socks5://127.0.0.1:18080" {
 		t.Fatal("no proxy set, but agy still got one")
