@@ -64,7 +64,7 @@ pub fn regenerate_at(path: &std::path::Path) -> Result<(), String> {
         let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
     }
     let mut raw = [0u8; 32];
-    getrandom::getrandom(&mut raw).map_err(|e| e.to_string())?;
+    getrandom::fill(&mut raw).map_err(|e| e.to_string())?;
     let token: String = raw.iter().map(|b| format!("{b:02x}")).collect();
     let tmp = dir.join(format!(".gateway-token-{}", std::process::id()));
     let mut opts = std::fs::OpenOptions::new();
