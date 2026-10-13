@@ -34,8 +34,11 @@ Invoke-Checked { go build -trimpath -o (Join-Path $stage 'integration\arkism.exe
 Invoke-Checked { go build -trimpath -o (Join-Path $stage 'runtime\memoryd.exe') ./cmd/memoryd } 'go build memoryd'
 Invoke-Checked { go build -trimpath -o (Join-Path $stage 'runtime\memory-principal.exe') ./cmd/memory-principal } 'go build memory-principal'
 Pop-Location
-Copy-Item (Join-Path $repo 'tools\install_arkism_export_task.ps1'), (Join-Path $repo 'tools\install_arkism_work_task.ps1') (Join-Path $stage 'integration')
-Copy-Item (Join-Path $repo 'deploy\local\roles.sql') (Join-Path $stage 'runtime')
+foreach ($task in 'install_arkism_export_task.ps1', 'install_arkism_work_task.ps1') {
+    $source = Join-Path $repo "tools\$task"
+    if (Test-Path $source) { Copy-Item $source (Join-Path $stage 'integration') } else { Write-Warning "tools\$task not found, skipping" }
+}
+Copy-Item (Join-Path $repo 'tools\roles.sql') (Join-Path $stage 'runtime')
 & (Join-Path $PSScriptRoot 'prepare-runtime.ps1') -Cache $cache -Stage $stage
 
 $env:TAURI_CONFIG = '{"version":"' + $Version + '"}'

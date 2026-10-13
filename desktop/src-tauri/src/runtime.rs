@@ -975,7 +975,7 @@ fn free_port(preferred: u16) -> Result<u16, String> {
 
 fn secret() -> Result<String, String> {
     let mut buf = [0u8; 32];
-    getrandom::getrandom(&mut buf).map_err(|e| e.to_string())?;
+    getrandom::fill(&mut buf).map_err(|e| e.to_string())?;
     Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
 }
 

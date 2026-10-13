@@ -13,7 +13,6 @@ flags:
     paths:
       - cmd/
       - internal/
-      - bench/
     carryforward: true
   ui:
     paths:

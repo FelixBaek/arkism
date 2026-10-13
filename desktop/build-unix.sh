@@ -37,7 +37,7 @@ export CGO_ENABLED=0
 go build -C "$DIR/.." -trimpath -o "$STAGE/runtime/memoryd" ./cmd/memoryd
 go build -C "$DIR/.." -trimpath -o "$STAGE/runtime/memory-principal" ./cmd/memory-principal
 go build -C "$DIR/.." -trimpath -o "$STAGE/runtime/integration/arkism" ./cmd/arkism
-cp "$DIR/../deploy/local/roles.sql" "$STAGE/runtime/"
+cp "$DIR/../tools/roles.sql" "$STAGE/runtime/"
 "$DIR/installer/prepare-runtime.sh" "$CACHE" "$STAGE"
 
 # Bundle settings for this build only; tauri.conf.json keeps bundling off for the Windows NSIS path.

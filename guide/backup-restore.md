@@ -13,7 +13,7 @@ The backup folder sits outside the app's data folder, so erasing data or uninsta
 
 ## Server
 
-`arkism-backup.timer` runs [`tools/backup_postgres.sh`](../tools/backup_postgres.sh) every night. It needs `ARKISM_BACKUP_CERT` (the recipient certificate) and the Postgres container name in `MEMORY_PG_CONTAINER`. It expects a database named `arkism` and a compose project run with `MEMORY_ENV=prod` (it stops `arkism-prod-api-1` and `arkism-prod-worker-1` for a moment). Each run:
+A server backup is a nightly job you schedule yourself (a systemd timer or cron). The repository ships the `arkism` subcommands it is built from, not the job script. It needs the recipient certificate in `ARKISM_BACKUP_CERT`. Each run:
 
 1. pauses writers only while it pins a database snapshot and copies the file store (`arkism backup-snapshot`),
 2. bundles the `pg_dump -Fc` archive and the files (`arkism backup-bundle create`),

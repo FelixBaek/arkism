@@ -106,17 +106,11 @@ Capture settings and agent setting backups are in `~/.config/arkism`. In server 
 
 Run Arkism on one machine and connect every PC to it. Good for a home server or a small team.
 
-1. On the server, start Arkism with Docker:
-
-   ```bash
-   ./deploy/local/start.sh
-   ```
-
-   It builds the image, creates `deploy/local/.env` with random passwords and tokens, and prints the owner token. Running it again keeps your data.
+1. On the server, install Postgres 17 with pgvector and start the API and the worker: [guide/server.md](guide/server.md#install-by-hand).
 2. Install the `arkism` tool on the server and save the owner token where it can read it. Details: [guide/server.md](guide/server.md#connect-the-desktop-app-over-ssh).
 3. In the app, open **Settings › 연결 (Connection)** and type the server's SSH address, for example `me@my-server`. Nothing else is needed. The app logs in with your normal SSH keys, reads the connection details from the server, and forwards the API over that SSH connection.
 
-Manual install, configuration, systemd units and backups: [guide/server.md](guide/server.md) and [guide/backup-restore.md](guide/backup-restore.md).
+Configuration, systemd and backups: [guide/server.md](guide/server.md) and [guide/backup-restore.md](guide/backup-restore.md).
 - Use Supabase Cloud instead of running Postgres yourself: [guide/server.md](guide/server.md#use-supabase-cloud-as-the-database).
 
 ## Discord bot
@@ -136,7 +130,6 @@ Full setup: [guide/discord.md](guide/discord.md).
 You need Go (version in `go.mod`) with a C compiler, Node.js 22 and Python 3. Rust (stable) is needed only for the desktop app.
 
 ```bash
-python3 tools/check_local.py        # all local checks
 go vet ./...
 go test -race ./...
 node --test desktop/ui/*.test.js

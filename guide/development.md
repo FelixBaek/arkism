@@ -14,8 +14,6 @@
 | `desktop/src-tauri` | Desktop app shell (Rust, Tauri): built-in mode, SSH connection, backups |
 | `desktop/ui` | Desktop app screens (plain JavaScript, no build step) |
 | `api/openapi.yaml` | HTTP API description |
-| `deploy/` | Docker setup (`deploy/local`) and systemd units (`deploy/systemd`) |
-| `bench/locomo` | Memory extraction benchmark |
 
 ## Requirements
 
@@ -23,20 +21,14 @@
 |---|---|
 | Go | The version in `go.mod`. Tests use `-race`, so a C compiler (gcc) is also needed |
 | PostgreSQL | Postgres 17 with pgvector, only for integration tests and server mode. The `vector` extension must live in the `extensions` schema |
-| Docker | Only for `tools/check_postgres_local.sh` and the server Docker setup |
+| Docker | Only for `tools/check_postgres_local.sh` |
 | Node.js | 22, for the desktop UI tests |
-| Python | 3, for `tools/check_local.py` and the UI preview |
+| Python | 3, for the UI preview |
 | Rust (stable) | Only to build or test the desktop app |
 
 ## Checks
 
-All local checks, with no credentials:
-
-```bash
-python3 tools/check_local.py
-```
-
-The same checks one by one:
+Local checks, with no credentials:
 
 ```bash
 go vet ./...
