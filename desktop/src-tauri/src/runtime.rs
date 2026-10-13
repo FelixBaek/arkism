@@ -933,10 +933,13 @@ fn run(cmd: &mut Command, error: &str) -> Result<(), String> {
     }
 }
 
+/// An HTTP client whose whole request, body included, must finish within `timeout`.
+pub fn http_agent(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder().timeout_global(Some(timeout)).build().into()
+}
+
 fn ready(server: &str) -> bool {
-    ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(2))
-        .build()
+    http_agent(Duration::from_secs(2))
         .get(&format!("{server}/readyz"))
         .call()
         .is_ok()
@@ -947,9 +950,9 @@ const OLLAMA_MODEL: &str = "qwen3-embedding:0.6b";
 
 /// Ollama answers on this computer and has this embedding model.
 fn ollama_ready(model: &str) -> bool {
-    let reply = ureq::AgentBuilder::new().timeout(Duration::from_secs(2)).build().get(&format!("{OLLAMA_URL}/api/tags")).call();
-    let Ok(reply) = reply else { return false };
-    let Ok(tags) = reply.into_json::<serde_json::Value>() else { return false };
+    let reply = http_agent(Duration::from_secs(2)).get(&format!("{OLLAMA_URL}/api/tags")).call();
+    let Ok(mut reply) = reply else { return false };
+    let Ok(tags) = reply.body_mut().read_json::<serde_json::Value>() else { return false };
     tags["models"].as_array().is_some_and(|models| {
         models.iter().any(|m| m["name"].as_str().or(m["model"].as_str()).is_some_and(|n| n == model || n == format!("{model}:latest")))
     })
