@@ -2,6 +2,8 @@ package backup
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -173,6 +175,9 @@ func TestDirectoryAliasAndNonPrivateRootAreRejected(t *testing.T) {
 func serviceCommand(t *testing.T, bin, lock, managed string) []string {
 	t.Helper()
 	unit, err := os.ReadFile("../../../deploy/systemd/arkism-backup-retention.service")
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Skip("deploy files are not in this checkout")
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,6 +261,9 @@ func TestFailedNewBackupStillExpiresOldBundleBeforeServiceAccess(t *testing.T) {
 	fresh := filepath.Join(backups, bundleFile(time.Now().Unix(), false))
 	write(t, fresh, "keep")
 	script, err := os.ReadFile("../../../tools/backup_postgres.sh")
+	if errors.Is(err, fs.ErrNotExist) {
+		t.Skip("deploy files are not in this checkout")
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

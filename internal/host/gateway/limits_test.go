@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
 )
@@ -71,6 +72,11 @@ func TestEveryByteSplitMatchesWholeStream(t *testing.T) {
 	if len(data) == 0 {
 		t.Fatal("no split case in goldens")
 	}
+	// Pin the clock so a second boundary between runs cannot change "created".
+	saved := now
+	t.Cleanup(func() { now = saved })
+	at := time.Unix(1700000000, 0)
+	now = func() time.Time { return at }
 	whole, err := collect(func(emit func([]byte) error) error { return CodecStream(chunks(data), "m", true, emit) })
 	if err != nil || !strings.HasSuffix(whole, "data: [DONE]\n\n") {
 		t.Fatalf("whole stream: %v %q", err, whole)

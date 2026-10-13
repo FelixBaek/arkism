@@ -1,3 +1,6 @@
+// Megabyte archives exceed the production search deadline under the race detector; the plain test run covers them.
+//go:build !race
+
 package memory
 
 import (
