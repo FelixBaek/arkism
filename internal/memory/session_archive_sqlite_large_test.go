@@ -1,3 +1,6 @@
+// Megabyte archives exceed the production search deadline under the race detector; the plain test run covers them.
+//go:build !race
+
 package memory
 
 import (
@@ -244,5 +247,43 @@ func TestSessionArchiveSQLiteLargeTypeAndReadFailures(t *testing.T) {
 	}
 	if _, err = f.svc.ReadSessionArchiveMessage(testCtx, f.agent, ArchiveMessageInput{Scope: scopeA, Ref: ArchiveMessageRef{ArchiveID: id, SHA256: header.SHA256, SQLiteStep: "0"}}); !errors.Is(err, ErrInvalid) {
 		t.Fatal("non-BLOB direct read accepted", err)
+	}
+}
+
+func TestSessionArchiveSQLiteBudgetAndOversized(t *testing.T) {
+	f, now := archiveSearchFixture(t, nil)
+	rows := []sqliteFixtureRow{{0, 14, 3, 0, sqliteStepBody(14, "찾기 "+strings.Repeat("x", archiveRecordLimit))}}
+	for i := 1; i <= 12; i++ {
+		rows = append(rows, sqliteFixtureRow{int64(i), 14, 3, 0, sqliteStepBody(14, "찾기 "+strings.Repeat("a", 1<<20))})
+	}
+	raw := sqliteArchiveFixture(t, rows)
+	id := ContentHash("sqlite-budget")
+	uploadSQLiteArchive(t, f, *now, id, raw, SessionArchiveChunkSize)
+	in := ArchiveSearchInput{Scope: scopeA, ArchiveID: id, Query: "찾기", Limit: 50}
+	count, oversized, pages := 0, 0, 0
+	for ; pages < 20; pages++ {
+		out, err := f.svc.SearchSessionArchiveMessages(testCtx, f.agent, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if pages == 0 {
+			if out.ScannedBytes <= archiveSearchBudget || len(out.Items) != 1 || out.Items[0].Ref.SQLiteStep != "0" {
+				t.Fatal("large row cost or result missing")
+			}
+		} else if out.ScannedBytes > archiveSearchBudget {
+			t.Fatal("small row page budget exceeded")
+		}
+		count += len(out.Items)
+		oversized += out.Oversized
+		if out.Next == "" {
+			break
+		}
+		if out.Next == in.After {
+			t.Fatal("cursor made no progress")
+		}
+		in.After = out.Next
+	}
+	if count != 13 || oversized != 0 || pages == 0 || pages == 20 {
+		t.Fatalf("count=%d oversized=%d pages=%d", count, oversized, pages)
 	}
 }

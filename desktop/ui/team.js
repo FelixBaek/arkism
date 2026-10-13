@@ -89,7 +89,7 @@ window.ArkismTeams = (ctx) => {
     if (/^(claude )?opus/.test(l)) return `Claude Opus ${s.match(/[\d.]+/)?.[0] || ""}`.trim();
     if (/^(claude )?sonnet/.test(l)) return `Claude Sonnet ${s.match(/[\d.]+/)?.[0] || ""}`.trim();
     if (l.startsWith("deepseek")) return `DeepSeek ${(s.match(/v\d+/i)?.[0] || "").toUpperCase()}`.trim();
-    if (l.startsWith("gpt")) return s.toUpperCase().replace(/^GPT/, "GPT");
+    if (l.startsWith("gpt")) return s.toUpperCase();
     if (l.startsWith("glm")) return s.toUpperCase();
     if (l.startsWith("gemini")) return s.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     return s;
