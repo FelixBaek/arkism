@@ -578,7 +578,7 @@ const (
 // restraintRE finds a rule about what not to do or what is preferred: following one leaves no words in the answer.
 // 말고도, 피해 범위, 빠짐없이, 마지막, 뿐·만이 아니라, 안 됐다고, whenever and preferences are not restraints.
 var restraintRE = regexp.MustCompile(`않(는다|게|도록|고|아야|으며|기로)|말(고(?:[^도]|$)|\s?것|아야|라)|금지|피(한다|하고|해야|해서)|` +
-	`지\s?마(?:라|\s|[,.]|$)|안\s?된다|(?:^|\s)안\s\S*[^았었였했됐렸]다(?:[\s,.]|$)|선호|대신|(?:[^만]이|가)\s아니라|\s없이|(?:것|뒤에|끼리|로)만\s|보다\s.*먼저|` +
+	`지\s?마(?:라|세요|십시오|\s|[,.]|$)|안\s?된다|(?:^|\s)안\s\S*[^았었였했됐렸]다(?:[\s,.]|$)|선호|대신|(?:[^만]이|가)\s아니라|\s없이|(?:것|뒤에|끼리|로)만\s|보다\s.*먼저|` +
 	`(?i:\b(?:never|don['’]?t|do not|avoid(?:s|ing)?|must not|prefer(?:s|red)?)\b)`)
 
 // keptOnTrial says a trial memory is never retired as unused, only graduated: standing rules (user, procedural)
@@ -589,10 +589,17 @@ func keptOnTrial(m map[string]any) bool {
 		return true
 	}
 	rule := strings.TrimRight(str(or(m["text"], "")), ". ")
-	if i := strings.LastIndex(rule, " ("); i >= 0 && strings.HasSuffix(rule, ")") {
-		rule = rule[:i] // the trailing note tells what went wrong; its negations are not the rule
+	if i := strings.LastIndex(rule, " ("); i >= 0 && strings.HasSuffix(rule, ")") && pastTense(rule[i+2:len(rule)-1]) {
+		rule = rule[:i] // a trailing note in the past tense tells what went wrong; its negations are not the rule
 	}
 	return restraintRE.MatchString(rule)
+}
+
+// pastTense is a Korean sentence ending in a ㅆ-final syllable before 다 (했다, 됐다, 막혔다): an incident, not a directive.
+func pastTense(s string) bool {
+	r := []rune(strings.TrimRight(s, ". "))
+	n := len(r)
+	return n >= 2 && r[n-1] == '다' && r[n-2] >= '가' && r[n-2] <= '힣' && (r[n-2]-'가')%28 == 20
 }
 
 func trialState() host.Obj {

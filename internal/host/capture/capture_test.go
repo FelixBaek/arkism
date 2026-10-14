@@ -614,6 +614,8 @@ func TestCaptureKeptOnTrialFindsProhibitionsAndPreferences(t *testing.T) {
 		"고친 부분뿐 아니라 기존 기능도 화면으로 확인한다.":                               false,
 		"usage 화면에는 잔여사용량만이 아니라 모든 사용량을 표시한다.":                       false,
 		"허용 규칙과 같은 명령 형태로만 실행한다.":                                    true,
+		"주석에 이모지를 쓰지 마세요.":                                           true,
+		"코드를 검토한다 (변경 파일을 빠뜨리지 않는다).":                                true, // a directive in the note, not an incident
 		"사용자가 표시가 안 됐다고 보고하면 서버 응답을 먼저 확인한다.":                        false,
 		"메모리는 이 폴더에 넣지 않고 DB에 저장한다.":                                 true,
 		"임시 폴더는 홈 바로 아래가 아니라 스크래치패드에 만든다.":                           true,
