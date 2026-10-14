@@ -575,9 +575,99 @@ func TestCaptureTrialRetiresUnusedAndGraduatesOld(t *testing.T) {
 	state := host.Obj{{Key: "a", Value: "2026-11-01T00:00:00.000Z"}, {Key: "b", Value: "2026-11-01T00:00:00.000Z"},
 		{Key: "c", Value: "2026-10-01T00:00:00.000Z"}, {Key: "d", Value: "2026-11-01T00:00:00.000Z"}, {Key: "e", Value: "2026-11-01T00:00:00.000Z"}}
 	counts := map[string][3]int{"a": {5, 0, 0}, "b": {9, 1, 0}, "c": {2, 0, 0}, "d": {4, 0, 0}, "e": {6, 0, 1}} // e: also recalled by Codex
-	got, err := trialVerdicts(state, counts, today)
+	never := func(string) bool { return false }
+	got, err := trialVerdicts(state, counts, today, never)
 	if err != nil || host.MustDumps(got, host.DumpOpts{}) != `{"a": "retire", "c": "graduate"}` {
 		t.Fatal(got, err)
+	}
+	state = append(state, host.KV{Key: "f", Value: "2026-10-01T00:00:00.000Z"})
+	counts["c"], counts["f"] = [3]int{5, 0, 0}, [3]int{5, 0, 0}
+	kept := func(id string) bool { return id != "a" }
+	got, err = trialVerdicts(state, counts, today, kept) // a kept one due for retirement waits, then graduates
+	if err != nil || host.MustDumps(got, host.DumpOpts{}) != `{"a": "retire", "c": "graduate", "f": "graduate"}` {
+		t.Fatal(got, err)
+	}
+}
+
+func TestCaptureKeptOnTrialFindsProhibitionsAndPreferences(t *testing.T) {
+	for text, want := range map[string]bool{
+		"공유 서버에서 /tmp가 차면 다른 세션의 파일을 지우지 말고 빌드 경로를 바꾼다 (no space left로 실패했다).":                                     true,
+		"제품명을 일괄 치환할 때는 경로까지 바뀌지 않도록 범위를 좁힌다 (경로가 소문자로 바뀌었다).":                                                     true,
+		"n8n에서 단순 조건이면 AI 노드로 그래프를 구성하지 않는다.":                                                                      true,
+		"Prefer table-driven tests; never commit generated files.":                                                 true,
+		"PR에 push하기 전에는 단위 테스트가 전부 통과했는지 확인한다 (실패를 확인하지 않고 push했다).":                                               false, // negation only in the incident
+		"pgrep으로 판정할 때는 -x 옵션으로 자기 명령을 제외한다 (자기 명령을 잡았다).":                                                         false,
+		"공개 저장소 (FelixBaek/arkism)에는 .env 파일을 push하지 않는다.":                                                         true, // a parenthesis inside the rule
+		"Tunnel check (GatewayTunnel.cs): readiness comes from a health check, never by listener alone (it hung).": true,
+		"확인 전에는 링크 없이 내용만 안내한다 (링크가 깨져 있었다).":                                                                      true,
+		"내부 세션 ID 대신 사이드바 제목을 알려 준다.":                                                                              true,
+		"/tmp가 아니라 영구 위치에 저장한다.":                                                                                   true,
+		"공개 레포에는 아바타를 넣지마.":                                                                                        true,
+		"주석에 이모지를 안 쓴다.":                                                                                           true,
+		"Docker를 요구하지 않기로 했다.":                                                                                     true,
+		"Don’t force-push to main.":                                  true,
+		"도커 컨테이너 말고도 pip 패키지까지 확인한다.":                                false,
+		"장애가 나면 먼저 피해 범위를 확인해 알린다.":                                  false,
+		"목록을 빠짐없이 읽고 마지막에 결과를 낸다.":                                   false,
+		"끝났는지 마지막으로 로그를 확인한다.":                                       false,
+		"Whenever the build changes, record preferences in the log.": false,
+		"고친 부분뿐 아니라 기존 기능도 화면으로 확인한다.":                               false,
+		"usage 화면에는 잔여사용량만이 아니라 모든 사용량을 표시한다.":                       false,
+		"허용 규칙과 같은 명령 형태로만 실행한다.":                                    true,
+		"주석에 이모지를 쓰지 마세요.":                                           true,
+		"코드를 검토한다 (변경 파일을 빠뜨리지 않는다).":                                true, // a directive in the note, not an incident
+		"사용자가 표시가 안 됐다고 보고하면 서버 응답을 먼저 확인한다.":                        false,
+		"메모리는 이 폴더에 넣지 않고 DB에 저장한다.":                                 true,
+		"임시 폴더는 홈 바로 아래가 아니라 스크래치패드에 만든다.":                           true,
+	} {
+		if got := keptOnTrial(map[string]any{"kind": "lesson", "text": text}); got != want {
+			t.Errorf("%q: %v", text, got)
+		}
+	}
+	if !keptOnTrial(map[string]any{"kind": "user", "text": "결론부터 쉬운 말로 쓴다."}) || keptOnTrial(map[string]any{"kind": "lesson"}) {
+		t.Fatal("kind")
+	}
+}
+
+func TestCaptureTrialReviewKeepsAnUnusedProhibition(t *testing.T) {
+	capFake(t)
+	reads := map[string]int{}
+	capGet = func(path string, _ time.Duration) (map[string]any, error) {
+		if strings.Contains(path, "candidates") {
+			return map[string]any{"revision": 1, "status": "approved"}, nil
+		}
+		id := pathID(path)
+		reads[id]++
+		if id == "e" {
+			return nil, &host.HTTPError{Code: 404} // deleted meanwhile
+		}
+		if id == "c" && reads[id] == 1 {
+			return nil, &host.HTTPError{Code: 503} // read once by keep, not retired on a guess
+		}
+		status := map[string]string{"d": "expired"}[id]
+		text := map[string]string{"a": "주석에 이모지를 쓰지 않는다.", "b": "배포 전에 백업을 확인한다."}[id]
+		return map[string]any{"revision": 1, "status": or(status, "active"), "kind": "lesson", "text": or(text, "주석에 이모지를 쓰지 않는다.")}, nil
+	}
+	var posts []string
+	capPost = func(path string, _ any, _ time.Duration) (map[string]any, error) {
+		posts = append(posts, path)
+		return nil, nil
+	}
+	host.UtilityCounts = func(string) (map[string][3]int, int, error) {
+		return map[string][3]int{"a": {5, 0, 0}, "b": {5, 0, 0}, "c": {5, 0, 0}, "d": {5, 0, 0}, "e": {5, 0, 0}}, 0, nil // injected five times, never restated
+	}
+	if err := recordTrial([]string{"a", "b", "c", "d", "e"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := trialUpdate(func(st *host.Obj) { st.Set("c", "2026-01-01T00:00:00.000Z") }); err != nil { // c is due to graduate too
+		t.Fatal(err)
+	}
+	if err := trialReview(); err != nil {
+		t.Fatal(err)
+	}
+	// a kept; b retired; c unread, so neither retired nor graduated this run; d already expired by a person and e deleted, so both leave as before
+	if !reflect.DeepEqual(trialSet(), []string{"a", "c"}) || !reflect.DeepEqual(posts, []string{"/v1/memories/b/transition"}) {
+		t.Fatal(trialSet(), posts)
 	}
 }
 
