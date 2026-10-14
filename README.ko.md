@@ -5,6 +5,8 @@
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=FelixBaek_arkism&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=FelixBaek_arkism)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=FelixBaek_arkism&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=FelixBaek_arkism)
 [![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=FelixBaek_arkism&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=FelixBaek_arkism)
+[![Coverage](https://codecov.io/gh/FelixBaek/arkism/graph/badge.svg)](https://app.codecov.io/gh/FelixBaek/arkism)
+[![AI Code Assurance](https://sonarcloud.io/api/project_badges/ai_code_assurance?project=FelixBaek_arkism)](https://sonarcloud.io/summary/new_code?id=FelixBaek_arkism)
 [![Secrets: gitleaks](https://img.shields.io/badge/secrets-gitleaks-blue)](https://github.com/FelixBaek/arkism/actions/workflows/checks.yml)
 [![Dependabot](https://img.shields.io/badge/dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/FelixBaek/arkism/security/dependabot)
 [![Secret scanning](https://img.shields.io/badge/secret%20scanning-push%20protection-brightgreen?logo=github)](https://github.com/FelixBaek/arkism/security)
