@@ -59,10 +59,10 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 		return zero, usage, ErrUnavailable
 	}
 	if in.BaselineAnalysis != nil {
-		copy := *in.BaselineAnalysis
-		copy.EvaluationStats = nil
-		copy.SkillID, copy.Version, copy.ContentHash, copy.SourcePath, copy.SourceFile = "", "", "", "", ""
-		in.BaselineAnalysis = &copy
+		clone := *in.BaselineAnalysis
+		clone.EvaluationStats = nil
+		clone.SkillID, clone.Version, clone.ContentHash, clone.SourcePath, clone.SourceFile = "", "", "", "", ""
+		in.BaselineAnalysis = &clone
 	}
 	for _, ref := range lessonRefs {
 		row, err := a.Service.Get(ctx, token, ref.Collection, scope, ref.ID)

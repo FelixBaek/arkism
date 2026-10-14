@@ -45,7 +45,7 @@ window.ArkismMemoryEvaluation = (() => {
       }
       if (seq === serial && panel.isConnected) content.append(button("평가 다시 조회", "ghost small", null, load));
     }
-    load();
+    void load();
     return panel;
   }
   return { reviewPayload, describe, mount };

@@ -74,8 +74,8 @@ func (s *Service) resolveReviewConflict(ctx context.Context, tx Tx, candidate Re
 			next = row
 		}
 		if row.ID == old.ID && c.Resolution == "replace_old" {
-			copy := row
-			replaced = &copy
+			clone := row
+			replaced = &clone
 		}
 	}
 	if next.ID == "" {

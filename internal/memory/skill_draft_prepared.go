@@ -102,12 +102,12 @@ func checkPreparedDraftEvidence(ctx context.Context, tx Tx, r Record) error {
 	if err = checkSources(ctx, tx, r); err != nil {
 		return err
 	}
-	copy := r
-	copy.Relations = []Ref{}
+	clone := r
+	clone.Relations = []Ref{}
 	for _, ref := range r.Relations {
 		if ref.Collection != "memory_candidates" {
-			copy.Relations = append(copy.Relations, ref)
+			clone.Relations = append(clone.Relations, ref)
 		}
 	}
-	return checkRelations(ctx, tx, copy)
+	return checkRelations(ctx, tx, clone)
 }

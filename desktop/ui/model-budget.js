@@ -33,7 +33,7 @@ window.ArkismModelBudget = (() => {
       }
       if (seq === serial && panel.isConnected) body.append(button("예산 다시 조회", "ghost small", null, load));
     }
-    load();
+    void load();
     return panel;
   }
   return { validate, mount };

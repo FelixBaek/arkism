@@ -994,9 +994,8 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .memory-context-panel { display: grid; gap: var(--space-12); padding: 20px; background: var(--bg-surface); border: 1px solid var(--border); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .memory-context-panel p { margin: 0; font-size: inherit; line-height: inherit; }
 
-.skill-trial-status { display: grid; gap: var(--space-12); padding: 20px; border: 1px solid var(--border); background: var(--bg-surface); }
+.skill-trial-status { display: grid; gap: var(--space-12); padding: 20px; border: 1px solid var(--border); background: var(--bg-surface); font-size: 12px; line-height: 1.5; }
 .skill-trial-status > div { display: grid; gap: var(--space-12); }
 .skill-trial-status p, .skill-trial-status h4 { margin: 0; }
 .skill-trial-status .btn { justify-self: start; }
-.skill-trial-status { font-size: 12px; line-height: 1.5; }
 .skill-trial-status h4, .skill-trial-status strong { font-size: inherit; line-height: inherit; font-weight: 400; }

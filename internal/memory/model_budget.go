@@ -169,14 +169,14 @@ func budgetCounter(ctx context.Context, tx Tx, scope Scope, period string) (Reco
 	return r, e
 }
 func updateBudgetCounter(ctx context.Context, tx Tx, r Record, delta, reservedDelta int64, priority bool) error {
-	copy := *r.ModelBudget
-	r.ModelBudget = &copy
-	copy.Total += delta
-	copy.Reserved += reservedDelta
+	clone := *r.ModelBudget
+	r.ModelBudget = &clone
+	clone.Total += delta
+	clone.Reserved += reservedDelta
 	if !priority {
-		copy.General += delta
+		clone.General += delta
 	}
-	if copy.Total < 0 || copy.General < 0 || copy.Reserved < 0 {
+	if clone.Total < 0 || clone.General < 0 || clone.Reserved < 0 {
 		return ErrUnavailable
 	}
 	rev := r.Revision

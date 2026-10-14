@@ -1740,7 +1740,6 @@
   }
   // Conflict resolution and candidate review commit together on the server.
   const CONFLICT_REASON = "Arkism 앱에서 사용자가 선택";
-  const refOf = (collection, r) => ({ collection, id: r.id, revision: r.revision });
   // One review action per item at a time: a second click on the same item would only meet the first one's new revision.
   const reviewing = new Set();
   async function reviewOnce(id, work) {
