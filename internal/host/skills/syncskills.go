@@ -104,6 +104,8 @@ func syncSkillID(row map[string]any) (string, error) {
 		return "agents/" + s, nil
 	case "claude-plugins": // account/plugin folder (often an id)/…/name
 		return "claude-plugin/" + pluginName(str(row["path"])) + "/" + lastPart(s), nil
+	case "agent-plugins": // kit plugin folder/skills/…/name
+		return "kit-plugin/" + strings.SplitN(s, "/", 2)[0] + "/" + lastPart(s), nil
 	}
 	parts := strings.Split(s, "/") // marketplace/plugin/version/.../skills/name
 	if len(parts) < 4 {

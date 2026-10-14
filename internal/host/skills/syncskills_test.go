@@ -47,6 +47,7 @@ func TestClaudeAIPluginSkillIsNamedByPluginJSON(t *testing.T) {
 func TestStableIDsAcrossRuntimesAndPluginVersions(t *testing.T) {
 	cases := [][3]string{
 		{"agent-skills", "pdf-ocr/mineru-local", "pdf-ocr/mineru-local"},
+		{"agent-plugins", "demo-plugin/skills/plug-skill", "kit-plugin/demo-plugin/plug-skill"},
 		{"codex", ".system/imagegen", "codex/system/imagegen"},
 		{"claude-code", "synced/abc_def/xlsx", "claude/xlsx"},
 		{"agents", "impeccable", "agents/impeccable"},

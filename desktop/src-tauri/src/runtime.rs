@@ -1278,4 +1278,34 @@ mod tests {
         assert!(r.valid());
         assert_eq!(r.root_env(), vec![("ARKISM_SKILLS_ROOT", "/srv/skills"), ("ARKISM_PLUGINS_ROOT", "D:\\ark\\plugins")]);
     }
+
+    /// 저장 → models.json → the next `arkism` run gets the folders (and loses them once cleared).
+    #[cfg(unix)]
+    #[test]
+    fn saved_folders_reach_the_next_host_run() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("arkism-roots-test-{}", secret().unwrap()));
+        let client = dir.join("programs").join("integration").join("arkism");
+        fs::create_dir_all(client.parent().unwrap()).unwrap();
+        fs::write(&client, "#!/bin/sh\necho \"skills=$ARKISM_SKILLS_ROOT mcp=$ARKISM_MCP_ROOT plugins=$ARKISM_PLUGINS_ROOT\"\n").unwrap();
+        fs::set_permissions(&client, fs::Permissions::from_mode(0o755)).unwrap();
+        let rt = Runtime::new(Some(dir.join("programs")), dir.join("data"));
+        fs::create_dir_all(dir.join("data")).unwrap();
+        rt.secrets().unwrap();
+        fs::write(dir.join("data").join("owner.token"), b"t").unwrap();
+        let run = || {
+            let out = rt.host_command(&[]).unwrap().output().unwrap();
+            String::from_utf8(out.stdout).unwrap()
+        };
+        let mut roles = rt.model_roles();
+        roles.skills_root = "/kit/skills".into();
+        roles.mcp_root = "/kit/mcp".into();
+        rt.set_model_roles(roles).unwrap();
+        assert_eq!(run().trim(), "skills=/kit/skills mcp=/kit/mcp plugins=");
+        let mut roles = rt.model_roles();
+        roles.skills_root.clear();
+        rt.set_model_roles(roles).unwrap();
+        assert_eq!(run().trim(), "skills= mcp=/kit/mcp plugins=");
+        fs::remove_dir_all(dir).unwrap();
+    }
 }
