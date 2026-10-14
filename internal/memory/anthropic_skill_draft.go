@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"reflect"
@@ -88,6 +89,7 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 		return zero, usage, ErrUnavailable
 	}
 	client := providerClient(a.Client, 120*time.Second)
+	sent := false
 	request := func(method, path string, payload []byte) ([]byte, error) {
 		req, e := http.NewRequestWithContext(ctx, method, strings.TrimRight(endpoint, "/")+path, bytes.NewReader(payload))
 		if e != nil {
@@ -97,6 +99,7 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 		req.Header.Set("anthropic-version", "2023-06-01")
 		req.Header.Set("anthropic-workspace-id", a.WorkspaceID)
 		req.Header.Set("Content-Type", "application/json")
+		sent = true
 		response, e := client.Do(req)
 		if e != nil {
 			return nil, ErrUnavailable
@@ -143,9 +146,22 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 	if !reserved.DispatchAllowed {
 		return zero, usage, ErrConflict
 	}
+	// Every failed dispatch is settled so the reservation never stays pending;
+	// "unknown" keeps the allowance held because the provider may have billed it.
+	release := func(e error) (SkillDraft, ProviderUsage, error) {
+		status := "unknown"
+		if !sent {
+			status = "not_sent"
+		}
+		if _, se := a.Service.SettleModelBudget(context.WithoutCancel(ctx), token, ModelBudgetSettleInput{Scope: a.BudgetScope, ReservationID: reserved.ReservationID, Status: status}); se != nil {
+			return zero, usage, errors.Join(e, se)
+		}
+		return zero, usage, e
+	}
+	sent = false
 	raw, e := request("POST", "/messages", body)
 	if e != nil {
-		return zero, usage, e
+		return release(e)
 	}
 	var response struct {
 		Model   string `json:"model"`
@@ -162,7 +178,7 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 		} `json:"usage"`
 	}
 	if json.Unmarshal(raw, &response) != nil || response.Model != a.Generator().Model || response.Usage.Input == nil || response.Usage.Output == nil || *response.Usage.Input < 0 || *response.Usage.Output < 0 || response.Usage.CacheRead != 0 || response.Usage.CacheWrite != 0 {
-		return zero, usage, ErrUnavailable
+		return release(ErrUnavailable)
 	}
 	usage = ProviderUsage{Provider: "skill_llm", Model: a.Generator().Model, Requests: 1, InputTokens: *response.Usage.Input, OutputTokens: *response.Usage.Output, TotalTokens: *response.Usage.Input + *response.Usage.Output}
 	if _, e = a.Service.SettleModelBudget(ctx, token, ModelBudgetSettleInput{Scope: a.BudgetScope, ReservationID: reserved.ReservationID, Status: "completed", InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens}); e != nil {

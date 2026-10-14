@@ -253,6 +253,9 @@ func (s *Service) ObserveSkillTrial(ctx context.Context, token, id string, in Sk
 				return e
 			}
 			out.Trial.Revision = trial.Revision
+			if e = closeSkillTrialCheck(ctx, tx, trial); e != nil {
+				return e
+			}
 			out.State = "stopped_regression"
 			return audit(ctx, tx, in.Scope, actor.PrincipalID, "stop:skill_trials:regression", id)
 		}

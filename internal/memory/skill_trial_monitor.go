@@ -64,14 +64,26 @@ func (s *Service) MonitorSkillTrial(ctx context.Context, token, id string, in Sk
 	if e != nil {
 		return out, e
 	}
+	var terminal string
+	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		var err error
+		terminal, err = skillTrialTerminal(ctx, tx, trial)
+		return err
+	}); e != nil {
+		return out, e
+	}
 	candidate, e := s.Repo.Get(ctx, colSkillVersions, in.Scope, trial.SkillTrial.Candidate.ID)
 	if e != nil {
 		return out, e
 	}
 	marker := ContentHash("trial-regression/" + id)
-	pending := candidate.Status == "rejected" && candidate.RequestHash == marker
+	pending := (candidate.Status == "rejected" || candidate.Status == "superseded") && candidate.RequestHash == marker
 	out.Candidate = Ref{Collection: colSkillVersions, ID: candidate.ID, Revision: candidate.Revision}
 	out.BaselineVersion = trial.SkillTrial.BaselineVersion
+	if terminal == "rolled_back" {
+		out.State = terminal
+		return out, nil
+	}
 	if !pending && !trial.SkillTrial.EndsAt.After(time.Now()) {
 		out.State = "expired"
 		return out, nil

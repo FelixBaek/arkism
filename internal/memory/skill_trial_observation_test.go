@@ -50,6 +50,10 @@ func TestSkillTrialObservationStopsRegressionAtomically(t *testing.T) {
 			} else if e != nil || out.State != "stopped_regression" || current.Status != "stopped" {
 				t.Fatal("stop", out, e, current.Status)
 			}
+			job, e := f.repo.Get(testCtx, colJobs, scopeA, skillTrialCheckID(scopeA, trial.ID))
+			if e != nil || auditFailure == (job.Status == JobStatusDone) {
+				t.Fatal("trial check job", job.Status, e)
+			}
 			parent, _ := f.repo.Get(testCtx, colSkills, scopeA, candidate.SkillID)
 			if parent.ActiveVersion != "" {
 				t.Fatal("baseline changed")

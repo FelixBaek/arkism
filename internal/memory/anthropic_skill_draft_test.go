@@ -131,7 +131,7 @@ func TestAnthropicSkillDraftCannotBypassAuthorizedEntry(t *testing.T) {
 }
 
 func TestAnthropicSkillDraftFailureAccountingAndTransferFence(t *testing.T) {
-	for _, mode := range []string{"transfer-denied", "truncated", "unknown-usage", "missing-model"} {
+	for _, mode := range []string{"transfer-denied", "truncated", "unknown-usage", "missing-model", "http-error", "cache-usage"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newFixture(t)
 			in, _ := generationFixture(t, f)
@@ -152,6 +152,14 @@ func TestAnthropicSkillDraftFailureAccountingAndTransferFence(t *testing.T) {
 					return
 				}
 				calls.Add(1)
+				switch mode {
+				case "http-error":
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				case "cache-usage":
+					w.Write([]byte(`{"model":"claude-sonnet-5-5","stop_reason":"end_turn","content":[],"usage":{"input_tokens":100,"output_tokens":200,"cache_read_input_tokens":5}}`))
+					return
+				}
 				if mode == "unknown-usage" {
 					w.Write([]byte(`{"model":"claude-sonnet-5-5","stop_reason":"end_turn","content":[]}`))
 					return
@@ -167,7 +175,16 @@ func TestAnthropicSkillDraftFailureAccountingAndTransferFence(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			if mode == "unknown-usage" && status.Outstanding == 0 {
+			reservations, e := f.svc.Repo.ListRecords(testCtx, scopeA, "jobs", 100)
+			if e != nil {
+				t.Fatal(e)
+			}
+			for _, row := range reservations {
+				if row.Kind == "model_budget_reservation" && row.Status == JobStatusPending {
+					t.Fatal("failed dispatch left reservation pending")
+				}
+			}
+			if (mode == "unknown-usage" || mode == "http-error" || mode == "cache-usage") && status.Outstanding == 0 {
 				t.Fatal("uncertain spend released")
 			}
 			if mode == "truncated" && (status.Outstanding != 0 || status.MonthlyCommitted == 0) {

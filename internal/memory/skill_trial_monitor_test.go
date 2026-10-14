@@ -189,6 +189,9 @@ func TestSkillTrialMonitorRestoresOnlyValidatedBaseline(t *testing.T) {
 	if parent.ActiveVersion != baseline.ID {
 		t.Fatal("baseline not restored")
 	}
+	if again, e := f.svc.MonitorSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID}); e != nil || again.State != "rolled_back" {
+		t.Fatal("repeated monitor lost rollback", again, e)
+	}
 	view, e := f.svc.ObserveSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 	if e != nil || view.State != "rolled_back" {
 		t.Fatal("terminal recovery observation", view, e)

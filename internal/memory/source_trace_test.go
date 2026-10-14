@@ -306,3 +306,17 @@ func TestDeletionReceiptFailureRollsBackSource(t *testing.T) {
 		t.Fatal("partial deletion", e)
 	}
 }
+
+func TestCompletedTraceRejectsMismatchedPayloadOrigin(t *testing.T) {
+	start := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	ingest := func(payload string) error {
+		in := TraceIngestInput{Scope: Scope{WorkspaceID: "ws-a", ProjectID: "proj-a", AgentID: "agent-a"}, TraceID: "origin-trace", ThreadID: "origin-thread", AgentRun: CompletedAgentRunInput{OriginAgentID: "runtime-a", TaskType: "work", Outcome: "partial", StartedAt: start, FinishedAt: start.Add(time.Second), Text: "task"}, Events: []TraceEventInput{{ID: "origin-event", Kind: "langgraph.input", OccurredAt: start, Payload: json.RawMessage(payload)}}}
+		_, _, err := prepareCompletedTrace(in)
+		return err
+	}
+	for payload, want := range map[string]error{`{"origin_agent_id":"runtime-a","input":"x"}`: nil, `{"input":"x"}`: nil, `{"origin_agent_id":"runtime-b","input":"x"}`: ErrInvalid, `{"origin_agent_id":7}`: ErrInvalid} {
+		if err := ingest(payload); !errors.Is(err, want) {
+			t.Fatal(payload, err)
+		}
+	}
+}

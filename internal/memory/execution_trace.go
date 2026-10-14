@@ -192,6 +192,13 @@ func prepareCompletedTrace(in TraceIngestInput) (preparedTrace, []byte, error) {
 		if err != nil {
 			return preparedTrace{}, nil, err
 		}
+		// Payloads become note sources whose origin_agent_id is shown as provenance.
+		var origin struct {
+			OriginAgentID *string `json:"origin_agent_id"`
+		}
+		if json.Unmarshal(event.Payload, &origin) != nil || origin.OriginAgentID != nil && *origin.OriginAgentID != in.AgentRun.OriginAgentID {
+			return preparedTrace{}, nil, ErrInvalid
+		}
 		lineageByEvent[event.ID] = lineage
 		for _, id := range lineage {
 			lineageSeen[id] = true

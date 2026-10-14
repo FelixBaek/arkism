@@ -17,6 +17,32 @@ func enqueueSkillTrialCheck(ctx context.Context, tx Tx, trial Record) error {
 	return tx.Insert(ctx, colJobs, Record{ID: skillTrialCheckID(trial.Scope, trial.ID), Scope: trial.Scope, Kind: skillTrialCheckKind, Status: JobStatusPending, Revision: 1, Target: &ref, SkillID: trial.SkillID, RunAt: &now, CreatedBy: trial.CreatedBy, CreatedByType: trial.CreatedByType, CreatedAt: now, UpdatedAt: now})
 }
 
+// Claim refuses inactive trials, so a stop must close the check job itself. A
+// live lease is left for its holder, whose Finish sees the stop and closes it.
+func closeSkillTrialCheck(ctx context.Context, tx Tx, trial Record) error {
+	job, e := tx.Get(ctx, colJobs, trial.Scope, skillTrialCheckID(trial.Scope, trial.ID))
+	if errors.Is(e, ErrNotFound) {
+		return nil
+	}
+	if e != nil {
+		return e
+	}
+	now := time.Now().UTC()
+	if job.Kind != skillTrialCheckKind || job.Target == nil || job.Target.ID != trial.ID {
+		return ErrConflict
+	}
+	if job.Status == JobStatusDone || job.Status == JobStatusFailed || job.Status == JobStatusRunning && job.LeaseUntil.After(now) {
+		return nil
+	}
+	prev := job.Revision
+	job.Status = JobStatusDone
+	job.Revision++
+	job.LeaseToken = ""
+	job.LeaseUntil = time.Time{}
+	job.UpdatedAt = now
+	return tx.Replace(ctx, colJobs, job, prev)
+}
+
 type SkillTrialCheckLease struct {
 	ID         string    `json:"id"`
 	Revision   int64     `json:"revision"`

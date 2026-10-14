@@ -187,6 +187,9 @@ func (s *Service) StopSkillTrial(ctx context.Context, token, id string, in Skill
 			return e
 		}
 		result = r
+		if e = closeSkillTrialCheck(ctx, tx, r); e != nil {
+			return e
+		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "stop:skill_trials", id)
 	})
 	return result, err
