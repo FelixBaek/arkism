@@ -641,7 +641,7 @@ window.ArkismPages = (ctx) => {
     };
     return { node, read };
   }
-  const toRoutingSettings = () => { state.settingsTab = "routing"; state.menu = "router"; go("settings"); };
+  const toConnectSettings = () => { state.settingsTab = "connect"; go("settings"); }; // already in the 설정 menu
   function roleModelsGroup(summary) {
     const g = el("div", "v4-roles");
     let cur = null, saved = null, busy = false;
@@ -654,9 +654,9 @@ window.ArkismPages = (ctx) => {
     function draw() {
       const next = {};
       const embedModel = roleField(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b");
-      const toJudge = el("button", "link-btn v4-link", "판정 모델은 ROUTER › 라우팅 설정 ›");
+      const toJudge = el("button", "link-btn v4-link", "판정 모델은 설정 › 연결 ›");
       toJudge.type = "button";
-      toJudge.addEventListener("click", toRoutingSettings);
+      toJudge.addEventListener("click", toConnectSettings);
       const card = el("section", "pg-group v4-rows");
       card.append(
         roleBlock(line("임베딩 모델", "의미로 기억을 찾을 때 써요. 자동은 이 PC의 Ollama에 모델이 있을 때만 켜요. 끄면 키워드로만 찾아요.",
@@ -685,17 +685,15 @@ window.ArkismPages = (ctx) => {
     load();
     return g;
   }
-  // 설정 › 라우팅 설정 › 스킬·MCP·플러그인 (Figma 198:458, top card): the judge, then where skills, MCP servers and plugins live.
-  // Kept across re-renders of the tab so typed paths survive the routing data reloading; dropped when the tab changes.
+  // 설정 › 연결 › 스킬·MCP·플러그인 (Figma 293:18786, below 연결 방식): the judge, then where skills, MCP servers and plugins live.
+  // Kept across re-renders of the tab so typed paths survive; dropped when the tab changes.
   let kitCard = null;
   const ROOTS = [["skills_root", "스킬 폴더"], ["mcp_root", "MCP 폴더"], ["plugins_root", "플러그인 폴더"]];
-  function routingKitCard() {
+  function agentKitCard() {
     if (kitCard) return kitCard;
-    const c = kitCard = el("section", "rt-set-card rt-kit-card");
-    const head = el("div", "rt-ctl-head"); head.append(el("h3", "", "스킬·MCP·플러그인"));
-    c.append(head, el("p", "rt-set-hint", "모든 에이전트가 라우팅을 통해 하나로 관리합니다. 요청마다 판정 모델이 스킬·MCP·플러그인 중 맞는 것을 골라요."));
-    if (!(tauri && state.mode === "local")) { c.append(el("p", "rt-set-hint rt-kit-ro", "서버에 연결해 쓰는 동안에는 서버가 정한 위치와 모델을 써요.")); return c; }
-    const body = el("div", "rt-kit-body");
+    const c = kitCard = group("스킬·MCP·플러그인", "모든 에이전트가 라우팅을 통해 하나로 관리합니다. 요청마다 판정 모델이 스킬·MCP·플러그인 중 맞는 것을 골라요.");
+    if (!(tauri && state.mode === "local")) { c.append(el("p", "pg-hint", "서버에 연결해 쓰는 동안에는 서버가 정한 위치와 모델을 써요.")); return c; }
+    const body = el("div", "v4-kit-body");
     c.append(body);
     let busy = false;
     const draw = (cur) => {
@@ -789,7 +787,7 @@ window.ArkismPages = (ctx) => {
       : "연결을 끊으면 다음에 앱을 켤 때 자동으로 다시 붙지 않아요. 이 PC로 돌아가도 서버의 기억은 그대로 남아요."));
     const gw = window.ArkismGatewayToken?.({ el, button, tauri, notice })?.side(sideSec) || []; // 모델 중계기 (gateway-token.js)
     toSide(...gw.slice(0, 1), now, ...gw.slice(1), ...doctorGroup().map(asSide));
-    return [g];
+    return [g, agentKitCard()];
   }
   // 설정 › 고급 (Figma 198:6392): 수집·데이터·지우기 on the left; 진단, 설정 옮기기, ComfyUI on the right.
   function tabAdvanced() {
@@ -1053,7 +1051,7 @@ window.ArkismPages = (ctx) => {
     $("#controls").replaceChildren();
     sideParts = []; headParts = [];
     const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote };
-    const body = { general: tabGeneral, connect: tabConnect, roles: tabRoles, appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => [routingKitCard(), ...routing.tab(kit)],
+    const body = { general: tabGeneral, connect: tabConnect, roles: tabRoles, appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => routing.tab(kit),
       workflow: () => crew.settingsTab({ group }), categories: tabCategories, update: tabUpdate, advanced: tabAdvanced }[tab]();
     if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고칠 수 있어요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
     const content = el("div", `pg-content v4-set v4-set-${tab}`);
