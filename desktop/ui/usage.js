@@ -482,12 +482,12 @@ window.ArkismUsage = (ctx) => {
     if (!tabs().some(([k]) => k === S.tab)) S.tab = "overview";
     const controls = el("div", "v4u-controls");
     const tabSeg = segment(tabs(), S.tab, (k) => { S.tab = k; render(); }); tabSeg.classList.add("v4u-box");
-    const rangeSeg = segment(RANGES, S.range, (k) => { if (S.range !== k) { S.range = k; load(); } }); rangeSeg.classList.add("v4u-box");
+    const rangeSeg = segment(RANGES, S.range, (k) => { if (S.range !== k) { S.range = k; void load(); } }); rangeSeg.classList.add("v4u-box");
     controls.append(tabSeg, el("span", "v4u-gap"), rangeSeg);
     if (S.doc?.agents?.length && S.tab !== "requests" && menu() !== "router") {
       const pick = el("select", "v4u-select"); pick.setAttribute("aria-label", "에이전트");
       for (const [v, l] of [["", "전체"], ...S.doc.agents.map((a) => [a.name, `${agentName(a.name)}${a.all_sessions ? ` ${num(a.all_sessions)}` : ""}`])]) { const o = el("option", "", l); o.value = v; o.selected = v === S.source; pick.append(o); }
-      pick.addEventListener("change", () => { S.source = pick.value; load(); });
+      pick.addEventListener("change", () => { S.source = pick.value; void load(); });
       controls.append(pick);
     }
     $("#controls").replaceChildren(controls);

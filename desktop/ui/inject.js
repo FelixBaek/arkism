@@ -96,7 +96,7 @@
     const use7 = () => effect(state.data.tools?.memory_use);
     const use30 = () => effect(state.data.tools?.memory_use_30);
     const memRepo = (m) => (m.tags || []).find((t) => t.startsWith("repo:"))?.slice(5) || "";
-    const repos = () => [...new Set((state.data.memories || []).map(memRepo).filter(Boolean))].sort();
+    const repos = () => [...new Set((state.data.memories || []).map(memRepo).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     const textOf = (id) => { const m = (state.data.memories || []).find((x) => x.id === id); return m ? m.text : null; };
 
     async function countTokens(text) {
@@ -198,7 +198,7 @@
       const pick = el("label", "field");
       const sel = el("select");
       for (const [v, l] of [["", "저장소 밖 폴더 (공용 기억만)"], ...repos().map((r) => [r, r])]) { const o = el("option", "", l); o.value = v; o.selected = v === repo; sel.append(o); }
-      sel.addEventListener("change", () => { repo = sel.value; session = null; prompt = null; loadSession(); });
+      sel.addEventListener("change", () => { repo = sel.value; session = null; prompt = null; void loadSession(); });
       pick.append("저장소", sel);
       s.append(pick);
       if (busy === "session") { s.append(el("p", "meta", "불러오는 중…")); return s; }
@@ -218,7 +218,7 @@
       box.setAttribute("aria-label", "시험할 질문");
       const go = button("찾아보기", "small", "magnifying-glass"); go.type = "submit"; go.disabled = busy === "prompt";
       form.append(box, go);
-      form.addEventListener("submit", (e) => { e.preventDefault(); tryPrompt(box.value); });
+      form.addEventListener("submit", (e) => { e.preventDefault(); void tryPrompt(box.value); });
       s.append(form);
       if (busy === "prompt") s.append(el("p", "meta", "찾는 중…"));
       else if (prompt?.short) s.append(el("p", "meta", "8자보다 짧은 질문에는 아무것도 넣지 않아요."));
@@ -240,7 +240,7 @@
       if (key !== identity()) { key = identity(); session = null; prompt = null; promptText = ""; tokens = {}; }
       state.selected = "inject";
       paint(); openDetail();
-      if (!session && busy !== "session") loadSession();
+      if (!session && busy !== "session") void loadSession();
     }
     // The memory page stats row: use ratio over 7 and 30 days, average injected per session.
     function tiles(stat, often) {

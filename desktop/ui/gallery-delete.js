@@ -69,7 +69,7 @@ window.ArkismGalleryDelete = (ctx) => {
     x.setAttribute("aria-label", "삭제");
     x.title = "삭제";
     x.append(icon("trash"));
-    const go = (e) => { e.preventDefault(); e.stopPropagation(); remove(col, r); };
+    const go = (e) => { e.preventDefault(); e.stopPropagation(); void remove(col, r); };
     x.addEventListener("click", go);
     x.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") go(e); });
     card.classList.add("gd-card");
@@ -84,7 +84,7 @@ window.ArkismGalleryDelete = (ctx) => {
     S.items = null; S.picking = false; S.picked.clear();
     state.selected = null;
     render(false);
-    if (S.open) loadArchived(col).then(() => { if (S.open === col) render(false); });
+    if (S.open) void loadArchived(col).then(() => { if (S.open === col) render(false); });
   }
   function archiveChip(col) {
     const c = el("button", `chip gd-archive-chip${isOpen(col) ? " active" : ""}`);

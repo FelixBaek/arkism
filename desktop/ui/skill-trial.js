@@ -91,7 +91,7 @@ window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
           if (live(ticket)) {
             note.textContent = "준비 결과를 확인하지 못했어요. 같은 요청으로 다시 확인하세요.";
             create.replaceChildren(button("같은 시험 요청 다시 확인", "primary small", null, () => start(input)));
-            if (["invalid_request", "access_denied", "not_found", "revision_conflict"].includes(error.message)) create.append(button("시험 입력 다시 선택", "small", null, () => { if (busy || !live(ticket)) return; try { localStorage.removeItem(journal); draw(); } catch (_) { note.textContent = "앱 저장 공간을 확인해 주세요."; } }));
+            if (["invalid_request", "access_denied", "not_found", "revision_conflict"].includes(error.message)) create.append(button("시험 입력 다시 선택", "small", null, () => { if (busy || !live(ticket)) return; try { localStorage.removeItem(journal); void draw(); } catch (_) { note.textContent = "앱 저장 공간을 확인해 주세요."; } }));
           }
         } finally { busy = false; running.delete(runKey); }
       }
@@ -128,7 +128,7 @@ window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
       }
       if (selectedID && live(ticket)) { busy = false; await refresh(selectedID); }
     }
-    panel.addEventListener("toggle", () => { if (panel.open) draw(); else { epoch++; body.replaceChildren(); } });
+    panel.addEventListener("toggle", () => { if (panel.open) void draw(); else { epoch++; body.replaceChildren(); } });
     return panel;
   };
 };

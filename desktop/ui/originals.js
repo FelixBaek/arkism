@@ -35,7 +35,7 @@ window.ArkismOriginals = (ctx) => {
         more.hidden = false; more.textContent = "다시 읽기";
       } finally { loading = false; more.disabled = false; }
     }
-    load();
+    void load();
   }
   function sourceDetails(host, memory, response) {
     const owner = identity();
@@ -100,7 +100,7 @@ window.ArkismOriginals = (ctx) => {
         status.textContent = "메시지를 불러오지 못했어요. 만료 여부와 접근 권한을 확인하고 다시 시도하세요.";
       } finally { loading = false; more.disabled = false; }
     }
-    load();
+    void load();
   }
   function detail() {
     const host = detailShell("대화 원문"), selected = selection, owner = identity();
@@ -156,10 +156,10 @@ window.ArkismOriginals = (ctx) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault(); if (busy) return;
       if (new TextEncoder().encode(input.value.trim()).length > 256) { input.setCustomValidity("검색어를 조금 짧게 입력하세요."); input.reportValidity(); return; }
-      input.setCustomValidity(""); term = input.value.trim(); load();
+      input.setCustomValidity(""); term = input.value.trim(); void load();
     });
     input.addEventListener("input", () => input.setCustomValidity(""));
-    $("#chips").append(form); paint(); if (rows === null) load();
+    $("#chips").append(form); paint(); if (rows === null) void load();
   }
   function close() {
     const index = rows?.indexOf(selection) ?? -1;

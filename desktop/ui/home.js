@@ -144,7 +144,7 @@ window.ArkismHome = function (ctx) {
       mark();
     } else if (e.key === "Enter" && !e.isComposing) {
       e.preventDefault();
-      if (hits[active]) openHit(hits[active]);
+      if (hits[active]) void openHit(hits[active]);
     } else if (e.key === "Escape") {
       e.preventDefault(); e.stopPropagation();
       hide(); $("#search").blur();

@@ -314,7 +314,7 @@ window.ArkismRouting = (ctx) => {
     const foot = el("div", "rt-foot"); foot.append(button("조건 저장", "", null, () => {
       // Read the draft at click time: f is the value from when this card was drawn.
       const now = { error_rate_pct: 5, p95_ms: 120000, order: [], ...((S.policy || {}).failover || {}), ...(S.failoverDraft || {}) };
-      savePolicySettings({ failover: { error_rate_pct: now.error_rate_pct, p95_ms: now.p95_ms, order: now.order || [] } });
+      void savePolicySettings({ failover: { error_rate_pct: now.error_rate_pct, p95_ms: now.p95_ms, order: now.order || [] } });
     }));
     b.append(g2, g1, foot);
     return [a, b];
@@ -350,7 +350,7 @@ window.ArkismRouting = (ctx) => {
     }
     if (S.eventsAll && S.range !== "30d") {
       const b = el("button", "link-btn v4-link", "30일로 넓혀 보기"); b.type = "button";
-      b.addEventListener("click", () => { S.range = "30d"; load(); });
+      b.addEventListener("click", () => { S.range = "30d"; void load(); });
       more.append(b);
     }
     if (S.eventsAll && (d.events || []).length >= 50) more.append(el("small", "", "최근 50건까지 보여요."));
@@ -420,7 +420,7 @@ window.ArkismRouting = (ctx) => {
       const t = el("span", "rt-model-text"); t.append(el("b", "mono", m.name), el("small", "", m.provider || m.family || ""));
       const [cls, label] = on ? (STATUS[m.connection?.state] || STATUS.ok) : STATUS.off;
       const conn = el("span", `rt-status ${cls}`); conn.append(el("i"), m.connection?.label || label);
-      const sw = switchEl(on, `${m.name} 사용`, (v) => { stage(raw, { enabled: v }); saveModel(raw); });
+      const sw = switchEl(on, `${m.name} 사용`, (v) => { stage(raw, { enabled: v }); void saveModel(raw); });
       sw.addEventListener("click", (e) => e.stopPropagation());
       row.append(el("span", "rt-order mono", on ? String(m.order ?? "—") : "—"), agentTile(m.family), t, el("span", "rt-when", m.when ? `의도 · ${m.when}` : ""), conn, sw);
       row.addEventListener("click", () => { S.selected = raw.id; S.group = ""; render(false); });
@@ -433,7 +433,7 @@ window.ArkismRouting = (ctx) => {
     const m = cur(raw), box = el("div", "rt-model-detail");
     box.append(el("small", "rt-kind", "모델"));
     const top = el("div", "rt-detail-top"); const t = el("div"); t.append(el("h3", "", m.name), el("small", "", `${m.provider || ""} · ${m.family} 계열`));
-    top.append(agentTile(m.family, m.name), t, switchEl(m.enabled !== false, "라우팅에 쓰기", (v) => { stage(raw, { enabled: v }); saveModel(raw); }));
+    top.append(agentTile(m.family, m.name), t, switchEl(m.enabled !== false, "라우팅에 쓰기", (v) => { stage(raw, { enabled: v }); void saveModel(raw); }));
     const when = el("div", "rt-sec"); when.append(el("h4", "", "Clef가 이럴 때 보내요"), el("small", "", "Clef가 이 설명을 보고 요청을 나눠요."));
     const ta = el("textarea"); ta.value = m.when || ""; ta.rows = 2; ta.addEventListener("input", () => stage(raw, { when: ta.value })); when.append(ta);
     const mix = el("div", "rt-sec"); mix.append(el("h4", "", "순서"), el("small", "", "고정 모델이 없을 때 먼저 고르고, 막혔을 때 넘기는 순서예요."));
@@ -506,7 +506,7 @@ window.ArkismRouting = (ctx) => {
     const row = el("div", "rt-trial-row");
     const input = el("input"); input.value = S.trial.text; input.placeholder = "예: 이 함수에 테스트를 써 줘"; input.setAttribute("aria-label", "시험할 요청");
     input.addEventListener("input", () => { S.trial.text = input.value; });
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") tryRoute(S.group); });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") void tryRoute(S.group); });
     row.append(input, button(S.trial.busy ? "고르는 중…" : "어디로 가나 보기", "", null, () => tryRoute(S.group)));
     box.append(h, el("small", "rt-set-hint", "실제로 보내지 않고, 이 요청이면 어느 모델로 갈지만 물어봐요. 자동 라우팅이 켜져 있으면 Clef 판정 비용이 조금 들어요."), row);
     const o = S.trial.out;
@@ -609,7 +609,7 @@ window.ArkismRouting = (ctx) => {
       const foot = el("div", "rt-foot");
       foot.append(button("그룹 저장", "primary", null, () => saveGroups()), button("그룹 지우기", "ghost", null, () => {
         if (!confirm(`'${g.name}' 그룹을 지울까요? 이 그룹을 부르던 에이전트는 모델을 못 찾게 돼요.`)) return;
-        const list2 = editGroups(); list2.splice(list2.findIndex((x) => x.id === g.id), 1); S.group = ""; saveGroups();
+        const list2 = editGroups(); list2.splice(list2.findIndex((x) => x.id === g.id), 1); S.group = ""; void saveGroups();
       }));
       box.append(foot);
     }
@@ -680,7 +680,7 @@ window.ArkismRouting = (ctx) => {
       sub: () => (S.state === "ready" && S.at ? `실시간 · 10초마다 갱신 · 마지막 ${S.at.toLocaleTimeString(globalThis.ArkismI18n?.locale() || "ko-KR", { hour12: false })}` : "Clef가 요청을 나누고, 막히면 다음 모델로 넘겨요"),
       head: () => {
         const again = button("", "icon-btn", "arrows-clockwise", load); again.title = "새로고침"; again.setAttribute("aria-label", "새로고침");
-        const seg = segment(RANGES.map(([k, l]) => [k, l]), S.range, (k) => { if (S.range !== k) { S.range = k; load(); } });
+        const seg = segment(RANGES.map(([k, l]) => [k, l]), S.range, (k) => { if (S.range !== k) { S.range = k; void load(); } });
         seg.classList.add("rt-range");
         return [again, seg];
       } } }

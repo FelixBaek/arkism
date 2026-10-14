@@ -214,7 +214,7 @@ window.ArkismTeams = (ctx) => {
     $("#controls").replaceChildren();
     const table = $("#table");
     table.className = "tm-wrap";
-    if (!S.discord) loadDiscord(true);
+    if (!S.discord) void loadDiscord(true);
     const list = teams();
     if (!S.team || !byId(S.team)) S.team = list[0]?.id || null;
     const rail = el("div", "tm-list");
@@ -236,7 +236,7 @@ window.ArkismTeams = (ctx) => {
       main.append(empty(agents().length ? "아직 팀이 없어요. 새 팀을 만들어 작업 에이전트 여럿이 함께 회의하게 해 보세요." : "팀은 작업 에이전트로 만들어요. 먼저 작업 에이전트를 만들어 주세요."));
     } else {
       if (S.draftFor !== rec.id) { S.draft = clone(rec.crew); S.draftFor = rec.id; S.dirty = false; }
-      loadStats(rec.id);
+      void loadStats(rec.id);
       main.append(...teamEditor(rec));
     }
     const split = el("div", "tm-split"); split.append(rail, main);
@@ -703,7 +703,7 @@ window.ArkismTeams = (ctx) => {
     S.timer = setTimeout(async () => {
       if (!here("meetings") || !S.meeting) return;
       S.tick++;
-      if (S.tick % 5 === 0) loadMeetings(true);
+      if (S.tick % 5 === 0) void loadMeetings(true);
       await loadMeeting(S.meeting.id, false);
     }, 2000);
   }
@@ -719,7 +719,7 @@ window.ArkismTeams = (ctx) => {
     $("#controls").replaceChildren();
     const table = $("#table");
     table.className = "tm-wrap tm-meet";
-    if (S.meetings == null) { S.meetings = []; S.meetLoading = true; loadMeetings().finally(() => { S.meetLoading = false; }); }
+    if (S.meetings == null) { S.meetings = []; S.meetLoading = true; void loadMeetings().finally(() => { S.meetLoading = false; }); }
     if (S.meetErr) {
       table.replaceChildren(empty(S.meetErr === "unsupported" ? "이 서버는 아직 회의를 지원하지 않아요. 서버를 새 버전으로 올리면 팀 회의를 여기서 볼 수 있어요." : `회의를 불러오지 못했어요 (${S.meetErr}).`));
       meetingSide(null);
@@ -730,7 +730,7 @@ window.ArkismTeams = (ctx) => {
     for (const [k, label] of [["running", "진행 중"], ["ended", "끝남"], ["all", "전체"]]) {
       const t = el("button", `tm-seg-tab${S.meetTab === k ? " active" : ""}`); t.type = "button"; t.setAttribute("role", "tab");
       t.append(el("span", "", label), el("output", "", String(c[k] ?? "")));
-      t.addEventListener("click", () => { if (S.meetTab !== k) { S.meetTab = k; S.meetSel = null; loadMeetings(); } });
+      t.addEventListener("click", () => { if (S.meetTab !== k) { S.meetTab = k; S.meetSel = null; void loadMeetings(); } });
       seg.append(t);
     }
     const list = el("div", "tm-mlist2");
@@ -739,7 +739,7 @@ window.ArkismTeams = (ctx) => {
       const t = el("div", ""); t.append(raw(el("b", "", m.title || "(제목 없음)")), raw(el("small", "", meetingMeta(m))));
       const [label, tone] = MEETING_STATUS[m.status] || [m.status, "line"];
       row.append(t, badge(label, tone));
-      row.addEventListener("click", () => { S.meetSel = m.id; S.newMeeting = null; S.meeting = m; render(false); loadMeeting(m.id); });
+      row.addEventListener("click", () => { S.meetSel = m.id; S.newMeeting = null; S.meeting = m; render(false); void loadMeeting(m.id); });
       list.append(row);
     }
     if (!(S.meetings || []).length) list.append(empty(S.meetLoading ? "불러오는 중…" : S.meetTab === "running" ? "지금 진행 중인 회의는 없어요. 새 회의를 열어 보세요." : "아직 회의 기록이 없어요."));
@@ -859,7 +859,7 @@ window.ArkismTeams = (ctx) => {
         if (r?.id) S.meeting = mt(r); else S.meeting = { ...m, notes_pending: [...(m.notes_pending || []), { by: "나", text, at: new Date().toISOString() }] };
         notice("다음 라운드에 반영할게요.");
         repaintMeetings();
-        loadMeeting(m.id, true);
+        void loadMeeting(m.id, true);
       } catch (err) { notice(errorText(err)); send.disabled = false; }
     });
     row.append(i, send);
@@ -948,7 +948,7 @@ window.ArkismTeams = (ctx) => {
     $("#controls").replaceChildren();
     const table = $("#table");
     table.className = "tm-wrap tm-discord";
-    if (!S.discord) { loadDiscord(); table.replaceChildren(empty("불러오는 중…")); $("#detail").replaceChildren(); return; }
+    if (!S.discord) { void loadDiscord(); table.replaceChildren(empty("불러오는 중…")); $("#detail").replaceChildren(); return; }
     if (S.discordErr === "unsupported") { table.replaceChildren(empty("이 서버는 아직 디스코드 연결을 지원하지 않아요. 서버를 새 버전으로 올려 주세요.")); $("#detail").replaceChildren(); return; }
     if (S.connect) { table.replaceChildren(...connectSteps()); connectSide(); return; }
     const kids = [];
@@ -992,7 +992,7 @@ window.ArkismTeams = (ctx) => {
       const r = el("div", "tm-bot-ch");
       const auto = el("button", `tm-auto${ch.auto_start ? " on" : ""}`, ch.auto_start ? "자동 시작 켜짐" : "자동 시작 꺼짐"); auto.type = "button";
       auto.title = "누르면 바뀌어요";
-      auto.addEventListener("click", (e) => { e.stopPropagation(); saveBot(b, { channels: b.channels.map((x) => (x === ch ? { ...x, auto_start: !x.auto_start } : x)) }); });
+      auto.addEventListener("click", (e) => { e.stopPropagation(); void saveBot(b, { channels: b.channels.map((x) => (x === ch ? { ...x, auto_start: !x.auto_start } : x)) }); });
       r.append(raw(el("span", "mono", `#${ch.name || ch.channel_id}`)), raw(el("span", "", ch.label || tr(targetLabel(ch.action)))), auto);
       c.append(r);
     }
@@ -1055,7 +1055,7 @@ window.ArkismTeams = (ctx) => {
   function botSide(b) {
     if (S.botDraftFor !== b.id || !S.botDraft) { S.botDraft = clone({ channels: b.channels || [], allowed: b.allowed || { user_ids: [], role_ids: [] }, name: b.name }); S.botDraftFor = b.id; }
     const d = S.botDraft;
-    loadChannels(b);
+    void loadChannels(b);
     const head = el("div", "tm-side-sec");
     const [label, tone] = BOT_STATE[b.state] || [b.state || "—", "line"];
     const t = el("div", "tm-side-titlerow"); t.append(raw(el("h3", "tm-side-title", b.name)), badge(label, tone));
@@ -1279,7 +1279,7 @@ window.ArkismTeams = (ctx) => {
   }
   function renderUsage() {
     const ctl = el("div", "tm-uctl");
-    ctl.append(segBox(RANGES, S.uRange, (k) => { if (S.uRange !== k) { S.uRange = k; loadUsage(); } }), segBox(USAGE_KINDS, S.uKind, (k) => { if (S.uKind !== k) { S.uKind = k; loadUsage(); } }));
+    ctl.append(segBox(RANGES, S.uRange, (k) => { if (S.uRange !== k) { S.uRange = k; void loadUsage(); } }), segBox(USAGE_KINDS, S.uKind, (k) => { if (S.uKind !== k) { S.uKind = k; void loadUsage(); } }));
     const span = el("span", "tm-urange mono");
     const days = { today: 1, "7d": 7, "30d": 30, "90d": 90 }[S.uRange];
     if (days) { const to = new Date(), from = new Date(Date.now() - (days - 1) * 86400000); const f = (x) => x.toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" }); span.textContent = days === 1 ? f(to) : `${f(from)} – ${f(to)}`; }

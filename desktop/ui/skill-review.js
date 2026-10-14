@@ -108,7 +108,7 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
       select.addEventListener("change", show); await show();
     } catch (_) { if (live(ticket)) body.replaceChildren(el("p", "meta", "버전 목록을 읽지 못했어요. 접었다 다시 펼쳐 주세요.")); }
   }
-  panel.addEventListener("toggle", () => { if (panel.open) load(); else { epoch++; body.replaceChildren(); } });
+  panel.addEventListener("toggle", () => { if (panel.open) void load(); else { epoch++; body.replaceChildren(); } });
   if (mode) panel.open = true;
   return panel;
 };
