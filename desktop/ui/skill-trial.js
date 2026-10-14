@@ -1,6 +1,7 @@
 "use strict";
 window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
   const running = new Map();
+  const statusPanel = window.ArkismSkillTrialStatus({ state, el, button, request });
   const runtimes = { codex: "Codex", claude_code: "Claude Code", zcode: "Zcode", gemini: "Gemini CLI", grok: "Grok" };
   const statuses = { active: "시험 가능", stopped: "종료됨", expired: "기간 종료", invalidated: "근거 또는 기준판 변경" };
   return (skillID, versionID) => {
@@ -56,6 +57,7 @@ window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
             catch (_) { if (live(ticket)) { text.focus(); text.select(); note.textContent = "요청 내용을 선택했어요. 직접 복사해 주세요."; } }
           }));
         }
+        detail.append(statusPanel(skillID, r.id, versionID));
         detail.append(button("시험 상태 새로고침", "small", null, () => refresh(r.id)));
         if (state.caps?.role === "human" && r.status === "active") detail.append(button("시험 종료", "small", null, async () => {
           if (busy || !live(ticket)) return; busy = true; detail.querySelectorAll("button").forEach(b => b.disabled = true);

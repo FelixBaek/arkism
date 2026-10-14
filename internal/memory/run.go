@@ -8,11 +8,13 @@ import (
 )
 
 type RunDetails struct {
-	AgentID    string     `json:"agent_id" bson:"agent_id"`
-	TaskType   string     `json:"task_type" bson:"task_type"`
-	Outcome    string     `json:"outcome" bson:"outcome"`
-	StartedAt  time.Time  `json:"started_at" bson:"started_at"`
-	FinishedAt *time.Time `json:"finished_at,omitempty" bson:"finished_at,omitempty"`
+	// OriginAgentID is declared runtime provenance, never an authorization identity.
+	OriginAgentID string     `json:"origin_agent_id,omitempty" bson:"origin_agent_id,omitempty"`
+	AgentID       string     `json:"agent_id" bson:"agent_id"`
+	TaskType      string     `json:"task_type" bson:"task_type"`
+	Outcome       string     `json:"outcome" bson:"outcome"`
+	StartedAt     time.Time  `json:"started_at" bson:"started_at"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty" bson:"finished_at,omitempty"`
 }
 type FinishRunInput struct {
 	Scope            Scope     `json:"scope"`
@@ -25,7 +27,7 @@ func terminalOutcome(outcome string) bool {
 	return outcome == "success" || outcome == "partial" || outcome == "failed"
 }
 func validRun(x *RunDetails, scope Scope, now time.Time) bool {
-	if x == nil || !validRunLabel(x.AgentID, 256) || !validRunLabel(x.TaskType, 128) || scope.AgentID != "" && scope.AgentID != x.AgentID || x.StartedAt.Truncate(time.Millisecond).IsZero() || x.StartedAt.After(now) {
+	if x == nil || x.OriginAgentID != "" && !validRunLabel(x.OriginAgentID, 256) || !validRunLabel(x.AgentID, 256) || !validRunLabel(x.TaskType, 128) || scope.AgentID != "" && scope.AgentID != x.AgentID || x.StartedAt.Truncate(time.Millisecond).IsZero() || x.StartedAt.After(now) {
 		return false
 	}
 	if x.Outcome == "running" {

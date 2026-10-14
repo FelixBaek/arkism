@@ -282,3 +282,13 @@ func (f *fakeRepo) ListSkillTrialRecords(_ context.Context, scope Scope, skillID
 	}
 	return rows, nil
 }
+
+func TestStopSkillTrialClosesCheckJob(t *testing.T) {
+	f, candidate, trial, _ := skillAutomationFixture(t)
+	if _, e := f.svc.StopSkillTrial(testCtx, f.human, trial.ID, SkillTrialStopInput{Scope: scopeA, SkillID: candidate.SkillID, ExpectedRevision: trial.Revision}); e != nil {
+		t.Fatal(e)
+	}
+	if job, e := f.repo.Get(testCtx, colJobs, scopeA, skillTrialCheckID(scopeA, trial.ID)); e != nil || job.Status != JobStatusDone {
+		t.Fatal("stopped trial left its check job open", job.Status, e)
+	}
+}

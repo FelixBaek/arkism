@@ -45,6 +45,7 @@ func (v *SkillComparisonResult) UnmarshalJSON(data []byte) error {
 }
 
 type RecordSkillComparisonInput struct {
+	TrialID string                `json:"trial_id,omitempty"`
 	Scope   Scope                 `json:"scope"`
 	EventID string                `json:"event_id"`
 	Result  SkillComparisonResult `json:"result"`
@@ -144,7 +145,7 @@ func comparisonMeasurements(r SkillComparisonResult, scope Scope) ([2]RunDetails
 
 func (s *Service) RecordSkillComparison(ctx context.Context, token string, in RecordSkillComparisonInput) (RecordSkillComparisonResult, error) {
 	var out RecordSkillComparisonResult
-	if !validScope(in.Scope) || !workCheckpointIDPattern.MatchString(in.EventID) || containsSecret(in.EventID) {
+	if !validScope(in.Scope) || !workCheckpointIDPattern.MatchString(in.EventID) || containsSecret(in.EventID) || in.TrialID != "" && !validRunLabel(in.TrialID, 128) {
 		return out, ErrInvalid
 	}
 	runs, measured, err := comparisonMeasurements(in.Result, in.Scope)
@@ -152,6 +153,12 @@ func (s *Service) RecordSkillComparison(ctx context.Context, token string, in Re
 		return out, err
 	}
 	body := structuredText(in.Result)
+	if in.TrialID != "" {
+		body = structuredText(struct {
+			TrialID string                `json:"trial_id"`
+			Result  SkillComparisonResult `json:"result"`
+		}{in.TrialID, in.Result})
+	}
 	if len(body) > 64000 || !safeTransfer(body) {
 		return out, ErrInvalid
 	}
@@ -264,8 +271,20 @@ func (s *Service) RecordSkillComparison(ctx context.Context, token string, in Re
 		if e != nil {
 			return e
 		}
-		if current.Revision != in.Result.Candidate.Revision || current.Status != "candidate" || current.PrivacyQuarantined || current.ContentErased || current.CreatedBy == actor.PrincipalID || current.Analysis == nil || current.Analysis.ContentHash != in.Result.ContentSHA256["candidate"] {
+		if current.Revision != in.Result.Candidate.Revision || (current.Status != "candidate" && !(in.TrialID != "" && current.Status == "approved")) || current.PrivacyQuarantined || current.ContentErased || current.CreatedBy == actor.PrincipalID || current.Analysis == nil || current.Analysis.ContentHash != in.Result.ContentSHA256["candidate"] {
 			return ErrConflict
+		}
+		if in.TrialID != "" {
+			trial, e := tx.Get(ctx, colSkillTrials, in.Scope, in.TrialID)
+			if e != nil {
+				return e
+			}
+			if trial.SkillTrial == nil || trial.Status != "active" || trial.ContentErased || trial.PrivacyQuarantined || trial.SkillID != current.SkillID || trial.SkillTrial.Candidate.ID != current.ID || trial.SkillTrial.Candidate.Revision != current.Revision || trial.CreatedBy == actor.PrincipalID {
+				return ErrDenied
+			}
+			if _, e = skillTrialCandidate(ctx, tx, in.Scope, current.SkillID, trial.SkillTrial); e != nil {
+				return e
+			}
 		}
 		// Same-revision write fences approval/deletion without changing logical history.
 		if e = tx.Replace(ctx, colSkillVersions, current, current.Revision); e != nil {

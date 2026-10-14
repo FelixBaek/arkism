@@ -276,6 +276,18 @@ func run() error {
 		return err
 	}
 	svc := &memory.Service{GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: repo, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, CostRates: costRates}
+	svc.ModelBudgetPolicy, e = memory.ParseModelBudgetPolicy(os.Getenv("MEMORY_MODEL_BUDGET_POLICY"))
+	if e != nil {
+		return e
+	}
+	svc.MemoryReviewPolicies, e = memory.ParseMemoryReviewPolicies(os.Getenv("MEMORY_REVIEW_POLICIES"))
+	if e != nil {
+		return e
+	}
+	svc.SkillAutomationPolicies, e = memory.ParseSkillAutomationPolicies(os.Getenv("MEMORY_SKILL_AUTOMATION_POLICIES"))
+	if e != nil {
+		return e
+	}
 	if key := os.Getenv("MEMORY_SESSION_ARCHIVE_KEY"); key != "" {
 		decoded, err := hex.DecodeString(key)
 		if err != nil || len(decoded) != 32 {
@@ -311,6 +323,14 @@ func run() error {
 		if os.Getenv("ARKISM_WIKI") == "on" { // optional LLM-Wiki jobs, off by default
 			svc.Wiki = &memory.ChatWikiLLM{Config: config}
 		}
+	}
+	if !*recovery && os.Getenv("ARKISM_ANTHROPIC_SKILL_DRAFTER") == "1" {
+		keyFile := os.Getenv("ARKISM_ANTHROPIC_KEY_FILE")
+		key, err := os.ReadFile(keyFile)
+		if err != nil || strings.TrimSpace(string(key)) == "" || os.Getenv("ARKISM_ANTHROPIC_WORKSPACE_ID") == "" || svc.ModelBudgetPolicy == nil {
+			return errors.New("Anthropic skill drafter requires key file, workspace and model budget policy")
+		}
+		svc.Drafter = &memory.AnthropicSkillDrafter{Service: svc, APIKey: strings.TrimSpace(string(key)), WorkspaceID: os.Getenv("ARKISM_ANTHROPIC_WORKSPACE_ID"), BudgetScope: svc.ModelBudgetPolicy.Scope}
 	}
 	if !*recovery {
 		// Skill routing: Cloudflare Clef-flash when its account and token are set, with Jev as the spare; else Jev alone.

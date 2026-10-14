@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"time"
@@ -9,6 +10,7 @@ import (
 )
 
 type SourceTrace struct {
+	OriginAgentID   string              `json:"origin_agent_id,omitempty"`
 	ArchiveMessages []ArchiveMessageRef `json:"archive_messages,omitempty"`
 
 	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
@@ -138,6 +140,14 @@ func (s *Service) TraceMemorySources(ctx context.Context, token string, scope Sc
 					item.Reference = &refCopy
 					item.Source = &Ref{Collection: "sources", ID: source.ID, Revision: source.Revision}
 					item.OriginProduct, item.SourceRef, item.CollectedAt = source.OriginProduct, source.SourceRef, source.CollectedAt
+					if source.Kind == "note" && source.SourceEventID != "" && source.TraceID != "" {
+						var provenance struct {
+							OriginAgentID string `json:"origin_agent_id"`
+						}
+						if json.Unmarshal([]byte(source.Text), &provenance) == nil && validRunLabel(provenance.OriginAgentID, 256) {
+							item.OriginAgentID = provenance.OriginAgentID
+						}
+					}
 					if ref.Span != nil {
 						item.Excerpt = string([]rune(source.Text)[ref.Span.Start:ref.Span.End])
 					}

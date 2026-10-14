@@ -127,6 +127,7 @@ func (s *Service) conflictPrincipal(ctx context.Context, token string, in Confli
 type conflictRun struct {
 	in        ConflictInput
 	principal string
+	role      string
 	winner    int
 	rows      []Record
 	base      []string // status each member returns to: active or candidate
@@ -137,7 +138,10 @@ type conflictRun struct {
 // applyConflict marks or resolves inside the caller's transaction, so a caller
 // can mark and resolve (and record its own decision) as one change.
 func applyConflict(ctx context.Context, tx Tx, in ConflictInput, principal string, winner int) (ConflictOutput, error) {
-	c := &conflictRun{in: in, principal: principal, winner: winner, rows: make([]Record, 2), base: []string{"active", "active"}, missing: make([]bool, 2)}
+	return applyConflictAs(ctx, tx, in, principal, roleHuman, winner)
+}
+func applyConflictAs(ctx context.Context, tx Tx, in ConflictInput, principal, role string, winner int) (ConflictOutput, error) {
+	c := &conflictRun{in: in, principal: principal, role: role, winner: winner, rows: make([]Record, 2), base: []string{"active", "active"}, missing: make([]bool, 2)}
 	for i, ref := range in.Memories {
 		if ref.Collection == "memory_candidates" {
 			c.base[i] = "candidate"
@@ -202,7 +206,7 @@ func (c *conflictRun) mark(ctx context.Context, tx Tx) (Record, error) {
 	if len(refs) == 0 || len(refs) > 64 {
 		return Record{}, ErrInvalid
 	}
-	rel := Record{ID: ID(), Scope: c.in.Scope, Kind: "conflicts_with", Status: "active", Revision: 1, Text: c.in.Reason, Sources: refs, Sensitivity: "private", Conflict: &ConflictDetails{Hold: c.in.Hold}, CreatedAt: c.now, UpdatedAt: c.now, CreatedBy: c.principal, CreatedByType: "human"}
+	rel := Record{ID: ID(), Scope: c.in.Scope, Kind: "conflicts_with", Status: "active", Revision: 1, Text: c.in.Reason, Sources: refs, Sensitivity: "private", Conflict: &ConflictDetails{Hold: c.in.Hold}, CreatedAt: c.now, UpdatedAt: c.now, CreatedBy: c.principal, CreatedByType: c.role}
 	for i := range c.rows {
 		c.rows[i].ConflictID = rel.ID
 		if c.holds(i) {
@@ -340,6 +344,7 @@ func (c *conflictRun) write(ctx context.Context, tx Tx, rel Record) (ConflictOut
 		if e != nil {
 			return ConflictOutput{}, e
 		}
+		r.CreatedByType = c.role
 		replacement = &r
 		rel.Conflict.Replacement = &Ref{Collection: "memory_relations", ID: r.ID, Revision: r.Revision}
 		if e = insertSourceRecord(ctx, tx, "memory_relations", r); e != nil {

@@ -1738,14 +1738,8 @@
     Object.assign(state.data, { candidates, conflicted, memories, maintenance });
     render();
   }
-  // A candidate that contradicts a memory carries a conflict and cannot be reviewed
-  // directly: the conflict is resolved first. "new" keeps the old memory as superseded
-  // history (mark + second_supersedes_first), the same path session reflection uses.
+  // Conflict resolution and candidate review commit together on the server.
   const CONFLICT_REASON = "Arkism 앱에서 사용자가 선택";
-  async function conflictCall(body) {
-    return request("/v1/memories/conflicts", { method: "POST", body: JSON.stringify({ scope: state.scope, reason: CONFLICT_REASON, ...body }) });
-  }
-  const refOf = (collection, r) => ({ collection, id: r.id, revision: r.revision });
   // One review action per item at a time: a second click on the same item would only meet the first one's new revision.
   const reviewing = new Set();
   async function reviewOnce(id, work) {
@@ -1759,20 +1753,15 @@
   function resolveConflict(c, choice) {
     return reviewOnce(c.id, async () => {
       const rel = await request(`/v1/memory_relations/${encodeURIComponent(c.conflict_id)}?${query()}`);
-      const resolution = { keep_old: "keep_first", both: "keep_both", new: "keep_both" }[choice];
-      await conflictCall({ memories: rel.relations, action: "resolve", conflict_id: rel.id, expected_revision: rel.revision, resolution });
-      if (choice !== "keep_old") {
-        const cand = await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}?${query()}`);
-        await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/review`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: cand.revision, action: "approve" }) });
-      }
-      if (choice === "new") {
-        const oldRef = rel.relations.find((r) => r.collection === "memories");
-        const [old, fresh] = await Promise.all([oldRef.id, c.id].map((id) => request(`/v1/memories/${encodeURIComponent(id)}?${query()}`)));
-        const marked = await conflictCall({ memories: [refOf("memories", old), refOf("memories", fresh)], action: "mark" });
-        const rows = Object.fromEntries(marked.memories.map((m) => [m.id, m]));
-        await conflictCall({ memories: [refOf("memories", rows[old.id]), refOf("memories", rows[fresh.id])], action: "resolve",
-          conflict_id: marked.relation.id, expected_revision: marked.relation.revision, resolution: "second_supersedes_first" });
-      }
+      const memory = rel.relations?.find((r) => r.collection === "memories");
+      if (!memory) throw new Error("revision_conflict");
+      const payload = { scope: state.scope, expected_revision: c.revision,
+        action: choice === "keep_old" ? "reject" : "approve",
+        ...(choice === "keep_old" ? { reason: CONFLICT_REASON } : {}),
+        conflict: { id: rel.id, expected_revision: rel.revision, memory,
+          resolution: { keep_old: "keep_old", both: "keep_both", new: "replace_old" }[choice], reason: CONFLICT_REASON } };
+      await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/review`, {
+        method: "POST", body: JSON.stringify(window.ArkismMemoryEvaluation.reviewPayload(c.id, payload)) });
       notice({ keep_old: "기존 기억을 그대로 뒀어요.", both: "둘 다 기억으로 남겼어요.", new: "새 내용으로 바꿨어요. 옛 기억은 이력에 남아요." }[choice]);
       state.selected = null;
       await reloadMemories();
@@ -1781,7 +1770,7 @@
   function decide(item, action, reason) {
     return reviewOnce(item.id, async () => {
       await request(`/v1/memory_candidates/${encodeURIComponent(item.id)}/review`, {
-        method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: item.revision, action, ...(reason ? { reason } : {}) })
+        method: "POST", body: JSON.stringify(window.ArkismMemoryEvaluation.reviewPayload(item.id, { scope: state.scope, expected_revision: item.revision, action, ...(reason ? { reason } : {}) }))
       });
       notice(action === "approve" ? "기억으로 저장했어요." : "후보를 버렸어요.");
       state.selected = null;
@@ -4259,6 +4248,8 @@
     r.append(facts([["대화 시작", "선호·작업 규칙을 모두 넣어요"], ["질문할 때", "관련 있는 기억만 최대 6개"], ["자동 저장", "내가 직접 말한 것 · AI가 추론한 교훈·결정(시험 적용)"], ["저장소", "저장소에서 나온 기억은 그 저장소에서만, 나머지는 어디서나 써요"]]));
     body.append(r);
   }
+  const renderMemoryContext = window.ArkismMemoryContext({ el });
+  const renderModelGeneration = window.ArkismModelGeneration({ el });
   // Figma 198:630 detail: kind · title · meta → action card → 어디서 왔나요 → 언제 쓰이나요 → 바뀐 이력.
   function detailHead(body, label, title, meta) {
     const top = el("div", "d-head");
@@ -4276,6 +4267,10 @@
     const body = detailShell("기억");
     const u = usageOf(m.id), s = memStat(m.id);
     detailHead(body, kindLabel(m.kind), m.text, `${originOf(m)} · ${shortDate(m.created_at)} 저장 · ${memRepo(m) ? `${memRepo(m).split("/").pop()} 저장소에서만` : "모든 에이전트"}`);
+    const contextPanel = renderMemoryContext(m);
+    if (contextPanel) body.append(contextPanel);
+    const modelPanel = renderModelGeneration(m);
+    if (modelPanel) body.append(modelPanel);
     const fix = () => button("고치기", "small", null, () => openMemoryFix(m));
     if (unusedOften(m)) {
       body.append(actionCard(`최근 ${memUse().days}일 동안 ${s.injected}번 참고됐지만, 답변에는 한 번도 쓰이지 않았어요. 아직 맞는 내용인가요?`,
@@ -4303,6 +4298,8 @@
     ]));
     if (!standing(m) && u) use.append(el("p", "meta", "질문에 자료로 들어간 횟수예요. 최근 10번까지 기록해요."));
     body.append(use);
+    window.ArkismMemoryEvaluation.mount({ container: body, record: m, scope: { ...state.scope },
+      request, el, section, facts, button });
     // 변경 이력 N건 › (folded) · 이전으로 되돌리기 (Figma 198:630): the lineage walk fills both once it answers.
     const hist = el("details", "d-history");
     const histHead = el("summary", "", "변경 이력 1건");
@@ -4449,6 +4446,10 @@
   // Figma 198:716 (새 후보) · 198:1748 (헷갈림): kind · title · meta → action card → 어디서 왔나요 → 자동 저장 규칙.
   async function candidateDetail(c) {
     const body = detailShell("기억 후보");
+    const contextPanel = renderMemoryContext(c);
+    if (contextPanel) body.append(contextPanel);
+    const modelPanel = renderModelGeneration(c);
+    if (modelPanel) body.append(modelPanel);
     const [why] = waitReason(c);
     const rules = el("details", "d-rules");
     rules.append(el("summary", "", "자동 저장 규칙 보기"), facts([["바로 저장", "내가 직접 말한 선호·결정·규칙"], ["시험 적용", "AI가 추론한 교훈·결정 (5개 세션에서 안 쓰이면 내림)"], ["항상 확인", "명령 같은 문장 · AI가 추론한 선호·작업 규칙"]]));
@@ -4483,7 +4484,7 @@
         act.append(button("새 내용으로 바꾸기", "primary small", null, () => resolveConflict(c, "new")),
           button("지금 기억 유지", "small", null, () => resolveConflict(c, "keep_old")),
           button("둘 다 맞아요", "ghost small", null, () => resolveConflict(c, "both")));
-        parts.push(act);
+        parts.push(el("p", "meta", "선택한 내용과 기존 기억의 변경을 함께 저장해요. 응답을 못 받은 경우 같은 선택으로 다시 시도할 수 있어요."), act);
       }
       body.append(...parts, rules);
       request(`/v1/memory_relations/${encodeURIComponent(c.conflict_id)}?${query()}`)

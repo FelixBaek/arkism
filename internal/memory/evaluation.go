@@ -54,6 +54,7 @@ type EvaluationTotals struct {
 	MeanScore *float64 `json:"mean_score"`
 }
 type EvaluationSummary struct {
+	Tracking       *MemoryEvaluationTracking   `json:"tracking,omitempty"`
 	EvaluationRefs []Ref                       `json:"evaluation_refs"`
 	Target         Ref                         `json:"target"`
 	Groups         map[string]EvaluationTotals `json:"groups"`
@@ -161,6 +162,10 @@ func (s *Service) SummarizeEvaluations(ctx context.Context, token string, in Eva
 			return ErrConflict
 		}
 		out = EvaluationSummary{EvaluationRefs: refs, Target: in.Target, Groups: map[string]EvaluationTotals{}, PreferredTypes: []string{}, Authority: AuthorityDataOnly}
+		out.Tracking, e = memoryEvaluationTracking(ctx, tx, in.Scope, in.Target)
+		if e != nil {
+			return e
+		}
 		for _, r := range current {
 			if !live(r) || r.Scope != in.Scope || r.Target == nil || *r.Target != in.Target {
 				return ErrConflict
