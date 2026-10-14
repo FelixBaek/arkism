@@ -20,25 +20,27 @@ try {
   const browser=await playwright.chromium.launch({headless:true});
   const page=await browser.newPage({locale:'ko-KR',viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(String(e)));
   try{
+    // Each synthetic endpoint answers [status, body]; anything unlisted is an empty list.
+    const denied=[403,{code:'access_denied'}];
+    const routes={
+      '/v1/memories':()=>[200,{items:[memory]}],
+      '/v1/memory_candidates':req=>[200,{items:new URL(req.url()).searchParams.get('status')==='conflicted'?[candidate]:[]}],
+      '/v1/memory_relations/conflict1':()=>[200,{id:'conflict1',revision:1,relations:[{collection:'memories',id:'memory1',revision:1},{collection:'memory_candidates',id:'candidate1',revision:1}]}],
+      '/v1/memories/memory1':()=>[200,memory],
+      '/v1/evaluations/summary':req=>{
+        assert.deepEqual(req.postDataJSON(),{scope,target:{collection:'memories',id:'memory1',revision:1}});
+        if(mode==='error')return denied;
+        return [200,{authority:'data_only_untrusted',target:{collection:'memories',id:'memory1',revision:mode==='stale'?2:1},tracking:{status:mode==='failed'?'done':'pending'},groups:{self:{model_self:{count:1}},failed:{automated_check:{count:1}}}[mode]||{},passed:{self:true,failed:false}[mode]??null}];
+      },
+      '/v1/model-budget/status':()=>budgetDenied?denied:[200,{month:'2026-10',monthly_limit_pico_usd:100e12,general_limit_pico_usd:90e12,daily_soft_target_pico_usd:3e12,daily_soft_target_exceeded:budgetExceeded,...(budgetHard?{daily_limit_pico_usd:5e12}:{}),monthly_committed_pico_usd:12e12,general_committed_pico_usd:10e12,daily_committed_pico_usd:budgetExceeded?4e12:2e12,outstanding_pico_usd:.2e12}],
+      '/v1/memory_candidates/candidate1/review':req=>{writes.push(req.postDataJSON());return [503,{code:'dependency_unavailable'}];},
+    };
+    const capabilities=()=>[200,{role:'human',principal_id:'synthetic',actions:{review_list:true,review_decide:true},collections:[]}];
     await page.route(url+'/v1/**',async route=>{
       const req=route.request(),p=new URL(req.url()).pathname;
-      let value={items:[]};
-      if(p.endsWith('/capabilities'))value={role:'human',principal_id:'synthetic',actions:{review_list:true,review_decide:true},collections:[]};
-      else if(p==='/v1/memories')value={items:[memory]};
-      else if(p==='/v1/memory_candidates')value={items:new URL(req.url()).searchParams.get('status')==='conflicted'?[candidate]:[]};
-      else if(p==='/v1/memory_relations/conflict1')value={id:'conflict1',revision:1,relations:[{collection:'memories',id:'memory1',revision:1},{collection:'memory_candidates',id:'candidate1',revision:1}]};
-      else if(p==='/v1/memories/memory1')value=memory;
-      else if(p==='/v1/evaluations/summary'){
-        assert.deepEqual(req.postDataJSON(),{scope,target:{collection:'memories',id:'memory1',revision:1}});
-        if(mode==='error'){await route.fulfill({status:403,json:{code:'access_denied'}});return;}
-        value={authority:'data_only_untrusted',target:{collection:'memories',id:'memory1',revision:mode==='stale'?2:1},tracking:{status:mode==='failed'?'done':'pending'},groups:{self:{model_self:{count:1}},failed:{automated_check:{count:1}}}[mode]||{},passed:{self:true,failed:false}[mode]??null};
-      }else if(p==='/v1/model-budget/status'){
-        if(budgetDenied){await route.fulfill({status:403,json:{code:'access_denied'}});return;}
-        value={month:'2026-10',monthly_limit_pico_usd:100e12,general_limit_pico_usd:90e12,daily_soft_target_pico_usd:3e12,daily_soft_target_exceeded:budgetExceeded,...(budgetHard?{daily_limit_pico_usd:5e12}:{}),monthly_committed_pico_usd:12e12,general_committed_pico_usd:10e12,daily_committed_pico_usd:budgetExceeded?4e12:2e12,outstanding_pico_usd:.2e12};
-      }else if(p==='/v1/memory_candidates/candidate1/review'){
-        writes.push(req.postDataJSON());await route.fulfill({status:503,json:{code:'dependency_unavailable'}});return;
-      }
-      await route.fulfill({json:value});
+      const answer=p.endsWith('/capabilities')?capabilities:routes[p];
+      const [status,json]=answer?answer(req):[200,{items:[]}];
+      await route.fulfill({status,json});
     });
     await page.route(url+'/readyz',r=>r.fulfill({json:{status:'ready'}}));
     await page.addInitScript((sc)=>{const answers={app_defaults:()=>({local:false}),ssh_connect:()=>({server:location.origin,token:'synthetic-token',workspace_id:sc.workspace_id,project_id:sc.project_id,ssh_host:'verify'}),api:async a=>{const r=await fetch(a.base+a.path,{method:a.method,body:a.body,headers:{Authorization:'Bearer '+a.token,'Content-Type':'application/json'}});return {status:r.status,body:await r.text()};}};localStorage.setItem('arkism.mode','remote');localStorage.setItem('arkism.ssh',JSON.stringify({host:'verify'}));window.__TAURI__={core:{invoke:async(cmd,a)=>answers[cmd]?.(a)??null}};localStorage.setItem('arkism.token','synthetic-token');localStorage.setItem('arkism.server',location.origin);},scope);
