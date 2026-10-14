@@ -406,7 +406,8 @@ func (p *Postgres) SourceErasureBatch(ctx context.Context, s Scope, id, kind str
 		if len(out) == sourceMemoryErasureBatch {
 			break
 		}
-		rows, e := p.selectRecords(ctx, col, s, `doc @> $6::jsonb`, []any{fmt.Sprintf(`{"sources":[{"source_id":%q}]}`, id)}, "id ASC", sourceMemoryErasureBatch-len(out))
+		// Some records (synthetic consultations) cite their source only by source_event_id.
+		rows, e := p.selectRecords(ctx, col, s, `(doc @> $6::jsonb OR (doc->>'source_event_id'=$7 AND id<>$7))`, []any{fmt.Sprintf(`{"sources":[{"source_id":%q}]}`, id), id}, "id ASC", sourceMemoryErasureBatch-len(out))
 		if e != nil {
 			return nil, e
 		}

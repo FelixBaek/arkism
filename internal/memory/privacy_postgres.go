@@ -477,7 +477,7 @@ func (p *Postgres) VerifyPrivacyPurge(ctx context.Context, scope Scope, impact P
 		}
 	}
 	var remaining int
-	if err := p.q().QueryRow(ctx, `SELECT count(*) FROM memory_records WHERE workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND collection NOT IN ('jobs','audit_events','provider_usage','blobs') AND EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(doc->'sources')='array' THEN doc->'sources' ELSE '[]'::jsonb END) x WHERE x->>'source_id'=ANY($5))`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, impact.SourceEventIDs).Scan(&remaining); err != nil {
+	if err := p.q().QueryRow(ctx, `SELECT count(*) FROM memory_records WHERE workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND collection NOT IN ('jobs','audit_events','provider_usage','blobs') AND (EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(doc->'sources')='array' THEN doc->'sources' ELSE '[]'::jsonb END) x WHERE x->>'source_id'=ANY($5)) OR doc->>'source_event_id'=ANY($5))`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, impact.SourceEventIDs).Scan(&remaining); err != nil {
 		return report, pgErr(err)
 	}
 	if remaining != 0 {
