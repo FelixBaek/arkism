@@ -33,8 +33,8 @@ window.ArkismShell = (ctx) => {
     ] },
     connect: { label: "TOOLS", tabs: [
       ["skills", "스킬", () => go("skills"), () => state.view === "skills", count("skills")],
-      ["mcp", "MCP", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin"],
       ["plugin", "플러그인", () => { state.toolTab = "plugin"; go("tools"); }, () => state.view === "tools" && state.toolTab === "plugin"],
+      ["mcp", "MCP", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin"],
       ["git", "저장소", () => go("git"), () => ["git", "reviews"].includes(state.view)],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },

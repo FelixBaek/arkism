@@ -3446,7 +3446,7 @@
       table.replaceChildren(el("div", "empty", "MCP 목록을 불러오지 못했어요. 서버의 arkism-agents.timer가 돌고 있는지 확인해 주세요."));
       return;
     }
-    const seg = segment([["mcp", "MCP 서버", t.servers.length], ["plugin", "플러그인", t.plugins.length]], state.toolTab, (k) => { state.toolTab = k; state.selected = null; render(); });
+    const seg = segment([["plugin", "플러그인", t.plugins.length], ["mcp", "MCP 서버", t.servers.length]], state.toolTab, (k) => { state.toolTab = k; state.selected = null; render(); });
     headExtras({ count: `${(plugin ? t.plugins : t.servers).length}개`, aside: [seg] });
     const age = t.collected_at ? Date.now() - new Date(t.collected_at).getTime() : Infinity;
     if (age > 5 * 60000) notice("서버에서 최근 5분 동안 목록이 올라오지 않았어요. arkism-agents.timer를 확인해 주세요.");
