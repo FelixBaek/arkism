@@ -14,7 +14,6 @@ window.ArkismShell = (ctx) => {
     memory: { label: "MEMORY", tabs: [
       ["memories", "기억", () => go("memories", "active"), () => state.view === "memories", count("memories")],
       ["knowledge", "지식", () => go("knowledge"), () => state.view === "knowledge"], // adopt-knowledge (knowledge.js)
-      ["skills", "스킬", () => go("skills"), () => state.view === "skills", count("skills")],
       ["sessions", "세션", () => go("sessions"), () => state.view === "sessions", count("sessions")],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },
@@ -34,6 +33,7 @@ window.ArkismShell = (ctx) => {
     ] },
     connect: { label: "CONNECT", tabs: [
       ["agent", "에이전트", () => { state.agentTab = "list"; go("agent"); }, () => state.view === "agent"],
+      ["skills", "스킬", () => go("skills"), () => state.view === "skills", count("skills")],
       ["mcp", "MCP", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin"],
       ["plugin", "플러그인", () => { state.toolTab = "plugin"; go("tools"); }, () => state.view === "tools" && state.toolTab === "plugin"],
       ["git", "저장소", () => go("git"), () => ["git", "reviews"].includes(state.view)],

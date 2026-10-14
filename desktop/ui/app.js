@@ -1174,7 +1174,7 @@
   const TODO_SHORT = { review: "기억 후보", conflicted: "부딪힘", maintenance: "정리 제안", idle: "안 쓰임", fresh: "새로 저장",
     suggest: "새 스킬", similar: "비슷함", unused: "안 씀", updates: "업데이트", adapter: "어댑터 필요", blocked: "빠진 에이전트" };
   const TODO_MENUS = [["MEMORY", "기억", ["fresh", "review", "conflicted", "maintenance", "idle"], ["memories", "active"]],
-    ["MEMORY", "스킬", ["suggest", "similar", "unused", "updates", "adapter", "blocked"], ["skills"]]];
+    ["CONNECT", "스킬", ["suggest", "similar", "unused", "updates", "adapter", "blocked"], ["skills"]]];
   const todoKey = (id) => (id || "").replace(/^todo:/, "").split("#")[0];
   const todoIndex = (id) => Number((id || "").split("#")[1] || 0);
   const todoTotal = (items) => items.reduce((s, t) => s + (t.n || 0), 0);
@@ -1343,9 +1343,10 @@
   // 메뉴별 확인할 것: what is left after 먼저 확인, one row per menu; the row opens that menu.
   function menuRows(rest) {
     const list = el("div", "todo-list home-menus");
-    const rows = TODO_MENUS.map(([menu, name, ids, target]) => [menu, name, rest.filter((t) => ids.includes(t.id) && t.n), target]);
+    const of = (m) => TODO_MENUS.filter(([menu]) => menu === m).map(([menu, name, ids, target]) => [menu, name, rest.filter((t) => ids.includes(t.id) && t.n), target]);
+    const rows = of("MEMORY");
     digests.menuRows(rows); // 병합 제안 · 모아보기 (digests.js)
-    rows.push(...home.menuExtras(generation)); // 워크플로우 · 라우팅
+    rows.push(...home.menuExtras(generation), ...of("CONNECT")); // 워크플로우 · 라우팅, then 스킬 (CONNECT)
     const tools = state.data.tools;
     if (tools) {
       const login = tools.servers.filter((s) => Object.values(s.login || {}).includes("needed"));
