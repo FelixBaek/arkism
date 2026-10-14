@@ -385,6 +385,9 @@ func (s *Service) eraseSourceMemories(ctx context.Context, token string, job Rec
 					found = true
 				}
 			}
+			if job.Target.Collection == "sources" && r.SourceEventID == job.Target.ID && r.ID != job.Target.ID {
+				found = true
+			}
 			if ref.Collection == colSkillVersions {
 				parent, ok := currentParents[r.SkillID]
 				if !ok {
