@@ -309,7 +309,8 @@ dialog.git-dialog .btn.danger, dialog.cn-confirm .btn.danger { border-color: tra
 .git-lanes svg { display: block; height: 100%; }
 .git-node { position: absolute; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--nc-quiet); }
 .git-node.tip { width: 8px; height: 8px; margin: -4px 0 0 -4px; background: var(--nc-amber); }
-.git-row.on .git-node { background: var(--nc-accent) !important; }
+/* :not(#_) adds id-level weight so the accent beats .tip and any later rule without !important */
+.git-row.on .git-node:not(#_) { background: var(--nc-accent); }
 
 /* ---------------------------------------------------------------- 코드 리뷰 (Figma 198:2780) */
 .app.v4-connect .rv-wrap { display: flex; flex-direction: column; gap: 12px; border: 0; background: none; overflow: visible; }
