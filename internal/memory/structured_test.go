@@ -440,3 +440,34 @@ func TestSkillQueryVariantsIncludeKoreanBrandPrefix(t *testing.T) {
 		t.Fatalf("variants = %q", got)
 	}
 }
+
+func TestRoutingJudgesExtraMCPAndPluginCandidates(t *testing.T) {
+	f := newFixture(t)
+	v := analyzedSkill(t, f)
+	var seen []SkillCandidate
+	f.svc.Router = judgeFunc(func(_ context.Context, _ string, c []SkillCandidate) (RouteResult, error) {
+		seen = c
+		return RouteResult{SelectedID: "mcp-files", Provider: "jev", Judgments: []SkillJudgment{{ID: v.ID, Suitability: 1, Confidence: .9}, {ID: "mcp-files", Suitability: 3, Confidence: .9}}}, nil
+	})
+	extra := []SkillCandidate{{ID: "mcp-files", Kind: "mcp", Name: "files", Description: "file search", Tools: []string{"dropped"}}}
+	got, e := f.svc.RouteSkills(testCtx, f.human, SearchInput{Scope: scopeA, Query: "index", ExtraCandidates: extra})
+	if e != nil || got.SelectedID != "mcp-files" || len(seen) != 2 || seen[0].Kind != "skill" || seen[1].Kind != "mcp" || seen[1].Tools != nil {
+		t.Fatalf("extra candidate: %+v %+v %v", got, seen, e)
+	}
+	// The host trims descriptions to 300 code points; Korean takes 3 bytes each.
+	long := []SkillCandidate{{ID: "mcp-ko", Kind: "mcp", Description: strings.Repeat("가", 300)}}
+	if _, e := f.svc.RouteSkills(testCtx, f.human, SearchInput{Scope: scopeA, Query: "index", ExtraCandidates: long}); e != nil {
+		t.Fatalf("300-rune description refused: %v", e)
+	}
+	for _, bad := range [][]SkillCandidate{
+		{{ID: "files", Kind: "mcp", Name: "files"}},
+		{{ID: "mcp-a/b", Kind: "mcp"}},
+		{{ID: "skill-x", Kind: "skill"}},
+		{{ID: "mcp-long", Kind: "mcp", Description: strings.Repeat("가", 301)}},
+		{{ID: "mcp-1", Kind: "mcp"}, {ID: "mcp-2", Kind: "mcp"}, {ID: "mcp-3", Kind: "mcp"}, {ID: "mcp-4", Kind: "mcp"}, {ID: "mcp-5", Kind: "mcp"}},
+	} {
+		if _, e := f.svc.RouteSkills(testCtx, f.human, SearchInput{Scope: scopeA, Query: "index", ExtraCandidates: bad}); !errors.Is(e, ErrInvalid) {
+			t.Fatalf("accepted %+v: %v", bad, e)
+		}
+	}
+}

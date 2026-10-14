@@ -217,13 +217,30 @@ func routeSkills(query any) (host.Obj, error) {
 	if routerRuntime != "" {
 		payload["runtime"] = routerRuntime
 	}
+	// MCP servers and plugins whose name or description fits the query are judged beside the skills.
+	local := map[string]localTool{}
+	var extras []any
+	for _, t := range matchTools(q, localTools(), 3) {
+		local[t.id()] = t
+		extras = append(extras, map[string]any{"id": t.id(), "kind": t.kind, "name": t.name, "description": t.desc})
+	}
+	if len(extras) > 0 {
+		payload["extra_candidates"] = extras
+	}
 	routed, err := routerRequest("/v1/skills/route", payload)
 	if err != nil {
 		return nil, err
 	}
+	pick := func(id string) (host.Obj, error) {
+		if t, ok := local[id]; ok {
+			return t.item(), nil
+		}
+		v, err := skillVersion(id)
+		return append(v, host.KV{Key: "kind", Value: "skill"}, host.KV{Key: "state", Value: "enabled"}), err
+	}
 	skills := []any{}
 	if selected := routed["selected_id"]; truthy(selected) {
-		v, err := skillVersion(pyStr(selected))
+		v, err := pick(pyStr(selected))
 		if err != nil {
 			return nil, err
 		}
@@ -237,7 +254,7 @@ func routeSkills(query any) (host.Obj, error) {
 		})
 		for _, j := range ranked[:min(2, len(ranked))] {
 			if id := asMap(j)["id"]; truthy(id) {
-				v, err := skillVersion(pyStr(id))
+				v, err := pick(pyStr(id))
 				if err != nil {
 					return nil, err
 				}
@@ -916,6 +933,8 @@ func callTool(name, argsAny any) (host.Obj, error) {
 		}, host.Scope())
 	case "route_skills":
 		value, err = routeSkills(arg(args, "query", ""))
+	case "enable_tool":
+		value, err = enableTool(argStr(args, "kind", ""), argStr(args, "name", ""))
 	case "load_skill":
 		value, err = loadSkill(argStr(args, "skill_id", ""), argStr(args, "trial_id", ""))
 	case "read_skill_file":

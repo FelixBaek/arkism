@@ -21,12 +21,14 @@ type SearchInput struct {
 	Destination     string   `json:"destination,omitempty"`
 	Purpose         string   `json:"purpose,omitempty"`
 	// Runtime (route only) drops skills labelled unsupported on it.
-	Runtime        string `json:"runtime,omitempty"`
-	Scope          Scope  `json:"scope"`
-	Query          string `json:"query"`
-	Limit          int    `json:"limit"`
-	MaxChars       int    `json:"max_chars"`
-	retrievalQuery string
+	Runtime string `json:"runtime,omitempty"`
+	// ExtraCandidates (route only): the caller's own MCP servers and plugins, judged beside the skills.
+	ExtraCandidates []SkillCandidate `json:"extra_candidates,omitempty"`
+	Scope           Scope            `json:"scope"`
+	Query           string           `json:"query"`
+	Limit           int              `json:"limit"`
+	MaxChars        int              `json:"max_chars"`
+	retrievalQuery  string
 	// pinned: memories a context build already injected ahead of this search
 	// (crew_pins.go); the receipt lists them first and the search hits after.
 	pinned []Ref

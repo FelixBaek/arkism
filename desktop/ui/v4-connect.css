@@ -143,7 +143,6 @@ dialog.cn-confirm .btn.danger { border-color: transparent; background: var(--nc-
 .cn-alert-text .cn-alert-title { display: flex; gap: 8px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .cn-alert-title span { font-family: var(--mono); color: var(--nc-amber); }
 .app.v4-connect .panel-main > .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.app.v4-connect .head-aside .cn-agent-pick { font-family: var(--sans); }
 
 /* ---------------------------------------------------------------- 저장소 (Figma 198:1146): search row · side lists | commit list; detail on the right */
 .app.v4-connect .git-wrap { display: flex; flex-direction: column; gap: 20px; overflow: visible; border: 0; background: none; }
@@ -310,7 +309,8 @@ dialog.git-dialog .btn.danger, dialog.cn-confirm .btn.danger { border-color: tra
 .git-lanes svg { display: block; height: 100%; }
 .git-node { position: absolute; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--nc-quiet); }
 .git-node.tip { width: 8px; height: 8px; margin: -4px 0 0 -4px; background: var(--nc-amber); }
-.git-row.on .git-node { background: var(--nc-accent) !important; }
+/* :not(#_) adds id-level weight so the accent beats .tip and any later rule without !important */
+.git-row.on .git-node:not(#_) { background: var(--nc-accent); }
 
 /* ---------------------------------------------------------------- 코드 리뷰 (Figma 198:2780) */
 .app.v4-connect .rv-wrap { display: flex; flex-direction: column; gap: 12px; border: 0; background: none; overflow: visible; }

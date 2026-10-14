@@ -1,4 +1,4 @@
-// AGENT › 작업 에이전트 · 팀 — 항상 넣는 자료 (Figma 381:28425, 381:29154).
+// CREW › 작업 에이전트 · 팀 — 항상 넣는 자료 (Figma 381:28425, 381:29154).
 // A work agent or a team keeps `pinned[]` on its crew record: {collection, id, revision (0 = latest approved; a
 // skill's version number), injection full|summary|reference, priority 0-100}, at most 20. This card edits the
 // draft's list (crew.js / team.js save the record as before) and shows how each saved pin resolves right now

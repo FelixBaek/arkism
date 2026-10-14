@@ -1,4 +1,4 @@
-/* v4 · NOCTURNE — AGENT › 팀 (208:18425) · 팀 — 새로 만들기 (310:19981) · 회의 (208:19103) · 디스코드 (208:19677) ·
+/* v4 · NOCTURNE — CREW › 팀 (208:18425) · 팀 — 새로 만들기 (310:19981) · 회의 (208:19103) · 디스코드 (208:19677) ·
    사용량 (325:37545). Screens are built in team.js; colours are only the --nc-* tokens. */
 
 /* ---------------------------------------------------------------- shared bits */
@@ -86,8 +86,9 @@ textarea.tm-input { height: auto; padding: 9px 12px; resize: vertical; }
 .tm-person { display: flex; align-items: center; gap: 10px; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .tm-person > span:not(.tm-mark) { flex: 1; min-width: 0; }
 .tm-person small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
-.amber { color: var(--nc-amber) !important; }
-.accent { color: var(--nc-accent) !important; }
+/* :not(#_) gives these colour helpers id-level weight, so they win over component colours without !important */
+.amber:not(#_) { color: var(--nc-amber); }
+.accent:not(#_) { color: var(--nc-accent); }
 
 /* ================================================================ 팀 (208:18425) — list 248 | editor */
 .panel-main:has(.tm-split) { padding: 0; gap: 0; }

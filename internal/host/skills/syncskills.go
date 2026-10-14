@@ -31,6 +31,7 @@ var syncRoots = func() []skillRoot {
 	h := host.Home
 	return []skillRoot{
 		{"agent-skills", host.SkillsRoot, "generic"},
+		{"agent-plugins", host.PluginsRoot, "generic"}, // each kit plugin's skills/ (agentkit.go)
 		{"codex", filepath.Join(h, ".codex/skills"), "codex"},
 		{"codex-plugins", filepath.Join(h, ".codex/plugins/cache"), "codex"},
 		{"claude-code", filepath.Join(h, ".claude/skills"), "claude_code"},
@@ -103,6 +104,8 @@ func syncSkillID(row map[string]any) (string, error) {
 		return "agents/" + s, nil
 	case "claude-plugins": // account/plugin folder (often an id)/…/name
 		return "claude-plugin/" + pluginName(str(row["path"])) + "/" + lastPart(s), nil
+	case "agent-plugins": // kit plugin folder/skills/…/name
+		return "kit-plugin/" + strings.SplitN(s, "/", 2)[0] + "/" + lastPart(s), nil
 	}
 	parts := strings.Split(s, "/") // marketplace/plugin/version/.../skills/name
 	if len(parts) < 4 {
@@ -476,8 +479,16 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+	// The agent kit's MCP servers and hooks (agentkit.go); its skills went to the hub above.
+	kitFailed := false
+	if kit := kitRun(*execute); kit != nil {
+		summary.Set("kit", kit)
+		for _, r := range kit {
+			kitFailed = kitFailed || strings.HasPrefix(str(objGet(r.(host.Obj), "state")), "failed")
+		}
+	}
 	io.WriteString(stdout, host.MustDumps(summary, host.DumpOpts{NoASCII: true})+"\n")
-	if failed, _ := summary.Get("failed"); len(failed.(host.Obj)) > 0 {
+	if failed, _ := summary.Get("failed"); len(failed.(host.Obj)) > 0 || kitFailed {
 		return 1
 	}
 	return 0

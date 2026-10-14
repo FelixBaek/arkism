@@ -222,6 +222,9 @@ impl Runtime {
             .env("ARKISM_REFLECT_MODEL", &roles.reflect_model)
             .env("ARKISM_REVIEW_MODEL", &roles.reflect_model)
             .env("ARKISM_MAINTAIN_MODEL", &roles.reflect_model);
+        for (k, v) in roles.root_env() {
+            cmd.env(k, v);
+        }
         Some(cmd)
     }
 
@@ -869,6 +872,13 @@ pub struct ModelRoles {
     pub extract_model: String,
     #[serde(default = "default_sonnet")]
     pub reflect_model: String,
+    /// 라우팅 설정 › 스킬·MCP·플러그인 › 폴더 위치: empty means the host's default under its data folder.
+    #[serde(default)]
+    pub skills_root: String,
+    #[serde(default)]
+    pub mcp_root: String,
+    #[serde(default)]
+    pub plugins_root: String,
 }
 
 fn default_auto() -> String { "auto".into() }
@@ -906,7 +916,25 @@ impl ModelRoles {
             && (self.picker_model.is_empty() || model(&self.picker_model))
             && model(&self.extract_model)
             && model(&self.reflect_model)
+            && [&self.skills_root, &self.mcp_root, &self.plugins_root].iter().all(|p| p.is_empty() || root_ok(p))
     }
+
+    /// The folder overrides the host reads (internal/host/client.go); unset ones keep its defaults.
+    fn root_env(&self) -> Vec<(&'static str, &str)> {
+        [("ARKISM_SKILLS_ROOT", &self.skills_root), ("ARKISM_MCP_ROOT", &self.mcp_root), ("ARKISM_PLUGINS_ROOT", &self.plugins_root)]
+            .into_iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(k, v)| (k, v.as_str()))
+            .collect()
+    }
+}
+
+/// An absolute folder path: `/…`, `C:\…` or `C:/…`, one line, not absurdly long.
+fn root_ok(p: &str) -> bool {
+    let b = p.as_bytes();
+    p.len() <= 1024
+        && !p.contains(['\n', '\r', '\0'])
+        && (p.starts_with('/') || (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/')))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq)]
@@ -1235,6 +1263,49 @@ mod tests {
         bad = rt.model_roles();
         bad.embedder = "gpu".into();
         assert!(rt.set_model_roles(bad).is_err());
+        bad = rt.model_roles();
+        bad.mcp_root = "relative/mcp".into();
+        assert!(rt.set_model_roles(bad).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn folder_roots_become_host_env_only_when_set() {
+        let mut r = ModelRoles::default();
+        assert!(r.root_env().is_empty());
+        r.skills_root = "/srv/skills".into();
+        r.plugins_root = "D:\\ark\\plugins".into();
+        assert!(r.valid());
+        assert_eq!(r.root_env(), vec![("ARKISM_SKILLS_ROOT", "/srv/skills"), ("ARKISM_PLUGINS_ROOT", "D:\\ark\\plugins")]);
+    }
+
+    /// 저장 → models.json → the next `arkism` run gets the folders (and loses them once cleared).
+    #[cfg(unix)]
+    #[test]
+    fn saved_folders_reach_the_next_host_run() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("arkism-roots-test-{}", secret().unwrap()));
+        let client = dir.join("programs").join("integration").join("arkism");
+        fs::create_dir_all(client.parent().unwrap()).unwrap();
+        fs::write(&client, "#!/bin/sh\necho \"skills=$ARKISM_SKILLS_ROOT mcp=$ARKISM_MCP_ROOT plugins=$ARKISM_PLUGINS_ROOT\"\n").unwrap();
+        fs::set_permissions(&client, fs::Permissions::from_mode(0o755)).unwrap();
+        let rt = Runtime::new(Some(dir.join("programs")), dir.join("data"));
+        fs::create_dir_all(dir.join("data")).unwrap();
+        rt.secrets().unwrap();
+        fs::write(dir.join("data").join("owner.token"), b"t").unwrap();
+        let run = || {
+            let out = rt.host_command(&[]).unwrap().output().unwrap();
+            String::from_utf8(out.stdout).unwrap()
+        };
+        let mut roles = rt.model_roles();
+        roles.skills_root = "/kit/skills".into();
+        roles.mcp_root = "/kit/mcp".into();
+        rt.set_model_roles(roles).unwrap();
+        assert_eq!(run().trim(), "skills=/kit/skills mcp=/kit/mcp plugins=");
+        let mut roles = rt.model_roles();
+        roles.skills_root.clear();
+        rt.set_model_roles(roles).unwrap();
+        assert_eq!(run().trim(), "skills= mcp=/kit/mcp plugins=");
         fs::remove_dir_all(dir).unwrap();
     }
 }

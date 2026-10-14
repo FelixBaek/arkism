@@ -293,6 +293,9 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .rt-set-card .rt-kv > span:first-child { width: 96px; font-size: calc(13px * var(--fs, 1)); color: var(--nc-quiet); }
 .rt-set-card .rt-kv b { color: var(--nc-text); }
 .rt-set-card .rt-foot { justify-content: flex-start; }
+.v4-kit-body { display: flex; flex-direction: column; }
+.v4-kit-body > .v4-role:first-child { padding-top: 4px; }
+.v4-kit-body .pg-actions { display: flex; gap: 8px; padding-top: 14px; }
 .rt-set-card .rt-foot .btn { height: auto; padding: 7px 14px; font-weight: 500; }
 .rt-amber { padding: 10px 12px; border-radius: var(--nc-radius-control); background: var(--nc-amber-bg); }
 .rt-amber p { margin: 0; font-size: calc(12px * var(--fs, 1)); color: var(--nc-text); }

@@ -13,12 +13,10 @@ window.ArkismShell = (ctx) => {
     ] },
     memory: { label: "MEMORY", tabs: [
       ["memories", "기억", () => go("memories", "active"), () => state.view === "memories", count("memories")],
-      ["knowledge", "지식", () => go("knowledge"), () => state.view === "knowledge"], // adopt-knowledge (knowledge.js)
-      ["skills", "스킬", () => go("skills"), () => state.view === "skills", count("skills")],
       ["sessions", "세션", () => go("sessions"), () => state.view === "sessions", count("sessions")],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },
-    agent: { label: "AGENT", tabs: [
+    agent: { label: "CREW", tabs: [
       ["crew", "워크플로우", () => go("crew"), () => ["crew", "graph"].includes(state.view), count("crew")],
       ["workers", "작업 에이전트", () => { state.workerNew = false; go("workers"); }, () => state.view === "workers"],
       ["teams", "팀", () => go("teams"), () => ["teams", "teamNew"].includes(state.view)],
@@ -32,10 +30,11 @@ window.ArkismShell = (ctx) => {
       ["models", "모델 설정", () => settings("models"), () => state.view === "settings" && state.settingsTab === "models"],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage", count("usage")]
     ] },
-    connect: { label: "CONNECT", tabs: [
-      ["agent", "에이전트", () => { state.agentTab = "list"; go("agent"); }, () => state.view === "agent"],
-      ["mcp", "MCP", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin"],
+    connect: { label: "TOOLS", tabs: [
+      ["skills", "스킬", () => go("skills"), () => state.view === "skills", count("skills")],
       ["plugin", "플러그인", () => { state.toolTab = "plugin"; go("tools"); }, () => state.view === "tools" && state.toolTab === "plugin"],
+      ["mcp", "MCP", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin"],
+      ["knowledge", "지식", () => go("knowledge"), () => state.view === "knowledge"], // adopt-knowledge (knowledge.js)
       ["git", "저장소", () => go("git"), () => ["git", "reviews"].includes(state.view)],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },

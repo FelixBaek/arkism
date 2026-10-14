@@ -759,6 +759,11 @@ func addServer(req map[string]any) error {
 	} else {
 		return runtimeError{"실행할 프로그램이나 주소가 필요해요"}
 	}
+	return addServerDef(agent, name, d)
+}
+
+// addServerDef writes one server definition (Claude's shape) with the agent's own CLI or config file.
+func addServerDef(agent, name string, d host.Obj) error {
 	switch agent {
 	case "claude_code":
 		if _, ok := claudeServers()[name]; ok {
