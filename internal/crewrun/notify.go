@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -133,6 +134,8 @@ func sendMail(ctx context.Context, addr, host string, auth smtp.Auth, from strin
 		if err = c.StartTLS(&tls.Config{ServerName: host}); err != nil {
 			return err
 		}
+	} else if !loopbackAddr(addr) {
+		return errors.New("smtp server " + host + " does not offer STARTTLS; refusing to send in clear text")
 	}
 	if auth != nil {
 		if err = c.Auth(auth); err != nil {

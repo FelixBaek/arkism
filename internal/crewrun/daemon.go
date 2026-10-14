@@ -202,6 +202,10 @@ func Serve(ctx context.Context, cfg Config) error {
 	if err := e.ResumeRunning(ctx); err != nil {
 		log.Warn("crew resume", "error", err.Error())
 	}
+	// The crew API is plain HTTP with callbacks, so it stays on loopback; put a TLS proxy in front for remote use.
+	if !loopbackAddr(cfg.Listen) {
+		return errors.New("ARKISM_CREW_LISTEN must be a loopback address, got " + cfg.Listen)
+	}
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return err
@@ -241,4 +245,16 @@ func Serve(ctx context.Context, cfg Config) error {
 			}
 		}
 	}
+}
+
+func loopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
