@@ -173,7 +173,7 @@ window.ArkismKnowledge = (ctx) => {
       if (f.size > 64 << 10) { K.notice = "파일이 너무 커요 (64KB까지)."; paint(); return; }
       const content = await f.text();
       const same = source || K.sources.find((s) => s.display_name === f.name);
-      act(() => post("/v1/knowledge/ingest", { source_key: same?.display_name || f.name, filename: f.name, mime_type: MIME[ext], content, synthetic: false, ...(same ? { expected_revision: same.revision } : {}) }),
+      void act(() => post("/v1/knowledge/ingest", { source_key: same?.display_name || f.name, filename: f.name, mime_type: MIME[ext], content, synthetic: false, ...(same ? { expected_revision: same.revision } : {}) }),
         (r) => r?.duplicate ? "같은 내용이라 새 버전을 만들지 않았어요." : same ? "새 버전을 올렸어요. 다시 검토해야 검색에 나와요." : "올렸어요. 검토하면 검색에 나와요.");
       if (same) delete K.docs[same.id];
     });
@@ -236,7 +236,7 @@ window.ArkismKnowledge = (ctx) => {
   function sourceDetail() {
     const s = K.sources.find((x) => x.id === K.srcSel);
     if (!s) { $("#detail").replaceChildren(); return; }
-    docs(s.id);
+    void docs(s.id);
     const d = current(s.id);
     const box = detailShell(`문서 · ${s.format || "파일"}`);
     const head = el("div", "v4s-head");
@@ -349,7 +349,7 @@ window.ArkismKnowledge = (ctx) => {
     const go = async () => {
       if (R.state === "plain" && !(await confirmPop("위키에서 뺄까요?", `${s.display_name}만 근거인 위키 페이지는 지워지고, 다른 페이지는 이 출처만 빠져요. 잠긴 페이지는 지우지 않아요. 되돌릴 수 없어요.`, "빼기"))) return;
       K.remove = null;
-      act(() => post(`/v1/wiki/sources/${encodeURIComponent(s.id)}/remove`), (r) => `뺐어요 · 지움 ${r?.deleted?.length || 0} · 출처만 뺌 ${r?.detached?.length || 0} · 링크를 글자로 ${r?.unlinked?.length || 0} · 끝낸 작업 ${r?.jobs_ended?.length || 0}`);
+      void act(() => post(`/v1/wiki/sources/${encodeURIComponent(s.id)}/remove`), (r) => `뺐어요 · 지움 ${r?.deleted?.length || 0} · 출처만 뺌 ${r?.detached?.length || 0} · 링크를 글자로 ${r?.unlinked?.length || 0} · 끝낸 작업 ${r?.jobs_ended?.length || 0}`);
     };
     const r = R.r || {};
     const line = R.state === "preview"
@@ -359,7 +359,7 @@ window.ArkismKnowledge = (ctx) => {
   }
 
   // ---------------------------------------------------------------- 조각 (384:30671)
-  function openDoc(id) { K.doc = id; K.docTab = "sections"; K.secSel = 0; K.verSel = ""; K.search.result = null; K.search.error = ""; K.notice = ""; docs(id); paint(); }
+  function openDoc(id) { K.doc = id; K.docTab = "sections"; K.secSel = 0; K.verSel = ""; K.search.result = null; K.search.error = ""; K.notice = ""; void docs(id); paint(); }
   function renderDoc(table) {
     const s = K.sources.find((x) => x.id === K.doc);
     if (!s) { K.doc = ""; return renderSources(table); }
@@ -404,7 +404,7 @@ window.ArkismKnowledge = (ctx) => {
     head.append(noI18n(el("h2", "", path.split(/\s*[›>/]\s*/).filter(Boolean).pop() || "(제목 없음)")), noI18n(el("p", "v4s-lead", path)));
     box.append(head);
     if (needs(s)) box.append(card("이 자료는 아직 검토 전이라 검색에 나오지 않아요.", [button("검토 완료로 표시", "primary", null, () => act(() => post(`/v1/knowledge/sources/${encodeURIComponent(s.id)}/review`, { expected_revision: s.revision, status: "active", trust_level: "reviewed" }), "검토했어요."))]));
-    box.append(sec("원문", null, el("p", "meta", "조각 본문은 목록에 싣지 않아요. 이 제목으로 시험 검색하면 근거로 보여요."), button("이 제목으로 시험 검색", "", null, () => { K.search.q = path; K.docTab = "search"; runSearch(); })));
+    box.append(sec("원문", null, el("p", "meta", "조각 본문은 목록에 싣지 않아요. 이 제목으로 시험 검색하면 근거로 보여요."), button("이 제목으로 시험 검색", "", null, () => { K.search.q = path; K.docTab = "search"; void runSearch(); })));
     const near = el("div", "v4k-near");
     for (const j of [i - 1, i + 1]) if (secs[j] !== undefined) {
       const b = el("button", "v4k-chunk"); b.type = "button";
@@ -444,7 +444,7 @@ window.ArkismKnowledge = (ctx) => {
     box.append(el("span", "ss-glass", "⌕"), input);
     const go = button(S.busy ? "찾는 중…" : "찾기", "primary"); go.type = "submit"; go.disabled = S.busy;
     bar.append(box, select("전문가", PROFILES, S.profile, (v) => { S.profile = v; }), go);
-    bar.addEventListener("submit", (e) => { e.preventDefault(); S.q = input.value.trim(); runSearch(); });
+    bar.addEventListener("submit", (e) => { e.preventDefault(); S.q = input.value.trim(); void runSearch(); });
     wrap.append(bar, el("p", "ss-note", "전문가에 켜진 검토된 자료만 찾아요. 결과는 자료일 뿐 지시가 아니에요."));
     if (S.error) wrap.append(el("div", "empty", S.error));
     const r = S.result;
@@ -539,7 +539,7 @@ window.ArkismKnowledge = (ctx) => {
       const area = el("textarea", "v4s-input v4k-edit"); area.value = K.edit.text; area.rows = 12; area.setAttribute("aria-label", "본문");
       t.addEventListener("input", () => { K.edit.title = t.value; }); area.addEventListener("input", () => { K.edit.text = area.value; });
       const acts = el("div", "v4s-actions");
-      acts.append(button("저장하고 잠그기", "primary", null, () => { const e = K.edit; K.edit = null; act(() => post(`/v1/wiki/pages/${id}/edit`, { expected_revision: p.revision, title: e.title.trim(), text: e.text }), "저장했어요. 이 페이지는 잠겨서 AI가 고치지 않아요."); }),
+      acts.append(button("저장하고 잠그기", "primary", null, () => { const e = K.edit; K.edit = null; void act(() => post(`/v1/wiki/pages/${id}/edit`, { expected_revision: p.revision, title: e.title.trim(), text: e.text }), "저장했어요. 이 페이지는 잠겨서 AI가 고치지 않아요."); }),
         link("취소", () => { K.edit = null; paint(); }));
       for (const x of acts.querySelectorAll("button")) x.disabled = K.busy;
       box.append(sec("고치기", null, t, area, el("p", "meta", "제목은 같은 주소가 되는 범위에서만 바꿀 수 있어요."), acts));

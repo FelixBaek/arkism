@@ -30,7 +30,7 @@ window.ArkismPrivacy = (ctx) => {
   }
   // Ask the server to erase these source records (and what came from them), 64 at a time.
   async function eraseSources(ids) {
-    const list = [...ids].sort();
+    const list = [...ids].sort((a, b) => a.localeCompare(b));
     const done = [];
     for (let i = 0; i < list.length; i += BATCH) {
       const r = await request("/v1/privacy/deletions", { method: "POST", body: JSON.stringify({ scope: state.scope, idempotency_key: idempotency(), target_type: "source_event", target_ids: list.slice(i, i + BATCH), reason: REASON }) });
@@ -93,7 +93,7 @@ window.ArkismPrivacy = (ctx) => {
     const byDate = button("날짜로 정하기", "small", null, () => {
       const at = date.value ? new Date(`${date.value}T00:00`) : null;
       if (!at || !(at > new Date())) { date.setCustomValidity("오늘 이후 날짜를 고르세요."); date.reportValidity(); return; }
-      setExpiry(m, at, box);
+      void setExpiry(m, at, box);
     });
     date.addEventListener("input", () => date.setCustomValidity(""));
     box.append(date, byDate);
@@ -181,7 +181,7 @@ window.ArkismPrivacy = (ctx) => {
       } finally { go.disabled = false; find.disabled = false; for (const b of actions.querySelectorAll(".danger")) if (!preview) b.remove(); }
     }
     input.addEventListener("input", () => input.setCustomValidity(""));
-    form.addEventListener("submit", (event) => { event.preventDefault(); look(); });
+    form.addEventListener("submit", (event) => { event.preventDefault(); void look(); });
     show();
     return g;
   }

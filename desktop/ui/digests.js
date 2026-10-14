@@ -34,7 +34,7 @@ window.ArkismDigests = (ctx) => {
     if (loading) return;
     if (data.key === identity() && Date.now() - data.at < STALE_MS) return;
     if (data.key === identity() && ctx.canRefresh && !ctx.canRefresh()) return;
-    load();
+    void load();
   }
   async function load() {
     const key = identity();
@@ -137,7 +137,7 @@ window.ArkismDigests = (ctx) => {
     q.addEventListener("input", () => { filter.q = q.value.trim().toLowerCase(); paintList(); });
     search.append(ctx.icon("magnifying-glass"), q);
     tools.append(search,
-      ctx.memSelect("상태", STATUS, filter.status, (v) => { filter.status = v; filter.chip = "all"; if (v !== "active") loadOther(v); paintList(); }),
+      ctx.memSelect("상태", STATUS, filter.status, (v) => { filter.status = v; filter.chip = "all"; if (v !== "active") void loadOther(v); paintList(); }),
       ctx.memSelect("정렬", SORT, filter.sort, (v) => { filter.sort = v; paintList(); }));
     $("#controls").replaceChildren(...top, tools);
     $("#stats").replaceChildren();
@@ -301,7 +301,7 @@ window.ArkismDigests = (ctx) => {
     ok.disabled = !c.fresh;
     const no = button("버리기", "ghost small", null, () => {
       if (reason.hidden) { reason.hidden = false; reason.focus(); return; }
-      decideDigest(c, kind, "reject", reason.value.trim(), btns);
+      void decideDigest(c, kind, "reject", reason.value.trim(), btns);
     });
     btns.append(ok, no);
     card.append(reason, btns);

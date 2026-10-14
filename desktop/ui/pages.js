@@ -232,7 +232,7 @@ window.ArkismPages = (ctx) => {
           savePrefs();
           render(false);
         } else {
-          agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: next, skills_dir: next ? (a.skills_dirs || [])[0] : undefined }, next ? `${a.name}를 켰어요.` : `${a.name}를 껐어요. 스킬과 대화를 더 읽지 않아요.`);
+          void agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: next, skills_dir: next ? (a.skills_dirs || [])[0] : undefined }, next ? `${a.name}를 켰어요.` : `${a.name}를 껐어요. 스킬과 대화를 더 읽지 않아요.`);
         }
       }));
       if (tools?.agents) {
@@ -241,7 +241,7 @@ window.ArkismPages = (ctx) => {
         more.title = a.custom ? "빼기" : "Arkism이 읽지 않게 하기";
         more.setAttribute("aria-label", `${a.name} 빼기`);
         more.append(icon("trash"));
-        more.addEventListener("click", () => { if (confirm(`${a.name}를 목록에서 뺄까요? 에이전트 쪽 파일은 그대로 둬요.`)) agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: false }, `${a.name}를 뺐어요.`); });
+        more.addEventListener("click", () => { if (confirm(`${a.name}를 목록에서 뺄까요? 에이전트 쪽 파일은 그대로 둬요.`)) void agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: false }, `${a.name}를 뺐어요.`); });
         right.append(more);
       }
       row.append(logoOf(a), info, right);
@@ -277,7 +277,7 @@ window.ArkismPages = (ctx) => {
     addDir.append(dirIn, button("폴더 추가", "ghost small", "plus", () => {
       const d = dirIn.value.trim();
       if (!/^(~\/|\/)/.test(d) || d.includes("..")) { notice("~/ 나 / 로 시작하는 폴더를 써 주세요."); return; }
-      agentRequest({ agent: "shared", kind: "shared", name: d, enabled: true }, "공용 폴더를 넣었어요. 1분 안에 반영돼요.");
+      void agentRequest({ agent: "shared", kind: "shared", name: d, enabled: true }, "공용 폴더를 넣었어요. 1분 안에 반영돼요.");
     }));
     sbox.append(addDir);
     shared.append(sbox);
@@ -371,10 +371,10 @@ window.ArkismPages = (ctx) => {
         const id = slug.replace(/^-|-$/g, "").replace(/^([^a-z])/, "a$1").slice(0, 40);
         const dir = skillsDir.value.trim();
         if (!id || !/^(~\/|\/)/.test(dir) || dir.includes("..")) { e.preventDefault(); notice("영문 이름과 ~/ 로 시작하는 스킬 폴더를 써 주세요."); return; }
-        agentRequest({ agent: id, kind: "agent", name: manual, enabled: true, skills_dir: dir, chats_dir: chatsDir.value.trim() || undefined }, `${manual}를 추가했어요. 1분 안에 반영돼요.`);
+        void agentRequest({ agent: id, kind: "agent", name: manual, enabled: true, skills_dir: dir, chats_dir: chatsDir.value.trim() || undefined }, `${manual}를 추가했어요. 1분 안에 반영돼요.`);
       } else if (sel) {
         const a = choices.find((x) => x.id === sel);
-        agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: true, skills_dir: (a.skills_dirs || [])[0] }, `${a.name}를 추가했어요. 1분 안에 반영돼요.`);
+        void agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: true, skills_dir: (a.skills_dirs || [])[0] }, `${a.name}를 추가했어요. 1분 안에 반영돼요.`);
       }
     });
     dlg.append(form);
@@ -539,7 +539,7 @@ window.ArkismPages = (ctx) => {
       const r = el("div", "v4-tr two"); r.append(el("strong", warn ? "warn" : "", k), el("span", "", v)); t.append(r);
     }
     states.append(t);
-    if (!update.info && !update.busy && update.label === "업데이트 확인") checkUpdate(false);
+    if (!update.info && !update.busy && update.label === "업데이트 확인") void checkUpdate(false);
     return [card, states];
   }
 
@@ -866,7 +866,7 @@ window.ArkismPages = (ctx) => {
         const folder = input.value.trim();
         if (!folder) return;
         if (current.exclude.includes(folder)) { notice("이미 뺀 폴더예요."); return; }
-        save({ ...current, exclude: [...current.exclude, folder] }, "이 폴더는 수집하지 않아요.");
+        void save({ ...current, exclude: [...current.exclude, folder] }, "이 폴더는 수집하지 않아요.");
       });
       input.addEventListener("keydown", (e) => { if (e.key === "Enter") add.click(); });
       const f = el("label", "field wide", "수집하지 않을 폴더");
@@ -988,7 +988,7 @@ window.ArkismPages = (ctx) => {
       try { await tauri.invoke("local_erase"); notice("모두 지웠어요. 빈 Arkism으로 다시 시작해요."); } catch (e) { notice(errorText(e)); }
       await startLocal();
     }))));
-    refresh();
+    void refresh();
     return [g, danger];
   }
 
