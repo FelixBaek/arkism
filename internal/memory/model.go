@@ -19,6 +19,7 @@ var (
 	// or fusion request whose embedding lane failed and whose policy forbids
 	// the deterministic fallback.
 	ErrSemanticLaneDown = errors.New("semantic_lane_unavailable")
+	ErrModelBudget      = errors.New("model_budget_exceeded")
 	ErrCandidateQuota   = errors.New("candidate_daily_limit")
 )
 
@@ -95,6 +96,8 @@ type ProviderCost struct {
 // Record keeps original text independent of replaceable embeddings. References
 // bind evidence to a specific immutable content/version revision.
 type Record struct {
+	MemoryContext     *MemoryContext       `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
+	ModelBudget       *ModelBudgetState    `json:"-" bson:"model_budget,omitempty"`
 	SkillBundle       *SkillBundle         `json:"skill_bundle,omitempty" bson:"skill_bundle,omitempty"`
 	SkillBundleSHA256 string               `json:"skill_bundle_sha256,omitempty" bson:"skill_bundle_sha256,omitempty"`
 	SkillTrial        *SkillTrial          `json:"skill_trial,omitempty" bson:"skill_trial,omitempty"`
@@ -310,40 +313,41 @@ type MeteredEmbedder interface {
 	EmbedMeasured(context.Context, []string, string) (EmbeddingBatch, error)
 }
 type Hit struct {
-	ConflictPending    bool        `json:"conflict_pending,omitempty" bson:"conflict_pending,omitempty"`
-	Supersedes         []Ref       `json:"supersedes,omitempty" bson:"supersedes,omitempty"`
-	SupersededBy       *Ref        `json:"superseded_by,omitempty" bson:"superseded_by,omitempty"`
-	TrustLevel         string      `json:"trust_level,omitempty" bson:"trust_level,omitempty"`
-	GeneratorModel     string      `json:"generator_model,omitempty" bson:"generator_model,omitempty"`
-	CreatedBy          string      `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	CreatedAt          *time.Time  `json:"created_at,omitempty" bson:"created_at,omitempty"`
-	Tags               []string    `json:"tags,omitempty" bson:"tags,omitempty"`
-	Digest             string      `json:"digest,omitempty" bson:"digest,omitempty"`
-	ReviewStatus       string      `json:"review_status,omitempty" bson:"review_status,omitempty"`
-	SourceEventID      string      `json:"source_event_id,omitempty" bson:"source_event_id,omitempty"`
-	TraceID            string      `json:"trace_id,omitempty" bson:"trace_id,omitempty"`
-	VerificationStatus string      `json:"verification_status,omitempty" bson:"verification_status,omitempty"`
-	CollectedAt        *time.Time  `json:"collected_at,omitempty" bson:"collected_at,omitempty"`
-	EffectiveAt        *time.Time  `json:"effective_at" bson:"effective_at,omitempty"`
-	Rank               int         `json:"rank,omitempty" bson:"rank,omitempty"`
-	Kind               string      `json:"kind,omitempty" bson:"kind"`
-	Sensitivity        string      `json:"sensitivity,omitempty" bson:"sensitivity"`
-	ID                 string      `json:"id" bson:"id"`
-	Collection         string      `json:"collection" bson:"collection"`
-	Origin             string      `json:"origin" bson:"origin"`
-	Scope              Scope       `json:"scope" bson:"scope"`
-	Status             string      `json:"status" bson:"status"`
-	Revision           int64       `json:"revision" bson:"revision"`
-	Text               string      `json:"text" bson:"text"`
-	Summary            string      `json:"summary,omitempty" bson:"summary"`
-	Sources            []SourceRef `json:"sources" bson:"sources"`
-	SourceURL          string      `json:"source_url,omitempty" bson:"source_url"`
-	ImageURL           string      `json:"image_url,omitempty" bson:"image_url"`
-	UpdatedAt          time.Time   `json:"updated_at" bson:"updated_at"`
-	Trust              float64     `json:"trust" bson:"trust"`
-	Relations          []Ref       `json:"relations,omitempty" bson:"relations"`
-	Reasons            []string    `json:"reasons" bson:"reasons"`
-	Authority          string      `json:"authority" bson:"authority"`
+	MemoryContext      *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
+	ConflictPending    bool           `json:"conflict_pending,omitempty" bson:"conflict_pending,omitempty"`
+	Supersedes         []Ref          `json:"supersedes,omitempty" bson:"supersedes,omitempty"`
+	SupersededBy       *Ref           `json:"superseded_by,omitempty" bson:"superseded_by,omitempty"`
+	TrustLevel         string         `json:"trust_level,omitempty" bson:"trust_level,omitempty"`
+	GeneratorModel     string         `json:"generator_model,omitempty" bson:"generator_model,omitempty"`
+	CreatedBy          string         `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	CreatedAt          *time.Time     `json:"created_at,omitempty" bson:"created_at,omitempty"`
+	Tags               []string       `json:"tags,omitempty" bson:"tags,omitempty"`
+	Digest             string         `json:"digest,omitempty" bson:"digest,omitempty"`
+	ReviewStatus       string         `json:"review_status,omitempty" bson:"review_status,omitempty"`
+	SourceEventID      string         `json:"source_event_id,omitempty" bson:"source_event_id,omitempty"`
+	TraceID            string         `json:"trace_id,omitempty" bson:"trace_id,omitempty"`
+	VerificationStatus string         `json:"verification_status,omitempty" bson:"verification_status,omitempty"`
+	CollectedAt        *time.Time     `json:"collected_at,omitempty" bson:"collected_at,omitempty"`
+	EffectiveAt        *time.Time     `json:"effective_at" bson:"effective_at,omitempty"`
+	Rank               int            `json:"rank,omitempty" bson:"rank,omitempty"`
+	Kind               string         `json:"kind,omitempty" bson:"kind"`
+	Sensitivity        string         `json:"sensitivity,omitempty" bson:"sensitivity"`
+	ID                 string         `json:"id" bson:"id"`
+	Collection         string         `json:"collection" bson:"collection"`
+	Origin             string         `json:"origin" bson:"origin"`
+	Scope              Scope          `json:"scope" bson:"scope"`
+	Status             string         `json:"status" bson:"status"`
+	Revision           int64          `json:"revision" bson:"revision"`
+	Text               string         `json:"text" bson:"text"`
+	Summary            string         `json:"summary,omitempty" bson:"summary"`
+	Sources            []SourceRef    `json:"sources" bson:"sources"`
+	SourceURL          string         `json:"source_url,omitempty" bson:"source_url"`
+	ImageURL           string         `json:"image_url,omitempty" bson:"image_url"`
+	UpdatedAt          time.Time      `json:"updated_at" bson:"updated_at"`
+	Trust              float64        `json:"trust" bson:"trust"`
+	Relations          []Ref          `json:"relations,omitempty" bson:"relations"`
+	Reasons            []string       `json:"reasons" bson:"reasons"`
+	Authority          string         `json:"authority" bson:"authority"`
 }
 type ContextBundle struct {
 	History       []HistoricalHit `json:"history,omitempty"`

@@ -75,22 +75,50 @@ func (s *Service) GenerateSkill(ctx context.Context, token string, in GenerateSk
 	if !validGenerator(&generation) {
 		return out, ErrUnavailable
 	}
-	reserved, err := s.beginProviderCall(ctx, in.Scope, "skill_draft", "skill_llm", generation.Model)
-	if err != nil {
-		return out, err
-	}
-	draft, usage, draftErr := s.Drafter.Draft(ctx, material)
-	if !validProviderUsage(usage) || usage.Requests != 1 || usage.TotalTokens == 0 || usage.InputTokens > usage.TotalTokens || usage.OutputTokens > usage.TotalTokens-usage.InputTokens || usage.Provider != "skill_llm" || usage.Model != generation.Model {
-		usage = ProviderUsage{Provider: "skill_llm", Model: generation.Model, Requests: 1}
-		if draftErr == nil {
-			draftErr = ErrUnavailable
+	var draft SkillDraft
+	_, durable := s.Drafter.(*AnthropicSkillDrafter)
+	preparedHash := ContentHash(requestHash + "\n" + snapshot + "\n" + structuredText(generation))
+	recovered := false
+	if durable {
+		draft, recovered, err = s.readPreparedDraft(ctx, token, in, actor, preparedHash)
+		if err != nil {
+			return out, err
 		}
 	}
-	if err = s.finishProviderCall(ctx, reserved, usage, draftErr == nil); err != nil {
-		return out, err
-	}
-	if draftErr != nil {
-		return out, draftErr
+	if !recovered {
+		reserved, err := s.beginProviderCall(ctx, in.Scope, "skill_draft", "skill_llm", generation.Model)
+		if err != nil {
+			return out, err
+		}
+		var usage ProviderUsage
+		var draftErr error
+		if direct, ok := s.Drafter.(interface {
+			DraftAuthorized(context.Context, string, Scope, string, []Ref, SkillDraftInput) (SkillDraft, ProviderUsage, error)
+		}); ok {
+			draft, usage, draftErr = direct.DraftAuthorized(ctx, token, in.Scope, in.EventID, in.Lessons, material)
+		} else {
+			draft, usage, draftErr = s.Drafter.Draft(ctx, material)
+		}
+		if !validProviderUsage(usage) || usage.Requests != 1 || usage.TotalTokens == 0 || usage.InputTokens > usage.TotalTokens || usage.OutputTokens > usage.TotalTokens-usage.InputTokens || usage.Provider != "skill_llm" || usage.Model != generation.Model {
+			usage = ProviderUsage{Provider: "skill_llm", Model: generation.Model, Requests: 1}
+			if draftErr == nil {
+				draftErr = ErrUnavailable
+			}
+		}
+		if err = s.finishProviderCall(ctx, reserved, usage, draftErr == nil); err != nil {
+			return out, err
+		}
+		if draftErr != nil {
+			return out, draftErr
+		}
+		if durable {
+			if err = normalizeSkillDraft(material, &draft); err != nil {
+				return out, err
+			}
+			if err = s.savePreparedDraft(ctx, token, in, actor, preparedHash, generation, draft); err != nil {
+				return out, err
+			}
+		}
 	}
 	// An adapter does not confer authority. Recheck mutable evidence and policy
 	// after the paid call; the importer repeats the evidence checks in its tx.

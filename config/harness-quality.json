@@ -1,0 +1,640 @@
+{
+  "schema_version": "session-state-v1",
+  "prompt_version": "harness-session-v2",
+  "passed_categories": [
+    "korean_correction"
+  ],
+  "cases": [
+    {
+      "category": "korean_correction",
+      "results": [
+        {
+          "model": "claude-haiku-5-5",
+          "passed": true,
+          "assertions": {
+            "semantic_case": true,
+            "no_unobserved_completion": true,
+            "no_unobserved_test_pass": true
+          },
+          "model_id": "claude-haiku-5-5",
+          "prompt_version": "harness-session-v2",
+          "operation_id": "quality-korean_correction-claude-haiku-5-5",
+          "token_usage": {
+            "input_tokens": 2691,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1789,
+            "output_tokens_details": {
+              "thinking_tokens": 906
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "cost_usd": 0.0011635999999999999,
+          "stop_reason": "end_turn",
+          "latency_ms": 8722
+        },
+        {
+          "model": "claude-sonnet-5-5",
+          "passed": true,
+          "assertions": {
+            "semantic_case": true,
+            "no_unobserved_completion": true,
+            "no_unobserved_test_pass": true
+          },
+          "model_id": "claude-sonnet-5-5",
+          "prompt_version": "harness-session-v2",
+          "operation_id": "quality-korean_correction-claude-sonnet-5-5",
+          "token_usage": {
+            "input_tokens": 2691,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 756,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "cost_usd": 0.012942,
+          "stop_reason": "end_turn",
+          "latency_ms": 7537
+        }
+      ]
+    },
+    {
+      "category": "conditional_preference",
+      "results": [
+        {
+          "model": "claude-haiku-5-5",
+          "passed": true,
+          "assertions": {
+            "semantic_case": true,
+            "no_unobserved_completion": true,
+            "no_unobserved_test_pass": true
+          },
+          "model_id": "claude-haiku-5-5",
+          "prompt_version": "harness-session-v2",
+          "operation_id": "quality-conditional_preference-claude-haiku-5-5",
+          "token_usage": {
+            "input_tokens": 2705,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 2427,
+            "output_tokens_details": {
+              "thinking_tokens": 1171
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "cost_usd": 0.001484,
+          "stop_reason": "end_turn",
+          "latency_ms": 11395
+        },
+        {
+          "model": "claude-sonnet-5-5",
+          "passed": true,
+          "assertions": {
+            "semantic_case": true,
+            "no_unobserved_completion": true,
+            "no_unobserved_test_pass": true
+          },
+          "model_id": "claude-sonnet-5-5",
+          "prompt_version": "harness-session-v2",
+          "operation_id": "quality-conditional_preference-claude-sonnet-5-5",
+          "token_usage": {
+            "input_tokens": 2705,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1178,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "cost_usd": 0.01719,
+          "stop_reason": "end_turn",
+          "latency_ms": 7740
+        }
+      ]
+    },
+    {
+      "category": "mixed_personal_work",
+      "results": [
+        {
+          "model": "claude-haiku-5-5",
+          "passed": true,
+          "assertions": {
+            "semantic_case": true,
+            "no_unobserved_completion": true,
+            "no_unobserved_test_pass": true
+          },
+          "model_id": "claude-haiku-5-5",
+          "prompt_version": "harness-session-v2",
+          "operation_id": "quality-mixed_personal_work-claude-haiku-5-5",
+          "token_usage": {
+            "input_tokens": 2728,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 3135,
+            "output_tokens_details": {
+              "thinking_tokens": 1645
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "cost_usd": 0.0018403,
+          "stop_reason": "end_turn",
+          "latency_ms": 13302
+        },
+        {
+          "model": "claude-sonnet-5-5",
+          "passed": true,
+          "assertions": {
+            "semantic_case": true,
+            "no_unobserved_completion": true,
+            "no_unobserved_test_pass": true
+          },
+          "model_id": "claude-sonnet-5-5",
+          "prompt_version": "harness-session-v2",
+          "operation_id": "quality-mixed_personal_work-claude-sonnet-5-5",
+          "token_usage": {
+            "input_tokens": 2728,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 0,
+              "ephemeral_1h_input_tokens": 0
+            },
+            "output_tokens": 1235,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "service_tier": "standard",
+            "inference_geo": "global"
+          },
+          "cost_usd": 0.017806,
+          "stop_reason": "end_turn",
+          "latency_ms": 7572
+        }
+      ]
+    }
+  ],
+  "model_discovery": {
+    "claude-sonnet-5-5": true,
+    "claude-haiku-5-5": true,
+    "claude-opus-5-5": true
+  },
+  "actual_cost_usd": 0.0524259,
+  "limitation": "Three synthetic cases per category (one initial + two held-out), each compared with Sonnet. Only correction passed every critical assertion; does not establish general Korean quality.",
+  "previous_attempts": [
+    {
+      "prompt_version": "harness-session-v1",
+      "passed_categories": [],
+      "actual_cost_usd": 0.0495613
+    },
+    {
+      "prompt_version": "harness-session-v1",
+      "passed_categories": [],
+      "actual_cost_usd": 0.049501800000000006
+    }
+  ],
+  "total_probe_cost_usd": 0.2508902,
+  "evaluated_at": "2026-10-14",
+  "input_data": "synthetic fixtures in tools/check_harness_model_quality.py",
+  "initial_passed_categories": [
+    "korean_correction",
+    "conditional_preference",
+    "mixed_personal_work"
+  ],
+  "heldout": {
+    "schema_version": "session-state-v1",
+    "prompt_version": "harness-session-v2",
+    "passed_categories": [
+      "korean_correction_variant2",
+      "korean_correction_variant3",
+      "mixed_personal_work_variant3"
+    ],
+    "cases": [
+      {
+        "category": "korean_correction_variant2",
+        "results": [
+          {
+            "model": "claude-haiku-5-5",
+            "passed": true,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": true,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-haiku-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-korean_correction_variant2-claude-haiku-5-5",
+            "token_usage": {
+              "input_tokens": 2700,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 1626,
+              "output_tokens_details": {
+                "thinking_tokens": 884
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.001083,
+            "stop_reason": "end_turn",
+            "latency_ms": 7658
+          },
+          {
+            "model": "claude-sonnet-5-5",
+            "passed": true,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": true,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-sonnet-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-korean_correction_variant2-claude-sonnet-5-5",
+            "token_usage": {
+              "input_tokens": 2700,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 907,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.01447,
+            "stop_reason": "end_turn",
+            "latency_ms": 6624
+          }
+        ]
+      },
+      {
+        "category": "korean_correction_variant3",
+        "results": [
+          {
+            "model": "claude-haiku-5-5",
+            "passed": true,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": true,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-haiku-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-korean_correction_variant3-claude-haiku-5-5",
+            "token_usage": {
+              "input_tokens": 2697,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 1389,
+              "output_tokens_details": {
+                "thinking_tokens": 555
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.0009642,
+            "stop_reason": "end_turn",
+            "latency_ms": 6960
+          },
+          {
+            "model": "claude-sonnet-5-5",
+            "passed": true,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": true,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-sonnet-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-korean_correction_variant3-claude-sonnet-5-5",
+            "token_usage": {
+              "input_tokens": 2697,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 844,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.013834,
+            "stop_reason": "end_turn",
+            "latency_ms": 5382
+          }
+        ]
+      },
+      {
+        "category": "conditional_preference_variant2",
+        "results": [
+          {
+            "model": "claude-haiku-5-5",
+            "passed": false,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": false,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-haiku-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-conditional_preference_variant2-claude-haiku-5-5",
+            "token_usage": {
+              "input_tokens": 2706,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 1936,
+              "output_tokens_details": {
+                "thinking_tokens": 869
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.0012385999999999999,
+            "stop_reason": "end_turn",
+            "latency_ms": 9460
+          },
+          {
+            "model": "claude-sonnet-5-5",
+            "passed": true,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": true,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-sonnet-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-conditional_preference_variant2-claude-sonnet-5-5",
+            "token_usage": {
+              "input_tokens": 2706,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 963,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.015042,
+            "stop_reason": "end_turn",
+            "latency_ms": 7338
+          }
+        ]
+      },
+      {
+        "category": "conditional_preference_variant3",
+        "results": [
+          {
+            "model": "claude-haiku-5-5",
+            "passed": false,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": false,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-haiku-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-conditional_preference_variant3-claude-haiku-5-5",
+            "token_usage": {
+              "input_tokens": 2722,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 1766,
+              "output_tokens_details": {
+                "thinking_tokens": 828
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.0011552,
+            "stop_reason": "end_turn",
+            "latency_ms": 8274
+          },
+          {
+            "model": "claude-sonnet-5-5",
+            "passed": true,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": true,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-sonnet-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-conditional_preference_variant3-claude-sonnet-5-5",
+            "token_usage": {
+              "input_tokens": 2722,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 819,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.013634,
+            "stop_reason": "end_turn",
+            "latency_ms": 5680
+          }
+        ]
+      },
+      {
+        "category": "mixed_personal_work_variant2",
+        "results": [
+          {
+            "model": "claude-haiku-5-5",
+            "passed": false,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": false,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-haiku-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-mixed_personal_work_variant2-claude-haiku-5-5",
+            "token_usage": {
+              "input_tokens": 2722,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 2926,
+              "output_tokens_details": {
+                "thinking_tokens": 1463
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.0017352000000000001,
+            "stop_reason": "end_turn",
+            "latency_ms": 13888
+          },
+          {
+            "model": "claude-sonnet-5-5",
+            "passed": true,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": true,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-sonnet-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-mixed_personal_work_variant2-claude-sonnet-5-5",
+            "token_usage": {
+              "input_tokens": 2722,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 1142,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.016864,
+            "stop_reason": "end_turn",
+            "latency_ms": 7600
+          }
+        ]
+      },
+      {
+        "category": "mixed_personal_work_variant3",
+        "results": [
+          {
+            "model": "claude-haiku-5-5",
+            "passed": true,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": true,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-haiku-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-mixed_personal_work_variant3-claude-haiku-5-5",
+            "token_usage": {
+              "input_tokens": 2725,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 2997,
+              "output_tokens_details": {
+                "thinking_tokens": 1634
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.001771,
+            "stop_reason": "end_turn",
+            "latency_ms": 13625
+          },
+          {
+            "model": "claude-sonnet-5-5",
+            "passed": true,
+            "assertions": {
+              "semantic_case": true,
+              "no_unobserved_completion": true,
+              "no_unobserved_test_pass": true
+            },
+            "model_id": "claude-sonnet-5-5",
+            "prompt_version": "harness-session-v2",
+            "operation_id": "quality-mixed_personal_work_variant3-claude-sonnet-5-5",
+            "token_usage": {
+              "input_tokens": 2725,
+              "cache_creation_input_tokens": 0,
+              "cache_read_input_tokens": 0,
+              "cache_creation": {
+                "ephemeral_5m_input_tokens": 0,
+                "ephemeral_1h_input_tokens": 0
+              },
+              "output_tokens": 1216,
+              "output_tokens_details": {
+                "thinking_tokens": 0
+              },
+              "service_tier": "standard",
+              "inference_geo": "global"
+            },
+            "cost_usd": 0.01761,
+            "stop_reason": "end_turn",
+            "latency_ms": 10656
+          }
+        ]
+      }
+    ],
+    "model_discovery": {
+      "claude-opus-5-5": true,
+      "claude-haiku-5-5": true,
+      "claude-sonnet-5-5": true
+    },
+    "suite": "heldout",
+    "actual_cost_usd": 0.09940120000000001,
+    "limitation": "Three synthetic cases, two models; not a general Korean quality guarantee. No production data or writes."
+  }
+}

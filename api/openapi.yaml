@@ -7844,6 +7844,736 @@
           }
         ]
       }
+    },
+    "/v1/memory_candidates/{id}/hold-conflict": {
+      "post": {
+        "summary": "Hold exact correction conflict",
+        "description": "Configured scoped service only. Exact candidate and live memory are held atomically without approval. Stable operation ID permits lost-response replay with current privacy and authorization checks.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CandidateConflictHoldInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidateConflictHoldOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Current authorization or policy denied"
+          },
+          "404": {
+            "description": "Unavailable target or job not due"
+          },
+          "409": {
+            "description": "Revision, evidence or lease conflict"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/skill-trials/{id}/status": {
+      "post": {
+        "summary": "Read trial lifecycle and scheduling",
+        "description": "Read-only read:skills and read:skill_versions in exact scope. No observer, checker, model or monitor mutation. Does not expose lease tokens or infer outcomes from job completion.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "skill_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scope",
+                  "skill_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTrialStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Current authorization or policy denied"
+          },
+          "404": {
+            "description": "Unavailable target or job not due"
+          },
+          "409": {
+            "description": "Revision, evidence or lease conflict"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/skill-trials/{id}/monitor": {
+      "post": {
+        "summary": "Monitor promoted trial regression",
+        "description": "Configured scoped service only, within bounded trial observation window. Revalidates actual canonical failure or independent negative evaluation, marks regressed version non-live atomically. Ordinary lifecycle rollback requires independently validated live baseline; otherwise recovery_unavailable, never claimed restored.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "skill_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scope",
+                  "skill_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTrialRecovery"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Current authorization or policy denied"
+          },
+          "404": {
+            "description": "Unavailable target or job not due"
+          },
+          "409": {
+            "description": "Revision, evidence or lease conflict"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/skill-trials/{id}/finish-check": {
+      "post": {
+        "summary": "Settle trial check lease",
+        "description": "Exact revision and lease token. checked includes waiting/unobserved states and is not trial success. unavailable retries with bounded backoff. Terminal stopped/expired states close tracking.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillTrialCheckFinish"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Current authorization or policy denied"
+          },
+          "404": {
+            "description": "Unavailable target or job not due"
+          },
+          "409": {
+            "description": "Revision, evidence or lease conflict"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/skill-trials/{id}/claim-check": {
+      "post": {
+        "summary": "Claim bounded trial check job",
+        "description": "Configured service policy, exact scope/skill, five-minute canonical lease and bounded failure retry. Not due or closed jobs do not execute.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "skill_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scope",
+                  "skill_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTrialCheckLease"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Current authorization or policy denied"
+          },
+          "404": {
+            "description": "Unavailable target or job not due"
+          },
+          "409": {
+            "description": "Revision, evidence or lease conflict"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/memory-outcomes": {
+      "post": {
+        "summary": "Record independent actual memory-use outcome",
+        "description": "Service checker distinct from creator, approver and trace producer. Exact live memory must appear in canonical completed trace retrieved input; evidence sources belong to that trace. Personal compliance and work task outcomes remain separate. Idempotent event writes evaluation and settles tracking atomically. Unobserved checks must not submit a boolean success.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryOutcomeInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ref"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Current authorization or policy denied"
+          },
+          "404": {
+            "description": "Unavailable target or job not due"
+          },
+          "409": {
+            "description": "Revision, evidence or lease conflict"
+          }
+        }
+      }
+    },
+    "/v1/model-input/authorize": {
+      "post": {
+        "summary": "Authorize exact consolidation input",
+        "description": "Service only. Exact current source/memory/candidate revisions, explicit external transfer policy, classifications, transitive source/archive privacy fences and bodyless audit. Pending/conflicted candidates remain untrusted. No reusable export capability.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelInputTransferInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "authorized": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "content_hash": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "authorized",
+                    "content_hash"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Current authorization or policy denied"
+          },
+          "404": {
+            "description": "Unavailable target or job not due"
+          },
+          "409": {
+            "description": "Revision, evidence or lease conflict"
+          }
+        }
+      }
+    },
+    "/v1/skill-trial-outcomes": {
+      "post": {
+        "summary": "Record independent actual trial check",
+        "description": "Independent service or pipeline checker, distinct from runtime/generator/trial manager. Exact source and trial linkage, live evidence, pinned checker hash and required boolean passed. Idempotent scoped event, changed input conflicts. Does not approve or apply.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillTrialOutcomeInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current canonical result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ref"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Unauthorized or policy denied"
+          },
+          "404": {
+            "description": "Unavailable target"
+          },
+          "409": {
+            "description": "Revision or evidence conflict"
+          }
+        }
+      }
+    },
+    "/v1/skill-trials/{id}/observe": {
+      "post": {
+        "summary": "Observe actual bounded trial outcomes",
+        "description": "Configured service automation only. Rechecks exact trial, source and independent evaluation revisions across enumerated evidence scopes. Missing observation is pending, never success. Actual failure atomically stops trial; baseline stays selected.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "skill_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scope",
+                  "skill_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current canonical result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillTrialObservations"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Unauthorized or policy denied"
+          },
+          "404": {
+            "description": "Unavailable target"
+          },
+          "409": {
+            "description": "Revision or evidence conflict"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/session-archives/authorize-transfer": {
+      "post": {
+        "summary": "Authorize exact archived session model input for immediate external transfer",
+        "description": "Service only. Explicit transfer:model_input and external transfer decision, safe-content check, exact archive reads and current privacy/revision fences, and previous work/source/archive dependencies. Not a reusable export capability; recheck before a later model attempt. Destination fixed to Anthropic. No content stored in audit.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scope",
+                  "destination",
+                  "content"
+                ],
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "refs": {
+                    "type": "array",
+                    "minItems": 0,
+                    "maxItems": 8,
+                    "items": {
+                      "$ref": "#/components/schemas/ArchiveMessageRef"
+                    }
+                  },
+                  "destination": {
+                    "type": "string",
+                    "enum": [
+                      "external:anthropic"
+                    ]
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "Exact serialized model data; nonblank, at most100000 UTF8 bytes."
+                  },
+                  "work": {
+                    "$ref": "#/components/schemas/Ref"
+                  },
+                  "source_refs": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {
+                      "$ref": "#/components/schemas/Ref"
+                    },
+                    "description": "Canonical sources only, exact revision. Combined archive and source refs must contain 1 to 8 items."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Authorized exact content hash",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "authorized",
+                    "content_hash"
+                  ],
+                  "properties": {
+                    "authorized": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "content_hash": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Transfer denied"
+          },
+          "404": {
+            "description": "Evidence unavailable"
+          },
+          "409": {
+            "description": "Evidence changed"
+          },
+          "503": {
+            "description": "Cannot validate evidence"
+          }
+        }
+      }
+    },
+    "/v1/model-budget/status": {
+      "post": {
+        "summary": "Read configured shared account allowance",
+        "description": "One deployment-owned exact scope and UTC month/day. Limits are <= $100 total and <= $90 general per month. Configured service identities only for mutations, current authorization and explicit priority grant required. Missing/expired policy denies. Human readers need read:model_budget. Amounts are integer pico-USD (1 USD = 1e12). Committed amounts include outstanding worst-case reservations; not all are actual spend. No prompt or key is stored. Uncertain dispatch cannot be released as not_sent. Cache creation counters are disjoint 5-minute and 1-hour counts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scope"
+                ],
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current budget result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelBudgetStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid model/role/token bound or settlement"
+          },
+          "403": {
+            "description": "Missing, expired or unauthorized policy"
+          },
+          "409": {
+            "description": "Operation or settlement conflicts"
+          },
+          "429": {
+            "description": "model_budget_exceeded"
+          },
+          "503": {
+            "description": "Durable reservation unavailable; do not dispatch"
+          }
+        }
+      }
+    },
+    "/v1/model-budget/settle": {
+      "post": {
+        "summary": "Settle usage or retain an uncertain reservation",
+        "description": "One deployment-owned exact scope and UTC month/day. Limits are <= $100 total and <= $90 general per month. Configured service identities only for mutations, current authorization and explicit priority grant required. Missing/expired policy denies. Human readers need read:model_budget. Amounts are integer pico-USD (1 USD = 1e12). Committed amounts include outstanding worst-case reservations; not all are actual spend. No prompt or key is stored. Uncertain dispatch cannot be released as not_sent. Cache creation counters are disjoint 5-minute and 1-hour counts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelBudgetSettleInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current budget result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelBudgetReservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid model/role/token bound or settlement"
+          },
+          "403": {
+            "description": "Missing, expired or unauthorized policy"
+          },
+          "409": {
+            "description": "Operation or settlement conflicts"
+          },
+          "429": {
+            "description": "model_budget_exceeded"
+          },
+          "503": {
+            "description": "Durable reservation unavailable; do not dispatch"
+          }
+        }
+      }
+    },
+    "/v1/model-budget/reserve": {
+      "post": {
+        "summary": "Reserve paid harness model allowance before dispatch",
+        "description": "One deployment-owned exact scope and UTC month/day. Limits are <= $100 total and <= $90 general per month. Configured service identities only for mutations, current authorization and explicit priority grant required. Missing/expired policy denies. Human readers need read:model_budget. Amounts are integer pico-USD (1 USD = 1e12). Committed amounts include outstanding worst-case reservations; not all are actual spend. No prompt or key is stored. Uncertain dispatch cannot be released as not_sent. Cache creation counters are disjoint 5-minute and 1-hour counts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelBudgetReserveInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current budget result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelBudgetReservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid model/role/token bound or settlement"
+          },
+          "403": {
+            "description": "Missing, expired or unauthorized policy"
+          },
+          "409": {
+            "description": "Operation or settlement conflicts"
+          },
+          "429": {
+            "description": "model_budget_exceeded"
+          },
+          "503": {
+            "description": "Durable reservation unavailable; do not dispatch"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9724,9 +10454,19 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "conflict_pending": {"type": "boolean", "description": "This memory participates in an unresolved conflict, including an active member not held back. No opposing content is disclosed."},
-          "supersedes": {"type": "array", "items": {"$ref": "#/components/schemas/Ref"}},
-          "superseded_by": {"$ref": "#/components/schemas/Ref"},
+          "conflict_pending": {
+            "type": "boolean",
+            "description": "This memory participates in an unresolved conflict, including an active member not held back. No opposing content is disclosed."
+          },
+          "supersedes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Ref"
+            }
+          },
+          "superseded_by": {
+            "$ref": "#/components/schemas/Ref"
+          },
           "trust_level": {
             "type": "string",
             "enum": [
@@ -9875,6 +10615,9 @@
               "verified"
             ],
             "description": "Independent verification marker; does not replace active/superseded lifecycle status."
+          },
+          "memory_context": {
+            "$ref": "#/components/schemas/MemoryContext"
           }
         },
         "required": [
@@ -9952,6 +10695,17 @@
               "$ref": "#/components/schemas/ArchiveMessageRef"
             },
             "description": "Exact previously validated safe original message locations. Sources only; immutable. Does not copy original text, renew retention or imply current availability."
+          },
+          "source_refs": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/Ref"
+            },
+            "description": "Current exact canonical sources only. Basis must be inferred. Does not assert user authorship or bypass source authorization."
+          },
+          "memory_context": {
+            "$ref": "#/components/schemas/MemoryContext"
           }
         }
       },
@@ -10021,6 +10775,11 @@
           },
           "generator": {
             "$ref": "#/components/schemas/Generator"
+          },
+          "automated": {
+            "type": "boolean",
+            "default": false,
+            "description": "Automatic host workflow; requires service role, preventing inherited owner credentials. Existing scoped policy and source checks still apply."
           }
         }
       },
@@ -10201,6 +10960,9 @@
           "trace_id": {
             "type": "string",
             "description": "Same-scope canonical execution_traces.id. Must match supplied source evidence."
+          },
+          "memory_context": {
+            "$ref": "#/components/schemas/MemoryContext"
           }
         },
         "required": [
@@ -10213,6 +10975,43 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "scoped_trial_evidence": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "scope",
+                "source",
+                "evaluation"
+              ],
+              "properties": {
+                "scope": {
+                  "$ref": "#/components/schemas/Scope"
+                },
+                "source": {
+                  "$ref": "#/components/schemas/Ref"
+                },
+                "evaluation": {
+                  "$ref": "#/components/schemas/Ref"
+                }
+              }
+            },
+            "description": "Explicit authorized runtime scopes and independent evaluations; no scope inferred from origin/purpose."
+          },
+          "trial_id": {
+            "type": "string",
+            "description": "Required for configured service skill promotion, bound to an actual active trial and independent evaluation."
+          },
+          "trial_evidence": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/Ref"
+            },
+            "description": "Actual independently checked trial usage references, not a model assertion."
+          },
           "scope": {
             "$ref": "#/components/schemas/Scope"
           },
@@ -10944,13 +11743,31 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "skill_bundle":{"$ref":"#/components/schemas/SkillBundle","readOnly":true},
-          "skill_bundle_sha256":{"type":"string","readOnly":true},
-
-          "skill_trial":{"$ref":"#/components/schemas/SkillTrial","readOnly":true},
-          "skill_basis": {"$ref": "#/components/schemas/SkillBasis", "readOnly": true},
-          "comparison_plan": {"$ref": "#/components/schemas/SkillComparisonPlan"},
-          "comparison_plan_sha256": {"type":"string","pattern":"^[a-f0-9]{64}$","readOnly":true,"description":"Computed for authorized GET skill_versions responses with a comparison plan. Not stored or accepted as input."},
+          "skill_bundle": {
+            "$ref": "#/components/schemas/SkillBundle",
+            "readOnly": true
+          },
+          "skill_bundle_sha256": {
+            "type": "string",
+            "readOnly": true
+          },
+          "skill_trial": {
+            "$ref": "#/components/schemas/SkillTrial",
+            "readOnly": true
+          },
+          "skill_basis": {
+            "$ref": "#/components/schemas/SkillBasis",
+            "readOnly": true
+          },
+          "comparison_plan": {
+            "$ref": "#/components/schemas/SkillComparisonPlan"
+          },
+          "comparison_plan_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "readOnly": true,
+            "description": "Computed for authorized GET skill_versions responses with a comparison plan. Not stored or accepted as input."
+          },
           "archive_messages": {
             "type": "array",
             "maxItems": 8,
@@ -11136,9 +11953,28 @@
           "trust": {
             "type": "number"
           },
-          "version_history": {"type": "array", "items": {"type": "string"}, "description": "Skill parent only: ordered version IDs; index+1 is the public version number."},
-          "skill_origin": {"$ref": "#/components/schemas/SkillOrigin"},
-          "skill_compatibility": {"type": "object", "additionalProperties": {"type": "string", "enum": ["supported", "unsupported", "untested", "requires_adapter"]}},
+          "version_history": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Skill parent only: ordered version IDs; index+1 is the public version number."
+          },
+          "skill_origin": {
+            "$ref": "#/components/schemas/SkillOrigin"
+          },
+          "skill_compatibility": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "supported",
+                "unsupported",
+                "untested",
+                "requires_adapter"
+              ]
+            }
+          },
           "active_version": {
             "type": "string"
           },
@@ -11268,6 +12104,12 @@
               "verified"
             ],
             "description": "Independent verification marker; does not replace active/superseded lifecycle status."
+          },
+          "code_reviews": {
+            "$ref": "#/components/schemas/CodeReviews"
+          },
+          "memory_context": {
+            "$ref": "#/components/schemas/MemoryContext"
           }
         },
         "required": [
@@ -11858,6 +12700,11 @@
           },
           "result": {
             "$ref": "#/components/schemas/SkillComparisonResult"
+          },
+          "trial_id": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Optional active trial bound to this exact approved candidate. Omitted retains candidate-only comparison."
           }
         }
       },
@@ -12506,6 +13353,14 @@
           "action"
         ],
         "properties": {
+          "conflict": {
+            "$ref": "#/components/schemas/CandidateReviewConflict"
+          },
+          "operation_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+            "description": "Required for configured service reviewers, optional for people. Exact retries return duplicate=true after current policy/revision/source/deletion checks; changed input with the same scoped actor key conflicts."
+          },
           "scope": {
             "$ref": "#/components/schemas/Scope"
           },
@@ -12528,6 +13383,11 @@
           "reason": {
             "type": "string",
             "description": "Required only for reject, nonblank, at most 2000 UTF-8 bytes."
+          },
+          "automated": {
+            "type": "boolean",
+            "default": false,
+            "description": "Automatic host workflow; requires service role, preventing inherited owner credentials. Existing scoped policy and source checks still apply."
           }
         },
         "description": ""
@@ -12569,6 +13429,14 @@
           "action"
         ],
         "properties": {
+          "conflict": {
+            "$ref": "#/components/schemas/CandidateReviewConflict"
+          },
+          "operation_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+            "description": "Required for configured service reviewers, optional for people. Exact retries return duplicate=true after current policy/revision/source/deletion checks; changed input with the same scoped actor key conflicts."
+          },
           "expected_revision": {
             "type": "integer",
             "minimum": 1
@@ -12593,6 +13461,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 256
+          },
+          "automated": {
+            "type": "boolean",
+            "default": false,
+            "description": "Automatic host workflow; requires service role, preventing inherited owner credentials. Existing scoped policy and source checks still apply."
           }
         }
       },
@@ -13101,6 +13974,11 @@
             "type": "string",
             "format": "date-time",
             "description": "Only for deleted: timestamp proven by the same-scope server-owned source deletion receipt; no inference from absence."
+          },
+          "origin_agent_id": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Optional runtime-declared origin agent for explicitly configured shared audience. Metadata only; authenticated principal and exact scope authorization remain authoritative."
           }
         }
       },
@@ -13397,6 +14275,11 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "origin_agent_id": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Optional runtime-declared origin agent for explicitly configured shared audience. Metadata only; authenticated principal and exact scope authorization remain authoritative."
           }
         },
         "allOf": [
@@ -13691,7 +14574,33 @@
           "authority"
         ],
         "properties": {
-          "evaluation_refs": { "type": "array", "items": { "$ref": "#/components/schemas/Ref" }, "description": "Exact authorized evaluation references; inclusion is not approval eligibility." },
+          "evaluation_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Ref"
+            },
+            "description": "Exact authorized evaluation references; inclusion is not approval eligibility."
+          },
+          "tracking": {
+            "type": "object",
+            "required": [
+              "job_id",
+              "status"
+            ],
+            "properties": {
+              "job_id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "done"
+                ]
+              }
+            },
+            "description": "Optional durable evaluation obligation for this exact memory revision. done means an independent rated observation was recorded, not that it passed or proved utility. Missing means this historical revision was not scheduled."
+          },
           "target": {
             "$ref": "#/components/schemas/Ref"
           },
@@ -14308,6 +15217,9 @@
           "trace_id": {
             "type": "string",
             "description": "Same-scope canonical execution_traces.id. Must match supplied source evidence."
+          },
+          "memory_context": {
+            "$ref": "#/components/schemas/MemoryContext"
           }
         },
         "required": [
@@ -14715,6 +15627,11 @@
           },
           "text": {
             "type": "string"
+          },
+          "origin_agent_id": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Optional runtime-declared origin agent for explicitly configured shared audience. Metadata only; authenticated principal and exact scope authorization remain authoritative."
           }
         },
         "required": [
@@ -15625,7 +16542,708 @@
       },
       "SyntheticKnowledgeIndexRequest": {"type": "object", "additionalProperties": false, "properties": {"scope": {"$ref": "#/components/schemas/Scope"}, "knowledge_source_id": {"type": "string"}}, "required": ["scope", "knowledge_source_id"]},
       "SyntheticKnowledgeIndexResult": {"type": "object", "properties": {"scope": {"$ref": "#/components/schemas/Scope"}, "knowledge_source_id": {"type": "string"}, "document_id": {"type": "string"}, "source_version": {"type": "string"}, "chunker_version": {"type": "string"}, "embedding_space_id": {"type": "string"}, "embedding_model": {"type": "string"}, "embedding_revision": {"type": "string"}, "embedding_dimension": {"type": "integer"}, "embedded": {"type": "integer"}, "reused": {"type": "integer"}, "failed": {"type": "integer"}, "indexed_at": {"type": "string", "format": "date-time"}, "chunk_ids": {"type": "array", "items": {"type": "string"}}}, "required": ["scope", "knowledge_source_id", "embedded", "reused", "failed"]},
-      "KnowledgeSourceQuarantine": {"type": "object", "additionalProperties": false, "properties": {"scope": {"$ref": "#/components/schemas/Scope"}, "reason": {"type": "string", "minLength": 1, "maxLength": 500}}, "required": ["scope", "reason"]}
+      "KnowledgeSourceQuarantine": {"type": "object", "additionalProperties": false, "properties": {"scope": {"$ref": "#/components/schemas/Scope"}, "reason": {"type": "string", "minLength": 1, "maxLength": 500}}, "required": ["scope", "reason"]},
+      "CandidateConflictHoldOutput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "candidate": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "conflict": {
+            "$ref": "#/components/schemas/Ref"
+          }
+        },
+        "required": [
+          "candidate",
+          "memory",
+          "conflict"
+        ]
+      },
+      "CandidateConflictHoldInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "memory": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "operation_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "expected_revision",
+          "memory",
+          "operation_id"
+        ]
+      },
+      "SkillTrialStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "authority": {
+            "type": "string",
+            "const": "data_only_untrusted"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "skill_id": {
+            "type": "string"
+          },
+          "trial": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "state": {
+            "type": "string"
+          },
+          "observation_state": {
+            "type": "string",
+            "const": "not_available"
+          },
+          "scheduler": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "attempts": {
+                "type": "integer"
+              },
+              "next_check": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "status",
+              "attempts",
+              "updated_at"
+            ]
+          }
+        },
+        "required": [
+          "authority",
+          "scope",
+          "skill_id",
+          "trial",
+          "candidate",
+          "state",
+          "observation_state"
+        ]
+      },
+      "SkillTrialRecovery": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "state": {
+            "type": "string"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "baseline_version": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "scope": {
+                  "$ref": "#/components/schemas/Scope"
+                },
+                "source": {
+                  "$ref": "#/components/schemas/Ref"
+                },
+                "evaluation": {
+                  "$ref": "#/components/schemas/Ref"
+                },
+                "outcome": {
+                  "type": "string"
+                },
+                "independently_verified": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "scope",
+                "source",
+                "outcome",
+                "independently_verified"
+              ]
+            }
+          }
+        },
+        "required": [
+          "state",
+          "candidate",
+          "baseline_version",
+          "evidence"
+        ]
+      },
+      "SkillTrialCheckFinish": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "skill_id": {
+            "type": "string"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lease_token": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "checked",
+              "unavailable"
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "skill_id",
+          "expected_revision",
+          "lease_token",
+          "outcome"
+        ]
+      },
+      "SkillTrialCheckLease": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "lease_token": {
+            "type": "string"
+          },
+          "lease_until": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "lease_token",
+          "lease_until"
+        ]
+      },
+      "MemoryOutcomeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "trace": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/Ref"
+            }
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "checker_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "personal_compliance",
+              "work_task"
+            ]
+          },
+          "passed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "scope",
+          "target",
+          "trace",
+          "evidence",
+          "event_id",
+          "checker_sha256",
+          "dimension",
+          "passed"
+        ]
+      },
+      "ModelInputTransferInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "refs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/Ref"
+            }
+          },
+          "destination": {
+            "type": "string",
+            "enum": [
+              "external:anthropic"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "description": "Exact serialized model data, at most100000 UTF8 bytes."
+          }
+        },
+        "required": [
+          "scope",
+          "refs",
+          "destination",
+          "content"
+        ]
+      },
+      "MemoryContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "domains": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "personal",
+                "work"
+              ]
+            }
+          },
+          "applicability": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "evidence_kind": {
+            "type": "string",
+            "enum": [
+              "user_statement",
+              "tool_observation",
+              "agent_statement",
+              "inference"
+            ]
+          },
+          "uncertainty": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "valid_from": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Descriptive time expression only; never changes lifecycle effective_at."
+          },
+          "semantic_kind": {
+            "type": "string",
+            "enum": [
+              "fact",
+              "preference",
+              "correction",
+              "lesson",
+              "failure_recovery"
+            ]
+          }
+        },
+        "required": [
+          "domains",
+          "evidence_kind",
+          "semantic_kind"
+        ]
+      },
+      "SkillTrialObservations": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "trial": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "baseline_version": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "scope": {
+                  "$ref": "#/components/schemas/Scope"
+                },
+                "source": {
+                  "$ref": "#/components/schemas/Ref"
+                },
+                "evaluation": {
+                  "$ref": "#/components/schemas/Ref"
+                },
+                "outcome": {
+                  "type": "string"
+                },
+                "independently_verified": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "scope",
+                "source",
+                "outcome",
+                "independently_verified"
+              ]
+            }
+          },
+          "authority": {
+            "type": "string",
+            "const": "data_only_untrusted"
+          }
+        },
+        "required": [
+          "trial",
+          "candidate",
+          "baseline_version",
+          "state",
+          "items",
+          "authority"
+        ]
+      },
+      "SkillTrialOutcomeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "trial_scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "trial_id": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+              "$ref": "#/components/schemas/Ref"
+            }
+          },
+          "checker_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "passed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "scope",
+          "trial_scope",
+          "trial_id",
+          "event_id",
+          "source",
+          "evidence",
+          "checker_sha256",
+          "passed"
+        ]
+      },
+      "ModelBudgetStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "month",
+          "day",
+          "pricing_revision",
+          "monthly_limit_pico_usd",
+          "general_limit_pico_usd",
+          "monthly_committed_pico_usd",
+          "general_committed_pico_usd",
+          "daily_committed_pico_usd",
+          "outstanding_pico_usd",
+          "daily_soft_target_pico_usd",
+          "daily_soft_target_exceeded"
+        ],
+        "properties": {
+          "month": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          },
+          "pricing_revision": {
+            "type": "string"
+          },
+          "monthly_limit_pico_usd": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "general_limit_pico_usd": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "daily_limit_pico_usd": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Optional operator-configured hard daily cap. Zero means no daily hard cap; monthly and general caps still apply."
+          },
+          "monthly_committed_pico_usd": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "general_committed_pico_usd": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "daily_committed_pico_usd": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outstanding_pico_usd": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "daily_soft_target_pico_usd": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Advisory daily spending target, normally $3; exceeding it never alone rejects a reservation."
+          },
+          "daily_soft_target_exceeded": {
+            "type": "boolean",
+            "description": "Current UTC day committed spend plus reservations exceeds the advisory target."
+          }
+        }
+      },
+      "ModelBudgetReservation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reservation_id",
+          "status",
+          "dispatch_allowed",
+          "reserved_pico_usd"
+        ],
+        "properties": {
+          "reservation_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "unknown",
+              "done"
+            ]
+          },
+          "dispatch_allowed": {
+            "type": "boolean",
+            "description": "Only the first committed reservation may dispatch; exact retries never authorize another paid call."
+          },
+          "reserved_pico_usd": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ModelBudgetSettleInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "reservation_id",
+          "status"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "reservation_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "unknown",
+              "not_sent"
+            ]
+          },
+          "input_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "output_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_read_input_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_creation_input_tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cache_creation_1h_input_tokens": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ModelBudgetReserveInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "operation_id",
+          "model",
+          "role",
+          "max_input_tokens",
+          "max_output_tokens"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "operation_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.-]{1,128}$"
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "claude-haiku-5-5",
+              "claude-sonnet-5-5",
+              "claude-opus-5-5"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "session_processor",
+              "retrieval_planner",
+              "consolidator",
+              "skill_drafter",
+              "evaluator",
+              "conflict_analyst"
+            ]
+          },
+          "max_input_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24576
+          },
+          "priority": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "CandidateReviewConflict": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "expected_revision",
+          "memory",
+          "resolution",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "memory": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "keep_old",
+              "keep_both",
+              "replace_old"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Nonblank, at most 2000 UTF-8 bytes."
+          }
+        },
+        "description": "Atomic resolution of an existing candidate/memory conflict and review. Requires operation_id. keep_old requires reject; keep_both/replace_old require approve or edit_approve. All endpoints and revisions are rechecked with current per-record transition permissions; scoped service policy also applies to the existing memory kind."
+      }
     },
     "headers": {
       "RequestID": {

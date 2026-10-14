@@ -139,7 +139,7 @@ func TestDeletionPreviewCountsAndPreserves(t *testing.T) {
 		}
 	}
 	out, e := f.svc.PreviewDeletion(testCtx, f.human, "memories", memory.ID, ChangeInput{Scope: scopeA, ExpectedRevision: memory.Revision})
-	if e != nil || !out.TargetHasStoredVector || out.DirectReferences["memories"] != 0 || out.DirectReferences["skill_versions"] != 1 || out.DirectReferences["evaluations"] != 1 || out.DirectReferences["jobs"] != 2 {
+	if e != nil || !out.TargetHasStoredVector || out.DirectReferences["memories"] != 0 || out.DirectReferences["skill_versions"] != 1 || out.DirectReferences["evaluations"] != 1 || out.DirectReferences["jobs"] != 3 {
 		t.Fatalf("preview %+v %v", out, e)
 	}
 	raw, _ := json.Marshal(out)

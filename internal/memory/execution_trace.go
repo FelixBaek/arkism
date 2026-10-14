@@ -27,12 +27,13 @@ type TraceEventInput struct {
 }
 
 type CompletedAgentRunInput struct {
-	ID         string    `json:"id,omitempty"`
-	TaskType   string    `json:"task_type"`
-	Outcome    string    `json:"outcome"`
-	StartedAt  time.Time `json:"started_at"`
-	FinishedAt time.Time `json:"finished_at"`
-	Text       string    `json:"text"`
+	OriginAgentID string    `json:"origin_agent_id,omitempty"`
+	ID            string    `json:"id,omitempty"`
+	TaskType      string    `json:"task_type"`
+	Outcome       string    `json:"outcome"`
+	StartedAt     time.Time `json:"started_at"`
+	FinishedAt    time.Time `json:"finished_at"`
+	Text          string    `json:"text"`
 }
 
 type TraceIngestInput struct {
@@ -160,6 +161,9 @@ func prepareCompletedTrace(in TraceIngestInput) (preparedTrace, []byte, error) {
 	}
 	if in.AgentRun.ID == "" {
 		in.AgentRun.ID = "run-" + ContentHash("agent-run:" + in.TraceID)[:32]
+	}
+	if in.AgentRun.OriginAgentID != "" && !validRunLabel(in.AgentRun.OriginAgentID, 256) {
+		return preparedTrace{}, nil, ErrInvalid
 	}
 	if !traceIdentifier(in.AgentRun.ID) || !validRunLabel(in.AgentRun.TaskType, 128) || !terminalOutcome(in.AgentRun.Outcome) || !traceTime(in.AgentRun.StartedAt) || !traceTime(in.AgentRun.FinishedAt) || in.AgentRun.FinishedAt.Before(in.AgentRun.StartedAt) || in.AgentRun.FinishedAt.After(time.Now()) || strings.TrimSpace(in.AgentRun.Text) == "" || len(in.AgentRun.Text) > 64000 || !utf8.ValidString(in.AgentRun.Text) {
 		return preparedTrace{}, nil, ErrInvalid

@@ -17,6 +17,9 @@ import (
 )
 
 type Service struct {
+	ModelBudgetPolicy       *ModelBudgetPolicy
+	MemoryReviewPolicies    []MemoryReviewPolicy
+	SkillAutomationPolicies []SkillAutomationPolicy
 	// GoogleLogin, when set, lets the desktop app trade a Google sign-in for its token.
 	GoogleLogin *GoogleLogin
 	// Unsplash, when set, searches card background photos for teams and automations.
@@ -58,6 +61,7 @@ type Service struct {
 	Wiki WikiLLM
 }
 type CreateInput struct {
+	MemoryContext   *MemoryContext      `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
 	ArchiveMessages []ArchiveMessageRef `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
 
 	TrustLevel     string      `json:"trust_level,omitempty"`
@@ -92,11 +96,14 @@ type CreateInput struct {
 	Passed         bool        `json:"passed"`
 }
 type ChangeInput struct {
-	Scope            Scope  `json:"scope"`
-	ExpectedRevision int64  `json:"expected_revision"`
-	Status           string `json:"status"`
-	ValidationID     string `json:"validation_id"`
-	VersionID        string `json:"version_id"`
+	ScopedTrialEvidence []ScopedTrialEvidence `json:"scoped_trial_evidence,omitempty"`
+	TrialID             string                `json:"trial_id,omitempty"`
+	TrialEvidence       []Ref                 `json:"trial_evidence,omitempty"`
+	Scope               Scope                 `json:"scope"`
+	ExpectedRevision    int64                 `json:"expected_revision"`
+	Status              string                `json:"status"`
+	ValidationID        string                `json:"validation_id"`
+	VersionID           string                `json:"version_id"`
 }
 
 func ID() string {
@@ -440,6 +447,9 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	if in.IdempotencyKey != "" && (col != "sources" || !idempotencyPattern.MatchString(in.IdempotencyKey)) {
 		return Record{}, ErrInvalid
 	}
+	if !validMemoryContext(in.MemoryContext, time.Now().UTC()) || in.MemoryContext != nil && col != "memory_candidates" {
+		return Record{}, ErrInvalid
+	}
 	allowed := map[string]bool{"sources": true, "memory_candidates": true, "agent_runs": true, "tool_calls": true, "evaluations": true, "reflections": true, "memory_relations": true}
 	if !validTags(in.Tags) || len(in.Tags) > 0 && col != "memory_candidates" || !allowed[col] || (file != nil && col != "sources") || (in.Evaluation != nil && col != "evaluations") || (in.Run != nil && col != "agent_runs") || (in.ToolCall != nil && col != "tool_calls") || (in.Reflection != nil && col != colReflections) || (in.SourceEventID != "" || in.TraceID != "") && col != "memory_candidates" && col != colReflections || in.SourceEventID != "" && !validRunLabel(in.SourceEventID, 256) || in.TraceID != "" && !validRunLabel(in.TraceID, 256) || (file == nil && strings.TrimSpace(in.Text) == "") || len(in.Text) > 64000 || len(in.Summary) > 8000 || len(in.Sources) > 64 || len(in.Relations) > 64 || len(in.Keywords) > 128 || len(in.SkillID) > 256 || len(in.BaseVersion) > 256 {
 		return Record{}, ErrInvalid
@@ -547,7 +557,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	} else if in.OriginProduct != "" || in.SourceRef != "" || in.CollectedAt != nil {
 		return Record{}, ErrInvalid
 	}
-	r := Record{ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
+	r := Record{MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
 	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
 		return Record{}, ErrInvalid
 	}
@@ -647,7 +657,14 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 			return Record{}, ErrDenied
 		}
 	}
+	contextHeaders, contextErr := s.validateMemoryContextEvidence(ctx, token, r.Scope, r.Sources, r.MemoryContext)
+	if contextErr != nil {
+		return Record{}, contextErr
+	}
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := s.fenceSourceArchives(ctx, tx, contextHeaders); err != nil {
+			return err
+		}
 		if col != "sources" {
 			sources, err := sourceMetadata(ctx, tx, r.Scope, r.Sources)
 			if err != nil {
@@ -697,6 +714,9 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 			if (r.Evaluation.EvalType == "model_self") != (v.CreatedBy == d.PrincipalID) {
 				return ErrDenied
 			}
+			if r.Target.Collection == colMemories && r.Evaluation.EvalType == "automated_check" && v.ApprovedBy == d.PrincipalID {
+				return ErrDenied
+			}
 			if e = checkSources(ctx, tx, v); e != nil {
 				return e
 			}
@@ -725,6 +745,11 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 		}
 		if e := insertErr; e != nil {
 			return e
+		}
+		if col == "evaluations" {
+			if e := recordMemoryEvaluation(ctx, tx, r); e != nil {
+				return e
+			}
 		}
 		if inspection.Redacted || inspection.PersonalData {
 			if err := audit(ctx, tx, r.Scope, d.PrincipalID, "inspection:processed:"+inspectionVersion, r.ID); err != nil {
@@ -769,6 +794,11 @@ func (s *Service) Get(ctx context.Context, token, col string, scope Scope, id st
 	}
 	if col == colSkillVersions && r.Kind == proposedSkillKind {
 		if e = checkRelations(ctx, s.Repo, r); e != nil {
+			return Record{}, e
+		}
+	}
+	if col == "sources" && r.Kind == "skill_draft_prepared" {
+		if e = checkPreparedDraftEvidence(ctx, s.Repo, r); e != nil {
 			return Record{}, e
 		}
 	}
@@ -859,8 +889,40 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 	if e != nil {
 		return Record{}, e
 	}
-	if d.Role != "human" || review != nil && !d.ContentSafe {
-		return Record{}, ErrDenied
+	if review != nil {
+		if review.Automated && d.Role != roleService || !d.ContentSafe || !s.memoryReviewerAllowed(d, in.Scope, "") {
+			return Record{}, ErrDenied
+		}
+		if d.Role == roleService {
+			if review.OperationID == "" {
+				return Record{}, ErrInvalid
+			}
+			ctx = bindRequestActor(ctx, d)
+			if _, e = s.authorize(ctx, token, "auto_review:memory_candidates", in.Scope, id, content); e != nil {
+				return Record{}, e
+			}
+		}
+	} else if d.Role != roleHuman {
+		if col != colSkillVersions || (in.Status != "approved" && in.Status != "rejected") {
+			return Record{}, ErrDenied
+		}
+		candidate, err := s.Repo.Get(ctx, colSkillVersions, in.Scope, id)
+		if err != nil {
+			return Record{}, err
+		}
+		if _, err = s.authorizeSkillAutomation(ctx, token, d, in.Scope, candidate.SkillID, ""); err != nil {
+			return Record{}, err
+		}
+		ctx = bindRequestActor(ctx, d)
+	}
+	if review != nil && review.Conflict != nil {
+		other, err := s.authorize(ctx, token, "transition:memories", in.Scope, review.Conflict.Memory.ID, content)
+		if err != nil {
+			return Record{}, err
+		}
+		if other.PrincipalID != d.PrincipalID || other.Role != d.Role || !other.ContentSafe {
+			return Record{}, ErrDenied
+		}
 	}
 	if col == "skill_versions" && in.Status == "active" {
 		return Record{}, ErrInvalid
@@ -881,22 +943,58 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		if e != nil {
 			return e
 		}
+		if r.ContentErased || r.PrivacyQuarantined {
+			return ErrNotFound
+		}
+
+		if review != nil {
+			if !s.memoryReviewerAllowed(d, in.Scope, r.Kind) {
+				return ErrDenied
+			}
+			if d.Role == roleService {
+				if e = checkAutomaticMemoryReview(ctx, tx, r, *review); e != nil {
+					return e
+				}
+			}
+			var replay bool
+			result, replay, e = replayMemoryReview(ctx, tx, id, d.PrincipalID, *review)
+			if e != nil {
+				return e
+			}
+			if replay {
+				return audit(ctx, tx, in.Scope, d.PrincipalID, "review:memory_candidates:replay", id)
+			}
+		}
+		var replaced *Record
+		expectedRevision := in.ExpectedRevision
+		resolvedRejection := false
+		if review != nil && review.Conflict != nil {
+			if r.Revision != expectedRevision {
+				return ErrConflict
+			}
+			r, replaced, e = s.resolveReviewConflict(ctx, tx, r, *review, d)
+			if e != nil {
+				return e
+			}
+			expectedRevision = r.Revision
+			resolvedRejection = review.Action == "reject"
+		}
 		if col == colMemories || col == "memory_candidates" {
 			normalizeMemoryProvenance(&r)
 		}
-		if r.ConflictID != "" || r.Revision != in.ExpectedRevision {
+		if r.ConflictID != "" || r.Revision != expectedRevision {
 			return ErrConflict
 		}
-		if review != nil && r.Status != "candidate" && r.Status != "conflicted" {
+		if review != nil && !resolvedRejection && r.Status != "candidate" && r.Status != "conflicted" {
 			return ErrConflict
 		}
 		if review != nil && in.Status == "approved" && r.ExpiresAt != nil && !r.ExpiresAt.After(time.Now()) {
 			return ErrConflict
 		}
-		if (col == "memory_candidates" && r.Status != "candidate" && !(review != nil && r.Status == "conflicted")) || (col == "skill_versions" && r.Status != "candidate" && r.Status != "approved") {
+		if (col == "memory_candidates" && !resolvedRejection && r.Status != "candidate" && !(review != nil && r.Status == "conflicted")) || (col == "skill_versions" && r.Status != "candidate" && r.Status != "approved") {
 			return ErrInvalid
 		}
-		if !validTransition(r.Status, in.Status) && !(review != nil && r.Status == "conflicted") {
+		if !resolvedRejection && !validTransition(r.Status, in.Status) && !(review != nil && r.Status == "conflicted") {
 			return ErrInvalid
 		}
 		if review == nil || in.Status != "rejected" {
@@ -944,16 +1042,20 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 				return e
 			}
 		}
-		if e = tx.Replace(ctx, col, r, in.ExpectedRevision); e != nil {
+		if e = tx.Replace(ctx, col, r, expectedRevision); e != nil {
 			return e
 		}
 		if col == "memory_candidates" && r.Status == "approved" {
 			memory := r
-			memory.TrustLevel = "user_verified"
+			if d.Role == roleHuman {
+				memory.TrustLevel = "user_verified"
+			}
 			memory.Proposal = &Ref{Collection: "memory_candidates", ID: r.ID, Revision: r.Revision}
 			if review != nil {
 				memory.Status = "active"
-				memory.Trust = 1
+				if d.Role == roleHuman {
+					memory.Trust = 1
+				}
 				memory.Embedding = nil
 				if review.Action == "edit_approve" {
 					memory.Text = review.Content
@@ -963,11 +1065,26 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 				}
 				memory.ContentHash = ContentHash(memory.Text)
 			}
+			var replacementRelation Record
+			if replaced != nil {
+				replacementRelation, e = finishReviewReplacement(ctx, tx, replaced, &memory, *review, d)
+				if e != nil {
+					return e
+				}
+			}
 			if e = insertSourceRecord(ctx, tx, "memories", memory); e != nil {
 				return e
 			}
+			if replacementRelation.ID != "" {
+				if e = insertSourceRecord(ctx, tx, "memory_relations", replacementRelation); e != nil {
+					return e
+				}
+			}
 			if review != nil {
 				if e = enqueue(ctx, tx, "memories", memory); e != nil {
+					return e
+				}
+				if e = enqueueMemoryEvaluation(ctx, tx, memory); e != nil {
 					return e
 				}
 				result = memory
@@ -977,17 +1094,26 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 			if e = enqueue(ctx, tx, col, r); e != nil {
 				return e
 			}
+			if e = enqueueMemoryEvaluation(ctx, tx, r); e != nil {
+				return e
+			}
 		}
 		if result.ID == "" {
 			result = r
 		}
 		action := "transition:" + col + ":" + in.Status
 		if review != nil {
+			if e = recordMemoryReview(ctx, tx, id, d.PrincipalID, *review, result); e != nil {
+				return e
+			}
 			action = "review:memory_candidates:" + review.Action
 		}
 		return audit(ctx, tx, r.Scope, d.PrincipalID, action, id)
 	})
-	return result, e
+	if e != nil {
+		return Record{}, e
+	}
+	return result, nil
 }
 func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInput, rollback bool) (Record, error) {
 	action := "apply"
@@ -998,8 +1124,22 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 	if e != nil {
 		return Record{}, e
 	}
-	if d.Role != "human" {
-		return Record{}, ErrDenied
+	var automation SkillAutomationPolicy
+	if d.Role != roleHuman {
+		automation, e = s.authorizeSkillAutomation(ctx, token, d, in.Scope, id, "")
+		if e != nil {
+			return Record{}, e
+		}
+		// Automatic rollback needs an explicit validated target; never clear all skills.
+		if in.VersionID == "" {
+			return Record{}, ErrDenied
+		}
+		ctx = bindRequestActor(ctx, d)
+		if !rollback {
+			if e = s.authorizeTrialEvidence(ctx, token, d, in, automation); e != nil {
+				return Record{}, e
+			}
+		}
 	}
 	var target Record
 	if in.VersionID != "" {
@@ -1016,6 +1156,9 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 	// An imported baseline never went through transition, so it has no
 	// validation; rolling back to it needs a fresh independent evaluation.
 	vid := target.ValidationID
+	if d.Role == roleService && !rollback {
+		vid = in.ValidationID
+	}
 	if rollback && vid == "" {
 		vid = in.ValidationID
 	}
@@ -1056,6 +1199,11 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 			}
 			if e = validation(ctx, tx, r, vid, vid != target.ValidationID); e != nil {
 				return e
+			}
+			if d.Role == roleService && !rollback {
+				if e = checkAutomaticSkillPromotion(ctx, tx, r, in, automation); e != nil {
+					return e
+				}
 			}
 			prev := r.Revision
 			r.Revision++
@@ -1183,7 +1331,7 @@ func HitFromRecord(col string, r Record) Hit {
 	if col == colMemories || col == "memory_candidates" {
 		normalizeMemoryProvenance(&r)
 	}
-	hit := Hit{TrustLevel: r.TrustLevel, CreatedBy: r.CreatedBy, CreatedAt: &r.CreatedAt, Tags: r.Tags, EffectiveAt: r.EffectiveAt, Digest: ContentHash(recordContent(r)), Kind: r.Kind, Sensitivity: r.Sensitivity, ID: r.ID, Collection: col, Origin: origin, Scope: r.Scope, Status: r.Status, Revision: r.Revision, Text: r.Text, Summary: r.Summary, Sources: r.Sources, SourceEventID: r.SourceEventID, TraceID: r.TraceID, VerificationStatus: r.VerificationStatus, UpdatedAt: r.UpdatedAt, Trust: r.Trust, Relations: r.Relations, Authority: "data_only_untrusted"}
+	hit := Hit{MemoryContext: copyMemoryContext(r.MemoryContext), TrustLevel: r.TrustLevel, CreatedBy: r.CreatedBy, CreatedAt: &r.CreatedAt, Tags: r.Tags, EffectiveAt: r.EffectiveAt, Digest: ContentHash(recordContent(r)), Kind: r.Kind, Sensitivity: r.Sensitivity, ID: r.ID, Collection: col, Origin: origin, Scope: r.Scope, Status: r.Status, Revision: r.Revision, Text: r.Text, Summary: r.Summary, Sources: r.Sources, SourceEventID: r.SourceEventID, TraceID: r.TraceID, VerificationStatus: r.VerificationStatus, UpdatedAt: r.UpdatedAt, Trust: r.Trust, Relations: r.Relations, Authority: "data_only_untrusted"}
 	if col == colMemories {
 		hit.ConflictPending = r.ConflictID != ""
 		hit.Supersedes = append([]Ref(nil), r.Supersedes...)
@@ -1195,6 +1343,13 @@ func HitFromRecord(col string, r Record) Hit {
 	return hit
 }
 func recordContent(r Record) string {
+	if r.MemoryContext != nil {
+		return structuredText(struct {
+			Text    string         `json:"text"`
+			Summary string         `json:"summary"`
+			Context *MemoryContext `json:"memory_context"`
+		}{r.Text, r.Summary, r.MemoryContext})
+	}
 	if r.Reflection != nil {
 		return structuredText(map[string]any{"reflection": r.Reflection, "scope": r.Scope, "sources": r.Sources, "created_at": r.CreatedAt.UTC().Truncate(time.Millisecond)})
 	}

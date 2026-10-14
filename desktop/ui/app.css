@@ -985,3 +985,18 @@ textarea.code { font: 12px/1.5 var(--mono); }
 
 /* 이 PC 모드에서 서버가 있어야 하는 기능 안내 */
 .local-note { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
+
+/* observation and budget states share the existing detail typography. */
+.memory-evaluation > div, .model-budget > div { display: grid; gap: var(--space-12); }
+.memory-evaluation .tag, .memory-evaluation .btn, .model-budget .btn { justify-self: start; }
+.memory-evaluation .meta, .model-budget .meta { margin: 0; }
+
+.memory-context-panel { display: grid; gap: var(--space-12); padding: 20px; background: var(--bg-surface); border: 1px solid var(--border); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.memory-context-panel p { margin: 0; font-size: inherit; line-height: inherit; }
+
+.skill-trial-status { display: grid; gap: var(--space-12); padding: 20px; border: 1px solid var(--border); background: var(--bg-surface); }
+.skill-trial-status > div { display: grid; gap: var(--space-12); }
+.skill-trial-status p, .skill-trial-status h4 { margin: 0; }
+.skill-trial-status .btn { justify-self: start; }
+.skill-trial-status { font-size: 12px; line-height: 1.5; }
+.skill-trial-status h4, .skill-trial-status strong { font-size: inherit; line-height: inherit; font-weight: 400; }

@@ -42,6 +42,8 @@ type CaptureEvent struct {
 }
 
 type CaptureClaim struct {
+	MemoryContext   *MemoryContext      `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
+	SourceRefs      []Ref               `json:"source_refs,omitempty"`
 	ArchiveMessages []ArchiveMessageRef `json:"archive_messages,omitempty"`
 
 	Subject string `json:"subject"`
@@ -58,6 +60,7 @@ type CaptureClaim struct {
 }
 
 type CaptureInput struct {
+	Automated bool           `json:"automated,omitempty"`
 	Scope     Scope          `json:"scope"`
 	Event     CaptureEvent   `json:"event"`
 	Claims    []CaptureClaim `json:"claims"`
@@ -85,6 +88,17 @@ func validCaptureInput(in CaptureInput, now time.Time) bool {
 }
 
 func validCaptureClaim(c CaptureClaim) bool {
+	if !validMemoryContext(c.MemoryContext, time.Now().UTC()) || c.MemoryContext != nil && (c.MemoryContext.EvidenceKind == "user_statement" && c.Basis != "explicit_user" || c.MemoryContext.EvidenceKind == "tool_observation" && len(c.SourceRefs) == 0) {
+		return false
+	}
+	if len(c.SourceRefs) > 8 || len(c.SourceRefs) > 0 && c.Basis != "inferred" {
+		return false
+	}
+	for _, ref := range c.SourceRefs {
+		if ref.Collection != "sources" || !validRunLabel(ref.ID, 256) || ref.Revision < 1 {
+			return false
+		}
+	}
 	return strings.TrimSpace(c.Text) != "" && len(c.Text) <= 4000 && validRunLabel(c.Subject, 128) && len(c.Reason) <= 500 &&
 		(c.Repo == "" || validRunLabel(c.Repo, 128)) &&
 		slices.Contains(captureKinds, c.Kind) && slices.Contains(captureBases, c.Basis) &&
@@ -93,13 +107,17 @@ func validCaptureClaim(c CaptureClaim) bool {
 
 // captureKey ignores the event, so the same claim from a retry, a replay or a
 // later session lands on the same pointer and merges instead of duplicating.
-func captureKey(scope Scope, kind, text string) string {
-	return "capture-" + ContentHash(structuredText(struct {
+func captureKey(scope Scope, kind, text string, correction ...*Ref) string {
+	key := "capture-" + ContentHash(structuredText(struct {
 		Version int    `json:"version"`
 		Scope   Scope  `json:"scope"`
 		Kind    string `json:"kind"`
 		Text    string `json:"text"`
 	}{1, scope, kind, strings.ToLower(strings.Join(strings.Fields(text), " "))}))
+	if len(correction) > 0 && correction[0] != nil {
+		key = "capture-" + ContentHash(key+"\n"+structuredText(correction[0]))
+	}
+	return key
 }
 
 func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (CaptureResult, error) {
@@ -113,9 +131,14 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 		Scope Scope  `json:"scope"`
 		Event string `json:"event"`
 	}{in.Scope, in.Event.ID}))
-	if _, err := s.authorize(ctx, token, "read:memory_candidates", in.Scope, "", ""); err != nil {
-		return CaptureResult{}, err
+	actor, authErr := s.authorize(ctx, token, "read:memory_candidates", in.Scope, "", "")
+	if authErr != nil {
+		return CaptureResult{}, authErr
 	}
+	if in.Automated && actor.Role != roleService {
+		return CaptureResult{}, ErrDenied
+	}
+	ctx = bindRequestActor(ctx, actor)
 	var seen Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		var e error
@@ -138,7 +161,7 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 		item, err := s.captureClaim(ctx, token, in, c)
 		if err != nil {
 			item = CaptureItem{Status: "rejected", Reason: captureErrorCode(err), DedupeKey: item.DedupeKey}
-			transient = transient || errors.Is(err, ErrUnavailable) || errors.Is(err, ErrConflict) || item.Reason == "internal_error"
+			transient = transient || c.Supersedes != nil || errors.Is(err, ErrUnavailable) || errors.Is(err, ErrConflict) || item.Reason == "internal_error"
 		}
 		out.Items[i] = item
 		// Identifiers and codes only: claim text never reaches the log.
@@ -171,7 +194,21 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	if c.Basis == "explicit_user" {
 		scope.AgentID = ""
 	}
-	key := captureKey(scope, c.Kind, c.Text)
+	// Rebind only the scope, then authorize it afresh with the same actor.
+	// User-owned capture is not an inferred grant from the observing agent.
+	if actor, ok := ctx.Value(requestActorKey{}).(Decision); ok && actor.Scope != scope {
+		actor.Scope = scope
+		ctx = bindRequestActor(ctx, actor)
+	}
+	c.MemoryContext = copyMemoryContext(c.MemoryContext)
+	if c.MemoryContext != nil {
+		at := in.Event.OccurredAt.UTC().Truncate(time.Millisecond)
+		c.MemoryContext.ObservedAt = &at
+	}
+	key := captureKey(scope, c.Kind, c.Text, c.Supersedes)
+	if c.MemoryContext != nil {
+		key = "capture-" + ContentHash(key+"\n"+memoryContextKey(c.MemoryContext))
+	}
 	item := CaptureItem{DedupeKey: key}
 	if _, err := s.authorize(ctx, token, "read:memory_candidates", scope, "", ""); err != nil {
 		return item, err
@@ -184,6 +221,10 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	})
 	var stale *Record
 	if err == nil && existing.Kind == "capture_pointer" {
+		if existing.Target != nil && existing.Status == "correction_pending" && c.Supersedes != nil {
+			item.CandidateID = existing.Target.ID
+			return s.finishCaptureCorrection(ctx, token, in, c, scope, existing, item)
+		}
 		if existing.Target != nil {
 			live, e := s.captureTargetLive(ctx, scope, existing.Target.ID)
 			if e != nil {
@@ -215,26 +256,73 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 			return item, err
 		}
 	}
-	src, err := s.Create(ctx, token, "sources", CreateInput{
-		ArchiveMessages: c.ArchiveMessages,
-		Scope:           scope, Kind: "message", Text: c.Text, OriginProduct: in.Event.OriginProduct,
-		SourceRef: "capture:" + in.Event.Type + ":" + in.Event.ID, CollectedAt: in.Event.OccurredAt,
-		IdempotencyKey: "cap-" + ContentHash(key + "\n" + in.Event.ID)[:60], OnSecret: "block",
-	})
-	if errors.Is(err, ErrConflict) && stale != nil {
-		// A restatement of a withdrawn claim: its original source still
-		// stands as evidence, so the new candidate cites it.
-		src, err = s.staleCaptureSource(ctx, scope, *stale)
+	var canonicalSources []SourceRef
+	var src Record
+	for _, ref := range c.SourceRefs {
+		r, e := s.Get(ctx, token, "sources", scope, ref.ID)
+		if e != nil {
+			return item, e
+		}
+		if r.Revision != ref.Revision || !live(r) || r.ContentErased {
+			return item, ErrConflict
+		}
+		if src.ID == "" {
+			src = r
+		}
+		canonicalSources = append(canonicalSources, sourceReference(r, "original"))
 	}
-	if errors.Is(err, ErrConflict) {
-		// The same text already exists as a source with other provenance.
-		item.Status, item.Reason = "merged", "duplicate_source"
-		return item, nil
+	if len(c.SourceRefs) == 0 || len(c.ArchiveMessages) > 0 {
+
+		sourceText := c.Text
+		var sourceGenerator *Generator
+		if c.MemoryContext != nil {
+			sourceGenerator = in.Generator
+			sourceText += "\n[추출된 맥락 · 사용자 원문 아님]\n" + memoryContextKey(c.MemoryContext)
+		}
+		if c.Supersedes != nil {
+			sourceGenerator = in.Generator
+			sourceText += "\n[정정 연결 메타데이터 · 사용자 원문 아님]\n" + structuredText(c.Supersedes) + "\n" + in.Event.ID
+		}
+
+		src, err = s.Create(ctx, token, "sources", CreateInput{
+			ArchiveMessages: c.ArchiveMessages,
+			Scope:           scope, Kind: "message", Text: sourceText, Generator: sourceGenerator, Generated: sourceGenerator != nil, OriginProduct: in.Event.OriginProduct,
+			SourceRef: "capture:" + in.Event.Type + ":" + in.Event.ID, CollectedAt: in.Event.OccurredAt,
+			IdempotencyKey: "cap-" + ContentHash(key + "\n" + in.Event.ID)[:60], OnSecret: "block",
+		})
+		if errors.Is(err, ErrConflict) && stale != nil {
+			// A restatement of a withdrawn claim: its original source still
+			// stands as evidence, so the new candidate cites it.
+			src, err = s.staleCaptureSource(ctx, scope, *stale)
+		}
+		if errors.Is(err, ErrConflict) {
+			// The same text already exists as a source with other provenance.
+			item.Status, item.Reason = "merged", "duplicate_source"
+			return item, nil
+		}
+		if err != nil {
+			return item, err
+		}
+		ref := sourceReference(src, "original")
+		if (c.MemoryContext != nil || c.Supersedes != nil) && ref.Span != nil {
+			ref.Span.End = len([]rune(c.Text))
+		}
+		canonicalSources = append(canonicalSources, ref)
 	}
-	if err != nil {
-		return item, err
+
+	// Persist source provenance before candidate creation for correction retries.
+	if c.Supersedes != nil && stale == nil {
+		at := time.Now().UTC()
+		pending := Record{ID: key, Scope: scope, Kind: "capture_pointer", Status: "correction_pending", Revision: 1, Sources: canonicalSources, CreatedAt: at, UpdatedAt: at}
+		if err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error { return tx.Insert(ctx, "jobs", pending) }); err != nil {
+			return item, err
+		}
+		stale = &pending
 	}
 	tags := []string{"capture", "event:" + in.Event.Type, "basis:" + c.Basis}
+	if c.Supersedes != nil {
+		tags = append(tags, pendingCaptureCorrectionTag)
+	}
 	// Event, session and trace ids travel as tags: the record's own
 	// source_event_id/trace_id must name stored evidence, which these are not.
 	tags = append(tags, "event_id:"+in.Event.ID)
@@ -253,9 +341,10 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		tags = append(tags, "review:instruction_like")
 	}
 	cand, err := s.Create(ctx, token, "memory_candidates", CreateInput{
-		Scope: scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags,
-		Sources: []SourceRef{sourceReference(src, "original")}, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
-		SourceEventID: src.ID, OnSecret: "block",
+		MemoryContext: c.MemoryContext,
+		Scope:         scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags,
+		Sources: canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
+		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block",
 	})
 	if errors.Is(err, ErrCandidateQuota) && stale == nil {
 		// The source is already stored: point at it, so a retry after the limit resets cites it
@@ -265,7 +354,7 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		at := time.Now().UTC().Truncate(time.Millisecond)
 		if e := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 			return tx.Insert(ctx, "jobs", Record{ID: key, Scope: scope, Kind: "capture_pointer", Status: "done", Revision: 1,
-				Sources: []SourceRef{sourceReference(src, "original")}, CreatedAt: at, UpdatedAt: at})
+				Sources: canonicalSources, CreatedAt: at, UpdatedAt: at})
 		}); e != nil {
 			return item, e
 		}
@@ -277,8 +366,11 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		// The pointer also names its source, which outlives a deleted memory.
-		pointer := Record{ID: key, Scope: scope, Kind: "capture_pointer", Status: "done", Revision: 1, Sources: []SourceRef{sourceReference(src, "original")},
+		pointer := Record{ID: key, Scope: scope, Kind: "capture_pointer", Status: "done", Revision: 1, Sources: canonicalSources,
 			Target: &Ref{Collection: "memory_candidates", ID: cand.ID, Revision: cand.Revision}, CreatedAt: now, UpdatedAt: now}
+		if c.Supersedes != nil {
+			pointer.Status = "correction_pending"
+		}
 		if stale != nil {
 			pointer.Revision, pointer.CreatedAt = stale.Revision+1, stale.CreatedAt
 			return tx.Replace(ctx, "jobs", pointer, stale.Revision)
@@ -286,6 +378,9 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		return tx.Insert(ctx, "jobs", pointer)
 	})
 	if err != nil {
+		if c.Supersedes != nil {
+			return item, err
+		}
 		// shortcut: a concurrent twin can leave one extra unreviewed candidate;
 		// the pointer still wins, so later captures merge. Lock per key if this shows up.
 		item.Status, item.Reason = "merged", "concurrent_duplicate"
@@ -294,13 +389,11 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 
 	switch {
 	case c.Supersedes != nil:
-		_, err = s.Conflict(ctx, token, ConflictInput{Scope: scope, Action: "mark", Reason: "user correction captured from " + in.Event.OriginProduct,
-			Memories: []Ref{*c.Supersedes, {Collection: "memory_candidates", ID: cand.ID, Revision: cand.Revision}}})
-		item.Status, item.Reason = "candidate", "conflict_review"
-		if err != nil {
-			item.Reason = "conflict_mark_failed:" + captureErrorCode(err)
+		pointer, e := s.Repo.Get(ctx, "jobs", scope, key)
+		if e != nil {
+			return item, e
 		}
-		return item, nil
+		return s.finishCaptureCorrection(ctx, token, in, c, scope, pointer, item)
 	case c.Basis != "explicit_user" || !slices.Contains(capturePromotableKinds, c.Kind):
 		item.Status, item.Reason = "candidate", "review_required"
 		return item, nil

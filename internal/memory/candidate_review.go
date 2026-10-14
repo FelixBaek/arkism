@@ -7,11 +7,14 @@ import (
 )
 
 type CandidateReviewInput struct {
-	Scope            Scope  `json:"scope"`
-	ExpectedRevision int64  `json:"expected_revision"`
-	Action           string `json:"action"`
-	Content          string `json:"content,omitempty"`
-	Reason           string `json:"reason,omitempty"`
+	Automated        bool                     `json:"automated,omitempty"`
+	Conflict         *CandidateReviewConflict `json:"conflict,omitempty"`
+	OperationID      string                   `json:"operation_id,omitempty"`
+	Scope            Scope                    `json:"scope"`
+	ExpectedRevision int64                    `json:"expected_revision"`
+	Action           string                   `json:"action"`
+	Content          string                   `json:"content,omitempty"`
+	Reason           string                   `json:"reason,omitempty"`
 }
 type ReviewDecision struct {
 	Action string    `json:"action" bson:"action"`
@@ -21,7 +24,7 @@ type ReviewDecision struct {
 }
 
 func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in CandidateReviewInput) (Record, error) {
-	if in.ExpectedRevision < 1 || id == "" || len(id) > 256 {
+	if in.ExpectedRevision < 1 || id == "" || len(id) > 256 || in.OperationID != "" && !idempotencyPattern.MatchString(in.OperationID) {
 		return Record{}, ErrInvalid
 	}
 	status := "approved"
@@ -42,6 +45,9 @@ func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in Cand
 	default:
 		return Record{}, ErrInvalid
 	}
+	if in.Conflict != nil && !validCandidateReviewConflict(id, in) {
+		return Record{}, ErrInvalid
+	}
 	if containsSecret(structuredText(in)) {
 		return Record{}, ErrSecretDetected
 	}
@@ -53,11 +59,14 @@ func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in Cand
 }
 
 type CandidateReviewBatchItem struct {
-	ID               string `json:"id"`
-	ExpectedRevision int64  `json:"expected_revision"`
-	Action           string `json:"action"`
-	Content          string `json:"content,omitempty"`
-	Reason           string `json:"reason,omitempty"`
+	Automated        bool                     `json:"automated,omitempty"`
+	Conflict         *CandidateReviewConflict `json:"conflict,omitempty"`
+	OperationID      string                   `json:"operation_id,omitempty"`
+	ID               string                   `json:"id"`
+	ExpectedRevision int64                    `json:"expected_revision"`
+	Action           string                   `json:"action"`
+	Content          string                   `json:"content,omitempty"`
+	Reason           string                   `json:"reason,omitempty"`
 }
 type CandidateReviewBatchInput struct {
 	Scope Scope                      `json:"scope"`
@@ -82,7 +91,7 @@ func (s *Service) ReviewCandidates(ctx context.Context, token string, in Candida
 	if e != nil {
 		return out, e
 	}
-	if d.Role != "human" {
+	if !s.memoryReviewerAllowed(d, in.Scope, "") {
 		return out, ErrDenied
 	}
 	ctx = bindRequestActor(ctx, d)
@@ -92,7 +101,7 @@ func (s *Service) ReviewCandidates(ctx context.Context, token string, in Candida
 		var r Record
 		e = ctx.Err()
 		if e == nil {
-			r, e = s.ReviewCandidate(ctx, token, item.ID, CandidateReviewInput{Scope: in.Scope, ExpectedRevision: item.ExpectedRevision, Action: item.Action, Content: item.Content, Reason: item.Reason})
+			r, e = s.ReviewCandidate(ctx, token, item.ID, CandidateReviewInput{Automated: item.Automated, Conflict: item.Conflict, OperationID: item.OperationID, Scope: in.Scope, ExpectedRevision: item.ExpectedRevision, Action: item.Action, Content: item.Content, Reason: item.Reason})
 		}
 		if e != nil {
 			result.Code, result.Status = errorResponse(e)

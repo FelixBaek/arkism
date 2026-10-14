@@ -46,6 +46,11 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	workCheckpointRoutes(mux, s)
 	digestRoutes(mux, s)
 	registerWikiHTTP(mux, s)
+	modelBudgetRoutes(mux, s)
+	modelTransferRoutes(mux, s)
+	skillTrialStatusRoutes(mux, s)
+	modelInputRoutes(mux, s)
+	memoryOutcomeRoutes(mux, s)
 	mux.HandleFunc("POST /v1/consultations", func(w http.ResponseWriter, r *http.Request) {
 		var in CreateConsultationInput
 		if !decode(w, r, &in) {
@@ -507,6 +512,54 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		v, e := s.ListSkillTrials(r.Context(), bearer(r), in)
 		respond(w, v, e)
 	})
+	mux.HandleFunc("POST /v1/skill-trial-outcomes", func(w http.ResponseWriter, r *http.Request) {
+		var in SkillTrialOutcomeInput
+		if !decode(w, r, &in) {
+			return
+		}
+		v, e := s.RecordSkillTrialOutcome(r.Context(), bearer(r), in)
+		respond(w, v, e)
+	})
+	mux.HandleFunc("POST /v1/memory_candidates/{id}/hold-conflict", func(w http.ResponseWriter, r *http.Request) {
+		var in CandidateConflictHoldInput
+		if !decode(w, r, &in) {
+			return
+		}
+		v, e := s.HoldCandidateConflict(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, v, e)
+	})
+	mux.HandleFunc("POST /v1/skill-trials/{id}/observe", func(w http.ResponseWriter, r *http.Request) {
+		var in SkillTrialReadInput
+		if !decode(w, r, &in) {
+			return
+		}
+		v, e := s.ObserveSkillTrial(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, v, e)
+	})
+	mux.HandleFunc("POST /v1/skill-trials/{id}/claim-check", func(w http.ResponseWriter, r *http.Request) {
+		var in SkillTrialReadInput
+		if !decode(w, r, &in) {
+			return
+		}
+		v, e := s.ClaimSkillTrialCheck(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, v, e)
+	})
+	mux.HandleFunc("POST /v1/skill-trials/{id}/finish-check", func(w http.ResponseWriter, r *http.Request) {
+		var in SkillTrialCheckFinish
+		if !decode(w, r, &in) {
+			return
+		}
+		e := s.FinishSkillTrialCheck(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, map[string]bool{"ok": e == nil}, e)
+	})
+	mux.HandleFunc("POST /v1/skill-trials/{id}/monitor", func(w http.ResponseWriter, r *http.Request) {
+		var in SkillTrialReadInput
+		if !decode(w, r, &in) {
+			return
+		}
+		v, e := s.MonitorSkillTrial(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, v, e)
+	})
 	mux.HandleFunc("POST /v1/skill-trials/{id}/inspect", func(w http.ResponseWriter, r *http.Request) {
 		var in SkillTrialReadInput
 		if !decode(w, r, &in) {
@@ -841,6 +894,8 @@ func errorResponse(e error) (string, int) {
 		code, status = "access_denied", 403
 	case errors.Is(e, ErrNotFound):
 		code, status = "not_found", 404
+	case errors.Is(e, ErrModelBudget):
+		return e.Error(), http.StatusTooManyRequests
 	case errors.Is(e, ErrCandidateQuota):
 		code, status = "candidate_daily_limit", 429
 	case errors.Is(e, ErrConflict):

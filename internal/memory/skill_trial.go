@@ -94,7 +94,14 @@ func (s *Service) StartSkillTrial(ctx context.Context, token string, in SkillTri
 		return Record{}, err
 	}
 	if d.Role != roleHuman {
-		return Record{}, ErrDenied
+		policy, e := s.authorizeSkillAutomation(ctx, token, d, in.Scope, in.SkillID, in.Runtime)
+		if e != nil {
+			return Record{}, e
+		}
+		if in.EndsAt.After(time.Now().Add(time.Duration(policy.MaxTrialSeconds)*time.Second)) || in.EndsAt.After(policy.ExpiresAt) {
+			return Record{}, ErrDenied
+		}
+		ctx = bindRequestActor(ctx, d)
 	}
 	raw, _ := json.Marshal(in)
 	binding, _ := json.Marshal([]any{in.Scope, d.PrincipalID, in.EventID})
@@ -128,6 +135,11 @@ func (s *Service) StartSkillTrial(ctx context.Context, token string, in SkillTri
 		if e = tx.Insert(ctx, colSkillTrials, result); e != nil {
 			return e
 		}
+		if d.Role == roleService {
+			if e = enqueueSkillTrialCheck(ctx, tx, result); e != nil {
+				return e
+			}
+		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "start:skill_trials", id)
 	})
 	return result, err
@@ -141,7 +153,10 @@ func (s *Service) StopSkillTrial(ctx context.Context, token, id string, in Skill
 		return Record{}, err
 	}
 	if d.Role != roleHuman {
-		return Record{}, ErrDenied
+		if _, e := s.authorizeSkillAutomation(ctx, token, d, in.Scope, in.SkillID, ""); e != nil {
+			return Record{}, e
+		}
+		ctx = bindRequestActor(ctx, d)
 	}
 	var result Record
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {

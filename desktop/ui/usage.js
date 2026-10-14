@@ -498,6 +498,7 @@ window.ArkismUsage = (ctx) => {
       const box = el("div", "empty", msg);
       if (S.state === "error") box.append(el("br"), button("다시 시도", "small", "arrows-clockwise", load));
       table.replaceChildren(box);
+      window.ArkismModelBudget.mount({ container: table, scope: { ...state.scope }, request, el, button });
       $("#detail").replaceChildren();
       return;
     }
@@ -506,6 +507,7 @@ window.ArkismUsage = (ctx) => {
     const at = d.updated_at || d.collected_at;
     const note = el("p", "v4u-hint v4u-at", menu() === "router" ? "Arkism 라우터를 거친 요청만 세요. 에이전트가 직접 쓴 토큰은 MEMORY·AGENT 사용량에서 봐요." : at ? `1분마다 모아요 · 마지막 ${new Date(at).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}` : "");
     table.replaceChildren(...(at || menu() === "router" ? [note] : []), ...({ overview, requests, sessions, hours: hoursTab }[S.tab])(d));
+    if (S.tab === "overview") window.ArkismModelBudget.mount({ container: table, scope: { ...state.scope }, request, el, button });
     if (S.tab === "requests") side("요청", requestsSide(d));
     else if (S.tab === "sessions") side("세션", sessionsSide(d));
     else if (S.tab === "hours") side("시간대", hoursSide(d));

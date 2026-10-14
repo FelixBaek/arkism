@@ -246,7 +246,7 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, event.ID, in.TraceID, i
 	}
 	runFinished := in.AgentRun.FinishedAt
 	run := Record{ID: in.AgentRun.ID, Scope: in.Scope, Kind: "agent", Status: "active", Revision: 1, Text: in.AgentRun.Text,
-		Run:     &RunDetails{AgentID: in.Scope.AgentID, TaskType: in.AgentRun.TaskType, Outcome: in.AgentRun.Outcome, StartedAt: in.AgentRun.StartedAt, FinishedAt: &runFinished},
+		Run:     &RunDetails{AgentID: in.Scope.AgentID, OriginAgentID: in.AgentRun.OriginAgentID, TaskType: in.AgentRun.TaskType, Outcome: in.AgentRun.Outcome, StartedAt: in.AgentRun.StartedAt, FinishedAt: &runFinished},
 		Sources: sources, Relations: []Ref{{Collection: "execution_traces", ID: in.TraceID, Revision: 1}}, CreatedAt: now, UpdatedAt: now,
 		CreatedBy: prepared.actor.PrincipalID, CreatedByType: prepared.actor.Role, Trust: .5, SourceEventID: prepared.events[0].ID, TraceID: in.TraceID, Sensitivity: prepared.sensitivity, RequestHash: prepared.requestHash}
 	trace := Record{ID: in.TraceID, Scope: in.Scope, Kind: "execution_trace", Status: "active", Revision: 1,
