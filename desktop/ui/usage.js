@@ -1,7 +1,7 @@
 // 사용량 (magpie Usage: 개요·요청·세션·시간대), GET /v1/usage/summary. The host collector
 // reports count-only rows per agent session; 요청 are routed calls.
 // One view serves every menu's 사용량 tab (Figma v4: 198:1490 · 5446 · 1576 · 5532 · 325:35181 · 37545 · 34690);
-// state.menu picks what the 개요 puts first: ROUTER models·cost, MEMORY skills·hours, AGENT agents, CONNECT tools.
+// state.menu picks what the 개요 puts first: ROUTER models·cost, MEMORY skills·hours, AGENT agents, TOOLS tools.
 window.ArkismUsage = (ctx) => {
   "use strict";
   const { state, $, el, button, segment, render, request, query, agentLogo, AGENTS, ago } = ctx;
@@ -14,7 +14,7 @@ window.ArkismUsage = (ctx) => {
   const DAYS = ["월", "화", "수", "목", "금", "토", "일"];
   const S = { tab: "overview", range: "30d", source: "", day: "tokens", top: "tokens", doc: null, state: "idle", error: "", session: null, ov: null, rday: "traffic", flowModel: "" };
   // ROUTER counts only calls that went through the Arkism router (routing_calls: /v1/usage/summary .requests and
-  // /v1/routing/overview). Agent sessions read from transcripts are MEMORY·AGENT·CONNECT usage, never router usage.
+  // /v1/routing/overview). Agent sessions read from transcripts are MEMORY·AGENT·TOOLS usage, never router usage.
   const OV_RANGE = { today: "24h", "7d": "7d", "30d": "30d" };
   const DECISIONS = { clef: "Clef가 고름", fixed: "고정 모델", failover: "장애 때 넘김", "": "—" };
   const decisionLabel = (k) => DECISIONS[k ?? ""] || k;

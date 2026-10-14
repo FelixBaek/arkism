@@ -31,8 +31,7 @@ window.ArkismShell = (ctx) => {
       ["models", "모델 설정", () => settings("models"), () => state.view === "settings" && state.settingsTab === "models"],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage", count("usage")]
     ] },
-    connect: { label: "CONNECT", tabs: [
-      ["agent", "에이전트", () => { state.agentTab = "list"; go("agent"); }, () => state.view === "agent"],
+    connect: { label: "TOOLS", tabs: [
       ["skills", "스킬", () => go("skills"), () => state.view === "skills", count("skills")],
       ["mcp", "MCP", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin"],
       ["plugin", "플러그인", () => { state.toolTab = "plugin"; go("tools"); }, () => state.view === "tools" && state.toolTab === "plugin"],

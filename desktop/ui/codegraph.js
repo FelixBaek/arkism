@@ -1,4 +1,4 @@
-// CONNECT › 저장소 › 코드 그래프 (Figma 377:27520) and PR 영향 (379:27807): a sub-view of the Git screen (git.js).
+// TOOLS › 저장소 › 코드 그래프 (Figma 377:27520) and PR 영향 (379:27807): a sub-view of the Git screen (git.js).
 //   GET  /v1/code_graph/repos                   색인된 저장소: 마지막 색인 커밋·시각·심볼 수·stats
 //   POST /v1/code_graph/search|callers|callees|impact   심볼 찾기, 부르는 곳 / 부르는 것 / 바꾸면 영향 받는 곳(깊이 1~8)
 //   POST /v1/code_graph/changed                 PR이 바꾼 줄에 걸치는 함수·메서드와 각각의 영향(깊이 2)

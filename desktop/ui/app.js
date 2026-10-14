@@ -38,8 +38,7 @@
     imageTab: "image",
     promptRun: null, // 프롬프트 실행 page: the prompt id
     designGroup: stored("arkism.designGroup") === "purpose" ? "purpose" : "product",
-    agent: "claude_code",
-    agentTab: "skills",
+    toolAgent: "", // MCP·플러그인 filter: "" = every agent, else an agent key
     versions: new Map(), // version_id -> skill version record (analysis + inspection), for 품질·보안
     versionsDone: false,
     engine: "all",
@@ -286,9 +285,9 @@
       const nameBox = tile.querySelector(".st-name");
       nameBox.replaceChildren(el("span", "", name));
       if (cls === "warn" || cls === "bad") {
-        const fix = el("button", "st-fix", label === "로그인 필요" ? "연결 설정 ›" : "에이전트 관리 ›");
+        const fix = el("button", "st-fix", label === "로그인 필요" ? "MCP 로그인 ›" : "에이전트 관리 ›");
         fix.type = "button";
-        fix.addEventListener("click", () => { card.hidden = true; label === "로그인 필요" ? go("tools") : openSettings(); });
+        fix.addEventListener("click", () => { card.hidden = true; if (label === "로그인 필요") { state.toolTab = "mcp"; state.toolAgent = tile.dataset.agent; return go("tools"); } state.settingsTab = "agents"; go("settings"); });
         nameBox.append(fix);
       }
       tile.querySelector(".st-badge").textContent = label;
@@ -441,7 +440,7 @@
     if (syncing) { syncAgain ||= !!event; return; }
     if (syncBlocked()) return;
     const view = state.view;
-    if (!["todo", "memories", "skills", "agent", "tools", "crew", "images", "design", "routing", "settings"].includes(view)) return;
+    if (!["todo", "memories", "skills", "tools", "crew", "images", "design", "routing", "settings"].includes(view)) return;
     if (view === "memories" && ["originals", "past"].includes(state.memTab)) return;
     if (view === "settings" && state.settingsTab !== "models") return;
     syncing = true;
@@ -463,12 +462,12 @@
           add("maintenance", items("/v1/maintenance_proposals", { status: "open" }));
         }
       }
-      if (["todo", "skills", "agent"].includes(view)) {
+      if (["todo", "skills"].includes(view)) {
         add("skills", listAll("/v1/skills", {}, 2000));
         add("skillTrash", listAll("/v1/skills/trash", {}, 100000).then((rows) => rows.map((r) => ({ ...r, status: "deprecated" }))));
         add("skillUse", items("/v1/skills/usage", { days: 60 }).then((rows) => new Map(rows.map((r) => [r.skill_id, r]))));
       }
-      if (["todo", "skills", "agent", "tools"].includes(view)) add("tools", loadTools());
+      if (["todo", "skills", "tools"].includes(view)) add("tools", loadTools());
       if (view === "crew") add("crew", items("/v1/crew"));
       if (view === "images") add("prompts", items("/v1/prompts"));
       if (view === "design") add("designSystems", items("/v1/design_systems"));
@@ -514,7 +513,6 @@
         install: "저장소 주소를 넣으면 안에 있는 스킬을 보여 줘요. 받은 파일은 실행하지 않아요.",
         route: "할 일을 적으면 에이전트가 어떤 스킬을 꺼내 쓸지 미리 봐요. 실제로 실행하지는 않아요." }[state.skillPage?.kind] || "에이전트가 일할 때 꺼내 쓰는 작업 방법이에요.") },
     design: { title: "디자인 시스템", sub: () => "앱·메일·웹·문서에 쓰는 색·글꼴·규칙 모음이에요. 하나를 고르면 오른쪽에서 자세히 볼 수 있어요." },
-    agent: { title: () => (state.agentTab === "list" ? "연결" : agentName(state.agent)), sub: () => (state.agentTab === "list" ? "에이전트마다 쓸 수 있는 MCP·플러그인·스킬과 연결 상태예요." : `${PROVIDERS[state.agent] || "직접 추가"} · 쓰는 스킬 ${state.data.skills.filter((sk) => allowed(sk, state.agent)).length}개와 도구 서버예요.`) },
     images: {
       title: () => (state.promptRun ? `프롬프트 실행${(state.data.prompts.find((x) => x.id === state.promptRun)?.image_prompt.engine || "").startsWith("comfyui") ? " · ComfyUI" : ""}` : state.imageTab === "slide" ? "슬라이드 프롬프트" : "이미지 프롬프트"),
       sub: () => (state.promptRun ? "변수 값을 채우고 바로 만들거나, ComfyUI 워크플로우로 보내요." : state.imageTab === "slide" ? "발표·보고용 슬라이드 프롬프트와 만드는 스크립트를 모아 둬요. 카드를 고르면 오른쪽에서 고치고 바로 만들 수 있어요." : "자주 쓰는 이미지 프롬프트를 예시 이미지와 함께 모아 둬요. 모델과 카테고리로 골라 보세요.")
@@ -999,8 +997,8 @@
     $("#title-count").textContent = typeof v.count === "function" && !state.loading ? v.count() : "";
     $("#subtitle").textContent = state.loading ? "불러오는 중…" : v.sub();
     $(".main > .page-head .page-back")?.remove(); // a screen that has a ← link draws it again
-    $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); // CONNECT screens add them again via headExtras()
-    $("#app").classList.toggle("v4-connect", ["tools", "agent", "git", "reviews"].includes(state.view));
+    $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); // TOOLS screens add them again via headExtras()
+    $("#app").classList.toggle("v4-connect", ["tools", "git", "reviews"].includes(state.view));
     const table = $("#table");
     if (state.loading) {
       ["#controls", "#chips", "#stats"].forEach((s) => $(s).replaceChildren());
@@ -1008,7 +1006,7 @@
       $("#detail").replaceChildren();
       return;
     }
-    if (["skills", "agent"].includes(state.view) && !state.versionsDone) void loadVersions(generation);
+    if (state.view === "skills" && !state.versionsDone) void loadVersions(generation);
     const scroll = table.scrollTop;
     const page = pages.views[state.view] || crew.pages[state.view];
     $("#app").classList.toggle("wide", !!page && !page.keepDetail);
@@ -1032,7 +1030,6 @@
     if (state.view === "todo") renderTodo();
     if (state.view === "memories") renderMemories();
     if (state.view === "skills") renderSkills();
-    if (state.view === "agent") renderAgent();
     if (state.view === "images") renderImages();
     if (state.view === "crew") crew.render();
     if (state.view === "design") renderLibrary();
@@ -1080,8 +1077,6 @@
       box.replaceChildren(state.promptRun ? button("이 프롬프트로 만들기", "primary", null, (e) => runPrompt(e.currentTarget)) : button("프롬프트 추가", "primary", null, () => openPromptEditor(null)));
     } else if (state.view === "design") {
       box.replaceChildren(button("Arkism 토큰", "ghost", null, () => go("tokens")), button("디자인 시스템 추가", "primary", null, () => openSystemEditor(null)));
-    } else if (state.view === "agent") {
-      box.replaceChildren(button("모든 스킬 보기", "ghost", null, () => go("skills")));
     } else if (state.view === "tools") {
       box.replaceChildren(button("다시 읽기", "ghost", null, refreshTools), state.toolTab === "plugin"
         ? button("플러그인 찾기", "primary", null, () => { $("#search").focus(); notice("이름이나 설명으로 찾아요. 새 플러그인은 Claude Code에서 /plugin 으로 설치해요."); })
@@ -1107,7 +1102,6 @@
     if (view === "images" && tab) state.imageTab = tab;
     if (view === "images") state.promptRun = null;
     gallery.reset();
-    if (view === "agent" && tab && tab !== state.agent) { state.agent = tab; state.agentTab = "skills"; }
     if (view === "crew" && tab) { state.crewTab = tab; state.crewCat = "all"; }
     state.kind = "all";
     state.repo = "";
@@ -1174,7 +1168,7 @@
   const TODO_SHORT = { review: "기억 후보", conflicted: "부딪힘", maintenance: "정리 제안", idle: "안 쓰임", fresh: "새로 저장",
     suggest: "새 스킬", similar: "비슷함", unused: "안 씀", updates: "업데이트", adapter: "어댑터 필요", blocked: "빠진 에이전트" };
   const TODO_MENUS = [["MEMORY", "기억", ["fresh", "review", "conflicted", "maintenance", "idle"], ["memories", "active"]],
-    ["CONNECT", "스킬", ["suggest", "similar", "unused", "updates", "adapter", "blocked"], ["skills"]]];
+    ["TOOLS", "스킬", ["suggest", "similar", "unused", "updates", "adapter", "blocked"], ["skills"]]];
   const todoKey = (id) => (id || "").replace(/^todo:/, "").split("#")[0];
   const todoIndex = (id) => Number((id || "").split("#")[1] || 0);
   const todoTotal = (items) => items.reduce((s, t) => s + (t.n || 0), 0);
@@ -1346,14 +1340,14 @@
     const of = (m) => TODO_MENUS.filter(([menu]) => menu === m).map(([menu, name, ids, target]) => [menu, name, rest.filter((t) => ids.includes(t.id) && t.n), target]);
     const rows = of("MEMORY");
     digests.menuRows(rows); // 병합 제안 · 모아보기 (digests.js)
-    rows.push(...home.menuExtras(generation), ...of("CONNECT")); // 워크플로우 · 라우팅, then 스킬 (CONNECT)
+    rows.push(...home.menuExtras(generation), ...of("TOOLS")); // 워크플로우 · 라우팅, then 스킬 (TOOLS)
     const tools = state.data.tools;
     if (tools) {
       const login = tools.servers.filter((s) => Object.values(s.login || {}).includes("needed"));
       const noted = tools.servers.filter((s) => s.note);
       const parts = [...login.map((s) => ({ label: `${s.name} 로그인 필요`, n: 1 })), ...noted.map((s) => ({ label: `${s.name} 설정 확인`, n: 1 }))];
       if (pendingTool(tools)) parts.push({ label: "적용 대기", n: tools.requests.filter((q) => q.status === "pending").length });
-      rows.push(["CONNECT", "연결", parts, ["tools"]]);
+      rows.push(["TOOLS", "MCP", parts, ["tools"]]);
     }
     let any = false;
     for (const [menu, name, parts, target] of rows) {
@@ -1767,23 +1761,6 @@
   const allowed = (sk, key) => compatOf(sk)[key] !== "unsupported";
   const blockedAny = (sk) => shownAgents().some(([k]) => !allowed(sk, k));
   const categoryFilter = (sk) => state.skillCat === "all" || (state.skillCat === "none" ? !pages.categoryOf(sk) : pages.categoryOf(sk)?.id === state.skillCat);
-  // Category chips only show when categories exist; picking one narrows the table, picking it again clears it.
-  function categoryChips() {
-    const cats = pages.prefs.categories;
-    if (!cats.length) return [];
-    const row = el("div", "cat-chips");
-    const mk = (id, label, ic, n) => {
-      const c = el("button", `chip${state.skillCat === id ? " active" : ""}`);
-      c.type = "button";
-      if (ic) c.append(icon(ic));
-      c.append(label, el("output", "", String(n)));
-      c.addEventListener("click", () => { state.skillCat = state.skillCat === id ? "all" : id; render(false); });
-      return c;
-    };
-    const all = state.data.skills;
-    row.append(...cats.map((c) => mk(c.id, c.name, c.icon, all.filter((sk) => pages.categoryOf(sk)?.id === c.id).length)), mk("none", "분류 안 됨", null, all.filter((sk) => !pages.categoryOf(sk)).length));
-    return [row];
-  }
   // 최근 60일 사용 (skill.usage traces); null while the server has no usage API.
   const useOf = (sk) => state.data.skillUse?.get(sk.id) || null;
   const unused = (sk) => !!state.data.skillUse && sk.status !== "deprecated" && !useOf(sk);
@@ -1829,7 +1806,7 @@
   const skillFolder = (sk) => (sk.source_path || "").split("/").slice(-2, -1)[0] || sk.name; // 표시 이름이 아니라 SKILL.md가 든 폴더 이름
   const updatesOf = (sk) => (state.data.tools?.skill_updates || []).filter((u) => u.name === skillFolder(sk) && (sk.source_path || "").includes(`${(u.repo || "").replace(/^~/, "")}/`));
   function skillFilter(sk) {
-    if (state.skillModel && !allowed(sk, state.skillModel)) return false;
+    if (state.skillModel && allowed(sk, state.skillModel.replace("!", "")) === state.skillModel.startsWith("!")) return false; // "!key" = 못 쓰는 스킬
     if (state.skillTab === "trash") return sk.status === "deprecated";
     if (sk.status === "deprecated") return false;
     if (state.skillTab === "unused") return unused(sk);
@@ -1847,29 +1824,6 @@
     else state.pending.set(k, want);
     render(false);
     if (state.selected === `skill:${skillId}`) renderDetail();
-  }
-  function toggleCell(sk, key) {
-    stage(sk.id, key, allowed(sk, key) ? "block" : "allow");
-  }
-  function cellButton(sk, key) {
-    const b = el("button", "cell-btn");
-    b.type = "button";
-    const staged = state.pending.get(`${sk.id}|${key}`);
-    const name = agentName(key);
-    if (staged) {
-      b.classList.add("staged");
-      b.append(icon(staged === "allow" ? "plus" : "minus"));
-      b.title = staged === "allow" ? `${name}에 추가 예정` : `${name}에서 뺄 예정`;
-    } else if (!allowed(sk, key)) {
-      b.title = `${name}에서 못 써요 · 누르면 추가 예정`;
-    } else if (compatOf(sk)[key] === "requires_adapter") {
-      b.classList.add("adapter"); b.textContent = "A"; b.title = `${name} · 어댑터 필요`;
-    } else {
-      b.classList.add("ok"); b.append(icon("check")); b.title = `${name}에서 써요 · 누르면 뺄 예정`;
-    }
-    b.setAttribute("aria-label", b.title);
-    b.addEventListener("click", (e) => { e.stopPropagation(); toggleCell(sk, key); });
-    return b;
   }
   // 품질·보안 come from Arkism's built-in check (always) plus, where installed, NVIDIA SkillEvaluator
   // (quality-check, 0–100 and A–F) and SkillSpector (--no-llm: SAFE / CAUTION / DO_NOT_INSTALL),
@@ -1918,22 +1872,6 @@
     }
     if (q || s) out.source = "host";
     return out;
-  }
-  function qualityCell(sk) {
-    const c = skillChecks(sk);
-    const cell = el("span", "check-cell");
-    if (!c) { cell.append(el("span", "meta", "…")); return cell; }
-    cell.append(el("span", `grade ${c.quality.cls}`, c.quality.grade), el("span", "num", c.quality.score === null ? "" : String(c.quality.score)));
-    cell.title = c.quality.missing.length ? `빠진 것: ${c.quality.missing.join(", ")}` : "설명이 다 갖춰졌어요";
-    return cell;
-  }
-  function securityCell(sk) {
-    const c = skillChecks(sk);
-    const cell = el("span", "check-cell");
-    if (!c) { cell.append(el("span", "meta", "…")); return cell; }
-    cell.append(el("i", `dot ${{ ok: "ready", warn: "error", bad: "error" }[c.security.cls] || ""}`), el("span", `sec ${c.security.cls}`, c.security.label));
-    cell.title = c.security.reasons.join(" · ") || "걸리는 것이 없어요";
-    return cell;
   }
   // v4 · 스킬 (Figma 198:802): 확인할 것 카드 → 검색·상태·정렬 → 분류 → 목록, 오른쪽은 고른 스킬.
   // state.skillPage opens a page inside the same view: 개선하기 (4 steps), 휴지통·중복, GitHub에서 설치.
@@ -2013,8 +1951,8 @@
     const bar = el("div", "v4s-bar");
     const states = SKILL_STATES.filter(([k]) => k === "all" || k === state.skillTab || n[k]).map(([k, l]) => [k, `상태: ${l}${k === "all" ? "" : ` ${n[k] ?? "…"}`}`]);
     const modelKeys = shownAgents().map(([k]) => k);
-    if (state.skillModel && !modelKeys.includes(state.skillModel)) state.skillModel = "";
-    const models = [["", "모든 에이전트"], ...modelKeys.map((k) => [k, `${agentName(k)} ${live.filter((sk) => allowed(sk, k)).length}`])];
+    if (state.skillModel && !modelKeys.includes(state.skillModel.replace("!", ""))) state.skillModel = "";
+    const models = [["", "모든 에이전트"], ...modelKeys.flatMap((k) => [[k, `${agentName(k)} 쓰는 스킬 ${live.filter((sk) => allowed(sk, k)).length}`], [`!${k}`, `${agentName(k)} 못 쓰는 스킬 ${live.filter((sk) => !allowed(sk, k)).length}`]])];
     const dir = el("button", "v4s-dir", skillDir() > 0 ? "↑" : "↓"); dir.type = "button"; dir.title = "정렬 방향 바꾸기"; dir.setAttribute("aria-label", dir.title);
     dir.addEventListener("click", () => pickSkillSort(state.skillSort));
     bar.append(panelSearch("스킬 검색"), skSelect("상태", states, state.skillTab, (k) => go("skills", k)), skSelect("정렬", SKILL_SORTS, state.skillSort, pickSkillSort), dir,
@@ -2403,7 +2341,7 @@
   function renderChangeBar() {
     const bar = $("#change-bar");
     const changes = [...state.pending.entries()];
-    bar.hidden = !["skills", "agent"].includes(state.view) || !changes.length;
+    bar.hidden = state.view !== "skills" || !changes.length;
     if (bar.hidden) return;
     const [[k, want]] = changes;
     const [id, agent] = k.split("|");
@@ -2447,202 +2385,14 @@
   $("#change-apply").addEventListener("click", applyChanges);
   $("#change-revert").addEventListener("click", () => { state.pending.clear(); render(false); renderDetail(); });
 
-  // ---------------------------------------------------------------- 에이전트별 (스킬 아래 메뉴)
-  // What the app knows per agent: which skills it gets, the tool servers the host sync reads, and its folders.
+  // ---------------------------------------------------------------- MCP·플러그인 (TOOLS)
+  // Which agents' tool servers the host sync reads; the rest are only filtered by what the server reported.
   const AGENT_SYNC = { claude_code: "서버의 ~/.claude.json을 1분마다 읽어요", codex: "서버의 codex mcp list를 1분마다 읽어요" };
-  function agentTools(key) {
-    const t = state.data.tools;
-    return t ? { servers: t.servers.filter((x) => x.agents?.[key] === "on"), plugins: t.plugins.filter((x) => x.agents?.[key] === "on") } : null;
-  }
-  function agentConnection(key) {
-    const t = state.data.tools;
-    if (!AGENT_SYNC[key]) return ["스킬 허브로 받아요", "ready"];
-    if (!t) return ["도구 목록을 못 읽었어요", "error"];
-    const age = t.collected_at ? Date.now() - new Date(t.collected_at).getTime() : Infinity;
-    return age > 5 * 60000 ? ["최근 5분 동안 소식 없음", "error"] : ["정상 · 설정을 읽고 있어요", "ready"];
-  }
-  // 연결 › 에이전트 (Figma 284:18279): every agent in one list; picking one opens its skills and tools (state.agentTab).
-  function agentSummary(key) {
-    const tools = agentTools(key);
-    const skills = state.data.skills;
-    const use = skills.filter((sk) => allowed(sk, key));
-    const adapter = use.filter((sk) => compatOf(sk)[key] === "requires_adapter").length;
-    const login = toolEntries().filter((e) => needsLogin(e, key)).length;
-    let badge = ["정상", ""];
-    if (login) badge = [`로그인 필요 ${login}`, "warn"];
-    else if (adapter) badge = [`어댑터 필요 ${adapter}`, "warn"];
-    else if (skills.length && use.length < skills.length) badge = [`스킬 ${skills.length - use.length}개 못 씀`, "warn"];
-    return { tools, use, off: skills.length - use.length, adapter, login, badge };
-  }
-  function agentIssues() {
-    const out = [];
-    for (const e of toolEntries()) {
-      if (AGENTS.some(([k]) => needsLogin(e, k))) out.push({ text: `${e.name} 로그인 필요`, open: () => openTool(e) });
-      else if (e.note) out.push({ text: `${e.name} 설정 확인`, open: () => openTool(e) });
-    }
-    for (const [k, n] of shownAgents()) {
-      const a = agentSummary(k).adapter;
-      if (a) out.push({ text: `${n} 스킬 어댑터 ${a}`, open: () => { state.agent = k; state.selected = `agent:${k}`; render(); } });
-    }
-    return out;
-  }
   function openTool(e) {
     state.toolTab = toolKind(e);
     go("tools");
     state.selected = `tool:${e.name}`;
     render();
-  }
-  function renderAgentList() {
-    const t = state.data.tools;
-    const agents = shownAgents();
-    const extras = extraAgents();
-    headExtras({ count: `에이전트 ${agents.length + extras.length}개` });
-    $("#controls").replaceChildren();
-    const issues = agentIssues();
-    if (issues.length) {
-      const card = el("div", "cn-alert");
-      const txt = el("div", "cn-alert-text");
-      const h = el("p", "cn-alert-title", "확인해 주세요");
-      h.append(el("span", "", String(issues.length)));
-      txt.append(h, el("p", "", issues.map((i) => i.text).join(" · ")));
-      card.append(txt, button("하나씩 확인하기", "primary", null, () => issues[0].open()));
-      $("#chips").replaceChildren(card);
-    } else $("#chips").replaceChildren();
-    const repos = state.data.reviews?.repos || [];
-    const prs = repos.reduce((n, r) => n + (r.prs || 0), 0);
-    const tiles = el("div", "cn-tiles");
-    const okServers = t ? t.servers.filter((e) => toolGroup(e) === "ok").length : 0;
-    tiles.append(
-      cnTile("MCP 서버", t ? `${t.servers.length}개 · 정상 ${okServers} ›` : "— ›", "", false, () => { state.toolTab = "mcp"; go("tools"); }),
-      cnTile("플러그인", t ? `${t.plugins.length}개 ›` : "— ›", "", false, () => { state.toolTab = "plugin"; go("tools"); }),
-      cnTile("저장소", repos.length ? `${repos.length}개 · PR ${prs} ›` : "열기 ›", "", false, () => go("git")));
-    $("#stats").replaceChildren(tiles);
-    const table = $("#table");
-    table.className = "cn-list";
-    if (!state.selected) state.selected = `agent:${state.agent}`;
-    const rows = agents.map(([k, n, logo]) => {
-      const s = agentSummary(k);
-      const ic = el("span", "cn-row-icon"); ic.append(agentLogo(logo, n));
-      const meta = [PROVIDERS[k], s.tools ? `MCP ${s.tools.servers.length}` : "", s.tools?.plugins.length ? `플러그인 ${s.tools.plugins.length}` : "", `스킬 ${s.use.length}`].filter(Boolean).join(" · ");
-      return cnRow(`agent:${k}`, [ic, cnRowBody(el("span", "", n), meta), cnBadge(s.badge[0], s.badge[1])], () => { state.agent = k; renderDetail(); });
-    });
-    for (const a of extras) {
-      const ic = el("span", "cn-row-icon"); ic.append(pages.logoOf(a));
-      const dirs = (a.skills_dirs || []).length;
-      rows.push(cnRow(`agent:${a.id}`, [ic, cnRowBody(raw(el("span", "", a.name)), ["직접 추가", dirs ? `스킬 폴더 ${dirs}` : ""].filter(Boolean).join(" · ")), cnBadge("정상")], renderDetail));
-    }
-    table.replaceChildren(...rows);
-  }
-  function renderAgent() {
-    if (state.agentTab === "list" || !AGENTS.some(([k]) => k === state.agent)) { state.agentTab = "list"; return renderAgentList(); }
-    const key = state.agent;
-    const skills = state.data.skills;
-    const use = skills.filter((sk) => allowed(sk, key));
-    const off = skills.filter((sk) => !allowed(sk, key));
-    const adapter = use.filter((sk) => compatOf(sk)[key] === "requires_adapter");
-    const tools = agentTools(key);
-    const toolN = tools ? tools.servers.length + tools.plugins.length : undefined;
-    // Agent picker in the title row; ← 연결 goes back to the list of all agents.
-    const pick = el("select", "cn-agent-pick");
-    pick.setAttribute("aria-label", "에이전트");
-    for (const [k, n] of shownAgents()) { const o = el("option", "", n); o.value = k; pick.append(o); }
-    pick.value = key;
-    pick.addEventListener("change", () => go("agent", pick.value));
-    headExtras({ count: PROVIDERS[key] || "", back: ["연결", () => { state.agentTab = "list"; state.selected = `agent:${key}`; render(); }], aside: [pick] });
-    $("#controls").replaceChildren(segment([["skills", "쓰는 스킬", use.length], ["off", "못 쓰는 스킬", off.length, true], ["tools", "MCP·플러그인", toolN]], state.agentTab, (k) => { state.agentTab = k; state.selected = null; render(); }));
-    const caution = state.versionsDone ? use.filter((sk) => ["warn", "bad"].includes(skillChecks(sk)?.security.cls)).length : null;
-    const tiles = el("div", "cn-tiles");
-    tiles.append(
-      cnTile("쓰는 스킬", String(use.length), `/ ${skills.length}개${adapter.length ? ` · 어댑터 필요 ${adapter.length}` : ""}`, adapter.length > 0),
-      cnTile("보안 주의", caution === null ? "…" : String(caution), "개 · 쓰는 스킬 중", !!caution),
-      cnTile("켜진 MCP·플러그인", toolN === undefined ? "—" : String(toolN), tools ? `개 · MCP ${tools.servers.length} · 플러그인 ${tools.plugins.length}` : "개"));
-    $("#stats").replaceChildren(tiles);
-    const table = $("#table");
-    if (state.agentTab === "tools") {
-      $("#chips").replaceChildren();
-      const entries = toolEntries().filter((e) => matches(`${e.name} ${e.target || ""}`)).sort((a, b) => (b.agents?.[key] === "on") - (a.agents?.[key] === "on"));
-      table.className = "cn-list";
-      table.replaceChildren(...entries.map((e) => {
-        const on = e.agents?.[key] === "on";
-        const ic = el("span", "cn-row-icon"); ic.append(icon(e.transport === "plugin" ? "puzzle-piece" : "plug"));
-        const body = cnRowBody(raw(el("span", "mono", e.name)), [e.transport === "plugin" ? "플러그인" : e.transport, e.target].filter(Boolean).join(" · "));
-        return cnRow(`tool:${e.name}`, [ic, body, cnBadge(on ? "켜짐" : "꺼짐", on ? "" : "off")], renderDetail);
-      }));
-      if (!entries.length) table.append(el("div", "empty", tools ? "이 에이전트에 연결된 도구가 없어요." : "도구 목록을 불러오지 못했어요."));
-      if (!AGENT_SYNC[key]) $("#chips").replaceChildren(el("p", "cn-note", `${agentName(key)}의 MCP 설정은 아직 읽지 않아요. 켜고 끄기는 Claude Code·Codex만 돼요.`));
-      return;
-    }
-    $("#chips").replaceChildren(...categoryChips());
-    const list = (state.agentTab === "off" ? off : use).filter((sk) => categoryFilter(sk) && matches(`${sk.name} ${sk.id} ${sk.description || ""}`));
-    const tpl = "minmax(0,1fr) 112px 84px 92px 44px";
-    const catCell = (sk) => { const c = pages.categoryOf(sk); const k = el("span", "kind"); k.append(icon(c?.icon || "stack"), c?.name || "분류 안 됨"); return k; };
-    table.replaceChildren(header(["스킬", "분류", "품질", "보안 검사", state.agentTab === "off" ? "추가" : "쓰기"], tpl), ...list.map((sk) => {
-      const cell = el("div", "cell");
-      cell.append(raw(el("div", "skill-title", firstSentence(sk.description) || sk.name)), el("div", "skill-name", sk.name));
-      const toggle = el("span", "center keep"); toggle.append(cellButton(sk, key));
-      return row(`skill:${sk.id}`, tpl, [cell, catCell(sk), qualityCell(sk), securityCell(sk), toggle], renderDetail);
-    }));
-    if (!list.length) table.append(el("div", "empty", state.agentTab === "off" ? `${agentName(key)}가 못 쓰는 스킬이 없어요.` : "조건에 맞는 스킬이 없어요."));
-  }
-  function agentDetail() {
-    const key = state.agent;
-    const [, name] = AGENTS.find(([k]) => k === key);
-    const body = detailShell("에이전트");
-    const d = el("div", "cn-detail");
-    const shown = shownAgents().some(([k]) => k === key);
-    const [connText] = agentConnection(key);
-    const seen = state.data.tools?.collected_at;
-    const head = el("div", "cn-head");
-    head.append(el("p", "cn-kind", `${PROVIDERS[key]} · ${connText.split(" · ")[0]}`), el("h2", "cn-title", name),
-      el("p", "cn-desc", [AGENT_SYNC[key] && seen ? `마지막 확인 ${ago(seen)}` : "", shown ? "" : "설정에서 꺼 둠"].filter(Boolean).join(" · ") || "스킬 허브로 받아요"));
-    const parts = [head];
-    const use = state.data.skills.filter((sk) => allowed(sk, key));
-    const off = state.data.skills.length - use.length;
-    const manage = button("스킬 관리", "primary", null, () => { state.agentTab = off ? "off" : "skills"; state.selected = null; render(); });
-    const setup = button("연결 설정", "", null, () => { state.settingsTab = "agents"; go("settings"); });
-    parts.push(off ? cnCallout(`스킬 ${off}개를 못 써요`, "‘못 쓰는 스킬’에서 칸을 눌러 추가하고 적용하면 바로 받아요.", [manage, setup]) : (() => { const b = el("div", "cn-btns"); b.append(manage, setup); return b; })());
-    const byCat = new Map();
-    for (const sk of use) { const n = pages.categoryOf(sk)?.name || "분류 안 됨"; byCat.set(n, (byCat.get(n) || 0) + 1); }
-    const cats = cnSection("스킬", `${use.length} / ${state.data.skills.length}`);
-    cats.append(byCat.size ? cnFacts([...byCat].sort((a, b) => b[1] - a[1]).map(([n, c]) => [n, `${c}개`])) : el("p", "cn-note", "쓰는 스킬이 없어요."));
-    parts.push(cats);
-    const tools = agentTools(key);
-    const tl = cnSection("MCP·플러그인", tools ? `${tools.servers.length + tools.plugins.length}개` : "");
-    const toolRows = tools ? [...tools.servers, ...tools.plugins].map((e) => { const [l, c] = toolState(e); return [e.name, l, c === "warn" ? "warn" : ""]; }) : [];
-    tl.append(toolRows.length ? cnFacts(toolRows) : el("p", "cn-note", tools ? "켜 둔 도구가 없어요." : "도구 목록을 못 읽었어요."));
-    parts.push(tl);
-    const conn = cnSection("연결");
-    conn.append(cnFacts([["상태", connText], ["MCP 설정", AGENT_SYNC[key] || "아직 읽지 않아요"], ["켜고 끄기", SWITCHABLE.plugin.includes(key) ? "MCP·플러그인" : SWITCHABLE.mcp.includes(key) ? "MCP" : "아직 안 돼요"]]));
-    parts.push(conn);
-    const [skillPath, chatPath] = pages.agentPaths[key] || [];
-    const where = cnSection("설정 위치");
-    where.append(cnFacts([["MCP", CONFIG_FILES[key], "mono"], ["스킬", skillPath, "mono"], ["대화 기록", chatPath, "mono"]]));
-    parts.push(where);
-    const recent = [...use].sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)).slice(0, 5);
-    if (recent.length) {
-      const sec = cnSection("최근 바뀐 스킬");
-      const ul = el("ul", "plain history");
-      recent.forEach((sk) => ul.append(historyItem(sk.updated_at, sk.name, firstSentence(sk.description))));
-      sec.append(ul);
-      parts.push(sec);
-    }
-    d.append(...parts);
-    body.append(d);
-  }
-  // An agent the owner added by hand (설정 › 에이전트): its folders and where to manage it.
-  function extraAgentDetail(id) {
-    const a = extraAgents().find((x) => x.id === id);
-    if (!a) return agentDetail();
-    const body = detailShell("에이전트");
-    const d = el("div", "cn-detail");
-    const head = el("div", "cn-head");
-    head.append(el("p", "cn-kind", "직접 추가 · 연결됨"), raw(el("h2", "cn-title", a.name)), el("p", "cn-desc", "자기 스킬 폴더만 읽어요."));
-    const btns = el("div", "cn-btns");
-    btns.append(button("연결 설정", "", null, () => { state.settingsTab = "agents"; go("settings"); }));
-    const where = cnSection("설정 위치");
-    where.append(cnFacts([["스킬", (a.skills_dirs || []).join(" · "), "mono"], ["대화 기록", a.chats_dir, "mono"]]));
-    d.append(head, btns, where);
-    body.append(d);
   }
 
   // ---------------------------------------------------------------- 이미지
@@ -3707,7 +3457,13 @@
       tiles.append(cnTile("정상", String(n("ok")), "개"), cnTile("로그인 필요", String(n("login")), "개", n("login") > 0), cnTile("끊김", String(n("broken")), "개", n("broken") > 0), cnTile("꺼짐", String(n("off")), "개"));
       $("#stats").replaceChildren(tiles);
     }
-    const list = (plugin ? t.plugins : t.servers).filter((e) => matches(`${e.name} ${e.target || ""} ${e.desc || ""}`));
+    // 에이전트: only what that agent has on.
+    const keys = shownAgents().map(([k]) => k);
+    if (!keys.includes(state.toolAgent)) state.toolAgent = "";
+    const who = state.toolAgent;
+    $("#controls").replaceChildren(skSelect("에이전트", [["", "모든 에이전트"], ...keys.map((k) => [k, `${agentName(k)} ${(plugin ? t.plugins : t.servers).filter((e) => e.agents?.[k] === "on").length}`])], who, (k) => { state.toolAgent = k; state.selected = null; render(); }));
+    if (who && !AGENT_SYNC[who]) $("#chips").replaceChildren(el("p", "cn-note", `${agentName(who)}의 MCP 설정은 아직 읽지 않아요. 켜고 끄기는 Claude Code·Codex만 돼요.`));
+    const list = (plugin ? t.plugins : t.servers).filter((e) => (!who || e.agents?.[who] === "on") && matches(`${e.name} ${e.target || ""} ${e.desc || ""}`));
     if (!state.selected && list.length) state.selected = `tool:${(list.find((e) => toolState(e)[1] === "warn") || list[0]).name}`;
     table.className = "cn-list";
     table.replaceChildren(...list.map((e) => {
@@ -4192,13 +3948,6 @@
       const s = [...trashed(), ...state.data.skills].find((x) => `skill:${x.id}` === id);
       return s ? skillDetailV4(s) : summaryDetail();
     }
-    if (state.view === "agent") {
-      if (id?.startsWith("agent:") && !AGENTS.some(([k]) => `agent:${k}` === id)) return extraAgentDetail(id.slice(6));
-      const s = state.data.skills.find((x) => `skill:${x.id}` === id);
-      if (s) return skillDetail(s);
-      const t = toolEntries().find((x) => `tool:${x.name}` === id);
-      return t ? toolDetail(t) : agentDetail();
-    }
     if (state.view === "memories" && id === "inject") return inject.detail();
     if (state.view === "memories" && id === "batch") return reviewBatchDetail(detailShell("한 번에 처리"));
     if (state.view === "memories" && id) {
@@ -4621,52 +4370,6 @@
     if (r.behind && ups.length) sec.append(button("업데이트 받기", "", "arrows-clockwise", () => updateSkills(ups)));
     return sec;
   }
-  async function skillDetail(sk) {
-    const body = detailShell("스킬");
-    const top = el("div", "section");
-    const explain = el("div", "");
-    const aiBtn = button("AI로 설명", "ghost small", "sparkle", async () => {
-      aiBtn.disabled = true;
-      explain.replaceChildren(el("p", "dim", "AI가 쉬운 말로 풀어 쓰는 중이에요…"));
-      try {
-        const text = await crew.explain(`스킬 이름: ${sk.name}\n설명: ${sk.description || ""}\n\n이 스킬이 무엇을 언제 하는지 쉬운 한국어 두세 문장으로 설명해 줘.`);
-        explain.replaceChildren(Object.assign(el("div", "quote"), { textContent: text }));
-      } catch (e) { explain.replaceChildren(el("p", "warn-text", e.message)); } finally { aiBtn.disabled = false; }
-    });
-    top.append(el("h2", "mono", sk.name), raw(el("p", "lead", sk.description || "")), aiBtn, explain);
-    if (sk.status === "deprecated") {
-      top.append(button("휴지통에서 되돌리기", "primary", "arrow-counter-clockwise", async () => {
-        try {
-          await setSkillStatus(sk, "active");
-          writeKey(TRASH_KEY, readKey(TRASH_KEY, []).filter((x) => x.id !== sk.id));
-          state.data.skills = await listAll("/v1/skills", {}, 2000);
-          state.data.skillTrash = await loadTrash();
-          state.selected = null;
-          notice(`${sk.name}를 되돌렸어요.`);
-          render(false);
-          renderDetail();
-        } catch (e) { notice(`되돌리지 못했어요 (${e.message}).`); }
-      }));
-    }
-    const u = useOf(sk);
-    const useSec = section("최근 60일 사용", u ? `마지막 ${ago(u.last_used_at)}` : "");
-    if (state.data.skillUse) {
-      const big = el("div", "use-big");
-      big.append(el("strong", "", String(u?.count || 0)), el("span", "dim", "번"));
-      useSec.append(big);
-      if (u) useSec.append(facts(Object.entries(u.by_runtime || {}).sort((a, b) => b[1] - a[1]).map(([rt, n]) => [agentName(rt) || rt, `${n}번`])));
-    } else useSec.append(el("p", "dim", "이 서버는 아직 사용 기록을 모으지 않아요."));
-    const crewSec = crew.skillExperts(sk);
-    const where = section("위치");
-    where.append(facts([["분류", pages.categoryOf(sk)?.name || "분류 안 됨"], ["버전", sk.version], ["원본", sk.source_path], ["업데이트", shortDate(sk.updated_at)]]));
-    body.append(...[top, blockedCallout(sk), checksSection(sk), useSec, agentGrid(sk), crewSec, updateSection(sk), where].filter(Boolean));
-    body.append(skillReview(sk), skillGenerate(sk));
-    const g = generation;
-    const v = await request(`/v1/skill_versions/${encodeURIComponent(sk.version_id)}?${query()}`).catch(() => null);
-    if (!v || g !== generation || state.selected !== `skill:${sk.id}`) return;
-    const a = v.analysis || {};
-    where.before(...[bulletSection("이럴 때 써요", a.use_when), bulletSection("이럴 땐 쓰지 마세요", a.avoid_when), bulletSection("쓰는 도구", a.tools)].filter(Boolean));
-  }
   function openDetail() { $("#app").classList.add("detail-open"); }
   function closeDetail() {
     $("#app").classList.remove("detail-open"); state.selected = null;
@@ -4984,7 +4687,7 @@
   const inject = window.ArkismInject({ state, el, button, request, query, detailShell, openDetail, section, facts });
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request, detailShell, openDetail, ago });
   const privacy = window.ArkismPrivacy({ state, el, button, request, query, notice, section, afterChange: async () => { await reloadMemories(); renderDetail(); } });
-  const codegraph = window.ArkismCodeGraph ? window.ArkismCodeGraph({ state, el, raw, button, request, query, notice, ago }) : null; // CONNECT › 저장소 › 코드 그래프 (codegraph.js)
+  const codegraph = window.ArkismCodeGraph ? window.ArkismCodeGraph({ state, el, raw, button, request, query, notice, ago }) : null; // TOOLS › 저장소 › 코드 그래프 (codegraph.js)
   const git = window.ArkismGit({ state, $, el, button, icon, tauri, ago, notice, go, headExtras, codegraph,
     openReview: (key) => { go("reviews"); state.selected = key; markSelected(); reviews.detail(); openDetail(); } });
   const knowledge = window.ArkismKnowledge({ state, $, el, button, render, request, query, ago, detailShell, headExtras, confirmPop }); // MEMORY › 지식 (knowledge.js)
