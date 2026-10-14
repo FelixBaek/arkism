@@ -37,7 +37,7 @@ window.ArkismHome = function (ctx) {
     d.skills.filter((s) => has(s.name, q) || has(s.description, q)).slice(0, MAX_EACH)
       .forEach((s) => out.push({ kind: "skill", id: s.id, title: s.name, mono: true, where: `스킬${ctx.skillCategory(s) ? ` › ${ctx.skillCategory(s)}` : ""}`, badge: "스킬" }));
     (d.crew || []).filter((r) => has(r.crew?.name, q) || has(r.crew?.handle, q) || has(r.crew?.role, q)).slice(0, MAX_EACH)
-      .forEach((r) => out.push({ kind: "crew", id: r.id, title: `$${r.crew.handle || r.crew.name}`, where: "AGENT › 워크플로우", badge: "워크플로우" }));
+      .forEach((r) => out.push({ kind: "crew", id: r.id, title: `$${r.crew.handle || r.crew.name}`, where: "CREW › 워크플로우", badge: "워크플로우" }));
     (d.prompts || []).filter((p) => has(p.title, q) || has(p.prompt, q)).slice(0, MAX_EACH)
       .forEach((p) => out.push({ kind: "prompt", id: p.id, title: p.title || "프롬프트", where: `GALLERY › ${p.kind === "slide" ? "슬라이드" : "프롬프트"}`, badge: "프롬프트", item: p }));
     return out;
@@ -386,7 +386,7 @@ window.ArkismHome = function (ctx) {
       const week = Date.now() - 7 * 86400000;
       const waiting = extra.runs.filter((x) => x.crew_run?.status === "waiting" && x.crew_run.waiting?.kind === "approval").length;
       const failed = extra.runs.filter((x) => x.crew_run?.status === "failed" && new Date(x.created_at).getTime() > week).length;
-      rows.push(["AGENT", "워크플로우", [{ label: `확인 대기 ${waiting}`, n: waiting }, { label: `실패 ${failed}`, n: failed }].filter((p) => p.n), ["crew"]]);
+      rows.push(["CREW", "워크플로우", [{ label: `확인 대기 ${waiting}`, n: waiting }, { label: `실패 ${failed}`, n: failed }].filter((p) => p.n), ["crew"]]);
     }
     if (extra.route) {
       const parts = (extra.route.models || []).filter((m) => m.status === "watch" || m.status === "slow")

@@ -4698,7 +4698,7 @@
   home.wireSearch();
   shell = window.ArkismShell({ state, $, el, go, render });
   Object.assign(views, pages.views);
-  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // AGENT › 팀·회의·디스코드·사용량 (team.js)
+  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
   Object.assign(views, crew.views, crew.pages, reviews.views);
   void (async () => {
     const defaults = tauri ? await tauri.invoke("app_defaults").catch(() => null) : null;

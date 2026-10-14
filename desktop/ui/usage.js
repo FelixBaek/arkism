@@ -1,7 +1,7 @@
 // 사용량 (magpie Usage: 개요·요청·세션·시간대), GET /v1/usage/summary. The host collector
 // reports count-only rows per agent session; 요청 are routed calls.
 // One view serves every menu's 사용량 tab (Figma v4: 198:1490 · 5446 · 1576 · 5532 · 325:35181 · 37545 · 34690);
-// state.menu picks what the 개요 puts first: ROUTER models·cost, MEMORY skills·hours, AGENT agents, TOOLS tools.
+// state.menu picks what the 개요 puts first: ROUTER models·cost, MEMORY skills·hours, CREW agents, TOOLS tools.
 window.ArkismUsage = (ctx) => {
   "use strict";
   const { state, $, el, button, segment, render, request, query, agentLogo, AGENTS, ago } = ctx;
@@ -14,7 +14,7 @@ window.ArkismUsage = (ctx) => {
   const DAYS = ["월", "화", "수", "목", "금", "토", "일"];
   const S = { tab: "overview", range: "30d", source: "", day: "tokens", top: "tokens", doc: null, state: "idle", error: "", session: null, ov: null, rday: "traffic", flowModel: "" };
   // ROUTER counts only calls that went through the Arkism router (routing_calls: /v1/usage/summary .requests and
-  // /v1/routing/overview). Agent sessions read from transcripts are MEMORY·AGENT·TOOLS usage, never router usage.
+  // /v1/routing/overview). Agent sessions read from transcripts are MEMORY·CREW·TOOLS usage, never router usage.
   const OV_RANGE = { today: "24h", "7d": "7d", "30d": "30d" };
   const DECISIONS = { clef: "Clef가 고름", fixed: "고정 모델", failover: "장애 때 넘김", "": "—" };
   const decisionLabel = (k) => DECISIONS[k ?? ""] || k;
@@ -184,7 +184,7 @@ window.ArkismUsage = (ctx) => {
     act.append(button("라우팅 설정 열기", "primary small", null, () => ctx.openSettings?.("routing")), link("라우팅 현황 보기 ›", () => ctx.go?.("routing")));
     c.append(el("h3", "", "아직 라우터를 거친 요청이 없어요"),
       el("p", "v4u-hint", "여기에는 Arkism 라우터가 모델을 골라 보낸 요청만 쌓여요. 라우팅을 켜고 워크플로우·하위 작업이 라우터로 모델을 고르면 요청 수·토큰·비용이 보여요."),
-      el("p", "v4u-hint", "에이전트가 직접 쓴 토큰은 MEMORY·AGENT의 사용량에서 봐요."), act);
+      el("p", "v4u-hint", "에이전트가 직접 쓴 토큰은 MEMORY·CREW의 사용량에서 봐요."), act);
     return c;
   }
   function routerOverview(d) {
@@ -504,7 +504,7 @@ window.ArkismUsage = (ctx) => {
     if (S.loadedFor && S.loadedFor !== loadKey()) queueMicrotask(() => load(true));
     const d = S.doc;
     const at = d.updated_at || d.collected_at;
-    const note = el("p", "v4u-hint v4u-at", menu() === "router" ? "Arkism 라우터를 거친 요청만 세요. 에이전트가 직접 쓴 토큰은 MEMORY·AGENT 사용량에서 봐요." : at ? `1분마다 모아요 · 마지막 ${new Date(at).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}` : "");
+    const note = el("p", "v4u-hint v4u-at", menu() === "router" ? "Arkism 라우터를 거친 요청만 세요. 에이전트가 직접 쓴 토큰은 MEMORY·CREW 사용량에서 봐요." : at ? `1분마다 모아요 · 마지막 ${new Date(at).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}` : "");
     table.replaceChildren(...(at || menu() === "router" ? [note] : []), ...({ overview, requests, sessions, hours: hoursTab }[S.tab])(d));
     if (S.tab === "overview") window.ArkismModelBudget.mount({ container: table, scope: { ...state.scope }, request, el, button });
     if (S.tab === "requests") side("요청", requestsSide(d));

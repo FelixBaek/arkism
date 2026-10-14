@@ -1,9 +1,9 @@
-// AGENT › 팀 · 회의 · 디스코드 · 사용량 (Figma v4: 208:18425 팀, 310:19981 팀 — 새로 만들기, 208:19103 회의,
+// CREW › 팀 · 회의 · 디스코드 · 사용량 (Figma v4: 208:18425 팀, 310:19981 팀 — 새로 만들기, 208:19103 회의,
 // 208:19677 디스코드, 325:37545 사용량). Interface: the team/meeting/discord contract (2026-10-13).
 // A team is a crew record of type "team" (called @이름, same namespace as work agents; workflows keep $이름).
 // Meetings live in /v1/crew/meetings (the host engine runs the turns; this screen polls every 2 s while one runs),
 // Discord bots in /v1/discord (tokens go to the host keyring; the record keeps only the last four characters),
-// and AGENT › 사용량 reads /v1/crew/usage. Every cost here is an estimate from public list prices (marked 추정).
+// and CREW › 사용량 reads /v1/crew/usage. Every cost here is an estimate from public list prices (marked 추정).
 window.ArkismTeams = (ctx) => {
   "use strict";
   const { state, $, el, icon, button, go, render, request, query, notice, ago } = ctx;
