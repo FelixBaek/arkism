@@ -251,7 +251,7 @@ window.ArkismCodeGraph = (ctx) => {
     input.addEventListener("input", () => { clearTimeout(searchTimer); const v = input.value; searchTimer = setTimeout(() => search(v), 250); });
     input.addEventListener("keydown", (e) => { if (e.key === "Enter" && input.value.trim()) { clearTimeout(searchTimer); void search(input.value); void open(input.value.trim()); } });
     box.append(el("span", "cg-search-icon", "⌕"), input);
-    const folders = [...new Set((S.results?.items || []).map((h) => folderOf(h.loc)).filter(Boolean))].sort();
+    const folders = [...new Set((S.results?.items || []).map((h) => folderOf(h.loc)).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     bar.append(box,
       select("폴더", [["", "폴더: 전체"], ...folders.map((f) => [f, `폴더: ${f}`])], S.folder, (v) => { S.folder = v; paint(); }),
       select("정렬", [["rank", "가까운 순"], ["name", "이름 순"], ["path", "위치 순"]], S.sort, (v) => { S.sort = v; paint(); }));

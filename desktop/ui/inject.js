@@ -96,7 +96,7 @@
     const use7 = () => effect(state.data.tools?.memory_use);
     const use30 = () => effect(state.data.tools?.memory_use_30);
     const memRepo = (m) => (m.tags || []).find((t) => t.startsWith("repo:"))?.slice(5) || "";
-    const repos = () => [...new Set((state.data.memories || []).map(memRepo).filter(Boolean))].sort();
+    const repos = () => [...new Set((state.data.memories || []).map(memRepo).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     const textOf = (id) => { const m = (state.data.memories || []).find((x) => x.id === id); return m ? m.text : null; };
 
     async function countTokens(text) {

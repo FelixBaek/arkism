@@ -376,7 +376,7 @@ window.ArkismGit = (ctx) => {
     open.slice(0, 20).forEach((f) => {
       const c = el("div", "git-finding");
       const top = el("div", "git-finding-top");
-      top.append(el("span", `git-badge ${f.severity === "blocking" ? "warn" : "warn"}`, f.severity === "blocking" ? "심각" : "권고"), el("code", "", `${f.path}:${f.line}`));
+      top.append(el("span", "git-badge warn", f.severity === "blocking" ? "심각" : "권고"), el("code", "", `${f.path}:${f.line}`));
       c.append(top, el("p", "", f.text));
       sec.append(c);
     });

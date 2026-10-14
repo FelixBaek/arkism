@@ -13,7 +13,6 @@ window.ArkismCrew = (ctx) => {
   // 팀 이름(데이터)과 화면 문구가 한 줄에 섞일 때: 줄은 raw로 두고 문구만 만들 때 번역한다.
   const raw = (n) => { n.setAttribute("data-no-i18n", ""); return n; };
   const tr = (s) => (window.ArkismI18n ? window.ArkismI18n.translate(s) : s);
-  "use strict";
   const { state, $, el, icon, button, segment, render, request, query, notice, detailShell, section, copyButton, markSelected, openDetail, ago, models } = ctx;
   const kit = window.ArkismAssist(ctx);
   const pins = window.ArkismPins?.(ctx); // 항상 넣는 자료 (pins.js)

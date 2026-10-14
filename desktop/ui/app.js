@@ -1602,7 +1602,7 @@
     });
     search.append(icon("magnifying-glass"), q);
     tools.append(search);
-    const repos = [...new Set(source.map(memRepo).filter(Boolean))].sort();
+    const repos = [...new Set(source.map(memRepo).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     if (state.repo && state.repo !== "shared" && !repos.includes(state.repo)) state.repo = "";
     if (repos.length) {
       const shared = source.filter((m) => !memRepo(m)).length;

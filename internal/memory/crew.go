@@ -317,7 +317,7 @@ func noTeamFields(c Crew) bool {
 
 func optionalModel(m string) bool { return m == "" || crewModelRe.MatchString(m) }
 
-func validUSD(v float64) bool { return v >= 0 && v <= 1e5 && v == v }
+func validUSD(v float64) bool { return v >= 0 && v <= 1e5 } // NaN fails both comparisons
 
 // validCrewAgent: a template's fields (category optional) plus the agent's own.
 func validCrewAgent(c Crew) bool {
