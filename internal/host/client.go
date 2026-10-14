@@ -28,6 +28,8 @@ var (
 	// AgentsState holds agents.json, provider keys and runner tokens (was arkism_crew.STATE).
 	AgentsState = Env("ARKISM_AGENTS_STATE", filepath.Join(Home, ".config/arkism"))
 	SkillsRoot  = Env("ARKISM_SKILLS_ROOT", filepath.Join(Home, "skills"))
+	McpRoot     = Env("ARKISM_MCP_ROOT", filepath.Join(Home, "mcp"))
+	PluginsRoot = Env("ARKISM_PLUGINS_ROOT", filepath.Join(Home, "plugins"))
 	DataDir     = Env("ARKISM_DATA_DIR", filepath.Join(Home, ".local/share/arkism"))
 )
 

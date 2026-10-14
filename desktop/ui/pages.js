@@ -584,81 +584,96 @@ window.ArkismPages = (ctx) => {
     }
     return [roleModelsGroup(summary)];
   }
+  // Shared by 역할별 모델 and 라우팅 설정 › 스킬·MCP·플러그인: both edit models.json through set_model_roles.
+  const roleField = (value, label, placeholder, secret) => {
+    const i = el("input", "mono");
+    i.value = value || ""; i.placeholder = placeholder || ""; i.setAttribute("aria-label", label);
+    if (secret) { i.type = "password"; i.autocomplete = "off"; }
+    return i;
+  };
+  const roleSub = (label, input) => { const r = el("label", "v4-subfield"); r.append(el("span", "", label), input); return r; };
+  const roleBlock = (row, ...extra) => { const b = el("div", "v4-role"); b.append(row, ...extra); return b; };
+  const JUDGE = [["fixed", "고정"], ["chat", "내 모델"], ["clef", "Clef"], ["jev", "Jev"]];
+  const JUDGE_NAME = { fixed: "고정 규칙", chat: "내 모델", clef: "Clef", jev: "Jev" };
+  // Saves `patch` over the loaded roles and restarts the built-in Arkism. Empty secrets keep the saved ones.
+  async function saveRoles(cur, patch) {
+    notice("저장하고 Arkism을 다시 시작하는 중이에요.");
+    try {
+      const all = { ...cur, cloudflare_token: "", jev_key: "", picker_key: "", ...patch };
+      const roles = Object.fromEntries(Object.entries(all).filter(([k]) => !k.endsWith("_saved")));
+      await tauri.invoke("set_model_roles", { roles });
+      await startLocal();
+      notice("저장했어요.");
+      return true;
+    } catch (e) { notice(String(e).includes("invalid") ? "모델 이름이나 주소를 확인해 주세요." : "저장하지 못했어요."); return false; }
+  }
+  // 라우팅 판정 모델: its segment, the selected judge's fields, and read() → the patch, or null after telling what is missing.
+  function judgeBlock(cur) {
+    const savedHint = (k, placeholder) => (cur[`${k}_saved`] ? "저장됨 · 바꿀 때만 입력" : placeholder);
+    const account = roleField(cur.cloudflare_account, "Cloudflare 계정 ID", "account id");
+    const token = roleField("", "Cloudflare API 토큰", savedHint("cloudflare_token", "API token"), true);
+    const jevKey = roleField("", "Jev API 키", savedHint("jev_key", "API key"), true);
+    const pickerUrl = roleField(cur.picker_url, "판별 모델 주소", "http://127.0.0.1:11434/v1");
+    const pickerModel = roleField(cur.picker_model, "판별 모델", "qwen3:4b");
+    const pickerKey = roleField("", "판별 모델 API 키", savedHint("picker_key", "없으면 비워 두기"), true);
+    // Only the selected judge's settings are shown; the others keep their saved values.
+    const judgeFields = {
+      chat: [roleSub("주소", pickerUrl), roleSub("모델", pickerModel), roleSub("API 키", pickerKey)],
+      clef: [roleSub("Cloudflare 계정 ID", account), roleSub("Cloudflare API 토큰", token)],
+      jev: [roleSub("Jev API 키", jevKey)],
+    };
+    let judge = cur.judge;
+    const judgeBox = el("div", "v4-judge-fields");
+    const showJudge = (k) => judgeBox.replaceChildren(...(judgeFields[k] || []));
+    showJudge(judge);
+    const node = roleBlock(line("라우팅 판정 모델", "요청마다 맞는 모델과 스킬·MCP·플러그인을 골라요. 고정은 내장 규칙, 내 모델은 OpenAI 호환 주소, Clef는 Cloudflare Workers AI, Jev는 TypeSafe Jev를 써요.",
+      segment(JUDGE, judge, (k) => { judge = k; showJudge(k); })), judgeBox,
+      el("small", "v4-default", "기본값: 고정 · 키와 토큰은 이 PC의 Arkism 데이터 폴더에만 저장돼요"));
+    const read = () => {
+      const next = { judge, cloudflare_account: account.value.trim(), cloudflare_token: token.value.trim(), jev_key: jevKey.value.trim(),
+        picker_url: pickerUrl.value.trim(), picker_model: pickerModel.value.trim(), picker_key: pickerKey.value.trim() };
+      const has = (k) => next[k] || cur[`${k}_saved`];
+      if (judge === "clef" && (!next.cloudflare_account || !has("cloudflare_token"))) { notice("Clef를 쓰려면 Cloudflare 계정 ID와 토큰이 필요해요."); return null; }
+      if (judge === "jev" && !has("jev_key")) { notice("Jev를 쓰려면 API 키가 필요해요."); return null; }
+      if (judge === "chat" && (!next.picker_url || !next.picker_model)) { notice("내 모델로 판별하려면 주소와 모델 이름이 필요해요."); return null; }
+      if (judge === "chat" && !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(next.picker_url)) { notice("주소는 https이거나 이 PC(127.0.0.1)여야 해요."); return null; }
+      return next;
+    };
+    return { node, read };
+  }
+  const toRoutingSettings = () => { state.settingsTab = "routing"; state.menu = "router"; go("settings"); };
   function roleModelsGroup(summary) {
     const g = el("div", "v4-roles");
     let cur = null, saved = null, busy = false;
     const guard = (fn) => async () => { if (busy) return; busy = true; try { await fn(); } finally { busy = false; } };
     const body = el("div", "v4-roles-body");
     g.append(body);
-    const field = (value, label, placeholder, secret) => {
-      const i = el("input", "mono");
-      i.value = value || ""; i.placeholder = placeholder || ""; i.setAttribute("aria-label", label);
-      if (secret) { i.type = "password"; i.autocomplete = "off"; }
-      return i;
-    };
     const MODELS = [["haiku", "Haiku"], ["sonnet", "Sonnet"], ["opus", "Opus"]];
     const EMBED = [["auto", "자동"], ["ollama", "Ollama"], ["none", "끄기"]];
-    const JUDGE = [["fixed", "고정"], ["chat", "내 모델"], ["clef", "Clef"], ["jev", "Jev"]];
-    const JUDGE_NAME = { fixed: "고정 규칙", chat: "내 모델", clef: "Clef", jev: "Jev" };
     const nameOf = (list, k) => list.find(([x]) => x === k)?.[1] || k || "—";
-    const sub = (label, input) => { const r = el("label", "v4-subfield"); r.append(el("span", "", label), input); return r; };
-    const block = (row, ...extra) => { const b = el("div", "v4-role"); b.append(row, ...extra); return b; };
     function draw() {
-      const next = { ...cur, cloudflare_token: "", jev_key: "", picker_key: "" };
-      const savedHint = (k, placeholder) => (cur[`${k}_saved`] ? "저장됨 · 바꿀 때만 입력" : placeholder);
-      const embedModel = field(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b");
-      const account = field(cur.cloudflare_account, "Cloudflare 계정 ID", "account id");
-      const token = field("", "Cloudflare API 토큰", savedHint("cloudflare_token", "API token"), true);
-      const jevKey = field("", "Jev API 키", savedHint("jev_key", "API key"), true);
-      const pickerUrl = field(cur.picker_url, "판별 모델 주소", "http://127.0.0.1:11434/v1");
-      const pickerModel = field(cur.picker_model, "판별 모델", "qwen3:4b");
-      const pickerKey = field("", "판별 모델 API 키", savedHint("picker_key", "없으면 비워 두기"), true);
-      // Only the selected judge's settings are shown; the others keep their saved values.
-      const judgeFields = {
-        chat: [sub("주소", pickerUrl), sub("모델", pickerModel), sub("API 키", pickerKey)],
-        clef: [sub("Cloudflare 계정 ID", account), sub("Cloudflare API 토큰", token)],
-        jev: [sub("Jev API 키", jevKey)],
-      };
-      const judgeBox = el("div", "v4-judge-fields");
-      const showJudge = (k) => judgeBox.replaceChildren(...(judgeFields[k] || []));
-      showJudge(cur.judge);
+      const next = {};
+      const embedModel = roleField(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b");
+      const toJudge = el("button", "link-btn v4-link", "판정 모델은 ROUTER › 라우팅 설정 ›");
+      toJudge.type = "button";
+      toJudge.addEventListener("click", toRoutingSettings);
       const card = el("section", "pg-group v4-rows");
       card.append(
-        block(line("임베딩 모델", "의미로 기억을 찾을 때 써요. 자동은 이 PC의 Ollama에 모델이 있을 때만 켜요. 끄면 키워드로만 찾아요.",
-          segment(EMBED, cur.embedder, (k) => { next.embedder = k; })), sub("Ollama 모델 이름", embedModel), el("small", "v4-default", "기본값: 자동 (qwen3-embedding:0.6b) · 바꾸면 저장된 기억을 한 번 다시 색인해요")),
-        block(line("판정 모델", "라우팅에서 요청마다 맞는 모델과 스킬을 골라요. 고정은 내장 규칙, 내 모델은 OpenAI 호환 주소, Clef는 Cloudflare Workers AI, Jev는 TypeSafe Jev를 써요.",
-          segment(JUDGE, cur.judge, (k) => { next.judge = k; showJudge(k); })), judgeBox,
-          el("small", "v4-default", "기본값: 고정 · 키와 토큰은 이 PC의 Arkism 데이터 폴더에만 저장돼요")),
-        block(line("기억 추출 모델", "대화에서 기억 후보를 뽑아요. 자주 돌아서 가벼운 모델이 좋아요.", segment(MODELS, cur.extract_model, (k) => { next.extract_model = k; })), el("small", "v4-default", "기본값: Haiku")),
-        block(line("반성·검토 모델", "3시간마다 교훈을 정리하고 검토 대기와 정리 제안을 판단해요.", segment(MODELS, cur.reflect_model, (k) => { next.reflect_model = k; })), el("small", "v4-default", "기본값: Sonnet")));
+        roleBlock(line("임베딩 모델", "의미로 기억을 찾을 때 써요. 자동은 이 PC의 Ollama에 모델이 있을 때만 켜요. 끄면 키워드로만 찾아요.",
+          segment(EMBED, cur.embedder, (k) => { next.embedder = k; })), roleSub("Ollama 모델 이름", embedModel), el("small", "v4-default", "기본값: 자동 (qwen3-embedding:0.6b) · 바꾸면 저장된 기억을 한 번 다시 색인해요")),
+        roleBlock(toJudge),
+        roleBlock(line("기억 추출 모델", "대화에서 기억 후보를 뽑아요. 자주 돌아서 가벼운 모델이 좋아요.", segment(MODELS, cur.extract_model, (k) => { next.extract_model = k; })), el("small", "v4-default", "기본값: Haiku")),
+        roleBlock(line("반성·검토 모델", "3시간마다 교훈을 정리하고 검토 대기와 정리 제안을 판단해요.", segment(MODELS, cur.reflect_model, (k) => { next.reflect_model = k; })), el("small", "v4-default", "기본값: Sonnet")));
       const actions = el("div", "pg-actions");
       body.replaceChildren(card, actions);
-      // 기본값으로 (Figma 302:18838): fills the form with the app defaults; saved keys and addresses stay. 저장 applies it.
+      // 기본값으로 (Figma 302:18838): fills the form with the app defaults; the judge (라우팅 설정) stays. 저장 applies it.
       const reset = button("기본값으로", "ghost", null, () => {
-        cur = { ...cur, embedder: "auto", embed_model: "qwen3-embedding:0.6b", judge: "fixed", extract_model: "haiku", reflect_model: "sonnet" };
+        cur = { ...cur, embedder: "auto", embed_model: "qwen3-embedding:0.6b", extract_model: "haiku", reflect_model: "sonnet" };
         draw(); notice("기본값으로 채웠어요. 저장해야 적용돼요.");
       });
       actions.append(button("저장", "primary", null, guard(async () => {
         next.embed_model = embedModel.value.trim() || "qwen3-embedding:0.6b";
-        next.cloudflare_account = account.value.trim();
-        next.cloudflare_token = token.value.trim();
-        next.jev_key = jevKey.value.trim();
-        next.picker_url = pickerUrl.value.trim();
-        next.picker_model = pickerModel.value.trim();
-        next.picker_key = pickerKey.value.trim();
-        const has = (k) => next[k] || cur[`${k}_saved`];
-        if (next.judge === "clef" && (!next.cloudflare_account || !has("cloudflare_token"))) { notice("Clef를 쓰려면 Cloudflare 계정 ID와 토큰이 필요해요."); return; }
-        if (next.judge === "jev" && !has("jev_key")) { notice("Jev를 쓰려면 API 키가 필요해요."); return; }
-        if (next.judge === "chat" && (!next.picker_url || !next.picker_model)) { notice("내 모델로 판별하려면 주소와 모델 이름이 필요해요."); return; }
-        if (next.judge === "chat" && !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(next.picker_url)) { notice("주소는 https이거나 이 PC(127.0.0.1)여야 해요."); return; }
-        notice("저장하고 Arkism을 다시 시작하는 중이에요.");
-        try {
-          const roles = Object.fromEntries(Object.entries(next).filter(([k]) => !k.endsWith("_saved")));
-          await tauri.invoke("set_model_roles", { roles });
-          await startLocal();
-          notice("저장했어요.");
-          load();
-        } catch (e) { notice(String(e).includes("invalid") ? "모델 이름이나 주소를 확인해 주세요." : "저장하지 못했어요."); }
+        if (await saveRoles(cur, next)) load();
       })), reset);
       summary.replaceChildren(el("h3", "", "지금 쓰는 모델"),
         kvRow("임베딩", saved.embedder === "none" ? "끄기" : `${saved.embed_model || "qwen3-embedding:0.6b"} · ${nameOf(EMBED, saved.embedder)}`),
@@ -669,6 +684,43 @@ window.ArkismPages = (ctx) => {
     }
     load();
     return g;
+  }
+  // 설정 › 라우팅 설정 › 스킬·MCP·플러그인 (Figma 198:458, top card): the judge, then where skills, MCP servers and plugins live.
+  // Kept across re-renders of the tab so typed paths survive the routing data reloading; dropped when the tab changes.
+  let kitCard = null;
+  const ROOTS = [["skills_root", "스킬 폴더"], ["mcp_root", "MCP 폴더"], ["plugins_root", "플러그인 폴더"]];
+  function routingKitCard() {
+    if (kitCard) return kitCard;
+    const c = kitCard = el("section", "rt-set-card rt-kit-card");
+    const head = el("div", "rt-ctl-head"); head.append(el("h3", "", "스킬·MCP·플러그인"));
+    c.append(head, el("p", "rt-set-hint", "모든 에이전트가 라우팅을 통해 하나로 관리합니다. 요청마다 판정 모델이 스킬·MCP·플러그인 중 맞는 것을 골라요."));
+    if (!(tauri && state.mode === "local")) { c.append(el("p", "rt-set-hint rt-kit-ro", "서버에 연결해 쓰는 동안에는 서버가 정한 위치와 모델을 써요.")); return c; }
+    const body = el("div", "rt-kit-body");
+    c.append(body);
+    let busy = false;
+    const draw = (cur) => {
+      const judge = judgeBlock(cur);
+      const inputs = ROOTS.map(([k, label]) => [k, roleField(cur[k], label, "기본 위치")]);
+      const folders = roleBlock(line("폴더 위치", "비워 두면 기본 위치(데이터 폴더 아래 skills·mcp·plugins)를 써요", el("span")),
+        ...inputs.map(([, i], n) => roleSub(ROOTS[n][1], i)));
+      const actions = el("div", "pg-actions");
+      actions.append(button("저장", "primary", null, async () => {
+        if (busy) return;
+        const patch = judge.read();
+        if (!patch) return;
+        for (const [k, i] of inputs) {
+          const v = i.value.trim();
+          if (v && !/^(\/|[A-Za-z]:[\\/])/.test(v)) { notice("폴더 위치는 / 또는 드라이브 문자(C:\\)로 시작하는 전체 경로여야 해요."); return; }
+          patch[k] = v;
+        }
+        busy = true;
+        try { if (await saveRoles(cur, patch)) load(); } finally { busy = false; }
+      }));
+      body.replaceChildren(judge.node, folders, actions);
+    };
+    const load = () => tauri.invoke("model_roles").then(draw, () => body.replaceChildren(el("p", "pg-hint", "모델 설정을 읽지 못했어요.")));
+    load();
+    return c;
   }
 
   // 설정 › 연결 (Figma 293:18786): 연결 방식 on the left; what is connected now, switching back and 진단 on the right.
@@ -997,11 +1049,11 @@ window.ArkismPages = (ctx) => {
   function renderSettings() {
     if (!SETTINGS_TABS[state.settingsTab]) state.settingsTab = "general";
     const tab = state.settingsTab;
-    if (shownTab !== tab) { draft = null; open = null; shownTab = tab; }
+    if (shownTab !== tab) { draft = null; open = null; kitCard = null; shownTab = tab; }
     $("#controls").replaceChildren();
     sideParts = []; headParts = [];
     const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote };
-    const body = { general: tabGeneral, connect: tabConnect, roles: tabRoles, appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => routing.tab(kit),
+    const body = { general: tabGeneral, connect: tabConnect, roles: tabRoles, appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => [routingKitCard(), ...routing.tab(kit)],
       workflow: () => crew.settingsTab({ group }), categories: tabCategories, update: tabUpdate, advanced: tabAdvanced }[tab]();
     if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고칠 수 있어요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
     const content = el("div", `pg-content v4-set v4-set-${tab}`);
