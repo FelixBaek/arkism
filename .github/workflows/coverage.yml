@@ -25,7 +25,8 @@ jobs:
         image: pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d # pg17
         env:
           POSTGRES_USER: arkism
-          POSTGRES_PASSWORD: arkism
+          # Throwaway DB on a loopback-only port of a disposable runner.
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: arkism_ci
         ports:
           - 127.0.0.1:5432:5432
@@ -46,7 +47,7 @@ jobs:
           node-version: 22
       - name: Go coverage
         env:
-          POSTGRES_TEST_DSN: postgres://arkism:arkism@127.0.0.1:5432/arkism_ci?sslmode=disable
+          POSTGRES_TEST_DSN: postgres://arkism@127.0.0.1:5432/arkism_ci?sslmode=disable
         run: go test -covermode=atomic -coverprofile=go-coverage.out ./...
       - name: UI coverage
         run: >
