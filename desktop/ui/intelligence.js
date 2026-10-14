@@ -193,7 +193,7 @@ window.ArkismIntelligence = (ctx, tab) => {
       event.preventDefault(); if (busy) return;
       const value = input.value.trim();
       if ((!twin && !edges && !value) || new TextEncoder().encode(value).length > 128) { input.setCustomValidity((twin || edges) ? "검색어를 조금 짧게 줄여주세요." : "주제를 입력하거나 조금 짧게 줄여주세요."); input.reportValidity(); return; }
-      subject = value; load();
+      subject = value; void load();
     });
     input.addEventListener("input", () => input.setCustomValidity(""));
     $("#chips").append(form); paint();

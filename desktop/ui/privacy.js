@@ -93,7 +93,7 @@ window.ArkismPrivacy = (ctx) => {
     const byDate = button("날짜로 정하기", "small", null, () => {
       const at = date.value ? new Date(`${date.value}T00:00`) : null;
       if (!at || !(at > new Date())) { date.setCustomValidity("오늘 이후 날짜를 고르세요."); date.reportValidity(); return; }
-      setExpiry(m, at, box);
+      void setExpiry(m, at, box);
     });
     date.addEventListener("input", () => date.setCustomValidity(""));
     box.append(date, byDate);
@@ -181,7 +181,7 @@ window.ArkismPrivacy = (ctx) => {
       } finally { go.disabled = false; find.disabled = false; for (const b of actions.querySelectorAll(".danger")) if (!preview) b.remove(); }
     }
     input.addEventListener("input", () => input.setCustomValidity(""));
-    form.addEventListener("submit", (event) => { event.preventDefault(); look(); });
+    form.addEventListener("submit", (event) => { event.preventDefault(); void look(); });
     show();
     return g;
   }

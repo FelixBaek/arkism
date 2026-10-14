@@ -49,7 +49,7 @@ window.ArkismSkillExecution = ({ state, el, button, tauri }) => {
           if (busy || !live(ticket)) return;
           current ||= pending.get(pendingKey()) || { event_id: crypto.randomUUID(), profile_id: select.value };
           pending.set(pendingKey(), current);
-          select.disabled = true; act("start", { candidate: target, event_id: current.event_id, profile_id: current.profile_id }, content);
+          select.disabled = true; void act("start", { candidate: target, event_id: current.event_id, profile_id: current.profile_id }, content);
         });content.append(label,start);note.textContent = "동일 과제로 기존 버전과 후보를 비교해요. 실행만으로 승인·적용되지는 않아요.";
       } catch (_) { if (live(ticket)) note.textContent = "불러오지 못했어요. SSH 연결과 평가 서버의 범위·API 설정을 확인해 주세요."; }
       finally { busy = false;if(live(ticket)) input.disabled = find.disabled = false; }
@@ -72,6 +72,6 @@ window.ArkismSkillExecution = ({ state, el, button, tauri }) => {
       finally { busy=false;if(live(ticket)){ input.disabled=find.disabled=false;body.querySelectorAll("button,select").forEach(node=>node.disabled=node.dataset.executionProfile === "true" && Boolean(current?.event_id)); } }
     }
   }
-  box.addEventListener("toggle", () => { if(box.open)draw();else{epoch++;body.replaceChildren();} });return box;
+  box.addEventListener("toggle", () => { if(box.open)void draw();else{epoch++;body.replaceChildren();} });return box;
 };
 };

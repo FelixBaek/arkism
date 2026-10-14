@@ -376,7 +376,7 @@
     render();
     try {
       const canReview = !!state.caps?.actions?.review_list;
-      request("/readyz").then(() => true, () => false).then((ok) => { if (g === generation) { state.ready = ok; renderStatusCard(); } });
+      void request("/readyz").then(() => true, () => false).then((ok) => { if (g === generation) { state.ready = ok; renderStatusCard(); } });
       const reviewsReq = reviews.load();
       const trashReq = loadTrash();
       const usageReq = request(`/v1/skills/usage?${query({ days: 60 })}`).then((r) => new Map((r.items || []).map((u) => [u.skill_id, u])), () => null);
@@ -399,7 +399,7 @@
       setStatus("ready", "기억 저장소·검색 정상");
       render();
       renderStatusCard();
-      loadUsage(g);
+      void loadUsage(g);
     } catch (e) {
       if (g !== generation) return;
       state.loading = false;
@@ -1025,7 +1025,7 @@
       $("#detail").replaceChildren();
       return;
     }
-    if (["skills", "agent"].includes(state.view) && !state.versionsDone) loadVersions(generation);
+    if (["skills", "agent"].includes(state.view) && !state.versionsDone) void loadVersions(generation);
     const scroll = table.scrollTop;
     const page = pages.views[state.view] || crew.pages[state.view];
     $("#app").classList.toggle("wide", !!page && !page.keepDetail);
@@ -1132,7 +1132,7 @@
     notice("");
     $("#table").scrollTop = 0;
     render();
-    syncVisible({ type: "navigation" });
+    void syncVisible({ type: "navigation" });
   }
   function segment(tabs, current, onPick) {
     const s = el("div", "segment");
@@ -1390,7 +1390,7 @@
     if (week.g !== generation) {
       week = { g: generation, doc: undefined };
       const g = generation;
-      request(`/v1/usage/summary?${query({ range: "7d" })}`).then((d) => (d?.kpi ? d : null), () => null)
+      void request(`/v1/usage/summary?${query({ range: "7d" })}`).then((d) => (d?.kpi ? d : null), () => null)
         .then((doc) => { if (week.g !== g) return; week.doc = doc; if (state.view === "todo" && !state.selected) render(false); });
     }
     const k = week.doc?.kpi;
@@ -1695,7 +1695,7 @@
           ok.addEventListener("click", (e) => {
             e.stopPropagation();
             if (c.conflict_id) { state.selected = c.id; markSelected(); renderDetail(); openDetail(); return; }
-            decide(c, "approve", "");
+            void decide(c, "approve", "");
           });
           const no = el("button", "icon-btn"); no.type = "button"; no.title = "버리기"; no.setAttribute("aria-label", "버리기"); no.append(icon("x"));
           no.addEventListener("click", (e) => {
@@ -2360,7 +2360,7 @@
         explain();
       } finally { busy = go.disabled = false; }
     }
-    ask.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) run(); });
+    ask.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void run(); });
     return wrap;
   }
   // 휴지통·중복 (Figma 198:4500)
@@ -2389,7 +2389,7 @@
     };
     const list = el("div", "v4s-list");
     if (tab === "trash") {
-      list.append(...gone.map((sk) => { const b = el("span", "v4s-link", "되돌리기"); b.addEventListener("click", (e) => { e.stopPropagation(); restoreSkill(sk); }); return line(sk, b); }));
+      list.append(...gone.map((sk) => { const b = el("span", "v4s-link", "되돌리기"); b.addEventListener("click", (e) => { e.stopPropagation(); void restoreSkill(sk); }); return line(sk, b); }));
       if (!gone.length) list.append(el("div", "empty", "휴지통이 비어 있어요."));
     } else if (tab === "unused") {
       list.append(...idle.map((sk) => { const b = el("span", "v4s-link", "휴지통으로"); b.addEventListener("click", (e) => { e.stopPropagation(); confirmBatch([sk], () => trashSkills([sk])); }); return line(sk, b); }));
@@ -3056,7 +3056,7 @@
   // The 이 프롬프트로 만들기 button on top of the 실행 page.
   function runPrompt(btn) {
     const p = state.data.prompts.find((x) => x.id === state.promptRun);
-    if (p) promptKit(p).run(btn, $("#prompt-run-out"));
+    if (p) void promptKit(p).run(btn, $("#prompt-run-out"));
   }
   const promptDialog = $("#prompt-dialog");
   let editing = null;
@@ -3107,7 +3107,7 @@
       drawDialogImages();
     }
   }
-  $("#p-image-file").addEventListener("change", (e) => { addImages(e.target.files); e.target.value = ""; });
+  $("#p-image-file").addEventListener("change", (e) => { void addImages(e.target.files); e.target.value = ""; });
 
   // 반짝이 (이름 옆): AI reads the prompt and the fields already filled, names the prompt, and fills the empty
   // category·what to leave out·size; the size comes from the first image's shape when there is one. Only on click.
@@ -3165,7 +3165,7 @@
     const files = [...(e.clipboardData?.files || [])];
     if (!files.some((f) => f.type.startsWith("image/"))) return;
     e.preventDefault();
-    addImages(files);
+    void addImages(files);
   });
   // 종류·모델 as pills over the two selects (the form still reads the selects).
   function pillsFor(select, box, label) {
@@ -4093,7 +4093,7 @@
           setTimeout(() => dlg.close(), 1500);
         } catch (e) {
           show(`다시 연결하지 못했어요: ${e.message}`, "error");
-          refreshTools();
+          void refreshTools();
         } finally {
           busy = false;
           go_.disabled = false;
@@ -4372,7 +4372,7 @@
   function openCandidateFix(c) {
     const text = prompt("고친 문장을 쓰세요. 내가 직접 말한 기억으로 저장돼요.", c.text);
     if (!text?.trim() || text.trim() === c.text) return;
-    (async () => {
+    void (async () => {
       try {  // edit_approve keeps the candidate's sources and kind
         await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/review`, {
           method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: c.revision, action: "edit_approve", content: text.trim() })
@@ -4497,11 +4497,11 @@
       : `${why}. 저장하면 모든 에이전트가 자료로 써요.`;
     if (canDecide) {
       const reason = el("textarea"); reason.id = "reject-reason"; reason.rows = 2; reason.placeholder = "버리는 이유 (버릴 때만 필요해요)"; reason.setAttribute("aria-label", "버리는 이유");
-      const ok = button("그대로 저장", instructionLike ? "ghost small" : "primary small", null, () => { ok.disabled = no.disabled = true; decide(c, "approve", ""); });
+      const ok = button("그대로 저장", instructionLike ? "ghost small" : "primary small", null, () => { ok.disabled = no.disabled = true; void decide(c, "approve", ""); });
       const fix = button("고쳐서 저장", "small", null, () => openCandidateFix(c));
       const no = button("버리기", instructionLike ? "primary small" : "ghost small", null, () => {
         if (!reason.value.trim()) { reason.focus(); notice("버리는 이유를 적어 주세요."); return; }
-        ok.disabled = no.disabled = true; decide(c, "reject", reason.value.trim());
+        ok.disabled = no.disabled = true; void decide(c, "reject", reason.value.trim());
       });
       const card = actionCard(text, ...(instructionLike ? [no, fix, ok] : [ok, fix, no]));
       card.insertBefore(reason, card.lastChild);
@@ -4937,7 +4937,7 @@
   $("#local-link").addEventListener("click", useLocal);
   $("#unlock-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    unlockConnect(true);
+    void unlockConnect(true);
   });
   document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => go(b.dataset.view, b.dataset.tab)));
   $("#search").addEventListener("input", (e) => {
@@ -5026,13 +5026,13 @@
   Object.assign(views, pages.views);
   Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // AGENT › 팀·회의·디스코드·사용량 (team.js)
   Object.assign(views, crew.views, crew.pages, reviews.views);
-  (async () => {
+  void (async () => {
     const defaults = tauri ? await tauri.invoke("app_defaults").catch(() => null) : null;
     if (defaults) Object.assign(state.defaults, defaults);
     if (state.defaults.local && stored("arkism.mode") !== "remote") return startLocal();
     state.mode = "remote";
     lock();
     // 지난번에 연결한 서버로 다시 붙는다.
-    if (state.ssh && stored("arkism.mode") === "remote" && tauri) unlockConnect();
+    if (state.ssh && stored("arkism.mode") === "remote" && tauri) void unlockConnect();
   })();
 })();

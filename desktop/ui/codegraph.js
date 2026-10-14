@@ -249,7 +249,7 @@ window.ArkismCodeGraph = (ctx) => {
     const input = el("input"); input.type = "search"; input.placeholder = "함수·타입 이름 찾기 (Enter: 이름으로 바로 열기)"; input.value = S.q;
     input.setAttribute("aria-label", "심볼 찾기");
     input.addEventListener("input", () => { clearTimeout(searchTimer); const v = input.value; searchTimer = setTimeout(() => search(v), 250); });
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && input.value.trim()) { clearTimeout(searchTimer); search(input.value); open(input.value.trim()); } });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter" && input.value.trim()) { clearTimeout(searchTimer); void search(input.value); void open(input.value.trim()); } });
     box.append(el("span", "cg-search-icon", "⌕"), input);
     const folders = [...new Set((S.results?.items || []).map((h) => folderOf(h.loc)).filter(Boolean))].sort();
     bar.append(box,
@@ -420,7 +420,7 @@ window.ArkismCodeGraph = (ctx) => {
     const first = el("option", "", "PR 바꾸기"); first.value = ""; pick.append(first);
     prs.forEach((p) => { const o = data("option", "", `#${p.number} ${p.title}`); o.value = String(p.number); pick.append(o); });
     pick.value = "";
-    pick.addEventListener("change", () => { if (pick.value) loadPr(Number(pick.value)); });
+    pick.addEventListener("change", () => { if (pick.value) void loadPr(Number(pick.value)); });
     box.append(left, pick);
     return box;
   }
@@ -430,7 +430,7 @@ window.ArkismCodeGraph = (ctx) => {
     const pr = S.pr, parts = [prPicker()];
     if (!pr.number) {
       const first = host.prs().find((p) => p.state === "open");
-      if (first && !pr.busy) queueMicrotask(() => { if (!S.pr.number) loadPr(first.number); });
+      if (first && !pr.busy) queueMicrotask(() => { if (!S.pr.number) void loadPr(first.number); });
       return parts;
     }
     if (pr.error) { parts.push(el("p", "git-error", pr.error)); return parts; }
@@ -469,7 +469,7 @@ window.ArkismCodeGraph = (ctx) => {
       });
       if (!items.length) list.append(el("p", "git-empty", "바뀐 줄에 걸치는 함수·메서드가 색인에 없어요."));
     } else {
-      union.sort((a, b) => (a.depth - b.depth) || a.loc.localeCompare(b.loc)).forEach((h) => list.append(symRow(h, false, () => { host.setMode("code"); open(h.id); }, el("span", "cg-quiet", `깊이 ${h.depth}`))));
+      union.sort((a, b) => (a.depth - b.depth) || a.loc.localeCompare(b.loc)).forEach((h) => list.append(symRow(h, false, () => { host.setMode("code"); void open(h.id); }, el("span", "cg-quiet", `깊이 ${h.depth}`))));
       if (!union.length) list.append(el("p", "git-empty", "영향 받는 곳이 없어요."));
     }
     parts.push(list);
@@ -507,11 +507,11 @@ window.ArkismCodeGraph = (ctx) => {
     const acts = el("div", "cg-acts");
     acts.append(button("코드 리뷰에서 보기", "primary", null, () => host.openReview(`review:${host.gitRepo}#${d.number}`)));
     const code = codeButton(h.loc); if (code) acts.append(code);
-    acts.append(button("코드 그래프에서 열기", "", null, () => { host.setMode("code"); open(h.id); }));
+    acts.append(button("코드 그래프에서 열기", "", null, () => { host.setMode("code"); void open(h.id); }));
     act.append(acts);
     box.append(act);
     const s1 = section("깊이별 영향", `${num(c.impact_total)}곳`);
-    if (c.impact.length) s1.append(depthBars(c.impact, false, (id) => { host.setMode("code"); open(id); }));
+    if (c.impact.length) s1.append(depthBars(c.impact, false, (id) => { host.setMode("code"); void open(id); }));
     else s1.append(el("p", "cg-fine", "영향 받는 곳이 없어요."));
     if (c.truncated) s1.append(el("p", "cg-fine warn", REASON[c.reason] || "일부만 셌어요"));
     box.append(s1);
