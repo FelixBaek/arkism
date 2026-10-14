@@ -85,8 +85,6 @@
   }
   const shownAgents = () => pages.shownAgents();
   const agentName = (key) => (AGENTS.find(([k]) => k === key) || [, key])[1];
-  // The sidebar names each agent by the company behind it.
-  const PROVIDERS = { claude_code: "Anthropic", codex: "OpenAI", gemini: "Google", zcode: "Z.ai", grok: "xAI" };
   // Agents the server reports beyond the skill router's runtimes (ones the owner added by hand). They read only their own
   // skill folder, so the sidebar shows that folder's count and opens 설정 › 에이전트, and the status card shows their connection.
   const extraAgents = () => (state.data.tools?.agents || []).filter((a) => pages.agentWanted(a) && !AGENTS.some(([k]) => k === a.id));
@@ -1131,24 +1129,6 @@
     const strong = el("strong", warn ? "warn" : "", value);
     s.append(el("p", "", label), strong, el("span", "", unit));
     return s;
-  }
-  // cols: 글자 또는 [글자, 정렬키]. sort = { key, dir, pick(key) } 이면 정렬키가 있는 열이 눌린다.
-  function header(cols, template, sort) {
-    const h = el("div", "thead");
-    h.style.gridTemplateColumns = template;
-    cols.forEach((c) => {
-      const [label, key] = Array.isArray(c) ? c : [c];
-      if (!sort || !key) return h.append(el("span", "", label));
-      const on = sort.key === key;
-      const b = el("button", `th-sort${on ? " on" : ""}`, label);
-      b.type = "button";
-      const order = sort.dir > 0 ? "ascending" : "descending";
-      b.setAttribute("aria-sort", on ? order : "none");
-      if (on) b.append(el("i", "th-arrow", sort.dir > 0 ? "▲" : "▼"));
-      b.addEventListener("click", () => sort.pick(key));
-      h.append(b);
-    });
-    return h;
   }
   function row(id, template, cells, onClick) {
     const r = el("button", `row${state.selected === id ? " selected" : ""}`);
@@ -2391,12 +2371,6 @@
   // ---------------------------------------------------------------- MCP·플러그인 (TOOLS)
   // Which agents' tool servers the host sync reads; the rest are only filtered by what the server reported.
   const AGENT_SYNC = { claude_code: "서버의 ~/.claude.json을 1분마다 읽어요", codex: "서버의 codex mcp list를 1분마다 읽어요" };
-  function openTool(e) {
-    state.toolTab = toolKind(e);
-    go("tools");
-    state.selected = `tool:${e.name}`;
-    render();
-  }
 
   // ---------------------------------------------------------------- 이미지
   const ENGINES = { gemini: "Gemini", gpt: "GPT", claude: "Claude", grok: "Grok", comfyui: "ComfyUI", other: "기타" };
@@ -4239,15 +4213,6 @@
     if (staged) return staged === "allow" ? " · 추가 예정" : " · 뺄 예정";
     return compatOf(sk)[k] === "requires_adapter" ? " · 어댑터" : "";
   }
-  function blockedCallout(sk) {
-    const off = AGENTS.filter(([k]) => !allowed(sk, k) && !state.pending.has(`${sk.id}|${k}`));
-    if (!off.length) return null;
-    const [k, n] = off[0];
-    const more = off.slice(1).map(([, x]) => x).join("·");
-    const c = callout(`${n}에서 이 스킬을 못 써요`, more ? `${more}도 막혀 있어요.` : "추가하고 적용하면 바로 받아요.");
-    c.append(button(`${n}에 추가`, "", "plus", () => stage(sk.id, k, "allow")));
-    return c;
-  }
   // PC에서 이 서버로 마지막 통신한 때를 색으로: 24시간 안·밀린 것 없음 초록, 오래됐거나 밀림 주황, 마지막 시도가 실패면 빨강, 기록 없으면 회색.
   const PC_STALE_MS = 24 * 3600 * 1000;
   function pcStatus(l) { // → [색 이름, 설명]
@@ -4278,45 +4243,6 @@
     }
     return row;
   }
-  function agentGrid(sk) {
-    const ag = section("에이전트", `${AGENTS.filter(([k]) => allowed(sk, k)).length} / ${AGENTS.length}`);
-    const grid = el("div", "agents");
-    for (const [k, n, logo] of AGENTS) {
-      const staged = state.pending.get(`${sk.id}|${k}`);
-      const cls = ["agent", "clickable", allowed(sk, k) ? "on" : "none"];
-      if (staged) cls.push("staged");
-      const a = el("button", cls.join(" "));
-      a.type = "button";
-      a.append(agentLogo(logo, n), el("span", "agent-label", n + agentNote(sk, k, staged)), pcLink(k));
-      a.title = "누르면 어떻게 적용되는지 보여 줘요";
-      a.addEventListener("click", () => skillAgentPopup(sk, k, n));
-      grid.append(a);
-    }
-    ag.append(grid, el("p", "meta", "테두리가 진하면 쓰는 중, 점선이면 안 써요."), pcLegend());
-    return ag;
-  }
-  function skillAgentPopup(sk, k, n) {
-    const on = allowed(sk, k);
-    const staged = state.pending.get(`${sk.id}|${k}`);
-    const rows = [
-      on ? `지금 ${n}에서 이 스킬을 써요.` : `지금 ${n}에서는 이 스킬을 못 써요.`,
-      `${on ? "빼면" : "추가하면"} Arkism이 ${n}에 이 스킬을 ${on ? "막아요" : "열어 줘요"}. ‘적용’을 눌러야 실제로 바뀌고, ${n}은 다음 대화부터 바로 받아요.`,
-    ];
-    if (staged) rows.push(`지금 ‘${staged === "allow" ? "추가" : "빼기"} 예정’으로 표시돼 있어요. 위쪽 ‘바뀐 칸 → 적용’에서 한꺼번에 적용할 수도 있어요.`);
-    const others = state.pending.size - (staged ? 1 : 0);
-    if (others > 0) rows.push(`‘지금’을 누르면 예정으로 둔 다른 칸 ${others}개도 함께 적용돼요.`);
-    applyPopup(`${n} · ${sk.name}`, "스킬", rows, (dlg) => {
-      const now = button(on ? "지금 빼기" : "지금 추가", "primary", null, async () => {
-        if (!staged) toggleCell(sk, k);
-        dlg.close();
-        await applyChanges();
-      });
-      let laterLabel = on ? "뺄 예정으로" : "추가 예정으로";
-      if (staged) laterLabel = "예정 취소";
-      const later = button(laterLabel, "ghost", null, () => { toggleCell(sk, k); dlg.close(); });
-      return [later, now];
-    });
-  }
   function checksSection(sk) {
     const c = skillChecks(sk);
     const sec = section("품질·보안 검사");
@@ -4336,14 +4262,6 @@
     sec.append(dl, el("p", "meta", note));
     return sec;
   }
-  function bulletSection(title, items) {
-    if (!items?.length) return null;
-    const sec = section(title);
-    const ul = el("ul", "bullets");
-    items.forEach((i) => ul.append(el("li", "", i)));
-    sec.append(ul);
-    return sec;
-  }
   // 서버에게 원본 저장소를 지금 다시 확인하게 한다 (서버는 6시간마다 확인). 1분 안에 결과가 돌아온다.
   async function checkSkillRepo(r) {
     try {
@@ -4357,22 +4275,6 @@
   // 스킬이 든 저장소: 원본 주소, 지금 커밋, 새 버전이 있는지, 서버가 마지막으로 확인한 때 (서버가 6시간마다 git fetch)
   const repoOf = (sk) => (state.data.tools?.skill_repos || []).filter((r) => (sk.source_path || "").includes(`${r.repo.replace(/^~/, "")}/`))
     .sort((x, y) => y.repo.length - x.repo.length)[0] || null;
-  function updateSection(sk) {
-    const r = repoOf(sk);
-    if (!r) return null;
-    const sec = section("업데이트");
-    const checking = (state.data.tools?.requests || []).some((q) => q.kind === "skill_check" && q.name === r.repo && q.status === "pending");
-    const check = button(checking ? "확인 중…" : "업데이트 확인", "ghost small", "arrows-clockwise", () => checkSkillRepo(r));
-    check.disabled = checking;
-    sec.querySelector("h3").append(check);
-    const row = el("div", "update-row");
-    row.append(icon("link"), el("span", "mono update-remote", r.remote || r.repo), el("span", "mono update-head", r.head || ""),
-      el("span", "update-state " + (r.behind ? "warn" : "ok"), r.behind ? `새 커밋 ${r.behind}개` : "✓ 최신"));
-    sec.append(row, el("p", "meta", "마지막 확인 · " + ago(r.checked_at)));
-    const ups = (state.data.tools?.skill_updates || []).filter((u) => u.repo === r.repo);
-    if (r.behind && ups.length) sec.append(button("업데이트 받기", "", "arrows-clockwise", () => updateSkills(ups)));
-    return sec;
-  }
   function openDetail() { $("#app").classList.add("detail-open"); }
   function closeDetail() {
     $("#app").classList.remove("detail-open"); state.selected = null;
