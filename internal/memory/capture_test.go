@@ -69,7 +69,7 @@ func TestCaptureRejectsSecretsWithoutStoringAnything(t *testing.T) {
 	if got[0].Status != "rejected" || got[0].Reason != "secret_detected" {
 		t.Fatal("secret not rejected", got)
 	}
-	if after := len(f.repo.store["sources"]) + len(f.repo.store["memory_candidates"]); after != before {
+	if len(f.repo.store["sources"])+len(f.repo.store["memory_candidates"]) != before {
 		t.Fatal("secret claim left records behind")
 	}
 	audited := false

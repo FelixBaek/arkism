@@ -34,7 +34,7 @@
 .app.v4-connect .panel-main > .stats { display: block; }
 .app.v4-connect .panel-main > .stats:empty, .app.v4-connect .panel-main > .controls:empty, .app.v4-connect .panel-main > .chips:empty { display: none; }
 .app.v4-connect .panel-main { overflow: auto; }
-.app.v4-connect .table-wrap { overflow: visible; flex: none; }
+.app.v4-connect .table-wrap { overflow: visible; flex: none; width: 100%; }
 
 /* ---------------------------------------------------------------- summary tiles */
 .cn-tiles { display: flex; gap: 8px; }
@@ -106,7 +106,7 @@
 .cn-facts dd.warn { color: var(--nc-amber); }
 .cn-callout { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border-radius: var(--nc-radius-control); background: var(--nc-amber-bg); }
 .cn-callout p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
-.cn-callout strong { font-weight: 500; }
+.cn-callout strong { font-weight: 500; display: block; margin-bottom: 2px; }
 
 .cn-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .cn-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid transparent; border-radius: 6px; background: var(--nc-raised); color: var(--nc-text); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
@@ -131,10 +131,9 @@
 dialog.cn-confirm { width: min(420px, calc(100vw - 32px)); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); background: var(--nc-surface); color: var(--nc-text); }
 dialog.cn-confirm form { display: flex; flex-direction: column; gap: 20px; padding: 24px; }
 dialog.cn-confirm h2 { margin: 0; font: 500 calc(17px * var(--fs, 1))/1.5 var(--sans); }
-dialog.cn-confirm p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+dialog.cn-confirm p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); white-space: pre-line; }
 .cn-confirm-btns { display: flex; gap: 8px; }
 dialog.cn-confirm .btn.danger { border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-amber); }
-.app.v4-connect .table-wrap { width: 100%; }
 .app.v4-connect .table-wrap > .cn-list { width: 100%; }
 
 /* ---------------------------------------------------------------- 확인해 주세요 card (amber-bg) */
@@ -370,7 +369,6 @@ dialog.rv-settings .dialog-foot { padding: 12px 24px 20px; border-top: 0; }
 dialog.rv-settings .dialog-foot .btn { min-height: 34px; padding: 7px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 dialog.rv-settings .dialog-foot .btn.primary { background: var(--nc-action); border-color: var(--nc-action); color: var(--nc-on-accent); }
 .app.v4-connect .table-wrap > * { flex: 1 1 auto; min-width: 0; }
-dialog.cn-confirm p { white-space: pre-line; }
 
 /* ---------------------------------------------------------------- MCP 서버 추가 (Figma 198:4586): form | 최근 요청 · 방식 고르기 */
 dialog.mcp-add { width: min(960px, calc(100vw - 32px)); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); background: var(--nc-canvas); }
@@ -433,6 +431,5 @@ dialog.apply-pop .apply-paste { display: flex; flex-direction: column; gap: 8px;
 dialog.apply-pop .apply-paste a { color: var(--nc-accent); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 dialog.apply-pop .apply-paste input { min-height: 40px; padding: 8px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--mono); }
 dialog.apply-pop .dialog-foot { padding: 12px 24px 20px; border-top: 0; }
-.cn-callout strong { display: block; margin-bottom: 2px; }
 /* round 3: AI가 고쳐서 올리기 above the findings */
 .app.v4-connect .rv-fix-all { align-self: flex-start; width: auto; margin-bottom: 4px; }

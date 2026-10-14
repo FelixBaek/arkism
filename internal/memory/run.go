@@ -35,8 +35,8 @@ func validRun(x *RunDetails, scope Scope, now time.Time) bool {
 	}
 	return terminalOutcome(x.Outcome) && x.FinishedAt != nil && !x.FinishedAt.Truncate(time.Millisecond).IsZero() && !x.FinishedAt.Before(x.StartedAt) && !x.FinishedAt.After(now)
 }
-func validRunLabel(value string, max int) bool {
-	return len(value) > 0 && len(value) <= max && strings.TrimSpace(value) == value && strings.IndexFunc(value, unicode.IsControl) < 0
+func validRunLabel(value string, maxN int) bool {
+	return len(value) > 0 && len(value) <= maxN && strings.TrimSpace(value) == value && strings.IndexFunc(value, unicode.IsControl) < 0
 }
 
 func (s *Service) FinishRun(ctx context.Context, token, id string, in FinishRunInput) (Ref, error) {

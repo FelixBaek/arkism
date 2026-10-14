@@ -13,9 +13,9 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 # Per-builder values (not in git): see README.md. Explicit environment wins over the file.
-if [ -f "$DIR/local.env" ]; then
+if [[ -f "$DIR/local.env" ]]; then
   while IFS='=' read -r key value; do
-    case "$key" in ARKISM_[A-Z_]*) [ -n "${!key:-}" ] || export "$key=$value" ;; esac
+    case "$key" in ARKISM_[A-Z_]*) [[ -n "${!key:-}" ]] || export "$key=$value" ;; *) ;; esac
   done < "$DIR/local.env"
 fi
 VERSION="" HOST="${ARKISM_BUILD_HOST:-}" RELOCK=0
@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "--version x.y.z is required" >&2; exit 2; }
-[ -n "$HOST" ] || { echo "--host <build-pc> (or ARKISM_BUILD_HOST in desktop/local.env) is required" >&2; exit 2; }
+[[ -n "$HOST" ]] || { echo "--host <build-pc> (or ARKISM_BUILD_HOST in desktop/local.env) is required" >&2; exit 2; }
 BUILD_DIR="${ARKISM_BUILD_DIR:-C:/arkism-build}"
 MAKENSIS="${ARKISM_MAKENSIS:-makensis}"
 # Values compiled into the app (option_env! in src-tauri); unset ones keep the public defaults.
@@ -36,20 +36,20 @@ BUILD_ENV=""
 for name in ARKISM_DEFAULT_SERVER ARKISM_DEFAULT_WORKSPACE ARKISM_DEFAULT_PROJECT ARKISM_UPDATE_FEED ARKISM_SSH_HOST ARKISM_SERVER_BIN; do
   value="${!name:-}"
   # Unset here means unset in the app: a variable left in the build PC's own environment must not leak in.
-  if [ -z "$value" ]; then BUILD_ENV+="Remove-Item Env:$name -ErrorAction SilentlyContinue"$'\n'; continue; fi
+  if [[ -z "$value" ]]; then BUILD_ENV+="Remove-Item Env:$name -ErrorAction SilentlyContinue"$'\n'; continue; fi
   [[ "$value" != *"'"* ]] || { echo "$name must not contain a quote" >&2; exit 2; }
   BUILD_ENV+="\$env:$name = '$value'"$'\n'
 done
 # Check the feed first: another session may have shipped a newer version (see feed-newest.sh).
 NEWEST="$("$(dirname "$0")/feed-newest.sh")"
-if [ -n "$NEWEST" ] && { [ "$NEWEST" = "$VERSION" ] || [ "$(printf '%s\n%s\n' "$NEWEST" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]; }; then
+if [[ -n "$NEWEST" ]] && { [[ "$NEWEST" = "$VERSION" ]] || [[ "$(printf '%s\n%s\n' "$NEWEST" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]]; }; then
   echo "the feed already has $NEWEST: build a newer version than that" >&2; exit 2
 fi
 REMOTE="$BUILD_DIR/$VERSION-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 quiet() { grep -a -v -i 'post-quantum\|store now\|pq.html' || true; }
 # The remote step's exit status, not the filter's, decides success.
-run() { "$@" 2>&1 | quiet; [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "== FAILED: $1 ${*: -1}" >&2; exit 1; }; }
-LOCKED=""; [ -f "$DIR/src-tauri/Cargo.lock" ] && [ "$RELOCK" = 0 ] && LOCKED="--locked"
+run() { "$@" 2>&1 | quiet; [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "== FAILED: $1 ${*: -1}" >&2; exit 1; }; }
+LOCKED=""; [[ -f "$DIR/src-tauri/Cargo.lock" ]] && [[ "$RELOCK" = 0 ]] && LOCKED="--locked"
 
 echo "== ship to $HOST:$REMOTE"
 ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemType Directory '$REMOTE/stage' | Out-Null\"" 2>&1 | quiet
@@ -103,5 +103,5 @@ run ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -NonInteractive -Executi
 mkdir -p "$DIR/dist"
 OUT="$DIR/dist/Arkism-$VERSION-setup.exe"
 scp -q -o BatchMode=yes "$HOST:$REMOTE/Arkism-$VERSION-setup.exe" "$OUT" 2>/dev/null
-[ -n "$LOCKED" ] || scp -q -o BatchMode=yes "$HOST:$REMOTE/src-tauri/Cargo.lock" "$DIR/src-tauri/Cargo.lock" 2>/dev/null
+[[ -n "$LOCKED" ]] || scp -q -o BatchMode=yes "$HOST:$REMOTE/src-tauri/Cargo.lock" "$DIR/src-tauri/Cargo.lock" 2>/dev/null
 sha256sum "$OUT" | tee "$OUT.sha256"

@@ -90,7 +90,7 @@ func NativeResponse(body any, model string) (out host.Obj, err error) {
 		}
 	}
 	calls, ok := getd(message, "tool_calls", []any{}).([]any)
-	if v := getd(message, "tool_calls", nil); v == nil {
+	if getd(message, "tool_calls", nil) == nil {
 		calls, ok = nil, true
 	}
 	if !ok {
@@ -194,7 +194,7 @@ func nativeStream(chunks iter.Seq2[[]byte, error], model string, includeUsage bo
 			}
 		}
 		tools, ok := getd(delta, "tool_calls", []any{}).([]any)
-		if v := getd(delta, "tool_calls", nil); v == nil {
+		if getd(delta, "tool_calls", nil) == nil {
 			tools, ok = nil, true
 		}
 		if !ok {

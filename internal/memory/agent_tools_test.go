@@ -205,9 +205,9 @@ func TestAgentToolReportWithPortAndAtSignIsNotASecret(t *testing.T) {
 	if _, err := f.svc.ReportAgentTools(testCtx, f.human, in); err != nil {
 		t.Fatal("false secret", err)
 	}
-	for _, real := range []string{`"url":"https://admin:hunter2@db.example.com"`, `postgresql://admin:p'ass@db.example/app`, `{"dsn":"mysql://root:p\"w@db/x"}`} {
-		if !containsSecret(real) {
-			t.Fatal("a real user:password@host must still be caught", real)
+	for _, secret := range []string{`"url":"https://admin:hunter2@db.example.com"`, `postgresql://admin:p'ass@db.example/app`, `{"dsn":"mysql://root:p\"w@db/x"}`} {
+		if !containsSecret(secret) {
+			t.Fatal("a real user:password@host must still be caught", secret)
 		}
 	}
 }

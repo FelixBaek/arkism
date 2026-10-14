@@ -658,11 +658,11 @@ func (c *collector) file(path, device, origin, logical, sid string, observed flo
 		}
 		defer os.RemoveAll(temp)
 		snapshot := filepath.Join(temp, "session.db")
-		real, err := filepath.EvalSymlinks(absPath(path))
+		resolved, err := filepath.EvalSymlinks(absPath(path))
 		if err != nil {
 			return err
 		}
-		db, err := openRO(real)
+		db, err := openRO(resolved)
 		if err != nil {
 			return err
 		}
@@ -773,11 +773,11 @@ func (c *collector) zcodeExport(path string) error {
 }
 
 func (c *collector) zcode(path string) error {
-	real, err := filepath.EvalSymlinks(absPath(path))
+	resolved, err := filepath.EvalSymlinks(absPath(path))
 	if err != nil {
 		return err
 	}
-	db, err := openRO(real)
+	db, err := openRO(resolved)
 	if err != nil {
 		return err
 	}
@@ -816,11 +816,11 @@ func rowObjGet(cols []string, vals []any, key string) any {
 
 // migrate uploads recent sessions from an AgentsView database.
 func (c *collector) migrate(path string) error {
-	real, err := filepath.EvalSymlinks(absPath(path))
+	resolved, err := filepath.EvalSymlinks(absPath(path))
 	if err != nil {
 		return err
 	}
-	db, err := openRO(real)
+	db, err := openRO(resolved)
 	if err != nil {
 		return err
 	}

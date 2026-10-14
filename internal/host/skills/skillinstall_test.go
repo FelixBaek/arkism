@@ -57,7 +57,7 @@ func stubGitHub(t *testing.T, tarball []byte) (*[]string, *int) {
 	oldHome, oldFetch, oldSync, oldNow := agentsHome, githubFetch, startSkillSync, installNow
 	agentsHome = home
 	calls, syncs := &[]string{}, new(int)
-	githubFetch = func(url, accept string, max int64) ([]byte, error) {
+	githubFetch = func(url, accept string, maxN int64) ([]byte, error) {
 		*calls = append(*calls, url)
 		switch url {
 		case githubAPI + "/repos/o/r":

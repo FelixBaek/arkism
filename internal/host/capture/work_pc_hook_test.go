@@ -22,8 +22,8 @@ func newPcHookFixture(t *testing.T) *pcHookFixture {
 	meta := host.Obj{{Key: "type", Value: "session_meta"}, {Key: "payload", Value: host.Obj{{Key: "id", Value: "s"}, {Key: "cwd", Value: root}, {Key: "source", Value: "cli"}}}}
 	os.WriteFile(f.path, []byte(host.MustDumps(meta, host.DumpOpts{})+"\n"), 0o644)
 	f.event = map[string]any{"hook_event_name": "SessionStart", "session_id": "s", "cwd": root, "transcript_path": f.path}
-	real := pcHookRoots
-	t.Cleanup(func() { pcHookRoots = real })
+	orig := pcHookRoots
+	t.Cleanup(func() { pcHookRoots = orig })
 	pcHookRoots = map[string]string{"codex": f.source}
 	return f
 }
@@ -107,18 +107,18 @@ func TestPcHookStartStopDuplicateAndSelectionTransitions(t *testing.T) {
 
 func TestPcHookCrashBeforePublishRestoresOriginalEventAndBoundary(t *testing.T) {
 	f := newPcHookFixture(t)
-	real := outboxWrite
-	t.Cleanup(func() { outboxWrite = real })
+	orig := outboxWrite
+	t.Cleanup(func() { outboxWrite = orig })
 	outboxWrite = func(path string, data []byte) error {
 		if filepath.Ext(path) == ".json" && filepath.Base(path)[0] == '0' {
 			return errors.New("interrupted")
 		}
-		return real(path, data)
+		return orig(path, data)
 	}
 	if err := f.record("work", nil, nil); err == nil {
 		t.Fatal("no crash")
 	}
-	outboxWrite = real
+	outboxWrite = orig
 	paths, _ := filepath.Glob(filepath.Join(f.queue, "session-*.json"))
 	raw, _ := os.ReadFile(paths[0])
 	intent, _ := loadObjBytes(raw)

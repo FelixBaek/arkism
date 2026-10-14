@@ -211,7 +211,7 @@
 .v4u-at { font-size: 11px; }
 .v4u-empty { margin: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
 .v4u-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
-.v4u-kpi { min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 14px 14px 12px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); }
+.v4u-kpi { min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 14px 14px 12px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); position: relative; }
 .v4u-kpi p { margin: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
 .v4u-kpi strong { font: 500 calc(20px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v4u-kpi small { font: 400 11px/1.5 var(--sans); color: var(--nc-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -346,7 +346,6 @@
 .v4u-flow-recv b { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
 .v4u-flow-note { align-self: flex-end; margin: 0; padding: 3px 10px; border-radius: 6px; background: var(--nc-amber-bg); font: 400 12px/1.5 var(--sans); color: var(--nc-amber); }
 .v4u-kpi .v4u-kpi-link { position: absolute; top: 12px; right: 14px; font-size: 12px; }
-.v4u-kpi { position: relative; }
 .v4u-tidy { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--nc-line); cursor: pointer; }
 .v4u-tidy:first-child { border-top: 0; }
 .v4u-tidy b { display: block; font: 400 13px/1.5 var(--sans); color: var(--nc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

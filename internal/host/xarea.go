@@ -35,9 +35,9 @@ var (
 	// AccountsUnregister removes only Arkism's profile reference, never the login.
 	AccountsUnregister = func(id, state string) error { return errNotPorted }
 	// AccountsWait waits for the usage probes AccountsAccount started.
-	AccountsWait = func() {}
+	AccountsWait = func() { /* nothing to wait for until the subscription package registers */ }
 	// AccountsForce makes the following AccountsAccount calls probe even right after a probe.
-	AccountsForce = func() {}
+	AccountsForce = func() { /* no probes until the subscription package registers */ }
 	// AccountsAccount returns the public view of a profile with identity and usage.
 	AccountsAccount = func(profile map[string]any, executable, state string, refresh bool) (map[string]any, error) {
 		return nil, errNotPorted

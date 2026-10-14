@@ -130,8 +130,8 @@ func (s *Service) usageSessionDeleted(ctx context.Context, scope Scope, id strin
 	return err == nil
 }
 
-func validSessionIDs(ids []string, max int) bool {
-	if len(ids) == 0 || len(ids) > max {
+func validSessionIDs(ids []string, maxN int) bool {
+	if len(ids) == 0 || len(ids) > maxN {
 		return false
 	}
 	seen := map[string]bool{}

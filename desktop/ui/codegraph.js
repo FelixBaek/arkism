@@ -130,7 +130,7 @@ window.ArkismCodeGraph = (ctx) => {
       const d = await host.call("pr", { repo: host.gitRepo, number });
       if (ticket !== epoch) return;
       pr.detail = d; pr.busy = "바뀐 줄을 읽는 중…"; paint();
-      const files = (d.files || []).map((f) => f.path).filter((p) => CODE_FILE.test(p) && !/_test\.go$/.test(p)).slice(0, 20);
+      const files = (d.files || []).map((f) => f.path).filter((p) => CODE_FILE.test(p) && !p.endsWith("_test.go")).slice(0, 20);
       const ranges = [];
       const diffs = await Promise.all(files.map((path) => host.call("diff", { repo: host.gitRepo, sha: d.head_sha, base: d.base, path }).catch(() => null)));
       if (ticket !== epoch) return;
@@ -349,7 +349,7 @@ window.ArkismCodeGraph = (ctx) => {
   }
   function blobUrl(loc) {
     const base = host.repoUrl, commit = repoRow()?.commit;
-    if (!base || !commit || !/^https:\/\/github\.com\//.test(base)) return "";
+    if (!base || !commit || !base.startsWith("https://github.com/")) return "";
     const [path, line] = loc.split(":");
     return `${base.replace(/\/$/, "")}/blob/${commit}/${path.split("/").map(encodeURIComponent).join("/")}#L${line}`;
   }
@@ -469,7 +469,8 @@ window.ArkismCodeGraph = (ctx) => {
       });
       if (!items.length) list.append(el("p", "git-empty", "바뀐 줄에 걸치는 함수·메서드가 색인에 없어요."));
     } else {
-      union.sort((a, b) => (a.depth - b.depth) || a.loc.localeCompare(b.loc)).forEach((h) => list.append(symRow(h, false, () => { host.setMode("code"); void open(h.id); }, el("span", "cg-quiet", `깊이 ${h.depth}`))));
+      union.sort((a, b) => (a.depth - b.depth) || a.loc.localeCompare(b.loc));
+      union.forEach((h) => list.append(symRow(h, false, () => { host.setMode("code"); void open(h.id); }, el("span", "cg-quiet", `깊이 ${h.depth}`))));
       if (!union.length) list.append(el("p", "git-empty", "영향 받는 곳이 없어요."));
     }
     parts.push(list);

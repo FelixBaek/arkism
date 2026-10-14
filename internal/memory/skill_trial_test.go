@@ -223,9 +223,9 @@ func checkSkillTrial(t *testing.T, f *fixture, existing bool) {
 
 	if existing {
 		for n := 0; n < 103; n++ {
-			copy := r
-			copy.ID = "trial-" + ContentHash(fmt.Sprint(n))
-			if err = f.svc.Repo.Insert(testCtx, colSkillTrials, copy); err != nil {
+			clone := r
+			clone.ID = "trial-" + ContentHash(fmt.Sprint(n))
+			if err = f.svc.Repo.Insert(testCtx, colSkillTrials, clone); err != nil {
 				t.Fatal("seed page", err)
 			}
 		}

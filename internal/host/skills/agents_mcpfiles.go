@@ -257,9 +257,9 @@ func otherDef(name, except string, stash map[string]any) map[string]any {
 }
 
 // writeAtomic replaces path (through a symlink) with data, keeping its mode.
-func writeAtomic(path string, data string) error {
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		path = real
+func writeAtomic(path, data string) error {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
 	}
 	mode := os.FileMode(0o600)
 	if st, err := os.Stat(path); err == nil {
@@ -1260,6 +1260,7 @@ func tomlValue(s string, i int) (any, int, error) {
 			}
 			tomlSet(out, path, v)
 			for i = j; i < len(s) && (s[i] == ' ' || s[i] == '\t'); i++ {
+				// skip the blanks after the value
 			}
 			if i < len(s) && s[i] == ',' {
 				i++

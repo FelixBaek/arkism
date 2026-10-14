@@ -59,7 +59,7 @@ func comparisonCoversBundle(r Record, v *SkillComparisonReport) bool {
 	candidate := v.BundleSHA256["candidate"]
 	return candidate == r.SkillBundleSHA256 && (candidate == v.BundleSHA256["baseline"] || v.CompanionCoverage == "materialized")
 }
-func comparisonPasses(r Record, evaluation Record) bool {
+func comparisonPasses(r, evaluation Record) bool {
 	p := r.ComparisonPlan
 	if p == nil {
 		return true

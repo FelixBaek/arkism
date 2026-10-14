@@ -3,7 +3,7 @@
 // To add a tab, add a line here — app.js reads nothing else about the menu layout.
 window.ArkismShell = (ctx) => {
   "use strict";
-  const { state, $, el, go, render } = ctx;
+  const { state, $, el, go } = ctx;
   const count = (id) => () => $(`#count-${id}`)?.textContent || "";
 
   // [key, label, open(), isActive(), count?]

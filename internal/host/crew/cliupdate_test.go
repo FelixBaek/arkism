@@ -85,9 +85,9 @@ func (f *cliFixture) installed(name, via string, cask bool) string {
 		}
 		target = "brew/" + kind + "/" + cliBrew[name] + "/1.0.0/bin/" + name
 	}
-	real := f.file(target, "fake")
+	realFile := f.file(target, "fake")
 	link := filepath.Join(f.root, fmt.Sprint(name, "-", via, cask))
-	_ = os.Symlink(real, link)
+	_ = os.Symlink(realFile, link)
 	return link
 }
 
@@ -150,11 +150,11 @@ func TestCLIUnknownAndWrongMarkersNeverUpdate(t *testing.T) {
 func TestCLINpmMarkerRequiresValidBoundedJSON(t *testing.T) {
 	f := newCLIFixture(t)
 	path := f.installed("claude", "npm", false)
-	real, _ := filepath.EvalSymlinks(path)
-	marker := filepath.Join(filepath.Dir(filepath.Dir(real)), "package.json")
+	resolved, _ := filepath.EvalSymlinks(path)
+	marker := filepath.Join(filepath.Dir(filepath.Dir(resolved)), "package.json")
 	for _, body := range []string{"[]", "null", "{", strings.Repeat(" ", outputLimit+1)} {
 		_ = os.WriteFile(marker, []byte(body), 0o600)
-		if _, ok := installationOf("claude", real); ok {
+		if _, ok := installationOf("claude", resolved); ok {
 			t.Error(body[:min(len(body), 10)])
 		}
 	}
@@ -176,8 +176,8 @@ func TestCLICacheTTLAndBinaryChange(t *testing.T) {
 	if len(f.argv) != 2 {
 		t.Fatal(len(f.argv))
 	}
-	real, _ := filepath.EvalSymlinks(path)
-	_ = os.WriteFile(real, []byte("replacement"), 0o700)
+	resolved, _ := filepath.EvalSymlinks(path)
+	_ = os.WriteFile(resolved, []byte("replacement"), 0o700)
 	inspectCLI("claude", path, false)
 	if len(f.argv) != 3 {
 		t.Fatal(len(f.argv))
@@ -202,8 +202,8 @@ func TestCLIConflictBypassesCache(t *testing.T) {
 func TestCLIBinaryReplacedDuringProbeIsConflict(t *testing.T) {
 	f := newCLIFixture(t)
 	path := f.installed("claude", "self", false)
-	real, _ := filepath.EvalSymlinks(path)
-	f.onRun = func() { _ = os.WriteFile(real, []byte("changed binary identity"), 0o700) }
+	resolved, _ := filepath.EvalSymlinks(path)
+	f.onRun = func() { _ = os.WriteFile(resolved, []byte("changed binary identity"), 0o700) }
 	f.reply(runReply{"", "1.0.0"})
 	if r := f.update(path, "1.0.0", "self"); r["error"] != "conflict" || len(f.argv) != 1 {
 		t.Fatal(r)

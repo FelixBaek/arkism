@@ -424,7 +424,7 @@ type RoutingModelInput struct {
 
 func (s *Service) SetRoutingModel(ctx context.Context, token, id string, in RoutingModelInput) (Record, error) {
 	m := in.RoutingModel
-	badInt := func(p *int, max int) bool { return p != nil && (*p < 0 || *p > max) }
+	badInt := func(p *int, maxN int) bool { return p != nil && (*p < 0 || *p > maxN) }
 	if !validScope(in.Scope) || !validRoutingModelID(id) ||
 		badInt(m.Order, 1000) || badInt(m.RPMLimit, 1e6) || badInt(m.Concurrency, 1e4) || len([]rune(m.When)) > 500 || containsSecret(m.When) {
 		return Record{}, ErrInvalid

@@ -20,23 +20,24 @@ JOBS="$( (command -v nproc >/dev/null && nproc) || sysctl -n hw.ncpu 2>/dev/null
 DIR="$CACHE/postgres-$PG_VERSION-pgvector-$VECTOR_VERSION-$OS-$(uname -m)"
 PG="$DIR/pgsql"
 
-sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
-fetch() { # url file sha256
-  curl -fsSL --retry 3 -o "$2" "$1"
-  local got; got="$(sha256 "$2")"
-  if [ "$got" != "$3" ]; then
-    if [ -n "${ARKISM_PRINT_SHA:-}" ]; then echo "sha256 $2 = $got" >&2; else echo "checksum mismatch for $1: $got" >&2; exit 1; fi
+sha256() { local file="$1"; if command -v sha256sum >/dev/null; then sha256sum "$file" | cut -d' ' -f1; else shasum -a 256 "$file" | cut -d' ' -f1; fi; }
+fetch() {
+  local url="$1" file="$2" want="$3"
+  curl -fsSL --retry 3 -o "$file" "$url"
+  local got; got="$(sha256 "$file")"
+  if [[ "$got" != "$want" ]]; then
+    if [[ -n "${ARKISM_PRINT_SHA:-}" ]]; then echo "sha256 $file = $got" >&2; else echo "checksum mismatch for $url: $got" >&2; exit 1; fi
   fi
 }
 
-if [ ! -f "$PG/lib/vector.so" ] && [ ! -f "$PG/lib/vector.dylib" ]; then
+if [[ ! -f "$PG/lib/vector.so" ]] && [[ ! -f "$PG/lib/vector.dylib" ]]; then
   rm -rf "$DIR"; mkdir -p "$DIR/src"
   fetch "https://ftp.postgresql.org/pub/source/v$PG_VERSION/postgresql-$PG_VERSION.tar.bz2" "$DIR/src/pg.tar.bz2" "$PG_SHA256"
   fetch "https://github.com/pgvector/pgvector/archive/refs/tags/v$VECTOR_VERSION.tar.gz" "$DIR/src/vector.tar.gz" "$VECTOR_SHA256"
   tar xjf "$DIR/src/pg.tar.bz2" -C "$DIR/src"
   tar xzf "$DIR/src/vector.tar.gz" -C "$DIR/src"
   # Programs find libpq beside them: $ORIGIN on Linux, @loader_path on macOS (set after install).
-  if [ "$OS" = Linux ]; then export LDFLAGS="-Wl,-rpath,'\$\$ORIGIN/../lib'"; fi
+  if [[ "$OS" = Linux ]]; then export LDFLAGS="-Wl,-rpath,'\$\$ORIGIN/../lib'"; fi
   # Only what a loopback database needs: no ICU, readline, OpenSSL, Kerberos or LDAP, so there is
   # no system library to be missing. Passwords still use SCRAM (built in without OpenSSL).
   ( cd "$DIR/src/postgresql-$PG_VERSION" &&
@@ -45,7 +46,7 @@ if [ ! -f "$PG/lib/vector.so" ] && [ ! -f "$PG/lib/vector.dylib" ]; then
     make -s -j"$JOBS" >"$DIR/make.log" && make -s install >>"$DIR/make.log" )
   ( cd "$DIR/src/pgvector-$VECTOR_VERSION" &&
     make -s PG_CONFIG="$PG/bin/pg_config" OPTFLAGS="" >"$DIR/vector.log" && make -s PG_CONFIG="$PG/bin/pg_config" install >>"$DIR/vector.log" )
-  if [ "$OS" = Darwin ]; then
+  if [[ "$OS" = Darwin ]]; then
     # Point every program at the libpq beside it instead of the build path.
     for f in "$PG"/bin/*; do
       for dep in $(otool -L "$f" | awk 'NR>1 {print $1}' | grep "^$PG/lib/" || true); do

@@ -112,7 +112,7 @@ func responsesFunction(callID, name any, arguments string) host.Obj {
 }
 
 // appendOutput appends to result's output list in place (the key always exists).
-func appendOutput(result host.Obj, item host.Obj) {
+func appendOutput(result, item host.Obj) {
 	result.Set("output", append(get(result, "output").([]any), item))
 }
 

@@ -101,11 +101,11 @@ func TestOutboxWrongReceiptsKeepHeadAndNeverSendTail(t *testing.T) {
 
 func TestOutboxCreatedTimeExpiryIsNotExtendedByRetryOrTouch(t *testing.T) {
 	root := t.TempDir()
-	real := timeNow
-	t.Cleanup(func() { timeNow = real })
-	timeNow = func() float64 { return real() - 8*86400 }
+	orig := timeNow
+	t.Cleanup(func() { timeNow = orig })
+	timeNow = func() float64 { return orig() - 8*86400 }
 	outboxEnq(t, root, "bind")
-	timeNow = real
+	timeNow = orig
 	os.Chtimes(outboxFiles(root)[0], time.Now(), time.Now())
 	outboxEnq(t, root, "stop")
 	var seqs []int64
@@ -122,18 +122,18 @@ func TestOutboxCreatedTimeExpiryIsNotExtendedByRetryOrTouch(t *testing.T) {
 
 func TestOutboxReservationCrashLeavesGapNeverReusesSequence(t *testing.T) {
 	root := t.TempDir()
-	real := outboxWrite
-	t.Cleanup(func() { outboxWrite = real })
+	orig := outboxWrite
+	t.Cleanup(func() { outboxWrite = orig })
 	outboxWrite = func(path string, data []byte) error {
 		if filepath.Base(path) != "sequence.json" {
 			return errors.New("power loss")
 		}
-		return real(path, data)
+		return orig(path, data)
 	}
 	if _, err := outboxEnqueue(root, "codex", "s", `C:\repo`, "work", "bind", outboxMarker()); err == nil {
 		t.Fatal("no crash")
 	}
-	outboxWrite = real
+	outboxWrite = orig
 	outboxEnq(t, root, "bind")
 	if seq := outboxSeq(t, outboxFiles(root)[0]); seq != 2 {
 		t.Fatal(seq)

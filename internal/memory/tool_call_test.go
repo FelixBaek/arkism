@@ -80,19 +80,19 @@ func TestToolCallValidationAndIsolation(t *testing.T) {
 		}
 	}
 	for _, kind := range []string{"changed", "inactive", "missing", "source_missing"} {
-		copy := run
+		clone := run
 		switch kind {
 		case "changed":
-			copy.Revision++
+			clone.Revision++
 		case "inactive":
-			copy.Status = "expired"
+			clone.Status = "expired"
 		case "missing":
 			delete(f.repo.store["agent_runs"], recKey(scopeA, run.ID))
 		case "source_missing":
-			copy.Sources = []SourceRef{{SourceID: ID(), Locator: "missing"}}
+			clone.Sources = []SourceRef{{SourceID: ID(), Locator: "missing"}}
 		}
 		if kind != "missing" {
-			f.repo.store["agent_runs"][recKey(scopeA, run.ID)] = copy
+			f.repo.store["agent_runs"][recKey(scopeA, run.ID)] = clone
 		}
 		if r, e := f.svc.Create(testCtx, f.human, "tool_calls", toolInput(run)); e == nil || r.ID != "" {
 			t.Fatal(kind, r, e)

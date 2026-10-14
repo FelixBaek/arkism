@@ -7,7 +7,7 @@
 .app.home-mode .panel-main { gap: 0; }
 .app.home-mode .panel-main > .table-wrap { flex: none; display: block; }
 .app.home-mode .panel > .detail { overflow: visible; }
-.app.home-mode .detail-body { overflow: visible; }
+.app.home-mode .detail-body { overflow: visible; padding: 6px 20px 24px; gap: 22px; }
 .home-hero, .home-hero-line, .home-back, .home-all { display: none; }
 
 /* 맨 위 그림 (오늘의 아틀리에) — only on 홈 itself */
@@ -95,7 +95,6 @@
 
 /* ---------------------------------------------------------------- 홈 detail (right column) */
 .app.home-mode .detail-bar { padding: 24px 20px 0; border-bottom: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
-.app.home-mode .detail-body { padding: 6px 20px 24px; gap: 22px; }
 .app.home-mode .detail h2 { font: 500 calc(16px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .app.home-mode .detail .lead, .app.home-mode .detail .meta { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .app.home-mode .detail-body > h2 + .lead { margin-top: -16px; }

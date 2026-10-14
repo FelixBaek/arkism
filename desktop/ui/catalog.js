@@ -29,7 +29,8 @@
     const url = /^(www\.)?github\.com\//.test(s);
     if (url) s = s.slice(s.indexOf("/") + 1).split(/[?#]/)[0];
     else if (s.includes("@")) { ref = s.slice(s.lastIndexOf("@") + 1); s = s.slice(0, s.lastIndexOf("@")); }
-    let parts = s.replace(/^\/+|\/+$/g, "").split("/");
+    let parts = s.replace(/^\/+/, "").split("/");
+    while (parts.length > 1 && parts.at(-1) === "") parts.pop(); // trailing slashes, without a backtracking /\/+$/
     if (parts.length < 2) return "";
     const owner = parts[0], repo = parts[1].replace(/\.git$/, "");
     let rest = parts.slice(2);

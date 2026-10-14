@@ -96,9 +96,9 @@ func (r *Reader) readFSE(data block, off, maxSym, maxBits int, table []fseEntry)
 			continue
 		}
 
-		max := (2*threshold - 1) - remaining
+		maxV := (2*threshold - 1) - remaining
 		var count int
-		if int(br.bits&uint32(threshold-1)) < max {
+		if int(br.bits&uint32(threshold-1)) < maxV {
 			// A small value.
 			count = int(br.bits & uint32((threshold - 1)))
 			br.bits >>= bitsNeeded - 1
@@ -107,7 +107,7 @@ func (r *Reader) readFSE(data block, off, maxSym, maxBits int, table []fseEntry)
 			// A large value.
 			count = int(br.bits & uint32((2*threshold - 1)))
 			if count >= threshold {
-				count -= max
+				count -= maxV
 			}
 			br.bits >>= bitsNeeded
 			br.cnt -= uint32(bitsNeeded)

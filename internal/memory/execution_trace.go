@@ -85,7 +85,7 @@ func decodeCompletedTrace(w http.ResponseWriter, r *http.Request, in *TraceInges
 		respond(w, nil, ErrInvalid)
 		return false
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	if decoder.Decode(new(any)) != io.EOF {
 		respond(w, nil, ErrInvalid)
 		return false
 	}
@@ -318,7 +318,7 @@ func inspectTraceJSON(raw json.RawMessage) (Inspection, error) {
 		return inspection, ErrInvalid
 	}
 	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
+	if decoder.Decode(&extra) != io.EOF {
 		return inspection, ErrInvalid
 	}
 	var walk func(any) error

@@ -17,7 +17,7 @@ var codeGraphTools = map[string]string{
 func callCodeGraph(name string, args map[string]any) (any, error) {
 	op := codeGraphTools[name]
 	payload := map[string]any{"scope": host.Scope()}
-	text := func(key string, required bool, max int) error {
+	text := func(key string, required bool, maxN int) error {
 		v, ok := args[key]
 		if !ok || v == nil {
 			if required {
@@ -26,8 +26,8 @@ func callCodeGraph(name string, args map[string]any) (any, error) {
 			return nil
 		}
 		s, ok := v.(string)
-		if !ok || required && pyStrip(s) == "" || host.Len(s) > max {
-			return errors.New(key + " must be a nonempty string of at most " + strconv.Itoa(max) + " characters")
+		if !ok || required && pyStrip(s) == "" || host.Len(s) > maxN {
+			return errors.New(key + " must be a nonempty string of at most " + strconv.Itoa(maxN) + " characters")
 		}
 		if s != "" {
 			payload[key] = s

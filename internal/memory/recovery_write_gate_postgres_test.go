@@ -80,7 +80,7 @@ func TestPostgresRecoveryWriteGateLifecycle(t *testing.T) {
 	if paused.Gate.State != "paused" || paused.Gate.Generation == initial.Gate.Generation {
 		t.Fatal("transition lost generation")
 	}
-	if again := gateChange(t, p, "pause", paused); again != paused {
+	if gateChange(t, p, "pause", paused) != paused {
 		t.Fatal("same transition not idempotent")
 	}
 	if _, err := p.ManageRecoveryWrites(testCtx, "resume", paused.StorageIdentity, initial.Gate.Generation); !errors.Is(err, ErrConflict) {
@@ -123,7 +123,7 @@ func TestPostgresRecoveryWriteGateLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reconnected.Close()
-	if got := gateStatus(t, reconnected); got != paused {
+	if gateStatus(t, reconnected) != paused {
 		t.Fatal("init/reconnect released gate")
 	}
 	if err = p.RequireRestoreReview(testCtx, ContentHash("gate restore")); err != nil {

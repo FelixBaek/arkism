@@ -5,7 +5,7 @@
 // removes the selected sessions and their archived transcripts, never the agent's own files.
 window.ArkismSessions = (ctx) => {
   "use strict";
-  const { state, $, el, button, segment, render, request, query, ago, detailShell, usage } = ctx;
+  const { state, $, el, button, render, request, query, detailShell, usage } = ctx;
   const { num, usd, dur, logo, agentName, bars } = usage.fmt;
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
   const S = { range: "7d", source: "", q: "", sort: "recent", selecting: false, doc: null, state: "idle", error: "", selected: "", picked: new Set(), busy: false, notice: "", tx: null };

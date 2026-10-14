@@ -807,8 +807,8 @@ func (f *jsFile) declareImport(i int) {
 			f.namespaces[f.tok(j+2).text] = target
 			j += 3
 		case f.is(j, "{"):
-			close := f.match(j)
-			for k := j + 1; k < close; k++ {
+			closeAt := f.match(j)
+			for k := j + 1; k < closeAt; k++ {
 				if f.tok(k).kind != 'i' || f.is(k, "type") {
 					continue
 				}
@@ -819,7 +819,7 @@ func (f *jsFile) declareImport(i int) {
 					f.named[f.tok(k).text] = mod + "#" + f.tok(k).text
 				}
 			}
-			j = close + 1
+			j = closeAt + 1
 		case t.kind == 'i':
 			f.named[t.text] = mod + "#default"
 			j++
@@ -829,10 +829,10 @@ func (f *jsFile) declareImport(i int) {
 	}
 }
 
-// classMembers declares the methods of the class body between open and close.
-func (f *jsFile) classMembers(frame, open, close int) {
+// classMembers declares the methods of the class body between open and closeAt.
+func (f *jsFile) classMembers(frame, open, closeAt int) {
 	fr := f.frames[frame]
-	for j := open + 1; j < close; j++ {
+	for j := open + 1; j < closeAt; j++ {
 		if f.is(j, "{") || f.is(j, "(") || f.is(j, "[") {
 			j = f.match(j)
 			continue

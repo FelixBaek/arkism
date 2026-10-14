@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
-	_ "embed"
+	_ "embed" // for //go:embed router_tools.json
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -892,7 +892,7 @@ func pyFloat(v any) (float64, error) {
 	return 0, fmt.Errorf("float() argument must be a string or a real number, not '%s'", pyTypeName(v))
 }
 
-func callTool(name any, argsAny any) (host.Obj, error) {
+func callTool(name, argsAny any) (host.Obj, error) {
 	n, _ := name.(string)
 	if receiveOnly && n == "record_skill_usage" {
 		return nil, errors.New("skills_receive_only: skill usage writes are disabled for this client")

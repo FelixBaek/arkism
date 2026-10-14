@@ -44,7 +44,7 @@ func decodeRecoveryWriteGate(data []byte) (RecoveryWriteGate, error) {
 	if err := decoder.Decode(&gate); err != nil {
 		return gate, ErrUnavailable
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
+	if decoder.Decode(new(any)) != io.EOF {
 		return gate, ErrUnavailable
 	}
 	if gate.Version != 1 || (gate.State != "open" && gate.State != "paused") || !sourceHashPattern.MatchString(gate.Generation) || gate.ChangedAt.IsZero() {

@@ -3,8 +3,6 @@ name: SonarCloud
 # Quality gate. CI-based analysis so sonar-project.properties (exclusions and reviewed ignores)
 # applies; automatic analysis must stay OFF in the SonarCloud project settings.
 # Coverage is Codecov's job, so it is excluded from the SonarCloud quality gate.
-# TODO(owner): create the SonarCloud project FelixBaek_arkism (organization felixbaek) and add
-# the repository secret SONAR_TOKEN before making this check required.
 
 on:
   push:

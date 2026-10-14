@@ -178,20 +178,7 @@
   }
   const shortDate = (v) => v ? new Intl.DateTimeFormat(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" }).format(new Date(v)) : "—";
   const kindLabel = (k) => (KINDS[k] || [k || "기억"])[0];
-  function kindTag(k) {
-    const t = el("span", "kind");
-    t.append(icon((KINDS[k] || [, "file-text"])[1]), kindLabel(k));
-    return t;
-  }
   const memRepo = (m) => (m.tags || []).find((t) => t.startsWith("repo:"))?.slice(5) || "";
-  function repoTag(m) {
-    const r = memRepo(m);
-    if (!r) return null;
-    const t = el("span", "kind repo");
-    t.title = `${r} 저장소에서만 써요`;
-    t.append(icon("git-branch"), r.split("/").pop());
-    return t;
-  }
   const tagValue = (item, prefix) => (item.tags || []).find((t) => t.startsWith(prefix))?.slice(prefix.length) || "";
   function agentOf(item) {
     const ev = tagValue(item, "event_id:");
@@ -237,10 +224,6 @@
   const KEEP_KEY = "arkism.keptMemories";
   const keptMemories = () => { try { return JSON.parse(localStorage.getItem(KEEP_KEY) || "[]"); } catch (_) { return []; } };
   const unusedOften = (m) => { const s = memStat(m.id); return !!s && s.injected >= 3 && s.used === 0 && !keptMemories().includes(m.id); };
-  function lastUse(u) {
-    if (!u) return "…";
-    return u.last ? ago(u.last) : "안 불림";
-  }
   function savedHow(m) {
     if (originOf(m) === "사용자 말") return "사용자가 직접 말해서 바로 저장";
     return m.review?.by ? `검토 후 승인 (${m.review.by})` : originOf(m);
@@ -1566,7 +1549,6 @@
     return s;
   }
   function renderMemories() {
-    const d = state.data;
     memBack();
     if (state.memTab === "digests") { digests.draw(); return; }
     const panel = memPanels()[state.memTab];
@@ -1968,11 +1950,6 @@
     skillPageCache = null;
     $("#table").scrollTop = 0;
     render();
-  }
-  function pageBack(label, onClick) {
-    const b = el("button", "page-back", `← ${label}`); b.type = "button";
-    b.addEventListener("click", onClick);
-    $(".main > .page-head").prepend(b);
   }
   const skBadge = (text, cls = "") => el("span", `v4s-badge ${cls}`.trim(), text);
   function skillBadge(sk) {
@@ -2711,13 +2688,6 @@
     if (src) { const img = el("img"); img.src = src; img.alt = ""; t.append(img); return t; }
     t.append(icon(p.image_prompt.kind === "slide" ? "presentation" : "image"));
     return t;
-  }
-  function engineChips(ip) {
-    const row = el("div", "mini-chips");
-    row.append(el("span", "mini-chip", ENGINES[engineOf(ip)] || ip.engine));
-    (ip.tags || []).forEach((c) => { const t = el("span", "mini-chip"); t.append(icon("tag"), c); row.append(t); });
-    if (ip.script) { const c = el("span", "mini-chip"); c.append(icon("code"), "스크립트"); row.append(c); }
-    return row;
   }
   function promptMeta(ip) {
     const m = el("div", "pc-meta");
@@ -3458,7 +3428,6 @@
   // ---------------------------------------------------------------- MCP·플러그인
   // The host tool (arkism-agents.timer) applies a switch within a minute and reports back.
   const SWITCHABLE = { mcp: ["claude_code", "codex", "gemini", "zcode", "grok", "opencode", "cursor"], plugin: ["claude_code"] };
-  const DOTS = { ok: "ready", warn: "error", off: "" };
   async function loadTools() {
     try {
       const r = await request(`/v1/agent_tools?${query()}`);

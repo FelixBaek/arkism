@@ -137,11 +137,11 @@ func (s *Service) searchArchiveSQLite(ctx context.Context, h Record, in ArchiveS
 	if err != nil {
 		return err
 	}
-	db, close, err := openArchiveSQLite(ctx, reader)
+	db, closeDB, err := openArchiveSQLite(ctx, reader)
 	if err != nil {
 		return err
 	}
-	defer close()
+	defer closeDB()
 	if err = sqliteArchiveSchema(db, h.SessionArchive.SessionID); err != nil {
 		if reader.failure != nil {
 			return reader.failure
@@ -231,11 +231,11 @@ func (s *Service) readArchiveSQLite(ctx context.Context, token string, h Record,
 	if err != nil {
 		return empty, err
 	}
-	db, close, err := openArchiveSQLite(ctx, reader)
+	db, closeDB, err := openArchiveSQLite(ctx, reader)
 	if err != nil {
 		return empty, ErrInvalid
 	}
-	defer close()
+	defer closeDB()
 	if err = sqliteArchiveSchema(db, h.SessionArchive.SessionID); err != nil {
 		return empty, ErrInvalid
 	}

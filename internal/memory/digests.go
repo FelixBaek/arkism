@@ -200,8 +200,8 @@ func digestStateID(col string, scope Scope) string {
 	return prefix + ContentHash(structuredText(scope))[:32]
 }
 
-func validDigestRefs(refs []Ref, collection string, max int) bool {
-	if len(refs) > max {
+func validDigestRefs(refs []Ref, collection string, maxN int) bool {
+	if len(refs) > maxN {
 		return false
 	}
 	seen := map[string]bool{}
@@ -397,13 +397,13 @@ func (s *Service) GetDigest(ctx context.Context, token string, scope Scope, kind
 }
 
 func validDigestText(kind, title, body string) bool {
-	max := topicDigestBodyMax
+	maxN := topicDigestBodyMax
 	if kind == digestKindUser {
-		max = userDigestBodyMax
+		maxN = userDigestBodyMax
 	}
 	n := utf8.RuneCountInString(body)
 	t := utf8.RuneCountInString(title)
-	if !utf8.ValidString(body) || !utf8.ValidString(title) || strings.TrimSpace(body) == "" || n > max || t > digestTitleMax || strings.ContainsRune(title, '\n') {
+	if !utf8.ValidString(body) || !utf8.ValidString(title) || strings.TrimSpace(body) == "" || n > maxN || t > digestTitleMax || strings.ContainsRune(title, '\n') {
 		return false
 	}
 	if kind == digestKindTopic {

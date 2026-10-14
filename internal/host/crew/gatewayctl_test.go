@@ -349,7 +349,7 @@ func TestGatewaySameIDNeverReexecutes(t *testing.T) {
 	}
 }
 
-func (f *gatewayFixture) receiptFiles(request any, result any) string {
+func (f *gatewayFixture) receiptFiles(request, result any) string {
 	folder := filepath.Join(f.state, obj(request)["request_id"].(string))
 	_ = os.MkdirAll(f.state, 0o700)
 	_ = os.Mkdir(folder, 0o700)

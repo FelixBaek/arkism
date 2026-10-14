@@ -854,7 +854,7 @@ func decodeLimit(w http.ResponseWriter, r *http.Request, v any, limit int64) boo
 	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	if e := d.Decode(v); e != nil {
+	if d.Decode(v) != nil {
 		respond(w, nil, ErrInvalid)
 		return false
 	}

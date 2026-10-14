@@ -35,7 +35,7 @@
 .panel-main > .stats:has(.wf-attn, .wf-local) { display: flex; flex-direction: column; gap: 8px; }
 
 /* ---------------------------------------------------------------- list (198:286) */
-.wf-bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.wf-bar { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .wf-bar .segment .tab { border-radius: 8px; padding: 6px 12px; line-height: 1.5; }
 .wf-bar .segment .tab:not(.active) { font-weight: 400; }
 .wf-bar .segment .tab output { font: 12px var(--mono); opacity: 1; color: var(--nc-quiet); margin-left: 6px; }
@@ -126,7 +126,6 @@
 .wf-ok { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 .wf-ok .icon { width: 13px; height: 13px; }
 .wf-detail .try-row input { background: var(--nc-raised); border-color: var(--nc-line); font-family: var(--sans); }
-.wf-bar { flex: 1; }
 .wf-chips .btn.small { height: 24px; padding: 0 6px; gap: 4px; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 .wf-chips .btn.small .icon { width: 12px; height: 12px; }
 
@@ -287,7 +286,7 @@
 .wf-budget { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .wf-budget-card { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--nc-line); background: var(--nc-surface); }
 .wf-budget-card > small { color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
-.wf-budget-card strong { color: var(--nc-text); font: 400 calc(20px * var(--fs, 1))/1.4 var(--sans); }
+.wf-budget-card strong { color: var(--nc-text); font: 400 calc(20px * var(--fs, 1))/1.4 var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wf-budget-card strong small { color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1)) var(--mono); }
 .wf-run-acts { flex-direction: column; gap: 8px; }
 .wf-run-acts .btn { width: 100%; height: 40px; justify-content: center; }
@@ -308,7 +307,6 @@
 .wf-steprow.st-failed strong, .wf-steprow.st-running strong { color: var(--nc-accent); }
 .wf-steprow .wf-badge { justify-self: start; }
 .wf-steprow .mono { font: 400 calc(12px * var(--fs, 1)) var(--mono); color: var(--nc-muted); }
-.wf-budget-card strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* 간단 편집 (198:2608) */
 .wf-simple { display: grid; grid-template-columns: minmax(0, 1fr) var(--nc-detail-w); height: 100%; padding: 0; overflow: hidden; border: 0; border-radius: 0; background: var(--nc-canvas); justify-content: stretch; }

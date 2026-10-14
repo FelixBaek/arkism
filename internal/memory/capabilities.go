@@ -52,16 +52,16 @@ func (s *Service) Capabilities(ctx context.Context, token string, scope Scope) (
 		return Capabilities{}, ErrDenied
 	}
 	out := Capabilities{Scope: scope, Actions: make(map[string]bool, len(capabilityCatalog)), Advisory: true, AssistRequestLookup: true}
-	for _, cap := range capabilityCatalog {
-		d, err := s.authorize(ctx, token, cap.Action, scope, "", "")
+	for _, capability := range capabilityCatalog {
+		d, err := s.authorize(ctx, token, capability.Action, scope, "", "")
 		if err != nil {
 			return Capabilities{}, err
 		}
 		allowed := d.Allowed
-		if humanOnlyActions[cap.Key] {
+		if humanOnlyActions[capability.Key] {
 			allowed = allowed && d.Role == roleHuman
 		}
-		out.Actions[cap.Key] = allowed
+		out.Actions[capability.Key] = allowed
 		// Identity comes only from decisions that passed verification; an
 		// unverified answer never names a principal to the UI.
 		if out.Principal == "" && d.Allowed && d.PrincipalID != "" && !containsSecret(d.PrincipalID) && decisionRoles[d.Role] {

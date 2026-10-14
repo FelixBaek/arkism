@@ -77,11 +77,10 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-set .mode-out { margin: 0; padding: 8px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); color: var(--nc-text); }
 .v4-set .mode-actions { flex-direction: row-reverse; justify-content: flex-end; }
 .v4-set .field input, .v4-set .field textarea, .v4-set .shared-add input { border-color: var(--nc-line); background: var(--nc-surface); }
-.v4-transfer { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
+.v4-transfer { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 6px; }
 .v4-transfer > strong { font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .v4-transfer > .pg-hint { margin: 0; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 .v4-transfer .btn { align-self: flex-start; }
-.v4-transfer { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .v4-transfer > strong, .v4-transfer > .pg-hint { flex-basis: 100%; }
 .v4-side .doctor-list .setting { padding: 6px 0; border-top: 0; }
 .v4-side .field.wide input { width: 100%; height: 36px; padding: 0 12px; border-radius: var(--nc-radius-control); border: 1px solid var(--nc-line); background: var(--nc-surface); color: var(--nc-text); }

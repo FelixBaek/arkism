@@ -95,8 +95,8 @@ func TestEvaluationSummaryPriorityAndIsolation(t *testing.T) {
 	run := f.create(f.agent, "agent_runs", completedRunInput(CreateInput{Scope: scopeA, Text: "private task", Sources: refs(src)}))
 	target := Ref{Collection: "agent_runs", ID: run.ID, Revision: run.Revision}
 	in := EvaluationSummaryInput{Scope: scopeA, Target: target}
-	add := func(token, kind string, passed *bool, score, max *float64) Record {
-		return f.create(token, "evaluations", CreateInput{Scope: scopeA, Text: "private evaluation", Sources: refs(src), Target: &target, Evaluation: &Evaluation{EvalType: kind, Passed: passed, Score: score, ScoreMax: max}})
+	add := func(token, kind string, passed *bool, score, maxScore *float64) Record {
+		return f.create(token, "evaluations", CreateInput{Scope: scopeA, Text: "private evaluation", Sources: refs(src), Target: &target, Evaluation: &Evaluation{EvalType: kind, Passed: passed, Score: score, ScoreMax: maxScore}})
 	}
 	add(f.agent, "model_self", boolValue(true), scoreValue(100), scoreValue(100))
 	out, e := f.svc.SummarizeEvaluations(testCtx, f.human, in)

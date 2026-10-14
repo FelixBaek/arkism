@@ -85,7 +85,7 @@ func selectionSelected(cwd any) (id string) {
 }
 
 // selectionSelect stores workID as the checkout's selection.
-func selectionSelect(cwd any, workID any) (host.Obj, error) {
+func selectionSelect(cwd, workID any) (host.Obj, error) {
 	id, ok := workID.(string)
 	if !ok || !selectionKey.MatchString(id) {
 		return nil, valueErr("invalid work id")

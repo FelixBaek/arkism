@@ -583,7 +583,7 @@ const prFields = "number,title,state,isDraft,author,headRefName,headRefOid,baseR
 
 func login(v any) string { return sOrDefault(obj(v)["login"], "") }
 
-func anyLogin(v any, me any) bool {
+func anyLogin(v, me any) bool {
 	for _, a := range list(v) {
 		if same(obj(a)["login"], me) {
 			return true

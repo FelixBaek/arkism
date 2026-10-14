@@ -224,16 +224,16 @@ func identity(executable string) (fileID, bool) {
 	if !filepath.IsAbs(executable) {
 		return fileID{}, false
 	}
-	real, err := filepath.EvalSymlinks(executable)
+	resolved, err := filepath.EvalSymlinks(executable)
 	if err != nil {
 		return fileID{}, false
 	}
-	real, _ = filepath.Abs(real)
-	st, err := os.Stat(real)
-	if err != nil || !st.Mode().IsRegular() || !canExecute(real) {
+	resolved, _ = filepath.Abs(resolved)
+	st, err := os.Stat(resolved)
+	if err != nil || !st.Mode().IsRegular() || !canExecute(resolved) {
 		return fileID{}, false
 	}
-	return fileID{real, fmt.Sprint(real, " ", st.Size(), " ", st.ModTime().UnixNano(), " ", statIdentity(st))}, true
+	return fileID{resolved, fmt.Sprint(resolved, " ", st.Size(), " ", st.ModTime().UnixNano(), " ", statIdentity(st))}, true
 }
 
 type installation struct {
@@ -253,8 +253,8 @@ func pathParts(p string) []string {
 
 func joinParts(parts []string) string { return filepath.Join(parts...) }
 
-func installationOf(cli, real string) (installation, bool) {
-	parts := pathParts(real)
+func installationOf(cli, resolved string) (installation, bool) {
+	parts := pathParts(resolved)
 	pkg := strings.Split(cliPackages[cli], "/")
 	// Alternative managers must not be silently converted to npm installations.
 	for _, p := range parts {

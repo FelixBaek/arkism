@@ -999,7 +999,7 @@ func TestCoreGroupBodyBoundariesAreRejectedBeforeDeciding(t *testing.T) {
 				t.Fatalf("%d %s", reply.status, reply.body)
 			}
 			// net/http answers a malformed Content-Length itself with a plain 400, before the handler runs.
-			if malformed := len(tc.headers) == 2 && tc.headers[0] == "content-length" && tc.status == 400; malformed {
+			if len(tc.headers) == 2 && tc.headers[0] == "content-length" && tc.status == 400 {
 				return
 			}
 			if v, err := Parse(string(reply.body)); err != nil || get(v, "type") != "error" {

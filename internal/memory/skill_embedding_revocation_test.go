@@ -62,7 +62,7 @@ func TestSkillEmbeddingRevocation(t *testing.T) {
 				} else {
 					revoke()
 				}
-				if e := f.svc.WorkOnce(testCtx, f.work); e == nil {
+				if f.svc.WorkOnce(testCtx, f.work) == nil {
 					t.Fatal("revoked skill embedded")
 				}
 				want := 0

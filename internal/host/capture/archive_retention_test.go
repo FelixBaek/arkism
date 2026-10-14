@@ -204,13 +204,13 @@ func TestExportExpiredCopyAndRestoredCopyAreRemoved(t *testing.T) {
 func TestExportHandleTimeDifferenceDoesNotHideHandleChanges(t *testing.T) {
 	root := t.TempDir()
 	_, path := retentionOldCopy(t, root)
-	real := exportHandleStamp
-	t.Cleanup(func() { exportHandleStamp = real })
+	orig := exportHandleStamp
+	t.Cleanup(func() { exportHandleStamp = orig })
 	for _, changed := range []bool{false, true} {
 		calls := int64(0)
 		exportHandleStamp = func(f *os.File) (fileStamp, error) {
 			calls++
-			s, err := real(f)
+			s, err := orig(f)
 			s.CtimeNs += 1000
 			if changed {
 				s.CtimeNs += calls
