@@ -2336,7 +2336,7 @@ window.ArkismI18nEN = {
   "라우팅 모델은 ROUTER › 모델 설정 ›": "Routing models are in ROUTER › Model settings ›",
   "라우팅 판정 모델": "Routing judge model",
   "요청마다 맞는 모델과 스킬·MCP·플러그인을 골라요. 고정은 내장 규칙, 내 모델은 OpenAI 호환 주소, Clef는 Cloudflare Workers AI, Jev는 TypeSafe Jev를 써요.": "Picks the right model and skill, MCP server or plugin for each request. Fixed uses built-in rules, My model an OpenAI-compatible address, Clef Cloudflare Workers AI, Jev TypeSafe Jev.",
-  "판정 모델은 설정 › 연결 ›": "The judge model is in Settings › Connection ›",
+  "판정 모델은 설정 › 에이전트 ›": "The judge model is in Settings › Agents ›",
   "MCP 폴더": "MCP folder",
   "플러그인 폴더": "Plugins folder",
   "스킬·MCP·플러그인": "Skills · MCP · Plugins",
