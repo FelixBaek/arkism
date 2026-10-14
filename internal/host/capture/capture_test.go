@@ -638,6 +638,9 @@ func TestCaptureTrialReviewKeepsAnUnusedProhibition(t *testing.T) {
 		}
 		id := pathID(path)
 		reads[id]++
+		if id == "e" {
+			return nil, &host.HTTPError{Code: 404} // deleted meanwhile
+		}
 		if id == "c" && reads[id] == 1 {
 			return nil, &host.HTTPError{Code: 503} // read once by keep, not retired on a guess
 		}
@@ -651,9 +654,9 @@ func TestCaptureTrialReviewKeepsAnUnusedProhibition(t *testing.T) {
 		return nil, nil
 	}
 	host.UtilityCounts = func(string) (map[string][3]int, int, error) {
-		return map[string][3]int{"a": {5, 0, 0}, "b": {5, 0, 0}, "c": {5, 0, 0}, "d": {5, 0, 0}}, 0, nil // injected five times, never restated
+		return map[string][3]int{"a": {5, 0, 0}, "b": {5, 0, 0}, "c": {5, 0, 0}, "d": {5, 0, 0}, "e": {5, 0, 0}}, 0, nil // injected five times, never restated
 	}
-	if err := recordTrial([]string{"a", "b", "c", "d"}); err != nil {
+	if err := recordTrial([]string{"a", "b", "c", "d", "e"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := trialUpdate(func(st *host.Obj) { st.Set("c", "2026-01-01T00:00:00.000Z") }); err != nil { // c is due to graduate too
@@ -662,7 +665,7 @@ func TestCaptureTrialReviewKeepsAnUnusedProhibition(t *testing.T) {
 	if err := trialReview(); err != nil {
 		t.Fatal(err)
 	}
-	// a kept; b retired; c unread, so neither retired nor graduated this run; d already expired by a person, so it leaves as before
+	// a kept; b retired; c unread, so neither retired nor graduated this run; d already expired by a person and e deleted, so both leave as before
 	if !reflect.DeepEqual(trialSet(), []string{"a", "c"}) || !reflect.DeepEqual(posts, []string{"/v1/memories/b/transition"}) {
 		t.Fatal(trialSet(), posts)
 	}
