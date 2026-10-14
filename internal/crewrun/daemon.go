@@ -185,6 +185,10 @@ func (e *Engine) ResumeRunning(ctx context.Context) error {
 // Serve is the daemon: crew reload every minute, schedules every 15 s,
 // waiting runs every 10 s, and the webhook/callback listener.
 func Serve(ctx context.Context, cfg Config) error {
+	// The crew API is plain HTTP with callbacks, so it stays on loopback; put a TLS proxy in front for remote use.
+	if !loopbackAddr(cfg.Listen) {
+		return errors.New("ARKISM_CREW_LISTEN must be a loopback IP address, got " + cfg.Listen)
+	}
 	e := cfg.Engine
 	log := e.log()
 	for {
@@ -201,10 +205,6 @@ func Serve(ctx context.Context, cfg Config) error {
 	}
 	if err := e.ResumeRunning(ctx); err != nil {
 		log.Warn("crew resume", "error", err.Error())
-	}
-	// The crew API is plain HTTP with callbacks, so it stays on loopback; put a TLS proxy in front for remote use.
-	if !loopbackAddr(cfg.Listen) {
-		return errors.New("ARKISM_CREW_LISTEN must be a loopback address, got " + cfg.Listen)
 	}
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
@@ -247,13 +247,11 @@ func Serve(ctx context.Context, cfg Config) error {
 	}
 }
 
+// loopbackAddr accepts loopback IP literals only; a name like "localhost" could resolve elsewhere.
 func loopbackAddr(addr string) bool {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return false
-	}
-	if host == "localhost" {
-		return true
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()

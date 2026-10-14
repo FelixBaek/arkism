@@ -134,7 +134,7 @@ func sendMail(ctx context.Context, addr, host string, auth smtp.Auth, from strin
 		if err = c.StartTLS(&tls.Config{ServerName: host}); err != nil {
 			return err
 		}
-	} else if !loopbackAddr(addr) {
+	} else if tcp, _ := conn.RemoteAddr().(*net.TCPAddr); tcp == nil || !tcp.IP.IsLoopback() {
 		return errors.New("smtp server " + host + " does not offer STARTTLS; refusing to send in clear text")
 	}
 	if auth != nil {
