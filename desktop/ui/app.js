@@ -4595,7 +4595,7 @@
   const codegraph = window.ArkismCodeGraph ? window.ArkismCodeGraph({ state, el, raw, button, request, query, notice, ago }) : null; // TOOLS › 저장소 › 코드 그래프 (codegraph.js)
   const git = window.ArkismGit({ state, $, el, button, icon, tauri, ago, notice, go, headExtras, codegraph,
     openReview: (key) => { go("reviews"); state.selected = key; markSelected(); reviews.detail(); openDetail(); } });
-  const knowledge = window.ArkismKnowledge({ state, $, el, button, render, request, query, ago, detailShell, headExtras, confirmPop }); // MEMORY › 지식 (knowledge.js)
+  const knowledge = window.ArkismKnowledge({ state, $, el, button, render, request, query, ago, detailShell, headExtras, confirmPop }); // TOOLS › 지식 (knowledge.js)
   Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request, query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], openRecord: openIntelligenceRecord,

@@ -1,4 +1,4 @@
-// MEMORY › 지식 (Figma 384:30031 자료 · 384:30671 조각 · 384:31269 위키).
+// TOOLS › 지식 (Figma 384:30031 자료 · 384:30671 조각 · 384:31269 위키).
 // 자료 = uploaded knowledge sources (GET /v1/knowledge/sources, …/documents). A new version puts the source back
 // to draft: a person reviews it before search sees it. 조각 = the current document's heading paths, its versions and
 // a test search (POST /v1/knowledge/search) — chunk text is never listed, only search evidence shows it.
