@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -406,6 +407,10 @@ func enableTool(kind, name string) (host.Obj, error) {
 				continue
 			}
 			if err := applyRequest(map[string]any{"agent": agent, "kind": "mcp", "name": n, "enabled": true}, stash); err != nil {
+				if len(done) > 0 {
+					// callTool drops the value on error, so the agents already switched on travel in the message.
+					return nil, fmt.Errorf("%w (이미 켠 곳: %v)", err, done)
+				}
 				return nil, err
 			}
 			done = append(done, agent)

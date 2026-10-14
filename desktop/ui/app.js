@@ -1825,6 +1825,9 @@
     render(false);
     if (state.selected === `skill:${skillId}`) renderDetail();
   }
+  function toggleCell(sk, key) {
+    stage(sk.id, key, allowed(sk, key) ? "block" : "allow");
+  }
   // 품질·보안 come from Arkism's built-in check (always) plus, where installed, NVIDIA SkillEvaluator
   // (quality-check, 0–100 and A–F) and SkillSpector (--no-llm: SAFE / CAUTION / DO_NOT_INSTALL),
   // which arkism-skill-checks.timer runs on the host's

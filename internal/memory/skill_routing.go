@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 type SkillCandidate struct {
@@ -278,7 +279,7 @@ func routeExtras(in []SkillCandidate) ([]SkillCandidate, bool) {
 	}
 	out := []SkillCandidate{}
 	for _, c := range in {
-		if !extraIDRx.MatchString(c.ID) || !strings.HasPrefix(c.ID, c.Kind+"-") || len(c.Name) > 128 || len(c.Description) > 600 {
+		if !extraIDRx.MatchString(c.ID) || !strings.HasPrefix(c.ID, c.Kind+"-") || len(c.Name) > 128 || utf8.RuneCountInString(c.Description) > 300 {
 			return nil, false
 		}
 		out = append(out, SkillCandidate{ID: c.ID, Kind: c.Kind, Name: c.Name, Description: c.Description})
