@@ -25,6 +25,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Keep local-only files out of the public repository
+        run: |
+          set -euo pipefail
+          found=$(git ls-files | grep -E '(^|/)(\.gitignore|\.dockerignore|\.env|\.env\..*)$' || true)
+          if [ -n "$found" ]; then
+            echo "::error::These files must stay local and never be committed:"
+            echo "$found"
+            exit 1
+          fi
       - name: gitleaks (pinned release, checksum checked; fake test values are listed in .gitleaks.toml)
         run: |
           curl --proto '=https' --tlsv1.2 -sfLO https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz
