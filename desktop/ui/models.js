@@ -333,7 +333,7 @@ window.ArkismModels = (ctx) => {
       await switchModel(p.id, m, true, { add: true });
       notice(`${m}를 넣었어요. 워크플로우 모델 목록에 보여요.`);
     };
-    mi.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) addIt(); });
+    mi.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) void addIt(); });
     addRow.append(mi, button("넣기", "primary small", null, addIt));
     // A 직접 추가 provider may list hundreds: the ones turned on come first.
     const all = isCustom(p.id) ? modelsOf(p).sort((a, b) => Number(enabled(p.id, b)) - Number(enabled(p.id, a))) : modelsOf(p);
@@ -376,7 +376,7 @@ window.ArkismModels = (ctx) => {
       plug.setAttribute("aria-label", `${m} 연결 시험`);
       acts.append(plug);
       if (extra.includes(m) && !(p.models || []).includes(m)) {
-        const del = button("", "icon-btn plain", "trash", () => { if (confirm(`${m}를 목록에서 뺄까요?`)) switchModel(p.id, m, true, { remove: true }); });
+        const del = button("", "icon-btn plain", "trash", () => { if (confirm(`${m}를 목록에서 뺄까요?`)) void switchModel(p.id, m, true, { remove: true }); });
         del.setAttribute("aria-label", `${m} 빼기`);
         acts.append(del);
       }

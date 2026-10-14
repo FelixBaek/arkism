@@ -54,7 +54,7 @@
 .home-first .sub.warn-text { color: var(--nc-amber); }
 .home-first .sub .agent-tile { width: 14px; height: 14px; border: 0; background: none; }
 .home-first .sub .agent-tile img, .home-first .sub .agent-tile svg { width: 14px; height: 14px; }
-.app.home-mode .btn.small { height: auto; padding: 7px 14px; line-height: 1.5; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); flex: none; }
+.app.home-mode .btn.small { height: auto; padding: 7px 14px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); flex: none; }
 .home-group { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--nc-line); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .home-group strong { font-weight: 500; color: var(--nc-muted); }
 .home-group output { padding: 2px 8px; border-radius: 999px; background: var(--nc-raised); font: 400 12px/1.5 var(--mono); color: var(--nc-muted); }

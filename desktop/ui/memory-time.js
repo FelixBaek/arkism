@@ -84,7 +84,7 @@ window.ArkismMemoryTime = (ctx) => {
       const parsed = new Date(time.value);
       if (!Number.isFinite(parsed.getTime()) || parsed > new Date()) { time.setCustomValidity("현재보다 이전 시각을 입력하세요."); time.reportValidity(); return; }
       if (new TextEncoder().encode(query.value.trim()).length > 256) { query.setCustomValidity("검색어를 조금 짧게 입력하세요."); query.reportValidity(); return; }
-      when = time.value; term = query.value.trim(); asOf = parsed.toISOString(); load();
+      when = time.value; term = query.value.trim(); asOf = parsed.toISOString(); void load();
     });
     time.addEventListener("input", () => time.setCustomValidity("")); query.addEventListener("input", () => query.setCustomValidity(""));
     $("#chips").append(form); paint();

@@ -48,7 +48,7 @@ window.ArkismGit = (ctx) => {
       const side = (action, key) => call(action, { repo, refresh }).then((v) => { if (live(ticket) && S.repo === repo) { S[key] = v; paint(); } },
         () => { if (live(ticket) && S.repo === repo) { S[key] = { failed: true }; paint(); } });
       S.prs = null; S.runs = null;
-      side("prs", "prs"); side("runs", "runs");
+      void side("prs", "prs"); void side("runs", "runs");
       const graph = await call("graph", { repo, limit: 300, refresh, query: S.query });
       if (!live(ticket)) return;
       Object.assign(S, { graph, busy: "" });
@@ -363,7 +363,7 @@ window.ArkismGit = (ctx) => {
       (v) => {
         const head = branches().find((b) => b.name === v.branch);
         if (!head) return notice("브랜치를 찾지 못했어요.");
-        act(kind === "revert" ? "되돌리는 중…" : "가져오는 중…", kind === "revert" ? "revert" : "cherry_pick", { sha, branch: v.branch, expected_sha: head.sha },
+        void act(kind === "revert" ? "되돌리는 중…" : "가져오는 중…", kind === "revert" ? "revert" : "cherry_pick", { sha, branch: v.branch, expected_sha: head.sha },
           (o) => (o.url ? `새 브랜치 ${o.branch}와 PR을 만들었어요.` : `${o.branch}에 올렸어요.`));
       }, kind === "revert" ? `${sha.slice(0, 7)}${subject ? ` · ${subject}` : ""}` : "같은 커밋을 다른 브랜치에도 적용해요.");
   }
@@ -376,7 +376,7 @@ window.ArkismGit = (ctx) => {
     open.slice(0, 20).forEach((f) => {
       const c = el("div", "git-finding");
       const top = el("div", "git-finding-top");
-      top.append(el("span", `git-badge ${f.severity === "blocking" ? "warn" : "warn"}`, f.severity === "blocking" ? "심각" : "권고"), el("code", "", `${f.path}:${f.line}`));
+      top.append(el("span", "git-badge warn", f.severity === "blocking" ? "심각" : "권고"), el("code", "", `${f.path}:${f.line}`));
       c.append(top, el("p", "", f.text));
       sec.append(c);
     });
@@ -469,7 +469,7 @@ window.ArkismGit = (ctx) => {
         const pr = prFor(sel.name), def = S.graph.repo.default_branch;
         box.append(el("p", "git-kicker", "브랜치"), el("h3", "mono", sel.name));
         const acts = el("div", "git-actions");
-        if (pr) acts.append(button(`PR #${pr.number} 보기`, "", null, () => { S.mode = "prs"; select({ type: "pr", number: pr.number }); }));
+        if (pr) acts.append(button(`PR #${pr.number} 보기`, "", null, () => { S.mode = "prs"; void select({ type: "pr", number: pr.number }); }));
         else if (sel.name !== def) acts.append(button("PR 만들기", "primary", null, () => newPr(sel.name)));
         acts.append(button("여기서 새 브랜치", "", null, () => newBranch(sel.sha, sel.name)));
         if (sel.name !== def) acts.append(button("브랜치 지우기", "", null, () => ask(`브랜치 ${sel.name} 지우기`, [], "브랜치 지우기",
@@ -542,7 +542,7 @@ window.ArkismGit = (ctx) => {
     const pick = el("select", "git-repo"); pick.setAttribute("aria-label", "저장소");
     (S.repos || []).forEach((r) => { const o = el("option", "", `${r.name}${r.archived ? " (보관)" : ""}`); o.value = r.name; pick.append(o); });
     pick.value = S.repo;
-    pick.addEventListener("change", () => { S.repo = pick.value; keep(REPO_KEY, S.repo); S.sel = null; S.detail = null; S.graph = null; codegraph?.reset(); load(); });
+    pick.addEventListener("change", () => { S.repo = pick.value; keep(REPO_KEY, S.repo); S.sel = null; S.detail = null; S.graph = null; codegraph?.reset(); void load(); });
     const def = S.graph?.repo?.default_branch;
     const head = def && branches().find((b) => b.name === def);
     const out = S.mode === "prs" ? [] : [pick];
@@ -561,8 +561,8 @@ window.ArkismGit = (ctx) => {
   function toolbar() {
     const bar = el("div", "git-toolbar");
     const search = el("input", "git-search"); search.type = "search"; search.placeholder = "커밋 메시지·해시 찾기"; search.value = S.query;
-    search.addEventListener("keydown", (e) => { if (e.key === "Enter") { S.query = search.value.trim(); load(); } });
-    bar.append(search, button("PR 상세", "", null, () => { S.mode = "prs"; const first = pulls().find((p) => p.state === "open"); if (first && S.sel?.type !== "pr") select({ type: "pr", number: first.number }); else paint(); }),
+    search.addEventListener("keydown", (e) => { if (e.key === "Enter") { S.query = search.value.trim(); void load(); } });
+    bar.append(search, button("PR 상세", "", null, () => { S.mode = "prs"; const first = pulls().find((p) => p.state === "open"); if (first && S.sel?.type !== "pr") void select({ type: "pr", number: first.number }); else paint(); }),
       button("코드 리뷰", "", null, () => go("reviews")));
     if (S.busy) bar.append(el("span", "git-busy", S.busy));
     return bar;
@@ -584,7 +584,7 @@ window.ArkismGit = (ctx) => {
     if (S.error) {
       const box = el("div", "git-error-box"), hostLabel = el("label", "git-field"), host = el("input"); host.value = S.host || state.defaults.ssh_host;
       hostLabel.append(el("span", "git-field-label", "SSH 주소"), host);
-      box.append(el("h4", "", "연결 오류"), el("p", "git-error", S.error), hostLabel, button("다시 연결", "", "", () => { S.host = host.value.trim() || state.defaults.ssh_host; keep(HOST_KEY, S.host); S.repos = null; load(true); }),
+      box.append(el("h4", "", "연결 오류"), el("p", "git-error", S.error), hostLabel, button("다시 연결", "", "", () => { S.host = host.value.trim() || state.defaults.ssh_host; keep(HOST_KEY, S.host); S.repos = null; void load(true); }),
         el("p", "git-note", "브랜치가 바뀜 · 충돌 · 같은 이름 · SSH 실패 때는 작업을 다시 확인해요."));
       parts.push(box);
     } else if (code) {

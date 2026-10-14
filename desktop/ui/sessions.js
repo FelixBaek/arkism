@@ -214,12 +214,12 @@ window.ArkismSessions = (ctx) => {
     const bar = el("div", "v4s-bar");
     const box = el("label", "v4s-search ss-search");
     const search = el("input"); search.type = "search"; search.placeholder = "제목 · 프로젝트 · 세션 ID"; search.value = S.q; search.setAttribute("aria-label", "세션 검색");
-    search.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(() => { S.q = search.value.trim(); load(); }, 300); });
+    search.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(() => { S.q = search.value.trim(); void load(); }, 300); });
     box.append(el("span", "ss-glass", "⌕"), search);
     const sel = (label, opts, cur, pick) => { const s = el("select", "v4s-select"); s.setAttribute("aria-label", label); for (const [k, l] of opts) { const o = el("option", "", l); o.value = k; o.selected = k === cur; s.append(o); } s.addEventListener("change", () => pick(s.value)); return s; };
     const pickMode = el("button", `link-btn ss-pick${S.selecting ? " on" : ""}`, S.selecting ? "선택 끝내기" : "선택해서 지우기"); pickMode.type = "button";
     pickMode.addEventListener("click", () => { S.selecting = !S.selecting; if (!S.selecting) S.picked.clear(); render(false); });
-    bar.append(box, sel("기간", RANGES.map(([k, l]) => [k, k === "all" ? "전체 기간" : k === "today" ? "오늘" : `최근 ${l}`]), S.range, (k) => { if (S.range !== k) { S.range = k; load(); } }),
+    bar.append(box, sel("기간", RANGES.map(([k, l]) => [k, k === "all" ? "전체 기간" : k === "today" ? "오늘" : `최근 ${l}`]), S.range, (k) => { if (S.range !== k) { S.range = k; void load(); } }),
       sel("정렬", SORTS, S.sort, (k) => { S.sort = k; render(false); }), pickMode);
     const keep = document.activeElement?.closest?.(".ss-search");
     $("#controls").replaceChildren(bar);
@@ -230,7 +230,7 @@ window.ArkismSessions = (ctx) => {
       if (k) c.append(logo(k));
       c.append(label);
       if (S.source === k && S.doc) c.append(el("output", "", num(S.doc.total)));
-      c.addEventListener("click", () => { if (S.source !== k) { S.source = k; load(); } });
+      c.addEventListener("click", () => { if (S.source !== k) { S.source = k; void load(); } });
       return c;
     };
     $("#chips").replaceChildren(...(agents.length ? [chip("", "전체"), ...agents.map((a) => chip(a, agentName(a)))] : []));

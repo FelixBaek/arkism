@@ -13,7 +13,6 @@ window.ArkismCrew = (ctx) => {
   // 팀 이름(데이터)과 화면 문구가 한 줄에 섞일 때: 줄은 raw로 두고 문구만 만들 때 번역한다.
   const raw = (n) => { n.setAttribute("data-no-i18n", ""); return n; };
   const tr = (s) => (window.ArkismI18n ? window.ArkismI18n.translate(s) : s);
-  "use strict";
   const { state, $, el, icon, button, segment, render, request, query, notice, detailShell, section, copyButton, markSelected, openDetail, ago, models } = ctx;
   const kit = window.ArkismAssist(ctx);
   const pins = window.ArkismPins?.(ctx); // 항상 넣는 자료 (pins.js)
@@ -514,7 +513,7 @@ window.ArkismCrew = (ctx) => {
     drawWaiting();
     drawCards();
     drawRecent();
-    loadRecent();
+    void loadRecent();
   }
   // 확인해 주세요: runs that wait for a person's answer, with the answer buttons right there.
   function drawWaiting() {
@@ -531,7 +530,7 @@ window.ArkismCrew = (ctx) => {
       t.append(el("strong", "", `확인해 주세요 · ${rec?.crew.name || "워크플로우"}`), el("p", "", `${node ? `${nodeTitle(node)} — ` : ""}${run.crew_run.waiting.question || node?.config?.question || "다음 단계로 갈까요?"}`));
       const acts = el("div", "wf-attn-actions");
       const after = async () => { recent = null; await loadRecent(); };
-      acts.append(button("거절", "", null, async () => { await decide(run, false); after(); }), button("승인", "primary", null, async () => { await decide(run, true); after(); }));
+      acts.append(button("거절", "", null, async () => { await decide(run, false); void after(); }), button("승인", "primary", null, async () => { await decide(run, true); void after(); }));
       if (rec) acts.prepend(button("실행 보기", "ghost", null, () => openGraph(rec, { run })));
       card.append(t, acts);
       out.push(card);
@@ -631,10 +630,10 @@ window.ArkismCrew = (ctx) => {
     if (!box) return;
     const picked = state.selected?.startsWith("crew:") ? state.selected.slice(5) : null;
     const own = picked ? runsOf.get(picked) : null;
-    if (picked && own === undefined) loadRunsOf(picked);
+    if (picked && own === undefined) void loadRunsOf(picked);
     // 상태로 거르기: the server filters (status=…), so a failure older than the latest 30 runs still shows.
     const key = `${picked || ""}|${runStatus}`;
-    if (runStatus !== "all" && byStatus.key !== key) loadByStatus(key, picked);
+    if (runStatus !== "all" && byStatus.key !== key) void loadByStatus(key, picked);
     const filtered = runStatus !== "all" ? (byStatus.key === key && Array.isArray(byStatus.items) ? byStatus.items : null) : undefined;
     const loading = filtered === null || (filtered === undefined && (picked ? !Array.isArray(own) : recent === null));
     const list = filtered || (filtered === null ? [] : picked ? (Array.isArray(own) ? own : (recent || []).filter((x) => x.crew_run?.crew_id === picked)) : recent || []);
@@ -801,7 +800,7 @@ window.ArkismCrew = (ctx) => {
       if (r) openGraph(rec, { run: r });
     };
     go2.addEventListener("click", send);
-    q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) send(); });
+    q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) void send(); });
     row.append(q, go2);
     box.append(row);
     return box;
@@ -869,7 +868,7 @@ window.ArkismCrew = (ctx) => {
     const more = button("더 보기", "ghost small", null, () => find(page + 1));
     more.hidden = true;
     const status = el("small", "dim");
-    search.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); find(1); } });
+    search.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void find(1); } });
     async function find(n) {
       const q = search.value.trim();
       if (!q) return;
@@ -1099,7 +1098,7 @@ window.ArkismCrew = (ctx) => {
     state.view = "graph";
     state.selected = null;
     render();
-    if (ed.run) pollRun();
+    if (ed.run) void pollRun();
   }
   function leaveGraph() {
     if (ed.dirty && !confirm("저장하지 않은 변경이 있어요. 나갈까요?")) return;
@@ -2064,7 +2063,7 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
     box.append(el("h4", "", "예산"), cards);
     if (cr.summary && cr.status !== "failed") { box.append(el("h4", "", "결과")); const pre = el("pre", "try-answer"); pre.textContent = cr.summary; box.append(pre); }
     const acts = el("div", "crew-actions wf-run-acts");
-    if (cr.status === "running" || cr.status === "waiting") acts.append(button("멈추기", "", "stop-circle", async () => { await stopRun(ed.run); pollRun(); }));
+    if (cr.status === "running" || cr.status === "waiting") acts.append(button("멈추기", "", "stop-circle", async () => { await stopRun(ed.run); void pollRun(); }));
     if (cr.status === "failed") acts.append(button("실패한 곳부터 다시", "", null, retryRun));
     acts.append(button("편집으로", "ghost", null, () => { stopPolling(); ed.run = null; render(false); }));
     box.append(acts);
@@ -2074,7 +2073,7 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
   async function retryRun() {
     const cr = ed.run.crew_run || {};
     const r = await startRun(ed.rec, runRequest(cr), null, cr);
-    if (r) { ed.run = r; render(false); pollRun(); }
+    if (r) { ed.run = r; render(false); void pollRun(); }
   }
   // 목록으로 보기 (198:5360 · 198:6908): the same run as a table of steps instead of the graph.
   function runList() {
@@ -2138,7 +2137,7 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
     const text = await askTask(ed.rec);
     if (text === null) return;
     const r = await startRun(ed.rec, text);
-    if (r) { ed.run = r; render(false); pollRun(); }
+    if (r) { ed.run = r; render(false); void pollRun(); }
   }
 
   function graphHead() {
@@ -2573,7 +2572,7 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
     $("#controls").replaceChildren();
     const main = $("#table");
     main.className = "wk-main";
-    loadAgentInfo();
+    void loadAgentInfo();
     if (state.workerNew) return renderWorkerNew(main);
     const all = agents();
     if (!wk.id || !byId(wk.id)) workerPick(all[0]?.id);
