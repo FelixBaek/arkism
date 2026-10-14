@@ -88,7 +88,7 @@ type lane struct {
 // turned away when no slot is free), each at most wait. The release is safe to call twice.
 func (l *lanes) take(ctx context.Context, id string, limit, queue int, wait time.Duration) (func(), error) {
 	if limit <= 0 {
-		return func() {}, nil
+		return func() { /* no limit: nothing was taken, nothing to release */ }, nil
 	}
 	l.mu.Lock()
 	if l.m == nil {

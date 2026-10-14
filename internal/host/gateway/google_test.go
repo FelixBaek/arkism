@@ -227,7 +227,7 @@ func gSetup(t *testing.T) *gFake {
 		if n := len(googleSlots); n != 0 {
 			t.Errorf("request leaked %d capacity slots", n)
 		}
-		if n := len(googleAuthLock); n != 0 {
+		if len(googleAuthLock) != 0 {
 			t.Error("request leaked the login lock")
 		}
 		googleAPI, googleAssist, googleOAuth = saved[0].(string), saved[1].(string), saved[2].(string)
@@ -1107,7 +1107,7 @@ func TestGoogleOAuthCountThoughtPartsPreserveInput(t *testing.T) {
 		if dump(input) != before {
 			t.Fatal("input mutated")
 		}
-		if want := map[bool]int{true: 2, false: 1}[c.oauth]; f.count() != want {
+		if f.count() != (map[bool]int{true: 2, false: 1}[c.oauth]) {
 			t.Fatal(f.count())
 		}
 	}

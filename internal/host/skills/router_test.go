@@ -104,7 +104,7 @@ func TestRouterGoldenSessionAndTools(t *testing.T) {
 			writeGolden(t, "router.json", g)
 			continue
 		}
-		if want := `{"jsonrpc":"2.0","id":1,"result":` + g[key].(string) + "}\n"; out.String() != want {
+		if out.String() != `{"jsonrpc":"2.0","id":1,"result":`+g[key].(string)+"}\n" {
 			t.Fatalf("%s:\n%s", key, out.String())
 		}
 	}

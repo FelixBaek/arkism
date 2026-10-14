@@ -139,7 +139,7 @@ func TestCodegraphIndexMirrorUploadsIncrementally(t *testing.T) {
 	if code := codegraphMain([]string{"index", "--mirror", "demo"}, nil, &out, &errOut); code != 0 || len(server.batches) != 2 {
 		t.Fatalf("unchanged run %d %d", code, len(server.batches))
 	}
-	if code := codegraphMain([]string{"index"}, nil, &out, &errOut); code != 2 {
+	if codegraphMain([]string{"index"}, nil, &out, &errOut) != 2 {
 		t.Fatal("index without a path or mirror")
 	}
 }

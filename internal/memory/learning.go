@@ -371,8 +371,8 @@ func validLearningCandidate(ctx context.Context, tx Tx, candidate learningCandid
 
 func learningTag(taskType string) string { return "learning:" + ContentHash(taskType) }
 
-func validLearningText(value string, max int, required bool) bool {
-	if len(value) > max || strings.TrimSpace(value) != value || required && value == "" || strings.IndexFunc(value, unicode.IsControl) >= 0 {
+func validLearningText(value string, maxN int, required bool) bool {
+	if len(value) > maxN || strings.TrimSpace(value) != value || required && value == "" || strings.IndexFunc(value, unicode.IsControl) >= 0 {
 		return false
 	}
 	return true

@@ -511,7 +511,7 @@ func skillExecutionMain(argv []string, stdin io.Reader, stdout, stderr io.Writer
 		return 1
 	}
 	defer func() {
-		if r := recover(); r != nil {
+		if recover() != nil {
 			code = fail(nil)
 		}
 	}()

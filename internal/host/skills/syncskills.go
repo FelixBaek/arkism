@@ -205,7 +205,7 @@ func reviewedRows() (host.Obj, error) {
 }
 
 // writeReviewed replaces the skill's catalog row, keeps source_path order, and logs the change.
-func writeReviewed(row host.Obj, change host.Obj) error {
+func writeReviewed(row, change host.Obj) error {
 	rows, err := reviewedRows()
 	if err != nil {
 		return err

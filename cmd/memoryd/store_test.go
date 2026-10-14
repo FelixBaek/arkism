@@ -45,7 +45,7 @@ func TestLocalEmbedderSelectionDoesNotFallBackToCloud(t *testing.T) {
 		t.Fatal("query prefix must be part of the space", err)
 	}
 	t.Setenv("TEI_QUERY_PREFIX", "Instruct: find\nQuery: ")
-	if real, err := configuredEmbedder(true, false); err != nil || real.Space() != escaped.Space() {
+	if embedder, err := configuredEmbedder(true, false); err != nil || embedder.Space() != escaped.Space() {
 		t.Fatal(`an escaped \n must equal a real newline`, err)
 	}
 	t.Setenv("MEMORY_EMBEDDER", "none")

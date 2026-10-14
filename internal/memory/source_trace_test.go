@@ -218,10 +218,10 @@ func TestSourceTraceDeletionProof(t *testing.T) {
 	receipt := f.repo.store["jobs"][recKey(scopeA, sourceDeletionID(scopeA, id))]
 	delete(f.repo.store["jobs"], recKey(scopeA, receipt.ID))
 	for _, other := range []Scope{scopeB, {WorkspaceID: "other", ProjectID: scopeA.ProjectID}, {WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, UserID: "other"}, {WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, AgentID: "other"}} {
-		copy := receipt
-		copy.Scope = other
-		copy.ID = sourceDeletionID(other, id)
-		if e := f.repo.Insert(testCtx, "jobs", copy); e != nil {
+		clone := receipt
+		clone.Scope = other
+		clone.ID = sourceDeletionID(other, id)
+		if e := f.repo.Insert(testCtx, "jobs", clone); e != nil {
 			t.Fatal(e)
 		}
 	}

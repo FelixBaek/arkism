@@ -6,14 +6,14 @@ import (
 	"os"
 
 	"github.com/FelixBaek/arkism/internal/host"
-	_ "github.com/FelixBaek/arkism/internal/host/backup"
-	_ "github.com/FelixBaek/arkism/internal/host/capture"
-	_ "github.com/FelixBaek/arkism/internal/host/crew"
-	_ "github.com/FelixBaek/arkism/internal/host/discord"
-	_ "github.com/FelixBaek/arkism/internal/host/doctor"
-	_ "github.com/FelixBaek/arkism/internal/host/gateway"
-	_ "github.com/FelixBaek/arkism/internal/host/skills"
-	_ "github.com/FelixBaek/arkism/internal/host/subscription"
+	_ "github.com/FelixBaek/arkism/internal/host/backup"       // registers its subcommands in init
+	_ "github.com/FelixBaek/arkism/internal/host/capture"      // registers its subcommands in init
+	_ "github.com/FelixBaek/arkism/internal/host/crew"         // registers its subcommands in init
+	_ "github.com/FelixBaek/arkism/internal/host/discord"      // registers its subcommands in init
+	_ "github.com/FelixBaek/arkism/internal/host/doctor"       // registers its subcommands in init
+	_ "github.com/FelixBaek/arkism/internal/host/gateway"      // registers its subcommands in init
+	_ "github.com/FelixBaek/arkism/internal/host/skills"       // registers its subcommands in init
+	_ "github.com/FelixBaek/arkism/internal/host/subscription" // installs the host.Accounts* hooks in init
 )
 
 func main() {

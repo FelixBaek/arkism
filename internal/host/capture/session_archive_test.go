@@ -258,13 +258,13 @@ func TestArchiveCounterKeepsFirstIncrementOrder(t *testing.T) {
 // Like Path.rglob: a symlinked root is followed, a symlinked folder below it is not.
 func TestArchiveGlobAllFollowsSymlinkedRootOnly(t *testing.T) {
 	dir := t.TempDir()
-	real, root := filepath.Join(dir, "real"), filepath.Join(dir, "root")
-	os.MkdirAll(filepath.Join(real, "a"), 0o700)
-	os.WriteFile(filepath.Join(real, "a", "x.jsonl"), nil, 0o600)
+	realDir, root := filepath.Join(dir, "real"), filepath.Join(dir, "root")
+	os.MkdirAll(filepath.Join(realDir, "a"), 0o700)
+	os.WriteFile(filepath.Join(realDir, "a", "x.jsonl"), nil, 0o600)
 	other := filepath.Join(dir, "other")
 	os.MkdirAll(other, 0o700)
 	os.WriteFile(filepath.Join(other, "y.jsonl"), nil, 0o600)
-	if os.Symlink(real, root) != nil || os.Symlink(other, filepath.Join(real, "link")) != nil {
+	if os.Symlink(realDir, root) != nil || os.Symlink(other, filepath.Join(realDir, "link")) != nil {
 		t.Skip("no symlinks")
 	}
 	got := globAll(root, "*.jsonl")

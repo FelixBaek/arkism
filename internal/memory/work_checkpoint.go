@@ -170,8 +170,8 @@ type WorkCheckpointStore interface {
 	WorkCheckpointRows(ctx context.Context, scope Scope, after string, limit int) ([]Record, error)
 }
 
-func validWorkCheckpointString(s string, max int) bool {
-	return utf8.ValidString(s) && len(s) > 0 && len(s) <= max && strings.TrimSpace(s) == s && strings.IndexFunc(s, unicode.IsControl) < 0
+func validWorkCheckpointString(s string, maxN int) bool {
+	return utf8.ValidString(s) && len(s) > 0 && len(s) <= maxN && strings.TrimSpace(s) == s && strings.IndexFunc(s, unicode.IsControl) < 0
 }
 
 func validWorkCheckpointOutcome(outcome string) bool {

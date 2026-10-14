@@ -14,7 +14,7 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 VERSION=""
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) VERSION="$2"; shift 2 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
@@ -74,13 +74,13 @@ for f in "$OUT"/dmg/*.dmg "$OUT"/appimage/*.AppImage "$OUT"/deb/*.deb; do
   cp "$f" "$DIR/dist/"
   made+=("$(basename "$f")")
 done
-if [ "$(uname -s)" = Darwin ]; then
+if [[ "$(uname -s)" = Darwin ]]; then
   # The .app as a zip as well, for copying by hand.
   zip="Arkism-$VERSION-macos-$(uname -m).app.zip"
   ( cd "$OUT/macos" && ditto -c -k --keepParent Arkism.app "$DIR/dist/$zip" )
   made+=("$zip")
 fi
-[ ${#made[@]} -gt 0 ] || { echo "no bundle was made" >&2; exit 1; }
+[[ ${#made[@]} -gt 0 ]] || { echo "no bundle was made" >&2; exit 1; }
 cd "$DIR/dist"
 for f in "${made[@]}"; do
   if command -v sha256sum >/dev/null; then sha256sum "$f" > "$f.sha256"; else shasum -a 256 "$f" > "$f.sha256"; fi

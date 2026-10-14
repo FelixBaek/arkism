@@ -121,7 +121,7 @@ func jsonText(value any, code string) string {
 	return dumps(value)
 }
 
-func loads(value string, code string) any {
+func loads(value, code string) any {
 	parsed, err := parse(value, true)
 	if err != nil {
 		fail(code)
@@ -1025,7 +1025,7 @@ func CodecError(message string, status int) (out host.Obj, err error) {
 // Exported forms of the codec helpers the gateway and provider bridges call.
 
 // Loads is _loads: strict JSON (no duplicate keys, NaN or Infinity) or the given code.
-func Loads(value string, code string) (out any, err error) {
+func Loads(value, code string) (out any, err error) {
 	defer catch(&err)
 	return loads(value, code), nil
 }

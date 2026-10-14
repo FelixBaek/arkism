@@ -46,7 +46,7 @@ def main():
         return 1
     try:
         totals = parse_profile(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, ValueError) as error:
+    except (OSError, ValueError) as error:  # UnicodeError is a ValueError
         print(f"실패: {error}", file=sys.stderr)
         return 1
     passed = True

@@ -172,8 +172,8 @@ var skillRef = regexp.MustCompile(`\{\{SKILL\.md:([^{}\n]{1,1000})\}\}`)
 
 func resolvePath(p string) string {
 	abs, _ := filepath.Abs(p)
-	if real, err := filepath.EvalSymlinks(abs); err == nil {
-		return real
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		return resolved
 	}
 	return abs
 }

@@ -775,7 +775,7 @@ func TestClaudeArgvGolden(t *testing.T) {
 			!strings.HasPrefix(filepath.Base(run.tmp), "arkism-claude-") {
 			t.Fatalf("%s: %+v", c.Name, seen)
 		}
-		if want := getd(body, "system", ""); seen.System != want {
+		if seen.System != getd(body, "system", "") {
 			t.Fatalf("system %q", seen.System)
 		}
 		if c.Env["CLAUDE_CODE_TMPDIR"] != "<tmp>" {

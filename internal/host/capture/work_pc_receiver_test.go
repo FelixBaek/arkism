@@ -122,8 +122,8 @@ func TestReceiverPermissionFailureAndStorageFailureNeverAcknowledge(t *testing.T
 		t.Fatal("stored")
 	}
 	f.postErr = nil
-	real := outboxWrite
-	t.Cleanup(func() { outboxWrite = real })
+	orig := outboxWrite
+	t.Cleanup(func() { outboxWrite = orig })
 	outboxWrite = func(string, []byte) error { return errors.New("disk full") }
 	if _, err := receiverReceive(f.raw); err == nil {
 		t.Fatal("no error")
@@ -162,8 +162,8 @@ func TestReceiverRuntimeScopeAndExpiryBoundaries(t *testing.T) {
 func TestReceiverMainPrintsReceiptOrCode(t *testing.T) {
 	f := newReceiverFixture(t)
 	spawned := 0
-	real := spawnDrain
-	t.Cleanup(func() { spawnDrain = real })
+	orig := spawnDrain
+	t.Cleanup(func() { spawnDrain = orig })
 	spawnDrain = func() { spawned++ }
 	var out strings.Builder
 	if code := receiverMain(nil, strings.NewReader(string(f.raw)), &out, &out); code != 0 || spawned != 1 ||

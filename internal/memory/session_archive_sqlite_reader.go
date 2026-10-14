@@ -151,22 +151,22 @@ func openArchiveSQLite(ctx context.Context, r *archiveSQLiteReader) (*sqlite.Con
 		}
 		return nil, nil, errArchiveSQLiteUnsupported
 	}
-	close := func() { db.Close(); cleanup() }
+	closeDB := func() { db.Close(); cleanup() }
 	db.SetInterrupt(ctx)
 	db.Limit(sqlite.LIMIT_LENGTH, archiveRecordLimit+4096)
 	db.Limit(sqlite.LIMIT_ATTACHED, 0)
 	db.HardHeapLimit(32 << 20)
 	if _, err = db.Config(sqlite.DBCONFIG_DEFENSIVE, true); err != nil {
-		close()
+		closeDB()
 		return nil, nil, ErrUnavailable
 	}
 	if _, err = db.Config(sqlite.DBCONFIG_TRUSTED_SCHEMA, false); err != nil {
-		close()
+		closeDB()
 		return nil, nil, ErrUnavailable
 	}
 	if err = db.Exec("PRAGMA query_only=ON; PRAGMA temp_store=MEMORY"); err != nil {
-		close()
+		closeDB()
 		return nil, nil, ErrUnavailable
 	}
-	return db, close, nil
+	return db, closeDB, nil
 }

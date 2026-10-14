@@ -112,7 +112,7 @@ func parseSkillSource(raw string) (skillSource, error) {
 	return src, nil
 }
 
-func fetchGitHub(url, accept string, max int64) ([]byte, error) {
+func fetchGitHub(url, accept string, maxN int64) ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -131,11 +131,11 @@ func fetchGitHub(url, accept string, max int64) ([]byte, error) {
 	if res.StatusCode != 200 {
 		return nil, runtimeError{fmt.Sprintf("GitHub이 HTTP %d로 답했어요", res.StatusCode)}
 	}
-	raw, err := io.ReadAll(io.LimitReader(res.Body, max+1))
+	raw, err := io.ReadAll(io.LimitReader(res.Body, maxN+1))
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(raw)) > max {
+	if int64(len(raw)) > maxN {
 		return nil, runtimeError{"저장소가 너무 커서 받지 않았어요"}
 	}
 	return raw, nil
@@ -437,7 +437,7 @@ func installSkills(src skillSource, targets []string, update bool) (string, erro
 	}
 	type job struct{ target, dir string }
 	var jobs []job
-	real := map[string]bool{}
+	seenDirs := map[string]bool{}
 	for _, t := range targets {
 		d := installDir(t)
 		if d == "" {
@@ -450,8 +450,8 @@ func installSkills(src skillSource, targets []string, update bool) (string, erro
 		if err != nil {
 			return "", err
 		}
-		if !real[r] {
-			real[r] = true
+		if !seenDirs[r] {
+			seenDirs[r] = true
 			jobs = append(jobs, job{t, d})
 		}
 	}

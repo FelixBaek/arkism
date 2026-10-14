@@ -32,8 +32,8 @@ func cliIdentity(executable string) []any {
 	if err != nil {
 		return []any{}
 	}
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		path = real
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
 	}
 	st, err := os.Stat(path)
 	if err != nil {

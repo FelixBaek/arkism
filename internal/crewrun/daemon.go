@@ -225,7 +225,7 @@ func Serve(ctx context.Context, cfg Config) error {
 	for {
 		select {
 		case <-ctx.Done():
-			shut, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			shut, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second) // ctx is already done; keep its values, drop its cancel
 			_ = srv.Shutdown(shut)
 			cancel()
 			e.Wait()

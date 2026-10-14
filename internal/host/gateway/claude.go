@@ -405,7 +405,7 @@ func claudeNewRun(lock *sync.Mutex, owner, settings string, body host.Obj, selec
 		tag: newHex(), closed: make(chan struct{}), events: make(chan any, 32), exited: make(chan struct{}), lock: lock}
 	r.deadline.Store(claudeClock() + int64(claudeDeadline))
 	defer func() {
-		if p := recover(); p != nil {
+		if recover() != nil {
 			err = errors.New("claude: start failed")
 		}
 		if err != nil {

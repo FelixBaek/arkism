@@ -74,8 +74,9 @@
 .segment.mem-seg .tab output { font: 400 11px/1.5 var(--mono); color: var(--nc-quiet); }
 .segment.mem-seg .tab output.warn { color: var(--nc-quiet); }
 
-.mem-hint { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.mem-hint p { margin: 0; display: inline-flex; align-items: center; gap: 4px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+/* 30일 지난 후보 정리 sits next to 여러 개 한 번에 처리 on the right */
+.mem-hint { flex: 1; display: flex; align-items: center; justify-content: flex-start; gap: 12px; }
+.mem-hint p { margin: 0 auto 0 0; display: inline-flex; align-items: center; gap: 4px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .mem-hint p .icon { width: 12px; height: 12px; }
 
 /* 모아보기 lists (intelligence.js · memory-time.js · originals.js) drawn as the same rows */
@@ -118,9 +119,8 @@
 .memory-mode .detail-body .section h3 small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 .memory-mode .detail-body .quote { gap: 6px; padding: 10px 12px; border-radius: var(--nc-radius-quote); background: var(--nc-raised); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .memory-mode .detail-body .quote footer { font-size: calc(11px * var(--fs, 1)); color: var(--nc-quiet); }
-.memory-mode .detail-body .quote .original-source { padding: 0; border: 0; }
+.memory-mode .detail-body .quote .original-source { padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px; }
 .memory-mode .detail-body .quote .original-source .meta { font-size: calc(11px * var(--fs, 1)); order: 2; }
-.memory-mode .detail-body .quote .original-source { display: flex; flex-direction: column; gap: 6px; }
 .memory-mode .detail-body .quote .original-excerpt { margin: 0; order: 1; }
 .memory-mode .detail-body .facts { gap: 8px 12px; font-size: calc(13px * var(--fs, 1)); line-height: 1.5; }
 .memory-mode .detail-body .facts dt { color: var(--nc-quiet); }
@@ -153,8 +153,7 @@
 /* 변경 이력 N건 › · 이전으로 되돌리기 (198:630) */
 .d-history-row { position: relative; }
 .d-history { min-width: 0; }
-.d-history summary { padding-right: 140px; }
-.d-history summary { cursor: pointer; list-style: none; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.d-history summary { padding-right: 140px; cursor: pointer; list-style: none; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .d-history summary::after { content: " ›"; }
 .d-history summary::-webkit-details-marker { display: none; }
 .d-history[open] summary { margin-bottom: 10px; }
@@ -169,10 +168,6 @@
 .memory-mode .mem-more { padding: 12px 16px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .memory-mode .mem-more .link-btn { color: var(--nc-muted); font: inherit; cursor: pointer; }
 .memory-mode .mem-more .link-btn:hover { color: var(--nc-text); }
-
-/* 30일 지난 후보 정리 sits next to 여러 개 한 번에 처리 on the right */
-.mem-hint p { margin-right: auto; }
-.mem-hint { justify-content: flex-start; }
 
 /* 만료일 picks wrap inside the 366px column */
 .memory-mode .detail-body .expiry-picks { flex-wrap: wrap; }

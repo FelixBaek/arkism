@@ -81,12 +81,12 @@ func (m *requestMetrics) snapshot() map[string]RequestMetric {
 	defer m.mu.Unlock()
 	out := map[string]RequestMetric{}
 	for route, row := range m.routes {
-		copy := row
-		copy.StatusCodes = map[int]uint64{}
+		clone := row
+		clone.StatusCodes = map[int]uint64{}
 		for k, v := range row.StatusCodes {
-			copy.StatusCodes[k] = v
+			clone.StatusCodes[k] = v
 		}
-		out[route] = copy
+		out[route] = clone
 	}
 	return out
 }

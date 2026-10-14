@@ -96,9 +96,9 @@ func TestRunFinishPolicyScopeAndRollback(t *testing.T) {
 		t.Fatal("agent terminated another owner", e)
 	}
 	for _, scope := range []Scope{scopeB, {WorkspaceID: "other", ProjectID: scopeA.ProjectID}, {WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, UserID: "other"}, {WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, AgentID: "other"}} {
-		copy := in
-		copy.Scope = scope
-		if _, e := f.svc.FinishRun(testCtx, f.human, r.ID, copy); !errors.Is(e, ErrNotFound) {
+		clone := in
+		clone.Scope = scope
+		if _, e := f.svc.FinishRun(testCtx, f.human, r.ID, clone); !errors.Is(e, ErrNotFound) {
 			t.Fatal("scope leak", e)
 		}
 	}
@@ -116,9 +116,9 @@ func TestRunFinishPolicyScopeAndRollback(t *testing.T) {
 		t.Fatal("rollback mutated run", got)
 	}
 	f.repo.failAudit = false
-	copy := in
-	copy.FinishedAt = r.Run.StartedAt.Add(-time.Second)
-	if _, e := f.svc.FinishRun(testCtx, f.human, r.ID, copy); !errors.Is(e, ErrInvalid) {
+	clone := in
+	clone.FinishedAt = r.Run.StartedAt.Add(-time.Second)
+	if _, e := f.svc.FinishRun(testCtx, f.human, r.ID, clone); !errors.Is(e, ErrInvalid) {
 		t.Fatal(e)
 	}
 	// Legacy rows remain readable but are never silently upgraded by finish.

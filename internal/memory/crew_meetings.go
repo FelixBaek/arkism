@@ -172,12 +172,12 @@ func terminalMeeting(status string) bool {
 	return status == "concluded" || status == "no_conclusion" || status == "stopped" || status == "failed"
 }
 
-func shortTexts(list []string, n, max int) bool {
+func shortTexts(list []string, n, maxN int) bool {
 	if len(list) > n {
 		return false
 	}
 	for _, t := range list {
-		if runes(t) > max {
+		if runes(t) > maxN {
 			return false
 		}
 	}
@@ -560,7 +560,7 @@ func sameTurns(old, next []MeetingTurn) bool {
 
 // keepsNotes: every stored note is still pending or became one new human
 // turn with its words, and the engine wrote no human turn of its own.
-func keepsNotes(old CrewMeeting, next CrewMeeting) bool {
+func keepsNotes(old, next CrewMeeting) bool {
 	pending := map[string]int{}
 	key := func(by, text string) string { return by + "\x00" + text }
 	for _, n := range next.NotesPending {

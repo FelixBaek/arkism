@@ -144,7 +144,7 @@ func TestSourceSkillErasureGuards(t *testing.T) {
 					}
 				}}
 			}
-			if e := f.svc.WorkOnce(testCtx, token); e == nil {
+			if f.svc.WorkOnce(testCtx, token) == nil {
 				t.Fatal("guard bypassed")
 			}
 			h, e := f.repo.Get(testCtx, colSkills, scopeA, parent.ID)

@@ -137,10 +137,10 @@ func TestBoundaryClaudeMetadataAndChangedDuringRead(t *testing.T) {
 	if p, err := boundaryVerify(f.server, marker); err != nil || p != f.copy {
 		t.Fatal(p, err)
 	}
-	real := boundaryPrefix
-	t.Cleanup(func() { boundaryPrefix = real })
+	orig := boundaryPrefix
+	t.Cleanup(func() { boundaryPrefix = orig })
 	boundaryPrefix = func(p string, offset int64) (string, error) {
-		d, err := real(p, offset)
+		d, err := orig(p, offset)
 		boundaryAppend(p, "{}\n")
 		return d, err
 	}

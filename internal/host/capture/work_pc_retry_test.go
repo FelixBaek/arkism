@@ -54,15 +54,15 @@ func pcRetryGet(o host.Obj, key string) any { v, _ := o.Get(key); return v }
 
 func TestPcRetryPeriodicRetryRecoversUnpublishedIntentWithoutNewHook(t *testing.T) {
 	f := pcRetryFixture(t)
-	real := outboxWrite
+	orig := outboxWrite
 	outboxWrite = func(path string, data []byte) error {
 		if filepath.Ext(path) == ".json" && filepath.Base(path)[0] == '0' {
 			return errors.New("interrupted")
 		}
-		return real(path, data)
+		return orig(path, data)
 	}
 	err := f.record("work", nil, nil)
-	outboxWrite = real
+	outboxWrite = orig
 	if err == nil {
 		t.Fatal("no crash")
 	}

@@ -97,27 +97,27 @@ func (xh *xxhash64) digest() uint64 {
 
 	h64 += xh.len
 
-	len := xh.len
-	len &= 31
+	length := xh.len
+	length &= 31
 	buf := xh.buf[:]
-	for len >= 8 {
+	for length >= 8 {
 		k1 := xh.round(0, binary.LittleEndian.Uint64(buf))
 		buf = buf[8:]
 		h64 ^= k1
 		h64 = bits.RotateLeft64(h64, 27)*xxhPrime64c1 + xxhPrime64c4
-		len -= 8
+		length -= 8
 	}
-	if len >= 4 {
+	if length >= 4 {
 		h64 ^= uint64(binary.LittleEndian.Uint32(buf)) * xxhPrime64c1
 		buf = buf[4:]
 		h64 = bits.RotateLeft64(h64, 23)*xxhPrime64c2 + xxhPrime64c3
-		len -= 4
+		length -= 4
 	}
-	for len > 0 {
+	for length > 0 {
 		h64 ^= uint64(buf[0]) * xxhPrime64c5
 		buf = buf[1:]
 		h64 = bits.RotateLeft64(h64, 11) * xxhPrime64c1
-		len--
+		length--
 	}
 
 	h64 ^= h64 >> 33

@@ -132,9 +132,9 @@ func comparisonMeasurements(r SkillComparisonResult, scope Scope) ([2]RunDetails
 	if len(categories) != 3 || quality[0] == 0 || quality[0] != quality[1] {
 		return runs, SkillComparisonReport{}, ErrInvalid
 	}
-	close := func(a, b float64) bool { return math.Abs(a-b) <= 1e-9*math.Max(1, math.Max(math.Abs(a), math.Abs(b))) }
+	near := func(a, b float64) bool { return math.Abs(a-b) <= 1e-9*math.Max(1, math.Max(math.Abs(a), math.Abs(b))) }
 	v := r.Report
-	if !close(v.BaselineScore, float64(passed[0])/float64(quality[0])) || !close(v.CandidateScore, float64(passed[1])/float64(quality[1])) || !close(v.CandidateCost, cost[1]) || v.CandidateDurationMS != duration[1] || v.RegressionPassed != regression || v.SafetyPassed != safety {
+	if !near(v.BaselineScore, float64(passed[0])/float64(quality[0])) || !near(v.CandidateScore, float64(passed[1])/float64(quality[1])) || !near(v.CandidateCost, cost[1]) || v.CandidateDurationMS != duration[1] || v.RegressionPassed != regression || v.SafetyPassed != safety {
 		return runs, SkillComparisonReport{}, ErrInvalid
 	}
 	measured := *v

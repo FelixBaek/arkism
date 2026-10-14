@@ -123,7 +123,7 @@ func TestSourceMemoryErasureFailureAndLease(t *testing.T) {
 				}
 			} else {
 				for i := 0; i < maxJobAttempts; i++ {
-					if e := f.svc.WorkOnce(testCtx, token); e == nil {
+					if f.svc.WorkOnce(testCtx, token) == nil {
 						t.Fatal("guard accepted")
 					}
 				}
@@ -482,7 +482,7 @@ func TestSourceRecordErasureGuards(t *testing.T) {
 			case "audit":
 				f.repo.failAudit = true
 			}
-			if e := f.svc.WorkOnce(testCtx, token); e == nil {
+			if f.svc.WorkOnce(testCtx, token) == nil {
 				t.Fatal("guard bypassed")
 			}
 			if _, e := f.repo.Get(testCtx, "reflections", scopeA, r.ID); e != nil {

@@ -27,16 +27,16 @@ func TestCrewAssistRequestLookup(t *testing.T) {
 		t.Fatal("changed duplicate", err)
 	}
 	for _, state := range []string{"pending", "done", "failed", "expired"} {
-		copy := r
+		clone := r
 		a := *r.CrewAssist
-		copy.CrewAssist = &a
+		clone.CrewAssist = &a
 		if state == "expired" {
-			copy.CreatedAt = time.Now().Add(-crewAssistTTL - time.Minute)
+			clone.CreatedAt = time.Now().Add(-crewAssistTTL - time.Minute)
 		} else {
 			a.Status = state
 		}
 		f.repo.mu.Lock()
-		f.repo.store[colCrewAssists][recKey(scopeA, r.ID)] = copy
+		f.repo.store[colCrewAssists][recKey(scopeA, r.ID)] = clone
 		f.repo.mu.Unlock()
 		got, e := f.svc.GetCrewAssistByRequest(testCtx, f.human, scopeA, key)
 		want := state

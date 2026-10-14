@@ -90,7 +90,7 @@ function lexJS(src, onString, onTemplate) {
         while (i < src.length && /[\w$À-￿]/.test(src[i])) w += src[i++];
         prev = "word"; prevWord = w; continue;
       }
-      if (/[0-9]/.test(c)) { while (/[\w.]/.test(src[i] || "")) i++; prev = "num"; continue; }
+      if (/\d/.test(c)) { while (/[\w.]/.test(src[i] || "")) i++; prev = "num"; continue; }
       if (c === "{") { depth++; i++; prev = "punct"; continue; }
       if (c === "}") {
         if (depth === 0 && !top) { i++; return; }

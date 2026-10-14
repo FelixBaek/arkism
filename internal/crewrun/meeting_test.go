@@ -539,7 +539,7 @@ func TestStanceAndConclusionParsing(t *testing.T) {
 	if _, st := stanceOf("STANCE: maybe"); st != "" {
 		t.Fatal(st)
 	}
-	if c := parseConclusion(`{"summary":" ","decisions":[]}`); c != nil {
+	if parseConclusion(`{"summary":" ","decisions":[]}`) != nil {
 		t.Fatal("empty summary accepted")
 	}
 	if c := parseConclusion("```json\n{\"summary\":\"s\",\"decisions\":[\" a \",\"\"]}\n```"); c == nil || len(c.Decisions) != 1 || c.Decisions[0] != "a" || c.Todos == nil {

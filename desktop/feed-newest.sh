@@ -4,9 +4,9 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 # Per-builder values (not in git): see desktop/README.md. Explicit environment wins over the file.
-if [ -f "$DIR/local.env" ]; then
+if [[ -f "$DIR/local.env" ]]; then
   while IFS='=' read -r key value; do
-    case "$key" in ARKISM_[A-Z_]*) [ -n "${!key:-}" ] || export "$key=$value" ;; esac
+    case "$key" in ARKISM_[A-Z_]*) [[ -n "${!key:-}" ]] || export "$key=$value" ;; *) ;; esac
   done < "$DIR/local.env"
 fi
 FEED="${ARKISM_FEED_DIR:-/srv/arkism-updates}"

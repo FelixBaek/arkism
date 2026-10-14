@@ -60,7 +60,7 @@ func TestBlobRestore(t *testing.T) {
 	if e != nil || string(data) != "restored bytes" {
 		t.Fatal("bytes changed", e)
 	}
-	if e := f.svc.AdoptRestoredBlobs(testCtx, f.work); e == nil {
+	if f.svc.AdoptRestoredBlobs(testCtx, f.work) == nil {
 		t.Fatal("normal root adopted again")
 	}
 }
@@ -130,13 +130,13 @@ func TestBlobRestoreRefuses(t *testing.T) {
 			case "old_db":
 				f.svc.Repo = &changedBlobIdentity{Repository: f.repo, identity: ContentHash("old-db")}
 			}
-			if e := f.svc.AdoptRestoredBlobs(testCtx, f.work); e == nil {
+			if f.svc.AdoptRestoredBlobs(testCtx, f.work) == nil {
 				t.Fatal("invalid restore opened")
 			}
 			if _, e := os.Stat(filepath.Join(f.svc.BlobDirectory, ".restore-pending")); e != nil {
 				t.Fatal("quarantine removed", e)
 			}
-			if e := f.svc.CheckBlobStorage(testCtx); e == nil {
+			if f.svc.CheckBlobStorage(testCtx) == nil {
 				t.Fatal("failed restore became ready")
 			}
 		})

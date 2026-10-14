@@ -1,7 +1,7 @@
 // Settings and the Arkism design-token pages. app.js passes the shared helpers in once, so these screens use the same state and builders.
 window.ArkismPages = (ctx) => {
   "use strict";
-  const { state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, lock, disconnect, useServer, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, reopen, trimSlash, tauri, models, routing, crew, request, reloadTools, assist } = ctx;
+  const { state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useServer, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, tauri, models, routing, crew, request, reloadTools, assist } = ctx;
 
   // ---------------------------------------------------------------- saved choices (this PC only)
   const PREFS_KEY = "arkism.prefs";

@@ -26,8 +26,8 @@ func TestIntegrationVectorCutDropsWeakNeighbours(t *testing.T) {
 		}
 	}
 	query := unit(1)
-	ids := func(max float64) []string {
-		p.SetVectorMaxDistance(max)
+	ids := func(maxDist float64) []string {
+		p.SetVectorMaxDistance(maxDist)
 		lanes, err := p.SearchCollection(testCtx, colMemories, SearchInput{Scope: scopeA, Limit: 8, Modes: []string{"vector"}}, query, "test:1:1024d")
 		if err != nil {
 			t.Fatal(err)

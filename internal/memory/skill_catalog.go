@@ -286,10 +286,10 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 	in.Content = clean.Text
 	if in.Bundle != nil {
 		// Snapshot caller-owned slices; secrets are withheld (hash only), never redacted in place.
-		copy := *in.Bundle
-		copy.Files = slices.Clone(in.Bundle.Files)
-		in.Bundle = &copy
-		for i, file := range copy.Files {
+		clone := *in.Bundle
+		clone.Files = slices.Clone(in.Bundle.Files)
+		in.Bundle = &clone
+		for i, file := range clone.Files {
 			// A companion whose text trips the secret scan is pinned by hash only: its bytes are
 			// never stored or served, and the bundle hash (paths + file hashes) is unchanged.
 			text := file.Path + "\n" + file.Content
@@ -297,7 +297,7 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 				if file.Omitted != "" || file.Content == "" || containsSecret(file.Path) {
 					return out, ErrSecretDetected
 				}
-				copy.Files[i] = SkillBundleFile{Path: file.Path, SHA256: file.SHA256, Size: int64(len(file.Content)), Omitted: "secret"}
+				clone.Files[i] = SkillBundleFile{Path: file.Path, SHA256: file.SHA256, Size: int64(len(file.Content)), Omitted: "secret"}
 				continue
 			}
 			if personalPattern.MatchString(text) {
@@ -328,9 +328,9 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 	ctx = bindRequestActor(ctx, decision)
 	var evidence skillLessonEvidence
 	if proposal != nil {
-		copy := *proposal
-		copy.Skill = in
-		proposal = &copy
+		clone := *proposal
+		clone.Skill = in
+		proposal = &clone
 		// Authorize before reading any lesson; then authorize every transitive record.
 		read := func(ref Ref) error {
 			d, e := s.authorize(ctx, token, "read:"+ref.Collection, in.Scope, ref.ID, "")

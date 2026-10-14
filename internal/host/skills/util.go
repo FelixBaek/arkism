@@ -254,8 +254,8 @@ func resolve(p string) string {
 	p, _ = filepath.Abs(p)
 	rest := ""
 	for cur := p; ; {
-		if real, err := filepath.EvalSymlinks(cur); err == nil {
-			return filepath.Join(real, rest)
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(resolved, rest)
 		}
 		parent := filepath.Dir(cur)
 		if parent == cur {

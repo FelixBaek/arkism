@@ -12,7 +12,7 @@
 set -euo pipefail
 
 list="${ARKISM_PUBLIC_DENYLIST:-}"
-if [ -z "$list" ] || [ ! -r "$list" ]; then
+if [[ -z "$list" ]] || [[ ! -r "$list" ]]; then
 	echo "check_public: set ARKISM_PUBLIC_DENYLIST to a readable denylist file" >&2
 	exit 2
 fi
@@ -20,13 +20,13 @@ dir="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$dir"
 
 pat=$(command grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$list" | sed 's/.*/(?:&)/' | paste -sd'|' -)
-if [ -z "$pat" ]; then
+if [[ -z "$pat" ]]; then
 	echo "check_public: $list has no patterns" >&2
 	exit 2
 fi
 rc=0
 printf 'x\n' | command grep -qiP -e "$pat" || rc=$?
-if [ "$rc" -gt 1 ]; then
+if [[ "$rc" -gt 1 ]]; then
 	echo "check_public: $list has an invalid pattern" >&2
 	exit 2
 fi
@@ -41,11 +41,11 @@ fi
 rc=0
 hits=$(files | command grep -zv -e '^\(\./\)\?LICENSE$' |
 	xargs -0 -r sh -c 'grep -nHIiP -e "$0" -- "$@"; s=$?; [ "$s" -le 1 ] || exit 255' "$pat") || rc=$?
-if [ "$rc" -ne 0 ] && [ "$rc" -ne 123 ]; then
+if [[ "$rc" -ne 0 ]] && [[ "$rc" -ne 123 ]]; then
 	echo "check_public: grep failed ($rc)" >&2
 	exit 2
 fi
-if [ -n "$hits" ]; then
+if [[ -n "$hits" ]]; then
 	echo "check_public: private text found:"
 	echo "$hits"
 	exit 1

@@ -397,16 +397,16 @@ func (r *Reader) copyFromWindow(rbr *reverseBitReader, offset, match uint32) err
 	lenBlock := uint32(len(r.buffer))
 	if lenBlock < offset {
 		lenWindow := r.window.len()
-		copy := offset - lenBlock
-		if copy > lenWindow {
+		copyLen := offset - lenBlock
+		if copyLen > lenWindow {
 			return rbr.makeError("offset past window")
 		}
-		windowOffset := lenWindow - copy
-		if copy > match {
-			copy = match
+		windowOffset := lenWindow - copyLen
+		if copyLen > match {
+			copyLen = match
 		}
-		r.buffer = r.window.appendTo(r.buffer, windowOffset, windowOffset+copy)
-		match -= copy
+		r.buffer = r.window.appendTo(r.buffer, windowOffset, windowOffset+copyLen)
+		match -= copyLen
 	} else {
 		bufferOffset = lenBlock - offset
 	}
@@ -414,12 +414,12 @@ func (r *Reader) copyFromWindow(rbr *reverseBitReader, offset, match uint32) err
 	// We are being asked to copy data that we are adding to the
 	// buffer in the same copy.
 	for match > 0 {
-		copy := uint32(len(r.buffer)) - bufferOffset
-		if copy > match {
-			copy = match
+		copyLen := uint32(len(r.buffer)) - bufferOffset
+		if copyLen > match {
+			copyLen = match
 		}
-		r.buffer = append(r.buffer, r.buffer[bufferOffset:bufferOffset+copy]...)
-		match -= copy
+		r.buffer = append(r.buffer, r.buffer[bufferOffset:bufferOffset+copyLen]...)
+		match -= copyLen
 	}
 	return nil
 }

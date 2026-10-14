@@ -14,7 +14,6 @@ window.ArkismTeams = (ctx) => {
 
   // ---------------------------------------------------------------- vocabulary (mirrors the contract)
   const ROLES = [["moderator", "진행자"], ["worker", "작업자"], ["reviewer", "리뷰어"], ["scribe", "정리 담당"]];
-  const roleText = (r) => ROLES.find(([k]) => k === r)?.[1] || "작업자";
   const MODES = [
     ["round_robin", "정해진 순서대로", "적힌 순서로 한 사람씩 말하고, 다 돌면 처음부터 다시 돌아요."],
     ["moderator_picks", "진행자가 다음 사람 지명", "진행자가 매번 다음에 말할 사람을 골라요. 필요한 사람만 다시 부를 수 있어요."]

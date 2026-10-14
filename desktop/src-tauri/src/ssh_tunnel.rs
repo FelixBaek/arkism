@@ -114,7 +114,7 @@ pub fn list_keys() -> Vec<String> {
         .map(|e| e.path())
         .filter(|p| p.is_file() && p.extension().is_none_or(|x| x != "pub"))
         .filter(|p| {
-            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            let name = p.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("");
             !matches!(name, "config" | "known_hosts" | "known_hosts.old" | "authorized_keys") && (name.starts_with("id_") || p.with_extension("pub").is_file() || std::path::PathBuf::from(format!("{}.pub", p.display())).is_file())
         })
         .map(|p| p.display().to_string())

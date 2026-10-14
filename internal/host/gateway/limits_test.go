@@ -133,7 +133,7 @@ func TestToolArgumentByteLimits(t *testing.T) {
 	wantCode(t, err, "stream_frame_too_large")
 }
 
-func nativeChunk(delta string, finish string) string {
+func nativeChunk(delta, finish string) string {
 	return `data: {"id":"c","object":"chat.completion.chunk","created":1,"model":"u","choices":[{"index":0,"delta":` + delta + `,"finish_reason":` + finish + `}]}` + "\n\n"
 }
 

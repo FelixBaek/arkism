@@ -57,22 +57,26 @@ class CoreCoverageTests(unittest.TestCase):
 
     def test_malformed_lines_fail(self):
         # 잘못된 mode·행·수치·좌표는 검사 대상 밖의 파일이라도 거부한다.
+        base = self.profile()
         for bad in ("mode: unknown\n", "unparseable\n", "other.go:1.1,2.2 -1 0\n",
                     "other.go:0.1,2.2 1 0\n", "other.go:3.1,2.2 1 0\n",
                     "other.go:1.1,2.2 1 x\n", "\n"):
             with self.subTest(bad=bad):
                 with self.assertRaises(ValueError):
-                    coverage.parse_profile(self.profile() + bad)
+                    coverage.parse_profile(base + bad)
+        unknown_mode = self.profile(mode="unknown")
         with self.assertRaises(ValueError):
-            coverage.parse_profile(self.profile(mode="unknown"))
+            coverage.parse_profile(unknown_mode)
 
     def test_duplicate_blocks_fail(self):
         # 동일 블록은 count·문장 수가 같거나 달라도 중복 합산하지 않고 거부한다.
-        block = self.profile().splitlines()[1]
+        base = self.profile()
+        block = base.splitlines()[1]
         for duplicate in (block, block.replace(" 9 1", " 9 0"), block.replace(" 9 1", " 10 1")):
             with self.subTest(duplicate=duplicate):
+                profile = base + duplicate + "\n"
                 with self.assertRaisesRegex(ValueError, "중복 coverage 블록"):
-                    coverage.parse_profile(self.profile() + duplicate + "\n")
+                    coverage.parse_profile(profile)
 
     def test_execution_count_is_not_statement_weight(self):
         # 블록 실행 횟수가 커져도 문장 수와 커버리지 비율은 변하지 않는다.

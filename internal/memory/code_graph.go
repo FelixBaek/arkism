@@ -460,12 +460,12 @@ type codePacker struct {
 	used  int
 }
 
-func newCodePacker(cap int) (*codePacker, error) {
+func newCodePacker(capacity int) (*codePacker, error) {
 	codec, err := tokenizer.Get(tokenizer.Cl100kBase)
 	if err != nil {
 		return nil, ErrUnavailable
 	}
-	return &codePacker{codec: codec, cap: cap, used: 40}, nil
+	return &codePacker{codec: codec, cap: capacity, used: 40}, nil
 }
 
 func (p *codePacker) fits(h CodeHit) bool {

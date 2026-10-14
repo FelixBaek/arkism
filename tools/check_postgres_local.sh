@@ -6,7 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 image="${POSTGRES_TEST_IMAGE:-supabase/postgres:17.6.1.136@sha256:5a4314708484bec672de2c09653a5c01fb1c84a998564ac231b0325e2238ed5b}"
 container_id=""
 cleanup() {
-  if [ -n "$container_id" ]; then docker rm -f "$container_id" >/dev/null; fi
+  if [[ -n "$container_id" ]]; then docker rm -f "$container_id" >/dev/null; fi
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -27,7 +27,7 @@ for _ in {1..45}; do
   fi
   sleep 1
 done
-if [ "$ready" -ne 1 ]; then
+if [[ "$ready" -ne 1 ]]; then
   echo 'isolated Supabase Postgres did not start' >&2
   exit 1
 fi

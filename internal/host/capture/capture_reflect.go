@@ -675,7 +675,7 @@ func trialVerdicts(state host.Obj, counts map[string][3]int, today time.Time) (h
 		if !aware {
 			return nil, fmt.Errorf("%w: can't subtract offset-naive and offset-aware datetimes", errType)
 		}
-		if days := math.Floor((float64(today.UnixNano())/1e9 - ts) / 86400); days >= trialDays {
+		if math.Floor((float64(today.UnixNano())/1e9-ts)/86400) >= trialDays {
 			out.Set(e.Key, "graduate")
 		}
 	}

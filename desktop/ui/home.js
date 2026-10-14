@@ -7,7 +7,7 @@
 // 서버나 앱에 새 기능을 더하지 않는다. 이미 있는 요청과 화면으로만 만든다.
 window.ArkismHome = function (ctx) {
   "use strict";
-  const { state, $, el, icon, button, go, render, request, query, notice, agentLogo, AGENTS, ago } = ctx;
+  const { state, $, el, button, go, render, request, query, notice, agentLogo, AGENTS } = ctx;
 
   // ------------------------------------------------------------ 전체 검색
   const MAX_EACH = 4;

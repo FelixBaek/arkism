@@ -372,7 +372,7 @@ func TestPermissionCheckEveryFiveMinutesAndOnRequest(t *testing.T) {
 	n = len(h.f.find("POST", "/v1/discord/report"))
 	h.now = h.now.Add(5 * time.Minute)
 	h.m.Tick()
-	if got := len(h.f.find("POST", "/v1/discord/report")); got != n+1 {
+	if len(h.f.find("POST", "/v1/discord/report")) != n+1 {
 		t.Fatalf("no check after 5 minutes")
 	}
 	h.sess.perms["c1"] = permAdministrator | invitePerms()

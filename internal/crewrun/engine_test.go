@@ -165,7 +165,9 @@ func node(id, typ string, kv ...string) Node {
 }
 
 // back is a back edge followed at most max times.
-func back(from, to, port string, max int) Edge { return Edge{From: from, To: to, Port: port, Max: max} }
+func back(from, to, port string, maxN int) Edge {
+	return Edge{From: from, To: to, Port: port, Max: maxN}
+}
 
 func edge(from, to string, port ...string) Edge {
 	e := Edge{From: from, To: to}
@@ -1109,12 +1111,12 @@ func TestCollabPlansRunsWorkersAndSumsUp(t *testing.T) {
 }
 
 // A check that fails sends the run back; within max the work repeats, at max the run fails.
-func loopGraph(max int) *Graph {
+func loopGraph(maxN int) *Graph {
 	count := `d=$(cat | sed 's/.*"dir":"\([^"]*\)".*/\1/'); echo x >> "$d/n"; wc -l < "$d/n" | tr -d ' '`
 	check := `read n; if [ "$n" -ge 3 ]; then echo '{"ok":true}'; else echo '{"ok":false}'; fi`
 	return &Graph{Nodes: []Node{node("start", "start"), node("work", "code", "lang", "sh", "code", count), node("check", "code", "lang", "sh", "code", check),
 		node("end", "end", "summary", "통과")},
-		Edges: []Edge{edge("start", "work"), edge("work", "check"), edge("check", "end", "pass"), back("check", "work", "fail", max)}}
+		Edges: []Edge{edge("start", "work"), edge("work", "check"), edge("check", "end", "pass"), back("check", "work", "fail", maxN)}}
 }
 
 func TestBackEdgeRepeatsUntilPassOrLimit(t *testing.T) {

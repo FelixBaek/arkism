@@ -38,7 +38,6 @@ window.ArkismUsage = (ctx) => {
   const tr = (s) => (window.ArkismI18n ? window.ArkismI18n.translate(s) : s);
   const menu = () => (["memory", "agent", "router", "connect"].includes(state.menu) ? state.menu : "router");
   const tabs = () => (menu() === "router" ? TABS.filter(([k]) => k === "overview" || k === "requests") : TABS.filter(([k]) => k !== "requests"));
-  const routerOnly = () => menu() === "router" && !S.session;
   const loadKey = () => (menu() === "router" ? `router|${S.range}` : `sessions|${S.range}|${S.source}`);
   const modelLabel = (id) => S.ov?.models?.find((m) => m.id === id)?.name || String(id || "").replace(/^[^/]+\//, "");
   const days = () => Math.max(1, { today: 1, "7d": 7, "30d": 30, "90d": 90 }[S.range] || S.doc?.by_day?.length || 1);

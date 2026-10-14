@@ -34,7 +34,7 @@ func TestIntegrationBlobGCCLI(t *testing.T) {
 	for _, args := range [][]string{{"--collect-blobs", "--recovery"}, {"--collect-blobs", "--worker"}, {"--collect-blobs", "--init-db"}} {
 		cmd := exec.Command(bin, args...)
 		cmd.Env = env
-		if e := cmd.Run(); e == nil {
+		if cmd.Run() == nil {
 			t.Fatal("mixed command modes accepted", args)
 		}
 	}

@@ -77,7 +77,7 @@ func deliveryStatus(workID string) (any, error) {
 	exhausted := func() bool {
 		return scanned > deliveryMaxFiles || !time.Now().Before(deadline) || remaining <= 0
 	}
-	count := func(job any, created any, errText any) {
+	count := func(job, created, errText any) {
 		c, isNum := num(created)
 		if !isNum || !(now-deliveryTTL < c && c <= now+60) {
 			panic(valueErr("invalid or expired delivery metadata"))

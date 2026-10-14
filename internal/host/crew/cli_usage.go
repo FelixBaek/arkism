@@ -50,7 +50,7 @@ func tokens(u map[string]any, key string) int64 {
 }
 
 // withUsage appends a "usage" field to payload when the call reported any.
-func withUsage(payload host.Obj, usage host.Obj) host.Obj {
+func withUsage(payload, usage host.Obj) host.Obj {
 	if usage == nil {
 		return payload
 	}

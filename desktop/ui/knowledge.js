@@ -28,6 +28,8 @@ window.ArkismKnowledge = (ctx) => {
   };
   let epoch = 0, typing = 0;
   const live = () => state.view === "knowledge";
+  // Last heading of "A › B / C": split, then trim beside each separator — the same pieces as /\s*[›>/]\s*/ without its backtracking.
+  const leafOf = (path) => { const p = path.split(/[›>/]/); return p.map((x, i) => (i ? x.trimStart() : x)).map((x, i) => (i < p.length - 1 ? x.trimEnd() : x)).filter(Boolean).pop() || "(제목 없음)"; };
   const paint = () => { if (live()) render(false); };
   const get = (path, extra) => request(`${path}?${query(extra)}`);
   const post = (path, body = {}) => request(path, { method: "POST", body: JSON.stringify({ scope: state.scope, ...body }) });
@@ -266,7 +268,7 @@ window.ArkismKnowledge = (ctx) => {
       const r = el("div", "v4k-bind");
       r.append(el("span", "", profileName(b.specialist_profile_id)), el("small", "", bindState(b)),
         button(on ? "끄기" : "켜기", on ? "ghost" : "", null, () => act(() => post(`/v1/knowledge/bindings/${encodeURIComponent(b.id)}/state`, { expected_revision: b.revision, status: on ? "suspended" : "active_synthetic" }), on ? "껐어요." : "켰어요. 이 전문가가 검색할 때 써요.")));
-      if (!on && needs(s)) r.lastChild.disabled = true, r.lastChild.title = "검토한 자료만 켤 수 있어요";
+      if (!on && needs(s)) { r.lastChild.disabled = true; r.lastChild.title = "검토한 자료만 켤 수 있어요"; }
       else r.lastChild.disabled = K.busy;
       binds.append(r);
     }
@@ -374,7 +376,7 @@ window.ArkismKnowledge = (ctx) => {
       const list = el("div", "v4s-list");
       (d?.sections || []).forEach((path, i) => {
         const n = el("span", "v4k-num", `#${i + 1}`);
-        const leaf = path.split(/\s*[›>/]\s*/).filter(Boolean).pop() || "(제목 없음)";
+        const leaf = leafOf(path);
         list.append(row("v4k-row", K.secSel === i, [n, text(leaf, path || "본문", false)], () => { K.secSel = i; paint(); }));
       });
       if (!d?.sections.length) list.append(el("div", "empty", "목차가 없어요. 제목 없는 글은 길이로 나눠요."));
@@ -401,7 +403,7 @@ window.ArkismKnowledge = (ctx) => {
     if (path === undefined) { $("#detail").replaceChildren(); return; }
     const box = detailShell(`조각 #${i + 1}`);
     const head = el("div", "v4s-head");
-    head.append(noI18n(el("h2", "", path.split(/\s*[›>/]\s*/).filter(Boolean).pop() || "(제목 없음)")), noI18n(el("p", "v4s-lead", path)));
+    head.append(noI18n(el("h2", "", leafOf(path))), noI18n(el("p", "v4s-lead", path)));
     box.append(head);
     if (needs(s)) box.append(card("이 자료는 아직 검토 전이라 검색에 나오지 않아요.", [button("검토 완료로 표시", "primary", null, () => act(() => post(`/v1/knowledge/sources/${encodeURIComponent(s.id)}/review`, { expected_revision: s.revision, status: "active", trust_level: "reviewed" }), "검토했어요."))]));
     box.append(sec("원문", null, el("p", "meta", "조각 본문은 목록에 싣지 않아요. 이 제목으로 시험 검색하면 근거로 보여요."), button("이 제목으로 시험 검색", "", null, () => { K.search.q = path; K.docTab = "search"; void runSearch(); })));

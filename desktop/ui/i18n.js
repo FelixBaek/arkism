@@ -98,7 +98,7 @@
     }
     // "빠진 곳 있음 10"처럼 끝에 숫자만 붙은 말
     function fromNumber(core, depth) {
-      const m = /^(.*?[^\s\d.,])\s+([\d][\d.,]*[%KkM]?)$/.exec(core);
+      const m = /^(.*?[^\s\d.,])\s+(\d[\d.,]*[%KkM]?)$/.exec(core);
       if (!m || depth >= 3) return null;
       const head = whole(m[1], depth + 1);
       return head === m[1] ? null : head + " " + m[2];
@@ -139,8 +139,8 @@
       const key = depth + "\u0000" + s; // 깊이마다 따로: 깊은 곳에서는 덜 번역된다
       const hit = cache.get(key);
       if (hit !== undefined) return hit;
-      const lead = s.match(/^\s*/)[0];
-      const trail = s.slice(lead.length).match(/\s*$/)[0];
+      const lead = /^\s*/.exec(s)[0];
+      const rest = s.slice(lead.length), trail = rest.slice(rest.trimEnd().length);
       const core = s.slice(lead.length, s.length - trail.length);
       let r = exact.get(core) ?? loose.get(collapse(core));
       if (r == null) {

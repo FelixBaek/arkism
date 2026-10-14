@@ -363,7 +363,7 @@ func level(v any) int {
 	return 3
 }
 
-func orDefault(v any, def any) any {
+func orDefault(v, def any) any {
 	if truthy(v) {
 		return v
 	}
@@ -707,7 +707,7 @@ func evaluateMain(argv []string, stdin io.Reader, stdout, stderr io.Writer) (cod
 		apiURL = "http://127.0.0.1:8091"
 	}
 	defer func() {
-		if r := recover(); r != nil {
+		if recover() != nil {
 			fmt.Fprintln(stderr, "comparison_failed")
 			code = 1
 		}
