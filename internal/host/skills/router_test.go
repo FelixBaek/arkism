@@ -27,6 +27,7 @@ func j(t *testing.T, s string) map[string]any {
 
 func swapRouter(t *testing.T) {
 	t.Helper()
+	kitEnv(t) // route_skills also reads the agents' MCP configs: never this machine's
 	req, base, tok, cache, rt, ro, pc, loaded := routerRequest, routerBaseURL, routerTokenFile, routerCacheDir, routerRuntime, receiveOnly, fromPC, loadedSkills
 	routerTokenFile = filepath.Join(t.TempDir(), "missing-token") // never the real token
 	routerCacheDir, fromPC, receiveOnly, loadedSkills = t.TempDir(), false, false, map[string]loadedSkill{}
@@ -294,7 +295,7 @@ func TestToolContractStatusAndVersionPattern(t *testing.T) {
 			t.Fatalf("work tool %d differs from host.WorkTools", i)
 		}
 	}
-	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,decide_workflow,list_crew,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,code_search_symbols,code_callers,code_callees,code_impact" {
+	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,enable_tool,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,decide_workflow,list_crew,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,code_search_symbols,code_callers,code_callees,code_impact" {
 		t.Fatal(names)
 	}
 	if _, err := routeSkills("  "); err == nil {
