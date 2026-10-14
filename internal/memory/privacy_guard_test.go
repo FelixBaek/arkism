@@ -128,11 +128,11 @@ func TestPrivacyEndpointsRejectWrongRoles(t *testing.T) {
 		f.work + "-rev":   func() PrivacyRuntimeReceiptInput { r := receipt; r.ExpectedRevision = 0; return r }(),
 		f.work + "-lease": func() PrivacyRuntimeReceiptInput { r := receipt; r.LeaseToken = ""; return r }(),
 	} {
-		real := token
+		caller := token
 		if token != f.human {
-			real = f.work
+			caller = f.work
 		}
-		if _, err := f.svc.RecordPrivacyRuntimeReceipt(testCtx, real, "plain-job", in); !errors.Is(err, ErrDenied) {
+		if _, err := f.svc.RecordPrivacyRuntimeReceipt(testCtx, caller, "plain-job", in); !errors.Is(err, ErrDenied) {
 			t.Fatal("receipt accepted", token, err)
 		}
 	}
