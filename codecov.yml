@@ -22,6 +22,8 @@ ignore:
   - "**/*_test.go"
   - "**/*.test.js"
   - "**/testdata/**"
+  # Vendored copy of the Go team's zstd decoder; not our code.
+  - "internal/host/capture/dshzstd/**"
 comment:
   layout: "diff, flags, files"
   require_changes: true
