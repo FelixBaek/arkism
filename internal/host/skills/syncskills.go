@@ -31,6 +31,7 @@ var syncRoots = func() []skillRoot {
 	h := host.Home
 	return []skillRoot{
 		{"agent-skills", host.SkillsRoot, "generic"},
+		{"agent-plugins", host.PluginsRoot, "generic"}, // each kit plugin's skills/ (agentkit.go)
 		{"codex", filepath.Join(h, ".codex/skills"), "codex"},
 		{"codex-plugins", filepath.Join(h, ".codex/plugins/cache"), "codex"},
 		{"claude-code", filepath.Join(h, ".claude/skills"), "claude_code"},
@@ -476,8 +477,16 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+	// The agent kit's MCP servers and hooks (agentkit.go); its skills went to the hub above.
+	kitFailed := false
+	if kit := kitRun(*execute); kit != nil {
+		summary.Set("kit", kit)
+		for _, r := range kit {
+			kitFailed = kitFailed || strings.HasPrefix(str(objGet(r.(host.Obj), "state")), "failed")
+		}
+	}
 	io.WriteString(stdout, host.MustDumps(summary, host.DumpOpts{NoASCII: true})+"\n")
-	if failed, _ := summary.Get("failed"); len(failed.(host.Obj)) > 0 {
+	if failed, _ := summary.Get("failed"); len(failed.(host.Obj)) > 0 || kitFailed {
 		return 1
 	}
 	return 0
