@@ -565,8 +565,8 @@ func supersede(old map[string]any, newID any) (err error) {
 
 // ---------------------------------------------------------------- trial
 // An inferred lesson or decision is used at once instead of waiting for a person, but on trial: prompt search
-// marks it "시험 중", and one injected in trialRetireAt sessions without any answer using it is retired (expired).
-// After trialDays it is an ordinary memory. Standing rules (user, procedural) reach every session, so they still wait.
+// marks it "시험 중", and one injected in trialRetireAt sessions without any answer using it is retired (expired),
+// unless keptOnTrial. After trialDays it is an ordinary memory. Standing rules (user, procedural) reach every session, so they still wait.
 
 var trialKinds = map[any]bool{"decision": true, "lesson": true}
 
@@ -574,6 +574,26 @@ const (
 	trialDays     = 30
 	trialRetireAt = 5 // sessions, not injections: one session repeating it is one chance to be used
 )
+
+// restraintRE finds a rule about what not to do or what is preferred: following one leaves no words in the answer.
+// 말고도, 피해 범위, 빠짐없이, 마지막, 뿐·만이 아니라, 안 됐다고, whenever and preferences are not restraints.
+var restraintRE = regexp.MustCompile(`않(는다|게|도록|고|아야|으며|기로)|말(고(?:[^도]|$)|\s?것|아야|라)|금지|피(한다|하고|해야|해서)|` +
+	`지\s?마(?:라|\s|[,.]|$)|안\s?된다|(?:^|\s)안\s\S*[^았었였했됐렸]다(?:[\s,.]|$)|선호|대신|(?:[^만]이|가)\s아니라|\s없이|(?:것|뒤에|끼리|로)만\s|보다\s.*먼저|` +
+	`(?i:\b(?:never|don['’]?t|do not|avoid(?:s|ing)?|must not|prefer(?:s|red)?)\b)`)
+
+// keptOnTrial says a trial memory is never retired as unused, only graduated: standing rules (user, procedural)
+// and prohibitions or preferences, which word overlap cannot see being followed.
+// shortcut: a phrase match on the rule; tag restraints at reflection if it misses real ones.
+func keptOnTrial(m map[string]any) bool {
+	if k := m["kind"]; k == "user" || k == "procedural" {
+		return true
+	}
+	rule := strings.TrimRight(str(or(m["text"], "")), ". ")
+	if i := strings.LastIndex(rule, " ("); i >= 0 && strings.HasSuffix(rule, ")") {
+		rule = rule[:i] // the trailing note tells what went wrong; its negations are not the rule
+	}
+	return restraintRE.MatchString(rule)
+}
 
 func trialState() host.Obj {
 	raw, err := os.ReadFile(filepath.Join(capState, "trial.json"))
@@ -658,12 +678,13 @@ func approveTrial(ids []string, why string) error {
 	return nil
 }
 
-// trialVerdicts is {id: "retire" | "graduate"} for trial memories that are decided.
-func trialVerdicts(state host.Obj, counts map[string][3]int, today time.Time) (host.Obj, error) {
+// trialVerdicts is {id: "retire" | "graduate"} for trial memories that are decided. keep is asked only about
+// one due for retirement; a kept one waits to graduate instead.
+func trialVerdicts(state host.Obj, counts map[string][3]int, today time.Time, keep func(string) bool) (host.Obj, error) {
 	out := host.Obj{}
 	for _, e := range state {
 		n := counts[e.Key]
-		if n[0] >= trialRetireAt && n[1] == 0 && n[2] == 0 { // another agent may have used it: never retire blind
+		if n[0] >= trialRetireAt && n[1] == 0 && n[2] == 0 && !keep(e.Key) { // another agent may have used it: never retire blind
 			out.Set(e.Key, "retire")
 			continue
 		}
@@ -721,12 +742,27 @@ func trialReview() error {
 	if err != nil {
 		return err
 	}
-	verdicts, err := trialVerdicts(state, counts, time.Now().UTC())
+	unread := map[string]bool{}
+	verdicts, err := trialVerdicts(state, counts, time.Now().UTC(), func(mid string) bool {
+		m, err := capGet(memoryPath(mid), 8*time.Second)
+		if err != nil {
+			if host.HTTPCode(err) == 404 {
+				return false // deleted: leaves the trial below
+			}
+			unread[mid] = true
+			metric(kv("event", "trial_failure"), kv("memory_id", mid), kv("error", errorCode(err)))
+			return true
+		}
+		return m["status"] == "active" && keptOnTrial(m) // an expired or superseded one leaves the trial as before
+	})
 	if err != nil {
 		return err
 	}
 	for _, v := range verdicts {
 		mid, verdict := v.Key, v.Value.(string)
+		if unread[mid] {
+			continue // neither retired nor graduated on a guess; decided on a later run
+		}
 		if verdict == "retire" {
 			skip, err := func() (bool, error) {
 				m, err := capGet(memoryPath(mid), 8*time.Second)
