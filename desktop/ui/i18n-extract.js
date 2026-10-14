@@ -106,9 +106,14 @@ function lexJS(src, onString, onTemplate) {
 function collapse(s) { return s.replace(/\s+/g, " ").trim(); }
 
 function extractHTML(src, add) {
-  const body = src.replace(/<svg[\s\S]*?<\/svg>/g, "").replace(/<script[\s\S]*?<\/script>/g, "").replace(/<style[\s\S]*?<\/style>/g, "");
+  // Repeat until nothing changes, so a removal can't join pieces into a new block.
+  let body = src, prev;
+  do {
+    prev = body;
+    body = body.replace(/<(svg|script|style)\b[\s\S]*?<\/\1\b[^>]*>/gi, "");
+  } while (body !== prev);
   for (const m of body.matchAll(/>([^<>]+)</g)) {
-    const t = collapse(m[1].replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">"));
+    const t = collapse(m[1].replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"));
     if (HANGUL.test(t)) add(t);
   }
   for (const m of body.matchAll(/\s(?:title|placeholder|aria-label|alt|label|content)="([^"]*)"/g)) {

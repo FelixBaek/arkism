@@ -273,7 +273,7 @@ func (p *parser) hex4() (rune, bool) {
 	if p.i+4 > len(p.s) {
 		return 0, false
 	}
-	n, err := strconv.ParseUint(p.s[p.i:p.i+4], 16, 32)
+	n, err := strconv.ParseUint(p.s[p.i:p.i+4], 16, 16)
 	if err != nil || strings.ContainsAny(p.s[p.i:p.i+4], "+-_") {
 		return 0, false
 	}

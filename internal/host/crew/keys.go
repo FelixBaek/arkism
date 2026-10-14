@@ -279,7 +279,7 @@ func childEnv(row host.CLI, keys []map[string]any, model string, key map[string]
 		}
 		return customEnv(env, model, key)
 	}
-	if row.Proxy {
+	if row.Proxy && host.PCProxy != "" {
 		env["HTTPS_PROXY"], env["HTTP_PROXY"], env["ALL_PROXY"] = host.PCProxy, host.PCProxy, host.PCProxy
 	}
 	if !host.APIModeOn(row.Name) || row.KeyEnv == "" {

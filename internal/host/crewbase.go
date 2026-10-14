@@ -25,7 +25,8 @@ func Crewf(format string, args ...any) error { return &CrewError{fmt.Sprintf(for
 var (
 	KeysFile        = Env("ARKISM_CREW_KEYS", filepath.Join(AgentsState, "provider-keys.json"))
 	RunnerTokenFile = Env("ARKISM_CREW_TOKEN_FILE", filepath.Join(AgentsState, "crew-runner.token"))
-	PCProxy         = Env("ARKISM_PC_PROXY", "socks5://127.0.0.1:18080")
+	// PCProxy is the optional proxy for CLIs whose API refuses some regions (e.g. socks5://127.0.0.1:18080); "" runs them directly.
+	PCProxy = os.Getenv("ARKISM_PC_PROXY")
 	// APIMode lists CLIs that use a stored provider key instead of their own login: "codex,gemini", "all" or "".
 	APIMode = splitSet(os.Getenv("ARKISM_CREW_API_MODE"))
 )
@@ -46,7 +47,7 @@ type CLI struct {
 	KeyEnv   string // env var that carries a stored key ("" = none)
 	BaseEnv  string // env var that carries the provider address
 	Effort   string // "flag", "config" or "" (no reasoning switch)
-	Proxy    bool   // runs through the PC proxy
+	Proxy    bool   // runs through PCProxy when it is set
 }
 
 // CLIS: order matters, the first pattern that matches wins (claude names are tested before
@@ -58,7 +59,7 @@ var CLIS = []CLI{
 	{"glm", regexp.MustCompile(`^glm`), "ARKISM_GLM_BIN", "claude-glm", "zai", "ZAI_API_KEY", "ZAI_BASE_URL", "", false},
 	{"grok", regexp.MustCompile(`^grok`), "ARKISM_GROK_BIN", "grok", "xai", "XAI_API_KEY", "XAI_BASE_URL", "flag", false},
 	// antigravity models share names with Gemini and Claude ones, so they carry a prefix; its API
-	// refuses some regions, so the run goes out through the PC proxy.
+	// refuses some regions, so the run can go out through PCProxy.
 	{"agy", regexp.MustCompile(`^antigravity-`), "ARKISM_AGY_BIN", "agy", "google", "", "", "flag", true},
 }
 

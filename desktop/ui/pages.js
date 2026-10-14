@@ -597,27 +597,43 @@ window.ArkismPages = (ctx) => {
       return i;
     };
     const MODELS = [["haiku", "Haiku"], ["sonnet", "Sonnet"], ["opus", "Opus"]];
-    const EMBED = [["auto", "자동"], ["ollama", "Ollama"], ["none", "끄기"]], JUDGE = [["fixed", "고정"], ["clef", "Clef"]];
+    const EMBED = [["auto", "자동"], ["ollama", "Ollama"], ["none", "끄기"]];
+    const JUDGE = [["fixed", "고정"], ["chat", "내 모델"], ["clef", "Clef"], ["jev", "Jev"]];
+    const JUDGE_NAME = { fixed: "고정 규칙", chat: "내 모델", clef: "Clef", jev: "Jev" };
     const nameOf = (list, k) => list.find(([x]) => x === k)?.[1] || k || "—";
     const sub = (label, input) => { const r = el("label", "v4-subfield"); r.append(el("span", "", label), input); return r; };
     const block = (row, ...extra) => { const b = el("div", "v4-role"); b.append(row, ...extra); return b; };
     function draw() {
-      const next = { ...cur, cloudflare_token: "" };
+      const next = { ...cur, cloudflare_token: "", jev_key: "", picker_key: "" };
+      const savedHint = (k, placeholder) => (cur[`${k}_saved`] ? "저장됨 · 바꿀 때만 입력" : placeholder);
       const embedModel = field(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b");
       const account = field(cur.cloudflare_account, "Cloudflare 계정 ID", "account id");
-      const token = field("", "Cloudflare API 토큰", cur.cloudflare_token_saved ? "저장됨 · 바꿀 때만 입력" : "API token", true);
+      const token = field("", "Cloudflare API 토큰", savedHint("cloudflare_token", "API token"), true);
+      const jevKey = field("", "Jev API 키", savedHint("jev_key", "API key"), true);
+      const pickerUrl = field(cur.picker_url, "판별 모델 주소", "http://127.0.0.1:11434/v1");
+      const pickerModel = field(cur.picker_model, "판별 모델", "qwen3:4b");
+      const pickerKey = field("", "판별 모델 API 키", savedHint("picker_key", "없으면 비워 두기"), true);
+      // Only the selected judge's settings are shown; the others keep their saved values.
+      const judgeFields = {
+        chat: [sub("주소", pickerUrl), sub("모델", pickerModel), sub("API 키", pickerKey)],
+        clef: [sub("Cloudflare 계정 ID", account), sub("Cloudflare API 토큰", token)],
+        jev: [sub("Jev API 키", jevKey)],
+      };
+      const judgeBox = el("div", "v4-judge-fields");
+      const showJudge = (k) => judgeBox.replaceChildren(...(judgeFields[k] || []));
+      showJudge(cur.judge);
       const card = el("section", "pg-group v4-rows");
       card.append(
         block(line("임베딩 모델", "의미로 기억을 찾을 때 써요. 자동은 이 PC의 Ollama에 모델이 있을 때만 켜요. 끄면 키워드로만 찾아요.",
           segment(EMBED, cur.embedder, (k) => { next.embedder = k; })), sub("Ollama 모델 이름", embedModel), el("small", "v4-default", "기본값: 자동 (qwen3-embedding:0.6b) · 바꾸면 저장된 기억을 한 번 다시 색인해요")),
-        block(line("판정 모델", "스킬 품질·모델 판정에 써요. 고정은 내장 규칙, Clef는 Cloudflare Workers AI를 써요.",
-          segment(JUDGE, cur.judge, (k) => { next.judge = k; })), sub("Cloudflare 계정 ID", account), sub("Cloudflare API 토큰", token),
-          el("small", "v4-default", "기본값: 고정 · Clef를 고르면 Cloudflare 계정 ID와 토큰을 넣어요 · 토큰은 이 PC의 Arkism 데이터 폴더에만 저장돼요")),
+        block(line("판정 모델", "라우팅에서 요청마다 맞는 모델과 스킬을 골라요. 고정은 내장 규칙, 내 모델은 OpenAI 호환 주소, Clef는 Cloudflare Workers AI, Jev는 TypeSafe Jev를 써요.",
+          segment(JUDGE, cur.judge, (k) => { next.judge = k; showJudge(k); })), judgeBox,
+          el("small", "v4-default", "기본값: 고정 · 키와 토큰은 이 PC의 Arkism 데이터 폴더에만 저장돼요")),
         block(line("기억 추출 모델", "대화에서 기억 후보를 뽑아요. 자주 돌아서 가벼운 모델이 좋아요.", segment(MODELS, cur.extract_model, (k) => { next.extract_model = k; })), el("small", "v4-default", "기본값: Haiku")),
         block(line("반성·검토 모델", "3시간마다 교훈을 정리하고 검토 대기와 정리 제안을 판단해요.", segment(MODELS, cur.reflect_model, (k) => { next.reflect_model = k; })), el("small", "v4-default", "기본값: Sonnet")));
       const actions = el("div", "pg-actions");
       body.replaceChildren(card, actions);
-      // 기본값으로 (Figma 302:18838): fills the form with the app defaults; the Cloudflare ID and token stay. 저장 applies it.
+      // 기본값으로 (Figma 302:18838): fills the form with the app defaults; saved keys and addresses stay. 저장 applies it.
       const reset = button("기본값으로", "ghost", null, () => {
         cur = { ...cur, embedder: "auto", embed_model: "qwen3-embedding:0.6b", judge: "fixed", extract_model: "haiku", reflect_model: "sonnet" };
         draw(); notice("기본값으로 채웠어요. 저장해야 적용돼요.");
@@ -626,19 +642,27 @@ window.ArkismPages = (ctx) => {
         next.embed_model = embedModel.value.trim() || "qwen3-embedding:0.6b";
         next.cloudflare_account = account.value.trim();
         next.cloudflare_token = token.value.trim();
-        if (next.judge === "clef" && (!next.cloudflare_account || !(next.cloudflare_token || cur.cloudflare_token_saved))) { notice("Clef를 쓰려면 Cloudflare 계정 ID와 토큰이 필요해요."); return; }
+        next.jev_key = jevKey.value.trim();
+        next.picker_url = pickerUrl.value.trim();
+        next.picker_model = pickerModel.value.trim();
+        next.picker_key = pickerKey.value.trim();
+        const has = (k) => next[k] || cur[`${k}_saved`];
+        if (next.judge === "clef" && (!next.cloudflare_account || !has("cloudflare_token"))) { notice("Clef를 쓰려면 Cloudflare 계정 ID와 토큰이 필요해요."); return; }
+        if (next.judge === "jev" && !has("jev_key")) { notice("Jev를 쓰려면 API 키가 필요해요."); return; }
+        if (next.judge === "chat" && (!next.picker_url || !next.picker_model)) { notice("내 모델로 판별하려면 주소와 모델 이름이 필요해요."); return; }
+        if (next.judge === "chat" && !/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(next.picker_url)) { notice("주소는 https이거나 이 PC(127.0.0.1)여야 해요."); return; }
         notice("저장하고 Arkism을 다시 시작하는 중이에요.");
         try {
-          const { cloudflare_token_saved, ...roles } = next;
+          const roles = Object.fromEntries(Object.entries(next).filter(([k]) => !k.endsWith("_saved")));
           await tauri.invoke("set_model_roles", { roles });
           await startLocal();
           notice("저장했어요.");
           load();
-        } catch (e) { notice(String(e).includes("invalid") ? "모델 이름을 확인해 주세요." : "저장하지 못했어요."); }
+        } catch (e) { notice(String(e).includes("invalid") ? "모델 이름이나 주소를 확인해 주세요." : "저장하지 못했어요."); }
       })), reset);
       summary.replaceChildren(el("h3", "", "지금 쓰는 모델"),
         kvRow("임베딩", saved.embedder === "none" ? "끄기" : `${saved.embed_model || "qwen3-embedding:0.6b"} · ${nameOf(EMBED, saved.embedder)}`),
-        kvRow("판정", saved.judge === "clef" ? "Clef" : "고정 규칙"), kvRow("기억 추출", `Claude ${nameOf(MODELS, saved.extract_model)}`), kvRow("반성·검토", `Claude ${nameOf(MODELS, saved.reflect_model)}`));
+        kvRow("판정", JUDGE_NAME[saved.judge] || "고정 규칙"), kvRow("기억 추출", `Claude ${nameOf(MODELS, saved.extract_model)}`), kvRow("반성·검토", `Claude ${nameOf(MODELS, saved.reflect_model)}`));
     }
     function load() {
       tauri.invoke("model_roles").then((r) => { cur = r; saved = r; draw(); }, () => body.replaceChildren(el("p", "pg-hint", "모델 설정을 읽지 못했어요.")));
