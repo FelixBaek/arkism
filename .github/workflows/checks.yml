@@ -81,6 +81,7 @@ jobs:
           POSTGRES_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: go test -race -tags=integration -count=1 ./...
       - name: Core boundary coverage (90% per file)
+        if: ${{ !cancelled() }}
         run: |
           go test -coverprofile=core-coverage.out -run 'TestTEI|TestCandidate|TestContext|TestSearchBudget' ./internal/memory
           python3 tools/check_core_coverage.py core-coverage.out
