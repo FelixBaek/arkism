@@ -13,6 +13,7 @@ from private_storage import private_file
 
 CONDITIONS = ('none', 'static', 'arkism')
 FIELDS = ('input_tokens', 'cached_input_tokens', 'output_tokens')
+PROMPT_FILE = 'prompt.txt'
 
 
 def read_observation(path):
@@ -46,7 +47,7 @@ def load_observations(results):
             raise ValueError(f'duplicate or invalid cell: {row["run_id"]}')
         identities.add(identity)
         observations.append(row)
-        for file in (path, path.with_name('events.json'), path.with_name('prompt.txt')):
+        for file in (path, path.with_name('events.json'), path.with_name(PROMPT_FILE)):
             evidence.append({'path': file.relative_to(results).as_posix(),
                              'sha256': hashlib.sha256(file.read_bytes()).hexdigest()})
     if not observations:
@@ -84,8 +85,8 @@ def compare_pair(results, static, arkism, billed):
     costs_complete = all(row['run_id'] in billed for row in (static, arkism))
     return {
         'task_id': static['task_id'], 'replicate': static['replicate'],
-        'prompt_bytes_equal': ((results / static['run_id'] / 'prompt.txt').read_bytes()
-                               == (results / arkism['run_id'] / 'prompt.txt').read_bytes()),
+        'prompt_bytes_equal': ((results / static['run_id'] / PROMPT_FILE).read_bytes()
+                               == (results / arkism['run_id'] / PROMPT_FILE).read_bytes()),
         'arkism_minus_static_task_seconds': arkism['task_seconds'] - static['task_seconds'],
         **{f'arkism_minus_static_{field}': arkism[field] - static[field]
            for field in (*FIELDS, 'uncached_input_tokens')},

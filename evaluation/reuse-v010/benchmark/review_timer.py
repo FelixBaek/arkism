@@ -20,7 +20,7 @@ def start_event(previous, condition, candidate_id, reviewer):
         raise ValueError('review ID already exists; use a new ID for another interval')
     if condition not in ('none', 'static', 'arkism') or not candidate_id or not reviewer:
         raise ValueError('condition, candidate ID and reviewer label are required')
-    return dict(condition=condition, candidate_id=candidate_id, reviewer=reviewer)
+    return {'condition': condition, 'candidate_id': candidate_id, 'reviewer': reviewer}
 
 
 def stop_event(previous, current, decision, evidence_ref):
@@ -32,9 +32,9 @@ def stop_event(previous, current, decision, evidence_ref):
     seconds = (current - timestamp(start['timestamp'])).total_seconds()
     if seconds < 0:
         raise ValueError('clock moved backwards; do not infer an elapsed time')
-    return dict(condition=start['condition'], candidate_id=start['candidate_id'],
-                reviewer=start['reviewer'], decision=decision, evidence_ref=evidence_ref,
-                review_interval_seconds=seconds, active_attention_seconds=None)
+    return {'condition': start['condition'], 'candidate_id': start['candidate_id'],
+            'reviewer': start['reviewer'], 'decision': decision, 'evidence_ref': evidence_ref,
+            'review_interval_seconds': seconds, 'active_attention_seconds': None}
 
 
 def record(action, review_id, *, condition=None, candidate_id=None,

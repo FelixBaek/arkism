@@ -96,8 +96,8 @@ class MeasurementTests(unittest.TestCase):
         link = self.root / 'linked-root'
         link.symlink_to(self.root, target_is_directory=True)
         def open_private(root):
-            with private_file('reviews', root=root, create=True):
-                pass
+            with private_file('reviews', root=root, create=True) as stream:
+                return stream.readable()
         with self.assertRaises(OSError):
             open_private(link)
         shared = self.root / 'shared'
