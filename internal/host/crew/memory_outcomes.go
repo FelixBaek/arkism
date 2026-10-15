@@ -158,11 +158,11 @@ func drainReceipts(evaluator comparisonAPI, evaluatorToken, dir string, configur
 	defer lock.Close()
 	paths, _ := filepath.Glob(filepath.Join(dir, "*.json"))
 	sort.Strings(paths)
-	if len(paths) > 32 {
-		paths = paths[:32]
-	}
 	results := []any{}
 	for _, path := range paths {
+		if len(results) == 32 { // finished receipts stay on disk, so bound the work, not the listing
+			break
+		}
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
@@ -185,7 +185,7 @@ func drainReceipts(evaluator comparisonAPI, evaluatorToken, dir string, configur
 		case err == nil:
 		case code == 403 || code == 404 || code == 409 || code == 410:
 			state = "rejected"
-		case errors.As(err, &ce) && (ce.code == "outcome_source_changed" || ce.code == "outcome_material_changed"):
+		case errors.As(err, &ce) && (ce.code == "outcome_source_changed" || ce.code == "outcome_material_changed" || ce.code == "crew_trace_excluded"):
 			state = "rejected"
 		default:
 			state = "pending"
@@ -212,6 +212,9 @@ func drainReceipts(evaluator comparisonAPI, evaluatorToken, dir string, configur
 func drainReceipt(evaluator comparisonAPI, evaluatorToken string, job map[string]any, configurations []any, producerToken string) (state string, err error) {
 	defer catch(&err)
 	scope, traceRef := obj(at(job, "scope")), obj(at(job, "trace"))
+	if same(getOr(scope, "agent_id", nil), "crew") || strings.HasPrefix(str(traceRef["id"]), "crew-trace-") {
+		return "", cmpErr("crew_trace_excluded") // OI-25: crew runner traces never judge memories
+	}
 	trace, err := liveRef(evaluator, scope, traceRef)
 	if err != nil {
 		return "", err
@@ -252,6 +255,12 @@ func drainReceipt(evaluator comparisonAPI, evaluatorToken string, job map[string
 			observation := map[string]any{"scope": scope, "trace": traceRef, "target": target, "dimension": at(config, "dimension")}
 			result, err := processOutcome(evaluator, evaluatorToken, observation, environmentRaw, mustStr(at(config, "checker_sha256")), producerToken)
 			if err != nil {
+				// A target changed or erased since delivery is skipped; the receipt's other targets still count.
+				_, gone := liveRef(evaluator, scope, obj(target))
+				var ce *comparisonError
+				if code := host.HTTPCode(gone); code == 404 || code == 410 || errors.As(gone, &ce) && ce.code == "outcome_source_changed" {
+					break
+				}
 				return "", err
 			}
 			pending = pending || result["state"] == "unobserved"

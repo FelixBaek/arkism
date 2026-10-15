@@ -622,6 +622,7 @@ func drain(allWorkOrigins bool) error {
 			return err
 		}
 	}
+	sessionTraces()
 	if err := hoDrain(allWorkOrigins); err != nil {
 		return err
 	}

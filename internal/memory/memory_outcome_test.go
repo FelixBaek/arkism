@@ -2,6 +2,7 @@ package memory
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -84,5 +85,28 @@ func TestMemoryOutcomeDeniesUnboundOrSelfRatings(t *testing.T) {
 				t.Fatal("unsafe outcome accepted")
 			}
 		})
+	}
+}
+func TestMemoryOutcomeExcludesCrewRunnerTraces(t *testing.T) {
+	f, _, in := outcomeFixture(t)
+	run, e := f.repo.Get(testCtx, "agent_runs", scopeA, "outcome-run")
+	if e != nil {
+		t.Fatal(e)
+	}
+	run.Run.TaskType, run.Revision = "crew_run", 2
+	if e = f.repo.Replace(testCtx, "agent_runs", run, 1); e != nil {
+		t.Fatal(e)
+	}
+	trace, e := f.repo.Get(testCtx, "execution_traces", scopeA, in.Trace.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	trace.Relations, trace.Revision = []Ref{{Collection: "agent_runs", ID: run.ID, Revision: 2}}, 2
+	if e = f.repo.Replace(testCtx, "execution_traces", trace, 1); e != nil {
+		t.Fatal(e)
+	}
+	in.Trace.Revision = 2
+	if _, e = f.svc.RecordMemoryOutcome(testCtx, "checker", in); !errors.Is(e, ErrDenied) || len(f.repo.rows("evaluations")) != 0 {
+		t.Fatal("crew runner trace judged a memory:", e)
 	}
 }

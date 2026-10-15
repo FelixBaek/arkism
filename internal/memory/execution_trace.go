@@ -2,6 +2,7 @@ package memory
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -27,6 +28,9 @@ type TraceEventInput struct {
 }
 
 type CompletedAgentRunInput struct {
+	// AgentID names the executing agent when the trace lives in the shared
+	// (agent-less) user scope; with a scope agent_id it must match or be omitted.
+	AgentID       string    `json:"agent_id,omitempty"`
 	OriginAgentID string    `json:"origin_agent_id,omitempty"`
 	ID            string    `json:"id,omitempty"`
 	TaskType      string    `json:"task_type"`
@@ -156,7 +160,8 @@ func (s *Service) IngestCompletedTrace(ctx context.Context, token string, in Tra
 }
 
 func prepareCompletedTrace(in TraceIngestInput) (preparedTrace, []byte, error) {
-	if !validScope(in.Scope) || in.Scope.AgentID == "" || !traceIdentifier(in.TraceID) || !traceIdentifier(in.ThreadID) || in.LangSmithRunID != "" && !traceIdentifier(in.LangSmithRunID) || len(in.Events) == 0 || len(in.Events) > maxTraceEvents {
+	agent := cmp.Or(in.Scope.AgentID, in.AgentRun.AgentID)
+	if !validScope(in.Scope) || !traceIdentifier(agent) || in.AgentRun.AgentID != "" && in.AgentRun.AgentID != agent || !traceIdentifier(in.TraceID) || !traceIdentifier(in.ThreadID) || in.LangSmithRunID != "" && !traceIdentifier(in.LangSmithRunID) || len(in.Events) == 0 || len(in.Events) > maxTraceEvents {
 		return preparedTrace{}, nil, ErrInvalid
 	}
 	if in.AgentRun.ID == "" {

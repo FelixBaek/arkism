@@ -639,6 +639,7 @@ func logRecall(hook, sid string, items []map[string]any) {
 		}
 	}
 	metric(kv("event", "recall"), kv("hook", hook), kv("session", sid), kv("injected", len(items)), kv("ids", ids), kv("captured", captured))
+	ledgerRecall(sid, items)
 }
 
 // promptContext is the memories related to this prompt, beyond what SessionStart injected.
