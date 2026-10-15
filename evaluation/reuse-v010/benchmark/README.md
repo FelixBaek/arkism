@@ -107,7 +107,7 @@ rm /tmp/arkism-bench-memory.test
 The exporter only accepts the exact five user-approved synthetic facts. Reusing
 this harness with other facts requires a new human review; do not relabel a
 synthetic role as real human approval. Results are incremental and resumable;
-use a new output directory for a new experiment. Authentication failure or HTTP
+the reproduction output is restricted to `/tmp/new-arkism-bench-results` (or the published results directory). Move your own prior reproduction results aside before starting a new experiment. Authentication failure or HTTP
 fixture failure aborts rather than substituting simulated data.
 
 `results/frozen-spec.json` includes task facts, starting code, hidden checks and
@@ -140,3 +140,5 @@ from model timeout; incomplete token observations produce a null aggregate plus
 coverage counts. The running model process had already loaded its original
 harness, so these changes did not alter prompts, task ordering, checks or
 observed outcomes. Completed-run exit/timeout/token coverage is audited afterward.
+
+After data collection, the harness was split into helpers and its CLI output/exporter paths were restricted for static-analysis review. The original seed-generated 45-run permutation is now replayed explicitly. All saved prompts, ordering, observed results and summaries were checked unchanged; these maintenance changes did not trigger another model run.

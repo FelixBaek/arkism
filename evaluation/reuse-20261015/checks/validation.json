@@ -8,8 +8,17 @@
     "evidence": "baseline-go-summary.json"
   },
   "final_go": {
-    "status": "running",
-    "product_commit": "7049c444fb80829a133bf1509694f2b5faa7bd3a"
+    "status": "passed",
+    "product_commit": "7049c444fb80829a133bf1509694f2b5faa7bd3a",
+    "top_level": {
+      "pass": 1988,
+      "skip": 4
+    },
+    "including_subtests": {
+      "pass": 6287,
+      "skip": 4
+    },
+    "evidence": "final-go-summary.json"
   },
   "final_go_vet": {
     "status": "passed"
@@ -38,5 +47,22 @@
   "publication": {
     "main_merged": false,
     "deployed": false
+  },
+  "ci": {
+    "status": "pending",
+    "note": "Initial Sonar findings concern evaluation harness CLI paths and maintainability; fixes in progress. Main is not merged."
+  },
+  "evaluation_harness": {
+    "status": "passed_offline",
+    "checks": [
+      "45 model prompts and frozen schedule unchanged after refactor",
+      "benchmark report and totals unchanged",
+      "5 reference programs accepted and 5 policy mutants rejected",
+      "live source/task scores byte-identical",
+      "CLI path, label, symlink and URL escape checks",
+      "API CSV/JSON summaries byte-identical",
+      "Python compilation and shell syntax"
+    ],
+    "note": "No provider calls repeated after harness-only hardening."
   }
 }

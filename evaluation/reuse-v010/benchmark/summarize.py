@@ -21,4 +21,5 @@ for r in rows:
 lines+=['','## 실행별 결과','', '|순서|과제|조건|반복|성공|초|입력|출력|검색 ms|','|---:|---|---|---:|---|---:|---:|---:|---:|']
 for r in rows:
  lines.append(f"|{r['order']+1}|{r['task_id']}|{r['condition']}|{r['replicate']}|{'성공' if r['success'] else '실패'}|{r['task_seconds']:.3f}|{r['input_tokens']}|{r['output_tokens']}|{r['retrieval_ms'] if r['retrieval_ms'] is not None else '미측정'}|")
-(root/'REPORT.ko.md').write_text('\n'.join(lines)+'\n')
+with (root / 'REPORT.ko.md').open('w') as report:
+ report.write('\n'.join(lines) + '\n')

@@ -13,7 +13,7 @@ pairs={
 rows=[]
 for t in TASKS:
  for kind,code in zip(['reference','mutant'],pairs[t['id']]):
-  passed,error=evaluate(code,t['checks'],ROOT)
+  passed,error=evaluate(code,t['checks'])
   assert passed==(kind=='reference'),(t['id'],kind,error)
   rows.append({'task_id':t['id'],'kind':kind,'judge_passed':passed,'expected_judge_passed':kind=='reference','code':code,'stderr':error})
 (ROOT/'evaluator-validation.json').write_text(json.dumps(rows,indent=2))

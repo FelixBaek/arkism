@@ -31,7 +31,7 @@
 
 스킬 권한 결함은 실제 HTTP handler와 항목별 거부 정책을 가진 authorizer fixture로 재현했다. 현재 Postgres의 scope 중심 권한 설정에서 실제 운영 계정 유출이 관측됐다는 뜻은 아니다.
 
-수정 과정의 실패도 보존했다. 첫 스킬 권한 수정이 DB transaction 안에서 별도 연결을 요구해, 연결 1개 환경의 기존 `TestPostgresSkillAvailability`에서 대기했다. 전체 PostgreSQL 검사에서 발견했으며, 해당 수정은 검토 후 바로잡았다. 기준 릴리스의 결함 수에 이 개발 중 회귀를 더하지 않는다. 최종 검사 결과는 `checks/final-go-summary.json`에 기록한다.
+수정 과정의 실패도 보존했다. 첫 스킬 권한 수정이 DB transaction 안에서 별도 연결을 요구해, 연결 1개 환경의 기존 `TestPostgresSkillAvailability`에서 대기했다. 전체 PostgreSQL 검사에서 발견했으며, 해당 수정은 검토 후 바로잡았다. 기준 릴리스의 결함 수에 이 개발 중 회귀를 더하지 않는다. [중간 실패 로그](checks/development-regression-summary.json)와 [수정 후 단일 연결 검사](skill-single-connection-fixed.jsonl)를 보존했다. 최종 전체 Go race/integration 검사는 최상위 1,988개 통과·4개 skip, 하위 포함 6,287개 통과했다. [최종 로그 요약](checks/final-go-summary.json). 추가 skip은 별도 opt-in 실험 exporter다.
 
 ## 3. 조건별 실제 측정
 
@@ -67,11 +67,11 @@ C 검색 15회: 평균 12.800ms, 표준편차 2.100ms, 범위 10.345–17.911ms.
 
 ## 버전·환경·재현 기록
 
-처음에는 공개 HEAD와 v0.1.0 태그가 모두 기준 커밋이었다. 작업 도중 공개 main에 [PR #43](https://github.com/FelixBaek/arkism/pull/43)이 병합되어 `edc6f934101c12a218a02bef8a9c686f962863a6`이 됐다. 이는 캡처 감사 문서/도구 및 패치 파일 변경이다. 위 릴리스 측정에 섞지 않았다. 이번 PR의 제품 수정은 기준 버전 **이후 변경**이다.
+처음에는 공개 HEAD와 v0.1.0 태그가 모두 기준 커밋이었다. 작업 도중 공개 main에 [PR #43](https://github.com/FelixBaek/arkism/pull/43)이 병합되어 `edc6f934101c12a218a02bef8a9c686f962863a6`이 됐다. 이는 캡처 감사 문서/도구 및 패치 파일 변경이다. 위 릴리스 측정에 섞지 않았다. PR 브랜치는 이 공개 main 위로 정리했으며, 이번 PR의 제품 수정은 기준 버전 **이후 변경**이다.
 
 공개 기준 버전에 AGENTS.md는 없었다. 사용자가 제공한 Git 규칙과 `guide/memory-evaluation.md`, 기존 재사용 테스트·연결 설정을 읽었다. 세 병렬 담당자는 각각 독립 clone/DB/세션을 썼다. 루트는 통합·전체 검사·실제 양방향 모델 실행을 맡았다. [독립 측정 검토](independent-measurement-review.md)
 
-기준 버전 전체 Go race+integration 검사: 최상위 1,980개 통과, 3개 skip; 하위 검사를 포함하면 6,255개 통과. 3개 skip을 성공으로 계산하지 않았다. `go vet ./...` 통과, UI 29/29 통과. [기준 요약](checks/baseline-go-summary.json), [원본 압축 JSONL](checks/baseline-go.jsonl.gz), [UI 로그](checks/baseline-ui.log). 최종 수정 검사와 공개 전 검사 결과는 [검사 목록](checks/validation.json)에 별도 기록한다.
+기준 버전 전체 Go race+integration 검사: 최상위 1,980개 통과, 3개 skip; 하위 검사를 포함하면 6,255개 통과. 3개 skip(배포 파일 없는 2개, 복사본 DB 설정 없는 1개)을 성공으로 계산하지 않았다. `go vet ./...` 통과, UI 29/29 통과. [기준 요약](checks/baseline-go-summary.json), [원본 압축 JSONL](checks/baseline-go.jsonl.gz), [UI 로그](checks/baseline-ui.log). 최종 수정 검사와 공개 전 검사 결과는 [검사 목록](checks/validation.json)에 별도 기록한다.
 
 재현 시작점:
 
@@ -86,3 +86,5 @@ go test -race ./internal/memory -run '^Test(CrossAgentSkillHTTP|SkillResolve)' -
 ```
 
 모든 공개 로그는 합성 데이터만 담는다. 인증 파일·운영 데이터는 포함하지 않았다. `.gitignore`, `.dockerignore`, `.env.example`을 추가/변경하지 않았고, 무시 규칙은 `.git/info/exclude`에만 뒀다.
+
+공개 PR의 초기 정적 검사에서 평가 스크립트의 경로 입력·복잡도·고정 테스트 비밀번호도 지적됐다. 출력 위치와 API 경로를 제한하고 함수를 분리했으며, 임시 DB 비밀번호를 매번 생성하도록 바꿨다. 평가 프롬프트 45개·순서·집계·기존 판정 결과가 같음을 오프라인 대조했다. 모델을 다시 실행해 과거 측정값을 바꾸지는 않았다.
