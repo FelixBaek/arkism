@@ -312,7 +312,8 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 
 	// Persist source provenance before candidate creation for correction retries.
 	if c.Supersedes != nil && stale == nil {
-		at := time.Now().UTC()
+		// Keep the in-memory provenance identical to the millisecond storage codec.
+		at := time.Now().UTC().Truncate(time.Millisecond)
 		pending := Record{ID: key, Scope: scope, Kind: "capture_pointer", Status: "correction_pending", Revision: 1, Sources: canonicalSources, CreatedAt: at, UpdatedAt: at}
 		if err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error { return tx.Insert(ctx, "jobs", pending) }); err != nil {
 			return item, err

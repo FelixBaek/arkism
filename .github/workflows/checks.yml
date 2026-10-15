@@ -1,7 +1,8 @@
 name: Checks
 
 # Merge gate for correctness: Go server, desktop UI and the Tauri shell run as parallel jobs.
-# Code quality is SonarCloud's job (sonarcloud.yml), coverage is Codecov's (coverage.yml) and
+# Core boundary coverage is enforced here; Codecov reports broader coverage (coverage.yml).
+# Code quality is SonarCloud's job (sonarcloud.yml) and
 # security is CodeQL default setup on the GitHub side.
 
 on:
@@ -43,7 +44,24 @@ jobs:
 
   go:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d # pg17
+        env:
+          POSTGRES_USER: arkism
+          # Throwaway DB on a loopback-only port of a disposable runner.
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: arkism_ci
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arkism"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_TEST_DSN: postgres://arkism@127.0.0.1:5432/arkism_ci?sslmode=disable
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -57,10 +75,33 @@ jobs:
         run: |
           GOOS=windows go vet ./...
           GOOS=darwin go vet ./...
-      - name: Test (race)
-        run: go test -race ./...
+      - name: Unit and Postgres integration tests (race)
+        env:
+          # Enable the real pg_dump/pg_restore roundtrip in isolated test databases.
+          POSTGRES_TEST_CONTAINER: ${{ job.services.postgres.id }}
+        run: go test -race -tags=integration -count=1 ./...
+      - name: Core boundary coverage (90% per file)
+        if: ${{ !cancelled() }}
+        run: |
+          go test -coverprofile=core-coverage.out -run 'TestTEI|TestCandidate|TestContext|TestSearchBudget' ./internal/memory
+          python3 tools/check_core_coverage.py core-coverage.out
       - name: Release scripts parse
         run: bash -n desktop/build-unix.sh desktop/installer/prepare-runtime.sh
+
+  go-windows:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build Go commands on Windows
+        run: go build ./cmd/...
+      - name: Execute Windows skill bundle capture
+        run: go test -v -count=1 -run '^TestWindowsBundleCaptureMatchesTheUnixRules$' ./internal/host/skills
 
   ui:
     runs-on: ubuntu-24.04
