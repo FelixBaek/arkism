@@ -105,3 +105,19 @@ func TestCaptureClaimCarriesItsRiskCall(t *testing.T) {
 		t.Fatal("risk reasons without a risk", items)
 	}
 }
+
+func TestCaptureAutoApprovalIsNotAPersonsCall(t *testing.T) {
+	f := newFixture(t)
+	claim := CaptureClaim{Subject: "build", Text: "이 저장소는 pnpm으로 빌드한다.", Kind: "decision", Basis: "explicit_user", Reason: "user decided", Risk: "high"}
+	items := f.capture(f.human, captureInput(scopeA, "e-auto", claim))
+	if len(items) != 1 || items[0].Status != "accepted" {
+		t.Fatal(items)
+	}
+	c := f.get(f.human, "memory_candidates", scopeA, items[0].CandidateID)
+	if c.Review == nil || c.Review.Person || c.Review.AIRisk != "" || c.Review.Overturned {
+		t.Fatal(c.Review)
+	}
+	if rep, e := f.svc.ClassificationReport(testCtx, f.human, scopeA); e != nil || len(rep.Decided) != 0 || len(rep.Overturned) != 0 {
+		t.Fatal(rep, e)
+	}
+}

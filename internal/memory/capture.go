@@ -417,7 +417,7 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		item.Status, item.Reason = "candidate", "review_required:instruction_like"
 		return item, nil
 	}
-	if _, err = s.ReviewCandidate(ctx, token, cand.ID, CandidateReviewInput{Scope: scope, ExpectedRevision: cand.Revision, Action: "approve"}); err != nil {
+	if _, err = s.ReviewCandidate(ctx, token, cand.ID, CandidateReviewInput{Scope: scope, ExpectedRevision: cand.Revision, Action: "approve", byServer: true}); err != nil {
 		// Only a human principal passes the review gate; anything else waits.
 		item.Status, item.Reason = "candidate", "review_required:"+captureErrorCode(err)
 		return item, nil

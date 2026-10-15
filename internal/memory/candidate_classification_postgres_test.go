@@ -30,8 +30,25 @@ func TestPostgresClassifierCanOnlyClassify(t *testing.T) {
 	}
 	classified.Revision, classified.UpdatedAt = 2, now.Add(time.Second)
 	classified.Classification = &CandidateClassification{Risk: "high", By: "arkism-memory-reviewer"}
+	forged := classified
+	forged.Classification = &CandidateClassification{Risk: "high", By: "someone-else"}
+	if err := app.Replace(bound, "memory_candidates", forged, 1); !errors.Is(err, ErrDenied) {
+		t.Fatalf("classifier signed as another principal: %v", err)
+	}
 	if err := app.Replace(bound, "memory_candidates", classified, 1); err != nil {
 		t.Fatalf("classification refused: %v", err)
+	}
+	event := func(by, target string) Record {
+		return Record{ID: ID(), Scope: scope, Kind: "classify:memory_candidates", Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: by, Target: &Ref{ID: target}}
+	}
+	if err := app.Insert(bound, "audit_events", event("someone-else", cand.ID)); !errors.Is(err, ErrDenied) {
+		t.Fatalf("classifier forged an audit actor: %v", err)
+	}
+	if err := app.Insert(bound, "audit_events", event("arkism-memory-reviewer", "other-cand")); !errors.Is(err, ErrDenied) {
+		t.Fatalf("classifier audited a candidate it did not classify: %v", err)
+	}
+	if err := app.Insert(bound, "audit_events", event("arkism-memory-reviewer", cand.ID)); err != nil {
+		t.Fatalf("classification audit refused: %v", err)
 	}
 	approved := classified
 	approved.Revision, approved.Status = 3, "approved"

@@ -1030,9 +1030,12 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		r.Revision++
 		r.UpdatedAt = time.Now().UTC()
 		if review != nil {
-			r.Review = &ReviewDecision{Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason, Overturned: overturned(r.Classification, review.Action)}
-			if r.Classification != nil {
-				r.Review.AIRisk = r.Classification.Risk
+			r.Review = &ReviewDecision{Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
+			if d.Role == roleHuman && !review.byServer {
+				r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
+				if r.Classification != nil {
+					r.Review.AIRisk = r.Classification.Risk
+				}
 			}
 			if personalPattern.MatchString(review.Content + " " + review.Reason) {
 				if r.Sensitivity != "restricted" {

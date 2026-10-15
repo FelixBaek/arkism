@@ -98,7 +98,7 @@ func overturned(c *CandidateClassification, action string) bool {
 }
 
 type ClassificationReport struct {
-	// Decided counts reviewed candidates per AI risk ("none" when unclassified); Overturned counts the
+	// Decided counts candidates a person reviewed, per AI risk ("none" when unclassified); Overturned counts the
 	// ones a person decided against the risk call. Error rate = Overturned[risk] / Decided[risk].
 	Decided    map[string]int `json:"decided"`
 	Overturned map[string]int `json:"overturned"`
@@ -116,7 +116,7 @@ func (s *Service) ClassificationReport(ctx context.Context, token string, scope 
 			return out, e
 		}
 		for _, r := range rows {
-			if r.Review == nil {
+			if r.Review == nil || !r.Review.Person {
 				continue
 			}
 			risk := r.Review.AIRisk

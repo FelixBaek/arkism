@@ -15,13 +15,17 @@ type CandidateReviewInput struct {
 	Action           string                   `json:"action"`
 	Content          string                   `json:"content,omitempty"`
 	Reason           string                   `json:"reason,omitempty"`
+	// byServer marks an approval the server made for the caller (capture's explicit_user path), not a person's call.
+	byServer bool
 }
 type ReviewDecision struct {
 	Action string    `json:"action" bson:"action"`
 	By     string    `json:"by" bson:"by"`
 	At     time.Time `json:"at" bson:"at"`
 	Reason string    `json:"reason,omitempty" bson:"reason,omitempty"`
-	// AIRisk is the candidate's risk call when the person decided; Overturned marks a decision against it.
+	// Person marks a human's own call; only those measure the classifier. AIRisk is the candidate's risk call
+	// when the person decided; Overturned marks a decision against it.
+	Person     bool   `json:"person,omitempty" bson:"person,omitempty"`
 	AIRisk     string `json:"ai_risk,omitempty" bson:"ai_risk,omitempty"`
 	Overturned bool   `json:"overturned,omitempty" bson:"overturned,omitempty"`
 }
