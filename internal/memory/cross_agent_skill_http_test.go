@@ -147,3 +147,59 @@ func TestSkillResolveRejectsChangedReaderIdentity(t *testing.T) {
 		})
 	}
 }
+
+// Policy evaluation runs outside the read transaction, so a policy callback
+// can revoke a source. The publication fence must then discard the snapshot.
+func TestSkillResolveRechecksAfterResourceAuthorization(t *testing.T) {
+	f := newFixture(t)
+	imported, err := f.svc.ImportSkill(testCtx, f.human, ImportSkillInput{Scope: scopeA, SkillID: "revoked-during-policy", Path: "/synthetic/SKILL.md", Content: "# Synthetic procedure", Analysis: detailedSkillAnalysis()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := false
+	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+		if token == f.agent && req.Action == "read:sources" && req.ResourceID == imported.Record.Sources[0].SourceID && !changed {
+			changed = true
+			source, e := f.repo.Get(ctx, "sources", scopeA, req.ResourceID)
+			if e != nil {
+				t.Fatal(e)
+			}
+			before := source.Revision
+			source.Revision++
+			source.Status = "expired"
+			if e = f.repo.Replace(ctx, "sources", source, before); e != nil {
+				t.Fatal(e)
+			}
+		}
+		return f.auth.Authorize(ctx, token, req)
+	})
+	got, err := f.svc.ResolveSkills(testCtx, f.agent, SkillResolveInput{Scope: scopeA, Refs: []string{"revoked-during-policy@latest-approved"}})
+	if err != ErrConflict || len(got.Items) != 0 {
+		t.Fatalf("revoked content returned: %v %#v", err, got)
+	}
+}
+
+func TestPostgresSkillResolveWithSingleConnection(t *testing.T) {
+	pg := isolatedPostgres(t)
+	f := newFixture(t)
+	f.svc.Repo = pg
+	imported, err := f.svc.ImportSkill(testCtx, f.human, ImportSkillInput{Scope: scopeA, SkillID: "single-connection", Path: "/synthetic/SKILL.md", Content: "# Synthetic procedure", Analysis: detailedSkillAnalysis()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = pg.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: "single-reader", Role: "agent", Token: f.agent, OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"*"}}); err != nil {
+		t.Fatal(err)
+	}
+	app := restrictedPostgres(t, pg)
+	auth, err := NewPostgresAuthorizer(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.svc.Repo, f.svc.Auth = app, auth
+	ctx, cancel := context.WithTimeout(ContextWithPostgresToken(testCtx, f.agent), 5*time.Second)
+	defer cancel()
+	got, err := f.svc.ResolveSkills(ctx, f.agent, SkillResolveInput{Scope: scopeA, Refs: []string{"single-connection@latest-approved"}})
+	if err != nil || len(got.Items) != 1 || got.Items[0].VersionID != imported.Record.ID {
+		t.Fatalf("single connection resolution: %v %#v", err, got)
+	}
+}

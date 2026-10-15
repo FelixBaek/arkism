@@ -226,40 +226,64 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 	if err != nil {
 		return out, err
 	}
+	resolve := func(ctx context.Context, tx Tx, ref string) (ResolvedSkill, error) {
+		if in.TrialID != "" {
+			return resolveSkillTrial(ctx, tx, in, ref)
+		}
+		return resolveSkillRef(ctx, tx, in.Scope, ref)
+	}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		for _, ref := range in.Refs {
-			var item ResolvedSkill
-			var err error
-			if in.TrialID != "" {
-				item, err = resolveSkillTrial(ctx, tx, in, ref)
-			} else {
-				item, err = resolveSkillRef(ctx, tx, in.Scope, ref)
-			}
-			if err != nil {
-				return err
-			}
-			// Scope-level permission does not imply permission to publish each
-			// resolved parent, version and source. Match direct-read policy and
-			// keep the caller identity stable across all decisions.
-			if item.Error == "" {
-				for _, resource := range []Ref{
-					{Collection: colSkills, ID: item.SkillID},
-					{Collection: colSkillVersions, ID: item.VersionID},
-					{Collection: "sources", ID: item.Provenance.SourceID},
-				} {
-					d, e := s.authorize(ctx, token, "read:"+resource.Collection, in.Scope, resource.ID, "")
-					if e != nil {
-						return e
-					}
-					if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
-						return ErrDenied
-					}
-				}
+			item, e := resolve(ctx, tx, ref)
+			if e != nil {
+				return e
 			}
 			out.Items = append(out.Items, item)
 		}
 		return nil
 	})
+	if err != nil {
+		out.Items = []ResolvedSkill{}
+		return out, err
+	}
+	// Authorization may need its own database connection (including denial
+	// auditing). Never hold a repository transaction while asking the policy.
+	for _, item := range out.Items {
+		if item.Error != "" {
+			continue
+		}
+		for _, resource := range []Ref{
+			{Collection: colSkills, ID: item.SkillID},
+			{Collection: colSkillVersions, ID: item.VersionID},
+			{Collection: "sources", ID: item.Provenance.SourceID},
+		} {
+			d, e := s.authorize(ctx, token, "read:"+resource.Collection, in.Scope, resource.ID, "")
+			if e == nil && (d.PrincipalID != actor.PrincipalID || d.Role != actor.Role) {
+				e = ErrDenied
+			}
+			if e != nil {
+				out.Items = []ResolvedSkill{}
+				return out, e
+			}
+		}
+	}
+	// Approval/source state may change while policy is consulted. Publish only
+	// the exact snapshot whose resource identities were authorized.
+	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		for i, ref := range in.Refs {
+			item, e := resolve(ctx, tx, ref)
+			if e != nil {
+				return e
+			}
+			if structuredText(item) != structuredText(out.Items[i]) {
+				return ErrConflict
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		out.Items = []ResolvedSkill{}
+	}
 	return out, err
 }
 
