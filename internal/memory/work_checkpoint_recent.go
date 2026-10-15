@@ -20,7 +20,7 @@ type RecentWorkOutput struct {
 	Items     []WorkCheckpointView `json:"items"`
 	Authority string               `json:"authority"`
 }
-type recentWorkStore interface {
+type recentWorkRowsReader interface {
 	RecentWorkRows(context.Context, Scope, string, string, time.Time, int) ([]Record, error)
 }
 
@@ -41,7 +41,7 @@ func (s *Service) RecentWorkCheckpoints(ctx context.Context, token string, in Re
 	if err != nil {
 		return out, err
 	}
-	store, ok := s.Repo.(recentWorkStore)
+	store, ok := s.Repo.(recentWorkRowsReader)
 	if !ok {
 		return out, ErrUnavailable
 	}

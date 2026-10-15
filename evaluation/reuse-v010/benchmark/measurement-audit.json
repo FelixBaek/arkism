@@ -221,12 +221,20 @@
       "sha256": "ce239337e72cf31bf4274c72762fae19ac9610b9279ec05b6ef80fb798b6daa9"
     },
     {
+      "path": "billing-arkism-1/prompt.txt",
+      "sha256": "c9583d9b2ec23f28ac915aa499cb2d10044f3f19d723c73431307e0adf72bcf4"
+    },
+    {
       "path": "billing-arkism-2/result.json",
       "sha256": "57bac5a54fecdd20d95d5682e65dd53cc806a3294579be9ebaacd297020ac751"
     },
     {
       "path": "billing-arkism-2/events.json",
       "sha256": "532472cb3c36708d9145b1096b1df3caac0260106d467e0f9d53f7d1fe6866c9"
+    },
+    {
+      "path": "billing-arkism-2/prompt.txt",
+      "sha256": "c9583d9b2ec23f28ac915aa499cb2d10044f3f19d723c73431307e0adf72bcf4"
     },
     {
       "path": "billing-arkism-3/result.json",
@@ -237,12 +245,20 @@
       "sha256": "30a8dad7a65a889688364442d5a311056e339786e46d547ec3052f9b9043c60c"
     },
     {
+      "path": "billing-arkism-3/prompt.txt",
+      "sha256": "c9583d9b2ec23f28ac915aa499cb2d10044f3f19d723c73431307e0adf72bcf4"
+    },
+    {
       "path": "billing-none-1/result.json",
       "sha256": "94da1d797d0921fc9f2b11f1c4b18dbd8a5ed634ee45ab7dca4bc1aac024bd2d"
     },
     {
       "path": "billing-none-1/events.json",
       "sha256": "350f0341397063fb20fc4c760f23674b25ab3336a570017d0b33bca7d767bbd2"
+    },
+    {
+      "path": "billing-none-1/prompt.txt",
+      "sha256": "7f04ea3a3e2da8f06d1b08949608840c413e042a8f048a4b2cada532233b334f"
     },
     {
       "path": "billing-none-2/result.json",
@@ -253,12 +269,20 @@
       "sha256": "127090b14a98f4ee678a43df91e7c6b0204d0cc62b935cd7f3d0669a7ff25b07"
     },
     {
+      "path": "billing-none-2/prompt.txt",
+      "sha256": "7f04ea3a3e2da8f06d1b08949608840c413e042a8f048a4b2cada532233b334f"
+    },
+    {
       "path": "billing-none-3/result.json",
       "sha256": "a2fa858ea98950223a6c53985e339ba7d3476509b7cc36b4c479620478d80346"
     },
     {
       "path": "billing-none-3/events.json",
       "sha256": "63826539efac49928e78c44a097a53d9f46663a9c20365f261311bb00fc2828b"
+    },
+    {
+      "path": "billing-none-3/prompt.txt",
+      "sha256": "7f04ea3a3e2da8f06d1b08949608840c413e042a8f048a4b2cada532233b334f"
     },
     {
       "path": "billing-static-1/result.json",
@@ -269,12 +293,20 @@
       "sha256": "30a8dad7a65a889688364442d5a311056e339786e46d547ec3052f9b9043c60c"
     },
     {
+      "path": "billing-static-1/prompt.txt",
+      "sha256": "c9583d9b2ec23f28ac915aa499cb2d10044f3f19d723c73431307e0adf72bcf4"
+    },
+    {
       "path": "billing-static-2/result.json",
       "sha256": "f48851aabc994836ca3f904b7394f9caaf0f05a2e1f54abb39a5a55f7c881905"
     },
     {
       "path": "billing-static-2/events.json",
       "sha256": "ce239337e72cf31bf4274c72762fae19ac9610b9279ec05b6ef80fb798b6daa9"
+    },
+    {
+      "path": "billing-static-2/prompt.txt",
+      "sha256": "c9583d9b2ec23f28ac915aa499cb2d10044f3f19d723c73431307e0adf72bcf4"
     },
     {
       "path": "billing-static-3/result.json",
@@ -285,12 +317,20 @@
       "sha256": "30a8dad7a65a889688364442d5a311056e339786e46d547ec3052f9b9043c60c"
     },
     {
+      "path": "billing-static-3/prompt.txt",
+      "sha256": "c9583d9b2ec23f28ac915aa499cb2d10044f3f19d723c73431307e0adf72bcf4"
+    },
+    {
       "path": "cache-arkism-1/result.json",
       "sha256": "e906480e7555651739d52c7720d242028dfe504bb96d4a86b3aebda081d1630a"
     },
     {
       "path": "cache-arkism-1/events.json",
       "sha256": "ec9058125083da38330879b0696a28e8c8b3cff575bf727b2313332483594b10"
+    },
+    {
+      "path": "cache-arkism-1/prompt.txt",
+      "sha256": "73a74152d66b5d2d83aa587a849255fd896ec24fa1075a4222995875e050188e"
     },
     {
       "path": "cache-arkism-2/result.json",
@@ -301,12 +341,20 @@
       "sha256": "f12f1d0293ad92b4e87d5f18644ca8402a1d8ab70ae1316805a531480135168e"
     },
     {
+      "path": "cache-arkism-2/prompt.txt",
+      "sha256": "73a74152d66b5d2d83aa587a849255fd896ec24fa1075a4222995875e050188e"
+    },
+    {
       "path": "cache-arkism-3/result.json",
       "sha256": "67eb132565cd0c6d71132baca0a665c6d16ad6aa0bf2f0f36f74069d58f685c6"
     },
     {
       "path": "cache-arkism-3/events.json",
       "sha256": "f12f1d0293ad92b4e87d5f18644ca8402a1d8ab70ae1316805a531480135168e"
+    },
+    {
+      "path": "cache-arkism-3/prompt.txt",
+      "sha256": "73a74152d66b5d2d83aa587a849255fd896ec24fa1075a4222995875e050188e"
     },
     {
       "path": "cache-none-1/result.json",
@@ -317,12 +365,20 @@
       "sha256": "b9d4f8e79e4fa7166b7406ae957217d1ffd727f95fc606cca96600396176b2cd"
     },
     {
+      "path": "cache-none-1/prompt.txt",
+      "sha256": "288f8aba44500ec9720a9367466fdcabc89aa18bc2fad57974105e8e3e1693ad"
+    },
+    {
       "path": "cache-none-2/result.json",
       "sha256": "0d54fb58538d20434994a12ecb45904c7c6353544e848afd2d224e17a5ebb312"
     },
     {
       "path": "cache-none-2/events.json",
       "sha256": "73789d7ca544ad2ae2b8031ca12a2445d4b916eee67a4d845a723033905aa74a"
+    },
+    {
+      "path": "cache-none-2/prompt.txt",
+      "sha256": "288f8aba44500ec9720a9367466fdcabc89aa18bc2fad57974105e8e3e1693ad"
     },
     {
       "path": "cache-none-3/result.json",
@@ -333,12 +389,20 @@
       "sha256": "43eca298efc324c980f262bdf6324c450d80fe35e3ed5d141a894f4971a34b76"
     },
     {
+      "path": "cache-none-3/prompt.txt",
+      "sha256": "288f8aba44500ec9720a9367466fdcabc89aa18bc2fad57974105e8e3e1693ad"
+    },
+    {
       "path": "cache-static-1/result.json",
       "sha256": "4c6b9b5cec9d2b54a3cb82f0de30a114fd3f975159541ef226ccebab279bef6f"
     },
     {
       "path": "cache-static-1/events.json",
       "sha256": "f12f1d0293ad92b4e87d5f18644ca8402a1d8ab70ae1316805a531480135168e"
+    },
+    {
+      "path": "cache-static-1/prompt.txt",
+      "sha256": "73a74152d66b5d2d83aa587a849255fd896ec24fa1075a4222995875e050188e"
     },
     {
       "path": "cache-static-2/result.json",
@@ -349,12 +413,20 @@
       "sha256": "f12f1d0293ad92b4e87d5f18644ca8402a1d8ab70ae1316805a531480135168e"
     },
     {
+      "path": "cache-static-2/prompt.txt",
+      "sha256": "73a74152d66b5d2d83aa587a849255fd896ec24fa1075a4222995875e050188e"
+    },
+    {
       "path": "cache-static-3/result.json",
       "sha256": "c934668b287c8bb23dfad1946abffa723d85085a0a623320a4417517b0ece8a3"
     },
     {
       "path": "cache-static-3/events.json",
       "sha256": "ec9058125083da38330879b0696a28e8c8b3cff575bf727b2313332483594b10"
+    },
+    {
+      "path": "cache-static-3/prompt.txt",
+      "sha256": "73a74152d66b5d2d83aa587a849255fd896ec24fa1075a4222995875e050188e"
     },
     {
       "path": "handoff-arkism-1/result.json",
@@ -365,12 +437,20 @@
       "sha256": "2f84614923d65450eb522608ba4f7a9a60e690da26d747c071a1804e65f27849"
     },
     {
+      "path": "handoff-arkism-1/prompt.txt",
+      "sha256": "f0bbe74ae4ea55a0798a1e994f029d2df6367143cd8feb92f9ffbd291ec633d9"
+    },
+    {
       "path": "handoff-arkism-2/result.json",
       "sha256": "796d7823f43c95b49cd29882919870d808fdede108bbc40839a15b94ba238e50"
     },
     {
       "path": "handoff-arkism-2/events.json",
       "sha256": "b8755e797302ee6b55d5a30a67285265f89987baf9e913d09992cb9d0770e0b7"
+    },
+    {
+      "path": "handoff-arkism-2/prompt.txt",
+      "sha256": "f0bbe74ae4ea55a0798a1e994f029d2df6367143cd8feb92f9ffbd291ec633d9"
     },
     {
       "path": "handoff-arkism-3/result.json",
@@ -381,12 +461,20 @@
       "sha256": "8c527efa4e8cf61c347422671db5e7c491655b0f013a60ecf56e30be8b35208c"
     },
     {
+      "path": "handoff-arkism-3/prompt.txt",
+      "sha256": "f0bbe74ae4ea55a0798a1e994f029d2df6367143cd8feb92f9ffbd291ec633d9"
+    },
+    {
       "path": "handoff-none-1/result.json",
       "sha256": "3ece8c36b326b0c23be623e9f286c89a9ba908d73f64628aa15880db63319e06"
     },
     {
       "path": "handoff-none-1/events.json",
       "sha256": "02a512ffeff436c03e59d92a0deb5c8e9ab0ff5830f70a0b0b348f196501d43d"
+    },
+    {
+      "path": "handoff-none-1/prompt.txt",
+      "sha256": "7b278655cab353cd36f3b5ba93bb6b0af8f94ea48bc3ab95149d55214054a2e2"
     },
     {
       "path": "handoff-none-2/result.json",
@@ -397,12 +485,20 @@
       "sha256": "3da6c5dcb43091617b69c69faba261c0421c15b0baf5b1c32bee4a8e7efb591d"
     },
     {
+      "path": "handoff-none-2/prompt.txt",
+      "sha256": "7b278655cab353cd36f3b5ba93bb6b0af8f94ea48bc3ab95149d55214054a2e2"
+    },
+    {
       "path": "handoff-none-3/result.json",
       "sha256": "3496e95d87c437eea06fa1d670188711a02ac62e927a509df2e4a5723ad1bc38"
     },
     {
       "path": "handoff-none-3/events.json",
       "sha256": "db77458d46bf7270a92834f2366f4f1e54a32e585be997dac3a3ec2c4d88eb8b"
+    },
+    {
+      "path": "handoff-none-3/prompt.txt",
+      "sha256": "7b278655cab353cd36f3b5ba93bb6b0af8f94ea48bc3ab95149d55214054a2e2"
     },
     {
       "path": "handoff-static-1/result.json",
@@ -413,12 +509,20 @@
       "sha256": "7c2e08c35d064c884aa6acff6e3728779c50401c318335f48b443148e106ba45"
     },
     {
+      "path": "handoff-static-1/prompt.txt",
+      "sha256": "f0bbe74ae4ea55a0798a1e994f029d2df6367143cd8feb92f9ffbd291ec633d9"
+    },
+    {
       "path": "handoff-static-2/result.json",
       "sha256": "0fcdbf01faf6b89fd36f54e391b67271d7eda1ef226ddbfb53259df1578046b3"
     },
     {
       "path": "handoff-static-2/events.json",
       "sha256": "a2f1549ba7623d514452fccc4030a5aa4e825e44272a2411e2b498c587256266"
+    },
+    {
+      "path": "handoff-static-2/prompt.txt",
+      "sha256": "f0bbe74ae4ea55a0798a1e994f029d2df6367143cd8feb92f9ffbd291ec633d9"
     },
     {
       "path": "handoff-static-3/result.json",
@@ -429,12 +533,20 @@
       "sha256": "c582173a3e315bcb88cc580f34f6dbdcc344d93aef696272f6d5d9944e6738a5"
     },
     {
+      "path": "handoff-static-3/prompt.txt",
+      "sha256": "f0bbe74ae4ea55a0798a1e994f029d2df6367143cd8feb92f9ffbd291ec633d9"
+    },
+    {
       "path": "labels-arkism-1/result.json",
       "sha256": "2cb74d13d18d8061d732472848724cbb88df5c9bfbdd8dff1edfc17a4369f974"
     },
     {
       "path": "labels-arkism-1/events.json",
       "sha256": "dce6d8c404ecc2d1c6a1d420743ff0ef5d979f160e052a6ed50ceb4521d6fcd9"
+    },
+    {
+      "path": "labels-arkism-1/prompt.txt",
+      "sha256": "bbf67b62399f5160035bcdf038ce79db649e53a9f000d3db9a160193b6bf8c1d"
     },
     {
       "path": "labels-arkism-2/result.json",
@@ -445,12 +557,20 @@
       "sha256": "dce6d8c404ecc2d1c6a1d420743ff0ef5d979f160e052a6ed50ceb4521d6fcd9"
     },
     {
+      "path": "labels-arkism-2/prompt.txt",
+      "sha256": "bbf67b62399f5160035bcdf038ce79db649e53a9f000d3db9a160193b6bf8c1d"
+    },
+    {
       "path": "labels-arkism-3/result.json",
       "sha256": "0c9d519bf17d6adff20840c5474c114ff6c6c62600c86b8ab9ea50ef754c442b"
     },
     {
       "path": "labels-arkism-3/events.json",
       "sha256": "ae77fda37b1d9fa0e4c807b8fde2ebc4551fd4848628a7230a4d9c7c93992383"
+    },
+    {
+      "path": "labels-arkism-3/prompt.txt",
+      "sha256": "bbf67b62399f5160035bcdf038ce79db649e53a9f000d3db9a160193b6bf8c1d"
     },
     {
       "path": "labels-none-1/result.json",
@@ -461,12 +581,20 @@
       "sha256": "833bef1fb747974df49b7817d5182abc26d66d7bed5f311d48898270d9586d96"
     },
     {
+      "path": "labels-none-1/prompt.txt",
+      "sha256": "dccf5872b5edf0df68c05d4a044d9d3bda679b1741ed12a65282848a681f5481"
+    },
+    {
       "path": "labels-none-2/result.json",
       "sha256": "13815364a537d97c1c1d8c178e0f2c7771a0edc8c9fd6ae7b9c72673e4584426"
     },
     {
       "path": "labels-none-2/events.json",
       "sha256": "c65816b1d16899c9af0126cc832651e7e227863b4bc62d9a339c7627473a3045"
+    },
+    {
+      "path": "labels-none-2/prompt.txt",
+      "sha256": "dccf5872b5edf0df68c05d4a044d9d3bda679b1741ed12a65282848a681f5481"
     },
     {
       "path": "labels-none-3/result.json",
@@ -477,12 +605,20 @@
       "sha256": "fca647cffc8649f8268eddc12621c0142f8b347a8f9a2fbc3c74606638e0da44"
     },
     {
+      "path": "labels-none-3/prompt.txt",
+      "sha256": "dccf5872b5edf0df68c05d4a044d9d3bda679b1741ed12a65282848a681f5481"
+    },
+    {
       "path": "labels-static-1/result.json",
       "sha256": "0fc180db238d53569ad9a6b574be6344ea3b22d421ee6d235226d5d0a304c89b"
     },
     {
       "path": "labels-static-1/events.json",
       "sha256": "61fc0ea95c67c862c6d180de3d6eb4d29273da32c01bfd8df0e66b55c31dd98a"
+    },
+    {
+      "path": "labels-static-1/prompt.txt",
+      "sha256": "bbf67b62399f5160035bcdf038ce79db649e53a9f000d3db9a160193b6bf8c1d"
     },
     {
       "path": "labels-static-2/result.json",
@@ -493,12 +629,20 @@
       "sha256": "3c526cce972bae1a837cfc97a0764a46bb2b64ef4928066bad4f75f18e4b7559"
     },
     {
+      "path": "labels-static-2/prompt.txt",
+      "sha256": "bbf67b62399f5160035bcdf038ce79db649e53a9f000d3db9a160193b6bf8c1d"
+    },
+    {
       "path": "labels-static-3/result.json",
       "sha256": "113ae2bb0d98ba8be1e51f748af730765bb3c427e1c5848863373c795336c44d"
     },
     {
       "path": "labels-static-3/events.json",
       "sha256": "3c526cce972bae1a837cfc97a0764a46bb2b64ef4928066bad4f75f18e4b7559"
+    },
+    {
+      "path": "labels-static-3/prompt.txt",
+      "sha256": "bbf67b62399f5160035bcdf038ce79db649e53a9f000d3db9a160193b6bf8c1d"
     },
     {
       "path": "roster-arkism-1/result.json",
@@ -509,12 +653,20 @@
       "sha256": "1a6fc3f4b6e92616f5e3b9896b126635b822dd21a748078f8b9e4fd33cd6583f"
     },
     {
+      "path": "roster-arkism-1/prompt.txt",
+      "sha256": "c49e60f5aa9e2a619bbf3bd078b316dc1b3bd76ccb4617734f42e10e4ef27b48"
+    },
+    {
       "path": "roster-arkism-2/result.json",
       "sha256": "eb2adb40ccd9aa0033dabb01e0471e52d852bab7478a7463be39bd54ae96d00f"
     },
     {
       "path": "roster-arkism-2/events.json",
       "sha256": "f680dada1a290b598b5f6a14afd5c9a597eaf7b15783cee21d9c302efd3d263a"
+    },
+    {
+      "path": "roster-arkism-2/prompt.txt",
+      "sha256": "c49e60f5aa9e2a619bbf3bd078b316dc1b3bd76ccb4617734f42e10e4ef27b48"
     },
     {
       "path": "roster-arkism-3/result.json",
@@ -525,12 +677,20 @@
       "sha256": "f680dada1a290b598b5f6a14afd5c9a597eaf7b15783cee21d9c302efd3d263a"
     },
     {
+      "path": "roster-arkism-3/prompt.txt",
+      "sha256": "c49e60f5aa9e2a619bbf3bd078b316dc1b3bd76ccb4617734f42e10e4ef27b48"
+    },
+    {
       "path": "roster-none-1/result.json",
       "sha256": "b0f4c08ce0ef215ebc02d0d1cdea7b3d2498c7595e950ae76361c8992349f838"
     },
     {
       "path": "roster-none-1/events.json",
       "sha256": "13c63aa13e4dae90d54a412d079ada7575ff233d08e0cea2b9f7a5f0adbea602"
+    },
+    {
+      "path": "roster-none-1/prompt.txt",
+      "sha256": "3104f42275d821caddc73a4f89507e94f0c9c427d7669cdbdbc288b98f23713f"
     },
     {
       "path": "roster-none-2/result.json",
@@ -541,12 +701,20 @@
       "sha256": "088244ea172117c9815e2dc3ba8c20d3aabbdbe67fbdc2fdd4728aba52cba3bb"
     },
     {
+      "path": "roster-none-2/prompt.txt",
+      "sha256": "3104f42275d821caddc73a4f89507e94f0c9c427d7669cdbdbc288b98f23713f"
+    },
+    {
       "path": "roster-none-3/result.json",
       "sha256": "e9048421eafb0705865a85eade9eab843f3c1aadd70bcd62b1a2faa1b95aa4b7"
     },
     {
       "path": "roster-none-3/events.json",
       "sha256": "03fce6d568f8a020db9b596885e2a2c40f0e95b37884be51ed169b058fc6331b"
+    },
+    {
+      "path": "roster-none-3/prompt.txt",
+      "sha256": "3104f42275d821caddc73a4f89507e94f0c9c427d7669cdbdbc288b98f23713f"
     },
     {
       "path": "roster-static-1/result.json",
@@ -557,6 +725,10 @@
       "sha256": "f680dada1a290b598b5f6a14afd5c9a597eaf7b15783cee21d9c302efd3d263a"
     },
     {
+      "path": "roster-static-1/prompt.txt",
+      "sha256": "c49e60f5aa9e2a619bbf3bd078b316dc1b3bd76ccb4617734f42e10e4ef27b48"
+    },
+    {
       "path": "roster-static-2/result.json",
       "sha256": "e5b6e01e32fd68f594c394395af9f94e0719298c45e2832dec5a4a861884de4c"
     },
@@ -565,12 +737,20 @@
       "sha256": "f680dada1a290b598b5f6a14afd5c9a597eaf7b15783cee21d9c302efd3d263a"
     },
     {
+      "path": "roster-static-2/prompt.txt",
+      "sha256": "c49e60f5aa9e2a619bbf3bd078b316dc1b3bd76ccb4617734f42e10e4ef27b48"
+    },
+    {
       "path": "roster-static-3/result.json",
       "sha256": "72b06385cd2c4ff65c2da126c2b7e5a7d0a6976b53cbd847aa61ff8548e71fc3"
     },
     {
       "path": "roster-static-3/events.json",
       "sha256": "f680dada1a290b598b5f6a14afd5c9a597eaf7b15783cee21d9c302efd3d263a"
+    },
+    {
+      "path": "roster-static-3/prompt.txt",
+      "sha256": "c49e60f5aa9e2a619bbf3bd078b316dc1b3bd76ccb4617734f42e10e4ef27b48"
     }
   ],
   "limitations": [

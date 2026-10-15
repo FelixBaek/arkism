@@ -23,14 +23,15 @@
 
 ```sh
 python3 evaluation/reuse-v010/benchmark/measurement_audit.py \
-  --output /tmp/arkism-measurement-audit.json
+  > /tmp/arkism-measurement-audit.json
 python3 -m unittest discover -s evaluation/reuse-v010/benchmark -p 'test_measurement.py'
 ```
 
 [measurement-audit.json](measurement-audit.json)은 조건별 합계, 짝별 차이,
-원시 증빙 90개 파일의 SHA256과 측정 한계를 담는다.
+원시 증빙 135개 파일의 SHA256과 측정 한계를 담는다.
 
-실제 청구 내역을 확보하면 `--charges PRIVATE_JSONL_PATH`로 별도 원장을 읽을 수 있다.
+실제 청구 내역을 확보하면 `--charges`로 현재 사용자 홈의 고정 개인 원장
+`~/.arkism-measurements/charges.jsonl`을 읽을 수 있다.
 각 행의 필수 필드는 `run_id`(실행 폴더명), `amount_usd`(실제 배분된 달러 금액),
 `basis`(`provider_billed`), `evidence_ref`(청구 증빙 위치)다.
 실행 ID 중복·음수·추정 단가를 거부한다. 조건의 모든 실행에 증빙이 있어야
@@ -40,6 +41,9 @@ python3 -m unittest discover -s evaluation/reuse-v010/benchmark -p 'test_measure
 토큰을 단가에 곱한 추정치나 구독 요금을 임의 배분한 값을 실제 청구액으로 넣지 않는다.
 이 도구는 원장의 형식과 범위를 검사하며, 청구 증빙 자체의 진위를 인증하지 않는다.
 청구서·계정 정보·개인 원장은 공개 저장소에 커밋하지 않는다.
+감사 결과도 `--output`을 지정하면 같은 개인 디렉터리의 `measurement-audit.json`에만
+저장한다. 기본 출력은 표준 출력이다. 파일 열기는 검증된 디렉터리 핸들 기준의 고정
+이름만 사용하므로 사용자 입력 경로가 파일 읽기·쓰기에 전달되지 않는다.
 
 ## 사람 검토시간 도구만 준비
 
@@ -47,11 +51,13 @@ python3 -m unittest discover -s evaluation/reuse-v010/benchmark -p 'test_measure
 기존 `setup_seconds`는 기계의 DB/API 준비 시간이며 사람 승인시간으로 바꾸지 않는다.
 
 `review_timer.py`는 Linux/Python 표준 라이브러리만 사용한다. 검토자가 검토를 시작할 때
-`start`, 판단을 기록한 뒤 `stop`을 직접 호출한다. 개인 원장은 0600 권한으로 생성된다. 기존 파일도 현재 사용자 소유의 0600 일반 파일이어야 하며,
+`start`, 판단을 기록한 뒤 `stop`을 직접 호출한다. 개인 원장은 `~/.arkism-measurements/reviews.jsonl` 고정 위치에 0600 권한으로 생성된다.
+CLI로 다른 경로를 지정할 수 없다. 개인 디렉터리는 현재 사용자 소유의 0700이어야 한다.
+기존 파일도 현재 사용자 소유의 0600 일반 파일이어야 하며,
 심볼릭 링크·추가 하드 링크·공유 권한 파일·FIFO는 거부한다.
 
-- 시작 인자: `start --ledger PATH --review-id ID --condition CONDITION --candidate-id ID --reviewer LABEL`
-- 종료 인자: `stop --ledger PATH --review-id ID --decision DECISION --evidence-ref REF`
+- 시작 인자: `start --review-id ID --condition CONDITION --candidate-id ID --reviewer LABEL`
+- 종료 인자: `stop --review-id ID --decision DECISION --evidence-ref REF`
 - 조건: `none`, `static`, `arkism`. 판단: `approved`, `rejected`, `needs_changes`, `abandoned`.
 
 검토 ID는 한 구간에만 사용한다. 재검토는 새 ID를 만들고 같은 후보 ID를 사용한다.

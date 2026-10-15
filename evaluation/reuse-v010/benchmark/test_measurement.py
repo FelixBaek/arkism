@@ -7,6 +7,7 @@ import unittest
 
 from measurement_audit import audit
 from review_timer import record
+from private_storage import private_file
 
 
 class MeasurementTests(unittest.TestCase):
@@ -39,8 +40,23 @@ class MeasurementTests(unittest.TestCase):
         self.assertIsNone(report['paired_static_arkism'][0]['static_minus_arkism_billed_usd'])
         with self.assertRaises(ValueError):
             audit(self.root, [charge, charge])
+        estimated = [dict(charge, basis='estimated_price')]
         with self.assertRaises(ValueError):
-            audit(self.root, [dict(charge, basis='estimated_price')])
+            audit(self.root, estimated)
+
+    def test_prompt_changes_are_visible_even_when_pair_remains_equal(self):
+        directories = [self.run_fixture('static'), self.run_fixture('arkism')]
+        before = audit(self.root)
+        for directory in directories:
+            (directory / 'prompt.txt').write_text('changed together')
+        after = audit(self.root)
+        self.assertTrue(after['paired_static_arkism'][0]['prompt_bytes_equal'])
+        self.assertEqual(before['conditions'], after['conditions'])
+        self.assertEqual(len(after['evidence']), 6)
+        old_hashes = {item['path']: item['sha256'] for item in before['evidence']}
+        changed = [item['path'] for item in after['evidence']
+                   if old_hashes[item['path']] != item['sha256']]
+        self.assertEqual(sorted(changed), ['task-arkism-1/prompt.txt', 'task-static-1/prompt.txt'])
 
     def test_raw_usage_mismatch_is_rejected(self):
         directory = self.run_fixture('arkism')
@@ -54,43 +70,62 @@ class MeasurementTests(unittest.TestCase):
     def test_review_ledger_rejects_links_shared_files_and_nonregular_paths(self):
         target = self.root / 'target'
         target.write_text('preserve me')
-        link = self.root / 'link'
-        link.symlink_to(target)
-        def start(path):
-            return record(path, 'start', 'r', condition='arkism', candidate_id='c', reviewer='tester')
+        ledger = self.root / 'reviews.jsonl'
+        ledger.symlink_to(target)
+        def start():
+            return record('start', 'r', condition='arkism', candidate_id='c',
+                          reviewer='tester', storage_root=self.root)
         with self.assertRaises(OSError):
-            start(link)
-        target.chmod(0o644)
+            start()
+        ledger.unlink()
+        ledger.write_text('preserve me')
+        ledger.chmod(0o644)
         with self.assertRaises(ValueError):
-            start(target)
-        self.assertEqual(target.read_text(), 'preserve me')
-        target.chmod(0o600)
-        os.link(target, self.root / 'hardlink')
+            start()
+        self.assertEqual(ledger.read_text(), 'preserve me')
+        ledger.chmod(0o600)
+        os.link(ledger, self.root / 'hardlink')
         with self.assertRaises(ValueError):
-            start(target)
-        fifo = self.root / 'fifo'
-        os.mkfifo(fifo, 0o600)
+            start()
+        ledger.unlink()
+        os.mkfifo(ledger, 0o600)
         with self.assertRaises(ValueError):
-            start(fifo)
+            start()
+
+    def test_private_root_rejects_symlink_and_shared_directory(self):
+        link = self.root / 'linked-root'
+        link.symlink_to(self.root, target_is_directory=True)
+        def open_private(root):
+            with private_file('reviews', root=root, create=True):
+                pass
+        with self.assertRaises(OSError):
+            open_private(link)
+        shared = self.root / 'shared'
+        shared.mkdir(mode=0o755)
+        with self.assertRaises(ValueError):
+            open_private(shared)
+        self.assertFalse((shared / 'reviews.jsonl').exists())
 
     def test_review_interval_requires_operator_start_and_decision(self):
-        path = self.root / 'private-reviews.jsonl'
+        path = self.root / 'reviews.jsonl'
         now = datetime(2026, 1, 1, tzinfo=timezone.utc)
         with self.assertRaises(ValueError):
-            record(path, 'stop', 'r', decision='approved', evidence_ref='test', now=now)
-        record(path, 'start', 'r', condition='arkism', candidate_id='candidate', reviewer='tester', now=now)
+            record('stop', 'r', decision='approved', evidence_ref='test', now=now, storage_root=self.root)
+        record('start', 'r', condition='arkism', candidate_id='candidate', reviewer='tester', now=now, storage_root=self.root)
         with self.assertRaises(ValueError):
-            record(path, 'start', 'r', condition='arkism', candidate_id='candidate', reviewer='tester', now=now)
+            record('start', 'r', condition='arkism', candidate_id='candidate', reviewer='tester', now=now, storage_root=self.root)
+        backwards = now-timedelta(seconds=1)
         with self.assertRaises(ValueError):
-            record(path, 'stop', 'r', decision='approved', evidence_ref='test', now=now-timedelta(seconds=1))
+            record('stop', 'r', decision='approved', evidence_ref='test', now=backwards, storage_root=self.root)
         with self.assertRaises(ValueError):
-            record(path, 'stop', 'r', decision='approved', now=now)
-        event = record(path, 'stop', 'r', decision='rejected', evidence_ref='test', now=now+timedelta(seconds=12))
+            record('stop', 'r', decision='approved', now=now, storage_root=self.root)
+        event = record('stop', 'r', decision='rejected', evidence_ref='test', now=now+timedelta(seconds=12), storage_root=self.root)
         self.assertEqual(event['review_interval_seconds'], 12)
         self.assertIsNone(event['active_attention_seconds'])
         self.assertEqual(len(path.read_text().splitlines()), 2)
+        later = now+timedelta(seconds=15)
         with self.assertRaises(ValueError):
-            record(path, 'stop', 'r', decision='approved', evidence_ref='test', now=now+timedelta(seconds=15))
+            record('stop', 'r', decision='approved', evidence_ref='test', now=later, storage_root=self.root)
 
 
 if __name__ == '__main__':
