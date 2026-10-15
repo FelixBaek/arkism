@@ -214,6 +214,31 @@ type SkillResolveResult struct {
 	Items     []ResolvedSkill `json:"items"`
 }
 
+// Track identities consulted by resolution, including missing/error records.
+// This stays request-local and is never serialized into a response. Policy
+// calls happen after the read transaction so single-connection pools are safe.
+type skillResolveReadTx struct {
+	Tx
+	refs *[]Ref
+}
+
+func (t skillResolveReadTx) remember(collection, id string) {
+	ref := Ref{Collection: collection, ID: id}
+	if !slices.Contains(*t.refs, ref) {
+		*t.refs = append(*t.refs, ref)
+	}
+}
+func (t skillResolveReadTx) Get(ctx context.Context, collection string, scope Scope, id string) (Record, error) {
+	t.remember(collection, id)
+	return t.Tx.Get(ctx, collection, scope, id)
+}
+func (t skillResolveReadTx) SourceMetadata(ctx context.Context, scope Scope, ids []string, includeText bool) ([]Record, error) {
+	for _, id := range ids {
+		t.remember("sources", id)
+	}
+	return t.Tx.SourceMetadata(ctx, scope, ids, includeText)
+}
+
 // ResolveSkills answers each ref independently so one missing skill never
 // hides the others. Failures are fixed codes: invalid_ref, skill_not_found,
 // version_not_found, no_approved_version, skill_deprecated, skill_unavailable.
@@ -245,15 +270,25 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 			return out, e
 		}
 	}
+	if in.TrialID != "" {
+		d, e := s.authorize(ctx, token, "read:"+colSkillTrials, in.Scope, in.TrialID, "")
+		if e == nil && (d.PrincipalID != actor.PrincipalID || d.Role != actor.Role) {
+			e = ErrDenied
+		}
+		if e != nil {
+			return out, e
+		}
+	}
 	resolve := func(ctx context.Context, tx Tx, ref string) (ResolvedSkill, error) {
 		if in.TrialID != "" {
 			return resolveSkillTrial(ctx, tx, in, ref)
 		}
 		return resolveSkillRef(ctx, tx, in.Scope, ref)
 	}
+	consulted := make([][]Ref, len(in.Refs))
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		for _, ref := range in.Refs {
-			item, e := resolve(ctx, tx, ref)
+		for i, ref := range in.Refs {
+			item, e := resolve(ctx, skillResolveReadTx{Tx: tx, refs: &consulted[i]}, ref)
 			if e != nil {
 				return e
 			}
@@ -267,18 +302,12 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 	}
 	// Authorization may need its own database connection (including denial
 	// auditing). Never hold a repository transaction while asking the policy.
-	for _, item := range out.Items {
+	for i, item := range out.Items {
 		if e := authorizeSkill(item.Ref); e != nil {
 			out.Items = []ResolvedSkill{}
 			return out, e
 		}
-		if item.Error != "" {
-			continue
-		}
-		for _, resource := range []Ref{
-			{Collection: colSkillVersions, ID: item.VersionID},
-			{Collection: "sources", ID: item.Provenance.SourceID},
-		} {
+		for _, resource := range consulted[i] {
 			d, e := s.authorize(ctx, token, "read:"+resource.Collection, in.Scope, resource.ID, "")
 			if e == nil && (d.PrincipalID != actor.PrincipalID || d.Role != actor.Role) {
 				e = ErrDenied
@@ -293,11 +322,12 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 	// the exact snapshot whose resource identities were authorized.
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		for i, ref := range in.Refs {
-			item, e := resolve(ctx, tx, ref)
+			var currentRefs []Ref
+			item, e := resolve(ctx, skillResolveReadTx{Tx: tx, refs: &currentRefs}, ref)
 			if e != nil {
 				return e
 			}
-			if structuredText(item) != structuredText(out.Items[i]) {
+			if structuredText(item) != structuredText(out.Items[i]) || !slices.Equal(currentRefs, consulted[i]) {
 				return ErrConflict
 			}
 		}

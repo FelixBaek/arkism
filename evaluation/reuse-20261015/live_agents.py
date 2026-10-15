@@ -82,7 +82,7 @@ def parse_events(stdout):
  return events
 
 def public_event(event):
- if event.get('type')=='thread.started':return None
+ if event.get('type') in ('thread.started','rate_limit_event'):return None
  if event.get('type')=='system':
   if event.get('subtype')!='init':return None
   return {key:value for key,value in event.items() if key in ('type','subtype','model','tools','mcp_servers','claude_code_version','skills','plugins')}
