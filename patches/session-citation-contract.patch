@@ -1,0 +1,269 @@
+diff --git a/internal/host/capture/session_citation_contract_test.go b/internal/host/capture/session_citation_contract_test.go
+new file mode 100644
+index 0000000..53f3b33
+--- /dev/null
++++ b/internal/host/capture/session_citation_contract_test.go
+@@ -0,0 +1,106 @@
++package capture
++
++import (
++	"os"
++	"strings"
++	"testing"
++)
++
++func TestSessionCitationSchemaRejectsEmptyEvidence(t *testing.T) {
++	capFake(t)
++	for _, field := range []string{"state", "check:not_run", "check:unknown", "candidate"} {
++		t.Run(field, func(t *testing.T) {
++			request, output := sessionFixture(t)
++			state := output["session_state"].(map[string]any)
++			switch field {
++			case "state":
++				state["source_refs"] = []any{}
++			case "candidate":
++				output["memory_candidates"].([]any)[0].(map[string]any)["source_refs"] = []any{}
++			default:
++				state["checks"] = []any{map[string]any{"command": "go test", "outcome": field[6:], "summary": "No observed execution", "source_refs": []any{}}}
++			}
++			if err := validateSessionSchema(output, sessionSchema); !pending(err) || errorCode(err) != "schema_array_min_items" {
++				t.Fatalf("empty %s evidence accepted by model schema: %v", field, err)
++			}
++			if err := validateSessionOutput(output, request); !pending(err) {
++				t.Fatalf("empty evidence accepted by output validator: %v", err)
++			}
++		})
++	}
++}
++
++func TestSessionCitationSchemaAllowsOmittingUnsupportedItems(t *testing.T) {
++	request, output := sessionFixture(t)
++	output["memory_candidates"] = []any{}
++	if err := validateSessionOutput(output, request); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func TestSessionCitationSchemaPreservesObservedChecksAndStrictReferences(t *testing.T) {
++	for _, mutation := range []string{"valid", "quote", "revision", "role"} {
++		t.Run(mutation, func(t *testing.T) {
++			request, output := sessionFixture(t)
++			tool := map[string]any{"source_id": "tool1", "revision": 1, "role": "tool", "text": "go test: PASS"}
++			request["records"] = append(request["records"].([]any), tool)
++			output["coverage"].(map[string]any)["source_ids"] = []any{"s1", "tool1"}
++			ref := map[string]any{"source_id": "tool1", "revision": 1, "quote": "go test: PASS"}
++			state := output["session_state"].(map[string]any)
++			check := map[string]any{"command": "go test", "outcome": "passed", "summary": "Observed result", "source_refs": []any{ref}}
++			state["checks"] = []any{check}
++			switch mutation {
++			case "quote":
++				ref["quote"] = "invented success"
++			case "revision":
++				ref["revision"] = 2
++			case "role":
++				// Keep a real tool in the input: it cannot legitimize citing a user.
++				ref["source_id"], ref["quote"] = "s1", request["records"].([]any)[0].(map[string]any)["text"]
++			}
++			err := validateSessionOutput(output, request)
++			if mutation == "valid" {
++				if err != nil || check["outcome"] != "passed" {
++					t.Fatalf("valid observation lost: %v", err)
++				}
++			} else if !pending(err) {
++				t.Fatalf("invalid %s evidence accepted: %v", mutation, err)
++			}
++		})
++	}
++}
++
++func TestSessionCitationSchemaAdvertisesNonemptyReferences(t *testing.T) {
++	properties := sessionSchema["properties"].(map[string]any)
++	state := properties["session_state"].(map[string]any)["properties"].(map[string]any)
++	check := state["checks"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
++	candidate := properties["memory_candidates"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
++	for name, properties := range map[string]map[string]any{"state": state, "check": check, "candidate": candidate} {
++		if properties["source_refs"].(map[string]any)["minItems"] != 1 {
++			t.Errorf("%s evidence schema permits empty references", name)
++		}
++	}
++}
++
++func TestSessionCitationSchemaKeepsSafeMissingFieldDiagnostics(t *testing.T) {
++	realMetric := metric
++	capFake(t)
++	metric = realMetric
++	request, output := sessionFixture(t)
++	state := output["session_state"].(map[string]any)
++	state["checks"] = []any{map[string]any{"command": "PRIVATE-COMMAND", "outcome": "not_run", "summary": "PRIVATE-SUMMARY", "source_refs": []any{}}}
++	if err := validateSessionOutput(output, request); errorCode(err) != "schema_array_min_items" {
++		t.Fatal(err)
++	}
++	raw, err := os.ReadFile(metricsFile())
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !strings.Contains(string(raw), "session_evidence_missing") || !strings.Contains(string(raw), "check:not_run") || strings.Contains(string(raw), "PRIVATE-") {
++		t.Fatalf("missing field diagnostic absent or leaked content: %s", raw)
++	}
++	state["checks"].([]any)[0].(map[string]any)["outcome"] = "PRIVATE-INVALID-OUTCOME"
++	if field := sessionEmptyEvidenceField(output); field != "check" {
++		t.Fatal(field)
++	}
++}
+diff --git a/internal/host/capture/session_processor.go b/internal/host/capture/session_processor.go
+index ae42193..9a88611 100644
+--- a/internal/host/capture/session_processor.go
++++ b/internal/host/capture/session_processor.go
+@@ -23,7 +23,7 @@ import (
+ 
+ const (
+ 	sessionSchemaVersion = "session-state-v1"
+-	sessionPromptVersion = "harness-session-v2"
++	sessionPromptVersion = "harness-session-v3"
+ )
+ 
+ // The CLI subscription aliases for the session_processor and consolidator roles (config/harness-models.json).
+@@ -46,16 +46,18 @@ func sArray(item any) map[string]any { return map[string]any{"type": "array", "i
+ func sEnum(values ...any) map[string]any { return map[string]any{"type": "string", "enum": values} }
+ 
+ var (
+-	sString      = map[string]any{"type": "string"}
+-	sInteger     = map[string]any{"type": "integer"}
+-	sRef         = sObj("source_id", sString, "revision", sInteger, "quote", sString)
++	sString  = map[string]any{"type": "string"}
++	sInteger = map[string]any{"type": "integer"}
++	sRef     = sObj("source_id", sString, "revision", sInteger, "quote", sString)
++	// The generation schema must require the same citations as the evidence validator.
++	sRefs        = map[string]any{"type": "array", "items": sRef, "minItems": 1}
+ 	sessionState = sObj("goal", sString, "constraints", sArray(sString), "decisions", sArray(sString), "completed", sArray(sString),
+ 		"next_steps", sArray(sString), "uncertainties", sArray(sString), "artifacts", sArray(sObj("path", sString, "sha256", sString)),
+-		"checks", sArray(sObj("command", sString, "outcome", sEnum("passed", "failed", "not_run", "unknown"), "summary", sString, "source_refs", sArray(sRef))),
+-		"source_refs", sArray(sRef))
++		"checks", sArray(sObj("command", sString, "outcome", sEnum("passed", "failed", "not_run", "unknown"), "summary", sString, "source_refs", sRefs)),
++		"source_refs", sRefs)
+ 	sessionCandidate = sObj("statement", sString, "kind", sEnum("fact", "preference", "correction", "lesson", "failure_recovery"),
+ 		"domains", sArray(sEnum("personal", "work")), "applicability", sString, "observed_at", sString, "valid_from", sString,
+-		"evidence_kind", sEnum("user_statement", "tool_observation", "agent_statement", "inference"), "source_refs", sArray(sRef), "uncertainty", sString)
++		"evidence_kind", sEnum("user_statement", "tool_observation", "agent_statement", "inference"), "source_refs", sRefs, "uncertainty", sString)
+ 	sessionSchema = sObj("session_state", sessionState, "memory_candidates", sArray(sessionCandidate),
+ 		"coverage", sObj("start", sInteger, "end", sInteger, "expected_revision", sInteger, "schema_version", sString, "prompt_version", sString, "source_ids", sArray(sString)),
+ 		"unresolved_refs", sArray(sString))
+@@ -70,6 +72,10 @@ not a plan or success claim. Tests without tool evidence must be not_run or unkn
+ If no supplied record has role tool, every check outcome must be unknown or not_run.
+ Write natural-language fields in the source language: Korean for Korean input.
+ Cite exact source_id, revision and verbatim quote from supplied records.
++Every source_refs array must contain at least one citation, including checks marked unknown or not_run.
++Only include a check when supplied evidence mentions that check; lack of tool output alone is not evidence of a check.
++Omit checks and memory candidates that have no exact supporting citation; empty checks and memory_candidates arrays are valid.
++Never invent a citation to fill the schema. Put unsupported context in uncertainties or unresolved_refs.
+ Every quote must be one exact contiguous substring: no translation, paraphrase, combined fragments, or ellipsis.
+ A correction must be kind correction and must preserve the new rule AND its exceptions in statement/applicability. Prior summaries alone cannot support new candidates.
+ Return coverage exactly matching the host input range and versions. All source_ids in this range must be accounted for.
+@@ -128,6 +134,11 @@ func validateSessionSchema(value any, schema map[string]any) error {
+ 			}
+ 		}
+ 	case "array":
++		if minimum, has := schema["minItems"]; has {
++			if n, ok := host.Int(minimum); !ok || int64(len(value.([]any))) < n {
++				return sessionWait("schema_array_min_items")
++			}
++		}
+ 		if len(value.([]any)) > 100 {
+ 			return sessionWait("schema_array_limit")
+ 		}
+@@ -196,10 +207,67 @@ func sessionOperationID(scope any, sessionID string, start, end, revision int64,
+ 	return "session-" + sdigest([]any{sessionSchemaVersion, sessionPromptVersion, scope, sessionID, start, end, revision, parts})
+ }
+ 
++// sessionEmptyEvidenceField uses fixed labels only: malformed model text must never reach metrics.
++func sessionEmptyEvidenceField(output map[string]any) string {
++	empty := func(value any) bool {
++		refs, ok := autosaveGet(value, "source_refs").([]any)
++		return ok && len(refs) == 0
++	}
++	state := output["session_state"]
++	if empty(state) {
++		return "session_state"
++	}
++	for _, check := range anyList(autosaveGet(state, "checks")) {
++		if empty(check) {
++			switch autosaveGet(check, "outcome") {
++			case "passed":
++				return "check:passed"
++			case "failed":
++				return "check:failed"
++			case "unknown":
++				return "check:unknown"
++			case "not_run":
++				return "check:not_run"
++			default:
++				return "check"
++			}
++		}
++	}
++	for _, candidate := range anyList(output["memory_candidates"]) {
++		if empty(candidate) {
++			switch autosaveGet(candidate, "kind") {
++			case "fact":
++				return "candidate:fact"
++			case "preference":
++				return "candidate:preference"
++			case "correction":
++				return "candidate:correction"
++			case "lesson":
++				return "candidate:lesson"
++			case "failure_recovery":
++				return "candidate:failure_recovery"
++			default:
++				return "candidate"
++			}
++		}
++	}
++	return ""
++}
++
++func sessionMissingEvidenceMetric(field string, request map[string]any) {
++	metric(kv("event", "session_evidence_missing"), kv("field", field), kv("records", len(anyList(request["records"]))),
++		kv("prior_evidence", len(anyList(request["prior_evidence"]))), kv("has_previous_state", request["previous_state"] != nil))
++}
++
+ // validateSessionOutput rejects fabricated or stale evidence, false test success and summary-only candidates.
+ func validateSessionOutput(output map[string]any, request map[string]any) (err error) {
+ 	defer recovered(&err)
+ 	if err := validateSessionSchema(output, sessionSchema); err != nil {
++		if errorCode(err) == "schema_array_min_items" {
++			if field := sessionEmptyEvidenceField(output); field != "" {
++				sessionMissingEvidenceMetric(field, request)
++			}
++		}
+ 		return err
+ 	}
+ 	ids := []any{}
+@@ -227,8 +295,7 @@ func validateSessionOutput(output map[string]any, request map[string]any) (err e
+ 	refsValid := func(refs []any, freshRequired bool, kind, field string) error {
+ 		if len(refs) == 0 {
+ 			// Where the citation was dropped, never the content: production misses it while fixtures do not.
+-			metric(kv("event", "session_evidence_missing"), kv("field", field), kv("records", len(ids)),
+-				kv("prior_evidence", len(anyList(request["prior_evidence"]))), kv("has_previous_state", request["previous_state"] != nil))
++			sessionMissingEvidenceMetric(field, request)
+ 			return sessionWait("evidence_missing")
+ 		}
+ 		anyFresh := false
+diff --git a/internal/host/capture/subscription_usage_test.go b/internal/host/capture/subscription_usage_test.go
+index 53304f6..725909a 100644
+--- a/internal/host/capture/subscription_usage_test.go
++++ b/internal/host/capture/subscription_usage_test.go
+@@ -59,8 +59,11 @@ func TestSessionQualityGateDefaultsToShippedEvidence(t *testing.T) {
+ 	capFake(t)
+ 	fakeUsage(t, nil, errors.New("no reading"))
+ 	t.Setenv("ARKISM_HAIKU_QUALITY_GATE", "")
+-	// Only korean_correction passed every initial and held-out case; the other categories stay on Sonnet.
+-	for category, want := range map[string]string{"korean_correction": sessionFastModel, "conditional_preference": sessionModel, "mixed_personal_work": sessionModel, "": sessionModel} {
++	// Shipped quality evidence covers v2, not the v3 citation contract. No category may reuse it.
++	if gate := sessionQualityGate(); gate["prompt_version"] == sessionPromptVersion {
++		t.Fatal("update this expectation only after reviewing new measured quality evidence")
++	}
++	for category, want := range map[string]string{"korean_correction": sessionModel, "conditional_preference": sessionModel, "mixed_personal_work": sessionModel, "": sessionModel} {
+ 		var models []string
+ 		llm = func(_, _, model string, _ time.Duration, _, _ string) (any, error) {
+ 			models = append(models, model)
