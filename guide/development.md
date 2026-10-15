@@ -50,7 +50,16 @@ Postgres integration tests start a throwaway Postgres in Docker, run every test 
 bash tools/check_postgres_local.sh
 ```
 
-GitHub Actions runs these checks on every pull request.
+GitHub Actions Checks runs the Go race suite with a disposable pgvector Postgres database and `-tags=integration` on every pull request. It also enforces the core boundary coverage threshold, runs UI and Tauri tests, and builds the Go commands and executes the Windows skill bundle capture test on a Windows runner. Keep both `go` and `go-windows` required in branch protection; a workflow file alone does not configure merge protection.
+
+To run the same tagged Go suite against your own disposable loopback database:
+
+```bash
+POSTGRES_TEST_DSN='postgres://arkism@127.0.0.1:5432/arkism_ci?sslmode=disable' \
+  go test -race -tags=integration -count=1 ./...
+```
+
+The database user must be able to create disposable test databases. The local Docker helper additionally checks restricted database roles and schema ownership; these extra checks are not part of the pgvector CI service job.
 
 Before publishing, maintainers run `ARKISM_PUBLIC_DENYLIST=<their own denylist file> tools/check_public.sh`, which fails if any tracked file matches one of its private regexes.
 
