@@ -24,21 +24,24 @@
 
 `live_agents.py`는 기존 Codex/Claude 인증으로 모델을 실행한다. 정확한 FACTS에 사람 승인이 있어야 `--human-approved-facts`를 사용할 수 있다. 새로운 내용의 승인을 대신하지 않는다.
 
-1. 기준 커밋의 새 복제본에 이 PR의 `internal/memory/cross_agent_http_postgres_test.go`만 복사한다. `go build -o /tmp/arkism-baseline ./cmd/arkism`으로 원본 제품을 빌드한다.
+1. 기준 커밋의 새 복제본에 이 PR의 `internal/memory/cross_agent_http_postgres_test.go`만 복사한다. 아래의 사용자 전용 폴더를 만든 다음, 이 복제본에서 원본 제품을 빌드한다.
 2. `evaluations/2026-10-15/api/run.sh`처럼 별도 loopback Postgres를 준비한다. 운영 DB를 사용하지 않는다. 아래의 DSN은 그 일회용 DB만 가리켜야 한다.
-3. 권한 0700인 임시 디렉터리를 정하고 다음을 실행한다. state에는 합성 테스트 토큰이 있으므로 공개하지 않는다.
+3. 권한 0700인 사용자 전용 디렉터리에서 다음을 실행한다. state에는 합성 테스트 토큰이 있으므로 공개하지 않는다.
 
 ```sh
 export POSTGRES_TEST_DSN='postgres://arkism@127.0.0.1:PORT/arkism_ci?sslmode=disable'
-private_dir=$(mktemp -d)
+install -d -m 700 "$HOME/arkism-reuse-evidence-20261015"
+private_dir=$(mktemp -d "$HOME/arkism-reuse-evidence-20261015/run.XXXXXX")
+# 기준 커밋의 독립 복제본에서 빌드:
+go build -o "$private_dir/arkism-baseline" ./cmd/arkism
 ARKISM_EVAL_FIXTURE_STATE="$private_dir/state.json" \
 ARKISM_EVAL_FIXTURE_STOP="$private_dir/stop" \
   go test ./internal/memory -run '^TestCrossAgentHTTPPostgresReuse$' -count=1 -v > "$private_dir/server.log" 2>&1 &
 # state.json 생성 이후, PR checkout에서 실행:
 python3 evaluation/reuse-20261015/live_agents.py \
-  --state "$private_dir/state.json" --arkism /tmp/arkism-baseline \
-  --output /tmp/new-live-agent-results --human-approved-facts
-python3 evaluation/reuse-20261015/judge_live.py /tmp/new-live-agent-results
+  --state "$private_dir/state.json" --arkism "$private_dir/arkism-baseline" \
+  --output "$private_dir/results" --human-approved-facts
+python3 evaluation/reuse-20261015/judge_live.py "$private_dir/results"
 touch "$private_dir/stop"
 # 서버 종료 후 본인이 생성한 임시 디렉터리/컨테이너를 정리한다.
 ```
