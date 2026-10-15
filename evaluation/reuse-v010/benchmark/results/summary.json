@@ -1,0 +1,47 @@
+{
+  "none": {
+    "runs": 15,
+    "successes": 5,
+    "rule_violations": 10,
+    "timeouts": 0,
+    "seconds_mean": 10.882257582734262,
+    "seconds_stdev": 2.3652875731594025,
+    "seconds_min": 7.812964478012873,
+    "seconds_max": 15.794804642995587,
+    "input_tokens": 213288,
+    "output_tokens": 2074,
+    "input_token_observations": 15,
+    "output_token_observations": 15,
+    "actual_cost_usd": null
+  },
+  "static": {
+    "runs": 15,
+    "successes": 15,
+    "rule_violations": 0,
+    "timeouts": 0,
+    "seconds_mean": 7.0231992637331135,
+    "seconds_stdev": 1.6147028214400956,
+    "seconds_min": 5.076482315984322,
+    "seconds_max": 10.026556183001958,
+    "input_tokens": 213408,
+    "output_tokens": 645,
+    "input_token_observations": 15,
+    "output_token_observations": 15,
+    "actual_cost_usd": null
+  },
+  "arkism": {
+    "runs": 15,
+    "successes": 15,
+    "rule_violations": 0,
+    "timeouts": 0,
+    "seconds_mean": 7.072995694202836,
+    "seconds_stdev": 1.1321983904461355,
+    "seconds_min": 5.914650749007706,
+    "seconds_max": 9.056215095013613,
+    "input_tokens": 213396,
+    "output_tokens": 592,
+    "input_token_observations": 15,
+    "output_token_observations": 15,
+    "actual_cost_usd": null
+  }
+}

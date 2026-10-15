@@ -1,0 +1,279 @@
+{
+  "baseline": "9379ee5f493716e1c80027c0beb4fd12283100cf",
+  "tasks": [
+    {
+      "id": "billing",
+      "scenario": "past_rounding_error",
+      "fact": "Amounts are integer cents; partial-cent charges round down.",
+      "task": "Implement charge(cents, numerator, denominator) returning a nonnegative integer charge. Inputs are nonnegative integers and denominator is positive. Follow the project billing policy.",
+      "starter": "def charge(cents, numerator, denominator):\n    raise NotImplementedError\n",
+      "checks": "assert charge(105,1,2)==52\nassert charge(7,1,2)==3\nassert charge(100,1,2)==50\nassert charge(0,3,2)==0"
+    },
+    {
+      "id": "roster",
+      "scenario": "persistent_project_rule",
+      "fact": "Jobs are permitted Monday\u2013Thursday; Friday\u2013Sunday are blackout days.",
+      "task": "Implement allowed(weekday) returning whether a job may run. weekday is an integer 0 (Monday) through 6 (Sunday). Follow the project scheduling policy.",
+      "starter": "def allowed(weekday):\n    raise NotImplementedError\n",
+      "checks": "assert [allowed(i) for i in range(7)] == [True,True,True,True,False,False,False]"
+    },
+    {
+      "id": "labels",
+      "scenario": "past_normalization_error",
+      "fact": "Trim surrounding whitespace but preserve letter case.",
+      "task": "Implement normalize(label) for a string label according to the project normalization policy.",
+      "starter": "def normalize(label):\n    raise NotImplementedError\n",
+      "checks": "assert normalize(\"  AbC  \")==\"AbC\"\nassert normalize(\"\\n MiXeD\\t\")==\"MiXeD\"\nassert normalize(\"a b\")==\"a b\"\nassert normalize(\"\")==\"\""
+    },
+    {
+      "id": "cache",
+      "scenario": "conditional_zero_ttl",
+      "fact": "Zero TTL means do not cache; positive TTL stays unchanged.",
+      "task": "Implement cache_ttl(ttl) for a nonnegative integer TTL. Return None to bypass caching or an integer expiration TTL according to the project policy.",
+      "starter": "def cache_ttl(ttl):\n    raise NotImplementedError\n",
+      "checks": "assert cache_ttl(0) is None\nassert cache_ttl(1)==1\nassert cache_ttl(120)==120"
+    },
+    {
+      "id": "handoff",
+      "scenario": "agent_handoff_retry",
+      "fact": "Retrying an event with an already-recorded event_id must leave the ledger unchanged; new events append in arrival order.",
+      "task": "Implement apply_event(ledger, event), returning a list of event dicts. Each event has event_id and value. This function is called by a different worker after handoff. Follow the project retry policy.",
+      "starter": "def apply_event(ledger, event):\n    raise NotImplementedError\n",
+      "checks": "a=[{\"event_id\":\"a\",\"value\":1}]\nassert apply_event(a,{\"event_id\":\"a\",\"value\":999}) == [{\"event_id\":\"a\",\"value\":1}]\nb=[{\"event_id\":\"z\",\"value\":2}]\nassert apply_event(b,{\"event_id\":\"a\",\"value\":3}) == [{\"event_id\":\"z\",\"value\":2},{\"event_id\":\"a\",\"value\":3}]\nassert apply_event([],{\"event_id\":\"a\",\"value\":3}) == [{\"event_id\":\"a\",\"value\":3}]"
+    }
+  ],
+  "schedule": [
+    [
+      "roster",
+      "none",
+      1
+    ],
+    [
+      "roster",
+      "none",
+      2
+    ],
+    [
+      "labels",
+      "arkism",
+      1
+    ],
+    [
+      "billing",
+      "static",
+      1
+    ],
+    [
+      "billing",
+      "static",
+      2
+    ],
+    [
+      "roster",
+      "arkism",
+      2
+    ],
+    [
+      "handoff",
+      "arkism",
+      3
+    ],
+    [
+      "labels",
+      "static",
+      3
+    ],
+    [
+      "billing",
+      "arkism",
+      1
+    ],
+    [
+      "labels",
+      "none",
+      2
+    ],
+    [
+      "labels",
+      "none",
+      1
+    ],
+    [
+      "cache",
+      "static",
+      3
+    ],
+    [
+      "labels",
+      "arkism",
+      3
+    ],
+    [
+      "labels",
+      "none",
+      3
+    ],
+    [
+      "roster",
+      "arkism",
+      1
+    ],
+    [
+      "handoff",
+      "static",
+      2
+    ],
+    [
+      "handoff",
+      "none",
+      1
+    ],
+    [
+      "handoff",
+      "none",
+      2
+    ],
+    [
+      "labels",
+      "static",
+      2
+    ],
+    [
+      "cache",
+      "none",
+      3
+    ],
+    [
+      "roster",
+      "none",
+      3
+    ],
+    [
+      "handoff",
+      "static",
+      1
+    ],
+    [
+      "billing",
+      "arkism",
+      3
+    ],
+    [
+      "handoff",
+      "static",
+      3
+    ],
+    [
+      "handoff",
+      "arkism",
+      1
+    ],
+    [
+      "billing",
+      "static",
+      3
+    ],
+    [
+      "roster",
+      "arkism",
+      3
+    ],
+    [
+      "billing",
+      "arkism",
+      2
+    ],
+    [
+      "handoff",
+      "none",
+      3
+    ],
+    [
+      "cache",
+      "arkism",
+      3
+    ],
+    [
+      "labels",
+      "static",
+      1
+    ],
+    [
+      "cache",
+      "static",
+      2
+    ],
+    [
+      "roster",
+      "static",
+      3
+    ],
+    [
+      "cache",
+      "arkism",
+      2
+    ],
+    [
+      "labels",
+      "arkism",
+      2
+    ],
+    [
+      "cache",
+      "none",
+      1
+    ],
+    [
+      "cache",
+      "arkism",
+      1
+    ],
+    [
+      "handoff",
+      "arkism",
+      2
+    ],
+    [
+      "billing",
+      "none",
+      2
+    ],
+    [
+      "billing",
+      "none",
+      3
+    ],
+    [
+      "billing",
+      "none",
+      1
+    ],
+    [
+      "cache",
+      "static",
+      1
+    ],
+    [
+      "cache",
+      "none",
+      2
+    ],
+    [
+      "roster",
+      "static",
+      1
+    ],
+    [
+      "roster",
+      "static",
+      2
+    ]
+  ],
+  "limitations": [
+    "host retrieves context; model does not call MCP",
+    "no real agent A capture",
+    "synthetic short code tasks",
+    "equal configured budgets, different observed input token counts"
+  ],
+  "improvement_threshold": "At least 3 additional successes over static in 15 paired attempts, without extra rule violations; exploratory signal only, not general productivity proof."
+}

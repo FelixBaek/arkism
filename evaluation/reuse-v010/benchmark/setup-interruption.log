@@ -1,0 +1,6 @@
+=== RUN   TestBenchmarkHTTPFactExport
+    benchmark_http_export_test.go:82: POST /v1/sources status=403
+    benchmark_http_export_test.go:82: status 403 want 201: {"code":"access_denied"}
+--- FAIL: TestBenchmarkHTTPFactExport (0.25s)
+FAIL
+2026/10/15 19:18:21 INFO memory request status=403 request_id=a3b3b0880dcb5374572427ce1d0f3a13 method=POST route="POST /v1/{collection}" duration_ms=3

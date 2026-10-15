@@ -1,0 +1,39 @@
+[
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_0",
+      "type": "error",
+      "message": "Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  session-flags: `model_max_output_tokens` is ignored."
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_1",
+      "type": "error",
+      "message": "Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  session-flags: `model_max_output_tokens` is ignored."
+    }
+  },
+  {
+    "type": "turn.started"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_2",
+      "type": "agent_message",
+      "text": "{\"code\":\"def apply_event(ledger, event):\\n    \\\"\\\"\\\"Return the ledger with an event applied once per event_id.\\n\\n    The ledger is an iterable of event dictionaries. Replaying an event\\n    with the same ID and value is a no-op; conflicting reuse of an ID\\n    raises ValueError. Inputs are not mutated.\\n    \\\"\\\"\\\"\\n    event_id = event['event_id']\\n    value = event['value']\\n    result = [dict(entry) for entry in ledger]\\n    found = False\\n    for entry in result:\\n        if entry['event_id'] == event_id:\\n            if entry['value'] != value:\\n                raise ValueError('An event_id cannot be reused with a different value')\\n            found = True\\n    if not found:\\n        result.append(dict(event))\\n    return result\\n\"}"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "usage": {
+      "input_tokens": 14229,
+      "cached_input_tokens": 12288,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 279,
+      "reasoning_output_tokens": 84
+    }
+  }
+]

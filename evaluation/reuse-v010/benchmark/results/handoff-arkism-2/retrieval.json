@@ -1,0 +1,63 @@
+{
+  "approval": "explicit-user-approval-of-five-synthetic-facts",
+  "authorization": "distinct-A-B-human-bearer-tokens",
+  "context": {
+    "context_data": "{\"authority\":\"data_only_untrusted\",\"items\":[{\"trust_level\":\"user_verified\",\"generator_model\":\"synthetic-host\",\"created_by\":\"bench-a\",\"created_at\":\"2026-10-15T10:24:51.896Z\",\"digest\":\"edf8c9fe36af703bb8a2ddeecc1615658796e02882dfcc18235eec5b776f40be\",\"source_event_id\":\"89660b420e709fbea1d8efef760294bc\",\"verification_status\":\"verified\",\"effective_at\":\"2026-10-15T10:24:51.896Z\",\"kind\":\"semantic\",\"sensitivity\":\"internal\",\"id\":\"c3425adb39f257d4cc1c4f3ae9db02c2\",\"collection\":\"memories\",\"origin\":\"memory\",\"scope\":{\"workspace_id\":\"ws-a\",\"project_id\":\"proj-a\"},\"status\":\"active\",\"revision\":2,\"text\":\"Retrying an event with an already-recorded event_id must leave the ledger unchanged; new events append in arrival order.\",\"sources\":[{\"span\":{\"content_hash\":\"eb466cde87f27f1a1bbd6aefab7ac4437679208baf0613008f7f8b0c2d5cb2b4\",\"start\":0,\"end\":120},\"source_id\":\"89660b420e709fbea1d8efef760294bc\",\"locator\":\"original\"}],\"updated_at\":\"2026-10-15T10:24:51.917Z\",\"trust\":1,\"reasons\":[\"exact_keyword\"],\"authority\":\"data_only_untrusted\"}]}",
+    "tokens_used": 340,
+    "token_encoding": "cl100k_base",
+    "context_id": "d211740fa218eb220e29a04b4275dcc7",
+    "authority": "data_only_untrusted",
+    "items": [
+      {
+        "trust_level": "user_verified",
+        "generator_model": "synthetic-host",
+        "created_by": "bench-a",
+        "created_at": "2026-10-15T10:24:51.896Z",
+        "digest": "edf8c9fe36af703bb8a2ddeecc1615658796e02882dfcc18235eec5b776f40be",
+        "source_event_id": "89660b420e709fbea1d8efef760294bc",
+        "verification_status": "verified",
+        "effective_at": "2026-10-15T10:24:51.896Z",
+        "kind": "semantic",
+        "sensitivity": "internal",
+        "id": "c3425adb39f257d4cc1c4f3ae9db02c2",
+        "collection": "memories",
+        "origin": "memory",
+        "scope": {
+          "workspace_id": "ws-a",
+          "project_id": "proj-a"
+        },
+        "status": "active",
+        "revision": 2,
+        "text": "Retrying an event with an already-recorded event_id must leave the ledger unchanged; new events append in arrival order.",
+        "sources": [
+          {
+            "span": {
+              "content_hash": "eb466cde87f27f1a1bbd6aefab7ac4437679208baf0613008f7f8b0c2d5cb2b4",
+              "start": 0,
+              "end": 120
+            },
+            "source_id": "89660b420e709fbea1d8efef760294bc",
+            "locator": "original"
+          }
+        ],
+        "updated_at": "2026-10-15T10:24:51.917Z",
+        "trust": 1,
+        "reasons": [
+          "exact_keyword"
+        ],
+        "authority": "data_only_untrusted"
+      }
+    ]
+  },
+  "limitation": "admin database connection; RLS not asserted in this benchmark",
+  "machine_setup_seconds": 0.20887394,
+  "retrieval_ms": 10.345,
+  "returned_rule_ids": [
+    "c3425adb39f257d4cc1c4f3ae9db02c2"
+  ],
+  "source_ids": [
+    "89660b420e709fbea1d8efef760294bc"
+  ],
+  "storage": "fresh-postgres-database",
+  "text": "Retrying an event with an already-recorded event_id must leave the ledger unchanged; new events append in arrival order."
+}

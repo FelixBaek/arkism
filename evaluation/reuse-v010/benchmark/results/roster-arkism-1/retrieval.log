@@ -1,0 +1,13 @@
+=== RUN   TestBenchmarkHTTPFactExport
+    benchmark_http_export_test.go:82: POST /v1/sources status=201
+    benchmark_http_export_test.go:83: POST /v1/memory_candidates status=201
+    benchmark_http_export_test.go:86: POST /v1/search status=200
+    benchmark_http_export_test.go:90: POST /v1/memory_candidates/80b31fd19e25ae1e8cc98e7ce0940147/review status=200
+    benchmark_http_export_test.go:94: POST /v1/search status=200
+--- PASS: TestBenchmarkHTTPFactExport (0.30s)
+PASS
+2026/10/15 19:21:28 INFO memory request status=201 request_id=9e8baa1ca0e90cbd98ba491f0b26978e method=POST route="POST /v1/{collection}" duration_ms=10
+2026/10/15 19:21:28 INFO memory request status=201 request_id=cb0f0fd527ef6fa17053b8f60522ce7b method=POST route="POST /v1/{collection}" duration_ms=13
+2026/10/15 19:21:28 INFO memory request status=200 request_id=0d4fb22cadcf1985b069d27e6ae092ec method=POST route="POST /v1/search" duration_ms=12
+2026/10/15 19:21:28 INFO memory request status=200 request_id=4770c6069d88bb09f98b480bc8c920e7 method=POST route="POST /v1/memory_candidates/{id}/review" duration_ms=9
+2026/10/15 19:21:28 INFO memory request status=200 request_id=804fb007a1ff1e741f3404cfe15d49f9 method=POST route="POST /v1/search" duration_ms=10

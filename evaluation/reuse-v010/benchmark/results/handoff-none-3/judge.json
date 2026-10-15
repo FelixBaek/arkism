@@ -1,0 +1,4 @@
+{
+  "success": false,
+  "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 22, in <module>\n  File \"<stdin>\", line 15, in apply_event\nValueError: An event_id cannot be reused with a different value\n"
+}

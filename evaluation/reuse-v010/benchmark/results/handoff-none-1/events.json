@@ -1,0 +1,39 @@
+[
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_0",
+      "type": "error",
+      "message": "Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  session-flags: `model_max_output_tokens` is ignored."
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_1",
+      "type": "error",
+      "message": "Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  session-flags: `model_max_output_tokens` is ignored."
+    }
+  },
+  {
+    "type": "turn.started"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_2",
+      "type": "agent_message",
+      "text": "{\"code\":\"def apply_event(ledger, event):\\n    \\\"\\\"\\\"Return the ledger with an event applied at most once by event_id.\\n\\n    The ledger is an iterable of event dictionaries. Existing events win\\n    on retries. Inputs are not mutated. The caller must persist the result\\n    atomically with any concurrent updates to provide durable deduplication.\\n    \\\"\\\"\\\"\\n    event_id = event['event_id']\\n    event['value']  # Validate the required field before applying the event.\\n    result = [dict(entry) for entry in ledger]\\n    if not any(entry['event_id'] == event_id for entry in result):\\n        result.append(dict(event))\\n    return result\\n\"}"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "usage": {
+      "input_tokens": 14232,
+      "cached_input_tokens": 12288,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 241,
+      "reasoning_output_tokens": 79
+    }
+  }
+]

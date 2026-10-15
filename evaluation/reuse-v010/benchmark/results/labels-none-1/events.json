@@ -1,0 +1,39 @@
+[
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_0",
+      "type": "error",
+      "message": "Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  session-flags: `model_max_output_tokens` is ignored."
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_1",
+      "type": "error",
+      "message": "Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  session-flags: `model_max_output_tokens` is ignored."
+    }
+  },
+  {
+    "type": "turn.started"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_2",
+      "type": "agent_message",
+      "text": "{\"code\":\"def normalize(label):\\n    \\\"\\\"\\\"Normalize a string label by trimming whitespace and lowercasing it.\\\"\\\"\\\"\\n    return label.strip().lower()\\n\"}"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "usage": {
+      "input_tokens": 14201,
+      "cached_input_tokens": 12288,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 93,
+      "reasoning_output_tokens": 49
+    }
+  }
+]

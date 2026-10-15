@@ -1,0 +1,37 @@
+{
+  "experiment_id": "v010-synthetic-code-20261015",
+  "commit": "9379ee5f493716e1c80027c0beb4fd12283100cf",
+  "fixture_sha256": "6364d70362b9f002ecf25bd05b3f7867c5fa73c7ea78cd4a6c53cf2db5515eb7",
+  "task_id": "labels",
+  "scenario": "past_normalization_error",
+  "condition": "arkism",
+  "direction": "host-retrieval-to-codex",
+  "replicate": 1,
+  "order": 2,
+  "model": "gpt-6-astra",
+  "reasoning_effort": "low",
+  "temperature": null,
+  "seed": null,
+  "success": true,
+  "timeout": false,
+  "rule_violations": 0,
+  "rework_count": 0,
+  "input_tokens": 14201,
+  "output_tokens": 20,
+  "cached_input_tokens": 12288,
+  "provider_cost_usd": null,
+  "setup_seconds": 0.291323249,
+  "maintenance_seconds": null,
+  "review_seconds": null,
+  "retrieval_ms": 12.345,
+  "task_seconds": 8.411868674011203,
+  "manual_interventions": 0,
+  "approval_basis": "explicit-human-approved",
+  "evidence_path": "labels-arkism-1",
+  "returned_rule_ids": [
+    "fd4ead408e706b41724110e1a14e2e3a"
+  ],
+  "source_ids": [
+    "5487b075ce35ce221ffc2bcfd07aef37"
+  ]
+}

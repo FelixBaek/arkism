@@ -1,0 +1,22 @@
+{
+  "recorded_at_utc": "2026-10-15T10:20:01.070710+00:00",
+  "baseline": "9379ee5f493716e1c80027c0beb4fd12283100cf",
+  "python": "3.14.4",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "codex": "codex-cli 0.162.1",
+  "go": "go version go1.27.1 linux/amd64",
+  "judge_image": "sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4",
+  "postgres_image": "sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "low",
+  "provider_temperature": null,
+  "provider_seed": null,
+  "requested_output_cap": 2048,
+  "output_cap_honored": false,
+  "actual_output_cap": null,
+  "human_review_seconds": null,
+  "human_approval": "explicit approval of the five synthetic facts before benchmark inference",
+  "claude_in_this_benchmark": false,
+  "judge_repo_digest": "python@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4",
+  "postgres_repo_digest": "pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d"
+}

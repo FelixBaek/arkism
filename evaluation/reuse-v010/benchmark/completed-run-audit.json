@@ -1,0 +1,15 @@
+{
+  "runs": 45,
+  "unique_cells": 45,
+  "cli_exit_zero": 45,
+  "input_output_token_coverage": 45,
+  "model_timeouts": 0,
+  "observed_tool_calls": 0,
+  "model_event_items": {
+    "error": 90,
+    "agent_message": 45
+  },
+  "all_static_arkism_paired_prompts_byte_identical": true,
+  "evaluator_reference_acceptances": 5,
+  "evaluator_mutant_rejections": 5
+}

@@ -1,0 +1,37 @@
+{
+  "experiment_id": "v010-synthetic-code-20261015",
+  "commit": "9379ee5f493716e1c80027c0beb4fd12283100cf",
+  "fixture_sha256": "6364d70362b9f002ecf25bd05b3f7867c5fa73c7ea78cd4a6c53cf2db5515eb7",
+  "task_id": "handoff",
+  "scenario": "agent_handoff_retry",
+  "condition": "arkism",
+  "direction": "host-retrieval-to-codex",
+  "replicate": 3,
+  "order": 6,
+  "model": "gpt-6-astra",
+  "reasoning_effort": "low",
+  "temperature": null,
+  "seed": null,
+  "success": true,
+  "timeout": false,
+  "rule_violations": 0,
+  "rework_count": 0,
+  "input_tokens": 14254,
+  "output_tokens": 73,
+  "cached_input_tokens": 12288,
+  "provider_cost_usd": null,
+  "setup_seconds": 0.27331909,
+  "maintenance_seconds": null,
+  "review_seconds": null,
+  "retrieval_ms": 16.991,
+  "task_seconds": 7.8578634730074555,
+  "manual_interventions": 0,
+  "approval_basis": "explicit-human-approved",
+  "evidence_path": "handoff-arkism-3",
+  "returned_rule_ids": [
+    "214e93dbb8520cc8fa4e89e3ccfb9626"
+  ],
+  "source_ids": [
+    "3fb57cda63bd5467e62fe5c820e3fd79"
+  ]
+}
