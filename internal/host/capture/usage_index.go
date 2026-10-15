@@ -40,7 +40,7 @@ const usageIdle = 300 // a gap longer than this (seconds) between messages is no
 
 var (
 	usageState      = or(os.Getenv("ARKISM_USAGE_STATE"), filepath.Join(host.Home, ".local/state/arkism-usage-index/state.json")).(string)
-	usageCodexIndex = filepath.Join(host.Home, ".codex/session_index.jsonl")
+	usageCodexIndex = host.CodexSessionIndex(capCodexSessions)
 	usageRoots      = usageSessionRoots
 	usageSleep      = time.Sleep
 	usageKST        = time.FixedZone("KST", 9*3600)
