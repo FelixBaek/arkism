@@ -2,12 +2,15 @@ package memory
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -202,6 +205,80 @@ func TestCrossAgentHTTPPostgresReuse(t *testing.T) {
 		call(t, owner, "POST", "/v1/memories/conflicts", ConflictInput{Scope: scopeA, Memories: marked.Relation.Relations, Action: "resolve", Reason: "synthetic resolution", ConflictID: marked.Relation.ID, ExpectedRevision: marked.Relation.Revision, Resolution: "keep_second"}, 200, nil)
 		search(t, b, scopeA, "reuseconflict", m2.ID)
 	})
+	t.Run("mcp_subprocess_capture_and_recall", func(t *testing.T) {
+		binary := os.Getenv("ARKISM_EVAL_MCP_BINARY")
+		if binary == "" {
+			t.Skip("ARKISM_EVAL_MCP_BINARY not set; MCP subprocess not tested")
+		}
+		invoke := func(token, runtime, name string, args any) map[string]any {
+			t.Helper()
+			dir := t.TempDir()
+			tokenFile := filepath.Join(dir, "synthetic.token")
+			if err := os.WriteFile(tokenFile, []byte(token), 0600); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": name, "arguments": args}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, binary, "skill-router")
+			cmd.Env = []string{"HOME=" + dir, "PATH=/usr/bin:/bin", "ARKISM_URL=" + server.URL, "ARKISM_TOKEN_FILE=" + tokenFile, "ARKISM_AGENT_TOKEN_FILE=" + tokenFile, "ARKISM_WORKSPACE=" + scopeA.WorkspaceID, "ARKISM_PROJECT=" + scopeA.ProjectID, "ARKISM_USER=management:owner", "ARKISM_RUNTIME=" + runtime, "ARKISM_SKILL_CACHE=" + filepath.Join(dir, "cache")}
+			cmd.Stdin = bytes.NewReader(append(raw, '\n'))
+			output, err := cmd.Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var response map[string]any
+			if err = json.Unmarshal(bytes.TrimSpace(output), &response); err != nil {
+				t.Fatalf("MCP decode: %v", err)
+			}
+			result, ok := response["result"].(map[string]any)
+			if !ok || result["isError"] == true {
+				t.Fatalf("MCP error: %s", output)
+			}
+			structured, ok := result["structuredContent"].(map[string]any)
+			if !ok {
+				t.Fatalf("MCP structured output missing: %s", output)
+			}
+			return structured
+		}
+		for _, direction := range []struct{ writer, reader string }{{"codex", "claude_code"}, {"claude_code", "codex"}} {
+			query := "reusemcp" + strings.ReplaceAll(direction.writer, "_", "")
+			proposed := invoke(a, direction.writer, "remember", map[string]any{"text": query + " run focused tests before full suite", "kind": "procedural"})
+			items, ok := proposed["items"].([]any)
+			if !ok || len(items) != 1 {
+				t.Fatalf("capture missing: %+v", proposed)
+			}
+			item := items[0].(map[string]any)
+			if item["status"] != "candidate" {
+				t.Fatalf("capture status: %+v", item)
+			}
+			scope := scopeA
+			scope.UserID = "management:owner"
+			before := invoke(b, direction.reader, "recall", map[string]any{"query": query})
+			if len(before["memories"].([]any)) != 0 {
+				t.Fatal("MCP exposed unapproved candidate")
+			}
+			id := item["candidate_id"].(string)
+			var c Record
+			call(t, owner, "GET", "/v1/memory_candidates/"+id+"?workspace_id="+scope.WorkspaceID+"&project_id="+scope.ProjectID+"&user_id="+url.QueryEscape(scope.UserID), nil, 200, &c)
+			var m Record
+			call(t, owner, "POST", "/v1/memory_candidates/"+id+"/review", CandidateReviewInput{Scope: scope, ExpectedRevision: c.Revision, Action: "approve"}, 200, &m)
+			after := invoke(b, direction.reader, "recall", map[string]any{"query": query})
+			memories := after["memories"].([]any)
+			if len(memories) != 1 || memories[0].(map[string]any)["id"] != m.ID {
+				t.Fatalf("MCP approved memory missing: %+v", after)
+			}
+			byID := invoke(b, direction.reader, "recall", map[string]any{"ids": []string{m.ID}})
+			if len(byID["memories"].([]any)) != 1 {
+				t.Fatal("MCP ID lookup failed")
+			}
+			t.Logf("MCP adapter direction=%s-to-%s capture=unapproved approved_fixture=true query_recall=1 id_recall=1 actual_model=false", direction.writer, direction.reader)
+		}
+	})
+
 	// Explicit opt-in for fresh external clients. Never write real credentials.
 	// The caller supplies private absolute paths outside the repository.
 	if statePath := os.Getenv("ARKISM_EVAL_FIXTURE_STATE"); statePath != "" {
