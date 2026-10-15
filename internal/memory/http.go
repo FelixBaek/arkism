@@ -44,6 +44,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerKnowledgeRetrievalHTTP(mux, s)
 	sessionArchiveRoutes(mux, s)
 	workCheckpointRoutes(mux, s)
+	collaborationRoutes(mux, s)
 	digestRoutes(mux, s)
 	registerWikiHTTP(mux, s)
 	modelBudgetRoutes(mux, s)

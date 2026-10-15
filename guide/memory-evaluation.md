@@ -138,3 +138,19 @@ static text, and 15/15 with host-retrieved Arkism memory. This did not establish
 an advantage over maintained static instructions. Actual charges and human
 review time were not measured. See the report for per-run data, failure cases,
 and the distinction between actual model use and automated client fixtures.
+
+## Cost evidence and review timer
+
+The [measurement audit](../evaluation/reuse-v010/benchmark/MEASUREMENT.ko.md)
+rechecks all 45 provider usage events against their recorded results, separates
+cached from uncached input, and preserves unknown billed charges as null.
+It does not turn token differences into verified cost savings. The optional
+private charge ledger requires run IDs, actual provider-billed amounts and
+receipt references; partial coverage cannot become a full-condition total.
+
+A separate operator-controlled `review_timer.py` records start/stop intervals,
+including rejected and abandoned reviews. It is prepared but has not been run
+with a human reviewer. Recorded wall-clock intervals include interruptions;
+active attention remains unknown. Synthetic test clocks never enter the
+measurement report. See the linked instructions for required arguments and
+privacy handling of the ledger.

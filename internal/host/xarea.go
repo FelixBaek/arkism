@@ -53,6 +53,8 @@ var (
 
 // Area RC (crew runner) owns these.
 var (
+	// RunHandoff reserves and executes a bounded, read-only child agent task.
+	RunHandoff = func(input map[string]any, request Requester) (map[string]any, error) { return nil, errNotPorted }
 	// ChildEnv is a child CLI's environment: ARKISM_CAPTURE_CHILD=1, plus a stored key only for
 	// a CLI in API mode; keys nil means load them. model/key pick a 직접 추가 provider's key.
 	ChildEnv = func(row CLI, keys []map[string]any, model string, key map[string]any) (map[string]string, error) {

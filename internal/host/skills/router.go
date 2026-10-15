@@ -950,6 +950,12 @@ func callTool(name, argsAny any) (host.Obj, error) {
 	var value any
 	var err error
 	switch n {
+	case "handoff_work":
+		value, err = host.RunHandoff(args, func(path string, payload map[string]any) (map[string]any, error) {
+			return routerRequest(path, payload)
+		})
+	case "recent_sessions", "recall_for_role", "expand_knowledge_graph":
+		value, err = collaborationRead(n, args)
 	case "save_work", "resume_work", "list_work":
 		value, err = host.WorkCall(n, args, func(path string, payload map[string]any) (map[string]any, error) {
 			if payload == nil {

@@ -88,6 +88,19 @@ jobs:
       - name: Release scripts parse
         run: bash -n desktop/build-unix.sh desktop/installer/prepare-runtime.sh
 
+  evaluation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Offline evaluation and measurement regression tests
+        run: |
+          python3 -m unittest discover -s tools -p 'test_*.py'
+          python3 -m unittest discover -s evaluation -p 'test_*.py'
+          python3 -m unittest discover -s evaluation/reuse-v010/benchmark -p 'test_*.py'
+
   go-windows:
     runs-on: windows-2022
     timeout-minutes: 15

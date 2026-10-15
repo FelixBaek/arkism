@@ -34,7 +34,7 @@ func init() {
 
 const crewProg = "arkism crew"
 
-const crewUsage = "{resolve,run-node,start,status,decide,hook-context,list,route,keys,accounts,providers} ..."
+const crewUsage = "{resolve,run-node,handoff,start,status,decide,hook-context,list,route,keys,accounts,providers} ..."
 
 // crewCommand is one parsed subcommand: its options and the positionals it needs.
 type crewCommand struct {
@@ -46,6 +46,7 @@ type crewCommand struct {
 }
 
 var crewCommands = map[string]crewCommand{
+	"handoff":      {},
 	"resolve":      {positional: []string{"handle"}},
 	"run-node":     {bools: []string{"json"}},
 	"start":        {valued: []string{"task", "wait", "cwd"}, positional: []string{"handle"}, required: []string{"task"}, floats: []string{"wait"}},
@@ -208,6 +209,16 @@ func crewMain(argv []string, stdin io.Reader, stdout, stderr io.Writer) int {
 func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, stdout io.Writer) (int, error) {
 	readAll := func() string { raw, _ := io.ReadAll(stdin); return string(raw) }
 	switch name {
+	case "handoff":
+		stopOnTerm.Store(true)
+		out, err := runHandoff(stdin, handoffCallerRequest, runNodeFn)
+		if err != nil {
+			return 0, err
+		}
+		fmt.Fprintln(stdout, dumpIndent(out))
+		if out["ok"] != true {
+			return 1, nil
+		}
 	case "resolve":
 		res, err := resolve(a.pos[0], 8*time.Second)
 		if err != nil {

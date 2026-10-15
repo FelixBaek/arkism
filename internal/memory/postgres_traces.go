@@ -56,6 +56,25 @@ const traceGraphTriggerSQL = `CREATE OR REPLACE FUNCTION sync_memory_record_grap
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=arkism,pg_catalog AS $$
 DECLARE entity_kind text; target_kind text; evidence_id text; link jsonb;
 BEGIN
+  -- Human graph assertions are invalidated when their canonical memory changes.
+  -- Remove isolated assertion nodes too, so erased identifiers do not linger.
+  IF TG_OP IN ('UPDATE','DELETE') AND OLD.collection IN ('memories','sources') AND
+    (TG_OP='DELETE' OR NEW.doc->'revision' IS DISTINCT FROM OLD.doc->'revision'
+    OR NEW.doc->'content_erased' IS DISTINCT FROM OLD.doc->'content_erased'
+    OR NEW.doc->'privacy_quarantined' IS DISTINCT FROM OLD.doc->'privacy_quarantined'
+    OR NEW.doc->'status' IS DISTINCT FROM OLD.doc->'status') THEN
+    DELETE FROM relations r WHERE r.organization_id=OLD.workspace_id AND r.project_id=OLD.project_id
+      AND r.user_id=OLD.user_id AND r.agent_id=OLD.agent_id AND starts_with(r.relation_kind,'asserted_')
+      AND ((OLD.collection='memories' AND r.metadata->'evidence'->>'id'=OLD.id)
+        OR (OLD.collection='sources' AND EXISTS (SELECT 1 FROM memory_records m
+          WHERE m.collection='memories' AND m.workspace_id=OLD.workspace_id AND m.project_id=OLD.project_id
+          AND m.user_id=OLD.user_id AND m.agent_id=OLD.agent_id AND m.id=r.metadata->'evidence'->>'id'
+          AND m.doc->'sources' @> jsonb_build_array(jsonb_build_object('source_id',OLD.id)))));
+    DELETE FROM entities e WHERE e.organization_id=OLD.workspace_id AND e.project_id=OLD.project_id
+      AND e.user_id=OLD.user_id AND e.agent_id=OLD.agent_id AND starts_with(e.kind,'asserted_')
+      AND NOT EXISTS (SELECT 1 FROM relations r WHERE r.organization_id=e.organization_id AND r.project_id=e.project_id
+        AND r.user_id=e.user_id AND r.agent_id=e.agent_id AND ((r.source_kind=e.kind AND r.source_id=e.external_id) OR (r.target_kind=e.kind AND r.target_id=e.external_id)));
+  END IF;
 	IF TG_OP='DELETE' AND OLD.collection='sources' THEN
 	  UPDATE source_events SET payload='null'::jsonb,payload_raw=''::bytea,content_erased=true
 	    WHERE organization_id=OLD.workspace_id AND project_id=OLD.project_id AND user_id=OLD.user_id AND agent_id=OLD.agent_id

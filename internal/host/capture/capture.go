@@ -887,7 +887,7 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 				}
 			}
 			if err != nil { // recall failed: the crew and work context still go in
-				if crew == "" && work == "" {
+				if crew == "" && work == "" && name != "SessionStart" {
 					return err
 				}
 				metric(kv("event", "hook_error"), kv("hook", name), kv("error", pyType(err)))
@@ -896,6 +896,14 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 			ctx, err := host.AssembleParts(part, host.Part{Full: work}, host.Part{Full: crew, Meta: host.CrewMeta(crew)}, host.ContextMaxChars)
 			if err != nil {
 				return err
+			}
+			if name == "SessionStart" {
+				if recent := recentSessionContext(data, host.ContextMaxChars-host.Len(ctx)-2); recent != "" {
+					if ctx != "" {
+						ctx += "\n\n"
+					}
+					ctx += recent
+				}
 			}
 			if ctx != "" {
 				fmt.Fprintln(stdout, host.MustDumps(host.Obj{{Key: "hookSpecificOutput", Value: host.Obj{
