@@ -66,8 +66,9 @@ The prompt contract becomes harness-session-v3. Existing v2 quality evidence
 cannot qualify the new prompt, so routing falls back to Sonnet until new quality
 measurements qualify cheaper categories. This may increase cost. Deterministic
 tests establish contract behavior, not model acceptance-rate improvement.
-There was no paid model replay, production deployment, job replay, or automatic
-memory approval during this audit.
+The initial audit did not deploy the change or replay models. Subsequent
+authorized runtime validation is described below; no automatic memory approval
+was introduced.
 
 The latest log tail is dominated by archive availability and parent-batch
 waiting, which require a separate investigation. This patch does not claim to
@@ -79,3 +80,21 @@ Use guide/public-publishing.md and tools/check_public_push.py from a clean
 public checkout. Deleting private files in a later commit does not sanitize
 earlier commits. Existing private worktrees must remain isolated until their
 owners coordinate any history migration or deletion.
+
+## Runtime validation and diagnostic correction
+
+The regression tests now isolate capture state. Earlier test execution emitted
+synthetic missing-evidence diagnostics into the live metrics file. Exclude those
+test-generated records from operational comparisons using the private exclusion
+manifest; retain the raw metrics. Their absence in later runs is not evidence
+of lower production failure rates. The ten earlier field diagnostics predate
+those tests and remain valid evidence for their limited observed subset.
+
+After the correction, the full local check passed with an external state
+sentinel unchanged and no increase in live missing-evidence diagnostics.
+Authorized deployment and limited real-source probes were also performed.
+Three matched replay pairs validated in both versions. An additional full
+two-record window validated after the change, while its baseline CLI failed
+before a classified validation result was available. These observations do not
+establish a rejection-rate reduction. Longer operational comparisons must keep
+test events separate and account for archive and parent-batch waiting.

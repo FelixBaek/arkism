@@ -1,9 +1,9 @@
 diff --git a/internal/host/capture/session_citation_contract_test.go b/internal/host/capture/session_citation_contract_test.go
 new file mode 100644
-index 0000000..16a268c
+index 0000000..53f3b33
 --- /dev/null
 +++ b/internal/host/capture/session_citation_contract_test.go
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,106 @@
 +package capture
 +
 +import (
@@ -13,6 +13,7 @@ index 0000000..16a268c
 +)
 +
 +func TestSessionCitationSchemaRejectsEmptyEvidence(t *testing.T) {
++	capFake(t)
 +	for _, field := range []string{"state", "check:not_run", "check:unknown", "candidate"} {
 +		t.Run(field, func(t *testing.T) {
 +			request, output := sessionFixture(t)
