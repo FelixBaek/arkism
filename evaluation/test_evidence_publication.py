@@ -35,10 +35,11 @@ class EvidencePublicationTests(unittest.TestCase):
         result = summarize(raw)
         self.assertEqual(result[3][0]['BuildAction'], 'build-fail')
         self.assertEqual(result[4][0]['result'], 'fail')
-        with self.assertRaises(ValueError):
-            summarize(self.raw({'Action': 'build-output', 'ImportPath': 'fixture'}))
-        with self.assertRaises(ValueError):
-            summarize(self.raw({'Action': 'output'}))
+        unfinished = self.raw({'Action': 'build-output', 'ImportPath': 'fixture'})
+        invalid = self.raw({'Action': 'output'})
+        for raw in (unfinished, invalid):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                summarize(raw)
 
     def test_package_panic_remains_a_failure(self):
         raw = self.raw({'Action': 'run', 'Package': 'fixture', 'Test': 'TestOne'},
