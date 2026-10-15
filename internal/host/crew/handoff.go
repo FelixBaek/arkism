@@ -223,14 +223,6 @@ func runHandoff(input io.Reader, request host.Requester, run runFn) (map[string]
 		child["next_steps"] = []string{"Parent must review the unverified result and independently verify source citations before integration."}
 	}
 	saved, err := save(reserved["revision"], "-result")
-	if err != nil && success {
-		// Model output can fail the checkpoint secret scan; never leave the reservation in_progress.
-		success = false
-		delete(child, "completed")
-		child["status"] = "blocked"
-		child["next_steps"] = []string{"Output was rejected by checkpoint validation and withheld. Inspect the workspace before creating a new handoff ID."}
-		saved, err = save(reserved["revision"], "-result-withheld")
-	}
 	if err != nil {
 		originalErr := err
 		// Never retry the model or overwrite a result whose commit response was
