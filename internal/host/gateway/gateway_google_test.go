@@ -281,7 +281,10 @@ func TestGoogleGatewayGroupGenerationHTTPExceptionsNeverUseFallback(t *testing.T
 				if method == "streamGenerateContent" {
 					data, ctype = "data: "+data+"\n\n", "text/event-stream"
 				}
-				g.next(gxRaw(fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %d\r\n\r\n%s", ctype, len(data), data)))
+				// gxRaw closes its hijacked socket. Announce that before the
+				// complete body is pooled: otherwise the next non-retryable POST
+				// can race the peer close and fail before reaching this fixture.
+				g.next(gxRaw(fmt.Sprintf("HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: %s\r\nContent-Length: %d\r\n\r\n%s", ctype, len(data), data)))
 				fault.Store(true)
 			case "open":
 				g.next(gxRaw(""))
