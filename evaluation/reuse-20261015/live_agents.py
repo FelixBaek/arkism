@@ -6,11 +6,18 @@ Uses only isolated fixture credentials; never connects to the user's Arkism prof
 import argparse,json,os,pathlib,re,shutil,subprocess,tempfile,time,urllib.request,urllib.parse
 FACTS=[('codex','claude','labels: trim surrounding whitespace but preserve letter case.'),('claude','codex','cache: zero TTL means do not cache; positive TTL stays unchanged.')]
 ARTIFACT_ROOT = pathlib.Path(__file__).resolve().parent
+PRIVATE_ROOT = pathlib.Path.home() / 'arkism-reuse-evidence-20261015'
 
 def confined_path(raw):
  path = pathlib.Path(raw).resolve()
- if not any(path.is_relative_to(root) for root in (ARTIFACT_ROOT, pathlib.Path('/tmp').resolve())):
-  raise ValueError('path must be inside this evaluation directory or /tmp')
+ if path.is_relative_to(ARTIFACT_ROOT):
+  return path
+ PRIVATE_ROOT.mkdir(mode=0o700, exist_ok=True)
+ info = PRIVATE_ROOT.lstat()
+ if PRIVATE_ROOT.is_symlink() or info.st_uid != os.getuid() or info.st_mode & 0o077:
+  raise ValueError('private evidence root must be owned by the current user with mode 0700')
+ if not path.is_relative_to(PRIVATE_ROOT.resolve()):
+  raise ValueError('path must be inside this evaluation directory or the private evidence root')
  return path
 
 def artifact_path(directory, name):

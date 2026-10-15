@@ -93,21 +93,22 @@ docker run -d --name arkism-reuse-bench-test \
   -e POSTGRES_PASSWORD=synthetic-benchmark-only -e POSTGRES_DB=arkism_bench \
   -p 127.0.0.1::5432 pgvector/pgvector:pg17
 docker port arkism-reuse-bench-test 5432
-go test -c ./internal/memory -o /tmp/arkism-bench-memory.test
+install -d -m 700 "$HOME/.local/state/arkism-benchmark"
+go test -c ./internal/memory -o "$HOME/.local/state/arkism-benchmark/exporter.test"
 # Replace PORT with the loopback port printed above. Password is disposable.
 POSTGRES_TEST_DSN='postgres://postgres:synthetic-benchmark-only@127.0.0.1:PORT/arkism_bench?sslmode=disable' \
   python3 evaluation/reuse-v010/benchmark/run.py \
-  --out /tmp/new-arkism-bench-results \
-  --exporter /tmp/arkism-bench-memory.test --approval explicit-human-approved
+  --out "$HOME/.local/state/arkism-benchmark/results" \
+  --exporter "$HOME/.local/state/arkism-benchmark/exporter.test" --approval explicit-human-approved
 # After completion:
 docker rm -f arkism-reuse-bench-test
-rm /tmp/arkism-bench-memory.test
+rm "$HOME/.local/state/arkism-benchmark/exporter.test"
 ```
 
 The exporter only accepts the exact five user-approved synthetic facts. Reusing
 this harness with other facts requires a new human review; do not relabel a
 synthetic role as real human approval. Results are incremental and resumable;
-the reproduction output is restricted to `/tmp/new-arkism-bench-results` (or the published results directory). Move your own prior reproduction results aside before starting a new experiment. Authentication failure or HTTP
+the reproduction output is restricted to `$HOME/.local/state/arkism-benchmark/results` (or the published results directory). Move your own prior reproduction results aside before starting a new experiment. Authentication failure or HTTP
 fixture failure aborts rather than substituting simulated data.
 
 `results/frozen-spec.json` includes task facts, starting code, hidden checks and

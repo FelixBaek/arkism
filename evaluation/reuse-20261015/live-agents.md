@@ -44,3 +44,12 @@ touch "$private_dir/stop"
 ```
 
 서버는 stop 파일이 없으면 최대 15분 뒤 종료된다. 이 실험은 기억만 검증했다. 실제 모델의 스킬 수집→사람 승인→다른 모델의 실행은 아직 입증하지 않았다.
+
+### Private reproduction paths
+
+`live_agents.py`, `judge_live.py`, and `summarize_checks.py` accept artifacts
+inside this evaluation directory or `$HOME/arkism-reuse-evidence-20261015`.
+The latter directory must belong to the current user with mode `0700` and must
+not be a symlink. Place the disposable fixture state and Arkism test executable
+there before invoking the live harness. Arbitrary paths in a shared temporary
+directory are rejected; symlinks cannot escape the selected artifact root.

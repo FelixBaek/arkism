@@ -11,6 +11,7 @@ import os
 import pathlib
 import shutil
 import statistics
+import stat
 import subprocess
 import tempfile
 import time
@@ -27,13 +28,29 @@ TASKS = [
 
 # Replay the original seed-20261015 permutation, not security-sensitive randomness.
 FROZEN_ORDER = (9, 10, 24, 3, 4, 16, 44, 23, 6, 19, 18, 32, 26, 20, 15, 40, 36, 37, 22, 29, 11, 39, 8, 41, 42, 5, 17, 7, 38, 35, 21, 31, 14, 34, 25, 27, 33, 43, 1, 2, 0, 30, 28, 12, 13)
-EXPORTER = '/tmp/arkism-bench-memory.test'
+PRIVATE_ROOT = pathlib.Path.home() / '.local' / 'state' / 'arkism-benchmark'
+EXPORTER = str(PRIVATE_ROOT / 'exporter.test')
 OUTPUT_LOCATIONS = {
     'evaluation/reuse-v010/benchmark/results': ROOT / 'results',
     str(ROOT / 'results'): ROOT / 'results',
-    '/tmp/new-arkism-bench-results': pathlib.Path('/tmp/new-arkism-bench-results'),
+    str(PRIVATE_ROOT / 'results'): PRIVATE_ROOT / 'results',
 }
 CONDITIONS = ('none', 'static', 'arkism')
+
+
+def private_directory(path):
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = path.lstat()
+    if path.is_symlink() or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise ValueError('evaluation directory must be user-owned with mode 0700')
+
+
+def validate_exporter():
+    private_directory(PRIVATE_ROOT)
+    path = pathlib.Path(EXPORTER)
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022 or not os.access(path, os.X_OK):
+        raise ValueError('exporter must be a user-owned executable, not a symlink or shared-writable file')
 
 
 def write_json(path, value):
@@ -74,6 +91,7 @@ def initial_record(task, condition, rep, ordinal, run_dir, approval):
 def retrieve_fact(task, run_dir, record, exporter_enabled):
     if not exporter_enabled:
         raise RuntimeError('Arkism requires real HTTP exporter; no simulation fallback')
+    validate_exporter()
     env = os.environ.copy()
     env.update(ARKISM_BENCH_FACT=task['fact'],
                ARKISM_BENCH_OUTPUT=str((run_dir / 'retrieval.json').resolve()))
@@ -286,7 +304,13 @@ def main():
     args = arguments()
     # Select predeclared destinations; no CLI bytes become a filesystem path.
     out = OUTPUT_LOCATIONS[args.out]
-    out.mkdir(parents=True, exist_ok=True)
+    if out.is_relative_to(PRIVATE_ROOT):
+        private_directory(PRIVATE_ROOT)
+        private_directory(out)
+    else:
+        out.mkdir(parents=True, exist_ok=True)
+        if out.is_symlink() or not out.resolve().is_relative_to(ROOT):
+            raise ValueError('results directory escapes benchmark root')
     schedule = frozen_schedule()
     write_spec(out, schedule)
     selected = args.conditions.split(',')
