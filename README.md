@@ -35,9 +35,7 @@ The screenshots use made-up sample data and show the Korean interface. Switch to
 
 ## Install
 
-The first public installer release is being prepared. Until it is published, build from source using [the development guide](guide/development.md). Packaging pull requests produce test installers in [Release workflow artifacts](../../actions/workflows/release.yml); these are validation builds, not public releases.
-
-Once published, download the file for your system from [Releases](../../releases).
+Download the file for your system from [Releases](../../releases/latest).
 
 | System | File |
 |---|---|

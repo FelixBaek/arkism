@@ -1,0 +1,64 @@
+name: Initial public release
+
+# One-time, user-authorized v0.1.0 publication. Merge this workflow last, after
+# policy and release fixes. Its own main commit must pass both existing gates.
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/initial-release.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: initial-public-release-v0.1.0
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    if: github.repository == 'FelixBaek/arkism'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for correctness and external Sonar quality on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 1800))
+          while (( SECONDS < deadline )); do
+            ready=true
+            for workflow in checks.yml sonarcloud.yml; do
+              runs="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" -f "head_sha=$RELEASE_SHA" -f event=push -f per_page=100)"
+              latest="$(jq -c --arg sha "$RELEASE_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .event == "push")] | sort_by(.id) | last // empty' <<< "$runs")"
+              if [ -z "$latest" ] || [ "$(jq -r .status <<< "$latest")" != "completed" ]; then
+                ready=false
+                continue
+              fi
+              conclusion="$(jq -r .conclusion <<< "$latest")"
+              if [ "$conclusion" != "success" ]; then
+                echo "::error::$workflow failed for $RELEASE_SHA ($conclusion)"
+                exit 1
+              fi
+            done
+            if [ "$ready" = true ]; then
+              echo "Correctness and external quality gates passed for $RELEASE_SHA."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::Timed out waiting for exact-commit quality gates."
+          exit 1
+
+  packages:
+    needs: quality
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      version: "0.1.0"
+      publish_initial: true
+    secrets: inherit

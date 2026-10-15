@@ -44,3 +44,5 @@ jobs:
             -Dsonar.projectKey=FelixBaek_arkism
             -Dsonar.projectVersion=${{ steps.version.outputs.version }}
             -Dsonar.coverage.exclusions=**/*
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=600
