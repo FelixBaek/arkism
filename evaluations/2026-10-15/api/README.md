@@ -67,3 +67,19 @@ Claude/Codex 모델 실행이 아니다. 이 검증은 기억 조회 가능성�
 담는다. stop 파일을 만들면 정상 종료하고 state를 제거한다. 이 파일은
 공개 결과나 저장소에 넣지 않는다. 실제 에이전트를 붙이기 위한 편의 기능이며
 그 자체로 실제 에이전트 실행을 증명하지 않는다.
+
+## 기존 계약의 독립 재실행
+
+`existing-contracts.jsonl`에는 기존 테스트 6개를 같은 격리 DB에서
+`-race -count=1`로 실행한 기록이 있다. 모두 통과했다. Postgres/RLS는 실제 DB,
+나머지 서비스 계약은 기존 fake 저장소라는 차이를 유지한다.
+
+```sh
+# 위의 disposable DB만 가리키는 POSTGRES_TEST_DSN이 설정된 상태
+ go test -race -json ./internal/memory \
+  -run '^Test(PostgresHTTPWorkflow|PostgresRLSScopesRevocationAndPoolIsolation|CrossAgentMemoryReuseLifecycle|ExpiredMemoryIsNotSearchedOrListed|ConflictMarkAndResolve|SupersedeExistingAndStaleSearch)$' \
+  -count=1
+```
+
+재현 스크립트 자체도 `/tmp/arkism-reuse-script-validation` 출력 경로로 별도
+실행해 정상 종료 및 생성 컨테이너 삭제를 확인했다.
