@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/FelixBaek/arkism/internal/crewrun"
 )
 
 func init() {
@@ -117,5 +119,20 @@ func TestReceiptDrainIsBoundedAndNeverPublishesWithoutChecks(t *testing.T) {
 	raw, _ := os.ReadFile(filepath.Join(root, digest([]byte(job))+".json"))
 	if json.Unmarshal(raw, &stored) != nil || stored["attempts"] != float64(8) {
 		t.Fatal(string(raw))
+	}
+}
+
+// The crew engine's receipt file is what this drain reads: same spool, same {scope, trace} contract.
+func TestCrewRunReceiptDrains(t *testing.T) {
+	root := t.TempDir()
+	scope := map[string]string{"workspace_id": "w", "project_id": "p", "user_id": "u", "agent_id": "crew"}
+	if err := crewrun.EnqueueReceipt(root, crewrun.TraceReceipt{Scope: scope, Trace: crewrun.Ref{Collection: "execution_traces", ID: "t", Revision: 1}}); err != nil {
+		t.Fatal(err)
+	}
+	api := &recordAPI{records: map[string]any{"execution_traces/t": map[string]any{"id": "t", "revision": 1, "status": "active",
+		"scope": map[string]any{"workspace_id": "w", "project_id": "p", "user_id": "u", "agent_id": "crew"}, "sources": []any{}}}}
+	rows, err := drainReceipts(api, "checker", root, nil, "producer", 0)
+	if err != nil || len(rows) != 1 || obj(rows[0])["state"] != "awaiting_observation" || len(api.calls) != 0 {
+		t.Fatal(rows, err, api.calls)
 	}
 }

@@ -26,6 +26,13 @@ func sessionTokenFile() error {
 		return runtimeErr("harness_service_credential_required")
 	}
 	host.TokenFile = file
+	if os.Getenv("ARKISM_SHARED_AUDIENCE_SCOPE") != "" {
+		scope, err := sessionScope()
+		if err != nil {
+			return err
+		}
+		capScope = func() map[string]any { return scope }
+	}
 	return nil
 }
 
@@ -287,15 +294,26 @@ func sessionFinishChildren(job map[string]any) error {
 var sessionClaimKinds = map[any]string{"preference": "user", "lesson": "lesson", "failure_recovery": "lesson"}
 
 // sessionClaims turns validated candidates into capture claims bound to their archive messages.
-func sessionClaims(candidates []any, refs map[string][]any) ([]any, error) {
+// canonical maps a canonical trace source id to its sources ref: such evidence travels as
+// source_refs, and an agent statement over a canonical trace is only an inference.
+func sessionClaims(candidates []any, refs map[string][]any, canonical map[string]any) ([]any, error) {
 	claims := []any{}
 	for _, c := range candidates {
 		candidate := c.(map[string]any)
 		var candidateRefs []any
+		sourceRefs := []any{}
+		evidenceKind := candidate["evidence_kind"]
 		for _, evidence := range candidate["source_refs"].([]any) {
-			candidateRefs = append(candidateRefs, refs[str(autosaveGet(evidence, "source_id"))]...)
+			id := str(autosaveGet(evidence, "source_id"))
+			candidateRefs = append(candidateRefs, refs[id]...)
+			if ref, has := canonical[id]; has {
+				sourceRefs = append(sourceRefs, ref)
+				if evidenceKind == "agent_statement" {
+					evidenceKind = "inference"
+				}
+			}
 		}
-		context := map[string]any{"evidence_kind": candidate["evidence_kind"], "semantic_kind": candidate["kind"]}
+		context := map[string]any{"evidence_kind": evidenceKind, "semantic_kind": candidate["kind"]}
 		for _, k := range []string{"domains", "applicability", "uncertainty", "valid_from"} {
 			context[k] = candidate[k]
 		}
@@ -325,7 +343,7 @@ func sessionClaims(candidates []any, refs map[string][]any) ([]any, error) {
 			reason = "session_processor source-backed candidate"
 		}
 		claims = append(claims, map[string]any{"memory_context": context, "subject": "session-" + strings.Join(domains, "-"), "text": text,
-			"kind": kind, "basis": basis, "reason": reason, "archive_messages": dedupeRefs(candidateRefs), "source_refs": []any{}})
+			"kind": kind, "basis": basis, "reason": reason, "archive_messages": dedupeRefs(candidateRefs), "source_refs": sourceRefs})
 	}
 	return claims, nil
 }
@@ -343,7 +361,7 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 	if truthy(job["session_processor_complete"]) {
 		return sessionFinishChildren(job)
 	}
-	if len(anyList(job["users"])) == 0 && !truthy(job["archive_context"]) {
+	if len(anyList(job["users"])) == 0 && !truthy(job["execution_receipt"]) && !truthy(job["archive_context"]) {
 		return nil
 	}
 	userText := func() string {
@@ -389,9 +407,26 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 		return err
 	}
 	event = explicit(event)
-	records, refs, err := sessionLinked(job, origin)
+	read := sessionLinked
+	if truthy(job["execution_receipt"]) {
+		read = func(job map[string]any, _ string) ([]any, map[string][]any, error) { return sessionCanonical(job) }
+	}
+	records, refs, err := read(job, origin)
 	if err != nil {
 		return err
+	}
+	canonical := map[string]any{}
+	for _, ref := range anyList(autosaveGet(or(job["execution_receipt"], map[string]any{}), "source_events")) {
+		canonical[str(autosaveGet(ref, "id"))] = ref
+	}
+	chunkSources := func(chunk []any) []any {
+		out := []any{}
+		for _, row := range chunk {
+			if ref, has := canonical[str(autosaveGet(row, "source_id"))]; has {
+				out = append(out, ref)
+			}
+		}
+		return out
 	}
 	groups, err := chunkRecords(records, 32000)
 	if err != nil {
@@ -423,12 +458,19 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 			var previous any
 			if current != nil {
 				previous = current["package"]
-				known := map[string]bool{}
+				known, knownSources := map[string]bool{}, map[string]bool{}
 				for _, ref := range anyList(current["archive_messages"]) {
 					known[sdigest(ref)] = true
 				}
+				for _, ref := range anyList(autosaveGet(or(current["package"], map[string]any{}), "source_refs")) {
+					knownSources[sdigest(ref)] = true
+				}
 				delivered := true
 				for _, row := range chunk {
+					if ref, has := canonical[str(autosaveGet(row, "source_id"))]; has {
+						delivered = delivered && knownSources[sdigest(ref)]
+						continue
+					}
 					for _, ref := range refs[str(autosaveGet(row, "source_id"))] {
 						delivered = delivered && known[sdigest(ref)]
 					}
@@ -450,7 +492,7 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 				return sessionWait("session_transfer_evidence_limit")
 			}
 			authorize := func(content string) error {
-				payload := map[string]any{"scope": scope, "refs": transferRefs, "source_refs": []any{}, "destination": "external:anthropic", "content": content}
+				payload := map[string]any{"scope": scope, "refs": transferRefs, "source_refs": chunkSources(chunk), "destination": "external:anthropic", "content": content}
 				if current != nil {
 					payload["work"] = map[string]any{"collection": "work_checkpoints", "id": checkpointID, "revision": current["revision"]}
 				}
@@ -476,12 +518,12 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 				return err
 			}
 			pkg := sessionCheckpointPackage(prepared, sid, origin, str(or(job["cwd"], "")))
-			pkg["source_refs"] = dedupeRefs(anyList(autosaveGet(or(previous, map[string]any{}), "source_refs")))
+			pkg["source_refs"] = dedupeRefs(append(chunkSources(chunk), anyList(autosaveGet(or(previous, map[string]any{}), "source_refs"))...))
 			archiveRefs := dedupeRefs(append(chunkRefs, anyList(current["archive_messages"])...))
 			if len(archiveRefs) > 100 {
 				return sessionWait("session_checkpoint_evidence_limit")
 			}
-			claims, err := sessionClaims(prepared["output"].(map[string]any)["memory_candidates"].([]any), refs)
+			claims, err := sessionClaims(prepared["output"].(map[string]any)["memory_candidates"].([]any), refs, canonical)
 			if err != nil {
 				return err
 			}
