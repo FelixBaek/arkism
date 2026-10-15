@@ -4124,7 +4124,7 @@
       try {
         const item = await captureMemory(ta.value.trim(), m?.kind || kind.value, m);
         dlg.close();
-        const saved = ["accepted", "merged", "approved"].includes(item.status) || item.memory_id;
+        const saved = ["accepted", "approved"].includes(item.status) || item.memory_id;
         if (saved) {
           notice(m ? "고쳤어요. 옛 기억은 바뀐 이력에 남아요." : "저장했어요.");
         } else if (item.status === "merged") {
