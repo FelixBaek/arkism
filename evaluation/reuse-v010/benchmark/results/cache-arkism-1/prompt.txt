@@ -1,0 +1,8 @@
+Write Python code completing the supplied module. Return JSON only, with one string key "code" containing the whole module. Use no tools. Do not ask questions; make the best implementation from the available information.
+Task: Implement cache_ttl(ttl) for a nonnegative integer TTL. Return None to bypass caching or an integer expiration TTL according to the project policy.
+Starting module:
+def cache_ttl(ttl):
+    raise NotImplementedError
+
+Project context:
+Zero TTL means do not cache; positive TTL stays unchanged.

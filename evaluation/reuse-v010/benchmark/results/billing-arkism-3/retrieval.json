@@ -1,0 +1,63 @@
+{
+  "approval": "explicit-user-approval-of-five-synthetic-facts",
+  "authorization": "distinct-A-B-human-bearer-tokens",
+  "context": {
+    "context_data": "{\"authority\":\"data_only_untrusted\",\"items\":[{\"trust_level\":\"user_verified\",\"generator_model\":\"synthetic-host\",\"created_by\":\"bench-a\",\"created_at\":\"2026-10-15T10:22:50.019Z\",\"digest\":\"e2eb812b23f767906a4d7567bf6876d25b701181a513ddd313bd22ca85b10733\",\"source_event_id\":\"47d8b837de06223d632eecb7ded5f75e\",\"verification_status\":\"verified\",\"effective_at\":\"2026-10-15T10:22:50.019Z\",\"kind\":\"semantic\",\"sensitivity\":\"internal\",\"id\":\"2fe1a819dcab234e1a4137de3cd1e36f\",\"collection\":\"memories\",\"origin\":\"memory\",\"scope\":{\"workspace_id\":\"ws-a\",\"project_id\":\"proj-a\"},\"status\":\"active\",\"revision\":2,\"text\":\"Amounts are integer cents; partial-cent charges round down.\",\"sources\":[{\"span\":{\"content_hash\":\"074459b420e795562e070833ba31673ce8f359e7800aa0d399be96f6aa0f747e\",\"start\":0,\"end\":59},\"source_id\":\"47d8b837de06223d632eecb7ded5f75e\",\"locator\":\"original\"}],\"updated_at\":\"2026-10-15T10:22:50.044Z\",\"trust\":1,\"reasons\":[\"exact_keyword\"],\"authority\":\"data_only_untrusted\"}]}",
+    "tokens_used": 321,
+    "token_encoding": "cl100k_base",
+    "context_id": "ccfe8a96d78e1e371c9c4f1256c5d4d1",
+    "authority": "data_only_untrusted",
+    "items": [
+      {
+        "trust_level": "user_verified",
+        "generator_model": "synthetic-host",
+        "created_by": "bench-a",
+        "created_at": "2026-10-15T10:22:50.019Z",
+        "digest": "e2eb812b23f767906a4d7567bf6876d25b701181a513ddd313bd22ca85b10733",
+        "source_event_id": "47d8b837de06223d632eecb7ded5f75e",
+        "verification_status": "verified",
+        "effective_at": "2026-10-15T10:22:50.019Z",
+        "kind": "semantic",
+        "sensitivity": "internal",
+        "id": "2fe1a819dcab234e1a4137de3cd1e36f",
+        "collection": "memories",
+        "origin": "memory",
+        "scope": {
+          "workspace_id": "ws-a",
+          "project_id": "proj-a"
+        },
+        "status": "active",
+        "revision": 2,
+        "text": "Amounts are integer cents; partial-cent charges round down.",
+        "sources": [
+          {
+            "span": {
+              "content_hash": "074459b420e795562e070833ba31673ce8f359e7800aa0d399be96f6aa0f747e",
+              "start": 0,
+              "end": 59
+            },
+            "source_id": "47d8b837de06223d632eecb7ded5f75e",
+            "locator": "original"
+          }
+        ],
+        "updated_at": "2026-10-15T10:22:50.044Z",
+        "trust": 1,
+        "reasons": [
+          "exact_keyword"
+        ],
+        "authority": "data_only_untrusted"
+      }
+    ]
+  },
+  "limitation": "admin database connection; RLS not asserted in this benchmark",
+  "machine_setup_seconds": 0.276059623,
+  "retrieval_ms": 13.511,
+  "returned_rule_ids": [
+    "2fe1a819dcab234e1a4137de3cd1e36f"
+  ],
+  "source_ids": [
+    "47d8b837de06223d632eecb7ded5f75e"
+  ],
+  "storage": "fresh-postgres-database",
+  "text": "Amounts are integer cents; partial-cent charges round down."
+}

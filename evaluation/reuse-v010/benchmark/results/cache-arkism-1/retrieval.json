@@ -1,0 +1,63 @@
+{
+  "approval": "explicit-user-approval-of-five-synthetic-facts",
+  "authorization": "distinct-A-B-human-bearer-tokens",
+  "context": {
+    "context_data": "{\"authority\":\"data_only_untrusted\",\"items\":[{\"trust_level\":\"user_verified\",\"generator_model\":\"synthetic-host\",\"created_by\":\"bench-a\",\"created_at\":\"2026-10-15T10:24:45.402Z\",\"digest\":\"8b45b894fd4f10d3b66dec904ce06f2ded35dfdbca9fba0a14722de3741b482e\",\"source_event_id\":\"e4981b41ce2358d58e31c7cd24cd362e\",\"verification_status\":\"verified\",\"effective_at\":\"2026-10-15T10:24:45.402Z\",\"kind\":\"semantic\",\"sensitivity\":\"internal\",\"id\":\"858da3473e759e24542986521aa10e77\",\"collection\":\"memories\",\"origin\":\"memory\",\"scope\":{\"workspace_id\":\"ws-a\",\"project_id\":\"proj-a\"},\"status\":\"active\",\"revision\":2,\"text\":\"Zero TTL means do not cache; positive TTL stays unchanged.\",\"sources\":[{\"span\":{\"content_hash\":\"cca9c6cb546c37e6cac4de020604b6d4d1cef5e71797b9a0d68b6e32cb467f32\",\"start\":0,\"end\":58},\"source_id\":\"e4981b41ce2358d58e31c7cd24cd362e\",\"locator\":\"original\"}],\"updated_at\":\"2026-10-15T10:24:45.423Z\",\"trust\":1,\"reasons\":[\"exact_keyword\"],\"authority\":\"data_only_untrusted\"}]}",
+    "tokens_used": 329,
+    "token_encoding": "cl100k_base",
+    "context_id": "002129bd8abc60dabb259d863d287fc8",
+    "authority": "data_only_untrusted",
+    "items": [
+      {
+        "trust_level": "user_verified",
+        "generator_model": "synthetic-host",
+        "created_by": "bench-a",
+        "created_at": "2026-10-15T10:24:45.402Z",
+        "digest": "8b45b894fd4f10d3b66dec904ce06f2ded35dfdbca9fba0a14722de3741b482e",
+        "source_event_id": "e4981b41ce2358d58e31c7cd24cd362e",
+        "verification_status": "verified",
+        "effective_at": "2026-10-15T10:24:45.402Z",
+        "kind": "semantic",
+        "sensitivity": "internal",
+        "id": "858da3473e759e24542986521aa10e77",
+        "collection": "memories",
+        "origin": "memory",
+        "scope": {
+          "workspace_id": "ws-a",
+          "project_id": "proj-a"
+        },
+        "status": "active",
+        "revision": 2,
+        "text": "Zero TTL means do not cache; positive TTL stays unchanged.",
+        "sources": [
+          {
+            "span": {
+              "content_hash": "cca9c6cb546c37e6cac4de020604b6d4d1cef5e71797b9a0d68b6e32cb467f32",
+              "start": 0,
+              "end": 58
+            },
+            "source_id": "e4981b41ce2358d58e31c7cd24cd362e",
+            "locator": "original"
+          }
+        ],
+        "updated_at": "2026-10-15T10:24:45.423Z",
+        "trust": 1,
+        "reasons": [
+          "exact_keyword"
+        ],
+        "authority": "data_only_untrusted"
+      }
+    ]
+  },
+  "limitation": "admin database connection; RLS not asserted in this benchmark",
+  "machine_setup_seconds": 0.204019235,
+  "retrieval_ms": 11.12,
+  "returned_rule_ids": [
+    "858da3473e759e24542986521aa10e77"
+  ],
+  "source_ids": [
+    "e4981b41ce2358d58e31c7cd24cd362e"
+  ],
+  "storage": "fresh-postgres-database",
+  "text": "Zero TTL means do not cache; positive TTL stays unchanged."
+}
