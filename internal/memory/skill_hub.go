@@ -222,10 +222,11 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 	if (in.TrialID != "" && (!validRunLabel(in.TrialID, 128) || !trialRuntime(in.Runtime) || len(in.Refs) != 1)) || (in.TrialID == "" && in.Runtime != "") || !validScope(in.Scope) || len(in.Refs) == 0 || len(in.Refs) > skillResolveRefMax {
 		return out, ErrInvalid
 	}
-	if _, err := s.authorize(ctx, token, "read:skill_versions", in.Scope, "", ""); err != nil {
+	actor, err := s.authorize(ctx, token, "read:skill_versions", in.Scope, "", "")
+	if err != nil {
 		return out, err
 	}
-	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		for _, ref := range in.Refs {
 			var item ResolvedSkill
 			var err error
@@ -236,6 +237,24 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 			}
 			if err != nil {
 				return err
+			}
+			// Scope-level permission does not imply permission to publish each
+			// resolved parent, version and source. Match direct-read policy and
+			// keep the caller identity stable across all decisions.
+			if item.Error == "" {
+				for _, resource := range []Ref{
+					{Collection: colSkills, ID: item.SkillID},
+					{Collection: colSkillVersions, ID: item.VersionID},
+					{Collection: "sources", ID: item.Provenance.SourceID},
+				} {
+					d, e := s.authorize(ctx, token, "read:"+resource.Collection, in.Scope, resource.ID, "")
+					if e != nil {
+						return e
+					}
+					if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
+						return ErrDenied
+					}
+				}
 			}
 			out.Items = append(out.Items, item)
 		}

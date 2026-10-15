@@ -1,0 +1,1292 @@
+{
+  "baseline_commit": "9379ee5f493716e1c80027c0beb4fd12283100cf",
+  "human_approval": "synthetic_role_fixture",
+  "storage": "isolated in-memory repository",
+  "policy": "token-keyed fake with per-resource denial wrapper",
+  "transport": "loopback TCP HTTP for new cross-agent and denial tests",
+  "live_agent_task_execution": false,
+  "input_tokens": null,
+  "output_tokens": null,
+  "actual_cost_usd": null,
+  "review_seconds": null,
+  "tests": [
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestCrossAgentSkillHTTPLifecycle",
+      "result": "pass",
+      "elapsed_seconds": 0.11
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillResolveHTTPHonorsResourceReadDenial/skills",
+      "result": "pass",
+      "elapsed_seconds": 0.02
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillResolveHTTPHonorsResourceReadDenial/skill_versions",
+      "result": "pass",
+      "elapsed_seconds": 0.02
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillResolveHTTPHonorsResourceReadDenial/sources",
+      "result": "pass",
+      "elapsed_seconds": 0.02
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillResolveHTTPHonorsResourceReadDenial",
+      "result": "pass",
+      "elapsed_seconds": 0.06
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPolicy",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationTrialPromotion",
+      "result": "pass",
+      "elapsed_seconds": 0.11
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPromotionRejectsMissingOrStaleEvidence/missing",
+      "result": "pass",
+      "elapsed_seconds": 0.09
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPromotionRejectsMissingOrStaleEvidence/cherry_pick",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPromotionRejectsMissingOrStaleEvidence/same_trace",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPromotionRejectsMissingOrStaleEvidence/failed",
+      "result": "pass",
+      "elapsed_seconds": 0.13
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPromotionRejectsMissingOrStaleEvidence/deleted",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPromotionRejectsMissingOrStaleEvidence/self",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPromotionRejectsMissingOrStaleEvidence/expired_policy",
+      "result": "pass",
+      "elapsed_seconds": 0.11
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPromotionRejectsMissingOrStaleEvidence/trial_bound",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAutomationPromotionRejectsMissingOrStaleEvidence",
+      "result": "pass",
+      "elapsed_seconds": 0.85
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillAvailabilityDeprecatesAndLimitsRuntimes",
+      "result": "pass",
+      "elapsed_seconds": 0.12
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillVersionsResolveAndUsage",
+      "result": "pass",
+      "elapsed_seconds": 0.03
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposal",
+      "result": "pass",
+      "elapsed_seconds": 0.15
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence/missing_plan",
+      "result": "pass",
+      "elapsed_seconds": 0.06
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence/missing_generator",
+      "result": "pass",
+      "elapsed_seconds": 0.06
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence/few",
+      "result": "pass",
+      "elapsed_seconds": 0.06
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence/duplicate",
+      "result": "pass",
+      "elapsed_seconds": 0.07
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence/stale",
+      "result": "pass",
+      "elapsed_seconds": 0.06
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence/different_lesson",
+      "result": "pass",
+      "elapsed_seconds": 0.06
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence/denied_read",
+      "result": "pass",
+      "elapsed_seconds": 0.07
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence/denied_parent_read",
+      "result": "pass",
+      "elapsed_seconds": 0.06
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence/source_revoked",
+      "result": "pass",
+      "elapsed_seconds": 0.05
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRejectsInvalidEvidence",
+      "result": "pass",
+      "elapsed_seconds": 0.55
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalErasure",
+      "result": "pass",
+      "elapsed_seconds": 0.07
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalRechecksBeforeWrite",
+      "result": "pass",
+      "elapsed_seconds": 0.07
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillProposalMetadataAndPrivacy",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialCannotCherryPickIndependentOutcomes",
+      "result": "pass",
+      "elapsed_seconds": 0.11
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialFreshComparisonAndPromotion",
+      "result": "pass",
+      "elapsed_seconds": 0.15
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialMonitorDisablesFailedPromotionWithoutInventingBaseline",
+      "result": "pass",
+      "elapsed_seconds": 0.12
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialMonitorIndependentFailureAndAtomicAudit/independent",
+      "result": "pass",
+      "elapsed_seconds": 0.12
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialMonitorIndependentFailureAndAtomicAudit/model_self",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialMonitorIndependentFailureAndAtomicAudit/audit_failure",
+      "result": "pass",
+      "elapsed_seconds": 0.11
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialMonitorIndependentFailureAndAtomicAudit",
+      "result": "pass",
+      "elapsed_seconds": 0.32
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialMonitorRestoresOnlyValidatedBaseline",
+      "result": "pass",
+      "elapsed_seconds": 0.11
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialObservationRequiresIndependentOutcomes",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialObservationStopsRegressionAtomically/stop",
+      "result": "pass",
+      "elapsed_seconds": 0.09
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialObservationStopsRegressionAtomically/rollback",
+      "result": "pass",
+      "elapsed_seconds": 0.09
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialObservationStopsRegressionAtomically",
+      "result": "pass",
+      "elapsed_seconds": 0.18
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialOutcomeProducer",
+      "result": "pass",
+      "elapsed_seconds": 0.12
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialSchedulerLeaseAndRecovery",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialStatusReadOnlyDoesNotClaimOutcomes",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialStatusCanonicalTerminalStates/promoted",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialStatusCanonicalTerminalStates/expired",
+      "result": "pass",
+      "elapsed_seconds": 0.09
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialStatusCanonicalTerminalStates/stopped",
+      "result": "pass",
+      "elapsed_seconds": 0.09
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialStatusCanonicalTerminalStates/stopped_regression",
+      "result": "pass",
+      "elapsed_seconds": 0.09
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialStatusCanonicalTerminalStates/recovery_pending",
+      "result": "pass",
+      "elapsed_seconds": 0.09
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialStatusCanonicalTerminalStates/rolled_back",
+      "result": "pass",
+      "elapsed_seconds": 0.09
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialStatusCanonicalTerminalStates",
+      "result": "pass",
+      "elapsed_seconds": 0.55
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrialTerminalDistinguishesPromotionAndExpiration",
+      "result": "pass",
+      "elapsed_seconds": 0.18
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrial/new",
+      "result": "pass",
+      "elapsed_seconds": 2.29
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrial/existing",
+      "result": "pass",
+      "elapsed_seconds": 0.66
+    },
+    {
+      "artifact": "skills-fixed.jsonl",
+      "test": "TestSkillTrial",
+      "result": "pass",
+      "elapsed_seconds": 2.95
+    },
+    {
+      "artifact": "skills-regression.jsonl",
+      "test": "TestCrossAgentSkillHTTPLifecycle",
+      "result": "pass",
+      "elapsed_seconds": 0.1
+    },
+    {
+      "artifact": "skills-regression.jsonl",
+      "test": "TestSkillResolveHTTPHonorsResourceReadDenial/skills",
+      "result": "pass",
+      "elapsed_seconds": 0.02
+    },
+    {
+      "artifact": "skills-regression.jsonl",
+      "test": "TestSkillResolveHTTPHonorsResourceReadDenial/skill_versions",
+      "result": "pass",
+      "elapsed_seconds": 0.02
+    },
+    {
+      "artifact": "skills-regression.jsonl",
+      "test": "TestSkillResolveHTTPHonorsResourceReadDenial/sources",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "skills-regression.jsonl",
+      "test": "TestSkillResolveHTTPHonorsResourceReadDenial",
+      "result": "pass",
+      "elapsed_seconds": 0.05
+    },
+    {
+      "artifact": "skills-regression.jsonl",
+      "test": "TestSkillResolveRejectsChangedReaderIdentity/principal",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "skills-regression.jsonl",
+      "test": "TestSkillResolveRejectsChangedReaderIdentity/role",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "skills-regression.jsonl",
+      "test": "TestSkillResolveRejectsChangedReaderIdentity",
+      "result": "pass",
+      "elapsed_seconds": 0.02
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestAgentKitPlanAndApply",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRouteSkillsOffersMCPAndPluginsWithKindAndState",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRedirectIsReplayedOnTheCLILoopback",
+      "result": "pass",
+      "elapsed_seconds": 4.03
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestAFailedSignInIsReported",
+      "result": "pass",
+      "elapsed_seconds": 3.02
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestOpenCodeAndCursorMCPSwitchAndAdd",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsSwitchOffIntoStashAndBackExactly/gemini",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsSwitchOffIntoStashAndBackExactly/zcode",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsSwitchOffIntoStashAndBackExactly/grok",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsSwitchOffIntoStashAndBackExactly",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsRemoveAMiddleEntryAndKeepTheRest",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsTakeAnotherAgentsDefinition/gemini",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsTakeAnotherAgentsDefinition/gemini#01",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsTakeAnotherAgentsDefinition/zcode",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsTakeAnotherAgentsDefinition/grok",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFileAgentsTakeAnotherAgentsDefinition",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestAbsentAgentFoldersAreLeftAlone",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestMalformedFilesAreRefusedUntouched",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestServerListReportsTheFileAgents",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestAddServerWritesGeminiZcodeAndGrok",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestTargetsNeverCarryArgumentsOrCredentials",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestCodexAddArguments",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestUnsupportedAgentsAndBadNamesFailWithoutRunningAnything",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFoundAgentsSkillCountsAndOwnerChanges",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestAddsWithTheAgentsCLIAndRefusesDuplicates",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestCodexLoginMark",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLoginRunsInItsOwnUnitUnderSystemd",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestAKilledSignInStopsBlockingAfterTwentyMinutes",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestErrorTextNeverCarriesTheRedirect",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPluginCaptureIsBoundedAndImmutable",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPluginScopeAndHashOnlyCompanions",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestTotalBudgetTurnsRemainingTextIntoHashOnly",
+      "result": "pass",
+      "elapsed_seconds": 0.02
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestUnsafeOrIncompleteCaptureFails",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestInventoryBoundaryIsCheckedAfterNormalizing",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLinkedAncestorIsNotFollowed",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLinkedFolderIsRefused",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestImportRechecksScanSnapshot",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestCodeGraphToolsAskTheServerAndStayData",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestUnifiedDiffMatchesPython",
+      "result": "pass",
+      "elapsed_seconds": 0.07
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestExpiryCutoffAndDryRun",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestExpiryBoundedBatchesAndFixedCutoff",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestExpiryRejectsRedirectErrorsAndBadResponses",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestExpiryCLISuppressesFailureAfterPriorCommit",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestHubGoldens",
+      "result": "pass",
+      "elapsed_seconds": 0.02
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestConcurrentStoresDoNotCollide",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestTrialIsOnlineOnlyAndPreservesNormalCache",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestVersionsOfflineCacheAndProjection",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestHubErrorDiscardsCacheAndDecodeErrorsPropagate",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestFailedSwapKeepsPreviousCopy",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRequirementsAreNotPermissionAndUsageCodes",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestCanonicalModel",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestInventoryDedupAndImporter",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestImportSkipsSymlinksAndHashesContent",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestImportPreservesCRLFBytes",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestImportDryRunNeedsExactCatalog",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSearchKnowledgeToolCallsBindingSearchAndMarksData",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSearchKnowledgeToolProfileDefaultsAndValidation",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCNoTraceMeansNoRow",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCRecentSuccessIsNotFailing",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCLocalSkipDoesNotClearFailure",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCRetriedRememberClearsFailure",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCLastEventFailureIsFailing",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCPendingCountsOldSpoolFilesByEnqueueTime",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCSuccessAfterErrorIsNotThrottled",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCMarkIsThrottledAndErrorFlipsFailing",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCUnknownOriginIsIgnored",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestDeploysServerPinNotLocalFolder",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestHashOnlyMismatchKeepsPreviousCopy",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestUserEditsAndForeignFoldersArePreserved",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestUnpinnedOrPluginVersionsAreNotDeployed",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRefusedSkillRemovesOnlyUneditedCopy",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestAllRefusedRunRemovesNothing",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestProjectCheckDoesNotWrite",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestParseTheCIComment",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSettingsFileIsWrittenOnlyWhenItChanges",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestUnfinishedReviewIsFailed",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPullItemFromFakeGH",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPinnedBytesWithoutLocalFolderAndOfflineAlias",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRawVersionIDUsesPinnedResolve",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestHashOnlyCompanionIsListedButNeverServed",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestOnlineUnavailabilityCannotReappearFromCache",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestBundleCorruptionIsRejectedOnlineAndInCache",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestTrialFileReadsRecheckLifetimeAndNeverCache",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLegacyTrialNeverReadsUnversionedLocalFiles",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRecallDigestAsksForApprovedTopicDigests",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRouterGoldenSessionAndTools",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRecallAtPreservesUnknownsWithoutUse",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRecallRelationLaneAndInvalidAnchors",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRecallKeepsConflictSourceAndReplacement",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestMemoryUseFollowsSessionLink",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestArchivesAndSourcesDoNotAcknowledgeUse",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestReceiveOnlyBlocksSkillWritesNotMemory",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestToolContractStatusAndVersionPattern",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRecallByIDOrQuery",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestWorkflowTools",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRememberIsACandidateAndReportsRejection",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRouteSkills",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLoadSkillResolvesThroughTheHub",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLoadSkillListsBundleAndReadsStayInside",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestOnlyTheWindowsMarkerMakesAPC",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPCClientsLeaveAMarkAndErrorsFlipIt",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLoadSkillKeepsTheSessionPin",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLoadSkillServesTheSessionStartVersion",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLoadSkillRefusesABodyOverBudget",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestBuiltinRulesFindEachRiskWithFileAndLine",
+      "result": "pass",
+      "elapsed_seconds": 0.02
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestBuiltinRulesLeaveOrdinarySkillsAlone",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestBuiltinQualityScore",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestBuiltinScanRunsWithoutToolsAndNeverLeaksMatchedText",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestBuiltinScanSkipsUnchangedFolders",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLabelsStayWithinTheServerLimit",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestNothingIsReportedBeforeTheFirstScan",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestScanKeepsScoresAndLabelsButNeverMatchedText",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestUnchangedFoldersAreNotRescanned",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestABrokenScannerIsAnErrorNotAPass",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestBuiltinFindingsAreAddedNextToTheNvidiaScanners",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestParseSkillSource",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallPreviewPinsTheCommitAndListsSkills",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallWritesPinnedFilesWithPlainPermissions",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources/symlink",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources/hardlink",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources/escape",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources/too_many",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources/bad_name",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources/unpinned",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources/link_away",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources/too_big",
+      "result": "pass",
+      "elapsed_seconds": 0.37
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources/no_skill",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillInstallRefusesUnsafeSources",
+      "result": "pass",
+      "elapsed_seconds": 0.41
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestMCPAddWarnsWhenTheProgramIsMissing",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestJudgeLabelsMapBackToRedGreenInBothOrders",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestCompanionChangesAreShown",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestOnlyBodyIdenticalPinningCandidatesAreApproved",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRuntimeSpecificSkillsAreUnsupportedElsewhere",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestClaudeAIPluginSkillIsNamedByPluginJSON",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestStableIDsAcrossRuntimesAndPluginVersions",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestNewVersionKeepsReviewedRulesAndLogsChange",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestAnalysisWithoutLLMURLAbortsTheRun",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSyncDetectsBundleOnlyChangeAndDoesNotRepeatCandidate",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestOldVersionComparisonIncludesBundle",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestCallsFromTranscripts",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRiskyAndCachedToolLists",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestStdioToolsListsAServer",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestPluginContents",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestSkillUpdatesAndPull",
+      "result": "pass",
+      "elapsed_seconds": 0.28
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestLongNonASCIIRemoteIsCutInBytesAndTheUpstreamRemoteIsUsed",
+      "result": "pass",
+      "elapsed_seconds": 0.19
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRecheckForgetsTheCacheAndALocalUpstreamHasNoRemote",
+      "result": "pass",
+      "elapsed_seconds": 0.09
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestRemoteAddressesLoseCredentials",
+      "result": "pass",
+      "elapsed_seconds": 0
+    },
+    {
+      "artifact": "host-skills.jsonl",
+      "test": "TestReadWikiToolReviewedDataOnly",
+      "result": "pass",
+      "elapsed_seconds": 0.01
+    }
+  ]
+}
