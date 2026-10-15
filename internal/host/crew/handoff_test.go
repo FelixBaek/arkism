@@ -398,3 +398,74 @@ func TestHandoffPinsAllAuthorizedEvidenceBeforeReservation(t *testing.T) {
 		})
 	}
 }
+
+func TestHandoffRejectedResultFallsBackToMetadataWithoutRerun(t *testing.T) {
+	store := newHandoffStore()
+	input := handoffInput(t)
+	calls := 0
+	var events []string
+	request := func(path string, p map[string]any) (map[string]any, error) {
+		if strings.HasSuffix(path, "/save") && p["expected_revision"] != 0 {
+			events = append(events, sOr(p["event_id"]))
+			if _, hasOutput := p["package"].(map[string]any)["completed"]; hasOutput {
+				return nil, errors.New("result rejected")
+			}
+			if p["expected_revision"] != 1 {
+				t.Fatal("fallback rebased onto another writer", p["expected_revision"])
+			}
+		}
+		return store.request(path, p)
+	}
+	run := func(map[string]any) (map[string]any, error) {
+		calls++
+		return map[string]any{"ok": true, "output": "Rejected result must not be copied into fallback metadata"}, nil
+	}
+	out, err := runHandoff(strings.NewReader(input), request, run)
+	if err != nil || out["ok"] != false || out["status"] != "blocked" || calls != 1 {
+		t.Fatal(out, err, calls)
+	}
+	pkg := store.saved["child"]["package"].(map[string]any)
+	if _, exists := pkg["completed"]; exists || strings.Contains(dumpLine(pkg), "Rejected result must") {
+		t.Fatal("result body persisted in fallback")
+	}
+	if len(events) != 2 || events[0] == events[1] || !strings.HasSuffix(events[1], "-result-withheld") {
+		t.Fatal(events)
+	}
+	if _, err := runHandoff(strings.NewReader(input), request, run); err == nil || calls != 1 {
+		t.Fatal("replayed model execution", err, calls)
+	}
+}
+
+func TestHandoffAmbiguousCommittedResultCannotBeOverwrittenByFallback(t *testing.T) {
+	store := newHandoffStore()
+	originalErr := errors.New("commit response lost")
+	calls := 0
+	fallbacks := 0
+	request := func(path string, p map[string]any) (map[string]any, error) {
+		if strings.HasSuffix(path, "/save") && strings.HasSuffix(sOr(p["event_id"]), "-result") {
+			if _, err := store.request(path, p); err != nil {
+				t.Fatal(err)
+			}
+			return nil, originalErr
+		}
+		if strings.HasSuffix(sOr(p["event_id"]), "-result-withheld") {
+			fallbacks++
+			if p["expected_revision"] != 1 {
+				t.Fatal("unsafe fallback revision")
+			}
+		}
+		return store.request(path, p)
+	}
+	out, err := runHandoff(strings.NewReader(handoffInput(t)), request, func(map[string]any) (map[string]any, error) {
+		calls++
+		return map[string]any{"ok": true, "output": "Already committed result"}, nil
+	})
+	if !errors.Is(err, originalErr) || out != nil || calls != 1 || fallbacks != 1 {
+		t.Fatal(out, err, calls, fallbacks)
+	}
+	pkg := store.saved["child"]["package"].(map[string]any)
+	if pkg["status"] != "completed" || store.saved["child"]["revision"] != 2 {
+		t.Fatal("fallback overwrote committed state", store.saved["child"])
+	}
+	eq(t, pkg["completed"], []string{"Already committed result"})
+}

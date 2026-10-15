@@ -224,7 +224,18 @@ func runHandoff(input io.Reader, request host.Requester, run runFn) (map[string]
 	}
 	saved, err := save(reserved["revision"], "-result")
 	if err != nil {
-		return nil, fmt.Errorf("handoff ran but result persistence failed; do not rerun ID %s: %w", in.ID, err)
+		originalErr := err
+		// Never retry the model or overwrite a result whose commit response was
+		// lost. The original reservation revision fences this metadata-only save:
+		// if the result (or another writer) committed, the fallback conflicts.
+		delete(child, "completed")
+		child["status"] = "blocked"
+		child["next_steps"] = []string{"Execution finished, but its result could not be stored. Output was withheld; inspect the workspace before creating a new handoff ID."}
+		saved, err = save(reserved["revision"], "-result-withheld")
+		if err != nil {
+			return nil, fmt.Errorf("handoff ran but result persistence failed; do not rerun ID %s: %w", in.ID, originalErr)
+		}
+		success = false
 	}
 	return map[string]any{"ok": success, "id": in.ID, "revision": saved["revision"], "sender": in.Sender, "recipient": in.Recipient, "session_id": in.SessionID, "parent_work_id": in.ParentWorkID, "parent_revision": parent["revision"], "status": child["status"], "source_refs": child["source_refs"], "authority": "data_only_untrusted", "verification_status": "unverified", "result_tool": "resume_work"}, nil
 }
