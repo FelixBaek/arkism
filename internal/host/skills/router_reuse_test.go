@@ -14,6 +14,8 @@ func TestRecallByIDWithholdsUnavailableMemory(t *testing.T) {
 		{"conflicted", `"status":"conflicted","approved_by":"human"`},
 		{"superseded", `"status":"superseded","approved_by":"human"`},
 		{"unapproved", `"status":"active"`},
+		{"invalid_approver", `"status":"active","approved_by":123`},
+		{"quarantined", `"status":"active","approved_by":"human","privacy_quarantined":true`},
 		{"expired_clock", `"status":"active","approved_by":"human","expires_at":"2000-01-01T00:00:00Z"`},
 		{"future", `"status":"active","approved_by":"human","effective_at":"2999-01-01T00:00:00Z"`},
 		{"malformed_expiry", `"status":"active","approved_by":"human","expires_at":"invalid"`},

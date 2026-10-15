@@ -660,7 +660,8 @@ func validAnchor(v any) bool {
 // currentRecallMemory fences the history-capable GET endpoint before its body
 // enters a fresh agent context. Search already applies this fence server-side.
 func currentRecallMemory(m map[string]any, now time.Time) bool {
-	if m["status"] != "active" || strings.TrimSpace(str(m["approved_by"])) == "" || m["approved_by"] == nil || truthy(m["content_erased"]) || truthy(m["privacy_quarantined"]) {
+	approvedBy, ok := m["approved_by"].(string)
+	if m["status"] != "active" || !ok || strings.TrimSpace(approvedBy) == "" || truthy(m["content_erased"]) || truthy(m["privacy_quarantined"]) {
 		return false
 	}
 	for _, key := range []string{"effective_at", "expires_at"} {
