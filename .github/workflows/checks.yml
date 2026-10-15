@@ -76,6 +76,9 @@ jobs:
           GOOS=windows go vet ./...
           GOOS=darwin go vet ./...
       - name: Unit and Postgres integration tests (race)
+        env:
+          # Enable the real pg_dump/pg_restore roundtrip in isolated test databases.
+          POSTGRES_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: go test -race -tags=integration -count=1 ./...
       - name: Core boundary coverage (90% per file)
         run: |
