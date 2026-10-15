@@ -210,9 +210,12 @@ func sendCapture(eventType, eventID, sid string, occurredAt any, claims []any, o
 	if started == 0 {
 		started = monotonic()
 	}
-	res, err := capPost("/v1/capture", host.Obj{{Key: "scope", Value: capScope()}, {Key: "generator", Value: gen}, {Key: "claims", Value: claims},
-		{Key: "event", Value: host.Obj{{Key: "id", Value: eventID}, {Key: "type", Value: eventType}, {Key: "origin_product", Value: origin},
-			{Key: "session_id", Value: head(sid, 120)}, {Key: "occurred_at", Value: occurredAt}}}}, 60*time.Second)
+	body := host.Obj{{Key: "scope", Value: capScope()}, {Key: "generator", Value: gen}, {Key: "claims", Value: claims}}
+	if sessionProcessorOn() { // the server accepts automated capture only from a service role
+		body = append(body, host.KV{Key: "automated", Value: true})
+	}
+	res, err := capPost("/v1/capture", append(body, host.KV{Key: "event", Value: host.Obj{{Key: "id", Value: eventID}, {Key: "type", Value: eventType}, {Key: "origin_product", Value: origin},
+		{Key: "session_id", Value: head(sid, 120)}, {Key: "occurred_at", Value: occurredAt}}}), 60*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -316,6 +319,9 @@ func process(job map[string]any, persist func() error) (err error) {
 	if allInternal {
 		metric(kv("event", "capture_skipped"), kv("reason", "codex_ambient_prompt"))
 		return nil
+	}
+	if sessionProcessorOn() {
+		return sessionProcess(job, persist, origin)
 	}
 	started := monotonic()
 	sid := job["session_id"].(string) // KeyError/TypeError surface through recovered
@@ -576,6 +582,19 @@ func drain(allWorkOrigins bool) error {
 		}
 		code := errorCode(err)
 		sid := head(str(job["session_id"]), 12)
+		if sessionProcessorOn() && (errors.Is(err, errSessionPending) || code == "429") {
+			wait := 60.0
+			if code == "429" {
+				wait = 3600
+			}
+			job["archive_retry_after"] = timeNow() + wait
+			job["last_error"] = code
+			if err := save(); err != nil {
+				return err
+			}
+			metric(kv("event", "session_processor_pending"), kv("session", sid), kv("error", code))
+			continue
+		}
 		if code == "archive_prompt_pending" {
 			if queued, ok := archiveTimestamp(job["queued_at"]); ok && queued != 0 && queued+archiveTTL > timeNow() {
 				job["archive_retry_after"] = timeNow() + 60

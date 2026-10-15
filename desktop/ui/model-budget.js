@@ -24,6 +24,8 @@ window.ArkismModelBudget = (() => {
         }
         if (doc.daily_limit_pico_usd > 0) rows.append(el("dt", "", "오늘 상한"), el("dd", "", dollars(doc.daily_limit_pico_usd)));
         rows.append(el("dt", "", "미정산 예약"), el("dd", "", dollars(doc.outstanding_pico_usd)));
+        // Subscription CLI calls are recorded only; they never count against the API budget above.
+        if (["subscription_requests", "subscription_estimated_pico_usd"].every(k => Number.isSafeInteger(doc[k]) && doc[k] >= 0)) rows.append(el("dt", "", "구독"), el("dd", "", `${doc.subscription_requests}회 · API 환산 ${dollars(doc.subscription_estimated_pico_usd)} (예산 밖)`));
         body.replaceChildren(el("p", "meta", `${doc.month} · UTC 기준`), rows,
           el("p", "meta", "사용 확정액과 미정산 예약을 함께 계산해요. 실제 청구 금액과 다를 수 있어요."));
         body.append(el("p", "meta", doc.daily_soft_target_exceeded ? "오늘 목표를 넘었어요. 목표 초과만으로 처리를 차단하지 않으며 월 예산과 별도 설정한 상한은 계속 적용해요." : "오늘 목표는 지출 추이를 보는 기준이에요. 월 예산과 별도 설정한 상한은 계속 적용해요."));

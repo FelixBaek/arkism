@@ -4576,6 +4576,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0} · UTC 기준": "{0} · UTC",
+  "{0}회 · API 환산 {1} (예산 밖)": "{0} calls · {1} at API prices (outside the budget)",
   "프롬프트 버전   {0}": "Prompt version   {0}",
   "처리 버전   {0}": "Processor version   {0}",
   "원래 실행 에이전트   {0} · 실행기가 기록한 정보": "Original agent   {0} · as recorded by the runner",

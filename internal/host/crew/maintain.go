@@ -51,7 +51,7 @@ func maxPairs() int     { return envInt("ARKISM_MAINTAIN_MAX_PAIRS", 30) }      
 func maxProposals() int { return envInt("ARKISM_MAINTAIN_MAX_PROPOSALS", 10) }  // what a person sees per morning
 func useLLM() bool      { return host.Env("ARKISM_MAINTAIN_LLM", "1") == "1" }
 func maintainModel() string {
-	return host.Env("ARKISM_MAINTAIN_MODEL", "sonnet")
+	return host.Env("ARKISM_MAINTAIN_MODEL", host.HarnessCLIModel("consolidator", "sonnet"))
 }
 
 const (

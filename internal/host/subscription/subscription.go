@@ -641,7 +641,8 @@ func claudeOutput(configDir, executable string, timeout time.Duration) (string, 
 			env = append(env, kv)
 		}
 	}
-	cmd := exec.Command(executable, "-p", "/usage")
+	// No settings sources: the probe runs every minute and must not fire the user's SessionStart hooks
+	cmd := exec.Command(executable, "-p", "/usage", "--setting-sources", "")
 	cmd.Env = append(env, "CLAUDE_CONFIG_DIR="+resolve(configDir))
 	cmd.Dir = configDir
 	out, errs, code, err := runBounded(cmd, true, true, MaxBytes, timeout)

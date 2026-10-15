@@ -419,9 +419,7 @@ func codexQuotas(home string) []any {
 func keyRow(pub host.Obj) host.Obj {
 	get := func(k string) any { v, _ := pub.Get(k); return v }
 	row := host.Obj{{Key: "id", Value: get("id")}, {Key: "name", Value: get("name")}, {Key: "last4", Value: get("last4")}, {Key: "base_url", Value: get("base_url")}}
-	if st := get("storage"); st != nil {
-		row = append(row, host.KV{Key: "storage", Value: st}) // "keyring" or "file"
-	}
+	// No "storage": the server's ProviderKey rejects unknown fields, so the whole report would fail
 	if b := get("monthly_budget_usd"); b != nil {
 		row = append(row, host.KV{Key: "monthly_budget_usd", Value: b})
 	}

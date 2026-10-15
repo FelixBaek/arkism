@@ -300,7 +300,7 @@ func TestFetchClaudeArgvEnvAndOutput(t *testing.T) {
 	f := newFolder(t)
 	f.claudeLogin(nil)
 	names := []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "AUTH_TOKEN", "ANTHROPIC_BASE_URL", "BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN"}
-	checks := `[ "$#" = 2 ] && [ "$1" = -p ] && [ "$2" = /usage ] || exit 3
+	checks := `[ "$#" = 4 ] && [ "$1" = -p ] && [ "$2" = /usage ] && [ "$3" = --setting-sources ] && [ -z "$4" ] || exit 3
 [ "$CLAUDE_CONFIG_DIR" = "$(pwd -P)" ] || exit 4
 `
 	for _, name := range names {
