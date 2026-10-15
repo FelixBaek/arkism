@@ -70,7 +70,7 @@ def count_event(row, groups, sessions, field_counts):
 
 def summarize(lines, until=None):
     """Counts are log occurrences, never inferred candidate or unique-job counts."""
-    cutoff = timestamp(until) if until else None
+    cutoff = timestamp(until) if until is not None else None
     groups = Counter()
     sessions = defaultdict(set)
     field_counts = Counter()

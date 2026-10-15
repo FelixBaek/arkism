@@ -55,5 +55,24 @@ class MetricsAuditTests(unittest.TestCase):
             summarize([], "2026-10-14T14:00:00")
 
 
+    def test_empty_cutoff_rejected_in_api_and_cli(self):
+        """An empty shell variable must not silently widen the audit time range."""
+        import pathlib
+        import subprocess
+        import sys
+        import tempfile
+        with self.assertRaises(ValueError):
+            summarize([], "")
+        self.assertIsNone(summarize([])["until"])
+        with tempfile.TemporaryDirectory() as directory:
+            metrics = pathlib.Path(directory) / "metrics.jsonl"
+            metrics.write_text(line(error="evidence_missing"))
+            result = subprocess.run(
+                [sys.executable, str(pathlib.Path(__file__).with_name("capture_metrics_audit.py")),
+                 str(metrics), "--until", ""], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertEqual(result.stdout, "")
+
+
 if __name__ == "__main__":
     unittest.main()
