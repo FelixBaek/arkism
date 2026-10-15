@@ -235,6 +235,25 @@ func TestHandoffWithholdsResultWhenParentChangesDuringExecution(t *testing.T) {
 	}
 }
 
+func TestHandoffWithholdsResultRejectedByCheckpointValidation(t *testing.T) {
+	store := newHandoffStore()
+	request := func(path string, p map[string]any) (map[string]any, error) {
+		if pkg, ok := p["package"].(map[string]any); ok && pkg["completed"] != nil {
+			return nil, errors.New("invalid")
+		}
+		return store.request(path, p)
+	}
+	out, err := runHandoff(strings.NewReader(handoffInput(t)), request, func(map[string]any) (map[string]any, error) {
+		return map[string]any{"ok": true, "output": "result rejected by secret scan"}, nil
+	})
+	if err != nil || out["ok"] != false || out["status"] != "blocked" {
+		t.Fatal(out, err)
+	}
+	if pkg := store.saved["child"]["package"].(map[string]any); pkg["status"] != "blocked" || pkg["completed"] != nil {
+		t.Fatal(pkg)
+	}
+}
+
 func TestHandoffWriteUsesCodexWorkspaceSandbox(t *testing.T) {
 	store := newHandoffStore()
 	var input map[string]any
