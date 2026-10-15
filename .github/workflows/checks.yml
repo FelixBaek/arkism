@@ -6,7 +6,6 @@ name: Checks
 # security is CodeQL default setup on the GitHub side.
 
 on:
-  workflow_call:
   push:
     branches: [main]
   pull_request:
@@ -16,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: checks-${{ github.workflow }}-${{ github.ref }}
+  group: checks-${{ github.ref }}
   # Supersede outdated PR runs; finish every main run.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
