@@ -1,0 +1,3 @@
+direction,actual_recall,task_correct,source_id_correct,preapproval_search_count,answer,evidence
+codex -> claude,True,True,False,0,"{'transformed_label': 'MiXeD', 'source_id': '7b6806cd838497757671451b89aa2751'}",direction-1-reader.jsonl
+claude -> codex,True,True,True,0,"{'cache_zero': False, 'positive_ttl': 15, 'source_id': '16d52af9761cb2be2f6cdfd56434bceb'}",direction-2-reader.jsonl

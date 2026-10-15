@@ -1,0 +1,18 @@
+[
+  {
+    "label": "direction-1-writer",
+    "agent": "codex",
+    "exit_code": 0,
+    "seconds": 25.954789386014454,
+    "provider_cost_usd": null,
+    "events_path": "direction-1-writer.jsonl",
+    "timeout": false,
+    "usage": {
+      "input_tokens": 43007,
+      "cached_input_tokens": 40448,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 147,
+      "reasoning_output_tokens": 0
+    }
+  }
+]
