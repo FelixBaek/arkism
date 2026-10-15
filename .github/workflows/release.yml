@@ -13,6 +13,14 @@ name: Release
 # Without them Windows SmartScreen and macOS Gatekeeper warn on first open (README explains).
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      publish_initial:
+        default: false
+        type: boolean
   push:
     tags: ["v*.*.*"]
   pull_request:
@@ -31,7 +39,7 @@ permissions:
   contents: read
 
 env:
-  VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version || '0.1.0' }}
+  VERSION: ${{ inputs.version || (github.event_name == 'push' && github.ref_name) || '0.1.0' }}
   # The app checks this address for latest.json and downloads the installer from it.
   ARKISM_UPDATE_FEED: https://github.com/${{ github.repository }}/releases/latest/download
 
@@ -45,6 +53,8 @@ jobs:
           [[ "$VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected version x.y.z'; exit 1; }
 
   windows:
+    permissions:
+      contents: read
     needs: validate
     runs-on: windows-2022
     timeout-minutes: 90
@@ -52,6 +62,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -75,6 +86,8 @@ jobs:
           if-no-files-found: error
 
   unix:
+    permissions:
+      contents: read
     needs: validate
     strategy:
       fail-fast: false
@@ -90,6 +103,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -137,7 +151,11 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'push' &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+       (inputs.publish_initial && inputs.version == '0.1.0' &&
+        github.ref == 'refs/heads/main' && github.repository == 'FelixBaek/arkism'))
     needs: [windows, unix]
     runs-on: ubuntu-24.04
     permissions:
@@ -155,9 +173,40 @@ jobs:
           sum="$(sha256sum "dist/$file" | cut -d' ' -f1)"
           printf '{"version":"%s","file":"%s","sha256":"%s"}\n' "$version" "$file" "$sum" > dist/latest.json
           ls -l dist
-      - name: Draft release
+      - name: Draft tag release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
             --title "Arkism ${VERSION#v}" --generate-notes dist/*
+      - name: Publish the verified initial release
+        if: inputs.publish_initial && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tag="v0.1.0"
+          # Never move an existing tag or publish binaries built from another commit.
+          refs="$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$tag")"
+          existing="$(jq -c --arg ref "refs/tags/$tag" '.[] | select(.ref == $ref)' <<< "$refs")"
+          if [ -n "$existing" ]; then
+            jq -e --arg sha "$RELEASE_SHA" '.object.type == "commit" and .object.sha == $sha' <<< "$existing" >/dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$RELEASE_SHA"
+          fi
+          releases="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | {tag_name, draft}')"
+          existing_release="$(jq -sc --arg tag "$tag" 'map(select(.tag_name == $tag)) | first // empty' <<< "$releases")"
+          if [ -n "$existing_release" ]; then
+            # A published release is immutable here; retries must not replace public assets.
+            if [ "$(jq -r .draft <<< "$existing_release")" != "true" ]; then
+              echo "Release already published for the verified commit."
+              exit 0
+            fi
+            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber dist/*
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" --draft --verify-tag \
+              --title "Arkism 0.1.0" --generate-notes dist/*
+          fi
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false
