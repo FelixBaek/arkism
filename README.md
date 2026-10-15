@@ -20,7 +20,7 @@ Claude Code, Codex, Gemini CLI and other agents each forget what you told them y
 **Who it is for:** people who use more than one AI coding agent every day and want them to share context, skills and limits, without sending their data to another cloud service.
 
 - Runs on your PC by default. No account, no Docker, no API key.
-- A memory written by an AI is not used until it is reviewed.
+- A memory extracted by an AI is not used until a person approves it. Even a quoted user statement waits for review.
 - Open source (MIT). Go server, Tauri desktop app.
 
 ## Screenshots
@@ -70,7 +70,7 @@ Want several PCs to share one Arkism? See [Server mode](#server-mode-optional).
 
 ## How it works
 
-**Memory.** While you work, Arkism watches the conversation through the agent's hooks. When something looks worth keeping (a decision, a preference, a fix that worked), it asks a small model to write it down as a *memory candidate*. The model runs through your own agent login (Claude by default). Candidates wait for review. A reviewed memory keeps a link to the session it came from. When you start a new session, Arkism adds the few memories that fit the current task to the agent's context, within a fixed size budget.
+**Memory.** While you work, Arkism watches the conversation through the agent's hooks. When something looks worth keeping (a decision, a preference, a fix that worked), it asks a small model to write it down as a *memory candidate*. The model runs through your own agent login (Claude by default). Candidates wait for a person to approve or reject them. Quoting something you said does not approve the model’s wording. Automated capture cannot approve on your behalf; you decide what to keep in the app. A reviewed memory keeps a link to the session it came from. When you start a new session, Arkism adds the few memories that fit the current task to the agent's context, within a fixed size budget.
 
 **Skills.** Skills are `SKILL.md` folders, the format Claude Code and other agents already use. Arkism keeps one shared copy of each skill, with versions and history, and installs it for every connected agent. Agents can also look up skills on demand through the Arkism MCP server. Arkism records which skills were used and how they did, and can suggest new skills from repeated work.
 

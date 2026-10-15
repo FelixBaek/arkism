@@ -14,17 +14,13 @@ import (
 // (Claude Code hooks, other agent events) only extract claims; privacy, scope,
 // dedupe and promotion live here so every client behaves the same way.
 //
-// Only a claim the user stated explicitly can be promoted, and only by a human
-// principal through the normal review gate. Model results and inferences stay
-// candidates; corrections never overwrite and are marked as conflicts.
+// Extraction never approves a claim, even with a human owner's credential or
+// basis=explicit_user. A person must review the resulting candidate separately.
+// Corrections never overwrite and are marked as conflicts.
 
 var captureEventTypes = []string{"turn_completed", "run_completed", "handoff_completed", "user_corrected_fact", "explicit_remember", "session_end", "backfill"}
 var captureKinds = []string{"user", "decision", "procedural", "lesson", "episodic", "semantic"}
 var captureBases = []string{"explicit_user", "assistant_result", "inferred"}
-
-// Kinds that describe what the user wants or decided; those are the only ones
-// a user's explicit statement may promote without a reviewer.
-var capturePromotableKinds = []string{"user", "decision", "procedural"}
 
 // A recalled memory is injected into every later prompt, so a claim that reads
 // like an order to the model (prompt injection carried in from a log, a web page
@@ -411,19 +407,12 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 			return item, e
 		}
 		return s.finishCaptureCorrection(ctx, token, in, c, scope, pointer, item)
-	case c.Basis != "explicit_user" || !slices.Contains(capturePromotableKinds, c.Kind):
-		item.Status, item.Reason = "candidate", "review_required"
-		return item, nil
 	case suspect:
 		item.Status, item.Reason = "candidate", "review_required:instruction_like"
 		return item, nil
 	}
-	if _, err = s.ReviewCandidate(ctx, token, cand.ID, CandidateReviewInput{Scope: scope, ExpectedRevision: cand.Revision, Action: "approve", byServer: true}); err != nil {
-		// Only a human principal passes the review gate; anything else waits.
-		item.Status, item.Reason = "candidate", "review_required:"+captureErrorCode(err)
-		return item, nil
-	}
-	item.Status, item.Reason, item.MemoryID = "accepted", "explicit_user_statement", cand.ID
+	// Authorship describes evidence, not consent to store the extracted wording.
+	item.Status, item.Reason = "candidate", "review_required"
 	return item, nil
 }
 

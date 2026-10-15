@@ -2,6 +2,16 @@
 // edit freely. strings: exact Korean → English. patterns: Korean with {0}… placeholders → English.
 window.ArkismI18nEN = {
  "strings": {
+  "고친 문장을 검토 대기에 넣어요. 검토 후 새 기억으로 승인할 수 있어요.": "The correction goes to review. You can approve it as a new memory after reviewing it.",
+  "검토 대기에 추가해요. 승인한 뒤 모든 에이전트가 자료로 써요.": "Added for review. Agents can use it after you approve it.",
+  "이미 수집한 내용이에요. 기억 목록에서 상태를 확인하세요.": "This was already captured. Check its status in the memory list.",
+  "검토 대기에 들어갔어요. 기억 › 검토 대기에서 승인하면 저장돼요.": "Added for review. Approve it in Memory › Pending review to save it.",
+  "기억 검토 규칙 보기": "How memory review works",
+  "새로 수집한 모든 기억": "Every newly captured memory",
+  "AI 역할": "AI's role",
+  "위험도 분류와 근거 정리": "Classify risk and organize evidence",
+  "사람 결정": "Your decision",
+  "승인·고쳐서 승인·거절": "Approve, edit and approve, or reject",
   "에이전트 연결": "Agent connections",
   "다시 연결 필요": "Reconnect needed",
   "끊기": "Disconnect",

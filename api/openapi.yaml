@@ -503,7 +503,7 @@
       "post": {
         "operationId": "captureClaims",
         "summary": "capture claims with optional exact archive provenance",
-        "description": "Claims remain candidates unless the existing human review gate authorizes promotion. Optional archive_messages must refer to safe live messages in the event session; explicit_user requires user-role messages. No retention renewal. Duplicate events/claims preserve existing provenance.",
+        "description": "Capture never approves claims, including explicit_user claims submitted with an owner token. A person must approve each candidate through a separate review request. Optional archive_messages must refer to safe live messages in the event session; explicit_user requires user-role messages. No retention renewal. Duplicate events/claims preserve existing provenance.",
         "requestBody": {
           "required": true,
           "content": {
@@ -516,7 +516,7 @@
         },
         "responses": {
           "200": {
-            "description": "Per-claim accepted, candidate, merged or rejected statuses; inspect every item."
+            "description": "Per-claim candidate, merged or rejected statuses; inspect every item."
           },
           "400": {
             "description": "Invalid capture event"
@@ -3623,7 +3623,7 @@
       }
     },
     "/v1/memory_candidates/{id}/classify": {
-      "post": {"summary": "Record a risk classification on a waiting memory candidate", "description": "ADR-0022: AI classifies, people approve. Needs classify:memory_candidates. Changes only the candidate's classification (risk high|medium|low, risk_reasons <=8, dup_hint); never its status or text. The extractor's evidence_span is kept. A principal with role classifier can do nothing else: approval paths require a human or service role, and Postgres refuses its other writes.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["scope", "expected_revision", "risk"], "properties": {"scope": {"$ref": "#/components/schemas/Scope"}, "expected_revision": {"type": "integer", "minimum": 1}, "risk": {"type": "string", "enum": ["high", "medium", "low"]}, "risk_reasons": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 1000}}, "dup_hint": {"type": "string", "maxLength": 2000}}}}}}, "responses": {"200": {"description": "The candidate with its new classification and revision"}, "400": {"description": "invalid_request"}, "403": {"description": "No classify:memory_candidates permission"}, "404": {"description": "not_found"}, "409": {"description": "Revision changed or candidate already decided"}}}
+      "post": {"summary": "Record a risk classification on a waiting memory candidate", "description": "ADR-0022: AI classifies, people approve. Needs classify:memory_candidates. Changes only the candidate's classification (risk high|medium|low, risk_reasons <=8, dup_hint); never its status or text. The extractor's evidence_span is kept. A principal with role classifier can do nothing else: approval paths require a human role, and Postgres refuses its other writes.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["scope", "expected_revision", "risk"], "properties": {"scope": {"$ref": "#/components/schemas/Scope"}, "expected_revision": {"type": "integer", "minimum": 1}, "risk": {"type": "string", "enum": ["high", "medium", "low"]}, "risk_reasons": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 1000}}, "dup_hint": {"type": "string", "maxLength": 2000}}}}}}, "responses": {"200": {"description": "The candidate with its new classification and revision"}, "400": {"description": "invalid_request"}, "403": {"description": "No classify:memory_candidates permission"}, "404": {"description": "not_found"}, "409": {"description": "Revision changed or candidate already decided"}}}
     },
     "/v1/memory_candidates/classification_report": {
       "get": {"summary": "How often people decided against the AI risk call", "description": "Needs review:memory_candidates. Counts the newest 1000 approved and 1000 rejected candidates per AI risk at decision time (none when unclassified), skipping decisions no person made (service review policies, capture auto-approval). overturned = approved while high, or rejected while low. Error rate per risk = overturned / decided.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "{decided: {risk: n}, overturned: {risk: n}}"}, "403": {"description": "No review:memory_candidates permission"}}}

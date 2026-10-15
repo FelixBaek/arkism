@@ -15,8 +15,6 @@ type CandidateReviewInput struct {
 	Action           string                   `json:"action"`
 	Content          string                   `json:"content,omitempty"`
 	Reason           string                   `json:"reason,omitempty"`
-	// byServer marks an approval the server made for the caller (capture's explicit_user path), not a person's call.
-	byServer bool
 }
 type ReviewDecision struct {
 	Action string    `json:"action" bson:"action"`
@@ -98,7 +96,7 @@ func (s *Service) ReviewCandidates(ctx context.Context, token string, in Candida
 	if e != nil {
 		return out, e
 	}
-	if !s.memoryReviewerAllowed(d, in.Scope, "") {
+	if d.Role != roleHuman {
 		return out, ErrDenied
 	}
 	ctx = bindRequestActor(ctx, d)

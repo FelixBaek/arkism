@@ -902,17 +902,9 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		return Record{}, e
 	}
 	if review != nil {
-		if review.Automated && d.Role != roleService || !d.ContentSafe || !s.memoryReviewerAllowed(d, in.Scope, "") {
+		// Review is an explicit human decision; legacy service policies cannot approve or reject.
+		if review.Automated || d.Role != roleHuman || !d.ContentSafe {
 			return Record{}, ErrDenied
-		}
-		if d.Role == roleService {
-			if review.OperationID == "" {
-				return Record{}, ErrInvalid
-			}
-			ctx = bindRequestActor(ctx, d)
-			if _, e = s.authorize(ctx, token, "auto_review:memory_candidates", in.Scope, id, content); e != nil {
-				return Record{}, e
-			}
 		}
 	} else if d.Role != roleHuman {
 		if col != colSkillVersions || (in.Status != "approved" && in.Status != "rejected") {
@@ -962,11 +954,6 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		if review != nil {
 			if !s.memoryReviewerAllowed(d, in.Scope, r.Kind) {
 				return ErrDenied
-			}
-			if d.Role == roleService {
-				if e = checkAutomaticMemoryReview(ctx, tx, r, *review); e != nil {
-					return e
-				}
 			}
 			var replay bool
 			result, replay, e = replayMemoryReview(ctx, tx, id, d.PrincipalID, *review)
@@ -1031,7 +1018,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		r.UpdatedAt = time.Now().UTC()
 		if review != nil {
 			r.Review = &ReviewDecision{Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
-			if d.Role == roleHuman && !review.byServer {
+			if d.Role == roleHuman {
 				r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
 				if r.Classification != nil {
 					r.Review.AIRisk = r.Classification.Risk

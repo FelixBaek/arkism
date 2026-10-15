@@ -38,7 +38,7 @@ func TestCandidateConflictReviewAtomicAndReplay(t *testing.T) {
 		for _, reverse := range []bool{false, true} {
 			t.Run(resolution+map[bool]string{false: "-normal", true: "-reversed"}[reverse], func(t *testing.T) {
 				f, c, old, in := conflictReviewFixture(t, resolution, reverse)
-				got, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in)
+				got, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -54,7 +54,7 @@ func TestCandidateConflictReviewAtomicAndReplay(t *testing.T) {
 						t.Fatal("not replaced")
 					}
 					for _, r := range f.repo.rows("memory_relations") {
-						if r.Kind == "supersedes" && r.CreatedByType != roleService {
+						if r.Kind == "supersedes" && r.CreatedByType != roleHuman {
 							t.Fatal("incorrect actor")
 						}
 					}
@@ -69,7 +69,7 @@ func TestCandidateConflictReviewAtomicAndReplay(t *testing.T) {
 					evaluationJob(t, f, got)
 				}
 				jobs := len(f.repo.rows("jobs"))
-				replay, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in)
+				replay, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in)
 				if err != nil || !replay.Duplicate || replay.Revision != got.Revision || len(f.repo.rows("jobs")) != jobs {
 					t.Fatal("retry", err)
 				}
@@ -82,7 +82,7 @@ func TestCandidateConflictReviewRollsBackAndRecovers(t *testing.T) {
 	f, c, old, in := conflictReviewFixture(t, "replace_old", false)
 	jobs := len(f.repo.rows("jobs"))
 	f.svc.Repo = evaluationFailureRepo{f.repo, "enqueue"}
-	got, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in)
+	got, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in)
 	if !errors.Is(err, ErrUnavailable) || got.ID != "" {
 		t.Fatal(got, err)
 	}
@@ -96,7 +96,7 @@ func TestCandidateConflictReviewRollsBackAndRecovers(t *testing.T) {
 		t.Fatal("orphan jobs or memory")
 	}
 	f.svc.Repo = f.repo
-	if _, err = f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); err != nil {
+	if _, err = f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); err != nil {
 		t.Fatal("recovery", err)
 	}
 }
@@ -115,9 +115,9 @@ func TestCandidateConflictReviewRejectsStaleOrDifferentEndpoint(t *testing.T) {
 			case "endpoint":
 				in.Conflict.Memory.ID = "unrelated"
 			case "policy":
-				f.svc.MemoryReviewPolicies = nil
+				f.auth.actors[f.human] = actor("human-1", roleAgent, true, allVerbs...)
 			}
-			if _, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); err == nil {
+			if _, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); err == nil {
 				t.Fatal("invalid replacement succeeded")
 			}
 			if len(f.repo.rows(colMemories)) != 1 {
@@ -135,7 +135,7 @@ func TestCandidateConflictReviewCannotRevivePrivateCandidate(t *testing.T) {
 			c.PrivacyQuarantined = !erased
 			f.repo.store["memory_candidates"][recKey(scopeA, c.ID)] = c
 			jobs := len(f.repo.rows("jobs"))
-			if _, e := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); !errors.Is(e, ErrNotFound) {
+			if _, e := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); !errors.Is(e, ErrNotFound) {
 				t.Fatal(resolution, erased, e)
 			}
 			got, e := f.repo.Get(testCtx, colMemories, scopeA, old.ID)
