@@ -57,6 +57,19 @@ type CaptureClaim struct {
 	Reason     string   `json:"reason"`
 	Confidence *float64 `json:"confidence,omitempty"`
 	Supersedes *Ref     `json:"supersedes,omitempty"`
+	// The extractor's risk call (ADR-0022): it orders the review list and never approves anything.
+	Risk         string   `json:"risk,omitempty"`
+	RiskReasons  []string `json:"risk_reasons,omitempty"`
+	EvidenceSpan string   `json:"evidence_span,omitempty"`
+	DupHint      string   `json:"dup_hint,omitempty"`
+}
+
+// classification is nil for a claim without a risk call.
+func (c CaptureClaim) classification() *CandidateClassification {
+	if c.Risk == "" {
+		return nil
+	}
+	return &CandidateClassification{Risk: c.Risk, Reasons: c.RiskReasons, EvidenceSpan: c.EvidenceSpan, DupHint: c.DupHint}
 }
 
 type CaptureInput struct {
@@ -98,6 +111,9 @@ func validCaptureClaim(c CaptureClaim) bool {
 		if ref.Collection != "sources" || !validRunLabel(ref.ID, 256) || ref.Revision < 1 {
 			return false
 		}
+	}
+	if k := c.classification(); k == nil && (len(c.RiskReasons) > 0 || c.EvidenceSpan != "" || c.DupHint != "") || k != nil && !validClassification(*k) {
+		return false
 	}
 	return strings.TrimSpace(c.Text) != "" && len(c.Text) <= 4000 && validRunLabel(c.Subject, 128) && len(c.Reason) <= 500 &&
 		(c.Repo == "" || validRunLabel(c.Repo, 128)) &&
@@ -344,7 +360,7 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		MemoryContext: c.MemoryContext,
 		Scope:         scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags,
 		Sources: canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
-		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block",
+		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block", Classification: c.classification(),
 	})
 	if errors.Is(err, ErrCandidateQuota) && stale == nil {
 		// The source is already stored: point at it, so a retry after the limit resets cites it

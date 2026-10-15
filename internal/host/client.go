@@ -137,23 +137,33 @@ func HTTPCode(err error) int {
 // direct never uses a proxy from the environment (urllib ProxyHandler({})).
 var direct = &http.Client{Transport: &http.Transport{Proxy: nil}}
 
-func token() (string, error) {
-	raw, err := os.ReadFile(TokenFile)
+func tokenFrom(file string) (string, error) {
+	raw, err := os.ReadFile(file)
 	return strings.TrimSpace(string(raw)), err
 }
 
 // Get calls the Arkism API with the owner token and decodes the JSON answer.
 func Get(path string, timeout time.Duration) (map[string]any, error) {
-	return call(http.MethodGet, path, nil, timeout)
+	return call(TokenFile, http.MethodGet, path, nil, timeout)
+}
+
+// GetWith is Get under the credential in tokenFile instead of TokenFile.
+func GetWith(tokenFile, path string, timeout time.Duration) (map[string]any, error) {
+	return call(tokenFile, http.MethodGet, path, nil, timeout)
+}
+
+// PostWith is Post under the credential in tokenFile instead of TokenFile.
+func PostWith(tokenFile, path string, payload any, timeout time.Duration) (map[string]any, error) {
+	return call(tokenFile, http.MethodPost, path, payload, timeout)
 }
 
 // Post sends payload as JSON with the owner token and decodes the JSON answer.
 func Post(path string, payload any, timeout time.Duration) (map[string]any, error) {
-	return call(http.MethodPost, path, payload, timeout)
+	return call(TokenFile, http.MethodPost, path, payload, timeout)
 }
 
-func call(method, path string, payload any, timeout time.Duration) (map[string]any, error) {
-	tok, err := token()
+func call(tokenFile, method, path string, payload any, timeout time.Duration) (map[string]any, error) {
+	tok, err := tokenFrom(tokenFile)
 	if err != nil {
 		return nil, err
 	}

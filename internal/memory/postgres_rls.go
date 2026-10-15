@@ -265,8 +265,10 @@ func (p *Postgres) ReserveCandidateQuota(ctx context.Context, scope Scope, accep
 func (p *Postgres) InitRLS(ctx context.Context) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS principals (
-id text PRIMARY KEY, role text NOT NULL CHECK (role IN ('human','agent','service','pipeline')),
+id text PRIMARY KEY, role text NOT NULL CHECK (role IN ('human','agent','service','pipeline','classifier')),
 token_sha256 bytea NOT NULL UNIQUE CHECK (octet_length(token_sha256)=32), active boolean NOT NULL DEFAULT true)`,
+		`ALTER TABLE principals DROP CONSTRAINT IF EXISTS principals_role_check`,
+		`ALTER TABLE principals ADD CONSTRAINT principals_role_check CHECK (role IN ('human','agent','service','pipeline','classifier'))`,
 		`CREATE TABLE IF NOT EXISTS organization_memberships (
 organization_id text NOT NULL, principal_id text NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
 active boolean NOT NULL DEFAULT true, PRIMARY KEY(organization_id,principal_id))`,
@@ -399,5 +401,40 @@ CREATE POLICY arkism_delete ON ` + name + ` FOR DELETE TO PUBLIC USING (
 			return pgErr(err)
 		}
 	}
+	if err := p.initClassifierGuard(ctx); err != nil {
+		return err
+	}
 	return p.initArtifactPrivacyRLS(ctx)
+}
+
+// initClassifierGuard: a classifier principal (ADR-0022) may change only a waiting candidate's classification and
+// write its audit row. Enforced here, under the app, so no API path can approve, edit or delete on its behalf.
+func (p *Postgres) initClassifierGuard(ctx context.Context) error {
+	var exists bool
+	if err := p.q().QueryRow(ctx, `SELECT to_regclass('arkism.memory_records') IS NOT NULL`).Scan(&exists); err != nil || !exists {
+		return pgErr(err)
+	}
+	_, err := p.q().Exec(ctx, `CREATE OR REPLACE FUNCTION classifier_write_guard() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,arkism AS $$
+BEGIN
+ -- payload is what the service decodes and doc its jsonb copy: both must hold the same change.
+ IF NOT EXISTS (SELECT 1 FROM arkism.current_principal() c WHERE c.role='classifier') THEN
+  RETURN COALESCE(NEW, OLD);
+ END IF;
+ IF TG_OP='UPDATE' AND OLD.collection='memory_candidates' AND OLD.status IN ('candidate','conflicted')
+    AND (NEW.collection,NEW.id,NEW.workspace_id,NEW.project_id,NEW.user_id,NEW.agent_id,NEW.status,NEW.kind)
+      = (OLD.collection,OLD.id,OLD.workspace_id,OLD.project_id,OLD.user_id,OLD.agent_id,OLD.status,OLD.kind)
+    AND NEW.doc - 'classification' - 'revision' - 'updated_at' = OLD.doc - 'classification' - 'revision' - 'updated_at'
+    AND convert_from(NEW.payload,'UTF8')::jsonb = NEW.doc
+    AND NEW.embedding::text IS NOT DISTINCT FROM OLD.embedding::text THEN
+  RETURN NEW;
+ END IF;
+ IF TG_OP='INSERT' AND NEW.collection='audit_events' AND NEW.kind='classify:memory_candidates' THEN
+  RETURN NEW;
+ END IF;
+ RAISE EXCEPTION 'classifier may only classify memory candidates' USING ERRCODE='AK403';
+END $$;
+DROP TRIGGER IF EXISTS memory_records_classifier_guard ON memory_records;
+CREATE TRIGGER memory_records_classifier_guard BEFORE INSERT OR UPDATE OR DELETE ON memory_records FOR EACH ROW EXECUTE FUNCTION classifier_write_guard()`)
+	return pgErr(err)
 }

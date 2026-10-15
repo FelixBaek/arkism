@@ -21,6 +21,9 @@ type ReviewDecision struct {
 	By     string    `json:"by" bson:"by"`
 	At     time.Time `json:"at" bson:"at"`
 	Reason string    `json:"reason,omitempty" bson:"reason,omitempty"`
+	// AIRisk is the candidate's risk call when the person decided; Overturned marks a decision against it.
+	AIRisk     string `json:"ai_risk,omitempty" bson:"ai_risk,omitempty"`
+	Overturned bool   `json:"overturned,omitempty" bson:"overturned,omitempty"`
 }
 
 func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in CandidateReviewInput) (Record, error) {

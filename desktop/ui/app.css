@@ -999,3 +999,4 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .skill-trial-status p, .skill-trial-status h4 { margin: 0; }
 .skill-trial-status .btn { justify-self: start; }
 .skill-trial-status h4, .skill-trial-status strong { font-size: inherit; line-height: inherit; font-weight: 400; }
+.tidy-cards .sim-card p.one-line { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

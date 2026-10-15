@@ -35,6 +35,12 @@ func capFake(t *testing.T) string {
 		lp, pu := evLocatePrompt, evPrepareUsers
 		save(func() { evLocatePrompt, evPrepareUsers = lp, pu })
 	}
+	{
+		rp := revPost
+		save(func() { revPost = rp })
+		// never the live reviewer credential: a test that classifies sets revPost itself
+		revPost = func(string, any, time.Duration) (map[string]any, error) { return nil, errReviewerCredential }
+	}
 	t.Cleanup(func() {
 		for _, f := range keep {
 			f()
@@ -394,26 +400,15 @@ func TestCaptureOnlyTextThePersonTypedIsCaptured(t *testing.T) {
 	}
 }
 
-func TestCaptureApplyLessonsFollowsTheServerContract(t *testing.T) {
+func TestCaptureApplyLessonsOnlyCapturesAndNeverApproves(t *testing.T) {
 	capFake(t)
-	type call struct {
-		path string
-		body any
-	}
-	var calls []call
+	var paths []string
+	var sent any
 	capPost = func(path string, body any, _ time.Duration) (map[string]any, error) {
-		calls = append(calls, call{path, body})
-		if path == "/v1/capture" {
-			return mustLoad(t, `{"items": [{"status": "candidate", "reason": "review_required", "candidate_id": "n1"},
-				{"status": "candidate", "reason": "review_required", "candidate_id": "n2"}]}`), nil
-		}
-		if field(body, "action") == "mark" {
-			return mustLoad(t, `{"memories": [{"id": "m1", "revision": 3}, {"id": "n1", "revision": 2}], "relation": {"id": "r1", "revision": 1}}`), nil
-		}
-		return map[string]any{}, nil
-	}
-	capGet = func(path string, _ time.Duration) (map[string]any, error) {
-		return map[string]any{"id": pathID(path), "revision": 1, "status": "candidate"}, nil
+		paths = append(paths, path)
+		sent = body
+		return mustLoad(t, `{"items": [{"status": "candidate", "reason": "review_required", "candidate_id": "n1"},
+			{"status": "candidate", "reason": "review_required", "candidate_id": "n2"}]}`), nil
 	}
 	lesson := func(text string) host.Obj {
 		return host.Obj{{Key: "subject", Value: "s"}, {Key: "text", Value: text}, {Key: "kind", Value: "lesson"}, {Key: "basis", Value: "inferred"}, {Key: "reason", Value: ""}}
@@ -422,151 +417,15 @@ func TestCaptureApplyLessonsFollowsTheServerContract(t *testing.T) {
 		{lesson("a"), "replace", map[string]any{"id": "m1", "revision": 2, "status": "active"}, true},
 		{lesson("b"), "new", nil, false},
 		{lesson("c"), "confirm", map[string]any{"id": "c1", "revision": 1, "status": "candidate"}, false},
-		// its own session reread, or a suspect candidate: never approved
-		{lesson("d"), "confirm", map[string]any{"id": "c2", "status": "candidate", "tags": []any{"session:s1"}}, false},
-		{lesson("e"), "confirm", map[string]any{"id": "c3", "status": "candidate", "tags": []any{"session:s0", "review:instruction_like"}}, false},
 	}, "e1", "s1", "claude_code")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var reviews []string
-	captures := 0
-	var resolve any
-	for _, c := range calls {
-		if strings.HasSuffix(c.path, "/review") {
-			reviews = append(reviews, c.path)
-			if !reflect.DeepEqual(keys(c.body), []string{"action", "expected_revision", "scope"}) || field(c.body, "action") != "approve" {
-				t.Fatal(keys(c.body))
-			}
-		}
-		if c.path == "/v1/capture" {
-			captures++
-		}
-		if c.path == "/v1/memories/conflicts" && field(c.body, "action") == "resolve" && resolve == nil {
-			resolve = c.body
-		}
+	if !reflect.DeepEqual(paths, []string{"/v1/capture"}) || len(field(sent, "claims").([]any)) != 2 {
+		t.Fatal(paths, sent)
 	}
-	if !reflect.DeepEqual(reviews, []string{"/v1/memory_candidates/c1/review", "/v1/memory_candidates/n1/review", "/v1/memory_candidates/n2/review"}) {
-		t.Fatal(reviews)
-	}
-	if got := trialSet(); !reflect.DeepEqual(got, []string{"n2"}) { // the tool-failure lesson is on trial; the user's objection is not
-		t.Fatal(got)
-	}
-	if captures != 1 || field(resolve, "resolution") != "second_supersedes_first" || field(resolve, "conflict_id") != "r1" {
-		t.Fatal(captures, resolve)
-	}
-	var revisions []string
-	for _, m := range field(resolve, "memories").([]any) {
-		revisions = append(revisions, str(field(m, "revision")))
-	}
-	if !reflect.DeepEqual(revisions, []string{"3", "2"}) {
-		t.Fatal(revisions)
-	}
-}
-
-func TestCaptureInstructionLikeCandidateIsNeverAutoApproved(t *testing.T) {
-	capFake(t)
-	capGet = func(string, time.Duration) (map[string]any, error) {
-		return mustLoad(t, `{"id": "x", "revision": 1, "status": "candidate", "tags": ["basis:inferred", "review:instruction_like"]}`), nil
-	}
-	if ok, err := approveCandidate("x", "test"); ok || err != nil {
-		t.Fatal(ok, err)
-	}
-}
-
-func TestCaptureAIReviewRulesModelDecisionsAndTrial(t *testing.T) {
-	capFake(t)
-	items := `[{"id": "ep", "kind": "episodic", "tags": ["basis:assistant_result"]},
-		{"id": "inj", "kind": "lesson", "tags": ["basis:inferred", "review:instruction_like"]},
-		{"id": "les", "kind": "lesson", "tags": ["basis:inferred"], "text": "병합 뒤 테스트를 돌린다"},
-		{"id": "dup", "kind": "decision", "tags": ["basis:explicit_user"], "text": "결론부터 쓴다"}]`
-	capGet = func(path string, _ time.Duration) (map[string]any, error) {
-		if strings.HasPrefix(path, "/v1/memory_candidates?") {
-			if strings.Contains(path, "status=candidate") {
-				return mustLoad(t, `{"items": `+items+`}`), nil
-			}
-			return map[string]any{"items": []any{}}, nil
-		}
-		return map[string]any{"revision": 1, "status": "candidate"}, nil
-	}
-	var seen []string
-	llm = func(_, user, _ string, _ time.Duration, _, _ string) (any, error) {
-		seen = append(seen, user)
-		return mustLoad(t, `{"d": [{"id": "les", "action": "edit_approve", "content": "병합 커밋에서 테스트를 돌린 뒤 푸시한다", "reason": "구체적"},
-			{"id": "dup", "action": "reject", "content": "", "reason": "이미 있는 기억과 같다"},
-			{"id": "zzz", "action": "approve", "content": "", "reason": ""}]}`)["d"], nil
-	}
-	reviews := map[string]any{}
-	capPost = func(path string, body any, _ time.Duration) (map[string]any, error) {
-		reviews[pathID(path)] = body
-		return map[string]any{}, nil
-	}
-	search = func(string, int, float64) ([]any, error) {
-		return []any{map[string]any{"id": "m1", "text": "결론부터 쓴다"}}, nil
-	}
-	if err := aiReview(false, nil); err != nil {
-		t.Fatal(err)
-	}
-	acts := map[string]any{}
-	for id, b := range reviews {
-		acts[id] = field(b, "action")
-	}
-	if !reflect.DeepEqual(acts, map[string]any{"ep": "reject", "inj": "reject", "les": "edit_approve", "dup": "reject"}) {
-		t.Fatal(acts)
-	}
-	if field(reviews["les"], "content") != "병합 커밋에서 테스트를 돌린 뒤 푸시한다" || !strings.HasPrefix(str(field(reviews["dup"], "reason")), "AI 검토: ") {
-		t.Fatal(reviews)
-	}
-	if got := trialSet(); !reflect.DeepEqual(got, []string{"les"}) {
-		t.Fatal(got)
-	}
-	// rule-decided items never reach the model
-	if len(seen) != 1 || strings.Contains(seen[0], "ITEM ep") || !strings.Contains(seen[0], "RELATED: 결론부터 쓴다") {
-		t.Fatal(seen)
-	}
-}
-
-func TestCaptureCutShortTrialApprovalIsFinishedLater(t *testing.T) {
-	capFake(t)
-	status := map[string]string{"n1": "candidate", "n2": "candidate"}
-	var approvals []string
-	capPost = func(path string, _ any, _ time.Duration) (map[string]any, error) {
-		if path == "/v1/capture" {
-			return mustLoad(t, `{"items": [{"status": "candidate", "reason": "review_required", "candidate_id": "n1"},
-				{"status": "candidate", "reason": "review_required", "candidate_id": "n2"}]}`), nil
-		}
-		cid := pathID(path)
-		approvals = append(approvals, cid)
-		status[cid] = "approved"
-		if len(approvals) == 1 {
-			return nil, runtimeErr("answer_lost") // committed on the server, the answer never came back
-		}
-		return map[string]any{}, nil
-	}
-	capGet = func(path string, _ time.Duration) (map[string]any, error) {
-		return map[string]any{"revision": 1, "status": status[pathID(path)]}, nil
-	}
-	search = func(string, int, float64) ([]any, error) { return []any{}, nil }
-	host.UtilityCounts = func(string) (map[string][3]int, int, error) { return map[string][3]int{}, 0, nil }
-	llm = func(string, string, string, time.Duration, string, string) (any, error) {
-		return []any{map[string]any{"subject": "s", "text": "가", "kind": "decision", "quote": "남이 한 말", "reason": ""},
-			map[string]any{"subject": "s", "text": "나", "kind": "decision", "quote": "남이 한 말", "reason": ""}}, nil
-	}
-	job := mustLoad(t, `{"session_id": "s1", "event_id": "e1", "type": "turn_completed", "users": [{"at": "t", "text": "앞으로 이렇게 해"}]}`)
-	if err := process(job, nil); pyType(err) != "RuntimeError" {
-		t.Fatal(err)
-	}
-	if job["captured"] != true { // drain's retry will not capture again
-		t.Fatal(job)
-	}
-	if got := trialSet(); !reflect.DeepEqual(got, []string{"n1", "n2"}) { // both written before the first approval
-		t.Fatal(got)
-	}
-	if err := trialReview(); err != nil { // n1 is already approved and stays on trial; n2 gets approved now
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(approvals, []string{"n1", "n2"}) || !reflect.DeepEqual(trialSet(), []string{"n1", "n2"}) || status["n2"] != "approved" {
-		t.Fatal(approvals, trialSet(), status)
+	if len(trialState()) != 0 {
+		t.Fatal(trialState())
 	}
 }
 
@@ -656,7 +515,7 @@ func TestCaptureTrialReviewKeepsAnUnusedProhibition(t *testing.T) {
 	host.UtilityCounts = func(string) (map[string][3]int, int, error) {
 		return map[string][3]int{"a": {5, 0, 0}, "b": {5, 0, 0}, "c": {5, 0, 0}, "d": {5, 0, 0}, "e": {5, 0, 0}}, 0, nil // injected five times, never restated
 	}
-	if err := recordTrial([]string{"a", "b", "c", "d", "e"}); err != nil {
+	if err := seedTrial([]string{"a", "b", "c", "d", "e"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := trialUpdate(func(st *host.Obj) { st.Set("c", "2026-01-01T00:00:00.000Z") }); err != nil { // c is due to graduate too
@@ -688,7 +547,7 @@ func TestCaptureRetireKeepsAConflictedMemoryOnTrial(t *testing.T) {
 	host.UtilityCounts = func(string) (map[string][3]int, int, error) {
 		return map[string][3]int{"a": {5, 0, 0}, "b": {5, 0, 0}}, 0, nil // both due for retirement
 	}
-	if err := recordTrial([]string{"a", "b"}); err != nil {
+	if err := seedTrial([]string{"a", "b"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := trialReview(); err != nil {
@@ -771,4 +630,13 @@ func TestCaptureCodexAndZcodeLogsKeepOnlyWhatThePersonTyped(t *testing.T) {
 	if r, err := readZcode("s", 3); err != nil || len(r.lines) != 0 || r.users != 0 || r.end != 3 { // still being written: read next time
 		t.Fatal(r, err)
 	}
+}
+
+// seedTrial puts entries on trial the way approvals did before ADR-0022; trialReview still settles them.
+func seedTrial(ids []string) error {
+	return trialUpdate(func(st *host.Obj) {
+		for _, id := range ids {
+			st.Set(id, host.NowISO())
+		}
+	})
 }

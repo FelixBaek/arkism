@@ -45,6 +45,8 @@ var decisionRoles = map[string]bool{
 	roleAgent:    true,
 	roleService:  true,
 	rolePipeline: true,
+	// roleClassifier may only classify memory candidates (candidate_classification.go).
+	roleClassifier: true,
 }
 
 // LocalStandaloneAuthorizer is deliberately limited to one loopback-only

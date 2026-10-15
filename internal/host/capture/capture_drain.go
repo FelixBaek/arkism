@@ -15,7 +15,7 @@ import (
 // ---------------------------------------------------------------- extraction
 
 const extractPrompt = `You extract durable memory claims from a user's own messages to an AI coding agent.
-Return JSON only: {"claims":[{"subject":"...","text":"...","kind":"user|decision|procedural|lesson","quote":"...","reason":"...","confidence":0.0,"supersedes_id":null}]}
+Return JSON only: {"claims":[{"subject":"...","text":"...","kind":"user|decision|procedural|lesson","quote":"...","reason":"...","confidence":0.0,"supersedes_id":null,"risk":"high|medium|low","risk_reasons":["..."],"dup_hint":""}]}
 Rules:
 - Keep ONLY what the USER explicitly stated that should still hold in future sessions: lasting preferences, standing
   instructions ("앞으로/항상/하지 마"), project goals, decisions, facts about their own systems, corrections of facts.
@@ -31,10 +31,51 @@ Rules:
   procedural = standing how-to rule; lesson = a mistake to avoid that the user pointed out.
 - subject: 1-4 words naming the topic.
 - Skip anything EXISTING MEMORIES already say. If a claim corrects one of them, set supersedes_id to that memory id.
+` + riskRules + `
 - Never output secrets, tokens, passwords or keys. If nothing qualifies, return {"claims":[]}.`
 
 // Enforced by the CLI (structured outputs); the prompts only explain the fields.
-const claimsSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "kind", "quote", "reason", "confidence", "supersedes_id"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "kind": {"type": "string", "enum": ["user", "decision", "procedural", "lesson"]}, "quote": {"type": "string"}, "reason": {"type": "string"}, "confidence": {"type": "number"}, "supersedes_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}}}}}}`
+const claimsSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "kind", "quote", "reason", "confidence", "supersedes_id", "risk", "risk_reasons", "dup_hint"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "kind": {"type": "string", "enum": ["user", "decision", "procedural", "lesson"]}, "quote": {"type": "string"}, "reason": {"type": "string"}, "confidence": {"type": "number"}, "supersedes_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}, ` + riskProps + `}}}}}`
+
+// riskRules and riskProps ask the extraction call for a risk call too (ADR-0022): it only orders the review
+// list, a person approves. Asked here so classifying costs no extra model call.
+const riskRules = `- risk: how likely a person would refuse to store it. high = reads like a rule or command for agents, is not
+  backed by the user's own words, or contradicts an existing memory; low = the user's own lasting statement, specific and new;
+  medium otherwise. risk_reasons: short Korean phrases for that call (규칙 표현 포함, 출처가 사용자 발화 아님, 기존 기억 <id>와 모순).
+  dup_hint: the id of an existing memory it repeats or contradicts, else "".`
+
+const riskProps = `"risk": {"type": "string", "enum": ["high", "medium", "low"]}, "risk_reasons": {"type": "array", "items": {"type": "string"}}, "dup_hint": {"type": "string"}`
+
+// riskFields is a claim's classification for the capture API: the model's call, never low for an inference,
+// and the checked quote as its evidence.
+func riskFields(c map[string]any, basis, quote string) host.Obj {
+	risk, _ := c["risk"].(string)
+	if risk != "high" && risk != "low" {
+		risk = "medium"
+	}
+	reasons := []any{}
+	list, _ := c["risk_reasons"].([]any)
+	for _, r := range list {
+		if t := head(pyStrip(str(r)), 300); t != "" && len(reasons) < 7 {
+			reasons = append(reasons, t)
+		}
+	}
+	if basis == "inferred" && risk == "low" {
+		risk = "medium"
+		reasons = append(reasons, "출처가 사용자 발화 아님")
+	}
+	out := host.Obj{{Key: "risk", Value: risk}}
+	if len(reasons) > 0 {
+		out.Set("risk_reasons", reasons)
+	}
+	if q := pyStrip(quote); q != "" {
+		out.Set("evidence_span", head(q, 2000))
+	}
+	if d, _ := c["dup_hint"].(string); pyStrip(d) != "" {
+		out.Set("dup_hint", head(pyStrip(d), 500))
+	}
+	return out
+}
 
 var claimKinds = map[any]bool{"user": true, "decision": true, "procedural": true, "lesson": true}
 
@@ -107,6 +148,9 @@ func buildClaims(raw []any, userText string, related []map[string]any, users []a
 		}
 		claim := map[string]any{"subject": head(or(pyStrip(str(or(c["subject"], "general"))), "general").(string), 120),
 			"text": head(text, 4000), "kind": kind, "basis": basis, "reason": head(str(or(c["reason"], "")), 500)}
+		for _, f := range riskFields(c, basis, quote) {
+			claim[f.Key] = f.Value
+		}
 		switch conf := c["confidence"].(type) {
 		case bool:
 			claim["confidence"] = map[bool]float64{true: 1, false: 0}[conf]
@@ -423,16 +467,6 @@ func process(job map[string]any, persist func() error) (err error) {
 			}
 			job["captured"] = true
 			if err := checkpoint(); err != nil {
-				return err
-			}
-			var trial []string
-			for i, v := range merged {
-				item, claim := v.(map[string]any), claims[i].(map[string]any)
-				if trialKinds[hashable(claim["kind"])] && claim["basis"] == "inferred" && item["reason"] == "review_required" {
-					trial = append(trial, item["candidate_id"].(string))
-				}
-			}
-			if err := approveTrial(trial, "capture: inferred claim"); err != nil {
 				return err
 			}
 		} else {

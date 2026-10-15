@@ -36,9 +36,10 @@ Rules:
   replace = target_id is an A lesson that is wrong or too vague, or the mistake happened again despite it; text is the fix.
   A difference in a condition, a negation or a number makes it a different lesson: new.
 - When unsure the mistake was real, leave it out: a false lesson steers every future session.
+` + riskRules + `
 - At most 3. Never output secrets, tokens, passwords or keys. If nothing qualifies, return {"claims":[]}.`
 
-const reflectSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "quote", "action", "target_id", "reason"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "quote": {"type": "string"}, "action": {"type": "string", "enum": ["new", "confirm", "replace"]}, "target_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "reason": {"type": "string"}}}}}}`
+const reflectSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "quote", "action", "target_id", "reason", "risk", "risk_reasons", "dup_hint"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "quote": {"type": "string"}, "action": {"type": "string", "enum": ["new", "confirm", "replace"]}, "target_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "reason": {"type": "string"}, ` + riskProps + `}}}}}`
 
 var (
 	reflectModel = host.Env("ARKISM_REFLECT_MODEL", "sonnet")
@@ -469,6 +470,11 @@ func reflectionClaims(raw []any, lines []string, active, waiting []map[string]an
 		claim := host.Obj{{Key: "subject", Value: head(or(pyStrip(str(or(c["subject"], "general"))), "general").(string), 120)},
 			{Key: "text", Value: head(text, 4000)}, {Key: "kind", Value: "lesson"}, {Key: "basis", Value: "inferred"},
 			{Key: "reason", Value: head(str(or(c["reason"], "")), 500)}}
+		risk := riskFields(c, "inferred", quote)
+		if _, has := risk.Get("dup_hint"); target != nil && !has { // a confirm or replace names its lesson
+			risk.Set("dup_hint", str(target["id"]))
+		}
+		claim = append(claim, risk...)
 		fromUser := false
 		for _, u := range users {
 			if strings.Contains(u, quote) {
@@ -487,88 +493,10 @@ func memoryPath(mid any) string {
 	return fmt.Sprintf("/v1/memories/%s?%s", str(mid), scopeQuery(false))
 }
 
-func review(cid any, body host.Obj) error {
-	_, err := capPost(fmt.Sprintf("/v1/memory_candidates/%s/review", str(cid)), body, 60*time.Second)
-	return err
-}
-
-// approveCandidate approves unless the sentence reads like an instruction: the server tags it,
-// but an inferred claim comes back as plain review_required, so the tag is checked here.
-func approveCandidate(cid any, why string) (bool, error) {
-	cand, err := capGet(candidatePath(cid), 8*time.Second)
-	if err != nil {
-		return false, err
-	}
-	if cand["status"] != "candidate" {
-		return false, nil // already decided, e.g. a retry after the approval went through
-	}
-	if tags, _ := cand["tags"].([]any); containsAny(tags, "review:instruction_like") {
-		metric(kv("event", "reflection_approve_skipped"), kv("candidate_id", cid), kv("why", "instruction_like"))
-		return false, nil
-	}
-	rev, has := cand["revision"]
-	if !has {
-		return false, fmt.Errorf("%w: 'revision'", errKey)
-	}
-	// approve takes no reason (the server rejects one); why is kept in the local metric only.
-	if err := review(cid, host.Obj{{Key: "scope", Value: capScope()}, {Key: "expected_revision", Value: rev}, {Key: "action", Value: "approve"}}); err != nil {
-		return false, err
-	}
-	metric(kv("event", "reflection_approved"), kv("candidate_id", cid), kv("why", why))
-	return true, nil
-}
-
-func memRef(m map[string]any) host.Obj {
-	return host.Obj{{Key: "collection", Value: "memories"}, {Key: "id", Value: m["id"]}, {Key: "revision", Value: m["revision"]}}
-}
-
-// markAndSupersede marks old and fresh as a conflict and resolves it with fresh replacing old.
-func markAndSupersede(old, fresh map[string]any, body func(host.Obj) host.Obj) error {
-	marked, err := capPost("/v1/memories/conflicts", body(host.Obj{{Key: "memories", Value: []any{memRef(old), memRef(fresh)}}, {Key: "action", Value: "mark"}}), 60*time.Second)
-	if err != nil {
-		return err
-	}
-	rows := map[any]map[string]any{}
-	for _, m := range listOf(marked["memories"]) {
-		mm := m.(map[string]any)
-		rows[hashable(mm["id"])] = mm
-	}
-	rel := marked["relation"].(map[string]any)
-	o, f := rows[hashable(old["id"])], rows[hashable(fresh["id"])]
-	if o == nil || f == nil {
-		return fmt.Errorf("%w: conflict rows", errKey)
-	}
-	_, err = capPost("/v1/memories/conflicts", body(host.Obj{{Key: "memories", Value: []any{memRef(o), memRef(f)}}, {Key: "action", Value: "resolve"},
-		{Key: "conflict_id", Value: rel["id"]}, {Key: "expected_revision", Value: rel["revision"]}, {Key: "resolution", Value: "second_supersedes_first"}}), 60*time.Second)
-	return err
-}
-
-// supersede: the conflict path is the only way to retire a memory; the old lesson stays, linked and reversible.
-func supersede(old map[string]any, newID any) (err error) {
-	defer recovered(&err)
-	fresh, err := capGet(memoryPath(newID), 8*time.Second)
-	if err != nil {
-		return err
-	}
-	fresh = map[string]any{"id": newID, "revision": fresh["revision"]}
-	const reason = "session reflection replaced this lesson"
-	err = markAndSupersede(old, fresh, func(o host.Obj) host.Obj {
-		b := host.Obj{{Key: "scope", Value: capScope()}, o[0], o[1], {Key: "reason", Value: reason}}
-		return append(b, o[2:]...)
-	})
-	if err != nil {
-		return err
-	}
-	metric(kv("event", "reflection_superseded"), kv("memory_id", old["id"]), kv("replaced_by", newID))
-	return nil
-}
-
 // ---------------------------------------------------------------- trial
-// An inferred lesson or decision is used at once instead of waiting for a person, but on trial: prompt search
-// marks it "시험 중", and one injected in trialRetireAt sessions without any answer using it is retired (expired),
-// unless keptOnTrial. After trialDays it is an ordinary memory. Standing rules (user, procedural) reach every session, so they still wait.
-
-var trialKinds = map[any]bool{"decision": true, "lesson": true}
+// Memories an earlier version approved on trial: prompt search marks them "시험 중", and one injected in trialRetireAt
+// sessions without any answer using it is retired (expired), unless keptOnTrial. After trialDays it is an ordinary memory.
+// Nothing new goes on trial: a person approves every candidate (ADR-0022).
 
 const (
 	trialDays     = 30
@@ -640,51 +568,6 @@ func trialPop(cid string) error {
 	})
 }
 
-// settleTrial approves a recorded trial candidate. One a person must decide leaves the trial;
-// one already approved (the answer to an earlier try was lost) stays on it.
-func settleTrial(cid, why string) error {
-	ok, err := approveCandidate(cid, why)
-	if err != nil || ok {
-		return err
-	}
-	cand, err := capGet(candidatePath(cid), 8*time.Second)
-	if err != nil {
-		return err
-	}
-	if cand["status"] != "approved" {
-		return trialPop(cid)
-	}
-	return nil
-}
-
-// recordTrial is written down before any approval, so an approval cut short is finished by
-// the next trialReview instead of leaving the claim waiting, or approved but never on trial.
-func recordTrial(ids []string) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	stamp := host.NowISO()
-	return trialUpdate(func(st *host.Obj) {
-		for _, id := range ids {
-			if _, has := st.Get(id); !has {
-				st.Set(id, stamp)
-			}
-		}
-	})
-}
-
-func approveTrial(ids []string, why string) error {
-	if err := recordTrial(ids); err != nil {
-		return err
-	}
-	for _, id := range ids {
-		if err := settleTrial(id, why); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // trialVerdicts is {id: "retire" | "graduate"} for trial memories that are decided. keep is asked only about
 // one due for retirement; a kept one waits to graduate instead.
 func trialVerdicts(state host.Obj, counts map[string][3]int, today time.Time, keep func(string) bool) (host.Obj, error) {
@@ -721,9 +604,7 @@ func trialReview() error {
 			if err != nil {
 				return err
 			}
-			if cand["status"] == "candidate" {
-				return settleTrial(cid, "trial: finishing an interrupted approval")
-			} else if cand["status"] != "approved" {
+			if cand["status"] != "approved" { // one still waiting is a person's to decide (ADR-0022)
 				return trialPop(cid)
 			}
 			return nil
@@ -821,84 +702,22 @@ func networkish(err error) bool {
 	return true
 }
 
-// applyLessons: confirm approves a waiting lesson seen again in another session; new/replace are
-// stored and approved, on trial unless the user objected.
-// shortcut: a replace without a user objection does not retire the old lesson; the trial retires
-// whichever one goes unused.
+// applyLessons stores new and replacing lessons as candidates with their risk call; a person approves them
+// (ADR-0022). A confirm only notes the recurrence: approving on it would be the AI deciding.
 func applyLessons(checked []checkedLesson, eventID, sid, origin string) error {
-	for _, c := range checked {
-		if c.action != "confirm" {
-			continue
-		}
-		tags, _ := c.target["tags"].([]any)
-		switch {
-		case containsAny(tags, "session:"+sid) || containsAny(tags, "review:instruction_like"):
-			// Rereading the session that produced it is not a recurrence; a suspect waits for a person.
-			metric(kv("event", "reflection_confirm_skipped"), kv("candidate_id", c.target["id"]))
-		case c.target["status"] == "candidate":
-			if _, err := approveCandidate(c.target["id"], "session reflection: recurred"); err != nil {
-				return err
-			}
-		default:
-			metric(kv("event", "reflection_confirmed"), kv("memory_id", c.target["id"]))
-		}
-	}
-	var stored []checkedLesson
 	claims := []any{}
 	for _, c := range checked {
-		if c.action != "confirm" {
-			stored = append(stored, c)
-			claims = append(claims, c.claim)
-		}
-	}
-	if len(stored) == 0 {
-		return nil
-	}
-	items, err := sendCapture("session_end", eventID, sid, host.NowISO(), claims, origin, 0, reflectGenerator(origin))
-	if err != nil {
-		return err
-	}
-	type pair struct {
-		item map[string]any
-		c    checkedLesson
-	}
-	var pairs []pair
-	var trial []string
-	for i, v := range items {
-		if i >= len(stored) {
-			break
-		}
-		item := v.(map[string]any)
-		if item["reason"] == "review_required" { // else a person decides
-			pairs = append(pairs, pair{item, stored[i]})
-			if !stored[i].fromUser {
-				trial = append(trial, item["candidate_id"].(string))
-			}
-		}
-	}
-	if err := recordTrial(trial); err != nil { // trialReview finishes these if anything below is cut short
-		return err
-	}
-	for _, p := range pairs {
-		if !p.c.fromUser {
+		if c.action == "confirm" {
+			metric(kv("event", "reflection_confirmed"), kv("target_id", c.target["id"]), kv("same_session", containsAny(listOf(c.target["tags"]), "session:"+sid)))
 			continue
 		}
-		ok, err := approveCandidate(p.item["candidate_id"], "session reflection: user objection")
-		if err != nil {
-			return err
-		}
-		if ok && p.c.action == "replace" {
-			if err := supersede(p.c.target, p.item["candidate_id"]); err != nil {
-				return err
-			}
-		}
+		claims = append(claims, c.claim)
 	}
-	for _, cid := range trial { // last, so a failure here never holds back the user's own correction
-		if err := settleTrial(cid, "session reflection: tool failure"); err != nil {
-			return err
-		}
+	if len(claims) == 0 {
+		return nil
 	}
-	return nil
+	_, err := sendCapture("session_end", eventID, sid, host.NowISO(), claims, origin, 0, reflectGenerator(origin))
+	return err
 }
 
 type existingLessons struct {
@@ -1037,7 +856,7 @@ func reflectRun(dryRun bool, stdout io.Writer) error {
 		return err
 	}
 	if err := aiReview(false, stdout); err != nil { // the next run retries; reflection itself is done
-		if !networkish(err) {
+		if !networkish(err) && !errors.Is(err, errReviewerCredential) {
 			return err
 		}
 		metric(kv("event", "ai_review_failure"), kv("error", errorCode(err)))

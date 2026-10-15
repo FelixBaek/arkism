@@ -857,9 +857,14 @@
 
   // 기억 검토: up to 5 candidates in one view, each set to keep or drop, sent as one review_batch.
   // A sentence that reads like an instruction starts as "버리기"; everything else starts as "저장".
+  // The AI's risk call (ADR-0022) only orders the list: high risk first and shown in full, the rest in one line.
   const BATCH = 5;
+  const RISK = { high: [0, "주의"], medium: [1, "보통"], low: [2, "낮음"] };
+  const riskOf = (c) => RISK[c.classification?.risk]?.[0] ?? 3;
+  const byRisk = (a, b) => riskOf(a) - riskOf(b) || new Date(b.created_at) - new Date(a.created_at);
+  const riskLabel = (c) => RISK[c.classification?.risk] ? `위험도 ${RISK[c.classification.risk][1]}` : "";
   function reviewBatchDetail(body) {
-    const list = [...state.data.candidates].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, BATCH);
+    const list = [...state.data.candidates].sort(byRisk).slice(0, BATCH);
     const keep = new Map(list.map((c) => [c.id, !(c.tags || []).includes("review:instruction_like")]));
     body.append(el("h2", "", `기억 후보 ${list.length}개`), el("p", "lead", "눌러서 저장·버리기를 바꾸고 한 번에 반영해요. 14일 동안 안 보면 저절로 사라져요."));
     const cards = el("div", "tidy-cards");
@@ -868,8 +873,12 @@
       const card = el("button", `sim-card${on ? " on" : " off"}`);
       card.type = "button";
       const suspect = (c.tags || []).includes("review:instruction_like");
-      card.append(el("span", on ? "tag" : "dim", on ? "저장" : "버리기"), raw(el("p", "", c.text)),
-        el("small", "dim", `${kindLabel(c.kind)} · ${shortDate(c.created_at)}${suspect ? " · 지시처럼 보이는 문장" : ""}`));
+      const open = riskOf(c) === 0;
+      const text = el("p", open ? "" : "one-line", c.text);
+      if (!open) text.title = c.text;
+      card.append(el("span", on ? "tag" : "dim", on ? "저장" : "버리기"), raw(text),
+        el("small", "dim", [kindLabel(c.kind), shortDate(c.created_at), riskLabel(c), suspect ? "지시처럼 보이는 문장" : ""].filter(Boolean).join(" · ")));
+      if (open && c.classification.risk_reasons?.length) card.append(el("small", "dim", c.classification.risk_reasons.join(" · ")));
       card.addEventListener("click", () => { keep.set(c.id, !on); paint(); });
       return card;
     }));
@@ -1619,7 +1628,7 @@
     if (state.memTab === "merge") { digests.drawMerge(); return; }
     $("#stats").replaceChildren();
     const time = (m) => new Date(m.created_at).getTime();
-    const items = memorySource().filter((m) => matches(`${m.text} ${m.summary || ""}`)).sort((a, b) => time(b) - time(a));
+    const items = memorySource().filter((m) => matches(`${m.text} ${m.summary || ""}`)).sort(state.memTab === "candidate" ? byRisk : (a, b) => time(b) - time(a));
     const canDecide = !!state.caps?.actions?.review_decide;
     if (state.memTab === "candidate" && items.length) {
       const hint = el("div", "mem-hint");
@@ -1645,7 +1654,7 @@
       const tpl = quickCol ? "minmax(0,1fr) auto auto" : "minmax(0,1fr) auto";
       table.replaceChildren(...shown.map((c) => {
         const [why, warn] = waitReason(c);
-        const cells = [memCell(c, [kindLabel(c.kind), withAgent(c), ago(c.created_at), memRepo(c).split("/").pop()]), el("span", `mem-badge${warn ? " warn" : ""}`, why.split(" — ")[0])];
+        const cells = [memCell(c, [kindLabel(c.kind), riskLabel(c), withAgent(c), ago(c.created_at), memRepo(c).split("/").pop()]), el("span", `mem-badge${warn ? " warn" : ""}`, why.split(" — ")[0])];
         if (quickCol) {
           const quick = el("div", "quick");
           const ok = el("button", "icon-btn"); ok.type = "button"; ok.title = "저장"; ok.setAttribute("aria-label", "저장"); ok.append(icon("check"));

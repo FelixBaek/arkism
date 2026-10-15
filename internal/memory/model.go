@@ -147,6 +147,7 @@ type Record struct {
 	SupersededBy       *Ref             `json:"superseded_by,omitempty" bson:"superseded_by,omitempty"`
 	Supersedes         []Ref            `json:"supersedes,omitempty" bson:"supersedes,omitempty"`
 	Review             *ReviewDecision  `json:"review,omitempty" bson:"review,omitempty"`
+	Classification     *CandidateClassification `json:"classification,omitempty" bson:"classification,omitempty"`
 	OriginProduct      string           `json:"origin_product,omitempty" bson:"origin_product,omitempty"`
 	SourceRef          string           `json:"source_ref,omitempty" bson:"source_ref,omitempty"`
 	SourceEventID      string           `json:"source_event_id,omitempty" bson:"source_event_id,omitempty"`
