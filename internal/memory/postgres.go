@@ -208,6 +208,9 @@ func pgErr(err error) error {
 		if e.Code == "23505" {
 			return ErrConflict
 		}
+		if e.Code == "AK403" { // classifier_write_guard
+			return ErrDenied
+		}
 		if e.Code == "40001" || e.Code == "40P01" {
 			return transientTransactionError{}
 		}

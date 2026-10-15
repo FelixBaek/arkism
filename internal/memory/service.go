@@ -80,6 +80,8 @@ type CreateInput struct {
 	OnSecret       string      `json:"on_secret,omitempty"`
 	Sensitivity    string      `json:"sensitivity,omitempty"`
 	Reflection     *Reflection `json:"reflection,omitempty"`
+	// Classification is the extractor's risk call; kept on memory candidates only.
+	Classification *CandidateClassification `json:"classification,omitempty"`
 	Scope          Scope       `json:"scope"`
 	Kind           string      `json:"kind"`
 	Text           string      `json:"text"`
@@ -563,6 +565,16 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	}
 	if col == "memory_candidates" {
 		r.Status = "candidate"
+		if in.Classification != nil {
+			c := *in.Classification
+			if !validClassification(c) {
+				return Record{}, ErrInvalid
+			}
+			c.By, c.At = d.PrincipalID, &now
+			r.Classification = &c
+		}
+	} else if in.Classification != nil {
+		return Record{}, ErrInvalid
 	}
 	if col == "sources" {
 		r.TrustLevel = sourceTrustLevel(in.TrustLevel)
@@ -1019,6 +1031,12 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		r.UpdatedAt = time.Now().UTC()
 		if review != nil {
 			r.Review = &ReviewDecision{Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
+			if d.Role == roleHuman && !review.byServer {
+				r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
+				if r.Classification != nil {
+					r.Review.AIRisk = r.Classification.Risk
+				}
+			}
 			if personalPattern.MatchString(review.Content + " " + review.Reason) {
 				if r.Sensitivity != "restricted" {
 					r.Sensitivity = "private"

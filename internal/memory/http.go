@@ -381,6 +381,18 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		v, e := s.ReviewCandidates(r.Context(), bearer(r), in)
 		respond(w, v, e)
 	})
+	mux.HandleFunc("POST /v1/memory_candidates/{id}/classify", func(w http.ResponseWriter, r *http.Request) {
+		var in CandidateClassifyInput
+		if !decode(w, r, &in) {
+			return
+		}
+		v, e := s.ClassifyCandidate(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, v, e)
+	})
+	mux.HandleFunc("GET /v1/memory_candidates/classification_report", func(w http.ResponseWriter, r *http.Request) {
+		v, e := s.ClassificationReport(r.Context(), bearer(r), scopeQuery(r))
+		respond(w, v, e)
+	})
 	mux.HandleFunc("POST /v1/memory_candidates/{id}/review", func(w http.ResponseWriter, r *http.Request) {
 		var in CandidateReviewInput
 		if !decode(w, r, &in) {

@@ -126,17 +126,17 @@ func TestCaptureReflectRunReadsEachSessionOnceAndRemembersHowFar(t *testing.T) {
 	if n, _ := num(state[path]); int64(n) != info.Size() || len(state) != 1 {
 		t.Fatal(state)
 	}
-	// the user's own objection is approved at once, never put on trial
-	var review, capture string
+	// the user's objection waits for a person with its risk call; nothing is approved or put on trial
+	var capture string
 	for _, p := range *posts {
-		if strings.HasPrefix(p, "/v1/memory_candidates/n1/review") {
-			review = p
+		if strings.Contains(p, "/review") {
+			t.Fatal(p)
 		}
 		if strings.HasPrefix(p, "/v1/capture ") {
 			capture = p
 		}
 	}
-	if review == "" || !strings.Contains(capture, `"claude-code:s1:reflect:`) || len(trialState()) != 0 {
+	if !strings.Contains(capture, `"claude-code:s1:reflect:`) || !strings.Contains(capture, `"risk": "medium"`) || len(trialState()) != 0 {
 		t.Fatal(*posts, trialState())
 	}
 
@@ -334,28 +334,3 @@ func TestCaptureToolErrorJoinsTextBlocks(t *testing.T) {
 	}
 }
 
-func TestCaptureSettleTrialPopsOnlyWhatAPersonMustDecide(t *testing.T) {
-	capFake(t)
-	status := map[string]string{"a": "rejected", "b": "approved"}
-	capGet = func(path string, _ time.Duration) (map[string]any, error) {
-		return map[string]any{"revision": 1, "status": status[pathID(path)]}, nil
-	}
-	if err := recordTrial([]string{"a", "b"}); err != nil {
-		t.Fatal(err)
-	}
-	for _, id := range []string{"a", "b"} {
-		if err := settleTrial(id, "test"); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if !reflect.DeepEqual(trialSet(), []string{"b"}) {
-		t.Fatal(trialSet())
-	}
-	capGet = func(string, time.Duration) (map[string]any, error) { return nil, &host.HTTPError{Code: 502} }
-	if err := settleTrial("b", "test"); host.HTTPCode(err) != 502 {
-		t.Fatal(err)
-	}
-	if err := recordTrial(nil); err != nil {
-		t.Fatal(err)
-	}
-}
