@@ -28,7 +28,7 @@ public upstream. The checker cannot establish trust in an arbitrary local ref.
 If upstream advances, update the public branch before running the check.
 A successful result reports the resolved public base and outgoing commit count.
 
-The checker inspects every outgoing commit's complete tree and commit message,
+The checker inspects every outgoing commit's complete tree, commit message, and author/committer names and emails,
 including merge parents and intermediate files later deleted. It also checks
 HEAD, the index, and tracked working files. The already-public history preceding
 the trusted base is outside this outgoing-history check. Submodules require a
@@ -55,3 +55,14 @@ It exempts only those exact bytes from content matching, including identical
 tracked working files. Changed content is scanned again. Forbidden paths,
 private path patterns, and commit messages remain checked. There is no
 filename-wide LICENSE exception and no global denylist suppression.
+
+The preflight accepts ordinary public refs or commit hashes and rejects option-like
+base arguments before invoking Git. Use a public author and committer identity;
+private identity data in an earlier outgoing commit remains a finding even after
+changing local Git configuration. Coordinate any necessary history rewrite.
+
+If a broad private-name rule also matches the verified public GitHub login,
+--allow-public-identity NAME EMAIL permits only that exact reviewed author or
+committer pair. Verify the pair against the public account first. A different
+name/email combination is still scanned. This exception never applies to commit
+messages, paths, or file content, and must not be used to allow a private identity.

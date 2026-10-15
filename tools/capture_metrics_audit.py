@@ -21,6 +21,7 @@ FIELDS = frozenset(("session_state", "check:passed", "check:failed",
 
 
 def timestamp(value):
+    """Reject timezone-free timestamps before comparing event times."""
     if not isinstance(value, str):
         raise ValueError("timestamp must be a string")
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -29,45 +30,57 @@ def timestamp(value):
     return parsed
 
 
+def parse_event(line, cutoff):
+    """Return a selected metadata event or a countable parsing failure."""
+    if not line.strip():
+        return None, None
+    try:
+        row = json.loads(line)
+    except (ValueError, TypeError):
+        return None, "malformed"
+    if not isinstance(row, dict):
+        return None, "malformed"
+    event = row.get("event")
+    if not isinstance(event, str) or event not in EVENTS | {"session_evidence_missing"}:
+        return None, None
+    try:
+        when = timestamp(row.get("ts"))
+    except (ValueError, TypeError, OverflowError):
+        return None, "invalid_time"
+    if cutoff and when > cutoff:
+        return None, None
+    return row, None
+
+
+def count_event(row, groups, sessions, field_counts):
+    """Allowlist output labels; keep distinct identifiers only for counting."""
+    event = row["event"]
+    if event == "session_evidence_missing":
+        field = row.get("field")
+        field_counts[field if isinstance(field, str) and field in FIELDS else "other"] += 1
+        return
+    error = row.get("error")
+    error = error if isinstance(error, str) and error in KNOWN_ERRORS else "other"
+    key = (event, error)
+    groups[key] += 1
+    session = row.get("session")
+    if isinstance(session, str) and session:
+        sessions[key].add(session)
+
+
 def summarize(lines, until=None):
     """Counts are log occurrences, never inferred candidate or unique-job counts."""
     cutoff = timestamp(until) if until else None
     groups = Counter()
     sessions = defaultdict(set)
     field_counts = Counter()
-    malformed = invalid_time = 0
+    failures = Counter()
     for line in lines:
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except (ValueError, TypeError):
-            malformed += 1
-            continue
-        if not isinstance(row, dict):
-            malformed += 1
-            continue
-        event = row.get("event")
-        if not isinstance(event, str) or (event not in EVENTS and event != "session_evidence_missing"):
-            continue
-        try:
-            when = timestamp(row.get("ts"))
-        except (ValueError, TypeError, OverflowError):
-            invalid_time += 1
-            continue
-        if cutoff and when > cutoff:
-            continue
-        if event == "session_evidence_missing":
-            field = row.get("field")
-            field_counts[field if isinstance(field, str) and field in FIELDS else "other"] += 1
-            continue
-        error = row.get("error")
-        error = error if isinstance(error, str) and error in KNOWN_ERRORS else "other"
-        key = (event, error)
-        groups[key] += 1
-        session = row.get("session")
-        if isinstance(session, str) and session:
-            sessions[key].add(session)
+        row, failure = parse_event(line, cutoff)
+        if failure:
+            failures[failure] += 1
+        if row is not None:
+            count_event(row, groups, sessions, field_counts)
     return {
         "count_unit": "log_occurrences",
         "unique_session_note": "Distinct logged identifiers may be truncated; these are not unique jobs or candidates.",
@@ -78,8 +91,8 @@ def summarize(lines, until=None):
             for (event, error), count in sorted(groups.items())
         ],
         "missing_evidence_fields": dict(sorted(field_counts.items())),
-        "malformed_lines": malformed,
-        "invalid_event_timestamps": invalid_time,
+        "malformed_lines": failures["malformed"],
+        "invalid_event_timestamps": failures["invalid_time"],
     }
 
 
@@ -91,7 +104,7 @@ def main():
     try:
         with args.metrics.open(encoding="utf-8") as stream:
             result = summarize(stream, args.until)
-    except (OSError, UnicodeError, ValueError):
+    except (OSError, ValueError):
         parser.exit(2, "Cannot read metrics or parse the cutoff timestamp.\n")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
