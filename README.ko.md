@@ -35,9 +35,7 @@ Claude Code, Codex, Gemini CLI 같은 에이전트는 어제 알려 준 것을 �
 
 ## 설치
 
-첫 공개 설치 파일을 준비하고 있습니다. 게시 전에는 [개발 가이드](guide/development.md)에 따라 소스에서 빌드하세요. 패키징 PR의 시험용 설치 파일은 [Release 워크플로 아티팩트](../../actions/workflows/release.yml)에 올라옵니다. 공개 릴리스가 아닌 검증용 빌드입니다.
-
-공개 후 [Releases](../../releases)에서 내 운영체제 파일을 받습니다.
+[Releases](../../releases/latest)에서 내 운영체제 파일을 받습니다.
 
 | 운영체제 | 파일 |
 |---|---|
