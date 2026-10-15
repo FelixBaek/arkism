@@ -906,15 +906,6 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		if review.Automated || d.Role != roleHuman || !d.ContentSafe {
 			return Record{}, ErrDenied
 		}
-		if d.Role == roleService {
-			if review.OperationID == "" {
-				return Record{}, ErrInvalid
-			}
-			ctx = bindRequestActor(ctx, d)
-			if _, e = s.authorize(ctx, token, "auto_review:memory_candidates", in.Scope, id, content); e != nil {
-				return Record{}, e
-			}
-		}
 	} else if d.Role != roleHuman {
 		if col != colSkillVersions || (in.Status != "approved" && in.Status != "rejected") {
 			return Record{}, ErrDenied
@@ -963,11 +954,6 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		if review != nil {
 			if !s.memoryReviewerAllowed(d, in.Scope, r.Kind) {
 				return ErrDenied
-			}
-			if d.Role == roleService {
-				if e = checkAutomaticMemoryReview(ctx, tx, r, *review); e != nil {
-					return e
-				}
 			}
 			var replay bool
 			result, replay, e = replayMemoryReview(ctx, tx, id, d.PrincipalID, *review)
