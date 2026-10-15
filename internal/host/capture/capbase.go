@@ -21,7 +21,7 @@ var (
 	capState         = host.CaptureState
 	capOrigin        = host.Env("ARKISM_ORIGIN", "claude_code")
 	capProjects      = host.Env("ARKISM_CLAUDE_PROJECTS", filepath.Join(host.Home, ".claude/projects"))
-	capCodexSessions = host.Env("ARKISM_CODEX_SESSIONS", filepath.Join(host.Home, ".codex/sessions"))
+	capCodexSessions = host.CodexSessionsDir(host.Home)
 	capZcodeDB       = host.Env("ARKISM_ZCODE_DB", filepath.Join(host.Home, ".zcode/cli/db/db.sqlite"))
 	capModel         = host.Env("ARKISM_CAPTURE_MODEL", "haiku")
 	capOnPrompt      = os.Getenv("ARKISM_CAPTURE_ON_PROMPT") == "1"

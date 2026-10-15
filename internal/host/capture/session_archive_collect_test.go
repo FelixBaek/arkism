@@ -23,8 +23,12 @@ import (
 func archiveHome(t *testing.T) (home, pc string) {
 	t.Helper()
 	h, p, s, sl := host.Home, archivePC, archiveState, archiveSleep
+	projects, codex := capProjects, capCodexSessions
+	t.Cleanup(func() { capProjects, capCodexSessions = projects, codex })
 	t.Cleanup(func() { host.Home, archivePC, archiveState, archiveSleep = h, p, s, sl })
 	host.Home, archivePC = t.TempDir(), t.TempDir()
+	capProjects = filepath.Join(host.Home, ".claude/projects")
+	capCodexSessions = filepath.Join(host.Home, ".codex/sessions")
 	archiveState = filepath.Join(t.TempDir(), "state", "state.json")
 	archiveSleep = func(time.Duration) {}
 	t.Setenv("ARKISM_PC_LOCAL", "")
@@ -384,5 +388,35 @@ func TestArchiveMainPlansCollectsAndExpires(t *testing.T) {
 	os.WriteFile(archiveState, []byte("{torn"), 0o600)
 	if code := sessionArchiveMain([]string{"collect"}, nil, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "JSONDecodeError") {
 		t.Fatal(code, errOut.String())
+	}
+}
+
+func TestArchiveAndUsageShareConfiguredTranscriptRoots(t *testing.T) {
+	_, pc := archiveHome(t)
+	capProjects = filepath.Join(t.TempDir(), "projects")
+	capCodexSessions = filepath.Join(t.TempDir(), "sessions")
+	for _, local := range []string{"", "1"} {
+		t.Setenv("ARKISM_PC_LOCAL", local)
+		for _, roots := range [][]archiveRoot{archiveRoots(), usageSessionRoots()} {
+			for _, origin := range []string{"claude_code", "codex"} {
+				localRoot, inbox := capProjects, "claude-projects"
+				if origin == "codex" {
+					localRoot, inbox = capCodexSessions, "codex-sessions"
+				}
+				var got []string
+				for _, r := range roots {
+					if r.origin == origin {
+						got = append(got, r.device+":"+r.root)
+					}
+				}
+				want := []string{"server:" + localRoot, "pc:" + filepath.Join(pc, inbox)}
+				if local == "1" {
+					want = []string{"pc:" + localRoot}
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("local=%q origin=%s got=%v want=%v", local, origin, got, want)
+				}
+			}
+		}
 	}
 }
