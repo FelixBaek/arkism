@@ -207,7 +207,7 @@ class PublicPushTests(unittest.TestCase):
         """Verify option like base and git arguments are rejected."""
         from unittest.mock import patch
         with patch.object(MODULE.subprocess, "check_output") as run:
-            for base in ("--help", "-c", "--output=private", "main;echo"):
+            for base in ("--help", "-c", "--output=private", "main;echo", "main\u00e9"):
                 with self.assertRaises(ValueError):
                     MODULE.check(self.root, base, self.patterns)
             with self.assertRaises(ValueError):
