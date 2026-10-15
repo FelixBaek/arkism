@@ -15,6 +15,7 @@ import stat
 import subprocess
 import tempfile
 import time
+import uuid
 ROOT = pathlib.Path(__file__).resolve().parent
 BASELINE = '9379ee5f493716e1c80027c0beb4fd12283100cf'
 MODEL = 'gpt-6-astra'
@@ -58,17 +59,38 @@ def write_json(path, value):
         json.dump(value, handle, indent=2)
 
 
-def evaluate(code, checks):
-    # Generated code gets no credentials, host mounts, or network.
+def remove_judge_container(name):
+    cleaned = subprocess.run(['docker', 'rm', '--force', name], text=True,
+                             capture_output=True, timeout=10)
+    if cleaned.returncode and 'No such container' not in cleaned.stderr:
+        raise RuntimeError('judge container cleanup failed: ' + cleaned.stderr[-2000:])
+
+
+def evaluate(code, checks, *, timeout=20):
+    # Generated code gets no credentials, host mounts, or network. A unique name
+    # lets the host remove the daemon-owned container even if docker CLI times out.
+    name = 'arkism-judge-' + uuid.uuid4().hex
+    marker = 'ARKISM_JUDGE_COMPLETED_' + uuid.uuid4().hex
+    driver = ("import sys; source=sys.stdin.read(); "
+              "exec(compile(source,'<judge>','exec'),{}); "
+              "sys.stdout.write(" + repr('\n' + marker + '\n') + ")")
     command = [
-        'docker', 'run', '--rm', '--network', 'none', '--read-only',
+        'docker', 'run', '--rm', '--name', name, '--network', 'none', '--read-only',
         '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
         '--user', '65534:65534', '--memory', '128m', '--cpus', '1', '-i',
-        'python:3.12-alpine', 'python', '-I', '-',
+        'python:3.12-alpine', 'python', '-I', '-c', driver,
     ]
-    process = subprocess.run(command, input=code + '\n' + checks, text=True,
-                             capture_output=True, timeout=20)
-    return process.returncode == 0, process.stderr[-2000:]
+    try:
+        process = subprocess.run(command, input=code + '\n' + checks, text=True,
+                                 capture_output=True, timeout=timeout)
+        completed = marker in process.stdout.splitlines()
+        success = process.returncode == 0 and completed
+        diagnostic = process.stderr[-2000:]
+        if process.returncode == 0 and not completed:
+            diagnostic = 'judge exited before completing all checks'
+        return success, diagnostic
+    finally:
+        remove_judge_container(name)
 
 
 def initial_record(task, condition, rep, ordinal, run_dir, approval):

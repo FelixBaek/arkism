@@ -272,3 +272,110 @@ func TestSkillResolveErrorItemsHonorParentReadDenial(t *testing.T) {
 		})
 	}
 }
+
+func TestSkillResolveErrorItemsHonorConsultedResourceDenial(t *testing.T) {
+	for _, state := range []string{"version-missing", "version-unavailable", "source-missing", "source-expired", "source-hash"} {
+		t.Run(state, func(t *testing.T) {
+			f := newFixture(t)
+			imported, err := f.svc.ImportSkill(testCtx, f.human, ImportSkillInput{Scope: scopeA, SkillID: "consulted-private", Path: "/synthetic/SKILL.md", Content: "# Private evidence", Analysis: detailedSkillAnalysis()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			collection, id := colSkillVersions, imported.Record.ID
+			want := "skill_unavailable"
+			switch state {
+			case "version-missing":
+				want = "version_not_found"
+				err = f.repo.Delete(testCtx, colSkillVersions, scopeA, id, imported.Record.Revision)
+			case "version-unavailable":
+				r := imported.Record
+				r.ContentErased = true
+				err = f.repo.Replace(testCtx, colSkillVersions, r, r.Revision)
+			default:
+				collection, id = "sources", imported.Record.Sources[0].SourceID
+				r, e := f.repo.Get(testCtx, collection, scopeA, id)
+				if e != nil {
+					t.Fatal(e)
+				}
+				if state == "source-missing" {
+					err = f.repo.Delete(testCtx, collection, scopeA, id, r.Revision)
+				} else {
+					if state == "source-expired" {
+						r.Status = "expired"
+					} else {
+						r.ContentHash = ContentHash("changed source")
+					}
+					err = f.repo.Replace(testCtx, collection, r, r.Revision)
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			in := SkillResolveInput{Scope: scopeA, Refs: []string{"consulted-private@latest-approved"}}
+			visible, err := f.svc.ResolveSkills(testCtx, f.agent, in)
+			if err != nil || len(visible.Items) != 1 || visible.Items[0].Error != want {
+				t.Fatal("fixture did not reach intended error", visible, err)
+			}
+			f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+				if token == f.agent && req.Action == "read:"+collection && req.ResourceID == id {
+					return Decision{}, ErrDenied
+				}
+				return f.auth.Authorize(ctx, token, req)
+			})
+			got, err := f.svc.ResolveSkills(testCtx, f.agent, in)
+			if err != ErrDenied || len(got.Items) != 0 {
+				t.Fatal("consulted error state disclosed", got, err)
+			}
+			server := httptest.NewServer(Handler(f.svc))
+			defer server.Close()
+			skillHTTPCall(t, server, f.agent, "/v1/skills/resolve", in, nil, http.StatusForbidden)
+		})
+	}
+}
+
+func TestSkillResolveErrorRechecksConsultedIdentities(t *testing.T) {
+	f := newFixture(t)
+	imported, err := f.svc.ImportSkill(testCtx, f.human, ImportSkillInput{Scope: scopeA, SkillID: "changing-error", Path: "/synthetic/SKILL.md", Content: "# Private evidence", Analysis: detailedSkillAnalysis()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := f.repo.Get(testCtx, "sources", scopeA, imported.Record.Sources[0].SourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nextVersion, e := f.svc.ImportSkill(testCtx, f.human, ImportSkillInput{Scope: scopeA, SkillID: "changing-error", Path: "/synthetic/SKILL.md", Content: "# Replacement evidence", Analysis: detailedSkillAnalysis()})
+	if e != nil {
+		t.Fatal(e)
+	}
+	second, e := f.repo.Get(testCtx, "sources", scopeA, nextVersion.Record.Sources[0].SourceID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, r := range []Record{first, second} {
+		r.Status = "expired"
+		if err = f.repo.Replace(testCtx, "sources", r, r.Revision); err != nil {
+			t.Fatal(err)
+		}
+	}
+	changed := false
+	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+		if token == f.agent && req.Action == "read:sources" && req.ResourceID == first.ID && !changed {
+			changed = true
+			parent, e := f.repo.Get(ctx, colSkills, scopeA, "changing-error")
+			if e != nil {
+				t.Fatal(e)
+			}
+			parent.ActiveVersion = nextVersion.Record.ID
+			if e := f.repo.Replace(ctx, colSkills, parent, parent.Revision); e != nil {
+				t.Fatal(e)
+			}
+		}
+		return f.auth.Authorize(ctx, token, req)
+	})
+	// Both snapshots produce skill_unavailable, but the second one consulted an
+	// unauthorized source identity and therefore cannot be published.
+	got, err := f.svc.ResolveSkills(testCtx, f.agent, SkillResolveInput{Scope: scopeA, Refs: []string{"changing-error@latest-approved"}})
+	if !changed || err != ErrConflict || len(got.Items) != 0 {
+		t.Fatal("changed hidden dependency accepted", got, err)
+	}
+}
