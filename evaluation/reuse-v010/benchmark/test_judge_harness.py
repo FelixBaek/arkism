@@ -24,7 +24,7 @@ class JudgeHarnessTests(unittest.TestCase):
 
     def test_completion_and_zero_exit_are_both_required(self):
         for status, expected in ((0, True), (1, False)):
-            def execute(command, **kwargs):
+            def execute(command, status=status, **kwargs):
                 if command[1] == 'rm':
                     return subprocess.CompletedProcess(command, 1, '', 'No such container')
                 marker = re.search(r'ARKISM_JUDGE_COMPLETED_[a-f0-9]+', command[-1]).group()
@@ -51,9 +51,8 @@ class JudgeHarnessTests(unittest.TestCase):
     def test_cleanup_failure_is_visible(self):
         def execute(command, **kwargs):
             return subprocess.CompletedProcess(command, 1, '', 'daemon unavailable')
-        with patch.object(benchmark.subprocess, 'run', side_effect=execute):
-            with self.assertRaises(RuntimeError):
-                benchmark.evaluate('pass', 'assert True')
+        with patch.object(benchmark.subprocess, 'run', side_effect=execute), self.assertRaises(RuntimeError):
+            benchmark.evaluate('pass', 'assert True')
 
     def test_summary_retains_unknown_tokens_and_coverage(self):
         rows = [{'input_tokens': 100}, {'input_tokens': None}]

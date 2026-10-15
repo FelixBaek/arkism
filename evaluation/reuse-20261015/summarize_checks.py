@@ -33,7 +33,23 @@ def parsed_events(raw):
             raise ValueError(f'invalid JSON event at line {number}') from error
         if not isinstance(event, dict):
             raise ValueError(f'invalid event object at line {number}')
-        yield event
+        normalized = normalize_event(event)
+        if normalized is not None:
+            yield normalized
+
+
+def normalize_event(event):
+    action = event.get('Action')
+    if action in ('build-output', 'build-fail'):
+        if not event.get('ImportPath'):
+            raise ValueError('build event has no ImportPath')
+        if action == 'build-output':
+            return None  # Dependency builds need not emit a test package result.
+        return {**event, 'Package': event['ImportPath'],
+                'BuildAction': action, 'Action': 'fail'}
+    if not action or not event.get('Package'):
+        raise ValueError('test event has no Action or Package')
+    return event
 
 
 def track_completion(event, seen, finished, running_tests):

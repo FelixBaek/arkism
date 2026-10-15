@@ -29,6 +29,17 @@ class EvidencePublicationTests(unittest.TestCase):
             with self.subTest(raw=raw), self.assertRaises(ValueError):
                 summarize(raw)
 
+    def test_build_failure_without_package_is_preserved(self):
+        raw = self.raw({'Action': 'build-output', 'ImportPath': 'fixture', 'Output': 'compile error'},
+                       {'Action': 'build-fail', 'ImportPath': 'fixture'})
+        result = summarize(raw)
+        self.assertEqual(result[3][0]['BuildAction'], 'build-fail')
+        self.assertEqual(result[4][0]['result'], 'fail')
+        with self.assertRaises(ValueError):
+            summarize(self.raw({'Action': 'build-output', 'ImportPath': 'fixture'}))
+        with self.assertRaises(ValueError):
+            summarize(self.raw({'Action': 'output'}))
+
     def test_package_panic_remains_a_failure(self):
         raw = self.raw({'Action': 'run', 'Package': 'fixture', 'Test': 'TestOne'},
                        {'Action': 'fail', 'Package': 'fixture'})
