@@ -17,6 +17,9 @@ def main():
     os.environ["GOFLAGS"] = os.environ.get("GOFLAGS", "") + " -buildvcs=false"
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tools",
                     "-p", "test_*.py"], cwd=ROOT, check=True)
+    for directory in ("evaluation", "evaluation/reuse-v010/benchmark"):
+        subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", directory,
+                        "-p", "test_*.py"], cwd=ROOT, check=True)
     subprocess.run(["go", "vet", "./..."], cwd=ROOT, check=True)
     subprocess.run(["go", "test", "-race", "./..."], cwd=ROOT, check=True)
     subprocess.run(["node", "--test", *sorted(str(path) for path in
