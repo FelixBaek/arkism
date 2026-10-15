@@ -4043,7 +4043,13 @@
     try {
       const item = await captureMemory(text, m.kind, m, "Arkism 앱에서 사용자가 이전 내용으로 되돌림");
       const saved = ["accepted", "approved"].includes(item.status) || item.memory_id;
-      notice(saved ? "이전 내용으로 되돌렸어요." : "검토 대기에 들어갔어요. 기억 › 확인해 주세요에서 저장하면 되돌려져요.");
+      if (saved) {
+        notice("이전 내용으로 되돌렸어요.");
+      } else if (item.status === "merged") {
+        notice("이미 수집한 내용이에요. 기억 목록에서 상태를 확인하세요.");
+      } else {
+        notice("검토 대기에 들어갔어요. 기억 › 확인해 주세요에서 저장하면 되돌려져요.");
+      }
       state.selected = null;
       await reloadMemories();
     } catch (e) { notice(`되돌리지 못했어요 (${e.message}).`); trigger.disabled = false; }

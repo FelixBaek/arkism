@@ -4574,7 +4574,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "다음 확인   {0}": "Next check   {0}"
 });
 
-Object.assign(window.ArkismI18nEN, {
+Object.assign(window.ArkismI18nEN.strings, {
   "고친 문장을 검토 대기에 넣어요. 검토 후 새 기억으로 승인할 수 있어요.": "The correction goes to review. You can approve it as a new memory after reviewing it.",
   "검토 대기에 추가해요. 승인한 뒤 모든 에이전트가 자료로 써요.": "Added for review. Agents can use it after you approve it.",
   "이미 수집한 내용이에요. 기억 목록에서 상태를 확인하세요.": "This was already captured. Check its status in the memory list.",
