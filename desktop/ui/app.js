@@ -4042,7 +4042,7 @@
     trigger.disabled = true;
     try {
       const item = await captureMemory(text, m.kind, m, "Arkism 앱에서 사용자가 이전 내용으로 되돌림");
-      const saved = ["accepted", "merged", "approved"].includes(item.status) || item.memory_id;
+      const saved = ["accepted", "approved"].includes(item.status) || item.memory_id;
       notice(saved ? "이전 내용으로 되돌렸어요." : "검토 대기에 들어갔어요. 기억 › 확인해 주세요에서 저장하면 되돌려져요.");
       state.selected = null;
       await reloadMemories();
@@ -4092,7 +4092,7 @@
     form.method = "dialog";
     const head = el("div", "dialog-head");
     const t = el("div", "");
-    t.append(el("h2", "", m ? "기억 고치기" : "기억 직접 추가"), el("p", "", m ? "고친 문장이 새 기억이 되고, 옛 기억은 바뀐 이력에 남아 되돌릴 수 있어요." : "내가 직접 말한 것처럼 저장돼요. 모든 에이전트가 자료로 써요."));
+    t.append(el("h2", "", m ? "기억 고치기" : "기억 직접 추가"), el("p", "", m ? "고친 문장을 검토 대기에 넣어요. 검토 후 새 기억으로 승인할 수 있어요." : "검토 대기에 추가해요. 승인한 뒤 모든 에이전트가 자료로 써요."));
     head.append(t);
     const ta = el("textarea");
     ta.rows = 4;
@@ -4127,9 +4127,10 @@
         const saved = ["accepted", "merged", "approved"].includes(item.status) || item.memory_id;
         if (saved) {
           notice(m ? "고쳤어요. 옛 기억은 바뀐 이력에 남아요." : "저장했어요.");
+        } else if (item.status === "merged") {
+          notice("이미 수집한 내용이에요. 기억 목록에서 상태를 확인하세요.");
         } else {
-          const reasonText = item.reason ? ` (${item.reason})` : "";
-          notice(`검토 대기에 들어갔어요${reasonText}. 기억 › 검토 대기에서 승인하면 저장돼요.`);
+          notice("검토 대기에 들어갔어요. 기억 › 검토 대기에서 승인하면 저장돼요.");
         }
         state.selected = null;
         await reloadMemories();
@@ -4157,7 +4158,7 @@
     if (modelPanel) body.append(modelPanel);
     const [why] = waitReason(c);
     const rules = el("details", "d-rules");
-    rules.append(el("summary", "", "자동 저장 규칙 보기"), facts([["바로 저장", "내가 직접 말한 선호·결정·규칙"], ["시험 적용", "AI가 추론한 교훈·결정 (5개 세션에서 안 쓰이면 내림)"], ["항상 확인", "명령 같은 문장 · AI가 추론한 선호·작업 규칙"]]));
+    rules.append(el("summary", "", "기억 검토 규칙 보기"), facts([["검토 대기", "새로 수집한 모든 기억"], ["AI 역할", "위험도 분류와 근거 정리"], ["사람 결정", "승인·고쳐서 승인·거절"]]));
     const reasonSection = () => {
       if (!c.summary) return null;
       const s = section("어디서 왔나요");
