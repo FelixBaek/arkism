@@ -70,6 +70,650 @@
     }
   ],
   "paths": {
+    "/v1/work-checkpoints/authorize-handoff": {
+      "post": {
+        "summary": "Authorize one exact handoff model input",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "HandoffTransferOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "authorized",
+                    "content_hash",
+                    "source_refs",
+                    "archive_messages"
+                  ],
+                  "properties": {
+                    "authorized": {
+                      "type": "boolean"
+                    },
+                    "content_hash": {
+                      "type": "string"
+                    },
+                    "source_refs": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "$ref": "#/components/schemas/Ref"
+                      },
+                      "description": "Exact canonical recursive evidence references; preserve in every child checkpoint save."
+                    },
+                    "archive_messages": {
+                      "type": "array",
+                      "maxItems": 8,
+                      "items": {
+                        "$ref": "#/components/schemas/ArchiveMessageRef"
+                      },
+                      "description": "Canonical normalized archive pointers; preserve in every child checkpoint save."
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scope",
+                  "work",
+                  "destination",
+                  "content"
+                ],
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "work": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/Ref"
+                      },
+                      {
+                        "properties": {
+                          "collection": {
+                            "const": "work_checkpoints"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "destination": {
+                    "type": "string",
+                    "enum": [
+                      "external:openai",
+                      "external:anthropic"
+                    ]
+                  },
+                  "content": {
+                    "type": "string",
+                    "maxLength": 100000,
+                    "description": "Exact serialized JSON object with task and instructions passed to this single model attempt."
+                  },
+                  "skills": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "skill_id",
+                        "version_id",
+                        "content_hash"
+                      ],
+                      "properties": {
+                        "skill_id": {
+                          "type": "string"
+                        },
+                        "version_id": {
+                          "type": "string"
+                        },
+                        "content_hash": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "description": "Requires explicit transfer:model_input and external transfer permission. Revalidates canonical parent work, source/archive lineage and latest-approved skills. No reusable export capability or automatic permission grant.",
+        "operationId": "authorizeHandoffTransfer"
+      }
+    },
+    "/v1/memory/role-search": {
+      "post": {
+        "summary": "searchMemoryForRole",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "ContextBundle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextBundle"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleSearchInput"
+              }
+            }
+          }
+        },
+        "description": "Server-defined relevance profiles narrow ordinary authorized memory search; roles grant no access.",
+        "operationId": "searchMemoryForRole"
+      }
+    },
+    "/v1/knowledge-graph/relations": {
+      "post": {
+        "summary": "putKnowledgeRelation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "KnowledgeRelation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeRelation"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeRelationInput"
+              }
+            }
+          }
+        },
+        "description": "Explicit human-only relationship assertion with current approved memory evidence. Requires write:memory_relations and evidence read permission.",
+        "operationId": "putKnowledgeRelation"
+      }
+    },
+    "/v1/knowledge-graph/expand": {
+      "post": {
+        "summary": "expandKnowledgeGraph",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "KnowledgeGraphResult",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeGraphResult"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeGraphInput"
+              }
+            }
+          }
+        },
+        "description": "Bounded directed traversal with current evidence checks, at most 3 hops, 50 returned edges and 200 inspected edges. Requires read:memory_relations.",
+        "operationId": "expandKnowledgeGraph"
+      }
+    },
+    "/v1/work-checkpoints/recent": {
+      "post": {
+        "summary": "recentWorkCheckpoints",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "RecentWorkOutput",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentWorkOutput"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecentWorkInput"
+              }
+            }
+          }
+        },
+        "description": "Recent distinct session work summaries for one exact repository and current scope; excludes current session and revalidates references.",
+        "operationId": "recentWorkCheckpoints"
+      }
+    },
     "/v1/reflections": {
       "get": {
         "summary": "Group reflection lessons for one task subject",
@@ -8590,6 +9234,538 @@
       }
     },
     "schemas": {
+      "GraphEntity": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+          }
+        }
+      },
+      "KnowledgeRelationInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "source",
+          "target",
+          "relation",
+          "evidence"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "source": {
+            "$ref": "#/components/schemas/GraphEntity"
+          },
+          "target": {
+            "$ref": "#/components/schemas/GraphEntity"
+          },
+          "relation": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "evidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Ref"
+              },
+              {
+                "properties": {
+                  "collection": {
+                    "const": "memories"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "KnowledgeRelation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "source",
+          "target",
+          "relation",
+          "evidence",
+          "asserted_by"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "source": {
+            "$ref": "#/components/schemas/GraphEntity"
+          },
+          "target": {
+            "$ref": "#/components/schemas/GraphEntity"
+          },
+          "relation": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "evidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Ref"
+              },
+              {
+                "properties": {
+                  "collection": {
+                    "const": "memories"
+                  }
+                }
+              }
+            ]
+          },
+          "asserted_by": {
+            "type": "string"
+          }
+        }
+      },
+      "KnowledgeGraphInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "start"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "start": {
+            "$ref": "#/components/schemas/GraphEntity"
+          },
+          "max_depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "default": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 20
+          }
+        }
+      },
+      "KnowledgeGraphResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "authority",
+          "truncated"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeRelation"
+            }
+          },
+          "authority": {
+            "enum": [
+              "data_only_untrusted"
+            ]
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RoleSearchInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kinds": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "description": "Exact case-sensitive OR match. Server additionally enforces 64 UTF-8 bytes per kind, no edge whitespace/control characters or secrets. Unknown kinds match no records."
+          },
+          "filters": {
+            "$ref": "#/components/schemas/SearchFilters"
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "exact",
+                "fts",
+                "vector",
+                "relation"
+              ]
+            },
+            "description": "Omitted, null or empty means legacy defaults: exact, fts, vector. Explicit modes execute only selected lanes. Order does not change rank weights. Excluded vector makes no query-embedding call and is not degraded. Selected unavailable lanes retain degraded reporting without adding unselected fallback lanes. Kinds and metadata filters apply before local candidate limits. Visual mode is not implemented. History uses the selected local lanes and preserves the active-only model context. Explicit relation mode requires related_to; never enabled by default and may be combined with exact/fts/vector."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "1..1000 Unicode code points, not UTF-8 bytes or grapheme clusters. Whitespace-only input is rejected. Original whitespace is preserved and counted. Validated before policy and provider calls. Exact mode also matches the trimmed whole query as a literal stored keyword when at most256 UTF-8 bytes, preserving internal whitespace and punctuation; it retains up to16 existing word tokens and adds at most one distinct whole keyword. It is not phrase-only filtering or a quoting/regex language."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50,
+            "default": 8
+          },
+          "max_chars": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 64000,
+            "default": 12000
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "answer",
+              "knowledge"
+            ],
+            "default": "answer",
+            "description": "answer returns approved memory only; reflections only for improvement/risk/skill validation; knowledge returns approved memory only."
+          },
+          "runtime": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "/v1/skills/route only: drop skills labelled unsupported on this runtime (e.g. claude_code, codex)."
+          },
+          "destination": {
+            "type": "string",
+            "pattern": "^(internal|external:[a-zA-Z0-9_.-]{1,64})$",
+            "default": "internal",
+            "description": "External context requires per-item export approval. Missing legacy classification is not exported."
+          },
+          "run_id": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "budget_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 64000,
+            "description": "Positive values require token_encoding and bound context_data including metadata. Zero or omitted with no encoding preserves character-only behavior."
+          },
+          "token_encoding": {
+            "type": "string",
+            "enum": [
+              "cl100k_base",
+              "o200k_base"
+            ],
+            "description": "Explicit encoding matching the consumer; no model inference."
+          },
+          "include_inactive": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "Approved memory history only, with purpose omitted/answer and destination omitted/internal. Inactive results are returned in history, never items/context_data or memory-use items. Endpoints that cannot return history reject true."
+          },
+          "related_to": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Ref"
+                  },
+                  {
+                    "properties": {
+                      "collection": {
+                        "enum": [
+                          "sources",
+                          "memories",
+                          "evaluations"
+                        ]
+                      },
+                      "id": {
+                        "minLength": 1,
+                        "maxLength": 256
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "description": "Exact scoped anchor revision. Requires explicit relation mode, answer purpose and internal destination. One-hop stored source, supersession or evaluation references only; target memories retain normal policy, filters, history separation and final transaction checks."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "researcher",
+              "implementer",
+              "reviewer"
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "query",
+          "role"
+        ],
+        "dependentRequired": {
+          "token_encoding": [
+            "budget_tokens"
+          ]
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "budget_tokens"
+              ],
+              "properties": {
+                "budget_tokens": {
+                  "minimum": 1
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "token_encoding"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "token_encoding"
+              ]
+            },
+            "then": {
+              "properties": {
+                "budget_tokens": {
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "include_inactive"
+              ],
+              "properties": {
+                "include_inactive": {
+                  "const": true
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "purpose": {
+                  "enum": [
+                    "answer"
+                  ]
+                },
+                "destination": {
+                  "enum": [
+                    "internal"
+                  ]
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "filters": {
+                  "properties": {
+                    "statuses": {
+                      "items": {
+                        "const": "active"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "related_to"
+              ],
+              "properties": {
+                "related_to": {
+                  "type": "object"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "modes"
+              ],
+              "properties": {
+                "modes": {
+                  "type": "array",
+                  "contains": {
+                    "const": "relation"
+                  }
+                },
+                "destination": {
+                  "enum": [
+                    "internal"
+                  ]
+                },
+                "purpose": {
+                  "enum": [
+                    "answer"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "modes"
+              ],
+              "properties": {
+                "modes": {
+                  "type": "array",
+                  "contains": {
+                    "const": "relation"
+                  }
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "related_to"
+              ],
+              "properties": {
+                "related_to": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "RecentWorkInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "repository",
+          "session_id"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 3
+          },
+          "max_age_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "default": 7
+          }
+        }
+      },
+      "RecentWorkOutput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "authority"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "authority": {
+                  "const": "data_only_untrusted"
+                },
+                "archive_messages": {
+                  "type": "array",
+                  "maxItems": 100,
+                  "items": {
+                    "$ref": "#/components/schemas/ArchiveMessageRef"
+                  },
+                  "description": "Historical provenance only; read_session_message revalidates current access and retention."
+                },
+                "package": {
+                  "type": "object"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "revision",
+                "authority",
+                "package",
+                "updated_at"
+              ]
+            }
+          },
+          "authority": {
+            "enum": [
+              "data_only_untrusted"
+            ]
+          }
+        }
+      },
       "Capabilities": {
         "type": "object", "required": ["scope", "actions", "advisory"],
         "properties": {

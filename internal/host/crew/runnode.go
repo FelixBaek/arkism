@@ -370,6 +370,19 @@ func runNode(spec map[string]any) (map[string]any, error) {
 			env = host.AccountsChildEnvironment(env, profile)
 		}
 	}
+	if truthy(spec["handoff_isolated"]) {
+		var cleanup func()
+		env, cleanup, err = isolatedHandoffEnv(env, row.Name)
+		if err != nil {
+			return nil, err
+		}
+		defer cleanup()
+		if row.Name == "codex" {
+			if err = verifyHandoffCodex(binOf(row), workdir, env); err != nil {
+				return nil, err
+			}
+		}
+	}
 	outFile := ""
 	if row.Name == "codex" {
 		f, err := os.CreateTemp("", "arkism-crew-*.txt")
@@ -390,6 +403,9 @@ func runNode(spec map[string]any) (map[string]any, error) {
 		return nil, err
 	}
 	argv, stdin := buildCommand(row, model, effort, instructions, task, outFile, truthy(spec["once"]), access)
+	if truthy(spec["handoff_isolated"]) {
+		argv = isolatedHandoffCommand(argv, row.Name)
+	}
 	out, errOut, code, err := spawnCLI(argv, stdin, workdir, env, timeout, outFile)
 	switch err {
 	case errSpawn:

@@ -10,30 +10,62 @@ import (
 // use the existing human-authorized privacy lifecycle.
 // The serializable transaction covers discovery, quarantine and the job insert.
 func (p *Postgres) discoverWorkPrivacyImpact(ctx context.Context, scope Scope, subject bool, impact *PrivacyImpact, limit int) error {
-	evidence := impact.Records
-	if evidence == nil {
-		evidence = []Ref{}
+	seen := map[string]bool{}
+	workIDs := []string{}
+	for _, ref := range impact.Records {
+		seen[ref.Collection+"/"+ref.ID] = true
+		if ref.Collection == colWorkCheckpoints {
+			workIDs = append(workIDs, ref.ID)
+		}
 	}
-	refs, err := json.Marshal(evidence)
-	if err != nil {
-		return ErrInvalid
-	}
-	rows, err := p.selectRecords(ctx, colWorkCheckpoints, scope, `NOT COALESCE((doc->>'content_erased')::boolean,false) AND ($6 OR EXISTS (
+	// Follow archive-message provenance only for an explicit privacy request.
+	// Retention expiry does not invoke this discovery or erase independent work.
+	// The SQL identity predicate mirrors sameSourceArchiveMessages: stable record
+	// key plus message digest, or position plus digest (legacy archive hash).
+	for round := 0; round < 64; round++ {
+		evidence := impact.Records
+		if evidence == nil {
+			evidence = []Ref{}
+		}
+		refs, err := json.Marshal(evidence)
+		if err != nil {
+			return ErrInvalid
+		}
+		rows, err := p.selectRecords(ctx, colWorkCheckpoints, scope, `NOT COALESCE((doc->>'content_erased')::boolean,false) AND ($6 OR EXISTS (
  SELECT 1 FROM jsonb_array_elements(COALESCE(doc->'work_checkpoint'->'package'->'source_refs','[]'::jsonb)) w
  JOIN jsonb_array_elements($7::jsonb) evidence ON w->>'collection'=evidence->>'collection' AND w->>'id'=evidence->>'id'
+ ) OR EXISTS (
+ SELECT 1 FROM jsonb_array_elements(COALESCE(memory_records.doc->'work_checkpoint'->'archive_messages','[]'::jsonb)) w
+ JOIN memory_records basis ON basis.workspace_id=$2 AND basis.project_id=$3 AND basis.user_id=$4 AND basis.agent_id=$5
+ CROSS JOIN LATERAL jsonb_array_elements(COALESCE(basis.doc->'archive_messages','[]'::jsonb) || COALESCE(basis.doc->'work_checkpoint'->'archive_messages','[]'::jsonb)) a
+ WHERE EXISTS (SELECT 1 FROM jsonb_array_elements($7::jsonb) evidence WHERE evidence->>'collection'=basis.collection AND evidence->>'id'=basis.id)
+ AND w->>'archive_id'=a->>'archive_id' AND COALESCE(w->>'sqlite_step','')=COALESCE(a->>'sqlite_step','')
+ AND ((COALESCE(w->>'record_key','')<>'' AND w->>'record_key'=a->>'record_key' AND COALESCE(w->>'message_sha256','')<>'' AND w->>'message_sha256'=a->>'message_sha256')
+ OR (w->>'chunk_index'=a->>'chunk_index' AND w->>'chunk_offset'=a->>'chunk_offset'
+ AND CASE WHEN COALESCE(w->>'message_sha256','')<>'' AND COALESCE(a->>'message_sha256','')<>'' THEN w->>'message_sha256'=a->>'message_sha256' ELSE w->>'sha256'=a->>'sha256' END))
  ))`, []any{subject, string(refs)}, "id ASC", limit+1)
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
+		added := false
+		for _, row := range rows {
+			key := colWorkCheckpoints + "/" + row.ID
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			added = true
+			impact.Records = append(impact.Records, Ref{Collection: colWorkCheckpoints, ID: row.ID, Revision: row.Revision})
+			workIDs = append(workIDs, row.ID)
+		}
+		if len(impact.Records) > limit {
+			return ErrUnavailable
+		}
+		if !added {
+			return p.appendWorkPrivacyReceipts(ctx, scope, workIDs, impact, limit)
+		}
 	}
-	ids := make([]string, 0, len(rows))
-	for _, row := range rows {
-		impact.Records = append(impact.Records, Ref{Collection: colWorkCheckpoints, ID: row.ID, Revision: row.Revision})
-		ids = append(ids, row.ID)
-	}
-	if len(impact.Records) > limit {
-		return ErrUnavailable
-	}
-	return p.appendWorkPrivacyReceipts(ctx, scope, ids, impact, limit)
+	return ErrUnavailable
 }
 
 func (p *Postgres) appendWorkPrivacyReceipts(ctx context.Context, scope Scope, ids []string, impact *PrivacyImpact, limit int) error {
@@ -168,7 +200,7 @@ func (p *Postgres) discoverSelectedWorkPrivacyImpact(ctx context.Context, scope 
 	if len(impact.Records) > limit {
 		return PrivacyImpact{}, ErrUnavailable
 	}
-	if err := p.appendWorkPrivacyReceipts(ctx, scope, ids, &impact, limit); err != nil {
+	if err := p.discoverWorkPrivacyImpact(ctx, scope, false, &impact, limit); err != nil {
 		return PrivacyImpact{}, err
 	}
 	return impact, nil
