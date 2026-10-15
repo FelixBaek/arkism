@@ -1,0 +1,42 @@
+{
+  "baseline_commit": "9379ee5f493716e1c80027c0beb4fd12283100cf",
+  "upstream_after_baseline": "edc6f934101c12a218a02bef8a9c686f962863a6",
+  "baseline_go": {
+    "status": "passed",
+    "top_level_pass": 1980,
+    "skipped": 3,
+    "evidence": "baseline-go-summary.json"
+  },
+  "final_go": {
+    "status": "running",
+    "product_commit": "7049c444fb80829a133bf1509694f2b5faa7bd3a"
+  },
+  "final_go_vet": {
+    "status": "passed"
+  },
+  "ui": {
+    "passed": 29,
+    "failed": 0
+  },
+  "python_tools": {
+    "passed": 32,
+    "failed": 0
+  },
+  "single_connection_postgres_regression": {
+    "status": "passed",
+    "tests": 2,
+    "evidence": "../skill-single-connection-fixed.jsonl"
+  },
+  "public_preflight": {
+    "status": "passed",
+    "public_base": "edc6f934101c12a218a02bef8a9c686f962863a6",
+    "allowance": "exact unchanged upstream LICENSE blob and verified public noreply identity"
+  },
+  "gitleaks": {
+    "status": "passed"
+  },
+  "publication": {
+    "main_merged": false,
+    "deployed": false
+  }
+}

@@ -1,0 +1,8 @@
+{"Time":"2026-10-15T19:29:33.827498308+09:00","Action":"start","Package":"github.com/FelixBaek/arkism/internal/memory"}
+{"Time":"2026-10-15T19:29:33.904971961+09:00","Action":"run","Package":"github.com/FelixBaek/arkism/internal/memory","Test":"TestPostgresSkillAvailability"}
+{"Time":"2026-10-15T19:29:33.90506602+09:00","Action":"output","Package":"github.com/FelixBaek/arkism/internal/memory","Test":"TestPostgresSkillAvailability","Output":"=== RUN   TestPostgresSkillAvailability\n","OutputType":"frame"}
+{"Time":"2026-10-15T19:29:34.621291829+09:00","Action":"output","Package":"github.com/FelixBaek/arkism/internal/memory","Test":"TestPostgresSkillAvailability","Output":"--- PASS: TestPostgresSkillAvailability (0.72s)\n","OutputType":"frame"}
+{"Time":"2026-10-15T19:29:34.621330502+09:00","Action":"pass","Package":"github.com/FelixBaek/arkism/internal/memory","Test":"TestPostgresSkillAvailability","Elapsed":0.72}
+{"Time":"2026-10-15T19:29:34.621575269+09:00","Action":"output","Package":"github.com/FelixBaek/arkism/internal/memory","Output":"PASS\n","OutputType":"frame"}
+{"Time":"2026-10-15T19:29:35.625590683+09:00","Action":"output","Package":"github.com/FelixBaek/arkism/internal/memory","Output":"ok  \tgithub.com/FelixBaek/arkism/internal/memory\t1.797s\n"}
+{"Time":"2026-10-15T19:29:35.625635107+09:00","Action":"pass","Package":"github.com/FelixBaek/arkism/internal/memory","Elapsed":1.798}

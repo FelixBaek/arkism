@@ -24,7 +24,7 @@ for row in rows:
         requests.append(dict(test=row.get('Test'), method=method, path=path, status=int(status), elapsed_ms=float(elapsed)))
 for filename, entries in [('runs.csv', checks), ('requests.csv', requests)]:
     with (root / filename).open('w', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=list(entries[0]))
+        writer = csv.DictWriter(file, fieldnames=list(entries[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows(entries)
 search = [r['elapsed_ms'] for r in requests if r['path'] == '/v1/search' and r['status'] == 200]

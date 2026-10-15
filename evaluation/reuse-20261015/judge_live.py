@@ -28,5 +28,5 @@ for direction in (1,2):
  scores.append({'direction':validation['writer']+' -> '+validation['reader'],'actual_recall':called,'task_correct':correct,'source_id_correct':answer.get('source_id') in validation['source_ids'],'preapproval_search_count':validation['before_items'],'answer':answer,'evidence':label+'-reader.jsonl'})
 (root/'scores.json').write_text(json.dumps(scores,indent=2)+'\n')
 with (root/'scores.csv').open('w',newline='') as f:
- w=csv.DictWriter(f,fieldnames=scores[0]);w.writeheader();w.writerows(scores)
+ w=csv.DictWriter(f,fieldnames=scores[0],lineterminator="\n");w.writeheader();w.writerows(scores)
 print(json.dumps(scores,indent=2))
