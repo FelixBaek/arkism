@@ -4037,21 +4037,23 @@
       histRow.append(back);
     }
   }
+  async function finishMemoryCapture(item, savedMessage, pendingMessage) {
+    if (["accepted", "approved"].includes(item.status) || item.memory_id) {
+      notice(savedMessage);
+    } else if (item.status === "merged") {
+      notice("이미 수집한 내용이에요. 기억 목록에서 상태를 확인하세요.");
+    } else {
+      notice(pendingMessage);
+    }
+    state.selected = null;
+    await reloadMemories();
+  }
   async function revertMemory(m, text, trigger) {
     if (!confirm(`이전 내용으로 되돌릴까요?\n\n지금: “${m.text}”\n이전: “${text}”\n\n지금 내용은 변경 이력에 남아요.`)) return;
     trigger.disabled = true;
     try {
       const item = await captureMemory(text, m.kind, m, "Arkism 앱에서 사용자가 이전 내용으로 되돌림");
-      const saved = ["accepted", "approved"].includes(item.status) || item.memory_id;
-      if (saved) {
-        notice("이전 내용으로 되돌렸어요.");
-      } else if (item.status === "merged") {
-        notice("이미 수집한 내용이에요. 기억 목록에서 상태를 확인하세요.");
-      } else {
-        notice("검토 대기에 들어갔어요. 기억 › 확인해 주세요에서 저장하면 되돌려져요.");
-      }
-      state.selected = null;
-      await reloadMemories();
+      await finishMemoryCapture(item, "이전 내용으로 되돌렸어요.", "검토 대기에 들어갔어요. 기억 › 확인해 주세요에서 저장하면 되돌려져요.");
     } catch (e) { notice(`되돌리지 못했어요 (${e.message}).`); trigger.disabled = false; }
   }
   async function forgetMemory(m) {
@@ -4130,16 +4132,8 @@
       try {
         const item = await captureMemory(ta.value.trim(), m?.kind || kind.value, m);
         dlg.close();
-        const saved = ["accepted", "approved"].includes(item.status) || item.memory_id;
-        if (saved) {
-          notice(m ? "고쳤어요. 옛 기억은 바뀐 이력에 남아요." : "저장했어요.");
-        } else if (item.status === "merged") {
-          notice("이미 수집한 내용이에요. 기억 목록에서 상태를 확인하세요.");
-        } else {
-          notice("검토 대기에 들어갔어요. 기억 › 검토 대기에서 승인하면 저장돼요.");
-        }
-        state.selected = null;
-        await reloadMemories();
+        await finishMemoryCapture(item, m ? "고쳤어요. 옛 기억은 바뀐 이력에 남아요." : "저장했어요.",
+          "검토 대기에 들어갔어요. 기억 › 검토 대기에서 승인하면 저장돼요.");
       } catch (error_) { notice(`저장하지 못했어요 (${error_.message}).`); ok.disabled = false; }
     });
     dlg.append(form);

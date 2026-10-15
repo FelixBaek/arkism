@@ -31,7 +31,7 @@ function setup(item) {
     reloadMemories: async () => { reloads++; }
   });
   vm.runInContext(
-    handler("  async function revertMemory(", "  async function forgetMemory(") +
+    handler("  async function finishMemoryCapture(", "  async function forgetMemory(") +
     handler("  function openMemoryFix(", "  function historyItem("), context);
   return {context, body, notices, captures, reloads: () => reloads};
 }
