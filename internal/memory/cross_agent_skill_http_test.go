@@ -203,3 +203,72 @@ func TestPostgresSkillResolveWithSingleConnection(t *testing.T) {
 		t.Fatalf("single connection resolution: %v %#v", err, got)
 	}
 }
+
+// Error codes and trial status are stored information too. A denied parent
+// must look identical whether missing, deprecated, unapproved or unavailable.
+func TestSkillResolveErrorItemsHonorParentReadDenial(t *testing.T) {
+	for _, state := range []string{"missing", "deprecated", "unapproved", "missing-version", "unavailable", "trial"} {
+		t.Run(state, func(t *testing.T) {
+			f := newFixture(t)
+			imported, err := f.svc.ImportSkill(testCtx, f.human, ImportSkillInput{Scope: scopeA, SkillID: "private-status", Path: "/synthetic/SKILL.md", Content: "# Private procedure", Analysis: detailedSkillAnalysis()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			parent := imported.Skill
+			in := SkillResolveInput{Scope: scopeA, Refs: []string{parent.ID + "@latest-approved"}}
+			want := ""
+			switch state {
+			case "missing":
+				in.Refs = []string{"private-missing@latest-approved"}
+				want = "skill_not_found"
+			case "deprecated":
+				parent.Status = "deprecated"
+				want = "skill_deprecated"
+			case "unapproved", "trial":
+				parent.ActiveVersion = ""
+				want = "no_approved_version"
+			case "missing-version":
+				in.Refs = []string{parent.ID + "@99"}
+				want = "version_not_found"
+			case "unavailable":
+				version := imported.Record
+				version.Analysis = nil
+				if err = f.repo.Replace(testCtx, colSkillVersions, version, version.Revision); err != nil {
+					t.Fatal(err)
+				}
+				want = "skill_unavailable"
+			}
+			if err = f.repo.Replace(testCtx, colSkills, parent, parent.Revision); err != nil {
+				t.Fatal(err)
+			}
+			if state == "trial" {
+				in.TrialID, in.Runtime = "private-trial", "codex"
+				trial := Record{ID: in.TrialID, Scope: scopeA, SkillID: parent.ID, Status: "expired", Revision: 1, SkillTrial: &SkillTrial{Runtime: in.Runtime, EndsAt: time.Now().Add(-time.Hour)}}
+				if err = f.repo.Insert(testCtx, colSkillTrials, trial); err != nil {
+					t.Fatal(err)
+				}
+			}
+			visible, err := f.svc.ResolveSkills(testCtx, f.agent, in)
+			if err != nil || len(visible.Items) != 1 || visible.Items[0].Error != want {
+				t.Fatal("fixture did not reach intended error state", visible, err)
+			}
+			if state == "trial" && visible.Items[0].TrialStatus != "expired" {
+				t.Fatal("fixture did not expose trial status")
+			}
+			id, _, _ := parseSkillRef(in.Refs[0])
+			f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+				if token == f.agent && req.Action == "read:skills" && req.ResourceID == id {
+					return Decision{}, ErrDenied
+				}
+				return f.auth.Authorize(ctx, token, req)
+			})
+			got, err := f.svc.ResolveSkills(testCtx, f.agent, in)
+			if err != ErrDenied || len(got.Items) != 0 {
+				t.Fatal("private error/status disclosed", got, err)
+			}
+			server := httptest.NewServer(Handler(f.svc))
+			defer server.Close()
+			skillHTTPCall(t, server, f.agent, "/v1/skills/resolve", in, nil, http.StatusForbidden)
+		})
+	}
+}

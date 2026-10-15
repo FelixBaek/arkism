@@ -226,6 +226,25 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 	if err != nil {
 		return out, err
 	}
+	// Even unsuccessful resolutions disclose existence, approval and trial state.
+	// Authorize the parsed skill before any lookup, including unknown IDs, so a
+	// denied reader cannot distinguish missing from deprecated/private skills.
+	authorizeSkill := func(ref string) error {
+		id, _, valid := parseSkillRef(ref)
+		if !valid {
+			return nil // invalid_ref contains no stored information.
+		}
+		d, e := s.authorize(ctx, token, "read:skills", in.Scope, id, "")
+		if e == nil && (d.PrincipalID != actor.PrincipalID || d.Role != actor.Role) {
+			e = ErrDenied
+		}
+		return e
+	}
+	for _, ref := range in.Refs {
+		if e := authorizeSkill(ref); e != nil {
+			return out, e
+		}
+	}
 	resolve := func(ctx context.Context, tx Tx, ref string) (ResolvedSkill, error) {
 		if in.TrialID != "" {
 			return resolveSkillTrial(ctx, tx, in, ref)
@@ -249,11 +268,14 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 	// Authorization may need its own database connection (including denial
 	// auditing). Never hold a repository transaction while asking the policy.
 	for _, item := range out.Items {
+		if e := authorizeSkill(item.Ref); e != nil {
+			out.Items = []ResolvedSkill{}
+			return out, e
+		}
 		if item.Error != "" {
 			continue
 		}
 		for _, resource := range []Ref{
-			{Collection: colSkills, ID: item.SkillID},
 			{Collection: colSkillVersions, ID: item.VersionID},
 			{Collection: "sources", ID: item.Provenance.SourceID},
 		} {
