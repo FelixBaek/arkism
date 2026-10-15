@@ -214,6 +214,31 @@ type SkillResolveResult struct {
 	Items     []ResolvedSkill `json:"items"`
 }
 
+// Track identities consulted by resolution, including missing/error records.
+// This stays request-local and is never serialized into a response. Policy
+// calls happen after the read transaction so single-connection pools are safe.
+type skillResolveReadTx struct {
+	Tx
+	refs *[]Ref
+}
+
+func (t skillResolveReadTx) remember(collection, id string) {
+	ref := Ref{Collection: collection, ID: id}
+	if !slices.Contains(*t.refs, ref) {
+		*t.refs = append(*t.refs, ref)
+	}
+}
+func (t skillResolveReadTx) Get(ctx context.Context, collection string, scope Scope, id string) (Record, error) {
+	t.remember(collection, id)
+	return t.Tx.Get(ctx, collection, scope, id)
+}
+func (t skillResolveReadTx) SourceMetadata(ctx context.Context, scope Scope, ids []string, includeText bool) ([]Record, error) {
+	for _, id := range ids {
+		t.remember("sources", id)
+	}
+	return t.Tx.SourceMetadata(ctx, scope, ids, includeText)
+}
+
 // ResolveSkills answers each ref independently so one missing skill never
 // hides the others. Failures are fixed codes: invalid_ref, skill_not_found,
 // version_not_found, no_approved_version, skill_deprecated, skill_unavailable.
@@ -222,25 +247,99 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 	if (in.TrialID != "" && (!validRunLabel(in.TrialID, 128) || !trialRuntime(in.Runtime) || len(in.Refs) != 1)) || (in.TrialID == "" && in.Runtime != "") || !validScope(in.Scope) || len(in.Refs) == 0 || len(in.Refs) > skillResolveRefMax {
 		return out, ErrInvalid
 	}
-	if _, err := s.authorize(ctx, token, "read:skill_versions", in.Scope, "", ""); err != nil {
+	actor, err := s.authorize(ctx, token, "read:skill_versions", in.Scope, "", "")
+	if err != nil {
 		return out, err
 	}
-	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		for _, ref := range in.Refs {
-			var item ResolvedSkill
-			var err error
-			if in.TrialID != "" {
-				item, err = resolveSkillTrial(ctx, tx, in, ref)
-			} else {
-				item, err = resolveSkillRef(ctx, tx, in.Scope, ref)
-			}
-			if err != nil {
-				return err
+	// Even unsuccessful resolutions disclose existence, approval and trial state.
+	// Authorize the parsed skill before any lookup, including unknown IDs, so a
+	// denied reader cannot distinguish missing from deprecated/private skills.
+	authorizeSkill := func(ref string) error {
+		id, _, valid := parseSkillRef(ref)
+		if !valid {
+			return nil // invalid_ref contains no stored information.
+		}
+		d, e := s.authorize(ctx, token, "read:skills", in.Scope, id, "")
+		if e == nil && (d.PrincipalID != actor.PrincipalID || d.Role != actor.Role) {
+			e = ErrDenied
+		}
+		return e
+	}
+	for _, ref := range in.Refs {
+		if e := authorizeSkill(ref); e != nil {
+			return out, e
+		}
+	}
+	if in.TrialID != "" {
+		d, e := s.authorize(ctx, token, "read:"+colSkillTrials, in.Scope, in.TrialID, "")
+		if e == nil && (d.PrincipalID != actor.PrincipalID || d.Role != actor.Role) {
+			e = ErrDenied
+		}
+		if e != nil {
+			return out, e
+		}
+	}
+	resolve := func(ctx context.Context, tx Tx, ref string) (ResolvedSkill, error) {
+		if in.TrialID != "" {
+			return resolveSkillTrial(ctx, tx, in, ref)
+		}
+		return resolveSkillRef(ctx, tx, in.Scope, ref)
+	}
+	var consulted [][]Ref
+	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		// PostgreSQL may retry this callback after serialization failure. Publish
+		// only the successful attempt, never rolled-back items or read identities.
+		out.Items = []ResolvedSkill{}
+		consulted = make([][]Ref, len(in.Refs))
+		for i, ref := range in.Refs {
+			item, e := resolve(ctx, skillResolveReadTx{Tx: tx, refs: &consulted[i]}, ref)
+			if e != nil {
+				return e
 			}
 			out.Items = append(out.Items, item)
 		}
 		return nil
 	})
+	if err != nil {
+		out.Items = []ResolvedSkill{}
+		return out, err
+	}
+	// Authorization may need its own database connection (including denial
+	// auditing). Never hold a repository transaction while asking the policy.
+	for i, item := range out.Items {
+		if e := authorizeSkill(item.Ref); e != nil {
+			out.Items = []ResolvedSkill{}
+			return out, e
+		}
+		for _, resource := range consulted[i] {
+			d, e := s.authorize(ctx, token, "read:"+resource.Collection, in.Scope, resource.ID, "")
+			if e == nil && (d.PrincipalID != actor.PrincipalID || d.Role != actor.Role) {
+				e = ErrDenied
+			}
+			if e != nil {
+				out.Items = []ResolvedSkill{}
+				return out, e
+			}
+		}
+	}
+	// Approval/source state may change while policy is consulted. Publish only
+	// the exact snapshot whose resource identities were authorized.
+	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		for i, ref := range in.Refs {
+			var currentRefs []Ref
+			item, e := resolve(ctx, skillResolveReadTx{Tx: tx, refs: &currentRefs}, ref)
+			if e != nil {
+				return e
+			}
+			if structuredText(item) != structuredText(out.Items[i]) || !slices.Equal(currentRefs, consulted[i]) {
+				return ErrConflict
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		out.Items = []ResolvedSkill{}
+	}
 	return out, err
 }
 

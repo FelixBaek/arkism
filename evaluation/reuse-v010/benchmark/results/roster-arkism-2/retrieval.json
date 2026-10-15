@@ -1,0 +1,63 @@
+{
+  "approval": "explicit-user-approval-of-five-synthetic-facts",
+  "authorization": "distinct-A-B-human-bearer-tokens",
+  "context": {
+    "context_data": "{\"authority\":\"data_only_untrusted\",\"items\":[{\"trust_level\":\"user_verified\",\"generator_model\":\"synthetic-host\",\"created_by\":\"bench-a\",\"created_at\":\"2026-10-15T10:20:12.038Z\",\"digest\":\"93d9eb4ea34d89e9b0bb4e173d99484a3e7776a028d4565c40d33e822297c32f\",\"source_event_id\":\"b44917d74495cbad2f0759226acfaf8b\",\"verification_status\":\"verified\",\"effective_at\":\"2026-10-15T10:20:12.038Z\",\"kind\":\"semantic\",\"sensitivity\":\"internal\",\"id\":\"780c0546b23635da14d0d5bb4055d8ec\",\"collection\":\"memories\",\"origin\":\"memory\",\"scope\":{\"workspace_id\":\"ws-a\",\"project_id\":\"proj-a\"},\"status\":\"active\",\"revision\":2,\"text\":\"Jobs are permitted Monday–Thursday; Friday–Sunday are blackout days.\",\"sources\":[{\"span\":{\"content_hash\":\"3e659b026bae0f97c8e018aa9d73c5208c5ccc5f2a588da9aaa76efb70181b62\",\"start\":0,\"end\":68},\"source_id\":\"b44917d74495cbad2f0759226acfaf8b\",\"locator\":\"original\"}],\"updated_at\":\"2026-10-15T10:20:12.067Z\",\"trust\":1,\"reasons\":[\"exact_keyword\"],\"authority\":\"data_only_untrusted\"}]}",
+    "tokens_used": 333,
+    "token_encoding": "cl100k_base",
+    "context_id": "00597cf3c7f63f9fd2593f5f2aa024a5",
+    "authority": "data_only_untrusted",
+    "items": [
+      {
+        "trust_level": "user_verified",
+        "generator_model": "synthetic-host",
+        "created_by": "bench-a",
+        "created_at": "2026-10-15T10:20:12.038Z",
+        "digest": "93d9eb4ea34d89e9b0bb4e173d99484a3e7776a028d4565c40d33e822297c32f",
+        "source_event_id": "b44917d74495cbad2f0759226acfaf8b",
+        "verification_status": "verified",
+        "effective_at": "2026-10-15T10:20:12.038Z",
+        "kind": "semantic",
+        "sensitivity": "internal",
+        "id": "780c0546b23635da14d0d5bb4055d8ec",
+        "collection": "memories",
+        "origin": "memory",
+        "scope": {
+          "workspace_id": "ws-a",
+          "project_id": "proj-a"
+        },
+        "status": "active",
+        "revision": 2,
+        "text": "Jobs are permitted Monday–Thursday; Friday–Sunday are blackout days.",
+        "sources": [
+          {
+            "span": {
+              "content_hash": "3e659b026bae0f97c8e018aa9d73c5208c5ccc5f2a588da9aaa76efb70181b62",
+              "start": 0,
+              "end": 68
+            },
+            "source_id": "b44917d74495cbad2f0759226acfaf8b",
+            "locator": "original"
+          }
+        ],
+        "updated_at": "2026-10-15T10:20:12.067Z",
+        "trust": 1,
+        "reasons": [
+          "exact_keyword"
+        ],
+        "authority": "data_only_untrusted"
+      }
+    ]
+  },
+  "limitation": "admin database connection; RLS not asserted in this benchmark",
+  "machine_setup_seconds": 0.262360441,
+  "retrieval_ms": 12.546,
+  "returned_rule_ids": [
+    "780c0546b23635da14d0d5bb4055d8ec"
+  ],
+  "source_ids": [
+    "b44917d74495cbad2f0759226acfaf8b"
+  ],
+  "storage": "fresh-postgres-database",
+  "text": "Jobs are permitted Monday–Thursday; Friday–Sunday are blackout days."
+}

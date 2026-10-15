@@ -163,7 +163,7 @@ func TestRecallRelationLaneAndInvalidAnchors(t *testing.T) {
 func TestRecallKeepsConflictSourceAndReplacement(t *testing.T) {
 	swapRouter(t)
 	for _, byID := range []bool{true, false} {
-		memory := `{"id":"m","revision":3,"kind":"decision","status":"active","text":"근거","sources":[{"source_id":"source","locator":"original"}],"supersedes":[{"collection":"memories","id":"old","revision":2}],`
+		memory := `{"id":"m","revision":3,"kind":"decision","status":"active","approved_by":"human","text":"근거","sources":[{"source_id":"source","locator":"original"}],"supersedes":[{"collection":"memories","id":"old","revision":2}],`
 		if byID {
 			memory += `"conflict_id":"private-relation"}`
 		} else {
@@ -305,7 +305,7 @@ func TestToolContractStatusAndVersionPattern(t *testing.T) {
 
 func TestRecallByIDOrQuery(t *testing.T) {
 	swapRouter(t)
-	memory := `{"id":"m1","kind":"user","status":"active","text":"답은 한국어로","sources":[{"source_id":"s"}],"scope":{}}`
+	memory := `{"id":"m1","kind":"user","status":"active","approved_by":"human","text":"답은 한국어로","sources":[{"source_id":"s"}],"scope":{}}`
 	calls := fakeRequest(t, memory)
 	out := structured(t, call(t, "recall", `{"ids":["m1"]}`))
 	if !strings.HasPrefix((*calls)[0].path, "/v1/memories/m1?") || field(out, "authority") != "data_only_untrusted" ||

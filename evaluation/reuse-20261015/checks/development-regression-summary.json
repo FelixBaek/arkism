@@ -1,0 +1,131 @@
+{
+  "label": "development-regression",
+  "product_commit": "08a648d",
+  "raw_sha256": "efeb2a231b3409914fb0e52ce3b4b4b1a36be2a8bccf3c8fdbcb939c3a39cf41",
+  "counts_including_subtests": {
+    "pass": 5029,
+    "skip": 2
+  },
+  "top_level_counts": {
+    "pass": 1743,
+    "skip": 2
+  },
+  "skips": [
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/backup",
+      "test": "TestCLIDefaultsToPreviewAndServiceSharesBackupLock"
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/backup",
+      "test": "TestFailedNewBackupStillExpiresOldBundleBeforeServiceAccess"
+    }
+  ],
+  "failures": [
+    {
+      "Time": "2026-10-15T19:26:56.730360191+09:00",
+      "Action": "fail",
+      "Package": "github.com/FelixBaek/arkism/internal/memory",
+      "Elapsed": 302.107
+    }
+  ],
+  "packages": [
+    {
+      "package": "github.com/FelixBaek/arkism/cmd/arkism",
+      "result": "skip",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/cmd/arkism-crew",
+      "result": "pass",
+      "seconds": 1.008
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/cmd/memory-principal",
+      "result": "skip",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/capture/dshzstd",
+      "result": "skip",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/crew/keystore",
+      "result": "skip",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/cmd/memoryd",
+      "result": "pass",
+      "seconds": 1.066
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/doctor",
+      "result": "pass",
+      "seconds": 1.089
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host",
+      "result": "pass",
+      "seconds": 1.13
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/discord",
+      "result": "pass",
+      "seconds": 1.169
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/backup",
+      "result": "pass",
+      "seconds": 1.176
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/subscription",
+      "result": "pass",
+      "seconds": 4.771
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/codegraph",
+      "result": "pass",
+      "seconds": 4.908
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/capture",
+      "result": "pass",
+      "seconds": 5.556
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/gateway",
+      "result": "pass",
+      "seconds": 8.132
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/skills",
+      "result": "pass",
+      "seconds": 8.138
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/crewrun",
+      "result": "pass",
+      "seconds": 14.558
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/prices",
+      "result": "pass",
+      "seconds": 1.019
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/host/crew",
+      "result": "pass",
+      "seconds": 70.636
+    },
+    {
+      "package": "github.com/FelixBaek/arkism/internal/memory",
+      "result": "fail",
+      "seconds": 302.107
+    }
+  ],
+  "command": "go test -race -tags=integration -json -count=1 ./...",
+  "environment": "disposable loopback pgvector Postgres 17; no model providers",
+  "note": "Intermediate fix held a transaction while authorization acquired the only DB connection. Manually interrupted with SIGQUIT after confirming the blocked TestPostgresSkillAvailability; this is not a v0.1.0 failure. Product commit field is the pre-rebase intermediate commit recorded locally."
+}

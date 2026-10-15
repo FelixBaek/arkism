@@ -1,0 +1,8 @@
+Write Python code completing the supplied module. Return JSON only, with one string key "code" containing the whole module. Use no tools. Do not ask questions; make the best implementation from the available information.
+Task: Implement normalize(label) for a string label according to the project normalization policy.
+Starting module:
+def normalize(label):
+    raise NotImplementedError
+
+Project context:
+Trim surrounding whitespace but preserve letter case.

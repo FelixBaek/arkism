@@ -1,0 +1,63 @@
+{
+  "approval": "explicit-user-approval-of-five-synthetic-facts",
+  "authorization": "distinct-A-B-human-bearer-tokens",
+  "context": {
+    "context_data": "{\"authority\":\"data_only_untrusted\",\"items\":[{\"trust_level\":\"user_verified\",\"generator_model\":\"synthetic-host\",\"created_by\":\"bench-a\",\"created_at\":\"2026-10-15T10:24:30.187Z\",\"digest\":\"24f9ab67ba3f72e64b0faf3ba8fa412835b34bd541a8bff0f7a214b3ab10073b\",\"source_event_id\":\"7b0dc20e5cf45e8f658fc033bca3cc0b\",\"verification_status\":\"verified\",\"effective_at\":\"2026-10-15T10:24:30.187Z\",\"kind\":\"semantic\",\"sensitivity\":\"internal\",\"id\":\"c2b5c98a8b8c2df211f454fbbd2d4358\",\"collection\":\"memories\",\"origin\":\"memory\",\"scope\":{\"workspace_id\":\"ws-a\",\"project_id\":\"proj-a\"},\"status\":\"active\",\"revision\":2,\"text\":\"Trim surrounding whitespace but preserve letter case.\",\"sources\":[{\"span\":{\"content_hash\":\"3f156fb57a57949751c31c81643f4f8f219375faeb45db597a9ae045953bc9cf\",\"start\":0,\"end\":53},\"source_id\":\"7b0dc20e5cf45e8f658fc033bca3cc0b\",\"locator\":\"original\"}],\"updated_at\":\"2026-10-15T10:24:30.216Z\",\"trust\":1,\"reasons\":[\"exact_keyword\"],\"authority\":\"data_only_untrusted\"}]}",
+    "tokens_used": 332,
+    "token_encoding": "cl100k_base",
+    "context_id": "d1a9e887c75e194a760382b341826af7",
+    "authority": "data_only_untrusted",
+    "items": [
+      {
+        "trust_level": "user_verified",
+        "generator_model": "synthetic-host",
+        "created_by": "bench-a",
+        "created_at": "2026-10-15T10:24:30.187Z",
+        "digest": "24f9ab67ba3f72e64b0faf3ba8fa412835b34bd541a8bff0f7a214b3ab10073b",
+        "source_event_id": "7b0dc20e5cf45e8f658fc033bca3cc0b",
+        "verification_status": "verified",
+        "effective_at": "2026-10-15T10:24:30.187Z",
+        "kind": "semantic",
+        "sensitivity": "internal",
+        "id": "c2b5c98a8b8c2df211f454fbbd2d4358",
+        "collection": "memories",
+        "origin": "memory",
+        "scope": {
+          "workspace_id": "ws-a",
+          "project_id": "proj-a"
+        },
+        "status": "active",
+        "revision": 2,
+        "text": "Trim surrounding whitespace but preserve letter case.",
+        "sources": [
+          {
+            "span": {
+              "content_hash": "3f156fb57a57949751c31c81643f4f8f219375faeb45db597a9ae045953bc9cf",
+              "start": 0,
+              "end": 53
+            },
+            "source_id": "7b0dc20e5cf45e8f658fc033bca3cc0b",
+            "locator": "original"
+          }
+        ],
+        "updated_at": "2026-10-15T10:24:30.216Z",
+        "trust": 1,
+        "reasons": [
+          "exact_keyword"
+        ],
+        "authority": "data_only_untrusted"
+      }
+    ]
+  },
+  "limitation": "admin database connection; RLS not asserted in this benchmark",
+  "machine_setup_seconds": 0.274586582,
+  "retrieval_ms": 12.752,
+  "returned_rule_ids": [
+    "c2b5c98a8b8c2df211f454fbbd2d4358"
+  ],
+  "source_ids": [
+    "7b0dc20e5cf45e8f658fc033bca3cc0b"
+  ],
+  "storage": "fresh-postgres-database",
+  "text": "Trim surrounding whitespace but preserve letter case."
+}

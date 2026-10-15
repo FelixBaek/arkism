@@ -1,0 +1,186 @@
+TAP version 13
+# Subtest: skill sources normalize to owner/repo[/path][@ref] like the host and server expect
+ok 1 - skill sources normalize to owner/repo[/path][@ref] like the host and server expect
+  ---
+  duration_ms: 1.227834
+  type: 'test'
+  ...
+# Subtest: MCP presets fill a valid dialog: name, method and a program or https address
+ok 2 - MCP presets fill a valid dialog: name, method and a program or https address
+  ---
+  duration_ms: 0.303617
+  type: 'test'
+  ...
+# Subtest: install targets and sizes
+ok 3 - install targets and sizes
+  ---
+  duration_ms: 0.972138
+  type: 'test'
+  ...
+# Subtest: UI DELETE paths are allowed by the desktop app
+ok 4 - UI DELETE paths are allowed by the desktop app
+  ---
+  duration_ms: 19.207556
+  type: 'test'
+  ...
+# i18n: 3369 static strings, 0 untranslated (100.0% covered)
+# i18n: 758 template strings, 0 without a pattern
+# Subtest: every static string has its own English entry
+ok 5 - every static string has its own English entry
+  ---
+  duration_ms: 2.087868
+  type: 'test'
+  ...
+# Subtest: every template string has a pattern
+ok 6 - every template string has a pattern
+  ---
+  duration_ms: 0.52184
+  type: 'test'
+  ...
+# Subtest: each pattern keeps its placeholders and translates a sample
+ok 7 - each pattern keeps its placeholders and translates a sample
+  ---
+  duration_ms: 53.602487
+  type: 'test'
+  ...
+# Subtest: translator details
+ok 8 - translator details
+  ---
+  duration_ms: 0.414388
+  type: 'test'
+  ...
+# Subtest: translator keeps words whole and leaves half-translated data alone
+ok 9 - translator keeps words whole and leaves half-translated data alone
+  ---
+  duration_ms: 0.455255
+  type: 'test'
+  ...
+# Subtest: indexLine matches the hook's pointer line
+ok 10 - indexLine matches the hook's pointer line
+  ---
+  duration_ms: 0.722953
+  type: 'test'
+  ...
+# Subtest: forRepo keeps shared memories and the chosen repository's
+ok 11 - forRepo keeps shared memories and the chosen repository's
+  ---
+  duration_ms: 0.496253
+  type: 'test'
+  ...
+# Subtest: sessionPreview fills the 4000-char budget in server order and reports what is cut
+ok 12 - sessionPreview fills the 4000-char budget in server order and reports what is cut
+  ---
+  duration_ms: 4.185374
+  type: 'test'
+  ...
+# Subtest: contract-related memories go after the index and take their share of the budget
+ok 13 - contract-related memories go after the index and take their share of the budget
+  ---
+  duration_ms: 0.149223
+  type: 'test'
+  ...
+# Subtest: promptPreview is the prompt header plus recalled lines for this repository
+ok 14 - promptPreview is the prompt header plus recalled lines for this repository
+  ---
+  duration_ms: 0.141971
+  type: 'test'
+  ...
+# Subtest: effect hides what cannot be computed
+ok 15 - effect hides what cannot be computed
+  ---
+  duration_ms: 0.260386
+  type: 'test'
+  ...
+# Subtest: golden: the same SessionStart text the Go hook builds (internal/host/capture inject_stats_test.go)
+ok 16 - golden: the same SessionStart text the Go hook builds (internal/host/capture inject_stats_test.go)
+  ---
+  duration_ms: 1.864685
+  type: 'test'
+  ...
+# Subtest: manual Add reports accepted accurately
+ok 17 - manual Add reports accepted accurately
+  ---
+  duration_ms: 6.304882
+  type: 'test'
+  ...
+# Subtest: restore reports accepted accurately
+ok 18 - restore reports accepted accurately
+  ---
+  duration_ms: 4.069284
+  type: 'test'
+  ...
+# Subtest: manual Add reports candidate accurately
+ok 19 - manual Add reports candidate accurately
+  ---
+  duration_ms: 3.753585
+  type: 'test'
+  ...
+# Subtest: restore reports candidate accurately
+ok 20 - restore reports candidate accurately
+  ---
+  duration_ms: 0.616762
+  type: 'test'
+  ...
+# Subtest: manual Add reports merged candidate accurately
+ok 21 - manual Add reports merged candidate accurately
+  ---
+  duration_ms: 0.755456
+  type: 'test'
+  ...
+# Subtest: restore reports merged candidate accurately
+ok 22 - restore reports merged candidate accurately
+  ---
+  duration_ms: 0.559273
+  type: 'test'
+  ...
+# Subtest: manual Add reports merged source without candidate accurately
+ok 23 - manual Add reports merged source without candidate accurately
+  ---
+  duration_ms: 0.490442
+  type: 'test'
+  ...
+# Subtest: restore reports merged source without candidate accurately
+ok 24 - restore reports merged source without candidate accurately
+  ---
+  duration_ms: 0.472377
+  type: 'test'
+  ...
+# Subtest: export omits credentials and account content
+ok 25 - export omits credentials and account content
+  ---
+  duration_ms: 1.328986
+  type: 'test'
+  ...
+# Subtest: memory export binds identity without credentials or bodies
+ok 26 - memory export binds identity without credentials or bodies
+  ---
+  duration_ms: 0.550176
+  type: 'test'
+  ...
+# Subtest: skill export preserves drafts and exclusions strictly
+ok 27 - skill export preserves drafts and exclusions strictly
+  ---
+  duration_ms: 2.821763
+  type: 'test'
+  ...
+# Subtest: preference import restores an export and rejects a bad file without writing
+ok 28 - preference import restores an export and rejects a bad file without writing
+  ---
+  duration_ms: 0.687657
+  type: 'test'
+  ...
+# Subtest: memory and skill imports apply only to the account that exported them
+ok 29 - memory and skill imports apply only to the account that exported them
+  ---
+  duration_ms: 0.777858
+  type: 'test'
+  ...
+1..29
+# tests 29
+# suites 0
+# pass 29
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 891.41948

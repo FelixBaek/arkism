@@ -1,0 +1,6 @@
+{"type": "turn.started"}
+{"type": "item.completed", "item": {"id": "item_0", "type": "agent_message", "text": "I’ll submit the exact wording as a decision candidate without approving it.\n"}}
+{"type": "item.started", "item": {"id": "item_1", "type": "mcp_tool_call", "server": "arkism", "tool": "remember", "arguments": {"kind": "decision", "text": "labels: trim surrounding whitespace but preserve letter case."}, "result": null, "error": null, "status": "in_progress"}}
+{"type": "item.completed", "item": {"id": "item_1", "type": "mcp_tool_call", "server": "arkism", "tool": "remember", "arguments": {"kind": "decision", "text": "labels: trim surrounding whitespace but preserve letter case."}, "result": null, "error": {"message": "MCP tool call requires approval, but approval policy is never"}, "status": "failed"}}
+{"type": "item.completed", "item": {"id": "item_2", "type": "agent_message", "text": "No candidate ID was returned. The tool required approval, but this session’s approval policy blocks it."}}
+{"type": "turn.completed", "usage": {"input_tokens": 43007, "cached_input_tokens": 40448, "cache_write_input_tokens": 0, "output_tokens": 147, "reasoning_output_tokens": 0}}

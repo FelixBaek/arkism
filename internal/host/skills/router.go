@@ -657,7 +657,31 @@ func validAnchor(v any) bool {
 	return ok && rev >= 1
 }
 
-// recall reads whole memories by id (from the SessionStart index) or the best matches for a query.
+// currentRecallMemory fences the history-capable GET endpoint before its body
+// enters a fresh agent context. Search already applies this fence server-side.
+func currentRecallMemory(m map[string]any, now time.Time) bool {
+	approvedBy, ok := m["approved_by"].(string)
+	if m["status"] != "active" || !ok || strings.TrimSpace(approvedBy) == "" || truthy(m["content_erased"]) || truthy(m["privacy_quarantined"]) {
+		return false
+	}
+	for _, key := range []string{"effective_at", "expires_at"} {
+		value, exists := m[key]
+		if !exists || value == nil {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok {
+			return false
+		}
+		at, err := time.Parse(time.RFC3339Nano, text)
+		if err != nil || key == "effective_at" && at.After(now) || key == "expires_at" && !at.After(now) {
+			return false
+		}
+	}
+	return true
+}
+
+// recall reads current memories by id (from the SessionStart index) or query.
 func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 	all, err := pyIter(idsArg)
 	if err != nil {
@@ -685,7 +709,9 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 			if err != nil {
 				return nil, err
 			}
-			found = append(found, m)
+			if currentRecallMemory(m, time.Now()) {
+				found = append(found, m)
+			}
 		}
 	} else {
 		text := "related memory evidence"

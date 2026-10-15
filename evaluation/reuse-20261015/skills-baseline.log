@@ -1,0 +1,46 @@
+=== RUN   TestCrossAgentSkillHTTPLifecycle
+2026/10/15 19:15:59 INFO memory request status=200 request_id=9ec31d4c0cfac13fd0dcde51c1e5a86c method=POST route="POST /v1/skills/propose" duration_ms=1
+    cross_agent_skill_http_test.go:56: path=/v1/skills/propose status=200 elapsed_ms=2.075
+2026/10/15 19:15:59 INFO memory request status=200 request_id=0ad54b45f5bc3ff2a98cf8d1ca41fbe0 method=POST route="POST /v1/skills/resolve" duration_ms=0
+    cross_agent_skill_http_test.go:67: path=/v1/skills/resolve status=200 elapsed_ms=0.389
+2026/10/15 19:15:59 INFO memory request status=200 request_id=1ad0b1164cecb4af1f3e3ac0c5c2766b method=POST route="POST /v1/skills/resolve" duration_ms=0
+    cross_agent_skill_http_test.go:71: path=/v1/skills/resolve status=200 elapsed_ms=0.483
+2026/10/15 19:15:59 INFO memory request status=403 request_id=5c5e1aee9ac3ff6017d7883e6759c035 method=POST route="POST /v1/{collection}/{id}/transition" duration_ms=0
+    cross_agent_skill_http_test.go:75: path=/v1/skill_versions/skill-c4667df073dfb0df8ece448c178df18c97ae61316f1b142d1795e54e7afd0cea/transition status=403 elapsed_ms=0.258
+2026/10/15 19:15:59 INFO memory request status=403 request_id=14ab3d515802d156f3632fd0c034513c method=POST route="POST /v1/{collection}/{id}/transition" duration_ms=0
+    cross_agent_skill_http_test.go:75: path=/v1/skill_versions/skill-c4667df073dfb0df8ece448c178df18c97ae61316f1b142d1795e54e7afd0cea/transition status=403 elapsed_ms=0.288
+2026/10/15 19:15:59 INFO memory request status=200 request_id=cb0d8bc783f811ab0e8a749c8813a032 method=POST route="POST /v1/{collection}/{id}/transition" duration_ms=0
+    cross_agent_skill_http_test.go:81: path=/v1/skill_versions/skill-c4667df073dfb0df8ece448c178df18c97ae61316f1b142d1795e54e7afd0cea/transition status=200 elapsed_ms=0.723
+2026/10/15 19:15:59 INFO memory request status=200 request_id=5d0c57dce7cef5fb9328f3b8b3628de9 method=POST route="POST /v1/skills/{id}/apply" duration_ms=0
+    cross_agent_skill_http_test.go:82: path=/v1/skills/lesson-review/apply status=200 elapsed_ms=1.118
+2026/10/15 19:15:59 INFO memory request status=200 request_id=610eaef2f7a8b1668e41710b98391a57 method=POST route="POST /v1/skills/resolve" duration_ms=0
+    cross_agent_skill_http_test.go:83: path=/v1/skills/resolve status=200 elapsed_ms=0.451
+2026/10/15 19:15:59 INFO memory request status=200 request_id=d8bf874f387471bf2f4535a782ecb481 method=POST route="POST /v1/skills/resolve" duration_ms=0
+    cross_agent_skill_http_test.go:86: path=/v1/skills/resolve status=200 elapsed_ms=0.154
+2026/10/15 19:15:59 INFO memory request status=200 request_id=046602ae5f8bf5571cba097956cefaa4 method=POST route="POST /v1/skills/{id}/availability" duration_ms=0
+    cross_agent_skill_http_test.go:89: path=/v1/skills/lesson-review/availability status=200 elapsed_ms=0.600
+2026/10/15 19:15:59 INFO memory request status=200 request_id=5b0aed1f034f3b2f81a6faab2ee803a4 method=POST route="POST /v1/skills/resolve" duration_ms=0
+    cross_agent_skill_http_test.go:90: path=/v1/skills/resolve status=200 elapsed_ms=0.255
+2026/10/15 19:15:59 INFO memory request status=200 request_id=9737f80b2d482e209cbc1ded9c3d5bd1 method=POST route="POST /v1/skills/resolve" duration_ms=0
+    cross_agent_skill_http_test.go:93: path=/v1/skills/resolve status=200 elapsed_ms=0.393
+--- PASS: TestCrossAgentSkillHTTPLifecycle (0.02s)
+=== RUN   TestSkillResolveHTTPHonorsResourceReadDenial
+=== RUN   TestSkillResolveHTTPHonorsResourceReadDenial/skills
+2026/10/15 19:15:59 INFO memory request status=200 request_id=47774420656ad87d2b0af9b3f94bd71a method=POST route="POST /v1/skills/resolve" duration_ms=0
+    cross_agent_skill_http_test.go:118: path=/v1/skills/resolve status=200 elapsed_ms=0.722
+    cross_agent_skill_http_test.go:118: status=200 want=403 body={"authority":"data_only_untrusted","items":[{"ref":"isolated-review@latest-approved","skill_id":"isolated-review","resolved_version":1,"version_id":"skill-69508513f5dde91d1e829293d6e11d3b2a4bd2275876b70c1278d7da48fea46c","content_hash":"3fdaf878b65a4aeb5027af10a4d1fb86b71b16e04307756da72b114f275913fd","name":"Design review","description":"Review a product interface before release.","instructions":"# Synthetic private procedure\nRun focused checks.","requirements":{"authority":"requirements_only","tools":[],"apis":[],"permissions":[],"secret_names":[],"irreversible_actions":[],"environments":[],"dependencies":[],"reads":false,"writes":false,"external_transfer":false},"validation_status":"active","latest_approved":true,"provenance_summary":{"source_id":"source-skill-69508513f5dde91d1e829293d6e11d3b2a4bd2275876b70c1278d7da48fea46c","source_path":"/synthetic/SKILL.md","content_hash":"3fdaf878b65a4aeb5027af10a4d1fb86b71b16e04307756da72b114f275913fd","imported_by":"human-1","imported_at":"2026-10-15T10:15:59.507179128Z"}}]}
+=== RUN   TestSkillResolveHTTPHonorsResourceReadDenial/skill_versions
+2026/10/15 19:15:59 INFO memory request status=200 request_id=3484d61ca822654574fb0c958a54a5e8 method=POST route="POST /v1/skills/resolve" duration_ms=0
+    cross_agent_skill_http_test.go:118: path=/v1/skills/resolve status=200 elapsed_ms=0.873
+    cross_agent_skill_http_test.go:118: status=200 want=403 body={"authority":"data_only_untrusted","items":[{"ref":"isolated-review@latest-approved","skill_id":"isolated-review","resolved_version":1,"version_id":"skill-69508513f5dde91d1e829293d6e11d3b2a4bd2275876b70c1278d7da48fea46c","content_hash":"3fdaf878b65a4aeb5027af10a4d1fb86b71b16e04307756da72b114f275913fd","name":"Design review","description":"Review a product interface before release.","instructions":"# Synthetic private procedure\nRun focused checks.","requirements":{"authority":"requirements_only","tools":[],"apis":[],"permissions":[],"secret_names":[],"irreversible_actions":[],"environments":[],"dependencies":[],"reads":false,"writes":false,"external_transfer":false},"validation_status":"active","latest_approved":true,"provenance_summary":{"source_id":"source-skill-69508513f5dde91d1e829293d6e11d3b2a4bd2275876b70c1278d7da48fea46c","source_path":"/synthetic/SKILL.md","content_hash":"3fdaf878b65a4aeb5027af10a4d1fb86b71b16e04307756da72b114f275913fd","imported_by":"human-1","imported_at":"2026-10-15T10:15:59.50908481Z"}}]}
+=== RUN   TestSkillResolveHTTPHonorsResourceReadDenial/sources
+2026/10/15 19:15:59 INFO memory request status=200 request_id=bb1794b177383b00753fbf0091cca1de method=POST route="POST /v1/skills/resolve" duration_ms=0
+    cross_agent_skill_http_test.go:118: path=/v1/skills/resolve status=200 elapsed_ms=0.579
+    cross_agent_skill_http_test.go:118: status=200 want=403 body={"authority":"data_only_untrusted","items":[{"ref":"isolated-review@latest-approved","skill_id":"isolated-review","resolved_version":1,"version_id":"skill-69508513f5dde91d1e829293d6e11d3b2a4bd2275876b70c1278d7da48fea46c","content_hash":"3fdaf878b65a4aeb5027af10a4d1fb86b71b16e04307756da72b114f275913fd","name":"Design review","description":"Review a product interface before release.","instructions":"# Synthetic private procedure\nRun focused checks.","requirements":{"authority":"requirements_only","tools":[],"apis":[],"permissions":[],"secret_names":[],"irreversible_actions":[],"environments":[],"dependencies":[],"reads":false,"writes":false,"external_transfer":false},"validation_status":"active","latest_approved":true,"provenance_summary":{"source_id":"source-skill-69508513f5dde91d1e829293d6e11d3b2a4bd2275876b70c1278d7da48fea46c","source_path":"/synthetic/SKILL.md","content_hash":"3fdaf878b65a4aeb5027af10a4d1fb86b71b16e04307756da72b114f275913fd","imported_by":"human-1","imported_at":"2026-10-15T10:15:59.51125233Z"}}]}
+--- FAIL: TestSkillResolveHTTPHonorsResourceReadDenial (0.01s)
+    --- FAIL: TestSkillResolveHTTPHonorsResourceReadDenial/skills (0.00s)
+    --- FAIL: TestSkillResolveHTTPHonorsResourceReadDenial/skill_versions (0.00s)
+    --- FAIL: TestSkillResolveHTTPHonorsResourceReadDenial/sources (0.00s)
+FAIL
+FAIL	github.com/FelixBaek/arkism/internal/memory	0.040s
+FAIL

@@ -1,0 +1,8 @@
+Write Python code completing the supplied module. Return JSON only, with one string key "code" containing the whole module. Use no tools. Do not ask questions; make the best implementation from the available information.
+Task: Implement allowed(weekday) returning whether a job may run. weekday is an integer 0 (Monday) through 6 (Sunday). Follow the project scheduling policy.
+Starting module:
+def allowed(weekday):
+    raise NotImplementedError
+
+Project context:
+(No additional project context.)

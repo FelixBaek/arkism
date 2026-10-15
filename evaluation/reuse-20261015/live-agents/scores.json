@@ -1,0 +1,27 @@
+[
+  {
+    "direction": "codex -> claude",
+    "actual_recall": true,
+    "task_correct": true,
+    "source_id_correct": false,
+    "preapproval_search_count": 0,
+    "answer": {
+      "transformed_label": "MiXeD",
+      "source_id": "7b6806cd838497757671451b89aa2751"
+    },
+    "evidence": "direction-1-reader.jsonl"
+  },
+  {
+    "direction": "claude -> codex",
+    "actual_recall": true,
+    "task_correct": true,
+    "source_id_correct": true,
+    "preapproval_search_count": 0,
+    "answer": {
+      "cache_zero": false,
+      "positive_ttl": 15,
+      "source_id": "16d52af9761cb2be2f6cdfd56434bceb"
+    },
+    "evidence": "direction-2-reader.jsonl"
+  }
+]

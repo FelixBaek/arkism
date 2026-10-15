@@ -1,0 +1,68 @@
+{
+  "baseline_commit": "9379ee5f493716e1c80027c0beb4fd12283100cf",
+  "upstream_after_baseline": "edc6f934101c12a218a02bef8a9c686f962863a6",
+  "baseline_go": {
+    "status": "passed",
+    "top_level_pass": 1980,
+    "skipped": 3,
+    "evidence": "baseline-go-summary.json"
+  },
+  "final_go": {
+    "status": "passed",
+    "product_commit": "7049c444fb80829a133bf1509694f2b5faa7bd3a",
+    "top_level": {
+      "pass": 1988,
+      "skip": 4
+    },
+    "including_subtests": {
+      "pass": 6287,
+      "skip": 4
+    },
+    "evidence": "final-go-summary.json"
+  },
+  "final_go_vet": {
+    "status": "passed"
+  },
+  "ui": {
+    "passed": 29,
+    "failed": 0
+  },
+  "python_tools": {
+    "passed": 32,
+    "failed": 0
+  },
+  "single_connection_postgres_regression": {
+    "status": "passed",
+    "tests": 2,
+    "evidence": "../skill-single-connection-fixed.jsonl"
+  },
+  "public_preflight": {
+    "status": "passed",
+    "public_base": "edc6f934101c12a218a02bef8a9c686f962863a6",
+    "allowance": "exact unchanged upstream LICENSE blob and verified public noreply identity"
+  },
+  "gitleaks": {
+    "status": "passed"
+  },
+  "publication": {
+    "main_merged": false,
+    "deployed": false
+  },
+  "ci": {
+    "status": "pending",
+    "note": "Initial Sonar findings concern evaluation harness CLI paths and maintainability; fixes in progress. Main is not merged."
+  },
+  "evaluation_harness": {
+    "status": "passed_offline",
+    "checks": [
+      "45 model prompts and frozen schedule unchanged after refactor",
+      "benchmark report and totals unchanged",
+      "5 reference programs accepted and 5 policy mutants rejected",
+      "live source/task scores byte-identical",
+      "CLI path, label, symlink and URL escape checks",
+      "API CSV/JSON summaries byte-identical",
+      "Python compilation and shell syntax"
+    ],
+    "note": "No provider calls repeated after harness-only hardening."
+  }
+}

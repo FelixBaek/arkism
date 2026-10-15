@@ -1,0 +1,4 @@
+{
+  "success": false,
+  "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 7, in <module>\nAssertionError\n"
+}

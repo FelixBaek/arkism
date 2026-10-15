@@ -1,0 +1,39 @@
+[
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_0",
+      "type": "error",
+      "message": "Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  session-flags: `model_max_output_tokens` is ignored."
+    }
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_1",
+      "type": "error",
+      "message": "Codex is ignoring 1 unrecognized configuration setting. Check for typos or deprecated settings.\n  session-flags: `model_max_output_tokens` is ignored."
+    }
+  },
+  {
+    "type": "turn.started"
+  },
+  {
+    "type": "item.completed",
+    "item": {
+      "id": "item_2",
+      "type": "agent_message",
+      "text": "{\"code\":\"def allowed(weekday):\\n    \\\"\\\"\\\"Assume a Monday\u2013Friday schedule; no project policy was supplied.\\\"\\\"\\\"\\n    if not isinstance(weekday, int) or isinstance(weekday, bool):\\n        raise TypeError(\\\"weekday must be an integer\\\")\\n    if not 0 <= weekday <= 6:\\n        raise ValueError(\\\"weekday must be between 0 and 6\\\")\\n    return weekday < 5\\n\"}"
+    }
+  },
+  {
+    "type": "turn.completed",
+    "usage": {
+      "input_tokens": 14217,
+      "cached_input_tokens": 12288,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 168,
+      "reasoning_output_tokens": 63
+    }
+  }
+]

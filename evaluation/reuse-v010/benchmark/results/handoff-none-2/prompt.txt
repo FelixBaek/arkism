@@ -1,0 +1,8 @@
+Write Python code completing the supplied module. Return JSON only, with one string key "code" containing the whole module. Use no tools. Do not ask questions; make the best implementation from the available information.
+Task: Implement apply_event(ledger, event), returning a list of event dicts. Each event has event_id and value. This function is called by a different worker after handoff. Follow the project retry policy.
+Starting module:
+def apply_event(ledger, event):
+    raise NotImplementedError
+
+Project context:
+(No additional project context.)

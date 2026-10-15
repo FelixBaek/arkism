@@ -127,3 +127,14 @@ duplicates, applicability, or stale-memory handling), change it, and rerun the
 frozen set plus the full affected test suite. Keep exploratory examples
 separate from the frozen evaluation. Do not expand feature scope to compensate
 for missing evidence.
+
+## Recorded v0.1.0 evaluation
+
+The [2026-10-15 evaluation report](../evaluation/reuse-20261015/REPORT.ko.md)
+freezes the product at `9379ee5f493716e1c80027c0beb4fd12283100cf`, separates
+subsequent fixes, and links reproducible API/MCP tests and live Claude/Codex
+runs. Its 45 short code-generation runs scored 5/15 without memory, 15/15 with
+static text, and 15/15 with host-retrieved Arkism memory. This did not establish
+an advantage over maintained static instructions. Actual charges and human
+review time were not measured. See the report for per-run data, failure cases,
+and the distinction between actual model use and automated client fixtures.

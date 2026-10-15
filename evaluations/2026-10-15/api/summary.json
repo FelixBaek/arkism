@@ -1,0 +1,28 @@
+{
+  "baseline_commit": "9379ee5f493716e1c80027c0beb4fd12283100cf",
+  "product_changes": false,
+  "postgres_image_id": "sha256:f371b5f3f2ac0a05703f33d6e6134515fb2498cab708fb948a0aeb7481467c00",
+  "go_version": "go1.27.1 linux/amd64",
+  "repeats": 3,
+  "subtests_pass": 24,
+  "subtests_fail": 0,
+  "subtests_skip": 0,
+  "actual_model_runs": 0,
+  "human_approval": "synthetic credential fixture, no person review",
+  "successful_http_search_ms": {
+    "n": 36,
+    "mean": 26.153388888888887,
+    "stdev": 16.205063080545056,
+    "minimum": 10.559,
+    "maximum": 65.491
+  },
+  "model_input_tokens": null,
+  "model_output_tokens": null,
+  "actual_cost_usd": null,
+  "human_review_seconds": null,
+  "limitations": [
+    "Search latency includes loopback HTTP and DB; no embedding provider.",
+    "MCP subprocess runtime labels do not constitute actual Claude/Codex model runs.",
+    "Timings under race detector and synthetic data are not production performance."
+  ]
+}
