@@ -902,7 +902,8 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		return Record{}, e
 	}
 	if review != nil {
-		if review.Automated && d.Role != roleService || !d.ContentSafe || !s.memoryReviewerAllowed(d, in.Scope, "") {
+		// Review is an explicit human decision; legacy service policies cannot approve or reject.
+		if review.Automated || d.Role != roleHuman || !d.ContentSafe {
 			return Record{}, ErrDenied
 		}
 		if d.Role == roleService {
@@ -1031,7 +1032,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		r.UpdatedAt = time.Now().UTC()
 		if review != nil {
 			r.Review = &ReviewDecision{Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
-			if d.Role == roleHuman && !review.byServer {
+			if d.Role == roleHuman {
 				r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
 				if r.Classification != nil {
 					r.Review.AIRisk = r.Classification.Risk

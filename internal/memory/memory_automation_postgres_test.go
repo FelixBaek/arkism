@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestPostgresMemoryAutomationAtomicReplay(t *testing.T) {
+func TestPostgresHumanMemoryReviewAtomicReplay(t *testing.T) {
 	p := isolatedPostgres(t)
 	f, _, in := autoReviewFixture(t)
 	f.svc.Repo = p
@@ -18,7 +18,7 @@ func TestPostgresMemoryAutomationAtomicReplay(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r, e := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in)
+			r, e := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in)
 			if e != nil || r.ID != c.ID || r.Status != "active" {
 				t.Errorf("concurrent review: %+v %v", r, e)
 			}
@@ -39,7 +39,7 @@ func TestPostgresMemoryAutomationAtomicReplay(t *testing.T) {
 	if e != nil || job.Status != JobStatusDone || len(job.Relations) != 1 || job.Relations[0].ID != ev.ID {
 		t.Fatal(job, e)
 	}
-	if _, e = f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); e != nil {
+	if _, e = f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); e != nil {
 		t.Fatal("evaluation completion changed approval receipt", e)
 	}
 }
@@ -52,7 +52,7 @@ func TestPostgresMemoryEvaluationApprovalRollback(t *testing.T) {
 	c := f.create(f.agent, "memory_candidates", generatedCandidate(scopeA, refs(src)))
 	in.ExpectedRevision = c.Revision
 	f.svc.Repo = evaluationFailureRepo{p, "enqueue"}
-	if _, e := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); !errors.Is(e, ErrUnavailable) {
+	if _, e := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); !errors.Is(e, ErrUnavailable) {
 		t.Fatal(e)
 	}
 	if len(pgCollection(t, p, colMemories)) != 0 {
@@ -67,7 +67,7 @@ func TestPostgresMemoryEvaluationApprovalRollback(t *testing.T) {
 	if r := f.get(f.human, "memory_candidates", scopeA, c.ID); r.Revision != c.Revision || r.Status != "candidate" {
 		t.Fatal(r)
 	}
-	if _, e := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); e != nil {
+	if _, e := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); e != nil {
 		t.Fatal("recovery retry", e)
 	}
 }
@@ -93,7 +93,7 @@ func TestPostgresCandidateConflictReviewAtomicRecovery(t *testing.T) {
 	in.ExpectedRevision = c.Revision
 	in.Conflict = &CandidateReviewConflict{ID: mark.Relation.ID, ExpectedRevision: mark.Relation.Revision, Memory: Ref{Collection: colMemories, ID: old.ID, Revision: old.Revision}, Resolution: "replace_old", Reason: "changed preference"}
 	f.svc.Repo = evaluationFailureRepo{p, "enqueue"}
-	if _, err = f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); !errors.Is(err, ErrUnavailable) {
+	if _, err = f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); !errors.Is(err, ErrUnavailable) {
 		t.Fatal(err)
 	}
 	stored, err := p.Get(testCtx, colMemories, scopeA, old.ID)
@@ -109,7 +109,7 @@ func TestPostgresCandidateConflictReviewAtomicRecovery(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, e := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); e != nil {
+			if _, e := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); e != nil {
 				t.Error(e)
 			}
 		}()

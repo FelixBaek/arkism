@@ -19,7 +19,7 @@ func autoReviewFixture(t *testing.T) (*fixture, Record, CandidateReviewInput) {
 }
 
 func TestMemoryAutomationRequiresExactPolicyAndRole(t *testing.T) {
-	for _, mode := range []string{"missing", "expired", "scope", "principal", "kind", "agent", "pipeline", "permission", "operation"} {
+	for _, mode := range []string{"missing", "expired", "scope", "principal", "kind", "agent", "pipeline", "permission", "operation", "valid-policy"} {
 		t.Run(mode, func(t *testing.T) {
 			f, c, in := autoReviewFixture(t)
 			want := ErrDenied
@@ -42,7 +42,7 @@ func TestMemoryAutomationRequiresExactPolicyAndRole(t *testing.T) {
 				f.auth.actors["reviewer"] = actor("memory-reviewer", roleService, true, allVerbs...)
 			case "operation":
 				in.OperationID = ""
-				want = ErrInvalid
+				want = ErrDenied
 			}
 			if _, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); !errors.Is(err, want) {
 				t.Fatal(err)
@@ -54,14 +54,14 @@ func TestMemoryAutomationRequiresExactPolicyAndRole(t *testing.T) {
 	}
 }
 
-func TestMemoryAutomationReplayAndProvenance(t *testing.T) {
+func TestHumanMemoryReviewReplayAndProvenance(t *testing.T) {
 	f, c, in := autoReviewFixture(t)
-	first, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in)
+	first, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Status != "active" || first.ApprovedBy != "memory-reviewer" || first.Review.By != "memory-reviewer" || first.CreatedBy != c.CreatedBy || first.TrustLevel == "user_verified" || first.Trust == 1 {
-		t.Fatal("service disguised as human", first)
+	if first.Review == nil || first.Status != "active" || first.ApprovedBy != "human-1" || first.Review.By != "human-1" || first.CreatedBy != c.CreatedBy || !first.Review.Person {
+		t.Fatal("human review provenance missing", first)
 	}
 	if evaluationJob(t, f, first).Status != JobStatusPending {
 		t.Fatal("lost evaluation obligation")
@@ -72,7 +72,7 @@ func TestMemoryAutomationReplayAndProvenance(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r, e := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in)
+			r, e := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in)
 			if e != nil || !r.Duplicate || r.ID != first.ID {
 				t.Errorf("retry: %v %v", r, e)
 			}
@@ -85,7 +85,7 @@ func TestMemoryAutomationReplayAndProvenance(t *testing.T) {
 	changed := in
 	changed.Action = "edit_approve"
 	changed.Content = "different decision"
-	if _, err = f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, changed); !errors.Is(err, ErrConflict) {
+	if _, err = f.svc.ReviewCandidate(testCtx, f.human, c.ID, changed); !errors.Is(err, ErrConflict) {
 		t.Fatal("operation reused", err)
 	}
 	for _, r := range f.repo.rows("jobs") {
@@ -98,7 +98,7 @@ func TestMemoryAutomationReplayAndProvenance(t *testing.T) {
 	if err = f.svc.Delete(testCtx, f.human, colMemories, first.ID, ChangeInput{Scope: first.Scope, ExpectedRevision: first.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); !errors.Is(err, ErrConflict) && !errors.Is(err, ErrNotFound) {
+	if _, err = f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); !errors.Is(err, ErrConflict) && !errors.Is(err, ErrNotFound) {
 		t.Fatal("replayed deleted memory", err)
 	}
 }
@@ -126,10 +126,10 @@ func TestMemoryAutomationExcludesEpisodesAndInjectedInstructions(t *testing.T) {
 			in.Content = ""
 			in.Reason = "not eligible"
 			in.OperationID = "reject-1"
-			if _, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); err != nil {
+			if _, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); err != nil {
 				t.Fatal("rejection blocked", err)
 			}
-			out, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in)
+			out, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in)
 			if err != nil || !out.Duplicate || out.Status != "rejected" {
 				t.Fatal(out, err)
 			}
@@ -153,15 +153,15 @@ func TestMemoryReviewPolicyParsing(t *testing.T) {
 	}
 }
 
-func TestMemoryAutomationReviewerCannotEvaluateOwnApproval(t *testing.T) {
+func TestHumanReviewerCannotEvaluateOwnApproval(t *testing.T) {
 	f, c, review := autoReviewFixture(t)
-	m, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, review)
+	m, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, review)
 	if err != nil {
 		t.Fatal(err)
 	}
 	in := CreateInput{Scope: m.Scope, Text: "independent observed check", Sources: m.Sources, Target: &Ref{Collection: colMemories, ID: m.ID, Revision: m.Revision}, Evaluation: &Evaluation{EvalType: "automated_check", Passed: boolValue(true)}}
 	before := len(f.repo.rows("evaluations"))
-	if _, err = f.svc.Create(testCtx, "reviewer", "evaluations", in); !errors.Is(err, ErrDenied) {
+	if _, err = f.svc.Create(testCtx, f.human, "evaluations", in); !errors.Is(err, ErrDenied) {
 		t.Fatal("reviewer evaluated its own approval", err)
 	}
 	if len(f.repo.rows("evaluations")) != before || evaluationJob(t, f, m).Status != JobStatusPending {
