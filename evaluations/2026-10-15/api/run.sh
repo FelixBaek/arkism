@@ -6,7 +6,7 @@ mkdir -p "$output_dir"
 run_tmp=$(mktemp -d)
 container="arkism-reuse-eval-$(date +%s)-$$"
 cleanup() {
-  docker rm -f "$container" >/dev/null 2>&1 || true
+  docker rm -fv "$container" >/dev/null 2>&1 || true
   rm -rf "$run_tmp"
 }
 trap cleanup EXIT

@@ -82,7 +82,9 @@ def main():
     root = confined_path(args.root)
     runs = json.loads(artifact_path(root, 'runs.json').read_text())
     scores = [score_direction(root, runs, direction) for direction in (1, 2)]
-    artifact_path(root, 'scores.json').write_text(json.dumps(scores, indent=2) + '\n')
+    with artifact_path(root, 'scores.json').open('w') as output:
+        json.dump(scores, output, indent=2)
+        output.write('\n')
     with artifact_path(root, 'scores.csv').open('w', newline='') as output:
         writer = csv.DictWriter(output, fieldnames=scores[0], lineterminator='\n')
         writer.writeheader()

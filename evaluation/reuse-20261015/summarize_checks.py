@@ -25,21 +25,24 @@ def destination_file(directory, filename):
     return path
 
 
+def parsed_events(raw):
+    for line in raw.splitlines():
+        try:
+            yield json.loads(line)
+        except ValueError:
+            continue
+
+
 def summarize(raw):
     counts = collections.Counter()
     top = collections.Counter()
     skips, failures, packages = [], [], []
-    for line in raw.splitlines():
-        try:
-            event = json.loads(line)
-        except ValueError:
-            continue
+    for event in parsed_events(raw):
         action = event['Action']
         test = event.get('Test')
         if test and action in ('pass', 'fail', 'skip'):
             counts[action] += 1
-            if '/' not in test:
-                top[action] += 1
+            top[action] += '/' not in test
             if action == 'skip':
                 skips.append({'package': event['Package'], 'test': test})
         if action == 'fail':
@@ -72,8 +75,9 @@ def main():
               'skips': skips, 'failures': failures, 'packages': packages,
               'command': 'go test -race -tags=integration -json -count=1 ./...',
               'environment': 'disposable loopback pgvector Postgres 17; no model providers'}
-    destination_file(destination, args.label + '-summary.json').write_text(
-        json.dumps(result, indent=2) + '\n')
+    with destination_file(destination, args.label + '-summary.json').open('w') as output:
+        json.dump(result, output, indent=2)
+        output.write('\n')
     print(json.dumps({'label': args.label, 'top_level': dict(top),
                       'all': dict(counts), 'packages': len(packages)}))
 
