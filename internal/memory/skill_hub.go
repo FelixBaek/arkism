@@ -285,8 +285,12 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 		}
 		return resolveSkillRef(ctx, tx, in.Scope, ref)
 	}
-	consulted := make([][]Ref, len(in.Refs))
+	var consulted [][]Ref
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		// PostgreSQL may retry this callback after serialization failure. Publish
+		// only the successful attempt, never rolled-back items or read identities.
+		out.Items = []ResolvedSkill{}
+		consulted = make([][]Ref, len(in.Refs))
 		for i, ref := range in.Refs {
 			item, e := resolve(ctx, skillResolveReadTx{Tx: tx, refs: &consulted[i]}, ref)
 			if e != nil {

@@ -379,3 +379,71 @@ func TestSkillResolveErrorRechecksConsultedIdentities(t *testing.T) {
 		t.Fatal("changed hidden dependency accepted", got, err)
 	}
 }
+
+// Simulate a serialization retry after a fully evaluated callback rolls back.
+// The second attempt can observe a different canonical snapshot.
+type skillResolveRetryRepo struct {
+	Repository
+	retried       bool
+	afterRollback func()
+}
+
+func (r *skillResolveRetryRepo) Transaction(ctx context.Context, fn func(context.Context, Tx) error) error {
+	if !r.retried {
+		r.retried = true
+		evaluated := false
+		err := r.Repository.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+			if err := fn(ctx, tx); err != nil {
+				return err
+			}
+			evaluated = true
+			return ErrConflict
+		})
+		if !evaluated {
+			return err
+		}
+		if r.afterRollback != nil {
+			r.afterRollback()
+		}
+	}
+	return r.Repository.Transaction(ctx, fn)
+}
+func TestSkillResolveTransactionRetryResetsResponseAndConsultedRefs(t *testing.T) {
+	for _, changed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "same-snapshot", true: "changed-snapshot"}[changed], func(t *testing.T) {
+			f := newFixture(t)
+			imported, err := f.svc.ImportSkill(testCtx, f.human, ImportSkillInput{Scope: scopeA, SkillID: "retry-resolution", Path: "/synthetic/SKILL.md", Content: "# Retry-safe procedure", Analysis: detailedSkillAnalysis()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo := &skillResolveRetryRepo{Repository: f.repo}
+			if changed {
+				repo.afterRollback = func() {
+					parent := imported.Skill
+					parent.Status = "deprecated"
+					if e := f.repo.Replace(testCtx, colSkills, parent, parent.Revision); e != nil {
+						t.Fatal(e)
+					}
+				}
+				f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+					if token == f.agent && req.Action == "read:sources" && req.ResourceID == imported.Record.Sources[0].SourceID {
+						return Decision{}, ErrDenied
+					}
+					return f.auth.Authorize(ctx, token, req)
+				})
+			}
+			f.svc.Repo = repo
+			got, err := f.svc.ResolveSkills(testCtx, f.agent, SkillResolveInput{Scope: scopeA, Refs: []string{"retry-resolution@latest-approved"}})
+			if err != nil || len(got.Items) != 1 || !repo.retried {
+				t.Fatal("retry leaked prior attempt", got, err)
+			}
+			if changed {
+				if got.Items[0].Error != "skill_deprecated" || got.Items[0].Instructions != "" {
+					t.Fatal("old body retained", got)
+				}
+			} else if got.Items[0].VersionID != imported.Record.ID || got.Items[0].Error != "" {
+				t.Fatal("unexpected retry result", got)
+			}
+		})
+	}
+}
