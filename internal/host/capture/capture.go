@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -534,7 +535,7 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 		}
 		items = append(items, dicts(listOf(or(res["items"], []any{})))...)
 	}
-	items = withText(forRepo(items, repoKey(cwd)))
+	items = standingOrder(withText(forRepo(items, repoKey(cwd))))
 	related := contractRelated(taskContract(cwd))
 	if len(skip) > 0 {
 		unpinned := func(i map[string]any) bool { return !skip[strField(i["id"])] }
@@ -578,6 +579,36 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 		meta = append(meta, contractHeader+"\n"+strings.Join(metaLines(related), "\n"))
 	}
 	return indexBlock{Full: strings.Join(parts, "\n\n"), Meta: strings.Join(meta, "\n\n"), IDs: itemIDs(append(rest, related...))}, nil
+}
+
+// standingOrder sorts the standing rules so the char limit cuts the least important: preferences
+// (user) before how-to rules, then oldest first, then id. List rows carry no use or effect score,
+// and the restate-based utility count reads every transcript and never counts a prohibition kept.
+// Oldest first keeps the rules that lasted, and a new memory joins at the end instead of
+// reshuffling which rules the limit cuts (the server lists by id, a hash). Deterministic, so a
+// session's block stays byte-identical.
+func standingOrder(items []map[string]any) []map[string]any {
+	rank := func(i map[string]any) int {
+		if i["kind"] == "user" {
+			return 0
+		}
+		return 1
+	}
+	created := func(i map[string]any) time.Time {
+		t, _ := time.Parse(time.RFC3339Nano, strField(i["created_at"])) // missing sorts first
+		return t
+	}
+	sort.SliceStable(items, func(a, b int) bool {
+		x, y := items[a], items[b]
+		if rx, ry := rank(x), rank(y); rx != ry {
+			return rx < ry
+		}
+		if tx, ty := created(x), created(y); !tx.Equal(ty) {
+			return tx.Before(ty)
+		}
+		return strField(x["id"]) < strField(y["id"])
+	})
+	return items
 }
 
 func keepIf(items []map[string]any, ok func(map[string]any) bool) []map[string]any {
@@ -628,6 +659,11 @@ func taskContract(cwd string) string {
 
 // logRecall logs ids only, never text: `utility` later checks which injected memories were used.
 func logRecall(hook, sid string, items []map[string]any) {
+	recallMetric(hook, sid, items)
+	ledgerRecall(sid, items)
+}
+
+func recallMetric(hook, sid string, items []map[string]any) {
 	ids := []any{}
 	captured := 0
 	for _, i := range items {
@@ -639,7 +675,6 @@ func logRecall(hook, sid string, items []map[string]any) {
 		}
 	}
 	metric(kv("event", "recall"), kv("hook", hook), kv("session", sid), kv("injected", len(items)), kv("ids", ids), kv("captured", captured))
-	ledgerRecall(sid, items)
 }
 
 // promptContext is the memories related to this prompt, beyond what SessionStart injected.
@@ -649,7 +684,7 @@ func promptContext(prompt, sid, cwd string) (string, error) {
 }
 
 // promptParts is the per-turn recall block (full and meta form). Memories the session's stable
-// block already shows are left out.
+// block already shows are left out, and so are those an earlier turn showed unless revised since.
 func promptParts(prompt, sid, cwd string) (host.Part, error) {
 	text := clean(prompt)
 	if host.Len(text) < 8 {
@@ -660,23 +695,33 @@ func promptParts(prompt, sid, cwd string) (host.Part, error) {
 		return host.Part{}, err
 	}
 	items := forRepo(dicts(list), repoKey(cwd))
-	if stable, ok := sessionStore().Stable(sid); ok && len(stable.IDs) > 0 {
+	store := sessionStore()
+	if stable, ok := store.Stable(sid); ok && len(stable.IDs) > 0 {
 		seen := map[string]bool{}
 		for _, id := range stable.IDs {
 			seen[id] = true
 		}
-		var fresh []map[string]any
-		for _, i := range items {
-			if !seen[str(i["id"])] {
-				fresh = append(fresh, i)
-			}
-		}
-		items = fresh
+		items = keepIf(items, func(i map[string]any) bool { return !seen[str(i["id"])] })
 	}
-	logRecall("UserPromptSubmit", sid, items)
+	// The trace ledger still lists a memory an earlier turn showed: it is in the session's context.
+	ledgerRecall(sid, items)
+	shown := store.Delivered(sid)
+	revision := func(i map[string]any) int64 { n, _ := host.Int(i["revision"]); return n }
+	items = keepIf(items, func(i map[string]any) bool {
+		rev, ok := shown[str(i["id"])]
+		return !ok || revision(i) > rev
+	})
+	recallMetric("UserPromptSubmit", sid, items)
 	items = withText(items)
 	if len(items) == 0 {
 		return host.Part{}, nil
+	}
+	revs := map[string]int64{}
+	for _, i := range items {
+		revs[str(i["id"])] = revision(i)
+	}
+	if err := store.MarkDelivered(sid, revs); err != nil {
+		metric(kv("event", "hook_error"), kv("hook", "recall_delivered"), kv("error", pyType(err)))
 	}
 	full := promptHeader + "\n" + strings.Join(indexLines(items), "\n")
 	logInjected("UserPromptSubmit", sid, full)

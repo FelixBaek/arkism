@@ -19,7 +19,7 @@ test("forRepo keeps shared memories and the chosen repository's", () => {
   assert.deepEqual(core.forRepo(items, "").map((i) => i.id), ["s"]);
 });
 
-test("sessionPreview fills the 4000-char budget in server order and reports what is cut", () => {
+test("sessionPreview fills the 4000-char budget in standing order and reports what is cut", () => {
   const items = Array.from({ length: 60 }, (_, i) => ({ id: `m${i}`, kind: i % 2 ? "procedural" : "user", text: `${i} ${"규칙".repeat(40)}`, tags: [] }));
   items.push({ id: "empty", kind: "user", text: "", tags: [] }, { id: "other", kind: "user", text: "다른 저장소", tags: ["repo:o/b"] });
   const p = core.sessionPreview(items, "o/a");
@@ -27,7 +27,9 @@ test("sessionPreview fills the 4000-char budget in server order and reports what
   assert.ok([...p.text].length <= core.SESSION_MAX_CHARS);
   assert.equal(p.included.length + p.cut.length, 60);
   assert.ok(p.cut.length > 0 && p.included.length > 0);
-  assert.equal(p.cut[0].id, `m${p.included.length}`);
+  // No created_at here: user before procedural, then id.
+  const order = items.slice(0, 60).sort((a, b) => (a.kind === "user" ? 0 : 1) - (b.kind === "user" ? 0 : 1) || (a.id < b.id ? -1 : 1));
+  assert.deepEqual([...p.included, ...p.cut].map((i) => i.id), order.map((i) => i.id));
   assert.equal(p.outOfRepo, 1);
   assert.equal(p.chars, [...p.text].length);
   // Exactly what within() admits: each line plus a newline, the header and its newline inside the limit.

@@ -114,6 +114,46 @@ func (s SessionStore) SaveStable(sid string, b StableBlock) (StableBlock, error)
 	return b, errors.New("stable block unreadable")
 }
 
+// Delivered is the memory revisions per-turn recall already showed in the session (id -> the
+// highest revision shown).
+func (s SessionStore) Delivered(sid string) map[string]int64 {
+	out := map[string]int64{}
+	if sid == "" {
+		return out
+	}
+	raw, _ := os.ReadFile(filepath.Join(s.dir(sid), "delivered.txt"))
+	for _, line := range strings.Split(string(raw), "\n") {
+		id, rev, ok := strings.Cut(line, " ")
+		n, err := strconv.ParseInt(rev, 10, 64)
+		if ok && err == nil && id != "" && n >= out[id] {
+			out[id] = n
+		}
+	}
+	return out
+}
+
+// MarkDelivered records memory revisions per-turn recall showed in the session.
+func (s SessionStore) MarkDelivered(sid string, revs map[string]int64) error {
+	if sid == "" || len(revs) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	for id, rev := range revs {
+		if id != "" && !strings.ContainsAny(id, " \n") {
+			b.WriteString(id + " " + strconv.FormatInt(rev, 10) + "\n")
+		}
+	}
+	if err := os.MkdirAll(s.dir(sid), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(s.dir(sid), "delivered.txt"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString(b.String())
+	return errors.Join(err, f.Close())
+}
+
 // Expire drops a session's state once its stable block is older than ttl, and other sessions'
 // state older than a week. It never touches a younger session.
 func (s SessionStore) Expire(sid string, ttl time.Duration, now time.Time) {
