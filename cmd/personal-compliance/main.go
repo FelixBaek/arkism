@@ -68,14 +68,16 @@ var (
 	// Only a message written inline is in the trace; one from a file, an editor, -C or --fill is not.
 	inlineCommitRE = regexp.MustCompile(`(^|\s)(-[a-zA-Z]*m|--message)`)
 	inlinePRRE     = regexp.MustCompile(`(^|\s)(-b|--body)(\s|=)`)
-	commitSegRE    = regexp.MustCompile(`\bgit\b.*\bcommit\b`)
-	prSegRE        = regexp.MustCompile(`\bgh\s+pr\s+(create|edit)\b`)
+	commitSegRE    = regexp.MustCompile(`^\s*(\w+=\S*\s+)*git\b.*\bcommit\b`)
+	prSegRE        = regexp.MustCompile(`^\s*(\w+=\S*\s+)*gh\s+pr\s+(create|edit)\b`)
 	cmdSplitRE     = regexp.MustCompile(`&&|\|\||[;|\n]`)
 )
 
 // inline reports whether every commit or PR command in s carries its message inline: a flag
-// from another command in the same shell line does not count.
+// from another command in the same shell line does not count. Segments start a command, so a
+// message body line that mentions git commit is not one.
 func inline(s string, seg, flag *regexp.Regexp) bool {
+	s = strings.ReplaceAll(s, "\\\n", " ") // backslash line continuation
 	found := false
 	for _, part := range cmdSplitRE.Split(s, -1) {
 		if seg.MatchString(part) {

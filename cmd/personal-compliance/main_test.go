@@ -76,6 +76,8 @@ func TestRulesPassFailAndNotApplicable(t *testing.T) {
 		{"another command's -m", commitRule, 4, map[string]any{"commits": []any{"git commit -F msg.txt && python -m pytest"}}, want{false, false}},
 		{"another command's -b", prRule, 4, map[string]any{"pull_requests": []any{"gh pr create --fill && tool -b x"}}, want{false, false}},
 		{"heredoc message", commitRule, 4, map[string]any{"commits": []any{"git commit -m \"$(cat <<'EOF'\nST-1 fix\nEOF\n)\""}}, want{true, true}},
+		{"line continuation", commitRule, 4, map[string]any{"commits": []any{"git commit \\\n  -m 'ST-1 fix'"}}, want{true, true}},
+		{"body line mentioning git commit", commitRule, 4, map[string]any{"commits": []any{"git commit -m \"$(cat <<'EOF'\nST-1 make git hooks run on commit\nEOF\n)\""}}, want{true, true}},
 		{"no rule", "unknown", 1, map[string]any{"replies": []any{replyOf(ko, 1, false)}}, want{false, false}},
 	}
 	for _, c := range cases {
