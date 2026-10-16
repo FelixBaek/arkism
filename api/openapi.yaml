@@ -9154,7 +9154,7 @@
           "400": {"description": "invalid_request: invalid operation_id/operation/usage, empty usage or unknown field"},
           "403": {"description": "access_denied: missing, expired or unauthorized policy, or principal not in ModelBudgetPolicy"},
           "409": {"description": "revision_conflict: same scope, principal and operation_id with different input"},
-          "503": {"description": "dependency_unavailable: store or the month's subscription counter unavailable; the record may or may not have committed, so retry with the same operation_id"}
+          "503": {"description": "dependency_unavailable: store or the month's subscription counter unavailable; the record may or may not have committed, so retry the identical request under the same scope and principal, with the same operation_id and unchanged input"}
         }
       }
     },
