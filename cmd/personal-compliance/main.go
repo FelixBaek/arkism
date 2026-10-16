@@ -57,6 +57,7 @@ type behavior struct {
 	Replies      []reply  `json:"replies"`
 	Commits      []string `json:"commits"`
 	PullRequests []string `json:"pull_requests"`
+	Incomplete   bool     `json:"incomplete"` // the producer cut or dropped something: no pass, only a seen violation
 }
 
 var (
@@ -64,6 +65,8 @@ var (
 	urlRE        = regexp.MustCompile(`https?://\S+`)
 	spaceRE      = regexp.MustCompile(`\s+`)
 	paragraphRE  = regexp.MustCompile(`\n\s*\n`)
+	// The message comes from a file the trace does not hold, so its text cannot be judged.
+	fileMessageRE = regexp.MustCompile(`(^|\s)(-F|--file|--body-file|--template)(\s|=)`)
 )
 
 func main() {
@@ -147,11 +150,15 @@ func check(t Table, stdin []byte) (bool, bool, error) {
 		return false, false, nil
 	}
 	observed, passed := judge(*rule, *b)
+	if b.Incomplete && passed {
+		return false, false, nil
+	}
 	return observed, passed, nil
 }
 
 func judge(r Rule, b behavior) (observed, passed bool) {
 	passed = true
+	unseen := false // an artifact whose text is elsewhere: a clean result there is no pass
 	switch r.Kind {
 	case "forbidden_text":
 		needle := normalize(r.Text)
@@ -170,13 +177,15 @@ func judge(r Rule, b behavior) (observed, passed bool) {
 			for _, s := range texts {
 				observed = true
 				passed = passed && !strings.Contains(normalize(s), needle)
+				unseen = unseen || a != "replies" && fileMessageRE.MatchString(s)
 			}
 		}
 	case "language":
 		for _, rp := range b.Replies {
-			if hangul, letters := letterCounts(rp.Text); letters >= 20 { // too short to call a language
+			if hangul, latin, letters := letterCounts(rp.Text); letters >= 20 { // too short to call a language
 				observed = true
-				passed = passed && hangul > 0 && float64(hangul)/float64(letters) >= r.MinRatio
+				englishOnly := hangul == 0 && latin == letters
+				passed = passed && !englishOnly && (hangul == 0 || float64(hangul)/float64(letters) >= r.MinRatio)
 			}
 		}
 	case "max_length":
@@ -196,6 +205,9 @@ func judge(r Rule, b behavior) (observed, passed bool) {
 			}
 		}
 	}
+	if unseen && passed {
+		return false, false
+	}
 	return observed, observed && passed
 }
 
@@ -204,8 +216,8 @@ func normalize(s string) string {
 	return spaceRE.ReplaceAllString(strings.ToLower(s), " ")
 }
 
-// letterCounts counts Hangul and all letters outside inline code and URLs.
-func letterCounts(s string) (hangul, letters int) {
+// letterCounts counts Hangul, Latin and all letters outside inline code and URLs.
+func letterCounts(s string) (hangul, latin, letters int) {
 	s = urlRE.ReplaceAllString(inlineCodeRE.ReplaceAllString(s, ""), "")
 	for _, r := range s {
 		if unicode.Is(unicode.Hangul, r) {
@@ -213,6 +225,9 @@ func letterCounts(s string) (hangul, letters int) {
 			letters++
 		} else if unicode.IsLetter(r) {
 			letters++
+			if unicode.Is(unicode.Latin, r) {
+				latin++
+			}
 		}
 	}
 	return

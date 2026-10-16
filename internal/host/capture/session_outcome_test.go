@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -194,10 +195,23 @@ func TestSessionBehaviorCountsOnlyRealCommitCommands(t *testing.T) {
 		"cat > t.go <<'EOF'\n\"git commit -m x\"":                        false,
 		"echo 'gh pr create' >> notes":                                   false,
 		"git log --oneline":                                              false,
+		"echo 'note; git commit -m x'":                                   false,
+		"echo \"a && gh pr create\" | tee n":                             false,
 		"cat >> t.go <<'EOF'\n\tx := \"cd /r && git -C /r commit\"\nEOF": false,
 	} {
-		if shell := withoutHeredocs(cmd); (commitCmdRE.MatchString(shell) || prCmdRE.MatchString(shell)) != want {
+		if shell := shellText(cmd); (commitCmdRE.MatchString(shell) || prCmdRE.MatchString(shell)) != want {
 			t.Error(cmd)
 		}
+	}
+}
+
+func TestHeadTailKeepsFootersAndSummaries(t *testing.T) {
+	s := "시작" + strings.Repeat("가", 5000) + "\n\n핵심: 끝"
+	got := headTail(s, 100)
+	if r := []rune(got); len(r) != 100 || !strings.HasPrefix(got, "시작") || !strings.HasSuffix(got, "핵심: 끝") {
+		t.Fatal(len(r), got)
+	}
+	if headTail("짧다", 100) != "짧다" {
+		t.Fatal("short text changed")
 	}
 }

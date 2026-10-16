@@ -63,6 +63,12 @@ func TestRulesPassFailAndNotApplicable(t *testing.T) {
 		{"status line is not a report", tailRule, 3, map[string]any{"replies": []any{replyOf(ko, 1, false)}}, want{false, false}},
 		{"revised memory", tailRule, 4, map[string]any{"replies": []any{replyOf(ko+"\n\n핵심: 끝", 6, false)}}, want{false, false}},
 		{"no behavior event", prRule, 4, nil, want{false, false}},
+		{"japanese is not english", koRule, 2, map[string]any{"replies": []any{replyOf("判定器を作りました。テストもすべて通りました。運用への反映は承認の後です。", 1, false)}}, want{true, true}},
+		{"commit message from a file", commitRule, 4, map[string]any{"commits": []any{"git commit -F msg.txt"}}, want{false, false}},
+		{"pr body from a file", prRule, 4, map[string]any{"pull_requests": []any{"gh pr create --title x --body-file body.md"}}, want{false, false}},
+		{"file message beside a seen violation", commitRule, 4, map[string]any{"commits": []any{"git commit -F m", "git commit -m 'Generated with Claude Code'"}}, want{true, false}},
+		{"cut evidence is no pass", lenRule, 2, map[string]any{"replies": []any{replyOf(ko, 3, false)}, "incomplete": true}, want{false, false}},
+		{"cut evidence still fails", lenRule, 2, map[string]any{"replies": []any{replyOf(ko, 30, false)}, "incomplete": true}, want{true, false}},
 		{"no rule", "unknown", 1, map[string]any{"replies": []any{replyOf(ko, 1, false)}}, want{false, false}},
 	}
 	for _, c := range cases {

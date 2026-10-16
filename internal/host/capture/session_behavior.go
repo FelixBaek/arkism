@@ -29,6 +29,7 @@ var (
 	commitCmdRE   = regexp.MustCompile(`(^|[;&|(]|\n)\s*git\s+(-C\s+\S+\s+)?commit\b`)
 	prCmdRE       = regexp.MustCompile(`(^|[;&|(]|\n)\s*gh\s+pr\s+(create|edit)\b`)
 	heredocRE     = regexp.MustCompile(`<<-?\s*['"]?(\w+)['"]?`)
+	quotedRE      = regexp.MustCompile(`'[^']*'|"(?:[^"\\]|\\.)*"`) // a quoted "; git commit" is an argument, not a command
 	detailAskedRE = regexp.MustCompile(`자세히|자세하게|상세히|길게|전부 설명|walk me through|explain`)
 )
 
@@ -51,6 +52,7 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 	var turns []behaviorTurn
 	commits, prs := []any{}, []any{}
 	corrections := 0
+	incomplete := false // a cut or dropped artifact: the checker must not call the rest a pass
 	reply := func(at, text string) {
 		if len(turns) == 0 {
 			turns = append(turns, behaviorTurn{})
@@ -60,8 +62,10 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 		}
 	}
 	command := func(cmd string) {
-		cmd = head(cmd, behaviorCommandRunes)
-		shell := withoutHeredocs(cmd)
+		if len([]rune(cmd)) > behaviorCommandRunes {
+			cmd, incomplete = headTail(cmd, behaviorCommandRunes), true
+		}
+		shell := shellText(cmd)
 		if commitCmdRE.MatchString(shell) {
 			commits = append(commits, cmd)
 		}
@@ -134,20 +138,33 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 		if t.reply == "" {
 			continue
 		}
-		prose := codeFenceRE.ReplaceAllString(t.reply, "")
-		replies = append(replies, map[string]any{"at": t.at, "text": head(strings.TrimSpace(prose), behaviorReplyRunes),
+		prose := strings.TrimSpace(codeFenceRE.ReplaceAllString(t.reply, ""))
+		if len([]rune(prose)) > behaviorReplyRunes {
+			prose, incomplete = headTail(prose, behaviorReplyRunes), true
+		}
+		replies = append(replies, map[string]any{"at": t.at, "text": prose,
 			"lines": len(strings.Split(t.reply, "\n")), "code_blocks": len(codeFenceRE.FindAllString(t.reply, -1)), "detail_requested": t.detail})
 	}
-	out := map[string]any{"behavior": "agent_session", "replies": replies, "commits": commits, "pull_requests": prs, "user_corrections": corrections}
+	out := map[string]any{"behavior": "agent_session", "replies": replies, "commits": commits, "pull_requests": prs, "user_corrections": corrections, "incomplete": incomplete}
 	// shortcut: oldest replies go first when the event would pass the server limit; one event per trace.
 	for raw, _ := json.Marshal(out); len(raw) > behaviorMaxBytes && len(replies) > 0; raw, _ = json.Marshal(out) {
 		replies = replies[1:]
-		out["replies"] = replies
+		out["replies"], out["incomplete"] = replies, true
 	}
 	if raw, _ := json.Marshal(out); len(raw) > behaviorMaxBytes {
 		return nil
 	}
 	return out
+}
+
+// headTail keeps both ends of s within n runes: footers and closing summaries are what checkers judge.
+func headTail(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	h := n / 2
+	return string(r[:h]) + "\n…\n" + string(r[len(r)-(n-h-3):])
 }
 
 func codexText(content any) string {
@@ -158,6 +175,11 @@ func codexText(content any) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// shellText is what the shell runs as commands: heredoc bodies and quoted arguments are data.
+func shellText(cmd string) string {
+	return quotedRE.ReplaceAllString(withoutHeredocs(cmd), "''")
 }
 
 // withoutHeredocs drops here-document bodies: they are data (a file being written), not commands.

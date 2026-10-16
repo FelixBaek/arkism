@@ -143,7 +143,7 @@ func recordSession(path, spool string) (int, error) {
 			first = ts
 		}
 		last = max(last, ts)
-		if t := str(row["transcript"]); t != "" {
+		if t, ok := row["transcript"].(string); ok && t != "" {
 			transcript = t
 		}
 		for _, r := range anyList(row["refs"]) {
