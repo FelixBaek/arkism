@@ -271,8 +271,10 @@ func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return false
 	}
 	var err error
-	if sessionProcessorOn() && cmd != "hook" { // the hook only spools; every API caller runs as the harness service
-		if err := sessionTokenFile(); err != nil {
+	// Only the automated paths (timers, hook-spawned drain) run as the harness service; the hook only
+	// spools, and commands a person types (review, stats, ...) keep that person's credential.
+	if sessionProcessorOn() && cmd != "hook" {
+		if err := sessionTokenFile(cmd == "drain" || cmd == "reflect" || cmd == "logs"); err != nil {
 			fmt.Fprintln(stderr, err)
 			return 1
 		}

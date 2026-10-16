@@ -59,8 +59,11 @@ func TestSessionQualityGateDefaultsToShippedEvidence(t *testing.T) {
 	capFake(t)
 	fakeUsage(t, nil, errors.New("no reading"))
 	t.Setenv("ARKISM_HAIKU_QUALITY_GATE", "")
-	// Only korean_correction passed every initial and held-out case; the other categories stay on Sonnet.
-	for category, want := range map[string]string{"korean_correction": sessionFastModel, "conditional_preference": sessionModel, "mixed_personal_work": sessionModel, "": sessionModel} {
+	// Shipped quality evidence covers v2, not the v3 citation contract. No category may reuse it.
+	if gate := sessionQualityGate(); gate["prompt_version"] == sessionPromptVersion {
+		t.Fatal("update this expectation only after reviewing new measured quality evidence")
+	}
+	for category, want := range map[string]string{"korean_correction": sessionModel, "conditional_preference": sessionModel, "mixed_personal_work": sessionModel, "": sessionModel} {
 		var models []string
 		llm = func(_, _, model string, _ time.Duration, _, _ string) (any, error) {
 			models = append(models, model)
