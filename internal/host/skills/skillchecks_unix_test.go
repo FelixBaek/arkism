@@ -193,18 +193,18 @@ func TestAnOperatorBaselineGoesToSkillSpectorAndRescansWhenAdded(t *testing.T) {
 
 func TestASymlinkedSkillIsScannedAtItsRealPath(t *testing.T) {
 	root := swapChecks(t)
-	real := filepath.Join(root, "repo/linked-impl")
-	write(t, filepath.Join(real, "SKILL.md"), "---\nname: linked\n---\n")
+	target := filepath.Join(root, "repo/linked-impl")
+	write(t, filepath.Join(target, "SKILL.md"), "---\nname: linked\n---\n")
 	b := filepath.Join(checksState, "skill-baselines", "linked.yaml") // named after the link, like the cache entry
 	write(t, b, "suppressions: []\n")
 	link := filepath.Join(root, ".claude/skills/linked")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
 	spectorBin = executable(t, filepath.Join(root, "skillspector"), "#!/bin/sh\necho \"$@\" > \"$(dirname \"$0\")/spector.args\"\n"+strings.TrimPrefix(fakeSpector, "#!/bin/sh\n"))
 	entry := check("claude_code", link, "x")
 	args, _ := os.ReadFile(filepath.Join(root, "spector.args"))
-	if want, _ := filepath.EvalSymlinks(real); !strings.HasPrefix(string(args), "scan "+want+" ") || !strings.Contains(string(args), "--baseline "+b) || has(entry, "error") || objGet(entry, "path") != "~/.claude/skills/linked" {
+	if want, _ := filepath.EvalSymlinks(target); !strings.HasPrefix(string(args), "scan "+want+" ") || !strings.Contains(string(args), "--baseline "+b) || has(entry, "error") || objGet(entry, "path") != "~/.claude/skills/linked" {
 		t.Fatal(string(args), entry)
 	}
 }

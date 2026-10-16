@@ -470,12 +470,12 @@ func check(agent, folder, digest string) host.Obj {
 	}
 	qScore, qGrade := bScore, builtinGrade(bScore)
 	// SkillSpector refuses a symlinked input; ~/.agents/skills links into the skills repo.
-	real := folder
+	resolved := folder
 	if r, err := filepath.EvalSymlinks(folder); err == nil {
-		real = r
+		resolved = r
 	}
 	if toolInstalled(evaluatorBin) {
-		if score, grade, err := quality(real); err != nil {
+		if score, grade, err := quality(resolved); err != nil {
 			errs = append(errs, "품질: "+pyErrName(err))
 		} else {
 			qScore, qGrade = score, grade
@@ -492,7 +492,7 @@ func check(agent, folder, digest string) host.Obj {
 		if !toolInstalled(sc.bin) {
 			continue
 		}
-		if res, err := sc.run(real, folder); err != nil {
+		if res, err := sc.run(resolved, folder); err != nil {
 			errs = append(errs, sc.name+": "+pyErrName(err))
 			broken = true
 		} else {
