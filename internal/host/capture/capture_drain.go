@@ -545,11 +545,13 @@ func drain(allWorkOrigins bool) error {
 		}
 		return os.Rename(path, filepath.Join(failedDir(), filepath.Base(path)))
 	}
-	parkedEvents := map[any]bool{} // batch parents already in the failed spool
+	parkedEvents := map[string]bool{} // batch parents already in the failed spool
 	if failed, _ := filepath.Glob(filepath.Join(globEscape(failedDir()), "*.json")); sessionProcessorOn() {
 		for _, f := range failed {
 			if job, err := readJob(f); err == nil {
-				parkedEvents[job["event_id"]] = true
+				if id, ok := job["event_id"].(string); ok {
+					parkedEvents[id] = true
+				}
 			}
 		}
 	}
@@ -558,7 +560,8 @@ func drain(allWorkOrigins bool) error {
 			continue
 		}
 		job, err := readJob(path)
-		if err == nil && truthy(job["session_batch_parent"]) && parkedEvents[job["session_batch_parent"]] {
+		parent, _ := job["session_batch_parent"].(string) // a non-string parent never matches a parked event
+		if err == nil && parent != "" && parkedEvents[parent] {
 			// The parent holds this child's turns and was parked: follow it so the redrive keeps them together.
 			if err := park(path); err != nil {
 				return err
@@ -615,7 +618,7 @@ func drain(allWorkOrigins bool) error {
 			if err := park(path); err != nil {
 				return err
 			}
-			parkedEvents[job["event_id"]] = true
+			parkedEvents[str(job["event_id"])] = true
 			metric(kv("event", "session_processor_parked"), kv("session", sid), kv("error", code))
 			continue
 		}
