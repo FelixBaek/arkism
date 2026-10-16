@@ -238,7 +238,7 @@ func sendCapture(eventType, eventID, sid string, occurredAt any, claims []any, o
 	return items, nil
 }
 
-var captureOrigins = map[string]bool{"claude_code": true, "codex": true, "zcode": true, "gemini": true, "grok": true, "deepseek": true}
+var captureOrigins = map[string]bool{"claude_code": true, "codex": true, "zcode": true, "gemini": true, "grok": true, "deepseek": true, "langgraph": true}
 
 // queuedOrigin: a shared spool must retain the producer, independent of its next drainer.
 func queuedOrigin(job map[string]any) (string, error) {

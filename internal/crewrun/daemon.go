@@ -31,7 +31,9 @@ func envOr(k, def string) string {
 //	ARKISM_CREW_LISTEN (127.0.0.1:8095), ARKISM_CREW_PUBLIC_URL (http://LISTEN),
 //	ARKISM_CREW_RUNNER ("/srv/arkism/bin/arkism crew"), ARKISM_CREW_SANDBOX,
 //	ARKISM_CREW_MODEL ("opus 5.5", AI nodes without a model), ARKISM_CREW_GH (gh), TZ (schedule time zone),
-//	ARKISM_CREW_KEYS, ARKISM_CREW_NOTIFY, ARKISM_CREW_HOOKS (files under ~/.config/arkism).
+//	ARKISM_CREW_KEYS, ARKISM_CREW_NOTIFY, ARKISM_CREW_HOOKS (files under ~/.config/arkism),
+//	ARKISM_CREW_TRACE_TOKEN_FILE (producer service token, not the engine's) with
+//	ARKISM_MEMORY_OUTCOME_SPOOL: finished runs become execution traces and outcome receipts.
 func FromEnv() Config {
 	home, _ := os.UserHomeDir()
 	state := filepath.Join(home, ".config", "arkism")
@@ -51,7 +53,13 @@ func FromEnv() Config {
 		// The local Arkism is reached directly, never through a proxy.
 		HTTP: &http.Client{Timeout: 60 * time.Second, Transport: &http.Transport{Proxy: nil}},
 	}
+	var sinks []ReceiptSink
+	if spool := os.Getenv("ARKISM_MEMORY_OUTCOME_SPOOL"); spool != "" {
+		sinks = append(sinks, func(r TraceReceipt) error { return EnqueueReceipt(spool, r) })
+	}
 	return Config{Listen: listen, Engine: &Engine{
+		Traces:       tracesFromEnv(client),
+		Sinks:        sinks,
 		Store:        client,
 		Meetings:     client,
 		Loc:          loc,

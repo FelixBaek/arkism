@@ -19,6 +19,8 @@ import (
 	"syscall"
 
 	"github.com/FelixBaek/arkism/internal/crewrun"
+	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/host/capture"
 )
 
 const usage = `usage:
@@ -30,7 +32,25 @@ func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	os.Exit(run(ctx, os.Args[1:], os.Stdout, crewrun.FromEnv()))
+	cfg := crewrun.FromEnv()
+	if os.Getenv("ARKISM_SESSION_PROCESSOR") == "1" { // the bridge's session_processor_sink
+		cfg.Engine.Sinks = append(cfg.Engine.Sinks, sessionSink)
+	}
+	os.Exit(run(ctx, os.Args[1:], os.Stdout, cfg))
+}
+
+// sessionSink spools a finished run's receipt for the capture drain's session processor.
+func sessionSink(r crewrun.TraceReceipt) error {
+	raw, err := json.Marshal(map[string]any{"scope": r.Scope, "session_id": r.SessionID, "occurred_at": r.OccurredAt,
+		"receipt": map[string]any{"trace": r.Trace, "run": r.Run, "source_events": r.SourceEvents}})
+	if err != nil {
+		return err
+	}
+	event, err := host.Loads(string(raw)) // integers stay integers in the spool
+	if err != nil {
+		return err
+	}
+	return capture.EnqueueSessionTrace(event.(map[string]any))
 }
 
 func run(ctx context.Context, args []string, out io.Writer, cfg crewrun.Config) int {
@@ -70,6 +90,7 @@ func run(ctx context.Context, args []string, out io.Writer, cfg crewrun.Config) 
 		if err := e.Drive(ctx, r.ID); err != nil {
 			fmt.Fprintln(os.Stderr, "run:", err)
 		}
+		e.Wait() // the finished run's trace and receipts are recorded in the background
 		final, err := e.Store.GetRun(context.WithoutCancel(ctx), r.ID)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "read run:", err)
