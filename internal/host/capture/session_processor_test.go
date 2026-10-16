@@ -221,6 +221,32 @@ func TestSessionPendingDrainKeepsAttemptsAndNeedsServiceCredential(t *testing.T)
 	}
 }
 
+// A pending code that will not clear by waiting spends attempts and parks, so the model is not re-called forever.
+func TestSessionPendingFailureSpendsAttemptsAndParks(t *testing.T) {
+	capFake(t)
+	t.Setenv("ARKISM_SESSION_PROCESSOR", "1")
+	saved := processJob
+	t.Cleanup(func() { processJob = saved })
+	calls := 0
+	processJob = func(map[string]any, func() error) error { calls++; return sessionWait("coverage_mismatch") }
+	os.MkdirAll(spoolDir(), 0o700)
+	path := filepath.Join(spoolDir(), "job.json")
+	os.WriteFile(path, []byte(`{"session_id": "s1", "event_id": "e1", "queued_at": "`+time.Now().UTC().Format(time.RFC3339)+`", "users": []}`), 0o600)
+	for i := 0; i < capMaxAttempts; i++ {
+		if job, err := readJob(path); err == nil {
+			delete(job, "archive_retry_after") // skip the one-minute backoff
+			atomicWrite(path, dumps(job))
+		}
+		if err := drain(false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	job, err := readJob(filepath.Join(failedDir(), "job.json"))
+	if err != nil || exists(path) || calls != capMaxAttempts || !eq(job["attempts"], capMaxAttempts) || job["last_error"] != "coverage_mismatch" {
+		t.Fatal(job, err, calls)
+	}
+}
+
 func TestSessionSaveFailureReplaysPreparedResultAndCursorWaits(t *testing.T) {
 	request, output := sessionFixture(t)
 	capFake(t)

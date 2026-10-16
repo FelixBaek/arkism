@@ -619,7 +619,9 @@ func drain(allWorkOrigins bool) error {
 			metric(kv("event", "session_processor_parked"), kv("session", sid), kv("error", code))
 			continue
 		}
-		if sessionProcessorOn() && (errors.Is(err, errSessionPending) || code == "429") {
+		// Only a real wait is free; any other pending code spends an attempt so it parks instead of re-calling the model forever.
+		waiting := code == "429" || code == "session_batch_wait" || code == "session_model_budget_wait" || code == "session_batch_parent_pending"
+		if sessionProcessorOn() && waiting {
 			wait := 60.0
 			if code == "429" {
 				wait = 3600
@@ -647,6 +649,9 @@ func drain(allWorkOrigins bool) error {
 		attempts, _ := num(or(job["attempts"], 0))
 		job["attempts"] = int(attempts) + 1
 		job["last_error"] = code
+		if sessionProcessorOn() && errors.Is(err, errSessionPending) {
+			job["archive_retry_after"] = timeNow() + 60
+		}
 		metric(kv("event", "writeback_failure"), kv("session", sid), kv("error", code), kv("attempts", job["attempts"]))
 		if int(attempts)+1 >= capMaxAttempts {
 			if err := park(path); err != nil {

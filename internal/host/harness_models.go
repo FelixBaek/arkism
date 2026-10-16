@@ -6,6 +6,7 @@ package host
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -25,7 +26,12 @@ type HarnessRole struct {
 var harnessPlan = sync.OnceValue(func() map[string]HarnessRole {
 	raw := config.HarnessModels
 	if path := os.Getenv("ARKISM_HARNESS_MODELS"); path != "" {
-		if b, err := os.ReadFile(path); err == nil {
+		// An unusable operator copy falls back to the built-in plan, but never silently.
+		if b, err := os.ReadFile(path); err != nil {
+			fmt.Fprintln(os.Stderr, "harness_models_unreadable: using built-in plan")
+		} else if !json.Valid(b) {
+			fmt.Fprintln(os.Stderr, "harness_models_invalid: using built-in plan")
+		} else {
 			raw = b
 		}
 	}
