@@ -228,7 +228,7 @@ func TestSessionPendingFailureSpendsAttemptsAndParks(t *testing.T) {
 	saved := processJob
 	t.Cleanup(func() { processJob = saved })
 	calls := 0
-	processJob = func(map[string]any, func() error) error { calls++; return sessionWait("coverage_mismatch") }
+	processJob = func(map[string]any, func() error) error { calls++; return sessionWait("session_trace_ref_invalid") }
 	os.MkdirAll(spoolDir(), 0o700)
 	path := filepath.Join(spoolDir(), "job.json")
 	os.WriteFile(path, []byte(`{"session_id": "s1", "event_id": "e1", "queued_at": "`+time.Now().UTC().Format(time.RFC3339)+`", "users": []}`), 0o600)
@@ -242,7 +242,7 @@ func TestSessionPendingFailureSpendsAttemptsAndParks(t *testing.T) {
 		}
 	}
 	job, err := readJob(filepath.Join(failedDir(), "job.json"))
-	if err != nil || exists(path) || calls != capMaxAttempts || !eq(job["attempts"], capMaxAttempts) || job["last_error"] != "coverage_mismatch" {
+	if err != nil || exists(path) || calls != capMaxAttempts || !eq(job["attempts"], capMaxAttempts) || job["last_error"] != "session_trace_ref_invalid" {
 		t.Fatal(job, err, calls)
 	}
 }
