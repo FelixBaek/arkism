@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -290,5 +291,37 @@ func TestFailedNewBackupStillExpiresOldBundleBeforeServiceAccess(t *testing.T) {
 	}
 	if _, err := os.Stat(fresh); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOldestRetainedIsToldToThePrivacyWorker(t *testing.T) {
+	const now = 1791158400
+	managed := privateDir(t, filepath.Join(t.TempDir(), "managed"))
+	var calls [][]string
+	docker = func(_ context.Context, _ time.Duration, _ dockerIO, args ...string) (string, error) {
+		calls = append(calls, args)
+		return "", nil
+	}
+	defer func() { docker = runDocker }()
+	// No backup at all: nothing proves expiry, so the worker is not told.
+	empty, err := expire(managed, true, now)
+	if err != nil || field(empty, "oldest_retained") != nil || notifyPrivacy("worker-1", empty) != nil || len(calls) != 0 {
+		t.Fatal(empty, err, calls)
+	}
+	for _, at := range []int64{now - TTL, now - 3600, now - 60} {
+		write(t, filepath.Join(managed, bundleFile(at, false)), "encrypted fixture")
+	}
+	result, err := expire(managed, true, now)
+	want := time.Unix(now-3600, 0).UTC().Format(time.RFC3339)
+	if err != nil || field(result, "oldest_retained") != want {
+		t.Fatal(result, err)
+	}
+	if err := notifyPrivacy("worker-1", result); err != nil || !reflect.DeepEqual(calls, [][]string{{"exec", "worker-1", "/memoryd", "--privacy-backup-expiry", want}}) {
+		t.Fatal(calls, err)
+	}
+	// An unknown file could be an older copy, so the oldest time is withheld.
+	write(t, filepath.Join(managed, "copy.cms"), "unknown")
+	if hidden, _ := expire(managed, true, now); field(hidden, "oldest_retained") != nil {
+		t.Fatal(hidden)
 	}
 }

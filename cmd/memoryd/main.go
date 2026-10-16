@@ -39,6 +39,7 @@ func run() error {
 	inspectRestore := flag.Bool("inspect-restored-recovery", false, "offline administrator: inspect all-scope requests in a publication-blocked restore")
 	exportSnapshot := flag.Bool("export-recovery-snapshot", false, "offline administrator: export all-scope recovery ledger from one read-only database snapshot")
 	adoptBlobs := flag.Bool("adopt-restored-blobs", false, "verify quarantined restored files and bind to the restored DB; stopped writers required")
+	backupExpiry := flag.String("privacy-backup-expiry", "", "RFC3339 time of the oldest retained backup; finish privacy deletions parked before it, then exit")
 	collectBlobs := flag.Bool("collect-blobs", false, "collect unreferenced blob files and abandoned temporary files; service maintenance authorization required")
 	initDB := flag.Bool("init-db", false, "create Memory collections and ordinary indexes")
 	semanticIndex := flag.String("semantic-index", "", "create or drop the opt-in pgvector knowledge index: create|drop")
@@ -205,8 +206,27 @@ func run() error {
 	if *checkIndexes {
 		return pg.SearchReady(ctx)
 	}
-	if *worker || *collectBlobs || *adoptBlobs || *reindex {
+	if *worker || *collectBlobs || *adoptBlobs || *reindex || *backupExpiry != "" {
 		ctx = memory.ContextWithPostgresToken(ctx, os.Getenv("MEMORY_WORKER_TOKEN"))
+	}
+	if *backupExpiry != "" {
+		oldest, err := time.Parse(time.RFC3339, *backupExpiry)
+		if err != nil {
+			return memory.ErrInvalid
+		}
+		auth, err := configuredAuthorizer(repo, standalone)
+		if err != nil {
+			return err
+		}
+		svc := &memory.Service{Repo: repo, Auth: auth}
+		op, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+		advanced, err := svc.ExpirePrivacyBackups(op, os.Getenv("MEMORY_WORKER_TOKEN"), oldest)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("{\"advanced\":%d}\n", advanced)
+		return nil
 	}
 	if *collectBlobs || *adoptBlobs {
 		auth, err := configuredAuthorizer(repo, standalone)

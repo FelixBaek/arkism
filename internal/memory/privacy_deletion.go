@@ -31,6 +31,9 @@ const (
 	privacyPartial           = "partial"
 	privacyFailed            = "failed"
 	privacyCancelled         = "cancelled"
+	// JobStatusWaiting parks a privacy job at waiting_for_retention_or_backup:
+	// no worker action is due until backup expiry evidence arrives.
+	JobStatusWaiting = "waiting"
 )
 
 // PrivacyDeletion is the durable saga payload stored in the existing jobs
@@ -96,6 +99,9 @@ type PrivacyPurgeReport struct {
 	DerivedPurged       bool `json:"derived_purged" bson:"derived_purged"`
 	ArtifactsPurged     bool `json:"artifacts_purged" bson:"artifacts_purged"`
 	BackupExpiryPending bool `json:"backup_expiry_pending" bson:"backup_expiry_pending"`
+	// BackupOldestRetainedAt is the oldest backup still kept when expiry was
+	// accepted; every retained backup was taken after the local purge.
+	BackupOldestRetainedAt *time.Time `json:"backup_oldest_retained_at,omitempty" bson:"backup_oldest_retained_at,omitempty"`
 }
 
 type PrivacyDeletionRequest struct {
@@ -122,6 +128,8 @@ type PrivacyScopeInput struct {
 type PrivacyRevisionInput struct {
 	Scope            Scope `json:"scope"`
 	ExpectedRevision int64 `json:"expected_revision"`
+	// BackupOldestRetainedAt is required only to leave waiting_for_retention_or_backup.
+	BackupOldestRetainedAt *time.Time `json:"backup_oldest_retained_at,omitempty"`
 }
 type PrivacyHoldInput struct {
 	Scope            Scope  `json:"scope"`
@@ -163,6 +171,7 @@ type privacyStore interface {
 	VerifyPrivacyPurge(context.Context, Scope, PrivacyImpact) (PrivacyPurgeReport, error)
 	ClaimPrivacyDeletion(context.Context, Scope, time.Time, time.Duration) (Record, error)
 	NextPrivacyAdvance(context.Context, time.Time) (Record, error)
+	PrivacyBackupWaiting(context.Context, time.Time) ([]Record, error)
 	PrivacyFence(context.Context, PrivacyFenceInput) (PrivacyFenceResult, error)
 }
 
@@ -619,16 +628,27 @@ func (s *Service) AdvancePrivacyDeletion(ctx context.Context, token, id string, 
 			pd.ErrorSummary = ""
 			r.Status, r.RunAt = JobStatusPending, nil
 			report.RuntimePurged = pd.Report.RuntimePurged
-			report.BackupExpiryPending = pd.RetentionPolicyRef != retentionSynthetic
+			report.BackupOldestRetainedAt = pd.Report.BackupOldestRetainedAt
+			report.BackupExpiryPending = pd.RetentionPolicyRef != retentionSynthetic && report.BackupOldestRetainedAt == nil
 			pd.Report = report
 			if !report.LiveAccessRemoved || !report.RuntimePurged || !report.DerivedPurged || !report.ArtifactsPurged {
 				pd.State = privacyPartial
 			} else if report.BackupExpiryPending {
-				pd.State = privacyWaiting
+				pd.State, r.Status = privacyWaiting, JobStatusWaiting
 			} else {
 				now := time.Now().UTC().Truncate(time.Millisecond)
 				pd.State, pd.CompletedAt, r.Status = privacyCompleted, &now, JobStatusDone
 			}
+		case privacyWaiting:
+			// UpdatedAt is when verification parked the job; a backup taken
+			// before then can still hold the deleted rows.
+			oldest := in.BackupOldestRetainedAt
+			if oldest == nil || !oldest.After(r.UpdatedAt) {
+				return ErrConflict
+			}
+			at := oldest.UTC().Truncate(time.Millisecond)
+			pd.Report.BackupOldestRetainedAt = &at
+			pd.State, r.Status, r.RunAt = privacyVerifying, JobStatusPending, nil
 		default:
 			return ErrConflict
 		}
@@ -647,6 +667,25 @@ func (s *Service) AdvancePrivacyDeletion(ctx context.Context, token, id string, 
 		return PrivacyDeletionStatus{}, err
 	}
 	return privacyStatus(saved)
+}
+
+// ExpirePrivacyBackups sends every waiting deletion that finished before the
+// oldest retained backup back through verification, which then completes it.
+func (s *Service) ExpirePrivacyBackups(ctx context.Context, token string, oldest time.Time) (int, error) {
+	store, ok := s.Repo.(privacyStore)
+	if !ok || oldest.IsZero() {
+		return 0, ErrUnavailable
+	}
+	rows, err := store.PrivacyBackupWaiting(ctx, oldest)
+	if err != nil {
+		return 0, err
+	}
+	for n, r := range rows {
+		if _, err := s.AdvancePrivacyDeletion(ctx, token, r.ID, PrivacyRevisionInput{Scope: r.Scope, ExpectedRevision: r.Revision, BackupOldestRetainedAt: &oldest}); err != nil {
+			return n, err
+		}
+	}
+	return len(rows), nil
 }
 
 func (s *Service) HoldPrivacyDeletion(ctx context.Context, token, id string, in PrivacyHoldInput) (PrivacyDeletionStatus, error) {
