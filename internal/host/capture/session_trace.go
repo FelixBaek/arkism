@@ -120,6 +120,20 @@ func sessionCanonical(job map[string]any) (records []any, refs map[string][]any,
 	return records, refs, nil
 }
 
+var sessionTraceLockWait = 90 * time.Second
+
+// lockFileWithin takes path's exclusive lock, giving up with errBusy after d.
+func lockFileWithin(path string, d time.Duration) (*os.File, error) {
+	deadline := time.Now().Add(d)
+	for {
+		f, err := lockFile(path, false)
+		if !errors.Is(err, errBusy) || !time.Now().Before(deadline) {
+			return f, err
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
 // EnqueueSessionTrace is the completion sink: it spools one canonical receipt
 // {scope, session_id, receipt{trace, run, source_events}, occurred_at} for the session processor.
 // A replay of the same event is a no-op; a different receipt under the same id is refused.
@@ -150,7 +164,8 @@ func EnqueueSessionTrace(event map[string]any) error {
 	if err := os.MkdirAll(capState, 0o700); err != nil {
 		return err
 	}
-	lock, err := lockFile(filepath.Join(capState, "drain.lock"), true)
+	// Bounded: a crew run's background recorder waits here, and Engine.Wait must not hang on a long drain.
+	lock, err := lockFileWithin(filepath.Join(capState, "drain.lock"), sessionTraceLockWait)
 	if err != nil {
 		return err
 	}
