@@ -3,12 +3,47 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/FelixBaek/arkism/internal/crewrun"
+	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/host/capture"
 )
+
+// A crew run's receipt reaches the session spool in the shape EnqueueSessionTrace reads.
+func TestSessionSinkSpoolsTheReceipt(t *testing.T) {
+	dir := t.TempDir()
+	capture.SetBenchState(dir)
+	defer capture.SetBenchState(host.CaptureState)
+	t.Setenv("ARKISM_WORKSPACE", "w")
+	t.Setenv("ARKISM_PROJECT", "p")
+	t.Setenv("ARKISM_USER", "u")
+	t.Setenv("ARKISM_AGENT", "crew")
+	t.Setenv("ARKISM_SHARED_AUDIENCE_SCOPE", "")
+	t.Setenv("ARKISM_SESSION_PROCESSOR", "1")
+	r := crewrun.TraceReceipt{
+		Scope:        map[string]string{"workspace_id": "w", "project_id": "p", "user_id": "u", "agent_id": "crew"},
+		SessionID:    "crew-run-1",
+		OccurredAt:   "2026-10-16T00:00:00.000Z",
+		Trace:        crewrun.Ref{Collection: "execution_traces", ID: "tr", Revision: 1},
+		Run:          crewrun.Ref{Collection: "agent_runs", ID: "run", Revision: 1},
+		SourceEvents: []crewrun.Ref{{Collection: "sources", ID: "e1", Revision: 1}},
+	}
+	if err := sessionSink(r); err != nil {
+		t.Fatal(err)
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "spool", "*.json"))
+	if len(files) != 1 {
+		t.Fatal(files)
+	}
+	raw, _ := os.ReadFile(files[0])
+	if !strings.Contains(string(raw), "execution_receipt") || !strings.Contains(string(raw), "execution_traces") {
+		t.Fatal(string(raw))
+	}
+}
 
 func TestCommandLine(t *testing.T) {
 	cfg := crewrun.FromEnv()

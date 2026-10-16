@@ -3,6 +3,7 @@ package capture
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -147,5 +148,30 @@ func TestSessionCanonicalReceiptCarriesMemoryContextAndSourceRefs(t *testing.T) 
 	rows["/v1/sources/ev-tool"]["revision"] = int64(2)
 	if _, _, err := sessionCanonical(job); !pending(err) || errorCode(err) != "session_trace_source_changed" {
 		t.Fatal(err)
+	}
+}
+
+// A drain holding its lock past the bound makes the sink give up, so a crew run's Wait never hangs on it.
+func TestSessionTraceGivesUpOnAHeldDrainLock(t *testing.T) {
+	capFake(t)
+	scope := traceScopeEnv(t)
+	t.Setenv("ARKISM_SESSION_PROCESSOR", "1")
+	old := sessionTraceLockWait
+	sessionTraceLockWait = 300 * time.Millisecond
+	t.Cleanup(func() { sessionTraceLockWait = old })
+	if err := os.MkdirAll(capState, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	held, err := lockFile(filepath.Join(capState, "drain.lock"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer held.Close()
+	ref := map[string]any{"collection": "execution_traces", "id": "tr", "revision": int64(1)}
+	event := map[string]any{"scope": scope, "session_id": "crew-run-1", "occurred_at": "2026-10-14T00:00:00.000Z",
+		"receipt": map[string]any{"trace": ref, "run": ref, "source_events": []any{}}}
+	start := time.Now()
+	if err := EnqueueSessionTrace(event); !errors.Is(err, errBusy) || time.Since(start) > 5*time.Second {
+		t.Fatal(err, time.Since(start))
 	}
 }

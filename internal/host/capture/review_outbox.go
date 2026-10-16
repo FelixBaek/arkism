@@ -53,6 +53,11 @@ func reviewTerminal(err error) bool {
 	return false
 }
 
+// reviewFailClosed stops every run with no backoff: a missing credential or a 403.
+func reviewFailClosed(err error) bool {
+	return errors.Is(err, errReviewerCredential) || host.HTTPCode(err) == 403
+}
+
 func validReviewRequest(v any) bool {
 	r, _ := v.(map[string]any)
 	body, _ := r["body"].(map[string]any)
@@ -196,8 +201,8 @@ func deliverReviews(path string, record host.Obj, send reviewSend) ([]map[string
 		if err == nil {
 			err = checkReviewAck(r, res)
 		}
-		if errors.Is(err, errReviewerCredential) {
-			return nil, err // no backoff: every run fails closed until the credential is there
+		if reviewFailClosed(err) {
+			return nil, err // no backoff: every run fails closed until the credential or grant is there
 		}
 		if err != nil && !reviewTerminal(err) {
 			attempts, _ := intField(get("attempts"))
@@ -281,8 +286,8 @@ func replayReviews(send reviewSend) (pending map[string]bool, err error) {
 				if err == nil || reviewTerminal(err) {
 					continue
 				}
-				if errors.Is(err, errReviewerCredential) {
-					return err // fails closed: no reviewer credential, nothing is sent
+				if reviewFailClosed(err) {
+					return err // fails closed: no reviewer credential or grant, nothing is sent
 				}
 				if ve := valueErr(""); errors.As(err, &ve) && !errors.Is(err, errReviewAck) {
 					return err // a changed or corrupt spool is never sent
