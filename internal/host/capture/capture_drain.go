@@ -705,7 +705,7 @@ func sessionModelDefect(code string) bool {
 // sessionInputDefect reports an archive window or record that rereading the same transcript cannot change.
 func sessionInputDefect(code string) bool {
 	return code == "session_archive_window_incomplete" || code == "oversized_record_requires_artifact_reference" ||
-		code == "oversized_tool_group_requires_reference"
+		code == "oversized_tool_group_requires_reference" || code == "input_chunk_required"
 }
 
 // readJob loads one spool file, stamping a legacy job's queue time from its mtime.

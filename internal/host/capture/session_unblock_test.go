@@ -18,7 +18,7 @@ func TestMaskEmailsClearsServerFilterAndKeepsOtherText(t *testing.T) {
 	in := []any{
 		map[string]any{"source_id": "archive-1", "revision": 1, "role": "user", "text": "커밋 작성자는 Felix.Baek+ark@atelier-felix.co.kr 로 해줘"},
 		host.Obj{{Key: "role", Value: "tool"}, {Key: "text", Value: "Author: Seungyong Baek <me@atelierfelix.dev>\nDate: today"}},
-		map[string]any{"role": "assistant", "text": "줄바꿈 뒤\n@atelierfelix.dev 와 탭\t@x.io"},
+		map[string]any{"role": "assistant", "text": "줄바꿈 뒤\n@atelierfelix.dev 와 탭\t@x.io, Important\nme@example.com, me@\nx.com"},
 		map[string]any{"role": "assistant", "text": "@app.route('/v1') 와 user@localhost, npm @types/node 는 그대로"},
 	}
 	out := maskEmails(in).([]any)
@@ -31,6 +31,9 @@ func TestMaskEmailsClearsServerFilterAndKeepsOtherText(t *testing.T) {
 	}
 	if got := autosaveGet(out[1], "text"); got != "Author: Seungyong Baek <[email]>\nDate: today" {
 		t.Fatal(got)
+	}
+	if got := autosaveGet(out[2], "text"); got != "줄바꿈 뒤[email] 와 탭[email], Important[email], me@\nx.com" {
+		t.Fatal("text before an address must stay:", got)
 	}
 	if got := autosaveGet(out[3], "text"); got != "@app.route('/v1') 와 user@localhost, npm @types/node 는 그대로" {
 		t.Fatal("text without an address changed:", got)
@@ -140,7 +143,7 @@ func TestSessionPrivateTranscriptDropsBatch(t *testing.T) {
 }
 
 func TestSessionRepeatInputDefectsParkBatch(t *testing.T) {
-	for _, code := range []string{"session_archive_window_incomplete", "oversized_record_requires_artifact_reference", "oversized_tool_group_requires_reference"} {
+	for _, code := range []string{"session_archive_window_incomplete", "oversized_record_requires_artifact_reference", "oversized_tool_group_requires_reference", "input_chunk_required"} {
 		t.Run(code, func(t *testing.T) {
 			parent, child, other := sessionUnblockSpool(t, code)
 			if err := drain(false); err != nil {
