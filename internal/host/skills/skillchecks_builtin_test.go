@@ -24,13 +24,13 @@ var (
 func noTools(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	h, st, c, ev, sp, roots := checksHome, checksState, checksCache, evaluatorBin, spectorBin, checkRoots
+	h, st, c, ev, sp, cs, roots := checksHome, checksState, checksCache, evaluatorBin, spectorBin, ciscoBin, checkRoots
 	t.Cleanup(func() {
-		checksHome, checksState, checksCache, evaluatorBin, spectorBin, checkRoots = h, st, c, ev, sp, roots
+		checksHome, checksState, checksCache, evaluatorBin, spectorBin, ciscoBin, checkRoots = h, st, c, ev, sp, cs, roots
 	})
 	checksHome, checksState = root, filepath.Join(root, "state")
 	checksCache = filepath.Join(checksState, "skill-checks.json")
-	evaluatorBin, spectorBin = filepath.Join(root, "missing-se"), filepath.Join(root, "missing-ss")
+	evaluatorBin, spectorBin, ciscoBin = filepath.Join(root, "missing-se"), filepath.Join(root, "missing-ss"), filepath.Join(root, "missing-cs")
 	checkRoots = []agentRoot{{"claude_code", filepath.Join(root, ".claude/skills")}}
 	return root
 }
@@ -221,5 +221,26 @@ func TestLabelsStayWithinTheServerLimit(t *testing.T) {
 	}
 	if worseVerdict("SAFE", "CAUTION") != "CAUTION" || worseVerdict("DO_NOT_INSTALL", "SAFE") != "DO_NOT_INSTALL" {
 		t.Fatal()
+	}
+}
+
+// The server rejects a whole report on one unknown key (2026-10-15: "baseline" stopped every agent report).
+func TestChecksReportSendsOnlyServerFields(t *testing.T) {
+	noTools(t)
+	if err := os.MkdirAll(checksState, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cache := `{"tools":"arkism-builtin 1","checks":[{"agent":"claude_code","name":"x","path":"~/x","findings":0,"scanned_at":"2026-10-15T00:00:00Z","hash":"h","source":"builtin","builtin_version":"1","baseline":true,"some_future_key":1}]}`
+	if err := os.WriteFile(checksCache, []byte(cache), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	checks, _ := checksReport()
+	for _, kv := range asObj(checks[0]) {
+		if !containsStr(reportedCheckKeys, kv.Key) {
+			t.Fatal("cache-only key sent:", kv.Key)
+		}
+	}
+	if objGet(asObj(checks[0]), "name") != "x" {
+		t.Fatal(checks)
 	}
 }

@@ -2,6 +2,7 @@ package skills
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -305,10 +307,13 @@ func generateAnalysis(sid, content string, prev host.Obj, old string) (host.Obj,
 		}
 		content = "## 이전 검토 분석\n" + host.MustDumps(prior, host.DumpOpts{NoASCII: true}) + "\n\n## 옛 SKILL.md 대비 diff\n" + diff + "\n\n## 새 SKILL.md\n" + content
 	}
-	payload := host.Obj{{Key: "model", Value: llmModel}, {Key: "temperature", Value: 0}, {Key: "response_format", Value: host.Obj{{Key: "type", Value: "json_object"}}},
-		{Key: "enable_thinking", Value: false}, {Key: "messages", Value: []any{
-			host.Obj{{Key: "role", Value: "system"}, {Key: "content", Value: system}},
-			host.Obj{{Key: "role", Value: "user"}, {Key: "content", Value: runeCut(content, 60000)}}}}}
+	payload := host.Obj{{Key: "model", Value: llmModel}}
+	if !strings.Contains(llmURL, "api.anthropic.com") { // Anthropic's OpenAI-compatible endpoint rejects json_object and temperature (400) and has no enable_thinking; unfence handles its reply
+		payload = append(payload, host.KV{Key: "temperature", Value: 0}, host.KV{Key: "response_format", Value: host.Obj{{Key: "type", Value: "json_object"}}}, host.KV{Key: "enable_thinking", Value: false})
+	}
+	payload = append(payload, host.KV{Key: "messages", Value: []any{
+		host.Obj{{Key: "role", Value: "system"}, {Key: "content", Value: system}},
+		host.Obj{{Key: "role", Value: "user"}, {Key: "content", Value: runeCut(content, 60000)}}}})
 	res, err := postJSONWith(http.DefaultClient, llmURL, "Bearer "+key, payload, 120*time.Second)
 	if err != nil {
 		return nil, err
@@ -321,7 +326,7 @@ func generateAnalysis(sid, content string, prev host.Obj, old string) (host.Obj,
 	if !ok {
 		return nil, keyErr("content")
 	}
-	v, err := loadsStrict(text)
+	v, err := loadsStrict(unfence(text))
 	if err != nil {
 		return nil, err
 	}
@@ -392,6 +397,19 @@ func generateAnalysis(sid, content string, prev host.Obj, old string) (host.Obj,
 	return out, nil
 }
 
+// unfence drops a ```json … ``` wrapper: Anthropic's OpenAI-compatible endpoint ignores response_format.
+func unfence(s string) string {
+	t := strings.TrimSpace(s)
+	if !strings.HasPrefix(t, "```") || !strings.HasSuffix(t, "```") || len(t) < 6 {
+		return s
+	}
+	t = strings.TrimSuffix(t, "```")
+	if i := strings.IndexByte(t, '\n'); i >= 0 {
+		return t[i+1:]
+	}
+	return s
+}
+
 // postJSONWith sends payload as JSON and decodes the object answer; non-2xx is an *host.HTTPError.
 func postJSONWith(client *http.Client, url, auth string, payload any, timeout time.Duration) (map[string]any, error) {
 	body, err := host.Dumps(payload, host.DumpOpts{})
@@ -435,13 +453,51 @@ func rowMatchesOldVersion(url, token string, scope map[string]any, sid, contentH
 
 // failureCode is what the summary shows for a per-skill failure: the HTTP status, the hub code, or
 // the error kind.
+// httpFailure keeps the status and the error's own code and short message (never the request), so a 400 says why.
+func httpFailure(err error) any {
+	var h *host.HTTPError
+	errors.As(err, &h)
+	var body struct {
+		Code  string                               `json:"code"`  // Arkism hub
+		Error struct{ Code, Type, Message string } `json:"error"` // OpenAI-compatible providers
+	}
+	if json.Unmarshal(h.Body, &body) != nil || body.Code+body.Error.Message+body.Error.Code == "" {
+		return h.Code
+	}
+	if body.Code != "" {
+		return fmt.Sprintf("%d %s", h.Code, body.Code)
+	}
+	return fmt.Sprintf("%d %s: %s", h.Code, cmp.Or(body.Error.Code, body.Error.Type), runeCut(body.Error.Message, 160))
+}
+
+// transferBlocked mirrors the hub's sensitivePattern (internal/memory/structured.go): model-written examples
+// such as "test@example.com" or "bearer URL" otherwise fail the whole import with 400 invalid_request.
+var transferBlocked = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY|bearer\s+[a-z0-9._~-]+|\b(?:sk|al)-[a-z0-9_-]{12,}|(?:api[_ -]?key|token|password|secret)["']?\s*[=:]\s*["']?[a-z0-9_./+=-]{8,}|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|\b01[016789][- ]?\d{3,4}[- ]?\d{4}\b|\b\d{6}-[1-4]\d{6}\b|\b(?:tool_output|raw_output|raw_conversation)\b)`)
+
+// scrubTransfer masks blocked text in analysis strings and drops blocked list items.
+func scrubTransfer(v any) any {
+	switch x := v.(type) {
+	case string:
+		return transferBlocked.ReplaceAllString(x, "[생략]")
+	case []any:
+		kept := []any{}
+		for _, item := range x {
+			if s, ok := item.(string); !ok || !transferBlocked.MatchString(s) {
+				kept = append(kept, item)
+			}
+		}
+		return kept
+	}
+	return v
+}
+
 func failureCode(err error) any {
 	var hubE *host.SkillHubError
 	var pathE *fs.PathError
 	var syntax *json.SyntaxError
 	switch {
 	case host.HTTPCode(err) != 0:
-		return host.HTTPCode(err)
+		return httpFailure(err)
 	case errors.As(err, &hubE):
 		return hubE.Code
 	case errors.Is(err, fs.ErrNotExist):
@@ -729,7 +785,7 @@ func syncOne(sid string, row, current map[string]any, known map[analysisKey]map[
 	sent := map[string]any{}
 	for k, v := range analysis {
 		if k != "original_runtime" {
-			sent[k] = v
+			sent[k] = scrubTransfer(v)
 		}
 	}
 	sent["source_path"], sent["source_file"] = row["path"], "SKILL.md"
