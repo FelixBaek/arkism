@@ -837,6 +837,7 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 	if !ok {
 		return 1 // Python failed on data.get outside its handler
 	}
+	hookTranscript = str(or(data["transcript_path"], ""))
 	// An `ark:` command is answered here, before capture and recall (ark_commands.go).
 	if data["hook_event_name"] == "UserPromptSubmit" && arkHandle(data, stdout) {
 		if os.Getenv("ARKISM_CAPTURE_ACK") == "1" { // nothing to store: the relay may drop its copy

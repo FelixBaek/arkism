@@ -243,7 +243,10 @@ func TestCaptureAIReviewOutboxFailsClosedOnForbidden(t *testing.T) {
 	capFake(t)
 	reviewServer(t, `[{"id": "p", "revision": 3, "kind": "decision", "text": "추측", "tags": ["basis:inferred"], "created_by": "owner"}]`, `[]`)
 	sent := 0
-	revPost = func(string, any, time.Duration) (map[string]any, error) { sent++; return nil, &host.HTTPError{Code: 403} }
+	revPost = func(string, any, time.Duration) (map[string]any, error) {
+		sent++
+		return nil, &host.HTTPError{Code: 403}
+	}
 	llm = func(string, string, string, time.Duration, string, string) (any, error) {
 		return []any{map[string]any{"id": "p", "risk": "medium", "risk_reasons": []any{"추측"}, "dup_hint": ""}}, nil
 	}
