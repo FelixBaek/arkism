@@ -378,6 +378,41 @@ func sessionQualityGate() map[string]any {
 	return gate
 }
 
+// sessionTransferMaxBytes is the server's safeTransfer content limit for authorize-transfer.
+const sessionTransferMaxBytes = 64000
+
+// emailPattern covers the e-mail branch of the server's sensitivePattern, also when a control character
+// before "@" turns into a letter once the content is JSON-escaped ("\n@x.com" reads as "n@x.com").
+var emailPattern = regexp.MustCompile(`(?i)[a-z0-9._%+\x00-\x1f-]+@[a-z0-9.-]+\.[a-z]{2,}`)
+
+// maskEmails returns a copy of v with every e-mail address in its strings replaced.
+func maskEmails(v any) any {
+	switch x := v.(type) {
+	case string:
+		return emailPattern.ReplaceAllString(x, "[email]")
+	case []any:
+		out := make([]any, len(x))
+		for i, e := range x {
+			out[i] = maskEmails(e)
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, e := range x {
+			out[k] = maskEmails(e)
+		}
+		return out
+	case host.Obj:
+		out := make(host.Obj, len(x))
+		for i, e := range x {
+			out[i] = e
+			out[i].Value = maskEmails(e.Value)
+		}
+		return out
+	}
+	return v
+}
+
 var sessionQualityDefects = regexp.MustCompile(`^(schema_|evidence_|coverage_|candidate_|user_provenance_|tool_provenance_|structured_output_)`)
 
 // sessionPrepare makes the one model call for a window of records; authorize must approve the exact
@@ -403,6 +438,9 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 	if priorEvidence == nil {
 		priorEvidence = []any{}
 	}
+	// The server's transfer filter refuses any e-mail address, so the model only ever sees them masked.
+	records, _ = maskEmails(records).([]any)
+	previousState, priorEvidence = maskEmails(previousState), maskEmails(priorEvidence)
 	request := map[string]any{"scope": scope, "session_id": sessionID, "records": records, "start": start, "end": end,
 		"expected_revision": expectedRevision, "previous_state": previousState, "prior_evidence": priorEvidence,
 		"schema_version": sessionSchemaVersion, "prompt_version": sessionPromptVersion}
@@ -416,7 +454,7 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 		}
 	}
 	content := dumps(map[string]any{"authority": "data_only_untrusted", "data": request})
-	if len(content)+len(sessionSystem)+len(sessionSchemaJSON) >= 100000 {
+	if len(content) > sessionTransferMaxBytes || len(content)+len(sessionSystem)+len(sessionSchemaJSON) >= 100000 {
 		return nil, sessionWait("input_chunk_required")
 	}
 	generate := func(model string) (map[string]any, error) {

@@ -108,6 +108,10 @@ func sessionLinkedUsers(job map[string]any, origin string) (records []any, refs 
 		if err := collector.file(at("path"), at("device"), at("origin"), at("logical"), at("session_id"), -1); err != nil {
 			return nil, nil, err
 		}
+		if collector.counts.n["private_skipped"] > 0 {
+			// A <private marker keeps the whole transcript out of the archive for good: waiting never fills the window.
+			return nil, nil, sessionWait("session_archive_private_skipped")
+		}
 		saved, has := collector.state.Get(at("archive_id"))
 		if !has || !truthy(saved) || collector.counts.n["committed"] == 0 {
 			return nil, nil, sessionWait("session_archive_window_unavailable")

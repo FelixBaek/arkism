@@ -601,7 +601,22 @@ func drain(allWorkOrigins bool) error {
 		}
 		code := errorCode(err)
 		sid := head(str(job["session_id"]), 12)
-		if sessionProcessorOn() && errors.Is(err, errSessionPending) && sessionModelDefect(code) {
+		if sessionProcessorOn() && errors.Is(err, errSessionPending) && code == "session_archive_private_skipped" {
+			// The user marked the transcript private, so it never reaches the archive: drop the batch, never retry.
+			for _, name := range anyList(job["session_batch_children"]) {
+				if child, err := sessionChildPath(name); err == nil {
+					if err := os.Remove(child); err != nil && !os.IsNotExist(err) {
+						return err
+					}
+				}
+			}
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			metric(kv("event", "session_processor_dropped"), kv("session", sid), kv("error", code))
+			continue
+		}
+		if sessionProcessorOn() && errors.Is(err, errSessionPending) && (sessionModelDefect(code) || sessionInputDefect(code)) {
 			// Re-running the same window repeats the model call and the same defect every minute: park the batch
 			// (parent and merged children) instead of blocking every later turn of the session.
 			job["last_error"] = code
@@ -685,6 +700,12 @@ func sessionModelDefect(code string) bool {
 		}
 	}
 	return false
+}
+
+// sessionInputDefect reports an archive window or record that rereading the same transcript cannot change.
+func sessionInputDefect(code string) bool {
+	return code == "session_archive_window_incomplete" || code == "oversized_record_requires_artifact_reference" ||
+		code == "oversized_tool_group_requires_reference"
 }
 
 // readJob loads one spool file, stamping a legacy job's queue time from its mtime.
