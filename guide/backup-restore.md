@@ -19,7 +19,7 @@ A server backup is a nightly job you schedule yourself (a systemd timer or cron)
 2. bundles the `pg_dump -Fc` archive and the files (`arkism backup-bundle create`),
 3. encrypts the bundle with CMS into `/srv/arkism/backups/arkism-prod-pg-<time>.cms` (`arkism backup-archive encrypt`).
 
-`arkism-backup-retention.timer` removes old archives.
+`arkism-backup-retention.timer` removes old archives, then, with `--privacy-worker <worker container>`, tells the memory worker the oldest archive it kept so privacy deletions finished before that time can complete.
 
 ### Restore
 

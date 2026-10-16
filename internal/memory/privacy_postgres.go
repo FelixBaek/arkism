@@ -386,6 +386,35 @@ ORDER BY updated_at,id LIMIT 1`, privacyDeletionKind, []string{JobStatusPending,
 	return pgDecode(payload)
 }
 
+// PrivacyBackupWaiting lists waiting deletions parked before the given backup
+// time, under the same RLS as NextPrivacyAdvance.
+func (p *Postgres) PrivacyBackupWaiting(ctx context.Context, before time.Time) ([]Record, error) {
+	// status 'pending' covers rows parked before JobStatusWaiting existed.
+	rows, err := p.q().Query(ctx, `SELECT payload FROM memory_records
+WHERE collection='jobs' AND kind=$1 AND status=ANY($2)
+  AND doc->'privacy_deletion'->>'state'=$3
+  AND doc->'privacy_deletion'->>'legal_hold_status'<>'held'
+  AND updated_at<$4
+ORDER BY updated_at,id LIMIT 100`, privacyDeletionKind, []string{JobStatusWaiting, JobStatusPending}, privacyWaiting, before.UTC())
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	var out []Record
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return nil, pgErr(err)
+		}
+		r, err := pgDecode(payload)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, pgErr(rows.Err())
+}
+
 func (p *Postgres) PrivacyFence(ctx context.Context, in PrivacyFenceInput) (PrivacyFenceResult, error) {
 	if checkScope(in.Scope) != nil || len(in.SourceEventIDs)+len(in.TraceIDs) == 0 || len(in.SourceEventIDs)+len(in.TraceIDs) > 128 {
 		return PrivacyFenceResult{}, ErrInvalid

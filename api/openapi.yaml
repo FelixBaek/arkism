@@ -10812,6 +10812,11 @@
           "expected_revision": {
             "type": "integer",
             "minimum": 1
+          },
+          "backup_oldest_retained_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Advance only: the oldest retained managed backup time. Required to leave waiting_for_retention_or_backup, and must be later than the time the job entered the wait."
           }
         },
         "required": [
@@ -11297,6 +11302,11 @@
           "backup_expiry_pending": {
             "type": "boolean",
             "description": "External backup or immutable retention has no verified expiry receipt."
+          },
+          "backup_oldest_retained_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Oldest retained managed backup when backup expiry was accepted; every retained backup was taken after the local purge."
           }
         }
       },
