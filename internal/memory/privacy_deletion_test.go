@@ -42,6 +42,9 @@ func (r *privacyAdvanceRepo) PrivacyFence(context.Context, PrivacyFenceInput) (P
 func (r *privacyAdvanceRepo) NextPrivacyAdvance(ctx context.Context, _ time.Time) (Record, error) {
 	return r.Get(ctx, colJobs, scopeA, r.nextID)
 }
+func (r *privacyAdvanceRepo) PrivacyBackupWaiting(context.Context, time.Time) ([]Record, error) {
+	return nil, nil
+}
 
 func TestPrivacyStateAndReceiptFailClosed(t *testing.T) {
 	states := []string{privacyRequested, privacyAuthorized, privacyDiscoveringImpact, privacyQuarantined, privacyPurgingRuntime, privacyPurgingDerived, privacyWaiting, privacyHeld, privacyVerifying, privacyCompleted, privacyPartial, privacyFailed, privacyCancelled}

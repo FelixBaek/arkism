@@ -377,3 +377,81 @@ func TestPostgresPrivacyAdvanceVerifyingOutcomes(t *testing.T) {
 		t.Fatal("verification removed data", err)
 	}
 }
+
+// A waiting deletion completes only once every retained backup is newer than
+// its purge; missing or older backup evidence leaves it waiting.
+func TestPostgresPrivacyBackupExpiryCompletesWaiting(t *testing.T) {
+	p := isolatedPostgres(t)
+	auth := &fakeAuth{actors: map[string]fakeActor{"worker": actor("worker", "service", false, "purge")}}
+	svc := &Service{Repo: p, Auth: auth}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	scope := Scope{WorkspaceID: "w", ProjectID: "p", UserID: "u", AgentID: "a"}
+	insert := func(id, state, status string, at time.Time) {
+		t.Helper()
+		pd := &PrivacyDeletion{State: state, TargetType: "source_event", RequestHash: ContentHash(id), LegalHoldStatus: privacyHoldNone, RetentionPolicyRef: retentionExternal, Report: PrivacyPurgeReport{RuntimePurged: true}}
+		if err := p.Insert(testCtx, colJobs, Record{ID: id, Scope: scope, Kind: privacyDeletionKind, Status: status, Revision: 1, Attempts: 1, CreatedAt: at, UpdatedAt: at, PrivacyDeletion: pd}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	insert("privacy-deletion-new", privacyVerifying, JobStatusPending, now)
+	// Parked before JobStatusWaiting existed, like the production rows.
+	insert("privacy-deletion-legacy", privacyWaiting, JobStatusPending, now.Add(-time.Hour))
+	st, err := svc.AdvancePrivacyDeletion(testCtx, "worker", "privacy-deletion-new", PrivacyRevisionInput{Scope: scope, ExpectedRevision: 1})
+	if err != nil || st.PrivacyDeletion.State != privacyWaiting || st.JobStatus != JobStatusWaiting || !st.PrivacyDeletion.Report.BackupExpiryPending {
+		t.Fatalf("parked = %+v %v", st, err)
+	}
+	parked, err := p.Get(testCtx, colJobs, scope, "privacy-deletion-new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.AdvancePrivacyDeletion(testCtx, "worker", parked.ID, PrivacyRevisionInput{Scope: scope, ExpectedRevision: parked.Revision}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("advanced without backup evidence: %v", err)
+	}
+	if _, err := p.NextPrivacyAdvance(testCtx, time.Now().UTC()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("waiting job offered to the worker: %v", err)
+	}
+	if n, err := svc.ExpirePrivacyBackups(testCtx, "worker", now.Add(-time.Minute)); err != nil || n != 1 {
+		t.Fatalf("backup older than the new purge: n=%d %v", n, err)
+	}
+	if again, _ := p.Get(testCtx, colJobs, scope, parked.ID); again.PrivacyDeletion.State != privacyWaiting || again.Revision != parked.Revision {
+		t.Fatalf("still-covered deletion moved: %+v", again.PrivacyDeletion)
+	}
+	oldest := parked.UpdatedAt.Add(time.Hour)
+	if n, err := svc.ExpirePrivacyBackups(testCtx, "worker", oldest); err != nil || n != 1 {
+		t.Fatalf("expired backups: n=%d %v", n, err)
+	}
+	for range 2 {
+		next, err := p.NextPrivacyAdvance(testCtx, time.Now().UTC())
+		if err != nil || next.PrivacyDeletion.State != privacyVerifying {
+			t.Fatalf("next = %+v %v", next, err)
+		}
+		if st, err = svc.AdvancePrivacyDeletion(testCtx, "worker", next.ID, PrivacyRevisionInput{Scope: scope, ExpectedRevision: next.Revision}); err != nil {
+			t.Fatal(err)
+		}
+		r := st.PrivacyDeletion.Report
+		if st.PrivacyDeletion.State != privacyCompleted || st.JobStatus != JobStatusDone || r.BackupExpiryPending || r.BackupOldestRetainedAt == nil || st.PrivacyDeletion.CompletedAt == nil {
+			t.Fatalf("completed = %+v", st)
+		}
+	}
+	if _, err := p.NextPrivacyAdvance(testCtx, time.Now().UTC()); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("work left: %v", err)
+	}
+}
+
+// A verification that finds an incomplete purge drops old backup evidence, so the re-purge waits again.
+func TestPostgresPrivacyPartialDropsBackupEvidence(t *testing.T) {
+	p := isolatedPostgres(t)
+	auth := &fakeAuth{actors: map[string]fakeActor{"worker": actor("worker", "service", false, "purge")}}
+	svc := &Service{Repo: p, Auth: auth}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	scope := Scope{WorkspaceID: "w", ProjectID: "p", UserID: "u", AgentID: "a"}
+	pd := &PrivacyDeletion{State: privacyVerifying, TargetType: "source_event", RequestHash: ContentHash("x"), LegalHoldStatus: privacyHoldNone,
+		RetentionPolicyRef: retentionExternal, Report: PrivacyPurgeReport{RuntimePurged: false, BackupOldestRetainedAt: &now}}
+	if err := p.Insert(testCtx, colJobs, Record{ID: "privacy-deletion-partial", Scope: scope, Kind: privacyDeletionKind, Status: JobStatusPending, Revision: 1, Attempts: 1, CreatedAt: now, UpdatedAt: now, PrivacyDeletion: pd}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := svc.AdvancePrivacyDeletion(testCtx, "worker", "privacy-deletion-partial", PrivacyRevisionInput{Scope: scope, ExpectedRevision: 1})
+	if r := st.PrivacyDeletion.Report; err != nil || st.PrivacyDeletion.State != privacyPartial || r.BackupOldestRetainedAt != nil || !r.BackupExpiryPending {
+		t.Fatalf("partial = %+v %v", st, err)
+	}
+}

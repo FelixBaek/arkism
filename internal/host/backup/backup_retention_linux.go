@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -68,6 +69,7 @@ func expire(directory string, execute bool, now float64) (host.Obj, error) {
 	}
 	expired := []any{}
 	removed, retained, excluded := 0, 0, 0
+	oldest := 0.0
 	for _, name := range names {
 		at, ok := createdAt(name)
 		var entry unix.Stat_t
@@ -80,6 +82,9 @@ func expire(directory string, execute bool, now float64) (host.Obj, error) {
 		}
 		if at+TTL > now {
 			retained++
+			if oldest == 0 || at < oldest {
+				oldest = at
+			}
 			continue
 		}
 		expired = append(expired, name)
@@ -95,14 +100,31 @@ func expire(directory string, execute bool, now float64) (host.Obj, error) {
 			return nil, err
 		}
 	}
+	// An unknown file may be an older copy, so it hides the oldest retained time.
+	var oldestRetained any
+	if oldest > 0 && excluded == 0 {
+		oldestRetained = time.Unix(int64(oldest), 0).UTC().Format(time.RFC3339)
+	}
 	return host.Obj{{Key: "mode", Value: mode}, {Key: "expired", Value: expired}, {Key: "removed", Value: removed},
-		{Key: "retained", Value: retained}, {Key: "excluded", Value: excluded}}, nil
+		{Key: "retained", Value: retained}, {Key: "excluded", Value: excluded}, {Key: "oldest_retained", Value: oldestRetained}}, nil
+}
+
+// notifyPrivacy hands the oldest retained backup time to the memory worker,
+// which finishes privacy deletions parked before it.
+func notifyPrivacy(container string, result host.Obj) error {
+	oldest, _ := result.Get("oldest_retained")
+	if container == "" || oldest == nil {
+		return nil
+	}
+	_, err := docker(context.Background(), 5*time.Minute, dockerIO{capture: true}, "exec", container, "/memoryd", "--privacy-backup-expiry", oldest.(string))
+	return err
 }
 
 func retentionMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	fs := flags("backup-retention", stderr)
 	directory := fs.String("directory", "", "managed backup directory")
 	execute := fs.Bool("execute", false, "delete expired bundles instead of previewing")
+	worker := fs.String("privacy-worker", "", "memory worker container told the oldest retained backup after execute")
 	if code := parse(fs, args, "directory"); code >= 0 {
 		return code
 	}
@@ -112,5 +134,11 @@ func retentionMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintln(stdout, host.MustDumps(result, host.DumpOpts{}))
+	if *execute {
+		if err := notifyPrivacy(*worker, result); err != nil {
+			fmt.Fprintln(stderr, "privacy backup expiry notice failed; deletions stay waiting until the next run")
+			return 1
+		}
+	}
 	return 0
 }
