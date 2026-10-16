@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "rules": [
+    {"memory": {"id": "rule-pr-text", "revision": 4}, "kind": "forbidden_text", "artifacts": ["pull_requests"], "text": "Generated with Claude Code"},
+    {"memory": {"id": "rule-commit-text", "revision": 4}, "kind": "forbidden_text", "artifacts": ["commits", "pull_requests"], "text": "Generated with Claude Code"},
+    {"memory": {"id": "rule-language", "revision": 2}, "kind": "language"},
+    {"memory": {"id": "rule-max-length", "revision": 2}, "kind": "max_length", "max_lines": 25},
+    {"memory": {"id": "rule-report-tail", "revision": 3}, "kind": "required_tail", "min_lines": 5, "pattern": "^[*_\\s]*(핵심|한 ?줄 ?요약|요약)[^\\n:：]{0,12}[:：]"}
+  ]
+}

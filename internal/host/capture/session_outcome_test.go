@@ -132,3 +132,72 @@ func TestSessionTraceDropsRefusedLedgerAndStaysOffByDefault(t *testing.T) {
 		t.Fatal("off by default", left, *posts)
 	}
 }
+
+func TestSessionTraceCarriesWindowBehaviorAndFallsBackWithoutIt(t *testing.T) {
+	_, posts, _ := sessionOutcomeEnv(t)
+	now := time.Now().UTC()
+	at := func(d time.Duration) string { return now.Add(d).Format(time.RFC3339Nano) }
+	line := func(v map[string]any) string { raw, _ := json.Marshal(v); return string(raw) + "\n" }
+	transcript := filepath.Join(t.TempDir(), "t.jsonl")
+	os.WriteFile(transcript, []byte(
+		line(map[string]any{"type": "user", "timestamp": at(-2 * time.Hour), "message": map[string]any{"content": "옛 질문"}})+
+			line(map[string]any{"type": "assistant", "timestamp": at(-2 * time.Hour), "message": map[string]any{"content": []any{map[string]any{"type": "text", "text": "out of window"}}}})+
+			line(map[string]any{"type": "user", "timestamp": at(0), "message": map[string]any{"content": "아니, 자세히 설명해"}})+
+			line(map[string]any{"type": "assistant", "timestamp": at(time.Second), "message": map[string]any{"content": []any{
+				map[string]any{"type": "text", "text": "중간 보고"},
+				map[string]any{"type": "tool_use", "name": "Bash", "input": map[string]any{"command": "git commit -m 'ST-623 fix'"}}}}})+
+			line(map[string]any{"type": "assistant", "timestamp": at(2 * time.Second), "message": map[string]any{"content": []any{
+				map[string]any{"type": "text", "text": "결론입니다.\n```go\nGenerated with Claude Code\n```\n핵심: 끝"}}}})), 0o600)
+	hookTranscript = transcript
+	t.Cleanup(func() { hookTranscript = "" })
+	logRecall("UserPromptSubmit", "s4", []map[string]any{memoryHit("m", 1, "")})
+
+	refused := 0
+	ok := capPost
+	capPost = func(path string, body any, d time.Duration) (map[string]any, error) {
+		if len(body.(map[string]any)["events"].([]any)) > 1 && refused == 0 {
+			refused++
+			return nil, &host.HTTPError{Code: 400}
+		}
+		return ok(path, body, d)
+	}
+	timeNow = func() float64 { return float64(now.Unix()) + sessionIdle + 1 }
+	sessionTraces() // the server refuses the behavior event once: the delivery record still lands
+	if refused != 1 || len(*posts) != 1 || len((*posts)[0]["events"].([]any)) != 1 {
+		t.Fatal(refused, *posts)
+	}
+
+	*posts = nil
+	logRecall("UserPromptSubmit", "s5", []map[string]any{memoryHit("m", 1, "")})
+	sessionTraces()
+	if len(*posts) != 1 {
+		t.Fatal(*posts)
+	}
+	events := (*posts)[0]["events"].([]any)
+	b := events[1].(map[string]any)
+	p := b["payload"].(map[string]any)
+	replies := p["replies"].([]any)
+	if b["kind"] != "behavior" || len(replies) != 1 || len(p["commits"].([]any)) != 1 || p["user_corrections"] != float64(1) {
+		t.Fatal(p)
+	}
+	r := replies[0].(map[string]any)
+	if r["text"] != "결론입니다.\n\n핵심: 끝" || r["code_blocks"] != float64(1) || r["lines"] != float64(5) || r["detail_requested"] != true {
+		t.Fatal(r)
+	}
+}
+
+func TestSessionBehaviorCountsOnlyRealCommitCommands(t *testing.T) {
+	for cmd, want := range map[string]bool{
+		"git commit -m x":                                                true,
+		"cd /r && git -C /r commit -m x":                                 true,
+		"git add a; git commit -F msg":                                   true,
+		"cat > t.go <<'EOF'\n\"git commit -m x\"":                        false,
+		"echo 'gh pr create' >> notes":                                   false,
+		"git log --oneline":                                              false,
+		"cat >> t.go <<'EOF'\n\tx := \"cd /r && git -C /r commit\"\nEOF": false,
+	} {
+		if shell := withoutHeredocs(cmd); (commitCmdRE.MatchString(shell) || prCmdRE.MatchString(shell)) != want {
+			t.Error(cmd)
+		}
+	}
+}

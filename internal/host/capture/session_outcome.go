@@ -72,7 +72,11 @@ func ledgerRecall(sid string, items []map[string]any) {
 			return err
 		}
 		defer f.Close()
-		_, err = f.WriteString(dumps(map[string]any{"ts": host.NowISO(), "origin": capOrigin, "session": sid, "refs": refs}) + "\n")
+		row := map[string]any{"ts": host.NowISO(), "origin": capOrigin, "session": sid, "refs": refs}
+		if hookTranscript != "" {
+			row["transcript"] = hookTranscript
+		}
+		_, err = f.WriteString(dumps(row) + "\n")
 		return err
 	}()
 	if err != nil {
@@ -123,7 +127,7 @@ func recordSession(path, spool string) (int, error) {
 		return 0, err
 	}
 	defer f.Close()
-	var origin, sid, first, last string
+	var origin, sid, first, last, transcript string
 	var refs []any
 	seen := map[string]bool{}
 	lines := bufio.NewScanner(f)
@@ -139,6 +143,9 @@ func recordSession(path, spool string) (int, error) {
 			first = ts
 		}
 		last = max(last, ts)
+		if t := str(row["transcript"]); t != "" {
+			transcript = t
+		}
 		for _, r := range anyList(row["refs"]) {
 			if k := sdigest(r); !seen[k] {
 				seen[k] = true
@@ -150,6 +157,13 @@ func recordSession(path, spool string) (int, error) {
 		return 0, errLedgerInvalid
 	}
 	scope := sharedScope()
+	var behavior map[string]any
+	if t, err := time.Parse(time.RFC3339Nano, first); err == nil {
+		// The prompt line is written around its recall, so the window opens a minute early.
+		if t2, err := time.Parse(time.RFC3339Nano, last); err == nil {
+			behavior = sessionBehavior(transcript, t.Add(-time.Minute).Format(time.RFC3339Nano), t2.Add(time.Duration(sessionIdle)*time.Second).Format(time.RFC3339Nano))
+		}
+	}
 	for i := 0; i < len(refs); i += sessionTraceRefs {
 		chunk := refs[i:min(i+sessionTraceRefs, len(refs))]
 		id := sdigest([]any{origin, sid, first, last, chunk})[:32]
@@ -158,7 +172,17 @@ func recordSession(path, spool string) (int, error) {
 				"text": "agent session " + origin}, // the run's real result is unknown here: a checker decides
 			"events": []any{map[string]any{"id": "session-event-" + id, "kind": "context", "occurred_at": last,
 				"payload": map[string]any{"retrieved": chunk}}}}
+		context := body["events"]
+		if behavior != nil {
+			body["events"] = append(context.([]any), map[string]any{"id": "session-behavior-" + id, "kind": "behavior", "occurred_at": last, "payload": behavior})
+		}
 		stored, err := capPost("/v1/execution_traces/completed", body, 30*time.Second)
+		if code := host.HTTPCode(err); behavior != nil && code >= 400 && code < 500 && code != 429 {
+			// A refused behavior event (e.g. a secret in a command) must not cost the delivery record.
+			metric(kv("event", "session_behavior_refused"), kv("error", errorCode(err)))
+			body["events"] = context
+			stored, err = capPost("/v1/execution_traces/completed", body, 30*time.Second)
+		}
 		if err != nil {
 			return i / sessionTraceRefs, err
 		}
