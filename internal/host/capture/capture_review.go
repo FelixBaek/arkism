@@ -253,6 +253,10 @@ var errStop = fmt.Errorf("%w: StopIteration", errKey)
 
 // ---------------------------------------------------------------- command
 
+// Outcomes is `capture outcomes`, the memory outcome receipt drain; the crew package sets it
+// because the pinned checker runner lives there.
+var Outcomes host.Command
+
 func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cmd := ""
 	if len(args) > 0 {
@@ -267,6 +271,12 @@ func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return false
 	}
 	var err error
+	if sessionProcessorOn() && cmd != "hook" { // the hook only spools; every API caller runs as the harness service
+		if err := sessionTokenFile(); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+	}
 	switch {
 	case cmd == "hook":
 		return hookMain(stdin, stdout)
@@ -274,6 +284,13 @@ func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		err = drain(has("--all-work-origins"))
 	case cmd == "logs":
 		err = logsMain()
+	case cmd == "reflect" && sessionProcessorOn():
+		// The same raw source ranges belong to the session processor, never double-extract.
+		if !has("--dry-run") {
+			if err = drain(false); err == nil {
+				err = trialReview()
+			}
+		}
 	case cmd == "reflect":
 		if why := LLMBudgetReason(reflectModel); why != "" {
 			fmt.Fprintln(stdout, why)
@@ -292,6 +309,8 @@ func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		err = aiReview(has("--dry-run"), stdout)
 	case cmd == "import-agents":
 		err = importAgentsMain(args[1:], stdout)
+	case cmd == "outcomes" && Outcomes != nil:
+		return Outcomes(args[1:], stdin, stdout, stderr)
 	default:
 		fmt.Fprint(stdout, captureDoc+"\n")
 		return 2

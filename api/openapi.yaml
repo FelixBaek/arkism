@@ -9139,6 +9139,24 @@
         }
       }
     },
+    "/v1/model-budget/subscription-usage": {
+      "post": {
+        "summary": "Record one subscription CLI call's usage (record only, ST-620 / FR-012)",
+        "description": "settle:model_budget by a configured budget principal; same exact policy scope. Never reserves, settles or refuses for spend: the call already ran on the user's Claude subscription. Idempotent per principal+operation_id; a changed replay is 409. Files a provider_usage row (provider claude_cli) at list price and adds to the month's subscription counter shown by status. No prompt, output or credential is accepted.",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["scope", "operation_id", "operation", "usage"], "properties": {
+          "scope": {"$ref": "#/components/schemas/Scope"},
+          "operation_id": {"type": "string", "pattern": "^[a-zA-Z0-9_.-]{1,128}$"},
+          "operation": {"type": "string", "pattern": "^[a-zA-Z0-9_.-]{1,64}$", "description": "Harness role or worker label, e.g. session_processor, capture."},
+          "usage": {"type": "object", "additionalProperties": false, "required": ["model", "input_tokens", "output_tokens"], "properties": {"model": {"type": "string", "maxLength": 128}, "requests": {"type": "integer", "minimum": 0, "maximum": 20}, "input_tokens": {"type": "integer", "minimum": 0}, "output_tokens": {"type": "integer", "minimum": 0}}}
+        }}}}},
+        "responses": {
+          "200": {"description": "{id, recorded, estimated_cost_pico_usd, pricing_available}"},
+          "400": {"description": "Invalid operation or empty usage"},
+          "403": {"description": "Missing, expired or unauthorized policy"},
+          "409": {"description": "Same operation_id with different usage"}
+        }
+      }
+    },
     "/v1/model-budget/settle": {
       "post": {
         "summary": "Settle usage or retain an uncertain reservation",
@@ -18258,7 +18276,11 @@
           "daily_soft_target_exceeded": {
             "type": "boolean",
             "description": "Current UTC day committed spend plus reservations exceeds the advisory target."
-          }
+          },
+          "subscription_requests": {"type": "integer", "minimum": 0, "description": "Claude subscription CLI calls recorded this UTC month. Record-only; never part of any limit above."},
+          "subscription_input_tokens": {"type": "integer", "minimum": 0},
+          "subscription_output_tokens": {"type": "integer", "minimum": 0},
+          "subscription_estimated_pico_usd": {"type": "integer", "minimum": 0, "description": "List-price API-equivalent estimate of those calls, not a charge."}
         }
       },
       "ModelBudgetReservation": {

@@ -32,7 +32,7 @@ try {
         if(mode==='error')return denied;
         return [200,{authority:'data_only_untrusted',target:{collection:'memories',id:'memory1',revision:mode==='stale'?2:1},tracking:{status:mode==='failed'?'done':'pending'},groups:{self:{model_self:{count:1}},failed:{automated_check:{count:1}}}[mode]||{},passed:{self:true,failed:false}[mode]??null}];
       },
-      '/v1/model-budget/status':()=>budgetDenied?denied:[200,{month:'2026-10',monthly_limit_pico_usd:100e12,general_limit_pico_usd:90e12,daily_soft_target_pico_usd:3e12,daily_soft_target_exceeded:budgetExceeded,...(budgetHard?{daily_limit_pico_usd:5e12}:{}),monthly_committed_pico_usd:12e12,general_committed_pico_usd:10e12,daily_committed_pico_usd:budgetExceeded?4e12:2e12,outstanding_pico_usd:.2e12}],
+      '/v1/model-budget/status':()=>budgetDenied?denied:[200,{month:'2026-10',monthly_limit_pico_usd:100e12,general_limit_pico_usd:90e12,daily_soft_target_pico_usd:3e12,daily_soft_target_exceeded:budgetExceeded,...(budgetHard?{daily_limit_pico_usd:5e12}:{}),monthly_committed_pico_usd:12e12,general_committed_pico_usd:10e12,daily_committed_pico_usd:budgetExceeded?4e12:2e12,outstanding_pico_usd:.2e12,subscription_requests:7,subscription_input_tokens:9000,subscription_output_tokens:1000,subscription_estimated_pico_usd:1.5e12}],
       '/v1/memory_candidates/candidate1/review':req=>{writes.push(req.postDataJSON());return [503,{code:'dependency_unavailable'}];},
     };
     const capabilities=()=>[200,{role:'human',principal_id:'synthetic',actions:{review_list:true,review_decide:true},collections:[]}];
@@ -65,7 +65,7 @@ try {
     }
     assert.equal(writes.length,2);assert.equal(writes[0].operation_id,writes[1].operation_id);assert.equal(writes[0].conflict.resolution,'replace_old');assert.equal(writes[0].expected_revision,1);
     await page.locator('.nav-item[data-menu="memory"]').click();await page.locator('.area-tab',{hasText:'사용량'}).click();await page.locator('.model-budget').getByText('$12.00 / $100.00',{exact:true}).waitFor();
-    const budget=page.locator('.model-budget');assert((await budget.innerText()).includes('오늘 목표'));assert(!(await budget.innerText()).includes('오늘 상한'));
+    const budget=page.locator('.model-budget');assert((await budget.innerText()).includes('오늘 목표'));assert(!(await budget.innerText()).includes('오늘 상한'));assert((await budget.innerText()).includes('7회 · API 환산 $1.50 (예산 밖)'));
     budgetExceeded=true;await budget.getByRole('button',{name:'예산 다시 조회'}).click();await budget.getByText('오늘 목표를 넘었어요.',{exact:false}).waitFor();assert((await budget.innerText()).includes('$4.00 / $3.00'));
     budgetHard=true;await budget.getByRole('button',{name:'예산 다시 조회'}).click();await budget.getByText('오늘 상한',{exact:true}).waitFor();
     await page.screenshot({path:join(shots,'budget.png')});budgetDenied=true;await page.getByRole('button',{name:'예산 다시 조회'}).click();await page.waitForFunction(()=>document.querySelector('.model-budget')?.textContent.includes('예산 설정을 확인할 수 없어요'));assert(!(await page.locator('.model-budget').innerText()).includes('$0.00'));

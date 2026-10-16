@@ -370,8 +370,17 @@ func orDefault(v, def any) any {
 	return def
 }
 
-func prepare(api comparisonAPI, proposal map[string]any) (out map[string]any, err error) {
+func prepare(api comparisonAPI, proposal map[string]any) (map[string]any, error) {
+	return prepareTrial(api, proposal, "")
+}
+
+// prepareTrial pins a comparison; inside a skill trial the candidate is already approved.
+func prepareTrial(api comparisonAPI, proposal map[string]any, trialID string) (out map[string]any, err error) {
 	defer catch(&err)
+	status := "candidate"
+	if trialID != "" {
+		status = "approved"
+	}
 	expected := obj(at(proposal, "record"))
 	scope := obj(at(expected, "scope"))
 	c, err := api.get("skill_versions", scope, mustStr(at(expected, "id")))
@@ -380,7 +389,7 @@ func prepare(api comparisonAPI, proposal map[string]any) (out map[string]any, er
 	}
 	candidate := obj(c)
 	plan := getOr(candidate, "comparison_plan", nil)
-	if !same(at(candidate, "revision"), at(expected, "revision")) || !same(at(candidate, "status"), "candidate") ||
+	if !same(at(candidate, "revision"), at(expected, "revision")) || !same(at(candidate, "status"), status) ||
 		!same(plan, getOr(expected, "comparison_plan", nil)) || !truthy(plan) ||
 		!same(at(at(candidate, "analysis"), "content_hash"), at(at(expected, "analysis"), "content_hash")) {
 		return nil, cmpErr("candidate_changed")
@@ -439,9 +448,13 @@ func prepare(api comparisonAPI, proposal map[string]any) (out map[string]any, er
 	if !sha256Re.MatchString(planSHA) {
 		return nil, cmpErr("invalid_plan_hash")
 	}
-	return map[string]any{"scope": scope, "candidate": map[string]any{"collection": "skill_versions", "id": at(candidate, "id"), "revision": at(candidate, "revision")},
+	out = map[string]any{"scope": scope, "candidate": map[string]any{"collection": "skill_versions", "id": at(candidate, "id"), "revision": at(candidate, "revision")},
 		"sensitivity": sensitivity, "baseline_revision": baselineRevision, "baseline_id": baselineID, "plan": plan, "plan_sha256": planSHA,
-		"skills": map[string]any{"baseline": baseline, "candidate": content}, "bundles": bundles}, nil
+		"skills": map[string]any{"baseline": baseline, "candidate": content}, "bundles": bundles}
+	if trialID != "" {
+		out["trial_id"] = trialID
+	}
+	return out, nil
 }
 
 // pinnedBundle is the version's companion bundle, which must be exactly the one its record pins
@@ -610,7 +623,11 @@ func evaluate(prepared, dataset, env map[string]any) (out map[string]any, err er
 }
 
 func publish(api comparisonAPI, prepared, result map[string]any) (any, error) {
-	return api.request("/v1/skills/comparisons/record", map[string]any{"scope": prepared["scope"], "event_id": digest([]byte(mustCanonical(result))), "result": result})
+	payload := map[string]any{"scope": prepared["scope"], "event_id": digest([]byte(mustCanonical(result))), "result": result}
+	if trialID, _ := prepared["trial_id"].(string); trialID != "" {
+		payload["event_id"], payload["trial_id"] = digest([]byte(mustCanonical([]any{trialID, result}))), trialID
+	}
+	return api.request("/v1/skills/comparisons/record", payload)
 }
 
 // saveJSON publishes atomically through a hard link, so another writer's file is never overwritten

@@ -34,6 +34,7 @@ const captureDoc = `Claude Code / Codex / ZCode -> Arkism automatic memory captu
   stats     capture metrics from the local log
   utility   how often memories injected by prompt search were used in the answers
   trial     retire trial memories that prompt search keeps injecting and no answer uses (reflect runs it too)
+  outcomes  drain the memory outcome receipt spool through the pinned independent checker
 
 Hooks never block or fail the Claude session: they only append to a local
 spool and start ` + "`drain`" + ` in the background. A failed writeback stays in the
@@ -443,11 +444,14 @@ func sessionCapture(hook map[string]any, kind string) error {
 	turns, _ := host.Int(t)
 	turns += int64(len(users))
 	state.Set("turns", turns)
-	if len(users) > 0 {
+	if len(users) > 0 || sessionProcessorOn() && end > offset {
 		job := map[string]any{"type": kind, "session_id": sid, "cwd": or(hook["cwd"], ""), "users": users, "turns": turns,
 			"event_id": fmt.Sprintf("%s:%s:%s:%d", strings.ReplaceAll(capOrigin, "_", "-"), sid, kind, end), "queued_at": host.NowISO()}
 		if truthy(context) {
 			job["archive_context"] = context
+			if sessionProcessorOn() {
+				job["source_start"], job["source_end"] = offset, end
+			}
 		}
 		if err := enqueue(job); err != nil {
 			return err

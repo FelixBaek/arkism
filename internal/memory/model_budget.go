@@ -89,6 +89,11 @@ type ModelBudgetStatus struct {
 	DailyCommitted          int64  `json:"daily_committed_pico_usd"`
 	Outstanding             int64  `json:"outstanding_pico_usd"`
 	PricingRevision         string `json:"pricing_revision"`
+	// Subscription CLI calls this month: recorded only, never part of the limits above.
+	SubscriptionRequests     int64 `json:"subscription_requests"`
+	SubscriptionInputTokens  int64 `json:"subscription_input_tokens"`
+	SubscriptionOutputTokens int64 `json:"subscription_output_tokens"`
+	SubscriptionEstimated    int64 `json:"subscription_estimated_pico_usd"`
 }
 
 func ParseModelBudgetPolicy(raw string) (*ModelBudgetPolicy, error) {
@@ -393,7 +398,9 @@ func (s *Service) ModelBudgetStatus(ctx context.Context, token string, scope Sco
 				out.DailyCommitted = row.ModelBudget.Total
 			}
 		}
-		return nil
+		sub, err := subscriptionMonth(ctx, tx, scope, out.Month)
+		out.SubscriptionRequests, out.SubscriptionInputTokens, out.SubscriptionOutputTokens, out.SubscriptionEstimated = sub.Requests, sub.InputTokens, sub.OutputTokens, sub.EstimatedCostPicoUSD
+		return err
 	})
 	out.DailySoftTargetExceeded = out.DailyCommitted > out.DailySoftTarget
 	return out, e
@@ -414,6 +421,14 @@ func modelBudgetRoutes(mux *http.ServeMux, s *Service) {
 			return
 		}
 		out, e := s.SettleModelBudget(r.Context(), bearer(r), in)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("POST /v1/model-budget/subscription-usage", func(w http.ResponseWriter, r *http.Request) {
+		var in SubscriptionUsageInput
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.RecordSubscriptionUsage(r.Context(), bearer(r), in)
 		respond(w, out, e)
 	})
 	mux.HandleFunc("POST /v1/model-budget/status", func(w http.ResponseWriter, r *http.Request) {

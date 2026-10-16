@@ -70,7 +70,7 @@ var (
 )
 
 // llm runs the Claude Code CLI headless with a JSON schema and returns
-// structured_output[key] (or an empty list). Tests replace it.
+// structured_output[key] (or an empty list; key "" is the whole object). Tests replace it.
 var llm = func(system, user, model string, timeout time.Duration, schema, key string) (any, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -96,9 +96,13 @@ var llm = func(system, user, model string, timeout time.Duration, schema, key st
 	if err != nil {
 		return nil, err
 	}
+	recordSubscriptionUsage(llmOperation(system), model, result)
 	out, isMap := result["structured_output"].(map[string]any)
 	if truthy(result["is_error"]) || !isMap {
 		return nil, runtimeErr("extractor_no_json")
+	}
+	if key == "" {
+		return out, nil
 	}
 	return or(out[key], []any{}), nil
 }
