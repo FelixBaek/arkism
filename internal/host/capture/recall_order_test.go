@@ -56,7 +56,7 @@ func TestSessionIndexCutsNewestRuleFirst(t *testing.T) {
 	}
 	limit := len([]rune(indexHeader)) + 1 + len([]rune(indexLine(pref))) + 1 + len([]rune(indexLine(old))) + 1
 	idx, err := sessionIndex("s1", "", limit)
-	if err != nil || !reflect.DeepEqual(idx.IDs, itemIDs([]map[string]any{pref, old})) || !strings.Contains(idx.Full, "Generated") {
+	if err != nil || !reflect.DeepEqual(idx.IDs, itemIDs([]map[string]any{pref, old})) || !strings.Contains(idx.Full, "자동 생성") {
 		t.Fatal(err, idx.IDs, idx.Full)
 	}
 	again, _ := sessionIndex("s2", "", limit)
