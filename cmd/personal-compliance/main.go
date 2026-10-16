@@ -65,8 +65,9 @@ var (
 	urlRE        = regexp.MustCompile(`https?://\S+`)
 	spaceRE      = regexp.MustCompile(`\s+`)
 	paragraphRE  = regexp.MustCompile(`\n\s*\n`)
-	// The message comes from a file the trace does not hold, so its text cannot be judged.
-	fileMessageRE = regexp.MustCompile(`(^|\s)(-F|--file|--body-file|--template)(\s|=)`)
+	// Only a message written inline is in the trace; one from a file, an editor, -C or --fill is not.
+	inlineCommitRE = regexp.MustCompile(`(^|\s)(-[a-zA-Z]*m|--message)`)
+	inlinePRRE     = regexp.MustCompile(`(^|\s)(-b|--body)(\s|=)`)
 )
 
 func main() {
@@ -177,7 +178,7 @@ func judge(r Rule, b behavior) (observed, passed bool) {
 			for _, s := range texts {
 				observed = true
 				passed = passed && !strings.Contains(normalize(s), needle)
-				unseen = unseen || a != "replies" && fileMessageRE.MatchString(s)
+				unseen = unseen || a == "commits" && !inlineCommitRE.MatchString(s) || a == "pull_requests" && !inlinePRRE.MatchString(s)
 			}
 		}
 	case "language":

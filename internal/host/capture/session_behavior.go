@@ -62,14 +62,15 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 		}
 	}
 	command := func(cmd string) {
-		if len([]rune(cmd)) > behaviorCommandRunes {
+		shell := shellText(cmd) // judged whole; only the stored copy is cut
+		commit, pr := commitCmdRE.MatchString(shell), prCmdRE.MatchString(shell)
+		if (commit || pr) && len([]rune(cmd)) > behaviorCommandRunes {
 			cmd, incomplete = headTail(cmd, behaviorCommandRunes), true
 		}
-		shell := shellText(cmd)
-		if commitCmdRE.MatchString(shell) {
+		if commit {
 			commits = append(commits, cmd)
 		}
-		if prCmdRE.MatchString(shell) {
+		if pr {
 			prs = append(prs, cmd)
 		}
 	}
