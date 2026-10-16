@@ -42,11 +42,11 @@ func archiveRoots() []archiveRoot {
 	if os.Getenv("ARKISM_PC_LOCAL") == "1" {
 		// The hook runs on the PC itself against the app's built-in Arkism: the transcripts are
 		// the agents' own folders, not a server's synced copy.
-		pcClaude, pcCodex = filepath.Join(h, ".claude/projects"), filepath.Join(h, ".codex/sessions")
+		pcClaude, pcCodex = capProjects, capCodexSessions
 	}
 	roots := []archiveRoot{
-		{"claude_code", "server", filepath.Join(h, ".claude/projects"), "*.jsonl"},
-		{"codex", "server", filepath.Join(h, ".codex/sessions"), "*.jsonl"},
+		{"claude_code", "server", capProjects, "*.jsonl"},
+		{"codex", "server", capCodexSessions, "*.jsonl"},
 		{"grok", "server", filepath.Join(h, ".grok/sessions"), "*.jsonl"},
 		{"grok", "server", filepath.Join(h, ".grok/sessions"), "summary.json"},
 		{"kiro", "server", filepath.Join(h, ".kiro/sessions"), "messages.jsonl"},

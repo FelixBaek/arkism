@@ -942,6 +942,8 @@ func TestDisplayNamesBecomeClaudeIDs(t *testing.T) {
 }
 
 func TestBothCodexWindowsAreRead(t *testing.T) {
+	t.Setenv("CODEX_HOME", "")
+	t.Setenv("ARKISM_CODEX_SESSIONS", "")
 	home := t.TempDir()
 	log := filepath.Join(home, ".codex/sessions/2026/10/02/rollout-x.jsonl")
 	_ = os.MkdirAll(filepath.Dir(log), 0o700)
