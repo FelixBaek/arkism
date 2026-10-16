@@ -100,6 +100,8 @@ func traceInput(scope Scope, run Run, nodes map[string]Node) (map[string]any, bo
 }
 
 // recordFinished stores the run's trace and feeds the receipt to every sink. It never fails the run.
+// The caller holds the run's lock, so the trace is built here and the POST and sinks (a sink may wait
+// on the capture drain's lock) run in the background; Wait waits for them.
 // shortcut: a failed trace or sink write is logged, not retried; add a journal when outcomes go live.
 func (e *Engine) recordFinished(ctx context.Context, run Run, nodes map[string]Node) {
 	if e.Traces == nil || len(e.Sinks) == 0 {
@@ -109,24 +111,34 @@ func (e *Engine) recordFinished(ctx context.Context, run Run, nodes map[string]N
 	if !ok {
 		return
 	}
+	e.wg.Add(1)
+	go func() {
+		defer e.wg.Done()
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute) // a shutdown still records the end
+		defer cancel()
+		e.storeTrace(ctx, run.ID, body)
+	}()
+}
+
+func (e *Engine) storeTrace(ctx context.Context, runID string, body map[string]any) {
 	var stored struct {
 		Trace        Ref   `json:"trace"`
 		Run          Ref   `json:"run"`
 		SourceEvents []Ref `json:"source_events"`
 	}
 	if err := e.Traces.do(ctx, "POST", "/v1/execution_traces/completed", body, &stored); err != nil {
-		e.log().Warn("crew run trace", "run_id", run.ID, "error", err.Error())
+		e.log().Warn("crew run trace", "run_id", runID, "error", err.Error())
 		return
 	}
 	if stored.Trace.Collection != "execution_traces" || stored.Trace.Revision < 1 {
-		e.log().Warn("crew run trace", "run_id", run.ID, "error", "trace_receipt_invalid")
+		e.log().Warn("crew run trace", "run_id", runID, "error", "trace_receipt_invalid")
 		return
 	}
 	receipt := TraceReceipt{Scope: scopeMap(e.Traces.Scope), SessionID: body["thread_id"].(string), Trace: stored.Trace, Run: stored.Run,
 		SourceEvents: stored.SourceEvents, OccurredAt: body["agent_run"].(map[string]any)["finished_at"].(string)}
 	for _, sink := range e.Sinks {
 		if err := sink(receipt); err != nil {
-			e.log().Warn("crew run receipt", "run_id", run.ID, "error", err.Error())
+			e.log().Warn("crew run receipt", "run_id", runID, "error", err.Error())
 		}
 	}
 }

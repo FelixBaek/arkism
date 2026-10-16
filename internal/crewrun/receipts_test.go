@@ -44,6 +44,7 @@ func TestFinishedRunWritesTraceAndOutcomeReceipt(t *testing.T) {
 	e.Traces = tracesFromEnv(base)
 	e.Sinks = []ReceiptSink{func(r TraceReceipt) error { receipts = append(receipts, r); return EnqueueReceipt(spool, r) }}
 	r := runOnce(t, e, "a", map[string]any{})
+	e.Wait()
 	if r.State.Status != "succeeded" || len(traces) != 1 || len(receipts) != 1 {
 		t.Fatal(r.State.Status, traces, receipts)
 	}

@@ -41,7 +41,8 @@ func main() {
 
 // sessionSink spools a finished run's receipt for the capture drain's session processor.
 func sessionSink(r crewrun.TraceReceipt) error {
-	raw, err := json.Marshal(r)
+	raw, err := json.Marshal(map[string]any{"scope": r.Scope, "session_id": r.SessionID, "occurred_at": r.OccurredAt,
+		"receipt": map[string]any{"trace": r.Trace, "run": r.Run, "source_events": r.SourceEvents}})
 	if err != nil {
 		return err
 	}
@@ -89,6 +90,7 @@ func run(ctx context.Context, args []string, out io.Writer, cfg crewrun.Config) 
 		if err := e.Drive(ctx, r.ID); err != nil {
 			fmt.Fprintln(os.Stderr, "run:", err)
 		}
+		e.Wait() // the finished run's trace and receipts are recorded in the background
 		final, err := e.Store.GetRun(context.WithoutCancel(ctx), r.ID)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "read run:", err)
