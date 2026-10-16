@@ -673,6 +673,14 @@ window.ArkismI18nEN = {
   "새 내용으로 바꾸기": "Replace with new content",
   "기존 기억 유지": "Keep existing memory",
   "둘 다 맞아요": "Both are correct",
+  "정정 대기 — 내가 확인": "Correction waiting — I check",
+  "정정 대기": "Correction waiting",
+  "기존 기억을 고친 내용이 들어왔어요": "A correction to an existing memory came in",
+  "고를 때까지 에이전트는 지금 기억을 그대로 써요.": "Agents keep using the current memory until you choose.",
+  "고친 내용": "Corrected text",
+  "둘 다 지우기": "Delete both",
+  "고친 내용과 지금 기억을 모두 지울까요?": "Delete both the correction and the current memory?",
+  "고친 내용과 지금 기억을 모두 지웠어요.": "Deleted both the correction and the current memory.",
   "기존 기억을 불러오지 못했어요.": "Couldn't load the existing memory.",
   "기다리는 이유": "Why it's waiting",
   "버리는 이유 (버릴 때만 필요해요)": "Reason for discarding (only needed when discarding)",
@@ -3943,6 +3951,7 @@ window.ArkismI18nEN = {
   "{0}번 참고 · {1}번 사용": "Referenced {0} times · used {1} times",
   "{0}번 참고 · 30일 {1}번": "Referenced {0} times · {1} in 30 days",
   "{0} · 내용이 달라요": "{0} · content differs",
+  "{0} · 정정 대기": "{0} · correction waiting",
   "{0} 저장 · {1}": "Saved {0} · {1}",
   "{0} · 새 후보": "{0} · new candidate",
   "{0}에서 뽑음 · {1}": "Extracted from {0} · {1}",
@@ -4494,6 +4503,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 // memory harness: 기억 맥락·평가, 모델 예산·생성 모델, 스킬 시험 상태 (memory-context.js, memory-evaluation.js, model-budget.js, model-generation.js, skill-trial-status.js)
 Object.assign(window.ArkismI18nEN.strings, {
+  "고친 내용은 버렸지만 지금 기억은 지우지 못했어요. 기억 목록에서 직접 지워 주세요.": "The correction was discarded, but the current memory could not be deleted. Delete it from the memory list.",
   "선택한 내용과 기존 기억의 변경을 함께 저장해요. 응답을 못 받은 경우 같은 선택으로 다시 시도할 수 있어요.": "Your choice and the change to the existing memory are saved together. If no response comes back, you can retry with the same choice.",
   "개인": "Personal",
   "업무": "Work",

@@ -7,13 +7,22 @@ import (
 
 func conflictReviewFixture(t *testing.T, resolution string, reverse bool) (*fixture, Record, Record, CandidateReviewInput) {
 	t.Helper()
+	return conflictReviewFixtureHold(t, resolution, reverse, "")
+}
+
+// hold "candidate" holds only the candidate, as a captured correction does.
+func conflictReviewFixtureHold(t *testing.T, resolution string, reverse bool, hold string) (*fixture, Record, Record, CandidateReviewInput) {
+	t.Helper()
 	f, c, in := autoReviewFixture(t)
 	old := reviewedForEvaluation(t, f)
 	refs := []Ref{{Collection: colMemories, ID: old.ID, Revision: old.Revision}, {Collection: "memory_candidates", ID: c.ID, Revision: c.Revision}}
 	if reverse {
 		refs[0], refs[1] = refs[1], refs[0]
 	}
-	marked, err := f.svc.Conflict(testCtx, f.human, ConflictInput{Scope: scopeA, Memories: refs, Action: "mark", Reason: "changed preference"})
+	if hold == "candidate" {
+		hold = map[bool]string{false: "second", true: "first"}[reverse]
+	}
+	marked, err := f.svc.Conflict(testCtx, f.human, ConflictInput{Scope: scopeA, Memories: refs, Action: "mark", Reason: "changed preference", Hold: hold})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,6 +40,26 @@ func conflictReviewFixture(t *testing.T, resolution string, reverse bool) (*fixt
 		in.Reason = "existing memory is still correct"
 	}
 	return f, c, old, in
+}
+
+func TestCandidateConflictReviewWithOldMemoryStillActive(t *testing.T) {
+	for _, resolution := range []string{"replace_old", "keep_both", "keep_old"} {
+		for _, reverse := range []bool{false, true} {
+			f, c, old, in := conflictReviewFixtureHold(t, resolution, reverse, "candidate")
+			if old.Status != "active" || c.Status != "conflicted" {
+				t.Fatal("hold did not leave the old memory active", old.Status, c.Status)
+			}
+			got, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in)
+			if err != nil {
+				t.Fatal(resolution, reverse, err)
+			}
+			current, _ := f.repo.Get(testCtx, colMemories, scopeA, old.ID)
+			want := map[string]string{"replace_old": "superseded", "keep_both": "active", "keep_old": "active"}[resolution]
+			if current.Status != want || current.ConflictID != "" || got.ConflictID != "" {
+				t.Fatal(resolution, reverse, current.Status, current.ConflictID)
+			}
+		}
+	}
 }
 
 func TestCandidateConflictReviewAtomicAndReplay(t *testing.T) {

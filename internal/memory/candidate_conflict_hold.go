@@ -20,8 +20,8 @@ type CandidateConflictHoldOutput struct {
 	Conflict  Ref `json:"conflict"`
 }
 
-// HoldCandidateConflict grants no approval. Both exact references leave active
-// retrieval atomically, under configured service policy and ordinary grants.
+// HoldCandidateConflict grants no approval. The exact candidate waits for a person
+// while the memory it corrects stays active, so agents keep reading it until then.
 func (s *Service) HoldCandidateConflict(ctx context.Context, token, id string, in CandidateConflictHoldInput) (CandidateConflictHoldOutput, error) {
 	out := CandidateConflictHoldOutput{}
 	if !validScope(in.Scope) || !validRunLabel(id, 256) || !validRunLabel(in.OperationID, 256) || in.ExpectedRevision < 1 || in.Memory.Collection != colMemories || !validRunLabel(in.Memory.ID, 256) || in.Memory.ID == id || in.Memory.Revision < 1 {
@@ -79,7 +79,7 @@ func (s *Service) HoldCandidateConflict(ctx context.Context, token, id string, i
 			if err != nil {
 				return err
 			}
-			if rel.Revision != receipt.Target.Revision || !live(rel) || rel.ContentErased || candidate.Status != "conflicted" || memory.Status != "conflicted" || candidate.ConflictID != rel.ID || memory.ConflictID != rel.ID || candidate.Revision != receipt.Relations[0].Revision || memory.Revision != receipt.Relations[1].Revision {
+			if rel.Revision != receipt.Target.Revision || !live(rel) || rel.ContentErased || candidate.Status != "conflicted" || memory.Status != "active" || candidate.ConflictID != rel.ID || memory.ConflictID != rel.ID || candidate.Revision != receipt.Relations[0].Revision || memory.Revision != receipt.Relations[1].Revision {
 				return ErrConflict
 			}
 			if err = checkSources(ctx, tx, rel); err != nil {
@@ -91,7 +91,7 @@ func (s *Service) HoldCandidateConflict(ctx context.Context, token, id string, i
 		if candidate.Revision != in.ExpectedRevision || memory.Revision != in.Memory.Revision {
 			return ErrConflict
 		}
-		held, err := applyConflictAs(ctx, tx, ConflictInput{Scope: in.Scope, Memories: []Ref{in.Memory, {Collection: "memory_candidates", ID: id, Revision: in.ExpectedRevision}}, Action: "mark", Reason: "Scoped correction awaiting independent consolidation", Hold: "both"}, actor.PrincipalID, actor.Role, -1)
+		held, err := applyConflictAs(ctx, tx, ConflictInput{Scope: in.Scope, Memories: []Ref{in.Memory, {Collection: "memory_candidates", ID: id, Revision: in.ExpectedRevision}}, Action: "mark", Reason: "Scoped correction awaiting independent consolidation", Hold: "second"}, actor.PrincipalID, actor.Role, -1)
 		if err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func (s *Service) finishCaptureCorrection(ctx context.Context, token string, in 
 			return item, e
 		}
 		if candidate.ConflictID == "" {
-			_, e = s.Conflict(ctx, token, ConflictInput{Scope: scope, Action: "mark", Reason: "Captured user correction", Memories: []Ref{*claim.Supersedes, *pointer.Target}})
+			_, e = s.Conflict(ctx, token, ConflictInput{Scope: scope, Action: "mark", Reason: "Captured user correction", Hold: "second", Memories: []Ref{*claim.Supersedes, *pointer.Target}})
 			if e != nil {
 				return item, e
 			}
