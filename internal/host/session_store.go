@@ -155,10 +155,14 @@ func (s SessionStore) MarkDelivered(sid string, revs map[string]int64) error {
 }
 
 // ResetDelivered forgets what per-turn recall showed, e.g. after the transcript was compacted.
-func (s SessionStore) ResetDelivered(sid string) {
-	if sid != "" {
-		os.Remove(filepath.Join(s.dir(sid), "delivered.txt"))
+func (s SessionStore) ResetDelivered(sid string) error {
+	if sid == "" {
+		return nil
 	}
+	if err := os.Remove(filepath.Join(s.dir(sid), "delivered.txt")); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // Expire drops a session's state once its stable block is older than ttl, and other sessions'

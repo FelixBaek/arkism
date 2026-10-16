@@ -932,7 +932,10 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 			var err error
 			if name == "SessionStart" {
 				if src := data["source"]; src == "compact" || src == "clear" {
-					sessionStore().ResetDelivered(sid) // per-turn recall shown before is gone from the context
+					// per-turn recall shown before is gone from the context
+					if err := sessionStore().ResetDelivered(sid); err != nil {
+						metric(kv("event", "hook_error"), kv("hook", "recall_reset"), kv("error", pyType(err)))
+					}
 				}
 				// Session-fixed text only: byte-identical for the whole session (prompt cache).
 				part, err = func() (p host.Part, err error) {
