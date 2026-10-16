@@ -3,6 +3,7 @@ package capture
 import (
 	"bytes"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -177,6 +178,9 @@ func TestCaptureAIReviewSurvivesAModelOutageAndStopsOnServerErrors(t *testing.T)
 	if err := aiReview(false, nil); host.HTTPCode(err) != 403 {
 		t.Fatal(err)
 	}
+	if err := os.RemoveAll(reviewOutboxDir()); err != nil { // the 403 write would stop this run first
+		t.Fatal(err)
+	}
 	capGet = func(string, time.Duration) (map[string]any, error) { return nil, &host.HTTPError{Code: 500} }
 	if err := aiReview(false, nil); host.HTTPCode(err) != 500 {
 		t.Fatal(err)
@@ -231,5 +235,21 @@ func TestCaptureAIReviewReplaysTheOutbox(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(reviewOutboxDir(), "batch-*.json")); len(left) != 0 {
 		t.Fatal(left)
+	}
+}
+
+// A 403 stops every run with no backoff: the next run replays the write and stops again.
+func TestCaptureAIReviewOutboxFailsClosedOnForbidden(t *testing.T) {
+	capFake(t)
+	reviewServer(t, `[{"id": "p", "revision": 3, "kind": "decision", "text": "추측", "tags": ["basis:inferred"], "created_by": "owner"}]`, `[]`)
+	sent := 0
+	revPost = func(string, any, time.Duration) (map[string]any, error) { sent++; return nil, &host.HTTPError{Code: 403} }
+	llm = func(string, string, string, time.Duration, string, string) (any, error) {
+		return []any{map[string]any{"id": "p", "risk": "medium", "risk_reasons": []any{"추측"}, "dup_hint": ""}}, nil
+	}
+	for run := 1; run <= 2; run++ {
+		if err := aiReview(false, nil); host.HTTPCode(err) != 403 || sent != run {
+			t.Fatal(run, err, sent)
+		}
 	}
 }
