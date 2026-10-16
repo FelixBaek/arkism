@@ -545,11 +545,30 @@ func drain(allWorkOrigins bool) error {
 		}
 		return os.Rename(path, filepath.Join(failedDir(), filepath.Base(path)))
 	}
+	parkedEvents := map[string]bool{} // batch parents already in the failed spool
+	if failed, _ := filepath.Glob(filepath.Join(globEscape(failedDir()), "*.json")); sessionProcessorOn() {
+		for _, f := range failed {
+			if job, err := readJob(f); err == nil {
+				if id, ok := job["event_id"].(string); ok {
+					parkedEvents[id] = true
+				}
+			}
+		}
+	}
 	for _, path := range paths {
-		if isSymlink(path) {
+		if isSymlink(path) || !exists(path) { // gone: parked earlier in this pass with its batch parent
 			continue
 		}
 		job, err := readJob(path)
+		parent, _ := job["session_batch_parent"].(string) // a non-string parent never matches a parked event
+		if err == nil && parent != "" && parkedEvents[parent] {
+			// The parent holds this child's turns and was parked: follow it so the redrive keeps them together.
+			if err := park(path); err != nil {
+				return err
+			}
+			metric(kv("event", "session_processor_parked"), kv("session", head(str(job["session_id"]), 12)), kv("error", "session_batch_parent_parked"))
+			continue
+		}
 		if err != nil { // torn or vanished file: park it instead of blocking every later job
 			if exists(path) {
 				if err := park(path); err != nil {
@@ -582,6 +601,27 @@ func drain(allWorkOrigins bool) error {
 		}
 		code := errorCode(err)
 		sid := head(str(job["session_id"]), 12)
+		if sessionProcessorOn() && errors.Is(err, errSessionPending) && sessionModelDefect(code) {
+			// Re-running the same window repeats the model call and the same defect every minute: park the batch
+			// (parent and merged children) instead of blocking every later turn of the session.
+			job["last_error"] = code
+			if err := save(); err != nil {
+				return err
+			}
+			for _, name := range anyList(job["session_batch_children"]) {
+				if child, err := sessionChildPath(name); err == nil && exists(child) {
+					if err := park(child); err != nil {
+						return err
+					}
+				}
+			}
+			if err := park(path); err != nil {
+				return err
+			}
+			parkedEvents[str(job["event_id"])] = true
+			metric(kv("event", "session_processor_parked"), kv("session", sid), kv("error", code))
+			continue
+		}
 		// Only a real wait is free; any other pending code spends an attempt so it parks instead of re-calling the model forever.
 		waiting := code == "429" || code == "session_batch_wait" || code == "session_model_budget_wait" || code == "session_batch_parent_pending"
 		if sessionProcessorOn() && waiting {
@@ -635,6 +675,17 @@ func drain(allWorkOrigins bool) error {
 }
 
 var errSkip = errors.New("skip")
+
+// sessionModelDefect reports a validation failure of an already-dispatched model output.
+func sessionModelDefect(code string) bool {
+	for _, p := range []string{"schema_", "evidence_", "coverage_", "candidate_", "user_provenance_",
+		"tool_provenance_", "structured_output_", "checkpoint_", "memory_context_"} {
+		if strings.HasPrefix(code, p) {
+			return true
+		}
+	}
+	return false
+}
 
 // readJob loads one spool file, stamping a legacy job's queue time from its mtime.
 func readJob(path string) (map[string]any, error) {

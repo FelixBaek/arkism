@@ -19,13 +19,16 @@ import (
 func sessionProcessorOn() bool { return os.Getenv("ARKISM_SESSION_PROCESSOR") == "1" }
 
 // sessionTokenFile points the capture client at the harness service credential: the processor's
-// automated capture must never run as the owner.
-func sessionTokenFile() error {
-	file := os.Getenv("ARKISM_HARNESS_TOKEN_FILE")
-	if file == "" {
-		return runtimeErr("harness_service_credential_required")
+// automated capture must never run as the owner. With automated false (a command a person types)
+// the person's credential stays and only the shared audience partition is selected.
+func sessionTokenFile(automated bool) error {
+	if automated {
+		file := os.Getenv("ARKISM_HARNESS_TOKEN_FILE")
+		if file == "" {
+			return runtimeErr("harness_service_credential_required")
+		}
+		host.TokenFile = file
 	}
-	host.TokenFile = file
 	if os.Getenv("ARKISM_SHARED_AUDIENCE_SCOPE") != "" {
 		scope, err := sessionScope()
 		if err != nil {
@@ -119,7 +122,8 @@ func sessionLinkedUsers(job map[string]any, origin string) (records []any, refs 
 	}
 	records, refs = []any{}, map[string][]any{}
 	for _, u := range users {
-		user := u.(map[string]any)
+		// evPrepareUsers returns host.Obj users (archive_ref added), the job holds plain maps.
+		user := map[string]any{"archive_refs": autosaveGet(u, "archive_refs"), "archive_ref": autosaveGet(u, "archive_ref"), "text": autosaveGet(u, "text")}
 		archiveRefs, _ := user["archive_refs"].([]any)
 		if len(archiveRefs) == 0 && truthy(user["archive_ref"]) {
 			archiveRefs = []any{user["archive_ref"]}
@@ -519,10 +523,9 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 			}
 			pkg := sessionCheckpointPackage(prepared, sid, origin, str(or(job["cwd"], "")))
 			pkg["source_refs"] = dedupeRefs(append(chunkSources(chunk), anyList(autosaveGet(or(previous, map[string]any{}), "source_refs"))...))
-			archiveRefs := dedupeRefs(append(chunkRefs, anyList(current["archive_messages"])...))
-			if len(archiveRefs) > 100 {
-				return sessionWait("session_checkpoint_evidence_limit")
-			}
+			// Only this window's refs: the server takes at most 8, all from the current archive snapshot,
+			// so a previous window's refs (older snapshot) would make every later save a 409.
+			archiveRefs := transferRefs
 			claims, err := sessionClaims(prepared["output"].(map[string]any)["memory_candidates"].([]any), refs, canonical)
 			if err != nil {
 				return err

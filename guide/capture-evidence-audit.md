@@ -55,12 +55,11 @@ events alone do not prove that an ingestor accidentally dropped tool output:
 incorrectly labeled or mixed references can also fail. Adding a synthetic tool
 line without authenticated tool records would not repair provenance.
 
-## Runtime patch, not a public feature migration
+## Citation contract on main
 
-patches/session-citation-contract.patch targets the deployed revision above.
-The public base e1eb8fec79121e8b79b347a2734fc0152b06c9bc does not contain the
-session processor. This PR publishes a reviewable source patch and audit tools;
-it does not import the whole private feature branch or enable it on public main.
+The session processor and its citation contract are now part of main
+(internal/host/capture/session_processor.go, covered by
+session_citation_contract_test.go). The earlier source patch is removed.
 
 The prompt contract becomes harness-session-v3. Existing v2 quality evidence
 cannot qualify the new prompt, so routing falls back to Sonnet until new quality

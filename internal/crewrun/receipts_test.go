@@ -32,7 +32,7 @@ func TestFinishedRunWritesTraceAndOutcomeReceipt(t *testing.T) {
 	os.WriteFile(engineToken, []byte("engine\n"), 0o600)
 	os.WriteFile(producerToken, []byte("producer\n"), 0o600)
 	t.Setenv("ARKISM_CREW_TRACE_TOKEN_FILE", engineToken)
-	base := &Client{BaseURL: api.URL, TokenFile: engineToken, Scope: Scope{WorkspaceID: "w", ProjectID: "p", UserID: "u", AgentID: "crew"}}
+	base := &Client{BaseURL: api.URL, TokenFile: engineToken, Scope: Scope{WorkspaceID: "w", ProjectID: "p", UserID: "u"}}
 	if tracesFromEnv(base) != nil {
 		t.Fatal("the engine's own token must not produce traces")
 	}
@@ -47,6 +47,9 @@ func TestFinishedRunWritesTraceAndOutcomeReceipt(t *testing.T) {
 	e.Wait()
 	if r.State.Status != "succeeded" || len(traces) != 1 || len(receipts) != 1 {
 		t.Fatal(r.State.Status, traces, receipts)
+	}
+	if traces[0]["scope"].(map[string]any)["agent_id"] != "crew" {
+		t.Fatal("unset ARKISM_AGENT must still send a non-empty agent_id", traces[0]["scope"])
 	}
 	events := traces[0]["events"].([]any)
 	if len(events) != 1 || events[0].(map[string]any)["kind"] != "tool_result" || traces[0]["agent_run"].(map[string]any)["outcome"] != "success" {
