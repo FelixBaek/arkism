@@ -1732,15 +1732,14 @@
       await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/review`, {
         method: "POST", body: JSON.stringify(window.ArkismMemoryEvaluation.reviewPayload(c.id, payload)) });
       if (choice === "drop") {
-        // The review moved the old memory to a new revision; delete that one.
+        // Resolving the conflict moved the old memory exactly one revision; anyone else's edit after that makes the delete refuse.
         // The review already committed, so a failed delete must say the old memory is still there.
         try {
-          const old = await request(`/v1/memories/${encodeURIComponent(memory.id)}?${query()}`);
-          await request(`/v1/memories/${encodeURIComponent(old.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: old.revision }) });
+          await request(`/v1/memories/${encodeURIComponent(memory.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: memory.revision + 1 }) });
         } catch {
           notice("고친 내용은 버렸지만 지금 기억은 지우지 못했어요. 기억 목록에서 직접 지워 주세요.");
           state.selected = null;
-          await reloadMemories();
+          await reloadMemories().catch(() => {});
           return;
         }
       }
