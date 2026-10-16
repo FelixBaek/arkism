@@ -475,6 +475,9 @@ func reflectionClaims(raw []any, lines []string, active, waiting []map[string]an
 			risk.Set("dup_hint", str(target["id"]))
 		}
 		claim = append(claim, risk...)
+		if action == "replace" && target["revision"] != nil { // a suggestion: the old lesson stays in use until a person replaces it
+			claim = append(claim, host.KV{Key: "supersedes", Value: host.Obj{{Key: "collection", Value: "memories"}, {Key: "id", Value: target["id"]}, {Key: "revision", Value: target["revision"]}}})
+		}
 		fromUser := false
 		for _, u := range users {
 			if strings.Contains(u, quote) {
@@ -495,7 +498,8 @@ func memoryPath(mid any) string {
 
 // ---------------------------------------------------------------- trial
 // Memories an earlier version approved on trial: prompt search marks them "시험 중", and one injected in trialRetireAt
-// sessions without any answer using it is retired (expired), unless keptOnTrial. After trialDays it is an ordinary memory.
+// sessions without any answer using it leaves the trial as unused, unless keptOnTrial; it stays active for a person to remove
+// from the app's 안 쓰임 list. After trialDays it is an ordinary memory.
 // Nothing new goes on trial: a person approves every candidate (ADR-0022).
 
 const (
@@ -593,7 +597,7 @@ func trialVerdicts(state host.Obj, counts map[string][3]int, today time.Time, ke
 	return out, nil
 }
 
-// trialReview retires unused trial memories and graduates old ones.
+// trialReview drains the legacy trial list: it reports unused memories and graduates old ones, writing nothing.
 // shortcut: `used` is word overlap, so a lesson followed without being restated can read as unused;
 // trialRetireAt is high for that reason; add an LLM judge if it bites.
 func trialReview() error {
@@ -652,37 +656,7 @@ func trialReview() error {
 			continue // neither retired nor graduated on a guess; decided on a later run
 		}
 		if verdict == "retire" {
-			skip, err := func() (bool, error) {
-				m, err := capGet(memoryPath(mid), 8*time.Second)
-				if err == nil {
-					switch m["status"] {
-					case "active":
-						rev, has := m["revision"]
-						if !has {
-							return false, fmt.Errorf("%w: 'revision'", errKey)
-						}
-						_, err = capPost(fmt.Sprintf("/v1/memories/%s/transition", mid), host.Obj{{Key: "scope", Value: capScope()},
-							{Key: "expected_revision", Value: rev}, {Key: "status", Value: "expired"}}, 60*time.Second)
-					case "expired", "superseded", "rejected":
-					default:
-						return true, nil // e.g. conflicted: stays on trial, so a review back to active is still retired later
-					}
-				}
-				if code := host.HTTPCode(err); code != 0 {
-					if code != 404 {
-						metric(kv("event", "trial_failure"), kv("memory_id", mid), kv("error", code))
-						return true, nil
-					}
-					return false, nil
-				}
-				return false, err
-			}()
-			if err != nil {
-				return err
-			}
-			if skip {
-				continue
-			}
+			verdict = "unused" // a person removes it from the 안 쓰임 list; the AI never expires a memory (ADR-0022)
 		}
 		metric(kv("event", "trial_"+verdict), kv("memory_id", mid), kv("injected", counts[mid][0]))
 		if err := trialPop(mid); err != nil {

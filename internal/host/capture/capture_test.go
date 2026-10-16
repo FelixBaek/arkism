@@ -333,7 +333,7 @@ func TestCaptureReflectionKeepsOnlyLessonsTheLogShows(t *testing.T) {
 		map[string]any{"subject": "실패", "text": "exit 1이면 원인부터 본다.", "quote": "exit 1", "action": "replace", "target_id": "c1"},
 		map[string]any{"subject": "재발", "text": "같은 교훈.", "quote": "죄송", "action": "confirm", "target_id": "c1"},
 	}
-	checked, err := reflectionClaims(raw, lines, []map[string]any{{"id": "m1", "status": "active"}}, []map[string]any{{"id": "c1", "status": "candidate"}})
+	checked, err := reflectionClaims(raw, lines, []map[string]any{{"id": "m1", "status": "active", "revision": 4}}, []map[string]any{{"id": "c1", "status": "candidate"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,6 +353,15 @@ func TestCaptureReflectionKeepsOnlyLessonsTheLogShows(t *testing.T) {
 	}
 	if b, _ := checked[0].claim.Get("basis"); b != "inferred" {
 		t.Fatal(b)
+	}
+	// A replacement is only suggested: the server holds the new lesson for a person, the old one stays in use.
+	if sup, _ := checked[0].claim.Get("supersedes"); host.MustDumps(sup, host.DumpOpts{}) != `{"collection": "memories", "id": "m1", "revision": 4}` {
+		t.Fatal(sup)
+	}
+	for _, c := range checked[1:] {
+		if _, has := c.claim.Get("supersedes"); has {
+			t.Fatal("only a replace names the lesson it supersedes")
+		}
 	}
 }
 
@@ -524,13 +533,13 @@ func TestCaptureTrialReviewKeepsAnUnusedProhibition(t *testing.T) {
 	if err := trialReview(); err != nil {
 		t.Fatal(err)
 	}
-	// a kept; b retired; c unread, so neither retired nor graduated this run; d already expired by a person and e deleted, so both leave as before
-	if !reflect.DeepEqual(trialSet(), []string{"a", "c"}) || !reflect.DeepEqual(posts, []string{"/v1/memories/b/transition"}) {
+	// a kept; b leaves as unused without any write; c unread, so undecided this run; d expired by a person and e deleted leave as before
+	if !reflect.DeepEqual(trialSet(), []string{"a", "c"}) || len(posts) != 0 {
 		t.Fatal(trialSet(), posts)
 	}
 }
 
-func TestCaptureRetireKeepsAConflictedMemoryOnTrial(t *testing.T) {
+func TestCaptureTrialNeverWritesAMemoryStatus(t *testing.T) {
 	capFake(t)
 	status := map[string]string{"a": "conflicted", "b": "expired"}
 	capGet = func(path string, _ time.Duration) (map[string]any, error) {
@@ -553,7 +562,7 @@ func TestCaptureRetireKeepsAConflictedMemoryOnTrial(t *testing.T) {
 	if err := trialReview(); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(trialSet(), []string{"a"}) || len(posts) != 0 {
+	if len(trialSet()) != 0 || len(posts) != 0 {
 		t.Fatal(trialSet(), posts)
 	}
 }
