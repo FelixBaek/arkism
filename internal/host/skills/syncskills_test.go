@@ -116,6 +116,56 @@ func TestNewVersionKeepsReviewedRulesAndLogsChange(t *testing.T) {
 	}
 }
 
+func TestHaikuFencedAnalysisIsAccepted(t *testing.T) {
+	if unfence("```json\n{\"a\": 1}\n```") != "{\"a\": 1}\n" || unfence(`{"a": 1}`) != `{"a": 1}` || unfence("```") != "```" {
+		t.Fatal(unfence("```json\n{\"a\": 1}\n```"))
+	}
+}
+
+func TestAnthropicAnalysisSendsNoJSONObjectFormat(t *testing.T) {
+	swapSync(t)
+	os.WriteFile(llmKey, []byte("k"), 0o600)
+	var sent string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		sent = string(raw)
+		io.WriteString(w, `{"choices": [{"message": {"content": "x"}}]}`)
+	}))
+	defer srv.Close()
+	for _, tc := range []struct {
+		path string
+		want bool
+	}{{"/api.anthropic.com/v1/chat/completions", false}, {"/v1/chat/completions", true}} {
+		llmURL = srv.URL + tc.path
+		generateAnalysis("x", "body", nil, "")
+		if strings.Contains(sent, "json_object") != tc.want || strings.Contains(sent, "enable_thinking") != tc.want || strings.Contains(sent, "temperature") != tc.want {
+			t.Fatal(tc.path, sent)
+		}
+	}
+}
+
+func TestHTTPFailureKeepsTheReason(t *testing.T) {
+	for body, want := range map[string]any{
+		`{"code":"skill_invalid"}`: "400 skill_invalid",
+		`{"error":{"code":"invalid_request_error","message":"response_format.type: Input should be 'json_schema'"}}`: "400 invalid_request_error: response_format.type: Input should be 'json_schema'",
+		`not json`: 400,
+	} {
+		if got := failureCode(&host.HTTPError{Code: 400, Body: []byte(body)}); got != want {
+			t.Fatal(body, got)
+		}
+	}
+}
+
+func TestAnalysisScrubMatchesHubSensitivePattern(t *testing.T) {
+	if got := scrubTransfer("메일은 test@example.com 로"); got != "메일은 [생략] 로" {
+		t.Fatal(got)
+	}
+	got := scrubTransfer([]any{"jane.doe@example.com 에게 보내기", "bearer URL 만료", "평범한 예"}).([]any)
+	if len(got) != 1 || got[0] != "평범한 예" || scrubTransfer(true) != true {
+		t.Fatal(got)
+	}
+}
+
 func TestAnalysisWithoutLLMURLAbortsTheRun(t *testing.T) {
 	swapSync(t)
 	llmURL = ""

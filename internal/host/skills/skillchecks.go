@@ -37,10 +37,14 @@ Optional scanners, used next to the built-in check when installed
   NVIDIA SkillEvaluator  ` + "`skillevaluator quality-check DIR -r json`" + `  → 0–100 score, A–F grade
   NVIDIA SkillSpector    ` + "`skillspector scan DIR --no-llm --format json`" + ` → risk 0–100,
                          SAFE | CAUTION | DO_NOT_INSTALL
-Neither paid tier runs here (no LLM judge, no agent runs). What leaves this host per
-skill is the folder name and path, the two scores, and finding category · pattern ·
-severity (· file:line for built-in findings): never the matched text, a code
-snippet or file contents.
+  Cisco Skill Scanner    ` + "`skill-scanner scan DIR --format json`" + ` → worst severity,
+                         SAFE | CAUTION | DO_NOT_INSTALL
+NVIDIA's paid tiers never run here. Cisco's LLM judge runs only when
+ARKISM_CISCO_LLM_KEY_FILE names an Anthropic key file (model ARKISM_CISCO_LLM_MODEL,
+default claude-haiku-5-5); then the skill folder's files go to Anthropic. What leaves
+this host per skill is the folder name and path, the two scores, and finding
+category · pattern · severity (· file:line for built-in findings): never the matched
+text, a code snippet or file contents.
 `
 
 func init() { host.Register("skill-checks", checksMain) }
@@ -54,6 +58,9 @@ var (
 	toolsBin     = host.Env("ARKISM_SKILL_TOOLS_BIN", filepath.Join(host.Home, ".local/bin"))
 	evaluatorBin = host.Env("ARKISM_SKILLEVALUATOR_BIN", filepath.Join(toolsBin, "skillevaluator"))
 	spectorBin   = host.Env("ARKISM_SKILLSPECTOR_BIN", filepath.Join(toolsBin, "skillspector"))
+	ciscoBin     = host.Env("ARKISM_CISCO_SCANNER_BIN", filepath.Join(toolsBin, "skill-scanner"))
+	ciscoKeyFile = os.Getenv("ARKISM_CISCO_LLM_KEY_FILE") // unset: rules only, nothing leaves the host
+	ciscoModel   = host.Env("ARKISM_CISCO_LLM_MODEL", "claude-haiku-5-5")
 	// Same folders the desktop app lists under 설정 › 에이전트.
 	checkRoots = []agentRoot{{"claude_code", filepath.Join(host.Home, ".claude/skills")}, {"codex", filepath.Join(host.Home, ".codex/skills")},
 		{"codex", filepath.Join(host.Home, ".agents/skills")}, {"zcode", filepath.Join(host.Home, ".zcode/skills")}}
@@ -68,6 +75,8 @@ const (
 )
 
 // runtimeError and timeoutExpired carry the Python exception names the cache reports.
+var errCiscoLLMFailed = errors.New("cisco_llm_analysis_failed")
+
 type runtimeError struct{ msg string }
 
 func (e runtimeError) Error() string { return e.msg }
@@ -81,6 +90,8 @@ func pyErrName(err error) string {
 		return "RuntimeError"
 	case errors.Is(err, errTimeoutExpired):
 		return "TimeoutExpired"
+	case errors.Is(err, errCiscoLLMFailed):
+		return "LLM 분석 실패"
 	case errors.Is(err, exec.ErrNotFound):
 		return "FileNotFoundError"
 	}
@@ -149,11 +160,15 @@ func contentHash(folder string) (string, error) {
 }
 
 func scanTool(timeout time.Duration, argv ...string) (string, string, error) {
+	return scanToolEnv(timeout, nil, argv...)
+}
+
+func scanToolEnv(timeout time.Duration, env []string, argv ...string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.WaitDelay = time.Second // a grandchild holding the pipe must not outlive the timeout
-	cmd.Env = append(os.Environ(), "NO_COLOR=1", "ARKISM_CAPTURE_CHILD=1")
+	cmd.Env = append(append(os.Environ(), "NO_COLOR=1", "ARKISM_CAPTURE_CHILD=1"), env...)
 	var out, errOut strings.Builder
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err := cmd.Run()
@@ -228,14 +243,19 @@ type securityResult struct {
 }
 
 // security is (risk, verdict, finding count, top three category · pattern · severity) from SkillSpector.
-func security(folder string) (securityResult, error) {
+// It scans dir; the baseline is looked up by folder's name, the one checkDigest and the cache use.
+func security(dir, folder string) (securityResult, error) {
 	tmp, err := os.MkdirTemp("", "arkism-ss-")
 	if err != nil {
 		return securityResult{}, err
 	}
 	defer os.RemoveAll(tmp)
 	report := filepath.Join(tmp, "report.json")
-	if _, _, err := scanTool(180*time.Second, spectorBin, "scan", folder, "--no-llm", "--format", "json", "--output", report); err != nil {
+	argv := []string{spectorBin, "scan", dir, "--no-llm", "--format", "json", "--output", report}
+	if b := baselineFor(folder); b != "" {
+		argv = append(argv, "--baseline", b)
+	}
+	if _, _, err := scanTool(180*time.Second, argv...); err != nil {
 		return securityResult{}, err
 	}
 	v, err := readReport(report)
@@ -258,6 +278,11 @@ func security(folder string) (securityResult, error) {
 		return ra < rb || ra == rb && ca < cb
 	})
 	res := securityResult{verdict: pyStr(firstOr(risk["recommendation"], "")), n: len(issues), top: []string{}}
+	// With nothing left after the operator's baseline, SkillSpector's CAUTION only says the scan was
+	// partial (e.g. a path the skill writes at runtime); the operator accepted that skill as reviewed.
+	if res.verdict == "CAUTION" && len(issues) == 0 && baselineFor(folder) != "" {
+		res.verdict = "SAFE"
+	}
 	for _, i := range issues {
 		if label := findingLabel(asMap(i)); label != "" && !containsStr(res.top, label) {
 			res.top = append(res.top, label)
@@ -270,6 +295,148 @@ func security(folder string) (securityResult, error) {
 		res.risk = max(0, min(100, int(numFloat(score))))
 	}
 	return res, nil
+}
+
+// ciscoSecurity maps Cisco Skill Scanner's worst severity onto the same verdicts:
+// CRITICAL/HIGH → DO_NOT_INSTALL, MEDIUM → CAUTION, otherwise SAFE.
+func ciscoSecurity(dir, folder string) (securityResult, error) {
+	tmp, err := os.MkdirTemp("", "arkism-cs-")
+	if err != nil {
+		return securityResult{}, err
+	}
+	defer os.RemoveAll(tmp)
+	report := filepath.Join(tmp, "report.json")
+	argv := []string{ciscoBin, "scan", dir, "--format", "json", "--output", report, "--policy", "balanced"}
+	var env []string
+	timeout := 180 * time.Second
+	if ciscoKeyFile != "" {
+		raw, err := os.ReadFile(ciscoKeyFile)
+		if err != nil {
+			return securityResult{}, err
+		}
+		argv = append(argv[:len(argv)-1], "low-noise", "--use-llm", "--llm-provider", "anthropic")
+		env = []string{"SKILL_SCANNER_LLM_API_KEY=" + strings.TrimSpace(string(raw)), "SKILL_SCANNER_LLM_MODEL=" + ciscoModel}
+		timeout = 600 * time.Second
+	}
+	if _, _, err := scanToolEnv(timeout, env, argv...); err != nil {
+		return securityResult{}, err
+	}
+	v, err := readReport(report)
+	if err != nil {
+		return securityResult{}, err
+	}
+	doc := asMap(v)
+	issues := append([]any(nil), asList(doc["findings"])...)
+	for _, i := range issues {
+		if asMap(i)["rule_id"] == "LLM_ANALYSIS_FAILED" { // an error entry is never reused, so the next run scans again
+			return securityResult{}, errCiscoLLMFailed
+		}
+	}
+	worstName := pyStr(doc["max_severity"])
+	if accepted := ciscoAccepted(folder); len(accepted) > 0 {
+		kept := issues[:0]
+		for _, i := range issues {
+			if !accepted[pyStr(asMap(i)["id"])] {
+				kept = append(kept, i)
+			}
+		}
+		issues, worstName = kept, ""
+	}
+	sort.SliceStable(issues, func(a, b int) bool {
+		return severityOf(issues[a]) < severityOf(issues[b])
+	})
+	if worstName == "" && len(issues) > 0 {
+		worstName = pyStr(asMap(issues[0])["severity"])
+	}
+	res := securityResult{n: len(issues), top: []string{}}
+	for _, i := range issues {
+		m := asMap(i)
+		if label := findingLabel(map[string]any{"category": m["category"], "pattern": m["rule_id"], "severity": m["severity"]}); label != "" && !containsStr(res.top, label) {
+			res.top = append(res.top, label)
+		}
+		if len(res.top) == 3 {
+			break
+		}
+	}
+	switch worst, known := severityRank[strings.ToUpper(worstName)]; {
+	case !known || worst > 2:
+		res.risk, res.verdict = 0, "SAFE"
+		if len(issues) > 0 {
+			res.risk = 10
+		}
+	case worst == 2:
+		res.risk, res.verdict = 50, "CAUTION"
+	default:
+		res.risk, res.verdict = 90, "DO_NOT_INSTALL"
+	}
+	return res, nil
+}
+
+func severityOf(i any) int {
+	if r, ok := severityRank[strings.ToUpper(pyStr(asMap(i)["severity"]))]; ok {
+		return r
+	}
+	return 9
+}
+
+// baselineFor is the operator's SkillSpector baseline for this skill folder name
+// (skillspector baseline DIR -o <state>/skill-baselines/<name>.yaml): the findings
+// a person accepted as false alarms. New findings still count. A baseline shipped
+// inside the skill folder is never used — the author could hide its own findings.
+func baselineFor(folder string) string {
+	p := filepath.Join(checksState, "skill-baselines", filepath.Base(folder)+".yaml")
+	if isFile(p) {
+		return p
+	}
+	return ""
+}
+
+// ciscoAcceptedFile is the operator's Cisco counterpart of baselineFor: finding ids
+// (one per line, # comments) accepted as false alarms in <state>/skill-baselines/<name>.cisco.txt.
+func ciscoAcceptedFile(folder string) string {
+	p := filepath.Join(checksState, "skill-baselines", filepath.Base(folder)+".cisco.txt")
+	if isFile(p) {
+		return p
+	}
+	return ""
+}
+
+func ciscoAccepted(folder string) map[string]bool {
+	ids := map[string]bool{}
+	if p := ciscoAcceptedFile(folder); p != "" {
+		raw, _ := os.ReadFile(p)
+		for _, l := range strings.Split(string(raw), "\n") {
+			if l = strings.TrimSpace(l); l != "" && !strings.HasPrefix(l, "#") {
+				ids[l] = true
+			}
+		}
+	}
+	return ids
+}
+
+// checkDigest changes when the folder or its baselines change, so both rescan.
+func checkDigest(folder string) (string, error) {
+	digest, err := contentHash(folder)
+	if err != nil || digest == "" {
+		return digest, err
+	}
+	if b := baselineFor(folder); b != "" {
+		raw, err := os.ReadFile(b)
+		if err != nil {
+			return "", err
+		}
+		sum := sha256.Sum256(raw)
+		digest += ":baseline:" + hex.EncodeToString(sum[:8])
+	}
+	if b := ciscoAcceptedFile(folder); b != "" {
+		raw, err := os.ReadFile(b)
+		if err != nil {
+			return "", err
+		}
+		sum := sha256.Sum256(raw)
+		digest += ":cisco-baseline:" + hex.EncodeToString(sum[:8])
+	}
+	return digest, nil
 }
 
 func homePath(folder string) string {
@@ -287,6 +454,9 @@ func check(agent, folder, digest string) host.Obj {
 	entry.Set("hash", digest)
 	entry.Set("source", checkSource())
 	entry.Set("builtin_version", builtinVersion)
+	if baselineFor(folder) != "" || ciscoAcceptedFile(folder) != "" {
+		entry.Set("baseline", true)
+	}
 	var errs []string
 	// The built-in check always runs; the NVIDIA scanners add to it where they are installed.
 	bScore, bIssues := builtinQuality(folder)
@@ -299,8 +469,13 @@ func check(agent, folder, digest string) host.Obj {
 		}
 	}
 	qScore, qGrade := bScore, builtinGrade(bScore)
+	// SkillSpector refuses a symlinked input; ~/.agents/skills links into the skills repo.
+	resolved := folder
+	if r, err := filepath.EvalSymlinks(folder); err == nil {
+		resolved = r
+	}
 	if toolInstalled(evaluatorBin) {
-		if score, grade, err := quality(folder); err != nil {
+		if score, grade, err := quality(resolved); err != nil {
 			errs = append(errs, "품질: "+pyErrName(err))
 		} else {
 			qScore, qGrade = score, grade
@@ -309,22 +484,31 @@ func check(agent, folder, digest string) host.Obj {
 	entry.Set("quality_score", qScore)
 	entry.Set("quality_grade", qGrade)
 	risk, verdict, n, top := any(bRisk), bVerdict, len(bFindings), bTop
-	if toolInstalled(spectorBin) {
-		if res, err := security(folder); err != nil {
-			errs = append(errs, "보안: "+pyErrName(err))
-			if bVerdict == "SAFE" { // a broken scanner is an error, not a pass
-				verdict, risk = "", nil
-			}
+	broken := false
+	for _, sc := range []struct {
+		bin, name string
+		run       func(dir, folder string) (securityResult, error)
+	}{{spectorBin, "보안", security}, {ciscoBin, "Cisco", ciscoSecurity}} {
+		if !toolInstalled(sc.bin) {
+			continue
+		}
+		if res, err := sc.run(resolved, folder); err != nil {
+			errs = append(errs, sc.name+": "+pyErrName(err))
+			broken = true
 		} else {
 			if r, ok := res.risk.(int); ok {
-				risk = max(r, bRisk)
+				prev, _ := risk.(int)
+				risk = max(r, prev, bRisk)
 			}
 			if containsStr([]string{"SAFE", "CAUTION", "DO_NOT_INSTALL"}, res.verdict) {
-				verdict = worseVerdict(res.verdict, bVerdict)
+				verdict = worseVerdict(res.verdict, verdict)
 			}
 			n += res.n
-			top = mergeTop(res.top, bTop)
+			top = mergeTop(res.top, top)
 		}
+	}
+	if broken && verdict == "SAFE" { // a broken scanner is an error, not a pass
+		verdict, risk = "", nil
 	}
 	if risk != nil {
 		entry.Set("risk_score", risk)
@@ -346,15 +530,22 @@ func toolInstalled(bin string) bool { _, err := exec.LookPath(bin); return err =
 
 // checkSource names what produced an entry; an entry from another set of scanners is rescanned.
 func checkSource() string {
+	s := "builtin"
 	if toolInstalled(evaluatorBin) || toolInstalled(spectorBin) {
-		return "builtin+nvidia"
+		s += "+nvidia"
 	}
-	return "builtin"
+	if toolInstalled(ciscoBin) {
+		s += "+cisco"
+		if ciscoKeyFile != "" {
+			s += "-llm"
+		}
+	}
+	return s
 }
 
 func scannerVersions() string {
 	out := []string{"arkism-builtin " + builtinVersion}
-	for _, t := range [][2]string{{"skillevaluator", evaluatorBin}, {"skillspector", spectorBin}} {
+	for _, t := range [][2]string{{"skillevaluator", evaluatorBin}, {"skillspector", spectorBin}, {"skill-scanner", ciscoBin}} {
 		if !toolInstalled(t[1]) {
 			continue
 		}
@@ -401,7 +592,7 @@ func scanChecks(stderr io.Writer) int {
 	}
 	checks, source := []any{}, checkSource()
 	for _, ad := range skillDirs() {
-		digest, err := contentHash(ad[1])
+		digest, err := checkDigest(ad[1])
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return 1
@@ -428,6 +619,8 @@ func scanChecks(stderr io.Writer) int {
 	return 0
 }
 
+var reportedCheckKeys = []string{"agent", "name", "path", "quality_score", "quality_grade", "risk_score", "verdict", "findings", "top_findings", "scanned_at", "error"}
+
 // checksReport is what agents sync sends: nil until the first scan, so the server keeps what it has.
 func checksReport() ([]any, string) {
 	doc := loadChecks()
@@ -439,8 +632,9 @@ func checksReport() ([]any, string) {
 	for _, c := range asList(raw) {
 		row := host.Obj{}
 		for _, kv := range asObj(c) {
-			// Cache-only keys: the server's skill_checks schema rejects unknown fields.
-			if !containsStr([]string{"hash", "source", "builtin_version", "quality_issues", "builtin_findings"}, kv.Key) {
+			// Only the fields of the server's SkillCheck: it rejects the whole report on any unknown key,
+			// so cache-only keys (hash, source, baseline, …) never leave the host.
+			if containsStr(reportedCheckKeys, kv.Key) {
 				row = append(row, kv)
 			}
 		}
