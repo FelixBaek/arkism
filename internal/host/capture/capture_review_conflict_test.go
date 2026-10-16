@@ -23,12 +23,16 @@ func reviewServer(t *testing.T, candidates, conflicted string) *[]any {
 			return mustLoad(t, `{"items": `+conflicted+`}`), nil
 		case strings.HasPrefix(path, "/v1/memory_candidates?"):
 			return mustLoad(t, `{"items": `+candidates+`}`), nil
+		case strings.HasPrefix(path, "/v1/memory_relations/r3?"):
+			return mustLoad(t, `{"id": "r3", "revision": 1, "relations": [{"collection": "memory_candidates", "id": "k3"}, {"collection": "memories", "id": "u1"}]}`), nil
 		case strings.HasPrefix(path, "/v1/memory_relations/r1?"):
 			return mustLoad(t, `{"id": "r1", "revision": 4, "relations": [{"collection": "memory_candidates", "id": "k1"}, {"collection": "memories", "id": "o1"}]}`), nil
 		case strings.HasPrefix(path, "/v1/memory_relations/"):
 			return mustLoad(t, `{"id": "r2", "revision": 1, "relations": [{"collection": "memory_candidates", "id": "k2"}]}`), nil
 		case strings.HasPrefix(path, "/v1/memories/o1?"):
-			return mustLoad(t, `{"id": "o1", "revision": 2, "text": "라이트 테마를 쓴다"}`), nil
+			return mustLoad(t, `{"id": "o1", "revision": 2, "kind": "decision", "text": "라이트 테마를 쓴다"}`), nil
+		case strings.HasPrefix(path, "/v1/memories/u1?"):
+			return mustLoad(t, `{"id": "u1", "revision": 1, "kind": "user", "text": "개인 정보"}`), nil
 		}
 		t.Fatalf("unexpected read %s", path)
 		return nil, nil
@@ -40,9 +44,11 @@ func reviewServer(t *testing.T, candidates, conflicted string) *[]any {
 	revPost = func(path string, body any, _ time.Duration) (map[string]any, error) {
 		classified = append(classified, map[string]any{"path": path, "risk": field(body, "risk"), "reasons": field(body, "risk_reasons"),
 			"dup": field(body, "dup_hint"), "rev": field(body, "expected_revision")})
-		return map[string]any{}, nil
+		rev, _ := num(field(body, "expected_revision"))
+		id := strings.Split(path, "/")[3]
+		return map[string]any{"id": id, "revision": rev + 1, "status": "candidate", "classification": map[string]any{"risk": field(body, "risk")}}, nil
 	}
-	search = func(text string, _ int, _ float64) ([]any, error) {
+	reviewSearch = func(text string) ([]any, error) {
 		if text != "다크 테마를 쓴다" {
 			return []any{map[string]any{"id": "q", "text": "비슷한 것"}}, nil
 		}
@@ -174,5 +180,56 @@ func TestCaptureAIReviewSurvivesAModelOutageAndStopsOnServerErrors(t *testing.T)
 	capGet = func(string, time.Duration) (map[string]any, error) { return nil, &host.HTTPError{Code: 500} }
 	if err := aiReview(false, nil); host.HTTPCode(err) != 500 {
 		t.Fatal(err)
+	}
+}
+
+func TestCaptureAIReviewKeepsUserMemoryTextFromTheModel(t *testing.T) {
+	capFake(t)
+	got := reviewServer(t, `[]`, `[{"id": "k3", "revision": 2, "kind": "user", "conflict_id": "r3", "text": "y", "tags": ["basis:explicit_user"]}]`)
+	llm = func(string, string, string, time.Duration, string, string) (any, error) {
+		t.Fatal("a user memory's text reached the model")
+		return nil, nil
+	}
+	if err := aiReview(false, nil); err != nil || len(*got) != 1 {
+		t.Fatal(err, *got)
+	}
+	if c := (*got)[0].(map[string]any); c["risk"] != "high" || c["dup"] != "u1" {
+		t.Fatal(c)
+	}
+}
+
+func TestCaptureReviewSearchAsksOnlyReviewKinds(t *testing.T) {
+	capFake(t)
+	var kinds any
+	capPost = func(path string, body any, _ time.Duration) (map[string]any, error) {
+		kinds = field(body, "kinds")
+		return map[string]any{"items": []any{}}, nil
+	}
+	if _, err := reviewSearch("x"); err != nil || host.MustDumps(kinds, host.DumpOpts{}) != `["lesson", "decision", "procedural"]` {
+		t.Fatal(err, kinds)
+	}
+}
+
+// A classify write lost to the network is spooled and replayed on the next run without asking the model again.
+func TestCaptureAIReviewReplaysTheOutbox(t *testing.T) {
+	capFake(t)
+	got := reviewServer(t, `[{"id": "p", "revision": 3, "kind": "decision", "text": "추측", "tags": ["basis:inferred"], "created_by": "owner"}]`, `[]`)
+	revPost = func(string, any, time.Duration) (map[string]any, error) { return nil, errors.New("connection refused") }
+	calls := 0
+	llm = func(string, string, string, time.Duration, string, string) (any, error) {
+		calls++
+		return []any{map[string]any{"id": "p", "risk": "medium", "risk_reasons": []any{"추측"}, "dup_hint": ""}}, nil
+	}
+	if err := aiReview(false, nil); err != nil || len(*got) != 0 {
+		t.Fatal(err, *got)
+	}
+	// the server now shows the replayed call; the model is not asked again
+	got = reviewServer(t, `[{"id": "p", "revision": 4, "kind": "decision", "text": "추측", "created_by": "owner", "classification": {"risk": "medium", "by": "arkism-memory-reviewer"}}]`, `[]`)
+	timeNow = func() float64 { return float64(time.Now().Add(2*time.Hour).UnixNano()) / 1e9 } // past the backoff
+	if err := aiReview(false, nil); err != nil || calls != 1 || len(*got) != 1 || host.MustDumps((*got)[0].(map[string]any)["rev"], host.DumpOpts{}) != "3" {
+		t.Fatal(err, calls, *got)
+	}
+	if left, _ := filepath.Glob(filepath.Join(reviewOutboxDir(), "batch-*.json")); len(left) != 0 {
+		t.Fatal(left)
 	}
 }

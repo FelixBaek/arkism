@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,6 +34,20 @@ For each item give:
 const reviewSchema = `{"type": "object", "additionalProperties": false, "required": ["decisions"], "properties": {"decisions": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "risk", "risk_reasons", "dup_hint"], "properties": {"id": {"type": "string"}, ` + riskProps + `}}}}}`
 
 var errReviewerCredential = errors.New("reviewer_credential_required")
+
+// reviewKinds are the existing memories whose text may reach the classifier's model as OLD or RELATED;
+// user and episodic text stays out, and a conflict with one is called by rule.
+var reviewKinds = []any{"lesson", "decision", "procedural"}
+
+// reviewSearch finds related memories of reviewKinds only; tests replace it.
+var reviewSearch = func(text string) ([]any, error) {
+	res, err := capPost("/v1/search", map[string]any{"scope": capScope(), "query": head(text, 1000), "modes": []any{"exact", "fts", "vector"},
+		"kinds": reviewKinds, "purpose": "answer", "destination": "internal", "limit": 4, "max_chars": 3000}, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return listOf(res["items"]), nil
+}
 
 // revPost classifies under the reviewer's own credential, never the owner's; tests replace it.
 var revPost = func(path string, payload any, timeout time.Duration) (map[string]any, error) {
@@ -89,21 +104,61 @@ func reviewItem(c map[string]any, related []map[string]any, old map[string]any) 
 	return strings.Join(lines, "\n")
 }
 
-// classify records one risk call; the candidate's status and text never change.
-func classify(c map[string]any, risk string, reasons []any, dup string, dryRun bool, stdout io.Writer) error {
-	body := host.Obj{{Key: "scope", Value: capScope()}, {Key: "expected_revision", Value: c["revision"]}, {Key: "risk", Value: risk}}
+// classifyRequest is one risk call as an outbox write; the candidate's status and text never change.
+func classifyRequest(c map[string]any, risk string, reasons []any, dup string) map[string]any {
+	body := map[string]any{"scope": plainJSON(capScope()), "expected_revision": c["revision"], "risk": risk}
 	if len(reasons) > 0 {
-		body.Set("risk_reasons", reasons)
+		body["risk_reasons"] = reasons
 	}
 	if dup != "" {
-		body.Set("dup_hint", dup)
+		body["dup_hint"] = dup
 	}
-	if dryRun {
-		fmt.Fprintln(stdout, host.MustDumps(append(host.Obj{{Key: "id", Value: c["id"]}, {Key: "text", Value: head(str(or(c["text"], "")), 80)}}, body[2:]...), host.DumpOpts{NoASCII: true}))
+	return map[string]any{"path": fmt.Sprintf("/v1/memory_candidates/%s/classify", str(c["id"])), "body": body}
+}
+
+// sendClassify posts one spooled write under the reviewer's credential.
+func sendClassify(path string, body any) (map[string]any, error) {
+	return revPost(path, body, 60*time.Second)
+}
+
+// classifyAll stores the batch's risk calls in the outbox, then sends them. A dry run only prints them.
+// A refused write (decided or changed meanwhile) is skipped; anything else stops the run, and the outbox
+// replays what is left on the next one.
+func classifyAll(requests []map[string]any, by string, dryRun bool, stdout io.Writer) error {
+	if len(requests) == 0 {
 		return nil
 	}
-	_, err := revPost(fmt.Sprintf("/v1/memory_candidates/%s/classify", str(c["id"])), body, 60*time.Second)
-	return err
+	if dryRun {
+		for _, r := range requests {
+			b := r["body"].(map[string]any)
+			fmt.Fprintln(stdout, host.MustDumps(host.Obj{{Key: "id", Value: reviewCandidateID(r["path"].(string))},
+				{Key: "risk", Value: b["risk"]}, {Key: "risk_reasons", Value: b["risk_reasons"]}, {Key: "dup_hint", Value: b["dup_hint"]}}, host.DumpOpts{NoASCII: true}))
+		}
+		return nil
+	}
+	results, err := dispatchReviews(requests, sendClassify)
+	if err != nil && !reviewTerminal(err) {
+		return err
+	}
+	for i, res := range results {
+		if res != nil {
+			metric(kv("event", "ai_review"), kv("candidate_id", reviewCandidateID(requests[i]["path"].(string))),
+				kv("risk", requests[i]["body"].(map[string]any)["risk"]), kv("by", by))
+		}
+	}
+	return nil
+}
+
+// classifyBatch sends one batch; a network failure is skipped (the outbox replays it on the next run),
+// a missing credential or any other server answer (403, 500) stops the run.
+func classifyBatch(requests []map[string]any, by string, dryRun bool, stdout io.Writer) error {
+	if err := classifyAll(requests, by, dryRun, stdout); err != nil {
+		if !skippable(err) {
+			return err
+		}
+		metric(kv("event", "ai_review_failure"), kv("error", errorCode(err)))
+	}
+	return nil
 }
 
 // skippable: a network failure, a candidate decided or changed meanwhile (404/409); the next run retries.
@@ -120,6 +175,13 @@ func skippable(err error) bool {
 
 // aiReview classifies waiting candidates and conflicts: rules first, the model for the rest, a batch per call.
 func aiReview(dryRun bool, stdout io.Writer) error {
+	pending := map[string]bool{}
+	if !dryRun {
+		var err error
+		if pending, err = replayReviews(sendClassify); err != nil {
+			return err
+		}
+	}
 	var waiting []map[string]any
 	for _, status := range []string{"candidate", "conflicted"} {
 		res, err := capGet(fmt.Sprintf("/v1/memory_candidates?%s&status=%s&limit=100", scopeQuery(false), status), 8*time.Second)
@@ -127,26 +189,25 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 			return err
 		}
 		for _, c := range dicts(listOf(res["items"])) {
-			if !reviewed(c) {
+			if !reviewed(c) && !pending[str(c["id"])] {
 				waiting = append(waiting, c)
 			}
 		}
 	}
 	var todo []map[string]any
+	var ruled []map[string]any
 	for _, c := range waiting {
 		risk, reason, ok := reviewRule(c)
 		if !ok {
 			todo = append(todo, c)
 			continue
 		}
-		if err := classify(c, risk, []any{reason}, "", dryRun, stdout); err != nil {
-			if !skippable(err) {
-				return err
-			}
-			metric(kv("event", "ai_review_failure"), kv("candidate_id", c["id"]), kv("error", errorCode(err)))
-			continue
+		ruled = append(ruled, classifyRequest(c, risk, []any{reason}, ""))
+	}
+	for i := 0; i < len(ruled); i += reviewOutboxMaxBatch {
+		if err := classifyBatch(ruled[i:min(i+reviewOutboxMaxBatch, len(ruled))], "rule", dryRun, stdout); err != nil {
+			return err
 		}
-		metric(kv("event", "ai_review"), kv("candidate_id", c["id"]), kv("risk", risk), kv("by", "rule"))
 	}
 	for i := 0; i < len(todo); i += reviewBatch {
 		chunk := todo[i:min(i+reviewBatch, len(todo))]
@@ -173,8 +234,15 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 					}
 					continue // cannot show the old side: leave it for the next run
 				}
+				if !slices.Contains(reviewKinds, old["kind"]) { // its text never reaches the model
+					ruled := []map[string]any{classifyRequest(c, "high", []any{"기존 기억과 모순"}, str(old["id"]))}
+					if err := classifyBatch(ruled, "rule", dryRun, stdout); err != nil {
+						return err
+					}
+					continue
+				}
 			}
-			found, err := search(str(or(c["text"], "")), 4, 30)
+			found, err := reviewSearch(str(or(c["text"], "")))
 			if err != nil {
 				return err
 			}
@@ -205,6 +273,7 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 		if err != nil {
 			return err
 		}
+		var requests []map[string]any
 		for _, v := range decisions {
 			d, err := asDict(v)
 			if err != nil {
@@ -220,14 +289,11 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 			dup, _ := k.Get("dup_hint")
 			list, _ := reasons.([]any)
 			dupID, _ := dup.(string)
-			if err := classify(c, risk.(string), list, dupID, dryRun, stdout); err != nil {
-				if !skippable(err) {
-					return err
-				}
-				metric(kv("event", "ai_review_failure"), kv("candidate_id", c["id"]), kv("error", errorCode(err)))
-				continue
-			}
-			metric(kv("event", "ai_review"), kv("candidate_id", c["id"]), kv("risk", risk), kv("by", reviewModel))
+			requests = append(requests, classifyRequest(c, risk.(string), list, dupID))
+			delete(batch, hashable(d["id"])) // a repeated id in the answer is classified once
+		}
+		if err := classifyBatch(requests, reviewModel, dryRun, stdout); err != nil {
+			return err
 		}
 	}
 	return nil
