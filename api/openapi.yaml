@@ -9142,18 +9142,19 @@
     "/v1/model-budget/subscription-usage": {
       "post": {
         "summary": "Record one subscription CLI call's usage (record only, ST-620 / FR-012)",
-        "description": "settle:model_budget by a configured budget principal; same exact policy scope. Never reserves, settles or refuses for spend: the call already ran on the user's Claude subscription. Idempotent per principal+operation_id; a changed replay is 409. Files a provider_usage row (provider claude_cli) at list price and adds to the month's subscription counter shown by status. No prompt, output or credential is accepted.",
+        "description": "settle:model_budget by a service principal listed in ModelBudgetPolicy; same exact policy scope, policy not expired. Never reserves, settles or refuses for spend: the call already ran on the user's Claude subscription. Idempotent per principal+operation_id; a changed replay is 409. Files a provider_usage row (provider claude_cli) at list price and adds to the month's subscription counter shown by status. No prompt, output or credential is accepted.",
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["scope", "operation_id", "operation", "usage"], "properties": {
           "scope": {"$ref": "#/components/schemas/Scope"},
           "operation_id": {"type": "string", "pattern": "^[a-zA-Z0-9_.-]{1,128}$"},
           "operation": {"type": "string", "pattern": "^[a-zA-Z0-9_.-]{1,64}$", "description": "Harness role or worker label, e.g. session_processor, capture."},
-          "usage": {"type": "object", "additionalProperties": false, "required": ["model", "input_tokens", "output_tokens"], "properties": {"model": {"type": "string", "maxLength": 128}, "requests": {"type": "integer", "minimum": 0, "maximum": 20}, "input_tokens": {"type": "integer", "minimum": 0}, "output_tokens": {"type": "integer", "minimum": 0}}}
+          "usage": {"type": "object", "additionalProperties": false, "required": ["model", "input_tokens", "output_tokens"], "properties": {"model": {"type": "string", "maxLength": 128}, "requests": {"type": "integer", "minimum": 0, "maximum": 20}, "input_tokens": {"type": "integer", "minimum": 0, "maximum": 100000000}, "output_tokens": {"type": "integer", "minimum": 0, "maximum": 100000000}}, "description": "input_tokens + output_tokens must be > 0; model must not look like a secret; requests 0 is counted as 1."}
         }}}}},
         "responses": {
           "200": {"description": "{id, recorded, estimated_cost_pico_usd, pricing_available}"},
-          "400": {"description": "Invalid operation or empty usage"},
-          "403": {"description": "Missing, expired or unauthorized policy"},
-          "409": {"description": "Same operation_id with different usage"}
+          "400": {"description": "invalid_request: invalid operation_id/operation/usage, empty usage or unknown field"},
+          "403": {"description": "access_denied: missing, expired or unauthorized policy, or principal not in ModelBudgetPolicy"},
+          "409": {"description": "revision_conflict: same operation_id with different input"},
+          "503": {"description": "dependency_unavailable: store or the month's subscription counter unavailable; nothing recorded"}
         }
       }
     },
