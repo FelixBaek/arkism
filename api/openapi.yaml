@@ -8498,7 +8498,7 @@
     "/v1/memory_candidates/{id}/hold-conflict": {
       "post": {
         "summary": "Hold exact correction conflict",
-        "description": "Configured scoped service only. Exact candidate and live memory are held atomically without approval. Stable operation ID permits lost-response replay with current privacy and authorization checks.",
+        "description": "Configured scoped service only. The exact candidate is held for human review without approval; the live memory it corrects stays active until a person resolves the conflict. Stable operation ID permits lost-response replay with current privacy and authorization checks.",
         "requestBody": {
           "required": true,
           "content": {
@@ -9136,6 +9136,24 @@
           "503": {
             "description": "Durable reservation unavailable; do not dispatch"
           }
+        }
+      }
+    },
+    "/v1/model-budget/subscription-usage": {
+      "post": {
+        "summary": "Record one subscription CLI call's usage (record only, ST-620 / FR-012)",
+        "description": "settle:model_budget by a configured budget principal; same exact policy scope. Never reserves, settles or refuses for spend: the call already ran on the user's Claude subscription. Idempotent per principal+operation_id; a changed replay is 409. Files a provider_usage row (provider claude_cli) at list price and adds to the month's subscription counter shown by status. No prompt, output or credential is accepted.",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["scope", "operation_id", "operation", "usage"], "properties": {
+          "scope": {"$ref": "#/components/schemas/Scope"},
+          "operation_id": {"type": "string", "pattern": "^[a-zA-Z0-9_.-]{1,128}$"},
+          "operation": {"type": "string", "pattern": "^[a-zA-Z0-9_.-]{1,64}$", "description": "Harness role or worker label, e.g. session_processor, capture."},
+          "usage": {"type": "object", "additionalProperties": false, "required": ["model", "input_tokens", "output_tokens"], "properties": {"model": {"type": "string", "maxLength": 128}, "requests": {"type": "integer", "minimum": 0, "maximum": 20}, "input_tokens": {"type": "integer", "minimum": 0}, "output_tokens": {"type": "integer", "minimum": 0}}}
+        }}}}},
+        "responses": {
+          "200": {"description": "{id, recorded, estimated_cost_pico_usd, pricing_available}"},
+          "400": {"description": "Invalid operation or empty usage"},
+          "403": {"description": "Missing, expired or unauthorized policy"},
+          "409": {"description": "Same operation_id with different usage"}
         }
       }
     },
@@ -16792,6 +16810,11 @@
           "id": {
             "type": "string"
           },
+          "agent_id": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "The executing agent when the trace is stored in the shared (agent-less) user scope. Required when scope.agent_id is empty; when both are set they must match. The run is recorded with agent_id = scope.agent_id or this value."
+          },
           "task_type": {
             "type": "string"
           },
@@ -18258,7 +18281,11 @@
           "daily_soft_target_exceeded": {
             "type": "boolean",
             "description": "Current UTC day committed spend plus reservations exceeds the advisory target."
-          }
+          },
+          "subscription_requests": {"type": "integer", "minimum": 0, "description": "Claude subscription CLI calls recorded this UTC month. Record-only; never part of any limit above."},
+          "subscription_input_tokens": {"type": "integer", "minimum": 0},
+          "subscription_output_tokens": {"type": "integer", "minimum": 0},
+          "subscription_estimated_pico_usd": {"type": "integer", "minimum": 0, "description": "List-price API-equivalent estimate of those calls, not a charge."}
         }
       },
       "ModelBudgetReservation": {

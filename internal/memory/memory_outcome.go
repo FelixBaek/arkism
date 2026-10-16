@@ -94,6 +94,9 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 				if e != nil {
 					return e
 				}
+				if run.Run != nil && run.Run.TaskType == "crew_run" {
+					return ErrDenied // OI-25: crew runner traces never judge memories
+				}
 				if run.Revision == ref.Revision && live(run) && !run.ContentErased && !run.PrivacyQuarantined && run.Run != nil && run.Run.FinishedAt != nil && terminalOutcome(run.Run.Outcome) {
 					completed = true
 				}

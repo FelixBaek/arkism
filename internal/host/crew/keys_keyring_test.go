@@ -1,6 +1,8 @@
 package crew
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"runtime"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/FelixBaek/arkism/internal/host"
 	"github.com/FelixBaek/arkism/internal/host/crew/keystore"
+	"github.com/FelixBaek/arkism/internal/memory"
 )
 
 // Every crew test runs against an unavailable store (the server's file behaviour) unless it opts in, so no test
@@ -160,5 +163,20 @@ func TestKeystoreParseRef(t *testing.T) {
 		if _, _, ok := keystore.ParseRef(bad); ok {
 			t.Fatal(bad)
 		}
+	}
+}
+
+func TestKeyRowDecodesAsServerProviderKey(t *testing.T) {
+	pub := host.Obj{{Key: "id", Value: "k1"}, {Key: "name", Value: "main"}, {Key: "last4", Value: "abcd"},
+		{Key: "storage", Value: "keyring"}, {Key: "created_at", Value: "2026-10-15T00:00:00Z"}}
+	raw, err := json.Marshal(keyRow(pub))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	var k memory.ProviderKey
+	if err := d.Decode(&k); err != nil {
+		t.Fatalf("server would reject the inventory: %v", err)
 	}
 }

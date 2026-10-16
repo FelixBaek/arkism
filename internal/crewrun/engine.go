@@ -52,6 +52,11 @@ type Engine struct {
 	HTTP        *http.Client
 	CodeTimeout time.Duration
 
+	// Traces records each finished run as an execution trace with its own producer credential and
+	// hands the receipt to Sinks (see receipts.go); either unset leaves runs untraced.
+	Traces *Client
+	Sinks  []ReceiptSink
+
 	// Meetings drives team meetings when set (FromEnv sets the Arkism client).
 	Meetings MeetingStore
 	// MeetingAI replaces the run-node call of a meeting turn (tests).
@@ -258,6 +263,8 @@ type runExec struct {
 	in    map[string][]Edge // forward edges only
 	out   map[string][]Edge // forward edges only
 	back  map[string][]Edge // back edges (max > 0) by source
+	// traced: this run's end was already handed to recordFinished
+	traced bool
 }
 
 func (x *runExec) index(g *Graph) {
@@ -372,6 +379,10 @@ func (x *runExec) saveLocked(ctx context.Context, node string) error {
 		r, err := x.e.Store.UpdateRun(ctx, x.run)
 		if err == nil {
 			x.run.Revision, x.run.State.Decisions = r.Revision, r.State.Decisions
+			if terminal(x.run.State.Status) && !x.traced {
+				x.traced = true
+				x.e.recordFinished(ctx, x.run, x.nodes)
+			}
 			return nil
 		}
 		switch apiCode(err) {

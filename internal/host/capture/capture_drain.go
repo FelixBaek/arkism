@@ -210,9 +210,12 @@ func sendCapture(eventType, eventID, sid string, occurredAt any, claims []any, o
 	if started == 0 {
 		started = monotonic()
 	}
-	res, err := capPost("/v1/capture", host.Obj{{Key: "scope", Value: capScope()}, {Key: "generator", Value: gen}, {Key: "claims", Value: claims},
-		{Key: "event", Value: host.Obj{{Key: "id", Value: eventID}, {Key: "type", Value: eventType}, {Key: "origin_product", Value: origin},
-			{Key: "session_id", Value: head(sid, 120)}, {Key: "occurred_at", Value: occurredAt}}}}, 60*time.Second)
+	body := host.Obj{{Key: "scope", Value: capScope()}, {Key: "generator", Value: gen}, {Key: "claims", Value: claims}}
+	if sessionProcessorOn() { // the server accepts automated capture only from a service role
+		body = append(body, host.KV{Key: "automated", Value: true})
+	}
+	res, err := capPost("/v1/capture", append(body, host.KV{Key: "event", Value: host.Obj{{Key: "id", Value: eventID}, {Key: "type", Value: eventType}, {Key: "origin_product", Value: origin},
+		{Key: "session_id", Value: head(sid, 120)}, {Key: "occurred_at", Value: occurredAt}}}), 60*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +238,7 @@ func sendCapture(eventType, eventID, sid string, occurredAt any, claims []any, o
 	return items, nil
 }
 
-var captureOrigins = map[string]bool{"claude_code": true, "codex": true, "zcode": true, "gemini": true, "grok": true, "deepseek": true}
+var captureOrigins = map[string]bool{"claude_code": true, "codex": true, "zcode": true, "gemini": true, "grok": true, "deepseek": true, "langgraph": true}
 
 // queuedOrigin: a shared spool must retain the producer, independent of its next drainer.
 func queuedOrigin(job map[string]any) (string, error) {
@@ -316,6 +319,9 @@ func process(job map[string]any, persist func() error) (err error) {
 	if allInternal {
 		metric(kv("event", "capture_skipped"), kv("reason", "codex_ambient_prompt"))
 		return nil
+	}
+	if sessionProcessorOn() {
+		return sessionProcess(job, persist, origin)
 	}
 	started := monotonic()
 	sid := job["session_id"].(string) // KeyError/TypeError surface through recovered
@@ -539,11 +545,30 @@ func drain(allWorkOrigins bool) error {
 		}
 		return os.Rename(path, filepath.Join(failedDir(), filepath.Base(path)))
 	}
+	parkedEvents := map[string]bool{} // batch parents already in the failed spool
+	if failed, _ := filepath.Glob(filepath.Join(globEscape(failedDir()), "*.json")); sessionProcessorOn() {
+		for _, f := range failed {
+			if job, err := readJob(f); err == nil {
+				if id, ok := job["event_id"].(string); ok {
+					parkedEvents[id] = true
+				}
+			}
+		}
+	}
 	for _, path := range paths {
-		if isSymlink(path) {
+		if isSymlink(path) || !exists(path) { // gone: parked earlier in this pass with its batch parent
 			continue
 		}
 		job, err := readJob(path)
+		parent, _ := job["session_batch_parent"].(string) // a non-string parent never matches a parked event
+		if err == nil && parent != "" && parkedEvents[parent] {
+			// The parent holds this child's turns and was parked: follow it so the redrive keeps them together.
+			if err := park(path); err != nil {
+				return err
+			}
+			metric(kv("event", "session_processor_parked"), kv("session", head(str(job["session_id"]), 12)), kv("error", "session_batch_parent_parked"))
+			continue
+		}
 		if err != nil { // torn or vanished file: park it instead of blocking every later job
 			if exists(path) {
 				if err := park(path); err != nil {
@@ -576,6 +601,42 @@ func drain(allWorkOrigins bool) error {
 		}
 		code := errorCode(err)
 		sid := head(str(job["session_id"]), 12)
+		if sessionProcessorOn() && errors.Is(err, errSessionPending) && sessionModelDefect(code) {
+			// Re-running the same window repeats the model call and the same defect every minute: park the batch
+			// (parent and merged children) instead of blocking every later turn of the session.
+			job["last_error"] = code
+			if err := save(); err != nil {
+				return err
+			}
+			for _, name := range anyList(job["session_batch_children"]) {
+				if child, err := sessionChildPath(name); err == nil && exists(child) {
+					if err := park(child); err != nil {
+						return err
+					}
+				}
+			}
+			if err := park(path); err != nil {
+				return err
+			}
+			parkedEvents[str(job["event_id"])] = true
+			metric(kv("event", "session_processor_parked"), kv("session", sid), kv("error", code))
+			continue
+		}
+		// Only a real wait is free; any other pending code spends an attempt so it parks instead of re-calling the model forever.
+		waiting := code == "429" || code == "session_batch_wait" || code == "session_model_budget_wait" || code == "session_batch_parent_pending"
+		if sessionProcessorOn() && waiting {
+			wait := 60.0
+			if code == "429" {
+				wait = 3600
+			}
+			job["archive_retry_after"] = timeNow() + wait
+			job["last_error"] = code
+			if err := save(); err != nil {
+				return err
+			}
+			metric(kv("event", "session_processor_pending"), kv("session", sid), kv("error", code))
+			continue
+		}
 		if code == "archive_prompt_pending" {
 			if queued, ok := archiveTimestamp(job["queued_at"]); ok && queued != 0 && queued+archiveTTL > timeNow() {
 				job["archive_retry_after"] = timeNow() + 60
@@ -591,6 +652,9 @@ func drain(allWorkOrigins bool) error {
 		attempts, _ := num(or(job["attempts"], 0))
 		job["attempts"] = int(attempts) + 1
 		job["last_error"] = code
+		if sessionProcessorOn() && errors.Is(err, errSessionPending) {
+			job["archive_retry_after"] = timeNow() + 60
+		}
 		metric(kv("event", "writeback_failure"), kv("session", sid), kv("error", code), kv("attempts", job["attempts"]))
 		if int(attempts)+1 >= capMaxAttempts {
 			if err := park(path); err != nil {
@@ -603,6 +667,7 @@ func drain(allWorkOrigins bool) error {
 			return err
 		}
 	}
+	sessionTraces()
 	if err := hoDrain(allWorkOrigins); err != nil {
 		return err
 	}
@@ -610,6 +675,17 @@ func drain(allWorkOrigins bool) error {
 }
 
 var errSkip = errors.New("skip")
+
+// sessionModelDefect reports a validation failure of an already-dispatched model output.
+func sessionModelDefect(code string) bool {
+	for _, p := range []string{"schema_", "evidence_", "coverage_", "candidate_", "user_provenance_",
+		"tool_provenance_", "structured_output_", "checkpoint_", "memory_context_"} {
+		if strings.HasPrefix(code, p) {
+			return true
+		}
+	}
+	return false
+}
 
 // readJob loads one spool file, stamping a legacy job's queue time from its mtime.
 func readJob(path string) (map[string]any, error) {
