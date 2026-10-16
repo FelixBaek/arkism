@@ -21,8 +21,9 @@ func TestCandidateConflictHoldAtomicServiceAndReplay(t *testing.T) {
 		t.Fatal("service marked as human")
 	}
 	current, _ := f.repo.Get(testCtx, colMemories, scopeA, old.ID)
-	if live(current) {
-		t.Fatal("held old memory remained active")
+	// Until a person decides, agents keep reading the memory the correction targets.
+	if !live(current) || current.ConflictID != got.Conflict.ID {
+		t.Fatal("corrected memory left retrieval or lost its conflict link")
 	}
 	again, e := f.svc.HoldCandidateConflict(testCtx, "reviewer", c.ID, in)
 	if e != nil || again != got {
@@ -93,8 +94,8 @@ func TestCaptureAutomatedCorrectionRetriesFailedHold(t *testing.T) {
 		t.Fatal("retry lost correction", out)
 	}
 	current, _ := f.repo.Get(testCtx, colMemories, scopeA, old.ID)
-	if current.Status != "conflicted" {
-		t.Fatal("old memory searchable", current.Status)
+	if current.Status != "active" || current.ConflictID == "" {
+		t.Fatal("old memory left retrieval or lost its conflict link", current.Status, current.ConflictID)
 	}
 	if again := f.capture("reviewer", in); again[0].Reason != "duplicate_event" {
 		t.Fatal(again)
@@ -140,7 +141,7 @@ func TestCaptureCorrectionRecoversAfterCommittedHoldBeforePointerCompletion(t *t
 		t.Fatal(first)
 	}
 	current, _ := f.repo.Get(testCtx, colMemories, scopeA, old.ID)
-	if current.Status != "conflicted" {
+	if current.Status != "active" || current.ConflictID == "" {
 		t.Fatal("hold not committed")
 	}
 	conflict := current.ConflictID
@@ -153,10 +154,12 @@ func TestCaptureCorrectionRecoversAfterCommittedHoldBeforePointerCompletion(t *t
 		t.Fatal("replayed hold duplicated")
 	}
 	hits := f.search(f.human, SearchInput{Scope: scopeA, Query: old.Text, Modes: []string{"exact", "fts", "vector"}, Limit: 10, MaxChars: 4000})
+	found := false
 	for _, hit := range hits.Items {
-		if hit.ID == old.ID {
-			t.Fatal("held memory searchable")
-		}
+		found = found || hit.ID == old.ID
+	}
+	if !found {
+		t.Fatal("memory under correction left search")
 	}
 }
 func TestCaptureSameCorrectionTextDifferentTargetsDoesNotMerge(t *testing.T) {

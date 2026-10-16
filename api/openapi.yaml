@@ -8498,7 +8498,7 @@
     "/v1/memory_candidates/{id}/hold-conflict": {
       "post": {
         "summary": "Hold exact correction conflict",
-        "description": "Configured scoped service only. Exact candidate and live memory are held atomically without approval. Stable operation ID permits lost-response replay with current privacy and authorization checks.",
+        "description": "Configured scoped service only. The exact candidate is held for human review without approval; the live memory it corrects stays active until a person resolves the conflict. Stable operation ID permits lost-response replay with current privacy and authorization checks.",
         "requestBody": {
           "required": true,
           "content": {

@@ -193,8 +193,11 @@
     if (tags.includes("basis:inferred")) return "AI 추측";
     return item.created_by_type === "human" ? "직접 입력" : "가져옴";
   }
+  // A captured correction waits for a person; the memory it corrects stays in use until then.
+  const isCorrection = (item) => (item.tags || []).includes("review:pending_correction");
   function waitReason(item) {
     if ((item.tags || []).includes("review:instruction_like")) return ["명령처럼 보이는 문장 — 내가 확인", true];
+    if (isCorrection(item)) return ["정정 대기 — 내가 확인", true];
     if (item.status === "conflicted") return ["기존 기억과 부딪힘", true];
     if ((item.tags || []).includes("basis:assistant_result")) return ["에이전트 결과 — 확인 필요", false];
     if ((item.tags || []).includes("basis:inferred")) return ["AI 추측 — 사용자가 말하지 않음", false];
@@ -1722,13 +1725,18 @@
       const memory = rel.relations?.find((r) => r.collection === "memories");
       if (!memory) throw new Error("revision_conflict");
       const payload = { scope: state.scope, expected_revision: c.revision,
-        action: choice === "keep_old" ? "reject" : "approve",
-        ...(choice === "keep_old" ? { reason: CONFLICT_REASON } : {}),
+        action: choice === "keep_old" || choice === "drop" ? "reject" : "approve",
+        ...(choice === "keep_old" || choice === "drop" ? { reason: CONFLICT_REASON } : {}),
         conflict: { id: rel.id, expected_revision: rel.revision, memory,
-          resolution: { keep_old: "keep_old", both: "keep_both", new: "replace_old" }[choice], reason: CONFLICT_REASON } };
+          resolution: { keep_old: "keep_old", drop: "keep_old", both: "keep_both", new: "replace_old" }[choice], reason: CONFLICT_REASON } };
       await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/review`, {
         method: "POST", body: JSON.stringify(window.ArkismMemoryEvaluation.reviewPayload(c.id, payload)) });
-      notice({ keep_old: "기존 기억을 그대로 뒀어요.", both: "둘 다 기억으로 남겼어요.", new: "새 내용으로 바꿨어요. 옛 기억은 이력에 남아요." }[choice]);
+      if (choice === "drop") {
+        // The review moved the old memory to a new revision; delete that one.
+        const old = await request(`/v1/memories/${encodeURIComponent(memory.id)}?${query()}`);
+        await request(`/v1/memories/${encodeURIComponent(old.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: old.revision }) });
+      }
+      notice({ keep_old: "기존 기억을 그대로 뒀어요.", drop: "고친 내용과 지금 기억을 모두 지웠어요.", both: "둘 다 기억으로 남겼어요.", new: "새 내용으로 바꿨어요. 옛 기억은 이력에 남아요." }[choice]);
       state.selected = null;
       await reloadMemories();
     });
@@ -4171,13 +4179,15 @@
     const canDecide = !!state.caps?.actions?.review_decide;
     if (c.conflict_id) {
       // 헷갈림: 지금 기억 → 새로 들어온 내용 → 이유 → 고르기.
-      detailHead(body, `${kindLabel(c.kind)} · 내용이 달라요`, "기존 기억과 내용이 달라요", "어느 쪽이 맞나요?");
+      const correction = isCorrection(c);
+      if (correction) detailHead(body, `${kindLabel(c.kind)} · 정정 대기`, "기존 기억을 고친 내용이 들어왔어요", "고를 때까지 에이전트는 지금 기억을 그대로 써요.");
+      else detailHead(body, `${kindLabel(c.kind)} · 내용이 달라요`, "기존 기억과 내용이 달라요", "어느 쪽이 맞나요?");
       if (instructionLike) body.append(actionCard("AI에게 명령하는 문장처럼 보여요. 붙여 넣은 글이나 웹 문서에서 섞여 들어온 문장일 수 있어요."));
       const cmp = section("지금 기억");
       const oldBox = el("div", "quote");
       oldBox.append(el("div", "meta", "불러오는 중…"));
       cmp.append(oldBox);
-      const fresh = section("새로 들어온 내용");
+      const fresh = section(correction ? "고친 내용" : "새로 들어온 내용");
       const newBox = el("div", "quote");
       const foot = el("footer", "");
       foot.append(`${ago(c.created_at)} · ${withAgent(c)}`);
@@ -4189,7 +4199,8 @@
         const act = el("div", "d-buttons");
         act.append(button("새 내용으로 바꾸기", "primary small", null, () => resolveConflict(c, "new")),
           button("지금 기억 유지", "small", null, () => resolveConflict(c, "keep_old")),
-          button("둘 다 맞아요", "ghost small", null, () => resolveConflict(c, "both")));
+          correction ? button("둘 다 지우기", "ghost small", null, () => { if (confirm("고친 내용과 지금 기억을 모두 지울까요?")) void resolveConflict(c, "drop"); })
+            : button("둘 다 맞아요", "ghost small", null, () => resolveConflict(c, "both")));
         parts.push(el("p", "meta", "선택한 내용과 기존 기억의 변경을 함께 저장해요. 응답을 못 받은 경우 같은 선택으로 다시 시도할 수 있어요."), act);
       }
       body.append(...parts, rules);
