@@ -632,7 +632,10 @@ func (s *Service) AdvancePrivacyDeletion(ctx context.Context, token, id string, 
 			report.BackupExpiryPending = pd.RetentionPolicyRef != retentionSynthetic && report.BackupOldestRetainedAt == nil
 			pd.Report = report
 			if !report.LiveAccessRemoved || !report.RuntimePurged || !report.DerivedPurged || !report.ArtifactsPurged {
+				// A re-purge must wait again: backups taken before it can still hold what it removes.
 				pd.State = privacyPartial
+				pd.Report.BackupOldestRetainedAt = nil
+				pd.Report.BackupExpiryPending = pd.RetentionPolicyRef != retentionSynthetic
 			} else if report.BackupExpiryPending {
 				pd.State, r.Status = privacyWaiting, JobStatusWaiting
 			} else {
@@ -680,12 +683,19 @@ func (s *Service) ExpirePrivacyBackups(ctx context.Context, token string, oldest
 	if err != nil {
 		return 0, err
 	}
-	for n, r := range rows {
+	// One row that cannot advance (a held overlap, a scope the token cannot act on) must not block the rest.
+	advanced := 0
+	var first error
+	for _, r := range rows {
 		if _, err := s.AdvancePrivacyDeletion(ctx, token, r.ID, PrivacyRevisionInput{Scope: r.Scope, ExpectedRevision: r.Revision, BackupOldestRetainedAt: &oldest}); err != nil {
-			return n, err
+			if first == nil {
+				first = err
+			}
+			continue
 		}
+		advanced++
 	}
-	return len(rows), nil
+	return advanced, first
 }
 
 func (s *Service) HoldPrivacyDeletion(ctx context.Context, token, id string, in PrivacyHoldInput) (PrivacyDeletionStatus, error) {

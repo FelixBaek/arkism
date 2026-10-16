@@ -437,3 +437,21 @@ func TestPostgresPrivacyBackupExpiryCompletesWaiting(t *testing.T) {
 		t.Fatalf("work left: %v", err)
 	}
 }
+
+// A verification that finds an incomplete purge drops old backup evidence, so the re-purge waits again.
+func TestPostgresPrivacyPartialDropsBackupEvidence(t *testing.T) {
+	p := isolatedPostgres(t)
+	auth := &fakeAuth{actors: map[string]fakeActor{"worker": actor("worker", "service", false, "purge")}}
+	svc := &Service{Repo: p, Auth: auth}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	scope := Scope{WorkspaceID: "w", ProjectID: "p", UserID: "u", AgentID: "a"}
+	pd := &PrivacyDeletion{State: privacyVerifying, TargetType: "source_event", RequestHash: ContentHash("x"), LegalHoldStatus: privacyHoldNone,
+		RetentionPolicyRef: retentionExternal, Report: PrivacyPurgeReport{RuntimePurged: false, BackupOldestRetainedAt: &now}}
+	if err := p.Insert(testCtx, colJobs, Record{ID: "privacy-deletion-partial", Scope: scope, Kind: privacyDeletionKind, Status: JobStatusPending, Revision: 1, Attempts: 1, CreatedAt: now, UpdatedAt: now, PrivacyDeletion: pd}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := svc.AdvancePrivacyDeletion(testCtx, "worker", "privacy-deletion-partial", PrivacyRevisionInput{Scope: scope, ExpectedRevision: 1})
+	if r := st.PrivacyDeletion.Report; err != nil || st.PrivacyDeletion.State != privacyPartial || r.BackupOldestRetainedAt != nil || !r.BackupExpiryPending {
+		t.Fatalf("partial = %+v %v", st, err)
+	}
+}

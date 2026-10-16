@@ -222,11 +222,8 @@ func run() error {
 		op, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 		advanced, err := svc.ExpirePrivacyBackups(op, os.Getenv("MEMORY_WORKER_TOKEN"), oldest)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("{\"advanced\":%d}\n", advanced)
-		return nil
+		fmt.Printf("{\"advanced\":%d}\n", advanced) // rows past a failed one still advanced
+		return err
 	}
 	if *collectBlobs || *adoptBlobs {
 		auth, err := configuredAuthorizer(repo, standalone)
