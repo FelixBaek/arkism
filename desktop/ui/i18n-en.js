@@ -4503,6 +4503,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 // memory harness: 기억 맥락·평가, 모델 예산·생성 모델, 스킬 시험 상태 (memory-context.js, memory-evaluation.js, model-budget.js, model-generation.js, skill-trial-status.js)
 Object.assign(window.ArkismI18nEN.strings, {
+  "고친 내용은 버렸지만 지금 기억은 지우지 못했어요. 기억 목록에서 직접 지워 주세요.": "The correction was discarded, but the current memory could not be deleted. Delete it from the memory list.",
   "선택한 내용과 기존 기억의 변경을 함께 저장해요. 응답을 못 받은 경우 같은 선택으로 다시 시도할 수 있어요.": "Your choice and the change to the existing memory are saved together. If no response comes back, you can retry with the same choice.",
   "개인": "Personal",
   "업무": "Work",

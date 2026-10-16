@@ -1733,8 +1733,16 @@
         method: "POST", body: JSON.stringify(window.ArkismMemoryEvaluation.reviewPayload(c.id, payload)) });
       if (choice === "drop") {
         // The review moved the old memory to a new revision; delete that one.
-        const old = await request(`/v1/memories/${encodeURIComponent(memory.id)}?${query()}`);
-        await request(`/v1/memories/${encodeURIComponent(old.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: old.revision }) });
+        // The review already committed, so a failed delete must say the old memory is still there.
+        try {
+          const old = await request(`/v1/memories/${encodeURIComponent(memory.id)}?${query()}`);
+          await request(`/v1/memories/${encodeURIComponent(old.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: old.revision }) });
+        } catch {
+          notice("고친 내용은 버렸지만 지금 기억은 지우지 못했어요. 기억 목록에서 직접 지워 주세요.");
+          state.selected = null;
+          await reloadMemories();
+          return;
+        }
       }
       notice({ keep_old: "기존 기억을 그대로 뒀어요.", drop: "고친 내용과 지금 기억을 모두 지웠어요.", both: "둘 다 기억으로 남겼어요.", new: "새 내용으로 바꿨어요. 옛 기억은 이력에 남아요." }[choice]);
       state.selected = null;
