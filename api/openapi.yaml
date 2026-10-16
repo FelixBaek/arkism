@@ -16810,6 +16810,11 @@
           "id": {
             "type": "string"
           },
+          "agent_id": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "The executing agent when the trace is stored in the shared (agent-less) user scope. Required when scope.agent_id is empty; when both are set they must match. The run is recorded with agent_id = scope.agent_id or this value."
+          },
           "task_type": {
             "type": "string"
           },
