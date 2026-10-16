@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/host"
 )
 
 // standingRow is a GET /v1/memories row as the API sends it (no collection, created_at RFC 3339).
@@ -25,7 +27,7 @@ func TestStandingOrderUserThenOldestThenID(t *testing.T) {
 			standingRow("ffff0000000000000000000000000000", "user", "2026-10-15T01:00:00Z", "새 선호"),
 			standingRow("0000ffff000000000000000000000000", "procedural", "2026-09-24T10:39:43.513Z", "같은 시각"), // tie: id decides
 			standingRow("1111000000000000000000000000000a", "procedural", "", "시각 없음"),                         // missing sorts first
-			standingRow("2222000000000000000000000000000b", "user", "2026-09-24T10:39:43.5Z", "옛 선호"),             // shorter fraction parses
+			standingRow("2222000000000000000000000000000b", "user", "2026-09-24T10:39:43.5Z", "옛 선호"),          // shorter fraction parses
 		}
 	}
 	want := []string{"2222000000000000000000000000000b", "ffff0000000000000000000000000000", "1111000000000000000000000000000a",
@@ -75,10 +77,11 @@ func TestPromptRecallSkipsEarlierTurnsUnlessRevised(t *testing.T) {
 	search = func(string, int, float64) ([]any, error) { return hits, nil }
 	turn := func(sid string) string {
 		t.Helper()
-		p, err := promptParts("기억 승인 권한을 다시 설명해 줘", sid, "")
+		p, revs, err := promptParts("기억 승인 권한을 다시 설명해 줘", sid, "")
 		if err != nil {
 			t.Fatal(err)
 		}
+		markShown(sid, p.Full, revs)
 		return p.Full
 	}
 	if first := turn("s1"); strings.Count(first, "\n- [") != 2 {
@@ -101,6 +104,16 @@ func TestPromptRecallSkipsEarlierTurnsUnlessRevised(t *testing.T) {
 	if got := sessionStore().Delivered("s1"); !reflect.DeepEqual(got, map[string]int64{"c8b788c964a0350e97d8635111de6824": 3, "d9243bd5ef20da4ea2369e120fb20962": 1}) {
 		t.Fatal(got)
 	}
+	// The budget stub carries no memory, so nothing is recorded; compaction forgets what was shown.
+	_, revs, _ := promptParts("기억 승인 권한을 다시 설명해 줘", "s3", "")
+	markShown("s3", host.MemoryOmitted, revs)
+	if sessionStore().Delivered("s3")["d9243bd5ef20da4ea2369e120fb20962"] != 0 || turn("s3") == "" {
+		t.Fatal("stub output recorded as shown")
+	}
+	sessionStore().ResetDelivered("s1")
+	if again := turn("s1"); strings.Count(again, "\n- [") != 2 {
+		t.Fatal("compaction did not bring the memories back", again)
+	}
 	ledgers, _ := filepath.Glob(filepath.Join(capState, sessionLedgerName, "*.jsonl"))
 	rows := 0
 	for _, l := range ledgers {
@@ -111,7 +124,7 @@ func TestPromptRecallSkipsEarlierTurnsUnlessRevised(t *testing.T) {
 			}
 		}
 	}
-	if rows != 4 {
+	if rows != 5 {
 		t.Fatal("ledger rows for s1", rows)
 	}
 }

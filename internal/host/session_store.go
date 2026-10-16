@@ -154,6 +154,13 @@ func (s SessionStore) MarkDelivered(sid string, revs map[string]int64) error {
 	return errors.Join(err, f.Close())
 }
 
+// ResetDelivered forgets what per-turn recall showed, e.g. after the transcript was compacted.
+func (s SessionStore) ResetDelivered(sid string) {
+	if sid != "" {
+		os.Remove(filepath.Join(s.dir(sid), "delivered.txt"))
+	}
+}
+
 // Expire drops a session's state once its stable block is older than ttl, and other sessions'
 // state older than a week. It never touches a younger session.
 func (s SessionStore) Expire(sid string, ttl time.Duration, now time.Time) {

@@ -73,3 +73,11 @@ test("golden: the same SessionStart text the Go hook builds (internal/host/captu
   assert.deepEqual(p.included.map((i) => i.id), g.included);
   assert.ok(p.cut.length > 0, "the fixture must exercise the budget");
 });
+
+test("sessionPreview orders created_at below a millisecond like Go", () => {
+  const items = [
+    { id: "a", kind: "user", text: "늦은 규칙", created_at: "2026-10-01T00:00:00.000200Z", tags: [] },
+    { id: "z", kind: "user", text: "이른 규칙", created_at: "2026-10-01T00:00:00.0001Z", tags: [] },
+  ];
+  assert.deepEqual(core.sessionPreview(items, "").included.map((i) => i.id), ["z", "a"]);
+});
