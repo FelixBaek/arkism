@@ -193,8 +193,10 @@ func TestAnOperatorBaselineGoesToSkillSpectorAndRescansWhenAdded(t *testing.T) {
 
 func TestASymlinkedSkillIsScannedAtItsRealPath(t *testing.T) {
 	root := swapChecks(t)
-	real := filepath.Join(root, "repo/linked")
+	real := filepath.Join(root, "repo/linked-impl")
 	write(t, filepath.Join(real, "SKILL.md"), "---\nname: linked\n---\n")
+	b := filepath.Join(checksState, "skill-baselines", "linked.yaml") // named after the link, like the cache entry
+	write(t, b, "suppressions: []\n")
 	link := filepath.Join(root, ".claude/skills/linked")
 	if err := os.Symlink(real, link); err != nil {
 		t.Fatal(err)
@@ -202,7 +204,7 @@ func TestASymlinkedSkillIsScannedAtItsRealPath(t *testing.T) {
 	spectorBin = executable(t, filepath.Join(root, "skillspector"), "#!/bin/sh\necho \"$@\" > \"$(dirname \"$0\")/spector.args\"\n"+strings.TrimPrefix(fakeSpector, "#!/bin/sh\n"))
 	entry := check("claude_code", link, "x")
 	args, _ := os.ReadFile(filepath.Join(root, "spector.args"))
-	if want, _ := filepath.EvalSymlinks(real); !strings.HasPrefix(string(args), "scan "+want+" ") || has(entry, "error") || objGet(entry, "path") != "~/.claude/skills/linked" {
+	if want, _ := filepath.EvalSymlinks(real); !strings.HasPrefix(string(args), "scan "+want+" ") || !strings.Contains(string(args), "--baseline "+b) || has(entry, "error") || objGet(entry, "path") != "~/.claude/skills/linked" {
 		t.Fatal(string(args), entry)
 	}
 }
@@ -212,11 +214,11 @@ func TestAReviewedSkillWithNoFindingsLeftIsSafe(t *testing.T) {
 	folder := filepath.Join(root, ".claude/skills/pdf-tools")
 	partial := "#!/bin/sh\nwhile [ \"$1\" != \"--output\" ]; do shift; done\necho '{\"risk_assessment\": {\"score\": 0, \"recommendation\": \"CAUTION\"}, \"issues\": []}' > \"$2\"\n"
 	spectorBin = executable(t, filepath.Join(root, "skillspector"), partial)
-	if res, _ := security(folder); res.verdict != "CAUTION" {
+	if res, _ := security(folder, folder); res.verdict != "CAUTION" {
 		t.Fatal("partial scan without a baseline must stay CAUTION", res)
 	}
 	write(t, filepath.Join(checksState, "skill-baselines", "pdf-tools.yaml"), "suppressions: []\n")
-	if res, _ := security(folder); res.verdict != "SAFE" {
+	if res, _ := security(folder, folder); res.verdict != "SAFE" {
 		t.Fatal(res)
 	}
 }
@@ -243,11 +245,11 @@ func TestCiscoBaselineDropsOnlyAcceptedFindings(t *testing.T) {
 	if after, _ := checkDigest(folder); after == before {
 		t.Fatal("a new Cisco baseline must rescan")
 	}
-	if res, _ := ciscoSecurity(folder); res.verdict != "CAUTION" || res.n != 1 {
+	if res, _ := ciscoSecurity(folder, folder); res.verdict != "CAUTION" || res.n != 1 {
 		t.Fatal("a finding not in the baseline still counts", res)
 	}
 	write(t, filepath.Join(checksState, "skill-baselines", "pdf-tools.cisco.txt"), "A1\nB2\n")
-	if res, _ := ciscoSecurity(folder); res.verdict != "SAFE" || res.n != 0 {
+	if res, _ := ciscoSecurity(folder, folder); res.verdict != "SAFE" || res.n != 0 {
 		t.Fatal(res)
 	}
 }

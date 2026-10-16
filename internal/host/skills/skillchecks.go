@@ -243,14 +243,15 @@ type securityResult struct {
 }
 
 // security is (risk, verdict, finding count, top three category · pattern · severity) from SkillSpector.
-func security(folder string) (securityResult, error) {
+// It scans dir; the baseline is looked up by folder's name, the one checkDigest and the cache use.
+func security(dir, folder string) (securityResult, error) {
 	tmp, err := os.MkdirTemp("", "arkism-ss-")
 	if err != nil {
 		return securityResult{}, err
 	}
 	defer os.RemoveAll(tmp)
 	report := filepath.Join(tmp, "report.json")
-	argv := []string{spectorBin, "scan", folder, "--no-llm", "--format", "json", "--output", report}
+	argv := []string{spectorBin, "scan", dir, "--no-llm", "--format", "json", "--output", report}
 	if b := baselineFor(folder); b != "" {
 		argv = append(argv, "--baseline", b)
 	}
@@ -298,14 +299,14 @@ func security(folder string) (securityResult, error) {
 
 // ciscoSecurity maps Cisco Skill Scanner's worst severity onto the same verdicts:
 // CRITICAL/HIGH → DO_NOT_INSTALL, MEDIUM → CAUTION, otherwise SAFE.
-func ciscoSecurity(folder string) (securityResult, error) {
+func ciscoSecurity(dir, folder string) (securityResult, error) {
 	tmp, err := os.MkdirTemp("", "arkism-cs-")
 	if err != nil {
 		return securityResult{}, err
 	}
 	defer os.RemoveAll(tmp)
 	report := filepath.Join(tmp, "report.json")
-	argv := []string{ciscoBin, "scan", folder, "--format", "json", "--output", report, "--policy", "balanced"}
+	argv := []string{ciscoBin, "scan", dir, "--format", "json", "--output", report, "--policy", "balanced"}
 	var env []string
 	timeout := 180 * time.Second
 	if ciscoKeyFile != "" {
@@ -486,12 +487,12 @@ func check(agent, folder, digest string) host.Obj {
 	broken := false
 	for _, sc := range []struct {
 		bin, name string
-		run       func(string) (securityResult, error)
+		run       func(dir, folder string) (securityResult, error)
 	}{{spectorBin, "보안", security}, {ciscoBin, "Cisco", ciscoSecurity}} {
 		if !toolInstalled(sc.bin) {
 			continue
 		}
-		if res, err := sc.run(real); err != nil {
+		if res, err := sc.run(real, folder); err != nil {
 			errs = append(errs, sc.name+": "+pyErrName(err))
 			broken = true
 		} else {
