@@ -68,7 +68,25 @@ var (
 	// Only a message written inline is in the trace; one from a file, an editor, -C or --fill is not.
 	inlineCommitRE = regexp.MustCompile(`(^|\s)(-[a-zA-Z]*m|--message)`)
 	inlinePRRE     = regexp.MustCompile(`(^|\s)(-b|--body)(\s|=)`)
+	commitSegRE    = regexp.MustCompile(`\bgit\b.*\bcommit\b`)
+	prSegRE        = regexp.MustCompile(`\bgh\s+pr\s+(create|edit)\b`)
+	cmdSplitRE     = regexp.MustCompile(`&&|\|\||[;|\n]`)
 )
+
+// inline reports whether every commit or PR command in s carries its message inline: a flag
+// from another command in the same shell line does not count.
+func inline(s string, seg, flag *regexp.Regexp) bool {
+	found := false
+	for _, part := range cmdSplitRE.Split(s, -1) {
+		if seg.MatchString(part) {
+			if !flag.MatchString(part) {
+				return false
+			}
+			found = true
+		}
+	}
+	return found
+}
 
 func main() {
 	if len(os.Args) != 2 {
@@ -178,7 +196,7 @@ func judge(r Rule, b behavior) (observed, passed bool) {
 			for _, s := range texts {
 				observed = true
 				passed = passed && !strings.Contains(normalize(s), needle)
-				unseen = unseen || a == "commits" && !inlineCommitRE.MatchString(s) || a == "pull_requests" && !inlinePRRE.MatchString(s)
+				unseen = unseen || a == "commits" && !inline(s, commitSegRE, inlineCommitRE) || a == "pull_requests" && !inline(s, prSegRE, inlinePRRE)
 			}
 		}
 	case "language":
