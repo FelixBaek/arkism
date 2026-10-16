@@ -45,7 +45,7 @@ func TestStandingOrderUserThenOldestThenID(t *testing.T) {
 // When the char limit cuts, the newest how-to rule goes, not one that sorts late by id.
 func TestSessionIndexCutsNewestRuleFirst(t *testing.T) {
 	capFake(t)
-	old := standingRow("ffff6394712964a139f82bfc9edd59e8", "procedural", "2026-09-24T10:39:43.513Z", "PR 본문에 'Generated with Claude Code' 문구를 넣지 않는다.")
+	old := standingRow("ffff6394712964a139f82bfc9edd59e8", "procedural", "2026-09-24T10:39:43.513Z", "PR 본문에 자동 생성 표시 문구를 넣지 않는다.")
 	newer := standingRow("0000597c4af56e9d17534b150a09436c", "procedural", "2026-10-13T20:22:44.942Z", "오래된 branch 자체를 계속 유지하지 않는다.")
 	pref := standingRow("8888000000000000000000000000000c", "user", "2026-10-15T01:00:00Z", "보고는 한국어로 짧게 한다.")
 	capGet = func(path string, _ time.Duration) (map[string]any, error) {
