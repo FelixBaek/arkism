@@ -256,7 +256,11 @@ func personaRun(a map[string]any, runner runFn, work string) (map[string]any, er
 	if persona == "" {
 		persona = assistPersona
 	}
-	persona = strings.TrimSpace(persona + "\n\n" + assistGuide[pyStr(a["kind"])])
+	guide := assistGuide[pyStr(a["kind"])]
+	if a["lang"] == "en" { // the app is set to English: override every "Korean" in the persona, guide and prompt
+		guide += "\n\nThe owner reads English: write every text they read in English, even where the instructions say Korean."
+	}
+	persona = strings.TrimSpace(persona + "\n\n" + guide)
 	model := pyStr(a["model"])
 	if !truthy(a["model"]) || !modelID.MatchString(model) {
 		model = assistModel()
