@@ -28,7 +28,7 @@ func TestMissingPaths(t *testing.T) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 	t.Setenv("HOME", sub)
-	if got, want := MissingPaths(sub, "~/local.txt 있고 ~/gone.md 없다. path/filepath.Join 과 os/exec.Cmd 는 Go 이름. docs/Guide.PDF 도 없다."), []string{"~/gone.md", "docs/Guide.PDF"}; !slices.Equal(got, want) {
+	if got, want := MissingPaths(sub, "~/local.txt 있고 ~/gone.md 없다. path/filepath.Join 과 os/exec.Cmd, net/url.URL 은 Go 이름. docs/Guide.PDF 도 없다."), []string{"~/gone.md", "docs/Guide.PDF"}; !slices.Equal(got, want) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 	if got := MissingPaths(sub, "경로 없음"); got != nil {
