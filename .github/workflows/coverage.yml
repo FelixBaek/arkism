@@ -27,13 +27,15 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # Self-hosted runners keep the Go build and module caches in their own HOME.
+          cache: ${{ runner.environment == 'github-hosted' }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
       - name: Postgres for tests
         run: tools/ci_postgres.sh
       - name: Go coverage
-        run: go test -covermode=atomic -coverprofile=go-coverage.out ./...
+        run: python3 tools/ci_go_test.py --coverprofile go-coverage.out
       - name: UI coverage
         run: >
           node --test --experimental-test-coverage
