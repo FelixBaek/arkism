@@ -164,8 +164,8 @@ func TestWorkRelatedCombinedBudgetDropsSupplementWhole(t *testing.T) {
 // From test_arkism_context: a long prompt-search memory keeps its retrieval id in the index.
 func TestContextRequestMemoryIndexKeepsLongTextRetrievalID(t *testing.T) {
 	capFake(t)
-	search = func(string, string, int, float64) ([]any, error) {
-		return []any{map[string]any{"kind": "user", "id": "memory-id", "text": strings.Repeat("긴 기억 ", 4000)}}, nil
+	search = func(string, string, int, float64) ([]any, bool, error) {
+		return []any{map[string]any{"kind": "user", "id": "memory-id", "text": strings.Repeat("긴 기억 ", 4000)}}, true, nil
 	}
 	result, err := promptContext("현재 작업 관련 내용을 찾아줘", "s", "")
 	if err != nil || !strings.Contains(result, "memory-id") || !strings.Contains(result, "recall") || host.Len(result) >= 1000 {

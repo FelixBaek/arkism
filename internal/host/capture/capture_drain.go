@@ -379,7 +379,7 @@ func process(job map[string]any, persist func() error) (err error) {
 			} else if correctionRE.MatchString(userText) {
 				eventType = "user_corrected_fact"
 			}
-			found, err := search(head(userText, 2000), host.ProjectKey(str(or(job["cwd"], ""))), 5, 60)
+			found, _, err := search(head(userText, 2000), host.ProjectKey(str(or(job["cwd"], ""))), 5, 60)
 			if err != nil {
 				return err
 			}
