@@ -363,6 +363,8 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 				} else if errors.Is(err, errSourceOtherProvenance) {
 					item.Status, item.Reason = "merged", "duplicate_source"
 					return item, nil
+				} else if errors.Is(err, errSourceDeleted) {
+					return item, errPreparedSourceGone // final not_found: retrying cannot bring the source back
 				}
 			}
 			if err != nil {

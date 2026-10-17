@@ -346,8 +346,11 @@ func TestCaptureSameTextAsDeletedSourceIsNotMerged(t *testing.T) {
 	if err := f.svc.Delete(testCtx, f.human, "sources", src.ID, ChangeInput{Scope: scopeA, ExpectedRevision: src.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	got := f.capture(f.human, captureInput(scopeA, "after-deleted-source", explicit(text)))[0]
-	if got.Status == "merged" || got.Status == "candidate" {
-		t.Fatalf("deleted source reported as a live duplicate: %+v", got)
+	in := captureInput(scopeA, "after-deleted-source", explicit(text))
+	if got := f.capture(f.human, in)[0]; got.Status != "rejected" || got.Reason != "not_found" {
+		t.Fatalf("same text as a deleted source: %+v", got)
+	}
+	if again := f.capture(f.human, in)[0]; again.Reason != "duplicate_event" {
+		t.Fatalf("event kept retrying: %+v", again)
 	}
 }
