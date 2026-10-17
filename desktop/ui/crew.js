@@ -600,6 +600,11 @@ window.ArkismCrew = (ctx) => {
   }
   // Nodes from the AI carry no place on the canvas: lay them out left to right by distance from the start.
   function layoutGraph(g) {
+    // The server keeps node settings as text: numbers and lists from the AI become strings, unknown edge ends are dropped.
+    g.nodes = g.nodes.filter((n) => n?.id && NODES[n.type]).slice(0, 100).map((n) => ({ id: String(n.id).slice(0, 40), type: n.type, title: String(n.title || NODES[n.type].label).slice(0, 80),
+      config: Object.fromEntries(Object.entries(n.config || {}).slice(0, 20).map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)])) }));
+    const ids = new Set(g.nodes.map((n) => n.id));
+    g.edges = g.edges.filter((e) => ids.has(e.from) && ids.has(e.to) && e.from !== e.to).map(({ from, to, port, max }) => ({ from, to, ...(port ? { port: String(port).slice(0, 20) } : {}), ...(max ? { max: Math.min(10, Number(max) || 0) } : {}) }));
     const depth = {};
     const roots = g.nodes.filter((n) => !g.edges.some((e) => e.to === n.id)).map((n) => n.id);
     const queue = (roots.length ? roots : [g.nodes[0]?.id]).filter(Boolean).map((id) => [id, 0]);

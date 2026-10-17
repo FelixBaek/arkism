@@ -34,7 +34,7 @@ var assistGuide = map[string]string{
 	"explain":   "쉬운 한국어로 짧게 답한다. 답만 쓴다.",
 	"review": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이): {\"suggestions\":[...]}. 그래프에 실제로 있는 노드 id만 쓴다. 고칠 것이 없으면 빈 배열. " + crewCatalog,
 	"build": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이). 아직 무엇을 만들지 모르면 {\"ask\":\"짧은 질문 하나\"}. 충분히 알면 " +
-		"{\"name\",\"role\",\"graph\":{\"nodes\":[{id,type,title,config}],\"edges\":[{from,to,port}]}}. 시작은 start 노드 하나, 끝은 end. 사용자 저장소·채널 이름은 들은 그대로 쓴다. " +
+		"{\"name\",\"role\",\"graph\":{\"nodes\":[{id,type,title,config}],\"edges\":[{from,to,port}]}}. config 값은 모두 문자열. 시작은 start 노드 하나, 끝은 end. 사용자 저장소·채널 이름은 들은 그대로 쓴다. " +
 		"if로 판정되는 칸은 code, 판단이 필요한 칸만 ai. " + crewCatalog,
 	"title": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이): {\"name\":\"30자 이내 한국어 제목\",\"role\":\"한 줄 설명\"}.",
 	"draft":     "SKILL.md 전체만 쓴다(설명·코드 블록 표시 없이). 맨 위는 --- 로 감싼 name·description, 그 아래 번호 목록 단계 5개 이하.",
