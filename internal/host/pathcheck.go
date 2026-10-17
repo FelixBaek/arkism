@@ -10,8 +10,8 @@ import (
 
 var (
 	// shortcut: only paths with a file extension count (dir names and extensionless files are skipped), widen if missed paths show up.
-	// a lowercase extension keeps Go qualified names (path/filepath.Join) out; ~/ alone may lead a file.
-	memoryPathPattern = regexp.MustCompile(`(?:~/(?:[\w.-]+/)*|(?:\.{1,2}/|/)?(?:[\w.-]+/)+)[\w.-]*\.[a-z][A-Za-z0-9]{0,4}\b`)
+	// a lowercase or all-caps extension (x.go, Guide.PDF) keeps Go qualified names (path/filepath.Join) out; ~/ alone may lead a file.
+	memoryPathPattern = regexp.MustCompile(`(?:~/(?:[\w.-]+/)*|(?:\.{1,2}/|/)?(?:[\w.-]+/)+)[\w.-]*\.(?:[a-z][A-Za-z0-9]{0,4}|[A-Z][A-Z0-9]{0,4})\b`)
 	urlPattern        = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://\S+`)
 )
 
