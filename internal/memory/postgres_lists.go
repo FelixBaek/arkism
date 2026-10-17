@@ -632,11 +632,13 @@ func (p *Postgres) MemoryOutcomeSessionCounts(ctx context.Context, in MemoryOutc
 		return "jsonb_array_elements(CASE WHEN jsonb_typeof(" + v + ")='array' THEN " + v + " ELSE '[]'::jsonb END)"
 	}
 	rows, err := p.q().Query(ctx, `WITH o AS (SELECT rel->>'id' AS trace_id, doc->'target'->>'id' AS memory_id, (doc->>'passed')::boolean AS passed FROM memory_records, `+arr("doc->'relations'")+` rel WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND rel->>'collection'='execution_traces' AND (`+w+`)),
-s AS (SELECT trace_id, bool_and(passed) AS ok, bool_or(memory_id=$6) AS judged FROM o GROUP BY trace_id)
-SELECT s.judged OR EXISTS (SELECT 1 FROM memory_records tr, `+arr("tr.doc->'relations'")+` run, memory_records u, `+arr("u.doc->'usage'->'items'")+` it
- WHERE tr.collection='execution_traces' AND tr`+fmt.Sprintf(scoped, "tr")+` AND tr.id=s.trace_id AND run->>'collection'='agent_runs'
- AND u.collection='jobs' AND u`+fmt.Sprintf(scoped, "u")+` AND u.kind='context_usage' AND u.status='done' AND u.doc->'usage'->'run'->>'collection'='agent_runs' AND u.doc->'usage'->'run'->>'id'=run->>'id'
- AND it->'memory'->>'collection'='memories' AND it->'memory'->>'id'=$6) AS used, count(*), count(*) FILTER (WHERE s.ok) FROM s GROUP BY 1 ORDER BY 1`, params...)
+s AS (SELECT trace_id, bool_and(passed) AS ok, bool_or(memory_id=$6) AS judged FROM o GROUP BY trace_id),
+ur AS (SELECT DISTINCT u.doc->'usage'->'run'->>'id' AS run_id FROM memory_records u, `+arr("u.doc->'usage'->'items'")+` it
+ WHERE u.collection='jobs' AND u`+fmt.Sprintf(scoped, "u")+` AND u.kind='context_usage' AND u.status='done' AND u.doc->'usage'->'run'->>'collection'='agent_runs'
+ AND it->'memory'->>'collection'='memories' AND it->'memory'->>'id'=$6),
+ut AS (SELECT DISTINCT tr.id FROM memory_records tr, `+arr("tr.doc->'relations'")+` run, ur
+ WHERE tr.collection='execution_traces' AND tr`+fmt.Sprintf(scoped, "tr")+` AND run->>'collection'='agent_runs' AND run->>'id'=ur.run_id)
+SELECT s.judged OR ut.id IS NOT NULL AS used, count(*), count(*) FILTER (WHERE s.ok) FROM s LEFT JOIN ut ON ut.id=s.trace_id GROUP BY 1 ORDER BY 1`, params...)
 	if err != nil {
 		return nil, pgErr(err)
 	}
