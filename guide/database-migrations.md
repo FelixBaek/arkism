@@ -31,7 +31,8 @@ advisory lock. Lock waits are limited to five seconds; the whole schema operatio
 is limited to two minutes and also respects the caller's earlier deadline. A
 timeout or statement failure rolls back **all** pending DDL and history rows in
 that attempt. Resolve the cause and retry with the same binary. The tool reports
-the failed phase/version without printing SQL, database credentials or data.
+the failed phase/version and a safe SQLSTATE code for failed migration statements
+or lock acquisition, without printing SQL, database credentials or data.
 
 Application sessions may read history but cannot insert, update, delete or
 truncate it. Missing entries, altered checksums/names, gaps and unknown newer

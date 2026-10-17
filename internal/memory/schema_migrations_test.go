@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -26,6 +28,29 @@ func TestSchemaMigrationChecksumAcrossPlatforms(t *testing.T) {
 	changed := schemaMigration{1, "baseline", "SELECT 1;\nSELECT 3;\n"}
 	if lf.checksum() != crlf.checksum() || lf.checksum() == changed.checksum() {
 		t.Fatal("checksum ignores content changes or depends on checkout line endings")
+	}
+}
+
+func TestSchemaDatabaseFailureKeepsOnlySQLState(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		code string
+	}{
+		{"postgres", &pgconn.PgError{Code: "42501", Message: "sensitive-statement", Detail: "sensitive-value"}, "42501"},
+		{"wrapped", fmt.Errorf("sensitive-connection: %w", &pgconn.PgError{Code: "55P03", Where: "sensitive-query"}), "55P03"},
+		{"non-postgres", errors.New("sensitive-connection"), "unknown"},
+		{"nil-postgres", (*pgconn.PgError)(nil), "unknown"},
+		{"invalid-code", &pgconn.PgError{Code: "sensitive-value"}, "unknown"},
+		{"invalid-characters", &pgconn.PgError{Code: "42\n01"}, "unknown"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := schemaDatabaseFailure("migration 2 failed", test.err)
+			want := "database schema migration 2 failed (SQLSTATE " + test.code + "): " + ErrUnavailable.Error()
+			if !errors.Is(err, ErrUnavailable) || err.Error() != want {
+				t.Fatal("migration diagnostic exposes more than its safe code")
+			}
+		})
 	}
 }
 
@@ -105,7 +130,8 @@ func TestSchemaMigrationsAdoptLegacyPreservesDataAndPausedGate(t *testing.T) {
 	}
 	identity := bytes.Repeat([]byte{23}, 32)
 	gate := []byte(`{"version":1,"state":"open","generation":"` + strings.Repeat("a", 64) + `","changed_at":"2026-10-18T00:00:00Z"}`)
-	schemaExec(t, p, string(legacy), pgx.QueryExecModeSimpleProtocol, identity, gate)
+	schemaExec(t, p, string(legacy))
+	schemaExec(t, p, `INSERT INTO memory_storage_metadata(key,value) VALUES('storage_identity',$1),('recovery_write_gate',$2)`, identity, gate)
 	row := Record{ID: "before-upgrade", Scope: scopeA, Status: statusActive, Kind: "decision", Revision: 7, Text: "기존 승인된 자료는 그대로 보존한다", UpdatedAt: time.Now().UTC()}
 	if err := p.Insert(ctx, "memories", row); err != nil {
 		t.Fatal(err)
@@ -146,8 +172,8 @@ func TestSchemaMigrationsRollbackAndRetry(t *testing.T) {
 	ctx := context.Background()
 	before := schemaSnapshot(t, p)
 	failed := append(schemaMigrations(), schemaMigration{2, "atomic-change", `CREATE TABLE arkism.migration_probe(id integer); INSERT INTO arkism.migration_probe VALUES(1); SELECT 1/0;`})
-	if p.migrateSchema(ctx, failed) == nil {
-		t.Fatal("failed migration accepted")
+	if err := p.migrateSchema(ctx, failed); !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "SQLSTATE 22012") {
+		t.Fatal("failed migration did not retain safe diagnostic code", err)
 	}
 	var exists bool
 	if err := p.pool.QueryRow(ctx, `SELECT to_regclass('arkism.migration_probe') IS NOT NULL`).Scan(&exists); err != nil || exists {

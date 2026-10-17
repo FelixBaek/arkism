@@ -7,11 +7,13 @@ import (
 	_ "embed" // Required for the embedded, immutable SQL migration assets.
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Transaction-scoped and database-local: no lock survives a rollback or lost connection.
@@ -40,6 +42,24 @@ func (m schemaMigration) checksum() string {
 func schemaFailure(message string) error {
 	// Never return SQL, a DSN, data, credentials or raw database diagnostics.
 	return fmt.Errorf("database schema %s: %w", message, ErrUnavailable)
+}
+
+func schemaDatabaseFailure(message string, err error) error {
+	code := "unknown"
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr != nil && len(pgErr.Code) == 5 {
+		valid := true
+		for _, c := range pgErr.Code {
+			if (c < '0' || c > '9') && (c < 'A' || c > 'Z') {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			code = pgErr.Code
+		}
+	}
+	return schemaFailure(fmt.Sprintf("%s (SQLSTATE %s)", message, code))
 }
 
 // Init applies only unapplied, immutable migrations. Search backfill is a separate,
@@ -122,7 +142,7 @@ FROM pg_roles r WHERE rolname=current_user`).Scan(&allowed)
 		return schemaFailure("configuration unavailable")
 	}
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, schemaMigrationLock); err != nil {
-		return schemaFailure("migration lock unavailable")
+		return schemaDatabaseFailure("migration lock unavailable", err)
 	}
 	return nil
 }
@@ -190,7 +210,7 @@ func applySchemaMigration(ctx context.Context, tx pgx.Tx, migration schemaMigrat
 		args = []any{pgx.QueryExecModeSimpleProtocol, identity[:], data}
 	}
 	if _, err := tx.Exec(ctx, migration.sql, args...); err != nil {
-		return schemaFailure(fmt.Sprintf("migration %d failed", migration.version))
+		return schemaDatabaseFailure(fmt.Sprintf("migration %d failed", migration.version), err)
 	}
 	return nil
 }
