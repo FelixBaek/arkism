@@ -1033,7 +1033,6 @@
     const v = views[state.view];
     $("#title").textContent = typeof v.title === "function" ? v.title() : v.title;
     $("#title-count").textContent = typeof v.count === "function" && !state.loading ? v.count() : "";
-    $("#subtitle").textContent = state.loading ? "불러오는 중…" : v.sub();
     $(".main > .page-head .page-back")?.remove(); // a screen that has a ← link draws it again
     $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); // TOOLS screens add them again via headExtras()
     $("#app").classList.toggle("v4-connect", ["tools", "git", "reviews"].includes(state.view));
@@ -1056,6 +1055,7 @@
     $("#app").classList.toggle("skills-mode", state.view === "skills");
     $("#app").classList.toggle("gallery-mode", ["images", "design", "tokens"].includes(state.view));
     $("#app").classList.toggle("home-mode", state.view === "todo");
+    $("#app").classList.toggle("overview-mode", state.view === "overview");
     table.className = { todo: "todo-wrap", images: "card-grid", crew: "card-grid crew-grid", settings: "page-wrap", design: "page-wrap", tokens: "page-wrap", graph: "page-wrap" }[state.view] || "table";
     renderHeadActions();
     renderChangeBar();
@@ -4654,7 +4654,8 @@
   const git = window.ArkismGit({ state, $, el, button, icon, tauri, ago, notice, go, headExtras, codegraph,
     openReview: (key) => { go("reviews"); state.selected = key; markSelected(); reviews.detail(); openDetail(); } });
   const knowledge = window.ArkismKnowledge({ state, $, el, button, render, request, query, ago, detailShell, headExtras, confirmPop }); // TOOLS › 지식 (knowledge.js)
-  Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views);
+  const overview = window.ArkismOverview({ state, $, el, button, request, query, ago, go, render }); // MEMORY › 개요 (overview.js)
+  Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request, query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel, sshErrorText, useLocal, lock, reconnect });

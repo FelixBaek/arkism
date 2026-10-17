@@ -20,7 +20,16 @@
 .sidebar .nav-item.active { background: var(--nc-raised); color: var(--nc-text); font-weight: 500; }
 .ln { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .rail-space { flex: 1; min-height: 0; }
-.rail-art { width: 178px; height: 118px; opacity: .65; flex: none; }
+.rail-art { width: 178px; height: 118px; opacity: .85; flex: none; }
+.rail-art .ark-triangle { display: block; overflow: visible; }
+.rail-art .ark-line { stroke: rgb(236,235,230); }
+.rail-art .ark-accent { stroke: rgb(242,209,75); }
+:root[data-theme="light"] .rail-art .ark-line { stroke: rgb(117,117,112); }
+:root[data-theme="light"] .rail-art .ark-accent { stroke: rgb(125,98,0); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .rail-art .ark-line { stroke: rgb(117,117,112); }
+  :root:not([data-theme="dark"]) .rail-art .ark-accent { stroke: rgb(125,98,0); }
+}
 .sidebar .rail-settings { height: 40px; padding-left: 12px; color: var(--nc-text); }
 .sidebar .rail-settings.active { background: var(--nc-raised); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
