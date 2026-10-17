@@ -4036,7 +4036,7 @@
     if (kind === "plugin") parts.push(pluginContents(entry), toolSwitches(entry, kind));
     else parts.push(conn, toolSwitches(entry, kind), serverTools(entry), serverCalls(entry));
     if (kind === "plugin") parts.push(conn);
-    parts.push(toolExperts(entry));
+    parts.push(...toolSkillSections(entry), toolExperts(entry));
     const hist = toolHistory(entry);
     if (hist) parts.push(hist);
     const on = Object.entries(entry.agents || {}).filter(([, v]) => v === "on").map(([k]) => k);
@@ -4159,6 +4159,38 @@
       s.append(r);
     }
     return s;
+  }
+  // 연결된 스킬·스크립트: hub skills whose name or description names this server; their scripts/ files come from the resolved bundle.
+  const norm = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9가-힣]+/g, "");
+  function toolSkills(entry) {
+    const key = norm(entry.name).replace(/mcp$/, "");
+    if (key.length < 3) return [];
+    return (state.data.skills || []).filter((sk) => sk.status !== "deprecated" && (norm(sk.name).replace(/mcp$/, "") === key || norm(`${sk.name} ${sk.description}`).includes(key)));
+  }
+  const scriptCache = new Map();
+  function skillScripts(sk) {
+    if (!scriptCache.has(sk.id)) {
+      scriptCache.set(sk.id, request("/v1/skills/resolve", { method: "POST", body: JSON.stringify({ scope: state.scope, refs: [`${sk.id}@latest-approved`] }) })
+        .then((r) => (r.items || r.skills || r.resolved || [r]).flatMap((x) => x?.bundle?.files || []).map((f) => f.path).filter((f) => /(^|\/)scripts\//.test(f)))
+        .catch(() => []));
+    }
+    return scriptCache.get(sk.id);
+  }
+  function toolSkillSections(entry) {
+    const list = toolSkills(entry);
+    if (!list.length) return [];
+    const s = cnSection("연결된 스킬", `${list.length}개`);
+    s.append(itemRows(list.map((sk) => ({ name: sk.name, desc: sk.description, label: ITEM_KIND.skill }))));
+    const sc = cnSection("스크립트");
+    sc.hidden = true;
+    Promise.all(list.map((sk) => skillScripts(sk).then((fs) => fs.map((f) => ({ name: f, desc: sk.name, label: "스크립트" }))))).then((rows) => {
+      const all = rows.flat();
+      if (!all.length) return;
+      sc.querySelector("h3 small")?.remove();
+      sc.append(itemRows(all));
+      sc.hidden = false;
+    });
+    return [s, sc];
   }
   // 쓰는 워크플로우: workflows with an AI step whose 울타리 or tools name this server or plugin.
   function toolUsers(entry) {
