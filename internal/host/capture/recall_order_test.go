@@ -137,7 +137,7 @@ func TestHookRecallAppliesSharedBudget(t *testing.T) {
 	capFake(t)
 	hookEnv(t)
 	sessionOutcomeEnv(t)
-	t.Setenv("ARKISM_RECALL_MIN_SCORE", "0.0327")
+	t.Setenv("ARKISM_RECALL_MIN_SCORE", "0.025")
 	t.Setenv("ARKISM_RECALL_BUDGET", "procedural=3:1500")
 	low := memoryHit("c8b788c964a0350e97d8635111de6824", 1, "")
 	low["score"] = json.Number("0.016393")

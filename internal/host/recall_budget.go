@@ -25,11 +25,12 @@ type RecallBudget struct {
 }
 
 // First values from the ST-810 baseline (2026-10-17): every relevant hit scored ≥ 0.032787 (2/61) and
-// every unrelated-query hit ≤ 0.016393 (1/61). The four kind caps add up to the search's 6000 chars and
+// every unrelated-query hit ≤ 0.016393 (1/61). The floor sits mid-gap: a hit only one lane found
+// (≤ 1/61) stays out, one two lanes agree on (two ranks ≤ ~20) or an exact keyword match goes in. The four kind caps add up to the search's 6000 chars and
 // the largest baseline recall was 2,056 chars, so the caps only trim one-kind floods. A person approves
 // the values; later tuning is a dreaming proposal (ST-821), not automatic.
 const (
-	defaultRecallMinScore = 0.0327
+	defaultRecallMinScore = 0.025
 	defaultRecallBudget   = "user=2:1500,procedural=3:1500,lesson=2:1500,decision=2:1500"
 )
 
@@ -90,7 +91,9 @@ func VectorRan(modes []any, res map[string]any) bool {
 	return has(modes, "vector") && !has(degraded, "memory_vector_unavailable") && !has(degraded, "memory_vector_disabled")
 }
 
-// Floor drops hits below MinScore when vectorRan. A hit without a score (an older server) is not judged.
+// Floor drops hits below MinScore when vectorRan. A hit without a score (an older server) or one a
+// text lane (exact, keyword) found is not judged: a memory not yet embedded scores 1/61 from the
+// keyword lane alone, the same as an unrelated query's top hit, so the score cannot tell them apart.
 func (b RecallBudget) Floor(items []any, vectorRan bool) (kept []any, dropped int) {
 	if !vectorRan {
 		return items, 0
@@ -98,7 +101,7 @@ func (b RecallBudget) Floor(items []any, vectorRan bool) (kept []any, dropped in
 	kept = []any{}
 	for _, raw := range items {
 		if m, _ := raw.(map[string]any); m != nil {
-			if s, has := score(m["score"]); has && b.MinScore > 0 && s < b.MinScore {
+			if s, has := score(m["score"]); has && b.MinScore > 0 && s < b.MinScore && !textLane(m["lanes"]) {
 				dropped++
 				continue
 			}
@@ -150,4 +153,14 @@ func score(v any) (float64, bool) {
 		return f, err == nil
 	}
 	return 0, false
+}
+
+func textLane(v any) bool {
+	lanes, _ := v.([]any)
+	for _, l := range lanes {
+		if l == "exact" || l == "keyword" {
+			return true
+		}
+	}
+	return false
 }

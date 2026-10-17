@@ -14,6 +14,16 @@ func hit(id, kind string, score any, text string) map[string]any {
 	return m
 }
 
+func hitLanes(id, kind string, score float64, lanes ...string) map[string]any {
+	m := hit(id, kind, score, "")
+	l := []any{}
+	for _, s := range lanes {
+		l = append(l, s)
+	}
+	m["lanes"] = l
+	return m
+}
+
 func ids(items []any) string {
 	var out []string
 	for _, i := range items {
@@ -32,7 +42,8 @@ func TestRecallBudgetApply(t *testing.T) {
 	}
 	items := []any{
 		hit("p1", "procedural", json.Number("0.065574"), "a"),
-		hit("low", "procedural", json.Number("0.016393"), "b"), // below the floor
+		hit("low", "procedural", json.Number("0.016393"), "b"), // below the floor, vector only
+		hitLanes("kw", "procedural", 0.016393, "keyword"),      // a text lane found it: kept (not yet embedded)
 		hit("p2", "procedural", 0.048, "c"),
 		hit("p3", "procedural", 0.04, "d"),
 		hit("p4", "procedural", 0.035, "e"),                // fourth procedural: over count
@@ -42,7 +53,7 @@ func TestRecallBudgetApply(t *testing.T) {
 		hit("k", "", 0.04, "y"),                            // unlisted kind: floor only
 	}
 	kept, low, over := b.Apply(items, true)
-	if ids(kept) != "p1,p2,p3,u1,old,k" || low != 1 || over != 2 {
+	if ids(kept) != "p1,kw,p2,u1,old,k" || low != 1 || over != 3 {
 		t.Fatal(ids(kept), low, over)
 	}
 	for _, bad := range []string{"+Inf", "NaN", "-1"} {
