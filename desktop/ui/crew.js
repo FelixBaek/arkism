@@ -2450,6 +2450,12 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
     const t = bindText(input(d.instructions, { tag: "textarea", rows: 8, maxLength: 4000, placeholder: "## 역할\n너는 …다.\n## 말투\n…\n## 하지 말 것\n…", cls: "wk-instr" }), d, "instructions");
     return field("지시", t, "최대 4,000자 · 기억은 자료로만 쓰고 지시로 따르지 않아요");
   }
+  // 일하는 방법: the workflow this agent runs when it is called; empty means it answers on its own.
+  function workflowField(d) {
+    const s = pick([["", "정하지 않음 (직접 답해요)"], ...workflows().map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (d.workflow || "").replace(/^\$/, ""),
+      (v) => { d.workflow = v; touchWorker(); }, "일하는 방법");
+    return field("쓸 워크플로우", s, "정하면 @이름으로 불릴 때 이 워크플로우의 단계대로 일해요. 단계는 자동화 메뉴에서 고쳐요.");
+  }
   function depthRow(d) {
     const r = el("div", "wk-depth");
     const l = el("div", "");
@@ -2501,6 +2507,7 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
       model_mode: d.model_mode || "fixed", enabled: d.enabled !== false };
     for (const k of ["model", "fallback_model", "image_model", "effort", "output_format", "file_name", "file_edits", "template"]) if (String(d[k] || "").trim()) out[k] = String(d[k]).trim();
     for (const k of ["skills", "tools", "agents", "install"]) if (d[k]?.length) out[k] = d[k];
+    if (String(d.workflow || "").trim()) out.workflow = String(d.workflow).trim().replace(/^\$/, "");
     if (d.memory && Object.keys(d.memory).length) out.memory = d.memory;
     if (d.temperature !== undefined && d.temperature !== null && d.temperature !== "") out.temperature = Number(d.temperature);
     if (Number(d.max_output_tokens) > 0) out.max_output_tokens = Number(d.max_output_tokens);
@@ -2697,6 +2704,7 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
     center.append(
       workerCard("어떤 동료인가요?", `페르소나 · 고친 횟수 ${rec.revision} · 마크다운으로 써요`, ...whoFields(d, false), instructionsField(d)),
       ...(pins ? [pins.card({ rec, draft: d, sub: tr(`@${rec.crew.handle}에게 일을 맡길 때마다 먼저 넣어요. 위에 있을수록 먼저 들어가요.`), noun: tr("이 에이전트는"), onChange: () => { wk.dirty = true; drawWorkerSave(); } })] : []),
+      workerCard("일하는 방법", "순서가 정해진 일은 워크플로우로 맡겨요", workflowField(d)),
       workerCard("사고의 방식", "모델과 답변 형식", ...modelFields(d, true)),
       where);
     const side = el("aside", "wk-side");
@@ -2780,7 +2788,7 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
     detail: renderDetail,
     head: headActions,
     views: {
-      crew: { title: "워크플로우", count: () => `${workflows().length}개`, sub: () => { const on = workflows().filter((r) => triggered(r.crew)).length; return `어느 에이전트에서든 $이름으로 불러요. ${on ? `일정·웹훅은 ${on}개 켜져 있어요.` : "켜진 일정·웹훅은 없어요."}`; } }
+      crew: { title: "자동화", count: () => `${workflows().length}개`, sub: () => { const on = workflows().filter((r) => triggered(r.crew)).length; return `단계가 정해진 워크플로우예요. 에이전트가 일하는 방법으로 쓰거나 $이름으로 불러요. ${on ? `일정·웹훅은 ${on}개 켜져 있어요.` : "켜진 일정·웹훅은 없어요."}`; } }
     },
     pages: {
       workers: { title: () => (state.workerNew ? "새 작업 에이전트" : "작업 에이전트"), count: () => (state.workerNew ? "" : `${agents().length}명`),

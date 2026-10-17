@@ -206,3 +206,20 @@ func TestCrewResolveFindsWorkflow(t *testing.T) {
 		t.Fatal("bad handle", err)
 	}
 }
+
+func TestAgentWorkflowIsAHandleOnAgentsOnly(t *testing.T) {
+	a := crewAgent("리서처", "리서처")
+	a.Workflow = "리서치"
+	if !validCrew(a) {
+		t.Fatal("agent with a workflow refused")
+	}
+	a.Workflow = "not a handle!"
+	if validCrew(a) {
+		t.Fatal("bad workflow handle accepted")
+	}
+	w := crewWorkflow("x", "x")
+	w.Workflow = "리서치"
+	if validCrew(w) {
+		t.Fatal("a workflow took a workflow")
+	}
+}

@@ -199,6 +199,7 @@ type Crew struct {
 	MaxOutputTokens int         `json:"max_output_tokens,omitempty"`
 	OutputFormat    string      `json:"output_format,omitempty"`
 	FileEdits       string      `json:"file_edits,omitempty"`
+	Workflow        string      `json:"workflow,omitempty"` // handle of the workflow ($) this agent runs as its way of working
 	Budget          *CrewBudget `json:"budget,omitempty"`
 	// agent and team: records always read first (crew_pins.go)
 	Pinned []CrewPin `json:"pinned,omitempty"`
@@ -308,7 +309,7 @@ func validCrewTemplate(c Crew) bool {
 
 func noAgentFields(c Crew) bool {
 	return c.ModelMode == "" && c.FallbackModel == "" && c.ImageModel == "" && c.Temperature == nil && c.MaxOutputTokens == 0 &&
-		c.OutputFormat == "" && c.FileEdits == "" && c.Budget == nil
+		c.OutputFormat == "" && c.FileEdits == "" && c.Workflow == "" && c.Budget == nil
 }
 
 func noTeamFields(c Crew) bool {
@@ -327,6 +328,7 @@ func validCrewAgent(c Crew) bool {
 		c.Effort != "" && !slices.Contains(crewEfforts, c.Effort) || c.RunMode != "" && !slices.Contains(crewRunModes, c.RunMode) ||
 		c.Temperature != nil && !(*c.Temperature >= 0 && *c.Temperature <= 1) || c.MaxOutputTokens < 0 || c.MaxOutputTokens > 200000 ||
 		c.OutputFormat != "" && !slices.Contains(crewOutputFormats, c.OutputFormat) || c.FileEdits != "" && !slices.Contains(crewFileEdits, c.FileEdits) ||
+		c.Workflow != "" && !crewHandleRe.MatchString(c.Workflow) ||
 		c.Budget != nil && (!validUSD(c.Budget.MonthlyUSD) || !validUSD(c.Budget.AskOverUSD)) {
 		return false
 	}

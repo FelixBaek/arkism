@@ -484,6 +484,9 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 	if err != nil || c["type"] != "agent" {
 		return failedResult("@" + handle + " 작업 에이전트를 찾지 못했어요"), nil
 	}
+	if wf := strings.TrimPrefix(strings.TrimSpace(sOr(c["workflow"])), "$"); wf != "" {
+		return agentWorkflow(wf, sOr(a["prompt"])), nil
+	}
 	model := strings.TrimSpace(sOr(c["model"]))
 	if c["model_mode"] == "auto" || model == "" {
 		model = "auto"
@@ -513,6 +516,22 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 		return nil, err
 	}
 	return assistResult(out), nil
+}
+
+// agentWorkflow runs the workflow an agent works by ($handle) with the caller's prompt, and reports it like an answer.
+// A run that outlasts the wait is left running; the result says so with its id.
+func agentWorkflow(handle, prompt string) map[string]any {
+	view, err := startWorkflow(handle, prompt, 120, "", nil)
+	if err != nil {
+		return failedResult(err.Error())
+	}
+	switch status := pyStr(view["status"]); status {
+	case "succeeded":
+		return map[string]any{"status": "done", "output": clipRunes(pyStr(view["summary"]), 20000)}
+	case "failed", "stopped":
+		return failedResult("$" + handle + " 워크플로우가 " + map[string]string{"failed": "실패했어요", "stopped": "멈췄어요"}[status])
+	}
+	return map[string]any{"status": "done", "output": "$" + handle + " 워크플로우가 아직 도는 중이에요 (실행 " + pyStr(view["run_id"]) + ")"}
 }
 
 // runAgentSpec runs one agent call and counts it (routed calls count themselves).
