@@ -72,40 +72,31 @@ def distance(a, b):
     return 1 - sum(x * y for x, y in zip(a, b)) / math.sqrt(sum(x*x for x in a) * sum(y*y for y in b))
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--endpoint", default="http://127.0.0.1:8093/embed")
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--reuse-query-vectors", action="store_true", help="reuse unchanged public query vectors while re-embedding documents")
-    args = parser.parse_args()
-    url = urlsplit(args.endpoint)
-    if url.scheme != "http" or not ipaddress.ip_address(url.hostname).is_loopback or url.username or url.password or url.query or url.fragment or url.path != "/embed":
-        parser.error("requires a literal loopback HTTP /embed endpoint without credentials")
-    opener = build_opener(NoRedirect)
+# The frozen fixture always lives beside the Go test that replays it.
+OUTPUT = Path(__file__).resolve().parent.parent / "internal/memory/testdata/semantic_recall_harrier.json"
 
-    def embed(texts, prefix):
-        result = []
-        for offset in range(0, len(texts), 4):
-            body = json.dumps({"inputs": [prefix + text for text in texts[offset:offset+4]]}).encode()
-            req = Request(args.endpoint, data=body, headers={"Content-Type": "application/json"})
-            with opener.open(req, timeout=60) as response:
-                rows = json.load(response)
-            if len(rows) != min(4, len(texts)-offset) or any(len(v) != 1024 or not all(isinstance(x, (int, float)) and math.isfinite(x) for x in v) or sum(x*x for x in v) == 0 for v in rows):
-                raise ValueError("invalid local embedding response")
-            result.extend(rows)
-        return result
 
-    # recordContent for a memory with an empty summary is text + newline.
-    documents = [{"id": name, "text": text, "vector": vector} for (name, text), vector in zip(DOCUMENTS, embed([text + "\n" for _, text in DOCUMENTS], ""))]
-    if args.reuse_query_vectors:
-        previous = json.loads(args.output.read_text())
-        if previous["model"] != MODEL or previous["revision"] != REVISION or previous["query_prefix"] != QUERY_PREFIX or [(q["category"], q["relevant"][0] if q["relevant"] else "", q["text"]) for q in previous["queries"]] != QUERIES:
-            raise ValueError("cached query contract changed")
-        queries = previous["queries"]
-    else:
-        queries = [{"category": category, "relevant": [relevant] if relevant else [], "text": text, "vector": vector} for (category, relevant, text), vector in zip(QUERIES, embed([text for _, _, text in QUERIES], QUERY_PREFIX))]
-    prefix_hash = hashlib.sha256(json.dumps([QUERY_PREFIX, ""], ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
-    fixture = {"model": MODEL, "revision": REVISION, "query_prefix": QUERY_PREFIX, "document_prefix": "", "document_input_format": "recordContent: text + newline + empty summary", "space": f"tei:{MODEL}:{REVISION}:1024d:{prefix_hash}", "max_distance": CUTOFF, "labels": "agent-authored public synthetic; held out from fixed deployed-cutoff selection; not human approval", "documents": documents, "queries": queries}
+def embed(opener, endpoint, texts, prefix):
+    result = []
+    for offset in range(0, len(texts), 4):
+        body = json.dumps({"inputs": [prefix + text for text in texts[offset:offset+4]]}).encode()
+        req = Request(endpoint, data=body, headers={"Content-Type": "application/json"})
+        with opener.open(req, timeout=60) as response:
+            rows = json.load(response)
+        if len(rows) != min(4, len(texts)-offset) or any(len(v) != 1024 or not all(isinstance(x, (int, float)) and math.isfinite(x) for x in v) or sum(x*x for x in v) == 0 for v in rows):
+            raise ValueError("invalid local embedding response")
+        result.extend(rows)
+    return result
+
+
+def cached_queries():
+    previous = json.loads(OUTPUT.read_text())
+    if previous["model"] != MODEL or previous["revision"] != REVISION or previous["query_prefix"] != QUERY_PREFIX or [(q["category"], q["relevant"][0] if q["relevant"] else "", q["text"]) for q in previous["queries"]] != QUERIES:
+        raise ValueError("cached query contract changed")
+    return previous["queries"]
+
+
+def observe(documents, queries):
     stats = {}
     for query in queries:
         row = stats.setdefault(query["category"], {"queries": 0, "target_found": 0, "returned": 0, "wrong_returned": 0})
@@ -114,11 +105,29 @@ def main():
         row["target_found"] += bool(set(selected) & set(query["relevant"]))
         row["returned"] += len(selected)
         row["wrong_returned"] += len(set(selected) - set(query["relevant"]))
-    fixture["observed"] = stats
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(fixture, ensure_ascii=False, separators=(",", ":")) + "\n")
-    print(json.dumps({"fixed_max_distance": CUTOFF, "stats": stats, "fixture_sha256": hashlib.sha256(args.output.read_bytes()).hexdigest()}, ensure_ascii=False))
+    return stats
 
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--endpoint", default="http://127.0.0.1:8093/embed")
+    parser.add_argument("--reuse-query-vectors", action="store_true", help="reuse unchanged public query vectors while re-embedding documents")
+    args = parser.parse_args()
+    url = urlsplit(args.endpoint)
+    if url.scheme != "http" or not ipaddress.ip_address(url.hostname).is_loopback or url.username or url.password or url.query or url.fragment or url.path != "/embed":
+        parser.error("requires a literal loopback HTTP /embed endpoint without credentials")
+    opener = build_opener(NoRedirect)
+    # recordContent for a memory with an empty summary is text + newline.
+    documents = [{"id": name, "text": text, "vector": vector} for (name, text), vector in zip(DOCUMENTS, embed(opener, args.endpoint, [text + "\n" for _, text in DOCUMENTS], ""))]
+    if args.reuse_query_vectors:
+        queries = cached_queries()
+    else:
+        queries = [{"category": category, "relevant": [relevant] if relevant else [], "text": text, "vector": vector} for (category, relevant, text), vector in zip(QUERIES, embed(opener, args.endpoint, [text for _, _, text in QUERIES], QUERY_PREFIX))]
+    prefix_hash = hashlib.sha256(json.dumps([QUERY_PREFIX, ""], ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+    fixture = {"model": MODEL, "revision": REVISION, "query_prefix": QUERY_PREFIX, "document_prefix": "", "document_input_format": "recordContent: text + newline + empty summary", "space": f"tei:{MODEL}:{REVISION}:1024d:{prefix_hash}", "max_distance": CUTOFF, "labels": "agent-authored public synthetic; held out from fixed deployed-cutoff selection; not human approval", "documents": documents, "queries": queries}
+    fixture["observed"] = observe(documents, queries)
+    OUTPUT.write_text(json.dumps(fixture, ensure_ascii=False, separators=(",", ":")) + "\n")
+    print(json.dumps({"fixed_max_distance": CUTOFF, "stats": fixture["observed"], "fixture_sha256": hashlib.sha256(OUTPUT.read_bytes()).hexdigest()}, ensure_ascii=False))
 
 if __name__ == "__main__":
     main()

@@ -39,61 +39,79 @@ QUESTIONS = [
 ]
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--holdout", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--reuse-calibration-vectors", action="store_true", help="replay the already frozen calibration against an updated holdout input contract")
-    args = parser.parse_args()
-    holdout = json.loads(args.holdout.read_text())
-    if holdout["model"] != MODEL or holdout["revision"] != REVISION or holdout["query_prefix"] != QUERY_PREFIX:
-        raise ValueError("holdout embedding identity mismatch")
+# Both files are the committed fixtures; the holdout is evaluate_semantic_recall.py's output.
+TESTDATA = Path(__file__).resolve().parent.parent / "internal/memory/testdata"
+HOLDOUT = TESTDATA / "semantic_recall_harrier.json"
+OUTPUT = TESTDATA / "semantic_recall_calibration.json"
+DOC_FORMAT = "recordContent: text + newline + empty summary"
+
+
+def embed(opener, texts, prefix):
+    out = []
+    for offset in range(0, len(texts), 4):
+        batch = texts[offset:offset+4]
+        req = Request("http://127.0.0.1:8093/embed", data=json.dumps({"inputs": [prefix+t for t in batch]}).encode(), headers={"Content-Type": "application/json"})
+        with opener.open(req, timeout=60) as response:
+            vectors = json.load(response)
+        if len(vectors) != len(batch) or any(len(v) != 1024 or not all(isinstance(x, (int, float)) and math.isfinite(x) for x in v) for v in vectors):
+            raise ValueError("invalid local embedding response")
+        out.extend(vectors)
+    return out
+
+
+def cached_vectors(holdout):
+    previous = json.loads(OUTPUT.read_text())
+    if previous.get("document_input_format") != DOC_FORMAT or previous["space"] != holdout["space"] or [(d["id"], d["text"]) for d in previous["documents"]] != DOCS or [(q["relevant"][0] if q["relevant"] else "", q["text"]) for q in previous["queries"]] != QUESTIONS:
+        raise ValueError("cached calibration contract changed")
+    return previous["documents"], previous["queries"]
+
+
+def fresh_vectors():
     opener = build_opener(NoRedirect)
-    def embed(texts, prefix):
-        out = []
-        for offset in range(0, len(texts), 4):
-            batch = texts[offset:offset+4]
-            req = Request("http://127.0.0.1:8093/embed", data=json.dumps({"inputs": [prefix+t for t in batch]}).encode(), headers={"Content-Type": "application/json"})
-            with opener.open(req, timeout=60) as response:
-                vectors = json.load(response)
-            if len(vectors) != len(batch) or any(len(v) != 1024 or not all(isinstance(x, (int, float)) and math.isfinite(x) for x in v) for v in vectors):
-                raise ValueError("invalid local embedding response")
-            out.extend(vectors)
-        return out
-    if args.reuse_calibration_vectors:
-        previous = json.loads(args.output.read_text())
-        if previous.get("document_input_format") != "recordContent: text + newline + empty summary" or previous["space"] != holdout["space"] or [(d["id"], d["text"]) for d in previous["documents"]] != DOCS or [(q["relevant"][0] if q["relevant"] else "", q["text"]) for q in previous["queries"]] != QUESTIONS:
-            raise ValueError("cached calibration contract changed")
-        documents, queries = previous["documents"], previous["queries"]
-    else:
-        documents = [{"id": name, "text": text, "vector": vec} for (name, text), vec in zip(DOCS, embed([text+"\n" for _, text in DOCS], ""))]
-        queries = [{"relevant": [name] if name else [], "text": text, "vector": vec} for (name, text), vec in zip(QUESTIONS, embed([text for _, text in QUESTIONS], QUERY_PREFIX))]
+    documents = [{"id": name, "text": text, "vector": vec} for (name, text), vec in zip(DOCS, embed(opener, [text+"\n" for _, text in DOCS], ""))]
+    queries = [{"relevant": [name] if name else [], "text": text, "vector": vec} for (name, text), vec in zip(QUESTIONS, embed(opener, [text for _, text in QUESTIONS], QUERY_PREFIX))]
+    return documents, queries
+
+
+def pair_distances(documents, queries):
     positive, negative = [], []
     for q in queries:
         for d in documents:
             (positive if d["id"] in q["relevant"] else negative).append(distance(q["vector"], d["vector"]))
+    return positive, negative
+
+
+def metrics(docs, questions, limit):
+    counts = {"positive_queries": 0, "target_found": 0, "negative_queries": 0, "negative_queries_with_result": 0, "returned": 0, "wrong_returned": 0}
+    for q in questions:
+        found = [d["id"] for d in docs if distance(q["vector"], d["vector"]) <= limit]
+        counts["positive_queries"] += bool(q["relevant"])
+        counts["negative_queries"] += not q["relevant"]
+        counts["target_found"] += bool(set(found) & set(q["relevant"]))
+        counts["negative_queries_with_result"] += not q["relevant"] and bool(found)
+        counts["returned"] += len(found)
+        counts["wrong_returned"] += len(set(found) - set(q["relevant"]))
+    return counts
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--reuse-calibration-vectors", action="store_true", help="replay the already frozen calibration against an updated holdout input contract")
+    args = parser.parse_args()
+    holdout = json.loads(HOLDOUT.read_text())
+    if holdout["model"] != MODEL or holdout["revision"] != REVISION or holdout["query_prefix"] != QUERY_PREFIX:
+        raise ValueError("holdout embedding identity mismatch")
+    documents, queries = cached_vectors(holdout) if args.reuse_calibration_vectors else fresh_vectors()
+    positive, negative = pair_distances(documents, queries)
     closest_negative = min(negative)
     retained = [value for value in positive if value < closest_negative]
     if not retained:
         raise ValueError("calibration cannot separate any positive at zero false positives")
     cutoff = (max(retained) + closest_negative) / 2
-    def metrics(docs, questions, limit):
-        counts = {"positive_queries": 0, "target_found": 0, "negative_queries": 0, "negative_queries_with_result": 0, "returned": 0, "wrong_returned": 0}
-        for q in questions:
-            found = [d["id"] for d in docs if distance(q["vector"], d["vector"]) <= limit]
-            counts["positive_queries"] += bool(q["relevant"])
-            counts["negative_queries"] += not q["relevant"]
-            counts["target_found"] += bool(set(found) & set(q["relevant"]))
-            counts["negative_queries_with_result"] += not q["relevant"] and bool(found)
-            counts["returned"] += len(found)
-            counts["wrong_returned"] += len(set(found) - set(q["relevant"]))
-        return counts
-    result = {"model": MODEL, "revision": REVISION, "space": holdout["space"], "document_input_format": "recordContent: text + newline + empty summary", "labels": "agent-authored public synthetic; development only", "selection_rule": "maximum calibration pair recall with zero false positives; midpoint between retained-positive maximum and negative minimum; selected once before holdout evaluation", "candidate_max_distance": cutoff, "calibration_positive_distance_min": min(positive), "calibration_positive_distance_max": max(positive), "calibration_negative_distance_min": closest_negative,
+    result = {"model": MODEL, "revision": REVISION, "space": holdout["space"], "document_input_format": DOC_FORMAT, "labels": "agent-authored public synthetic; development only", "selection_rule": "maximum calibration pair recall with zero false positives; midpoint between retained-positive maximum and negative minimum; selected once before holdout evaluation", "candidate_max_distance": cutoff, "calibration_positive_distance_min": min(positive), "calibration_positive_distance_max": max(positive), "calibration_negative_distance_min": closest_negative,
               "calibration": metrics(documents, queries, cutoff), "holdout_current": metrics(holdout["documents"], holdout["queries"], .38), "holdout_candidate": metrics(holdout["documents"], holdout["queries"], cutoff), "documents": documents, "queries": queries}
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":"))+"\n")
+    OUTPUT.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":"))+"\n")
     print(json.dumps({key: value for key, value in result.items() if key not in {"documents", "queries"}}, ensure_ascii=False))
-
 
 if __name__ == "__main__":
     main()
