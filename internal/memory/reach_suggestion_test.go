@@ -1,7 +1,12 @@
 package memory
 
 import (
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -133,5 +138,40 @@ func TestReachSuggestionFollowsEditApprove(t *testing.T) {
 	m, e := f.svc.ReviewCandidate(testCtx, f.human, c.ID, CandidateReviewInput{Scope: scopeA, ExpectedRevision: c.Revision, Action: "edit_approve", Content: "결론부터 쓴다"})
 	if e != nil || m.ReachSuggestion == nil || m.ReachSuggestion.Reach != ReachGeneral {
 		t.Fatal("edited memory keeps the old suggestion", m.ReachSuggestion, e)
+	}
+}
+
+// ST-825 / TC-SEC-012: the HTTP routes list suggestions and let only a human dismiss one.
+func TestReachSuggestionHTTP(t *testing.T) {
+	f := newFixture(t)
+	m := f.activeMemory("httpsug Go 코드는 gofmt", "httpsug")
+	h := Handler(f.svc)
+	call := func(token, method, path, body string) (int, string) {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code, w.Body.String()
+	}
+	list := "/v1/memory-reach-suggestions?workspace_id=" + scopeA.WorkspaceID + "&project_id=" + scopeA.ProjectID + "&q=httpsug"
+	code, body := call(f.human, "GET", list, "")
+	var page ReachSuggestionPage
+	if code != http.StatusOK || json.Unmarshal([]byte(body), &page) != nil || len(page.Items) != 1 || page.Items[0].MemoryID != m.ID {
+		t.Fatal(code, body)
+	}
+	if code, _ = call(f.human, "GET", list+"&bogus=1", ""); code != http.StatusBadRequest {
+		t.Fatal("unknown parameter", code)
+	}
+	scope, _ := json.Marshal(scopeA)
+	dismiss := `{"scope":` + string(scope) + `,"expected_revision":` + strconv.FormatInt(m.Revision, 10) + `,"reach":"project"}`
+	path := "/v1/memories/" + m.ID + "/reach-suggestion/dismiss"
+	if code, _ = call(f.agent, "POST", path, dismiss); code != http.StatusForbidden {
+		t.Fatal("agent dismissed over HTTP", code)
+	}
+	if code, body = call(f.human, "POST", path, dismiss); code != http.StatusOK {
+		t.Fatal(code, body)
+	}
+	if code, body = call(f.human, "GET", list, ""); code != http.StatusOK || strings.Contains(body, m.ID) {
+		t.Fatal("dismissed suggestion listed", code, body)
 	}
 }
