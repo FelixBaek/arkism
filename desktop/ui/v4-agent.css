@@ -481,3 +481,20 @@ span.wk-chip { cursor: default; }
 .wk-side .field { align-self: stretch; }
 .wk-side .field select, .wk-side .field input { width: 100%; box-sizing: border-box; }
 .wk-side .scope-fields { align-self: stretch; display: grid; grid-template-columns: 1fr; gap: 8px; }
+/* 일하는 방법: the agent's workflow as a panel with numbered steps. Neutral surface; the only accent is the mark. */
+.wk-flow-wrap { display: flex; flex-direction: column; gap: 12px; }
+.wk-flow { display: flex; flex-direction: column; gap: 14px; padding: 16px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); }
+.wk-flow.empty { flex-direction: row; align-items: center; gap: 12px; border-style: dashed; background: transparent; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
+.wk-flow-mark { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 8px; background: var(--nc-amber-bg); color: var(--nc-amber); }
+.wk-flow-head { display: flex; align-items: center; gap: 12px; }
+.wk-flow-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
+.wk-flow-who strong { color: var(--nc-text); font-weight: 500; font-size: calc(14px * var(--fs, 1)); }
+.wk-flow-who small { display: flex; flex-wrap: wrap; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.wk-flow-who small code { font-family: var(--mono); }
+.wk-flow-who small > * + *::before { content: "·"; margin: 0 6px; }
+.wk-flow-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.wk-flow-steps li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-canvas); color: var(--nc-muted); font-size: calc(13px * var(--fs, 1)); }
+.wk-flow-steps li.ai { color: var(--nc-text); }
+.wk-flow-steps .n { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--nc-line); color: var(--nc-quiet); font: 500 calc(11px * var(--fs, 1))/1 var(--mono); }
+.wk-flow-steps li.ai .n { border-color: var(--nc-amber); color: var(--nc-amber); }
+.wk-flow-steps .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

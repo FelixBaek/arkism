@@ -1400,9 +1400,9 @@ window.ArkismTeams = (ctx) => {
   // ---------------------------------------------------------------- pages (registered like crew.js pages)
   const pages = {
     teams: { title: "팀", count: () => `${teams().length}개`, sub: () => "작업 에이전트 여럿이 정한 순서대로 말하며 하나의 결과를 만들어요. 연결된 채널에 글을 쓰면 회의가 시작돼요.",
-      head: () => [], render: renderTeams },
+      head: () => [button("회의 보기", "ghost", null, () => go("meetings"))], render: renderTeams },
     teamNew: { title: "새 팀", sub: () => "작업 에이전트 여러 명을 모아, 정한 순서와 규칙으로 회의하며 하나의 결과를 만들어요.", keepDetail: true, head: () => [], render: renderTeamNew },
-    meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [], render: renderMeetings },
+    meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [button("팀 보기", "ghost", null, () => go("teams"))], render: renderMeetings },
     discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord },
     crewUsage: { title: "사용량", sub: () => "워크플로우·작업 에이전트·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.",
       head: () => [button("새로고침", "ghost", null, loadUsage)], render: renderUsage }
