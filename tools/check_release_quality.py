@@ -1,56 +1,97 @@
 """Require successful main-push quality runs for the exact release commit."""
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
 import time
 from urllib.parse import urlencode
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+from http.client import HTTPException
 
 
 WORKFLOWS = ("checks.yml", "sonarcloud.yml")
 PENDING = {"queued", "in_progress", "waiting", "pending", "requested"}
+MAX_PAGES = 10
+MAX_PAGE_BYTES = 5 * 1024 * 1024
 
 
 class GateError(Exception):
     """The release cannot be verified; never include API bodies or stderr."""
 
 
+class NoApiRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def github_auth(timeout):
+    value = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if not value:
+        # Local verification can use the existing gh login. No request arguments
+        # reach this fixed credential lookup, and its output is never logged.
+        try:
+            result = subprocess.run(["gh", "auth", "token", "--hostname", "github.com"],
+                                    shell=False, capture_output=True, text=True,
+                                    check=False, timeout=timeout)
+        except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
+            raise GateError("GitHub credentials unavailable") from exc
+        if result.returncode:
+            raise GateError("GitHub credentials unavailable")
+        value = result.stdout
+    value = value.strip()
+    if not value or any(char.isspace() for char in value):
+        raise GateError("invalid GitHub credentials")
+    return value
+
+
+def request_page(url, auth, timeout):
+    request = Request(url, method="GET", headers={
+        "Authorization": "Bearer " + auth,
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "arkism-release-quality",
+    })
+    try:
+        with build_opener(NoApiRedirect()).open(request, timeout=timeout) as response:
+            if response.status != 200:
+                raise GateError("unexpected GitHub API status")
+            body = response.read(MAX_PAGE_BYTES + 1)
+        if len(body) > MAX_PAGE_BYTES:
+            raise GateError("GitHub API page exceeds the size limit")
+        return json.loads(body)
+    except (OSError, ValueError, HTTPException) as exc:
+        raise GateError("GitHub API request or response unavailable") from exc
+
+
 def fetch_runs(repository, sha, workflow, timeout):
-    # Validate at the process boundary too, including callers other than verify().
     validate_request(repository, sha, 0, 1)
     if workflow not in WORKFLOWS:
         raise GateError("unknown release quality workflow")
-    query = urlencode({"head_sha": sha, "event": "push", "branch": "main", "per_page": 100})
-    endpoint = f"repos/{repository}/actions/workflows/{workflow}/runs?{query}"
-    # No user-supplied value occupies an option position. All query values are
-    # URL-encoded and the endpoint follows the CLI's end-of-options delimiter.
-    command = ["gh", "api", "--method", "GET", "--paginate", "--", endpoint]
-    try:
-        result = subprocess.run(command, shell=False, capture_output=True, text=True,
-                                check=False, timeout=timeout)
-    except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
-        raise GateError(f"{workflow}: GitHub API request unavailable") from exc
-    if result.returncode:
-        raise GateError(f"{workflow}: GitHub API request failed")
-    return decode_run_inventory(result.stdout, workflow)
+    deadline = time.monotonic() + timeout
+    auth = github_auth(timeout)
+    pages = fetch_pages(repository, sha, workflow, auth, deadline)
+    return validate_run_inventory(pages, workflow)
 
 
-def decode_pages(body, workflow):
-    # --paginate emits one JSON object per page. Decode the full stream rather
-    # than requiring --slurp, which older GitHub CLI installations lack.
-    pages, remaining = [], body.lstrip()
-    decoder = json.JSONDecoder()
-    try:
-        while remaining:
-            value, end = decoder.raw_decode(remaining)
-            pages.append(value)
-            remaining = remaining[end:].lstrip()
-    except ValueError as exc:
-        raise GateError(f"{workflow}: invalid GitHub API response") from exc
-    if not pages:
-        raise GateError(f"{workflow}: missing GitHub API pages")
-    return pages
+def fetch_pages(repository, sha, workflow, auth, deadline):
+    pages, received = [], 0
+    for number in range(1, MAX_PAGES + 1):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise GateError("GitHub API request timed out")
+        query = urlencode({"head_sha": sha, "event": "push", "branch": "main",
+                           "per_page": 100, "page": number})
+        url = f"https://api.github.com/repos/{repository}/actions/workflows/{workflow}/runs?{query}"
+        page = request_page(url, auth, remaining)
+        total, items = page_inventory(page, workflow)
+        pages.append(page)
+        received += len(items)
+        if received >= total:
+            return pages
+        if not items:
+            raise GateError("incomplete GitHub run inventory")
+    raise GateError("GitHub run inventory exceeds the page limit")
 
 
 def page_inventory(page, workflow):
@@ -68,9 +109,11 @@ def run_identifier(run, workflow):
     return run["id"]
 
 
-def decode_run_inventory(body, workflow):
+def validate_run_inventory(pages, workflow):
+    if not isinstance(pages, list) or not pages:
+        raise GateError(f"{workflow}: missing GitHub API pages")
     runs, total = [], None
-    for page in decode_pages(body, workflow):
+    for page in pages:
         count, items = page_inventory(page, workflow)
         if total is not None and total != count:
             raise GateError(f"{workflow}: GitHub run inventory changed during pagination")

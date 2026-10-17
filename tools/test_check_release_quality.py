@@ -1,9 +1,10 @@
 """Exact-commit release gates: wrong evidence, reruns, API failures and wiring."""
 import json
+import io
+import contextlib
 import os
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -132,13 +133,10 @@ class ReleaseQualityTests(unittest.TestCase):
                     gate.verify(repo, sha, timeout, poll)
                 fetch.assert_not_called()
 
-    def fetch(self, pages, returncode=0):
-        body = "\n".join(json.dumps(p) for p in pages) if isinstance(pages, list) else json.dumps(pages)
-        result = subprocess.CompletedProcess([], returncode, body, API_DIAGNOSTIC)
-        with patch.object(gate.subprocess, "run", return_value=result):
-            return gate.fetch_runs(REPOSITORY, SHA, "checks.yml", 30)
+    def fetch(self, pages):
+        return gate.validate_run_inventory(pages, "checks.yml")
 
-    def test_fetch_rejects_invalid_cli_arguments_before_starting_a_process(self):
+    def test_fetch_rejects_invalid_identifiers_before_external_io(self):
         cases = [("owner/repo/extra", SHA, "checks.yml"),
                  (REPOSITORY, "--option", "checks.yml"),
                  (REPOSITORY, SHA, "other.yml"),
@@ -146,10 +144,12 @@ class ReleaseQualityTests(unittest.TestCase):
                  (REPOSITORY, SHA, "--header=bad")]
         for repository, sha, workflow in cases:
             with self.subTest(repository=repository, sha=sha, workflow=workflow), \
-                    patch.object(gate.subprocess, "run") as process:
+                    patch.object(gate, "github_auth") as auth, \
+                    patch.object(gate, "request_page") as request:
                 with self.assertRaises(gate.GateError):
                     gate.fetch_runs(repository, sha, workflow, 30)
-                process.assert_not_called()
+                auth.assert_not_called()
+                request.assert_not_called()
 
     def test_all_pages_are_read_including_newer_failure(self):
         pages = [{"total_count": 2, "workflow_runs": [run()]},
@@ -172,55 +172,110 @@ class ReleaseQualityTests(unittest.TestCase):
                 self.fetch(value)
         self.assertEqual(self.fetch(response([])), [])
 
-    def test_api_errors_and_invalid_json_are_not_leaked_or_accepted(self):
+    def test_credential_lookup_is_fixed_and_never_logs_diagnostics(self):
         for outcome in [subprocess.CompletedProcess([], 1, API_DIAGNOSTIC, API_DIAGNOSTIC),
-                        subprocess.CompletedProcess([], 0, API_DIAGNOSTIC, API_DIAGNOSTIC),
+                        subprocess.CompletedProcess([], 0, "", API_DIAGNOSTIC),
                         subprocess.TimeoutExpired("gh", 30, output=API_DIAGNOSTIC),
                         FileNotFoundError(API_DIAGNOSTIC)]:
             with self.subTest(outcome=type(outcome).__name__):
                 kwargs = {"side_effect": outcome} if isinstance(outcome, Exception) else {"return_value": outcome}
-                with patch.object(gate.subprocess, "run", **kwargs):
+                with patch.dict(os.environ, {"GH_TOKEN": "", "GITHUB_TOKEN": ""}), \
+                        patch.object(gate.subprocess, "run", **kwargs) as process:
                     with self.assertRaises(gate.GateError) as error:
-                        gate.fetch_runs(REPOSITORY, SHA, "checks.yml", 30)
+                        gate.github_auth(30)
                     self.assertNotIn(API_DIAGNOSTIC, str(error.exception))
+                    self.assertEqual(process.call_args.args[0], ["gh", "auth", "token", "--hostname", "github.com"])
 
-    @unittest.skipIf(os.name == "nt", "Unix workflow CLI fixture uses an executable shebang")
-    def test_cli_executes_paginated_read_only_query_and_hides_api_output(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            fixture = root / "fixture.json"
-            fixture.write_text(json.dumps({w: response([run(w)]) for w in gate.WORKFLOWS}))
-            executable = root / "gh"
-            executable.write_text(
-                "#!/usr/bin/env python3\nimport json,os,sys\n"
-                "with open(os.environ['GATE_CALLS'],'a') as f: f.write(json.dumps(sys.argv[1:])+'\\n')\n"
-                "if os.environ.get('GATE_FAIL'):\n"
-                f" print('{API_DIAGNOSTIC}',file=sys.stderr);sys.exit(1)\n"
-                "endpoint=sys.argv[-1].split('?')[0]\n"
-                "for page in json.load(open(os.environ['GATE_FIXTURE']))[endpoint.split('/')[-2]]: print(json.dumps(page))\n")
-            executable.chmod(0o700)
-            calls = root / "calls.jsonl"
-            env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
-                   "GATE_FIXTURE": str(fixture), "GATE_CALLS": str(calls)}
-            command = [sys.executable, gate.__file__, "--repository", REPOSITORY,
-                       "--sha", SHA, "--timeout-seconds", "0"]
-            result = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(json.loads(result.stdout)["commit"], SHA)
-            requests = [json.loads(line) for line in calls.read_text().splitlines()]
-            self.assertEqual(len(requests), 2)
-            for request in requests:
-                self.assertIn("--paginate", request)
-                self.assertEqual(request[request.index("--method") + 1], "GET")
-                self.assertEqual(request[-2], "--")
-                endpoint = urlsplit(request[-1])
-                self.assertTrue(endpoint.path.startswith("repos/" + REPOSITORY + "/actions/workflows/"))
-                self.assertEqual(parse_qs(endpoint.query), {"head_sha": [SHA], "event": ["push"],
-                                                          "branch": ["main"], "per_page": ["100"]})
-            env["GATE_FAIL"] = "1"
-            failure = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
-            self.assertNotEqual(failure.returncode, 0)
-            self.assertNotIn(API_DIAGNOSTIC, failure.stdout + failure.stderr)
+    def test_environment_auth_avoids_processes_and_rejects_header_whitespace(self):
+        with patch.dict(os.environ, {"GH_TOKEN": "test-auth"}), \
+                patch.object(gate.subprocess, "run") as process:
+            self.assertEqual(gate.github_auth(30), "test-auth")
+            process.assert_not_called()
+        with patch.dict(os.environ, {"GH_TOKEN": "test\nauth"}):
+            with self.assertRaises(gate.GateError):
+                gate.github_auth(30)
+
+    def test_api_errors_and_invalid_json_are_not_leaked_or_accepted(self):
+        for outcome in (OSError(API_DIAGNOSTIC), ValueError(API_DIAGNOSTIC)):
+            with self.subTest(outcome=type(outcome).__name__), \
+                    patch.object(gate, "build_opener") as opener:
+                opener.return_value.open.side_effect = outcome
+                with self.assertRaises(gate.GateError) as error:
+                    gate.request_page("https://api.github.com/", "test-auth", 30)
+                self.assertNotIn(API_DIAGNOSTIC, str(error.exception))
+        response_bytes = io.BytesIO(API_DIAGNOSTIC.encode())
+        response_bytes.status = 200
+        with patch.object(gate, "build_opener") as opener:
+            opener.return_value.open.return_value = response_bytes
+            with self.assertRaises(gate.GateError):
+                gate.request_page("https://api.github.com/", "test-auth", 30)
+
+    def test_http_requests_use_fixed_https_origin_get_auth_and_no_redirects(self):
+        response_bytes = io.BytesIO(json.dumps(response([])[0]).encode())
+        response_bytes.status = 200
+        with patch.object(gate, "build_opener") as opener:
+            opener.return_value.open.return_value = response_bytes
+            result = gate.request_page("https://api.github.com/repos/example/arkism", "test-auth", 30)
+        self.assertEqual(result["total_count"], 0)
+        self.assertIsInstance(opener.call_args.args[0], gate.NoApiRedirect)
+        self.assertIsNone(opener.call_args.args[0].redirect_request(None, None, None, None, None, None))
+        request = opener.return_value.open.call_args.args[0]
+        self.assertEqual(request.get_method(), "GET")
+        self.assertEqual(request.get_header("Authorization"), "Bearer test-auth")
+        self.assertTrue(request.full_url.startswith("https://api.github.com/"))
+
+    def test_http_fetch_paginates_with_exact_query_and_bounded_requests(self):
+        pages = [{"total_count": 2, "workflow_runs": [run()]},
+                 {"total_count": 2, "workflow_runs": [run(run_id=11)]}]
+        with patch.object(gate, "github_auth", return_value="test-auth"), \
+                patch.object(gate, "request_page", side_effect=pages) as fetch:
+            result = gate.fetch_runs(REPOSITORY, SHA, "checks.yml", 30)
+        self.assertEqual(len(result), 2)
+        for number, call in enumerate(fetch.call_args_list, 1):
+            url, auth, timeout = call.args
+            parsed = urlsplit(url)
+            self.assertEqual((parsed.scheme, parsed.netloc), ("https", "api.github.com"))
+            self.assertEqual(parsed.path, "/repos/" + REPOSITORY + "/actions/workflows/checks.yml/runs")
+            self.assertEqual(parse_qs(parsed.query), {"head_sha": [SHA], "event": ["push"], "branch": ["main"],
+                                                   "per_page": ["100"], "page": [str(number)]})
+            self.assertEqual(auth, "test-auth")
+            self.assertGreater(timeout, 0)
+            self.assertLessEqual(timeout, 30)
+
+    def test_http_fetch_rejects_empty_intermediate_pages_and_page_limit(self):
+        for pages in [[{"total_count": 1, "workflow_runs": []}],
+                      [{"total_count": 1001, "workflow_runs": [run(run_id=i + 1)]}
+                       for i in range(gate.MAX_PAGES)]]:
+            with self.subTest(pages=len(pages)), \
+                    patch.object(gate, "github_auth", return_value="test-auth"), \
+                    patch.object(gate, "request_page", side_effect=pages):
+                with self.assertRaises(gate.GateError):
+                    gate.fetch_runs(REPOSITORY, SHA, "checks.yml", 30)
+
+    def test_http_response_size_is_bounded(self):
+        response_bytes = io.BytesIO(b"x" * (gate.MAX_PAGE_BYTES + 1))
+        response_bytes.status = 200
+        with patch.object(gate, "build_opener") as opener:
+            opener.return_value.open.return_value = response_bytes
+            with self.assertRaisesRegex(gate.GateError, "size limit"):
+                gate.request_page("https://api.github.com/", "test-auth", 30)
+
+    def test_cli_returns_verified_metadata_and_hides_provider_errors(self):
+        args = [gate.__file__, "--repository", REPOSITORY, "--sha", SHA, "--timeout-seconds", "0"]
+        output = io.StringIO()
+        pages = [response([run(w)])[0] for w in gate.WORKFLOWS]
+        with patch.object(sys, "argv", args), patch.object(gate, "github_auth", return_value="test-auth"), \
+                patch.object(gate, "request_page", side_effect=pages), contextlib.redirect_stdout(output):
+            result = gate.main()
+        self.assertEqual(result, 0)
+        self.assertEqual(json.loads(output.getvalue())["commit"], SHA)
+        error = io.StringIO()
+        with patch.object(sys, "argv", args), patch.object(gate, "github_auth", return_value="test-auth"), \
+                patch.object(gate, "build_opener") as opener, contextlib.redirect_stderr(error):
+            opener.return_value.open.side_effect = OSError(API_DIAGNOSTIC)
+            result = gate.main()
+        self.assertEqual(result, 1)
+        self.assertNotIn(API_DIAGNOSTIC, error.getvalue())
 
     def test_workflow_gates_packaging_and_rechecks_before_release(self):
         workflow = (Path(gate.__file__).resolve().parents[1] / ".github/workflows/release.yml").read_text()

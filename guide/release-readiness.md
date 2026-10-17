@@ -27,6 +27,12 @@ The gate checks every API page and rechecks the latest run attempts immediately
 before creating the release. If quality is rerun and no longer succeeds while
 packages build, those packages cannot be released by that run.
 
+Queries use authenticated, read-only HTTPS requests to `api.github.com` with
+redirects disabled. Credentials come from the workflow token or the existing
+local GitHub CLI login; credential values and provider errors are never printed.
+Requests share a deadline, and inventories over 10 pages or oversized responses
+are blocked rather than partially trusted.
+
 Pull-request and manual builds still create disposable workflow artifacts without
 creating tags or releases. The one-time initial publication also passes the
 shared release gate. These checks do not install branch protection, sign an
