@@ -47,6 +47,8 @@ func run() error {
 	recovery := flag.Bool("recovery", false, "isolated deletion recovery only; loopback API or erasure-only worker")
 	worker := flag.Bool("worker", false, "run embedding worker instead of HTTP API")
 	reindex := flag.Bool("reindex", false, "queue embedding jobs for Postgres records not in the configured embedder's space, then exit")
+	recallBaseline := flag.String("recall-baseline", "", "read-only ST-810 measurement: evaluation JSONL path, or self for the known-item set; prints numbers only")
+	baselineScope := flag.String("recall-baseline-scope", "default/default/management:owner/", "workspace/project/user/agent measured by -recall-baseline")
 	listen := flag.String("listen", "127.0.0.1:8091", "HTTP listen address")
 	flag.Parse()
 	if *receiptCauses && !*exportSnapshot && !*inspectRestore {
@@ -190,6 +192,12 @@ func run() error {
 		memory.TopicDigestCap = n
 	}
 	repo = pg
+	if *recallBaseline != "" {
+		if flag.NFlag() > 2 || flag.NArg() != 0 || *worker || *recovery || *initDB {
+			return memory.ErrInvalid // a measurement never shares a run with a writing mode
+		}
+		return runRecallBaseline(ctx, pg, *recallBaseline, *baselineScope)
+	}
 	if *initDB {
 		op, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
