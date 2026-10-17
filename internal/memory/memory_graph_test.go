@@ -444,6 +444,28 @@ func TestMemoryGraphLinesReachesAndDepth(t *testing.T) {
 	}
 }
 
+// ST-820 / TC-FUNC-035: nearer stale vectors filling the first query must not hide current ones.
+func TestMemoryGraphSimilarSkipsStaleVectors(t *testing.T) {
+	f := newFixture(t)
+	w := newGraphWorld(t, func(col string, r Record) error { return f.repo.Insert(testCtx, col, r) }, f.emb.space)
+	seedGraph(w)
+	for i := range 7 {
+		r := w.put(fmt.Sprintf("stale%d", i), "stale near rule", ReachGeneral, "", 0.01*float64(i+1))
+		r.Text = "edited, vector not refreshed yet"
+		if e := f.repo.Replace(testCtx, colMemories, r, 1); e != nil {
+			t.Fatal(e)
+		}
+	}
+	g, e := f.svc.MemoryGraph(testCtx, f.human, graphQuery(1))
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, edges := graphShape(g)
+	if edges["c>sim1"] != GraphSimilar || edges["c>sim3"] != GraphSimilar || edges["c>stale0"] != "" {
+		t.Fatal("stale vectors hid current ones", edges)
+	}
+}
+
 // ST-820 / TC-SEC-011: a neighbour the caller may not read never shows, nor what lies behind it.
 func TestMemoryGraphHonorsNeighbourReadDenial(t *testing.T) {
 	f := newFixture(t)

@@ -430,30 +430,53 @@ func (b *memoryGraphBuild) similarLines(ctx context.Context, frontier []string) 
 	if len(vectored) == 0 {
 		return nil, nil
 	}
-	// Twice the cap, so neighbours dropped below for a stale vector still leave three.
-	pairs, e := b.s.Repo.MemoryGraphSimilar(ctx, b.in, vectored, 1-memoryGraphSimilarMin, 2*memoryGraphPerNode)
-	if e != nil {
-		return nil, e
-	}
-	need := []MemoryGraphEdge{}
-	for _, p := range pairs {
-		if !slices.Contains(vectored, p.From) || p.From == p.To || p.Distance < 0 || p.Distance > 1-memoryGraphSimilarMin {
-			return nil, ErrUnavailable
+	// Stale vectors are only known after loading (the hash covers the Go-built content), so a node
+	// whose nearest rows were stale asks again with a wider limit, up to memoryGraphMaxNodes.
+	lines := map[string][]MemoryGraphEdge{}
+	asking, limit := vectored, 2*memoryGraphPerNode
+	for len(asking) > 0 {
+		pairs, e := b.s.Repo.MemoryGraphSimilar(ctx, b.in, asking, 1-memoryGraphSimilarMin, limit)
+		if e != nil {
+			return nil, e
 		}
-		need = append(need, MemoryGraphEdge{From: p.From, To: p.To})
-	}
-	if e = b.load(ctx, need); e != nil {
-		return nil, e
-	}
-	out, perNode := []MemoryGraphEdge{}, map[string]int{}
-	for _, p := range pairs {
-		to, ok := b.nodes[p.To]
-		if !ok || !b.vectorOK(to) || !sameReach(b.nodes[p.From], to) || perNode[p.From] >= memoryGraphPerNode {
-			continue // neighbour gone, its vector is stale, or a repository returned another reach
+		need := []MemoryGraphEdge{}
+		for _, p := range pairs {
+			if !slices.Contains(asking, p.From) || p.From == p.To || p.Distance < 0 || p.Distance > 1-memoryGraphSimilarMin {
+				return nil, ErrUnavailable
+			}
+			need = append(need, MemoryGraphEdge{From: p.From, To: p.To})
 		}
-		perNode[p.From]++
-		score := 1 - p.Distance
-		out = append(out, MemoryGraphEdge{From: p.From, To: p.To, Type: GraphSimilar, Score: &score})
+		if e = b.load(ctx, need); e != nil {
+			return nil, e
+		}
+		got := map[string]int{}
+		for _, id := range asking {
+			lines[id] = nil
+		}
+		for _, p := range pairs {
+			got[p.From]++
+			to, ok := b.nodes[p.To]
+			if !ok || !b.vectorOK(to) || !sameReach(b.nodes[p.From], to) || len(lines[p.From]) >= memoryGraphPerNode {
+				continue // neighbour gone, its vector is stale, or a repository returned another reach
+			}
+			score := 1 - p.Distance
+			lines[p.From] = append(lines[p.From], MemoryGraphEdge{From: p.From, To: p.To, Type: GraphSimilar, Score: &score})
+		}
+		short := []string{}
+		for _, id := range asking {
+			if len(lines[id]) < memoryGraphPerNode && got[id] >= limit {
+				short = append(short, id)
+			}
+		}
+		if len(short) > 0 && limit >= memoryGraphMaxNodes {
+			b.trunc = true
+			break
+		}
+		asking, limit = short, min(4*limit, memoryGraphMaxNodes)
+	}
+	out := []MemoryGraphEdge{}
+	for _, id := range vectored {
+		out = append(out, lines[id]...)
 	}
 	return out, nil
 }
