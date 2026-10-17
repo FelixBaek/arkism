@@ -134,6 +134,8 @@ type Record struct {
 	// dedicated /v1/work-checkpoints endpoints, never through generic Record
 	// serialization; receipts carry request hash/id/revision only.
 	WorkCheckpoint *WorkCheckpoint `json:"-" bson:"work_checkpoint,omitempty"`
+	// MemorySignal is the derived ST-813 trust signal on a jobs row (kind memory_signal).
+	MemorySignal *MemorySignal `json:"memory_signal,omitempty" bson:"memory_signal,omitempty"`
 
 	RunCallFence       int64            `json:"-" bson:"run_call_fence,omitempty"`
 	Run                *RunDetails      `json:"run,omitempty" bson:"run,omitempty"`
@@ -272,6 +274,8 @@ type Repository interface {
 	MemoryOutcomes(context.Context, MemoryOutcomeQuery) ([]Record, error)
 	// MemoryOutcomeCounts aggregates memory_outcome evaluations per memory id under the same filters.
 	MemoryOutcomeCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeCount, error)
+	// MemoryUseCounts aggregates context_usage receipts per memory id (all revisions) in one scope.
+	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
 	ListCandidates(context.Context, ReviewInput) ([]Record, error)
 	ListSources(context.Context, SourceListInput) ([]Record, error)
 	ListMemories(context.Context, MemoryListInput) ([]Record, error)

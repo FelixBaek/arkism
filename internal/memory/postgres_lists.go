@@ -603,3 +603,25 @@ func (p *Postgres) MemoryOutcomeCounts(ctx context.Context, in MemoryOutcomeQuer
 	}
 	return out, pgErr(rows.Err())
 }
+
+// MemoryUseCounts counts distinct context_usage receipts that handed out each
+// memory id; the scope columns are the only range condition for ST-813 uses.
+func (p *Postgres) MemoryUseCounts(ctx context.Context, s Scope, ids []string) ([]MemoryUseCount, error) {
+	if checkScope(s) != nil || len(ids) == 0 || len(ids) > memorySignalBatch {
+		return nil, ErrInvalid
+	}
+	rows, err := p.q().Query(ctx, `SELECT it->'memory'->>'id', count(DISTINCT id), max(`+pgDate+`) FROM memory_records, jsonb_array_elements(CASE WHEN jsonb_typeof(doc->'usage'->'items')='array' THEN doc->'usage'->'items' ELSE '[]'::jsonb END) it WHERE collection='jobs' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND kind='context_usage' AND status='done' AND it->'memory'->>'collection'='memories' AND it->'memory'->>'id'=ANY($5) GROUP BY 1 ORDER BY 1`, s.WorkspaceID, s.ProjectID, s.UserID, s.AgentID, ids)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	out := []MemoryUseCount{}
+	for rows.Next() {
+		var c MemoryUseCount
+		if err = rows.Scan(&c.MemoryID, &c.Uses, &c.Last); err != nil {
+			return nil, ErrUnavailable
+		}
+		out = append(out, c)
+	}
+	return out, pgErr(rows.Err())
+}

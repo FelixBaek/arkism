@@ -9002,6 +9002,212 @@
         }
       }
     },
+"/v1/memories/{id}/signal": {
+      "get": {
+        "summary": "Trust signal of one memory (ST-813)",
+        "description": "Derived signal (pass rate, samples, per-dimension counts, uses, last use) recomputed daily; same read model as POST /v1/memory-signals. available=false when the memory is missing, erased, quarantined or denied; signal=null before the first recompute. Never changes the memory's state. No text is returned.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemorySignalView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scope, id list or cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authorization or policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency or audit failure; no partial result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memory-signals": {
+      "post": {
+        "summary": "Trust signals for up to 100 memories (ST-813)",
+        "description": "Stored signals in request order. Requires read:memories, read:evaluations and read:usage on scope for one principal, and read:memories per id. Duplicate ids or more than 100 ids are 400. Signals are ranking and proposal inputs only; no text is returned.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemorySignalQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Signals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemorySignalPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scope, id list or cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authorization or policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency or audit failure; no partial result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memory-signals/recompute": {
+      "post": {
+        "summary": "Recompute trust signals for one page of active memories (ST-813)",
+        "description": "Rebuilds derived memory_signal rows (jobs collection) from memory_outcome evaluations and context_usage receipts for up to limit (1..100, default 100) active memories in id order; follow next_cursor. Unchanged signals are not rewritten, so a repeat run is a no-op. Role human, service or pipeline with write:memory_signals plus read:memories, read:evaluations and read:usage for the same principal. Run daily by `arkism memory-signals --execute`; never changes memory state.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemorySignalRecomputeInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemorySignalRecomputeOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scope, id list or cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authorization or policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency or audit failure; no partial result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/memory-outcomes": {
       "post": {
         "summary": "Record independent actual memory-use outcome",
@@ -18188,6 +18394,214 @@
           "lease_token",
           "lease_until"
         ]
+      },
+"MemorySignal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memory",
+          "samples",
+          "passed",
+          "pass_rate",
+          "last_judged_at",
+          "personal_compliance",
+          "work_task",
+          "uses",
+          "last_used_at",
+          "computed_at"
+        ],
+        "properties": {
+          "memory": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "samples": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "passed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pass_rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "last_judged_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "personal_compliance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "samples",
+              "passed"
+            ],
+            "properties": {
+              "samples": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "passed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "work_task": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "samples",
+              "passed"
+            ],
+            "properties": {
+              "samples": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "passed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "uses": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "computed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MemorySignalView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memory_id",
+          "available",
+          "signal"
+        ],
+        "properties": {
+          "memory_id": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "signal": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MemorySignal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "MemorySignalPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "authority"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemorySignalView"
+            }
+          },
+          "authority": {
+            "type": "string",
+            "const": "data_only_untrusted"
+          }
+        }
+      },
+      "MemorySignalQuery": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "memory_ids"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "memory_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "MemorySignalRecomputeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        }
+      },
+      "MemorySignalRecomputeOutput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "computed",
+          "changed",
+          "next_cursor"
+        ],
+        "properties": {
+          "computed": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "changed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        }
       },
       "MemoryOutcomeSummaryInput": {
         "type": "object",
