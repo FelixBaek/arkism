@@ -27,6 +27,8 @@ def selected(line, cutoff):
         return None
     if cutoff and timestamp(row.get("ts")) < cutoff:
         return None
+    if not isinstance(row.get("session"), str):
+        row["session"] = None
     return row
 
 
@@ -47,14 +49,13 @@ def summarize(lines, since=None, session_max=4000):
         hook = row.get("hook") if row.get("hook") in HOOKS else "other"
         if row["event"] == "inject" and isinstance(row.get("chars"), int):
             chars[hook].append(row["chars"])
-            if isinstance(row.get("session"), str):
-                sessions[hook].add(row["session"])
+            sessions[hook].add(row["session"])
         elif row["event"] == "recall" and isinstance(row.get("injected"), int):
             injected[hook].append(row["injected"])
     return {
         "since": cutoff.isoformat() if cutoff else None,
         "session_max_chars": session_max,
-        "inject_chars": {h: {**spread(v), "sessions": len(sessions[h]),
+        "inject_chars": {h: {**spread(v), "sessions": len(sessions[h] - {None}),
                              "over_session_max": sum(c > session_max for c in v)}
                          for h, v in sorted(chars.items())},
         "recall_items": {h: {**spread(v), "empty": v.count(0)}
