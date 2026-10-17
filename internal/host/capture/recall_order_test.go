@@ -46,6 +46,7 @@ func TestStandingOrderUserThenOldestThenID(t *testing.T) {
 
 // When the char limit cuts, the newest how-to rule goes, not one that sorts late by id.
 func TestSessionIndexCutsNewestRuleFirst(t *testing.T) {
+	t.Chdir(t.TempDir()) // the index reads .arkism/contract.md from the cwd's repo; keep a local one out
 	capFake(t)
 	old := standingRow("ffff6394712964a139f82bfc9edd59e8", "procedural", "2026-09-24T10:39:43.513Z", "PR 본문에 자동 생성 표시 문구를 넣지 않는다.")
 	newer := standingRow("0000597c4af56e9d17534b150a09436c", "procedural", "2026-10-13T20:22:44.942Z", "오래된 branch 자체를 계속 유지하지 않는다.")

@@ -74,6 +74,10 @@ func (s *handoffStore) request(path string, p map[string]any) (map[string]any, e
 }
 func handoffInput(t *testing.T) string {
 	t.Helper()
+	// a parent agent's provider override (e.g. ANTHROPIC_BASE_URL under Claude Code) would make every handoff refuse
+	for _, key := range []string{"OPENAI_BASE_URL", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"} {
+		t.Setenv(key, "")
+	}
 	b, _ := json.Marshal(handoffRequest{ID: "child", ParentWorkID: "parent", Sender: "codex", Recipient: "claude", SessionID: "session-1", Task: "Inspect the current repository", Model: "opus", CWD: t.TempDir(), TimeoutSeconds: 10})
 	return string(b)
 }
