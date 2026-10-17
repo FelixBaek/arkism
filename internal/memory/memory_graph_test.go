@@ -451,7 +451,9 @@ func TestMemoryGraphHonorsNeighbourReadDenial(t *testing.T) {
 	if g, e = f.svc.MemoryGraph(testCtx, f.human, graphQuery(2)); e != nil || asked["sim1"] != 1 {
 		t.Fatal("denied neighbour asked", asked, e)
 	}
-	if nodes, _ = graphShape(g); hasNode(nodes, "sim1") || !hasNode(nodes, "sim2") {
+	// con is one step from c and a2 two steps behind it: neither shows, nor a2's text.
+	raw, _ = json.Marshal(g)
+	if nodes, _ = graphShape(g); hasNode(nodes, "sim1") || !hasNode(nodes, "sim2") || hasNode(nodes, "con") || hasNode(nodes, "a2") || strings.Contains(string(raw), "two steps away") {
 		t.Fatal("denied similar neighbour", nodes)
 	}
 	// A decision for another principal on a neighbour stops the whole read.
