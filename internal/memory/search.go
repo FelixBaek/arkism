@@ -49,20 +49,36 @@ func validSearchModes(modes []string) bool {
 	return true
 }
 
+// ScoredHit is a fused hit with its RRF score and the lane indexes that found it.
+type ScoredHit struct {
+	Hit
+	Score float64
+	Lanes []int
+}
+
 // Fuse uses ordinal positions only. Provider similarities are never accepted.
 func Fuse(lists [][]Hit, limit int) []Hit {
+	scored := FuseScored(lists, limit)
+	out := make([]Hit, len(scored))
+	for i, r := range scored {
+		out[i] = r.Hit
+	}
+	return out
+}
+
+// FuseScored is Fuse with each hit's score kept, for measurement (ST-810).
+func FuseScored(lists [][]Hit, limit int) []ScoredHit {
 	if limit <= 0 {
-		return []Hit{}
+		return []ScoredHit{}
 	}
 	const rankOffset = 60
 	const exactKeywordWeight = 2.0
 	type ranked struct {
-		hit   Hit
-		score float64
-		key   string
+		ScoredHit
+		key string
 	}
 	merged := map[string]*ranked{}
-	for _, list := range lists {
+	for lane, list := range lists {
 		seen := map[string]bool{}
 		for position, hit := range list {
 			key := hit.Origin + ":" + hit.Collection + ":" + hit.ID
@@ -73,17 +89,18 @@ func Fuse(lists [][]Hit, limit int) []Hit {
 			entry := merged[key]
 			if entry == nil {
 				hit.Reasons = slices.Clone(hit.Reasons)
-				entry = &ranked{hit: hit, key: key}
+				entry = &ranked{ScoredHit: ScoredHit{Hit: hit}, key: key}
 				merged[key] = entry
 			}
+			entry.Lanes = append(entry.Lanes, lane)
 			weight := 1.0
 			if slices.Contains(hit.Reasons, "exact_keyword") {
 				weight = exactKeywordWeight
 			}
-			entry.score += weight / float64(rankOffset+position+1)
+			entry.Score += weight / float64(rankOffset+position+1)
 			for _, reason := range hit.Reasons {
-				if !slices.Contains(entry.hit.Reasons, reason) {
-					entry.hit.Reasons = append(entry.hit.Reasons, reason)
+				if !slices.Contains(entry.Hit.Reasons, reason) {
+					entry.Hit.Reasons = append(entry.Hit.Reasons, reason)
 				}
 			}
 		}
@@ -94,24 +111,24 @@ func Fuse(lists [][]Hit, limit int) []Hit {
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		a, b := rows[i], rows[j]
-		if a.score != b.score {
-			return a.score > b.score
+		if a.Score != b.Score {
+			return a.Score > b.Score
 		}
-		if a.hit.Trust != b.hit.Trust {
-			return a.hit.Trust > b.hit.Trust
+		if a.Hit.Trust != b.Hit.Trust {
+			return a.Hit.Trust > b.Hit.Trust
 		}
-		if !a.hit.UpdatedAt.Equal(b.hit.UpdatedAt) {
-			return a.hit.UpdatedAt.After(b.hit.UpdatedAt)
+		if !a.Hit.UpdatedAt.Equal(b.Hit.UpdatedAt) {
+			return a.Hit.UpdatedAt.After(b.Hit.UpdatedAt)
 		}
 		return a.key < b.key
 	})
-	out := make([]Hit, 0, min(limit, len(rows)))
+	out := make([]ScoredHit, 0, min(limit, len(rows)))
 	for _, r := range rows {
 		if len(out) >= limit {
 			break
 		}
-		r.hit.Authority = AuthorityDataOnly
-		out = append(out, r.hit)
+		r.Hit.Authority = AuthorityDataOnly
+		out = append(out, r.ScoredHit)
 	}
 	return out
 }
