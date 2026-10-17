@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   coverage:
-    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 15
     # Postgres store tests skip without POSTGRES_TEST_DSN; tools/ci_postgres.sh gives them a disposable pgvector DB.
     steps:
