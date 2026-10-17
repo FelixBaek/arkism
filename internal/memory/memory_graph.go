@@ -32,6 +32,7 @@ const (
 	MemoryGraphModeAll  = "all" // whole visible map: no center, no labels
 	memoryGraphMapNodes = 5000
 	memoryGraphMapEdges = 20000
+	memoryGraphMapPage  = 500 // records read and authorized per page; only slim copies are kept
 )
 
 var memoryGraphReaches = []string{ReachPersonal, ReachGeneral, ReachProject}
@@ -128,6 +129,14 @@ func memoryGraphVisible(r Record, in MemoryGraphQuery) bool {
 // sameReach: derived lines never cross a reach (or two projects' reaches).
 func sameReach(a, b Record) bool {
 	return memoryReach(a) == memoryReach(b) && a.ReachProject == b.ReachProject
+}
+
+// vectorOK reads the vector state saved for a slim all-mode node, else checks the record.
+func (b *memoryGraphBuild) vectorOK(r Record) bool {
+	if v, ok := b.fresh[r.ID]; ok {
+		return v
+	}
+	return b.s.vectorCurrent(r)
 }
 
 func (s *Service) vectorCurrent(r Record) bool {
@@ -230,6 +239,7 @@ type memoryGraphBuild struct {
 	seen  map[string]bool
 	deny  map[string]bool // read denied once; never asked again in this request
 	cap   int             // line cap
+	fresh map[string]bool // all mode: vector state kept for slim node records
 	trunc bool
 }
 
@@ -413,7 +423,7 @@ func (b *memoryGraphBuild) sessionLines(ctx context.Context, frontier []string) 
 func (b *memoryGraphBuild) similarLines(ctx context.Context, frontier []string) ([]MemoryGraphEdge, error) {
 	vectored := []string{}
 	for _, id := range frontier {
-		if b.s.vectorCurrent(b.nodes[id]) {
+		if b.vectorOK(b.nodes[id]) {
 			vectored = append(vectored, id)
 		}
 	}
@@ -438,7 +448,7 @@ func (b *memoryGraphBuild) similarLines(ctx context.Context, frontier []string) 
 	out, perNode := []MemoryGraphEdge{}, map[string]int{}
 	for _, p := range pairs {
 		to, ok := b.nodes[p.To]
-		if !ok || !b.s.vectorCurrent(to) || !sameReach(b.nodes[p.From], to) || perNode[p.From] >= memoryGraphPerNode {
+		if !ok || !b.vectorOK(to) || !sameReach(b.nodes[p.From], to) || perNode[p.From] >= memoryGraphPerNode {
 			continue // neighbour gone, its vector is stale, or a repository returned another reach
 		}
 		perNode[p.From]++

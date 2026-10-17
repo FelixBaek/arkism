@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -24,14 +25,14 @@ func (f *fakeRepo) graphRows(col string) []Record {
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
-func (f *fakeRepo) MemoryGraphMapNodes(_ context.Context, in MemoryGraphQuery) ([]Record, error) {
+func (f *fakeRepo) MemoryGraphMapNodes(_ context.Context, in MemoryGraphQuery, after string, limit int) ([]Record, error) {
 	in, e := normalizeMemoryGraphQuery(in)
-	if e != nil || in.Mode != MemoryGraphModeAll {
+	if e != nil || in.Mode != MemoryGraphModeAll || limit < 1 || limit > memoryGraphMapPage {
 		return nil, ErrInvalid
 	}
 	out := []Record{}
 	for _, r := range f.graphRows(colMemories) {
-		if len(out) <= in.Limit && memoryGraphVisible(r, in) {
+		if len(out) < limit && r.ID > after && memoryGraphVisible(r, in) {
 			out = append(out, r)
 		}
 	}
@@ -379,6 +380,31 @@ func TestMemoryGraphMap(t *testing.T) {
 		if l.From == "c" || l.To == "c" {
 			t.Fatal("line to denied node", l)
 		}
+	}
+	// The cap counts readable memories only: a denied first id never leaves the map empty.
+	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+		if req.Action == "read:memories" && req.ResourceID == "a2" {
+			return Decision{}, ErrDenied
+		}
+		return f.auth.Authorize(ctx, token, req)
+	})
+	if g, e = f.svc.MemoryGraphMap(testCtx, f.human, MemoryGraphQuery{Scope: scopeA, Limit: 1}); e != nil || len(g.Nodes) != 1 || g.Nodes[0].ID != "a3" || !g.Truncated {
+		t.Fatal("denied first id", g, e)
+	}
+	personal := MemoryGraphQuery{Scope: scopeA, Reaches: []string{ReachPersonal}, Limit: 7} // exactly the seven personal memories
+	if g, e = f.svc.MemoryGraphMap(testCtx, f.human, personal); e != nil || len(g.Nodes) != 7 || g.Truncated {
+		t.Fatal("exact cap", len(g.Nodes), g.Truncated, e)
+	}
+	// Pages of memoryGraphMapPage records are walked to the end.
+	for i := range memoryGraphMapPage + 20 {
+		r := Record{ID: fmt.Sprintf("p-%04d", i), Scope: scopeA, Kind: "lesson", Status: "active", Revision: 1, Text: "paged", ApprovedBy: "reviewer", Reach: ReachPersonal}
+		if e = f.repo.Insert(testCtx, colMemories, r); e != nil {
+			t.Fatal(e)
+		}
+	}
+	personal.Limit = 0
+	if g, e = f.svc.MemoryGraphMap(testCtx, f.human, personal); e != nil || len(g.Nodes) != 7+memoryGraphMapPage+20 || g.Truncated {
+		t.Fatal("paged map", len(g.Nodes), g.Truncated, e)
 	}
 	// read:usage is required, for the same principal.
 	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {

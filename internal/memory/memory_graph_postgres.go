@@ -31,13 +31,13 @@ func (p *Postgres) MemoryGraphNodes(ctx context.Context, in MemoryGraphQuery, id
 	return p.selectRecords(ctx, colMemories, in.Scope, w, append(args, ids), "id ASC", len(ids))
 }
 
-func (p *Postgres) MemoryGraphMapNodes(ctx context.Context, in MemoryGraphQuery) ([]Record, error) {
+func (p *Postgres) MemoryGraphMapNodes(ctx context.Context, in MemoryGraphQuery, after string, limit int) ([]Record, error) {
 	in, err := normalizeMemoryGraphQuery(in)
-	if err != nil || in.Mode != MemoryGraphModeAll {
+	if err != nil || in.Mode != MemoryGraphModeAll || limit < 1 || limit > memoryGraphMapPage {
 		return nil, ErrInvalid
 	}
 	w, args := memoryGraphWhere(in, "", 6)
-	return p.selectRecords(ctx, colMemories, in.Scope, w, args, "id ASC", in.Limit+1)
+	return p.selectRecords(ctx, colMemories, in.Scope, w+" AND id > $8", append(args, after), "id ASC", limit)
 }
 
 func (p *Postgres) MemoryGraphLinks(ctx context.Context, in MemoryGraphQuery, ids []string) ([]Record, error) {

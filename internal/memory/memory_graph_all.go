@@ -49,28 +49,9 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 			return MemoryGraphMap{}, ErrDenied
 		}
 	}
-	rows, e := s.Repo.MemoryGraphMapNodes(ctx, in)
-	if e != nil {
+	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{}, depth: map[string]int{}, seen: map[string]bool{}, deny: map[string]bool{}, cap: memoryGraphMapEdges, fresh: map[string]bool{}}
+	if e = b.mapNodes(ctx); e != nil {
 		return MemoryGraphMap{}, e
-	}
-	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{}, depth: map[string]int{}, seen: map[string]bool{}, deny: map[string]bool{}, cap: memoryGraphMapEdges, trunc: len(rows) > in.Limit}
-	for _, r := range rows[:min(len(rows), in.Limit)] {
-		if _, dup := b.nodes[r.ID]; dup || !memoryGraphVisible(r, in) {
-			return MemoryGraphMap{}, ErrUnavailable
-		}
-		// shortcut: one authorizer call per node (5000 max) like ListMemories; batch it if the map gets slow.
-		d, e := s.authorize(ctx, token, "read:memories", in.Scope, r.ID, structuredText(r))
-		if errors.Is(e, ErrDenied) {
-			continue
-		}
-		if e != nil {
-			return MemoryGraphMap{}, e
-		}
-		if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
-			return MemoryGraphMap{}, ErrDenied
-		}
-		b.nodes[r.ID], b.depth[r.ID] = r, 0
-		b.order = append(b.order, r.ID)
 	}
 	for chunk := range slices.Chunk(b.order, memoryGraphMaxNodes) {
 		for _, lines := range []func(context.Context, []string) ([]MemoryGraphEdge, error){b.storedLines, b.sessionLines, b.similarLines} {
@@ -103,7 +84,7 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 	out := MemoryGraphMap{Nodes: make([]MemoryGraphMapNode, 0, len(b.order)), Edges: make([]MemoryGraphMapEdge, 0, len(b.edges)), Truncated: b.trunc, Authority: AuthorityDataOnly}
 	for _, id := range b.order {
 		r := b.nodes[id]
-		out.Nodes = append(out.Nodes, MemoryGraphMapNode{ID: id, Reach: memoryReach(r), Kind: r.Kind, Uses: uses[id], VectorPending: !s.vectorCurrent(r)})
+		out.Nodes = append(out.Nodes, MemoryGraphMapNode{ID: id, Reach: memoryReach(r), Kind: r.Kind, Uses: uses[id], VectorPending: !b.fresh[id]})
 	}
 	for _, edge := range b.edges {
 		out.Edges = append(out.Edges, MemoryGraphMapEdge{From: edge.From, To: edge.To, Type: edge.Type})
@@ -114,4 +95,43 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 		return MemoryGraphMap{}, e
 	}
 	return out, nil
+}
+
+// mapNodes pages through visible memories by id and keeps those the caller may read, up to
+// the node limit; truncated means one more readable memory exists. Only a slim copy of each
+// record stays in memory: the fields the line rules use, and the vector state.
+func (b *memoryGraphBuild) mapNodes(ctx context.Context) error {
+	for after := ""; ; {
+		rows, e := b.s.Repo.MemoryGraphMapNodes(ctx, b.in, after, memoryGraphMapPage)
+		if e != nil {
+			return e
+		}
+		for _, r := range rows {
+			if _, dup := b.nodes[r.ID]; dup || !memoryGraphVisible(r, b.in) {
+				return ErrUnavailable
+			}
+			// shortcut: one authorizer call per node like ListMemories; batch it if the map gets slow.
+			d, e := b.s.authorize(ctx, b.token, "read:memories", b.in.Scope, r.ID, structuredText(r))
+			if errors.Is(e, ErrDenied) {
+				continue
+			}
+			if e != nil {
+				return e
+			}
+			if d.PrincipalID != b.who.PrincipalID || d.Role != b.who.Role {
+				return ErrDenied
+			}
+			if len(b.order) == b.in.Limit {
+				b.trunc = true
+				return nil
+			}
+			b.nodes[r.ID] = Record{ID: r.ID, Scope: r.Scope, Kind: r.Kind, Status: r.Status, Revision: r.Revision, Reach: r.Reach, ReachProject: r.ReachProject, Tags: r.Tags}
+			b.fresh[r.ID], b.depth[r.ID] = b.s.vectorCurrent(r), 0
+			b.order = append(b.order, r.ID)
+		}
+		if len(rows) < memoryGraphMapPage {
+			return nil
+		}
+		after = rows[len(rows)-1].ID
+	}
 }

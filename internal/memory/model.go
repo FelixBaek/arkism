@@ -282,8 +282,8 @@ type Repository interface {
 	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
 	// ST-820 graph reads; each applies the scope and memoryGraphWhere (reach) filter.
 	MemoryGraphNodes(context.Context, MemoryGraphQuery, []string) ([]Record, error)
-	// MemoryGraphMapNodes returns up to in.Limit+1 visible memories by id (ST-820 all mode).
-	MemoryGraphMapNodes(context.Context, MemoryGraphQuery) ([]Record, error)
+	// MemoryGraphMapNodes returns up to limit visible memories with id after the given one, by id (ST-820 all mode).
+	MemoryGraphMapNodes(context.Context, MemoryGraphQuery, string, int) ([]Record, error)
 	// MemoryGraphLinks returns memory_relations rows naming any of the memory ids (up to memoryGraphScan+1).
 	MemoryGraphLinks(context.Context, MemoryGraphQuery, []string) ([]Record, error)
 	// MemoryGraphSessions returns, per asking memory id, up to limit other visible memories of the
