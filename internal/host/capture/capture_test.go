@@ -171,7 +171,7 @@ func TestCaptureSearchRetriesShareOneBudgetAndKeepSuccessfulResults(t *testing.T
 	}{{7, 2}, {8, 1}} {
 		clock(c.elapsed)
 		answers(first(), errTimeout)
-		got, err := search("query", "", 6, 8)
+		got, _, err := search("query", "", 6, 8)
 		if err != nil || len(got) != 1 || len(calls) != c.calls {
 			t.Fatal(got, err, calls)
 		}
@@ -182,20 +182,21 @@ func TestCaptureSearchRetriesShareOneBudgetAndKeepSuccessfulResults(t *testing.T
 	for _, elapsed := range []float64{7, 8} {
 		clock(elapsed)
 		answers(&host.HTTPError{Code: 503}, map[string]any{"items": []any{}})
-		got, err := search("query", "", 6, 8)
+		got, vectorRan, err := search("query", "", 6, 8)
 		if elapsed == 8 {
 			if host.HTTPCode(err) != 503 || len(calls) != 1 {
 				t.Fatal(err, calls)
 			}
 			continue
 		}
-		if err != nil || len(got) != 0 || calls[1].timeout != time.Second || !reflect.DeepEqual(calls[1].modes, []any{"exact", "fts"}) {
+		// ST-815: the lexical fallback is not judged by the three-lane score floor.
+		if err != nil || len(got) != 0 || vectorRan || calls[1].timeout != time.Second || !reflect.DeepEqual(calls[1].modes, []any{"exact", "fts"}) {
 			t.Fatal(got, err, calls)
 		}
 	}
 	clock(1)
 	answers(first(), &host.HTTPError{Code: 403})
-	if _, err := search("query", "", 6, 8); host.HTTPCode(err) != 403 {
+	if _, _, err := search("query", "", 6, 8); host.HTTPCode(err) != 403 {
 		t.Fatal(err)
 	}
 }
@@ -660,7 +661,7 @@ func TestNoProjectKeyIsOmittedAndKeepsProjectMemoriesOut(t *testing.T) {
 		body = payload.(map[string]any)
 		return map[string]any{"hits": []any{}}, nil
 	}
-	if _, err := searchMemories("query", "", 3, 1); err != nil {
+	if _, _, err := searchMemories("query", "", 3, 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := body["project_key"]; ok || body == nil {

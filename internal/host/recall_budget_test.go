@@ -41,7 +41,7 @@ func TestRecallBudgetApply(t *testing.T) {
 		hit("old", "lesson", nil, "x"),                     // no score from an older server: not judged
 		hit("k", "", 0.04, "y"),                            // unlisted kind: floor only
 	}
-	kept, low, over := b.Apply(items)
+	kept, low, over := b.Apply(items, true)
 	if ids(kept) != "p1,p2,p3,u1,old,k" || low != 1 || over != 2 {
 		t.Fatal(ids(kept), low, over)
 	}
@@ -51,13 +51,22 @@ func TestRecallBudgetApply(t *testing.T) {
 			t.Fatal(bad, got)
 		}
 	}
+	// Lexical-only search (embedder off or down): the three-lane floor does not judge it.
+	if kept, low := b.Floor(items[:2], false); len(kept) != 2 || low != 0 {
+		t.Fatal(kept, low)
+	}
+	if !VectorRan([]any{"exact", "fts", "vector"}, map[string]any{}) || VectorRan([]any{"exact", "fts"}, map[string]any{}) ||
+		VectorRan([]any{"exact", "fts", "vector"}, map[string]any{"degraded": []any{"memory_vector_disabled"}}) ||
+		VectorRan([]any{"exact", "fts", "vector"}, map[string]any{"degraded": []any{"memory_vector_unavailable"}}) {
+		t.Fatal("VectorRan")
+	}
 	t.Setenv("ARKISM_RECALL_MIN_SCORE", "0")
 	t.Setenv("ARKISM_RECALL_BUDGET", "procedural=1:10, bad, user=x:1")
 	b = LoadRecallBudget()
 	if b.MinScore != 0 || b.Kinds["procedural"] != (KindBudget{1, 10}) || b.Kinds["user"] != (KindBudget{2, 1500}) {
 		t.Fatal(b)
 	}
-	if kept, low, _ := b.Apply(items[:2]); ids(kept) != "p1" || low != 0 {
+	if kept, low, _ := b.Apply(items[:2], true); ids(kept) != "p1" || low != 0 {
 		t.Fatal(ids(kept), low)
 	}
 }

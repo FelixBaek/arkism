@@ -76,7 +76,7 @@ func TestPromptRecallSkipsEarlierTurnsUnlessRevised(t *testing.T) {
 	hookEnv(t)
 	sessionOutcomeEnv(t)
 	hits := []any{memoryHit("c8b788c964a0350e97d8635111de6824", 2, ""), memoryHit("d9243bd5ef20da4ea2369e120fb20962", 1, "")}
-	search = func(string, string, int, float64) ([]any, error) { return hits, nil }
+	search = func(string, string, int, float64) ([]any, bool, error) { return hits, true, nil }
 	turn := func(sid string) string {
 		t.Helper()
 		p, revs, err := promptParts("기억 승인 권한을 다시 설명해 줘", sid, "")
@@ -141,7 +141,7 @@ func TestHookRecallAppliesSharedBudget(t *testing.T) {
 	t.Setenv("ARKISM_RECALL_BUDGET", "procedural=3:1500")
 	low := memoryHit("c8b788c964a0350e97d8635111de6824", 1, "")
 	low["score"] = json.Number("0.016393")
-	search = func(string, string, int, float64) ([]any, error) { return []any{low}, nil }
+	search = func(string, string, int, float64) ([]any, bool, error) { return []any{low}, true, nil }
 	if p, _, err := promptParts("관련 없는 질문을 하나 해 볼게요", "s1", ""); err != nil || p.Full != "" {
 		t.Fatal(err, p.Full)
 	}
@@ -154,7 +154,7 @@ func TestHookRecallAppliesSharedBudget(t *testing.T) {
 		h["kind"], h["score"] = "procedural", json.Number("0.05")
 		procedural = append(procedural, h)
 	}
-	search = func(string, string, int, float64) ([]any, error) { return procedural, nil }
+	search = func(string, string, int, float64) ([]any, bool, error) { return procedural, true, nil }
 	if p, _, err := promptParts("기억 승인 권한을 다시 설명해 줘", "s2", ""); err != nil || strings.Count(p.Full, "\n- [") != 3 {
 		t.Fatal(err, p.Full)
 	}

@@ -742,7 +742,7 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 		}
 		found = asList(getOr(res, "items", []any{}))
 		if relatedTo == nil { // relation hits come from one lane, so the fused-score floor does not fit them
-			found, _, _ = host.LoadRecallBudget().Apply(found)
+			found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan(modes, res))
 		}
 	}
 	memories := []any{}

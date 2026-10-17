@@ -69,14 +69,32 @@ func parseRecallBudget(spec string) RecallBudget {
 }
 
 // Apply is Floor then Cap, for a caller that injects the search hits as they come.
-func (b RecallBudget) Apply(items []any) (kept []any, droppedScore, droppedBudget int) {
-	kept, droppedScore = b.Floor(items)
+func (b RecallBudget) Apply(items []any, vectorRan bool) (kept []any, droppedScore, droppedBudget int) {
+	kept, droppedScore = b.Floor(items, vectorRan)
 	kept, droppedBudget = b.Cap(kept)
 	return kept, droppedScore, droppedBudget
 }
 
-// Floor drops hits below MinScore. A hit without a score (an older server) is not judged.
-func (b RecallBudget) Floor(items []any) (kept []any, dropped int) {
+// VectorRan reports whether a /v1/search response came from all three lanes; the floor was
+// measured that way (ST-810), so a lexical-only search (embedder off or down) is not judged by it.
+func VectorRan(modes []any, res map[string]any) bool {
+	degraded, _ := res["degraded"].([]any)
+	has := func(list []any, s string) bool {
+		for _, v := range list {
+			if v == s {
+				return true
+			}
+		}
+		return false
+	}
+	return has(modes, "vector") && !has(degraded, "memory_vector_unavailable") && !has(degraded, "memory_vector_disabled")
+}
+
+// Floor drops hits below MinScore when vectorRan. A hit without a score (an older server) is not judged.
+func (b RecallBudget) Floor(items []any, vectorRan bool) (kept []any, dropped int) {
+	if !vectorRan {
+		return items, 0
+	}
 	kept = []any{}
 	for _, raw := range items {
 		if m, _ := raw.(map[string]any); m != nil {

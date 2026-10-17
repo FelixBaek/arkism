@@ -107,11 +107,11 @@ var search = searchMemories
 // recallSearch is search with the score floor the MCP recall tool also uses (ST-815); hooks then
 // capBudget the list they actually inject. The extractor's duplicate check keeps the raw search.
 func recallSearch(query, project string, limit int, timeout float64) ([]any, error) {
-	items, err := search(query, project, limit, timeout)
+	items, vectorRan, err := search(query, project, limit, timeout)
 	if err != nil {
 		return nil, err
 	}
-	kept, low := host.LoadRecallBudget().Floor(items)
+	kept, low := host.LoadRecallBudget().Floor(items, vectorRan)
 	budgetMetric("below_score", low)
 	return kept, nil
 }
@@ -135,7 +135,8 @@ func budgetMetric(reason string, n int) {
 }
 
 // project is host.ProjectKey of the session: the server leaves out other projects' memories.
-func searchMemories(query, project string, limit int, timeout float64) ([]any, error) {
+// vectorRan is host.VectorRan of the answer it returns.
+func searchMemories(query, project string, limit int, timeout float64) (items []any, vectorRan bool, err error) {
 	deadline := monotonic() + timeout
 	body := map[string]any{"scope": capScope(), "query": head(query, 1000), "modes": []any{"exact", "fts", "vector"},
 		"purpose": "answer", "destination": "internal", "limit": limit, "max_chars": 6000}
@@ -145,18 +146,18 @@ func searchMemories(query, project string, limit int, timeout float64) ([]any, e
 	res, err := capPost("/v1/search", body, secs(timeout))
 	if err != nil {
 		if host.HTTPCode(err) != 503 {
-			return nil, err
+			return nil, false, err
 		}
 		remaining := deadline - monotonic()
 		if remaining <= 0 {
-			return nil, err
+			return nil, false, err
 		}
 		body["modes"] = []any{"exact", "fts"} // embedder outage: keep lexical recall instead of none
 		res, err = capPost("/v1/search", body, secs(remaining))
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return listOf(res["items"]), nil
+		return listOf(res["items"]), false, nil
 	}
 	if degraded, _ := res["degraded"].([]any); containsAny(degraded, "memory_vector_unavailable") {
 		// Retry within the caller's budget; never double a foreground hook's wait.
@@ -166,14 +167,11 @@ func searchMemories(query, project string, limit int, timeout float64) ([]any, e
 			if err == nil {
 				res = retry
 			} else if code := host.HTTPCode(err); code != 503 && (code != 0 || !networkish(err) || pyType(err) == "RuntimeError") {
-				return nil, err
+				return nil, false, err
 			} // HTTP 503 or a network error: the first response still has usable lexical results
 		}
 	}
-	if items, has := res["items"]; has {
-		return listOf(items), nil
-	}
-	return []any{}, nil
+	return listOf(res["items"]), host.VectorRan(body["modes"].([]any), res), nil
 }
 
 func secs(s float64) time.Duration { return time.Duration(s * float64(time.Second)) }
