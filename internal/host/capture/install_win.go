@@ -30,9 +30,6 @@ var instClient = map[bool]string{true: "arkism.exe", false: "arkism"}[runtime.GO
 // "arkism" would match far too much.
 const instUnixClient = "/.config/arkism/arkism"
 
-// instSupport are copied next to the installed client when they ship beside this binary.
-var instSupport = []string{"install_arkism_export_task.ps1", "install_arkism_work_task.ps1"}
-
 // instOldHooks name every handler this installer (or its Python predecessor) wrote.
 var instOldHooks = []string{"honcho-memory-router", "arkism_windows.py", "hook-codex.cmd", "arkism_capture.py", "arkism.exe", instUnixClient}
 
@@ -773,7 +770,7 @@ func instSameFile(a, b string) bool {
 	return err1 == nil && err2 == nil && os.SameFile(x, y)
 }
 
-// instFiles installs this binary and the task scripts shipped beside it.
+// instFiles installs this binary and its embedded Windows task helpers.
 func instFiles(s *instSaver, folder, client string) error {
 	exe := host.Executable()
 	// Re-running the installed copy must not replace the running binary with itself.
@@ -791,18 +788,8 @@ func instFiles(s *instSaver, folder, client string) error {
 			}
 		}
 	}
-	for _, name := range instSupport {
-		source := filepath.Join(filepath.Dir(exe), name)
-		if !isFile(source) {
-			continue
-		}
-		text, err := instRead(source)
-		if err != nil {
-			return err
-		}
-		if err := s.text(filepath.Join(folder, name), text); err != nil {
-			return err
-		}
+	if runtime.GOOS == "windows" {
+		return instWriteTaskScripts(s, folder)
 	}
 	return nil
 }

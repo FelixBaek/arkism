@@ -12,6 +12,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -40,24 +41,53 @@ func sharedScope() map[string]string {
 	return map[string]string{"workspace_id": str(s["workspace_id"]), "project_id": str(s["project_id"]), "user_id": str(s["user_id"]), "agent_id": ""}
 }
 
-// ledgerRecall records the delivered memories of the shared scope; anything else could not be judged.
+// memoryDeliveries extracts exact refs from returned memory rows without storing their text.
+func memoryDeliveries(items []map[string]any, form string) []host.MemoryDelivery {
+	var out []host.MemoryDelivery
+	for _, item := range items {
+		rev, _ := host.Int(item["revision"])
+		id, _ := item["id"].(string)
+		if (item["collection"] != nil && item["collection"] != "memories") || rev < 1 || id == "" || !truthy(item["text"]) {
+			continue
+		}
+		scope := map[string]string{}
+		rowScope, ok := item["scope"].(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, key := range scopeKeys {
+			scope[key], _ = rowScope[key].(string)
+		}
+		out = append(out, host.MemoryDelivery{Collection: "memories", ID: id, Revision: rev, Scope: scope, Form: form})
+	}
+	return out
+}
+
+// ledgerRecall supports historical callers whose output form was not recorded.
 func ledgerRecall(sid string, items []map[string]any) {
+	ledgerDeliveries(sid, memoryDeliveries(items, "unknown"))
+}
+
+// ledgerDeliveries logs reference-only context exposure, never an actual-use acknowledgement.
+func ledgerDeliveries(sid string, items []host.MemoryDelivery) {
 	if outcomeSpool() == "" || sid == "" {
 		return
 	}
-	scope, refs := sharedScope(), []any{}
-	for _, i := range items {
-		rev, _ := host.Int(i["revision"])
-		rowScope, _ := i["scope"].(map[string]any)
-		// Memory list rows carry no collection and the server omits an empty agent_id/user_id.
-		ok := (i["collection"] == nil || i["collection"] == "memories") && rev >= 1 && truthy(i["text"]) && str(i["id"]) != ""
-		for _, k := range scopeKeys {
-			v, _ := rowScope[k].(string)
-			ok = ok && v == scope[k]
+	scope, refs, deliveries := sharedScope(), []any{}, []any{}
+	for _, item := range items {
+		ok := item.Collection == "memories" && item.ID != "" && item.Revision >= 1
+		for _, key := range scopeKeys {
+			ok = ok && item.Scope[key] == scope[key]
 		}
-		if ok {
-			refs = append(refs, map[string]any{"collection": "memories", "id": i["id"], "revision": rev})
+		if !ok {
+			continue
 		}
+		form := item.Form
+		if form != "full" && form != "meta" {
+			form = "unknown"
+		}
+		refs = append(refs, map[string]any{"collection": "memories", "id": item.ID, "revision": item.Revision})
+		deliveries = append(deliveries, map[string]any{"collection": "memories", "id": item.ID, "revision": item.Revision, "form": form})
 	}
 	if len(refs) == 0 {
 		return
@@ -72,7 +102,7 @@ func ledgerRecall(sid string, items []map[string]any) {
 			return err
 		}
 		defer f.Close()
-		row := map[string]any{"ts": host.NowISO(), "origin": capOrigin, "session": sid, "refs": refs}
+		row := map[string]any{"ts": host.NowISO(), "origin": capOrigin, "session": sid, "refs": refs, "scope": scope, "deliveries": deliveries}
 		if hookTranscript != "" {
 			row["transcript"] = hookTranscript
 		}
@@ -130,6 +160,9 @@ func recordSession(path, spool string) (int, error) {
 	var origin, sid, first, last, transcript string
 	var refs []any
 	seen := map[string]bool{}
+	forms := map[string][]string{}
+	hasDeliveryMetadata := false
+	scope := sharedScope()
 	lines := bufio.NewScanner(f)
 	lines.Buffer(nil, 1<<20)
 	for lines.Scan() {
@@ -146,7 +179,38 @@ func recordSession(path, spool string) (int, error) {
 		if t, ok := row["transcript"].(string); ok && t != "" {
 			transcript = t
 		}
+		if saved, ok := row["scope"].(map[string]any); ok {
+			for _, key := range scopeKeys {
+				if strField(saved[key]) != scope[key] {
+					return 0, runtimeErr("session_ledger_scope_changed")
+				}
+			}
+		}
+		rowForms := map[string][]string{}
+		for _, raw := range anyList(row["deliveries"]) {
+			d, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			form := strField(d["form"])
+			if form != "full" && form != "meta" && form != "unknown" {
+				continue
+			}
+			key := sdigest(map[string]any{"collection": d["collection"], "id": d["id"], "revision": d["revision"]})
+			rowForms[key] = append(rowForms[key], form)
+			hasDeliveryMetadata = true
+		}
 		for _, r := range anyList(row["refs"]) {
+			key := sdigest(r)
+			fs := rowForms[key]
+			if len(fs) == 0 {
+				fs = []string{"unknown"}
+			}
+			for _, form := range fs {
+				if !slices.Contains(forms[key], form) {
+					forms[key] = append(forms[key], form)
+				}
+			}
 			if k := sdigest(r); !seen[k] {
 				seen[k] = true
 				refs = append(refs, r)
@@ -156,7 +220,6 @@ func recordSession(path, spool string) (int, error) {
 	if lines.Err() != nil || origin == "" || sid == "" || len(refs) == 0 {
 		return 0, errLedgerInvalid
 	}
-	scope := sharedScope()
 	var behavior map[string]any
 	if t, err := time.Parse(time.RFC3339Nano, first); err == nil {
 		// The prompt line is written around its recall, so the window opens a minute early.
@@ -166,12 +229,37 @@ func recordSession(path, spool string) (int, error) {
 	}
 	for i := 0; i < len(refs); i += sessionTraceRefs {
 		chunk := refs[i:min(i+sessionTraceRefs, len(refs))]
-		id := sdigest([]any{origin, sid, first, last, chunk})[:32]
+		payload := map[string]any{"retrieved": chunk}
+		identity := []any{origin, sid, first, last, chunk}
+		if hasDeliveryMetadata {
+			var deliveries []any
+			known := 0
+			for _, raw := range chunk {
+				r, ok := raw.(map[string]any)
+				if !ok {
+					return 0, errLedgerInvalid
+				}
+				for _, form := range forms[sdigest(raw)] {
+					deliveries = append(deliveries, map[string]any{"collection": r["collection"], "id": r["id"], "revision": r["revision"], "form": form})
+				}
+				if fs := forms[sdigest(raw)]; slices.Contains(fs, "full") || slices.Contains(fs, "meta") {
+					known++
+				}
+			}
+			payload["deliveries"] = deliveries
+			if known == len(chunk) {
+				payload["observation"] = "context_delivery"
+			} else if known > 0 {
+				payload["observation"] = "context_delivery_mixed"
+			}
+			identity = append(identity, deliveries)
+		}
+		id := sdigest(identity)[:32]
 		body := map[string]any{"scope": scope, "trace_id": "session-trace-" + id, "thread_id": sid,
 			"agent_run": map[string]any{"agent_id": origin, "task_type": "agent_session", "outcome": "partial", "started_at": first, "finished_at": last,
 				"text": "agent session " + origin}, // the run's real result is unknown here: a checker decides
 			"events": []any{map[string]any{"id": "session-event-" + id, "kind": "context", "occurred_at": last,
-				"payload": map[string]any{"retrieved": chunk}}}}
+				"payload": payload}}}
 		context := body["events"]
 		if behavior != nil {
 			body["events"] = append(context.([]any), map[string]any{"id": "session-behavior-" + id, "kind": "behavior", "occurred_at": last, "payload": behavior})

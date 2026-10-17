@@ -3666,7 +3666,7 @@
     "/v1/merge_proposals/{id}/decide": {"post": {"summary": "A person's answer to a merge proposal (human principals only)", "description": "Body {scope, expected_revision, decision accept|dismiss, content?}. dismiss changes nothing. accept: store approves the candidate (content = edit_approve wording), skip rejects it as already covered, merge approves it and supersedes each target through the conflict path (mark, resolve second_supersedes_first) with the proposal close in that transaction. A record changed since the proposal returns 409 and marks it stale.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The closed proposal"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}}}},
     "/v1/crew": {
       "get": {"summary": "Live workflows, templates and personas of the scope (one page of 1000)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "items (records with a crew field)"}}},
-      "post": {"summary": "Add a workflow, template or persona (human principals only)", "description": "Body {scope, crew}. Agent and team only: pinned[] (<=20) {collection memories|skills|knowledge_sources, id, revision (0/omitted = latest approved; skills: version number), injection full|summary|reference, priority 0-100}; every new or changed pin must name an approved record of the same scope (400 otherwise); pins read first by GET /v1/context/pins and context build with agent. crew.type workflow|template|persona; name; role; category; avatar{art,bg}. Workflow: handle (required, unique among live workflows; compared without $, spaces and case), model (default worker model, optional), trigger{kind schedule|webhook, cron, label} (optional) and enabled, limits{max_steps 1..500, max_minutes 1..1440} (optional), cover{id, url, thumb, author, author_url} (an Unsplash photo: url and thumb on https://images.unsplash.com/, author_url on https://unsplash.com/), graph (required, at least one node); no template fields. graph{nodes[{id,type,title,x,y,config (string values)}], edges[{from,port,to,max 0..10}]}: edges with max 0 must form a DAG; an edge with max > 0 goes back (from != to) and is followed at most max times per run. Node types start|schedule|webhook|ai|ai_once|code|http|github|approval|condition|merge|loop|wait|notify|end|n8n|subflow. Template: instructions, model (optional), effort low|medium|high|max, run_mode fixed|caller, skills, tools, agents claude_code|codex|gemini|zcode, skill_rules [{field category|name, value}], skills_off, file_name, install claude_code|codex|zcode, memory {user|procedural|decision|lesson: all|category|expert|off}, scripts [{name, desc, lang bash|sh|python|go, code}], template, a required category, no handle. Persona: name, role (where it is used), instructions; no handle. Credentials are refused.", "responses": {"200": {"description": "Created record"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "Handle already used"}, "422": {"description": "secret_detected"}}}
+      "post": {"summary": "Add a workflow, template or persona (human principals only)", "description": "Body {scope, crew}. Agent and team only: pinned[] (<=20) {collection memories|skills|knowledge_sources, id, revision (0/omitted = latest approved; skills: version number), injection full|summary|reference, priority 0-100}; every new or changed pin must name an approved record of the same scope (400 otherwise); pins read first by GET /v1/context/pins and context build with agent. crew.type workflow|template|persona; name; role; category; avatar{art,bg}. Workflow: handle (required, unique among live workflows; compared without $, spaces and case), model (default worker model, optional), trigger{kind schedule|webhook, cron, label} (optional) and enabled, limits{max_steps 1..500, max_minutes 1..1440} (optional), cover{id, url, thumb, author, author_url} (an Unsplash photo: url and thumb on https://images.unsplash.com/, author_url on https://unsplash.com/), graph (required, at least one node); no template fields. graph{nodes[{id,type,title,x,y,config (string values)}], edges[{from,port,to,max 0..10}]}: edges with max 0 must form a DAG; an edge with max > 0 goes back (from != to) and is followed at most max times per run. Node types start|schedule|webhook|ai|ai_once|code|http|github|approval|condition|merge|loop|wait|notify|end|subflow. Template: instructions, model (optional), effort low|medium|high|max, run_mode fixed|caller, skills, tools, agents claude_code|codex|gemini|zcode, skill_rules [{field category|name, value}], skills_off, file_name, install claude_code|codex|zcode, memory {user|procedural|decision|lesson: all|category|expert|off}, scripts [{name, desc, lang bash|sh|python|go, code}], template, a required category, no handle. Persona: name, role (where it is used), instructions; no handle. Credentials are refused.", "responses": {"200": {"description": "Created record"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "Handle already used"}, "422": {"description": "secret_detected"}}}
     },
     "/v1/crew/resolve": {
       "get": {"summary": "Resolve a $handle to the live workflow", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "handle", "in": "query", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{item, members (always empty), leader_models (always empty)}"}, "400": {"description": "invalid_request"}, "404": {"description": "No such handle"}}}
@@ -9456,7 +9456,7 @@
     "/v1/memories/{id}/outcome-comparison": {
       "get": {
         "summary": "Pass rate of sessions that used a memory versus sessions that did not (ST-819)",
-        "description": "Groups memory_outcome verdicts in the exact scope by execution trace (one session) for one required dimension and optional judged_at range. A session passed when all its verdicts under the filters passed. It used the memory when it has a verdict on this memory id (ST-302 checked delivery) or a done context_usage receipt that handed this memory id out names one of the trace's agent_runs; every other judged session is not_used. A side with fewer than min_sessions (10) sessions returns status insufficient_data with passed and pass_rate null; difference (used minus not_used pass rate) is set only when both sides are ok. Correlation over existing verdicts, not a causal effect; computed on read from existing rows, nothing stored. read:memories, read:evaluations and read:usage on scope and read:memories on the memory, all the same principal. Only counts and rates: no memory, source, trace or checker text or ids. Audited as read:memory_outcome_comparison with the memory id only.",
+        "description": "Describes independently judged sessions by context observation: delivered, returned_only (a server response without delivery evidence), or unknown. Missing observation never proves non-use. Native traces are grouped by exact scope, producer, executing agent and thread_id; legacy traces without canonical session identity remain distinct. A session passes only if all filtered verdicts pass. Delivered requires a target-specific independently checked verdict or a live context event with matching retrieved and full/meta delivery references; full means the hook output form, not full-body reading. Each group below 10 sessions hides passed and pass_rate. Deprecated used aliases delivered; not_used is empty and difference is null because actual use/non-use is not measured. measurement_basis=context_delivery; actual_use_status=not_measured. Read permissions and audit are unchanged; returns counts only.",
         "parameters": [
           {
             "name": "id",
@@ -12895,7 +12895,11 @@
         "properties": {
           "reach": {
             "type": "string",
-            "enum": ["personal", "general", "project"],
+            "enum": [
+              "personal",
+              "general",
+              "project"
+            ],
             "readOnly": true,
             "description": "ST-824 memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
           },
@@ -12913,12 +12917,22 @@
           "lanes": {
             "type": "array",
             "readOnly": true,
-            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "items": {
+              "type": "string",
+              "enum": [
+                "exact",
+                "keyword",
+                "vector",
+                "relation"
+              ]
+            },
             "description": "ST-811 lanes that found this hit, in fixed order exact, keyword, vector, relation."
           },
           "path_check": {
             "type": "string",
-            "enum": ["missing"],
+            "enum": [
+              "missing"
+            ],
             "readOnly": true,
             "description": "ST-818 display marker set by the host (hooks, MCP recall), never by the server: a file path in the text or sources does not exist in the session's working folder (\"확인 필요\"). The hit is still returned in its rank; nothing is hidden or reordered."
           },
@@ -12926,7 +12940,9 @@
             "type": "array",
             "readOnly": true,
             "maxItems": 8,
-            "items": {"type": "string"},
+            "items": {
+              "type": "string"
+            },
             "description": "ST-818 host-set: the paths as written in the memory that were not found. Shown to the agent only; never logged or sent back to the server."
           },
           "conflict_pending": {
@@ -13093,6 +13109,32 @@
           },
           "memory_context": {
             "$ref": "#/components/schemas/MemoryContext"
+          },
+          "vector_match": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "space",
+              "distance",
+              "max_distance"
+            ],
+            "description": "Same-space cosine evidence recomputed from authorized current memory content under the server distance gate. Rank-fusion score is separate. Not an approval or actual-use signal.",
+            "properties": {
+              "space": {
+                "type": "string",
+                "minLength": 1
+              },
+              "distance": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              },
+              "max_distance": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 2
+              }
+            }
           }
         },
         "required": [
@@ -16840,7 +16882,9 @@
         "type": "object",
         "required": [
           "items",
-          "authority"
+          "authority",
+          "measurement_basis",
+          "actual_use_status"
         ],
         "properties": {
           "items": {
@@ -16872,6 +16916,15 @@
           },
           "authority": {
             "type": "string"
+          },
+          "measurement_basis": {
+            "type": "string",
+            "const": "server_return",
+            "description": "Counts server responses; not confirmed context delivery or actual use."
+          },
+          "actual_use_status": {
+            "type": "string",
+            "const": "not_measured"
           }
         }
       },
@@ -16879,7 +16932,9 @@
         "type": "object",
         "required": [
           "items",
-          "authority"
+          "authority",
+          "measurement_basis",
+          "actual_use_status"
         ],
         "properties": {
           "items": {
@@ -16892,6 +16947,15 @@
           "authority": {
             "type": "string",
             "const": "data_only_untrusted"
+          },
+          "measurement_basis": {
+            "type": "string",
+            "const": "server_return",
+            "description": "Counts server responses; not confirmed context delivery or actual use."
+          },
+          "actual_use_status": {
+            "type": "string",
+            "const": "not_measured"
           }
         }
       },
@@ -19598,7 +19662,9 @@
         "required": [
           "memory_id",
           "available",
-          "signal"
+          "signal",
+          "use_measurement_basis",
+          "actual_use_status"
         ],
         "properties": {
           "memory_id": {
@@ -19616,6 +19682,15 @@
                 "type": "null"
               }
             ]
+          },
+          "use_measurement_basis": {
+            "type": "string",
+            "const": "server_return",
+            "description": "Counts server responses; not confirmed context delivery or actual use."
+          },
+          "actual_use_status": {
+            "type": "string",
+            "const": "not_measured"
           }
         }
       },
@@ -20156,7 +20231,13 @@
             "used",
             "not_used",
             "difference",
-            "authority"
+            "authority",
+            "delivered",
+            "returned_only",
+            "unknown",
+            "measurement_basis",
+            "actual_use_status",
+            "session_unit"
           ],
           "properties": {
             "memory": {
@@ -20174,23 +20255,43 @@
               "const": 10
             },
             "used": {
-              "$ref": "#/components/schemas/MemoryOutcomeGroup"
+              "$ref": "#/components/schemas/MemoryOutcomeGroup",
+              "deprecated": true,
+              "description": "Compatibility alias of delivered; not proof of actual use."
             },
             "not_used": {
-              "$ref": "#/components/schemas/MemoryOutcomeGroup"
+              "$ref": "#/components/schemas/MemoryOutcomeGroup",
+              "deprecated": true,
+              "description": "Empty because absence of an observation cannot establish non-use."
             },
             "difference": {
-              "type": [
-                "number",
-                "null"
-              ],
-              "minimum": -1,
-              "maximum": 1,
-              "description": "used.pass_rate - not_used.pass_rate when both sides are ok"
+              "type": "null",
+              "description": "Not computed without actual use and non-use observations."
             },
             "authority": {
               "type": "string",
               "const": "data_only_untrusted"
+            },
+            "delivered": {
+              "$ref": "#/components/schemas/MemoryOutcomeGroup"
+            },
+            "returned_only": {
+              "$ref": "#/components/schemas/MemoryOutcomeGroup"
+            },
+            "unknown": {
+              "$ref": "#/components/schemas/MemoryOutcomeGroup"
+            },
+            "measurement_basis": {
+              "type": "string",
+              "const": "context_delivery"
+            },
+            "actual_use_status": {
+              "type": "string",
+              "const": "not_measured"
+            },
+            "session_unit": {
+              "type": "string",
+              "const": "agent_session_or_legacy_trace"
             }
           }
         },

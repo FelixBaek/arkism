@@ -2,12 +2,39 @@ package capture
 
 import (
 	"fmt"
+	"maps"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
 )
+
+// stableHookLock serializes a session's build -> output -> save across hook processes.
+// Fixed lock buckets stay outside expiring session directories: never unlink a live lock,
+// and never leave one new lock file behind for every session. Contention is bounded.
+func stableHookLock(sid string) (*os.File, error) {
+	dir := filepath.Join(sessionsDir(), "stable-locks")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	return lockFileWithin(filepath.Join(dir, sha256Hex([]byte(sid))[:2]+".lock"), 3*time.Second)
+}
+
+func stableScope() map[string]string {
+	scope, out := capScope(), map[string]string{}
+	for _, key := range scopeKeys {
+		out[key], _ = scope[key].(string)
+	}
+	return out
+}
+
+// Ownerless legacy caches cannot prove whose text they contain. Fail closed rather
+// than assigning the current account to old text or suppressing its current recall IDs.
+func stableScopeMatches(b host.StableBlock) bool {
+	return b.Scope != nil && maps.Equal(b.Scope, stableScope())
+}
 
 // The SessionStart block holds only what does not change during a session: pinned context,
 // the standing-rules index, the approved user digest and the approved skill list. It is built once per session, saved
@@ -114,12 +141,15 @@ func skillSection(sid string, limit int) host.Part {
 // already built one, else pins + memory index + user digest + skills within sessionMaxChars.
 // Pins take up to 2/5, the digest 1/4 and skills 1/5; the index gets what is left. A pinned
 // memory is not repeated in the index, and per-turn recall leaves it out (StableBlock.IDs).
-func stableBlock(sid, cwd string) (host.Part, error) {
+func stableBlock(sid, cwd string) (host.Part, *stableOutput, error) {
 	store := sessionStore()
 	if sid != "" {
 		store.Expire(sid, host.SessionStateTTL, stableNow())
 		if b, ok := store.Stable(sid); ok {
-			return replayStable(sid, b), nil
+			if !stableScopeMatches(b) {
+				return host.Part{}, nil, runtimeErr("session_context_scope_changed")
+			}
+			return replayStable(sid, b)
 		}
 	}
 	pins, err := stablePins(sid, sessionMaxChars*2/5)
@@ -142,37 +172,70 @@ func stableBlock(sid, cwd string) (host.Part, error) {
 	idx, err := sessionIndexSkipping(sid, cwd, limit, pinned)
 	if err != nil {
 		if pins.Full == "" && digest == "" && skills.Full == "" {
-			return host.Part{}, err
+			return host.Part{}, nil, err
 		}
 		// Partial: inject it but do not fix it for the session, so the next start retries.
 		metric(kv("event", "hook_error"), kv("hook", "SessionStart"), kv("error", pyType(err)))
 		full := joinNonEmpty(pins.Full, digest, skills.Full)
-		logInjected("SessionStart", sid, full)
-		return host.Part{Full: full, Meta: joinNonEmpty(pins.Meta, digest, skills.Meta), Stable: true}, nil
+		part := host.Part{Full: full, Meta: joinNonEmpty(pins.Meta, digest, skills.Meta), Stable: true}
+		return part, &stableOutput{Part: part, Items: pins.Items, Memories: memoryDeliveries(pins.Items, "unknown")}, nil
 	}
 	b := host.StableBlock{
-		Full: joinNonEmpty(pins.Full, idx.Full, digest, skills.Full),
-		Meta: joinNonEmpty(pins.Meta, idx.Meta, digest, skills.Meta),
-		IDs:  append(append([]string{}, pins.IDs...), idx.IDs...),
+		Full:  joinNonEmpty(pins.Full, idx.Full, digest, skills.Full),
+		Meta:  joinNonEmpty(pins.Meta, idx.Meta, digest, skills.Meta),
+		IDs:   append(append([]string{}, pins.IDs...), idx.IDs...),
+		Scope: stableScope(),
 	}
-	if sid != "" && b.Full != "" {
-		if kept, err := store.SaveStable(sid, b); err != nil {
-			metric(kv("event", "hook_error"), kv("hook", "stable_save"), kv("error", pyType(err)))
-		} else {
-			b = kept
-		}
-	}
-	logInjected("SessionStart", sid, b.Full)
-	return host.Part{Full: b.Full, Meta: b.Meta, Stable: true}, nil
+	part := host.Part{Full: b.Full, Meta: b.Meta, Stable: true}
+	return part, &stableOutput{Part: part, Block: &b, Items: append(pins.Items, idx.Items...), Memories: memoryDeliveries(append(pins.Items, idx.Items...), "unknown")}, nil
 }
 
-// replayStable re-injects a saved block and logs the memories it shows again.
-func replayStable(sid string, b host.StableBlock) host.Part {
+type stableOutput struct {
+	Part     host.Part
+	Block    *host.StableBlock
+	Items    []map[string]any
+	Memories []host.MemoryDelivery
+}
+
+// markStableShown commits only the complete full/meta block that reached the hook output.
+// A budget stub or failed output must neither count as recall nor suppress future prompt recall.
+func markStableShown(sid, output string, delivery *stableOutput) {
+	if delivery == nil {
+		return
+	}
+	for i, form := range []string{delivery.Part.Full, delivery.Part.Meta} {
+		if form == "" || output != form && !strings.HasPrefix(output, form+"\n\n") {
+			continue
+		}
+		representation := "full"
+		if i == 1 {
+			representation = "meta"
+		}
+		memories := append([]host.MemoryDelivery(nil), delivery.Memories...)
+		for j := range memories {
+			memories[j].Form = representation
+		}
+		ledgerDeliveries(sid, memories)
+		recallMetric("SessionStart", sid, delivery.Items)
+		logInjected("SessionStart", sid, form)
+		if sid != "" && delivery.Block != nil {
+			block := *delivery.Block
+			block.Memories, block.DeliveryForm = memories, representation
+			if _, err := sessionStore().SaveStable(sid, block); err != nil {
+				metric(kv("event", "hook_error"), kv("hook", "stable_save"), kv("error", pyType(err)))
+			}
+		}
+		return
+	}
+}
+
+// replayStable uses stored exact receipts. Old ID-only caches remain readable but cannot
+// manufacture a revision-bearing trace receipt from those IDs.
+func replayStable(sid string, b host.StableBlock) (host.Part, *stableOutput, error) {
 	items := make([]map[string]any, len(b.IDs))
 	for i, id := range b.IDs {
 		items[i] = map[string]any{"id": id}
 	}
-	logRecall("SessionStart", sid, items)
-	logInjected("SessionStart", sid, b.Full)
-	return host.Part{Full: b.Full, Meta: b.Meta, Stable: true}
+	part := host.Part{Full: b.Full, Meta: b.Meta, Stable: true}
+	return part, &stableOutput{Part: part, Items: items, Memories: b.Memories}, nil
 }

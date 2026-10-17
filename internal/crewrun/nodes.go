@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,16 +60,13 @@ import (
 //	merge      output is an object keyed by source node id.
 //	loop       path (to a list in the input; empty means the input itself), concurrency (1-16, default 1).
 //	           Runs the one node directly after it once per item (ai, ai_once, code, http, github, notify or
-//	           n8n sync only); that node and the loop both output the list of results. Only the
+//	           only); that node and the loop both output the list of results. Only the
 //	           immediate next node repeats.
 //	wait       duration (Go duration, ≤ 30 days). The run waits (kind wait) and resumes after resume_at,
 //	           also across engine restarts; output is the input.
 //	notify     channel (telegram|slack|email), to (destination name in notify.json, default "default"),
 //	           message (template, default the input as text).
 //	end        summary (template, default the input as text). Finishes the run as succeeded.
-//	n8n        url, mode (sync|async), timeout (async, default 1h). sync posts the input and outputs
-//	           the JSON answer. async posts {input, callback_url, callback_token} and waits (kind
-//	           callback) for POST callback_url with header X-Arkism-Callback-Token; the body is the output.
 //
 // Every node may set access=read to run alongside other ready read nodes.
 //
@@ -149,14 +143,12 @@ func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (re
 			s = render(f, input)
 		}
 		return result{out: input, end: true, summary: clip(s, 4000)}, nil
-	case "n8n":
-		return e.runN8N(ctx, x, n, input)
 	}
 	return result{}, failf("unknown_node", "node type %q", n.Type)
 }
 
 // fake: a test run (시험 실행) does not run steps that reach outside: AI,
-// code that may write, HTTP, GitHub, notify, n8n and subflows hand back a
+// code that may write, HTTP, GitHub, notify and subflows hand back a
 // stand-in output and a wait does not wait. Branches, loops, merges,
 // approvals and shared state run as usual.
 func (x *runExec) fake(n Node, input any) (any, bool) {
@@ -168,7 +160,7 @@ func (x *runExec) fake(n Node, input any) (any, bool) {
 		if n.Config["access"] == "read" {
 			return nil, false
 		}
-	case "ai", "ai_once", "http", "github", "notify", "n8n", "subflow":
+	case "ai", "ai_once", "http", "github", "notify", "subflow":
 	case "wait":
 		return input, true
 	default:
@@ -736,7 +728,7 @@ func (e *Engine) runGitHub(ctx context.Context, c map[string]string, input any) 
 	return parseOutput(out), nil
 }
 
-var loopBodies = map[string]bool{"ai": true, "ai_once": true, "code": true, "http": true, "github": true, "notify": true, "n8n": true}
+var loopBodies = map[string]bool{"ai": true, "ai_once": true, "code": true, "http": true, "github": true, "notify": true}
 
 func (e *Engine) runLoop(ctx context.Context, x *runExec, n Node, input any) (result, error) {
 	next := x.out[n.ID]
@@ -744,7 +736,7 @@ func (e *Engine) runLoop(ctx context.Context, x *runExec, n Node, input any) (re
 		return result{}, failf("bad_config", "loop needs exactly one next node")
 	}
 	body := x.nodes[next[0].To]
-	if !loopBodies[body.Type] || body.Type == "n8n" && body.Config["mode"] == "async" {
+	if !loopBodies[body.Type] {
 		return result{}, failf("bad_config", "a loop cannot repeat a %s node", body.Type)
 	}
 	items, ok := lookupPath(input, splitPath(n.Config["path"])).([]any)
@@ -777,52 +769,6 @@ func (e *Engine) runLoop(ctx context.Context, x *runExec, n Node, input any) (re
 		}
 	}
 	return result{out: results, also: map[string]any{body.ID: results}}, nil
-}
-
-func (e *Engine) runN8N(ctx context.Context, x *runExec, n Node, input any) (result, error) {
-	c := n.Config
-	u, err := url.Parse(c["url"])
-	if err != nil || u.Scheme != "http" && u.Scheme != "https" || u.Host == "" {
-		return result{}, failf("bad_config", "url must be http(s)")
-	}
-	payload := any(input)
-	var wait *Waiting
-	if c["mode"] == "async" {
-		tok := make([]byte, 32)
-		if _, err := rand.Read(tok); err != nil {
-			return result{}, err
-		}
-		token := hex.EncodeToString(tok)
-		sum := sha256.Sum256([]byte(token))
-		at := e.now().UTC().Add(durationOr(c["timeout"], time.Hour)).Truncate(time.Millisecond)
-		wait = &Waiting{Kind: "callback", ResumeAt: &at, CallbackHash: hex.EncodeToString(sum[:])}
-		cb := strings.TrimRight(e.PublicURL, "/") + "/callbacks/" + url.PathEscape(x.run.ID) + "/" + url.PathEscape(n.ID)
-		payload = map[string]any{"input": input, "callback_url": cb, "callback_token": token}
-	} else if c["mode"] != "" && c["mode"] != "sync" {
-		return result{}, failf("bad_config", "mode must be sync or async")
-	}
-	b, _ := json.Marshal(payload)
-	limit := durationOr(c["sync_timeout"], 2*time.Minute)
-	ctx, cancel := context.WithTimeout(ctx, limit)
-	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "POST", u.String(), bytes.NewReader(b))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := e.httpClientFor(limit).Do(req)
-	if err != nil {
-		return result{}, failf("n8n", "request to %s failed", u.Host)
-	}
-	defer resp.Body.Close()
-	body, err := readLimited(resp.Body)
-	if err != nil {
-		return result{}, err
-	}
-	if resp.StatusCode >= 400 {
-		return result{}, failf("n8n_status", "%s answered %d", u.Host, resp.StatusCode)
-	}
-	if wait != nil {
-		return result{wait: wait}, nil
-	}
-	return result{out: parseOutput(body)}, nil
 }
 
 func expandHome(p string) string {

@@ -570,7 +570,6 @@ window.ArkismGit = (ctx) => {
   const subText = () => (CODE_MODES.includes(S.mode) ? codegraph.sub(S.mode) : S.mode === "prs" ? "열린 PR의 검사·리뷰·바뀐 파일을 보고 병합해요." : "브랜치·PR·검사 상태와 커밋 기록을 한눈에 봐요.");
   function render() {
     const table = $("#table"), detail = $("#detail");
-    if (!state.loading) $("#subtitle").textContent = subText();
     $("#title").textContent = S.mode === "prs" ? "PR 상세" : "저장소"; // paint() redraws only this page, so the title follows here too
     table.className = "git-wrap";
     const plain = (text) => { headExtras(); table.replaceChildren(el("p", "git-empty", text)); detail.replaceChildren(); };

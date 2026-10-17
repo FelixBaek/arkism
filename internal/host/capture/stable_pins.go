@@ -105,8 +105,7 @@ func pinSection(sid string, limit int) (indexBlock, error) {
 			memories = append(memories, it)
 		}
 	}
-	logRecall("SessionStart:pins", sid, memories)
-	return indexBlock{Full: header + "\n" + strings.Join(full, "\n"), Meta: header + "\n" + strings.Join(meta, "\n"), IDs: itemIDs(memories)}, nil
+	return indexBlock{Full: header + "\n" + strings.Join(full, "\n"), Meta: header + "\n" + strings.Join(meta, "\n"), IDs: itemIDs(memories), Items: memories}, nil
 }
 
 const digestClose = "\n</arkism-user-digest>"

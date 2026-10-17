@@ -281,7 +281,8 @@ type Repository interface {
 	MemoryOutcomes(context.Context, MemoryOutcomeQuery) ([]Record, error)
 	// MemoryOutcomeCounts aggregates memory_outcome evaluations per memory id under the same filters.
 	MemoryOutcomeCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeCount, error)
-	// MemoryOutcomeSessionCounts splits one memory's dimension into used / not-used sessions (ST-819).
+	// MemoryOutcomeSessionCounts groups judged sessions by confirmed delivery,
+	// server-only return, or unknown observation (ST-819).
 	MemoryOutcomeSessionCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeSessionCount, error)
 	// MemoryUseCounts aggregates context_usage receipts per memory id (all revisions) in one scope.
 	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
@@ -365,6 +366,7 @@ type Hit struct {
 	Rank               int            `json:"rank,omitempty" bson:"rank,omitempty"`
 	Score              float64        `json:"score,omitempty" bson:"-"`
 	Lanes              []string       `json:"lanes,omitempty" bson:"-"`
+	VectorMatch        *VectorMatch   `json:"vector_match,omitempty" bson:"-"`
 	Kind               string         `json:"kind,omitempty" bson:"kind"`
 	Sensitivity        string         `json:"sensitivity,omitempty" bson:"sensitivity"`
 	ID                 string         `json:"id" bson:"id"`
@@ -383,6 +385,9 @@ type Hit struct {
 	Relations          []Ref          `json:"relations,omitempty" bson:"relations"`
 	Reasons            []string       `json:"reasons" bson:"reasons"`
 	Authority          string         `json:"authority" bson:"authority"`
+	// Repository-only evidence that its configured vector distance gate ran.
+	// Service rehydrates, authorizes and recomputes before exposing VectorMatch.
+	vectorDistanceLimit float64
 }
 type ContextBundle struct {
 	History       []HistoricalHit `json:"history,omitempty"`

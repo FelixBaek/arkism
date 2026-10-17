@@ -146,7 +146,7 @@ func TestSessionTraceCarriesWindowBehaviorAndFallsBackWithoutIt(t *testing.T) {
 			line(map[string]any{"type": "user", "timestamp": at(0), "message": map[string]any{"content": "아니, 자세히 설명해"}})+
 			line(map[string]any{"type": "assistant", "timestamp": at(time.Second), "message": map[string]any{"content": []any{
 				map[string]any{"type": "text", "text": "중간 보고"},
-				map[string]any{"type": "tool_use", "name": "Bash", "input": map[string]any{"command": "git commit -m 'ST-623 fix'"}}}}})+
+				map[string]any{"type": "tool_use", "name": "Bash", "input": map[string]any{"command": "git commit -m 'capture window fix'"}}}}})+
 			line(map[string]any{"type": "assistant", "timestamp": at(2 * time.Second), "message": map[string]any{"content": []any{
 				map[string]any{"type": "text", "text": "결론입니다.\n```go\nGenerated with Claude Code\n```\n핵심: 끝"}}}})), 0o600)
 	hookTranscript = transcript
@@ -162,7 +162,8 @@ func TestSessionTraceCarriesWindowBehaviorAndFallsBackWithoutIt(t *testing.T) {
 		}
 		return ok(path, body, d)
 	}
-	timeNow = func() float64 { return float64(now.Unix()) + sessionIdle + 1 }
+	// Follow each fresh ledger write; a captured whole second can leave s5 non-idle.
+	timeNow = func() float64 { return float64(time.Now().UnixNano())/1e9 + sessionIdle + 1 }
 	sessionTraces() // the server refuses the behavior event once: the delivery record still lands
 	if refused != 1 || len(*posts) != 1 || len((*posts)[0]["events"].([]any)) != 1 {
 		t.Fatal(refused, *posts)

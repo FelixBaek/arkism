@@ -105,7 +105,7 @@ func TestUsageRunAndHTTP(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+f.human)
 	w := httptest.NewRecorder()
 	Handler(f.svc).ServeHTTP(w, req)
-	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
+	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" || !strings.Contains(w.Body.String(), `"measurement_basis":"server_return"`) || !strings.Contains(w.Body.String(), `"actual_use_status":"not_measured"`) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	f.repo.failAudit = true

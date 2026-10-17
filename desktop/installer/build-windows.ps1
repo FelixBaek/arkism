@@ -26,18 +26,14 @@ function Invoke-Checked([scriptblock]$Block, [string]$What) {
   if ($LASTEXITCODE -ne 0) { throw "$What failed" }
 }
 
-# The agent client with the scheduled-task scripts it installs beside itself, the server programs
-# and the database roles; then Postgres with pgvector (prepare-runtime.ps1).
+# Build the agent client (including embedded task helpers), the server programs and database roles;
+# then prepare Postgres with pgvector (prepare-runtime.ps1).
 $env:CGO_ENABLED = '0'
 Push-Location $repo
 Invoke-Checked { go build -trimpath -o (Join-Path $stage 'integration\arkism.exe') ./cmd/arkism } 'go build arkism'
 Invoke-Checked { go build -trimpath -o (Join-Path $stage 'runtime\memoryd.exe') ./cmd/memoryd } 'go build memoryd'
 Invoke-Checked { go build -trimpath -o (Join-Path $stage 'runtime\memory-principal.exe') ./cmd/memory-principal } 'go build memory-principal'
 Pop-Location
-foreach ($task in 'install_arkism_export_task.ps1', 'install_arkism_work_task.ps1') {
-    $source = Join-Path $repo "tools\$task"
-    if (Test-Path $source) { Copy-Item $source (Join-Path $stage 'integration') } else { Write-Warning "tools\$task not found, skipping" }
-}
 Copy-Item (Join-Path $repo 'tools\roles.sql') (Join-Path $stage 'runtime')
 & (Join-Path $PSScriptRoot 'prepare-runtime.ps1') -Cache $cache -Stage $stage
 

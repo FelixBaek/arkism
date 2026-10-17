@@ -270,8 +270,10 @@ func instUninstall(userRoot, roaming, local string) (summary host.Obj, err error
 		})
 	}
 	steps = append(steps, func() error { return s.remove(filepath.Join(folder, "hook-codex.cmd")) })
-	// The PC's scheduled tasks (tools/install_arkism_*_task.ps1) run files in this folder; without
-	// them Windows shows a "script not found" box every few minutes.
+	for _, name := range instSupport {
+		steps = append(steps, func() error { return s.remove(filepath.Join(folder, name)) })
+	}
+	// Remove the known tasks as well as their registration helpers; unrelated tasks stay intact.
 	var tasks []string
 	steps = append(steps, func() error { tasks = instRemoveTasks(); return nil })
 	for _, step := range steps {
