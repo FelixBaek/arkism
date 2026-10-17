@@ -338,3 +338,16 @@ func TestCaptureDeletedPreparedSourceEndsTheEvent(t *testing.T) {
 		t.Fatalf("event kept retrying after its source was deleted: %+v", got)
 	}
 }
+
+func TestCaptureSameTextAsDeletedSourceIsNotMerged(t *testing.T) {
+	f := newFixture(t)
+	text := "지워진 출처와 같은 문장은 병합됨으로 답하지 않는다."
+	src := f.create(f.human, "sources", sourceInput(CreateInput{Scope: scopeA, Kind: "message", Text: text}))
+	if err := f.svc.Delete(testCtx, f.human, "sources", src.ID, ChangeInput{Scope: scopeA, ExpectedRevision: src.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	got := f.capture(f.human, captureInput(scopeA, "after-deleted-source", explicit(text)))[0]
+	if got.Status == "merged" || got.Status == "candidate" {
+		t.Fatalf("deleted source reported as a live duplicate: %+v", got)
+	}
+}

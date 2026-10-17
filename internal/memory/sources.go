@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"time"
 )
@@ -23,6 +24,11 @@ func checkSourceArtifact(in CreateInput, proposed Record, decision Decision, fil
 	}
 	return nil
 }
+
+// errSourceOtherProvenance: a live source already holds this exact text in the
+// scope, saved with other provenance (kind, origin, generator...). Capture reads
+// it as a duplicate; every other source conflict stays a plain ErrConflict.
+var errSourceOtherProvenance = fmt.Errorf("%w: same text is saved with other provenance", ErrConflict)
 
 // Registration pointers contain hashes and references only. Keeping them after
 // source deletion prevents the same digest from resurrecting an old source ID.
@@ -125,8 +131,11 @@ func (s *Service) createSource(ctx context.Context, token string, in CreateInput
 				if e != nil {
 					return e
 				}
-				if !live(saved) || saved.Revision != pointer.Target.Revision || saved.ContentHash != proposed.ContentHash || sourceTrustLevel(saved.TrustLevel) != sourceTrustLevel(proposed.TrustLevel) || saved.Sensitivity != proposed.Sensitivity || saved.Kind != proposed.Kind || saved.OriginProduct != proposed.OriginProduct || saved.SourceRef != proposed.SourceRef || !sameSourceArchiveMessages(saved.ArchiveMessages, proposed.ArchiveMessages) || structuredText(saved.Generator) != structuredText(proposed.Generator) || structuredText(saved.ExpiresAt) != structuredText(proposed.ExpiresAt) || structuredText(saved.Relations) != structuredText(proposed.Relations) {
+				if !live(saved) || saved.Revision != pointer.Target.Revision || saved.ContentHash != proposed.ContentHash {
 					return ErrConflict
+				}
+				if sourceTrustLevel(saved.TrustLevel) != sourceTrustLevel(proposed.TrustLevel) || saved.Sensitivity != proposed.Sensitivity || saved.Kind != proposed.Kind || saved.OriginProduct != proposed.OriginProduct || saved.SourceRef != proposed.SourceRef || !sameSourceArchiveMessages(saved.ArchiveMessages, proposed.ArchiveMessages) || structuredText(saved.Generator) != structuredText(proposed.Generator) || structuredText(saved.ExpiresAt) != structuredText(proposed.ExpiresAt) || structuredText(saved.Relations) != structuredText(proposed.Relations) {
+					return errSourceOtherProvenance
 				}
 				saved.Duplicate = true
 				result = saved

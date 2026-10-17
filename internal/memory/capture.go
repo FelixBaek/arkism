@@ -360,8 +360,7 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 							return write.prepare(ctx, tx, canonicalSources, src.ID)
 						})
 					}
-				} else {
-					// The same text already exists as a source with other provenance.
+				} else if errors.Is(err, errSourceOtherProvenance) {
 					item.Status, item.Reason = "merged", "duplicate_source"
 					return item, nil
 				}
