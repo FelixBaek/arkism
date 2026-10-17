@@ -103,6 +103,11 @@ func enqueueMemoryErasureAs(ctx context.Context, tx Tx, col string, scope Scope,
 	} else if col != "memories" {
 		return ErrInvalid
 	}
+	if col == colMemories {
+		if e := deleteMemorySignal(ctx, tx, scope, id); e != nil {
+			return e
+		}
+	}
 	now := time.Now().UTC()
 	job := Record{ErasureParentID: parentID, ID: deletionJobID(col, scope, id), Scope: scope, Kind: kind, Status: JobStatusPending, Revision: 1, CreatedBy: actor, CreatedByType: actorType, CreatedAt: now, UpdatedAt: now, Target: &Ref{Collection: col, ID: id, Revision: revision}, Proposal: proposal, SourceMemoryErasure: &SourceMemoryErasure{}}
 	return tx.Insert(ctx, "jobs", job)
