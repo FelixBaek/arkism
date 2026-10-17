@@ -269,8 +269,8 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 		if crew.Status != statusActive || crew.Crew == nil || crew.Crew.Type != "workflow" {
 			return ErrInvalid
 		}
-		// A workflow an agent works by runs only when that agent is called (@), never alone by $, schedule or webhook.
-		if _, owned := owners[crew.Crew.Handle]; owned && run.Trigger != "agent" {
+		// A workflow an agent works by runs only when that agent is called (@), never alone by $, schedule or webhook; a 시험 실행 (test) is the one exception.
+		if _, owned := owners[crew.Crew.Handle]; owned && run.Trigger != "agent" && run.Trigger != "test" {
 			return ErrInvalid
 		}
 		if run.Trigger == "agent" && !crewRunWriter(d.Role) {

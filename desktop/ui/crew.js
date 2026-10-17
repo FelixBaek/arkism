@@ -1286,6 +1286,9 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     const rec = ed.rec;
     ed.rec = null;
     ed.run = null;
+    // A workflow an agent works by is edited from that agent, so leaving the editor goes back there (its unsaved draft stays).
+    const owner = ownerOf(rec);
+    if (owner) { state.workerNew = false; if (wk.id !== owner.id) workerPick(owner.id); state.view = "workers"; render(); return; }
     state.view = "crew";
     state.selected = `crew:${rec.id}`;
     render();

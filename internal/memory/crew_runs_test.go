@@ -375,4 +375,10 @@ func TestWorkflowOfAnAgentRunsOnlyThroughThatAgent(t *testing.T) {
 	if _, err := f.svc.CreateCrewRun(testCtx, tokEngine, CrewRunInput{Scope: scopeA, Run: run}); err != nil {
 		t.Fatal("the agent could not run its workflow", err)
 	}
+	// A person's 시험 실행 still works: the engine fakes every outside step.
+	run = newCrewRun(wf.ID)
+	run.Trigger = "test"
+	if _, err := f.svc.CreateCrewRun(testCtx, f.human, CrewRunInput{Scope: scopeA, Run: run}); err != nil {
+		t.Fatal("a test run of an owned workflow was refused", err)
+	}
 }
