@@ -14,8 +14,9 @@ bin=$(find /usr/lib/postgresql -mindepth 2 -maxdepth 2 -name bin | sort -V | tai
 data="$RUNNER_TEMP/pgdata"
 port=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
 "$bin/initdb" -D "$data" -U arkism --auth=trust -E UTF8 >/dev/null
+# Throwaway data: skip durability for speed; parallel test groups need more connections.
 "$bin/pg_ctl" -D "$data" -l "$RUNNER_TEMP/postgres.log" -w \
-  -o "-c listen_addresses=127.0.0.1 -p $port -k $RUNNER_TEMP" start >/dev/null
+  -o "-c listen_addresses=127.0.0.1 -p $port -k $RUNNER_TEMP -c max_connections=400 -c fsync=off -c synchronous_commit=off -c full_page_writes=off" start >/dev/null
 "$bin/createdb" -h 127.0.0.1 -p "$port" -U arkism arkism_ci
 {
   echo "POSTGRES_TEST_DSN=postgres://arkism@127.0.0.1:${port}/arkism_ci?sslmode=disable"
