@@ -26,7 +26,7 @@ const (
 // explain (plain-words answer) and draft (a SKILL.md or a merged one) serve the skills screens.
 // suggest proposes new skills from recent memories; install_skill has the runner write a SKILL.md
 // (prompt is {"name","content","agents"} JSON, no model call) into the agents' skill folders.
-var crewAssistKinds = []string{"fill", "polish", "recommend", "classify", "try", "explain", "draft", "suggest", "install_skill", "fix", "comfy"}
+var crewAssistKinds = []string{"fill", "polish", "recommend", "classify", "try", "explain", "draft", "suggest", "install_skill", "fix", "comfy", "review", "build", "title", "json"}
 var crewAssistStates = []string{"pending", "done", "failed"}
 
 type CrewAssist struct {
@@ -34,6 +34,7 @@ type CrewAssist struct {
 	Persona string `json:"persona,omitempty"` // the fill persona's instructions
 	Expert  string `json:"expert,omitempty"`  // try: the work agent's handle ("@리뷰어" or "리뷰어")
 	Prompt  string `json:"prompt"`
+	Lang    string `json:"lang,omitempty"` // reply language: "" or "ko" = Korean, "en" = English
 	Status  string `json:"status"`
 	Output  string `json:"output,omitempty"`
 	Model   string `json:"model,omitempty"`
@@ -66,7 +67,7 @@ func validCrewAssist(a CrewAssist) bool {
 		limit = 120512 // A 20,000-character body plus JSON escaping and target names.
 	}
 	return slices.Contains(crewAssistKinds, a.Kind) && strings.TrimSpace(a.Prompt) != "" && runes(a.Prompt) <= limit &&
-		runes(a.Persona) <= 8000 && (a.Kind == "try") == (a.Expert != "") && (a.Expert == "" || crewHandleRe.MatchString(strings.TrimPrefix(a.Expert, "@")))
+		runes(a.Persona) <= 8000 && (a.Lang == "" || a.Lang == "ko" || a.Lang == "en") && (a.Kind == "try") == (a.Expert != "") && (a.Expert == "" || crewHandleRe.MatchString(strings.TrimPrefix(a.Expert, "@")))
 }
 
 // expired reads a request nobody answered within the TTL as failed, so the

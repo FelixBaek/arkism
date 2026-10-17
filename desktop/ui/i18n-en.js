@@ -1095,6 +1095,7 @@ window.ArkismI18nEN = {
   "멈춘 이유": "Why it stopped",
   "멈추기": "Stop",
   "실패한 곳부터 다시": "Retry from failure",
+  "여기부터 다시": "Rerun from here",
   "편집으로": "Back to editing",
   "돌아가기": "Go back",
   "되돌리기": "Undo",
@@ -3682,7 +3683,7 @@ window.ArkismI18nEN = {
   "{0} · 단계 하나": "{0} · single step",
   "· 제안 {0}개": "· {0} suggestions",
   "규칙 검사 {0}/{1} 통과{2}": "Rule checks {0}/{1} passed{2}",
-  "아래 워크플로우 그래프를 검토해 개선안을 최대 4개 줘. 원칙: if 문으로 판정되는 칸은 코드 노드(토큰 0)로, 판단이 필요한 칸만 AI로. 싼 검사를 먼저. 되돌아가는 선은 꼭 필요한 곳에만, 횟수 제한. 병렬 갈래는 서로 필요한 게 없어야 해. 되돌릴 수 없는 동작 앞에는 사람 확인.\nJSON으로만 답해: {\"suggestions\":[{\"title\":\"짧은 제목\",\"body\":\"쉬운 한국어 두 문장\",\"tag\":\"토큰 줄이기|순서|멈추는 조건|안전\",\"action\":null 또는 {\"type\":\"set_model\",\"node\":\"id\",\"model\":\"...\"} 또는 {\"type\":\"set_edge_max\",\"from\":\"id\",\"to\":\"id\",\"max\":2} 또는 {\"type\":\"set_access\",\"node\":\"id\",\"access\":\"read|write\"} 또는 {\"type\":\"insert_before\",\"node\":\"id\",\"new\":{\"type\":\"code|ai_once|approval\",\"title\":\"...\",\"config\":{}}}}]}\n워크플로우: {0} (${1}) — {2}\n기본 워커 모델: {3}\n그래프: {4}": "Review the workflow graph below and give up to 4 improvements. Principles: steps that an if-statement can decide should be code nodes (0 tokens); use AI only where judgment is needed. Run cheap checks first. Use back edges only where truly needed, with a retry limit. Parallel branches must not depend on each other. Put a human approval before any irreversible action.\nAnswer only in JSON: {\"suggestions\":[{\"title\":\"short title\",\"body\":\"two plain sentences\",\"tag\":\"Fewer tokens|Order|Stop conditions|Safety\",\"action\":null or {\"type\":\"set_model\",\"node\":\"id\",\"model\":\"...\"} or {\"type\":\"set_edge_max\",\"from\":\"id\",\"to\":\"id\",\"max\":2} or {\"type\":\"set_access\",\"node\":\"id\",\"access\":\"read|write\"} or {\"type\":\"insert_before\",\"node\":\"id\",\"new\":{\"type\":\"code|ai_once|approval\",\"title\":\"...\",\"config\":{}}}}]}\nWorkflow: {0} (${1}) — {2}\nDefault worker model: {3}\nGraph: {4}",
+  "아래 워크플로우 그래프를 검토해 개선안을 최대 4개 줘. 원칙: if 문으로 판정되는 칸은 코드 노드(토큰 0)로, 판단이 필요한 칸만 AI로. 싼 검사를 먼저. 되돌아가는 선은 꼭 필요한 곳에만, 횟수 제한. 병렬 갈래는 서로 필요한 게 없어야 해. 되돌릴 수 없는 동작 앞에는 사람 확인.\nJSON으로만 답해: {\"suggestions\":[{\"title\":\"짧은 제목\",\"body\":\"쉬운 한국어 두 문장\",\"tag\":\"토큰 줄이기|순서|멈추는 조건|안전\",\"action\":null 또는 {\"type\":\"set_model\",\"node\":\"id\",\"model\":\"...\"} 또는 {\"type\":\"set_edge_max\",\"from\":\"id\",\"to\":\"id\",\"max\":2} 또는 {\"type\":\"set_access\",\"node\":\"id\",\"access\":\"read|write\"} 또는 {\"type\":\"insert_before\",\"node\":\"id\",\"new\":{\"type\":\"code|ai_once|approval\",\"title\":\"...\",\"config\":{}}}}]}\n워크플로우: {0} (${1}) — {2}\n기본 워커 모델: {3}\nset_model에 쓸 수 있는 모델(이 목록에서만): {4}\n그래프: {5}": "Review the workflow graph below and give up to 4 improvements. Principles: steps that an if-statement can decide should be code nodes (0 tokens); use AI only where judgment is needed. Run cheap checks first. Use back edges only where truly needed, with a retry limit. Parallel branches must not depend on each other. Put a human approval before any irreversible action.\nAnswer only in JSON: {\"suggestions\":[{\"title\":\"short title\",\"body\":\"two plain sentences\",\"tag\":\"Fewer tokens|Order|Stop conditions|Safety\",\"action\":null or {\"type\":\"set_model\",\"node\":\"id\",\"model\":\"...\"} or {\"type\":\"set_edge_max\",\"from\":\"id\",\"to\":\"id\",\"max\":2} or {\"type\":\"set_access\",\"node\":\"id\",\"access\":\"read|write\"} or {\"type\":\"insert_before\",\"node\":\"id\",\"new\":{\"type\":\"code|ai_once|approval\",\"title\":\"...\",\"config\":{}}}}]}\nWorkflow: {0} (${1}) — {2}\nDefault worker model: {3}\nModels allowed for set_model (only these): {4}\nGraph: {5}",
   "{0} 넣기": "Insert {0}",
   "실행 기록 · {0}": "Run history · {0}",
   "{0} 시작{1}": "Started {0}{1}",
@@ -4598,5 +4599,29 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "원래 실행 에이전트   {0} · 실행기가 기록한 정보": "Original agent   {0} · as recorded by the runner",
   "자동 확인   {0}": "Automatic check   {0}",
   "현재 시도   {0}회": "Current attempt   {0}",
-  "다음 확인   {0}": "Next check   {0}"
+  "다음 확인   {0}": "Next check   {0}",
+  "제목없음{0}": "Untitled{0}",
+  "사용자와 나눈 대화로 Arkism 워크플로우를 만든다. 꼭 필요한 것(무엇을 받아서·무엇을 하고·결과를 어디로)이 빠졌을 때만 질문하고, 질문은 최대 3번. 그 뒤엔 합리적으로 정해서 만든다.\n{0}": "Build an Arkism workflow from the conversation with the user. Ask only when something essential (what it takes in, what it does, where the result goes) is missing, at most 3 questions; after that decide sensibly and build it.\n{0}",
+  "{0}: 단계 {1}개로 그렸어요. 편집 화면에서 확인해 주세요.": "{0}: drew it with {1} steps. Check it in the editor.",
+  "이 워크플로우의 제목과 한 줄 설명을 지어 줘.\n단계: {0}": "Give this workflow a title and a one-line description.\nSteps: {0}",
+  "AI가 제목을 '{0}'(으)로 붙였어요. 설정에서 바꿀 수 있어요.": "AI named it '{0}'. You can change it in settings."
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "AI로 만들기": "Build with AI",
+  "하고 싶은 일을 말하면 AI가 물어보고 그래프를 그려요.": "Describe what you want; AI asks a few questions and draws the graph.",
+  "직접 만들기": "Build it yourself",
+  "바로 그래프 편집으로 가요. 제목은 나중에 AI가 채워요.": "Go straight to the graph editor. AI fills in the title later.",
+  "템플릿·설정으로 만들기": "Start from a template or settings",
+  "어떤 일을 자동으로 하고 싶어요? 언제 시작하고, 무엇을 받아서, 결과를 어디로 보낼지 알려 주세요.": "What do you want to automate? Tell me when it starts, what it takes in, and where the result goes.",
+  "예: 매일 아침 GitHub PR을 모아 요약해서 슬랙으로 보내 줘": "e.g. Every morning, summarize open GitHub PRs and post to Slack",
+  "AI가 생각하는 중…": "AI is thinking…",
+  "AI 답을 읽지 못했어요. 다시 보내 주세요.": "Couldn't read the AI's answer. Please send again.",
+  "없음 — set_model 제안은 하지 마": "none — do not suggest set_model"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "제목없음": "Untitled"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "AI가 제목을 '{0}'(으)로, 부르는 이름을 ${1}로 붙였어요. 설정에서 바꿀 수 있어요.": "AI named it '{0}' and set its call name to ${1}. You can change both in settings."
+});
+Object.assign(window.ArkismI18nEN.strings, {"토큰 줄이기": "Cut tokens", "안전": "Safety"});

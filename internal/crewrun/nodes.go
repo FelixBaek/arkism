@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/FelixBaek/arkism/internal/host/crew/keystore"
 	"io"
+	"maps"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -74,8 +75,15 @@ import (
 //	           callback) for POST callback_url with header X-Arkism-Callback-Token; the body is the output.
 //
 // Every node may set access=read to run alongside other ready read nodes.
+//
+// Shared state: any template (not code, expr or control keys) may also read {{trigger}} / {{trigger.a.b}} (the run's
+// input) and {{nodes.<id>}} / {{nodes.<id>.a.b}} (a finished node's output), not
+// only what the incoming edges hand over. A node not done yet reads as empty.
 func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (result, error) {
-	c := n.Config
+	c := x.shared(n.Config)
+	if out, ok := x.fake(n, input); ok {
+		return result{out: out}, nil
+	}
 	switch n.Type {
 	case "start", "schedule", "webhook":
 		return result{out: input}, nil
@@ -145,6 +153,71 @@ func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (re
 		return e.runN8N(ctx, x, n, input)
 	}
 	return result{}, failf("unknown_node", "node type %q", n.Type)
+}
+
+// fake: a test run (시험 실행) does not run steps that reach outside: AI,
+// code that may write, HTTP, GitHub, notify, n8n and subflows hand back a
+// stand-in output and a wait does not wait. Branches, loops, merges,
+// approvals and shared state run as usual.
+func (x *runExec) fake(n Node, input any) (any, bool) {
+	if x == nil || x.run.State.Trigger != "test" {
+		return nil, false
+	}
+	switch n.Type {
+	case "code":
+		if n.Config["access"] == "read" {
+			return nil, false
+		}
+	case "ai", "ai_once", "http", "github", "notify", "n8n", "subflow":
+	case "wait":
+		return input, true
+	default:
+		return nil, false
+	}
+	return map[string]any{"test": true, "step": cmp.Or(n.Title, n.ID), "type": n.Type, "input": input}, true
+}
+
+var sharedRe = regexp.MustCompile(`\{\{\s*((?:nodes|trigger)(?:\.[^}\s]+)?)\s*\}\}`)
+
+// sharedSkip are the config keys shared state never fills: the condition reads only
+// its input, and code or control keys must not take text from outside (a trigger
+// body pasted into a sh script runs as code; code reads its input on stdin).
+var sharedSkip = map[string]bool{"expr": true, "code": true, "lang": true, "access": true, "key": true, "timeout": true}
+
+// shared fills {{trigger…}} and {{nodes.<id>…}} in every config value but sharedSkip.
+func (x *runExec) shared(c map[string]string) map[string]string {
+	if x == nil {
+		return c
+	}
+	var out map[string]string
+	for k, v := range c {
+		if sharedSkip[k] || !sharedRe.MatchString(v) {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(c)
+		}
+		out[k] = sharedRe.ReplaceAllStringFunc(v, func(m string) string {
+			path := splitPath(sharedRe.FindStringSubmatch(m)[1])
+			x.mu.Lock()
+			defer x.mu.Unlock()
+			if path[0] == "trigger" {
+				return textOf(walkPath(decodeStored(x.run.State.Input), path[1:]))
+			}
+			if len(path) < 2 {
+				return ""
+			}
+			st := x.state(path[1])
+			if st == nil || st.Status != "done" {
+				return ""
+			}
+			return textOf(walkPath(decodeStored(st.Output), path[2:]))
+		})
+	}
+	if out == nil {
+		return c
+	}
+	return out
 }
 
 var tmplRe = regexp.MustCompile(`\{\{\s*(input|in(?:\.[^}\s]+)?)\s*\}\}`)
