@@ -4,6 +4,8 @@ name: Checks
 # Core boundary coverage is enforced here; Codecov reports broader coverage (coverage.yml).
 # Code quality is SonarCloud's job (sonarcloud.yml) and
 # security is CodeQL default setup on the GitHub side.
+# Linux jobs from this repository's own branches run on the owner's self-hosted runner (label arkism-self);
+# fork and Dependabot PRs stay on GitHub-hosted ubuntu-24.04 so outside code never runs on that machine.
 
 on:
   push:
@@ -22,7 +24,7 @@ concurrency:
 jobs:
   secrets:
     name: secrets
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,25 +45,25 @@ jobs:
           ./gitleaks dir . --no-banner --redact --exit-code 1
 
   go:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 30
     services:
       postgres:
         image: pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d # pg17
         env:
           POSTGRES_USER: arkism
-          # Throwaway DB on a loopback-only port of a disposable runner.
+          # Throwaway DB on a random loopback-only port; several self-hosted jobs share one machine.
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: arkism_ci
         ports:
-          - 127.0.0.1:5432:5432
+          - 127.0.0.1::5432
         options: >-
           --health-cmd "pg_isready -U arkism"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      POSTGRES_TEST_DSN: postgres://arkism@127.0.0.1:5432/arkism_ci?sslmode=disable
+      POSTGRES_TEST_DSN: postgres://arkism@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/arkism_ci?sslmode=disable
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,7 +91,7 @@ jobs:
         run: bash -n desktop/build-unix.sh desktop/installer/prepare-runtime.sh
 
   evaluation:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -117,7 +119,7 @@ jobs:
         run: go test -v -count=1 -run '^TestWindowsBundleCaptureMatchesTheUnixRules$' ./internal/host/skills
 
   ui:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -135,7 +137,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'ubuntu-24.04' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || matrix.os }}
     timeout-minutes: 15
     env:
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
@@ -148,7 +150,8 @@ jobs:
         with:
           toolchain: stable
       - name: Linux WebView packages
-        if: runner.os == 'Linux'
+        # The self-hosted runner has these preinstalled and no sudo.
+        if: runner.os == 'Linux' && runner.environment == 'github-hosted'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
