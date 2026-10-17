@@ -56,7 +56,7 @@ func TestArkParse(t *testing.T) {
 func TestArkHelpBlocksWithoutRecallOrCapture(t *testing.T) {
 	capFake(t)
 	capOnPrompt = true // even with prompt capture on, a command is not captured
-	search = func(string, string, int, float64) ([]any, error) { t.Fatal("recall ran for a command"); return nil, nil }
+	search = func(string, string, int, float64) ([]any, bool, error) { t.Fatal("recall ran for a command"); return nil, true, nil }
 	v, _ := arkHook(t, "ark:help")
 	if v["decision"] != "block" || !strings.Contains(str(v["reason"]), "ark:remember") || v["systemMessage"] != nil {
 		t.Fatal("help output", v)
@@ -74,7 +74,7 @@ func TestArkHelpBlocksWithoutRecallOrCapture(t *testing.T) {
 func TestArkPassThroughKeepsNormalHook(t *testing.T) {
 	capFake(t)
 	called := false
-	search = func(string, string, int, float64) ([]any, error) { called = true; return []any{}, nil }
+	search = func(string, string, int, float64) ([]any, bool, error) { called = true; return []any{}, true, nil }
 	if v, _ := arkHook(t, "ark:status 는 무슨 뜻이야?"); v != nil && v["decision"] != nil {
 		t.Fatal("ordinary prompt was blocked", v)
 	}

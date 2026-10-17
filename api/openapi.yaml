@@ -3657,8 +3657,8 @@
     "/v1/prompts/{id}": {
       "post": {"summary": "Replace a prompt's fields, or archive it (expected_revision required)", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Updated record"}, "409": {"description": "revision_conflict"}}}
     },
-    "/v1/maintenance_proposals": {"get": {"summary": "Memory cleanup proposals of one status (default open), newest first, up to 500 (read:maintenance_proposals)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["open", "accepted", "swapped", "dismissed", "stale"]}}], "responses": {"200": {"description": "items (records with a maintenance field: type duplicate|contradiction, keep and retire refs {collection memories, id, revision}, reason same_meaning|more_specific|newer_replaces_older, decision, decided_by, decided_at). No memory text."}}}, "post": {"summary": "Propose keeping one of two active memories (write:maintenance_proposals)", "description": "Body {scope, proposal{type, keep, retire, reason}}. Both memories must be live, approved, outside any conflict and at the given revisions (409 otherwise). One record per pair (id from the scope and both ids): a decided pair, or an open one at the same revisions, comes back with duplicate=true; an open one at older revisions or a stale one is replaced in place. Reason is a fixed code; free text is refused.", "responses": {"200": {"description": "The proposal record"}, "400": {"description": "invalid_request"}, "409": {"description": "revision_conflict"}}}},
-    "/v1/maintenance_proposals/{id}/decide": {"post": {"summary": "A person's answer to a proposal (human principals only)", "description": "Body {scope, expected_revision, decision accept|swap|dismiss}. accept keeps keep and supersedes retire, swap the other way round, dismiss changes nothing. accept and swap run the conflict path's mark and resolve (second_supersedes_first) with the proposal close in one transaction and need transition:memories on both memories. A memory changed since the proposal returns 409 and marks the proposal stale.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The closed proposal"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}}}},
+    "/v1/maintenance_proposals": {"get": {"summary": "Memory cleanup proposals of one status (default open), newest first, up to 500 (read:maintenance_proposals)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["open", "accepted", "swapped", "dismissed", "stale"]}}], "responses": {"200": {"description": "items (records with a maintenance field: type duplicate|contradiction, keep and retire refs {collection memories, id, revision}, reason same_meaning|more_specific|newer_replaces_older, decision, decided_by, decided_at; or a signal proposal (ST-814): type rule_often_violated|lesson_often_failing, memory ref, reason low_pass_rate, evidence {samples, passed, pass_rate}). No memory text."}}}, "post": {"summary": "Propose keeping one of two active memories (write:maintenance_proposals)", "description": "Body {scope, proposal{type, keep, retire, reason}}. Both memories must be live, approved, outside any conflict and at the given revisions (409 otherwise). One record per pair (id from the scope and both ids): a decided pair, or an open one at the same revisions, comes back with duplicate=true; an open one at older revisions or a stale one is replaced in place. Reason is a fixed code; free text is refused. Signal proposal (ST-814): proposal{type rule_often_violated (memory kind user|procedural|decision) or lesson_often_failing (lesson), memory ref, reason low_pass_rate, evidence{samples, passed}}, keep and retire empty; samples and passed must equal the stored memory signal (409 otherwise), pass_rate is recomputed, and the token also needs read:usage. One record per memory.", "responses": {"200": {"description": "The proposal record"}, "400": {"description": "invalid_request"}, "409": {"description": "revision_conflict"}}}},
+    "/v1/maintenance_proposals/{id}/decide": {"post": {"summary": "A person's answer to a proposal (human principals only)", "description": "Body {scope, expected_revision, decision accept|swap|dismiss}. accept keeps keep and supersedes retire, swap the other way round, dismiss changes nothing. A signal proposal takes accept or dismiss only (swap 400) and neither changes the memory. accept and swap run the conflict path's mark and resolve (second_supersedes_first) with the proposal close in one transaction and need transition:memories on both memories. A memory changed since the proposal returns 409 and marks the proposal stale.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The closed proposal"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}}}},
     "/v1/context/pins": {"get": {"summary": "Resolved pins of a work agent or team (read:crew, context:read)", "description": "agent=@handle of a live agent or team in the scope. Pins come in priority order, each read now: status ok|not_found|not_approved|revision_mismatch|secret_blocked|denied; only ok pins carry item (a data-only hit shaped by injection full|summary|reference). Optional destination external:<name> runs the transfer policy as search does.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "destination", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{crew, handle, type, items[{pin, status, item?}], authority, notice}"}, "404": {"description": "not_found"}}}, "post": {"summary": "Resolve pins a host is injecting and record them (context:read)", "description": "Body {scope, agent, destination?}. Same answer as GET plus context_id: the injected pinned memories are stored in a context_usage receipt (purpose session_start), like the memories a search hands out. GET writes no receipt.", "responses": {"200": {"description": "{context_id?, crew, handle, type, items[{pin, status, item?}], authority, notice}"}, "404": {"description": "not_found"}}}},
     "/v1/merge_proposals": {"get": {"summary": "Memory merge proposals of one status (default open), newest first, up to 500 (read:merge_proposals)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["open", "accepted", "dismissed", "stale"]}}], "responses": {"200": {"description": "items: records with merge.proposal {candidate, action store|merge|skip, targets, reason_code, reason (short model note, data only, cleared on close), pool_id, decision, decided_by, decided_at, memory}"}}}, "post": {"summary": "Submit a judge's verdicts for a pool (write:merge_proposals)", "description": "Body {scope, pool_id, pool_revision, generator, verdicts[{candidate_id, action, target_ids, reason_code, reason}]}. The pool is single use, made by the same principal and unexpired (409 otherwise). Each verdict is checked alone: a candidate or target outside the pool, an unknown action or reason, a secret in the note, or a record changed since the pool was made is refused (per-item status 400/409) and stored nowhere. Nothing changes until a person decides.", "responses": {"200": {"description": "{items[{index, status, code?, record?}], proposed, rejected}"}, "400": {"description": "invalid_request"}, "409": {"description": "revision_conflict"}}}},
     "/v1/merge_proposals/pool": {"post": {"summary": "Build a pool of undecided memory candidates and their most similar approved memories (human principals only)", "description": "Body {scope, limit 1-20 (10), k 1-5 (3)}. Candidates with a proposal for their current revision are left out. The stored pool holds references only; the answer carries the texts for the judge, data only.", "responses": {"200": {"description": "{id, revision, expires_at, candidates[{ref, kind, text, similar}], memories[{ref, kind, text}], degraded, authority, notice}; no id when there is nothing to ask"}, "403": {"description": "Not a human principal"}}}},
@@ -4350,6 +4350,258 @@
         }
       }
     },
+      "/v1/memory-reach-suggestions": {
+        "get": {
+          "summary": "List AI reach suggestions for active memories (ST-825)",
+          "description": "Pages active memories with the memory list's checks (read:memories) plus read:usage, and returns those whose suggestion differs from their reach and was not dismissed. A project memory whose current revision was handed out under two or more project keys is suggested for general (uses from before a reach change do not count; project memories are hidden from other keys' search and id recall and pin receipts carry no key, so today this signal rarely appears). Memories whose reach a person set show no save-time suggestion; others use the save-time suggestion or one computed for older memories. Read-only. Accept with POST /v1/memories/{id}/reach (human only); dismiss with POST /v1/memories/{id}/reach-suggestion/dismiss.",
+          "parameters": [
+            {
+              "name": "workspace_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "user_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "agent_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 20
+              }
+            },
+            {
+              "name": "project_key",
+              "in": "query",
+              "required": false,
+              "description": "ST-824: when present (empty allowed), lists only personal, general and this key's project-reach memories. Absent lists every reach (management screens).",
+              "schema": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            {
+              "name": "q",
+              "in": "query",
+              "required": false,
+              "description": "UTF-8 literal case-sensitive substring of full memory text, at most256 bytes before trimming. Explicit empty, controls, secrets and duplicates rejected. Included in cursor binding and passed to initial read:memories policy; query is not stored in101 audit/logs. No file-body/OCR search.",
+              "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            {
+              "name": "kind",
+              "in": "query",
+              "required": false,
+              "description": "Memory kind",
+              "schema": {
+                "type": "string",
+                "enum": [
+                  "raw",
+                  "semantic",
+                  "episodic",
+                  "procedural",
+                  "user",
+                  "decision",
+                  "lesson"
+                ]
+              }
+            },
+            {
+              "name": "cursor",
+              "in": "query",
+              "required": false,
+              "description": "Opaque unsigned cursor bound to scope and filters",
+              "schema": {
+                "type": "string",
+                "maxLength": 2048
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Suggestions on this page and the memory list cursor",
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              },
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ReachSuggestionPage"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "403": {
+              "description": "Not permitted",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            }
+          }
+        }
+      },
+      "/v1/memories/{id}/reach-suggestion/dismiss": {
+        "post": {
+          "summary": "Dismiss one reach suggestion (ST-825)",
+          "description": "Human transition:memories only; agent and pipeline principals get 403. Hides the named suggestion on this memory; reach, content and revision stay. Revision pinned (409 when stale, or when the named suggestion is not the one shown now, so a later suggestion cannot be hidden in advance); quarantined or erased memories are 404. Audit records dismiss_reach_suggestion:memories without content.",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReachSuggestionDismissInput"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "The memory with reach_suggestion_dismissed set",
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              },
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Record"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "403": {
+              "description": "Not a human principal or not permitted",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "404": {
+              "description": "Not found",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "409": {
+              "description": "Stale revision or not active",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            }
+          }
+        }
+      },
     "/v1/memories/{id}/reach": {
       "post": {
         "summary": "Change an active memory's reach (ST-824)",
@@ -9201,6 +9453,298 @@
         }
       }
     },
+    "/v1/memories/{id}/outcome-comparison": {
+      "get": {
+        "summary": "Pass rate of sessions that used a memory versus sessions that did not (ST-819)",
+        "description": "Groups memory_outcome verdicts in the exact scope by execution trace (one session) for one required dimension and optional judged_at range. A session passed when all its verdicts under the filters passed. It used the memory when it has a verdict on this memory id (ST-302 checked delivery) or a done context_usage receipt that handed this memory id out names one of the trace's agent_runs; every other judged session is not_used. A side with fewer than min_sessions (10) sessions returns status insufficient_data with passed and pass_rate null; difference (used minus not_used pass rate) is set only when both sides are ok. Correlation over existing verdicts, not a causal effect; computed on read from existing rows, nothing stored. read:memories, read:evaluations and read:usage on scope and read:memories on the memory, all the same principal. Only counts and rates: no memory, source, trace or checker text or ids. Audited as read:memory_outcome_comparison with the memory id only.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dimension",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "personal_compliance",
+                "work_task"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Inclusive judged_at lower bound (RFC3339)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Exclusive judged_at upper bound (RFC3339)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Used and not-used session groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryOutcomeComparison"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid dimension, invalid filter or memory id, or a limit/cursor parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authorization or policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Memory missing, erased or privacy-quarantined in this scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency or audit failure; no partial result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memory-graph": {
+      "get": {
+        "summary": "Relation graph around one memory, or the whole map (ST-820)",
+        "description": "Memories and lines up to two steps from memory_id. Lines: supersedes, conflicts, supports and human_link come from stored memory_relations (active, exactly two memory ends) and may cross reaches; same_session (shared session: tag) and similar (stored vectors, cosine >= 0.80, score) stay inside one reach and reach_project, at most 3 per node. Nodes are visible memories (not erased or quarantined, currently active or superseded) in the asked reaches; a project memory shows only when reach_project equals project_key (ST-824). vector_pending marks a memory without a current stored vector. No embedding call, no relation reasons, sources or vectors in the response. Caps: limit nodes (default 60, max 100), 300 lines; truncated=true when cut. Exact four-field scope from the storage layer; read:memories on scope and on memory_id and read:memory_relations on scope, all the same principal. Audited as read:memory_graph with the center id only. mode=all: no memory_id or depth; every visible memory of the scope (same node, reach and line rules) with only id, reach, kind, uses (context_usage receipts) and vector_pending per node and from, to, type per line; no text, labels, relations or scores. Caps: limit nodes (default and max 5000), 20000 lines; truncated=true when cut. Also needs read:usage on scope and read:memories per node (denied nodes left out with their lines). Audited as read:memory_graph with id all.",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all"
+              ]
+            },
+            "description": "all = whole visible map without a center"
+          },
+          {
+            "name": "memory_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Center memory (required unless mode=all)"
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2,
+              "default": 2
+            }
+          },
+          {
+            "name": "reach",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated personal, general, project (default all)"
+          },
+          {
+            "name": "project_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Repository key (lowercased); without it project memories are hidden"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            "description": "Node cap (center: default 60, max 100; mode=all: default and max 5000)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/MemoryGraph"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MemoryGraphMap"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scope, mode, memory id, depth, reach, project key or limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authorization or policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Center memory missing, erased, quarantined or outside the reach filter in this scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency or audit failure; no partial result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/memory-outcomes/summary": {
       "post": {
         "summary": "Verification summaries for up to 100 memories (ST-812)",
@@ -12292,6 +12836,18 @@
             "type": "integer",
             "minimum": 1
           },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "readOnly": true,
+            "description": "ST-811 fused rank score, as on Hit."
+          },
+          "lanes": {
+            "type": "array",
+            "readOnly": true,
+            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "description": "ST-811 lanes that found this hit, as on Hit."
+          },
           "collected_at": {
             "type": [
               "string",
@@ -12347,6 +12903,31 @@
             "type": "string",
             "readOnly": true,
             "description": "Project key a project-reach memory recalls for (normalized origin owner/name or path:hash). Never a raw path."
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "readOnly": true,
+            "description": "ST-811 fused rank score (weighted reciprocal rank, exact keyword weighted 2x) after scope, reach and liveness filters. Ordinal only; not a provider similarity."
+          },
+          "lanes": {
+            "type": "array",
+            "readOnly": true,
+            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "description": "ST-811 lanes that found this hit, in fixed order exact, keyword, vector, relation."
+          },
+          "path_check": {
+            "type": "string",
+            "enum": ["missing"],
+            "readOnly": true,
+            "description": "ST-818 display marker set by the host (hooks, MCP recall), never by the server: a file path in the text or sources does not exist in the session's working folder (\"확인 필요\"). The hit is still returned in its rank; nothing is hidden or reordered."
+          },
+          "missing_paths": {
+            "type": "array",
+            "readOnly": true,
+            "maxItems": 8,
+            "items": {"type": "string"},
+            "description": "ST-818 host-set: the paths as written in the memory that were not found. Shown to the agent only; never logged or sent back to the server."
           },
           "conflict_pending": {
             "type": "boolean",
@@ -13657,6 +14238,20 @@
             "readOnly": true,
             "description": "Project key a project-reach memory recalls for (normalized origin owner/name or path:hash). Never a raw path."
           },
+            "reach_suggestion": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ReachSuggestion"
+                }
+              ],
+              "readOnly": true,
+              "description": "ST-825 save-time suggestion on new candidates and memories, copied on approval."
+            },
+            "reach_suggestion_dismissed": {
+              "type": "string",
+              "readOnly": true,
+              "description": "ST-825 'reach|project' a person dismissed."
+            },
           "skill_bundle": {
             "$ref": "#/components/schemas/SkillBundle",
             "readOnly": true
@@ -15489,6 +16084,143 @@
           }
         }
       },
+        "ReachSuggestion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reach",
+            "reason",
+            "confidence"
+          ],
+          "description": "ST-825 AI reach suggestion. Never changes reach; a person accepts or dismisses it.",
+          "properties": {
+            "reach": {
+              "type": "string",
+              "enum": [
+                "personal",
+                "general",
+                "project"
+              ]
+            },
+            "reach_project": {
+              "type": "string",
+              "description": "Suggested project key; empty for a project suggestion means a person picks the project."
+            },
+            "reason": {
+              "type": "string",
+              "description": "One fixed phrase; never memory text, queries or paths."
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "ReachSuggestionItem": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "memory_id",
+            "revision",
+            "kind",
+            "text",
+            "reach",
+            "used_projects",
+            "suggestion"
+          ],
+          "properties": {
+            "memory_id": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "reach": {
+              "type": "string",
+              "enum": [
+                "personal",
+                "general",
+                "project"
+              ]
+            },
+            "reach_project": {
+              "type": "string"
+            },
+            "used_projects": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Distinct project keys in context_usage receipts for this memory's current revision."
+            },
+            "suggestion": {
+              "$ref": "#/components/schemas/ReachSuggestion"
+            }
+          }
+        },
+        "ReachSuggestionPage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "items",
+            "next_cursor",
+            "authority"
+          ],
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ReachSuggestionItem"
+              }
+            },
+            "next_cursor": {
+              "type": "string"
+            },
+            "authority": {
+              "type": "string",
+              "enum": [
+                "data_only_untrusted"
+              ]
+            }
+          }
+        },
+        "ReachSuggestionDismissInput": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scope",
+            "expected_revision",
+            "reach"
+          ],
+          "properties": {
+            "scope": {
+              "$ref": "#/components/schemas/Scope"
+            },
+            "expected_revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "reach": {
+              "type": "string",
+              "enum": [
+                "personal",
+                "general",
+                "project"
+              ]
+            },
+            "reach_project": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        },
       "MemoryReachInput": {
         "type": "object",
         "additionalProperties": false,
@@ -16027,6 +16759,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 50
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "description": "ST-811 fused score the search handed this memory out with; absent for pinned memories."
+          },
+          "lanes": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "description": "ST-811 lanes that found it; absent for pinned memories. No body or query text is stored."
           }
         }
       },
@@ -16078,6 +16820,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 50
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "description": "ST-811 fused score the search handed this memory out with; absent for pinned memories."
+          },
+          "lanes": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "description": "ST-811 lanes that found it; absent for pinned memories. No body or query text is stored."
           },
           "run": {
             "$ref": "#/components/schemas/Ref"
@@ -18990,6 +19742,232 @@
           }
         }
       },
+      "MemoryGraphNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memory",
+          "kind",
+          "status",
+          "reach",
+          "label",
+          "depth",
+          "vector_pending"
+        ],
+        "properties": {
+          "memory": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "superseded"
+            ]
+          },
+          "reach": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "general",
+              "project"
+            ]
+          },
+          "reach_project": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 121,
+            "description": "First 120 characters of the memory text"
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "vector_pending": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MemoryGraphEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "type"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "supersedes",
+              "conflicts",
+              "supports",
+              "human_link",
+              "same_session",
+              "similar"
+            ]
+          },
+          "relation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Ref"
+              }
+            ],
+            "description": "memory_relations row of a stored line"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0.8,
+            "maximum": 1,
+            "description": "Cosine similarity of a similar line"
+          }
+        }
+      },
+      "MemoryGraph": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "center",
+          "nodes",
+          "edges",
+          "truncated",
+          "authority"
+        ],
+        "properties": {
+          "center": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "nodes": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/MemoryGraphNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "maxItems": 300,
+            "items": {
+              "$ref": "#/components/schemas/MemoryGraphEdge"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "authority": {
+            "type": "string",
+            "const": "data_only_untrusted"
+          }
+        }
+      },
+      "MemoryGraphMapNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "reach",
+          "kind",
+          "uses",
+          "vector_pending"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reach": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "general",
+              "project"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "uses": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "vector_pending": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MemoryGraphMapEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "type"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "supersedes",
+              "conflicts",
+              "supports",
+              "human_link",
+              "same_session",
+              "similar"
+            ]
+          }
+        }
+      },
+      "MemoryGraphMap": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nodes",
+          "edges",
+          "truncated",
+          "authority"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "maxItems": 5000,
+            "items": {
+              "$ref": "#/components/schemas/MemoryGraphMapNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "maxItems": 20000,
+            "items": {
+              "$ref": "#/components/schemas/MemoryGraphMapEdge"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "authority": {
+            "type": "string",
+            "const": "data_only_untrusted"
+          }
+        }
+      },
       "MemoryOutcomeSummary": {
         "type": "object",
         "additionalProperties": false,
@@ -19129,6 +20107,93 @@
           }
         }
       },
+        "MemoryOutcomeGroup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sessions",
+            "status",
+            "passed",
+            "pass_rate"
+          ],
+          "properties": {
+            "sessions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "insufficient_data"
+              ],
+              "description": "insufficient_data when sessions < min_sessions; passed and pass_rate are then null"
+            },
+            "passed": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "pass_rate": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "MemoryOutcomeComparison": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "memory",
+            "dimension",
+            "min_sessions",
+            "used",
+            "not_used",
+            "difference",
+            "authority"
+          ],
+          "properties": {
+            "memory": {
+              "$ref": "#/components/schemas/Ref"
+            },
+            "dimension": {
+              "type": "string",
+              "enum": [
+                "personal_compliance",
+                "work_task"
+              ]
+            },
+            "min_sessions": {
+              "type": "integer",
+              "const": 10
+            },
+            "used": {
+              "$ref": "#/components/schemas/MemoryOutcomeGroup"
+            },
+            "not_used": {
+              "$ref": "#/components/schemas/MemoryOutcomeGroup"
+            },
+            "difference": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": -1,
+              "maximum": 1,
+              "description": "used.pass_rate - not_used.pass_rate when both sides are ok"
+            },
+            "authority": {
+              "type": "string",
+              "const": "data_only_untrusted"
+            }
+          }
+        },
       "MemoryOutcomeInput": {
         "type": "object",
         "additionalProperties": false,

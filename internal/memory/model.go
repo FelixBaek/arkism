@@ -98,17 +98,20 @@ type ProviderCost struct {
 type Record struct {
 	MemoryContext *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
 	// Reach (ST-824): where a memory is recalled; "" reads as memoryReach's default. See memory_reach.go.
-	Reach             string               `json:"reach,omitempty" bson:"reach,omitempty"`
-	ReachProject      string               `json:"reach_project,omitempty" bson:"reach_project,omitempty"`
-	ReachOrigin       string               `json:"-" bson:"reach_origin,omitempty"`
-	ModelBudget       *ModelBudgetState    `json:"-" bson:"model_budget,omitempty"`
-	SkillBundle       *SkillBundle         `json:"skill_bundle,omitempty" bson:"skill_bundle,omitempty"`
-	SkillBundleSHA256 string               `json:"skill_bundle_sha256,omitempty" bson:"skill_bundle_sha256,omitempty"`
-	SkillTrial        *SkillTrial          `json:"skill_trial,omitempty" bson:"skill_trial,omitempty"`
-	SkillBasis        *SkillBasis          `json:"skill_basis,omitempty" bson:"skill_basis,omitempty"`
-	ComparisonPlan    *SkillComparisonPlan `json:"comparison_plan,omitempty" bson:"comparison_plan,omitempty"`
-	MemoryTimeline    []MemoryState        `json:"-" bson:"memory_timeline,omitempty"`
-	ArchiveMessages   []ArchiveMessageRef  `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
+	Reach        string `json:"reach,omitempty" bson:"reach,omitempty"`
+	ReachProject string `json:"reach_project,omitempty" bson:"reach_project,omitempty"`
+	ReachOrigin  string `json:"-" bson:"reach_origin,omitempty"`
+	// ReachSuggestion (ST-825) is the save-time proposal; ReachSuggestionDismissed is "reach|project" a person turned down.
+	ReachSuggestion          *ReachSuggestion     `json:"reach_suggestion,omitempty" bson:"reach_suggestion,omitempty"`
+	ReachSuggestionDismissed string               `json:"reach_suggestion_dismissed,omitempty" bson:"reach_suggestion_dismissed,omitempty"`
+	ModelBudget              *ModelBudgetState    `json:"-" bson:"model_budget,omitempty"`
+	SkillBundle              *SkillBundle         `json:"skill_bundle,omitempty" bson:"skill_bundle,omitempty"`
+	SkillBundleSHA256        string               `json:"skill_bundle_sha256,omitempty" bson:"skill_bundle_sha256,omitempty"`
+	SkillTrial               *SkillTrial          `json:"skill_trial,omitempty" bson:"skill_trial,omitempty"`
+	SkillBasis               *SkillBasis          `json:"skill_basis,omitempty" bson:"skill_basis,omitempty"`
+	ComparisonPlan           *SkillComparisonPlan `json:"comparison_plan,omitempty" bson:"comparison_plan,omitempty"`
+	MemoryTimeline           []MemoryState        `json:"-" bson:"memory_timeline,omitempty"`
+	ArchiveMessages          []ArchiveMessageRef  `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
 
 	KnowledgeRetrieval   *KnowledgeRetrievalLog `json:"knowledge_retrieval,omitempty" bson:"knowledge_retrieval,omitempty"`
 	Knowledge            *KnowledgeRecord       `json:"knowledge,omitempty" bson:"knowledge,omitempty"`
@@ -278,10 +281,23 @@ type Repository interface {
 	MemoryOutcomes(context.Context, MemoryOutcomeQuery) ([]Record, error)
 	// MemoryOutcomeCounts aggregates memory_outcome evaluations per memory id under the same filters.
 	MemoryOutcomeCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeCount, error)
+	// MemoryOutcomeSessionCounts splits one memory's dimension into used / not-used sessions (ST-819).
+	MemoryOutcomeSessionCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeSessionCount, error)
 	// MemoryUseCounts aggregates context_usage receipts per memory id (all revisions) in one scope.
 	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
 	// MemoryUsageWindow counts context_usage receipts per live memory created since the first time, and since the second.
 	MemoryUsageWindow(context.Context, Scope, time.Time, time.Time) ([]MemoryUsageCount, error)
+	// ST-820 graph reads; each applies the scope and memoryGraphWhere (reach) filter.
+	MemoryGraphNodes(context.Context, MemoryGraphQuery, []string) ([]Record, error)
+	// MemoryGraphMapNodes returns up to limit visible memories with id after the given one, by id (ST-820 all mode).
+	MemoryGraphMapNodes(context.Context, MemoryGraphQuery, string, int) ([]Record, error)
+	// MemoryGraphLinks returns memory_relations rows naming any of the memory ids (up to memoryGraphScan+1).
+	MemoryGraphLinks(context.Context, MemoryGraphQuery, []string) ([]Record, error)
+	// MemoryGraphSessions returns, per asking memory id, up to limit other visible memories of the
+	// same reach and reach_project sharing one of its session tags, by id.
+	MemoryGraphSessions(context.Context, MemoryGraphQuery, []string, int) ([]MemoryGraphSessionHit, error)
+	// MemoryGraphSimilar returns up to limit nearest visible same-reach memories per id within maxDistance.
+	MemoryGraphSimilar(context.Context, MemoryGraphQuery, []string, float64, int) ([]MemoryGraphSimilarPair, error)
 	ListCandidates(context.Context, ReviewInput) ([]Record, error)
 	ListSources(context.Context, SourceListInput) ([]Record, error)
 	ListMemories(context.Context, MemoryListInput) ([]Record, error)
@@ -347,6 +363,8 @@ type Hit struct {
 	CollectedAt        *time.Time     `json:"collected_at,omitempty" bson:"collected_at,omitempty"`
 	EffectiveAt        *time.Time     `json:"effective_at" bson:"effective_at,omitempty"`
 	Rank               int            `json:"rank,omitempty" bson:"rank,omitempty"`
+	Score              float64        `json:"score,omitempty" bson:"-"`
+	Lanes              []string       `json:"lanes,omitempty" bson:"-"`
 	Kind               string         `json:"kind,omitempty" bson:"kind"`
 	Sensitivity        string         `json:"sensitivity,omitempty" bson:"sensitivity"`
 	ID                 string         `json:"id" bson:"id"`
