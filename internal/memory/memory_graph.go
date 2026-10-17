@@ -73,9 +73,9 @@ type MemoryGraphSimilarPair struct {
 	Distance float64
 }
 
-// MemoryGraphSessionHit is one memory carrying a session tag asked for.
+// MemoryGraphSessionHit is one memory sharing a session tag with the asking memory From.
 type MemoryGraphSessionHit struct {
-	Tag    string
+	From   string
 	Memory Record
 }
 
@@ -343,42 +343,43 @@ func (b *memoryGraphBuild) storedLines(ctx context.Context, frontier []string) (
 }
 
 // sessionLines: up to memoryGraphPerNode same-session memories per node, same reach only.
+// The repository applies reach per asking node, so other reaches never use up the cap.
 func (b *memoryGraphBuild) sessionLines(ctx context.Context, frontier []string) ([]MemoryGraphEdge, error) {
-	tags := []string{}
+	asking := []string{}
 	for _, id := range frontier {
-		tags = append(tags, sessionTags(b.nodes[id])...)
+		if len(sessionTags(b.nodes[id])) > 0 {
+			asking = append(asking, id)
+		}
 	}
-	if len(tags) == 0 {
+	if len(asking) == 0 {
 		return nil, nil
 	}
-	slices.Sort(tags)
-	tags = slices.Compact(tags)
-	hits, e := b.s.Repo.MemoryGraphSessions(ctx, b.in, tags, memoryGraphPerNode+1)
+	hits, e := b.s.Repo.MemoryGraphSessions(ctx, b.in, asking, memoryGraphPerNode+1)
 	if e != nil {
 		return nil, e
 	}
-	byTag := map[string][]Record{}
+	byNode := map[string][]string{}
 	for _, h := range hits {
-		if !slices.Contains(tags, h.Tag) || !slices.Contains(h.Memory.Tags, h.Tag) || !memoryGraphVisible(h.Memory, b.in) {
+		n, ok := b.nodes[h.From]
+		if !ok || !slices.Contains(asking, h.From) || h.Memory.ID == h.From || !sameReach(n, h.Memory) || !memoryGraphVisible(h.Memory, b.in) ||
+			!slices.ContainsFunc(sessionTags(n), func(t string) bool { return slices.Contains(h.Memory.Tags, t) }) {
 			return nil, ErrUnavailable
 		}
-		byTag[h.Tag] = append(byTag[h.Tag], h.Memory)
+		if !slices.Contains(byNode[h.From], h.Memory.ID) {
+			byNode[h.From] = append(byNode[h.From], h.Memory.ID)
+		}
 		if _, ok := b.nodes[h.Memory.ID]; !ok {
 			b.nodes[h.Memory.ID] = h.Memory // record only; joins the graph when placed
 		}
 	}
 	out := []MemoryGraphEdge{}
-	for _, id := range frontier {
-		n, others := b.nodes[id], []string{}
-		for _, t := range sessionTags(n) {
-			for _, m := range byTag[t] {
-				if m.ID != id && sameReach(n, m) && !slices.Contains(others, m.ID) {
-					others = append(others, m.ID)
-				}
-			}
-		}
+	for _, id := range asking {
+		others := byNode[id]
 		slices.Sort(others)
-		for _, o := range others[:min(len(others), memoryGraphPerNode)] {
+		if len(others) > memoryGraphPerNode {
+			b.trunc, others = true, others[:memoryGraphPerNode]
+		}
+		for _, o := range others {
 			out = append(out, MemoryGraphEdge{From: id, To: o, Type: GraphSameSession})
 		}
 	}

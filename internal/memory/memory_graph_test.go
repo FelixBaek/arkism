@@ -50,17 +50,22 @@ func (f *fakeRepo) MemoryGraphLinks(_ context.Context, in MemoryGraphQuery, ids 
 	}
 	return out, nil
 }
-func (f *fakeRepo) MemoryGraphSessions(_ context.Context, in MemoryGraphQuery, tags []string, limit int) ([]MemoryGraphSessionHit, error) {
+func (f *fakeRepo) MemoryGraphSessions(_ context.Context, in MemoryGraphQuery, ids []string, limit int) ([]MemoryGraphSessionHit, error) {
 	in, e := normalizeMemoryGraphQuery(in)
 	if e != nil {
 		return nil, e
 	}
+	rows := f.graphRows(colMemories)
 	out := []MemoryGraphSessionHit{}
-	for _, t := range tags {
+	for _, c := range rows {
+		if !slices.Contains(ids, c.ID) {
+			continue
+		}
 		n := 0
-		for _, r := range f.graphRows(colMemories) {
-			if n < limit && slices.Contains(r.Tags, t) && memoryGraphVisible(r, in) {
-				out, n = append(out, MemoryGraphSessionHit{Tag: t, Memory: r}), n+1
+		for _, m := range rows {
+			shared := slices.ContainsFunc(sessionTags(c), func(t string) bool { return slices.Contains(m.Tags, t) })
+			if n < limit && m.ID != c.ID && shared && sameReach(c, m) && memoryGraphVisible(m, in) {
+				out, n = append(out, MemoryGraphSessionHit{From: c.ID, Memory: m}), n+1
 			}
 		}
 	}
@@ -163,6 +168,14 @@ func seedGraph(w graphWorld) {
 	w.rel("r-a2", "supports", roleHuman, "con", "a2")
 	w.rel("r-a3", "supports", roleHuman, "a2", "a3")
 	w.rel("r-other", "supports", roleHuman, "c", "other-proj")
+	// A separate crowded session: lower-id personal memories must not use up x-c's three general lines.
+	w.put("x-c", "crowded session center", ReachGeneral, "", nan, "session:crowd")
+	for _, id := range []string{"x-a1", "x-a2", "x-a3", "x-a4"} {
+		w.put(id, "crowded personal", ReachPersonal, "", nan, "session:crowd")
+	}
+	for _, id := range []string{"x-g1", "x-g2", "x-g3", "x-g4"} {
+		w.put(id, "crowded general", ReachGeneral, "", nan, "session:crowd")
+	}
 }
 
 func graphQuery(depth int) MemoryGraphQuery {
@@ -253,6 +266,13 @@ func checkGraph(t *testing.T, svc *Service, token string) {
 	q.Limit = 3
 	if g, e = svc.MemoryGraph(testCtx, token, q); e != nil || len(g.Nodes) != 3 || !g.Truncated {
 		t.Fatal("limit", g, e)
+	}
+	// Same-session cap is per node and reach: other reaches never crowd out lines, and a cut says truncated.
+	q = graphQuery(1)
+	q.MemoryID = "x-c"
+	g, e = svc.MemoryGraph(testCtx, token, q)
+	if nodes, edges = graphShape(g); e != nil || len(nodes) != 4 || !g.Truncated || edges["x-c>x-g1"] != GraphSameSession || edges["x-c>x-g3"] != GraphSameSession || hasNode(nodes, "x-a1") {
+		t.Fatal("crowded session", nodes, edges, g.Truncated, e)
 	}
 }
 

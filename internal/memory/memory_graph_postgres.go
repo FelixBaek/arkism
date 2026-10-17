@@ -41,17 +41,22 @@ AND jsonb_typeof(doc->'relations')='array' AND EXISTS (SELECT 1 FROM jsonb_array
 	return p.selectRecords(ctx, "memory_relations", in.Scope, w, []any{ids}, "id ASC", memoryGraphScan+1)
 }
 
-func (p *Postgres) MemoryGraphSessions(ctx context.Context, in MemoryGraphQuery, tags []string, limit int) ([]MemoryGraphSessionHit, error) {
+func (p *Postgres) MemoryGraphSessions(ctx context.Context, in MemoryGraphQuery, ids []string, limit int) ([]MemoryGraphSessionHit, error) {
 	in, err := normalizeMemoryGraphQuery(in)
-	if err != nil || len(tags) == 0 || len(tags) > memoryGraphScan || limit < 1 || limit > memoryGraphMaxNodes {
+	if err != nil || len(ids) == 0 || len(ids) > memoryGraphMaxNodes || limit < 1 || limit > memoryGraphMaxNodes {
 		return nil, ErrInvalid
 	}
 	w, args := memoryGraphWhere(in, "m.", 6)
 	params := append([]any{in.Scope.WorkspaceID, in.Scope.ProjectID, in.Scope.UserID, in.Scope.AgentID, colMemories}, args...)
-	params = append(params, tags, limit)
-	rows, err := p.q().Query(ctx, `SELECT t, n.payload FROM unnest($8::text[]) t CROSS JOIN LATERAL (
-SELECT m.payload FROM memory_records m WHERE m.collection=$5 AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4
-AND m.doc->'tags' ? t AND `+w+` ORDER BY m.id LIMIT $9) n ORDER BY t`, params...)
+	params = append(params, ids, limit)
+	// sessionTags in SQL: tags starting with "session:" and longer than it.
+	rows, err := p.q().Query(ctx, `SELECT c.id, n.payload FROM memory_records c CROSS JOIN LATERAL (
+SELECT m.id, m.payload FROM memory_records m WHERE m.collection=$5 AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4
+AND m.id<>c.id AND `+pgReach("m.")+`=`+pgReach("c.")+` AND COALESCE(m.doc->>'reach_project','')=COALESCE(c.doc->>'reach_project','')
+AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(c.doc->'tags') t WHERE t LIKE 'session:_%' AND m.doc->'tags' ? t)
+AND `+w+` ORDER BY m.id LIMIT $9) n
+WHERE c.collection=$5 AND c.workspace_id=$1 AND c.project_id=$2 AND c.user_id=$3 AND c.agent_id=$4 AND c.id=ANY($8::text[]) AND jsonb_typeof(c.doc->'tags')='array'
+ORDER BY c.id, n.id`, params...)
 	if err != nil {
 		return nil, pgErr(err)
 	}
@@ -60,7 +65,7 @@ AND m.doc->'tags' ? t AND `+w+` ORDER BY m.id LIMIT $9) n ORDER BY t`, params...
 	for rows.Next() {
 		var h MemoryGraphSessionHit
 		var payload []byte
-		if err = rows.Scan(&h.Tag, &payload); err != nil {
+		if err = rows.Scan(&h.From, &payload); err != nil {
 			return nil, ErrUnavailable
 		}
 		if h.Memory, err = pgDecode(payload); err != nil || !sameScope(h.Memory.Scope, in.Scope) {
