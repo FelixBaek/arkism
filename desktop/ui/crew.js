@@ -1315,14 +1315,14 @@ window.ArkismCrew = (ctx) => {
       }
       box.append(portBox);
       if (!ed.run) head.addEventListener("pointerdown", (ev) => startDrag(ev, n, box, canvas, svg));
-      box.addEventListener("click", (ev) => { ev.stopPropagation(); if (ed.sel !== n.id) { ed.sel = n.id; ed.selEdge = null; render(false); } });
+      box.addEventListener("click", (ev) => { ev.stopPropagation(); if (ed.sel !== n.id) selectOnCanvas(n.id); });
       canvas.append(box);
       nodeEls.set(n.id, box);
     }
     stage.append(canvas);
     stage.addEventListener("click", () => {
       if (ed.justPanned) { ed.justPanned = false; return; }
-      if (ed.sel || ed.selEdge !== null) { ed.sel = null; ed.selEdge = null; render(false); }
+      if (ed.sel || ed.selEdge !== null) selectOnCanvas(null);
     });
     // 화면 이동: 휠 클릭(가운데 버튼)으로 끌거나 스페이스를 누른 채 끌어요 (Figma와 같아요).
     // Capture phase, so a node under the pointer does not start its own drag.
@@ -1435,7 +1435,7 @@ window.ArkismCrew = (ctx) => {
       const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
       title.textContent = ed.run ? "" : "눌러서 선 설정";
       hit.append(title);
-      if (!ed.run) hit.addEventListener("click", (ev) => { ev.stopPropagation(); ed.selEdge = i; ed.sel = null; render(false); });
+      if (!ed.run) hit.addEventListener("click", (ev) => { ev.stopPropagation(); selectOnCanvas(null, i); });
       svg.append(p, hit);
       const fromType = typeOf.get(e.from);
       const portText = PORTS[fromType]?.find(([k]) => k === e.port)?.[1] || e.port;
@@ -1444,14 +1444,28 @@ window.ArkismCrew = (ctx) => {
         const chip = el("span", `g-edge-label${back ? " back" : ""}${used ? " used" : ""}`, text);
         chip.style.left = `${shape.mid.x}px`;
         chip.style.top = `${shape.mid.y}px`;
-        if (!ed.run) chip.addEventListener("click", (ev) => { ev.stopPropagation(); ed.selEdge = i; ed.sel = null; render(false); });
+        if (!ed.run) chip.addEventListener("click", (ev) => { ev.stopPropagation(); selectOnCanvas(null, i); });
         labels.append(chip);
         at.chip = chip;
       }
-      drawn.push(Object.assign(at, { e, p, hit }));
+      drawn.push(Object.assign(at, { i, e, p, hit }));
     });
     svg.drawn = drawn;
     window.ArkismPerf?.note("canvas.edges", performance.now() - t0, ed.graph.edges.length);
+  }
+  // Picking a node or a line only swaps the selection marks and the side panel; the canvas stays as drawn.
+  function selectOnCanvas(id, edge = null) {
+    ed.sel = id;
+    ed.selEdge = edge;
+    const page = $("#table .graph-page");
+    const side = page?.querySelector(":scope > .g-right");
+    if (ed.run || ed.review || !side) { render(false); return; }
+    const t0 = performance.now();
+    page.querySelectorAll(".g-node.selected").forEach((b) => b.classList.remove("selected"));
+    if (id) page.querySelector(`.g-node[data-id="${CSS.escape(id)}"]`)?.classList.add("selected");
+    for (const d of page.querySelector(".g-edges")?.drawn || []) d.p.classList.toggle("selected", d.i === edge);
+    side.replaceWith(inspector());
+    window.ArkismPerf?.note("canvas.select", performance.now() - t0, ed.graph.nodes.length);
   }
   // While a node is dragged only the lines touching it move; the rest of the canvas stays as drawn.
   function moveEdges(svg, nodeEls, id) {
