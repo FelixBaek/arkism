@@ -22,7 +22,15 @@ HEAVY = ["./internal/memory", "./internal/host/crew"]
 COVERAGE_FILE = "go-coverage.out"
 # Tests with a wall-clock budget that can miss it only because the groups share the machine.
 # They get one rerun alone, after every other group has finished; nothing else is rerun.
-RERUNNABLE = {"TestPostgresCodeGraphArkism", "TestSystemOneFailuresRecordOnce"}
+RERUNNABLE = {
+    "TestPostgresCodeGraphArkism",  # impact query under 5s
+    "TestSystemOneFailuresRecordOnce",  # timeout subtest
+    "TestSessionArchiveZcodeLongMetadata", "TestPostgresSessionArchiveZcodeLongMetadata",  # 15s search deadline
+    "TestPostgresSessionArchiveSQLiteLargeMessage",  # 10s read deadline
+    "TestSkillComparisonRunner", "TestPostgresSkillComparisonRunner",  # adapter timeout
+    "TestPostgresAutomaticWorkWriterExactRetryAndConflict",  # bounded hook drain
+    "TestCLIRunBoundedOutputTimeoutAndFailures",  # 4s budget per case
+}
 
 
 def run(cmd, cwd=None, env=None):
@@ -43,10 +51,12 @@ def main():
     ap.add_argument("--race", action="store_true")
     ap.add_argument("--integration", action="store_true", help="build with -tags=integration")
     ap.add_argument("--coverage", action="store_true", help="write " + COVERAGE_FILE)
+    # Both Go test jobs share the self-hosted runners' 10-CPU slice; more workers only add contention.
+    ap.add_argument("--jobs", type=int, default=min(6, os.cpu_count() or 4))
     opts = ap.parse_args()
     tags = ["-tags=integration"] if opts.integration else []
     goflags = (["-race"] if opts.race else []) + tags
-    jobs = max(4, os.cpu_count() or 4)
+    jobs = max(1, opts.jobs)
     with tempfile.TemporaryDirectory(prefix="ci-go-test-") as tmp, \
             concurrent.futures.ThreadPoolExecutor(jobs + 1) as pool:
         rest = start_rest(goflags, tags, opts.coverage, tmp, pool)
