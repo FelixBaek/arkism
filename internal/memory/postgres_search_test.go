@@ -23,8 +23,8 @@ func TestPostgresSearchPredicatesUseBoundPlaceholders(t *testing.T) {
 	if strings.Contains(w, "%!") || strings.Contains(w, "%d") {
 		t.Fatalf("unbound placeholder in %q", w)
 	}
-	if len(args) != 6 { // status, effective, expiry, vector, digest pair
-		t.Fatalf("args=%d, want 6", len(args))
+	if len(args) != 7 { // status, effective, expiry, vector, project key (ST-824), digest pair
+		t.Fatalf("args=%d, want 7", len(args))
 	}
 }
 

@@ -21,6 +21,9 @@ type MemoryListInput struct {
 	IncludeInactive     bool
 	Limit               int
 	Cursor              string
+	// ProjectKey (ST-824), when set, lists only what recall would show for that project
+	// (empty key: personal and general). Unset lists every reach, for management screens.
+	ProjectKey *string
 }
 type MemoryPage struct {
 	Items      []Record `json:"items"`
@@ -37,7 +40,7 @@ func normalizeMemoryList(in MemoryListInput) (MemoryListInput, string, error) {
 	if in.Limit == 0 {
 		in.Limit = 20
 	}
-	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || in.Limit < 1 || in.Limit > 100 || len(in.Query) > 256 || !utf8.ValidString(in.Query) || strings.IndexFunc(in.Query, unicode.IsControl) >= 0 || containsSecret(in.Query) || in.Query != "" && strings.TrimSpace(in.Query) == "" || in.Kind != "" && !validCreateKind("memory_candidates", in.Kind) || in.Status != "" && !slices.Contains([]string{"active", "superseded", "conflicted", "rejected", "expired"}, in.Status) || !in.IncludeInactive && in.Status != "" && in.Status != "active" {
+	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || in.Limit < 1 || in.Limit > 100 || len(in.Query) > 256 || !utf8.ValidString(in.Query) || strings.IndexFunc(in.Query, unicode.IsControl) >= 0 || containsSecret(in.Query) || in.Query != "" && strings.TrimSpace(in.Query) == "" || in.Kind != "" && !validCreateKind("memory_candidates", in.Kind) || in.Status != "" && !slices.Contains([]string{"active", "superseded", "conflicted", "rejected", "expired"}, in.Status) || !in.IncludeInactive && in.Status != "" && in.Status != "active" || in.ProjectKey != nil && !validProjectKey(*in.ProjectKey) {
 		return in, "", ErrInvalid
 	}
 	in.Query = strings.TrimSpace(in.Query)
@@ -68,7 +71,7 @@ func parseMemoryListQuery(raw string) (MemoryListInput, error) {
 		return in, ErrInvalid
 	}
 	for k, v := range q {
-		if len(v) != 1 || !slices.Contains([]string{"workspace_id", "project_id", "user_id", "agent_id", "q", "kind", "status", "include_inactive", "limit", "cursor"}, k) {
+		if len(v) != 1 || !slices.Contains([]string{"workspace_id", "project_id", "user_id", "agent_id", "q", "kind", "status", "include_inactive", "limit", "cursor", "project_key"}, k) {
 			return in, ErrInvalid
 		}
 	}
@@ -77,6 +80,9 @@ func parseMemoryListQuery(raw string) (MemoryListInput, error) {
 		if v, ok := q[key]; ok && v[0] == "" {
 			return in, ErrInvalid
 		}
+	}
+	if v, ok := q["project_key"]; ok {
+		in.ProjectKey = &v[0]
 	}
 	if v, ok := q["include_inactive"]; ok {
 		if v[0] != "true" && v[0] != "false" {
@@ -94,7 +100,8 @@ func parseMemoryListQuery(raw string) (MemoryListInput, error) {
 	return in, e
 }
 func memoryListMatches(r Record, in MemoryListInput) bool {
-	return r.Scope == in.Scope && !r.ContentErased && !r.PrivacyQuarantined && (in.IncludeInactive || live(r)) && (in.Status == "" || r.Status == in.Status) && (in.Kind == "" || r.Kind == in.Kind) && strings.Contains(r.Text, in.Query)
+	return r.Scope == in.Scope && !r.ContentErased && !r.PrivacyQuarantined && (in.IncludeInactive || live(r)) && (in.Status == "" || r.Status == in.Status) && (in.Kind == "" || r.Kind == in.Kind) && strings.Contains(r.Text, in.Query) &&
+		(in.ProjectKey == nil || reachVisible(memoryReach(r), r.ReachProject, *in.ProjectKey))
 }
 
 func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListInput) (MemoryPage, error) {

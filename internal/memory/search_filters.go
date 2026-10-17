@@ -9,6 +9,9 @@ type SearchCriteria struct {
 	history bool           // Local memory search only; never forwarded to the hub.
 	Kinds   []string       `json:"kinds,omitempty"`
 	Filters *SearchFilters `json:"filters,omitempty"`
+	// ProjectKey (ST-824) is the caller's project, e.g. the git repository; it only narrows the
+	// Scope's results: project-reach memories of other keys, or of any key when empty, are left out.
+	ProjectKey string `json:"project_key,omitempty"`
 }
 type SearchFilters struct {
 	Statuses    []string   `json:"statuses,omitempty"`
@@ -34,6 +37,9 @@ func normalizeSearchCriteria(in SearchCriteria) (SearchCriteria, error) {
 		if !validRunLabel(kind, 64) || containsSecret(kind) {
 			return in, ErrInvalid
 		}
+	}
+	if !validProjectKey(in.ProjectKey) {
+		return in, ErrInvalid
 	}
 	in.Kinds = slices.Clone(in.Kinds)
 	if in.Filters == nil {
@@ -167,7 +173,7 @@ func (c SearchCriteria) matches(kind string, tags []string, created, updated tim
 	return true
 }
 func (c SearchCriteria) matchesRecord(r Record) bool {
-	return c.matchesStatus(r.Status) && c.matches(r.Kind, r.Tags, r.CreatedAt, r.UpdatedAt) &&
+	return reachVisible(memoryReach(r), r.ReachProject, c.ProjectKey) && c.matchesStatus(r.Status) && c.matches(r.Kind, r.Tags, r.CreatedAt, r.UpdatedAt) &&
 		c.matchesIdentity(r.CreatedBy, generatorModel(r), recordFileDigests(r))
 }
 func (c SearchCriteria) matchesHit(h Hit) bool {
@@ -175,7 +181,7 @@ func (c SearchCriteria) matchesHit(h Hit) bool {
 	if h.CreatedAt != nil {
 		created = *h.CreatedAt
 	}
-	return c.matchesStatus(h.Status) && c.matches(h.Kind, h.Tags, created, h.UpdatedAt) &&
+	return reachVisible(h.Reach, h.ReachProject, c.ProjectKey) && c.matchesStatus(h.Status) && c.matches(h.Kind, h.Tags, created, h.UpdatedAt) &&
 		c.matchesIdentity(h.CreatedBy, h.GeneratorModel, hitFileDigests(h))
 }
 

@@ -46,6 +46,7 @@ func run() error {
 	checkIndexes := flag.Bool("check-indexes", false, "verify the Postgres schema, search indexes and RLS are ready")
 	recovery := flag.Bool("recovery", false, "isolated deletion recovery only; loopback API or erasure-only worker")
 	worker := flag.Bool("worker", false, "run embedding worker instead of HTTP API")
+	memoryReach := flag.String("memory-reach", "", "offline administrator: apply|revert the ST-824 default memory reach (user=personal, rest=general), then exit")
 	reindex := flag.Bool("reindex", false, "queue embedding jobs for Postgres records not in the configured embedder's space, then exit")
 	listen := flag.String("listen", "127.0.0.1:8091", "HTTP listen address")
 	flag.Parse()
@@ -206,8 +207,17 @@ func run() error {
 	if *checkIndexes {
 		return pg.SearchReady(ctx)
 	}
-	if *worker || *collectBlobs || *adoptBlobs || *reindex || *backupExpiry != "" {
+	if *worker || *collectBlobs || *adoptBlobs || *reindex || *backupExpiry != "" || *memoryReach != "" {
 		ctx = memory.ContextWithPostgresToken(ctx, os.Getenv("MEMORY_WORKER_TOKEN"))
+	}
+	if *memoryReach != "" {
+		pg, ok := repo.(*memory.Postgres)
+		if !ok || *memoryReach != "apply" && *memoryReach != "revert" {
+			return memory.ErrInvalid
+		}
+		changed, err := pg.MigrateMemoryReach(ctx, *memoryReach == "revert")
+		fmt.Printf("{\"changed\":%d,\"direction\":%q}\n", changed, *memoryReach)
+		return err
 	}
 	if *backupExpiry != "" {
 		oldest, err := time.Parse(time.RFC3339, *backupExpiry)

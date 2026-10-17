@@ -82,20 +82,20 @@ type CreateInput struct {
 	Reflection     *Reflection `json:"reflection,omitempty"`
 	// Classification is the extractor's risk call; kept on memory candidates only.
 	Classification *CandidateClassification `json:"classification,omitempty"`
-	Scope          Scope       `json:"scope"`
-	Kind           string      `json:"kind"`
-	Text           string      `json:"text"`
-	Summary        string      `json:"summary"`
-	Keywords       []string    `json:"keywords"`
-	Sources        []SourceRef `json:"sources"`
-	Relations      []Ref       `json:"relations"`
-	EffectiveAt    *time.Time  `json:"effective_at,omitempty"`
-	ExpiresAt      *time.Time  `json:"expires_at"`
-	SkillID        string      `json:"skill_id"`
-	BaseVersion    string      `json:"base_version"`
-	Target         *Ref        `json:"target"`
-	Evaluation     *Evaluation `json:"evaluation,omitempty"`
-	Passed         bool        `json:"passed"`
+	Scope          Scope                    `json:"scope"`
+	Kind           string                   `json:"kind"`
+	Text           string                   `json:"text"`
+	Summary        string                   `json:"summary"`
+	Keywords       []string                 `json:"keywords"`
+	Sources        []SourceRef              `json:"sources"`
+	Relations      []Ref                    `json:"relations"`
+	EffectiveAt    *time.Time               `json:"effective_at,omitempty"`
+	ExpiresAt      *time.Time               `json:"expires_at"`
+	SkillID        string                   `json:"skill_id"`
+	BaseVersion    string                   `json:"base_version"`
+	Target         *Ref                     `json:"target"`
+	Evaluation     *Evaluation              `json:"evaluation,omitempty"`
+	Passed         bool                     `json:"passed"`
 }
 type ChangeInput struct {
 	ScopedTrialEvidence []ScopedTrialEvidence `json:"scoped_trial_evidence,omitempty"`
@@ -1338,6 +1338,7 @@ func HitFromRecord(col string, r Record) Hit {
 	}
 	hit := Hit{MemoryContext: copyMemoryContext(r.MemoryContext), TrustLevel: r.TrustLevel, CreatedBy: r.CreatedBy, CreatedAt: &r.CreatedAt, Tags: r.Tags, EffectiveAt: r.EffectiveAt, Digest: ContentHash(recordContent(r)), Kind: r.Kind, Sensitivity: r.Sensitivity, ID: r.ID, Collection: col, Origin: origin, Scope: r.Scope, Status: r.Status, Revision: r.Revision, Text: r.Text, Summary: r.Summary, Sources: r.Sources, SourceEventID: r.SourceEventID, TraceID: r.TraceID, VerificationStatus: r.VerificationStatus, UpdatedAt: r.UpdatedAt, Trust: r.Trust, Relations: r.Relations, Authority: "data_only_untrusted"}
 	if col == colMemories {
+		hit.Reach, hit.ReachProject = memoryReach(r), r.ReachProject
 		hit.ConflictPending = r.ConflictID != ""
 		hit.Supersedes = append([]Ref(nil), r.Supersedes...)
 		hit.SupersededBy = r.SupersededBy

@@ -87,6 +87,10 @@ func (p *Postgres) ListMemories(ctx context.Context, in MemoryListInput) ([]Reco
 		w += fmt.Sprintf(` AND status=$%d`, len(args)+6)
 		args = append(args, in.Status)
 	}
+	if in.ProjectKey != nil {
+		w += fmt.Sprintf(` AND (doc->>'reach' IS DISTINCT FROM 'project' OR ($%[1]d <> '' AND doc->>'reach_project' = $%[1]d))`, len(args)+6)
+		args = append(args, *in.ProjectKey)
+	}
 	if !in.IncludeInactive {
 		w += ` AND status='active' AND (doc->'effective_at' IS NULL OR (doc->'effective_at'->>'$date')::timestamptz <= now()) AND (doc->'expires_at' IS NULL OR (doc->'expires_at'->>'$date')::timestamptz > now())`
 	}
