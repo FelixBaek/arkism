@@ -14,6 +14,7 @@ import (
 
 func sessionOutcomeEnv(t *testing.T) (spool string, posts *[]map[string]any, fail *int) {
 	dir := t.TempDir()
+	t.Setenv("ARKISM_CAPTURE_SETTINGS", filepath.Join(dir, "capture.json"))
 	oldState, oldOrigin, oldScope, oldPost, oldNow := capState, capOrigin, capScope, capPost, timeNow
 	t.Cleanup(func() {
 		capState, capOrigin, capScope, capPost, timeNow = oldState, oldOrigin, oldScope, oldPost, oldNow

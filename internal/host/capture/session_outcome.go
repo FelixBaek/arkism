@@ -1,6 +1,6 @@
 package capture
 
-// Finished Claude Code and Codex sessions as execution traces (ST-623, FR-012, OI-25). A recall hook
+// Finished Claude Code and Codex sessions as execution traces. A recall hook
 // appends the exact memory versions it delivered to a per-session ledger (refs only, never text).
 // Once a session has been idle for 30 minutes the drain records one trace per 32 refs in the shared
 // (agent-less) user scope the memories live in, names the agent in agent_run.agent_id, and spools a
@@ -64,16 +64,37 @@ func memoryDeliveries(items []map[string]any, form string) []host.MemoryDelivery
 }
 
 // ledgerRecall supports historical callers whose output form was not recorded.
-func ledgerRecall(sid string, items []map[string]any) {
-	ledgerDeliveries(sid, memoryDeliveries(items, "unknown"))
+func ledgerRecall(sid string, items []map[string]any, cwd ...string) {
+	ledgerDeliveries(sid, memoryDeliveries(items, "unknown"), cwd...)
 }
 
 // ledgerDeliveries logs reference-only context exposure, never an actual-use acknowledgement.
-func ledgerDeliveries(sid string, items []host.MemoryDelivery) {
+func ledgerDeliveries(sid string, items []host.MemoryDelivery, cwd ...string) {
 	if outcomeSpool() == "" || sid == "" {
 		return
 	}
 	scope, refs, deliveries := sharedScope(), []any{}, []any{}
+	if len(cwd) > 1 || privatePayload([]any{capOrigin, sid, scope, items, hookTranscript, cwd}) {
+		return
+	}
+	explicitCWD := ""
+	if len(cwd) == 1 && strings.TrimSpace(cwd[0]) != "" {
+		explicitCWD = cwd[0]
+	}
+	policy := newArchivePolicy(hookTranscript)
+	if explicitCWD != "" {
+		// Hooks already carry their working directory. Keep recall bounded:
+		// only this directory and the original transcript parent are checked.
+		// Full metadata/snapshot inspection stays in the idle trace drain.
+		if err := policy.addPath(explicitCWD, false); err != nil {
+			return
+		}
+		if err := evidencePolicyCheck(policy); err != nil {
+			return
+		}
+	} else if err := tracePolicySource(policy, hookTranscript, nil); err != nil {
+		return // Unknown historical callers retain their full inspection fallback.
+	}
 	for _, item := range items {
 		ok := item.Collection == "memories" && item.ID != "" && item.Revision >= 1
 		for _, key := range scopeKeys {
@@ -93,6 +114,9 @@ func ledgerDeliveries(sid string, items []host.MemoryDelivery) {
 		return
 	}
 	err := func() error {
+		if err := evidencePolicyCheck(policy); err != nil {
+			return err
+		}
 		dir := filepath.Join(capState, sessionLedgerName)
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return err
@@ -105,6 +129,9 @@ func ledgerDeliveries(sid string, items []host.MemoryDelivery) {
 		row := map[string]any{"ts": host.NowISO(), "origin": capOrigin, "session": sid, "refs": refs, "scope": scope, "deliveries": deliveries}
 		if hookTranscript != "" {
 			row["transcript"] = hookTranscript
+		}
+		if explicitCWD != "" {
+			row["cwd"] = explicitCWD
 		}
 		_, err = f.WriteString(dumps(row) + "\n")
 		return err
@@ -121,10 +148,17 @@ func sessionTraces() {
 	if spool == "" {
 		return
 	}
+	if err := privateCapturePolicy("capture_policy_wait"); err != nil {
+		return
+	}
 	dir := filepath.Join(capState, sessionLedgerName)
 	open, _ := filepath.Glob(filepath.Join(globEscape(dir), "*.jsonl"))
 	for _, path := range open {
 		if st, err := os.Stat(path); err == nil && float64(st.ModTime().UnixNano())/1e9+sessionIdle <= timeNow() {
+			policy, err := traceLedgerPolicy(path)
+			if capturePolicyPending(err) || evidencePolicyCheck(policy) != nil {
+				continue
+			}
 			// A later recall of the same session starts a new ledger, so a claim never loses one.
 			os.Rename(path, strings.TrimSuffix(path, ".jsonl")+"-"+strconv.FormatInt(time.Now().UnixNano(), 10)+".claimed")
 		}
@@ -132,6 +166,9 @@ func sessionTraces() {
 	claimed, _ := filepath.Glob(filepath.Join(globEscape(dir), "*.claimed"))
 	for _, path := range claimed {
 		n, err := recordSession(path, spool)
+		if capturePolicyPending(err) {
+			continue
+		}
 		st, statErr := os.Stat(path)
 		expired := statErr == nil && float64(st.ModTime().UnixNano())/1e9+sessionLedgerTTL <= timeNow()
 		code := host.HTTPCode(err)
@@ -152,6 +189,10 @@ var errLedgerInvalid = runtimeErr("session_ledger_invalid")
 
 // recordSession posts the ledger's traces and spools their receipts; a replay posts the same bodies.
 func recordSession(path, spool string) (int, error) {
+	policy, err := traceLedgerPolicy(path)
+	if err != nil {
+		return 0, err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return 0, err
@@ -165,10 +206,14 @@ func recordSession(path, spool string) (int, error) {
 	scope := sharedScope()
 	lines := bufio.NewScanner(f)
 	lines.Buffer(nil, 1<<20)
+	inspected := map[string]bool{}
 	for lines.Scan() {
 		row, err := loadsMap(lines.Text())
 		if err != nil || origin != "" && (row["origin"] != origin || row["session"] != sid) {
 			return 0, errLedgerInvalid
+		}
+		if err := tracePolicyRow(policy, row, inspected); err != nil {
+			return 0, err
 		}
 		origin, sid = str(row["origin"]), str(row["session"])
 		ts := str(row["ts"])
@@ -221,13 +266,26 @@ func recordSession(path, spool string) (int, error) {
 		return 0, errLedgerInvalid
 	}
 	var behavior map[string]any
+	snapshot, cleanup, err := traceBehaviorSnapshot(transcript)
+	if err != nil {
+		return 0, err
+	}
+	defer cleanup()
+	if snapshot != "" {
+		if err := policy.inspect(snapshot, "jsonl"); err != nil {
+			return 0, err
+		}
+	}
 	if t, err := time.Parse(time.RFC3339Nano, first); err == nil {
 		// The prompt line is written around its recall, so the window opens a minute early.
 		if t2, err := time.Parse(time.RFC3339Nano, last); err == nil {
-			behavior = sessionBehavior(transcript, t.Add(-time.Minute).Format(time.RFC3339Nano), t2.Add(time.Duration(sessionIdle)*time.Second).Format(time.RFC3339Nano))
+			behavior = sessionBehavior(snapshot, t.Add(-time.Minute).Format(time.RFC3339Nano), t2.Add(time.Duration(sessionIdle)*time.Second).Format(time.RFC3339Nano))
 		}
 	}
 	for i := 0; i < len(refs); i += sessionTraceRefs {
+		if err := evidencePolicyCheck(policy); err != nil {
+			return i / sessionTraceRefs, err
+		}
 		chunk := refs[i:min(i+sessionTraceRefs, len(refs))]
 		payload := map[string]any{"retrieved": chunk}
 		identity := []any{origin, sid, first, last, chunk}
@@ -264,11 +322,17 @@ func recordSession(path, spool string) (int, error) {
 		if behavior != nil {
 			body["events"] = append(context.([]any), map[string]any{"id": "session-behavior-" + id, "kind": "behavior", "occurred_at": last, "payload": behavior})
 		}
+		if privatePayload(body) {
+			return i / sessionTraceRefs, errLedgerInvalid
+		}
 		stored, err := capPost("/v1/execution_traces/completed", body, 30*time.Second)
 		if code := host.HTTPCode(err); behavior != nil && code >= 400 && code < 500 && code != 429 {
 			// A refused behavior event (e.g. a secret in a command) must not cost the delivery record.
 			metric(kv("event", "session_behavior_refused"), kv("error", errorCode(err)))
 			body["events"] = context
+			if err := evidencePolicyCheck(policy); err != nil {
+				return i / sessionTraceRefs, err
+			}
 			stored, err = capPost("/v1/execution_traces/completed", body, 30*time.Second)
 		}
 		if err != nil {
@@ -278,6 +342,12 @@ func recordSession(path, spool string) (int, error) {
 		rev, _ := host.Int(trace["revision"])
 		if trace["collection"] != "execution_traces" || str(trace["id"]) == "" || rev < 1 {
 			return i / sessionTraceRefs, runtimeErr("trace_receipt_invalid")
+		}
+		if privateIdentityFields(trace, evidenceIdentityKeys) {
+			return i / sessionTraceRefs, sessionWait("session_private_identity")
+		}
+		if err := evidencePolicyCheck(policy); err != nil {
+			return i / sessionTraceRefs, err
 		}
 		if err := crewrun.EnqueueReceipt(spool, crewrun.TraceReceipt{Scope: scope,
 			Trace: crewrun.Ref{Collection: "execution_traces", ID: str(trace["id"]), Revision: int64(rev)}}); err != nil {

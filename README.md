@@ -102,9 +102,13 @@ Capture settings and agent setting backups are in `~/.config/arkism`. In server 
 
 **Keeping things out**
 
-- Wrap words in `<private>…</private>` in a prompt. They are never captured, searched or sent to a model.
+- Wrap words in `<private>…</private>`. They are removed from user, assistant and tool text before extraction or model transfer. Nested spans stay private until the outer span closes; an unfinished span hides the rest of that message.
 - **Settings › 고급 (Advanced) › 수집 (Capture)**: pause capture, or list folders Arkism must ignore.
 - Put an empty `.arkism-ignore` file in a folder to keep Arkism out of it and everything below it.
+
+Raw session archives keep the original bytes, so a session containing a private marker is skipped as a whole. Archive upload also checks the source folder and recorded project folders, including when it retries. Invalid or unreadable capture settings pause capture; an archive that cannot be inspected waits instead of being uploaded. These settings apply to new capture. Use the deletion controls below to remove data already saved.
+
+See [capture privacy boundaries](guide/capture-privacy.md) for supported formats and inspection limits.
 
 **Delete, export, back up**
 

@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const fixInstall = "arkism doctor --fix (install-arkism 재실행)"
@@ -471,23 +472,80 @@ func requeue(dir string) (moved, skipped int, err error) {
 
 // ---- 5. capture settings ----
 
-func (e *env) checkSettings() Check {
-	path := filepath.Join(e.folder(), "capture.json")
-	data, err := readSmall(path)
+type captureStatus struct {
+	Paused       bool     `json:"paused"`
+	Exclude      []string `json:"exclude"`
+	Instructions string   `json:"instructions"`
+}
+
+// Match the host's bounded, fail-closed interpretation. A diagnostic must not
+// report capture as enabled when its settings could not be checked.
+func readCaptureStatus(path string) (captureStatus, error) {
+	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		return Check{ID: "capture.settings", Status: OK, Message: "수집 켜짐, 제외 폴더 0개",
-			Details: map[string]any{"paused": false, "excluded": 0}}
+		if _, linkErr := os.Lstat(path); os.IsNotExist(linkErr) {
+			return captureStatus{}, nil
+		}
 	}
-	var s struct {
-		Paused  bool     `json:"paused"`
-		Exclude []string `json:"exclude"`
+	if err != nil || !info.Mode().IsRegular() {
+		return captureStatus{}, errors.New("capture settings unavailable")
 	}
-	if err == nil {
-		err = json.Unmarshal(data, &s)
-	}
+	file, err := os.Open(path)
 	if err != nil {
-		return Check{ID: "capture.settings", Status: Warn, Message: "수집 설정(capture.json)을 읽을 수 없어 기본값으로 동작",
-			Fix: "앱의 설정 › 고급 › 수집에서 다시 저장하세요"}
+		return captureStatus{}, err
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	if err != nil {
+		return captureStatus{}, err
+	}
+	if len(data) > 1<<20 {
+		return captureStatus{}, errors.New("capture settings too large")
+	}
+	var fields map[string]any
+	if !utf8.Valid(data) || json.Unmarshal(data, &fields) != nil || fields == nil {
+		return captureStatus{}, errors.New("capture settings invalid")
+	}
+	for key, value := range fields {
+		if !captureStatusFieldValid(key, value) {
+			return captureStatus{}, errors.New("capture settings invalid")
+		}
+	}
+	var settings captureStatus
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return captureStatus{}, err
+	}
+	return settings, nil
+}
+
+func captureStatusFieldValid(key string, value any) bool {
+	switch {
+	case strings.EqualFold(key, "paused"):
+		_, ok := value.(bool)
+		return ok
+	case strings.EqualFold(key, "instructions"):
+		_, ok := value.(string)
+		return ok
+	case strings.EqualFold(key, "exclude"):
+		folders, ok := value.([]any)
+		if !ok {
+			return false
+		}
+		for _, folder := range folders {
+			if _, ok := folder.(string); !ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (e *env) checkSettings() Check {
+	s, err := readCaptureStatus(filepath.Join(e.folder(), "capture.json"))
+	if err != nil {
+		return Check{ID: "capture.settings", Status: Warn, Message: "수집 설정(capture.json)을 확인할 수 없어 수집이 중단됨",
+			Fix:     fmt.Sprintf("파일의 읽기 권한·JSON 형식·크기(1MiB 이하)를 복구한 뒤 앱 설정을 다시 여세요: %s", filepath.Join(e.folder(), "capture.json")),
+			Details: map[string]any{"paused": true, "settings_path": filepath.Join(e.folder(), "capture.json")}}
 	}
 	n := 0
 	for _, f := range s.Exclude {

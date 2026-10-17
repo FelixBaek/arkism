@@ -33,6 +33,7 @@ func CueMatch(text string) bool { return cueRE.MatchString(text) }
 // related the EXISTING MEMORIES rows (id, text, revision) the drain gets from search, guidance an
 // optional user note appended the way capture.json's is. pipeline names the generator.
 func ExtractClaims(userText, today string, related []map[string]any, guidance, pipeline string) (BenchExtraction, error) {
+	userText, guidance = redactPrivate(userText), redactPrivate(guidance)
 	if err := os.MkdirAll(capState, 0o700); err != nil {
 		return BenchExtraction{}, err
 	}
@@ -44,13 +45,13 @@ func ExtractClaims(userText, today string, related []map[string]any, guidance, p
 	}
 	lines := make([]string, len(related))
 	for i, r := range related {
-		lines[i] = fmt.Sprintf("%s: %s", str(r["id"]), str(or(r["text"], "")))
+		lines[i] = fmt.Sprintf("%s: %s", str(r["id"]), redactPrivate(str(or(r["text"], ""))))
 	}
 	existing := strings.Join(lines, "\n")
 	if existing == "" {
 		existing = "(none)"
 	}
-	out, err := llm(extractPrompt+userGuidance(guidance), fmt.Sprintf("TODAY: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", today, existing, userText),
+	out, err := privateModel(extractPrompt+userGuidance(guidance), fmt.Sprintf("TODAY: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", today, existing, userText),
 		capModel, 180*time.Second, claimsSchema, "claims")
 	if err != nil {
 		return BenchExtraction{}, err

@@ -242,7 +242,11 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 					continue
 				}
 			}
-			found, err := reviewSearch(str(or(c["text"], "")))
+			query := redactPrivate(str(or(c["text"], "")))
+			if privatePayload(query) {
+				return sessionWait("review_private_content")
+			}
+			found, err := reviewSearch(query)
 			if err != nil {
 				return err
 			}
@@ -256,12 +260,12 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 					related = append(related, rm)
 				}
 			}
-			prompt = append(prompt, reviewItem(c, related, old))
+			prompt = append(prompt, redactPrivate(reviewItem(c, related, old)))
 		}
 		if len(prompt) == 0 {
 			continue
 		}
-		out, err := llm(reviewSystem, strings.Join(prompt, "\n\n"), reviewModel, 300*time.Second, reviewSchema, "decisions")
+		out, err := privateModel(reviewSystem, strings.Join(prompt, "\n\n"), reviewModel, 300*time.Second, reviewSchema, "decisions")
 		if err != nil {
 			if t := pyType(err); t != "RuntimeError" && t != "TimeoutExpired" && t != "ValueError" && t != "JSONDecodeError" {
 				return err

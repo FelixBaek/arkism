@@ -366,7 +366,34 @@ func sessionClaims(candidates []any, refs map[string][]any, canonical map[string
 // sessionProcess is process() under ARKISM_SESSION_PROCESSOR=1.
 func sessionProcess(job map[string]any, persist func() error, origin string) (err error) {
 	defer recovered(&err)
+	repository := ""
+	checkPolicy := func() error {
+		return privateCapturePolicy("session_capture_policy_wait", str(or(job["cwd"], "")), str(or(job["repository"], "")),
+			privateCheckpointRepository(job["session_prepared"], true), repository)
+	}
+	if err := checkPolicy(); err != nil {
+		return err
+	}
+	checkpoint := persist
+	persist = func() error {
+		if err := checkPolicy(); err != nil {
+			return err
+		}
+		return checkpoint()
+	}
+	post := func(path string, body any) (map[string]any, error) {
+		if err := checkPolicy(); err != nil {
+			return nil, err
+		}
+		return capRequest(path, body)
+	}
+	if privatePrepared(job, "session_prepared") {
+		return sessionWait("session_private_prepared")
+	}
 	scope := capScope()
+	if privatePayload([]any{scope, job["session_id"]}) {
+		return sessionWait("session_private_identity")
+	}
 	if v, has := job["session_scope"]; has && v != nil && !eq(v, scope) {
 		return sessionWait("session_scope_changed")
 	}
@@ -444,7 +471,10 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 		return out
 	}
 	// Mask before splitting, so a cut never halves an address or number past the filter.
-	records, _ = maskSensitive(records).([]any)
+	records, err = maskSessionRecords(records)
+	if err != nil {
+		return err
+	}
 	groups, err := chunkRecords(records, 32000)
 	if err != nil {
 		return err
@@ -471,6 +501,9 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 	sid := str(job["session_id"])
 	var start int64
 	for index, chunk := range chunks {
+		if err := checkPolicy(); err != nil {
+			return err
+		}
 		end := start + int64(len(chunk))
 		chunkStart := start
 		start = end
@@ -486,6 +519,13 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 			var previous any
 			if current != nil {
 				previous = current["package"]
+				if privateCheckpointIdentity(previous) {
+					return sessionWait("session_private_identity")
+				}
+				repository = str(or(evidenceField(previous, "repository"), ""))
+				if err := checkPolicy(); err != nil {
+					return err
+				}
 				known, knownSources := map[string]bool{}, map[string]bool{}
 				for _, ref := range anyList(current["archive_messages"]) {
 					known[sdigest(ref)] = true
@@ -528,7 +568,7 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 				if current != nil {
 					payload["work"] = map[string]any{"collection": "work_checkpoints", "id": checkpointID, "revision": current["revision"]}
 				}
-				permission, err := capRequest("/v1/session-archives/authorize-transfer", payload)
+				permission, err := post("/v1/session-archives/authorize-transfer", payload)
 				if err != nil {
 					return err
 				}
@@ -546,10 +586,10 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 			if event == "explicit_correction" {
 				category = "korean_correction"
 			}
-			if prepared, err = sessionPrepare(scope, sid, chunk, chunkStart, end, expected, previous, nil, category, authorize); err != nil {
+			if prepared, err = sessionPrepare(scope, sid, chunk, chunkStart, end, expected, previous, nil, category, authorize, str(or(job["cwd"], "")), str(or(job["repository"], "")), repository); err != nil {
 				return err
 			}
-			pkg := sessionCheckpointPackage(prepared, sid, origin, str(or(job["cwd"], "")))
+			pkg := sessionCheckpointPackage(prepared, sid, origin, str(or(job["cwd"], job["repository"], "")))
 			pkg["source_refs"] = dedupeRefs(append(chunkSources(chunk), anyList(autosaveGet(or(previous, map[string]any{}), "source_refs"))...))
 			// Only this window's refs: the server takes at most 8, all from the current archive snapshot,
 			// so a previous window's refs (older snapshot) would make every later save a 409.
@@ -564,12 +604,18 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 			prepared["claims"] = claims
 			prepared["checkpoint_request"] = map[string]any{"scope": scope, "id": checkpointID, "event_id": prepared["operation_id"],
 				"expected_revision": expected, "package": pkg, "archive_messages": archiveRefs}
+			if privatePayload(prepared) {
+				return sessionWait("session_private_prepared")
+			}
 			job["session_prepared"] = prepared
 			if err := persist(); err != nil {
 				return err
 			}
 		}
 		request := prepared["checkpoint_request"].(map[string]any)
+		if privatePayload(prepared) {
+			return sessionWait("session_private_prepared")
+		}
 		if !eq(request["scope"], scope) {
 			return sessionWait("session_scope_changed")
 		}
@@ -585,6 +631,9 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 				occurred := or(job["occurred_at"], job["queued_at"])
 				if users := anyList(job["users"]); len(users) > 0 {
 					occurred = autosaveGet(users[len(users)-1], "at")
+				}
+				if err := checkPolicy(); err != nil {
+					return err
 				}
 				items, err := sendCapture(eventType, str(prepared["operation_id"]), sid, occurred, claims, origin, 0, host.Obj{
 					{Key: "model", Value: autosaveGet(prepared["metadata"], "model_id")}, {Key: "prompt_version", Value: sessionPromptVersion},
@@ -605,7 +654,7 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 				return err
 			}
 		}
-		receipt, err := capRequest("/v1/work-checkpoints/save", request)
+		receipt, err := post("/v1/work-checkpoints/save", request)
 		if err != nil {
 			return err
 		}

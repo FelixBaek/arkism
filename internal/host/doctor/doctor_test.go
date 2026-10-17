@@ -246,3 +246,60 @@ func TestWindowsClaudeShim(t *testing.T) {
 }
 
 func timeAgo(seconds int) time.Time { return time.Now().Add(-time.Duration(seconds) * time.Second) }
+
+func TestCaptureSettingsFailClosedDiagnostics(t *testing.T) {
+	e := &env{home: t.TempDir()}
+	path := filepath.Join(e.folder(), "capture.json")
+	checkEnabled := func() {
+		t.Helper()
+		c := e.checkSettings()
+		if c.Status != OK || c.Details["paused"] != false || c.Details["excluded"] != 0 {
+			t.Fatalf("ordinary settings: %+v", c)
+		}
+	}
+	checkEnabled()
+	for _, text := range []string{`{}`, `{"future":{"paused":null}}`, `{"paused":false,"exclude":[],"instructions":""}`, `{}` + strings.Repeat(" ", (1<<20)-2)} {
+		write(t, path, text, 0o600)
+		checkEnabled()
+	}
+	for _, text := range []string{"", `null`, `[]`, `{`, `{"paused":null}`, `{"Paused":null}`, `{"paused":"false"}`,
+		`{"exclude":null}`, `{"exclude":[null]}`, `{"exclude":[1]}`, `{"instructions":null}`, `{"instructions":3}`, `{} {}`, "{\"instructions\":\"\xff\"}",
+		strings.Repeat(" ", (1<<20)+1)} {
+		write(t, path, text, 0o600)
+		c := e.checkSettings()
+		if c.Status != Warn || c.Details["paused"] != true || !strings.Contains(c.Message, "중단") || strings.Contains(c.Message, "기본값") {
+			t.Fatalf("invalid settings reported enabled/defaults: %+v", c)
+		}
+		if c.Details["settings_path"] != path || !strings.Contains(c.Fix, "읽기 권한") || !strings.Contains(c.Fix, "JSON") || !strings.Contains(c.Fix, "다시 여세요") || strings.Contains(c.Fix, "다시 저장") {
+			t.Fatalf("invalid settings recovery is unavailable: %+v", c)
+		}
+	}
+	write(t, path, `{"Paused":true,"Exclude":["/synthetic/project"],"Instructions":"public note"}`, 0o600)
+	if c := e.checkSettings(); c.Status != Warn || c.Details["paused"] != true || c.Details["excluded"] != 1 {
+		t.Fatalf("case-insensitive settings: %+v", c)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if c := e.checkSettings(); c.Status != Warn || c.Details["paused"] != true {
+		t.Fatalf("directory settings: %+v", c)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Symlink(filepath.Join(t.TempDir(), "missing"), path); err != nil {
+			t.Fatal(err)
+		}
+		if c := e.checkSettings(); c.Status != Warn || c.Details["paused"] != true {
+			t.Fatalf("dangling settings link: %+v", c)
+		}
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	checkEnabled()
+}

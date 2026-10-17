@@ -426,8 +426,9 @@ func siSummary(opt siOptions, counts map[string]int, sessions []any) host.Obj {
 // siSession extracts one session's candidates and sends them (run) or previews them.
 func siSession(p siPlanned, run bool, ledger *siLedger) (out host.Obj, err error) {
 	defer recovered(&err)
+	p.lines, _ = privateData(p.lines).([]string)
 	kept, offset, log := siLog(p.lines)
-	raw, err := llm(withGuidance(siPrompt), "SESSION LOG ("+p.c.origin+"):\n"+log, siModel, 600*time.Second, siSchema, "candidates")
+	raw, err := privateModel(redactPrivate(withGuidance(siPrompt)), "SESSION LOG ("+p.c.origin+"):\n"+log, siModel, 600*time.Second, siSchema, "candidates")
 	if err != nil {
 		return nil, err
 	}

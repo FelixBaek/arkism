@@ -712,8 +712,9 @@ func reflectSession(c chat, start int64, existing existingLessons, dryRun bool, 
 	if r.users < 2 {
 		return 0, false, nil // too little yet; read again with what follows
 	}
-	kept := tail(r.lines, reflectMaxChars)
-	out, err := llm(withGuidance(reflectPrompt), "EXISTING LESSONS:\n"+existing.known+"\n\nSESSION LOG:\n"+strings.Join(kept, "\n"), reflectModel,
+	lines, _ := privateData(r.lines).([]string)
+	kept := tail(lines, reflectMaxChars)
+	out, err := privateModel(redactPrivate(withGuidance(reflectPrompt)), "EXISTING LESSONS:\n"+redactPrivate(existing.known)+"\n\nSESSION LOG:\n"+strings.Join(kept, "\n"), reflectModel,
 		600*time.Second, reflectSchema, "claims")
 	if err != nil {
 		return 0, false, err

@@ -2,6 +2,8 @@ package capture
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
@@ -85,6 +87,9 @@ func evidenceRowHint(context any, raw []byte, offset int64, message any, format 
 		len(raw) > 8<<20 || !utf8.Valid(raw) {
 		return nil
 	}
+	if marked, err := scanPrivate(strings.NewReader(string(raw))); marked || err != nil {
+		return nil
+	}
 	rawHash := sha256Hex(raw[:len(raw)-1])
 	digest := sha256Hex([]byte("arkism-message-v1\n" + format + "\nuser\n" + rawHash))
 	return host.Obj{{Key: "archive_id", Value: autosaveItem(context, "archive_id")}, {Key: "chunk_index", Value: offset / archiveChunk},
@@ -96,6 +101,24 @@ func evidenceRowHint(context any, raw []byte, offset int64, message any, format 
 type evidenceClient struct {
 	send  evidencePost
 	scope map[string]any
+}
+
+func evidencePolicyCheck(policy *archivePolicy) error {
+	if err := policy.check(); err != nil {
+		return sessionWait("archive_capture_policy_wait")
+	}
+	return nil
+}
+
+// Evidence lookups can reuse an archive without calling collector.upload. They
+// obey the original source and recorded project policy before every request too.
+func evidencePolicyClient(post evidencePost, scope map[string]any, policy *archivePolicy) evidenceClient {
+	return evidenceClient{func(path string, payload any, timeout time.Duration) (map[string]any, error) {
+		if err := evidencePolicyCheck(policy); err != nil {
+			return nil, err
+		}
+		return post(path, payload, timeout)
+	}, scope}
 }
 
 func (c evidenceClient) post(endpoint string, payload map[string]any) (map[string]any, error) {
@@ -141,6 +164,11 @@ func evidencePrepareUsers(context any, users []any, root string, post evidencePo
 	if expected == nil || !eq(expected, context) {
 		return nil, runtimeErr("archive_context_invalid")
 	}
+	path := sstr(autosaveGet(context, "path"))
+	policy := newArchivePolicy(path)
+	if err := evidencePolicyCheck(policy); err != nil {
+		return nil, err
+	}
 	if privateMarked(sstr(autosaveGet(context, "path"))) { // never archived; the memories carry no source link
 		for _, u := range users {
 			if m, ok := u.(map[string]any); ok {
@@ -149,8 +177,14 @@ func evidencePrepareUsers(context any, users []any, root string, post evidencePo
 		}
 		return users, nil
 	}
+	if err := policy.inspect(path, "jsonl"); err != nil {
+		return nil, err
+	}
+	if err := evidencePolicyCheck(policy); err != nil {
+		return nil, err
+	}
 	at := func(k string) any { return autosaveItem(context, k) }
-	client := evidenceClient{post, scope}
+	client := evidencePolicyClient(post, scope, policy)
 	refreshed := false
 	refresh := func() error {
 		if refreshed {
@@ -167,6 +201,9 @@ func evidencePrepareUsers(context any, users []any, root string, post evidencePo
 			return err
 		}
 		if c.counts.n["committed"] == 0 {
+			if c.counts.n["capture_skipped"] > 0 {
+				return sessionWait("archive_capture_policy_wait")
+			}
 			return runtimeErr("archive_snapshot_unavailable")
 		}
 		return nil
@@ -222,6 +259,9 @@ func evidencePrepareUsers(context any, users []any, root string, post evidencePo
 				if message["role"] != "user" || message["authority"] != "data_only_untrusted" || !evidenceHas(got, h) ||
 					!evidenceHash.MatchString(gotSHA) {
 					return nil, runtimeErr("archive_message_mismatch")
+				}
+				if privatePayload(message["text"]) {
+					return nil, sessionWait("session_archive_private_skipped")
 				}
 				return got, nil
 			}()
@@ -354,6 +394,9 @@ func evidencePromptLocator(origin, device string, sid, prompt any) host.Obj {
 	if !ok || s == "" || s == "unknown" || !pok || p == "" {
 		return nil
 	}
+	if privatePayload([]any{s, p}) {
+		return nil
+	}
 	return host.Obj{{Key: "origin", Value: origin}, {Key: "device", Value: device}, {Key: "session_id", Value: s},
 		{Key: "prompt_sha256", Value: sha256Hex([]byte(p))}}
 }
@@ -420,6 +463,9 @@ func evidenceLocatePrompt(locator any) (context, hint host.Obj, root string, err
 	context = contexts[0]
 	pathV, _ := context.Get("path")
 	path := pathV.(string)
+	if privateMarked(path) {
+		return nil, nil, "", sessionWait("session_archive_private_skipped")
+	}
 	before, err := archiveSignature(path)
 	if err != nil {
 		return nil, nil, "", err
@@ -507,7 +553,7 @@ func evidencePromptHint(context host.Obj, raw []byte, offset int64, key, kind st
 		content = strings.Join(texts, "\n")
 	}
 	s, ok := content.(string)
-	if !ok || sha256Hex([]byte(s)) != want {
+	if !ok || privatePayload(s) || sha256Hex([]byte(s)) != want {
 		return nil
 	}
 	return evidenceRowHint(context, raw, offset, message, "")
@@ -516,6 +562,16 @@ func evidencePromptHint(context host.Obj, raw []byte, offset int64, key, kind st
 // evidenceZcodeHints selects real-user parts from exactly the snapshot that will be uploaded.
 func evidenceZcodeHints(path string, locator host.Obj) (out []any, err error) {
 	defer recovered(&err)
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > archiveMaxBytes {
+		return nil, runtimeErr("archive_snapshot_too_large")
+	}
+	if privateMarked(path) {
+		return nil, sessionWait("session_archive_private_skipped")
+	}
 	device, _ := locator.Get("device")
 	sid, _ := locator.Get("session_id")
 	want, _ := locator.Get("prompt_sha256")
@@ -658,10 +714,24 @@ func evidencePrepareZcode(locator any, users []any, path string, post evidencePo
 	if origin, _ := l.Get("origin"); origin != "zcode" || (device != "server" && device != "pc") || len(users) != 1 {
 		return nil, runtimeErr("archive_locator_invalid")
 	}
-	client := evidenceClient{post, scope}
 	sid, _ := l.Get("session_id")
+	source := path
+	if device == "pc" {
+		source = filepath.Join(path, sha256Hex([]byte(sid.(string)))+".jsonl")
+	}
+	policy := newArchivePolicy(source)
+	if err := evidencePolicyCheck(policy); err != nil {
+		return nil, err
+	}
+	client := evidencePolicyClient(post, scope, policy)
 	var refs []any
 	body := func(snapshot string, observed float64, revision any) error {
+		if err := policy.inspect(snapshot, "reconstructed_zcode"); err != nil {
+			return err
+		}
+		if err := evidencePolicyCheck(policy); err != nil {
+			return err
+		}
 		hints, err := evidenceZcodeHints(snapshot, l)
 		if err != nil {
 			return err
@@ -671,12 +741,16 @@ func evidencePrepareZcode(locator any, users []any, path string, post evidencePo
 		if err != nil {
 			return err
 		}
-		raw, err := io.ReadAll(f)
+		hasher := sha256.New()
+		n, err := io.Copy(hasher, io.LimitReader(f, archiveMaxBytes+1))
 		f.Close()
 		if err != nil {
 			return err
 		}
-		sha := sha256Hex(raw)
+		if n > archiveMaxBytes {
+			return runtimeErr("archive_snapshot_too_large")
+		}
+		sha := hex.EncodeToString(hasher.Sum(nil))
 		same := func(header map[string]any) bool {
 			for _, k := range []string{"origin", "device", "session_id"} {
 				if v, _ := l.Get(k); !eq(header[k], v) {
@@ -698,10 +772,13 @@ func evidencePrepareZcode(locator any, users []any, path string, post evidencePo
 		}
 		if header == nil || header["sha256"] != sha {
 			c := newCollector(client, nil, true)
-			if err := c.upload(snapshot, device.(string), "zcode", sid.(string), "db-session", observed, "reconstructed_zcode", revision); err != nil {
+			if err := c.upload(snapshot, device.(string), "zcode", sid.(string), "db-session", observed, "reconstructed_zcode", revision, source); err != nil {
 				return err
 			}
 			if c.counts.n["committed"] == 0 {
+				if c.counts.n["capture_skipped"] > 0 {
+					return sessionWait("archive_capture_policy_wait")
+				}
 				return runtimeErr("archive_snapshot_unavailable")
 			}
 			if header, err = client.post("get", map[string]any{"id": aid}); err != nil {
@@ -720,6 +797,9 @@ func evidencePrepareZcode(locator any, users []any, path string, post evidencePo
 			}
 			if message["role"] != "user" || message["authority"] != "data_only_untrusted" || !eq(message["ref"], ref) {
 				return runtimeErr("archive_message_mismatch")
+			}
+			if privatePayload(message["text"]) {
+				return sessionWait("session_archive_private_skipped")
 			}
 			refs = append(refs, ref)
 		}

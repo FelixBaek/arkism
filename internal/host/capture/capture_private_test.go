@@ -236,7 +236,7 @@ func TestPrivateMarkedFindsTagAcrossChunks(t *testing.T) {
 	os.WriteFile(plain, []byte(strings.Repeat("x", 3<<20)), 0o644)
 	big := []byte(strings.Repeat("y", (1<<20)-3))
 	os.WriteFile(marked, append(big, []byte("<PRIVATE>secret</private>")...), 0o644)
-	if privateMarked(plain) || !privateMarked(marked) || privateMarked(filepath.Join(dir, "missing")) {
+	if privateMarked(plain) || !privateMarked(marked) || !privateMarked(filepath.Join(dir, "missing")) {
 		t.Fatal("privateMarked")
 	}
 }

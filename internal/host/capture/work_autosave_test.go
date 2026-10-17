@@ -32,6 +32,7 @@ type autosaveFixture struct {
 }
 
 func newAutosaveFixture(t *testing.T) *autosaveFixture {
+	t.Setenv("ARKISM_CAPTURE_SETTINGS", filepath.Join(t.TempDir(), "capture.json"))
 	f := &autosaveFixture{t: t, scope: map[string]any{"workspace_id": "w", "project_id": "p"}, status: "in_progress"}
 	f.job = host.Obj{kv("scope", f.scope), kv("id", "work"), kv("event_id", "turn"), kv("expected_revision", 1),
 		kv("archive_id", strings.Repeat("a", 64)), kv("sha256", strings.Repeat("b", 64))}

@@ -1,6 +1,6 @@
 package capture
 
-// Canonical execution receipts as session processor input (ST-302, FR-012). A finished agent run's
+// Canonical execution receipts as session processor input. A finished agent run's
 // trace is already canonical on the server; the spool keeps only its refs, never a body. Sources of
 // kind tool_result are tool observations; every other trace event is an assistant claim.
 
@@ -55,7 +55,13 @@ func sessionCanonical(job map[string]any) (records []any, refs map[string][]any,
 	defer recovered(&err)
 	receipt := job["execution_receipt"].(map[string]any)
 	scope := capScope()
+	if privatePayload([]any{scope, job["session_id"], receipt}) {
+		return nil, nil, sessionWait("session_private_identity")
+	}
 	fetch := func(ref any) (map[string]any, error) {
+		if err := privateCapturePolicy("session_capture_policy_wait", str(or(job["cwd"], "")), str(or(job["repository"], ""))); err != nil {
+			return nil, err
+		}
 		collection := autosaveGet(ref, "collection")
 		id, isStr := autosaveGet(ref, "id").(string)
 		if !isStr || collection != "execution_traces" && collection != "agent_runs" && collection != "sources" {
@@ -157,10 +163,24 @@ func EnqueueSessionTrace(event map[string]any) error {
 		}
 		receipt[k] = v
 	}
+	if privatePayload([]any{scope, event["scope"], event["session_id"], receipt, event["occurred_at"], event["cwd"], event["repository"]}) {
+		return sessionWait("session_private_identity")
+	}
+	checkPolicy := func() error {
+		return privateCapturePolicy("session_capture_policy_wait", str(or(event["cwd"], "")), str(or(event["repository"], "")))
+	}
+	if err := checkPolicy(); err != nil {
+		return err
+	}
 	eventID := "langgraph-session-" + sdigest([]any{event["scope"], receipt})
 	job := map[string]any{"type": "task_finished", "origin": "langgraph", "session_id": event["session_id"], "users": []any{},
 		"event_id": eventID, "queued_at": event["occurred_at"], "session_scope": event["scope"], "execution_receipt": receipt,
 		"occurred_at": event["occurred_at"]}
+	for _, key := range []string{"cwd", "repository"} {
+		if value, has := event[key]; has {
+			job[key] = value
+		}
+	}
 	if err := os.MkdirAll(capState, 0o700); err != nil {
 		return err
 	}
@@ -182,6 +202,9 @@ func EnqueueSessionTrace(event map[string]any) error {
 		}
 		return nil
 	case !errors.Is(err, os.ErrNotExist):
+		return err
+	}
+	if err := checkPolicy(); err != nil {
 		return err
 	}
 	return atomicWrite(path, dumps(job))
