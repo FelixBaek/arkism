@@ -9061,8 +9061,8 @@
     },
     "/v1/memory-graph": {
       "get": {
-        "summary": "Relation graph around one memory (ST-820)",
-        "description": "Memories and lines up to two steps from memory_id. Lines: supersedes, conflicts, supports and human_link come from stored memory_relations (active, exactly two memory ends) and may cross reaches; same_session (shared session: tag) and similar (stored vectors, cosine >= 0.80, score) stay inside one reach and reach_project, at most 3 per node. Nodes are visible memories (not erased or quarantined, currently active or superseded) in the asked reaches; a project memory shows only when reach_project equals project_key (ST-824). vector_pending marks a memory without a current stored vector. No embedding call, no relation reasons, sources or vectors in the response. Caps: limit nodes (default 60, max 100), 300 lines; truncated=true when cut. Exact four-field scope from the storage layer; read:memories on scope and on memory_id and read:memory_relations on scope, all the same principal. Audited as read:memory_graph with the center id only.",
+        "summary": "Relation graph around one memory, or the whole map (ST-820)",
+        "description": "Memories and lines up to two steps from memory_id. Lines: supersedes, conflicts, supports and human_link come from stored memory_relations (active, exactly two memory ends) and may cross reaches; same_session (shared session: tag) and similar (stored vectors, cosine >= 0.80, score) stay inside one reach and reach_project, at most 3 per node. Nodes are visible memories (not erased or quarantined, currently active or superseded) in the asked reaches; a project memory shows only when reach_project equals project_key (ST-824). vector_pending marks a memory without a current stored vector. No embedding call, no relation reasons, sources or vectors in the response. Caps: limit nodes (default 60, max 100), 300 lines; truncated=true when cut. Exact four-field scope from the storage layer; read:memories on scope and on memory_id and read:memory_relations on scope, all the same principal. Audited as read:memory_graph with the center id only. mode=all: no memory_id or depth; every visible memory of the scope (same node, reach and line rules) with only id, reach, kind, uses (context_usage receipts) and vector_pending per node and from, to, type per line; no text, labels, relations or scores. Caps: limit nodes (default and max 5000), 20000 lines; truncated=true when cut. Also needs read:usage on scope and read:memories per node (denied nodes left out with their lines). Audited as read:memory_graph with id all.",
         "parameters": [
           {
             "name": "workspace_id",
@@ -9097,13 +9097,25 @@
             }
           },
           {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all"
+              ]
+            },
+            "description": "all = whole visible map without a center"
+          },
+          {
             "name": "memory_id",
             "in": "query",
-            "required": true,
+            "required": false,
             "schema": {
               "type": "string"
             },
-            "description": "Center memory"
+            "description": "Center memory (required unless mode=all)"
           },
           {
             "name": "depth",
@@ -9141,10 +9153,9 @@
             "schema": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100,
-              "default": 60
+              "maximum": 5000
             },
-            "description": "Node cap"
+            "description": "Node cap (center: default 60, max 100; mode=all: default and max 5000)"
           }
         ],
         "responses": {
@@ -9153,13 +9164,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MemoryGraph"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/MemoryGraph"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MemoryGraphMap"
+                    }
+                  ]
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid scope, memory id, depth, reach, project key or limit",
+            "description": "Invalid scope, mode, memory id, depth, reach, project key or limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -19071,6 +19089,101 @@
             "maxItems": 300,
             "items": {
               "$ref": "#/components/schemas/MemoryGraphEdge"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "authority": {
+            "type": "string",
+            "const": "data_only_untrusted"
+          }
+        }
+      },
+      "MemoryGraphMapNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "reach",
+          "kind",
+          "uses",
+          "vector_pending"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reach": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "general",
+              "project"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "uses": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "vector_pending": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MemoryGraphMapEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "type"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "supersedes",
+              "conflicts",
+              "supports",
+              "human_link",
+              "same_session",
+              "similar"
+            ]
+          }
+        }
+      },
+      "MemoryGraphMap": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nodes",
+          "edges",
+          "truncated",
+          "authority"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "maxItems": 5000,
+            "items": {
+              "$ref": "#/components/schemas/MemoryGraphMapNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "maxItems": 20000,
+            "items": {
+              "$ref": "#/components/schemas/MemoryGraphMapEdge"
             }
           },
           "truncated": {

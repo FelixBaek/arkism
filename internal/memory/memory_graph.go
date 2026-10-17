@@ -28,6 +28,10 @@ const (
 	memoryGraphMaxEdges     = 300
 	memoryGraphScan         = 1000 // stored relation rows read per step
 	memoryGraphLabelRunes   = 120
+
+	MemoryGraphModeAll  = "all" // whole visible map: no center, no labels
+	memoryGraphMapNodes = 5000
+	memoryGraphMapEdges = 20000
 )
 
 var memoryGraphReaches = []string{ReachPersonal, ReachGeneral, ReachProject}
@@ -36,6 +40,7 @@ var memoryGraphReaches = []string{ReachPersonal, ReachGeneral, ReachProject}
 // a project memory is shown only when its reach_project equals ProjectKey (reachVisible).
 type MemoryGraphQuery struct {
 	Scope      Scope    `json:"scope"`
+	Mode       string   `json:"mode,omitempty"`
 	MemoryID   string   `json:"memory_id"`
 	Depth      int      `json:"depth"`
 	Reaches    []string `json:"reaches"`
@@ -81,7 +86,14 @@ type MemoryGraphSessionHit struct {
 }
 
 func normalizeMemoryGraphQuery(in MemoryGraphQuery) (MemoryGraphQuery, error) {
-	if in.Depth == 0 {
+	all, maxNodes := in.Mode == MemoryGraphModeAll, memoryGraphMaxNodes
+	if all {
+		maxNodes = memoryGraphMapNodes
+		if in.Limit == 0 {
+			in.Limit = memoryGraphMapNodes
+		}
+	}
+	if in.Depth == 0 && !all {
 		in.Depth = 2
 	}
 	if in.Limit == 0 {
@@ -93,8 +105,9 @@ func normalizeMemoryGraphQuery(in MemoryGraphQuery) (MemoryGraphQuery, error) {
 	in.Reaches = slices.Clone(in.Reaches)
 	slices.Sort(in.Reaches)
 	in.ProjectKey = strings.ToLower(strings.TrimSpace(in.ProjectKey))
-	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || !validRunLabel(in.MemoryID, 256) || containsSecret(in.MemoryID) || in.Depth < 1 || in.Depth > 2 ||
-		in.Limit < 1 || in.Limit > memoryGraphMaxNodes || !validProjectKey(in.ProjectKey) || len(slices.Compact(slices.Clone(in.Reaches))) != len(in.Reaches) {
+	center := in.Mode == "" && validRunLabel(in.MemoryID, 256) && !containsSecret(in.MemoryID) && in.Depth >= 1 && in.Depth <= 2
+	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || !center && !(all && in.MemoryID == "" && in.Depth == 0) ||
+		in.Limit < 1 || in.Limit > maxNodes || !validProjectKey(in.ProjectKey) || len(slices.Compact(slices.Clone(in.Reaches))) != len(in.Reaches) {
 		return in, ErrInvalid
 	}
 	for _, r := range in.Reaches {
@@ -168,11 +181,11 @@ func parseMemoryGraphQuery(raw string) (MemoryGraphQuery, error) {
 		return MemoryGraphQuery{}, ErrInvalid
 	}
 	for k, v := range q {
-		if len(v) != 1 || v[0] == "" && k != "user_id" && k != "agent_id" && k != "project_key" || !slices.Contains([]string{"workspace_id", "project_id", "user_id", "agent_id", "memory_id", "depth", "reach", "project_key", "limit"}, k) {
+		if len(v) != 1 || v[0] == "" && k != "user_id" && k != "agent_id" && k != "project_key" || !slices.Contains([]string{"workspace_id", "project_id", "user_id", "agent_id", "mode", "memory_id", "depth", "reach", "project_key", "limit"}, k) {
 			return MemoryGraphQuery{}, ErrInvalid
 		}
 	}
-	in := MemoryGraphQuery{Scope: Scope{WorkspaceID: q.Get("workspace_id"), ProjectID: q.Get("project_id"), UserID: q.Get("user_id"), AgentID: q.Get("agent_id")}, MemoryID: q.Get("memory_id"), ProjectKey: q.Get("project_key")}
+	in := MemoryGraphQuery{Scope: Scope{WorkspaceID: q.Get("workspace_id"), ProjectID: q.Get("project_id"), UserID: q.Get("user_id"), AgentID: q.Get("agent_id")}, Mode: q.Get("mode"), MemoryID: q.Get("memory_id"), ProjectKey: q.Get("project_key")}
 	if v, ok := q["reach"]; ok {
 		in.Reaches = strings.Split(v[0], ",")
 	}
@@ -195,6 +208,11 @@ func memoryGraphRoutes(mux *http.ServeMux, s *Service) {
 			respond(w, nil, e)
 			return
 		}
+		if in.Mode == MemoryGraphModeAll {
+			out, e := s.MemoryGraphMap(r.Context(), bearer(r), in)
+			respond(w, out, e)
+			return
+		}
 		out, e := s.MemoryGraph(r.Context(), bearer(r), in)
 		respond(w, out, e)
 	})
@@ -211,6 +229,7 @@ type memoryGraphBuild struct {
 	edges []MemoryGraphEdge
 	seen  map[string]bool
 	deny  map[string]bool // read denied once; never asked again in this request
+	cap   int             // line cap
 	trunc bool
 }
 
@@ -226,7 +245,7 @@ func (b *memoryGraphBuild) addEdge(e MemoryGraphEdge) {
 	if b.seen[key] {
 		return
 	}
-	if len(b.edges) >= memoryGraphMaxEdges {
+	if len(b.edges) >= b.cap {
 		b.trunc = true
 		return
 	}
@@ -265,7 +284,7 @@ func (s *Service) MemoryGraph(ctx context.Context, token string, in MemoryGraphQ
 	if len(center) != 1 {
 		return MemoryGraph{}, ErrNotFound
 	}
-	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{in.MemoryID: center[0]}, depth: map[string]int{in.MemoryID: 0}, order: []string{in.MemoryID}, seen: map[string]bool{}, deny: map[string]bool{}}
+	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{in.MemoryID: center[0]}, depth: map[string]int{in.MemoryID: 0}, order: []string{in.MemoryID}, seen: map[string]bool{}, deny: map[string]bool{}, cap: memoryGraphMaxEdges}
 	frontier := []string{in.MemoryID}
 	for step := 1; step <= in.Depth && len(frontier) > 0; step++ {
 		if frontier, e = b.expand(ctx, frontier, step); e != nil {

@@ -24,6 +24,19 @@ func (f *fakeRepo) graphRows(col string) []Record {
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
+func (f *fakeRepo) MemoryGraphMapNodes(_ context.Context, in MemoryGraphQuery) ([]Record, error) {
+	in, e := normalizeMemoryGraphQuery(in)
+	if e != nil || in.Mode != MemoryGraphModeAll {
+		return nil, ErrInvalid
+	}
+	out := []Record{}
+	for _, r := range f.graphRows(colMemories) {
+		if len(out) <= in.Limit && memoryGraphVisible(r, in) {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
 func (f *fakeRepo) MemoryGraphNodes(_ context.Context, in MemoryGraphQuery, ids []string) ([]Record, error) {
 	in, e := normalizeMemoryGraphQuery(in)
 	if e != nil {
@@ -276,6 +289,109 @@ func checkGraph(t *testing.T, svc *Service, token string) {
 	}
 }
 
+// checkGraphMap: all mode returns every visible memory and its lines, never text, and
+// keeps derived lines inside one reach.
+func checkGraphMap(t *testing.T, svc *Service, token string) {
+	t.Helper()
+	q := MemoryGraphQuery{Scope: scopeA, Mode: MemoryGraphModeAll, ProjectKey: "owner/mine"}
+	g, e := svc.MemoryGraphMap(testCtx, token, q)
+	if e != nil {
+		t.Fatal(e)
+	}
+	nodes := map[string]MemoryGraphMapNode{}
+	for _, n := range g.Nodes {
+		nodes[n.ID] = n
+	}
+	edges := map[string]string{}
+	for _, l := range g.Edges {
+		edges[l.From+">"+l.To] = l.Type
+		a, b := nodes[l.From], nodes[l.To]
+		if a.ID == "" || b.ID == "" || (l.Type == GraphSameSession || l.Type == GraphSimilar) && a.Reach != b.Reach {
+			t.Fatal("line outside the map or across reaches", l)
+		}
+	}
+	if len(nodes) != 25 || !g.Truncated || nodes["c"].Uses != 2 || nodes["sim1"].Uses != 0 || !nodes["con"].VectorPending || nodes["sim1"].VectorPending || nodes["hum"].Reach != ReachProject {
+		t.Fatal("map nodes", len(nodes), g.Truncated, nodes["c"], nodes["con"], nodes["sim1"], nodes["hum"])
+	}
+	for _, id := range []string{"sim-other-project", "other-proj"} {
+		if _, ok := nodes[id]; ok {
+			t.Fatal("hidden project memory in map", id)
+		}
+	}
+	for k, v := range map[string]string{"c>sup-old": GraphSupersedes, "c>con": GraphConflicts, "pro>c": GraphSupports, "c>hum": GraphHumanLink, "c>ses": GraphSameSession,
+		"c>sim1": GraphSimilar, "con>a2": GraphSupports, "a2>a3": GraphSupports, "x-c>x-g1": GraphSameSession} {
+		if edges[k] != v {
+			t.Fatal("map line", k, edges[k], edges)
+		}
+	}
+	if edges["c>ai"] != "" || edges["c>x-a1"] != "" {
+		t.Fatal("unexpected map line", edges)
+	}
+	raw, _ := json.Marshal(g)
+	for _, bad := range []string{"center rule body", "label", "relation reason"} {
+		if strings.Contains(string(raw), bad) {
+			t.Fatal("text in map", bad)
+		}
+	}
+	// Truncated above: the crowded session has more than three same-session lines per node.
+	// Reach filter and node cap behave as in the center mode.
+	q.Reaches, q.ProjectKey = []string{ReachGeneral}, ""
+	if g, e = svc.MemoryGraphMap(testCtx, token, q); e != nil || len(g.Nodes) != 17 {
+		t.Fatal("general map", len(g.Nodes), e)
+	}
+	q.Limit = 5
+	if g, e = svc.MemoryGraphMap(testCtx, token, q); e != nil || len(g.Nodes) != 5 || !g.Truncated {
+		t.Fatal("map cap", len(g.Nodes), g.Truncated, e)
+	}
+	for _, bad := range []MemoryGraphQuery{{Scope: scopeA, MemoryID: "c"}, {Scope: scopeA, Depth: 1}, {Scope: scopeA, Limit: memoryGraphMapNodes + 1}} {
+		if _, e = svc.MemoryGraphMap(testCtx, token, bad); e != ErrInvalid {
+			t.Fatal("bad map query", bad, e)
+		}
+	}
+}
+
+func seedGraphUses(t *testing.T, repo interface {
+	Insert(context.Context, string, Record) error
+}) {
+	now := time.Now().UTC()
+	useReceipt(t, repo, "use-1", scopeA, Ref{Collection: colMemories, ID: "c", Revision: 1}, now)
+	useReceipt(t, repo, "use-2", scopeA, Ref{Collection: colMemories, ID: "c", Revision: 1}, now)
+}
+
+// ST-820 / FR-012 / TC-FUNC-035: all mode, the whole visible map without text.
+func TestMemoryGraphMap(t *testing.T) {
+	f := newFixture(t)
+	seedGraph(newGraphWorld(t, func(col string, r Record) error { return f.repo.Insert(testCtx, col, r) }, f.emb.space))
+	seedGraphUses(t, f.repo)
+	checkGraphMap(t, f.svc, f.human)
+	// A memory the caller may not read is left out with its lines.
+	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+		if req.Action == "read:memories" && req.ResourceID == "c" {
+			return Decision{}, ErrDenied
+		}
+		return f.auth.Authorize(ctx, token, req)
+	})
+	g, e := f.svc.MemoryGraphMap(testCtx, f.human, MemoryGraphQuery{Scope: scopeA, ProjectKey: "owner/mine"})
+	if e != nil || len(g.Nodes) != 24 {
+		t.Fatal("denied map node", len(g.Nodes), e)
+	}
+	for _, l := range g.Edges {
+		if l.From == "c" || l.To == "c" {
+			t.Fatal("line to denied node", l)
+		}
+	}
+	// read:usage is required, for the same principal.
+	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+		if req.Action == "read:usage" {
+			return Decision{}, ErrDenied
+		}
+		return f.auth.Authorize(ctx, token, req)
+	})
+	if _, e = f.svc.MemoryGraphMap(testCtx, f.human, MemoryGraphQuery{Scope: scopeA}); e != ErrDenied {
+		t.Fatal("map without read:usage", e)
+	}
+}
+
 // ST-820 / FR-012 / TC-FUNC-035 / TC-SEC-011: every line type, reach rules, two steps, vector pending.
 func TestMemoryGraphLinesReachesAndDepth(t *testing.T) {
 	f := newFixture(t)
@@ -381,7 +497,13 @@ func TestMemoryGraphHTTP(t *testing.T) {
 	if code != http.StatusOK || json.Unmarshal([]byte(body), &g) != nil || len(g.Nodes) != 8 || !strings.Contains(body, `"type":"human_link"`) {
 		t.Fatal(code, body)
 	}
-	for _, bad := range []string{"", "&memory_id=c&depth=0", "&memory_id=c&depth=x", "&memory_id=c&extra=1", "&memory_id=c&reach=", "&memory_id=c&limit=0"} {
+	code, body = call("&mode=all&reach=general&limit=5000")
+	var m MemoryGraphMap
+	if code != http.StatusOK || json.Unmarshal([]byte(body), &m) != nil || len(m.Nodes) != 17 || strings.Contains(body, "label") || strings.Contains(body, "center") {
+		t.Fatal(code, body)
+	}
+	for _, bad := range []string{"", "&memory_id=c&depth=0", "&memory_id=c&depth=x", "&memory_id=c&extra=1", "&memory_id=c&reach=", "&memory_id=c&limit=0",
+		"&mode=all&memory_id=c", "&mode=all&depth=1", "&mode=all&limit=5001", "&mode=near&memory_id=c"} {
 		if code, _ = call(bad); code != http.StatusBadRequest {
 			t.Fatal(bad, code)
 		}
@@ -399,5 +521,7 @@ func TestPostgresMemoryGraph(t *testing.T) {
 		t.Fatal(e)
 	}
 	auth := &fakeAuth{actors: map[string]fakeActor{"tok": actor("human-1", roleHuman, true, allVerbs...)}}
+	seedGraphUses(t, p)
 	checkGraph(t, &Service{Repo: p, Auth: auth, Embedder: emb}, "tok")
+	checkGraphMap(t, &Service{Repo: p, Auth: auth, Embedder: emb}, "tok")
 }
