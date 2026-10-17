@@ -281,6 +281,8 @@ type Repository interface {
 	MemoryOutcomes(context.Context, MemoryOutcomeQuery) ([]Record, error)
 	// MemoryOutcomeCounts aggregates memory_outcome evaluations per memory id under the same filters.
 	MemoryOutcomeCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeCount, error)
+	// MemoryOutcomeSessionCounts splits one memory's dimension into used / not-used sessions (ST-819).
+	MemoryOutcomeSessionCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeSessionCount, error)
 	// MemoryUseCounts aggregates context_usage receipts per memory id (all revisions) in one scope.
 	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
 	ListCandidates(context.Context, ReviewInput) ([]Record, error)
