@@ -2320,6 +2320,7 @@ window.ArkismI18nEN = {
   "연결 끊기할까요?": "Disconnect?",
   "플러그인을 제거할까요?": "Remove the plugin?",
   "제공 도구": "Tools provided",
+  "연결된 스킬": "Linked skills",
   "한 번에 처리": "Do it all at once",
   "30일 동안 한 번도 참고되지 않았어요. 질문과 관련된 적이 없어서예요. 아직 필요한 기억인가요?": "Not referenced once in 30 days, because it never related to a question. Do you still need this memory?",
   "어디서 왔나요": "Where it came from",
