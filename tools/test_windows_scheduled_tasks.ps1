@@ -37,7 +37,7 @@ try {
     $work = Join-Path $scripts 'install_arkism_work_task.ps1'
     Assert-TaskContract ((Get-Command Register-ScheduledTask).CommandType -eq 'Function') 'Registration mock is not active'
     & $export -Arkism $binary -Confirm:$false | Out-Null
-    & $work -Arkism $binary -Agents codex,claude_code,zcode,codex -SshHost 'sync-host' -Confirm:$false | Out-Null
+    & $work -Arkism $binary -Agents Codex,CLAUDE_CODE,zcode,codex -SshHost 'sync-host' -Confirm:$false | Out-Null
     Assert-TaskContract ($global:ArkismTaskRegistrations.Count -eq 4) 'Expected export and three distinct drain tasks'
     $expected = @{
         'Arkism-Zcode-Export' = 'export-zcode --execute'
@@ -49,7 +49,8 @@ try {
     foreach ($task in $global:ArkismTaskRegistrations) {
         Assert-TaskContract ($task.Action.Execute -eq $binary) 'Executable path was not preserved'
         Assert-TaskContract ($task.Action.WorkingDirectory -eq $root) 'Working directory was not preserved'
-        Assert-TaskContract ($task.Action.Arguments -eq $expected[$task.TaskName]) 'Task uses the wrong CLI contract'
+        Assert-TaskContract ($expected.Keys -ccontains $task.TaskName) 'Task name is not canonical'
+        Assert-TaskContract ($task.Action.Arguments -ceq $expected[$task.TaskName]) 'Task uses the wrong case-sensitive CLI contract'
         Assert-TaskContract ((Resolve-TaskUserSid $task.Principal.UserId) -eq $user) 'Task does not belong to the current user'
         Assert-TaskContract ([int]$task.Principal.RunLevel -eq 0) 'Task must not request elevation'
         Assert-TaskContract ([int]$task.Principal.LogonType -eq 3) 'Task must use the interactive user token'

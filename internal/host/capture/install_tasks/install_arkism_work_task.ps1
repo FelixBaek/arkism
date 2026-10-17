@@ -8,7 +8,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'arkism_scheduled_tasks.ps1')
-foreach ($agent in ($Agents | Select-Object -Unique)) {
+$normalizedAgents = $Agents | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Unique
+foreach ($agent in $normalizedAgents) {
     $taskName = "Arkism-Work-Drain-$agent"
     $arguments = "windows drain-work $agent"
     if ($SshHost) { $arguments += " --ssh-host $SshHost" }
