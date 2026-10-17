@@ -14,6 +14,14 @@ test('timing summary gives median, 95th percentile, slowest and largest size per
   assert.deepEqual(s['canvas.render'], { n: 1, p50: 7, p95: 7, max: 7, size: 40 });
 });
 
+test('time() notes how long a call took and passes its result through, even when it throws', () => {
+  perf.clear();
+  assert.equal(perf.time('render.test', () => 42, 7), 42);
+  assert.throws(() => perf.time('render.test', () => { throw new Error('x'); }));
+  assert.equal(perf.summary()['render.test'].n, 2);
+  assert.equal(perf.summary()['render.test'].size, 7);
+});
+
 test('only the last 500 samples per kind are kept', () => {
   perf.clear();
   for (let i = 0; i < 600; i++) perf.note('canvas.drag', i);

@@ -6,13 +6,16 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 var (
 	// shortcut: only paths with a file extension count (dir names and extensionless files are skipped), widen if missed paths show up.
-	// a lowercase extension (x.go) or a listed all-caps one (Guide.PDF) keeps Go qualified names (path/filepath.Join, net/url.URL) out; ~/ alone may lead a file.
-	memoryPathPattern = regexp.MustCompile(`(?:~/(?:[\w.-]+/)*|(?:\.{1,2}/|/)?(?:[\w.-]+/)+)[\w.-]*\.(?:[a-z][A-Za-z0-9]{0,4}|PDF|PNG|JPE?G|GIF|HEIC|TXT|MD|CSV|JSON|ZIP|DOCX?|XLSX?|PPTX?|MP[34]|MOV)\b`)
-	urlPattern        = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://\S+`)
+	// a lowercase extension (x.go) or a listed all-caps one (Guide.PDF) keeps Go qualified names (path/filepath.Join, net/url.URL) out; ~/ or / alone may lead a file; a bare name (README.md, Next.js) never counts.
+	memoryPathPattern = regexp.MustCompile(`(?:~/+(?:[\w.-]+/+)*|/(?:[\w.-]+/+)*|(?:\.{1,2}/+)?(?:[\w.-]+/+)+)[\w.-]*\.(?:[a-z][A-Za-z0-9]{0,4}|PDF|PNG|JPE?G|GIF|HEIC|TXT|MD|CSV|JSON|ZIP|DOCX?|XLSX?|PPTX?|MP[34]|MOV)\b`)
+	// protocol-relative //host/... too, unless the // sits inside a path.
+	urlPattern = regexp.MustCompile(`[A-Za-z][A-Za-z0-9+.-]*://\S+|(?:^|[^\w.~/-])//\S+`)
 )
 
 const maxCheckedPaths = 8
@@ -25,7 +28,13 @@ func MissingPaths(cwd string, texts ...string) []string {
 	home, _ := os.UserHomeDir()
 	var missing, seen []string
 	for _, text := range texts {
-		for _, p := range memoryPathPattern.FindAllString(urlPattern.ReplaceAllString(text, " "), -1) {
+		clean := urlPattern.ReplaceAllString(text, " ")
+		for _, at := range memoryPathPattern.FindAllStringIndex(clean, -1) {
+			p := clean[at[0]:at[1]]
+			// \w is ASCII only: in 설정/config.yaml the match starts at "/" but is not absolute.
+			if before, _ := utf8.DecodeLastRuneInString(clean[:at[0]]); p[0] == '/' && (unicode.IsLetter(before) || unicode.IsDigit(before)) {
+				continue
+			}
 			if len(seen) == maxCheckedPaths {
 				return missing
 			}

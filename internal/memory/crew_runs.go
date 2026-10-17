@@ -16,8 +16,9 @@ import (
 // when they look like credentials, so a run never stores keys or tokens.
 const colCrewRuns = "crew_runs"
 
-// "agent": started by the agent whose way of working the workflow is; the only trigger a bot-owned workflow takes.
-var crewRunTriggers = []string{"manual", "schedule", "webhook", "call", "discord", "agent"}
+// "agent": started by the agent whose way of working the workflow is; the only live trigger a bot-owned workflow takes.
+// test: a person's 시험 실행; the engine fakes every step that reaches outside.
+var crewRunTriggers = []string{"manual", "schedule", "webhook", "call", "discord", "agent", "test"}
 var crewRunStatuses = []string{"running", "waiting", "succeeded", "failed", "stopped"}
 var crewNodeStatuses = []string{"pending", "running", "waiting", "done", "failed", "skipped"}
 
@@ -246,7 +247,7 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 		return Record{}, err
 	}
 	// A one-node run skips every step before it, approvals too, and a resumed one starts past them: only a person may ask.
-	if !crewRunWriter(d.Role) || (in.Run.Only != "" || resumed) && d.Role != roleHuman {
+	if !crewRunWriter(d.Role) || (in.Run.Only != "" || resumed || in.Run.Trigger == "test") && d.Role != roleHuman {
 		return Record{}, ErrDenied
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)

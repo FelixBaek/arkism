@@ -1304,3 +1304,41 @@ func TestSecretAfterApprovalEndsTheRun(t *testing.T) {
 		t.Fatal("stuck after secret", got.State.Status, got.State.Summary, statuses(got))
 	}
 }
+
+func TestSharedStateReadsAnyFinishedNode(t *testing.T) {
+	g := &Graph{
+		Nodes: []Node{node("start", "start"), node("a", "code", "lang", "sh", "code", `echo '{"v":7}'`),
+			node("b", "code", "lang", "sh", "code", `echo '"{{trigger.who}}"'`), // code never takes shared text
+			node("end", "end", "summary", "{{in}} {{nodes.a.v}} {{trigger.who}} {{trigger.in}} [{{nodes.later}}]"), node("later", "merge")},
+		Edges: []Edge{edge("start", "a"), edge("a", "b"), edge("b", "end"), edge("end", "later")},
+	}
+	fs := newFakeStore(wf("auto", g))
+	r := runOnce(t, testEngine(t, fs), "auto", map[string]any{"who": "felix", "in": "x"})
+	if r.State.Status != "succeeded" || r.State.Summary != "{{trigger.who}} 7 felix x []" {
+		t.Fatalf("shared state: %s %q", r.State.Status, r.State.Summary)
+	}
+}
+
+func TestTestRunFakesOutsideSteps(t *testing.T) {
+	g := &Graph{
+		Nodes: []Node{node("start", "start"), node("ask", "ai_once", "prompt", "hi"), node("w", "code", "lang", "sh", "code", "exit 9"),
+			node("pause", "wait", "duration", "1h"), node("end", "end", "summary", "{{nodes.ask.test}} {{nodes.w.type}}")},
+		Edges: []Edge{edge("start", "ask"), edge("ask", "w"), edge("w", "pause"), edge("pause", "end")},
+	}
+	fs := newFakeStore(wf("auto", g))
+	e := testEngine(t, fs)
+	if err := e.LoadCrew(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	r, err := e.StartRun(context.Background(), "auto", "test", map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Drive(context.Background(), r.ID); err != nil {
+		t.Fatal(err)
+	}
+	r, _ = fs.GetRun(context.Background(), r.ID)
+	if r.State.Status != "succeeded" || r.State.Summary != "true code" {
+		t.Fatalf("test run: %s %q", r.State.Status, r.State.Summary)
+	}
+}

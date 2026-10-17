@@ -426,8 +426,8 @@ window.ArkismPages = (ctx) => {
       notice("AI가 분류하는 중이에요…");
       try {
         const skillLines = todo.slice(0, 150).map((sk) => `${sk.name}: ${(sk.description || "").slice(0, 100)}`).join("\n");
-        const prompt = `카테고리: ${draft.map((c) => c.name).join(", ")}\n\n스킬 (이름: 설명):\n${skillLines}\n\n답은 JSON 객체 하나만: {"스킬 이름": "카테고리 이름"}. 맞는 카테고리가 없으면 그 스킬은 뺀다.`;
-        const a = await assist("explain", prompt, { purpose: "category" });
+        const prompt = `Categories: ${draft.map((c) => c.name).join(", ")}\n\nSkills (name: description):\n${skillLines}\n\nShape: {"skill name": "category name"}, using only the categories above. Leave out a skill no category fits.`;
+        const a = await assist("json", prompt, { purpose: "category" });
         if (a.status !== "done") throw new Error(a.error || "AI가 답하지 못했어요");
         const text = a.output || "";
         const start = text.indexOf("{");
@@ -892,7 +892,18 @@ window.ArkismPages = (ctx) => {
       box.append(el("strong", "", grp.querySelector("h2").textContent), ...[...grp.childNodes].filter((n) => n.tagName !== "H2"));
       return box;
     })), asSide(comfy));
-    return [...captureGroup(), ...dataGroup(), ctx.privacyGroup()];
+    return [...captureGroup(), ...dataGroup(), ctx.privacyGroup(), speedGroup()];
+  }
+  // 속도 기록 (perf.js): the slowest kinds first; 100ms or more is what a person notices as a stall.
+  function speedGroup() {
+    const g = group("속도 기록", "이 PC에서 화면을 불러오고 그린 시간이에요. 100ms를 넘으면 느리게 느껴져요. 기록은 이 PC에만 남아요.");
+    const rows = Object.entries(window.ArkismPerf?.summary() || {}).sort((a, b) => b[1].p95 - a[1].p95).slice(0, 15);
+    if (!rows.length) g.append(el("p", "pg-hint", "아직 기록이 없어요."));
+    for (const [kind, x] of rows) {
+      g.append(line(kind, `보통 ${x.p50}ms · 느릴 때 ${x.p95}ms · 가장 느림 ${x.max}ms · ${x.n}번${x.size ? ` · 최대 ${x.size}개` : ""}`, el("span", x.p95 >= 100 ? "badge warn" : "badge", `${x.p95}ms`)));
+    }
+    if (rows.length) g.append(button("기록 지우기", "", null, () => { window.ArkismPerf.clear(); notice("속도 기록을 지웠어요."); render(false); }));
+    return g;
   }
 
   // 수집: 이 PC의 에이전트 훅이 읽는 ~/.config/arkism/capture.json. 내장 모드·서버 연결 모두 같다.
