@@ -1820,7 +1820,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     if (n.type === "approval") box.append(el("p", "meta", "배포·게시처럼 되돌릴 수 없는 단계 바로 앞에 두세요. 답이 올 때까지 멈춰요."));
     if (n.type === "subflow") box.append(el("p", "meta", "부른 워크플로우를 끝까지 돌리고 그 결과를 다음 단계에 넘겨요. 세 겹까지만 부를 수 있어요."));
     if (n.type === "n8n") box.append(el("p", "meta", "오래 걸리는 일은 n8n 마지막 노드가 Arkism 콜백 주소로 결과를 보내요. 주소는 실행할 때 1회용 토큰과 함께 넘겨요."));
-    if (WORK(n)) box.append(onlyRun(n));
+    if (WORK(n) && !ownerOf(ed.rec)) box.append(onlyRun(n));
     box.append(button("노드 지우기", "ghost danger", "trash", async () => {
       if (await confirmBox("노드를 지울까요?", "이 노드와 이어진 선이 함께 지워져요. 저장하기 전까지는 되돌리기로 살릴 수 있어요.", "노드 지우기")) removeNode(n.id);
     }));
@@ -2015,7 +2015,9 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     const side = el("aside", "g-right wf-simple-side");
     const c = n.config || {};
     side.append(el("h3", "", "주고받는 것"), kv([["필요한 것", c.needs || "앞 단계 결과"], ["만드는 것", c.makes || "정하지 않음"], ["실패하면", Number(c.retries) ? `${c.retries}번 다시 → 멈추고 보고` : "멈추고 보고"]]), el("i", "wf-rule"));
-    side.append(onlyRun(n), el("i", "wf-rule"));
+    // An owned workflow runs only through its agent (@); the server refuses a manual run.
+    const owned = ownerOf(ed.rec);
+    if (!owned) side.append(onlyRun(n), el("i", "wf-rule"));
     const run = button("실행", "primary", "play", async () => {
       if (ed.dirty && !(await saveGraph())) return;
       await runFromEditor();
@@ -2024,7 +2026,8 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     more.append(el("h3", "", "단계 더하기"), el("p", "wf-text", "단계를 더하면 그래프 편집기로 바뀌어요. 지금 내용은 첫 단계로 그대로 남아요."),
       button("단계 추가 — 그래프로 바뀌어요", "wf-full center", null, () => { ed.graphMode = true; ed.menu = true; render(false); }));
     const acts = el("div", "crew-actions wf-run-acts");
-    acts.append(run, button("워크플로우 설정", "ghost", "gear-six", () => openSettings(ed.rec, null, true)));
+    if (!owned) acts.append(run);
+    acts.append(button("워크플로우 설정", "ghost", "gear-six", () => openSettings(ed.rec, null, true)));
     side.append(more, el("i", "wf-rule"), acts);
     page.append(form, side);
     $("#table").replaceChildren(page);
@@ -2400,7 +2403,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     trial.title = ed.dirty ? "저장한 뒤에 실행할 수 있어요" : "저장된 워크플로우로 지금 한 번 돌려요";
     const settings = button("설정", "ghost", "gear-six", () => openSettings(ed.rec, null, true));
     settings.title = "이름·$이름·워커 기본 모델·멈추는 조건·일정·웹훅·배경 사진";
-    return [button("돌아가기", "ghost", "arrow-left", leaveGraph), settings, review, trial, revert, save2];
+    // An owned workflow runs only through its agent (@); the server refuses a manual run.
+    return [button("돌아가기", "ghost", "arrow-left", leaveGraph), settings, review, ...(ownerOf(rec) ? [] : [trial]), revert, save2];
   }
   // Space held = hand tool on the graph, as in Figma.
   let spaceDown = false;
@@ -2643,20 +2647,23 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     // The chosen workflow is shown as its own panel (name, numbered steps, one clear edit button) so it reads as part of this agent.
     const box = el("div", `wk-flow${w ? "" : " empty"}`);
     if (w) {
-      const steps = levels(w.crew.graph).flat().filter(WORK);
+      // Nodes on the same level run together, so they share one number (as in workflowDetail).
+      const lvls = levels(w.crew.graph).map((lv) => lv.filter(WORK)).filter((lv) => lv.length);
+      const steps = lvls.flat();
       const ai = steps.filter((n) => IS_AI(n.type)).length;
       const head = el("div", "wk-flow-head");
       const who = el("div", "wk-flow-who");
       const meta = el("small", "");
-      meta.append(el("code", "", `$${w.crew.handle}`), el("span", "", `${steps.length}단계`));
+      meta.append(el("code", "", `$${w.crew.handle}`), el("span", "", `${lvls.length}단계`));
       if (ai) meta.append(el("span", "", `AI ${ai}곳`));
       who.append(el("strong", "", w.crew.name), meta);
       const mark = el("span", "wk-flow-mark"); mark.append(icon("tree-structure"));
       head.append(mark, who, button("단계 고치기", "small", "pencil-simple", () => openGraph(w)));
       const chain = el("ol", "wk-flow-steps");
-      steps.forEach((n, i) => {
-        const li = el("li", IS_AI(n.type) ? "ai" : "");
-        li.append(el("span", "n", String(i + 1)), el("span", "t", nodeTitle(n)));
+      lvls.forEach((lv, i) => {
+        const li = el("li", lv.some((n) => IS_AI(n.type)) ? "ai" : "");
+        li.append(el("span", "n", String(i + 1)), el("span", "t", lv.map(nodeTitle).join(" · ")));
+        if (lv.length > 1) li.append(el("small", "", "동시에"));
         chain.append(li);
       });
       box.append(head, chain);
