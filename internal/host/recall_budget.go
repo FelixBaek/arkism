@@ -24,7 +24,7 @@ type RecallBudget struct {
 	Kinds    map[string]KindBudget // a kind not listed here is judged by the floor only
 }
 
-// First values from the ST-810 baseline (2026-10-17): every relevant hit scored ≥ 0.032787 (2/61) and
+// Legacy fallback values from the ST-810 self-query baseline (2026-10-17): labeled relevant hits scored ≥ 0.032787 (2/61) and
 // every unrelated-query hit ≤ 0.016393 (1/61). The floor sits mid-gap: a hit only one lane found
 // (≤ 1/61) stays out, one two lanes agree on (two ranks ≤ ~20) or an exact keyword match goes in. The four kind caps add up to the search's 6000 chars and
 // the largest baseline recall was 2,056 chars, so the caps only trim one-kind floods. A person approves
@@ -91,9 +91,11 @@ func VectorRan(modes []any, res map[string]any) bool {
 	return has(modes, "vector") && !has(degraded, "memory_vector_unavailable") && !has(degraded, "memory_vector_disabled")
 }
 
-// Floor drops hits below MinScore when vectorRan. A hit without a score (an older server) or one a
-// text lane (exact, keyword) found is not judged: a memory not yet embedded scores 1/61 from the
-// keyword lane alone, the same as an unrelated query's top hit, so the score cannot tell them apart.
+// Floor preserves a server-verified vector match without treating its RRF rank
+// as semantic relevance. The server's existing distance policy is authoritative
+// for that space; this host neither selects nor loosens its cutoff. Servers
+// without that evidence retain the legacy fallback. Text lanes, absent scores,
+// disabled floors and degraded searches retain their compatibility behavior.
 func (b RecallBudget) Floor(items []any, vectorRan bool) (kept []any, dropped int) {
 	if !vectorRan {
 		return items, 0
@@ -101,7 +103,7 @@ func (b RecallBudget) Floor(items []any, vectorRan bool) (kept []any, dropped in
 	kept = []any{}
 	for _, raw := range items {
 		if m, _ := raw.(map[string]any); m != nil {
-			if s, has := score(m["score"]); has && b.MinScore > 0 && s < b.MinScore && !textLane(m["lanes"]) {
+			if s, has := score(m["score"]); has && b.MinScore > 0 && s < b.MinScore && !textLane(m["lanes"]) && !verifiedVectorMatch(m) {
 				dropped++
 				continue
 			}
@@ -109,6 +111,21 @@ func (b RecallBudget) Floor(items []any, vectorRan bool) (kept []any, dropped in
 		kept = append(kept, raw)
 	}
 	return kept, dropped
+}
+
+func verifiedVectorMatch(item map[string]any) bool {
+	lanes, _ := item["lanes"].([]any)
+	vector := false
+	for _, lane := range lanes {
+		vector = vector || lane == "vector"
+	}
+	match, _ := item["vector_match"].(map[string]any)
+	space, _ := match["space"].(string)
+	distance, hasDistance := score(match["distance"])
+	limit, hasLimit := score(match["max_distance"])
+	return vector && space != "" && strings.TrimSpace(space) == space && hasDistance && hasLimit &&
+		!math.IsNaN(distance) && !math.IsInf(distance, 0) && !math.IsNaN(limit) && !math.IsInf(limit, 0) &&
+		distance >= 0 && distance <= limit && limit > 0 && limit < 2
 }
 
 // Cap keeps hits in rank order that fit their kind's budget. Run it on the list that is actually

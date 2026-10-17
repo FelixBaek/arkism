@@ -199,7 +199,7 @@ func TestMemorySignalHTTPReturnsCountsOnly(t *testing.T) {
 	}
 	code, one := call("GET", "/v1/memories/"+m.ID+"/signal?workspace_id="+scopeA.WorkspaceID+"&project_id="+scopeA.ProjectID, "")
 	var view MemorySignalView
-	if code != http.StatusOK || json.Unmarshal([]byte(one), &view) != nil || view.Signal == nil || view.Signal.Samples != 3 || view.Signal.Uses != 1 {
+	if code != http.StatusOK || json.Unmarshal([]byte(one), &view) != nil || view.Signal == nil || view.Signal.Samples != 3 || view.Signal.Uses != 1 || view.UseMeasurementBasis != "server_return" || view.ActualUseStatus != "not_measured" {
 		t.Fatal(code, one)
 	}
 	code, batch := call("POST", "/v1/memory-signals", `{"scope":`+string(scope)+`,"memory_ids":["`+m.ID+`","missing"]}`)

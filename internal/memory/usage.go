@@ -59,8 +59,10 @@ type UsageEntry struct {
 	Run         *Ref      `json:"run,omitempty"`
 }
 type UsagePage struct {
-	Items     []UsageEntry `json:"items"`
-	Authority string       `json:"authority"`
+	MeasurementBasis string       `json:"measurement_basis"`
+	ActualUseStatus  string       `json:"actual_use_status"`
+	Items            []UsageEntry `json:"items"`
+	Authority        string       `json:"authority"`
 }
 
 func (s *Service) RecentMemoryUsage(ctx context.Context, token string, scope Scope, id string) (UsagePage, error) {
@@ -93,7 +95,7 @@ func (s *Service) RecentMemoryUsage(ctx context.Context, token string, scope Sco
 	if len(rows) > 10 {
 		return UsagePage{}, ErrUnavailable
 	}
-	out := UsagePage{Items: []UsageEntry{}, Authority: AuthorityDataOnly}
+	out := UsagePage{Items: []UsageEntry{}, Authority: AuthorityDataOnly, MeasurementBasis: "server_return", ActualUseStatus: "not_measured"}
 	for _, r := range rows {
 		if r.Scope != scope || r.Kind != "context_usage" || r.Status != "done" || r.Usage == nil {
 			return UsagePage{}, ErrUnavailable
@@ -147,8 +149,10 @@ type MemoryUsageCount struct {
 	Last     time.Time `json:"last"`
 }
 type UsageSummaryPage struct {
-	Items     []MemoryUsageCount `json:"items"`
-	Authority string             `json:"authority"`
+	MeasurementBasis string             `json:"measurement_basis"`
+	ActualUseStatus  string             `json:"actual_use_status"`
+	Items            []MemoryUsageCount `json:"items"`
+	Authority        string             `json:"authority"`
 }
 
 // MemoryUsageSummary counts, for every memory used in the last 30 days, its uses in 7 and 30 days and the last use,
@@ -173,7 +177,7 @@ func (s *Service) MemoryUsageSummary(ctx context.Context, token string, scope Sc
 	if e != nil {
 		return UsageSummaryPage{}, e
 	}
-	out := UsageSummaryPage{Items: []MemoryUsageCount{}, Authority: AuthorityDataOnly}
+	out := UsageSummaryPage{Items: []MemoryUsageCount{}, Authority: AuthorityDataOnly, MeasurementBasis: "server_return", ActualUseStatus: "not_measured"}
 	// The Postgres and local authorizers decide per scope and action, so the decision above already covers every row;
 	// asking again per memory would be one database query per row.
 	perRow := !scopeOnly(s.Auth)

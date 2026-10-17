@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
@@ -193,7 +194,7 @@ func (f *fakeRepo) Transaction(ctx context.Context, fn func(context.Context, Tx)
 		return ErrInvalid
 	}
 	f.mu.Lock()
-	next, view := f.snapshot(), f.view()
+	base, next, view := f.snapshot(), f.snapshot(), f.view()
 	f.mu.Unlock()
 
 	view.store = next
@@ -201,8 +202,43 @@ func (f *fakeRepo) Transaction(ctx context.Context, fn func(context.Context, Tx)
 		return err // rollback: next is dropped
 	}
 	f.mu.Lock()
-	f.store = next
-	f.mu.Unlock()
+	defer f.mu.Unlock()
+	// Commit only the rows this transaction changed, and fail like a serialization
+	// error when a concurrent (or nested) commit already changed one of them.
+	changed := map[string]map[string]bool{}
+	for _, side := range []map[string]map[string]Record{base, next} {
+		for col, docs := range side {
+			for key := range docs {
+				if old, ok := base[col][key]; !ok || !reflect.DeepEqual(old, next[col][key]) {
+					if changed[col] == nil {
+						changed[col] = map[string]bool{}
+					}
+					changed[col][key] = true
+				}
+			}
+		}
+	}
+	for col, keys := range changed {
+		for key := range keys {
+			old, had := base[col][key]
+			cur, has := f.store[col][key]
+			if had != has || !reflect.DeepEqual(old, cur) {
+				return ErrConflict
+			}
+		}
+	}
+	for col, keys := range changed {
+		for key := range keys {
+			if rec, ok := next[col][key]; ok {
+				if f.store[col] == nil {
+					f.store[col] = map[string]Record{}
+				}
+				f.store[col][key] = rec
+			} else {
+				delete(f.store[col], key)
+			}
+		}
+	}
 	return nil
 }
 

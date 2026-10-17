@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// ST-813: per-memory trust signals (pass rate, sample size, use count, last
-// use), recomputed daily from memory_outcome evaluations and context_usage
+// ST-813: per-memory trust signals (pass rate, sample size, return count, last
+// server return), recomputed daily from memory_outcome evaluations and context_usage
 // receipts. Signals are derived rows in the jobs collection (kind
 // memory_signal) that a recompute can rebuild at any time; they are inputs for
 // ranking and proposals only and never change a memory's state. They carry ids,
@@ -54,9 +54,11 @@ type MemorySignal struct {
 }
 
 type MemorySignalView struct {
-	MemoryID  string        `json:"memory_id"`
-	Available bool          `json:"available"`
-	Signal    *MemorySignal `json:"signal"`
+	UseMeasurementBasis string        `json:"use_measurement_basis"`
+	ActualUseStatus     string        `json:"actual_use_status"`
+	MemoryID            string        `json:"memory_id"`
+	Available           bool          `json:"available"`
+	Signal              *MemorySignal `json:"signal"`
 }
 type MemorySignalPage struct {
 	Items     []MemorySignalView `json:"items"`
@@ -296,7 +298,7 @@ func (s *Service) MemorySignals(ctx context.Context, token string, in MemorySign
 	}
 	out := MemorySignalPage{Items: make([]MemorySignalView, 0, len(in.MemoryIDs)), Authority: AuthorityDataOnly}
 	for _, id := range in.MemoryIDs {
-		view := MemorySignalView{MemoryID: id}
+		view := MemorySignalView{MemoryID: id, UseMeasurementBasis: "server_return", ActualUseStatus: "not_measured"}
 		_, e := s.readableOutcomeMemory(ctx, token, who, in.Scope, id)
 		if e != nil && !errors.Is(e, ErrNotFound) && !errors.Is(e, ErrDenied) {
 			return MemorySignalPage{}, e

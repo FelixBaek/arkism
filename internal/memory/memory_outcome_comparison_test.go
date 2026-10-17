@@ -17,7 +17,7 @@ func (f *fakeRepo) MemoryOutcomeSessionCounts(ctx context.Context, in MemoryOutc
 		return nil, ErrInvalid
 	}
 	id := in.MemoryIDs[0]
-	type session struct{ ok, used bool }
+	type session struct{ ok, used, returned bool }
 	by := map[string]*session{}
 	for _, r := range f.rows("evaluations") {
 		one := in
@@ -44,17 +44,23 @@ func (f *fakeRepo) MemoryOutcomeSessionCounts(ctx context.Context, in MemoryOutc
 			runs[r.Usage.Run.ID] = true
 		}
 	}
-	sides := map[bool]*MemoryOutcomeSessionCount{}
+	sides := map[string]*MemoryOutcomeSessionCount{}
 	for trace, s := range by {
 		if tr, e := f.Get(ctx, "execution_traces", in.Scope, trace); !s.used && e == nil {
 			for _, rel := range tr.Relations {
-				s.used = s.used || rel.Collection == "agent_runs" && runs[rel.ID]
+				s.returned = s.returned || rel.Collection == "agent_runs" && runs[rel.ID]
 			}
 		}
-		c := sides[s.used]
+		observation := observationUnknown
+		if s.used {
+			observation = observationDelivered
+		} else if s.returned {
+			observation = observationReturned
+		}
+		c := sides[observation]
 		if c == nil {
-			c = &MemoryOutcomeSessionCount{Used: s.used}
-			sides[s.used] = c
+			c = &MemoryOutcomeSessionCount{Used: s.used, Observation: observation}
+			sides[observation] = c
 		}
 		c.Sessions++
 		if s.ok {
@@ -62,8 +68,8 @@ func (f *fakeRepo) MemoryOutcomeSessionCounts(ctx context.Context, in MemoryOutc
 		}
 	}
 	out := []MemoryOutcomeSessionCount{}
-	for _, used := range []bool{false, true} {
-		if c := sides[used]; c != nil {
+	for _, observation := range []string{observationDelivered, observationReturned, observationUnknown} {
+		if c := sides[observation]; c != nil {
 			out = append(out, *c)
 		}
 	}
@@ -83,7 +89,7 @@ func putOutcome(t *testing.T, repo Repository, scope Scope, id, trace, memory, d
 
 // comparisonRows: memory m is judged in 9 sessions (6 pass; u0 also fails on
 // another memory), and handed out by a receipt bound to run r-run, whose trace
-// has only another memory's passing verdict. 9 sessions never used m (5 pass).
+// has only another memory's passing verdict. 9 sessions have unknown exposure (5 pass).
 func comparisonRows(t *testing.T, repo Repository, scope Scope, m string) {
 	t.Helper()
 	for i := 0; i < 9; i++ {
@@ -115,16 +121,17 @@ func TestMemoryOutcomeComparisonSplitsSessionsAndHidesSmallSamples(t *testing.T)
 	if e != nil {
 		t.Fatal(e)
 	}
-	// used: u0..u8 + r-trace = 10 sessions; u0 fails on other-mem, so 6 pass (u1..u5 and r-trace).
-	if out.Used.Sessions != 10 || out.Used.Status != "ok" || *out.Used.Passed != 6 || *out.Used.PassRate != 0.6 || out.MinSessions != 10 || out.Memory.ID != m.ID || out.Authority != AuthorityDataOnly {
-		t.Fatalf("used: %+v", out)
+	// Delivered u0..u8; the server-only return is separate, and no
+	// observation for another judged session does not prove non-use.
+	if out.Delivered.Sessions != 9 || out.Used != out.Delivered || out.Delivered.Status != "insufficient_data" || out.ReturnedOnly.Sessions != 1 || out.Unknown.Sessions != 9 || out.MinSessions != 10 || out.Memory.ID != m.ID || out.Authority != AuthorityDataOnly {
+		t.Fatalf("observations: %+v", out)
 	}
-	if out.NotUsed.Sessions != 9 || out.NotUsed.Status != "insufficient_data" || out.NotUsed.Passed != nil || out.NotUsed.PassRate != nil || out.Difference != nil {
-		t.Fatalf("small side reported numbers: %+v", out)
+	if out.NotUsed.Sessions != 0 || out.NotUsed.PassRate != nil || out.Difference != nil || out.ActualUseStatus != "not_measured" {
+		t.Fatalf("unobserved data reported as non-use: %+v", out)
 	}
 	putOutcome(t, f.repo, scopeA, "on9", "n9", "other-mem", "work_task", true)
-	if out, e = f.svc.CompareMemoryOutcomes(testCtx, f.human, comparisonQuery(m.ID)); e != nil || out.NotUsed.Status != "ok" || *out.NotUsed.PassRate != 0.6 || out.Difference == nil || *out.Difference != 0 {
-		t.Fatalf("ten sessions: %+v %v", out, e)
+	if out, e = f.svc.CompareMemoryOutcomes(testCtx, f.human, comparisonQuery(m.ID)); e != nil || out.Unknown.Status != "ok" || *out.Unknown.PassRate != 0.6 || out.Difference != nil {
+		t.Fatalf("ten unknown sessions: %+v %v", out, e)
 	}
 	q := comparisonQuery(m.ID)
 	q.Dimension = "personal_compliance"
@@ -184,7 +191,7 @@ func TestMemoryOutcomeComparisonHTTPReturnsCountsOnly(t *testing.T) {
 	}
 	code, body := call(q + "&dimension=work_task")
 	var out MemoryOutcomeComparison
-	if code != http.StatusOK || json.Unmarshal([]byte(body), &out) != nil || out.Used.Sessions != 10 || !strings.Contains(body, `"not_used":{"sessions":9,"status":"insufficient_data","passed":null,"pass_rate":null}`) {
+	if code != http.StatusOK || json.Unmarshal([]byte(body), &out) != nil || out.Delivered.Sessions != 9 || out.Unknown.Sessions != 9 || !strings.Contains(body, `"not_used":{"sessions":0,"status":"insufficient_data","passed":null,"pass_rate":null}`) {
 		t.Fatal(code, body)
 	}
 	for _, text := range []string{m.Text, "Independent pinned memory checker", "r-trace", "other-mem"} {
@@ -207,13 +214,13 @@ func TestPostgresMemoryOutcomeSessionCounts(t *testing.T) {
 	other.UserID = "someone-else"
 	putOutcome(t, p, other, "leak-user", "u-leak", "mem-1", "work_task", true)
 	counts, e := p.MemoryOutcomeSessionCounts(testCtx, comparisonQuery("mem-1"))
-	want := []MemoryOutcomeSessionCount{{Used: false, Sessions: 9, Passed: 5}, {Used: true, Sessions: 10, Passed: 6}}
-	if e != nil || len(counts) != 2 || counts[0] != want[0] || counts[1] != want[1] {
+	want := []MemoryOutcomeSessionCount{{Used: true, Observation: observationDelivered, Sessions: 9, Passed: 5}, {Observation: observationReturned, Sessions: 1, Passed: 1}, {Observation: observationUnknown, Sessions: 9, Passed: 5}}
+	if e != nil || len(counts) != 3 || counts[0] != want[0] || counts[1] != want[1] || counts[2] != want[2] {
 		t.Fatalf("counts: %+v %v", counts, e)
 	}
 	q := comparisonQuery("mem-1")
 	q.Dimension = "personal_compliance"
-	if counts, e = p.MemoryOutcomeSessionCounts(testCtx, q); e != nil || len(counts) != 1 || counts[0] != (MemoryOutcomeSessionCount{Used: true, Sessions: 1}) {
+	if counts, e = p.MemoryOutcomeSessionCounts(testCtx, q); e != nil || len(counts) != 1 || counts[0] != (MemoryOutcomeSessionCount{Used: true, Sessions: 1, Observation: observationDelivered}) {
 		t.Fatalf("compliance: %+v %v", counts, e)
 	}
 	future := time.Now().Add(time.Hour)

@@ -709,6 +709,7 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 		return nil, errors.New("ids, query or related_to is required")
 	}
 	var found []any
+	var degraded []any
 	project := sessionProjectKey()
 	if len(ids) > 0 {
 		for _, i := range ids {
@@ -741,6 +742,7 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 			return nil, err
 		}
 		found = asList(getOr(res, "items", []any{}))
+		degraded = asList(getOr(res, "degraded", []any{}))
 		if relatedTo == nil { // relation hits come from one lane, so the fused-score floor does not fit them
 			found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan(modes, res))
 		}
@@ -754,7 +756,7 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 		}
 		m["conflict_pending"] = truthy(m["conflict_pending"]) || truthy(m["conflict_id"])
 		kept := host.Obj{}
-		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "conflict_pending", "supersedes", "superseded_by", "score", "lanes"} {
+		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "memory_context", "conflict_pending", "supersedes", "superseded_by", "score", "lanes", "vector_match"} {
 			if v, ok := m[k]; ok && v != nil {
 				kept = append(kept, host.KV{Key: k, Value: v})
 			}
@@ -765,6 +767,9 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 		memories = append(memories, kept)
 	}
 	out := host.Obj{{Key: "memories", Value: memories}, {Key: "authority", Value: "data_only_untrusted"}, {Key: "note", Value: recallNote}}
+	if len(degraded) > 0 {
+		out = append(out, host.KV{Key: "degraded", Value: degraded})
+	}
 	if len(memories) == 0 && len(ids) == 0 && relatedTo == nil {
 		out = append(out, host.KV{Key: "result", Value: host.NoRelatedMemory})
 	}
