@@ -12,6 +12,7 @@ window.ArkismShell = (ctx) => {
       ["home", "홈", () => go("todo"), () => state.view === "todo", count("todo")]
     ] },
     memory: { label: "MEMORY", tabs: [
+      ["overview", "개요", () => go("overview"), () => state.view === "overview"],
       ["memories", "기억", () => go("memories", "active"), () => state.view === "memories", count("memories")],
       ["sessions", "세션", () => go("sessions"), () => state.view === "sessions", count("sessions")],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
