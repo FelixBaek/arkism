@@ -91,6 +91,10 @@ func (p *Postgres) ListMemories(ctx context.Context, in MemoryListInput) ([]Reco
 		w += fmt.Sprintf(` AND (doc->>'reach' IS DISTINCT FROM 'project' OR ($%[1]d <> '' AND doc->>'reach_project' = $%[1]d))`, len(args)+6)
 		args = append(args, *in.ProjectKey)
 	}
+	if in.UpdatedSince != nil {
+		w += fmt.Sprintf(` AND %s > $%d`, pgUpdated, len(args)+6)
+		args = append(args, *in.UpdatedSince)
+	}
 	if !in.IncludeInactive {
 		w += ` AND status='active' AND (doc->'effective_at' IS NULL OR (doc->'effective_at'->>'$date')::timestamptz <= now()) AND (doc->'expires_at' IS NULL OR (doc->'expires_at'->>'$date')::timestamptz > now())`
 	}
@@ -674,4 +678,33 @@ func (p *Postgres) MemoryUseCounts(ctx context.Context, s Scope, ids []string) (
 		out = append(out, c)
 	}
 	return out, pgErr(rows.Err())
+}
+
+func (p *Postgres) MemoryUsageWindow(ctx context.Context, s Scope, since, recent time.Time) ([]MemoryUsageCount, error) {
+	if checkScope(s) != nil || since.IsZero() || recent.Before(since) {
+		return nil, ErrInvalid
+	}
+	rows, err := p.q().Query(ctx, `SELECT it->'memory'->>'id', count(DISTINCT j.id) FILTER (WHERE `+pgDateOf("j")+` >= $6), count(DISTINCT j.id), max(`+pgDateOf("j")+`)
+FROM memory_records j, jsonb_array_elements(CASE WHEN jsonb_typeof(j.doc->'usage'->'items')='array' THEN j.doc->'usage'->'items' ELSE '[]'::jsonb END) it
+WHERE j.collection='jobs' AND j.workspace_id=$1 AND j.project_id=$2 AND j.user_id=$3 AND j.agent_id=$4 AND j.kind='context_usage' AND j.status='done' AND `+pgDateOf("j")+` >= $5 AND it->'memory'->>'collection'='memories'
+AND EXISTS (SELECT 1 FROM memory_records m WHERE m.collection='memories' AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4 AND m.id=it->'memory'->>'id'
+  AND COALESCE((m.doc->>'content_erased')::boolean,false)=false AND COALESCE((m.doc->>'privacy_quarantined')::boolean,false)=false)
+GROUP BY 1 ORDER BY 1`, s.WorkspaceID, s.ProjectID, s.UserID, s.AgentID, since, recent)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	out := []MemoryUsageCount{}
+	for rows.Next() {
+		var c MemoryUsageCount
+		if err = rows.Scan(&c.MemoryID, &c.Recent, &c.Uses, &c.Last); err != nil {
+			return nil, ErrUnavailable
+		}
+		out = append(out, c)
+	}
+	return out, pgErr(rows.Err())
+}
+
+func pgDateOf(alias string) string {
+	return `((` + alias + `.doc->'created_at'->>'$date')::timestamptz)`
 }

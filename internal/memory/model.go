@@ -285,6 +285,8 @@ type Repository interface {
 	MemoryOutcomeSessionCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeSessionCount, error)
 	// MemoryUseCounts aggregates context_usage receipts per memory id (all revisions) in one scope.
 	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
+	// MemoryUsageWindow counts context_usage receipts per live memory created since the first time, and since the second.
+	MemoryUsageWindow(context.Context, Scope, time.Time, time.Time) ([]MemoryUsageCount, error)
 	// ST-820 graph reads; each applies the scope and memoryGraphWhere (reach) filter.
 	MemoryGraphNodes(context.Context, MemoryGraphQuery, []string) ([]Record, error)
 	// MemoryGraphMapNodes returns up to limit visible memories with id after the given one, by id (ST-820 all mode).

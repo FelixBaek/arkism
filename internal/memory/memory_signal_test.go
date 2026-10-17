@@ -311,3 +311,45 @@ func TestMemorySignalRecomputeLosesRaceToDelete(t *testing.T) {
 		t.Fatal("orphan signal rows:", n)
 	}
 }
+
+func (f *fakeRepo) MemoryUsageWindow(_ context.Context, scope Scope, since, recent time.Time) ([]MemoryUsageCount, error) {
+	if checkScope(scope) != nil || since.IsZero() || recent.Before(since) {
+		return nil, ErrInvalid
+	}
+	live := map[string]bool{}
+	for _, m := range f.rows(colMemories) {
+		live[m.ID] = m.Scope == scope && !m.ContentErased && !m.PrivacyQuarantined
+	}
+	by := map[string]*MemoryUsageCount{}
+	for _, r := range f.rows("jobs") {
+		if r.Scope != scope || r.Kind != "context_usage" || r.Status != "done" || r.Usage == nil || r.CreatedAt.Before(since) {
+			continue
+		}
+		seen := map[string]bool{}
+		for _, it := range r.Usage.Items {
+			id := it.Memory.ID
+			if it.Memory.Collection != colMemories || seen[id] || !live[id] {
+				continue
+			}
+			seen[id] = true
+			c := by[id]
+			if c == nil {
+				c = &MemoryUsageCount{MemoryID: id}
+				by[id] = c
+			}
+			c.Uses++
+			if !r.CreatedAt.Before(recent) {
+				c.Recent++
+			}
+			if r.CreatedAt.After(c.Last) {
+				c.Last = r.CreatedAt
+			}
+		}
+	}
+	out := []MemoryUsageCount{}
+	for _, c := range by {
+		out = append(out, *c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].MemoryID < out[j].MemoryID })
+	return out, nil
+}

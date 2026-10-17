@@ -307,6 +307,15 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		out, e := s.ExpireCandidates(r.Context(), bearer(r), in)
 		respond(w, out, e)
 	})
+	mux.HandleFunc("GET /v1/memory_usage", func(w http.ResponseWriter, r *http.Request) {
+		scope, e := parseSourceTraceQuery(r.URL.RawQuery)
+		if e != nil {
+			respond(w, nil, e)
+			return
+		}
+		out, e := s.MemoryUsageSummary(r.Context(), bearer(r), scope)
+		respond(w, out, e)
+	})
 	mux.HandleFunc("GET /v1/memories/{id}/usage", func(w http.ResponseWriter, r *http.Request) {
 		scope, e := parseSourceTraceQuery(r.URL.RawQuery)
 		if e != nil {

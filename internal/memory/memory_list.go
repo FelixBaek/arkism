@@ -24,6 +24,8 @@ type MemoryListInput struct {
 	// ProjectKey (ST-824), when set, lists only what recall would show for that project
 	// (empty key: personal and general). Unset lists every reach, for management screens.
 	ProjectKey *string
+	// UpdatedSince lists only rows changed after this time, so a screen can refresh without reading everything again.
+	UpdatedSince *time.Time
 }
 type MemoryPage struct {
 	Items      []Record `json:"items"`
@@ -71,7 +73,7 @@ func parseMemoryListQuery(raw string) (MemoryListInput, error) {
 		return in, ErrInvalid
 	}
 	for k, v := range q {
-		if len(v) != 1 || !slices.Contains([]string{"workspace_id", "project_id", "user_id", "agent_id", "q", "kind", "status", "include_inactive", "limit", "cursor", "project_key"}, k) {
+		if len(v) != 1 || !slices.Contains([]string{"workspace_id", "project_id", "user_id", "agent_id", "q", "kind", "status", "include_inactive", "limit", "cursor", "project_key", "updated_since"}, k) {
 			return in, ErrInvalid
 		}
 	}
@@ -83,6 +85,13 @@ func parseMemoryListQuery(raw string) (MemoryListInput, error) {
 	}
 	if v, ok := q["project_key"]; ok {
 		in.ProjectKey = &v[0]
+	}
+	if v, ok := q["updated_since"]; ok {
+		t, e := time.Parse(time.RFC3339Nano, v[0])
+		if e != nil {
+			return in, ErrInvalid
+		}
+		in.UpdatedSince = &t
 	}
 	if v, ok := q["include_inactive"]; ok {
 		if v[0] != "true" && v[0] != "false" {
@@ -101,7 +110,7 @@ func parseMemoryListQuery(raw string) (MemoryListInput, error) {
 }
 func memoryListMatches(r Record, in MemoryListInput) bool {
 	return r.Scope == in.Scope && !r.ContentErased && !r.PrivacyQuarantined && (in.IncludeInactive || live(r)) && (in.Status == "" || r.Status == in.Status) && (in.Kind == "" || r.Kind == in.Kind) && strings.Contains(r.Text, in.Query) &&
-		(in.ProjectKey == nil || reachVisible(memoryReach(r), r.ReachProject, *in.ProjectKey))
+		(in.ProjectKey == nil || reachVisible(memoryReach(r), r.ReachProject, *in.ProjectKey)) && (in.UpdatedSince == nil || r.UpdatedAt.After(*in.UpdatedSince))
 }
 
 func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListInput) (MemoryPage, error) {

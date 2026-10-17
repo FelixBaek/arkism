@@ -149,6 +149,9 @@
     if (status < 200 || status >= 300) throw new Error(body.code || `HTTP ${status}`);
     return body;
   }
+  // shortcut: every active memory is kept in the app (counts, 안 쓰는 기억, search); past ~50,000 move those to the server.
+  const MEMORY_CAP = 100000;
+  let lastFullMemories = 0;
   async function listAll(path, extra, cap = 1000) {
     const items = [];
     let cursor = "";
@@ -205,13 +208,9 @@
   }
   const standing = (m) => m.kind === "user" || m.kind === "procedural";
   function usageOf(id) {
-    const items = state.usage.get(id);
-    if (!items) return null;
-    const now = Date.now();
-    const within = (days) => items.filter((u) => now - new Date(u.created_at).getTime() < days * DAY).length;
-    // The server keeps the 10 most recent uses, so a full page means "at least".
-    const capped = (n) => (n >= 10 && items.length >= 10 ? "10+" : String(n));
-    return { d7: within(7), d30: within(30), label7: capped(within(7)), last: items[0]?.created_at || "" };
+    if (!state.usageDone) return null;
+    const u = state.usage.get(id);
+    return { d7: u?.d7 || 0, d30: u?.d30 || 0, label7: String(u?.d7 || 0), last: u?.last || "" };
   }
   // 들어감 · 쓰임 over the last week, from the server's report (`arkism capture` utility).
   const memUse = () => state.data.tools?.memory_use || null;
@@ -350,7 +349,7 @@
 
   // ---------------------------------------------------------------- data
   async function loadAll() {
-    const g = ++generation;
+    const g = ++generation, t0 = performance.now();
     state.loading = true;
     state.usage = new Map();
     state.usageDone = false;
@@ -364,7 +363,7 @@
       const trashReq = loadTrash();
       const usageReq = request(`/v1/skills/usage?${query({ days: 60 })}`).then((r) => new Map((r.items || []).map((u) => [u.skill_id, u])), () => null);
       const [memories, candidates, conflicted, maintenance, skills, prompts, designSystems, tools, crewItems, providers, skillUse, reviewItems, skillTrash] = await Promise.all([
-        listAll("/v1/memories", { status: "active" }),
+        listAll("/v1/memories", { status: "active" }, MEMORY_CAP),
         canReview ? listAll("/v1/memory_candidates", { status: "candidate" }) : [],
         canReview ? listAll("/v1/memory_candidates", { status: "conflicted" }).catch(() => []) : [],
         canReview ? loadMaintenance() : [],
@@ -377,6 +376,8 @@
       ]);
       if (g !== generation) return;
       state.data = { memories, candidates, conflicted, maintenance, skills, prompts, designSystems, tools, crew: crewItems, providers, skillUse, reviews: reviewItems, skillTrash };
+      window.ArkismPerf?.note("load.all", performance.now() - t0, memories.length);
+      lastFullMemories = Date.now();
       state.loading = false;
       state.loadError = "";
       setStatus("ready", "기억 저장소·검색 정상");
@@ -392,20 +393,15 @@
       notice(`불러오지 못했어요: ${e.message}`);
     }
   }
-  // shortcut: one usage call per memory (6 at a time); add a list-level usage summary to the API if this gets slow.
+  // Use counts of every memory in one call (GET /v1/memory_usage: 7·30 days and the last use; unused memories are absent).
   async function loadUsage(g) {
-    const queue = [...state.data.memories];  // one repaint at the end: per-batch repaints of the whole list made startup stutter
-    const worker = async () => {
-      while (queue.length && g === generation) {
-        const m = queue.shift();
-        const items = await request(`/v1/memories/${encodeURIComponent(m.id)}/usage?${query()}`).then((r) => r.items || [], () => []);
-        if (g !== generation) return;
-        state.usage.set(m.id, items);
-      }
-    };
-    await Promise.all(Array.from({ length: 6 }, worker));
+    const t0 = performance.now();
+    const items = await request(`/v1/memory_usage?${query()}`).then((r) => r.items || [], () => null);
     if (g !== generation) return;
+    if (!items) return; // older server or no read:usage: 쓰임 stays "…" instead of calling every memory one by one
+    state.usage = new Map(items.map((u) => [u.id, u]));
     state.usageDone = true;
+    window.ArkismPerf?.note("load.usage", performance.now() - t0, items.length);
     render(false);
   }
 
@@ -432,6 +428,32 @@
     render(false);
   }
 
+  // The 10-second refresh reads only memories changed since the newest one here (include_inactive also brings the ones
+  // that left the active list). Every 10 minutes it reads them all again: an erased or expired memory never shows up as a change.
+  const FULL_MEMORIES = 10 * 60000;
+  const liveNow = (m, now) => m.status === "active" && !(m.effective_at && Date.parse(m.effective_at) > now) && !(m.expires_at && Date.parse(m.expires_at) <= now);
+  async function syncMemories(old) {
+    // Only server times go into updated_since: a PC clock ahead of the server would skip new memories.
+    const newest = (old || []).reduce((t, m) => Math.max(t, Date.parse(m.updated_at) || 0), 0);
+    if (!newest || Date.now() - lastFullMemories > FULL_MEMORIES) {
+      const all = await listAll("/v1/memories", { status: "active" }, MEMORY_CAP);
+      lastFullMemories = Date.now();
+      void loadUsage(generation); // use counts refresh with the full list, every 10 minutes
+      return all;
+    }
+    const rows = await listAll("/v1/memories", { include_inactive: "true", updated_since: new Date(newest - 2000).toISOString() }, MEMORY_CAP);
+    const now = Date.now(), live = old.filter((m) => liveNow(m, now)); // one that just expired never comes back as a change
+    const byId = new Map(live.map((m) => [m.id, m]));
+    let changed = live.length !== old.length;
+    for (const r of rows) {
+      const had = byId.get(r.id), keep = liveNow(r, now);
+      if (keep ? had?.revision === r.revision && had?.updated_at === r.updated_at : !had) continue;
+      changed = true;
+      if (keep) byId.set(r.id, r); else byId.delete(r.id);
+    }
+    return changed ? [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)) : old;
+  }
+
   // Keep the current page fresh without a loading screen or rebuilding unchanged DOM.
   let syncing = false, syncAgain = false;
   const syncPage = () => [state.view, state.memTab, state.skillTab, state.settingsTab].join("|");
@@ -445,7 +467,7 @@
     if (view === "memories" && ["originals", "past"].includes(state.memTab)) return;
     if (view === "settings" && state.settingsTab !== "models") return;
     syncing = true;
-    const g = generation, page = syncPage(), before = state.data;
+    const g = generation, page = syncPage(), before = state.data, t0 = performance.now();
     const reads = [];
     const add = (key, promise) => reads.push({ key, old: before[key], promise });
     const items = (path, extra = {}) => request(`${path}?${query(extra)}`).then((r) => r.items || []);
@@ -456,7 +478,7 @@
       if (view === "memories" && ["digests", "merge"].includes(state.memTab)) digests.refresh();
       if (view === "settings") add("providers", request(`/v1/providers?${query()}`).then((r) => r.providers));
       if (["todo", "memories"].includes(view)) {
-        add("memories", listAll("/v1/memories", { status: "active" }));
+        add("memories", syncMemories(before.memories));
         if (state.caps?.actions?.review_list) {
           add("candidates", listAll("/v1/memory_candidates", { status: "candidate" }));
           add("conflicted", listAll("/v1/memory_candidates", { status: "conflicted" }));
@@ -478,7 +500,7 @@
       const snapshot = (v) => JSON.stringify(v instanceof Map ? [...v] : v, (key, value) => key === "_by" ? undefined : value);
       results.forEach((result, i) => {
         const { key, old } = reads[i];
-        if (result.status !== "fulfilled" || result.value == null || state.data[key] !== old || snapshot(old) === snapshot(result.value)) return;
+        if (result.status !== "fulfilled" || result.value == null || result.value === old || state.data[key] !== old || snapshot(old) === snapshot(result.value)) return;
         if (key === "skills") {
           const previous = new Map((old || []).map((r) => [r.id, r]));
           state.versions = new Map(result.value.filter((r) => r.version_id === previous.get(r.id)?.version_id && r.updated_at === previous.get(r.id)?.updated_at && state.versions.has(r.version_id)).map((r) => [r.version_id, state.versions.get(r.version_id)]));
@@ -489,6 +511,7 @@
       });
       if (changed) render();
     } finally {
+      window.ArkismPerf?.note(`sync.${view}`, performance.now() - t0);
       syncing = false;
       if (syncAgain) { syncAgain = false; queueMicrotask(syncVisible); }
     }
@@ -989,7 +1012,12 @@
     syncExtraAgents();
     shell?.sync();
   }
+  // Every screen redraw is timed (설정 → 고급 → 속도 기록); size is how many rows or cards it drew.
   function render(resetDetail = true) {
+    const t0 = performance.now();
+    try { renderNow(resetDetail); } finally { window.ArkismPerf?.note(`render.${state.view}`, performance.now() - t0, $("#table").childElementCount); }
+  }
+  function renderNow(resetDetail) {
     if (state.view !== "todo") state.start = 0; // 시작 2·3단계 lives on 홈 only
     if (state.view !== "routing") routing.leave();
     if (state.view !== "settings" || state.settingsTab !== "routing") routing.leaveSettings(); // 모델 설정 changes show up next time
@@ -1520,7 +1548,7 @@
     const u = usageOf(m.id);
     if (!u) return badge("…");
     if (!u.d30) return badge(fresh ? "새 기억" : "안 불림", fresh ? "new" : "");
-    return badge(`${u.d30 >= 10 ? "10+" : u.d30}번 참고`);
+    return badge(`${u.d30}번 참고`);
   }
   function memCell(m, meta) {
     const cell = el("div", "cell mem-cell");
@@ -1596,7 +1624,8 @@
 
     const repoOk = (m) => !state.repo || (state.repo === "shared" ? !memRepo(m) : memRepo(m) === state.repo);
     const items = source.filter((m) => (state.kind === "all" || m.kind === state.kind) && repoOk(m) && matches(`${m.text} ${m.summary || ""}`));
-    const time = (m) => new Date(m.created_at).getTime();
+    // Parse each date once: parsing inside the comparison ran ~20 times per memory and made a 10,000-memory list redraw slowly.
+    const at = new Map(items.map((m) => [m, Date.parse(m.created_at) || 0])), time = (m) => at.get(m);
     if (state.sort === "recent") items.sort((a, b) => time(b) - time(a));
     if (state.sort === "old") items.sort((a, b) => time(a) - time(b));
     if (state.sort === "used") items.sort((a, b) => (usageOf(b.id)?.d30 || 0) - (usageOf(a.id)?.d30 || 0));
@@ -1701,10 +1730,11 @@
   }
   async function reloadMemories() {
     const [candidates, conflicted, memories, maintenance] = await Promise.all([
-      listAll("/v1/memory_candidates", { status: "candidate" }), listAll("/v1/memory_candidates", { status: "conflicted" }).catch(() => []), listAll("/v1/memories", { status: "active" }),
+      listAll("/v1/memory_candidates", { status: "candidate" }), listAll("/v1/memory_candidates", { status: "conflicted" }).catch(() => []), listAll("/v1/memories", { status: "active" }, MEMORY_CAP),
       loadMaintenance()
     ]);
     Object.assign(state.data, { candidates, conflicted, memories, maintenance });
+    lastFullMemories = Date.now();
     render();
   }
   // Conflict resolution and candidate review commit together on the server.
@@ -4016,7 +4046,7 @@
       [standing(m) ? "횟수" : `최근 ${memUse()?.days || 7}일`, uses],
       ["저장 방식", savedHow(m)]
     ]));
-    if (!standing(m) && u) use.append(el("p", "meta", "질문에 자료로 들어간 횟수예요. 최근 10번까지 기록해요."));
+    if (!standing(m) && u) use.append(el("p", "meta", "질문에 자료로 들어간 횟수예요. 최근 30일만 세요."));
     body.append(use);
     window.ArkismMemoryEvaluation.mount({ container: body, record: m, scope: { ...state.scope },
       request, el, section, facts, button });

@@ -87,6 +87,9 @@ func NewLocalStandaloneAuthorizer(cfg LocalStandaloneConfig) (*LocalStandaloneAu
 	return &LocalStandaloneAuthorizer{ownerHash: owner, workerHash: worker}, nil
 }
 
+// ScopeOnly: the decision reads only the token, scope and action, never the resource id.
+func (a *LocalStandaloneAuthorizer) ScopeOnly() bool { return true }
+
 func (a *LocalStandaloneAuthorizer) Authorize(_ context.Context, token string, request Authorization) (Decision, error) {
 	if a == nil || strings.TrimSpace(token) == "" || strings.TrimSpace(request.Action) == "" || !validScope(request.Scope) {
 		return Decision{}, ErrDenied
