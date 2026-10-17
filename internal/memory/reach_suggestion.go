@@ -207,7 +207,7 @@ func (s *Service) DismissReachSuggestion(ctx context.Context, token, id string, 
 		}
 		sg := currentReachSuggestion(r, usedProjectsAt(uses, r.Revision))
 		key := reachSuggestionKey(sg.Reach, sg.ReachProject)
-		if key == reachSuggestionKey(memoryReach(r), r.ReachProject) || key != reachSuggestionKey(in.Reach, in.ReachProject) {
+		if key == reachSuggestionKey(memoryReach(r), r.ReachProject) || key != reachSuggestionKey(in.Reach, in.ReachProject) || key == r.ReachSuggestionDismissed {
 			return ErrConflict
 		}
 		r.ReachSuggestionDismissed = key

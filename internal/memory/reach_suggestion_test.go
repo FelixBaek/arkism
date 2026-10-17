@@ -115,6 +115,9 @@ func TestReachSuggestionsHumanDecides(t *testing.T) {
 	if find(list(f.human), plain.ID) != nil {
 		t.Fatal("dismissed suggestion still shown")
 	}
+	if _, e = dismiss(f.human, plain, item.Suggestion); !errors.Is(e, ErrConflict) {
+		t.Fatal("an already dismissed suggestion was dismissed again", e)
+	}
 	// Accepting is the ST-824 reach change: the suggestion then matches and disappears.
 	sg := find(list(f.human), rule.ID).Suggestion
 	if _, e = f.svc.SetMemoryReach(testCtx, f.human, rule.ID, MemoryReachInput{Scope: scopeA, ExpectedRevision: rule.Revision, Reach: sg.Reach, ReachProject: "owner/a"}); e != nil {
