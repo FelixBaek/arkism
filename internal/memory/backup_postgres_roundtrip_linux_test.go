@@ -132,6 +132,13 @@ func TestPostgresBackupBundleDeletionAndExpiry(t *testing.T) {
 	if err = restoredDB.SearchReady(testCtx); err != nil {
 		t.Fatal("restored schema/RLS not ready", err)
 	}
+	history := schemaSnapshot(t, restoredDB)
+	if err = restoredDB.Init(testCtx); err != nil {
+		t.Fatal("restored migration history cannot initialize", err)
+	}
+	if !reflect.DeepEqual(history, schemaSnapshot(t, restoredDB)) {
+		t.Fatal("restore initialization replayed applied schema")
+	}
 	restored := newFixture(t)
 	restored.svc.Repo = restoredDB
 	restored.svc.BlobDirectory = filepath.Join(extracted, "files")

@@ -73,84 +73,14 @@ func (p *Postgres) q() pgQuery {
 	return postgresQuery{store: p}
 }
 
-func (p *Postgres) Init(ctx context.Context) error {
-	_, err := p.q().Exec(ctx, `CREATE SCHEMA IF NOT EXISTS arkism; REVOKE ALL ON SCHEMA arkism FROM PUBLIC; CREATE SCHEMA IF NOT EXISTS extensions; CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions`)
-	if err != nil {
-		return ErrUnavailable
-	}
-	_, err = p.q().Exec(ctx, `CREATE TABLE IF NOT EXISTS memory_records (
-collection text NOT NULL, id text NOT NULL, workspace_id text NOT NULL, project_id text NOT NULL,
-user_id text NOT NULL DEFAULT '', agent_id text NOT NULL DEFAULT '', revision bigint NOT NULL,
-status text NOT NULL DEFAULT '', kind text NOT NULL DEFAULT '', updated_at timestamptz,
-run_at timestamptz, lease_until timestamptz, lease_token text NOT NULL DEFAULT '', attempts integer NOT NULL DEFAULT 0,
-	payload bytea NOT NULL, doc jsonb NOT NULL, embedding vector(1024), embedding_space text, embedding_dimension integer,
-PRIMARY KEY (collection,id))`)
-	if err != nil {
-		return ErrUnavailable
-	}
-	_, err = p.q().Exec(ctx, `CREATE INDEX IF NOT EXISTS memory_records_scope ON memory_records (collection,workspace_id,project_id,user_id,agent_id)`)
-	if err != nil {
-		return ErrUnavailable
-	}
-	_, err = p.q().Exec(ctx, `ALTER TABLE memory_records ADD COLUMN IF NOT EXISTS embedding vector(1024); ALTER TABLE memory_records ADD COLUMN IF NOT EXISTS embedding_space text; ALTER TABLE memory_records ADD COLUMN IF NOT EXISTS embedding_dimension integer`)
-	if err != nil {
-		return ErrUnavailable
-	}
-	_, err = p.q().Exec(ctx, `CREATE INDEX IF NOT EXISTS memory_records_jobs ON memory_records (collection,status,run_at,lease_until)`)
-	if err != nil {
-		return ErrUnavailable
-	}
-	for _, stmt := range []string{
-		`CREATE INDEX IF NOT EXISTS memory_records_scope_id ON memory_records(collection,workspace_id,project_id,user_id,agent_id,id)`,
-		`CREATE INDEX IF NOT EXISTS memory_records_scope_state ON memory_records(collection,workspace_id,project_id,user_id,agent_id,status,updated_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS memory_records_keywords ON memory_records USING gin ((doc->'keywords_lower'))`,
-		`CREATE INDEX IF NOT EXISTS memory_records_document ON memory_records USING gin (doc jsonb_path_ops)`,
-		`CREATE INDEX IF NOT EXISTS memory_records_fts ON memory_records USING gin (` + pgTextSearchExpression + `)`,
-	} {
-		if _, err = p.q().Exec(ctx, stmt); err != nil {
-			return ErrUnavailable
-		}
-	}
-	if err = p.initSearchTokens(ctx); err != nil {
-		return err
-	}
-	if _, err = p.q().Exec(ctx, `CREATE TABLE IF NOT EXISTS memory_storage_metadata (key text PRIMARY KEY, value bytea NOT NULL)`); err != nil {
-		return ErrUnavailable
-	}
-	// Defense in depth for Supabase installations with broad default grants.
-	if _, err = p.q().Exec(ctx, `REVOKE ALL ON ALL TABLES IN SCHEMA arkism FROM PUBLIC;
-DO $$ DECLARE role_name text; BEGIN
-  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role'] LOOP
-    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname=role_name) THEN
-      EXECUTE format('REVOKE ALL ON SCHEMA arkism FROM %I', role_name);
-      EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA arkism FROM %I', role_name);
-    END IF;
-  END LOOP;
-END $$;`); err != nil {
-		return ErrUnavailable
-	}
-	var identity [32]byte
-	if _, err = rand.Read(identity[:]); err != nil {
-		return ErrUnavailable
-	}
-	if _, err = p.q().Exec(ctx, `INSERT INTO memory_storage_metadata(key,value) VALUES('storage_identity',$1) ON CONFLICT (key) DO NOTHING`, identity[:]); err != nil {
-		return ErrUnavailable
-	}
-	if err = p.initTraceSchema(ctx); err != nil {
-		return err
-	}
-	if err = p.initPrivacySchema(ctx); err != nil {
-		return err
-	}
-	if err = p.initCodeGraphSchema(ctx); err != nil {
-		return err
-	}
-	if err = p.InitRLS(ctx); err != nil {
-		return err
-	}
-	return p.initRecoveryWriteGate(ctx)
-}
 func (p *Postgres) SearchReady(ctx context.Context) error {
+	if err := checkSchemaHistory(ctx, p.q(), schemaMigrations(), true); err != nil {
+		return err
+	}
+	return p.checkSearchSchema(ctx)
+}
+
+func (p *Postgres) checkSearchSchema(ctx context.Context) error {
 	var ok bool
 	if err := p.q().QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='vector') AND to_regclass('arkism.memory_records') IS NOT NULL AND to_regclass('arkism.memory_storage_metadata') IS NOT NULL AND to_regclass('arkism.memory_records_fts') IS NOT NULL AND to_regclass('arkism.memory_records_keywords') IS NOT NULL AND to_regclass('arkism.memory_records_search_tokens') IS NOT NULL
 AND (SELECT count(*)=5 AND bool_and(relrowsecurity AND relforcerowsecurity) FROM pg_class WHERE oid=ANY(ARRAY[to_regclass('arkism.memory_records'),to_regclass('arkism.execution_traces'),to_regclass('arkism.source_events'),to_regclass('arkism.entities'),to_regclass('arkism.relations')]))

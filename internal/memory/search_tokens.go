@@ -231,25 +231,3 @@ WHERE m.collection=v.c AND m.id=v.i AND m.revision=v.r AND m.search_tokens IS NU
 		lastCollection, lastID = cols[len(cols)-1], ids[len(ids)-1]
 	}
 }
-
-// initSearchTokens adds the column and its index (both cheap on a large table:
-// a nullable column without default is a catalog change, and the GIN index
-// starts empty) and then backfills within the time Init has left.
-func (p *Postgres) initSearchTokens(ctx context.Context) error {
-	for _, stmt := range []string{
-		`ALTER TABLE memory_records ADD COLUMN IF NOT EXISTS search_tokens tsvector`,
-		`CREATE INDEX IF NOT EXISTS memory_records_search_tokens ON memory_records USING gin (search_tokens)`,
-		// Lets the backfill (and every later Init) find unfilled rows without a scan.
-		`CREATE INDEX IF NOT EXISTS memory_records_search_tokens_pending ON memory_records (collection,id) WHERE ` + searchTokensPending,
-	} {
-		if _, err := p.q().Exec(ctx, stmt); err != nil {
-			return ErrUnavailable
-		}
-	}
-	budget := 30 * time.Second
-	if deadline, ok := ctx.Deadline(); ok {
-		budget = min(budget, time.Until(deadline)/2)
-	}
-	_, _, err := p.BackfillSearchTokens(ctx, budget)
-	return err
-}

@@ -2,7 +2,6 @@ package memory
 
 import (
 	"context"
-	"strings"
 )
 
 // A detached artifact still has provenance in its durable cleanup intent. Use
@@ -51,58 +50,6 @@ func (p *Postgres) checkArtifactHoldBoundary(ctx context.Context, scope Scope, i
 	}
 	if blocked {
 		return ErrConflict
-	}
-	return nil
-}
-
-// SECURITY DEFINER changes current_user, so check the original SQL role (SET
-// ROLE, or the session login when no role is set), never the function owner.
-// Normal application callers must pass the token permission checks below.
-const artifactPrivilegedInvoker = `EXISTS (SELECT 1 FROM pg_catalog.pg_roles
- WHERE rolname=COALESCE(NULLIF(current_setting('role',true),'none'),session_user::text)
- AND (rolsuper OR rolbypassrls OR rolname='arkism_init'))`
-
-func (p *Postgres) initArtifactPrivacyRLS(ctx context.Context) error {
-	// Only code-owned kind constants enter these function definitions.
-	kinds := "ARRAY['" + strings.Join(erasureJobKinds, "','") + "']::text[]"
-	pairs := strings.NewReplacer("$1::text[]", kinds, "$2", "'"+privacyDeletionKind+"'", "memory_records", "arkism.memory_records").Replace(artifactPrivacyPairs)
-	statements := []string{
-		`CREATE OR REPLACE FUNCTION arkism.artifact_gc_held(blob_digest text) RETURNS boolean
- LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,arkism AS $body$
- BEGIN
-  IF NOT (arkism.has_any_permission('storage:internal') OR ` + artifactPrivilegedInvoker + `) THEN
-   RAISE EXCEPTION 'artifact GC permission denied' USING ERRCODE='42501';
-  END IF;
-  RETURN EXISTS (SELECT 1` + pairs + `
-   AND a->>'digest'=blob_digest
-   AND (p.doc#>>'{privacy_deletion,state}'='held' OR p.doc#>>'{privacy_deletion,legal_hold_status}'='held'));
- END $body$`,
-		`CREATE OR REPLACE FUNCTION arkism.artifact_cleanup_pending(org text,project text,subject_id text,agent text,job_id text,blob_digest text) RETURNS boolean
- LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,arkism AS $body$
- BEGIN
-  IF NOT (arkism.has_permission(org,project,'db:read') OR ` + artifactPrivilegedInvoker + `) THEN
-   RAISE EXCEPTION 'artifact hold permission denied' USING ERRCODE='42501';
-  END IF;
-  RETURN EXISTS (SELECT 1 FROM arkism.memory_records j
-   CROSS JOIN LATERAL jsonb_array_elements(COALESCE(NULLIF(j.doc#>'{source_memory_erasure,pending_artifacts}','null'::jsonb),'[]'::jsonb)) a
-   JOIN arkism.memory_records b ON b.collection='blobs' AND b.id=a->>'digest'
-    AND b.workspace_id='__memory_blobs__' AND b.project_id='__memory_blobs__' AND b.user_id='' AND b.agent_id='' AND b.status='pending'
-   WHERE j.collection='jobs' AND j.kind=ANY(` + kinds + `) AND j.id=job_id
-    AND j.workspace_id=org AND j.project_id=project AND j.user_id=subject_id AND j.agent_id=agent AND a->>'digest'=blob_digest);
- END $body$`,
-		`REVOKE ALL ON FUNCTION arkism.artifact_gc_held(text),arkism.artifact_cleanup_pending(text,text,text,text,text,text) FROM PUBLIC`,
-		`DO $$ DECLARE role_name text; BEGIN
-  FOREACH role_name IN ARRAY ARRAY['anon','authenticated','service_role','arkism_app'] LOOP
-   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname=role_name) THEN
-    EXECUTE format('GRANT EXECUTE ON FUNCTION arkism.artifact_gc_held(text),arkism.artifact_cleanup_pending(text,text,text,text,text,text) TO %I',role_name);
-   END IF;
-  END LOOP;
- END $$`,
-	}
-	for _, statement := range statements {
-		if _, err := p.q().Exec(ctx, statement); err != nil {
-			return pgErr(err)
-		}
 	}
 	return nil
 }

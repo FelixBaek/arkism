@@ -31,6 +31,8 @@ on:
       - "desktop/build-unix.sh"
       - "desktop/installer/**"
       - "desktop/src-tauri/**"
+      - "internal/memory/migrations/**"
+      - "internal/memory/schema_migrations*.go"
   workflow_dispatch:
     inputs:
       version:

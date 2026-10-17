@@ -11,43 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Code graph tables. They carry organization_id/project_id like the trace
-// tables, so InitRLS gives them the same per-project policies.
+// Code graph tables share the baseline's per-project RLS policies.
 var codeGraphTables = []string{colCodeRepos, colCodeSymbols, colCodeEdges}
-
-func (p *Postgres) initCodeGraphSchema(ctx context.Context) error {
-	for _, stmt := range []string{
-		`CREATE TABLE IF NOT EXISTS code_repos (
-organization_id text NOT NULL, project_id text NOT NULL, repo text NOT NULL,
-commit_sha text NOT NULL DEFAULT '', indexed_at timestamptz, updated_at timestamptz NOT NULL, revision bigint NOT NULL,
-stats jsonb NOT NULL DEFAULT '{}'::jsonb, files jsonb NOT NULL DEFAULT '{}'::jsonb,
-PRIMARY KEY (organization_id,project_id,repo))`,
-		`CREATE TABLE IF NOT EXISTS code_symbols (
-organization_id text NOT NULL, project_id text NOT NULL, repo text NOT NULL, id text NOT NULL,
-path text NOT NULL, lang text NOT NULL, kind text NOT NULL, name text NOT NULL, qname text NOT NULL,
-signature text NOT NULL DEFAULT '', start_line integer NOT NULL, end_line integer NOT NULL, exported boolean NOT NULL DEFAULT false, doc text NOT NULL DEFAULT '',
-search tsvector GENERATED ALWAYS AS (to_tsvector('simple'::regconfig,
-  name || ' ' || regexp_replace(name, '([a-z0-9])([A-Z])', '\1 \2', 'g') || ' ' || regexp_replace(qname, '[^A-Za-z0-9_]+', ' ', 'g'))) STORED,
-PRIMARY KEY (organization_id,project_id,repo,id),
-FOREIGN KEY (organization_id,project_id,repo) REFERENCES code_repos(organization_id,project_id,repo) ON DELETE CASCADE)`,
-		`CREATE INDEX IF NOT EXISTS code_symbols_path ON code_symbols(organization_id,project_id,repo,path)`,
-		`CREATE INDEX IF NOT EXISTS code_symbols_name ON code_symbols(organization_id,project_id,lower(name))`,
-		`CREATE INDEX IF NOT EXISTS code_symbols_qname ON code_symbols(organization_id,project_id,qname)`,
-		`CREATE INDEX IF NOT EXISTS code_symbols_search ON code_symbols USING gin (search)`,
-		`CREATE TABLE IF NOT EXISTS code_edges (
-organization_id text NOT NULL, project_id text NOT NULL, repo text NOT NULL,
-from_id text NOT NULL, to_id text NOT NULL, kind text NOT NULL, path text NOT NULL, line integer NOT NULL,
-PRIMARY KEY (organization_id,project_id,repo,from_id,to_id,kind),
-FOREIGN KEY (organization_id,project_id,repo) REFERENCES code_repos(organization_id,project_id,repo) ON DELETE CASCADE)`,
-		`CREATE INDEX IF NOT EXISTS code_edges_to ON code_edges(organization_id,project_id,repo,to_id,kind)`,
-		`CREATE INDEX IF NOT EXISTS code_edges_path ON code_edges(organization_id,project_id,repo,path)`,
-	} {
-		if _, err := p.q().Exec(ctx, stmt); err != nil {
-			return pgErr(err)
-		}
-	}
-	return nil
-}
 
 const codeRepoColumns = `repo,commit_sha,indexed_at,updated_at,revision,stats,
 (SELECT count(*) FROM jsonb_object_keys(files)),

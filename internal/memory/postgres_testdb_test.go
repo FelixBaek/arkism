@@ -88,3 +88,6 @@ func pgCollection(t *testing.T, p *Postgres, col string) []Record {
 	}
 	return out
 }
+
+// Older trace tests explicitly request schema setup after isolatedPostgres.
+func (p *Postgres) initTraceSchema(ctx context.Context) error { return p.Init(ctx) }
