@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Postgres for CI tests. GitHub-hosted jobs use the service container; the self-hosted runner has no
-# docker, so it starts a throwaway local cluster in RUNNER_TEMP (killed with the job's process group).
+# Postgres for CI tests: a throwaway local cluster with pgvector in RUNNER_TEMP, on a random loopback port.
+# No docker (the self-hosted runner has none), so no service container. The cluster dies with the job.
 # Writes POSTGRES_TEST_* to GITHUB_ENV. No password or secret is involved: trust auth on loopback only.
 set -euo pipefail
-if [ -n "${SERVICE_PORT:-}" ]; then
-  echo "POSTGRES_TEST_DSN=postgres://arkism@127.0.0.1:${SERVICE_PORT}/arkism_ci?sslmode=disable" >> "$GITHUB_ENV"
-  if [ -n "${SERVICE_CONTAINER:-}" ]; then echo "POSTGRES_TEST_CONTAINER=${SERVICE_CONTAINER}" >> "$GITHUB_ENV"; fi
-  exit 0
+if [ "${RUNNER_ENVIRONMENT:-}" = github-hosted ]; then
+  # GitHub-hosted Ubuntu ships PostgreSQL without pgvector; the self-hosted runner has both preinstalled.
+  major=$(find /usr/lib/postgresql -mindepth 1 -maxdepth 1 -printf '%f\n' | sort -V | tail -1)
+  sudo apt-get update -q >/dev/null
+  sudo apt-get install -y -q "postgresql-${major}-pgvector" >/dev/null
 fi
 bin=$(find /usr/lib/postgresql -mindepth 2 -maxdepth 2 -name bin | sort -V | tail -1)
 [ -x "$bin/initdb" ] || { echo "::error::No local Postgres on this runner (install postgresql and pgvector)"; exit 1; }
