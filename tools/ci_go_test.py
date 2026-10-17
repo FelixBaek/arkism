@@ -28,7 +28,7 @@ RERUNNABLE = {
     "TestSessionArchiveZcodeLongMetadata", "TestPostgresSessionArchiveZcodeLongMetadata",  # 15s search deadline
     "TestPostgresSessionArchiveSQLiteLargeMessage",  # 10s read deadline
     "TestSkillComparisonRunner", "TestPostgresSkillComparisonRunner",  # adapter timeout
-    "TestPostgresAutomaticWorkWriterExactRetryAndConflict",  # bounded hook drain
+    "TestPostgresAutomaticWorkWriterExactRetryAndConflict",  # waits up to 30s for hook processes
     "TestCLIRunBoundedOutputTimeoutAndFailures",  # 4s budget per case
 }
 
