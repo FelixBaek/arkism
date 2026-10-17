@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func maintenanceFixture(t *testing.T) (*fixture, Record, Record, MaintenanceInput) {
@@ -188,5 +189,101 @@ func TestMaintenanceDismissOfAChangedPairGoesStale(t *testing.T) {
 	}
 	if got, _ := f.repo.Get(testCtx, colMaintenance, scopeA, p.ID); got.Status != "stale" {
 		t.Fatal("changed pair not stale", got.Status)
+	}
+}
+
+// signalFixture is an active memory of the given kind with a stored ST-813 signal of samples/passed.
+func signalFixture(t *testing.T, kind string, samples, passed int) (*fixture, Record, MaintenanceInput) {
+	f := newFixture(t)
+	cand := f.create(f.human, "memory_candidates", CreateInput{Scope: scopeA, Kind: kind, Text: "PR 본문에 광고 문구를 넣지 않는다", Sources: refs(f.source())})
+	approved := f.transition(f.human, "memory_candidates", cand.ID, ChangeInput{Scope: scopeA, ExpectedRevision: cand.Revision, Status: "approved"})
+	m := f.transition(f.human, "memories", approved.ID, ChangeInput{Scope: scopeA, ExpectedRevision: approved.Revision, Status: "active"})
+	ref := Ref{Collection: "memories", ID: m.ID, Revision: m.Revision}
+	sig := MemorySignal{Memory: ref, Samples: samples, Passed: passed}
+	now := time.Now().UTC()
+	if err := f.repo.Insert(testCtx, colJobs, Record{ID: memorySignalID(scopeA, m.ID), Scope: scopeA, Kind: memorySignalKind, Status: JobStatusDone, Revision: 1,
+		Target: &ref, MemorySignal: &sig, CreatedBy: "human-1", CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	typ := "rule_often_violated"
+	if kind == "lesson" {
+		typ = "lesson_often_failing"
+	}
+	return f, m, MaintenanceInput{Scope: scopeA, Proposal: MaintenanceProposal{Type: typ, Reason: "low_pass_rate", Memory: &ref,
+		Evidence: &MaintenanceEvidence{Samples: samples, Passed: passed, PassRate: 0.99}}}
+}
+
+// ST-814 / FR-079 / TC-MAINT-010: a signal proposal carries the stored counts as evidence and a person's answer changes no memory.
+func TestMaintenanceSignalProposalOnlyProposes(t *testing.T) {
+	f, m, in := signalFixture(t, "procedural", 12, 3)
+	p, err := f.svc.ProposeMaintenance(testCtx, f.human, in)
+	if err != nil || p.Status != "open" || p.Kind != "rule_often_violated" || p.Maintenance.Evidence.PassRate != 0.25 {
+		t.Fatal("propose", p.Status, p.Kind, err)
+	}
+	if again, _ := f.svc.ProposeMaintenance(testCtx, f.human, in); !again.Duplicate || again.ID != p.ID {
+		t.Fatal("the same memory was proposed twice")
+	}
+	if _, err = f.svc.DecideMaintenance(testCtx, f.agent, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "accept"}); !errors.Is(err, ErrDenied) {
+		t.Fatal("an agent decided", err)
+	}
+	if _, err = f.svc.DecideMaintenance(testCtx, f.human, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "swap"}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("swap on one memory", err)
+	}
+	done, err := f.svc.DecideMaintenance(testCtx, f.human, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "accept"})
+	if err != nil || done.Status != "accepted" {
+		t.Fatal("accept", err)
+	}
+	if got := f.get(f.human, "memories", scopeA, m.ID); got.Status != "active" || got.Revision != m.Revision {
+		t.Fatal("accepting a signal proposal changed the memory", got.Status, got.Revision)
+	}
+	if again, _ := f.svc.ProposeMaintenance(testCtx, f.human, in); !again.Duplicate || again.Status != "accepted" {
+		t.Fatal("a decided memory was proposed again")
+	}
+
+	f, _, in = signalFixture(t, "lesson", 10, 2)
+	if p, err = f.svc.ProposeMaintenance(testCtx, f.human, in); err != nil || p.Kind != "lesson_often_failing" {
+		t.Fatal("lesson", err)
+	}
+	if d, err := f.svc.DecideMaintenance(testCtx, f.human, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "dismiss"}); err != nil || d.Status != "dismissed" {
+		t.Fatal("dismiss", err)
+	}
+}
+
+func TestMaintenanceSignalProposalEvidenceMustMatch(t *testing.T) {
+	f, _, in := signalFixture(t, "procedural", 12, 3)
+	bad := in
+	bad.Proposal.Evidence = &MaintenanceEvidence{Samples: 12, Passed: 1}
+	if _, err := f.svc.ProposeMaintenance(testCtx, f.human, bad); !errors.Is(err, ErrConflict) {
+		t.Fatal("made-up evidence accepted", err)
+	}
+	bad = in
+	bad.Proposal.Type = "lesson_often_failing"
+	if _, err := f.svc.ProposeMaintenance(testCtx, f.human, bad); !errors.Is(err, ErrInvalid) {
+		t.Fatal("a rule proposed as a lesson", err)
+	}
+	for _, mut := range []func(*MaintenanceProposal){
+		func(p *MaintenanceProposal) { p.Reason = "자주 어김" },
+		func(p *MaintenanceProposal) { p.Evidence = nil },
+		func(p *MaintenanceProposal) { p.Evidence = &MaintenanceEvidence{Samples: 2, Passed: 3} },
+		func(p *MaintenanceProposal) { p.Keep = *p.Memory },
+	} {
+		bad = in
+		mut(&bad.Proposal)
+		if _, err := f.svc.ProposeMaintenance(testCtx, f.human, bad); !errors.Is(err, ErrInvalid) {
+			t.Fatal("invalid signal proposal accepted", err)
+		}
+	}
+	bad = in
+	stale := *in.Proposal.Memory
+	stale.Revision++
+	bad.Proposal.Memory = &stale
+	if _, err := f.svc.ProposeMaintenance(testCtx, f.human, bad); !errors.Is(err, ErrConflict) {
+		t.Fatal("old revision accepted", err)
+	}
+	if err := f.repo.Delete(testCtx, colJobs, scopeA, memorySignalID(scopeA, in.Proposal.Memory.ID), 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.ProposeMaintenance(testCtx, f.human, in); !errors.Is(err, ErrConflict) {
+		t.Fatal("proposed without a stored signal", err)
 	}
 }

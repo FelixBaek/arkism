@@ -9,6 +9,11 @@ package crew
 // Pairs come from Arkism search (words + meaning) and a letter-pair overlap, within one kind. A model judges each
 // pair; without one (ARKISM_MAINTAIN_LLM=0) only near-identical wording is proposed. A contradiction always keeps the
 // newer memory. Proposals carry ids and a reason code, never memory text; the local log keeps counts only.
+//
+// ST-814: the same night reads each memory's trust signal (ST-813) and proposes, one memory at a time, a rule
+// that is often broken or a lesson that often fails. Only memories with enough judged samples
+// (ARKISM_MAINTAIN_SIGNAL_MIN_SAMPLES) and a pass rate at or below ARKISM_MAINTAIN_SIGNAL_MAX_PASS_RATE count.
+// The proposal carries the signal's counts as evidence; a person decides, and deciding changes no memory.
 
 import (
 	"bytes"
@@ -34,7 +39,9 @@ const maintainDoc = `Nightly memory maintenance proposals.
 
   run [--dry-run]   find pairs of active memories that say the same thing, or where a newer one
                     contradicts an older one, and post proposals to Arkism. Nothing changes until
-                    a person decides in the desktop 할 일 (accept, swap or keep both).`
+                    a person decides in the desktop 할 일 (accept, swap or keep both).
+                    It also proposes rules often broken and lessons that often fail, from each
+                    memory's pass rate (signal proposals; nothing changes either).`
 
 var maintainKinds = []string{"user", "procedural", "decision", "lesson"}
 
@@ -46,10 +53,18 @@ func envInt(name string, def int) int {
 	return n
 }
 
-func maxPerKind() int   { return envInt("ARKISM_MAINTAIN_MAX_PER_KIND", 1000) } // memories read per kind
-func maxPairs() int     { return envInt("ARKISM_MAINTAIN_MAX_PAIRS", 30) }      // judged per night
-func maxProposals() int { return envInt("ARKISM_MAINTAIN_MAX_PROPOSALS", 10) }  // what a person sees per morning
-func useLLM() bool      { return host.Env("ARKISM_MAINTAIN_LLM", "1") == "1" }
+func maxPerKind() int       { return envInt("ARKISM_MAINTAIN_MAX_PER_KIND", 1000) }     // memories read per kind
+func maxPairs() int         { return envInt("ARKISM_MAINTAIN_MAX_PAIRS", 30) }          // judged per night
+func maxProposals() int     { return envInt("ARKISM_MAINTAIN_MAX_PROPOSALS", 10) }      // what a person sees per morning
+func minSignalSamples() int { return envInt("ARKISM_MAINTAIN_SIGNAL_MIN_SAMPLES", 10) } // fewer judged samples prove nothing
+func maxSignalPassRate() float64 {
+	v, err := strconv.ParseFloat(strings.TrimSpace(host.Env("ARKISM_MAINTAIN_SIGNAL_MAX_PASS_RATE", "0.5")), 64)
+	if err != nil || v < 0 || v > 1 {
+		return 0.5
+	}
+	return v
+}
+func useLLM() bool { return host.Env("ARKISM_MAINTAIN_LLM", "1") == "1" }
 func maintainModel() string {
 	return host.Env("ARKISM_MAINTAIN_MODEL", host.HarnessCLIModel("consolidator", "sonnet"))
 }
@@ -88,7 +103,15 @@ var (
 	// the night's inputs (fakes in tests)
 	memoriesFn   = memories
 	knownPairsFn = knownPairs
+	signalsFn    = signals
 )
+
+// signalProposalType is the signal proposal for a memory kind (ST-814).
+var signalProposalType = map[string]string{"user": "rule_often_violated", "procedural": "rule_often_violated",
+	"decision": "rule_often_violated", "lesson": "lesson_often_failing"}
+
+// signalKey is the seen-set key of a memory's signal proposal (pairOf keys hold a NUL between two ids).
+func signalKey(id any) string { return "signal\x00" + pyStr(id) }
 
 var notWordish = regexp.MustCompile(`[^0-9a-z가-힣]`)
 
@@ -204,6 +227,10 @@ func knownPairs(items []map[string]any) (map[string]bool, error) {
 		}
 		for _, p := range list(page["items"]) {
 			m := obj(obj(p)["maintenance"])
+			if one := obj(m["memory"]); one != nil { // a signal proposal: one per memory, never asked twice
+				seen[signalKey(one["id"])] = true
+				continue
+			}
 			keep, retire := obj(m["keep"]), obj(m["retire"])
 			stale := false
 			for _, r := range []map[string]any{keep, retire} {
@@ -483,6 +510,86 @@ func slicesDelete(keys []string, key string) []string {
 	return out
 }
 
+// signals is the stored trust signal per memory id, read 100 ids at a time.
+func signals(items []map[string]any) (map[string]map[string]any, error) {
+	out := map[string]map[string]any{}
+	for i := 0; i < len(items); i += 100 {
+		ids := []any{}
+		for _, m := range items[i:min(len(items), i+100)] {
+			ids = append(ids, m["id"])
+		}
+		page, err := mPost("/v1/memory-signals", host.Obj{{Key: "scope", Value: scope()}, {Key: "memory_ids", Value: ids}}, 30*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range list(page["items"]) {
+			if sig := obj(obj(v)["signal"]); truthy(obj(v)["available"]) && sig != nil {
+				out[pyStr(obj(v)["memory_id"])] = sig
+			}
+		}
+	}
+	return out, nil
+}
+
+type weakMemory struct {
+	kind            string
+	memory          map[string]any
+	samples, passed int64
+	rate            float64
+}
+
+// weakMemories is the rules and lessons whose pass rate is low on enough samples, worst first, not proposed before.
+func weakMemories(items []map[string]any, sigs map[string]map[string]any, seen map[string]bool) []weakMemory {
+	out := []weakMemory{}
+	for _, m := range items {
+		kind, ok := signalProposalType[pyStr(m["kind"])]
+		sig := sigs[pyStr(m["id"])]
+		if !ok || sig == nil || seen[signalKey(m["id"])] {
+			continue
+		}
+		n, ok1 := host.Int(sig["samples"])
+		passed, ok2 := host.Int(sig["passed"])
+		if !ok1 || !ok2 || n < 1 || n < int64(minSignalSamples()) || passed < 0 || passed > n {
+			continue
+		}
+		if rate := float64(passed) / float64(n); rate <= maxSignalPassRate() {
+			out = append(out, weakMemory{kind, m, n, passed, rate})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].rate < out[j].rate || out[i].rate == out[j].rate && out[i].samples > out[j].samples
+	})
+	return out[:min(len(out), max(0, maxProposals()))]
+}
+
+// signalRun posts the night's signal proposals: (found, posted). A token that may not read signals skips them.
+func signalRun(items []map[string]any, seen map[string]bool, dryRun bool, stdout io.Writer) (int, int) {
+	sigs, err := signalsFn(items)
+	if err != nil {
+		mMetric(map[string]any{"event": "maintain_error", "step": "signals", "error": errName(err)})
+		return 0, 0
+	}
+	found := weakMemories(items, sigs, seen)
+	posted := 0
+	for _, w := range found {
+		if dryRun {
+			fmt.Fprintf(stdout, "%s: %s passed %d/%d\n", w.kind, pyStr(w.memory["id"]), w.passed, w.samples)
+			continue
+		}
+		res, err := mPost("/v1/maintenance_proposals", host.Obj{{Key: "scope", Value: scope()}, {Key: "proposal", Value: host.Obj{
+			{Key: "type", Value: w.kind}, {Key: "memory", Value: memRef(w.memory)}, {Key: "reason", Value: "low_pass_rate"},
+			{Key: "evidence", Value: host.Obj{{Key: "samples", Value: w.samples}, {Key: "passed", Value: w.passed}, {Key: "pass_rate", Value: w.rate}}}}}}, 30*time.Second)
+		if err != nil { // the memory or its signal changed since it was read: next night sees the new one
+			mMetric(map[string]any{"event": "maintain_error", "step": "post_signal", "error": errName(err)})
+			continue
+		}
+		if !truthy(res["duplicate"]) {
+			posted++
+		}
+	}
+	return len(found), posted
+}
+
 func memRef(m map[string]any) host.Obj {
 	return host.Obj{{Key: "collection", Value: "memories"}, {Key: "id", Value: m["id"]}, {Key: "revision", Value: m["revision"]}}
 }
@@ -500,13 +607,26 @@ func maintainRun(dryRun bool, stdout io.Writer) (int, int, error) {
 	for k := range judgedPairs(items) {
 		seen[k] = true
 	}
+	sigFound, sigPosted := signalRun(items, seen, dryRun, stdout)
+	// One limit for what a person sees per morning: pairs get what signal proposals left.
+	slots := maxProposals() - sigPosted
+	if dryRun {
+		slots = maxProposals() - sigFound
+	}
 	pairs := candidatePairs(items, seen, nil)
-	if len(pairs) == 0 {
-		mMetric(map[string]any{"event": "maintain", "memories": len(items), "pairs": 0, "proposed": 0})
-		return 0, 0, nil
+	if len(pairs) == 0 || slots <= 0 { // no model call when nothing could be posted
+		mMetric(map[string]any{"event": "maintain", "memories": len(items), "pairs": 0, "proposed": sigPosted, "signal_proposed": sigPosted})
+		return sigFound, sigPosted, nil
 	}
 	var verdicts []any
 	if useLLM() {
+		// The model judge spends the user's own Claude; near a limit the pairs wait for another night.
+		// Signal proposals above use no model and went out anyway.
+		if why := capture.LLMBudgetReason(maintainModel()); why != "" {
+			fmt.Fprintln(stdout, why)
+			mMetric(map[string]any{"event": "maintain", "memories": len(items), "pairs": len(pairs), "proposed": sigPosted, "signal_proposed": sigPosted, "judge": "budget"})
+			return sigFound, sigPosted, nil
+		}
 		if verdicts, err = judgeFn(pairs); err != nil {
 			return 0, 0, err
 		}
@@ -523,7 +643,7 @@ func maintainRun(dryRun bool, stdout io.Writer) (int, int, error) {
 		}
 	}
 	found := proposals(pairs, verdicts)
-	found = found[:min(len(found), max(0, maxProposals()))]
+	found = found[:min(len(found), slots)]
 	posted := 0
 	for _, p := range found {
 		if dryRun {
@@ -540,8 +660,8 @@ func maintainRun(dryRun bool, stdout io.Writer) (int, int, error) {
 			posted++
 		}
 	}
-	mMetric(map[string]any{"event": "maintain", "memories": len(items), "pairs": len(pairs), "proposed": posted, "dry_run": dryRun})
-	return len(found), posted, nil
+	mMetric(map[string]any{"event": "maintain", "memories": len(items), "pairs": len(pairs), "proposed": posted + sigPosted, "signal_proposed": sigPosted, "dry_run": dryRun})
+	return len(found) + sigFound, posted + sigPosted, nil
 }
 
 func maintainMain(argv []string, _ io.Reader, stdout, stderr io.Writer) int {
@@ -552,13 +672,6 @@ func maintainMain(argv []string, _ io.Reader, stdout, stderr io.Writer) int {
 	dry := false
 	for _, a := range argv[1:] {
 		dry = dry || a == "--dry-run"
-	}
-	// The model judge spends the user's own Claude; near a limit it waits for another night.
-	if useLLM() {
-		if why := capture.LLMBudgetReason(maintainModel()); why != "" {
-			fmt.Fprintln(stdout, why)
-			return 0
-		}
 	}
 	found, posted, err := maintainRun(dry, stdout)
 	if err != nil {
