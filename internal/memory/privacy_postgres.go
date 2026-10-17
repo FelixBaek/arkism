@@ -9,15 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (p *Postgres) initPrivacySchema(ctx context.Context) error {
-	_, err := p.q().Exec(ctx, `
-ALTER TABLE source_events ADD COLUMN IF NOT EXISTS privacy_quarantined boolean NOT NULL DEFAULT false;
-ALTER TABLE execution_traces ADD COLUMN IF NOT EXISTS privacy_quarantined boolean NOT NULL DEFAULT false;
-CREATE INDEX IF NOT EXISTS source_events_privacy ON source_events(organization_id,project_id,user_id,agent_id,id) WHERE privacy_quarantined;
-CREATE INDEX IF NOT EXISTS execution_traces_privacy ON execution_traces(organization_id,project_id,user_id,agent_id,id) WHERE privacy_quarantined;`)
-	return pgErr(err)
-}
-
 func (p *Postgres) DiscoverPrivacyImpact(ctx context.Context, scope Scope, targetType string, targetIDs []string, limit int) (PrivacyImpact, error) {
 	if checkScope(scope) != nil || !slices.Contains([]string{"source_event", "trace", "subject", "work_checkpoint"}, targetType) || len(targetIDs) == 0 || len(targetIDs) > 64 || limit < 1 || limit > privacyImpactLimit {
 		return PrivacyImpact{}, ErrInvalid

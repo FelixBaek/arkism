@@ -110,6 +110,8 @@ jobs:
       - name: Windows scheduled task registration contract
         shell: powershell
         run: ./tools/test_windows_scheduled_tasks.ps1
+      - name: Verify cross-platform migration checksums
+        run: go test -v -count=1 -run '^TestSchemaMigrationChecksumAcrossPlatforms$' ./internal/memory
 
   ui:
     runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}

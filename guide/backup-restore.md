@@ -42,7 +42,11 @@ Keep every writer (API, worker, timers) stopped, and restore into a **new, empty
    pg_restore --exit-on-error -d "$NEW_DATABASE_URL" < restore/database.archive
    ```
 
-3. Bind the restored files to the restored database. File storage stays locked until this runs.
+3. After the dump has loaded, use the matching or newer binary and the migration
+   owner connection to run `memoryd --init-db`. This preserves the restored
+   identity and recovery pause, checks versioned history, and adopts an older
+   unversioned dump. See [database-migrations.md](database-migrations.md). Then bind
+   the restored files to the restored database. File storage stays locked until this runs.
 
    ```bash
    export MEMORY_DATABASE_URL="$NEW_DATABASE_URL" MEMORY_BLOB_DIRECTORY="$PWD/restore/files" MEMORY_WORKER_TOKEN=...

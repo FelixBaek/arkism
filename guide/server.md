@@ -86,8 +86,8 @@ Arkism only needs Postgres with pgvector, so a Supabase project works as a manag
 |---|---|
 | (none) | Run the HTTP API (`--listen`, default `127.0.0.1:8091`) |
 | `--worker` | Run the embedding and index worker instead |
-| `--init-db` | Create the Postgres schema and indexes |
-| `--check-indexes` | Check the schema, search indexes and row-level security |
+| `--init-db` | Apply pending [versioned migrations](database-migrations.md) with the migration owner |
+| `--check-indexes` | Check migration history, schema, search indexes and row-level security |
 | `--semantic-index create\|drop` | Create or drop the optional pgvector index (`MEMORY_SEMANTIC_RETRIEVAL=1`) |
 | `--reindex` | Queue embedding jobs for records the current embedder has not indexed, then exit |
 | `--collect-blobs` | Remove files nothing points to |

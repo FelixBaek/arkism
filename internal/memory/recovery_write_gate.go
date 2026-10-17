@@ -56,57 +56,6 @@ func decodeRecoveryWriteGate(data []byte) (RecoveryWriteGate, error) {
 // Installed atomically after the canonical and authorization schemas exist.
 // A data write holds a shared row lock until its transaction ends. Changing the
 // gate takes an exclusive lock, so successful pause drains earlier writes.
-func (p *Postgres) initRecoveryWriteGate(ctx context.Context) error {
-	gate, err := newRecoveryWriteGate("open")
-	if err != nil {
-		return err
-	}
-	data, err := json.Marshal(gate)
-	if err != nil {
-		return ErrUnavailable
-	}
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
-		return pgErr(err)
-	}
-	defer tx.Rollback(ctx)
-	if _, err = tx.Exec(ctx, `INSERT INTO memory_storage_metadata(key,value) VALUES('recovery_write_gate',$1) ON CONFLICT(key) DO NOTHING`, data); err != nil {
-		return pgErr(err)
-	}
-	if _, err = tx.Exec(ctx, recoveryWriteGateSQL); err != nil {
-		return pgErr(err)
-	}
-	for _, table := range recoveryWriteTables {
-		name := pgx.Identifier{"arkism", table}.Sanitize()
-		if _, err = tx.Exec(ctx, `DROP TRIGGER IF EXISTS recovery_write_gate ON `+name+`; CREATE TRIGGER recovery_write_gate BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON `+name+` FOR EACH STATEMENT EXECUTE FUNCTION arkism.check_recovery_write_gate()`); err != nil {
-			return pgErr(err)
-		}
-	}
-	if _, err = tx.Exec(ctx, `REVOKE ALL ON FUNCTION arkism.check_recovery_write_gate() FROM PUBLIC`); err != nil {
-		return pgErr(err)
-	}
-	return pgErr(tx.Commit(ctx))
-}
-
-const recoveryWriteGateSQL = `CREATE OR REPLACE FUNCTION arkism.check_recovery_write_gate() RETURNS trigger
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,arkism AS $$
-DECLARE raw bytea; gate jsonb;
-BEGIN
- SELECT value INTO raw FROM arkism.memory_storage_metadata WHERE key='recovery_write_gate' FOR SHARE;
- IF raw IS NULL THEN RAISE EXCEPTION 'recovery write gate unavailable' USING ERRCODE='55000'; END IF;
- gate := convert_from(raw,'UTF8')::jsonb;
- IF jsonb_typeof(gate)<>'object' OR NOT (gate ?& ARRAY['version','state','generation','changed_at'])
-    OR gate-'version'-'state'-'generation'-'changed_at'<>'{}'::jsonb
-    OR jsonb_typeof(gate->'version')<>'number' OR gate->>'version'<>'1' OR gate->>'state' NOT IN ('open','paused')
-    OR jsonb_typeof(gate->'state')<>'string' OR jsonb_typeof(gate->'generation')<>'string'
-    OR gate->>'generation' !~ '^[0-9a-f]{64}$' OR jsonb_typeof(gate->'changed_at')<>'string'
-    OR gate->>'changed_at' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?Z$'
-    OR (gate->>'changed_at')::timestamptz IS NULL THEN
-  RAISE EXCEPTION 'recovery write gate invalid' USING ERRCODE='55000';
- END IF;
- IF gate->>'state'<>'open' THEN RAISE EXCEPTION 'recovery writes paused' USING ERRCODE='55000'; END IF;
- RETURN NULL;
-END $$`
 
 func (p *Postgres) recoveryWriteGate(ctx context.Context, lock string) (RecoveryWriteGateStatus, error) {
 	var identity, data []byte
