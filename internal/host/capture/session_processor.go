@@ -171,17 +171,26 @@ func sessionDue(newRecords []any, event string, idle, pendingAge float64) bool {
 	return idle >= 300 || pendingAge >= 1800 || size >= 24000
 }
 
-// chunkRecords never tail-truncates or splits a tool transaction; oversized records wait for
-// reference extraction.
+// chunkRecords never tail-truncates or splits a tool transaction; a record over maxBytes is cut
+// into numbered parts (splitRecord) that each fit.
 func chunkRecords(records []any, maxBytes int) ([][]any, error) {
 	var chunks [][]any
 	var current []any
 	size := 0
+	var expanded []any
 	for _, record := range records {
-		amount := len(dumps(record))
-		if amount > maxBytes {
-			return nil, sessionWait("oversized_record_requires_artifact_reference")
+		if len(dumps(record)) <= maxBytes {
+			expanded = append(expanded, record)
+			continue
 		}
+		parts, err := splitRecord(record, maxBytes)
+		if err != nil {
+			return nil, err
+		}
+		expanded = append(expanded, parts...)
+	}
+	for _, record := range expanded {
+		amount := len(dumps(record))
 		// The host gives a tool call and its result one group so they are never divided.
 		group := autosaveGet(record, "group_id")
 		if len(current) > 0 && size+amount > maxBytes && (!truthy(group) || !eq(autosaveGet(current[len(current)-1], "group_id"), group)) {
@@ -197,6 +206,41 @@ func chunkRecords(records []any, maxBytes int) ([][]any, error) {
 		chunks = append(chunks, current)
 	}
 	return chunks, nil
+}
+
+// splitRecord cuts an oversized record's text, whole and in order, into parts of at most maxBytes each.
+// Every part keeps the record's revision and role and names it in split_of, so its archive refs still apply.
+func splitRecord(record any, maxBytes int) ([]any, error) {
+	id, text := str(autosaveGet(record, "source_id")), str(autosaveGet(record, "text"))
+	part := func(n int, text string) map[string]any {
+		return map[string]any{"source_id": fmt.Sprintf("%s-p%d", id, n), "split_of": id, "revision": autosaveGet(record, "revision"),
+			"role": autosaveGet(record, "role"), "text": text}
+	}
+	budget := maxBytes - len(dumps(part(99999, "")))
+	if budget < 1024 {
+		return nil, sessionWait("oversized_record_requires_artifact_reference")
+	}
+	var parts []any
+	for n := 1; text != ""; n++ {
+		cut := min(len(text), budget)
+		for {
+			for cut < len(text) && !utf8.RuneStart(text[cut]) {
+				cut--
+			}
+			// JSON escaping can grow the piece (up to 6 bytes per byte): shrink in proportion until it fits.
+			escaped := len(dumps(text[:cut])) - 2
+			if escaped <= budget {
+				break
+			}
+			cut = min(cut-1, cut*budget/escaped)
+		}
+		if cut <= 0 {
+			return nil, sessionWait("oversized_record_requires_artifact_reference")
+		}
+		parts = append(parts, part(n, text[:cut]))
+		text = text[cut:]
+	}
+	return parts, nil
 }
 
 func sessionOperationID(scope any, sessionID string, start, end, revision int64, records []any) string {
@@ -385,32 +429,61 @@ const sessionTransferMaxBytes = 64000
 // so a control character right before "@" also counts ("\n@x.com" reads as "n@x.com"); text before it is kept.
 var emailPattern = regexp.MustCompile(`(?i)(?:[\x00-\x1f][a-z0-9._%+-]*|[a-z0-9._%+-]+)@[a-z0-9.-]+\.[a-z]{2,}`)
 
-// maskEmails returns a copy of v with every e-mail address in its strings replaced.
-func maskEmails(v any) any {
+// phonePattern and rrnPattern are the server's Korean mobile and resident-number branches as is: JSON escaping
+// only turns a control character into a word character ("\n" reads as "n"), which can remove a \b, never add one.
+var (
+	phonePattern = regexp.MustCompile(`\b01[016789][- ]?\d{3,4}[- ]?\d{4}\b`)
+	rrnPattern   = regexp.MustCompile(`\b\d{6}-[1-4]\d{6}\b`)
+)
+
+// maskSensitive returns a copy of v with every e-mail address, Korean mobile and resident number in its strings replaced.
+func maskSensitive(v any) any {
 	switch x := v.(type) {
 	case string:
-		return emailPattern.ReplaceAllString(x, "[email]")
+		x = emailPattern.ReplaceAllString(x, "[email]")
+		return rrnPattern.ReplaceAllString(phonePattern.ReplaceAllString(x, "[phone]"), "[rrn]")
 	case []any:
 		out := make([]any, len(x))
 		for i, e := range x {
-			out[i] = maskEmails(e)
+			out[i] = maskSensitive(e)
 		}
 		return out
 	case map[string]any:
 		out := make(map[string]any, len(x))
 		for k, e := range x {
-			out[k] = maskEmails(e)
+			out[k] = maskSensitive(e)
 		}
 		return out
 	case host.Obj:
 		out := make(host.Obj, len(x))
 		for i, e := range x {
 			out[i] = e
-			out[i].Value = maskEmails(e.Value)
+			out[i].Value = maskSensitive(e.Value)
 		}
 		return out
 	}
 	return v
+}
+
+// trimPreviousState drops the last entries of previous_state's largest lists until content fits the transfer
+// limit, so a long-running session's state never parks the next window. It reports false when no list is left.
+func trimPreviousState(request map[string]any, content *string) bool {
+	state, _ := request["previous_state"].(map[string]any)
+	for len(*content) > sessionTransferMaxBytes {
+		largest, size := "", 0
+		for k, v := range state {
+			if l, ok := v.([]any); ok && len(l) > 0 && len(dumps(l)) > size {
+				largest, size = k, len(dumps(l))
+			}
+		}
+		if largest == "" {
+			return false
+		}
+		l := state[largest].([]any)
+		state[largest] = l[:len(l)-1]
+		*content = dumps(map[string]any{"authority": "data_only_untrusted", "data": request})
+	}
+	return true
 }
 
 var sessionQualityDefects = regexp.MustCompile(`^(schema_|evidence_|coverage_|candidate_|user_provenance_|tool_provenance_|structured_output_)`)
@@ -438,9 +511,9 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 	if priorEvidence == nil {
 		priorEvidence = []any{}
 	}
-	// The server's transfer filter refuses any e-mail address, so the model only ever sees them masked.
-	records, _ = maskEmails(records).([]any)
-	previousState, priorEvidence = maskEmails(previousState), maskEmails(priorEvidence)
+	// The server's transfer filter refuses e-mail addresses, Korean mobile and resident numbers, so the model only ever sees them masked.
+	records, _ = maskSensitive(records).([]any)
+	previousState, priorEvidence = maskSensitive(previousState), maskSensitive(priorEvidence)
 	request := map[string]any{"scope": scope, "session_id": sessionID, "records": records, "start": start, "end": end,
 		"expected_revision": expectedRevision, "previous_state": previousState, "prior_evidence": priorEvidence,
 		"schema_version": sessionSchemaVersion, "prompt_version": sessionPromptVersion}
@@ -454,7 +527,7 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 		}
 	}
 	content := dumps(map[string]any{"authority": "data_only_untrusted", "data": request})
-	if len(content) > sessionTransferMaxBytes || len(content)+len(sessionSystem)+len(sessionSchemaJSON) >= 100000 {
+	if !trimPreviousState(request, &content) || len(content)+len(sessionSystem)+len(sessionSchemaJSON) >= 100000 {
 		return nil, sessionWait("input_chunk_required")
 	}
 	generate := func(model string) (map[string]any, error) {
