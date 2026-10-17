@@ -292,3 +292,23 @@ func TestCaptureRestatementPreservesOriginalSourceSpan(t *testing.T) {
 		t.Fatal("restatement widened original span into generated metadata")
 	}
 }
+
+func TestCaptureSameTextOtherKindMergesInsteadOfConflict(t *testing.T) {
+	f := newFixture(t)
+	first := explicit("같은 문장이 다른 종류로 다시 들어와도 기록은 끝난다.")
+	if got := f.capture(f.human, captureInput(scopeA, "kind-first", first))[0]; got.Status != "candidate" {
+		t.Fatal(got)
+	}
+	second := first
+	second.Kind = "procedural"
+	if got := f.capture(f.human, captureInput(scopeA, "kind-second", second))[0]; got.Status != "merged" || got.Reason != "duplicate_source" {
+		t.Fatalf("same text from another event: %+v", got)
+	}
+	// The event finished with a receipt, so a replay stops at it.
+	if got := f.capture(f.human, captureInput(scopeA, "kind-second", second))[0]; got.Reason != "duplicate_event" {
+		t.Fatalf("replay did not see the receipt: %+v", got)
+	}
+	if len(f.repo.rows("sources")) != 1 {
+		t.Fatal("duplicate source stored")
+	}
+}

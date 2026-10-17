@@ -104,7 +104,9 @@ func TestConcurrentFirstSessionStartsKeepIdenticalStableOutput(t *testing.T) {
 			t.Fatal(err, secondOut.String())
 		}
 	}
-	if firstOut.String() != secondOut.String() {
+	// Under -cover each helper also prints its own "PASS / coverage: N%" footer; compare the hook output only.
+	hookOutput := func(b *bytes.Buffer) string { out, _, _ := strings.Cut(b.String(), "\nPASS\n"); return out }
+	if hookOutput(firstOut) != hookOutput(secondOut) {
 		t.Fatalf("same session emitted different stable blocks:\nfirst %s\nsecond %s", firstOut.String(), secondOut.String())
 	}
 }

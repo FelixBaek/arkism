@@ -8,11 +8,9 @@ without network access, model calls, or private data.
 """
 import argparse
 import hashlib
-import ipaddress
 import json
 import math
 from pathlib import Path
-from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 MODEL = "microsoft/harrier-oss-v1-0.6b"
@@ -72,6 +70,8 @@ def distance(a, b):
     return 1 - sum(x * y for x, y in zip(a, b)) / math.sqrt(sum(x*x for x in a) * sum(y*y for y in b))
 
 
+# Local TEI only: the fixture must never be built from a remote model.
+ENDPOINT = "http://127.0.0.1:8093/embed"
 # The frozen fixture always lives beside the Go test that replays it.
 OUTPUT = Path(__file__).resolve().parent.parent / "internal/memory/testdata/semantic_recall_harrier.json"
 
@@ -110,19 +110,15 @@ def observe(documents, queries):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--endpoint", default="http://127.0.0.1:8093/embed")
     parser.add_argument("--reuse-query-vectors", action="store_true", help="reuse unchanged public query vectors while re-embedding documents")
     args = parser.parse_args()
-    url = urlsplit(args.endpoint)
-    if url.scheme != "http" or not ipaddress.ip_address(url.hostname).is_loopback or url.username or url.password or url.query or url.fragment or url.path != "/embed":
-        parser.error("requires a literal loopback HTTP /embed endpoint without credentials")
     opener = build_opener(NoRedirect)
     # recordContent for a memory with an empty summary is text + newline.
-    documents = [{"id": name, "text": text, "vector": vector} for (name, text), vector in zip(DOCUMENTS, embed(opener, args.endpoint, [text + "\n" for _, text in DOCUMENTS], ""))]
+    documents = [{"id": name, "text": text, "vector": vector} for (name, text), vector in zip(DOCUMENTS, embed(opener, ENDPOINT, [text + "\n" for _, text in DOCUMENTS], ""))]
     if args.reuse_query_vectors:
         queries = cached_queries()
     else:
-        queries = [{"category": category, "relevant": [relevant] if relevant else [], "text": text, "vector": vector} for (category, relevant, text), vector in zip(QUERIES, embed(opener, args.endpoint, [text for _, _, text in QUERIES], QUERY_PREFIX))]
+        queries = [{"category": category, "relevant": [relevant] if relevant else [], "text": text, "vector": vector} for (category, relevant, text), vector in zip(QUERIES, embed(opener, ENDPOINT, [text for _, _, text in QUERIES], QUERY_PREFIX))]
     prefix_hash = hashlib.sha256(json.dumps([QUERY_PREFIX, ""], ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
     fixture = {"model": MODEL, "revision": REVISION, "query_prefix": QUERY_PREFIX, "document_prefix": "", "document_input_format": "recordContent: text + newline + empty summary", "space": f"tei:{MODEL}:{REVISION}:1024d:{prefix_hash}", "max_distance": CUTOFF, "labels": "agent-authored public synthetic; held out from fixed deployed-cutoff selection; not human approval", "documents": documents, "queries": queries}
     fixture["observed"] = observe(documents, queries)

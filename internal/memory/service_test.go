@@ -154,6 +154,7 @@ func (x fakeTx) Delete(_ context.Context, col string, s Scope, id string, revisi
 type fakeRepo struct {
 	restoreManifest string
 	mu              sync.Mutex
+	txMu            sync.Mutex // serializes transactions like the real store; snapshot commits would otherwise drop a concurrent commit
 	store           map[string]map[string]Record
 	failAudit       bool
 	stale           []Hit // index rows that outlived the document they describe
@@ -192,6 +193,8 @@ func (f *fakeRepo) Transaction(ctx context.Context, fn func(context.Context, Tx)
 	if fn == nil {
 		return ErrInvalid
 	}
+	f.txMu.Lock()
+	defer f.txMu.Unlock()
 	f.mu.Lock()
 	next, view := f.snapshot(), f.view()
 	f.mu.Unlock()
