@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -19,8 +20,10 @@ import (
 // use the actual dump and authenticated bundle, not reconstructed
 // records. No production credentials, certificate, files or database are used.
 func TestPostgresBackupBundleDeletionAndExpiry(t *testing.T) {
-	if os.Getenv("POSTGRES_TEST_CONTAINER") == "" {
-		t.Skip("POSTGRES_TEST_CONTAINER is required for isolated pg_dump/pg_restore")
+	// pg_dump/pg_restore run inside the service container, or from a local bin directory when CI has no docker.
+	container, binDir := os.Getenv("POSTGRES_TEST_CONTAINER"), os.Getenv("POSTGRES_TEST_PG_BINDIR")
+	if container == "" && binDir == "" {
+		t.Skip("POSTGRES_TEST_CONTAINER or POSTGRES_TEST_PG_BINDIR is required for isolated pg_dump/pg_restore")
 	}
 	origin := isolatedPostgres(t)
 	restoredDB := isolatedPostgresSchema(t, false)
@@ -42,9 +45,15 @@ func TestPostgresBackupBundleDeletionAndExpiry(t *testing.T) {
 	}
 	databaseCommand := func(p *Postgres, program string, args ...string) *exec.Cmd {
 		cfg := p.pool.Config().ConnConfig
-		command := []string{"exec", "-i", "-e", "PGPASSWORD", os.Getenv("POSTGRES_TEST_CONTAINER"), program,
-			"-h", "127.0.0.1", "-U", cfg.User, "-d", cfg.Database}
-		cmd := exec.Command("docker", append(command, args...)...)
+		var cmd *exec.Cmd
+		if binDir != "" {
+			connection := []string{"-h", cfg.Host, "-p", strconv.Itoa(int(cfg.Port)), "-U", cfg.User, "-d", cfg.Database}
+			cmd = exec.Command(filepath.Join(binDir, program), append(connection, args...)...)
+		} else {
+			command := []string{"exec", "-i", "-e", "PGPASSWORD", container, program,
+				"-h", "127.0.0.1", "-U", cfg.User, "-d", cfg.Database}
+			cmd = exec.Command("docker", append(command, args...)...)
+		}
 		cmd.Env = append(os.Environ(), "PGPASSWORD="+cfg.Password)
 		return cmd
 	}

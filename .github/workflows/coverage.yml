@@ -17,24 +17,9 @@ concurrency:
 
 jobs:
   coverage:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 15
-    # Postgres store tests skip without POSTGRES_TEST_DSN; give them a disposable pgvector DB.
-    services:
-      postgres:
-        image: pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d # pg17
-        env:
-          POSTGRES_USER: arkism
-          # Throwaway DB on a loopback-only port of a disposable runner.
-          POSTGRES_HOST_AUTH_METHOD: trust
-          POSTGRES_DB: arkism_ci
-        ports:
-          - 127.0.0.1:5432:5432
-        options: >-
-          --health-cmd "pg_isready -U arkism"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    # Postgres store tests skip without POSTGRES_TEST_DSN; tools/ci_postgres.sh gives them a disposable pgvector DB.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,9 +30,9 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+      - name: Postgres for tests
+        run: tools/ci_postgres.sh
       - name: Go coverage
-        env:
-          POSTGRES_TEST_DSN: postgres://arkism@127.0.0.1:5432/arkism_ci?sslmode=disable
         run: go test -covermode=atomic -coverprofile=go-coverage.out ./...
       - name: UI coverage
         run: >
