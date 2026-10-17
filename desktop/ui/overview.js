@@ -9,7 +9,6 @@ window.ArkismOverview = (ctx) => {
   const { state, $, el, button, request, query, ago, go, render } = ctx;
   const HOUR = 3600000, W = 1157, H = 930;
   const C = { g: "#8fd19e", r: "#ff5160", a: "#f5b955", p: "#c58cff" };
-  const HALO = { g: "rgba(143,209,158,.35)", r: "rgba(255,81,96,.55)", a: "rgba(245,185,85,.4)", p: "rgba(197,140,255,.45)" };
   const SVG = "http://www.w3.org/2000/svg";
   const svg = (tag, attrs = {}) => { const n = document.createElementNS(SVG, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
   const num = (n) => Number(n || 0).toLocaleString("ko-KR");
@@ -48,9 +47,11 @@ window.ArkismOverview = (ctx) => {
     const w = d.tools?.memory_use || null, reported = time(d.tools?.collected_at);
     const proposals = (d.maintenance || []).map((p) => time(p.created_at)).filter(Boolean);
     const lastSession = latest(sessions), lastExtract = latest(extracted);
+    // never extracted yet: count the stall from the oldest session in range
+    const since = lastExtract || (sessions.length ? Math.min(...sessions) : 0);
     // 분석 stops when sessions keep coming but nothing new became a candidate for 6 hours.
-    const stalled = lastSession - lastExtract > 6 * HOUR && now - lastExtract > 6 * HOUR && sessions.length > 0;
-    const stalledHours = Math.floor((now - lastExtract) / HOUR);
+    const stalled = sessions.length > 0 && since > 0 && lastSession - since > 6 * HOUR && now - since > 6 * HOUR;
+    const stalledHours = Math.floor((now - since) / HOUR);
     const rate = w?.injections ? Math.round((w.used / w.injections) * 100) : null;
     const tidy = (d.memories || []).filter((m) => { const u = w?.items?.find((x) => x.id === m.id); return u && u.injected >= 3 && !u.used; }).length;
     const oldest = waiting.length ? Math.min(...waiting.map((m) => time(m.created_at)).filter(Boolean)) : 0;
@@ -58,7 +59,7 @@ window.ArkismOverview = (ctx) => {
 
     const row = (times, tone) => slots(times).map((n) => (n ? tone : ""));
     const extractRow = row(extracted, "g");
-    if (stalled) slots(sessions).forEach((n, i) => { if (n && now - (23 - i) * HOUR > lastExtract) extractRow[i] = "r"; });
+    if (stalled) slots(sessions).forEach((n, i) => { if (n && now - (23 - i) * HOUR > since) extractRow[i] = "r"; });
     const classRow = row(classified, "g"); slots(unclassified.map((m) => time(m.created_at))).forEach((n, i) => { if (n && !classRow[i]) classRow[i] = "a"; });
     const waitRow = row(waiting.map((m) => time(m.created_at)), "a");
     const reportRow = row(reported ? [reported] : [], "g");
@@ -172,7 +173,7 @@ window.ArkismOverview = (ctx) => {
     const grid = el("div", "ov-grid"), gh = el("div", "ov-grid-head");
     ui.badge = el("span", "ov-badge"); gh.append(el("i", "ov-dot"), el("strong", "", "기억 처리"), ui.badge);
     const body = el("div", "ov-grid-body");
-    for (const [g, label, keys] of [["save", "저장", ["collect", "extract", "classify", "review"]], ["use", "사용", ["recall", "trace", "judge"]], ["dream", "드리밍", ["dream"]]]) {
+    for (const [, label, keys] of [["save", "저장", ["collect", "extract", "classify", "review"]], ["use", "사용", ["recall", "trace", "judge"]], ["dream", "드리밍", ["dream"]]]) {
       body.append(el("div", "ov-grid-sec", label));
       for (const k of keys) { const r = el("div", "ov-grid-row"), name = el("span", "ov-grid-name"), cells = el("div", "ov-cells"); for (let c = 0; c < 24; c++) cells.append(el("i")); r.append(name, cells); body.append(r); ui.rows[k] = { name, cells }; }
     }

@@ -1,6 +1,7 @@
 // Rail art: the arkism triangle spiralling inward with glints running along its edge (ArkismTriangle.jsx, framework-free).
 // Colors come from CSS (.ark-line / .ark-accent in shell.css) so the light/dark theme switch needs no remount;
 // the page CSP forbids style attributes, so the svg is styled through .style and classes only.
+let arkTriangleSeq = 0;
 window.mountArkismTriangle = (el, opts = {}) => {
   const o = { width: 178, duration: 12, lineWeight: 1.5, layers: 28, twist: 62, glints: 3, ...opts };
   const OUTER = [[91.105, 11.71], [143.3, 105.76], [38.91, 105.76]];
@@ -16,7 +17,7 @@ window.mountArkismTriangle = (el, opts = {}) => {
     return `M${p[0][0].toFixed(3)} ${p[0][1].toFixed(3)}L${p[1][0].toFixed(3)} ${p[1][1].toFixed(3)}L${p[2][0].toFixed(3)} ${p[2][1].toFixed(3)}Z`;
   };
   const mk = (tag, attrs, parent) => { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); parent && parent.appendChild(n); return n; };
-  const lw = o.lineWeight, gid = "ark-glow-" + Math.random().toString(36).slice(2, 8);
+  const lw = o.lineWeight, gid = "ark-glow-" + ++arkTriangleSeq;
   const svg = mk("svg", { viewBox: "0 0 178 118", width: o.width, height: (o.width * 118) / 178, "aria-hidden": "true", class: "ark-triangle" });
   mk("feGaussianBlur", { stdDeviation: 1.6 }, mk("filter", { id: gid, x: "-50%", y: "-50%", width: "200%", height: "200%" }, mk("defs", {}, svg)));
   const base = { fill: "none", "stroke-linejoin": "round" };

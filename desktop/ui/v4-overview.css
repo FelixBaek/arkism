@@ -8,7 +8,8 @@
 /* theme: dark by default; light follows tokens.css (data-theme or the system setting) */
 .ov-wrap { --ov-bg: #111212; --ov-fg-rgb: 245,245,244; --ov-card: rgba(19,20,20,.86); --ov-step-bg: #171818; --ov-step-line: #4d4f4f; --ov-alert-bg: #3d1417;
   --ov-g: #8fd19e; --ov-r: #ff5160; --ov-a: #f5b955; --ov-p: #c58cff; --ov-r-text: #ff8a92;
-  --ov-nerve: #fff; --ov-glow: #fff; --ov-glow-soft: rgba(255,255,255,.45); --ov-frame: rgba(10,10,10,.35); --ov-core: #fff; --ov-brain-filter: brightness(1.15) contrast(1.08); }
+  --ov-nerve: #fff; --ov-glow: #fff; --ov-glow-soft: rgba(255,255,255,.45); --ov-frame: rgba(10,10,10,.35); --ov-core: #fff; --ov-brain-filter: brightness(1.15) contrast(1.08);
+  position: relative; width: 100%; overflow: hidden; background: var(--ov-bg); border-radius: 16px; }
 :root[data-theme="light"] .ov-wrap { --ov-bg: #f4f3ef; --ov-fg-rgb: 28,28,26; --ov-card: rgba(255,255,255,.88); --ov-step-bg: #fff; --ov-step-line: #d6d4cd; --ov-alert-bg: #fde8ea;
   --ov-g: #2f8a4a; --ov-r: #d92d3c; --ov-a: #b57a10; --ov-p: #8a4fd1; --ov-r-text: #c0202f;
   --ov-nerve: #3a3a36; --ov-glow: rgba(58,58,54,.5); --ov-glow-soft: rgba(58,58,54,.18); --ov-frame: rgba(255,255,255,.7); --ov-core: #fff; --ov-brain-filter: invert(1) brightness(1.05) contrast(.95); --ov-brain-opacity: .55; }
@@ -16,7 +17,6 @@
   --ov-g: #2f8a4a; --ov-r: #d92d3c; --ov-a: #b57a10; --ov-p: #8a4fd1; --ov-r-text: #c0202f;
   --ov-nerve: #3a3a36; --ov-glow: rgba(58,58,54,.5); --ov-glow-soft: rgba(58,58,54,.18); --ov-frame: rgba(255,255,255,.7); --ov-core: #fff; --ov-brain-filter: invert(1) brightness(1.05) contrast(.95); --ov-brain-opacity: .55; } }
 
-.ov-wrap { position: relative; width: 100%; overflow: hidden; background: var(--ov-bg); border-radius: 16px; }
 .ov-stage { position: absolute; left: 0; top: 0; width: 1157px; height: 930px; transform-origin: 0 0; color: rgb(var(--ov-fg-rgb)); font-size: 12px; }
 .ov-stage button { font: inherit; color: inherit; cursor: pointer; }
 .ov-stage .ov-dot { width: 6px; height: 6px; border-radius: 50%; background: #8fd19e; flex: none; display: inline-block; }
@@ -128,4 +128,4 @@
 @keyframes ov-ring { 0% { transform: translate(-50%,-50%) scale(.6); opacity: .9 } 100% { transform: translate(-50%,-50%) scale(2.6); opacity: 0 } }
 @keyframes ov-core { 0%,100% { transform: translate(-50%,-50%) scale(1) } 50% { transform: translate(-50%,-50%) scale(1.18) } }
 @keyframes ov-travel { 0% { offset-distance: 0%; opacity: 0 } 10%,85% { opacity: 1 } 100% { offset-distance: 100%; opacity: 0 } }
-@media (prefers-reduced-motion: reduce) { .ov-stage *, .ov-stage *::before { animation: none !important; transition: none !important; } .ov-link { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .ov-wrap .ov-stage *, .ov-wrap .ov-stage *::before { animation: none; transition: none; } .ov-link { stroke-dashoffset: 0; } }
