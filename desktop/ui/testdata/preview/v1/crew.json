@@ -485,7 +485,11 @@
       "priority": 80
      }
     ],
-    "category": "디자인"
+    "category": "디자인",
+    "avatar": {
+     "art": "001",
+     "bg": "rose"
+    }
    }
   },
   {
@@ -525,7 +529,11 @@
     "file_edits": "ask",
     "enabled": true,
     "model": "claude opus 5.5",
-    "category": "리서치"
+    "category": "리서치",
+    "avatar": {
+     "art": "084",
+     "bg": "sky"
+    }
    }
   },
   {
@@ -606,7 +614,11 @@
     "file_edits": "ask",
     "enabled": true,
     "model": "glm-5",
-    "category": "기록·비서"
+    "category": "기록·비서",
+    "avatar": {
+     "art": "128",
+     "bg": "sage"
+    }
    }
   },
   {

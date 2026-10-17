@@ -441,6 +441,90 @@ window.ArkismCrew = (ctx) => {
     box.append(svg);
     return box;
   }
+  // 전문가 아바타 (Figma 아바타 635:57217): a preset drawing on one of the server's background colours
+  // (crewAvatarBgs in internal/memory/crew.go); without one the model mark stands in.
+  const AVATAR_BGS = [["cream", "크림"], ["sand", "모래"], ["tan", "황토"], ["rose", "장미"], ["lilac", "라일락"], ["sky", "하늘"], ["mint", "민트"], ["sage", "세이지"]];
+  const AVATARS = ("001 005 006 007 011 014 015 016 019 021 026 027 032 034 039 042 043 044 048 050 051 054 057 061 062 063 064 069 071 072 " +
+    "075 078 080 084 087 091 092 093 094 097 098 101 102 103 104 105 106 107 108 109 110 111 112 113 114 115 116 117 118 119 120 121 122 123 124 " +
+    "125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143 144 145 146 147 148 149 150 151 152 153 154 155 156 157 158 159").split(" ");
+  const validAvatar = (a) => !!a && AVATARS.includes(a.art) && AVATAR_BGS.some(([k]) => k === a.bg);
+  function faceImg(art, bg) {
+    const box = el("span", "wf-mark wk-face");
+    box.style.setProperty("--face-bg", `var(--avatar-${bg})`);
+    const img = el("img");
+    img.src = `img/avatars/${art}.png`;
+    img.alt = "";
+    box.append(img);
+    return box;
+  }
+  const avatarMark = (x) => validAvatar(x?.avatar) ? faceImg(x.avatar.art, x.avatar.bg) : modelMark(x?.model);
+  // Resolves to {art, bg}, null to clear, or undefined when cancelled.
+  function pickAvatar(cur) {
+    return new Promise((resolve) => {
+      const dlg = el("dialog", "crew-dialog wk-face-dialog");
+      const form = el("form");
+      form.method = "dialog";
+      const pick = { art: validAvatar(cur) ? cur.art : AVATARS[0], bg: validAvatar(cur) ? cur.bg : "cream" };
+      const radio = (name, value, label, on) => {
+        const opt = el("label", `wk-face-opt ${name}`);
+        const r = el("input");
+        r.type = "radio";
+        r.name = name;
+        r.value = value;
+        r.checked = on;
+        r.setAttribute("aria-label", label);
+        r.addEventListener("change", () => { pick[name] = value; if (name === "bg") grid.style.setProperty("--face-bg", `var(--avatar-${value})`); });
+        opt.append(r);
+        return opt;
+      };
+      const bgs = el("div", "wk-face-bgs");
+      bgs.setAttribute("role", "radiogroup");
+      bgs.setAttribute("aria-label", "배경색");
+      for (const [k, label] of AVATAR_BGS) {
+        const o = radio("bg", k, label, k === pick.bg);
+        o.style.setProperty("--face-bg", `var(--avatar-${k})`);
+        bgs.append(o);
+      }
+      const grid = el("div", "wk-face-grid");
+      grid.setAttribute("role", "radiogroup");
+      grid.setAttribute("aria-label", "아바타");
+      grid.style.setProperty("--face-bg", `var(--avatar-${pick.bg})`);
+      for (const n of AVATARS) {
+        const o = radio("art", n, `아바타 ${n}`, n === pick.art);
+        const img = el("img");
+        img.src = `img/avatars/${n}.png`;
+        img.alt = "";
+        img.loading = "lazy";
+        o.append(img);
+        grid.append(o);
+      }
+      const body = el("div", "dialog-body");
+      body.append(bgs, grid);
+      const head = el("div", "dialog-head");
+      head.append(el("h2", "", "아바타 고르기"));
+      const foot = el("div", "dialog-foot");
+      const clear = button("모델 아이콘 쓰기", "ghost");
+      clear.type = "submit";
+      clear.value = "clear";
+      clear.classList.add("wk-face-clear");
+      const cancel = button("취소", "ghost");
+      cancel.type = "submit";
+      cancel.value = "cancel";
+      const ok = button("고르기", "primary");
+      ok.type = "submit";
+      ok.value = "ok";
+      foot.append(clear, cancel, ok);
+      form.append(head, body, foot);
+      let answer;
+      form.addEventListener("submit", (e) => { const v = e.submitter?.value; answer = v === "ok" ? { ...pick } : v === "clear" ? null : undefined; });
+      dlg.append(form);
+      dlg.addEventListener("close", () => { dlg.remove(); resolve(answer); });
+      document.body.append(dlg);
+      dlg.showModal();
+      (grid.querySelector("input:checked") || grid.querySelector("input")).focus();
+      grid.querySelector("input:checked")?.closest("label").scrollIntoView({ block: "center" });
+    });
+  }
   // The latest runs of every workflow, for 최근 실행 under the cards and the approvals card on top.
   let recent = null;
   let recentBusy = false;
@@ -2634,7 +2718,16 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     dl.id = "wk-cats";
     for (const c of catsOf(agents())) { const o = el("option"); o.value = c; dl.append(o); }
     row2.append(field("@이름", handle, "팀과 같은 이름은 못 써요"), field("카테고리", cat, "격자에서 이 이름으로 묶여요"), dl);
-    return [row, row2];
+    const face = el("button", "wk-face-btn");
+    face.type = "button";
+    face.append(avatarMark(d), el("span", "", validAvatar(d.avatar) ? "아바타 바꾸기" : "아바타 고르기"));
+    face.addEventListener("click", async () => {
+      const a = await pickAvatar(d.avatar);
+      if (a === undefined) return;
+      if (a) d.avatar = a; else delete d.avatar;
+      touchWorker();
+    });
+    return [face, row, row2];
   }
   function instructionsField(d) {
     const t = bindText(input(d.instructions, { tag: "textarea", rows: 8, maxLength: 4000, placeholder: "## 역할\n너는 …다.\n## 말투\n…\n## 하지 말 것\n…", cls: "wk-instr" }), d, "instructions");
@@ -2856,7 +2949,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     b.setAttribute("aria-pressed", String(r.id === wk.id));
     const badge = x.enabled === false ? el("span", "wf-badge small line", "꺼짐") : statusBadge(r.id);
     badge.classList.add("wk-tile-badge");
-    const av = modelMark(x.model);
+    const av = avatarMark(x);
     av.classList.add("wk-avatar");
     const flow = allWorkflows().find((w) => w.crew.handle === (x.workflow || "").replace(/^\$/, ""));
     b.append(badge, av);
@@ -2898,7 +2991,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     }
     const pane = el("div", "wk-detail");
     const head = el("div", "wk-head");
-    const av = modelMark(d.model);
+    const av = avatarMark(d);
     av.classList.add("wk-avatar");
     const ht = el("div", "wk-head-text");
     const tags = el("div", "wk-title");
@@ -2976,7 +3069,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     // Redrawn as the fields are typed in (the inputs keep focus; only this card changes).
     drawWorkerSave = () => {
       const top = el("div", "wk-row-top");
-      top.append(modelMark(d.model), el("strong", "", d.name || "이름"));
+      top.append(avatarMark(d), el("strong", "", d.name || "이름"));
       card.replaceChildren(top, el("small", "", `${workerMeta(d)} · ${depthText(d.effort)}`), el("p", "", d.role || "한 줄 소개가 여기에 보여요"));
     };
     drawWorkerSave();

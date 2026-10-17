@@ -4696,3 +4696,6 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "AI가 제목을 '{0}'(으)로, 부르는 이름을 ${1}로 붙였어요. 설정에서 바꿀 수 있어요.": "AI named it '{0}' and set its call name to ${1}. You can change both in settings."
 });
 Object.assign(window.ArkismI18nEN.strings, {"토큰 줄이기": "Cut tokens", "안전": "Safety"});
+Object.assign(window.ArkismI18nEN.strings, {"크림": "Cream", "모래": "Sand", "황토": "Tan", "장미": "Rose", "라일락": "Lilac", "하늘": "Sky", "민트": "Mint", "세이지": "Sage",
+  "배경색": "Background", "아바타": "Avatar", "아바타 고르기": "Choose avatar", "모델 아이콘 쓰기": "Use model icon", "아바타 바꾸기": "Change avatar"});
+Object.assign(window.ArkismI18nEN.patterns, {"아바타 {0}": "Avatar {0}"});
