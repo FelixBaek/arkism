@@ -64,7 +64,7 @@ jobs:
           { go vet ./... && GOOS=windows go vet ./... && GOOS=darwin go vet ./...; } > "$RUNNER_TEMP/vet.log" 2>&1 &
           vet=$!
           status=0
-          python3 tools/ci_go_test.py -race -tags=integration || status=$?
+          python3 tools/ci_go_test.py --race --integration || status=$?
           if ! wait "$vet"; then cat "$RUNNER_TEMP/vet.log"; echo "::error::go vet failed"; exit 1; fi
           cat "$RUNNER_TEMP/vet.log"
           exit "$status"

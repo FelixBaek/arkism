@@ -35,7 +35,7 @@ jobs:
       - name: Postgres for tests
         run: tools/ci_postgres.sh
       - name: Go coverage
-        run: python3 tools/ci_go_test.py --coverprofile go-coverage.out
+        run: python3 tools/ci_go_test.py --coverage
       - name: UI coverage
         run: >
           node --test --experimental-test-coverage
