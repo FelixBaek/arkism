@@ -1002,13 +1002,6 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 				}
 			}
 			sid := str(or(data["session_id"], ""))
-			if name == "SessionStart" && sid != "" {
-				lock, err := stableHookLock(sid)
-				if err != nil {
-					return err
-				}
-				defer lock.Close()
-			}
 			if err := func() (err error) { defer recovered(&err); return sessionStore().LinkAgent(sid) }(); err != nil {
 				metric(kv("event", "hook_error"), kv("hook", "session_link"), kv("error", pyType(err)))
 			}
@@ -1029,11 +1022,22 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 					}
 				}
 				// Session-fixed text only: byte-identical for the whole session (prompt cache).
-				part, err = func() (p host.Part, err error) {
-					defer recovered(&err)
-					p, stableDelivery, err = stableBlock(sid, str(or(data["cwd"], "")))
-					return p, err
-				}()
+				// Held until markStableShown so a concurrent start reuses this exact block.
+				// Failing to get it drops only the stable block; work and recent context still go out.
+				var lock io.Closer
+				if sid != "" {
+					lock, err = stableHookLock(sid)
+				}
+				if err == nil {
+					if lock != nil {
+						defer lock.Close()
+					}
+					part, err = func() (p host.Part, err error) {
+						defer recovered(&err)
+						p, stableDelivery, err = stableBlock(sid, str(or(data["cwd"], "")))
+						return p, err
+					}()
+				}
 			} else {
 				prompt, isStr := or(data["prompt"], "").(string)
 				if !isStr {

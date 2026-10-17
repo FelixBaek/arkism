@@ -318,7 +318,7 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	write := newCaptureWrite(key, scope, stale, c)
 	write.prefixSources = canonicalSources
 	prepared, preparedSource, prepareErr := s.loadCapturePreparation(ctx, token, write)
-	if errors.Is(prepareErr, ErrNotFound) {
+	if missingPreparation(prepareErr) {
 		if len(c.SourceRefs) == 0 || len(c.ArchiveMessages) > 0 {
 			sourceText := c.Text
 			var sourceGenerator *Generator
@@ -347,7 +347,7 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 				prepared, preparedSource, prepareErr = s.loadCapturePreparation(ctx, token, write)
 				if prepareErr == nil {
 					err = nil
-				} else if !errors.Is(prepareErr, ErrNotFound) {
+				} else if !missingPreparation(prepareErr) {
 					return item, prepareErr
 				} else if stale != nil {
 					// Legacy pointers predate preparation records. Reuse only their

@@ -312,3 +312,29 @@ func TestCaptureSameTextOtherKindMergesInsteadOfConflict(t *testing.T) {
 		t.Fatal("duplicate source stored")
 	}
 }
+
+func TestCaptureDeletedPreparedSourceEndsTheEvent(t *testing.T) {
+	f := newFixture(t)
+	original := f.svc.Auth
+	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+		if req.Action == "write:memory_candidates" {
+			return Decision{}, ErrUnavailable
+		}
+		return original.Authorize(ctx, token, req)
+	})
+	in := captureInput(scopeA, "prepared-gone", explicit("준비된 출처가 지워지면 기록은 끝나야 한다."))
+	if got := f.capture(f.human, in)[0]; got.Status != "rejected" {
+		t.Fatal(got)
+	}
+	f.svc.Auth = original
+	src := f.repo.rows("sources")[0]
+	if err := f.repo.Delete(testCtx, "sources", src.Scope, src.ID, src.Revision); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.capture(f.human, in)[0]; got.Status != "rejected" || got.Reason != "not_found" {
+		t.Fatalf("deleted prepared source: %+v", got)
+	}
+	if got := f.capture(f.human, in)[0]; got.Reason != "duplicate_event" {
+		t.Fatalf("event kept retrying after its source was deleted: %+v", got)
+	}
+}

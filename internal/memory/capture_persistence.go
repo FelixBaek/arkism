@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 	"unicode/utf8"
 )
@@ -69,6 +70,15 @@ func (w *captureWrite) prepare(ctx context.Context, tx Tx, refs []SourceRef, sou
 	return tx.Insert(ctx, "jobs", Record{ID: w.preparationID, Scope: w.scope, Kind: "capture_preparation", Status: "prepared", Revision: 1, Sources: refs, SourceEventID: sourceID, CreatedAt: now, UpdatedAt: now})
 }
 
+// errPreparedSourceGone: the preparation exists but its evidence was deleted.
+// It is final (not_found, so the event gets a receipt) and must not be read as
+// "no preparation yet", which would retry a conflicting re-preparation forever.
+var errPreparedSourceGone = fmt.Errorf("%w: prepared capture source is gone", ErrNotFound)
+
+func missingPreparation(err error) bool {
+	return errors.Is(err, ErrNotFound) && !errors.Is(err, errPreparedSourceGone)
+}
+
 func (s *Service) loadCapturePreparation(ctx context.Context, token string, w *captureWrite) (Record, Record, error) {
 	prepared, err := s.Repo.Get(ctx, "jobs", w.scope, w.preparationID)
 	if err != nil {
@@ -80,11 +90,14 @@ func (s *Service) loadCapturePreparation(ctx context.Context, token string, w *c
 	var source Record
 	for _, ref := range prepared.Sources {
 		r, e := s.Get(ctx, token, "sources", w.scope, ref.SourceID)
+		if errors.Is(e, ErrNotFound) {
+			return Record{}, Record{}, errPreparedSourceGone
+		}
 		if e != nil {
 			return Record{}, Record{}, e
 		}
 		if !live(r) || r.ContentErased {
-			return Record{}, Record{}, ErrConflict
+			return Record{}, Record{}, errPreparedSourceGone
 		}
 		if r.ID == prepared.SourceEventID {
 			source = r

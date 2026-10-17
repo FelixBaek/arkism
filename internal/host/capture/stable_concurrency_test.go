@@ -104,9 +104,16 @@ func TestConcurrentFirstSessionStartsKeepIdenticalStableOutput(t *testing.T) {
 			t.Fatal(err, secondOut.String())
 		}
 	}
-	// Under -cover each helper also prints its own "PASS / coverage: N%" footer; compare the hook output only.
-	hookOutput := func(b *bytes.Buffer) string { out, _, _ := strings.Cut(b.String(), "\nPASS\n"); return out }
-	if hookOutput(firstOut) != hookOutput(secondOut) {
+	// Each helper also prints go test's own PASS/coverage lines; compare the hook JSON line only.
+	hookLine := func(b *bytes.Buffer) string {
+		for line := range strings.Lines(b.String()) {
+			if strings.HasPrefix(line, `{"hookSpecificOutput"`) {
+				return line
+			}
+		}
+		return ""
+	}
+	if a := hookLine(firstOut); a == "" || a != hookLine(secondOut) {
 		t.Fatalf("same session emitted different stable blocks:\nfirst %s\nsecond %s", firstOut.String(), secondOut.String())
 	}
 }
