@@ -56,15 +56,10 @@ ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemTyp
 ( cd "$DIR" && tar cf - --exclude=src-tauri/target --exclude=dist ui src-tauri installer ) | ssh -o BatchMode=yes "$HOST" "tar xf - -C $REMOTE" 2>&1 | quiet
 
 WORK="$(mktemp -d)"; trap 'rm -rf -- "$WORK"' EXIT
-# Ship the same complete integration set as the standalone PC installer: the arkism
-# binary plus the scheduled-task scripts it installs beside itself.
+# The client embeds the Windows task helpers; both packaging paths ship the same payload.
 GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/arkism.exe" ./cmd/arkism
 run ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemType Directory '$REMOTE/stage/integration' | Out-Null\""
-SUPPORT=()
-for f in install_arkism_export_task.ps1 install_arkism_work_task.ps1; do
-  if [[ -f "$DIR/../tools/$f" ]]; then SUPPORT+=("$DIR/../tools/$f"); else echo "warning: tools/$f not found, skipping" >&2; fi
-done
-run scp -q -o BatchMode=yes "$WORK/arkism.exe" ${SUPPORT[@]+"${SUPPORT[@]}"} "$HOST:$REMOTE/stage/integration/"
+run scp -q -o BatchMode=yes "$WORK/arkism.exe" "$HOST:$REMOTE/stage/integration/"
 
 # Built-in Arkism: the server programs (built here) and the database roles. The build PC adds
 # Postgres and pgvector (installer/prepare-runtime.ps1) because pgvector needs its C compiler.
