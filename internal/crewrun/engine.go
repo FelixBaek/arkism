@@ -97,7 +97,7 @@ func (e *Engine) httpClient() *http.Client {
 }
 
 // httpClientFor is httpClient with its overall timeout raised to at least d, so a
-// node's own timeout (http `timeout`, n8n `sync_timeout`) is not cut short by the
+// node's own timeout (http `timeout`) is not cut short by the
 // daemon client's 60 s.
 func (e *Engine) httpClientFor(d time.Duration) *http.Client {
 	c := e.httpClient()
@@ -598,7 +598,7 @@ func (x *runExec) loop(ctx context.Context) error {
 func (x *runExec) concurrent(id string) bool {
 	n := x.nodes[id]
 	switch n.Type {
-	case "approval", "wait", "n8n", "loop", "end":
+	case "approval", "wait", "loop", "end":
 		return false
 	}
 	return n.Config["access"] == "read"

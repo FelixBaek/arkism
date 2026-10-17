@@ -51,10 +51,9 @@ var crewScriptLangs = []string{"bash", "sh", "python", "go"}
 var crewFileRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,63}$`)
 var crewAvatarBgs = []string{"sand", "tan", "sage", "sky", "lilac", "rose", "cream", "mint"}
 
-// Node kinds a graph may use. Everything here runs on Arkism itself except
-// "n8n", which hands the step to an existing n8n workflow.
+// Node kinds a graph may use. Everything here runs on Arkism itself.
 var crewNodeTypes = []string{"start", "schedule", "webhook", "ai", "ai_once", "code", "http", "github", "approval",
-	"condition", "merge", "loop", "wait", "notify", "end", "n8n", "subflow"}
+	"condition", "merge", "loop", "wait", "notify", "end", "subflow"}
 
 var crewHandleRe = regexp.MustCompile(`^[\p{L}\p{N}_-]{1,40}$`)
 var crewModelRe = regexp.MustCompile(`^[a-zA-Z0-9._ -]{1,80}$`)

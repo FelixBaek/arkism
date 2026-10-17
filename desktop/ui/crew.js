@@ -50,8 +50,7 @@ window.ArkismCrew = (ctx) => {
     wait: { label: "기다리기", sub: "정한 시간 뒤 이어서", icon: "clock-counter-clockwise", group: "흐름" },
     subflow: { label: "하위 워크플로우", sub: "다른 워크플로우를 노드로", icon: "tree-structure", group: "흐름" },
     notify: { label: "알림 보내기", sub: "텔레그램·슬랙·메일", icon: "paper-plane", group: "알림·끝" },
-    end: { label: "보고하고 끝", sub: "부른 자리에 결과 돌려주기", icon: "flag", group: "알림·끝" },
-    n8n: { label: "n8n으로 보내기", sub: "위 노드로 안 되는 연동", icon: "plug", group: "그 밖의 연동" }
+    end: { label: "보고하고 끝", sub: "부른 자리에 결과 돌려주기", icon: "flag", group: "알림·끝" }
   };
   const IS_AI = (t) => t === "ai" || t === "ai_once";
   const PORTS = { condition: [["yes", "예"], ["no", "아니오"]], approval: [["approve", "승인"], ["reject", "거절"]], code: [["pass", "통과"], ["fail", "실패"]] };
@@ -70,8 +69,7 @@ window.ArkismCrew = (ctx) => {
     wait: [["duration", "기다릴 시간 (예: 30m, 2h)", "text", "30m"]],
     subflow: [["workflow", "부를 워크플로우", "workflow"], ["task", "넘길 일 ({{input}}에 앞 결과가 들어가요)", "area"]],
     notify: [["channel", "보내는 곳", "select", [["telegram", "텔레그램"], ["slack", "슬랙"], ["email", "메일"]]], ["to", "받는 곳 이름 (서버 notify.json)", "text"], ["message", "보낼 말", "area"]],
-    end: [["message", "보고 형식", "text", "요약 + 링크"]],
-    n8n: [["url", "n8n 웹훅 주소", "text", "https://"], ["mode", "결과 받기", "select", [["sync", "바로 응답 (짧은 일)"], ["async", "끝나면 알려줌 (오래 걸리는 일)"]]], ["timeout", "기다릴 최대 시간", "text", "30m"]]
+    end: [["message", "보고 형식", "text", "요약 + 링크"]]
   };
 
   // ---------------------------------------------------------------- data
@@ -227,7 +225,7 @@ window.ArkismCrew = (ctx) => {
 
   // 구조 검토 · 규칙 검사 (03c): what code can decide on its own, before any AI is asked.
   // POST is how most search APIs read, so only PUT·PATCH·DELETE count as changing something elsewhere.
-  const IRREVERSIBLE = (n) => n.type === "github" || n.type === "n8n" || n.type === "notify" || (n.type === "http" && ["PUT", "PATCH", "DELETE"].includes((n.config?.method || "").toUpperCase()));
+  const IRREVERSIBLE = (n) => n.type === "github" || n.type === "notify" || (n.type === "http" && ["PUT", "PATCH", "DELETE"].includes((n.config?.method || "").toUpperCase()));
   function ruleChecks(x, g = x.graph) {
     const nodes = g?.nodes || [];
     const edges = fwd(g);
@@ -1173,10 +1171,10 @@ window.ArkismCrew = (ctx) => {
     touch();
     render(false);
   }
-  const TAB_NAMES = { "저장한 페르소나": "페르소나", "그 밖의 연동": "연동" };
+  const TAB_NAMES = { "저장한 페르소나": "페르소나" };
   function presetItems() {
     const out = [];
-    const order = ["AI", "저장한 페르소나", "시작", "처리", "흐름", "알림·끝", "그 밖의 연동"];
+    const order = ["AI", "저장한 페르소나", "시작", "처리", "흐름", "알림·끝"];
     for (const [type, n] of Object.entries(NODES)) if (!n.hidden) out.push({ group: n.group, type, title: n.label, sub: n.sub, preset: {} });
     for (const p of personas()) out.push({ group: "저장한 페르소나", type: "ai", title: p.crew.name, sub: "AI 에이전트로 넣어요", persona: true, preset: { title: p.crew.name, config: { persona: p.id } } });
     return out.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
@@ -1248,7 +1246,6 @@ window.ArkismCrew = (ctx) => {
     if (n.type === "wait") return [["기다림", c.duration || "—"]];
     if (n.type === "loop") return [["목록", c.path || "—"]];
     if (n.type === "notify") return [["보내기", `${{ telegram: "텔레그램", slack: "슬랙", email: "메일" }[c.channel] || ""} ${c.to || ""}`]];
-    if (n.type === "n8n") return [["결과", c.mode === "async" ? "끝나면 알려줌" : "바로 응답"]];
     if (n.type === "end") return [["형식", c.message || "요약 + 링크"]];
     if (n.type === "start") return [["받는 것", "부를 때 쓴 문장"]];
     return [];
@@ -1642,7 +1639,6 @@ window.ArkismCrew = (ctx) => {
     if (n.type === "code") box.append(el("p", "meta", "출력이 {\"ok\": true/false, …}면 통과·실패 갈래로 나뉘어요. 처음 한 번은 빌드에 1~2초, 30초 안에 끝나야 해요. 토큰은 들지 않아요."));
     if (n.type === "approval") box.append(el("p", "meta", "배포·게시처럼 되돌릴 수 없는 단계 바로 앞에 두세요. 답이 올 때까지 멈춰요."));
     if (n.type === "subflow") box.append(el("p", "meta", "부른 워크플로우를 끝까지 돌리고 그 결과를 다음 단계에 넘겨요. 세 겹까지만 부를 수 있어요."));
-    if (n.type === "n8n") box.append(el("p", "meta", "오래 걸리는 일은 n8n 마지막 노드가 Arkism 콜백 주소로 결과를 보내요. 주소는 실행할 때 1회용 토큰과 함께 넘겨요."));
     if (WORK(n)) box.append(onlyRun(n));
     box.append(button("노드 지우기", "ghost danger", "trash", async () => {
       if (await confirmBox("노드를 지울까요?", "이 노드와 이어진 선이 함께 지워져요. 저장하기 전까지는 되돌리기로 살릴 수 있어요.", "노드 지우기")) removeNode(n.id);

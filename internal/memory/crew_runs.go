@@ -44,7 +44,7 @@ type CrewRunWaiting struct {
 	ResumeAt *time.Time `json:"resume_at,omitempty" bson:"resume_at,omitempty"`
 	Question string     `json:"question,omitempty" bson:"question,omitempty"`
 	// CallbackHash is the SHA-256 (hex) of a one-time callback token; the token
-	// itself stays with the engine and n8n.
+	// itself stays with the engine.
 	CallbackHash string `json:"callback_hash,omitempty" bson:"callback_hash,omitempty"`
 }
 
