@@ -104,8 +104,39 @@ func scopeQuery(skipEmpty bool, extra ...string) string {
 // searchMemories recalls memories within one time budget; on an embedder outage it keeps lexical recall.
 var search = searchMemories
 
+// recallSearch is search with the score floor the MCP recall tool also uses (ST-815); hooks then
+// capBudget the list they actually inject. The extractor's duplicate check keeps the raw search.
+func recallSearch(query, project string, limit int, timeout float64) ([]any, error) {
+	items, vectorRan, err := search(query, project, limit, timeout)
+	if err != nil {
+		return nil, err
+	}
+	kept, low := host.LoadRecallBudget().Floor(items, vectorRan)
+	budgetMetric("below_score", low)
+	return kept, nil
+}
+
+// capBudget applies the per-kind budget to the final injected list (ST-815).
+func capBudget(items []map[string]any) []map[string]any {
+	list := make([]any, len(items))
+	for i, m := range items {
+		list[i] = m
+	}
+	kept, over := host.LoadRecallBudget().Cap(list)
+	budgetMetric("over_budget", over)
+	return dicts(kept)
+}
+
+// budgetMetric logs counts only, never text or query.
+func budgetMetric(reason string, n int) {
+	if n > 0 {
+		metric(kv("event", "recall_budget"), kv("reason", reason), kv("dropped", n))
+	}
+}
+
 // project is host.ProjectKey of the session: the server leaves out other projects' memories.
-func searchMemories(query, project string, limit int, timeout float64) ([]any, error) {
+// vectorRan is host.VectorRan of the answer it returns.
+func searchMemories(query, project string, limit int, timeout float64) (items []any, vectorRan bool, err error) {
 	deadline := monotonic() + timeout
 	body := map[string]any{"scope": capScope(), "query": head(query, 1000), "modes": []any{"exact", "fts", "vector"},
 		"purpose": "answer", "destination": "internal", "limit": limit, "max_chars": 6000}
@@ -115,18 +146,18 @@ func searchMemories(query, project string, limit int, timeout float64) ([]any, e
 	res, err := capPost("/v1/search", body, secs(timeout))
 	if err != nil {
 		if host.HTTPCode(err) != 503 {
-			return nil, err
+			return nil, false, err
 		}
 		remaining := deadline - monotonic()
 		if remaining <= 0 {
-			return nil, err
+			return nil, false, err
 		}
 		body["modes"] = []any{"exact", "fts"} // embedder outage: keep lexical recall instead of none
 		res, err = capPost("/v1/search", body, secs(remaining))
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		return listOf(res["items"]), nil
+		return listOf(res["items"]), false, nil
 	}
 	if degraded, _ := res["degraded"].([]any); containsAny(degraded, "memory_vector_unavailable") {
 		// Retry within the caller's budget; never double a foreground hook's wait.
@@ -136,14 +167,11 @@ func searchMemories(query, project string, limit int, timeout float64) ([]any, e
 			if err == nil {
 				res = retry
 			} else if code := host.HTTPCode(err); code != 503 && (code != 0 || !networkish(err) || pyType(err) == "RuntimeError") {
-				return nil, err
+				return nil, false, err
 			} // HTTP 503 or a network error: the first response still has usable lexical results
 		}
 	}
-	if items, has := res["items"]; has {
-		return listOf(items), nil
-	}
-	return []any{}, nil
+	return listOf(res["items"]), host.VectorRan(body["modes"].([]any), res), nil
 }
 
 func secs(s float64) time.Duration { return time.Duration(s * float64(time.Second)) }
@@ -556,6 +584,7 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 		unpinned := func(i map[string]any) bool { return !skip[strField(i["id"])] }
 		items, related = keepIf(items, unpinned), keepIf(related, unpinned)
 	}
+	related = capBudget(related) // after the pinned ones are out, so they use no kind slot
 	relLines, dropped := within(indexLines(related), limit/2-host.Len(contractHeader)-1)
 	related = related[:len(relLines)]
 	shown := map[any]bool{}
@@ -649,12 +678,13 @@ func withText(items []map[string]any) []map[string]any {
 	return out
 }
 
-// contractRelated is up to 6 memories that match the repo's task contract.
+// contractRelated is up to 6 memories that match the repo's task contract (score floor only; the
+// caller applies the kind budget once pinned memories are out).
 func contractRelated(contract, project string) []map[string]any {
 	if contract == "" {
 		return []map[string]any{}
 	}
-	items, err := search(head(contract, 2000), project, 6, 8)
+	items, err := recallSearch(head(contract, 2000), project, 6, 8)
 	if err != nil { // the standing rules still go in
 		metric(kv("event", "hook_error"), kv("hook", "SessionStart:contract"), kv("error", pyType(err)))
 		return []map[string]any{}
@@ -710,7 +740,7 @@ func promptParts(prompt, sid, cwd string) (part host.Part, revs map[string]int64
 	if host.Len(text) < 8 {
 		return host.Part{}, nil, nil
 	}
-	list, err := search(head(text, 2000), host.ProjectKey(cwd), 6, 8)
+	list, err := recallSearch(head(text, 2000), host.ProjectKey(cwd), 6, 8)
 	if err != nil {
 		return host.Part{}, nil, err
 	}
@@ -731,8 +761,8 @@ func promptParts(prompt, sid, cwd string) (part host.Part, revs map[string]int64
 		rev, ok := shown[str(i["id"])]
 		return !ok || revision(i) > rev
 	})
+	items = capBudget(withText(items))
 	recallMetric("UserPromptSubmit", sid, items)
-	items = withText(items)
 	if len(items) == 0 {
 		return host.Part{}, nil, nil
 	}

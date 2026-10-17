@@ -53,6 +53,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	modelInputRoutes(mux, s)
 	memoryOutcomeRoutes(mux, s)
 	memoryOutcomeReadRoutes(mux, s)
+	memoryOutcomeComparisonRoutes(mux, s)
 	memorySignalRoutes(mux, s)
 	memoryGraphRoutes(mux, s)
 	mux.HandleFunc("POST /v1/consultations", func(w http.ResponseWriter, r *http.Request) {
@@ -363,6 +364,23 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 			return
 		}
 		v, e := s.SetMemoryReach(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, v, e)
+	})
+	mux.HandleFunc("GET /v1/memory-reach-suggestions", func(w http.ResponseWriter, r *http.Request) {
+		in, e := parseMemoryListQuery(r.URL.RawQuery)
+		if e != nil {
+			respond(w, nil, e)
+			return
+		}
+		v, e := s.ReachSuggestions(r.Context(), bearer(r), in)
+		respond(w, v, e)
+	})
+	mux.HandleFunc("POST /v1/memories/{id}/reach-suggestion/dismiss", func(w http.ResponseWriter, r *http.Request) {
+		var in ReachSuggestionDismissInput
+		if !decode(w, r, &in) {
+			return
+		}
+		v, e := s.DismissReachSuggestion(r.Context(), bearer(r), r.PathValue("id"), in)
 		respond(w, v, e)
 	})
 	mux.HandleFunc("GET /v1/maintenance_proposals", func(w http.ResponseWriter, r *http.Request) {

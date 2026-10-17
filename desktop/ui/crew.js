@@ -138,6 +138,12 @@ window.ArkismCrew = (ctx) => {
   const WORK = (n) => !["start", "schedule", "webhook", "end"].includes(n.type);
   const isBack = (e) => (e.max || 0) > 0;
   const fwd = (g) => (g?.edges || []).filter((e) => !isBack(e));
+  // Edges by the node they leave, so walks over the graph stay linear in its size.
+  const outsOf = (edges) => {
+    const m = new Map();
+    for (const e of edges) (m.get(e.from) || m.set(e.from, []).get(e.from)).push(e);
+    return m;
+  };
   const nodeTitle = (n) => n.title || NODES[n.type]?.label || n.type;
   const stepCount = (g) => (g?.nodes || []).filter(WORK).length;
   const aiNodes = (g) => (g?.nodes || []).filter((n) => IS_AI(n.type));
@@ -157,9 +163,10 @@ window.ArkismCrew = (ctx) => {
     const queue = g.nodes.filter((n) => !incoming[n.id]).map((n) => n.id);
     queue.forEach((id) => { depth[id] = 0; });
     const left = { ...incoming };
-    while (queue.length) {
-      const id = queue.shift();
-      for (const e of edges.filter((x) => x.from === id)) {
+    const outs = outsOf(edges);
+    for (let qi = 0; qi < queue.length; qi++) {
+      const id = queue[qi];
+      for (const e of outs.get(id) || []) {
         depth[e.to] = Math.max(depth[e.to] || 0, depth[id] + 1);
         if (--left[e.to] === 0) queue.push(e.to);
       }
@@ -175,12 +182,12 @@ window.ArkismCrew = (ctx) => {
   function wouldCycle(graph, from, to) {
     if (from === to) return true;
     const seen = new Set();
-    const edges = fwd(graph);
+    const outs = outsOf(fwd(graph));
     const walk = (id) => {
       if (id === from) return true;
       if (seen.has(id)) return false;
       seen.add(id);
-      return edges.filter((e) => e.from === id).some((e) => walk(e.to));
+      return (outs.get(id) || []).some((e) => walk(e.to));
     };
     return walk(to);
   }
@@ -225,12 +232,14 @@ window.ArkismCrew = (ctx) => {
     const nodes = g?.nodes || [];
     const edges = fwd(g);
     const out = [];
-    const roots = nodes.filter((n) => !edges.some((e) => e.to === n.id));
+    const targets = new Set(edges.map((e) => e.to));
+    const outs = outsOf(edges);
+    const roots = nodes.filter((n) => !targets.has(n.id));
     const seen = new Set();
-    const walk = (id) => { if (seen.has(id)) return; seen.add(id); edges.filter((e) => e.from === id).forEach((e) => walk(e.to)); };
+    const walk = (id) => { if (seen.has(id)) return; seen.add(id); (outs.get(id) || []).forEach((e) => walk(e.to)); };
     roots.forEach((n) => walk(n.id));
     const orphan = nodes.filter((n) => !seen.has(n.id));
-    const ends = nodes.filter((n) => !edges.some((e) => e.from === n.id));
+    const ends = nodes.filter((n) => !outs.has(n.id));
     out.push({ ok: !orphan.length && roots.length <= 1, label: "시작→끝 도달", detail: orphan.length ? `닿지 않는 노드: ${orphan.map(nodeTitle).join(", ")}` : roots.length > 1 ? `시작이 ${roots.length}개예요` : `끝 ${ends.length}곳` });
     const backs = (g?.edges || []).filter(isBack);
     out.push({ ok: true, label: "되돌아가기 제한", detail: backs.length ? backs.map((e) => `${nodeTitle(nodes.find((n) => n.id === e.from) || {})} → ${nodeTitle(nodes.find((n) => n.id === e.to) || {})} 최대 ${e.max}번`).join(" · ") : "되돌아가는 선이 없어요" });
@@ -1253,6 +1262,7 @@ window.ArkismCrew = (ctx) => {
   }
 
   function renderGraph() {
+    const t0 = performance.now();
     const rec = ed.rec;
     if (!rec) { state.view = "crew"; render(); return; }
     $("#controls").replaceChildren();
@@ -1305,14 +1315,14 @@ window.ArkismCrew = (ctx) => {
       }
       box.append(portBox);
       if (!ed.run) head.addEventListener("pointerdown", (ev) => startDrag(ev, n, box, canvas, svg));
-      box.addEventListener("click", (ev) => { ev.stopPropagation(); if (ed.sel !== n.id) { ed.sel = n.id; ed.selEdge = null; render(false); } });
+      box.addEventListener("click", (ev) => { ev.stopPropagation(); if (ed.sel !== n.id) selectOnCanvas(n.id); });
       canvas.append(box);
       nodeEls.set(n.id, box);
     }
     stage.append(canvas);
     stage.addEventListener("click", () => {
       if (ed.justPanned) { ed.justPanned = false; return; }
-      if (ed.sel || ed.selEdge !== null) { ed.sel = null; ed.selEdge = null; render(false); }
+      if (ed.sel || ed.selEdge !== null) selectOnCanvas(null);
     });
     // 화면 이동: 휠 클릭(가운데 버튼)으로 끌거나 스페이스를 누른 채 끌어요 (Figma와 같아요).
     // Capture phase, so a node under the pointer does not start its own drag.
@@ -1379,7 +1389,10 @@ window.ArkismCrew = (ctx) => {
     else if (ed.review) side = reviewPanel;
     page.append(ed.run && ed.runList ? runList() : stage, side());
     $("#table").replaceChildren(page);
-    requestAnimationFrame(() => drawEdges(svg, labels, nodeEls));
+    requestAnimationFrame(() => {
+      drawEdges(svg, labels, nodeEls);
+      window.ArkismPerf?.note("canvas.render", performance.now() - t0, g.nodes.length);
+    });
   }
   function curve(a, b) {
     const dx = Math.max(40, Math.abs(b.x - a.x) / 2);
@@ -1392,18 +1405,26 @@ window.ArkismCrew = (ctx) => {
     const at = 0.3 + 0.4 * (k % 2);
     return { d: `M${a.x},${a.y} C${a.x + 60},${a.y} ${a.x + 60},${top} ${a.x - 40},${top} L${b.x + 40},${top} C${b.x - 60},${top} ${b.x - 60},${b.y} ${b.x},${b.y}`, mid: { x: b.x + (a.x - b.x) * at, y: top } };
   }
+  const edgeShape = (e, pa, pb, lift, k) => isBack(e) ? backCurve(pa, pb, lift, k) : { d: curve(pa, pb), mid: { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 } };
   function drawEdges(svg, labels, nodeEls) {
+    const t0 = performance.now();
     svg.replaceChildren();
     labels.replaceChildren();
     const loops = ed.run?.crew_run?.loops || {};
+    const typeOf = new Map(ed.graph.nodes.map((n) => [n.id, n.type]));
+    const drawn = [];
     let lift = 60, k = 0;
-    ed.graph.edges.forEach((e, i) => {
+    // Read every port position before writing anything: a write between reads makes the browser lay out again each time.
+    const points = ed.graph.edges.map((e) => {
       const a = nodeEls.get(e.from), b = nodeEls.get(e.to);
-      if (!a || !b) return;
-      const pa = outPoint(a, e.port), pb = inPoint(b);
+      return a && b ? [outPoint(a, e.port), inPoint(b)] : [];
+    });
+    ed.graph.edges.forEach((e, i) => {
+      const [pa, pb] = points[i];
       if (!pa || !pb) return;
       const back = isBack(e);
-      const shape = back ? backCurve(pa, pb, (lift += 32), k++) : { d: curve(pa, pb), mid: { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 } };
+      const at = back ? { lift: (lift += 32), k: k++ } : { lift: 0, k: 0 };
+      const shape = edgeShape(e, pa, pb, at.lift, at.k);
       const used = loops[`${e.from}>${e.to}:${e.port || ""}`] || 0;
       const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
       p.setAttribute("d", shape.d);
@@ -1414,19 +1435,49 @@ window.ArkismCrew = (ctx) => {
       const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
       title.textContent = ed.run ? "" : "눌러서 선 설정";
       hit.append(title);
-      if (!ed.run) hit.addEventListener("click", (ev) => { ev.stopPropagation(); ed.selEdge = i; ed.sel = null; render(false); });
+      if (!ed.run) hit.addEventListener("click", (ev) => { ev.stopPropagation(); selectOnCanvas(null, i); });
       svg.append(p, hit);
-      const fromType = ed.graph.nodes.find((n) => n.id === e.from)?.type;
+      const fromType = typeOf.get(e.from);
       const portText = PORTS[fromType]?.find(([k]) => k === e.port)?.[1] || e.port;
       const text = back ? `${portText ? `${portText} → ` : ""}다시 · ${used ? `${used}/${e.max}번째` : `최대 ${e.max}번`}` : (IS_AI(fromType) && e.port ? `${e.port} · AI가 고름` : "");
       if (text) {
         const chip = el("span", `g-edge-label${back ? " back" : ""}${used ? " used" : ""}`, text);
         chip.style.left = `${shape.mid.x}px`;
         chip.style.top = `${shape.mid.y}px`;
-        if (!ed.run) chip.addEventListener("click", (ev) => { ev.stopPropagation(); ed.selEdge = i; ed.sel = null; render(false); });
+        if (!ed.run) chip.addEventListener("click", (ev) => { ev.stopPropagation(); selectOnCanvas(null, i); });
         labels.append(chip);
+        at.chip = chip;
       }
+      drawn.push(Object.assign(at, { i, e, p, hit }));
     });
+    svg.drawn = drawn;
+    window.ArkismPerf?.note("canvas.edges", performance.now() - t0, ed.graph.edges.length);
+  }
+  // Picking a node or a line only swaps the selection marks and the side panel; the canvas stays as drawn.
+  function selectOnCanvas(id, edge = null) {
+    ed.sel = id;
+    ed.selEdge = edge;
+    const page = $("#table .graph-page");
+    const side = page?.querySelector(":scope > .g-right");
+    if (ed.run || ed.review || !side) { render(false); return; }
+    const t0 = performance.now();
+    page.querySelectorAll(".g-node.selected").forEach((b) => b.classList.remove("selected"));
+    if (id) page.querySelector(`.g-node[data-id="${CSS.escape(id)}"]`)?.classList.add("selected");
+    for (const d of page.querySelector(".g-edges")?.drawn || []) d.p.classList.toggle("selected", d.i === edge);
+    side.replaceWith(inspector());
+    window.ArkismPerf?.note("canvas.select", performance.now() - t0, ed.graph.nodes.length);
+  }
+  // While a node is dragged only the lines touching it move; the rest of the canvas stays as drawn.
+  function moveEdges(svg, nodeEls, id) {
+    for (const d of svg.drawn || []) {
+      if (d.e.from !== id && d.e.to !== id) continue;
+      const pa = outPoint(nodeEls.get(d.e.from), d.e.port), pb = inPoint(nodeEls.get(d.e.to));
+      if (!pa || !pb) continue;
+      const shape = edgeShape(d.e, pa, pb, d.lift, d.k);
+      d.p.setAttribute("d", shape.d);
+      d.hit.setAttribute("d", shape.d);
+      if (d.chip) { d.chip.style.left = `${shape.mid.x}px`; d.chip.style.top = `${shape.mid.y}px`; }
+    }
   }
   function outPoint(box, port) {
     const dot = box.querySelector(`.g-port.out[data-port="${CSS.escape(port || "")}"]`) || box.querySelector(".g-port.out");
@@ -1449,7 +1500,7 @@ window.ArkismCrew = (ctx) => {
     const ox = n.x, oy = n.y;
     let moved = false;
     const nodeEls = new Map([...canvas.querySelectorAll(".g-node")].map((b) => [b.dataset.id, b]));
-    const labels = canvas.querySelector(".g-labels");
+    let frame = 0;
     const move = (e) => {
       const p = toCanvas(e, canvas);
       n.x = Math.round(ox + p.x - start.x);
@@ -1457,7 +1508,13 @@ window.ArkismCrew = (ctx) => {
       box.style.left = `${n.x}px`;
       box.style.top = `${n.y}px`;
       moved = true;
-      drawEdges(svg, labels, nodeEls);
+      // One redraw per screen frame, however many pointer events arrive.
+      frame ||= requestAnimationFrame(() => {
+        frame = 0;
+        const t0 = performance.now();
+        moveEdges(svg, nodeEls, n.id);
+        window.ArkismPerf?.note("canvas.drag", performance.now() - t0, ed.graph.edges.length);
+      });
     };
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); if (moved) touch(); };
     window.addEventListener("pointermove", move);

@@ -2,7 +2,9 @@ package capture
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -75,7 +77,7 @@ func TestPromptRecallSkipsEarlierTurnsUnlessRevised(t *testing.T) {
 	hookEnv(t)
 	sessionOutcomeEnv(t)
 	hits := []any{memoryHit("c8b788c964a0350e97d8635111de6824", 2, ""), memoryHit("d9243bd5ef20da4ea2369e120fb20962", 1, "")}
-	search = func(string, string, int, float64) ([]any, error) { return hits, nil }
+	search = func(string, string, int, float64) ([]any, bool, error) { return hits, true, nil }
 	turn := func(sid string) string {
 		t.Helper()
 		p, revs, err := promptParts("기억 승인 권한을 다시 설명해 줘", sid, "")
@@ -127,5 +129,69 @@ func TestPromptRecallSkipsEarlierTurnsUnlessRevised(t *testing.T) {
 	}
 	if rows != 5 {
 		t.Fatal("ledger rows for s1", rows)
+	}
+}
+
+// ST-815: the prompt and SessionStart contract hooks drop hits below the same score floor and
+// kind budget the MCP recall tool uses, so an unrelated prompt injects nothing.
+func TestHookRecallAppliesSharedBudget(t *testing.T) {
+	capFake(t)
+	hookEnv(t)
+	sessionOutcomeEnv(t)
+	t.Setenv("ARKISM_RECALL_MIN_SCORE", "0.025")
+	t.Setenv("ARKISM_RECALL_BUDGET", "procedural=3:1500")
+	low := memoryHit("c8b788c964a0350e97d8635111de6824", 1, "")
+	low["score"] = json.Number("0.016393")
+	search = func(string, string, int, float64) ([]any, bool, error) { return []any{low}, true, nil }
+	if p, _, err := promptParts("관련 없는 질문을 하나 해 볼게요", "s1", ""); err != nil || p.Full != "" {
+		t.Fatal(err, p.Full)
+	}
+	if got := contractRelated("작업 계약 본문", ""); len(got) != 0 {
+		t.Fatal(got)
+	}
+	var procedural []any
+	for i := range 4 {
+		h := memoryHit(fmt.Sprintf("%032x", i+1), 1, "")
+		h["kind"], h["score"] = "procedural", json.Number("0.05")
+		procedural = append(procedural, h)
+	}
+	search = func(string, string, int, float64) ([]any, bool, error) { return procedural, true, nil }
+	if p, _, err := promptParts("기억 승인 권한을 다시 설명해 줘", "s2", ""); err != nil || strings.Count(p.Full, "\n- [") != 3 {
+		t.Fatal(err, p.Full)
+	}
+	// The kind cap runs on the injected list: hits the stable block already shows use no slot.
+	ids := []string{}
+	for _, h := range procedural[:3] {
+		ids = append(ids, h.(map[string]any)["id"].(string))
+	}
+	if _, err := sessionStore().SaveStable("s3", host.StableBlock{IDs: ids}); err != nil {
+		t.Fatal(err)
+	}
+	p, revs, err := promptParts("기억 승인 권한을 다시 설명해 줘", "s3", "")
+	if _, fourth := revs[procedural[3].(map[string]any)["id"].(string)]; err != nil || strings.Count(p.Full, "\n- [") != 1 || len(revs) != 1 || !fourth {
+		t.Fatal(err, p.Full, revs)
+	}
+}
+
+// ST-815: contract-related memories the stable block pins use no kind slot; the budget runs after
+// they are skipped, so a third decision still shows under decision=2.
+func TestSessionIndexContractBudgetAfterSkip(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	os.MkdirAll(filepath.Join(repo, ".arkism"), 0o755)
+	os.WriteFile(filepath.Join(repo, ".arkism", "contract.md"), []byte("작업 계약: 기억 승인 경계를 지킨다."), 0o644)
+	capFake(t)
+	t.Setenv("ARKISM_RECALL_BUDGET", "decision=2:1500")
+	capGet = func(string, time.Duration) (map[string]any, error) { return map[string]any{"items": []any{}}, nil }
+	var hits []any
+	for i := range 3 {
+		hits = append(hits, map[string]any{"id": fmt.Sprintf("d%d", i), "kind": "decision", "text": fmt.Sprintf("결정 %d", i), "score": 0.05})
+	}
+	search = func(string, string, int, float64) ([]any, bool, error) { return hits, true, nil }
+	idx, err := sessionIndexSkipping("s1", repo, 4000, map[string]bool{"d0": true, "d1": true})
+	if err != nil || !strings.Contains(idx.Full, "결정 2") {
+		t.Fatal(err, idx.Full)
 	}
 }

@@ -34,11 +34,11 @@ func stableFake(t *testing.T) *[]any {
 		t.Fatalf("unexpected get %s", path)
 		return nil, nil
 	}
-	search = func(q, _ string, _ int, _ float64) ([]any, error) {
+	search = func(q, _ string, _ int, _ float64) ([]any, bool, error) {
 		return []any{
 			map[string]any{"id": "rule-1", "kind": "user", "text": "보고는 짧게"}, // already in the stable block
 			map[string]any{"id": "hit-" + q[:3], "kind": "decision", "text": "턴별 기억 " + q},
-		}, nil
+		}, true, nil
 	}
 	return standing
 }

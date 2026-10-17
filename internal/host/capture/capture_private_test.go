@@ -211,7 +211,7 @@ func TestDrainAndReflectPromptsCarryUserGuidance(t *testing.T) {
 		systems = append(systems, system)
 		return []any{}, nil
 	}
-	search = func(string, string, int, float64) ([]any, error) { return []any{}, nil }
+	search = func(string, string, int, float64) ([]any, bool, error) { return []any{}, true, nil }
 	capPost = func(string, any, time.Duration) (map[string]any, error) { return map[string]any{}, nil }
 	job := mustLoad(t, `{"session_id": "s1", "event_id": "e1", "type": "turn_completed", "users": [{"at": "t", "text": "앞으로 이렇게 해"}]}`)
 	if err := process(job, nil); err != nil {
