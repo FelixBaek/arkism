@@ -142,3 +142,20 @@ func TestAgentWithAWorkflowRunsItInsteadOfAnswering(t *testing.T) {
 		t.Fatal(res, err)
 	}
 }
+
+func TestAgentWorkflowWaitingOnAnApprovalSaysSo(t *testing.T) {
+	patch(t, &apiGet, func(path string, _ time.Duration) (map[string]any, error) {
+		if strings.Contains(path, "/v1/crew/resolve") {
+			return workflowFixture(t, "리서치", ""), nil
+		}
+		return runRec("waiting", map[string]any{"node_id": "a", "kind": "approval", "question": "보낼까요?"}, nil, "", 2), nil
+	})
+	patch(t, &apiPost, func(string, any, time.Duration) (map[string]any, error) {
+		return runRec("running", nil, nil, "", 1), nil
+	})
+	patch(t, &runSleep, func(float64) {})
+	res := agentWorkflow("리서치", "AI 뉴스")
+	if out := sOr(res["output"]); !strings.Contains(out, "확인을 기다려요: 보낼까요?") || !strings.Contains(out, "run-1") {
+		t.Fatal(res)
+	}
+}

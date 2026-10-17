@@ -524,7 +524,8 @@ func syncInstalls(manifest string) (int, error) {
 }
 
 // tryAgent is 써보기 (and Discord's @이름 question): the work agent called by its handle answers once, read-only, on its
-// model (auto: 라우팅 picks; its fallback model when the first fails). The call is counted for the agent.
+// model (auto: 라우팅 picks; its fallback model when the first fails). The call is counted for the agent. An agent that
+// works by a workflow runs that workflow instead, with the access its steps were given (the only way it runs live).
 func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 	handle := strings.TrimPrefix(strings.TrimSpace(sOr(a["expert"])), "@")
 	res, err := runnerCall("/v1/crew/resolve?"+scopeQuery("handle", "@"+handle), nil, 15*time.Second)
@@ -583,6 +584,11 @@ func agentWorkflow(handle, prompt string) map[string]any {
 	case "failed", "stopped":
 		return failedResult("$" + handle + " 워크플로우가 " + map[string]string{"failed": "실패했어요", "stopped": "멈췄어요"}[status])
 	}
+	if w, ok := view["waiting"].(host.Obj); ok {
+		q, _ := w.Get("question")
+		return map[string]any{"status": "done", "output": "$" + handle + " 워크플로우가 확인을 기다려요: " + pyStr(q) + " (실행 " + pyStr(view["run_id"]) + ")"}
+	}
+	// An assist ends done or failed only; a run still going is neither, so the answer says so with its id.
 	return map[string]any{"status": "done", "output": "$" + handle + " 워크플로우가 아직 도는 중이에요 (실행 " + pyStr(view["run_id"]) + ")"}
 }
 
