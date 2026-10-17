@@ -20,6 +20,16 @@ def spread(values):
             "p90": pick(0.9), "max": v[-1]}
 
 
+def selected(line, cutoff):
+    """Return an inject/recall row at or after the cutoff, None to ignore, or raise."""
+    row = json.loads(line)
+    if row.get("event") not in ("inject", "recall"):
+        return None
+    if cutoff and timestamp(row.get("ts")) < cutoff:
+        return None
+    return row
+
+
 def summarize(lines, since=None, session_max=4000):
     """inject chars per hook and recall item counts; session ids only counted."""
     cutoff = timestamp(since) if since is not None else None
@@ -28,13 +38,11 @@ def summarize(lines, since=None, session_max=4000):
     skipped = 0
     for line in lines:
         try:
-            row = json.loads(line)
-            if row.get("event") not in ("inject", "recall"):
-                continue
-            if cutoff and timestamp(row.get("ts")) < cutoff:
-                continue
+            row = selected(line, cutoff)
         except (ValueError, TypeError, AttributeError):
             skipped += 1
+            continue
+        if row is None:
             continue
         hook = row.get("hook") if row.get("hook") in HOOKS else "other"
         if row["event"] == "inject" and isinstance(row.get("chars"), int):
