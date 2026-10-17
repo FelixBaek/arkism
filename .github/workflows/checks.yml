@@ -58,15 +58,16 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' }}
       - name: Postgres for tests
         run: tools/ci_postgres.sh
-      - name: Vet
-        run: go vet ./...
-      - name: Vet for Windows and macOS
+      - name: Vet (Linux, Windows, macOS) and unit + Postgres integration tests (race)
+        # Vet runs alongside the tests; the two slow packages run as parallel test groups (tools/ci_go_test.py).
         run: |
-          GOOS=windows go vet ./...
-          GOOS=darwin go vet ./...
-      - name: Unit and Postgres integration tests (race)
-        # The two slow packages run as parallel test groups (tools/ci_go_test.py).
-        run: python3 tools/ci_go_test.py -race -tags=integration
+          { go vet ./... && GOOS=windows go vet ./... && GOOS=darwin go vet ./...; } > "$RUNNER_TEMP/vet.log" 2>&1 &
+          vet=$!
+          status=0
+          python3 tools/ci_go_test.py -race -tags=integration || status=$?
+          if ! wait "$vet"; then cat "$RUNNER_TEMP/vet.log"; echo "::error::go vet failed"; exit 1; fi
+          cat "$RUNNER_TEMP/vet.log"
+          exit "$status"
       - name: Core boundary coverage (90% per file)
         if: ${{ !cancelled() }}
         run: |
