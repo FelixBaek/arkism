@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 )
 
 var hooksMu sync.Mutex
@@ -95,11 +94,10 @@ func readBody(w http.ResponseWriter, r *http.Request) (any, bool) {
 	return v, true
 }
 
-// Handler serves webhooks and n8n callbacks. Runs started here continue on
+// Handler serves webhooks. Runs started here continue on
 // ctx (the daemon's lifetime), not the request's.
 //
 //	POST /hooks/{workflow_id}          header X-Arkism-Hook-Token; body JSON is the run input → 202 {run_id}
-//	POST /callbacks/{run_id}/{node_id} header X-Arkism-Callback-Token (one-time); body JSON is the node output
 func (e *Engine) Handler(ctx context.Context) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /hooks/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -127,61 +125,5 @@ func (e *Engine) Handler(ctx context.Context) http.Handler {
 		e.Go(ctx, run.ID)
 		writeJSON(w, 202, map[string]string{"run_id": run.ID})
 	})
-	mux.HandleFunc("POST /callbacks/{run}/{node}", func(w http.ResponseWriter, r *http.Request) {
-		out, ok := readBody(w, r)
-		if !ok {
-			return
-		}
-		status, code := e.Callback(r.Context(), r.PathValue("run"), r.PathValue("node"), r.Header.Get("X-Arkism-Callback-Token"), out)
-		if status == 200 {
-			e.Go(ctx, r.PathValue("run"))
-		}
-		writeJSON(w, status, map[string]string{"code": code})
-	})
 	return mux
-}
-
-// Callback completes an async n8n node once: the token must match the hash
-// the run holds, and the hash is cleared with the result.
-func (e *Engine) Callback(ctx context.Context, runID, nodeID, token string, out any) (int, string) {
-	// A fast n8n may answer before the engine has saved the waiting state;
-	// wait up to 10 s for the drive that posted the request to let go.
-	for i := 0; !e.claim(runID); i++ {
-		if i == 50 || ctx.Err() != nil {
-			return 409, "busy"
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-	defer e.release(runID)
-	run, err := e.Store.GetRun(ctx, runID)
-	if err != nil {
-		return 404, "not_found"
-	}
-	w := run.State.Waiting
-	if run.State.Status != "waiting" || w == nil || w.Kind != "callback" || w.NodeID != nodeID {
-		return 404, "not_waiting"
-	}
-	sum := sha256.Sum256([]byte(token))
-	want, err := hex.DecodeString(w.CallbackHash)
-	if err != nil || subtle.ConstantTimeCompare(sum[:], want) != 1 {
-		return 403, "access_denied"
-	}
-	if w.ResumeAt != nil && e.now().After(*w.ResumeAt) {
-		return 410, "expired"
-	}
-	x := &runExec{e: e, run: run}
-	st := run.State.Nodes[nodeID]
-	if st == nil {
-		return 404, "not_found"
-	}
-	t := e.now().UTC().Truncate(time.Millisecond)
-	st.Status, st.Output, st.FinishedAt = "done", encodeStored(out), &t
-	x.run.State.Status, x.run.State.Waiting = "running", nil
-	x.mu.Lock()
-	err = x.saveLocked(ctx, nodeID)
-	x.mu.Unlock()
-	if err != nil {
-		return 503, "dependency_unavailable"
-	}
-	return 200, "ok"
 }

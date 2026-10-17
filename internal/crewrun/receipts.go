@@ -55,7 +55,7 @@ func shortHash(parts ...string) string {
 }
 
 // eventKinds: steps that observe the world are tool results; AI answers are assistant messages.
-var eventKinds = map[string]string{"code": "tool_result", "http": "tool_result", "github": "tool_result", "n8n": "tool_result",
+var eventKinds = map[string]string{"code": "tool_result", "http": "tool_result", "github": "tool_result",
 	"ai": "message", "ai_once": "message", "subflow": "message"}
 
 // traceInput is the deterministic trace of a finished run, so a retry replays the same request.
