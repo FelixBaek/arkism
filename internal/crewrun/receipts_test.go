@@ -39,7 +39,7 @@ func TestFinishedRunWritesTraceAndOutcomeReceipt(t *testing.T) {
 	t.Setenv("ARKISM_CREW_TRACE_TOKEN_FILE", producerToken)
 	spool := filepath.Join(dir, "receipts")
 	var receipts []TraceReceipt
-	g := &Graph{Nodes: []Node{node("start", "start"), node("flow", "n8n", "url", flow.URL, "mode", "sync")}, Edges: []Edge{edge("start", "flow")}}
+	g := &Graph{Nodes: []Node{node("start", "start"), node("flow", "http", "url", flow.URL, "method", "POST")}, Edges: []Edge{edge("start", "flow")}}
 	e := testEngine(t, newFakeStore(wf("a", g)))
 	e.Traces = tracesFromEnv(base)
 	e.Sinks = []ReceiptSink{func(r TraceReceipt) error { receipts = append(receipts, r); return EnqueueReceipt(spool, r) }}
