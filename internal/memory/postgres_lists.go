@@ -547,3 +547,59 @@ func (p *Postgres) ListSkillTrialRecords(ctx context.Context, scope Scope, skill
 	}
 	return p.selectRecords(ctx, colSkillTrials, scope, `doc->>'skill_id'=$6 AND doc->'skill_trial'->'candidate'->>'id'=$7 AND id>$8`, []any{skillID, candidateID, after}, "id ASC", limit+1)
 }
+
+// memoryOutcomeWhere is the one filter for ST-812 reads; selectRecords and the
+// aggregate below add the scope columns. Arguments start at $6.
+func memoryOutcomeWhere(in MemoryOutcomeQuery) (string, []any) {
+	w := `kind='memory_outcome' AND status='active' AND COALESCE((doc->>'content_erased')::boolean,false)=false AND COALESCE((doc->>'privacy_quarantined')::boolean,false)=false AND (doc->'expires_at' IS NULL OR (doc->'expires_at'->>'$date')::timestamptz > now()) AND doc->'target'->>'collection'='memories' AND doc->'target'->>'id'=ANY($6) AND (doc->'tags' ? 'dimension:personal_compliance' OR doc->'tags' ? 'dimension:work_task')`
+	args := []any{in.MemoryIDs}
+	if in.Dimension != "" {
+		w += fmt.Sprintf(` AND doc->'tags' ? $%d`, len(args)+6)
+		args = append(args, "dimension:"+in.Dimension)
+	}
+	if in.From != nil {
+		w += fmt.Sprintf(" AND %s >= $%d", pgDate, len(args)+6)
+		args = append(args, *in.From)
+	}
+	if in.To != nil {
+		w += fmt.Sprintf(" AND %s < $%d", pgDate, len(args)+6)
+		args = append(args, *in.To)
+	}
+	return w, args
+}
+
+func (p *Postgres) MemoryOutcomes(ctx context.Context, in MemoryOutcomeQuery) ([]Record, error) {
+	in, after, err := normalizeMemoryOutcomeQuery(in, true)
+	if err != nil {
+		return nil, err
+	}
+	w, args := memoryOutcomeWhere(in)
+	if after != nil {
+		w += fmt.Sprintf(" AND (%s < $%d OR (%s = $%d AND id < $%d))", pgDate, len(args)+6, pgDate, len(args)+6, len(args)+7)
+		args = append(args, after.At, after.ID)
+	}
+	return p.selectRecords(ctx, "evaluations", in.Scope, w, args, pgDate+" DESC,id DESC", in.Limit+1)
+}
+
+func (p *Postgres) MemoryOutcomeCounts(ctx context.Context, in MemoryOutcomeQuery) ([]MemoryOutcomeCount, error) {
+	in, _, err := normalizeMemoryOutcomeQuery(in, false)
+	if err != nil {
+		return nil, err
+	}
+	w, args := memoryOutcomeWhere(in)
+	params := append([]any{"evaluations", in.Scope.WorkspaceID, in.Scope.ProjectID, in.Scope.UserID, in.Scope.AgentID}, args...)
+	rows, err := p.q().Query(ctx, `SELECT doc->'target'->>'id', count(*), count(*) FILTER (WHERE (doc->>'passed')::boolean), max(`+pgDate+`) FROM memory_records WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND (`+w+`) GROUP BY 1 ORDER BY 1`, params...)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	out := []MemoryOutcomeCount{}
+	for rows.Next() {
+		var c MemoryOutcomeCount
+		if err = rows.Scan(&c.MemoryID, &c.Total, &c.Passed, &c.Last); err != nil {
+			return nil, ErrUnavailable
+		}
+		out = append(out, c)
+	}
+	return out, pgErr(rows.Err())
+}
