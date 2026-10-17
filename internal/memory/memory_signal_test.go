@@ -226,12 +226,12 @@ func TestPostgresMemoryUseCountsScopes(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	put("u1", scopeA, now.Add(-time.Hour), MemoryUse{ref("mem-1"), 1}, MemoryUse{ref("mem-2"), 2})
-	put("u2", scopeA, now, MemoryUse{ref("mem-1"), 1})
-	put("leak", scopeB, now.Add(time.Hour), MemoryUse{ref("mem-1"), 1})
+	put("u1", scopeA, now.Add(-time.Hour), MemoryUse{Memory: ref("mem-1"), Rank: 1}, MemoryUse{Memory: ref("mem-2"), Rank: 2})
+	put("u2", scopeA, now, MemoryUse{Memory: ref("mem-1"), Rank: 1})
+	put("leak", scopeB, now.Add(time.Hour), MemoryUse{Memory: ref("mem-1"), Rank: 1})
 	other := scopeA
 	other.AgentID = "agent-x"
-	put("leak-agent", other, now.Add(time.Hour), MemoryUse{ref("mem-1"), 1})
+	put("leak-agent", other, now.Add(time.Hour), MemoryUse{Memory: ref("mem-1"), Rank: 1})
 	counts, e := p.MemoryUseCounts(testCtx, scopeA, []string{"mem-1", "mem-2", "mem-3"})
 	if e != nil || len(counts) != 2 || counts[0].MemoryID != "mem-1" || counts[0].Uses != 2 || !counts[0].Last.Equal(now) || counts[1].MemoryID != "mem-2" || counts[1].Uses != 1 {
 		t.Fatalf("counts: %+v %v", counts, e)

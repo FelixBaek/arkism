@@ -750,7 +750,7 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 		}
 		m["conflict_pending"] = truthy(m["conflict_pending"]) || truthy(m["conflict_id"])
 		kept := host.Obj{}
-		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "conflict_pending", "supersedes", "superseded_by"} {
+		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "conflict_pending", "supersedes", "superseded_by", "score", "lanes"} {
 			if v, ok := m[k]; ok && v != nil {
 				kept = append(kept, host.KV{Key: k, Value: v})
 			}

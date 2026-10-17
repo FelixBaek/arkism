@@ -5,7 +5,7 @@ import (
 )
 
 func searchHitHash(h Hit) string {
-	h.Reasons = nil // lane/rank annotations are not stored record content.
+	h.Reasons, h.Score, h.Lanes = nil, 0, nil // lane/rank annotations are not stored record content.
 	return ContentHash(structuredText(h))
 }
 

@@ -56,6 +56,23 @@ type ScoredHit struct {
 	Lanes []int
 }
 
+// laneByReason names the lane each search reason comes from (ST-811).
+var laneByReason = map[string]string{reasonExactKeyword: "exact", reasonTextSearch: "keyword", reasonVector: "vector", "relation": "relation"}
+
+// hitLanes lists the lanes that found a fused hit, in a fixed order.
+func hitLanes(reasons []string) []string {
+	lanes := []string{}
+	for _, lane := range []string{"exact", "keyword", "vector", "relation"} {
+		for _, r := range reasons {
+			if laneByReason[r] == lane {
+				lanes = append(lanes, lane)
+				break
+			}
+		}
+	}
+	return lanes
+}
+
 // Fuse uses ordinal positions only. Provider similarities are never accepted.
 func Fuse(lists [][]Hit, limit int) []Hit {
 	scored := FuseScored(lists, limit)
@@ -356,7 +373,12 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		}
 		lists[i] = clean
 	}
-	out.Items = Fuse(lists, in.Limit)
+	scored := FuseScored(lists, in.Limit)
+	out.Items = make([]Hit, len(scored))
+	for i, r := range scored {
+		r.Hit.Score, r.Hit.Lanes = r.Score, hitLanes(r.Hit.Reasons)
+		out.Items[i] = r.Hit
+	}
 	snapshots := map[Ref]string{}
 	for _, h := range out.Items {
 		snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] = searchHitHash(h)
@@ -396,7 +418,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	usage := pinnedUsage(run, in.Purpose, in.pinned)
 	for i, h := range out.Items {
 		if h.Collection == colMemories && h.Origin == "memory" && !usedRef(usage, h.ID) {
-			usage.Items = append(usage.Items, MemoryUse{Memory: Ref{Collection: colMemories, ID: h.ID, Revision: h.Revision}, Rank: len(in.pinned) + i + 1})
+			usage.Items = append(usage.Items, MemoryUse{Memory: Ref{Collection: colMemories, ID: h.ID, Revision: h.Revision}, Rank: len(in.pinned) + i + 1, Score: h.Score, Lanes: h.Lanes})
 		}
 	}
 	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {

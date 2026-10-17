@@ -8,6 +8,9 @@ import (
 type MemoryUse struct {
 	Memory Ref `json:"memory" bson:"memory"`
 	Rank   int `json:"rank" bson:"rank"`
+	// Score and Lanes are the fused score and the lanes that found it (ST-811); pinned memories have neither.
+	Score float64  `json:"score,omitempty" bson:"score,omitempty"`
+	Lanes []string `json:"lanes,omitempty" bson:"lanes,omitempty"`
 }
 type ContextUsage struct {
 	Run     *Ref        `json:"run,omitempty" bson:"run,omitempty"`
@@ -48,6 +51,8 @@ type UsageEntry struct {
 	RequestedBy string    `json:"requested_by"`
 	Memory      Ref       `json:"memory"`
 	Rank        int       `json:"rank"`
+	Score       float64   `json:"score,omitempty"`
+	Lanes       []string  `json:"lanes,omitempty"`
 	Run         *Ref      `json:"run,omitempty"`
 }
 type UsagePage struct {
@@ -115,7 +120,7 @@ func (s *Service) RecentMemoryUsage(ctx context.Context, token string, scope Sco
 				if found || item.Memory.Revision < 1 || item.Rank < 1 || item.Rank > 50 {
 					return UsagePage{}, ErrUnavailable
 				}
-				out.Items = append(out.Items, UsageEntry{ContextID: r.ID, CreatedAt: r.CreatedAt, RequestedBy: r.CreatedBy, Memory: item.Memory, Rank: item.Rank, Run: r.Usage.Run})
+				out.Items = append(out.Items, UsageEntry{ContextID: r.ID, CreatedAt: r.CreatedAt, RequestedBy: r.CreatedBy, Memory: item.Memory, Rank: item.Rank, Score: item.Score, Lanes: item.Lanes, Run: r.Usage.Run})
 				found = true
 			}
 		}
