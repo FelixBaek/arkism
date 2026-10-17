@@ -60,6 +60,10 @@ class ReleaseQualityTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(gate.GateError):
                 self.check(evidence)
 
+    def test_other_branch_failure_cannot_override_main_success(self):
+        result = self.check({"checks.yml": [run(), run(run_id=11, head_branch="feature", conclusion="failure")]})
+        self.assertEqual(result["workflows"][0]["run_id"], 10)
+
     def test_latest_failed_run_cannot_reuse_older_success(self):
         for conclusion in ("failure", "cancelled", "skipped", "neutral", "timed_out",
                            "action_required", "stale", None, API_DIAGNOSTIC):
@@ -301,6 +305,13 @@ class ReleaseQualityTests(unittest.TestCase):
         self.assertIn('workflow_dispatch:', events)
         self.assertNotIn('push:', events)
         self.assertIn('run: test "$GITHUB_REF" = refs/heads/main', initial)
+        quality = initial.split('\n  quality:\n')[1].split('\n  packages:\n')[0]
+        self.assertIn('contents: read', quality)
+        self.assertIn('actions: read', quality)
+        self.assertIn('ref: ${{ github.sha }}', quality)
+        self.assertIn('run: python3 tools/check_release_quality.py', quality)
+        self.assertIn('RELEASE_SHA: ${{ github.sha }}', quality)
+        self.assertNotIn('gh api', quality)
         packages = initial.split('\n  packages:\n')[1]
         self.assertIn('actions: read', packages)
         self.assertIn('contents: write', packages)

@@ -18,40 +18,20 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
+      contents: read
       actions: read
     steps:
       - name: Require the main branch for initial publication
         run: test "$GITHUB_REF" = refs/heads/main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
       - name: Wait for correctness and external Sonar quality on this commit
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          deadline=$((SECONDS + 1800))
-          while (( SECONDS < deadline )); do
-            ready=true
-            for workflow in checks.yml sonarcloud.yml; do
-              runs="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" -f "head_sha=$RELEASE_SHA" -f event=push -f per_page=100)"
-              latest="$(jq -c --arg sha "$RELEASE_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .event == "push")] | sort_by(.id) | last // empty' <<< "$runs")"
-              if [ -z "$latest" ] || [ "$(jq -r .status <<< "$latest")" != "completed" ]; then
-                ready=false
-                continue
-              fi
-              conclusion="$(jq -r .conclusion <<< "$latest")"
-              if [ "$conclusion" != "success" ]; then
-                echo "::error::$workflow failed for $RELEASE_SHA ($conclusion)"
-                exit 1
-              fi
-            done
-            if [ "$ready" = true ]; then
-              echo "Correctness and external quality gates passed for $RELEASE_SHA."
-              exit 0
-            fi
-            sleep 20
-          done
-          echo "::error::Timed out waiting for exact-commit quality gates."
-          exit 1
+        run: python3 tools/check_release_quality.py --repository "$GITHUB_REPOSITORY" --sha "$RELEASE_SHA"
 
   packages:
     needs: quality
