@@ -137,6 +137,19 @@ class ReleaseQualityTests(unittest.TestCase):
         with patch.object(gate.subprocess, "run", return_value=result):
             return gate.fetch_runs(REPOSITORY, SHA, "checks.yml", 30)
 
+    def test_fetch_rejects_invalid_cli_arguments_before_starting_a_process(self):
+        cases = [("owner/repo/extra", SHA, "checks.yml"),
+                 (REPOSITORY, "--option", "checks.yml"),
+                 (REPOSITORY, SHA, "other.yml"),
+                 (REPOSITORY, SHA, "../checks.yml"),
+                 (REPOSITORY, SHA, "--header=bad")]
+        for repository, sha, workflow in cases:
+            with self.subTest(repository=repository, sha=sha, workflow=workflow), \
+                    patch.object(gate.subprocess, "run") as process:
+                with self.assertRaises(gate.GateError):
+                    gate.fetch_runs(repository, sha, workflow, 30)
+                process.assert_not_called()
+
     def test_all_pages_are_read_including_newer_failure(self):
         pages = [{"total_count": 2, "workflow_runs": [run()]},
                  {"total_count": 2, "workflow_runs": [run(run_id=11, conclusion="failure")]}]

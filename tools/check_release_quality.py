@@ -16,6 +16,10 @@ class GateError(Exception):
 
 
 def fetch_runs(repository, sha, workflow, timeout):
+    # Validate at the process boundary too, including callers other than verify().
+    validate_request(repository, sha, 0, 1)
+    if workflow not in WORKFLOWS:
+        raise GateError("unknown release quality workflow")
     command = [
         "gh", "api", "--method", "GET", "--paginate",
         f"repos/{repository}/actions/workflows/{workflow}/runs",
@@ -23,7 +27,7 @@ def fetch_runs(repository, sha, workflow, timeout):
         "-f", "per_page=100",
     ]
     try:
-        result = subprocess.run(command, capture_output=True, text=True,
+        result = subprocess.run(command, shell=False, capture_output=True, text=True,
                                 check=False, timeout=timeout)
     except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
         raise GateError(f"{workflow}: GitHub API request unavailable") from exc
