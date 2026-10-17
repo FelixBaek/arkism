@@ -194,7 +194,23 @@ func (s *Service) DismissReachSuggestion(ctx context.Context, token, id string, 
 		if r.Revision != in.ExpectedRevision || !live(r) {
 			return ErrConflict
 		}
-		r.ReachSuggestionDismissed = reachSuggestionKey(in.Reach, in.ReachProject)
+		// Only the suggestion shown now can be dismissed, so a later one is never hidden in advance.
+		counts, e := s.Repo.MemoryUseCounts(ctx, in.Scope, []string{r.ID})
+		if e != nil {
+			return e
+		}
+		var uses []MemoryProjectUse
+		for _, c := range counts {
+			if c.MemoryID == r.ID {
+				uses = c.Projects
+			}
+		}
+		sg := currentReachSuggestion(r, usedProjectsAt(uses, r.Revision))
+		key := reachSuggestionKey(sg.Reach, sg.ReachProject)
+		if key == reachSuggestionKey(memoryReach(r), r.ReachProject) || key != reachSuggestionKey(in.Reach, in.ReachProject) {
+			return ErrConflict
+		}
+		r.ReachSuggestionDismissed = key
 		if e = tx.Replace(ctx, colMemories, r, r.Revision); e != nil {
 			return e
 		}

@@ -105,6 +105,9 @@ func TestReachSuggestionsHumanDecides(t *testing.T) {
 	if _, e = dismiss(f.human, Record{ID: plain.ID, Revision: plain.Revision - 1}, item.Suggestion); !errors.Is(e, ErrConflict) {
 		t.Fatal("stale dismissal accepted", e)
 	}
+	if _, e = dismiss(f.human, plain, ReachSuggestion{Reach: ReachPersonal}); !errors.Is(e, ErrConflict) {
+		t.Fatal("a suggestion not shown now was dismissed in advance", e)
+	}
 	dismissed, e := dismiss(f.human, plain, item.Suggestion)
 	if e != nil || dismissed.Revision != plain.Revision || dismissed.Reach != ReachProject {
 		t.Fatal("dismissal must keep revision and reach", dismissed, e)

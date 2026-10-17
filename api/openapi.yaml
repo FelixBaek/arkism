@@ -4500,7 +4500,7 @@
       "/v1/memories/{id}/reach-suggestion/dismiss": {
         "post": {
           "summary": "Dismiss one reach suggestion (ST-825)",
-          "description": "Human transition:memories only; agent and pipeline principals get 403. Hides the named suggestion on this memory; reach, content and revision stay. Revision pinned (409 when stale); quarantined or erased memories are 404. Audit records dismiss_reach_suggestion:memories without content.",
+          "description": "Human transition:memories only; agent and pipeline principals get 403. Hides the named suggestion on this memory; reach, content and revision stay. Revision pinned (409 when stale, or when the named suggestion is not the one shown now, so a later suggestion cannot be hidden in advance); quarantined or erased memories are 404. Audit records dismiss_reach_suggestion:memories without content.",
           "parameters": [
             {
               "name": "id",
