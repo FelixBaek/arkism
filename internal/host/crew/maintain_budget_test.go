@@ -26,10 +26,15 @@ func TestMaintainWaitsWhenClaudeUsageIsHigh(t *testing.T) {
 	}
 	ran := false
 	memoriesFn = func() ([]map[string]any, error) { ran = true; return nil, nil }
+	// Near the limit the model judge is skipped; the night itself (signal proposals) still runs.
+	fakeNight(t, maintainItems())
+	judged := false
+	patch(t, &judgeFn, func([]memPair) ([]any, error) { judged = true; return nil, nil })
 	var out, errOut bytes.Buffer
-	if code := maintainMain([]string{"run"}, nil, &out, &errOut); code != 0 || ran || !strings.Contains(out.String(), "95%") {
-		t.Fatal(code, ran, out.String(), errOut.String())
+	if code := maintainMain([]string{"run"}, nil, &out, &errOut); code != 0 || judged || !strings.Contains(out.String(), "95%") {
+		t.Fatal(code, judged, out.String(), errOut.String())
 	}
+	memoriesFn = func() ([]map[string]any, error) { ran = true; return nil, nil }
 	// Under the limit, or the model judge off: the night runs.
 	left = 50
 	out.Reset()

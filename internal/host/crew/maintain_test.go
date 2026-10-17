@@ -266,6 +266,14 @@ func TestSignalProposalsPostWeakRulesAndLessonsWithEvidence(t *testing.T) {
 	eq(t, got, []any{[]any{"rule_often_violated", "r2", 10, 1, "low_pass_rate"}, []any{"lesson_often_failing", "l1", 12, 3, "low_pass_rate"},
 		[]any{"rule_often_violated", "r1", 20, 10, "low_pass_rate"}})
 
+	// Signal proposals and pair proposals share one limit per morning.
+	t.Setenv("ARKISM_MAINTAIN_MAX_PROPOSALS", "2")
+	*posted = nil
+	if found, sent, _ = maintainRun(false, io.Discard); found != 2 || sent != 2 {
+		t.Fatal("limit not shared", found, sent)
+	}
+	t.Setenv("ARKISM_MAINTAIN_MAX_PROPOSALS", "10")
+
 	// A stricter setting keeps only the worst; a token that cannot read signals skips them and the night goes on.
 	t.Setenv("ARKISM_MAINTAIN_SIGNAL_MAX_PASS_RATE", "0.2")
 	*posted = nil

@@ -615,6 +615,13 @@ func maintainRun(dryRun bool, stdout io.Writer) (int, int, error) {
 	}
 	var verdicts []any
 	if useLLM() {
+		// The model judge spends the user's own Claude; near a limit the pairs wait for another night.
+		// Signal proposals above use no model and went out anyway.
+		if why := capture.LLMBudgetReason(maintainModel()); why != "" {
+			fmt.Fprintln(stdout, why)
+			mMetric(map[string]any{"event": "maintain", "memories": len(items), "pairs": len(pairs), "proposed": sigPosted, "signal_proposed": sigPosted, "judge": "budget"})
+			return sigFound, sigPosted, nil
+		}
 		if verdicts, err = judgeFn(pairs); err != nil {
 			return 0, 0, err
 		}
@@ -631,7 +638,7 @@ func maintainRun(dryRun bool, stdout io.Writer) (int, int, error) {
 		}
 	}
 	found := proposals(pairs, verdicts)
-	found = found[:min(len(found), max(0, maxProposals()))]
+	found = found[:min(len(found), max(0, maxProposals()-sigFound))] // one limit for what a person sees per morning
 	posted := 0
 	for _, p := range found {
 		if dryRun {
@@ -660,13 +667,6 @@ func maintainMain(argv []string, _ io.Reader, stdout, stderr io.Writer) int {
 	dry := false
 	for _, a := range argv[1:] {
 		dry = dry || a == "--dry-run"
-	}
-	// The model judge spends the user's own Claude; near a limit it waits for another night.
-	if useLLM() {
-		if why := capture.LLMBudgetReason(maintainModel()); why != "" {
-			fmt.Fprintln(stdout, why)
-			return 0
-		}
 	}
 	found, posted, err := maintainRun(dry, stdout)
 	if err != nil {
