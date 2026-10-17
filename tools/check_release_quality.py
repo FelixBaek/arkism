@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import time
+from urllib.parse import urlencode
 
 
 WORKFLOWS = ("checks.yml", "sonarcloud.yml")
@@ -20,12 +21,11 @@ def fetch_runs(repository, sha, workflow, timeout):
     validate_request(repository, sha, 0, 1)
     if workflow not in WORKFLOWS:
         raise GateError("unknown release quality workflow")
-    command = [
-        "gh", "api", "--method", "GET", "--paginate",
-        f"repos/{repository}/actions/workflows/{workflow}/runs",
-        "-f", f"head_sha={sha}", "-f", "event=push", "-f", "branch=main",
-        "-f", "per_page=100",
-    ]
+    query = urlencode({"head_sha": sha, "event": "push", "branch": "main", "per_page": 100})
+    endpoint = f"repos/{repository}/actions/workflows/{workflow}/runs?{query}"
+    # No user-supplied value occupies an option position. All query values are
+    # URL-encoded and the endpoint follows the CLI's end-of-options delimiter.
+    command = ["gh", "api", "--method", "GET", "--paginate", "--", endpoint]
     try:
         result = subprocess.run(command, shell=False, capture_output=True, text=True,
                                 check=False, timeout=timeout)

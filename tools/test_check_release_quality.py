@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 import check_release_quality as gate
 
@@ -195,7 +196,7 @@ class ReleaseQualityTests(unittest.TestCase):
                 "with open(os.environ['GATE_CALLS'],'a') as f: f.write(json.dumps(sys.argv[1:])+'\\n')\n"
                 "if os.environ.get('GATE_FAIL'):\n"
                 f" print('{API_DIAGNOSTIC}',file=sys.stderr);sys.exit(1)\n"
-                "endpoint=next(x for x in sys.argv if x.endswith('/runs'))\n"
+                "endpoint=sys.argv[-1].split('?')[0]\n"
                 "for page in json.load(open(os.environ['GATE_FIXTURE']))[endpoint.split('/')[-2]]: print(json.dumps(page))\n")
             executable.chmod(0o700)
             calls = root / "calls.jsonl"
@@ -211,9 +212,11 @@ class ReleaseQualityTests(unittest.TestCase):
             for request in requests:
                 self.assertIn("--paginate", request)
                 self.assertEqual(request[request.index("--method") + 1], "GET")
-                self.assertIn("head_sha=" + SHA, request)
-                self.assertIn("event=push", request)
-                self.assertIn("branch=main", request)
+                self.assertEqual(request[-2], "--")
+                endpoint = urlsplit(request[-1])
+                self.assertTrue(endpoint.path.startswith("repos/" + REPOSITORY + "/actions/workflows/"))
+                self.assertEqual(parse_qs(endpoint.query), {"head_sha": [SHA], "event": ["push"],
+                                                          "branch": ["main"], "per_page": ["100"]})
             env["GATE_FAIL"] = "1"
             failure = subprocess.run(command, env=env, capture_output=True, text=True, check=False)
             self.assertNotEqual(failure.returncode, 0)
