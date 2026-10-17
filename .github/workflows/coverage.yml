@@ -22,14 +22,16 @@ jobs:
     # Postgres store tests skip without POSTGRES_TEST_DSN; give them a disposable pgvector DB.
     services:
       postgres:
-        image: pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d # pg17
+        # pg17. The self-hosted runner has no docker: an empty image skips the service there
+        # and tools/ci_postgres.sh starts a local cluster instead.
+        image: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && '' || 'pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d' }}
         env:
           POSTGRES_USER: arkism
-          # Throwaway DB on a random loopback-only port; several self-hosted jobs share one machine.
+          # Throwaway DB on a loopback-only port of a disposable runner.
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: arkism_ci
         ports:
-          - 127.0.0.1::5432
+          - 127.0.0.1:5432:5432
         options: >-
           --health-cmd "pg_isready -U arkism"
           --health-interval 5s
@@ -45,9 +47,11 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - name: Go coverage
+      - name: Postgres for tests
         env:
-          POSTGRES_TEST_DSN: postgres://arkism@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/arkism_ci?sslmode=disable
+          SERVICE_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: tools/ci_postgres.sh
+      - name: Go coverage
         run: go test -covermode=atomic -coverprofile=go-coverage.out ./...
       - name: UI coverage
         run: >

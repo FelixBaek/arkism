@@ -49,21 +49,21 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d # pg17
+        # pg17. The self-hosted runner has no docker: an empty image skips the service there
+        # and tools/ci_postgres.sh starts a local cluster instead.
+        image: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && '' || 'pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d' }}
         env:
           POSTGRES_USER: arkism
-          # Throwaway DB on a random loopback-only port; several self-hosted jobs share one machine.
+          # Throwaway DB on a loopback-only port of a disposable runner.
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: arkism_ci
         ports:
-          - 127.0.0.1::5432
+          - 127.0.0.1:5432:5432
         options: >-
           --health-cmd "pg_isready -U arkism"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    env:
-      POSTGRES_TEST_DSN: postgres://arkism@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/arkism_ci?sslmode=disable
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,6 +71,12 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Postgres for tests
+        env:
+          SERVICE_PORT: ${{ job.services.postgres.ports['5432'] }}
+          # Enables the real pg_dump/pg_restore roundtrip in isolated test databases.
+          SERVICE_CONTAINER: ${{ job.services.postgres.id }}
+        run: tools/ci_postgres.sh
       - name: Vet
         run: go vet ./...
       - name: Vet for Windows and macOS
@@ -78,9 +84,6 @@ jobs:
           GOOS=windows go vet ./...
           GOOS=darwin go vet ./...
       - name: Unit and Postgres integration tests (race)
-        env:
-          # Enable the real pg_dump/pg_restore roundtrip in isolated test databases.
-          POSTGRES_TEST_CONTAINER: ${{ job.services.postgres.id }}
         run: go test -race -tags=integration -count=1 ./...
       - name: Core boundary coverage (90% per file)
         if: ${{ !cancelled() }}
