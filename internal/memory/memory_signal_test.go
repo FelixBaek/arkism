@@ -35,9 +35,8 @@ func (f *fakeRepo) MemoryUseCounts(_ context.Context, scope Scope, ids []string)
 				by[id] = c
 			}
 			c.Uses++
-			if k := r.Usage.ProjectKey; k != "" && !slices.Contains(c.Projects, k) {
-				c.Projects = append(c.Projects, k)
-				slices.Sort(c.Projects)
+			if u := (MemoryProjectUse{it.Memory.Revision, r.Usage.ProjectKey}); u.ProjectKey != "" && !slices.Contains(c.Projects, u) {
+				c.Projects = append(c.Projects, u)
 			}
 			if r.CreatedAt.After(c.Last) {
 				c.Last = r.CreatedAt

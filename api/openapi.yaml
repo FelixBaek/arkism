@@ -4353,7 +4353,7 @@
       "/v1/memory-reach-suggestions": {
         "get": {
           "summary": "List AI reach suggestions for active memories (ST-825)",
-          "description": "Pages active memories with the memory list's checks (read:memories) plus read:usage, and returns those whose suggestion differs from their reach and was not dismissed. A project memory used from two or more project keys is suggested for general; others use the save-time suggestion or one computed for older memories. Read-only. Accept with POST /v1/memories/{id}/reach (human only); dismiss with POST /v1/memories/{id}/reach-suggestion/dismiss.",
+          "description": "Pages active memories with the memory list's checks (read:memories) plus read:usage, and returns those whose suggestion differs from their reach and was not dismissed. A project memory whose current revision was handed out under two or more project keys is suggested for general (uses from before a reach change do not count; project memories are hidden from other keys' search and id recall and pin receipts carry no key, so today this signal rarely appears). Memories whose reach a person set show no save-time suggestion; others use the save-time suggestion or one computed for older memories. Read-only. Accept with POST /v1/memories/{id}/reach (human only); dismiss with POST /v1/memories/{id}/reach-suggestion/dismiss.",
           "parameters": [
             {
               "name": "workspace_id",
@@ -15686,7 +15686,7 @@
             "used_projects": {
               "type": "integer",
               "minimum": 0,
-              "description": "Distinct project keys in this memory's context_usage receipts."
+              "description": "Distinct project keys in context_usage receipts for this memory's current revision."
             },
             "suggestion": {
               "$ref": "#/components/schemas/ReachSuggestion"

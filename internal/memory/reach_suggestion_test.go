@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -73,6 +74,16 @@ func TestReachSuggestionsHumanDecides(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	if item := find(list(f.human), plain.ID); item != nil {
+		t.Fatal("uses from before the narrowing must not suggest undoing it", item)
+	}
+	ref := Ref{Collection: colMemories, ID: plain.ID, Revision: plain.Revision}
+	for i, key := range []string{"owner/a", "owner/b"} {
+		at := time.Now().UTC().Add(time.Duration(i) * time.Second)
+		if e = f.repo.Insert(testCtx, "jobs", Record{ID: "pin-use-" + key, Scope: scopeA, Kind: "context_usage", Status: "done", Revision: 1, CreatedAt: at, UpdatedAt: at, CreatedBy: "agent-1", Usage: &ContextUsage{ProjectKey: key, Items: []MemoryUse{{ref, 1}}}}); e != nil {
+			t.Fatal(e)
+		}
+	}
 	item := find(list(f.human), plain.ID)
 	if item == nil || item.Suggestion.Reach != ReachGeneral || item.UsedProjects != 2 || item.Revision != plain.Revision {
 		t.Fatal("promotion to general not suggested", item)
@@ -116,14 +127,14 @@ func TestPostgresMemoryUseProjects(t *testing.T) {
 	p := isolatedPostgres(t)
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	ref := Ref{Collection: colMemories, ID: "mem-p", Revision: 1}
-	for i, key := range []string{"owner/a", "owner/b", "owner/a", ""} {
+	for i, key := range []string{"owner/a", "owner/b", "owner/a", ""} { // revision 1
 		r := Record{ID: "use-" + ID(), Scope: scopeA, Kind: "context_usage", Status: "done", Revision: 1, CreatedAt: now.Add(time.Duration(i) * time.Second), UpdatedAt: now, CreatedBy: "agent-1", Usage: &ContextUsage{ProjectKey: key, Items: []MemoryUse{{ref, 1}}}}
 		if e := p.Insert(testCtx, "jobs", r); e != nil {
 			t.Fatal(e)
 		}
 	}
 	counts, e := p.MemoryUseCounts(testCtx, scopeA, []string{"mem-p"})
-	if e != nil || len(counts) != 1 || counts[0].Uses != 4 || len(counts[0].Projects) != 2 || counts[0].Projects[0] != "owner/a" || counts[0].Projects[1] != "owner/b" {
+	if e != nil || len(counts) != 1 || counts[0].Uses != 4 || len(counts[0].Projects) != 2 || !slices.Equal(usedProjectsAt(counts[0].Projects, 1), []string{"owner/a", "owner/b"}) || len(usedProjectsAt(counts[0].Projects, 2)) != 0 {
 		t.Fatalf("projects: %+v %v", counts, e)
 	}
 }

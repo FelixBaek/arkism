@@ -66,22 +66,36 @@ func suggestReach(r Record) ReachSuggestion {
 	return ReachSuggestion{Reach: ReachGeneral, Reason: "특정 저장소·언어 표시 없음", Confidence: 0.6}
 }
 
-// currentReachSuggestion: two or more projects used a project memory → general (FR-012 promotion);
+// usedProjectsAt is the sorted distinct project keys that recalled this revision. Uses from before a
+// person changed the reach (an older revision) do not count, so narrowing never bounces straight back.
+func usedProjectsAt(uses []MemoryProjectUse, revision int64) []string {
+	keys := []string{}
+	for _, u := range uses {
+		if u.Revision == revision && !slices.Contains(keys, u.ProjectKey) {
+			keys = append(keys, u.ProjectKey)
+		}
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// currentReachSuggestion: two or more projects recalled this revision of a project memory → general
+// (FR-012 promotion). Only memories actually handed out count, and other keys' search and id recall
+// hide a project memory while pin receipts carry no key, so today this rarely fires (08 [제안]);
 // otherwise the stored suggestion, or one computed for memories saved before ST-825.
 func currentReachSuggestion(r Record, usedProjects []string) ReachSuggestion {
 	if memoryReach(r) == ReachProject && len(usedProjects) >= 2 {
 		return ReachSuggestion{Reach: ReachGeneral, Reason: fmt.Sprintf("%d개 프로젝트에서 불러와 쓰임", len(usedProjects)), Confidence: min(0.5+0.1*float64(len(usedProjects)), 0.9)}
 	}
+	if r.ReachOrigin == reachOriginHuman { // a person decided: the save-time suggestion is settled
+		return ReachSuggestion{Reach: memoryReach(r), ReachProject: r.ReachProject}
+	}
 	sg := suggestReach(r)
 	if r.ReachSuggestion != nil {
 		sg = *r.ReachSuggestion
 	}
-	if sg.Reach == ReachProject && sg.ReachProject == "" {
-		if memoryReach(r) == ReachProject { // a person already picked the project
-			sg.ReachProject = r.ReachProject
-		} else if len(usedProjects) == 1 {
-			sg.ReachProject = usedProjects[0]
-		}
+	if sg.Reach == ReachProject && sg.ReachProject == "" && len(usedProjects) == 1 {
+		sg.ReachProject = usedProjects[0]
 	}
 	return sg
 }
@@ -115,7 +129,7 @@ func (s *Service) ReachSuggestions(ctx context.Context, token string, in MemoryL
 	if _, e = s.authorize(ctx, token, "read:usage", in.Scope, "", ""); e != nil {
 		return ReachSuggestionPage{}, e
 	}
-	used := map[string][]string{}
+	used := map[string][]MemoryProjectUse{}
 	if len(page.Items) > 0 {
 		ids := make([]string, len(page.Items))
 		for i, r := range page.Items {
@@ -131,12 +145,13 @@ func (s *Service) ReachSuggestions(ctx context.Context, token string, in MemoryL
 	}
 	out := ReachSuggestionPage{Items: []ReachSuggestionItem{}, NextCursor: page.NextCursor, Authority: AuthorityDataOnly}
 	for _, r := range page.Items {
-		sg := currentReachSuggestion(r, used[r.ID])
+		projects := usedProjectsAt(used[r.ID], r.Revision)
+		sg := currentReachSuggestion(r, projects)
 		key := reachSuggestionKey(sg.Reach, sg.ReachProject)
 		if key == reachSuggestionKey(memoryReach(r), r.ReachProject) || key == r.ReachSuggestionDismissed {
 			continue
 		}
-		out.Items = append(out.Items, ReachSuggestionItem{MemoryID: r.ID, Revision: r.Revision, Kind: r.Kind, Text: r.Text, Reach: memoryReach(r), ReachProject: r.ReachProject, UsedProjects: len(used[r.ID]), Suggestion: sg})
+		out.Items = append(out.Items, ReachSuggestionItem{MemoryID: r.ID, Revision: r.Revision, Kind: r.Kind, Text: r.Text, Reach: memoryReach(r), ReachProject: r.ReachProject, UsedProjects: len(projects), Suggestion: sg})
 	}
 	return out, nil
 }
