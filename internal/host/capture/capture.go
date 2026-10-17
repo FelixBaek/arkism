@@ -104,6 +104,20 @@ func scopeQuery(skipEmpty bool, extra ...string) string {
 // searchMemories recalls memories within one time budget; on an embedder outage it keeps lexical recall.
 var search = searchMemories
 
+// recallSearch is search with the score floor and kind budget the MCP recall tool also uses (ST-815).
+// Hooks inject through it; the extractor's duplicate check keeps the raw search.
+func recallSearch(query, project string, limit int, timeout float64) ([]any, error) {
+	items, err := search(query, project, limit, timeout)
+	if err != nil {
+		return nil, err
+	}
+	kept, lowScore, overBudget := host.LoadRecallBudget().Apply(items)
+	if lowScore+overBudget > 0 { // counts only, never text or query
+		metric(kv("event", "recall_budget"), kv("below_score", lowScore), kv("over_budget", overBudget), kv("kept", len(kept)))
+	}
+	return kept, nil
+}
+
 // project is host.ProjectKey of the session: the server leaves out other projects' memories.
 func searchMemories(query, project string, limit int, timeout float64) ([]any, error) {
 	deadline := monotonic() + timeout
@@ -654,7 +668,7 @@ func contractRelated(contract, project string) []map[string]any {
 	if contract == "" {
 		return []map[string]any{}
 	}
-	items, err := search(head(contract, 2000), project, 6, 8)
+	items, err := recallSearch(head(contract, 2000), project, 6, 8)
 	if err != nil { // the standing rules still go in
 		metric(kv("event", "hook_error"), kv("hook", "SessionStart:contract"), kv("error", pyType(err)))
 		return []map[string]any{}
@@ -710,7 +724,7 @@ func promptParts(prompt, sid, cwd string) (part host.Part, revs map[string]int64
 	if host.Len(text) < 8 {
 		return host.Part{}, nil, nil
 	}
-	list, err := search(head(text, 2000), host.ProjectKey(cwd), 6, 8)
+	list, err := recallSearch(head(text, 2000), host.ProjectKey(cwd), 6, 8)
 	if err != nil {
 		return host.Part{}, nil, err
 	}

@@ -2,6 +2,7 @@ package capture
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -127,5 +128,32 @@ func TestPromptRecallSkipsEarlierTurnsUnlessRevised(t *testing.T) {
 	}
 	if rows != 5 {
 		t.Fatal("ledger rows for s1", rows)
+	}
+}
+
+// ST-815: the prompt and SessionStart contract hooks drop hits below the same score floor and
+// kind budget the MCP recall tool uses, so an unrelated prompt injects nothing.
+func TestHookRecallAppliesSharedBudget(t *testing.T) {
+	capFake(t)
+	hookEnv(t)
+	sessionOutcomeEnv(t)
+	low := memoryHit("c8b788c964a0350e97d8635111de6824", 1, "")
+	low["score"] = json.Number("0.016393")
+	search = func(string, string, int, float64) ([]any, error) { return []any{low}, nil }
+	if p, _, err := promptParts("관련 없는 질문을 하나 해 볼게요", "s1", ""); err != nil || p.Full != "" {
+		t.Fatal(err, p.Full)
+	}
+	if got := contractRelated("작업 계약 본문", ""); len(got) != 0 {
+		t.Fatal(got)
+	}
+	var procedural []any
+	for i := range 4 {
+		h := memoryHit(fmt.Sprintf("%032x", i+1), 1, "")
+		h["kind"], h["score"] = "procedural", json.Number("0.05")
+		procedural = append(procedural, h)
+	}
+	search = func(string, string, int, float64) ([]any, error) { return procedural, nil }
+	if p, _, err := promptParts("기억 승인 권한을 다시 설명해 줘", "s2", ""); err != nil || strings.Count(p.Full, "\n- [") != 3 {
+		t.Fatal(err, p.Full)
 	}
 }

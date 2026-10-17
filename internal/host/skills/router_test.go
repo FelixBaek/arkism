@@ -332,6 +332,23 @@ func TestRecallByIDOrQuery(t *testing.T) {
 	}
 }
 
+// ST-815: the MCP recall tool drops hits below the shared score floor and says nothing related was found.
+func TestRecallBelowScoreFloorReturnsNoRelatedMemory(t *testing.T) {
+	swapRouter(t)
+	low := `{"id":"m2","kind":"lesson","status":"active","text":"무관","sources":[{"source_id":"s"}],"scope":{},"score":0.016393,"lanes":["vector"]}`
+	fakeRequest(t, `{"items":[`+low+`]}`)
+	out := structured(t, call(t, "recall", `{"query":"관련 없는 질문"}`))
+	if len(asList(field(out, "memories"))) != 0 || field(out, "result") != host.NoRelatedMemory {
+		t.Fatal(out)
+	}
+	t.Setenv("ARKISM_RECALL_MIN_SCORE", "0") // the same setting the hooks read turns the floor off
+	fakeRequest(t, `{"items":[`+low+`]}`)
+	out = structured(t, call(t, "recall", `{"query":"관련 없는 질문"}`))
+	if len(asList(field(out, "memories"))) != 1 || field(out, "result") != nil {
+		t.Fatal(out)
+	}
+}
+
 func swapCrew(t *testing.T) {
 	start, decide, list := host.StartWorkflow, host.DecideRun, host.ListCrew
 	t.Cleanup(func() { host.StartWorkflow, host.DecideRun, host.ListCrew = start, decide, list })
