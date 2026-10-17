@@ -27,6 +27,9 @@ const assistPersona = "You are Arkism's assistant. You tidy up the owner's saved
 // Every guide is appended to the persona. Backend wording is English; text the owner reads stays Korean.
 const jsonOnly = "Reply with exactly one JSON value and nothing else: no explanation, no code fence. "
 
+// englishReader is added when the app is set to English (the request's lang is "en").
+const englishReader = "\n\nThe owner reads English: write every text they read in English, even where the instructions say Korean."
+
 var assistGuide = map[string]string{
 	"fill": jsonOnly + "An object with keys: name (<= 60 chars), role (one-line intro, <= 200 chars), category, " +
 		"instructions (numbered rules, <= 2000 chars), file_name (lowercase letters, digits, hyphens), skills (only names from the list given), " +
@@ -53,10 +56,13 @@ var assistGuide = map[string]string{
 var serverModelID = regexp.MustCompile(`^[a-zA-Z0-9._ -]{1,80}$`)
 
 // crewCatalog tells the AI which nodes and settings the workflow engine (internal/crewrun) understands.
-const crewCatalog = "Node types and their config keys: start, schedule, webhook (entry points); ai (prompt, model, instructions, skills, persona, effort, retries, timeout); " +
-	"ai_once (prompt, model); code (code, lang, access=read|write, timeout; outgoing port pass|fail or none); http (method, url, headers, body); github (task, repo_dir); " +
-	"approval (question; outgoing port approve|reject); condition (expr such as in.x == 1; outgoing port yes|no); merge; loop (key, max_workers); wait (duration); " +
-	"notify (channel=telegram|slack|email, to, message, subject); subflow (workflow); n8n (url); end. " +
+const crewCatalog = "Node types and their config keys: start, schedule, webhook (entry points); " +
+	"ai (goal, model, instructions, skills, persona, effort, fence, done, cwd, access=read|write, retries, timeout); " +
+	"ai_once (prompt, model, instructions, persona, effort, timeout); code (code, lang=sh|go, access=read|write, timeout; outgoing port pass|fail or none); " +
+	"http (method, url, headers, body, key, timeout); github (args: the gh arguments as a JSON list, repo_dir); " +
+	"approval (question; outgoing port approve|reject); condition (expr such as in.x == 1; outgoing port yes|no); merge; " +
+	"loop (path to a list in the input, concurrency; repeats only the one node right after it); wait (duration); " +
+	"notify (channel=telegram|slack|email, to, message, subject); subflow (workflow, task); n8n (url, mode=sync|async); end (summary). " +
 	"The previous step's result is {{input}}; never invent other keys. Leave model empty to use the default model. " +
 	"Schedules and webhooks are switched on in settings, so a graph starts with start. "
 
@@ -258,7 +264,7 @@ func personaRun(a map[string]any, runner runFn, work string) (map[string]any, er
 	}
 	guide := assistGuide[pyStr(a["kind"])]
 	if a["lang"] == "en" { // the app is set to English: override every "Korean" in the persona, guide and prompt
-		guide += "\n\nThe owner reads English: write every text they read in English, even where the instructions say Korean."
+		guide += englishReader
 	}
 	persona = strings.TrimSpace(persona + "\n\n" + guide)
 	model := pyStr(a["model"])
@@ -434,13 +440,25 @@ func assistJob(rec map[string]any, answer func(map[string]any) (map[string]any, 
 		assistDone[id] = body
 		assistMu.Unlock()
 	}
-	if _, err := runnerCall("/v1/crew/assists/"+pyQuote(id, "/")+"/result", body, 30*time.Second); err != nil {
+	path := "/v1/crew/assists/" + pyQuote(id, "/") + "/result"
+	_, err := runnerCall(path, body, 30*time.Second)
+	var he *host.HTTPError
+	if errors.As(err, &he) && he.Code >= 400 && he.Code < 500 {
+		// The server refused this answer (a secret in the output, say) and the assist may still be pending: report a bare
+		// failure in its place, so the next round neither resends the refused answer nor runs the work again.
 		fmt.Fprintf(os.Stderr, "AI 도움 응답 실패: %s\n", errName(err))
-		// A 4xx answer will not change on retry: drop it instead of resending every round until the assist expires.
-		var he *host.HTTPError
-		if !errors.As(err, &he) || he.Code < 400 || he.Code >= 500 {
-			return
+		body = append(host.Obj{{Key: "scope", Value: scope()}}, ordered(failedResult("결과를 저장하지 못했어요"), assistOrder...)...)
+		assistMu.Lock()
+		assistDone[id] = body
+		assistMu.Unlock()
+		_, err = runnerCall(path, body, 30*time.Second)
+		if errors.As(err, &he) && he.Code >= 400 && he.Code < 500 {
+			err = nil // already finished or expired: nothing is left to report
 		}
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "AI 도움 응답 실패: %s\n", errName(err))
+		return
 	}
 	assistMu.Lock()
 	delete(assistDone, id)
@@ -526,6 +544,9 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 	instructions := strings.TrimSpace(sOr(c["role"]) + "\n\n" + sOr(c["instructions"]))
 	if f := sOr(c["output_format"]); f == "json" || f == "markdown" {
 		instructions += "\n\n답은 " + f + " 형식으로 써."
+	}
+	if a["lang"] == "en" {
+		instructions += englishReader
 	}
 	trigger := "manual"
 	if rec["created_by_type"] == "service" {

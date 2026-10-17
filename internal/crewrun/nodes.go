@@ -76,7 +76,7 @@ import (
 //
 // Every node may set access=read to run alongside other ready read nodes.
 //
-// Shared state: any template may also read {{trigger}} / {{trigger.a.b}} (the run's
+// Shared state: any template (not code, expr or control keys) may also read {{trigger}} / {{trigger.a.b}} (the run's
 // input) and {{nodes.<id>}} / {{nodes.<id>.a.b}} (a finished node's output), not
 // only what the incoming edges hand over. A node not done yet reads as empty.
 func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (result, error) {
@@ -179,15 +179,19 @@ func (x *runExec) fake(n Node, input any) (any, bool) {
 
 var sharedRe = regexp.MustCompile(`\{\{\s*((?:nodes|trigger)(?:\.[^}\s]+)?)\s*\}\}`)
 
-// shared fills {{trigger…}} and {{nodes.<id>…}} in every config value but the
-// condition expression, which reads only its input.
+// sharedSkip are the config keys shared state never fills: the condition reads only
+// its input, and code or control keys must not take text from outside (a trigger
+// body pasted into a sh script runs as code; code reads its input on stdin).
+var sharedSkip = map[string]bool{"expr": true, "code": true, "lang": true, "access": true, "key": true, "timeout": true}
+
+// shared fills {{trigger…}} and {{nodes.<id>…}} in every config value but sharedSkip.
 func (x *runExec) shared(c map[string]string) map[string]string {
 	if x == nil {
 		return c
 	}
 	var out map[string]string
 	for k, v := range c {
-		if k == "expr" || !sharedRe.MatchString(v) {
+		if sharedSkip[k] || !sharedRe.MatchString(v) {
 			continue
 		}
 		if out == nil {
@@ -198,7 +202,7 @@ func (x *runExec) shared(c map[string]string) map[string]string {
 			x.mu.Lock()
 			defer x.mu.Unlock()
 			if path[0] == "trigger" {
-				return textOf(lookupPath(decodeStored(x.run.State.Input), path[1:]))
+				return textOf(walkPath(decodeStored(x.run.State.Input), path[1:]))
 			}
 			if len(path) < 2 {
 				return ""
@@ -207,7 +211,7 @@ func (x *runExec) shared(c map[string]string) map[string]string {
 			if st == nil || st.Status != "done" {
 				return ""
 			}
-			return textOf(lookupPath(decodeStored(st.Output), path[2:]))
+			return textOf(walkPath(decodeStored(st.Output), path[2:]))
 		})
 	}
 	if out == nil {

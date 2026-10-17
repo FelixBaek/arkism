@@ -1013,6 +1013,32 @@ func TestFailedReportIsRetriedWithoutRerunning(t *testing.T) {
 	}
 }
 
+func TestRefusedReportEndsAsFailedWithoutRerunning(t *testing.T) {
+	runs, sent := 0, []string{}
+	answer := func(map[string]any) (map[string]any, error) {
+		runs++
+		return map[string]any{"status": "done", "output": "password: x"}, nil
+	}
+	patch(t, &runnerCall, func(_ string, body any, _ time.Duration) (map[string]any, error) {
+		sent = append(sent, dumpLine(body))
+		if len(sent) == 1 {
+			return nil, &host.HTTPError{Code: 422}
+		}
+		if len(sent) == 2 {
+			return nil, errors.New("down")
+		}
+		return map[string]any{}, nil
+	})
+	assistJob(map[string]any{"id": "r2"}, answer)
+	assistJob(map[string]any{"id": "r2"}, answer)
+	if runs != 1 || len(sent) != 3 || !strings.Contains(sent[2], `"failed"`) || strings.Contains(sent[2], "password") {
+		t.Fatal(runs, sent)
+	}
+	if _, ok := assistDone["r2"]; ok {
+		t.Fatal("kept after a report")
+	}
+}
+
 func TestLongInstructionsAreCutToOneArgument(t *testing.T) {
 	if fitText("짧은 지시", "할 일") != "짧은 지시" {
 		t.Fatal("cut a short text")

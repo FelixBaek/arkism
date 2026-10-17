@@ -672,7 +672,7 @@ window.ArkismCrew = (ctx) => {
   }
   function openBuildChat() {
     dialog?.remove();
-    dialog = el("dialog", "crew-dialog wf-dialog wf-build");
+    const box = (dialog = el("dialog", "crew-dialog wf-dialog wf-build"));
     const form = el("form");
     const head = el("div", "dialog-head");
     const close = el("button", "icon-btn plain");
@@ -707,6 +707,7 @@ window.ArkismCrew = (ctx) => {
         const prompt = `Build an Arkism workflow from this conversation with the user. Ask only when something essential is missing (what it takes in, what it does, where the result goes), at most 3 questions in total; after that decide sensibly and build it.
 ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}`;
         const a = await kit.assist("build", prompt, { purpose: "workflow" });
+        if (!box.open) return; // closed while the AI was thinking: build nothing
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output);
         if (j?.ask) { say("AI", String(j.ask).slice(0, 400)); return; }
@@ -714,7 +715,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
         if (!Array.isArray(g?.nodes) || !g.nodes.length) throw new Error("AI 답을 읽지 못했어요. 다시 보내 주세요.");
         g.edges = Array.isArray(g.edges) ? g.edges : [];
         say("AI", `${String(j.name || UNTITLED)}: 단계 ${g.nodes.length}개로 그렸어요. 편집 화면에서 확인해 주세요.`);
-        if (await createBlank(layoutGraph(g), String(j.name || UNTITLED).slice(0, 60), String(j.role || "").slice(0, 200))) dialog.close();
+        if (await createBlank(layoutGraph(g), String(j.name || UNTITLED).slice(0, 60), String(j.role || "").slice(0, 200))) box.close();
       } catch (x) {
         err.textContent = x.message;
       } finally {
@@ -2302,7 +2303,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     if (typeof from === "string") {
       const again = new Set([from]);
       for (let grew = true; grew; ) { grew = false; for (const e of fwd(ed.rec.crew.graph)) if (again.has(e.from) && !again.has(e.to)) { again.add(e.to); grew = true; } }
-      cr = { ...cr, nodes: Object.fromEntries(Object.entries(cr.nodes || {}).filter(([id]) => !again.has(id))) };
+      cr = { ...cr, loops: {}, nodes: Object.fromEntries(Object.entries(cr.nodes || {}).filter(([id]) => !again.has(id))) };
     }
     const r = await startRun(ed.rec, runRequest(cr), null, cr);
     if (r) { ed.run = r; render(false); void pollRun(); }

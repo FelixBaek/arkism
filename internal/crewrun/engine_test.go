@@ -1308,13 +1308,13 @@ func TestSecretAfterApprovalEndsTheRun(t *testing.T) {
 func TestSharedStateReadsAnyFinishedNode(t *testing.T) {
 	g := &Graph{
 		Nodes: []Node{node("start", "start"), node("a", "code", "lang", "sh", "code", `echo '{"v":7}'`),
-			node("b", "code", "lang", "sh", "code", `echo '"b"'`),
-			node("end", "end", "summary", "{{in}} {{nodes.a.v}} {{trigger.who}} [{{nodes.later}}]"), node("later", "merge")},
+			node("b", "code", "lang", "sh", "code", `echo '"{{trigger.who}}"'`), // code never takes shared text
+			node("end", "end", "summary", "{{in}} {{nodes.a.v}} {{trigger.who}} {{trigger.in}} [{{nodes.later}}]"), node("later", "merge")},
 		Edges: []Edge{edge("start", "a"), edge("a", "b"), edge("b", "end"), edge("end", "later")},
 	}
 	fs := newFakeStore(wf("auto", g))
-	r := runOnce(t, testEngine(t, fs), "auto", map[string]any{"who": "felix"})
-	if r.State.Status != "succeeded" || r.State.Summary != "b 7 felix []" {
+	r := runOnce(t, testEngine(t, fs), "auto", map[string]any{"who": "felix", "in": "x"})
+	if r.State.Status != "succeeded" || r.State.Summary != "{{trigger.who}} 7 felix x []" {
 		t.Fatalf("shared state: %s %q", r.State.Status, r.State.Summary)
 	}
 }

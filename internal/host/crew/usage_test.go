@@ -109,12 +109,12 @@ func TestTryRunsTheAgentReadOnly(t *testing.T) {
 		}
 		return result(true, "좋아요", pyStr(s["model"]), "medium", "claude", time.Now(), ""), nil
 	}
-	res, err := answerAssist(map[string]any{"id": "x", "created_by_type": "service", "crew_assist": map[string]any{"kind": "try", "expert": "리뷰어", "prompt": "봐 줘"}}, runner)
+	res, err := answerAssist(map[string]any{"id": "x", "created_by_type": "service", "crew_assist": map[string]any{"kind": "try", "expert": "리뷰어", "prompt": "봐 줘", "lang": "en"}}, runner)
 	if err != nil || res["status"] != "done" || res["output"] != "좋아요" || len(specs) != 2 {
 		t.Fatal(res, err, specs)
 	}
 	s := specs[0]
-	if s["access"] != "read" || s["once"] != true || !strings.Contains(pyStr(s["instructions"]), "markdown") || obj(s["origin"])["trigger"] != "discord" {
+	if s["access"] != "read" || s["once"] != true || !strings.Contains(pyStr(s["instructions"]), "markdown") || !strings.Contains(pyStr(s["instructions"]), "reads English") || obj(s["origin"])["trigger"] != "discord" {
 		t.Fatal(s)
 	}
 	if len(*reports) != 2 || (*reports)[1]["ok"] != true || obj((*reports)[1]["origin"])["agent_id"] != "a1" {

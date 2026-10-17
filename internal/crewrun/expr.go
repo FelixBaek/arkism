@@ -121,6 +121,11 @@ func lookupPath(v any, path []string) any {
 	if len(path) > 0 && path[0] == "in" {
 		path = path[1:]
 	}
+	return walkPath(v, path)
+}
+
+// walkPath walks keys of decoded JSON exactly as given ("in" is a key like any other).
+func walkPath(v any, path []string) any {
 	for _, k := range path {
 		switch x := v.(type) {
 		case map[string]any:
