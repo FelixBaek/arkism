@@ -108,7 +108,20 @@ func TestSessionProcessCarriesOversizedRecordAcrossWindows(t *testing.T) {
 	t.Setenv("ARKISM_SESSION_PROCESSOR", "1")
 	id := "archive-" + strings.Repeat("9c", 32)
 	ref := map[string]any{"archive_id": "arc-39be5193", "sha256": strings.Repeat("e", 64), "chunk_index": 0, "chunk_offset": 14363172}
-	text := bigTranscriptText(90000)
+	// Pad until an unmasked split would cut a contact in half, so the test proves masking happens first.
+	contacts := strings.Repeat("연락처 010-1234-5678, 900101-1234567, me@atelierfelix.dev\n", 1000)
+	var text string
+	for pad := 0; text == ""; pad++ {
+		candidate := strings.Repeat("a", pad) + contacts
+		split, _ := chunkRecords([]any{map[string]any{"source_id": id, "revision": 1, "role": "assistant", "text": candidate}}, 32000)
+		whole := 0
+		for _, chunk := range split {
+			whole += len(serverKoreanID.FindAllString(str(autosaveGet(chunk[0], "text")), -1))
+		}
+		if whole < len(serverKoreanID.FindAllString(candidate, -1)) {
+			text = candidate
+		}
+	}
 	linked := sessionLinked
 	t.Cleanup(func() { sessionLinked = linked })
 	sessionLinked = func(map[string]any, string) ([]any, map[string][]any, error) {
@@ -146,8 +159,15 @@ func TestSessionProcessCarriesOversizedRecordAcrossWindows(t *testing.T) {
 	if err := sessionProcess(job, func() error { return nil }, "claude_code"); err != nil {
 		t.Fatal(err)
 	}
-	parts, _ := chunkRecords([]any{map[string]any{"source_id": id, "revision": 1, "role": "assistant", "text": text}}, 32000)
-	if len(parts) < 3 || len(sent) != len(parts) || authorized != len(parts) || job["session_cursor"] != len(parts) || job["session_processor_complete"] != true {
+	for _, c := range sent {
+		for _, piece := range []string{"010", "5678", "9001", "4567", "atelierfelix", "me@"} {
+			if strings.Contains(c, piece) {
+				t.Fatal("a split boundary let part of a contact through:", piece)
+			}
+		}
+	}
+	parts, _ := chunkRecords([]any{maskSensitive(map[string]any{"source_id": id, "revision": 1, "role": "assistant", "text": text})}, 32000)
+	if len(parts) < 2 || len(sent) != len(parts) || authorized != len(parts) || job["session_cursor"] != len(parts) || job["session_processor_complete"] != true {
 		t.Fatal("every part must reach the model once; later parts share the saved refs:", len(parts), len(sent), authorized, job)
 	}
 	if !strings.Contains(sent[1], `"previous_state": {`) || !strings.Contains(sent[1], id+`-p2`) {

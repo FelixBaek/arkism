@@ -172,6 +172,9 @@ func sessionLinkedUsers(job map[string]any, origin string) (records []any, refs 
 			return nil, nil, sessionWait("session_archive_window_incomplete")
 		}
 		if len(messages) == 0 {
+			if len(records) > 0 { // verified user turns must not vanish with an empty window
+				return nil, nil, sessionWait("session_archive_window_incomplete")
+			}
 			// A window of only metadata lines (system, cost-state, last-prompt) has nothing to learn from: done.
 			return []any{}, map[string][]any{}, nil
 		}
@@ -440,6 +443,8 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 		}
 		return out
 	}
+	// Mask before splitting, so a cut never halves an address or number past the filter.
+	records, _ = maskSensitive(records).([]any)
 	groups, err := chunkRecords(records, 32000)
 	if err != nil {
 		return err
