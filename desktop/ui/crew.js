@@ -2538,7 +2538,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   const depthText = (e) => DEPTH.find(([k]) => k === e)?.[1] || "보통";
   const blankAgent = () => ({ type: "agent", name: "", handle: "", role: "", instructions: "", model_mode: "fixed", model: "", fallback_model: "", effort: "medium",
     skills: [], tools: [], agents: ["claude_code", "codex", "zcode", "app"], memory: { procedural: "all", decision: "all", lesson: "all" }, file_edits: "ask", enabled: true });
-  const wk = { id: null, draft: null, dirty: false, q: "", busy: false, status: {}, usage: null, statusAt: 0, teamsPick: new Set(), test: null };
+  const wk = { id: null, draft: null, dirty: false, q: "", busy: false, status: {}, usage: null, statusAt: 0, teamsPick: new Set(), test: null, cat: "" };
   function workerPick(id) {
     const rec = byId(id);
     wk.id = rec?.id || null;
@@ -2627,7 +2627,14 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     if (isNew) name.addEventListener("input", () => { if (!handle.dataset.touched) { handle.value = d.handle = name.value.replace(/\s+/g, "").slice(0, 40); drawWorkerSave(); } });
     handle.addEventListener("input", () => { handle.dataset.touched = "1"; });
     row.append(field("이름", name), field("한 줄 소개", bindText(input(d.role, { maxLength: 200, placeholder: "커밋 전에 diff를 보고 고칠 곳을 알려 줘요" }), d, "role")));
-    return [row, field("@이름", handle, "어느 에이전트에서든 @이름으로 불러요 · 팀과 같은 이름은 못 써요")];
+    const row2 = el("div", "scope-fields");
+    const cat = bindText(input(d.category, { maxLength: 40, placeholder: "개발" }), d, "category");
+    cat.setAttribute("list", "wk-cats");
+    const dl = el("datalist");
+    dl.id = "wk-cats";
+    for (const c of catsOf(agents())) { const o = el("option"); o.value = c; dl.append(o); }
+    row2.append(field("@이름", handle, "팀과 같은 이름은 못 써요"), field("카테고리", cat, "격자에서 이 이름으로 묶여요"), dl);
+    return [row, row2];
   }
   function instructionsField(d) {
     const t = bindText(input(d.instructions, { tag: "textarea", rows: 8, maxLength: 4000, placeholder: "## 역할\n너는 …다.\n## 말투\n…\n## 하지 말 것\n…", cls: "wk-instr" }), d, "instructions");
@@ -2639,8 +2646,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       (v) => { d.workflow = v; touchWorker(); }, "일하는 방법");
     const w = allWorkflows().find((x) => x.crew.handle === (d.workflow || "").replace(/^\$/, ""));
     // The chosen workflow is shown as its own panel (name, numbered steps, one clear edit button) so it reads as part of this agent.
-    const box = el("div", `wk-flow${w ? "" : " empty"}`);
-    if (w) {
+    if (!w) return field("쓸 워크플로우", s);
+    const box = el("div", "wk-flow");
+    {
       const steps = (w.crew.graph?.nodes || []).filter(WORK);
       const ai = steps.filter((n) => IS_AI(n.type)).length;
       const head = el("div", "wk-flow-head");
@@ -2658,12 +2666,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         chain.append(li);
       });
       box.append(head, chain);
-    } else {
-      const mark = el("span", "wk-flow-mark"); mark.append(icon("tree-structure"));
-      box.append(mark, el("span", "", "정하지 않음 · 지시대로 바로 답해요. 순서가 정해진 일이면 아래에서 워크플로우를 골라요."));
     }
     const wrap = el("div", "wk-flow-wrap");
-    wrap.append(box, field(w ? "다른 워크플로우로 바꾸기" : "쓸 워크플로우", s));
+    wrap.append(box, field("다른 워크플로우로 바꾸기", s));
     return wrap;
   }
   function depthRow(d) {
@@ -2715,7 +2720,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   function workerOut(d) {
     const out = { type: "agent", name: (d.name || "").trim(), handle: (d.handle || "").trim().replace(/^@/, ""), role: (d.role || "").trim(), instructions: d.instructions || "",
       model_mode: d.model_mode || "fixed", enabled: d.enabled !== false };
-    for (const k of ["model", "fallback_model", "image_model", "effort", "output_format", "file_name", "file_edits", "template"]) if (String(d[k] || "").trim()) out[k] = String(d[k]).trim();
+    for (const k of ["category", "model", "fallback_model", "image_model", "effort", "output_format", "file_name", "file_edits", "template"]) if (String(d[k] || "").trim()) out[k] = String(d[k]).trim();
     for (const k of ["skills", "tools", "agents", "install"]) if (d[k]?.length) out[k] = d[k];
     if (String(d.workflow || "").trim()) out.workflow = String(d.workflow).trim().replace(/^\$/, "");
     if (d.memory && Object.keys(d.memory).length) out.memory = d.memory;
@@ -2748,7 +2753,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
           joined++;
         } catch (_) { /* reported below */ }
       }
-      notice(rec ? "저장했어요." : wk.teamsPick.size && joined < wk.teamsPick.size ? "만들었어요. 팀에 못 넣은 곳이 있어요 — 팀 화면에서 넣어 주세요." : "에이전트를 만들었어요.");
+      notice(rec ? "저장했어요." : wk.teamsPick.size && joined < wk.teamsPick.size ? "만들었어요. 팀에 못 넣은 곳이 있어요 — 팀 화면에서 넣어 주세요." : "전문가를 만들었어요.");
       state.workerNew = false;
       await reload();
       workerPick(saved.id);
@@ -2758,7 +2763,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   async function removeWorker(rec) {
     const inTeams = teamsOf(rec.id);
     if (inTeams.length) { notice(`${inTeams.map((t) => t.crew.name).join(", ")}에 들어 있어요. 팀에서 먼저 빼 주세요.`); return; }
-    if (!confirm(`'${rec.crew.name}' 에이전트를 지울까요? 되돌릴 수 없어요.`)) return;
+    if (!confirm(`'${rec.crew.name}' 전문가를 지울까요? 되돌릴 수 없어요.`)) return;
     try {
       await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: rec.revision }) });
       notice("지웠어요.");
@@ -2842,6 +2847,25 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     sec.append(...budgetFields(d), field("파일 고치기", pick(FILE_EDITS, d.file_edits || "ask", (v) => { d.file_edits = v; touchWorker(); }, "파일 고치기")));
     return sec;
   }
+  // 전문가 (208:17763): category chips and a card grid on the left, the picked expert's settings on the right.
+  const catsOf = (all) => [...new Set(all.map((r) => r.crew.category).filter(Boolean))];
+  function expertCard(r) {
+    const x = r.crew;
+    const b = el("button", `wk-tile${r.id === wk.id ? " on" : ""}${x.enabled === false ? " off" : ""}`);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(r.id === wk.id));
+    const badge = x.enabled === false ? el("span", "wf-badge small line", "꺼짐") : statusBadge(r.id);
+    badge.classList.add("wk-tile-badge");
+    const av = modelMark(x.model);
+    av.classList.add("wk-avatar");
+    const flow = allWorkflows().find((w) => w.crew.handle === (x.workflow || "").replace(/^\$/, ""));
+    b.append(badge, av);
+    if (x.category) b.append(el("small", "wk-tile-cat", x.category));
+    b.append(el("strong", "", x.name), el("p", "", x.role || ""), el("small", "wk-tile-model", x.model_mode === "auto" ? "Clef 자동" : x.model || "모델 미정"),
+      el("span", `wk-tile-flow${flow ? "" : " none"}`, flow ? `→ ${flow.crew.name}` : "바로 답해요"));
+    b.addEventListener("click", () => { if (r.id === wk.id) return; if (wk.dirty && !confirm("저장하지 않은 변경이 있어요. 버리고 옮길까요?")) return; workerPick(r.id); render(false); });
+    return b;
+  }
   function renderWorkers() {
     $("#controls").replaceChildren();
     const main = $("#table");
@@ -2849,86 +2873,74 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     void loadAgentInfo();
     if (state.workerNew) return renderWorkerNew(main);
     const all = agents();
-    if (!wk.id || !byId(wk.id)) workerPick(all[0]?.id);
+    const cats = catsOf(all);
+    if (wk.cat && !cats.includes(wk.cat)) wk.cat = "";
+    const shown = all.filter((r) => !wk.cat || r.crew.category === wk.cat);
+    if (!wk.id || !byId(wk.id)) workerPick(shown[0]?.id || all[0]?.id);
     const rec = wk.id ? byId(wk.id) : null;
     const d = wk.draft;
-    const list = el("aside", "wk-list");
-    const search = el("label", "search wk-search");
-    const q = el("input");
-    q.type = "search";
-    q.placeholder = "에이전트 찾기";
-    q.setAttribute("aria-label", "에이전트 찾기");
-    q.value = wk.q;
-    search.append(icon("magnifying-glass"), q);
-    const add = el("button", "wk-new", "+ 새 에이전트");
+    const left = el("div", "wk-browse");
+    if (cats.length) left.append(toggleChips([["", `모든 카테고리 ${all.length}`], ...cats.map((c) => [c, `${c} ${all.filter((r) => r.crew.category === c).length}`])],
+      (k) => (wk.cat || "") === k, (k) => { wk.cat = k; render(false); }));
+    const grid = el("div", "wk-grid");
+    const add = el("button", "wk-tile wk-tile-new");
     add.type = "button";
+    const plus = el("span", "wk-avatar"); plus.append(icon("plus"));
+    add.append(plus, el("strong", "", "새 전문가"));
     add.addEventListener("click", () => openWorkers(null, true));
-    const rows = el("div", "wk-rows");
-    const drawRows = () => rows.replaceChildren(...all.filter((r) => !wk.q || `${r.crew.name} ${r.crew.handle || ""} ${r.crew.role || ""}`.toLowerCase().includes(wk.q)).map((r) => {
-      const b = el("button", `wk-row${r.id === wk.id ? " on" : ""}`);
-      b.type = "button";
-      const t = el("span", "wk-row-text");
-      const top = el("span", "wk-row-top");
-      top.append(el("strong", "", r.crew.name), r.crew.enabled === false ? el("span", "wf-badge small line", "꺼짐") : statusBadge(r.id));
-      t.append(top, el("small", "", workerMeta(r.crew)));
-      b.append(modelMark(r.crew.model), t);
-      b.addEventListener("click", () => { if (wk.dirty && !confirm("저장하지 않은 변경이 있어요. 버리고 옮길까요?")) return; workerPick(r.id); render(false); });
-      return b;
-    }));
-    q.addEventListener("input", () => { wk.q = q.value.trim().toLowerCase(); drawRows(); });
-    drawRows();
-    list.append(search, add, rows);
-    if (!all.length) list.append(el("p", "wf-empty", "아직 에이전트가 없어요. 위에서 하나 만들어 보세요."));
+    grid.append(...shown.map(expertCard), add);
+    left.append(grid);
     if (!rec || !d) {
-      const empty = el("div", "wk-center wk-empty");
-      empty.append(el("h3", "", "에이전트"), el("p", "", "역할·지시·모델·쓸 수 있는 스킬을 한 번 정해 두면, 어느 에이전트에서든 @이름으로 불러 일을 맡겨요."), button("새 에이전트", "primary", null, () => openWorkers(null, true)));
-      main.replaceChildren(list, empty);
+      const empty = el("div", "wk-detail wk-empty");
+      empty.append(el("h3", "", "전문가"), el("p", "", "역할·지시·모델·쓸 수 있는 스킬을 한 번 정해 두면, Claude Code·Codex 어디서든 @이름으로 불러 일을 맡겨요."), button("새 전문가", "primary", null, () => openWorkers(null, true)));
+      main.replaceChildren(left, empty);
       return;
     }
-    const center = el("div", "wk-center");
+    const pane = el("div", "wk-detail");
     const head = el("div", "wk-head");
+    const av = modelMark(d.model);
+    av.classList.add("wk-avatar");
     const ht = el("div", "wk-head-text");
-    const h2 = el("div", "wk-title");
-    h2.append(el("h2", "", d.name || "이름 없음"), d.enabled === false ? el("span", "wf-badge small line", "꺼짐") : statusBadge(rec.id));
-    ht.append(h2, el("small", "", [d.role, `고친 횟수 ${rec.revision}`].filter(Boolean).join(" · ")));
+    const tags = el("div", "wk-title");
+    if (d.category) tags.append(el("span", "wf-chip", d.category));
+    tags.append(d.enabled === false ? el("span", "wf-badge small line", "꺼짐") : statusBadge(rec.id));
+    ht.append(el("h2", "", d.name || "이름 없음"), el("small", "", d.role || ""), tags);
+    head.append(av, ht, switchEl(d.enabled !== false, "켜기", (on) => { d.enabled = on; touchWorker(); }));
     const acts = el("div", "wk-head-actions");
-    const onOff = switchEl(d.enabled !== false, "켜기", (on) => { d.enabled = on; touchWorker(); });
-    const test = el("button", "wf-link", "대화 테스트");
-    test.type = "button";
-    test.addEventListener("click", () => { wk.test = wk.test ? null : { q: "", a: "" }; render(false); });
+    const tabs = segment([["edit", "편집"], ["test", "대화 테스트"]], wk.test ? "test" : "edit", (k) => { wk.test = k === "test" ? wk.test || { q: "", a: "" } : null; render(false); });
     const del = el("button", "wf-link quiet", "지우기");
     del.type = "button";
     del.addEventListener("click", () => removeWorker(rec));
     const ok = button("저장", "primary small", null, () => saveWorker(rec));
     drawWorkerSave = () => { ok.disabled = !wk.dirty || wk.busy; };
     drawWorkerSave();
-    acts.append(onOff, del, test, ok);
-    head.append(modelMark(d.model), ht, acts);
-    const where = workerCard("한 번 정하고, 다섯 곳에서", "어디서든 같은 지시로 @이름으로 불러요");
-    const sample = el("div", "wk-sample mono", d.role ? `@${d.handle || "이름"} 이 일 맡아 줘` : `@${d.handle || "이름"} 지금 이거 봐 줘`);
+    acts.append(tabs, del, ok);
+    const call = el("div", "wk-call");
+    const copy = el("button", "wf-link", "복사");
+    copy.type = "button";
+    copy.addEventListener("click", () => { navigator.clipboard?.writeText(`@${d.handle}`).then(() => notice("복사했어요."), () => {}); });
+    call.append(raw(el("strong", "mono", `@${d.handle || "이름"}`)), el("small", "", "로 불러요"), copy);
+    pane.append(head, acts, call);
+    if (wk.test) { pane.append(testPanel(rec)); main.replaceChildren(left, pane); return; }
     const inTeams = teamsOf(rec.id);
-    where.append(sample, placeChips(d), el("h4", "wk-label", "속한 팀"),
-      raw(el("p", "wk-side-sub", inTeams.length ? inTeams.map((t) => `${t.crew.name} · ${tr(({ moderator: "진행자", worker: "작업자", reviewer: "리뷰어", scribe: "기록자" })[t.crew.members.find((m) => m.agent_id === rec.id)?.role] || "작업자")}`).join("  /  ") : tr("아직 어느 팀에도 없어요."))));
-    center.append(head);
-    if (wk.test) center.append(testPanel(rec));
-    center.append(
+    const team = raw(el("p", "wk-side-sub", inTeams.length ? inTeams.map((t) => `${t.crew.name} · ${tr(({ moderator: "진행자", worker: "작업자", reviewer: "리뷰어", scribe: "기록자" })[t.crew.members.find((m) => m.agent_id === rec.id)?.role] || "작업자")}`).join("  /  ") : tr("아직 어느 팀에도 없어요.")));
+    pane.append(
+      workerCard("일하는 방법", "", workflowField(d)),
+      workerCard("실행", "", ...modelFields(d, true), el("h4", "wk-label", "부르는 곳"), placeChips(d)),
       workerCard("어떤 동료인가요?", `페르소나 · 고친 횟수 ${rec.revision} · 마크다운으로 써요`, ...whoFields(d, false), instructionsField(d)),
-      ...(pins ? [pins.card({ rec, draft: d, sub: tr(`@${rec.crew.handle}에게 일을 맡길 때마다 먼저 넣어요. 위에 있을수록 먼저 들어가요.`), noun: tr("이 에이전트는"), onChange: () => { wk.dirty = true; drawWorkerSave(); } })] : []),
-      workerCard("일하는 방법", "순서가 정해진 일은 워크플로우로 맡겨요", workflowField(d)),
-      workerCard("사고의 방식", "모델과 답변 형식", ...modelFields(d, true)),
-      where);
-    const side = el("aside", "wk-side");
-    const uses = el("section", "wk-side-sec");
-    uses.append(el("h3", "", "쓸 수 있는 것"), el("p", "wk-side-sub", "이 에이전트가 쓰는 스킬·MCP·기억이에요."), ...useFields(d));
-    const pinNote = pins?.sideNotice(d, touchWorker, () => render(false));
-    side.append(...(pinNote ? [pinNote] : []), uses, spendSection(rec.id, d));
-    main.replaceChildren(list, center, side);
+      ...(pins ? [pins.card({ rec, draft: d, sub: tr(`@${rec.crew.handle}에게 일을 맡길 때마다 먼저 넣어요. 위에 있을수록 먼저 들어가요.`), noun: tr("이 전문가는"), onChange: () => { wk.dirty = true; drawWorkerSave(); } })] : []),
+      workerCard("쓸 수 있는 것", "", ...useFields(d)),
+      workerCard("속한 팀", "", team));
+    const spend = spendSection(rec.id, d);
+    spend.className = "wk-card wk-spend-card";
+    pane.append(spend);
+    main.replaceChildren(left, pane);
   }
   function renderWorkerNew(main) {
     const d = wk.draft || (wk.draft = blankAgent());
     const back = el("button", "page-back");
     back.type = "button";
-    back.append("← 에이전트");
+    back.append("← 전문가");
     back.addEventListener("click", () => { if (wk.dirty && !confirm("쓰던 내용을 버릴까요?")) return; openWorkers(null, false); });
     $(".main > .page-head").prepend(back);
     const form = el("div", "wk-form");
@@ -2950,7 +2962,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     });
     form.append(ai,
       step(1, "누구인가요", "", ...whoFields(d, true), el("h4", "wk-label", "비슷한 것에서 시작"), like),
-      step(2, "어떻게 일하나요", "에이전트가 일할 때 지키는 역할·말투·순서예요.", instructionsField(d)),
+      step(2, "어떻게 일하나요", "전문가가 일할 때 지키는 역할·말투·순서예요.", instructionsField(d), workflowField(d)),
       step(3, "어떤 모델로 생각하나요", "", ...modelFields(d, false)),
       step(4, "무엇을 쓸 수 있나요", "", ...useFields(d)),
       step(5, "예산", "", ...budgetFields(d)));
@@ -2970,7 +2982,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     drawWorkerSave();
     pv.append(el("h3", "wk-quiet", "미리보기"), card);
     const where = el("section", "wk-side-sec");
-    where.append(el("h3", "", "어디서 부를 수 있나요"), placeChips(d), el("p", "wk-side-sub", `켜 둔 에이전트에서 @${d.handle || "이름"}으로 부르면 이 설정으로 일을 맡아요.`));
+    where.append(el("h3", "", "어디서 부를 수 있나요"), placeChips(d), el("p", "wk-side-sub", `Claude Code·Codex에서 @${d.handle || "이름"}으로 부르면 이 전문가가 일을 맡아요.`));
     const tm = el("section", "wk-side-sec");
     tm.append(el("h3", "", "팀에 넣기"));
     if (teams().length) tm.append(toggleChips(teams().map((t) => [t.id, t.crew.name]), (k) => wk.teamsPick.has(k), (k, on) => { if (on) wk.teamsPick.add(k); else wk.teamsPick.delete(k); render(false); }));
@@ -3001,9 +3013,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       crew: { title: "자동화", count: () => `${workflows().length}개`, sub: () => { const on = workflows().filter((r) => triggered(r.crew)).length; return `단계가 정해진 워크플로우예요. 에이전트가 일하는 방법으로 쓰거나 $이름으로 불러요. ${on ? `일정·웹훅은 ${on}개 켜져 있어요.` : "켜진 일정·웹훅은 없어요."}`; } }
     },
     pages: {
-      workers: { title: () => (state.workerNew ? "새 에이전트" : "에이전트"), count: () => (state.workerNew ? "" : `${agents().length}명`),
-        sub: () => (state.workerNew ? "역할·말투·쓸 모델과 도구를 정하면, 어느 에이전트에서든 @이름으로 불러 일을 맡길 수 있어요." : "페르소나를 한 번 정하면 Claude Code·Codex·ZCode·디스코드·arkism 앱 어디서든 @이름으로 불러요."),
-        head: () => [], render: renderWorkers },
+      workers: { title: () => (state.workerNew ? "새 전문가" : "전문가"), count: () => (state.workerNew ? "" : `${agents().length}명`),
+        sub: () => "",
+        bare: () => !state.workerNew, head: () => [], render: renderWorkers },
       graph: { title: () => (ed.rec ? `${ed.rec.crew.name} · ${ed.run ? "실행" : "워크플로우 편집"}` : "워크플로우 편집"), sub: pageSub, head: graphHead, render: renderGraph }
     },
     // exported for tests in a browser console

@@ -17,7 +17,7 @@ window.ArkismShell = (ctx) => {
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },
     agent: { label: "CREW", tabs: [
-      ["workers", "에이전트", () => { state.workerNew = false; go("workers"); }, () => state.view === "workers"],
+      ["workers", "전문가", () => { state.workerNew = false; go("workers"); }, () => state.view === "workers"],
       ["teams", "팀", () => go("teams"), () => ["teams", "teamNew", "meetings"].includes(state.view)],
       ["crew", "자동화", () => go("crew"), () => ["crew", "graph"].includes(state.view), count("crew")],
       ["discord", "디스코드", () => go("discord"), () => state.view === "discord"],
