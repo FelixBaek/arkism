@@ -12150,6 +12150,18 @@
             "type": "integer",
             "minimum": 1
           },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "readOnly": true,
+            "description": "ST-811 fused rank score, as on Hit."
+          },
+          "lanes": {
+            "type": "array",
+            "readOnly": true,
+            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "description": "ST-811 lanes that found this hit, as on Hit."
+          },
           "collected_at": {
             "type": [
               "string",
