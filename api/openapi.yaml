@@ -12150,6 +12150,18 @@
             "type": "integer",
             "minimum": 1
           },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "readOnly": true,
+            "description": "ST-811 fused rank score, as on Hit."
+          },
+          "lanes": {
+            "type": "array",
+            "readOnly": true,
+            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "description": "ST-811 lanes that found this hit, as on Hit."
+          },
           "collected_at": {
             "type": [
               "string",
@@ -12205,6 +12217,18 @@
             "type": "string",
             "readOnly": true,
             "description": "Project key a project-reach memory recalls for (normalized origin owner/name or path:hash). Never a raw path."
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "readOnly": true,
+            "description": "ST-811 fused rank score (weighted reciprocal rank, exact keyword weighted 2x) after scope, reach and liveness filters. Ordinal only; not a provider similarity."
+          },
+          "lanes": {
+            "type": "array",
+            "readOnly": true,
+            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "description": "ST-811 lanes that found this hit, in fixed order exact, keyword, vector, relation."
           },
           "conflict_pending": {
             "type": "boolean",
@@ -15885,6 +15909,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 50
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "description": "ST-811 fused score the search handed this memory out with; absent for pinned memories."
+          },
+          "lanes": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "description": "ST-811 lanes that found it; absent for pinned memories. No body or query text is stored."
           }
         }
       },
@@ -15936,6 +15970,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 50
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "description": "ST-811 fused score the search handed this memory out with; absent for pinned memories."
+          },
+          "lanes": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
+            "description": "ST-811 lanes that found it; absent for pinned memories. No body or query text is stored."
           },
           "run": {
             "$ref": "#/components/schemas/Ref"

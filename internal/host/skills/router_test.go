@@ -317,10 +317,15 @@ func TestRecallByIDOrQuery(t *testing.T) {
 	if got := host.MustDumps(field(out, "memories"), host.DumpOpts{Compact: true, NoASCII: true}); got != `[{"id":"m1","kind":"user","status":"active","text":"답은 한국어로","sources":[{"source_id":"s"}],"conflict_pending":false}]` {
 		t.Fatal(got)
 	}
-	calls = fakeRequest(t, `{"items":[`+memory+`]}`)
+	scored := strings.TrimSuffix(memory, "}") + `,"score":0.0327,"lanes":["exact","keyword"]}`
+	calls = fakeRequest(t, `{"items":[`+scored+`]}`)
 	out = structured(t, call(t, "recall", `{"query":"답 언어"}`))
 	if (*calls)[0].path != "/v1/search" || len(asList(field(out, "memories"))) != 1 {
 		t.Fatal(*calls)
+	}
+	// ST-811: search hits keep the server's fused score and lanes.
+	if got := host.MustDumps(field(out, "memories"), host.DumpOpts{Compact: true, NoASCII: true}); !strings.HasSuffix(got, `"conflict_pending":false,"score":0.0327,"lanes":["exact","keyword"]}]`) {
+		t.Fatal(got)
 	}
 	if _, err := recall("  ", []any{}, nil); err == nil {
 		t.Fatal("blank recall")

@@ -345,6 +345,8 @@ type Hit struct {
 	CollectedAt        *time.Time     `json:"collected_at,omitempty" bson:"collected_at,omitempty"`
 	EffectiveAt        *time.Time     `json:"effective_at" bson:"effective_at,omitempty"`
 	Rank               int            `json:"rank,omitempty" bson:"rank,omitempty"`
+	Score              float64        `json:"score,omitempty" bson:"-"`
+	Lanes              []string       `json:"lanes,omitempty" bson:"-"`
 	Kind               string         `json:"kind,omitempty" bson:"kind"`
 	Sensitivity        string         `json:"sensitivity,omitempty" bson:"sensitivity"`
 	ID                 string         `json:"id" bson:"id"`
