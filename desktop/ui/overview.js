@@ -233,14 +233,17 @@ window.ArkismOverview = (ctx) => {
       chip(C.p, "관계 그래프", `점 ${num(d.memories.length)}`, () => go("memories", "relations")));
   }
 
-  // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone.
+  // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone or hidden.
   let tick = 0;
   const still = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  function stopFiring() {
+    clearInterval(timer); timer = 0;
+    ui?.fires?.forEach((p) => p.classList.remove("on")); ui?.sparks?.forEach((sp) => sp.classList.remove("hot"));
+  }
   function startFiring() {
-    if (timer || still?.matches || !root?.isConnected) return;
+    if (timer || still?.matches || document.hidden || !root?.isConnected) return;
     timer = setInterval(() => {
-      if (!root?.isConnected) { clearInterval(timer); timer = 0; return; }
-      if (document.hidden) return;
+      if (!root?.isConnected || document.hidden) { stopFiring(); return; }
       tick++;
       const on = new Set([0, 1, 2].map((k) => Math.floor(noise(tick, 20 + k) * PAIRS.length))), hot = new Set();
       ui.fires.forEach((p, i) => { const f = on.has(i); p.classList.toggle("on", f); if (f) { hot.add(PAIRS[i][0]); hot.add(PAIRS[i][1]); } });
@@ -251,9 +254,10 @@ window.ArkismOverview = (ctx) => {
   // follow the reduced-motion setting live: stop firing on reduce, resume only while the screen is shown
   still?.addEventListener?.("change", () => {
     if (!still.matches) { startFiring(); return; }
-    clearInterval(timer); timer = 0;
-    ui?.fires?.forEach((p) => p.classList.remove("on")); ui?.sparks?.forEach((sp) => sp.classList.remove("hot"));
+    stopFiring();
   });
+  // a hidden window keeps no timer; startFiring resumes only while the overview is on screen
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stopFiring(); else startFiring(); });
 
   function renderView() {
     const table = $("#table");
