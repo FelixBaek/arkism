@@ -108,7 +108,10 @@ var search = searchMemories
 func searchMemories(query, project string, limit int, timeout float64) ([]any, error) {
 	deadline := monotonic() + timeout
 	body := map[string]any{"scope": capScope(), "query": head(query, 1000), "modes": []any{"exact", "fts", "vector"},
-		"purpose": "answer", "destination": "internal", "limit": limit, "max_chars": 6000, "project_key": project}
+		"purpose": "answer", "destination": "internal", "limit": limit, "max_chars": 6000}
+	if project != "" { // older servers reject unknown fields; no key already means personal and general only
+		body["project_key"] = project
+	}
 	res, err := capPost("/v1/search", body, secs(timeout))
 	if err != nil {
 		if host.HTTPCode(err) != 503 {
@@ -534,11 +537,18 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 	var items []map[string]any
 	project := host.ProjectKey(cwd)
 	for _, kind := range []string{"user", "procedural"} {
-		res, err := capGet("/v1/memories?"+scopeQuery(false, "status", "active", "kind", kind, "limit", "100", "project_key", project), 8*time.Second)
+		args := []string{"status", "active", "kind", kind, "limit", "100"}
+		if project != "" {
+			args = append(args, "project_key", project)
+		}
+		res, err := capGet("/v1/memories?"+scopeQuery(false, args...), 8*time.Second)
 		if err != nil {
 			return indexBlock{}, err
 		}
 		items = append(items, dicts(listOf(or(res["items"], []any{})))...)
+	}
+	if project == "" { // without project_key the list returns every reach; outside a repository keep project ones out
+		items = keepIf(items, func(i map[string]any) bool { return i["reach"] != "project" })
 	}
 	items = standingOrder(withText(forRepo(items, repoKey(cwd))))
 	related := contractRelated(taskContract(cwd), project)

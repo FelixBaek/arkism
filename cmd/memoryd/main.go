@@ -93,6 +93,9 @@ func run() error {
 	if (*adoptBlobs || *collectBlobs) && ((*adoptBlobs && *collectBlobs) || *initDB || *checkIndexes || *recovery || *worker) {
 		return memory.ErrInvalid
 	}
+	if *memoryReach != "" && (*initDB || *semanticIndex != "" || *checkIndexes) {
+		return memory.ErrInvalid
+	}
 	if *recovery {
 		host, _, err := net.SplitHostPort(*listen)
 		ip := net.ParseIP(host)

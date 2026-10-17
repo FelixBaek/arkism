@@ -729,7 +729,10 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 		if relatedTo != nil {
 			modes = []any{"relation"}
 		}
-		payload := map[string]any{"scope": host.Scope(), "query": text, "modes": modes, "purpose": "answer", "destination": "internal", "limit": 6, "max_chars": 6000, "project_key": project}
+		payload := map[string]any{"scope": host.Scope(), "query": text, "modes": modes, "purpose": "answer", "destination": "internal", "limit": 6, "max_chars": 6000}
+		if project != "" {
+			payload["project_key"] = project
+		}
 		if relatedTo != nil {
 			payload["related_to"] = relatedTo
 		}

@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 )
 
@@ -51,6 +53,7 @@ func (s *Service) SetMemoryReach(ctx context.Context, token, id string, in Memor
 	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || in.ExpectedRevision < 1 || !validRunLabel(id, 256) || containsSecret(id) {
 		return Record{}, ErrInvalid
 	}
+	in.ReachProject = strings.ToLower(strings.TrimSpace(in.ReachProject)) // same form host.RemoteKey sends
 	switch in.Reach {
 	case ReachPersonal, ReachGeneral:
 		if in.ReachProject != "" {
@@ -134,8 +137,11 @@ func (p *Postgres) MigrateMemoryReach(ctx context.Context, revert bool) (int, er
 	for _, t := range targets {
 		err = p.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 			r, e := tx.Get(ctx, colMemories, t.s, t.id)
-			if e != nil || r.ContentErased {
-				return nil
+			if errors.Is(e, ErrNotFound) || e == nil && r.ContentErased {
+				return nil // deleted since the listing, or erased
+			}
+			if e != nil {
+				return e
 			}
 			if revert {
 				if r.ReachOrigin != reachOriginMigration {

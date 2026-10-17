@@ -35,8 +35,8 @@ func TestMemoryReachRecallAndHumanOnlyChange(t *testing.T) {
 			t.Fatal("invalid reach accepted", bad, e)
 		}
 	}
-	mine, e := set(f.human, mine, ReachProject, "owner/mine")
-	if e != nil || mine.Reach != ReachProject || mine.ReachOrigin != reachOriginHuman {
+	mine, e := set(f.human, mine, ReachProject, " Owner/Mine ")
+	if e != nil || mine.Reach != ReachProject || mine.ReachProject != "owner/mine" || mine.ReachOrigin != reachOriginHuman {
 		t.Fatal("set reach", mine, e)
 	}
 	if _, e = f.svc.SetMemoryReach(testCtx, f.human, mine.ID, MemoryReachInput{Scope: scopeA, ExpectedRevision: mine.Revision - 1, Reach: ReachGeneral}); !errors.Is(e, ErrConflict) {
