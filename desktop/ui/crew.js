@@ -847,7 +847,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     head.append(el("h2", "", "워크플로우"),
       el("p", "", "어느 에이전트에서든 $이름으로 불러요. 부르면 서버 실행기가 그래프대로 돌리고, 부른 자리에는 진행과 결과를 보고해요. AI 칸은 칸마다 정한 모델이 맡아요."));
     const s = section("지금");
-    s.append(kv([["워크플로우", `${workflows().length}개`], ["일정·웹훅", `${workflows().filter((r) => triggered(r.crew)).length}개 켜짐`], ["페르소나", `${personas().length}개 저장`], ["작업 에이전트", `${agents().length}명`]]));
+    s.append(kv([["워크플로우", `${workflows().length}개`], ["일정·웹훅", `${workflows().filter((r) => triggered(r.crew)).length}개 켜짐`], ["페르소나", `${personas().length}개 저장`], ["에이전트", `${agents().length}명`]]));
     body.append(head, s, el("p", "meta", "카드를 누르면 여기서 실행하고 고쳐요."));
   }
   const dupButton = (r) => button("복제", "", null, () => {
@@ -1192,7 +1192,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
       const when3 = kind.value === "schedule" ? cronText(cron.value) : kind.value === "webhook" ? "웹훅" : "수동 실행";
       return { name: name.value.trim(), role: role.value.trim(), category: category.value.trim(), meta: [`$${handle.value.trim() || "이름"}`, n ? (n === 1 ? "단계 1개" : `${n}단계`) : "단계 없음", when3].join(" · ") };
     });
-    if (startWith) { fromTemplate(startWith); cover.refresh(); } // 작업 에이전트 › 워크플로우로 만들기
+    if (startWith) { fromTemplate(startWith); cover.refresh(); } // 에이전트 › 워크플로우로 만들기
     bodyEl.append(row3, row4, el("small", "dim", "멈추는 조건 — 비워 두면 정하지 않아요. 되돌아가는 선은 선마다 횟수를 정해요."), row5, field("배경 사진", cover.node, "고른 사진은 카드 뒤에 깔리고, 아래쪽 그라데이션으로 글씨가 보여요 · 사진: Unsplash"), err);
     // Two columns (198:2952 · 198:3038): the fields, and on the right the card as the list will show it.
     const mainCol = el("div", "wf-dlg-main");
@@ -2520,7 +2520,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     return box;
   }
 
-  // ---------------------------------------------------------------- 작업 에이전트 (Figma 208:17763 · 310:19277)
+  // ---------------------------------------------------------------- 에이전트 (Figma 208:17763 · 310:19277)
   // A work agent (crew type "agent", called @이름; workflows keep $이름): who it is, its instructions, model and how it
   // thinks, the skills·MCP·memory it may use, where it can be called and its monthly budget. Teams list their members by
   // agent id. Status comes from /v1/crew/agents/status, spend from /v1/crew/usage (estimated list prices).
@@ -2651,7 +2651,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     } else {
       box.append(icon("tree-structure"), el("span", "", "정하지 않음 · 지시대로 바로 답해요. 순서가 정해진 일이면 워크플로우를 골라요."));
     }
-    return el("div", "wk-flow-wrap", box, field("쓸 워크플로우", s));
+    const wrap = el("div", "wk-flow-wrap");
+    wrap.append(box, field("쓸 워크플로우", s));
+    return wrap;
   }
   function depthRow(d) {
     const r = el("div", "wk-depth");
@@ -2735,7 +2737,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
           joined++;
         } catch (_) { /* reported below */ }
       }
-      notice(rec ? "저장했어요." : wk.teamsPick.size && joined < wk.teamsPick.size ? "만들었어요. 팀에 못 넣은 곳이 있어요 — 팀 화면에서 넣어 주세요." : "작업 에이전트를 만들었어요.");
+      notice(rec ? "저장했어요." : wk.teamsPick.size && joined < wk.teamsPick.size ? "만들었어요. 팀에 못 넣은 곳이 있어요 — 팀 화면에서 넣어 주세요." : "에이전트를 만들었어요.");
       state.workerNew = false;
       await reload();
       workerPick(saved.id);
@@ -2745,7 +2747,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   async function removeWorker(rec) {
     const inTeams = teamsOf(rec.id);
     if (inTeams.length) { notice(`${inTeams.map((t) => t.crew.name).join(", ")}에 들어 있어요. 팀에서 먼저 빼 주세요.`); return; }
-    if (!confirm(`'${rec.crew.name}' 작업 에이전트를 지울까요? 되돌릴 수 없어요.`)) return;
+    if (!confirm(`'${rec.crew.name}' 에이전트를 지울까요? 되돌릴 수 없어요.`)) return;
     try {
       await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: rec.revision }) });
       notice("지웠어요.");
@@ -2844,10 +2846,10 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const q = el("input");
     q.type = "search";
     q.placeholder = "에이전트 찾기";
-    q.setAttribute("aria-label", "작업 에이전트 찾기");
+    q.setAttribute("aria-label", "에이전트 찾기");
     q.value = wk.q;
     search.append(icon("magnifying-glass"), q);
-    const add = el("button", "wk-new", "+ 새 작업 에이전트");
+    const add = el("button", "wk-new", "+ 새 에이전트");
     add.type = "button";
     add.addEventListener("click", () => openWorkers(null, true));
     const rows = el("div", "wk-rows");
@@ -2865,10 +2867,10 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     q.addEventListener("input", () => { wk.q = q.value.trim().toLowerCase(); drawRows(); });
     drawRows();
     list.append(search, add, rows);
-    if (!all.length) list.append(el("p", "wf-empty", "아직 작업 에이전트가 없어요. 위에서 하나 만들어 보세요."));
+    if (!all.length) list.append(el("p", "wf-empty", "아직 에이전트가 없어요. 위에서 하나 만들어 보세요."));
     if (!rec || !d) {
       const empty = el("div", "wk-center wk-empty");
-      empty.append(el("h3", "", "작업 에이전트"), el("p", "", "역할·지시·모델·쓸 수 있는 스킬을 한 번 정해 두면, 어느 에이전트에서든 @이름으로 불러 일을 맡겨요."), button("새 작업 에이전트", "primary", null, () => openWorkers(null, true)));
+      empty.append(el("h3", "", "에이전트"), el("p", "", "역할·지시·모델·쓸 수 있는 스킬을 한 번 정해 두면, 어느 에이전트에서든 @이름으로 불러 일을 맡겨요."), button("새 에이전트", "primary", null, () => openWorkers(null, true)));
       main.replaceChildren(list, empty);
       return;
     }
@@ -2915,7 +2917,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const d = wk.draft || (wk.draft = blankAgent());
     const back = el("button", "page-back");
     back.type = "button";
-    back.append("← 작업 에이전트");
+    back.append("← 에이전트");
     back.addEventListener("click", () => { if (wk.dirty && !confirm("쓰던 내용을 버릴까요?")) return; openWorkers(null, false); });
     $(".main > .page-head").prepend(back);
     const form = el("div", "wk-form");
@@ -2988,7 +2990,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       crew: { title: "자동화", count: () => `${workflows().length}개`, sub: () => { const on = workflows().filter((r) => triggered(r.crew)).length; return `단계가 정해진 워크플로우예요. 에이전트가 일하는 방법으로 쓰거나 $이름으로 불러요. ${on ? `일정·웹훅은 ${on}개 켜져 있어요.` : "켜진 일정·웹훅은 없어요."}`; } }
     },
     pages: {
-      workers: { title: () => (state.workerNew ? "새 작업 에이전트" : "작업 에이전트"), count: () => (state.workerNew ? "" : `${agents().length}명`),
+      workers: { title: () => (state.workerNew ? "새 에이전트" : "에이전트"), count: () => (state.workerNew ? "" : `${agents().length}명`),
         sub: () => (state.workerNew ? "역할·말투·쓸 모델과 도구를 정하면, 어느 에이전트에서든 @이름으로 불러 일을 맡길 수 있어요." : "페르소나를 한 번 정하면 Claude Code·Codex·ZCode·디스코드·arkism 앱 어디서든 @이름으로 불러요."),
         head: () => [], render: renderWorkers },
       graph: { title: () => (ed.rec ? `${ed.rec.crew.name} · ${ed.run ? "실행" : "워크플로우 편집"}` : "워크플로우 편집"), sub: pageSub, head: graphHead, render: renderGraph }

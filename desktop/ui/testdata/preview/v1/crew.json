@@ -493,6 +493,7 @@
    "status": "active",
    "crew": {
     "type": "agent",
+    "workflow": "리서치",
     "name": "리서처",
     "handle": "리서처",
     "role": "주제를 받아 출처까지 정리해요",
