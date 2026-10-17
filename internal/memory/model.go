@@ -98,17 +98,20 @@ type ProviderCost struct {
 type Record struct {
 	MemoryContext *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
 	// Reach (ST-824): where a memory is recalled; "" reads as memoryReach's default. See memory_reach.go.
-	Reach             string               `json:"reach,omitempty" bson:"reach,omitempty"`
-	ReachProject      string               `json:"reach_project,omitempty" bson:"reach_project,omitempty"`
-	ReachOrigin       string               `json:"-" bson:"reach_origin,omitempty"`
-	ModelBudget       *ModelBudgetState    `json:"-" bson:"model_budget,omitempty"`
-	SkillBundle       *SkillBundle         `json:"skill_bundle,omitempty" bson:"skill_bundle,omitempty"`
-	SkillBundleSHA256 string               `json:"skill_bundle_sha256,omitempty" bson:"skill_bundle_sha256,omitempty"`
-	SkillTrial        *SkillTrial          `json:"skill_trial,omitempty" bson:"skill_trial,omitempty"`
-	SkillBasis        *SkillBasis          `json:"skill_basis,omitempty" bson:"skill_basis,omitempty"`
-	ComparisonPlan    *SkillComparisonPlan `json:"comparison_plan,omitempty" bson:"comparison_plan,omitempty"`
-	MemoryTimeline    []MemoryState        `json:"-" bson:"memory_timeline,omitempty"`
-	ArchiveMessages   []ArchiveMessageRef  `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
+	Reach        string `json:"reach,omitempty" bson:"reach,omitempty"`
+	ReachProject string `json:"reach_project,omitempty" bson:"reach_project,omitempty"`
+	ReachOrigin  string `json:"-" bson:"reach_origin,omitempty"`
+	// ReachSuggestion (ST-825) is the save-time proposal; ReachSuggestionDismissed is "reach|project" a person turned down.
+	ReachSuggestion          *ReachSuggestion     `json:"reach_suggestion,omitempty" bson:"reach_suggestion,omitempty"`
+	ReachSuggestionDismissed string               `json:"reach_suggestion_dismissed,omitempty" bson:"reach_suggestion_dismissed,omitempty"`
+	ModelBudget              *ModelBudgetState    `json:"-" bson:"model_budget,omitempty"`
+	SkillBundle              *SkillBundle         `json:"skill_bundle,omitempty" bson:"skill_bundle,omitempty"`
+	SkillBundleSHA256        string               `json:"skill_bundle_sha256,omitempty" bson:"skill_bundle_sha256,omitempty"`
+	SkillTrial               *SkillTrial          `json:"skill_trial,omitempty" bson:"skill_trial,omitempty"`
+	SkillBasis               *SkillBasis          `json:"skill_basis,omitempty" bson:"skill_basis,omitempty"`
+	ComparisonPlan           *SkillComparisonPlan `json:"comparison_plan,omitempty" bson:"comparison_plan,omitempty"`
+	MemoryTimeline           []MemoryState        `json:"-" bson:"memory_timeline,omitempty"`
+	ArchiveMessages          []ArchiveMessageRef  `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
 
 	KnowledgeRetrieval   *KnowledgeRetrievalLog `json:"knowledge_retrieval,omitempty" bson:"knowledge_retrieval,omitempty"`
 	Knowledge            *KnowledgeRecord       `json:"knowledge,omitempty" bson:"knowledge,omitempty"`

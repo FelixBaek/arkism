@@ -25,6 +25,8 @@ type MemoryUseCount struct {
 	MemoryID string
 	Uses     int
 	Last     time.Time
+	// Projects are the distinct non-empty project keys of those receipts (ST-825), sorted.
+	Projects []string
 }
 
 type MemorySignalCounts struct {

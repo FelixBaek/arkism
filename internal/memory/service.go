@@ -563,6 +563,10 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
 		return Record{}, ErrInvalid
 	}
+	if col == "memory_candidates" || col == colMemories {
+		sg := suggestReach(r)
+		r.ReachSuggestion = &sg
+	}
 	if col == "memory_candidates" {
 		r.Status = "candidate"
 		if in.Classification != nil {
