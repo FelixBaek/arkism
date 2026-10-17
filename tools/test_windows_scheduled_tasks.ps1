@@ -19,6 +19,14 @@ function Assert-TaskThrows([scriptblock]$Action) {
     try { & $Action | Out-Null } catch { $thrown = $true }
     Assert-TaskContract $thrown 'Expected invalid input or registration failure to be reported'
 }
+function Resolve-TaskUserSid([string]$UserId) {
+    # ScheduledTasks can normalize a supplied SID to an account name. Compare
+    # the resolved identity, while still rejecting another user or SYSTEM.
+    if ($UserId -match '^S-\d-') {
+        return [Security.Principal.SecurityIdentifier]::new($UserId).Value
+    }
+    return [Security.Principal.NTAccount]::new($UserId).Translate([Security.Principal.SecurityIdentifier]).Value
+}
 $root = Join-Path ([IO.Path]::GetTempPath()) "arkism task contract [$([guid]::NewGuid())]"
 [IO.Directory]::CreateDirectory($root) | Out-Null
 try {
@@ -42,7 +50,7 @@ try {
         Assert-TaskContract ($task.Action.Execute -eq $binary) 'Executable path was not preserved'
         Assert-TaskContract ($task.Action.WorkingDirectory -eq $root) 'Working directory was not preserved'
         Assert-TaskContract ($task.Action.Arguments -eq $expected[$task.TaskName]) 'Task uses the wrong CLI contract'
-        Assert-TaskContract ($task.Principal.UserId -eq $user) 'Task does not belong to the current user'
+        Assert-TaskContract ((Resolve-TaskUserSid $task.Principal.UserId) -eq $user) 'Task does not belong to the current user'
         Assert-TaskContract ([int]$task.Principal.RunLevel -eq 0) 'Task must not request elevation'
         Assert-TaskContract ([int]$task.Principal.LogonType -eq 3) 'Task must use the interactive user token'
         Assert-TaskContract ($task.Trigger.Repetition.Interval -eq 'PT5M') 'Wrong repetition interval'
