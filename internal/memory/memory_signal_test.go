@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -34,6 +35,9 @@ func (f *fakeRepo) MemoryUseCounts(_ context.Context, scope Scope, ids []string)
 				by[id] = c
 			}
 			c.Uses++
+			if u := (MemoryProjectUse{it.Memory.Revision, r.Usage.ProjectKey}); u.ProjectKey != "" && !slices.Contains(c.Projects, u) {
+				c.Projects = append(c.Projects, u)
+			}
 			if r.CreatedAt.After(c.Last) {
 				c.Last = r.CreatedAt
 			}

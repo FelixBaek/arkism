@@ -416,6 +416,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	}
 	out.ContextID = ID()
 	usage := pinnedUsage(run, in.Purpose, in.pinned)
+	usage.ProjectKey = in.ProjectKey
 	for i, h := range out.Items {
 		if h.Collection == colMemories && h.Origin == "memory" && !usedRef(usage, h.ID) {
 			usage.Items = append(usage.Items, MemoryUse{Memory: Ref{Collection: colMemories, ID: h.ID, Revision: h.Revision}, Rank: len(in.pinned) + i + 1, Score: h.Score, Lanes: h.Lanes})

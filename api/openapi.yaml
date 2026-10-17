@@ -4350,6 +4350,258 @@
         }
       }
     },
+      "/v1/memory-reach-suggestions": {
+        "get": {
+          "summary": "List AI reach suggestions for active memories (ST-825)",
+          "description": "Pages active memories with the memory list's checks (read:memories) plus read:usage, and returns those whose suggestion differs from their reach and was not dismissed. A project memory whose current revision was handed out under two or more project keys is suggested for general (uses from before a reach change do not count; project memories are hidden from other keys' search and id recall and pin receipts carry no key, so today this signal rarely appears). Memories whose reach a person set show no save-time suggestion; others use the save-time suggestion or one computed for older memories. Read-only. Accept with POST /v1/memories/{id}/reach (human only); dismiss with POST /v1/memories/{id}/reach-suggestion/dismiss.",
+          "parameters": [
+            {
+              "name": "workspace_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "user_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "agent_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 20
+              }
+            },
+            {
+              "name": "project_key",
+              "in": "query",
+              "required": false,
+              "description": "ST-824: when present (empty allowed), lists only personal, general and this key's project-reach memories. Absent lists every reach (management screens).",
+              "schema": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            {
+              "name": "q",
+              "in": "query",
+              "required": false,
+              "description": "UTF-8 literal case-sensitive substring of full memory text, at most256 bytes before trimming. Explicit empty, controls, secrets and duplicates rejected. Included in cursor binding and passed to initial read:memories policy; query is not stored in101 audit/logs. No file-body/OCR search.",
+              "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            {
+              "name": "kind",
+              "in": "query",
+              "required": false,
+              "description": "Memory kind",
+              "schema": {
+                "type": "string",
+                "enum": [
+                  "raw",
+                  "semantic",
+                  "episodic",
+                  "procedural",
+                  "user",
+                  "decision",
+                  "lesson"
+                ]
+              }
+            },
+            {
+              "name": "cursor",
+              "in": "query",
+              "required": false,
+              "description": "Opaque unsigned cursor bound to scope and filters",
+              "schema": {
+                "type": "string",
+                "maxLength": 2048
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Suggestions on this page and the memory list cursor",
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              },
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ReachSuggestionPage"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "403": {
+              "description": "Not permitted",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            }
+          }
+        }
+      },
+      "/v1/memories/{id}/reach-suggestion/dismiss": {
+        "post": {
+          "summary": "Dismiss one reach suggestion (ST-825)",
+          "description": "Human transition:memories only; agent and pipeline principals get 403. Hides the named suggestion on this memory; reach, content and revision stay. Revision pinned (409 when stale, or when the named suggestion is not the one shown now, so a later suggestion cannot be hidden in advance); quarantined or erased memories are 404. Audit records dismiss_reach_suggestion:memories without content.",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReachSuggestionDismissInput"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "The memory with reach_suggestion_dismissed set",
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              },
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Record"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid input",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "403": {
+              "description": "Not a human principal or not permitted",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "404": {
+              "description": "Not found",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "409": {
+              "description": "Stale revision or not active",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            }
+          }
+        }
+      },
     "/v1/memories/{id}/reach": {
       "post": {
         "summary": "Change an active memory's reach (ST-824)",
@@ -13539,6 +13791,20 @@
             "readOnly": true,
             "description": "Project key a project-reach memory recalls for (normalized origin owner/name or path:hash). Never a raw path."
           },
+            "reach_suggestion": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ReachSuggestion"
+                }
+              ],
+              "readOnly": true,
+              "description": "ST-825 save-time suggestion on new candidates and memories, copied on approval."
+            },
+            "reach_suggestion_dismissed": {
+              "type": "string",
+              "readOnly": true,
+              "description": "ST-825 'reach|project' a person dismissed."
+            },
           "skill_bundle": {
             "$ref": "#/components/schemas/SkillBundle",
             "readOnly": true
@@ -15371,6 +15637,143 @@
           }
         }
       },
+        "ReachSuggestion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reach",
+            "reason",
+            "confidence"
+          ],
+          "description": "ST-825 AI reach suggestion. Never changes reach; a person accepts or dismisses it.",
+          "properties": {
+            "reach": {
+              "type": "string",
+              "enum": [
+                "personal",
+                "general",
+                "project"
+              ]
+            },
+            "reach_project": {
+              "type": "string",
+              "description": "Suggested project key; empty for a project suggestion means a person picks the project."
+            },
+            "reason": {
+              "type": "string",
+              "description": "One fixed phrase; never memory text, queries or paths."
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "ReachSuggestionItem": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "memory_id",
+            "revision",
+            "kind",
+            "text",
+            "reach",
+            "used_projects",
+            "suggestion"
+          ],
+          "properties": {
+            "memory_id": {
+              "type": "string"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "kind": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "reach": {
+              "type": "string",
+              "enum": [
+                "personal",
+                "general",
+                "project"
+              ]
+            },
+            "reach_project": {
+              "type": "string"
+            },
+            "used_projects": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Distinct project keys in context_usage receipts for this memory's current revision."
+            },
+            "suggestion": {
+              "$ref": "#/components/schemas/ReachSuggestion"
+            }
+          }
+        },
+        "ReachSuggestionPage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "items",
+            "next_cursor",
+            "authority"
+          ],
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ReachSuggestionItem"
+              }
+            },
+            "next_cursor": {
+              "type": "string"
+            },
+            "authority": {
+              "type": "string",
+              "enum": [
+                "data_only_untrusted"
+              ]
+            }
+          }
+        },
+        "ReachSuggestionDismissInput": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scope",
+            "expected_revision",
+            "reach"
+          ],
+          "properties": {
+            "scope": {
+              "$ref": "#/components/schemas/Scope"
+            },
+            "expected_revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "reach": {
+              "type": "string",
+              "enum": [
+                "personal",
+                "general",
+                "project"
+              ]
+            },
+            "reach_project": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        },
       "MemoryReachInput": {
         "type": "object",
         "additionalProperties": false,

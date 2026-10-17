@@ -25,6 +25,13 @@ type MemoryUseCount struct {
 	MemoryID string
 	Uses     int
 	Last     time.Time
+	// Projects are the distinct (memory revision, non-empty project key) pairs of those receipts (ST-825).
+	Projects []MemoryProjectUse
+}
+
+type MemoryProjectUse struct {
+	Revision   int64  `json:"revision"`
+	ProjectKey string `json:"project_key"`
 }
 
 type MemorySignalCounts struct {

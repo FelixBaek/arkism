@@ -16,6 +16,8 @@ type ContextUsage struct {
 	Run     *Ref        `json:"run,omitempty" bson:"run,omitempty"`
 	Purpose string      `json:"purpose,omitempty" bson:"purpose,omitempty"`
 	Items   []MemoryUse `json:"items" bson:"items"`
+	// ProjectKey (ST-825) is the search's project key, so a memory's uses can be counted per project.
+	ProjectKey string `json:"project_key,omitempty" bson:"project_key,omitempty"`
 }
 
 // pinnedUsage is a receipt body that starts with the pinned memories, in order.
