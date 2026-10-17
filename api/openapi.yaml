@@ -12482,6 +12482,19 @@
             "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
             "description": "ST-811 lanes that found this hit, in fixed order exact, keyword, vector, relation."
           },
+          "path_check": {
+            "type": "string",
+            "enum": ["missing"],
+            "readOnly": true,
+            "description": "ST-818 display marker set by the host (hooks, MCP recall), never by the server: a file path in the text or sources does not exist in the session's working folder (\"확인 필요\"). The hit is still returned in its rank; nothing is hidden or reordered."
+          },
+          "missing_paths": {
+            "type": "array",
+            "readOnly": true,
+            "maxItems": 8,
+            "items": {"type": "string"},
+            "description": "ST-818 host-set: the paths as written in the memory that were not found. Shown to the agent only; never logged or sent back to the server."
+          },
           "conflict_pending": {
             "type": "boolean",
             "description": "This memory participates in an unresolved conflict, including an active member not held back. No opposing content is disclosed."

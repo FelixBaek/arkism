@@ -626,3 +626,28 @@ func TestRecallByIDKeepsOtherProjectsOut(t *testing.T) {
 		t.Fatal("empty project key showed a project memory", got)
 	}
 }
+
+// ST-818: a recalled memory naming a file that is not in the working folder is marked, never hidden or reordered.
+func TestRecallMarksMissingPaths(t *testing.T) {
+	swapRouter(t)
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "here.md"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	stale := `{"id":"m1","kind":"lesson","status":"active","text":"docs/here.md 와 docs/gone.md 를 본다 https://x.dev/a/b.html","sources":[{"source_id":"s","locator":"/nonexistent-st818/x.go"}]}`
+	fresh := `{"id":"m2","kind":"lesson","status":"active","text":"docs/here.md 만 본다","sources":[{"source_id":"s","locator":"original"}]}`
+	fakeRequest(t, `{"items":[`+stale+`,`+fresh+`]}`)
+	memories := asList(field(structured(t, call(t, "recall", `{"query":"문서"}`)), "memories"))
+	if len(memories) != 2 {
+		t.Fatal(memories)
+	}
+	got := host.MustDumps(memories, host.DumpOpts{Compact: true, NoASCII: true})
+	if !strings.Contains(got, `"id":"m1"`) || strings.Index(got, `"id":"m1"`) > strings.Index(got, `"id":"m2"`) ||
+		!strings.Contains(got, `"path_check":"missing","missing_paths":["docs/gone.md","/nonexistent-st818/x.go"]}`) || strings.Count(got, "path_check") != 1 {
+		t.Fatal(got)
+	}
+}

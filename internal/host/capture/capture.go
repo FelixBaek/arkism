@@ -468,7 +468,7 @@ func sessionCapture(hook map[string]any, kind string) error {
 
 // indexLine is one pointer line: the memory up to indexText chars; a cut line ends with "…" and
 // the id so the agent can read the whole memory with recall.
-func indexLine(item map[string]any) string {
+func indexLine(item map[string]any, cwd string) string {
 	text := strings.Join(pyFields(str(or(item["text"], item["summary"], ""))), " ")
 	hasPointer := host.Len(text) > indexText
 	if hasPointer {
@@ -486,6 +486,9 @@ func indexLine(item map[string]any) string {
 	}
 	if truthy(item["superseded_by"]) {
 		markers = append(markers, "다른 기억으로 대체됨")
+	}
+	if len(host.MissingPaths(cwd, str(item["text"]), str(item["summary"]))) > 0 {
+		markers = append(markers, "확인 필요: 가리키는 파일이 지금 없음")
 	}
 	if len(markers) > 1 && !hasPointer {
 		text += fmt.Sprintf(" (id: %s)", str(item["id"]))
@@ -506,10 +509,10 @@ func within(lines []string, limit int) ([]string, int) {
 	return lines[:n], len(lines) - n
 }
 
-func indexLines(items []map[string]any) []string {
+func indexLines(items []map[string]any, cwd string) []string {
 	out := make([]string, len(items))
 	for i, it := range items {
-		out[i] = indexLine(it)
+		out[i] = indexLine(it, cwd)
 	}
 	return out
 }
@@ -556,7 +559,7 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 		unpinned := func(i map[string]any) bool { return !skip[strField(i["id"])] }
 		items, related = keepIf(items, unpinned), keepIf(related, unpinned)
 	}
-	relLines, dropped := within(indexLines(related), limit/2-host.Len(contractHeader)-1)
+	relLines, dropped := within(indexLines(related, cwd), limit/2-host.Len(contractHeader)-1)
 	related = related[:len(relLines)]
 	shown := map[any]bool{}
 	for _, r := range related {
@@ -575,7 +578,7 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 			used += host.Len(x) + 1
 		}
 	}
-	lines, more := within(indexLines(rest), limit-used-host.Len(indexHeader)-1)
+	lines, more := within(indexLines(rest, cwd), limit-used-host.Len(indexHeader)-1)
 	rest, dropped = rest[:len(lines)], dropped+more
 	logRecall("SessionStart", sid, rest)
 	if len(related) > 0 {
@@ -740,7 +743,7 @@ func promptParts(prompt, sid, cwd string) (part host.Part, revs map[string]int64
 	for _, i := range items {
 		revs[str(i["id"])] = revision(i)
 	}
-	full := promptHeader + "\n" + strings.Join(indexLines(items), "\n")
+	full := promptHeader + "\n" + strings.Join(indexLines(items, cwd), "\n")
 	logInjected("UserPromptSubmit", sid, full)
 	return host.Part{Full: full, Meta: promptHeader + "\n" + strings.Join(metaLines(items), "\n")}, revs, nil
 }
