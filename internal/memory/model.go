@@ -285,6 +285,17 @@ type Repository interface {
 	MemoryOutcomeSessionCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeSessionCount, error)
 	// MemoryUseCounts aggregates context_usage receipts per memory id (all revisions) in one scope.
 	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
+	// ST-820 graph reads; each applies the scope and memoryGraphWhere (reach) filter.
+	MemoryGraphNodes(context.Context, MemoryGraphQuery, []string) ([]Record, error)
+	// MemoryGraphMapNodes returns up to limit visible memories with id after the given one, by id (ST-820 all mode).
+	MemoryGraphMapNodes(context.Context, MemoryGraphQuery, string, int) ([]Record, error)
+	// MemoryGraphLinks returns memory_relations rows naming any of the memory ids (up to memoryGraphScan+1).
+	MemoryGraphLinks(context.Context, MemoryGraphQuery, []string) ([]Record, error)
+	// MemoryGraphSessions returns, per asking memory id, up to limit other visible memories of the
+	// same reach and reach_project sharing one of its session tags, by id.
+	MemoryGraphSessions(context.Context, MemoryGraphQuery, []string, int) ([]MemoryGraphSessionHit, error)
+	// MemoryGraphSimilar returns up to limit nearest visible same-reach memories per id within maxDistance.
+	MemoryGraphSimilar(context.Context, MemoryGraphQuery, []string, float64, int) ([]MemoryGraphSimilarPair, error)
 	ListCandidates(context.Context, ReviewInput) ([]Record, error)
 	ListSources(context.Context, SourceListInput) ([]Record, error)
 	ListMemories(context.Context, MemoryListInput) ([]Record, error)
