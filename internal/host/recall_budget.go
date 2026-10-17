@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -38,7 +39,7 @@ func LoadRecallBudget() RecallBudget {
 	b := parseRecallBudget(defaultRecallBudget)
 	b.MinScore = defaultRecallMinScore
 	if v, ok := os.LookupEnv("ARKISM_RECALL_MIN_SCORE"); ok {
-		if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && f >= 0 {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && f >= 0 && !math.IsInf(f, 0) {
 			b.MinScore = f
 		}
 	}

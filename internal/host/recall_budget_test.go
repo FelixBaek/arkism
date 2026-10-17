@@ -45,6 +45,12 @@ func TestRecallBudgetApply(t *testing.T) {
 	if ids(kept) != "p1,p2,p3,u1,old,k" || low != 1 || over != 2 {
 		t.Fatal(ids(kept), low, over)
 	}
+	for _, bad := range []string{"+Inf", "NaN", "-1"} {
+		t.Setenv("ARKISM_RECALL_MIN_SCORE", bad)
+		if got := LoadRecallBudget().MinScore; got != defaultRecallMinScore {
+			t.Fatal(bad, got)
+		}
+	}
 	t.Setenv("ARKISM_RECALL_MIN_SCORE", "0")
 	t.Setenv("ARKISM_RECALL_BUDGET", "procedural=1:10, bad, user=x:1")
 	b = LoadRecallBudget()
