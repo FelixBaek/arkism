@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +51,7 @@ func fakeNight(t *testing.T, items []map[string]any) {
 	patch(t, &knownPairsFn, func([]map[string]any) (map[string]bool, error) { return map[string]bool{}, nil })
 	patch(t, &mSearch, func(string, int) ([]any, error) { return nil, nil })
 	patch(t, &mMetric, func(map[string]any) {})
+	patch(t, &signalsFn, func([]map[string]any) (map[string]map[string]any, error) { return nil, nil })
 	patch(t, &host.CaptureState, t.TempDir())
 }
 
@@ -80,7 +82,8 @@ func TestAnOpenProposalForAnEditedMemoryDoesNotBlockThePair(t *testing.T) {
 	prop := func(id, k, r string, kr, rr int) any {
 		return map[string]any{"id": id, "maintenance": map[string]any{"keep": map[string]any{"id": k, "revision": kr}, "retire": map[string]any{"id": r, "revision": rr}}}
 	}
-	lists := map[string][]any{"open": {prop("p1", "new", "old", 2, 2), prop("p2", "d2", "d1", 2, 1)}, "dismissed": {prop("p3", "d2", "p1", 1, 1)}}
+	lists := map[string][]any{"open": {prop("p1", "new", "old", 2, 2), prop("p2", "d2", "d1", 2, 1)}, "dismissed": {prop("p3", "d2", "p1", 1, 1),
+		map[string]any{"id": "p4", "maintenance": map[string]any{"memory": map[string]any{"id": "old", "revision": 1}}}}}
 	patch(t, &mGet, func(path string, _ time.Duration) (map[string]any, error) {
 		return map[string]any{"items": lists[queryOf(t, path).Get("status")]}, nil
 	})
@@ -88,8 +91,8 @@ func TestAnOpenProposalForAnEditedMemoryDoesNotBlockThePair(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eq(t, len(seen), 2) // d1 is at revision 2 now
-	if !seen[pairOf("new", "old")] || !seen[pairOf("d2", "p1")] {
+	eq(t, len(seen), 3) // d1 is at revision 2 now; a decided signal proposal is never asked again
+	if !seen[pairOf("new", "old")] || !seen[pairOf("d2", "p1")] || !seen[signalKey("old")] {
 		t.Fatalf("seen %v", seen)
 	}
 }
@@ -223,4 +226,75 @@ func TestWithoutAModelOnlyNearIdenticalWordingIsProposed(t *testing.T) {
 		got = append(got, []any{obj(pr["keep"])["id"], obj(pr["retire"])["id"]})
 	}
 	eq(t, got, []any{[]any{"dup", "old"}})
+}
+
+func sig(samples, passed int) map[string]any {
+	return map[string]any{"samples": samples, "passed": passed}
+}
+
+// ST-814 / FR-079 / TC-MAINT-010: rules and lessons that often fail on enough samples are proposed, worst first,
+// with the signal's counts as evidence; too few samples, other kinds and memories proposed before are left out.
+func TestSignalProposalsPostWeakRulesAndLessonsWithEvidence(t *testing.T) {
+	items := []map[string]any{mem("r1", "procedural", "PR에 광고 문구 금지", 1), mem("r2", "user", "답은 짧게", 2),
+		mem("l1", "lesson", "배포 전 조상 확인", 3), mem("few", "procedural", "표본 적음", 4), mem("ok", "decision", "잘 지킴", 5),
+		mem("sem", "semantic", "종류 밖", 6), mem("seen", "lesson", "이미 제안", 7)}
+	fakeNight(t, items)
+	t.Setenv("ARKISM_MAINTAIN_LLM", "0")
+	t.Setenv("ARKISM_MAINTAIN_SIGNAL_MIN_SAMPLES", "10")
+	t.Setenv("ARKISM_MAINTAIN_SIGNAL_MAX_PASS_RATE", "0.5")
+	patch(t, &signalsFn, func([]map[string]any) (map[string]map[string]any, error) {
+		return map[string]map[string]any{"r1": sig(20, 10), "r2": sig(10, 1), "l1": sig(12, 3), "few": sig(9, 0), "ok": sig(10, 9),
+			"sem": sig(30, 0), "seen": sig(30, 0)}, nil
+	})
+	patch(t, &knownPairsFn, func([]map[string]any) (map[string]bool, error) { return map[string]bool{signalKey("seen"): true}, nil })
+	posted := fakePost(t)
+	found, sent, err := maintainRun(false, io.Discard)
+	if err != nil || found != 3 || sent != 3 {
+		t.Fatalf("%d %d %v", found, sent, err)
+	}
+	got := []any{}
+	for _, p := range *posted {
+		eq(t, p.path, "/v1/maintenance_proposals")
+		if strings.Contains(p.body, "광고") || strings.Contains(p.body, "keep") {
+			t.Fatal("memory text or a pair in a signal proposal", p.body)
+		}
+		b, _ := host.Loads(p.body)
+		pr := obj(obj(b)["proposal"])
+		ev := obj(pr["evidence"])
+		got = append(got, []any{pr["type"], obj(pr["memory"])["id"], ev["samples"], ev["passed"], pr["reason"]})
+	}
+	eq(t, got, []any{[]any{"rule_often_violated", "r2", 10, 1, "low_pass_rate"}, []any{"lesson_often_failing", "l1", 12, 3, "low_pass_rate"},
+		[]any{"rule_often_violated", "r1", 20, 10, "low_pass_rate"}})
+
+	// A stricter setting keeps only the worst; a token that cannot read signals skips them and the night goes on.
+	t.Setenv("ARKISM_MAINTAIN_SIGNAL_MAX_PASS_RATE", "0.2")
+	*posted = nil
+	if _, sent, _ = maintainRun(false, io.Discard); sent != 1 {
+		t.Fatal("max pass rate setting ignored", sent)
+	}
+	patch(t, &signalsFn, func([]map[string]any) (map[string]map[string]any, error) { return nil, os.ErrPermission })
+	if found, sent, err = maintainRun(false, io.Discard); err != nil || found != 0 || sent != 0 {
+		t.Fatalf("unreadable signals: %d %d %v", found, sent, err)
+	}
+}
+
+func TestSignalsAreReadInBatchesOfAHundred(t *testing.T) {
+	items := []map[string]any{}
+	for i := 0; i < 150; i++ {
+		items = append(items, mem("m"+strconv.Itoa(i), "lesson", "x", 1))
+	}
+	patch(t, &mPost, func(path string, body any, _ time.Duration) (map[string]any, error) {
+		eq(t, path, "/v1/memory-signals")
+		b, _ := host.Loads(host.MustDumps(body, host.DumpOpts{}))
+		ids := list(obj(b)["memory_ids"])
+		if len(ids) > 100 {
+			t.Fatal("batch over 100", len(ids))
+		}
+		return map[string]any{"items": []any{map[string]any{"memory_id": ids[0], "available": true, "signal": sig(10, 0)},
+			map[string]any{"memory_id": ids[1], "available": false, "signal": nil}}}, nil
+	})
+	got, err := signals(items)
+	if err != nil || len(got) != 2 || got["m0"] == nil || got["m100"] == nil {
+		t.Fatal(len(got), err)
+	}
 }

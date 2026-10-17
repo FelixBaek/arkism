@@ -18,6 +18,11 @@ import (
 //
 // Each pair of memories has one proposal record, whose id comes from the pair,
 // so "asked before?" is a single read in the same transaction as the write.
+//
+// ST-814: a signal proposal names one memory whose stored trust signal
+// (ST-813) shows it often fails: a rule often broken or a lesson that often
+// fails. It carries the signal's counts as the AI's evidence. Deciding it never
+// changes the memory; a person who agrees fixes or retires it the usual way.
 const colMaintenance = "maintenance_proposals"
 
 const (
@@ -27,19 +32,31 @@ const (
 )
 
 var (
-	maintenanceTypes     = []string{"duplicate", "contradiction"}
-	maintenanceReasons   = []string{"same_meaning", "newer_replaces_older", "more_specific"}
+	maintenanceTypes   = []string{"duplicate", "contradiction"}
+	maintenanceReasons = []string{"same_meaning", "newer_replaces_older", "more_specific"}
+	// signal proposal type -> the memory kinds it may name
+	signalTypes          = map[string][]string{"rule_often_violated": {"user", "procedural", "decision"}, "lesson_often_failing": {"lesson"}}
 	maintenanceDecisions = map[string]string{"accept": "accepted", "swap": "swapped", "dismiss": "dismissed"}
 )
 
 type MaintenanceProposal struct {
-	Type      string     `json:"type"`
-	Keep      Ref        `json:"keep"`
-	Retire    Ref        `json:"retire"`
-	Reason    string     `json:"reason"`
-	Decision  string     `json:"decision,omitempty"`
-	DecidedBy string     `json:"decided_by,omitempty"`
-	DecidedAt *time.Time `json:"decided_at,omitempty"`
+	Type   string `json:"type"`
+	Keep   Ref    `json:"keep"`
+	Retire Ref    `json:"retire"`
+	// Memory and Evidence are set only on a signal proposal (ST-814).
+	Memory    *Ref                 `json:"memory,omitempty"`
+	Evidence  *MaintenanceEvidence `json:"evidence,omitempty"`
+	Reason    string               `json:"reason"`
+	Decision  string               `json:"decision,omitempty"`
+	DecidedBy string               `json:"decided_by,omitempty"`
+	DecidedAt *time.Time           `json:"decided_at,omitempty"`
+}
+
+// MaintenanceEvidence is the stored signal's counts when the proposal was made.
+type MaintenanceEvidence struct {
+	Samples  int     `json:"samples"`
+	Passed   int     `json:"passed"`
+	PassRate float64 `json:"pass_rate"`
 }
 
 type MaintenanceInput struct {
@@ -59,8 +76,34 @@ type MaintenancePage struct {
 
 func validMaintenance(p MaintenanceProposal) bool {
 	ref := func(r Ref) bool { return r.Collection == colMemories && validRunLabel(r.ID, 256) && r.Revision > 0 }
-	return slices.Contains(maintenanceTypes, p.Type) && slices.Contains(maintenanceReasons, p.Reason) && ref(p.Keep) && ref(p.Retire) &&
-		p.Keep.ID != p.Retire.ID && p.Decision == "" && p.DecidedBy == "" && p.DecidedAt == nil
+	if p.Decision != "" || p.DecidedBy != "" || p.DecidedAt != nil {
+		return false
+	}
+	if _, ok := signalTypes[p.Type]; ok {
+		e := p.Evidence
+		return p.Reason == "low_pass_rate" && p.Memory != nil && ref(*p.Memory) && p.Keep == (Ref{}) && p.Retire == (Ref{}) &&
+			e != nil && e.Samples > 0 && e.Passed >= 0 && e.Passed <= e.Samples
+	}
+	return p.Memory == nil && p.Evidence == nil && slices.Contains(maintenanceTypes, p.Type) && slices.Contains(maintenanceReasons, p.Reason) && ref(p.Keep) && ref(p.Retire) &&
+		p.Keep.ID != p.Retire.ID
+}
+
+func isSignalProposal(p MaintenanceProposal) bool { return p.Memory != nil }
+
+// proposalRefs is the memories a proposal names: one for a signal proposal, else the pair.
+func proposalRefs(p MaintenanceProposal) []Ref {
+	if isSignalProposal(p) {
+		return []Ref{*p.Memory}
+	}
+	return []Ref{p.Keep, p.Retire}
+}
+
+// proposalID is one record per pair, or per memory for a signal proposal (NUL is no valid id).
+func proposalID(scope Scope, p MaintenanceProposal) string {
+	if isSignalProposal(p) {
+		return pairID(scope, "\x00signal", p.Memory.ID)
+	}
+	return pairID(scope, p.Keep.ID, p.Retire.ID)
 }
 
 // errMemoryChanged: a memory in the proposal changed after it was made.
@@ -76,6 +119,9 @@ func pairID(scope Scope, a, b string) string {
 }
 
 func sameRevisions(a, b MaintenanceProposal) bool {
+	if isSignalProposal(a) || isSignalProposal(b) {
+		return isSignalProposal(a) && isSignalProposal(b) && a.Memory.Revision == b.Memory.Revision
+	}
 	rev := map[string]int64{a.Keep.ID: a.Keep.Revision, a.Retire.ID: a.Retire.Revision}
 	return rev[b.Keep.ID] == b.Keep.Revision && rev[b.Retire.ID] == b.Retire.Revision
 }
@@ -117,9 +163,15 @@ func (s *Service) ProposeMaintenance(ctx context.Context, token string, in Maint
 	if err != nil {
 		return Record{}, err
 	}
+	// The evidence is checked against stored signals, so the proposer must be able to read them.
+	if isSignalProposal(in.Proposal) {
+		if _, err := s.authorize(ctx, token, "read:usage", in.Scope, "", ""); err != nil {
+			return Record{}, err
+		}
+	}
 	var out Record
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		id := pairID(in.Scope, in.Proposal.Keep.ID, in.Proposal.Retire.ID)
+		id := proposalID(in.Scope, in.Proposal)
 		prior, err := tx.Get(ctx, colMaintenance, in.Scope, id)
 		if err != nil && !errors.Is(err, ErrNotFound) {
 			return err
@@ -133,8 +185,13 @@ func (s *Service) ProposeMaintenance(ctx context.Context, token string, in Maint
 		if err := checkProposalMemories(ctx, tx, in); err != nil {
 			return err
 		}
-		now := time.Now().UTC().Truncate(time.Millisecond)
 		p := in.Proposal
+		if isSignalProposal(p) {
+			if err := checkSignalEvidence(ctx, tx, in.Scope, &p); err != nil {
+				return err
+			}
+		}
+		now := time.Now().UTC().Truncate(time.Millisecond)
 		out = Record{ID: id, Scope: in.Scope, Kind: p.Type, Status: maintenanceOpen, Revision: 1, Text: p.Reason, Maintenance: &p,
 			CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
 		if found {
@@ -154,7 +211,7 @@ func (s *Service) ProposeMaintenance(ctx context.Context, token string, in Maint
 // checkProposalMemories: both memories are live, approved, outside any
 // conflict and at the revisions the proposal names.
 func checkProposalMemories(ctx context.Context, tx Tx, in MaintenanceInput) error {
-	for _, ref := range []Ref{in.Proposal.Keep, in.Proposal.Retire} {
+	for _, ref := range proposalRefs(in.Proposal) {
 		m, err := tx.Get(ctx, colMemories, in.Scope, ref.ID)
 		if err != nil {
 			return err
@@ -163,6 +220,34 @@ func checkProposalMemories(ctx context.Context, tx Tx, in MaintenanceInput) erro
 			return ErrConflict
 		}
 	}
+	return nil
+}
+
+// checkSignalEvidence: the memory's kind fits the proposal type and the
+// evidence is the stored signal's counts, so the AI cannot invent its evidence.
+// The pass rate is recomputed here from those counts.
+func checkSignalEvidence(ctx context.Context, tx Tx, scope Scope, p *MaintenanceProposal) error {
+	m, err := tx.Get(ctx, colMemories, scope, p.Memory.ID)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(signalTypes[p.Type], m.Kind) {
+		return ErrInvalid
+	}
+	r, err := tx.Get(ctx, colJobs, scope, memorySignalID(scope, p.Memory.ID))
+	if errors.Is(err, ErrNotFound) {
+		return ErrConflict
+	}
+	if err != nil {
+		return err
+	}
+	sig := r.MemorySignal
+	if r.Kind != memorySignalKind || sig == nil || sig.Memory.ID != p.Memory.ID || sig.Samples != p.Evidence.Samples || sig.Passed != p.Evidence.Passed {
+		return ErrConflict
+	}
+	e := *p.Evidence
+	e.PassRate = float64(e.Passed) / float64(e.Samples)
+	p.Evidence = &e
 	return nil
 }
 
@@ -189,8 +274,13 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 	if seen.Revision != in.ExpectedRevision || seen.Status != maintenanceOpen || seen.Maintenance == nil {
 		return Record{}, ErrConflict
 	}
+	signal := isSignalProposal(*seen.Maintenance)
+	if signal && in.Decision == "swap" {
+		return Record{}, ErrInvalid
+	}
 	var mark *ConflictInput
-	if in.Decision != "dismiss" {
+	// A signal proposal changes no memory either way: accept records that a person agrees.
+	if in.Decision != "dismiss" && !signal {
 		m := supersedeInput(in.Scope, seen, in.Decision)
 		// The same permission the conflict path asks for: a human who may change both memories.
 		if _, err := s.conflictPrincipal(ctx, token, m); err != nil {
