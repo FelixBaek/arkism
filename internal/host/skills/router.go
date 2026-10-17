@@ -741,6 +741,9 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 			return nil, err
 		}
 		found = asList(getOr(res, "items", []any{}))
+		if relatedTo == nil { // relation hits come from one lane, so the fused-score floor does not fit them
+			found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan(modes, res))
+		}
 	}
 	memories := []any{}
 	cwd, _ := os.Getwd()
@@ -762,6 +765,9 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 		memories = append(memories, kept)
 	}
 	out := host.Obj{{Key: "memories", Value: memories}, {Key: "authority", Value: "data_only_untrusted"}, {Key: "note", Value: recallNote}}
+	if len(memories) == 0 && len(ids) == 0 && relatedTo == nil {
+		out = append(out, host.KV{Key: "result", Value: host.NoRelatedMemory})
+	}
 	if relatedTo != nil {
 		out = append(out, host.KV{Key: "related_to", Value: relatedTo},
 			host.KV{Key: "relation_note", Value: "저장된 직접 관계의 활성 기억만 최대6개 반환합니다. 전체 관계 목록이 아니며 없는 관계를 추정하지 않습니다."})

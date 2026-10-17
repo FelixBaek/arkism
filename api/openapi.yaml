@@ -9311,6 +9311,138 @@
         }
       }
     },
+    "/v1/memories/{id}/outcome-comparison": {
+      "get": {
+        "summary": "Pass rate of sessions that used a memory versus sessions that did not (ST-819)",
+        "description": "Groups memory_outcome verdicts in the exact scope by execution trace (one session) for one required dimension and optional judged_at range. A session passed when all its verdicts under the filters passed. It used the memory when it has a verdict on this memory id (ST-302 checked delivery) or a done context_usage receipt that handed this memory id out names one of the trace's agent_runs; every other judged session is not_used. A side with fewer than min_sessions (10) sessions returns status insufficient_data with passed and pass_rate null; difference (used minus not_used pass rate) is set only when both sides are ok. Correlation over existing verdicts, not a causal effect; computed on read from existing rows, nothing stored. read:memories, read:evaluations and read:usage on scope and read:memories on the memory, all the same principal. Only counts and rates: no memory, source, trace or checker text or ids. Audited as read:memory_outcome_comparison with the memory id only.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dimension",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "personal_compliance",
+                "work_task"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Inclusive judged_at lower bound (RFC3339)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Exclusive judged_at upper bound (RFC3339)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Used and not-used session groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryOutcomeComparison"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid dimension, invalid filter or memory id, or a limit/cursor parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authorization or policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Memory missing, erased or privacy-quarantined in this scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency or audit failure; no partial result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/memory-outcomes/summary": {
       "post": {
         "summary": "Verification summaries for up to 100 memories (ST-812)",
@@ -19408,6 +19540,93 @@
           }
         }
       },
+        "MemoryOutcomeGroup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sessions",
+            "status",
+            "passed",
+            "pass_rate"
+          ],
+          "properties": {
+            "sessions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "insufficient_data"
+              ],
+              "description": "insufficient_data when sessions < min_sessions; passed and pass_rate are then null"
+            },
+            "passed": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "pass_rate": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "MemoryOutcomeComparison": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "memory",
+            "dimension",
+            "min_sessions",
+            "used",
+            "not_used",
+            "difference",
+            "authority"
+          ],
+          "properties": {
+            "memory": {
+              "$ref": "#/components/schemas/Ref"
+            },
+            "dimension": {
+              "type": "string",
+              "enum": [
+                "personal_compliance",
+                "work_task"
+              ]
+            },
+            "min_sessions": {
+              "type": "integer",
+              "const": 10
+            },
+            "used": {
+              "$ref": "#/components/schemas/MemoryOutcomeGroup"
+            },
+            "not_used": {
+              "$ref": "#/components/schemas/MemoryOutcomeGroup"
+            },
+            "difference": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": -1,
+              "maximum": 1,
+              "description": "used.pass_rate - not_used.pass_rate when both sides are ok"
+            },
+            "authority": {
+              "type": "string",
+              "const": "data_only_untrusted"
+            }
+          }
+        },
       "MemoryOutcomeInput": {
         "type": "object",
         "additionalProperties": false,
