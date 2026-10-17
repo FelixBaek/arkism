@@ -9059,6 +9059,148 @@
         }
       }
     },
+    "/v1/memory-graph": {
+      "get": {
+        "summary": "Relation graph around one memory (ST-820)",
+        "description": "Memories and lines up to two steps from memory_id. Lines: supersedes, conflicts, supports and human_link come from stored memory_relations (active, exactly two memory ends) and may cross reaches; same_session (shared session: tag) and similar (stored vectors, cosine >= 0.80, score) stay inside one reach and reach_project, at most 3 per node. Nodes are visible memories (not erased or quarantined, currently active or superseded) in the asked reaches; a project memory shows only when reach_project equals project_key (ST-824). vector_pending marks a memory without a current stored vector. No embedding call, no relation reasons, sources or vectors in the response. Caps: limit nodes (default 60, max 100), 300 lines; truncated=true when cut. Exact four-field scope from the storage layer; read:memories on scope and on memory_id and read:memory_relations on scope, all the same principal. Audited as read:memory_graph with the center id only.",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "memory_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Center memory"
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2,
+              "default": 2
+            }
+          },
+          {
+            "name": "reach",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated personal, general, project (default all)"
+          },
+          {
+            "name": "project_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Repository key (lowercased); without it project memories are hidden"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 60
+            },
+            "description": "Node cap"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryGraph"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid scope, memory id, depth, reach, project key or limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authorization or policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Center memory missing, erased, quarantined or outside the reach filter in this scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency or audit failure; no partial result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/memory-outcomes/summary": {
       "post": {
         "summary": "Verification summaries for up to 100 memories (ST-812)",
@@ -18806,6 +18948,137 @@
           "to": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "MemoryGraphNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memory",
+          "kind",
+          "status",
+          "reach",
+          "label",
+          "depth",
+          "vector_pending"
+        ],
+        "properties": {
+          "memory": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "superseded"
+            ]
+          },
+          "reach": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "general",
+              "project"
+            ]
+          },
+          "reach_project": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 121,
+            "description": "First 120 characters of the memory text"
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2
+          },
+          "vector_pending": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MemoryGraphEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "type"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "supersedes",
+              "conflicts",
+              "supports",
+              "human_link",
+              "same_session",
+              "similar"
+            ]
+          },
+          "relation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Ref"
+              }
+            ],
+            "description": "memory_relations row of a stored line"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0.8,
+            "maximum": 1,
+            "description": "Cosine similarity of a similar line"
+          }
+        }
+      },
+      "MemoryGraph": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "center",
+          "nodes",
+          "edges",
+          "truncated",
+          "authority"
+        ],
+        "properties": {
+          "center": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "nodes": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/MemoryGraphNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "maxItems": 300,
+            "items": {
+              "$ref": "#/components/schemas/MemoryGraphEdge"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "authority": {
+            "type": "string",
+            "const": "data_only_untrusted"
           }
         }
       },
