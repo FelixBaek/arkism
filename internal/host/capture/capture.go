@@ -584,6 +584,7 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 		unpinned := func(i map[string]any) bool { return !skip[strField(i["id"])] }
 		items, related = keepIf(items, unpinned), keepIf(related, unpinned)
 	}
+	related = capBudget(related) // after the pinned ones are out, so they use no kind slot
 	relLines, dropped := within(indexLines(related), limit/2-host.Len(contractHeader)-1)
 	related = related[:len(relLines)]
 	shown := map[any]bool{}
@@ -677,7 +678,8 @@ func withText(items []map[string]any) []map[string]any {
 	return out
 }
 
-// contractRelated is up to 6 memories that match the repo's task contract.
+// contractRelated is up to 6 memories that match the repo's task contract (score floor only; the
+// caller applies the kind budget once pinned memories are out).
 func contractRelated(contract, project string) []map[string]any {
 	if contract == "" {
 		return []map[string]any{}
@@ -687,7 +689,7 @@ func contractRelated(contract, project string) []map[string]any {
 		metric(kv("event", "hook_error"), kv("hook", "SessionStart:contract"), kv("error", pyType(err)))
 		return []map[string]any{}
 	}
-	return capBudget(withText(dicts(items)))
+	return withText(dicts(items))
 }
 
 // taskContract is the repo's task contract text, or "".

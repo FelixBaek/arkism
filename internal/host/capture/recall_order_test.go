@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -169,5 +170,28 @@ func TestHookRecallAppliesSharedBudget(t *testing.T) {
 	p, revs, err := promptParts("기억 승인 권한을 다시 설명해 줘", "s3", "")
 	if _, fourth := revs[procedural[3].(map[string]any)["id"].(string)]; err != nil || strings.Count(p.Full, "\n- [") != 1 || len(revs) != 1 || !fourth {
 		t.Fatal(err, p.Full, revs)
+	}
+}
+
+// ST-815: contract-related memories the stable block pins use no kind slot; the budget runs after
+// they are skipped, so a third decision still shows under decision=2.
+func TestSessionIndexContractBudgetAfterSkip(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatal(err, string(out))
+	}
+	os.MkdirAll(filepath.Join(repo, ".arkism"), 0o755)
+	os.WriteFile(filepath.Join(repo, ".arkism", "contract.md"), []byte("작업 계약: 기억 승인 경계를 지킨다."), 0o644)
+	capFake(t)
+	t.Setenv("ARKISM_RECALL_BUDGET", "decision=2:1500")
+	capGet = func(string, time.Duration) (map[string]any, error) { return map[string]any{"items": []any{}}, nil }
+	var hits []any
+	for i := range 3 {
+		hits = append(hits, map[string]any{"id": fmt.Sprintf("d%d", i), "kind": "decision", "text": fmt.Sprintf("결정 %d", i), "score": 0.05})
+	}
+	search = func(string, string, int, float64) ([]any, bool, error) { return hits, true, nil }
+	idx, err := sessionIndexSkipping("s1", repo, 4000, map[string]bool{"d0": true, "d1": true})
+	if err != nil || !strings.Contains(idx.Full, "결정 2") {
+		t.Fatal(err, idx.Full)
 	}
 }
