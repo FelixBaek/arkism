@@ -122,3 +122,16 @@ func TestPostgresMemoryUseProjects(t *testing.T) {
 		t.Fatalf("projects: %+v %v", counts, e)
 	}
 }
+
+// ST-825: an edit-approve suggests from the reviewer's text, not the candidate's.
+func TestReachSuggestionFollowsEditApprove(t *testing.T) {
+	f := newFixture(t)
+	c := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "Go 코드는 gofmt", Sources: refs(f.source())}))
+	if c.ReachSuggestion == nil || c.ReachSuggestion.Reach != ReachProject {
+		t.Fatal("candidate suggestion", c.ReachSuggestion)
+	}
+	m, e := f.svc.ReviewCandidate(testCtx, f.human, c.ID, CandidateReviewInput{Scope: scopeA, ExpectedRevision: c.Revision, Action: "edit_approve", Content: "결론부터 쓴다"})
+	if e != nil || m.ReachSuggestion == nil || m.ReachSuggestion.Reach != ReachGeneral {
+		t.Fatal("edited memory keeps the old suggestion", m.ReachSuggestion, e)
+	}
+}

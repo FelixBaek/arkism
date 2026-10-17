@@ -1071,6 +1071,8 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 					memory.Summary = ""
 					memory.Keywords = nil
 					memory.KeywordsLower = nil
+					sg := suggestReach(memory) // the suggestion follows the edited text (ST-825)
+					memory.ReachSuggestion = &sg
 				}
 				memory.ContentHash = ContentHash(memory.Text)
 			}
