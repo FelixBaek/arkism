@@ -33,9 +33,12 @@ local GitHub CLI login; credential values and provider errors are never printed.
 Requests share a deadline, and inventories over 10 pages or oversized responses
 are blocked rather than partially trusted.
 
-Pull-request and manual builds still create disposable workflow artifacts without
-creating tags or releases. The one-time initial publication also passes the
-shared release gate. These checks do not install branch protection, sign an
+Pull-request and normal Release manual builds still create disposable workflow
+artifacts without creating tags or releases. The retained initial-publication
+workflow requires an explicit manual dispatch and also passes the shared gate;
+editing its file cannot automatically publish. Its caller grants read access to
+quality runs, and existing published tags/assets are never replaced by a retry.
+These checks do not install branch protection, sign an
 artifact, or prove clean-profile installation and upgrade behavior.
 
 After the release candidate passes, create a new `vX.Y.Z` tag on that verified commit. The tag workflow builds the packages and creates a draft release. Inspect its assets and checksums before publishing. Do not move an existing tag or replace published assets. No tag or public release is created by a pull request preflight.

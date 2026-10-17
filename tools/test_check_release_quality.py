@@ -294,6 +294,20 @@ class ReleaseQualityTests(unittest.TestCase):
         self.assertIn('actions: read', release)
         self.assertIn('RELEASE_SHA: ${{ github.sha }}', release)
 
+    def test_initial_publication_is_manual_and_inherits_read_permission(self):
+        root = Path(gate.__file__).resolve().parents[1]
+        initial = (root / '.github/workflows/initial-release.yml').read_text()
+        events = initial.split('\non:\n')[1].split('\npermissions:\n')[0]
+        self.assertIn('workflow_dispatch:', events)
+        self.assertNotIn('push:', events)
+        packages = initial.split('\n  packages:\n')[1]
+        self.assertIn('actions: read', packages)
+        self.assertIn('contents: write', packages)
+        self.assertIn('publish_initial: true', packages)
+        release = (root / '.github/workflows/release.yml').read_text()
+        self.assertEqual(release.count("if: github.event_name == 'push' || inputs.publish_initial"), 2)
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.publish_initial", release)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,11 +1,9 @@
 name: Initial public release
 
-# One-time, user-authorized v0.1.0 publication. Merge this workflow last, after
-# policy and release fixes. Its own main commit must pass both existing gates.
+# Retained for an explicit manual bootstrap/retry only. Editing this file must
+# never automatically publish a release. The selected main commit must pass both gates.
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/initial-release.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -57,6 +55,7 @@ jobs:
     needs: quality
     permissions:
       contents: write
+      actions: read
     uses: ./.github/workflows/release.yml
     with:
       version: "0.1.0"
