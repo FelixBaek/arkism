@@ -248,3 +248,62 @@ func TestPostgresMemoryUseCountsScopes(t *testing.T) {
 		t.Fatal("signal read across scope:", e)
 	}
 }
+
+// deletingListRepo deletes the listed memory after the page is read, the
+// window in which a recompute could otherwise write an orphan signal.
+type deletingListRepo struct {
+	*fakeRepo
+	del func()
+}
+
+func (r deletingListRepo) ListMemories(ctx context.Context, in MemoryListInput) ([]Record, error) {
+	rows, e := r.fakeRepo.ListMemories(ctx, in)
+	r.del()
+	return rows, e
+}
+
+func memorySignalRows(f *fixture) []Record {
+	out := []Record{}
+	for _, r := range f.repo.rows("jobs") {
+		if r.Kind == memorySignalKind {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func TestMemorySignalLeavesWithItsMemory(t *testing.T) {
+	f, m, _ := recordOutcomes(t)
+	if _, e := f.svc.RecomputeMemorySignals(testCtx, f.human, MemorySignalRecomputeInput{Scope: scopeA}); e != nil {
+		t.Fatal(e)
+	}
+	if len(memorySignalRows(f)) == 0 {
+		t.Fatal("no signal before delete")
+	}
+	if e := f.svc.Delete(testCtx, f.human, colMemories, m.ID, ChangeInput{Scope: scopeA, ExpectedRevision: m.Revision}); e != nil {
+		t.Fatal(e)
+	}
+	for _, r := range memorySignalRows(f) {
+		if r.Target != nil && r.Target.ID == m.ID {
+			t.Fatal("orphan signal kept the deleted memory id")
+		}
+	}
+	if v := signalOf(t, f, scopeA, m.ID); v.Available || v.Signal != nil {
+		t.Fatalf("deleted memory still has a signal: %+v", v)
+	}
+}
+
+func TestMemorySignalRecomputeLosesRaceToDelete(t *testing.T) {
+	f, m, _ := recordOutcomes(t)
+	racing := &Service{Auth: f.auth, Embedder: f.emb, Repo: deletingListRepo{f.repo, func() {
+		if e := f.svc.Delete(testCtx, f.human, colMemories, m.ID, ChangeInput{Scope: scopeA, ExpectedRevision: m.Revision}); e != nil {
+			t.Fatal(e)
+		}
+	}}}
+	if _, e := racing.RecomputeMemorySignals(testCtx, f.human, MemorySignalRecomputeInput{Scope: scopeA}); !errors.Is(e, ErrConflict) {
+		t.Fatal("recompute wrote past a concurrent delete:", e)
+	}
+	if n := len(memorySignalRows(f)); n != 0 {
+		t.Fatal("orphan signal rows:", n)
+	}
+}

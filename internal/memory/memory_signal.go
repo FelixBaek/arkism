@@ -87,6 +87,22 @@ func memorySignalID(scope Scope, memoryID string) string {
 	return "memory-signal-" + ContentHash(structuredText(scope)+"/"+memoryID)
 }
 
+// deleteMemorySignal drops the derived signal in the memory's erasure
+// transaction, so no orphan keeps a deleted id or its counts.
+func deleteMemorySignal(ctx context.Context, tx Tx, scope Scope, memoryID string) error {
+	r, e := tx.Get(ctx, colJobs, scope, memorySignalID(scope, memoryID))
+	if errors.Is(e, ErrNotFound) {
+		return nil
+	}
+	if e != nil {
+		return e
+	}
+	if r.Kind != memorySignalKind {
+		return ErrConflict
+	}
+	return tx.Delete(ctx, colJobs, scope, r.ID, r.Revision)
+}
+
 // buildMemorySignal folds the two per-dimension outcome aggregates and the use aggregate.
 func buildMemorySignal(m Record, pc, wt MemoryOutcomeCount, use MemoryUseCount) MemorySignal {
 	sig := MemorySignal{Memory: Ref{Collection: colMemories, ID: m.ID, Revision: m.Revision},
@@ -211,26 +227,13 @@ func (s *Service) RecomputeMemorySignals(ctx context.Context, token string, in M
 		for _, m := range rows {
 			sig := buildMemorySignal(m, pc[m.ID], wt[m.ID], uses[m.ID])
 			sig.ComputedAt = now
-			id := memorySignalID(in.Scope, m.ID)
-			prev, e := tx.Get(ctx, colJobs, in.Scope, id)
-			switch {
-			case errors.Is(e, ErrNotFound):
-				e = tx.Insert(ctx, colJobs, Record{ID: id, Scope: in.Scope, Kind: memorySignalKind, Status: JobStatusDone, Revision: 1, Target: &sig.Memory, MemorySignal: &sig, CreatedBy: who.PrincipalID, CreatedByType: who.Role, CreatedAt: now, UpdatedAt: now})
-			case e != nil:
-				return e
-			case prev.Kind != memorySignalKind || prev.MemorySignal == nil:
-				return ErrConflict
-			case sameMemorySignal(*prev.MemorySignal, sig):
-				continue
-			default:
-				rev := prev.Revision
-				prev.Revision, prev.MemorySignal, prev.Target, prev.UpdatedAt = rev+1, &sig, &sig.Memory, now
-				e = tx.Replace(ctx, colJobs, prev, rev)
-			}
+			changed, e := writeMemorySignal(ctx, tx, in.Scope, sig, who, now)
 			if e != nil {
 				return e
 			}
-			out.Changed++
+			if changed {
+				out.Changed++
+			}
 		}
 		return audit(ctx, tx, in.Scope, who.PrincipalID, "write:memory_signals", "")
 	})
@@ -238,6 +241,34 @@ func (s *Service) RecomputeMemorySignals(ctx context.Context, token string, in M
 		return MemorySignalRecomputeOutput{}, e
 	}
 	return out, nil
+}
+
+// writeMemorySignal stores sig unless the stored values already match; it
+// reports whether it wrote.
+func writeMemorySignal(ctx context.Context, tx Tx, scope Scope, sig MemorySignal, who Decision, now time.Time) (bool, error) {
+	id := memorySignalID(scope, sig.Memory.ID)
+	prev, e := tx.Get(ctx, colJobs, scope, id)
+	found := e == nil
+	if e != nil && !errors.Is(e, ErrNotFound) {
+		return false, e
+	}
+	if found && (prev.Kind != memorySignalKind || prev.MemorySignal == nil) {
+		return false, ErrConflict
+	}
+	if found && sameMemorySignal(*prev.MemorySignal, sig) {
+		return false, nil
+	}
+	// Lock the memory row before writing: a concurrent delete either lands
+	// first (conflict) or waits and then drops this signal with the memory.
+	if e = tx.FenceRelationMember(ctx, scope, colMemories, sig.Memory.ID); e != nil {
+		return false, e
+	}
+	if !found {
+		return true, tx.Insert(ctx, colJobs, Record{ID: id, Scope: scope, Kind: memorySignalKind, Status: JobStatusDone, Revision: 1, Target: &sig.Memory, MemorySignal: &sig, CreatedBy: who.PrincipalID, CreatedByType: who.Role, CreatedAt: now, UpdatedAt: now})
+	}
+	rev := prev.Revision
+	prev.Revision, prev.MemorySignal, prev.Target, prev.UpdatedAt = rev+1, &sig, &sig.Memory, now
+	return true, tx.Replace(ctx, colJobs, prev, rev)
 }
 
 // MemorySignals reads stored signals for up to 100 ids. An unreadable, erased
