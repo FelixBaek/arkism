@@ -8793,6 +8793,215 @@
         ]
       }
     },
+    "/v1/memories/{id}/outcomes": {
+      "get": {
+        "summary": "Verification verdicts recorded for one memory (ST-812)",
+        "description": "Lists memory_outcome evaluations whose target is this memory id (every revision), newest first by judged_at then evaluation id, with a summary over the same filters. Exact four-field scope from the storage layer; read:memories on scope and on the memory, read:evaluations on scope and on every returned evaluation, all the same principal; any denial returns no partial page. Only references, booleans, counts and times are returned: no memory, source, trace or checker text. Cursor is bound to scope and filters. Audited as read:memory_outcomes with the memory id only.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dimension",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "personal_compliance",
+                "work_task"
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Inclusive judged_at lower bound (RFC3339)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Exclusive judged_at upper bound (RFC3339)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page and its summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryOutcomePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filter, cursor or memory id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authorization or policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Memory missing, erased or privacy-quarantined in this scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency or audit failure; no partial result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memory-outcomes/summary": {
+      "post": {
+        "summary": "Verification summaries for up to 100 memories (ST-812)",
+        "description": "Per-memory totals (total, passed, pass_rate, last_judged_at) of memory_outcome evaluations under optional dimension and judged_at filters, in memory_id order. Same scope and read model as GET /v1/memories/{id}/outcomes (read:memories and read:evaluations on scope, read:memories per id). A memory that is missing, erased, privacy-quarantined or denied for its id returns available=false with zero counts instead of failing the batch. Duplicate ids, more than 100 ids, limit or cursor fields are 400. No text is returned.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryOutcomeSummaryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Summaries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryOutcomeSummaries"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filter, cursor or memory id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Current authorization or policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency or audit failure; no partial result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/memory-outcomes": {
       "post": {
         "summary": "Record independent actual memory-use outcome",
@@ -17979,6 +18188,182 @@
           "lease_token",
           "lease_until"
         ]
+      },
+      "MemoryOutcomeSummaryInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "memory_ids"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "memory_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "personal_compliance",
+              "work_task"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MemoryOutcomeSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memory_id",
+          "available",
+          "total",
+          "passed",
+          "pass_rate",
+          "last_judged_at"
+        ],
+        "properties": {
+          "memory_id": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "passed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pass_rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1
+          },
+          "last_judged_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "MemoryOutcomeEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evaluation",
+          "memory",
+          "trace",
+          "dimension",
+          "passed",
+          "judged_at"
+        ],
+        "properties": {
+          "evaluation": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "trace": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Ref"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "personal_compliance",
+              "work_task"
+            ]
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "judged_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MemoryOutcomePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memory",
+          "summary",
+          "items",
+          "next_cursor",
+          "authority"
+        ],
+        "properties": {
+          "memory": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/MemoryOutcomeSummary"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryOutcomeEntry"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "authority": {
+            "type": "string",
+            "const": "data_only_untrusted"
+          }
+        }
+      },
+      "MemoryOutcomeSummaries": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "authority"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MemoryOutcomeSummary"
+            }
+          },
+          "authority": {
+            "type": "string",
+            "const": "data_only_untrusted"
+          }
+        }
       },
       "MemoryOutcomeInput": {
         "type": "object",

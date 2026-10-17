@@ -268,6 +268,10 @@ type Repository interface {
 	BlobStorageIdentity(context.Context) (string, error)
 	ExpiringCandidates(context.Context, Scope, time.Time, int) ([]Record, error)
 	MemoryUsage(context.Context, Scope, string) ([]Record, error)
+	// MemoryOutcomes pages one memory's memory_outcome evaluations, newest first (limit+1 rows).
+	MemoryOutcomes(context.Context, MemoryOutcomeQuery) ([]Record, error)
+	// MemoryOutcomeCounts aggregates memory_outcome evaluations per memory id under the same filters.
+	MemoryOutcomeCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeCount, error)
 	ListCandidates(context.Context, ReviewInput) ([]Record, error)
 	ListSources(context.Context, SourceListInput) ([]Record, error)
 	ListMemories(context.Context, MemoryListInput) ([]Record, error)
