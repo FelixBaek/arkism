@@ -2638,21 +2638,32 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const s = pick([["", "정하지 않음 (직접 답해요)"], ...allWorkflows().filter((w) => !ownerOf(w) || ownerOf(w).id === wk.id).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (d.workflow || "").replace(/^\$/, ""),
       (v) => { d.workflow = v; touchWorker(); }, "일하는 방법");
     const w = allWorkflows().find((x) => x.crew.handle === (d.workflow || "").replace(/^\$/, ""));
-    // The chosen workflow is shown as its own panel (name + step chain) so it reads as part of this agent.
+    // The chosen workflow is shown as its own panel (name, numbered steps, one clear edit button) so it reads as part of this agent.
     const box = el("div", `wk-flow${w ? "" : " empty"}`);
     if (w) {
       const steps = (w.crew.graph?.nodes || []).filter(WORK);
+      const ai = steps.filter((n) => IS_AI(n.type)).length;
       const head = el("div", "wk-flow-head");
-      head.append(icon("tree-structure"), el("strong", "", w.crew.name), el("code", "", `$${w.crew.handle}`), el("small", "", `${steps.length}단계`),
-        button("단계 고치기", "ghost small", null, () => openGraph(w)));
+      const who = el("div", "wk-flow-who");
+      const meta = el("small", "");
+      meta.append(el("code", "", `$${w.crew.handle}`), el("span", "", `${steps.length}단계`));
+      if (ai) meta.append(el("span", "", `AI ${ai}곳`));
+      who.append(el("strong", "", w.crew.name), meta);
+      const mark = el("span", "wk-flow-mark"); mark.append(icon("tree-structure"));
+      head.append(mark, who, button("단계 고치기", "small", "pencil-simple", () => openGraph(w)));
       const chain = el("ol", "wk-flow-steps");
-      steps.forEach((n) => chain.append(el("li", "", nodeTitle(n))));
+      steps.forEach((n, i) => {
+        const li = el("li", IS_AI(n.type) ? "ai" : "");
+        li.append(el("span", "n", String(i + 1)), el("span", "t", nodeTitle(n)));
+        chain.append(li);
+      });
       box.append(head, chain);
     } else {
-      box.append(icon("tree-structure"), el("span", "", "정하지 않음 · 지시대로 바로 답해요. 순서가 정해진 일이면 워크플로우를 골라요."));
+      const mark = el("span", "wk-flow-mark"); mark.append(icon("tree-structure"));
+      box.append(mark, el("span", "", "정하지 않음 · 지시대로 바로 답해요. 순서가 정해진 일이면 아래에서 워크플로우를 골라요."));
     }
     const wrap = el("div", "wk-flow-wrap");
-    wrap.append(box, field("쓸 워크플로우", s));
+    wrap.append(box, field(w ? "다른 워크플로우로 바꾸기" : "쓸 워크플로우", s));
     return wrap;
   }
   function depthRow(d) {

@@ -2880,6 +2880,8 @@ window.ArkismI18nEN = {
   "스레드에서 메시지 보내기": "Send messages in threads",
   "작업 에이전트": "Work agents",
   "에이전트": "Work agents",
+  "정하지 않음 · 지시대로 바로 답해요. 순서가 정해진 일이면 아래에서 워크플로우를 골라요.": "None · it answers straight from its instructions. For ordered work, pick a workflow below.",
+  "다른 워크플로우로 바꾸기": "Switch workflow",
   "정하지 않음 (직접 답해요)": "None (answers on its own)",
   "일하는 방법": "How it works",
   "쓸 워크플로우": "Workflow to run",
@@ -3462,6 +3464,7 @@ window.ArkismI18nEN = {
  "patterns": {
   "중계기 {0} · 켜짐": "Gateway {0} · on",
   "{0}단계": "{0} steps",
+  "AI {0}곳": "AI {0}",
   "Arkism 내장 검사와 NVIDIA SkillEvaluator(품질)·SkillSpector(보안)가 서버의 스킬 폴더를 검사한 결과예요. {0}": "Result of Arkism's built-in check plus NVIDIA SkillEvaluator (quality) and SkillSpector (security) on the skill folder. {0}",
   "Arkism 내장 검사(비밀값·원격 실행·삭제 명령·자격 파일·유출·프롬프트 주입, SKILL.md 구성)가 서버의 스킬 폴더를 검사한 결과예요. {0}": "Result of Arkism's built-in check of the skill folder (secrets, remote execution, destructive commands, credential files, exfiltration, prompt injection, SKILL.md structure). {0}",
   "SSH 로그인과 서버의 Arkism 응답을 확인했어요 ({0}).": "SSH login and the server's Arkism both answered ({0}).",
