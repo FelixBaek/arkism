@@ -52,6 +52,11 @@ func (s *Service) createSource(ctx context.Context, token string, in CreateInput
 		requestHash = ContentHash(structuredText(in) + "\nsource-file-v1\n" + structuredText(file))
 	}
 	attach := func(ctx context.Context, tx Tx, source Record, existing bool) error {
+		if in.capture != nil {
+			if err := in.capture.prepareSource(ctx, tx, source); err != nil {
+				return err
+			}
+		}
 		if file == nil {
 			return nil
 		}

@@ -618,12 +618,9 @@ func (p *Postgres) MemoryOutcomeCounts(ctx context.Context, in MemoryOutcomeQuer
 	return out, pgErr(rows.Err())
 }
 
-// MemoryOutcomeSessionCounts (ST-819) groups every memory_outcome verdict in
-// the scope by its execution trace (one session). A session passed when all its
-// verdicts under the filters passed. It "used" the memory when it has a verdict
-// on that memory id (ST-302 checked delivery) or a context_usage receipt that
-// handed the memory out names one of the trace's agent_runs. Scope columns are
-// bound on all three tables; at most one row per used value.
+// MemoryOutcomeSessionCounts separates confirmed context delivery, server-only
+// returns and missing observations. Native thread identity groups trace chunks;
+// legacy records without that identity remain distinct instead of guessing.
 func (p *Postgres) MemoryOutcomeSessionCounts(ctx context.Context, in MemoryOutcomeQuery) ([]MemoryOutcomeSessionCount, error) {
 	in, _, err := normalizeMemoryOutcomeQuery(in, false)
 	if err != nil || len(in.MemoryIDs) != 1 || in.Dimension == "" {
@@ -638,11 +635,28 @@ func (p *Postgres) MemoryOutcomeSessionCounts(ctx context.Context, in MemoryOutc
 	rows, err := p.q().Query(ctx, `WITH o AS (SELECT rel->>'id' AS trace_id, doc->'target'->>'id' AS memory_id, (doc->>'passed')::boolean AS passed FROM memory_records, `+arr("doc->'relations'")+` rel WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND rel->>'collection'='execution_traces' AND (`+w+`)),
 s AS (SELECT trace_id, bool_and(passed) AS ok, bool_or(memory_id=$6) AS judged FROM o GROUP BY trace_id),
 ur AS (SELECT DISTINCT u.doc->'usage'->'run'->>'id' AS run_id FROM memory_records u, `+arr("u.doc->'usage'->'items'")+` it
- WHERE u.collection='jobs' AND u`+fmt.Sprintf(scoped, "u")+` AND u.kind='context_usage' AND u.status='done' AND u.doc->'usage'->'run'->>'collection'='agent_runs'
+ WHERE u.collection='jobs' AND u`+fmt.Sprintf(scoped, "u")+` AND u.kind='context_usage' AND u.status='done' AND COALESCE((u.doc->>'content_erased')::boolean,false)=false AND COALESCE((u.doc->>'privacy_quarantined')::boolean,false)=false AND u.doc->'usage'->'run'->>'collection'='agent_runs'
  AND it->'memory'->>'collection'='memories' AND it->'memory'->>'id'=$6),
 ut AS (SELECT DISTINCT tr.id FROM memory_records tr, `+arr("tr.doc->'relations'")+` run, ur
- WHERE tr.collection='execution_traces' AND tr`+fmt.Sprintf(scoped, "tr")+` AND run->>'collection'='agent_runs' AND run->>'id'=ur.run_id)
-SELECT s.judged OR ut.id IS NOT NULL AS used, count(*), count(*) FILTER (WHERE s.ok) FROM s LEFT JOIN ut ON ut.id=s.trace_id GROUP BY 1 ORDER BY 1`, params...)
+ WHERE tr.collection='execution_traces' AND tr`+fmt.Sprintf(scoped, "tr")+` AND tr.status='active' AND COALESCE((tr.doc->>'content_erased')::boolean,false)=false AND COALESCE((tr.doc->>'privacy_quarantined')::boolean,false)=false
+ AND run->>'collection'='agent_runs' AND run->>'id'=ur.run_id),
+dt AS (SELECT DISTINCT e.trace_id FROM source_events e
+ JOIN memory_records src ON src.collection='sources' AND src.id=e.id AND src.workspace_id=$2 AND src.project_id=$3 AND src.user_id=$4 AND src.agent_id=$5
+ CROSS JOIN LATERAL `+arr("e.payload->'deliveries'")+` item
+ WHERE e.organization_id=$2 AND e.project_id=$3 AND e.user_id=$4 AND e.agent_id=$5 AND NOT e.content_erased AND e.kind='context'
+ AND e.payload->>'observation' IN ('context_delivery','context_delivery_mixed') AND item->>'collection'='memories' AND item->>'id'=$6
+ AND item->>'form' IN ('full','meta') AND jsonb_typeof(item->'revision')='number' AND item->>'revision' ~ '^[1-9][0-9]*$'
+ AND e.payload->'retrieved' @> jsonb_build_array(item - 'form')
+ AND src.status='active' AND COALESCE((src.doc->>'content_erased')::boolean,false)=false AND COALESCE((src.doc->>'privacy_quarantined')::boolean,false)=false),
+observed AS (SELECT CASE WHEN nt.id IS NULL OR ar.id IS NULL THEN jsonb_build_array('legacy_trace',s.trace_id)
+ ELSE jsonb_build_array('agent_session',nt.created_by,COALESCE(ar.doc->'run'->>'agent_id',nt.agent_id),nt.thread_id) END AS session_key,
+ s.ok, s.judged OR dt.trace_id IS NOT NULL AS delivered, ut.id IS NOT NULL AS returned
+ FROM s LEFT JOIN ut ON ut.id=s.trace_id LEFT JOIN dt ON dt.trace_id=s.trace_id
+ LEFT JOIN execution_traces nt ON nt.id=s.trace_id AND nt.organization_id=$2 AND nt.project_id=$3 AND nt.user_id=$4 AND nt.agent_id=$5 AND NOT nt.content_erased
+ LEFT JOIN memory_records ar ON ar.collection='agent_runs' AND ar.id=nt.agent_run_id AND ar`+fmt.Sprintf(scoped, "ar")+` AND ar.status='active' AND COALESCE((ar.doc->>'content_erased')::boolean,false)=false AND COALESCE((ar.doc->>'privacy_quarantined')::boolean,false)=false),
+sessions AS (SELECT session_key,bool_and(ok) AS ok,bool_or(delivered) AS delivered,bool_or(returned) AS returned FROM observed GROUP BY session_key)
+SELECT CASE WHEN delivered THEN 'delivered' WHEN returned THEN 'returned_only' ELSE 'unknown' END AS observation,
+ count(*),count(*) FILTER (WHERE ok) FROM sessions GROUP BY 1 ORDER BY 1`, params...)
 	if err != nil {
 		return nil, pgErr(err)
 	}
@@ -650,9 +664,10 @@ SELECT s.judged OR ut.id IS NOT NULL AS used, count(*), count(*) FILTER (WHERE s
 	out := []MemoryOutcomeSessionCount{}
 	for rows.Next() {
 		var c MemoryOutcomeSessionCount
-		if err = rows.Scan(&c.Used, &c.Sessions, &c.Passed); err != nil {
+		if err = rows.Scan(&c.Observation, &c.Sessions, &c.Passed); err != nil {
 			return nil, ErrUnavailable
 		}
+		c.Used = c.Observation == observationDelivered
 		out = append(out, c)
 	}
 	return out, pgErr(rows.Err())

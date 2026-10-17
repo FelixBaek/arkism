@@ -173,7 +173,7 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 		item, err := s.captureClaim(ctx, token, in, c)
 		if err != nil {
 			item = CaptureItem{Status: "rejected", Reason: captureErrorCode(err), DedupeKey: item.DedupeKey}
-			transient = transient || c.Supersedes != nil || errors.Is(err, ErrUnavailable) || errors.Is(err, ErrConflict) || item.Reason == "internal_error"
+			transient = transient || c.Supersedes != nil || errors.Is(err, ErrUnavailable) || errors.Is(err, ErrDenied) || errors.Is(err, ErrConflict) || errors.Is(err, ErrCandidateQuota) || item.Reason == "internal_error"
 		}
 		out.Items[i] = item
 		// Identifiers and codes only: claim text never reaches the log.
@@ -221,40 +221,12 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	if c.MemoryContext != nil {
 		key = "capture-" + ContentHash(key+"\n"+memoryContextKey(c.MemoryContext))
 	}
+	legacyKey := key
+	key = captureEvidenceKey(key, c)
 	item := CaptureItem{DedupeKey: key}
 	if _, err := s.authorize(ctx, token, "read:memory_candidates", scope, "", ""); err != nil {
 		return item, err
 	}
-	var existing Record
-	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		var e error
-		existing, e = tx.Get(ctx, "jobs", scope, key)
-		return e
-	})
-	var stale *Record
-	if err == nil && existing.Kind == "capture_pointer" {
-		if existing.Target != nil && existing.Status == "correction_pending" && c.Supersedes != nil {
-			item.CandidateID = existing.Target.ID
-			return s.finishCaptureCorrection(ctx, token, in, c, scope, existing, item)
-		}
-		if existing.Target != nil {
-			live, e := s.captureTargetLive(ctx, scope, existing.Target.ID)
-			if e != nil {
-				return item, e
-			}
-			if live {
-				item.Status, item.Reason, item.CandidateID = "merged", "duplicate_claim", existing.Target.ID
-				return item, nil
-			}
-		}
-		// The earlier memory was deleted, rejected or expired, or its candidate never got past the daily
-		// limit (no target): saying it again is a new statement, not a duplicate of nothing.
-		stale = &existing
-	}
-	if err != nil && !errors.Is(err, ErrNotFound) {
-		return item, err
-	}
-
 	if len(c.ArchiveMessages) > 0 {
 		if in.Event.SessionID == "" {
 			return item, ErrInvalid
@@ -283,55 +255,145 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		}
 		canonicalSources = append(canonicalSources, sourceReference(r, "original"))
 	}
-	if len(c.SourceRefs) == 0 || len(c.ArchiveMessages) > 0 {
 
-		sourceText := c.Text
-		var sourceGenerator *Generator
-		if c.MemoryContext != nil {
-			sourceGenerator = in.Generator
-			sourceText += "\n[추출된 맥락 · 사용자 원문 아님]\n" + memoryContextKey(c.MemoryContext)
+	var existing Record
+	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		var e error
+		existing, e = tx.Get(ctx, "jobs", scope, key)
+		if e == nil && key == legacyKey && existing.Kind == "capture_pointer" && existing.Target != nil {
+			candidate, candidateErr := tx.Get(ctx, "memory_candidates", scope, existing.Target.ID)
+			if candidateErr != nil && !errors.Is(candidateErr, ErrNotFound) {
+				return candidateErr
+			}
+			if candidateErr == nil && !captureLegacyEvidenceMatches(candidate, c) {
+				// A legacy scoped claim cannot stand in for an unscoped one.
+				// Fail explicitly instead of silently dropping the new context.
+				return ErrConflict
+			}
 		}
-		if c.Supersedes != nil {
-			sourceGenerator = in.Generator
-			sourceText += "\n[정정 연결 메타데이터 · 사용자 원문 아님]\n" + structuredText(c.Supersedes) + "\n" + in.Event.ID
+		if errors.Is(e, ErrNotFound) && key != legacyKey {
+			// Old pointers did not bind repository or explicit source identities.
+			// Reuse one only when its immutable candidate proves the same context.
+			old, oldErr := tx.Get(ctx, "jobs", scope, legacyKey)
+			if oldErr != nil && !errors.Is(oldErr, ErrNotFound) {
+				return oldErr
+			}
+			if oldErr == nil && old.Kind == "capture_pointer" && old.Target != nil {
+				candidate, candidateErr := tx.Get(ctx, "memory_candidates", scope, old.Target.ID)
+				if candidateErr != nil && !errors.Is(candidateErr, ErrNotFound) {
+					return candidateErr
+				}
+				if candidateErr == nil && captureLegacyEvidenceMatches(candidate, c) {
+					existing, e, key = old, nil, legacyKey
+					item.DedupeKey = key
+				}
+			}
 		}
+		return e
+	})
+	var stale *Record
+	if err == nil && existing.Kind == "capture_pointer" {
+		if existing.Target != nil && existing.Status == "correction_pending" && c.Supersedes != nil {
+			item.CandidateID = existing.Target.ID
+			return s.finishCaptureCorrection(ctx, token, in, c, scope, existing, item)
+		}
+		if existing.Target != nil {
+			live, e := s.captureTargetLive(ctx, scope, existing.Target.ID)
+			if e != nil {
+				return item, e
+			}
+			if live {
+				item.Status, item.Reason, item.CandidateID = "merged", "duplicate_claim", existing.Target.ID
+				return item, nil
+			}
+		}
+		// The earlier memory was deleted, rejected or expired, or its candidate never got past the daily
+		// limit (no target): saying it again is a new statement, not a duplicate of nothing.
+		stale = &existing
+	}
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return item, err
+	}
 
-		src, err = s.Create(ctx, token, "sources", CreateInput{
-			ArchiveMessages: c.ArchiveMessages,
-			Scope:           scope, Kind: "message", Text: sourceText, Generator: sourceGenerator, Generated: sourceGenerator != nil, OriginProduct: in.Event.OriginProduct,
-			SourceRef: "capture:" + in.Event.Type + ":" + in.Event.ID, CollectedAt: in.Event.OccurredAt,
-			IdempotencyKey: "cap-" + ContentHash(key + "\n" + in.Event.ID)[:60], OnSecret: "block",
-		})
-		if errors.Is(err, ErrConflict) && stale != nil {
-			// A restatement of a withdrawn claim: its original source still
-			// stands as evidence, so the new candidate cites it.
-			src, err = s.staleCaptureSource(ctx, scope, *stale)
+	write := newCaptureWrite(key, scope, stale, c)
+	write.prefixSources = canonicalSources
+	prepared, preparedSource, prepareErr := s.loadCapturePreparation(ctx, token, write)
+	if errors.Is(prepareErr, ErrNotFound) {
+		if len(c.SourceRefs) == 0 || len(c.ArchiveMessages) > 0 {
+			sourceText := c.Text
+			var sourceGenerator *Generator
+			if c.Repo != "" && c.Kind != "user" {
+				sourceGenerator = in.Generator
+				sourceText += "\n[저장소 맥락 메타데이터 · 사용자 원문 아님]\n" + structuredText(c.Repo)
+			}
+			if c.MemoryContext != nil {
+				sourceGenerator = in.Generator
+				sourceText += "\n[추출된 맥락 · 사용자 원문 아님]\n" + memoryContextKey(c.MemoryContext)
+			}
+			if c.Supersedes != nil {
+				sourceGenerator = in.Generator
+				sourceText += "\n[정정 연결 메타데이터 · 사용자 원문 아님]\n" + structuredText(c.Supersedes) + "\n" + in.Event.ID
+			}
+
+			src, err = s.Create(ctx, token, "sources", CreateInput{
+				capture:         write,
+				ArchiveMessages: c.ArchiveMessages,
+				Scope:           scope, Kind: "message", Text: sourceText, Generator: sourceGenerator, Generated: sourceGenerator != nil, OriginProduct: in.Event.OriginProduct,
+				SourceRef: "capture:" + in.Event.Type + ":" + in.Event.ID, CollectedAt: in.Event.OccurredAt,
+				IdempotencyKey: "cap-" + ContentHash(key + "\n" + in.Event.ID)[:60], OnSecret: "block",
+			})
+			if errors.Is(err, ErrConflict) {
+				// Another event may have committed the source/preparation first.
+				prepared, preparedSource, prepareErr = s.loadCapturePreparation(ctx, token, write)
+				if prepareErr == nil {
+					err = nil
+				} else if !errors.Is(prepareErr, ErrNotFound) {
+					return item, prepareErr
+				} else if stale != nil {
+					// Legacy pointers predate preparation records. Reuse only their
+					// verified live evidence, preserving immutable provenance.
+					var originalRef SourceRef
+					src, originalRef, err = s.staleCaptureEvidence(ctx, scope, *stale)
+					if err == nil {
+						canonicalSources = append(canonicalSources, originalRef)
+						err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+							return write.prepare(ctx, tx, canonicalSources, src.ID)
+						})
+					}
+				}
+			}
+			if err != nil {
+				return item, err
+			}
+		} else {
+			err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+				return write.prepare(ctx, tx, canonicalSources, src.ID)
+			})
+			if err != nil && !errors.Is(err, ErrConflict) {
+				return item, err
+			}
 		}
-		if errors.Is(err, ErrConflict) {
-			// The same text already exists as a source with other provenance.
-			item.Status, item.Reason = "merged", "duplicate_source"
-			return item, nil
+		prepared, preparedSource, prepareErr = s.loadCapturePreparation(ctx, token, write)
+	}
+	if prepareErr != nil {
+		return item, prepareErr
+	}
+	if prepared.Status == "done" {
+		if prepared.Target == nil || prepared.Target.Collection != "memory_candidates" {
+			return item, ErrConflict
 		}
+		stands, err := s.captureTargetLive(ctx, scope, prepared.Target.ID)
 		if err != nil {
 			return item, err
 		}
-		ref := sourceReference(src, "original")
-		if (c.MemoryContext != nil || c.Supersedes != nil) && ref.Span != nil {
-			ref.Span.End = len([]rune(c.Text))
+		if !stands {
+			return item, ErrConflict
 		}
-		canonicalSources = append(canonicalSources, ref)
+		item.Status, item.Reason, item.CandidateID = "merged", "concurrent_duplicate", prepared.Target.ID
+		return item, nil
 	}
+	write.prepared, canonicalSources, src = prepared, prepared.Sources, preparedSource
 
-	// Persist source provenance before candidate creation for correction retries.
-	if c.Supersedes != nil && stale == nil {
-		// Keep the in-memory provenance identical to the millisecond storage codec.
-		at := time.Now().UTC().Truncate(time.Millisecond)
-		pending := Record{ID: key, Scope: scope, Kind: "capture_pointer", Status: "correction_pending", Revision: 1, Sources: canonicalSources, CreatedAt: at, UpdatedAt: at}
-		if err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error { return tx.Insert(ctx, "jobs", pending) }); err != nil {
-			return item, err
-		}
-		stale = &pending
-	}
 	tags := []string{"capture", "event:" + in.Event.Type, "basis:" + c.Basis}
 	if c.Supersedes != nil {
 		tags = append(tags, pendingCaptureCorrectionTag)
@@ -354,52 +416,42 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		tags = append(tags, "review:instruction_like")
 	}
 	cand, err := s.Create(ctx, token, "memory_candidates", CreateInput{
+		capture:       write,
 		MemoryContext: c.MemoryContext,
 		Scope:         scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags,
 		Sources: canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
 		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block", Classification: c.classification(),
 	})
-	if errors.Is(err, ErrCandidateQuota) && stale == nil {
-		// The source is already stored: point at it, so a retry after the limit resets cites it
-		// instead of meeting its own text as a "duplicate source" and losing the claim.
-		// If the pointer cannot be written, that error (retryable) is returned, not the limit: the caller must not
-		// record the event as done while nothing points at the stored source.
-		at := time.Now().UTC().Truncate(time.Millisecond)
-		if e := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-			return tx.Insert(ctx, "jobs", Record{ID: key, Scope: scope, Kind: "capture_pointer", Status: "done", Revision: 1,
-				Sources: canonicalSources, CreatedAt: at, UpdatedAt: at})
-		}); e != nil {
-			return item, e
-		}
-	}
 	if err != nil {
-		return item, err
-	}
-	item.CandidateID = cand.ID
-	now := time.Now().UTC().Truncate(time.Millisecond)
-	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		// The pointer also names its source, which outlives a deleted memory.
-		pointer := Record{ID: key, Scope: scope, Kind: "capture_pointer", Status: "done", Revision: 1, Sources: canonicalSources,
-			Target: &Ref{Collection: "memory_candidates", ID: cand.ID, Revision: cand.Revision}, CreatedAt: now, UpdatedAt: now}
-		if c.Supersedes != nil {
-			pointer.Status = "correction_pending"
-		}
-		if stale != nil {
-			pointer.Revision, pointer.CreatedAt = stale.Revision+1, stale.CreatedAt
-			return tx.Replace(ctx, "jobs", pointer, stale.Revision)
-		}
-		return tx.Insert(ctx, "jobs", pointer)
-	})
-	if err != nil {
-		if c.Supersedes != nil {
+		if c.Supersedes != nil || !errors.Is(err, ErrConflict) {
 			return item, err
 		}
-		// shortcut: a concurrent twin can leave one extra unreviewed candidate;
-		// the pointer still wins, so later captures merge. Lock per key if this shows up.
-		item.Status, item.Reason = "merged", "concurrent_duplicate"
+		// A conflict is a concurrent duplicate only if a committed, live
+		// pointer won. Storage/policy failures must leave this event retryable.
+		winner, readErr := s.Repo.Get(ctx, "jobs", scope, key)
+		if errors.Is(readErr, ErrNotFound) {
+			return item, err
+		}
+		if readErr != nil {
+			return item, readErr
+		}
+		if winner.Kind != "capture_pointer" || winner.Status != "done" || winner.Target == nil || winner.Target.Collection != "memory_candidates" {
+			return item, err
+		}
+		stands, readErr := s.captureTargetLive(ctx, scope, winner.Target.ID)
+		if readErr != nil {
+			return item, readErr
+		}
+		if !stands {
+			return item, err
+		}
+		// The losing candidate transaction rolled back. Return the durable
+		// winner rather than the discarded local candidate ID.
+		item.Status, item.Reason, item.CandidateID = "merged", "concurrent_duplicate", winner.Target.ID
 		return item, nil
 	}
 
+	item.CandidateID = cand.ID
 	switch {
 	case c.Supersedes != nil:
 		pointer, e := s.Repo.Get(ctx, "jobs", scope, key)
@@ -419,7 +471,7 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 // captureTargetLive reports whether a pointer's claim still stands: a pending
 // or conflicted candidate, or an approved one whose memory is still active.
 func (s *Service) captureTargetLive(ctx context.Context, scope Scope, id string) (bool, error) {
-	live := false
+	targetLive := false
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		cand, e := tx.Get(ctx, "memory_candidates", scope, id)
 		if errors.Is(e, ErrNotFound) {
@@ -428,9 +480,12 @@ func (s *Service) captureTargetLive(ctx context.Context, scope Scope, id string)
 		if e != nil {
 			return e
 		}
+		if cand.ContentErased || cand.PrivacyQuarantined {
+			return nil
+		}
 		switch cand.Status {
 		case "candidate", "conflicted":
-			live = true
+			targetLive = cand.ExpiresAt == nil || cand.ExpiresAt.After(time.Now())
 		case "approved":
 			m, e := tx.Get(ctx, "memories", scope, id)
 			if errors.Is(e, ErrNotFound) {
@@ -439,33 +494,58 @@ func (s *Service) captureTargetLive(ctx context.Context, scope Scope, id string)
 			if e != nil {
 				return e
 			}
-			live = m.Status == "active" && !m.ContentErased
+			targetLive = live(m) && !m.ContentErased
 		}
 		return nil
 	})
-	return live, err
+	return targetLive, err
 }
 
 // staleCaptureSource returns the live source a withdrawn claim cited: the one
 // its pointer names, else the one its (rejected) candidate names.
 func (s *Service) staleCaptureSource(ctx context.Context, scope Scope, pointer Record) (Record, error) {
+	src, _, err := s.staleCaptureEvidence(ctx, scope, pointer)
+	return src, err
+}
+
+func (s *Service) staleCaptureEvidence(ctx context.Context, scope Scope, pointer Record) (Record, SourceRef, error) {
 	var src Record
+	var originalRef SourceRef
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		refs := pointer.Sources
-		if pointer.Target == nil {
-			// A pointer left by a quota rejection names only its source.
-		} else if cand, e := tx.Get(ctx, "memory_candidates", scope, pointer.Target.ID); e == nil {
-			refs = append(refs, cand.Sources...)
-		}
-		for _, ref := range refs {
-			if r, e := tx.Get(ctx, "sources", scope, ref.SourceID); e == nil && live(r) && !r.ContentErased {
-				src = r
-				return nil
+		refs := append([]SourceRef(nil), pointer.Sources...)
+		if pointer.Target != nil {
+			cand, e := tx.Get(ctx, "memory_candidates", scope, pointer.Target.ID)
+			if e != nil && !errors.Is(e, ErrNotFound) {
+				return e
+			}
+			if e == nil {
+				refs = append(refs, cand.Sources...)
 			}
 		}
-		return ErrConflict
+		invalid := false
+		for _, ref := range refs {
+			r, e := tx.Get(ctx, "sources", scope, ref.SourceID)
+			if errors.Is(e, ErrNotFound) {
+				continue
+			}
+			if e != nil {
+				return e
+			}
+			if live(r) && !r.ContentErased {
+				src, originalRef = r, ref
+				if originalRef.Span == nil {
+					originalRef = sourceReference(r, "original")
+				}
+				return nil
+			}
+			invalid = true
+		}
+		if invalid {
+			return ErrConflict
+		}
+		return ErrNotFound
 	})
-	return src, err
+	return src, originalRef, err
 }
 
 func captureErrorCode(err error) string {

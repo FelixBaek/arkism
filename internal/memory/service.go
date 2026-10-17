@@ -61,6 +61,7 @@ type Service struct {
 	Wiki WikiLLM
 }
 type CreateInput struct {
+	capture         *captureWrite       // Server-owned; omitted from all JSON/BSON input.
 	MemoryContext   *MemoryContext      `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
 	ArchiveMessages []ArchiveMessageRef `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
 
@@ -492,6 +493,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 		}
 		return Record{}, ErrSecretDetected
 	}
+	clean.capture = in.capture
 	in = clean
 	// Policy inspects the sanitized complete payload, including secondary fields.
 	raw, _ := json.Marshal(in)
@@ -761,6 +763,14 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 		}
 		if e := insertErr; e != nil {
 			return e
+		}
+		if in.capture != nil {
+			if col != "memory_candidates" {
+				return ErrInvalid
+			}
+			if err := in.capture.complete(ctx, tx, r); err != nil {
+				return err
+			}
 		}
 		if col == "evaluations" {
 			if e := recordMemoryEvaluation(ctx, tx, r); e != nil {

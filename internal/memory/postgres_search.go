@@ -140,6 +140,12 @@ func pgSearchWhere(criteria SearchCriteria, collection string, now time.Time, ex
 	// state placeholders are relative to the selectRecords predicate ($6).
 	parts := []string{state}
 	params := append([]any{}, stateArgs...)
+	if collection == colMemories && !criteria.history {
+		// The service rechecks these conditions, but rejecting only after LIMIT
+		// lets stale active rows displace approved, unerased memories in every
+		// lane (and in the vector lane's nearest-neighbour cutoff).
+		parts = append(parts, "COALESCE((doc->>'content_erased')::boolean,false)=false", "NULLIF(doc->>'approved_by','') IS NOT NULL")
+	}
 	if collection == colReflections {
 		parts = append(parts, "COALESCE((doc->'reflection'->>'verified')::boolean,false)=true", "COALESCE((doc->'reflection'->>'secret_checked')::boolean,false)=true")
 	}
@@ -312,7 +318,11 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 		if !criteria.matchesRecord(r) || !searchableLive(r, collection, space, now, parent, criteria.history) {
 			continue
 		}
-		hits = append(hits, searchHit(r, collection, map[string]string{"exact": reasonExactKeyword, "fts": reasonTextSearch, "vector": reasonVector}[lane]))
+		hit := searchHit(r, collection, map[string]string{"exact": reasonExactKeyword, "fts": reasonTextSearch, "vector": reasonVector}[lane])
+		if lane == "vector" {
+			hit.vectorDistanceLimit = p.vectorMaxDistance
+		}
+		hits = append(hits, hit)
 		if len(hits) == limit {
 			break
 		}

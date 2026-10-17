@@ -110,6 +110,9 @@ func FuseScored(lists [][]Hit, limit int) []ScoredHit {
 				merged[key] = entry
 			}
 			entry.Lanes = append(entry.Lanes, lane)
+			if entry.VectorMatch == nil && hit.VectorMatch != nil {
+				entry.VectorMatch = hit.VectorMatch
+			}
 			weight := 1.0
 			if slices.Contains(hit.Reasons, "exact_keyword") {
 				weight = exactKeywordWeight
@@ -255,6 +258,8 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	var lists [][]Hit
 	var memoryErr error
 	var degraded []string
+	var queryVector []float64
+	var querySpace string
 	func() {
 		var vec []float64
 		space := ""
@@ -287,6 +292,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 			retrieval.Query = in.retrievalQuery
 		}
 		lists, memoryErr = s.Repo.SearchCollection(ctx, collection, retrieval, vec, space)
+		queryVector, querySpace = vec, space
 	}()
 	if memoryErr != nil {
 		return out, Decision{}, ErrUnavailable
@@ -328,7 +334,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 					continue
 				}
 			}
-			why := h.Reasons
+			why, distanceLimit := h.Reasons, h.vectorDistanceLimit
 			h = HitFromRecord(h.Collection, r)
 			if in.IncludeInactive && !live(r) {
 				historyRecords[h.ID] = r
@@ -368,6 +374,9 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 			}
 			if allowed.PrincipalID != d.PrincipalID || allowed.Role != d.Role {
 				return ContextBundle{}, Decision{}, ErrDenied
+			}
+			if slices.Contains(why, reasonVector) {
+				h.VectorMatch = verifiedSemanticMatch(r, queryVector, querySpace, distanceLimit)
 			}
 			clean = append(clean, h)
 		}
@@ -523,19 +532,26 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 			return err
 		}
 	}
-	job, e := s.Repo.ClaimJob(ctx, time.Now().UTC(), 2*time.Minute)
-	if errors.Is(e, ErrNotFound) {
-		// shortcut: canonical privacy advancement shares idle worker slots. Split
-		// the queue only if measured continuous embedding load delays this phase.
-		if privacy, ok := s.Repo.(privacyStore); ok {
-			next, nextErr := privacy.NextPrivacyAdvance(ctx, time.Now().UTC())
-			if nextErr != nil {
-				return nextErr
-			}
-			_, nextErr = s.AdvancePrivacyDeletion(ctx, workerToken, next.ID, PrivacyRevisionInput{Scope: next.Scope, ExpectedRevision: next.Revision})
-			return nextErr
+	// Give both queues one opportunity per worker iteration. Canonical privacy
+	// phases must not wait for an embedding backlog to empty; a blocked privacy
+	// phase must likewise not prevent its derived-erasure jobs from running.
+	privacyErr := error(ErrNotFound)
+	if privacy, ok := s.Repo.(privacyStore); ok {
+		next, nextErr := privacy.NextPrivacyAdvance(ctx, time.Now().UTC())
+		privacyErr = nextErr
+		if nextErr == nil {
+			_, privacyErr = s.AdvancePrivacyDeletion(ctx, workerToken, next.ID, PrivacyRevisionInput{Scope: next.Scope, ExpectedRevision: next.Revision})
 		}
 	}
+	job, e := s.Repo.ClaimJob(ctx, time.Now().UTC(), 2*time.Minute)
+	if errors.Is(e, ErrNotFound) {
+		return privacyErr // nil when the privacy phase made progress
+	}
+	defer func() {
+		if privacyErr != nil && !errors.Is(privacyErr, ErrNotFound) {
+			result = errors.Join(result, privacyErr)
+		}
+	}()
 	if e != nil {
 		return e
 	}

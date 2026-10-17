@@ -39,9 +39,23 @@ type SkillPin struct {
 
 // StableBlock is the cached session-fixed injection and the memory ids it shows.
 type StableBlock struct {
-	Full string   `json:"full"`
-	Meta string   `json:"meta"`
-	IDs  []string `json:"ids"`
+	Full         string            `json:"full"`
+	Meta         string            `json:"meta"`
+	IDs          []string          `json:"ids"`
+	Memories     []MemoryDelivery  `json:"memories,omitempty"`
+	DeliveryForm string            `json:"delivery_form,omitempty"`
+	Scope        map[string]string `json:"scope,omitempty"`
+}
+
+// MemoryDelivery records an observed hook output, never confirmed behavioral use.
+// Full means the hook's full representation, which may itself be an index or summary.
+// Scope is retained to prevent replay under a different account from relabeling the receipt.
+type MemoryDelivery struct {
+	Collection string            `json:"collection"`
+	ID         string            `json:"id"`
+	Revision   int64             `json:"revision"`
+	Scope      map[string]string `json:"scope"`
+	Form       string            `json:"form"`
 }
 
 func hashName(s string) string {
@@ -159,10 +173,55 @@ func (s SessionStore) ResetDelivered(sid string) error {
 	if sid == "" {
 		return nil
 	}
-	if err := os.Remove(filepath.Join(s.dir(sid), "delivered.txt")); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+	for _, name := range []string{"delivered.txt", "delivered-memories.jsonl"} {
+		if err := os.Remove(filepath.Join(s.dir(sid), name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
 	return nil
+}
+
+// DeliveredMemories is the exact receipt for the latest delivered revision, when recorded.
+// Old delivered.txt files still suppress repetition but cannot invent scope or form metadata.
+func (s SessionStore) DeliveredMemories(sid string) map[string]MemoryDelivery {
+	out := map[string]MemoryDelivery{}
+	if sid == "" {
+		return out
+	}
+	raw, _ := os.ReadFile(filepath.Join(s.dir(sid), "delivered-memories.jsonl"))
+	for _, line := range strings.Split(string(raw), "\n") {
+		var item MemoryDelivery
+		if json.Unmarshal([]byte(line), &item) != nil || item.ID == "" || item.Revision < 1 || item.Collection != "memories" || (item.Form != "full" && item.Form != "meta") {
+			continue
+		}
+		if previous, ok := out[item.ID]; !ok || item.Revision >= previous.Revision {
+			out[item.ID] = item
+		}
+	}
+	return out
+}
+
+func (s SessionStore) MarkMemoryDelivered(sid string, items []MemoryDelivery) error {
+	if sid == "" || len(items) == 0 {
+		return nil
+	}
+	var data []byte
+	for _, item := range items {
+		raw, err := json.Marshal(item)
+		if err != nil {
+			return err
+		}
+		data = append(append(data, raw...), '\n')
+	}
+	if err := os.MkdirAll(s.dir(sid), 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(s.dir(sid), "delivered-memories.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	return errors.Join(err, f.Close())
 }
 
 // Expire drops a session's state once its stable block is older than ttl, and other sessions'

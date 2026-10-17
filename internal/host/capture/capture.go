@@ -555,6 +555,7 @@ func sessionContext(sid, cwd string) (string, error) {
 type indexBlock struct {
 	Full, Meta string
 	IDs        []string
+	Items      []map[string]any
 }
 
 // sessionIndex is an index of the standing rules (preferences and how-to rules) within limit
@@ -609,10 +610,6 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 	}
 	lines, more := within(indexLines(rest, cwd), limit-used-host.Len(indexHeader)-1)
 	rest, dropped = rest[:len(lines)], dropped+more
-	logRecall("SessionStart", sid, rest)
-	if len(related) > 0 {
-		logRecall("SessionStart:contract", sid, related)
-	}
 	if dropped > 0 {
 		metric(kv("event", "session_budget"), kv("session", sid), kv("dropped", dropped))
 	}
@@ -625,7 +622,7 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 		parts = append(parts, contractHeader+"\n"+strings.Join(relLines, "\n"))
 		meta = append(meta, contractHeader+"\n"+strings.Join(metaLines(related), "\n"))
 	}
-	return indexBlock{Full: strings.Join(parts, "\n\n"), Meta: strings.Join(meta, "\n\n"), IDs: itemIDs(append(rest, related...))}, nil
+	return indexBlock{Full: strings.Join(parts, "\n\n"), Meta: strings.Join(meta, "\n\n"), IDs: itemIDs(append(rest, related...)), Items: append(rest, related...)}, nil
 }
 
 // standingOrder sorts the standing rules so the char limit cuts the least important: preferences
@@ -737,8 +734,8 @@ func promptContext(prompt, sid, cwd string) (string, error) {
 
 // promptParts is the per-turn recall block (full and meta form). Memories the session's stable
 // block already shows are left out, and so are those an earlier turn showed unless revised since.
-// revs is what to record with markShown once the block is actually output.
-func promptParts(prompt, sid, cwd string) (part host.Part, revs map[string]int64, err error) {
+// delivery is committed by markShown only after the final output has been assembled.
+func promptParts(prompt, sid, cwd string) (part host.Part, delivery *promptDelivery, err error) {
 	text := clean(prompt)
 	if host.Len(text) < 8 {
 		return host.Part{}, nil, nil
@@ -749,42 +746,76 @@ func promptParts(prompt, sid, cwd string) (part host.Part, revs map[string]int64
 	}
 	items := forRepo(dicts(list), repoKey(cwd))
 	store := sessionStore()
-	if stable, ok := store.Stable(sid); ok && len(stable.IDs) > 0 {
+	if stable, ok := store.Stable(sid); ok && stableScopeMatches(stable) && len(stable.IDs) > 0 {
 		seen := map[string]bool{}
 		for _, id := range stable.IDs {
 			seen[id] = true
 		}
 		items = keepIf(items, func(i map[string]any) bool { return !seen[str(i["id"])] })
 	}
-	// The trace ledger still lists a memory an earlier turn showed: it is in the session's context.
-	ledgerRecall(sid, items)
 	shown := store.Delivered(sid)
+	previousDeliveries := store.DeliveredMemories(sid)
 	revision := func(i map[string]any) int64 { n, _ := host.Int(i["revision"]); return n }
+	delivery = &promptDelivery{Revisions: map[string]int64{}}
 	items = keepIf(items, func(i map[string]any) bool {
 		rev, ok := shown[str(i["id"])]
+		if previous, known := previousDeliveries[str(i["id"])]; ok && known && previous.Revision == rev {
+			// Carry the original receipt, never reconstruct an old revision from a new row.
+			delivery.Previous = append(delivery.Previous, previous)
+		}
 		return !ok || revision(i) > rev
 	})
 	items = capBudget(withText(items))
-	recallMetric("UserPromptSubmit", sid, items)
+	delivery.Items = items
 	if len(items) == 0 {
-		return host.Part{}, nil, nil
+		return host.Part{}, delivery, nil
 	}
-	revs = map[string]int64{}
 	for _, i := range items {
-		revs[str(i["id"])] = revision(i)
+		delivery.Revisions[str(i["id"])] = revision(i)
 	}
 	full := promptHeader + "\n" + strings.Join(indexLines(items, cwd), "\n")
-	logInjected("UserPromptSubmit", sid, full)
-	return host.Part{Full: full, Meta: promptHeader + "\n" + strings.Join(metaLines(items), "\n")}, revs, nil
+	part = host.Part{Full: full, Meta: promptHeader + "\n" + strings.Join(metaLines(items), "\n")}
+	delivery.Part = part
+	return part, delivery, nil
 }
 
-// markShown records revs as shown when output carries the recall block (full or meta form, not the
+type promptDelivery struct {
+	Revisions map[string]int64
+	Items     []map[string]any
+	Previous  []host.MemoryDelivery
+	Part      host.Part
+}
+
+// markShown records the delivery when output carries the recall block (full or meta form, not the
 // budget stub), so a memory the budget dropped can still come back next turn.
-func markShown(sid, output string, revs map[string]int64) {
-	if !strings.Contains(output, promptHeader) {
+func markShown(sid, output string, delivery *promptDelivery) {
+	if delivery == nil {
 		return
 	}
-	if err := sessionStore().MarkDelivered(sid, revs); err != nil {
+	items := delivery.Previous
+	delivered, representation := "", "full"
+	for i, form := range []string{delivery.Part.Full, delivery.Part.Meta} {
+		if form != "" && (output == form || strings.HasPrefix(output, form+"\n\n")) {
+			delivered = form
+			if i == 1 {
+				representation = "meta"
+			}
+			break
+		}
+	}
+	if delivered == "" {
+		ledgerDeliveries(sid, items)
+		recallMetric("UserPromptSubmit", sid, nil)
+		return
+	}
+	fresh := memoryDeliveries(delivery.Items, representation)
+	ledgerDeliveries(sid, append(items, fresh...))
+	if err := sessionStore().MarkMemoryDelivered(sid, fresh); err != nil {
+		metric(kv("event", "hook_error"), kv("hook", "recall_receipt"), kv("error", pyType(err)))
+	}
+	recallMetric("UserPromptSubmit", sid, delivery.Items)
+	logInjected("UserPromptSubmit", sid, delivered)
+	if err := sessionStore().MarkDelivered(sid, delivery.Revisions); err != nil {
 		metric(kv("event", "hook_error"), kv("hook", "recall_delivered"), kv("error", pyType(err)))
 	}
 }
@@ -971,6 +1002,13 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 				}
 			}
 			sid := str(or(data["session_id"], ""))
+			if name == "SessionStart" && sid != "" {
+				lock, err := stableHookLock(sid)
+				if err != nil {
+					return err
+				}
+				defer lock.Close()
+			}
 			if err := func() (err error) { defer recovered(&err); return sessionStore().LinkAgent(sid) }(); err != nil {
 				metric(kv("event", "hook_error"), kv("hook", "session_link"), kv("error", pyType(err)))
 			}
@@ -980,7 +1018,8 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 			}
 			work := workContext(data)
 			var part host.Part
-			var revs map[string]int64
+			var revs *promptDelivery
+			var stableDelivery *stableOutput
 			var err error
 			if name == "SessionStart" {
 				if src := data["source"]; src == "compact" || src == "clear" {
@@ -992,7 +1031,8 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 				// Session-fixed text only: byte-identical for the whole session (prompt cache).
 				part, err = func() (p host.Part, err error) {
 					defer recovered(&err)
-					return stableBlock(sid, str(or(data["cwd"], "")))
+					p, stableDelivery, err = stableBlock(sid, str(or(data["cwd"], "")))
+					return p, err
 				}()
 			} else {
 				prompt, isStr := or(data["prompt"], "").(string)
@@ -1017,7 +1057,6 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 			if err != nil {
 				return err
 			}
-			markShown(sid, ctx, revs)
 			if name == "SessionStart" {
 				if recent := recentSessionContext(data, host.ContextMaxChars-host.Len(ctx)-2); recent != "" {
 					if ctx != "" {
@@ -1027,9 +1066,13 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 				}
 			}
 			if ctx != "" {
-				fmt.Fprintln(stdout, host.MustDumps(host.Obj{{Key: "hookSpecificOutput", Value: host.Obj{
-					{Key: "hookEventName", Value: name}, {Key: "additionalContext", Value: ctx}}}}, host.DumpOpts{NoASCII: true}))
+				if _, err := fmt.Fprintln(stdout, host.MustDumps(host.Obj{{Key: "hookSpecificOutput", Value: host.Obj{
+					{Key: "hookEventName", Value: name}, {Key: "additionalContext", Value: ctx}}}}, host.DumpOpts{NoASCII: true})); err != nil {
+					return err
+				}
 			}
+			markShown(sid, ctx, revs)
+			markStableShown(sid, ctx, stableDelivery)
 		case capOnPrompt:
 		case name == "Stop":
 			return sessionCapture(data, "turn_completed")
