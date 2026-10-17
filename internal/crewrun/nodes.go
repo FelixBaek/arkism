@@ -148,7 +148,7 @@ func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (re
 }
 
 // fake: a test run (시험 실행) does not run steps that reach outside: AI,
-// code that may write, HTTP, GitHub, notify, n8n and subflows hand back a
+// code that may write, HTTP, GitHub, notify and subflows hand back a
 // stand-in output and a wait does not wait. Branches, loops, merges,
 // approvals and shared state run as usual.
 func (x *runExec) fake(n Node, input any) (any, bool) {
@@ -160,7 +160,7 @@ func (x *runExec) fake(n Node, input any) (any, bool) {
 		if n.Config["access"] == "read" {
 			return nil, false
 		}
-	case "ai", "ai_once", "http", "github", "notify", "n8n", "subflow":
+	case "ai", "ai_once", "http", "github", "notify", "subflow":
 	case "wait":
 		return input, true
 	default:
