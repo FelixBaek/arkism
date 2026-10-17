@@ -168,8 +168,15 @@ func sessionLinkedUsers(job map[string]any, origin string) (records []any, refs 
 		if err != nil {
 			return nil, nil, err
 		}
-		if excluded > 0 || len(messages) == 0 {
+		if excluded > 0 {
 			return nil, nil, sessionWait("session_archive_window_incomplete")
+		}
+		if len(messages) == 0 {
+			if len(records) > 0 { // verified user turns must not vanish with an empty window
+				return nil, nil, sessionWait("session_archive_window_incomplete")
+			}
+			// A window of only metadata lines (system, cost-state, last-prompt) has nothing to learn from: done.
+			return []any{}, map[string][]any{}, nil
 		}
 		direct := map[string]bool{}
 		for _, values := range refs {
@@ -436,9 +443,22 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 		}
 		return out
 	}
+	// Mask before splitting, so a cut never halves an address or number past the filter.
+	records, _ = maskSensitive(records).([]any)
 	groups, err := chunkRecords(records, 32000)
 	if err != nil {
 		return err
+	}
+	for _, group := range groups {
+		for _, row := range group {
+			if split := autosaveGet(row, "split_of"); split != nil {
+				id, whole := str(autosaveGet(row, "source_id")), str(split)
+				refs[id] = refs[whole]
+				if ref, has := canonical[whole]; has {
+					canonical[id] = ref
+				}
+			}
+		}
 	}
 	var chunks [][]any
 	for _, group := range groups {
@@ -475,6 +495,10 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 				}
 				delivered := true
 				for _, row := range chunk {
+					// A later part shares its record's refs with the window just saved, so refs cannot prove it delivered.
+					if whole := autosaveGet(row, "split_of"); whole != nil && autosaveGet(row, "source_id") != str(whole)+"-p1" {
+						delivered = false
+					}
 					if ref, has := canonical[str(autosaveGet(row, "source_id"))]; has {
 						delivered = delivered && knownSources[sdigest(ref)]
 						continue

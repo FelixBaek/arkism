@@ -21,7 +21,7 @@ func TestMaskEmailsClearsServerFilterAndKeepsOtherText(t *testing.T) {
 		map[string]any{"role": "assistant", "text": "줄바꿈 뒤\n@atelierfelix.dev 와 탭\t@x.io, Important\nme@example.com, me@\nx.com"},
 		map[string]any{"role": "assistant", "text": "@app.route('/v1') 와 user@localhost, npm @types/node 는 그대로"},
 	}
-	out := maskEmails(in).([]any)
+	out := maskSensitive(in).([]any)
 	content := dumps(map[string]any{"authority": "data_only_untrusted", "data": map[string]any{"records": out}})
 	if m := serverEmail.FindString(strings.ReplaceAll(content, `\"`, `"`)); m != "" {
 		t.Fatalf("server filter still matches %q in %s", m, content)
