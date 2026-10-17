@@ -20,6 +20,8 @@ jobs:
     permissions:
       actions: read
     steps:
+      - name: Require the main branch for initial publication
+        run: test "$GITHUB_REF" = refs/heads/main
       - name: Wait for correctness and external Sonar quality on this commit
         env:
           GH_TOKEN: ${{ github.token }}

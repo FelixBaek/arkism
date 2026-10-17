@@ -300,6 +300,7 @@ class ReleaseQualityTests(unittest.TestCase):
         events = initial.split('\non:\n')[1].split('\npermissions:\n')[0]
         self.assertIn('workflow_dispatch:', events)
         self.assertNotIn('push:', events)
+        self.assertIn('run: test "$GITHUB_REF" = refs/heads/main', initial)
         packages = initial.split('\n  packages:\n')[1]
         self.assertIn('actions: read', packages)
         self.assertIn('contents: write', packages)
