@@ -48,7 +48,9 @@ window.ArkismOverview = (ctx) => {
     const proposals = (d.maintenance || []).map((p) => time(p.created_at)).filter(Boolean);
     const lastSession = latest(sessions), lastExtract = latest(extracted);
     // never extracted yet: count the stall from the oldest session in range
-    const since = lastExtract || (sessions.length ? Math.min(...sessions) : 0);
+    // the stall clock starts at the first session after the last extraction (the oldest session if never extracted)
+    const pending = lastExtract ? sessions.filter((t) => t > lastExtract) : sessions;
+    const since = pending.length ? Math.min(...pending) : lastExtract;
     // 분석 stops when sessions keep coming but nothing new became a candidate for 6 hours.
     const stalled = sessions.length > 0 && since > 0 && lastSession - since > 6 * HOUR && now - since > 6 * HOUR;
     const stalledHours = Math.floor((now - since) / HOUR);
@@ -233,8 +235,9 @@ window.ArkismOverview = (ctx) => {
 
   // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone.
   let tick = 0;
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)");
   function startFiring() {
-    if (timer || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (timer || still?.matches || !root?.isConnected) return;
     timer = setInterval(() => {
       if (!root?.isConnected) { clearInterval(timer); timer = 0; return; }
       if (document.hidden) return;
@@ -244,6 +247,13 @@ window.ArkismOverview = (ctx) => {
       ui.sparks.forEach((s, i) => s.classList.toggle("hot", hot.has(i)));
     }, 520);
   }
+
+  // follow the reduced-motion setting live: stop firing on reduce, resume only while the screen is shown
+  still?.addEventListener?.("change", () => {
+    if (!still.matches) { startFiring(); return; }
+    clearInterval(timer); timer = 0;
+    ui?.fires?.forEach((p) => p.classList.remove("on")); ui?.sparks?.forEach((sp) => sp.classList.remove("hot"));
+  });
 
   function renderView() {
     const table = $("#table");
