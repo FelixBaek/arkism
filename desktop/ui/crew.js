@@ -891,7 +891,9 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
       runWrap.querySelector("input")?.focus();
     });
     const acts = el("div", "crew-actions wf-acts");
-    acts.append(runBtn, button("편집", "", null, () => openGraph(r)), dupButton(r), button("설정", "ghost", null, () => openSettings(r)), button("보관", "ghost", null, () => archive(r)));
+    // An owned workflow runs only through its agent (@); the server refuses a manual run.
+    if (!ownerOf(r)) acts.append(runBtn);
+    acts.append(button("편집", "", null, () => openGraph(r)), dupButton(r), button("설정", "ghost", null, () => openSettings(r)), button("보관", "ghost", null, () => archive(r)));
     body.append(acts, runWrap);
 
     const run = section("실행", "실행기가 노드를 따라가요");
@@ -2641,7 +2643,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     // The chosen workflow is shown as its own panel (name, numbered steps, one clear edit button) so it reads as part of this agent.
     const box = el("div", `wk-flow${w ? "" : " empty"}`);
     if (w) {
-      const steps = (w.crew.graph?.nodes || []).filter(WORK);
+      const steps = levels(w.crew.graph).flat().filter(WORK);
       const ai = steps.filter((n) => IS_AI(n.type)).length;
       const head = el("div", "wk-flow-head");
       const who = el("div", "wk-flow-who");
