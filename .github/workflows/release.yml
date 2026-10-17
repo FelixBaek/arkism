@@ -26,6 +26,8 @@ on:
   pull_request:
     paths:
       - ".github/workflows/release.yml"
+      - "tools/check_release_quality.py"
+      - "tools/test_check_release_quality.py"
       - "desktop/build-unix.sh"
       - "desktop/installer/**"
       - "desktop/src-tauri/**"
@@ -46,11 +48,26 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Validate build version
         shell: bash
         run: |
           [[ "$VERSION" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Expected version x.y.z'; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'push' || inputs.publish_initial
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify exact-commit quality before packaging
+        if: github.event_name == 'push' || inputs.publish_initial
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: python3 tools/check_release_quality.py --repository "$GITHUB_REPOSITORY" --sha "$RELEASE_SHA"
 
   windows:
     permissions:
@@ -152,14 +169,15 @@ jobs:
 
   release:
     if: >-
-      github.event_name == 'push' &&
-      (startsWith(github.ref, 'refs/tags/v') ||
-       (inputs.publish_initial && inputs.version == '0.1.0' &&
-        github.ref == 'refs/heads/main' && github.repository == 'FelixBaek/arkism'))
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_initial &&
+       inputs.version == '0.1.0' && github.ref == 'refs/heads/main' &&
+       github.repository == 'FelixBaek/arkism')
     needs: [windows, unix]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -177,6 +195,11 @@ jobs:
           sum="$(sha256sum "dist/$file" | cut -d' ' -f1)"
           printf '{"version":"%s","file":"%s","sha256":"%s"}\n' "$version" "$file" "$sum" > dist/latest.json
           ls -l dist
+      - name: Recheck exact-commit quality before release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: python3 tools/check_release_quality.py --repository "$GITHUB_REPOSITORY" --sha "$RELEASE_SHA" --timeout-seconds 0
       - name: Draft tag release
         if: startsWith(github.ref, 'refs/tags/')
         env:
