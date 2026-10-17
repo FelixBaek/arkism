@@ -32,7 +32,7 @@ func TestMissingPaths(t *testing.T) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 	// a lone file at / or after ./ ../ counts; bare names and protocol-relative URLs do not.
-	if got, want := MissingPaths(sub, "/gone-st818.md, ./gone.md, ../gone.md 없음. README.md, Next.js 는 이름뿐. src=//cdn.example.com/a/b.js 와 //cdn.example.com/c.js 는 URL."), []string{"/gone-st818.md", "./gone.md", "../gone.md"}; !slices.Equal(got, want) {
+	if got, want := MissingPaths(sub, "/gone-st818.md, ./gone.md, ../gone.md 없음. README.md, Next.js 는 이름뿐. 문서/gone.md 와 설정/sub/config.yaml 은 절대경로가 아니다. src=//cdn.example.com/a/b.js 와 //cdn.example.com/c.js 는 URL."), []string{"/gone-st818.md", "./gone.md", "../gone.md"}; !slices.Equal(got, want) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 	if got := MissingPaths(sub, "경로 없음"); got != nil {

@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 var (
@@ -26,7 +28,13 @@ func MissingPaths(cwd string, texts ...string) []string {
 	home, _ := os.UserHomeDir()
 	var missing, seen []string
 	for _, text := range texts {
-		for _, p := range memoryPathPattern.FindAllString(urlPattern.ReplaceAllString(text, " "), -1) {
+		clean := urlPattern.ReplaceAllString(text, " ")
+		for _, at := range memoryPathPattern.FindAllStringIndex(clean, -1) {
+			p := clean[at[0]:at[1]]
+			// \w is ASCII only: in 설정/config.yaml the match starts at "/" but is not absolute.
+			if before, _ := utf8.DecodeLastRuneInString(clean[:at[0]]); p[0] == '/' && (unicode.IsLetter(before) || unicode.IsDigit(before)) {
+				continue
+			}
 			if len(seen) == maxCheckedPaths {
 				return missing
 			}
