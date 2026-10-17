@@ -2630,7 +2630,6 @@ window.ArkismI18nEN = {
   "AI가 초안을 쓰는 중이에요…": "AI is writing a draft…",
   "초안을 채웠어요. 확인하고 만들어 주세요.": "Draft filled in. Check it and create.",
   "작업 에이전트 찾기": "Find work agents",
-  "에이전트 찾기": "Find agents",
   "+ 새 작업 에이전트": "+ New work agent",
   "+ 새 에이전트": "+ New agent",
   "작업": "Work",
@@ -3462,7 +3461,6 @@ window.ArkismI18nEN = {
  },
  "patterns": {
   "중계기 {0} · 켜짐": "Gateway {0} · on",
-  "{0}단계": "{0} steps",
   "AI {0}곳": "AI {0}",
   "Arkism 내장 검사와 NVIDIA SkillEvaluator(품질)·SkillSpector(보안)가 서버의 스킬 폴더를 검사한 결과예요. {0}": "Result of Arkism's built-in check plus NVIDIA SkillEvaluator (quality) and SkillSpector (security) on the skill folder. {0}",
   "Arkism 내장 검사(비밀값·원격 실행·삭제 명령·자격 파일·유출·프롬프트 주입, SKILL.md 구성)가 서버의 스킬 폴더를 검사한 결과예요. {0}": "Result of Arkism's built-in check of the skill folder (secrets, remote execution, destructive commands, credential files, exfiltration, prompt injection, SKILL.md structure). {0}",
