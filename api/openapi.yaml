@@ -4983,6 +4983,138 @@
         "description": "same-scope one-hop links, at most 66. Root and every target need read permission from the same principal. Return target body only with exact pinned revision and currently valid sources. Hidden/missing/changed/invalid-source targets have no record. Read and audit are transactional; no partial output on failures. Old records are not inferred to have proposals. This is not a full revision archive or usage history. Unknown and duplicate query parameters rejected. Successful dependent authorization decisions must match the initial principal and role; mismatch returns 403 without result data."
       }
     },
+    "/v1/memory_usage": {
+      "get": {
+        "summary": "Uses of every memory in the last 7 and 30 days",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per-memory use counts; memories not used in 30 days are absent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSummaryPage"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          }
+        },
+        "description": "One call for list screens instead of one /v1/memories/{id}/usage call per memory. Needs read:memories and read:usage from the same principal; memories the caller may not read, erased or quarantined memories are left out. Audited once."
+      }
+    },
     "/v1/memories/{id}/usage": {
       "get": {
         "summary": "Recent ten context-generation usages of a memory",
@@ -7574,6 +7706,16 @@
             "schema": {
               "type": "boolean",
               "default": false
+            }
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "required": false,
+            "description": "RFC 3339 time; only rows updated after it. With include_inactive=true a refresh also sees rows that left the active list.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
             }
           },
           {
@@ -15939,6 +16081,45 @@
           },
           "run": {
             "$ref": "#/components/schemas/Ref"
+          }
+        }
+      },
+      "UsageSummaryPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "authority"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "d7",
+                "d30",
+                "last"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "d7": {
+                  "type": "integer"
+                },
+                "d30": {
+                  "type": "integer"
+                },
+                "last": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "authority": {
+            "type": "string"
           }
         }
       },

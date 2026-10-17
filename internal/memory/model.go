@@ -280,6 +280,8 @@ type Repository interface {
 	MemoryOutcomeCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeCount, error)
 	// MemoryUseCounts aggregates context_usage receipts per memory id (all revisions) in one scope.
 	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
+	// MemoryUsageWindow counts context_usage receipts per live memory created since the first time, and since the second.
+	MemoryUsageWindow(context.Context, Scope, time.Time, time.Time) ([]MemoryUsageCount, error)
 	ListCandidates(context.Context, ReviewInput) ([]Record, error)
 	ListSources(context.Context, SourceListInput) ([]Record, error)
 	ListMemories(context.Context, MemoryListInput) ([]Record, error)

@@ -185,3 +185,73 @@ func TestUsagePrincipalGuard(t *testing.T) {
 		t.Fatal(page, e)
 	}
 }
+
+func TestMemoryUsageSummary(t *testing.T) { exerciseMemoryUsageSummary(t, newFixture(t)) }
+func TestPostgresMemoryUsageSummary(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Repo = isolatedPostgres(t)
+	exerciseMemoryUsageSummary(t, f)
+}
+func exerciseMemoryUsageSummary(t *testing.T, f *fixture) {
+	t.Helper()
+	used := f.activeMemory("summary often used body", "often")
+	old := f.activeMemory("summary used once body", "once")
+	never := f.activeMemory("summary never used body", "never")
+	erased := f.activeMemory("summary erased body", "erased")
+	for i := 0; i < 12; i++ {
+		if _, e := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "often"}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	receipt := func(id string, age time.Duration, ids ...string) Record {
+		at := time.Now().UTC().Add(-age).Truncate(time.Millisecond)
+		u := &ContextUsage{Items: []MemoryUse{}}
+		for i, m := range ids {
+			u.Items = append(u.Items, MemoryUse{Memory: Ref{Collection: colMemories, ID: m, Revision: 1}, Rank: i + 1})
+		}
+		return Record{ID: id, Scope: scopeA, Kind: "context_usage", Status: "done", Revision: 1, CreatedAt: at, UpdatedAt: at, CreatedBy: "seed", Usage: u}
+	}
+	if e := f.svc.Repo.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
+		for _, r := range []Record{receipt("usage-10d", 10*24*time.Hour, old.ID, erased.ID), receipt("usage-40d", 40*24*time.Hour, old.ID, never.ID)} {
+			if e := tx.Insert(ctx, "jobs", r); e != nil {
+				return e
+			}
+		}
+		return nil
+	}); e != nil {
+		t.Fatal(e)
+	}
+	erased.ContentErased = true
+	if e := f.svc.Repo.Replace(testCtx, colMemories, erased, erased.Revision); e != nil {
+		t.Fatal(e)
+	}
+	page, e := f.svc.MemoryUsageSummary(testCtx, f.human, scopeA)
+	if e != nil || page.Authority != AuthorityDataOnly || len(page.Items) != 2 {
+		t.Fatal(page, e)
+	}
+	by := map[string]MemoryUsageCount{}
+	for _, c := range page.Items {
+		by[c.MemoryID] = c
+	}
+	if c := by[used.ID]; c.Recent != 12 || c.Uses != 12 || c.Last.IsZero() {
+		t.Fatal("recent uses", c)
+	}
+	if c := by[old.ID]; c.Recent != 0 || c.Uses != 1 {
+		t.Fatal("30 day window", c)
+	}
+	f.svc.Auth = reviewDenyAuth{Authorizer: f.auth, denyID: used.ID}
+	if page, e = f.svc.MemoryUsageSummary(testCtx, f.human, scopeA); e != nil || len(page.Items) != 1 || page.Items[0].MemoryID != old.ID {
+		t.Fatal("denied memory shown", page, e)
+	}
+	f.svc.Auth = f.auth
+	if page, e = f.svc.MemoryUsageSummary(testCtx, f.human, scopeB); e != nil || len(page.Items) != 0 {
+		t.Fatal("scope leak", page, e)
+	}
+	req := httptest.NewRequest("GET", "/v1/memory_usage?workspace_id=ws-a&project_id=proj-a", nil)
+	req.Header.Set("Authorization", "Bearer "+f.human)
+	w := httptest.NewRecorder()
+	Handler(f.svc).ServeHTTP(w, req)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"d7":12`) {
+		t.Fatal(w.Code, w.Body.String())
+	}
+}

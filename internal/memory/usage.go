@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -127,6 +128,65 @@ func (s *Service) RecentMemoryUsage(ctx context.Context, token string, scope Sco
 		return audit(ctx, tx, scope, who.PrincipalID, "read:memory_usage", id)
 	}); e != nil {
 		return UsagePage{}, e
+	}
+	return out, nil
+}
+
+// MemoryUsageCount is one memory's use in a recent window: Recent counts uses in the shorter window.
+type MemoryUsageCount struct {
+	MemoryID string    `json:"id"`
+	Recent   int       `json:"d7"`
+	Uses     int       `json:"d30"`
+	Last     time.Time `json:"last"`
+}
+type UsageSummaryPage struct {
+	Items     []MemoryUsageCount `json:"items"`
+	Authority string             `json:"authority"`
+}
+
+// MemoryUsageSummary counts, for every memory used in the last 30 days, its uses in 7 and 30 days and the last use,
+// so a list screen reads usage in one call instead of one call per memory. Memories never used are absent.
+func (s *Service) MemoryUsageSummary(ctx context.Context, token string, scope Scope) (UsageSummaryPage, error) {
+	who, e := s.authorize(ctx, token, "read:memories", scope, "", "")
+	if e != nil {
+		return UsageSummaryPage{}, e
+	}
+	allowed, e := s.authorize(ctx, token, "read:usage", scope, "", "")
+	if e != nil {
+		return UsageSummaryPage{}, e
+	}
+	if allowed.PrincipalID != who.PrincipalID || allowed.Role != who.Role {
+		return UsageSummaryPage{}, ErrDenied
+	}
+	if s.Repo == nil {
+		return UsageSummaryPage{}, ErrUnavailable
+	}
+	now := time.Now().UTC()
+	rows, e := s.Repo.MemoryUsageWindow(ctx, scope, now.Add(-30*24*time.Hour), now.Add(-7*24*time.Hour))
+	if e != nil {
+		return UsageSummaryPage{}, e
+	}
+	out := UsageSummaryPage{Items: []MemoryUsageCount{}, Authority: AuthorityDataOnly}
+	for _, r := range rows {
+		if !validRunLabel(r.MemoryID, 256) || containsSecret(r.MemoryID) || r.Uses < 1 || r.Recent < 0 || r.Recent > r.Uses {
+			return UsageSummaryPage{}, ErrUnavailable
+		}
+		d, e := s.authorize(ctx, token, "read:memories", scope, r.MemoryID, "")
+		if errors.Is(e, ErrDenied) {
+			continue
+		}
+		if e != nil {
+			return UsageSummaryPage{}, e
+		}
+		if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
+			return UsageSummaryPage{}, ErrDenied
+		}
+		out.Items = append(out.Items, r)
+	}
+	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		return audit(ctx, tx, scope, who.PrincipalID, "read:memory_usage", "")
+	}); e != nil {
+		return UsageSummaryPage{}, e
 	}
 	return out, nil
 }

@@ -118,6 +118,7 @@ func exerciseMemoryList(t *testing.T, repo Repository) {
 		func(x *MemoryListInput) { x.Query = "other" }, func(x *MemoryListInput) { x.IncludeInactive = false },
 		func(x *MemoryListInput) { x.Status = "superseded" }, func(x *MemoryListInput) { x.Kind = "decision" },
 		func(x *MemoryListInput) { x.Scope.UserID = "other" },
+		func(x *MemoryListInput) { t := time.Now(); x.UpdatedSince = &t },
 	} {
 		bad := in
 		bad.Cursor = p.NextCursor
@@ -150,6 +151,17 @@ func exerciseMemoryList(t *testing.T, repo Repository) {
 		t.Fatal("kind filter")
 	}
 	in.Kind = ""
+	cut := time.Now().UTC().Truncate(time.Millisecond)
+	changed := rows[2]
+	changed.UpdatedAt = cut.Add(time.Second)
+	if e := repo.Replace(testCtx, colMemories, changed, changed.Revision); e != nil {
+		t.Fatal(e)
+	}
+	in.UpdatedSince = &cut
+	if p = query(in); len(p.Items) != 1 || p.Items[0].ID != changed.ID {
+		t.Fatal("updated since", p)
+	}
+	in.UpdatedSince = nil
 	for _, scope := range []Scope{{WorkspaceID: "other", ProjectID: scopeA.ProjectID, UserID: scopeA.UserID, AgentID: scopeA.AgentID}, {WorkspaceID: scopeA.WorkspaceID, ProjectID: "other", UserID: scopeA.UserID, AgentID: scopeA.AgentID}, {WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, UserID: "other", AgentID: scopeA.AgentID}, {WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, UserID: scopeA.UserID, AgentID: "other"}} {
 		outside := in
 		outside.Scope = scope
@@ -196,6 +208,17 @@ func exerciseMemoryList(t *testing.T, repo Repository) {
 	}
 }
 func TestMemoryList(t *testing.T) { exerciseMemoryList(t, newFakeRepo()) }
+func TestMemoryListUpdatedSinceQuery(t *testing.T) {
+	in, e := parseMemoryListQuery("workspace_id=ws-a&project_id=proj-a&updated_since=2026-10-17T01:02:03.456Z")
+	if e != nil || in.UpdatedSince == nil || !in.UpdatedSince.Equal(time.Date(2026, 10, 17, 1, 2, 3, 456e6, time.UTC)) {
+		t.Fatal(in, e)
+	}
+	for _, bad := range []string{"yesterday", ""} {
+		if _, e = parseMemoryListQuery("workspace_id=ws-a&project_id=proj-a&updated_since=" + bad); !errors.Is(e, ErrInvalid) {
+			t.Fatal(bad, e)
+		}
+	}
+}
 func TestMemoryListHTTP(t *testing.T) {
 	f := newFixture(t)
 	f.activeMemory("needle")
