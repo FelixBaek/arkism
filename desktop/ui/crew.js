@@ -2458,8 +2458,20 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
     const s = pick([["", "정하지 않음 (직접 답해요)"], ...allWorkflows().filter((w) => !ownerOf(w) || ownerOf(w).id === wk.id).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (d.workflow || "").replace(/^\$/, ""),
       (v) => { d.workflow = v; touchWorker(); }, "일하는 방법");
     const w = allWorkflows().find((x) => x.crew.handle === (d.workflow || "").replace(/^\$/, ""));
-    const edit = w ? button("단계 고치기", "ghost small", null, () => openGraph(w)) : null;
-    return field("쓸 워크플로우", edit ? el("div", "scope-fields", s, edit) : s, "고르면 이 에이전트의 일하는 방법이 돼요. 그 워크플로우는 $로 따로 못 부르고, @이름으로만 돌아요.");
+    // The chosen workflow is shown as its own panel (name + step chain) so it reads as part of this agent.
+    const box = el("div", `wk-flow${w ? "" : " empty"}`);
+    if (w) {
+      const steps = (w.crew.graph?.nodes || []).filter(WORK);
+      const head = el("div", "wk-flow-head");
+      head.append(icon("tree-structure"), el("strong", "", w.crew.name), el("code", "", `$${w.crew.handle}`), el("small", "", `${steps.length}단계`),
+        button("단계 고치기", "ghost small", null, () => openGraph(w)));
+      const chain = el("ol", "wk-flow-steps");
+      steps.forEach((n) => chain.append(el("li", "", nodeTitle(n))));
+      box.append(head, chain);
+    } else {
+      box.append(icon("tree-structure"), el("span", "", "정하지 않음 · 지시대로 바로 답해요. 순서가 정해진 일이면 워크플로우를 골라요."));
+    }
+    return el("div", "wk-flow-wrap", box, field("쓸 워크플로우", s));
   }
   function depthRow(d) {
     const r = el("div", "wk-depth");

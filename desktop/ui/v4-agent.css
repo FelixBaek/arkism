@@ -471,3 +471,15 @@ span.wk-chip { cursor: default; }
 .wk-side .field { align-self: stretch; }
 .wk-side .field select, .wk-side .field input { width: 100%; box-sizing: border-box; }
 .wk-side .scope-fields { align-self: stretch; display: grid; grid-template-columns: 1fr; gap: 8px; }
+/* 일하는 방법: the agent's workflow, drawn as a panel with its step chain. */
+.wk-flow-wrap { display: flex; flex-direction: column; gap: 12px; }
+.wk-flow { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--nc-amber); border-radius: 8px; background: var(--nc-amber-bg); }
+.wk-flow.empty { flex-direction: row; align-items: center; gap: 10px; border-style: dashed; border-color: var(--nc-line); background: transparent; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
+.wk-flow-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--nc-amber); }
+.wk-flow-head strong { color: var(--nc-text); font-weight: 500; }
+.wk-flow-head code { color: var(--nc-amber); }
+.wk-flow-head small { color: var(--nc-quiet); margin-right: auto; }
+.wk-flow-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: s; }
+.wk-flow-steps li { counter-increment: s; padding: 3px 10px; border: 1px solid var(--nc-line); border-radius: 999px; background: var(--nc-canvas); color: var(--nc-text); font-size: calc(12px * var(--fs, 1)); }
+.wk-flow-steps li::before { content: counter(s) " "; color: var(--nc-amber); }
+.wk-flow-steps li + li::after { content: none; }
