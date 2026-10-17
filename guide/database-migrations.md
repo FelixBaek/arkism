@@ -70,5 +70,11 @@ history and application privileges. The authenticated backup roundtrip also
 restores the history and verifies readiness before applying recovery actions.
 These tests do not constitute an upgrade of a user's installed database.
 
+The SQL dialect is PostgreSQL/PLpgSQL. Sonar's Oracle PL/SQL analyzer is mapped
+to Oracle-specific suffixes, rather than its default `.sql` mapping; see
+[Sonar's language-mapping documentation](https://docs.sonarsource.com/sonarqube-server/analyzing-source-code/languages/t-sql).
+PostgreSQL executes the migration, function, RLS and privilege regression tests;
+the Go, JavaScript, Python and other configured Sonar analyses still run.
+
 PostgreSQL documents [transaction-scoped advisory locks](https://www.postgresql.org/docs/18/explicit-locking.html#ADVISORY-LOCKS)
 and [object privileges](https://www.postgresql.org/docs/18/ddl-priv.html).

@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	_ "embed"
+	_ "embed" // Required for the embedded, immutable SQL migration assets.
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
