@@ -51,6 +51,7 @@ func hookText(t *testing.T, event string) string {
 // Two consecutive prompts leave the session's stable block byte-identical, the per-turn recall
 // stays out of it, and a later SessionStart (compact) replays the same bytes.
 func TestStableBlockIdenticalAcrossPrompts(t *testing.T) {
+	t.Chdir(t.TempDir()) // the hook reads .arkism/contract.md from the cwd's repo; keep a local one out
 	standing := stableFake(t)
 	start := hookText(t, `{"hook_event_name": "SessionStart", "session_id": "s1", "source": "startup"}`)
 	stable, ok := sessionStore().Stable("s1")
