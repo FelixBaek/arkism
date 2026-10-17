@@ -53,6 +53,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	modelInputRoutes(mux, s)
 	memoryOutcomeRoutes(mux, s)
 	memoryOutcomeReadRoutes(mux, s)
+	memoryOutcomeComparisonRoutes(mux, s)
 	memorySignalRoutes(mux, s)
 	mux.HandleFunc("POST /v1/consultations", func(w http.ResponseWriter, r *http.Request) {
 		var in CreateConsultationInput

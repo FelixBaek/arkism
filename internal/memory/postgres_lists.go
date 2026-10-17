@@ -555,8 +555,14 @@ func (p *Postgres) ListSkillTrialRecords(ctx context.Context, scope Scope, skill
 // memoryOutcomeWhere is the one filter for ST-812 reads; selectRecords and the
 // aggregate below add the scope columns. Arguments start at $6.
 func memoryOutcomeWhere(in MemoryOutcomeQuery) (string, []any) {
-	w := `kind='memory_outcome' AND status='active' AND COALESCE((doc->>'content_erased')::boolean,false)=false AND COALESCE((doc->>'privacy_quarantined')::boolean,false)=false AND (doc->'expires_at' IS NULL OR (doc->'expires_at'->>'$date')::timestamptz > now()) AND doc->'target'->>'collection'='memories' AND doc->'target'->>'id'=ANY($6) AND (doc->'tags' ? 'dimension:personal_compliance' OR doc->'tags' ? 'dimension:work_task')`
-	args := []any{in.MemoryIDs}
+	w, args := memoryOutcomeFilter(in, []any{in.MemoryIDs})
+	return `doc->'target'->>'id'=ANY($6) AND ` + w, args
+}
+
+// memoryOutcomeFilter is memoryOutcomeWhere without the target id: every
+// memory's verdicts, numbered after args (which start at $6).
+func memoryOutcomeFilter(in MemoryOutcomeQuery, args []any) (string, []any) {
+	w := `kind='memory_outcome' AND status='active' AND COALESCE((doc->>'content_erased')::boolean,false)=false AND COALESCE((doc->>'privacy_quarantined')::boolean,false)=false AND (doc->'expires_at' IS NULL OR (doc->'expires_at'->>'$date')::timestamptz > now()) AND doc->'target'->>'collection'='memories' AND (doc->'tags' ? 'dimension:personal_compliance' OR doc->'tags' ? 'dimension:work_task')`
 	if in.Dimension != "" {
 		w += fmt.Sprintf(` AND doc->'tags' ? $%d`, len(args)+6)
 		args = append(args, "dimension:"+in.Dimension)
@@ -601,6 +607,44 @@ func (p *Postgres) MemoryOutcomeCounts(ctx context.Context, in MemoryOutcomeQuer
 	for rows.Next() {
 		var c MemoryOutcomeCount
 		if err = rows.Scan(&c.MemoryID, &c.Total, &c.Passed, &c.Last); err != nil {
+			return nil, ErrUnavailable
+		}
+		out = append(out, c)
+	}
+	return out, pgErr(rows.Err())
+}
+
+// MemoryOutcomeSessionCounts (ST-819) groups every memory_outcome verdict in
+// the scope by its execution trace (one session). A session passed when all its
+// verdicts under the filters passed. It "used" the memory when it has a verdict
+// on that memory id (ST-302 checked delivery) or a context_usage receipt that
+// handed the memory out names one of the trace's agent_runs. Scope columns are
+// bound on all three tables; at most one row per used value.
+func (p *Postgres) MemoryOutcomeSessionCounts(ctx context.Context, in MemoryOutcomeQuery) ([]MemoryOutcomeSessionCount, error) {
+	in, _, err := normalizeMemoryOutcomeQuery(in, false)
+	if err != nil || len(in.MemoryIDs) != 1 || in.Dimension == "" {
+		return nil, ErrInvalid
+	}
+	w, args := memoryOutcomeFilter(in, []any{in.MemoryIDs[0]})
+	params := append([]any{"evaluations", in.Scope.WorkspaceID, in.Scope.ProjectID, in.Scope.UserID, in.Scope.AgentID}, args...)
+	const scoped = ".workspace_id=$2 AND %[1]s.project_id=$3 AND %[1]s.user_id=$4 AND %[1]s.agent_id=$5"
+	arr := func(v string) string {
+		return "jsonb_array_elements(CASE WHEN jsonb_typeof(" + v + ")='array' THEN " + v + " ELSE '[]'::jsonb END)"
+	}
+	rows, err := p.q().Query(ctx, `WITH o AS (SELECT rel->>'id' AS trace_id, doc->'target'->>'id' AS memory_id, (doc->>'passed')::boolean AS passed FROM memory_records, `+arr("doc->'relations'")+` rel WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND rel->>'collection'='execution_traces' AND (`+w+`)),
+s AS (SELECT trace_id, bool_and(passed) AS ok, bool_or(memory_id=$6) AS judged FROM o GROUP BY trace_id)
+SELECT s.judged OR EXISTS (SELECT 1 FROM memory_records tr, `+arr("tr.doc->'relations'")+` run, memory_records u, `+arr("u.doc->'usage'->'items'")+` it
+ WHERE tr.collection='execution_traces' AND tr`+fmt.Sprintf(scoped, "tr")+` AND tr.id=s.trace_id AND run->>'collection'='agent_runs'
+ AND u.collection='jobs' AND u`+fmt.Sprintf(scoped, "u")+` AND u.kind='context_usage' AND u.status='done' AND u.doc->'usage'->'run'->>'collection'='agent_runs' AND u.doc->'usage'->'run'->>'id'=run->>'id'
+ AND it->'memory'->>'collection'='memories' AND it->'memory'->>'id'=$6) AS used, count(*), count(*) FILTER (WHERE s.ok) FROM s GROUP BY 1 ORDER BY 1`, params...)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	out := []MemoryOutcomeSessionCount{}
+	for rows.Next() {
+		var c MemoryOutcomeSessionCount
+		if err = rows.Scan(&c.Used, &c.Sessions, &c.Passed); err != nil {
 			return nil, ErrUnavailable
 		}
 		out = append(out, c)

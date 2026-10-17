@@ -80,7 +80,7 @@ func TestReachSuggestionsHumanDecides(t *testing.T) {
 	ref := Ref{Collection: colMemories, ID: plain.ID, Revision: plain.Revision}
 	for i, key := range []string{"owner/a", "owner/b"} {
 		at := time.Now().UTC().Add(time.Duration(i) * time.Second)
-		if e = f.repo.Insert(testCtx, "jobs", Record{ID: "pin-use-" + key, Scope: scopeA, Kind: "context_usage", Status: "done", Revision: 1, CreatedAt: at, UpdatedAt: at, CreatedBy: "agent-1", Usage: &ContextUsage{ProjectKey: key, Items: []MemoryUse{{ref, 1}}}}); e != nil {
+		if e = f.repo.Insert(testCtx, "jobs", Record{ID: "pin-use-" + key, Scope: scopeA, Kind: "context_usage", Status: "done", Revision: 1, CreatedAt: at, UpdatedAt: at, CreatedBy: "agent-1", Usage: &ContextUsage{ProjectKey: key, Items: []MemoryUse{{Memory: ref, Rank: 1}}}}); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -134,7 +134,7 @@ func TestPostgresMemoryUseProjects(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	ref := Ref{Collection: colMemories, ID: "mem-p", Revision: 1}
 	for i, key := range []string{"owner/a", "owner/b", "owner/a", ""} { // revision 1
-		r := Record{ID: "use-" + ID(), Scope: scopeA, Kind: "context_usage", Status: "done", Revision: 1, CreatedAt: now.Add(time.Duration(i) * time.Second), UpdatedAt: now, CreatedBy: "agent-1", Usage: &ContextUsage{ProjectKey: key, Items: []MemoryUse{{ref, 1}}}}
+		r := Record{ID: "use-" + ID(), Scope: scopeA, Kind: "context_usage", Status: "done", Revision: 1, CreatedAt: now.Add(time.Duration(i) * time.Second), UpdatedAt: now, CreatedBy: "agent-1", Usage: &ContextUsage{ProjectKey: key, Items: []MemoryUse{{Memory: ref, Rank: 1}}}}
 		if e := p.Insert(testCtx, "jobs", r); e != nil {
 			t.Fatal(e)
 		}
