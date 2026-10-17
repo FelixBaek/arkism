@@ -49,9 +49,15 @@ func listCrew(timeout time.Duration) ([]map[string]any, error) {
 		return nil, err
 	}
 	out := []map[string]any{}
+	owned := map[string]bool{} // workflows an agent works by are called through that agent, not by $
+	for _, r := range list(getOr(page, "items", []any{})) {
+		if c := obj(obj(r)["crew"]); c["type"] == "agent" && truthy(c["workflow"]) {
+			owned[strings.TrimPrefix(pyStr(c["workflow"]), "$")] = true
+		}
+	}
 	for _, r := range list(getOr(page, "items", []any{})) {
 		c := obj(obj(r)["crew"])
-		if c["type"] == "workflow" && truthy(c["handle"]) {
+		if c["type"] == "workflow" && truthy(c["handle"]) && !owned[pyStr(c["handle"])] {
 			out = append(out, map[string]any{"handle": c["handle"], "type": "workflow", "name": getOr(c, "name", ""),
 				"role": getOr(c, "role", ""), "category": getOr(c, "category", ""), "trigger": getOr(obj(c["trigger"]), "kind", ""),
 				"enabled": truthy(c["enabled"]), "steps": len(list(obj(c["graph"])["nodes"]))})
@@ -130,6 +136,11 @@ func waitRun(runID string, wait float64, rec map[string]any) (map[string]any, er
 
 // startWorkflow starts the workflow $handle with input {"request": task} (and "cwd" when given) and waits up to wait seconds.
 func startWorkflow(handle, task string, wait float64, cwd string, resolver func(string) (map[string]any, error)) (map[string]any, error) {
+	return startWorkflowAs("call", handle, task, wait, cwd, resolver)
+}
+
+// startWorkflowAs is startWorkflow with the run's trigger: "agent" when the agent that owns the workflow starts it.
+func startWorkflowAs(trigger, handle, task string, wait float64, cwd string, resolver func(string) (map[string]any, error)) (map[string]any, error) {
 	if strings.TrimSpace(task) == "" {
 		return nil, crewErr("할 일(task)이 비었어요")
 	}
@@ -158,7 +169,7 @@ func startWorkflow(handle, task string, wait float64, cwd string, resolver func(
 	if cwd != "" {
 		input = append(input, host.KV{Key: "cwd", Value: cwd})
 	}
-	run := host.Obj{{Key: "crew_id", Value: item["id"]}, {Key: "crew_revision", Value: item["revision"]}, {Key: "trigger", Value: "call"},
+	run := host.Obj{{Key: "crew_id", Value: item["id"]}, {Key: "crew_revision", Value: item["revision"]}, {Key: "trigger", Value: trigger},
 		{Key: "status", Value: "running"}, {Key: "input", Value: dumpLine(input)}, {Key: "nodes", Value: nodes}}
 	rec, err := apiPost("/v1/crew/runs", host.Obj{{Key: "scope", Value: scope()}, {Key: "run", Value: run}}, 15*time.Second)
 	if err != nil {

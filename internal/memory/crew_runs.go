@@ -16,7 +16,8 @@ import (
 // when they look like credentials, so a run never stores keys or tokens.
 const colCrewRuns = "crew_runs"
 
-var crewRunTriggers = []string{"manual", "schedule", "webhook", "call", "discord"}
+// "agent": started by the agent whose way of working the workflow is; the only trigger a bot-owned workflow takes.
+var crewRunTriggers = []string{"manual", "schedule", "webhook", "call", "discord", "agent"}
 var crewRunStatuses = []string{"running", "waiting", "succeeded", "failed", "stopped"}
 var crewNodeStatuses = []string{"pending", "running", "waiting", "done", "failed", "skipped"}
 
@@ -255,6 +256,10 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 	}
 	r := Record{ID: ID(), Scope: in.Scope, Kind: colCrewRuns, Status: statusActive, Revision: 1, Text: run.Trigger, CrewRun: &run,
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
+	owners, err := s.workflowOwners(ctx, in.Scope)
+	if err != nil {
+		return Record{}, err
+	}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		crew, err := tx.Get(ctx, colCrew, in.Scope, run.CrewID)
 		if err != nil {
@@ -262,6 +267,13 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 		}
 		if crew.Status != statusActive || crew.Crew == nil || crew.Crew.Type != "workflow" {
 			return ErrInvalid
+		}
+		// A workflow an agent works by runs only when that agent is called (@), never alone by $, schedule or webhook.
+		if _, owned := owners[crew.Crew.Handle]; owned && run.Trigger != "agent" {
+			return ErrInvalid
+		}
+		if run.Trigger == "agent" && !crewRunWriter(d.Role) {
+			return ErrDenied
 		}
 		approvals := map[string]bool{}
 		addApprovals(approvals, crew.Crew)
@@ -538,4 +550,19 @@ func crewRunRoutes(mux *http.ServeMux, s *Service) {
 		out, e := s.DecideCrewRun(r.Context(), bearer(r), r.PathValue("id"), in)
 		respond(w, out, e)
 	})
+}
+
+// workflowOwners maps a workflow handle to the handle of the live agent that works by it.
+func (s *Service) workflowOwners(ctx context.Context, scope Scope) (map[string]string, error) {
+	live, err := s.liveCrew(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, r := range live {
+		if r.Crew.Type == "agent" && r.Crew.Workflow != "" {
+			out[r.Crew.Workflow] = r.Crew.Handle
+		}
+	}
+	return out, nil
 }

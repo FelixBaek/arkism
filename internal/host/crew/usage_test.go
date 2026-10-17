@@ -132,7 +132,9 @@ func TestAgentWithAWorkflowRunsItInsteadOfAnswering(t *testing.T) {
 		}
 		return runRec("succeeded", nil, nil, "보고서", 2), nil
 	})
-	patch(t, &apiPost, func(string, any, time.Duration) (map[string]any, error) { return runRec("running", nil, nil, "", 1), nil })
+	patch(t, &apiPost, func(string, any, time.Duration) (map[string]any, error) {
+		return runRec("running", nil, nil, "", 1), nil
+	})
 	patch(t, &runSleep, func(float64) {})
 	runner := func(map[string]any) (map[string]any, error) { t.Fatal("the agent answered itself"); return nil, nil }
 	res, err := answerAssist(map[string]any{"id": "x", "crew_assist": map[string]any{"kind": "try", "expert": "리서처", "prompt": "AI 뉴스"}}, runner)

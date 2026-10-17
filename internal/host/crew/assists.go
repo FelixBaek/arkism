@@ -521,7 +521,7 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 // agentWorkflow runs the workflow an agent works by ($handle) with the caller's prompt, and reports it like an answer.
 // A run that outlasts the wait is left running; the result says so with its id.
 func agentWorkflow(handle, prompt string) map[string]any {
-	view, err := startWorkflow(handle, prompt, 120, "", nil)
+	view, err := startWorkflowAs("agent", handle, prompt, 120, "", nil)
 	if err != nil {
 		return failedResult(err.Error())
 	}

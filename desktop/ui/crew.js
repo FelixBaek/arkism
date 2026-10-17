@@ -76,7 +76,10 @@ window.ArkismCrew = (ctx) => {
 
   // ---------------------------------------------------------------- data
   const items = () => state.data.crew || [];
-  const workflows = () => items().filter((r) => r.crew.type === "workflow");
+  // A workflow an agent works by belongs to that agent: no $ call, and no place in 자동화.
+  const ownerOf = (w) => items().find((r) => r.crew.type === "agent" && r.crew.workflow && r.crew.workflow.replace(/^\$/, "") === w.crew.handle);
+  const allWorkflows = () => items().filter((r) => r.crew.type === "workflow");
+  const workflows = () => allWorkflows().filter((r) => !ownerOf(r));
   const personas = () => items().filter((r) => r.crew.type === "persona");
   // template: a saved agent definition (instructions·model·effort·skills). 새 워크플로우 can start from one.
   const templates = () => items().filter((r) => r.crew.type === "template");
@@ -2452,9 +2455,11 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
   }
   // 일하는 방법: the workflow this agent runs when it is called; empty means it answers on its own.
   function workflowField(d) {
-    const s = pick([["", "정하지 않음 (직접 답해요)"], ...workflows().map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (d.workflow || "").replace(/^\$/, ""),
+    const s = pick([["", "정하지 않음 (직접 답해요)"], ...allWorkflows().filter((w) => !ownerOf(w) || ownerOf(w).id === wk.id).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (d.workflow || "").replace(/^\$/, ""),
       (v) => { d.workflow = v; touchWorker(); }, "일하는 방법");
-    return field("쓸 워크플로우", s, "정하면 @이름으로 불릴 때 이 워크플로우의 단계대로 일해요. 단계는 자동화 메뉴에서 고쳐요.");
+    const w = allWorkflows().find((x) => x.crew.handle === (d.workflow || "").replace(/^\$/, ""));
+    const edit = w ? button("단계 고치기", "ghost small", null, () => openGraph(w)) : null;
+    return field("쓸 워크플로우", edit ? el("div", "scope-fields", s, edit) : s, "고르면 이 에이전트의 일하는 방법이 돼요. 그 워크플로우는 $로 따로 못 부르고, @이름으로만 돌아요.");
   }
   function depthRow(d) {
     const r = el("div", "wk-depth");
