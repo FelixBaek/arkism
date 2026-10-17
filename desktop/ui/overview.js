@@ -26,10 +26,10 @@ window.ArkismOverview = (ctx) => {
     S.at = Date.now(); S.loading = false;
     if (state.view === "overview") render();
   }
-  // counts[i] = events in the hour slot i (0 = 23 hours ago, 23 = this hour).
+  // counts[i] = events in the clock hour slot i (0 = 23 hours ago, 23 = this hour so far), matching the HH:00 ticks.
   function slots(times) {
-    const c = new Array(24).fill(0), now = Date.now();
-    for (const t of times) { const d = Math.floor((now - t) / HOUR); if (t && d >= 0 && d < 24) c[23 - d]++; }
+    const c = new Array(24).fill(0), base = new Date().setMinutes(0, 0, 0), now = Date.now();
+    for (const t of times) { if (!t || t > now) continue; const d = t >= base ? 0 : Math.ceil((base - t) / HOUR); if (d < 24) c[23 - d]++; }
     return c;
   }
   const today = (t) => t >= new Date().setHours(0, 0, 0, 0);
@@ -59,7 +59,7 @@ window.ArkismOverview = (ctx) => {
 
     const row = (times, tone) => slots(times).map((n) => (n ? tone : ""));
     const extractRow = row(extracted, "g");
-    if (stalled) slots(sessions).forEach((n, i) => { if (n && now - (23 - i) * HOUR > since) extractRow[i] = "r"; });
+    if (stalled) slots(sessions).forEach((n, i) => { if (n && new Date().setMinutes(0, 0, 0) - (23 - i) * HOUR > since) extractRow[i] = "r"; });
     const classRow = row(classified, "g"); slots(unclassified.map((m) => time(m.created_at))).forEach((n, i) => { if (n && !classRow[i]) classRow[i] = "a"; });
     const waitRow = row(waiting.map((m) => time(m.created_at)), "a");
     const reportRow = row(reported ? [reported] : [], "g");

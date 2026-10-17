@@ -45,12 +45,13 @@ window.mountArkismTriangle = (el, opts = {}) => {
   };
 
   let raf = 0;
-  render(0);
-  if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-    const t0 = performance.now();
-    const tick = (now) => { if (!document.hidden) render((((now - t0) / 1000) % o.duration) / o.duration); raf = requestAnimationFrame(tick); };
-    raf = requestAnimationFrame(tick);
-  }
-  return () => { cancelAnimationFrame(raf); svg.remove(); };
+  const t0 = performance.now();
+  const tick = (now) => { if (!document.hidden) render((((now - t0) / 1000) % o.duration) / o.duration); raf = requestAnimationFrame(tick); };
+  // follow the reduced-motion setting live, not just at mount
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  const sync = () => { cancelAnimationFrame(raf); raf = 0; if (still?.matches) render(0); else raf = requestAnimationFrame(tick); };
+  sync();
+  still?.addEventListener?.("change", sync);
+  return () => { cancelAnimationFrame(raf); still?.removeEventListener?.("change", sync); svg.remove(); };
 };
 document.addEventListener("DOMContentLoaded", () => { const art = document.getElementById("rail-art"); if (art) window.mountArkismTriangle(art); });
