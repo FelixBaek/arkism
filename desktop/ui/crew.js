@@ -2737,7 +2737,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   }
   // 일하는 방법: the workflow this agent runs when it is called; empty means it answers on its own.
   function workflowField(d) {
-    const s = pick([["", "정하지 않음 (직접 답해요)"], ...allWorkflows().filter((w) => !ownerOf(w) || ownerOf(w).id === wk.id).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (d.workflow || "").replace(/^\$/, ""),
+    const s = pick([["", "정하지 않음 (직접 답해요)"], ...allWorkflows().filter((w) => ownerOf(w) ? ownerOf(w).id === wk.id : !triggered(w.crew)).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (d.workflow || "").replace(/^\$/, ""),
       (v) => { d.workflow = v; touchWorker(); }, "일하는 방법");
     const w = allWorkflows().find((x) => x.crew.handle === (d.workflow || "").replace(/^\$/, ""));
     // The chosen workflow is shown as its own panel (name, numbered steps, one clear edit button) so it reads as part of this agent.

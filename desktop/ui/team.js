@@ -220,7 +220,7 @@ window.ArkismTeams = (ctx) => {
     const rail = el("div", "tm-browse");
     const grid = el("div", "tm-grid");
     for (const r of list) {
-      const row = el("button", `tm-tile${r.id === S.team ? " selected" : ""}`); row.type = "button";
+      const row = el("button", `tm-tile${r.id === S.team ? " selected" : ""}`); row.type = "button"; row.dataset.id = r.id;
       row.setAttribute("aria-pressed", String(r.id === S.team));
       const members = sorted(r.crew.members);
       const top = el("div", "tm-tile-top");

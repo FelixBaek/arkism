@@ -223,3 +223,45 @@ func TestAgentWorkflowIsAHandleOnAgentsOnly(t *testing.T) {
 		t.Fatal("a workflow took a workflow")
 	}
 }
+
+func TestAgentWorkflowMustBeLiveFreeAndUntriggered(t *testing.T) {
+	f := newFixture(t)
+	create := func(c Crew) error {
+		_, err := f.svc.CreateCrew(testCtx, f.human, CrewInput{Scope: scopeA, Crew: c})
+		return err
+	}
+	a := crewAgent("리서처", "리서처")
+	a.Workflow = "없는것"
+	if err := create(a); !errors.Is(err, ErrInvalid) {
+		t.Fatal("an unknown workflow accepted", err)
+	}
+	sched := crewWorkflow("아침", "아침")
+	sched.Trigger, sched.Enabled = &CrewTrigger{Kind: "schedule", Cron: "0 8 * * *"}, true
+	f.crew(sched)
+	a.Workflow = "아침"
+	if err := create(a); !errors.Is(err, ErrInvalid) {
+		t.Fatal("a scheduled workflow taken by an agent", err)
+	}
+	w := f.crew(crewWorkflow("리서치", "리서치"))
+	a.Workflow = "리서치"
+	owner := f.crew(a)
+	b := crewAgent("둘째", "둘째")
+	b.Workflow = "리서치"
+	if err := create(b); !errors.Is(err, ErrInvalid) {
+		t.Fatal("two agents share one workflow", err)
+	}
+	on := *w.Crew
+	on.Trigger, on.Enabled = &CrewTrigger{Kind: "webhook"}, true
+	if _, err := f.svc.UpdateCrew(testCtx, f.human, w.ID, CrewUpdate{Scope: scopeA, ExpectedRevision: w.Revision, Crew: &on}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("an owned workflow got a live webhook", err)
+	}
+	on.Enabled = false
+	if _, err := f.svc.UpdateCrew(testCtx, f.human, w.ID, CrewUpdate{Scope: scopeA, ExpectedRevision: w.Revision, Crew: &on}); err != nil {
+		t.Fatal("an owned workflow kept a trigger that is off", err)
+	}
+	same := *owner.Crew
+	same.Role = "조사"
+	if _, err := f.svc.UpdateCrew(testCtx, f.human, owner.ID, CrewUpdate{Scope: scopeA, ExpectedRevision: owner.Revision, Crew: &same}); err != nil {
+		t.Fatal("the owner could not save its own workflow", err)
+	}
+}
