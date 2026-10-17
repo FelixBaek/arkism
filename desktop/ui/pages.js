@@ -426,8 +426,8 @@ window.ArkismPages = (ctx) => {
       notice("AI가 분류하는 중이에요…");
       try {
         const skillLines = todo.slice(0, 150).map((sk) => `${sk.name}: ${(sk.description || "").slice(0, 100)}`).join("\n");
-        const prompt = `카테고리: ${draft.map((c) => c.name).join(", ")}\n\n스킬 (이름: 설명):\n${skillLines}\n\n답은 JSON 객체 하나만: {"스킬 이름": "카테고리 이름"}. 맞는 카테고리가 없으면 그 스킬은 뺀다.`;
-        const a = await assist("explain", prompt, { purpose: "category" });
+        const prompt = `Categories: ${draft.map((c) => c.name).join(", ")}\n\nSkills (name: description):\n${skillLines}\n\nShape: {"skill name": "category name"}, using only the categories above. Leave out a skill no category fits.`;
+        const a = await assist("json", prompt, { purpose: "category" });
         if (a.status !== "done") throw new Error(a.error || "AI가 답하지 못했어요");
         const text = a.output || "";
         const start = text.indexOf("{");

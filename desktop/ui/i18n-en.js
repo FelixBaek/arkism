@@ -4612,3 +4612,10 @@ Object.assign(window.ArkismI18nEN.strings, {
   "AI 답을 읽지 못했어요. 다시 보내 주세요.": "Couldn't read the AI's answer. Please send again.",
   "없음 — set_model 제안은 하지 마": "none — do not suggest set_model"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "제목없음": "Untitled"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "AI가 제목을 '{0}'(으)로, 부르는 이름을 ${1}로 붙였어요. 설정에서 바꿀 수 있어요.": "AI named it '{0}' and set its call name to ${1}. You can change both in settings."
+});
+Object.assign(window.ArkismI18nEN.strings, {"토큰 줄이기": "Cut tokens", "안전": "Safety"});

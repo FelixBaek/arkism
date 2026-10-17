@@ -22,31 +22,43 @@ import (
 
 func defaultAssistModel() string { return host.Env("ARKISM_ASSIST_MODEL", "sonnet 5.5") }
 
-const assistPersona = "너는 Arkism의 도우미다. 사용자가 저장해 둔 전문가·스킬을 짧고 분명하게 다듬는다."
+const assistPersona = "You are Arkism's assistant. You tidy up the owner's saved agents, skills and workflows, briefly and clearly."
+
+// Every guide is appended to the persona. Backend wording is English; text the owner reads stays Korean.
+const jsonOnly = "Reply with exactly one JSON value and nothing else: no explanation, no code fence. "
 
 var assistGuide = map[string]string{
-	"fill": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이). 키: name(60자 이내), role(한 줄 소개, 200자 이내), category, " +
-		"instructions(번호 목록 규칙, 2000자 이내), file_name(영문 소문자·숫자·하이픈), skills(아래 목록에 있는 이름만), " +
-		"skill_rules([{field: category|name, value}]), tools(MCP 서버 이름). 모르면 그 키를 뺀다.",
-	"polish":    "아래 글을 같은 뜻으로 더 짧고 분명하게 고친다. 고친 글만 쓴다.",
-	"recommend": "답은 JSON 배열 하나만 쓴다: [{name, role, why}] 3개. why는 어떤 요청이 많았는지 한 줄.",
-	"classify":  "답은 카테고리 이름 하나만 쓴다. 맞는 것이 없으면 빈 줄을 쓴다.",
-	"explain":   "쉬운 한국어로 짧게 답한다. 답만 쓴다.",
-	"review": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이): {\"suggestions\":[...]}. 그래프에 실제로 있는 노드 id만 쓴다. 고칠 것이 없으면 빈 배열. " + crewCatalog,
-	"build": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이). 아직 무엇을 만들지 모르면 {\"ask\":\"짧은 질문 하나\"}. 충분히 알면 " +
-		"{\"name\",\"role\",\"graph\":{\"nodes\":[{id,type,title,config}],\"edges\":[{from,to,port}]}}. config 값은 모두 문자열. 시작은 start 노드 하나, 끝은 end. 사용자 저장소·채널 이름은 들은 그대로 쓴다. " +
-		"if로 판정되는 칸은 code, 판단이 필요한 칸만 ai. " + crewCatalog,
-	"title": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이): {\"name\":\"30자 이내 한국어 제목\",\"role\":\"한 줄 설명\"}.",
-	"draft":     "SKILL.md 전체만 쓴다(설명·코드 블록 표시 없이). 맨 위는 --- 로 감싼 name·description, 그 아래 번호 목록 단계 5개 이하.",
-	"suggest": "답은 JSON 배열 하나만 쓴다: [{name(영문 소문자·숫자·하이픈), title(한국어 한 줄), why(어떤 요청이 몇 번 나왔는지 한 줄), " +
-		"examples(사용자 요청 문장 2개), skill_md(SKILL.md 전체)}] 최대 3개. 이미 있는 스킬과 겹치면 빼고, 근거가 약하면 빈 배열을 쓴다.",
+	"fill": jsonOnly + "An object with keys: name (<= 60 chars), role (one-line intro, <= 200 chars), category, " +
+		"instructions (numbered rules, <= 2000 chars), file_name (lowercase letters, digits, hyphens), skills (only names from the list given), " +
+		"skill_rules ([{field: category|name, value}]), tools (MCP server names). Leave out any key you are unsure of. Write values in Korean unless they are identifiers.",
+	"polish":    "Rewrite the text below with the same meaning, shorter and clearer, in the same language. Output only the rewritten text.",
+	"recommend": jsonOnly + "An array of exactly 3 objects [{name, role, why}]; why is one Korean line on which requests were frequent.",
+	"classify":  "Output only one category name from the list given. If none fits, output an empty line.",
+	"explain":   "Answer in plain, short Korean. Output only the answer.",
+	"json":      jsonOnly + "Use exactly the shape the request describes. Keep values in Korean unless the request asks otherwise.",
+	"review": jsonOnly + "An object {\"suggestions\":[...]} in the shape the request describes. Use only node ids that exist in the graph; " +
+		"suggest nothing rather than something weak (an empty array is fine). Titles and bodies in plain Korean. " + crewCatalog,
+	"build": jsonOnly + "If you do not yet know what to build, {\"ask\":\"one short Korean question\"}. Once you know enough, " +
+		"{\"name\",\"role\",\"graph\":{\"nodes\":[{id,type,title,config}],\"edges\":[{from,to,port}]}} with Korean name, role and titles. " +
+		"Every config value is a string. Exactly one start node and an end node. Use repository and channel names exactly as the user gave them. " +
+		"Steps decidable by an if go in code nodes; only steps that need judgement use ai. " + crewCatalog,
+	"title": jsonOnly + "{\"name\":\"Korean title, <= 30 chars\",\"role\":\"one Korean line on what it does\"}.",
+	"draft": "Output the whole SKILL.md only (no explanation, no code fence): front matter between --- lines with name and description, " +
+		"then at most 5 numbered steps. Write the body in Korean unless the source skills are in English.",
+	"suggest": jsonOnly + "An array of at most 3 objects [{name (lowercase letters, digits, hyphens), title (one Korean line), why (one Korean line: which request came up how often), " +
+		"examples (2 user request sentences), skill_md (the whole SKILL.md)}]. Skip anything overlapping an existing skill; if the evidence is weak, return [].",
 }
 
 // serverModelID is the model name the server stores (memory.crewModelRe); anything else gets the whole result refused.
 var serverModelID = regexp.MustCompile(`^[a-zA-Z0-9._ -]{1,80}$`)
 
 // crewCatalog tells the AI which nodes and settings the workflow engine (internal/crewrun) understands.
-const crewCatalog = "노드 종류와 config 키: start·schedule·webhook(시작), ai(prompt, model, instructions, skills, persona, effort, retries, timeout), ai_once(prompt, model), code(code, lang, access=read|write, timeout, 나가는 선 port pass|fail 또는 없음), http(method, url, headers, body), github(task, repo_dir), approval(question, 나가는 선 port approve|reject), condition(expr: in.x == 1 같은 식, 나가는 선 port yes|no), merge, loop(key, max_workers), wait(duration), notify(channel=telegram|slack|email, to, message, subject), subflow(workflow), n8n(url), end. 바로 앞 단계 결과는 {{input}}으로 쓴다(키 이름을 지어내지 않는다). model은 비워 두면 기본 모델을 쓴다. 일정·웹훅은 설정에서 따로 켜므로 그래프 시작은 start로 한다. "
+const crewCatalog = "Node types and their config keys: start, schedule, webhook (entry points); ai (prompt, model, instructions, skills, persona, effort, retries, timeout); " +
+	"ai_once (prompt, model); code (code, lang, access=read|write, timeout; outgoing port pass|fail or none); http (method, url, headers, body); github (task, repo_dir); " +
+	"approval (question; outgoing port approve|reject); condition (expr such as in.x == 1; outgoing port yes|no); merge; loop (key, max_workers); wait (duration); " +
+	"notify (channel=telegram|slack|email, to, message, subject); subflow (workflow); n8n (url); end. " +
+	"The previous step's result is {{input}}; never invent other keys. Leave model empty to use the default model. " +
+	"Schedules and webhooks are switched on in settings, so a graph starts with start. "
 
 // Where installSkill writes a new SKILL.md, per agent (the shared ~/.agents/skills serves Codex and Gemini CLI).
 const sharedSkillsDir = ".agents/skills"

@@ -535,7 +535,7 @@
     notice("AI가 최근 기억과 후보를 보고 새 스킬을 찾는 중이에요…");
     const d = state.data;
     const lines = [...d.candidates, ...d.memories].filter((m) => ["procedural", "lesson", "decision"].includes(m.kind) || d.candidates.includes(m)).slice(0, 80).map((m) => `- ${(m.text || "").slice(0, 160)}`).join("\n");
-    const prompt = `이미 있는 스킬: ${d.skills.map((sk) => sk.name).join(", ").slice(0, 4000)}\n\n최근 기억과 기억 후보(사용자가 반복해서 시킨 일의 흔적):\n${lines || "(없음)"}`;
+    const prompt = `Existing skills: ${d.skills.map((sk) => sk.name).join(", ").slice(0, 4000)}\n\nRecent memories and memory candidates (traces of work the user asked for again and again):\n${lines || "(none)"}`;
     try {
       const a = await crew.assist("suggest", prompt, { purpose: "skill" });
       if (a.status !== "done") throw new Error(crew.assistError(a));
@@ -776,7 +776,7 @@
       try {
         const drop = keep === p.a ? p.b : p.a;
         // the server puts each whole SKILL.md in place of {{SKILL.md:path}}, so steps, limits and scripts survive the merge.
-        const a = await crew.assist("draft", `두 스킬을 하나로 합친 SKILL.md를 써 줘. 이름은 ${keep.name}. 두 스킬의 단계·제약·스크립트를 빠짐없이 살려.\n\n===== ${keep.name}/SKILL.md =====\n{{SKILL.md:${keep.source_path}}}\n\n===== ${drop.name}/SKILL.md =====\n{{SKILL.md:${drop.source_path}}}`, { purpose: "skill" });
+        const a = await crew.assist("draft", `Write one SKILL.md that merges the two skills below. Its name is ${keep.name}. Keep every step, constraint and script from both.\n\n===== ${keep.name}/SKILL.md =====\n{{SKILL.md:${keep.source_path}}}\n\n===== ${drop.name}/SKILL.md =====\n{{SKILL.md:${drop.source_path}}}`, { purpose: "skill" });
         if (a.status !== "done") throw new Error(crew.assistError(a));
         const ta = el("textarea", "");
         ta.rows = 12;
@@ -2087,7 +2087,7 @@
       aiBtn.disabled = true;
       explain.replaceChildren(el("p", "dim", "AI가 쉬운 말로 풀어 쓰는 중이에요…"));
       try {
-        const text = await crew.explain(`스킬 이름: ${sk.name}\n설명: ${sk.description || ""}\n\n이 스킬이 무엇을 언제 하는지 쉬운 한국어 두세 문장으로 설명해 줘.`);
+        const text = await crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n\nExplain in two or three plain Korean sentences what this skill does and when to use it.`);
         explain.replaceChildren(Object.assign(el("div", "quote"), { textContent: text }));
       } catch (e) { explain.replaceChildren(el("p", "warn-text", e.message)); } finally { aiBtn.disabled = false; }
     });
@@ -2846,13 +2846,13 @@
     autoNote("AI가 이름을 정하는 중이에요…");
     const v = (id) => $(id).value.trim();
     const known = [...new Set(state.data.prompts.flatMap((x) => x.image_prompt.tags || []))].slice(0, 60);
-    const ask = `이미지·슬라이드 생성 프롬프트를 라이브러리에 저장한다. 아래 내용을 읽고 이름을 정하고, 비어 있는 칸만 채운다.\n`
-      + `답은 JSON 객체 하나만: {"title": "내용이 드러나는 한국어 이름 30자 이내", "tags": ["카테고리 1~3개"], "negative": "프롬프트가 피하라고 한 것을 영어 쉼표 목록으로, 없으면 빈 문자열", "size": "프롬프트에 크기·비율이 있으면 1024×1536 꼴, 없으면 빈 문자열"}\n`
-      + `카테고리는 가능하면 기존 것 중에서: ${known.join(", ") || "(없음)"}\n\n`
-      + `종류: ${v("#p-kind")}\n모델: ${v("#p-engine")}\n카테고리: ${v("#p-tags") || "(비어 있음)"}\n제외할 것: ${v("#p-negative") || "(비어 있음)"}\n크기: ${v("#p-size") || "(비어 있음)"}\n\n프롬프트:\n${text.slice(0, 6000)}`;
+    const ask = `An image or slide generation prompt is being saved to a library. Read it, name it, and fill only the empty fields.\n`
+      + `Shape: {"title": "Korean name that shows the content, <= 30 chars", "tags": ["1-3 categories"], "negative": "what the prompt says to avoid, as an English comma list, or empty", "size": "a size or ratio given in the prompt as 1024×1536, or empty"}\n`
+      + `Prefer existing categories: ${known.join(", ") || "(none)"}\n\n`
+      + `Kind: ${v("#p-kind")}\nModel: ${v("#p-engine")}\nCategories: ${v("#p-tags") || "(empty)"}\nAvoid: ${v("#p-negative") || "(empty)"}\nSize: ${v("#p-size") || "(empty)"}\n\nPrompt:\n${text.slice(0, 6000)}`;
     try {
       const [a, size] = await Promise.all([
-        crew.assist("explain", ask, { persona: { crew: { instructions: "너는 이미지 프롬프트 라이브러리 정리 도우미다. 프롬프트를 읽고 저장 칸만 채운다." } } }),
+        crew.assist("json", ask, { persona: { crew: { instructions: "You keep an image prompt library tidy. Read the prompt and fill only the fields to save." } } }),
         firstImage && empty("#p-size") ? imageSize(firstImage) : ""
       ]);
       if (seq !== nameSeq || !promptDialog.open) return; // the dialog was closed or reopened meanwhile

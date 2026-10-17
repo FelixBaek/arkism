@@ -704,8 +704,8 @@ window.ArkismCrew = (ctx) => {
       const wait = el("p", "dim", "AI가 생각하는 중…");
       log.append(wait);
       try {
-        const prompt = `사용자와 나눈 대화로 Arkism 워크플로우를 만든다. 꼭 필요한 것(무엇을 받아서·무엇을 하고·결과를 어디로)이 빠졌을 때만 질문하고, 질문은 최대 3번. 그 뒤엔 합리적으로 정해서 만든다.
-${talk.map(([w, t]) => `${w}: ${t}`).join("\n")}`;
+        const prompt = `Build an Arkism workflow from this conversation with the user. Ask only when something essential is missing (what it takes in, what it does, where the result goes), at most 3 questions in total; after that decide sensibly and build it.
+${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}`;
         const a = await kit.assist("build", prompt, { purpose: "workflow" });
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output);
@@ -740,17 +740,18 @@ ${talk.map(([w, t]) => `${w}: ${t}`).join("\n")}`;
     const steps = (rec.crew.graph?.nodes || []).filter((n) => !["start", "end", "schedule", "webhook"].includes(n.type));
     if (rec.crew.name !== UNTITLED || steps.length < 2) return;
     try {
-      const a = await kit.assist("title", `이 워크플로우의 제목과 한 줄 설명을 지어 줘.\n단계: ${JSON.stringify(steps.map(({ type, title, config }) => ({ type, title, config }))).slice(0, 6000)}`, { purpose: "workflow" });
+      const a = await kit.assist("title", `Give this workflow a title and a one-line description.\nSteps: ${JSON.stringify(steps.map(({ type, title, config }) => ({ type, title, config }))).slice(0, 6000)}`, { purpose: "workflow" });
       if (a.status !== "done") return;
       const j = kit.parseJSON(a.output);
       const name = String(j?.name || "").trim().slice(0, 60);
       if (!name || name === UNTITLED) return;
       const cur = byId(rec.id) || rec;
       if (cur.crew.name !== UNTITLED) return; // the user named it meanwhile
-      const saved = await save(cur, { ...cur.crew, name, role: cur.crew.role || String(j.role || "").slice(0, 200) });
+      const handle = cur.crew.handle.startsWith("제목없음") ? freeHandle(name) : cur.crew.handle;
+      const saved = await save(cur, { ...cur.crew, name, handle, role: cur.crew.role || String(j.role || "").slice(0, 200) });
       await reload();
       if (ed.rec?.id === saved.id) { ed.rec = byId(saved.id) || saved; if (state.view === "graph") render(false); }
-      notice(`AI가 제목을 '${name}'(으)로 붙였어요. 설정에서 바꿀 수 있어요.`);
+      notice(`AI가 제목을 '${name}'(으)로, 부르는 이름을 $${handle}로 붙였어요. 설정에서 바꿀 수 있어요.`);
     } catch { /* naming is best effort */ }
   }
 
@@ -1118,7 +1119,9 @@ ${talk.map(([w, t]) => `${w}: ${t}`).join("\n")}`;
     const cats = el("datalist");
     cats.id = "crew-cats";
     categories(workflows()).forEach(([n]) => { const o = el("option"); o.value = n; cats.append(o); });
-    name.addEventListener("input", () => { if (!rec && !handle.dataset.touched) handle.value = name.value.replace(/\s+/g, "").slice(0, 40); cover.refresh(); });
+    // $이름 follows the name while it was still derived from it (or untitled), also when editing a saved workflow.
+    const follows = !rec || c.handle === c.name.replace(/\s+/g, "").slice(0, 40) || c.handle.startsWith("제목없음");
+    name.addEventListener("input", () => { if (follows && !handle.dataset.touched) handle.value = name.value.replace(/\s+/g, "").slice(0, 40); cover.refresh(); });
     handle.addEventListener("input", () => { handle.dataset.touched = "1"; handle.value = handle.value.replace(/^\$/, ""); cover.refresh(); });
     role.addEventListener("input", () => cover.refresh());
     category.addEventListener("input", () => cover.refresh());
@@ -2055,7 +2058,7 @@ ${talk.map(([w, t]) => `${w}: ${t}`).join("\n")}`;
       const card = el("div", "wf-suggest");
       card.append(el("strong", "", s.title), el("p", "", s.body));
       const row = el("div", "wf-suggest-actions");
-      row.append(el("span", "wf-tag", s.tag || "제안"));
+      row.append(el("span", "wf-tag", { tokens: "토큰 줄이기", order: "순서", stop: "멈추는 조건", safety: "안전" }[s.tag] || s.tag || "제안"));
       const dismiss = button("무시", "ghost small", null, () => { ed.suggestions = ed.suggestions.filter((x) => x !== s); render(false); });
       row.append(dismiss);
       if (s.action && canApply(s.action) && fresh(s)) row.append(button(applyLabel(s.action), "small", "check", () => { applyAction(s.action); ed.suggestions = (ed.suggestions || []).filter((x) => x !== s); render(false); notice("적용했어요. 저장하기 전까지는 되돌리기로 취소할 수 있어요."); }));
@@ -2074,12 +2077,12 @@ ${talk.map(([w, t]) => `${w}: ${t}`).join("\n")}`;
     // The graph as the AI reads it, taken from the live node objects (so a node deleted and re-added under the
     // same id while it thinks counts as a different node): edits made meanwhile make its suggestions stale.
     const asked = { nodes: Object.fromEntries(ed.graph.nodes.map((n) => [n.id, nodePrint(n)])), edges: structuredClone(ed.graph.edges) };
-    const prompt = `아래 워크플로우 그래프를 검토해 개선안을 최대 4개 줘. 원칙: if 문으로 판정되는 칸은 코드 노드(토큰 0)로, 판단이 필요한 칸만 AI로. 싼 검사를 먼저. 되돌아가는 선은 꼭 필요한 곳에만, 횟수 제한. 병렬 갈래는 서로 필요한 게 없어야 해. 되돌릴 수 없는 동작 앞에는 사람 확인.
-JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 한국어 두 문장","tag":"토큰 줄이기|순서|멈추는 조건|안전","action":null 또는 {"type":"set_model","node":"id","model":"..."} 또는 {"type":"set_edge_max","from":"id","to":"id","max":2} 또는 {"type":"set_access","node":"id","access":"read|write"} 또는 {"type":"insert_before","node":"id","new":{"type":"code|ai_once|approval","title":"...","config":{}}}}]}
-워크플로우: ${ed.rec.crew.name} ($${ed.rec.crew.handle}) — ${ed.rec.crew.role || ""}
-기본 워커 모델: ${ed.rec.crew.model || "없음"}
-set_model에 쓸 수 있는 모델(이 목록에서만): ${[...new Set(models?.enabledModels() || [])].join(", ") || "없음 — set_model 제안은 하지 마"}
-그래프: ${JSON.stringify(g).slice(0, 14000)}`;
+    const prompt = `Review the workflow graph below and give at most 4 improvements. Principles: steps an if can decide become code nodes (0 tokens); only steps that need judgement use AI. Cheap checks first. Back edges only where truly needed, with a count limit. Parallel branches must not need each other. A human check before any irreversible action.
+Shape: {"suggestions":[{"title":"short Korean title","body":"two plain Korean sentences","tag":"tokens|order|stop|safety","action":null or {"type":"set_model","node":"id","model":"..."} or {"type":"set_edge_max","from":"id","to":"id","max":2} or {"type":"set_access","node":"id","access":"read|write"} or {"type":"insert_before","node":"id","new":{"type":"code|ai_once|approval","title":"...","config":{}}}}]}
+Workflow: ${ed.rec.crew.name} ($${ed.rec.crew.handle}) — ${ed.rec.crew.role || ""}
+Default worker model: ${ed.rec.crew.model || "none"}
+Models allowed for set_model (only these): ${[...new Set(models?.enabledModels() || [])].join(", ") || "none — do not suggest set_model"}
+Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     try {
       const a = await kit.assist("review", prompt, { purpose: "workflow" });
       if (a.status !== "done") throw new Error(kit.assistError(a));
@@ -2470,8 +2473,8 @@ set_model에 쓸 수 있는 모델(이 목록에서만): ${[...new Set(models?.e
       ai.disabled = true;
       notice("Opus 5.5가 페르소나를 마무리하는 중이에요…");
       try {
-        const prompt = `작성 중인 페르소나를 완성한다. 쓴 사람의 의도와 이미 쓴 문장은 살리고, 빈 칸은 채우고, 지시는 역할·말투·꼭 지킬 것·하지 말 것이 드러나게 "너는 ○○다."로 시작하는 짧은 번호 목록으로 정리한다. 답의 키는 name, role, instructions만 쓴다.\n\n이름: ${d.name || "(비어 있음)"}\n한 줄 설명: ${d.role || "(비어 있음)"}\n지시:\n${d.instructions || "(비어 있음)"}`;
-        const a = await kit.assist("fill", prompt, { model: "opus 5.5", persona: { crew: { instructions: "너는 AI 에이전트 페르소나 작가다. 짧고 분명한 한국어로 쓴다." } } });
+        const prompt = `Finish this persona draft. Keep the author's intent and the sentences already written, fill the empty fields, and turn the instructions into a short numbered list in Korean, opening with who the agent is ("You are …" in Korean), that makes the role, tone, must-dos and must-nots clear. Use only the keys name, role, instructions.\n\nName: ${d.name || "(empty)"}\nOne-line description: ${d.role || "(empty)"}\nInstructions:\n${d.instructions || "(empty)"}`;
+        const a = await kit.assist("fill", prompt, { model: "opus 5.5", persona: { crew: { instructions: "You write personas for AI agents, in short, clear Korean." } } });
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const got = kit.parseJSON(a.output || "") || {};
         if (!got.instructions && !got.name) throw new Error("AI 답을 읽지 못했어요. 다시 눌러 주세요.");
@@ -2731,8 +2734,8 @@ set_model에 쓸 수 있는 모델(이 목록에서만): ${[...new Set(models?.e
     try {
       const skills = (state.data.skills || []).slice(0, 200).map((s) => s.name).join(", ");
       const tools = (ctx.toolServers?.() || []).map((s) => s.name).join(", ");
-      const prompt = `작업 에이전트 정의를 만든다. 요청: ${ask}\n\n지시는 ## 역할, ## 말투, ## 하지 말 것 제목 아래 짧게 쓴다(4000자 이내).\n쓸 수 있는 스킬: ${skills || "(없음)"}\nMCP 서버: ${tools || "(없음)"}`;
-      const a = await kit.assist("fill", prompt, { persona: { crew: { instructions: "너는 AI 작업 에이전트 설계자다. 짧고 분명한 한국어로 쓴다." } } });
+      const prompt = `Define a work agent. Request: ${ask}\n\nWrite the instructions in Korean under three Markdown headings in Korean (role, tone, things not to do), briefly (<= 4000 chars).\nSkills available: ${skills || "(none)"}\nMCP servers: ${tools || "(none)"}`;
+      const a = await kit.assist("fill", prompt, { persona: { crew: { instructions: "You design AI work agents and write in short, clear Korean." } } });
       if (a.status !== "done") throw new Error(kit.assistError(a));
       const got = kit.parseJSON(a.output || "") || {};
       if (!got.name && !got.instructions) throw new Error("AI 답을 읽지 못했어요. 다시 눌러 주세요.");
