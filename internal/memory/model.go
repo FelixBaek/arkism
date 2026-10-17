@@ -96,7 +96,11 @@ type ProviderCost struct {
 // Record keeps original text independent of replaceable embeddings. References
 // bind evidence to a specific immutable content/version revision.
 type Record struct {
-	MemoryContext     *MemoryContext       `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
+	MemoryContext *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
+	// Reach (ST-824): where a memory is recalled; "" reads as memoryReach's default. See memory_reach.go.
+	Reach             string               `json:"reach,omitempty" bson:"reach,omitempty"`
+	ReachProject      string               `json:"reach_project,omitempty" bson:"reach_project,omitempty"`
+	ReachOrigin       string               `json:"-" bson:"reach_origin,omitempty"`
 	ModelBudget       *ModelBudgetState    `json:"-" bson:"model_budget,omitempty"`
 	SkillBundle       *SkillBundle         `json:"skill_bundle,omitempty" bson:"skill_bundle,omitempty"`
 	SkillBundleSHA256 string               `json:"skill_bundle_sha256,omitempty" bson:"skill_bundle_sha256,omitempty"`
@@ -135,54 +139,54 @@ type Record struct {
 	// serialization; receipts carry request hash/id/revision only.
 	WorkCheckpoint *WorkCheckpoint `json:"-" bson:"work_checkpoint,omitempty"`
 
-	RunCallFence       int64            `json:"-" bson:"run_call_fence,omitempty"`
-	Run                *RunDetails      `json:"run,omitempty" bson:"run,omitempty"`
-	ToolCall           *ToolCall        `json:"tool_call,omitempty" bson:"tool_call,omitempty"`
-	QuotaUsed          int              `json:"-" bson:"quota_used,omitempty"`
-	Usage              *ContextUsage    `json:"usage,omitempty" bson:"usage,omitempty"`
-	Cost               *ProviderCost    `json:"cost,omitempty" bson:"cost,omitempty"`
-	Proposal           *Ref             `json:"proposal,omitempty" bson:"proposal,omitempty"`
-	ConflictID         string           `json:"conflict_id,omitempty" bson:"conflict_id,omitempty"`
-	Conflict           *ConflictDetails `json:"conflict,omitempty" bson:"conflict,omitempty"`
-	SupersededBy       *Ref             `json:"superseded_by,omitempty" bson:"superseded_by,omitempty"`
-	Supersedes         []Ref            `json:"supersedes,omitempty" bson:"supersedes,omitempty"`
-	Review             *ReviewDecision  `json:"review,omitempty" bson:"review,omitempty"`
+	RunCallFence       int64                    `json:"-" bson:"run_call_fence,omitempty"`
+	Run                *RunDetails              `json:"run,omitempty" bson:"run,omitempty"`
+	ToolCall           *ToolCall                `json:"tool_call,omitempty" bson:"tool_call,omitempty"`
+	QuotaUsed          int                      `json:"-" bson:"quota_used,omitempty"`
+	Usage              *ContextUsage            `json:"usage,omitempty" bson:"usage,omitempty"`
+	Cost               *ProviderCost            `json:"cost,omitempty" bson:"cost,omitempty"`
+	Proposal           *Ref                     `json:"proposal,omitempty" bson:"proposal,omitempty"`
+	ConflictID         string                   `json:"conflict_id,omitempty" bson:"conflict_id,omitempty"`
+	Conflict           *ConflictDetails         `json:"conflict,omitempty" bson:"conflict,omitempty"`
+	SupersededBy       *Ref                     `json:"superseded_by,omitempty" bson:"superseded_by,omitempty"`
+	Supersedes         []Ref                    `json:"supersedes,omitempty" bson:"supersedes,omitempty"`
+	Review             *ReviewDecision          `json:"review,omitempty" bson:"review,omitempty"`
 	Classification     *CandidateClassification `json:"classification,omitempty" bson:"classification,omitempty"`
-	OriginProduct      string           `json:"origin_product,omitempty" bson:"origin_product,omitempty"`
-	SourceRef          string           `json:"source_ref,omitempty" bson:"source_ref,omitempty"`
-	SourceEventID      string           `json:"source_event_id,omitempty" bson:"source_event_id,omitempty"`
-	TraceID            string           `json:"trace_id,omitempty" bson:"trace_id,omitempty"`
-	VerificationStatus string           `json:"verification_status,omitempty" bson:"verification_status,omitempty"`
-	CollectedAt        *time.Time       `json:"collected_at,omitempty" bson:"collected_at,omitempty"`
-	Generator          *Generator       `json:"generator,omitempty" bson:"generator,omitempty"`
-	CreatedByType      string           `json:"created_by_type,omitempty" bson:"created_by_type,omitempty"`
-	ContentHash        string           `json:"content_hash,omitempty" bson:"content_hash,omitempty"`
-	Duplicate          bool             `json:"duplicate" bson:"duplicate,omitempty"`
-	RequestHash        string           `json:"-" bson:"request_hash,omitempty"`
-	Sensitivity        string           `json:"sensitivity,omitempty" bson:"sensitivity,omitempty"`
-	Inspection         *Inspection      `json:"inspection,omitempty" bson:"inspection,omitempty"`
-	Reflection         *Reflection      `json:"reflection,omitempty" bson:"reflection,omitempty"`
-	Analysis           *SkillAnalysis   `json:"analysis,omitempty" bson:"analysis,omitempty"`
-	ID                 string           `json:"id" bson:"_id"`
-	Scope              Scope            `json:"scope" bson:"scope"`
-	Kind               string           `json:"kind" bson:"kind"`
-	Status             string           `json:"status" bson:"status"`
-	Revision           int64            `json:"revision" bson:"revision"`
-	Text               string           `json:"text" bson:"text"`
-	Summary            string           `json:"summary,omitempty" bson:"summary"`
-	Keywords           []string         `json:"keywords,omitempty" bson:"keywords"`
-	KeywordsLower      []string         `json:"-" bson:"keywords_lower"`
-	Sources            []SourceRef      `json:"sources" bson:"sources"`
-	Relations          []Ref            `json:"relations,omitempty" bson:"relations"`
-	CreatedAt          time.Time        `json:"created_at" bson:"created_at"`
-	UpdatedAt          time.Time        `json:"updated_at" bson:"updated_at"`
-	EffectiveAt        *time.Time       `json:"effective_at,omitempty" bson:"effective_at,omitempty"`
-	ExpiresAt          *time.Time       `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
-	CreatedBy          string           `json:"created_by" bson:"created_by"`
-	Trust              float64          `json:"trust" bson:"trust"`
-	SkillID            string           `json:"skill_id,omitempty" bson:"skill_id,omitempty"`
-	ActiveVersion      string           `json:"active_version,omitempty" bson:"active_version,omitempty"`
-	BaseVersion        string           `json:"base_version,omitempty" bson:"base_version,omitempty"`
+	OriginProduct      string                   `json:"origin_product,omitempty" bson:"origin_product,omitempty"`
+	SourceRef          string                   `json:"source_ref,omitempty" bson:"source_ref,omitempty"`
+	SourceEventID      string                   `json:"source_event_id,omitempty" bson:"source_event_id,omitempty"`
+	TraceID            string                   `json:"trace_id,omitempty" bson:"trace_id,omitempty"`
+	VerificationStatus string                   `json:"verification_status,omitempty" bson:"verification_status,omitempty"`
+	CollectedAt        *time.Time               `json:"collected_at,omitempty" bson:"collected_at,omitempty"`
+	Generator          *Generator               `json:"generator,omitempty" bson:"generator,omitempty"`
+	CreatedByType      string                   `json:"created_by_type,omitempty" bson:"created_by_type,omitempty"`
+	ContentHash        string                   `json:"content_hash,omitempty" bson:"content_hash,omitempty"`
+	Duplicate          bool                     `json:"duplicate" bson:"duplicate,omitempty"`
+	RequestHash        string                   `json:"-" bson:"request_hash,omitempty"`
+	Sensitivity        string                   `json:"sensitivity,omitempty" bson:"sensitivity,omitempty"`
+	Inspection         *Inspection              `json:"inspection,omitempty" bson:"inspection,omitempty"`
+	Reflection         *Reflection              `json:"reflection,omitempty" bson:"reflection,omitempty"`
+	Analysis           *SkillAnalysis           `json:"analysis,omitempty" bson:"analysis,omitempty"`
+	ID                 string                   `json:"id" bson:"_id"`
+	Scope              Scope                    `json:"scope" bson:"scope"`
+	Kind               string                   `json:"kind" bson:"kind"`
+	Status             string                   `json:"status" bson:"status"`
+	Revision           int64                    `json:"revision" bson:"revision"`
+	Text               string                   `json:"text" bson:"text"`
+	Summary            string                   `json:"summary,omitempty" bson:"summary"`
+	Keywords           []string                 `json:"keywords,omitempty" bson:"keywords"`
+	KeywordsLower      []string                 `json:"-" bson:"keywords_lower"`
+	Sources            []SourceRef              `json:"sources" bson:"sources"`
+	Relations          []Ref                    `json:"relations,omitempty" bson:"relations"`
+	CreatedAt          time.Time                `json:"created_at" bson:"created_at"`
+	UpdatedAt          time.Time                `json:"updated_at" bson:"updated_at"`
+	EffectiveAt        *time.Time               `json:"effective_at,omitempty" bson:"effective_at,omitempty"`
+	ExpiresAt          *time.Time               `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
+	CreatedBy          string                   `json:"created_by" bson:"created_by"`
+	Trust              float64                  `json:"trust" bson:"trust"`
+	SkillID            string                   `json:"skill_id,omitempty" bson:"skill_id,omitempty"`
+	ActiveVersion      string                   `json:"active_version,omitempty" bson:"active_version,omitempty"`
+	BaseVersion        string                   `json:"base_version,omitempty" bson:"base_version,omitempty"`
 	// Skill hub: ordered version IDs on the parent skill (index+1 is the
 	// public version number), import origin and runtime compatibility on a
 	// version. Content stays immutable; only lifecycle status moves.
@@ -319,6 +323,8 @@ type MeteredEmbedder interface {
 }
 type Hit struct {
 	MemoryContext      *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
+	Reach              string         `json:"reach,omitempty" bson:"reach,omitempty"`
+	ReachProject       string         `json:"reach_project,omitempty" bson:"reach_project,omitempty"`
 	ConflictPending    bool           `json:"conflict_pending,omitempty" bson:"conflict_pending,omitempty"`
 	Supersedes         []Ref          `json:"supersedes,omitempty" bson:"supersedes,omitempty"`
 	SupersededBy       *Ref           `json:"superseded_by,omitempty" bson:"superseded_by,omitempty"`

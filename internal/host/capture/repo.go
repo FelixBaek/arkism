@@ -7,14 +7,13 @@ package capture
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
+
+	"github.com/FelixBaek/arkism/internal/host"
 )
 
 // repoTagsOn: only when the receiving Arkism accepts the repo field (the app's built-in one sets it).
 func repoTagsOn() bool { return os.Getenv("ARKISM_REPO_TAGS") == "1" }
-
-var remoteURL = regexp.MustCompile(`(?m)^\s*url\s*=\s*(\S+)\s*$`)
 
 // repoKey is the repository cwd belongs to: owner/name from its origin remote when there is one
 // (so clones on other computers match), otherwise the repository folder's name. "" outside a repository.
@@ -27,7 +26,7 @@ func repoKey(cwd string) string {
 		dotGit := filepath.Join(dir, ".git")
 		if info, err := os.Stat(dotGit); err == nil {
 			if info.IsDir() {
-				if key := remoteKey(filepath.Join(dotGit, "config")); key != "" {
+				if key := host.RemoteKey(filepath.Join(dotGit, "config")); key != "" {
 					return key
 				}
 			}
@@ -39,38 +38,6 @@ func repoKey(cwd string) string {
 		}
 		dir = parent
 	}
-}
-
-// remoteKey reads the origin url of a git config as owner/name.
-func remoteKey(config string) string {
-	raw, err := os.ReadFile(config)
-	if err != nil {
-		return ""
-	}
-	text := string(raw)
-	i := strings.Index(text, `[remote "origin"]`)
-	if i < 0 {
-		return ""
-	}
-	section := text[i:]
-	if j := strings.Index(section[1:], "\n["); j >= 0 {
-		section = section[:j+1]
-	}
-	m := remoteURL.FindStringSubmatch(section)
-	if m == nil {
-		return ""
-	}
-	url := strings.TrimSuffix(strings.TrimRight(m[1], "/"), ".git")
-	url = strings.ReplaceAll(url, ":", "/") // git@github.com:owner/name
-	parts := strings.Split(url, "/")
-	if len(parts) < 2 {
-		return ""
-	}
-	key := strings.ToLower(parts[len(parts)-2] + "/" + parts[len(parts)-1])
-	if len(key) > 128 || strings.TrimSpace(key) != key {
-		return ""
-	}
-	return key
 }
 
 // forRepo drops recalled memories tagged for another repository.

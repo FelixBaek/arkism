@@ -100,6 +100,8 @@ func pgCriteria(criteria SearchCriteria, start int) (string, []any) {
 	if len(criteria.Kinds) > 0 {
 		add("doc->>'kind' = ANY($%d::text[])", criteria.Kinds)
 	}
+	// ST-824: the same rule as reachVisible, so other projects' memories never spend the LIMIT.
+	add("(doc->>'reach' IS DISTINCT FROM 'project' OR ($%[1]d <> '' AND doc->>'reach_project' = $%[1]d))", criteria.ProjectKey)
 	if f := criteria.Filters; f != nil {
 		if len(f.Tags) > 0 {
 			add("doc->'tags' ?| $%d::text[]", f.Tags)

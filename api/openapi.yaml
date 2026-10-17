@@ -4350,6 +4350,111 @@
         }
       }
     },
+    "/v1/memories/{id}/reach": {
+      "post": {
+        "summary": "Change an active memory's reach (ST-824)",
+        "description": "Human transition:memories only; agent and pipeline principals get 403. personal and general forbid reach_project; project requires it. Revision pinned; quarantined or erased memories are 404. Audit records set_reach:memories without content.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryReachInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Not a human principal or not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Missing or outside scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Revision conflict, conflicted or not live",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "200": {
+            "description": "Updated memory",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Record"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/memories/{id}/supersede": {
       "post": {
         "summary": "Replace a decision with a new or existing approved memory",
@@ -7404,6 +7509,16 @@
               "minimum": 1,
               "maximum": 100,
               "default": 20
+            }
+          },
+          {
+            "name": "project_key",
+            "in": "query",
+            "required": false,
+            "description": "ST-824: when present (empty allowed), lists only personal, general and this key's project-reach memories. Absent lists every reach (management screens).",
+            "schema": {
+              "type": "string",
+              "maxLength": 256
             }
           },
           {
@@ -11874,6 +11989,17 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "reach": {
+            "type": "string",
+            "enum": ["personal", "general", "project"],
+            "readOnly": true,
+            "description": "ST-824 memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
+          },
+          "reach_project": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Project key a project-reach memory recalls for (normalized origin owner/name or path:hash). Never a raw path."
+          },
           "conflict_pending": {
             "type": "boolean",
             "description": "This memory participates in an unresolved conflict, including an active member not held back. No opposing content is disclosed."
@@ -12850,6 +12976,11 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "project_key": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "ST-824: caller's project key. Only narrows results inside the Scope; empty or missing returns personal and general memories only, never project-reach ones."
+          },
           "kinds": {
             "type": [
               "array",
@@ -13167,6 +13298,17 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "reach": {
+            "type": "string",
+            "enum": ["personal", "general", "project"],
+            "readOnly": true,
+            "description": "ST-824 memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
+          },
+          "reach_project": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Project key a project-reach memory recalls for (normalized origin owner/name or path:hash). Never a raw path."
+          },
           "skill_bundle": {
             "$ref": "#/components/schemas/SkillBundle",
             "readOnly": true
@@ -14996,6 +15138,33 @@
                 }
               ]
             }
+          }
+        }
+      },
+      "MemoryReachInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "expected_revision",
+          "reach"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reach": {
+            "type": "string",
+            "enum": ["personal", "general", "project"]
+          },
+          "reach_project": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
           }
         }
       },

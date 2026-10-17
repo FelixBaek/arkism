@@ -75,7 +75,7 @@ func TestPromptRecallSkipsEarlierTurnsUnlessRevised(t *testing.T) {
 	hookEnv(t)
 	sessionOutcomeEnv(t)
 	hits := []any{memoryHit("c8b788c964a0350e97d8635111de6824", 2, ""), memoryHit("d9243bd5ef20da4ea2369e120fb20962", 1, "")}
-	search = func(string, int, float64) ([]any, error) { return hits, nil }
+	search = func(string, string, int, float64) ([]any, error) { return hits, nil }
 	turn := func(sid string) string {
 		t.Helper()
 		p, revs, err := promptParts("기억 승인 권한을 다시 설명해 줘", sid, "")

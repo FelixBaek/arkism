@@ -171,7 +171,7 @@ func TestCaptureSearchRetriesShareOneBudgetAndKeepSuccessfulResults(t *testing.T
 	}{{7, 2}, {8, 1}} {
 		clock(c.elapsed)
 		answers(first(), errTimeout)
-		got, err := search("query", 6, 8)
+		got, err := search("query", "", 6, 8)
 		if err != nil || len(got) != 1 || len(calls) != c.calls {
 			t.Fatal(got, err, calls)
 		}
@@ -182,7 +182,7 @@ func TestCaptureSearchRetriesShareOneBudgetAndKeepSuccessfulResults(t *testing.T
 	for _, elapsed := range []float64{7, 8} {
 		clock(elapsed)
 		answers(&host.HTTPError{Code: 503}, map[string]any{"items": []any{}})
-		got, err := search("query", 6, 8)
+		got, err := search("query", "", 6, 8)
 		if elapsed == 8 {
 			if host.HTTPCode(err) != 503 || len(calls) != 1 {
 				t.Fatal(err, calls)
@@ -195,7 +195,7 @@ func TestCaptureSearchRetriesShareOneBudgetAndKeepSuccessfulResults(t *testing.T
 	}
 	clock(1)
 	answers(first(), &host.HTTPError{Code: 403})
-	if _, err := search("query", 6, 8); host.HTTPCode(err) != 403 {
+	if _, err := search("query", "", 6, 8); host.HTTPCode(err) != 403 {
 		t.Fatal(err)
 	}
 }
@@ -648,4 +648,37 @@ func seedTrial(ids []string) error {
 			st.Set(id, host.NowISO())
 		}
 	})
+}
+
+// ST-824: outside a repository the host sends no project_key (older servers reject unknown
+// fields) and still keeps project-reach memories out of the session index.
+func TestNoProjectKeyIsOmittedAndKeepsProjectMemoriesOut(t *testing.T) {
+	capFake(t)
+	t.Setenv("ARKISM_REPO", "")
+	var body map[string]any
+	capPost = func(_ string, payload any, _ time.Duration) (map[string]any, error) {
+		body = payload.(map[string]any)
+		return map[string]any{"hits": []any{}}, nil
+	}
+	if _, err := searchMemories("query", "", 3, 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := body["project_key"]; ok || body == nil {
+		t.Fatal("empty project_key sent", body)
+	}
+	var paths []string
+	capGet = func(path string, _ time.Duration) (map[string]any, error) {
+		paths = append(paths, path)
+		return map[string]any{"items": []any{
+			map[string]any{"id": "g", "kind": "user", "text": "범용 규칙", "status": "active"},
+			map[string]any{"id": "p", "kind": "user", "text": "다른 프로젝트 규칙", "status": "active", "reach": "project", "reach_project": "owner/other"},
+		}}, nil
+	}
+	idx, err := sessionIndex("sid", t.TempDir(), 4000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.Join(paths, " "), "project_key") || strings.Contains(idx.Full, "다른 프로젝트") || !strings.Contains(idx.Full, "범용 규칙") {
+		t.Fatal(paths, idx.Full)
+	}
 }

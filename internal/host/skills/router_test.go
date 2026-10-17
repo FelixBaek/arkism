@@ -127,11 +127,12 @@ func TestRecallAtPreservesUnknownsWithoutUse(t *testing.T) {
 
 func TestRecallRelationLaneAndInvalidAnchors(t *testing.T) {
 	swapRouter(t)
+	t.Setenv("ARKISM_REPO", "owner/repo")
 	ref := `{"collection":"memories","id":"old","revision":3}`
 	calls := fakeRequest(t, `{"items":[]}`)
 	out := structured(t, call(t, "recall", `{"related_to":`+ref+`}`))
 	want := map[string]any{"scope": host.Scope(), "query": "related memory evidence", "modes": []any{"relation"}, "purpose": "answer",
-		"destination": "internal", "limit": 6, "max_chars": 6000, "related_to": j(t, ref)}
+		"destination": "internal", "limit": 6, "max_chars": 6000, "related_to": j(t, ref), "project_key": "owner/repo"}
 	if len(*calls) != 1 || (*calls)[0].path != "/v1/search" || canon(t, (*calls)[0].payload) != canon(t, want) {
 		t.Fatal(*calls)
 	}
@@ -599,5 +600,24 @@ func TestPCClientsLeaveAMarkAndErrorsFlipIt(t *testing.T) {
 	routerMain(nil, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`+"\n"), &out, nil)
 	if _, err := os.Stat(pcLinkDir); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("non-PC client left a mark")
+	}
+}
+
+// ST-824 / TC-SEC-011: recall by id never shows another project's project-reach memory.
+func TestRecallByIDKeepsOtherProjectsOut(t *testing.T) {
+	swapRouter(t)
+	t.Setenv("ARKISM_REPO", "owner/mine")
+	mine := `{"id":"a","kind":"procedural","reach":"project","reach_project":"owner/mine","status":"active","approved_by":"human","text":"Go로 작성","sources":[{"source_id":"s"}]}`
+	other := `{"id":"b","kind":"procedural","reach":"project","reach_project":"owner/other","status":"active","approved_by":"human","text":"Rust로 작성","sources":[{"source_id":"s"}]}`
+	fakeRequest(t, mine, other)
+	out := structured(t, call(t, "recall", `{"ids":["a","b"]}`))
+	got := asList(field(out, "memories"))
+	if len(got) != 1 || !strings.Contains(host.MustDumps(got, host.DumpOpts{Compact: true, NoASCII: true}), `"reach":"project"`) {
+		t.Fatal(got)
+	}
+	t.Setenv("ARKISM_REPO", "")
+	fakeRequest(t, mine)
+	if got := asList(field(structured(t, call(t, "recall", `{"ids":["a"]}`)), "memories")); len(got) != 0 {
+		t.Fatal("empty project key showed a project memory", got)
 	}
 }

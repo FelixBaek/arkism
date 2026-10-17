@@ -104,10 +104,14 @@ func scopeQuery(skipEmpty bool, extra ...string) string {
 // searchMemories recalls memories within one time budget; on an embedder outage it keeps lexical recall.
 var search = searchMemories
 
-func searchMemories(query string, limit int, timeout float64) ([]any, error) {
+// project is host.ProjectKey of the session: the server leaves out other projects' memories.
+func searchMemories(query, project string, limit int, timeout float64) ([]any, error) {
 	deadline := monotonic() + timeout
 	body := map[string]any{"scope": capScope(), "query": head(query, 1000), "modes": []any{"exact", "fts", "vector"},
 		"purpose": "answer", "destination": "internal", "limit": limit, "max_chars": 6000}
+	if project != "" { // older servers reject unknown fields; no key already means personal and general only
+		body["project_key"] = project
+	}
 	res, err := capPost("/v1/search", body, secs(timeout))
 	if err != nil {
 		if host.HTTPCode(err) != 503 {
@@ -471,6 +475,9 @@ func indexLine(item map[string]any) string {
 		text = pyRstrip(head(text, indexText)) + fmt.Sprintf("… (id: %s)", str(item["id"]))
 	}
 	markers := []string{str(item["kind"])}
+	if item["reach"] == "project" {
+		markers = append(markers, "이 프로젝트 전용, 범용보다 우선")
+	}
 	if truthy(item["conflict_pending"]) || truthy(item["conflict_id"]) {
 		markers = append(markers, "충돌 검토 중")
 	}
@@ -528,15 +535,23 @@ func sessionIndex(sid, cwd string, limit int) (indexBlock, error) {
 // sessionIndexSkipping is sessionIndex without the memories in skip (already pinned).
 func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (indexBlock, error) {
 	var items []map[string]any
+	project := host.ProjectKey(cwd)
 	for _, kind := range []string{"user", "procedural"} {
-		res, err := capGet("/v1/memories?"+scopeQuery(false, "status", "active", "kind", kind, "limit", "100"), 8*time.Second)
+		args := []string{"status", "active", "kind", kind, "limit", "100"}
+		if project != "" {
+			args = append(args, "project_key", project)
+		}
+		res, err := capGet("/v1/memories?"+scopeQuery(false, args...), 8*time.Second)
 		if err != nil {
 			return indexBlock{}, err
 		}
 		items = append(items, dicts(listOf(or(res["items"], []any{})))...)
 	}
+	if project == "" { // without project_key the list returns every reach; outside a repository keep project ones out
+		items = keepIf(items, func(i map[string]any) bool { return i["reach"] != "project" })
+	}
 	items = standingOrder(withText(forRepo(items, repoKey(cwd))))
-	related := contractRelated(taskContract(cwd))
+	related := contractRelated(taskContract(cwd), project)
 	if len(skip) > 0 {
 		unpinned := func(i map[string]any) bool { return !skip[strField(i["id"])] }
 		items, related = keepIf(items, unpinned), keepIf(related, unpinned)
@@ -582,7 +597,7 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 }
 
 // standingOrder sorts the standing rules so the char limit cuts the least important: preferences
-// (user) before how-to rules, then oldest first, then id. List rows carry no use or effect score,
+// (user) before how-to rules, this project's rules before general ones (ST-824), then oldest first, then id. List rows carry no use or effect score,
 // and the restate-based utility count reads every transcript and never counts a prohibition kept.
 // Oldest first keeps the rules that lasted, and a new memory joins at the end instead of
 // reshuffling which rules the limit cuts (the server lists by id, a hash). Deterministic, so a
@@ -592,7 +607,10 @@ func standingOrder(items []map[string]any) []map[string]any {
 		if i["kind"] == "user" {
 			return 0
 		}
-		return 1
+		if i["reach"] == "project" {
+			return 1
+		}
+		return 2
 	}
 	created := func(i map[string]any) time.Time {
 		t, _ := time.Parse(time.RFC3339Nano, strField(i["created_at"])) // missing sorts first
@@ -632,11 +650,11 @@ func withText(items []map[string]any) []map[string]any {
 }
 
 // contractRelated is up to 6 memories that match the repo's task contract.
-func contractRelated(contract string) []map[string]any {
+func contractRelated(contract, project string) []map[string]any {
 	if contract == "" {
 		return []map[string]any{}
 	}
-	items, err := search(head(contract, 2000), 6, 8)
+	items, err := search(head(contract, 2000), project, 6, 8)
 	if err != nil { // the standing rules still go in
 		metric(kv("event", "hook_error"), kv("hook", "SessionStart:contract"), kv("error", pyType(err)))
 		return []map[string]any{}
@@ -692,7 +710,7 @@ func promptParts(prompt, sid, cwd string) (part host.Part, revs map[string]int64
 	if host.Len(text) < 8 {
 		return host.Part{}, nil, nil
 	}
-	list, err := search(head(text, 2000), 6, 8)
+	list, err := search(head(text, 2000), host.ProjectKey(cwd), 6, 8)
 	if err != nil {
 		return host.Part{}, nil, err
 	}

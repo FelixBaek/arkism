@@ -355,6 +355,14 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		v, e := s.SetMemoryExpiry(r.Context(), bearer(r), r.PathValue("id"), in)
 		respond(w, v, e)
 	})
+	mux.HandleFunc("POST /v1/memories/{id}/reach", func(w http.ResponseWriter, r *http.Request) {
+		var in MemoryReachInput
+		if !decode(w, r, &in) {
+			return
+		}
+		v, e := s.SetMemoryReach(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, v, e)
+	})
 	mux.HandleFunc("GET /v1/maintenance_proposals", func(w http.ResponseWriter, r *http.Request) {
 		v, e := s.ListMaintenance(r.Context(), bearer(r), scopeQuery(r), r.URL.Query().Get("status"))
 		respond(w, v, e)
