@@ -156,4 +156,16 @@ func TestHookRecallAppliesSharedBudget(t *testing.T) {
 	if p, _, err := promptParts("기억 승인 권한을 다시 설명해 줘", "s2", ""); err != nil || strings.Count(p.Full, "\n- [") != 3 {
 		t.Fatal(err, p.Full)
 	}
+	// The kind cap runs on the injected list: hits the stable block already shows use no slot.
+	ids := []string{}
+	for _, h := range procedural[:3] {
+		ids = append(ids, h.(map[string]any)["id"].(string))
+	}
+	if _, err := sessionStore().SaveStable("s3", host.StableBlock{IDs: ids}); err != nil {
+		t.Fatal(err)
+	}
+	p, revs, err := promptParts("기억 승인 권한을 다시 설명해 줘", "s3", "")
+	if _, fourth := revs[procedural[3].(map[string]any)["id"].(string)]; err != nil || strings.Count(p.Full, "\n- [") != 1 || len(revs) != 1 || !fourth {
+		t.Fatal(err, p.Full, revs)
+	}
 }

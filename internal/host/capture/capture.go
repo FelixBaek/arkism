@@ -104,18 +104,34 @@ func scopeQuery(skipEmpty bool, extra ...string) string {
 // searchMemories recalls memories within one time budget; on an embedder outage it keeps lexical recall.
 var search = searchMemories
 
-// recallSearch is search with the score floor and kind budget the MCP recall tool also uses (ST-815).
-// Hooks inject through it; the extractor's duplicate check keeps the raw search.
+// recallSearch is search with the score floor the MCP recall tool also uses (ST-815); hooks then
+// capBudget the list they actually inject. The extractor's duplicate check keeps the raw search.
 func recallSearch(query, project string, limit int, timeout float64) ([]any, error) {
 	items, err := search(query, project, limit, timeout)
 	if err != nil {
 		return nil, err
 	}
-	kept, lowScore, overBudget := host.LoadRecallBudget().Apply(items)
-	if lowScore+overBudget > 0 { // counts only, never text or query
-		metric(kv("event", "recall_budget"), kv("below_score", lowScore), kv("over_budget", overBudget), kv("kept", len(kept)))
-	}
+	kept, low := host.LoadRecallBudget().Floor(items)
+	budgetMetric("below_score", low)
 	return kept, nil
+}
+
+// capBudget applies the per-kind budget to the final injected list (ST-815).
+func capBudget(items []map[string]any) []map[string]any {
+	list := make([]any, len(items))
+	for i, m := range items {
+		list[i] = m
+	}
+	kept, over := host.LoadRecallBudget().Cap(list)
+	budgetMetric("over_budget", over)
+	return dicts(kept)
+}
+
+// budgetMetric logs counts only, never text or query.
+func budgetMetric(reason string, n int) {
+	if n > 0 {
+		metric(kv("event", "recall_budget"), kv("reason", reason), kv("dropped", n))
+	}
 }
 
 // project is host.ProjectKey of the session: the server leaves out other projects' memories.
@@ -673,7 +689,7 @@ func contractRelated(contract, project string) []map[string]any {
 		metric(kv("event", "hook_error"), kv("hook", "SessionStart:contract"), kv("error", pyType(err)))
 		return []map[string]any{}
 	}
-	return withText(dicts(items))
+	return capBudget(withText(dicts(items)))
 }
 
 // taskContract is the repo's task contract text, or "".
@@ -745,8 +761,8 @@ func promptParts(prompt, sid, cwd string) (part host.Part, revs map[string]int64
 		rev, ok := shown[str(i["id"])]
 		return !ok || revision(i) > rev
 	})
+	items = capBudget(withText(items))
 	recallMetric("UserPromptSubmit", sid, items)
-	items = withText(items)
 	if len(items) == 0 {
 		return host.Part{}, nil, nil
 	}

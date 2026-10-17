@@ -67,19 +67,37 @@ func parseRecallBudget(spec string) RecallBudget {
 	return b
 }
 
-// Apply keeps search hits in rank order that reach MinScore and fit their kind's budget. A hit
-// without a score (an older server) is not judged by the floor. droppedScore/droppedBudget are counts.
+// Apply is Floor then Cap, for a caller that injects the search hits as they come.
 func (b RecallBudget) Apply(items []any) (kept []any, droppedScore, droppedBudget int) {
+	kept, droppedScore = b.Floor(items)
+	kept, droppedBudget = b.Cap(kept)
+	return kept, droppedScore, droppedBudget
+}
+
+// Floor drops hits below MinScore. A hit without a score (an older server) is not judged.
+func (b RecallBudget) Floor(items []any) (kept []any, dropped int) {
+	kept = []any{}
+	for _, raw := range items {
+		if m, _ := raw.(map[string]any); m != nil {
+			if s, has := score(m["score"]); has && b.MinScore > 0 && s < b.MinScore {
+				dropped++
+				continue
+			}
+		}
+		kept = append(kept, raw)
+	}
+	return kept, dropped
+}
+
+// Cap keeps hits in rank order that fit their kind's budget. Run it on the list that is actually
+// injected, after other filters, so a hit dropped later does not use up a slot.
+func (b RecallBudget) Cap(items []any) (kept []any, dropped int) {
 	kept = []any{}
 	used := map[string]KindBudget{}
 	for _, raw := range items {
 		m, _ := raw.(map[string]any)
 		if m == nil { // not judged here; callers keep their own shape checks
 			kept = append(kept, raw)
-			continue
-		}
-		if s, has := score(m["score"]); has && b.MinScore > 0 && s < b.MinScore {
-			droppedScore++
 			continue
 		}
 		kind, _ := m["kind"].(string)
@@ -94,13 +112,13 @@ func (b RecallBudget) Apply(items []any) (kept []any, droppedScore, droppedBudge
 		u.Chars += utf8.RuneCountInString(text)
 		// The kind's best hit goes in however long it is (the search's max_chars bounds it); the char cap trims the rest.
 		if u.Count > limit.Count || u.Count > 1 && u.Chars > limit.Chars {
-			droppedBudget++
+			dropped++
 			continue
 		}
 		used[kind] = u
 		kept = append(kept, raw)
 	}
-	return kept, droppedScore, droppedBudget
+	return kept, dropped
 }
 
 // score reads a decoded JSON number (Decode keeps json.Number).
