@@ -585,10 +585,169 @@ window.ArkismCrew = (ctx) => {
     const c = el("button", "crew-card new workflow wf-card");
     c.type = "button";
     c.append(icon("plus"), el("strong", "", "새 워크플로우"), el("small", "", "AI 하나로 간단히 시작하거나 단계를 이어 그려요"));
-    c.addEventListener("click", () => openSettings(null));
+    c.addEventListener("click", openCreate);
     return c;
   }
-  const headActions = () => [button("새 워크플로우", "primary", null, () => openSettings(null))];
+  const headActions = () => [button("새 워크플로우", "primary", null, openCreate)];
+
+  // ---------------------------------------------------------------- 새 워크플로우: AI로 만들기 / 직접 만들기
+  const UNTITLED = "제목 없음";
+  function untitledHandle() {
+    const taken = new Set(workflows().map((r) => r.crew.handle));
+    let i = 1;
+    while (taken.has(`제목없음${i}`)) i++;
+    return `제목없음${i}`;
+  }
+  // Nodes from the AI carry no place on the canvas: lay them out left to right by distance from the start.
+  function layoutGraph(g) {
+    const depth = {};
+    const roots = g.nodes.filter((n) => !g.edges.some((e) => e.to === n.id)).map((n) => n.id);
+    const queue = (roots.length ? roots : [g.nodes[0]?.id]).filter(Boolean).map((id) => [id, 0]);
+    while (queue.length) {
+      const [id, d] = queue.shift();
+      if (depth[id] !== undefined || d > g.nodes.length) continue;
+      depth[id] = d;
+      for (const e of g.edges) if (e.from === id) queue.push([e.to, d + 1]);
+    }
+    const rows = {};
+    for (const n of g.nodes) {
+      const d = depth[n.id] ?? 0;
+      rows[d] = (rows[d] || 0) + 1;
+      Object.assign(n, { x: 40 + d * 280, y: 40 + (rows[d] - 1) * 140, config: n.config || {} });
+    }
+    return g;
+  }
+  function openCreate() {
+    dialog?.remove();
+    dialog = el("dialog", "crew-dialog wf-dialog wf-create");
+    const form = el("form");
+    form.method = "dialog";
+    const head = el("div", "dialog-head");
+    const close = el("button", "icon-btn plain");
+    close.value = "cancel";
+    close.setAttribute("aria-label", "닫기");
+    close.append(icon("x"));
+    head.append(el("h2", "", "새 워크플로우"), close);
+    const pick = el("div", "crew-choice big wf-choice");
+    const opt = (l, sub, fn) => {
+      const b = el("button");
+      b.type = "button";
+      b.append(el("strong", "", l), el("small", "", sub));
+      b.addEventListener("click", fn);
+      return b;
+    };
+    pick.append(opt("AI로 만들기", "하고 싶은 일을 말하면 AI가 물어보고 그래프를 그려요.", () => { dialog.remove(); openBuildChat(); }),
+      opt("직접 만들기", "바로 그래프 편집으로 가요. 제목은 나중에 AI가 채워요.", () => { dialog.remove(); void createBlank(); }));
+    const more = button("템플릿·설정으로 만들기", "ghost small", null, () => { dialog.remove(); openSettings(null); });
+    more.type = "button";
+    const body = el("div", "dialog-body");
+    body.append(pick, more);
+    form.append(head, body);
+    dialog.append(form);
+    dialog.addEventListener("close", () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
+  }
+  function freeHandle(name) {
+    const h = name === UNTITLED ? "" : name.replace(/[^\p{L}\p{N}_-]/gu, "").slice(0, 40);
+    return h && !workflows().some((r) => r.crew.handle === h) ? h : untitledHandle();
+  }
+  async function createBlank(graph, name = UNTITLED, role = "") {
+    try {
+      const out = { type: "workflow", name, handle: freeHandle(name), role, category: "", model: "", enabled: false,
+        graph: graph || defaultGraph("blank", {}) };
+      const saved = await save(null, out);
+      await reload(saved.id);
+      openGraph(byId(saved.id) || saved, { graphMode: true });
+      return true;
+    } catch (e) {
+      notice(errorText(e));
+      return false;
+    }
+  }
+  function openBuildChat() {
+    dialog?.remove();
+    dialog = el("dialog", "crew-dialog wf-dialog wf-build");
+    const form = el("form");
+    const head = el("div", "dialog-head");
+    const close = el("button", "icon-btn plain");
+    close.type = "button";
+    close.setAttribute("aria-label", "닫기");
+    close.append(icon("x"));
+    close.addEventListener("click", () => dialog.close());
+    head.append(el("h2", "", "AI로 만들기"), close);
+    const log = el("div", "wf-build-log");
+    const talk = [];
+    const say = (who, text) => { talk.push([who, text]); log.append(el("p", who === "AI" ? "wf-build-ai" : "wf-build-me", text)); log.scrollTop = log.scrollHeight; };
+    say("AI", "어떤 일을 자동으로 하고 싶어요? 언제 시작하고, 무엇을 받아서, 결과를 어디로 보낼지 알려 주세요.");
+    const q = el("textarea");
+    q.rows = 3;
+    q.maxLength = 2000;
+    q.placeholder = "예: 매일 아침 GitHub PR을 모아 요약해서 슬랙으로 보내 줘";
+    const send = button("보내기", "primary", "paper-plane");
+    send.type = "submit";
+    const err = el("p", "form-error");
+    err.setAttribute("role", "alert");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = q.value.trim();
+      if (!text) return;
+      q.value = "";
+      say("나", text);
+      send.disabled = true;
+      err.textContent = "";
+      const wait = el("p", "dim", "AI가 생각하는 중…");
+      log.append(wait);
+      try {
+        const prompt = `사용자와 나눈 대화로 Arkism 워크플로우를 만든다. 꼭 필요한 것(무엇을 받아서·무엇을 하고·결과를 어디로)이 빠졌을 때만 질문하고, 질문은 최대 3번. 그 뒤엔 합리적으로 정해서 만든다.
+${talk.map(([w, t]) => `${w}: ${t}`).join("\n")}`;
+        const a = await kit.assist("build", prompt, { purpose: "workflow" });
+        if (a.status !== "done") throw new Error(kit.assistError(a));
+        const j = kit.parseJSON(a.output);
+        if (j?.ask) { say("AI", String(j.ask).slice(0, 400)); return; }
+        const g = j?.graph;
+        if (!Array.isArray(g?.nodes) || !g.nodes.length) throw new Error("AI 답을 읽지 못했어요. 다시 보내 주세요.");
+        g.edges = Array.isArray(g.edges) ? g.edges : [];
+        say("AI", `${String(j.name || UNTITLED)}: 단계 ${g.nodes.length}개로 그렸어요. 편집 화면에서 확인해 주세요.`);
+        if (await createBlank(layoutGraph(g), String(j.name || UNTITLED).slice(0, 60), String(j.role || "").slice(0, 200))) dialog.close();
+      } catch (x) {
+        err.textContent = x.message;
+      } finally {
+        wait.remove();
+        send.disabled = false;
+        q.focus();
+      }
+    });
+    q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
+    const foot = el("div", "dialog-foot");
+    foot.append(q, send);
+    const body = el("div", "dialog-body");
+    body.append(log, err);
+    form.append(head, body, foot);
+    dialog.append(form);
+    dialog.addEventListener("close", () => dialog.remove());
+    document.body.append(dialog);
+    dialog.showModal();
+    q.focus();
+  }
+  // An untitled workflow gets its name·설명 from the AI once it has a few real steps.
+  async function autoTitle(rec) {
+    const steps = (rec.crew.graph?.nodes || []).filter((n) => !["start", "end", "schedule", "webhook"].includes(n.type));
+    if (rec.crew.name !== UNTITLED || steps.length < 2) return;
+    try {
+      const a = await kit.assist("title", `이 워크플로우의 제목과 한 줄 설명을 지어 줘.\n단계: ${JSON.stringify(steps.map(({ type, title, config }) => ({ type, title, config }))).slice(0, 6000)}`, { purpose: "workflow" });
+      if (a.status !== "done") return;
+      const j = kit.parseJSON(a.output);
+      const name = String(j?.name || "").trim().slice(0, 60);
+      if (!name || name === UNTITLED) return;
+      const cur = byId(rec.id) || rec;
+      if (cur.crew.name !== UNTITLED) return; // the user named it meanwhile
+      const saved = await save(cur, { ...cur.crew, name, role: cur.crew.role || String(j.role || "").slice(0, 200) });
+      await reload();
+      if (ed.rec?.id === saved.id) { ed.rec = byId(saved.id) || saved; if (state.view === "graph") render(false); }
+      notice(`AI가 제목을 '${name}'(으)로 붙였어요. 설정에서 바꿀 수 있어요.`);
+    } catch { /* naming is best effort */ }
+  }
 
   // 최근 실행 (198:286): the chosen workflow's runs, or every workflow's when none is chosen. 실행 기록 shows more.
   const RUN_BADGE = { succeeded: "done", failed: "fail", waiting: "wait", running: "live", stopped: "done" };
@@ -1128,6 +1287,7 @@ window.ArkismCrew = (ctx) => {
       state.view = "graph";
       render();
       notice("워크플로우를 저장했어요.");
+      void autoTitle(ed.rec);
       return true;
     } catch (e) {
       notice(errorText(e));
@@ -1913,9 +2073,10 @@ window.ArkismCrew = (ctx) => {
 JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 한국어 두 문장","tag":"토큰 줄이기|순서|멈추는 조건|안전","action":null 또는 {"type":"set_model","node":"id","model":"..."} 또는 {"type":"set_edge_max","from":"id","to":"id","max":2} 또는 {"type":"set_access","node":"id","access":"read|write"} 또는 {"type":"insert_before","node":"id","new":{"type":"code|ai_once|approval","title":"...","config":{}}}}]}
 워크플로우: ${ed.rec.crew.name} ($${ed.rec.crew.handle}) — ${ed.rec.crew.role || ""}
 기본 워커 모델: ${ed.rec.crew.model || "없음"}
+set_model에 쓸 수 있는 모델(이 목록에서만): ${[...new Set(models?.enabledModels() || [])].join(", ") || "없음 — set_model 제안은 하지 마"}
 그래프: ${JSON.stringify(g).slice(0, 14000)}`;
     try {
-      const a = await kit.assist("draft", prompt, { purpose: "workflow" });
+      const a = await kit.assist("review", prompt, { purpose: "workflow" });
       if (a.status !== "done") throw new Error(kit.assistError(a));
       const j = kit.parseJSON(a.output);
       const list = Array.isArray(j) ? j : j?.suggestions;
@@ -2127,8 +2288,14 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
     return box;
   }
   // 실패한 곳부터 다시 (198:6994): the done nodes keep their results, the rest runs again.
-  async function retryRun() {
-    const cr = ed.run.crew_run || {};
+  // 여기부터 다시: from and every step after it run again; the past run stays as it was.
+  async function retryRun(from) {
+    let cr = ed.run.crew_run || {};
+    if (typeof from === "string") {
+      const again = new Set([from]);
+      for (let grew = true; grew; ) { grew = false; for (const e of fwd(ed.rec.crew.graph)) if (again.has(e.from) && !again.has(e.to)) { again.add(e.to); grew = true; } }
+      cr = { ...cr, nodes: Object.fromEntries(Object.entries(cr.nodes || {}).filter(([id]) => !again.has(id))) };
+    }
     const r = await startRun(ed.rec, runRequest(cr), null, cr);
     if (r) { ed.run = r; render(false); void pollRun(); }
   }
@@ -2154,6 +2321,7 @@ JSON으로만 답해: {"suggestions":[{"title":"짧은 제목","body":"쉬운 �
       name.append(el("strong", "", `${i + 1} · ${nodeTitle(n)}${st.runs > 1 ? ` · ${st.runs}회째` : ""}`));
       if (st.error) name.append(el("small", "", st.error));
       else if (st.status === "pending") name.append(el("small", "", "앞 단계가 끝나면 실행해요."));
+      if (st.status === "done" && ["succeeded", "failed", "stopped"].includes(cr.status)) name.append(button("여기부터 다시", "ghost", null, () => retryRun(n.id)));
       row.append(name, el("span", `wf-badge small ${{ failed: "fail", waiting: "wait", running: "live", pending: "line", skipped: "line" }[st.status] || ""}`, st.status === "pending" ? "실행 전" : stepState(n, st).split(" · ")[0]), el("span", "mono", nodeDur(st) || "—"));
       table.append(row);
     });

@@ -26,7 +26,7 @@ const (
 // explain (plain-words answer) and draft (a SKILL.md or a merged one) serve the skills screens.
 // suggest proposes new skills from recent memories; install_skill has the runner write a SKILL.md
 // (prompt is {"name","content","agents"} JSON, no model call) into the agents' skill folders.
-var crewAssistKinds = []string{"fill", "polish", "recommend", "classify", "try", "explain", "draft", "suggest", "install_skill", "fix", "comfy"}
+var crewAssistKinds = []string{"fill", "polish", "recommend", "classify", "try", "explain", "draft", "suggest", "install_skill", "fix", "comfy", "review", "build", "title"}
 var crewAssistStates = []string{"pending", "done", "failed"}
 
 type CrewAssist struct {

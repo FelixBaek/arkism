@@ -341,6 +341,16 @@ dialog.wf-settings { width: min(1000px, calc(100vw - 48px)); }
 .wf-dialog .dialog-foot .btn.ghost { color: var(--nc-text); }
 .wf-dialog .dialog-foot .btn.danger { color: var(--nc-amber); }
 /* 어떻게 시작할까요: three cards */
+.wf-create .dialog-body, .wf-build .dialog-body { padding: 20px 24px; gap: 12px; display: flex; flex-direction: column; }
+.wf-create .crew-choice.wf-choice button { padding: 18px; min-height: 96px; }
+.wf-create .dialog-body > .ghost { align-self: flex-start; }
+.wf-build { width: min(640px, calc(100vw - 32px)); }
+.wf-build-log { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto; }
+.wf-build-log p { margin: 0; padding: 10px 12px; border-radius: 8px; max-width: 85%; font: 400 calc(13px * var(--fs, 1))/1.55 var(--sans); }
+.wf-build-ai { background: var(--nc-surface); color: var(--nc-text); align-self: flex-start; }
+.wf-build-me { background: var(--nc-raised); color: var(--nc-text); align-self: flex-end; }
+.wf-build .dialog-foot { display: flex; gap: 8px; align-items: flex-end; padding: 12px 24px 20px; }
+.wf-build .dialog-foot textarea { flex: 1; resize: vertical; }
 .crew-choice.wf-choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; padding: 0; background: none; }
 .crew-choice.wf-choice button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--nc-line); background: var(--nc-surface); text-align: left; }
 .crew-choice.wf-choice button strong { font: 500 calc(13px * var(--fs, 1))/1.45 var(--sans); color: var(--nc-text); }

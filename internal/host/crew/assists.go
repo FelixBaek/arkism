@@ -32,10 +32,21 @@ var assistGuide = map[string]string{
 	"recommend": "답은 JSON 배열 하나만 쓴다: [{name, role, why}] 3개. why는 어떤 요청이 많았는지 한 줄.",
 	"classify":  "답은 카테고리 이름 하나만 쓴다. 맞는 것이 없으면 빈 줄을 쓴다.",
 	"explain":   "쉬운 한국어로 짧게 답한다. 답만 쓴다.",
+	"review": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이): {\"suggestions\":[...]}. 그래프에 실제로 있는 노드 id만 쓴다. 고칠 것이 없으면 빈 배열. " + crewCatalog,
+	"build": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이). 아직 무엇을 만들지 모르면 {\"ask\":\"짧은 질문 하나\"}. 충분히 알면 " +
+		"{\"name\",\"role\",\"graph\":{\"nodes\":[{id,type,title,config}],\"edges\":[{from,to,port}]}}. 시작은 start 노드 하나, 끝은 end. 사용자 저장소·채널 이름은 들은 그대로 쓴다. " +
+		"if로 판정되는 칸은 code, 판단이 필요한 칸만 ai. " + crewCatalog,
+	"title": "답은 JSON 객체 하나만 쓴다(설명·코드 블록 없이): {\"name\":\"30자 이내 한국어 제목\",\"role\":\"한 줄 설명\"}.",
 	"draft":     "SKILL.md 전체만 쓴다(설명·코드 블록 표시 없이). 맨 위는 --- 로 감싼 name·description, 그 아래 번호 목록 단계 5개 이하.",
 	"suggest": "답은 JSON 배열 하나만 쓴다: [{name(영문 소문자·숫자·하이픈), title(한국어 한 줄), why(어떤 요청이 몇 번 나왔는지 한 줄), " +
 		"examples(사용자 요청 문장 2개), skill_md(SKILL.md 전체)}] 최대 3개. 이미 있는 스킬과 겹치면 빼고, 근거가 약하면 빈 배열을 쓴다.",
 }
+
+// serverModelID is the model name the server stores (memory.crewModelRe); anything else gets the whole result refused.
+var serverModelID = regexp.MustCompile(`^[a-zA-Z0-9._ -]{1,80}$`)
+
+// crewCatalog tells the AI which nodes and settings the workflow engine (internal/crewrun) understands.
+const crewCatalog = "노드 종류와 config 키: start·schedule·webhook(시작), ai(prompt, model, instructions, skills, persona, effort, retries, timeout), ai_once(prompt, model), code(code, lang, access=read|write, timeout, 나가는 선 port pass|fail 또는 없음), http(method, url, headers, body), github(task, repo_dir), approval(question, 나가는 선 port approve|reject), condition(expr: in.x == 1 같은 식, 나가는 선 port yes|no), merge, loop(key, max_workers), wait(duration), notify(channel=telegram|slack|email, to, message, subject), subflow(workflow), n8n(url), end. 바로 앞 단계 결과는 {{input}}으로 쓴다(키 이름을 지어내지 않는다). model은 비워 두면 기본 모델을 쓴다. 일정·웹훅은 설정에서 따로 켜므로 그래프 시작은 start로 한다. "
 
 // Where installSkill writes a new SKILL.md, per agent (the shared ~/.agents/skills serves Codex and Gemini CLI).
 const sharedSkillsDir = ".agents/skills"
@@ -261,7 +272,7 @@ func assistResult(out map[string]any) map[string]any {
 		status = "done"
 	}
 	res := map[string]any{"status": status, "output": clipRunes(sOr(out["output"]), 20000)}
-	if m := sOr(out["model"]); m != "" && modelID.MatchString(m) {
+	if m := sOr(out["model"]); m != "" && serverModelID.MatchString(m) {
 		res["model"] = m
 	}
 	if !truthy(out["ok"]) {
@@ -409,7 +420,11 @@ func assistJob(rec map[string]any, answer func(map[string]any) (map[string]any, 
 	}
 	if _, err := runnerCall("/v1/crew/assists/"+pyQuote(id, "/")+"/result", body, 30*time.Second); err != nil {
 		fmt.Fprintf(os.Stderr, "AI 도움 응답 실패: %s\n", errName(err))
-		return
+		// A 4xx answer will not change on retry: drop it instead of resending every round until the assist expires.
+		var he *host.HTTPError
+		if !errors.As(err, &he) || he.Code < 400 || he.Code >= 500 {
+			return
+		}
 	}
 	assistMu.Lock()
 	delete(assistDone, id)
