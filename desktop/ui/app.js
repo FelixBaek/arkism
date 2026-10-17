@@ -438,6 +438,7 @@
     if (!newest || Date.now() - lastFullMemories > FULL_MEMORIES) {
       const all = await listAll("/v1/memories", { status: "active" }, MEMORY_CAP);
       lastFullMemories = Date.now();
+      void loadUsage(generation); // use counts refresh with the full list, every 10 minutes
       return all;
     }
     const rows = await listAll("/v1/memories", { include_inactive: "true", updated_since: new Date(newest - 2000).toISOString() }, MEMORY_CAP);
