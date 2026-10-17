@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -534,7 +535,7 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 		}
 		items = append(items, dicts(listOf(or(res["items"], []any{})))...)
 	}
-	items = withText(forRepo(items, repoKey(cwd)))
+	items = standingOrder(withText(forRepo(items, repoKey(cwd))))
 	related := contractRelated(taskContract(cwd))
 	if len(skip) > 0 {
 		unpinned := func(i map[string]any) bool { return !skip[strField(i["id"])] }
@@ -578,6 +579,36 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 		meta = append(meta, contractHeader+"\n"+strings.Join(metaLines(related), "\n"))
 	}
 	return indexBlock{Full: strings.Join(parts, "\n\n"), Meta: strings.Join(meta, "\n\n"), IDs: itemIDs(append(rest, related...))}, nil
+}
+
+// standingOrder sorts the standing rules so the char limit cuts the least important: preferences
+// (user) before how-to rules, then oldest first, then id. List rows carry no use or effect score,
+// and the restate-based utility count reads every transcript and never counts a prohibition kept.
+// Oldest first keeps the rules that lasted, and a new memory joins at the end instead of
+// reshuffling which rules the limit cuts (the server lists by id, a hash). Deterministic, so a
+// session's block stays byte-identical.
+func standingOrder(items []map[string]any) []map[string]any {
+	rank := func(i map[string]any) int {
+		if i["kind"] == "user" {
+			return 0
+		}
+		return 1
+	}
+	created := func(i map[string]any) time.Time {
+		t, _ := time.Parse(time.RFC3339Nano, strField(i["created_at"])) // missing sorts first
+		return t
+	}
+	sort.SliceStable(items, func(a, b int) bool {
+		x, y := items[a], items[b]
+		if rx, ry := rank(x), rank(y); rx != ry {
+			return rx < ry
+		}
+		if tx, ty := created(x), created(y); !tx.Equal(ty) {
+			return tx.Before(ty)
+		}
+		return strField(x["id"]) < strField(y["id"])
+	})
+	return items
 }
 
 func keepIf(items []map[string]any, ok func(map[string]any) bool) []map[string]any {
@@ -628,6 +659,11 @@ func taskContract(cwd string) string {
 
 // logRecall logs ids only, never text: `utility` later checks which injected memories were used.
 func logRecall(hook, sid string, items []map[string]any) {
+	recallMetric(hook, sid, items)
+	ledgerRecall(sid, items)
+}
+
+func recallMetric(hook, sid string, items []map[string]any) {
 	ids := []any{}
 	captured := 0
 	for _, i := range items {
@@ -639,48 +675,67 @@ func logRecall(hook, sid string, items []map[string]any) {
 		}
 	}
 	metric(kv("event", "recall"), kv("hook", hook), kv("session", sid), kv("injected", len(items)), kv("ids", ids), kv("captured", captured))
-	ledgerRecall(sid, items)
 }
 
 // promptContext is the memories related to this prompt, beyond what SessionStart injected.
 func promptContext(prompt, sid, cwd string) (string, error) {
-	p, err := promptParts(prompt, sid, cwd)
+	p, revs, err := promptParts(prompt, sid, cwd)
+	markShown(sid, p.Full, revs)
 	return p.Full, err
 }
 
 // promptParts is the per-turn recall block (full and meta form). Memories the session's stable
-// block already shows are left out.
-func promptParts(prompt, sid, cwd string) (host.Part, error) {
+// block already shows are left out, and so are those an earlier turn showed unless revised since.
+// revs is what to record with markShown once the block is actually output.
+func promptParts(prompt, sid, cwd string) (part host.Part, revs map[string]int64, err error) {
 	text := clean(prompt)
 	if host.Len(text) < 8 {
-		return host.Part{}, nil
+		return host.Part{}, nil, nil
 	}
 	list, err := search(head(text, 2000), 6, 8)
 	if err != nil {
-		return host.Part{}, err
+		return host.Part{}, nil, err
 	}
 	items := forRepo(dicts(list), repoKey(cwd))
-	if stable, ok := sessionStore().Stable(sid); ok && len(stable.IDs) > 0 {
+	store := sessionStore()
+	if stable, ok := store.Stable(sid); ok && len(stable.IDs) > 0 {
 		seen := map[string]bool{}
 		for _, id := range stable.IDs {
 			seen[id] = true
 		}
-		var fresh []map[string]any
-		for _, i := range items {
-			if !seen[str(i["id"])] {
-				fresh = append(fresh, i)
-			}
-		}
-		items = fresh
+		items = keepIf(items, func(i map[string]any) bool { return !seen[str(i["id"])] })
 	}
-	logRecall("UserPromptSubmit", sid, items)
+	// The trace ledger still lists a memory an earlier turn showed: it is in the session's context.
+	ledgerRecall(sid, items)
+	shown := store.Delivered(sid)
+	revision := func(i map[string]any) int64 { n, _ := host.Int(i["revision"]); return n }
+	items = keepIf(items, func(i map[string]any) bool {
+		rev, ok := shown[str(i["id"])]
+		return !ok || revision(i) > rev
+	})
+	recallMetric("UserPromptSubmit", sid, items)
 	items = withText(items)
 	if len(items) == 0 {
-		return host.Part{}, nil
+		return host.Part{}, nil, nil
+	}
+	revs = map[string]int64{}
+	for _, i := range items {
+		revs[str(i["id"])] = revision(i)
 	}
 	full := promptHeader + "\n" + strings.Join(indexLines(items), "\n")
 	logInjected("UserPromptSubmit", sid, full)
-	return host.Part{Full: full, Meta: promptHeader + "\n" + strings.Join(metaLines(items), "\n")}, nil
+	return host.Part{Full: full, Meta: promptHeader + "\n" + strings.Join(metaLines(items), "\n")}, revs, nil
+}
+
+// markShown records revs as shown when output carries the recall block (full or meta form, not the
+// budget stub), so a memory the budget dropped can still come back next turn.
+func markShown(sid, output string, revs map[string]int64) {
+	if !strings.Contains(output, promptHeader) {
+		return
+	}
+	if err := sessionStore().MarkDelivered(sid, revs); err != nil {
+		metric(kv("event", "hook_error"), kv("hook", "recall_delivered"), kv("error", pyType(err)))
+	}
 }
 
 // internalCodexPrompt: ambient suggestions use ephemeral sessions with no saved user transcript.
@@ -874,8 +929,15 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 			}
 			work := workContext(data)
 			var part host.Part
+			var revs map[string]int64
 			var err error
 			if name == "SessionStart" {
+				if src := data["source"]; src == "compact" || src == "clear" {
+					// per-turn recall shown before is gone from the context
+					if err := sessionStore().ResetDelivered(sid); err != nil {
+						metric(kv("event", "hook_error"), kv("hook", "recall_reset"), kv("error", pyType(err)))
+					}
+				}
 				// Session-fixed text only: byte-identical for the whole session (prompt cache).
 				part, err = func() (p host.Part, err error) {
 					defer recovered(&err)
@@ -888,7 +950,8 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 				} else {
 					part, err = func() (p host.Part, err error) {
 						defer recovered(&err)
-						return promptParts(prompt, sid, str(or(data["cwd"], "")))
+						p, revs, err = promptParts(prompt, sid, str(or(data["cwd"], "")))
+						return p, err
 					}()
 				}
 			}
@@ -903,6 +966,7 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 			if err != nil {
 				return err
 			}
+			markShown(sid, ctx, revs)
 			if name == "SessionStart" {
 				if recent := recentSessionContext(data, host.ContextMaxChars-host.Len(ctx)-2); recent != "" {
 					if ctx != "" {

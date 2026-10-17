@@ -72,8 +72,8 @@ func testContextRelationshipMetadata(t *testing.T, repo Repository) {
 					t.Fatalf("live recall lost metadata: %+v", value)
 				}
 			}
-			// The prompt hook renders the recalled memory as an index line.
-			hook, _ := json.Marshal(map[string]any{"hook_event_name": "UserPromptSubmit", "session_id": "s", "cwd": home, "prompt": "second rule"})
+			// The prompt hook renders the recalled memory as an index line; one session per runtime, since a session shows a memory once.
+			hook, _ := json.Marshal(map[string]any{"hook_event_name": "UserPromptSubmit", "session_id": "s-" + runtime, "cwd": home, "prompt": "second rule"})
 			var output struct {
 				Hook struct {
 					Context string `json:"additionalContext"`

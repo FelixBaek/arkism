@@ -46,10 +46,16 @@
   // A memory tagged for another repository stays out; "" (no git) keeps only untagged ones.
   const forRepo = (items, repo) => items.filter((i) => !(i.tags || []).some((t) => typeof t === "string" && t.startsWith("repo:") && t !== `repo:${repo}`));
   const withText = (items) => items.filter((i) => truthy(i.text));
+  // standingOrder in capture.go: user before procedural, then oldest created_at first (missing first), then id.
+  // Date.parse stops at milliseconds; the rest of the fraction (to nanoseconds, as Go compares) breaks ties.
+  const created = (i) => { const t = Date.parse(i.created_at); return Number.isNaN(t) ? -Infinity : t; };
+  const subMilli = (i) => Number((/\.(\d+)/.exec(String(i.created_at || ""))?.[1] || "").padEnd(9, "0").slice(3, 9));
+  const standingOrder = (items) => [...items].sort((a, b) =>
+    (a.kind === "user" ? 0 : 1) - (b.kind === "user" ? 0 : 1) || created(a) - created(b) || subMilli(a) - subMilli(b) || (str(a.id) < str(b.id) ? -1 : str(a.id) > str(b.id) ? 1 : 0));
 
   // standing: the user + procedural pages as GET /v1/memories returned them; related: contract matches.
   function sessionPreview(standing, repo, related = [], max = SESSION_MAX_CHARS) {
-    const items = withText(forRepo(standing, repo));
+    const items = standingOrder(withText(forRepo(standing, repo)));
     const relAll = related.map(indexLine);
     const nRel = within(relAll, Math.trunc(max / 2) - len(CONTRACT_HEADER) - 1);
     const relShown = related.slice(0, nRel), relLines = relAll.slice(0, nRel);
