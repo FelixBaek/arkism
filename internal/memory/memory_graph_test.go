@@ -232,7 +232,7 @@ func checkGraph(t *testing.T, svc *Service, token string) {
 		t.Fatalf("depths: %v %+v", nodes, g)
 	}
 	for _, n := range g.Nodes {
-		if pending := n.Memory.ID != "c" && !strings.HasPrefix(n.Memory.ID, "sim"); n.VectorPending != pending {
+		if n.VectorPending != (n.Memory.ID != "c" && !strings.HasPrefix(n.Memory.ID, "sim")) {
 			t.Fatalf("vector_pending of %s = %v", n.Memory.ID, n.VectorPending)
 		}
 	}
