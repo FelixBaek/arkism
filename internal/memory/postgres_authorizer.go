@@ -17,6 +17,9 @@ func NewPostgresAuthorizer(store *Postgres) (*PostgresAuthorizer, error) {
 	return &PostgresAuthorizer{store: store}, nil
 }
 
+// ScopeOnly: the decision reads only the token, scope and action, never the resource id.
+func (a *PostgresAuthorizer) ScopeOnly() bool { return true }
+
 func (a *PostgresAuthorizer) Authorize(ctx context.Context, token string, request Authorization) (Decision, error) {
 	if a == nil || a.store == nil || strings.TrimSpace(token) == "" || strings.TrimSpace(request.Action) == "" || !validScope(request.Scope) {
 		return Decision{}, ErrDenied

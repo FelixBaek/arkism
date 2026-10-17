@@ -244,6 +244,14 @@ func exerciseMemoryUsageSummary(t *testing.T, f *fixture) {
 		t.Fatal("denied memory shown", page, e)
 	}
 	f.svc.Auth = f.auth
+	if !scopeOnly(&PostgresAuthorizer{}) || !scopeOnly(&LocalStandaloneAuthorizer{}) || scopeOnly(f.auth) {
+		t.Fatal("scope-only authorizers")
+	}
+	cancelled, cancel := context.WithCancel(testCtx)
+	cancel()
+	if _, e = f.svc.MemoryUsageSummary(cancelled, f.human, scopeA); e == nil {
+		t.Fatal("cancelled request answered")
+	}
 	if page, e = f.svc.MemoryUsageSummary(testCtx, f.human, scopeB); e != nil || len(page.Items) != 0 {
 		t.Fatal("scope leak", page, e)
 	}

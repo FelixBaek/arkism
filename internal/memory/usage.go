@@ -167,9 +167,19 @@ func (s *Service) MemoryUsageSummary(ctx context.Context, token string, scope Sc
 		return UsageSummaryPage{}, e
 	}
 	out := UsageSummaryPage{Items: []MemoryUsageCount{}, Authority: AuthorityDataOnly}
+	// The Postgres and local authorizers decide per scope and action, so the decision above already covers every row;
+	// asking again per memory would be one database query per row.
+	perRow := !scopeOnly(s.Auth)
 	for _, r := range rows {
+		if ctx.Err() != nil {
+			return UsageSummaryPage{}, ErrUnavailable
+		}
 		if !validRunLabel(r.MemoryID, 256) || containsSecret(r.MemoryID) || r.Uses < 1 || r.Recent < 0 || r.Recent > r.Uses {
 			return UsageSummaryPage{}, ErrUnavailable
+		}
+		if !perRow {
+			out.Items = append(out.Items, r)
+			continue
 		}
 		d, e := s.authorize(ctx, token, "read:memories", scope, r.MemoryID, "")
 		if errors.Is(e, ErrDenied) {
@@ -189,4 +199,12 @@ func (s *Service) MemoryUsageSummary(ctx context.Context, token string, scope Sc
 		return UsageSummaryPage{}, e
 	}
 	return out, nil
+}
+
+// scopeOnlyAuthorizer is an Authorizer whose decision never depends on the resource id or content.
+type scopeOnlyAuthorizer interface{ ScopeOnly() bool }
+
+func scopeOnly(a Authorizer) bool {
+	x, ok := a.(scopeOnlyAuthorizer)
+	return ok && x.ScopeOnly()
 }

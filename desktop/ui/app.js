@@ -433,15 +433,17 @@
   const FULL_MEMORIES = 10 * 60000;
   const liveNow = (m, now) => m.status === "active" && !(m.effective_at && Date.parse(m.effective_at) > now) && !(m.expires_at && Date.parse(m.expires_at) <= now);
   async function syncMemories(old) {
-    if (!old || Date.now() - lastFullMemories > FULL_MEMORIES) {
+    // Only server times go into updated_since: a PC clock ahead of the server would skip new memories.
+    const newest = (old || []).reduce((t, m) => Math.max(t, Date.parse(m.updated_at) || 0), 0);
+    if (!newest || Date.now() - lastFullMemories > FULL_MEMORIES) {
       const all = await listAll("/v1/memories", { status: "active" }, MEMORY_CAP);
       lastFullMemories = Date.now();
       return all;
     }
-    const newest = old.reduce((t, m) => Math.max(t, Date.parse(m.updated_at) || 0), lastFullMemories - 60000);
     const rows = await listAll("/v1/memories", { include_inactive: "true", updated_since: new Date(newest - 2000).toISOString() }, MEMORY_CAP);
-    const byId = new Map(old.map((m) => [m.id, m])), now = Date.now();
-    let changed = false;
+    const now = Date.now(), live = old.filter((m) => liveNow(m, now)); // one that just expired never comes back as a change
+    const byId = new Map(live.map((m) => [m.id, m]));
+    let changed = live.length !== old.length;
     for (const r of rows) {
       const had = byId.get(r.id), keep = liveNow(r, now);
       if (keep ? had?.revision === r.revision && had?.updated_at === r.updated_at : !had) continue;
@@ -1727,10 +1729,11 @@
   }
   async function reloadMemories() {
     const [candidates, conflicted, memories, maintenance] = await Promise.all([
-      listAll("/v1/memory_candidates", { status: "candidate" }), listAll("/v1/memory_candidates", { status: "conflicted" }).catch(() => []), listAll("/v1/memories", { status: "active" }),
+      listAll("/v1/memory_candidates", { status: "candidate" }), listAll("/v1/memory_candidates", { status: "conflicted" }).catch(() => []), listAll("/v1/memories", { status: "active" }, MEMORY_CAP),
       loadMaintenance()
     ]);
     Object.assign(state.data, { candidates, conflicted, memories, maintenance });
+    lastFullMemories = Date.now();
     render();
   }
   // Conflict resolution and candidate review commit together on the server.
