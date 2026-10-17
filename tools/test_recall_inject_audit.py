@@ -32,6 +32,12 @@ class RecallInjectAuditTests(unittest.TestCase):
                                  ts="2026-10-01T00:00:00Z")], "2026-10-02T00:00:00Z")
         self.assertEqual(result["inject_chars"], {})
 
+    def test_bool_counters_ignored(self):
+        """TC-BASE-010: JSON booleans are not counted as integers."""
+        result = summarize([line(event="inject", hook="SessionStart", session="s", chars=True),
+                            line(event="recall", hook="UserPromptSubmit", injected=False)])
+        self.assertEqual((result["inject_chars"], result["recall_items"]), ({}, {}))
+
 
 if __name__ == "__main__":
     unittest.main()

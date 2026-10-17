@@ -47,10 +47,10 @@ def summarize(lines, since=None, session_max=4000):
         if row is None:
             continue
         hook = row.get("hook") if row.get("hook") in HOOKS else "other"
-        if row["event"] == "inject" and isinstance(row.get("chars"), int):
+        if row["event"] == "inject" and type(row.get("chars")) is int:
             chars[hook].append(row["chars"])
             sessions[hook].add(row["session"])
-        elif row["event"] == "recall" and isinstance(row.get("injected"), int):
+        elif row["event"] == "recall" and type(row.get("injected")) is int:
             injected[hook].append(row["injected"])
     return {
         "since": cutoff.isoformat() if cutoff else None,

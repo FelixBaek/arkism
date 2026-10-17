@@ -62,9 +62,10 @@ type baselineHit struct {
 }
 
 type baselineResult struct {
-	hits     []baselineHit
-	labeled  bool
-	negative bool
+	hits           []baselineHit
+	labeled        bool
+	negative       bool
+	vectorDisabled bool
 }
 
 // BaselineDistribution is a five-number summary; N=0 leaves the rest zero.
@@ -209,7 +210,9 @@ func (p *Postgres) baselineKnownItems(ctx context.Context, scope Scope) ([]Basel
 func (p *Postgres) baselineSearch(ctx context.Context, scope Scope, q BaselineQuery, embedder Embedder) (baselineResult, error) {
 	var vec []float64
 	space := ""
-	if embedder != nil {
+	// Same gate as Service.Search: text that fails safeTransfer never reaches the provider.
+	vectorDisabled := embedder != nil && !safeTransfer(q.Query)
+	if embedder != nil && !vectorDisabled {
 		batch, err := embedMeasured(ctx, embedder, []string{q.Query}, "query")
 		if err != nil || len(batch.Items) != 1 {
 			return baselineResult{}, ErrUnavailable
@@ -265,9 +268,20 @@ func (p *Postgres) baselineSearch(ctx context.Context, scope Scope, q BaselineQu
 			return baselineResult{}, pgErr(rows.Err())
 		}
 	}
+	out := baselineHits(q, fused, distances)
+	out.vectorDisabled = vectorDisabled
+	return out, nil
+}
+
+// baselineHits labels the fused hits and keeps only what Service.Search would return
+// within the character budget: once it is spent, later hits are dropped, not counted.
+func baselineHits(q BaselineQuery, fused []ScoredHit, distances map[string]float64) baselineResult {
 	out := baselineResult{labeled: len(q.Relevant) > 0, negative: q.Negative}
 	left := baselineMaxChars
 	for _, h := range fused {
+		if left == 0 {
+			break
+		}
 		chars := min(utf8.RuneCountInString(h.Text), left)
 		left -= chars
 		chars2 := min(utf8.RuneCountInString(h.Summary), left)
@@ -284,7 +298,7 @@ func (p *Postgres) baselineSearch(ctx context.Context, scope Scope, q BaselineQu
 		}
 		out.hits = append(out.hits, bh)
 	}
-	return out, nil
+	return out
 }
 
 func summarizeBaseline(results []baselineResult, vector bool) BaselineReport {
@@ -294,6 +308,9 @@ func summarizeBaseline(results []baselineResult, vector bool) BaselineReport {
 	var mrr, precision float64
 	for _, r := range results {
 		rep.Queries["total"]++
+		if r.vectorDisabled {
+			rep.Queries["vector_disabled"]++
+		}
 		switch {
 		case r.negative:
 			rep.Queries["negative"]++

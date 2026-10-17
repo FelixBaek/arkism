@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -97,10 +98,32 @@ func TestSummarizeOutcomes(t *testing.T) {
 	}
 }
 
-type baselineEmbedder struct{ marker string }
+// TC-BASE-007: hits past the character budget are dropped, as Service.Search drops them.
+func TestBaselineHitsStopAtCharBudget(t *testing.T) {
+	long := strings.Repeat("x", baselineMaxChars)
+	fused := []ScoredHit{
+		{Hit: Hit{ID: "a", Text: long}, Score: 0.03},
+		{Hit: Hit{ID: "b", Text: "short"}, Score: 0.02},
+	}
+	out := baselineHits(BaselineQuery{Relevant: []string{"b"}}, fused, nil)
+	if len(out.hits) != 1 || out.hits[0].chars != baselineMaxChars || out.hits[0].label != -1 {
+		t.Fatalf("hits=%+v", out.hits)
+	}
+	if rep := summarizeBaseline([]baselineResult{out}, false); rep.Relevance["hit_at_6"] != 0 {
+		t.Fatalf("a dropped hit counted as found: %v", rep.Relevance)
+	}
+}
+
+type baselineEmbedder struct {
+	marker string
+	seen   *[]string
+}
 
 func (e baselineEmbedder) Space() string { return "baseline-test" }
 func (e baselineEmbedder) Embed(_ context.Context, texts []string, _ string) ([]Embedding, error) {
+	if e.seen != nil {
+		*e.seen = append(*e.seen, texts...)
+	}
 	out := make([]Embedding, len(texts))
 	for i, text := range texts {
 		v := make([]float64, VectorDimension)
@@ -125,7 +148,8 @@ func TestRecallBaselinePostgresReadOnly(t *testing.T) {
 	if err := p.Insert(ctx, "sources", Record{ID: "src-1", Scope: scope, Kind: "source", Status: "active", Revision: 1, Text: "source", CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	emb := baselineEmbedder{marker: marker}
+	var seen []string
+	emb := baselineEmbedder{marker: marker, seen: &seen}
 	for i, text := range []string{marker + " worktree rule", marker + " report in Korean", "unrelated garden note"} {
 		r := Record{ID: "mem-" + string(rune('a'+i)), Scope: scope, Kind: "procedural", Status: "active", Revision: 1, Text: text, Summary: text, Keywords: []string{marker}, ApprovedBy: "human", Sources: []SourceRef{{SourceID: "src-1", Locator: "test"}}, CreatedAt: now, UpdatedAt: now}
 		vec, _ := emb.Embed(ctx, []string{text}, "document")
@@ -137,11 +161,16 @@ func TestRecallBaselinePostgresReadOnly(t *testing.T) {
 	if err := p.Insert(ctx, "evaluations", Record{ID: "ev-1", Scope: scope, Kind: "memory_outcome", Status: "active", Revision: 1, Text: "checker", Target: &Ref{Collection: colMemories, ID: "mem-a", Revision: 1}, Tags: []string{"dimension:personal_compliance"}, Passed: true, CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	rep, err := p.RecallBaseline(ctx, scope, []BaselineQuery{{Query: marker + " worktree", Relevant: []string{"mem-a"}}}, true, emb)
+	// TC-BASE-008: a query failing safeTransfer is searched without being embedded.
+	unsafe := marker + " mail owner@example.com"
+	rep, err := p.RecallBaseline(ctx, scope, []BaselineQuery{{Query: marker + " worktree", Relevant: []string{"mem-a"}}, {Query: unsafe, Relevant: []string{"mem-b"}}}, true, emb)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !rep.ReadOnlyTxHeld || !rep.VectorEnabled || rep.Queries["labeled"] != 4 || rep.Queries["negative"] != len(baselineNegatives) {
+	if slices.Contains(seen, unsafe) || rep.Queries["vector_disabled"] != 1 {
+		t.Fatalf("unsafe query embedded: vector_disabled=%d", rep.Queries["vector_disabled"])
+	}
+	if !rep.ReadOnlyTxHeld || !rep.VectorEnabled || rep.Queries["labeled"] != 5 || rep.Queries["negative"] != len(baselineNegatives) {
 		t.Fatalf("report=%+v", rep)
 	}
 	if rep.Relevance["hit_at_6"] != 1 || rep.RelevantDist.N == 0 || rep.Outcomes["personal_compliance"].Results != 1 {

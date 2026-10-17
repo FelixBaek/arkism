@@ -19,7 +19,9 @@ func TestBaselineQueries(t *testing.T) {
 	if err != nil || self || len(q) != 2 || q[0].Relevant[0] != "m1" || !q[1].Negative {
 		t.Fatalf("file: %+v %v %v", q, self, err)
 	}
-	for _, bad := range []string{"{\"query\":\"\"}\n", "{\"query\":\"a\",\"text\":\"x\"}\n", "not json\n"} {
+	for _, bad := range []string{"{\"query\":\"\"}\n", "{\"query\":\"a\",\"text\":\"x\"}\n", "not json\n",
+		// TC-BASE-009: a negative query cannot also name relevant memories.
+		"{\"query\":\"a\",\"relevant\":[\"m1\"],\"negative\":true}\n"} {
 		if err := os.WriteFile(path, []byte(bad), 0o600); err != nil {
 			t.Fatal(err)
 		}

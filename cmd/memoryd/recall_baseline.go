@@ -61,7 +61,7 @@ func baselineQueries(spec string) ([]memory.BaselineQuery, bool, error) {
 		var q memory.BaselineQuery
 		dec := json.NewDecoder(strings.NewReader(scan.Text()))
 		dec.DisallowUnknownFields()
-		if err := dec.Decode(&q); err != nil || strings.TrimSpace(q.Query) == "" || len([]rune(q.Query)) > 1000 {
+		if err := dec.Decode(&q); err != nil || strings.TrimSpace(q.Query) == "" || len([]rune(q.Query)) > 1000 || q.Negative && len(q.Relevant) > 0 {
 			return nil, false, memory.ErrInvalid
 		}
 		out = append(out, q)
