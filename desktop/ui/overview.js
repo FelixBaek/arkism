@@ -47,8 +47,8 @@ window.ArkismOverview = (ctx) => {
     const w = d.tools?.memory_use || null, reported = time(d.tools?.collected_at);
     const proposals = (d.maintenance || []).map((p) => time(p.created_at)).filter(Boolean);
     const lastSession = latest(sessions), lastExtract = latest(extracted);
-    // never extracted yet: count the stall from the oldest session in range
-    // the stall clock starts at the first session after the last extraction (the oldest session if never extracted)
+    // the stall clock starts at the first session that ended after the last extraction (the oldest session if never extracted);
+    // extraction runs on finished sessions, so a session that ended after it is still unprocessed even if it started before
     const pending = lastExtract ? sessions.filter((t) => t > lastExtract) : sessions;
     const since = pending.length ? Math.min(...pending) : lastExtract;
     // 분석 stops when sessions keep coming but nothing new became a candidate for 6 hours.
