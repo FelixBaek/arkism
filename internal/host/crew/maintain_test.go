@@ -266,12 +266,16 @@ func TestSignalProposalsPostWeakRulesAndLessonsWithEvidence(t *testing.T) {
 	eq(t, got, []any{[]any{"rule_often_violated", "r2", 10, 1, "low_pass_rate"}, []any{"lesson_often_failing", "l1", 12, 3, "low_pass_rate"},
 		[]any{"rule_often_violated", "r1", 20, 10, "low_pass_rate"}})
 
-	// Signal proposals and pair proposals share one limit per morning.
+	// Signal proposals and pair proposals share one limit per morning; with no slot left the model is not asked.
 	t.Setenv("ARKISM_MAINTAIN_MAX_PROPOSALS", "2")
+	t.Setenv("ARKISM_MAINTAIN_LLM", "1")
+	patch(t, &mSearch, func(string, int) ([]any, error) { return []any{map[string]any{"id": "few"}}, nil })
+	patch(t, &judgeFn, func([]memPair) ([]any, error) { t.Fatal("judged with no slot left"); return nil, nil })
 	*posted = nil
 	if found, sent, _ = maintainRun(false, io.Discard); found != 2 || sent != 2 {
 		t.Fatal("limit not shared", found, sent)
 	}
+	t.Setenv("ARKISM_MAINTAIN_LLM", "0")
 	t.Setenv("ARKISM_MAINTAIN_MAX_PROPOSALS", "10")
 
 	// A stricter setting keeps only the worst; a token that cannot read signals skips them and the night goes on.

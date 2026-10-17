@@ -608,8 +608,13 @@ func maintainRun(dryRun bool, stdout io.Writer) (int, int, error) {
 		seen[k] = true
 	}
 	sigFound, sigPosted := signalRun(items, seen, dryRun, stdout)
+	// One limit for what a person sees per morning: pairs get what signal proposals left.
+	slots := maxProposals() - sigPosted
+	if dryRun {
+		slots = maxProposals() - sigFound
+	}
 	pairs := candidatePairs(items, seen, nil)
-	if len(pairs) == 0 {
+	if len(pairs) == 0 || slots <= 0 { // no model call when nothing could be posted
 		mMetric(map[string]any{"event": "maintain", "memories": len(items), "pairs": 0, "proposed": sigPosted, "signal_proposed": sigPosted})
 		return sigFound, sigPosted, nil
 	}
@@ -638,7 +643,7 @@ func maintainRun(dryRun bool, stdout io.Writer) (int, int, error) {
 		}
 	}
 	found := proposals(pairs, verdicts)
-	found = found[:min(len(found), max(0, maxProposals()-sigFound))] // one limit for what a person sees per morning
+	found = found[:min(len(found), slots)]
 	posted := 0
 	for _, p := range found {
 		if dryRun {
