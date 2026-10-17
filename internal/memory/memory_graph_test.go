@@ -302,6 +302,40 @@ func TestMemoryGraphLinesReachesAndDepth(t *testing.T) {
 	}
 }
 
+// ST-820 / TC-SEC-011: a neighbour the caller may not read never shows, nor what lies behind it.
+func TestMemoryGraphHonorsNeighbourReadDenial(t *testing.T) {
+	f := newFixture(t)
+	seedGraph(newGraphWorld(t, func(col string, r Record) error { return f.repo.Insert(testCtx, col, r) }, f.emb.space))
+	switched := false
+	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+		if req.Action == "read:memories" && req.ResourceID == "con" {
+			return Decision{}, ErrDenied
+		}
+		d, e := f.auth.Authorize(ctx, token, req)
+		if switched && req.Action == "read:memories" && req.ResourceID == "ses" {
+			d.PrincipalID = "other-user"
+		}
+		return d, e
+	})
+	q := graphQuery(2)
+	q.Reaches = []string{ReachGeneral, ReachPersonal}
+	q.MemoryID = "pro"
+	g, e := f.svc.MemoryGraph(testCtx, f.human, q)
+	if e != nil {
+		t.Fatal(e)
+	}
+	nodes, _ := graphShape(g)
+	raw, _ := json.Marshal(g)
+	if !hasNode(nodes, "c") || hasNode(nodes, "con") || hasNode(nodes, "a2") || strings.Contains(string(raw), "two steps away") {
+		t.Fatal("denied neighbour", nodes)
+	}
+	// A decision for another principal on a neighbour stops the whole read.
+	switched = true
+	if _, e = f.svc.MemoryGraph(testCtx, f.human, graphQuery(1)); e != ErrDenied {
+		t.Fatal("principal switch", e)
+	}
+}
+
 func TestMemoryGraphRefusesBadInputAndOtherPrincipals(t *testing.T) {
 	f := newFixture(t)
 	seedGraph(newGraphWorld(t, func(col string, r Record) error { return f.repo.Insert(testCtx, col, r) }, f.emb.space))

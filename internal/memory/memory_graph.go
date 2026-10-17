@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"slices"
@@ -201,6 +202,8 @@ func memoryGraphRoutes(mux *http.ServeMux, s *Service) {
 
 type memoryGraphBuild struct {
 	s     *Service
+	token string
+	who   Decision
 	in    MemoryGraphQuery
 	nodes map[string]Record
 	depth map[string]int
@@ -261,7 +264,7 @@ func (s *Service) MemoryGraph(ctx context.Context, token string, in MemoryGraphQ
 	if len(center) != 1 {
 		return MemoryGraph{}, ErrNotFound
 	}
-	b := &memoryGraphBuild{s: s, in: in, nodes: map[string]Record{in.MemoryID: center[0]}, depth: map[string]int{in.MemoryID: 0}, order: []string{in.MemoryID}, seen: map[string]bool{}}
+	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{in.MemoryID: center[0]}, depth: map[string]int{in.MemoryID: 0}, order: []string{in.MemoryID}, seen: map[string]bool{}}
 	frontier := []string{in.MemoryID}
 	for step := 1; step <= in.Depth && len(frontier) > 0; step++ {
 		if frontier, e = b.expand(ctx, frontier, step); e != nil {
@@ -319,7 +322,7 @@ func (b *memoryGraphBuild) expand(ctx context.Context, frontier []string, step i
 	if e := b.load(ctx, candidates); e != nil {
 		return nil, e
 	}
-	return b.place(candidates, step), nil
+	return b.place(ctx, candidates, step)
 }
 
 func (b *memoryGraphBuild) storedLines(ctx context.Context, frontier []string) ([]MemoryGraphEdge, error) {
@@ -448,15 +451,28 @@ func (b *memoryGraphBuild) load(ctx context.Context, lines []MemoryGraphEdge) er
 	return nil
 }
 
-// place adds new loaded ends in id order up to the node limit and keeps lines between placed nodes.
-func (b *memoryGraphBuild) place(candidates []MemoryGraphEdge, step int) []string {
+// place adds new loaded ends the caller may read, in id order up to the node limit, and
+// keeps lines between placed nodes.
+func (b *memoryGraphBuild) place(ctx context.Context, candidates []MemoryGraphEdge, step int) ([]string, error) {
 	next := []string{}
 	for _, edge := range candidates {
 		for _, id := range []string{edge.From, edge.To} {
-			_, loaded := b.nodes[id]
-			if _, placed := b.depth[id]; loaded && !placed && !slices.Contains(next, id) {
-				next = append(next, id)
+			r, loaded := b.nodes[id]
+			if _, placed := b.depth[id]; !loaded || placed || slices.Contains(next, id) {
+				continue
 			}
+			// Per-memory read check like ListMemories: a denied neighbour is left out, never labelled.
+			d, e := b.s.authorize(ctx, b.token, "read:memories", b.in.Scope, id, structuredText(r))
+			if errors.Is(e, ErrDenied) {
+				continue
+			}
+			if e != nil {
+				return nil, e
+			}
+			if d.PrincipalID != b.who.PrincipalID || d.Role != b.who.Role {
+				return nil, ErrDenied
+			}
+			next = append(next, id)
 		}
 	}
 	slices.Sort(next)
@@ -479,5 +495,5 @@ func (b *memoryGraphBuild) place(candidates []MemoryGraphEdge, step int) []strin
 			delete(b.nodes, id)
 		}
 	}
-	return next
+	return next, nil
 }
