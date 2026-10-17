@@ -306,9 +306,10 @@ func TestMemoryGraphLinesReachesAndDepth(t *testing.T) {
 func TestMemoryGraphHonorsNeighbourReadDenial(t *testing.T) {
 	f := newFixture(t)
 	seedGraph(newGraphWorld(t, func(col string, r Record) error { return f.repo.Insert(testCtx, col, r) }, f.emb.space))
-	switched := false
+	switched, asked := false, map[string]int{}
 	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
-		if req.Action == "read:memories" && req.ResourceID == "con" {
+		if req.Action == "read:memories" && (req.ResourceID == "con" || req.ResourceID == "sim1") {
+			asked[req.ResourceID]++
 			return Decision{}, ErrDenied
 		}
 		d, e := f.auth.Authorize(ctx, token, req)
@@ -328,6 +329,14 @@ func TestMemoryGraphHonorsNeighbourReadDenial(t *testing.T) {
 	raw, _ := json.Marshal(g)
 	if !hasNode(nodes, "c") || hasNode(nodes, "con") || hasNode(nodes, "a2") || strings.Contains(string(raw), "two steps away") {
 		t.Fatal("denied neighbour", nodes)
+	}
+	// sim1 is reached from c at step 1 and from sim2, sim3 at step 2: one denial is remembered.
+	asked = map[string]int{}
+	if g, e = f.svc.MemoryGraph(testCtx, f.human, graphQuery(2)); e != nil || asked["sim1"] != 1 {
+		t.Fatal("denied neighbour asked", asked, e)
+	}
+	if nodes, _ = graphShape(g); hasNode(nodes, "sim1") || !hasNode(nodes, "sim2") {
+		t.Fatal("denied similar neighbour", nodes)
 	}
 	// A decision for another principal on a neighbour stops the whole read.
 	switched = true

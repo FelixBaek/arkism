@@ -210,6 +210,7 @@ type memoryGraphBuild struct {
 	order []string
 	edges []MemoryGraphEdge
 	seen  map[string]bool
+	deny  map[string]bool // read denied once; never asked again in this request
 	trunc bool
 }
 
@@ -264,7 +265,7 @@ func (s *Service) MemoryGraph(ctx context.Context, token string, in MemoryGraphQ
 	if len(center) != 1 {
 		return MemoryGraph{}, ErrNotFound
 	}
-	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{in.MemoryID: center[0]}, depth: map[string]int{in.MemoryID: 0}, order: []string{in.MemoryID}, seen: map[string]bool{}}
+	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{in.MemoryID: center[0]}, depth: map[string]int{in.MemoryID: 0}, order: []string{in.MemoryID}, seen: map[string]bool{}, deny: map[string]bool{}}
 	frontier := []string{in.MemoryID}
 	for step := 1; step <= in.Depth && len(frontier) > 0; step++ {
 		if frontier, e = b.expand(ctx, frontier, step); e != nil {
@@ -458,12 +459,13 @@ func (b *memoryGraphBuild) place(ctx context.Context, candidates []MemoryGraphEd
 	for _, edge := range candidates {
 		for _, id := range []string{edge.From, edge.To} {
 			r, loaded := b.nodes[id]
-			if _, placed := b.depth[id]; !loaded || placed || slices.Contains(next, id) {
+			if _, placed := b.depth[id]; !loaded || placed || b.deny[id] || slices.Contains(next, id) {
 				continue
 			}
 			// Per-memory read check like ListMemories: a denied neighbour is left out, never labelled.
 			d, e := b.s.authorize(ctx, b.token, "read:memories", b.in.Scope, id, structuredText(r))
 			if errors.Is(e, ErrDenied) {
+				b.deny[id] = true
 				continue
 			}
 			if e != nil {
