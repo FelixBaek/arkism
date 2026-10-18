@@ -26,7 +26,9 @@ fetch() {
   curl -fsSL --retry 3 -o "$file" "$url"
   local got; got="$(sha256 "$file")"
   if [[ "$got" != "$want" ]]; then
-    if [[ -n "${ARKISM_PRINT_SHA:-}" ]]; then echo "sha256 $file = $got" >&2; else echo "checksum mismatch for $url: $got" >&2; exit 1; fi
+    echo "checksum mismatch for $url: $got" >&2
+    if [[ -n "${ARKISM_PRINT_SHA:-}" ]]; then echo "sha256 $file = $got" >&2; fi
+    exit 1
   fi
 }
 
