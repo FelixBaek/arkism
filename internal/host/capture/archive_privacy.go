@@ -35,7 +35,9 @@ func (w *archivePrivacyWriter) Write(p []byte) (int, error) {
 // archiveSnapshot is the exact file later hashed, projected and transmitted.
 // Source changes cannot introduce new, uninspected bytes after this operation.
 func archiveSnapshot(path, format string) (target string, cleanup func(), err error) {
-	cleanup = func() {}
+	cleanup = func() {
+		// No staging directory exists yet; callers may always invoke cleanup.
+	}
 	info, err := os.Lstat(path)
 	if err != nil {
 		return "", cleanup, err

@@ -2,6 +2,8 @@
 
 `<private>…</private>` removes marked text from extraction input. Nested spans stay hidden until the outer span closes. An unfinished span hides the remainder of the message. User, assistant and tool text, prior state and queued extraction input follow the same boundary.
 
+If an encoded or incomplete marker remains after span redaction, extraction masks that string value. Other safe records in the same batch remain available; marked identifiers and object keys still stop the request.
+
 | Path | Before sending or saving |
 | --- | --- |
 | Hooks and extraction | Redact text before search and model authorization. Refuse marked identifiers and object keys rather than changing their identity. |
@@ -28,4 +30,4 @@ These boundaries apply to new capture and retries. They do not erase existing ba
 
 ## Verification
 
-The capture tests use synthetic input and fake transports. They check zero requests for marked input across JSONL, reconstructed exports and SQLite overflow pages; all dialogue roles and prior state; old spool and prepared retries; policy changes during extraction or upload; source mutations; staging cleanup; behavior traces and receipt replay; and unchanged bytes, hashes and delivery behavior for ordinary sessions. Actual queue tests pause repeatedly without spending retry attempts, then resume the original delivery. Windows CI also runs the privacy boundary tests. No real provider or user session is needed.
+The capture tests use synthetic input and fake transports. They check zero requests for marked input across JSONL, reconstructed exports and SQLite overflow pages; all dialogue roles and prior state; old spool and prepared retries; policy changes during extraction or upload; source mutations; staging cleanup; behavior traces and receipt replay; and unchanged bytes, hashes and delivery behavior for ordinary sessions. Actual queue tests pause repeatedly without spending retry attempts, then resume the original delivery. Windows CI also runs the privacy boundaries, native short-path and junction checks, and atomic receipt publication tests. No real provider or user session is needed.

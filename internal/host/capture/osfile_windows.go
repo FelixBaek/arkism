@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	"golang.org/x/sys/windows"
@@ -88,3 +90,75 @@ func killGroup(cmd *exec.Cmd) {
 
 // syncDir is a no-op: Windows cannot fsync a directory handle (Python skipped it too).
 func syncDir(string) error { return nil }
+
+// EvalSymlinks expands 8.3 names and filesystem letter case on Windows. Those
+// spellings are normal paths. Reparse points (including junctions) remain aliases
+// and are refused at every existing component before comparing file identities.
+func resolvedPathEqual(path, canonical string) bool {
+	for candidate := path; ; candidate = filepath.Dir(candidate) {
+		attributes, err := captureWindowsAttributes(candidate)
+		if err != nil || attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+			return false
+		}
+		if parent := filepath.Dir(candidate); parent == candidate {
+			break
+		}
+	}
+	original, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	actual, err := os.Lstat(canonical)
+	return err == nil && os.SameFile(original, actual)
+}
+
+func captureWindowsAttributes(path string) (uint32, error) {
+	native, err := captureWindowsPath(path)
+	if err != nil {
+		return 0, err
+	}
+	name, err := windows.UTF16PtrFromString(native)
+	if err != nil {
+		return 0, err
+	}
+	if filepath.Dir(path) != path {
+		return windows.GetFileAttributes(name)
+	}
+	// GetFileAttributes cannot inspect a UNC share root. Inspect roots through
+	// a handle without following reparse points; failures still reject the path.
+	h, err := windows.CreateFile(name, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer windows.CloseHandle(h)
+	var info windows.ByHandleFileInformation
+	if err := windows.GetFileInformationByHandle(h, &info); err != nil {
+		return 0, err
+	}
+	return info.FileAttributes, nil
+}
+
+func evalCanonicalPath(path string) (string, error) {
+	native, err := captureWindowsPath(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(native)
+}
+
+// Native attribute and path-resolution APIs need the same long-path spelling
+// that Go's os package supplies internally. Keep UNC shares and device prefixes.
+func captureWindowsPath(path string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(absolute, `\\?\`) || strings.HasPrefix(absolute, `\\.\`) {
+		return absolute, nil
+	}
+	if strings.HasPrefix(absolute, `\\`) {
+		return `\\?\UNC\` + absolute[2:], nil
+	}
+	return `\\?\` + absolute, nil
+}

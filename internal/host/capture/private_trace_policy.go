@@ -93,7 +93,9 @@ func traceLedgerPolicy(path string) (*archivePolicy, error) {
 // Metadata and behavior come from the same private, stable copy. Appending or
 // changing the live transcript cannot introduce uninspected project metadata.
 func traceBehaviorSnapshot(path string) (string, func(), error) {
-	cleanup := func() {}
+	cleanup := func() {
+		// Missing or rejected source paths allocate no snapshot to remove.
+	}
 	if path == "" {
 		return "", cleanup, nil
 	}
@@ -119,12 +121,12 @@ func traceBehaviorSnapshot(path string) (string, func(), error) {
 	target := filepath.Join(dir, "session.jsonl")
 	if err := copyFile(path, target); err != nil {
 		cleanup()
-		return "", func() {}, err
+		return "", cleanup, err
 	}
 	after, err := archiveSignature(path)
 	if err != nil || !eq(before, after) {
 		cleanup()
-		return "", func() {}, valueErr("session_trace_source_changed")
+		return "", cleanup, valueErr("session_trace_source_changed")
 	}
 	return target, cleanup, nil
 }

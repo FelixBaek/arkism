@@ -1,10 +1,10 @@
 package crewrun
 
-// Finished runs as canonical execution traces (ST-614, FR-012). When a run ends, the engine records
+// Finished runs as canonical execution traces. When a run ends, the engine records
 // one execution trace for it under a separate producer credential and hands the ref-only receipt to
 // the configured sinks: the memory outcome spool (`arkism capture outcomes` drains it) and,
 // optionally, the session processor. Bodies stay on the server; a receipt holds refs only. Crew
-// runs never judge memories (OI-25): the outcome drain rejects their receipts and the server
+// runs never judge memories: the outcome drain rejects their receipts and the server
 // refuses a crew_run trace as outcome evidence.
 
 import (
@@ -176,15 +176,7 @@ func EnqueueReceipt(dir string, r TraceReceipt) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Link(tmp.Name(), name); err != nil && !errors.Is(err, os.ErrExist) {
-		return err
-	}
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return d.Sync()
+	return publishReceipt(tmp.Name(), name, dir)
 }
 
 // tracesFromEnv is the producer client: ARKISM_CREW_TRACE_TOKEN_FILE, a credential of its own.
@@ -201,7 +193,7 @@ func tracesFromEnv(base *Client) *Client {
 	}
 	c := *base
 	c.TokenFile = file
-	// Crew traces keep their own agent partition (OI-25): they stay out of memory outcome matching.
+	// Crew traces keep their own agent partition: they stay out of memory outcome matching.
 	c.Scope.AgentID = cmp.Or(c.Scope.AgentID, "crew")
 	return &c
 }

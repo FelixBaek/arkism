@@ -20,12 +20,22 @@ func privatePayload(v any) bool {
 	return marked || err != nil
 }
 
+// Escaped or incomplete marks cannot always be cut into literal spans. Mask
+// only that value so other dialogue in the same window can still be captured.
+func redactPrivateValue(text string) string {
+	text = redactPrivate(text)
+	if privatePayload(text) {
+		return privateMark
+	}
+	return text
+}
+
 // privateData copies dialogue/state without changing identifiers or object keys.
 // A marked key is refused by privatePayload after sanitizing the values.
 func privateData(v any) any {
 	switch x := v.(type) {
 	case string:
-		return redactPrivate(x)
+		return redactPrivateValue(x)
 	case []any:
 		out := make([]any, len(x))
 		for i, value := range x {
@@ -35,7 +45,7 @@ func privateData(v any) any {
 	case []string:
 		out := make([]string, len(x))
 		for i, value := range x {
-			out[i] = redactPrivate(value)
+			out[i] = redactPrivateValue(value)
 		}
 		return out
 	case map[string]any:

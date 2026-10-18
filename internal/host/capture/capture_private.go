@@ -63,14 +63,14 @@ func onlyPrivate(text string) bool {
 // privateMarked reports whether a transcript file has a <private> mark anywhere. Such a session is
 // not archived: the archive keeps transcripts byte for byte (offsets and hashes), so the marked
 // text cannot be cut out of it. Its memories are still captured, from redacted text.
-func privateMarked(path string) bool {
+// Inspection failures remain errors so callers can retry without declaring an opt-out.
+func privateMarked(path string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return true
+		return false, err
 	}
 	defer f.Close()
-	marked, err := scanPrivate(f)
-	return marked || err != nil
+	return scanPrivate(f)
 }
 
 // privateMarker recognizes ASCII tags and JSON Unicode-escaped tags, including

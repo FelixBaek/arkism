@@ -60,7 +60,7 @@ func TestPrivateRecallHookDefersWholeTranscriptInspectionUntilIdle(t *testing.T)
 			}
 			if hook == "SessionStart" {
 				event["source"] = "compact"
-				if replay := hookText(t, dumps(event)); replay != output {
+				if hookText(t, dumps(event)) != output {
 					t.Fatal("cached stable context bytes changed")
 				}
 			}

@@ -151,6 +151,8 @@ func TestArchiveCodexBOMHeaderKeepsSessionID(t *testing.T) {
 
 func TestArchiveAgentsViewSubagentsDoNotCollide(t *testing.T) {
 	archiveTestSettings(t)
+	// Imported metadata participates in capture policy, so it must use test-owned paths too.
+	sourcePath := filepath.Join(t.TempDir(), "source.jsonl")
 	dbpath := filepath.Join(t.TempDir(), "sessions.db")
 	db, err := sqlite.Open(dbpath)
 	if err != nil {
@@ -160,18 +162,24 @@ func TestArchiveAgentsViewSubagentsDoNotCollide(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, i := range []string{"1", "2"} {
-		db.Exec("INSERT INTO sessions VALUES('" + i + "','claude','shared-parent','/home/user/source.jsonl','" + archiveISO(timeNow()) + "'," +
-			str(int64(timeNow()*1e9)) + ",1,NULL)")
-		db.Exec("INSERT INTO messages VALUES(" + i + ",'" + i + "',1,'user','child " + i + "')")
+		if err := db.Exec("INSERT INTO sessions VALUES('" + i + "','claude','shared-parent','" + strings.ReplaceAll(sourcePath, "'", "''") + "','" + archiveISO(timeNow()) + "'," +
+			str(int64(timeNow()*1e9)) + ",1,NULL)"); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Exec("INSERT INTO messages VALUES(" + i + ",'" + i + "',1,'user','child " + i + "')"); err != nil {
+			t.Fatal(err)
+		}
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	client := newFakeArchive(t)
 	c := newCollector(client, nil, true)
 	if err := c.migrate(dbpath); err != nil {
 		t.Fatal(err)
 	}
 	if len(client.commits) != 2 || client.commits[0]["id"] == client.commits[1]["id"] {
-		t.Fatalf("%v", client.commits)
+		t.Fatalf("commits=%v counts=%v", client.commits, c.counts.n)
 	}
 	for _, cm := range client.commits {
 		if cm["session_id"] != "shared-parent" {

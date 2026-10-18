@@ -440,9 +440,15 @@ var (
 func maskSensitive(v any) any {
 	switch x := v.(type) {
 	case string:
-		x = redactPrivate(x)
+		x = redactPrivateValue(x)
 		x = emailPattern.ReplaceAllString(x, "[email]")
 		return rrnPattern.ReplaceAllString(phonePattern.ReplaceAllString(x, "[phone]"), "[rrn]")
+	case []string:
+		out := make([]string, len(x))
+		for i, value := range x {
+			out[i] = maskSensitive(value).(string)
+		}
+		return out
 	case []any:
 		out := make([]any, len(x))
 		for i, e := range x {

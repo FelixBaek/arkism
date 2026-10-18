@@ -169,7 +169,11 @@ func evidencePrepareUsers(context any, users []any, root string, post evidencePo
 	if err := evidencePolicyCheck(policy); err != nil {
 		return nil, err
 	}
-	if privateMarked(sstr(autosaveGet(context, "path"))) { // never archived; the memories carry no source link
+	marked, err := privateMarked(path)
+	if err != nil {
+		return nil, sessionWait("archive_inspection_unavailable")
+	}
+	if marked { // never archived; the memories carry no source link
 		for _, u := range users {
 			if m, ok := u.(map[string]any); ok {
 				delete(m, "archive_hint")
@@ -463,7 +467,11 @@ func evidenceLocatePrompt(locator any) (context, hint host.Obj, root string, err
 	context = contexts[0]
 	pathV, _ := context.Get("path")
 	path := pathV.(string)
-	if privateMarked(path) {
+	marked, err := privateMarked(path)
+	if err != nil {
+		return nil, nil, "", sessionWait("archive_inspection_unavailable")
+	}
+	if marked {
 		return nil, nil, "", sessionWait("session_archive_private_skipped")
 	}
 	before, err := archiveSignature(path)
@@ -569,7 +577,11 @@ func evidenceZcodeHints(path string, locator host.Obj) (out []any, err error) {
 	if !info.Mode().IsRegular() || info.Size() > archiveMaxBytes {
 		return nil, runtimeErr("archive_snapshot_too_large")
 	}
-	if privateMarked(path) {
+	marked, err := privateMarked(path)
+	if err != nil {
+		return nil, sessionWait("archive_inspection_unavailable")
+	}
+	if marked {
 		return nil, sessionWait("session_archive_private_skipped")
 	}
 	device, _ := locator.Get("device")

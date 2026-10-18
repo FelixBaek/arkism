@@ -438,19 +438,19 @@ func absPath(p string) string {
 // resolved reports Path(p).resolve() == p: no symlink anywhere on the absolute path.
 // A missing tail resolves to itself, like Python's non-strict resolve.
 func resolved(p string) bool {
-	r, err := filepath.EvalSymlinks(p)
+	r, err := evalCanonicalPath(p)
 	if err != nil {
+		if _, statErr := os.Lstat(p); !os.IsNotExist(statErr) {
+			return false
+		}
 		// Resolve the existing prefix; the rest stays as written.
 		dir, base := filepath.Dir(p), filepath.Base(p)
 		if dir == p {
-			return true
-		}
-		if _, statErr := os.Lstat(p); statErr == nil {
 			return false
 		}
 		return resolved(dir) && base != ".."
 	}
-	return r == filepath.Clean(p)
+	return resolvedPathEqual(filepath.Clean(p), r)
 }
 
 // isSymlink is Path.is_symlink().

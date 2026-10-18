@@ -1,6 +1,6 @@
 package capture
 
-// Classification outbox (ST-302, FR-012, ADR-0022): the exact classify writes of one decided
+// Classification outbox: the exact classify writes of one decided
 // batch are stored before the first is sent, so a lost answer is replayed instead of asking the
 // model again. Each write is fenced by expected_revision; the server re-checks authorization and
 // revision on every replay. It carries risk calls only, never an approval. This is a protected
@@ -53,9 +53,9 @@ func reviewTerminal(err error) bool {
 	return false
 }
 
-// reviewFailClosed stops every run with no backoff: a missing credential or a 403.
+// Refused credentials and unsafe prepared requests stop without backoff or rewriting.
 func reviewFailClosed(err error) bool {
-	return errors.Is(err, errReviewerCredential) || host.HTTPCode(err) == 403
+	return errors.Is(err, errReviewerCredential) || errors.Is(err, errReviewInvalid) || host.HTTPCode(err) == 403
 }
 
 func validReviewRequest(v any) bool {
@@ -202,7 +202,7 @@ func deliverReviews(path string, record host.Obj, send reviewSend) ([]map[string
 			err = checkReviewAck(r, res)
 		}
 		if reviewFailClosed(err) {
-			return nil, err // no backoff: every run fails closed until the credential or grant is there
+			return nil, err // retain the prepared bytes until the refusal is resolved
 		}
 		if err != nil && !reviewTerminal(err) {
 			attempts, _ := intField(get("attempts"))
@@ -287,7 +287,7 @@ func replayReviews(send reviewSend) (pending map[string]bool, err error) {
 					continue
 				}
 				if reviewFailClosed(err) {
-					return err // fails closed: no reviewer credential or grant, nothing is sent
+					return err // no new classification until the refused replay is resolved
 				}
 				if ve := valueErr(""); errors.As(err, &ve) && !errors.Is(err, errReviewAck) {
 					return err // a changed or corrupt spool is never sent

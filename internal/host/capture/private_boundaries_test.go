@@ -21,7 +21,7 @@ func TestPrivateNestedAndUnfinishedSpans(t *testing.T) {
 		"visible </private> after":                                                   "visible </private> after",
 		"<privateer>visible</privateer>":                                             "<privateer>visible</privateer>",
 	} {
-		if got := clean(input); got != want {
+		if clean(input) != want {
 			t.Fatal("nested private boundary changed")
 		}
 	}
@@ -168,8 +168,8 @@ func TestArchivePrivateInspectionReadFailure(t *testing.T) {
 	if _, err := scanPrivate(privateErrorReader{}); err == nil {
 		t.Fatal("inspection error disappeared")
 	}
-	if !privateMarked(filepath.Join(t.TempDir(), "missing")) {
-		t.Fatal("uninspectable source allowed")
+	if marked, err := privateMarked(filepath.Join(t.TempDir(), "missing")); marked || err == nil {
+		t.Fatal("inspection error mislabeled as a private marker", err)
 	}
 }
 

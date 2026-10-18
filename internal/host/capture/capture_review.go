@@ -14,7 +14,7 @@ import (
 )
 
 // ---------------------------------------------------------------- AI classification
-// AI classifies, people approve (ADR-0022). An approved wrong memory reaches every project; a wrong classification
+// AI classifies, people approve. An approved wrong memory reaches every project; a wrong classification
 // only changes the order of the review list. So the reviewer writes nothing but a risk call, under its own classifier
 // credential that the server lets do nothing else; without that credential it fails closed.
 
@@ -70,6 +70,9 @@ func basisTag(c map[string]any) string {
 
 // reviewRule is a risk call no model is needed for; ok false when there is none.
 func reviewRule(c map[string]any) (risk, reason string, ok bool) {
+	if privatePayload(c["text"]) {
+		return "high", "비공개 내용: 직접 확인 필요", true
+	}
 	tags, _ := c["tags"].([]any)
 	if c["kind"] == "episodic" {
 		return "high", "진행 기록", true
@@ -87,19 +90,19 @@ func reviewed(c map[string]any) bool {
 }
 
 func reviewItem(c map[string]any, related []map[string]any, old map[string]any) string {
-	first := fmt.Sprintf("ITEM %s kind=%s basis=%s", str(c["id"]), str(c["kind"]), basisTag(c))
+	first := fmt.Sprintf("ITEM %s kind=%s basis=%s", str(c["id"]), redactPrivateValue(str(c["kind"])), redactPrivateValue(basisTag(c)))
 	if tags, _ := c["tags"].([]any); containsAny(tags, "review:instruction_like") {
 		first += " instruction_like"
 	}
-	lines := []string{first, "TEXT: " + head(str(or(c["text"], "")), 1500)}
+	lines := []string{first, "TEXT: " + head(redactPrivateValue(str(or(c["text"], ""))), 1500)}
 	if old != nil {
-		lines = append(lines, fmt.Sprintf("CONFLICT OLD %s: %s", str(old["id"]), head(str(or(old["text"], "")), 800)))
+		lines = append(lines, fmt.Sprintf("CONFLICT OLD %s: %s", str(old["id"]), head(redactPrivateValue(str(or(old["text"], ""))), 800)))
 	}
 	for i, r := range related {
 		if i == 3 {
 			break
 		}
-		lines = append(lines, fmt.Sprintf("RELATED %s: %s", str(r["id"]), head(str(or(r["text"], "")), 300)))
+		lines = append(lines, fmt.Sprintf("RELATED %s: %s", str(r["id"]), head(redactPrivateValue(str(or(r["text"], ""))), 300)))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -118,6 +121,11 @@ func classifyRequest(c map[string]any, risk string, reasons []any, dup string) m
 
 // sendClassify posts one spooled write under the reviewer's credential.
 func sendClassify(path string, body any) (map[string]any, error) {
+	// Legacy prepared writes keep their exact bytes for manual recovery. New
+	// candidates can receive a safe risk call; an unsafe replay cannot be rewritten.
+	if privatePayload([]any{path, body}) {
+		return nil, errReviewInvalid
+	}
 	return revPost(path, body, 60*time.Second)
 }
 
@@ -189,6 +197,10 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 			return err
 		}
 		for _, c := range dicts(listOf(res["items"])) {
+			if privateIdentityFields(c, []string{"id", "revision", "conflict_id"}) {
+				metric(kv("event", "ai_review_skipped"), kv("reason", "private_identity"))
+				continue
+			}
 			if !reviewed(c) && !pending[str(c["id"])] {
 				waiting = append(waiting, c)
 			}
@@ -234,6 +246,9 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 					}
 					continue // cannot show the old side: leave it for the next run
 				}
+				if privatePayload(old["id"]) {
+					continue
+				}
 				if !slices.Contains(reviewKinds, old["kind"]) { // its text never reaches the model
 					ruled := []map[string]any{classifyRequest(c, "high", []any{"기존 기억과 모순"}, str(old["id"]))}
 					if err := classifyBatch(ruled, "rule", dryRun, stdout); err != nil {
@@ -242,7 +257,7 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 					continue
 				}
 			}
-			query := redactPrivate(str(or(c["text"], "")))
+			query := redactPrivateValue(str(or(c["text"], "")))
 			if privatePayload(query) {
 				return sessionWait("review_private_content")
 			}
@@ -256,7 +271,7 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 				if err != nil {
 					return err
 				}
-				if !eq(rm["id"], c["id"]) {
+				if !privatePayload(rm["id"]) && !eq(rm["id"], c["id"]) {
 					related = append(related, rm)
 				}
 			}
@@ -312,6 +327,9 @@ func conflictOld(c map[string]any) (old map[string]any, err error) {
 	for _, r := range rel["relations"].([]any) {
 		m := r.(map[string]any)
 		if m["collection"] == "memories" && !eq(m["id"], c["id"]) {
+			if privatePayload(m["id"]) {
+				return nil, errStop
+			}
 			return capGet(memoryPath(m["id"]), 8*time.Second)
 		}
 	}
