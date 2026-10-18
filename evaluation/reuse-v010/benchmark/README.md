@@ -143,3 +143,24 @@ harness, so these changes did not alter prompts, task ordering, checks or
 observed outcomes. Completed-run exit/timeout/token coverage is audited afterward.
 
 After data collection, the harness was split into helpers and its CLI output/exporter paths were restricted for static-analysis review. The original seed-generated 45-run permutation is now replayed explicitly. All saved prompts, ordering, observed results and summaries were checked unchanged; these maintenance changes did not trigger another model run.
+
+
+## Offline result integrity
+
+Before aggregation or measurement auditing, observations must have unique
+`(task, condition, replicate)` cells and a consistent `experiment_id`, `commit`,
+`fixture_sha256` and `model`. Duplicate cells and mixed experiment identities are
+rejected before replacing aggregate outputs. Identical prompts alone do not
+make observations from different experiments comparable.
+
+This validation also applies to partial result sets, while a partial audit
+remains supported. Passing it does not prove that every planned run completed,
+that a resumed experiment used a frozen protocol, or that billing and human
+review time were measured. Those are separate requirements for a future
+benchmark protocol.
+
+The offline regression rechecks the archived 45 unique observations and their
+15 static/Arkism prompt pairs without new model calls. The original recorded
+results remain unchanged. Synthetic duplicates and one-field identity changes
+exercise the rejected paths; they do not establish an error in the archived
+measurements.

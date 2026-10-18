@@ -37,6 +37,7 @@ OUTPUT_LOCATIONS = {
     str(PRIVATE_ROOT / 'results'): PRIVATE_ROOT / 'results',
 }
 CONDITIONS = ('none', 'static', 'arkism')
+PROTOCOL_FIELDS = ('experiment_id', 'commit', 'fixture_sha256', 'model')
 
 
 def private_directory(path):
@@ -295,8 +296,24 @@ def summarize_condition(rows):
     }
 
 
+def validate_result_identities(rows):
+    """Reject duplicate cells and mixed execution identities before reporting."""
+    identities, protocol = set(), None
+    for row in rows:
+        identity = (row['task_id'], row['condition'], row['replicate'])
+        if identity in identities:
+            raise ValueError('duplicate benchmark result cell')
+        identities.add(identity)
+        current = tuple(row.get(field) for field in PROTOCOL_FIELDS)
+        if protocol is not None and current != protocol:
+            raise ValueError('inconsistent benchmark experiment, commit, fixture or model')
+        protocol = current
+    return identities
+
+
 def write_results(out):
     rows = [json.loads(path.read_text()) for path in out.glob('*/result.json')]
+    validate_result_identities(rows)
     rows.sort(key=lambda row: row['order'])
     write_json(out / 'results.json', rows)
     fields = sorted(set().union(*(row.keys() for row in rows)))

@@ -10,6 +10,7 @@ import statistics
 import fcntl
 import os
 from private_storage import private_file
+from run import validate_result_identities
 
 CONDITIONS = ('none', 'static', 'arkism')
 FIELDS = ('input_tokens', 'cached_input_tokens', 'output_tokens')
@@ -39,20 +40,18 @@ def read_observation(path):
 
 
 def load_observations(results):
-    observations, evidence, identities = [], [], set()
+    observations, evidence = [], []
     for path in sorted(results.glob('*/result.json')):
         row = read_observation(path)
-        identity = (row['task_id'], row['condition'], row['replicate'])
-        if identity in identities or row['condition'] not in CONDITIONS:
-            raise ValueError(f'duplicate or invalid cell: {row["run_id"]}')
-        identities.add(identity)
+        if row['condition'] not in CONDITIONS:
+            raise ValueError(f'invalid cell: {row["run_id"]}')
         observations.append(row)
         for file in (path, path.with_name('events.json'), path.with_name(PROMPT_FILE)):
             evidence.append({'path': file.relative_to(results).as_posix(),
                              'sha256': hashlib.sha256(file.read_bytes()).hexdigest()})
     if not observations:
         raise ValueError('no recorded runs')
-    return observations, evidence, identities
+    return observations, evidence, validate_result_identities(observations)
 
 
 def billed_amounts(observations, charges):
