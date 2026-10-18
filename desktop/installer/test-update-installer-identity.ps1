@@ -36,7 +36,7 @@ Section
   StrCmp $0 "" invalid_output
   SetOutPath "$0"
   File /oname=embedded.fixture "${TEST_PAYLOAD}"
-  Quit
+  Return
 invalid_output:
   SetErrorLevel 31
   Quit
@@ -192,7 +192,10 @@ for ($caseIndex = 0; $caseIndex -lt $caseTargets.Count; $caseIndex++) {
   $case = $report.comparison_cases[$caseIndex]
   if ($case.target -cne $caseTargets[$caseIndex] -or $case.outcome -cne 'passed' -or
       $case.created -isnot [bool] -or -not $case.created -or
-      $case.terminal -isnot [bool] -or -not $case.terminal -or $case.exit_code -ne 0) {
+      $case.terminal -isnot [bool] -or -not $case.terminal -or $case.exit_code -ne 0 -or
+      $case.payload_verified -isnot [bool] -or -not $case.payload_verified -or
+      $case.payload_bytes_match -isnot [bool] -or -not $case.payload_bytes_match -or
+      $case.output_single_file -isnot [bool] -or -not $case.output_single_file) {
     throw 'identity_comparison_required_case_failed'
   }
 }

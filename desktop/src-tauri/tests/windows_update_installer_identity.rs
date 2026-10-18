@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 use std::ffi::{c_void, OsString};
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
@@ -281,6 +281,9 @@ struct CaseRecord {
     os_code: Option<i32>,
     operation: &'static str,
     manifest_verified: bool,
+    payload_verified: Option<bool>,
+    payload_bytes_match: Option<bool>,
+    output_single_file: Option<bool>,
 }
 impl CaseRecord {
     fn declared(target: &'static str, dos: bool) -> Self {
@@ -296,6 +299,16 @@ impl CaseRecord {
             os_code: None,
             operation: "none",
             manifest_verified: false,
+            payload_verified: None,
+            payload_bytes_match: None,
+            output_single_file: None,
+        }
+    }
+    fn json_bool(value: Option<bool>) -> &'static str {
+        match value {
+            Some(true) => "true",
+            Some(false) => "false",
+            None => "null",
         }
     }
     fn json(&self) -> String {
@@ -305,9 +318,9 @@ impl CaseRecord {
         let code = self
             .os_code
             .map_or_else(|| "null".to_string(), |code| code.to_string());
-        format!("{{\"target\":\"{}\",\"namespace\":\"{}\",\"phase\":\"{}\",\"outcome\":\"{}\",\"image_sha256\":\"{}\",\"manifest_verified\":{},\"created\":{},\"terminal\":{},\"exit_code\":{exit},\"operation\":\"{}\",\"os_code\":{code}}}",
+        format!("{{\"target\":\"{}\",\"namespace\":\"{}\",\"phase\":\"{}\",\"outcome\":\"{}\",\"image_sha256\":\"{}\",\"manifest_verified\":{},\"payload_verified\":{},\"payload_bytes_match\":{},\"output_single_file\":{},\"created\":{},\"terminal\":{},\"exit_code\":{exit},\"operation\":\"{}\",\"os_code\":{code}}}",
             self.target, self.namespace, self.phase, self.outcome, self.image_hash,
-            self.manifest_verified, self.created, self.terminal, self.operation)
+            self.manifest_verified, Self::json_bool(self.payload_verified), Self::json_bool(self.payload_bytes_match), Self::json_bool(self.output_single_file), self.created, self.terminal, self.operation)
     }
 }
 fn case_update(index: usize, update: impl FnOnce(&mut CaseRecord)) {
@@ -814,11 +827,21 @@ fn wait_comparison(index: usize, mut pending: PendingObserver) -> bool {
     }
 }
 
-fn payload_matches(output: &Path) -> bool {
-    let bytes = fs::read(output.join("embedded.fixture"));
-    let count = fs::read_dir(output).map(|entries| entries.collect::<Result<Vec<_>, _>>());
-    matches!(bytes, Ok(bytes) if bytes == b"Arkism inert installer fixture.\n")
-        && matches!(count, Ok(Ok(entries)) if entries.len() == 1)
+fn payload_matches(index: usize, output: &Path) -> bool {
+    let bytes = fs::File::open(output.join("embedded.fixture")).and_then(|file| {
+        let mut bytes = Vec::with_capacity(33);
+        file.take(33).read_to_end(&mut bytes)?;
+        Ok(bytes)
+    });
+    let count = fs::read_dir(output).map(|entries| entries.take(2).collect::<Result<Vec<_>, _>>());
+    let bytes_match = matches!(bytes, Ok(bytes) if bytes == b"Arkism inert installer fixture.\n");
+    let single_file = matches!(count, Ok(Ok(entries)) if entries.len() == 1);
+    case_update(index, |case| {
+        case.payload_verified = Some(bytes_match && single_file);
+        case.payload_bytes_match = Some(bytes_match);
+        case.output_single_file = Some(single_file);
+    });
+    bytes_match && single_file
 }
 
 fn comparison_case(index: usize, parent: &Path, inputs: &NativeInputs) {
@@ -863,12 +886,16 @@ fn comparison_case(index: usize, parent: &Path, inputs: &NativeInputs) {
     };
     case_update(index, |case| case.created = true);
     drop(guard);
-    if !wait_comparison(index, observer) {
+    let exit_ok = wait_comparison(index, observer);
+    // Observe only after this exact child is confirmed terminal, even when its
+    // exit code failed. A matching payload never overrides that primary failure.
+    let payload_ok = payload_matches(index, &output);
+    if !exit_ok {
         case_update(index, |case| case.outcome = "exit_failed");
         return;
     }
     case_phase(index, "payload");
-    if !payload_matches(&output) {
+    if !payload_ok {
         case_update(index, |case| case.outcome = "payload_failed");
         return;
     }
