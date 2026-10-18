@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -13,13 +14,23 @@ import (
 // per-prompt search.
 func stableFake(t *testing.T) *[]any {
 	t.Helper()
-	capFake(t)
+	root := capFake(t)
+	t.Setenv("HOME", root)
+	t.Setenv("ARKISM_REPO", "")
+	t.Setenv("ARKISM_WORK_AGENT", "")
+	t.Setenv("ARKISM_WORK_ID", "")
 	hookEnv(t)
 	standing := &[]any{map[string]any{"id": "rule-1", "kind": "user", "text": "보고는 짧게"}}
+	fakeStableValidation(t, standing)
 	capGet = func(path string, _ time.Duration) (map[string]any, error) {
 		switch {
 		case strings.HasPrefix(path, "/v1/memories?"):
 			if strings.Contains(path, "kind=user") {
+				for _, v := range *standing {
+					if it, ok := v.(map[string]any); ok {
+						normalizeStableFakeRow(it)
+					}
+				}
 				return map[string]any{"items": *standing}, nil
 			}
 			return map[string]any{"items": []any{}}, nil
@@ -36,7 +47,7 @@ func stableFake(t *testing.T) *[]any {
 	}
 	search = func(q, _ string, _ int, _ float64) ([]any, bool, error) {
 		return []any{
-			map[string]any{"id": "rule-1", "kind": "user", "text": "보고는 짧게"}, // already in the stable block
+			map[string]any{"id": "rule-1", "revision": json.Number("1"), "kind": "user", "text": "보고는 짧게"}, // already in the stable block
 			map[string]any{"id": "hit-" + q[:3], "kind": "decision", "text": "턴별 기억 " + q},
 		}, true, nil
 	}
@@ -132,5 +143,103 @@ func TestSkillSectionNeverCutsADescription(t *testing.T) {
 	p := skillSection("s1", 800)
 	if !strings.Contains(p.Full, "- long (id: agent/long)") || strings.Contains(p.Full, "설명") {
 		t.Fatal(p.Full)
+	}
+}
+
+// This synthetic API fixture enforces the batch availability contract; server
+// authentication, source locking and HMAC behavior have separate service tests.
+func normalizeStableFakeRow(it map[string]any) {
+	if _, ok := it["revision"]; !ok {
+		it["revision"] = json.Number("1")
+	}
+	if _, ok := it["scope"]; !ok {
+		it["scope"] = capScope()
+	}
+	if _, ok := it["status"]; !ok {
+		it["status"] = "active"
+	}
+	if _, ok := it["approved_by"]; !ok {
+		it["approved_by"] = "synthetic-reviewer"
+	}
+	it["content_hash"] = sha256Hex([]byte(strField(it["text"]) + "\n" + strField(it["summary"])))
+}
+func fakeStableValidation(t *testing.T, standing *[]any) {
+	t.Helper()
+	post := capPost
+	capPost = func(path string, body any, d time.Duration) (map[string]any, error) {
+		if path != "/v1/context/validate" {
+			return post(path, body, d)
+		}
+		if d <= 0 || d > 2*time.Second {
+			t.Fatal("unbounded validation timeout", d)
+		}
+		raw, _ := json.Marshal(body)
+		var in struct {
+			Scope       map[string]string      `json:"scope"`
+			Renderer    string                 `json:"renderer"`
+			BlockHash   string                 `json:"block_hash"`
+			Fingerprint string                 `json:"fingerprint"`
+			Refs        []host.StableMemoryRef `json:"refs"`
+		}
+		if json.Unmarshal(raw, &in) != nil {
+			t.Fatal("invalid synthetic request")
+		}
+		if in.Refs == nil {
+			in.Refs = []host.StableMemoryRef{}
+		}
+		seal := func(refs []host.StableMemoryRef) string {
+			return stableHash(struct {
+				Scope               map[string]string
+				Renderer, BlockHash string
+				Refs                []host.StableMemoryRef
+			}{in.Scope, in.Renderer, in.BlockHash, refs})
+		}
+		integrity := in.Fingerprint == "" || in.Fingerprint == seal(in.Refs)
+		rows := []any{}
+		all := true
+		refs := append([]host.StableMemoryRef{}, in.Refs...)
+		for i, ref := range in.Refs {
+			row := map[string]any{"collection": ref.Collection, "id": ref.ID, "revision": ref.Revision, "status": "unavailable"}
+			for _, v := range *standing {
+				it, ok := v.(map[string]any)
+				if !ok || it["id"] != ref.ID {
+					continue
+				}
+				normalizeStableFakeRow(it)
+				rev, _ := host.Int(it["revision"])
+				fp := stableHash(it)
+				if integrity && rev == ref.Revision && it["content_hash"] == ref.Digest && it["status"] == "active" && strField(it["approved_by"]) != "" && !truthy(it["privacy_quarantined"]) && !truthy(it["content_erased"]) && (ref.Fingerprint == "" || ref.Fingerprint == fp) {
+					row["status"], row["fingerprint"] = "valid", fp
+					refs[i].Fingerprint = fp
+				}
+			}
+			if row["status"] != "valid" {
+				all = false
+			}
+			rows = append(rows, row)
+		}
+		fp := in.Fingerprint
+		if in.Fingerprint == "" {
+			integrity = all
+			if all {
+				fp = seal(refs)
+			}
+		}
+		return map[string]any{"authority": "data_only_untrusted", "integrity": integrity, "fingerprint": fp, "items": rows}, nil
+	}
+}
+
+func TestSkillListNeverDescribesADifferentPinnedVersion(t *testing.T) {
+	stableFake(t)
+	if _, err := sessionStore().Pin("version-mismatch", host.SkillPin{SkillID: "synthetic-skill", VersionID: "approved-old-version"}); err != nil {
+		t.Fatal(err)
+	}
+	capGet = func(string, time.Duration) (map[string]any, error) {
+		return map[string]any{"items": []any{map[string]any{"id": "synthetic-skill", "version_id": "approved-new-version", "name": "synthetic", "description": "synthetic new version description"}}}, nil
+	}
+	part := skillSection("version-mismatch", 800)
+	pin, _ := sessionStore().SkillPin("version-mismatch", "synthetic-skill")
+	if pin.VersionID != "approved-old-version" || strings.Contains(part.Full, "synthetic new version description") {
+		t.Fatal("latest metadata was paired with an immutable old version pin")
 	}
 }

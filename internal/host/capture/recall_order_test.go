@@ -132,7 +132,7 @@ func TestPromptRecallSkipsEarlierTurnsUnlessRevised(t *testing.T) {
 	}
 }
 
-// ST-815: the prompt and SessionStart contract hooks drop hits below the same score floor and
+// the prompt and SessionStart contract hooks drop hits below the same score floor and
 // kind budget the MCP recall tool uses, so an unrelated prompt injects nothing.
 func TestHookRecallAppliesSharedBudget(t *testing.T) {
 	capFake(t)
@@ -164,7 +164,12 @@ func TestHookRecallAppliesSharedBudget(t *testing.T) {
 	for _, h := range procedural[:3] {
 		ids = append(ids, h.(map[string]any)["id"].(string))
 	}
-	if _, err := sessionStore().SaveStable("s3", host.StableBlock{IDs: ids, Scope: stableScope()}); err != nil {
+	cache := host.StableBlock{IDs: ids, Scope: stableScope(), Renderer: stableRenderer, WorkAgent: pinAgent(), Fingerprint: strings.Repeat("a", 64)}
+	for _, id := range ids {
+		cache.Refs = append(cache.Refs, host.StableMemoryRef{Collection: "memories", ID: id, Revision: 1, Digest: sha256Hex([]byte("t\n")), Fingerprint: strings.Repeat("b", 64)})
+	}
+	cache.BlockHash = stableBlockHash(cache)
+	if _, err := sessionStore().SaveStable("s3", cache); err != nil {
 		t.Fatal(err)
 	}
 	p, revs, err := promptParts("기억 승인 권한을 다시 설명해 줘", "s3", "")
@@ -173,7 +178,7 @@ func TestHookRecallAppliesSharedBudget(t *testing.T) {
 	}
 }
 
-// ST-815: contract-related memories the stable block pins use no kind slot; the budget runs after
+// contract-related memories the stable block pins use no kind slot; the budget runs after
 // they are skipped, so a third decision still shows under decision=2.
 func TestSessionIndexContractBudgetAfterSkip(t *testing.T) {
 	repo := t.TempDir()

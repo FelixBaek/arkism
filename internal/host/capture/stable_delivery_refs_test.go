@@ -2,7 +2,6 @@ package capture
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,6 +16,7 @@ func TestStableReplayPreservesExactRevisionAndForm(t *testing.T) {
 	t.Chdir(t.TempDir())
 	standing := stableFake(t)
 	_, posts, _ := sessionOutcomeEnv(t)
+	fakeStableValidation(t, standing)
 	t.Setenv("ARKISM_WORK_ID", "")
 	t.Setenv("ARKISM_WORK_AGENT", "")
 	t.Setenv("ARKISM_AGENT", "")
@@ -30,7 +30,6 @@ func TestStableReplayPreservesExactRevisionAndForm(t *testing.T) {
 	if len(*posts) != 1 {
 		t.Fatal(*posts)
 	}
-	item["revision"], item["text"] = json.Number("99"), "current memory differs"
 	second := hookText(t, `{"hook_event_name":"SessionStart","session_id":"s","source":"compact"}`)
 	if second != first {
 		t.Fatal("replay changed bytes")
@@ -126,6 +125,7 @@ func TestStableMetadataReplayRetainsFormAndCacheRefs(t *testing.T) {
 	t.Chdir(t.TempDir())
 	standing := stableFake(t)
 	_, posts, _ := sessionOutcomeEnv(t)
+	fakeStableValidation(t, standing)
 	t.Setenv("ARKISM_WORK_ID", "")
 	t.Setenv("ARKISM_WORK_AGENT", "")
 	t.Setenv("ARKISM_AGENT", "")
@@ -279,6 +279,7 @@ func TestNewStableCacheRefusesTextReplayAcrossScope(t *testing.T) {
 	t.Chdir(t.TempDir())
 	standing := stableFake(t)
 	sessionOutcomeEnv(t)
+	fakeStableValidation(t, standing)
 	t.Setenv("ARKISM_WORK_ID", "")
 	t.Setenv("ARKISM_WORK_AGENT", "")
 	t.Setenv("ARKISM_AGENT", "")

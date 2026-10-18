@@ -15,7 +15,8 @@ import (
 // Per-session context state shared by the capture hooks and the MCP skill router: the
 // session's stable injected block and the skill versions the session is pinned to. It sits
 // with the other capture session state, so an MCP restart inside one session keeps the pins.
-// Every entry is create-only (first writer wins), which is what makes a pin a pin.
+// Skill pins remain create-only (first writer wins). Stable renderings can be
+// discarded under the hook lock when their evidence is no longer usable.
 
 // SessionStore keeps the state under Root (one folder per session id hash).
 type SessionStore struct{ Root string }
@@ -37,8 +38,27 @@ type SkillPin struct {
 	Version   int    `json:"version,omitempty"`
 }
 
-// StableBlock is the cached session-fixed injection and the memory ids it shows.
+// StableBlock is a cached rendering with the exact refs and snapshot evidence it shows.
+// StableMemoryRef identifies the exact server snapshot used by the trusted renderer.
+// Fingerprint covers canonical current memory and source state, never raw originals.
+type StableMemoryRef struct {
+	Collection  string `json:"collection"`
+	ID          string `json:"id"`
+	Revision    int64  `json:"revision"`
+	Digest      string `json:"digest"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
 type StableBlock struct {
+	ProjectKey   string            `json:"project_key,omitempty"`
+	Renderer     string            `json:"renderer,omitempty"`
+	BlockHash    string            `json:"block_hash,omitempty"`
+	Fingerprint  string            `json:"fingerprint,omitempty"`
+	Refs         []StableMemoryRef `json:"refs,omitempty"`
+	WorkAgent    string            `json:"work_agent,omitempty"`
+	PinHash      string            `json:"pin_hash,omitempty"`
+	DigestHash   string            `json:"digest_hash,omitempty"`
+	SkillHash    string            `json:"skill_hash,omitempty"`
 	Full         string            `json:"full"`
 	Meta         string            `json:"meta"`
 	IDs          []string          `json:"ids"`
@@ -126,6 +146,19 @@ func (s SessionStore) SaveStable(sid string, b StableBlock) (StableBlock, error)
 		return kept, nil
 	}
 	return b, errors.New("stable block unreadable")
+}
+
+// ClearStable removes only the cached rendering. Callers must hold the session's
+// stable hook lock; skill-version pins and delivery history deliberately survive.
+func (s SessionStore) ClearStable(sid string) error {
+	if sid == "" {
+		return errors.New("session id required")
+	}
+	err := os.Remove(filepath.Join(s.dir(sid), "stable.json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // Delivered is the memory revisions per-turn recall already showed in the session (id -> the

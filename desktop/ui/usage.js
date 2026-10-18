@@ -303,31 +303,31 @@ window.ArkismUsage = (ctx) => {
     if (!w) {
       return [kpiRow([["세션", num(k.sessions), `하루 평균 ${num(k.sessions / days())}`], ["활동 시간", dur(k.active_seconds), `${k.active_days}일 동안`],
         ["스킬 사용", num(skillUses), `스킬 ${d.skills.length}개`, "accent"], ["캐시 적중", `${k.cache_hit_pct}%`, `${num(k.cache_read)} 읽기`]]),
-        el("p", "v4u-hint", "기억이 답변에 얼마나 쓰였는지는 PC의 Arkism 수집기가 보고하면 여기에 보여요."), heat, two(skillCard, toolCard)];
+        el("p", "v4u-hint", "답변과 기억의 문구 겹침은 PC 수집기가 보고하면 여기에 보여요. 실제 활용 여부는 측정하지 않아요."), heat, two(skillCard, toolCard)];
     }
     const byId = new Map((m.memories || []).map((x) => [x.id, x]));
     const injectedItems = w.items.filter((x) => x.injected > 0);
     const tidy = (m.memories || []).filter((x) => m.often?.(x));
     const rate = w.injections ? Math.round((w.used / w.injections) * 100) : null;
-    const tidyKpi = kpi("정리할 기억", `${tidy.length}개`, "자주 들어가지만 답변엔 안 쓰임", tidy.length ? "amber" : "");
+    const tidyKpi = kpi("정리할 기억", `${tidy.length}개`, "답변 문구 겹침 미확인 · 직접 검토", tidy.length ? "amber" : "");
     if (tidy.length) { const go = link("정리하기 →", () => m.openIdle?.()); go.classList.add("v4u-kpi-link"); tidyKpi.append(go); }
     const kp = el("div", "v4u-kpis");
-    kp.append(kpi("답변에 쓰인 비율", rate === null ? "—" : `${rate}%`, `최근 ${w.days}일 · 들어간 ${num(w.injections)}번 중 ${num(w.used)}번`, "accent"),
+    kp.append(kpi("답변 문구 겹침 비율", rate === null ? "—" : `${rate}%`, `최근 ${w.days}일 · 들어간 ${num(w.injections)}번 중 ${num(w.used)}번`, "accent"),
       kpi("들어간 기억", `${num(w.injections)}회`, `기억 ${num(injectedItems.length)}개 · 하루 ${(w.injections / Math.max(1, w.days)).toFixed(1)}회`), tidyKpi,
       kpi("세션", num(k.sessions), w.inject_sessions ? `기억을 받은 세션 ${num(w.inject_sessions)}` : `하루 평균 ${num(k.sessions / days())}`));
     // 기억 흐름: saved in the window → put into answers → used by the answer.
     const since = Date.now() - w.days * 86400000;
     const saved = (m.memories || []).filter((x) => new Date(x.created_at).getTime() >= since).length;
     const flow = [["저장", saved, `${num(saved)}개`, ""], ["답변에 들어감", injectedItems.length, `${num(w.injections)}회 · 기억 ${num(injectedItems.length)}개`, ""],
-      ["답변에 쓰임", w.items.filter((x) => x.used > 0).length, `${num(w.items.filter((x) => x.used > 0).length)}개`, rate === null ? "" : `${rate}% 쓰임`]];
+      ["문구 겹침 확인", w.items.filter((x) => x.used > 0).length, `${num(w.items.filter((x) => x.used > 0).length)}개`, rate === null ? "" : `${rate}% 문구 겹침`]];
     const fmax = Math.max(1, ...flow.map((f) => f[1]));
     const fbox = el("div", "v4u-bars v4u-flowbars");
     for (const [label, n, text, side] of flow) {
       const row = el("div", "v4u-bar-row"), bar = el("span", "v4u-bar"), fill = el("i"); fill.style.width = `${Math.max(1, (n / fmax) * 100)}%`; bar.append(fill);
       row.append(el("span", "v4u-bar-name", label), bar, el("span", "v4u-num", text), el("span", "v4u-side", side)); fbox.append(row);
     }
-    const flowCard = card("기억 흐름", `최근 ${w.days}일 · 저장한 기억이 답변까지 가는 길`, fbox);
-    // 종류별 쓰임률: used / injected per kind.
+    const flowCard = card("기억 흐름", `최근 ${w.days}일 · 실제 활용 여부는 미측정`, fbox);
+    // 종류별 문구 겹침: used / injected per kind.
     const kinds = {};
     for (const x of injectedItems) { const kind = byId.get(x.id)?.kind; if (!kind) continue; const a = (kinds[kind] ||= { inj: 0, used: 0, n: 0 }); a.inj += x.injected; a.used += x.used; a.n++; }
     const kindRows = Object.entries(kinds).sort((a, b) => b[1].used / b[1].inj - a[1].used / a[1].inj);
@@ -338,18 +338,18 @@ window.ArkismUsage = (ctx) => {
       row.append(el("span", "v4u-bar-name", m.kindLabel ? m.kindLabel(kind) : kind), bar, el("span", `v4u-num${r < 20 ? " amber" : ""}`, `${r}%`), el("span", "v4u-side", `${a.n}개`)); kbox.append(row);
     }
     if (!kindRows.length) kbox.append(el("p", "v4u-empty", "아직 답변에 들어간 기억이 없어요."));
-    const kindCard = card("종류별 쓰임률", "들어간 기억 중 답변에 쓰인 비율", kbox);
+    const kindCard = card("종류별 문구 겹침", "전달한 기억 중 문구 겹침이 확인된 비율", kbox);
     const tbox = el("div", "v4u-rows");
     for (const x of tidy.slice(0, 5)) {
       const s = w.items.find((y) => y.id === x.id) || { injected: 0, used: 0 };
       const row = el("button", "v4u-tidy"); row.type = "button";
-      const t = el("div", "v4u-session-text"); t.append(raw(el("b", "", x.text)), el("small", "", `${s.injected}번 들어감 · ${s.used}번 쓰임`));
+      const t = el("div", "v4u-session-text"); t.append(raw(el("b", "", x.text)), el("small", "", `${s.injected}번 들어감 · 문구 겹침 ${s.used}번`));
       row.append(t, el("span", "v4u-link", "정리"));
       row.addEventListener("click", () => m.openMemory?.(x.id));
       tbox.append(row);
     }
     if (!tidy.length) tbox.append(el("p", "v4u-empty", "정리할 기억이 없어요."));
-    const tidyCard = card("정리할 기억", tidy.length ? link("모두 보기 →", () => m.openIdle?.()) : "", el("p", "v4u-hint", `들어가기만 하고 쓰이지 않음 · ${tidy.length}`), tbox);
+    const tidyCard = card("정리할 기억", tidy.length ? link("모두 보기 →", () => m.openIdle?.()) : "", el("p", "v4u-hint", `문구 겹침 미확인 · ${tidy.length}개 · 실제 활용 여부는 미측정`), tbox);
     return [kp, flowCard, heat, two(kindCard, tidyCard), two(skillCard, toolCard)];
   }
   // 많이 쓴 스킬 with the agents that ran it (GET /v1/skills/usage by_runtime) when the skill is known.

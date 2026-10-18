@@ -163,8 +163,8 @@ window.ArkismPages = (ctx) => {
       line("AI가 추론한 교훈·결정", "검토 대기에 올라가고, 내가 승인해야 쓰여요", fixed("검토 후 저장")),
       line("명령처럼 보이는 문장", "붙여 넣은 글·웹 문서에 섞인 지시를 막아요", fixed("항상 내가 확인")));
     const d = group("정리");
-    d.append(line("안 쓰이는 기억 모으기", "7일 동안 3번 넘게 들어갔는데 한 번도 안 쓰이면 ‘안 쓰임’에 모아요",
-      sw(prefs.collectUnused !== false, "안 쓰이는 기억 모으기", (on) => { prefs.collectUnused = on; savePrefs(); render(false); })));
+    d.append(line("문구 겹침이 적은 기억 검토", "7일 동안 3번 이상 전달됐지만 답변 문구 겹침이 확인되지 않으면 검토 목록에 모아요. 실제 활용 여부를 뜻하지 않아요",
+      sw(prefs.collectUnused !== false, "문구 겹침이 적은 기억 검토", (on) => { prefs.collectUnused = on; savePrefs(); render(false); })));
     if (!tauri) return [a, c, d];
     // 앱이 떠 있어야 수집·정리가 돈다: 로그인할 때 트레이로 시작(기본 켜짐).
     const start = group("시작");

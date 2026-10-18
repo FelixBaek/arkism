@@ -33,7 +33,7 @@ const captureDoc = `Claude Code / Codex / ZCode -> Arkism automatic memory captu
             lessons they show (a mistake that was found, and the rule that avoids it) as memories
   backfill  import a reviewed plan of existing Claude memory files
   stats     capture metrics from the local log
-  utility   how often memories injected by prompt search were used in the answers
+  utility   transcript text overlap with recalled memories, not actual use
   trial     retire trial memories that prompt search keeps injecting and no answer uses (reflect runs it too)
   outcomes  drain the memory outcome receipt spool through the pinned independent checker
 
@@ -494,15 +494,19 @@ func sessionCapture(hook map[string]any, kind string) error {
 	return atomicWrite(stateFile, host.MustDumps(state, host.DumpOpts{}))
 }
 
-// indexLine is one pointer line: the memory up to indexText chars; a cut line ends with "…" and
-// the id so the agent can read the whole memory with recall.
+// indexLine is one pointer line. A cut body or omitted applicability/provenance
+// metadata ends with "…" and the id, so recall can recover the complete memory.
 func indexLine(item map[string]any, cwd string) string {
 	text := strings.Join(pyFields(str(or(item["text"], item["summary"], ""))), " ")
-	hasPointer := host.Len(text) > indexText
+	contextDetails := memoryContextDetails(item)
+	hasPointer := host.Len(text) > indexText || contextDetails
 	if hasPointer {
 		text = pyRstrip(head(text, indexText)) + fmt.Sprintf("… (id: %s)", str(item["id"]))
 	}
 	markers := []string{str(item["kind"])}
+	if contextDetails {
+		markers = append(markers, "적용 맥락 확인")
+	}
 	if item["reach"] == "project" {
 		markers = append(markers, "이 프로젝트 전용, 범용보다 우선")
 	}
@@ -522,6 +526,27 @@ func indexLine(item map[string]any, cwd string) string {
 		text += fmt.Sprintf(" (id: %s)", str(item["id"]))
 	}
 	return fmt.Sprintf("- [%s] %s", strings.Join(markers, ", "), text)
+}
+
+func memoryContextDetails(item map[string]any) bool {
+	metadata, _ := item["memory_context"].(map[string]any)
+	for _, key := range []string{"domains", "applicability", "uncertainty", "valid_from", "observed_at", "evidence_kind", "semantic_kind"} {
+		switch value := metadata[key].(type) {
+		case string:
+			if strings.TrimSpace(value) != "" {
+				return true
+			}
+		case []any:
+			if len(value) != 0 {
+				return true
+			}
+		case []string:
+			if len(value) != 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // within returns the leading lines that fit in limit chars and how many were left out.
@@ -705,7 +730,7 @@ func taskContract(cwd string) string {
 	return text
 }
 
-// logRecall logs ids only, never text: `utility` later checks which injected memories were used.
+// logRecall logs ids only, never text: `utility` later reports transcript text overlap.
 func logRecall(hook, sid string, items []map[string]any, cwd ...string) {
 	recallMetric(hook, sid, items)
 	ledgerRecall(sid, items, cwd...)
@@ -746,12 +771,12 @@ func promptParts(prompt, sid, cwd string) (part host.Part, delivery *promptDeliv
 	}
 	items := forRepo(dicts(list), repoKey(cwd))
 	store := sessionStore()
-	if stable, ok := store.Stable(sid); ok && stableScopeMatches(stable) && len(stable.IDs) > 0 {
-		seen := map[string]bool{}
-		for _, id := range stable.IDs {
-			seen[id] = true
-		}
-		items = keepIf(items, func(i map[string]any) bool { return !seen[str(i["id"])] })
+	if seen := currentStableMemoryIDs(sid); len(seen) > 0 {
+		items = keepIf(items, func(i map[string]any) bool {
+			revision, valid := host.Int(i["revision"])
+			previous, exists := seen[str(i["id"])]
+			return !valid || !exists || revision != previous
+		})
 	}
 	shown := store.Delivered(sid)
 	previousDeliveries := store.DeliveredMemories(sid)

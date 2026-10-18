@@ -1006,10 +1006,10 @@ func stats(stdout io.Writer) error {
 
 var wordRE = regexp.MustCompile(`[A-Za-z0-9][A-Za-z0-9._/-]{2,}|[가-힣]{2,}`)
 
-// used: an answer drew on a memory when at least 2 and 40% of its words reappear.
-// shortcut: word overlap, so a rule that was followed without being restated reads as unused;
-// standing SessionStart rules are left out for that reason. Use an LLM judge if this proves too coarse.
-func used(memoryText, answer string) bool {
+// answerTextOverlap is a transcript heuristic, not evidence of actual memory use.
+// An answer can repeat a rule it ignored, or follow one without repeating it.
+// Standing SessionStart rules are outside this prompt-recall report.
+func answerTextOverlap(memoryText, answer string) bool {
 	words := map[string]bool{}
 	for _, w := range wordRE.FindAllString(memoryText, -1) {
 		words[w] = true
@@ -1069,7 +1069,7 @@ func memoryText(mid string) (string, bool) {
 
 const settled = 3600 // a session quiet this long has written its answers; a busier one may still use what it recalled
 
-// utilityCounts is {memory id: [injected, used, unread]} over settled sessions whose prompts
+// utilityCounts is {memory id: [injected, answer text overlap, unread]} over settled sessions whose prompts
 // recalled it (since an ISO time), and the session count. unread counts sessions whose answers
 // this client cannot read (Codex, ZCode share the memories).
 func utilityCounts(since string) (map[string][3]int, int, error) {
@@ -1124,7 +1124,7 @@ func utilityCounts(since string) (map[string][3]int, int, error) {
 			}
 			n := counts[mid]
 			n[0]++
-			if t.s != "" && used(norm(t.s), answer) {
+			if t.s != "" && answerTextOverlap(norm(t.s), answer) {
 				n[1]++
 			}
 			counts[mid] = n
@@ -1133,14 +1133,15 @@ func utilityCounts(since string) (map[string][3]int, int, error) {
 	return counts, len(bySession), nil
 }
 
-// utility lists, per memory recalled by prompt search, how often it was injected and used;
-// memories injected often and never used are listed for review, not demoted.
+// utility reports transcript text overlap. The legacy used/use_rate/review_unused
+// fields are compatibility aliases; neither overlap nor its absence measures use.
+// Review candidates are informational and are never automatically demoted.
 func utility(minInjected int, stdout io.Writer) error {
 	counts, sessions, err := utilityCounts("")
 	if err != nil {
 		return err
 	}
-	injected, hit := 0, 0
+	injected, hit, unread := 0, 0, 0
 	type row struct {
 		id string
 		n  int
@@ -1149,6 +1150,7 @@ func utility(minInjected int, stdout io.Writer) error {
 	for mid, n := range counts {
 		injected += n[0]
 		hit += n[1]
+		unread += n[2]
 		if n[0] >= minInjected && n[1] == 0 {
 			unused = append(unused, row{mid, n[0]})
 		}
@@ -1169,7 +1171,11 @@ func utility(minInjected int, stdout io.Writer) error {
 		t, _ := memoryText(u.id)
 		review = append(review, host.Obj{{Key: "id", Value: u.id}, {Key: "injected", Value: u.n}, {Key: "text", Value: head(t, 80)}})
 	}
-	fmt.Fprintln(stdout, dumpsIndent(host.Obj{{Key: "sessions", Value: sessions}, {Key: "memory_injections", Value: injected},
+	fmt.Fprintln(stdout, dumpsIndent(host.Obj{{Key: "measurement_basis", Value: "answer_text_overlap"},
+		{Key: "actual_use_status", Value: "not_measured"}, {Key: "actual_used", Value: nil},
+		{Key: "sessions", Value: sessions}, {Key: "memory_injections", Value: injected},
+		{Key: "unread_session_pairs", Value: unread}, {Key: "text_overlap_count", Value: hit},
+		{Key: "text_overlap_rate", Value: rate}, {Key: "review_without_text_overlap", Value: review},
 		{Key: "used", Value: hit}, {Key: "use_rate", Value: rate}, {Key: "review_unused", Value: review}}, true))
 	return nil
 }
