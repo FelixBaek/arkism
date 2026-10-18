@@ -476,14 +476,24 @@ function Invoke-WindowsEchoCoordinatorTests([string]$Filter) {
       $before = [Arkism.InstallerChecks.RebootObservation]::Parse($false, 0, $null)
       [void](Invoke-JobExactEcho @{} 'synthetic-root' @{} 332 @{} $before $after @{} $report)
     } catch { $failure = $_ }
-    if ($mode -eq 'success') {
-      if ($failure -or ($state.Calls -join ',') -cne 'directory,file') { throw 'echo coordinator success failed' }
-    } elseif (-not $failure -or ($state.Calls -join ',') -cne 'directory') { throw 'echo coordinator did not stop before second API' }
-    if ($report.nsis_observed_delta -ne 2 -or $report.echo_phase -cne $phases[$mode] -or
-      $report.echo_last_observed_delta -cne $deltas[$mode]) { throw 'echo diagnostic stage or count is incorrect' }
+    Assert-WindowsEchoOutcome $mode $failure ($state.Calls -join ',')
+    Assert-WindowsEchoDiagnostics $report $phases[$mode] $deltas[$mode]
     Write-Host "PASS echo coordinator $mode; fake native boundaries only"
   }
   return 5
+}
+
+function Assert-WindowsEchoOutcome([string]$Mode, $Failure, [string]$Calls) {
+  if ($Mode -eq 'success') {
+    if ($Failure -or $Calls -cne 'directory,file') { throw 'echo coordinator success failed' }
+    return
+  }
+  if (-not $Failure -or $Calls -cne 'directory') { throw 'echo coordinator did not stop before second API' }
+}
+
+function Assert-WindowsEchoDiagnostics($Report, [string]$Phase, $Delta) {
+  if ($Report.nsis_observed_delta -ne 2 -or $Report.echo_phase -cne $Phase -or
+    $Report.echo_last_observed_delta -cne $Delta) { throw 'echo diagnostic stage or count is incorrect' }
 }
 
 if ($MyInvocation.InvocationName -ne '.') { Invoke-WindowsProcessJobTests $Filter }
