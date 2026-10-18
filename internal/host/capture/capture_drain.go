@@ -121,6 +121,26 @@ func asDict(v any) (map[string]any, error) {
 	return m, nil
 }
 
+// claimQuoteMatches keeps message boundaries and the original spelling intact.
+// Older user-only rows omit role; an explicit non-user role is not evidence.
+func claimQuoteMatches(quote string, users []any) ([]map[string]any, error) {
+	var matches []map[string]any
+	for _, u := range users {
+		um, err := asDict(u)
+		if err != nil {
+			return nil, err
+		}
+		if role, present := um["role"]; present && role != "user" {
+			continue
+		}
+		text, isString := um["text"].(string)
+		if pyStrip(quote) != "" && isString && strings.Contains(text, quote) {
+			matches = append(matches, um)
+		}
+	}
+	return matches, nil
+}
+
 // buildClaims checks the model's claims: a claim whose quote is not the user's literal words is
 // only an inference, and a unique literal quote links its one source record.
 func buildClaims(raw []any, userText string, related []map[string]any, users []any) ([]any, error) {
@@ -141,10 +161,15 @@ func buildClaims(raw []any, userText string, related []map[string]any, users []a
 		if !claimKinds[hashable(kind)] {
 			kind = "decision"
 		}
-		basis := "explicit_user"
-		// The model paraphrases; the quote must be the user's literal words, or the claim is only an inference.
-		if pyStrip(quote) == "" || !strings.Contains(norm(userText), norm(quote)) {
-			basis = "inferred"
+		matches, err := claimQuoteMatches(quote, users)
+		if err != nil {
+			return nil, err
+		}
+		basis := "inferred"
+		// Aggregate-only legacy callers cannot establish message boundaries.
+		legacyExact := users == nil && pyStrip(quote) != "" && strings.Contains(userText, quote)
+		if len(matches) > 0 || legacyExact {
+			basis = "explicit_user"
 		}
 		claim := map[string]any{"subject": head(or(pyStrip(str(or(c["subject"], "general"))), "general").(string), 120),
 			"text": head(text, 4000), "kind": kind, "basis": basis, "reason": head(str(or(c["reason"], "")), 500)}
@@ -168,17 +193,6 @@ func buildClaims(raw []any, userText string, related []map[string]any, users []a
 			claim["supersedes"] = host.Obj{{Key: "collection", Value: "memories"}, {Key: "id", Value: sup["id"]}, {Key: "revision", Value: sup["revision"]}}
 		}
 		// A unique literal quote identifies one known input record; no similarity matching.
-		var matches []map[string]any
-		for _, u := range users {
-			um, err := asDict(u)
-			if err != nil {
-				return nil, err
-			}
-			ut, isStr := or(um["text"], "").(string)
-			if pyStrip(quote) != "" && isStr && strings.Contains(ut, quote) {
-				matches = append(matches, um)
-			}
-		}
 		if basis == "explicit_user" && len(matches) == 1 {
 			if truthy(matches[0]["archive_refs"]) {
 				claim["archive_messages"] = matches[0]["archive_refs"]
