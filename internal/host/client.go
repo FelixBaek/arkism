@@ -126,7 +126,7 @@ func AtomicWrite(path, text string) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	if err := os.Rename(name, path); err != nil {
+	if err := replaceAtomicWrite(name, path); err != nil {
 		return err
 	}
 	return nil
