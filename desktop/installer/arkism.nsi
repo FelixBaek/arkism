@@ -34,6 +34,8 @@ VIAddVersionKey "LegalCopyright" "Arkism contributors"
 !define MUI_UNICON "${__FILEDIR__}\..\src-tauri\icons\icon.ico"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE}"
 !define MUI_FINISHPAGE_RUN_TEXT "Arkism 실행"
+; Opening the installer waits for 다음 before installing; the silent in-app update skips pages.
+!insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_INSTFILES
