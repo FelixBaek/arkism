@@ -54,13 +54,9 @@ func TestWindowsResolvedSpellingAndReparseProtection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot create test junction: %v: %s", err, out)
 	}
-	name, err := windows.UTF16PtrFromString(alias)
-	if err != nil {
-		t.Fatal(err)
-	}
-	attributes, err := windows.GetFileAttributes(name)
-	if err != nil || attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT == 0 {
-		t.Fatal("test junction is not a reparse point", err)
+	info, err := captureWindowsAttributes(alias)
+	if err != nil || info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT == 0 || info.ReparseTag != windows.IO_REPARSE_TAG_MOUNT_POINT {
+		t.Fatal("test junction did not retain its native name-surrogate tag", err)
 	}
 	for _, path := range []string{alias, filepath.Join(alias, filepath.Base(file)), filepath.Join(alias, "missing", "session.jsonl")} {
 		if resolved(path) {
@@ -114,9 +110,53 @@ func TestWindowsResolvedSupportsLongPathsAndUNCSpelling(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, root := range []string{volumeRoot, nativeRoot} {
-		attributes, err := captureWindowsAttributes(root)
-		if err != nil || attributes&windows.FILE_ATTRIBUTE_DIRECTORY == 0 {
+		info, err := captureWindowsAttributes(root)
+		if err != nil || info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY == 0 {
 			t.Fatal("native root handle could not inspect the directory", root, err)
 		}
+	}
+}
+
+func TestWindowsResolvedReparseTagsMatchSDK(t *testing.T) {
+	// Numeric tags and the N-bit macro are fixed to Microsoft's SDK source:
+	// https://github.com/microsoft/win32metadata/blob/1bfb76db1c360653bdcb56512af0fdf987aceab8/generation/WinSDK/RecompiledIdlHeaders/um/winnt.h#L14714-L14769
+	// These are metadata vectors, not execution of Cloud, Dedup or SMB drivers.
+	cases := []struct {
+		name  string
+		tag   uint32
+		alias bool
+	}{
+		{"mount_point", 0xA0000003, true},
+		{"symlink", 0xA000000C, true},
+		{"global_reparse", 0xA0000019, true},
+		{"wci_link", 0xA0000027, true},
+		{"dedup", 0x80000013, false},
+		{"file_placeholder", 0x80000015, false},
+		{"wof", 0x80000017, false},
+		{"cloud", 0x9000001A, false},
+		{"cloud_1", 0x9000101A, false},
+		{"cloud_f", 0x9000F01A, false},
+		{"projfs", 0x9000001C, false},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			info := captureWindowsAttributeTagInfo{FileAttributes: windows.FILE_ATTRIBUTE_REPARSE_POINT, ReparseTag: test.tag}
+			if captureWindowsNameSurrogate(info) != test.alias {
+				t.Fatal("native reparse tag was classified against the SDK contract")
+			}
+		})
+	}
+}
+
+func TestWindowsResolvedAttributeQueryFailuresStayErrors(t *testing.T) {
+	if _, err := captureWindowsHandleAttributes(windows.InvalidHandle); err == nil {
+		t.Fatal("failed native tag query was accepted")
+	}
+	path := filepath.Join(t.TempDir(), "missing")
+	if _, err := captureWindowsAttributes(path); err == nil {
+		t.Fatal("failed native attribute lookup was accepted")
+	}
+	if resolvedPathEqual(path, path) {
+		t.Fatal("failed attribute lookup was accepted as an ordinary spelling")
 	}
 }

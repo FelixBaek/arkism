@@ -65,12 +65,66 @@ func onlyPrivate(text string) bool {
 // text cannot be cut out of it. Its memories are still captured, from redacted text.
 // Inspection failures remain errors so callers can retry without declaring an opt-out.
 func privateMarked(path string) (bool, error) {
+	return privateMarkedLimit(path, archiveMaxBytes)
+}
+
+func privateMarkedLimit(path string, limit int64) (bool, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
+		return false, valueErr("archive_source_not_regular")
+	}
+	if info.Size() > limit {
+		return false, valueErr("too_large")
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return false, err
 	}
 	defer f.Close()
-	return scanPrivate(f)
+	opened, err := f.Stat()
+	if err != nil {
+		return false, err
+	}
+	if !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		return false, valueErr("archive_source_changed")
+	}
+	if opened.Size() > limit {
+		return false, valueErr("too_large")
+	}
+	return scanPrivateLimit(f, limit)
+}
+
+// Record only bytes and errors actually observed before the marker's early exit.
+// A growing source can supply at most one byte beyond the inspection budget.
+type privateInspectionReader struct {
+	io.LimitedReader
+	readErr error
+}
+
+func (r *privateInspectionReader) Read(p []byte) (int, error) {
+	n, err := r.LimitedReader.Read(p)
+	if err != nil && err != io.EOF {
+		r.readErr = err
+	}
+	return n, err
+}
+
+func scanPrivateLimit(source io.Reader, limit int64) (bool, error) {
+	if limit < 0 || limit > archiveMaxBytes {
+		return false, valueErr("too_large")
+	}
+	r := privateInspectionReader{LimitedReader: io.LimitedReader{R: source, N: limit + 1}}
+	marked, err := scanPrivate(&r)
+	if r.N == 0 {
+		return false, valueErr("too_large")
+	}
+	if r.readErr != nil {
+		return false, r.readErr
+	}
+	return marked, err
 }
 
 // privateMarker recognizes ASCII tags and JSON Unicode-escaped tags, including
