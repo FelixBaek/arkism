@@ -182,3 +182,24 @@ The offline regression rechecks the archived 45 unique observations and their
 results remain unchanged. Synthetic duplicates and one-field identity changes
 exercise the rejected paths; they do not establish an error in the archived
 measurements.
+
+## Planned result-row coverage
+
+Inspect scheduled, recorded and missing cells, including counts per condition:
+
+```sh
+python3 -B evaluation/reuse-v010/benchmark/completion_audit.py \
+  --out evaluation/reuse-v010/benchmark/results --require-complete
+```
+
+This reads the existing frozen spec and reuses the current identity, folder and
+ordinal gates. It writes no result or aggregate files. Without
+`--require-complete`, valid partial coverage is reported with exit 0; with it,
+missing result rows return exit 1. Invalid inputs return exit 2 before a JSON
+report. A matching plan with no rows reports 0/45 and `coverage_complete: false`;
+a missing plan is rejected rather than created.
+
+`coverage_complete` means all planned result rows are recorded, including failed,
+timed-out and missing-outcome rows accepted by the identity gates. It does not
+validate outcomes, usage, attempts, provenance, billing, human review or the
+whole experiment. Existing partial measurement auditing remains unchanged.
