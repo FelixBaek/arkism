@@ -200,10 +200,9 @@ func managedClaimReceipts(dir string) ([]storedClaimReceipt, error) {
 			return nil, err
 		}
 		if sha256Hex(raw) != digest {
-			if strings.HasPrefix(name, ".claim-context-") {
-				return nil, runtimeErr("claim_context_receipt_temporary_unknown")
-			}
-			continue // Foreign ordinary files are never retention targets.
+			// A crash can leave an empty or partial temporary. Its name alone
+			// cannot prove ownership, so preserve it without blocking siblings.
+			continue
 		}
 		if _, err := decodeClaimContextEnvelope(raw); err == nil {
 			managed = append(managed, storedClaimReceipt{path, info})
@@ -272,8 +271,8 @@ func trimClaimReceipts(entries []storedClaimReceipt, target string, size int, po
 	return nil
 }
 
-// Only content-bound final files or our exclusive temporary naming scheme are
-// managed. Foreign files (including the old predictable .tmp name) stay intact.
+// Only valid content-bound final receipts and complete temporaries are managed.
+// Unrecognized ordinary files, including torn temporaries, stay intact.
 func claimReceiptNameDigest(name string) string {
 	if strings.HasSuffix(name, ".json") && claimReceiptHash(strings.TrimSuffix(name, ".json")) {
 		return strings.TrimSuffix(name, ".json")
