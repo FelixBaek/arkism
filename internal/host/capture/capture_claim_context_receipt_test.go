@@ -165,7 +165,7 @@ func TestCaptureContextReceiptRetentionIsBoundedAndForeignFilesSurvive(t *testin
 			if err := storeClaimContextReceipt(raw, func() error { return nil }); err != nil {
 				t.Fatal(err)
 			}
-			managed, err := managedClaimReceipts(dir)
+			managed, err := managedClaimReceipts(dir, func() error { return nil })
 			total := int64(0)
 			for _, file := range managed {
 				total += file.info.Size()
@@ -416,6 +416,22 @@ func TestCaptureContextReceiptLatePauseRetainsBoundedTemporary(t *testing.T) {
 	}
 }
 
+func TestCaptureContextReceiptTornTemporaryDoesNotBlockStorage(t *testing.T) {
+	capFake(t)
+	_, _, _, raw := contextReceiptFixture(t)
+	dir := filepath.Join(capState, "claim-context-rejections")
+	os.Mkdir(dir, 0o700)
+	torn := put(t, filepath.Join(dir, ".claim-context-"+sha256Hex(raw)+"-1.tmp"), string(raw[:len(raw)/2]))
+	if err := storeClaimContextReceipt(raw, func() error { return nil }); err != nil || !exists(torn) {
+		t.Fatal("fresh torn temporary blocked storage or was removed early", err)
+	}
+	when := time.Now().Add(-73 * time.Hour)
+	os.Chtimes(torn, when, when)
+	if err := storeClaimContextReceipt(raw, func() error { return nil }); err != nil || exists(torn) {
+		t.Fatal("expired torn temporary was not reclaimed", err)
+	}
+}
+
 func TestCaptureOptionalContextGeneratorIsFixedInPreparedRetry(t *testing.T) {
 	capFake(t)
 	t.Setenv("ARKISM_SESSION_PROCESSOR", "")
@@ -511,7 +527,7 @@ func TestCaptureContextReceiptUnrecognizedTemporaryDoesNotBlockSiblings(t *testi
 			dir := filepath.Join(capState, "claim-context-rejections")
 			unknown, content, original := claimReceiptUnknownTemporary(t, dir, raw, kind)
 			orphan := claimReceiptExpiredOrphan(t, dir, raw)
-			managed, err := managedClaimReceipts(dir)
+			managed, err := managedClaimReceipts(dir, func() error { return nil })
 			if err != nil || len(managed) != 1 || managed[0].path != orphan {
 				t.Fatal("unrecognized temporary blocked a valid sibling", err, len(managed))
 			}
@@ -523,9 +539,16 @@ func TestCaptureContextReceiptUnrecognizedTemporaryDoesNotBlockSiblings(t *testi
 			if err != nil || readErr != nil || !os.SameFile(original, current) || !bytes.Equal(content, actual) || exists(orphan) {
 				t.Fatal("retention changed unrecognized state or kept an expired valid orphan", err, readErr)
 			}
-			managed, err = managedClaimReceipts(dir)
+			managed, err = managedClaimReceipts(dir, func() error { return nil })
 			if err != nil || len(managed) != 1 || managed[0].path != filepath.Join(dir, sha256Hex(raw)+".json") {
 				t.Fatal("normal receipt did not survive orphan recovery", err, len(managed))
+			}
+			if kind == "partial" {
+				if exists(unknown) {
+					t.Fatal("complete final reference did not authorize expired prefix cleanup")
+				}
+			} else {
+				claimReceiptAssertPreserved(t, unknown, original, content)
 			}
 		})
 	}
@@ -583,7 +606,7 @@ func TestCaptureContextReceiptPartialTemporaryPreparedRetries(t *testing.T) {
 	if models != 1 || posts != 3 || !truthy(job["captured"]) || !bytes.Equal([]byte(claimReceiptTestText(t, partial)), content) {
 		t.Fatal("successful retry removed the foreign partial or stayed uncaptured")
 	}
-	managed, err := managedClaimReceipts(dir)
+	managed, err := managedClaimReceipts(dir, func() error { return nil })
 	if err != nil || len(managed) != 1 {
 		t.Fatal("serialized retries duplicated the bound receipt", err, len(managed))
 	}
@@ -611,5 +634,225 @@ func TestCaptureContextReceiptOwnStyleTemporaryAliasStillFailsClosed(t *testing.
 	current, err := os.Lstat(alias)
 	if err != nil || !os.SameFile(original, current) || claimReceiptTestText(t, outside) != "outside sentinel" || exists(filepath.Join(dir, sha256Hex(raw)+".json")) {
 		t.Fatal("alias failure modified an unrelated file or published a receipt", err)
+	}
+}
+
+func TestCaptureContextReceiptExpiredForeignTemporaryIsPreserved(t *testing.T) {
+	capFake(t)
+	_, _, _, raw := contextReceiptFixture(t)
+	dir := filepath.Join(capState, "claim-context-rejections")
+	foreign := put(t, filepath.Join(dir, ".claim-context-"+sha256Hex(raw)+"-1.tmp"), "foreign ordinary sentinel")
+	original, err := os.Lstat(foreign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-73 * time.Hour)
+	if err := os.Chtimes(foreign, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := storeClaimContextReceipt(raw, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	current, err := os.Lstat(foreign)
+	if err != nil || !os.SameFile(original, current) || claimReceiptTestText(t, foreign) != "foreign ordinary sentinel" {
+		t.Fatal("expired filename-looking foreign file was removed", err)
+	}
+}
+
+func claimReceiptAssertPreserved(t *testing.T, path string, original os.FileInfo, content []byte) {
+	t.Helper()
+	current, err := os.Lstat(path)
+	if err != nil || !os.SameFile(original, current) || !bytes.Equal([]byte(claimReceiptTestText(t, path)), content) {
+		t.Fatal("unrecognized receipt file changed", err)
+	}
+}
+
+func claimReceiptReferenceFixture(t *testing.T, kind string) ([]byte, string, []byte, os.FileInfo) {
+	t.Helper()
+	_, _, _, incoming := contextReceiptFixture(t)
+	full := append([]byte(nil), incoming...)
+	if kind == "no_reference" {
+		envelope, err := decodeClaimContextEnvelope(full)
+		if err != nil {
+			t.Fatal(err)
+		}
+		envelope.EventSHA256 = sha256Hex([]byte("unpublished different event"))
+		full, err = json.Marshal(envelope)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if kind == "invalid_reference" {
+		full = []byte(`{"module":"unrecognized"}`)
+	}
+	if kind == "noncanonical_reference" {
+		full = append(full, ' ')
+	}
+	partial := full[:len(full)/2]
+	if kind == "empty" {
+		partial = nil
+	}
+	if kind == "nonprefix" {
+		partial = []byte("foreign ordinary sentinel")
+	}
+	dir := filepath.Join(capState, "claim-context-rejections")
+	digest := sha256Hex(full)
+	path := put(t, filepath.Join(dir, ".claim-context-"+digest+"-1.tmp"), string(partial))
+	if kind != "no_reference" {
+		name := digest + ".json"
+		if kind == "complete_temp" {
+			name = ".claim-context-" + digest + "-2.tmp"
+		}
+		put(t, filepath.Join(dir, name), string(full))
+	}
+	if kind != "fresh_prefix" {
+		old := time.Now().Add(-73 * time.Hour)
+		if err := os.Chtimes(path, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return incoming, path, partial, info
+}
+
+func TestCaptureContextReceiptPartialReferenceRules(t *testing.T) {
+	for _, kind := range []string{"empty", "nonprefix", "no_reference", "invalid_reference", "noncanonical_reference", "fresh_prefix", "complete_temp"} {
+		t.Run(kind, func(t *testing.T) {
+			capFake(t)
+			raw, path, partial, original := claimReceiptReferenceFixture(t, kind)
+			if err := storeClaimContextReceipt(raw, func() error { return nil }); err != nil {
+				t.Fatal(err)
+			}
+			if kind == "complete_temp" {
+				if exists(path) {
+					t.Fatal("expired proper prefix of a complete temporary was not reclaimed")
+				}
+				return
+			}
+			claimReceiptAssertPreserved(t, path, original, partial)
+		})
+	}
+}
+
+func claimReceiptMutation(t *testing.T, kind, partial, reference string) func() error {
+	t.Helper()
+	switch kind {
+	case "reference_bytes":
+		return func() error { return os.WriteFile(reference, []byte("changed reference"), 0o600) }
+	case "partial_bytes":
+		return func() error { return os.WriteFile(partial, []byte("changed partial"), 0o600) }
+	case "partial_identity":
+		return func() error {
+			if err := os.Rename(partial, partial+".saved"); err != nil {
+				return err
+			}
+			return os.WriteFile(partial, []byte("replacement sentinel"), 0o600)
+		}
+	case "directory_identity":
+		return func() error {
+			dir := filepath.Dir(partial)
+			if err := os.Rename(dir, dir+".saved"); err != nil {
+				return err
+			}
+			return os.Mkdir(dir, 0o700)
+		}
+	default:
+		return func() error { return sessionWait("capture_policy_wait") }
+	}
+}
+
+func assertClaimReceiptMutationPreserved(t *testing.T, kind, partial string, content []byte) {
+	t.Helper()
+	switch kind {
+	case "partial_bytes":
+		if claimReceiptTestText(t, partial) != "changed partial" {
+			t.Fatal("cleanup deleted the changed partial")
+		}
+	case "partial_identity":
+		if claimReceiptTestText(t, partial) != "replacement sentinel" || !bytes.Equal([]byte(claimReceiptTestText(t, partial+".saved")), content) {
+			t.Fatal("cleanup deleted a replacement or its original")
+		}
+	case "directory_identity":
+		moved := filepath.Join(filepath.Dir(partial)+".saved", filepath.Base(partial))
+		if !bytes.Equal([]byte(claimReceiptTestText(t, moved)), content) {
+			t.Fatal("cleanup deleted through a replaced directory")
+		}
+	default:
+		if !bytes.Equal([]byte(claimReceiptTestText(t, partial)), content) {
+			t.Fatal("cleanup deleted a partial after reference or policy changed")
+		}
+	}
+}
+
+func TestCaptureContextReceiptPartialCleanupRechecksInputs(t *testing.T) {
+	for _, kind := range []string{"reference_bytes", "partial_bytes", "partial_identity", "directory_identity", "late_policy"} {
+		t.Run(kind, func(t *testing.T) {
+			capFake(t)
+			_, partial, content, _ := claimReceiptReferenceFixture(t, "nonprefix")
+			_, _, _, full := contextReceiptFixture(t)
+			// Turn the foreign fixture into a real expired prefix, then mutate
+			// only after both scan passes have selected this complete reference.
+			content = full[:len(full)/2]
+			if err := os.WriteFile(partial, content, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			old := time.Now().Add(-73 * time.Hour)
+			if err := os.Chtimes(partial, old, old); err != nil {
+				t.Fatal(err)
+			}
+			reference := filepath.Join(filepath.Dir(partial), sha256Hex(full)+".json")
+			mutation := claimReceiptMutation(t, kind, partial, reference)
+			calls := 0
+			_, err := managedClaimReceipts(filepath.Dir(partial), func() error {
+				calls++
+				if calls == 2 {
+					return mutation()
+				}
+				return nil
+			})
+			if err == nil || calls != 2 {
+				t.Fatal("changed cleanup inputs were ignored", err, calls)
+			}
+			assertClaimReceiptMutationPreserved(t, kind, partial, content)
+		})
+	}
+}
+
+func TestCaptureContextReceiptPartialCannotRelaxIncomingTarget(t *testing.T) {
+	capFake(t)
+	_, _, _, raw := contextReceiptFixture(t)
+	dir := filepath.Join(capState, "claim-context-rejections")
+	target := put(t, filepath.Join(dir, sha256Hex(raw)+".json"), "foreign incoming target")
+	partial := put(t, filepath.Join(dir, ".claim-context-"+sha256Hex(raw)+"-1.tmp"), string(raw[:len(raw)/2]))
+	old := time.Now().Add(-73 * time.Hour)
+	if err := os.Chtimes(partial, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if errorCode(storeClaimContextReceipt(raw, func() error { return nil })) != "claim_context_receipt_file_changed" {
+		t.Fatal("a partial temporary authorized replacing a foreign target")
+	}
+	if claimReceiptTestText(t, target) != "foreign incoming target" || claimReceiptTestText(t, partial) != string(raw[:len(raw)/2]) {
+		t.Fatal("target collision deleted unrecognized state")
+	}
+}
+
+func TestCaptureContextReceiptTemporaryReadBoundStillFailsClosed(t *testing.T) {
+	capFake(t)
+	_, _, _, raw := contextReceiptFixture(t)
+	dir := filepath.Join(capState, "claim-context-rejections")
+	content := bytes.Repeat([]byte("x"), claimReceiptBytes+1)
+	oversized := put(t, filepath.Join(dir, ".claim-context-"+sha256Hex(raw)+"-1.tmp"), string(content))
+	old := time.Now().Add(-73 * time.Hour)
+	if err := os.Chtimes(oversized, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if errorCode(storeClaimContextReceipt(raw, func() error { return nil })) != "claim_context_receipt_file_invalid" {
+		t.Fatal("unknown temporary bypassed the bounded read")
+	}
+	if claimReceiptTestText(t, oversized) != string(content) || exists(filepath.Join(dir, sha256Hex(raw)+".json")) {
+		t.Fatal("oversized temporary was removed or a receipt was published")
 	}
 }

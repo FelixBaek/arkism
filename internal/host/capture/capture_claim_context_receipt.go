@@ -178,43 +178,154 @@ func readStoredClaimReceipt(path string, info os.FileInfo) ([]byte, error) {
 	return raw, nil
 }
 
-func managedClaimReceipts(dir string) ([]storedClaimReceipt, error) {
+type claimReceiptScan struct {
+	managed    []storedClaimReceipt
+	references map[string]storedClaimReceipt
+	partials   []storedClaimReceipt
+}
+
+func canonicalClaimReceipt(raw []byte) bool {
+	envelope, err := decodeClaimContextEnvelope(raw)
+	if err != nil {
+		return false
+	}
+	canonical, err := json.Marshal(envelope)
+	return err == nil && bytes.Equal(raw, canonical)
+}
+
+func (scan *claimReceiptScan) classify(entry storedClaimReceipt, raw []byte, digest string, now time.Time) {
+	if sha256Hex(raw) != digest {
+		// Names alone do not establish ownership. Keep unknown files intact;
+		// an expired nonempty prefix needs an independently complete reference.
+		if strings.HasPrefix(filepath.Base(entry.path), ".claim-context-") && len(raw) > 0 && !entry.info.ModTime().Add(claimReceiptRetention).After(now) {
+			scan.partials = append(scan.partials, entry)
+		}
+		return
+	}
+	if _, err := decodeClaimContextEnvelope(raw); err != nil {
+		return
+	}
+	// Padded but valid complete files still count toward the existing cap.
+	scan.managed = append(scan.managed, entry)
+	if canonicalClaimReceipt(raw) {
+		scan.references[digest] = entry
+	}
+}
+
+func readClaimReceiptSnapshot(entry storedClaimReceipt) ([]byte, error) {
+	current, err := os.Lstat(entry.path)
+	if err != nil || !os.SameFile(entry.info, current) || current.Size() != entry.info.Size() || !current.ModTime().Equal(entry.info.ModTime()) {
+		return nil, runtimeErr("claim_context_receipt_file_changed")
+	}
+	return readStoredClaimReceipt(entry.path, current)
+}
+
+func verifyClaimReceiptSnapshot(entry storedClaimReceipt, expected []byte) error {
+	raw, err := readClaimReceiptSnapshot(entry)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(raw, expected) {
+		return runtimeErr("claim_context_receipt_file_changed")
+	}
+	return nil
+}
+
+func removeClaimReceiptPartial(partial, reference storedClaimReceipt, raw, full []byte, dirInfo os.FileInfo, policy func() error) error {
+	// Recheck after each policy callback: it can stop cleanup or reveal a change.
+	// This narrows read/unlink races; it is not an atomic ownership proof against
+	// an arbitrary concurrent same-user writer outside the capture drain lock.
+	for range 2 {
+		if err := policy(); err != nil {
+			return err
+		}
+		if err := claimReceiptDirectoryCurrent(filepath.Dir(partial.path), dirInfo); err != nil {
+			return err
+		}
+		if err := verifyClaimReceiptSnapshot(reference, full); err != nil {
+			return err
+		}
+		if err := verifyClaimReceiptSnapshot(partial, raw); err != nil {
+			return err
+		}
+	}
+	if err := os.Remove(partial.path); err != nil {
+		return runtimeErr("claim_context_receipt_cleanup_failed")
+	}
+	return nil
+}
+
+func reclaimClaimReceiptPartial(partial, reference storedClaimReceipt, dirInfo os.FileInfo, policy func() error) error {
+	if os.SameFile(partial.info, reference.info) {
+		return nil
+	}
+	raw, err := readClaimReceiptSnapshot(partial)
+	if err != nil {
+		return err
+	}
+	full, err := readClaimReceiptSnapshot(reference)
+	if err != nil {
+		return err
+	}
+	digest := claimReceiptNameDigest(filepath.Base(partial.path))
+	if len(raw) == 0 || len(raw) >= len(full) || !bytes.HasPrefix(full, raw) || sha256Hex(full) != digest || !canonicalClaimReceipt(full) {
+		return nil
+	}
+	return removeClaimReceiptPartial(partial, reference, raw, full, dirInfo, policy)
+}
+
+func scanClaimReceiptFiles(dir string, entries []os.DirEntry, now time.Time) (claimReceiptScan, error) {
+	scan := claimReceiptScan{references: map[string]storedClaimReceipt{}}
+	for _, entry := range entries {
+		digest := claimReceiptNameDigest(entry.Name())
+		if digest == "" {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		info, err := os.Lstat(path)
+		if err != nil {
+			return scan, runtimeErr("claim_context_receipt_read_failed")
+		}
+		raw, err := readStoredClaimReceipt(path, info)
+		if err != nil {
+			return scan, err
+		}
+		scan.classify(storedClaimReceipt{path, info}, raw, digest, now)
+	}
+	return scan, nil
+}
+
+func managedClaimReceipts(dir string, policy func() error) ([]storedClaimReceipt, error) {
+	dirInfo, err := os.Lstat(dir)
+	if err != nil || !dirInfo.IsDir() || !resolved(dir) {
+		return nil, runtimeErr("claim_context_receipt_directory_invalid")
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, runtimeErr("claim_context_receipt_read_failed")
 	}
-	managed := []storedClaimReceipt{}
-	for _, entry := range entries {
-		name := entry.Name()
-		digest := claimReceiptNameDigest(name)
-		if digest == "" {
-			continue
-		}
-		path := filepath.Join(dir, name)
-		info, err := os.Lstat(path)
-		if err != nil {
-			return nil, runtimeErr("claim_context_receipt_read_failed")
-		}
-		raw, err := readStoredClaimReceipt(path, info)
-		if err != nil {
-			return nil, err
-		}
-		if sha256Hex(raw) != digest {
-			// A crash can leave an empty or partial temporary. Its name alone
-			// cannot prove ownership, so preserve it without blocking siblings.
-			continue
-		}
-		if _, err := decodeClaimContextEnvelope(raw); err == nil {
-			managed = append(managed, storedClaimReceipt{path, info})
+	now := time.UnixMilli(int64(timeNow() * 1000))
+	scan, err := scanClaimReceiptFiles(dir, entries, now)
+	if err != nil {
+		return nil, err
+	}
+	// Build every complete reference before considering any expired partial.
+	// Incoming bytes are not a durable reference and never authorize cleanup.
+	for _, partial := range scan.partials {
+		reference, ok := scan.references[claimReceiptNameDigest(filepath.Base(partial.path))]
+		if ok {
+			if err := reclaimClaimReceiptPartial(partial, reference, dirInfo, policy); err != nil {
+				return nil, err
+			}
 		}
 	}
-	slices.SortFunc(managed, func(a, b storedClaimReceipt) int {
+	slices.SortFunc(scan.managed, func(a, b storedClaimReceipt) int {
 		if order := a.info.ModTime().Compare(b.info.ModTime()); order != 0 {
 			return order
 		}
 		return strings.Compare(a.path, b.path)
 	})
-	return managed, nil
+	return scan.managed, nil
 }
 
 func removeClaimReceipt(entry storedClaimReceipt, policy func() error) error {
@@ -437,7 +548,7 @@ func storeClaimContextReceipt(raw []byte, policy func() error) error {
 	if _, err := claimReceiptDir(); err != nil {
 		return err
 	}
-	entries, err := managedClaimReceipts(dir)
+	entries, err := managedClaimReceipts(dir, policy)
 	if err != nil {
 		return err
 	}
