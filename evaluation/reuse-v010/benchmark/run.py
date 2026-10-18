@@ -296,25 +296,30 @@ def summarize_condition(rows):
     }
 
 
+def result_identity(row):
+    """Validate one result and return its cell and execution identity."""
+    if not isinstance(row, dict):
+        raise ValueError('benchmark result must be a JSON object')
+    for field in ('task_id', 'condition', *PROTOCOL_FIELDS):
+        value = row.get(field)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f'missing or invalid benchmark identity: {field}')
+    if type(row.get('replicate')) is not int or row['replicate'] < 1:
+        raise ValueError('missing or invalid benchmark identity: replicate')
+    if row['condition'] not in CONDITIONS:
+        raise ValueError('invalid benchmark condition')
+    identity = (row['task_id'], row['condition'], row['replicate'])
+    return identity, tuple(row[field] for field in PROTOCOL_FIELDS)
+
+
 def validate_result_identities(rows):
     """Require usable identities; reject duplicate cells and mixed executions."""
     identities, protocol = set(), None
     for row in rows:
-        if not isinstance(row, dict):
-            raise ValueError('benchmark result must be a JSON object')
-        for field in ('task_id', 'condition', *PROTOCOL_FIELDS):
-            value = row.get(field)
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError(f'missing or invalid benchmark identity: {field}')
-        if type(row.get('replicate')) is not int or row['replicate'] < 1:
-            raise ValueError('missing or invalid benchmark identity: replicate')
-        if row['condition'] not in CONDITIONS:
-            raise ValueError('invalid benchmark condition')
-        identity = (row['task_id'], row['condition'], row['replicate'])
+        identity, current = result_identity(row)
         if identity in identities:
             raise ValueError('duplicate benchmark result cell')
         identities.add(identity)
-        current = tuple(row[field] for field in PROTOCOL_FIELDS)
         if protocol is not None and current != protocol:
             raise ValueError('inconsistent benchmark experiment, commit, fixture or model')
         protocol = current
