@@ -20,13 +20,59 @@ function Assert-ProductEnvironment($State) {
   }
 }
 
-function Assert-ProductManifest($Expected, $Actual) {
-  if (@($Expected).Count -ne @($Actual).Count) { throw 'product_manifest_changed' }
-  for ($index = 0; $index -lt @($Expected).Count; $index++) {
-    if ($Expected[$index].Path -cne $Actual[$index].Path -or $Expected[$index].Sha256 -cne $Actual[$index].Sha256) {
-      throw 'product_manifest_changed'
+function New-ProductManifestFailure($Expected, $Actual, [string]$Check, [int]$Index = -1) {
+  $checks = @('unspecified', 'profile_initial', 'profile_before_removal', 'stage_payload', 'data_before_removal', 'data_after_removal')
+  if ($Check -cnotin $checks) { throw 'product_manifest_check_invalid' }
+  $diagnostic = @{ Check = $Check; Kind = 'count'; ExpectedFiles = @($Expected).Count; ActualFiles = @($Actual).Count
+    FirstIndex = $Index; PathCaseEqual = $false; PathSeparatorEqual = $false }
+  if ($Index -ge 0) {
+    $pathChanged = $Expected[$Index].Path -cne $Actual[$Index].Path
+    $hashChanged = $Expected[$Index].Sha256 -cne $Actual[$Index].Sha256
+    $diagnostic.Kind = if ($pathChanged -and $hashChanged) { 'path_and_hash' } elseif ($pathChanged) { 'path' } else { 'hash' }
+    if ($Expected[$Index].Path -is [string] -and $Actual[$Index].Path -is [string]) {
+      $diagnostic.PathCaseEqual = [string]::Equals($Expected[$Index].Path, $Actual[$Index].Path, [StringComparison]::OrdinalIgnoreCase)
+      $diagnostic.PathSeparatorEqual = [string]::Equals($Expected[$Index].Path.Replace('\', '/'), $Actual[$Index].Path.Replace('\', '/'), [StringComparison]::Ordinal)
     }
   }
+  $failure = New-Object IO.InvalidDataException('product_manifest_changed')
+  $failure.Data['ArkismProductManifest'] = $diagnostic
+  return $failure
+}
+
+function Assert-ProductManifest($Expected, $Actual, [string]$Check = 'unspecified') {
+  if (@($Expected).Count -ne @($Actual).Count) { throw (New-ProductManifestFailure $Expected $Actual $Check) }
+  for ($index = 0; $index -lt @($Expected).Count; $index++) {
+    if ($Expected[$index].Path -cne $Actual[$index].Path -or $Expected[$index].Sha256 -cne $Actual[$index].Sha256) {
+      throw (New-ProductManifestFailure $Expected $Actual $Check $index)
+    }
+  }
+}
+
+function Get-ProductManifestDiagnostic($Failure) {
+  $exception = $Failure.Exception
+  for ($depth = 0; $depth -lt 8 -and $null -ne $exception; $depth++) {
+    $diagnostic = $exception.Data['ArkismProductManifest']
+    if ($exception.Message -ceq 'product_manifest_changed' -and $diagnostic -is [hashtable]) { return $diagnostic }
+    $exception = $exception.InnerException
+  }
+}
+
+function Add-ProductManifestDiagnostic($Report, $Failure) {
+  $diagnostic = Get-ProductManifestDiagnostic $Failure
+  if ($null -eq $diagnostic) { return }
+  if ($diagnostic.Check -isnot [string] -or $diagnostic.Kind -isnot [string]) { return }
+  if ($diagnostic.Check -cnotin @('unspecified', 'profile_initial', 'profile_before_removal', 'stage_payload', 'data_before_removal', 'data_after_removal') -or
+    $diagnostic.Kind -cnotin @('count', 'path', 'hash', 'path_and_hash')) { return }
+  foreach ($name in @('ExpectedFiles', 'ActualFiles', 'FirstIndex')) {
+    if ($diagnostic[$name] -isnot [int] -or $diagnostic[$name] -lt -1) { return }
+  }
+  foreach ($name in @('PathCaseEqual', 'PathSeparatorEqual')) {
+    if ($diagnostic[$name] -isnot [bool]) { return }
+  }
+  $Report.manifest_check = $diagnostic.Check; $Report.manifest_mismatch_kind = $diagnostic.Kind
+  $Report.manifest_expected_files = $diagnostic.ExpectedFiles; $Report.manifest_actual_files = $diagnostic.ActualFiles
+  $Report.manifest_first_index = $diagnostic.FirstIndex
+  $Report.manifest_path_case_equal = $diagnostic.PathCaseEqual; $Report.manifest_path_separator_equal = $diagnostic.PathSeparatorEqual
 }
 
 function Get-ProductProcessRows([string]$Install) {
@@ -73,7 +119,7 @@ function Assert-ProductGlobalState($State, [long]$AllowedPid = 0, [string]$Allow
 }
 
 function Assert-ProductProfileBeforeRemoval($State) {
-  Assert-ProductManifest $State.Profile @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path)
+  Assert-ProductManifest $State.Profile @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path) 'profile_before_removal'
 }
 
 function Set-ProductProfileBaseline($State) {
@@ -92,7 +138,7 @@ function Set-ProductProfileBaseline($State) {
       Sha256 = Get-InstalledSmokeHash $_
     }
   } | Sort-Object Path)
-  Assert-ProductManifest $expected @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path)
+  Assert-ProductManifest $expected @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path) 'profile_initial'
   $State.Profile = $expected
   $State.ProfileShortcuts = $shortcuts
 }
@@ -102,11 +148,11 @@ function Assert-ProductUninstallInputs($State, [long]$AllowedPid = 0, [string]$A
   Assert-ProductPathLayout $State
   Assert-ProductEnvironment $State
   if ((Get-InstalledSmokeHash $State.Setup) -cne $State.SetupHash) { throw 'product_setup_changed' }
-  Assert-ProductManifest $State.Manifest @(Get-InstalledSmokePayload $State.Stage)
+  Assert-ProductManifest $State.Manifest @(Get-InstalledSmokePayload $State.Stage) 'stage_payload'
   Assert-InstalledSmokePayload $State.Install $State.Manifest
   if ((Get-InstalledSmokeHash (Join-Path $State.Install 'uninstall.exe')) -cne $State.UninstallerHash) { throw 'product_uninstaller_changed' }
   Assert-ProductProfileBeforeRemoval $State
-  Assert-ProductManifest $State.Data @(Get-InstalledSmokeTree $State.Root (Join-Path $State.Root 'retained data'))
+  Assert-ProductManifest $State.Data @(Get-InstalledSmokeTree $State.Root (Join-Path $State.Root 'retained data')) 'data_before_removal'
   if ((Get-InstalledSmokeHash (Join-Path $State.Root 'unrelated.sentinel')) -cne $State.SentinelHash) { throw 'product_sentinel_changed' }
   Assert-ProductGlobalState $State $AllowedPid $AllowedImage
 }
@@ -197,7 +243,7 @@ function Assert-ProductRemoved($State, $Result) {
   Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $State.Context)
   Assert-InstalledSmokeNoProcesses $State.Install 'product_process_remains'
   Assert-ProductHookBackup $State
-  Assert-ProductManifest $State.Data @(Get-InstalledSmokeTree $State.Root (Join-Path $State.Root 'retained data'))
+  Assert-ProductManifest $State.Data @(Get-InstalledSmokeTree $State.Root (Join-Path $State.Root 'retained data')) 'data_after_removal'
   if ((Get-InstalledSmokeHash (Join-Path $State.Root 'unrelated.sentinel')) -cne $State.SentinelHash) { throw 'product_sentinel_changed' }
 }
 
@@ -325,6 +371,7 @@ function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePa
     $report.ok = $true; $report.phase = 'complete'
   } catch {
     $primary = $_; $report.error = 'product_check_failed'; $report.error_type = $_.Exception.GetType().FullName
+    Add-ProductManifestDiagnostic $report $_
     $failure = Find-JobFixtureFailure $_
     if ($null -ne $failure) { Add-ProductJobResult $report $failure.Result; $report.job_errors = @($failure.Result.Errors) }
   }

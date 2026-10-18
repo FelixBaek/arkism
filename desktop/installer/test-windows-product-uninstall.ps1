@@ -441,6 +441,77 @@ namespace Arkism.InstallerChecks {
     }
   }
 
+  function Invoke-ProductManifestDiagnosticCases {
+    Test-ProductCase 'manifest diagnostics identify initial profile counts without file paths or contents' {
+      $state=New-ProductFixture;$report=[ordered]@{};$failure=$null
+      $extra=Join-Path $state.Environment.HOME 'manifest-extra.fixture'
+      [IO.File]::WriteAllText($extra,'synthetic-unreported-content')
+      try{Set-ProductProfileBaseline $state}catch{$failure=$_}
+      Require-ProductTest ($null -ne $failure) 'extra_profile_accepted'
+      Add-ProductManifestDiagnostic $report $failure
+      Require-ProductTest ($report.manifest_check -ceq 'profile_initial' -and $report.manifest_mismatch_kind -ceq 'count' -and
+        $report.manifest_expected_files -eq 3 -and $report.manifest_actual_files -eq 4 -and $report.manifest_first_index -eq -1) 'initial_manifest_diagnostic_incorrect'
+      $json=$report|ConvertTo-Json -Compress
+      Require-ProductTest ($report.Count -eq 7 -and -not $json.Contains($state.Root) -and
+        -not $json.Contains('manifest-extra.fixture') -and -not $json.Contains('synthetic-unreported-content')) 'manifest_diagnostic_exposed_file'
+    }
+    Test-ProductCase 'manifest diagnostics identify changed profile bytes while exact comparison still rejects' {
+      $state=New-ProductFixture;$report=[ordered]@{};$failure=$null
+      [IO.File]::WriteAllText($state.Hook,'changed-inert-hook')
+      try{Assert-ProductUninstallInputs $state}catch{$failure=$_}
+      Require-ProductTest ($null -ne $failure) 'changed_profile_accepted'
+      Add-ProductManifestDiagnostic $report $failure
+      Require-ProductTest ($report.manifest_check -ceq 'profile_before_removal' -and $report.manifest_mismatch_kind -ceq 'hash' -and
+        $report.manifest_expected_files -eq 3 -and $report.manifest_actual_files -eq 3 -and
+        $report.manifest_path_case_equal -and $report.manifest_path_separator_equal) 'hash_manifest_diagnostic_incorrect'
+    }
+    Test-ProductCase 'manifest diagnostics describe path casing without accepting a changed staged path' {
+      $state=New-ProductFixture;$report=[ordered]@{};$failure=$null
+      $state.Manifest[0].Path=$state.Manifest[0].Path.ToUpperInvariant()
+      try{Assert-ProductUninstallInputs $state}catch{$failure=$_}
+      Require-ProductTest ($null -ne $failure) 'changed_manifest_path_accepted'
+      Add-ProductManifestDiagnostic $report $failure
+      Require-ProductTest ($report.manifest_check -ceq 'stage_payload' -and $report.manifest_mismatch_kind -ceq 'path' -and
+        $report.manifest_path_case_equal -and -not $report.manifest_path_separator_equal) 'path_manifest_diagnostic_incorrect'
+    }
+    Test-ProductCase 'manifest diagnostics discard unknown labels and malformed values' {
+      $exception=New-ProductManifestFailure @() @([pscustomobject]@{Path='synthetic';Sha256='synthetic'}) 'profile_initial'
+      $diagnostic=$exception.Data['ArkismProductManifest'];$diagnostic.Raw='synthetic-unreported-content'
+      $record=[pscustomobject]@{Exception=$exception};$report=[ordered]@{}
+      Add-ProductManifestDiagnostic $report $record
+      Require-ProductTest ($report.Count -eq 7 -and -not ($report|ConvertTo-Json -Compress).Contains('synthetic-unreported-content')) 'unknown_manifest_field_copied'
+      foreach($invalid in @(@{Key='Check';Value='synthetic-unreported-content'},@{Key='Kind';Value='synthetic-unreported-content'},
+        @{Key='ExpectedFiles';Value='1'},@{Key='PathCaseEqual';Value=1})) {
+        $old=$diagnostic[$invalid.Key];$diagnostic[$invalid.Key]=$invalid.Value;$report=[ordered]@{}
+        Add-ProductManifestDiagnostic $report $record
+        Require-ProductTest ($report.Count -eq 0) 'invalid_manifest_diagnostic_copied'
+        $diagnostic[$invalid.Key]=$old
+      }
+    }
+  }
+
+  function Invoke-ProductManifestMalformedCases {
+    Test-ProductCase 'manifest diagnostic labels reject string convertible objects without copying properties' {
+      foreach($entry in @(@{Key='Check';Label='profile_initial'},@{Key='Kind';Label='count'})) {
+        $exception=New-ProductManifestFailure @() @([pscustomobject]@{Path='synthetic';Sha256='synthetic'}) 'profile_initial'
+        $value=[pscustomobject]@{Label=$entry.Label;Unreported='synthetic-unreported-content'}
+        $value|Add-Member -MemberType ScriptMethod -Name ToString -Value {$this.Label} -Force
+        $exception.Data['ArkismProductManifest'][$entry.Key]=$value
+        $report=[ordered]@{};Add-ProductManifestDiagnostic $report ([pscustomobject]@{Exception=$exception})
+        Require-ProductTest ($report.Count -eq 0) 'non_string_manifest_label_copied'
+      }
+    }
+    Test-ProductCase 'manifest null path retains the original fixed failure rather than a diagnostic exception' {
+      $expected=@([pscustomobject]@{Path=$null;Sha256='synthetic'})
+      $actual=@([pscustomobject]@{Path='synthetic';Sha256='synthetic'})
+      $failure=$null;try{Assert-ProductManifest $expected $actual 'stage_payload'}catch{$failure=$_}
+      Require-ProductTest ($null -ne $failure -and $failure.Exception.Message -ceq 'product_manifest_changed') 'manifest_primary_failure_masked'
+      $report=[ordered]@{};Add-ProductManifestDiagnostic $report $failure
+      Require-ProductTest ($report.manifest_check -ceq 'stage_payload' -and $report.manifest_mismatch_kind -ceq 'path' -and
+        -not $report.manifest_path_case_equal -and -not $report.manifest_path_separator_equal) 'null_manifest_path_diagnostic_incorrect'
+    }
+  }
+
   $script:ProductPassed=0
   Invoke-ProductBindingCases
   Invoke-ProductCoreCases
@@ -450,6 +521,8 @@ namespace Arkism.InstallerChecks {
   Invoke-ProductLateProcessCases
   Invoke-ProductIdentityCases
   Invoke-ProductDiagnosticCases
+  Invoke-ProductManifestDiagnosticCases
+  Invoke-ProductManifestMalformedCases
   Write-Output "All $script:ProductPassed product prototype offline cases passed; native calls: 0. Owned inert fixtures retained."
 }
 
