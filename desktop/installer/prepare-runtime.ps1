@@ -206,39 +206,53 @@ $backup = Join-Path $target "pgsql-backup-$transaction"
 if ((Test-Path -LiteralPath $incoming) -or (Test-Path -LiteralPath $backup)) { throw 'runtime staging temporary path already exists' }
 $previous = Test-Path -LiteralPath $staged
 $publishing, $published = $false, $false
+$stagingFailure = $null
 try {
-  Assert-RuntimeDirectories @($pg, $staged, $incoming, $backup)
-  Copy-Item -LiteralPath $pg -Destination $incoming -Recurse -Force
-  if (-not (Test-RuntimeFiles -Root $incoming -Required $required)) { throw 'runtime staging copy incomplete' }
-  Assert-RuntimeDirectories @($pg, $staged, $incoming, $backup)
-  if ($previous) { Move-Item -LiteralPath $staged -Destination $backup }
-  Assert-RuntimeDirectories @($staged, $incoming, $backup)
-  $publishing = $true
-  Move-Item -LiteralPath $incoming -Destination $staged
-  $published = $true
-  Assert-RuntimePath $backup
-  if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
-} catch {
-  $failure = $_
-  if (-not $published) {
-    if (Test-Path -LiteralPath $backup) {
-      try {
-        Assert-RuntimeDirectories @($staged, $backup)
-        if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Recurse -Force }
-        Move-Item -LiteralPath $backup -Destination $staged
-      } catch {
-        # Keep the owned backup for recovery if restoring the previous output fails.
-        throw "runtime staging failed: $($failure.Exception.Message); previous output recovery requires $backup : $($_.Exception.Message)"
+  try {
+    Assert-RuntimeDirectories @($pg, $staged, $incoming, $backup)
+    Copy-Item -LiteralPath $pg -Destination $incoming -Recurse -Force
+    if (-not (Test-RuntimeFiles -Root $incoming -Required $required)) { throw 'runtime staging copy incomplete' }
+    Assert-RuntimeDirectories @($pg, $staged, $incoming, $backup)
+    if ($previous) { Move-Item -LiteralPath $staged -Destination $backup }
+    Assert-RuntimeDirectories @($staged, $incoming, $backup)
+    $publishing = $true
+    Move-Item -LiteralPath $incoming -Destination $staged
+    $published = $true
+    Assert-RuntimePath $backup
+    if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
+  } catch {
+    $failure = $_
+    if (-not $published) {
+      if (Test-Path -LiteralPath $backup) {
+        try {
+          Assert-RuntimeDirectories @($staged, $backup)
+          if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Recurse -Force }
+          Move-Item -LiteralPath $backup -Destination $staged
+        } catch {
+          # Keep the owned backup for recovery if restoring the previous output fails.
+          throw "runtime staging failed: $($failure.Exception.Message); previous output recovery requires $backup : $($_.Exception.Message)"
+        }
+      } elseif ($publishing -and -not $previous -and (Test-Path -LiteralPath $staged)) {
+        Assert-RuntimePath $staged
+        Remove-Item -LiteralPath $staged -Recurse -Force
       }
-    } elseif ($publishing -and -not $previous -and (Test-Path -LiteralPath $staged)) {
-      Assert-RuntimePath $staged
-      Remove-Item -LiteralPath $staged -Recurse -Force
     }
+    throw $failure
   }
-  throw $failure
+} catch {
+  # Capture the complete escaping error, including any rollback recovery information.
+  $stagingFailure = $_
+  throw
 } finally {
-  Assert-RuntimePath $incoming
-  if (Test-Path -LiteralPath $incoming) { Remove-Item -LiteralPath $incoming -Recurse -Force }
+  try {
+    Assert-RuntimePath $incoming
+    if (Test-Path -LiteralPath $incoming) { Remove-Item -LiteralPath $incoming -Recurse -Force }
+  } catch {
+    if ($null -ne $stagingFailure) {
+      throw "runtime staging failed: $($stagingFailure.Exception.Message); runtime staging cleanup failed: $($_.Exception.Message)"
+    }
+    throw
+  }
 }
 $mb = [int]((Get-ChildItem -LiteralPath $target -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
 Write-Host "built-in runtime staged: $mb MB"

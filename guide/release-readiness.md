@@ -46,6 +46,8 @@ concurrent path replacement.
 A new staging copy is checked before replacing the previous output. Copy or
 publication failures preserve or restore that output; a failed restoration
 retains the recovery backup and reports its location.
+If temporary-copy cleanup also fails, the reported error retains the original
+failure and any recovery path alongside the cleanup failure.
 
 The offline PowerShell regression uses inert ZIP fixtures and fake download,
 extraction and native build boundaries. Windows CI runs it with Windows

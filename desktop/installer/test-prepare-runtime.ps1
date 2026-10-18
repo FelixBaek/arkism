@@ -16,7 +16,7 @@ function Assert-RuntimeTest([bool]$Condition, [string]$Message) {
 
 function Get-RuntimeCommandSnapshot {
   $rows = @()
-  foreach ($name in @('Invoke-WebRequest', 'Expand-Archive', 'Get-Command', 'Copy-Item', 'Move-Item', 'cmd')) {
+  foreach ($name in @('Invoke-WebRequest', 'Expand-Archive', 'Get-Command', 'Copy-Item', 'Move-Item', 'Remove-Item', 'cmd')) {
     $commands = @(Microsoft.PowerShell.Core\Get-Command -Name $name -All -ErrorAction SilentlyContinue)
     if ($commands.Count -eq 0) { $rows += "$name=<missing>" }
     foreach ($command in $commands) {
@@ -217,13 +217,25 @@ function Move-RuntimeFixtureItem {
     Microsoft.PowerShell.Management\Move-Item @PSBoundParameters
     throw 'synthetic backup rename failed after move'
   }
-  if ($publishing -and $state.Mode -in @('stage_publish_failure', 'stage_rollback_failure')) { throw 'synthetic staging publication failed' }
+  if ($publishing -and $state.Mode -in @('stage_publish_failure', 'stage_rollback_failure', 'stage_publish_cleanup_failure', 'stage_rollback_cleanup_failure')) { throw 'synthetic staging publication failed' }
   if ($state.Mode -eq 'stage_partial_publish_failure' -and $publishing) {
     Microsoft.PowerShell.Management\Move-Item @PSBoundParameters
     throw 'synthetic staging publication failed after move'
   }
-  if ($state.Mode -eq 'stage_rollback_failure' -and $restoring) { throw 'synthetic rollback failed' }
+  if ($state.Mode -in @('stage_rollback_failure', 'stage_rollback_cleanup_failure') -and $restoring) { throw 'synthetic rollback failed' }
   Microsoft.PowerShell.Management\Move-Item @PSBoundParameters
+  if ($publishing) { $state.FailCleanup = $state.Mode -eq 'stage_cleanup_guard_failure' }
+}
+
+function Remove-RuntimeFixtureItem {
+  [CmdletBinding()]
+  param([string[]]$LiteralPath, [switch]$Recurse, [switch]$Force)
+  $state = $global:arkismRuntimeTest
+  if ($null -ne $state -and $state.Mode -in @('stage_publish_cleanup_failure', 'stage_rollback_cleanup_failure') -and
+      $LiteralPath.Count -eq 1 -and (Split-Path -Leaf $LiteralPath[0]) -cmatch '^pgsql-incoming-[0-9a-f]{32}$') {
+    throw [IO.IOException]::new('synthetic incoming cleanup failed')
+  }
+  Microsoft.PowerShell.Management\Remove-Item @PSBoundParameters
 }
 
 function Get-RuntimeStageSnapshot([string]$Stage) {
@@ -242,13 +254,41 @@ function New-RuntimeFixtureLink([hashtable]$Fixture, [string]$Path, [string]$Tar
     Assert-RuntimeTest ([IO.Path]::GetFullPath($candidate).StartsWith($owned, [StringComparison]::OrdinalIgnoreCase)) 'Link fixture escaped its owned root'
   }
   [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path)) | Out-Null
-  $kind = if ([IO.Path]::DirectorySeparatorChar -eq '\') { 'Junction' } else { 'SymbolicLink' }
-  New-Item -ItemType $kind -Path $Path -Target $Target | Out-Null
+  $callerLocation = (Get-Location).Path
+  if ([IO.Path]::DirectorySeparatorChar -eq '\') {
+    # Windows PowerShell resolves -Target as a wildcard. Keep the real [] path,
+    # but resolve the junction's '.' target from its literal filesystem location.
+    Push-Location -LiteralPath $Target
+    try { New-Item -ItemType Junction -Path $Path -Target '.' | Out-Null }
+    finally { Pop-Location }
+  } else {
+    New-Item -ItemType SymbolicLink -Path $Path -Target $Target | Out-Null
+  }
+  # Register before assertions so a broken link can always be unlinked safely.
   $Fixture.Links.Add($Path)
+  Assert-RuntimeTest ((Get-Location).Path -ceq $callerLocation) 'Link creation changed the caller location'
+  Assert-RuntimeTest (([IO.File]::GetAttributes($Path) -band [IO.FileAttributes]::ReparsePoint) -ne 0) 'Fixture did not create a real reparse point'
+  $probeName = 'link-probe-' + [Guid]::NewGuid().ToString('N') + '.tmp'
+  $probe = Join-Path $Target $probeName
+  $probeText = 'synthetic owned link target ' + [Guid]::NewGuid().ToString('N')
+  try {
+    # Write only to the owned real target; read through the link to verify its binding.
+    [IO.File]::WriteAllText($probe, $probeText, [Text.UTF8Encoding]::new($false))
+    Assert-RuntimeTest ([IO.File]::ReadAllText((Join-Path $Path $probeName)) -ceq $probeText) 'Fixture link points to a different target'
+  } finally { [IO.File]::Delete($probe) }
 }
 
 function Get-RuntimeFixtureInspectionFailure([string]$Path, [bool]$AllowMissing) {
   throw [IO.IOException]::new('synthetic runtime path inspection failed')
+}
+
+function Get-RuntimeFixtureCleanupAttributes([string]$Path, [bool]$AllowMissing) {
+  if ($global:arkismRuntimeTest.FailCleanup -and (Split-Path -Leaf $Path) -cmatch '^pgsql-incoming-[0-9a-f]{32}$') {
+    throw [IO.IOException]::new('synthetic cleanup inspection failed')
+  }
+  # Invoke the production implementation, bypassing only this local test alias.
+  $original = (Get-Item -LiteralPath Function:\Get-RuntimePathAttributes).ScriptBlock
+  & $original $Path $AllowMissing
 }
 
 function Invoke-RuntimeFixture([hashtable]$Fixture, [string]$Mode = 'ok',
@@ -260,10 +300,15 @@ function Invoke-RuntimeFixture([hashtable]$Fixture, [string]$Mode = 'ok',
   Set-Alias -Name cmd -Value Invoke-RuntimeBuild -Scope Local
   Set-Alias -Name Copy-Item -Value Copy-RuntimeFixtureItem -Scope Local
   Set-Alias -Name Move-Item -Value Move-RuntimeFixtureItem -Scope Local
+  Set-Alias -Name Remove-Item -Value Remove-RuntimeFixtureItem -Scope Local
   if ($Mode -eq 'path_inspection_failure') {
     Set-Alias -Name Get-RuntimePathAttributes -Value Get-RuntimeFixtureInspectionFailure -Scope Local
   }
+  if ($Mode -eq 'stage_cleanup_guard_failure') {
+    Set-Alias -Name Get-RuntimePathAttributes -Value Get-RuntimeFixtureCleanupAttributes -Scope Local
+  }
   $Fixture.Mode = $Mode
+  $Fixture.FailCleanup = $false
   $Fixture.Events.Clear()
   $global:arkismRuntimeTest = $Fixture
   $global:LASTEXITCODE = 0
@@ -593,6 +638,14 @@ foreach ($shape in @('stage_ancestor', 'cache_ancestor', 'cache_leaf', 'cache_ru
         $repository = Join-Path $fixture.Dir 'repository'
         $realTarget = Join-Path $repository 'desktop/stage'
         Write-RuntimeFixtureFile (Join-Path $realTarget 'runtime/pgsql/previous.txt') 'synthetic alias stage output'
+        $callerLocation = (Get-Location).Path
+        $inputBefore = (Get-FileHash -LiteralPath $fixture.GoodPg).Hash
+        $setupFailure = $null
+        try { New-RuntimeFixtureLink $fixture $fixture.GoodPg $repository }
+        catch { $setupFailure = $_ }
+        Assert-RuntimeTest ($null -ne $setupFailure) 'Link creation replaced an existing fixture input file'
+        Assert-RuntimeTest ((Get-Location).Path -ceq $callerLocation) 'Failed link creation changed the caller location'
+        Assert-RuntimeTest ((Get-FileHash -LiteralPath $fixture.GoodPg).Hash -ceq $inputBefore) 'Failed link creation changed fixture input bytes'
         $alias = Join-Path $fixture.Root 'repository alias'
         New-RuntimeFixtureLink $fixture $alias $repository
         $fixture.Stage = Join-Path $alias 'desktop/stage'
@@ -664,6 +717,53 @@ Test-RuntimeCase 'a link introduced during build stops before stage copy or publ
   Assert-RuntimeTest ($fixture.Events.Contains('build') -and $fixture.StageCopies -eq 0) 'Post-build inspection did not stop staging copy'
   Assert-RuntimeTest ((Get-RuntimeStageSnapshot $fixture.LinkedStageTarget) -ceq $before) 'Post-build rejection changed the previous runtime or neighbors'
   Assert-RuntimeTest (-not (Test-Path -LiteralPath (Join-Path $fixture.Dir 'complete.json'))) 'Post-build linked path completed its cache'
+}
+
+foreach ($mode in @('stage_publish_cleanup_failure', 'stage_rollback_cleanup_failure')) {
+  Test-RuntimeCase "$mode retains every cause and the previous runtime" {
+    param($fixture)
+    Assert-RuntimeTest ($null -eq (Invoke-RuntimeFixture $fixture)) 'Initial completed cache failed'
+    Add-RuntimeStageNeighbors $fixture
+    $staged = Join-Path $fixture.Stage 'runtime/pgsql'
+    $oldOutput = Get-RuntimeStageSnapshot $staged
+    $cacheBefore = Get-RuntimeStageSnapshot $fixture.Cache
+    $failure = Invoke-RuntimeFixture $fixture $mode
+    Assert-RuntimeTest ($null -ne $failure -and $failure.Contains('synthetic incoming cleanup failed')) "Cleanup failure was hidden: $failure"
+    Assert-RuntimeTest ($failure.Contains('synthetic staging publication failed')) "Cleanup failure replaced the original publication error: $failure"
+    $backups = @(Get-ChildItem -LiteralPath (Join-Path $fixture.Stage 'runtime') -Directory |
+      Where-Object { $_.Name -cmatch '^pgsql-backup-[0-9a-f]{32}$' })
+    if ($mode -eq 'stage_rollback_cleanup_failure') {
+      Assert-RuntimeTest ($failure.Contains('synthetic rollback failed') -and $failure.Contains('previous output recovery requires')) "Cleanup failure replaced rollback recovery information: $failure"
+      Assert-RuntimeTest ($backups.Count -eq 1) 'Cleanup failure deleted the recoverable backup'
+      Assert-RuntimeTest ($failure.Contains($backups[0].FullName)) 'Cleanup failure lost the exact recovery path'
+      Assert-RuntimeTest ((Get-RuntimeStageSnapshot $backups[0].FullName) -ceq $oldOutput) 'Cleanup failure changed the recoverable previous runtime'
+    } else {
+      Assert-RuntimeTest ($backups.Count -eq 0) 'Successful rollback left its backup behind'
+      Assert-RuntimeTest ((Get-RuntimeStageSnapshot $staged) -ceq $oldOutput) 'Cleanup failure lost the restored previous runtime'
+    }
+    Assert-RuntimeTest ((Get-RuntimeStageSnapshot $fixture.Cache) -ceq $cacheBefore) 'Cleanup failure changed its source cache'
+    Assert-RuntimeTest ($fixture.Events.Count -eq 0) 'Warm cleanup failure unexpectedly rebuilt its source'
+    Assert-RuntimeStageNeighbors $fixture
+    $incoming = @(Get-ChildItem -LiteralPath (Join-Path $fixture.Stage 'runtime') -Directory |
+      Where-Object { $_.Name -cmatch '^pgsql-incoming-[0-9a-f]{32}$' })
+    Assert-RuntimeTest ($incoming.Count -eq 1) 'Cleanup failure fixture did not retain the owned incoming copy'
+  }
+}
+
+Test-RuntimeCase 'a cleanup inspection error after successful publication reports only cleanup' {
+  param($fixture)
+  Assert-RuntimeTest ($null -eq (Invoke-RuntimeFixture $fixture)) 'Initial completed cache failed'
+  Add-RuntimeStageNeighbors $fixture
+  $cacheBefore = Get-RuntimeStageSnapshot $fixture.Cache
+  $failure = Invoke-RuntimeFixture $fixture 'stage_cleanup_guard_failure'
+  Assert-RuntimeTest ($null -ne $failure -and $failure.Contains('synthetic cleanup inspection failed')) "Cleanup-only error was hidden: $failure"
+  Assert-RuntimeTest (-not $failure.Contains('synthetic staging publication failed') -and -not $failure.Contains('synthetic rollback failed')) 'Cleanup-only error invented a publication or rollback cause'
+  Assert-RuntimeOutput $fixture
+  Assert-RuntimeStageNeighbors $fixture
+  Assert-RuntimeTest ((Get-RuntimeStageSnapshot $fixture.Cache) -ceq $cacheBefore -and $fixture.Events.Count -eq 0) 'Cleanup-only failure changed or rebuilt its source cache'
+  $leftovers = @(Get-ChildItem -LiteralPath (Join-Path $fixture.Stage 'runtime') -Directory |
+    Where-Object { $_.Name -cmatch '^pgsql-(incoming|backup)-[0-9a-f]{32}$' })
+  Assert-RuntimeTest ($leftovers.Count -eq 0) 'Successful publication left a transition directory'
 }
 
 Assert-RuntimeTest ((Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash -eq $sourceHash) 'Tests changed the original preparation script'
