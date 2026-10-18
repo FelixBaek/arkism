@@ -29,13 +29,13 @@ func TestAtomicWriteRetryTransientThenSuccess(t *testing.T) {
 			oldpath, newpath := atomicWriteRetryFixture(t)
 			clock := time.Unix(1, 0)
 			attempts := 0
-			err := replaceAtomicWriteWindows(oldpath, newpath, func(old, new string) error {
-				if old != oldpath || new != newpath {
+			err := replaceAtomicWriteWindows(oldpath, newpath, func(sourcePath, destinationPath string) error {
+				if sourcePath != oldpath || destinationPath != newpath {
 					t.Fatal("retry changed its source or destination")
 				}
 				attempts++
 				if attempts < 4 {
-					return &os.LinkError{Op: "rename", Old: old, New: new, Err: code}
+					return &os.LinkError{Op: "rename", Old: sourcePath, New: destinationPath, Err: code}
 				}
 				return nil
 			}, func() time.Time { return clock }, func(delay time.Duration) { clock = clock.Add(delay) })
