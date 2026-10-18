@@ -14,6 +14,21 @@ function Assert-RuntimeTest([bool]$Condition, [string]$Message) {
   if (-not $Condition) { throw $Message }
 }
 
+function Get-RuntimeCommandSnapshot {
+  $rows = @()
+  foreach ($name in @('Invoke-WebRequest', 'Expand-Archive', 'Get-Command', 'Copy-Item', 'Move-Item', 'cmd')) {
+    $commands = @(Microsoft.PowerShell.Core\Get-Command -Name $name -All -ErrorAction SilentlyContinue)
+    if ($commands.Count -eq 0) { $rows += "$name=<missing>" }
+    foreach ($command in $commands) {
+      $rows += "$name=$($command.CommandType)|$($command.ModuleName)|$($command.Source)|$($command.Definition)"
+    }
+  }
+  return $rows -join "`n"
+}
+
+# Capture real command resolution before any fixture boundary can be installed.
+$originalRuntimeCommands = Get-RuntimeCommandSnapshot
+
 function Get-RuntimeDeclaration([string]$Text, [string]$Name) {
   $pattern = '(?m)^\$' + [regex]::Escape($Name) + " = '([^']+)'"
   $found = [regex]::Matches($Text, $pattern)
@@ -80,7 +95,7 @@ function Assert-OwnedRuntimePath([string]$Path) {
   Assert-RuntimeTest ([IO.Path]::GetFullPath($Path).StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) 'Fixture path escaped its owned root'
 }
 
-function Invoke-WebRequest {
+function Invoke-RuntimeDownload {
   param([Parameter(Position=0)][string]$Uri, [switch]$UseBasicParsing, [string]$OutFile, [int]$TimeoutSec)
   $state = $global:arkismRuntimeTest
   Assert-OwnedRuntimePath $OutFile
@@ -97,7 +112,7 @@ function Invoke-WebRequest {
   } else { Copy-Item -LiteralPath $zip -Destination $OutFile }
 }
 
-function Expand-Archive {
+function Invoke-RuntimeExpand {
   param([Alias('LiteralPath')][Parameter(Position=0)][string]$Path, [Parameter(Position=1)][string]$DestinationPath, [switch]$Force)
   $state = $global:arkismRuntimeTest
   Assert-OwnedRuntimePath $Path
@@ -120,7 +135,7 @@ function Expand-Archive {
 
 # Resolve the production native-command boundary to a script block. The actual
 # script still checks its output, exit status and toolchain path.
-function Get-Command {
+function Get-RuntimeNativeCommand {
   [CmdletBinding()]
   param([string]$Name, [object]$CommandType)
   Assert-RuntimeTest ($Name.EndsWith('\vswhere.exe') -and $CommandType -eq 'Application') 'Unexpected native command lookup'
@@ -135,7 +150,7 @@ function Get-Command {
   }
 }
 
-function cmd {
+function Invoke-RuntimeBuild {
   param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments)
   $state = $global:arkismRuntimeTest
   Assert-RuntimeTest ($Arguments.Count -eq 2 -and $Arguments[0] -eq '/c' -and $Arguments[1].Contains('nmake /nologo /F Makefile.win')) 'Build invocation changed'
@@ -154,7 +169,7 @@ function cmd {
   }
 }
 
-function Copy-Item {
+function Copy-RuntimeFixtureItem {
   [CmdletBinding()]
   param([string]$LiteralPath, [string]$Destination, [switch]$Recurse, [switch]$Force)
   $state = $global:arkismRuntimeTest
@@ -174,30 +189,32 @@ function Copy-Item {
   Microsoft.PowerShell.Management\Copy-Item @PSBoundParameters
 }
 
-function Move-Item {
+function Move-RuntimeFixtureItem {
   [CmdletBinding()]
   param([string]$LiteralPath, [string]$Destination, [switch]$Force)
   $state = $global:arkismRuntimeTest
+  if ($null -eq $state) {
+    Microsoft.PowerShell.Management\Move-Item @PSBoundParameters
+    return
+  }
   $from = Split-Path -Leaf $LiteralPath
   $to = Split-Path -Leaf $Destination
   $publishing = $from -cmatch '^pgsql-incoming-[0-9a-f]{32}$'
   $backingUp = $to -cmatch '^pgsql-backup-[0-9a-f]{32}$'
   $restoring = $from -cmatch '^pgsql-backup-[0-9a-f]{32}$'
-  if ($null -ne $state) {
-    Assert-OwnedRuntimePath $LiteralPath
-    Assert-OwnedRuntimePath $Destination
-    if ($state.Mode -eq 'stage_backup_failure' -and $backingUp) { throw 'synthetic backup rename failed' }
-    if ($state.Mode -eq 'stage_backup_partial_failure' -and $backingUp) {
-      Microsoft.PowerShell.Management\Move-Item @PSBoundParameters
-      throw 'synthetic backup rename failed after move'
-    }
-    if ($publishing -and $state.Mode -in @('stage_publish_failure', 'stage_rollback_failure')) { throw 'synthetic staging publication failed' }
-    if ($state.Mode -eq 'stage_partial_publish_failure' -and $publishing) {
-      Microsoft.PowerShell.Management\Move-Item @PSBoundParameters
-      throw 'synthetic staging publication failed after move'
-    }
-    if ($state.Mode -eq 'stage_rollback_failure' -and $restoring) { throw 'synthetic rollback failed' }
+  Assert-OwnedRuntimePath $LiteralPath
+  Assert-OwnedRuntimePath $Destination
+  if ($state.Mode -eq 'stage_backup_failure' -and $backingUp) { throw 'synthetic backup rename failed' }
+  if ($state.Mode -eq 'stage_backup_partial_failure' -and $backingUp) {
+    Microsoft.PowerShell.Management\Move-Item @PSBoundParameters
+    throw 'synthetic backup rename failed after move'
   }
+  if ($publishing -and $state.Mode -in @('stage_publish_failure', 'stage_rollback_failure')) { throw 'synthetic staging publication failed' }
+  if ($state.Mode -eq 'stage_partial_publish_failure' -and $publishing) {
+    Microsoft.PowerShell.Management\Move-Item @PSBoundParameters
+    throw 'synthetic staging publication failed after move'
+  }
+  if ($state.Mode -eq 'stage_rollback_failure' -and $restoring) { throw 'synthetic rollback failed' }
   Microsoft.PowerShell.Management\Move-Item @PSBoundParameters
 }
 
@@ -213,6 +230,13 @@ function Get-RuntimeStageSnapshot([string]$Stage) {
 
 function Invoke-RuntimeFixture([hashtable]$Fixture, [string]$Mode = 'ok',
   [string]$CachePath = $Fixture.Cache, [string]$StagePath = $Fixture.Stage) {
+  # Only the called production script and its children see these test boundaries.
+  Set-Alias -Name Invoke-WebRequest -Value Invoke-RuntimeDownload -Scope Local
+  Set-Alias -Name Expand-Archive -Value Invoke-RuntimeExpand -Scope Local
+  Set-Alias -Name Get-Command -Value Get-RuntimeNativeCommand -Scope Local
+  Set-Alias -Name cmd -Value Invoke-RuntimeBuild -Scope Local
+  Set-Alias -Name Copy-Item -Value Copy-RuntimeFixtureItem -Scope Local
+  Set-Alias -Name Move-Item -Value Move-RuntimeFixtureItem -Scope Local
   $Fixture.Mode = $Mode
   $Fixture.Events.Clear()
   $global:arkismRuntimeTest = $Fixture
@@ -505,6 +529,23 @@ Test-RuntimeCase 'normalization preserves the filesystem root and its overlap bo
   Assert-RuntimeTest ((Get-NormalizedRuntimePath (Join-Path $root '.')) -ceq $root) 'Root dot normalization lost the filesystem root'
   Assert-RuntimeTest (Test-RuntimePathOverlap $root $fixture.Root) 'Root did not overlap its child path'
   Assert-RuntimeTest (Test-RuntimePathOverlap $fixture.Root $root) 'Root overlap depended on argument order'
+}
+
+Test-RuntimeCase 'mock aliases preserve caller commands after success and failure' {
+  param($fixture)
+  Assert-RuntimeTest ((Get-RuntimeCommandSnapshot) -ceq $originalRuntimeCommands) 'Fixture replaced a caller command outside runtime preparation'
+  & {
+    # This caller alias must survive the production script's temporary mock binding.
+    Set-Alias -Name Invoke-WebRequest -Value Write-Output -Scope Local
+    $callerCommands = Get-RuntimeCommandSnapshot
+    $failure = Invoke-RuntimeFixture $fixture
+    Assert-RuntimeTest ($null -eq $failure) "Scoped preparation failed: $failure"
+    Assert-RuntimeTest ((Get-RuntimeCommandSnapshot) -ceq $callerCommands) 'Successful preparation changed caller commands or aliases'
+    $failure = Invoke-RuntimeFixture $fixture 'stage_copy_failure'
+    Assert-RuntimeTest ($null -ne $failure -and $failure.Contains('synthetic staging copy failed')) "Scoped failure injection changed contract: $failure"
+    Assert-RuntimeTest ((Get-RuntimeCommandSnapshot) -ceq $callerCommands) 'Failed preparation changed caller commands or aliases'
+  }
+  Assert-RuntimeTest ((Get-RuntimeCommandSnapshot) -ceq $originalRuntimeCommands) 'A child caller alias leaked into the parent scope'
 }
 
 Assert-RuntimeTest ((Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash -eq $sourceHash) 'Tests changed the original preparation script'
