@@ -159,9 +159,23 @@ observation checks and evidence hashes.
 
 This validation also applies to partial result sets, while a partial audit
 remains supported. Passing it does not prove that every planned run completed,
-that a resumed experiment used a frozen protocol, or that billing and human
-review time were measured. Those are separate requirements for a future
-benchmark protocol.
+or that billing and human review time were measured. Those are separate
+requirements for a future benchmark protocol.
+
+Before resuming, the runner also checks every saved result, including unselected
+conditions, against the current experiment, baseline commit, task-fixture hash
+and model. Each result must belong to its exact scheduled folder. It validates
+the complete legacy frozen spec before any run or output-file write and leaves
+matching spec bytes intact. Results without their spec are rejected. A matching
+partial result set remains resumable: only missing selected cells run, and the
+validated rows are reused for aggregation. Key order and whitespace in the spec
+may differ; JSON value types must match. No model or experiment fields are
+retroactively inserted into legacy specs.
+
+This resume gate does not freeze a complete v2 protocol, recover attempts
+without results, or provide concurrent-writer or global artifact transactions.
+Adapter/judge/environment provenance and a complete protocol manifest remain
+separate work.
 
 The offline regression rechecks the archived 45 unique observations and their
 15 static/Arkism prompt pairs without new model calls. The original recorded
