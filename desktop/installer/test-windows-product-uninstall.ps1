@@ -582,7 +582,7 @@ namespace Arkism.InstallerChecks {
     switch($Mode) {
       query { throw 'synthetic_query_failure' }
       partial_query { $row;throw 'synthetic_partial_query_failure' }
-      unknown_image { $row.ExecutablePath=$null;$row|Add-Member NoteProperty Name 'uninstall.exe' -Force }
+      unknown_image { $row.ProcessId=2049;$row.ExecutablePath=$null;$row|Add-Member NoteProperty Name 'uninstall.exe' -Force }
       array_image { $row.ExecutablePath=@([string][char]0,'inert') }
       invalid_path { $row.ExecutablePath=[string][char]0 }
     }
@@ -591,8 +591,8 @@ namespace Arkism.InstallerChecks {
 
   function Invoke-ProductScanDiagnosticCase([string]$Mode) {
     $state=New-ProductFixture
-    function Get-ProductProcessRows([string]$InstallPath,$ScanState,[long]$ExpectedPid) {
-      & $productionProcessReader $InstallPath $ScanState $ExpectedPid
+    function Get-ProductProcessRows([string]$InstallPath,$ScanState,$ExpectedPid,$NativeImage) {
+      & $productionProcessReader $InstallPath $ScanState $ExpectedPid $NativeImage
     }
     function Invoke-ProductScanFakeCim { Get-ProductScanTestRows $state $Mode }
     Set-Alias Get-CimInstance Invoke-ProductScanFakeCim -Scope Local
@@ -613,7 +613,7 @@ namespace Arkism.InstallerChecks {
     $expected=@{query=@{Stage='query';Queried=$false;Kind='unobserved'}
       partial_query=@{Stage='query';Queried=$false;Kind='unobserved'}
       unknown_image=@{Stage='unknown_image';Queried=$true;Kind='null'}
-      array_image=@{Stage='path_normalize';Queried=$true;Kind='array'}
+      array_image=@{Stage='image_check';Queried=$true;Kind='array'}
       invalid_path=@{Stage='path_normalize';Queried=$true;Kind='string'}}[$Mode]
     Require-ProductTest ($report.policy_scan_stage -ceq $expected.Stage) 'scan_failure_substage_missing'
     $queried=$expected.Queried
@@ -622,7 +622,7 @@ namespace Arkism.InstallerChecks {
     Require-ProductTest ($report.policy_scan_image_kind -ceq $expected.Kind) 'scan_value_kind_incorrect'
     if ($Mode -ceq 'unknown_image') {
       Require-ProductTest ($report.policy_scan_name_kind -ceq 'string' -and
-        $report.policy_scan_pid_relation -ceq 'expected_pid') 'unknown_self_scan_relation_missing'
+        $report.policy_scan_pid_relation -ceq 'other_pid') 'unknown_foreign_scan_relation_missing'
     }
   }
 
@@ -649,6 +649,154 @@ namespace Arkism.InstallerChecks {
         Require-ProductTest ($report.Count -eq 8) 'malformed_scan_diagnostic_copied'
         $scan[$entry.Key]=$saved
       }
+    }
+  }
+
+  function Invoke-ProductNativeCimCore($Fixture, [scriptblock]$Mutation, [scriptblock]$AfterScan) {
+    function Get-ProductProcessRows([string]$InstallPath, $ScanState, $ExpectedPid, $NativeImage) {
+      $observed=@(& $productionProcessReader $InstallPath $ScanState $ExpectedPid $NativeImage)
+      if ($Fixture.ProcessRows.Count -and $AfterScan) { & $AfterScan }
+      return $observed
+    }
+    function Invoke-ProductNativeFakeCim {
+      $Fixture.ObservedCimRows=@($Fixture.ProcessRows)
+      return @($Fixture.ProcessRows)
+    }
+    Set-Alias Get-CimInstance Invoke-ProductNativeFakeCim -Scope Local
+    try { Invoke-TestProductCore $Fixture $Mutation }
+    finally { Remove-Item Alias:Get-CimInstance }
+  }
+
+  function Invoke-ProductNativeCimCases {
+    Test-ProductCase 'native verified own null CIM image keeps the observed row and resumes once' {
+      $state=New-ProductFixture
+      $result=Invoke-ProductNativeCimCore $state {
+        $state.ProcessRows[0].ExecutablePath=$null
+        $state.ProcessRows[0]|Add-Member NoteProperty Name 'uninstall.exe' -Force
+      }
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest ($result.EmptyConfirmed -and
+        [Arkism.InstallerChecks.ProductTestHarness]::Last.ResumeCalls -eq 1 -and
+        $state.ObservedCimRows.Count -eq 1 -and $null -eq $state.ObservedCimRows[0].ExecutablePath -and
+        $state.ObservedCimRows[0].Name -ceq 'uninstall.exe' -and $report.policy_completed -and
+        $report.policy_native_image_relied_on -eq $true -and $report.policy_cim_image_unavailable -eq $true -and
+        $report.policy_process_image_source -ceq 'native_verified_cim_unavailable') 'native_own_null_cim_not_bound'
+    }
+    foreach($mode in @('wrong_pid','text_pid','float_pid','bool_pid','zero_pid','overflow_pid','wrong_name','array_name',
+      'empty_image','whitespace_image','wrong_image','outside_image','array_image','duplicate','extra','other_unknown')) {
+      Test-ProductCase ("native CIM identity rejects $mode before resume") {
+        $state=New-ProductFixture
+        $failure=$null
+        try { $null=Invoke-ProductNativeCimCore $state { Set-ProductNativeCimTestRows $state $mode } }
+        catch { $failure=$_ }
+        Require-ProductTest ($null -ne $failure -and
+          [Arkism.InstallerChecks.ProductTestHarness]::Last.ResumeCalls -eq 0) 'invalid_native_cim_identity_resumed'
+        if ($mode -ceq 'array_image') { Assert-ProductNativeCimScalarChanges }
+      }
+    }
+    Test-ProductCase 'native CIM initial policy allows no unknown image exception' {
+      $state=New-ProductFixture
+      $state.ProcessRows=@([pscustomobject]@{ProcessId=2048;Name='uninstall.exe';ExecutablePath=$null})
+      Reject-ProductTest {Invoke-ProductNativeCimCore $state $null} 'product_process_image_unknown'
+      Require-ProductTest ([Arkism.InstallerChecks.ProductTestHarness]::Last.ResumeCalls -eq 0 -and
+        [Arkism.InstallerChecks.ProductTestHarness]::Last.FactoryCalls -eq 0) 'initial_unknown_cim_reached_adapter'
+    }
+    Test-ProductCase 'native CIM null row cannot bypass invalid verified native image' {
+      $state=New-ProductFixture;$state.FakeIdentityImage=Join-Path $state.Install 'Arkism.exe'
+      Reject-ProductTest {Invoke-ProductNativeCimCore $state { Set-ProductNativeCimTestRows $state 'own_null' }} 'product_process_identity_invalid'
+      Require-ProductTest ([Arkism.InstallerChecks.ProductTestHarness]::Last.ResumeCalls -eq 0 -and
+        ($state.PolicyPids -join ',') -ceq '0') 'invalid_native_image_reached_late_cim'
+    }
+    Invoke-ProductNativeCimAllowanceCases
+    Invoke-ProductNativeCimDiagnosticCases
+  }
+
+  function Set-ProductNativeCimTestRows($Fixture, [string]$Mode) {
+    $row=$Fixture.ProcessRows[0];$row.ExecutablePath=$null
+    $row|Add-Member NoteProperty Name 'uninstall.exe' -Force
+    $changes=@{
+      own_null={};wrong_pid={$row.ProcessId=2049};text_pid={$row.ProcessId='2048'}
+      float_pid={$row.ProcessId=2048.0};bool_pid={$row.ProcessId=$true};zero_pid={$row.ProcessId=0}
+      overflow_pid={$row.ProcessId=[long][uint32]::MaxValue+1};wrong_name={$row.Name='memoryd.exe'}
+      array_name={$row.Name=@('uninstall.exe')};empty_image={$row.ExecutablePath=''}
+      whitespace_image={$row.ExecutablePath=' '};wrong_image={$row.ExecutablePath=Join-Path $Fixture.Install 'Arkism.exe'}
+      outside_image={$row.ExecutablePath=Join-Path $Fixture.Root 'uninstall.exe'}
+      array_image={$row.ExecutablePath=@((Join-Path $Fixture.Install 'uninstall.exe'))}
+      duplicate={$Fixture.ProcessRows+= $row}
+      extra={$Fixture.ProcessRows+=([pscustomobject]@{ProcessId=2049;Name='Arkism.exe';ExecutablePath=(Join-Path $Fixture.Install 'Arkism.exe')})}
+      other_unknown={$Fixture.ProcessRows+=([pscustomobject]@{ProcessId=2049;Name='memoryd.exe';ExecutablePath=$null})}
+    }
+    if (-not $changes.ContainsKey($Mode)) { throw 'native_cim_test_mode_invalid' }
+    & $changes[$Mode]
+  }
+
+  function New-ProductCimConvertible([string]$Image) {
+    $value=[pscustomobject]@{Value=$Image}
+    $value|Add-Member ScriptMethod ToString {$this.Value} -Force
+    return $value
+  }
+
+  function Assert-ProductNativeCimScalarChanges {
+    foreach($variant in @('object_before_scan','array_after_scan','object_after_scan')) {
+      $state=New-ProductFixture;$image=Join-Path $state.Install 'uninstall.exe'
+      $change={ $state.ProcessRows[0].ExecutablePath=New-ProductCimConvertible $image }
+      $after=$null
+      if ($variant -cne 'object_before_scan') {
+        $change=$null
+        $after={
+          $state.ProcessRows[0].ExecutablePath=if ($variant -ceq 'array_after_scan') { ,@($image) }
+            else { New-ProductCimConvertible $image }
+        }
+      }
+      $failure=$null
+      try { $null=Invoke-ProductNativeCimCore $state $change $after } catch { $failure=$_ }
+      Require-ProductTest ($null -ne $failure -and
+        [Arkism.InstallerChecks.ProductTestHarness]::Last.ResumeCalls -eq 0) 'non_scalar_cim_image_resumed'
+    }
+  }
+
+  function Invoke-ProductNativeCimAllowanceCases {
+    Test-ProductCase 'native CIM allowance validates scalar native arguments before querying' {
+      $state=New-ProductFixture;$image=Join-Path $state.Install 'uninstall.exe';$calls=@{Count=0}
+      function Invoke-ProductAllowanceFakeCim { $calls.Count++;return @() }
+      function Get-ProductProcessRows([string]$InstallPath,$ScanState,$ExpectedPid,$NativeImage) {
+        & $productionProcessReader $InstallPath $ScanState $ExpectedPid $NativeImage
+      }
+      Set-Alias Get-CimInstance Invoke-ProductAllowanceFakeCim -Scope Local
+      try {
+        foreach($rowPid in @($null,'2048',2048.0,$true,-1,([long][uint32]::MaxValue+1))) {
+          Reject-ProductTest {Assert-ProductProcessState $state $rowPid $image} 'product_process_allowance_invalid'
+        }
+        $convertible=[pscustomobject]@{Value=$image}
+        $convertible|Add-Member ScriptMethod ToString {$this.Value} -Force
+        foreach($invalid in @($null,@($image),$convertible,(Join-Path $state.Install 'Arkism.exe'))) {
+          Reject-ProductTest {Assert-ProductProcessState $state 2048 $invalid} 'product_process_allowance_invalid'
+        }
+      } finally { Remove-Item Alias:Get-CimInstance }
+      Require-ProductTest ($calls.Count -eq 0) 'invalid_native_allowance_queried_cim'
+    }
+  }
+
+  function Invoke-ProductNativeCimDiagnosticCases {
+    Test-ProductCase 'native CIM fallback diagnostics use indexed fixed values and never expose extended text' {
+      $state=New-ProductFixture
+      $null=Invoke-ProductNativeCimCore $state { Set-ProductNativeCimTestRows $state 'own_null' }
+      $identity=$state['ProcessIdentityTrace'];$expected=[ordered]@{};Add-ProductPolicyDiagnostic $expected $state
+      foreach($name in @('NativeImageReliedOn','CimImageUnavailable','Source')) {
+        $identity|Add-Member NoteProperty $name 'synthetic-unreported-content' -Force
+      }
+      $state|Add-Member NoteProperty ProcessIdentityTrace 'synthetic-unreported-content' -Force
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest (($report|ConvertTo-Json -Compress) -ceq ($expected|ConvertTo-Json -Compress) -and
+        $report.Count -eq 18) 'native_cim_diagnostic_shadow_copied'
+      foreach($entry in @(@{Key='NativeImageReliedOn';Value=1},@{Key='CimImageUnavailable';Value=$false},
+        @{Key='Source';Value=@('native_verified_cim_unavailable')},@{Key='Source';Value='synthetic-unreported-content'})) {
+        $saved=$identity[$entry.Key];$identity[$entry.Key]=$entry.Value;$report=[ordered]@{}
+        Add-ProductPolicyDiagnostic $report $state
+        Require-ProductTest ($report.Count -eq 15) 'invalid_native_cim_diagnostic_copied'
+        $identity[$entry.Key]=$saved
+      }
+      Require-ProductTest (-not ($expected|ConvertTo-Json -Compress).Contains($state.Root)) 'native_cim_diagnostic_exposed_path'
     }
   }
 
@@ -895,6 +1043,7 @@ namespace Arkism.InstallerChecks {
   Invoke-ProductPolicyMalformedCases
   Invoke-ProductPolicyBindingCases
   Invoke-ProductScanDiagnosticCases
+  Invoke-ProductNativeCimCases
   Invoke-ProductManifestDiagnosticCases
   Invoke-ProductManifestMalformedCases
   Invoke-ProductSetupProfileCases

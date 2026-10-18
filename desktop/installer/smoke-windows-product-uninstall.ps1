@@ -52,6 +52,7 @@ function Invoke-ProductUninstallPolicy($State, [long]$AllowedPid, [string]$Allow
     $trace['CurrentStage'] = 'callback'; $trace['CompletedStage'] = 'none'; $trace['Completed'] = $false
     $trace['ProcessObserved'] = $false; $trace['ProcessCount'] = 0; $trace['ProcessVerified'] = $false
     $State['ProcessScanTrace'] = $null
+    $State['ProcessIdentityTrace'] = $null
   }
   Assert-ProductUninstallInputs $State $AllowedPid $AllowedImage
   if ($null -ne $trace) {
@@ -100,6 +101,20 @@ function Copy-ProductPolicyDiagnostic($Report, $State) {
   $Report.policy_process_observed = $trace['ProcessObserved']; $Report.policy_process_count = $trace['ProcessCount']
   $Report.policy_process_verified = $trace['ProcessVerified']; $Report.policy_completed = $trace['Completed']
   Copy-ProductProcessScanDiagnostic $Report $State
+  Copy-ProductProcessIdentityDiagnostic $Report $State
+}
+
+function Copy-ProductProcessIdentityDiagnostic($Report, $State) {
+  $identity = $State['ProcessIdentityTrace']
+  if ($identity -isnot [hashtable]) { return }
+  foreach ($name in @('NativeImageReliedOn', 'CimImageUnavailable')) {
+    if ($identity[$name] -isnot [bool] -or -not $identity[$name]) { return }
+  }
+  if ($identity['Source'] -isnot [string] -or
+    -not [string]::Equals($identity['Source'], 'native_verified_cim_unavailable', [StringComparison]::Ordinal)) { return }
+  $Report.policy_native_image_relied_on = $identity['NativeImageReliedOn']
+  $Report.policy_cim_image_unavailable = $identity['CimImageUnavailable']
+  $Report.policy_process_image_source = $identity['Source']
 }
 
 function New-ProductProcessScan($State) {
@@ -223,7 +238,40 @@ function Add-ProductManifestDiagnostic($Report, $Failure) {
   $Report.manifest_path_case_equal = $diagnostic['PathCaseEqual']; $Report.manifest_path_separator_equal = $diagnostic['PathSeparatorEqual']
 }
 
-function Get-ProductProcessRows([string]$Install, $ScanState, [long]$ExpectedPid = 0) {
+function New-ProductProcessAllowance([string]$Install, $AllowedPid, $AllowedImage) {
+  if (($AllowedPid -isnot [int] -and $AllowedPid -isnot [long] -and $AllowedPid -isnot [uint32]) -or
+    $AllowedPid -lt 0 -or $AllowedPid -gt [uint32]::MaxValue -or $AllowedImage -isnot [string]) {
+    throw 'product_process_allowance_invalid'
+  }
+  if ($AllowedPid -eq 0 -and $AllowedImage.Length -eq 0) { return }
+  $expected = ConvertTo-InstalledSmokePath (Join-Path $Install 'uninstall.exe')
+  if ($AllowedPid -eq 0 -or [string]::IsNullOrWhiteSpace($AllowedImage) -or
+    -not [string]::Equals((ConvertTo-InstalledSmokePath $AllowedImage), $expected, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'product_process_allowance_invalid'
+  }
+  return @{ ProcessId = $AllowedPid; Image = $expected }
+}
+
+function Test-ProductNativeCimUnavailable($Row, $ImageValue, $NameValue, $Allowance) {
+  if ($null -eq $Allowance -or $null -ne $ImageValue -or $NameValue -isnot [string] -or
+    -not [string]::Equals($NameValue, 'uninstall.exe', [StringComparison]::OrdinalIgnoreCase)) { return $false }
+  $rowPid = $Row.ProcessId
+  return (($rowPid -is [int] -or $rowPid -is [long] -or $rowPid -is [uint32]) -and
+    $rowPid -gt 0 -and $rowPid -le [uint32]::MaxValue -and $rowPid -eq $Allowance['ProcessId'])
+}
+
+function Get-ProductScanAllowance([string]$Install, $ExpectedPid, $NativeImage) {
+  # A PID supplied only for scan diagnostics cannot authorize an image exception.
+  if ($NativeImage -is [string] -and $NativeImage.Length -eq 0) { return }
+  return New-ProductProcessAllowance $Install $ExpectedPid $NativeImage
+}
+
+function Assert-ProductCimImageType($ImageValue) {
+  if ($null -ne $ImageValue -and $ImageValue -isnot [string]) { throw 'product_process_image_invalid' }
+}
+
+function Get-ProductProcessRows([string]$Install, $ScanState, $ExpectedPid = 0, $NativeImage = '') {
+  $allowance = Get-ProductScanAllowance $Install $ExpectedPid $NativeImage
   $scan = New-ProductProcessScan $ScanState
   $processes = @(Get-CimInstance Win32_Process -ErrorAction Stop)
   Set-ProductProcessScan $scan 'QueryReturned' $true
@@ -238,10 +286,16 @@ function Get-ProductProcessRows([string]$Install, $ScanState, [long]$ExpectedPid
     $imageValue = $process.ExecutablePath
     Set-ProductProcessScan $scan 'ImageKind' (Get-ProductScanKind $imageValue)
     Set-ProductProcessScan $scan 'Stage' 'image_check'
+    Assert-ProductCimImageType $imageValue
     if ([string]::IsNullOrWhiteSpace($imageValue)) {
       Set-ProductProcessScan $scan 'Stage' 'row_name'
       $nameValue = $process.Name
       Set-ProductProcessScan $scan 'NameKind' (Get-ProductScanKind $nameValue)
+      if (Test-ProductNativeCimUnavailable $process $imageValue $nameValue $allowance) {
+        # Preserve the observed CIM row; the separate native receipt supplies its image identity.
+        $process
+        continue
+      }
       if ($nameValue -in @('Arkism.exe', 'arkism.exe', 'uninstall.exe', 'memoryd.exe', 'memory-principal.exe', 'postgres.exe')) {
         Set-ProductProcessScan $scan 'Stage' 'unknown_image'
         throw 'product_process_image_unknown'
@@ -259,8 +313,9 @@ function Get-ProductProcessRows([string]$Install, $ScanState, [long]$ExpectedPid
   Set-ProductProcessScan $scan 'Stage' 'complete'
 }
 
-function Assert-ProductProcessState($State, [long]$AllowedPid = 0, [string]$AllowedImage = '') {
-  $rows = @(Invoke-ProductPolicyStage $State 'process_scan' { Get-ProductProcessRows $State.Install $State $AllowedPid })
+function Assert-ProductProcessState($State, $AllowedPid = 0, $AllowedImage = '') {
+  $allowance = New-ProductProcessAllowance $State.Install $AllowedPid $AllowedImage
+  $rows = @(Invoke-ProductPolicyStage $State 'process_scan' { Get-ProductProcessRows $State.Install $State $AllowedPid $AllowedImage })
   $trace = Get-ProductPolicyTrace $State
   if ($null -ne $trace) { $trace['ProcessObserved'] = $true; $trace['ProcessCount'] = $rows.Count }
   Invoke-ProductPolicyStage $State 'process_validate' {
@@ -268,21 +323,23 @@ function Assert-ProductProcessState($State, [long]$AllowedPid = 0, [string]$Allo
       if ($rows.Count) { throw 'product_unexpected_process' }
       return
     }
-    $expected = ConvertTo-InstalledSmokePath (Join-Path $State.Install 'uninstall.exe')
-    if ($AllowedPid -le 0 -or $AllowedPid -gt [uint32]::MaxValue -or
-      [string]::IsNullOrWhiteSpace($AllowedImage) -or (ConvertTo-InstalledSmokePath $AllowedImage) -ine $expected) {
-      throw 'product_process_allowance_invalid'
-    }
     if ($rows.Count -ne 1) { throw 'product_process_set_invalid' }
-    Assert-ProductProcessRow $rows[0] $AllowedPid $expected
+    Assert-ProductProcessRow $rows[0] $AllowedPid $allowance['Image'] $allowance
+    if ($null -eq $rows[0].ExecutablePath) {
+      $State['ProcessIdentityTrace'] = @{ NativeImageReliedOn = $true; CimImageUnavailable = $true
+        Source = 'native_verified_cim_unavailable' }
+    }
   }
   if ($null -ne $trace) { $trace['ProcessVerified'] = $true }
 }
 
-function Assert-ProductProcessRow($Row, [long]$AllowedPid, [string]$Expected) {
+function Assert-ProductProcessRow($Row, [long]$AllowedPid, [string]$Expected, $Allowance) {
+  $imageValue = $Row.ExecutablePath
+  if (Test-ProductNativeCimUnavailable $Row $imageValue $Row.Name $Allowance) { return }
+  if ($imageValue -isnot [string]) { throw 'product_process_set_invalid' }
   if (($Row.ProcessId -isnot [int] -and $Row.ProcessId -isnot [long] -and $Row.ProcessId -isnot [uint32]) -or
-    $Row.ProcessId -le 0 -or $Row.ProcessId -ne $AllowedPid -or [string]::IsNullOrWhiteSpace($Row.ExecutablePath) -or
-    (ConvertTo-InstalledSmokePath $Row.ExecutablePath) -ine $Expected) { throw 'product_process_set_invalid' }
+    $Row.ProcessId -le 0 -or $Row.ProcessId -ne $AllowedPid -or [string]::IsNullOrWhiteSpace($imageValue) -or
+    (ConvertTo-InstalledSmokePath $imageValue) -ine $Expected) { throw 'product_process_set_invalid' }
 }
 
 function Assert-ProductGlobalState($State, [long]$AllowedPid = 0, [string]$AllowedImage = '') {
