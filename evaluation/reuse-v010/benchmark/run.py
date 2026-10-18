@@ -363,13 +363,16 @@ def resume_results(out, schedule):
     completed = validate_result_identities(rows)
     requested = expected_protocol()
     expected = tuple(requested[field] for field in PROTOCOL_FIELDS)
-    planned = {(task['id'], condition, rep) for task, condition, rep in schedule}
+    planned = {(task['id'], condition, rep): ordinal
+               for ordinal, (task, condition, rep) in enumerate(schedule)}
     for path, row in saved:
         identity, protocol = result_identity(row)
         if protocol != expected:
             raise ValueError('saved benchmark result differs from the requested experiment')
         if identity not in planned:
             raise ValueError('saved benchmark result is outside the frozen schedule')
+        if type(row.get('order')) is not int or row['order'] != planned[identity]:
+            raise ValueError('saved benchmark result order differs from the frozen schedule')
         if path.parent.name != f'{identity[0]}-{identity[1]}-{identity[2]}':
             raise ValueError('saved benchmark result does not match its folder')
     return rows, completed

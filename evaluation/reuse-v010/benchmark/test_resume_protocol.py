@@ -128,6 +128,20 @@ class ResumeProtocolTests(unittest.TestCase):
                 benchmark.write_spec(self.out, self.schedule)
                 self.assert_rejected()
 
+    def test_missing_or_wrong_order_is_rejected_before_runs(self):
+        for value in (None, 1, True, 0.0):
+            with self.subTest(order=value):
+                self.reset_output()
+                task, condition, rep = self.schedule[0]
+                row = self.row(0, task, condition, rep)
+                if value is None:
+                    del row['order']
+                else:
+                    row['order'] = value
+                self.save(row)
+                benchmark.write_spec(self.out, self.schedule)
+                self.assert_rejected(conditions='none,static,arkism')
+
     def test_existing_spec_must_match_the_whole_legacy_template(self):
         for field in ('baseline', 'tasks', 'schedule', 'limitations', 'improvement_threshold'):
             with self.subTest(field=field):
