@@ -485,11 +485,11 @@ namespace Arkism.InstallerChecks
             for (int i = 0; i < before.EntryCount; i++)
                 if (before.Pairs[i][0] != after.Pairs[i][0] || before.Pairs[i][1] != after.Pairs[i][1])
                     throw new JobApiException("job_pending_existing_changed");
-            string prefix = QueuePath(ownedTemp).TrimEnd('\\') + "\\";
+            string prefix = QueuePath(ownedTemp, "owned_temp").TrimEnd('\\') + "\\";
             for (int i = before.EntryCount; i < after.EntryCount; i++)
             {
                 string[] pair = after.Pairs[i];
-                if (pair[1].Length != 0 || !QueuePath(pair[0]).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                if (pair[1].Length != 0 || !QueuePath(pair[0], "new_row").StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     throw new JobApiException("job_pending_new_not_owned_delete");
             }
             return new RebootComparison { ExistingRowsPreserved = true,
@@ -501,7 +501,7 @@ namespace Arkism.InstallerChecks
         {
             WindowsGuard.Context(request);
             var result = Compare(before, after, Path.Combine(request.Root, "temp"));
-            for (int i = before.EntryCount; i < after.EntryCount; i++) InspectExistingQueuePath(QueuePath(after.Pairs[i][0]));
+            for (int i = before.EntryCount; i < after.EntryCount; i++) InspectExistingQueuePath(QueuePath(after.Pairs[i][0], "new_row"));
             return result;
         }
 
@@ -534,15 +534,40 @@ namespace Arkism.InstallerChecks
             return true;
         }
 
-        private static string QueuePath(string path)
+        private static string QueuePath(string path, string context)
         {
-            if (path.StartsWith(@"\??\", StringComparison.Ordinal)) path = path.Substring(4);
-            if (!Regex.IsMatch(path, @"^[A-Za-z]:\\") || path.IndexOfAny(new char[] { '/', '"', '\0', '*', '?' }) >= 0)
-                throw new JobApiException("job_pending_path_unknown");
+            bool ntPrefix = path.StartsWith(@"\??\", StringComparison.Ordinal);
+            if (ntPrefix) path = path.Substring(4);
+            if (!Regex.IsMatch(path, @"^[A-Za-z]:\\"))
+                throw QueuePathError(context, RejectedNamespace(path, ntPrefix), "not_dos_absolute");
+            string space = ntPrefix ? "nt_dos" : "dos";
+            if (path.IndexOfAny(new char[] { '/', '"', '\0', '*', '?' }) >= 0)
+                throw QueuePathError(context, space, "forbidden_character");
             foreach (string part in path.Substring(3).Split('\\'))
-                if (part == "." || part == ".." || part.IndexOf(':') >= 0 || part.EndsWith(".") || part.EndsWith(" "))
-                    throw new JobApiException("job_pending_path_unknown");
+                CheckQueueComponent(part, context, space);
             return path;
+        }
+
+        private static string RejectedNamespace(string path, bool ntPrefix)
+        {
+            if (path.StartsWith(@"\\?\", StringComparison.Ordinal)) return "extended";
+            if (path.StartsWith(@"\\.\", StringComparison.Ordinal) || path.StartsWith(@"\Device\", StringComparison.Ordinal)) return "device";
+            if (path.StartsWith(@"\\", StringComparison.Ordinal)) return "unc";
+            return ntPrefix ? "nt_other" : "non_dos";
+        }
+
+        private static void CheckQueueComponent(string part, string context, string space)
+        {
+            if (part == "." || part == "..") throw QueuePathError(context, space, "relative_component");
+            if (part.IndexOf(':') >= 0) throw QueuePathError(context, space, "component_colon");
+            if (part.EndsWith(".")) throw QueuePathError(context, space, "trailing_dot");
+            if (part.EndsWith(" ")) throw QueuePathError(context, space, "trailing_space");
+        }
+
+        private static JobApiException QueuePathError(string context, string space, string reason)
+        {
+            // All three arguments are fixed diagnostic labels; no queue text is included.
+            return new JobApiException("job_pending_path_unknown:" + context + ":" + space + ":" + reason);
         }
 
         public static RebootSnapshot ReadWindows(JobRequest request)

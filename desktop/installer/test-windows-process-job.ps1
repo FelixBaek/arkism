@@ -75,6 +75,11 @@ public static class JobCoreTests
         try { action(); } catch (JobApiException error) { Check(error.Code.Contains(code), "wrong rejection"); return; }
         throw new Exception("rejection expected: " + code);
     }
+    private static void RejectExact(Action action, string code)
+    {
+        try { action(); } catch (JobApiException error) { Check(error.Code == code && error.Message == code, "unsafe or incorrect diagnostic"); return; }
+        throw new Exception("diagnostic rejection expected");
+    }
 
     public static string[] Run(string selected)
     {
@@ -226,6 +231,53 @@ public static class JobCoreTests
                 try { WindowsGuard.OutputLeaf(root + "\0", false); } catch (ArgumentException) { invalid = true; }
                 Check(invalid && File.ReadAllText(marker) == "unchanged", "leaf inspection swallowed error or mutated input");
             } finally { Directory.Delete(root, true); }
+        });
+        Test("pending diagnostics retain accepted DOS and NT forms", delegate {
+            var before = RebootObservation.Parse(false, 0, null);
+            foreach (string prefix in new string[] { "", @"\??\" }) {
+                var after = Snapshot(prefix + @"D:\owned\temp\Un.exe" + "\0\0");
+                var result = RebootObservation.Compare(before, after, prefix + @"D:\owned\temp");
+                Check(result.NewOwnedDeletes == 1 && result.ExistingRowsPreserved, "accepted path changed");
+            }
+        });
+        Test("pending diagnostics distinguish rejected namespaces and origin contexts", delegate {
+            var before = RebootObservation.Parse(false, 0, null);
+            string[][] shapes = new string[][] {
+                new string[] { @"\\?\D:\owned\temp\a", "extended" },
+                new string[] { @"\\server\share\a", "unc" },
+                new string[] { @"\\.\D:\owned\temp\a", "device" },
+                new string[] { @"\Device\volume\a", "device" },
+                new string[] { @"relative\a", "non_dos" },
+                new string[] { @"\??\UNC\server\share\a", "nt_other" }
+            };
+            foreach (string[] shape in shapes) {
+                var after = Snapshot(shape[0] + "\0\0");
+                RejectExact(delegate { RebootObservation.Compare(before, after, @"D:\owned\temp"); },
+                    "job_pending_path_unknown:new_row:" + shape[1] + ":not_dos_absolute");
+                var valid = Snapshot(@"D:\owned\temp\a" + "\0\0");
+                RejectExact(delegate { RebootObservation.Compare(before, valid, shape[0]); },
+                    "job_pending_path_unknown:owned_temp:" + shape[1] + ":not_dos_absolute");
+            }
+        });
+        Test("pending diagnostics distinguish characters components and suffixes without text", delegate {
+            var before = RebootObservation.Parse(false, 0, null);
+            string[][] shapes = new string[][] {
+                new string[] { "a/b", "forbidden_character" }, new string[] { "a?", "forbidden_character" },
+                new string[] { "a*", "forbidden_character" }, new string[] { "a\"", "forbidden_character" },
+                new string[] { ".", "relative_component" }, new string[] { @"..\a", "relative_component" },
+                new string[] { "a:b", "component_colon" }, new string[] { "a.", "trailing_dot" },
+                new string[] { "a ", "trailing_space" }
+            };
+            foreach (string prefix in new string[] { "", @"\??\" }) {
+                string space = prefix.Length == 0 ? "dos" : "nt_dos";
+                foreach (string[] shape in shapes) {
+                    string invalid = prefix + @"D:\owned\temp\" + shape[0];
+                    RejectExact(delegate { RebootObservation.Compare(before, Snapshot(invalid + "\0\0"), @"D:\owned\temp"); },
+                        "job_pending_path_unknown:new_row:" + space + ":" + shape[1]);
+                    RejectExact(delegate { RebootObservation.Compare(before, Snapshot(@"D:\owned\temp\a" + "\0\0"), invalid); },
+                        "job_pending_path_unknown:owned_temp:" + space + ":" + shape[1]);
+                }
+            }
         });
         return Passed.ToArray();
     }

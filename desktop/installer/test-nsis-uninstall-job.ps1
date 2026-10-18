@@ -90,10 +90,10 @@ function New-JobFixtureRequest($Context, [string]$Root, [string]$Executable, [st
 }
 
 function Find-JobFixtureFailure($Failure) {
-  $error = $Failure.Exception
-  while ($null -ne $error) {
-    if ($error -is [Arkism.InstallerChecks.JobFailure]) { return $error }
-    $error = $error.InnerException
+  $jobException = $Failure.Exception
+  while ($null -ne $jobException) {
+    if ($jobException -is [Arkism.InstallerChecks.JobFailure]) { return $jobException }
+    $jobException = $jobException.InnerException
   }
   return $null
 }
@@ -191,7 +191,7 @@ function Invoke-NsisUninstallJob([string]$Makensis, [string]$SourceSha, [string]
   Assert-JobFixtureLayout $sizes
   $root = New-InstalledSmokeOwnedRoot $context 'process-job'
   $report = [ordered]@{ ok = $false; source_sha = $jobSource; product_uninstaller_tested = $false
-    every_child_image_verified = $false; phase = 'prepare'; nested_job_supported = $false
+    every_child_image_verified = $false; phase = 'prepare'; owned_job_assignment_verified = $false
     runner_sha256 = Get-InstalledSmokeHash (Join-Path $PSScriptRoot 'WindowsProcessJob.cs')
     compiler_sha256 = Get-InstalledSmokeHash $jobCompiler }
   $primary = $null; $cleanup = $null; $evidenceError = $null
@@ -218,18 +218,22 @@ function Invoke-NsisUninstallJob([string]$Makensis, [string]$SourceSha, [string]
       throw
     }
     $safeToRemove = $result.EmptyConfirmed
+    $report.owned_job_assignment_verified = $true
+    $report.root_exited_while_tree_active = $result.RootExitedWhileActive
+    $report.job_empty = $result.EmptyConfirmed; $report.total_processes = $result.TotalProcesses
     if (-not $result.RootExitedWhileActive) { throw 'job_fixture_root_early_exit_not_observed' }
     Assert-JobFixtureMarker $marker 'grandchild_done'
+    $report.completion_marker_observed = $true
     if ($null -ne (Get-InstalledSmokeAttributes $fixture.Executable)) { throw 'job_fixture_original_not_removed' }
+    $report.original_uninstaller_removed = $true
     $report.observed_owned_copy_sha256 = Get-JobFixtureCopy $root $fixture.Install $request.ExpectedSha256
+    $report.phase = 'pending_reboot_observation'
     $after = [Arkism.InstallerChecks.RebootObservation]::ReadWindows($request)
     $comparison = [Arkism.InstallerChecks.RebootObservation]::CompareWindows($before, $after, $request)
     $pendingSafe = $comparison.ExistingRowsPreserved
     $report.pending_existing_rows_preserved = $comparison.ExistingRowsPreserved
     $report.pending_raw_unchanged = $comparison.RawUnchanged; $report.new_owned_pending_deletes = $comparison.NewOwnedDeletes
-    $report.legacy_reboot_unchanged = $true; $report.nested_job_supported = $true
-    $report.root_exited_while_tree_active = $result.RootExitedWhileActive
-    $report.job_empty = $result.EmptyConfirmed; $report.total_processes = $result.TotalProcesses
+    $report.legacy_reboot_unchanged = $true
     $report.phase = 'timeout_tree'; $safeToRemove = $false
     $report.timeout = Invoke-JobFixtureTimeout $context $root (Join-Path $root 'inert-process.exe') $environment $fixture.PayloadSha256
     $safeToRemove = $true
