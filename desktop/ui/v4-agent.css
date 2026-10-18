@@ -541,10 +541,12 @@ span.wk-chip { cursor: default; }
 .wk-flow-steps .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 전문가 아바타: the drawings carry a cream ground, so multiply lets the chosen --avatar-* colour through. */
-.wf-mark.wk-face { overflow: hidden; background: var(--face-bg) !important; /* beats the per-place mark backgrounds above */ }
+.wf-mark.wk-face { overflow: hidden; }
 .wf-mark.wk-face img { width: 100%; height: 100%; mix-blend-mode: multiply; }
 .wk-face-btn { display: inline-flex; align-items: center; gap: 12px; align-self: flex-start; padding: 0; border: 0; background: none; color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); cursor: pointer; }
 .wk-face-btn .wf-mark { width: 48px; height: 48px; border-radius: 50%; background: var(--nc-raised); }
+/* each selector outranks the place's own mark background (tile, detail head, form button) */
+.wf-mark.wk-face, .wk-tile .wk-avatar.wk-face, .wk-detail .wk-head .wk-avatar.wk-face, .wk-face-btn .wf-mark.wk-face { background: var(--face-bg); }
 .wk-face-btn .wf-mark:not(.wk-face) img, .wk-face-btn .wf-mark svg, .wk-face-btn .wf-mark .icon { width: 22px; height: 22px; }
 @media (hover: hover) and (pointer: fine) { .wk-face-btn:hover span { color: var(--nc-accent); } }
 .wk-face-btn:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 4px; border-radius: 8px; }
