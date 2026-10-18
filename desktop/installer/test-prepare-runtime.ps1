@@ -470,7 +470,7 @@ Test-RuntimeCase 'rollback failure retains the previous runtime in its owned bac
   $oldOutput = Get-RuntimeStageSnapshot $staged
   $cacheBefore = Get-RuntimeStageSnapshot $fixture.Cache
   $failure = Invoke-RuntimeFixture $fixture 'stage_rollback_failure'
-  Assert-RuntimeTest ($null -ne $failure -and $failure.Contains('previous output recovery requires') -and $failure.Contains('synthetic rollback failed')) "Rollback failure was hidden: $failure"
+  Assert-RuntimeTest ($null -ne $failure -and $failure.Contains('previous output recovery requires') -and $failure.Contains('synthetic rollback failed') -and $failure.Contains('synthetic staging publication failed')) "Rollback failure was hidden: $failure"
   $backups = @(Get-ChildItem -LiteralPath (Join-Path $fixture.Stage 'runtime') -Directory |
     Where-Object { $_.Name -cmatch '^pgsql-backup-[0-9a-f]{32}$' })
   Assert-RuntimeTest ($backups.Count -eq 1) 'Rollback failure deleted the recoverable backup'

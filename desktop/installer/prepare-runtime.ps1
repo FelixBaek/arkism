@@ -228,7 +228,7 @@ try {
         Move-Item -LiteralPath $backup -Destination $staged
       } catch {
         # Keep the owned backup for recovery if restoring the previous output fails.
-        throw "runtime staging failed; previous output recovery requires $backup : $($_.Exception.Message)"
+        throw "runtime staging failed: $($failure.Exception.Message); previous output recovery requires $backup : $($_.Exception.Message)"
       }
     } elseif ($publishing -and -not $previous -and (Test-Path -LiteralPath $staged)) {
       Assert-RuntimePath $staged
