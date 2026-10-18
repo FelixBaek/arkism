@@ -360,6 +360,12 @@ func TestWorkflowOfAnAgentRunsOnlyThroughThatAgent(t *testing.T) {
 	if _, err := f.svc.CreateCrewRun(testCtx, tokEngine, CrewRunInput{Scope: scopeA, Run: newCrewRun(wf.ID)}); err != nil {
 		t.Fatal("a free workflow refused", err)
 	}
+	// An agent takes only a workflow with no live trigger, so turn the schedule off first.
+	off := *wf.Crew
+	off.Enabled = false
+	if _, err := f.svc.UpdateCrew(testCtx, f.human, wf.ID, CrewUpdate{Scope: scopeA, ExpectedRevision: wf.Revision, Crew: &off}); err != nil {
+		t.Fatal("turn the schedule off", err)
+	}
 	bot := crewAgent("리서처", "리서처")
 	bot.Workflow = "아침브리핑"
 	f.crew(bot)
