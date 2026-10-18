@@ -153,7 +153,9 @@ Before aggregation or measurement auditing, observations must have unique
 rejected before replacing aggregate outputs. Cell and execution-identity fields
 must be present with valid, nonblank values; missing or malformed identity is a
 validation error. Identical prompts alone do not make observations from different
-experiments comparable.
+experiments comparable. The auditor validates the complete result set before
+reading token or prompt evidence, and uses the same result and event bytes for
+observation checks and evidence hashes.
 
 This validation also applies to partial result sets, while a partial audit
 remains supported. Passing it does not prove that every planned run completed,

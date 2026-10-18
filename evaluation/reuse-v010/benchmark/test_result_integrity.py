@@ -132,6 +132,76 @@ class ResultIntegrityTests(unittest.TestCase):
         self.assertEqual(report['recorded_runs'], 2)
         self.assertEqual(len(report['paired_static_arkism']), 1)
 
+    def test_dataset_preflight_precedes_missing_evidence_access(self):
+        for scenario, missing in (('duplicate', 'events.json'), ('mixed', 'prompt.txt')):
+            with self.subTest(scenario=scenario):
+                first = self.fixture('a-static')
+                if scenario == 'duplicate':
+                    second = self.fixture('b-static', order=1)
+                else:
+                    second = self.fixture('b-arkism', 'arkism', order=1,
+                                          experiment_id='synthetic-other-experiment')
+                try:
+                    (first / missing).unlink()
+                    outputs = [self.root / name for name in ('results.json', 'results.csv', 'summary.json')]
+                    for output in outputs:
+                        output.write_text('preserve existing output')
+                    evidence_accesses = []
+                    original_open = Path.open
+                    def observe_open(path, *args, **kwargs):
+                        if path.name in ('events.json', 'prompt.txt'):
+                            evidence_accesses.append(path)
+                        return original_open(path, *args, **kwargs)
+                    error = None
+                    with patch.object(Path, 'open', observe_open):
+                        try:
+                            measurement_audit.audit(self.root)
+                        except Exception as actual:
+                            error = actual
+                    self.assertIsInstance(error, ValueError)
+                    self.assertEqual(evidence_accesses, [])
+                    for output in outputs:
+                        self.assertEqual(output.read_text(), 'preserve existing output')
+                finally:
+                    shutil.rmtree(first)
+                    shutil.rmtree(second)
+
+    def test_preflight_reuses_result_and_event_bytes_for_observations_and_hashes(self):
+        first = self.fixture('a-static')
+        second = self.fixture('b-arkism', 'arkism', order=1)
+        result_path = first / 'result.json'
+        original_bytes = result_path.read_bytes()
+        changed = json.loads(original_bytes)
+        changed.update(experiment_id='synthetic-changed-after-validation', input_tokens=999)
+        original_validate = measurement_audit.validate_result_identities
+        validation_calls = 0
+        def validate_then_change_file(rows):
+            nonlocal validation_calls
+            identities = original_validate(rows)
+            validation_calls += 1
+            if validation_calls == 1:
+                result_path.write_text(json.dumps(changed))
+            return identities
+        original_open = Path.open
+        reads = {}
+        def observe_open(path, *args, **kwargs):
+            mode = kwargs.get('mode', args[0] if args else 'r')
+            if mode.startswith('r') and path.name in ('result.json', 'events.json'):
+                reads[path] = reads.get(path, 0) + 1
+            return original_open(path, *args, **kwargs)
+        with patch.object(Path, 'open', observe_open), patch.object(
+                measurement_audit, 'validate_result_identities', side_effect=validate_then_change_file):
+            report = measurement_audit.audit(self.root)
+        evidence = {item['path']: item['sha256'] for item in report['evidence']}
+        self.assertEqual(evidence['a-static/result.json'], hashlib.sha256(original_bytes).hexdigest())
+        self.assertNotEqual(result_path.read_bytes(), original_bytes)
+        self.assertEqual(report['recorded_runs'], 2)
+        self.assertEqual(len(report['paired_static_arkism']), 1)
+        self.assertEqual(report['conditions']['static']['input_tokens'], 100)
+        for directory in (first, second):
+            for filename in ('result.json', 'events.json'):
+                self.assertEqual(reads[directory / filename], 1)
+
     def test_duplicate_cells_rejected_before_aggregation(self):
         self.fixture('run-one')
         self.fixture('run-two', order=1)
