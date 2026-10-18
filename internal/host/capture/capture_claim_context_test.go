@@ -10,6 +10,8 @@ import (
 	"github.com/FelixBaek/arkism/internal/host"
 )
 
+const optionalContextSource = "앞으로 시험 설정은 검토 후에만 적용해. 격리된 시험에서만 사용하고 운영에서는 사용하지 않는다. 아직 확정되지 않았다. 검토 후 확정될 때부터"
+
 func optionalClaimContext() map[string]any {
 	return map[string]any{"domains": []any{"work"}, "applicability": "격리된 시험에서만 사용하고 운영에서는 사용하지 않는다.",
 		"uncertainty": "아직 확정되지 않았다.", "valid_from": "검토 후 확정될 때부터", "semantic_kind": "preference"}
@@ -17,7 +19,7 @@ func optionalClaimContext() map[string]any {
 
 func optionalContextClaim(context any) map[string]any {
 	return map[string]any{"text": "격리된 시험에서만 사용하고 운영에서는 사용하지 않는다. 아직 확정되지 않았으며 검토 후 확정될 때부터 적용한다.",
-		"subject": "시험 설정", "kind": "user", "quote": "앞으로 시험 설정은 검토 후에만 적용해", "risk": "low", "memory_context": context}
+		"subject": "시험 설정", "kind": "user", "quote": optionalContextSource, "risk": "low", "memory_context": context}
 }
 
 func TestCaptureOptionalContextKeepsConditionsWithoutClaimingAuthority(t *testing.T) {
@@ -56,9 +58,11 @@ func TestCaptureOptionalContextNilAndDomainRestriction(t *testing.T) {
 			case "personal_only":
 				context := optionalClaimContext()
 				context["domains"], context["applicability"] = []any{"personal"}, "개인 작업에만 적용하고 업무에는 적용하지 않는다."
-				raw["memory_context"], raw["text"] = context, context["applicability"]
+				raw["memory_context"] = context
+				raw["quote"] = context["applicability"].(string) + " " + context["uncertainty"].(string) + " " + context["valid_from"].(string)
+				raw["text"] = raw["quote"]
 			}
-			claims, receipt, err := buildClaimsWithReceipt([]any{raw}, raw["quote"].(string), nil, nil)
+			claims, receipt, err := buildClaimsWithReceipt([]any{raw}, raw["quote"].(string), nil, []any{map[string]any{"text": raw["quote"]}})
 			if err != nil || len(claims) != 1 || receipt != nil || claims[0].(map[string]any)["text"] != raw["text"] {
 				t.Fatal(err, claims, receipt)
 			}
@@ -109,7 +113,7 @@ func TestCaptureOptionalContextInvalidItemDoesNotDiscardOtherClaims(t *testing.T
 				value = append(row, host.KV{Key: "domains", Value: []any{"work"}})
 			}
 			good := optionalContextClaim(optionalClaimContext())
-			claims, receipt, err := buildClaimsWithReceipt([]any{optionalContextClaim(value), good}, good["quote"].(string), nil, nil)
+			claims, receipt, err := buildClaimsWithReceipt([]any{optionalContextClaim(value), good}, good["quote"].(string), nil, []any{map[string]any{"text": good["quote"]}})
 			if err != nil || len(claims) != 1 || receipt == nil || len(receipt.Rejected) != 1 || receipt.Rejected[0].Index != 0 {
 				t.Fatal("bad context discarded a batch or escaped its receipt", err, claims, receipt)
 			}
@@ -138,10 +142,12 @@ func TestCaptureOptionalContextRuneAndSerializedBudgets(t *testing.T) {
 	}
 	raw := []any{}
 	for range 6 {
-		raw = append(raw, optionalContextClaim(context))
+		claim := optionalContextClaim(context)
+		claim["quote"] = context["applicability"]
+		raw = append(raw, claim)
 	}
 	raw = append(raw, optionalContextClaim(nil))
-	claims, receipt, err := buildClaimsWithReceipt(raw, "input", nil, nil)
+	claims, receipt, err := buildClaimsWithReceipt(raw, context["applicability"].(string), nil, []any{map[string]any{"text": context["applicability"]}})
 	if err != nil || len(claims) != 6 || receipt == nil || len(receipt.Rejected) != 1 || receipt.Rejected[0].Index != 5 || receipt.Rejected[0].Reason != "context_batch_bytes_exceeded" {
 		t.Fatal("batch byte overflow lost an unrelated normal claim", err, len(claims), receipt)
 	}
@@ -151,7 +157,7 @@ func TestCaptureOptionalContextHasNoRawAliases(t *testing.T) {
 	capFake(t)
 	context := optionalClaimContext()
 	raw := optionalContextClaim(context)
-	claims, _, err := buildClaimsWithReceipt([]any{raw, raw}, "input", nil, nil)
+	claims, _, err := buildClaimsWithReceipt([]any{raw, raw}, raw["quote"].(string), nil, []any{map[string]any{"text": raw["quote"]}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,6 +193,16 @@ func TestCaptureOptionalContextExportDoesNotReportWithheldAsEmptySuccess(t *test
 	withheld, err := ExtractClaims("input", "2026-01-01", nil, "", "synthetic-context")
 	if errorCode(err) != "capture_context_all_withheld" || len(withheld.Claims) != 0 || withheld.ContextRejections == nil || withheld.ContextRejections.BindingStatus != "unbound" {
 		t.Fatal(err, withheld)
+	}
+	output = []any{optionalContextClaim(optionalClaimContext())}
+	withheld, err = ExtractClaims(optionalContextSource, "2026-01-01", nil, "", "synthetic-context")
+	if errorCode(err) != "capture_context_all_withheld" || withheld.ContextRejections == nil || withheld.ContextRejections.Rejected[0].Reason != "context_evidence_unbound" {
+		t.Fatal("aggregate export invented a single source boundary", err, withheld)
+	}
+	output = []any{optionalContextClaim(nil)}
+	legacy, err := ExtractClaims(optionalContextSource, "2026-01-01", nil, "", "synthetic-context")
+	if err != nil || len(legacy.Claims) != 1 || legacy.ContextRejections != nil {
+		t.Fatal("context-free aggregate export changed", err, legacy)
 	}
 	output = []any{}
 	empty, err := ExtractClaims("input", "2026-01-01", nil, "", "synthetic-context")

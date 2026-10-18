@@ -33,8 +33,12 @@ Rules:
   uncertainty, valid_from and semantic_kind (fact|preference|correction|lesson|failure_recovery).
   If the domain is unknown, use null and keep all qualifiers in text. A domain restriction (personal-only/work-only)
   is a real applicability condition: preserve it in text and applicability, not just in the domains label.
-  Use empty strings for unstated qualifiers; classification labels alone do not need memory_context.
-  Copy stated timing without inventing activation or treating future valid_from as already active.
+   applicability, uncertainty and valid_from must each be an exact contiguous quotation from the SAME user message,
+   also contained in quote. Copy the original wording, spelling and spacing; do not paraphrase or normalize these
+   fields, even dates (copy the user's date phrase). Use empty strings for unstated qualifiers.
+   Include enough of that message in quote to cover every nonempty context field within quote's first 2000 characters.
+   If one such quotation cannot support the context, use null and preserve all qualifiers in text.
+   Classification labels alone do not need memory_context. Never treat future valid_from as already active.
   Never supply evidence_kind or observed_at: those are not model declarations.
 - quote: an exact contiguous substring copied from the user's message that supports the claim.
 - kind: user = personal preference/working style; decision = project/product decision or fact about their systems;
@@ -78,14 +82,17 @@ func riskFields(c map[string]any, basis, quote string) host.Obj {
 	if len(reasons) > 0 {
 		out.Set("risk_reasons", reasons)
 	}
-	if q := pyStrip(quote); q != "" {
-		out.Set("evidence_span", head(q, 2000))
+	if span := claimEvidenceSpan(quote); span != "" {
+		out.Set("evidence_span", span)
 	}
 	if d, _ := c["dup_hint"].(string); pyStrip(d) != "" {
 		out.Set("dup_hint", head(pyStrip(d), 500))
 	}
 	return out
 }
+
+// The retained review evidence, shared with the optional context grounding check.
+func claimEvidenceSpan(quote string) string { return head(pyStrip(quote), 2000) }
 
 var claimKinds = map[any]bool{"user": true, "decision": true, "procedural": true, "lesson": true}
 
