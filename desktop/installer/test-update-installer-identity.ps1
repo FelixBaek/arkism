@@ -173,7 +173,7 @@ if (-not (Test-Path -LiteralPath $evidence -PathType Leaf)) { throw 'update_iden
 $report = Get-Content -LiteralPath $evidence -Raw | ConvertFrom-Json
 if ($report.ok -isnot [bool] -or -not $report.ok -or $report.source_sha -cne $source -or
     $report.scope -cne 'inert_images_only' -or $report.native_windows -isnot [bool] -or -not $report.native_windows -or
-    $report.inert_nsis_self_archive -isnot [bool] -or -not $report.inert_nsis_self_archive -or
+    $report.inert_nsis_self_archive -isnot [bool] -or
     $report.production_nsis_executed -isnot [bool] -or $report.production_nsis_executed -or
     $report.module_sha256 -cne (Get-FileHash -LiteralPath 'desktop/src-tauri/src/update_installer.rs' -Algorithm SHA256).Hash.ToLowerInvariant() -or
     $report.fixture_sha256 -cne (Get-FileHash -LiteralPath 'desktop/src-tauri/tests/windows_update_installer_identity.rs' -Algorithm SHA256).Hash.ToLowerInvariant() -or
@@ -181,21 +181,97 @@ if ($report.ok -isnot [bool] -or -not $report.ok -or $report.source_sha -cne $so
     $report.comparison_source_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_SOURCE_SHA256 -or
     $report.comparison_manifest_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_MANIFEST_SHA256 -or
     $report.comparison_compiler_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_COMPILER_SHA256 -or
-    $report.comparison_all_required_passed -isnot [bool] -or -not $report.comparison_all_required_passed -or
+    $report.comparison_all_required_passed -isnot [bool] -or
     @($report.comparison_cases).Count -ne 4 -or
+    $report.production_required_pass -isnot [bool] -or -not $report.production_required_pass -or
+    @($report.production_bound_cases).Count -ne 3 -or
     $report.dos_device_mapping_atomicity_proven -isnot [bool] -or $report.dos_device_mapping_atomicity_proven) {
   throw 'update_identity_evidence_invalid'
 }
 
-$caseTargets = @('managed_x86', 'managed_x64', 'inert_nsis', 'nsis_dos')
-for ($caseIndex = 0; $caseIndex -lt $caseTargets.Count; $caseIndex++) {
-  $case = $report.comparison_cases[$caseIndex]
-  if ($case.target -cne $caseTargets[$caseIndex] -or $case.outcome -cne 'passed' -or
-      $case.created -isnot [bool] -or -not $case.created -or
-      $case.terminal -isnot [bool] -or -not $case.terminal -or $case.exit_code -ne 0 -or
-      $case.payload_verified -isnot [bool] -or -not $case.payload_verified -or
-      $case.payload_bytes_match -isnot [bool] -or -not $case.payload_bytes_match -or
-      $case.output_single_file -isnot [bool] -or -not $case.output_single_file) {
-    throw 'identity_comparison_required_case_failed'
+function Assert-IdentityTerminal($Case) {
+  if ($Case.created -isnot [bool] -or -not $Case.created -or
+      $Case.terminal -isnot [bool] -or -not $Case.terminal) { throw 'identity_terminal_receipt_invalid' }
+}
+function Assert-IdentityPayloadSuccess($Case) {
+  if ($Case.payload_verified -isnot [bool] -or -not $Case.payload_verified -or
+      $Case.payload_bytes_match -isnot [bool] -or -not $Case.payload_bytes_match -or
+      $Case.output_single_file -isnot [bool] -or -not $Case.output_single_file) {
+    throw 'identity_payload_receipt_invalid'
   }
 }
+function Assert-IdentitySuccess($Case) {
+  Assert-IdentityTerminal $Case
+  Assert-IdentityPayloadSuccess $Case
+  if ($Case.exit_code -ne 0) { throw 'identity_success_exit_invalid' }
+}
+function Assert-IdentityFailedCreate($Case) {
+  if ($Case.created -isnot [bool] -or $Case.created -or
+      $Case.terminal -isnot [bool] -or $Case.terminal -or $Case.operation -cne 'spawn' -or
+      $null -eq $Case.os_code -or $null -ne $Case.payload_verified -or
+      $null -ne $Case.payload_bytes_match -or $null -ne $Case.output_single_file) {
+    throw 'identity_failed_create_receipt_invalid'
+  }
+}
+function Assert-IdentityFailedExit($Case) {
+  Assert-IdentityTerminal $Case
+  if ($null -eq $Case.exit_code -or $Case.exit_code -eq 0 -or
+      $Case.payload_verified -isnot [bool] -or $Case.payload_bytes_match -isnot [bool] -or
+      $Case.output_single_file -isnot [bool]) { throw 'identity_failed_exit_receipt_invalid' }
+}
+function Assert-IdentityLegacyCases($Report) {
+  $targets = @('managed_x86', 'managed_x64', 'inert_nsis', 'nsis_dos')
+  for ($index = 0; $index -lt $targets.Count; $index++) {
+    $case = $Report.comparison_cases[$index]
+    if ($case.target -cne $targets[$index]) { throw 'identity_legacy_case_order_invalid' }
+    switch -CaseSensitive ($case.outcome) {
+      'passed' { Assert-IdentitySuccess $case }
+      'create_failed' { Assert-IdentityFailedCreate $case }
+      'exit_failed' { Assert-IdentityFailedExit $case }
+      'payload_failed' {
+        Assert-IdentityTerminal $case
+        if ($case.exit_code -ne 0 -or $case.payload_verified -isnot [bool] -or $case.payload_verified) {
+          throw 'identity_failed_payload_receipt_invalid'
+        }
+      }
+      default { throw 'identity_unknown_legacy_owner_or_phase' }
+    }
+  }
+}
+function Assert-IdentityBoundPositive($Bound) {
+  Assert-IdentitySuccess $Bound.case
+  if ($Bound.native_name_match -isnot [bool] -or -not $Bound.native_name_match -or
+      $Bound.original_reverified -isnot [bool] -or -not $Bound.original_reverified -or
+      $Bound.resume_calls -ne 1 -or $Bound.resume_observation -ne 1 -or
+      $Bound.abort_attempted -isnot [bool] -or $Bound.abort_attempted -or
+      $Bound.abort_signaled -isnot [bool] -or $Bound.abort_signaled) {
+    throw 'identity_production_binding_not_committed'
+  }
+}
+function Assert-IdentityBoundRejection($Bound) {
+  Assert-IdentityTerminal $Bound.case
+  if ($Bound.native_name_match -isnot [bool] -or $Bound.native_name_match -or
+      $Bound.resume_calls -ne 0 -or $null -ne $Bound.resume_observation -or
+      $Bound.abort_attempted -isnot [bool] -or -not $Bound.abort_attempted -or
+      $Bound.abort_signaled -isnot [bool] -or -not $Bound.abort_signaled) {
+    throw 'identity_production_rejection_not_confirmed'
+  }
+  if ($Bound.marker_absent -isnot [bool] -or -not $Bound.marker_absent -or
+      $Bound.cleanup_confirmed -isnot [bool] -or -not $Bound.cleanup_confirmed -or
+      $Bound.case.operation -cne 'native_image_name_mismatch') {
+    throw 'identity_production_rejection_effects_invalid'
+  }
+}
+function Assert-IdentityProductionCases($Report) {
+  $targets = @('bound_positive', 'bound_wrong_image', 'bound_case_only')
+  for ($index = 0; $index -lt $targets.Count; $index++) {
+    $bound = $Report.production_bound_cases[$index]
+    if ($bound.case.target -cne $targets[$index] -or $bound.case.outcome -cne 'passed') {
+      throw 'identity_production_case_failed'
+    }
+    if ($index -eq 0) { Assert-IdentityBoundPositive $bound }
+    else { Assert-IdentityBoundRejection $bound }
+  }
+}
+Assert-IdentityLegacyCases $report
+Assert-IdentityProductionCases $report

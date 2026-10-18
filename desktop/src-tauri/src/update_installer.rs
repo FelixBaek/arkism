@@ -155,12 +155,156 @@ fn prepare_core<S: Storage>(
     }
 }
 
+/// Outcomes keep uncertain native ownership out of ordinary launch failures.
+pub enum LaunchDisposition {
+    Unstarted { installer: Installer, error: Error },
+    Started(Launched),
+    Unverified(PendingInstaller),
+}
+
+/// Closing a process observer is not confirmation that its child stopped.
+/// An accidentally dropped unresolved owner conservatively retains its handles
+/// and original guards until process teardown; it never kills or deletes.
+struct Retained<T>(Option<T>);
+impl<T> Retained<T> {
+    fn new(owner: T) -> Self {
+        Self(Some(owner))
+    }
+    fn get_mut(&mut self) -> &mut T {
+        self.0.as_mut().expect("retained_owner_present")
+    }
+    fn take(mut self) -> T {
+        self.0.take().expect("retained_owner_present")
+    }
+}
+impl<T> Drop for Retained<T> {
+    fn drop(&mut self) {
+        if let Some(owner) = self.0.take() {
+            std::mem::forget(owner);
+        }
+    }
+}
+
+pub struct PendingInstaller {
+    #[cfg(windows)]
+    _state: Option<Retained<windows::PendingState>>,
+    error: Error,
+    phase: &'static str,
+    resume: Option<u32>,
+    may_have_run: bool,
+}
+impl PendingInstaller {
+    pub fn primary_error(&self) -> &Error {
+        &self.error
+    }
+    pub fn phase(&self) -> &'static str {
+        self.phase
+    }
+    pub fn resume_observation(&self) -> Option<u32> {
+        self.resume
+    }
+    pub fn may_have_run(&self) -> bool {
+        self.may_have_run
+    }
+}
+
+/// Inert metadata owner for Runtime/lifecycle storage tests only; no native state.
+#[cfg(test)]
+pub(crate) fn pending_test_owner() -> PendingInstaller {
+    PendingInstaller {
+        #[cfg(windows)]
+        _state: None,
+        error: Error::fixed("inert_pending_installer"),
+        phase: "inert_factory",
+        resume: None,
+        may_have_run: false,
+    }
+}
+
+trait SuspendedControl {
+    fn verify_binding(&mut self) -> Result<(), Error>;
+    fn abort_before_resume(&mut self) -> Result<(), Error>;
+    fn resume_once(&mut self) -> Result<u32, Error>;
+}
+impl<T: SuspendedControl> SuspendedControl for Retained<T> {
+    fn verify_binding(&mut self) -> Result<(), Error> {
+        self.get_mut().verify_binding()
+    }
+    fn abort_before_resume(&mut self) -> Result<(), Error> {
+        self.get_mut().abort_before_resume()
+    }
+    fn resume_once(&mut self) -> Result<u32, Error> {
+        self.get_mut().resume_once()
+    }
+}
+enum CoreDisposition<T> {
+    Unstarted {
+        owner: T,
+        error: Error,
+    },
+    Started(T),
+    Unverified {
+        owner: T,
+        error: Error,
+        phase: &'static str,
+        resume: Option<u32>,
+        may_have_run: bool,
+    },
+}
+
+fn exact_native_name(expected: &[u16], actual: &[u16]) -> bool {
+    expected == actual
+}
+
+fn suspended_core<T: SuspendedControl>(mut owner: T) -> CoreDisposition<T> {
+    if let Err(primary) = owner.verify_binding() {
+        return match owner.abort_before_resume() {
+            Ok(()) => CoreDisposition::Unstarted {
+                owner,
+                error: primary,
+            },
+            Err(abort) => CoreDisposition::Unverified {
+                owner,
+                error: primary.with_cleanup(Err(abort)),
+                phase: "abort",
+                resume: None,
+                may_have_run: false,
+            },
+        };
+    }
+    match owner.resume_once() {
+        Ok(1) => CoreDisposition::Started(owner),
+        Ok(value) => CoreDisposition::Unverified {
+            owner,
+            error: Error::fixed("resume_observation"),
+            phase: "resume",
+            resume: Some(value),
+            may_have_run: true,
+        },
+        Err(error) => CoreDisposition::Unverified {
+            owner,
+            error,
+            phase: "resume",
+            resume: Some(u32::MAX),
+            may_have_run: true,
+        },
+    }
+}
+
 /// Opaque, non-cloneable owner. Dropping releases handles without deleting files.
 /// A successful launch deliberately leaves its staging file for the installer.
 pub struct Installer {
     #[cfg(windows)]
     storage: windows::Staging,
     launched: bool,
+    #[cfg(windows)]
+    length: u64,
+    #[cfg(windows)]
+    expected: [u8; 32],
+    #[cfg(all(test, windows))]
+    test_fault: BindingFault,
+    #[cfg(all(test, windows))]
+    test_other: Option<Box<Installer>>,
 }
 
 /// Process creation has succeeded. Waiting/closing this observer never reclassifies
@@ -210,9 +354,149 @@ impl Installer {
         Ok(Self {
             storage,
             launched: false,
+            length: bytes.len() as u64,
+            expected: expected_hash(hash)?,
+            #[cfg(test)]
+            test_fault: BindingFault::None,
+            #[cfg(test)]
+            test_other: None,
         })
     }
 
+    /// Consumes the original locked staging owner. Only an exact resumed binding
+    /// commits; uncertainty always carries its native owner to the caller.
+    pub fn launch(self) -> LaunchDisposition {
+        #[cfg(windows)]
+        {
+            self.launch_arguments(None)
+        }
+        #[cfg(not(windows))]
+        {
+            LaunchDisposition::Unstarted {
+                installer: self,
+                error: Error::fixed("windows_only"),
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    fn launch_arguments(
+        mut self,
+        environment: Option<&[(std::ffi::OsString, std::ffi::OsString)]>,
+    ) -> LaunchDisposition {
+        #[cfg(test)]
+        if self.launched {
+            return LaunchDisposition::Unverified(PendingInstaller {
+                _state: Some(Retained::new(windows::PendingState::already_started(self))),
+                error: Error::fixed("already_launched"),
+                phase: "already_started",
+                resume: None,
+                may_have_run: true,
+            });
+        }
+        let binding = match self.storage.launch_binding(self.length, &self.expected) {
+            Ok(binding) => binding,
+            Err(error) => {
+                return LaunchDisposition::Unstarted {
+                    installer: self,
+                    error,
+                }
+            }
+        };
+        let created = match self.storage.create_process(
+            &[std::ffi::OsString::from("/S")],
+            environment,
+            Some(&binding),
+            true,
+        ) {
+            Ok(created) => created,
+            Err(error) => {
+                return LaunchDisposition::Unstarted {
+                    installer: self,
+                    error,
+                }
+            }
+        };
+        let owner = Retained::new(windows::PendingState::new(self, created, binding));
+        #[cfg(test)]
+        let mut owner = owner;
+        #[cfg(test)]
+        owner
+            .get_mut()
+            .created
+            .as_ref()
+            .expect("created_owner_present")
+            .record_created();
+        #[cfg(test)]
+        if owner.get_mut().installer.test_fault == BindingFault::CaseOnlyName {
+            windows::change_native_case_for_test(owner.get_mut().binding_for_test());
+        }
+        match suspended_core(owner) {
+            CoreDisposition::Unstarted { owner, error } => {
+                let state = owner.take();
+                LaunchDisposition::Unstarted {
+                    installer: state.installer,
+                    error,
+                }
+            }
+            CoreDisposition::Started(owner) => {
+                let mut state = owner.take();
+                state.installer.launched = true;
+                LaunchDisposition::Started(Launched {
+                    process: state.created.expect("created_owner_present").process,
+                })
+            }
+            CoreDisposition::Unverified {
+                owner,
+                error,
+                phase,
+                resume,
+                may_have_run,
+            } => LaunchDisposition::Unverified(PendingInstaller {
+                _state: Some(owner),
+                error,
+                phase,
+                resume,
+                may_have_run,
+            }),
+        }
+    }
+
+    #[cfg(all(test, windows))]
+    pub fn launch_inert(
+        self,
+        environment: &[(std::ffi::OsString, std::ffi::OsString)],
+        fault: BindingFault,
+    ) -> LaunchDisposition {
+        let mut installer = self;
+        installer.test_fault = fault;
+        self::test_diagnostics::bound_start();
+        installer.launch_arguments(Some(environment))
+    }
+
+    #[cfg(all(test, windows))]
+    pub fn launch_wrong_image_for_test(
+        mut self,
+        mut wrong: Installer,
+        environment: &[(std::ffi::OsString, std::ffi::OsString)],
+    ) -> LaunchDisposition {
+        self::test_diagnostics::bound_start();
+        let binding = match wrong.storage.launch_binding(wrong.length, &wrong.expected) {
+            Ok(binding) => binding,
+            Err(error) => {
+                return LaunchDisposition::Unstarted {
+                    installer: self,
+                    error,
+                }
+            }
+        };
+        self.storage.test_redirect = Some(binding.path);
+        self.test_other = Some(Box::new(wrong));
+        self::test_diagnostics::bound_start();
+        self.launch_arguments(Some(environment))
+    }
+
+    #[cfg(test)]
     pub fn spawn(&mut self) -> Result<Launched, Error> {
         #[cfg(windows)]
         {
@@ -224,7 +508,7 @@ impl Installer {
         }
     }
 
-    #[cfg(windows)]
+    #[cfg(all(test, windows))]
     fn spawn_arguments(
         &mut self,
         arguments: &[std::ffi::OsString],
@@ -277,13 +561,18 @@ impl Installer {
         hook: Box<dyn FnOnce(&Path)>,
     ) -> Result<Self, Error> {
         let storage = prepare_core(bytes, hash, "Arkism-1-setup.exe", || {
-            let mut storage = windows::Staging::create(root)?;
-            storage.before_lock = Some(hook);
-            Ok(storage)
-        })?;
+            windows::Interleaved::new(root, hook)
+        })?
+        .storage;
         Ok(Self {
             storage,
             launched: false,
+            length: bytes.len() as u64,
+            expected: expected_hash(hash)?,
+            #[cfg(test)]
+            test_fault: BindingFault::None,
+            #[cfg(test)]
+            test_other: None,
         })
     }
 
@@ -300,6 +589,12 @@ impl Installer {
         Ok(Self {
             storage,
             launched: false,
+            length: bytes.len() as u64,
+            expected: expected_hash(hash)?,
+            #[cfg(test)]
+            test_fault: BindingFault::None,
+            #[cfg(test)]
+            test_other: None,
         })
     }
 
@@ -332,20 +627,33 @@ impl Installer {
         Ok(Self {
             storage,
             launched: false,
+            length: bytes.len() as u64,
+            expected: expected_hash(hash)?,
+            #[cfg(test)]
+            test_fault: BindingFault::None,
+            #[cfg(test)]
+            test_other: None,
         })
     }
+}
+
+#[cfg(all(test, windows))]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum BindingFault {
+    None,
+    CaseOnlyName,
 }
 
 #[cfg(windows)]
 mod windows {
     #[cfg(test)]
-    use super::test_diagnostics;
+    use super::expected_hash;
     #[cfg(test)]
-    use super::{expected_hash, verify_reader};
+    use super::test_diagnostics;
+    use super::{verify_reader, Installer, SuspendedControl};
     use super::{Error, Storage};
     use std::ffi::{c_void, OsStr, OsString};
     use std::fs::{File, OpenOptions};
-    #[cfg(test)]
     use std::io::Seek;
     use std::io::{self, Read, Write};
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
@@ -533,6 +841,15 @@ mod windows {
             information: *mut ProcessInformation,
         ) -> i32;
         fn WaitForSingleObject(handle: *mut c_void, milliseconds: u32) -> u32;
+        fn QueryFullProcessImageNameW(
+            handle: *mut c_void,
+            flags: u32,
+            name: *mut u16,
+            length: *mut u32,
+        ) -> i32;
+        fn ResumeThread(thread: *mut c_void) -> u32;
+        fn TerminateProcess(process: *mut c_void, exit_code: u32) -> i32;
+
         fn GetExitCodeProcess(handle: *mut c_void, code: *mut u32) -> i32;
     }
 
@@ -902,6 +1219,218 @@ mod windows {
         }
     }
 
+    pub(super) struct LaunchBinding {
+        pub path: PathBuf,
+        native: Vec<u16>,
+        length: u64,
+        expected: [u8; 32],
+    }
+
+    pub(super) struct Created {
+        pub process: Process,
+        thread: OwnedHandle,
+        #[cfg(test)]
+        diagnostic: usize,
+        #[cfg(test)]
+        suspended: bool,
+    }
+    #[cfg(test)]
+    impl Created {
+        pub fn record_created(&self) {
+            test_diagnostics::returned(self.diagnostic, true, None);
+            if self.suspended {
+                test_diagnostics::bound_created();
+            }
+        }
+    }
+
+    pub(super) struct PendingState {
+        pub installer: Installer,
+        pub created: Option<Created>,
+        binding: Option<LaunchBinding>,
+    }
+    impl PendingState {
+        pub fn new(installer: Installer, created: Created, binding: LaunchBinding) -> Self {
+            Self {
+                installer,
+                created: Some(created),
+                binding: Some(binding),
+            }
+        }
+        #[cfg(test)]
+        pub fn binding_for_test(&mut self) -> &mut LaunchBinding {
+            self.binding.as_mut().expect("binding_present")
+        }
+        #[cfg(test)]
+        pub fn already_started(installer: Installer) -> Self {
+            Self {
+                installer,
+                created: None,
+                binding: None,
+            }
+        }
+    }
+    impl SuspendedControl for PendingState {
+        fn verify_binding(&mut self) -> Result<(), Error> {
+            let created = self
+                .created
+                .as_ref()
+                .ok_or_else(|| Error::fixed("created_owner_missing"))?;
+            let binding = self
+                .binding
+                .as_ref()
+                .ok_or_else(|| Error::fixed("launch_binding_missing"))?;
+            let actual = process_native_name(&created.process)?;
+            let matched = super::exact_native_name(&binding.native, &actual);
+            #[cfg(test)]
+            test_diagnostics::bound_name(actual.len(), binding.native.len(), matched);
+            if !matched {
+                return Err(Error::fixed("native_image_name_mismatch"));
+            }
+            let checked = self.installer.storage.verify_launch(binding);
+            #[cfg(test)]
+            test_diagnostics::bound_reverified(checked.is_ok());
+            checked
+        }
+        fn abort_before_resume(&mut self) -> Result<(), Error> {
+            let process = &mut self
+                .created
+                .as_mut()
+                .ok_or_else(|| Error::fixed("created_owner_missing"))?
+                .process;
+            #[cfg(test)]
+            test_diagnostics::bound_abort(false);
+            if unsafe { TerminateProcess(process.handle.as_raw_handle(), 1) } == 0 {
+                return Err(Error::io("abort_terminate", io::Error::last_os_error()));
+            }
+            match process.wait(Duration::from_secs(5))? {
+                Some(_) => {
+                    #[cfg(test)]
+                    test_diagnostics::bound_abort(true);
+                    Ok(())
+                }
+                None => Err(Error::fixed("abort_signal_timeout")),
+            }
+        }
+        fn resume_once(&mut self) -> Result<u32, Error> {
+            let created = self
+                .created
+                .as_ref()
+                .ok_or_else(|| Error::fixed("created_owner_missing"))?;
+            let result = unsafe { ResumeThread(created.thread.as_raw_handle()) };
+            // Preserve the original OS code before any diagnostic observation.
+            let error = if result == u32::MAX {
+                Some(io::Error::last_os_error())
+            } else {
+                None
+            };
+            #[cfg(test)]
+            test_diagnostics::bound_resume(result);
+            match error {
+                Some(error) => Err(Error::io("resume_thread", error)),
+                None => Ok(result),
+            }
+        }
+    }
+
+    fn bounded_native_name(buffer: &[u16], count: usize) -> Result<Vec<u16>, Error> {
+        if count == 0 || count >= buffer.len() || buffer[..count].contains(&0) {
+            return Err(Error::fixed("native_name_length"));
+        }
+        let name = &buffer[..count];
+        let prefix: Vec<_> = "\\Device\\HarddiskVolume".encode_utf16().collect();
+        let suffix = name
+            .strip_prefix(prefix.as_slice())
+            .ok_or_else(|| Error::fixed("unsupported_native_volume"))?;
+        let digits = suffix
+            .iter()
+            .take_while(|value| (48..=57).contains(*value))
+            .count();
+        if digits == 0 || suffix.get(digits) != Some(&92) || suffix.len() <= digits + 1 {
+            return Err(Error::fixed("unsupported_native_volume"));
+        }
+        Ok(name.to_vec())
+    }
+    fn file_native_name(file: &File) -> Result<Vec<u16>, Error> {
+        let mut buffer = vec![0; MAX_PATH_UNITS];
+        let count = unsafe {
+            GetFinalPathNameByHandleW(
+                file.as_raw_handle(),
+                buffer.as_mut_ptr(),
+                buffer.len() as u32,
+                2,
+            )
+        } as usize;
+        if count == 0 {
+            return Err(Error::io("file_native_name", io::Error::last_os_error()));
+        }
+        bounded_native_name(&buffer, count)
+    }
+    fn process_native_name(process: &Process) -> Result<Vec<u16>, Error> {
+        let mut buffer = vec![0; MAX_PATH_UNITS];
+        let mut count = buffer.len() as u32;
+        if unsafe {
+            QueryFullProcessImageNameW(
+                process.handle.as_raw_handle(),
+                1,
+                buffer.as_mut_ptr(),
+                &mut count,
+            )
+        } == 0
+        {
+            return Err(Error::io("process_native_name", io::Error::last_os_error()));
+        }
+        bounded_native_name(&buffer, count as usize)
+    }
+
+    #[cfg(test)]
+    pub fn change_native_case_for_test(binding: &mut LaunchBinding) {
+        let start = binding
+            .native
+            .iter()
+            .rposition(|value| *value == 92)
+            .map_or(0, |position| position + 1);
+        let letter = binding.native[start..]
+            .iter_mut()
+            .find(|value| (65..=90).contains(&**value) || (97..=122).contains(&**value))
+            .expect("native_leaf_has_letter");
+        *letter ^= 32;
+    }
+
+    #[cfg(test)]
+    pub(super) struct Interleaved {
+        pub storage: Staging,
+        hook: Option<Box<dyn FnOnce(&Path)>>,
+    }
+    #[cfg(test)]
+    impl Interleaved {
+        pub fn new(root: &Path, hook: Box<dyn FnOnce(&Path)>) -> Result<Self, Error> {
+            Ok(Self {
+                storage: Staging::create(root)?,
+                hook: Some(hook),
+            })
+        }
+    }
+    #[cfg(test)]
+    impl Storage for Interleaved {
+        fn write(&mut self, bytes: &[u8]) -> Result<(), Error> {
+            self.storage.write(bytes)
+        }
+        fn seal(&mut self) -> Result<(), Error> {
+            self.storage.writer.take();
+            if let Some(hook) = self.hook.take() {
+                hook(&self.storage.path);
+            }
+            self.storage.seal()
+        }
+        fn reader(&mut self) -> Result<&mut dyn Read, Error> {
+            self.storage.reader()
+        }
+        fn cleanup(&mut self) -> Result<(), Error> {
+            self.storage.cleanup()
+        }
+    }
+
     pub(super) struct Staging {
         pub path: PathBuf,
         holds: Vec<(File, Identity)>,
@@ -912,9 +1441,9 @@ mod windows {
         anchor: File,
         identity: Identity,
         #[cfg(test)]
-        pub before_lock: Option<Box<dyn FnOnce(&Path)>>,
-        #[cfg(test)]
         test_launch: Option<(PathBuf, u64, [u8; 32])>,
+        #[cfg(test)]
+        pub(super) test_redirect: Option<PathBuf>,
     }
 
     impl Staging {
@@ -969,9 +1498,9 @@ mod windows {
                 anchor,
                 identity,
                 #[cfg(test)]
-                before_lock: None,
-                #[cfg(test)]
                 test_launch: None,
+                #[cfg(test)]
+                test_redirect: None,
             })
         }
 
@@ -1072,11 +1601,108 @@ mod windows {
             verify_reader(&mut file, length, hash)
         }
 
+        pub fn launch_binding(
+            &mut self,
+            length: u64,
+            expected: &[u8; 32],
+        ) -> Result<LaunchBinding, Error> {
+            self.rehash_locked(length, expected)?;
+            let file = self
+                .locked
+                .as_ref()
+                .ok_or_else(|| Error::fixed("not_locked"))?;
+            let mut buffer = vec![0; MAX_PATH_UNITS];
+            let count = unsafe {
+                GetFinalPathNameByHandleW(
+                    file.as_raw_handle(),
+                    buffer.as_mut_ptr(),
+                    buffer.len() as u32,
+                    0,
+                )
+            } as usize;
+            if count == 0 {
+                return Err(Error::io("launch_dos_path", io::Error::last_os_error()));
+            }
+            if count >= buffer.len() {
+                return Err(Error::fixed("launch_dos_path_length"));
+            }
+            let path = PathBuf::from(OsString::from_wide(&buffer[..count]));
+            if !matches!(path.components().next(), Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::VerbatimDisk(_)))
+                || path.file_name() != self.path.file_name()
+            {
+                return Err(Error::fixed("launch_dos_path_shape"));
+            }
+            let holds = hold_directories(
+                path.parent()
+                    .ok_or_else(|| Error::fixed("launch_dos_parent"))?,
+            )?;
+            let binding = LaunchBinding {
+                path,
+                native: file_native_name(file)?,
+                length,
+                expected: *expected,
+            };
+            self.verify_launch(&binding)?;
+            for (file, identity) in holds {
+                if !self.holds.iter().any(|(_, held)| *held == identity) {
+                    self.holds.push((file, identity));
+                }
+            }
+            Ok(binding)
+        }
+
+        fn rehash_locked(&mut self, length: u64, expected: &[u8; 32]) -> Result<(), Error> {
+            self.verify()?;
+            let file = self
+                .locked
+                .as_mut()
+                .ok_or_else(|| Error::fixed("not_locked"))?;
+            file.rewind()
+                .map_err(|error| Error::io("rewind_locked", error))?;
+            verify_reader(file, length, expected)
+        }
+
+        fn verify_launch(&mut self, binding: &LaunchBinding) -> Result<(), Error> {
+            self.rehash_locked(binding.length, &binding.expected)?;
+            let file = self
+                .locked
+                .as_ref()
+                .ok_or_else(|| Error::fixed("not_locked"))?;
+            if file_native_name(file)? != binding.native {
+                return Err(Error::fixed("native_original_name_changed"));
+            }
+            let mut candidate = OpenOptions::new()
+                .read(true)
+                .share_mode(SHARE_READ)
+                .custom_flags(OPEN_REPARSE)
+                .open(&binding.path)
+                .map_err(|error| Error::io("launch_dos_file", error))?;
+            if information(&candidate, false)? != self.identity {
+                return Err(Error::fixed("launch_dos_identity"));
+            }
+            verify_reader(&mut candidate, binding.length, &binding.expected)
+        }
+
+        #[cfg(test)]
         pub fn spawn(
-            &self,
+            &mut self,
             arguments: &[OsString],
             environment: Option<&[(OsString, OsString)]>,
         ) -> Result<Process, Error> {
+            self.create_process(arguments, environment, None, false)
+                .map(|created| {
+                    created.record_created();
+                    created.process
+                })
+        }
+
+        pub fn create_process(
+            &mut self,
+            arguments: &[OsString],
+            environment: Option<&[(OsString, OsString)]>,
+            binding: Option<&LaunchBinding>,
+            suspended: bool,
+        ) -> Result<Created, Error> {
             let mut inherited_handles = Vec::new();
             for (file, _) in &self.holds {
                 inherited_handles.push(inherited(file)?);
@@ -1108,6 +1734,10 @@ mod windows {
             startup.info.stderr = null.as_raw_handle();
             startup.attributes = attributes.pointer();
             let mut application: Vec<_> = self.path.as_os_str().encode_wide().collect();
+            if let Some(binding) = binding {
+                application = binding.path.as_os_str().encode_wide().collect();
+            }
+
             #[cfg(test)]
             if let Some((path, length, hash)) = &self.test_launch {
                 // Point-in-time DOS mapping verification only; a DOS device-map
@@ -1118,11 +1748,25 @@ mod windows {
             if application.contains(&0) {
                 return Err(Error::fixed("nul_path"));
             }
+            #[cfg(test)]
+            if let Some(path) = &self.test_redirect {
+                application = path.as_os_str().encode_wide().collect();
+            }
             application.push(0);
             let mut command = Vec::new();
             quoted(self.path.as_os_str(), &mut command)?;
+            if let Some(binding) = binding {
+                command.clear();
+                quoted(binding.path.as_os_str(), &mut command)?;
+            }
+
             #[cfg(test)]
             if let Some((path, _, _)) = &self.test_launch {
+                command.clear();
+                quoted(path.as_os_str(), &mut command)?;
+            }
+            #[cfg(test)]
+            if let Some(path) = &self.test_redirect {
                 command.clear();
                 quoted(path.as_os_str(), &mut command)?;
             }
@@ -1172,6 +1816,9 @@ mod windows {
                 .map(|entries| environment_block(entries))
                 .transpose()?;
             self.verify()?;
+            if let Some(binding) = binding {
+                self.verify_launch(binding)?;
+            }
             #[cfg(test)]
             let diagnostic = {
                 let mut valid = true;
@@ -1184,6 +1831,7 @@ mod windows {
                 }
                 test_diagnostics::begin(test_diagnostics::Shape {
                     namespace: test_diagnostics::namespace(&application),
+                    creation_suspended: suspended,
                     application_units: application.len(),
                     command_units: command.len(),
                     environment_units: block.as_ref().map_or(0, Vec::len),
@@ -1210,7 +1858,7 @@ mod windows {
                     std::ptr::null(),
                     std::ptr::null(),
                     1,
-                    0x00080000 | 0x400,
+                    0x00080000 | 0x400 | if suspended { 0x4 } else { 0 },
                     block
                         .as_ref()
                         .map_or(std::ptr::null(), |b| b.as_ptr() as *const c_void),
@@ -1229,14 +1877,17 @@ mod windows {
                 #[cfg(not(test))]
                 return Err(Error::io("spawn", io::Error::last_os_error()));
             }
-            #[cfg(test)]
-            test_diagnostics::returned(diagnostic, true, None);
-            // Nothing after successful CreateProcess may return a launch error.
-            // Only explicit guard duplicates were inherited. Closing these parent
-            // copies cannot release the child's file/directory sharing protection.
+            // Adopt both exact native handles before any fallible observation.
             let process = unsafe { OwnedHandle::from_raw_handle(information.process) };
-            let _thread = unsafe { OwnedHandle::from_raw_handle(information.thread) };
-            Ok(Process { handle: process })
+            let thread = unsafe { OwnedHandle::from_raw_handle(information.thread) };
+            Ok(Created {
+                process: Process { handle: process },
+                thread,
+                #[cfg(test)]
+                diagnostic,
+                #[cfg(test)]
+                suspended,
+            })
         }
     }
 
@@ -1251,10 +1902,6 @@ mod windows {
         }
         fn seal(&mut self) -> Result<(), Error> {
             self.writer.take();
-            #[cfg(test)]
-            if let Some(hook) = self.before_lock.take() {
-                hook(&self.path);
-            }
             let file = OpenOptions::new()
                 .read(true)
                 .share_mode(SHARE_READ)
@@ -1609,6 +2256,54 @@ pub mod test_diagnostics {
         }
     }
 
+    #[derive(Clone, Default)]
+    pub struct BoundSnapshot {
+        pub created: bool,
+        pub native_name_match: Option<bool>,
+        pub expected_name_units: usize,
+        pub actual_name_units: usize,
+        pub original_reverified: Option<bool>,
+        pub resume_calls: u32,
+        pub resume_observation: Option<u32>,
+        pub abort_attempted: bool,
+        pub abort_signaled: bool,
+    }
+    thread_local! { static BOUND: RefCell<BoundSnapshot> = RefCell::new(BoundSnapshot::default()); }
+    pub fn bound_start() {
+        BOUND.with(|state| *state.borrow_mut() = BoundSnapshot::default());
+    }
+    pub fn bound_created() {
+        BOUND.with(|state| state.borrow_mut().created = true);
+    }
+    pub fn bound_name(actual: usize, expected: usize, matched: bool) {
+        BOUND.with(|state| {
+            let mut state = state.borrow_mut();
+            state.native_name_match = Some(matched);
+            state.actual_name_units = actual;
+            state.expected_name_units = expected;
+        });
+    }
+    pub fn bound_reverified(verified: bool) {
+        BOUND.with(|state| state.borrow_mut().original_reverified = Some(verified));
+    }
+    pub fn bound_resume(observation: u32) {
+        BOUND.with(|state| {
+            let mut state = state.borrow_mut();
+            state.resume_calls += 1;
+            state.resume_observation = Some(observation);
+        });
+    }
+    pub fn bound_abort(signaled: bool) {
+        BOUND.with(|state| {
+            let mut state = state.borrow_mut();
+            state.abort_attempted = true;
+            state.abort_signaled = signaled;
+        });
+    }
+    pub fn bound_snapshot() -> BoundSnapshot {
+        BOUND.with(|state| state.borrow().clone())
+    }
+
     pub fn image(bytes: &[u8]) {
         let mut image = pe(bytes).unwrap_or_default();
         image.sha256 = Sha256::digest(bytes)
@@ -1621,6 +2316,7 @@ pub mod test_diagnostics {
     #[derive(Clone, Default)]
     pub struct Shape {
         pub namespace: &'static str,
+        pub creation_suspended: bool,
         pub application_units: usize,
         pub command_units: usize,
         pub environment_units: usize,
@@ -1705,7 +2401,8 @@ pub mod test_diagnostics {
     pub fn target(value: &'static str) {
         let value = match value {
             "rust_peer" | "rust_peer_long" | "inert_nsis" | "invalid_image" | "managed_x86"
-            | "managed_x64" | "nsis_dos" => value,
+            | "managed_x64" | "nsis_dos" | "bound_positive" | "bound_wrong_image"
+            | "bound_case_only" => value,
             _ => "other",
         };
         TRACE.with(|trace| trace.borrow_mut().target = value);
@@ -1822,9 +2519,9 @@ pub mod test_diagnostics {
         } else {
             "none"
         };
-        format!("{{\"target\":\"{}\",\"pe_valid\":{},\"pe_machine\":{},\"pe_magic\":{},\"pe_subsystem\":{},\"image_sha256\":\"{}\",\"namespace\":\"{}\",\"application_utf16_units\":{},\"command_utf16_units\":{},\"environment_utf16_units\":{},\"environment_supplied\":{},\"environment_double_nul\":{},\"argument_count\":{},\"handle_count\":{},\"guard_count\":{},\"directory_count\":{},\"stdio_unique_count\":1,\"handles_valid\":{},\"handles_inheritable\":{},\"startup_bytes\":{},\"startup_ex_bytes\":{},\"parent_pointer_bits\":{},\"create_returned\":{},\"created\":{},\"operation\":\"{operation}\",\"os_code\":{code}}}",
+        format!("{{\"target\":\"{}\",\"pe_valid\":{},\"pe_machine\":{},\"pe_magic\":{},\"pe_subsystem\":{},\"image_sha256\":\"{}\",\"namespace\":\"{}\",\"creation_suspended\":{},\"application_utf16_units\":{},\"command_utf16_units\":{},\"environment_utf16_units\":{},\"environment_supplied\":{},\"environment_double_nul\":{},\"argument_count\":{},\"handle_count\":{},\"guard_count\":{},\"directory_count\":{},\"stdio_unique_count\":1,\"handles_valid\":{},\"handles_inheritable\":{},\"startup_bytes\":{},\"startup_ex_bytes\":{},\"parent_pointer_bits\":{},\"create_returned\":{},\"created\":{},\"operation\":\"{operation}\",\"os_code\":{code}}}",
             attempt.target, image.valid, image.machine, image.magic, image.subsystem, image.sha256,
-            shape.namespace, shape.application_units, shape.command_units, shape.environment_units,
+            shape.namespace, shape.creation_suspended, shape.application_units, shape.command_units, shape.environment_units,
             shape.environment_supplied, shape.environment_double_nul, shape.argument_count,
             shape.handle_count, shape.guard_count, shape.directory_count, shape.handles_valid,
             shape.handles_inheritable, shape.startup_bytes, shape.startup_ex_bytes,
@@ -2006,5 +2703,193 @@ mod tests {
         let mut reader = Endless(0);
         assert!(verify_reader(&mut reader, 7, &[0; 32]).is_err());
         assert_eq!(reader.0, 8);
+    }
+}
+
+#[cfg(test)]
+mod bound_core_tests {
+    use super::{
+        exact_native_name, suspended_core, CoreDisposition, Error, Retained, SuspendedControl,
+    };
+    use std::sync::{Arc, Mutex};
+
+    struct Fake {
+        events: Arc<Mutex<Vec<&'static str>>>,
+        verify: &'static str,
+        abort: &'static str,
+        resume: Option<u32>,
+    }
+    impl Drop for Fake {
+        fn drop(&mut self) {
+            self.events.lock().unwrap().push("release");
+        }
+    }
+    impl SuspendedControl for Fake {
+        fn verify_binding(&mut self) -> Result<(), Error> {
+            self.events.lock().unwrap().push("verify");
+            if self.verify == "panic" {
+                panic!("inert_binding_panic");
+            }
+            if self.verify == "ok" {
+                Ok(())
+            } else {
+                Err(Error::fixed(self.verify))
+            }
+        }
+        fn abort_before_resume(&mut self) -> Result<(), Error> {
+            self.events.lock().unwrap().push("abort");
+            if self.abort == "ok" {
+                Ok(())
+            } else {
+                Err(Error::fixed(self.abort))
+            }
+        }
+        fn resume_once(&mut self) -> Result<u32, Error> {
+            self.events.lock().unwrap().push("resume");
+            self.resume
+                .ok_or_else(|| Error::io("resume_thread", std::io::Error::from_raw_os_error(5)))
+        }
+    }
+    fn fake(
+        verify: &'static str,
+        abort: &'static str,
+        resume: Option<u32>,
+    ) -> (Retained<Fake>, Arc<Mutex<Vec<&'static str>>>) {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        (
+            Retained::new(Fake {
+                events: events.clone(),
+                verify,
+                abort,
+                resume,
+            }),
+            events,
+        )
+    }
+    #[test]
+    fn bound_core_exact_one_resume_is_the_only_commit() {
+        for result in [Some(0), Some(1), Some(2), Some(u32::MAX), None] {
+            let (owner, events) = fake("ok", "ok", result);
+            match suspended_core(owner) {
+                CoreDisposition::Started(owner) => {
+                    assert_eq!(result, Some(1));
+                    drop(owner.take());
+                }
+                CoreDisposition::Unverified {
+                    owner,
+                    phase,
+                    resume,
+                    may_have_run,
+                    ..
+                } => {
+                    assert_ne!(result, Some(1));
+                    assert_eq!(phase, "resume");
+                    assert!(may_have_run);
+                    assert_eq!(resume, Some(result.unwrap_or(u32::MAX)));
+                    drop(owner);
+                }
+                CoreDisposition::Unstarted { .. } => {
+                    panic!("resume uncertainty became recoverable")
+                }
+            }
+            let events = events.lock().unwrap();
+            assert_eq!(events.iter().filter(|event| **event == "resume").count(), 1);
+            assert!(!events.contains(&"abort"));
+            assert_eq!(events.contains(&"release"), result == Some(1));
+        }
+    }
+    #[test]
+    fn bound_core_pre_resume_rejection_needs_confirmed_abort() {
+        for primary in [
+            "native_image_name_mismatch",
+            "process_native_name",
+            "hash_changed",
+        ] {
+            let (owner, events) = fake(primary, "ok", Some(1));
+            match suspended_core(owner) {
+                CoreDisposition::Unstarted { owner, error } => {
+                    assert_eq!(error.causes[0].operation, primary);
+                    drop(owner.take());
+                }
+                _ => panic!("confirmed abort was not returned with its staging owner"),
+            }
+            assert_eq!(*events.lock().unwrap(), ["verify", "abort", "release"]);
+        }
+    }
+    #[test]
+    fn bound_core_uncertain_abort_retains_owner_and_both_causes() {
+        for failure in [
+            "abort_terminate",
+            "abort_signal_timeout",
+            "wait",
+            "exit_code",
+        ] {
+            let (owner, events) = fake("native_image_name_mismatch", failure, Some(1));
+            match suspended_core(owner) {
+                CoreDisposition::Unverified {
+                    owner,
+                    error,
+                    phase,
+                    resume,
+                    may_have_run,
+                } => {
+                    assert_eq!(phase, "abort");
+                    assert_eq!(resume, None);
+                    assert!(!may_have_run);
+                    assert_eq!(
+                        error
+                            .causes
+                            .iter()
+                            .map(|cause| cause.operation)
+                            .collect::<Vec<_>>(),
+                        ["native_image_name_mismatch", failure]
+                    );
+                    drop(owner);
+                }
+                _ => panic!("unknown abort lost its native owner"),
+            }
+            assert_eq!(*events.lock().unwrap(), ["verify", "abort"]);
+        }
+    }
+    #[test]
+    fn bound_core_unwind_cannot_release_an_unverified_owner() {
+        let (owner, events) = fake("panic", "ok", Some(1));
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| suspended_core(owner)))
+                .is_err()
+        );
+        assert_eq!(*events.lock().unwrap(), ["verify"]);
+    }
+    #[test]
+    fn bound_core_native_names_are_exact_utf16_without_case_or_unicode_folding() {
+        let expected: Vec<_> = "\\Device\\HarddiskVolume2\\Arkism.exe"
+            .encode_utf16()
+            .collect();
+        assert!(exact_native_name(&expected, &expected));
+        for different in [
+            "\\Device\\HarddiskVolume2\\arkism.exe",
+            "\\Device\\HarddiskVolume3\\Arkism.exe",
+            "\\Device/HarddiskVolume2/Arkism.exe",
+        ] {
+            assert!(!exact_native_name(
+                &expected,
+                &different.encode_utf16().collect::<Vec<_>>()
+            ));
+        }
+        assert!(!exact_native_name(&[0x00e9], &[0x0065, 0x0301]));
+        let mut extra = expected.clone();
+        extra.push(0);
+        assert!(!exact_native_name(&expected, &extra));
+    }
+    #[test]
+    fn bound_core_retained_drop_is_not_cleanup_or_termination() {
+        fn require_send<T: Send>() {}
+        require_send::<super::PendingInstaller>();
+        let (owner, events) = fake("ok", "ok", Some(1));
+        drop(owner);
+        assert!(events.lock().unwrap().is_empty());
+        let (owner, events) = fake("ok", "ok", Some(1));
+        drop(owner.take());
+        assert_eq!(*events.lock().unwrap(), ["release"]);
     }
 }

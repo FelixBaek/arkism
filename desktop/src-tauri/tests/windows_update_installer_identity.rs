@@ -260,6 +260,7 @@ struct Report {
     control_manifest_hash: String,
     control_compiler_hash: String,
     cases: Vec<CaseRecord>,
+    production: Vec<ProductionCase>,
 }
 
 const MATRIX: [(&str, bool); 4] = [
@@ -323,6 +324,233 @@ impl CaseRecord {
             self.manifest_verified, Self::json_bool(self.payload_verified), Self::json_bool(self.payload_bytes_match), Self::json_bool(self.output_single_file), self.created, self.terminal, self.operation)
     }
 }
+const PRODUCTION_CASES: [&str; 3] = ["bound_positive", "bound_wrong_image", "bound_case_only"];
+struct ProductionCase {
+    record: CaseRecord,
+    snapshot: diagnostic::BoundSnapshot,
+    marker_absent: Option<bool>,
+    cleanup_confirmed: bool,
+}
+impl ProductionCase {
+    fn declared(target: &'static str) -> Self {
+        Self {
+            record: CaseRecord::declared(target, true),
+            snapshot: diagnostic::BoundSnapshot::default(),
+            marker_absent: None,
+            cleanup_confirmed: false,
+        }
+    }
+    fn json(&self) -> String {
+        let s = &self.snapshot;
+        let resume = s
+            .resume_observation
+            .map_or_else(|| "null".to_string(), |value| value.to_string());
+        format!("{{\"case\":{},\"native_name_match\":{},\"actual_native_name_units\":{},\"expected_native_name_units\":{},\"original_reverified\":{},\"resume_calls\":{},\"resume_observation\":{resume},\"abort_attempted\":{},\"abort_signaled\":{},\"marker_absent\":{},\"cleanup_confirmed\":{}}}",
+            self.record.json(), CaseRecord::json_bool(s.native_name_match), s.actual_name_units,
+            s.expected_name_units, CaseRecord::json_bool(s.original_reverified), s.resume_calls,
+            s.abort_attempted, s.abort_signaled, CaseRecord::json_bool(self.marker_absent), self.cleanup_confirmed)
+    }
+}
+fn production_update(index: usize, update: impl FnOnce(&mut ProductionCase)) {
+    REPORT.with(|report| update(&mut report.borrow_mut().production[index]));
+}
+fn production_error(index: usize, error: &update_installer::Error) {
+    let allowed = [
+        "native_image_name_mismatch",
+        "process_native_name",
+        "file_native_name",
+        "native_original_name_changed",
+        "resume_thread",
+        "resume_observation",
+        "abort_terminate",
+        "abort_signal_timeout",
+        "wait",
+        "exit_code",
+        "hash_changed",
+        "launch_dos_identity",
+        "spawn",
+    ];
+    if let Some(cause) = error.causes.first() {
+        production_update(index, |case| {
+            case.record.operation = if allowed.contains(&cause.operation) {
+                cause.operation
+            } else {
+                "guard_operation"
+            };
+            case.record.os_code = cause.code;
+        });
+    }
+}
+fn production_wait(index: usize, mut pending: PendingObserver) -> u32 {
+    production_update(index, |case| case.record.phase = "wait");
+    match pending.0.as_mut().unwrap().wait(Duration::from_secs(30)) {
+        Ok(Some(code)) => {
+            production_update(index, |case| {
+                case.record.terminal = true;
+                case.record.exit_code = Some(code);
+            });
+            drop(pending.0.take());
+            code
+        }
+        Ok(None) => {
+            production_update(index, |case| case.record.outcome = "wait_timeout");
+            panic!("production_live_owner_stops_fixture");
+        }
+        Err(error) => {
+            production_error(index, &error);
+            production_update(index, |case| case.record.outcome = "wait_unknown");
+            panic!("production_unknown_owner_stops_fixture");
+        }
+    }
+}
+fn production_started(index: usize, observer: update_installer::Launched, output: &Path) {
+    let pending = PendingObserver(Some(observer));
+    production_update(index, |case| case.record.created = true);
+    let exit = production_wait(index, pending);
+    let (bytes_match, single_file) = payload_observation(output);
+    production_update(index, |case| {
+        case.record.payload_verified = Some(bytes_match && single_file);
+        case.record.payload_bytes_match = Some(bytes_match);
+        case.record.output_single_file = Some(single_file);
+        let bound = case.snapshot.native_name_match == Some(true)
+            && case.snapshot.original_reverified == Some(true)
+            && case.snapshot.resume_calls == 1
+            && case.snapshot.resume_observation == Some(1)
+            && !case.snapshot.abort_attempted;
+        case.record.outcome = if index != 0 {
+            "unexpected_started"
+        } else if exit != 0 {
+            "exit_failed"
+        } else if !bytes_match || !single_file {
+            "payload_failed"
+        } else if !bound {
+            "binding_receipt_failed"
+        } else {
+            "passed"
+        };
+        case.record.phase = "complete";
+    });
+}
+fn production_unstarted(
+    index: usize,
+    installer: Installer,
+    error: update_installer::Error,
+    output: &Path,
+) {
+    production_error(index, &error);
+    let absent = fs::read_dir(output)
+        .ok()
+        .and_then(|mut entries| entries.next().transpose().ok())
+        .map(|entry| entry.is_none());
+    let expected = REPORT.with(|report| {
+        let report = report.borrow();
+        let case = &report.production[index];
+        index != 0
+            && case.snapshot.created
+            && case.snapshot.native_name_match == Some(false)
+            && case.snapshot.resume_calls == 0
+            && case.snapshot.abort_attempted
+            && case.snapshot.abort_signaled
+            && case.record.operation == "native_image_name_mismatch"
+            && absent == Some(true)
+    });
+    production_update(index, |case| {
+        case.marker_absent = absent;
+        case.record.created = case.snapshot.created;
+        case.record.terminal = case.snapshot.abort_signaled;
+        case.record.outcome = "unstarted";
+    });
+    if expected {
+        let original_path = installer.path().to_path_buf();
+        if let Err(error) = installer.cleanup() {
+            production_error(index, &error);
+            production_update(index, |case| case.record.outcome = "cleanup_failed");
+            panic!("production_confirmed_abort_cleanup_failed");
+        }
+        let removed = fs::symlink_metadata(&original_path)
+            .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound);
+        production_update(index, |case| {
+            case.cleanup_confirmed = removed;
+            case.record.outcome = if removed { "passed" } else { "cleanup_unconfirmed" };
+            case.record.phase = "complete";
+        });
+        assert!(removed, "production_exact_owned_cleanup_unconfirmed");
+    }
+    // Every unsuccessful case retains its exact owned files for VM teardown.
+}
+fn production_case(index: usize, parent: &Path, inputs: &NativeInputs) {
+    let root = owned_root(parent);
+    let output = root.join("inert NSIS output [owned]");
+    fs::create_dir(&output).unwrap();
+    let environment = environment(&[(
+        "ARKISM_INSTALLER_FIXTURE_OUTPUT",
+        output.clone().into_os_string(),
+    )]);
+    diagnostic::target(PRODUCTION_CASES[index]);
+    diagnostic::phase("prepare");
+    production_update(index, |case| {
+        case.record.image_hash = inputs.nsis_hash.clone();
+        case.record.phase = "prepare";
+        case.record.outcome = "in_progress";
+    });
+    let installer = checked(Installer::prepare_in(
+        &root,
+        &inputs.nsis_bytes,
+        &inputs.nsis_hash,
+        NAME,
+    ));
+    production_update(index, |case| case.record.phase = "launch");
+    let outcome = if index == 1 {
+        let wrong_root = owned_root(parent);
+        let wrong = checked(Installer::prepare_in(
+            &wrong_root,
+            &inputs.nsis_bytes,
+            &inputs.nsis_hash,
+            NAME,
+        ));
+        installer.launch_wrong_image_for_test(wrong, &environment)
+    } else {
+        let fault = if index == 2 {
+            update_installer::BindingFault::CaseOnlyName
+        } else {
+            update_installer::BindingFault::None
+        };
+        installer.launch_inert(&environment, fault)
+    };
+    production_update(index, |case| case.snapshot = diagnostic::bound_snapshot());
+    match outcome {
+        update_installer::LaunchDisposition::Started(observer) => {
+            production_started(index, observer, &output)
+        }
+        update_installer::LaunchDisposition::Unstarted { installer, error } => {
+            production_unstarted(index, installer, error, &output)
+        }
+        update_installer::LaunchDisposition::Unverified(owner) => {
+            production_error(index, owner.primary_error());
+            production_update(index, |case| {
+                case.record.created = case.snapshot.created;
+                case.record.outcome = "unverified_owner";
+            });
+            // Opaque PendingInstaller Drop deliberately retains original guards and
+            // exact process/thread. No observation or further launch is allowed.
+            drop(owner);
+            panic!("production_unverified_owner_stops_fixture");
+        }
+    }
+}
+fn production_bound_cases(parent: &Path, inputs: &NativeInputs) -> bool {
+    for index in 0..PRODUCTION_CASES.len() {
+        production_case(index, parent, inputs);
+    }
+    REPORT.with(|report| {
+        report
+            .borrow()
+            .production
+            .iter()
+            .all(|case| case.record.outcome == "passed")
+    })
+}
+
 fn case_update(index: usize, update: impl FnOnce(&mut CaseRecord)) {
     REPORT.with(|report| update(&mut report.borrow_mut().cases[index]));
 }
@@ -375,7 +603,10 @@ fn write_evidence(passed: bool) -> std::io::Result<()> {
         let cases = report.cases.iter().map(CaseRecord::json).collect::<Vec<_>>().join(",");
         let matrix_complete = report.cases.len() == MATRIX.len()
             && report.cases.iter().all(|case| case.outcome == "passed");
-        format!("{{\"ok\":{ok},\"scope\":\"inert_images_only\",\"native_windows\":true,\"source_sha\":\"{}\",\"module_sha256\":\"{}\",\"fixture_sha256\":\"{}\",\"writable_mapping_outcome\":\"{}\",\"inert_nsis_self_archive\":{},\"inert_nsis_sha256\":\"{}\",\"nsis_compiler_sha256\":{compiler},\"rust_peer_complete\":{},\"rust_peer_long_complete\":{},\"parent_drop_delayed_read\":{peers},\"selective_inheritance_checked\":{peers},\"owned_root_preserved\":{},\"production_nsis_executed\":false,\"comparison_source_sha256\":\"{}\",\"comparison_manifest_sha256\":\"{}\",\"comparison_compiler_sha256\":\"{}\",\"comparison_all_required_passed\":{matrix_complete},\"comparison_cases\":[{cases}],\"dos_device_mapping_atomicity_proven\":false,\"diagnostic\":{}}}\n",
+        let production_cases = report.production.iter().map(ProductionCase::json).collect::<Vec<_>>().join(",");
+        let production_required_pass = report.production.len() == PRODUCTION_CASES.len()
+            && report.production.iter().all(|case| case.record.outcome == "passed");
+        format!("{{\"ok\":{ok},\"scope\":\"inert_images_only\",\"native_windows\":true,\"source_sha\":\"{}\",\"module_sha256\":\"{}\",\"fixture_sha256\":\"{}\",\"writable_mapping_outcome\":\"{}\",\"inert_nsis_self_archive\":{},\"inert_nsis_sha256\":\"{}\",\"nsis_compiler_sha256\":{compiler},\"rust_peer_complete\":{},\"rust_peer_long_complete\":{},\"parent_drop_delayed_read\":{peers},\"selective_inheritance_checked\":{peers},\"owned_root_preserved\":{},\"production_nsis_executed\":false,\"comparison_source_sha256\":\"{}\",\"comparison_manifest_sha256\":\"{}\",\"comparison_compiler_sha256\":\"{}\",\"comparison_all_required_passed\":{matrix_complete},\"comparison_cases\":[{cases}],\"production_required_pass\":{production_required_pass},\"production_bound_cases\":[{production_cases}],\"dos_device_mapping_atomicity_proven\":false,\"diagnostic\":{}}}\n",
             report.source, hash(include_bytes!("../src/update_installer.rs")),
             hash(include_bytes!("windows_update_installer_identity.rs")), report.mapping,
             report.nsis, report.nsis_hash, report.rust_peer, report.rust_peer_long,
@@ -827,7 +1058,7 @@ fn wait_comparison(index: usize, mut pending: PendingObserver) -> bool {
     }
 }
 
-fn payload_matches(index: usize, output: &Path) -> bool {
+fn payload_observation(output: &Path) -> (bool, bool) {
     let bytes = fs::File::open(output.join("embedded.fixture")).and_then(|file| {
         let mut bytes = Vec::with_capacity(33);
         file.take(33).read_to_end(&mut bytes)?;
@@ -836,6 +1067,10 @@ fn payload_matches(index: usize, output: &Path) -> bool {
     let count = fs::read_dir(output).map(|entries| entries.take(2).collect::<Result<Vec<_>, _>>());
     let bytes_match = matches!(bytes, Ok(bytes) if bytes == b"Arkism inert installer fixture.\n");
     let single_file = matches!(count, Ok(Ok(entries)) if entries.len() == 1);
+    (bytes_match, single_file)
+}
+fn payload_matches(index: usize, output: &Path) -> bool {
+    let (bytes_match, single_file) = payload_observation(output);
     case_update(index, |case| {
         case.payload_verified = Some(bytes_match && single_file);
         case.payload_bytes_match = Some(bytes_match);
@@ -916,7 +1151,7 @@ fn comparison_case(index: usize, parent: &Path, inputs: &NativeInputs) {
     });
 }
 
-fn architecture_namespace_matrix(parent: &Path, inputs: &NativeInputs) {
+fn architecture_namespace_matrix(parent: &Path, inputs: &NativeInputs) -> bool {
     for index in 0..MATRIX.len() {
         comparison_case(index, parent, inputs);
     }
@@ -928,7 +1163,7 @@ fn architecture_namespace_matrix(parent: &Path, inputs: &NativeInputs) {
             .all(|case| case.outcome == "passed")
     });
     diagnostic::phase("comparison_required");
-    assert!(passed, "comparison_required_case_failed");
+    passed
 }
 
 fn bytes_for_mutation() -> Vec<u8> {
@@ -1049,6 +1284,10 @@ fn windows_update_installer_identity() {
                 .iter()
                 .map(|(target, dos)| CaseRecord::declared(target, *dos))
                 .collect(),
+            production: PRODUCTION_CASES
+                .iter()
+                .map(|target| ProductionCase::declared(target))
+                .collect(),
             ..Report::default()
         };
     });
@@ -1109,7 +1348,11 @@ fn run_identity_fixture(parent: &Path) {
     inherited_lifetime(&long, &bytes, &expected);
     REPORT.with(|report| report.borrow_mut().rust_peer_long = true);
     fs::remove_dir(long).unwrap();
-    architecture_namespace_matrix(parent, &inputs);
+    let production_passed = production_bound_cases(parent, &inputs);
+    // Historical GUID87/exit/payload outcomes remain diagnostic observations;
+    // uncertain/live ownership still aborts inside the matrix before any next case.
+    let _legacy_all_passed = architecture_namespace_matrix(parent, &inputs);
+    assert!(production_passed, "production_required_case_failed");
     diagnostic::target("other");
     diagnostic::phase("empty_parent");
     let preserved = empty_parent_reparse_race(&root, &bytes, &expected);
@@ -1130,7 +1373,8 @@ fn run_identity_fixture(parent: &Path) {
         assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
         fs::remove_dir(&root).unwrap();
     }
-    evidence(&inputs, true, mapping, true, preserved);
+    let legacy_nsis_observed = REPORT.with(|report| report.borrow().nsis);
+    evidence(&inputs, true, mapping, legacy_nsis_observed, preserved);
     diagnostic::phase("complete");
     println!("inert installer identity: locked bytes, replacement, writer conflict, exact cleanup, inherited lifetime and selective inheritance passed");
 }

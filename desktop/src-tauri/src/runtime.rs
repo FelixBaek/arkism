@@ -133,6 +133,22 @@ struct OwnedPostgres { start: LaunchSpec, identity: PostgresIdentity }
 #[derive(Clone)]
 enum Replay { Child(LaunchSpec), Postgres(OwnedPostgres) }
 
+// This owner is intentionally separate from managed runtime jobs: ordinary shutdown
+// is not evidence that an unverified installer may be killed, restored or deleted.
+struct PendingUpdate {
+    _installer: crate::update_installer::PendingInstaller,
+    _stopped: Vec<(Role, Replay)>,
+    _role_leases: BTreeMap<Role, u64>,
+    _lease: lifecycle::Lease,
+    _error: String,
+}
+
+#[derive(Debug)]
+pub(crate) enum InstallerHandoffFailure {
+    Unstarted(String),
+    Unverified(String),
+}
+
 fn postgres_identity(directory: &Path) -> Result<PostgresIdentity, String> {
     let file = fs::File::open(directory.join("postmaster.pid")).map_err(|_| "update_postgres_identity_unavailable")?;
     let mut bytes = Vec::new();
@@ -501,6 +517,7 @@ pub struct Runtime {
     gate: Arc<Gate>,
     // Failed native creations/control/finite commands keep their actual owners here.
     unverified: Mutex<Vec<Process>>,
+    pending_installer: Mutex<Option<PendingUpdate>>,
     #[cfg(windows)]
     generation: AtomicU64,
     #[cfg(test)]
@@ -520,7 +537,7 @@ pub struct Runtime {
 impl Runtime {
     /// `programs` is the folder with the bundled programs; None when this build has none.
     pub fn new(programs: Option<PathBuf>, data: PathBuf) -> Self {
-        Runtime { programs, data, children: Mutex::new(Vec::new()), watcher: Mutex::new(None), gateway: Mutex::new(None), postgres: Mutex::new(None), gate: Arc::new(Gate::default()), unverified: Mutex::new(Vec::new()),
+        Runtime { programs, data, children: Mutex::new(Vec::new()), watcher: Mutex::new(None), gateway: Mutex::new(None), postgres: Mutex::new(None), gate: Arc::new(Gate::default()), unverified: Mutex::new(Vec::new()), pending_installer: Mutex::new(None),
             #[cfg(windows)] generation: AtomicU64::new(0),
             #[cfg(test)] process_factory: Mutex::new(None),
             #[cfg(test)] postgres_boundary: Mutex::new(None),
@@ -622,10 +639,42 @@ impl Runtime {
         if output.code == 0 { Ok(()) } else { Err(error.into()) }
     }
 
-    /// Lock order is mutation lease, exclusive turn, then one role slot at a time.
+    fn installer_slot(&self) -> Result<std::sync::MutexGuard<'_, Option<PendingUpdate>>, String> {
+        match self.pending_installer.try_lock() {
+            Ok(slot) => Ok(slot),
+            Err(std::sync::TryLockError::WouldBlock) => Err("update_runtime_busy".into()),
+            Err(std::sync::TryLockError::Poisoned(_)) => {
+                self.gate.block();
+                Err("update_installer_owner_storage_unavailable".into())
+            }
+        }
+    }
+
+    /// Reserve installer storage before the mutation lease, exclusive turn and role slots.
     pub(crate) fn update_handoff(&self, launch: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+        let slot = self.installer_slot()?;
+        if slot.is_some() { return Err("update_installer_unverified".into()); }
         let mut backend = UpdateRuntime { rt:self, turn:None, leases:BTreeMap::new(), safe:true };
         lifecycle::coordinated(&self.gate,&mut backend,launch)
+    }
+
+    pub(crate) fn update_installer_handoff(&self, launch: impl FnOnce() -> lifecycle::Launch<crate::update_installer::PendingInstaller>) -> Result<(), InstallerHandoffFailure> {
+        // The guard remains held through launch. No fallible lock acquisition or
+        // replacement is needed after a child owner has become unverified.
+        let mut slot = self.installer_slot().map_err(InstallerHandoffFailure::Unstarted)?;
+        if slot.is_some() { return Err(InstallerHandoffFailure::Unstarted("update_installer_unverified".into())); }
+        let mut backend = UpdateRuntime { rt:self, turn:None, leases:BTreeMap::new(), safe:true };
+        match lifecycle::coordinated_owned(&self.gate,&mut backend,launch) {
+            lifecycle::OwnedHandoff::Started => Ok(()),
+            lifecycle::OwnedHandoff::Unstarted(error) => Err(InstallerHandoffFailure::Unstarted(error)),
+            lifecycle::OwnedHandoff::Unverified { owner, error, stopped, lease } => {
+                *slot = Some(PendingUpdate {
+                    _installer:owner, _stopped:stopped,
+                    _role_leases:std::mem::take(&mut backend.leases), _lease:lease, _error:error,
+                });
+                Err(InstallerHandoffFailure::Unverified("update_installer_unverified".into()))
+            }
+        }
     }
 
     /// Leaves the user's home alone (no capture queues read or erased): `--runtime-check`.
@@ -1819,6 +1868,7 @@ mod tests {
         stopping: std::collections::BTreeSet<Role>,
         events: Vec<String>,
         busy: Option<Role>,
+        pause_panic: Option<Role>,
         control_error: Option<Role>,
         resume_error: Option<Role>,
         stop_error: Option<Role>,
@@ -1870,6 +1920,10 @@ mod tests {
         fn pause(&mut self)->Result<Option<u64>,String> {
             let mut state=self.observed.lock().unwrap();
             state.events.push(format!("pause:{}",self.role.name()));
+            if state.pause_panic == Some(self.role) {
+                drop(state);
+                panic!("inert pause panic");
+            }
             if state.control_error == Some(self.role) { return Err("inert_receipt_unknown".into()); }
             if self.generation>0 {
                 assert!(state.bootstrap_held.contains(&self.role),"replay admitted work before first pause");
@@ -2046,6 +2100,90 @@ mod tests {
             "resume:server","resume:worker","resume:gateway","resume:watcher"]);
         assert!(rt.activity().is_ok()); assert_integrated_files_preserved(&dir);
         fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn update_installer_unverified_owner_keeps_checkpoint_and_blocks_reentry() {
+        fn require_send<T: Send>() {}
+        require_send::<PendingUpdate>();
+        let (rt,state,dir)=integrated_runtime_fixture();
+        let result=rt.update_installer_handoff(|| {
+            assert!(rt.pending_installer.try_lock().is_err(), "storage is reserved before launch");
+            assert!(rt.busy.try_lock().is_err());
+            assert_eq!(rt.update_handoff(||panic!("reentrant launch")),Err("update_runtime_busy".into()));
+            lifecycle::Launch::Unverified {
+                owner:crate::update_installer::pending_test_owner(), error:"update_installer_unverified".into(),
+            }
+        });
+        assert!(matches!(result,Err(InstallerHandoffFailure::Unverified(ref e)) if e=="update_installer_unverified"));
+        assert!(state.lock().unwrap().alive.is_empty());
+        assert!(state.lock().unwrap().events.iter().all(|e| !e.starts_with("replay:") && !e.starts_with("resume:")));
+        assert!(rt.unverified.lock().unwrap().is_empty(), "installer is not a managed runtime job");
+        assert!(rt.busy.try_lock().is_ok(), "the borrowed turn guard is not retained");
+        {
+            let slot=rt.pending_installer.lock().unwrap();
+            let pending=slot.as_ref().unwrap();
+            assert_eq!(pending._stopped.iter().map(|(role,_)|*role).collect::<Vec<_>>(),FIXTURE_ROLES.into_iter().rev().collect::<Vec<_>>());
+            assert!(pending._role_leases.is_empty());
+            assert_eq!(pending._error,"update_installer_unverified");
+            assert_eq!(pending._installer.primary_error().causes[0].operation,"inert_pending_installer");
+        }
+        assert!(rt.activity().is_err());
+        assert!(matches!(rt.update_installer_handoff(||panic!("pending owner cannot be overwritten")),Err(InstallerHandoffFailure::Unstarted(ref e)) if e=="update_installer_unverified"));
+        assert_eq!(rt.update_handoff(||panic!("ordinary update cannot bypass pending owner")),Err("update_installer_unverified".into()));
+        rt.stop_server();
+        assert_eq!(rt.pending_installer.lock().unwrap().as_ref().unwrap()._installer.primary_error().causes[0].operation,"inert_pending_installer");
+        assert_integrated_files_preserved(&dir);fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_installer_unstarted_recovers_through_the_same_runtime_boundary() {
+        let (rt,state,dir)=integrated_runtime_fixture();
+        let result=rt.update_installer_handoff(|| lifecycle::Launch::Unstarted("inert_installer_unstarted".into()));
+        assert!(matches!(result,Err(InstallerHandoffFailure::Unstarted(ref e)) if e=="inert_installer_unstarted"));
+        assert_eq!(state.lock().unwrap().alive,FIXTURE_ROLES.into_iter().collect());
+        assert_eq!(state.lock().unwrap().resumed_generations.len(),4);
+        assert!(rt.pending_installer.lock().unwrap().is_none());
+        assert!(rt.activity().is_ok());
+        assert_integrated_files_preserved(&dir);fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_installer_storage_errors_precede_launch_and_preserve_blocked_state() {
+        let dir=update_test_dir();
+        let rt=Runtime::new(None,dir.clone()).isolated();
+        let slot=rt.pending_installer.lock().unwrap();
+        assert!(matches!(rt.update_installer_handoff(||panic!("contended storage cannot launch")),Err(InstallerHandoffFailure::Unstarted(ref e)) if e=="update_runtime_busy"));
+        drop(slot);
+        assert!(rt.activity().is_ok());
+        let panic=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _slot=rt.pending_installer.lock().unwrap();
+            panic!("inert storage poisoning");
+        }));
+        assert!(panic.is_err());
+        assert!(matches!(rt.update_installer_handoff(||panic!("poisoned storage cannot launch")),Err(InstallerHandoffFailure::Unstarted(ref e)) if e=="update_installer_owner_storage_unavailable"));
+        assert!(rt.activity().is_err());
+        assert!(!rt.data.join("runtime.json").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_installer_pause_panic_drops_turn_without_resuming_or_replaying() {
+        let (rt,state,dir)=integrated_runtime_fixture();
+        state.lock().unwrap().pause_panic=Some(Role::Worker);
+        let panic=std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            rt.update_installer_handoff(||panic!("pause panic must prevent launch"))
+        }));
+        assert!(panic.is_err());
+        let observed=state.lock().unwrap();
+        assert_eq!(observed.events,vec!["pause:server","pause:worker"]);
+        assert_eq!(observed.alive,FIXTURE_ROLES.into_iter().collect());
+        assert!(observed.idle.contains_key(&Role::Server));
+        drop(observed);
+        // Unwinding releases the borrowed turn guard; poison still records the panic.
+        assert!(matches!(rt.busy.try_lock(),Err(std::sync::TryLockError::Poisoned(_))));
+        assert!(rt.activity().is_err());
+        assert!(rt.update_installer_handoff(||panic!("panic must keep later launch closed")).is_err());
+        assert_integrated_files_preserved(&dir);fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn update_integrated_busy_reopens_only_after_previous_idle_role_resumes() {

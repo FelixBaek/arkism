@@ -56,6 +56,10 @@ impl Lease {
     pub(crate) fn hand_off(&mut self) {
         self.handed_off = true;
     }
+
+    fn recovered(&mut self) {
+        self.handed_off = false;
+    }
 }
 
 impl Drop for Lease {
@@ -190,11 +194,29 @@ fn dependency_failed(role: Role, failed: &[Role]) -> bool {
     }
 }
 
-/// The production handoff state machine, with injected process boundaries for offline tests.
-pub(crate) fn handoff<B: Backend>(backend: &mut B, launch: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+pub(crate) enum Launch<O> {
+    Started,
+    Unstarted(String),
+    Unverified { owner: O, error: String },
+}
+
+enum Handoff<O, S> {
+    Started,
+    Unstarted(String),
+    Unverified { owner: O, error: String, stopped: Vec<(Role, S)> },
+}
+
+pub(crate) enum OwnedHandoff<O, S> {
+    Started,
+    Unstarted(String),
+    Unverified { owner: O, error: String, stopped: Vec<(Role, S)>, lease: Lease },
+}
+
+fn quiesce<B: Backend>(backend: &mut B, on_mutating: impl FnOnce()) -> Result<Vec<(Role, B::Spec)>, String> {
     let mut snapshot = backend.snapshot()?;
     snapshot.sort_by_key(|(role, _)| *role);
     validate(&snapshot)?;
+    on_mutating();
     backend.pause()?;
     let mut stopped = Vec::new();
     for (role, spec) in snapshot.iter().rev() {
@@ -208,15 +230,60 @@ pub(crate) fn handoff<B: Backend>(backend: &mut B, launch: impl FnOnce() -> Resu
             return Err(recovered_error(backend, &mut stopped, format!("update_runtime_stop_failed: {}: {error}", role.name())));
         }
     }
-    launch().map_err(|error| recovered_error(backend, &mut stopped, error))
+    Ok(stopped)
+}
+
+/// All launch outcomes share the same snapshot, stop and confirmed-subset recovery logic.
+fn handoff_core<B: Backend, O>(backend: &mut B, on_mutating: impl FnOnce(), launch: impl FnOnce() -> Launch<O>) -> Handoff<O, B::Spec> {
+    let mut stopped = match quiesce(backend, on_mutating) {
+        Ok(stopped) => stopped,
+        Err(error) => return Handoff::Unstarted(error),
+    };
+    match launch() {
+        Launch::Started => Handoff::Started,
+        Launch::Unstarted(error) => Handoff::Unstarted(recovered_error(backend, &mut stopped, error)),
+        Launch::Unverified { owner, error } => Handoff::Unverified { owner, error, stopped },
+    }
+}
+
+fn ordinary_launch(result: Result<(), String>) -> Launch<std::convert::Infallible> {
+    match result {
+        Ok(()) => Launch::Started,
+        Err(error) => Launch::Unstarted(error),
+    }
+}
+
+/// The ordinary Result boundary cannot produce an unresolved child owner.
+pub(crate) fn handoff<B: Backend>(backend: &mut B, launch: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+    match handoff_core(backend, || {}, || ordinary_launch(launch())) {
+        Handoff::Started => Ok(()),
+        Handoff::Unstarted(error) => Err(error),
+        Handoff::Unverified { owner, .. } => match owner {},
+    }
+}
+
+pub(crate) fn coordinated_owned<B: Backend, O>(gate: &Arc<Gate>, backend: &mut B, launch: impl FnOnce() -> Launch<O>) -> OwnedHandoff<O, B::Spec> {
+    let mut lease = match gate.lease() {
+        Ok(lease) => lease,
+        Err(error) => return OwnedHandoff::Unstarted(error),
+    };
+    match handoff_core(backend, || lease.hand_off(), launch) {
+        Handoff::Started => OwnedHandoff::Started,
+        Handoff::Unstarted(error) => {
+            if backend.safe_to_reopen() { lease.recovered(); } else { lease.hand_off(); }
+            OwnedHandoff::Unstarted(error)
+        }
+        Handoff::Unverified { owner, error, stopped } => OwnedHandoff::Unverified { owner, error, stopped, lease },
+    }
 }
 
 /// One production boundary owns both the mutation lease and recovery safety decision.
 pub(crate) fn coordinated<B: Backend>(gate: &Arc<Gate>, backend: &mut B, launch: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
-    let mut lease = gate.lease()?;
-    let result = handoff(backend, launch);
-    if result.is_ok() || !backend.safe_to_reopen() { lease.hand_off(); }
-    result
+    match coordinated_owned(gate, backend, || ordinary_launch(launch())) {
+        OwnedHandoff::Started => Ok(()),
+        OwnedHandoff::Unstarted(error) => Err(error),
+        OwnedHandoff::Unverified { owner, .. } => match owner {},
+    }
 }
 
 #[cfg(test)]
@@ -235,6 +302,9 @@ mod tests {
         probe_failure: bool,
         configuration: Vec<u8>,
         held_closed: bool,
+        pause_calls: usize,
+        resume_calls: usize,
+        panic_on: Option<&'static str>,
     }
 
     impl Fake {
@@ -243,6 +313,7 @@ mod tests {
                 running: roles.iter().map(|role| (*role, Spec { endpoint: 12000 + *role as u16, argv: format!("original-{}", role.name()) })).collect(),
                 events: Arc::new(Mutex::new(Vec::new())), stop_failure: None, restore_failure: None,
                 probe_failure: false, configuration: b"remote-routing;token-presence=absent;settings=original".to_vec(), held_closed:false,
+                pause_calls:0, resume_calls:0, panic_on:None,
             }
         }
         fn record(&self, action: &str, role: Role) { self.events.lock().unwrap().push(format!("{action}:{}", role.name())); }
@@ -252,11 +323,22 @@ mod tests {
     impl Backend for Fake {
         type Spec = Spec;
         fn snapshot(&mut self) -> Result<Vec<(Role, Spec)>, String> {
+            assert_ne!(self.panic_on, Some("snapshot"), "inert snapshot panic");
             self.events.lock().unwrap().push("snapshot".into());
             if self.probe_failure { return Err("probe_failed".into()); }
             Ok(self.running.iter().map(|(r, s)| (*r, s.clone())).collect())
         }
+        fn pause(&mut self) -> Result<(), String> {
+            self.pause_calls += 1;
+            assert_ne!(self.panic_on, Some("pause"), "inert pause panic");
+            Ok(())
+        }
+        fn resume_remaining(&mut self) -> Result<(), String> {
+            self.resume_calls += 1;
+            Ok(())
+        }
         fn stop(&mut self, role: Role) -> Stopped {
+            assert_ne!(self.panic_on, Some("stop"), "inert stop panic");
             self.record("stop", role);
             let failed = self.stop_failure.filter(|(r, _)| *r == role);
             let confirmed = failed.map_or(true, |(_, confirmed)| confirmed);
@@ -388,5 +470,83 @@ mod tests {
         resume.send(()).unwrap();
         thread.join().unwrap();
         assert!(gate.lease().is_ok());
+    }
+
+    struct DropOwner(Arc<std::sync::atomic::AtomicUsize>);
+    impl Drop for DropOwner {
+        fn drop(&mut self) { self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst); }
+    }
+
+    #[test]
+    fn update_owned_unverified_retains_owner_checkpoint_and_terminal_lease() {
+        let gate = Arc::new(Gate::default());
+        let mut fake = Fake::new(&ALL);
+        let original = fake.running.clone();
+        let drops = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let outcome = coordinated_owned(&gate, &mut fake, || Launch::Unverified {
+            owner: DropOwner(Arc::clone(&drops)), error:"update_installer_unverified".into(),
+        });
+        let OwnedHandoff::Unverified { error, stopped, lease, .. } = &outcome else { panic!("owner must be retained"); };
+        assert_eq!(error, "update_installer_unverified");
+        let retained: BTreeMap<_,_> = stopped.iter().cloned().collect();
+        assert_eq!(retained, original);
+        assert!(lease.handed_off);
+        assert!(fake.running.is_empty());
+        assert_eq!(fake.resume_calls, 0);
+        assert!(!fake.events().iter().any(|e| e.starts_with("restore:")));
+        assert_eq!(drops.load(std::sync::atomic::Ordering::SeqCst), 0);
+        let followup = coordinated_owned(&gate, &mut fake, || -> Launch<DropOwner> { panic!("pending owner prevents another launch") });
+        assert!(matches!(followup, OwnedHandoff::Unstarted(_)));
+        assert!(gate.activity().is_err());
+        drop(outcome);
+        assert_eq!(drops.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(gate.activity().is_err(), "dropping the checkpoint is not recovery evidence");
+    }
+
+    #[test]
+    fn update_owned_unstarted_uses_confirmed_recovery_and_releases_own_lease() {
+        let gate = Arc::new(Gate::default());
+        let mut fake = Fake::new(&ALL);
+        let original = fake.running.clone();
+        let result = coordinated_owned(&gate, &mut fake, || Launch::<DropOwner>::Unstarted("inert_unstarted".into()));
+        assert!(matches!(result, OwnedHandoff::Unstarted(ref e) if e == "inert_unstarted"));
+        assert_eq!(fake.running, original);
+        assert_eq!(fake.resume_calls, 1);
+        assert!(gate.activity().is_ok());
+    }
+
+    #[test]
+    fn update_owned_panic_arms_only_after_read_only_validation() {
+        for phase in ["snapshot", "pause", "stop", "launch"] {
+            let gate = Arc::new(Gate::default());
+            let mut fake = Fake::new(&ALL);
+            fake.panic_on = Some(phase);
+            let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                coordinated_owned(&gate, &mut fake, || -> Launch<DropOwner> { panic!("inert launch panic") })
+            }));
+            assert!(panic.is_err());
+            assert_eq!(gate.activity().is_ok(), phase == "snapshot");
+            assert!(!fake.events().iter().any(|e| e.starts_with("restore:")));
+            assert_eq!(fake.resume_calls, 0);
+        }
+        let gate = Arc::new(Gate::default());
+        let mut fake = Fake::new(&[Role::Server]);
+        assert!(matches!(coordinated_owned(&gate, &mut fake, || -> Launch<DropOwner> { panic!("invalid snapshot cannot launch") }), OwnedHandoff::Unstarted(_)));
+        assert_eq!(fake.pause_calls, 0);
+        assert!(gate.activity().is_ok());
+    }
+
+    #[test]
+    fn update_owned_recovery_preserves_unrelated_blocked_state() {
+        let gate = Arc::new(Gate::default());
+        let mut fake = Fake::new(&ALL);
+        let result = coordinated_owned(&gate, &mut fake, || {
+            gate.block();
+            Launch::<DropOwner>::Unstarted("inert_unstarted".into())
+        });
+        assert!(matches!(result, OwnedHandoff::Unstarted(_)));
+        let state = gate.0.lock().unwrap();
+        assert!(!state.updating, "only the recovered updating lease is released");
+        assert!(state.blocked, "recovery must not clear another blocked owner");
     }
 }
