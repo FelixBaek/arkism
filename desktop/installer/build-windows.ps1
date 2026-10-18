@@ -9,9 +9,17 @@
 # the bundled programs and the installer are signed; otherwise they are not.
 #
 # Output: desktop/dist/Arkism-<version>-setup.exe (+ .sha256)
-param([Parameter(Mandatory)][string]$Version, [string]$Makensis = 'makensis')
+param(
+  [Parameter(Mandatory)][string]$Version,
+  [string]$Makensis = 'makensis',
+  [switch]$InstalledSmoke
+)
 $ErrorActionPreference = 'Stop'
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw '-Version x.y.z is required' }
+if ($InstalledSmoke -and ($env:OS -ne 'Windows_NT' -or $env:GITHUB_ACTIONS -ne 'true' -or
+    $env:RUNNER_ENVIRONMENT -ne 'github-hosted' -or $env:GITHUB_SHA -notmatch '^[a-f0-9]{40}$')) {
+  throw '-InstalledSmoke requires a disposable GitHub-hosted Windows job and its source commit'
+}
 $desktop = Split-Path -Parent $PSScriptRoot
 $repo = Split-Path -Parent $desktop
 $stage = Join-Path $desktop 'stage'
@@ -63,7 +71,7 @@ try {
   if (Test-Path $pfx) { Remove-Item -Force $pfx }
 }
 
-# The installed app must start its built-in Arkism, back it up, erase and restore it.
+# Check the staged app's built-in runtime before testing the installer itself.
 $check = Join-Path $tmp "arkism-runtime-check-$PID"
 $p = Start-Process (Join-Path $stage 'Arkism.exe') -ArgumentList '--runtime-check', $check -Wait -PassThru
 Get-Content (Join-Path $check 'check.json')
@@ -71,4 +79,8 @@ if ($p.ExitCode -ne 0) { throw 'runtime check failed' }
 
 $hash = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
 "$hash  $(Split-Path -Leaf $out)" | Set-Content -NoNewline -Encoding ascii "$out.sha256"
+if ($InstalledSmoke) {
+  & (Join-Path $PSScriptRoot 'smoke-windows-installed.ps1') -InstallerPath $out -StagePath $stage `
+    -Version $Version -SourceSha $env:GITHUB_SHA -EvidencePath (Join-Path $dist 'windows-installed-check.json')
+}
 Write-Host "$out $hash"

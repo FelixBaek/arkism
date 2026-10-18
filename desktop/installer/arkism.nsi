@@ -2,6 +2,7 @@
 Unicode true
 ManifestDPIAware true
 !include "MUI2.nsh"
+!include "FileFunc.nsh"
 
 !ifndef VERSION
   !define VERSION "0.1.0"
@@ -65,9 +66,17 @@ Section "Install"
   WriteRegStr HKCU "${REG_UNINSTALL}" "UninstallString" '"$INSTDIR\uninstall.exe"'
   WriteRegDWORD HKCU "${REG_UNINSTALL}" "NoModify" 1
   WriteRegDWORD HKCU "${REG_UNINSTALL}" "NoRepair" 1
-  ; An in-app update runs silently; bring the app back afterwards.
-  IfSilent 0 +2
+  ; Silent updates restart the app unless an unattended caller explicitly opts out.
+  ; /NoAutoRun is a runtime option on the same installer; interactive launch stays unchanged.
+  IfSilent 0 arkism_install_complete
+  ${GetParameters} $0
+  ClearErrors
+  ${GetOptions} $0 "/NoAutoRun" $1
+  IfErrors arkism_launch_after_install
+  StrCmp $1 "" arkism_install_complete
+arkism_launch_after_install:
   Exec '"$INSTDIR\${EXE}"'
+arkism_install_complete:
 SectionEnd
 
 Section "Uninstall"

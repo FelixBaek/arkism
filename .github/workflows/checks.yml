@@ -122,6 +122,9 @@ jobs:
       - name: Windows runtime download integrity
         shell: powershell
         run: ./desktop/installer/test-prepare-runtime.ps1
+      - name: Installed runtime smoke boundaries (offline)
+        shell: powershell
+        run: ./desktop/installer/test-smoke-windows-installed.ps1
       - name: Verify cross-platform migration checksums
         run: go test -v -count=1 -run '^TestSchemaMigrationChecksumAcrossPlatforms$' ./internal/memory
 
