@@ -148,7 +148,8 @@ class ResultIntegrityTests(unittest.TestCase):
                         output.write_text('preserve existing output')
                     evidence_accesses = []
                     original_open = Path.open
-                    def observe_open(path, *args, **kwargs):
+                    def observe_open(path, *args, evidence_accesses=evidence_accesses,
+                                     original_open=original_open, **kwargs):
                         if path.name in ('events.json', 'prompt.txt'):
                             evidence_accesses.append(path)
                         return original_open(path, *args, **kwargs)
