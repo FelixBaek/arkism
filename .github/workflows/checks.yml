@@ -103,6 +103,8 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' }}
       - name: Build Go commands on Windows
         run: go build ./cmd/...
+      - name: Local state replacement ownership on Windows
+        run: go test -race -v -count=1 -run '^TestAtomicWrite' ./internal/host
       - name: Literal user evidence for memory capture on Windows
         run: go test -v -count=1 -run '^TestCaptureClaimEvidence' ./internal/host/capture
       - name: Captured memory context and retry receipts on Windows

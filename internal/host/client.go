@@ -107,14 +107,29 @@ func Metric(fields map[string]any) error {
 
 // AtomicWrite replaces path so a kill mid-write never leaves a torn file (mode 0600).
 func AtomicWrite(path, text string) error {
-	tmp := filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+".tmp")
-	if err := os.WriteFile(tmp, []byte(text), 0o600); err != nil {
+	// Each writer owns an exclusively created file. A predictable temporary
+	// name could follow a foreign link or collide with another state writer.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".arkism-state-*.tmp")
+	if err != nil {
 		return err
 	}
-	if err := os.Chmod(tmp, 0o600); err != nil {
+	name := tmp.Name()
+	defer os.Remove(name)
+	_, writeErr := tmp.WriteString(text)
+	if writeErr == nil {
+		writeErr = tmp.Sync()
+	}
+	closeErr := tmp.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if err := replaceAtomicWrite(name, path); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	return nil
 }
 
 // HTTPError is a non-2xx answer (urllib's HTTPError).
