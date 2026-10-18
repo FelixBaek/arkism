@@ -46,6 +46,117 @@ SectionEnd
 & $Makensis /NOCONFIG /V2 "/DTEST_OUTPUT=$installer" "/DTEST_PAYLOAD=$payload" $script
 if ($LASTEXITCODE -ne 0) { throw 'update_identity_inert_installer_build_failed' }
 
+# The two GUI controls share every input except the requested PE architecture.
+# The native test also measures the actual PE fields and embedded RT_MANIFEST/1.
+function New-IdentityArchitectureControls([string]$BuildRoot) {
+  $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+  if (-not [IO.File]::Exists($compiler)) { throw 'identity_comparison_compiler_missing' }
+  $controlSource = Join-Path $BuildRoot 'comparison.cs'
+  $controlManifest = Join-Path $BuildRoot 'comparison.manifest'
+  $text = @'
+using System;
+using System.IO;
+using System.Text;
+
+internal static class InertArchitectureProbe
+{
+    private static bool Hosted()
+    {
+        return String.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"), "true", StringComparison.Ordinal)
+            && String.Equals(Environment.GetEnvironmentVariable("RUNNER_OS"), "Windows", StringComparison.Ordinal)
+            && String.Equals(Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT"), "github-hosted", StringComparison.Ordinal)
+            && String.Equals(Environment.GetEnvironmentVariable("ARKISM_WINDOWS_UPDATE_IDENTITY_TEST"), "1", StringComparison.Ordinal);
+    }
+
+    private static bool LocalAbsolute(string path)
+    {
+        return !String.IsNullOrEmpty(path) && path.Length >= 3
+            && ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z'))
+            && path[1] == ':' && path[2] == '\\';
+    }
+
+    private static bool OrdinaryOwnedOutput(string output, string temp)
+    {
+        DirectoryInfo directory = new DirectoryInfo(output);
+        DirectoryInfo owner = directory.Parent;
+        const string prefix = "arkism identity [fixture] ";
+        if (!String.Equals(directory.Name, "inert NSIS output [owned]", StringComparison.Ordinal)
+            || owner == null || owner.Parent == null
+            || !String.Equals(owner.Parent.FullName.TrimEnd('\\'), temp.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)
+            || !owner.Name.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        string nonce = owner.Name.Substring(prefix.Length);
+        if (nonce.Length != 32) return false;
+        foreach (char character in nonce)
+            if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f'))) return false;
+        for (DirectoryInfo current = directory; current != null; current = current.Parent)
+            if ((File.GetAttributes(current.FullName) & FileAttributes.ReparsePoint) != 0) return false;
+        return directory.Exists && Directory.GetFileSystemEntries(output).Length == 0;
+    }
+
+    private static int Main(string[] arguments)
+    {
+        try
+        {
+            if (arguments.Length != 1 || !String.Equals(arguments[0], "/S", StringComparison.Ordinal)) return 64;
+            if (!Hosted()) return 65;
+            string rawOutput = Environment.GetEnvironmentVariable("ARKISM_INSTALLER_FIXTURE_OUTPUT");
+            string rawTemp = Environment.GetEnvironmentVariable("RUNNER_TEMP");
+            if (!LocalAbsolute(rawOutput) || !LocalAbsolute(rawTemp)) return 66;
+            string output = Path.GetFullPath(rawOutput);
+            string temp = Path.GetFullPath(rawTemp);
+            if (new DriveInfo(Path.GetPathRoot(output)).DriveType != DriveType.Fixed
+                || !OrdinaryOwnedOutput(output, temp)) return 66;
+            byte[] payload = Encoding.ASCII.GetBytes("Arkism inert installer fixture.\n");
+            using (FileStream stream = new FileStream(Path.Combine(output, "embedded.fixture"), FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+            {
+                stream.Write(payload, 0, payload.Length);
+                stream.Flush(true);
+            }
+            return 0;
+        }
+        catch (Exception)
+        {
+            return 70;
+        }
+    }
+}
+'@
+  $manifestText = @'
+<?xml version="1.0" encoding="utf-8"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity name="Arkism.InertArchitectureProbe" version="1.0.0.0" processorArchitecture="*" type="win32" />
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security><requestedPrivileges>
+      <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+    </requestedPrivileges></security>
+  </trustInfo>
+</assembly>
+'@
+  [IO.File]::WriteAllText($controlSource, $text, (New-Object Text.UTF8Encoding($false)))
+  [IO.File]::WriteAllText($controlManifest, $manifestText, (New-Object Text.UTF8Encoding($false)))
+  $document = New-Object Xml.XmlDocument
+  $document.Load($controlManifest)
+  $levels = $document.GetElementsByTagName('requestedExecutionLevel', 'urn:schemas-microsoft-com:asm.v3')
+  if ($levels.Count -ne 1 -or $levels[0].GetAttribute('level') -cne 'asInvoker' -or
+      $levels[0].GetAttribute('uiAccess') -cne 'false') { throw 'identity_comparison_manifest_invalid' }
+  foreach ($platform in @('x86', 'x64')) {
+    $directory = Join-Path $BuildRoot $platform
+    $null = New-Item -ItemType Directory -Path $directory -ErrorAction Stop
+    $image = Join-Path $directory 'comparison.exe'
+    $arguments = @('/nologo', '/noconfig', '/optimize+', '/target:winexe',
+      ('/platform:' + $platform), ('/win32manifest:' + $controlManifest), ('/out:' + $image), $controlSource)
+    try { $null = @(& $compiler @arguments 2>&1) }
+    catch { throw 'identity_comparison_compile_failed' }
+    if ($LASTEXITCODE -ne 0 -or -not [IO.File]::Exists($image)) { throw 'identity_comparison_compile_failed' }
+    [Environment]::SetEnvironmentVariable(('ARKISM_WINDOWS_INSTALLER_IDENTITY_MANAGED_' + $platform.ToUpperInvariant() + '_EXE'), $image, 'Process')
+    [Environment]::SetEnvironmentVariable(('ARKISM_WINDOWS_INSTALLER_IDENTITY_MANAGED_' + $platform.ToUpperInvariant() + '_SHA256'), (Get-FileHash -LiteralPath $image -Algorithm SHA256).Hash.ToLowerInvariant(), 'Process')
+  }
+  $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_SOURCE_SHA256 = (Get-FileHash -LiteralPath $controlSource -Algorithm SHA256).Hash.ToLowerInvariant()
+  $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_MANIFEST_SHA256 = (Get-FileHash -LiteralPath $controlManifest -Algorithm SHA256).Hash.ToLowerInvariant()
+  $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_COMPILER_SHA256 = (Get-FileHash -LiteralPath $compiler -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+New-IdentityArchitectureControls $root
+
 $env:ARKISM_WINDOWS_UPDATE_IDENTITY_TEST = '1'
 $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_SOURCE_SHA = $source
 $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_NSIS_EXE = $installer
@@ -66,6 +177,22 @@ if ($report.ok -isnot [bool] -or -not $report.ok -or $report.source_sha -cne $so
     $report.production_nsis_executed -isnot [bool] -or $report.production_nsis_executed -or
     $report.module_sha256 -cne (Get-FileHash -LiteralPath 'desktop/src-tauri/src/update_installer.rs' -Algorithm SHA256).Hash.ToLowerInvariant() -or
     $report.fixture_sha256 -cne (Get-FileHash -LiteralPath 'desktop/src-tauri/tests/windows_update_installer_identity.rs' -Algorithm SHA256).Hash.ToLowerInvariant() -or
-    $report.inert_nsis_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_NSIS_SHA256) {
+    $report.inert_nsis_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_NSIS_SHA256 -or
+    $report.comparison_source_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_SOURCE_SHA256 -or
+    $report.comparison_manifest_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_MANIFEST_SHA256 -or
+    $report.comparison_compiler_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_COMPILER_SHA256 -or
+    $report.comparison_all_required_passed -isnot [bool] -or -not $report.comparison_all_required_passed -or
+    @($report.comparison_cases).Count -ne 4 -or
+    $report.dos_device_mapping_atomicity_proven -isnot [bool] -or $report.dos_device_mapping_atomicity_proven) {
   throw 'update_identity_evidence_invalid'
+}
+
+$caseTargets = @('managed_x86', 'managed_x64', 'inert_nsis', 'nsis_dos')
+for ($caseIndex = 0; $caseIndex -lt $caseTargets.Count; $caseIndex++) {
+  $case = $report.comparison_cases[$caseIndex]
+  if ($case.target -cne $caseTargets[$caseIndex] -or $case.outcome -cne 'passed' -or
+      $case.created -isnot [bool] -or -not $case.created -or
+      $case.terminal -isnot [bool] -or -not $case.terminal -or $case.exit_code -ne 0) {
+    throw 'identity_comparison_required_case_failed'
+  }
 }

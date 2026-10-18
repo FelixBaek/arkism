@@ -131,6 +131,55 @@ struct NativeInputs {
     nsis_bytes: Vec<u8>,
     nsis_hash: String,
     compiler_hash: Option<String>,
+    managed: [ManagedImage; 2],
+    control_source_hash: String,
+    control_manifest_hash: String,
+    control_compiler_hash: String,
+}
+
+struct ManagedImage {
+    bytes: Vec<u8>,
+    hash: String,
+}
+
+fn managed_image(
+    parent: &Path,
+    architecture: &str,
+    fields: (u16, u16, u16),
+    manifest: &str,
+) -> ManagedImage {
+    let prefix = format!("ARKISM_WINDOWS_INSTALLER_IDENTITY_MANAGED_{architecture}");
+    let path =
+        PathBuf::from(std::env::var_os(format!("{prefix}_EXE")).expect("comparison_input_missing"));
+    assert!(
+        path.is_absolute() && path.starts_with(parent),
+        "comparison_input_scope"
+    );
+    let length = fs::metadata(&path)
+        .expect("comparison_input_metadata")
+        .len();
+    assert!(
+        length > 0 && length <= update_installer::MAX_BYTES,
+        "comparison_input_length"
+    );
+    let bytes = fs::read(path).expect("comparison_input_read");
+    let expected = hex_environment(&format!("{prefix}_SHA256"), 64);
+    assert_eq!(hash(&bytes), expected, "comparison_input_hash");
+    assert_eq!(
+        diagnostic::pe_fields(&bytes),
+        Some(fields),
+        "comparison_pe_shape"
+    );
+    let embedded = diagnostic::embedded_manifest(&bytes).expect("comparison_manifest_missing");
+    assert_eq!(
+        hash(&embedded),
+        manifest,
+        "comparison_embedded_manifest_hash"
+    );
+    ManagedImage {
+        bytes,
+        hash: expected,
+    }
 }
 
 fn hex_environment(name: &str, length: usize) -> String {
@@ -167,11 +216,31 @@ impl NativeInputs {
             std::env::var_os("ARKISM_WINDOWS_INSTALLER_IDENTITY_NSIS_COMPILER_SHA256").map(|_| {
                 hex_environment("ARKISM_WINDOWS_INSTALLER_IDENTITY_NSIS_COMPILER_SHA256", 64)
             });
+        let control_source_hash = hex_environment(
+            "ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_SOURCE_SHA256",
+            64,
+        );
+        let control_manifest_hash = hex_environment(
+            "ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_MANIFEST_SHA256",
+            64,
+        );
+        let control_compiler_hash = hex_environment(
+            "ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_COMPILER_SHA256",
+            64,
+        );
+        let managed = [
+            managed_image(parent, "X86", (0x14c, 0x10b, 2), &control_manifest_hash),
+            managed_image(parent, "X64", (0x8664, 0x20b, 2), &control_manifest_hash),
+        ];
         Self {
             source,
             nsis_bytes,
             nsis_hash,
             compiler_hash,
+            managed,
+            control_source_hash,
+            control_manifest_hash,
+            control_compiler_hash,
         }
     }
 }
@@ -187,6 +256,66 @@ struct Report {
     nsis: bool,
     preserved: bool,
     complete: bool,
+    control_source_hash: String,
+    control_manifest_hash: String,
+    control_compiler_hash: String,
+    cases: Vec<CaseRecord>,
+}
+
+const MATRIX: [(&str, bool); 4] = [
+    ("managed_x86", false),
+    ("managed_x64", false),
+    ("inert_nsis", false),
+    ("nsis_dos", true),
+];
+
+struct CaseRecord {
+    target: &'static str,
+    namespace: &'static str,
+    phase: &'static str,
+    outcome: &'static str,
+    image_hash: String,
+    created: bool,
+    terminal: bool,
+    exit_code: Option<u32>,
+    os_code: Option<i32>,
+    operation: &'static str,
+    manifest_verified: bool,
+}
+impl CaseRecord {
+    fn declared(target: &'static str, dos: bool) -> Self {
+        Self {
+            target,
+            namespace: if dos { "physical_dos" } else { "volume_guid" },
+            phase: "not_reached",
+            outcome: "not_reached",
+            image_hash: String::new(),
+            created: false,
+            terminal: false,
+            exit_code: None,
+            os_code: None,
+            operation: "none",
+            manifest_verified: false,
+        }
+    }
+    fn json(&self) -> String {
+        let exit = self
+            .exit_code
+            .map_or_else(|| "null".to_string(), |code| code.to_string());
+        let code = self
+            .os_code
+            .map_or_else(|| "null".to_string(), |code| code.to_string());
+        format!("{{\"target\":\"{}\",\"namespace\":\"{}\",\"phase\":\"{}\",\"outcome\":\"{}\",\"image_sha256\":\"{}\",\"manifest_verified\":{},\"created\":{},\"terminal\":{},\"exit_code\":{exit},\"operation\":\"{}\",\"os_code\":{code}}}",
+            self.target, self.namespace, self.phase, self.outcome, self.image_hash,
+            self.manifest_verified, self.created, self.terminal, self.operation)
+    }
+}
+fn case_update(index: usize, update: impl FnOnce(&mut CaseRecord)) {
+    REPORT.with(|report| update(&mut report.borrow_mut().cases[index]));
+}
+fn case_phase(index: usize, phase: &'static str) {
+    case_update(index, |case| case.phase = phase);
+    diagnostic::phase(phase);
 }
 
 thread_local! { static REPORT: RefCell<Report> = RefCell::new(Report::default()); }
@@ -197,6 +326,9 @@ fn evidence(inputs: &NativeInputs, ok: bool, mapping: &'static str, nsis: bool, 
         report.source = inputs.source.clone();
         report.nsis_hash = inputs.nsis_hash.clone();
         report.compiler_hash = inputs.compiler_hash.clone();
+        report.control_source_hash = inputs.control_source_hash.clone();
+        report.control_manifest_hash = inputs.control_manifest_hash.clone();
+        report.control_compiler_hash = inputs.control_compiler_hash.clone();
         report.mapping = mapping;
         report.nsis = nsis;
         report.preserved = preserved;
@@ -227,11 +359,14 @@ fn write_evidence(passed: bool) -> std::io::Result<()> {
             .as_ref()
             .map_or_else(|| "null".to_string(), |value| format!("\"{value}\""));
         let peers = report.rust_peer && report.rust_peer_long;
-        format!("{{\"ok\":{ok},\"scope\":\"inert_images_only\",\"native_windows\":true,\"source_sha\":\"{}\",\"module_sha256\":\"{}\",\"fixture_sha256\":\"{}\",\"writable_mapping_outcome\":\"{}\",\"inert_nsis_self_archive\":{},\"inert_nsis_sha256\":\"{}\",\"nsis_compiler_sha256\":{compiler},\"rust_peer_complete\":{},\"rust_peer_long_complete\":{},\"parent_drop_delayed_read\":{peers},\"selective_inheritance_checked\":{peers},\"owned_root_preserved\":{},\"production_nsis_executed\":false,\"diagnostic\":{}}}\n",
+        let cases = report.cases.iter().map(CaseRecord::json).collect::<Vec<_>>().join(",");
+        let matrix_complete = report.cases.len() == MATRIX.len()
+            && report.cases.iter().all(|case| case.outcome == "passed");
+        format!("{{\"ok\":{ok},\"scope\":\"inert_images_only\",\"native_windows\":true,\"source_sha\":\"{}\",\"module_sha256\":\"{}\",\"fixture_sha256\":\"{}\",\"writable_mapping_outcome\":\"{}\",\"inert_nsis_self_archive\":{},\"inert_nsis_sha256\":\"{}\",\"nsis_compiler_sha256\":{compiler},\"rust_peer_complete\":{},\"rust_peer_long_complete\":{},\"parent_drop_delayed_read\":{peers},\"selective_inheritance_checked\":{peers},\"owned_root_preserved\":{},\"production_nsis_executed\":false,\"comparison_source_sha256\":\"{}\",\"comparison_manifest_sha256\":\"{}\",\"comparison_compiler_sha256\":\"{}\",\"comparison_all_required_passed\":{matrix_complete},\"comparison_cases\":[{cases}],\"dos_device_mapping_atomicity_proven\":false,\"diagnostic\":{}}}\n",
             report.source, hash(include_bytes!("../src/update_installer.rs")),
             hash(include_bytes!("windows_update_installer_identity.rs")), report.mapping,
             report.nsis, report.nsis_hash, report.rust_peer, report.rust_peer_long,
-            report.preserved, diagnostic::json())
+            report.preserved, report.control_source_hash, report.control_manifest_hash, report.control_compiler_hash, diagnostic::json())
         });
         OpenOptions::new()
             .write(true)
@@ -620,38 +755,153 @@ fn writable_mapping_transition(
     }
 }
 
-fn inert_nsis_self_archive(root: &Path, inputs: &NativeInputs) {
-    diagnostic::target("inert_nsis");
-    diagnostic::phase("prepare");
-    let mut guard = checked(Installer::prepare_in(
-        root,
-        &inputs.nsis_bytes,
-        &inputs.nsis_hash,
-        NAME,
-    ));
+// An unknown observer is retained until this hosted test process/VM exits. Its
+// Drop never kills the child, and an unknown case must stop the entire matrix.
+struct PendingObserver(Option<update_installer::Launched>);
+impl Drop for PendingObserver {
+    fn drop(&mut self) {
+        if let Some(observer) = self.0.take() {
+            std::mem::forget(observer);
+        }
+    }
+}
+
+fn record_create_failure(index: usize, error: &update_installer::Error) -> bool {
+    diagnostic::error(error);
+    let cause = error.causes.first();
+    let known_no_child =
+        cause.is_some_and(|cause| cause.operation == "spawn" && cause.code.is_some());
+    case_update(index, |case| {
+        case.outcome = if known_no_child {
+            "create_failed"
+        } else {
+            "guard_failed"
+        };
+        case.operation = if known_no_child {
+            "spawn"
+        } else {
+            "guard_operation"
+        };
+        case.os_code = cause.and_then(|cause| cause.code);
+    });
+    known_no_child
+}
+
+fn wait_comparison(index: usize, mut pending: PendingObserver) -> bool {
+    case_phase(index, "wait");
+    match pending.0.as_mut().unwrap().wait(Duration::from_secs(30)) {
+        Ok(Some(code)) => {
+            case_update(index, |case| {
+                case.terminal = true;
+                case.exit_code = Some(code);
+            });
+            drop(pending.0.take());
+            code == 0
+        }
+        Ok(None) => {
+            case_update(index, |case| case.outcome = "wait_timeout");
+            panic!("comparison_live_owner_matrix_stopped");
+        }
+        Err(error) => {
+            diagnostic::error(&error);
+            case_update(index, |case| {
+                case.outcome = "wait_unknown";
+                case.operation = "wait";
+                case.os_code = error.causes.first().and_then(|cause| cause.code);
+            });
+            panic!("comparison_unknown_owner_matrix_stopped");
+        }
+    }
+}
+
+fn payload_matches(output: &Path) -> bool {
+    let bytes = fs::read(output.join("embedded.fixture"));
+    let count = fs::read_dir(output).map(|entries| entries.collect::<Result<Vec<_>, _>>());
+    matches!(bytes, Ok(bytes) if bytes == b"Arkism inert installer fixture.\n")
+        && matches!(count, Ok(Ok(entries)) if entries.len() == 1)
+}
+
+fn comparison_case(index: usize, parent: &Path, inputs: &NativeInputs) {
+    let (target, dos) = MATRIX[index];
+    let (bytes, expected) = match index {
+        0 | 1 => (&inputs.managed[index].bytes, &inputs.managed[index].hash),
+        _ => (&inputs.nsis_bytes, &inputs.nsis_hash),
+    };
+    case_update(index, |case| {
+        case.image_hash = expected.clone();
+        case.manifest_verified = index < 2;
+        case.outcome = "in_progress";
+    });
+    diagnostic::target(target);
+    case_phase(index, "prepare");
+    // All four owners have the same fixed prefix and 128-bit hex nonce length.
+    let root = owned_root(parent);
+    let mut guard = checked(Installer::prepare_in(&root, bytes, expected, NAME));
+    if dos {
+        checked(guard.select_physical_dos_for_test(bytes.len() as u64, expected));
+    }
     let staged = guard.path().to_path_buf();
     let output = root.join("inert NSIS output [owned]");
-    fs::create_dir(&output).unwrap();
+    fs::create_dir(&output).expect("comparison_output_create");
     let env = environment(&[(
         "ARKISM_INSTALLER_FIXTURE_OUTPUT",
         output.clone().into_os_string(),
     )]);
-    diagnostic::phase("create_process");
-    let mut launched = checked(guard.spawn_inert(&[OsString::from("/S")], &env));
+    case_phase(index, "create_process");
+    let observer = match guard.spawn_inert(&[OsString::from("/S")], &env) {
+        Ok(observer) => PendingObserver(Some(observer)),
+        Err(error) => {
+            // No cleanup/retry: preserve this exact failed case and original code.
+            // A recorded failed CreateProcess has no child and allows the next
+            // separately declared case. Every other uncertainty ends the matrix.
+            assert!(
+                record_create_failure(index, &error),
+                "comparison_guard_matrix_stopped"
+            );
+            return;
+        }
+    };
+    case_update(index, |case| case.created = true);
     drop(guard);
-    diagnostic::phase("wait");
-    assert_eq!(checked(launched.wait(Duration::from_secs(30))), Some(0));
-    diagnostic::phase("payload");
-    assert!(
-        fs::read(output.join("embedded.fixture")).unwrap() == b"Arkism inert installer fixture.\n",
-        "inert NSIS embedded payload mismatch"
-    );
-    assert_eq!(fs::read_dir(&output).unwrap().count(), 1);
-    REPORT.with(|report| report.borrow_mut().nsis = true);
-    diagnostic::phase("cleanup");
-    fs::remove_file(output.join("embedded.fixture")).unwrap();
-    fs::remove_dir(output).unwrap();
-    fs::remove_file(staged).unwrap();
+    if !wait_comparison(index, observer) {
+        case_update(index, |case| case.outcome = "exit_failed");
+        return;
+    }
+    case_phase(index, "payload");
+    if !payload_matches(&output) {
+        case_update(index, |case| case.outcome = "payload_failed");
+        return;
+    }
+    case_update(index, |case| case.outcome = "payload_verified");
+    if index == 2 {
+        REPORT.with(|report| report.borrow_mut().nsis = true);
+    }
+    // Successful inert-only cases remove their exact files after terminal exit.
+    // Failed/unknown cases retain their complete owners for VM teardown.
+    case_phase(index, "cleanup");
+    fs::remove_file(output.join("embedded.fixture")).expect("comparison_payload_cleanup");
+    fs::remove_dir(output).expect("comparison_output_cleanup");
+    fs::remove_file(staged).expect("comparison_image_cleanup");
+    fs::remove_dir(root).expect("comparison_root_cleanup");
+    case_update(index, |case| {
+        case.outcome = "passed";
+        case.phase = "complete";
+    });
+}
+
+fn architecture_namespace_matrix(parent: &Path, inputs: &NativeInputs) {
+    for index in 0..MATRIX.len() {
+        comparison_case(index, parent, inputs);
+    }
+    let passed = REPORT.with(|report| {
+        report
+            .borrow()
+            .cases
+            .iter()
+            .all(|case| case.outcome == "passed")
+    });
+    diagnostic::phase("comparison_required");
+    assert!(passed, "comparison_required_case_failed");
 }
 
 fn bytes_for_mutation() -> Vec<u8> {
@@ -768,6 +1018,10 @@ fn windows_update_installer_identity() {
                 64,
             ),
             mapping: "not_reached",
+            cases: MATRIX
+                .iter()
+                .map(|(target, dos)| CaseRecord::declared(target, *dos))
+                .collect(),
             ..Report::default()
         };
     });
@@ -828,8 +1082,7 @@ fn run_identity_fixture(parent: &Path) {
     inherited_lifetime(&long, &bytes, &expected);
     REPORT.with(|report| report.borrow_mut().rust_peer_long = true);
     fs::remove_dir(long).unwrap();
-    inert_nsis_self_archive(&root, &inputs);
-    REPORT.with(|report| report.borrow_mut().nsis = true);
+    architecture_namespace_matrix(parent, &inputs);
     diagnostic::target("other");
     diagnostic::phase("empty_parent");
     let preserved = empty_parent_reparse_race(&root, &bytes, &expected);

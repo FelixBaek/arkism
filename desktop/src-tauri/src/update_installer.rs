@@ -304,6 +304,12 @@ impl Installer {
     }
 
     #[cfg(all(test, windows))]
+    /// Diagnostic matrix only. This does not change the production namespace.
+    pub fn select_physical_dos_for_test(&mut self, length: u64, hash: &str) -> Result<(), Error> {
+        self.storage.select_physical_dos(length, hash)
+    }
+
+    #[cfg(all(test, windows))]
     pub fn inherited_guards_for_test() -> Result<usize, Error> {
         windows::inherited_guards_for_test()
     }
@@ -907,6 +913,8 @@ mod windows {
         identity: Identity,
         #[cfg(test)]
         pub before_lock: Option<Box<dyn FnOnce(&Path)>>,
+        #[cfg(test)]
+        test_launch: Option<(PathBuf, u64, [u8; 32])>,
     }
 
     impl Staging {
@@ -962,6 +970,8 @@ mod windows {
                 identity,
                 #[cfg(test)]
                 before_lock: None,
+                #[cfg(test)]
+                test_launch: None,
             })
         }
 
@@ -993,6 +1003,73 @@ mod windows {
                 .ok_or_else(|| Error::fixed("not_locked"))?;
             file.rewind().map_err(|e| Error::io("test_rewind", e))?;
             verify_reader(file, length, &expected_hash(hash)?)
+        }
+
+        #[cfg(test)]
+        // Independently declared namespace comparison, never an error fallback.
+        pub fn select_physical_dos(&mut self, length: u64, hash: &str) -> Result<(), Error> {
+            self.verify()?;
+            let mut buffer = vec![0u16; MAX_PATH_UNITS];
+            let count = unsafe {
+                GetFinalPathNameByHandleW(
+                    self.locked
+                        .as_ref()
+                        .ok_or_else(|| Error::fixed("not_locked"))?
+                        .as_raw_handle(),
+                    buffer.as_mut_ptr(),
+                    buffer.len() as u32,
+                    0,
+                )
+            } as usize;
+            if count == 0 {
+                return Err(Error::io("test_dos_path", io::Error::last_os_error()));
+            }
+            if count >= buffer.len() {
+                return Err(Error::fixed("test_dos_path_length"));
+            }
+            let candidate = PathBuf::from(OsString::from_wide(&buffer[..count]));
+            if !matches!(candidate.components().next(), Some(Component::Prefix(prefix))
+                if matches!(prefix.kind(), Prefix::VerbatimDisk(_)))
+                || candidate.file_name() != self.path.file_name()
+            {
+                return Err(Error::fixed("test_dos_path_shape"));
+            }
+            let holds = hold_directories(
+                candidate
+                    .parent()
+                    .ok_or_else(|| Error::fixed("test_dos_parent"))?,
+            )?;
+            let expected = expected_hash(hash)?;
+            self.verify_test_candidate(&candidate, length, &expected)?;
+            for (file, identity) in holds {
+                // Original GUID and input handles remain alive; avoid adding the
+                // same physical ancestor twice solely because its spelling differs.
+                if !self.holds.iter().any(|(_, held)| *held == identity) {
+                    self.holds.push((file, identity));
+                }
+            }
+            self.test_launch = Some((candidate, length, expected));
+            Ok(())
+        }
+
+        #[cfg(test)]
+        fn verify_test_candidate(
+            &self,
+            path: &Path,
+            length: u64,
+            hash: &[u8; 32],
+        ) -> Result<(), Error> {
+            self.verify()?;
+            let mut file = OpenOptions::new()
+                .read(true)
+                .share_mode(SHARE_READ)
+                .custom_flags(OPEN_REPARSE)
+                .open(path)
+                .map_err(|error| Error::io("test_dos_file", error))?;
+            if information(&file, false)? != self.identity {
+                return Err(Error::fixed("test_dos_identity"));
+            }
+            verify_reader(&mut file, length, hash)
         }
 
         pub fn spawn(
@@ -1031,12 +1108,24 @@ mod windows {
             startup.info.stderr = null.as_raw_handle();
             startup.attributes = attributes.pointer();
             let mut application: Vec<_> = self.path.as_os_str().encode_wide().collect();
+            #[cfg(test)]
+            if let Some((path, length, hash)) = &self.test_launch {
+                // Point-in-time DOS mapping verification only; a DOS device-map
+                // change after this check is outside this diagnostic's guarantee.
+                self.verify_test_candidate(path, *length, hash)?;
+                application = path.as_os_str().encode_wide().collect();
+            }
             if application.contains(&0) {
                 return Err(Error::fixed("nul_path"));
             }
             application.push(0);
             let mut command = Vec::new();
             quoted(self.path.as_os_str(), &mut command)?;
+            #[cfg(test)]
+            if let Some((path, _, _)) = &self.test_launch {
+                command.clear();
+                quoted(path.as_os_str(), &mut command)?;
+            }
             for argument in arguments {
                 command.push(32);
                 quoted(argument, &mut command)?;
@@ -1292,6 +1381,234 @@ pub mod test_diagnostics {
         })
     }
 
+    pub fn pe_fields(bytes: &[u8]) -> Option<(u16, u16, u16)> {
+        pe(bytes).map(|image| (image.machine, image.magic, image.subsystem))
+    }
+
+    /// Parse resources as bytes, without loading or running the inspected image.
+    /// All RT_MANIFEST/1 language variants must contain the same bounded bytes.
+    pub fn embedded_manifest(bytes: &[u8]) -> Option<Vec<u8>> {
+        resources::manifest(bytes)
+    }
+
+    mod resources {
+        use super::{pe, read16, read32};
+
+        struct Image<'a> {
+            bytes: &'a [u8],
+            sections: &'a [u8],
+            root: &'a [u8],
+        }
+        impl<'a> Image<'a> {
+            fn range(bytes: &[u8], start: usize, length: usize) -> Option<&[u8]> {
+                bytes.get(start..start.checked_add(length)?)
+            }
+            fn open(bytes: &'a [u8]) -> Option<Self> {
+                let fields = pe(bytes)?;
+                let header = read32(bytes, 0x3c)? as usize;
+                let count = read16(bytes, header.checked_add(6)?)? as usize;
+                if count == 0 || count > 96 {
+                    return None;
+                }
+                let optional = header.checked_add(24)?;
+                let size = read16(bytes, header.checked_add(20)?)? as usize;
+                let (directory, count_offset) = match fields.magic {
+                    0x10b => (112, 92),
+                    0x20b => (128, 108),
+                    _ => return None,
+                };
+                if size < directory + 8 || read32(bytes, optional.checked_add(count_offset)?)? < 3 {
+                    return None;
+                }
+                let sections =
+                    Self::range(bytes, optional.checked_add(size)?, count.checked_mul(40)?)?;
+                let mut image = Self {
+                    bytes,
+                    sections,
+                    root: &[],
+                };
+                let rva = read32(bytes, optional.checked_add(directory)?)?;
+                let length = read32(bytes, optional.checked_add(directory + 4)?)? as usize;
+                if length == 0 || length > 16 * 1024 * 1024 {
+                    return None;
+                }
+                image.root = image.rva(rva, length)?;
+                Some(image)
+            }
+            fn rva(&self, rva: u32, length: usize) -> Option<&'a [u8]> {
+                let mut found = None;
+                for section in self.sections.chunks_exact(40) {
+                    let Some(delta) = rva.checked_sub(read32(section, 12)?) else {
+                        continue;
+                    };
+                    let raw_size = read32(section, 16)? as usize;
+                    let end = (delta as usize).checked_add(length)?;
+                    if end > raw_size {
+                        continue;
+                    }
+                    let offset = (read32(section, 20)? as usize).checked_add(delta as usize)?;
+                    if found.is_some() {
+                        return None;
+                    }
+                    found = Some(Self::range(self.bytes, offset, length)?);
+                }
+                found
+            }
+            fn entries(&self, offset: usize) -> Option<&'a [u8]> {
+                let named = read16(self.root, offset.checked_add(12)?)? as usize;
+                let ids = read16(self.root, offset.checked_add(14)?)? as usize;
+                let count = named.checked_add(ids)?;
+                if count == 0 || count > 128 {
+                    return None;
+                }
+                Self::range(self.root, offset.checked_add(16)?, count.checked_mul(8)?)
+            }
+            fn child(&self, offset: usize, id: u32) -> Option<usize> {
+                let mut result = None;
+                for entry in self.entries(offset)?.chunks_exact(8) {
+                    if read32(entry, 0)? != id {
+                        continue;
+                    }
+                    let target = read32(entry, 4)?;
+                    if result.is_some() || target & 0x8000_0000 == 0 {
+                        return None;
+                    }
+                    result = Some((target & 0x7fff_ffff) as usize);
+                }
+                result
+            }
+            fn data(&self, entry: &[u8]) -> Option<Vec<u8>> {
+                if read32(entry, 0)? & 0x8000_0000 != 0 {
+                    return None;
+                }
+                let target = read32(entry, 4)?;
+                if target & 0x8000_0000 != 0 {
+                    return None;
+                }
+                let offset = target as usize;
+                let length = read32(self.root, offset.checked_add(4)?)? as usize;
+                if length == 0 || length > 65536 {
+                    return None;
+                }
+                Some(self.rva(read32(self.root, offset)?, length)?.to_vec())
+            }
+        }
+        pub(super) fn manifest(bytes: &[u8]) -> Option<Vec<u8>> {
+            let image = Image::open(bytes)?;
+            let kind = image.child(0, 24)?;
+            let name = image.child(kind, 1)?;
+            let entries = image.entries(name)?;
+            if entries.len() > 16 * 8 {
+                return None;
+            }
+            let mut manifest = None;
+            for entry in entries.chunks_exact(8) {
+                let data = image.data(entry)?;
+                if manifest.as_ref().is_some_and(|previous| *previous != data) {
+                    return None;
+                }
+                manifest = Some(data);
+            }
+            manifest
+        }
+    }
+
+    #[cfg(test)]
+    mod resource_tests {
+        use super::{embedded_manifest, pe_fields};
+        fn put16(bytes: &mut [u8], offset: usize, value: u16) {
+            bytes[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+        }
+        fn put32(bytes: &mut [u8], offset: usize, value: u32) {
+            bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        fn fixture(wide: bool) -> Vec<u8> {
+            let mut bytes = vec![0; 0x800];
+            bytes[..2].copy_from_slice(b"MZ");
+            put32(&mut bytes, 0x3c, 0x80);
+            bytes[0x80..0x84].copy_from_slice(b"PE\0\0");
+            put16(&mut bytes, 0x84, if wide { 0x8664 } else { 0x14c });
+            put16(&mut bytes, 0x86, 1);
+            let size = if wide { 240 } else { 224 };
+            put16(&mut bytes, 0x94, size);
+            put16(&mut bytes, 0x98, if wide { 0x20b } else { 0x10b });
+            put16(&mut bytes, 0x98 + 68, 2);
+            put32(&mut bytes, 0x98 + if wide { 108 } else { 92 }, 3);
+            let data = 0x98 + if wide { 128 } else { 112 };
+            put32(&mut bytes, data, 0x1000);
+            put32(&mut bytes, data + 4, 0x200);
+            let section = 0x98 + size as usize;
+            put32(&mut bytes, section + 12, 0x1000);
+            put32(&mut bytes, section + 16, 0x200);
+            put32(&mut bytes, section + 20, 0x400);
+            for offset in [0x400, 0x420, 0x440] {
+                put16(&mut bytes, offset + 14, 1);
+            }
+            put32(&mut bytes, 0x410, 24);
+            put32(&mut bytes, 0x414, 0x80000020);
+            put32(&mut bytes, 0x430, 1);
+            put32(&mut bytes, 0x434, 0x80000040);
+            put32(&mut bytes, 0x450, 1033);
+            put32(&mut bytes, 0x454, 0x60);
+            put32(&mut bytes, 0x460, 0x1100);
+            put32(&mut bytes, 0x464, 3);
+            bytes[0x500..0x503].copy_from_slice(b"one");
+            bytes
+        }
+        #[test]
+        fn embedded_manifest_measures_actual_pe32_and_pe64_gui_resources() {
+            for (wide, fields) in [(false, (0x14c, 0x10b, 2)), (true, (0x8664, 0x20b, 2))] {
+                let bytes = fixture(wide);
+                assert_eq!(pe_fields(&bytes), Some(fields));
+                assert_eq!(embedded_manifest(&bytes), Some(b"one".to_vec()));
+            }
+        }
+        #[test]
+        fn embedded_manifest_rejects_missing_ambiguous_and_unbounded_resources() {
+            for wide in [false, true] {
+                for count in [0, 2] {
+                    let mut bytes = fixture(wide);
+                    put32(&mut bytes, 0x98 + if wide { 108 } else { 92 }, count);
+                    assert!(
+                        embedded_manifest(&bytes).is_none(),
+                        "undeclared resource accepted"
+                    );
+                }
+            }
+            for (offset, value) in [
+                (0x410, 23),
+                (0x430, 2),
+                (0x454, 0x80000040),
+                (0x464, 65537),
+                (0x460, u32::MAX),
+                (0x98 + 112, 0xfffffff0),
+            ] {
+                let mut bytes = fixture(false);
+                put32(&mut bytes, offset, value);
+                assert!(
+                    embedded_manifest(&bytes).is_none(),
+                    "malformed resource accepted"
+                );
+            }
+            for length in [0, 0x40, 0x98, 0x450, 0x520] {
+                assert!(embedded_manifest(&fixture(false)[..length]).is_none());
+            }
+        }
+        #[test]
+        fn embedded_manifest_requires_all_language_variants_to_match() {
+            let mut bytes = fixture(false);
+            put16(&mut bytes, 0x44e, 2);
+            put32(&mut bytes, 0x458, 1041);
+            put32(&mut bytes, 0x45c, 0x80);
+            put32(&mut bytes, 0x480, 0x1120);
+            put32(&mut bytes, 0x484, 3);
+            bytes[0x520..0x523].copy_from_slice(b"one");
+            assert_eq!(embedded_manifest(&bytes), Some(b"one".to_vec()));
+            bytes[0x520..0x523].copy_from_slice(b"two");
+            assert!(embedded_manifest(&bytes).is_none());
+        }
+    }
+
     pub fn image(bytes: &[u8]) {
         let mut image = pe(bytes).unwrap_or_default();
         image.sha256 = Sha256::digest(bytes)
@@ -1369,6 +1686,7 @@ pub mod test_diagnostics {
             "payload",
             "cleanup",
             "empty_parent",
+            "comparison_required",
             "complete",
         ];
         let value = if allowed.contains(&value) {
@@ -1386,7 +1704,8 @@ pub mod test_diagnostics {
 
     pub fn target(value: &'static str) {
         let value = match value {
-            "rust_peer" | "rust_peer_long" | "inert_nsis" | "invalid_image" => value,
+            "rust_peer" | "rust_peer_long" | "inert_nsis" | "invalid_image" | "managed_x86"
+            | "managed_x64" | "nsis_dos" => value,
             _ => "other",
         };
         TRACE.with(|trace| trace.borrow_mut().target = value);
@@ -1397,6 +1716,14 @@ pub mod test_diagnostics {
             |prefix: &str| application.starts_with(&prefix.encode_utf16().collect::<Vec<_>>());
         if starts("\\\\?\\Volume{") {
             "volume_guid"
+        } else if starts("\\\\?\\")
+            && application.get(5) == Some(&58)
+            && application.get(6) == Some(&92)
+            && application.get(4).is_some_and(|letter| {
+                (*letter >= 65 && *letter <= 90) || (*letter >= 97 && *letter <= 122)
+            })
+        {
+            "physical_dos"
         } else if starts("\\\\?\\") {
             "verbatim_other"
         } else if starts("\\\\") {
@@ -1409,7 +1736,16 @@ pub mod test_diagnostics {
     }
 
     pub fn begin(mut shape: Shape) -> usize {
-        if !["volume_guid", "verbatim_other", "unc", "drive", "other"].contains(&shape.namespace) {
+        if ![
+            "volume_guid",
+            "physical_dos",
+            "verbatim_other",
+            "unc",
+            "drive",
+            "other",
+        ]
+        .contains(&shape.namespace)
+        {
             shape.namespace = "other";
         }
         TRACE.with(|trace| {
