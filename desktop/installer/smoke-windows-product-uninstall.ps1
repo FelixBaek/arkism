@@ -51,6 +51,7 @@ function Invoke-ProductUninstallPolicy($State, [long]$AllowedPid, [string]$Allow
     $trace['CallbackCount']++
     $trace['CurrentStage'] = 'callback'; $trace['CompletedStage'] = 'none'; $trace['Completed'] = $false
     $trace['ProcessObserved'] = $false; $trace['ProcessCount'] = 0; $trace['ProcessVerified'] = $false
+    $State['ProcessScanTrace'] = $null
   }
   Assert-ProductUninstallInputs $State $AllowedPid $AllowedImage
   if ($null -ne $trace) {
@@ -98,6 +99,63 @@ function Copy-ProductPolicyDiagnostic($Report, $State) {
   $Report.policy_current_stage = $trace['CurrentStage']; $Report.policy_completed_stage = $trace['CompletedStage']
   $Report.policy_process_observed = $trace['ProcessObserved']; $Report.policy_process_count = $trace['ProcessCount']
   $Report.policy_process_verified = $trace['ProcessVerified']; $Report.policy_completed = $trace['Completed']
+  Copy-ProductProcessScanDiagnostic $Report $State
+}
+
+function New-ProductProcessScan($State) {
+  if ($null -eq (Get-ProductPolicyTrace $State)) { return }
+  $scan = @{ Stage = 'query'; QueryReturned = $false; QueryRows = 0; RowsVisited = 0
+    ImageKind = 'unobserved'; NameKind = 'unobserved'; PidRelation = 'unobserved' }
+  $State['ProcessScanTrace'] = $scan
+  return $scan
+}
+
+function Set-ProductProcessScan($Scan, [string]$Name, $Value) {
+  if ($Scan -is [hashtable]) { $Scan[$Name] = $Value }
+}
+
+function Get-ProductScanKind($Value) {
+  if ($null -eq $Value) { return 'null' }
+  if ($Value -is [string]) { return 'string' }
+  if ($Value -is [array]) { return 'array' }
+  return 'other'
+}
+
+function Get-ProductScanPidRelation($Row, [long]$ExpectedPid) {
+  if ($ExpectedPid -le 0) { return 'not_applicable' }
+  # Optional observation never changes the actual process identity assertion.
+  try { $value = $Row.ProcessId } catch { return 'unavailable' }
+  if (($value -isnot [int] -and $value -isnot [long] -and $value -isnot [uint32]) -or
+    $value -le 0 -or $value -gt [uint32]::MaxValue) { return 'unavailable' }
+  if ($value -eq $ExpectedPid) { return 'expected_pid' }
+  return 'other_pid'
+}
+
+function Test-ProductProcessScan($Scan) {
+  if ($Scan -isnot [hashtable]) { return $false }
+  $allowed = @{
+    Stage = @('query','iterate','row_image','image_check','row_name','unknown_image','path_normalize','path_containment','emit','complete')
+    ImageKind = @('unobserved','null','string','array','other'); NameKind = @('unobserved','null','string','array','other')
+    PidRelation = @('unobserved','not_applicable','expected_pid','other_pid','unavailable')
+  }
+  foreach ($name in $allowed.Keys) {
+    if ($Scan[$name] -isnot [string]) { return $false }
+    if (-not (Test-ProductOrdinalMember $Scan[$name] $allowed[$name])) { return $false }
+  }
+  if ($Scan['QueryReturned'] -isnot [bool]) { return $false }
+  foreach ($name in @('QueryRows','RowsVisited')) {
+    if (-not (Test-ProductTraceCount $Scan[$name] 1000000)) { return $false }
+  }
+  return $true
+}
+
+function Copy-ProductProcessScanDiagnostic($Report, $State) {
+  $scan = $State['ProcessScanTrace']
+  if (-not (Test-ProductProcessScan $scan)) { return }
+  $Report.policy_scan_stage = $scan['Stage']; $Report.policy_scan_query_returned = $scan['QueryReturned']
+  $Report.policy_scan_query_rows = $scan['QueryRows']; $Report.policy_scan_rows_visited = $scan['RowsVisited']
+  $Report.policy_scan_image_kind = $scan['ImageKind']; $Report.policy_scan_name_kind = $scan['NameKind']
+  $Report.policy_scan_pid_relation = $scan['PidRelation']
 }
 
 function Get-ProductSortedManifest($Rows) {
@@ -165,21 +223,44 @@ function Add-ProductManifestDiagnostic($Report, $Failure) {
   $Report.manifest_path_case_equal = $diagnostic['PathCaseEqual']; $Report.manifest_path_separator_equal = $diagnostic['PathSeparatorEqual']
 }
 
-function Get-ProductProcessRows([string]$Install) {
-  foreach ($process in Get-CimInstance Win32_Process -ErrorAction Stop) {
-    if ([string]::IsNullOrWhiteSpace($process.ExecutablePath)) {
-      if ($process.Name -in @('Arkism.exe', 'arkism.exe', 'uninstall.exe', 'memoryd.exe', 'memory-principal.exe', 'postgres.exe')) {
+function Get-ProductProcessRows([string]$Install, $ScanState, [long]$ExpectedPid = 0) {
+  $scan = New-ProductProcessScan $ScanState
+  $processes = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+  Set-ProductProcessScan $scan 'QueryReturned' $true
+  Set-ProductProcessScan $scan 'QueryRows' $processes.Count
+  Set-ProductProcessScan $scan 'Stage' 'iterate'
+  foreach ($process in $processes) {
+    if ($null -ne $scan) { $scan['RowsVisited']++ }
+    Set-ProductProcessScan $scan 'ImageKind' 'unobserved'
+    Set-ProductProcessScan $scan 'NameKind' 'unobserved'
+    Set-ProductProcessScan $scan 'PidRelation' (Get-ProductScanPidRelation $process $ExpectedPid)
+    Set-ProductProcessScan $scan 'Stage' 'row_image'
+    $imageValue = $process.ExecutablePath
+    Set-ProductProcessScan $scan 'ImageKind' (Get-ProductScanKind $imageValue)
+    Set-ProductProcessScan $scan 'Stage' 'image_check'
+    if ([string]::IsNullOrWhiteSpace($imageValue)) {
+      Set-ProductProcessScan $scan 'Stage' 'row_name'
+      $nameValue = $process.Name
+      Set-ProductProcessScan $scan 'NameKind' (Get-ProductScanKind $nameValue)
+      if ($nameValue -in @('Arkism.exe', 'arkism.exe', 'uninstall.exe', 'memoryd.exe', 'memory-principal.exe', 'postgres.exe')) {
+        Set-ProductProcessScan $scan 'Stage' 'unknown_image'
         throw 'product_process_image_unknown'
       }
       continue
     }
-    $image = ConvertTo-InstalledSmokePath $process.ExecutablePath
-    if (Test-InstalledSmokeWithin $image $Install) { $process }
+    Set-ProductProcessScan $scan 'Stage' 'path_normalize'
+    $image = ConvertTo-InstalledSmokePath $imageValue
+    Set-ProductProcessScan $scan 'Stage' 'path_containment'
+    if (Test-InstalledSmokeWithin $image $Install) {
+      Set-ProductProcessScan $scan 'Stage' 'emit'
+      $process
+    }
   }
+  Set-ProductProcessScan $scan 'Stage' 'complete'
 }
 
 function Assert-ProductProcessState($State, [long]$AllowedPid = 0, [string]$AllowedImage = '') {
-  $rows = @(Invoke-ProductPolicyStage $State 'process_scan' { Get-ProductProcessRows $State.Install })
+  $rows = @(Invoke-ProductPolicyStage $State 'process_scan' { Get-ProductProcessRows $State.Install $State $AllowedPid })
   $trace = Get-ProductPolicyTrace $State
   if ($null -ne $trace) { $trace['ProcessObserved'] = $true; $trace['ProcessCount'] = $rows.Count }
   Invoke-ProductPolicyStage $State 'process_validate' {

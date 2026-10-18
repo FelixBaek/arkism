@@ -576,6 +576,82 @@ namespace Arkism.InstallerChecks {
     }
   }
 
+  function Get-ProductScanTestRows($State,[string]$Mode) {
+    if (-not $State.ProcessRows.Count) { return @() }
+    $row=$State.ProcessRows[0]
+    switch($Mode) {
+      query { throw 'synthetic_query_failure' }
+      partial_query { $row;throw 'synthetic_partial_query_failure' }
+      unknown_image { $row.ExecutablePath=$null;$row|Add-Member NoteProperty Name 'uninstall.exe' -Force }
+      array_image { $row.ExecutablePath=@([string][char]0,'inert') }
+      invalid_path { $row.ExecutablePath=[string][char]0 }
+    }
+    return $row
+  }
+
+  function Invoke-ProductScanDiagnosticCase([string]$Mode) {
+    $state=New-ProductFixture
+    function Get-ProductProcessRows([string]$InstallPath,$ScanState,[long]$ExpectedPid) {
+      & $productionProcessReader $InstallPath $ScanState $ExpectedPid
+    }
+    function Invoke-ProductScanFakeCim { Get-ProductScanTestRows $state $Mode }
+    Set-Alias Get-CimInstance Invoke-ProductScanFakeCim -Scope Local
+    $failure=$null;$result=$null
+    try { $result=Invoke-TestProductCore $state $null } catch { $failure=$_ }
+    finally { Remove-Item Alias:Get-CimInstance }
+    $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+    if ($Mode -ceq 'success') {
+      Require-ProductTest ($null -eq $failure -and $result.EmptyConfirmed -and $report.policy_completed -and
+        $report.policy_scan_stage -ceq 'complete' -and $report.policy_scan_query_returned -and
+        $report.policy_scan_query_rows -eq 1 -and $report.policy_scan_rows_visited -eq 1 -and
+        $report.policy_scan_image_kind -ceq 'string' -and $report.policy_scan_pid_relation -ceq 'expected_pid') 'scan_success_trace_incorrect'
+      return
+    }
+    Require-ProductTest ($null -ne $failure -and $report.policy_callback_count -eq 2 -and
+      $report.policy_current_stage -ceq 'process_scan' -and -not $report.policy_process_observed -and
+      [Arkism.InstallerChecks.ProductTestHarness]::Last.ResumeCalls -eq 0) 'scan_failure_guard_changed'
+    $expected=@{query=@{Stage='query';Queried=$false;Kind='unobserved'}
+      partial_query=@{Stage='query';Queried=$false;Kind='unobserved'}
+      unknown_image=@{Stage='unknown_image';Queried=$true;Kind='null'}
+      array_image=@{Stage='path_normalize';Queried=$true;Kind='array'}
+      invalid_path=@{Stage='path_normalize';Queried=$true;Kind='string'}}[$Mode]
+    Require-ProductTest ($report.policy_scan_stage -ceq $expected.Stage) 'scan_failure_substage_missing'
+    $queried=$expected.Queried
+    Require-ProductTest ($report.policy_scan_query_returned -eq $queried -and
+      $report.policy_scan_query_rows -eq [int]$queried -and $report.policy_scan_rows_visited -eq [int]$queried) 'partial_scan_claimed_complete'
+    Require-ProductTest ($report.policy_scan_image_kind -ceq $expected.Kind) 'scan_value_kind_incorrect'
+    if ($Mode -ceq 'unknown_image') {
+      Require-ProductTest ($report.policy_scan_name_kind -ceq 'string' -and
+        $report.policy_scan_pid_relation -ceq 'expected_pid') 'unknown_self_scan_relation_missing'
+    }
+  }
+
+  function Invoke-ProductScanDiagnosticCases {
+    foreach($mode in @('query','partial_query','unknown_image','array_image','invalid_path','success')) {
+      Test-ProductCase ("actual CIM reader scan diagnostic $mode preserves guarded policy") { Invoke-ProductScanDiagnosticCase $mode }
+    }
+    Test-ProductCase 'scan diagnostics use indexed scalar allowlists without extended property text' {
+      $state=New-ProductFixture;$null=New-ProductUninstallPolicy $state
+      $scan=@{Stage='complete';QueryReturned=$true;QueryRows=1;RowsVisited=1;ImageKind='string';NameKind='unobserved';PidRelation='expected_pid'}
+      $state['ProcessScanTrace']=$scan
+      $expected=[ordered]@{};Add-ProductPolicyDiagnostic $expected $state
+      foreach($name in @('Stage','QueryReturned','QueryRows','RowsVisited','ImageKind','NameKind','PidRelation')) {
+        $scan|Add-Member NoteProperty $name 'synthetic-unreported-content' -Force
+      }
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest ($report.Count -eq 15 -and ($report|ConvertTo-Json -Compress) -ceq
+        ($expected|ConvertTo-Json -Compress)) 'scan_diagnostic_shadow_copied'
+      foreach($entry in @(@{Key='Stage';Value='unknown-unreported-content'},@{Key='ImageKind';Value=@('string')},
+        @{Key='QueryRows';Value='1'},@{Key='RowsVisited';Value=-1},@{Key='QueryReturned';Value=1},
+        @{Key='PidRelation';Value=('expected_'+[char]0x00ad+'pid')})) {
+        $saved=$scan[$entry.Key];$scan[$entry.Key]=$entry.Value
+        $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+        Require-ProductTest ($report.Count -eq 8) 'malformed_scan_diagnostic_copied'
+        $scan[$entry.Key]=$saved
+      }
+    }
+  }
+
   function Invoke-ProductManifestDiagnosticCases {
     Test-ProductCase 'manifest diagnostics identify initial profile counts without file paths or contents' {
       $state=New-ProductFixture;$report=[ordered]@{};$failure=$null
@@ -818,6 +894,7 @@ namespace Arkism.InstallerChecks {
   Invoke-ProductPolicyDiagnosticCases
   Invoke-ProductPolicyMalformedCases
   Invoke-ProductPolicyBindingCases
+  Invoke-ProductScanDiagnosticCases
   Invoke-ProductManifestDiagnosticCases
   Invoke-ProductManifestMalformedCases
   Invoke-ProductSetupProfileCases
