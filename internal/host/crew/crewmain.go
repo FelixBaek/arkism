@@ -300,21 +300,10 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 		}
 		fmt.Fprintln(stdout, dumpIndent(inv))
 	case "providers report":
-		// --fresh (the app's refresh button): read every account's usage now and wait for it,
-		// instead of reporting what the last background check left.
-		if a.flags["fresh"] {
-			os.Remove(stateFile("gemini-quota.json"))
-			host.AccountsForce()
-			if _, err := inventory("", nil, true); err != nil {
-				return 0, err
-			}
-			host.AccountsWait()
-		}
-		n, err := providersRound(true)
+		n, err := providersReport(a.flags["fresh"])
 		if err != nil {
 			return 0, err
 		}
-		poolJobs.Wait() // model tests and assists started this round finish before the process ends
 		fmt.Fprintf(stdout, "처리한 요청 %d개\n", n)
 	case "providers watch":
 		interval, every := 3.0, 60.0
@@ -324,7 +313,9 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 		if v, ok := floats["report-every"]; ok {
 			every = v
 		}
-		providersWatch(time.Duration(interval*float64(time.Second)), time.Duration(every*float64(time.Second)), os.Stderr)
+		if err := desktopProvidersWatch(time.Duration(interval*float64(time.Second)), time.Duration(every*float64(time.Second)), stdin, stdout); err != nil {
+			return 0, err
+		}
 	case "accounts add", "accounts remove", "accounts list":
 		var result any
 		var err error

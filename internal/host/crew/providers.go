@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/host/desktopcontrol"
 )
 
 var providerNames = map[string]string{"anthropic": "Anthropic", "openai": "OpenAI", "google": "Google", "zai": "Z.ai", "xai": "xAI", "custom": "직접 추가"}
@@ -671,14 +672,16 @@ var (
 	testsDone = map[string]map[string]any{}
 )
 
-func submit(job func()) {
-	poolJobs.Add(1)
-	go func() {
-		defer poolJobs.Done()
-		poolSlots <- struct{}{}
-		defer func() { <-poolSlots }()
-		job()
-	}()
+func submit(job func()) bool {
+	return desktopcontrol.Submit(desktopcontrol.Default, desktopcontrol.Pool, func(work func()) {
+		poolJobs.Add(1)
+		go func() {
+			defer poolJobs.Done()
+			poolSlots <- struct{}{}
+			defer func() { <-poolSlots }()
+			work()
+		}()
+	}, job)
 }
 
 // errName is the Python exception name a failure is reported under (never its message).
@@ -731,6 +734,20 @@ func modelTestJob(item map[string]any) {
 	poolMu.Unlock()
 }
 
+func queueModelTest(item map[string]any) {
+	qid := pyStr(obj(item["request"])["id"])
+	poolMu.Lock()
+	busy := testsBusy[qid]
+	testsBusy[qid] = true
+	poolMu.Unlock()
+	if busy || submit(func() { modelTestJob(item) }) {
+		return
+	}
+	poolMu.Lock()
+	delete(testsBusy, qid)
+	poolMu.Unlock()
+}
+
 // providersRound collects waiting requests, carries them out and reports; with report, it also sends the inventory.
 // Model tests (up to a minute and a half) run beside the loop so keys and AI help are not held up.
 func providersRound(report bool) (int, error) {
@@ -745,14 +762,7 @@ func providersRound(report bool) (int, error) {
 		item := obj(it)
 		kind := obj(item["request"])["kind"]
 		if kind == "model_test" || kind == "cli_update" {
-			qid := pyStr(obj(item["request"])["id"])
-			poolMu.Lock()
-			busy := testsBusy[qid]
-			testsBusy[qid] = true
-			poolMu.Unlock()
-			if !busy {
-				submit(func() { modelTestJob(item) })
-			}
+			queueModelTest(item)
 		}
 	}
 	for _, it := range items {
@@ -787,8 +797,12 @@ func providersRound(report bool) (int, error) {
 
 // providersWatch runs forever: requests every interval, the inventory every reportEvery, old installs every minute.
 func providersWatch(interval, reportEvery time.Duration, stderr io.Writer) {
+	providersWatchUntil(interval, reportEvery, stderr, nil)
+}
+
+func providersWatchUntil(interval, reportEvery time.Duration, stderr io.Writer, stop <-chan struct{}) {
 	var last, installed time.Time
-	for {
+	watchLoop(desktopcontrol.Default, stop, interval, func() {
 		due := time.Since(last) >= reportEvery
 		if _, err := providersRound(due); err != nil {
 			fmt.Fprintf(stderr, "모델 설정 동기화 실패: %s\n", errName(err))
@@ -804,6 +818,5 @@ func providersWatch(interval, reportEvery time.Duration, stderr io.Writer) {
 				fmt.Fprintf(stderr, "옛 전문가 파일 정리 실패: %s\n", errName(err))
 			}
 		}
-		time.Sleep(interval)
-	}
+	})
 }

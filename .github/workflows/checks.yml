@@ -191,6 +191,43 @@ jobs:
           restore-keys: ${{ matrix.os }}-${{ runner.arch }}-tauri-v1-${{ steps.rust.outputs.cachekey }}-
       - name: Tauri shell tests
         run: cargo test --locked --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Go for Windows runtime control checks
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Windows runtime process and control checks
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:GITHUB_SHA -cnotmatch '^[0-9a-f]{40}$') { throw 'invalid runtime check source' }
+          $checkedSource = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $checkedSource -cne $env:GITHUB_SHA) { throw 'runtime check source mismatch' }
+          $checkRoot = Join-Path $env:RUNNER_TEMP ('arkism-runtime-control-' + [guid]::NewGuid().ToString('N'))
+          $null = New-Item -ItemType Directory -Path $checkRoot -ErrorAction Stop
+          $peer = Join-Path $checkRoot 'runtime-control-peer.exe'
+          $evidence = Join-Path $checkRoot 'runtime-control-check.json'
+          "ARKISM_WINDOWS_RUNTIME_CONTROL_EVIDENCE=$evidence" >> $env:GITHUB_ENV
+          go build -trimpath -ldflags "-X main.sourceSHA=$env:GITHUB_SHA" -o $peer ./desktop/src-tauri/tests/windows_runtime_control_peer
+          if ($LASTEXITCODE -ne 0) { throw 'runtime control peer build failed' }
+          $env:ARKISM_WINDOWS_RUNTIME_CONTROL_NATIVE = '1'
+          $env:ARKISM_WINDOWS_RUNTIME_CONTROL_SOURCE_SHA = $env:GITHUB_SHA
+          $env:ARKISM_WINDOWS_RUNTIME_CONTROL_PEER_EXE = $peer
+          $env:ARKISM_WINDOWS_RUNTIME_CONTROL_PEER_SHA256 = (Get-FileHash -LiteralPath $peer -Algorithm SHA256).Hash.ToLowerInvariant()
+          $env:ARKISM_WINDOWS_RUNTIME_CONTROL_EVIDENCE = $evidence
+          cargo test --locked --manifest-path desktop/src-tauri/Cargo.toml --test windows_runtime_control hosted_windows_runtime_control -- --ignored --exact --test-threads=1
+          if ($LASTEXITCODE -ne 0) { throw 'native Windows runtime control checks failed' }
+          if (-not (Test-Path -LiteralPath $evidence -PathType Leaf)) { throw 'runtime control evidence missing' }
+      - name: Upload Windows runtime control evidence
+        if: always() && runner.os == 'Windows' && runner.environment == 'github-hosted' && env.ARKISM_WINDOWS_RUNTIME_CONTROL_EVIDENCE != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-runtime-control-check
+          path: ${{ env.ARKISM_WINDOWS_RUNTIME_CONTROL_EVIDENCE }}
+          if-no-files-found: error
+          retention-days: 3
       - name: Save Rust build cache
         if: ${{ !cancelled() && runner.environment == 'github-hosted' && steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != '' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

@@ -74,6 +74,7 @@ try {
 # Check the staged app's built-in runtime before testing the installer itself.
 $check = Join-Path $tmp "arkism-runtime-check-$PID"
 $p = Start-Process (Join-Path $stage 'Arkism.exe') -ArgumentList '--runtime-check', $check -Wait -PassThru
+Copy-Item -LiteralPath (Join-Path $check 'check.json') -Destination (Join-Path $dist 'windows-staged-runtime-check.json')
 Get-Content (Join-Path $check 'check.json')
 if ($p.ExitCode -ne 0) { throw 'runtime check failed' }
 

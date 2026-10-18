@@ -20,6 +20,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/host/desktopcontrol"
 )
 
 const manifestLimit = 131072
@@ -520,15 +521,22 @@ func Account(profile map[string]any, executable, state string, refreshUsage bool
 		public["usage_status"] = "unavailable"
 	}
 	if refreshUsage && public["status"] == "connected" {
-		key := cachePath(profile, state)
-		busyMu.Lock()
-		if !busy[key] && (forceProbe.Load() || !recentProbe(usage)) {
-			busy[key] = true
-			submit(func() { refresh(profile, executable, state, key) })
-		}
-		busyMu.Unlock()
+		queueRefresh(profile, executable, state, usage)
 	}
 	return public, nil
+}
+
+func queueRefresh(profile map[string]any, executable, state string, usage map[string]any) {
+	key := cachePath(profile, state)
+	busyMu.Lock()
+	defer busyMu.Unlock()
+	if busy[key] || (!forceProbe.Load() && recentProbe(usage)) {
+		return
+	}
+	busy[key] = true
+	if !desktopcontrol.Submit(desktopcontrol.Default, desktopcontrol.Account, submit, func() { refresh(profile, executable, state, key) }) {
+		delete(busy, key)
+	}
 }
 
 // Exhausted reports a fresh zero quota that applies to model at time t.

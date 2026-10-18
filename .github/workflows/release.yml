@@ -128,6 +128,7 @@ jobs:
         with:
           name: windows-installed-check
           path: |
+            desktop/dist/windows-staged-runtime-check.json
             desktop/dist/windows-installed-check.json
             desktop/dist/nsis-autorun-check.json
             desktop/dist/nsis-process-job-check.json
