@@ -18,6 +18,7 @@ mod windows_job;
 mod desktop_control;
 mod runtime_process;
 mod runtime;
+mod update_installer;
 mod ssh_tunnel;
 mod work_handoff;
 
@@ -588,6 +589,25 @@ fn download_update_core(
     install(bytes)
 }
 
+fn finish_update_handoff<T>(
+    prepared: Option<T>,
+    outcome: Result<(), runtime::InstallerHandoffFailure>,
+    cleanup: impl FnOnce(T) -> Result<(), String>,
+) -> Result<(), String> {
+    match outcome {
+        Ok(()) => Ok(()),
+        Err(runtime::InstallerHandoffFailure::Unstarted(primary)) => {
+            let Some(installer) = prepared else { return Err(primary); };
+            match cleanup(installer) {
+                Ok(()) => Err(primary),
+                Err(error) => Err(format!("{primary}; {error}")),
+            }
+        },
+        // The runtime retains the unresolved installer and paused-role checkpoint.
+        Err(runtime::InstallerHandoffFailure::Unverified(primary)) => Err(primary),
+    }
+}
+
 fn fetch_latest() -> Result<Latest, String> {
     let feed = feed()?;
     let latest: Latest = runtime::http_agent(Duration::from_secs(30))
@@ -631,12 +651,28 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
                 .into_body()
                 .into_reader();
             download_update_core(reader, &latest.sha256, UPDATE_DOWNLOAD_MAX_BYTES, |bytes| {
-                let path = std::env::temp_dir().join(&latest.file);
-                std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+                let mut prepared = Some(update_installer::Installer::prepare(&bytes, &latest.sha256, &latest.file)
+                    .map_err(|error| error.to_string())?);
                 // The installer replaces the built-in programs, so they must not be running.
-                rt.update_handoff(|| {
-                    std::process::Command::new(&path).arg("/S").spawn().map(|_| ()).map_err(|e| format!("update_start_failed: {e}"))
-                })
+                let outcome = rt.update_installer_handoff(|| {
+                    let Some(installer) = prepared.take() else {
+                        return lifecycle::Launch::Unstarted("update_installer_state_invalid".into());
+                    };
+                    match installer.launch() {
+                        update_installer::LaunchDisposition::Unstarted { installer, error } => {
+                            prepared = Some(installer);
+                            lifecycle::Launch::Unstarted(error.to_string())
+                        },
+                        update_installer::LaunchDisposition::Started(_observer) => lifecycle::Launch::Started,
+                        update_installer::LaunchDisposition::Unverified(owner) => {
+                            lifecycle::Launch::Unverified {
+                                owner,
+                                error: "update_installer_unverified".into(),
+                            }
+                        },
+                    }
+                });
+                finish_update_handoff(prepared, outcome, |installer| installer.cleanup().map_err(|e| e.to_string()))
             })
         })
     })
@@ -672,7 +708,6 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
         phase = "restore";
         let restored = rt.restore_from(&backups, &backup.name)?;
         // The hourly expiry runs against the built-in Arkism (needs the bundled agent client).
-        phase = "expiry";
         let expiry = if rt.agent_client().is_some() { rt.expire().map(|_| "ok".to_string()).unwrap_or_else(|e| e) } else { "no_client".into() };
         phase = "restored_capabilities";
         let after = ureq::get(&format!("{}/v1/capabilities?workspace_id=default&project_id=default&user_id=management%3Aowner", restored.started.server))
@@ -791,6 +826,36 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_unstarted_cleans_only_returned_stage_and_preserves_primary_failure() {
+        for cleanup_error in [None, Some("cleanup_failed")] {
+            let calls = std::cell::Cell::new(0);
+            // This also covers preflight refusal before the launch closure runs.
+            let outcome = Err(runtime::InstallerHandoffFailure::Unstarted("primary_failure".into()));
+            let result = finish_update_handoff(Some(17), outcome, |stage| {
+                assert_eq!(stage, 17);
+                calls.set(calls.get() + 1);
+                cleanup_error.map_or(Ok(()), |error| Err(error.into()))
+            });
+            let expected = cleanup_error.map_or("primary_failure".into(), |error| format!("primary_failure; {error}"));
+            assert_eq!(result, Err(expected));
+            assert_eq!(calls.get(), 1);
+        }
+    }
+
+    #[test]
+    fn update_started_and_unverified_never_cleanup_retained_child_stage() {
+        for (outcome, expected) in [
+            (Ok(()), Ok(())),
+            (Err(runtime::InstallerHandoffFailure::Unverified("update_installer_unverified".into())), Err("update_installer_unverified".into())),
+        ] {
+            let result = finish_update_handoff(None::<()>, outcome, |_| panic!("child-owned stage must not be deleted"));
+            assert_eq!(result, expected);
+        }
+        let result = finish_update_handoff(None::<()>, Err(runtime::InstallerHandoffFailure::Unstarted("primary_failure".into())), |_| panic!("no returned stage to clean"));
+        assert_eq!(result, Err("primary_failure".into()));
+    }
 
     #[test]
     fn update_lifecycle_ui_requests_reject_handoff_before_http() {
