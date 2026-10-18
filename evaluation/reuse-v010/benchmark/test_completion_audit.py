@@ -70,21 +70,23 @@ class CompletionAuditTests(unittest.TestCase):
         with patch.object(benchmark, 'write_json', side_effect=AssertionError('read-only audit')):
             return completion_audit.audit(self.out)
 
-    def cli(self, *flags, entrypoint=False):
+    def cli(self, *flags, entrypoint=False, expect_error=False):
         stdout, stderr = io.StringIO(), io.StringIO()
         args = ['--out', 'synthetic-output', *flags]
         with (
             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr),
             patch.object(benchmark, 'write_json', side_effect=AssertionError('read-only CLI')),
         ):
-            try:
-                if entrypoint:
-                    with patch.object(sys, 'argv', ['completion_audit.py', *args]):
-                        runpy.run_path(completion_audit.__file__, run_name='__main__')
-                    self.fail('The actual script entrypoint did not exit')
+            if entrypoint or expect_error:
+                with self.assertRaises(SystemExit) as raised:
+                    if entrypoint:
+                        with patch.object(sys, 'argv', ['completion_audit.py', *args]):
+                            runpy.run_path(completion_audit.__file__, run_name='__main__')
+                    else:
+                        completion_audit.main(args)
+                status = raised.exception.code
+            else:
                 status = completion_audit.main(args)
-            except SystemExit as error:
-                status = error.code
         return status, stdout.getvalue(), stderr.getvalue()
 
     def test_complete_45_reports_condition_denominators_without_writes(self):
@@ -195,7 +197,7 @@ class CompletionAuditTests(unittest.TestCase):
                 self.invalidate(scenario)
                 (self.out / 'summary.json').write_text('preserve synthetic existing aggregate')
                 before = self.snapshot()
-                status, stdout, stderr = self.cli('--require-complete')
+                status, stdout, stderr = self.cli('--require-complete', expect_error=True)
                 self.assertEqual(status, 2)
                 self.assertEqual(stdout, '')
                 self.assertIn('error:', stderr)
@@ -203,7 +205,7 @@ class CompletionAuditTests(unittest.TestCase):
 
     def test_missing_plan_with_no_results_is_invalid_and_not_created(self):
         before = self.snapshot()
-        status, stdout, stderr = self.cli()
+        status, stdout, stderr = self.cli(expect_error=True)
         self.assertEqual(status, 2)
         self.assertEqual(stdout, '')
         self.assertIn('existing frozen benchmark spec', stderr)
