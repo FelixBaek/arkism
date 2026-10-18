@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -390,6 +391,7 @@ type claudeRun struct {
 	deadline  atomic.Int64 // claudeClock() nanoseconds
 	closed    chan struct{}
 	closeOnce sync.Once
+	closeErr  error
 	events    chan any // host.Obj frames, or a *ClaudeError
 	cmd       *exec.Cmd
 	stdin     io.WriteCloser
@@ -998,19 +1000,19 @@ func (r *claudeRun) generate(body host.Obj, cancelled func() bool, emit func([]b
 
 // close kills the CLI's whole process group and removes its folder; it runs once.
 func (r *claudeRun) close() {
+	_ = r.closeChecked(context.Background())
+}
+
+func (r *claudeRun) closeChecked(parent context.Context) error {
 	r.closeOnce.Do(func() {
 		close(r.closed)
 		if r.cmd != nil && r.cmd.Process != nil {
 			// Windows reuses a reaped pid, so only an unreaped tree is killed there.
+			tree := func() error { return nil }
 			if runtime.GOOS != "windows" || !r.reaped() {
-				if claudeKill(r.cmd.Process) != nil {
-					r.cmd.Process.Kill()
-				}
+				tree = func() error { return claudeKill(r.cmd.Process) }
 			}
-			select {
-			case <-r.exited:
-			case <-time.After(5 * time.Second):
-			}
+			r.closeErr = stopClaudeProcess(parent, tree, r.cmd.Process.Kill, r.exited)
 		}
 		if r.stdin != nil {
 			r.stdin.Close()
@@ -1022,6 +1024,7 @@ func (r *claudeRun) close() {
 			os.RemoveAll(r.tmp)
 		}
 	})
+	return r.closeErr
 }
 
 type claudeBridge struct {

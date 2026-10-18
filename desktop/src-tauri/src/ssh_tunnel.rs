@@ -11,7 +11,8 @@ use std::io::Read;
 use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use crate::lifecycle::Gate;
 use std::time::{Duration, Instant};
 
 // The arkism program on the server. `ark` is the server install's wrapper that loads arkism.env
@@ -282,12 +283,15 @@ fn free_port() -> Result<u16, String> {
 
 /// Restarts the forward on the same local port whenever ssh exits (sleep, network change),
 /// so the address the UI holds keeps working.
-fn watch(generation: u64) {
+fn watch(generation: u64, gate: Arc<Gate>) {
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_secs(3));
         if GENERATION.load(Ordering::SeqCst) != generation {
             return;
         }
+        // Count only a probe/reconnect operation, not an idle tunnel's lifetime. An update
+        // lease cannot pass a reconnect already in flight, and does not change its endpoint.
+        let Ok(_activity) = gate.activity() else { continue };
         let Ok(mut guard) = TUNNEL.lock() else { return };
         let Some(t) = guard.as_mut() else { return };
         if matches!(t.child.try_wait(), Ok(None)) {
@@ -299,7 +303,18 @@ fn watch(generation: u64) {
     });
 }
 
-pub fn stop() {
+pub fn stop(gate: &Arc<Gate>) -> Result<(), String> {
+    let _activity = gate.activity()?;
+    stop_inner();
+    Ok(())
+}
+
+/// Terminal app-exit teardown; normal disconnects must enter the lifecycle gate above.
+pub(crate) fn shutdown() {
+    stop_inner();
+}
+
+fn stop_inner() {
     GENERATION.fetch_add(1, Ordering::SeqCst);
     if let Ok(mut guard) = TUNNEL.lock() {
         if let Some(mut t) = guard.take() {
@@ -309,17 +324,18 @@ pub fn stop() {
     }
 }
 
-pub fn connect(target: Target) -> Result<Connected, String> {
+pub fn connect(target: Target, gate: Arc<Gate>) -> Result<Connected, String> {
+    let _activity = gate.activity()?;
     let info = connect_info(&target)?;
     let (rhost, rport) = remote_endpoint(&info.api)?;
-    stop();
+    stop_inner();
     let local = free_port()?;
     let forward = format!("127.0.0.1:{local}:{rhost}:{rport}");
     let mut child = spawn_forward(&target, &forward)?;
     wait_ready(&mut child, local)?;
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     *TUNNEL.lock().map_err(|e| e.to_string())? = Some(Tunnel { child, target: target.clone(), forward });
-    watch(generation);
+    watch(generation, Arc::clone(&gate));
     Ok(Connected {
         server: format!("http://127.0.0.1:{local}"),
         token: info.token,
@@ -334,6 +350,15 @@ pub fn connect(target: Target) -> Result<Connected, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_lifecycle_disconnect_does_not_mutate_tunnel_during_handoff() {
+        let gate = Arc::new(Gate::default());
+        let _lease = gate.lease().unwrap();
+        let generation = GENERATION.load(Ordering::SeqCst);
+        assert_eq!(stop(&gate), Err("update_runtime_busy".into()));
+        assert_eq!(GENERATION.load(Ordering::SeqCst), generation);
+    }
 
     #[test]
     fn addresses_parse_like_ssh() {

@@ -27,6 +27,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/host/desktopcontrol"
 	"github.com/FelixBaek/arkism/internal/host/subscription"
 )
 
@@ -2452,12 +2453,17 @@ func (x *exchange) chatAPI(base, key string, body host.Obj, hostChatAPI bool) er
 
 // runGateway serves until SIGINT or SIGTERM, then ends every live Claude run.
 func runGateway(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	control, err := desktopcontrol.FromEnvironment("gateway", stdin, stdout)
+	if err != nil {
+		fmt.Fprintln(stderr, "arkism gateway: desktop control configuration invalid")
+		return 1
+	}
 	listener, err := net.Listen("tcp", Listen)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	token, err := gatewayToken()
+	token, err := desktopGatewayToken(control != nil)
 	if err != nil {
 		listener.Close()
 		fmt.Fprintln(stderr, "arkism gateway: local token:", err)
@@ -2470,8 +2476,10 @@ func runGateway(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		<-signals
 		server.Close()
 	}()
-	err = server.Serve(listener)
-	claudeRuns.close()
+	err = serveDesktopGateway(server, listener, control, claudeRuns)
+	if control == nil || !control.Requested() {
+		claudeRuns.close()
+	}
 	if errors.Is(err, http.ErrServerClosed) {
 		return 0
 	}
