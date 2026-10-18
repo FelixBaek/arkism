@@ -207,6 +207,9 @@ func hashable(v any) any {
 
 // sendCapture posts the claims of one event and logs each item's outcome.
 func sendCapture(eventType, eventID, sid string, occurredAt any, claims []any, origin string, started float64, gen host.Obj) ([]any, error) {
+	if err := privateCapturePolicy("capture_policy_wait"); err != nil {
+		return nil, err
+	}
 	if started == 0 {
 		started = monotonic()
 	}
@@ -214,8 +217,12 @@ func sendCapture(eventType, eventID, sid string, occurredAt any, claims []any, o
 	if sessionProcessorOn() { // the server accepts automated capture only from a service role
 		body = append(body, host.KV{Key: "automated", Value: true})
 	}
-	res, err := capPost("/v1/capture", append(body, host.KV{Key: "event", Value: host.Obj{{Key: "id", Value: eventID}, {Key: "type", Value: eventType}, {Key: "origin_product", Value: origin},
-		{Key: "session_id", Value: head(sid, 120)}, {Key: "occurred_at", Value: occurredAt}}}), 60*time.Second)
+	body = append(body, host.KV{Key: "event", Value: host.Obj{{Key: "id", Value: eventID}, {Key: "type", Value: eventType}, {Key: "origin_product", Value: origin},
+		{Key: "session_id", Value: head(sid, 120)}, {Key: "occurred_at", Value: occurredAt}}})
+	if privatePayload(body) {
+		return nil, sessionWait("capture_private_content")
+	}
+	res, err := capPost("/v1/capture", body, 60*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -293,6 +300,22 @@ var retryableReasons = map[any]bool{"dependency_unavailable": true, "revision_co
 // at-least-once step so a retry resends the exact request.
 func process(job map[string]any, persist func() error) (err error) {
 	defer recovered(&err)
+	checkPolicy := func() error { return privateCapturePolicy("capture_policy_wait", str(or(job["cwd"], ""))) }
+	if err := checkPolicy(); err != nil {
+		return err
+	}
+	if persist != nil {
+		checkpoint := persist
+		persist = func() error {
+			if err := checkPolicy(); err != nil {
+				return err
+			}
+			return checkpoint()
+		}
+	}
+	if privatePrepared(job, "prepared_capture") || privatePrepared(job, "session_prepared") {
+		return sessionWait("capture_private_prepared")
+	}
 	origin, err := queuedOrigin(job)
 	if err != nil {
 		return err
@@ -322,6 +345,28 @@ func process(job map[string]any, persist func() error) (err error) {
 	}
 	if sessionProcessorOn() {
 		return sessionProcess(job, persist, origin)
+	}
+	// Old spool files may predate redaction. Sanitize before cue matching,
+	// searching or extraction, and never use hashes derived from private text.
+	if privatePayload(users) {
+		users, _ = privateData(users).([]any)
+		if privatePayload(users) {
+			return sessionWait("capture_private_content")
+		}
+		for _, user := range users {
+			if row, ok := user.(map[string]any); ok {
+				delete(row, "archive_hint")
+				delete(row, "archive_ref")
+				delete(row, "archive_refs")
+			}
+		}
+		job["users"] = users
+		delete(job, "archive_locator")
+		if persist != nil {
+			if err := persist(); err != nil {
+				return err
+			}
+		}
 	}
 	started := monotonic()
 	sid := job["session_id"].(string) // KeyError/TypeError surface through recovered
@@ -379,6 +424,9 @@ func process(job map[string]any, persist func() error) (err error) {
 			} else if correctionRE.MatchString(userText) {
 				eventType = "user_corrected_fact"
 			}
+			if err := checkPolicy(); err != nil {
+				return err
+			}
 			found, _, err := search(head(userText, 2000), host.ProjectKey(str(or(job["cwd"], ""))), 5, 60)
 			if err != nil {
 				return err
@@ -389,7 +437,7 @@ func process(job map[string]any, persist func() error) (err error) {
 				if related[i], err = asDict(r); err != nil {
 					return err
 				}
-				lines[i] = fmt.Sprintf("%s: %s", str(related[i]["id"]), str(or(related[i]["text"], "")))
+				lines[i] = fmt.Sprintf("%s: %s", str(related[i]["id"]), redactPrivate(str(or(related[i]["text"], ""))))
 				if _, has := related[i]["text"]; !has {
 					lines[i] = fmt.Sprintf("%s: ", str(related[i]["id"]))
 				}
@@ -398,8 +446,8 @@ func process(job map[string]any, persist func() error) (err error) {
 			if existing == "" {
 				existing = "(none)"
 			}
-			out, err := llm(withGuidance(extractPrompt), fmt.Sprintf("TODAY: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", messageDay(cued), existing, userText),
-				capModel, 120*time.Second, claimsSchema, "claims")
+			out, err := privateModel(redactPrivate(withGuidance(extractPrompt)), fmt.Sprintf("TODAY: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", messageDay(cued), existing, userText),
+				capModel, 120*time.Second, claimsSchema, "claims", str(or(job["cwd"], "")))
 			if err != nil {
 				return err
 			}
@@ -419,6 +467,9 @@ func process(job map[string]any, persist func() error) (err error) {
 				}
 			}
 			prepared = map[string]any{"event_type": eventType, "occurred_at": cued[len(cued)-1].(map[string]any)["at"], "claims": claims}
+			if privatePayload(prepared) {
+				return sessionWait("capture_private_prepared")
+			}
 			job["prepared_capture"] = prepared
 			if err := checkpoint(); err != nil { // persist the exact request before at-least-once delivery
 				return err
@@ -427,6 +478,9 @@ func process(job map[string]any, persist func() error) (err error) {
 		claims := prepared["claims"].([]any)
 		eventType := prepared["event_type"].(string)
 		if len(claims) > 0 {
+			if err := checkPolicy(); err != nil {
+				return err
+			}
 			items, err := sendCapture(eventType, job["event_id"].(string), sid, prepared["occurred_at"], claims, origin, started,
 				generator(strings.ReplaceAll(origin, "_", "-")+"-hook-v1"))
 			if err != nil {
@@ -601,6 +655,12 @@ func drain(allWorkOrigins bool) error {
 		}
 		code := errorCode(err)
 		sid := head(str(job["session_id"]), 12)
+		if capturePolicyPending(err) || privateCapturePolicy("capture_policy_wait", str(or(job["cwd"], "")), privateCheckpointRepository(job["session_prepared"], true)) != nil {
+			// Pausing must preserve the last durable request and retry budget;
+			// resuming retries it immediately without a synthetic failure/backoff.
+			metric(kv("event", "capture_policy_pending"), kv("session", sid), kv("error", code))
+			continue
+		}
 		if sessionProcessorOn() && errors.Is(err, errSessionPending) && code == "session_archive_private_skipped" {
 			// The user marked the transcript private, so it never reaches the archive: drop the batch, never retry.
 			for _, name := range anyList(job["session_batch_children"]) {

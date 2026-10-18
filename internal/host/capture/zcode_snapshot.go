@@ -181,11 +181,16 @@ func zcodeSnapshot(path, sid string, fn func(snapshot string, observed float64, 
 }
 
 func writeZcodeSnapshot(path, sid, target string) (host.Obj, error) {
+	return writeZcodeSnapshotLimit(path, sid, target, archiveMaxBytes)
+}
+
+func writeZcodeSnapshotLimit(path, sid, target string, maxBytes int64) (host.Obj, error) {
 	db, err := openRO(path)
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
+	db.Limit(sqlite.LIMIT_LENGTH, archiveSQLiteValueBytes)
 	if err := db.Exec("BEGIN"); err != nil {
 		return nil, err
 	}
@@ -208,7 +213,7 @@ func writeZcodeSnapshot(path, sid, target string) (host.Obj, error) {
 		return nil, err
 	}
 	defer f.Close()
-	out := bufio.NewWriter(f)
+	out := bufio.NewWriter(&archiveBoundedWriter{writer: f, remaining: maxBytes})
 	line := func(v any) error {
 		s, err := host.Dumps(v, host.DumpOpts{})
 		if err != nil {

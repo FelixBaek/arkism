@@ -47,6 +47,7 @@ func capFake(t *testing.T) string {
 		}
 	})
 	capState = dir
+	t.Setenv("ARKISM_CAPTURE_SETTINGS", filepath.Join(dir, "capture.json"))
 	// The real work modules run under drain and the hook: keep their state in dir too.
 	t.Setenv("ARKISM_WORK_SELECTION_STATE", filepath.Join(dir, "selections"))
 	t.Setenv("ARKISM_WORK_AUTOSAVE_STATE", filepath.Join(dir, "work-autosave"))
@@ -189,7 +190,7 @@ func TestCaptureSearchRetriesShareOneBudgetAndKeepSuccessfulResults(t *testing.T
 			}
 			continue
 		}
-		// ST-815: the lexical fallback is not judged by the three-lane score floor.
+		// the lexical fallback is not judged by the three-lane score floor.
 		if err != nil || len(got) != 0 || vectorRan || calls[1].timeout != time.Second || !reflect.DeepEqual(calls[1].modes, []any{"exact", "fts"}) {
 			t.Fatal(got, err, calls)
 		}
@@ -651,7 +652,7 @@ func seedTrial(ids []string) error {
 	})
 }
 
-// ST-824: outside a repository the host sends no project_key (older servers reject unknown
+// outside a repository the host sends no project_key (older servers reject unknown
 // fields) and still keeps project-reach memories out of the session index.
 func TestNoProjectKeyIsOmittedAndKeepsProjectMemoriesOut(t *testing.T) {
 	capFake(t)

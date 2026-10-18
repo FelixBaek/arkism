@@ -1,6 +1,6 @@
 package capture
 
-// The session trace's behavior evidence (ST-623, FR-012): what the agent did in the ledger's window,
+// The session trace's behavior evidence: what the agent did in the ledger's window,
 // so a personal_compliance checker can judge delivered memories against it. Replies keep their text
 // without code blocks; commits and pull requests keep the shell command that made them. The window
 // ends sessionIdle after the last recall, which a claimed ledger has already passed, so a replay
@@ -53,7 +53,21 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 	commits, prs := []any{}, []any{}
 	corrections := 0
 	incomplete := false // a cut or dropped artifact: the checker must not call the rest a pass
+	redact := func(text string) string {
+		masked := redactPrivate(text)
+		if masked != text {
+			incomplete = true
+		}
+		if privatePayload(masked) {
+			// An encoded/literal marker that cannot be safely delimited hides
+			// this record rather than reaching behavior storage or a checker.
+			incomplete = true
+			return privateMark
+		}
+		return masked
+	}
 	reply := func(at, text string) {
+		text = redact(text)
 		if len(turns) == 0 {
 			turns = append(turns, behaviorTurn{})
 		}
@@ -62,6 +76,7 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 		}
 	}
 	command := func(cmd string) {
+		cmd = redact(cmd)
 		shell := shellText(cmd) // judged whole; only the stored copy is cut
 		commit, pr := commitCmdRE.MatchString(shell), prCmdRE.MatchString(shell)
 		if (commit || pr) && len([]rune(cmd)) > behaviorCommandRunes {
@@ -78,6 +93,7 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 		v, err := loadsBytes(raw)
 		d, _ := v.(map[string]any)
 		if err != nil || d == nil {
+			incomplete = true
 			return nil
 		}
 		at := str(d["timestamp"])
@@ -85,6 +101,7 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 			return nil
 		}
 		user := func(text string) {
+			text = redact(text)
 			if text = clean(text); text != "" {
 				turns = append(turns, behaviorTurn{detail: detailAskedRE.MatchString(text)})
 				if correctionRE.MatchString(text) {

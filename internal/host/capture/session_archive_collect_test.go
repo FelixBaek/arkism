@@ -22,6 +22,7 @@ import (
 // archiveHome points the collector's home, PC inbox and state file at temp folders.
 func archiveHome(t *testing.T) (home, pc string) {
 	t.Helper()
+	archiveTestSettings(t)
 	h, p, s, sl := host.Home, archivePC, archiveState, archiveSleep
 	t.Cleanup(func() { host.Home, archivePC, archiveState, archiveSleep = h, p, s, sl })
 	host.Home, archivePC = t.TempDir(), t.TempDir()
@@ -49,6 +50,7 @@ func zcodeExportFile(t *testing.T, dir, sid string, updatedMs int64) string {
 }
 
 func TestArchiveCollectFindsEveryAgentFolderAndSkipsWhatItMust(t *testing.T) {
+	archiveTestSettings(t)
 	home, pc := archiveHome(t)
 	const uuid = "0f8fad5b-d9cb-469f-a165-70867728950e"
 	put(t, filepath.Join(home, ".claude/projects/p/a.jsonl"), `{"sessionId": "claude-sid"}`+"\n"+`{"message": {"role": "user", "content": "안녕"}}`+"\n")
@@ -103,6 +105,7 @@ func TestArchiveCollectFindsEveryAgentFolderAndSkipsWhatItMust(t *testing.T) {
 }
 
 func TestArchiveOnThePCTheAgentFoldersAreCountedOnce(t *testing.T) {
+	archiveTestSettings(t)
 	archiveHome(t)
 	t.Setenv("ARKISM_PC_LOCAL", "1")
 	var labels []string
@@ -117,6 +120,7 @@ func TestArchiveOnThePCTheAgentFoldersAreCountedOnce(t *testing.T) {
 }
 
 func TestArchiveServerZcodeDatabaseIsPlannedOrSnapshotted(t *testing.T) {
+	archiveTestSettings(t)
 	home, _ := archiveHome(t)
 	raw, err := os.ReadFile(filepath.Join("testdata", "zcode_fixture.sqlite"))
 	if err != nil {
@@ -147,6 +151,7 @@ func TestArchiveServerZcodeDatabaseIsPlannedOrSnapshotted(t *testing.T) {
 }
 
 func TestArchiveZcodeExportHeaderMustMatchItsName(t *testing.T) {
+	archiveTestSettings(t)
 	dir := t.TempDir()
 	good := zcodeExportFile(t, dir, "s1", 1760000000123)
 	sid, observed, err := zcodeExportMetadata(good)
@@ -192,6 +197,7 @@ func TestArchiveZcodeExportHeaderMustMatchItsName(t *testing.T) {
 }
 
 func TestArchiveSessionIDFallsBackToTheFileName(t *testing.T) {
+	archiveTestSettings(t)
 	dir := t.TempDir()
 	for _, c := range []struct{ name, origin, body, want string }{
 		{"x.jsonl", "codex", `{"type": "session_meta", "payload": {}}` + "\n" + `{"type": "session_meta", "payload": {"id": "late"}}` + "\n", "late"},
@@ -209,6 +215,7 @@ func TestArchiveSessionIDFallsBackToTheFileName(t *testing.T) {
 }
 
 func TestArchiveCommitRejectedForASecretIsRetriedWithoutText(t *testing.T) {
+	archiveTestSettings(t)
 	path := put(t, filepath.Join(t.TempDir(), "s.jsonl"), `{"message": {"role": "user", "content": "토큰 sk-xxx"}}`+"\n")
 	var commits []map[string]any
 	poster := posterFunc(func(endpoint string, payload map[string]any) (map[string]any, error) {
@@ -282,6 +289,7 @@ func archiveAPI(t *testing.T, reply func(n int, path string, body map[string]any
 }
 
 func TestArchiveClientRetriesBusyAnswersAndNamesTheFailure(t *testing.T) {
+	archiveTestSettings(t)
 	archiveHome(t)
 	var paths []string
 	archiveAPI(t, func(n int, path string, _ map[string]any) (int, string) {
@@ -319,6 +327,7 @@ func TestArchiveClientRetriesBusyAnswersAndNamesTheFailure(t *testing.T) {
 }
 
 func TestArchiveMainParsesArgumentsLikeArgparse(t *testing.T) {
+	archiveTestSettings(t)
 	archiveHome(t)
 	for _, c := range []struct {
 		args []string
@@ -344,6 +353,7 @@ func TestArchiveMainParsesArgumentsLikeArgparse(t *testing.T) {
 }
 
 func TestArchiveMainPlansCollectsAndExpires(t *testing.T) {
+	archiveTestSettings(t)
 	home, _ := archiveHome(t)
 	put(t, filepath.Join(home, ".claude/projects/p/a.jsonl"), `{"sessionId": "s"}`+"\n")
 	var out, errOut bytes.Buffer

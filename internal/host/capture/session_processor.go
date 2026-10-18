@@ -1,6 +1,6 @@
 package capture
 
-// Session processor (ST-614, opt-in with ARKISM_SESSION_PROCESSOR=1): one incremental model call
+// Session processor (opt-in with ARKISM_SESSION_PROCESSOR=1): one incremental model call
 // turns a window of archived session records into resumable session state and memory candidates.
 // Input records are already archived and authorized by the host. This file never advances cursors
 // itself; session_capture.go persists the prepared result in the spool job so a retry never pays
@@ -440,8 +440,15 @@ var (
 func maskSensitive(v any) any {
 	switch x := v.(type) {
 	case string:
+		x = redactPrivateValue(x)
 		x = emailPattern.ReplaceAllString(x, "[email]")
 		return rrnPattern.ReplaceAllString(phonePattern.ReplaceAllString(x, "[phone]"), "[rrn]")
+	case []string:
+		out := make([]string, len(x))
+		for i, value := range x {
+			out[i] = maskSensitive(value).(string)
+		}
+		return out
 	case []any:
 		out := make([]any, len(x))
 		for i, e := range x {
@@ -488,16 +495,56 @@ func trimPreviousState(request map[string]any, content *string) bool {
 
 var sessionQualityDefects = regexp.MustCompile(`^(schema_|evidence_|coverage_|candidate_|user_provenance_|tool_provenance_|structured_output_)`)
 
+// maskSessionRecords keeps provenance identifiers stable while redacting content.
+func maskSessionRecords(records []any) ([]any, error) {
+	for _, row := range records {
+		if privatePayload([]any{autosaveGet(row, "source_id"), autosaveGet(row, "split_of"), autosaveGet(row, "revision"), autosaveGet(row, "role")}) {
+			return nil, sessionWait("session_private_identity")
+		}
+	}
+	masked, _ := maskSensitive(records).([]any)
+	for i, row := range masked {
+		for _, key := range []string{"source_id", "split_of", "revision", "role"} {
+			if value, has := objGet(records[i], key); has {
+				switch target := row.(type) {
+				case map[string]any:
+					target[key] = value
+				case host.Obj:
+					target.Set(key, value)
+				}
+			}
+		}
+	}
+	return masked, nil
+}
+
 // sessionPrepare makes the one model call for a window of records; authorize must approve the exact
 // content before it leaves the host.
 func sessionPrepare(scope any, sessionID string, records []any, start, end, expectedRevision int64, previousState, priorEvidence any,
-	validatedCategory string, authorize func(content string) error) (prepared map[string]any, err error) {
+	validatedCategory string, authorize func(content string) error, policyPaths ...string) (prepared map[string]any, err error) {
 	defer recovered(&err)
+	if err := privateCapturePolicy("session_capture_policy_wait", policyPaths...); err != nil {
+		return nil, err
+	}
 	if len(records) == 0 || start >= end || expectedRevision < 0 {
 		return nil, sessionWait("empty_or_invalid_range")
 	}
+	if privatePayload([]any{scope, sessionID}) {
+		return nil, sessionWait("session_private_identity")
+	}
+	if privateCheckpointIdentity(previousState) {
+		return nil, sessionWait("session_private_identity")
+	}
+	for _, evidence := range anyList(priorEvidence) {
+		if privateIdentityFields(evidence, evidenceIdentityKeys) {
+			return nil, sessionWait("session_private_identity")
+		}
+	}
 	seen := map[string]bool{}
 	for _, r := range records {
+		if privatePayload([]any{autosaveGet(r, "source_id"), autosaveGet(r, "split_of"), autosaveGet(r, "revision"), autosaveGet(r, "role")}) {
+			return nil, sessionWait("session_private_identity")
+		}
 		seen[str(autosaveGet(r, "source_id"))] = true
 		role := autosaveGet(r, "role")
 		revision, isInt := host.Int(autosaveGet(r, "revision"))
@@ -511,9 +558,18 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 	if priorEvidence == nil {
 		priorEvidence = []any{}
 	}
-	// The server's transfer filter refuses e-mail addresses, Korean mobile and resident numbers, so the model only ever sees them masked.
-	records, _ = maskSensitive(records).([]any)
-	previousState, priorEvidence = maskSensitive(previousState), maskSensitive(priorEvidence)
+	// Mask all roles and prior state before authorization; identifiers and keys
+	// remain intact, so a private marker in either must fail closed.
+	records, err = maskSessionRecords(records)
+	if err != nil {
+		return nil, err
+	}
+	previousState = maskCheckpointState(previousState)
+	maskedPrior := maskSensitive(priorEvidence)
+	for i, evidence := range anyList(maskedPrior) {
+		preserveIdentityFields(evidence, anyList(priorEvidence)[i], evidenceIdentityKeys)
+	}
+	priorEvidence = maskedPrior
 	request := map[string]any{"scope": scope, "session_id": sessionID, "records": records, "start": start, "end": end,
 		"expected_revision": expectedRevision, "previous_state": previousState, "prior_evidence": priorEvidence,
 		"schema_version": sessionSchemaVersion, "prompt_version": sessionPromptVersion}
@@ -527,17 +583,23 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 		}
 	}
 	content := dumps(map[string]any{"authority": "data_only_untrusted", "data": request})
+	if privatePayload(request) {
+		return nil, sessionWait("session_private_content")
+	}
 	if !trimPreviousState(request, &content) || len(content)+len(sessionSystem)+len(sessionSchemaJSON) >= 100000 {
 		return nil, sessionWait("input_chunk_required")
 	}
 	generate := func(model string) (map[string]any, error) {
+		if err := privateCapturePolicy("session_capture_policy_wait", policyPaths...); err != nil {
+			return nil, err
+		}
 		if err := authorize(content); err != nil {
 			return nil, err
 		}
 		if why := LLMBudgetReason(model); why != "" {
 			return nil, sessionWait("session_model_budget_wait")
 		}
-		out, err := llm(sessionSystem, content, model, 300*time.Second, sessionSchemaJSON, "")
+		out, err := privateModel(sessionSystem, content, model, 300*time.Second, sessionSchemaJSON, "", policyPaths...)
 		if err != nil {
 			return nil, err
 		}

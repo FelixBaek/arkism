@@ -390,8 +390,26 @@ impl Runtime {
 
     /// 설정 › 고급 › 수집: paused, and the folders Arkism leaves alone.
     pub fn capture_settings(&self) -> Result<CaptureSettings, String> {
-        let text = fs::read_to_string(self.capture_settings_path()?).unwrap_or_default();
-        Ok(serde_json::from_str(&text).unwrap_or_default())
+        use std::io::Read;
+        let path = self.capture_settings_path()?;
+        match fs::metadata(&path) {
+            Ok(info) if info.is_file() => (),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                // A dangling settings link is unreadable, rather than missing.
+                return match fs::symlink_metadata(&path) {
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(CaptureSettings::default()),
+                    _ => Err("capture_settings_unavailable".into()),
+                };
+            }
+            _ => return Err("capture_settings_unavailable".into()),
+        }
+        let file = fs::File::open(&path).map_err(|_| "capture_settings_unavailable")?;
+        let mut data = Vec::new();
+        file.take((1 << 20) + 1).read_to_end(&mut data).map_err(|_| "capture_settings_unavailable")?;
+        if data.len() > 1 << 20 {
+            return Err("capture_settings_too_large".into());
+        }
+        parse_capture_settings(&data)
     }
 
     pub fn set_capture_settings(&self, settings: &CaptureSettings) -> Result<(), String> {
@@ -937,6 +955,36 @@ fn root_ok(p: &str) -> bool {
         && (p.starts_with('/') || (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/')))
 }
 
+// Read the same known field types as the host, including case-insensitive field
+// names, without replacing malformed or null values with an enabled default.
+fn parse_capture_settings(data: &[u8]) -> Result<CaptureSettings, String> {
+    struct SettingsReader;
+    impl<'de> serde::de::Visitor<'de> for SettingsReader {
+        type Value = CaptureSettings;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a capture settings object")
+        }
+        fn visit_map<A>(self, mut fields: A) -> Result<Self::Value, A::Error>
+        where A: serde::de::MapAccess<'de> {
+            let mut settings = CaptureSettings::default();
+            while let Some(key) = fields.next_key::<String>()? {
+                match key.to_ascii_lowercase().as_str() {
+                    "paused" => settings.paused = fields.next_value::<bool>()?,
+                    "exclude" => settings.exclude = fields.next_value::<Vec<String>>()?,
+                    "instructions" => settings.instructions = fields.next_value::<String>()?,
+                    _ => { fields.next_value::<serde::de::IgnoredAny>()?; }
+                }
+            }
+            Ok(settings)
+        }
+    }
+    let mut decoder = serde_json::Deserializer::from_slice(data);
+    let settings = serde::de::Deserializer::deserialize_map(&mut decoder, SettingsReader)
+        .map_err(|_| "capture_settings_invalid")?;
+    decoder.end().map_err(|_| "capture_settings_invalid")?;
+    Ok(settings)
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq)]
 pub struct CaptureSettings {
     #[serde(default)]
@@ -1238,6 +1286,54 @@ mod tests {
         assert_eq!(read.exclude, vec!["/a/b".to_string(), "/c".to_string()]);
         assert_eq!(read.instructions, "회의록은 빼 줘");
         assert!(dir.join("home/.config/arkism/capture.json").is_file());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn capture_settings_empty_writer_stays_enabled_and_uses_an_array() {
+        let dir = std::env::temp_dir().join(format!("arkism-capture-empty-test-{}", secret().unwrap()));
+        let mut rt = Runtime::new(None, dir.join("data"));
+        rt.home = Some(dir.join("home"));
+        rt.set_capture_settings(&CaptureSettings::default()).unwrap();
+        let raw = fs::read(rt.capture_settings_path().unwrap()).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(value["exclude"], serde_json::json!([]));
+        assert_eq!(rt.capture_settings().unwrap(), CaptureSettings::default());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn capture_settings_refuse_uncheckable_files_instead_of_enabled_defaults() {
+        let dir = std::env::temp_dir().join(format!("arkism-capture-invalid-test-{}", secret().unwrap()));
+        let mut rt = Runtime::new(None, dir.join("data"));
+        rt.home = Some(dir.join("home"));
+        assert_eq!(rt.capture_settings().unwrap(), CaptureSettings::default());
+        let path = rt.capture_settings_path().unwrap();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        for text in ["", "null", "[]", "{", r#"{"paused":null}"#, r#"{"Paused":null}"#,
+            r#"{"paused":"false"}"#, r#"{"exclude":null}"#, r#"{"exclude":[null]}"#,
+            r#"{"instructions":null}"#, r#"{"instructions":3}"#, r#"{} {}"#] {
+            fs::write(&path, text).unwrap();
+            assert_eq!(rt.capture_settings().unwrap_err(), "capture_settings_invalid");
+        }
+        fs::write(&path, " ".repeat((1 << 20) + 1)).unwrap();
+        assert_eq!(rt.capture_settings().unwrap_err(), "capture_settings_too_large");
+        fs::write(&path, format!("{{}}{}", " ".repeat((1 << 20) - 2))).unwrap();
+        assert_eq!(rt.capture_settings().unwrap(), CaptureSettings::default());
+        fs::write(&path, r#"{"future":{"paused":null}}"#).unwrap();
+        assert_eq!(rt.capture_settings().unwrap(), CaptureSettings::default());
+        fs::write(&path, r#"{"Paused":true,"Exclude":["/synthetic/project"],"Instructions":"public note"}"#).unwrap();
+        assert!(rt.capture_settings().unwrap().paused);
+        fs::remove_file(&path).unwrap();
+        fs::create_dir(&path).unwrap();
+        assert_eq!(rt.capture_settings().unwrap_err(), "capture_settings_unavailable");
+        fs::remove_dir(&path).unwrap();
+        #[cfg(unix)] {
+            std::os::unix::fs::symlink(dir.join("missing"), &path).unwrap();
+            assert_eq!(rt.capture_settings().unwrap_err(), "capture_settings_unavailable");
+            fs::remove_file(&path).unwrap();
+        }
+        assert_eq!(rt.capture_settings().unwrap(), CaptureSettings::default());
         fs::remove_dir_all(dir).unwrap();
     }
 

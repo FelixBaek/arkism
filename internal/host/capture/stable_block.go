@@ -199,7 +199,7 @@ type stableOutput struct {
 
 // markStableShown commits only the complete full/meta block that reached the hook output.
 // A budget stub or failed output must neither count as recall nor suppress future prompt recall.
-func markStableShown(sid, output string, delivery *stableOutput) {
+func markStableShown(sid, output string, delivery *stableOutput, cwd ...string) {
 	if delivery == nil {
 		return
 	}
@@ -215,7 +215,7 @@ func markStableShown(sid, output string, delivery *stableOutput) {
 		for j := range memories {
 			memories[j].Form = representation
 		}
-		ledgerDeliveries(sid, memories)
+		ledgerDeliveries(sid, memories, cwd...)
 		recallMetric("SessionStart", sid, delivery.Items)
 		logInjected("SessionStart", sid, form)
 		if sid != "" && delivery.Block != nil {

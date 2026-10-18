@@ -92,15 +92,20 @@ type archivePoster interface {
 	post(endpoint string, payload map[string]any) (map[string]any, error)
 }
 
-type archiveClient struct{}
+type archiveClient struct{ beforePost func() error }
 
-func (archiveClient) post(endpoint string, payload map[string]any) (map[string]any, error) {
+func (c archiveClient) post(endpoint string, payload map[string]any) (map[string]any, error) {
 	body := make(map[string]any, len(payload)+1)
 	for k, v := range payload {
 		body[k] = v
 	}
 	body["scope"] = host.Scope()
 	for attempt := 0; ; attempt++ {
+		if c.beforePost != nil {
+			if err := c.beforePost(); err != nil {
+				return nil, err
+			}
+		}
 		reply, err := host.Post("/v1/session-archives/"+endpoint, body, 120*time.Second)
 		if err == nil {
 			return reply, nil
@@ -459,7 +464,7 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(out, in); err != nil {
+	if _, err := io.Copy(&archiveBoundedWriter{writer: out, remaining: archiveMaxBytes}, io.LimitReader(in, archiveMaxBytes+1)); err != nil {
 		out.Close()
 		return err
 	}
@@ -507,7 +512,21 @@ func newCollector(client archivePoster, state *host.Obj, execute bool) *collecto
 }
 
 // upload sends path in 1 MiB chunks then commits it. observed < 0 means "from the file".
-func (c *collector) upload(path, device, origin, sid, logical string, observed float64, format string, statKey any) error {
+func (c *collector) upload(path, device, origin, sid, logical string, observed float64, format string, statKey any, sourcePaths ...string) (err error) {
+	policy := newArchivePolicy(append(sourcePaths, path)...)
+	defer func() {
+		switch {
+		case errors.Is(err, errArchivePolicySkipped):
+			c.counts.inc("capture_skipped")
+			err = nil
+		case errors.Is(err, errArchivePrivate):
+			c.counts.inc("private_skipped")
+			err = nil
+		}
+	}()
+	if err = policy.check(); err != nil {
+		return err
+	}
 	before, err := archiveSignature(path)
 	if err != nil {
 		return err
@@ -540,10 +559,30 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 		}
 	}
 	if !c.execute {
+		if err := inspectPrivateArchiveFile(path, format); err != nil {
+			return err
+		}
+		if err := policy.inspect(path, format); err != nil {
+			return err
+		}
+		if err := policy.check(); err != nil {
+			return err
+		}
 		c.counts.inc("planned")
 		return nil
 	}
-	f, err := os.Open(path)
+	snapshot, cleanup, err := archiveSnapshot(path, format)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	if err := policy.inspect(snapshot, format); err != nil {
+		return err
+	}
+	if err := policy.check(); err != nil {
+		return err
+	}
+	f, err := os.Open(snapshot)
 	if err != nil {
 		return err
 	}
@@ -556,7 +595,7 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 		if n > 0 {
 			part := buf[:n]
 			full.Write(part)
-			chunk, err := c.client.post("chunks", map[string]any{"parent_id": aid, "sha256": sha256Hex(part),
+			chunk, err := c.archivePost(policy, "chunks", map[string]any{"parent_id": aid, "sha256": sha256Hex(part),
 				"data": base64.StdEncoding.EncodeToString(part)})
 			if err != nil {
 				return err
@@ -583,7 +622,7 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 	}
 	text := ""
 	if format != "sqlite_snapshot" {
-		if text, err = projection(path); err != nil {
+		if text, err = projection(snapshot); err != nil {
 			return err
 		}
 	}
@@ -598,14 +637,14 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 	sum := hex.EncodeToString(full.Sum(nil))
 	payload := map[string]any{"id": aid, "session_id": sid, "device": device, "origin": origin, "format": format,
 		"observed_at": archiveISO(observed), "sha256": sum, "chunks": chunks, "text": text}
-	reply, err := c.client.post("commit", payload)
+	reply, err := c.archivePost(policy, "commit", payload)
 	if err != nil {
 		var api *APIError
 		if !errors.As(err, &api) || !strings.Contains(api.Code, "secret") {
 			return err
 		}
 		payload["text"] = ""
-		if reply, err = c.client.post("commit", payload); err != nil {
+		if reply, err = c.archivePost(policy, "commit", payload); err != nil {
 			return err
 		}
 	}
@@ -628,6 +667,9 @@ func objGet(v any, key string) (any, bool) {
 
 // file uploads one transcript, or a consistent backup of an SQLite session database.
 func (c *collector) file(path, device, origin, logical, sid string, observed float64) error {
+	if c.archiveCaptureSkipped(path) {
+		return nil
+	}
 	if isSymlink(path) {
 		c.counts.inc("symlink_skipped")
 		return nil
@@ -666,7 +708,7 @@ func (c *collector) file(path, device, origin, logical, sid string, observed flo
 		if err != nil {
 			return err
 		}
-		err = db.Backup("main", snapshot)
+		err = archiveSQLiteBackup(db, snapshot)
 		db.Close()
 		if err != nil {
 			return err
@@ -674,17 +716,13 @@ func (c *collector) file(path, device, origin, logical, sid string, observed flo
 		if sid == "" {
 			sid = strings.TrimSuffix(filepath.Base(path), ext)
 		}
-		return c.upload(snapshot, device, origin, sid, logical, observed, "sqlite_snapshot", []any{mark, walmark})
+		return c.upload(snapshot, device, origin, sid, logical, observed, "sqlite_snapshot", []any{mark, walmark}, path)
 	}
 	if sid == "" {
 		var err error
 		if sid, err = archiveSessionID(path, origin); err != nil {
 			return err
 		}
-	}
-	if privateMarked(path) {
-		c.counts.inc("private_skipped")
-		return nil
 	}
 	return c.upload(path, device, origin, sid, logical, observed, "jsonl", nil)
 }
@@ -739,6 +777,9 @@ func sortPaths(paths []string) {
 }
 
 func (c *collector) collect() {
+	if c.archiveCaptureSkipped() {
+		return
+	}
 	for _, r := range archiveRoots() {
 		if !exists(r.root) {
 			continue
@@ -765,6 +806,9 @@ func (c *collector) collect() {
 }
 
 func (c *collector) zcodeExport(path string) error {
+	if c.archiveCaptureSkipped(path) {
+		return nil
+	}
 	sid, observed, err := zcodeExportMetadata(path)
 	if err != nil {
 		return err
@@ -773,6 +817,9 @@ func (c *collector) zcodeExport(path string) error {
 }
 
 func (c *collector) zcode(path string) error {
+	if c.archiveCaptureSkipped(path) {
+		return nil
+	}
 	resolved, err := filepath.EvalSymlinks(absPath(path))
 	if err != nil {
 		return err
@@ -798,7 +845,7 @@ func (c *collector) zcode(path string) error {
 		}
 		c.attempt(func() error {
 			return zcodeSnapshot(path, sid, func(target string, observed float64, revision any) error {
-				return c.upload(target, "server", "zcode", sid, "db-session", observed, "reconstructed_zcode", revision)
+				return c.upload(target, "server", "zcode", sid, "db-session", observed, "reconstructed_zcode", revision, path)
 			})
 		})
 	}
@@ -816,6 +863,9 @@ func rowObjGet(cols []string, vals []any, key string) any {
 
 // migrate uploads recent sessions from an AgentsView database.
 func (c *collector) migrate(path string) error {
+	if c.archiveCaptureSkipped(path) {
+		return nil
+	}
 	resolved, err := filepath.EvalSymlinks(absPath(path))
 	if err != nil {
 		return err
@@ -880,13 +930,18 @@ func (c *collector) migrate(path string) error {
 			}
 			// Many subagent rows share source_session_id: keep the AgentsView row identity too.
 			return c.upload(target, device, origin, str(sid), "agentsview-db-export:"+id, observed,
-				"reconstructed_agentsview", []any{get("message_count"), get("ended_at"), get("file_mtime")})
+				"reconstructed_agentsview", []any{get("message_count"), get("ended_at"), get("file_mtime")}, path)
 		})
 	}
 	return nil
 }
 
 func writeAgentsView(db *sqlite.Conn, session host.Obj, id any, target string) error {
+	return writeAgentsViewLimit(db, session, id, target, archiveMaxBytes)
+}
+
+func writeAgentsViewLimit(db *sqlite.Conn, session host.Obj, id any, target string, maxBytes int64) error {
+	db.Limit(sqlite.LIMIT_LENGTH, archiveSQLiteValueBytes)
 	if err := db.Exec("BEGIN"); err != nil {
 		return err
 	}
@@ -896,8 +951,10 @@ func writeAgentsView(db *sqlite.Conn, session host.Obj, id any, target string) e
 		return err
 	}
 	defer f.Close()
-	out := bufio.NewWriter(f)
-	out.WriteString(host.MustDumps(host.Obj{{Key: "session", Value: session}}, host.DumpOpts{}) + "\n")
+	out := bufio.NewWriter(&archiveBoundedWriter{writer: f, remaining: maxBytes})
+	if _, err := out.WriteString(host.MustDumps(host.Obj{{Key: "session", Value: session}}, host.DumpOpts{}) + "\n"); err != nil {
+		return err
+	}
 	for _, t := range [][2]string{{"messages", "ordinal,id"}, {"tool_calls", "call_index,id"}} {
 		err := eachRow(db, "SELECT * FROM "+t[0]+" WHERE session_id=? ORDER BY "+t[1], []any{id},
 			func(cols []string, vals []any) error {

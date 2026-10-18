@@ -104,7 +104,7 @@ func scopeQuery(skipEmpty bool, extra ...string) string {
 // searchMemories recalls memories within one time budget; on an embedder outage it keeps lexical recall.
 var search = searchMemories
 
-// recallSearch is search with the score floor the MCP recall tool also uses (ST-815); hooks then
+// recallSearch is search with the score floor the MCP recall tool also uses; hooks then
 // capBudget the list they actually inject. The extractor's duplicate check keeps the raw search.
 func recallSearch(query, project string, limit int, timeout float64) ([]any, error) {
 	items, vectorRan, err := search(query, project, limit, timeout)
@@ -116,7 +116,7 @@ func recallSearch(query, project string, limit int, timeout float64) ([]any, err
 	return kept, nil
 }
 
-// capBudget applies the per-kind budget to the final injected list (ST-815).
+// capBudget applies the per-kind budget to the final injected list.
 func capBudget(items []map[string]any) []map[string]any {
 	list := make([]any, len(items))
 	for i, m := range items {
@@ -626,7 +626,7 @@ func sessionIndexSkipping(sid, cwd string, limit int, skip map[string]bool) (ind
 }
 
 // standingOrder sorts the standing rules so the char limit cuts the least important: preferences
-// (user) before how-to rules, this project's rules before general ones (ST-824), then oldest first, then id. List rows carry no use or effect score,
+// (user) before how-to rules, this project's rules before general ones, then oldest first, then id. List rows carry no use or effect score,
 // and the restate-based utility count reads every transcript and never counts a prohibition kept.
 // Oldest first keeps the rules that lasted, and a new memory joins at the end instead of
 // reshuffling which rules the limit cuts (the server lists by id, a hash). Deterministic, so a
@@ -706,9 +706,9 @@ func taskContract(cwd string) string {
 }
 
 // logRecall logs ids only, never text: `utility` later checks which injected memories were used.
-func logRecall(hook, sid string, items []map[string]any) {
+func logRecall(hook, sid string, items []map[string]any, cwd ...string) {
 	recallMetric(hook, sid, items)
-	ledgerRecall(sid, items)
+	ledgerRecall(sid, items, cwd...)
 }
 
 func recallMetric(hook, sid string, items []map[string]any) {
@@ -728,7 +728,7 @@ func recallMetric(hook, sid string, items []map[string]any) {
 // promptContext is the memories related to this prompt, beyond what SessionStart injected.
 func promptContext(prompt, sid, cwd string) (string, error) {
 	p, revs, err := promptParts(prompt, sid, cwd)
-	markShown(sid, p.Full, revs)
+	markShown(sid, p.Full, revs, cwd)
 	return p.Full, err
 }
 
@@ -788,7 +788,7 @@ type promptDelivery struct {
 
 // markShown records the delivery when output carries the recall block (full or meta form, not the
 // budget stub), so a memory the budget dropped can still come back next turn.
-func markShown(sid, output string, delivery *promptDelivery) {
+func markShown(sid, output string, delivery *promptDelivery, cwd ...string) {
 	if delivery == nil {
 		return
 	}
@@ -804,12 +804,12 @@ func markShown(sid, output string, delivery *promptDelivery) {
 		}
 	}
 	if delivered == "" {
-		ledgerDeliveries(sid, items)
+		ledgerDeliveries(sid, items, cwd...)
 		recallMetric("UserPromptSubmit", sid, nil)
 		return
 	}
 	fresh := memoryDeliveries(delivery.Items, representation)
-	ledgerDeliveries(sid, append(items, fresh...))
+	ledgerDeliveries(sid, append(items, fresh...), cwd...)
 	if err := sessionStore().MarkMemoryDelivered(sid, fresh); err != nil {
 		metric(kv("event", "hook_error"), kv("hook", "recall_receipt"), kv("error", pyType(err)))
 	}
@@ -1075,8 +1075,8 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 					return err
 				}
 			}
-			markShown(sid, ctx, revs)
-			markStableShown(sid, ctx, stableDelivery)
+			markShown(sid, ctx, revs, str(or(data["cwd"], "")))
+			markStableShown(sid, ctx, stableDelivery, str(or(data["cwd"], "")))
 		case capOnPrompt:
 		case name == "Stop":
 			return sessionCapture(data, "turn_completed")

@@ -57,6 +57,10 @@ func processorSourceRoot(event any) (string, error) {
 // processorProcess applies the head event of path: bind, suspend, or save new dialogue.
 func processorProcess(path string, entry map[string]any, binding any) (err error) {
 	defer recovered(&err)
+	if err := privateCapturePolicy("work_capture_policy_wait", str(or(evidenceField(evidenceField(entry, "event"), "cwd"), "")),
+		privateCheckpointRepository(evidenceField(evidenceField(entry, "job"), "prepared"), false)); err != nil {
+		return err
+	}
 	job0, has := objGet(entry, "job")
 	if !has {
 		job0 = map[string]any{}
@@ -334,6 +338,9 @@ func processorDrain(allOrigins bool) error {
 					stop = true
 					return nil
 				}
+				if err := privateCapturePolicy("work_capture_policy_wait", str(or(evidenceField(evidenceField(entry, "event"), "cwd"), ""))); err != nil {
+					return err
+				}
 				if processorAdvanceControl(state) {
 					if err := processorSave(path, state); err != nil {
 						return err
@@ -361,6 +368,10 @@ func processorDrain(allOrigins bool) error {
 			}
 			if err == nil {
 				continue
+			}
+			if capturePolicyPending(err) || privateCapturePolicy("work_capture_policy_wait", str(or(evidenceField(evidenceField(entry, "event"), "cwd"), "")), privateCheckpointRepository(evidenceField(evidenceField(entry, "job"), "prepared"), false)) != nil {
+				metric(kv("event", "pc_work_pending"), kv("error", errorCode(err)))
+				break
 			}
 			code := handoffCode(err)
 			metric(kv("event", "pc_work_failure"), kv("error", code))

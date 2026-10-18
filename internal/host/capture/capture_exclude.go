@@ -8,11 +8,14 @@ package capture
 
 import (
 	"encoding/json"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/FelixBaek/arkism/internal/host"
 )
@@ -70,33 +73,153 @@ func captureSettingsPath() string {
 	return host.Env("ARKISM_CAPTURE_SETTINGS", filepath.Join(host.Home, ".config", "arkism", "capture.json"))
 }
 
-// readCaptureSettings is the app's settings; a missing or unreadable file means none.
+// Missing settings keep the default; settings that cannot be checked pause capture.
 func readCaptureSettings() captureSettings {
-	var s captureSettings
-	data, err := os.ReadFile(captureSettingsPath())
-	if err == nil && len(data) <= 1<<20 {
-		_ = json.Unmarshal(data, &s)
+	settingsPath := captureSettingsPath()
+	info, err := os.Stat(settingsPath)
+	if os.IsNotExist(err) {
+		if _, linkErr := os.Lstat(settingsPath); os.IsNotExist(linkErr) {
+			return captureSettings{}
+		}
 	}
-	return s
+	if err != nil || !info.Mode().IsRegular() {
+		return captureSettings{Paused: true}
+	}
+	f, err := os.Open(settingsPath)
+	if err != nil {
+		return captureSettings{Paused: true}
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
+	if err != nil || len(data) > 1<<20 {
+		return captureSettings{Paused: true}
+	}
+	if !captureSettingsTypesValid(data) {
+		return captureSettings{Paused: true}
+	}
+	var s *captureSettings
+	if json.Unmarshal(data, &s) != nil || s == nil {
+		return captureSettings{Paused: true}
+	}
+	return *s
+}
+
+func captureSettingsTypesValid(data []byte) bool {
+	var fields map[string]any
+	if !utf8.Valid(data) || json.Unmarshal(data, &fields) != nil || fields == nil {
+		return false
+	}
+	for key, value := range fields {
+		if !captureSettingsFieldValid(key, value) {
+			return false
+		}
+	}
+	return true
+}
+
+func captureSettingsFieldValid(key string, value any) bool {
+	switch {
+	case strings.EqualFold(key, "paused"):
+		_, ok := value.(bool)
+		return ok
+	case strings.EqualFold(key, "instructions"):
+		_, ok := value.(string)
+		return ok
+	case strings.EqualFold(key, "exclude"):
+		folders, ok := value.([]any)
+		if !ok {
+			return false
+		}
+		for _, folder := range folders {
+			if _, ok := folder.(string); !ok {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // captureSkipped reports whether Arkism stays out of a session working in cwd.
 func captureSkipped(cwd string) bool {
-	s := readCaptureSettings()
+	return captureSkippedWithSettings(cwd, readCaptureSettings())
+}
+
+// A caller checking several source paths can share one freshly read settings snapshot.
+func captureSkippedWithSettings(cwd string, s captureSettings) bool {
 	if s.Paused {
 		return true
 	}
 	if cwd == "" {
 		return false
 	}
-	dir := filepath.Clean(cwd)
+	dir := capturePolicyPath(cwd)
 	for _, folder := range s.Exclude {
-		if folder = strings.TrimSpace(folder); folder != "" && pathWithin(dir, filepath.Clean(folder)) {
+		if excludedCaptureFolder(dir, folder) {
+			return true
+		}
+	}
+	// Imported Windows metadata still obeys its exclusion rules. Its drive and UNC
+	// paths do not identify folders on a different operating system.
+	if windowsCapturePath(cwd) && runtime.GOOS != "windows" {
+		// A forward-slash UNC spelling can also be an absolute native path.
+		// Preserve native opt-outs before treating it as imported metadata.
+		if strings.HasPrefix(cwd, "//") {
+			return captureNativeFolderSkipped(filepath.Clean(cwd), s)
+		}
+		return false
+	}
+	return captureNativeFolderSkipped(dir, s)
+}
+
+func captureNativeFolderSkipped(dir string, s captureSettings) bool {
+	resolved, err := resolveCapturePath(dir)
+	if err != nil || captureFolderSkipped(resolved, s) {
+		return true
+	}
+	return captureFolderSkipped(dir, s)
+}
+
+// Historical working directories can have a missing leaf. Resolve their existing
+// prefix so deleting the leaf cannot hide a symlink into an excluded project.
+func resolveCapturePath(dir string) (string, error) {
+	candidate, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	absolute := candidate
+	var missing []string
+	for {
+		resolved, err := filepath.EvalSymlinks(candidate)
+		if err == nil {
+			parts := []string{resolved}
+			for i := len(missing) - 1; i >= 0; i-- {
+				parts = append(parts, missing[i])
+			}
+			return filepath.Join(parts...), nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(candidate)
+		if parent == candidate {
+			// A disconnected Windows drive has no existing prefix to resolve.
+			return absolute, nil
+		}
+		missing = append(missing, filepath.Base(candidate))
+		candidate = parent
+	}
+}
+
+func captureFolderSkipped(dir string, s captureSettings) bool {
+	for _, folder := range s.Exclude {
+		if excludedCaptureFolder(dir, folder) {
 			return true
 		}
 	}
 	for {
-		if fi, err := os.Stat(filepath.Join(dir, captureIgnoreFile)); err == nil && !fi.IsDir() {
+		if fi, err := os.Lstat(filepath.Join(dir, captureIgnoreFile)); err == nil && !fi.IsDir() {
+			return true
+		} else if err != nil && !os.IsNotExist(err) {
 			return true
 		}
 		parent := filepath.Dir(dir)
@@ -107,9 +230,71 @@ func captureSkipped(cwd string) bool {
 	}
 }
 
+func excludedCaptureFolder(dir, folder string) bool {
+	folder = strings.TrimSpace(folder)
+	if folder == "" {
+		return false
+	}
+	if runtime.GOOS != "windows" && strings.HasPrefix(folder, "//") {
+		// POSIX also permits repeated leading separators. Check that spelling
+		// locally before applying the imported Windows UNC comparison.
+		nativeFolder, nativeDir := filepath.Clean(folder), filepath.Clean(dir)
+		if pathWithin(nativeDir, nativeFolder) {
+			return true
+		}
+		if resolved, err := resolveCapturePath(nativeFolder); err == nil && pathWithin(nativeDir, resolved) {
+			return true
+		}
+	}
+	folder = capturePolicyPath(folder)
+	if pathWithin(dir, folder) {
+		return true
+	}
+	// An unrelated UNC exclusion must not trigger a network filesystem lookup.
+	// A local source resolving into that share is checked against its UNC path.
+	if strings.HasPrefix(folder, "//") {
+		return false
+	}
+	if windowsCapturePath(folder) && runtime.GOOS != "windows" {
+		return false
+	}
+	resolved, err := resolveCapturePath(folder)
+	return err == nil && pathWithin(dir, resolved)
+}
+
+func windowsCapturePath(p string) bool {
+	return len(p) >= 3 && ((p[0] >= 'a' && p[0] <= 'z') || (p[0] >= 'A' && p[0] <= 'Z')) &&
+		p[1] == ':' && (p[2] == '\\' || p[2] == '/') || strings.HasPrefix(p, `\\`) || strings.HasPrefix(p, "//")
+}
+
+func capturePolicyPath(p string) string {
+	if runtime.GOOS == "windows" || windowsCapturePath(p) {
+		p = strings.ReplaceAll(p, `\`, "/")
+		if strings.HasPrefix(strings.ToLower(p), "//?/unc/") {
+			p = "//" + p[len("//?/unc/"):]
+		} else {
+			p = strings.TrimPrefix(p, "//?/")
+		}
+		unc := strings.HasPrefix(p, "//")
+		cleaned := path.Clean(p)
+		if unc && !strings.HasPrefix(cleaned, "//") {
+			cleaned = "/" + cleaned
+		}
+		if len(cleaned) == 2 && cleaned[1] == ':' && len(p) > 2 && p[2] == '/' {
+			cleaned += "/"
+		}
+		return strings.ToLower(cleaned)
+	}
+	return filepath.Clean(p)
+}
+
 // pathWithin reports whether path is folder or inside it (case-insensitive on Windows and macOS,
 // whose usual file systems are).
 func pathWithin(path, folder string) bool {
+	if windowsCapturePath(path) || windowsCapturePath(folder) || runtime.GOOS == "windows" {
+		path, folder = capturePolicyPath(path), capturePolicyPath(folder)
+		return path == folder || strings.HasPrefix(path, strings.TrimRight(folder, "/")+"/")
+	}
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		path, folder = strings.ToLower(path), strings.ToLower(folder)
 	}

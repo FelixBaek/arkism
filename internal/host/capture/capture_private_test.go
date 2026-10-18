@@ -236,7 +236,13 @@ func TestPrivateMarkedFindsTagAcrossChunks(t *testing.T) {
 	os.WriteFile(plain, []byte(strings.Repeat("x", 3<<20)), 0o644)
 	big := []byte(strings.Repeat("y", (1<<20)-3))
 	os.WriteFile(marked, append(big, []byte("<PRIVATE>secret</private>")...), 0o644)
-	if privateMarked(plain) || !privateMarked(marked) || privateMarked(filepath.Join(dir, "missing")) {
-		t.Fatal("privateMarked")
+	if found, err := privateMarked(plain); err != nil || found {
+		t.Fatal("plain transcript marked private", err)
+	}
+	if found, err := privateMarked(marked); err != nil || !found {
+		t.Fatal("private transcript not marked", err)
+	}
+	if found, err := privateMarked(filepath.Join(dir, "missing")); err == nil || found {
+		t.Fatal("missing source must remain an inspection error", err)
 	}
 }

@@ -61,8 +61,9 @@ func scanJoined(prev, window []byte) []byte {
 	if len(prev) == 0 {
 		return window
 	}
-	joined := make([]byte, 0, len(prev)+len(window))
-	joined = append(joined, prev...)
+	// Let append grow the slice without computing a potentially overflowing
+	// combined allocation size from reader-controlled lengths.
+	joined := append([]byte(nil), prev...)
 	joined = append(joined, window...)
 	return joined
 }

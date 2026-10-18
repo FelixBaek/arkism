@@ -15,6 +15,11 @@ import (
 	"github.com/FelixBaek/arkism/internal/host"
 )
 
+func archiveTestSettings(t *testing.T) {
+	t.Helper()
+	t.Setenv("ARKISM_CAPTURE_SETTINGS", filepath.Join(t.TempDir(), "capture.json"))
+}
+
 type fakeArchive struct {
 	chunks  map[string][]byte
 	commits []map[string]any
@@ -57,6 +62,7 @@ func codexRow(at float64, text string) string {
 }
 
 func TestArchiveCodexAppendUsesProducerTime(t *testing.T) {
+	archiveTestSettings(t)
 	path := filepath.Join(t.TempDir(), "session.jsonl")
 	old := timeNow() - 7200
 	newer := old + 3600
@@ -88,6 +94,7 @@ func TestArchiveCodexAppendUsesProducerTime(t *testing.T) {
 }
 
 func TestArchiveCodexOldTimestampNotRejuvenatedAndFutureRejected(t *testing.T) {
+	archiveTestSettings(t)
 	path := filepath.Join(t.TempDir(), "session.jsonl")
 	for _, c := range []struct {
 		at      float64
@@ -112,6 +119,7 @@ func TestArchiveCodexOldTimestampNotRejuvenatedAndFutureRejected(t *testing.T) {
 }
 
 func TestArchiveCodexTimestampIgnoresNestedInvalidAndOversized(t *testing.T) {
+	archiveTestSettings(t)
 	path := filepath.Join(t.TempDir(), "session.jsonl")
 	old := timeNow() - 7200
 	d := func(v any) string { return host.MustDumps(v, host.DumpOpts{}) + "\n" }
@@ -133,6 +141,7 @@ func TestArchiveCodexTimestampIgnoresNestedInvalidAndOversized(t *testing.T) {
 }
 
 func TestArchiveCodexBOMHeaderKeepsSessionID(t *testing.T) {
+	archiveTestSettings(t)
 	path := filepath.Join(t.TempDir(), "rollout-00000000-0000-0000-0000-000000000000.jsonl")
 	os.WriteFile(path, []byte("\xef\xbb\xbf"+`{"type":"session_meta","payload":{"id":"real"}}`+"\n"), 0o644)
 	if sid, _ := archiveSessionID(path, "codex"); sid != "real" {
@@ -141,6 +150,9 @@ func TestArchiveCodexBOMHeaderKeepsSessionID(t *testing.T) {
 }
 
 func TestArchiveAgentsViewSubagentsDoNotCollide(t *testing.T) {
+	archiveTestSettings(t)
+	// Imported metadata participates in capture policy, so it must use test-owned paths too.
+	sourcePath := filepath.Join(t.TempDir(), "source.jsonl")
 	dbpath := filepath.Join(t.TempDir(), "sessions.db")
 	db, err := sqlite.Open(dbpath)
 	if err != nil {
@@ -150,18 +162,24 @@ func TestArchiveAgentsViewSubagentsDoNotCollide(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, i := range []string{"1", "2"} {
-		db.Exec("INSERT INTO sessions VALUES('" + i + "','claude','shared-parent','/home/user/source.jsonl','" + archiveISO(timeNow()) + "'," +
-			str(int64(timeNow()*1e9)) + ",1,NULL)")
-		db.Exec("INSERT INTO messages VALUES(" + i + ",'" + i + "',1,'user','child " + i + "')")
+		if err := db.Exec("INSERT INTO sessions VALUES('" + i + "','claude','shared-parent','" + strings.ReplaceAll(sourcePath, "'", "''") + "','" + archiveISO(timeNow()) + "'," +
+			str(int64(timeNow()*1e9)) + ",1,NULL)"); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Exec("INSERT INTO messages VALUES(" + i + ",'" + i + "',1,'user','child " + i + "')"); err != nil {
+			t.Fatal(err)
+		}
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
 	client := newFakeArchive(t)
 	c := newCollector(client, nil, true)
 	if err := c.migrate(dbpath); err != nil {
 		t.Fatal(err)
 	}
 	if len(client.commits) != 2 || client.commits[0]["id"] == client.commits[1]["id"] {
-		t.Fatalf("%v", client.commits)
+		t.Fatalf("commits=%v counts=%v", client.commits, c.counts.n)
 	}
 	for _, cm := range client.commits {
 		if cm["session_id"] != "shared-parent" {
@@ -171,6 +189,7 @@ func TestArchiveAgentsViewSubagentsDoNotCollide(t *testing.T) {
 }
 
 func TestArchiveBytesPreservedAndProjectionExcludesThinkingTools(t *testing.T) {
+	archiveTestSettings(t)
 	path := filepath.Join(t.TempDir(), "session.jsonl")
 	raw := []byte(`{"message": {"role": "assistant", "content": [{"type": "thinking", "thinking": "hidden thought"}, {"type": "text", "text": "visible answer"}, {"type": "tool_use", "input": "hidden tool"}]}}` + "\n")
 	os.WriteFile(path, raw, 0o644)
@@ -194,6 +213,7 @@ func TestArchiveBytesPreservedAndProjectionExcludesThinkingTools(t *testing.T) {
 }
 
 func TestArchiveChangingFileIsNotCommitted(t *testing.T) {
+	archiveTestSettings(t)
 	path := filepath.Join(t.TempDir(), "s.jsonl")
 	os.WriteFile(path, []byte("initial"), 0o644)
 	client := newFakeArchive(t)
@@ -206,6 +226,7 @@ func TestArchiveChangingFileIsNotCommitted(t *testing.T) {
 }
 
 func TestArchiveOldFileIsNotRejuvenated(t *testing.T) {
+	archiveTestSettings(t)
 	path := filepath.Join(t.TempDir(), "old")
 	os.WriteFile(path, []byte("old"), 0o644)
 	touch(t, path, timeNow()-8*86400)
@@ -218,6 +239,7 @@ func TestArchiveOldFileIsNotRejuvenated(t *testing.T) {
 }
 
 func TestArchiveMultichunkRepeatedBytesPreservesOrder(t *testing.T) {
+	archiveTestSettings(t)
 	path := filepath.Join(t.TempDir(), "large")
 	os.WriteFile(path, append(bytes.Repeat([]byte("a"), archiveChunk*2), "end"...), 0o644)
 	client := newFakeArchive(t)
@@ -231,6 +253,7 @@ func TestArchiveMultichunkRepeatedBytesPreservesOrder(t *testing.T) {
 }
 
 func TestArchivePCIdentityDoesNotDependOnPhysicalRoot(t *testing.T) {
+	archiveTestSettings(t)
 	first, second := archiveIdentity("pc", "codex", "sid", "codex-sessions/2026/a.jsonl"), archiveIdentity("pc", "codex", "sid", "codex-sessions/2026/a.jsonl")
 	if first != second {
 		t.Fatal()
@@ -242,6 +265,7 @@ func TestArchivePCIdentityDoesNotDependOnPhysicalRoot(t *testing.T) {
 }
 
 func TestArchiveCounterKeepsFirstIncrementOrder(t *testing.T) {
+	archiveTestSettings(t)
 	c := newCounter()
 	c.inc("planned")
 	c.inc("failed")
@@ -257,6 +281,7 @@ func TestArchiveCounterKeepsFirstIncrementOrder(t *testing.T) {
 
 // Like Path.rglob: a symlinked root is followed, a symlinked folder below it is not.
 func TestArchiveGlobAllFollowsSymlinkedRootOnly(t *testing.T) {
+	archiveTestSettings(t)
 	dir := t.TempDir()
 	realDir, root := filepath.Join(dir, "real"), filepath.Join(dir, "root")
 	os.MkdirAll(filepath.Join(realDir, "a"), 0o700)

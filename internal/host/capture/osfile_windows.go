@@ -6,7 +6,10 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -88,3 +91,94 @@ func killGroup(cmd *exec.Cmd) {
 
 // syncDir is a no-op: Windows cannot fsync a directory handle (Python skipped it too).
 func syncDir(string) error { return nil }
+
+// EvalSymlinks expands 8.3 names and filesystem letter case on Windows. Those
+// spellings are normal paths. Name-surrogate reparse points (including junctions)
+// are refused at every existing component before comparing file identities.
+func resolvedPathEqual(path, canonical string) bool {
+	for candidate := path; ; candidate = filepath.Dir(candidate) {
+		info, err := captureWindowsAttributes(candidate)
+		if err != nil || captureWindowsNameSurrogate(info) {
+			return false
+		}
+		if filepath.Dir(candidate) == candidate {
+			break
+		}
+	}
+	original, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	actual, err := os.Lstat(canonical)
+	return err == nil && os.SameFile(original, actual)
+}
+
+// FILE_ATTRIBUTE_TAG_INFO has two DWORD fields on every Windows architecture.
+type captureWindowsAttributeTagInfo struct {
+	FileAttributes uint32
+	ReparseTag     uint32
+}
+
+func captureWindowsNameSurrogate(info captureWindowsAttributeTagInfo) bool {
+	// IsReparseTagNameSurrogate in the Windows SDK's winnt.h tests the N bit.
+	return info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 && info.ReparseTag&0x20000000 != 0
+}
+
+func captureWindowsAttributes(path string) (info captureWindowsAttributeTagInfo, err error) {
+	native, err := captureWindowsPath(path)
+	if err != nil {
+		return info, err
+	}
+	name, err := windows.UTF16PtrFromString(native)
+	if err != nil {
+		return info, err
+	}
+	if filepath.Dir(path) != path {
+		info.FileAttributes, err = windows.GetFileAttributes(name)
+		if err != nil || info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT == 0 {
+			return info, err
+		}
+	}
+	// Filter reparse points are not aliases. Inspect their tag without following
+	// them; UNC share roots also need a handle because GetFileAttributes fails.
+	h, err := windows.CreateFile(name, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT|windows.FILE_FLAG_BACKUP_SEMANTICS, 0)
+	if err != nil {
+		return info, err
+	}
+	defer windows.CloseHandle(h)
+	return captureWindowsHandleAttributes(h)
+}
+
+func captureWindowsHandleAttributes(handle windows.Handle) (info captureWindowsAttributeTagInfo, err error) {
+	err = windows.GetFileInformationByHandleEx(handle, windows.FileAttributeTagInfo,
+		(*byte)(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)))
+	if err == nil && info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 && info.ReparseTag == 0 {
+		return info, windows.ERROR_REPARSE_TAG_INVALID
+	}
+	return info, err
+}
+
+func evalCanonicalPath(path string) (string, error) {
+	native, err := captureWindowsPath(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(native)
+}
+
+// Native attribute and path-resolution APIs need the same long-path spelling
+// that Go's os package supplies internally. Keep UNC shares and device prefixes.
+func captureWindowsPath(path string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(absolute, `\\?\`) || strings.HasPrefix(absolute, `\\.\`) {
+		return absolute, nil
+	}
+	if strings.HasPrefix(absolute, `\\`) {
+		return `\\?\UNC\` + absolute[2:], nil
+	}
+	return `\\?\` + absolute, nil
+}

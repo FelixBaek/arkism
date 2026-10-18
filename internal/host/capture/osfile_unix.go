@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 
 	"golang.org/x/sys/unix"
@@ -79,3 +80,8 @@ func syncDir(dir string) error {
 	defer d.Close()
 	return d.Sync()
 }
+
+// Unix resolve preserves ordinary spelling; any changed prefix is an alias.
+func resolvedPathEqual(path, canonical string) bool { return path == canonical }
+
+func evalCanonicalPath(path string) (string, error) { return filepath.EvalSymlinks(path) }

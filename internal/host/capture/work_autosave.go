@@ -383,7 +383,13 @@ func autosaveDialogue(job any, request autosaveRequest, scope any) (messages []a
 					return nil, 0, err
 				}
 			}
-			messages = append(messages, host.Obj{{Key: "role", Value: role}, {Key: "text", Value: strings.Join(parts, "")}, {Key: "ref", Value: ref}})
+			text := strings.Join(parts, "")
+			if privatePayload(text) {
+				// Legacy archives may predate private filtering. Their original
+				// byte/hash refs cannot serve as new evidence after redaction.
+				return nil, 0, sessionWait("work_private_source")
+			}
+			messages = append(messages, host.Obj{{Key: "role", Value: role}, {Key: "text", Value: text}, {Key: "ref", Value: ref}})
 		}
 		next, has := page["next_cursor"]
 		if !has {
@@ -489,6 +495,33 @@ func containsJSON(list []any, v any) bool {
 // complete before any save.
 func autosaveProcess(job *host.Obj, request autosaveRequest, scope any, extract autosaveExtractor, persist func() error) (receipt any, err error) {
 	defer recovered(&err)
+	repository := ""
+	checkPolicy := func() error {
+		return privateCapturePolicy("work_capture_policy_wait", str(or(autosaveGet(*job, "cwd"), "")),
+			str(or(autosaveGet(*job, "repository"), "")), privateCheckpointRepository(autosaveGet(*job, "prepared"), false), repository)
+	}
+	if err := checkPolicy(); err != nil {
+		return nil, err
+	}
+	post, checkpoint := request, persist
+	request = func(path string, body any) (map[string]any, error) {
+		if err := checkPolicy(); err != nil {
+			return nil, err
+		}
+		if err := privateCapturePolicy("work_capture_policy_wait", privateCheckpointRepository(body, false)); err != nil {
+			return nil, err
+		}
+		return post(path, body)
+	}
+	persist = func() error {
+		if err := checkPolicy(); err != nil {
+			return err
+		}
+		return checkpoint()
+	}
+	if privatePrepared(*job, "prepared") {
+		return nil, sessionWait("work_private_prepared")
+	}
 	if truthy(autosaveGet(*job, "owner_recovery")) {
 		return nil, valueErr("work_recovery_pending")
 	}
@@ -519,13 +552,31 @@ func autosaveProcess(job *host.Obj, request autosaveRequest, scope any, extract 
 		if stale && autosaveGet(current["package"], "status") != "in_progress" {
 			return nil, valueErr("work_revision_changed")
 		}
+		repository = str(or(autosaveGet(current["package"], "repository"), ""))
+		if privateCheckpointIdentity(current["package"]) {
+			return nil, sessionWait("work_private_identity")
+		}
+		if err := checkPolicy(); err != nil {
+			return nil, err
+		}
 		messages, excluded, err := autosaveDialogue(*job, request, scope)
 		if err != nil {
 			return nil, err
 		}
+		current["package"] = privateData(current["package"])
+		messages, _ = privateData(messages).([]any)
+		if privatePayload(current["package"]) || privatePayload(messages) {
+			return nil, sessionWait("work_private_content")
+		}
 		claims, err := extract(current["package"], messages)
 		if err != nil {
 			return nil, err
+		}
+		if err := checkPolicy(); err != nil {
+			return nil, err
+		}
+		if privatePayload(claims) {
+			return nil, sessionWait("work_private_output")
 		}
 		pkg, err := autosaveApplyClaims(current["package"], messages, claims)
 		if err != nil {
@@ -561,6 +612,9 @@ func autosaveProcess(job *host.Obj, request autosaveRequest, scope any, extract 
 		if len(refs) > 8 {
 			return nil, valueErr("work_evidence_too_large")
 		}
+		if privatePayload(pkg) {
+			return nil, sessionWait("work_private_content")
+		}
 		job.Set("prepared_base_revision", current["revision"])
 		job.Set("prepared", host.Obj{{Key: "archive_messages", Value: refs}, {Key: "scope", Value: scope}, {Key: "id", Value: at("id")},
 			{Key: "event_id", Value: at("event_id")}, {Key: "expected_revision", Value: current["revision"]}, {Key: "package", Value: pkg}})
@@ -571,6 +625,9 @@ func autosaveProcess(job *host.Obj, request autosaveRequest, scope any, extract 
 		return nil, err
 	}
 	prepared := at("prepared")
+	if privatePayload(prepared) {
+		return nil, sessionWait("work_private_prepared")
+	}
 	for _, kv := range []host.KV{{Key: "scope", Value: scope}, {Key: "id", Value: at("id")}, {Key: "event_id", Value: at("event_id")},
 		{Key: "expected_revision", Value: revision}} {
 		if !eq(autosaveGet(prepared, kv.Key), kv.Value) {
@@ -612,8 +669,11 @@ func autosaveProcess(job *host.Obj, request autosaveRequest, scope any, extract 
 
 // autosaveExtract asks the model for quoted claims about the dialogue.
 func autosaveExtract(pkg any, messages []any) (any, error) {
-	user := host.MustDumps(host.Obj{{Key: "prior_checkpoint", Value: pkg}, {Key: "messages", Value: messages}}, host.DumpOpts{NoASCII: true})
-	return llm(autosavePrompt, user, capModel, 120*time.Second, autosaveSchema, "claims")
+	if privateCheckpointIdentity(pkg) {
+		return nil, sessionWait("work_private_identity")
+	}
+	user := host.MustDumps(privateData(host.Obj{{Key: "prior_checkpoint", Value: pkg}, {Key: "messages", Value: messages}}), host.DumpOpts{NoASCII: true})
+	return privateModel(autosavePrompt, user, capModel, 120*time.Second, autosaveSchema, "claims", str(or(evidenceField(pkg, "repository"), "")))
 }
 
 // autosaveOutboxKey names the outbox file of one save event.
@@ -677,6 +737,9 @@ const autosaveUsage = "usage: arkism work-autosave [-h] --id ID --event-id EVENT
 
 func autosaveRun(values map[string]string, revision int) (result any, err error) {
 	defer recovered(&err)
+	if err := privateCapturePolicy("work_capture_policy_wait"); err != nil {
+		return nil, err
+	}
 	scope := capScope()
 	descriptor := host.Obj{}
 	for _, d := range autosaveDescriptor {

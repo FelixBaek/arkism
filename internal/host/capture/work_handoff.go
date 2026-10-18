@@ -462,6 +462,11 @@ func handoffChecked(root, key string, job host.Obj) (host.Obj, error) {
 // handoffProcess archives the session up to now and saves it into the bound work.
 func handoffProcess(root, key string, job *host.Obj) (err error) {
 	defer recovered(&err)
+	context, _ := objGet(*job, "context")
+	if err := privateCapturePolicy("work_capture_policy_wait", str(or(evidenceField(context, "cwd"), "")),
+		privateCheckpointRepository(autosaveGet(*job, "prepared"), false)); err != nil {
+		return err
+	}
 	if truthy(autosaveGet(*job, "owner_recovery")) {
 		return valueErr("work_recovery_pending")
 	}
@@ -695,6 +700,10 @@ func handoffDrain(allOrigins bool) error {
 			return handoffProcess(root, strings.TrimSuffix(filepath.Base(path), ".pending.json"), &job)
 		}()
 		if err == nil {
+			continue
+		}
+		if capturePolicyPending(err) || privateCapturePolicy("work_capture_policy_wait", str(or(evidenceField(evidenceField(job, "context"), "cwd"), "")), privateCheckpointRepository(evidenceField(job, "prepared"), false)) != nil {
+			metric(kv("event", "work_handoff_pending"), kv("error", errorCode(err)))
 			continue
 		}
 		code := handoffCode(err)
