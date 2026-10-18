@@ -10,7 +10,8 @@ import (
 
 // These Win32 errors can also describe temporary sharing/delete-pending states.
 // An ambiguous access denial is not proof of a transient failure: it is returned
-// unchanged if this short retry budget expires. No ACL or attributes are changed.
+// with its underlying cause available when the short budget expires. No ACL or
+// attributes are changed.
 const (
 	atomicWriteAccessDenied     syscall.Errno = 5
 	atomicWriteSharingViolation syscall.Errno = 32
@@ -19,7 +20,9 @@ const (
 )
 
 func replaceAtomicWrite(oldpath, newpath string) error {
-	return replaceAtomicWriteWindows(oldpath, newpath, os.Rename, time.Now, time.Sleep)
+	return coordinateAtomicWrite(newpath, func() error {
+		return replaceAtomicWriteWindows(oldpath, newpath, os.Rename, time.Now, time.Sleep)
+	})
 }
 
 // The retry budget bounds additional attempts and sleeps, not kernel-call or
