@@ -82,7 +82,21 @@ namespace Arkism.InstallerChecks {
     return @($state.ProcessRows)
   }
   function Get-ProductProcessRows([string]$InstallPath) { return @($state.ProcessRows) }
-  function New-ProductFixture {
+  function New-TestSetupCollision($Fixture, [string]$Kind) {
+    $relative = switch ($Kind) {
+      hook { '.config/arkism/hook-codex.cmd' }
+      backup { '.config/arkism/backups/existing.fixture' }
+      shortcut_name { 'Desktop/Ar'+[char]0x00ad+'kism.lnk' }
+      default { throw 'test_collision_kind_invalid' }
+    }
+    $path=Join-Path $Fixture.Environment.HOME $relative
+    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))|Out-Null
+    if ($Kind -ceq 'shortcut_name') {
+      [IO.File]::Copy((Join-Path $Fixture.Environment.HOME 'Desktop/Arkism.lnk'),$path)
+    } else { [IO.File]::WriteAllText($path,'Inert setup-owned collision; must never be overwritten.') }
+    $Fixture.SetupCollisionPath=$path
+  }
+  function New-ProductFixture([int]$SetupExtraFiles = 0, [string]$SetupCollision = '', [switch]$SkipSyntheticData) {
     $parent = Join-Path $suite ([guid]::NewGuid().ToString('N')); $root = Join-Path $parent 'owned'
     [IO.Directory]::CreateDirectory($root) | Out-Null
     $owner='a'*32; [IO.File]::WriteAllText((Join-Path $root '.installed-smoke-owner'),$owner)
@@ -92,6 +106,7 @@ namespace Arkism.InstallerChecks {
     foreach($path in @($fixture.Stage,$fixture.Install,$fixture.Environment.HOME,$fixture.Environment.APPDATA,$fixture.Environment.LOCALAPPDATA,$fixture.Environment.TEMP)) {
       [IO.Directory]::CreateDirectory($path) | Out-Null
     }
+    Assert-ProductProfileBeforeSetup $fixture
     $names=@('Arkism.exe','integration/arkism.exe','runtime/memoryd.exe','runtime/memory-principal.exe','runtime/roles.sql',
       'runtime/pgsql/bin/postgres.exe','runtime/pgsql/bin/pg_ctl.exe','runtime/pgsql/bin/initdb.exe','runtime/pgsql/bin/psql.exe',
       'runtime/pgsql/bin/pg_dump.exe','runtime/pgsql/bin/pg_restore.exe','runtime/pgsql/lib/vector.dll','runtime/pgsql/share/extension/vector.control')
@@ -121,7 +136,12 @@ namespace Arkism.InstallerChecks {
       Shortcuts=@($links | ForEach-Object {[pscustomobject]@{Target=$values.DisplayIcon;Arguments='';Role=$_.Role;Path=$_.Path;Scope='owned'}});
       Tasks=@();Autostart=@();Residual=@()}
     $fixture.ProcessRows=@()
-    New-ProductSyntheticData $fixture
+    for ($index=0; $index -lt $SetupExtraFiles; $index++) {
+      [IO.File]::WriteAllText((Join-Path $fixture.Environment.LOCALAPPDATA ("setup-owned-$index.fixture")),"Inert setup-owned file $index.")
+    }
+    if ($SetupCollision) { New-TestSetupCollision $fixture $SetupCollision }
+    Initialize-ProductProfileBaseline $fixture
+    if (-not $SkipSyntheticData) { New-ProductSyntheticData $fixture }
     return $fixture
   }
   function Invoke-TestProductCore($State,[scriptblock]$Mutation,[bool]$Hang=$false,[string]$Faults='') {
@@ -512,6 +532,149 @@ namespace Arkism.InstallerChecks {
     }
   }
 
+  function Invoke-ProductSetupProfileCases {
+    Test-ProductCase 'setup profile snapshot preserves all five unrelated files through normal removal' {
+      $state=New-ProductFixture -SetupExtraFiles 5
+      Require-ProductTest (@($state.Profile).Count -eq 8 -and @($state.SetupProfile).Count -eq 7) 'setup_profile_count_incorrect'
+      Assert-ProductUninstallInputs $state
+      $result=Invoke-TestProductCore $state $null
+      Complete-TestProductRemoval $state
+      Assert-ProductRemoved $state $result
+      Require-ProductTest (@(Get-InstalledSmokeTree $state.Environment.HOME $state.Environment.HOME).Count -eq 7) 'setup_profile_files_lost'
+    }
+    Test-ProductCase 'profile must be empty before setup and cannot be recaptured afterward' {
+      $state=New-ProductFixture -SetupExtraFiles 5
+      $before=$state.SetupProfile|ConvertTo-Json -Compress
+      Reject-ProductTest {Assert-ProductProfileBeforeSetup $state} 'product_profile_not_empty'
+      Reject-ProductTest {Initialize-ProductProfileBaseline $state} 'product_profile_already_captured'
+      Require-ProductTest (($state.SetupProfile|ConvertTo-Json -Compress) -ceq $before) 'setup_profile_recaptured'
+    }
+  }
+
+  function Invoke-ProductSyntheticCollisionCases {
+    foreach ($kind in @('hook','backup')) {
+      Test-ProductCase ("synthetic data refuses setup $kind collision without overwriting it") {
+        $state=New-ProductFixture -SetupCollision $kind -SkipSyntheticData
+        $before=Get-InstalledSmokeHash $state.SetupCollisionPath
+        $code=if($kind -ceq 'hook'){'product_hook_already_exists'}else{'product_backup_namespace_exists'}
+        Reject-ProductTest {New-ProductSyntheticData $state} $code
+        Require-ProductTest ((Get-InstalledSmokeHash $state.SetupCollisionPath) -ceq $before) 'setup_collision_overwritten'
+      }
+    }
+  }
+
+  function Invoke-ProductShortcutCaseCases {
+    Test-ProductCase 'shortcut metadata casing uses the captured filesystem path without changing the baseline' {
+      $state=New-ProductFixture -SetupExtraFiles 5
+      $before=$state.SetupProfile|ConvertTo-Json -Compress
+      foreach ($shortcut in $state.Global.Shortcuts) { $shortcut.Path=$shortcut.Path.ToUpperInvariant() }
+      Assert-ProductUninstallInputs $state
+      Set-ProductProfileBaseline $state
+      Require-ProductTest (($state.SetupProfile|ConvertTo-Json -Compress) -ceq $before) 'setup_profile_case_rewritten'
+      Complete-TestProductRemoval $state
+      Assert-ProductRemoved $state ([pscustomobject]@{EmptyConfirmed=$true})
+    }
+  }
+
+  function Invoke-ProductSetupMutationCases {
+    $mutations=@{
+      missing = {[IO.File]::Delete((Join-Path $state.Environment.LOCALAPPDATA 'setup-owned-0.fixture'))}
+      hash = {[IO.File]::AppendAllText((Join-Path $state.Environment.LOCALAPPDATA 'setup-owned-0.fixture'),'changed')}
+      path = {
+        $extra=Join-Path $state.Environment.LOCALAPPDATA 'setup-owned-0.fixture'
+        [IO.File]::Move($extra,($extra+'.moved'))
+      }
+      role = {$state.Global.Shortcuts[0].Role='Desktop';$state.Global.Shortcuts[1].Role='Programs'}
+      duplicate = {$state.Global.Shortcuts[1].Path=$state.Global.Shortcuts[0].Path}
+    }
+    foreach ($kind in $mutations.Keys) {
+      foreach ($late in @($false,$true)) {
+        Test-ProductCase ("captured setup profile $kind late=$late keeps resume zero") {
+          $state=New-ProductFixture -SetupExtraFiles 5
+          $failure=$null
+          try {
+            if($late){[void](Invoke-TestProductCore $state $mutations[$kind])}
+            else{& $mutations[$kind];[void](Invoke-TestProductCore $state $null)}
+          }catch{$failure=$_}
+          Require-ProductTest ($null -ne $failure) 'setup_profile_mutation_accepted'
+          $api=[Arkism.InstallerChecks.ProductTestHarness]::Last
+          Require-ProductTest ($api.ResumeCalls -eq 0 -and $api.FactoryCalls -eq [int]$late) 'setup_profile_mutation_resumed'
+        }
+      }
+    }
+  }
+
+  function Invoke-ProductSetupPreservationCases {
+    foreach ($kind in @('extra','missing','hash','path')) {
+      Test-ProductCase ("removal preserves setup profile strictly and rejects $kind") {
+        $state=New-ProductFixture -SetupExtraFiles 5
+        Complete-TestProductRemoval $state
+        $extra=Join-Path $state.Environment.LOCALAPPDATA 'setup-owned-0.fixture'
+        switch($kind) {
+          extra {[IO.File]::WriteAllText(($extra+'.new'),'new unrelated file')}
+          missing {[IO.File]::Delete($extra)}
+          hash {[IO.File]::AppendAllText($extra,'changed')}
+          path {[IO.File]::Move($extra,($extra+'.moved'))}
+        }
+        $failure=$null;try{Assert-ProductRemoved $state ([pscustomobject]@{EmptyConfirmed=$true})}catch{$failure=$_}
+        Require-ProductTest ($null -ne $failure) 'removed_setup_profile_mutation_accepted'
+        $report=[ordered]@{};Add-ProductManifestDiagnostic $report $failure
+        Require-ProductTest ($report.manifest_check -ceq 'profile_after_removal' -and $report.manifest_expected_files -eq 7) 'removed_setup_profile_diagnostic_missing'
+      }
+    }
+  }
+
+  function Invoke-ProductOrdinalProfileCases {
+    Test-ProductCase 'ordinal setup profile preserves a distinct culturally equal shortcut name' {
+      $state=New-ProductFixture -SetupCollision 'shortcut_name'
+      $result=Invoke-TestProductCore $state $null
+      Complete-TestProductRemoval $state
+      Assert-ProductRemoved $state $result
+      Require-ProductTest ([IO.File]::Exists($state.SetupCollisionPath)) 'ordinal_setup_file_removed'
+    }
+    Test-ProductCase 'ordinal setup profile refuses deletion of a distinct culturally equal shortcut name' {
+      $state=New-ProductFixture -SetupCollision 'shortcut_name'
+      $result=Invoke-TestProductCore $state $null
+      Complete-TestProductRemoval $state
+      [IO.File]::Delete($state.SetupCollisionPath)
+      Reject-ProductTest {Assert-ProductRemoved $state $result} 'product_manifest_changed'
+    }
+    Test-ProductCase 'ordinal manifest rejects culturally equal path substitution with identical bytes' {
+      $expected=@([pscustomobject]@{Path='Desktop/Arkism.lnk';Sha256=('a'*64)})
+      $actual=@([pscustomobject]@{Path=('Desktop/Ar'+[char]0x00ad+'kism.lnk');Sha256=('a'*64)})
+      $failure=$null;try{Assert-ProductManifest $expected $actual 'profile_before_removal'}catch{$failure=$_}
+      Require-ProductTest ($null -ne $failure) 'ordinal_path_substitution_accepted'
+      $report=[ordered]@{};Add-ProductManifestDiagnostic $report $failure
+      Require-ProductTest ($report.manifest_mismatch_kind -ceq 'path' -and -not $report.manifest_path_case_equal) 'ordinal_path_diagnostic_incorrect'
+    }
+    Test-ProductCase 'ordinal manifest order preserves distinct paths and bytes regardless of enumeration' {
+      $expected=@([pscustomobject]@{Path='Desktop/Arkism.lnk';Sha256=('a'*64)},
+        [pscustomobject]@{Path=('Desktop/Ar'+[char]0x00ad+'kism.lnk');Sha256=('b'*64)})
+      Assert-ProductManifest $expected @($expected[1],$expected[0]) 'profile_initial'
+    }
+    Test-ProductCase 'manifest labels reject culturally equal unknown strings' {
+      foreach ($entry in @(@{Key='Check';Label='profile_initial'},@{Key='Kind';Label='count'})) {
+        $exception=New-ProductManifestFailure @() @([pscustomobject]@{Path='synthetic';Sha256='synthetic'}) 'profile_initial'
+        $exception.Data['ArkismProductManifest'][$entry.Key]=$entry.Label.Insert(2,[string][char]0x00ad)
+        $report=[ordered]@{};Add-ProductManifestDiagnostic $report ([pscustomobject]@{Exception=$exception})
+        Require-ProductTest ($report.Count -eq 0) 'ordinal_manifest_label_accepted'
+      }
+      Reject-ProductTest {New-ProductManifestFailure @() @() ('profile_in'+[char]0x00ad+'itial')} 'product_manifest_check_invalid'
+    }
+    foreach ($field in @('key','value')) {
+      Test-ProductCase ("hook backup rejects culturally equal but different manifest $field") {
+        $state=New-ProductFixture;Complete-TestProductRemoval $state
+        $directory=Join-Path $state.Environment.HOME '.config/arkism/backups/synthetic-remove'
+        $key=$state.Hook;$value=Join-Path $directory '0'
+        if($field -ceq 'key'){$key=$key.Replace('hook-codex','hook-'+[char]0x00ad+'codex')}
+        else{$value=$value.Replace('synthetic-remove','synthetic-'+[char]0x00ad+'remove')}
+        $manifest=@{};$manifest[$key]=$value
+        [IO.File]::WriteAllText((Join-Path $directory 'manifest.json'),($manifest|ConvertTo-Json))
+        Reject-ProductTest {Assert-ProductRemoved $state ([pscustomobject]@{EmptyConfirmed=$true})} 'product_helper_backup_invalid'
+      }
+    }
+  }
+
   $script:ProductPassed=0
   Invoke-ProductBindingCases
   Invoke-ProductCoreCases
@@ -523,6 +686,12 @@ namespace Arkism.InstallerChecks {
   Invoke-ProductDiagnosticCases
   Invoke-ProductManifestDiagnosticCases
   Invoke-ProductManifestMalformedCases
+  Invoke-ProductSetupProfileCases
+  Invoke-ProductSyntheticCollisionCases
+  Invoke-ProductShortcutCaseCases
+  Invoke-ProductSetupMutationCases
+  Invoke-ProductSetupPreservationCases
+  Invoke-ProductOrdinalProfileCases
   Write-Output "All $script:ProductPassed product prototype offline cases passed; native calls: 0. Owned inert fixtures retained."
 }
 

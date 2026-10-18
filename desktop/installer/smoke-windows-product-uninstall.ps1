@@ -20,14 +20,28 @@ function Assert-ProductEnvironment($State) {
   }
 }
 
+function Test-ProductOrdinalMember([string]$Value, [string[]]$Allowed) {
+  foreach ($candidate in $Allowed) {
+    if ([string]::Equals($Value, $candidate, [StringComparison]::Ordinal)) { return $true }
+  }
+  return $false
+}
+
+function Get-ProductSortedManifest($Rows) {
+  $ordered = New-Object 'Collections.Generic.List[object]'
+  foreach ($row in @($Rows)) { $ordered.Add($row) }
+  $ordered.Sort([Comparison[object]]{ param($left, $right) [StringComparer]::Ordinal.Compare($left.Path, $right.Path) })
+  return $ordered.ToArray()
+}
+
 function New-ProductManifestFailure($Expected, $Actual, [string]$Check, [int]$Index = -1) {
-  $checks = @('unspecified', 'profile_initial', 'profile_before_removal', 'stage_payload', 'data_before_removal', 'data_after_removal')
-  if ($Check -cnotin $checks) { throw 'product_manifest_check_invalid' }
+  $checks = @('unspecified', 'profile_initial', 'profile_before_removal', 'profile_after_removal', 'stage_payload', 'data_before_removal', 'data_after_removal')
+  if (-not (Test-ProductOrdinalMember $Check $checks)) { throw 'product_manifest_check_invalid' }
   $diagnostic = @{ Check = $Check; Kind = 'count'; ExpectedFiles = @($Expected).Count; ActualFiles = @($Actual).Count
     FirstIndex = $Index; PathCaseEqual = $false; PathSeparatorEqual = $false }
   if ($Index -ge 0) {
-    $pathChanged = $Expected[$Index].Path -cne $Actual[$Index].Path
-    $hashChanged = $Expected[$Index].Sha256 -cne $Actual[$Index].Sha256
+    $pathChanged = -not [string]::Equals($Expected[$Index].Path, $Actual[$Index].Path, [StringComparison]::Ordinal)
+    $hashChanged = -not [string]::Equals($Expected[$Index].Sha256, $Actual[$Index].Sha256, [StringComparison]::Ordinal)
     $diagnostic.Kind = if ($pathChanged -and $hashChanged) { 'path_and_hash' } elseif ($pathChanged) { 'path' } else { 'hash' }
     if ($Expected[$Index].Path -is [string] -and $Actual[$Index].Path -is [string]) {
       $diagnostic.PathCaseEqual = [string]::Equals($Expected[$Index].Path, $Actual[$Index].Path, [StringComparison]::OrdinalIgnoreCase)
@@ -41,8 +55,11 @@ function New-ProductManifestFailure($Expected, $Actual, [string]$Check, [int]$In
 
 function Assert-ProductManifest($Expected, $Actual, [string]$Check = 'unspecified') {
   if (@($Expected).Count -ne @($Actual).Count) { throw (New-ProductManifestFailure $Expected $Actual $Check) }
+  $Expected = @(Get-ProductSortedManifest $Expected)
+  $Actual = @(Get-ProductSortedManifest $Actual)
   for ($index = 0; $index -lt @($Expected).Count; $index++) {
-    if ($Expected[$index].Path -cne $Actual[$index].Path -or $Expected[$index].Sha256 -cne $Actual[$index].Sha256) {
+    if (-not [string]::Equals($Expected[$index].Path, $Actual[$index].Path, [StringComparison]::Ordinal) -or
+      -not [string]::Equals($Expected[$index].Sha256, $Actual[$index].Sha256, [StringComparison]::Ordinal)) {
       throw (New-ProductManifestFailure $Expected $Actual $Check $index)
     }
   }
@@ -61,8 +78,8 @@ function Add-ProductManifestDiagnostic($Report, $Failure) {
   $diagnostic = Get-ProductManifestDiagnostic $Failure
   if ($null -eq $diagnostic) { return }
   if ($diagnostic.Check -isnot [string] -or $diagnostic.Kind -isnot [string]) { return }
-  if ($diagnostic.Check -cnotin @('unspecified', 'profile_initial', 'profile_before_removal', 'stage_payload', 'data_before_removal', 'data_after_removal') -or
-    $diagnostic.Kind -cnotin @('count', 'path', 'hash', 'path_and_hash')) { return }
+  if (-not (Test-ProductOrdinalMember $diagnostic.Check @('unspecified', 'profile_initial', 'profile_before_removal', 'profile_after_removal', 'stage_payload', 'data_before_removal', 'data_after_removal')) -or
+    -not (Test-ProductOrdinalMember $diagnostic.Kind @('count', 'path', 'hash', 'path_and_hash'))) { return }
   foreach ($name in @('ExpectedFiles', 'ActualFiles', 'FirstIndex')) {
     if ($diagnostic[$name] -isnot [int] -or $diagnostic[$name] -lt -1) { return }
   }
@@ -115,6 +132,7 @@ function Assert-ProductGlobalState($State, [long]$AllowedPid = 0, [string]$Allow
   foreach ($name in @('Autostart', 'Tasks', 'Residual')) {
     if (@($global[$name]).Count) { throw 'product_global_state_changed' }
   }
+  if ($State.ContainsKey('ProfileShortcutRecords')) { Assert-ProductShortcutBindings $State $global }
   Assert-ProductProcessState $State $AllowedPid $AllowedImage
 }
 
@@ -122,25 +140,63 @@ function Assert-ProductProfileBeforeRemoval($State) {
   Assert-ProductManifest $State.Profile @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path) 'profile_before_removal'
 }
 
-function Set-ProductProfileBaseline($State) {
-  $global = Get-InstalledSmokeGlobalState $State.Context
-  Assert-InstalledSmokeRegistration $global $State.Install $State.Version -RequireComplete
-  $shortcuts = @($global.Shortcuts | ForEach-Object {
-    $path = ConvertTo-InstalledSmokePath $_.Path
-    if ($_.Scope -cne 'owned' -or -not (Test-InstalledSmokeWithin $path $State.Environment.HOME)) {
+function Assert-ProductProfileBeforeSetup($State) {
+  Assert-InstalledSmokeOwnedRoot $State.Context $State.Root
+  Assert-ProductPathLayout $State
+  Assert-ProductEnvironment $State
+  if (@(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME).Count) { throw 'product_profile_not_empty' }
+}
+
+function Get-ProductProfileShortcutRecords($State, $Global, $Profile) {
+  Assert-InstalledSmokeRegistration $Global $State.Install $State.Version -RequireComplete
+  $seen = @{}
+  foreach ($shortcut in @($Global.Shortcuts | Sort-Object Role)) {
+    $path = ConvertTo-InstalledSmokePath $shortcut.Path
+    if ($shortcut.Scope -cne 'owned' -or -not (Test-InstalledSmokeWithin $path $State.Environment.HOME)) {
       throw 'product_shortcut_profile_not_owned'
     }
-    $path
-  })
-  $expected = @(@($State.Hook) + $shortcuts | ForEach-Object {
-    [pscustomobject]@{
-      Path = $_.Substring($State.Environment.HOME.Length + 1).Replace('\', '/')
-      Sha256 = Get-InstalledSmokeHash $_
+    $relative = $path.Substring($State.Environment.HOME.Length + 1).Replace('\', '/')
+    $rows = @($Profile | Where-Object { [string]::Equals($_.Path, $relative, [StringComparison]::OrdinalIgnoreCase) })
+    if ($rows.Count -ne 1 -or $seen.ContainsKey($rows[0].Path)) { throw 'product_shortcut_profile_ambiguous' }
+    $seen[$rows[0].Path] = $true
+    [pscustomobject]@{ Role = $shortcut.Role; Path = $rows[0].Path; Sha256 = $rows[0].Sha256 }
+  }
+}
+
+function Assert-ProductShortcutBindings($State, $Global) {
+  $actual = @(Get-ProductProfileShortcutRecords $State $Global $State.SetupProfile)
+  Assert-ProductManifest $State.ProfileShortcutRecords $actual
+  for ($index = 0; $index -lt $actual.Count; $index++) {
+    if (-not [string]::Equals($State.ProfileShortcutRecords[$index].Role, $actual[$index].Role, [StringComparison]::Ordinal) -or
+      -not [string]::Equals($State.ProfileShortcutRecords[$index].Path, $actual[$index].Path, [StringComparison]::Ordinal)) {
+      throw 'product_shortcut_role_changed'
     }
-  } | Sort-Object Path)
+  }
+}
+
+function Initialize-ProductProfileBaseline($State) {
+  if ($State.ContainsKey('SetupProfile')) { throw 'product_profile_already_captured' }
+  Assert-InstalledSmokeOwnedRoot $State.Context $State.Root
+  Assert-ProductPathLayout $State
+  Assert-ProductEnvironment $State
+  if ((Get-InstalledSmokeHash $State.Setup) -cne $State.SetupHash) { throw 'product_setup_changed' }
+  Assert-InstalledSmokePayload $State.Install $State.Manifest
+  if ((Get-InstalledSmokeHash (Join-Path $State.Install 'uninstall.exe')) -cne $State.UninstallerHash) { throw 'product_uninstaller_changed' }
+  Assert-ProductGlobalState $State
+  $profile = @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path)
+  $shortcuts = @(Get-ProductProfileShortcutRecords $State (Get-InstalledSmokeGlobalState $State.Context) $profile)
+  $State.SetupProfile = $profile
+  $State.ProfileShortcutRecords = $shortcuts
+  $State.ProfileShortcuts = @($shortcuts | ForEach-Object { ConvertTo-InstalledSmokePath (Join-Path $State.Environment.HOME $_.Path) })
+}
+
+function Set-ProductProfileBaseline($State) {
+  if (-not $State.ContainsKey('SetupProfile')) { throw 'product_profile_not_captured' }
+  Assert-ProductShortcutBindings $State (Get-InstalledSmokeGlobalState $State.Context)
+  $hook = [pscustomobject]@{ Path = $State.Hook.Substring($State.Environment.HOME.Length + 1).Replace('\', '/'); Sha256 = $State.HookHash }
+  $expected = @(@($State.SetupProfile) + @($hook) | Sort-Object Path)
   Assert-ProductManifest $expected @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path) 'profile_initial'
   $State.Profile = $expected
-  $State.ProfileShortcuts = $shortcuts
 }
 
 function Assert-ProductUninstallInputs($State, [long]$AllowedPid = 0, [string]$AllowedImage = '') {
@@ -225,10 +281,16 @@ function Assert-ProductHookBackup($State) {
   $value = [IO.File]::ReadAllText($manifest) | ConvertFrom-Json -ErrorAction Stop
   $fields = @($value.PSObject.Properties)
   $saved = Join-Path $dirs[0] '0'
-  if ($fields.Count -ne 1 -or $fields[0].Name -cne $State.Hook -or $fields[0].Value -cne $saved -or
-    (Get-InstalledSmokeHash $saved) -cne $State.HookHash) { throw 'product_helper_backup_invalid' }
-  $files = @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME)
-  if ($files.Count -ne 2) { throw 'product_profile_after_removal_changed' }
+  if ($fields.Count -ne 1 -or -not [string]::Equals($fields[0].Name, $State.Hook, [StringComparison]::Ordinal) -or
+    -not [string]::Equals($fields[0].Value, $saved, [StringComparison]::Ordinal) -or
+    -not [string]::Equals((Get-InstalledSmokeHash $saved), $State.HookHash, [StringComparison]::Ordinal)) { throw 'product_helper_backup_invalid' }
+  $shortcuts = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+  foreach ($row in $State.ProfileShortcutRecords) { [void]$shortcuts.Add($row.Path) }
+  $retained = @($State.SetupProfile | Where-Object { -not $shortcuts.Contains($_.Path) })
+  $backups = @(@($manifest, $saved) | ForEach-Object {
+    [pscustomobject]@{ Path = $_.Substring($State.Environment.HOME.Length + 1).Replace('\', '/'); Sha256 = Get-InstalledSmokeHash $_ }
+  })
+  Assert-ProductManifest @(@($retained) + $backups | Sort-Object Path) @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path) 'profile_after_removal'
 }
 
 function Assert-ProductRemoved($State, $Result) {
@@ -259,12 +321,21 @@ function Invoke-ProductBoundRemoval($State) {
 }
 
 function New-ProductSyntheticData($State) {
+  if (-not $State.ContainsKey('SetupProfile')) { throw 'product_profile_not_captured' }
+  $State.Hook = ConvertTo-InstalledSmokePath (Join-Path $State.Environment.HOME '.config/arkism/hook-codex.cmd')
+  if ($null -ne (Get-InstalledSmokeAttributes $State.Hook)) { throw 'product_hook_already_exists' }
+  if ($null -ne (Get-InstalledSmokeAttributes (Join-Path $State.Environment.HOME '.config/arkism/backups'))) {
+    throw 'product_backup_namespace_exists'
+  }
   $data = Join-Path $State.Root 'retained data'; [IO.Directory]::CreateDirectory($data) | Out-Null
   [IO.File]::WriteAllText((Join-Path $data 'closed-memory.fixture'), 'Synthetic closed-file preservation only.')
   [IO.File]::WriteAllText((Join-Path $State.Root 'unrelated.sentinel'), 'Unrelated owned file.')
-  $State.Hook = ConvertTo-InstalledSmokePath (Join-Path $State.Environment.HOME '.config/arkism/hook-codex.cmd')
   [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($State.Hook)) | Out-Null
-  [IO.File]::WriteAllText($State.Hook, 'Inert text; never executed or registered.')
+  $stream = [IO.File]::Open($State.Hook, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+  try {
+    $bytes = [Text.Encoding]::UTF8.GetBytes('Inert text; never executed or registered.')
+    $stream.Write($bytes, 0, $bytes.Length)
+  } finally { $stream.Dispose() }
   $State.HookHash = Get-InstalledSmokeHash $State.Hook
   $State.SentinelHash = Get-InstalledSmokeHash (Join-Path $State.Root 'unrelated.sentinel')
   $State.Data = @(Get-InstalledSmokeTree $State.Root $data)
@@ -356,6 +427,7 @@ function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePa
     foreach ($path in @($state.Environment.HOME, $state.Environment.APPDATA, $state.Environment.LOCALAPPDATA,
       $state.Environment.XDG_CONFIG_HOME, $state.Environment.TEMP)) { [IO.Directory]::CreateDirectory($path) | Out-Null }
     Add-InstalledSmokeOwnedFolders $context $root $state.Environment
+    Assert-ProductProfileBeforeSetup $state
     Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
     $request = New-JobFixtureRequest $context $root (Join-Path $state.Install 'uninstall.exe') '' ('0' * 64)
     $beforeSetup = Get-ProductRebootSnapshot $request
@@ -366,6 +438,8 @@ function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePa
     Assert-InstalledSmokePayload $state.Install $manifest
     $state.UninstallerHash = Get-InstalledSmokeHash (Join-Path $state.Install 'uninstall.exe')
     $request.ExpectedSha256 = $state.UninstallerHash
+    Initialize-ProductProfileBaseline $state
+    $report.profile_files_after_setup = @($state.SetupProfile).Count
     New-ProductSyntheticData $state
     Invoke-ProductRemovalCheck $state $request $report
     $report.ok = $true; $report.phase = 'complete'
