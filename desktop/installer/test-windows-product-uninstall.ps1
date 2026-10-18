@@ -147,7 +147,8 @@ namespace Arkism.InstallerChecks {
   function Invoke-TestProductCore($State,[scriptblock]$Mutation,[bool]$Hang=$false,[string]$Faults='') {
     $image=Join-Path $State.Install 'uninstall.exe'
     $State.PolicyPids=@()
-    $policy=[Action[long,string]]{param($AllowedPid,$AllowedImage);$State.PolicyPids+=$AllowedPid;Assert-ProductUninstallInputs $State $AllowedPid $AllowedImage}
+    $checkedPolicy=New-ProductUninstallPolicy $State
+    $policy=[Action[long,string]]{param($AllowedPid,$AllowedImage);$State.PolicyPids+=$AllowedPid;$checkedPolicy.Invoke($AllowedPid,$AllowedImage)}
     $change=[Action]{
       $State.ProcessRows=@([pscustomobject]@{ProcessId=2048;ExecutablePath=$image})
       if($Mutation){& $Mutation}
@@ -461,6 +462,120 @@ namespace Arkism.InstallerChecks {
     }
   }
 
+  function Invoke-ProductPolicyDiagnosticCases {
+    Test-ProductCase 'policy trace initial failure preserves the failed and last completed guards' {
+      $state=New-ProductFixture
+      [IO.File]::WriteAllText((Join-Path $state.Root 'unrelated.sentinel'),'changed inert sentinel')
+      Reject-ProductTest {Invoke-TestProductCore $state $null} 'product_sentinel_changed'
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest ($report.policy_context -ceq 'initial' -and $report.policy_callback_count -eq 1 -and
+        $report.policy_current_stage -ceq 'sentinel' -and $report.policy_completed_stage -ceq 'retained_data' -and
+        -not $report.policy_process_observed -and -not $report.policy_completed) 'initial_policy_trace_incorrect'
+      Require-ProductTest ([Arkism.InstallerChecks.ProductTestHarness]::Last.FactoryCalls -eq 0) 'initial_policy_reached_native_adapter'
+    }
+    Test-ProductCase 'policy trace late global failure proves callback entry without allowing resume' {
+      $state=New-ProductFixture
+      Reject-ProductTest {Invoke-TestProductCore $state {$state.Global.Tasks=@('synthetic task')}} 'smoke_global_state_changed'
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest ($report.policy_context -ceq 'late' -and $report.policy_callback_count -eq 2 -and
+        $report.policy_current_stage -ceq 'registration' -and $report.policy_completed_stage -ceq 'global_read' -and
+        -not $report.policy_process_observed -and -not $report.policy_completed) 'late_policy_trace_incorrect'
+      Require-ProductTest ([Arkism.InstallerChecks.ProductTestHarness]::Last.ResumeCalls -eq 0) 'late_policy_failure_resumed'
+    }
+    Test-ProductCase 'policy trace process rejection records completed observation without verified identity' {
+      $state=New-ProductFixture
+      Reject-ProductTest {Invoke-TestProductCore $state {$state.ProcessRows+=$state.ProcessRows[0]}} 'product_process_set_invalid'
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest ($report.policy_context -ceq 'late' -and $report.policy_callback_count -eq 2 -and
+        $report.policy_current_stage -ceq 'process_validate' -and $report.policy_completed_stage -ceq 'process_scan' -and
+        $report.policy_process_observed -and $report.policy_process_count -eq 2 -and -not $report.policy_process_verified) 'process_policy_trace_incorrect'
+      Require-ProductTest ([Arkism.InstallerChecks.ProductTestHarness]::Last.ResumeCalls -eq 0) 'rejected_process_trace_resumed'
+    }
+    Test-ProductCase 'policy trace failed process query cannot reuse the earlier initial observation' {
+      $state=New-ProductFixture
+      function Get-ProductProcessRows([string]$InstallPath) {
+        if ($state.ProcessRows.Count) { throw 'synthetic_process_query_failed' }
+        return @()
+      }
+      Reject-ProductTest {Invoke-TestProductCore $state $null} 'synthetic_process_query_failed'
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest ($report.policy_callback_count -eq 2 -and $report.policy_current_stage -ceq 'process_scan' -and
+        $report.policy_completed_stage -ceq 'shortcuts' -and -not $report.policy_process_observed -and
+        $report.policy_process_count -eq 0 -and -not $report.policy_process_verified) 'incomplete_process_scan_claimed_observed'
+    }
+    Test-ProductCase 'policy trace success exports only fixed scalars after both actual callbacks' {
+      $state=New-ProductFixture;$null=Invoke-TestProductCore $state $null
+      $state.PolicyTrace.Raw=$state.Root
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest ($report.Count -eq 8 -and $report.policy_context -ceq 'late' -and $report.policy_callback_count -eq 2 -and
+        $report.policy_current_stage -ceq 'complete' -and $report.policy_completed_stage -ceq 'complete' -and
+        $report.policy_process_observed -and $report.policy_process_count -eq 1 -and
+        $report.policy_process_verified -and $report.policy_completed) 'complete_policy_trace_incorrect'
+      Require-ProductTest (-not ($report|ConvertTo-Json -Compress).Contains($state.Root)) 'policy_trace_exposed_unknown_field'
+    }
+  }
+
+  function Invoke-ProductPolicyMalformedCases {
+    Test-ProductCase 'policy trace rejects non scalar labels out of range counters and malformed booleans' {
+      $state=New-ProductFixture;$null=Invoke-TestProductCore $state $null
+      $convertible=[pscustomobject]@{Label='late';Raw=$state.Root}
+      $convertible|Add-Member -MemberType ScriptMethod -Name ToString -Value {$this.Label} -Force
+      $invalid=@(@{Key='Context';Value=$convertible},@{Key='Context';Value=('la'+[char]0x00ad+'te')},
+        @{Key='CurrentStage';Value='unknown-unreported-content'},@{Key='CompletedStage';Value=$convertible},
+        @{Key='CallbackCount';Value=3},@{Key='CallbackCount';Value='2'},@{Key='CallbackCount';Value=[long]2},
+        @{Key='ProcessCount';Value=-1},@{Key='ProcessCount';Value=1000001},@{Key='ProcessCount';Value=1.0},
+        @{Key='ProcessObserved';Value=1},@{Key='ProcessVerified';Value='true'},@{Key='Completed';Value=$null})
+      foreach($entry in $invalid) {
+        $saved=$state.PolicyTrace[$entry.Key];$state.PolicyTrace[$entry.Key]=$entry.Value
+        $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+        Require-ProductTest ($report.Count -eq 0) 'malformed_policy_trace_copied'
+        $state.PolicyTrace[$entry.Key]=$saved
+      }
+      $state.PolicyTrace.CallbackCount='unknown-unreported-content'
+      [IO.File]::WriteAllText((Join-Path $state.Root 'unrelated.sentinel'),'changed inert sentinel')
+      Reject-ProductTest {Invoke-ProductUninstallPolicy $state 0 ''} 'product_sentinel_changed'
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest ($report.Count -eq 0) 'malformed_policy_trace_masked_guard'
+    }
+  }
+
+  function Invoke-ProductPolicyBindingCases {
+    Test-ProductCase 'policy factory keeps its original state and caller scoped effect readers' {
+      $first=New-ProductFixture
+      $policy=New-ProductUninstallPolicy $first
+      $state=New-ProductFixture
+      $observations=@{Global=0;Processes=0}
+      function Get-InstalledSmokeGlobalState($Context) {
+        Require-ProductTest ([object]::ReferenceEquals($Context,$first.Context)) 'policy_switched_global_context'
+        $observations.Global++;return $first.Global
+      }
+      function Get-ProductProcessRows([string]$InstallPath) {
+        Require-ProductTest ($InstallPath -ceq $first.Install) 'policy_switched_process_context'
+        $observations.Processes++;return @($first.ProcessRows)
+      }
+      $image=Join-Path $first.Install 'uninstall.exe'
+      $change=[Action]{$first.ProcessRows=@([pscustomobject]@{ProcessId=2048;ExecutablePath=$image})}
+      $result=[Arkism.InstallerChecks.ProductTestHarness]::Run($policy,$change,$false,'',$image,2048,$image)
+      Require-ProductTest ($result.EmptyConfirmed -and $first['PolicyTrace']['CallbackCount'] -eq 2 -and
+        -not $state.ContainsKey('PolicyTrace') -and $observations.Global -eq 2 -and $observations.Processes -eq 2) 'policy_factory_binding_changed'
+    }
+    Test-ProductCase 'policy trace uses indexed entries despite extended property shadows on every field' {
+      $state=New-ProductFixture;$null=Invoke-TestProductCore $state $null
+      $trace=$state['PolicyTrace'];$expected=[ordered]@{};Add-ProductPolicyDiagnostic $expected $state
+      $unreported=[pscustomobject]@{Raw='synthetic-unreported-content'}
+      $unreported|Add-Member -MemberType ScriptMethod -Name ToString -Value {'synthetic-unreported-content'} -Force
+      foreach($key in @('Context','CallbackCount','CurrentStage','CompletedStage','ProcessObserved','ProcessCount','ProcessVerified','Completed')) {
+        $trace|Add-Member -MemberType NoteProperty -Name $key -Value $unreported -Force
+      }
+      $state|Add-Member -MemberType NoteProperty -Name PolicyTrace -Value $unreported -Force
+      $report=[ordered]@{};Add-ProductPolicyDiagnostic $report $state
+      Require-ProductTest (($report|ConvertTo-Json -Compress) -ceq ($expected|ConvertTo-Json -Compress)) 'extended_policy_property_serialized'
+      Require-ProductTest (-not ($report|ConvertTo-Json -Compress).Contains('synthetic-unreported-content')) 'extended_policy_content_exposed'
+      $null=New-ProductUninstallPolicy $state
+      Require-ProductTest ($state['PolicyTrace'] -is [hashtable] -and $state['PolicyTrace']['CallbackCount'] -eq 0) 'extended_state_shadow_replaced_indexed_factory'
+    }
+  }
+
   function Invoke-ProductManifestDiagnosticCases {
     Test-ProductCase 'manifest diagnostics identify initial profile counts without file paths or contents' {
       $state=New-ProductFixture;$report=[ordered]@{};$failure=$null
@@ -511,6 +626,22 @@ namespace Arkism.InstallerChecks {
   }
 
   function Invoke-ProductManifestMalformedCases {
+    Test-ProductCase 'manifest diagnostic indexed fields exclude all extended property shadows' {
+      $expectedRows=@([pscustomobject]@{Path='first';Sha256='first'})
+      $actualRows=@([pscustomobject]@{Path='second';Sha256='second'})
+      $exception=New-ProductManifestFailure $expectedRows $actualRows 'profile_initial' 0
+      $record=[pscustomobject]@{Exception=$exception};$expected=[ordered]@{}
+      Add-ProductManifestDiagnostic $expected $record
+      $diagnostic=$exception.Data['ArkismProductManifest']
+      foreach($field in @('Check','Kind','ExpectedFiles','ActualFiles','FirstIndex','PathCaseEqual','PathSeparatorEqual')) {
+        $shadow=switch($field){Check{'profile_before_removal'} Kind{'count'} default{'synthetic-unreported-content'}}
+        $diagnostic|Add-Member -MemberType NoteProperty -Name $field -Value $shadow -Force
+      }
+      $report=[ordered]@{};Add-ProductManifestDiagnostic $report $record
+      Require-ProductTest ($expected.Count -eq 7 -and
+        ($report|ConvertTo-Json -Compress) -ceq ($expected|ConvertTo-Json -Compress)) 'extended_manifest_property_serialized'
+      Require-ProductTest (-not ($report|ConvertTo-Json -Compress).Contains('synthetic-unreported-content')) 'extended_manifest_content_exposed'
+    }
     Test-ProductCase 'manifest diagnostic labels reject string convertible objects without copying properties' {
       foreach($entry in @(@{Key='Check';Label='profile_initial'},@{Key='Kind';Label='count'})) {
         $exception=New-ProductManifestFailure @() @([pscustomobject]@{Path='synthetic';Sha256='synthetic'}) 'profile_initial'
@@ -684,6 +815,9 @@ namespace Arkism.InstallerChecks {
   Invoke-ProductLateProcessCases
   Invoke-ProductIdentityCases
   Invoke-ProductDiagnosticCases
+  Invoke-ProductPolicyDiagnosticCases
+  Invoke-ProductPolicyMalformedCases
+  Invoke-ProductPolicyBindingCases
   Invoke-ProductManifestDiagnosticCases
   Invoke-ProductManifestMalformedCases
   Invoke-ProductSetupProfileCases

@@ -27,6 +27,79 @@ function Test-ProductOrdinalMember([string]$Value, [string[]]$Allowed) {
   return $false
 }
 
+function Get-ProductPolicyStages {
+  return @('none', 'callback', 'owner', 'layout', 'environment', 'setup_hash', 'stage_payload', 'installed_payload',
+    'uninstaller_hash', 'profile', 'retained_data', 'sentinel', 'global_read', 'registration', 'global_absence',
+    'shortcuts', 'process_scan', 'process_validate', 'complete')
+}
+
+function Get-ProductPolicyTrace($State) {
+  if ($State -is [hashtable] -and (Test-ProductPolicyTrace $State['PolicyTrace'])) { return $State['PolicyTrace'] }
+}
+
+function Invoke-ProductPolicyStage($State, [string]$Stage, [scriptblock]$Body) {
+  $trace = Get-ProductPolicyTrace $State
+  if ($null -ne $trace) { $trace['CurrentStage'] = $Stage }
+  & $Body
+  if ($null -ne $trace) { $trace['CompletedStage'] = $Stage }
+}
+
+function Invoke-ProductUninstallPolicy($State, [long]$AllowedPid, [string]$AllowedImage) {
+  $trace = Get-ProductPolicyTrace $State
+  if ($null -ne $trace) {
+    $trace['Context'] = if ($AllowedPid -eq 0 -and [string]::IsNullOrEmpty($AllowedImage)) { 'initial' } else { 'late' }
+    $trace['CallbackCount']++
+    $trace['CurrentStage'] = 'callback'; $trace['CompletedStage'] = 'none'; $trace['Completed'] = $false
+    $trace['ProcessObserved'] = $false; $trace['ProcessCount'] = 0; $trace['ProcessVerified'] = $false
+  }
+  Assert-ProductUninstallInputs $State $AllowedPid $AllowedImage
+  if ($null -ne $trace) {
+    $trace['CurrentStage'] = 'complete'; $trace['CompletedStage'] = 'complete'; $trace['Completed'] = $true
+  }
+}
+
+function New-ProductUninstallPolicy($State) {
+  $State['PolicyTrace'] = @{ Context = 'initial'; CallbackCount = 0; CurrentStage = 'none'; CompletedStage = 'none'
+    ProcessObserved = $false; ProcessCount = 0; ProcessVerified = $false; Completed = $false }
+  $factoryState = $State
+  $factoryPolicy = ${function:Invoke-ProductUninstallPolicy}
+  return [Action[long, string]]{ param($AllowedPid, $AllowedImage) & $factoryPolicy $factoryState $AllowedPid $AllowedImage }.GetNewClosure()
+}
+
+function Test-ProductPolicyTrace($Trace) {
+  if ($Trace -isnot [hashtable]) { return $false }
+  foreach ($name in @('Context', 'CurrentStage', 'CompletedStage')) {
+    if ($Trace[$name] -isnot [string]) { return $false }
+  }
+  if (-not (Test-ProductOrdinalMember $Trace['Context'] @('initial', 'late'))) { return $false }
+  foreach ($name in @('CurrentStage', 'CompletedStage')) {
+    if (-not (Test-ProductOrdinalMember $Trace[$name] (Get-ProductPolicyStages))) { return $false }
+  }
+  if (-not (Test-ProductTraceCount $Trace['CallbackCount'] 2) -or -not (Test-ProductTraceCount $Trace['ProcessCount'] 1000000)) { return $false }
+  foreach ($name in @('ProcessObserved', 'ProcessVerified', 'Completed')) {
+    if ($Trace[$name] -isnot [bool]) { return $false }
+  }
+  return $true
+}
+
+function Test-ProductTraceCount($Value, [int]$Maximum) {
+  return ($Value -is [int] -and $Value -ge 0 -and $Value -le $Maximum)
+}
+
+function Add-ProductPolicyDiagnostic($Report, $State) {
+  # Optional diagnostics never replace the primary, retention or evidence failure.
+  try { Copy-ProductPolicyDiagnostic $Report $State } catch { $Report.policy_trace_unavailable = $true }
+}
+
+function Copy-ProductPolicyDiagnostic($Report, $State) {
+  $trace = Get-ProductPolicyTrace $State
+  if (-not (Test-ProductPolicyTrace $trace)) { return }
+  $Report.policy_context = $trace['Context']; $Report.policy_callback_count = $trace['CallbackCount']
+  $Report.policy_current_stage = $trace['CurrentStage']; $Report.policy_completed_stage = $trace['CompletedStage']
+  $Report.policy_process_observed = $trace['ProcessObserved']; $Report.policy_process_count = $trace['ProcessCount']
+  $Report.policy_process_verified = $trace['ProcessVerified']; $Report.policy_completed = $trace['Completed']
+}
+
 function Get-ProductSortedManifest($Rows) {
   $ordered = New-Object 'Collections.Generic.List[object]'
   foreach ($row in @($Rows)) { $ordered.Add($row) }
@@ -77,19 +150,19 @@ function Get-ProductManifestDiagnostic($Failure) {
 function Add-ProductManifestDiagnostic($Report, $Failure) {
   $diagnostic = Get-ProductManifestDiagnostic $Failure
   if ($null -eq $diagnostic) { return }
-  if ($diagnostic.Check -isnot [string] -or $diagnostic.Kind -isnot [string]) { return }
-  if (-not (Test-ProductOrdinalMember $diagnostic.Check @('unspecified', 'profile_initial', 'profile_before_removal', 'profile_after_removal', 'stage_payload', 'data_before_removal', 'data_after_removal')) -or
-    -not (Test-ProductOrdinalMember $diagnostic.Kind @('count', 'path', 'hash', 'path_and_hash'))) { return }
+  if ($diagnostic['Check'] -isnot [string] -or $diagnostic['Kind'] -isnot [string]) { return }
+  if (-not (Test-ProductOrdinalMember $diagnostic['Check'] @('unspecified', 'profile_initial', 'profile_before_removal', 'profile_after_removal', 'stage_payload', 'data_before_removal', 'data_after_removal')) -or
+    -not (Test-ProductOrdinalMember $diagnostic['Kind'] @('count', 'path', 'hash', 'path_and_hash'))) { return }
   foreach ($name in @('ExpectedFiles', 'ActualFiles', 'FirstIndex')) {
     if ($diagnostic[$name] -isnot [int] -or $diagnostic[$name] -lt -1) { return }
   }
   foreach ($name in @('PathCaseEqual', 'PathSeparatorEqual')) {
     if ($diagnostic[$name] -isnot [bool]) { return }
   }
-  $Report.manifest_check = $diagnostic.Check; $Report.manifest_mismatch_kind = $diagnostic.Kind
-  $Report.manifest_expected_files = $diagnostic.ExpectedFiles; $Report.manifest_actual_files = $diagnostic.ActualFiles
-  $Report.manifest_first_index = $diagnostic.FirstIndex
-  $Report.manifest_path_case_equal = $diagnostic.PathCaseEqual; $Report.manifest_path_separator_equal = $diagnostic.PathSeparatorEqual
+  $Report.manifest_check = $diagnostic['Check']; $Report.manifest_mismatch_kind = $diagnostic['Kind']
+  $Report.manifest_expected_files = $diagnostic['ExpectedFiles']; $Report.manifest_actual_files = $diagnostic['ActualFiles']
+  $Report.manifest_first_index = $diagnostic['FirstIndex']
+  $Report.manifest_path_case_equal = $diagnostic['PathCaseEqual']; $Report.manifest_path_separator_equal = $diagnostic['PathSeparatorEqual']
 }
 
 function Get-ProductProcessRows([string]$Install) {
@@ -106,18 +179,23 @@ function Get-ProductProcessRows([string]$Install) {
 }
 
 function Assert-ProductProcessState($State, [long]$AllowedPid = 0, [string]$AllowedImage = '') {
-  $rows = @(Get-ProductProcessRows $State.Install)
-  if ($AllowedPid -eq 0 -and [string]::IsNullOrEmpty($AllowedImage)) {
-    if ($rows.Count) { throw 'product_unexpected_process' }
-    return
+  $rows = @(Invoke-ProductPolicyStage $State 'process_scan' { Get-ProductProcessRows $State.Install })
+  $trace = Get-ProductPolicyTrace $State
+  if ($null -ne $trace) { $trace['ProcessObserved'] = $true; $trace['ProcessCount'] = $rows.Count }
+  Invoke-ProductPolicyStage $State 'process_validate' {
+    if ($AllowedPid -eq 0 -and [string]::IsNullOrEmpty($AllowedImage)) {
+      if ($rows.Count) { throw 'product_unexpected_process' }
+      return
+    }
+    $expected = ConvertTo-InstalledSmokePath (Join-Path $State.Install 'uninstall.exe')
+    if ($AllowedPid -le 0 -or $AllowedPid -gt [uint32]::MaxValue -or
+      [string]::IsNullOrWhiteSpace($AllowedImage) -or (ConvertTo-InstalledSmokePath $AllowedImage) -ine $expected) {
+      throw 'product_process_allowance_invalid'
+    }
+    if ($rows.Count -ne 1) { throw 'product_process_set_invalid' }
+    Assert-ProductProcessRow $rows[0] $AllowedPid $expected
   }
-  $expected = ConvertTo-InstalledSmokePath (Join-Path $State.Install 'uninstall.exe')
-  if ($AllowedPid -le 0 -or $AllowedPid -gt [uint32]::MaxValue -or
-    [string]::IsNullOrWhiteSpace($AllowedImage) -or (ConvertTo-InstalledSmokePath $AllowedImage) -ine $expected) {
-    throw 'product_process_allowance_invalid'
-  }
-  if ($rows.Count -ne 1) { throw 'product_process_set_invalid' }
-  Assert-ProductProcessRow $rows[0] $AllowedPid $expected
+  if ($null -ne $trace) { $trace['ProcessVerified'] = $true }
 }
 
 function Assert-ProductProcessRow($Row, [long]$AllowedPid, [string]$Expected) {
@@ -127,12 +205,16 @@ function Assert-ProductProcessRow($Row, [long]$AllowedPid, [string]$Expected) {
 }
 
 function Assert-ProductGlobalState($State, [long]$AllowedPid = 0, [string]$AllowedImage = '') {
-  $global = Get-InstalledSmokeGlobalState $State.Context
-  Assert-InstalledSmokeRegistration $global $State.Install $State.Version -RequireComplete
-  foreach ($name in @('Autostart', 'Tasks', 'Residual')) {
-    if (@($global[$name]).Count) { throw 'product_global_state_changed' }
+  $global = Invoke-ProductPolicyStage $State 'global_read' { Get-InstalledSmokeGlobalState $State.Context }
+  Invoke-ProductPolicyStage $State 'registration' { Assert-InstalledSmokeRegistration $global $State.Install $State.Version -RequireComplete }
+  Invoke-ProductPolicyStage $State 'global_absence' {
+    foreach ($name in @('Autostart', 'Tasks', 'Residual')) {
+      if (@($global[$name]).Count) { throw 'product_global_state_changed' }
+    }
   }
-  if ($State.ContainsKey('ProfileShortcutRecords')) { Assert-ProductShortcutBindings $State $global }
+  Invoke-ProductPolicyStage $State 'shortcuts' {
+    if ($State.ContainsKey('ProfileShortcutRecords')) { Assert-ProductShortcutBindings $State $global }
+  }
   Assert-ProductProcessState $State $AllowedPid $AllowedImage
 }
 
@@ -200,16 +282,22 @@ function Set-ProductProfileBaseline($State) {
 }
 
 function Assert-ProductUninstallInputs($State, [long]$AllowedPid = 0, [string]$AllowedImage = '') {
-  Assert-InstalledSmokeOwnedRoot $State.Context $State.Root
-  Assert-ProductPathLayout $State
-  Assert-ProductEnvironment $State
-  if ((Get-InstalledSmokeHash $State.Setup) -cne $State.SetupHash) { throw 'product_setup_changed' }
-  Assert-ProductManifest $State.Manifest @(Get-InstalledSmokePayload $State.Stage) 'stage_payload'
-  Assert-InstalledSmokePayload $State.Install $State.Manifest
-  if ((Get-InstalledSmokeHash (Join-Path $State.Install 'uninstall.exe')) -cne $State.UninstallerHash) { throw 'product_uninstaller_changed' }
-  Assert-ProductProfileBeforeRemoval $State
-  Assert-ProductManifest $State.Data @(Get-InstalledSmokeTree $State.Root (Join-Path $State.Root 'retained data')) 'data_before_removal'
-  if ((Get-InstalledSmokeHash (Join-Path $State.Root 'unrelated.sentinel')) -cne $State.SentinelHash) { throw 'product_sentinel_changed' }
+  Invoke-ProductPolicyStage $State 'owner' { Assert-InstalledSmokeOwnedRoot $State.Context $State.Root }
+  Invoke-ProductPolicyStage $State 'layout' { Assert-ProductPathLayout $State }
+  Invoke-ProductPolicyStage $State 'environment' { Assert-ProductEnvironment $State }
+  Invoke-ProductPolicyStage $State 'setup_hash' {
+    if ((Get-InstalledSmokeHash $State.Setup) -cne $State.SetupHash) { throw 'product_setup_changed' }
+  }
+  Invoke-ProductPolicyStage $State 'stage_payload' { Assert-ProductManifest $State.Manifest @(Get-InstalledSmokePayload $State.Stage) 'stage_payload' }
+  Invoke-ProductPolicyStage $State 'installed_payload' { Assert-InstalledSmokePayload $State.Install $State.Manifest }
+  Invoke-ProductPolicyStage $State 'uninstaller_hash' {
+    if ((Get-InstalledSmokeHash (Join-Path $State.Install 'uninstall.exe')) -cne $State.UninstallerHash) { throw 'product_uninstaller_changed' }
+  }
+  Invoke-ProductPolicyStage $State 'profile' { Assert-ProductProfileBeforeRemoval $State }
+  Invoke-ProductPolicyStage $State 'retained_data' { Assert-ProductManifest $State.Data @(Get-InstalledSmokeTree $State.Root (Join-Path $State.Root 'retained data')) 'data_before_removal' }
+  Invoke-ProductPolicyStage $State 'sentinel' {
+    if ((Get-InstalledSmokeHash (Join-Path $State.Root 'unrelated.sentinel')) -cne $State.SentinelHash) { throw 'product_sentinel_changed' }
+  }
   Assert-ProductGlobalState $State $AllowedPid $AllowedImage
 }
 
@@ -316,7 +404,7 @@ function Get-ProductRebootSnapshot($Request) {
 function Invoke-ProductBoundRemoval($State) {
   $binding = New-Object Arkism.InstallerChecks.ProductUninstallBinding($State.Root, $State.Context.OwnedRoots[$State.Root],
     $State.Context.SourceSha, $State.Install, $State.Setup, $State.SetupHash, $State.UninstallerHash)
-  $policy = [Action[long, string]]{ param($AllowedPid, $AllowedImage) Assert-ProductUninstallInputs $State $AllowedPid $AllowedImage }
+  $policy = New-ProductUninstallPolicy $State
   return [Arkism.InstallerChecks.ProductUninstallCheck]::RunWindows($binding, $policy)
 }
 
@@ -451,6 +539,7 @@ function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePa
   }
   finally {
     try { Set-ProductRetention $state $report } catch { $cleanup = $_ }
+    Add-ProductPolicyDiagnostic $report $state
     try { Write-InstalledSmokeEvidence $evidence $report } catch { $evidenceError = $_ }
   }
   Assert-InstalledSmokeOutcome $primary $cleanup $evidenceError
