@@ -247,8 +247,8 @@ public static class JobCoreTests
                 new string[] { @"\\server\share\a", "unc" },
                 new string[] { @"\\.\D:\owned\temp\a", "device" },
                 new string[] { @"\Device\volume\a", "device" },
-                new string[] { @"relative\a", "non_dos" },
-                new string[] { @"\??\UNC\server\share\a", "nt_other" }
+                new string[] { @"relative\a", "non_dos_ascii_letter" },
+                new string[] { @"\??\UNC\server\share\a", "nt_other_ascii_letter" }
             };
             foreach (string[] shape in shapes) {
                 var after = Snapshot(shape[0] + "\0\0");
@@ -278,6 +278,44 @@ public static class JobCoreTests
                         "job_pending_path_unknown:owned_temp:" + space + ":" + shape[1]);
                 }
             }
+        });
+        Test("pending prefix diagnostics identify literal candidates without accepting them", delegate {
+            var before = RebootObservation.Parse(false, 0, null);
+            string[][] prefixes = new string[][] {
+                new string[] { @"*1??\", "literal_star1_compact" }, new string[] { @"*2??\", "literal_star2_compact" },
+                new string[] { @"*1\??\", "literal_star1_slash" }, new string[] { @"*2\??\", "literal_star2_slash" }
+            };
+            string[][] tails = new string[][] {
+                new string[] { @"D:\owned\temp\a", "tail_literal_match" }, new string[] { @"D:\other\a", "other_tail" },
+                new string[] { @"d:\OWNED\TEMP\a", "other_tail" }, new string[] { @"D:\owned\temp", "other_tail" },
+                new string[] { @"D:\owned\temp\..\a", "tail_invalid" }, new string[] { @"D:\owned\temp\a ", "tail_invalid" },
+                new string[] { @"\\?\D:\owned\temp\a", "tail_invalid" }, new string[] { @"\??\D:\owned\temp\a", "tail_invalid" }
+            };
+            foreach (string[] prefix in prefixes) {
+                foreach (string[] tail in tails) {
+                    RejectExact(delegate { RebootObservation.Compare(before, Snapshot(prefix[0] + tail[0] + "\0\0"), @"D:\owned\temp"); },
+                        "job_pending_path_unknown:new_row:" + prefix[1] + ":not_dos_absolute:" + tail[1]);
+                }
+                var valid = Snapshot(@"D:\owned\temp\a" + "\0\0");
+                RejectExact(delegate { RebootObservation.Compare(before, valid, prefix[0] + @"D:\owned\temp"); },
+                    "job_pending_path_unknown:owned_temp:" + prefix[1] + ":not_dos_absolute:tail_unavailable");
+            }
+        });
+        Test("pending prefix diagnostics expose only first character categories", delegate {
+            var before = RebootObservation.Parse(false, 0, null);
+            string[][] shapes = new string[][] {
+                new string[] { @"\relative\a", "slash" }, new string[] { "/relative/a", "slash" },
+                new string[] { "\"relative", "quote" }, new string[] { "'relative", "quote" },
+                new string[] { " relative", "whitespace" }, new string[] { "\trelative", "control" },
+                new string[] { "relative", "ascii_letter" }, new string[] { "1relative", "digit" },
+                new string[] { @"*3??\D:\owned\temp\a", "punctuation" }, new string[] { "\uAC00relative", "nonascii" }
+            };
+            foreach (string[] shape in shapes) {
+                RejectExact(delegate { RebootObservation.Compare(before, Snapshot(shape[0] + "\0\0"), @"D:\owned\temp"); },
+                    "job_pending_path_unknown:new_row:non_dos_" + shape[1] + ":not_dos_absolute");
+            }
+            RejectExact(delegate { RebootObservation.Compare(before, Snapshot(@"D:\owned\temp\a" + "\0\0"), ""); },
+                "job_pending_path_unknown:owned_temp:non_dos_empty:not_dos_absolute");
         });
         return Passed.ToArray();
     }

@@ -489,7 +489,7 @@ namespace Arkism.InstallerChecks
             for (int i = before.EntryCount; i < after.EntryCount; i++)
             {
                 string[] pair = after.Pairs[i];
-                if (pair[1].Length != 0 || !QueuePath(pair[0], "new_row").StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                if (pair[1].Length != 0 || !QueuePath(pair[0], "new_row", prefix).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     throw new JobApiException("job_pending_new_not_owned_delete");
             }
             return new RebootComparison { ExistingRowsPreserved = true,
@@ -534,12 +534,18 @@ namespace Arkism.InstallerChecks
             return true;
         }
 
-        private static string QueuePath(string path, string context)
+        private static string QueuePath(string path, string context, string diagnosticPrefix = null)
         {
             bool ntPrefix = path.StartsWith(@"\??\", StringComparison.Ordinal);
             if (ntPrefix) path = path.Substring(4);
             if (!Regex.IsMatch(path, @"^[A-Za-z]:\\"))
-                throw QueuePathError(context, RejectedNamespace(path, ntPrefix), "not_dos_absolute");
+            {
+                int literalLength;
+                string rejected = RejectedNamespace(path, ntPrefix, out literalLength);
+                string reason = "not_dos_absolute";
+                if (literalLength != 0) reason += ":" + DiagnoseTail(path.Substring(literalLength), diagnosticPrefix);
+                throw QueuePathError(context, rejected, reason);
+            }
             string space = ntPrefix ? "nt_dos" : "dos";
             if (path.IndexOfAny(new char[] { '/', '"', '\0', '*', '?' }) >= 0)
                 throw QueuePathError(context, space, "forbidden_character");
@@ -548,12 +554,47 @@ namespace Arkism.InstallerChecks
             return path;
         }
 
-        private static string RejectedNamespace(string path, bool ntPrefix)
+        private static string RejectedNamespace(string path, bool ntPrefix, out int literalLength)
         {
+            string literal = LiteralPrefixKind(path, out literalLength);
+            if (literal != null) return (ntPrefix ? "nt_prefix_" : "") + literal;
             if (path.StartsWith(@"\\?\", StringComparison.Ordinal)) return "extended";
             if (path.StartsWith(@"\\.\", StringComparison.Ordinal) || path.StartsWith(@"\Device\", StringComparison.Ordinal)) return "device";
             if (path.StartsWith(@"\\", StringComparison.Ordinal)) return "unc";
-            return ntPrefix ? "nt_other" : "non_dos";
+            return (ntPrefix ? "nt_other_" : "non_dos_") + FirstCharacterKind(path);
+        }
+
+        private static string LiteralPrefixKind(string path, out int length)
+        {
+            string[] prefixes = { @"*1??\", @"*2??\", @"*1\??\", @"*2\??\" };
+            string[] labels = { "literal_star1_compact", "literal_star2_compact", "literal_star1_slash", "literal_star2_slash" };
+            for (int i = 0; i < prefixes.Length; i++)
+                if (path.StartsWith(prefixes[i], StringComparison.Ordinal)) { length = prefixes[i].Length; return labels[i]; }
+            length = 0; return null;
+        }
+
+        private static string FirstCharacterKind(string path)
+        {
+            if (path.Length == 0) return "empty";
+            char value = path[0];
+            if (value > 127) return "nonascii";
+            if (Char.IsControl(value)) return "control";
+            if (Char.IsWhiteSpace(value)) return "whitespace";
+            if (value == '\\' || value == '/') return "slash";
+            if (value == '"' || value == '\'') return "quote";
+            if (Char.IsLetter(value)) return "ascii_letter";
+            if (Char.IsDigit(value)) return "digit";
+            return "punctuation";
+        }
+
+        private static string DiagnoseTail(string tail, string diagnosticPrefix)
+        {
+            if (diagnosticPrefix == null) return "tail_unavailable";
+            if (!Regex.IsMatch(tail, @"^[A-Za-z]:\\")) return "tail_invalid";
+            try { QueuePath(tail, "tail_probe"); }
+            catch (JobApiException) { return "tail_invalid"; }
+            // Exact Ordinal text only; this neither proves ownership nor authorizes a row.
+            return tail.StartsWith(diagnosticPrefix, StringComparison.Ordinal) ? "tail_literal_match" : "other_tail";
         }
 
         private static void CheckQueueComponent(string part, string context, string space)
