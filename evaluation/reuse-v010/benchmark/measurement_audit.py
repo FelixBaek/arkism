@@ -10,15 +10,15 @@ import statistics
 import fcntl
 import os
 from private_storage import private_file
-from run import validate_result_identities
+from run import CONDITIONS, validate_result_identities
 
-CONDITIONS = ('none', 'static', 'arkism')
 FIELDS = ('input_tokens', 'cached_input_tokens', 'output_tokens')
 PROMPT_FILE = 'prompt.txt'
 
 
 def read_observation(path):
     row = json.loads(path.read_text())
+    validate_result_identities([row])
     run_id = path.parent.name
     events = json.loads(path.with_name('events.json').read_text())
     turns = [event['usage'] for event in events
@@ -43,8 +43,6 @@ def load_observations(results):
     observations, evidence = [], []
     for path in sorted(results.glob('*/result.json')):
         row = read_observation(path)
-        if row['condition'] not in CONDITIONS:
-            raise ValueError(f'invalid cell: {row["run_id"]}')
         observations.append(row)
         for file in (path, path.with_name('events.json'), path.with_name(PROMPT_FILE)):
             evidence.append({'path': file.relative_to(results).as_posix(),

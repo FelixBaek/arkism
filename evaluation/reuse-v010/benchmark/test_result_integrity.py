@@ -57,6 +57,81 @@ class ResultIntegrityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             measurement_audit.audit(self.root)
 
+    def assert_invalid_identity_record(self, record):
+        directory = self.fixture('invalid')
+        path = directory / 'result.json'
+        path.write_text(json.dumps(record))
+        original = path.read_bytes()
+        try:
+            for entrypoint, action in (('aggregation', self.aggregate),
+                                       ('audit', lambda: measurement_audit.audit(self.root))):
+                with self.subTest(entrypoint=entrypoint):
+                    outputs = [self.root / name for name in ('results.json', 'results.csv', 'summary.json')]
+                    for output in outputs:
+                        output.write_text('preserve existing output')
+                    error = None
+                    try:
+                        action()
+                    except Exception as actual:
+                        error = actual
+                    self.assertIsInstance(error, ValueError)
+                    for output in outputs:
+                        self.assertEqual(output.read_text(), 'preserve existing output')
+            self.assertEqual(path.read_bytes(), original)
+        finally:
+            shutil.rmtree(directory)
+
+    def valid_identity_record(self):
+        directory = self.fixture('template')
+        row = json.loads((directory / 'result.json').read_text())
+        shutil.rmtree(directory)
+        return row
+
+    def test_missing_and_null_identity_fields_are_rejected(self):
+        for field in ('task_id', 'condition', 'replicate', 'experiment_id', 'commit',
+                      'fixture_sha256', 'model'):
+            for form in ('missing', 'null'):
+                with self.subTest(field=field, form=form):
+                    row = self.valid_identity_record()
+                    if form == 'missing':
+                        del row[field]
+                    else:
+                        row[field] = None
+                    self.assert_invalid_identity_record(row)
+
+    def test_blank_and_nonstring_identity_fields_are_rejected(self):
+        for field in ('task_id', 'condition', 'experiment_id', 'commit', 'fixture_sha256', 'model'):
+            for value in ('', ' \t\n', False, 7, [], {}):
+                with self.subTest(field=field, value=value):
+                    row = self.valid_identity_record()
+                    row[field] = value
+                    self.assert_invalid_identity_record(row)
+
+    def test_replicate_requires_a_positive_integer(self):
+        for value in ('1', 1.0, True, False, 0, -1, [], {}, ''):
+            with self.subTest(value=value):
+                row = self.valid_identity_record()
+                row['replicate'] = value
+                self.assert_invalid_identity_record(row)
+
+    def test_unknown_condition_is_rejected_before_reporting(self):
+        row = self.valid_identity_record()
+        row['condition'] = 'synthetic-unknown-condition'
+        self.assert_invalid_identity_record(row)
+
+    def test_result_identity_requires_a_json_object(self):
+        for value in (None, [], 'synthetic wrong result type', 1):
+            with self.subTest(value=value):
+                self.assert_invalid_identity_record(value)
+
+    def test_identity_validation_does_not_require_sha_format(self):
+        self.fixture('static', commit='synthetic-commit', fixture_sha256='synthetic-fixture')
+        self.fixture('arkism', 'arkism', order=1, commit='synthetic-commit', fixture_sha256='synthetic-fixture')
+        self.aggregate()
+        report = measurement_audit.audit(self.root)
+        self.assertEqual(report['recorded_runs'], 2)
+        self.assertEqual(len(report['paired_static_arkism']), 1)
+
     def test_duplicate_cells_rejected_before_aggregation(self):
         self.fixture('run-one')
         self.fixture('run-two', order=1)

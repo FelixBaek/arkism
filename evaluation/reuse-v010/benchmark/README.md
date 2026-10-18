@@ -150,8 +150,10 @@ After data collection, the harness was split into helpers and its CLI output/exp
 Before aggregation or measurement auditing, observations must have unique
 `(task, condition, replicate)` cells and a consistent `experiment_id`, `commit`,
 `fixture_sha256` and `model`. Duplicate cells and mixed experiment identities are
-rejected before replacing aggregate outputs. Identical prompts alone do not
-make observations from different experiments comparable.
+rejected before replacing aggregate outputs. Cell and execution-identity fields
+must be present with valid, nonblank values; missing or malformed identity is a
+validation error. Identical prompts alone do not make observations from different
+experiments comparable.
 
 This validation also applies to partial result sets, while a partial audit
 remains supported. Passing it does not prove that every planned run completed,

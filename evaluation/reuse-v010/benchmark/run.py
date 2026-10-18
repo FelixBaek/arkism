@@ -297,14 +297,24 @@ def summarize_condition(rows):
 
 
 def validate_result_identities(rows):
-    """Reject duplicate cells and mixed execution identities before reporting."""
+    """Require usable identities; reject duplicate cells and mixed executions."""
     identities, protocol = set(), None
     for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError('benchmark result must be a JSON object')
+        for field in ('task_id', 'condition', *PROTOCOL_FIELDS):
+            value = row.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f'missing or invalid benchmark identity: {field}')
+        if type(row.get('replicate')) is not int or row['replicate'] < 1:
+            raise ValueError('missing or invalid benchmark identity: replicate')
+        if row['condition'] not in CONDITIONS:
+            raise ValueError('invalid benchmark condition')
         identity = (row['task_id'], row['condition'], row['replicate'])
         if identity in identities:
             raise ValueError('duplicate benchmark result cell')
         identities.add(identity)
-        current = tuple(row.get(field) for field in PROTOCOL_FIELDS)
+        current = tuple(row[field] for field in PROTOCOL_FIELDS)
         if protocol is not None and current != protocol:
             raise ValueError('inconsistent benchmark experiment, commit, fixture or model')
         protocol = current
