@@ -8,6 +8,54 @@ Changes to the release workflow, installer, Unix build script or Tauri shell tri
 
 Download artifacts only from the expected repository, pull request and commit. Record that commit alongside results. A successful packaging build is not evidence that memory quality or approval policy is correct.
 
+## Runtime download inputs
+
+The Windows runtime recipe pins SHA-256 for both ZIP inputs before extraction.
+The existing versions and URLs are retained. These pins were observed from the
+exact official HTTPS distribution bytes on 2026-10-18; an independent
+publisher-signed or publisher-published checksum was not verified.
+
+| Input | Exact artifact | SHA-256 |
+| --- | --- | --- |
+| PostgreSQL 17.6-1 | [Windows x64 binaries ZIP](https://get.enterprisedb.com/postgresql/postgresql-17.6-1-windows-x64-binaries.zip) | `d378882abd001a186735acd6f6ba716bca6ccd192e800412d4fd15ed25376b3e` |
+| pgvector 0.8.1 | [Source ZIP](https://github.com/pgvector/pgvector/archive/refs/tags/v0.8.1.zip) | `61182a6afd6fb94c0e7740c037a7d3c36a8cab1cc581ae5bd9b7b2cfd789bdfc` |
+
+A failed or mismatched download stops before that archive is extracted, native
+build commands run, or the runtime is staged. Unix checksum diagnostics also
+stop on mismatch. Updating a pin requires reviewing the exact new artifact;
+changing versions or using the digest of a different archive is insufficient.
+GitHub can change generated ZIP compression bytes, so a regenerated archive may
+require a reviewed pin update even when its source tree is unchanged.
+
+Windows cache reuse requires a completion marker for the current recipe, target,
+versions, URLs and pins, plus the required runtime files. The marker is written
+after a successful build and required-file checks. A legacy cache containing
+only `vector.dll` cannot bypass the new download verification. Changes to the
+runtime build recipe must update its fingerprint identifier. This records the
+verified inputs and build completion; it does not authenticate every cached
+output or protect a cache that a local writer can modify.
+
+Normalized cache and staging overlaps are rejected before cleanup. Existing
+path components are inspected from the filesystem root: reparse points,
+unexpected file/directory types and inspection errors stop preparation. Only a
+genuinely missing tail below inspected directories is allowed. Checks repeat
+before cleanup, after the build and before staging changes. Use ordinary
+directory paths; this does not prove every DOS-device alias or prevent a
+concurrent path replacement.
+
+A new staging copy is checked before replacing the previous output. Copy or
+publication failures preserve or restore that output; a failed restoration
+retains the recovery backup and reports its location.
+If temporary-copy cleanup also fails, the reported error retains the original
+failure and any recovery path alongside the cleanup failure.
+
+The offline PowerShell regression uses inert ZIP fixtures and fake download,
+extraction and native build boundaries. Windows CI runs it with Windows
+PowerShell; it does not install or execute PostgreSQL from the fixture.
+Packaging preflight still checks the real bundled runtime. Source pins, cache
+completion, OS code signing and signed updater manifests provide separate
+evidence, and these checks do not establish clean-profile installation.
+
 ## Before a public tag
 
 - Land and verify the approval-policy changes, including captured user statements and background extraction. AI classification must not activate a memory by itself.

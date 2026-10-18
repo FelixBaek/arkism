@@ -1033,6 +1033,8 @@
     const v = views[state.view];
     $("#title").textContent = typeof v.title === "function" ? v.title() : v.title;
     $("#title-count").textContent = typeof v.count === "function" && !state.loading ? v.count() : "";
+    const bare = !state.loading && (typeof v.bare === "function" ? v.bare() : !!v.bare); // the rail and tabs already name the screen
+    $(".main > .page-head").style.display = bare ? "none" : "";
     $(".main > .page-head .page-back")?.remove(); // a screen that has a ← link draws it again
     $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); // TOOLS screens add them again via headExtras()
     $("#app").classList.toggle("v4-connect", ["tools", "git", "reviews"].includes(state.view));

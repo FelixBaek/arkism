@@ -121,3 +121,41 @@ func TestTryRunsTheAgentReadOnly(t *testing.T) {
 		t.Fatal(*reports)
 	}
 }
+
+func TestAgentWithAWorkflowRunsItInsteadOfAnswering(t *testing.T) {
+	patch(t, &runnerCall, func(string, any, time.Duration) (map[string]any, error) {
+		return map[string]any{"item": map[string]any{"id": "a1", "crew": map[string]any{"type": "agent", "workflow": "$리서치"}}}, nil
+	})
+	patch(t, &apiGet, func(path string, _ time.Duration) (map[string]any, error) {
+		if strings.Contains(path, "/v1/crew/resolve") {
+			return workflowFixture(t, "리서치", ""), nil
+		}
+		return runRec("succeeded", nil, nil, "보고서", 2), nil
+	})
+	patch(t, &apiPost, func(string, any, time.Duration) (map[string]any, error) {
+		return runRec("running", nil, nil, "", 1), nil
+	})
+	patch(t, &runSleep, func(float64) {})
+	runner := func(map[string]any) (map[string]any, error) { t.Fatal("the agent answered itself"); return nil, nil }
+	res, err := answerAssist(map[string]any{"id": "x", "crew_assist": map[string]any{"kind": "try", "expert": "리서처", "prompt": "AI 뉴스"}}, runner)
+	if err != nil || res["status"] != "done" || res["output"] != "보고서" {
+		t.Fatal(res, err)
+	}
+}
+
+func TestAgentWorkflowWaitingOnAnApprovalSaysSo(t *testing.T) {
+	patch(t, &apiGet, func(path string, _ time.Duration) (map[string]any, error) {
+		if strings.Contains(path, "/v1/crew/resolve") {
+			return workflowFixture(t, "리서치", ""), nil
+		}
+		return runRec("waiting", map[string]any{"node_id": "a", "kind": "approval", "question": "보낼까요?"}, nil, "", 2), nil
+	})
+	patch(t, &apiPost, func(string, any, time.Duration) (map[string]any, error) {
+		return runRec("running", nil, nil, "", 1), nil
+	})
+	patch(t, &runSleep, func(float64) {})
+	res := agentWorkflow("리서치", "AI 뉴스")
+	if out := sOr(res["output"]); !strings.Contains(out, "확인을 기다려요: 보낼까요?") || !strings.Contains(out, "run-1") {
+		t.Fatal(res)
+	}
+}

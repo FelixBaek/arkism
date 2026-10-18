@@ -42,12 +42,12 @@ window.ArkismTeams = (ctx) => {
   const PERM_BITS = PERMS.reduce((s, [, , bit]) => s + (1n << BigInt(bit)), 0n).toString(); // 311385197568
   const inviteURL = (appId) => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(appId)}&scope=bot%20applications.commands&permissions=${PERM_BITS}`;
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
-  const USAGE_KINDS = [["all", "전체"], ["workflow", "워크플로우"], ["agent", "작업 에이전트"], ["team", "팀"]];
+  const USAGE_KINDS = [["all", "전체"], ["workflow", "워크플로우"], ["agent", "전문가"], ["team", "팀"]];
   const ERRORS = {
     secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요.",
     invalid_request: "빈 칸이나 형식을 확인해 주세요. @이름은 띄어쓰기 없이 글자·숫자·_·-만 써요.",
     revision_conflict: "다른 곳에서 먼저 고쳤어요. 다시 불러와 주세요.",
-    conflict: "같은 @이름이 이미 있어요. 작업 에이전트와 팀은 이름을 함께 써요."
+    conflict: "같은 @이름이 이미 있어요. 전문가와 팀은 이름을 함께 써요."
   };
   const errorText = (e) => ERRORS[e.message] || (e.message === "HTTP 409" ? ERRORS.conflict : `처리하지 못했어요 (${e.message}).`);
   const unsupported = (e) => /HTTP 404|not_found|HTTP 501|not_implemented/.test(e?.message || "");
@@ -216,23 +216,32 @@ window.ArkismTeams = (ctx) => {
     if (!S.discord) void loadDiscord(true);
     const list = teams();
     if (!S.team || !byId(S.team)) S.team = list[0]?.id || null;
-    const rail = el("div", "tm-list");
-    const add = el("button", "tm-new", "+ 새 팀"); add.type = "button"; add.addEventListener("click", () => openNew());
-    rail.append(add);
+    // 팀 격자 (208:18425): one card per team — members' model marks, name, purpose, how many and how they talk; then a card to make one.
+    const rail = el("div", "tm-browse");
+    const grid = el("div", "tm-grid");
     for (const r of list) {
-      const row = el("button", `tm-team${r.id === S.team ? " selected" : ""}`); row.type = "button";
-      const top = el("div", "tm-team-top"); top.append(raw(el("b", "", r.crew.name)));
+      const row = el("button", `tm-tile${r.id === S.team ? " selected" : ""}`); row.type = "button"; row.dataset.id = r.id;
+      row.setAttribute("aria-pressed", String(r.id === S.team));
+      const members = sorted(r.crew.members);
+      const top = el("div", "tm-tile-top");
+      const marks = el("span", "tm-tile-marks");
+      marks.append(...members.slice(0, 5).map((m) => mark(memberModel(m))));
+      top.append(marks);
       const b = teamBadge(r); if (b) top.append(badge(b[0], b[1]));
-      const ch = channelsFor(r.id)[0];
-      const meta = [ch?.bot?.name, tr(`에이전트 ${(r.crew.members || []).length}`)].filter(Boolean).join(" · ");
-      row.append(top, raw(el("small", "", meta)));
+      const mode = MODES.find(([k]) => k === r.crew.mode)?.[1] || "";
+      row.append(top, raw(el("b", "", r.crew.name)), raw(el("p", "", r.crew.role || "")), raw(el("small", "", [tr(`${members.length}명`), mode ? tr(mode) : ""].filter(Boolean).join(" · "))));
       row.addEventListener("click", () => pickTeam(r.id));
-      rail.append(row);
+      grid.append(row);
     }
+    const add = el("button", "tm-tile tm-tile-new"); add.type = "button";
+    add.append(icon("plus"), el("b", "", "새 팀"));
+    add.addEventListener("click", () => openNew());
+    grid.append(add);
+    rail.append(grid);
     const main = el("div", "tm-edit");
     const rec = byId(S.team);
     if (!rec) {
-      main.append(empty(agents().length ? "아직 팀이 없어요. 새 팀을 만들어 작업 에이전트 여럿이 함께 회의하게 해 보세요." : "팀은 작업 에이전트로 만들어요. 먼저 작업 에이전트를 만들어 주세요."));
+      main.append(empty(agents().length ? "아직 팀이 없어요. 새 팀을 만들어 전문가 여럿이 함께 회의하게 해 보세요." : "팀은 전문가로 만들어요. 먼저 전문가를 만들어 주세요."));
     } else {
       if (S.draftFor !== rec.id) { S.draft = clone(rec.crew); S.draftFor = rec.id; S.dirty = false; }
       void loadStats(rec.id);
@@ -305,7 +314,7 @@ window.ArkismTeams = (ctx) => {
 
   // 참여자와 발언 순서: a table you can drag to reorder (editor) or a list with focus pills (new team, 310:19981).
   function membersCard(d, changed, compact) {
-    const c = card("", compact ? null : "참여자와 발언 순서", compact ? null : "끌어서 순서를 바꿔요. 각자의 역할로 하나의 결과를 만들어요.");
+    const c = card("", compact ? null : "참여자와 발언 순서", null);
     const members = sorted(d.members);
     const renumber = (list) => { list.forEach((m, i) => { m.order = i + 1; }); d.members = list; };
     const box = el("div", compact ? "tm-mlist" : "tm-mtable");
@@ -342,12 +351,12 @@ window.ArkismTeams = (ctx) => {
       }
       box.append(row);
     });
-    if (!members.length) box.append(empty("아직 참여자가 없어요. 작업 에이전트를 넣어 주세요."));
+    if (!members.length) box.append(empty("아직 참여자가 없어요. 전문가를 넣어 주세요."));
     c.append(box);
     const acts = el("div", "tm-row-acts");
     const free = agents().filter((a) => !members.some((m) => m.agent_id === a.id));
     if (S.adding && free.length) {
-      const pick = select([["", "넣을 작업 에이전트 고르기"], ...free.map((a) => [a.id, `${a.crew.name} · ${modelLabel(agentModel(a))}`])], "", (v) => {
+      const pick = select([["", "넣을 전문가 고르기"], ...free.map((a) => [a.id, `${a.crew.name} · ${modelLabel(agentModel(a))}`])], "", (v) => {
         if (!v) return;
         S.adding = false;
         renumber([...members, { agent_id: v, order: members.length + 1, role: members.length ? "worker" : "moderator", focus: "" }]);
@@ -356,9 +365,9 @@ window.ArkismTeams = (ctx) => {
       acts.append(pick, link("취소", () => { S.adding = false; render(false); }, "tm-link quiet"));
       queueMicrotask(() => pick.focus());
     } else {
-      const add = button(compact ? "+ 작업 에이전트 추가" : "에이전트 추가", "", null, () => { if (!free.length) { notice(agents().length ? "넣을 수 있는 작업 에이전트를 모두 넣었어요." : "먼저 작업 에이전트를 만들어 주세요."); return; } S.adding = true; render(false); });
+      const add = button(compact ? "+ 전문가 추가" : "전문가 추가", "", null, () => { if (!free.length) { notice(agents().length ? "넣을 수 있는 전문가를 모두 넣었어요." : "먼저 전문가를 만들어 주세요."); return; } S.adding = true; render(false); });
       acts.append(add);
-      if (compact) acts.append(link("+ 새로 만들기", () => { if (ctx.hasView?.("workers")) { state.workerNew = true; go("workers"); } else notice("작업 에이전트 화면에서 만들어 주세요."); }, "tm-link plain"));
+      if (compact) acts.append(link("+ 새로 만들기", () => { if (ctx.hasView?.("workers")) { state.workerNew = true; go("workers"); } else notice("전문가 화면에서 만들어 주세요."); }, "tm-link plain"));
     }
     c.append(acts);
     return c;
@@ -594,7 +603,7 @@ window.ArkismTeams = (ctx) => {
     two.append(field("팀 이름", raw(input(d.name, (v) => { d.name = v; handleIn.placeholder = handleFrom(v) || "디자인리뷰"; changed(); }, { max: 80, placeholder: "디자인 리뷰 팀" }))),
       field("목적", raw(input(d.role, (v) => { d.role = v; changed(); }, { max: 200, placeholder: "시안을 여러 관점에서 검토해 고칠 목록을 만들어요" }))));
     const hf = el("div", "tm-at"); hf.append(el("span", "", "@"), handleIn);
-    s1.append(two, field("부르는 이름 (작업 에이전트와 같은 @이름 칸을 써요)", hf, "tm-handle-field"));
+    s1.append(two, field("부르는 이름 (전문가와 같은 @이름 칸을 써요)", hf, "tm-handle-field"));
     const from = el("div", "tm-block"); from.append(el("h4", "tm-label", "비슷한 팀에서 시작"));
     const chips = el("div", "tm-chips");
     for (const [id, label] of [["", "빈 팀"], ...teams().map((t) => [t.id, t.crew.name])]) {
@@ -1003,7 +1012,7 @@ window.ArkismTeams = (ctx) => {
   function discordOverview() {
     const how = el("div", "tm-side-sec");
     how.append(el("h3", "tm-side-title", "채널에서 하는 네 가지"));
-    const steps = [["채널에 글 쓰기", "질문을 올리면 연결된 워크플로우가 시작돼요"], ["@이름으로 부르기", "작업 에이전트에게 바로 물어봐요"], ["스레드로 회의", "팀 회의가 스레드에서 진행돼요"], ["/회의 멈춤", "진행 중인 회의를 멈춰요"]];
+    const steps = [["채널에 글 쓰기", "질문을 올리면 연결된 워크플로우가 시작돼요"], ["@이름으로 부르기", "전문가에게 바로 물어봐요"], ["스레드로 회의", "팀 회의가 스레드에서 진행돼요"], ["/회의 멈춤", "진행 중인 회의를 멈춰요"]];
     const ol = el("ol", "tm-four");
     steps.forEach(([a, b], i) => { const li = el("li", ""); li.append(el("span", "mono", pad2(i + 1))); const t = el("div", ""); t.append(el("b", "", a), el("small", "", b)); li.append(t); ol.append(li); });
     how.append(ol);
@@ -1046,7 +1055,7 @@ window.ArkismTeams = (ctx) => {
     const out = [["", "정하지 않음"]];
     for (const t of teams()) out.push([`meeting:${t.id}`, `팀 회의 · ${t.crew.name}`]);
     for (const w of workflows()) out.push([`workflow:${w.id}`, `워크플로우 · $${w.crew.handle}`]);
-    for (const a of agents()) out.push([`agent:${a.id}`, `작업 에이전트 · @${a.crew.handle}`]);
+    for (const a of agents()) out.push([`agent:${a.id}`, `전문가 · @${a.crew.handle}`]);
     return out;
   }
   const actionKey = (a) => (a?.kind ? `${a.kind}:${a.id}` : "");
@@ -1369,7 +1378,7 @@ window.ArkismTeams = (ctx) => {
   }
   function agentCard(rows) {
     const calls = rows.reduce((s, x) => s + (x.calls || 0), 0);
-    const c = card("", "작업 에이전트 호출", `${calls}번 호출`);
+    const c = card("", "전문가 호출", `${calls}번 호출`);
     for (const a of rows) {
       const rec = byId(a.id);
       const r = el("div", "tm-ulist");
@@ -1383,7 +1392,7 @@ window.ArkismTeams = (ctx) => {
       r.append(mark(agentModel(rec)), t, right);
       c.append(r);
     }
-    if (!rows.length) c.append(empty("이 기간에 부른 작업 에이전트가 없어요."));
+    if (!rows.length) c.append(empty("이 기간에 부른 전문가가 없어요."));
     return c;
   }
   function teamStrip(rows) {
@@ -1399,12 +1408,12 @@ window.ArkismTeams = (ctx) => {
 
   // ---------------------------------------------------------------- pages (registered like crew.js pages)
   const pages = {
-    teams: { title: "팀", count: () => `${teams().length}개`, sub: () => "작업 에이전트 여럿이 정한 순서대로 말하며 하나의 결과를 만들어요. 연결된 채널에 글을 쓰면 회의가 시작돼요.",
-      head: () => [], render: renderTeams },
-    teamNew: { title: "새 팀", sub: () => "작업 에이전트 여러 명을 모아, 정한 순서와 규칙으로 회의하며 하나의 결과를 만들어요.", keepDetail: true, head: () => [], render: renderTeamNew },
-    meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [], render: renderMeetings },
+    teams: { title: "팀", count: () => `${teams().length}개`, sub: () => "전문가 여럿이 정한 순서대로 말하며 하나의 결과를 만들어요. 연결된 채널에 글을 쓰면 회의가 시작돼요.",
+      bare: true, head: () => [button("회의 보기", "ghost", null, () => go("meetings"))], render: renderTeams },
+    teamNew: { title: "새 팀", sub: () => "", keepDetail: true, head: () => [], render: renderTeamNew },
+    meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [button("팀 보기", "ghost", null, () => go("teams"))], render: renderMeetings },
     discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord },
-    crewUsage: { title: "사용량", sub: () => "워크플로우·작업 에이전트·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.",
+    crewUsage: { title: "사용량", sub: () => "워크플로우·전문가·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.",
       head: () => [button("새로고침", "ghost", null, loadUsage)], render: renderUsage }
   };
   return { pages, _test: { inviteURL, PERM_BITS, modelLabel, handleFrom } };

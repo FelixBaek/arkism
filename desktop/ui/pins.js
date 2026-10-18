@@ -263,19 +263,5 @@ window.ArkismPins = (ctx) => {
     return root;
   }
 
-  // The same 확인해 주세요 line for the right column (Figma: the agent detail repeats it at the top).
-  function sideNotice(draft, onChange, redraw) {
-    const p = (draft.pinned || []).find((x) => { const c = x.collection === "skills" && x.revision ? known(x) : null; return c && c.active > x.revision && !kept.has(`${x.id}:${c.active}:${x.revision}`); });
-    if (!p) return null;
-    const c = known(p);
-    const box = el("section", "pn-alert pn-side");
-    box.append(el("p", "", tr(`고정한 스킬 ${c.title}에 v${c.active}가 나왔어요. 바꾸기 전까지는 v${p.revision}를 계속 써요.`)));
-    const acts = el("div", "pn-alert-acts");
-    acts.append(button(tr(`v${c.active}로 바꾸기`), "primary small", null, () => { p.revision = c.active; onChange(); }),
-      button("나중에", "ghost small", null, () => { kept.add(`${p.id}:${c.active}:${p.revision}`); redraw(); }));
-    box.append(acts);
-    return box;
-  }
-
-  return { card, sideNotice, _test: { tokensOf } };
+  return { card, _test: { tokensOf } };
 };

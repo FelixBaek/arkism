@@ -354,3 +354,37 @@ func TestOneNodeRunsArePeopleOnly(t *testing.T) {
 		t.Fatal("unknown node accepted", err)
 	}
 }
+
+func TestWorkflowOfAnAgentRunsOnlyThroughThatAgent(t *testing.T) {
+	f, wf := crewRunFixture(t)
+	if _, err := f.svc.CreateCrewRun(testCtx, tokEngine, CrewRunInput{Scope: scopeA, Run: newCrewRun(wf.ID)}); err != nil {
+		t.Fatal("a free workflow refused", err)
+	}
+	// An agent takes only a workflow with no live trigger, so turn the schedule off first.
+	off := *wf.Crew
+	off.Enabled = false
+	if _, err := f.svc.UpdateCrew(testCtx, f.human, wf.ID, CrewUpdate{Scope: scopeA, ExpectedRevision: wf.Revision, Crew: &off}); err != nil {
+		t.Fatal("turn the schedule off", err)
+	}
+	bot := crewAgent("리서처", "리서처")
+	bot.Workflow = "아침브리핑"
+	f.crew(bot)
+	for _, trigger := range []string{"schedule", "call", "manual", "discord"} {
+		run := newCrewRun(wf.ID)
+		run.Trigger = trigger
+		if _, err := f.svc.CreateCrewRun(testCtx, tokEngine, CrewRunInput{Scope: scopeA, Run: run}); !errors.Is(err, ErrInvalid) {
+			t.Fatal("an owned workflow ran alone by", trigger, err)
+		}
+	}
+	run := newCrewRun(wf.ID)
+	run.Trigger = "agent"
+	if _, err := f.svc.CreateCrewRun(testCtx, tokEngine, CrewRunInput{Scope: scopeA, Run: run}); err != nil {
+		t.Fatal("the agent could not run its workflow", err)
+	}
+	// A person's 시험 실행 still works: the engine fakes every outside step.
+	run = newCrewRun(wf.ID)
+	run.Trigger = "test"
+	if _, err := f.svc.CreateCrewRun(testCtx, f.human, CrewRunInput{Scope: scopeA, Run: run}); err != nil {
+		t.Fatal("a test run of an owned workflow was refused", err)
+	}
+}

@@ -8,7 +8,7 @@
 //   - a post in an auto-start channel opens a thread and starts the channel's target (team meeting, workflow run
 //     or one agent answer), trigger "discord";
 //   - "@이름 질문" as plain text, or /물어보기, gets one read-only answer from that work agent (a team holds a
-//     meeting instead);
+//     meeting instead; an agent that works by a workflow runs that workflow);
 //   - meeting turns are mirrored into the thread (last_posted_seq), replies there become notes for the next round,
 //     and /회의 멈춤 stops the meeting;
 //   - when the daily budget is reached the bot asks in the thread (계속 / 멈춤) instead of starting or going on.
