@@ -26,6 +26,16 @@ Rules:
 - Record the content itself, not the user's action: not "the user asked for X" but what X is.
 - Only the user's words count: never extract something the assistant said, proposed or restated, even if the user agreed with "응".
 - A change keeps both sides: "<what> uses Y instead of X". Turn relative dates (today, next week) into absolute ones using TODAY.
+- Preserve every condition, exception, negation, uncertainty and stated change-effective time in text itself.
+  Do not turn a conditional or tentative statement into an unconditional rule. Do not invent a date, domain or certainty.
+- memory_context is optional and normally null. Supply it only for material applicability, uncertainty or a stated
+  change-effective time. Its fields are domains (personal and/or work, only when supported), applicability,
+  uncertainty, valid_from and semantic_kind (fact|preference|correction|lesson|failure_recovery).
+  If the domain is unknown, use null and keep all qualifiers in text. A domain restriction (personal-only/work-only)
+  is a real applicability condition: preserve it in text and applicability, not just in the domains label.
+  Use empty strings for unstated qualifiers; classification labels alone do not need memory_context.
+  Copy stated timing without inventing activation or treating future valid_from as already active.
+  Never supply evidence_kind or observed_at: those are not model declarations.
 - quote: an exact contiguous substring copied from the user's message that supports the claim.
 - kind: user = personal preference/working style; decision = project/product decision or fact about their systems;
   procedural = standing how-to rule; lesson = a mistake to avoid that the user pointed out.
@@ -35,7 +45,7 @@ Rules:
 - Never output secrets, tokens, passwords or keys. If nothing qualifies, return {"claims":[]}.`
 
 // Enforced by the CLI (structured outputs); the prompts only explain the fields.
-const claimsSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "kind", "quote", "reason", "confidence", "supersedes_id", "risk", "risk_reasons", "dup_hint"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "kind": {"type": "string", "enum": ["user", "decision", "procedural", "lesson"]}, "quote": {"type": "string"}, "reason": {"type": "string"}, "confidence": {"type": "number"}, "supersedes_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}, ` + riskProps + `}}}}}`
+const claimsSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "kind", "quote", "reason", "confidence", "supersedes_id", "risk", "risk_reasons", "dup_hint"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "kind": {"type": "string", "enum": ["user", "decision", "procedural", "lesson"]}, "quote": {"type": "string"}, "reason": {"type": "string"}, "confidence": {"type": "number"}, "supersedes_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}, ` + riskProps + `, ` + claimContextSchema + `}}}}}`
 
 // riskRules and riskProps ask the extraction call for a risk call too (ADR-0022): it only orders the review
 // list, a person approves. Asked here so classifying costs no extra model call.
@@ -144,70 +154,61 @@ func claimQuoteMatches(quote string, users []any) ([]map[string]any, error) {
 // buildClaims checks the model's claims: a claim whose quote is not the user's literal words is
 // only an inference, and a unique literal quote links its one source record.
 func buildClaims(raw []any, userText string, related []map[string]any, users []any) ([]any, error) {
-	claims := []any{}
-	if len(raw) > 16 {
-		raw = raw[:16]
+	claims, _, err := buildClaimsWithReceipt(raw, userText, related, users)
+	return claims, err
+}
+
+func buildClaim(c map[string]any, text, userText string, related []map[string]any, users []any) (map[string]any, error) {
+	quote := str(or(c["quote"], ""))
+	kind := c["kind"]
+	if !claimKinds[hashable(kind)] {
+		kind = "decision"
 	}
-	for _, v := range raw {
-		c, err := asDict(v)
-		if err != nil {
-			return nil, err
-		}
-		text, quote := pyStrip(str(or(c["text"], ""))), str(or(c["quote"], ""))
-		if text == "" {
-			continue
-		}
-		kind := c["kind"]
-		if !claimKinds[hashable(kind)] {
-			kind = "decision"
-		}
-		matches, err := claimQuoteMatches(quote, users)
-		if err != nil {
-			return nil, err
-		}
-		basis := "inferred"
-		// Aggregate-only legacy callers cannot establish message boundaries.
-		legacyExact := users == nil && pyStrip(quote) != "" && strings.Contains(userText, quote)
-		if len(matches) > 0 || legacyExact {
-			basis = "explicit_user"
-		}
-		claim := map[string]any{"subject": head(or(pyStrip(str(or(c["subject"], "general"))), "general").(string), 120),
-			"text": head(text, 4000), "kind": kind, "basis": basis, "reason": head(str(or(c["reason"], "")), 500)}
-		for _, f := range riskFields(c, basis, quote) {
-			claim[f.Key] = f.Value
-		}
-		switch conf := c["confidence"].(type) {
-		case bool:
-			claim["confidence"] = map[bool]float64{true: 1, false: 0}[conf]
-		case json.Number, float64, int, int64:
-			f, _ := num(conf)
-			claim["confidence"] = min(max(f, 0), 1)
-		}
-		var sup map[string]any
-		for _, r := range related { // {r["id"]: r} keeps the last row per id
-			if id := hashable(c["supersedes_id"]); id != nil && eq(r["id"], id) {
-				sup = r
-			}
-		}
-		if sup != nil {
-			claim["supersedes"] = host.Obj{{Key: "collection", Value: "memories"}, {Key: "id", Value: sup["id"]}, {Key: "revision", Value: sup["revision"]}}
-		}
-		// A unique literal quote identifies one known input record; no similarity matching.
-		if basis == "explicit_user" && len(matches) == 1 {
-			if truthy(matches[0]["archive_refs"]) {
-				claim["archive_messages"] = matches[0]["archive_refs"]
-			} else if truthy(matches[0]["archive_ref"]) {
-				claim["archive_messages"] = []any{matches[0]["archive_ref"]}
-			}
-		}
-		for k, v := range claim {
-			if v == nil {
-				delete(claim, k)
-			}
-		}
-		claims = append(claims, claim)
+	matches, err := claimQuoteMatches(quote, users)
+	if err != nil {
+		return nil, err
 	}
-	return claims, nil
+	basis := "inferred"
+	// Aggregate-only legacy callers cannot establish message boundaries.
+	legacyExact := users == nil && pyStrip(quote) != "" && strings.Contains(userText, quote)
+	if len(matches) > 0 || legacyExact {
+		basis = "explicit_user"
+	}
+	claim := map[string]any{"subject": head(or(pyStrip(str(or(c["subject"], "general"))), "general").(string), 120),
+		"text": head(text, 4000), "kind": kind, "basis": basis, "reason": head(str(or(c["reason"], "")), 500)}
+	for _, f := range riskFields(c, basis, quote) {
+		claim[f.Key] = f.Value
+	}
+	switch conf := c["confidence"].(type) {
+	case bool:
+		claim["confidence"] = map[bool]float64{true: 1, false: 0}[conf]
+	case json.Number, float64, int, int64:
+		f, _ := num(conf)
+		claim["confidence"] = min(max(f, 0), 1)
+	}
+	var sup map[string]any
+	for _, r := range related { // {r["id"]: r} keeps the last row per id
+		if id := hashable(c["supersedes_id"]); id != nil && eq(r["id"], id) {
+			sup = r
+		}
+	}
+	if sup != nil {
+		claim["supersedes"] = host.Obj{{Key: "collection", Value: "memories"}, {Key: "id", Value: sup["id"]}, {Key: "revision", Value: sup["revision"]}}
+	}
+	// A unique literal quote identifies one known input record; no similarity matching.
+	if basis == "explicit_user" && len(matches) == 1 {
+		if truthy(matches[0]["archive_refs"]) {
+			claim["archive_messages"] = matches[0]["archive_refs"]
+		} else if truthy(matches[0]["archive_ref"]) {
+			claim["archive_messages"] = []any{matches[0]["archive_ref"]}
+		}
+	}
+	for k, v := range claim {
+		if v == nil {
+			delete(claim, k)
+		}
+	}
+	return claim, nil
 }
 
 // hashable is v when Python could use it as a dict key, else nil.
@@ -469,7 +470,7 @@ func process(job map[string]any, persist func() error) (err error) {
 			if err != nil {
 				return err
 			}
-			claims, err := buildClaims(raw, userText, related, linked)
+			claims, contextReceipt, err := buildClaimsWithReceipt(raw, userText, related, linked)
 			if err != nil {
 				return err
 			}
@@ -480,7 +481,13 @@ func process(job map[string]any, persist func() error) (err error) {
 					}
 				}
 			}
-			prepared = map[string]any{"event_type": eventType, "occurred_at": cued[len(cued)-1].(map[string]any)["at"], "claims": claims}
+			prepared = map[string]any{"event_type": eventType, "occurred_at": cued[len(cued)-1].(map[string]any)["at"], "claims": claims, "generator": extractionGenerator(strings.ReplaceAll(origin, "_", "-") + "-hook-v1")}
+			if contextReceipt != nil {
+				prepared["context_rejections"], err = bindClaimContextReceipt(contextReceipt, job["event_id"], cued)
+				if err != nil {
+					return err
+				}
+			}
 			if privatePayload(prepared) {
 				return sessionWait("capture_private_prepared")
 			}
@@ -489,14 +496,20 @@ func process(job map[string]any, persist func() error) (err error) {
 				return err
 			}
 		}
+		if err := retainClaimContextReceipt(job, prepared, cued); err != nil {
+			return err
+		}
 		claims := prepared["claims"].([]any)
 		eventType := prepared["event_type"].(string)
 		if len(claims) > 0 {
 			if err := checkPolicy(); err != nil {
 				return err
 			}
-			items, err := sendCapture(eventType, job["event_id"].(string), sid, prepared["occurred_at"], claims, origin, started,
-				generator(strings.ReplaceAll(origin, "_", "-")+"-hook-v1"))
+			gen, err := preparedClaimGenerator(prepared, strings.ReplaceAll(origin, "_", "-")+"-hook-v1")
+			if err != nil {
+				return err
+			}
+			items, err := sendCapture(eventType, job["event_id"].(string), sid, prepared["occurred_at"], claims, origin, started, gen)
 			if err != nil {
 				return err
 			}
@@ -544,7 +557,14 @@ func process(job map[string]any, persist func() error) (err error) {
 				return err
 			}
 		} else {
-			metric(kv("event", eventType), kv("session", head(sid, 12)), kv("status", "no_claims"))
+			status := "no_claims"
+			if prepared["context_rejections"] != nil {
+				status = "context_withheld"
+			}
+			metric(kv("event", eventType), kv("session", head(sid, 12)), kv("status", status))
+			if status == "context_withheld" {
+				return runtimeErr("capture_context_all_withheld")
+			}
 		}
 		job["captured"] = true
 	}
