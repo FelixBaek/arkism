@@ -204,6 +204,8 @@ impl Installer {
         hash: &str,
         filename: &str,
     ) -> Result<Self, Error> {
+        #[cfg(test)]
+        test_diagnostics::image(bytes);
         let storage = prepare_core(bytes, hash, filename, || windows::Staging::create(root))?;
         Ok(Self {
             storage,
@@ -330,6 +332,8 @@ impl Installer {
 
 #[cfg(windows)]
 mod windows {
+    #[cfg(test)]
+    use super::test_diagnostics;
     #[cfg(test)]
     use super::{expected_hash, verify_reader};
     use super::{Error, Storage};
@@ -463,6 +467,8 @@ mod windows {
 
     #[link(name = "kernel32")]
     extern "system" {
+        #[cfg(test)]
+        fn GetHandleInformation(handle: *mut c_void, flags: *mut u32) -> i32;
         fn GetFileInformationByHandle(handle: *mut c_void, information: *mut Information) -> i32;
         fn GetFileInformationByHandleEx(
             handle: *mut c_void,
@@ -1077,6 +1083,36 @@ mod windows {
                 .map(|entries| environment_block(entries))
                 .transpose()?;
             self.verify()?;
+            #[cfg(test)]
+            let diagnostic = {
+                let mut valid = true;
+                let mut inheritable = true;
+                for handle in &handles {
+                    let mut flags = 0;
+                    let observed = unsafe { GetHandleInformation(*handle, &mut flags) } != 0;
+                    valid &= observed;
+                    inheritable &= observed && flags & 1 != 0;
+                }
+                test_diagnostics::begin(test_diagnostics::Shape {
+                    namespace: test_diagnostics::namespace(&application),
+                    application_units: application.len(),
+                    command_units: command.len(),
+                    environment_units: block.as_ref().map_or(0, Vec::len),
+                    environment_supplied: block.is_some(),
+                    environment_double_nul: block
+                        .as_ref()
+                        .map_or(true, |value| value.ends_with(&[0, 0])),
+                    argument_count: arguments.len(),
+                    handle_count: handles.len(),
+                    guard_count: inherited_handles.len(),
+                    directory_count: self.holds.len(),
+                    handles_valid: valid,
+                    handles_inheritable: inheritable,
+                    startup_bytes: std::mem::size_of::<StartupInfo>(),
+                    startup_ex_bytes: std::mem::size_of::<StartupEx>(),
+                    parent_pointer_bits: usize::BITS,
+                })
+            };
             let mut information = ProcessInformation::default();
             let created = unsafe {
                 CreateProcessW(
@@ -1095,8 +1131,17 @@ mod windows {
                 )
             };
             if created == 0 {
+                #[cfg(test)]
+                {
+                    let error = io::Error::last_os_error();
+                    test_diagnostics::returned(diagnostic, false, error.raw_os_error());
+                    return Err(Error::io("spawn", error));
+                }
+                #[cfg(not(test))]
                 return Err(Error::io("spawn", io::Error::last_os_error()));
             }
+            #[cfg(test)]
+            test_diagnostics::returned(diagnostic, true, None);
             // Nothing after successful CreateProcess may return a launch error.
             // Only explicit guard duplicates were inherited. Closing these parent
             // copies cannot release the child's file/directory sharing protection.
@@ -1192,6 +1237,271 @@ mod windows {
             }
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+pub mod test_diagnostics {
+    use sha2::{Digest, Sha256};
+    use std::cell::RefCell;
+
+    #[derive(Clone, Default)]
+    struct Image {
+        valid: bool,
+        machine: u16,
+        magic: u16,
+        subsystem: u16,
+        sha256: String,
+    }
+
+    fn read16(bytes: &[u8], offset: usize) -> Option<u16> {
+        Some(u16::from_le_bytes(
+            bytes.get(offset..offset.checked_add(2)?)?.try_into().ok()?,
+        ))
+    }
+
+    fn read32(bytes: &[u8], offset: usize) -> Option<u32> {
+        Some(u32::from_le_bytes(
+            bytes.get(offset..offset.checked_add(4)?)?.try_into().ok()?,
+        ))
+    }
+
+    fn pe(bytes: &[u8]) -> Option<Image> {
+        if bytes.get(..2)? != b"MZ" {
+            return None;
+        }
+        let header = read32(bytes, 0x3c)? as usize;
+        if bytes.get(header..header.checked_add(4)?)? != b"PE\0\0" {
+            return None;
+        }
+        let optional = header.checked_add(24)?;
+        let optional_size = read16(bytes, header.checked_add(20)?)? as usize;
+        if optional_size < 70
+            || bytes
+                .get(optional..optional.checked_add(optional_size)?)
+                .is_none()
+        {
+            return None;
+        }
+        Some(Image {
+            valid: true,
+            machine: read16(bytes, header.checked_add(4)?)?,
+            magic: read16(bytes, optional)?,
+            subsystem: read16(bytes, optional.checked_add(68)?)?,
+            sha256: String::new(),
+        })
+    }
+
+    pub fn image(bytes: &[u8]) {
+        let mut image = pe(bytes).unwrap_or_default();
+        image.sha256 = Sha256::digest(bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        TRACE.with(|trace| trace.borrow_mut().image = image);
+    }
+
+    #[derive(Clone, Default)]
+    pub struct Shape {
+        pub namespace: &'static str,
+        pub application_units: usize,
+        pub command_units: usize,
+        pub environment_units: usize,
+        pub environment_supplied: bool,
+        pub environment_double_nul: bool,
+        pub argument_count: usize,
+        pub handle_count: usize,
+        pub guard_count: usize,
+        pub directory_count: usize,
+        pub handles_valid: bool,
+        pub handles_inheritable: bool,
+        pub startup_bytes: usize,
+        pub startup_ex_bytes: usize,
+        pub parent_pointer_bits: u32,
+    }
+
+    struct Attempt {
+        target: &'static str,
+        image: Image,
+        shape: Shape,
+        returned: bool,
+        created: bool,
+        code: Option<i32>,
+    }
+
+    struct Trace {
+        phase: &'static str,
+        target: &'static str,
+        image: Image,
+        attempts: Vec<Attempt>,
+        overflow: bool,
+        operation: &'static str,
+        code: Option<i32>,
+    }
+
+    impl Default for Trace {
+        fn default() -> Self {
+            Self {
+                phase: "not_started",
+                target: "other",
+                image: Image::default(),
+                attempts: Vec::new(),
+                overflow: false,
+                operation: "none",
+                code: None,
+            }
+        }
+    }
+
+    thread_local! { static TRACE: RefCell<Trace> = RefCell::new(Trace::default()); }
+
+    pub fn phase(value: &'static str) {
+        let allowed = [
+            "inputs",
+            "mapping",
+            "file_guards",
+            "replacement",
+            "same_object",
+            "reparse",
+            "prepare",
+            "create_process",
+            "wait",
+            "payload",
+            "cleanup",
+            "empty_parent",
+            "complete",
+        ];
+        let value = if allowed.contains(&value) {
+            value
+        } else {
+            "unknown"
+        };
+        TRACE.with(|trace| {
+            let mut trace = trace.borrow_mut();
+            trace.phase = value;
+            trace.operation = "none";
+            trace.code = None;
+        });
+    }
+
+    pub fn target(value: &'static str) {
+        let value = match value {
+            "rust_peer" | "rust_peer_long" | "inert_nsis" | "invalid_image" => value,
+            _ => "other",
+        };
+        TRACE.with(|trace| trace.borrow_mut().target = value);
+    }
+
+    pub fn namespace(application: &[u16]) -> &'static str {
+        let starts =
+            |prefix: &str| application.starts_with(&prefix.encode_utf16().collect::<Vec<_>>());
+        if starts("\\\\?\\Volume{") {
+            "volume_guid"
+        } else if starts("\\\\?\\") {
+            "verbatim_other"
+        } else if starts("\\\\") {
+            "unc"
+        } else if application.get(1) == Some(&58) {
+            "drive"
+        } else {
+            "other"
+        }
+    }
+
+    pub fn begin(mut shape: Shape) -> usize {
+        if !["volume_guid", "verbatim_other", "unc", "drive", "other"].contains(&shape.namespace) {
+            shape.namespace = "other";
+        }
+        TRACE.with(|trace| {
+            let mut trace = trace.borrow_mut();
+            trace.phase = "create_process";
+            if trace.attempts.len() >= 16 {
+                trace.overflow = true;
+                return usize::MAX;
+            }
+            let attempt = Attempt {
+                target: trace.target,
+                image: trace.image.clone(),
+                shape,
+                returned: false,
+                created: false,
+                code: None,
+            };
+            trace.attempts.push(attempt);
+            trace.attempts.len() - 1
+        })
+    }
+
+    pub fn returned(index: usize, created: bool, code: Option<i32>) {
+        TRACE.with(|trace| {
+            if let Some(attempt) = trace.borrow_mut().attempts.get_mut(index) {
+                attempt.returned = true;
+                attempt.created = created;
+                attempt.code = code;
+            }
+        });
+    }
+
+    pub fn error(error: &super::Error) {
+        if let Some(cause) = error.causes.first() {
+            let allowed = [
+                "spawn",
+                "wait",
+                "exit_code",
+                "anchor_file",
+                "file_identity",
+                "lock_file",
+                "lock_volume_file",
+                "hold_directory",
+                "read_locked",
+                "write",
+                "flush",
+                "volume_path",
+            ];
+            let operation = if allowed.contains(&cause.operation) {
+                cause.operation
+            } else {
+                "guard_operation"
+            };
+            TRACE.with(|trace| {
+                let mut trace = trace.borrow_mut();
+                trace.operation = operation;
+                trace.code = cause.code;
+            });
+        }
+    }
+
+    pub fn healthy() -> bool {
+        TRACE.with(|trace| !trace.borrow().overflow)
+    }
+
+    fn attempt_json(attempt: &Attempt) -> String {
+        let image = &attempt.image;
+        let shape = &attempt.shape;
+        let code = attempt
+            .code
+            .map_or_else(|| "null".to_string(), |code| code.to_string());
+        let operation = if attempt.returned && !attempt.created {
+            "spawn"
+        } else {
+            "none"
+        };
+        format!("{{\"target\":\"{}\",\"pe_valid\":{},\"pe_machine\":{},\"pe_magic\":{},\"pe_subsystem\":{},\"image_sha256\":\"{}\",\"namespace\":\"{}\",\"application_utf16_units\":{},\"command_utf16_units\":{},\"environment_utf16_units\":{},\"environment_supplied\":{},\"environment_double_nul\":{},\"argument_count\":{},\"handle_count\":{},\"guard_count\":{},\"directory_count\":{},\"stdio_unique_count\":1,\"handles_valid\":{},\"handles_inheritable\":{},\"startup_bytes\":{},\"startup_ex_bytes\":{},\"parent_pointer_bits\":{},\"create_returned\":{},\"created\":{},\"operation\":\"{operation}\",\"os_code\":{code}}}",
+            attempt.target, image.valid, image.machine, image.magic, image.subsystem, image.sha256,
+            shape.namespace, shape.application_units, shape.command_units, shape.environment_units,
+            shape.environment_supplied, shape.environment_double_nul, shape.argument_count,
+            shape.handle_count, shape.guard_count, shape.directory_count, shape.handles_valid,
+            shape.handles_inheritable, shape.startup_bytes, shape.startup_ex_bytes,
+            shape.parent_pointer_bits, attempt.returned, attempt.created)
+    }
+
+    pub fn json() -> String {
+        TRACE.with(|trace| {
+            let trace = trace.borrow();
+            let attempts = trace.attempts.iter().map(attempt_json).collect::<Vec<_>>().join(",");
+            let code = trace.code.map_or_else(|| "null".to_string(), |value| value.to_string());
+            format!("{{\"phase\":\"{}\",\"target\":\"{}\",\"operation\":\"{}\",\"os_code\":{code},\"overflow\":{},\"attempts\":[{attempts}]}}", trace.phase, trace.target, trace.operation, trace.overflow)
+        })
     }
 }
 

@@ -12,10 +12,12 @@ use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use update_installer::test_diagnostics as diagnostic;
 use update_installer::Installer;
 
 const NAME: &str = "Arkism-1.2.3-setup.exe";
@@ -137,6 +139,13 @@ fn hex_environment(name: &str, length: usize) -> String {
     value.to_ascii_lowercase()
 }
 
+fn safe_hex_environment(name: &str, length: usize) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| value.len() == length && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .map(|value| value.to_ascii_lowercase())
+}
+
 impl NativeInputs {
     fn load(parent: &Path) -> Self {
         let source = hex_environment("ARKISM_WINDOWS_INSTALLER_IDENTITY_SOURCE_SHA", 40);
@@ -167,19 +176,70 @@ impl NativeInputs {
     }
 }
 
-fn evidence(inputs: &NativeInputs, ok: bool, mapping: &str, nsis: bool, preserved: bool) {
+#[derive(Default)]
+struct Report {
+    source: String,
+    nsis_hash: String,
+    compiler_hash: Option<String>,
+    mapping: &'static str,
+    rust_peer: bool,
+    rust_peer_long: bool,
+    nsis: bool,
+    preserved: bool,
+    complete: bool,
+}
+
+thread_local! { static REPORT: RefCell<Report> = RefCell::new(Report::default()); }
+
+fn evidence(inputs: &NativeInputs, ok: bool, mapping: &'static str, nsis: bool, preserved: bool) {
+    REPORT.with(|report| {
+        let mut report = report.borrow_mut();
+        report.source = inputs.source.clone();
+        report.nsis_hash = inputs.nsis_hash.clone();
+        report.compiler_hash = inputs.compiler_hash.clone();
+        report.mapping = mapping;
+        report.nsis = nsis;
+        report.preserved = preserved;
+        report.complete = ok;
+    });
+}
+
+fn checked<T>(result: Result<T, update_installer::Error>) -> T {
+    match result {
+        Ok(value) => value,
+        Err(error) => {
+            diagnostic::error(&error);
+            panic!("identity_guard_operation_failed");
+        }
+    }
+}
+
+fn write_evidence(passed: bool) -> std::io::Result<()> {
     if let Some(path) = std::env::var_os("ARKISM_UPDATE_IDENTITY_EVIDENCE") {
         let parent = require_hosted();
         let path = PathBuf::from(path);
         assert_eq!(path.parent(), Some(parent.as_path()));
-        let compiler = inputs
+        let body = REPORT.with(|report| {
+        let report = report.borrow();
+        let ok = passed && report.complete;
+        let compiler = report
             .compiler_hash
             .as_ref()
             .map_or_else(|| "null".to_string(), |value| format!("\"{value}\""));
-        create_new(&path, format!("{{\"ok\":{ok},\"scope\":\"inert_images_only\",\"native_windows\":true,\"source_sha\":\"{}\",\"module_sha256\":\"{}\",\"fixture_sha256\":\"{}\",\"writable_mapping_outcome\":\"{mapping}\",\"inert_nsis_self_archive\":{nsis},\"inert_nsis_sha256\":\"{}\",\"nsis_compiler_sha256\":{compiler},\"parent_drop_delayed_read\":{ok},\"selective_inheritance_checked\":{ok},\"owned_root_preserved\":{preserved},\"production_nsis_executed\":false}}\n",
-            inputs.source, hash(include_bytes!("../src/update_installer.rs")),
-            hash(include_bytes!("windows_update_installer_identity.rs")), inputs.nsis_hash).as_bytes());
+        let peers = report.rust_peer && report.rust_peer_long;
+        format!("{{\"ok\":{ok},\"scope\":\"inert_images_only\",\"native_windows\":true,\"source_sha\":\"{}\",\"module_sha256\":\"{}\",\"fixture_sha256\":\"{}\",\"writable_mapping_outcome\":\"{}\",\"inert_nsis_self_archive\":{},\"inert_nsis_sha256\":\"{}\",\"nsis_compiler_sha256\":{compiler},\"rust_peer_complete\":{},\"rust_peer_long_complete\":{},\"parent_drop_delayed_read\":{peers},\"selective_inheritance_checked\":{peers},\"owned_root_preserved\":{},\"production_nsis_executed\":false,\"diagnostic\":{}}}\n",
+            report.source, hash(include_bytes!("../src/update_installer.rs")),
+            hash(include_bytes!("windows_update_installer_identity.rs")), report.mapping,
+            report.nsis, report.nsis_hash, report.rust_peer, report.rust_peer_long,
+            report.preserved, diagnostic::json())
+        });
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)?
+            .write_all(body.as_bytes())?;
     }
+    Ok(())
 }
 
 struct WritableView {
@@ -561,8 +621,14 @@ fn writable_mapping_transition(
 }
 
 fn inert_nsis_self_archive(root: &Path, inputs: &NativeInputs) {
-    let mut guard =
-        Installer::prepare_in(root, &inputs.nsis_bytes, &inputs.nsis_hash, NAME).unwrap();
+    diagnostic::target("inert_nsis");
+    diagnostic::phase("prepare");
+    let mut guard = checked(Installer::prepare_in(
+        root,
+        &inputs.nsis_bytes,
+        &inputs.nsis_hash,
+        NAME,
+    ));
     let staged = guard.path().to_path_buf();
     let output = root.join("inert NSIS output [owned]");
     fs::create_dir(&output).unwrap();
@@ -570,14 +636,19 @@ fn inert_nsis_self_archive(root: &Path, inputs: &NativeInputs) {
         "ARKISM_INSTALLER_FIXTURE_OUTPUT",
         output.clone().into_os_string(),
     )]);
-    let mut launched = guard.spawn_inert(&[OsString::from("/S")], &env).unwrap();
+    diagnostic::phase("create_process");
+    let mut launched = checked(guard.spawn_inert(&[OsString::from("/S")], &env));
     drop(guard);
-    assert_eq!(launched.wait(Duration::from_secs(30)).unwrap(), Some(0));
+    diagnostic::phase("wait");
+    assert_eq!(checked(launched.wait(Duration::from_secs(30))), Some(0));
+    diagnostic::phase("payload");
     assert!(
         fs::read(output.join("embedded.fixture")).unwrap() == b"Arkism inert installer fixture.\n",
         "inert NSIS embedded payload mismatch"
     );
     assert_eq!(fs::read_dir(&output).unwrap().count(), 1);
+    REPORT.with(|report| report.borrow_mut().nsis = true);
+    diagnostic::phase("cleanup");
     fs::remove_file(output.join("embedded.fixture")).unwrap();
     fs::remove_dir(output).unwrap();
     fs::remove_file(staged).unwrap();
@@ -588,7 +659,8 @@ fn bytes_for_mutation() -> Vec<u8> {
 }
 
 fn inherited_lifetime(root: &Path, bytes: &[u8], expected: &str) {
-    let mut guard = Installer::prepare_in(root, bytes, expected, NAME).unwrap();
+    diagnostic::phase("prepare");
+    let mut guard = checked(Installer::prepare_in(root, bytes, expected, NAME));
     let path = guard.path().to_path_buf();
     let ready = root.join("ready");
     let release = root.join("release");
@@ -619,7 +691,8 @@ fn inherited_lifetime(root: &Path, bytes: &[u8], expected: &str) {
         ),
     ]);
     let args = ["--exact", "windows_update_installer_peer", "--nocapture"].map(OsString::from);
-    let mut process = guard.spawn_inert(&args, &env).unwrap();
+    diagnostic::phase("create_process");
+    let mut process = checked(guard.spawn_inert(&args, &env));
     // Parent originals and temporary inheritable duplicates are all closed now.
     drop(guard);
     wait_file(&ready);
@@ -639,7 +712,9 @@ fn inherited_lifetime(root: &Path, bytes: &[u8], expected: &str) {
     assert!(fs::rename(&path, root.join("renamed-child.exe")).is_err());
     assert!(fs::rename(root, root.with_extension("moved-child")).is_err());
     create_new(&release, b"release");
-    assert_eq!(process.wait(Duration::from_secs(30)).unwrap(), Some(0));
+    diagnostic::phase("wait");
+    assert_eq!(checked(process.wait(Duration::from_secs(30))), Some(0));
+    diagnostic::phase("payload");
     assert!(
         done.exists(),
         "peer completion was absent when process wait returned"
@@ -657,6 +732,8 @@ fn inherited_lifetime(root: &Path, bytes: &[u8], expected: &str) {
 }
 
 fn invalid_image_launch_preserves_cleanup_contract(root: &Path) {
+    diagnostic::target("invalid_image");
+    diagnostic::phase("prepare");
     let mut guard = Installer::prepare_in(
         root,
         b"not an executable",
@@ -680,24 +757,81 @@ fn invalid_image_launch_preserves_cleanup_contract(root: &Path) {
 #[ignore = "requires explicit opt-in on a disposable GitHub-hosted Windows runner"]
 fn windows_update_installer_identity() {
     let parent = require_hosted();
-    let inputs = NativeInputs::load(&parent);
-    let root = owned_root(&parent);
+    REPORT.with(|report| {
+        *report.borrow_mut() = Report {
+            source: safe_hex_environment("ARKISM_WINDOWS_INSTALLER_IDENTITY_SOURCE_SHA", 40)
+                .unwrap_or_else(|| "unavailable".to_string()),
+            nsis_hash: safe_hex_environment("ARKISM_WINDOWS_INSTALLER_IDENTITY_NSIS_SHA256", 64)
+                .unwrap_or_else(|| "unavailable".to_string()),
+            compiler_hash: safe_hex_environment(
+                "ARKISM_WINDOWS_INSTALLER_IDENTITY_NSIS_COMPILER_SHA256",
+                64,
+            ),
+            mapping: "not_reached",
+            ..Report::default()
+        };
+    });
+    preserve_failure(
+        || {
+            run_identity_fixture(&parent);
+            assert!(
+                REPORT.with(|report| report.borrow().complete),
+                "identity_fixture_incomplete"
+            );
+            assert!(diagnostic::healthy(), "identity_diagnostic_overflow");
+        },
+        write_evidence,
+    );
+}
+
+fn preserve_failure(body: impl FnOnce(), writer: impl FnOnce(bool) -> std::io::Result<()>) {
+    let execution = catch_unwind(AssertUnwindSafe(body));
+    let written = catch_unwind(AssertUnwindSafe(|| writer(execution.is_ok())));
+    match execution {
+        Err(original) => resume_unwind(original),
+        Ok(()) => match written {
+            Err(failure) => resume_unwind(failure),
+            Ok(Err(_)) => panic!("identity_evidence_write_failed"),
+            Ok(Ok(())) => (),
+        },
+    }
+}
+
+fn run_identity_fixture(parent: &Path) {
+    diagnostic::phase("inputs");
+    let inputs = NativeInputs::load(parent);
+    evidence(&inputs, false, "not_reached", false, false);
+    let root = owned_root(parent);
+    REPORT.with(|report| report.borrow_mut().preserved = true);
     let bytes = bytes_for_mutation();
     assert!(!bytes.is_empty() && bytes.len() as u64 <= update_installer::MAX_BYTES);
     let expected = hash(&bytes);
+    diagnostic::phase("mapping");
     let mapping = writable_mapping_transition(&root, &bytes, &expected, &inputs);
+    evidence(&inputs, false, mapping, false, true);
+    diagnostic::phase("file_guards");
     locked_file_and_ancestors(&root, &bytes, &expected);
+    diagnostic::phase("replacement");
     replacement_and_writer_conflicts(&root, &bytes, &expected);
+    diagnostic::phase("same_object");
     changed_same_object_and_collision(&root, &bytes, &expected);
+    diagnostic::phase("reparse");
     reparse_boundary(&root, &bytes, &expected);
     invalid_image_launch_preserves_cleanup_contract(&root);
+    diagnostic::target("rust_peer");
     inherited_lifetime(&root, &bytes, &expected);
+    REPORT.with(|report| report.borrow_mut().rust_peer = true);
     let long = root.join(format!("long {}", "a".repeat(170)));
     fs::create_dir(&long).unwrap();
     assert!(long.as_os_str().encode_wide().count() + 64 > 260);
+    diagnostic::target("rust_peer_long");
     inherited_lifetime(&long, &bytes, &expected);
+    REPORT.with(|report| report.borrow_mut().rust_peer_long = true);
     fs::remove_dir(long).unwrap();
     inert_nsis_self_archive(&root, &inputs);
+    REPORT.with(|report| report.borrow_mut().nsis = true);
+    diagnostic::target("other");
+    diagnostic::phase("empty_parent");
     let preserved = empty_parent_reparse_race(&root, &bytes, &expected);
     if preserved {
         let mut names: Vec<_> = fs::read_dir(&root)
@@ -717,5 +851,6 @@ fn windows_update_installer_identity() {
         fs::remove_dir(&root).unwrap();
     }
     evidence(&inputs, true, mapping, true, preserved);
+    diagnostic::phase("complete");
     println!("inert installer identity: locked bytes, replacement, writer conflict, exact cleanup, inherited lifetime and selective inheritance passed");
 }
