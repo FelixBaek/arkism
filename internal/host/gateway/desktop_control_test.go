@@ -117,7 +117,7 @@ func TestDesktopControlGatewayActualStartupRecoveryTokenFailureHasNoWriterFallba
 	Listen = "127.0.0.1:0"
 	t.Cleanup(func() { Listen = old })
 	var out, diagnostic bytes.Buffer
-	if code := runGateway(nil, strings.NewReader(""), &out, &diagnostic); code == 0 {
+	if runGateway(nil, strings.NewReader(""), &out, &diagnostic) == 0 {
 		t.Fatal("gateway recovered without its token")
 	}
 	if out.Len() != 0 || !strings.Contains(diagnostic.String(), "desktop_gateway_token_unavailable") {
@@ -184,7 +184,8 @@ func TestDesktopControlCheckedCloseDoesNotRunAfterExpiredDeadline(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	called := false
-	err := stopClaudeProcess(ctx, func() error { called = true; return nil }, func() error { called = true; return nil }, make(chan struct{}))
+	recordStop := func() error { called = true; return nil }
+	err := stopClaudeProcess(ctx, recordStop, recordStop, make(chan struct{}))
 	if called || !errors.Is(err, errClaudeWait) {
 		t.Fatal("expired deadline performed stop")
 	}

@@ -113,6 +113,11 @@ struct Owner<A: Api> {
     status: Status,
 }
 
+struct Observation {
+    accounting: Accounting,
+    root_signaled: bool,
+}
+
 struct LaunchFailure<A: Api> {
     error: JobError,
     owner: Owner<A>,
@@ -210,7 +215,10 @@ impl<A: Api> Owner<A> {
         let start = self.api.clock();
         let mut previous = start;
         loop {
-            let accounting = self.observe()?;
+            let Observation {
+                accounting,
+                root_signaled,
+            } = self.observe()?;
             let now = self.api.clock();
             if now < previous {
                 return Err(JobError::one(Cause::fixed("clock_regressed")));
@@ -219,36 +227,49 @@ impl<A: Api> Owner<A> {
             let elapsed = now
                 .checked_sub(start)
                 .ok_or_else(|| JobError::one(Cause::fixed("clock_regressed")))?;
-            if elapsed <= timeout && accounting.active_processes == 0 {
+            if elapsed <= timeout && accounting.active_processes == 0 && root_signaled {
                 self.status.empty_confirmed = true;
                 return Ok(accounting);
             }
             if elapsed >= timeout {
-                return Err(JobError::one(Cause::fixed("wait_timeout")));
+                let operation = if accounting.active_processes == 0 && !root_signaled {
+                    "empty_root_unsignaled"
+                } else {
+                    "wait_timeout"
+                };
+                return Err(JobError::one(Cause::fixed(operation)));
             }
             self.api
                 .sleep((timeout - elapsed).min(Duration::from_millis(10)));
         }
     }
 
-    fn observe(&mut self) -> Result<Accounting, JobError> {
+    fn observe(&mut self) -> Result<Observation, JobError> {
         if self.status.assigned {
             let accounting = self.query()?;
-            if accounting.active_processes == 0
-                && valid_handle(self.process)
-                && !self.api.root_exited(self.process).map_err(JobError::one)?
-            {
-                return Err(JobError::one(Cause::fixed("empty_root_unsignaled")));
-            }
-            Ok(accounting)
+            // Job accounting can reach zero before the process object is signaled.
+            // Keep both receipts separate and let the bounded wait confirm them.
+            let root_signaled = accounting.active_processes == 0
+                && (!valid_handle(self.process)
+                    || self.api.root_exited(self.process).map_err(JobError::one)?);
+            Ok(Observation {
+                accounting,
+                root_signaled,
+            })
         } else if valid_handle(self.process) {
             let exited = self.api.root_exited(self.process).map_err(JobError::one)?;
-            Ok(Accounting {
-                active_processes: u32::from(!exited),
-                total_processes: 1,
+            Ok(Observation {
+                accounting: Accounting {
+                    active_processes: u32::from(!exited),
+                    total_processes: 1,
+                },
+                root_signaled: exited,
             })
         } else {
-            Ok(Accounting::default())
+            Ok(Observation {
+                accounting: Accounting::default(),
+                root_signaled: true,
+            })
         }
     }
 
@@ -510,17 +531,24 @@ mod abi {
 
 #[cfg(windows)]
 mod native {
-    use super::abi::*;
-    use super::*;
+    use super::abi::{
+        BasicAccounting, ExtendedLimit, Handle, ProcessInfo, SecurityAttributes, StartupEx,
+    };
+    use super::{
+        command_line, environment_block, inheritance_list, no_nul, valid_handle, Accounting, Api,
+        Cause, Created, JobError, Owner, Status,
+    };
     use std::alloc::{alloc_zeroed, dealloc, Layout};
+    use std::cmp::Ordering;
     use std::ffi::{c_void, OsString};
+    use std::fmt;
     use std::fs::File;
     use std::mem::{size_of, zeroed};
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
     use std::os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle};
     use std::path::PathBuf;
     use std::ptr::{null, null_mut};
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
 
     const KILL_ON_CLOSE: u32 = 0x2000;
     const STARTF_USESTDHANDLES: u32 = 0x100;
@@ -1296,6 +1324,7 @@ mod tests {
         accounting: VecDeque<Result<Accounting, Cause>>,
         active: u32,
         root_exited: bool,
+        root_signals: VecDeque<Result<bool, Cause>>,
         times: VecDeque<Duration>,
         now: Duration,
     }
@@ -1311,6 +1340,7 @@ mod tests {
                 accounting: VecDeque::new(),
                 active: 1,
                 root_exited: true,
+                root_signals: VecDeque::new(),
                 times: VecDeque::new(),
                 now: Duration::ZERO,
             }
@@ -1374,7 +1404,9 @@ mod tests {
         fn root_exited(&mut self, p: usize) -> Result<bool, Cause> {
             assert_eq!(p, 20);
             self.call("root_exited")?;
-            Ok(self.root_exited)
+            self.root_signals
+                .pop_front()
+                .unwrap_or(Ok(self.root_exited))
         }
         fn terminate_job(&mut self, j: usize) -> Result<(), Cause> {
             assert_eq!(j, 10);
@@ -1610,6 +1642,69 @@ mod tests {
             ["empty_root_unsignaled"]
         );
         assert!(!owner.status.empty_confirmed);
+    }
+
+    #[test]
+    fn root_signal_delay_is_bounded_without_premature_empty() {
+        let mut owner = launch(Fake {
+            active: 0,
+            root_exited: false,
+            root_signals: VecDeque::from([Ok(false), Ok(false), Ok(true)]),
+            ..Fake::default()
+        });
+        let accounting = owner.wait_empty(Duration::from_millis(30)).unwrap();
+        assert_eq!(accounting.active_processes, 0);
+        assert_eq!(owner.api.now, Duration::from_millis(20));
+        assert!(owner.status.empty_confirmed);
+        assert!(!operations(&owner)
+            .iter()
+            .any(|op| op.starts_with("close") || op.starts_with("terminate")));
+    }
+
+    #[test]
+    fn root_signal_timeout_retains_all_ownership() {
+        let mut owner = launch(Fake {
+            active: 0,
+            root_exited: false,
+            ..Fake::default()
+        });
+        assert_eq!(
+            cause(owner.wait_empty(Duration::from_millis(20)).unwrap_err()),
+            ["empty_root_unsignaled"]
+        );
+        assert_eq!(owner.api.now, Duration::from_millis(20));
+        assert!(!owner.status.empty_confirmed);
+        assert_eq!((owner.job, owner.process, owner.thread), (10, 20, 30));
+        assert_eq!(
+            cause(owner.close_empty().unwrap_err()),
+            ["close_requires_confirmed_empty"]
+        );
+        assert!(!operations(&owner)
+            .iter()
+            .any(|op| op.starts_with("close") || op.starts_with("terminate")));
+    }
+
+    #[test]
+    fn root_signal_query_error_is_not_a_pending_exit() {
+        let mut owner = launch(Fake {
+            active: 0,
+            root_exited: false,
+            root_signals: VecDeque::from([
+                Ok(false),
+                Err(Cause::fixed("root_signal_probe_failed")),
+            ]),
+            ..Fake::default()
+        });
+        assert_eq!(
+            cause(owner.wait_empty(Duration::from_millis(30)).unwrap_err()),
+            ["root_signal_probe_failed"]
+        );
+        assert_eq!(owner.api.now, Duration::from_millis(10));
+        assert!(!owner.status.empty_confirmed);
+        assert_eq!((owner.job, owner.process, owner.thread), (10, 20, 30));
+        assert!(!operations(&owner)
+            .iter()
+            .any(|op| op.starts_with("close") || op.starts_with("terminate")));
     }
 
     #[test]

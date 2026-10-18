@@ -611,13 +611,14 @@ impl<T: Transport> Session<T> {
 
 #[cfg(windows)]
 mod windows {
-    use super::*;
+    use super::{Binding, Code, Error, ReadStep, Role, Session, State, Transport, MAX_FRAME};
     use crate::windows_job::{JobChild, ResumeState};
     use std::ffi::c_void;
+    use std::fmt;
     use std::fs::File;
     use std::os::windows::io::AsRawHandle;
     use std::ptr::{null, null_mut};
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
 
     #[link(name = "kernel32")]
     extern "system" {
