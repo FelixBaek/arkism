@@ -128,29 +128,44 @@ function Get-NsisAutorunErrorOrigin($Failure) {
   }
 }
 
-function Wait-NsisAutorunMarker([string]$Marker, [string]$InstallPath, [bool]$Expected) {
-  if ($Expected) {
-    $deadline = [DateTime]::UtcNow.AddSeconds(15)
-    while ($null -eq (Get-InstalledSmokeAttributes $Marker) -and [DateTime]::UtcNow -lt $deadline) {
-      Start-Sleep -Milliseconds 100
-    }
-    Assert-InstalledSmokeFile $Marker
-    if (([IO.FileInfo]$Marker).Length -gt 32768) { throw 'nsis_control_marker_too_large' }
-    $executable = ConvertTo-InstalledSmokePath ([IO.File]::ReadAllText($Marker))
-    if ($executable -ine (Join-Path $InstallPath 'Arkism.exe')) { throw 'nsis_control_wrong_executable' }
-  } else {
-    Start-Sleep -Milliseconds 1000
-    if ($null -ne (Get-InstalledSmokeAttributes $Marker)) { throw 'nsis_control_unexpected_autorun' }
+function Get-NsisAutorunNow { return [DateTime]::UtcNow }
+
+function Wait-NsisAutorunPoll { Start-Sleep -Milliseconds 100 }
+
+function Assert-NsisNoAutorun([string]$Marker, [string]$InstallPath) {
+  if (@(Get-InstalledSmokeProcesses $InstallPath).Count -or $null -ne (Get-InstalledSmokeAttributes $Marker)) {
+    throw 'nsis_control_unexpected_autorun'
   }
-  $deadline = [DateTime]::UtcNow.AddSeconds(15)
-  while (@(Get-InstalledSmokeProcesses $InstallPath).Count -and [DateTime]::UtcNow -lt $deadline) {
-    Start-Sleep -Milliseconds 100
+}
+
+function Wait-NsisPositiveAutorun([string]$Marker, [string]$InstallPath) {
+  $deadline = (Get-NsisAutorunNow).AddSeconds(15)
+  while ($null -eq (Get-InstalledSmokeAttributes $Marker) -and (Get-NsisAutorunNow) -lt $deadline) {
+    Wait-NsisAutorunPoll
   }
+  # The marker can exist before its writer closes it. Read only after the installed child exits.
+  while (@(Get-InstalledSmokeProcesses $InstallPath).Count -and (Get-NsisAutorunNow) -lt $deadline) { Wait-NsisAutorunPoll }
   if (@(Get-InstalledSmokeProcesses $InstallPath).Count) { throw 'nsis_control_process_did_not_exit' }
+  Assert-InstalledSmokeFile $Marker
+  if (([IO.FileInfo]$Marker).Length -gt 32768) { throw 'nsis_control_marker_too_large' }
+  $executable = ConvertTo-InstalledSmokePath ([IO.File]::ReadAllText($Marker))
+  if ($executable -ine (Join-Path $InstallPath 'Arkism.exe')) { throw 'nsis_control_wrong_executable' }
+}
+
+function Wait-NsisNegativeAutorun([string]$Marker, [string]$InstallPath) {
+  # This bounded observation catches delayed launches; it is not an unlimited absence guarantee.
+  $deadline = (Get-NsisAutorunNow).AddSeconds(2)
+  while ((Get-NsisAutorunNow) -lt $deadline) { Assert-NsisNoAutorun $Marker $InstallPath; Wait-NsisAutorunPoll }
+  Assert-NsisNoAutorun $Marker $InstallPath
+}
+
+function Wait-NsisAutorunMarker([string]$Marker, [string]$InstallPath, [bool]$Expected) {
+  if ($Expected) { Wait-NsisPositiveAutorun $Marker $InstallPath }
+  else { Wait-NsisNegativeAutorun $Marker $InstallPath }
 }
 
 function Invoke-NsisAutorunCase($Context, [string]$Root, [string]$Installer, [string]$InstallerHash,
-                               [string]$PayloadHash, $Environment, [bool]$NoAutoRun) {
+                               [string]$PayloadHash, $Environment, [bool]$NoAutoRun, $Diagnostics = $null) {
   $name = if ($NoAutoRun) { 'silent-no-autorun' } else { 'silent-default' }
   $install = Join-Path $Root $name
   $marker = Join-Path $Root "$name.marker"
@@ -164,7 +179,9 @@ function Invoke-NsisAutorunCase($Context, [string]$Root, [string]$Installer, [st
     [void](Invoke-InstalledSmokeProcess $Installer $arguments $childEnv 180 $name)
     if ((Get-InstalledSmokeHash $Installer) -cne $InstallerHash) { throw 'nsis_control_installer_changed' }
     if ((Get-InstalledSmokeHash (Join-Path $install 'Arkism.exe')) -cne $PayloadHash) { throw 'nsis_control_payload_changed' }
-    Assert-InstalledSmokeRegistration (Get-InstalledSmokeGlobalState $Context) $install '0.0.0' -RequireComplete
+    $state = Get-InstalledSmokeGlobalState $Context
+    if ($null -ne $Diagnostics) { $Diagnostics.registration = Get-InstalledSmokeRegistrationSummary $state }
+    Assert-InstalledSmokeRegistration $state $install '0.0.0' -RequireComplete
     Wait-NsisAutorunMarker $marker $install (-not $NoAutoRun)
     return [ordered]@{ case = $name; exit_code = 0; marker_present = (-not $NoAutoRun); installed_payload_matches = $true }
   } catch {
@@ -200,6 +217,8 @@ try {
                       $environment['XDG_CONFIG_HOME'], $environment['TEMP'])) {
     [IO.Directory]::CreateDirectory($path) | Out-Null
   }
+  Add-InstalledSmokeOwnedFolders $context $root $environment
+  Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
   $report.phase = 'build_inert'
   $stage = New-NsisAutorunPayload $root $environment $report
   $report.phase = 'resolve_source'
@@ -215,9 +234,9 @@ try {
   $report.nsis_source_sha256 = $sourceHash; $report.fixture_installer_sha256 = $installerHash
   $report.inert_payload_sha256 = $payloadHash
   $report.phase = 'default_case'
-  $defaultCase = Invoke-NsisAutorunCase $context $root $installer $installerHash $payloadHash $environment $false
+  $defaultCase = Invoke-NsisAutorunCase $context $root $installer $installerHash $payloadHash $environment $false $report
   $report.phase = 'noautorun_case'
-  $noAutorunCase = Invoke-NsisAutorunCase $context $root $installer $installerHash $payloadHash $environment $true
+  $noAutorunCase = Invoke-NsisAutorunCase $context $root $installer $installerHash $payloadHash $environment $true $report
   $report.cases = @($defaultCase, $noAutorunCase)
   $report.phase = 'verify_source'
   if ((Get-InstalledSmokeHash $source) -cne $sourceHash) { throw 'nsis_control_source_changed' }
@@ -229,6 +248,7 @@ try {
 } finally {
   try {
     if (@(Get-InstalledSmokeProcesses $root).Count) { throw 'nsis_control_process_still_running' }
+    $report.owned_attributes = Get-InstalledSmokeOwnedAttributes $context $root
     Remove-InstalledSmokeOwnedRoot $context $root
     Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
     $report.cleanup = 'owned_files_and_registrations_removed'

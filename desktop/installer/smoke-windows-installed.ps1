@@ -149,6 +149,7 @@ function Get-InstalledSmokeResidualPaths($Context) {
 }
 
 function Get-InstalledSmokeShortcut([string]$Path) {
+  Assert-InstalledSmokeDirectory ([IO.Path]::GetDirectoryName($Path)) -AllowMissing
   if ($null -eq (Get-InstalledSmokeAttributes $Path)) { return }
   Assert-InstalledSmokeFile $Path
   $shell = New-Object -ComObject WScript.Shell
@@ -157,6 +158,54 @@ function Get-InstalledSmokeShortcut([string]$Path) {
     try { [pscustomobject]@{ Path = $Path; Target = $link.TargetPath; Arguments = $link.Arguments } }
     finally { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($link) }
   } finally { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) }
+}
+
+function Add-InstalledSmokeOwnedFolders($Context, [string]$Root, $Environment) {
+  Assert-InstalledSmokeOwnedRoot $Context $Root
+  foreach ($name in @('APPDATA', 'USERPROFILE')) {
+    $path = ConvertTo-InstalledSmokePath $Environment[$name]
+    if (-not (Test-InstalledSmokeWithin $path $Root)) { throw 'smoke_child_profile_not_owned' }
+    Assert-InstalledSmokeDirectory $path -AllowMissing
+  }
+  $folders = @{
+    Programs = Join-Path $Environment['APPDATA'] 'Microsoft/Windows/Start Menu/Programs'
+    Desktop = Join-Path $Environment['USERPROFILE'] 'Desktop'
+  }
+  foreach ($name in @('Programs', 'Desktop')) {
+    $folders[$name] = ConvertTo-InstalledSmokePath $folders[$name]
+    if (-not (Test-InstalledSmokeWithin $folders[$name] $Root)) { throw 'smoke_child_folder_not_owned' }
+    Assert-InstalledSmokeDirectory $folders[$name] -AllowMissing
+  }
+  $Context.OwnedShortcutFolders = $folders
+}
+
+function Get-InstalledSmokeShortcutCandidates($Context) {
+  $seen = @{}
+  $locations = @([pscustomobject]@{ Scope = 'real'; Folders = $Context })
+  if ($Context.ContainsKey('OwnedShortcutFolders')) {
+    $locations += [pscustomobject]@{ Scope = 'owned'; Folders = $Context.OwnedShortcutFolders }
+  }
+  foreach ($location in $locations) {
+    foreach ($role in @('Programs', 'Desktop')) {
+      $path = Join-Path (ConvertTo-InstalledSmokePath $location.Folders[$role]) 'Arkism.lnk'
+      if ($seen.ContainsKey($path)) {
+        if ($seen[$path] -cne $role) { throw 'smoke_shortcut_role_ambiguous' }
+        continue
+      }
+      $seen[$path] = $role
+      [pscustomobject]@{ Path = $path; Role = $role; Scope = $location.Scope }
+    }
+  }
+}
+
+function Get-InstalledSmokeShortcuts($Context) {
+  foreach ($candidate in Get-InstalledSmokeShortcutCandidates $Context) {
+    $link = Get-InstalledSmokeShortcut $candidate.Path
+    if ($null -ne $link) {
+      [pscustomobject]@{ Path = $link.Path; Target = $link.Target; Arguments = $link.Arguments
+        Role = $candidate.Role; Scope = $candidate.Scope }
+    }
+  }
 }
 
 function Get-InstalledSmokeGlobalState($Context) {
@@ -170,8 +219,7 @@ function Get-InstalledSmokeGlobalState($Context) {
   return @{
     Registrations = @(Get-InstalledSmokeRegistry); Autostart = @(Get-InstalledSmokeAutostart)
     Tasks = @($tasks | ForEach-Object { $_.TaskName }); Residual = $residual
-    Shortcuts = @((Get-InstalledSmokeShortcut (Join-Path $Context.Programs 'Arkism.lnk'));
-      (Get-InstalledSmokeShortcut (Join-Path $Context.Desktop 'Arkism.lnk')))
+    Shortcuts = @(Get-InstalledSmokeShortcuts $Context)
   }
 }
 
@@ -246,8 +294,27 @@ function Assert-InstalledSmokeRegistration($State, [string]$InstallPath, [string
   foreach ($shortcut in $State.Shortcuts) {
     if ($shortcut.Target -ine $expected.DisplayIcon -or $shortcut.Arguments) { throw 'smoke_shortcut_not_owned' }
   }
-  if ($RequireComplete -and (@($State.Registrations).Count -eq 0 -or @($State.Shortcuts).Count -ne 2)) { throw 'smoke_registration_incomplete' }
+  if ($RequireComplete) { Assert-InstalledSmokeCompleteRegistration $State }
   Assert-InstalledSmokeStableState $State
+}
+
+function Assert-InstalledSmokeCompleteRegistration($State) {
+  if (@($State.Registrations).Count -eq 0 -or @($State.Shortcuts).Count -ne 2) { throw 'smoke_registration_incomplete' }
+  foreach ($role in @('Programs', 'Desktop')) {
+    if (@($State.Shortcuts | Where-Object { $_.Role -ceq $role }).Count -ne 1) { throw 'smoke_shortcut_roles_incomplete' }
+  }
+}
+
+function Get-InstalledSmokeRegistrationSummary($State) {
+  return [ordered]@{
+    registrations = @($State.Registrations).Count; shortcuts = @($State.Shortcuts).Count
+    real_shortcuts = @($State.Shortcuts | Where-Object { $_.Scope -ceq 'real' }).Count
+    owned_shortcuts = @($State.Shortcuts | Where-Object { $_.Scope -ceq 'owned' }).Count
+    programs_shortcuts = @($State.Shortcuts | Where-Object { $_.Role -ceq 'Programs' }).Count
+    desktop_shortcuts = @($State.Shortcuts | Where-Object { $_.Role -ceq 'Desktop' }).Count
+    string_registry_values = @($State.Registrations | ForEach-Object { $_.Kinds.Values } | Where-Object { $_ -ceq 'String' }).Count
+    dword_registry_values = @($State.Registrations | ForEach-Object { $_.Kinds.Values } | Where-Object { $_ -ceq 'DWord' }).Count
+  }
 }
 
 function Assert-InstalledSmokeStableState($State) {
@@ -347,8 +414,53 @@ function Assert-InstalledSmokeOwnedRoot($Context, [string]$Root) {
 
 function Remove-InstalledSmokeOwnedRoot($Context, [string]$Root) {
   Assert-InstalledSmokeOwnedRoot $Context $Root
+  Clear-InstalledSmokeOwnedReadOnly $Root
+  Assert-InstalledSmokeOwnedRoot $Context $Root
   [IO.Directory]::Delete($Root, $true)
   $Context.OwnedRoots.Remove($Root)
+}
+
+function Clear-InstalledSmokeOwnedReadOnly([string]$Directory) {
+  Assert-InstalledSmokeDirectory $Directory
+  foreach ($path in [IO.Directory]::EnumerateFileSystemEntries($Directory)) {
+    $attrs = Get-InstalledSmokeAttributes $path
+    if ($null -eq $attrs -or ($attrs -band [IO.FileAttributes]::ReparsePoint)) { throw 'smoke_tree_changed' }
+    if ($attrs -band [IO.FileAttributes]::Directory) { Clear-InstalledSmokeOwnedReadOnly $path }
+    Clear-InstalledSmokeReadOnlyEntry $path ([bool]($attrs -band [IO.FileAttributes]::Directory))
+  }
+  Clear-InstalledSmokeReadOnlyEntry $Directory $true
+}
+
+function Clear-InstalledSmokeReadOnlyEntry([string]$Path, [bool]$Directory) {
+  Assert-InstalledSmokeDirectory ([IO.Path]::GetDirectoryName($Path))
+  $attrs = Get-InstalledSmokeAttributes $Path
+  if ($null -eq $attrs -or ($attrs -band [IO.FileAttributes]::ReparsePoint)) { throw 'smoke_tree_changed' }
+  if ([bool]($attrs -band [IO.FileAttributes]::Directory) -ne $Directory) { throw 'smoke_tree_type_changed' }
+  if ($attrs -band [IO.FileAttributes]::ReadOnly) {
+    Set-InstalledSmokeAttributes $Path ($attrs -band (-bnot [IO.FileAttributes]::ReadOnly))
+  }
+}
+
+function Set-InstalledSmokeAttributes([string]$Path, [IO.FileAttributes]$Attributes) {
+  [IO.File]::SetAttributes($Path, $Attributes)
+}
+
+function Get-InstalledSmokeOwnedAttributes($Context, [string]$Root) {
+  Assert-InstalledSmokeOwnedRoot $Context $Root
+  $entries = @(Get-InstalledSmokeTreeAttributes $Root)
+  return [ordered]@{ entries = $entries.Count
+    readonly_entries = @($entries | Where-Object { $_ -band [IO.FileAttributes]::ReadOnly }).Count }
+}
+
+function Get-InstalledSmokeTreeAttributes([string]$Directory) {
+  Assert-InstalledSmokeDirectory $Directory
+  Get-InstalledSmokeAttributes $Directory
+  foreach ($path in [IO.Directory]::EnumerateFileSystemEntries($Directory)) {
+    $attrs = Get-InstalledSmokeAttributes $path
+    if ($null -eq $attrs -or ($attrs -band [IO.FileAttributes]::ReparsePoint)) { throw 'smoke_tree_changed' }
+    if ($attrs -band [IO.FileAttributes]::Directory) { Get-InstalledSmokeTreeAttributes $path }
+    else { $attrs }
+  }
 }
 
 function Write-InstalledSmokeEvidence([string]$Path, $Report) {
@@ -395,10 +507,14 @@ function Invoke-InstalledSmoke([string]$InstallerPath, [string]$StagePath, [stri
   $primary = $null; $cleanup = $null; $evidenceError = $null
   try {
     foreach ($path in @($data, $childEnv['HOME'], $childEnv['APPDATA'], $childEnv['LOCALAPPDATA'], $childEnv['XDG_CONFIG_HOME'], $childEnv['TEMP'])) { [IO.Directory]::CreateDirectory($path) | Out-Null }
+    Add-InstalledSmokeOwnedFolders $context $root $childEnv
+    Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
     $report.install = Invoke-InstalledSmokeProcess $installer "/S /NoAutoRun /D=$install" $childEnv 180 'install'
     if ((Get-InstalledSmokeHash $installer) -cne $installerHash) { throw 'smoke_installer_changed' }
     Assert-InstalledSmokePayload $install $manifest
-    Assert-InstalledSmokeRegistration (Get-InstalledSmokeGlobalState $context) $install $Version -RequireComplete
+    $state = Get-InstalledSmokeGlobalState $context
+    $report.registration = Get-InstalledSmokeRegistrationSummary $state
+    Assert-InstalledSmokeRegistration $state $install $Version -RequireComplete
     Assert-InstalledSmokeNoProcesses $install 'smoke_unexpected_autorun'
     [IO.File]::WriteAllText((Join-Path $data 'models.json'), '{"embedder":"none","judge":"fixed"}')
     $report.runtime = Invoke-InstalledSmokeProcess (Join-Path $install 'Arkism.exe') ('--runtime-check "' + $data + '"') $childEnv 300 'runtime_check'
@@ -411,6 +527,7 @@ function Invoke-InstalledSmoke([string]$InstallerPath, [string]$StagePath, [stri
     try {
       Assert-InstalledSmokeNoProcesses $install 'smoke_owned_process_still_running'
       Assert-InstalledSmokeOwnedRoot $context $root
+      $report.owned_attributes = Get-InstalledSmokeOwnedAttributes $context $root
       Remove-InstalledSmokeRegistration $context $install $Version
       Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
       Remove-InstalledSmokeOwnedRoot $context $root

@@ -7,6 +7,8 @@ $sourceHash = (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash
 $caseCount = 0
 $originalSmokeEvidenceWriter = (Get-Command Write-InstalledSmokeEvidence).ScriptBlock
 $originalSmokeAttributes = (Get-Command Get-InstalledSmokeAttributes).ScriptBlock
+$originalSmokeGlobalState = (Get-Command Get-InstalledSmokeGlobalState).ScriptBlock
+$originalSmokeSetAttributes = (Get-Command Set-InstalledSmokeAttributes).ScriptBlock
 
 function Assert-SmokeTest([bool]$Condition, [string]$Message) {
   if (-not $Condition) { throw $Message }
@@ -62,8 +64,8 @@ function Set-SmokeTestRegistration($Fixture, [string]$Install) {
     InstallLocation = $Install; UninstallString = ('"' + (Join-Path $Install 'uninstall.exe') + '"'); NoModify = 1; NoRepair = 1
   }; Kinds = @{ DisplayName = 'String'; DisplayVersion = 'String'; Publisher = 'String'; DisplayIcon = 'String'
     InstallLocation = 'String'; UninstallString = 'String'; NoModify = 'DWord'; NoRepair = 'DWord' } })
-  $Fixture.State.Shortcuts = @([pscustomobject]@{ Path = (Join-Path $Fixture.Context.Programs 'Arkism.lnk'); Target = $exe; Arguments = '' },
-    [pscustomobject]@{ Path = (Join-Path $Fixture.Context.Desktop 'Arkism.lnk'); Target = $exe; Arguments = '' })
+  $Fixture.State.Shortcuts = @([pscustomobject]@{ Path = (Join-Path $Fixture.Context.Programs 'Arkism.lnk'); Role = 'Programs'; Scope = 'real'; Target = $exe; Arguments = '' },
+    [pscustomobject]@{ Path = (Join-Path $Fixture.Context.Desktop 'Arkism.lnk'); Role = 'Desktop'; Scope = 'real'; Target = $exe; Arguments = '' })
 }
 
 function Copy-SmokeTestInstall($Fixture, [string]$Arguments) {
@@ -318,6 +320,234 @@ Invoke-SmokeTestCase 'uninstaller and wrong-version input names have zero effect
     Assert-SmokeTest ($f.Events.Count -eq 0 -and -not [IO.File]::Exists($f.Evidence)) 'Input mismatch must not run processes, registration cleanup or evidence publication'
   }
 }
+
+
+function Get-SmokeTestActualState($Fixture) {
+  function Get-InstalledSmokeResidualPaths($Context) {}
+  function Get-InstalledSmokeRegistry { return $Fixture.State.Registrations }
+  function Get-InstalledSmokeAutostart { return $Fixture.State.Autostart }
+  function Invoke-SmokeTestScheduledTasks {}
+  Set-Alias -Name Get-ScheduledTask -Value Invoke-SmokeTestScheduledTasks -Scope Local
+  function Get-InstalledSmokeShortcut([string]$Path) {
+    Assert-InstalledSmokeDirectory ([IO.Path]::GetDirectoryName($Path)) -AllowMissing
+    if (-not [IO.File]::Exists($Path)) { return }
+    Assert-InstalledSmokeFile $Path
+    return @($Fixture.State.Shortcuts | Where-Object { $_.Path -ieq $Path })
+  }
+  return & $originalSmokeGlobalState $Fixture.Context
+}
+
+function New-SmokeTestOwnedShortcutState($Fixture) {
+  $owned = New-InstalledSmokeOwnedRoot $Fixture.Context 'folder-test'
+  $child = New-InstalledSmokeEnvironment $owned
+  Add-InstalledSmokeOwnedFolders $Fixture.Context $owned $child
+  $install = Join-Path $owned 'installed'
+  Set-SmokeTestRegistration $Fixture $install
+  foreach ($record in $Fixture.State.Shortcuts) {
+    $record.Path = Join-Path $Fixture.Context.OwnedShortcutFolders[$record.Role] 'Arkism.lnk'
+    Write-SmokeTestFile $record.Path 'inert shortcut bytes'
+  }
+  return $owned
+}
+
+Invoke-SmokeTestCase 'actual state finds owned child shortcuts while retaining real folders' {
+  param($f)
+  $programs = $f.Context.Programs; $desktop = $f.Context.Desktop
+  $owned = New-SmokeTestOwnedShortcutState $f
+  $state = Get-SmokeTestActualState $f
+  Assert-InstalledSmokeRegistration $state $f.Install '1.2.3' -RequireComplete
+  $summary = Get-InstalledSmokeRegistrationSummary $state
+  Assert-SmokeTest ($summary.owned_shortcuts -eq 2 -and $summary.real_shortcuts -eq 0 -and $summary.programs_shortcuts -eq 1 -and $summary.desktop_shortcuts -eq 1) 'Child folders must be observed with exact roles'
+  Assert-SmokeTest ($f.Context.Programs -ceq $programs -and $f.Context.Desktop -ceq $desktop) 'Real shell folder monitoring must remain unchanged'
+}
+
+Invoke-SmokeTestCase 'actual state continues to observe preexisting real shortcuts' {
+  param($f)
+  $owned = New-SmokeTestOwnedShortcutState $f
+  $f.State.Registrations = @(); $f.State.Shortcuts = @()
+  $path = Join-Path $f.Context.Programs 'Arkism.lnk'
+  Write-SmokeTestFile $path 'inert prior shortcut'
+  $f.State.Shortcuts = @([pscustomobject]@{Path=$path;Target=$f.Installer;Arguments=''})
+  $state = Get-SmokeTestActualState $f
+  try { Assert-InstalledSmokeFreshState $state; throw 'Expected real state rejection' }
+  catch { Assert-SmokeTest ($_.Exception.Message.Contains('smoke_preexisting_state')) 'Owned monitoring must not hide real prior state' }
+  Assert-SmokeTest ([IO.File]::ReadAllText($path) -ceq 'inert prior shortcut' -and $f.Events.Count -eq 0) 'Real prior state must remain unchanged'
+}
+
+Invoke-SmokeTestCase 'two Programs shortcuts cannot substitute for a Desktop shortcut' {
+  param($f)
+  $owned = New-SmokeTestOwnedShortcutState $f
+  $f.State.Shortcuts[1].Path = Join-Path $f.Context.Programs 'Arkism.lnk'
+  Write-SmokeTestFile $f.State.Shortcuts[1].Path 'inert duplicate Programs shortcut'
+  $state = Get-SmokeTestActualState $f
+  try { Assert-InstalledSmokeRegistration $state $f.Install '1.2.3' -RequireComplete; throw 'Expected role rejection' }
+  catch { Assert-SmokeTest ($_.Exception.Message.Contains('smoke_shortcut_roles_incomplete')) 'The two distinct roles are required' }
+  Assert-SmokeTest ($f.Events.Count -eq 0) 'Incomplete role ownership cannot delete state'
+}
+
+Invoke-SmokeTestCase 'wrong owned shortcut targets cannot be removed' {
+  param($f)
+  $owned = New-SmokeTestOwnedShortcutState $f
+  $f.State.Shortcuts[0].Target = $f.Installer
+  $effects = @{Count=0}
+  function Get-InstalledSmokeGlobalState($Context) { return Get-SmokeTestActualState $f }
+  function Remove-InstalledSmokeShortcut([string]$Path) { $effects.Count++; throw 'Unexpected shortcut removal' }
+  function Remove-InstalledSmokeRegistryKey($Record) { $effects.Count++; throw 'Unexpected registry removal' }
+  try { Remove-InstalledSmokeRegistration $f.Context $f.Install '1.2.3'; throw 'Expected owned target rejection' }
+  catch { Assert-SmokeTest ($_.Exception.Message.Contains('smoke_shortcut_not_owned')) 'Owned paths must still have the exact expected target' }
+  Assert-SmokeTest ($effects.Count -eq 0 -and [IO.File]::Exists($f.State.Shortcuts[0].Path)) 'Foreign shortcut targets must be preserved'
+}
+
+Invoke-SmokeTestCase 'owned folders reject escape, ambiguous roles and links' {
+  param($f)
+  $owned = New-InstalledSmokeOwnedRoot $f.Context 'folder-test'
+  $child = New-InstalledSmokeEnvironment $owned
+  $child.APPDATA = $f.Root
+  try { Add-InstalledSmokeOwnedFolders $f.Context $owned $child; throw 'Expected child escape rejection' }
+  catch { Assert-SmokeTest ($_.Exception.Message.Contains('smoke_child_profile_not_owned')) 'Child profile must be owned' }
+  $child = New-InstalledSmokeEnvironment $owned
+  $target = Join-Path $f.Root 'owned link target'
+  [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($child.APPDATA)) | Out-Null
+  New-SmokeTestLink $f $child.APPDATA $target
+  try { Add-InstalledSmokeOwnedFolders $f.Context $owned $child; throw 'Expected linked child rejection' }
+  catch { Assert-SmokeTest ($_.Exception.Message.Contains('smoke_tree_changed')) 'Linked child profiles must fail closed' }
+  $f.Context.Desktop = $f.Context.Programs
+  try { Get-InstalledSmokeShortcutCandidates $f.Context | Out-Null; throw 'Expected ambiguous role rejection' }
+  catch { Assert-SmokeTest ($_.Exception.Message.Contains('smoke_shortcut_role_ambiguous')) 'Same path cannot represent two roles' }
+  Assert-SmokeTest ($f.Events.Count -eq 0) 'Rejected child profiles have no process/registration effects'
+}
+
+Invoke-SmokeTestCase 'shortcut candidates deduplicate normalized same-role paths' {
+  param($f)
+  $f.Context.OwnedShortcutFolders = @{Programs=(Join-Path $f.Context.Programs '.');Desktop=(Join-Path $f.Context.Desktop '.')}
+  $candidates = @(Get-InstalledSmokeShortcutCandidates $f.Context)
+  Assert-SmokeTest ($candidates.Count -eq 2) 'Same normalized role path must be observed once'
+}
+
+Invoke-SmokeTestCase 'owned readonly cleanup clears only the observed bit' {
+  param($f)
+  $owned = New-InstalledSmokeOwnedRoot $f.Context 'readonly-test'
+  $directory = Join-Path $owned 'readonly directory'
+  $file = Join-Path $directory 'owned.txt'
+  Write-SmokeTestFile $file 'owned readonly bytes'
+  foreach ($path in @($file,$directory)) {
+    [IO.File]::SetAttributes($path, ([IO.File]::GetAttributes($path) -bor [IO.FileAttributes]::ReadOnly))
+  }
+  $changes = [Collections.Generic.List[object]]::new()
+  function Set-InstalledSmokeAttributes([string]$Path,[IO.FileAttributes]$Attributes) {
+    $before = [IO.File]::GetAttributes($Path)
+    Assert-SmokeTest ($Attributes -eq ($before -band (-bnot [IO.FileAttributes]::ReadOnly))) 'Only the ReadOnly bit may change'
+    $changes.Add(@{Before=$before;After=$Attributes})
+    & $originalSmokeSetAttributes $Path $Attributes
+  }
+  $summary = Get-InstalledSmokeOwnedAttributes $f.Context $owned
+  Assert-SmokeTest ($summary.readonly_entries -eq 2) 'Safe attributes must count the observed readonly entries'
+  Remove-InstalledSmokeOwnedRoot $f.Context $owned
+  Assert-SmokeTest ($changes.Count -eq 2 -and -not [IO.Directory]::Exists($owned)) 'Only guarded readonly entries should be normalized and removed'
+}
+
+Invoke-SmokeTestCase 'marker failure precedes every readonly attribute mutation' {
+  param($f)
+  $owned = New-InstalledSmokeOwnedRoot $f.Context 'readonly-test'
+  $file = Join-Path $owned 'owned.txt'; Write-SmokeTestFile $file 'preserve readonly bytes'
+  $normal = [IO.File]::GetAttributes($file)
+  [IO.File]::SetAttributes($file, ($normal -bor [IO.FileAttributes]::ReadOnly))
+  Write-SmokeTestFile (Join-Path $owned '.installed-smoke-owner') 'wrong owner'
+  $effects = @{Count=0}
+  function Set-InstalledSmokeAttributes([string]$Path,[IO.FileAttributes]$Attributes) { $effects.Count++; throw 'Unexpected attribute mutation' }
+  try {
+    try { Remove-InstalledSmokeOwnedRoot $f.Context $owned; throw 'Expected owner rejection' }
+    catch { Assert-SmokeTest ($_.Exception.Message.Contains('smoke_root_not_owned')) 'Ownership must be checked before normalization' }
+    Assert-SmokeTest ($effects.Count -eq 0 -and ([IO.File]::GetAttributes($file) -band [IO.FileAttributes]::ReadOnly)) 'Readonly and owner bytes must survive rejection'
+  } finally { [IO.File]::SetAttributes($file,$normal) }
+}
+
+Invoke-SmokeTestCase 'readonly attribute IO failures remain visible and preserve owned files' {
+  param($f)
+  $owned = New-InstalledSmokeOwnedRoot $f.Context 'readonly-test'
+  $file = Join-Path $owned 'owned.txt'; Write-SmokeTestFile $file 'preserve readonly bytes'
+  $normal = [IO.File]::GetAttributes($file)
+  [IO.File]::SetAttributes($file,($normal -bor [IO.FileAttributes]::ReadOnly))
+  function Set-InstalledSmokeAttributes([string]$Path,[IO.FileAttributes]$Attributes) { throw 'synthetic attribute clear denied' }
+  try {
+    try { Remove-InstalledSmokeOwnedRoot $f.Context $owned; throw 'Expected attribute IO failure' }
+    catch { Assert-SmokeTest ($_.Exception.Message.Contains('synthetic attribute clear denied')) 'Attribute IO failure must propagate' }
+    Assert-SmokeTest ([IO.File]::ReadAllText($file) -ceq 'preserve readonly bytes') 'IO failure must preserve source bytes'
+  } finally { [IO.File]::SetAttributes($file,$normal) }
+}
+
+Invoke-SmokeTestCase 'tree inspection failure precedes every readonly attribute mutation' {
+  param($f)
+  $owned = New-InstalledSmokeOwnedRoot $f.Context 'readonly-test'
+  $file = Join-Path $owned 'owned.txt'; Write-SmokeTestFile $file 'preserve unreadable-tree bytes'
+  $normal = [IO.File]::GetAttributes($file)
+  [IO.File]::SetAttributes($file,($normal -bor [IO.FileAttributes]::ReadOnly))
+  $effects=@{Count=0}
+  function Get-InstalledSmokeAttributes([string]$Path) {
+    if ($Path -ceq $file) { throw 'synthetic tree inspection denied' }
+    & $originalSmokeAttributes $Path
+  }
+  function Set-InstalledSmokeAttributes([string]$Path,[IO.FileAttributes]$Attributes) { $effects.Count++; throw 'Unexpected attribute mutation' }
+  try {
+    try { Remove-InstalledSmokeOwnedRoot $f.Context $owned; throw 'Expected inspection failure' }
+    catch { Assert-SmokeTest ($_.Exception.Message.Contains('synthetic tree inspection denied')) 'Inspection IO must propagate before normalization' }
+    Assert-SmokeTest ($effects.Count -eq 0 -and [IO.File]::ReadAllText($file) -ceq 'preserve unreadable-tree bytes') 'Uninspected trees cannot be modified'
+  } finally { [IO.File]::SetAttributes($file,$normal) }
+}
+
+# Load definitions only; the native control's hosted preflight and main body never execute here.
+$nsisSourcePath = Join-Path $PSScriptRoot 'test-nsis-autorun.ps1'
+$nsisSourceHash = (Get-FileHash -LiteralPath $nsisSourcePath -Algorithm SHA256).Hash
+$nsisTokens=$null; $nsisErrors=$null
+$nsisAst = [Management.Automation.Language.Parser]::ParseFile($nsisSourcePath,[ref]$nsisTokens,[ref]$nsisErrors)
+Assert-SmokeTest ($nsisErrors.Count -eq 0) 'Native control source must parse'
+foreach ($definition in $nsisAst.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst]},$true)) {
+  . ([scriptblock]::Create($definition.Extent.Text))
+}
+
+function Invoke-SmokeTestAutorunWait($Fixture,[string]$Mode) {
+  $install = Join-Path $Fixture.Root 'inert writer'
+  $marker = Join-Path $Fixture.Root 'writer.marker'
+  $clock = @{Tick=0;Queries=0}
+  if ($Mode -eq 'partial_writer') { Write-SmokeTestFile $marker '' }
+  function Get-NsisAutorunNow { return [DateTime]::MinValue.AddDays(1).AddMilliseconds($clock.Tick*100) }
+  function Wait-NsisAutorunPoll {
+    $clock.Tick++
+    if ($Mode -eq 'partial_writer' -and $clock.Tick -eq 2) { Write-SmokeTestFile $marker (Join-Path $install 'Arkism.exe') }
+  }
+  function Get-InstalledSmokeProcesses([string]$InstallPath) {
+    $clock.Queries++
+    if ($Mode -eq 'partial_writer' -and $clock.Tick -lt 2) { return 'synthetic writer still active' }
+    if (($Mode -eq 'late_marker' -and $clock.Queries -eq 1) -or ($Mode -eq 'final_probe_marker' -and $clock.Tick -eq 20)) { Write-SmokeTestFile $marker (Join-Path $install 'Arkism.exe') }
+    if ($Mode -eq 'late_process' -and $clock.Tick -ge 1) { return 'synthetic late autorun' }
+  }
+  $errorText=''
+  try { Wait-NsisAutorunMarker $marker $install ($Mode -eq 'partial_writer') }
+  catch { $errorText=$_.Exception.Message }
+  return @{Error=$errorText;Tick=$clock.Tick}
+}
+
+Invoke-SmokeTestCase 'autorun positive waits for complete marker after child exit' {
+  param($f)
+  $result=Invoke-SmokeTestAutorunWait $f 'partial_writer'
+  Assert-SmokeTest (-not $result.Error -and $result.Tick -eq 2) 'An existing partial marker must not be read before writer exit'
+}
+
+foreach ($mode in @('late_marker','late_process','final_probe_marker')) {
+  Invoke-SmokeTestCase "noautorun rejects $mode during its observation" {
+    param($f)
+    $result=Invoke-SmokeTestAutorunWait $f $mode
+    Assert-SmokeTest ($result.Error.Contains('nsis_control_unexpected_autorun')) 'Late autorun evidence must be rejected'
+  }
+}
+
+Invoke-SmokeTestCase 'noautorun observes its complete bounded interval without real sleeps' {
+  param($f)
+  $result=Invoke-SmokeTestAutorunWait $f 'clean'
+  Assert-SmokeTest (-not $result.Error -and $result.Tick -eq 20) 'The full bounded observation and final check must run'
+}
+
+Assert-SmokeTest ((Get-FileHash -LiteralPath $nsisSourcePath -Algorithm SHA256).Hash -ceq $nsisSourceHash) 'Native control source changed during offline tests'
 
 Assert-SmokeTest ((Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash -ceq $sourceHash) 'Wrapper source changed during offline tests'
 Write-Host "All $caseCount offline installed-runtime smoke cases passed. No native product effects executed."
