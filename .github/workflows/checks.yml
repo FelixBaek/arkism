@@ -128,6 +128,9 @@ jobs:
       - name: Process tree completion boundaries (offline)
         shell: powershell
         run: ./desktop/installer/test-windows-process-job.ps1
+      - name: Product removal boundaries (offline)
+        shell: powershell
+        run: ./desktop/installer/test-windows-product-uninstall.ps1
       - name: Verify cross-platform migration checksums
         run: go test -v -count=1 -run '^TestSchemaMigrationChecksumAcrossPlatforms$' ./internal/memory
 
