@@ -227,8 +227,9 @@ namespace Arkism.InstallerChecks
             for (;;)
             {
                 var value = api.Query(job);
-                CheckDeadline(clock, start, budget);
-                if (value.Active == 0) return value;
+                long elapsed = Elapsed(clock, start);
+                if (value.Active == 0 && elapsed <= budget) return value;
+                if (elapsed >= budget) throw new JobApiException("job_timeout");
                 if (activeObservation != null) activeObservation(); // Diagnostic only; never the completion authority.
                 long before = clock.Milliseconds;
                 int delay = (int)Math.Min(20, budget - Elapsed(clock, start));
@@ -304,8 +305,13 @@ namespace Arkism.InstallerChecks
     {
         internal static void Context(JobRequest request)
         {
+            if (IntPtr.Size != 8) throw new JobApiException("job_hosted_windows_required");
+            HostedContext(request);
+        }
+
+        internal static void HostedContext(JobRequest request)
+        {
             if (Environment.OSVersion.Platform != PlatformID.Win32NT ||
-                IntPtr.Size != 8 ||
                 Environment.GetEnvironmentVariable("GITHUB_ACTIONS") != "true" ||
                 Environment.GetEnvironmentVariable("RUNNER_ENVIRONMENT") != "github-hosted")
                 throw new JobApiException("job_hosted_windows_required");
@@ -658,6 +664,215 @@ namespace Arkism.InstallerChecks
             if (error != 0 || actual != length) throw new JobApiException("job_pending_read_changed:" + error);
             return Parse(true, kind, raw);
         }
+    }
+
+    // Opaque rows are intentionally not a supported path namespace. This verifier
+    // establishes only exact correspondence to a separate, same-input API echo.
+    public sealed class OpaquePendingRows
+    {
+        internal readonly List<string[]> Rows;
+        internal OpaquePendingRows(List<string[]> rows) { Rows = rows; }
+        public int Count { get { return Rows.Count; } }
+    }
+
+    public static class PendingEchoVerifier
+    {
+        public static OpaquePendingRows Capture(RebootSnapshot before, RebootSnapshot after)
+        {
+            CheckDelta(before, after, 2);
+            return new OpaquePendingRows(new List<string[]> {
+                (string[])after.Pairs[before.EntryCount].Clone(), (string[])after.Pairs[before.EntryCount + 1].Clone() });
+        }
+
+        public static void VerifyEcho(OpaquePendingRows original, int index, RebootSnapshot before, RebootSnapshot after)
+        {
+            if (original == null || index < 0 || index >= original.Count) throw new JobApiException("job_echo_index_invalid");
+            CheckDelta(before, after, 1);
+            if (!SamePair(original.Rows[index], after.Pairs[before.EntryCount])) throw new JobApiException("job_echo_pair_mismatch");
+        }
+
+        private static bool SamePair(string[] left, string[] right) { return left[0] == right[0] && left[1] == right[1]; }
+
+        private static void CheckDelta(RebootSnapshot before, RebootSnapshot after, int count)
+        {
+            if (before == null || after == null || !after.Present || after.EntryCount - before.EntryCount != count)
+                throw new JobApiException("job_echo_delta_unsupported");
+            CheckLegacy(before, after);
+            for (int i = 0; i < before.EntryCount; i++)
+                if (!SamePair(before.Pairs[i], after.Pairs[i])) throw new JobApiException("job_echo_existing_changed");
+            for (int i = before.EntryCount; i < after.EntryCount; i++)
+                if (after.Pairs[i][1] != "") throw new JobApiException("job_echo_not_delete");
+        }
+
+        private static void CheckLegacy(RebootSnapshot before, RebootSnapshot after)
+        {
+            if (before.LegacyPresent != after.LegacyPresent || before.LegacySha256 != after.LegacySha256)
+                throw new JobApiException("job_echo_legacy_changed");
+        }
+
+        public static void AssertUnchanged(RebootSnapshot before, RebootSnapshot after)
+        {
+            if (before == null || after == null || before.Present != after.Present || before.Raw.Length != after.Raw.Length)
+                throw new JobApiException("job_echo_final_changed");
+            CheckLegacy(before, after);
+            for (int i = 0; i < before.Raw.Length; i++)
+                if (before.Raw[i] != after.Raw[i]) throw new JobApiException("job_echo_final_changed");
+        }
+
+        public static int ReadMachine(string path)
+        {
+            WindowsGuard.Ordinary(path, false);
+            using (var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read)) return ReadMachine(file);
+        }
+
+        public static int ReadMachine(Stream input)
+        {
+            return ReadPe(input, false);
+        }
+
+        public static int ReadNativeMachine(string path)
+        {
+            WindowsGuard.Ordinary(path, false);
+            using (var file = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read)) return ReadNativeMachine(file);
+        }
+
+        public static int ReadNativeMachine(Stream input) { return ReadPe(input, true); }
+
+        private static int ReadPe(Stream input, bool requireNative)
+        {
+            if (input == null || !input.CanSeek) throw new JobApiException("job_echo_pe_invalid");
+            input.Position = 0;
+            byte[] dos = ReadExact(input, 64);
+            int offset = BitConverter.ToInt32(dos, 60);
+            if (dos[0] != 77 || dos[1] != 90 || offset < 64 || offset > 1048570) throw new JobApiException("job_echo_pe_invalid");
+            input.Position = offset;
+            byte[] pe = ReadExact(input, 24);
+            if (pe[0] != 80 || pe[1] != 69 || pe[2] != 0 || pe[3] != 0) throw new JobApiException("job_echo_pe_invalid");
+            int machine = pe[4] | pe[5] << 8;
+            PointerBytes(machine);
+            int size = pe[20] | pe[21] << 8, flags = pe[22] | pe[23] << 8;
+            if (size < 224 || size > 4096 || (flags & 2) == 0 || (flags & 0x2000) != 0)
+                throw new JobApiException("job_echo_pe_invalid");
+            byte[] optional = ReadExact(input, size);
+            int magic = optional[0] | optional[1] << 8;
+            int directory = OptionalDirectoryOffset(machine, magic, size);
+            if (BitConverter.ToUInt32(optional, directory - 4) != 16) throw new JobApiException("job_echo_pe_invalid");
+            if (requireNative && (BitConverter.ToUInt32(optional, directory + 112) != 0 || BitConverter.ToUInt32(optional, directory + 116) != 0))
+                throw new JobApiException("job_echo_reference_managed");
+            return machine;
+        }
+
+        private static int OptionalDirectoryOffset(int machine, int magic, int size)
+        {
+            if (machine == 0x14c && magic == 0x10b && size >= 224) return 96;
+            if (machine == 0x8664 && magic == 0x20b && size >= 240) return 112;
+            throw new JobApiException("job_echo_pe_invalid");
+        }
+
+        private static byte[] ReadExact(Stream input, int size)
+        {
+            byte[] result = new byte[size]; int offset = 0;
+            while (offset < size)
+            {
+                int read = input.Read(result, offset, size - offset);
+                if (read == 0) throw new JobApiException("job_echo_pe_truncated");
+                offset += read;
+            }
+            return result;
+        }
+
+        public static int PointerBytes(int machine)
+        {
+            if (machine == 0x14c) return 4;
+            if (machine == 0x8664) return 8;
+            throw new JobApiException("job_echo_machine_unsupported");
+        }
+
+        public static void ValidateResult(int expected, int actual, bool ok, int calls, int error, int exit)
+        {
+            if ((expected != 4 && expected != 8) || actual != expected) throw new JobApiException("job_echo_bitness_mismatch");
+            if (!ok || calls != 1 || error != 0 || exit != 0) throw new JobApiException("job_echo_api_unsuccessful");
+        }
+    }
+
+    internal sealed class EchoLeafResult
+    {
+        internal bool Ok;
+        internal int PointerBytes, Calls, Error;
+        internal string Code = "leaf_guard_failed";
+    }
+
+    internal static class BoundEchoLeaf
+    {
+        internal static EchoLeafResult RunCore(int expected, int actual, Action validate, Func<bool> call, Func<int> lastError)
+        {
+            if ((expected != 4 && expected != 8) || expected != actual) throw new JobApiException("job_echo_bitness_mismatch");
+            validate();
+            var result = new EchoLeafResult { PointerBytes = actual, Calls = 1 };
+            try
+            {
+                result.Ok = call(); result.Error = result.Ok ? 0 : lastError();
+                result.Code = result.Ok ? "ok" : "leaf_api_failed";
+            }
+            catch (Exception) { result.Code = "leaf_boundary_failed"; }
+            return result;
+        }
+
+        internal static int MainBound(string[] args, JobRequest request, string directory, int expected)
+        {
+            string kind = args.Length == 1 ? args[0] : "";
+            if (kind != "directory" && kind != "file") return 90;
+            string output = Path.Combine(request.Root, "echo-" + kind + ".json");
+            var result = new EchoLeafResult { PointerBytes = IntPtr.Size };
+            try
+            {
+                string target = kind == "directory" ? directory : request.Executable;
+                result = RunCore(expected, IntPtr.Size, delegate { Validate(request, directory, output); },
+                    delegate { return EchoNative.MoveFileExW(target, null, 5); }, Marshal.GetLastWin32Error);
+            }
+            catch (JobApiException error) { result.Code = SafeCode(error.Code); }
+            catch (Exception) { result.Code = "leaf_boundary_failed"; }
+            try { WriteResult(request, output, result); }
+            catch (Exception) { return 91; }
+            return result.Ok ? 0 : 92;
+        }
+
+        internal static string SafeCode(string code)
+        {
+            return code != null && Regex.IsMatch(code, @"\A(job_|leaf_)[a-z0-9_:]{1,90}\z") ? code : "leaf_guard_failed";
+        }
+
+        private static void Validate(JobRequest request, string directory, string output)
+        {
+            WindowsGuard.HostedContext(request);
+            WindowsGuard.VerifyFile(request);
+            WindowsGuard.Ordinary(directory, true);
+            string temp = Path.Combine(request.Root, "temp");
+            if (!WindowsGuard.Within(directory, temp) || Path.GetDirectoryName(request.Executable) != directory)
+                throw new JobApiException("job_echo_target_not_owned");
+            string self = Process.GetCurrentProcess().MainModule.FileName;
+            WindowsGuard.Ordinary(self, false);
+            if (WindowsGuard.Full(self) != Path.Combine(request.Root, "pending-echo.exe")) throw new JobApiException("job_echo_image_changed");
+            WindowsGuard.OutputLeaf(output, true);
+        }
+
+        private static void WriteResult(JobRequest request, string output, EchoLeafResult value)
+        {
+            WindowsGuard.HostedContext(request);
+            WindowsGuard.OutputLeaf(output, true);
+            string json = "{\"ok\":" + (value.Ok ? "true" : "false") + ",\"pointer_bytes\":" + value.PointerBytes +
+                ",\"api_calls\":" + value.Calls + ",\"win32_error\":" + value.Error + ",\"code\":\"" + value.Code + "\"}";
+            using (var file = File.Open(output, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                byte[] bytes = Encoding.UTF8.GetBytes(json); file.Write(bytes, 0, bytes.Length);
+            }
+        }
+    }
+
+    internal static class EchoNative
+    {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool MoveFileExW(string existing, string destination, uint flags);
     }
 
     internal static class RegistryNative

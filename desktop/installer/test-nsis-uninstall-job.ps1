@@ -114,7 +114,141 @@ function Get-JobFixtureCopy([string]$Root, [string]$Install, [string]$OriginalHa
   Assert-InstalledSmokeFile $copy
   $hash = Get-InstalledSmokeHash $copy
   if ($hash -cne $OriginalHash) { throw 'job_fixture_copy_mismatch' }
-  return $hash
+  return [pscustomobject]@{ Path = $copy; Directory = [IO.Path]::GetDirectoryName($copy); Sha256 = $hash }
+}
+
+function ConvertTo-JobEchoLiteral([string]$Value) {
+  return '"' + $Value.Replace('\', '\\').Replace('"', '\"') + '"'
+}
+
+function Get-JobEchoSource($Context, [string]$Root, $Copy, [int]$PointerBytes) {
+  $core = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'WindowsProcessJob.cs'))
+  if (([regex]::Matches($core, 'namespace Arkism\.InstallerChecks')).Count -ne 1) { throw 'job_echo_namespace_invalid' }
+  $isolated = $core.Replace('namespace Arkism.InstallerChecks', 'namespace Arkism.EchoFixture')
+  if ($isolated.Replace('namespace Arkism.EchoFixture', 'namespace Arkism.InstallerChecks') -cne $core) { throw 'job_echo_source_changed' }
+  $entry = @'
+namespace Arkism.EchoFixture {
+  public static class FixedEchoEntry {
+    public static int Main(string[] args) {
+      var request = new JobRequest { Root = @ROOT@, Owner = @OWNER@, SourceSha = @SOURCE@,
+        Executable = @FILE@, ExpectedSha256 = @HASH@ };
+      return BoundEchoLeaf.MainBound(args, request, @DIRECTORY@, @POINTER@);
+    }
+  }
+}
+'@
+  $constants = @{ ROOT = $Root; OWNER = $Context.OwnedRoots[$Root]; SOURCE = $Context.SourceSha
+    FILE = $Copy.Path; HASH = $Copy.Sha256; DIRECTORY = $Copy.Directory }
+  foreach ($name in $constants.Keys) { $entry = $entry.Replace(('@' + $name + '@'), (ConvertTo-JobEchoLiteral $constants[$name])) }
+  $entry = $entry.Replace('@POINTER@', [string]$PointerBytes)
+  return $isolated + "`n" + $entry
+}
+
+function New-JobEchoExecutable($Context, [string]$Root, $Copy, [int]$Machine) {
+  $pointer = [Arkism.InstallerChecks.PendingEchoVerifier]::PointerBytes($Machine)
+  $platform = if ($pointer -eq 4) { 'x86' } else { 'x64' }
+  $exe = Join-Path $Root 'pending-echo.exe'
+  if ($null -ne (Get-InstalledSmokeAttributes $exe)) { throw 'job_echo_image_exists' }
+  $options = New-Object CodeDom.Compiler.CompilerParameters
+  $options.GenerateExecutable = $true; $options.GenerateInMemory = $false
+  $options.OutputAssembly = $exe
+  $options.WarningLevel = 4
+  $options.CompilerOptions = "/platform:$platform /langversion:5"
+  [void]$options.ReferencedAssemblies.Add('System.dll')
+  # Disk output only. Do not access CompiledAssembly, which would load the x86 leaf.
+  $provider = New-Object Microsoft.CSharp.CSharpCodeProvider
+  try {
+    $compiled = $provider.CompileAssemblyFromSource($options, [string[]]@(Get-JobEchoSource $Context $Root $Copy $pointer))
+    if ($compiled.NativeCompilerReturnValue -ne 0 -or $compiled.Errors.HasErrors -or $compiled.Errors.Count -ne 0) { throw 'job_echo_compile_failed' }
+  } finally { $provider.Dispose() }
+  if ([Arkism.InstallerChecks.PendingEchoVerifier]::ReadMachine($exe) -ne $Machine) { throw 'job_echo_compiler_machine_mismatch' }
+  return [pscustomobject]@{ Path = $exe; Sha256 = Get-InstalledSmokeHash $exe; PointerBytes = $pointer }
+}
+
+function Read-JobEchoResult([string]$Path) {
+  Assert-InstalledSmokeFile $Path
+  if (([IO.FileInfo]$Path).Length -gt 1024) { throw 'job_echo_result_oversized' }
+  $value = [IO.File]::ReadAllText($Path) | ConvertFrom-Json -ErrorAction Stop
+  $names = @($value.PSObject.Properties.Name | Sort-Object)
+  if (($names -join ',') -cne 'api_calls,code,ok,pointer_bytes,win32_error') { throw 'job_echo_result_schema' }
+  if ($value.ok -isnot [bool] -or $value.code -isnot [string]) { throw 'job_echo_result_schema' }
+  if ($value.code -cne 'ok' -and $value.code -cnotmatch '\A(job_|leaf_)[a-z0-9_:]{1,90}\z') { throw 'job_echo_result_schema' }
+  foreach ($name in @('api_calls', 'pointer_bytes', 'win32_error')) {
+    if (-not (Test-InstalledSmokeInteger $value.$name)) { throw 'job_echo_result_schema' }
+  }
+  return $value
+}
+
+function Invoke-JobEchoLeaf($Context, [string]$Root, $Copy, $Leaf, $Environment, [string]$Kind, $Report) {
+  if ($Kind -cnotin @('directory', 'file')) { throw 'job_echo_kind_invalid' }
+  Assert-InstalledSmokeOwnedRoot $Context $Root
+  Assert-InstalledSmokeDirectory $Copy.Directory
+  if ((Get-InstalledSmokeHash $Copy.Path) -cne $Copy.Sha256 -or (Get-InstalledSmokeHash $Leaf.Path) -cne $Leaf.Sha256) { throw 'job_echo_input_changed' }
+  $resultPath = Join-Path $Root "echo-$Kind.json"
+  if ($null -ne (Get-InstalledSmokeAttributes $resultPath)) { throw 'job_echo_result_exists' }
+  $child = @{} + $Environment
+  $child['GITHUB_ACTIONS'] = 'true'; $child['RUNNER_ENVIRONMENT'] = 'github-hosted'
+  $child['GITHUB_SHA'] = $Context.SourceSha; $child['RUNNER_TEMP'] = $Context.RunnerTemp
+  $processError = $null; $readError = $null; $value = $null
+  try { [void](Invoke-InstalledSmokeProcess $Leaf.Path $Kind $child 30 'pending_exact_echo') } catch { $processError = $_ }
+  try { $value = Read-JobEchoResult $resultPath } catch { $readError = $_ }
+  if ($value) { $Report.echo_last_result = $value }
+  if ($processError -and $readError) { throw ($processError.Exception.Message + '; leaf_result: ' + $readError.Exception.Message) }
+  if ($processError) { throw $processError }
+  if ($readError) { throw $readError }
+  [Arkism.InstallerChecks.PendingEchoVerifier]::ValidateResult($Leaf.PointerBytes, $value.pointer_bytes, $value.ok, $value.api_calls, $value.win32_error, 0)
+  if ($value.code -cne 'ok' -or (Get-InstalledSmokeHash $Leaf.Path) -cne $Leaf.Sha256) { throw 'job_echo_output_changed' }
+  # The fixed leaf has no child/process-launch path; its retained Process exit is the boundary.
+}
+
+function Invoke-JobExactEcho($Context, [string]$Root, $Copy, [int]$Machine, $Request, $Before, $After, $Environment, $Report) {
+  $Report.nsis_observed_delta = $After.EntryCount - $Before.EntryCount
+  $rows = [Arkism.InstallerChecks.PendingEchoVerifier]::Capture($Before, $After)
+  $Report.echo_phase = 'compile'
+  $leaf = New-JobEchoExecutable $Context $Root $Copy $Machine
+  $Report.echo_image_sha256 = $leaf.Sha256; $Report.echo_pointer_bytes = $leaf.PointerBytes
+  $previous = $After; $index = 0
+  foreach ($kind in @('directory', 'file')) {
+    $Report.phase = "echo_$kind"
+    $now = Get-JobEchoSnapshot $Request
+    [Arkism.InstallerChecks.PendingEchoVerifier]::AssertUnchanged($previous, $now)
+    $Report.echo_phase = $kind + '_call'
+    Invoke-JobEchoLeaf $Context $Root $Copy $leaf $Environment $kind $Report
+    $next = Get-JobEchoSnapshot $Request
+    $Report.echo_phase = $kind + '_match'
+    $Report.echo_last_observed_delta = $next.EntryCount - $now.EntryCount
+    [Arkism.InstallerChecks.PendingEchoVerifier]::VerifyEcho($rows, $index, $now, $next)
+    $previous = $next; $index++
+    $Report.echo_verified_calls = $index
+  }
+  $Report.echo_phase = 'complete'
+  return $previous
+}
+
+function Get-JobEchoSnapshot($Request) { return [Arkism.InstallerChecks.RebootObservation]::ReadWindows($Request) }
+
+function Get-JobCompletedCopy($Request, $Result, [string]$Root, $Fixture, $Report, [int]$Machine) {
+  $Report.owned_job_assignment_verified = $true
+  $Report.root_exited_while_tree_active = $Result.RootExitedWhileActive
+  $Report.job_empty = $Result.EmptyConfirmed; $Report.total_processes = $Result.TotalProcesses
+  if (-not $Result.RootExitedWhileActive) { throw 'job_fixture_root_early_exit_not_observed' }
+  Assert-JobFixtureMarker $Request.Marker 'grandchild_done'
+  $Report.completion_marker_observed = $true
+  if ($null -ne (Get-InstalledSmokeAttributes $Fixture.Executable)) { throw 'job_fixture_original_not_removed' }
+  $Report.original_uninstaller_removed = $true
+  $copy = Get-JobFixtureCopy $Root $Fixture.Install $Request.ExpectedSha256
+  $Report.observed_owned_copy_sha256 = $copy.Sha256
+  if ([Arkism.InstallerChecks.PendingEchoVerifier]::ReadNativeMachine($copy.Path) -ne $Machine) { throw 'job_echo_copy_machine_mismatch' }
+  return $copy
+}
+
+function Set-JobFixtureRetention($Context, [string]$Root, $Report, $Primary, [bool]$Settled) {
+  Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $Context)
+  Assert-InstalledSmokeOwnedRoot $Context $Root
+  if ($Primary) { $Report.cleanup = 'owned_root_retained_after_failure'; return }
+  if (-not $Settled) { throw 'job_fixture_root_retained_for_vm_teardown' }
+  # Intentionally leave this tiny root and all FOUR reservations; never cancel the queue.
+  $Report.cleanup = 'owned_root_and_four_reservations_retained_for_vm_teardown'
 }
 
 function Start-JobFixtureControl([string]$Executable, $Environment, [string]$Marker, [string]$Release, [string]$ExpectedHash) {
@@ -206,6 +340,7 @@ function Invoke-NsisUninstallJob([string]$Makensis, [string]$SourceSha, [string]
     $request = New-JobFixtureRequest $context $root $fixture.Executable $marker $fixture.UninstallerSha256
     $report.installer_sha256 = $fixture.InstallerSha256; $report.fixture_script_sha256 = $fixture.ScriptSha256
     $report.installed_uninstaller_sha256 = $request.ExpectedSha256
+    $machine = [Arkism.InstallerChecks.PendingEchoVerifier]::ReadNativeMachine($fixture.Executable)
     $before = [Arkism.InstallerChecks.RebootObservation]::ReadWindows($request)
     $report.phase = 'default_self_copy'; $safeToRemove = $false
     try { $result = [Arkism.InstallerChecks.WindowsProcessJob]::RunWindows($request) }
@@ -218,25 +353,23 @@ function Invoke-NsisUninstallJob([string]$Makensis, [string]$SourceSha, [string]
       throw
     }
     $safeToRemove = $result.EmptyConfirmed
-    $report.owned_job_assignment_verified = $true
-    $report.root_exited_while_tree_active = $result.RootExitedWhileActive
-    $report.job_empty = $result.EmptyConfirmed; $report.total_processes = $result.TotalProcesses
-    if (-not $result.RootExitedWhileActive) { throw 'job_fixture_root_early_exit_not_observed' }
-    Assert-JobFixtureMarker $marker 'grandchild_done'
-    $report.completion_marker_observed = $true
-    if ($null -ne (Get-InstalledSmokeAttributes $fixture.Executable)) { throw 'job_fixture_original_not_removed' }
-    $report.original_uninstaller_removed = $true
-    $report.observed_owned_copy_sha256 = Get-JobFixtureCopy $root $fixture.Install $request.ExpectedSha256
+    $copy = Get-JobCompletedCopy $request $result $root $fixture $report $machine
     $report.phase = 'pending_reboot_observation'
     $after = [Arkism.InstallerChecks.RebootObservation]::ReadWindows($request)
-    $comparison = [Arkism.InstallerChecks.RebootObservation]::CompareWindows($before, $after, $request)
-    $pendingSafe = $comparison.ExistingRowsPreserved
-    $report.pending_existing_rows_preserved = $comparison.ExistingRowsPreserved
-    $report.pending_raw_unchanged = $comparison.RawUnchanged; $report.new_owned_pending_deletes = $comparison.NewOwnedDeletes
+    # This inert-only echo adds TWO global reservations; it does not teach the generic parser a namespace.
+    $finalEcho = Invoke-JobExactEcho $context $root $copy $machine $request $before $after $environment $report
+    $pendingSafe = $true
+    $report.same_run_exact_api_pair_correspondence = $true
+    $report.pending_existing_rows_preserved = $true; $report.pending_raw_unchanged = $false
+    $report.nsis_pending_rows = 2; $report.api_echo_added_reservations = 2; $report.total_new_pending_rows = 4
+    $report.generic_opaque_namespace_supported = $false; $report.boot_deletion_verified = $false
     $report.legacy_reboot_unchanged = $true
     $report.phase = 'timeout_tree'; $safeToRemove = $false
     $report.timeout = Invoke-JobFixtureTimeout $context $root (Join-Path $root 'inert-process.exe') $environment $fixture.PayloadSha256
     $safeToRemove = $true
+    $final = Get-JobEchoSnapshot $request
+    [Arkism.InstallerChecks.PendingEchoVerifier]::AssertUnchanged($finalEcho, $final)
+    $report.queue_unchanged_after_timeout_control = $true
     Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
     $report.ok = $true; $report.phase = 'complete'
   } catch {
@@ -244,10 +377,7 @@ function Invoke-NsisUninstallJob([string]$Makensis, [string]$SourceSha, [string]
     $report.error_type = $_.Exception.GetType().FullName
   } finally {
     try {
-      Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
-      if (-not $safeToRemove -or -not $pendingSafe) { throw 'job_fixture_root_retained_for_vm_teardown' }
-      Remove-InstalledSmokeOwnedRoot $context $root
-      $report.cleanup = 'owned_root_removed'
+      Set-JobFixtureRetention $context $root $report $primary ($safeToRemove -and $pendingSafe)
     } catch { $cleanup = $_; $report.cleanup = 'owned_root_retained'; $report.cleanup_error = 'job_fixture_cleanup_failed' }
   }
   try { Write-InstalledSmokeEvidence $jobEvidence $report } catch { $evidenceError = $_ }

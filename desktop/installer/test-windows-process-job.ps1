@@ -29,6 +29,7 @@ public sealed class JobFakeApi : IJobApi
     public uint ResumeValue = 1, Code = 0, Total = 3;
     public bool Member = true, Killed, OutsideControlAlive = true;
     public long EmptyAt = 40;
+    public Action QueryHook;
     public JobFakeApi(JobFakeClock clock) { Clock = clock; }
     private void Call(string name) { Calls.Add(name); if (Faults.Contains(name)) throw new JobApiException("fake_" + name); }
     public IntPtr CreateJob() { Call("create"); return Job; }
@@ -41,6 +42,7 @@ public sealed class JobFakeApi : IJobApi
     public JobAccounting Query(IntPtr job)
     {
         Own(job); Call("query");
+        if (QueryHook != null) QueryHook();
         return new JobAccounting { Active = Killed || Clock.Now >= EmptyAt ? 0U : 1U, Total = Total };
     }
     public uint ExitCode(IntPtr process) { Call("exit"); return Code; }
@@ -70,6 +72,16 @@ public static class JobCoreTests
         test(); Passed.Add(name);
     }
     private static RebootSnapshot Snapshot(string text) { return RebootObservation.Parse(true, 7, Encoding.Unicode.GetBytes(text)); }
+    private static byte[] PeImage(int machine)
+    {
+        int size = machine == 0x8664 ? 240 : 224;
+        byte[] bytes = new byte[88 + size]; bytes[0] = 77; bytes[1] = 90; bytes[60] = 64;
+        bytes[64] = 80; bytes[65] = 69; bytes[68] = (byte)machine; bytes[69] = (byte)(machine >> 8);
+        bytes[84] = (byte)size; bytes[86] = 2;
+        int magic = machine == 0x8664 ? 0x20b : 0x10b; bytes[88] = (byte)magic; bytes[89] = (byte)(magic >> 8);
+        bytes[88 + (machine == 0x8664 ? 108 : 92)] = 16;
+        return bytes;
+    }
     private static void Reject(Action action, string code)
     {
         try { action(); } catch (JobApiException error) { Check(error.Code.Contains(code), "wrong rejection"); return; }
@@ -317,6 +329,114 @@ public static class JobCoreTests
             RejectExact(delegate { RebootObservation.Compare(before, Snapshot(@"D:\owned\temp\a" + "\0\0"), ""); },
                 "job_pending_path_unknown:owned_temp:non_dos_empty:not_dos_absolute");
         });
+        Test("echo binds two opaque NSIS rows to ordered exact single API additions", delegate {
+            string old = "C:\\old\0\0", dir = "*1\\??\\D:\\owned\\temp\\copy\0\0", file = "*1\\??\\D:\\owned\\temp\\copy\\Un.exe\0\0";
+            var first = Snapshot(old + dir + file); var rows = PendingEchoVerifier.Capture(Snapshot(old), first);
+            var second = Snapshot(old + dir + file + dir); var third = Snapshot(old + dir + file + dir + file);
+            PendingEchoVerifier.VerifyEcho(rows, 0, first, second); PendingEchoVerifier.VerifyEcho(rows, 1, second, third);
+            PendingEchoVerifier.AssertUnchanged(third, Snapshot(old + dir + file + dir + file));
+            Check(rows.Count == 2, "row capture failed");
+            Reject(delegate { RebootObservation.Compare(Snapshot(old), first, @"D:\owned\temp"); }, "path_unknown");
+        });
+        Test("echo refuses dedup extra rows and nonempty destinations", delegate {
+            string dir = "opaque-dir\0\0", file = "opaque-file\0\0";
+            var first = Snapshot(dir + file); var rows = PendingEchoVerifier.Capture(RebootObservation.Parse(false, 0, null), first);
+            Reject(delegate { PendingEchoVerifier.VerifyEcho(rows, 0, first, first); }, "delta_unsupported");
+            Reject(delegate { PendingEchoVerifier.VerifyEcho(rows, 0, first, Snapshot(dir + file + dir + dir)); }, "delta_unsupported");
+            Reject(delegate { PendingEchoVerifier.VerifyEcho(rows, 0, first, Snapshot(dir + file + "opaque-dir\0renamed\0\0")); }, "not_delete");
+        });
+        Test("echo equality is full Ordinal and ordered not suffix matching", delegate {
+            string dir = "prefix-dir\0\0", file = "prefix-file\0\0";
+            var first = Snapshot(dir + file); var rows = PendingEchoVerifier.Capture(RebootObservation.Parse(false, 0, null), first);
+            foreach (string wrong in new string[] { file, "other-dir\0\0", "PREFIX-dir\0\0" })
+                Reject(delegate { PendingEchoVerifier.VerifyEcho(rows, 0, first, Snapshot(dir + file + wrong)); }, "pair_mismatch");
+        });
+        Test("echo detects existing queue mutation and legacy changes", delegate {
+            string old = "old\0\0", dir = "dir\0\0", file = "file\0\0";
+            Reject(delegate { PendingEchoVerifier.Capture(Snapshot(old), Snapshot("changed\0\0" + dir + file)); }, "existing_changed");
+            var after = Snapshot(old + dir + file); after.LegacyPresent = true;
+            Reject(delegate { PendingEchoVerifier.Capture(Snapshot(old), after); }, "legacy_changed");
+            Reject(delegate { PendingEchoVerifier.Capture(Snapshot(old), Snapshot(old + dir)); }, "delta_unsupported");
+        });
+        Test("echo final observation catches concurrent data and terminator changes", delegate {
+            var before = Snapshot("dir\0\0file\0\0");
+            Reject(delegate { PendingEchoVerifier.AssertUnchanged(before, Snapshot("dir\0\0file\0\0extra\0\0")); }, "final_changed");
+            Reject(delegate { PendingEchoVerifier.AssertUnchanged(before, Snapshot("dir\0\0file\0\0\0")); }, "final_changed");
+            var after = Snapshot("dir\0\0file\0\0"); after.LegacyPresent = true;
+            Reject(delegate { PendingEchoVerifier.AssertUnchanged(before, after); }, "legacy_changed");
+        });
+        Test("echo leaf ownership failure prevents the API edge", delegate {
+            int calls = 0;
+            Reject(delegate { BoundEchoLeaf.RunCore(4, 4, delegate { throw new JobApiException("job_root_not_owned"); },
+                delegate { calls++; return true; }, delegate { return 0; }); }, "root_not_owned");
+            Check(calls == 0, "ownership failure reached API");
+        });
+        Test("echo leaf bitness mismatch precedes validation and API", delegate {
+            int validation = 0, calls = 0;
+            Reject(delegate { BoundEchoLeaf.RunCore(4, 8, delegate { validation++; }, delegate { calls++; return true; }, delegate { return 0; }); }, "bitness_mismatch");
+            Check(validation == 0 && calls == 0, "wrong architecture ran");
+        });
+        Test("echo leaf performs only one API attempt and preserves failure result", delegate {
+            int calls = 0, errorReads = 0;
+            var success = BoundEchoLeaf.RunCore(4, 4, delegate {}, delegate { calls++; return true; }, delegate { errorReads++; return 5; });
+            Check(success.Ok && success.Calls == 1 && calls == 1 && errorReads == 0, "unexpected success flow");
+            var failed = BoundEchoLeaf.RunCore(4, 4, delegate {}, delegate { calls++; return false; }, delegate { return 5; });
+            Check(!failed.Ok && failed.Error == 5 && failed.Calls == 1 && calls == 2, "failure retried or lost");
+            var unknown = BoundEchoLeaf.RunCore(4, 4, delegate {}, delegate { calls++; throw new IOException("synthetic"); }, delegate { return 0; });
+            Check(!unknown.Ok && unknown.Code == "leaf_boundary_failed" && calls == 3, "unknown API failure retried");
+        });
+        Test("echo result requires successful exit actual pointer and exactly one call", delegate {
+            PendingEchoVerifier.ValidateResult(4, 4, true, 1, 0, 0);
+            Reject(delegate { PendingEchoVerifier.ValidateResult(4, 8, true, 1, 0, 0); }, "bitness_mismatch");
+            Reject(delegate { PendingEchoVerifier.ValidateResult(4, 4, false, 1, 5, 92); }, "api_unsuccessful");
+            Reject(delegate { PendingEchoVerifier.ValidateResult(4, 4, true, 0, 0, 0); }, "api_unsuccessful");
+            Reject(delegate { PendingEchoVerifier.ValidateResult(4, 4, true, 2, 0, 0); }, "api_unsuccessful");
+        });
+        Test("echo PE reader binds actual x86 and x64 headers with bounded reads", delegate {
+            foreach (int machine in new int[] { 0x14c, 0x8664 }) {
+                byte[] bytes = PeImage(machine);
+                Check(PendingEchoVerifier.ReadMachine(new MemoryStream(bytes)) == machine, "wrong image machine");
+                Check(PendingEchoVerifier.ReadNativeMachine(new MemoryStream(bytes)) == machine, "wrong native image machine");
+            }
+        });
+        Test("echo PE reader rejects unsupported oversized offset and truncation", delegate {
+            byte[] bytes = PeImage(0xaa64);
+            Reject(delegate { PendingEchoVerifier.ReadMachine(new MemoryStream(bytes)); }, "machine_unsupported");
+            bytes[62] = 0x20;
+            Reject(delegate { PendingEchoVerifier.ReadMachine(new MemoryStream(bytes)); }, "pe_invalid");
+            Reject(delegate { PendingEchoVerifier.ReadMachine(new MemoryStream(new byte[2])); }, "pe_truncated");
+        });
+        Test("echo native reference rejects DLL managed CLR and magic mismatch", delegate {
+            byte[] managed = PeImage(0x14c); managed[88 + 96 + 112] = 1;
+            Reject(delegate { PendingEchoVerifier.ReadNativeMachine(new MemoryStream(managed)); }, "reference_managed");
+            Check(PendingEchoVerifier.ReadMachine(new MemoryStream(managed)) == 0x14c, "managed leaf machine unreadable");
+            byte[] dll = PeImage(0x14c); dll[87] = 0x20;
+            Reject(delegate { PendingEchoVerifier.ReadNativeMachine(new MemoryStream(dll)); }, "pe_invalid");
+            byte[] magic = PeImage(0x14c); magic[89] = 2;
+            Reject(delegate { PendingEchoVerifier.ReadNativeMachine(new MemoryStream(magic)); }, "pe_invalid");
+        });
+        Test("echo safe guard codes preserve enums without paths", delegate {
+            Check(BoundEchoLeaf.SafeCode("job_root_not_owned") == "job_root_not_owned", "guard code lost");
+            Check(BoundEchoLeaf.SafeCode("job_C:\\private") == "leaf_guard_failed", "unsafe text escaped");
+            Check(BoundEchoLeaf.SafeCode("job_guard\n") == "leaf_guard_failed", "control character escaped");
+            Check(BoundEchoLeaf.SafeCode(new string('x', 120)) == "leaf_guard_failed", "oversized text escaped");
+        });
+        Test("deadline boundary exact empty is successful", delegate {
+            var clock = new JobFakeClock(); var api = new JobFakeApi(clock); api.EmptyAt = 100;
+            var result = WindowsProcessJob.RunCore(Request(), api, clock);
+            Check(result.EmptyConfirmed && result.ElapsedMilliseconds == 100, "exact deadline empty rejected");
+        });
+        Test("deadline beyond boundary empty is still a timeout", delegate {
+            var clock = new JobFakeClock(); var api = new JobFakeApi(clock); api.EmptyAt = 100;
+            api.QueryHook = delegate { if (clock.Now == 100) clock.Now = 101; };
+            Has(Failure(Request(), api, clock), "primary:job_timeout");
+        });
+        Test("deadline query clock regression cannot accept empty", delegate {
+            var clock = new JobFakeClock(); var api = new JobFakeApi(clock);
+            api.QueryHook = delegate { if (clock.Now == 40) { clock.Now = 30; api.EmptyAt = 0; } };
+            var result = Failure(Request(), api, clock);
+            Has(result, "clock_regressed"); Check(!result.Result.EmptyConfirmed, "regressed clock accepted empty");
+        });
         return Passed.ToArray();
     }
 }
@@ -325,7 +445,45 @@ public static class JobCoreTests
   Add-Type -TypeDefinition ("using Arkism.InstallerChecks;`n" + $core + "`n" + $declarations) @compiler
   $passed = [JobCoreTests]::Run($Filter)
   foreach ($name in $passed) { Write-Output "PASS $name" }
-  Write-Output "All $($passed.Count) offline process job cases passed; native API calls: 0."
+  $coordinator = Invoke-WindowsEchoCoordinatorTests $Filter
+  Write-Output "All $($passed.Count + $coordinator) offline process job cases passed; native API calls: 0."
+}
+
+function Invoke-WindowsEchoCoordinatorTests([string]$Filter) {
+  if ($Filter -and 'echo coordinator boundaries' -notmatch $Filter) { return 0 }
+  . (Join-Path $PSScriptRoot 'test-nsis-uninstall-job.ps1')
+  function New-JobEchoExecutable { return [pscustomobject]@{ Sha256 = 'synthetic'; PointerBytes = 4 } }
+  function Get-JobEchoSnapshot { $value = $state.Reads[$state.Index]; $state.Index++; return $value }
+  function Invoke-JobEchoLeaf($Context, $Root, $Copy, $Leaf, $Environment, $Kind, $Report) {
+    $state.Calls += $Kind
+    if ($state.Mode -eq 'api_failure') { throw 'synthetic API failure' }
+  }
+  function New-EchoSnapshot([string]$Text) {
+    return [Arkism.InstallerChecks.RebootObservation]::Parse($true, 7, [Text.Encoding]::Unicode.GetBytes($Text))
+  }
+  $dir = 'opaque-dir' + [char]0 + [char]0; $file = 'opaque-file' + [char]0 + [char]0
+  $after = New-EchoSnapshot ($dir + $file)
+  $last = New-EchoSnapshot ($dir + $file + $dir + $file)
+  $seconds = @{ success = New-EchoSnapshot ($dir + $file + $dir); mismatch = New-EchoSnapshot ($dir + $file + $file)
+    api_failure = $after; dedup = $after; extra = $last }
+  $phases = @{ success = 'complete'; mismatch = 'directory_match'; api_failure = 'directory_call'; dedup = 'directory_match'; extra = 'directory_match' }
+  $deltas = @{ success = 1; mismatch = 1; api_failure = $null; dedup = 0; extra = 2 }
+  foreach ($mode in @('success', 'mismatch', 'api_failure', 'dedup', 'extra')) {
+    $second = $seconds[$mode]
+    $state = @{ Mode = $mode; Calls = @(); Index = 0; Reads = @($after, $second, $second, $last) }
+    $failure = $null; $report = [ordered]@{}
+    try {
+      $before = [Arkism.InstallerChecks.RebootObservation]::Parse($false, 0, $null)
+      [void](Invoke-JobExactEcho @{} 'synthetic-root' @{} 332 @{} $before $after @{} $report)
+    } catch { $failure = $_ }
+    if ($mode -eq 'success') {
+      if ($failure -or ($state.Calls -join ',') -cne 'directory,file') { throw 'echo coordinator success failed' }
+    } elseif (-not $failure -or ($state.Calls -join ',') -cne 'directory') { throw 'echo coordinator did not stop before second API' }
+    if ($report.nsis_observed_delta -ne 2 -or $report.echo_phase -cne $phases[$mode] -or
+      $report.echo_last_observed_delta -cne $deltas[$mode]) { throw 'echo diagnostic stage or count is incorrect' }
+    Write-Host "PASS echo coordinator $mode; fake native boundaries only"
+  }
+  return 5
 }
 
 if ($MyInvocation.InvocationName -ne '.') { Invoke-WindowsProcessJobTests $Filter }
