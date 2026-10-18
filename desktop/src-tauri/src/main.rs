@@ -18,6 +18,7 @@ mod windows_job;
 mod desktop_control;
 mod runtime_process;
 mod runtime;
+mod update_installer;
 mod ssh_tunnel;
 mod work_handoff;
 
@@ -631,12 +632,17 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
                 .into_body()
                 .into_reader();
             download_update_core(reader, &latest.sha256, UPDATE_DOWNLOAD_MAX_BYTES, |bytes| {
-                let path = std::env::temp_dir().join(&latest.file);
-                std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+                let mut installer = update_installer::Installer::prepare(&bytes, &latest.sha256, &latest.file)
+                    .map_err(|error| error.to_string())?;
                 // The installer replaces the built-in programs, so they must not be running.
-                rt.update_handoff(|| {
-                    std::process::Command::new(&path).arg("/S").spawn().map(|_| ()).map_err(|e| format!("update_start_failed: {e}"))
-                })
+                let outcome = rt.update_handoff(|| installer.spawn().map(|_| ()).map_err(|error| error.to_string()));
+                match outcome {
+                    Ok(()) => Ok(()),
+                    Err(primary) => match installer.cleanup() {
+                        Ok(()) => Err(primary),
+                        Err(cleanup) => Err(format!("{primary}; {cleanup}")),
+                    },
+                }
             })
         })
     })
@@ -672,7 +678,6 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
         phase = "restore";
         let restored = rt.restore_from(&backups, &backup.name)?;
         // The hourly expiry runs against the built-in Arkism (needs the bundled agent client).
-        phase = "expiry";
         let expiry = if rt.agent_client().is_some() { rt.expire().map(|_| "ok".to_string()).unwrap_or_else(|e| e) } else { "no_client".into() };
         phase = "restored_capabilities";
         let after = ureq::get(&format!("{}/v1/capabilities?workspace_id=default&project_id=default&user_id=management%3Aowner", restored.started.server))
