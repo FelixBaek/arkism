@@ -2,6 +2,7 @@
 // edit freely. strings: exact Korean → English. patterns: Korean with {0}… placeholders → English.
 window.ArkismI18nEN = {
  "strings": {
+  "적용 맥락 확인": "Check the memory's full context",
   "로 불러요": "to call it",
   "같은 @이름이 이미 있어요. 전문가와 팀은 이름을 함께 써요.": "That @name is taken. Experts and teams share one set of names.",
   "아직 참여자가 없어요. 전문가를 넣어 주세요.": "No members yet. Add experts.",
@@ -4731,3 +4732,42 @@ Object.assign(window.ArkismI18nEN.strings, {"토큰 줄이기": "Cut tokens", "�
 Object.assign(window.ArkismI18nEN.strings, {"크림": "Cream", "모래": "Sand", "황토": "Tan", "장미": "Rose", "라일락": "Lilac", "하늘": "Sky", "민트": "Mint", "세이지": "Sage",
   "배경색": "Background", "아바타": "Avatar", "아바타 고르기": "Choose avatar", "모델 아이콘 쓰기": "Use model icon", "아바타 바꾸기": "Change avatar"});
 Object.assign(window.ArkismI18nEN.patterns, {"아바타 {0}": "Avatar {0}"});
+
+Object.assign(window.ArkismI18nEN.strings, {
+  "답변과 문구가 겹쳤는지": "Whether answer text overlaps with memories",
+  "아직 서버가 문구 겹침 통계를 보내지 않았어요.": "The server has not sent text-overlap statistics yet.",
+  "질문할 때 찾아 넣은 기억과 답변의 문구 겹침만 셉니다. 실제 활용 여부는 측정하지 않았고, 읽지 못한 대화 수는 이 통계에서 알 수 없어요.": "Counts text overlap for memories retrieved for prompts. Actual use is not measured; this report does not include the count of unread conversations.",
+  "문구 겹침이 확인된 기억이 아직 없어요.": "No memories with observed text overlap yet.",
+  "문구 겹침을 검토할 기억": "Memories to review for text overlap",
+  "호출과 문구 검토": "Review retrieval and text overlap",
+  "최근 호출이나 답변 문구 겹침이 적어요. 필요성은 직접 확인해 주세요": "Few recent retrievals or text overlaps. Review whether the memories are still needed.",
+  "최근 호출이나 답변 문구 겹침이 적은 기억이에요. 실제 활용 여부는 측정하지 않았어요.": "Memories with few recent retrievals or text overlaps. Actual use has not been measured.",
+  "문구 겹침 미확인": "No text overlap observed",
+  "최근 호출 없음": "No recent retrievals",
+  "문구 겹침이 적은 기억 검토": "Review memories with little text overlap",
+  "7일 동안 3번 이상 전달됐지만 답변 문구 겹침이 확인되지 않으면 검토 목록에 모아요. 실제 활용 여부를 뜻하지 않아요": "Collect memories delivered at least 3 times in 7 days with no observed answer-text overlap for manual review. This does not measure actual use.",
+  "답변과 기억의 문구 겹침은 PC 수집기가 보고하면 여기에 보여요. 실제 활용 여부는 측정하지 않아요.": "The PC collector reports text overlap between answers and memories here. Actual use is not measured.",
+  "답변 문구 겹침 미확인 · 직접 검토": "No answer-text overlap observed · review manually",
+  "답변 문구 겹침 비율": "Answer-text overlap rate",
+  "문구 겹침 확인": "Text overlap observed",
+  "종류별 문구 겹침": "Text overlap by memory kind",
+  "전달한 기억 중 문구 겹침이 확인된 비율": "Share of delivered memories with observed text overlap"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}번 들어감 · 문구 겹침 {1}번 · {2}% · 대화 {3}개": "{0} delivered · {1} text overlaps · {2}% · {3} conversations",
+  "문구 겹침이 확인된 기억 · 최근 {0}일": "Memories with observed text overlap · last {0} days",
+  "문구 겹침 {0}번 / {1}번 들어감": "{0} text overlaps / {1} delivered",
+  "문구 겹침이 확인되지 않은 기억 · 최근 {0}일": "Memories with no observed text overlap · last {0} days",
+  "최근 {0}일 문구 겹침 비율": "Text-overlap rate · last {0} days",
+  "% · {0}번 들어감 · 문구 겹침 {1}번": "% · {0} delivered · {1} text overlaps",
+  "검토할 기억 {0}개": "{0} memories to review",
+  "전달한 기억 중 {0}%에서 답변 문구 겹침이 확인됐어요. 실제 활용 여부는 측정하지 않았어요.": " Answer-text overlap was observed for {0}% of delivered memories. Actual use is not measured.",
+  "문구 겹침 {0}번": "{0} text overlaps",
+  "새로 저장 {0} · 내용이 헷갈림 {1} · 검토 필요 {2}": "New {0} · conflicts {1} · needs review {2}",
+  "최근 {0}일 {1}번 전달 · 문구 겹침 {2}번": "Last {0} days · {1} delivered · {2} text overlaps",
+  "{0}번 전달 · 문구 겹침 {1}번": "{0} delivered · {1} text overlaps",
+  "{0}% 문구 겹침": "{0}% text overlap",
+  "{0}번 들어감 · 문구 겹침 {1}번": "{0} delivered · {1} text overlaps",
+  "문구 겹침 미확인 · {0}개 · 실제 활용 여부는 미측정": "No observed text overlap · {0} memories · actual use unmeasured",
+  "최근 {0}일 · 실제 활용 여부는 미측정": "Last {0} days · actual use unmeasured"
+});

@@ -746,6 +746,15 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		v, e := s.CountTokens(r.Context(), bearer(r), in)
 		respond(w, v, e)
 	})
+	mux.HandleFunc("POST /v1/context/validate", func(w http.ResponseWriter, r *http.Request) {
+		var in ContextValidationInput
+		if !decodeLimit(w, r, &in, 64<<10) {
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		v, e := s.ValidateContext(r.Context(), bearer(r), in)
+		respond(w, v, e)
+	})
 	mux.HandleFunc("POST /v1/search", func(w http.ResponseWriter, r *http.Request) {
 		var in SearchInput
 		if !decode(w, r, &in) {

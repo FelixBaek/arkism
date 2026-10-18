@@ -171,9 +171,10 @@ type AgentTools struct {
 	SkillRepos      []SkillRepo     `json:"skill_repos,omitempty"`
 }
 
-// MemoryUseStats is how often memories recalled for questions were injected and how
-// often the answers in that session used them (`arkism capture` utility), over
-// the last Days. Ids and counts only.
+// MemoryUseStats counts injections and observed answer-text overlap over Days.
+// Used is a legacy wire name for text overlap, not measured actual use. Older
+// hosts do not report unread transcript pairs, so zero cannot prove irrelevance.
+// Keep the wire shape compatible with those hosts. Ids and counts only.
 type MemoryUseStats struct {
 	Days       int             `json:"days"`
 	Sessions   int             `json:"sessions"`

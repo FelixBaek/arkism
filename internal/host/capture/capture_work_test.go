@@ -38,11 +38,15 @@ func TestWorkHookWorkAndMemoryFailIndependently(t *testing.T) {
 		capFake(t)
 		hookEnv(t)
 		t.Setenv("ARKISM_WORK_ID", "task")
+		t.Setenv("ARKISM_REPO", "")
+		item := map[string]any{"id": "m", "kind": "user", "text": "regular memory"}
+		normalizeStableFakeRow(item)
+		standing := []any{item}
 		capGet = func(string, time.Duration) (map[string]any, error) {
 			if memoryFailed {
 				return nil, errors.New("offline")
 			}
-			return mustLoad(t, `{"items": [{"id": "m", "kind": "user", "text": "regular memory"}]}`), nil
+			return map[string]any{"items": standing}, nil
 		}
 		capPost = func(string, any, time.Duration) (map[string]any, error) {
 			if !memoryFailed {
@@ -50,6 +54,7 @@ func TestWorkHookWorkAndMemoryFailIndependently(t *testing.T) {
 			}
 			return mustLoad(t, `{"id": "task", "revision": 1, "package": {"goal": "selected goal"}}`), nil
 		}
+		fakeStableValidation(t, &standing)
 		text := str(hookContext(t, `{"hook_event_name": "SessionStart", "session_id": "s"}`)["additionalContext"])
 		if memoryFailed != strings.Contains(text, "selected goal") || memoryFailed == strings.Contains(text, "regular memory") {
 			t.Fatal(memoryFailed, text)

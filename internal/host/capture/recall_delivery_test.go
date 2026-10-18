@@ -159,6 +159,7 @@ func TestStableLedgerCommitsOnlySuccessfulFinalOutput(t *testing.T) {
 			t.Chdir(t.TempDir())
 			standing := stableFake(t)
 			sessionOutcomeEnv(t)
+			fakeStableValidation(t, standing)
 			t.Setenv("ARKISM_WORK_ID", "")
 			t.Setenv("ARKISM_WORK_AGENT", "")
 			t.Setenv("ARKISM_AGENT", "")

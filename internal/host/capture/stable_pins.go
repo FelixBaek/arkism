@@ -68,6 +68,10 @@ func pinSection(sid string, limit int) (indexBlock, error) {
 	if err != nil {
 		return indexBlock{}, err
 	}
+	return renderPinSection(res, agent, limit), nil
+}
+
+func renderPinSection(res map[string]any, agent string, limit int) indexBlock {
 	header := fmt.Sprintf(pinsHeader, agent)
 	used := host.Len(header) + 1 + host.Len(pinsMore) + 1
 	var full, meta []string
@@ -94,7 +98,7 @@ func pinSection(sid string, limit int) (indexBlock, error) {
 		shown = append(shown, it)
 	}
 	if len(full) == 0 {
-		return indexBlock{}, nil
+		return indexBlock{}
 	}
 	if more {
 		full, meta = append(full, pinsMore), append(meta, pinsMore)
@@ -105,7 +109,7 @@ func pinSection(sid string, limit int) (indexBlock, error) {
 			memories = append(memories, it)
 		}
 	}
-	return indexBlock{Full: header + "\n" + strings.Join(full, "\n"), Meta: header + "\n" + strings.Join(meta, "\n"), IDs: itemIDs(memories), Items: memories}, nil
+	return indexBlock{Full: header + "\n" + strings.Join(full, "\n"), Meta: header + "\n" + strings.Join(meta, "\n"), IDs: itemIDs(memories), Items: memories}
 }
 
 const digestClose = "\n</arkism-user-digest>"

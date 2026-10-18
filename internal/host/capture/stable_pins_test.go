@@ -25,14 +25,18 @@ func pinsFake(t *testing.T) *[]any {
 		}
 		return get(path, d)
 	}
-	capPost = func(path string, body any, _ time.Duration) (map[string]any, error) {
+	post := capPost
+	capPost = func(path string, body any, d time.Duration) (map[string]any, error) {
+		if path == "/v1/context/validate" {
+			return post(path, body, d)
+		}
 		if path != "/v1/context/pins" {
 			t.Fatalf("unexpected post %s", path)
 		}
 		*posts = append(*posts, body)
 		return map[string]any{"context_id": "ctx-1", "items": []any{
 			map[string]any{"status": "ok", "pin": map[string]any{"collection": "memories", "id": "rule-1"},
-				"item": map[string]any{"collection": "memories", "id": "rule-1", "text": "보고는 짧게"}},
+				"item": map[string]any{"collection": "memories", "id": "rule-1", "revision": 1, "text": "보고는 짧게", "digest": sha256Hex([]byte("보고는 짧게\n")), "scope": capScope()}},
 			map[string]any{"status": "ok", "pin": map[string]any{"collection": "knowledge_sources", "id": "ks-1"},
 				"item": map[string]any{"collection": "knowledge_sources", "id": "ks-1", "summary": "배포 안내서"}},
 			map[string]any{"status": "not_approved", "pin": map[string]any{"collection": "memories", "id": "gone"}},
@@ -94,5 +98,27 @@ func TestPinAgentAndFitDigest(t *testing.T) {
 	}
 	if fitDigest(long, 120) != "" || fitDigest("no frame "+strings.Repeat("x", 50), 20) != "" {
 		t.Fatal("unframed or tiny digest kept")
+	}
+}
+
+func TestStableReplayDoesNotRediscloseRemovedKnowledgePin(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	posts := pinsFake(t)
+	first, delivery, e := stableBlock("pin-withdrawal", root)
+	if e != nil || !strings.Contains(first.Full, "배포 안내서") {
+		t.Fatal("initial current pin", e)
+	}
+	markStableShown("pin-withdrawal", first.Full, delivery, root)
+	get := capGet
+	capGet = func(path string, d time.Duration) (map[string]any, error) {
+		if strings.HasPrefix(path, "/v1/context/pins?") {
+			return map[string]any{"items": []any{}}, nil
+		}
+		return get(path, d)
+	}
+	next, _, e := stableBlock("pin-withdrawal", root)
+	if e == nil || next.Full != "" || len(*posts) != 1 {
+		t.Fatal("removed pin redisclosed or preview created usage", e, len(*posts))
 	}
 }
