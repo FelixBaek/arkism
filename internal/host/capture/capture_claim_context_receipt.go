@@ -178,11 +178,16 @@ func readStoredClaimReceipt(path string, info os.FileInfo) ([]byte, error) {
 	return raw, nil
 }
 
-func managedClaimReceipts(dir string) ([]storedClaimReceipt, error) {
+func managedClaimReceipts(dir string, policy func() error) ([]storedClaimReceipt, error) {
+	dirInfo, err := os.Lstat(dir)
+	if err != nil {
+		return nil, runtimeErr("claim_context_receipt_read_failed")
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, runtimeErr("claim_context_receipt_read_failed")
 	}
+	now := time.UnixMilli(int64(timeNow() * 1000))
 	managed := []storedClaimReceipt{}
 	for _, entry := range entries {
 		name := entry.Name()
@@ -201,7 +206,12 @@ func managedClaimReceipts(dir string) ([]storedClaimReceipt, error) {
 		}
 		if sha256Hex(raw) != digest {
 			if strings.HasPrefix(name, ".claim-context-") {
-				return nil, runtimeErr("claim_context_receipt_temporary_unknown")
+				// A crash before Sync leaves our own torn temporary; reclaim it only after retention.
+				if !info.ModTime().Add(claimReceiptRetention).After(now) {
+					if err := removeClaimReceiptTemp(path, info, dirInfo, policy); err != nil {
+						return nil, err
+					}
+				}
 			}
 			continue // Foreign ordinary files are never retention targets.
 		}
@@ -438,7 +448,7 @@ func storeClaimContextReceipt(raw []byte, policy func() error) error {
 	if _, err := claimReceiptDir(); err != nil {
 		return err
 	}
-	entries, err := managedClaimReceipts(dir)
+	entries, err := managedClaimReceipts(dir, policy)
 	if err != nil {
 		return err
 	}

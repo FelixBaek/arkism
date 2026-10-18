@@ -164,7 +164,7 @@ func TestCaptureContextReceiptRetentionIsBoundedAndForeignFilesSurvive(t *testin
 			if err := storeClaimContextReceipt(raw, func() error { return nil }); err != nil {
 				t.Fatal(err)
 			}
-			managed, err := managedClaimReceipts(dir)
+			managed, err := managedClaimReceipts(dir, func() error { return nil })
 			total := int64(0)
 			for _, file := range managed {
 				total += file.info.Size()
@@ -412,6 +412,22 @@ func TestCaptureContextReceiptLatePauseRetainsBoundedTemporary(t *testing.T) {
 	files, _ = os.ReadDir(dir)
 	if len(files) != 1 || !exists(path) || exists(temporary) {
 		t.Fatal("resumed retention did not reclaim only its expired bound temporary")
+	}
+}
+
+func TestCaptureContextReceiptTornTemporaryDoesNotBlockStorage(t *testing.T) {
+	capFake(t)
+	_, _, _, raw := contextReceiptFixture(t)
+	dir := filepath.Join(capState, "claim-context-rejections")
+	os.Mkdir(dir, 0o700)
+	torn := put(t, filepath.Join(dir, ".claim-context-"+sha256Hex(raw)+"-1.tmp"), string(raw[:len(raw)/2]))
+	if err := storeClaimContextReceipt(raw, func() error { return nil }); err != nil || !exists(torn) {
+		t.Fatal("fresh torn temporary blocked storage or was removed early", err)
+	}
+	when := time.Now().Add(-73 * time.Hour)
+	os.Chtimes(torn, when, when)
+	if err := storeClaimContextReceipt(raw, func() error { return nil }); err != nil || exists(torn) {
+		t.Fatal("expired torn temporary was not reclaimed", err)
 	}
 }
 
