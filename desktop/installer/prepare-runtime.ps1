@@ -86,6 +86,49 @@ function Test-RuntimePathOverlap([string]$Left, [string]$Right) {
     $rightPath.StartsWith($leftPrefix, $comparison)
 }
 
+function Get-RuntimePathAttributes([string]$Path, [bool]$AllowMissing) {
+  try { return [IO.File]::GetAttributes($Path) }
+  catch {
+    $cause = $_.Exception.GetBaseException()
+    if ($AllowMissing -and ($cause -is [IO.FileNotFoundException] -or $cause -is [IO.DirectoryNotFoundException])) {
+      return $null
+    }
+    throw
+  }
+}
+
+function Assert-RuntimePathComponent([string]$Path, [IO.FileAttributes]$Attributes, [bool]$File) {
+  if (($Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw "runtime path contains a reparse point: $Path"
+  }
+  $directory = ($Attributes -band [IO.FileAttributes]::Directory) -ne 0
+  if ($File) {
+    if ($directory) { throw "runtime file path is a directory: $Path" }
+  } elseif (-not $directory) { throw "runtime directory path is not a directory: $Path" }
+}
+
+function Assert-RuntimePath([string]$Path, [switch]$File) {
+  $full = Get-NormalizedRuntimePath $Path
+  $components = [System.Collections.Generic.Stack[string]]::new()
+  $component = $full
+  while (-not [string]::IsNullOrEmpty($component)) {
+    $components.Push($component)
+    $component = [IO.Path]::GetDirectoryName($component)
+  }
+  # Inspect parents first. Only a genuinely missing tail below a verified root is allowed.
+  $allowMissing = $false
+  foreach ($component in $components) {
+    $attributes = Get-RuntimePathAttributes $component $allowMissing
+    if ($null -eq $attributes) { return }
+    Assert-RuntimePathComponent $component $attributes ($File -and $component -ceq $full)
+    $allowMissing = $true
+  }
+}
+
+function Assert-RuntimeDirectories([string[]]$Paths) {
+  foreach ($path in $Paths) { Assert-RuntimePath $path }
+}
+
 # Use one filesystem location for both PowerShell cmdlets and .NET file operations.
 $Cache = Get-NormalizedRuntimePath $Cache
 $Stage = Get-NormalizedRuntimePath $Stage
@@ -101,11 +144,14 @@ $dir = Join-Path $Cache "postgres-$pgVersion-pgvector-$vectorVersion"
 $pg = Join-Path $dir 'runtime\pgsql'
 $target = Join-Path $Stage 'runtime'
 $staged = Join-Path $target 'pgsql'
-# Check ordinary normalized paths before removing an incomplete cache or staging output.
-# This does not resolve filesystem aliases or coordinate concurrent builders.
+# Reject lexical overlap and existing linked components before reading or cleaning the cache.
+# Rechecks limit exposure during a build; they do not coordinate concurrent path swaps or all device aliases.
 if (Test-RuntimePathOverlap $dir $staged) { throw 'cache and staging runtime paths overlap' }
 $completion = Join-Path $dir 'complete.json'
+Assert-RuntimeDirectories @($dir, $pg, $staged)
+Assert-RuntimePath $completion -File
 if (-not (Test-RuntimeCache -Root $pg -Completion $completion -Fingerprint $fingerprint -Required $required)) {
+  Assert-RuntimeDirectories @($dir, $pg, $staged)
   if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
   New-Item -ItemType Directory -Force $dir | Out-Null
   $full = Join-Path $dir 'full'
@@ -124,6 +170,7 @@ if (-not (Test-RuntimeCache -Root $pg -Completion $completion -Fingerprint $fing
   $src = Join-Path $dir "pgvector-$vectorVersion"
   cmd /c "`"$vcvars`" >nul && set `"PGROOT=$full\pgsql`" && cd /d `"$src`" && nmake /nologo /F Makefile.win && nmake /nologo /F Makefile.win install"
   if ($LASTEXITCODE -ne 0) { throw 'pgvector build failed' }
+  Assert-RuntimeDirectories @($dir, $pg, $staged, $full, $src)
   # Only what the app runs: the server and its setup tools, every DLL, and share/.
   # No pgAdmin, StackBuilder, docs, headers or static libraries.
   New-Item -ItemType Directory -Force (Join-Path $pg 'bin'), (Join-Path $pg 'lib') | Out-Null
@@ -132,18 +179,26 @@ if (-not (Test-RuntimeCache -Root $pg -Completion $completion -Fingerprint $fing
   Get-ChildItem -LiteralPath (Join-Path $full 'pgsql\lib') -File -Filter *.dll |
     ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $pg 'lib') }
   Copy-Item -LiteralPath (Join-Path $full 'pgsql\share') -Destination (Join-Path $pg 'share') -Recurse
+  Assert-RuntimeDirectories @($dir, $pg, $staged, $full, $src)
+  Assert-RuntimePath (Join-Path $dir 'pg.zip') -File
+  Assert-RuntimePath (Join-Path $dir 'pgvector.zip') -File
   Remove-Item -LiteralPath @($full, (Join-Path $dir 'pg.zip'), (Join-Path $dir 'pgvector.zip'), $src) -Recurse -Force
   if (-not (Test-RuntimeFiles -Root $pg -Required $required)) { throw 'runtime preparation incomplete' }
   # Only a fully prepared cache can bypass input verification on the next build.
   $record = [ordered]@{schema = 1; input_fingerprint = $fingerprint} | ConvertTo-Json -Compress
   $temporary = Join-Path $dir ('complete-' + [Guid]::NewGuid().ToString('N') + '.tmp')
   try {
+    Assert-RuntimeDirectories @($dir, $pg, $staged)
+    Assert-RuntimePath $completion -File
+    Assert-RuntimePath $temporary -File
     [IO.File]::WriteAllText($temporary, $record, [Text.UTF8Encoding]::new($false))
     Move-Item -LiteralPath $temporary -Destination $completion -Force
   } finally {
+    Assert-RuntimePath $temporary -File
     if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force }
   }
 }
+Assert-RuntimeDirectories @($dir, $pg, $staged)
 New-Item -ItemType Directory -Force $target | Out-Null
 $transaction = [Guid]::NewGuid().ToString('N')
 $incoming = Join-Path $target "pgsql-incoming-$transaction"
@@ -152,18 +207,23 @@ if ((Test-Path -LiteralPath $incoming) -or (Test-Path -LiteralPath $backup)) { t
 $previous = Test-Path -LiteralPath $staged
 $publishing, $published = $false, $false
 try {
+  Assert-RuntimeDirectories @($pg, $staged, $incoming, $backup)
   Copy-Item -LiteralPath $pg -Destination $incoming -Recurse -Force
   if (-not (Test-RuntimeFiles -Root $incoming -Required $required)) { throw 'runtime staging copy incomplete' }
+  Assert-RuntimeDirectories @($pg, $staged, $incoming, $backup)
   if ($previous) { Move-Item -LiteralPath $staged -Destination $backup }
+  Assert-RuntimeDirectories @($staged, $incoming, $backup)
   $publishing = $true
   Move-Item -LiteralPath $incoming -Destination $staged
   $published = $true
+  Assert-RuntimePath $backup
   if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
 } catch {
   $failure = $_
   if (-not $published) {
     if (Test-Path -LiteralPath $backup) {
       try {
+        Assert-RuntimeDirectories @($staged, $backup)
         if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Recurse -Force }
         Move-Item -LiteralPath $backup -Destination $staged
       } catch {
@@ -171,11 +231,13 @@ try {
         throw "runtime staging failed; previous output recovery requires $backup : $($_.Exception.Message)"
       }
     } elseif ($publishing -and -not $previous -and (Test-Path -LiteralPath $staged)) {
+      Assert-RuntimePath $staged
       Remove-Item -LiteralPath $staged -Recurse -Force
     }
   }
   throw $failure
 } finally {
+  Assert-RuntimePath $incoming
   if (Test-Path -LiteralPath $incoming) { Remove-Item -LiteralPath $incoming -Recurse -Force }
 }
 $mb = [int]((Get-ChildItem -LiteralPath $target -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)

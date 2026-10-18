@@ -86,7 +86,8 @@ function New-RuntimeFixture {
     PgVersion = $pgVersion; VectorVersion = $vectorVersion; VisualStudio = $visualStudio
     PgUrl = "https://get.enterprisedb.com/postgresql/postgresql-$pgVersion-windows-x64-binaries.zip"
     VectorUrl = "https://github.com/pgvector/pgvector/archive/refs/tags/v$vectorVersion.zip"
-    Events = [System.Collections.Generic.List[string]]::new(); Mode = 'ok'
+    Events = [System.Collections.Generic.List[string]]::new(); Mode = 'ok'; StageCopies = 0
+    Links = [System.Collections.Generic.List[string]]::new()
   }
 }
 
@@ -167,6 +168,12 @@ function Invoke-RuntimeBuild {
     Write-RuntimeFixtureFile (Join-Path $state.Dir 'runtime/pgsql/lib/vector.dll') 'synthetic incomplete cache'
     $global:LASTEXITCODE = 17
   }
+  if ($state.Mode -eq 'stage_link_during_build') {
+    $state.LinkedStageTarget = Join-Path $state.Root 'runtime target after build'
+    $runtime = Join-Path $state.Stage 'runtime'
+    [IO.Directory]::Move($runtime, $state.LinkedStageTarget)
+    New-RuntimeFixtureLink $state $runtime $state.LinkedStageTarget
+  }
 }
 
 function Copy-RuntimeFixtureItem {
@@ -175,6 +182,7 @@ function Copy-RuntimeFixtureItem {
   $state = $global:arkismRuntimeTest
   if ($null -ne $state -and
       [IO.Path]::GetFullPath($LiteralPath) -eq [IO.Path]::GetFullPath((Join-Path $state.Dir 'runtime/pgsql'))) {
+    $state.StageCopies++
     Assert-OwnedRuntimePath $Destination
     if ($state.Mode -eq 'stage_copy_failure') {
       Write-RuntimeFixtureFile (Join-Path $Destination 'partial.txt') 'synthetic partial copy'
@@ -228,6 +236,21 @@ function Get-RuntimeStageSnapshot([string]$Stage) {
   return $rows -join "`n"
 }
 
+function New-RuntimeFixtureLink([hashtable]$Fixture, [string]$Path, [string]$Target) {
+  $owned = $Fixture.Root + [IO.Path]::DirectorySeparatorChar
+  foreach ($candidate in @($Path, $Target)) {
+    Assert-RuntimeTest ([IO.Path]::GetFullPath($candidate).StartsWith($owned, [StringComparison]::OrdinalIgnoreCase)) 'Link fixture escaped its owned root'
+  }
+  [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path)) | Out-Null
+  $kind = if ([IO.Path]::DirectorySeparatorChar -eq '\') { 'Junction' } else { 'SymbolicLink' }
+  New-Item -ItemType $kind -Path $Path -Target $Target | Out-Null
+  $Fixture.Links.Add($Path)
+}
+
+function Get-RuntimeFixtureInspectionFailure([string]$Path, [bool]$AllowMissing) {
+  throw [IO.IOException]::new('synthetic runtime path inspection failed')
+}
+
 function Invoke-RuntimeFixture([hashtable]$Fixture, [string]$Mode = 'ok',
   [string]$CachePath = $Fixture.Cache, [string]$StagePath = $Fixture.Stage) {
   # Only the called production script and its children see these test boundaries.
@@ -237,6 +260,9 @@ function Invoke-RuntimeFixture([hashtable]$Fixture, [string]$Mode = 'ok',
   Set-Alias -Name cmd -Value Invoke-RuntimeBuild -Scope Local
   Set-Alias -Name Copy-Item -Value Copy-RuntimeFixtureItem -Scope Local
   Set-Alias -Name Move-Item -Value Move-RuntimeFixtureItem -Scope Local
+  if ($Mode -eq 'path_inspection_failure') {
+    Set-Alias -Name Get-RuntimePathAttributes -Value Get-RuntimeFixtureInspectionFailure -Scope Local
+  }
   $Fixture.Mode = $Mode
   $Fixture.Events.Clear()
   $global:arkismRuntimeTest = $Fixture
@@ -269,6 +295,13 @@ function Test-RuntimeCase([string]$Name, [scriptblock]$Body) {
     Write-Host "PASS: $Name"
   } finally {
     Remove-Variable -Name arkismRuntimeTest -Scope Global -ErrorAction SilentlyContinue
+    foreach ($link in $fixture.Links) {
+      try { [IO.Directory]::Delete($link) }
+      catch {
+        $cause = $_.Exception.GetBaseException()
+        if ($cause -isnot [IO.DirectoryNotFoundException] -and $cause -isnot [IO.FileNotFoundException]) { throw }
+      }
+    }
     Remove-Item -LiteralPath $fixture.Root -Recurse -Force
   }
 }
@@ -546,6 +579,91 @@ Test-RuntimeCase 'mock aliases preserve caller commands after success and failur
     Assert-RuntimeTest ((Get-RuntimeCommandSnapshot) -ceq $callerCommands) 'Failed preparation changed caller commands or aliases'
   }
   Assert-RuntimeTest ((Get-RuntimeCommandSnapshot) -ceq $originalRuntimeCommands) 'A child caller alias leaked into the parent scope'
+}
+
+foreach ($shape in @('stage_ancestor', 'cache_ancestor', 'cache_leaf', 'cache_runtime', 'stage_runtime', 'stage_leaf', 'stage_missing_tail')) {
+  Test-RuntimeCase "$shape rejects linked components before cleanup or preparation" {
+    param($fixture)
+    $originalStage = $fixture.Stage
+    $originalCache = $fixture.Cache
+    $realTarget = Join-Path $fixture.Root 'link target'
+    [IO.Directory]::CreateDirectory($realTarget) | Out-Null
+    switch ($shape) {
+      'stage_ancestor' {
+        $repository = Join-Path $fixture.Dir 'repository'
+        $realTarget = Join-Path $repository 'desktop/stage'
+        Write-RuntimeFixtureFile (Join-Path $realTarget 'runtime/pgsql/previous.txt') 'synthetic alias stage output'
+        $alias = Join-Path $fixture.Root 'repository alias'
+        New-RuntimeFixtureLink $fixture $alias $repository
+        $fixture.Stage = Join-Path $alias 'desktop/stage'
+      }
+      'cache_ancestor' {
+        [IO.Directory]::CreateDirectory($originalCache) | Out-Null
+        $fixture.Cache = Join-Path $fixture.Root 'cache alias'
+        New-RuntimeFixtureLink $fixture $fixture.Cache $originalCache
+        $fixture.Dir = Join-Path $fixture.Cache "postgres-$($fixture.PgVersion)-pgvector-$($fixture.VectorVersion)"
+      }
+      'cache_leaf' { New-RuntimeFixtureLink $fixture $fixture.Dir $realTarget }
+      'cache_runtime' { New-RuntimeFixtureLink $fixture (Join-Path $fixture.Dir 'runtime') $realTarget }
+      'stage_runtime' {
+        [IO.Directory]::Delete($realTarget)
+        [IO.Directory]::Move((Join-Path $fixture.Stage 'runtime'), $realTarget)
+        New-RuntimeFixtureLink $fixture (Join-Path $fixture.Stage 'runtime') $realTarget
+      }
+      'stage_leaf' {
+        [IO.Directory]::Delete($realTarget)
+        [IO.Directory]::Move((Join-Path $fixture.Stage 'runtime/pgsql'), $realTarget)
+        New-RuntimeFixtureLink $fixture (Join-Path $fixture.Stage 'runtime/pgsql') $realTarget
+      }
+      'stage_missing_tail' {
+        $alias = Join-Path $fixture.Root 'stage alias'
+        New-RuntimeFixtureLink $fixture $alias $realTarget
+        $fixture.Stage = Join-Path $alias 'missing/stage'
+      }
+    }
+    $sentinel = Join-Path $realTarget 'keep.txt'
+    Write-RuntimeFixtureFile $sentinel 'synthetic linked target sentinel'
+    $targetBefore = Get-RuntimeStageSnapshot $realTarget
+    $stageBefore = Get-RuntimeStageSnapshot $originalStage
+    $failure = Invoke-RuntimeFixture $fixture
+    Assert-RuntimeTest ($null -ne $failure -and $failure.Contains('reparse')) "Linked path was accepted: $failure"
+    Assert-RuntimeTest ($fixture.Events.Count -eq 0 -and $fixture.StageCopies -eq 0) 'Linked path reached preparation or staging'
+    Assert-RuntimeTest ([IO.File]::ReadAllText($sentinel) -eq 'synthetic linked target sentinel') 'Linked path rejection lost the target sentinel'
+    Assert-RuntimeTest ((Get-RuntimeStageSnapshot $realTarget) -ceq $targetBefore) 'Linked path rejection changed target bytes'
+    Assert-RuntimeTest ((Get-RuntimeStageSnapshot $originalStage) -ceq $stageBefore) 'Linked path rejection changed existing staging'
+    Assert-RuntimeTest (-not (Test-Path -LiteralPath (Join-Path $fixture.Dir 'complete.json'))) 'Linked path completed its cache'
+  }
+}
+
+Test-RuntimeCase 'a non-directory cache component is preserved before cleanup' {
+  param($fixture)
+  Write-RuntimeFixtureFile $fixture.Dir 'synthetic regular file at a directory path'
+  $stageBefore = Get-RuntimeStageSnapshot $fixture.Stage
+  $failure = Invoke-RuntimeFixture $fixture
+  Assert-RuntimeTest ($null -ne $failure -and $failure.Contains('directory')) "Non-directory cache was accepted: $failure"
+  Assert-RuntimeTest ($fixture.Events.Count -eq 0 -and $fixture.StageCopies -eq 0) 'Non-directory path reached preparation or staging'
+  Assert-RuntimeTest ([IO.File]::ReadAllText($fixture.Dir) -eq 'synthetic regular file at a directory path') 'Non-directory rejection deleted the original file'
+  Assert-RuntimeTest ((Get-RuntimeStageSnapshot $fixture.Stage) -ceq $stageBefore) 'Non-directory rejection changed staging'
+}
+
+Test-RuntimeCase 'path inspection I/O errors stop before preparation' {
+  param($fixture)
+  $before = Get-RuntimeStageSnapshot $fixture.Root
+  $failure = Invoke-RuntimeFixture $fixture 'path_inspection_failure'
+  Assert-RuntimeTest ($null -ne $failure -and $failure.Contains('synthetic runtime path inspection failed')) "Inspection failure was treated as a missing tail: $failure"
+  Assert-RuntimeTest ($fixture.Events.Count -eq 0 -and $fixture.StageCopies -eq 0) 'Inspection error reached preparation or staging'
+  Assert-RuntimeTest ((Get-RuntimeStageSnapshot $fixture.Root) -ceq $before) 'Inspection error changed owned input or output bytes'
+}
+
+Test-RuntimeCase 'a link introduced during build stops before stage copy or publication' {
+  param($fixture)
+  Add-RuntimeStageNeighbors $fixture
+  $before = Get-RuntimeStageSnapshot (Join-Path $fixture.Stage 'runtime')
+  $failure = Invoke-RuntimeFixture $fixture 'stage_link_during_build'
+  Assert-RuntimeTest ($null -ne $failure -and $failure.Contains('reparse')) "Post-build linked staging was accepted: $failure"
+  Assert-RuntimeTest ($fixture.Events.Contains('build') -and $fixture.StageCopies -eq 0) 'Post-build inspection did not stop staging copy'
+  Assert-RuntimeTest ((Get-RuntimeStageSnapshot $fixture.LinkedStageTarget) -ceq $before) 'Post-build rejection changed the previous runtime or neighbors'
+  Assert-RuntimeTest (-not (Test-Path -LiteralPath (Join-Path $fixture.Dir 'complete.json'))) 'Post-build linked path completed its cache'
 }
 
 Assert-RuntimeTest ((Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash -eq $sourceHash) 'Tests changed the original preparation script'

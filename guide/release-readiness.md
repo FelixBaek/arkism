@@ -35,10 +35,17 @@ runtime build recipe must update its fingerprint identifier. This records the
 verified inputs and build completion; it does not authenticate every cached
 output or protect a cache that a local writer can modify.
 
-Overlapping cache and staging paths are rejected before cleanup. A new staging
-copy is checked before replacing the previous output. Copy or publication
-failures preserve or restore that output; a failed restoration retains the
-recovery backup and reports its location.
+Normalized cache and staging overlaps are rejected before cleanup. Existing
+path components are inspected from the filesystem root: reparse points,
+unexpected file/directory types and inspection errors stop preparation. Only a
+genuinely missing tail below inspected directories is allowed. Checks repeat
+before cleanup, after the build and before staging changes. Use ordinary
+directory paths; this does not prove every DOS-device alias or prevent a
+concurrent path replacement.
+
+A new staging copy is checked before replacing the previous output. Copy or
+publication failures preserve or restore that output; a failed restoration
+retains the recovery backup and reports its location.
 
 The offline PowerShell regression uses inert ZIP fixtures and fake download,
 extraction and native build boundaries. Windows CI runs it with Windows
