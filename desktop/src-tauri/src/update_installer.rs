@@ -165,23 +165,16 @@ pub enum LaunchDisposition {
 /// Closing a process observer is not confirmation that its child stopped.
 /// An accidentally dropped unresolved owner conservatively retains its handles
 /// and original guards until process teardown; it never kills or deletes.
-struct Retained<T>(Option<T>);
+struct Retained<T>(std::mem::ManuallyDrop<Option<T>>);
 impl<T> Retained<T> {
     fn new(owner: T) -> Self {
-        Self(Some(owner))
+        Self(std::mem::ManuallyDrop::new(Some(owner)))
     }
     fn get_mut(&mut self) -> &mut T {
         self.0.as_mut().expect("retained_owner_present")
     }
     fn take(mut self) -> T {
         self.0.take().expect("retained_owner_present")
-    }
-}
-impl<T> Drop for Retained<T> {
-    fn drop(&mut self) {
-        if let Some(owner) = self.0.take() {
-            std::mem::forget(owner);
-        }
     }
 }
 
@@ -2160,102 +2153,6 @@ pub mod test_diagnostics {
         }
     }
 
-    #[cfg(test)]
-    mod resource_tests {
-        use super::{embedded_manifest, pe_fields};
-        fn put16(bytes: &mut [u8], offset: usize, value: u16) {
-            bytes[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
-        }
-        fn put32(bytes: &mut [u8], offset: usize, value: u32) {
-            bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
-        }
-        fn fixture(wide: bool) -> Vec<u8> {
-            let mut bytes = vec![0; 0x800];
-            bytes[..2].copy_from_slice(b"MZ");
-            put32(&mut bytes, 0x3c, 0x80);
-            bytes[0x80..0x84].copy_from_slice(b"PE\0\0");
-            put16(&mut bytes, 0x84, if wide { 0x8664 } else { 0x14c });
-            put16(&mut bytes, 0x86, 1);
-            let size = if wide { 240 } else { 224 };
-            put16(&mut bytes, 0x94, size);
-            put16(&mut bytes, 0x98, if wide { 0x20b } else { 0x10b });
-            put16(&mut bytes, 0x98 + 68, 2);
-            put32(&mut bytes, 0x98 + if wide { 108 } else { 92 }, 3);
-            let data = 0x98 + if wide { 128 } else { 112 };
-            put32(&mut bytes, data, 0x1000);
-            put32(&mut bytes, data + 4, 0x200);
-            let section = 0x98 + size as usize;
-            put32(&mut bytes, section + 12, 0x1000);
-            put32(&mut bytes, section + 16, 0x200);
-            put32(&mut bytes, section + 20, 0x400);
-            for offset in [0x400, 0x420, 0x440] {
-                put16(&mut bytes, offset + 14, 1);
-            }
-            put32(&mut bytes, 0x410, 24);
-            put32(&mut bytes, 0x414, 0x80000020);
-            put32(&mut bytes, 0x430, 1);
-            put32(&mut bytes, 0x434, 0x80000040);
-            put32(&mut bytes, 0x450, 1033);
-            put32(&mut bytes, 0x454, 0x60);
-            put32(&mut bytes, 0x460, 0x1100);
-            put32(&mut bytes, 0x464, 3);
-            bytes[0x500..0x503].copy_from_slice(b"one");
-            bytes
-        }
-        #[test]
-        fn embedded_manifest_measures_actual_pe32_and_pe64_gui_resources() {
-            for (wide, fields) in [(false, (0x14c, 0x10b, 2)), (true, (0x8664, 0x20b, 2))] {
-                let bytes = fixture(wide);
-                assert_eq!(pe_fields(&bytes), Some(fields));
-                assert_eq!(embedded_manifest(&bytes), Some(b"one".to_vec()));
-            }
-        }
-        #[test]
-        fn embedded_manifest_rejects_missing_ambiguous_and_unbounded_resources() {
-            for wide in [false, true] {
-                for count in [0, 2] {
-                    let mut bytes = fixture(wide);
-                    put32(&mut bytes, 0x98 + if wide { 108 } else { 92 }, count);
-                    assert!(
-                        embedded_manifest(&bytes).is_none(),
-                        "undeclared resource accepted"
-                    );
-                }
-            }
-            for (offset, value) in [
-                (0x410, 23),
-                (0x430, 2),
-                (0x454, 0x80000040),
-                (0x464, 65537),
-                (0x460, u32::MAX),
-                (0x98 + 112, 0xfffffff0),
-            ] {
-                let mut bytes = fixture(false);
-                put32(&mut bytes, offset, value);
-                assert!(
-                    embedded_manifest(&bytes).is_none(),
-                    "malformed resource accepted"
-                );
-            }
-            for length in [0, 0x40, 0x98, 0x450, 0x520] {
-                assert!(embedded_manifest(&fixture(false)[..length]).is_none());
-            }
-        }
-        #[test]
-        fn embedded_manifest_requires_all_language_variants_to_match() {
-            let mut bytes = fixture(false);
-            put16(&mut bytes, 0x44e, 2);
-            put32(&mut bytes, 0x458, 1041);
-            put32(&mut bytes, 0x45c, 0x80);
-            put32(&mut bytes, 0x480, 0x1120);
-            put32(&mut bytes, 0x484, 3);
-            bytes[0x520..0x523].copy_from_slice(b"one");
-            assert_eq!(embedded_manifest(&bytes), Some(b"one".to_vec()));
-            bytes[0x520..0x523].copy_from_slice(b"two");
-            assert!(embedded_manifest(&bytes).is_none());
-        }
-    }
-
     #[derive(Clone, Default)]
     pub struct BoundSnapshot {
         pub created: bool,
@@ -2535,6 +2432,102 @@ pub mod test_diagnostics {
             let code = trace.code.map_or_else(|| "null".to_string(), |value| value.to_string());
             format!("{{\"phase\":\"{}\",\"target\":\"{}\",\"operation\":\"{}\",\"os_code\":{code},\"overflow\":{},\"attempts\":[{attempts}]}}", trace.phase, trace.target, trace.operation, trace.overflow)
         })
+    }
+
+    #[cfg(test)]
+    mod resource_tests {
+        use super::{embedded_manifest, pe_fields};
+        fn put16(bytes: &mut [u8], offset: usize, value: u16) {
+            bytes[offset..offset + 2].copy_from_slice(&value.to_le_bytes());
+        }
+        fn put32(bytes: &mut [u8], offset: usize, value: u32) {
+            bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+        }
+        fn fixture(wide: bool) -> Vec<u8> {
+            let mut bytes = vec![0; 0x800];
+            bytes[..2].copy_from_slice(b"MZ");
+            put32(&mut bytes, 0x3c, 0x80);
+            bytes[0x80..0x84].copy_from_slice(b"PE\0\0");
+            put16(&mut bytes, 0x84, if wide { 0x8664 } else { 0x14c });
+            put16(&mut bytes, 0x86, 1);
+            let size = if wide { 240 } else { 224 };
+            put16(&mut bytes, 0x94, size);
+            put16(&mut bytes, 0x98, if wide { 0x20b } else { 0x10b });
+            put16(&mut bytes, 0x98 + 68, 2);
+            put32(&mut bytes, 0x98 + if wide { 108 } else { 92 }, 3);
+            let data = 0x98 + if wide { 128 } else { 112 };
+            put32(&mut bytes, data, 0x1000);
+            put32(&mut bytes, data + 4, 0x200);
+            let section = 0x98 + size as usize;
+            put32(&mut bytes, section + 12, 0x1000);
+            put32(&mut bytes, section + 16, 0x200);
+            put32(&mut bytes, section + 20, 0x400);
+            for offset in [0x400, 0x420, 0x440] {
+                put16(&mut bytes, offset + 14, 1);
+            }
+            put32(&mut bytes, 0x410, 24);
+            put32(&mut bytes, 0x414, 0x80000020);
+            put32(&mut bytes, 0x430, 1);
+            put32(&mut bytes, 0x434, 0x80000040);
+            put32(&mut bytes, 0x450, 1033);
+            put32(&mut bytes, 0x454, 0x60);
+            put32(&mut bytes, 0x460, 0x1100);
+            put32(&mut bytes, 0x464, 3);
+            bytes[0x500..0x503].copy_from_slice(b"one");
+            bytes
+        }
+        #[test]
+        fn embedded_manifest_measures_actual_pe32_and_pe64_gui_resources() {
+            for (wide, fields) in [(false, (0x14c, 0x10b, 2)), (true, (0x8664, 0x20b, 2))] {
+                let bytes = fixture(wide);
+                assert_eq!(pe_fields(&bytes), Some(fields));
+                assert_eq!(embedded_manifest(&bytes), Some(b"one".to_vec()));
+            }
+        }
+        #[test]
+        fn embedded_manifest_rejects_missing_ambiguous_and_unbounded_resources() {
+            for wide in [false, true] {
+                for count in [0, 2] {
+                    let mut bytes = fixture(wide);
+                    put32(&mut bytes, 0x98 + if wide { 108 } else { 92 }, count);
+                    assert!(
+                        embedded_manifest(&bytes).is_none(),
+                        "undeclared resource accepted"
+                    );
+                }
+            }
+            for (offset, value) in [
+                (0x410, 23),
+                (0x430, 2),
+                (0x454, 0x80000040),
+                (0x464, 65537),
+                (0x460, u32::MAX),
+                (0x98 + 112, 0xfffffff0),
+            ] {
+                let mut bytes = fixture(false);
+                put32(&mut bytes, offset, value);
+                assert!(
+                    embedded_manifest(&bytes).is_none(),
+                    "malformed resource accepted"
+                );
+            }
+            for length in [0, 0x40, 0x98, 0x450, 0x520] {
+                assert!(embedded_manifest(&fixture(false)[..length]).is_none());
+            }
+        }
+        #[test]
+        fn embedded_manifest_requires_all_language_variants_to_match() {
+            let mut bytes = fixture(false);
+            put16(&mut bytes, 0x44e, 2);
+            put32(&mut bytes, 0x458, 1041);
+            put32(&mut bytes, 0x45c, 0x80);
+            put32(&mut bytes, 0x480, 0x1120);
+            put32(&mut bytes, 0x484, 3);
+            bytes[0x520..0x523].copy_from_slice(b"one");
+            assert_eq!(embedded_manifest(&bytes), Some(b"one".to_vec()));
+            bytes[0x520..0x523].copy_from_slice(b"two");
+            assert!(embedded_manifest(&bytes).is_none());
+        }
     }
 }
 
