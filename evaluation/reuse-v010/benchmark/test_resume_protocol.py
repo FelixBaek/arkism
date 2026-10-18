@@ -78,12 +78,14 @@ class ResumeProtocolTests(unittest.TestCase):
         for name in ('results.json', 'results.csv', 'summary.json'):
             (self.out / name).write_text('preserve synthetic existing output')
         original = self.snapshot()
-        with patch.object(benchmark, 'write_spec', wraps=benchmark.write_spec) as spec_writer:
-            with patch.object(benchmark, 'write_results', wraps=benchmark.write_results) as writer:
-                with self.assertRaises(error):
-                    self.main(conditions)
-                spec_writer.assert_not_called()
-                writer.assert_not_called()
+        with (
+            patch.object(benchmark, 'write_spec', wraps=benchmark.write_spec) as spec_writer,
+            patch.object(benchmark, 'write_results', wraps=benchmark.write_results) as writer,
+        ):
+            with self.assertRaises(error):
+                self.main(conditions)
+            spec_writer.assert_not_called()
+            writer.assert_not_called()
         self.assertEqual(self.snapshot(), original)
         self.runner.assert_not_called()
         self.assert_no_external_effects()

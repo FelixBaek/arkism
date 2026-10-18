@@ -296,7 +296,7 @@ def validate_resume_spec(out, schedule, has_results):
             raise ValueError('benchmark results require their frozen spec') from None
         return False
     # JSON serialization normalizes tuples but preserves bool/int/float types.
-    canonical = dict(sort_keys=True, separators=(',', ':'), allow_nan=False)
+    canonical = {'sort_keys': True, 'separators': (',', ':'), 'allow_nan': False}
     if json.dumps(saved, **canonical) != json.dumps(frozen_spec(schedule), **canonical):
         raise ValueError('frozen benchmark spec differs from the requested experiment')
     return True
