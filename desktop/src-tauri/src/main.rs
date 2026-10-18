@@ -526,6 +526,24 @@ fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
     p.next().is_none().then_some(v)
 }
 
+fn strictly_newer(current: &str, latest: &str) -> Result<bool, String> {
+    let current = parse_version(current).ok_or_else(|| "update_current_invalid".to_string())?;
+    let latest = parse_version(latest).ok_or_else(|| "update_feed_invalid".to_string())?;
+    Ok(latest > current)
+}
+
+fn install_update_core(
+    current: &str,
+    fetch: impl FnOnce() -> Result<Latest, String>,
+    install: impl FnOnce(Latest) -> Result<(), String>,
+) -> Result<(), String> {
+    let latest = fetch()?;
+    if !strictly_newer(current, &latest.version)? {
+        return Err("update_not_newer".into());
+    }
+    install(latest)
+}
+
 fn fetch_latest() -> Result<Latest, String> {
     let feed = feed()?;
     let latest: Latest = runtime::http_agent(Duration::from_secs(30))
@@ -546,7 +564,7 @@ fn fetch_latest() -> Result<Latest, String> {
 async fn update_check(app: tauri::AppHandle) -> Result<Update, String> {
     let current = app.package_info().version.to_string();
     let latest = tauri::async_runtime::spawn_blocking(fetch_latest).await.map_err(|e| e.to_string())??;
-    let newer = parse_version(&latest.version) > parse_version(&current);
+    let newer = strictly_newer(&current, &latest.version)?;
     Ok(Update { current, latest: latest.version, newer })
 }
 
@@ -558,29 +576,31 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
     if !cfg!(windows) {
         return Err("update_manual".into());
     }
+    let current = app.package_info().version.to_string();
     let rt = Arc::clone(&app.state::<Arc<runtime::Runtime>>());
-    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        let latest = fetch_latest()?;
-        let mut bytes = Vec::new();
-        runtime::http_agent(Duration::from_secs(300))
-            .get(&format!("{}/{}", feed()?, latest.file))
-            .call()
-            .map_err(|e| format!("update_download_failed: {e}"))?
-            .into_body()
-            .into_reader()
-            .take(512 << 20)
-            .read_to_end(&mut bytes)
-            .map_err(|e| format!("update_download_failed: {e}"))?;
-        let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
-        if !hash.eq_ignore_ascii_case(&latest.sha256) {
-            return Err("update_hash_mismatch".into());
-        }
-        let path = std::env::temp_dir().join(&latest.file);
-        std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
-        // The installer replaces the built-in programs, so they must not be running.
-        rt.stop();
-        std::process::Command::new(&path).arg("/S").spawn().map_err(|e| format!("update_start_failed: {e}"))?;
-        Ok(())
+    tauri::async_runtime::spawn_blocking(move || {
+        install_update_core(&current, fetch_latest, |latest| {
+            let mut bytes = Vec::new();
+            runtime::http_agent(Duration::from_secs(300))
+                .get(&format!("{}/{}", feed()?, latest.file))
+                .call()
+                .map_err(|e| format!("update_download_failed: {e}"))?
+                .into_body()
+                .into_reader()
+                .take(512 << 20)
+                .read_to_end(&mut bytes)
+                .map_err(|e| format!("update_download_failed: {e}"))?;
+            let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+            if !hash.eq_ignore_ascii_case(&latest.sha256) {
+                return Err("update_hash_mismatch".into());
+            }
+            let path = std::env::temp_dir().join(&latest.file);
+            std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+            // The installer replaces the built-in programs, so they must not be running.
+            rt.stop();
+            std::process::Command::new(&path).arg("/S").spawn().map_err(|e| format!("update_start_failed: {e}"))?;
+            Ok(())
+        })
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -802,6 +822,96 @@ mod tests {
         assert_eq!(parse_version("1.2"), None);
         assert_eq!(parse_version("1.2.3.4"), None);
         assert_eq!(parse_version("a.b.c"), None);
+    }
+
+    fn update_fixture(version: &str) -> Latest {
+        Latest {
+            version: version.into(),
+            file: format!("Arkism-{version}-setup.exe"),
+            sha256: "a".repeat(64),
+        }
+    }
+
+    #[test]
+    fn update_install_rejects_older_and_equal_before_installer_effects() {
+        for version in ["1.2.2", "1.2.3"] {
+            let fetches = std::cell::Cell::new(0);
+            let installs = std::cell::Cell::new(0);
+            let result = install_update_core("1.2.3", || {
+                fetches.set(fetches.get() + 1);
+                Ok(update_fixture(version))
+            }, |_| {
+                installs.set(installs.get() + 1);
+                Ok(())
+            });
+            assert_eq!(result, Err("update_not_newer".into()), "{version}");
+            assert_eq!((fetches.get(), installs.get()), (1, 0));
+            assert_eq!(strictly_newer("1.2.3", version), Ok(false));
+        }
+    }
+
+    #[test]
+    fn update_install_rejects_invalid_versions_before_installer_effects() {
+        for (current, latest, error) in [
+            ("a.b.c", "1.2.4", "update_current_invalid"),
+            ("1.2", "1.2.4", "update_current_invalid"),
+            ("4294967296.0.0", "1.2.4", "update_current_invalid"),
+            ("1.2.3", "a.b.c", "update_feed_invalid"),
+            ("1.2.3", "1.2", "update_feed_invalid"),
+            ("1.2.3", "4294967296.0.0", "update_feed_invalid"),
+        ] {
+            let fetches = std::cell::Cell::new(0);
+            let installs = std::cell::Cell::new(0);
+            let result = install_update_core(current, || {
+                fetches.set(fetches.get() + 1);
+                Ok(update_fixture(latest))
+            }, |_| {
+                installs.set(installs.get() + 1);
+                Ok(())
+            });
+            assert_eq!(result, Err(error.into()), "{current} -> {latest}");
+            assert_eq!((fetches.get(), installs.get()), (1, 0));
+            assert_eq!(strictly_newer(current, latest), Err(error.into()));
+        }
+    }
+
+    #[test]
+    fn update_install_passes_the_same_newer_candidate_exactly_once() {
+        for (current, version) in [("0.9.9", "0.10.0"), ("1.2.3", "1.2.4")] {
+            let latest = update_fixture(version);
+            let expected = (latest.version.clone(), latest.file.clone(), latest.sha256.clone());
+            let fetches = std::cell::Cell::new(0);
+            let installs = std::cell::Cell::new(0);
+            let result = install_update_core(current, || {
+                fetches.set(fetches.get() + 1);
+                Ok(latest)
+            }, |candidate| {
+                installs.set(installs.get() + 1);
+                assert_eq!((candidate.version, candidate.file, candidate.sha256), expected);
+                Ok(())
+            });
+            assert_eq!(result, Ok(()));
+            assert_eq!((fetches.get(), installs.get()), (1, 1));
+            assert_eq!(strictly_newer(current, version), Ok(true));
+        }
+    }
+
+    #[test]
+    fn update_install_propagates_fetch_and_installer_errors() {
+        let installs = std::cell::Cell::new(0);
+        let result = install_update_core("1.2.3", || Err("synthetic_fetch_failed".into()), |_| {
+            installs.set(installs.get() + 1);
+            Ok(())
+        });
+        assert_eq!(result, Err("synthetic_fetch_failed".into()));
+        assert_eq!(installs.get(), 0);
+
+        let result = install_update_core("1.2.3", || Ok(update_fixture("1.2.4")), |_| {
+            installs.set(installs.get() + 1);
+            Err("synthetic_installer_failed".into())
+        });
+        assert_eq!(result, Err("synthetic_installer_failed".into()));
+        assert_eq!(installs.get(), 1);
     }
 
     #[test]
