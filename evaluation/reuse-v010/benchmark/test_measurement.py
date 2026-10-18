@@ -21,7 +21,9 @@ class MeasurementTests(unittest.TestCase):
         directory.mkdir()
         usage = {'input_tokens': 100, 'cached_input_tokens': 80, 'output_tokens': 5}
         row = dict(usage, task_id='task', condition=condition, replicate=1,
-                   success=True, task_seconds=2, review_seconds=None)
+                   success=True, task_seconds=2, review_seconds=None,
+                   experiment_id='synthetic-measurement', commit='synthetic-commit',
+                   fixture_sha256='synthetic-fixture', model='synthetic-model')
         (directory / 'result.json').write_text(json.dumps(row))
         (directory / 'events.json').write_text(json.dumps([{'type': 'turn.completed', 'usage': usage}]))
         (directory / 'prompt.txt').write_text('same prompt')

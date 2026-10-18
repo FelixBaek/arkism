@@ -10,16 +10,16 @@ import statistics
 import fcntl
 import os
 from private_storage import private_file
+from run import CONDITIONS, validate_result_identities
 
-CONDITIONS = ('none', 'static', 'arkism')
 FIELDS = ('input_tokens', 'cached_input_tokens', 'output_tokens')
 PROMPT_FILE = 'prompt.txt'
 
 
-def read_observation(path):
-    row = json.loads(path.read_text())
+def read_observation(path, row, events_bytes):
+    """Check usage against the same row accepted by dataset preflight."""
     run_id = path.parent.name
-    events = json.loads(path.with_name('events.json').read_text())
+    events = json.loads(events_bytes)
     turns = [event['usage'] for event in events
              if event.get('type') == 'turn.completed' and 'usage' in event]
     if len(turns) != 1:
@@ -39,20 +39,24 @@ def read_observation(path):
 
 
 def load_observations(results):
-    observations, evidence, identities = [], [], set()
+    records = []
     for path in sorted(results.glob('*/result.json')):
-        row = read_observation(path)
-        identity = (row['task_id'], row['condition'], row['replicate'])
-        if identity in identities or row['condition'] not in CONDITIONS:
-            raise ValueError(f'duplicate or invalid cell: {row["run_id"]}')
-        identities.add(identity)
-        observations.append(row)
-        for file in (path, path.with_name('events.json'), path.with_name(PROMPT_FILE)):
-            evidence.append({'path': file.relative_to(results).as_posix(),
-                             'sha256': hashlib.sha256(file.read_bytes()).hexdigest()})
-    if not observations:
+        result_bytes = path.read_bytes()
+        records.append((path, json.loads(result_bytes), result_bytes))
+    if not records:
         raise ValueError('no recorded runs')
-    return observations, evidence, identities
+    validate_result_identities([row for _, row, _ in records])
+    observations, evidence = [], []
+    for path, row, result_bytes in records:
+        events_path = path.with_name('events.json')
+        events_bytes = events_path.read_bytes()
+        observations.append(read_observation(path, row, events_bytes))
+        prompt_path = path.with_name(PROMPT_FILE)
+        for file, content in ((path, result_bytes), (events_path, events_bytes),
+                              (prompt_path, prompt_path.read_bytes())):
+            evidence.append({'path': file.relative_to(results).as_posix(),
+                             'sha256': hashlib.sha256(content).hexdigest()})
+    return observations, evidence, validate_result_identities(observations)
 
 
 def billed_amounts(observations, charges):
