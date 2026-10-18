@@ -39,10 +39,10 @@ func TestConcurrentStableHookHelper(t *testing.T) {
 	if root == "" {
 		return
 	}
-	standing := stableFake(t)
+	stableFake(t)
 	capState = root
 	label := os.Getenv("ARKISM_STABLE_TEST_LABEL")
-	(*standing)[0].(map[string]any)["text"] = label
+	// Both processes observe the same current backend memory; label is coordination only.
 	if err := os.WriteFile(filepath.Join(root, label+"-ready"), nil, 0600); err != nil {
 		t.Fatal(err)
 	}

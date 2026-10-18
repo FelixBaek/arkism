@@ -261,7 +261,7 @@ func sourceMetadata(ctx context.Context, tx Tx, scope Scope, refs []SourceRef) (
 		return nil, ErrDenied
 	}
 	for i, r := range rows {
-		if !wanted[r.ID] || r.Scope != scope || !live(r) {
+		if !wanted[r.ID] || r.Scope != scope || !live(r) || r.ContentErased {
 			return nil, ErrDenied
 		}
 		if len(spans[r.ID]) > 0 {
@@ -1081,7 +1081,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 					memory.Summary = ""
 					memory.Keywords = nil
 					memory.KeywordsLower = nil
-					sg := suggestReach(memory) // the suggestion follows the edited text (ST-825)
+					sg := suggestReach(memory) // The suggestion follows the edited text.
 					memory.ReachSuggestion = &sg
 				}
 				memory.ContentHash = ContentHash(memory.Text)

@@ -14,6 +14,7 @@ func privateRecallFixture(t *testing.T) (cwd, transcript string, posts *[]map[st
 	t.Helper()
 	standing := stableFake(t)
 	_, posts, _ = sessionOutcomeEnv(t)
+	fakeStableValidation(t, standing)
 	cwd = t.TempDir()
 	transcript = filepath.Join(t.TempDir(), "session.jsonl")
 	// A record beyond the metadata inspector's bound would make a whole-file

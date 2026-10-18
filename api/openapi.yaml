@@ -70,6 +70,116 @@
     }
   ],
   "paths": {
+    "/v1/context/validate": {
+      "post": {
+        "summary": "Revalidate exact cached memory and source snapshots before another disclosure",
+        "description": "Read-only batch with read:memories and per-item/source authorization. Maximum 64 KiB and 128 unique refs; total service deadline 2 seconds. Current active/approved memory revision, digest, expiry, erasure, source state and spans are checked under a transaction fence. First request omits all fingerprints; a trusted renderer receives source fingerprints and a process-local seal bound to actor, scope, renderer, block hash and ordered refs. Later requests must retain them exactly. The seal detects cache changes; it does not attest arbitrary client-rendered bytes. Restart or another replica rejects the seal. Clients must fail closed or rebuild from current APIs, never re-seal an old body. Previously transmitted model context cannot be withdrawn.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContextValidationInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Exact requested revisions in input order; unavailable refs reveal no current revision, body or source fingerprint. Integrity is a client-cache change detector, not content authority.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextValidationOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/work-checkpoints/authorize-handoff": {
       "post": {
         "summary": "Authorize one exact handoff model input",
@@ -3657,7 +3767,7 @@
     "/v1/prompts/{id}": {
       "post": {"summary": "Replace a prompt's fields, or archive it (expected_revision required)", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Updated record"}, "409": {"description": "revision_conflict"}}}
     },
-    "/v1/maintenance_proposals": {"get": {"summary": "Memory cleanup proposals of one status (default open), newest first, up to 500 (read:maintenance_proposals)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["open", "accepted", "swapped", "dismissed", "stale"]}}], "responses": {"200": {"description": "items (records with a maintenance field: type duplicate|contradiction, keep and retire refs {collection memories, id, revision}, reason same_meaning|more_specific|newer_replaces_older, decision, decided_by, decided_at; or a signal proposal (ST-814): type rule_often_violated|lesson_often_failing, memory ref, reason low_pass_rate, evidence {samples, passed, pass_rate}). No memory text."}}}, "post": {"summary": "Propose keeping one of two active memories (write:maintenance_proposals)", "description": "Body {scope, proposal{type, keep, retire, reason}}. Both memories must be live, approved, outside any conflict and at the given revisions (409 otherwise). One record per pair (id from the scope and both ids): a decided pair, or an open one at the same revisions, comes back with duplicate=true; an open one at older revisions or a stale one is replaced in place. Reason is a fixed code; free text is refused. Signal proposal (ST-814): proposal{type rule_often_violated (memory kind user|procedural|decision) or lesson_often_failing (lesson), memory ref, reason low_pass_rate, evidence{samples, passed}}, keep and retire empty; samples and passed must equal the stored memory signal (409 otherwise), pass_rate is recomputed, and the token also needs read:usage. One record per memory.", "responses": {"200": {"description": "The proposal record"}, "400": {"description": "invalid_request"}, "409": {"description": "revision_conflict"}}}},
+    "/v1/maintenance_proposals": {"get": {"summary": "Memory cleanup proposals of one status (default open), newest first, up to 500 (read:maintenance_proposals)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["open", "accepted", "swapped", "dismissed", "stale"]}}], "responses": {"200": {"description": "items (records with a maintenance field: type duplicate|contradiction, keep and retire refs {collection memories, id, revision}, reason same_meaning|more_specific|newer_replaces_older, decision, decided_by, decided_at; or a signal proposal : type rule_often_violated|lesson_often_failing, memory ref, reason low_pass_rate, evidence {samples, passed, pass_rate}). No memory text."}}}, "post": {"summary": "Propose keeping one of two active memories (write:maintenance_proposals)", "description": "Body {scope, proposal{type, keep, retire, reason}}. Both memories must be live, approved, outside any conflict and at the given revisions (409 otherwise). One record per pair (id from the scope and both ids): a decided pair, or an open one at the same revisions, comes back with duplicate=true; an open one at older revisions or a stale one is replaced in place. Reason is a fixed code; free text is refused. Signal proposal : proposal{type rule_often_violated (memory kind user|procedural|decision) or lesson_often_failing (lesson), memory ref, reason low_pass_rate, evidence{samples, passed}}, keep and retire empty; samples and passed must equal the stored memory signal (409 otherwise), pass_rate is recomputed, and the token also needs read:usage. One record per memory.", "responses": {"200": {"description": "The proposal record"}, "400": {"description": "invalid_request"}, "409": {"description": "revision_conflict"}}}},
     "/v1/maintenance_proposals/{id}/decide": {"post": {"summary": "A person's answer to a proposal (human principals only)", "description": "Body {scope, expected_revision, decision accept|swap|dismiss}. accept keeps keep and supersedes retire, swap the other way round, dismiss changes nothing. A signal proposal takes accept or dismiss only (swap 400) and neither changes the memory. accept and swap run the conflict path's mark and resolve (second_supersedes_first) with the proposal close in one transaction and need transition:memories on both memories. A memory changed since the proposal returns 409 and marks the proposal stale.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The closed proposal"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}}}},
     "/v1/context/pins": {"get": {"summary": "Resolved pins of a work agent or team (read:crew, context:read)", "description": "agent=@handle of a live agent or team in the scope. Pins come in priority order, each read now: status ok|not_found|not_approved|revision_mismatch|secret_blocked|denied; only ok pins carry item (a data-only hit shaped by injection full|summary|reference). Optional destination external:<name> runs the transfer policy as search does.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "destination", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{crew, handle, type, items[{pin, status, item?}], authority, notice}"}, "404": {"description": "not_found"}}}, "post": {"summary": "Resolve pins a host is injecting and record them (context:read)", "description": "Body {scope, agent, destination?}. Same answer as GET plus context_id: the injected pinned memories are stored in a context_usage receipt (purpose session_start), like the memories a search hands out. GET writes no receipt.", "responses": {"200": {"description": "{context_id?, crew, handle, type, items[{pin, status, item?}], authority, notice}"}, "404": {"description": "not_found"}}}},
     "/v1/merge_proposals": {"get": {"summary": "Memory merge proposals of one status (default open), newest first, up to 500 (read:merge_proposals)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["open", "accepted", "dismissed", "stale"]}}], "responses": {"200": {"description": "items: records with merge.proposal {candidate, action store|merge|skip, targets, reason_code, reason (short model note, data only, cleared on close), pool_id, decision, decided_by, decided_at, memory}"}}}, "post": {"summary": "Submit a judge's verdicts for a pool (write:merge_proposals)", "description": "Body {scope, pool_id, pool_revision, generator, verdicts[{candidate_id, action, target_ids, reason_code, reason}]}. The pool is single use, made by the same principal and unexpired (409 otherwise). Each verdict is checked alone: a candidate or target outside the pool, an unknown action or reason, a secret in the note, or a record changed since the pool was made is refused (per-item status 400/409) and stored nowhere. Nothing changes until a person decides.", "responses": {"200": {"description": "{items[{index, status, code?, record?}], proposed, rejected}"}, "400": {"description": "invalid_request"}, "409": {"description": "revision_conflict"}}}},
@@ -4352,7 +4462,7 @@
     },
       "/v1/memory-reach-suggestions": {
         "get": {
-          "summary": "List AI reach suggestions for active memories (ST-825)",
+          "summary": "List AI reach suggestions for active memories",
           "description": "Pages active memories with the memory list's checks (read:memories) plus read:usage, and returns those whose suggestion differs from their reach and was not dismissed. A project memory whose current revision was handed out under two or more project keys is suggested for general (uses from before a reach change do not count; project memories are hidden from other keys' search and id recall and pin receipts carry no key, so today this signal rarely appears). Memories whose reach a person set show no save-time suggestion; others use the save-time suggestion or one computed for older memories. Read-only. Accept with POST /v1/memories/{id}/reach (human only); dismiss with POST /v1/memories/{id}/reach-suggestion/dismiss.",
           "parameters": [
             {
@@ -4402,7 +4512,7 @@
               "name": "project_key",
               "in": "query",
               "required": false,
-              "description": "ST-824: when present (empty allowed), lists only personal, general and this key's project-reach memories. Absent lists every reach (management screens).",
+              "description": "when present (empty allowed), lists only personal, general and this key's project-reach memories. Absent lists every reach (management screens).",
               "schema": {
                 "type": "string",
                 "maxLength": 256
@@ -4499,7 +4609,7 @@
       },
       "/v1/memories/{id}/reach-suggestion/dismiss": {
         "post": {
-          "summary": "Dismiss one reach suggestion (ST-825)",
+          "summary": "Dismiss one reach suggestion",
           "description": "Human transition:memories only; agent and pipeline principals get 403. Hides the named suggestion on this memory; reach, content and revision stay. Revision pinned (409 when stale, or when the named suggestion is not the one shown now, so a later suggestion cannot be hidden in advance); quarantined or erased memories are 404. Audit records dismiss_reach_suggestion:memories without content.",
           "parameters": [
             {
@@ -4604,7 +4714,7 @@
       },
     "/v1/memories/{id}/reach": {
       "post": {
-        "summary": "Change an active memory's reach (ST-824)",
+        "summary": "Change an active memory's reach",
         "description": "Human transition:memories only; agent and pipeline principals get 403. personal and general forbid reach_project; project requires it. Revision pinned; quarantined or erased memories are 404. Audit records set_reach:memories without content.",
         "parameters": [
           {
@@ -7899,7 +8009,7 @@
             "name": "project_key",
             "in": "query",
             "required": false,
-            "description": "ST-824: when present (empty allowed), lists only personal, general and this key's project-reach memories. Absent lists every reach (management screens).",
+            "description": "when present (empty allowed), lists only personal, general and this key's project-reach memories. Absent lists every reach (management screens).",
             "schema": {
               "type": "string",
               "maxLength": 256
@@ -9304,7 +9414,7 @@
     },
     "/v1/memories/{id}/outcomes": {
       "get": {
-        "summary": "Verification verdicts recorded for one memory (ST-812)",
+        "summary": "Verification verdicts recorded for one memory",
         "description": "Lists memory_outcome evaluations whose target is this memory id (every revision), newest first by judged_at then evaluation id, with a summary over the same filters. Exact four-field scope from the storage layer; read:memories on scope and on the memory, read:evaluations on scope and on every returned evaluation, all the same principal; any denial returns no partial page. Only references, booleans, counts and times are returned: no memory, source, trace or checker text. Cursor is bound to scope and filters. Audited as read:memory_outcomes with the memory id only.",
         "parameters": [
           {
@@ -9455,7 +9565,7 @@
     },
     "/v1/memories/{id}/outcome-comparison": {
       "get": {
-        "summary": "Pass rate of sessions that used a memory versus sessions that did not (ST-819)",
+        "summary": "Pass rate of sessions that used a memory versus sessions that did not",
         "description": "Describes independently judged sessions by context observation: delivered, returned_only (a server response without delivery evidence), or unknown. Missing observation never proves non-use. Native traces are grouped by exact scope, producer, executing agent and thread_id; legacy traces without canonical session identity remain distinct. A session passes only if all filtered verdicts pass. Delivered requires a target-specific independently checked verdict or a live context event with matching retrieved and full/meta delivery references; full means the hook output form, not full-body reading. Each group below 10 sessions hides passed and pass_rate. Deprecated used aliases delivered; not_used is empty and difference is null because actual use/non-use is not measured. measurement_basis=context_delivery; actual_use_status=not_measured. Read permissions and audit are unchanged; returns counts only.",
         "parameters": [
           {
@@ -9587,8 +9697,8 @@
     },
     "/v1/memory-graph": {
       "get": {
-        "summary": "Relation graph around one memory, or the whole map (ST-820)",
-        "description": "Memories and lines up to two steps from memory_id. Lines: supersedes, conflicts, supports and human_link come from stored memory_relations (active, exactly two memory ends) and may cross reaches; same_session (shared session: tag) and similar (stored vectors, cosine >= 0.80, score) stay inside one reach and reach_project, at most 3 per node. Nodes are visible memories (not erased or quarantined, currently active or superseded) in the asked reaches; a project memory shows only when reach_project equals project_key (ST-824). vector_pending marks a memory without a current stored vector. No embedding call, no relation reasons, sources or vectors in the response. Caps: limit nodes (default 60, max 100), 300 lines; truncated=true when cut. Exact four-field scope from the storage layer; read:memories on scope and on memory_id and read:memory_relations on scope, all the same principal. Audited as read:memory_graph with the center id only. mode=all: no memory_id or depth; every visible memory of the scope (same node, reach and line rules) with only id, reach, kind, uses (context_usage receipts) and vector_pending per node and from, to, type per line; no text, labels, relations or scores. Caps: limit nodes (default and max 5000), 20000 lines; truncated=true when cut. Also needs read:usage on scope and read:memories per node (denied nodes left out with their lines). Audited as read:memory_graph with id all.",
+        "summary": "Relation graph around one memory, or the whole map",
+        "description": "Memories and lines up to two steps from memory_id. Lines: supersedes, conflicts, supports and human_link come from stored memory_relations (active, exactly two memory ends) and may cross reaches; same_session (shared session: tag) and similar (stored vectors, cosine >= 0.80, score) stay inside one reach and reach_project, at most 3 per node. Nodes are visible memories (not erased or quarantined, currently active or superseded) in the asked reaches; a project memory shows only when reach_project equals project_key. vector_pending marks a memory without a current stored vector. No embedding call, no relation reasons, sources or vectors in the response. Caps: limit nodes (default 60, max 100), 300 lines; truncated=true when cut. Exact four-field scope from the storage layer; read:memories on scope and on memory_id and read:memory_relations on scope, all the same principal. Audited as read:memory_graph with the center id only. mode=all: no memory_id or depth; every visible memory of the scope (same node, reach and line rules) with only id, reach, kind, uses (context_usage receipts) and vector_pending per node and from, to, type per line; no text, labels, relations or scores. Caps: limit nodes (default and max 5000), 20000 lines; truncated=true when cut. Also needs read:usage on scope and read:memories per node (denied nodes left out with their lines). Audited as read:memory_graph with id all.",
         "parameters": [
           {
             "name": "workspace_id",
@@ -9747,7 +9857,7 @@
     },
     "/v1/memory-outcomes/summary": {
       "post": {
-        "summary": "Verification summaries for up to 100 memories (ST-812)",
+        "summary": "Verification summaries for up to 100 memories",
         "description": "Per-memory totals (total, passed, pass_rate, last_judged_at) of memory_outcome evaluations under optional dimension and judged_at filters, in memory_id order. Same scope and read model as GET /v1/memories/{id}/outcomes (read:memories and read:evaluations on scope, read:memories per id). A memory that is missing, erased, privacy-quarantined or denied for its id returns available=false with zero counts instead of failing the batch. Duplicate ids, more than 100 ids, limit or cursor fields are 400. No text is returned.",
         "requestBody": {
           "required": true,
@@ -9805,7 +9915,7 @@
     },
 "/v1/memories/{id}/signal": {
       "get": {
-        "summary": "Trust signal of one memory (ST-813)",
+        "summary": "Trust signal of one memory",
         "description": "Derived signal (pass rate, samples, per-dimension counts, uses, last use) recomputed daily; same read model as POST /v1/memory-signals. available=false when the memory is missing, erased, quarantined or denied; signal=null before the first recompute. Never changes the memory's state. No text is returned.",
         "parameters": [
           {
@@ -9895,7 +10005,7 @@
     },
     "/v1/memory-signals": {
       "post": {
-        "summary": "Trust signals for up to 100 memories (ST-813)",
+        "summary": "Trust signals for up to 100 memories",
         "description": "Stored signals in request order. Requires read:memories, read:evaluations and read:usage on scope for one principal, and read:memories per id. Duplicate ids or more than 100 ids are 400. Signals are ranking and proposal inputs only; no text is returned.",
         "requestBody": {
           "required": true,
@@ -9953,7 +10063,7 @@
     },
     "/v1/memory-signals/recompute": {
       "post": {
-        "summary": "Recompute trust signals for one page of active memories (ST-813)",
+        "summary": "Recompute trust signals for one page of active memories",
         "description": "Rebuilds derived memory_signal rows (jobs collection) from memory_outcome evaluations and context_usage receipts for up to limit (1..100, default 100) active memories in id order; follow next_cursor. Unchanged signals are not rewritten, so a repeat run is a no-op. Role human, service or pipeline with write:memory_signals plus read:memories, read:evaluations and read:usage for the same principal. Run daily by `arkism memory-signals --execute`; never changes memory state.",
         "requestBody": {
           "required": true,
@@ -10357,7 +10467,7 @@
     },
     "/v1/model-budget/subscription-usage": {
       "post": {
-        "summary": "Record one subscription CLI call's usage (record only, ST-620 / FR-012)",
+        "summary": "Record one subscription CLI call's usage (record only)",
         "description": "settle:model_budget by a service principal listed in ModelBudgetPolicy; same exact policy scope, policy not expired. Never reserves, settles or refuses for spend: the call already ran on the user's Claude subscription. Idempotent per scope+principal+operation_id; a changed replay is 409. Files a provider_usage row (provider claude_cli) at list price and adds to the month's subscription counter shown by status. No prompt, output or credential is accepted.",
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["scope", "operation_id", "operation", "usage"], "properties": {
           "scope": {"$ref": "#/components/schemas/Scope"},
@@ -10469,6 +10579,131 @@
       }
     },
     "schemas": {
+      "ContextValidationRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "collection",
+          "id",
+          "revision",
+          "digest"
+        ],
+        "properties": {
+          "collection": {
+            "const": "memories"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ContextValidationInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "renderer",
+          "block_hash",
+          "refs"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "renderer": {
+            "const": "capture-stable-v2"
+          },
+          "block_hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "refs": {
+            "type": "array",
+            "maxItems": 128,
+            "items": {
+              "$ref": "#/components/schemas/ContextValidationRef"
+            }
+          }
+        }
+      },
+      "ContextValidationItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "collection",
+          "id",
+          "revision",
+          "status"
+        ],
+        "properties": {
+          "collection": {
+            "const": "memories"
+          },
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "enum": [
+              "valid",
+              "unavailable"
+            ]
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "ContextValidationOutput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "authority",
+          "integrity",
+          "items"
+        ],
+        "properties": {
+          "authority": {
+            "const": "data_only_untrusted"
+          },
+          "integrity": {
+            "type": "boolean"
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 128,
+            "items": {
+              "$ref": "#/components/schemas/ContextValidationItem"
+            }
+          }
+        }
+      },
       "GraphEntity": {
         "type": "object",
         "additionalProperties": false,
@@ -12840,13 +13075,13 @@
             "type": "number",
             "minimum": 0,
             "readOnly": true,
-            "description": "ST-811 fused rank score, as on Hit."
+            "description": "fused rank score, as on Hit."
           },
           "lanes": {
             "type": "array",
             "readOnly": true,
             "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
-            "description": "ST-811 lanes that found this hit, as on Hit."
+            "description": "lanes that found this hit, as on Hit."
           },
           "collected_at": {
             "type": [
@@ -12901,7 +13136,7 @@
               "project"
             ],
             "readOnly": true,
-            "description": "ST-824 memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
+            "description": "memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
           },
           "reach_project": {
             "type": "string",
@@ -12912,7 +13147,7 @@
             "type": "number",
             "minimum": 0,
             "readOnly": true,
-            "description": "ST-811 fused rank score (weighted reciprocal rank, exact keyword weighted 2x) after scope, reach and liveness filters. Ordinal only; not a provider similarity."
+            "description": "fused rank score (weighted reciprocal rank, exact keyword weighted 2x) after scope, reach and liveness filters. Ordinal only; not a provider similarity."
           },
           "lanes": {
             "type": "array",
@@ -12926,7 +13161,7 @@
                 "relation"
               ]
             },
-            "description": "ST-811 lanes that found this hit, in fixed order exact, keyword, vector, relation."
+            "description": "lanes that found this hit, in fixed order exact, keyword, vector, relation."
           },
           "path_check": {
             "type": "string",
@@ -12934,7 +13169,7 @@
               "missing"
             ],
             "readOnly": true,
-            "description": "ST-818 display marker set by the host (hooks, MCP recall), never by the server: a file path in the text or sources does not exist in the session's working folder (\"확인 필요\"). The hit is still returned in its rank; nothing is hidden or reordered."
+            "description": "display marker set by the host (hooks, MCP recall), never by the server: a file path in the text or sources does not exist in the session's working folder (\"확인 필요\"). The hit is still returned in its rank; nothing is hidden or reordered."
           },
           "missing_paths": {
             "type": "array",
@@ -12943,7 +13178,7 @@
             "items": {
               "type": "string"
             },
-            "description": "ST-818 host-set: the paths as written in the memory that were not found. Shown to the agent only; never logged or sent back to the server."
+            "description": "host-set: the paths as written in the memory that were not found. Shown to the agent only; never logged or sent back to the server."
           },
           "conflict_pending": {
             "type": "boolean",
@@ -13950,7 +14185,7 @@
           "project_key": {
             "type": "string",
             "maxLength": 256,
-            "description": "ST-824: caller's project key. Only narrows results inside the Scope; empty or missing returns personal and general memories only, never project-reach ones."
+            "description": "caller's project key. Only narrows results inside the Scope; empty or missing returns personal and general memories only, never project-reach ones."
           },
           "kinds": {
             "type": [
@@ -14273,7 +14508,7 @@
             "type": "string",
             "enum": ["personal", "general", "project"],
             "readOnly": true,
-            "description": "ST-824 memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
+            "description": "memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
           },
           "reach_project": {
             "type": "string",
@@ -14287,12 +14522,12 @@
                 }
               ],
               "readOnly": true,
-              "description": "ST-825 save-time suggestion on new candidates and memories, copied on approval."
+              "description": "save-time suggestion on new candidates and memories, copied on approval."
             },
             "reach_suggestion_dismissed": {
               "type": "string",
               "readOnly": true,
-              "description": "ST-825 'reach|project' a person dismissed."
+              "description": "'reach|project' a person dismissed."
             },
           "skill_bundle": {
             "$ref": "#/components/schemas/SkillBundle",
@@ -16134,7 +16369,7 @@
             "reason",
             "confidence"
           ],
-          "description": "ST-825 AI reach suggestion. Never changes reach; a person accepts or dismisses it.",
+          "description": "AI reach suggestion. Never changes reach; a person accepts or dismisses it.",
           "properties": {
             "reach": {
               "type": "string",
@@ -16805,12 +17040,12 @@
           "score": {
             "type": "number",
             "minimum": 0,
-            "description": "ST-811 fused score the search handed this memory out with; absent for pinned memories."
+            "description": "fused score the search handed this memory out with; absent for pinned memories."
           },
           "lanes": {
             "type": "array",
             "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
-            "description": "ST-811 lanes that found it; absent for pinned memories. No body or query text is stored."
+            "description": "lanes that found it; absent for pinned memories. No body or query text is stored."
           }
         }
       },
@@ -16866,12 +17101,12 @@
           "score": {
             "type": "number",
             "minimum": 0,
-            "description": "ST-811 fused score the search handed this memory out with; absent for pinned memories."
+            "description": "fused score the search handed this memory out with; absent for pinned memories."
           },
           "lanes": {
             "type": "array",
             "items": {"type": "string", "enum": ["exact", "keyword", "vector", "relation"]},
-            "description": "ST-811 lanes that found it; absent for pinned memories. No body or query text is stored."
+            "description": "lanes that found it; absent for pinned memories. No body or query text is stored."
           },
           "run": {
             "$ref": "#/components/schemas/Ref"

@@ -571,7 +571,7 @@ func TestCaptureTrialNeverWritesAMemoryStatus(t *testing.T) {
 
 func TestCaptureUsedNeedsTheAnswerToRestateTheMemory(t *testing.T) {
 	memory := "운영 Orbit은 SQLite 전용이고 임베딩은 Gemini다."
-	if !used(norm(memory), norm("AI: 운영은 SQLite라서 임베딩도 Gemini로 맞춘다")) || used(norm(memory), norm("AI: 테스트를 통과했다")) {
+	if !answerTextOverlap(norm(memory), norm("AI: 운영은 SQLite라서 임베딩도 Gemini로 맞춘다")) || answerTextOverlap(norm(memory), norm("AI: 테스트를 통과했다")) {
 		t.Fatal()
 	}
 }

@@ -56,7 +56,7 @@ func TestCaptureStatsCountsTheLocalMetrics(t *testing.T) {
 	}
 }
 
-func TestCaptureUtilityCountsInjectedAndUsedOverSettledSessions(t *testing.T) {
+func TestCaptureUtilityCountsTextOverlapWithoutClaimingActualUse(t *testing.T) {
 	capFake(t)
 	projects := reflectDirs(t)
 	settledPath := writeSession(t, projects, "s1", row(userRow, "배포해"), row(aiRow, "운영은 SQLite라서 임베딩도 Gemini로 맞췄습니다"))
@@ -83,7 +83,7 @@ func TestCaptureUtilityCountsInjectedAndUsedOverSettledSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// m1 used in s1 and unread in s2 (no local log); s3 is still busy; m3 is gone; m4 could not be read
+	// m1 overlaps in s1 and is unread in s2; s3 is busy; m3 is gone; m4 could not be read.
 	want := map[string][3]int{"m1": {1, 1, 1}, "m2": {1, 0, 0}, "m3": {1, 0, 0}}
 	if sessions != 3 || !reflect.DeepEqual(counts, want) {
 		t.Fatal(sessions, counts)
@@ -107,6 +107,12 @@ func TestCaptureUtilityCountsInjectedAndUsedOverSettledSessions(t *testing.T) {
 		!reflect.DeepEqual(ids, []string{"m2", "m3"}) {
 		t.Fatal(got)
 	}
+	if got["measurement_basis"] != "answer_text_overlap" || got["actual_use_status"] != "not_measured" ||
+		got["actual_used"] != nil || got["text_overlap_count"] != got["used"] ||
+		got["text_overlap_rate"] != got["use_rate"] || got["unread_session_pairs"] != 2.0 ||
+		!reflect.DeepEqual(got["review_without_text_overlap"], review) {
+		t.Fatal("overlap and unavailable transcripts must not claim actual use", got)
+	}
 	if review[0].(map[string]any)["text"] != texts["m2"] {
 		t.Fatal(review)
 	}
@@ -121,6 +127,37 @@ func TestCaptureUtilityWithNothingRecalledHasNoRate(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"use_rate": null`) || !strings.Contains(out.String(), `"review_unused": []`) {
 		t.Fatal(out.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["actual_used"] != nil || got["actual_use_status"] != "not_measured" || got["text_overlap_rate"] != nil {
+		t.Fatal("absence of observations is not zero actual use", got)
+	}
+}
+
+func TestCaptureUtilityRepeatingAnIgnoredRuleDoesNotEstablishActualUse(t *testing.T) {
+	capFake(t)
+	projects := reflectDirs(t)
+	path := writeSession(t, projects, "ignored-rule", row(userRow, "진행해"),
+		row(aiRow, "I ignored the rule never delete production database and deleted it."))
+	touch(t, path, timeNow()-2*settled)
+	writeMetrics(t, `{"event":"recall","hook":"UserPromptSubmit","session":"ignored-rule","ids":["rule-1"]}`)
+	capGet = func(_ string, _ time.Duration) (map[string]any, error) {
+		return map[string]any{"text": "never delete production database"}, nil
+	}
+	var out bytes.Buffer
+	if err := utility(1, &out); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["text_overlap_count"] != 1.0 || got["measurement_basis"] != "answer_text_overlap" ||
+		got["actual_use_status"] != "not_measured" || got["actual_used"] != nil {
+		t.Fatal("repeating a rule is not evidence it was followed", got)
 	}
 }
 

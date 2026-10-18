@@ -1,5 +1,5 @@
 // 들어가는 기억: what the capture hooks would add to a new session (SessionStart) or a prompt
-// (UserPromptSubmit), and how often injected memories were used.
+// (UserPromptSubmit), plus observed answer-text overlap.
 // The text is built here with the same steps as internal/host/capture/capture.go
 // (sessionContext, promptContext, indexLine, within, forRepo), from the same server calls
 // the hooks make (GET /v1/memories, POST /v1/search). Keep the two in step.
@@ -26,9 +26,13 @@
 
   function indexLine(item) {
     let text = (str(truthy(item.text) ? item.text : truthy(item.summary) ? item.summary : "").match(FIELDS) || []).join(" ");
-    const pointer = len(text) > INDEX_TEXT;
+    const context = item.memory_context;
+    const contextDetails = context && ["domains", "applicability", "uncertainty", "valid_from", "observed_at", "evidence_kind", "semantic_kind"]
+      .some((key) => typeof context[key] === "string" ? context[key].trim() !== "" : Array.isArray(context[key]) && context[key].length > 0);
+    const pointer = len(text) > INDEX_TEXT || contextDetails;
     if (pointer) text = head(text, INDEX_TEXT).replace(RSTRIP, "") + `… (id: ${str(item.id)})`;
     const markers = [str(item.kind)];
+    if (contextDetails) markers.push("적용 맥락 확인");
     if (truthy(item.conflict_pending) || truthy(item.conflict_id)) markers.push("충돌 검토 중");
     if (truthy(item.supersedes)) markers.push("이전 기억 대체");
     if (truthy(item.superseded_by)) markers.push("다른 기억으로 대체됨");
@@ -77,11 +81,12 @@
     return { text, chars: len(text), included: items };
   }
 
-  // The memory-use report windows: injections and use per memory, from the host's `capture utility`.
+  // The capture report measures answer-text overlap; it does not establish actual use.
   function effect(use) {
     if (!use || !Array.isArray(use.items)) return null;
     return {
       days: use.days, sessions: use.sessions, injections: use.injections, used: use.used,
+      measurementBasis: "answer_text_overlap", actualUseStatus: "not_measured", actualUsed: null, unreadSessionPairs: null,
       rate: use.injections > 0 ? Math.round((use.used / use.injections) * 100) : null,
       avgChars: use.inject_sessions > 0 ? Math.round(use.inject_chars / use.inject_sessions) : null,
       topUsed: use.items.filter((x) => x.used > 0).sort((a, b) => b.used - a.used || b.injected - a.injected || (a.id < b.id ? -1 : 1)).slice(0, 5),
@@ -181,11 +186,11 @@
     const tokenLine = (count, chars) => count ? `${count.tokens.toLocaleString()} 토큰 · ${chars.toLocaleString()}자 (${count.token_encoding || "cl100k_base"} 기준)` : `${chars.toLocaleString()}자 · 토큰 수는 계산하지 못했어요`;
 
     function effectSection() {
-      const s = section("효과", "답변에 실제로 쓰였는지");
+      const s = section("효과", "답변과 문구가 겹쳤는지");
       const w7 = use7(), w30 = use30();
-      if (!w7 && !w30) { s.append(el("p", "meta", "아직 서버가 사용 통계를 보내지 않았어요.")); return s; }
+      if (!w7 && !w30) { s.append(el("p", "meta", "아직 서버가 문구 겹침 통계를 보내지 않았어요.")); return s; }
       const rows = [];
-      for (const w of [w7, w30].filter(Boolean)) rows.push([`최근 ${w.days}일`, w.injections ? `${w.injections}번 들어감 · ${w.used}번 쓰임 · ${w.rate}% · 대화 ${w.sessions}개` : `들어간 기억 없음 · 대화 ${w.sessions}개`]);
+      for (const w of [w7, w30].filter(Boolean)) rows.push([`최근 ${w.days}일`, w.injections ? `${w.injections}번 들어감 · 문구 겹침 ${w.used}번 · ${w.rate}% · 대화 ${w.sessions}개` : `들어간 기억 없음 · 대화 ${w.sessions}개`]);
       const avg = (w30 || w7).avgChars ?? w7?.avgChars;
       if (avg !== null && avg !== undefined) {
         const ratio = session?.count && session.chars ? session.count.tokens / session.chars : null;
@@ -193,10 +198,10 @@
       }
       s.append(facts(rows));
       if (avg !== null && avg !== undefined && session?.count) s.append(el("p", "meta", "토큰은 아래 미리보기의 글자당 토큰 비율로 환산한 값이에요."));
-      s.append(el("p", "meta", "질문할 때 찾아 넣은 기억만 셉니다. 대화 시작 목차는 항상 들어가서 ‘쓰임’을 따로 세지 않아요."));
+      s.append(el("p", "meta", "질문할 때 찾아 넣은 기억과 답변의 문구 겹침만 셉니다. 실제 활용 여부는 측정하지 않았고, 읽지 못한 대화 수는 이 통계에서 알 수 없어요."));
       const w = w30 || w7;
-      s.append(el("h4", "", `많이 쓰인 기억 · 최근 ${w.days}일`), rankList(w.topUsed, (r) => `${r.used}번 쓰임 / ${r.injected}번 들어감`, "답변에 쓰인 기억이 아직 없어요."));
-      s.append(el("h4", "", `들어갔는데 한 번도 안 쓰인 기억 · 최근 ${w.days}일`), rankList(w.topUnused, (r) => `${r.injected}번 들어감`, "없어요."));
+      s.append(el("h4", "", `문구 겹침이 확인된 기억 · 최근 ${w.days}일`), rankList(w.topUsed, (r) => `문구 겹침 ${r.used}번 / ${r.injected}번 들어감`, "문구 겹침이 확인된 기억이 아직 없어요."));
+      s.append(el("h4", "", `문구 겹침이 확인되지 않은 기억 · 최근 ${w.days}일`), rankList(w.topUnused, (r) => `${r.injected}번 들어감`, "없어요."));
       return s;
     }
     function sessionSection() {
@@ -252,11 +257,11 @@
     function tiles(stat, often) {
       const w7 = use7(), w30 = use30(), out = [];
       const ratio = (w) => (w.rate === null ? "—" : String(w.rate));
-      if (w7) out.push(stat(`최근 ${w7.days}일 답변에 쓰인 비율`, ratio(w7), `% · ${w7.injections}번 들어감 · ${w7.used}번 쓰임`));
-      if (w30) out.push(stat(`최근 ${w30.days}일 답변에 쓰인 비율`, ratio(w30), `% · ${w30.injections}번 들어감 · ${w30.used}번 쓰임`));
+      if (w7) out.push(stat(`최근 ${w7.days}일 문구 겹침 비율`, ratio(w7), `% · ${w7.injections}번 들어감 · 문구 겹침 ${w7.used}번`));
+      if (w30) out.push(stat(`최근 ${w30.days}일 문구 겹침 비율`, ratio(w30), `% · ${w30.injections}번 들어감 · 문구 겹침 ${w30.used}번`));
       const avg = w30?.avgChars ?? w7?.avgChars;
       if (avg !== null && avg !== undefined) out.push(stat("세션당 평균 들어간 양", avg.toLocaleString(), "자 · 대화 시작 + 질문"));
-      out.push(stat("자주 들어가는데 안 쓰인 기억", String(often), "개 · 확인해 주세요", often > 0));
+      out.push(stat("문구 겹침을 검토할 기억", String(often), "개 · 확인해 주세요", often > 0));
       return out;
     }
     const openButton = () => button("들어가는 기억", "small", "eye", open);

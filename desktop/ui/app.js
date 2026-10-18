@@ -212,7 +212,7 @@
     const u = state.usage.get(id);
     return { d7: u?.d7 || 0, d30: u?.d30 || 0, label7: String(u?.d7 || 0), last: u?.last || "" };
   }
-  // 들어감 · 쓰임 over the last week, from the server's report (`arkism capture` utility).
+  // Legacy `used` counts text overlap, not actual answer use. Review suggestions are manual.
   const memUse = () => state.data.tools?.memory_use || null;
   function memStat(id) {
     const u = memUse();
@@ -222,13 +222,13 @@
   }
   const KEEP_KEY = "arkism.keptMemories";
   const keptMemories = () => { try { return JSON.parse(localStorage.getItem(KEEP_KEY) || "[]"); } catch (_) { return []; } };
-  const unusedOften = (m) => { const s = memStat(m.id); return !!s && s.injected >= 3 && s.used === 0 && !keptMemories().includes(m.id); };
+  const overlapReview = (m) => { const s = memStat(m.id); return !!s && s.injected >= 3 && s.used === 0 && !keptMemories().includes(m.id); };
   function savedHow(m) {
     if (originOf(m) === "사용자 말") return "사용자가 직접 말해서 바로 저장";
     return m.review?.by ? `검토 후 승인 (${m.review.by})` : originOf(m);
   }
   const idle = (m) => {
-    if (pages.prefs.collectUnused !== false && typeof unusedOften === "function" && unusedOften(m)) return true;
+    if (pages.prefs.collectUnused !== false && typeof overlapReview === "function" && overlapReview(m)) return true;
     const u = usageOf(m.id);
     return !!u && u.d30 === 0 && !standing(m) && Date.now() - new Date(m.created_at).getTime() > 7 * DAY;
   };
@@ -979,8 +979,8 @@
         run: () => { stage(blocked[0][0].id, blocked[0][1], "allow"); go("skills", "missing"); }, go: ["skills", "missing"],
         agent: blocked.length ? [AGENTS.find(([k]) => k === blocked[0][1])?.[2] || "sym:i-plug", agentName(blocked[0][1])] : null,
         preview: blocked.slice(0, 5).map(([sk, k]) => `${sk.name} → ${agentName(k)}`) },
-      { id: "idle", n: state.usageDone ? idleList.length : null, icon: "clock-counter-clockwise", label: "안 쓰는 기억", title: `30일 동안 안 쓰인 기억 ${idleList.length}개`,
-        sub: "질문에 한 번도 들어가지 않았어요", action: "보기", go: ["memories", "idle"], preview: idleList.slice(0, 5).map((m) => m.text) },
+      { id: "idle", n: state.usageDone ? idleList.length : null, icon: "clock-counter-clockwise", label: "호출과 문구 검토", title: `검토할 기억 ${idleList.length}개`,
+        sub: "최근 호출이나 답변 문구 겹침이 적어요. 필요성은 직접 확인해 주세요", action: "보기", go: ["memories", "idle"], preview: idleList.slice(0, 5).map((m) => m.text) },
       { id: "fresh", n: fresh.length, icon: "sparkle", label: "새 기억", title: `최근 3일 새 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
         action: "훑어보기", go: ["memories", "active"], preview: fresh.slice(0, 5).map((m) => m.text) },
       { id: "adapter", n: adapter.length, icon: "stack", label: "어댑터 필요", title: `어댑터가 필요한 스킬 ${adapter.length}개`, sub: "그대로는 일부 에이전트에서 제대로 안 돌 수 있어요",
@@ -1187,7 +1187,7 @@
 
   // ---------------------------------------------------------------- 할 일 (Figma v4 · 01 홈: 198:200, 198:2178, 198:2264, 198:3812, 210:17783)
   // 홈 = 맨 위 그림 + 먼저 확인 3가지 + 메뉴별 확인할 것 + 이번 주. 줄을 고르면 그 일의 화면(← 홈)으로, 전체 항목 보기는 표 하나로.
-  const TODO_SHORT = { review: "기억 후보", conflicted: "부딪힘", maintenance: "정리 제안", idle: "안 쓰임", fresh: "새로 저장",
+  const TODO_SHORT = { review: "기억 후보", conflicted: "부딪힘", maintenance: "정리 제안", idle: "호출과 문구 검토", fresh: "새로 저장",
     suggest: "새 스킬", similar: "비슷함", unused: "안 씀", updates: "업데이트", adapter: "어댑터 필요", blocked: "빠진 에이전트" };
   const TODO_MENUS = [["MEMORY", "기억", ["fresh", "review", "conflicted", "maintenance", "idle"], ["memories", "active"]],
     ["TOOLS", "스킬", ["suggest", "similar", "unused", "updates", "adapter", "blocked"], ["skills"]]];
@@ -1498,7 +1498,7 @@
   // ---------------------------------------------------------------- 기억
   // Figma v4 Brain › 기억 (198:630): 확인해 주세요 card → search + dropdowns → kind chips → list.
   // 확인할 것 (검토 대기·확인 필요·안 쓰임) and 모아보기 (작업 관계·사용자 특성·반성 교훈·과거 시점·대화) are sub-screens with "← 기억".
-  const MEM_CHECK = [["candidate", "새로 저장"], ["conflicted", "헷갈림"], ["idle", "안 쓰임"], ["merge", "병합 제안"]]; // merge: digests.js
+  const MEM_CHECK = [["candidate", "새로 저장"], ["conflicted", "헷갈림"], ["idle", "호출과 문구 검토"], ["merge", "병합 제안"]]; // merge: digests.js
   const MEM_LOOK = [["digests", "주제 요약"], ["relations", "작업 관계"], ["traits", "사용자 특성"], ["reflections", "반성 교훈"], ["past", "과거 시점"], ["originals", "대화"]];
   const memPanels = () => ({ relations, traits, reflections, past: memoryTime, originals });
   function checkCounts() {
@@ -1510,7 +1510,7 @@
   function memTitle() {
     const t = state.memTab;
     const check = { candidate: "AI가 대화에서 새로 뽑은 기억이에요. 저장할지 버릴지 정해 주세요.", conflicted: "이미 있는 기억과 다른 내용이 들어왔어요. 어느 쪽이 맞는지 골라 주세요.",
-      idle: "답변에 안 쓰이거나 오래 안 불린 기억이에요. 아직 맞는지 확인해 주세요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요." }[t];
+      idle: "최근 호출이나 답변 문구 겹침이 적은 기억이에요. 실제 활용 여부는 측정하지 않았어요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요." }[t];
     if (check) return ["확인해 주세요", check, `${checkTotal()}개`];
     if (t === "digests") return ["모아보기", "비슷한 기억을 주제로 묶고 AI가 요약해요. 요약이 바뀌면 바로 쓰지 않고 먼저 확인을 받아요.", digests.title()];
     const look = { relations: "같은 작업에서 이어서 쓰인 스킬 순서예요. 관찰한 것일 뿐, 실행 허가는 아니에요.", traits: "대화에서 관찰한 사용자 성향이에요. 지시나 실행 승인으로 쓰지 않아요.",
@@ -1519,7 +1519,7 @@
     if (look) return [MEM_LOOK.find(([k]) => k === t)[1], look, ""];
     const w = memUse();
     const rate = w?.injections ? Math.round((w.used / w.injections) * 100) : null;
-    return ["기억", `AI가 답할 때 참고하는 내용이에요.${rate === null ? "" : ` 그중 ${rate}%가 실제 답변에 쓰였어요.`}`, `${state.data.memories.length}개`];
+    return ["기억", `AI가 답할 때 참고하는 내용이에요.${rate === null ? "" : ` 전달한 기억 중 ${rate}%에서 답변 문구 겹침이 확인됐어요. 실제 활용 여부는 측정하지 않았어요.`}`, `${state.data.memories.length}개`];
   }
   function memorySource() {
     const d = state.data;
@@ -1543,10 +1543,10 @@
   function memBadge(m) {
     const badge = (text, cls = "") => el("span", `mem-badge${cls ? ` ${cls}` : ""}`, text);
     if (standing(m)) return badge("항상 적용");
-    if (state.usageDone && idle(m)) return badge("안 쓰임", "warn");
+    if (state.usageDone && idle(m)) return badge("검토 필요", "warn");
     const fresh = Date.now() - new Date(m.created_at).getTime() < DAY;
     const s = memStat(m.id);
-    if (s) return s.injected ? badge(`${s.used}번 쓰임`) : badge(fresh ? "새 기억" : "—", fresh ? "new" : "");
+    if (s) return s.injected ? badge(`문구 겹침 ${s.used}번`) : badge(fresh ? "새 기억" : "—", fresh ? "new" : "");
     const u = usageOf(m.id);
     if (!u) return badge("…");
     if (!u.d30) return badge(fresh ? "새 기억" : "안 불림", fresh ? "new" : "");
@@ -1584,7 +1584,7 @@
       const card = el("div", "mem-check");
       const txt = el("div", "mem-check-text");
       const line = el("p", "mem-check-title"); line.append("확인해 주세요", el("strong", "", String(total)));
-      txt.append(line, el("p", "mem-check-sub", `새로 저장 ${n.candidate} · 내용이 헷갈림 ${n.conflicted} · 안 쓰이는 중 ${n.idle ?? "…"}`));
+      txt.append(line, el("p", "mem-check-sub", `새로 저장 ${n.candidate} · 내용이 헷갈림 ${n.conflicted} · 검토 필요 ${n.idle ?? "…"}`));
       if (n.merge) txt.lastChild.append(` · 병합 제안 ${n.merge}`);
       const first = MEM_CHECK.find(([k]) => n[k])?.[0] || "candidate";
       card.append(txt, button("하나씩 확인하기", "primary small", null, () => go("memories", first)));
@@ -1679,9 +1679,9 @@
     if (state.memTab === "idle") {
       const w = memUse();
       table.replaceChildren(...shown.map((m) => {
-        const s = memStat(m.id), often = unusedOften(m);
-        const use = often && w ? `최근 ${w.days}일 ${s.injected}번 참고 · ${s.used}번 사용` : "30일 넘게 참고 안 됨";
-        return row(m.id, "minmax(0,1fr) auto", [memCell(m, [kindLabel(m.kind), use]), el("span", `mem-badge${often ? " warn" : ""}`, often ? "안 쓰임" : "오래됨")], renderDetail);
+        const s = memStat(m.id), often = overlapReview(m);
+        const use = often && w ? `최근 ${w.days}일 ${s.injected}번 전달 · 문구 겹침 ${s.used}번` : "30일 넘게 참고 안 됨";
+        return row(m.id, "minmax(0,1fr) auto", [memCell(m, [kindLabel(m.kind), use]), el("span", `mem-badge${often ? " warn" : ""}`, often ? "문구 겹침 미확인" : "최근 호출 없음")], renderDetail);
       }));
     } else {
       const quickCol = state.memTab === "candidate" && canDecide;
@@ -4024,7 +4024,7 @@
     const modelPanel = renderModelGeneration(m);
     if (modelPanel) body.append(modelPanel);
     const fix = () => button("고치기", "small", null, () => openMemoryFix(m));
-    if (unusedOften(m)) {
+    if (overlapReview(m)) {
       body.append(actionCard(`최근 ${memUse().days}일 동안 ${s.injected}번 참고됐지만, 답변에는 한 번도 쓰이지 않았어요. 아직 맞는 내용인가요?`,
         button("맞아요, 유지", "primary small", null, () => {
           try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), m.id])); } catch (_) { /* private window */ }
@@ -4041,7 +4041,7 @@
     body.append(why);
     const use = section("언제 쓰이나요", u?.last ? `마지막 ${ago(u.last)}` : "");
     const uses = standing(m) ? "대화를 시작할 때마다 들어가서 따로 세지 않아요"
-      : s && memUse() ? `${s.injected}번 참고 · ${s.used}번 사용` : u ? `${u.label7}번 참고 · 30일 ${u.d30}번` : "불러오는 중…";
+      : s && memUse() ? `${s.injected}번 전달 · 문구 겹침 ${s.used}번` : u ? `${u.label7}번 참고 · 30일 ${u.d30}번` : "불러오는 중…";
     use.append(facts([
       ["들어가는 때", standing(m) ? "대화를 시작할 때마다" : "질문과 관련 있을 때만"],
       ["쓰는 곳", m.scope?.agent_id ? `에이전트 ${m.scope.agent_id}` : "모든 에이전트 · 내 기억"],
@@ -4616,7 +4616,7 @@
   const routing = window.ArkismRouting({ canRefresh: () => !syncBlocked(), state, $, el, icon, button, segment, go, render, request, query, notice, detailShell, agentLogo, ago });
   const usage = window.ArkismUsage({ state, $, el, button, segment, render, request, query, agentLogo, AGENTS, ago, go, detailShell,
     openSession: (id) => sessions.open(id), openSettings: (tab) => { state.settingsTab = tab; go("settings"); },
-    memory: () => ({ use: memUse(), memories: state.data.memories, kindLabel, often: unusedOften, openIdle: () => { state.menu = "memory"; go("memories", "idle"); },
+    memory: () => ({ use: memUse(), memories: state.data.memories, kindLabel, often: overlapReview, openIdle: () => { state.menu = "memory"; go("memories", "idle"); },
       openMemory: (id) => { state.menu = "memory"; go("memories", "active"); state.selected = id; renderDetail(); } }),
     skillAgents: (name) => { const by = {}; for (const sk of state.data.skills.filter((x) => x.name === name)) for (const [k, n] of Object.entries(state.data.skillUse?.get(sk.id)?.by_runtime || {})) by[k] = (by[k] || 0) + n; return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k]) => k); } });
   const gallery = window.ArkismGalleryDelete({ state, $, el, button, icon, raw, render, request, query, notice, confirmPop, shortDate });

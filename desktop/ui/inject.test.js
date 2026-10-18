@@ -11,6 +11,8 @@ test("indexLine matches the hook's pointer line", () => {
   assert.equal(core.indexLine({ id: "b", kind: "procedural", text: long }), `- [procedural] ${"가".repeat(119)}… (id: b)`);
   assert.equal(core.indexLine({ id: "c", kind: "user", text: "x", conflict_pending: true, supersedes: [{ id: "z" }] }), "- [user, 충돌 검토 중, 이전 기억 대체] x (id: c)");
   assert.equal(core.indexLine({ id: "d", kind: "user", text: "", summary: "요약", superseded_by: {}, supersedes: [] }), "- [user] 요약");
+  assert.equal(core.indexLine({ id: "scoped-rule", kind: "procedural", text: "짧게 작성해요", memory_context: { applicability: "업무 발표 때만" } }),
+    "- [procedural, 적용 맥락 확인] 짧게 작성해요… (id: scoped-rule)");
 });
 
 test("forRepo keeps shared memories and the chosen repository's", () => {
@@ -61,6 +63,10 @@ test("effect hides what cannot be computed", () => {
   const f = core.effect({ days: 30, sessions: 3, injections: 10, used: 3, inject_sessions: 4, inject_chars: 1001, items: [
     { id: "a", injected: 5, used: 2 }, { id: "b", injected: 2, used: 0 }, { id: "c", injected: 3, used: 1 }, { id: "d", injected: 4, used: 0 }] });
   assert.equal(f.rate, 30);
+  assert.equal(f.measurementBasis, "answer_text_overlap");
+  assert.equal(f.actualUseStatus, "not_measured");
+  assert.equal(f.actualUsed, null);
+  assert.equal(f.unreadSessionPairs, null);
   assert.equal(f.avgChars, 250);
   assert.deepEqual(f.topUsed.map((x) => x.id), ["a", "c"]);
   assert.deepEqual(f.topUnused.map((x) => x.id), ["d", "b"]);
