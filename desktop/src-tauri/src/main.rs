@@ -544,6 +544,28 @@ fn install_update_core(
     install(latest)
 }
 
+const UPDATE_DOWNLOAD_MAX_BYTES: u64 = 512 << 20;
+
+fn download_update_core(
+    reader: impl Read,
+    expected_hash: &str,
+    limit: u64,
+    install: impl FnOnce(Vec<u8>) -> Result<(), String>,
+) -> Result<(), String> {
+    // One extra byte distinguishes a complete bounded response from a truncated prefix.
+    let budget = limit.checked_add(1).ok_or_else(|| "update_download_limit_invalid".to_string())?;
+    let mut bytes = Vec::new();
+    reader.take(budget).read_to_end(&mut bytes).map_err(|e| format!("update_download_failed: {e}"))?;
+    if bytes.len() as u64 > limit {
+        return Err("update_download_too_large".into());
+    }
+    let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+    if !hash.eq_ignore_ascii_case(expected_hash) {
+        return Err("update_hash_mismatch".into());
+    }
+    install(bytes)
+}
+
 fn fetch_latest() -> Result<Latest, String> {
     let feed = feed()?;
     let latest: Latest = runtime::http_agent(Duration::from_secs(30))
@@ -580,26 +602,20 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
     let rt = Arc::clone(&app.state::<Arc<runtime::Runtime>>());
     tauri::async_runtime::spawn_blocking(move || {
         install_update_core(&current, fetch_latest, |latest| {
-            let mut bytes = Vec::new();
-            runtime::http_agent(Duration::from_secs(300))
+            let reader = runtime::http_agent(Duration::from_secs(300))
                 .get(&format!("{}/{}", feed()?, latest.file))
                 .call()
                 .map_err(|e| format!("update_download_failed: {e}"))?
                 .into_body()
-                .into_reader()
-                .take(512 << 20)
-                .read_to_end(&mut bytes)
-                .map_err(|e| format!("update_download_failed: {e}"))?;
-            let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
-            if !hash.eq_ignore_ascii_case(&latest.sha256) {
-                return Err("update_hash_mismatch".into());
-            }
-            let path = std::env::temp_dir().join(&latest.file);
-            std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
-            // The installer replaces the built-in programs, so they must not be running.
-            rt.stop();
-            std::process::Command::new(&path).arg("/S").spawn().map_err(|e| format!("update_start_failed: {e}"))?;
-            Ok(())
+                .into_reader();
+            download_update_core(reader, &latest.sha256, UPDATE_DOWNLOAD_MAX_BYTES, |bytes| {
+                let path = std::env::temp_dir().join(&latest.file);
+                std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+                // The installer replaces the built-in programs, so they must not be running.
+                rt.stop();
+                std::process::Command::new(&path).arg("/S").spawn().map_err(|e| format!("update_start_failed: {e}"))?;
+                Ok(())
+            })
         })
     })
     .await
@@ -912,6 +928,143 @@ mod tests {
         });
         assert_eq!(result, Err("synthetic_installer_failed".into()));
         assert_eq!(installs.get(), 1);
+    }
+
+    const UPDATE_TEST_HASH: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"; // SHA256("abc")
+
+    struct ChunkedUpdateReader<R> {
+        inner: R,
+        chunk: usize,
+        read_bytes: usize,
+    }
+
+    impl<R: Read> Read for ChunkedUpdateReader<R> {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            let size = buffer.len().min(self.chunk);
+            let read = self.inner.read(&mut buffer[..size])?;
+            self.read_bytes += read;
+            Ok(read)
+        }
+    }
+
+    struct FailedUpdateReader {
+        kind: std::io::ErrorKind,
+        message: &'static str,
+        wrapped: bool,
+    }
+
+    impl Read for FailedUpdateReader {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            let error = std::io::Error::new(self.kind, self.message);
+            Err(if self.wrapped { std::io::Error::new(std::io::ErrorKind::Other, error) } else { error })
+        }
+    }
+
+    #[test]
+    fn update_download_accepts_exact_bound_and_case_insensitive_hash() {
+        for limit in [3, 8] {
+            let installs = std::cell::Cell::new(0);
+            let result = download_update_core(std::io::Cursor::new(b"abc"), &UPDATE_TEST_HASH.to_ascii_uppercase(), limit, |bytes| {
+                assert_eq!(bytes, b"abc");
+                installs.set(installs.get() + 1);
+                Ok(())
+            });
+            assert_eq!(result, Ok(()));
+            assert_eq!(installs.get(), 1);
+        }
+    }
+
+    #[test]
+    fn update_download_rejects_one_extra_byte_even_with_prefix_hash() {
+        let installs = std::cell::Cell::new(0);
+        let result = download_update_core(std::io::Cursor::new(b"abcd"), UPDATE_TEST_HASH, 3, |_| {
+            installs.set(installs.get() + 1);
+            Ok(())
+        });
+        assert_eq!(result, Err("update_download_too_large".into()));
+        assert_eq!(installs.get(), 0);
+    }
+
+    #[test]
+    fn update_download_bounds_multichunk_and_endless_readers() {
+        let mut finite = ChunkedUpdateReader { inner: std::io::Cursor::new(b"abcdefghi"), chunk: 1, read_bytes: 0 };
+        let result = download_update_core(&mut finite, UPDATE_TEST_HASH, 3, |_| panic!("oversized input reached installer effects"));
+        assert_eq!(result, Err("update_download_too_large".into()));
+        assert_eq!(finite.read_bytes, 4);
+        assert_eq!(finite.inner.position(), 4); // The remaining response is never consumed.
+
+        let mut endless = ChunkedUpdateReader { inner: std::io::repeat(b'a'), chunk: 2, read_bytes: 0 };
+        let result = download_update_core(&mut endless, UPDATE_TEST_HASH, 7, |_| panic!("endless input reached installer effects"));
+        assert_eq!(result, Err("update_download_too_large".into()));
+        assert_eq!(endless.read_bytes, 8);
+    }
+
+    #[test]
+    fn update_download_preserves_truncated_and_wrapped_read_errors() {
+        for (kind, message, wrapped) in [
+            (std::io::ErrorKind::UnexpectedEof, "synthetic truncated response", false),
+            (std::io::ErrorKind::ConnectionReset, "synthetic wrapped response failed", true),
+        ] {
+            // Even an error after exactly the matching prefix must not pass as EOF.
+            let reader = std::io::Cursor::new(b"abc").chain(FailedUpdateReader { kind, message, wrapped });
+            let installs = std::cell::Cell::new(0);
+            let result = download_update_core(reader, UPDATE_TEST_HASH, 3, |_| {
+                installs.set(installs.get() + 1);
+                Ok(())
+            });
+            assert_eq!(result, Err(format!("update_download_failed: {message}")));
+            assert_eq!(installs.get(), 0);
+        }
+    }
+
+    #[test]
+    fn update_download_hash_mismatch_stops_before_installer_effects() {
+        let result = download_update_core(std::io::Cursor::new(b"ab"), UPDATE_TEST_HASH, 3, |_| panic!("hash mismatch reached installer effects"));
+        assert_eq!(result, Err("update_hash_mismatch".into()));
+    }
+
+    #[test]
+    fn update_download_overflow_limit_fails_before_reading() {
+        let mut reader = ChunkedUpdateReader { inner: std::io::repeat(b'a'), chunk: 1, read_bytes: 0 };
+        let result = download_update_core(&mut reader, UPDATE_TEST_HASH, u64::MAX, |_| panic!("invalid limit reached installer effects"));
+        assert_eq!(result, Err("update_download_limit_invalid".into()));
+        assert_eq!(reader.read_bytes, 0);
+    }
+
+    #[test]
+    fn update_download_propagates_verified_installer_errors() {
+        let installs = std::cell::Cell::new(0);
+        let result = download_update_core(std::io::Cursor::new(b"abc"), UPDATE_TEST_HASH, 3, |bytes| {
+            assert_eq!(bytes, b"abc");
+            installs.set(installs.get() + 1);
+            Err("synthetic_installer_failed".into())
+        });
+        assert_eq!(result, Err("synthetic_installer_failed".into()));
+        assert_eq!(installs.get(), 1);
+    }
+
+    #[test]
+    fn update_install_version_gate_precedes_bounded_download() {
+        for (current, version, body, expected, read_bytes, installs) in [
+            ("1.2.3", "1.2.2", b"abcd".as_slice(), Err("update_not_newer".into()), 0, 0),
+            ("invalid", "1.2.4", b"abcd".as_slice(), Err("update_current_invalid".into()), 0, 0),
+            ("1.2.3", "1.2.4", b"abcd".as_slice(), Err("update_download_too_large".into()), 4, 0),
+            ("1.2.3", "1.2.4", b"abc".as_slice(), Ok(()), 3, 1),
+        ] {
+            let mut reader = ChunkedUpdateReader { inner: std::io::Cursor::new(body), chunk: 1, read_bytes: 0 };
+            let effects = std::cell::Cell::new(0);
+            let result = install_update_core(current, || {
+                let mut latest = update_fixture(version);
+                latest.sha256 = UPDATE_TEST_HASH.into();
+                Ok(latest)
+            }, |latest| download_update_core(&mut reader, &latest.sha256, 3, |bytes| {
+                assert_eq!(bytes, b"abc");
+                effects.set(effects.get() + 1);
+                Ok(())
+            }));
+            assert_eq!(result, expected);
+            assert_eq!((reader.read_bytes, effects.get()), (read_bytes, installs));
+        }
     }
 
     #[test]
