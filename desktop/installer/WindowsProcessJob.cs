@@ -227,8 +227,8 @@ namespace Arkism.InstallerChecks
             for (;;)
             {
                 var value = api.Query(job);
+                if (value.Active == 0) return value; // An empty job is complete even when observed at the deadline.
                 CheckDeadline(clock, start, budget);
-                if (value.Active == 0) return value;
                 if (activeObservation != null) activeObservation(); // Diagnostic only; never the completion authority.
                 long before = clock.Milliseconds;
                 int delay = (int)Math.Min(20, budget - Elapsed(clock, start));

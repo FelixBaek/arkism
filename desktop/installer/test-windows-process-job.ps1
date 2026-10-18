@@ -131,6 +131,11 @@ public static class JobCoreTests
             JobFailure error = Failure(Request(), api, clock); Has(error, "job_timeout");
             Check(error.Result.EmptyConfirmed && api.OutsideControlAlive && api.Calls.Contains("terminate_job"), "timeout escaped boundary");
         });
+        Test("tree empty exactly at the deadline is not a timeout", delegate {
+            var clock = new JobFakeClock(); var api = new JobFakeApi(clock); api.EmptyAt = 100;
+            JobResult result = WindowsProcessJob.RunCore(Request(), api, clock);
+            Check(result.EmptyConfirmed && clock.Now == 100 && !api.Calls.Contains("terminate_job"), "final empty observation lost");
+        });
         Test("primary termination accounting and close errors all survive", delegate {
             var clock = new JobFakeClock(); var api = new JobFakeApi(clock);
             foreach (string name in new string[] { "query", "terminate_job", "close_13", "close_11" }) api.Faults.Add(name);
