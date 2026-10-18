@@ -8,6 +8,38 @@ Changes to the release workflow, installer, Unix build script or Tauri shell tri
 
 Download artifacts only from the expected repository, pull request and commit. Record that commit alongside results. A successful packaging build is not evidence that memory quality or approval policy is correct.
 
+### Installed Windows runtime check
+
+The GitHub-hosted Windows packaging job also opts into
+`build-windows.ps1 -InstalledSmoke`. It installs the same final NSIS file with
+`/S /NoAutoRun` into a fresh owned temporary directory and checks the installed
+payload against the final staging files. The explicit `/NoAutoRun` option skips
+silent launch; the default silent update restart and interactive finish-page
+checkbox retain their existing behavior. An inert-payload fixture checks both
+silent launch options without starting the product GUI.
+
+The installed `Arkism.exe --runtime-check` must start its own local database,
+reuse its local endpoint, back up, erase and restore it. The check requires
+successful original and restored capabilities, a nonempty backup and successful
+expiry. It uses fresh test data, disabled embedding, a fixed judge and a child
+environment without provider or signing credentials. It does not make a model
+request. Stage-only execution is recorded separately.
+
+This mode refuses local or self-hosted runners and refuses existing product
+registrations, shortcuts, tasks, autostart entries or affected agent settings.
+It never starts the normal GUI or registers a scheduled task. Cleanup removes
+only its owned files and verified test-created registrations and shortcuts;
+it does not run the product uninstaller or disconnect agents. Inspection and
+cleanup errors fail the check and retain the original failure.
+
+The separate `windows-installed-check` Actions artifact contains only check
+summaries and source/payload hashes. Runtime tokens, database backups and child
+profiles are excluded, and this evidence artifact is excluded from release
+assets. A successful job establishes fresh installed-runtime operation for that
+commit. Existing-data upgrades, migration from older releases, normal uninstall,
+agent connection, interactive UI and operating-system signing trust still need
+their own acceptance checks.
+
 ## Runtime download inputs
 
 The Windows runtime recipe pins SHA-256 for both ZIP inputs before extraction.
@@ -54,7 +86,8 @@ extraction and native build boundaries. Windows CI runs it with Windows
 PowerShell; it does not install or execute PostgreSQL from the fixture.
 Packaging preflight still checks the real bundled runtime. Source pins, cache
 completion, OS code signing and signed updater manifests provide separate
-evidence, and these checks do not establish clean-profile installation.
+evidence. Runtime preparation alone does not establish installed-app behavior;
+the separate hosted installed-runtime check covers the narrower case above.
 
 ## Before a public tag
 
@@ -86,8 +119,8 @@ artifacts without creating tags or releases. The retained initial-publication
 workflow requires an explicit manual dispatch and also passes the shared gate;
 editing its file cannot automatically publish. Its caller grants read access to
 quality runs, and existing published tags/assets are never replaced by a retry.
-These checks do not install branch protection, sign an
-artifact, or prove clean-profile installation and upgrade behavior.
+The release gate does not install branch protection or sign an artifact. The
+installed-runtime check does not prove existing-profile upgrade behavior.
 
 After the release candidate passes, create a new `vX.Y.Z` tag on that verified commit. The tag workflow builds the packages and creates a draft release. Inspect its assets and checksums before publishing. Do not move an existing tag or replace published assets. No tag or public release is created by a pull request preflight.
 
