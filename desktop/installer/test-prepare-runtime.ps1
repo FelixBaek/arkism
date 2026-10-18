@@ -1,6 +1,8 @@
 # Offline control-flow tests for the actual preparation script. Compatible with
 # Windows PowerShell 5.1; no downloads, extraction, Visual Studio or PE execution.
 $ErrorActionPreference = 'Stop'
+# .NET Framework keeps ZipArchiveMode in the separate compression assembly.
+Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $sourcePath = Join-Path $PSScriptRoot 'prepare-runtime.ps1'
 $source = [IO.File]::ReadAllText($sourcePath)
