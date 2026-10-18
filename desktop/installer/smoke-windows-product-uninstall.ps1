@@ -73,9 +73,28 @@ function Assert-ProductGlobalState($State, [long]$AllowedPid = 0, [string]$Allow
 }
 
 function Assert-ProductProfileBeforeRemoval($State) {
-  $files = @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME)
-  if ($files.Count -ne 1 -or $files[0].Path -cne '.config/arkism/hook-codex.cmd' -or
-    $files[0].Sha256 -cne $State.HookHash) { throw 'product_profile_changed' }
+  Assert-ProductManifest $State.Profile @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path)
+}
+
+function Set-ProductProfileBaseline($State) {
+  $global = Get-InstalledSmokeGlobalState $State.Context
+  Assert-InstalledSmokeRegistration $global $State.Install $State.Version -RequireComplete
+  $shortcuts = @($global.Shortcuts | ForEach-Object {
+    $path = ConvertTo-InstalledSmokePath $_.Path
+    if ($_.Scope -cne 'owned' -or -not (Test-InstalledSmokeWithin $path $State.Environment.HOME)) {
+      throw 'product_shortcut_profile_not_owned'
+    }
+    $path
+  })
+  $expected = @(@($State.Hook) + $shortcuts | ForEach-Object {
+    [pscustomobject]@{
+      Path = $_.Substring($State.Environment.HOME.Length + 1).Replace('\', '/')
+      Sha256 = Get-InstalledSmokeHash $_
+    }
+  } | Sort-Object Path)
+  Assert-ProductManifest $expected @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path)
+  $State.Profile = $expected
+  $State.ProfileShortcuts = $shortcuts
 }
 
 function Assert-ProductUninstallInputs($State, [long]$AllowedPid = 0, [string]$AllowedImage = '') {
@@ -138,10 +157,10 @@ function Get-ProductUninstallerCopy($Before, $After, [string]$Temp, [string]$Has
     if (-not $current.ContainsKey($name) -or $current[$name].Kind -cne $existing[$name].Kind -or
       $current[$name].Sha256 -cne $existing[$name].Sha256) { throw 'product_temp_existing_changed' }
   }
-  $matches = @($After | Where-Object { -not $existing.ContainsKey($_.Path) -and $_.Kind -ceq 'file' -and
+  $copies = @($After | Where-Object { -not $existing.ContainsKey($_.Path) -and $_.Kind -ceq 'file' -and
     [IO.Path]::GetFileName($_.Path) -ieq 'Un.exe' })
-  if ($matches.Count -ne 1 -or $matches[0].Sha256 -cne $Hash) { throw 'product_copy_ambiguous' }
-  $path = Join-Path $Temp $matches[0].Path
+  if ($copies.Count -ne 1 -or $copies[0].Sha256 -cne $Hash) { throw 'product_copy_ambiguous' }
+  $path = Join-Path $Temp $copies[0].Path
   $path = ConvertTo-InstalledSmokePath $path
   if (-not (Test-InstalledSmokeWithin $path $Temp)) { throw 'product_copy_not_owned' }
   Assert-InstalledSmokeFile $path
@@ -197,16 +216,19 @@ function New-ProductSyntheticData($State) {
   $data = Join-Path $State.Root 'retained data'; [IO.Directory]::CreateDirectory($data) | Out-Null
   [IO.File]::WriteAllText((Join-Path $data 'closed-memory.fixture'), 'Synthetic closed-file preservation only.')
   [IO.File]::WriteAllText((Join-Path $State.Root 'unrelated.sentinel'), 'Unrelated owned file.')
-  $State.Hook = Join-Path $State.Environment.HOME '.config/arkism/hook-codex.cmd'
+  $State.Hook = ConvertTo-InstalledSmokePath (Join-Path $State.Environment.HOME '.config/arkism/hook-codex.cmd')
   [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($State.Hook)) | Out-Null
   [IO.File]::WriteAllText($State.Hook, 'Inert text; never executed or registered.')
   $State.HookHash = Get-InstalledSmokeHash $State.Hook
   $State.SentinelHash = Get-InstalledSmokeHash (Join-Path $State.Root 'unrelated.sentinel')
   $State.Data = @(Get-InstalledSmokeTree $State.Root $data)
+  Set-ProductProfileBaseline $State
 }
 
 function Invoke-ProductRemovalCheck($State, $Request, $Report) {
   Assert-ProductUninstallInputs $State
+  $Report.profile_files_before_removal = @($State.Profile).Count
+  $Report.owned_shortcut_files_before_removal = @($State.ProfileShortcuts).Count
   $temp = Join-Path $State.Root 'temp'
   $inventory = @(Get-ProductTempInventory $temp)
   $before = Get-ProductRebootSnapshot $Request
