@@ -107,6 +107,8 @@ jobs:
         run: go test -race -v -count=1 -run '^TestAtomicWrite' ./internal/host
       - name: Literal user evidence for memory capture on Windows
         run: go test -v -count=1 -run '^TestCaptureClaimEvidence' ./internal/host/capture
+      - name: Captured memory context and retry receipts on Windows
+        run: go test -v -count=1 -run '^TestCapture(OptionalContext|ContextReceipt)' ./internal/host/capture
       - name: Execute Windows skill bundle capture
         run: go test -v -count=1 -run '^TestWindowsBundleCaptureMatchesTheUnixRules$' ./internal/host/skills
       - name: Windows installer task payload
