@@ -143,6 +143,11 @@ public static class JobCoreTests
             JobFailure error = Failure(Request(), api, clock); Has(error, "job_timeout");
             Check(error.Result.EmptyConfirmed && api.OutsideControlAlive && api.Calls.Contains("terminate_job"), "timeout escaped boundary");
         });
+        Test("tree empty exactly at the deadline is not a timeout", delegate {
+            var clock = new JobFakeClock(); var api = new JobFakeApi(clock); api.EmptyAt = 100;
+            JobResult result = WindowsProcessJob.RunCore(Request(), api, clock);
+            Check(result.EmptyConfirmed && result.ElapsedMilliseconds == 100 && clock.Now == 100 && !api.Calls.Contains("terminate_job"), "final empty observation lost");
+        });
         Test("primary termination accounting and close errors all survive", delegate {
             var clock = new JobFakeClock(); var api = new JobFakeApi(clock);
             foreach (string name in new string[] { "query", "terminate_job", "close_13", "close_11" }) api.Faults.Add(name);
@@ -420,11 +425,6 @@ public static class JobCoreTests
             Check(BoundEchoLeaf.SafeCode("job_C:\\private") == "leaf_guard_failed", "unsafe text escaped");
             Check(BoundEchoLeaf.SafeCode("job_guard\n") == "leaf_guard_failed", "control character escaped");
             Check(BoundEchoLeaf.SafeCode(new string('x', 120)) == "leaf_guard_failed", "oversized text escaped");
-        });
-        Test("deadline boundary exact empty is successful", delegate {
-            var clock = new JobFakeClock(); var api = new JobFakeApi(clock); api.EmptyAt = 100;
-            var result = WindowsProcessJob.RunCore(Request(), api, clock);
-            Check(result.EmptyConfirmed && result.ElapsedMilliseconds == 100, "exact deadline empty rejected");
         });
         Test("deadline beyond boundary empty is still a timeout", delegate {
             var clock = new JobFakeClock(); var api = new JobFakeApi(clock); api.EmptyAt = 100;
