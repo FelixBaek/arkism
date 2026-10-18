@@ -12,7 +12,64 @@ $autorunEvidencePath = $EvidencePath
 $SourceSha = $autorunSourceSha
 $EvidencePath = $autorunEvidencePath
 
-function New-NsisAutorunPayload([string]$Root, $Environment) {
+function ConvertTo-NsisCompilerPath($Path) {
+  if ($Path -isnot [string] -or [string]::IsNullOrWhiteSpace($Path)) { throw 'nsis_control_compiler_path_invalid' }
+  $absolute = $Path.StartsWith('/') -and -not $Path.StartsWith('//')
+  if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) { $absolute = $Path -match '^[A-Za-z]:[\\/]' }
+  if (-not $absolute) { throw 'nsis_control_compiler_absolute_local_path_required' }
+  return ConvertTo-InstalledSmokePath $Path
+}
+
+function Assert-NsisCompilerEntry([string]$Path, [bool]$Directory) {
+  $attrs = Get-InstalledSmokeAttributes $Path
+  if ($null -eq $attrs -or ($attrs -band [IO.FileAttributes]::ReparsePoint)) { throw 'nsis_control_compiler_entry_unsafe' }
+  if ([bool]($attrs -band [IO.FileAttributes]::Directory) -ne $Directory) { throw 'nsis_control_compiler_entry_type' }
+}
+
+function Get-NsisCompilerAliasTarget([string]$SdkRoot) {
+  $item = Get-Item -LiteralPath $SdkRoot -Force -ErrorAction Stop
+  if ($item.LinkType -cnotin @('Junction', 'SymbolicLink')) { throw 'nsis_control_sdk_alias_unsupported' }
+  $targets = @($item.Target)
+  if ($targets.Count -ne 1) { throw 'nsis_control_sdk_alias_target_ambiguous' }
+  return ConvertTo-NsisCompilerPath $targets[0]
+}
+
+function Get-NsisCompilerDigest([string]$Path) {
+  # The source SDK alias is the only inspected link allowed by this resolver.
+  return (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToLowerInvariant()
+}
+
+function Resolve-NsisCompilerAlias([string]$Source, [string]$SdkRoot) {
+  $target = Get-NsisCompilerAliasTarget $SdkRoot
+  $physical = Join-Path $target 'bin/go.exe'
+  Assert-InstalledSmokeFile $physical
+  $sourceHash = Get-NsisCompilerDigest $Source
+  $targetHash = Get-NsisCompilerDigest $physical
+  if ($sourceHash -cne $targetHash) { throw 'nsis_control_sdk_alias_hash_mismatch' }
+  if ((Get-NsisCompilerAliasTarget $SdkRoot) -cne $target) { throw 'nsis_control_sdk_alias_changed' }
+  Assert-InstalledSmokeDirectory ([IO.Path]::GetDirectoryName($SdkRoot))
+  Assert-NsisCompilerEntry ([IO.Path]::GetDirectoryName($Source)) $true
+  Assert-NsisCompilerEntry $Source $false
+  Assert-InstalledSmokeFile $physical
+  return [pscustomobject]@{ Path = $physical; AliasResolved = $true; SourceSha256 = $sourceHash; TargetSha256 = $targetHash }
+}
+
+function Resolve-NsisCompiler([string]$Source) {
+  $path = ConvertTo-NsisCompilerPath $Source
+  $bin = [IO.Path]::GetDirectoryName($path)
+  if ([IO.Path]::GetFileName($path) -ine 'go.exe' -or [IO.Path]::GetFileName($bin) -ine 'bin') { throw 'nsis_control_compiler_layout_invalid' }
+  $sdk = [IO.Path]::GetDirectoryName($bin)
+  Assert-InstalledSmokeDirectory ([IO.Path]::GetDirectoryName($sdk))
+  Assert-NsisCompilerEntry $bin $true
+  Assert-NsisCompilerEntry $path $false
+  $attrs = Get-InstalledSmokeAttributes $sdk
+  if ($null -eq $attrs -or -not ($attrs -band [IO.FileAttributes]::Directory)) { throw 'nsis_control_sdk_directory_required' }
+  if ($attrs -band [IO.FileAttributes]::ReparsePoint) { return Resolve-NsisCompilerAlias $path $sdk }
+  Assert-InstalledSmokeFile $path
+  return [pscustomobject]@{ Path = $path; AliasResolved = $false; SourceSha256 = $null; TargetSha256 = $null }
+}
+
+function New-NsisAutorunPayload([string]$Root, $Environment, $Diagnostics = $null) {
   $stage = Join-Path $Root 'inert stage'
   foreach ($directory in @($stage, (Join-Path $stage 'integration'), (Join-Path $stage 'runtime'))) {
     [IO.Directory]::CreateDirectory($directory) | Out-Null
@@ -39,13 +96,36 @@ func main() {
   $buildEnv['CGO_ENABLED'] = '0'; $buildEnv['GOOS'] = 'windows'; $buildEnv['GOARCH'] = 'amd64'
   $buildEnv['GOCACHE'] = Join-Path $Root 'go-cache'
   $buildEnv['GOPATH'] = Join-Path $Root 'go'
-  $go = (Get-Command go.exe -CommandType Application -ErrorAction Stop).Source
+  $commands = @(Get-Command go.exe -CommandType Application -ErrorAction Stop)
+  if ($null -ne $Diagnostics) { $Diagnostics.go_search = [ordered]@{ result_count = $commands.Count } }
+  $selected = $commands | Select-Object -First 1
+  if ($null -eq $selected) { throw 'nsis_control_go_not_found' }
+  $go = $selected.Source
+  if ($null -ne $Diagnostics) {
+    $Diagnostics.go_search.selected_source_type = $go.GetType().FullName
+    $Diagnostics.go_search.absolute_path_boolean = [IO.Path]::IsPathRooted($go)
+    $Diagnostics.go_search.drive_prefix_count = ([regex]::Matches($go, '[A-Za-z]:[\\/]')).Count
+  }
+  $compiler = Resolve-NsisCompiler $go
+  if ($null -ne $Diagnostics) {
+    $Diagnostics.go_search.sdk_alias_resolved = $compiler.AliasResolved
+    $Diagnostics.go_search.source_sha256 = $compiler.SourceSha256
+    $Diagnostics.go_search.target_sha256 = $compiler.TargetSha256
+  }
   $arguments = 'build -trimpath -o "' + (Join-Path $stage 'Arkism.exe') + '" "' + $source + '"'
-  [void](Invoke-InstalledSmokeProcess $go $arguments $buildEnv 120 'build_inert_control')
+  [void](Invoke-InstalledSmokeProcess $compiler.Path $arguments $buildEnv 120 'build_inert_control')
   # These are data, not agent/server executables. The product uninstaller is never invoked.
   [IO.File]::WriteAllText((Join-Path $stage 'integration/inert-client.txt'), 'inert client placeholder')
   [IO.File]::WriteAllText((Join-Path $stage 'runtime/inert-runtime.txt'), 'inert runtime placeholder')
   return $stage
+}
+
+function Get-NsisAutorunErrorOrigin($Failure) {
+  return [ordered]@{
+    exception_type = $Failure.Exception.GetType().FullName
+    script_leaf = ($Failure.InvocationInfo.ScriptName -split '[\\/]')[-1]
+    line_number = $Failure.InvocationInfo.ScriptLineNumber
+  }
 }
 
 function Wait-NsisAutorunMarker([string]$Marker, [string]$InstallPath, [bool]$Expected) {
@@ -120,24 +200,32 @@ try {
                       $environment['XDG_CONFIG_HOME'], $environment['TEMP'])) {
     [IO.Directory]::CreateDirectory($path) | Out-Null
   }
-  $stage = New-NsisAutorunPayload $root $environment
+  $report.phase = 'build_inert'
+  $stage = New-NsisAutorunPayload $root $environment $report
+  $report.phase = 'resolve_source'
   $source = Join-Path $PSScriptRoot 'arkism.nsi'
   $sourceHash = Get-InstalledSmokeHash $source
   $installer = Join-Path $root 'inert-control-setup.exe'
   $arguments = '/V2 /DVERSION=0.0.0 "/DSTAGE_DIR=' + $stage + '" "/DOUT_FILE=' + $installer + '" "' + $source + '"'
+  $report.phase = 'compile_fixture'
   [void](Invoke-InstalledSmokeProcess $compiler $arguments $environment 120 'compile_product_nsis_inert_control')
+  $report.phase = 'hash_fixture'
   $installerHash = Get-InstalledSmokeHash $installer
   $payloadHash = Get-InstalledSmokeHash (Join-Path $stage 'Arkism.exe')
   $report.nsis_source_sha256 = $sourceHash; $report.fixture_installer_sha256 = $installerHash
   $report.inert_payload_sha256 = $payloadHash
-  $report.cases = @(
-    (Invoke-NsisAutorunCase $context $root $installer $installerHash $payloadHash $environment $false)
-    (Invoke-NsisAutorunCase $context $root $installer $installerHash $payloadHash $environment $true)
-  )
+  $report.phase = 'default_case'
+  $defaultCase = Invoke-NsisAutorunCase $context $root $installer $installerHash $payloadHash $environment $false
+  $report.phase = 'noautorun_case'
+  $noAutorunCase = Invoke-NsisAutorunCase $context $root $installer $installerHash $payloadHash $environment $true
+  $report.cases = @($defaultCase, $noAutorunCase)
+  $report.phase = 'verify_source'
   if ((Get-InstalledSmokeHash $source) -cne $sourceHash) { throw 'nsis_control_source_changed' }
   $report.ok = $true
+  $report.phase = 'complete'
 } catch {
   $primary = $_
+  $report.primary_origin = Get-NsisAutorunErrorOrigin $_
 } finally {
   try {
     if (@(Get-InstalledSmokeProcesses $root).Count) { throw 'nsis_control_process_still_running' }
@@ -146,6 +234,7 @@ try {
     $report.cleanup = 'owned_files_and_registrations_removed'
   } catch {
     $cleanup = $_
+    $report.cleanup_origin = Get-NsisAutorunErrorOrigin $_
     $report.cleanup = 'failed'
   }
 }
