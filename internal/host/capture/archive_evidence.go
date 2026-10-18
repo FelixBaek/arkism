@@ -151,6 +151,17 @@ func (c evidenceClient) post(endpoint string, payload map[string]any) (map[strin
 	return nil, &APIError{Status: h.Code, Code: str(code)}
 }
 
+func evidenceWithoutArchiveLinks(users []any) []any {
+	for _, user := range users {
+		if row, ok := user.(map[string]any); ok {
+			delete(row, "archive_hint")
+			delete(row, "archive_ref")
+			delete(row, "archive_refs")
+		}
+	}
+	return users
+}
+
 // evidencePrepareUsers returns users with validated archive refs, or fails before any
 // claim is submitted.
 func evidencePrepareUsers(context any, users []any, root string, post evidencePost, scope map[string]any) (out []any, err error) {
@@ -171,15 +182,14 @@ func evidencePrepareUsers(context any, users []any, root string, post evidencePo
 	}
 	marked, err := privateMarked(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// A removed local transcript cannot supply current archive evidence.
+			return evidenceWithoutArchiveLinks(users), nil
+		}
 		return nil, sessionWait("archive_inspection_unavailable")
 	}
 	if marked { // never archived; the memories carry no source link
-		for _, u := range users {
-			if m, ok := u.(map[string]any); ok {
-				delete(m, "archive_hint")
-			}
-		}
-		return users, nil
+		return evidenceWithoutArchiveLinks(users), nil
 	}
 	if err := policy.inspect(path, "jsonl"); err != nil {
 		return nil, err

@@ -176,9 +176,11 @@ func TestPrivateInspectionMarkerKeepsLegacyMemoryPath(t *testing.T) {
 	if err != nil || closeErr != nil {
 		t.Fatal(err, closeErr)
 	}
-	users := []any{map[string]any{"text": "visible memory", "archive_hint": map[string]any{"synthetic": "hint"}}}
+	users := []any{map[string]any{"text": "visible memory", "archive_hint": map[string]any{"synthetic": "hint"},
+		"archive_ref": map[string]any{"archive_id": "stale"}, "archive_refs": []any{map[string]any{"archive_id": "stale"}}}}
 	got, err := evidencePrepareUsers(context, users, root, capPost, capScope())
-	if err != nil || len(got) != 1 || autosaveGet(got[0], "text") != "visible memory" || truthy(autosaveGet(got[0], "archive_hint")) {
+	if err != nil || len(got) != 1 || autosaveGet(got[0], "text") != "visible memory" ||
+		truthy(autosaveGet(got[0], "archive_hint")) || truthy(autosaveGet(got[0], "archive_ref")) || truthy(autosaveGet(got[0], "archive_refs")) {
 		t.Fatal("private transcript must keep the legacy redacted-memory path", err)
 	}
 }
@@ -189,5 +191,124 @@ func TestPrivateMarkedReadFailureIsNotMarker(t *testing.T) {
 	}
 	if marked, err := scanPrivate(strings.NewReader("<private>synthetic marker</private>")); !marked || err != nil {
 		t.Fatal("real marker lost its terminal archive opt-out", err)
+	}
+}
+
+func inspectionMissingSourceJob(t *testing.T) map[string]any {
+	t.Helper()
+	capFake(t)
+	t.Setenv("ARKISM_SESSION_PROCESSOR", "0")
+	root := t.TempDir()
+	keep := capProjects
+	t.Cleanup(func() { capProjects = keep })
+	capProjects = root
+	path, raw, msg := evidenceTranscript(t, root)
+	ctx := evidenceClaudeContext(path, root, "s", "server")
+	if ctx == nil {
+		t.Fatal("context fixture")
+	}
+	hint := evidenceRowHint(ctx, raw, 0, msg, "")
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	job := map[string]any{"session_id": "s", "event_id": "synthetic-missing-source", "origin_product": "claude_code", "type": "task_finished", "archive_context": ctx,
+		"users": []any{map[string]any{"text": "기억해: 항상 한국어로 답해", "at": host.NowISO(), "archive_hint": hint,
+			"archive_ref": map[string]any{"archive_id": "stale"}, "archive_refs": []any{map[string]any{"archive_id": "stale"}}}}}
+	return mustLoad(t, dumps(job))
+}
+
+func TestPrivateMissingSourceLegacyCapturesOnlySafeDialogue(t *testing.T) {
+	for _, mode := range []string{"plain", "literal_private", "escaped_private"} {
+		t.Run(mode, func(t *testing.T) {
+			job := inspectionMissingSourceJob(t)
+			users := job["users"].([]any)
+			switch mode {
+			case "literal_private":
+				users = append(users, map[string]any{"text": "기억해: <private>synthetic-hidden</private> 공개 대화", "at": host.NowISO(), "archive_hint": map[string]any{"synthetic": "hint"}})
+			case "escaped_private":
+				users = append(users, map[string]any{"text": `기억해: \u003cprivate\u003esynthetic-hidden\u003c/private\u003e 공개 대화`, "at": host.NowISO(), "archive_hint": map[string]any{"synthetic": "hint"}})
+			}
+			job["users"] = users
+			var originalTexts []string
+			for _, user := range users {
+				row := user.(map[string]any)
+				row["archive_ref"] = map[string]any{"archive_id": "stale"}
+				row["archive_refs"] = []any{map[string]any{"archive_id": "stale"}}
+				originalTexts = append(originalTexts, str(row["text"]))
+			}
+			if mode != "plain" {
+				job["archive_locator"] = map[string]any{"synthetic": "stale locator"}
+			}
+			requests, models, searches := 0, 0, 0
+			capPost = func(string, any, time.Duration) (map[string]any, error) {
+				requests++
+				return nil, errors.New("unexpected request")
+			}
+			capGet = func(string, time.Duration) (map[string]any, error) {
+				requests++
+				return nil, errors.New("unexpected read")
+			}
+			search = func(query, _ string, _ int, _ float64) ([]any, bool, error) {
+				searches++
+				if privatePayload(query) || strings.Contains(query, "synthetic-hidden") {
+					t.Error("private query reached search")
+				}
+				return nil, false, nil
+			}
+			llm = func(system, user, _ string, _ time.Duration, _, _ string) (any, error) {
+				models++
+				if privatePayload([]string{system, user}) || strings.Contains(user, "synthetic-hidden") || !strings.Contains(user, "한국어로 답해") {
+					t.Error("unsafe or lost model context")
+				}
+				return []any{}, nil
+			}
+			err := process(job, func() error { return nil })
+			if err != nil || models != 1 || searches != 1 || requests != 0 || job["captured"] != true {
+				t.Errorf("missing source broke safe legacy capture: err=%v models=%d searches=%d requests=%d captured=%v", err, models, searches, requests, job["captured"])
+			}
+			if mode != "plain" && truthy(job["archive_locator"]) {
+				t.Error("private dialogue retained a raw locator")
+			}
+			for index, user := range users {
+				if autosaveGet(user, "text") != originalTexts[index] {
+					t.Error("source dialogue was mutated")
+				}
+			}
+			if mode == "literal_private" && autosaveGet(anyList(job["users"])[1], "text") != "기억해: "+privateMark+" 공개 대화" {
+				t.Error("literal private span was not redacted precisely")
+			}
+			if mode == "escaped_private" && autosaveGet(anyList(job["users"])[1], "text") != privateMark {
+				t.Error("encoded private value was not withheld")
+			}
+			for _, u := range anyList(job["users"]) {
+				if truthy(autosaveGet(u, "archive_hint")) || truthy(autosaveGet(u, "archive_ref")) || truthy(autosaveGet(u, "archive_refs")) {
+					t.Error("missing source retained archive evidence")
+				}
+			}
+		})
+	}
+}
+
+func TestPrivateMissingSourceStructuredStillRequiresEvidence(t *testing.T) {
+	job := inspectionMissingSourceJob(t)
+	t.Setenv("ARKISM_SESSION_PROCESSOR", "1")
+	capPost = func(string, any, time.Duration) (map[string]any, error) {
+		t.Fatal("missing source caused archive/model authorization request")
+		return nil, nil
+	}
+	llm = func(string, string, string, time.Duration, string, string) (any, error) {
+		t.Fatal("missing archive evidence reached structured model")
+		return nil, nil
+	}
+	err := process(job, func() error { return nil })
+	if !errors.Is(err, errSessionPending) || errorCode(err) != "session_archive_evidence_required" {
+		t.Fatal("structured missing-source boundary changed", err)
+	}
+}
+
+func TestPrivateMissingSourceRemainsAnInspectionError(t *testing.T) {
+	marked, err := privateMarked(filepath.Join(t.TempDir(), "missing"))
+	if marked || !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("missing file mislabeled as a user private marker", err)
 	}
 }

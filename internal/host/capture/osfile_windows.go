@@ -100,7 +100,7 @@ func resolvedPathEqual(path, canonical string) bool {
 		if err != nil || attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
 			return false
 		}
-		if parent := filepath.Dir(candidate); parent == candidate {
+		if filepath.Dir(candidate) == candidate {
 			break
 		}
 	}

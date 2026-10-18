@@ -16,6 +16,8 @@ Pause, folder exclusions and `.arkism-ignore` apply to the source folder and exp
 
 A missing capture settings file keeps the default behavior. Invalid JSON, invalid setting types, unreadable settings or settings larger than 1 MiB pause capture. Inspection errors stop archive transmission. Waiting does not approve a memory, change its scope or advance its durable processing cursor.
 
+If a legacy job's transcript no longer exists, it can still extract from its redacted queued text without archive links. Other inspection errors retain the batch for bounded retries. Structured session processing continues to require verified archive evidence.
+
 ## Archive inspection limits
 
 Inspection recognizes plain UTF-8 JSON/JSONL, JSON strings nested inside records, JSON Unicode escapes and UTF-16 SQLite text. SQLite logical TEXT and BLOB values are checked as well as raw bytes, because a value can span storage pages. Opaque compressed or encrypted payloads are not decoded.
