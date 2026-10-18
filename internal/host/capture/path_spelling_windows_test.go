@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -66,7 +67,7 @@ func TestWindowsResolvedSpellingAndReparseProtection(t *testing.T) {
 			t.Fatal("real junction accepted as an ordinary spelling")
 		}
 	}
-	if _, err := cleanupSpool(alias, "queued_at", timeNow()); errorCode(err) != "capture_spool_alias" {
+	if _, err := cleanupSpool(alias, "queued_at", timeNow()); !errors.Is(err, valueErr("capture_spool_alias")) {
 		t.Fatal("cleanup followed the test junction", err)
 	}
 	if raw, err := os.ReadFile(file); err != nil || string(raw) != "synthetic content" {
