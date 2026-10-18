@@ -96,6 +96,11 @@ jobs:
           New-Item -ItemType Directory -Force desktop/dist | Out-Null
           $evidence = Join-Path $env:RUNNER_TEMP 'arkism-nsis-autorun-check.json'
           ./desktop/installer/test-nsis-autorun.ps1 -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe" -SourceSha $env:GITHUB_SHA -EvidencePath $evidence
+      - name: Default uninstaller process tree (inert fixture)
+        shell: powershell
+        run: |
+          $evidence = Join-Path $env:RUNNER_TEMP 'arkism-nsis-process-job-check.json'
+          ./desktop/installer/test-nsis-uninstall-job.ps1 -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe" -SourceSha $env:GITHUB_SHA -EvidencePath $evidence
       - name: Build installer
         shell: pwsh
         env:
@@ -113,6 +118,11 @@ jobs:
             New-Item -ItemType Directory -Force desktop/dist | Out-Null
             Copy-Item -LiteralPath $evidence -Destination desktop/dist/nsis-autorun-check.json
           }
+          $jobEvidence = Join-Path $env:RUNNER_TEMP 'arkism-nsis-process-job-check.json'
+          if (Test-Path -LiteralPath $jobEvidence -PathType Leaf) {
+            New-Item -ItemType Directory -Force desktop/dist | Out-Null
+            Copy-Item -LiteralPath $jobEvidence -Destination desktop/dist/nsis-process-job-check.json
+          }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -120,6 +130,7 @@ jobs:
           path: |
             desktop/dist/windows-installed-check.json
             desktop/dist/nsis-autorun-check.json
+            desktop/dist/nsis-process-job-check.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
