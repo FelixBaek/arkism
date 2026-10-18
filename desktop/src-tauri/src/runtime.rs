@@ -6,11 +6,18 @@
 //! Everything listens on 127.0.0.1 only. The passwords and tokens are in `runtime.json`,
 //! readable by this user alone; anyone who can read that folder can read the database files too.
 use std::fs;
+use std::collections::BTreeMap;
+use std::ffi::OsString;
+use std::io::Read;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
+#[cfg(windows)]
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+use crate::lifecycle::{self, Activity, Backend, Gate, Role, Stopped};
+use crate::runtime_process::{self, Process};
 
 const PG_PORT: u16 = 55491;
 const API_PORT: u16 = 8091;
@@ -48,14 +55,401 @@ pub struct Started {
     pub token: String,
 }
 
+// Kept in memory only: arguments and environment can contain credentials. Captured at the
+// actual launch, rather than rebuilt from mutable settings during recovery.
+#[derive(Clone)]
+struct LaunchSpec {
+    program: OsString,
+    args: Vec<OsString>,
+    env: BTreeMap<OsString, OsString>,
+    cwd: PathBuf,
+    log: Option<PathBuf>,
+    endpoint: Option<String>,
+}
+
+impl LaunchSpec {
+    fn validate(&self) -> Result<(), String> {
+        let program = Path::new(&self.program);
+        if !program.is_absolute() || !fs::metadata(program).map(|m| m.is_file()).unwrap_or(false)
+            || !fs::metadata(&self.cwd).map(|m| m.is_dir()).unwrap_or(false) {
+            return Err("update_runtime_launch_spec_unavailable".into());
+        }
+        if let Some(log) = &self.log {
+            if !fs::metadata(log).map(|m| m.is_file()).unwrap_or(false) { return Err("update_runtime_log_unavailable".into()); }
+        }
+        Ok(())
+    }
+
+    fn capture(cmd: &mut Command, log: Option<PathBuf>, endpoint: Option<String>) -> Result<Self, String> {
+        // Command uses the platform's environment-key comparison (case-insensitive on
+        // Windows); a plain map merge would retain conflicting Path/PATH entries there.
+        let mut environment = Command::new(cmd.get_program());
+        environment.env_clear().envs(std::env::vars_os());
+        for (key, value) in cmd.get_envs() {
+            match value {
+                Some(value) => { environment.env(key, value); }
+                None => { environment.env_remove(key); }
+            }
+        }
+        let env = environment.get_envs().filter_map(|(key, value)| value.map(|v| (key.to_owned(), v.to_owned()))).collect();
+        let cwd = match cmd.get_current_dir() {
+            Some(path) => path.to_owned(),
+            None => std::env::current_dir().map_err(|_| "local_launch_directory_unavailable")?,
+        };
+        let spec = Self { program: cmd.get_program().to_owned(), args: cmd.get_args().map(ToOwned::to_owned).collect(), env, cwd, log, endpoint };
+        cmd.env_clear().envs(&spec.env).current_dir(&spec.cwd);
+        Ok(spec)
+    }
+
+    fn command(&self) -> Result<Command, String> {
+        self.validate()?;
+        let mut cmd = Command::new(&self.program);
+        cmd.args(&self.args).env_clear().envs(&self.env).current_dir(&self.cwd);
+        quiet(&mut cmd);
+        if let Some(path) = &self.log {
+            // Recovery never creates a new log/configuration folder as a startup shortcut.
+            let file = fs::OpenOptions::new().append(true).open(path).map_err(|_| "update_runtime_log_unavailable")?;
+            let err = file.try_clone().map_err(|_| "update_runtime_log_unavailable")?;
+            cmd.stdout(file).stderr(err);
+        }
+        Ok(cmd)
+    }
+}
+
+struct ManagedChild { process: Process, role: Role, spec: LaunchSpec }
+
+impl ManagedChild {
+    fn try_wait(&mut self) -> Result<Option<u32>, String> { self.process.live() }
+    fn kill(&mut self) -> Result<(), String> { self.process.kill() }
+    fn wait(&mut self) -> Result<(), String> { self.process.wait() }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct PostgresIdentity { pid: u32, started: u64, directory: PathBuf, port: u16 }
+
+#[derive(Clone)]
+struct OwnedPostgres { start: LaunchSpec, identity: PostgresIdentity }
+
+#[derive(Clone)]
+enum Replay { Child(LaunchSpec), Postgres(OwnedPostgres) }
+
+fn postgres_identity(directory: &Path) -> Result<PostgresIdentity, String> {
+    let file = fs::File::open(directory.join("postmaster.pid")).map_err(|_| "update_postgres_identity_unavailable")?;
+    let mut bytes = Vec::new();
+    file.take(8193).read_to_end(&mut bytes).map_err(|_| "update_postgres_identity_unavailable")?;
+    if bytes.len() > 8192 { return Err("update_postgres_identity_unavailable".into()); }
+    let text = std::str::from_utf8(&bytes).map_err(|_| "update_postgres_identity_unavailable")?;
+    let lines: Vec<_> = text.lines().collect();
+    let parse = || -> Option<PostgresIdentity> {
+        let pid = lines.first()?.parse::<u32>().ok().filter(|p| *p != 0)?;
+        let path = fs::canonicalize(lines.get(1)?).ok()?;
+        let started = lines.get(2)?.parse::<u64>().ok().filter(|s| *s != 0)?;
+        let port = lines.get(3)?.parse::<u16>().ok().filter(|p| *p != 0)?;
+        (path == fs::canonicalize(directory).ok()?).then_some(PostgresIdentity { pid, started, directory: path, port })
+    };
+    parse().ok_or_else(|| "update_postgres_identity_unavailable".into())
+}
+
+struct UpdateRuntime<'a> {
+    rt: &'a Runtime,
+    turn: Option<std::sync::MutexGuard<'a, ()>>,
+    leases: BTreeMap<Role, u64>,
+    safe: bool,
+}
+
+#[cfg(test)]
+trait PostgresBoundary: Send {
+    fn running(&mut self) -> Result<bool,String>;
+    fn execute(&mut self, start: bool, command: &Command) -> Result<bool,String>;
+}
+
+
+fn owned_postgres(running: bool, owned: Option<OwnedPostgres>, current: impl FnOnce() -> Result<PostgresIdentity, String>) -> Result<Option<OwnedPostgres>, String> {
+    match (running, owned) {
+        (false, None) => Ok(None),
+        (true, Some(owned)) if current()? == owned.identity => Ok(Some(owned)),
+        _ => Err("update_postgres_ownership_unknown".into()),
+    }
+}
+
+impl UpdateRuntime<'_> {
+    fn postgres_running(&self) -> Result<bool, String> {
+        let rt = self.rt;
+        #[cfg(test)]
+        if let Some(boundary) = rt.postgres_boundary.lock().map_err(|_| "postgres_boundary_unavailable")?.as_mut() {
+            return boundary.running();
+        }
+        match fs::metadata(rt.pgdata().join("PG_VERSION")) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Only an absent cluster is stopped by inspection alone. A dangling version
+                // link or an incomplete cluster is unknown, not evidence of a safe stop.
+                let absent = |path: PathBuf| matches!(fs::symlink_metadata(path), Err(e) if e.kind() == std::io::ErrorKind::NotFound);
+                return if absent(rt.pgdata().join("PG_VERSION")) && absent(rt.pgdata()) { Ok(false) }
+                    else { Err("update_postgres_state_unknown".into()) };
+            }
+            Ok(info) if info.is_file() => (),
+            _ => return Err("update_postgres_probe_failed".into()),
+        }
+        let status = quiet(Command::new(rt.pg_bin("pg_ctl")?).arg("-D").arg(rt.pgdata()).arg("status"))
+            .status().map_err(|_| "update_postgres_probe_failed")?;
+        match status.code() { Some(0) => Ok(true), Some(3) => Ok(false), _ => Err("update_postgres_probe_failed".into()) }
+    }
+
+    fn child_snapshot(child: &mut ManagedChild, out: &mut Vec<(Role, Replay)>) -> Result<(), String> {
+        if cfg!(windows) && !child.process.contained() { return Err("update_runtime_ownership_unknown".into()); }
+        match child.try_wait() {
+            Ok(None) => { out.push((child.role, Replay::Child(child.spec.clone()))); Ok(()) }
+            _ => Err(format!("update_runtime_state_unknown: {}", child.role.name())),
+        }
+    }
+
+    fn stop_postgres(&self) -> Stopped {
+        let rt = self.rt;
+        let checked = (|| -> Result<Command, String> {
+            let owned = rt.postgres.lock().map_err(|_| "update_runtime_busy")?;
+            let expected = owned.as_ref().ok_or("update_postgres_ownership_unknown")?;
+            if postgres_identity(&rt.pgdata())? != expected.identity { return Err("update_postgres_identity_changed".into()); }
+            let mut command = Command::new(rt.pg_bin("pg_ctl")?);
+            quiet(command.arg("-D").arg(rt.pgdata()).args(["stop", "-m", "fast", "-w", "-t", "30"]));
+            Ok(command)
+        })();
+        let mut command = match checked { Ok(command) => command, Err(error) => return Stopped { confirmed: false, error: Some(error) } };
+        let primary = rt.postgres_update_command(&mut command,false)
+            .and_then(|success| if success { Ok(()) } else { Err("update_postgres_stop_failed".into()) });
+        match self.postgres_running() {
+            Ok(false) => {
+                let clear = rt.postgres.lock().map(|mut owned| { *owned = None; }).map_err(|_| "update_runtime_busy".to_string());
+                let error = match (primary.err(), clear.err()) {
+                    (Some(primary), Some(clear)) => Some(format!("{primary}; {clear}")),
+                    (primary, clear) => primary.or(clear),
+                };
+                Stopped { confirmed: true, error }
+            }
+            probe => {
+                let probe = probe.err().unwrap_or_else(|| "update_postgres_stop_unconfirmed".into());
+                Stopped { confirmed: false, error: Some(primary.err().map_or_else(|| probe.clone(), |p| format!("{p}; {probe}"))) }
+            }
+        }
+    }
+
+    fn restore_child(&self, role: Role, spec: &LaunchSpec) -> Result<(), String> {
+        match role {
+            Role::Server | Role::Worker => {
+                let mut children = self.rt.children.lock().map_err(|_| "update_runtime_busy")?;
+                if children.iter().any(|c| c.role == role) { return Err("update_runtime_role_already_present".into()); }
+                children.push(self.rt.spawn_spec(role, spec.clone(), true)?);
+            }
+            Role::Gateway | Role::Watcher => {
+                let slot = if role == Role::Gateway { &self.rt.gateway } else { &self.rt.watcher };
+                let mut slot = slot.lock().map_err(|_| "update_runtime_busy")?;
+                if slot.is_some() { return Err("update_runtime_role_already_present".into()); }
+                *slot = Some(self.rt.spawn_spec(role, spec.clone(), true)?);
+            }
+            Role::Postgres => return Err("update_runtime_state_unknown".into()),
+        }
+        self.wait_restored(role, spec)
+    }
+
+    fn pause_role(&self, role: Role) -> Result<lifecycle::Pause, String> {
+        let slot = if role == Role::Gateway { &self.rt.gateway } else { &self.rt.watcher };
+        let mut slot = slot.lock().map_err(|_| "update_runtime_busy")?;
+        let Some(child) = slot.as_mut() else { return Ok(lifecycle::Pause::Absent); };
+        if child.try_wait()?.is_some() { return Err("update_runtime_state_unknown".into()); }
+        Ok(match child.process.pause()? { Some(lease) => lifecycle::Pause::Idle(lease), None => lifecycle::Pause::Busy })
+    }
+
+    fn resume_role(&self, role: Role, lease: u64) -> Result<(), String> {
+        let slot = if role == Role::Gateway { &self.rt.gateway } else { &self.rt.watcher };
+        let mut slot = slot.lock().map_err(|_| "update_runtime_busy")?;
+        let child = slot.as_mut().ok_or("update_runtime_state_unknown")?;
+        child.process.resume(lease)?;
+        if child.try_wait()?.is_some() { return Err("update_runtime_state_unknown".into()); }
+        Ok(())
+    }
+
+    fn wait_restored(&self, role: Role, spec: &LaunchSpec) -> Result<(), String> {
+        std::thread::sleep(Duration::from_millis(300));
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            let mut observed = Vec::new();
+            self.snapshot_children(&mut observed)?;
+            if self.rt.update_endpoint(role,spec)? { return Ok(()); }
+            if Instant::now() >= deadline { return Err("update_runtime_endpoint_unavailable".into()); }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    fn snapshot_children(&self, out: &mut Vec<(Role, Replay)>) -> Result<(), String> {
+        for child in self.rt.children.lock().map_err(|_| "update_runtime_busy")?.iter_mut() { Self::child_snapshot(child, out)?; }
+        for slot in [&self.rt.gateway, &self.rt.watcher] {
+            if let Some(child) = slot.lock().map_err(|_| "update_runtime_busy")?.as_mut() { Self::child_snapshot(child, out)?; }
+        }
+        Ok(())
+    }
+}
+
+fn endpoint_ready(role: Role, spec: &LaunchSpec) -> Result<bool, String> {
+    match role {
+        Role::Server => Ok(ready(spec.endpoint.as_deref().ok_or("update_runtime_endpoint_unknown")?)),
+        Role::Gateway => {
+            let address = spec.endpoint.as_deref().and_then(|url| url.strip_prefix("http://")).and_then(|s| s.parse::<std::net::SocketAddr>().ok()).ok_or("update_runtime_endpoint_unknown")?;
+            Ok(std::net::TcpStream::connect_timeout(&address, Duration::from_millis(500)).is_ok())
+        }
+        _ => Ok(true),
+    }
+}
+
+fn slot_alive(slot: &mut Option<ManagedChild>) -> Result<bool,String> {
+    match slot.as_mut().map(ManagedChild::try_wait).transpose()? {
+        Some(None) => Ok(true),
+        Some(Some(_)) => { *slot = None; Ok(false) },
+        None => Ok(false),
+    }
+}
+
+fn normal_child_stop(child: &mut ManagedChild) -> bool {
+    let _ = child.kill();
+    child.wait().is_ok() && matches!(child.try_wait(),Ok(Some(_)))
+}
+
+trait ChildControl {
+    fn kill_checked(&mut self) -> Result<(), String>;
+    fn wait_checked(&mut self) -> Result<(), String>;
+    fn stopped(&mut self) -> Result<bool, String>;
+}
+
+impl ChildControl for ManagedChild {
+    fn kill_checked(&mut self) -> Result<(), String> { self.kill().map_err(|_| "update_runtime_kill_failed".into()) }
+    fn stopped(&mut self) -> Result<bool, String> { self.try_wait().map(|s| s.is_some()).map_err(|_| "update_runtime_wait_failed".into()) }
+    fn wait_checked(&mut self) -> Result<(), String> {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !self.stopped()? {
+            if Instant::now() >= deadline { return Err("update_runtime_stop_timeout".into()); }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        Ok(())
+    }
+}
+
+fn stop_child(child: &mut impl ChildControl) -> Stopped {
+    let primary = child.kill_checked().and_then(|_| child.wait_checked()).err();
+    match child.stopped() {
+        Ok(confirmed) => Stopped { confirmed, error: primary },
+        Err(probe) => Stopped { confirmed: false, error: Some(primary.map_or_else(|| probe.clone(), |p| format!("{p}; {probe}"))) },
+    }
+}
+
+impl lifecycle::RoleControl for UpdateRuntime<'_> {
+    fn pause_role(&mut self, role: Role) -> Result<lifecycle::Pause,String> { UpdateRuntime::pause_role(self,role) }
+    fn resume_role(&mut self, role: Role, lease: u64) -> Result<(),String> { UpdateRuntime::resume_role(self,role,lease) }
+    fn control_failed(&mut self) { self.hold_closed(); }
+}
+
+impl Backend for UpdateRuntime<'_> {
+    type Spec = Replay;
+
+    fn snapshot(&mut self) -> Result<Vec<(Role, Replay)>, String> {
+        self.turn = Some(self.rt.busy.try_lock().map_err(|_| "update_runtime_busy")?);
+        if !self.rt.unverified.lock().map_err(|_| "update_runtime_busy")?.is_empty() {
+            self.hold_closed();
+            return Err("update_runtime_ownership_unknown".into());
+        }
+        let mut out = Vec::new();
+        let postgres = self.rt.postgres.lock().map_err(|_| "update_runtime_busy")?.clone();
+        if let Some(owned) = owned_postgres(self.postgres_running()?, postgres, || postgres_identity(&self.rt.pgdata()))? {
+            owned.start.validate()?;
+            out.push((Role::Postgres, Replay::Postgres(owned)));
+        }
+        if let Err(error) = self.snapshot_children(&mut out) {
+            self.hold_closed();
+            return Err(error);
+        }
+        for (role, spec) in &out {
+            if let Replay::Child(spec) = spec {
+                spec.validate()?;
+                if !self.rt.update_endpoint(*role,spec)? { return Err("update_runtime_endpoint_unavailable".into()); }
+            }
+        }
+        Ok(out)
+    }
+
+    fn pause(&mut self) -> Result<(), String> {
+        let mut leases = std::mem::take(&mut self.leases);
+        let result = lifecycle::pause_roles(self,&mut leases);
+        self.leases = leases;
+        result
+    }
+
+    fn resume_remaining(&mut self) -> Result<(), String> {
+        let mut leases = std::mem::take(&mut self.leases);
+        let result = lifecycle::resume_roles(self,&mut leases);
+        self.leases = leases;
+        result
+    }
+
+    fn hold_closed(&mut self) { self.safe = false; self.rt.gate.block(); }
+    fn safe_to_reopen(&self) -> bool { self.safe }
+
+    fn stop(&mut self, role: Role) -> Stopped {
+        if role == Role::Postgres { return self.stop_postgres(); }
+        let result = (|| -> Result<Stopped, String> {
+            if matches!(role, Role::Server | Role::Worker) {
+                let mut children = self.rt.children.lock().map_err(|_| "update_runtime_busy")?;
+                let index = children.iter().position(|c| c.role == role).ok_or("update_runtime_state_unknown")?;
+                let stopped = children[index].process.stop(None);
+                if stopped.confirmed { children.remove(index); }
+                return Ok(stopped);
+            }
+            let slot = if role == Role::Gateway { &self.rt.gateway } else { &self.rt.watcher };
+            let mut slot = slot.lock().map_err(|_| "update_runtime_busy")?;
+            let child = slot.as_mut().ok_or("update_runtime_state_unknown")?;
+            let stopped = child.process.stop(self.leases.get(&role).copied());
+            if stopped.confirmed { *slot = None; self.leases.remove(&role); }
+            Ok(stopped)
+        })();
+        result.unwrap_or_else(|error| Stopped { confirmed: false, error: Some(error) })
+    }
+
+    fn restore(&mut self, role: Role, spec: &Replay) -> Result<(), String> {
+        match (role, spec) {
+            (Role::Postgres, Replay::Postgres(owned)) => {
+                let mut slot = self.rt.postgres.lock().map_err(|_| "update_runtime_busy")?;
+                if slot.is_some() { return Err("update_runtime_role_already_present".into()); }
+                if self.postgres_running()? { return Err("update_postgres_ownership_unknown".into()); }
+                if !self.rt.postgres_update_command(&mut owned.start.command()?,true)? { return Err("update_postgres_restart_failed".into()); }
+                let identity = postgres_identity(&self.rt.pgdata())?;
+                if identity.port != owned.identity.port || !self.postgres_running()? { return Err("update_postgres_endpoint_changed".into()); }
+                *slot = Some(OwnedPostgres { start: owned.start.clone(), identity });
+                Ok(())
+            }
+            (_, Replay::Child(spec)) => self.restore_child(role, spec),
+            _ => Err("update_runtime_state_unknown".into()),
+        }
+    }
+}
+
 pub struct Runtime {
     programs: Option<PathBuf>,
     data: PathBuf,
-    children: Mutex<Vec<Child>>,
+    children: Mutex<Vec<ManagedChild>>,
     /// `arkism crew providers watch`: model accounts, quotas, model tests and AI help.
-    watcher: Mutex<Option<Child>>,
+    watcher: Mutex<Option<ManagedChild>>,
     /// `arkism gateway`: the agents connected in 라우팅 send their model requests here.
-    gateway: Mutex<Option<Child>>,
+    gateway: Mutex<Option<ManagedChild>>,
+    postgres: Mutex<Option<OwnedPostgres>>,
+    gate: Arc<Gate>,
+    // Failed native creations/control/finite commands keep their actual owners here.
+    unverified: Mutex<Vec<Process>>,
+    #[cfg(windows)]
+    generation: AtomicU64,
+    #[cfg(test)]
+    process_factory: Mutex<Option<Box<dyn Fn(Role,&LaunchSpec,&Command)->Result<Process,runtime_process::Failure> + Send>>>,
+    #[cfg(test)]
+    postgres_boundary: Mutex<Option<Box<dyn PostgresBoundary>>>,
+    #[cfg(test)]
+    endpoint_boundary: Mutex<Option<Box<dyn Fn(Role,&LaunchSpec)->Result<bool,String> + Send>>>,
+    #[cfg(test)]
+    command_boundary: Mutex<Option<Box<dyn Fn(&mut Command)->Result<runtime_process::Output,runtime_process::Failure> + Send>>>,
     /// Start, backup, restore and erase take turns.
     busy: Mutex<()>,
     /// The user's home: the agents' capture queues are under `.config/arkism`.
@@ -65,7 +459,105 @@ pub struct Runtime {
 impl Runtime {
     /// `programs` is the folder with the bundled programs; None when this build has none.
     pub fn new(programs: Option<PathBuf>, data: PathBuf) -> Self {
-        Runtime { programs, data, children: Mutex::new(Vec::new()), watcher: Mutex::new(None), gateway: Mutex::new(None), busy: Mutex::new(()), home: home_dir() }
+        Runtime { programs, data, children: Mutex::new(Vec::new()), watcher: Mutex::new(None), gateway: Mutex::new(None), postgres: Mutex::new(None), gate: Arc::new(Gate::default()), unverified: Mutex::new(Vec::new()),
+            #[cfg(windows)] generation: AtomicU64::new(0),
+            #[cfg(test)] process_factory: Mutex::new(None),
+            #[cfg(test)] postgres_boundary: Mutex::new(None),
+            #[cfg(test)] endpoint_boundary: Mutex::new(None),
+            #[cfg(test)] command_boundary: Mutex::new(None),
+            busy: Mutex::new(()), home: home_dir() }
+    }
+
+    pub(crate) fn activity(&self) -> Result<Activity, String> { self.gate.activity() }
+
+    pub(crate) fn gate(&self) -> Arc<Gate> { Arc::clone(&self.gate) }
+
+    fn postgres_update_command(&self, command: &mut Command, start: bool) -> Result<bool,String> {
+        #[cfg(test)]
+        if let Some(boundary) = self.postgres_boundary.lock().map_err(|_| "postgres_boundary_unavailable")?.as_mut() {
+            return boundary.execute(start,command);
+        }
+        let _ = start;
+        command.status().map(|status| status.success()).map_err(|_| "update_postgres_command_failed".into())
+    }
+
+    fn update_endpoint(&self, role: Role, spec: &LaunchSpec) -> Result<bool,String> {
+        #[cfg(test)]
+        if let Some(probe) = self.endpoint_boundary.lock().map_err(|_| "endpoint_boundary_unavailable")?.as_ref() {
+            return probe(role,spec);
+        }
+        endpoint_ready(role,spec)
+    }
+
+    fn retain_failure(&self, failure: runtime_process::Failure) -> String {
+        if let Some(process) = failure.process {
+            self.gate.block();
+            match self.unverified.lock() {
+                Ok(mut owners) => owners.push(process),
+                Err(poisoned) => {
+                    poisoned.into_inner().push(process);
+                    return format!("{}; runtime_owner_storage_unavailable",failure.error);
+                }
+            }
+        }
+        failure.error
+    }
+
+    fn spawn_spec(&self, role: Role, spec: LaunchSpec, recovery: bool) -> Result<ManagedChild, String> {
+        let mut command = spec.command()?;
+        command.env("ARKISM_DESKTOP_RECOVERY",if recovery {"1"}else{"0"});
+        #[cfg(test)]
+        if let Some(factory) = self.process_factory.lock().map_err(|_| "runtime_factory_unavailable")?.as_ref() {
+            let process = factory(role,&spec,&command).map_err(|failure| self.retain_failure(failure))?;
+            return Ok(ManagedChild {process,role,spec});
+        }
+        #[cfg(not(windows))]
+        if role == Role::Watcher { quiet(&mut command); }
+        #[cfg(windows)]
+        let bootstrap = if matches!(role, Role::Gateway | Role::Watcher) {
+            let control_role = if role == Role::Gateway { crate::desktop_control::Role::Gateway } else { crate::desktop_control::Role::Watcher };
+            let generation = self.generation.fetch_update(Ordering::SeqCst,Ordering::SeqCst,|v|v.checked_add(1)).map_err(|_| "runtime_generation_exhausted")? + 1;
+            let nonce = secret()?;
+            let env = crate::desktop_control::bootstrap_environment(control_role,generation,&nonce).map_err(|e|e.to_string())?;
+            command.envs(env);
+            Some((control_role,generation,nonce))
+        } else { None };
+        #[cfg(not(windows))]
+        let bootstrap = None;
+        let process = runtime_process::spawn(&mut command,spec.log.as_deref(),bootstrap).map_err(|failure| self.retain_failure(failure))?;
+        Ok(ManagedChild { process, role, spec })
+    }
+
+    fn spawn_child(&self, role: Role, cmd: &mut Command, log: Option<PathBuf>, endpoint: Option<String>) -> Result<ManagedChild, String> {
+        let spec = LaunchSpec::capture(cmd,log,endpoint)?;
+        #[cfg(windows)]
+        { self.spawn_spec(role,spec,false) }
+        #[cfg(not(windows))]
+        {
+            let process = runtime_process::spawn(cmd,spec.log.as_deref(),None).map_err(|failure| self.retain_failure(failure))?;
+            Ok(ManagedChild { process,role,spec })
+        }
+    }
+
+    pub(crate) fn command_output(&self, command: &mut Command) -> Result<runtime_process::Output, String> {
+        let _activity = self.activity()?;
+        let _spec = LaunchSpec::capture(command,None,None)?;
+        #[cfg(test)]
+        if let Some(boundary) = self.command_boundary.lock().map_err(|_| "command_boundary_unavailable")?.as_ref() {
+            return boundary(command).map_err(|failure| self.retain_failure(failure));
+        }
+        runtime_process::output(command).map_err(|failure| self.retain_failure(failure))
+    }
+
+    fn host_status(&self, command: &mut Command, error: &str) -> Result<(), String> {
+        let output = self.command_output(command)?;
+        if output.code == 0 { Ok(()) } else { Err(error.into()) }
+    }
+
+    /// Lock order is mutation lease, exclusive turn, then one role slot at a time.
+    pub(crate) fn update_handoff(&self, launch: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+        let mut backend = UpdateRuntime { rt:self, turn:None, leases:BTreeMap::new(), safe:true };
+        lifecycle::coordinated(&self.gate,&mut backend,launch)
     }
 
     /// Leaves the user's home alone (no capture queues read or erased): `--runtime-check`.
@@ -107,6 +599,7 @@ impl Runtime {
     /// Starts Postgres, prepares the database and starts the server. Safe to call again:
     /// what already runs is reused. Returns the address and the owner token for the UI.
     pub fn start(&self) -> Result<Started, String> {
+        let _activity = self.activity()?;
         let _turn = self.busy.lock().map_err(|_| "local_busy".to_string())?;
         self.start_locked()
     }
@@ -127,9 +620,10 @@ impl Runtime {
     /// Starts the model gateway on this computer if it is not running. It serves the models in
     /// 모델 설정 with the user's own logins and keys; nothing leaves for an Arkism server.
     pub fn ensure_gateway(&self) -> Result<String, String> {
+        let _activity = self.activity()?;
         let mut gateway = self.gateway.lock().map_err(|_| "local_busy".to_string())?;
+        let alive = slot_alive(&mut gateway).map_err(|e| { self.gate.block(); e })?;
         let mut secrets = self.secrets()?;
-        let alive = gateway.as_mut().is_some_and(|c| matches!(c.try_wait(), Ok(None)));
         if alive && secrets.gateway_port != 0 {
             return Ok(gateway_url(secrets.gateway_port));
         }
@@ -143,13 +637,13 @@ impl Runtime {
         let err = log.try_clone().map_err(|e| e.to_string())?;
         cmd.env("ARKISM_GATEWAY_LISTEN", &listen).stdin(Stdio::null()).stdout(log).stderr(err);
         no_window(&mut cmd);
-        let mut child = cmd.spawn().map_err(|e| format!("gateway_start_failed: {e}"))?;
+        let child = self.spawn_child(Role::Gateway, &mut cmd, Some(self.data.join("logs").join("gateway.log")), Some(gateway_url(secrets.gateway_port)))?;
         // A gateway that exits at once (bad config, port taken) is not reported as running.
+        *gateway = Some(child);
         std::thread::sleep(std::time::Duration::from_millis(300));
-        if !matches!(child.try_wait(), Ok(None)) {
+        if !slot_alive(&mut gateway).map_err(|e| { self.gate.block(); e })? {
             return Err("gateway_start_failed".into());
         }
-        *gateway = Some(child);
         if secrets.gateway_port != old_port {
             self.save(&secrets)?;
             // Agents linked to the old address follow the gateway to its new port.
@@ -167,6 +661,7 @@ impl Runtime {
 
     /// The gateway's address while it runs.
     pub fn gateway_address(&self) -> Option<String> {
+        let _activity = self.activity().ok()?;
         let mut gateway = self.gateway.lock().ok()?;
         let alive = gateway.as_mut().is_some_and(|c| matches!(c.try_wait(), Ok(None)));
         let port = self.secrets().ok()?.gateway_port;
@@ -231,6 +726,7 @@ impl Runtime {
     /// 설정 › 고급 › 데이터 › 에이전트 기억 가져오기: CLAUDE.md, Claude Code's memory files, AGENTS.md and
     /// GEMINI.md become review candidates (`arkism capture import-agents`). `dry_run` only counts.
     pub fn import_agent_memories(&self, dry_run: bool) -> Result<serde_json::Value, String> {
+        let _activity = self.activity()?;
         let mut args = vec!["capture", "import-agents"];
         if dry_run {
             args.push("--dry-run");
@@ -238,7 +734,7 @@ impl Runtime {
         let mut cmd = self.host_command(&args).ok_or("local_unavailable")?;
         cmd.env("ARKISM_REPO_TAGS", "1").stdin(Stdio::null()).stderr(Stdio::null());
         no_window(&mut cmd);
-        let out = cmd.output().map_err(|e| e.to_string())?;
+        let out = self.command_output(&mut cmd)?;
         let text = String::from_utf8_lossy(&out.stdout);
         let last = text.lines().rev().find(|l| l.trim_start().starts_with('{')).unwrap_or("");
         serde_json::from_str(last).map_err(|_| "import_failed".to_string())
@@ -246,6 +742,7 @@ impl Runtime {
 
     /// 설정 › 고급 › 진단: `arkism doctor --json` (with `--fix`: reconnect agents, retry failed captures).
     pub fn doctor(&self, fix: bool) -> Result<serde_json::Value, String> {
+        let _activity = self.activity()?;
         let mut args = vec!["doctor", "--json"];
         if fix {
             args.push("--fix");
@@ -254,20 +751,19 @@ impl Runtime {
         let mut cmd = Command::new(client);
         cmd.args(&args).stdin(Stdio::null()).stderr(Stdio::null());
         no_window(&mut cmd);
-        let out = cmd.output().map_err(|e| e.to_string())?;
+        let out = self.command_output(&mut cmd)?;
         serde_json::from_slice(&out.stdout).map_err(|_| "doctor_failed".to_string())
     }
 
     /// The model settings refresh button: read every account's usage now and report it.
     pub fn refresh_providers(&self) -> Result<(), String> {
+        let _activity = self.activity()?;
         let mut cmd = self.host_command(&["crew", "providers", "report", "--fresh"]).ok_or("local_unavailable")?;
-        match quiet(&mut cmd).status() {
-            Ok(s) if s.success() => Ok(()),
-            _ => Err("providers_refresh_failed".into()),
-        }
+        self.host_status(quiet(&mut cmd),"providers_refresh_failed")
     }
 
     pub fn background_work(&self, tick: u64) {
+        let Ok(_activity) = self.activity() else { return };
         if self.host_command(&[]).is_none() {
             return;
         }
@@ -277,15 +773,22 @@ impl Runtime {
             for (k, v) in extra {
                 cmd.env(k, v);
             }
-            let _ = quiet(&mut cmd).status();
+            let _ = self.host_status(quiet(&mut cmd),"background_host_failed");
         };
         let _ = self.ensure_gateway();
         // Keep the provider watcher running (restart it if it stopped).
         if let Ok(mut watcher) = self.watcher.lock() {
-            let alive = watcher.as_mut().is_some_and(|c| matches!(c.try_wait(), Ok(None)));
+            let alive = match slot_alive(&mut watcher) {
+                Ok(alive) => alive,
+                Err(_) => { self.gate.block(); return; }
+            };
             if !alive {
                 let mut cmd = command(&["crew", "providers", "watch"]);
-                *watcher = quiet(&mut cmd).spawn().ok();
+                quiet(&mut cmd);
+                match self.spawn_child(Role::Watcher, &mut cmd, None, None) {
+                    Ok(child) => *watcher = Some(child),
+                    Err(_) => return,
+                }
             }
         }
         run(&["agents", "sync"], &[]);
@@ -338,22 +841,24 @@ impl Runtime {
     /// What the server's expiry timers do (hourly here): archived transcripts past their keeping
     /// time, and memory candidates nobody reviewed for 14 days.
     pub fn expire(&self) -> Result<(), String> {
+        let _activity = self.activity()?;
         let secrets = self.secrets()?;
         let state = self.data.join("host").join("session-archive").join("state.json");
         let mut archive = self.host_command(&["session-archive", "expire", "--execute"]).ok_or("local_unavailable")?;
         archive.env("ARKISM_SESSION_STATE", state);
-        run(quiet(&mut archive), "local_expire_archive_failed")?;
+        self.host_status(quiet(&mut archive), "local_expire_archive_failed")?;
         let url = format!("http://127.0.0.1:{}", secrets.api_port);
         let mut candidates = self
             .host_command(&["expire-candidates", "--url", &url, "--workspace-id", "default", "--project-id", "default",
                 "--user-id", "management:owner", "--retention-days", "14", "--batch-size", "50", "--max-batches", "2", "--execute"])
             .ok_or("local_unavailable")?;
         candidates.env("MEMORY_API_TOKEN", &secrets.worker);
-        run(quiet(&mut candidates), "local_expire_candidates_failed")
+        self.host_status(quiet(&mut candidates), "local_expire_candidates_failed")
     }
 
     /// How the built-in Arkism searches: "ollama:<model>" (meaning and keywords) or "none" (keywords).
     pub fn search_mode(&self) -> String {
+        let Ok(_activity) = self.activity() else { return "none".into() };
         self.secrets().map(|s| if s.embedder.is_empty() { "none".into() } else { s.embedder }).unwrap_or_else(|_| "none".into())
     }
 
@@ -364,6 +869,7 @@ impl Runtime {
     /// Saves the roles and restarts the server so the embedder and judge take effect (a new embedder
     /// re-indexes once). The token is never sent back to the page: the UI only learns whether one is set.
     pub fn set_model_roles(&self, mut roles: ModelRoles) -> Result<(), String> {
+        let _activity = self.activity()?;
         let saved = self.model_roles(); // an empty secret field keeps the saved one
         for (field, old) in [(&mut roles.cloudflare_token, saved.cloudflare_token), (&mut roles.jev_key, saved.jev_key), (&mut roles.picker_key, saved.picker_key)] {
             if field.is_empty() {
@@ -413,6 +919,7 @@ impl Runtime {
     }
 
     pub fn set_capture_settings(&self, settings: &CaptureSettings) -> Result<(), String> {
+        let _activity = self.activity()?;
         let path = self.capture_settings_path()?;
         fs::create_dir_all(path.parent().expect("has a parent")).map_err(|e| e.to_string())?;
         let mut clean = settings.clone();
@@ -425,34 +932,47 @@ impl Runtime {
 
     /// The app switched to a server: agents follow it.
     pub fn agents_use_server(&self, ssh_host: &str, ssh_port: Option<u16>, ssh_key: Option<&str>) -> Result<(), String> {
+        let _activity = self.activity()?;
         fs::create_dir_all(&self.data).map_err(|e| e.to_string())?;
         self.write_agent_connection(None, None, Some((ssh_host, ssh_port, ssh_key)))
     }
 
     /// Stops the server and Postgres. Called when the app quits or before an update.
     pub fn stop(&self) {
+        let Ok(_activity) = self.activity() else { return };
+        self.shutdown();
+    }
+
+    /// App-exit teardown also runs after a successful update's terminal handoff. It is not
+    /// exposed as a command and does not reopen the ordinary mutation gate.
+    pub(crate) fn shutdown(&self) {
         self.stop_server();
         if let (Ok(pg_ctl), true) = (self.pg_bin("pg_ctl"), self.pgdata().join("postmaster.pid").exists()) {
             let _ = quiet(Command::new(pg_ctl).arg("-D").arg(self.pgdata()).args(["stop", "-m", "fast", "-w"])).status();
         }
+        if let Ok(mut postgres) = self.postgres.lock() { *postgres = None; }
     }
 
     /// Stops the server, its worker and the provider watcher; Postgres keeps running.
     fn stop_server(&self) {
-        for slot in [&self.watcher, &self.gateway] {
+        for slot in [&self.watcher,&self.gateway] {
             if let Ok(mut slot) = slot.lock() {
-                if let Some(mut child) = slot.take() {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                }
+                let stopped = slot.as_mut().map_or(true,normal_child_stop);
+                if stopped { *slot = None; } else { self.gate.block(); }
             }
         }
         if let Ok(mut children) = self.children.lock() {
-            for child in children.iter_mut() {
-                let _ = child.kill();
-                let _ = child.wait();
-            }
-            children.clear();
+            children.retain_mut(|child| {
+                let stopped = normal_child_stop(child);
+                if !stopped { self.gate.block(); }
+                !stopped
+            });
+        }
+        if let Ok(mut owners) = self.unverified.lock() {
+            owners.retain_mut(|owner| {
+                let _ = owner.kill();
+                owner.wait().is_err() || !matches!(owner.live(),Ok(Some(_)))
+            });
         }
     }
 
@@ -523,14 +1043,23 @@ impl Runtime {
         // Erasing removes the logs folder; a restore starts Postgres before anything else makes it.
         fs::create_dir_all(self.data.join("logs")).map_err(|e| format!("local_data_folder: {e}"))?;
         let log = self.data.join("logs").join("postgres.log");
-        let ok = quiet(Command::new(&pg_ctl)
-            .arg("-D").arg(&pgdata)
+        let mut command = Command::new(&pg_ctl);
+        quiet(command.arg("-D").arg(&pgdata)
             .arg("-l").arg(&log)
             .arg("-o").arg(format!("-p {} -c listen_addresses=127.0.0.1", secrets.pg_port))
-            .args(["-w", "-t", "60", "start"]))
+            .args(["-w", "-t", "60", "start"]));
+        let spec = LaunchSpec::capture(&mut command, None, None)?;
+        let ok = command
             .status()
             .map(|s| s.success())
             .unwrap_or(false);
+        if ok {
+            // A reused/external PG never acquires ownership by merely being observed running.
+            // If its identity cannot be read, normal startup is unchanged and updates fail closed.
+            *self.postgres.lock().map_err(|_| "local_busy")? = postgres_identity(&pgdata).ok()
+                .filter(|identity| identity.port == secrets.pg_port)
+                .map(|identity| OwnedPostgres { start: spec, identity });
+        }
         if ok { Ok(()) } else { Err("local_database_start_failed".into()) }
     }
 
@@ -586,13 +1115,21 @@ impl Runtime {
     fn start_server(&self, secrets: &mut Secrets) -> Result<String, String> {
         let server = |port: u16| format!("http://127.0.0.1:{port}");
         let mut children = self.children.lock().map_err(|_| "local_busy".to_string())?;
-        children.retain_mut(|c| matches!(c.try_wait(), Ok(None)));
+        let mut stopped = Vec::new();
+        for (index,child) in children.iter_mut().enumerate() {
+            match child.try_wait() {
+                Ok(Some(_)) => stopped.push(index),
+                Ok(None) => (),
+                Err(error) => { self.gate.block(); return Err(error); }
+            }
+        }
+        for index in stopped.into_iter().rev() { children.remove(index); }
         if children.len() == 2 && ready(&server(secrets.api_port)) {
             return Ok(server(secrets.api_port));
         }
-        for child in children.iter_mut() {
-            let _ = child.kill();
-            let _ = child.wait();
+        if !children.iter_mut().all(normal_child_stop) {
+            self.gate.block();
+            return Err("local_server_stop_unconfirmed".into());
         }
         children.clear();
         if !port_free(secrets.api_port) {
@@ -647,7 +1184,7 @@ impl Runtime {
             secrets.embedder = "none".into();
             self.save(secrets)?;
         }
-        let spawn = |args: &[&str], log: &str| -> Result<Child, String> {
+        let spawn = |role: Role, args: &[&str], log: &str| -> Result<ManagedChild, String> {
             let file = fs::OpenOptions::new().create(true).append(true).open(logs.join(log)).map_err(|e| e.to_string())?;
             let err = file.try_clone().map_err(|e| e.to_string())?;
             let mut cmd = Command::new(self.programs()?.join(exe("memoryd")));
@@ -665,19 +1202,21 @@ impl Runtime {
                 .stdout(file)
                 .stderr(err);
             no_window(&mut cmd);
-            cmd.spawn().map_err(|e| format!("local_server_start_failed: {e}"))
+            self.spawn_child(role, &mut cmd, Some(logs.join(log)), (role == Role::Server).then(|| server(secrets.api_port)))
         };
         let listen = format!("127.0.0.1:{}", secrets.api_port);
-        children.push(spawn(&["--listen", &listen], "server.log")?);
-        children.push(spawn(&["--worker"], "worker.log")?);
+        children.push(spawn(Role::Server, &["--listen", &listen], "server.log")?);
+        children.push(spawn(Role::Worker, &["--worker"], "worker.log")?);
         let deadline = Instant::now() + Duration::from_secs(30);
         while Instant::now() < deadline {
-            if ready(&server(secrets.api_port)) {
-                return Ok(server(secrets.api_port));
+            for child in children.iter_mut() {
+                match child.try_wait() {
+                    Ok(Some(_)) => return Err("local_server_start_failed".into()),
+                    Ok(None) => (),
+                    Err(error) => { self.gate.block(); return Err(error); }
+                }
             }
-            if children.iter_mut().any(|c| !matches!(c.try_wait(), Ok(None))) {
-                break;
-            }
+            if ready(&server(secrets.api_port)) { return Ok(server(secrets.api_port)); }
             std::thread::sleep(Duration::from_millis(300));
         }
         Err("local_server_start_failed".into())
@@ -699,6 +1238,7 @@ impl Runtime {
 
     /// `backup` into another folder (`--runtime-check`).
     pub fn backup_into(&self, folder: &Path) -> Result<Backup, String> {
+        let _activity = self.activity()?;
         let _turn = self.busy.lock().map_err(|_| "local_busy".to_string())?;
         self.backup_locked(folder, false)
     }
@@ -743,6 +1283,7 @@ impl Runtime {
     /// Once a day: a backup when the newest one is a day old, keeping the last seven automatic
     /// ones (backups the user made are never removed).
     pub fn auto_backup(&self) -> Result<(), String> {
+        let _activity = self.activity()?;
         const KEEP: usize = 7;
         let dir = Self::backup_dir()?;
         let newest = Self::backups()?.into_iter().next();
@@ -779,6 +1320,7 @@ impl Runtime {
 
     /// `restore` from another folder (`--runtime-check`).
     pub fn restore_from(&self, dir: &Path, name: &str) -> Result<Restored, String> {
+        let _activity = self.activity()?;
         let _turn = self.busy.lock().map_err(|_| "local_busy".to_string())?;
         let backup = valid_backup_name(name).then(|| Backup::read(&dir.join(name))).flatten().ok_or("local_backup_missing")?;
         let info: BackupInfo = serde_json::from_str(&fs::read_to_string(dir.join(name).join("backup.json")).map_err(|e| e.to_string())?)
@@ -835,6 +1377,7 @@ impl Runtime {
     /// capture queues that wait to be sent. Backups and the agents' own files stay. The next start
     /// makes a new, empty Arkism.
     pub fn erase(&self) -> Result<(), String> {
+        let _activity = self.activity()?;
         let _turn = self.busy.lock().map_err(|_| "local_busy".to_string())?;
         self.stop();
         for name in ["pg", "host", "logs"] {
@@ -1190,6 +1733,425 @@ pub fn find_programs(resources: Option<PathBuf>) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn update_test_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("arkism-update-lifecycle-{}", secret().unwrap()));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn update_spec(dir: &Path) -> LaunchSpec {
+        LaunchSpec { program: dir.join("inert-program").into_os_string(), args: vec!["--original".into()],
+            env: BTreeMap::from([("ARKISM_URL".into(), "http://127.0.0.1:12345".into())]), cwd: dir.to_owned(), log: None, endpoint: None }
+    }
+
+    #[derive(Default)]
+    struct ProcessObservations {
+        alive: std::collections::BTreeSet<Role>,
+        stopping: std::collections::BTreeSet<Role>,
+        events: Vec<String>,
+        busy: Option<Role>,
+        control_error: Option<Role>,
+        resume_error: Option<Role>,
+        stop_error: Option<Role>,
+        job_error: Option<Role>,
+        descendant_after_root: Option<Role>,
+        query_error: Option<Role>,
+        replay_error: Option<Role>,
+        pg_running: bool,
+    }
+    type Observations = Arc<Mutex<ProcessObservations>>;
+    const FIXTURE_ROLES: [Role;5] = [Role::Postgres,Role::Server,Role::Worker,Role::Gateway,Role::Watcher];
+    struct InertProcess { role: Role, observed: Observations }
+    impl runtime_process::StopEvidence for InertProcess {
+        fn role_stopped(&mut self,lease:u64)->Result<(),String> {
+            assert_eq!(lease,50+self.role as u64);
+            let mut state = self.observed.lock().unwrap();
+            state.events.push(format!("ack:{}",self.role.name()));
+            state.stopping.insert(self.role);
+            if state.stop_error == Some(self.role) { Err("inert_stop_receipt_unavailable".into()) } else { Ok(()) }
+        }
+        fn job_empty(&mut self)->Result<(),String> {
+            let mut state=self.observed.lock().unwrap();
+            state.events.push(format!("job0:{}",self.role.name()));
+            if state.job_error == Some(self.role) { return Err("inert_job_query_failed".into()); }
+            state.alive.remove(&self.role);
+            Ok(())
+        }
+    }
+    impl runtime_process::ProcessBoundary for InertProcess {
+        fn live(&mut self)->Result<Option<u32>,String> {
+            let state=self.observed.lock().unwrap();
+            if state.query_error == Some(self.role) { return Err("inert_job_query_failed".into()); }
+            if state.descendant_after_root == Some(self.role) { return runtime_process::checked_live(Some(0),1); }
+            if state.alive.contains(&self.role) { runtime_process::checked_live(None,1) } else { runtime_process::checked_live(Some(0),0) }
+        }
+        fn pause(&mut self)->Result<Option<u64>,String> {
+            let mut state=self.observed.lock().unwrap();
+            state.events.push(format!("pause:{}",self.role.name()));
+            if state.control_error == Some(self.role) { return Err("inert_receipt_unknown".into()); }
+            if state.busy == Some(self.role) { Ok(None) } else { Ok(Some(50+self.role as u64)) }
+        }
+        fn resume(&mut self,lease:u64)->Result<(),String> {
+            assert_eq!(lease,50+self.role as u64);
+            let mut state=self.observed.lock().unwrap();
+            state.events.push(format!("resume:{}",self.role.name()));
+            if state.resume_error == Some(self.role) || state.stopping.contains(&self.role) { Err("inert_resume_unknown".into()) } else { Ok(()) }
+        }
+        fn stop(&mut self,lease:Option<u64>)->Stopped {
+            if matches!(self.role,Role::Gateway|Role::Watcher) { return runtime_process::checked_role_stop(self,lease); }
+            let result=runtime_process::StopEvidence::job_empty(self);
+            let confirmed=result.is_ok();
+            let result=if self.observed.lock().unwrap().stop_error==Some(self.role) {Err("inert_termination_failed".into())}else{result};
+            runtime_process::checked_job_result(result,confirmed)
+        }
+    }
+    struct InertPostgres(Observations);
+    impl PostgresBoundary for InertPostgres {
+        fn running(&mut self)->Result<bool,String> { Ok(self.0.lock().unwrap().pg_running) }
+        fn execute(&mut self,start:bool,command:&Command)->Result<bool,String> {
+            assert!(command.get_args().any(|a|a==if start {"start"} else {"stop"}));
+            let mut state=self.0.lock().unwrap();
+            state.events.push(if start {"replay:postgres"}else{"job0:postgres"}.into());
+            if start && state.replay_error == Some(Role::Postgres) { return Err("inert_replay_failed".into()); }
+            state.pg_running=start;
+            if start {state.alive.insert(Role::Postgres);} else {state.alive.remove(&Role::Postgres);}
+            Ok(true)
+        }
+    }
+    fn inert_process(role:Role,observed:&Observations)->Process {
+        Process::Injected(Box::new(InertProcess{role,observed:Arc::clone(observed)}))
+    }
+    fn integrated_runtime_fixture()->(Runtime,Observations,PathBuf) {
+        let dir=update_test_dir();
+        let bundle=dir.join("programs");
+        fs::create_dir_all(bundle.join("pgsql/bin")).unwrap();
+        fs::create_dir_all(dir.join("pg")).unwrap();
+        fs::write(bundle.join("pgsql/bin").join(exe("pg_ctl")),b"inert, never executed").unwrap();
+        fs::write(dir.join("pg/PG_VERSION"),b"16").unwrap();
+        fs::write(dir.join("pg/postmaster.pid"),format!("101\n{}\n123\n55491\n",fs::canonicalize(dir.join("pg")).unwrap().display())).unwrap();
+        for name in ["runtime.json","agents.json","owner.token","models.json","agent-links.json"] {
+            fs::write(dir.join(name),format!("original-{name}")).unwrap();
+        }
+        let rt=Runtime::new(Some(bundle),dir.clone()).isolated();
+        let observed=Arc::new(Mutex::new(ProcessObservations {alive:FIXTURE_ROLES.into_iter().collect(),pg_running:true,..Default::default()}));
+        let mut specs=BTreeMap::new();
+        for role in FIXTURE_ROLES {
+            let program=dir.join(format!("inert-{}",role.name()));
+            let log=dir.join(format!("{}.log",role.name()));
+            fs::write(&program,b"inert, never executed").unwrap();
+            fs::write(&log,b"original-log").unwrap();
+            let spec=LaunchSpec {program:program.into_os_string(),args:vec!["--original".into(),role.name().into()],
+                env:BTreeMap::from([("USER_SETTING".into(),"original-value".into()),("ARKISM_URL".into(),"http://127.0.0.1:12345".into())]),
+                cwd:dir.clone(),log:Some(log),endpoint:Some(format!("http://127.0.0.1:{}",12000+role as u16))};
+            specs.insert(role,spec.clone());
+            let child=ManagedChild {process:inert_process(role,&observed),role,spec};
+            match role {
+                Role::Postgres=>(),
+                Role::Server|Role::Worker=>rt.children.lock().unwrap().push(child),
+                Role::Gateway=>*rt.gateway.lock().unwrap()=Some(child),
+                Role::Watcher=>*rt.watcher.lock().unwrap()=Some(child),
+            }
+        }
+        let identity=postgres_identity(&dir.join("pg")).unwrap();
+        let mut pg_spec=specs[&Role::Postgres].clone();
+        pg_spec.args.push("start".into());
+        *rt.postgres.lock().unwrap()=Some(OwnedPostgres {start:pg_spec,identity});
+        *rt.postgres_boundary.lock().unwrap()=Some(Box::new(InertPostgres(Arc::clone(&observed))));
+        let expected=specs.clone();
+        *rt.endpoint_boundary.lock().unwrap()=Some(Box::new(move |role,spec| {assert_eq!(spec.endpoint,expected[&role].endpoint);Ok(true)}));
+        let state=Arc::clone(&observed);
+        *rt.process_factory.lock().unwrap()=Some(Box::new(move |role,spec,command| {
+            assert!(command.get_envs().any(|(key,value)|key=="ARKISM_DESKTOP_RECOVERY" && value==Some(std::ffi::OsStr::new("1"))));
+            let expected=&specs[&role];
+            assert_eq!(spec.program,expected.program); assert_eq!(spec.args,expected.args);
+            assert_eq!(spec.env,expected.env); assert_eq!(spec.cwd,expected.cwd); assert_eq!(spec.log,expected.log);
+            assert_eq!(spec.endpoint,expected.endpoint);
+            let mut observation=state.lock().unwrap();
+            observation.events.push(format!("replay:{}",role.name()));
+            if observation.replay_error==Some(role) {return Err(runtime_process::Failure {error:"inert_replay_failed".into(),process:None});}
+            observation.alive.insert(role); observation.stopping.remove(&role);
+            drop(observation);
+            Ok(inert_process(role,&state))
+        }));
+        (rt,observed,dir)
+    }
+    fn assert_integrated_files_preserved(dir:&Path) {
+        for name in ["runtime.json","agents.json","owner.token","models.json","agent-links.json"] {
+            assert_eq!(fs::read(dir.join(name)).unwrap(),format!("original-{name}").as_bytes());
+        }
+    }
+    #[test]
+    fn update_integrated_finite_command_activity_survives_root_exit_until_job_zero() {
+        let dir=update_test_dir();
+        let rt=Arc::new(Runtime::new(None,dir.clone()).isolated());
+        let (entered,started)=std::sync::mpsc::channel();
+        let (empty,wait_empty)=std::sync::mpsc::channel();
+        *rt.command_boundary.lock().unwrap()=Some(Box::new(move |_| {
+            // The native capture core separately tests root-exited/descendant-live polling.
+            entered.send(()).unwrap(); wait_empty.recv().unwrap();
+            Ok(runtime_process::Output {code:0,stdout:vec![],stderr:vec![]})
+        }));
+        let worker=Arc::clone(&rt);
+        let command=dir.join("never-executed");
+        let thread=std::thread::spawn(move || worker.command_output(&mut Command::new(command)));
+        started.recv().unwrap();
+        assert_eq!(rt.update_handoff(||panic!("finite descendants are still active")),Err("update_runtime_busy".into()));
+        empty.send(()).unwrap(); thread.join().unwrap().unwrap();
+        assert_eq!(rt.update_handoff(||Err("inert_install_failure".into())),Err("inert_install_failure".into()));
+        assert!(rt.activity().is_ok()); fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_integrated_recovery_marker_is_parent_owned_and_not_replayed_from_user_environment() {
+        let (rt,state,dir)=integrated_runtime_fixture();
+        let mut spec=rt.gateway.lock().unwrap().as_ref().unwrap().spec.clone();
+        spec.env.insert("ARKISM_DESKTOP_RECOVERY".into(),"old-untrusted-marker".into());
+        let markers=Arc::new(Mutex::new(Vec::new()));
+        let recorded=Arc::clone(&markers);
+        *rt.process_factory.lock().unwrap()=Some(Box::new(move |role,spec,command| {
+            assert_eq!(spec.env.get(std::ffi::OsStr::new("ARKISM_DESKTOP_RECOVERY")).unwrap(),"old-untrusted-marker");
+            let marker=command.get_envs().find_map(|(key,value)|(key=="ARKISM_DESKTOP_RECOVERY").then_some(value).flatten()).unwrap();
+            recorded.lock().unwrap().push(marker.to_owned());
+            Ok(inert_process(role,&state))
+        }));
+        let _normal=rt.spawn_spec(Role::Gateway,spec.clone(),false).unwrap();
+        let _replay=rt.spawn_spec(Role::Gateway,spec,true).unwrap();
+        assert_eq!(*markers.lock().unwrap(),vec![std::ffi::OsString::from("0"),std::ffi::OsString::from("1")]);
+        assert_integrated_files_preserved(&dir);fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_integrated_default_roles_recover_exactly_after_installer_launch_failure() {
+        let (rt,state,dir)=integrated_runtime_fixture();
+        let error=rt.update_handoff(|| {
+            assert!(rt.activity().is_err()); assert!(rt.busy.try_lock().is_err());
+            assert!(state.lock().unwrap().alive.is_empty());
+            Err("update_start_failed: inert installer".into())
+        }).unwrap_err();
+        assert_eq!(error,"update_start_failed: inert installer");
+        assert_eq!(state.lock().unwrap().alive,FIXTURE_ROLES.into_iter().collect());
+        assert_eq!(state.lock().unwrap().events,vec!["pause:gateway","pause:watcher","ack:watcher","job0:watcher","ack:gateway","job0:gateway",
+            "job0:worker","job0:server","job0:postgres","replay:postgres","replay:server","replay:worker","replay:gateway","replay:watcher"]);
+        assert!(rt.activity().is_ok()); assert_integrated_files_preserved(&dir);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn update_integrated_busy_reopens_only_after_previous_idle_role_resumes() {
+        let (rt,state,dir)=integrated_runtime_fixture();
+        state.lock().unwrap().busy=Some(Role::Watcher);
+        assert_eq!(rt.update_handoff(||panic!("busy work cannot launch installer")),Err("update_runtime_busy".into()));
+        assert_eq!(state.lock().unwrap().events,vec!["pause:gateway","pause:watcher","resume:gateway"]);
+        assert_eq!(state.lock().unwrap().alive,FIXTURE_ROLES.into_iter().collect());
+        assert!(rt.activity().is_ok()); assert_integrated_files_preserved(&dir);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn update_integrated_unknown_receipt_or_failed_resume_keeps_gate_and_owners() {
+        for failed_resume in [false,true] {
+            let (rt,state,dir)=integrated_runtime_fixture();
+            if failed_resume {
+                state.lock().unwrap().busy=Some(Role::Watcher);
+                state.lock().unwrap().resume_error=Some(Role::Gateway);
+            } else { state.lock().unwrap().control_error=Some(Role::Watcher); }
+            let error=rt.update_handoff(||panic!("unknown control cannot launch installer")).unwrap_err();
+            assert!(error.contains(if failed_resume {"inert_resume_unknown"} else {"inert_receipt_unknown"}));
+            assert_eq!(state.lock().unwrap().events,vec!["pause:gateway","pause:watcher","resume:gateway"]);
+            assert!(rt.activity().is_err()); assert!(rt.gateway.lock().unwrap().is_some()); assert!(rt.watcher.lock().unwrap().is_some());
+            assert_integrated_files_preserved(&dir); fs::remove_dir_all(dir).unwrap();
+        }
+    }
+    #[test]
+    fn update_integrated_partial_stop_restores_confirmed_subset_without_replacing_unknown_owner() {
+        let (rt,state,dir)=integrated_runtime_fixture();
+        state.lock().unwrap().stop_error=Some(Role::Gateway);
+        let error=rt.update_handoff(||panic!("failed stop cannot launch installer")).unwrap_err();
+        assert!(error.contains("inert_stop_receipt_unavailable")); assert!(error.contains("inert_resume_unknown"));
+        let events=state.lock().unwrap().events.clone();
+        assert!(events.contains(&"replay:watcher".into()));
+        assert!(!events.contains(&"replay:gateway".into())); assert!(!events.contains(&"job0:gateway".into()));
+        assert!(rt.gateway.lock().unwrap().is_some()); assert!(rt.watcher.lock().unwrap().is_some());
+        assert!(rt.activity().is_err()); assert_integrated_files_preserved(&dir); fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn update_integrated_stop_error_with_job_zero_restores_the_confirmed_role() {
+        let (rt,state,dir)=integrated_runtime_fixture();
+        state.lock().unwrap().stop_error=Some(Role::Server);
+        let error=rt.update_handoff(||panic!("stop error prevents installer launch")).unwrap_err();
+        assert!(error.contains("inert_termination_failed"));
+        let events=state.lock().unwrap().events.clone();
+        assert!(events.contains(&"replay:server".into())); assert!(!events.contains(&"replay:postgres".into()));
+        assert_eq!(state.lock().unwrap().alive,FIXTURE_ROLES.into_iter().collect());
+        assert!(rt.activity().is_ok()); assert_integrated_files_preserved(&dir); fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn update_integrated_job_unknown_or_root_exit_with_descendants_never_loses_slot() {
+        for mode in 0..3 {
+            let (rt,state,dir)=integrated_runtime_fixture();
+            match mode {0=>state.lock().unwrap().descendant_after_root=Some(Role::Gateway),1=>state.lock().unwrap().query_error=Some(Role::Gateway),_=>state.lock().unwrap().job_error=Some(Role::Watcher)}
+            assert!(rt.update_handoff(||panic!("unconfirmed Job cannot launch installer")).is_err());
+            assert!(rt.activity().is_err());
+            if mode<2 {
+                assert!(state.lock().unwrap().events.is_empty());
+                let mut slot=rt.gateway.lock().unwrap();
+                assert!(slot_alive(&mut slot).is_err()); assert!(slot.is_some());
+            } else { assert!(rt.watcher.lock().unwrap().is_some()); }
+            assert_integrated_files_preserved(&dir); fs::remove_dir_all(dir).unwrap();
+        }
+    }
+    #[test]
+    fn update_integrated_recovery_failure_preserves_both_errors_and_blocks_new_work() {
+        for role in FIXTURE_ROLES {
+            let (rt,state,dir)=integrated_runtime_fixture();
+            state.lock().unwrap().replay_error=Some(role);
+            let error=rt.update_handoff(||Err("update_start_failed: inert installer".into())).unwrap_err();
+            assert!(error.contains("update_start_failed: inert installer")); assert!(error.contains("inert_replay_failed"));
+            assert!(error.contains("update_runtime_recovery_failed")); assert!(rt.activity().is_err());
+            assert_integrated_files_preserved(&dir); fs::remove_dir_all(dir).unwrap();
+        }
+    }
+    #[test]
+    fn update_integrated_success_keeps_terminal_gate_closed() {
+        let (rt,state,dir)=integrated_runtime_fixture();
+        rt.update_handoff(|| {assert!(state.lock().unwrap().alive.is_empty());Ok(())}).unwrap();
+        assert!(rt.activity().is_err()); assert!(state.lock().unwrap().events.iter().all(|e|!e.starts_with("replay:")));
+        assert_integrated_files_preserved(&dir); fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn update_integrated_failed_spawn_retains_its_native_owner() {
+        let (rt,state,dir)=integrated_runtime_fixture();
+        let error=rt.retain_failure(runtime_process::Failure {error:"native_start_and_cleanup_failed".into(),process:Some(inert_process(Role::Gateway,&state))});
+        assert_eq!(error,"native_start_and_cleanup_failed"); assert_eq!(rt.unverified.lock().unwrap().len(),1);
+        assert!(rt.activity().is_err()); assert!(rt.update_handoff(||panic!("retained unknown owner blocks launch")).is_err());
+        assert_integrated_files_preserved(&dir); fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_lifecycle_stopped_runtime_does_not_initialize_or_rewrite_settings() {
+        let dir = update_test_dir();
+        // A stopped runtime must not parse/migrate even malformed old settings to update.
+        let files = [("runtime.json", b"legacy-unread-settings".as_slice()), ("agents.json", b"server-routing-original"),
+            ("models.json", b"original-model-settings")];
+        for (name, bytes) in files { fs::write(dir.join(name), bytes).unwrap(); }
+        for bundled in [false, true] {
+            let rt = Runtime::new(bundled.then(|| dir.join("absent-bundle")), dir.clone()).isolated();
+            let error = rt.update_handoff(|| {
+                assert_eq!(rt.start().err().as_deref(), Some("update_runtime_busy"));
+                assert!(rt.busy.try_lock().is_err(), "the exclusive turn is retained through launch");
+                Err("update_start_failed: fixture".into())
+            }).unwrap_err();
+            assert_eq!(error, "update_start_failed: fixture");
+            assert!(rt.activity().is_ok());
+            for (name, bytes) in files { assert_eq!(fs::read(dir.join(name)).unwrap(), bytes); }
+            assert!(!dir.join("owner.token").exists());
+            assert!(!dir.join("pg").exists());
+            assert!(!dir.join("logs").exists());
+        }
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_lifecycle_busy_probe_and_terminal_paths_never_launch_unchecked() {
+        let dir = update_test_dir();
+        let rt = Runtime::new(None, dir.clone()).isolated();
+        let turn = rt.busy.lock().unwrap();
+        assert_eq!(rt.update_handoff(|| panic!("busy runtime cannot launch")), Err("update_runtime_busy".into()));
+        drop(turn);
+        assert!(rt.activity().is_ok());
+        fs::create_dir(dir.join("pg")).unwrap();
+        assert_eq!(rt.update_handoff(|| panic!("partial cluster cannot launch")), Err("update_postgres_state_unknown".into()));
+        fs::write(dir.join("pg/PG_VERSION"), "16").unwrap();
+        assert!(rt.update_handoff(|| panic!("unavailable PG probe cannot launch")).is_err());
+        assert!(rt.activity().is_ok());
+        fs::remove_dir_all(dir.join("pg")).unwrap();
+        rt.update_handoff(|| Ok(())).unwrap();
+        rt.shutdown(); // app-exit teardown is permitted without reopening the gate
+        assert!(rt.activity().is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_lifecycle_launch_spec_replays_original_environment_arguments_and_endpoint() {
+        let dir = update_test_dir();
+        let program = dir.join("inert-program");
+        let log = dir.join("existing.log");
+        fs::write(&program, b"not executable and never executed").unwrap();
+        fs::write(&log, b"old log").unwrap();
+        let mut command = Command::new(&program);
+        command.args(["--listen", "127.0.0.1:12345"]).env("ARKISM_UPDATE_TEST_VALUE", "original").current_dir(&dir);
+        let spec = LaunchSpec::capture(&mut command, Some(log.clone()), Some("http://127.0.0.1:12345".into())).unwrap();
+        command.arg("--later-change").env("ARKISM_UPDATE_TEST_VALUE", "changed");
+        let replay = spec.command().unwrap();
+        assert_eq!(replay.get_program(), program.as_os_str());
+        assert_eq!(replay.get_args().collect::<Vec<_>>(), vec!["--listen", "127.0.0.1:12345"]);
+        assert_eq!(replay.get_current_dir(), Some(dir.as_path()));
+        assert!(replay.get_envs().any(|(k, v)| k == "ARKISM_UPDATE_TEST_VALUE" && v == Some(std::ffi::OsStr::new("original"))));
+        assert_eq!(spec.endpoint.as_deref(), Some("http://127.0.0.1:12345"));
+        assert_eq!(fs::read(&log).unwrap(), b"old log");
+        fs::remove_file(log).unwrap();
+        assert!(spec.command().is_err(), "no recovery log creation");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_lifecycle_postgres_requires_direct_identity_and_never_adopts_external_running_pg() {
+        let dir = update_test_dir();
+        let identity = PostgresIdentity { pid: 123, started: 456, directory: dir.clone(), port: 12345 };
+        let owned = OwnedPostgres { start: update_spec(&dir), identity: identity.clone() };
+        assert!(owned_postgres(false, None, || panic!("stopped state needs no identity read")).unwrap().is_none());
+        assert!(owned_postgres(true, None, || panic!("external PG cannot become owned")).is_err());
+        assert!(owned_postgres(false, Some(owned.clone()), || panic!("stale record cannot become running")).is_err());
+        assert!(owned_postgres(true, Some(owned.clone()), || Err("probe_fixture".into())).is_err());
+        let mut replaced = identity.clone();
+        replaced.started += 1;
+        assert!(owned_postgres(true, Some(owned.clone()), || Ok(replaced)).is_err());
+        assert!(owned_postgres(true, Some(owned), || Ok(identity)).unwrap().is_some());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn update_lifecycle_postgres_identity_reader_is_bounded_and_checks_cluster_and_port() {
+        let dir = update_test_dir();
+        let pid = dir.join("postmaster.pid");
+        fs::write(&pid, format!("123\n{}\n456\n12345\n", dir.display())).unwrap();
+        let read = postgres_identity(&dir).unwrap();
+        assert_eq!((read.pid, read.started, read.port), (123, 456, 12345));
+        for text in [" ".repeat(8193), "-1\n/other\n456\n12345\n".into(), format!("123\n{}\n456\n0\n", dir.display()), "null".into()] {
+            fs::write(&pid, text).unwrap();
+            assert!(postgres_identity(&dir).is_err());
+        }
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    struct FakeChild {
+        kill: Result<(), String>, wait: Result<(), String>, probe: Result<bool, String>, waited: bool,
+    }
+
+    impl ChildControl for FakeChild {
+        fn kill_checked(&mut self) -> Result<(), String> { self.kill.clone() }
+        fn wait_checked(&mut self) -> Result<(), String> { self.waited = true; self.wait.clone() }
+        fn stopped(&mut self) -> Result<bool, String> { self.probe.clone() }
+    }
+
+    #[test]
+    fn update_lifecycle_checked_stop_keeps_unconfirmed_ownership_and_both_errors() {
+        for confirmed in [false, true] {
+            let mut child = FakeChild { kill: Err("kill_fixture".into()), wait: Ok(()), probe: Ok(confirmed), waited: false };
+            let result = stop_child(&mut child);
+            assert_eq!(result.confirmed, confirmed);
+            assert_eq!(result.error.as_deref(), Some("kill_fixture"));
+            assert!(!child.waited);
+        }
+        let mut child = FakeChild { kill: Ok(()), wait: Err("wait_fixture".into()), probe: Err("probe_fixture".into()), waited: false };
+        let result = stop_child(&mut child);
+        assert!(!result.confirmed);
+        assert!(result.error.unwrap().contains("wait_fixture; probe_fixture"));
+        assert!(child.waited);
+        child.wait = Ok(());
+        child.probe = Ok(true);
+        let result = stop_child(&mut child);
+        assert!(result.confirmed && result.error.is_none());
+    }
 
     #[test]
     fn secrets_are_long_and_different() {

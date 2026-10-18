@@ -482,8 +482,13 @@ func assistsRound() (int, error) {
 		if busy {
 			continue
 		}
-		submit(func() { assistJob(rec, nil) })
-		started++
+		if submit(func() { assistJob(rec, nil) }) {
+			started++
+		} else {
+			assistMu.Lock()
+			delete(assistBusy, id)
+			assistMu.Unlock()
+		}
 	}
 	return started, nil
 }
