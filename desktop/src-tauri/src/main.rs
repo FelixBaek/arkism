@@ -652,21 +652,29 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
 fn runtime_check(dir: &std::path::Path) -> i32 {
     let rt = runtime::Runtime::new(runtime::find_programs(None), dir.to_path_buf()).isolated();
     let started = Instant::now();
+    let mut phase = "start";
     let outcome = rt.start().and_then(|s| {
+        phase = "capabilities";
         let caps = ureq::get(&format!("{}/v1/capabilities?workspace_id=default&project_id=default&user_id=management%3Aowner", s.server))
             .header("Authorization", &format!("Bearer {}", s.token))
             .call()
             .map_err(|e| format!("capabilities: {e}"))?
             .status()
             .as_u16();
+        phase = "reuse_start";
         let again = rt.start()?; // a second start reuses what runs
         // Backup, erase everything, restore: the old owner token opens the restored Arkism again.
         let backups = dir.join("backups");
+        phase = "backup";
         let backup = rt.backup_into(&backups)?;
+        phase = "erase";
         rt.erase()?;
+        phase = "restore";
         let restored = rt.restore_from(&backups, &backup.name)?;
         // The hourly expiry runs against the built-in Arkism (needs the bundled agent client).
+        phase = "expiry";
         let expiry = if rt.agent_client().is_some() { rt.expire().map(|_| "ok".to_string()).unwrap_or_else(|e| e) } else { "no_client".into() };
+        phase = "restored_capabilities";
         let after = ureq::get(&format!("{}/v1/capabilities?workspace_id=default&project_id=default&user_id=management%3Aowner", restored.started.server))
             .header("Authorization", &format!("Bearer {}", s.token))
             .call()
@@ -680,11 +688,13 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
     let (code, report) = match outcome {
         Ok(mut v) => {
             v["ok"] = true.into();
+            phase = "complete";
             (0, v)
         }
         Err(e) => (1, serde_json::json!({ "ok": false, "error": e })),
     };
     let mut report = report;
+    report["phase"] = phase.into();
     report["seconds"] = started.elapsed().as_secs_f64().into();
     let _ = std::fs::create_dir_all(dir);
     let _ = std::fs::write(dir.join("check.json"), report.to_string());
