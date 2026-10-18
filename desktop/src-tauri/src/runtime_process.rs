@@ -29,6 +29,7 @@ pub(crate) enum Process {
 pub(crate) trait ProcessBoundary: Send {
     fn live(&mut self) -> Result<Option<u32>, String>;
     fn pause(&mut self) -> Result<Option<u64>, String>;
+    fn verify_idle(&mut self, lease: u64) -> Result<(), String>;
     fn resume(&mut self, lease: u64) -> Result<(), String>;
     fn stop(&mut self, lease: Option<u64>) -> Stopped;
 }
@@ -84,6 +85,18 @@ impl Process {
             Self::Owned(child) => child.resume(lease),
             #[cfg(test)]
             Self::Injected(child) => child.resume(lease),
+            _ => {
+                let _ = lease;
+                Err("runtime_control_unavailable".into())
+            }
+        }
+    }
+    pub(crate) fn verify_idle(&mut self, lease: u64) -> Result<(), String> {
+        match self {
+            #[cfg(windows)]
+            Self::Owned(child) => child.verify_idle(lease),
+            #[cfg(test)]
+            Self::Injected(child) => child.verify_idle(lease),
             _ => {
                 let _ = lease;
                 Err("runtime_control_unavailable".into())
@@ -158,15 +171,6 @@ pub(crate) fn checked_role_stop(evidence: &mut impl StopEvidence, lease: Option<
     Stopped {
         confirmed: result.is_ok(),
         error: result.err(),
-    }
-}
-
-pub(crate) fn checked_job_result(result: Result<(), String>, confirmed: bool) -> Stopped {
-    Stopped {
-        confirmed,
-        error: result
-            .err()
-            .or_else(|| (!confirmed).then(|| "runtime_stop_unconfirmed".into())),
     }
 }
 
@@ -367,6 +371,19 @@ fn role_error(error: control::Error) -> String {
 
 #[cfg(windows)]
 impl Native {
+    fn verify_idle(&mut self, lease: u64) -> Result<(), String> {
+        let session = self.session.as_ref().ok_or("runtime_control_unavailable")?;
+        if lease == 0
+            || session.state() != (control::State::Idle { lease_id: lease })
+            || session.pending().is_some()
+        {
+            return Err("runtime_control_idle_unverified".into());
+        }
+        if self.live()?.is_some() {
+            return Err("runtime_control_owner_exited".into());
+        }
+        Ok(())
+    }
     fn live(&mut self) -> Result<Option<u32>, String> {
         if self.drain_error.load(Ordering::SeqCst) {
             return Err("runtime_output_unavailable".into());
@@ -415,17 +432,9 @@ impl Native {
             .map_err(|e| e.to_string())
     }
     fn stop(&mut self, lease: Option<u64>) -> Stopped {
-        if self.session.is_some() {
-            return checked_role_stop(self, lease);
-        }
-        let result = self
-            .job
-            .terminate_and_wait(Duration::from_secs(5))
-            .map(|_| ())
-            .map_err(|e| e.to_string());
-        // A termination error can coexist with an independently confirmed empty Job.
-        // Retain that primary error and still restore the actually stopped role.
-        checked_job_result(result, self.job.status().empty_confirmed)
+        // Update shutdown always needs the role's same-session idle lease/receipt.
+        // Native Job termination remains an explicit normal/terminal teardown API.
+        checked_role_stop(self, lease)
     }
 }
 
@@ -928,15 +937,6 @@ mod tests {
         };
         assert!(!checked_role_stop(&mut evidence, None).confirmed);
         assert!(evidence.calls.is_empty());
-    }
-
-    #[test]
-    fn runtime_job_stop_preserves_error_and_confirmed_partial_stop() {
-        let stopped = checked_job_result(Err("inert_termination_failed".into()), true);
-        assert!(stopped.confirmed);
-        assert_eq!(stopped.error.as_deref(), Some("inert_termination_failed"));
-        assert!(!checked_job_result(Ok(()), false).confirmed);
-        assert!(!checked_job_result(Err("inert_query_failed".into()), false).confirmed);
     }
 
     #[test]

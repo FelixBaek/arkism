@@ -1,4 +1,4 @@
-//! Parent sessions for the opt-in gateway/watcher control protocol.
+//! Parent sessions for the opt-in managed runtime control protocol.
 //!
 //! A role's `stopped` receipt never proves native descendants have exited; the
 //! caller must also confirm its creation-time Job is empty. Busy is a receipt
@@ -16,6 +16,8 @@ pub const RECOMMENDED_STOP_BUDGET: Duration = Duration::from_secs(7);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
+    Server,
+    Worker,
     Gateway,
     Watcher,
 }
@@ -23,6 +25,8 @@ pub enum Role {
 impl Role {
     fn label(self) -> &'static str {
         match self {
+            Self::Server => "server",
+            Self::Worker => "worker",
             Self::Gateway => "gateway",
             Self::Watcher => "watcher",
         }
@@ -1692,5 +1696,80 @@ mod tests {
         assert_eq!(s.ready(budget()).unwrap(), Receipt::Ready);
         assert_eq!(s.binding().native_pid(), u32::MAX);
         assert_eq!(s.binding().generation(), u64::MAX);
+    }
+
+    fn runtime_role_frame(role: &str, id: u64, state: &str, lease: Option<u64>) -> Vec<u8> {
+        let mut value: Value = serde_json::from_slice(&wire(id, state, lease, None)).unwrap();
+        value["role"] = json!(role);
+        raw(value)
+    }
+
+    #[test]
+    fn runtime_roles_keep_exact_session_requests_and_leases() {
+        for label in ["server", "worker", "gateway", "watcher"] {
+            let role: Role = serde_json::from_value(json!(label)).unwrap();
+            let binding = Binding::new(role, 7, "a".repeat(64), 42).unwrap();
+            assert_eq!(binding.bootstrap_environment()[1].1, label);
+            let mut fake = Fake::default();
+            for (id, state, lease) in [
+                (0, "ready", None),
+                (1, "busy", None),
+                (2, "idle", Some(2)),
+                (3, "resumed", None),
+                (4, "idle", Some(4)),
+                (5, "stopped", Some(4)),
+            ] {
+                fake.frame(id as usize, runtime_role_frame(label, id, state, lease));
+            }
+            let mut session = Session::new(binding, fake);
+            assert_eq!(session.ready(budget()).unwrap(), Receipt::Ready);
+            assert_eq!(session.pause(budget()).unwrap(), Receipt::Busy);
+            assert_eq!(
+                session.pause(budget()).unwrap(),
+                Receipt::Idle { lease_id: 2 }
+            );
+            assert_eq!(session.resume(2, budget()).unwrap(), Receipt::Resumed);
+            assert_eq!(
+                session.pause(budget()).unwrap(),
+                Receipt::Idle { lease_id: 4 }
+            );
+            assert_eq!(session.stop(4, budget()).unwrap(), Receipt::RoleStopped);
+            assert_eq!(session.state(), State::RoleStopped);
+            for (index, request) in session.transport.requests().iter().enumerate() {
+                assert_eq!(request.as_object().unwrap().len(), 8);
+                assert_eq!(request["role"], label);
+                assert_eq!(request["pid"], 42);
+                assert_eq!(request["generation"], 7);
+                assert_eq!(request["nonce"], "a".repeat(64));
+                assert_eq!(request["request_id"], index + 1);
+            }
+        }
+    }
+
+    #[test]
+    fn runtime_roles_reject_foreign_role_native_pid_and_generation() {
+        for label in ["server", "worker"] {
+            let role: Role = serde_json::from_value(json!(label)).unwrap();
+            for (field, value) in [
+                ("role", json!("gateway")),
+                ("pid", json!(43)),
+                ("generation", json!(6)),
+                ("role", json!("unknown")),
+            ] {
+                let mut ready: Value =
+                    serde_json::from_slice(&runtime_role_frame(label, 0, "ready", None)).unwrap();
+                ready[field] = value;
+                let mut fake = Fake::default();
+                fake.frame(0, raw(ready));
+                let binding = Binding::new(role, 7, "a".repeat(64), 42).unwrap();
+                let mut session = Session::new(binding, fake);
+                assert!(session.ready(budget()).is_err());
+                assert_eq!(session.state(), State::Unverified);
+                assert!(session.transport.requests().is_empty());
+            }
+        }
+        for label in ["Server", "worker ", "postgres", "unknown", ""] {
+            assert!(serde_json::from_value::<Role>(json!(label)).is_err());
+        }
     }
 }

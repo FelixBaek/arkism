@@ -14,6 +14,31 @@ import (
 
 const headerContentType = "Content-Type"
 
+type requestWorkKey struct{}
+
+// WithRequestWork retains outer request work and the mux work inside its timeout
+// separately. A timeout may end the response while the actual operation (including
+// deferred cleanup) is still running. A nil wrapper keeps ordinary behavior.
+func WithRequestWork(handler http.Handler, wrap func(http.Handler) http.Handler) http.Handler {
+	if wrap == nil {
+		return handler
+	}
+	return wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), requestWorkKey{}, wrap)
+		handler.ServeHTTP(w, r.WithContext(ctx))
+	}))
+}
+
+func requestWork(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if wrap, ok := r.Context().Value(requestWorkKey{}).(func(http.Handler) http.Handler); ok {
+			wrap(handler).ServeHTTP(w, r)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	})
+}
+
 func Handler(s *Service) http.Handler { return handler(s, 45*time.Second) }
 
 func handler(s *Service, timeout time.Duration) http.Handler {
@@ -840,7 +865,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		}
 		respond(w, map[string]bool{"deleted": true}, e)
 	})
-	timed := http.TimeoutHandler(mux, timeout, `{"code":"request_timeout"}`)
+	timed := http.TimeoutHandler(requestWork(mux), timeout, `{"code":"request_timeout"}`)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, pattern := mux.Handler(r)
 		if pattern == "POST /v1/sources/ingest" {

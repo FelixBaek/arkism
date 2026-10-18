@@ -103,6 +103,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	role := os.Getenv("ARKISM_DESKTOP_ROLE")
+	switch role {
+	case "server", "worker", "gateway", "watcher":
+	default:
+		return errors.New("fixture_role")
+	}
 	if os.Getenv(prefix+"PEER_MODE") == "silent" {
 		if !waitRelease(root, "silent_release") {
 			return errors.New("fixture_silent_timeout")
@@ -112,7 +118,7 @@ func run() error {
 	if os.Getenv(prefix+"PEER_MODE") != "protocol" {
 		return errors.New("fixture_mode")
 	}
-	control, err := desktopcontrol.FromEnvironment("gateway", os.Stdin, os.Stdout)
+	control, err := desktopcontrol.FromEnvironment(role, os.Stdin, os.Stdout)
 	if err != nil || control == nil {
 		return errors.New("fixture_configuration")
 	}
@@ -121,17 +127,17 @@ func run() error {
 		return errors.New("fixture_activity")
 	}
 	go func() {
-		if !waitRelease(root, "release_activity") {
+		if !waitRelease(root, role+"_release_activity") {
 			return
 		}
 		release()
-		_ = marker(root, "activity_released")
+		_ = marker(root, role+"_activity_released")
 	}()
 	if control.Start(func(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return errors.New("fixture_stop_context")
 		}
-		return marker(root, "go_stop")
+		return marker(root, role+"_go_stop")
 	}) != nil {
 		return errors.New("fixture_start")
 	}

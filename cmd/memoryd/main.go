@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/FelixBaek/arkism/internal/host/desktopcontrol"
 	"github.com/FelixBaek/arkism/internal/memory"
 	"github.com/jackc/pgx/v5"
 )
@@ -46,9 +47,9 @@ func run() error {
 	checkIndexes := flag.Bool("check-indexes", false, "verify the Postgres schema, search indexes and RLS are ready")
 	recovery := flag.Bool("recovery", false, "isolated deletion recovery only; loopback API or erasure-only worker")
 	worker := flag.Bool("worker", false, "run embedding worker instead of HTTP API")
-	memoryReach := flag.String("memory-reach", "", "offline administrator: apply|revert the ST-824 default memory reach (user=personal, rest=general), then exit")
+	memoryReach := flag.String("memory-reach", "", "offline administrator: apply|revert the default memory reach (user=personal, rest=general), then exit")
 	reindex := flag.Bool("reindex", false, "queue embedding jobs for Postgres records not in the configured embedder's space, then exit")
-	recallBaseline := flag.String("recall-baseline", "", "read-only ST-810 measurement: evaluation JSONL path, or self for the known-item set; prints numbers only")
+	recallBaseline := flag.String("recall-baseline", "", "read-only measurement: evaluation JSONL path, or self for the known-item set; prints numbers only")
 	baselineScope := flag.String("recall-baseline-scope", "default/default/management:owner/", "workspace/project/user/agent measured by -recall-baseline")
 	listen := flag.String("listen", "127.0.0.1:8091", "HTTP listen address")
 	flag.Parse()
@@ -389,52 +390,45 @@ func run() error {
 			svc.ModelPicker = &memory.ChatModelPicker{Endpoint: endpoint, APIKey: os.Getenv("ARKISM_ROUTING_PICKER_KEY"), Model: model}
 		}
 	}
+	role := "server"
+	if *worker {
+		role = "worker"
+	}
+	control, err := desktopcontrol.FromEnvironment(role, os.Stdin, os.Stdout)
+	if err != nil {
+		return err
+	}
 	if *worker {
 		token := os.Getenv("MEMORY_WORKER_TOKEN")
 		if token == "" {
 			return memory.ErrInvalid
 		}
 		noAgentRuntime := os.Getenv("MEMORY_PRIVACY_NO_AGENT_RUNTIME") == "true"
-		for {
+		return runMemoryWorker(ctx, control, 2*time.Second, func(ctx context.Context) {
 			op, c := context.WithTimeout(ctx, 90*time.Second)
+			defer c()
 			if noAgentRuntime {
 				if _, perr := svc.RunPrivacyRuntimeStep(op, token); perr != nil && !errors.Is(perr, memory.ErrNotFound) {
 					slog.Warn("privacy runtime step deferred")
 				}
 			}
 			err := svc.WorkOnce(op, token)
-			c()
 			if err != nil && !errors.Is(err, memory.ErrNotFound) {
 				slog.Warn("memory job deferred; see scoped job status")
 			}
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(2 * time.Second):
-			}
-		}
+		})
 	}
 	handler := memory.Handler(svc)
 	if *recovery {
 		handler = memory.RecoveryHandler(svc)
 	}
 	server := &http.Server{Addr: *listen, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 50 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
-	go func() {
-		<-ctx.Done()
-		shutdown, c := context.WithTimeout(context.Background(), 10*time.Second)
-		defer c()
-		_ = server.Shutdown(shutdown)
-	}()
 	listener, err := net.Listen("tcp", *listen)
 	if err != nil {
 		return err
 	}
 	slog.Info("memory API starting", "address", listener.Addr().String(), "recovery", *recovery)
-	e = server.Serve(listener)
-	if errors.Is(e, http.ErrServerClosed) {
-		return nil
-	}
-	return e
+	return serveMemoryServer(ctx, server, listener, control)
 }
 
 func costRatesFromEnv() (memory.CostRates, error) {

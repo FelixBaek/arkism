@@ -29,10 +29,28 @@ const (
 var Default = &Gate{}
 
 type Gate struct {
-	mu       sync.Mutex
-	active   [scopeCount]uint64
-	lease    uint64
-	stopping bool
+	mu            sync.Mutex
+	active        [scopeCount]uint64
+	lease         uint64
+	stopping      bool
+	bootstrapHeld bool
+}
+
+// A recovered process starts closed before it can publish ready or start work.
+// Its first ordinary pause obtains a lease; only explicit Resume releases both.
+func (g *Gate) holdBootstrap() error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.bootstrapHeld || g.lease != 0 || g.stopping {
+		return ErrLease
+	}
+	for _, count := range g.active {
+		if count != 0 {
+			return ErrLease
+		}
+	}
+	g.bootstrapHeld = true
+	return nil
 }
 
 // Enter retains activity before enqueue/WaitGroup.Add, including work not yet scheduled.
@@ -40,7 +58,7 @@ type Gate struct {
 func (g *Gate) Enter(scope Scope) (func(), error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if scope >= scopeCount || g.lease != 0 || g.stopping || g.active[scope] == ^uint64(0) {
+	if scope >= scopeCount || g.bootstrapHeld || g.lease != 0 || g.stopping || g.active[scope] == ^uint64(0) {
 		return nil, ErrPaused
 	}
 	g.active[scope]++
@@ -73,6 +91,9 @@ func (g *Gate) Pause(lease uint64) (bool, error) {
 	for _, count := range g.active {
 		if count != 0 {
 			g.lease = 0
+			if g.bootstrapHeld {
+				return false, ErrLease
+			}
 			return false, nil
 		}
 	}
@@ -80,15 +101,24 @@ func (g *Gate) Pause(lease uint64) (bool, error) {
 }
 
 func (g *Gate) Resume(lease uint64) error {
+	return g.resume(lease, true)
+}
+
+func (g *Gate) reopenBusy(lease uint64) error {
+	return g.resume(lease, false)
+}
+
+func (g *Gate) resume(lease uint64, explicit bool) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.stopping {
 		return ErrStopping
 	}
-	if lease == 0 || lease != g.lease {
+	if lease == 0 || lease != g.lease || g.bootstrapHeld && !explicit {
 		return ErrLease
 	}
 	g.lease = 0
+	g.bootstrapHeld = false
 	return nil
 }
 

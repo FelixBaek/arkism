@@ -30,16 +30,33 @@ type Config struct {
 	generation uint64
 	nonce      string
 	pid        int
+	recovery   bool
 }
 
 func (Config) String() string   { return "desktopcontrol.Config(redacted)" }
 func (Config) GoString() string { return "desktopcontrol.Config(redacted)" }
 
+func validRole(role string) bool {
+	switch role {
+	case "server", "worker", "gateway", "watcher":
+		return true
+	default:
+		return false
+	}
+}
+
 func ParseEnvironment(get func(string) string, role string) (*Config, error) {
+	marker := get("ARKISM_DESKTOP_RECOVERY")
+	if marker != "" && marker != "0" && marker != "1" {
+		return nil, ErrConfiguration
+	}
 	if get("ARKISM_DESKTOP_CONTROL") == "" {
+		if marker == "1" {
+			return nil, ErrConfiguration
+		}
 		return nil, nil
 	}
-	if get("ARKISM_DESKTOP_CONTROL") != "1" || (role != "gateway" && role != "watcher") || get("ARKISM_DESKTOP_ROLE") != role {
+	if get("ARKISM_DESKTOP_CONTROL") != "1" || !validRole(role) || get("ARKISM_DESKTOP_ROLE") != role {
 		return nil, ErrConfiguration
 	}
 	generation, err := strconv.ParseUint(get("ARKISM_DESKTOP_GENERATION"), 10, 64)
@@ -47,7 +64,7 @@ func ParseEnvironment(get func(string) string, role string) (*Config, error) {
 	if err != nil || generation == 0 || !validNonce(nonce) {
 		return nil, ErrConfiguration
 	}
-	return &Config{role: role, generation: generation, nonce: nonce, pid: os.Getpid()}, nil
+	return &Config{role: role, generation: generation, nonce: nonce, pid: os.Getpid(), recovery: marker == "1"}, nil
 }
 
 func validNonce(nonce string) bool {
@@ -103,7 +120,10 @@ func FromEnvironment(role string, input io.Reader, output io.Writer) (*Controlle
 
 // New also permits isolated gates/transports in tests without changing process globals.
 func New(config Config, gate *Gate, input io.Reader, output io.Writer) (*Controller, error) {
-	if (config.role != "gateway" && config.role != "watcher") || config.generation == 0 || !validNonce(config.nonce) || config.pid != os.Getpid() || gate == nil || input == nil || output == nil {
+	if !validRole(config.role) || config.generation == 0 || !validNonce(config.nonce) || config.pid != os.Getpid() || gate == nil || input == nil || output == nil {
+		return nil, ErrConfiguration
+	}
+	if config.recovery && gate.holdBootstrap() != nil {
 		return nil, ErrConfiguration
 	}
 	return newController(config, gate, input, output), nil
@@ -298,7 +318,7 @@ func (c *Controller) pause(row request) error {
 		return c.write(row.ID, "error", "invalid_lease", 0)
 	}
 	if idle && c.idleCheck != nil && !c.idleCheck() {
-		if c.gate.Resume(row.ID) != nil {
+		if c.gate.reopenBusy(row.ID) != nil {
 			return c.write(row.ID, "error", "invalid_lease", 0)
 		}
 		idle = false

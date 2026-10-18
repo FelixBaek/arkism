@@ -749,11 +749,26 @@ fn nonce() -> Check<String> {
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
-fn peer_case(fixture: &mut Fixture, mode: &str, generation: u64, report: &mut Value) -> Check<()> {
+fn peer_role_name(role: Role) -> &'static str {
+    match role {
+        Role::Server => "server",
+        Role::Worker => "worker",
+        Role::Gateway => "gateway",
+        Role::Watcher => "watcher",
+    }
+}
+
+fn peer_case(
+    fixture: &mut Fixture,
+    role: Role,
+    mode: &str,
+    generation: u64,
+    report: &mut Value,
+) -> Check<()> {
     let nonce = nonce()?;
     let mut env = fixture.environment()?;
     env.extend(
-        desktop_control::bootstrap_environment(Role::Gateway, generation, &nonce)
+        desktop_control::bootstrap_environment(role, generation, &nonce)
             .map_err(|_| "fixture_bootstrap")?
             .into_iter()
             .map(|(key, value)| (key.into(), value.into())),
@@ -762,7 +777,7 @@ fn peer_case(fixture: &mut Fixture, mode: &str, generation: u64, report: &mut Va
     let index = fixture.spawn(fixture.peer.clone(), Vec::new(), env)?;
     let mut session = match desktop_control::for_job(
         &mut fixture.jobs[index].job,
-        Role::Gateway,
+        role,
         generation,
         nonce,
     ) {
@@ -822,10 +837,15 @@ fn peer_case(fixture: &mut Fixture, mode: &str, generation: u64, report: &mut Va
         )? == Receipt::Busy,
         "fixture_go_busy",
     )?;
-    create_file(&fixture.root.join("release_activity"), b"ok")?;
+    create_file(
+        &fixture
+            .root
+            .join(format!("{}_release_activity", peer_role_name(role))),
+        b"ok",
+    )?;
     wait_file(
         &fixture.root,
-        "activity_released",
+        &format!("{}_activity_released", peer_role_name(role)),
         &fixture.context,
         Duration::from_secs(5),
     )?;
@@ -863,7 +883,7 @@ fn peer_case(fixture: &mut Fixture, mode: &str, generation: u64, report: &mut Va
     )?;
     wait_file(
         &fixture.root,
-        "go_stop",
+        &format!("{}_go_stop", peer_role_name(role)),
         &fixture.context,
         Duration::from_secs(1),
     )?;
@@ -881,9 +901,15 @@ fn native_run(fixture: &mut Fixture, report: &mut Value) -> Check<()> {
     report["phase"] = json!("tree");
     tree_case(fixture, report)?;
     report["phase"] = json!("go_protocol");
-    peer_case(fixture, "protocol", 1, report)?;
+    for (index, role) in [Role::Server, Role::Worker, Role::Gateway, Role::Watcher]
+        .into_iter()
+        .enumerate()
+    {
+        peer_case(fixture, role, "protocol", index as u64 + 1, report)?;
+        report["go_controlled_role_count"] = json!(index + 1);
+    }
     report["phase"] = json!("pipe_timeout");
-    peer_case(fixture, "silent", 2, report)?;
+    peer_case(fixture, Role::Gateway, "silent", 5, report)?;
     require(
         hash_file(&fixture.exe, 128 << 20)? == fixture.exe_hash
             && hash_file(&fixture.peer, 128 << 20)? == fixture.peer_hash,

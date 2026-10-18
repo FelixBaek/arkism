@@ -97,24 +97,35 @@ pub(crate) enum Pause { Absent, Busy, Idle(u64) }
 
 pub(crate) trait RoleControl {
     fn pause_role(&mut self, role: Role) -> Result<Pause, String>;
+    fn verify_idle_role(&mut self, role: Role, lease: u64) -> Result<(), String>;
     fn resume_role(&mut self, role: Role, lease: u64) -> Result<(), String>;
     fn control_failed(&mut self);
 }
 
 pub(crate) fn resume_roles(control: &mut impl RoleControl, leases: &mut BTreeMap<Role,u64>) -> Result<(),String> {
     let held: Vec<_> = leases.iter().map(|(role,lease)| (*role,*lease)).collect();
-    let mut errors = Vec::new();
+    // Verify every held owner before releasing any one of them. The following
+    // sequential release is still not an atomic barrier across processes.
+    for &(role,lease) in &held {
+        if let Err(error) = control.verify_idle_role(role,lease) {
+            control.control_failed();
+            return Err(format!("{}: {error}",role.name()));
+        }
+    }
     for (role,lease) in held {
         match control.resume_role(role,lease) {
             Ok(()) => { leases.remove(&role); }
-            Err(error) => errors.push(format!("{}: {error}",role.name())),
+            Err(error) => {
+                control.control_failed();
+                return Err(format!("{}: {error}",role.name()));
+            }
         }
     }
-    if errors.is_empty() { Ok(()) } else { control.control_failed(); Err(errors.join("; ")) }
+    Ok(())
 }
 
 pub(crate) fn pause_roles(control: &mut impl RoleControl, leases: &mut BTreeMap<Role,u64>) -> Result<(),String> {
-    for role in [Role::Gateway,Role::Watcher] {
+    for role in [Role::Server,Role::Worker,Role::Gateway,Role::Watcher] {
         let primary = match control.pause_role(role) {
             Ok(Pause::Absent) => continue,
             Ok(Pause::Idle(lease)) => { leases.insert(role,lease); continue; }
@@ -164,7 +175,9 @@ fn recovered_error<B: Backend>(backend: &mut B, stopped: &mut [(Role, B::Spec)],
             errors.push(format!("{}: {error}", role.name()));
         }
     }
-    if let Err(error) = backend.resume_remaining() { errors.push(error); }
+    if errors.is_empty() && backend.safe_to_reopen() {
+        if let Err(error) = backend.resume_remaining() { errors.push(error); }
+    }
     if !errors.is_empty() { backend.hold_closed(); }
     if errors.is_empty() { primary } else { format!("{primary}; update_runtime_recovery_failed: {}", errors.join("; ")) }
 }

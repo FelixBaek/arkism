@@ -370,3 +370,347 @@ func TestDesktopControlEnvironmentOptInIsExplicitAndBoundToActualPID(t *testing.
 		t.Fatal("foreign role accepted")
 	}
 }
+
+func TestDesktopControlRuntimeRolesRequireExactCallerAndActualPID(t *testing.T) {
+	roles := []string{"server", "worker", "gateway", "watcher"}
+	for _, role := range roles {
+		t.Run(role, func(t *testing.T) { checkRuntimeRoleEnvironment(t, role, roles) })
+	}
+	for _, role := range []string{"", "Server", "worker ", "postgres", "unknown"} {
+		config := testConfig()
+		config.role = role
+		if _, err := New(config, &Gate{}, strings.NewReader(""), io.Discard); err == nil {
+			t.Fatal("unsupported runtime role accepted")
+		}
+	}
+}
+
+func checkRuntimeRoleEnvironment(t *testing.T, role string, roles []string) {
+	t.Helper()
+	values := map[string]string{"ARKISM_DESKTOP_CONTROL": "1", "ARKISM_DESKTOP_ROLE": role,
+		"ARKISM_DESKTOP_GENERATION": "7", "ARKISM_DESKTOP_NONCE": testConfig().nonce}
+	get := func(key string) string { return values[key] }
+	config, err := ParseEnvironment(get, role)
+	if err != nil || config == nil || config.pid != os.Getpid() || config.role != role {
+		t.Fatal("runtime role was not bound to its actual caller and PID")
+	}
+	if _, err := New(*config, &Gate{}, strings.NewReader(""), io.Discard); err != nil {
+		t.Fatal("valid runtime role rejected")
+	}
+	for _, other := range roles {
+		if other == role {
+			continue
+		}
+		if _, err := ParseEnvironment(get, other); err == nil {
+			t.Fatal("foreign runtime caller accepted")
+		}
+	}
+	config.pid++
+	if _, err := New(*config, &Gate{}, strings.NewReader(""), io.Discard); err == nil {
+		t.Fatal("foreign native PID accepted")
+	}
+}
+
+func TestDesktopControlServerWorkerProtocolRetainsContextAndLeases(t *testing.T) {
+	for _, role := range []string{"server", "worker"} {
+		t.Run(role, func(t *testing.T) { checkRuntimeRoleProtocol(t, role) })
+	}
+}
+
+func checkRuntimeRoleProtocol(t *testing.T, role string) {
+	t.Helper()
+	config := testConfig()
+	config.role = role
+	reader, input := io.Pipe()
+	t.Cleanup(func() { _ = input.Close(); _ = reader.Close() })
+	output := &frameWriter{rows: make(chan []byte, 32)}
+	var stops atomic.Int32
+	control, err := New(config, &Gate{}, reader, output)
+	if err != nil {
+		t.Fatal("runtime controller rejected")
+	}
+	if err := control.Start(func(context.Context) error { stops.Add(1); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if row := output.next(t); row.State != "ready" || row.Role != role || row.PID != os.Getpid() {
+		t.Fatal("runtime ready binding changed")
+	}
+	row := command(1, "pause", 0)
+	row.Role = role
+	checkRuntimeForeignContext(t, input, output, row)
+	checkRuntimeLeaseConversation(t, control, input, output, row)
+	select {
+	case <-control.Done():
+	case <-time.After(time.Second):
+		t.Fatal("runtime final receipt did not finish")
+	}
+	if control.Err() != nil || stops.Load() != 1 {
+		t.Fatal("runtime stop callback was not checked exactly once")
+	}
+}
+
+func checkRuntimeForeignContext(t *testing.T, input io.Writer, output *frameWriter, row request) {
+	t.Helper()
+	otherRole := "gateway"
+	if row.Role == otherRole {
+		otherRole = "watcher"
+	}
+	for _, mutate := range []func(*request){func(r *request) { r.Role = otherRole },
+		func(r *request) { r.PID++ }, func(r *request) { r.Generation++ },
+		func(r *request) { r.Nonce = strings.Repeat("b", 64) }} {
+		wrong := row
+		mutate(&wrong)
+		send(t, input, wrong)
+		if output.next(t).Error != "invalid_context_or_replay" {
+			t.Fatal("foreign runtime context accepted")
+		}
+	}
+}
+
+func checkRuntimeLeaseConversation(t *testing.T, control *Controller, input io.Writer, output *frameWriter, row request) {
+	t.Helper()
+	send(t, input, row)
+	if reply := output.next(t); reply.State != "idle" || reply.Lease != 1 {
+		t.Fatal("foreign context consumed the runtime cursor")
+	}
+	row.ID, row.Operation, row.Lease = 2, "resume", 99
+	send(t, input, row)
+	if output.next(t).Error != "invalid_lease" {
+		t.Fatal("wrong runtime lease accepted")
+	}
+	if end, err := control.Admission().Enter(Handler); err == nil {
+		end()
+		t.Fatal("invalid resume reopened admission")
+	}
+	row.ID, row.Lease = 3, 1
+	send(t, input, row)
+	if output.next(t).State != "resumed" {
+		t.Fatal("runtime resume rejected")
+	}
+	row.ID, row.Operation, row.Lease = 4, "pause", 0
+	send(t, input, row)
+	if reply := output.next(t); reply.State != "idle" || reply.Lease != 4 {
+		t.Fatal("runtime second lease changed")
+	}
+	row.ID, row.Operation, row.Lease = 5, "stop", 4
+	send(t, input, row)
+	if reply := output.next(t); reply.State != "stopped" || reply.Role != row.Role || reply.Lease != 4 {
+		t.Fatal("runtime stop receipt changed")
+	}
+}
+
+func recoveryConfig(t *testing.T, role string) Config {
+	t.Helper()
+	values := map[string]string{"ARKISM_DESKTOP_CONTROL": "1", "ARKISM_DESKTOP_ROLE": role,
+		"ARKISM_DESKTOP_GENERATION": "7", "ARKISM_DESKTOP_NONCE": testConfig().nonce, "ARKISM_DESKTOP_RECOVERY": "1"}
+	config, err := ParseEnvironment(func(key string) string { return values[key] }, role)
+	if err != nil || config == nil {
+		t.Fatal("valid controlled recovery refused")
+	}
+	return *config
+}
+
+func assertRecoveryHeld(t *testing.T, gate *Gate) {
+	t.Helper()
+	if release, err := gate.Enter(Round); err == nil {
+		release()
+		t.Fatal("recovery admitted work before explicit resume")
+	}
+}
+
+func newRecoveryController(t *testing.T, role string, output *frameWriter) (*Controller, *io.PipeWriter) {
+	t.Helper()
+	reader, input := io.Pipe()
+	t.Cleanup(func() { _ = input.Close(); _ = reader.Close() })
+	control, err := New(recoveryConfig(t, role), &Gate{}, reader, output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRecoveryHeld(t, control.Admission())
+	return control, input
+}
+
+func TestDesktopControlRecoveryEnvironmentRequiresControlledContext(t *testing.T) {
+	for _, marker := range []string{"", "0", "1", "unknown", "1 "} {
+		for _, optIn := range []string{"", "1"} {
+			checkRecoveryEnvironment(t, marker, optIn)
+		}
+	}
+}
+
+func checkRecoveryEnvironment(t *testing.T, marker, optIn string) {
+	t.Helper()
+	values := map[string]string{"ARKISM_DESKTOP_CONTROL": optIn, "ARKISM_DESKTOP_ROLE": "worker",
+		"ARKISM_DESKTOP_GENERATION": "7", "ARKISM_DESKTOP_NONCE": testConfig().nonce, "ARKISM_DESKTOP_RECOVERY": marker}
+	config, err := ParseEnvironment(func(key string) string { return values[key] }, "worker")
+	valid := marker == "" || marker == "0" || marker == "1" && optIn == "1"
+	if (err == nil) != valid {
+		t.Fatal("recovery marker used an uncontrolled or unknown mode")
+	}
+	if valid && optIn == "" && config != nil {
+		t.Fatal("normal uncontrolled startup changed")
+	}
+	if valid && optIn == "1" && marker != "1" {
+		assertNormalOpen(t, *config)
+	}
+}
+
+func assertNormalOpen(t *testing.T, config Config) {
+	t.Helper()
+	control, err := New(config, &Gate{}, strings.NewReader(""), io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := control.Admission().Enter(Round)
+	if err != nil {
+		t.Fatal("normal startup unexpectedly held admission")
+	}
+	release()
+}
+
+func TestDesktopControlRecoveryAdmissionWaitsForExactResume(t *testing.T) {
+	for _, role := range []string{"server", "worker", "gateway", "watcher"} {
+		t.Run(role, func(t *testing.T) { checkRecoveryResume(t, role) })
+	}
+}
+
+func checkRecoveryResume(t *testing.T, role string) {
+	t.Helper()
+	output := &frameWriter{rows: make(chan []byte, 32)}
+	control, input := newRecoveryController(t, role, output)
+	if err := control.Start(func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if ready := output.next(t); ready.State != "ready" || ready.Lease != 0 {
+		t.Fatal("ready metadata contract changed")
+	}
+	assertRecoveryHeld(t, control.Admission())
+	row := command(1, "pause", 0)
+	row.Role = role
+	checkRuntimeForeignContext(t, input, output, row)
+	checkRuntimeLeaseConversation(t, control, input, output, row)
+	// The shared conversation stopped the role. A separate cycle below verifies
+	// that explicit resume reopens held admission without changing normal busy.
+}
+
+func TestDesktopControlRecoveryResumeReopensNormalBusySemantics(t *testing.T) {
+	output := &frameWriter{rows: make(chan []byte, 32)}
+	control, input := newRecoveryController(t, "gateway", output)
+	if err := control.Start(func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	output.next(t)
+	send(t, input, command(1, "pause", 0))
+	if row := output.next(t); row.State != "idle" || row.Lease != 1 {
+		t.Fatal("bootstrap hold did not acquire an ordinary lease")
+	}
+	send(t, input, command(2, "resume", 99))
+	if output.next(t).Error != "invalid_lease" {
+		t.Fatal("wrong resume lease accepted")
+	}
+	assertRecoveryHeld(t, control.Admission())
+	send(t, input, command(3, "resume", 1))
+	if output.next(t).State != "resumed" {
+		t.Fatal("explicit recovery resume failed")
+	}
+	release, err := control.Admission().Enter(Round)
+	if err != nil {
+		t.Fatal("verified resume did not reopen admission")
+	}
+	send(t, input, command(4, "pause", 0))
+	if output.next(t).State != "busy" {
+		t.Fatal("normal busy semantics changed after recovery")
+	}
+	other, err := control.Admission().Enter(Handler)
+	if err != nil {
+		t.Fatal("normal busy receipt did not reopen admission")
+	}
+	other()
+	release()
+}
+
+func TestDesktopControlRecoveryIdleCheckFailureKeepsHold(t *testing.T) {
+	output := &frameWriter{rows: make(chan []byte, 32)}
+	control, input := newRecoveryController(t, "gateway", output)
+	if err := control.Start(func(context.Context) error { return nil }, func() bool { return false }); err != nil {
+		t.Fatal(err)
+	}
+	output.next(t)
+	send(t, input, command(1, "pause", 0))
+	if row := output.next(t); row.State != "error" || row.Error != "invalid_lease" {
+		t.Fatal("held idle-check failure falsely promised reopened busy admission")
+	}
+	assertRecoveryHeld(t, control.Admission())
+}
+
+func TestDesktopControlRecoveryTransportFailureKeepsHold(t *testing.T) {
+	for _, mode := range []string{"eof", "malformed", "ready_write"} {
+		t.Run(mode, func(t *testing.T) { checkRecoveryTransportFailure(t, mode) })
+	}
+}
+
+func checkRecoveryTransportFailure(t *testing.T, mode string) {
+	t.Helper()
+	output := &frameWriter{rows: make(chan []byte, 32)}
+	if mode == "ready_write" {
+		output.failAt = 1
+	}
+	control, input := newRecoveryController(t, "gateway", output)
+	err := control.Start(func(context.Context) error { t.Error("transport failure stopped the role"); return nil })
+	if mode == "ready_write" {
+		if err == nil {
+			t.Fatal("failed ready write accepted")
+		}
+	} else {
+		if err != nil {
+			t.Fatal(err)
+		}
+		output.next(t)
+		if mode == "malformed" {
+			_, _ = input.Write([]byte("not-json\n"))
+		} else {
+			_ = input.Close()
+		}
+	}
+	select {
+	case <-control.Done():
+	case <-time.After(time.Second):
+		t.Fatal("failed control transport did not finish")
+	}
+	if control.Err() == nil {
+		t.Fatal("transport failure claimed a valid session")
+	}
+	assertRecoveryHeld(t, control.Admission())
+}
+
+func TestDesktopControlRecoveryStopTimeoutKeepsHold(t *testing.T) {
+	output := &frameWriter{rows: make(chan []byte, 32)}
+	control, input := newRecoveryController(t, "gateway", output)
+	control.stopBudget = time.Millisecond
+	if err := control.Start(func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }); err != nil {
+		t.Fatal(err)
+	}
+	output.next(t)
+	send(t, input, command(1, "pause", 0))
+	output.next(t)
+	send(t, input, command(2, "stop", 1))
+	if row := output.next(t); row.State != "error" || row.Error != "shutdown_timeout" || row.Lease != 1 {
+		t.Fatal("stop timeout lost its held lease")
+	}
+	assertRecoveryHeld(t, control.Admission())
+	if control.Admission().Resume(1) == nil {
+		t.Fatal("irreversible failed stop reopened admission")
+	}
+}
+
+func TestDesktopControlRecoveryCannotTakeOverActiveGate(t *testing.T) {
+	gate := &Gate{}
+	release, err := gate.Enter(Round)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	if _, err := New(recoveryConfig(t, "worker"), gate, strings.NewReader(""), io.Discard); err == nil {
+		t.Fatal("recovery attached after work admission")
+	}
+}
