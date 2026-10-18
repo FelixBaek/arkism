@@ -374,3 +374,30 @@ textarea.tm-input { height: auto; padding: 9px 12px; resize: vertical; }
 .tm-pill-select { padding-right: 20px; background-position: calc(100% - 11px) 50%, calc(100% - 7px) 50%; background-color: var(--nc-raised); }
 .tm-select { background-color: var(--nc-raised); }
 .tm-step .tm-select, .tm-side .tm-select { background-color: var(--nc-surface); }
+
+/* 팀 격자 (208:18425): team cards on the left, the picked team's settings on the right */
+.tm-browse { flex: 1; min-width: 0; padding: 20px; overflow: auto; }
+.tm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.tm-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px; border: 1px solid var(--nc-line); border-radius: 10px;
+  background: var(--nc-raised); color: var(--nc-text); text-align: left; cursor: pointer; font: inherit; }
+.tm-tile:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .tm-tile:not(.selected):hover { border-color: var(--nc-muted); } }
+.tm-tile.selected { border-color: var(--nc-amber); background: var(--nc-amber-bg); }
+.tm-tile-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; align-self: stretch; }
+.tm-tile-marks { display: flex; gap: 4px; }
+.tm-tile b { font: 500 calc(15px * var(--fs, 1))/1.4 var(--sans); }
+.tm-tile p { margin: 0; min-height: 3em; word-break: keep-all; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tm-tile small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.tm-tile-new { border-style: dashed; background: none; align-items: center; justify-content: center; text-align: center; }
+.tm-tile-new small, .tm-tile-new p { margin-top: 0; }
+.tm-split > .tm-edit { flex: 0 0 min(460px, 45%); border-left: 1px solid var(--nc-line); padding: 20px; gap: 16px; }
+.tm-split > .tm-edit .tm-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1080px) {
+  .tm-split { flex-direction: column; overflow: auto; }
+  .tm-split > .tm-edit { flex: none; border-left: 0; border-top: 1px solid var(--nc-line); overflow: visible; }
+  .tm-browse { overflow: visible; }
+}
+.tm-split > .tm-edit .tm-edit-head { flex-wrap: wrap; }
+.tm-split > .tm-edit .tm-edit-words { flex: 1 1 100%; }
+.tm-split > .tm-edit .tm-mtable .tm-mrow { grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1.4fr) 64px 24px; gap: 10px; }
+.tm-split > .tm-edit .tm-mtable .tm-mrow > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
