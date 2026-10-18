@@ -194,6 +194,10 @@ function Get-InstalledSmokeProcesses([string]$InstallPath) {
   }
 }
 
+function Assert-InstalledSmokeNoProcesses([string]$InstallPath, [string]$ErrorCode) {
+  if (@(Get-InstalledSmokeProcesses $InstallPath).Count) { throw $ErrorCode }
+}
+
 function New-InstalledSmokeEnvironment([string]$Root) {
   $child = @{}
   foreach ($name in @('SystemRoot', 'WINDIR', 'SystemDrive', 'ComSpec', 'PATHEXT', 'PROCESSOR_ARCHITECTURE', 'NUMBER_OF_PROCESSORS')) {
@@ -379,7 +383,7 @@ function Invoke-InstalledSmoke([string]$InstallerPath, [string]$StagePath, [stri
   $manifest = @(Get-InstalledSmokePayload $stage)
   $installerHash = Get-InstalledSmokeHash $installer
   Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
-  if (@(Get-InstalledSmokeProcesses '').Count) { throw 'smoke_preexisting_process' }
+  Assert-InstalledSmokeNoProcesses '' 'smoke_preexisting_process'
   if ((Test-InstalledSmokeWithin $context.RunnerTemp $stage) -or $context.RunnerTemp -ieq $stage) { throw 'smoke_path_overlap' }
   Assert-InstalledSmokeDirectory ([IO.Path]::GetDirectoryName($evidence))
   if ($null -ne (Get-InstalledSmokeAttributes $evidence)) { throw 'smoke_evidence_exists' }
@@ -395,7 +399,7 @@ function Invoke-InstalledSmoke([string]$InstallerPath, [string]$StagePath, [stri
     if ((Get-InstalledSmokeHash $installer) -cne $installerHash) { throw 'smoke_installer_changed' }
     Assert-InstalledSmokePayload $install $manifest
     Assert-InstalledSmokeRegistration (Get-InstalledSmokeGlobalState $context) $install $Version -RequireComplete
-    if (@(Get-InstalledSmokeProcesses $install).Count) { throw 'smoke_unexpected_autorun' }
+    Assert-InstalledSmokeNoProcesses $install 'smoke_unexpected_autorun'
     [IO.File]::WriteAllText((Join-Path $data 'models.json'), '{"embedder":"none","judge":"fixed"}')
     $report.runtime = Invoke-InstalledSmokeProcess (Join-Path $install 'Arkism.exe') ('--runtime-check "' + $data + '"') $childEnv 300 'runtime_check'
     $report.result = Read-InstalledSmokeResult (Join-Path $data 'check.json')
@@ -405,7 +409,7 @@ function Invoke-InstalledSmoke([string]$InstallerPath, [string]$StagePath, [stri
   } catch { $primary = $_ }
   finally {
     try {
-      if (@(Get-InstalledSmokeProcesses $install).Count) { throw 'smoke_owned_process_still_running' }
+      Assert-InstalledSmokeNoProcesses $install 'smoke_owned_process_still_running'
       Assert-InstalledSmokeOwnedRoot $context $root
       Remove-InstalledSmokeRegistration $context $install $Version
       Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)

@@ -111,7 +111,7 @@ if (-not (Test-InstalledSmokeWithin $evidence $context.RunnerTemp) -or
 Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
 if (@(Get-InstalledSmokeProcesses '').Count) { throw 'nsis_control_preexisting_process' }
 $root = New-InstalledSmokeOwnedRoot $context 'nsis-autorun'
-$primary = $null; $cleanup = $null
+$primary = $null; $cleanup = $null; $evidenceError = $null
 $report = [ordered]@{ source_sha = $SourceSha; run_id = $context.RunId; kind = 'product-nsis-inert-control';
   shipping_payload_tested = $false; uninstaller_executed = $false; ok = $false; cleanup = 'not_started' }
 try {
@@ -151,9 +151,7 @@ try {
 }
 if ($null -ne $primary) { $report.ok = $false; $report.error = $primary.Exception.Message }
 if ($null -ne $cleanup) { $report.ok = $false; $report.cleanup_error = $cleanup.Exception.Message }
-Assert-InstalledSmokeDirectory ([IO.Path]::GetDirectoryName($evidence))
-$bytes = [Text.Encoding]::UTF8.GetBytes(($report | ConvertTo-Json -Depth 8))
-$stream = [IO.File]::Open($evidence, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
-if (-not $report.ok) { throw 'NSIS inert autorun control failed; see its evidence report' }
+try { Write-InstalledSmokeEvidence $evidence $report }
+catch { $evidenceError = $_ }
+Assert-InstalledSmokeOutcome $primary $cleanup $evidenceError
 Write-Host 'NSIS inert controls passed: default silent launch retained; explicit no-autorun suppressed launch.'

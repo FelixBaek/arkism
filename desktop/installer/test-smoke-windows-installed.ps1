@@ -94,6 +94,7 @@ function Write-SmokeTestResult($Fixture, [string]$FilePath, [string]$Arguments) 
   if ($Fixture.Mode -eq 'timeout') { throw 'synthetic runtime timeout' }
   if ($Fixture.Mode -eq 'runtime_failure') { throw 'synthetic runtime exit 1' }
   $text = $Fixture.Result | ConvertTo-Json
+  if ($Fixture.ResultJson) { $text = $Fixture.ResultJson }
   if ($Fixture.Mode -eq 'bad_json') { $text = '{invalid' }
   Write-SmokeTestFile (Join-Path $data 'check.json') $text
   if ($Fixture.Mode -eq 'mutated_payload') { Write-SmokeTestFile (Join-Path $Fixture.Install 'runtime/roles.sql') 'changed after check' }
@@ -243,9 +244,14 @@ Invoke-SmokeTestCase 'primary survives evidence publication failure' {
 
 foreach ($binding in @(@('expiry', 'expiry failed'), @('capabilities', 500), @('restored_capabilities', 500), @('reused', $false),
     @('backup_bytes', 0), @('safety_copy', $true), @('server', 'http://example.invalid:8091'), @('ok', 'true'), @('capabilities', 200.0), @('backup_bytes', $true))) {
-  Invoke-SmokeTestCase "strict runtime result $($binding[0])=$($binding[1])" {
+  Invoke-SmokeTestCase "strict runtime result $($binding[0])=$($binding[1]) [$($binding[1].GetType().Name)]" {
     param($f)
     $f.Result[$binding[0]] = $binding[1]
+    # Windows PowerShell serializes the Double 200.0 as the valid integer 200.
+    # Preserve the literal JSON type that this rejection case intends to supply.
+    if ($binding[0] -eq 'capabilities' -and $binding[1] -is [double]) {
+      $f.ResultJson = '{"ok":true,"capabilities":200.0,"restored_capabilities":200,"reused":true,"backup_bytes":128,"expiry":"ok","safety_copy":false,"server":"http://127.0.0.1:8091"}'
+    }
     Assert-SmokeTest ((Get-SmokeTestError $f).Length -gt 0) 'False success runtime report must be rejected'
   }
 }

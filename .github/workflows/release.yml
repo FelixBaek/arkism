@@ -96,7 +96,6 @@ jobs:
           New-Item -ItemType Directory -Force desktop/dist | Out-Null
           $evidence = Join-Path $env:RUNNER_TEMP 'arkism-nsis-autorun-check.json'
           ./desktop/installer/test-nsis-autorun.ps1 -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe" -SourceSha $env:GITHUB_SHA -EvidencePath $evidence
-          Copy-Item -LiteralPath $evidence -Destination desktop/dist/nsis-autorun-check.json
       - name: Build installer
         shell: pwsh
         env:
@@ -105,13 +104,23 @@ jobs:
         run: |
           $version = $env:VERSION.TrimStart('v')
           ./desktop/installer/build-windows.ps1 -Version $version -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe" -InstalledSmoke
+      - name: Collect installer check evidence
+        if: always()
+        shell: pwsh
+        run: |
+          $evidence = Join-Path $env:RUNNER_TEMP 'arkism-nsis-autorun-check.json'
+          if (Test-Path -LiteralPath $evidence -PathType Leaf) {
+            New-Item -ItemType Directory -Force desktop/dist | Out-Null
+            Copy-Item -LiteralPath $evidence -Destination desktop/dist/nsis-autorun-check.json
+          }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
         with:
           name: windows-installed-check
           path: |
             desktop/dist/windows-installed-check.json
             desktop/dist/nsis-autorun-check.json
-          if-no-files-found: error
+          if-no-files-found: warn
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows
