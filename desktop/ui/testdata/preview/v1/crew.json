@@ -484,7 +484,12 @@
       "injection": "reference",
       "priority": 80
      }
-    ]
+    ],
+    "category": "디자인",
+    "avatar": {
+     "art": "001",
+     "bg": "rose"
+    }
    }
   },
   {
@@ -493,6 +498,7 @@
    "status": "active",
    "crew": {
     "type": "agent",
+    "workflow": "리서치",
     "name": "리서처",
     "handle": "리서처",
     "role": "주제를 받아 출처까지 정리해요",
@@ -522,7 +528,12 @@
     },
     "file_edits": "ask",
     "enabled": true,
-    "model": "claude opus 5.5"
+    "model": "claude opus 5.5",
+    "category": "리서치",
+    "avatar": {
+     "art": "084",
+     "bg": "sky"
+    }
    }
   },
   {
@@ -565,7 +576,8 @@
     "model": "gpt-5.5",
     "budget": {
      "monthly_usd": 20
-    }
+    },
+    "category": "코드 품질"
    }
   },
   {
@@ -601,7 +613,12 @@
     },
     "file_edits": "ask",
     "enabled": true,
-    "model": "glm-5"
+    "model": "glm-5",
+    "category": "기록·비서",
+    "avatar": {
+     "art": "128",
+     "bg": "sage"
+    }
    }
   },
   {
@@ -634,7 +651,8 @@
      "user": "all"
     },
     "file_edits": "ask",
-    "enabled": false
+    "enabled": false,
+    "category": "기록·비서"
    }
   },
   {

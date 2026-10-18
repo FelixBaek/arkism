@@ -394,8 +394,9 @@ dialog.wf-confirm { width: min(420px, calc(100vw - 32px)); }
 .wf-hook code { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--nc-text); font-size: calc(12px * var(--fs, 1)); }
 
 /* 작업 에이전트 (208:17763 · 310:19277): list | editor | what it may use, inside one panel */
-.table-wrap > .wk-main { flex: 1; min-height: 0; overflow: auto; display: grid; grid-template-columns: 248px minmax(0, 1fr) 320px; align-items: start;
+.table-wrap > .wk-main { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 460px); align-items: stretch;
   border: 0; border-radius: 0; background: none; padding: 0; }
+.table-wrap > .wk-main > * { min-height: 0; overflow: auto; }
 .wk-card input, .wk-card textarea:not(.wk-instr), .wk-ai input { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); letter-spacing: 0; }
 .wk-head-actions .wf-link.quiet { color: var(--nc-muted); }
 .table-wrap > .wk-main:has(> .wk-form) { grid-template-columns: minmax(0, 1fr) 326px; }
@@ -433,7 +434,7 @@ dialog.wf-confirm { width: min(420px, calc(100vw - 32px)); }
 .wk-depth > div { display: flex; flex-direction: column; }
 .wk-depth strong { font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .wk-depth small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
-.wk-label { margin: 4px 0 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.wk-label { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .wk-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .wk-chip { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--nc-line); background: none; color: var(--nc-muted);
   font: 400 calc(12.5px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
@@ -457,9 +458,49 @@ span.wk-chip { cursor: default; }
 .wk-preview { align-self: stretch; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 8px; background: var(--nc-raised); }
 .wk-preview p { margin: 0; color: var(--nc-text); font-size: calc(13px * var(--fs, 1)); }
 .wk-foot { display: flex; align-items: center; gap: 12px; }
-@media (max-width: 1180px) {
-  .table-wrap > .wk-main { grid-template-columns: 220px minmax(0, 1fr); }
-  .table-wrap > .wk-main > .wk-side { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--nc-line); }
+/* 전문가 격자 (208:17763): cards on the left, the picked one's settings on the right */
+.wk-browse { display: flex; flex-direction: column; gap: 16px; padding: 20px; min-width: 0; }
+.wk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)); gap: 12px; }
+.wk-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 236px; padding: 36px 12px 14px; border: 1px solid var(--nc-line);
+  border-radius: 10px; background: var(--nc-raised); color: var(--nc-text); text-align: center; cursor: pointer; font: inherit; }
+.wk-tile:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .wk-tile:not(.on):hover { border-color: var(--nc-muted); } }
+.wk-tile.on { border-color: var(--nc-amber); background: var(--nc-amber-bg); }
+.wk-tile.off { opacity: .6; }
+.wk-tile-badge { position: absolute; top: 10px; right: 10px; }
+.wk-avatar.wf-mark, .wk-tile .wk-avatar { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 8px; border-radius: 50%; background: var(--nc-canvas); color: var(--nc-text); }
+.wk-avatar img, .wk-avatar svg, .wk-avatar .icon { width: 22px; height: 22px; }
+.wk-tile-cat, .wk-tile-model { color: var(--nc-quiet); font-size: calc(11.5px * var(--fs, 1)); }
+.wk-tile strong { font: 500 calc(15px * var(--fs, 1))/1.4 var(--sans); }
+.wk-tile p { margin: 0; min-height: 3em; word-break: keep-all; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.wk-tile-flow { margin-top: auto; padding: 4px 10px; border-radius: 6px; background: var(--nc-canvas); color: var(--nc-text); font-size: calc(12px * var(--fs, 1)); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-tile-flow.none { color: var(--nc-quiet); }
+.wk-tile-new { border-style: dashed; background: none; justify-content: center; padding-top: 14px; }
+.wk-tile-new .wk-avatar { background: none; color: var(--nc-muted); }
+.wk-detail { display: flex; flex-direction: column; gap: 16px; padding: 20px; min-width: 0; border-left: 1px solid var(--nc-line); align-self: stretch; }
+.wk-detail .wk-head { align-items: flex-start; }
+.wk-detail .wk-head .wk-avatar { width: 48px; height: 48px; margin: 0; border-radius: 10px; background: var(--nc-raised); }
+.wk-detail .wk-head-text h2 { margin: 0; font: 500 calc(18px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-text); }
+.wk-detail .wk-title { margin-top: 6px; }
+.wk-detail .wk-head-actions { gap: 16px; }
+.wk-detail .wk-head-actions .segment { margin-right: auto; display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); }
+.wk-detail .wk-head-actions .segment .tab { padding: 5px 12px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.wk-detail .wk-head-actions .segment .tab.active { background: var(--nc-raised); color: var(--nc-accent); }
+.wk-call { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--nc-line); border-radius: 8px; }
+.wk-call strong { color: var(--nc-text); font-size: calc(13px * var(--fs, 1)); }
+.wk-call small { flex: 1; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.wk-call .wf-link, .wk-head-actions .wf-link { padding: 6px 8px; margin: -6px -8px; } /* bigger click area, same visual spot */
+.wk-detail .wk-card { padding: 16px; }
+.wk-detail .wk-flow-steps { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.wk-spend-card { align-items: flex-start; }
+.wk-spend-card .field, .wk-spend-card .scope-fields { align-self: stretch; }
+.wk-spend-card .field select, .wk-spend-card .field input { width: 100%; box-sizing: border-box; }
+@media (max-width: 1080px) {
+  .table-wrap > .wk-main, .table-wrap > .wk-main:has(> .wk-form) { grid-template-columns: minmax(0, 1fr); align-content: start; overflow: auto; }
+  .wk-form { border-right: 0; }
+  .wk-form + .wk-side { border-top: 1px solid var(--nc-line); }
+  .table-wrap > .wk-main > * { min-height: auto; overflow: visible; }
+  .wk-detail { border-left: 0; border-top: 1px solid var(--nc-line); }
 }
 .wk-card .segment { display: inline-flex; flex-direction: row; align-self: flex-start; gap: 2px; padding: 3px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control, 8px); background: var(--nc-surface); }
 .wk-card .segment .tab { display: inline-flex; align-items: center; padding: 5px 12px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
@@ -481,3 +522,43 @@ span.wk-chip { cursor: default; }
 .wk-side .field { align-self: stretch; }
 .wk-side .field select, .wk-side .field input { width: 100%; box-sizing: border-box; }
 .wk-side .scope-fields { align-self: stretch; display: grid; grid-template-columns: 1fr; gap: 8px; }
+/* 일하는 방법: the agent's workflow as a panel with numbered steps. Neutral surface; the only accent is the mark. */
+.wk-flow-wrap { display: flex; flex-direction: column; gap: 12px; }
+.wk-flow { display: flex; flex-direction: column; gap: 14px; padding: 16px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); }
+.wk-flow.empty { flex-direction: row; align-items: center; gap: 12px; border-style: dashed; background: transparent; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
+.wk-flow-mark { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 8px; background: var(--nc-amber-bg); color: var(--nc-amber); }
+.wk-flow-head { display: flex; align-items: center; gap: 12px; }
+.wk-flow-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
+.wk-flow-who strong { color: var(--nc-text); font-weight: 500; font-size: calc(14px * var(--fs, 1)); }
+.wk-flow-who small { display: flex; flex-wrap: wrap; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.wk-flow-who small code { font-family: var(--mono); }
+.wk-flow-who small > * + *::before { content: "·"; margin: 0 6px; }
+.wk-flow-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.wk-flow-steps li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-canvas); color: var(--nc-muted); font-size: calc(13px * var(--fs, 1)); }
+.wk-flow-steps li.ai { color: var(--nc-text); }
+.wk-flow-steps .n { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--nc-line); color: var(--nc-quiet); font: 500 calc(11px * var(--fs, 1))/1 var(--mono); }
+.wk-flow-steps li.ai .n { border-color: var(--nc-amber); color: var(--nc-amber); }
+.wk-flow-steps .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 전문가 아바타: the drawings carry a cream ground, so multiply lets the chosen --avatar-* colour through. */
+.wf-mark.wk-face { overflow: hidden; }
+.wf-mark.wk-face img { width: 100%; height: 100%; mix-blend-mode: multiply; }
+.wk-face-btn { display: inline-flex; align-items: center; gap: 12px; align-self: flex-start; padding: 0; border: 0; background: none; color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); cursor: pointer; }
+.wk-face-btn .wf-mark { width: 48px; height: 48px; border-radius: 50%; background: var(--nc-raised); }
+/* each selector outranks the place's own mark background (tile, detail head, form button) */
+.wf-mark.wk-face, .wk-tile .wk-avatar.wk-face, .wk-detail .wk-head .wk-avatar.wk-face, .wk-face-btn .wf-mark.wk-face { background: var(--face-bg); }
+.wk-face-btn .wf-mark:not(.wk-face) img, .wk-face-btn .wf-mark svg, .wk-face-btn .wf-mark .icon { width: 22px; height: 22px; }
+@media (hover: hover) and (pointer: fine) { .wk-face-btn:hover span { color: var(--nc-accent); } }
+.wk-face-btn:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 4px; border-radius: 8px; }
+.wk-face-dialog { width: min(640px, calc(100vw - 32px)); }
+.wk-face-bgs { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 -4px; padding: 4px; } /* room for the selected ring, which the scrolling body would clip */
+.wk-face-opt { position: relative; cursor: pointer; background: var(--face-bg); }
+.wk-face-opt input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.wk-face-opt:has(:focus-visible) { outline: 2px solid var(--nc-accent); outline-offset: 3px; }
+.wk-face-opt.bg { width: 28px; height: 28px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--nc-line); }
+.wk-face-opt.bg:has(:checked) { box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--nc-accent); }
+.wk-face-grid { flex: 1 1 auto; min-height: 140px; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); grid-auto-rows: max-content; gap: 8px; max-height: min(360px, 50vh); margin: -4px -4px 0; padding: 4px; overflow: auto; overscroll-behavior: contain; }
+.wk-face-opt.art { aspect-ratio: 1; border-radius: 12px; overflow: hidden; }
+.wk-face-opt.art img { display: block; width: 100%; height: 100%; mix-blend-mode: multiply; }
+.wk-face-opt.art:has(:checked) { box-shadow: inset 0 0 0 3px var(--nc-accent); }
+.dialog-foot .wk-face-clear { margin-right: auto; }

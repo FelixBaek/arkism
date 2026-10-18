@@ -198,6 +198,7 @@ type Crew struct {
 	MaxOutputTokens int         `json:"max_output_tokens,omitempty"`
 	OutputFormat    string      `json:"output_format,omitempty"`
 	FileEdits       string      `json:"file_edits,omitempty"`
+	Workflow        string      `json:"workflow,omitempty"` // handle of the workflow ($) this agent runs as its way of working
 	Budget          *CrewBudget `json:"budget,omitempty"`
 	// agent and team: records always read first (crew_pins.go)
 	Pinned []CrewPin `json:"pinned,omitempty"`
@@ -307,7 +308,7 @@ func validCrewTemplate(c Crew) bool {
 
 func noAgentFields(c Crew) bool {
 	return c.ModelMode == "" && c.FallbackModel == "" && c.ImageModel == "" && c.Temperature == nil && c.MaxOutputTokens == 0 &&
-		c.OutputFormat == "" && c.FileEdits == "" && c.Budget == nil
+		c.OutputFormat == "" && c.FileEdits == "" && c.Workflow == "" && c.Budget == nil
 }
 
 func noTeamFields(c Crew) bool {
@@ -326,6 +327,7 @@ func validCrewAgent(c Crew) bool {
 		c.Effort != "" && !slices.Contains(crewEfforts, c.Effort) || c.RunMode != "" && !slices.Contains(crewRunModes, c.RunMode) ||
 		c.Temperature != nil && !(*c.Temperature >= 0 && *c.Temperature <= 1) || c.MaxOutputTokens < 0 || c.MaxOutputTokens > 200000 ||
 		c.OutputFormat != "" && !slices.Contains(crewOutputFormats, c.OutputFormat) || c.FileEdits != "" && !slices.Contains(crewFileEdits, c.FileEdits) ||
+		c.Workflow != "" && !crewHandleRe.MatchString(c.Workflow) ||
 		c.Budget != nil && (!validUSD(c.Budget.MonthlyUSD) || !validUSD(c.Budget.AskOverUSD)) {
 		return false
 	}
@@ -551,13 +553,25 @@ func (s *Service) checkCrewRefs(ctx context.Context, scope Scope, c Crew, self s
 		return err
 	}
 	agents := map[string]bool{}
+	flows := map[string]bool{}  // live workflow key -> it has a schedule or webhook on
+	owners := map[string]bool{} // workflow keys another live agent works by
+	var prev *Crew
 	ns := crewNamespace(c.Type)
 	for _, r := range rows {
+		if r.ID == self {
+			prev = r.Crew
+		}
 		if r.Status != statusActive || r.Crew == nil || r.ID == self {
 			continue
 		}
 		if isAgent(r.Crew) {
 			agents[r.ID] = true
+		}
+		if r.Crew.Type == "agent" && r.Crew.Workflow != "" {
+			owners[crewKey(r.Crew.Workflow)] = true
+		}
+		if r.Crew.Type == "workflow" {
+			flows[crewKey(r.Crew.Handle)] = r.Crew.Trigger != nil && r.Crew.Enabled
 		}
 		if c.Handle != "" && r.Crew.Handle != "" && crewNamespace(r.Crew.Type) == ns && crewKey(r.Crew.Handle) == crewKey(c.Handle) {
 			return ErrConflict
@@ -567,6 +581,16 @@ func (s *Service) checkCrewRefs(ctx context.Context, scope Scope, c Crew, self s
 		if !agents[m.AgentID] {
 			return ErrInvalid
 		}
+	}
+	// An owned workflow runs only through its one agent (CreateCrewRun), so it must exist, be free and have no live trigger.
+	// A reference kept unchanged on save passes, so an agent whose workflow went away can still be edited.
+	if k := crewKey(c.Workflow); c.Type == "agent" && k != "" && (prev == nil || crewKey(prev.Workflow) != k) {
+		if on, live := flows[k]; !live || on || owners[k] {
+			return ErrInvalid
+		}
+	}
+	if c.Type == "workflow" && c.Trigger != nil && c.Enabled && owners[crewKey(c.Handle)] {
+		return ErrInvalid
 	}
 	return nil
 }
