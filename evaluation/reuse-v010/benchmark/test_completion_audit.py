@@ -78,9 +78,11 @@ class CompletionAuditTests(unittest.TestCase):
             patch.object(benchmark, 'write_json', side_effect=AssertionError('read-only CLI')),
         ):
             if entrypoint:
-                with patch.object(sys, 'argv', ['completion_audit.py', *args]):
-                    with self.assertRaises(SystemExit) as raised:
-                        runpy.run_path(completion_audit.__file__, run_name='__main__')
+                with (
+                    patch.object(sys, 'argv', ['completion_audit.py', *args]),
+                    self.assertRaises(SystemExit) as raised,
+                ):
+                    runpy.run_path(completion_audit.__file__, run_name='__main__')
                 status = raised.exception.code
             elif expect_error:
                 with self.assertRaises(SystemExit) as raised:
