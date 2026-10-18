@@ -154,3 +154,12 @@ with a human reviewer. Recorded wall-clock intervals include interruptions;
 active attention remains unknown. Synthetic test clocks never enter the
 measurement report. See the linked instructions for required arguments and
 privacy handling of the ledger.
+
+## Benchmark v2 planning
+
+The [v2 preregistration draft](../evaluation/reuse-v2/PREREGISTRATION.md) separates
+maintained static instructions, automatic memory injection and autonomous memory
+search. Capture with real human review and skill execution have separate study
+tracks. Sample sizes, budgets, roles and analysis decisions remain pending;
+the draft does not authorize or start an experiment. The recorded v0.1.0 study
+and its archived protocol and results remain historical evidence.
