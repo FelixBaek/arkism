@@ -15,9 +15,10 @@ import (
 
 // BenchExtraction is one extracted event, ready for POST /v1/capture.
 type BenchExtraction struct {
-	EventType string
-	Claims    []any
-	Generator host.Obj
+	EventType         string
+	Claims            []any
+	Generator         host.Obj
+	ContextRejections *ClaimContextReceipt `json:"context_rejections,omitempty"`
 }
 
 // SetBenchState points the capture state dir (the extractor's working dir) at dir.
@@ -60,9 +61,13 @@ func ExtractClaims(userText, today string, related []map[string]any, guidance, p
 	if err != nil {
 		return BenchExtraction{}, err
 	}
-	claims, err := buildClaims(raw, userText, related, nil)
+	claims, receipt, err := buildClaimsWithReceipt(raw, userText, related, nil)
 	if err != nil {
 		return BenchExtraction{}, err
 	}
-	return BenchExtraction{EventType: eventType, Claims: claims, Generator: generator(pipeline)}, nil
+	result := BenchExtraction{EventType: eventType, Claims: claims, Generator: extractionGenerator(pipeline), ContextRejections: receipt}
+	if len(claims) == 0 && receipt != nil {
+		return result, runtimeErr("capture_context_all_withheld")
+	}
+	return result, nil
 }
