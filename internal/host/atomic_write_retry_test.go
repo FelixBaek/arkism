@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -59,7 +60,15 @@ func TestAtomicWriteRetryBudgetPreservesFailure(t *testing.T) {
 			}
 			clock = clock.Add(delay)
 		})
-	if err != original || clock.Sub(start) != atomicWriteRetryBudget || attempts < 2 {
+	var diagnostic *atomicWriteReplaceError
+	var link *os.LinkError
+	if !errors.As(err, &diagnostic) || !errors.As(err, &link) || link != original || !errors.Is(err, original) || !errors.Is(err, atomicWriteSharingViolation) {
+		t.Fatal("diagnostic wrapper lost the original typed cause", err)
+	}
+	if diagnostic.reason != "budget" || diagnostic.attempts != attempts || diagnostic.elapsed != atomicWriteRetryBudget || diagnostic.errno != atomicWriteSharingViolation || !strings.HasPrefix(err.Error(), "atomic_write_replace reason=budget attempts=") {
+		t.Fatal("bounded failure diagnostics changed", err)
+	}
+	if clock.Sub(start) != atomicWriteRetryBudget || attempts < 2 {
 		t.Fatal("retry lost the exact failure or its finite budget", err, attempts)
 	}
 	for _, path := range []string{oldpath, newpath} {
@@ -101,12 +110,32 @@ func TestAtomicWriteRetryPermanentErrorsDoNotWait(t *testing.T) {
 				return code
 			}, func() time.Time { return clock }, func(delay time.Duration) { sleeps++; clock = clock.Add(delay) })
 			if mode == "after_transient" {
-				if err != permanent || attempts != 2 || sleeps != 1 {
+				if !errors.Is(err, permanent) || attempts != 2 || sleeps != 1 {
 					t.Fatal("permanent follow-up error was retried")
 				}
 			} else if !errors.Is(err, code) || attempts != 1 || sleeps != 0 {
 				t.Fatal("known permanent error consumed a retry budget", err, attempts, sleeps)
 			}
+			assertAtomicWriteTerminalDiagnostic(t, err, mode, attempts, clock.Sub(time.Unix(1, 0)), code)
+
 		})
+	}
+}
+
+func assertAtomicWriteTerminalDiagnostic(t *testing.T, err error, mode string, attempts int, elapsed time.Duration, code syscall.Errno) {
+	t.Helper()
+	var diagnostic *atomicWriteReplaceError
+	if !errors.As(err, &diagnostic) {
+		t.Fatal("missing fixed terminal diagnostics", err)
+	}
+	reason := "permanent"
+	if mode == "errno" || mode == "after_transient" {
+		reason = "not_retryable"
+	}
+	if mode == "after_transient" {
+		code = 0
+	}
+	if diagnostic.reason != reason || diagnostic.attempts != attempts || diagnostic.elapsed != elapsed || diagnostic.errno != code {
+		t.Fatal("terminal reason/count/errno changed", err)
 	}
 }

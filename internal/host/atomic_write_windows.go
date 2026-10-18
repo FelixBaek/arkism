@@ -2,6 +2,7 @@ package host
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"syscall"
 	"time"
@@ -24,23 +25,54 @@ func replaceAtomicWrite(oldpath, newpath string) error {
 // The retry budget bounds additional attempts and sleeps, not kernel-call or
 // scheduler latency. Every attempt uses the same exclusively created source.
 func replaceAtomicWriteWindows(oldpath, newpath string, rename func(string, string) error, now func() time.Time, sleep func(time.Duration)) error {
-	deadline := now().Add(atomicWriteRetryBudget)
+	start := now()
+	deadline := start.Add(atomicWriteRetryBudget)
 	delay := time.Millisecond
+	attempts := 0
 	for {
 		err := rename(oldpath, newpath)
-		if err == nil || !atomicWriteWindowsMayRetry(err) || atomicWriteWindowsPermanent(oldpath, newpath) {
-			return err
+		attempts++
+		if err == nil {
+			return nil
+		}
+		if !atomicWriteWindowsMayRetry(err) {
+			return atomicWriteWindowsFailure(err, "not_retryable", attempts, start, now())
+		}
+		if atomicWriteWindowsPermanent(oldpath, newpath) {
+			return atomicWriteWindowsFailure(err, "permanent", attempts, start, now())
 		}
 		remaining := deadline.Sub(now())
 		if remaining <= 0 {
-			return err
+			return atomicWriteWindowsFailure(err, "budget", attempts, start, now())
 		}
 		sleep(min(delay, remaining))
 		if !now().Before(deadline) {
-			return err
+			return atomicWriteWindowsFailure(err, "budget", attempts, start, now())
 		}
 		delay = min(2*delay, 16*time.Millisecond)
 	}
+}
+
+// Diagnostics add fixed labels and numbers only; the original error remains
+// reachable with errors.Is/As. An error pointer is no longer returned directly.
+type atomicWriteReplaceError struct {
+	cause    error
+	reason   string
+	attempts int
+	elapsed  time.Duration
+	errno    syscall.Errno
+}
+
+func (err *atomicWriteReplaceError) Error() string {
+	return fmt.Sprintf("atomic_write_replace reason=%s attempts=%d elapsed_ms=%d errno=%d: %v", err.reason, err.attempts, err.elapsed.Milliseconds(), err.errno, err.cause)
+}
+
+func (err *atomicWriteReplaceError) Unwrap() error { return err.cause }
+
+func atomicWriteWindowsFailure(cause error, reason string, attempts int, start, end time.Time) error {
+	var errno syscall.Errno
+	errors.As(cause, &errno)
+	return &atomicWriteReplaceError{cause: cause, reason: reason, attempts: attempts, elapsed: max(end.Sub(start), 0), errno: errno}
 }
 
 func atomicWriteWindowsMayRetry(err error) bool {
