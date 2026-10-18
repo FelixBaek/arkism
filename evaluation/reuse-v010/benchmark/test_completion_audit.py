@@ -77,13 +77,14 @@ class CompletionAuditTests(unittest.TestCase):
             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr),
             patch.object(benchmark, 'write_json', side_effect=AssertionError('read-only CLI')),
         ):
-            if entrypoint or expect_error:
+            if entrypoint:
+                with patch.object(sys, 'argv', ['completion_audit.py', *args]):
+                    with self.assertRaises(SystemExit) as raised:
+                        runpy.run_path(completion_audit.__file__, run_name='__main__')
+                status = raised.exception.code
+            elif expect_error:
                 with self.assertRaises(SystemExit) as raised:
-                    if entrypoint:
-                        with patch.object(sys, 'argv', ['completion_audit.py', *args]):
-                            runpy.run_path(completion_audit.__file__, run_name='__main__')
-                    else:
-                        completion_audit.main(args)
+                    completion_audit.main(args)
                 status = raised.exception.code
             else:
                 status = completion_audit.main(args)
