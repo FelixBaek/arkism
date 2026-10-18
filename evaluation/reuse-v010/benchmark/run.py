@@ -94,13 +94,23 @@ def evaluate(code, checks, *, timeout=20):
         remove_judge_container(name)
 
 
-def initial_record(task, condition, rep, ordinal, run_dir, approval):
+def expected_protocol():
+    """Keep new records and resume checks bound to the same execution identity."""
     return {
         'experiment_id': 'v010-synthetic-code-20261015', 'commit': BASELINE,
         'fixture_sha256': hashlib.sha256(json.dumps(TASKS, sort_keys=True).encode()).hexdigest(),
+        'model': MODEL,
+    }
+
+
+def initial_record(task, condition, rep, ordinal, run_dir, approval):
+    protocol = expected_protocol()
+    return {
+        'experiment_id': protocol['experiment_id'], 'commit': protocol['commit'],
+        'fixture_sha256': protocol['fixture_sha256'],
         'task_id': task['id'], 'scenario': task['scenario'], 'condition': condition,
         'direction': 'host-retrieval-to-codex', 'replicate': rep, 'order': ordinal,
-        'model': MODEL, 'reasoning_effort': 'low', 'temperature': None, 'seed': None,
+        'model': protocol['model'], 'reasoning_effort': 'low', 'temperature': None, 'seed': None,
         'success': None, 'timeout': False, 'rule_violations': None, 'rework_count': 0,
         'input_tokens': None, 'output_tokens': None, 'cached_input_tokens': None,
         'provider_cost_usd': None, 'setup_seconds': None, 'maintenance_seconds': None,
@@ -261,15 +271,35 @@ def frozen_schedule():
     return [cells[index] for index in FROZEN_ORDER]
 
 
-def write_spec(out, schedule):
-    write_json(out / 'frozen-spec.json', {
+def frozen_spec(schedule):
+    """Build the original spec without adding metadata to archived experiments."""
+    return {
         'baseline': BASELINE, 'tasks': TASKS,
         'schedule': [(task['id'], condition, rep) for task, condition, rep in schedule],
         'limitations': ['host retrieves context; model does not call MCP',
                         'no real agent A capture', 'synthetic short code tasks',
                         'equal configured budgets, different observed input token counts'],
         'improvement_threshold': 'At least 3 additional successes over static in 15 paired attempts, without extra rule violations; exploratory signal only, not general productivity proof.',
-    })
+    }
+
+
+def write_spec(out, schedule):
+    write_json(out / 'frozen-spec.json', frozen_spec(schedule))
+
+
+def validate_resume_spec(out, schedule, has_results):
+    """Validate the full legacy spec and leave matching original bytes intact."""
+    try:
+        saved = json.loads((out / 'frozen-spec.json').read_text())
+    except FileNotFoundError:
+        if has_results:
+            raise ValueError('benchmark results require their frozen spec') from None
+        return False
+    # JSON serialization normalizes tuples but preserves bool/int/float types.
+    canonical = {'sort_keys': True, 'separators': (',', ':'), 'allow_nan': False}
+    if json.dumps(saved, **canonical) != json.dumps(frozen_spec(schedule), **canonical):
+        raise ValueError('frozen benchmark spec differs from the requested experiment')
+    return True
 
 
 def token_total(rows, field):
@@ -326,8 +356,31 @@ def validate_result_identities(rows):
     return identities
 
 
-def write_results(out):
-    rows = [json.loads(path.read_text()) for path in out.glob('*/result.json')]
+def resume_results(out, schedule):
+    """Bind all saved rows to the requested execution and their planned folders."""
+    saved = [(path, json.loads(path.read_text())) for path in out.glob('*/result.json')]
+    rows = [row for _, row in saved]
+    completed = validate_result_identities(rows)
+    requested = expected_protocol()
+    expected = tuple(requested[field] for field in PROTOCOL_FIELDS)
+    planned = {(task['id'], condition, rep): ordinal
+               for ordinal, (task, condition, rep) in enumerate(schedule)}
+    for path, row in saved:
+        identity, protocol = result_identity(row)
+        if protocol != expected:
+            raise ValueError('saved benchmark result differs from the requested experiment')
+        if identity not in planned:
+            raise ValueError('saved benchmark result is outside the frozen schedule')
+        if type(row.get('order')) is not int or row['order'] != planned[identity]:
+            raise ValueError('saved benchmark result order differs from the frozen schedule')
+        if path.parent.name != f'{identity[0]}-{identity[1]}-{identity[2]}':
+            raise ValueError('saved benchmark result does not match its folder')
+    return rows, completed
+
+
+def write_results(out, rows=None):
+    if rows is None:
+        rows = [json.loads(path.read_text()) for path in out.glob('*/result.json')]
     validate_result_identities(rows)
     rows.sort(key=lambda row: row['order'])
     write_json(out / 'results.json', rows)
@@ -366,14 +419,16 @@ def main():
         if out.is_symlink() or not out.resolve().is_relative_to(ROOT):
             raise ValueError('results directory escapes benchmark root')
     schedule = frozen_schedule()
-    write_spec(out, schedule)
+    rows, completed = resume_results(out, schedule)
+    if not validate_resume_spec(out, schedule, bool(rows)):
+        write_spec(out, schedule)
     selected = args.conditions.split(',')
     for ordinal, (task, condition, rep) in enumerate(schedule):
-        completed = (out / f'{task["id"]}-{condition}-{rep}' / 'result.json').exists()
-        if condition in selected and not completed:
-            run_one(task, condition, rep, ordinal, out, args.auth,
-                    args.exporter is not None, args.approval)
-    write_results(out)
+        identity = (task['id'], condition, rep)
+        if condition in selected and identity not in completed:
+            rows.append(run_one(task, condition, rep, ordinal, out, args.auth,
+                                args.exporter is not None, args.approval))
+    write_results(out, rows=rows)
 
 
 if __name__ == '__main__':
