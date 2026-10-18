@@ -147,7 +147,7 @@ function Assert-ProductProfileBeforeSetup($State) {
   if (@(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME).Count) { throw 'product_profile_not_empty' }
 }
 
-function Get-ProductProfileShortcutRecords($State, $Global, $Profile) {
+function Get-ProductProfileShortcutRecords($State, $Global, $ProfileTree) {
   Assert-InstalledSmokeRegistration $Global $State.Install $State.Version -RequireComplete
   $seen = @{}
   foreach ($shortcut in @($Global.Shortcuts | Sort-Object Role)) {
@@ -156,7 +156,7 @@ function Get-ProductProfileShortcutRecords($State, $Global, $Profile) {
       throw 'product_shortcut_profile_not_owned'
     }
     $relative = $path.Substring($State.Environment.HOME.Length + 1).Replace('\', '/')
-    $rows = @($Profile | Where-Object { [string]::Equals($_.Path, $relative, [StringComparison]::OrdinalIgnoreCase) })
+    $rows = @($ProfileTree | Where-Object { [string]::Equals($_.Path, $relative, [StringComparison]::OrdinalIgnoreCase) })
     if ($rows.Count -ne 1 -or $seen.ContainsKey($rows[0].Path)) { throw 'product_shortcut_profile_ambiguous' }
     $seen[$rows[0].Path] = $true
     [pscustomobject]@{ Role = $shortcut.Role; Path = $rows[0].Path; Sha256 = $rows[0].Sha256 }
@@ -183,9 +183,9 @@ function Initialize-ProductProfileBaseline($State) {
   Assert-InstalledSmokePayload $State.Install $State.Manifest
   if ((Get-InstalledSmokeHash (Join-Path $State.Install 'uninstall.exe')) -cne $State.UninstallerHash) { throw 'product_uninstaller_changed' }
   Assert-ProductGlobalState $State
-  $profile = @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path)
-  $shortcuts = @(Get-ProductProfileShortcutRecords $State (Get-InstalledSmokeGlobalState $State.Context) $profile)
-  $State.SetupProfile = $profile
+  $profileTree = @(Get-InstalledSmokeTree $State.Environment.HOME $State.Environment.HOME | Sort-Object Path)
+  $shortcuts = @(Get-ProductProfileShortcutRecords $State (Get-InstalledSmokeGlobalState $State.Context) $profileTree)
+  $State.SetupProfile = $profileTree
   $State.ProfileShortcutRecords = $shortcuts
   $State.ProfileShortcuts = @($shortcuts | ForEach-Object { ConvertTo-InstalledSmokePath (Join-Path $State.Environment.HOME $_.Path) })
 }
