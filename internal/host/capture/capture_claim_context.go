@@ -124,6 +124,26 @@ func parseClaimContext(v any) (*claimMemoryContext, int, string) {
 	return context, len(encoded), ""
 }
 
+// Literal support prevents invented metadata wording, not selective quotation or
+// false semantic implication. It never promotes inference to source authority.
+func claimContextSupported(context *claimMemoryContext, row map[string]any, users []any) bool {
+	quote, ok := row["quote"].(string)
+	if !ok || users == nil {
+		return false // An aggregate cannot establish a user-message boundary.
+	}
+	matches, err := claimQuoteMatches(quote, users)
+	if err != nil || len(matches) != 1 {
+		return false // Never guess which user's source or archive ref to use.
+	}
+	span := claimEvidenceSpan(quote)
+	for _, phrase := range []string{context.Applicability, context.Uncertainty, context.ValidFrom} {
+		if phrase != "" && !strings.Contains(span, phrase) {
+			return false
+		}
+	}
+	return true
+}
+
 // ClaimContextRejection names an omitted model item without storing its text.
 type ClaimContextRejection struct {
 	Index       int    `json:"index"`
@@ -189,6 +209,9 @@ func buildClaimsWithReceipt(raw []any, userText string, related []map[string]any
 			continue
 		}
 		context, size, reason := parseClaimContext(row["memory_context"])
+		if reason == "" && context != nil && !claimContextSupported(context, row, users) {
+			reason = "context_evidence_unbound"
+		}
 		if reason == "" && used+size > claimContextBatchBytes {
 			reason = "context_batch_bytes_exceeded"
 		}
@@ -219,7 +242,7 @@ func buildClaimsWithReceipt(raw []any, userText string, related []map[string]any
 // requests retain their original v2 generator.
 func extractionGenerator(pipeline string) host.Obj {
 	gen := generator(pipeline)
-	gen.Set("prompt_version", "capture-extract-v3")
+	gen.Set("prompt_version", "capture-extract-v4")
 	return gen
 }
 

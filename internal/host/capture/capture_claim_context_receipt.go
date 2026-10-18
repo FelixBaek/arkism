@@ -66,7 +66,7 @@ func validClaimContextReceipt(r *ClaimContextReceipt) bool {
 	previous := -1
 	for _, item := range r.Rejected {
 		if item.Index <= previous || item.Index >= 16 || !claimReceiptHash(item.TextSHA256) || !claimReceiptHash(item.QuoteSHA256) ||
-			!slices.Contains([]string{"context_fields_invalid", "context_domains_invalid", "context_text_invalid", "context_kind_invalid", "context_bytes_exceeded", "context_batch_bytes_exceeded"}, item.Reason) {
+			!slices.Contains([]string{"context_fields_invalid", "context_domains_invalid", "context_text_invalid", "context_kind_invalid", "context_bytes_exceeded", "context_batch_bytes_exceeded", "context_evidence_unbound"}, item.Reason) {
 			return false
 		}
 		previous = item.Index

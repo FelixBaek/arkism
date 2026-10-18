@@ -240,7 +240,7 @@ func TestCaptureContextReceiptFailureKeepsPreparedAndRetriesWithoutModel(t *test
 		return map[string]any{"items": []any{map[string]any{"status": "candidate"}}}, nil
 	}
 	job := map[string]any{"session_id": "synthetic-context", "event_id": "synthetic-context-event", "type": "turn_completed",
-		"users": []any{map[string]any{"text": "앞으로 시험 설정은 검토 후에만 적용해", "at": "2026-01-01T00:00:00Z"}}}
+		"users": []any{map[string]any{"text": optionalContextSource, "at": "2026-01-01T00:00:00Z"}}}
 	dir := put(t, filepath.Join(capState, "claim-context-rejections"), "directory blocker")
 	persist := func() error { checkpoints++; return nil }
 	if errorCode(process(job, persist)) != "claim_context_receipt_directory_invalid" || models != 1 || posts != 0 || checkpoints != 1 {
@@ -279,7 +279,7 @@ func TestCaptureOptionalContextAllWithheldHasDurableReceiptAndDistinctMetric(t *
 		}
 	}
 	job := map[string]any{"session_id": "synthetic-context", "event_id": "synthetic-all-withheld", "type": "turn_completed",
-		"users": []any{map[string]any{"text": "앞으로 시험 설정은 검토 후에만 적용해", "at": "2026-01-01T00:00:00Z"}}}
+		"users": []any{map[string]any{"text": optionalContextSource, "at": "2026-01-01T00:00:00Z"}}}
 	checkpoints := 0
 	if err := process(job, func() error { checkpoints++; return nil }); errorCode(err) != "capture_context_all_withheld" {
 		t.Fatal(err)
@@ -306,7 +306,7 @@ func TestCaptureContextReceiptRechecksPolicyAfterPreparedCheckpoint(t *testing.T
 				return []any{optionalContextClaim(invalid), optionalContextClaim(optionalClaimContext())}, nil
 			}
 			job := map[string]any{"session_id": "synthetic-context", "event_id": "synthetic-policy-change", "type": "turn_completed",
-				"users": []any{map[string]any{"text": "앞으로 시험 설정은 검토 후에만 적용해", "at": "2026-01-01T00:00:00Z"}}}
+				"users": []any{map[string]any{"text": optionalContextSource, "at": "2026-01-01T00:00:00Z"}}}
 			persist := func() error {
 				if mode == "paused" {
 					privateTestPause(t)
@@ -456,11 +456,11 @@ func TestCaptureOptionalContextGeneratorIsFixedInPreparedRetry(t *testing.T) {
 		}
 		return map[string]any{"items": []any{map[string]any{"status": "candidate"}}}, nil
 	}
-	job := map[string]any{"session_id": "synthetic-context", "event_id": "synthetic-generator", "type": "turn_completed", "users": []any{map[string]any{"text": "앞으로 시험 설정은 검토 후에만 적용해", "at": "2026-01-01T00:00:00Z"}}}
+	job := map[string]any{"session_id": "synthetic-context", "event_id": "synthetic-generator", "type": "turn_completed", "users": []any{map[string]any{"text": optionalContextSource, "at": "2026-01-01T00:00:00Z"}}}
 	if errorCode(process(job, func() error { return nil })) != "synthetic_delivery_failure" {
 		t.Fatal("first delivery did not fail")
 	}
-	if field(job["prepared_capture"], "generator") == nil || field(first, "prompt_version") != "capture-extract-v3" {
+	if field(job["prepared_capture"], "generator") == nil || field(first, "prompt_version") != "capture-extract-v4" {
 		t.Fatal("new extraction has no fixed version")
 	}
 	job = mustLoad(t, dumps(job))
@@ -586,7 +586,7 @@ func TestCaptureContextReceiptPartialTemporaryPreparedRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := map[string]any{"session_id": "synthetic-context", "event_id": "synthetic-partial-retry", "type": "turn_completed",
-		"users": []any{map[string]any{"text": "앞으로 시험 설정은 검토 후에만 적용해", "at": "2026-01-01T00:00:00Z"}}}
+		"users": []any{map[string]any{"text": optionalContextSource, "at": "2026-01-01T00:00:00Z"}}}
 	persist := func() error { return nil }
 	var prepared map[string]any
 	for attempt := range 3 {
