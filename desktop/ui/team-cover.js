@@ -91,7 +91,7 @@ window.ArkismCoverPicker = ({ el, icon, request, query, state, notice }) => {
     }
     for (const [label, word] of WORDS) {
       const c = el("button", "tp-chip", label); c.type = "button";
-      c.addEventListener("click", () => { q.value = word; chips.querySelectorAll(".on").forEach((x) => x.classList.remove("on")); c.classList.add("on"); void find(word, 1); });
+      c.addEventListener("click", () => { q.value = label; /* 985:60681 shows the chip word; the search itself goes out in English */ chips.querySelectorAll(".on").forEach((x) => x.classList.remove("on")); c.classList.add("on"); void find(word, 1); });
       chips.append(c);
     }
     q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { chips.querySelectorAll(".on").forEach((x) => x.classList.remove("on")); void find(q.value, 1); } });

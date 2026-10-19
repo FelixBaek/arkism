@@ -224,7 +224,7 @@ window.ArkismTeams = (ctx) => {
     request(`/v1/crew/teams/${encodeURIComponent(id)}/stats?${query({ days: 30 })}`).then((r) => S.stats.set(id, r), () => S.stats.set(id, { error: true })).then(() => popRedraw("overview"));
   }
   const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
-  // Daily bars for the last 14 days from this team's meetings (the stats endpoint only sends totals).
+  // Daily bars for the last 30 days from this team's meetings (the stats endpoint only sends totals).
   async function loadMeetingsOf(pop) {
     try {
       const r = await request(`/v1/crew/meetings?${query({ status: "all", team_id: pop.id, limit: 200 })}`);
@@ -233,12 +233,12 @@ window.ArkismTeams = (ctx) => {
     popRedraw("overview"); popRedraw("history");
   }
   function bars(pop, pick) {
-    const days = Array.from({ length: 14 }, (_, i) => dayKey(Date.now() - (13 - i) * 864e5));
+    const days = Array.from({ length: 30 }, (_, i) => dayKey(Date.now() - (29 - i) * 864e5));
     const sum = Object.fromEntries(days.map((k) => [k, 0]));
     for (const m of pop.meetings || []) { const k = dayKey(m.created_at || m.updated_at); if (k in sum) sum[k] += pick(m); }
     const max = Math.max(...Object.values(sum), 0);
     const box = el("span", "tm-bars"); box.setAttribute("aria-hidden", "true");
-    days.forEach((k, i) => { const b = el("i"); b.style.height = `${max ? Math.max(8, (sum[k] / max) * 100) : 8}%`; if (i === 13) b.className = "last"; box.append(b); });
+    days.forEach((k, i) => { const b = el("i"); b.style.height = `${max ? Math.max(8, (sum[k] / max) * 100) : 8}%`; if (i === 29) b.className = "last"; box.append(b); });
     return box;
   }
 
@@ -816,7 +816,10 @@ window.ArkismTeams = (ctx) => {
       const r = el("button", "tm-hist-row meet"); r.type = "button";
       const ok = m.status === "concluded";
       r.append(el("b", ok ? "ok" : "warn", ok ? "✓" : "!"), el("time", "", (() => { const t = new Date(m.created_at || m.updated_at); return isNaN(t) ? "" : `${pad2(t.getMonth() + 1)}-${pad2(t.getDate())} ${pad2(t.getHours())}:${pad2(t.getMinutes())}`; })()),
-        raw(el("span", "", m.title || "")), el("small", "", `${tr(MEETING_STATUS[m.status]?.[0] || "")} · ${usd(m.cost_usd)}`));
+        el("i", "tm-hist-src", TRIGGERS[m.trigger] || "직접"), raw(el("span", "", m.title || "")));
+      // 981:60196: a finished meeting shows how long it ran; others show where they stopped
+      const ms = Date.parse(m.updated_at) - Date.parse(m.created_at);
+      r.append(el("small", "", `${ok && ms > 0 ? dur(ms) : tr(MEETING_STATUS[m.status]?.[0] || "")} · ${usd(m.cost_usd)}`));
       r.addEventListener("click", () => { closePopup(); S.meetSel = m.id; S.meeting = m; S.meetTab = LIVE.has(m.status) ? "running" : "ended"; go("meetings"); });
       rows.append(r);
     }
@@ -897,6 +900,8 @@ window.ArkismTeams = (ctx) => {
     const c = bare ? el("div", "tm-mode-wrap") : card("", title, sub);
     d.ending = { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(d.ending || {}) };
     const members = sorted(d.members);
+    // compact cards hide the "add members" caption, so an empty team still shows the shape (310:19981)
+    const shape = bare && !members.length ? ["moderator", "worker", "reviewer", "scribe"].map((role, i) => ({ agent_id: "", name: "", order: i + 1, role })) : members;
     const pick = el("div", "tm-block");
     if (!bare) pick.append(el("h4", "tm-label", "진행 방식"));
     const opts = el("div", "tm-modes"); opts.setAttribute("role", "radiogroup"); opts.setAttribute("aria-label", "진행 방식");
@@ -905,7 +910,7 @@ window.ArkismTeams = (ctx) => {
       o.setAttribute("role", "radio"); o.setAttribute("aria-checked", String((d.mode || "round_robin") === key));
       const t = el("div", "tm-mode-title"); t.append(el("i", "tm-radio"), el("b", "", label));
       if (bare) o.title = text; // popup: compact card, the sentence stays as a tooltip
-      o.append(t, ...(bare ? [] : [el("p", "", text)]), key === "round_robin" ? diagramRound(members, d.ending.max_rounds, bare) : diagramPick(members));
+      o.append(t, ...(bare ? [] : [el("p", "", text)]), key === "round_robin" ? diagramRound(shape, d.ending.max_rounds, bare) : diagramPick(shape));
       o.addEventListener("click", () => { if (d.mode !== key) { d.mode = key; changed(true); } });
       opts.append(o);
     }
@@ -1030,7 +1035,7 @@ window.ArkismTeams = (ctx) => {
     if (!(d.members || []).length) return "참여자를 한 명 이상 넣어 주세요.";
     return "";
   }
-  const blankTeam = () => ({ type: "team", name: "", handle: "", role: "", members: [], mode: "moderator_picks",
+  const blankTeam = () => ({ type: "team", name: "", handle: "", role: "", members: [], mode: "round_robin",
     ending: { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true }, context: [], templates: [], discord_mirror: false });
 
   // ================================================================ 회의 (208:19103)
@@ -1655,7 +1660,7 @@ window.ArkismTeams = (ctx) => {
   const meetAt = (r) => Date.parse(r.crew_meeting.finished_at || r.crew_meeting.updated_at || r.updated_at);
   const sumBy = (rows, key) => rows.reduce((s, x) => s + (x[key] || 0), 0);
   const dur = (ms) => { const s = Math.round(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, "0")}초` : `${s}초`; };
-  const TRIGGERS = { manual: "직접", call: "직접", test: "직접", schedule: "일정", webhook: "웹훅", discord: "디스코드", agent: "전문가" };
+  const TRIGGERS = { manual: "직접", call: "직접", test: "직접", workflow: "자동화", schedule: "일정", webhook: "웹훅", discord: "디스코드", agent: "전문가" };
   // failed splits by kind: agent_failed, team_failed, and the rest of failed is automations (older servers: all automations).
   const dayParts = (x) => { const hasKinds = x.workflow != null || x.team != null || x.agent != null; const tf = x.team_failed || 0; return { agent: x.agent || 0, team: hasKinds ? x.team || 0 : 0, auto: hasKinds ? x.workflow || 0 : x.ok || 0, failed: (x.failed || 0) + (x.agent_failed || 0), fAgent: x.agent_failed || 0, fTeam: tf, fAuto: Math.max(0, (x.failed || 0) - tf) }; };
   function usageAvatar(rec, model) {
