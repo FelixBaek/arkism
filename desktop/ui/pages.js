@@ -106,10 +106,12 @@ window.ArkismPages = (ctx) => {
   }
 
   // ---------------------------------------------------------------- 설정
+  const messenger = window.ArkismMessenger(ctx);
   // 설정 pages (Figma 07 · 설정, 03 · 모델): [title, one-line description]. The tabs themselves are the area tabs in shell.js.
   const SETTINGS_TABS = {
     general: ["일반", "기억이 언제 들어가고 어떻게 저장되는지 정해요."],
     connect: ["연결", "이 앱이 어느 Arkism을 쓸지 정해요. 이 PC에서 켜거나, 서버의 Arkism에 SSH로 이어요."],
+    messenger: ["메신저", "디스코드·텔레그램 같은 메신저에 봇을 연결해요. 메신저마다 봇은 1개예요."],
     roles: ["역할별 모델", "Arkism이 기억을 찾고, 뽑고, 검토할 때 쓰는 모델이에요. 이 PC 모드에서만 바꿀 수 있어요."],
     appearance: ["모양", "언어·테마·글자 크기·화면 배율을 바꿔요. 바꾸면 바로 적용돼요."],
     agents: ["에이전트", "Arkism이 스킬과 대화를 읽어 오는 에이전트예요. 스위치는 이 PC의 표시만 바꿔요."],
@@ -576,11 +578,20 @@ window.ArkismPages = (ctx) => {
     link.type = "button";
     link.addEventListener("click", toRouterModels);
     const summary = sideSec("지금 쓰는 모델");
-    toSide(summary, sideNote("서버에 연결해 쓰면 이 칸은 보이지 않고, 서버의 설정을 따라요."), link);
-    if (!(tauri && state.mode === "local")) {
+    const local = tauri && state.mode === "local";
+    toSide(summary, ...(local ? [sideNote("서버에 연결해 쓰면 이 칸은 보이지 않고, 서버의 설정을 따라요.")] : []), link);
+    if (!local) {
+      // Figma 764:64196 shows "서버 기본값: …", but no server API reports its role models (they are env on the host),
+      // so naming a value here could be wrong; say only that the server decides.
+      const ROWS = [["임베딩 모델", "의미로 기억을 찾을 때 써요. 끄면 키워드로만 찾아요."],
+        ["판정 모델", "요청마다 맞는 모델과 스킬을 골라요."],
+        ["기억 추출 모델", "대화에서 기억 후보를 뽑아요. 자주 돌아서 가벼운 모델이 좋아요."],
+        ["반성·검토 모델", "3시간마다 교훈을 정리하고 검토 대기와 정리 제안을 판단해요."]];
       summary.append(el("p", "", "서버의 설정을 따르고 있어요."));
-      const g = group("역할별 모델", "서버에 연결해 쓰는 동안에는 서버가 정한 모델을 써요. 이 PC의 Arkism으로 돌아가면 여기서 바꿀 수 있어요.");
-      return [g];
+      const card = el("section", "pg-group v4-rows v4-roles-server");
+      for (const [t, hint] of ROWS) card.append(roleBlock(line(t, hint, pill("서버가 정함"))));
+      card.append(el("p", "pg-hint", "서버에 연결해 쓰는 동안에는 서버가 정한 모델을 써요. 바꾸려면 서버의 Arkism 설정을 고치거나, 이 PC의 Arkism으로 돌아가 여기서 바꿔요."));
+      return [card];
     }
     return [roleModelsGroup(summary)];
   }
@@ -1063,7 +1074,7 @@ window.ArkismPages = (ctx) => {
     $("#controls").replaceChildren();
     sideParts = []; headParts = [];
     const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote };
-    const body = { general: tabGeneral, connect: tabConnect, roles: tabRoles, appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => routing.tab(kit),
+    const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), roles: tabRoles, appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => routing.tab(kit),
       workflow: () => crew.settingsTab({ group }), categories: tabCategories, update: tabUpdate, advanced: tabAdvanced }[tab]();
     if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고칠 수 있어요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
     const content = el("div", `pg-content v4-set v4-set-${tab}`);

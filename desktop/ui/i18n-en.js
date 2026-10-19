@@ -4872,3 +4872,41 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {"비슷한 후보 {0}개": "{0} similar candidates"});
+
+// 설정 › 메신저 · 서버 모드 역할별 모델
+Object.assign(window.ArkismI18nEN.strings, {
+  "메신저": "Messengers",
+  "디스코드·텔레그램 같은 메신저에 봇을 연결해요. 메신저마다 봇은 1개예요.": "Connect a bot to messengers like Discord and Telegram. One bot per messenger.",
+  "서버가 정함": "Set by server",
+  "요청마다 맞는 모델과 스킬을 골라요.": "Picks the right model and skills for each request.",
+  "서버에 연결해 쓰는 동안에는 서버가 정한 모델을 써요. 바꾸려면 서버의 Arkism 설정을 고치거나, 이 PC의 Arkism으로 돌아가 여기서 바꿔요.": "While connected to a server, the server's chosen models are used. To change them, edit the server's Arkism settings, or go back to Arkism on this PC and change them here.",
+  "저장됨": "Saved",
+  "저장하고 연결": "Save and connect",
+  "방금 확인": "Checked just now",
+  "토큰을 끝까지 붙여 넣어 주세요.": "Paste the whole token.",
+  "디스코드 봇 토큰을 붙여 넣으세요": "Paste your Discord bot token",
+  "텔레그램 봇 토큰 (123456:ABC…)": "Telegram bot token (123456:ABC…)",
+  "xoxb-로 시작하는 봇 토큰을 붙여 넣으세요": "Paste a bot token starting with xoxb-",
+  "새 토큰을 넘겼어요.": "New token sent.",
+  "권한을 다시 확인하는 중이에요.": "Rechecking permissions.",
+  "디스코드 연결을 끊었어요.": "Discord disconnected.",
+  "디스코드 연결을 끊을까요? 저장된 토큰이 지워져요.": "Disconnect Discord? The saved token will be deleted.",
+  "필요한 권한이 빠졌어요. 서버 관리자가 역할을 다시 줘야 해요.": "A required permission is missing. A server admin needs to grant the role again.",
+  "토큰은 서버 PC의 키 저장소에 암호화해 저장해요. 화면에는 끝 4자리만 보여요. 넣기 전에 디스코드 개발자 포털에서 Message Content Intent를 켜 주세요. 봇을 만들고 서버에 초대하는 방법은 CREW › 디스코드에서 이어서 볼 수 있어요.": "The token is stored encrypted in the server PC's key store. Only the last 4 characters are shown. Turn on Message Content Intent in the Discord Developer Portal first. See CREW › Discord for how to create the bot and invite it to your server.",
+  "의미로 기억을 찾을 때 써요. 끄면 키워드로만 찾아요.": "Used to find memories by meaning. When off, only keywords are used.",
+  "서버가 아직 지원하지 않아요. 서버에 연결 기능이 들어오면 여기서 토큰을 넣어 연결해요.": "The server doesn't support this yet. Once it does, enter the token here to connect.",
+  "어느 팀·전문가가 어디서 불러지는지 한눈에 봐요. 바꾸려면 팀·전문가 상세의 채널 연결에서 해요.": "See at a glance which team or expert is called from where. To change it, use the channel connection in the team or expert detail."
+});
+
+Object.assign(window.ArkismI18nEN.strings, {
+  "토큰 형식을 확인해 주세요.": "Check the token format.",
+  "다른 곳에서 먼저 고쳤어요. 다시 불러올게요.": "It was changed elsewhere first. Reloading.",
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}분 전 확인": "Checked {0} min ago",
+  "{0}시간 전 확인": "Checked {0} h ago",
+  "서버 {0}": "Server {0}",
+  "채널 {0}개": "{0} channels",
+  "#{0} 채널에 필요한 권한이 빠졌어요. 서버 관리자가 역할을 다시 줘야 해요.": "Required permissions are missing in #{0}. A server admin needs to grant the role again.",
+  "디스코드 #{0}": "Discord #{0}"
+});
