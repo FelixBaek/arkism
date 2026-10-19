@@ -352,7 +352,11 @@ func run() error {
 	if e != nil {
 		return e
 	}
-	if key := os.Getenv("MEMORY_UNSPLASH_ACCESS_KEY"); key != "" {
+	key := os.Getenv("MEMORY_UNSPLASH_ACCESS_KEY")
+	if key == "" {
+		key = os.Getenv("ARKISM_UNSPLASH_KEY") // same key, the shorter name the app docs use
+	}
+	if key != "" {
 		svc.Unsplash = &memory.Unsplash{Key: key}
 	}
 	if !*recovery && os.Getenv("SKILL_LLM_API_KEY") != "" {

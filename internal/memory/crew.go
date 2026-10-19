@@ -1,7 +1,9 @@
 package memory
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"net/http"
 	"regexp"
 	"slices"
@@ -389,9 +391,19 @@ func validCrewTrigger(t *CrewTrigger) bool {
 	return t.Cron == ""
 }
 
+// A photo the person uploaded: the desktop shrinks it to a small JPEG and sends it as a data URL (id "mine").
+const crewCoverUploadMax = 150_000
+
 func validCrewCover(c *CrewCover) bool {
 	if c == nil {
 		return true
+	}
+	if c.ID == "mine" {
+		// The whole URL must decode as standard base64 to a JPEG (FF D8 FF), so it is safe in src and CSS url().
+		b64, ok := strings.CutPrefix(c.URL, "data:image/jpeg;base64,")
+		raw, err := base64.StdEncoding.DecodeString(b64)
+		return ok && err == nil && bytes.HasPrefix(raw, []byte{0xff, 0xd8, 0xff}) && len(c.URL) <= crewCoverUploadMax &&
+			c.Thumb == "" && strings.TrimSpace(c.Author) != "" && runes(c.Author) <= 80 && c.AuthorURL == ""
 	}
 	img := func(u string) bool { return len(u) <= 600 && strings.HasPrefix(u, "https://images.unsplash.com/") }
 	return unsplashIDRe.MatchString(c.ID) && img(c.URL) && img(c.Thumb) && strings.TrimSpace(c.Author) != "" && runes(c.Author) <= 80 &&
@@ -693,6 +705,9 @@ func (s *Service) UpdateCrew(ctx context.Context, token, id string, in CrewUpdat
 		if in.Archive {
 			r.Status = "archived"
 		} else {
+			if err := keepCrewVersion(ctx, tx, r); err != nil {
+				return err
+			}
 			c := *in.Crew
 			r.Crew, r.Text = &c, c.Name
 		}
@@ -736,6 +751,7 @@ func (s *Service) ResolveCrew(ctx context.Context, token string, scope Scope, ha
 
 func crewRoutes(mux *http.ServeMux, s *Service) {
 	unsplashRoutes(mux, s)
+	crewVersionRoutes(mux, s)
 	mux.HandleFunc("GET /v1/crew", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.ListCrew(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, out, e)

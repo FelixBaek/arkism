@@ -197,16 +197,64 @@ window.ArkismTeams = (ctx) => {
     if (ch.some((c) => ["needs_permission", "token_invalid"].includes(c.bot.state))) return ["확인 필요", "warn"];
     return ch.some((c) => c.bot.state === "connected") ? ["연결됨", "on"] : null;
   }
-  function pickTeam(id) {
-    if (S.dirty && S.draftFor !== id && !confirm("저장하지 않은 변경이 있어요. 버리고 다른 팀을 볼까요?")) return;
-    S.team = id; S.dirty = false; S.draftFor = null; S.tpl = null; S.adding = false; S.ctxAdding = false;
-    render(false);
+  // 아바타: a preset drawing on a background colour; the model mark stands in when an expert has none.
+  function face(rec, size) {
+    const a = rec?.crew?.avatar;
+    if (!a?.art || !a?.bg) return mark(agentModel(rec));
+    const box = el("span", `tm-face${size ? ` ${size}` : ""}`);
+    box.style.setProperty("--face-bg", `var(--avatar-${a.bg})`);
+    const img = el("img"); img.src = `img/avatars/${a.art}.png`; img.alt = "";
+    box.append(img);
+    return box;
   }
-  async function loadStats(id) {
+  const coverSrc = (c) => c?.thumb || c?.url || "";
+  function coverCredit(c) {
+    if (!c?.author) return null;
+    const small = el("small", "tm-credit");
+    if (c.author_url) {
+      const a = el("a", "", c.author); a.href = c.author_url; a.target = "_blank"; a.rel = "noreferrer"; a.setAttribute("data-no-i18n", "");
+      small.append(a);
+    } else small.append(raw(el("span", "", tr(c.author))));
+    return small;
+  }
+  function loadStats(id) {
     if (S.stats.has(id)) return;
     S.stats.set(id, null);
-    try { S.stats.set(id, await request(`/v1/crew/teams/${encodeURIComponent(id)}/stats?${query({ days: 30 })}`)); } catch { S.stats.set(id, { error: true }); }
-    if (here("teams") && S.team === id) render(false);
+    request(`/v1/crew/teams/${encodeURIComponent(id)}/stats?${query({ days: 30 })}`).then((r) => S.stats.set(id, r), () => S.stats.set(id, { error: true })).then(() => popRedraw("overview"));
+  }
+  const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+  // Daily bars for the last 14 days from this team's meetings (the stats endpoint only sends totals).
+  async function loadMeetingsOf(pop) {
+    try {
+      const r = await request(`/v1/crew/meetings?${query({ status: "all", team_id: pop.id, limit: 200 })}`);
+      pop.meetings = (r.items || []).map(mt);
+    } catch { pop.meetings = []; }
+    popRedraw("overview"); popRedraw("history");
+  }
+  function bars(pop, pick) {
+    const days = Array.from({ length: 14 }, (_, i) => dayKey(Date.now() - (13 - i) * 864e5));
+    const sum = Object.fromEntries(days.map((k) => [k, 0]));
+    for (const m of pop.meetings || []) { const k = dayKey(m.created_at || m.updated_at); if (k in sum) sum[k] += pick(m); }
+    const max = Math.max(...Object.values(sum), 0);
+    const box = el("span", "tm-bars"); box.setAttribute("aria-hidden", "true");
+    days.forEach((k, i) => { const b = el("i"); b.style.height = `${max ? Math.max(8, (sum[k] / max) * 100) : 8}%`; if (i === 13) b.className = "last"; box.append(b); });
+    return box;
+  }
+
+  // ================================================================ 팀 목록 (208:18425)
+  function teamCard(r) {
+    const x = r.crew, cv = x.cover;
+    const c = el("button", `tm-card2${cv ? " has-cover" : ""}`); c.type = "button"; c.dataset.id = r.id;
+    if (cv) { const img = el("img", "tm-card2-img"); img.alt = ""; img.src = coverSrc(cv); c.append(img); }
+    const top = el("div", "tm-card2-top");
+    const b = teamBadge(r); top.append(b ? badge(b[0], b[1]) : el("span"));
+    const faces = el("span", "tm-faces");
+    sorted(x.members).slice(0, 5).forEach((m) => faces.append(face(byId(m.agent_id), "s")));
+    top.append(faces);
+    c.append(top, raw(el("strong", "", x.name)), raw(el("p", "", x.role || "")));
+    const credit = coverCredit(cv); if (credit) c.append(credit);
+    c.addEventListener("click", () => openPopup(r.id));
+    return c;
   }
   function renderTeams() {
     $("#controls").replaceChildren();
@@ -214,101 +262,533 @@ window.ArkismTeams = (ctx) => {
     table.className = "tm-wrap";
     if (!S.discord) void loadDiscord(true);
     const list = teams();
-    if (!S.team || !byId(S.team)) S.team = list[0]?.id || null;
-    // 팀 격자 (208:18425): one card per team — members' model marks, name, purpose, how many and how they talk; then a card to make one.
-    const rail = el("div", "tm-browse");
-    const grid = el("div", "tm-grid");
-    for (const r of list) {
-      const row = el("button", `tm-tile${r.id === S.team ? " selected" : ""}`); row.type = "button"; row.dataset.id = r.id;
-      row.setAttribute("aria-pressed", String(r.id === S.team));
-      const members = sorted(r.crew.members);
-      const top = el("div", "tm-tile-top");
-      const marks = el("span", "tm-tile-marks");
-      marks.append(...members.slice(0, 5).map((m) => mark(memberModel(m))));
-      top.append(marks);
-      const b = teamBadge(r); if (b) top.append(badge(b[0], b[1]));
-      const mode = MODES.find(([k]) => k === r.crew.mode)?.[1] || "";
-      row.append(top, raw(el("b", "", r.crew.name)), raw(el("p", "", r.crew.role || "")), raw(el("small", "", [tr(`${members.length}명`), mode ? tr(mode) : ""].filter(Boolean).join(" · "))));
-      row.addEventListener("click", () => pickTeam(r.id));
-      grid.append(row);
+    const cats = [...new Set(list.map((r) => r.crew.category).filter(Boolean))];
+    if (S.cat && !cats.includes(S.cat)) S.cat = "";
+    const panel = el("section", "tm-panel");
+    const bar = el("div", "tm-cats");
+    const chips = el("div", "tm-chips");
+    for (const [key, label] of [["", "모든 카테고리"], ...cats.map((c) => [c, c])]) {
+      const n = key ? list.filter((r) => r.crew.category === key).length : list.length;
+      const c = el("button", `tm-chip${S.cat === key ? " active" : ""}`); c.type = "button";
+      c.append(key ? raw(el("span", "", label)) : el("span", "", label), el("output", "", String(n)));
+      c.addEventListener("click", () => { S.cat = key; render(false); });
+      chips.append(c);
     }
-    const add = el("button", "tm-tile tm-tile-new"); add.type = "button";
-    add.append(icon("plus"), el("b", "", "새 팀"));
-    add.addEventListener("click", () => openNew());
+    bar.append(chips, button("+ 새 팀", "primary", null, () => openPopup(null)));
+    const grid = el("div", "tm-grid2");
+    for (const r of list.filter((x) => !S.cat || x.crew.category === S.cat)) grid.append(teamCard(r));
+    const add = el("button", "tm-card2 tm-card2-new"); add.type = "button";
+    add.append(icon("plus"), el("b", "", "새 팀"), el("small", "", "전문가를 골라 순서를 정하면 @이름으로 불러요"));
+    add.addEventListener("click", () => openPopup(null));
     grid.append(add);
-    rail.append(grid);
-    const main = el("div", "tm-edit");
-    const rec = byId(S.team);
-    if (!rec) {
-      main.append(empty(agents().length ? "아직 팀이 없어요. 새 팀을 만들어 전문가 여럿이 함께 회의하게 해 보세요." : "팀은 전문가로 만들어요. 먼저 전문가를 만들어 주세요."));
-    } else {
-      if (S.draftFor !== rec.id) { S.draft = clone(rec.crew); S.draftFor = rec.id; S.dirty = false; }
-      void loadStats(rec.id);
-      main.append(...teamEditor(rec));
-    }
-    const split = el("div", "tm-split"); split.append(rail, main);
-    table.replaceChildren(split);
+    panel.append(bar, grid);
+    if (!list.length) panel.append(empty(agents().length ? "아직 팀이 없어요. 새 팀을 만들어 전문가 여럿이 함께 회의하게 해 보세요." : "팀은 전문가로 만들어요. 먼저 전문가를 만들어 주세요."));
+    table.replaceChildren(panel);
   }
-  function teamEditor(rec) {
-    const d = S.draft;
-    const changed = (structural) => { S.dirty = true; if (structural) render(false); else if (S.saveBtn) S.saveBtn.disabled = false; };
-    // title line: name, badge and purpose are the team's own words, edited in place
-    const head = el("div", "tm-edit-head");
-    const words = el("div", "tm-edit-words");
-    const line = el("div", "tm-edit-title");
-    const name = raw(input(d.name, (v) => { d.name = v; changed(); }, { max: 80 })); name.className = "tm-plain tm-plain-title"; name.setAttribute("aria-label", "팀 이름");
-    line.append(name);
-    const b = teamBadge(rec); if (b) line.append(badge(b[0], b[1]));
-    const purpose = raw(input(d.role, (v) => { d.role = v; changed(); }, { max: 200, placeholder: "이 팀이 하는 일" })); purpose.className = "tm-plain tm-plain-sub"; purpose.setAttribute("aria-label", "목적");
-    words.append(line, purpose, raw(el("small", "tm-handle", `@${d.handle || handleFrom(d.name)}`)));
-    const acts = el("div", "tm-edit-acts");
-    acts.append(button("보관", "ghost", null, () => archiveTeam(rec)), button("회의 시작", "", null, () => { S.newMeeting = { team_id: rec.id }; S.meetTab = "running"; go("meetings"); }));
-    S.saveBtn = button("저장", "primary", null, () => saveTeam(rec));
-    S.saveBtn.disabled = !S.dirty;
-    acts.append(S.saveBtn);
-    head.append(words, acts);
 
-    // 회의 템플릿
-    const tpl = el("div", "tm-block");
-    tpl.append(el("h4", "tm-label", "회의 템플릿"));
+  // ================================================================ 팀 상세 팝업 (961:60688 · 981:59766 · 981:60196 · 985:60681 · 967:60615 · 310:19981)
+  const popup = window.ArkismCrewPopup?.({ el, button });
+  const covers = window.ArkismCoverPicker?.({ el, icon, request, query, state, notice });
+  let kit = null;
+  const KEYS = ["name", "role", "handle", "category", "cover", "mode", "ending", "members", "context", "templates", "pinned", "discord_mirror"];
+  const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  const norm = (c) => ({ ...c, mode: c.mode || "round_robin", discord_mirror: !!c.discord_mirror, members: sorted(c.members).map((m) => ({ ...m, focus: m.focus || "" })), ending: { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(c.ending || {}) } });
+  const modeName = (k) => MODES.find(([x]) => x === (k || "round_robin"))?.[1] || k;
+  const roleName = (k) => ROLES.find(([x]) => x === k)?.[1] || k;
+  // What differs between two versions of a team, in the person's words (save bar count · 기록 탭).
+  function changes(a, b) {
+    a = norm(a); b = norm(b);
+    const out = [];
+    if (a.name !== b.name) out.push(`이름 ${a.name || "없음"} → ${b.name || "없음"}`);
+    if ((a.role || "") !== (b.role || "")) out.push("설명 바꿈");
+    if ((a.handle || "") !== (b.handle || "")) out.push(`@이름 ${a.handle || "없음"} → ${b.handle || "없음"}`);
+    if ((a.category || "") !== (b.category || "")) out.push(`카테고리 ${a.category || "없음"} → ${b.category || "없음"}`);
+    if (!same(a.cover, b.cover)) out.push("카드 사진 바꿈");
+    if (a.mode !== b.mode) out.push(`회의 방식 → ${modeName(b.mode)}`);
+    if (a.ending.max_rounds !== b.ending.max_rounds) out.push(`최대 라운드 ${a.ending.max_rounds} → ${b.ending.max_rounds}`);
+    if (a.ending.token_cap !== b.ending.token_cap) out.push(`토큰 상한 ${Number(a.ending.token_cap).toLocaleString("en-US")} → ${Number(b.ending.token_cap).toLocaleString("en-US")}`);
+    if (a.ending.end_on_all_approved !== b.ending.end_on_all_approved) out.push("리뷰어 승인 종료 바꿈");
+    if (a.ending.end_on_moderator !== b.ending.end_on_moderator) out.push("진행자 종료 바꿈");
+    const ids = (c) => c.members.map((m) => m.agent_id);
+    for (const m of b.members) if (!ids(a).includes(m.agent_id)) out.push(`${memberName(m)} 추가 (${roleName(m.role)})`);
+    for (const m of a.members) if (!ids(b).includes(m.agent_id)) out.push(`${memberName(m)} 뺌`);
+    if (ids(a).length === ids(b).length && ids(a).every((x) => ids(b).includes(x)) && !same(ids(a), ids(b))) out.push("발언 순서 바꿈");
+    if (a.members.some((m) => { const n = b.members.find((x) => x.agent_id === m.agent_id); return n && (n.role !== m.role || n.focus !== m.focus); })) out.push("전문가 역할·맡을 일 바꿈");
+    if (!same(a.context, b.context)) out.push("팀 자료 바꿈");
+    if (!same(a.templates, b.templates)) out.push("회의 템플릿 바꿈");
+    if (!same(a.pinned, b.pinned)) out.push("항상 넣는 자료 바꿈");
+    if (a.discord_mirror !== b.discord_mirror) out.push("디스코드에도 올리기 바꿈");
+    return out;
+  }
+  const pdiff = (pop) => changes(pop.base, pop.d);
+  function popRedraw(tab) {
+    const pop = S.pop;
+    if (!pop?.h?.dialog.isConnected || pop.tab !== tab) return;
+    const body = pop.h.body, top = body.scrollTop;
+    pop.h.select(tab);
+    body.scrollTop = top;
+  }
+  // 판 이력 from the server (GET /v1/crew/versions/{id}): the live definition first, then the ones each save replaced.
+  async function loadVersions(pop) {
+    try {
+      const items = (await request(`/v1/crew/versions/${encodeURIComponent(pop.id)}?${query()}`)).items || [];
+      pop.versions = items.map((x, i) => ({ v: x.revision, at: Date.parse(x.at) || 0, crew: x.crew,
+        summary: items[i + 1] ? changes(items[i + 1].crew, x.crew).slice(0, 2).join(" · ") || "저장" : x.revision === 1 ? "처음 만듦" : "처음 기록" }));
+    } catch { pop.versions = []; }
+    popRedraw("history");
+  }
+
+  function openPopup(id) {
+    if (S.pop || !popup) return;
+    const rec = id ? byId(id) : null;
+    const base = rec ? clone(rec.crew) : blankTeam();
+    const pop = S.pop = { id: id || null, rec, base, d: clone(base), aiOpen: true, aiBusy: false, ai: "", est: null, estKey: "", estTimer: 0, meetings: null, tab: "overview", test: { text: "", m: null, busy: false }, newCat: false, handleTouched: !!rec, from: "" };
+    if (rec) { S.stats.delete(id); loadStats(id); void loadMeetingsOf(pop); void loadVersions(pop); }
+    pop.estBox = el("div", "tm-est-box");
+    const tabs = [["overview", "개요"], ["test", "테스트"], ["history", "기록"]].map(([key, label]) => ({ key, label, render: (box) => { pop.tab = key; paintTab(pop, box); } }));
+    const actions = [pop.estBox];
+    if (rec) actions.push(button("보관", "ghost", null, () => archiveTeam(pop)), button("새 회의", "ghost", null, () => {
+      if (pdiff(pop).length && !confirm("저장하지 않은 변경이 있어요. 버리고 회의 화면으로 갈까요?")) return;
+      pop.base = clone(pop.d); closePopup(); S.newMeeting = { team_id: pop.id }; S.meetTab = "running"; go("meetings");
+    }));
+    pop.h = popup.open({ title: "", sub: "", tabs, initial: "overview", actions, cls: rec ? "tm-pop" : "tm-pop is-new", onClose: () => { clearTimeout(pop.estTimer); clearTimeout(pop.testTimer); S.pop = null; } });
+    const dlg = pop.h.dialog;
+    // closing with unsaved changes asks first (Esc and 닫기)
+    const guard = (e) => { if (pdiff(pop).length && !confirm(pop.id ? "저장하지 않은 변경이 있어요. 버리고 닫을까요?" : "아직 만들지 않았어요. 버리고 닫을까요?")) { e.preventDefault(); e.stopImmediatePropagation(); } };
+    dlg.addEventListener("cancel", guard);
+    dlg.addEventListener("click", (e) => { if (e.target.closest(".crew-popup-actions > .btn:last-child")) guard(e); }, true);
+    paintHead(pop);
+    queueEst(pop);
+  }
+  function closePopup() { S.pop?.h?.dialog.close(); }
+
+  function paintTab(pop, box) {
+    box.classList.add("tm-pop-body");
+    box.replaceChildren(...(pop.tab === "overview" ? overviewTab(pop) : pop.tab === "test" ? testTab(pop) : historyTab(pop)));
+  }
+  function changed(pop, structural) {
+    if (!pop.handleTouched) pop.d.handle = handleFrom(pop.d.name);
+    queueEst(pop);
+    if (structural) popRedraw("overview"); else updateBar(pop);
+  }
+
+  // head: card preview (opens the photo picker) · category · name · @name · purpose; the estimate sits at the right
+  function takenHandle(pop) {
+    const h = (pop.d.handle || "").toLowerCase();
+    return !!h && [...agents(), ...teams()].some((r) => r.id !== pop.id && (r.crew.handle || "").toLowerCase() === h);
+  }
+  function inline(pop, get, set, attrs) {
+    const i = raw(input(get(), (v) => { set(v); changed(pop); }, attrs));
+    let before = "";
+    i.className = `tm-plain ${attrs.cls || ""}`.trim();
+    i.addEventListener("focus", () => { before = i.value; });
+    i.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); i.blur(); }
+      if (e.key === "Escape" && i.value !== before) { e.stopPropagation(); e.preventDefault(); i.value = before; set(before); changed(pop); }
+    });
+    return i;
+  }
+  function paintHead(pop) {
+    const d = pop.d, dlg = pop.h.dialog;
+    const head = dlg.querySelector(".crew-popup-head");
+    head.classList.remove("has-cover"); head.style.removeProperty("--cover"); // the photo shows on the card preview, not behind the head
+    const card = el("button", `tm-prev${d.cover ? " has-cover" : ""}`); card.type = "button"; card.setAttribute("aria-label", "카드 사진 바꾸기");
+    if (d.cover) { const img = el("img"); img.alt = ""; img.src = coverSrc(d.cover); card.append(img); } else card.append(icon("image"));
+    const credit = coverCredit(d.cover); if (credit) { credit.classList.add("tm-prev-credit"); card.append(credit); }
+    card.addEventListener("click", () => covers?.open({ current: d.cover, onPick: (c) => { if (c) d.cover = c; else delete d.cover; paintHead(pop); changed(pop); } }));
+    const words = el("div", "tm-pop-words");
+    const row = el("div", "tm-pop-row");
+    const cats = [...new Set([...teams(), ...workflows()].map((r) => r.crew.category).filter(Boolean))];
+    if (d.category && !cats.includes(d.category)) cats.push(d.category);
+    if (pop.newCat) {
+      const ni = raw(input("", () => {}, { max: 40, placeholder: "새 카테고리" })); ni.className = "tm-chip-input";
+      const done = () => { const v = ni.value.trim(); pop.newCat = false; if (v) d.category = v; paintHead(pop); changed(pop); };
+      ni.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); done(); } if (e.key === "Escape") { e.stopPropagation(); pop.newCat = false; paintHead(pop); } });
+      ni.addEventListener("blur", () => { if (pop.newCat) done(); });
+      row.append(ni); queueMicrotask(() => ni.focus());
+    } else {
+      const cs = raw(select([["", "카테고리"], ...cats.map((c) => [c, c]), ["\u0000new", "+ 새 카테고리"]], d.category || "", (v) => {
+        if (v === "\u0000new") { pop.newCat = true; paintHead(pop); return; }
+        d.category = v; if (!v) delete d.category; changed(pop);
+      }, "tm-chip tm-chip-select")); cs.setAttribute("aria-label", "카테고리");
+      row.append(cs);
+    }
+    const faces = el("span", "tm-faces"); sorted(d.members).slice(0, 5).forEach((m) => faces.append(face(byId(m.agent_id), "s")));
+    row.append(faces);
+    const line = el("div", "tm-pop-title");
+    const name = inline(pop, () => d.name, (v) => { d.name = v; if (!pop.handleTouched) tag.value = handleFrom(v); }, { max: 60, placeholder: "팀 이름을 적어 주세요", cls: "tm-plain-title" });
+    name.setAttribute("aria-label", "팀 이름");
+    const at = el("span", "tm-at tm-pop-tag"); at.append(el("span", "", "@"));
+    const tag = inline(pop, () => d.handle || (pop.id ? "" : handleFrom(d.name)), (v) => { pop.handleTouched = true; d.handle = v.replace(/^@/, ""); warn.hidden = !takenHandle(pop); }, { max: 32, placeholder: "팀이름", cls: "tm-plain-tag" });
+    tag.setAttribute("aria-label", "@이름");
+    const copy = el("button", "icon-btn plain tm-copy"); copy.type = "button"; copy.title = "@이름 복사"; copy.setAttribute("aria-label", "@이름 복사"); copy.append(icon("copy"));
+    copy.addEventListener("click", () => { navigator.clipboard?.writeText(`@${d.handle || handleFrom(d.name)}`).then(() => notice("복사했어요."), () => {}); });
+    at.append(tag, copy);
+    line.append(name, at);
+    const warn = el("small", "tm-warn", "이미 쓰는 이름이에요"); warn.hidden = !takenHandle(pop);
+    const purpose = inline(pop, () => d.role, (v) => { d.role = v; }, { max: 200, placeholder: "무엇을 하는 팀인가요? 목적을 한 줄로 적어요", cls: "tm-plain-sub" });
+    purpose.setAttribute("aria-label", "목적");
+    words.append(row, line, warn, purpose);
+    dlg.querySelector(".crew-popup-who").replaceChildren(card, words);
+  }
+
+  // 1회 예상 (끝쪽): tokens · cost · minutes, computed again whenever members, mode or ending change
+  function paintEst(pop) {
+    const e = pop.est;
+    pop.estBox.replaceChildren(...[["예상 토큰", e ? `약 ${num(e.tokens)}` : "—"], ["예상 비용", e ? `약 ${usd(e.cost_usd)}` : "—"], ["예상 시간", e ? `${e.minutes_min}~${e.minutes_max}분` : "—"]].map(([k, v]) => {
+      const r = el("div", ""); r.append(el("span", "", k), el("i"), el("b", "", v)); return r;
+    }));
+    pop.estBox.title = "한 번 회의할 때 · 공시 단가로 계산한 추정";
+  }
+  function queueEst(pop) {
+    const d = pop.d, key = JSON.stringify([d.members, d.mode, d.ending]);
+    paintEst(pop);
+    if (key === pop.estKey) return;
+    pop.estKey = key;
+    clearTimeout(pop.estTimer);
+    if (!(d.members || []).length) { pop.est = null; paintEst(pop); return; }
+    pop.estTimer = setTimeout(async () => {
+      try { const r = await request("/v1/crew/teams/estimate", { method: "POST", body: body({ team: d }) }); if (pop.estKey === key) pop.est = r && r.tokens != null ? r : null; } catch { pop.est = null; }
+      if (S.pop === pop) paintEst(pop);
+    }, 500);
+  }
+
+  // ---------------------------------------------------------------- 개요 (편집 포함)
+  function sec(iconName, title, hint, ...heads) {
+    const s = el("section", "tm-sec");
+    const h = el("div", "tm-sec-head");
+    const t = el("h3", ""); t.append(icon(iconName), el("span", "", title));
+    h.append(t, ...heads);
+    if (hint) h.append(el("small", "", hint));
+    s.append(h);
+    return s;
+  }
+  function overviewTab(pop) {
+    const d = pop.d, rec = pop.rec;
+    const out = [];
+    if (rec) out.push(kpis(pop));
+    out.push(aiSection(pop));
+    if (!rec) out.push(fromSection(pop));
+    const mode = sec("tree-structure", "회의 방식", "누가 언제 말하고, 언제 끝낼지 정해요");
+    mode.append(modeCard(d, (s) => changed(pop, s), null, null, true));
+    out.push(mode);
+    const mem = sec("users-three", "전문가", d.mode === "moderator_picks" ? "진행자가 매번 다음 사람을 골라요" : "위에서부터 순서대로 말해요 · 끌어서 순서를 바꿔요");
+    mem.append(...membersCard(d, (s) => changed(pop, s), true).childNodes);
+    out.push(mem);
+    out.push(templatesSection(pop));
+    out.push(contextSection(pop));
+    if (rec) { const pc = pins?.card({ rec, draft: d, cls: "tm-card", sub: tr(`회의를 열 때마다 ${d.name || rec.crew.name}에게 먼저 넣어요. 위에 있을수록 먼저 들어가요.`), noun: tr("이 팀은"), onChange: () => changed(pop) }); if (pc) out.push(pc); }
+    out.push(channelsSection(pop));
+    pop.bar = el("div", "tm-bar2"); out.push(pop.bar);
+    updateBar(pop);
+    return out;
+  }
+  function kpis(pop) {
+    const st = S.stats.get(pop.id), none = !st || st.error;
+    const box = el("div", "tm-kpis tm-kpis2");
+    const k = (label, value, unit, sub, mark, series) => {
+      const c = el("div", "tm-kpi"); const l = el("div", "tm-kpi-l");
+      const v = el("div", "tm-kpi-value"); v.append(el("strong", "", value)); if (unit) v.append(el("span", "", unit)); if (mark) v.append(est());
+      l.append(v, el("small", "", sub)); c.append(l, series); return c;
+    };
+    box.append(k("최근 30일", none ? "—" : String(st.meetings_done || 0), "회", "최근 30일 회의", false, bars(pop, () => 1)),
+      k("사용량", none ? "—" : num(st.tokens), "", "전체 토큰", false, bars(pop, (m) => m.tokens_used || 0)),
+      k("추정 비용", none ? "—" : usd(st.cost_usd), "", "추정 비용", true, bars(pop, (m) => m.cost_usd || 0)));
+    return box;
+  }
+  function aiSection(pop) {
+    const mine = !!pop.id;
+    const s = el("section", "tm-sec tm-ai");
+    const h = el("button", "tm-sec-head tm-ai-head"); h.type = "button"; h.setAttribute("aria-expanded", String(pop.aiOpen));
+    const t = el("h3", ""); t.append(icon("sparkle"), el("span", "", mine ? "AI로 고치기" : "AI로 초안 만들기"));
+    const car = icon("caret-down"); car.classList.add("tm-caret"); if (!pop.aiOpen) car.classList.add("shut");
+    // 대기 중인 제안: what the last AI answer changed that is not saved yet, shown even when folded
+    const waiting = pop.aiFrom ? changes(pop.aiFrom, pop.d).length : 0;
+    h.append(t);
+    if (waiting) h.append(el("small", "tm-ai-count", `제안 ${waiting}개 대기 · 저장하면 반영돼요`));
+    h.append(car);
+    h.addEventListener("click", () => { pop.aiOpen = !pop.aiOpen; popRedraw("overview"); });
+    s.append(h);
+    if (pop.aiOpen) {
+      const row = el("form", "tm-ai-row");
+      const i = el("input", "tm-input"); i.maxLength = 1000; i.value = pop.ai;
+      i.placeholder = mine ? "무엇을 고칠까요? 예: 접근성 검토자를 넣고 라운드를 3번으로 줄여 줘" : "어떤 팀이 필요해요? 예: 시안을 여러 관점에서 보고 고칠 목록을 만드는 팀";
+      i.addEventListener("input", () => { pop.ai = i.value; });
+      const go2 = el("button", "btn primary", mine ? "고치기" : "초안 만들기"); go2.type = "submit"; go2.disabled = pop.aiBusy;
+      row.addEventListener("submit", (e) => { e.preventDefault(); void runAI(pop, go2); });
+      row.append(i, go2);
+      s.append(row);
+    }
+    return s;
+  }
+  async function runAI(pop, btn) {
+    const text = pop.ai.trim();
+    if (!text) { notice("무엇을 할지 적어 주세요."); return; }
+    kit = kit || window.ArkismAssist?.(ctx);
+    if (!kit) { notice("AI 도움을 쓸 수 없어요."); return; }
+    const d = pop.d, from = clone(d);
+    btn.disabled = true; btn.textContent = "만드는 중…"; pop.aiBusy = true;
+    const roster = agents().map((a) => ({ id: a.id, name: a.crew.name, about: a.crew.role || a.crew.category || "" }));
+    const cur = { name: d.name, role: d.role, mode: d.mode, max_rounds: d.ending?.max_rounds, token_cap: d.ending?.token_cap, members: sorted(d.members).map((m) => ({ agent_id: m.agent_id, role: m.role, focus: m.focus })) };
+    const prompt = `Request: ${text}\nCurrent team: ${JSON.stringify(cur)}\nExperts you may use: ${JSON.stringify(roster)}\nAnswer with ONE JSON object holding only the keys that change: name, role (one line), mode ("round_robin" or "moderator_picks"), max_rounds (1-10), token_cap, members ([{agent_id, role: "moderator"|"worker"|"reviewer"|"scribe", focus}] in speaking order; agent_id only from the experts list). Write name and role in the language of the request.`;
+    try {
+      const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You set up small teams of experts that hold meetings. Reply with the JSON object only." } } });
+      if (a.status !== "done") throw new Error(kit.assistError(a));
+      const j = kit.parseJSON(a.output);
+      if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error("AI의 답을 읽지 못했어요. 다시 해 보세요.");
+      if (typeof j.name === "string" && j.name.trim()) d.name = j.name.trim().slice(0, 60);
+      if (typeof j.role === "string") d.role = j.role.trim().slice(0, 200);
+      if (MODES.some(([k]) => k === j.mode)) d.mode = j.mode;
+      d.ending = { ...(d.ending || {}) };
+      if (Number.isFinite(+j.max_rounds) && +j.max_rounds >= 1) d.ending.max_rounds = Math.min(10, Math.round(+j.max_rounds));
+      if (Number.isFinite(+j.token_cap) && +j.token_cap > 0) d.ending.token_cap = Math.round(+j.token_cap);
+      if (Array.isArray(j.members)) {
+        const ok = j.members.filter((m) => agents().some((x) => x.id === m?.agent_id));
+        if (ok.length) d.members = ok.map((m, i) => ({ agent_id: m.agent_id, order: i + 1, role: ROLES.some(([k]) => k === m.role) ? m.role : i ? "worker" : "moderator", focus: String(m.focus || "").slice(0, 120) }));
+      }
+      pop.ai = ""; pop.aiBusy = false; pop.aiFrom = pop.aiFrom || from;
+      if (!pop.handleTouched) d.handle = handleFrom(d.name);
+      paintHead(pop); changed(pop, true);
+      notice(pop.id ? "고쳤어요. 저장하면 반영돼요." : "초안을 만들었어요. 다듬어서 만들어 주세요.");
+    } catch (e) {
+      pop.aiBusy = false; btn.disabled = false; btn.textContent = pop.id ? "고치기" : "초안 만들기";
+      notice(e.message || "AI가 답하지 못했어요.");
+    }
+  }
+  // 비슷한 팀에서 시작 (new team only)
+  function fromSection(pop) {
+    const s = sec("copy", "비슷한 팀에서 시작");
+    const chips = el("div", "tm-chips");
+    for (const [id, label] of [["", "빈 팀"], ...teams().map((t) => [t.id, t.crew.name])]) {
+      const c = el("button", `tm-chip${pop.from === id ? " active" : ""}`, label); c.type = "button"; if (id) raw(c);
+      c.addEventListener("click", () => {
+        const src = byId(id), keep = { name: pop.d.name, role: pop.d.role, handle: pop.d.handle };
+        pop.d = src ? { ...blankTeam(), ...clone(src.crew), ...keep, discord_mirror: false } : { ...blankTeam(), ...keep };
+        delete pop.d.cover; delete pop.d.pinned;
+        pop.from = id; paintHead(pop); changed(pop, true);
+      });
+      chips.append(c);
+    }
+    s.append(chips);
+    return s;
+  }
+  function templatesSection(pop) {
+    const d = pop.d;
+    const s = sec("chat-text", "회의 템플릿", "자주 여는 회의의 주제 틀");
     const chips = el("div", "tm-chips");
     (d.templates || []).forEach((t) => {
       const c = raw(el("button", `tm-chip${S.tpl === t.key ? " active" : ""}`, t.name || "이름 없음")); c.type = "button";
-      c.addEventListener("click", () => { S.tpl = S.tpl === t.key ? null : t.key; render(false); });
+      c.addEventListener("click", () => { S.tpl = S.tpl === t.key ? null : t.key; popRedraw("overview"); });
       chips.append(c);
     });
-    const addTpl = el("button", "tm-chip add", "+ 새 템플릿"); addTpl.type = "button";
-    addTpl.addEventListener("click", () => {
-      const key = `t${Date.now().toString(36)}`;
-      d.templates = [...(d.templates || []), { key, name: "새 템플릿", prompt: "", overrides: {} }];
-      S.tpl = key; changed(true);
-    });
-    chips.append(addTpl);
-    tpl.append(chips);
+    const add = el("button", "tm-chip add", "+ 새 템플릿"); add.type = "button";
+    add.addEventListener("click", () => { const key = `t${Date.now().toString(36)}`; d.templates = [...(d.templates || []), { key, name: "새 템플릿", prompt: "", overrides: {} }]; S.tpl = key; changed(pop, true); });
+    chips.append(add);
+    s.append(chips);
     const open = (d.templates || []).find((t) => t.key === S.tpl);
     if (open) {
       const ed = el("div", "tm-tpl");
-      ed.append(field("이름", raw(input(open.name, (v) => { open.name = v; changed(); }, { max: 60 }))),
-        field("회의 주제 틀", raw(input(open.prompt, (v) => { open.prompt = v; changed(); }, { tag: "textarea", rows: 3, max: 4000, placeholder: "예: {주제} 화면을 접근성·토큰 기준으로 검토하고 고칠 목록을 만들어 주세요." }))));
-      const del = link("이 템플릿 지우기", () => { d.templates = d.templates.filter((t) => t.key !== open.key); S.tpl = null; changed(true); }, "tm-link quiet");
-      ed.append(del);
-      tpl.append(ed);
+      ed.append(field("이름", raw(input(open.name, (v) => { open.name = v; changed(pop); }, { max: 60 }))),
+        field("회의 주제 틀", raw(input(open.prompt, (v) => { open.prompt = v; changed(pop); }, { tag: "textarea", rows: 3, max: 4000, placeholder: "예: {주제} 화면을 접근성·토큰 기준으로 검토하고 고칠 목록을 만들어 주세요." }))));
+      ed.append(link("이 템플릿 지우기", () => { d.templates = d.templates.filter((t) => t.key !== open.key); S.tpl = null; changed(pop, true); }, "tm-link quiet"));
+      s.append(ed);
     }
+    return s;
+  }
+  function contextSection(pop) {
+    const d = pop.d;
+    const add = S.ctxAdding ? null : link("+ 추가", () => { S.ctxAdding = true; popRedraw("overview"); });
+    const s = sec("file-text", "팀 자료", "회의 내내 모든 멤버가 보는 자료예요", ...(add ? [add] : []));
+    const list = el("div", "tm-ctx-list");
+    (d.context || []).forEach((x) => {
+      const r = el("div", "tm-ctx-row");
+      const pill = el("button", "tm-badge line", x.share === "shared" ? "다른 팀과 공유" : "팀 전용"); pill.type = "button"; pill.title = "누르면 바뀌어요";
+      pill.addEventListener("click", () => { x.share = x.share === "shared" ? "team" : "shared"; changed(pop, true); });
+      const del = el("button", "icon-btn plain tm-x"); del.type = "button"; del.setAttribute("aria-label", "빼기"); del.append(icon("x"));
+      del.addEventListener("click", () => { d.context = d.context.filter((y) => y !== x); changed(pop, true); });
+      r.append(raw(el("span", "", x.title || x.id)), pill, del);
+      list.append(r);
+    });
+    if (!(d.context || []).length) list.append(empty("아직 없어요. 회의 내내 모두가 볼 자료를 넣어 주세요."));
+    s.append(list);
+    if (S.ctxAdding) s.append(contextAdder(d, (st) => changed(pop, st)));
+    return s;
+  }
+  function channelsSection(pop) {
+    const d = pop.d;
+    const s = sec("chat-text", "채널 연결", "어디서 이 팀을 부를지 정해요 · 봇 설정은 디스코드 화면에서");
+    const list = el("div", "tm-ctx-list");
+    const ch = pop.id ? channelsFor(pop.id) : [];
+    for (const x of ch) {
+      const r = el("div", "tm-ctx-row");
+      r.append(raw(el("span", "", `디스코드 · #${x.name || x.channel_id}`)), raw(el("small", "", x.bot.name || "")), badge(["needs_permission", "token_invalid"].includes(x.bot.state) ? "확인 필요" : "글이 올라오면 시작", ["needs_permission", "token_invalid"].includes(x.bot.state) ? "warn" : "line"));
+      list.append(r);
+    }
+    if (!ch.length) list.append(empty(pop.id ? "연결된 채널이 없어요." : "팀을 만든 뒤 채널을 연결해요."));
+    const mirror = el("div", "tm-ctx-row");
+    mirror.append(el("span", "", "회의 진행을 디스코드 스레드에도 올리기"), sw(d.discord_mirror, "디스코드에도 올리기", (v) => { d.discord_mirror = v; changed(pop, true); }));
+    list.append(mirror);
+    s.append(list);
+    if (pop.id) s.append(link("디스코드에서 채널 정하기 →", () => { closePopup(); go("discord"); }));
+    return s;
+  }
+  function updateBar(pop) {
+    if (!pop.bar?.isConnected) return;
+    const diff = pdiff(pop), d = pop.d;
+    pop.bar.hidden = !!pop.id && !diff.length;
+    pop.bar.replaceChildren();
+    const left = el("div", "tm-bar2-acts");
+    left.append(button(pop.id ? "저장" : "팀 만들기", "primary", null, () => savePopup(pop)), button("취소", "ghost", null, () => {
+      if (pop.id) { pop.d = clone(pop.base); pop.handleTouched = true; pop.aiFrom = null; paintHead(pop); changed(pop, true); } else closePopup();
+    }));
+    if (pop.id) left.append(el("small", "", `바뀐 칸 ${diff.length}개`));
+    const hint = pop.id ? `저장하면 v${(pop.rec.revision || 1) + 1}이 돼요 · 기록 탭에서 되돌릴 수 있어요`
+      : `${(d.members || []).length}명 · ${d.mode === "round_robin" ? "정해진 순서" : "진행자 지명"} · 최대 ${d.ending?.max_rounds || 4}라운드`;
+    pop.bar.append(left, el("small", "", hint));
+  }
+  async function savePopup(pop, replace) {
+    const d = replace || pop.d;
+    const bad = validTeam(d) || (takenHandle(pop) ? "이미 쓰는 이름이에요. 다른 @이름을 써 주세요." : "");
+    if (bad) { notice(bad); return; }
+    d.handle = d.handle || handleFrom(d.name);
+    try {
+      if (!pop.id) {
+        const saved = await request("/v1/crew", { method: "POST", body: body({ crew: d }) });
+        await reloadCrew().catch(() => replaceRecord(saved));
+        pop.id = saved?.id; pop.rec = byId(pop.id) || saved; pop.base = clone(d); pop.d = clone(d); pop.handleTouched = true;
+        pop.h.dialog.classList.remove("is-new");
+        if (pop.id) { loadStats(pop.id); void loadMeetingsOf(pop); void loadVersions(pop); }
+        notice("팀을 만들었어요.");
+      } else {
+        const saved = await request(`/v1/crew/${encodeURIComponent(pop.id)}`, { method: "POST", body: body({ expected_revision: pop.rec.revision, crew: d }) });
+        const rec = saved?.id ? saved : { ...pop.rec, revision: (pop.rec.revision || 0) + 1, crew: clone(d) };
+        replaceRecord(rec);
+        pop.rec = byId(pop.id) || rec; pop.base = clone(d); pop.d = clone(d);
+        void loadVersions(pop);
+        notice("저장했어요.");
+      }
+      pop.aiFrom = null;
+      if (here("teams")) render(false);
+      paintHead(pop); popRedraw("overview"); popRedraw("history");
+    } catch (e) { notice(errorText(e)); }
+  }
+  async function archiveTeam(pop) {
+    const rec = pop.rec;
+    if (!confirm(`'${rec.crew.name}' 팀을 보관할까요? 지난 회의 기록은 남아요.`)) return;
+    try {
+      await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "POST", body: body({ expected_revision: rec.revision, archive: true }) });
+      state.data.crew = items().filter((r) => r.id !== rec.id);
+      pop.base = clone(pop.d); // nothing left to lose
+      closePopup();
+      notice("보관했어요.");
+      if (here("teams")) render(false);
+    } catch (e) { notice(errorText(e)); }
+  }
 
-    // numbers for the last 30 days
-    const st = S.stats.get(rec.id);
-    const kpis = el("div", "tm-kpis");
-    const k = (label, value, unit, sub, mark) => {
-      const c = el("div", "tm-kpi"); c.append(el("p", "", label));
-      const v = el("div", "tm-kpi-value"); v.append(el("strong", "", value)); if (unit) v.append(el("span", "", unit)); if (mark) v.append(est());
-      c.append(v, el("small", "", sub)); return c;
-    };
-    const none = !st || st.error;
-    kpis.append(k("최근 30일", none ? "—" : String(st.meetings_done || 0), "회", "완료된 회의"), k("사용량", none ? "—" : num(st.tokens), "", "전체 토큰"),
-      k("추정 비용", none ? "—" : usd(st.cost_usd), "", "공시 단가 기준", true));
+  // ---------------------------------------------------------------- 테스트 (981:59766): a real meeting from the saved team
+  function testTab(pop) {
+    const t = pop.test;
+    if (!pop.id) return [empty("팀을 만든 뒤 여기서 회의를 열어 볼 수 있어요.")];
+    const note = el("p", "tm-test-note", "여기서 연 회의도 실제 실행이에요. 회의 기록은 이번 달 한도에 남아요." + (pdiff(pop).length ? " 저장하지 않은 변경은 반영되지 않아요." : ""));
+    const log = el("div", "tm-test-log");
+    if (t.m) log.append(testLog(pop, t.m)); else log.append(empty("아래에 맡길 일을 적고 회의를 시작해 보세요."));
+    const form = el("form", "tm-test-form");
+    const i = el("input", "tm-input"); i.maxLength = 4000; i.value = t.text; i.placeholder = `$${pop.d.handle || handleFrom(pop.d.name)}에게 맡길 일…`;
+    i.addEventListener("input", () => { t.text = i.value; });
+    const live = !!t.m && LIVE.has(t.m.status);
+    const go2 = el("button", "btn primary", live ? "회의 중…" : "회의 시작"); go2.type = "submit"; go2.disabled = live || t.busy;
+    form.addEventListener("submit", (e) => { e.preventDefault(); void startTest(pop); });
+    form.append(i, go2, link("회의 기록 보기", () => { closePopup(); S.meetTab = "running"; go("meetings"); }, "tm-link quiet"));
+    return [note, log, form];
+  }
+  function testLog(pop, m) {
+    const box = el("div", "tm-test-thread");
+    const q = el("div", "tm-bubble"); q.append(raw(el("span", "", m.topic || m.title)));
+    const a = el("div", "tm-reply");
+    const hd = el("div", "tm-reply-head");
+    const pic = el("span", "tm-reply-pic"); if (pop.d.cover) { const img = el("img"); img.alt = ""; img.src = coverSrc(pop.d.cover); pic.append(img); }
+    hd.append(pic, raw(el("b", "", pop.d.name)), raw(el("small", "", `${tr(modeName(pop.d.mode))} · ${tr(`라운드 ${m.round || 0}/${m.max_rounds || "?"}`)}`)));
+    const st = el("div", "tm-steps");
+    const turns = m.turns || [];
+    for (const x of sorted(membersOf(m))) {
+      const name = memberName(x);
+      const speaking = m.status === "running" && (m.speaking === x.agent_id || m.speaking === name);
+      const done = turns.some((t) => t.agent_id === x.agent_id && t.ok !== false && t.kind !== "human");
+      const r = el("div", `tm-step2${speaking ? " now" : done ? " done" : ""}`);
+      r.append(el("i", "", done && !speaking ? "✓" : ""), raw(el("span", "", `${name} · ${tr(roleName(x.role))}`)), el("small", "", speaking ? "말하는 중…" : done ? "마침" : "대기"));
+      st.append(r);
+    }
+    const last = [...turns].reverse().find((t) => t.kind !== "conclusion" && t.kind !== "human" && t.ok !== false && t.text);
+    a.append(hd, st);
+    if (last) a.append(raw(el("p", "tm-reply-text", last.text.slice(0, 1200))));
+    if (m.conclusion) a.append(conclusionCard(m));
+    else if (m.ended_reason && !LIVE.has(m.status)) a.append(el("p", "tm-ended", ENDED[m.ended_reason] || m.ended_reason));
+    a.append(el("small", "tm-meta", `${num(m.tokens_used)} 토큰 · ${usd(m.cost_usd)}`));
+    box.append(q, a);
+    return box;
+  }
+  async function startTest(pop) {
+    const t = pop.test, text = t.text.trim();
+    if (!text) { notice("맡길 일을 적어 주세요."); return; }
+    t.busy = true;
+    try {
+      const r = mt(await request("/v1/crew/meetings", { method: "POST", body: body({ meeting: { team_id: pop.id, title: text.slice(0, 40), topic: text } }) }));
+      t.m = r; t.text = ""; t.busy = false;
+      popRedraw("test");
+      pollTest(pop);
+    } catch (e) { t.busy = false; notice(errorText(e)); }
+  }
+  function pollTest(pop) {
+    clearTimeout(pop.testTimer);
+    const m = pop.test.m;
+    if (!m?.id || !LIVE.has(m.status)) return;
+    pop.testTimer = setTimeout(async () => {
+      if (S.pop !== pop) return;
+      try { pop.test.m = mt(await request(`/v1/crew/meetings/${encodeURIComponent(m.id)}?${query()}`)); } catch { /* keep the last picture; try again */ }
+      popRedraw("test");
+      void loadMeetingsOf(pop);
+      pollTest(pop);
+    }, 2000);
+  }
 
-    const pinCard = pins?.card({ rec, draft: d, cls: "tm-card", sub: tr(`회의를 열 때마다 ${d.name || rec.crew.name}에게 먼저 넣어요. 위에 있을수록 먼저 들어가요.`), noun: tr("이 팀은"), onChange: () => changed() });
-    return [head, tpl, kpis, membersCard(d, changed, false), ...(pinCard ? [pinCard] : []), modeCard(d, changed, "회의 방식", "누가 언제 말하고, 언제 끝낼지 정해요."), contextCard(rec, d, changed)];
+  // ---------------------------------------------------------------- 기록 (981:60196): 판 이력 · 최근 회의
+  function historyTab(pop) {
+    if (!pop.id) return [empty("팀을 만들면 저장할 때마다 판이 남아요.")];
+    const list = pop.versions || []; pop.histOpen = pop.histOpen || new Set();
+    const s1 = sec("clock-counter-clockwise", "판 이력", "저장할 때마다 판이 하나 생겨요. 되돌려도 지금 판은 남아요.");
+    const box = el("div", "tm-hist");
+    list.forEach((h, i) => {
+      const cur = h.v === pop.rec.revision;
+      const r = el("div", "tm-hist-row");
+      const at = new Date(h.at);
+      r.append(el("b", "", `v${h.v}`), el("time", "", `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), raw(el("span", "", tr(h.summary))));
+      const acts = el("span", "tm-hist-acts");
+      if (cur) acts.append(el("em", "", "지금 쓰는 판"));
+      else {
+        acts.append(link("바뀐 점 보기", () => { if (!pop.histOpen.delete(h.v)) pop.histOpen.add(h.v); popRedraw("history"); }, "tm-link quiet"), link("이 판으로 되돌리기", () => {
+          if (!confirm(`v${h.v}로 되돌릴까요? 새 판으로 저장돼요.`)) return;
+          void savePopup(pop, { ...clone(h.crew), cover: h.crew.cover ? clone(h.crew.cover) : undefined });
+        }, "tm-link plain"));
+      }
+      r.append(acts);
+      box.append(r);
+      if (pop.histOpen.has(h.v)) { const lines = changes(list[0].crew, h.crew); /* what restoring this version would change */ const p = el("p", "tm-hist-diff"); p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((x) => raw(el("span", "", tr(x))))); box.append(p); }
+    });
+    if (!list.length) box.append(empty(pop.versions ? "판 이력을 불러오지 못했어요." : "불러오는 중…"));
+    s1.append(box);
+    const s2 = sec("chat-text", "최근 회의", "테스트 탭에서 연 회의도 여기 남아요");
+    const rows = el("div", "tm-hist");
+    for (const m of (pop.meetings || []).slice(0, 8)) {
+      const r = el("button", "tm-hist-row meet"); r.type = "button";
+      const ok = m.status === "concluded";
+      r.append(el("b", ok ? "ok" : "warn", ok ? "✓" : "!"), el("time", "", (() => { const t = new Date(m.created_at || m.updated_at); return isNaN(t) ? "" : `${pad2(t.getMonth() + 1)}-${pad2(t.getDate())} ${pad2(t.getHours())}:${pad2(t.getMinutes())}`; })()),
+        raw(el("span", "", m.title || "")), el("small", "", `${tr(MEETING_STATUS[m.status]?.[0] || "")} · ${usd(m.cost_usd)}`));
+      r.addEventListener("click", () => { closePopup(); S.meetSel = m.id; S.meeting = m; S.meetTab = LIVE.has(m.status) ? "running" : "ended"; go("meetings"); });
+      rows.append(r);
+    }
+    if (!(pop.meetings || []).length) rows.append(empty(pop.meetings ? "아직 연 회의가 없어요." : "불러오는 중…"));
+    s2.append(rows);
+    return [s1, s2];
   }
 
   // 참여자와 발언 순서: a table you can drag to reorder (editor) or a list with focus pills (new team, 310:19981).
@@ -322,19 +802,22 @@ window.ArkismTeams = (ctx) => {
       ["순서", "참여자", "모델", "역할", ""].forEach((t) => h.append(el("span", "", t)));
       box.append(h);
     }
+    const picks = d.mode === "moderator_picks"; // 진행자 지명 (972:60042): no order numbers, no drag handles
     members.forEach((m, i) => {
       const row = el("div", "tm-mrow");
-      row.draggable = true;
-      row.addEventListener("dragstart", (e) => { S.drag = i; e.dataTransfer.effectAllowed = "move"; row.classList.add("dragging"); });
-      row.addEventListener("dragend", () => row.classList.remove("dragging"));
-      row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("over"); });
-      row.addEventListener("dragleave", () => row.classList.remove("over"));
-      row.addEventListener("drop", (e) => {
-        e.preventDefault();
-        if (S.drag < 0 || S.drag === i) return;
-        const list = [...members]; const [moved] = list.splice(S.drag, 1); list.splice(i, 0, moved);
-        S.drag = -1; renumber(list); changed(true);
-      });
+      if (!picks) {
+        row.draggable = true;
+        row.addEventListener("dragstart", (e) => { S.drag = i; e.dataTransfer.effectAllowed = "move"; row.classList.add("dragging"); });
+        row.addEventListener("dragend", () => row.classList.remove("dragging"));
+        row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("over"); });
+        row.addEventListener("dragleave", () => row.classList.remove("over"));
+        row.addEventListener("drop", (e) => {
+          e.preventDefault();
+          if (S.drag < 0 || S.drag === i) return;
+          const list = [...members]; const [moved] = list.splice(S.drag, 1); list.splice(i, 0, moved);
+          S.drag = -1; renumber(list); changed(true);
+        });
+      } else row.classList.add("free");
       const model = memberModel(m);
       const roleSel = select(ROLES, m.role || "worker", (v) => { m.role = v; changed(); }, compact ? "tm-pill-select" : "tm-plain-select");
       roleSel.setAttribute("aria-label", "역할");
@@ -343,7 +826,7 @@ window.ArkismTeams = (ctx) => {
       if (compact) {
         const who = el("div", "tm-mwho"); who.append(raw(el("b", "", memberName(m))), el("small", "", modelLabel(model)));
         const focus = raw(input(m.focus, (v) => { m.focus = v; changed(); }, { max: 120, placeholder: "맡을 일" })); focus.className = "tm-pill-input"; focus.setAttribute("aria-label", "맡을 일");
-        row.append(el("span", "tm-grip", "⠿"), el("span", "tm-ord", String(i + 1)), mark(model), who, focus, roleSel, remove);
+        row.append(...(picks ? [] : [el("span", "tm-grip", "⠿"), el("span", "tm-ord", pad2(i + 1))]), face(byId(m.agent_id), "m"), who, focus, roleSel, remove);
       } else {
         const mc = el("span", "tm-mmodel"); mc.append(mark(model), el("span", "", modelLabel(model)));
         row.append(el("span", "tm-ord", pad2(i + 1)), raw(el("span", "tm-mname", memberName(m))), mc, roleSel, remove);
@@ -504,178 +987,13 @@ window.ArkismTeams = (ctx) => {
     queueMicrotask(() => s.focus());
     return s;
   }
-  function contextCard(rec, d, changed) {
-    const c = card("", "함께 보는 자료와 채널");
-    const grid = el("div", "tm-ctx");
-    const left = el("div", "tm-block");
-    left.append(el("h4", "tm-label", "공유하는 맥락"));
-    const list = el("div", "tm-ctx-list");
-    (d.context || []).forEach((x) => {
-      const r = el("div", "tm-ctx-row");
-      const pill = el("button", "tm-badge line", x.share === "shared" ? "다른 팀과 공유" : "팀 전용"); pill.type = "button";
-      pill.title = "누르면 바뀌어요";
-      pill.addEventListener("click", () => { x.share = x.share === "shared" ? "team" : "shared"; changed(true); });
-      const del = el("button", "icon-btn plain tm-x"); del.type = "button"; del.setAttribute("aria-label", "빼기"); del.append(icon("x"));
-      del.addEventListener("click", () => { d.context = d.context.filter((y) => y !== x); changed(true); });
-      r.append(raw(el("span", "", x.title || x.id)), pill, del);
-      list.append(r);
-    });
-    if (!(d.context || []).length) list.append(empty("아직 없어요. 회의 내내 모두가 볼 자료를 넣어 주세요."));
-    left.append(list, S.ctxAdding ? contextAdder(d, changed) : link("+ 자료 추가", () => { S.ctxAdding = true; render(false); }));
-    const right = el("div", "tm-block");
-    right.append(el("h4", "tm-label", "연결된 채널"));
-    const ch = channelsFor(rec.id);
-    if (ch.length) {
-      for (const x of ch) { const r = el("div", "tm-channel"); r.append(raw(el("span", "", `#${x.name || x.channel_id}`)), el("small", "", x.bot.name || "")); right.append(r); }
-      right.append(el("p", "tm-note", "채널에 글을 쓰면 회의가 시작돼요."));
-    } else {
-      right.append(el("p", "tm-note", "연결된 채널이 없어요."), link("디스코드에서 채널 정하기 →", () => go("discord")));
-    }
-    const mirror = el("div", "tm-toggle");
-    mirror.append(el("span", "", "회의 진행을 디스코드 스레드에도 올리기"), sw(d.discord_mirror, "디스코드에도 올리기", (v) => { d.discord_mirror = v; changed(true); }));
-    right.append(mirror);
-    grid.append(left, right);
-    c.append(grid);
-    return c;
-  }
   function validTeam(d) {
     if (!d.name?.trim()) return "팀 이름을 넣어 주세요.";
     if (!(d.members || []).length) return "참여자를 한 명 이상 넣어 주세요.";
     return "";
   }
-  async function saveTeam(rec) {
-    const d = S.draft;
-    const bad = validTeam(d); if (bad) { notice(bad); return; }
-    d.handle = d.handle || handleFrom(d.name);
-    try {
-      const saved = await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "POST", body: body({ expected_revision: rec.revision, crew: d }) });
-      replaceRecord(saved?.id ? saved : { ...rec, revision: (rec.revision || 0) + 1, crew: clone(d) });
-      S.dirty = false; S.draftFor = null;
-      notice("저장했어요.");
-      render(false);
-    } catch (e) { notice(errorText(e)); }
-  }
-  async function archiveTeam(rec) {
-    if (!confirm(`'${rec.crew.name}' 팀을 보관할까요? 지난 회의 기록은 남아요.`)) return;
-    try {
-      await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "POST", body: body({ expected_revision: rec.revision, archive: true }) });
-      state.data.crew = items().filter((r) => r.id !== rec.id);
-      S.team = null; S.dirty = false; S.draftFor = null;
-      notice("보관했어요.");
-      render(false);
-    } catch (e) { notice(errorText(e)); }
-  }
-
-  // ================================================================ 팀 — 새로 만들기 (310:19981)
   const blankTeam = () => ({ type: "team", name: "", handle: "", role: "", members: [], mode: "moderator_picks",
     ending: { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true }, context: [], templates: [], discord_mirror: false });
-  function openNew() {
-    if (S.dirty && !confirm("저장하지 않은 변경이 있어요. 버리고 새 팀을 만들까요?")) return;
-    S.dirty = false; S.draftFor = null; S.nd = blankTeam(); S.ndFrom = ""; S.estimate = null; S.estKey = ""; S.adding = false; S.ctxAdding = false;
-    go("teamNew");
-  }
-  function startFrom(id) {
-    const src = byId(id);
-    const keep = { name: S.nd.name, role: S.nd.role, handle: S.nd.handle };
-    S.nd = src ? { ...blankTeam(), ...clone(src.crew), ...keep, discord_mirror: false } : { ...blankTeam(), ...keep };
-    delete S.nd.id;
-    S.ndFrom = id; render(false);
-  }
-  function section(n, title, sub) {
-    const c = el("section", "tm-card tm-step");
-    const h = el("div", "tm-step-head"); h.append(el("span", "tm-step-n", String(n)), el("h3", "", title));
-    c.append(h);
-    if (sub) c.append(el("p", "tm-step-sub", sub));
-    return c;
-  }
-  function renderTeamNew() {
-    if (!S.nd) S.nd = blankTeam();
-    ctx.headExtras?.({ back: ["팀", () => go("teams")] });
-    $("#controls").replaceChildren();
-    const table = $("#table");
-    table.className = "tm-wrap tm-form";
-    const d = S.nd;
-    const changed = (structural) => { if (structural) render(false); else paintNewSide(); };
-    const s1 = section(1, "무슨 팀인가요");
-    const two = el("div", "tm-two");
-    const handleIn = raw(input(d.handle, (v) => { d.handle = v.replace(/^@/, ""); changed(); }, { max: 32, placeholder: handleFrom(d.name) || "디자인리뷰" }));
-    two.append(field("팀 이름", raw(input(d.name, (v) => { d.name = v; handleIn.placeholder = handleFrom(v) || "디자인리뷰"; changed(); }, { max: 80, placeholder: "디자인 리뷰 팀" }))),
-      field("목적", raw(input(d.role, (v) => { d.role = v; changed(); }, { max: 200, placeholder: "시안을 여러 관점에서 검토해 고칠 목록을 만들어요" }))));
-    const hf = el("div", "tm-at"); hf.append(el("span", "", "@"), handleIn);
-    s1.append(two, field("부르는 이름 (전문가와 같은 @이름 칸을 써요)", hf, "tm-handle-field"));
-    const from = el("div", "tm-block"); from.append(el("h4", "tm-label", "비슷한 팀에서 시작"));
-    const chips = el("div", "tm-chips");
-    for (const [id, label] of [["", "빈 팀"], ...teams().map((t) => [t.id, t.crew.name])]) {
-      const c = el("button", `tm-chip${S.ndFrom === id ? " active" : ""}`, label); c.type = "button"; if (id) raw(c);
-      c.addEventListener("click", () => startFrom(id)); chips.append(c);
-    }
-    from.append(chips); s1.append(from);
-    const s2 = section(2, "누가 참여하나요", "위에서부터 순서대로 말해요. 끌어서 순서를 바꿀 수 있어요.");
-    s2.append(...membersCard(d, changed, true).childNodes);
-    const s3 = section(3, "어떻게 회의하나요");
-    s3.append(modeCard(d, changed, null, null, true));
-    const s4 = section(4, "함께 보는 자료", "회의 내내 모든 멤버가 보는 자료예요.");
-    const docs = el("div", "tm-chips");
-    (d.context || []).forEach((x) => {
-      const c = raw(el("button", "tm-chip doc", x.title || x.id)); c.type = "button"; c.title = "누르면 빠져요";
-      c.addEventListener("click", () => { d.context = d.context.filter((y) => y !== x); changed(true); }); docs.append(c);
-    });
-    if (S.ctxAdding) docs.append(contextAdder(d, changed));
-    else { const a = el("button", "tm-chip add", "+ 문서 추가"); a.type = "button"; a.addEventListener("click", () => { S.ctxAdding = true; render(false); }); docs.append(a); }
-    const mirror = el("div", "tm-toggle bare");
-    const mt2 = el("div", ""); mt2.append(el("b", "", "디스코드에서도 회의"), el("small", "", "연결된 디스코드 채널의 스레드에 진행 상황을 올려요"));
-    mirror.append(mt2, sw(d.discord_mirror, "디스코드에서도 회의", (v) => { d.discord_mirror = v; changed(true); }));
-    s4.append(docs, mirror);
-    const foot = el("div", "tm-foot");
-    foot.append(button("팀 만들기", "primary", null, createTeam), link("취소", () => go("teams"), "tm-link plain"));
-    const main = el("div", "tm-form-main");
-    main.append(s1, s2, s3, s4, foot);
-    table.replaceChildren(main);
-    paintNewSide();
-  }
-  function paintNewSide() {
-    if (!here("teamNew")) return;
-    const d = S.nd, members = sorted(d.members);
-    const prev = el("div", "tm-preview");
-    prev.append(raw(el("b", "", d.name || "새 팀")));
-    const logos = el("div", "tm-logos"); members.forEach((m) => logos.append(mark(memberModel(m)))); prev.append(logos);
-    prev.append(el("small", "", `${members.length}명 · ${d.mode === "round_robin" ? "정해진 순서" : "진행자 지명"} · 최대 ${d.ending?.max_rounds || 4}라운드`));
-    const e = S.estimate;
-    const costV = el("b", ""); costV.append(e ? `약 ${usd(e.cost_usd)}` : "—"); if (e) costV.append(est());
-    const once = kv([["예상 토큰", e ? `약 ${num(e.tokens)}` : "—"], ["예상 비용", costV], ["걸리는 시간", e ? `${e.minutes_min}~${e.minutes_max}분` : "—"]]);
-    const handle = d.handle || handleFrom(d.name) || "팀이름";
-    side(el("p", "tm-side-kind", "미리보기"), prev, sideLabel("한 번 회의할 때"), once,
-      sideLabel("회의 시작하는 곳"), raw(el("p", "tm-side-text", tr(`회의 화면, 디스코드 채널, 또는 에이전트에서 @${handle} 으로 불러요.`))));
-    queueEstimate();
-  }
-  function queueEstimate() {
-    const d = S.nd;
-    const key = JSON.stringify([d.members, d.mode, d.ending]);
-    if (key === S.estKey) return;
-    S.estKey = key;
-    clearTimeout(S.estTimer);
-    if (!(d.members || []).length) { S.estimate = null; return; }
-    S.estTimer = setTimeout(async () => {
-      try {
-        const r = await request("/v1/crew/teams/estimate", { method: "POST", body: body({ team: d }) });
-        if (S.estKey !== key) return;
-        S.estimate = r && r.tokens != null ? r : null;
-      } catch { S.estimate = null; }
-      if (here("teamNew")) paintNewSide();
-    }, 500);
-  }
-  async function createTeam() {
-    const d = S.nd;
-    const bad = validTeam(d); if (bad) { notice(bad); return; }
-    d.handle = d.handle || handleFrom(d.name);
-    try {
-      const saved = await request("/v1/crew", { method: "POST", body: body({ crew: d }) });
-      await reloadCrew().catch(() => replaceRecord(saved));
-      S.team = saved?.id || S.team; S.nd = null;
-      go("teams");
-      notice("팀을 만들었어요.");
-    } catch (e) { notice(errorText(e)); }
-  }
 
   // ================================================================ 회의 (208:19103)
   async function loadMeetings(quiet) {
@@ -921,7 +1239,7 @@ window.ArkismTeams = (ctx) => {
     const f = S.newMeeting;
     const team = byId(f.team_id);
     const head = el("div", "tm-side-sec"); head.append(el("p", "tm-side-kind", "새 회의"));
-    if (!teams().length) return [head, empty("먼저 팀을 만들어 주세요."), link("팀 만들기 →", () => openNew())];
+    if (!teams().length) return [head, empty("먼저 팀을 만들어 주세요."), link("팀 만들기 →", () => openPopup(null))];
     const teamSel = select(teams().map((t) => [t.id, t.crew.name]), f.team_id, (v) => { f.team_id = v; f.template_key = ""; render(false); });
     const tpls = team?.crew?.templates || [];
     const topic = raw(input(f.topic, (v) => { f.topic = v; }, { tag: "textarea", rows: 6, max: 20000, placeholder: "무엇을 이야기할지 적어 주세요. 링크나 붙여 넣은 글도 돼요." }));
@@ -1490,7 +1808,7 @@ window.ArkismTeams = (ctx) => {
   const pages = {
     teams: { title: "팀", count: () => `${teams().length}개`, sub: () => "전문가 여럿이 정한 순서대로 말하며 하나의 결과를 만들어요. 연결된 채널에 글을 쓰면 회의가 시작돼요.",
       bare: true, head: () => [button("회의 보기", "ghost", null, () => go("meetings"))], render: renderTeams },
-    teamNew: { title: "새 팀", sub: () => "", keepDetail: true, head: () => [], render: renderTeamNew },
+    teamNew: { title: "새 팀", sub: () => "", keepDetail: true, head: () => [], render: () => { setTimeout(() => { go("teams"); setTimeout(() => openPopup(null)); }); $("#table").replaceChildren(); } },
     meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [button("팀 보기", "ghost", null, () => go("teams"))], render: renderMeetings },
     discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord },
     crewUsage: { title: "사용량", sub: () => "워크플로우·전문가·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.",

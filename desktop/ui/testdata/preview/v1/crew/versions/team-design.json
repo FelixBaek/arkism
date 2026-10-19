@@ -1,0 +1,253 @@
+{
+ "items": [
+  {
+   "revision": 2,
+   "at": "2026-10-18T05:20:00Z",
+   "crew": {
+    "type": "team",
+    "name": "디자인 리뷰 팀",
+    "handle": "디자인리뷰",
+    "role": "화면을 토큰·접근성 기준으로 검토하고, 고칠 목록을 만들어요.",
+    "mode": "moderator_picks",
+    "members": [
+     {
+      "agent_id": "ag-research",
+      "order": 1,
+      "role": "moderator",
+      "focus": "자료 찾기"
+     },
+     {
+      "agent_id": "ag-designer",
+      "order": 2,
+      "role": "worker",
+      "focus": "시안 해석"
+     },
+     {
+      "agent_id": "ag-review",
+      "order": 3,
+      "role": "reviewer",
+      "focus": "구현 가능성"
+     },
+     {
+      "agent_id": "ag-notes",
+      "order": 4,
+      "role": "scribe",
+      "focus": "정리·결론"
+     }
+    ],
+    "ending": {
+     "max_rounds": 4,
+     "token_cap": 100000,
+     "end_on_all_approved": true,
+     "end_on_moderator": true
+    },
+    "context": [
+     {
+      "collection": "design_systems",
+      "id": "ds-tokens",
+      "title": "디자인 시스템 토큰 v3",
+      "share": "team"
+     },
+     {
+      "collection": "memories",
+      "id": "m2",
+      "title": "Orbit 화면 규칙",
+      "share": "team"
+     },
+     {
+      "collection": "memories",
+      "id": "m1",
+      "title": "사용자 선호",
+      "share": "shared"
+     }
+    ],
+    "templates": [
+     {
+      "key": "review",
+      "name": "디자인 검토 회의",
+      "prompt": "{화면} 시안을 토큰·접근성 기준으로 검토하고 고칠 목록을 만들어 주세요.",
+      "overrides": {}
+     },
+     {
+      "key": "quick",
+      "name": "빠른 의견",
+      "prompt": "한 라운드만 돌며 각자 한 줄 의견을 주세요.",
+      "overrides": {
+       "ending": {
+        "max_rounds": 1
+       }
+      }
+     }
+    ],
+    "discord_mirror": true,
+    "pinned": [
+     {
+      "collection": "knowledge_sources",
+      "id": "ks-orbit-tokens",
+      "revision": 3,
+      "injection": "full",
+      "priority": 100
+     },
+     {
+      "collection": "skills",
+      "id": "skill-design-critique",
+      "revision": 4,
+      "injection": "full",
+      "priority": 95
+     },
+     {
+      "collection": "memories",
+      "id": "m-pin-tokens",
+      "injection": "summary",
+      "priority": 90
+     },
+     {
+      "collection": "memories",
+      "id": "m-pin-select",
+      "injection": "full",
+      "priority": 85
+     },
+     {
+      "collection": "knowledge_sources",
+      "id": "ks-orbit-rules",
+      "injection": "reference",
+      "priority": 80
+     }
+    ],
+    "category": "디자인",
+    "cover": {
+     "id": "p0",
+     "url": "img/arkism-art.svg",
+     "thumb": "img/arkism-art.svg",
+     "author": "Kim Lee",
+     "author_url": "https://unsplash.com/@kimlee"
+    }
+   }
+  },
+  {
+   "revision": 1,
+   "at": "2026-10-15T00:12:00Z",
+   "crew": {
+    "type": "team",
+    "name": "디자인 리뷰 팀",
+    "handle": "디자인리뷰",
+    "role": "화면을 토큰·접근성 기준으로 검토하고, 고칠 목록을 만들어요.",
+    "mode": "round_robin",
+    "members": [
+     {
+      "agent_id": "ag-research",
+      "order": 1,
+      "role": "moderator",
+      "focus": "자료 찾기"
+     },
+     {
+      "agent_id": "ag-designer",
+      "order": 2,
+      "role": "worker",
+      "focus": "시안 해석"
+     },
+     {
+      "agent_id": "ag-review",
+      "order": 3,
+      "role": "reviewer",
+      "focus": "구현 가능성"
+     },
+     {
+      "agent_id": "ag-notes",
+      "order": 4,
+      "role": "scribe",
+      "focus": "정리·결론"
+     }
+    ],
+    "ending": {
+     "max_rounds": 4,
+     "token_cap": 100000,
+     "end_on_all_approved": true,
+     "end_on_moderator": true
+    },
+    "context": [
+     {
+      "collection": "design_systems",
+      "id": "ds-tokens",
+      "title": "디자인 시스템 토큰 v3",
+      "share": "team"
+     },
+     {
+      "collection": "memories",
+      "id": "m2",
+      "title": "Orbit 화면 규칙",
+      "share": "team"
+     },
+     {
+      "collection": "memories",
+      "id": "m1",
+      "title": "사용자 선호",
+      "share": "shared"
+     }
+    ],
+    "templates": [
+     {
+      "key": "review",
+      "name": "디자인 검토 회의",
+      "prompt": "{화면} 시안을 토큰·접근성 기준으로 검토하고 고칠 목록을 만들어 주세요.",
+      "overrides": {}
+     },
+     {
+      "key": "quick",
+      "name": "빠른 의견",
+      "prompt": "한 라운드만 돌며 각자 한 줄 의견을 주세요.",
+      "overrides": {
+       "ending": {
+        "max_rounds": 1
+       }
+      }
+     }
+    ],
+    "discord_mirror": true,
+    "pinned": [
+     {
+      "collection": "knowledge_sources",
+      "id": "ks-orbit-tokens",
+      "revision": 3,
+      "injection": "full",
+      "priority": 100
+     },
+     {
+      "collection": "skills",
+      "id": "skill-design-critique",
+      "revision": 4,
+      "injection": "full",
+      "priority": 95
+     },
+     {
+      "collection": "memories",
+      "id": "m-pin-tokens",
+      "injection": "summary",
+      "priority": 90
+     },
+     {
+      "collection": "memories",
+      "id": "m-pin-select",
+      "injection": "full",
+      "priority": 85
+     },
+     {
+      "collection": "knowledge_sources",
+      "id": "ks-orbit-rules",
+      "injection": "reference",
+      "priority": 80
+     }
+    ],
+    "category": "디자인",
+    "cover": {
+     "id": "p0",
+     "url": "img/arkism-art.svg",
+     "thumb": "img/arkism-art.svg",
+     "author": "Kim Lee",
+     "author_url": "https://unsplash.com/@kimlee"
+    },
+    "revision": 4
+   }
+  }
+ ]
+}
