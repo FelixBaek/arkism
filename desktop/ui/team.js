@@ -668,7 +668,7 @@ window.ArkismTeams = (ctx) => {
         s.append(row);
       }
     }
-    if (mine) s.append(link("디스코드에서 채널 정하기 →", () => { closePopup(); go("discord"); }));
+    if (mine) s.append(link("설정 › 메신저에서 디스코드 연결 보기 →", () => { closePopup(); state.settingsTab = "messenger"; go("settings"); }));
     return s;
   }
   function updateBar(pop) {

@@ -5019,6 +5019,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 
 Object.assign(window.ArkismI18nEN.strings, {
+  "설정 › 메신저에서 디스코드 연결 보기 →": "See Discord in Settings › Messenger →",
   "토큰 형식을 확인해 주세요.": "Check the token format.",
   "다른 곳에서 먼저 고쳤어요. 다시 불러올게요.": "It was changed elsewhere first. Reloading.",
 });
@@ -5223,9 +5224,9 @@ Object.assign(window.ArkismI18nEN.strings, {
   "+ 새 워크플로우": "+ New workflow",
   "직접": "Direct",
   "설정 › 메신저에 연결한 곳으로 보내요": "Sends to the places linked in Settings › Messengers",
-  "어디서 이 자동화를 부를지 정해요 · 봇 토큰·연결 상태는 디스코드 봇 설정에서": "Choose where this automation is called from · bot token and status are in the Discord bot settings",
+  "어디서 이 자동화를 부를지 정해요 · 봇 토큰·연결 상태는 설정 › 메신저에서": "Choose where this automation is called from · bot token and status are in Settings › Messenger",
   "자동화를 만든 뒤 채널을 연결해요.": "Connect channels after the automation is created.",
-  "연결된 디스코드 봇이 없어요. 디스코드 화면에서 봇을 먼저 추가해 주세요.": "No Discord bot is connected. Add a bot on the Discord screen first.",
+  "연결된 디스코드 봇이 없어요. 설정 › 메신저에서 봇을 먼저 추가해 주세요.": "No Discord bot is connected. Add a bot in Settings › Messenger first.",
   "이 채널은 이미 다른 곳에 연결돼 있어요. 이 자동화로 바꿀까요?": "This channel is already connected elsewhere. Switch it to this automation?",
   "준비 중": "Coming soon",
   "예: GitHub PR 열림": "e.g. GitHub PR opened",
