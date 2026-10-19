@@ -128,7 +128,8 @@ var searchQueryScaffolding = map[string]bool{
 	"her": true, "their": true, "they": true, "he": true, "she": true,
 }
 
-// searchQueryTerms are the distinct normalized topic tokens of a query.
+// searchQueryTerms are the distinct normalized topic tokens of a query, capped
+// at searchQueryMaxTokens concepts so alias spellings do not consume the budget.
 func searchQueryTerms(query string) []string {
 	terms := []string{}
 	for _, t := range SearchTokens(query) {
@@ -137,7 +138,7 @@ func searchQueryTerms(query string) []string {
 		}
 		if !slices.Contains(terms, t) {
 			terms = append(terms, t)
-			if len(terms) == searchQueryMaxTokens {
+			if len(searchQueryConcepts(terms)) == searchQueryMaxTokens {
 				break
 			}
 		}

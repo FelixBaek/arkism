@@ -17,6 +17,17 @@ func TestSearchQueryConceptsCountAliasesOnce(t *testing.T) {
 	}
 }
 
+func TestSearchQueryTermsCapCountsAliasesOnce(t *testing.T) {
+	query := "사본 백업 복원 복구"
+	for i := range 31 {
+		query += fmt.Sprintf(" t%02d", i)
+	}
+	concepts := searchQueryConcepts(searchQueryTerms(query))
+	if len(concepts) != searchQueryMaxTokens || concepts[len(concepts)-1] != "('t29')" {
+		t.Fatalf("got %d concepts ending %v", len(concepts), concepts[len(concepts)-1])
+	}
+}
+
 func TestPostgresLexicalAliasesRemainOneConcept(t *testing.T) {
 	p := isolatedPostgres(t)
 	scope := scopeA
