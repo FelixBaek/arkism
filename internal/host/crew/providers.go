@@ -370,7 +370,7 @@ func rateLimits(v any) map[string]any {
 // codexQuotas is the 5-hour and weekly windows from the newest Codex session log, primary first; [] when unknown.
 func codexQuotas(home string) []any {
 	newest, newestAt := "", time.Time{}
-	_ = filepath.WalkDir(filepath.Join(home, ".codex/sessions"), func(p string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(host.CodexSessionsDir(home), func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}

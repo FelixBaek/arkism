@@ -15,8 +15,8 @@ import (
 
 // pcHookRoots are the transcript roots per origin; Zcode's is its database. Tests replace it.
 var pcHookRoots = map[string]string{
-	"claude_code": filepath.Join(host.Home, ".claude", "projects"),
-	"codex":       filepath.Join(host.Home, ".codex", "sessions"),
+	"claude_code": capProjects,
+	"codex":       capCodexSessions,
 	"zcode":       filepath.Join(host.Home, ".zcode", "cli", "db", "db.sqlite"),
 }
 

@@ -35,10 +35,11 @@ func promptRows(text string) [][]byte {
 // Codex folders.
 func evidenceHome(t *testing.T) (server, pc string) {
 	dir := t.TempDir()
-	home, pcRoot := host.Home, archivePC
-	t.Cleanup(func() { host.Home, archivePC = home, pcRoot })
+	home, pcRoot, codex := host.Home, archivePC, capCodexSessions
+	t.Cleanup(func() { host.Home, archivePC, capCodexSessions = home, pcRoot, codex })
 	host.Home, archivePC = filepath.Join(dir, "home"), filepath.Join(dir, "pc")
 	server, pc = filepath.Join(host.Home, ".codex/sessions"), filepath.Join(archivePC, "codex-sessions")
+	capCodexSessions = server
 	os.MkdirAll(server, 0o700)
 	os.MkdirAll(pc, 0o700)
 	return server, pc
