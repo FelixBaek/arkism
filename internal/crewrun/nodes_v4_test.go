@@ -66,6 +66,18 @@ func TestTeamNodeRunsMeetingAndOutputsConclusion(t *testing.T) {
 	}
 }
 
+func TestTeamNodeScopeAndRetries(t *testing.T) {
+	rig := newMeetingRig(t, baseItems(teamItem("round_robin", &TeamEnding{MaxRounds: 1}, threeMembers()...))...)
+	rig.e.Meetings = creatingMeetings{rig.store}
+	_, err := rig.e.runTeam(context.Background(), map[string]string{"team": "team", "topic": "검토", "fence": "읽기만", "done": "결정 하나", "retries": "2"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rig.store.recs["m-new"].Meeting.Topic; got != "검토\n\n울타리: 읽기만\n\n완료 기준: 결정 하나" {
+		t.Fatalf("topic %q", got)
+	}
+}
+
 func TestN8NSyncAndAsync(t *testing.T) {
 	var seen map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

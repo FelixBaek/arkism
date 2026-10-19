@@ -2041,8 +2041,49 @@ window.ArkismCrew = (ctx) => {
       b.addEventListener("click", () => onPick(r));
       chips.append(b);
     }
+    const add = el("button", "chip node-chip dim", label === "팀" ? "+ 새 팀" : "+ 새 전문가");
+    add.type = "button";
+    add.addEventListener("click", () => newMemberPopup(label === "팀", onPick));
+    chips.append(add);
     wrap.append(card, chips);
     return wrap;
+  }
+  // + 새 전문가 · + 새 팀 (1024:60724 · 1024:61783): make one right from the node. A new expert needs a name, @이름 and instruction;
+  // a new team starts with the first expert as its worker.
+  function newMemberPopup(isTeam, onPick) {
+    const first = agents()[0];
+    if (isTeam && !first) { notice("팀은 전문가로 만들어요. 먼저 전문가를 만들어 주세요."); return; }
+    const dlg = el("dialog", "crew-dialog ex-skill-dlg");
+    const head = el("div", "dialog-head");
+    head.append(el("h2", "", isTeam ? "새 팀" : "새 전문가"));
+    const body = el("div", "dialog-body");
+    const name = input("", { maxLength: 60, placeholder: isTeam ? "예: 릴리스 팀" : "예: 릴리스 매니저" });
+    const handle = input("", { maxLength: 40, pattern: "[\\p{L}\\p{N}_\\-]{1,40}", placeholder: "띄어쓰기 없이" });
+    name.addEventListener("input", () => { if (!handle.dataset.touched) handle.value = name.value.replace(/\s+/g, "").slice(0, 40); });
+    handle.addEventListener("input", () => { handle.dataset.touched = handle.value ? "1" : ""; });
+    const ins = input("", { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "너는 ○○다. …한다." });
+    body.append(field("이름", name), field("@이름", handle), ...(isTeam ? [el("p", "meta", "첫 번째 전문가를 넣어 만들어요. 팀 화면에서 더 고칠 수 있어요.")] : [field("지시", ins)]));
+    const foot = el("div", "dialog-foot");
+    foot.append(button("취소", "ghost", null, () => dlg.close()), button("만들기", "primary", null, async () => {
+      const n = name.value.trim(), h = handle.value.trim().replace(/^@/, "");
+      if (!n || !/^[\p{L}\p{N}_-]{1,40}$/u.test(h) || (!isTeam && !ins.value.trim())) { notice(isTeam ? "이름과 @이름(띄어쓰기 없이)을 채워 주세요." : "이름·@이름·지시를 채워 주세요."); return; }
+      if (agents().some((r) => r.crew.handle === h) || teams().some((r) => r.crew.handle === h)) { notice(`@${h}은 이미 있어요. 다른 이름을 써 주세요.`); return; }
+      const crew = isTeam
+        ? { type: "team", name: n, handle: h, role: "", members: [{ agent_id: first.id, order: 1, role: "worker" }], mode: "round_robin",
+          ending: { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true }, context: [], templates: [] }
+        : workerOut({ ...blankAgent(), name: n, handle: h, instructions: ins.value });
+      try {
+        const saved = await save(null, crew);
+        state.data.crew.push(saved);
+        dlg.close();
+        onPick(saved);
+      } catch (e) { notice(errorText(e)); }
+    }));
+    dlg.append(head, body, foot);
+    dlg.addEventListener("close", () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+    name.focus();
   }
   // AI·전문가·팀 노드 (1024:60724 · 1024:61783): 누가 맡나 · 무엇을 하나 on the left, 실행 범위 · 나눠서 맡기기 on the right.
   // 무엇·어디까지(목표·울타리·완료 기준)만 정하고, 어떻게는 AI가 정해요.
@@ -2099,15 +2140,14 @@ window.ArkismCrew = (ctx) => {
     else if (n.type === "ai_once") L.append(field("질문", bind(input(c.prompt, { tag: "textarea", rows: 4, maxLength: 8000 }), "prompt", true), slot));
     else L.append(field("목표", bind(input(c.goal, { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "하위 질문마다 출처 3개 이상 모아 줘." }), "goal", true), slot));
     if (n.type !== "team") L.append(field(p ? "더할 지시" : "페르소나 지시", bind(input(c.instructions, { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "너는 ○○다. …한다." }), "instructions")), skillsField(c));
-    if (n.type === "team") R.append(el("p", "meta", "고른 팀이 회의를 열어 결론(요약·결정·할 일)을 다음 단계에 넘겨요. 사람의 결정을 기다리는 회의는 이 단계를 멈추게 해요."));
-    if (n.type === "expert" || n.type === "ai") {
+    if (n.type === "expert" || n.type === "ai" || n.type === "team") {
       // 실행 범위
       R.append(el("h3", "", "실행 범위"),
         field("허용 범위", bind(input(c.fence, { maxLength: 4000, placeholder: "웹 검색과 자료 읽기만 허용" }), "fence")),
         field("완료 기준", bind(input(c.done, { maxLength: 1000, placeholder: "질문마다 출처 3개와 요약" }), "done")),
         group("하는 일", segment([["read", "읽기만 · 동시"], ["write", "쓰기 · 차례로"]], c.access || "read", (v) => { c.access = v; touch(); redraw(); })),
         field("실패하면 다시", bind(select([["0", "안 함"], ["1", "1번"], ["2", "2번"], ["3", "3번"]], c.retries || "0"), "retries")));
-      collabFields(R, n, bind);
+      if (n.type !== "team") collabFields(R, n, bind);
     }
     sends(R, n);
     if (WORK(n) && !ownerOf(ed.rec)) R.append(onlyRun(n));

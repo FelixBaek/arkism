@@ -5045,6 +5045,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "워크플로우 없음 · 지시대로 일해요": "No workflow · works from its instructions",
   "워크플로우 연결": "Connect a workflow",
   "+ 새 전문가": "+ New expert",
+  "예: 릴리스 매니저": "e.g. Release manager",
+  "첫 번째 전문가를 넣어 만들어요. 팀 화면에서 더 고칠 수 있어요.": "Made with the first expert as its member. Edit the rest on the team screen.",
   "페르소나와 워크플로우를 정해 시작해요": "Start by choosing a persona and a workflow",
   "+ 새 카테고리": "+ New category",
   "테스트": "Test",
