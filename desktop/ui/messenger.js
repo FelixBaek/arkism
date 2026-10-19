@@ -1,10 +1,11 @@
 // 설정 › 메신저 (Figma 1012:60790): one bot per messenger. Discord uses the same /v1/discord API as before
-// (token travels in once, the server keeps only the last four). Telegram and Slack have no server side yet, so their cards say so.
+// (token travels in once, the server keeps only the last four). Telegram (bot token + chat id) and Slack (webhook URL)
+// use /v1/messengers, which edits the notify file the crew runner sends notices from; secrets never come back, only the last four.
 window.ArkismMessenger = (ctx) => {
   "use strict";
   const { state, el, button, notice, request, render } = ctx;
   const raw = (n) => { n.setAttribute("data-no-i18n", ""); return n; };
-  const S = { loaded: false, loading: false, bots: [], err: "", draft: {}, changing: {}, busy: false };
+  const S = { loaded: false, loading: false, bots: [], err: "", draft: {}, changing: {}, busy: false, dests: [], nerr: "" };
   const body = (extra) => JSON.stringify({ scope: state.scope, ...extra });
   const unwrap = (r) => (r?.discord_bot ? { ...r.discord_bot, id: r.id, revision: r.revision } : r);
   const ago = (iso) => { if (!iso) return ""; const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 1 ? "방금 확인" : m < 60 ? `${m}분 전 확인` : `${Math.round(m / 60)}시간 전 확인`; };
@@ -17,6 +18,8 @@ window.ArkismMessenger = (ctx) => {
     S.loading = true;
     try { const d = await request(`/v1/discord?${new URLSearchParams(state.scope)}`); S.bots = (d.bots || []).map(unwrap); S.err = ""; }
     catch (e) { S.err = /HTTP 404|HTTP 501|not_found|not_implemented/.test(e.message) ? "unsupported" : e.message; if (!quiet) S.bots = []; }
+    try { S.dests = (await request(`/v1/messengers?${new URLSearchParams(state.scope)}`)).destinations || []; S.nerr = ""; }
+    catch (e) { S.nerr = /HTTP 404|HTTP 501|not_found|not_implemented/.test(e.message) ? "unsupported" : e.message; if (!quiet) S.dests = []; }
     finally { S.loading = false; S.loaded = true; if (state.view === "settings" && state.settingsTab === "messenger") render(false); }
   }
   async function act(fn, ok) {
@@ -40,15 +43,15 @@ window.ArkismMessenger = (ctx) => {
     c.append(head, ...rest);
     return c;
   }
-  function tokenRow(key, last4, placeholder, onSave, saveLabel) {
+  function tokenRow(key, last4, placeholder, onSave, saveLabel, label = "봇 토큰") {
     const row = el("div", "mg-token");
-    const lab = el("span", "mg-label", "봇 토큰");
-    const input = el("input", "mono"); input.type = "password"; input.autocomplete = "off"; input.spellcheck = false; input.setAttribute("aria-label", "봇 토큰");
+    const lab = el("span", "mg-label", label);
+    const input = el("input", "mono"); input.type = "password"; input.autocomplete = "off"; input.spellcheck = false; input.setAttribute("aria-label", label);
     const box = el("div", "mg-field");
     const editing = !last4 || S.changing[key];
     if (editing) {
       input.placeholder = placeholder; input.value = S.draft[key] || "";
-      const go = button(saveLabel, "primary", null, () => { const t = input.value.trim(); if (!tokenOk(t)) { notice("토큰을 끝까지 붙여 넣어 주세요."); return; } S.draft[key] = ""; S.changing[key] = false; onSave(t); });
+      const go = button(saveLabel, "primary", null, () => { const t = input.value.trim(); if (!tokenOk(t)) { notice("값을 끝까지 붙여 넣어 주세요."); return; } S.draft[key] = ""; S.changing[key] = false; onSave(t); });
       box.append(input);
       row.append(lab, el("div", "mg-line"), go);
       row.children[1].append(box);
@@ -87,16 +90,57 @@ window.ArkismMessenger = (ctx) => {
         button("권한 다시 확인", "", null, () => act(() => request(`/v1/discord/bots/${encodeURIComponent(b.id)}/check`, { method: "POST", body: body({}) }), "권한을 다시 확인하는 중이에요.")));
       kids.push(w);
     }
+    const invite = window.ArkismDiscordInvite?.(b.application_id || "");
+    if (invite && /^\d{5,24}$/.test(b.application_id || "")) {
+      const a = el("a", "btn", "서버에 초대하기"); a.href = invite; a.target = "_blank"; a.rel = "noreferrer";
+      kids.push(a);
+    }
     const off = button("연결 끊기", "ghost", null, () => { if (confirm("디스코드 연결을 끊을까요? 저장된 토큰이 지워져요.")) act(() => upd(b, { archive: true }), "디스코드 연결을 끊었어요.").catch(() => {}); });
     return card("디스코드", st, off, ...kids);
   }
-  const soon = (name, hint) => {
-    const input = el("input", "mono"); input.disabled = true; input.placeholder = hint; input.setAttribute("aria-label", "봇 토큰");
-    const row = el("div", "mg-token"); const line = el("div", "mg-line"); const f = el("div", "mg-field"); f.append(input); line.append(f);
-    row.append(el("span", "mg-label", "봇 토큰"), line, button("저장하고 연결", "primary", null, () => {}));
-    row.lastChild.disabled = true;
-    return card(name, ["연결 안 됨", ""], null, row, el("p", "mg-note", "서버가 아직 지원하지 않아요. 서버에 연결 기능이 들어오면 여기서 토큰을 넣어 연결해요."));
-  };
+  const OFF = { telegram: ["텔레그램 연결을 끊을까요? 저장된 값이 지워져요.", "텔레그램 연결을 끊었어요."], slack: ["슬랙 연결을 끊을까요? 저장된 값이 지워져요.", "슬랙 연결을 끊었어요."] };
+  const dest = (ch) => S.dests.find((d) => d.channel === ch && d.name === "default");
+  const saveDest = (ch, f) => request("/v1/messengers", { method: "POST", body: body({ channel: ch, ...f }) });
+  const dropDest = (ch) => request("/v1/messengers/remove", { method: "POST", body: body({ channel: ch }) });
+  async function testDest(ch) {
+    if (S.busy) return;
+    S.busy = true;
+    try { const r = await request("/v1/messengers/test", { method: "POST", body: body({ channel: ch }) }); notice(r.ok ? "시험 메시지를 보냈어요." : `보내지 못했어요 (${r.error}).`); }
+    catch (e) { notice(errText(e)); } finally { S.busy = false; }
+  }
+  // Telegram needs a chat id besides the token; a saved destination can change the chat without the token.
+  function chatRow(d) {
+    const row = el("div", "mg-token");
+    const input = el("input", "mono"); input.autocomplete = "off"; input.spellcheck = false; input.setAttribute("aria-label", "채팅 ID");
+    input.placeholder = "-1001234567890 또는 @채널이름"; input.value = S.draft.chat ?? d?.chat_id ?? "";
+    input.addEventListener("input", () => { S.draft.chat = input.value; });
+    const box = el("div", "mg-field"); box.append(input);
+    row.append(el("span", "mg-label", "채팅 ID"), box);
+    if (d) row.append(button("저장", "", null, () => act(() => saveDest("telegram", { chat_id: input.value.trim() }), "채팅 ID를 바꿨어요.")));
+    return row;
+  }
+  function messengerCard(ch, name, d, note, kids) {
+    if (S.nerr === "unsupported") return card(name, ["연결 안 됨", ""], null, el("p", "mg-note", "이 서버는 아직 이 연결을 지원하지 않아요. 서버를 새 버전으로 올려 주세요."));
+    // A failed read is not "not connected": say so and offer a retry instead of showing a saved link as missing.
+    if (S.nerr) return card(name, ["상태 모름", ""], button("다시 불러오기", "", null, () => void load()), el("p", "mg-note warn", `연결 상태를 불러오지 못했어요 (${S.nerr}).`));
+    const right = el("div", "mg-actions");
+    if (d) right.append(button("시험 보내기", "", null, () => testDest(ch)), button("연결 끊기", "ghost", null, () => { if (confirm(OFF[ch][0])) void act(() => dropDest(ch), OFF[ch][1]); }));
+    return card(name, d ? ["연결됨", "on"] : ["연결 안 됨", ""], d ? right : null, ...kids, note);
+  }
+  function telegramCard() {
+    const d = dest("telegram");
+    const row = tokenRow("telegram", d?.last4, "텔레그램 봇 토큰 (123456:ABC…)", (t) => {
+      const chat = (S.draft.chat ?? d?.chat_id ?? "").trim();
+      if (!chat) { notice("채팅 ID를 먼저 넣어 주세요."); return; }
+      void act(() => saveDest("telegram", { bot_token: t, chat_id: chat }), "텔레그램을 연결했어요.");
+    }, d ? "저장" : "저장하고 연결");
+    return messengerCard("telegram", "텔레그램", d, el("p", "mg-note", "토큰은 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. @BotFather로 만든 봇을 그룹이나 DM에 먼저 추가해 두세요."), [row, chatRow(d)]);
+  }
+  function slackCard() {
+    const d = dest("slack");
+    const row = tokenRow("slack", d?.last4, "https://hooks.slack.com/services/…", (t) => act(() => saveDest("slack", { webhook_url: t }), "슬랙을 연결했어요."), d ? "저장" : "저장하고 연결", "웹훅 주소");
+    return messengerCard("slack", "슬랙", d, el("p", "mg-note", "웹훅 주소는 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. 슬랙의 Incoming Webhooks에서 만들어요."), [row]);
+  }
   function channelsPanel() {
     const sec = el("section", "v4-side-sec");
     sec.append(el("h3", "", "연결된 채널"), el("p", "mg-note", "바꾸려면 팀·전문가 상세의 채널 연결에서 해요."));
@@ -120,7 +164,7 @@ window.ArkismMessenger = (ctx) => {
     if (!S.loaded) wrap.append(el("p", "pg-hint", "불러오는 중…"));
     else {
       if (S.err && S.err !== "unsupported") wrap.append(el("p", "mg-note warn", `디스코드 상태를 불러오지 못했어요 (${S.err}).`));
-      wrap.append(discordCard(), soon("텔레그램", "텔레그램 봇 토큰 (123456:ABC…)"), soon("슬랙", "xoxb-로 시작하는 봇 토큰을 붙여 넣으세요"));
+      wrap.append(discordCard(), telegramCard(), slackCard());
     }
     return [wrap];
   }

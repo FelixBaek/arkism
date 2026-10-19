@@ -7,7 +7,9 @@ package crewrun
 //	        instructions win (instructions add to the expert's).
 //	team    A team meeting on a topic: team (team record id), topic (template, default "{{input}}"). Starts a
 //	        meeting (trigger "workflow"), drives it here and outputs its conclusion
-//	        {summary, decisions, todos, open_questions, meeting_id}. A meeting that waits for a person fails the node,
+//	        {summary, decisions, todos, open_questions, meeting_id}.
+//	        fence and done (the 실행 범위) are added to the topic; retries (0-3) holds a failed meeting again; access read
+//	        lets it share a turn with other read nodes. A meeting that waits for a person fails the node,
 //	        and so does one that has no conclusion within timeout (default 1h).
 //	n8n     Sends the input to an n8n webhook: url, mode (sync: the answer is the output; async: the request carries
 //	        callback_url and the node waits until n8n posts the result there, at most timeout, default 30m, which
@@ -21,6 +23,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"maps"
 	"net/http"
 	"net/url"
@@ -54,7 +57,21 @@ type MeetingCreator interface {
 // teamPoll is how often runTeam looks at a meeting the poller took over.
 var teamPoll = 2 * time.Second
 
+// runTeam holds one meeting for the node. 실행 범위: fence and done join the meeting topic, and a failed meeting is
+// held again up to retries (0-3) times; one waiting on a person, a bad config or a timeout is not repeated
+// (a timed-out meeting is not ended by the engine, so a retry would leave it open beside a new one).
 func (e *Engine) runTeam(ctx context.Context, c map[string]string, input any) (any, error) {
+	retries := intIn(c["retries"], 0, 3, 0)
+	for try := 0; ; try++ {
+		out, err := e.runMeeting(ctx, c, input)
+		var f *nodeError
+		if err == nil || try >= retries || ctx.Err() != nil || !errors.As(err, &f) || f.code == "team_waiting" || f.code == "team_timeout" || f.code == "bad_config" {
+			return out, err
+		}
+	}
+}
+
+func (e *Engine) runMeeting(ctx context.Context, c map[string]string, input any) (any, error) {
 	mc, ok := e.Meetings.(MeetingCreator)
 	if !ok {
 		return nil, failf("bad_config", "이 실행기는 팀 회의를 만들 수 없어요")
@@ -64,6 +81,13 @@ func (e *Engine) runTeam(ctx context.Context, c map[string]string, input any) (a
 		return nil, failf("bad_config", "팀 %s를 찾지 못했어요", c["team"])
 	}
 	topic := strings.TrimSpace(render(cmp.Or(c["topic"], "{{input}}"), input))
+	if topic != "" {
+		done := ""
+		if v := strings.TrimSpace(c["done"]); v != "" {
+			done = "완료 기준: " + v
+		}
+		topic = joinText(topic, fenceOf(c), done)
+	}
 	if topic == "" {
 		return nil, failf("bad_config", "회의 주제가 비었어요")
 	}

@@ -46,6 +46,7 @@ type Engine struct {
 	GH          string
 	KeysFile    string
 	NotifyFile  string
+	NotifyScope string // "<workspace>/<project>": the runner's own destinations in NotifyFile
 	HooksFile   string
 	PublicURL   string
 	TelegramAPI string

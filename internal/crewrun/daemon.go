@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/notifycfg"
 )
 
 // Config comes from the environment (see FromEnv).
@@ -68,8 +71,9 @@ func FromEnv() Config {
 		Sandbox:      strings.Fields(os.Getenv("ARKISM_CREW_SANDBOX")),
 		GH:           envOr("ARKISM_CREW_GH", "gh"),
 		KeysFile:     envOr("ARKISM_CREW_KEYS", filepath.Join(state, "provider-keys.json")),
-		NotifyFile:   envOr("ARKISM_CREW_NOTIFY", filepath.Join(state, "notify.json")),
+		NotifyFile:   envOr("ARKISM_CREW_NOTIFY", filepath.Join(host.AgentsState, "notify.json")), // the file the desktop's messenger screen edits
 		HooksFile:    envOr("ARKISM_CREW_HOOKS", filepath.Join(state, "crew-hooks.json")),
+		NotifyScope:  notifycfg.ScopeKey(client.Scope.WorkspaceID, client.Scope.ProjectID),
 		PublicURL:    envOr("ARKISM_CREW_PUBLIC_URL", "http://"+listen),
 	}}
 }

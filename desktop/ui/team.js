@@ -41,6 +41,7 @@ window.ArkismTeams = (ctx) => {
     ["Send Messages in Threads", "스레드에서 메시지 보내기", 38], ["Create Public Threads", "공개 스레드 만들기", 35], ["Use Application Commands", "앱 명령어 사용", 31]];
   const PERM_BITS = PERMS.reduce((s, [, , bit]) => s + (1n << BigInt(bit)), 0n).toString(); // 311385197568
   const inviteURL = (appId) => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(appId)}&scope=bot%20applications.commands&permissions=${PERM_BITS}`;
+  window.ArkismDiscordInvite = inviteURL; // 설정 › 메신저 uses the same invite link
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
   const ERRORS = {
     secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요.",
@@ -245,18 +246,29 @@ window.ArkismTeams = (ctx) => {
   // ================================================================ 팀 목록 (208:18425)
   function teamCard(r) {
     const x = r.crew, cv = x.cover;
-    const c = el("button", `tm-card2${cv ? " has-cover" : ""}`); c.type = "button"; c.dataset.id = r.id;
+    // A card holds three controls (open the team, each face, the photo credit), so it is a box with a full-size open button
+    // underneath rather than one button with buttons inside it.
+    const c = el("div", `tm-card2${cv ? " has-cover" : ""}`); c.dataset.id = r.id;
+    const open = el("button", "tm-card2-open"); open.type = "button"; open.setAttribute("aria-label", x.name || "팀"); open.addEventListener("click", () => openPopup(r.id)); c.append(open);
     if (cv) { const img = el("img", "tm-card2-img"); img.alt = ""; img.src = coverSrc(cv); c.append(img); }
     const top = el("div", "tm-card2-top");
-    const b = teamBadge(r); top.append(b ? badge(b[0], b[1]) : el("span"));
+    const b = teamBadge(r); top.append(b && b[1] === "warn" ? badge(b[0], b[1]) : el("span")); // Figma shows no status badge; only the needs-attention one stays
     const faces = el("span", "tm-faces");
-    sorted(x.members).slice(0, 5).forEach((m) => faces.append(face(byId(m.agent_id), "s")));
+    sorted(x.members).slice(0, 5).forEach((m) => {
+      const a = byId(m.agent_id), f = el("button", "tm-face-btn"); f.type = "button"; f.dataset.name = a?.crew?.name || ""; f.setAttribute("aria-label", a?.crew?.name || "전문가"); f.append(face(a, "l"));
+      f.addEventListener("click", () => window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: m.agent_id } }))); faces.append(f);
+    });
     top.append(faces);
-    c.append(top, raw(el("strong", "", x.name)), raw(el("p", "", x.role || "")));
+    const title = raw(el("strong", /[A-Za-z]/.test(x.name || "") ? "tm-title-en" : "", x.name)); // English names read as the big uppercase title: DESIGN REVIEW.
+    c.append(top, title);
     const credit = coverCredit(cv); if (credit) c.append(credit);
-    c.addEventListener("click", () => openPopup(r.id));
+    // hover plate: category + @handle slide up from the bottom edge
+    const plate = el("span", "tm-card2-plate");
+    plate.append(el("span", "tm-card2-cat", x.category || ""), raw(el("b", "", x.handle ? `@${x.handle}` : "")));
+    c.append(plate);
     return c;
   }
+  const catIcon = (c) => (/git|release|릴리/i.test(c) ? "git-branch" : /plan|기획/i.test(c) ? "file-text" : /research|리서/i.test(c) ? "magnifying-glass" : /design|디자/i.test(c) ? "palette" : c ? "tag" : "list-bullets"); // categories are the person's own words
   function renderTeams() {
     $("#controls").replaceChildren();
     const table = $("#table");
@@ -271,7 +283,7 @@ window.ArkismTeams = (ctx) => {
     for (const [key, label] of [["", "모든 카테고리"], ...cats.map((c) => [c, c])]) {
       const n = key ? list.filter((r) => r.crew.category === key).length : list.length;
       const c = el("button", `tm-chip${S.cat === key ? " active" : ""}`); c.type = "button";
-      c.append(key ? raw(el("span", "", label)) : el("span", "", label), el("output", "", String(n)));
+      c.append(icon(catIcon(key)), key ? raw(el("span", "", label)) : el("span", "", label), el("output", "", String(n)));
       c.addEventListener("click", () => { S.cat = key; render(false); });
       chips.append(c);
     }
@@ -640,6 +652,14 @@ window.ArkismTeams = (ctx) => {
     mirror.append(el("span", "", "회의 진행을 디스코드 스레드에도 올리기"), sw(d.discord_mirror, "디스코드에도 올리기", (v) => { d.discord_mirror = v; changed(pop, true); }));
     list.append(mirror);
     s.append(list);
+    if (mine && S.discord) {
+      // 봇 쓰는 방식 (한 봇을 나눠 쓰기 / 팀마다 봇) moved here from the old 디스코드 screen; same chooser and save.
+      const perTeam = (S.discord.settings?.bot_mode || "shared") === "per_target";
+      const modeBox = el("div", "tm-side-sec");
+      modeBox.append(sideLabel("봇 쓰는 방식"), modeChooser(S.discord.settings?.bot_mode || "shared", (k) => { void saveSettings({ bot_mode: k }).then((ok) => { if (ok) popRedraw("overview"); }); }));
+      if (perTeam) modeBox.append(link("이 팀 전용 봇 연결하기 →", () => { closePopup(); startConnect(null, { mode: "per_target", target: `meeting:${pop.id}` }); }));
+      s.append(modeBox);
+    }
     if (mine && pop.chAdd) {
       const f = pop.chAdd;
       if (!bots().length) s.append(empty("먼저 디스코드 봇을 추가해 주세요."));
@@ -662,7 +682,7 @@ window.ArkismTeams = (ctx) => {
         s.append(row);
       }
     }
-    if (mine) s.append(link("디스코드에서 채널 정하기 →", () => { closePopup(); go("discord"); }));
+    if (mine) s.append(link("설정 › 메신저에서 디스코드 연결 보기 →", () => { closePopup(); state.settingsTab = "messenger"; go("settings"); }));
     return s;
   }
   function updateBar(pop) {
@@ -1523,15 +1543,21 @@ window.ArkismTeams = (ctx) => {
     if (sub) c.append(el("p", "tm-step-sub", sub));
     return c;
   }
-  function startConnect(retry) {
+  function startConnect(retry, preset) {
     const s0 = S.discord?.settings || {};
-    S.connect = { mode: s0.bot_mode || "shared", name: retry?.name || "", token: "", appId: retry?.application_id || "", intent: false, target: "", bot: null, busy: false, retry: retry?.id || null };
+    S.connect = { mode: s0.bot_mode || "shared", name: retry?.name || "", token: "", appId: retry?.application_id || "", intent: false, target: "", bot: null, busy: false, retry: retry?.id || null, from: { view: state.view, tab: state.settingsTab }, ...preset };
     S.bot = null; S.settingsOpen = false;
     if (!here("discord")) go("discord"); else render(false);
   }
+  // Back goes to where 봇 연결 was opened (e.g. the team list), never into the hidden 디스코드 list.
+  function leaveConnect() {
+    const from = S.connect?.from;
+    S.connect = null; clearTimeout(S.connectTimer);
+    if (from && from.view !== "discord") { if (from.view === "settings") state.settingsTab = from.tab; go(from.view); } else render(false);
+  }
   function connectSteps() {
     const c = S.connect;
-    const back = link("← 디스코드", () => { S.connect = null; clearTimeout(S.connectTimer); render(false); }, "tm-link quiet");
+    const back = link(S.connect.from && S.connect.from.view !== "discord" ? "← 돌아가기" : "← 디스코드", leaveConnect, "tm-link quiet");
     const s1 = section(1, "봇 쓰는 방식");
     s1.append(modeChooser(c.mode, (k) => { c.mode = k; render(false); }));
     const s2 = section(2, "디스코드에서 봇 만들기");
@@ -1559,7 +1585,7 @@ window.ArkismTeams = (ctx) => {
     s5.append(perms, S.inviteBox);
     const foot = el("div", "tm-foot");
     S.connectBtn = button(c.bot ? "다시 연결" : "연결", "primary", null, submitConnect);
-    foot.append(S.connectBtn, link("취소", () => { S.connect = null; clearTimeout(S.connectTimer); render(false); }, "tm-link plain"));
+    foot.append(S.connectBtn, link("취소", leaveConnect, "tm-link plain"));
     S.connectState = el("span", "tm-connect-state");
     foot.append(S.connectState);
     const main = el("div", "tm-form-main");
@@ -1586,7 +1612,7 @@ window.ArkismTeams = (ctx) => {
     const b = c.bot;
     if (S.connectState) {
       S.connectState.replaceChildren();
-      if (b) { const [label, tone] = BOT_STATE[b.state] || [b.state, "line"]; S.connectState.append(badge(label, tone)); if (b.state === "connected") S.connectState.append(link("채널 정하기 →", () => { S.connect = null; S.bot = b.id; render(false); })); }
+      if (b) { const [label, tone] = BOT_STATE[b.state] || [b.state, "line"]; S.connectState.append(badge(label, tone)); if (b.state === "connected") S.connectState.append(link("채널 정하기 →", () => { if (c.from && c.from.view !== "discord") leaveConnect(); else { S.connect = null; S.bot = b.id; render(false); } })); }
       else if (!c.intent) S.connectState.append(el("small", "", "3번을 켜면 연결할 수 있어요."));
     }
   }

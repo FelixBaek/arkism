@@ -21,6 +21,42 @@ type CandidateClassification struct {
 	DupHint      string     `json:"dup_hint,omitempty" bson:"dup_hint,omitempty"`
 	By           string     `json:"by,omitempty" bson:"by,omitempty"`
 	At           *time.Time `json:"at,omitempty" bson:"at,omitempty"`
+	// Verdict and Semantic are the classifier's advice to the reviewer (Figma 592:51366 / 764:61615): they never
+	// change the candidate, the person still decides.
+	Verdict  *CandidateVerdict `json:"verdict,omitempty" bson:"verdict,omitempty"`
+	Semantic []SemanticCheck   `json:"semantic,omitempty" bson:"semantic,omitempty"`
+}
+
+// CandidateVerdict is what the classifier would do with the candidate; Text is its suggested rewording for "fix".
+type CandidateVerdict struct {
+	Action string `json:"action" bson:"action"`
+	Text   string `json:"text,omitempty" bson:"text,omitempty"`
+	Reason string `json:"reason,omitempty" bson:"reason,omitempty"`
+}
+
+// SemanticCheck is one meaning check of the candidate text against its source quote; OK false means a finding.
+type SemanticCheck struct {
+	Check string `json:"check" bson:"check"`
+	OK    bool   `json:"ok" bson:"ok"`
+	Note  string `json:"note,omitempty" bson:"note,omitempty"`
+}
+
+var verdictActions = map[string]bool{"keep": true, "fix": true, "merge": true, "discard": true}
+var semanticChecks = map[string]bool{"same_meaning": true, "missing_content": true, "no_additions": true}
+
+func validJudgement(c CandidateClassification) bool {
+	if v := c.Verdict; v != nil && (!verdictActions[v.Action] || len(v.Text) > 2000 || len(v.Reason) > 1000) {
+		return false
+	}
+	if len(c.Semantic) > len(semanticChecks) {
+		return false
+	}
+	for _, k := range c.Semantic {
+		if !semanticChecks[k.Check] || len(k.Note) > 1000 {
+			return false
+		}
+	}
+	return true
 }
 
 func validClassification(c CandidateClassification) bool {
@@ -32,20 +68,22 @@ func validClassification(c CandidateClassification) bool {
 			return false
 		}
 	}
-	return !containsSecret(structuredText(c))
+	return validJudgement(c) && !containsSecret(structuredText(c))
 }
 
 type CandidateClassifyInput struct {
-	Scope            Scope    `json:"scope"`
-	ExpectedRevision int64    `json:"expected_revision"`
-	Risk             string   `json:"risk"`
-	RiskReasons      []string `json:"risk_reasons,omitempty"`
-	DupHint          string   `json:"dup_hint,omitempty"`
+	Scope            Scope             `json:"scope"`
+	ExpectedRevision int64             `json:"expected_revision"`
+	Risk             string            `json:"risk"`
+	RiskReasons      []string          `json:"risk_reasons,omitempty"`
+	DupHint          string            `json:"dup_hint,omitempty"`
+	Verdict          *CandidateVerdict `json:"verdict,omitempty"`
+	Semantic         []SemanticCheck   `json:"semantic,omitempty"`
 }
 
 // ClassifyCandidate records a reviewer's risk call on a waiting candidate. The extractor's evidence span is kept.
 func (s *Service) ClassifyCandidate(ctx context.Context, token, id string, in CandidateClassifyInput) (Record, error) {
-	c := CandidateClassification{Risk: in.Risk, Reasons: in.RiskReasons, DupHint: in.DupHint}
+	c := CandidateClassification{Risk: in.Risk, Reasons: in.RiskReasons, DupHint: in.DupHint, Verdict: in.Verdict, Semantic: in.Semantic}
 	if in.ExpectedRevision < 1 || id == "" || len(id) > 256 || !validClassification(c) {
 		return Record{}, ErrInvalid
 	}

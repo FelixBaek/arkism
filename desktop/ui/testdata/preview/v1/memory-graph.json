@@ -1,182 +1,202 @@
 {
- "nodes": [
-  {
-   "id": "m1",
-   "reach": "personal",
-   "kind": "decision",
-   "uses": 0,
-   "vector_pending": false
-  },
-  {
-   "id": "m2",
-   "reach": "general",
-   "kind": "procedural",
-   "uses": 3,
-   "vector_pending": false
-  },
-  {
-   "id": "m3",
-   "reach": "project",
-   "kind": "decision",
-   "uses": 6,
-   "vector_pending": false
-  },
-  {
-   "id": "m4",
-   "reach": "personal",
-   "kind": "lesson",
-   "uses": 0,
-   "vector_pending": false
-  },
-  {
-   "id": "m5",
-   "reach": "general",
-   "kind": "user",
-   "uses": 3,
-   "vector_pending": false
-  },
-  {
-   "id": "m6",
-   "reach": "project",
-   "kind": "decision",
-   "uses": 6,
-   "vector_pending": false
-  },
-  {
-   "id": "m7",
-   "reach": "personal",
-   "kind": "lesson",
-   "uses": 0,
-   "vector_pending": false
-  },
-  {
-   "id": "m8",
-   "reach": "general",
-   "kind": "procedural",
-   "uses": 3,
-   "vector_pending": false
-  },
-  {
-   "id": "m9",
-   "reach": "project",
-   "kind": "episodic",
-   "uses": 6,
-   "vector_pending": false
-  },
-  {
-   "id": "m10",
-   "reach": "personal",
-   "kind": "decision",
-   "uses": 0,
-   "vector_pending": false
-  },
-  {
-   "id": "m11",
-   "reach": "general",
-   "kind": "decision",
-   "uses": 3,
-   "vector_pending": false
-  },
-  {
-   "id": "m-pin-icons",
-   "reach": "project",
-   "kind": "decision",
-   "uses": 6,
-   "vector_pending": false
-  },
-  {
-   "id": "m-pin-select",
-   "reach": "personal",
-   "kind": "decision",
-   "uses": 0,
-   "vector_pending": false
-  },
-  {
-   "id": "m-pin-tokens",
-   "reach": "general",
-   "kind": "procedural",
-   "uses": 3,
-   "vector_pending": false
-  },
-  {
-   "id": "m-pin-copy",
-   "reach": "project",
-   "kind": "user",
-   "uses": 6,
-   "vector_pending": false
-  }
- ],
- "edges": [
-  {
-   "from": "m1",
-   "to": "m2",
-   "type": "supports"
-  },
-  {
-   "from": "m2",
-   "to": "m4",
-   "type": "similar"
-  },
-  {
-   "from": "m3",
-   "to": "m6",
-   "type": "supersedes"
-  },
-  {
-   "from": "m4",
-   "to": "m8",
-   "type": "human_link"
-  },
-  {
-   "from": "m5",
-   "to": "m10",
-   "type": "conflicts"
-  },
-  {
-   "from": "m6",
-   "to": "m-pin-icons",
-   "type": "same_session"
-  },
-  {
-   "from": "m7",
-   "to": "m-pin-tokens",
-   "type": "supports"
-  },
-  {
-   "from": "m8",
-   "to": "m1",
-   "type": "similar"
-  },
-  {
-   "from": "m9",
-   "to": "m3",
-   "type": "supersedes"
-  },
-  {
-   "from": "m10",
-   "to": "m5",
-   "type": "human_link"
-  },
-  {
-   "from": "m11",
-   "to": "m7",
-   "type": "conflicts"
-  },
-  {
-   "from": "m-pin-icons",
-   "to": "m9",
-   "type": "same_session"
-  },
-  {
-   "from": "m-pin-select",
-   "to": "m11",
-   "type": "supports"
-  },
-  {
-   "from": "m-pin-tokens",
-   "to": "m-pin-select",
-   "type": "similar"
-  }
- ],
- "truncated": false
+  "nodes": [
+    {
+      "id": "m1",
+      "reach": "personal",
+      "kind": "decision",
+      "uses": 0,
+      "vector_pending": false
+    },
+    {
+      "id": "m2",
+      "reach": "general",
+      "kind": "procedural",
+      "uses": 3,
+      "vector_pending": false
+    },
+    {
+      "id": "m3",
+      "reach": "project",
+      "kind": "decision",
+      "uses": 6,
+      "vector_pending": false
+    },
+    {
+      "id": "m4",
+      "reach": "personal",
+      "kind": "lesson",
+      "uses": 0,
+      "vector_pending": false
+    },
+    {
+      "id": "m5",
+      "reach": "general",
+      "kind": "user",
+      "uses": 3,
+      "vector_pending": false
+    },
+    {
+      "id": "m6",
+      "reach": "project",
+      "kind": "decision",
+      "uses": 6,
+      "vector_pending": false
+    },
+    {
+      "id": "m7",
+      "reach": "personal",
+      "kind": "lesson",
+      "uses": 0,
+      "vector_pending": false
+    },
+    {
+      "id": "m8",
+      "reach": "general",
+      "kind": "procedural",
+      "uses": 3,
+      "vector_pending": false
+    },
+    {
+      "id": "m9",
+      "reach": "project",
+      "kind": "episodic",
+      "uses": 6,
+      "vector_pending": false
+    },
+    {
+      "id": "m10",
+      "reach": "personal",
+      "kind": "decision",
+      "uses": 0,
+      "vector_pending": false
+    },
+    {
+      "id": "m11",
+      "reach": "general",
+      "kind": "decision",
+      "uses": 3,
+      "vector_pending": false
+    },
+    {
+      "id": "m-pin-icons",
+      "reach": "project",
+      "kind": "decision",
+      "uses": 6,
+      "vector_pending": false
+    },
+    {
+      "id": "m-pin-select",
+      "reach": "personal",
+      "kind": "decision",
+      "uses": 0,
+      "vector_pending": false
+    },
+    {
+      "id": "m-pin-tokens",
+      "reach": "general",
+      "kind": "procedural",
+      "uses": 3,
+      "vector_pending": false
+    },
+    {
+      "id": "m-pin-copy",
+      "reach": "project",
+      "kind": "user",
+      "uses": 6,
+      "vector_pending": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "m1",
+      "to": "m2",
+      "type": "supports"
+    },
+    {
+      "from": "m2",
+      "to": "m4",
+      "type": "similar"
+    },
+    {
+      "from": "m3",
+      "to": "m6",
+      "type": "supersedes"
+    },
+    {
+      "from": "m4",
+      "to": "m8",
+      "type": "human_link"
+    },
+    {
+      "from": "m5",
+      "to": "m10",
+      "type": "conflicts"
+    },
+    {
+      "from": "m6",
+      "to": "m-pin-icons",
+      "type": "same_session"
+    },
+    {
+      "from": "m7",
+      "to": "m-pin-tokens",
+      "type": "supports"
+    },
+    {
+      "from": "m8",
+      "to": "m1",
+      "type": "similar"
+    },
+    {
+      "from": "m9",
+      "to": "m3",
+      "type": "supersedes"
+    },
+    {
+      "from": "m10",
+      "to": "m5",
+      "type": "human_link"
+    },
+    {
+      "from": "m11",
+      "to": "m7",
+      "type": "conflicts"
+    },
+    {
+      "from": "m-pin-icons",
+      "to": "m9",
+      "type": "same_session"
+    },
+    {
+      "from": "m-pin-select",
+      "to": "m11",
+      "type": "supports"
+    },
+    {
+      "from": "m-pin-tokens",
+      "to": "m-pin-select",
+      "type": "similar"
+    },
+    {
+      "from": "m-pin-icons",
+      "to": "m2",
+      "type": "supports"
+    },
+    {
+      "from": "m-pin-icons",
+      "to": "m7",
+      "type": "supersedes"
+    },
+    {
+      "from": "m10",
+      "to": "m-pin-icons",
+      "type": "conflicts"
+    },
+    {
+      "from": "m-pin-copy",
+      "to": "m-pin-icons",
+      "type": "supports"
+    }
+  ],
+  "truncated": false
 }

@@ -60,6 +60,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	crewUsageRoutes(mux, s)
 	crewAgentCallRoutes(mux, s)
 	discordRoutes(mux, s)
+	messengerRoutes(mux, s)
 	skillUsageRoutes(mux, s)
 	codeReviewRoutes(mux, s)
 	codeGraphRoutes(mux, s)
@@ -343,6 +344,15 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 			return
 		}
 		out, e := s.MemoryUsageSummary(r.Context(), bearer(r), scope)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("GET /v1/recalls", func(w http.ResponseWriter, r *http.Request) {
+		scope, e := parseSourceTraceQuery(r.URL.RawQuery)
+		if e != nil {
+			respond(w, nil, e)
+			return
+		}
+		out, e := s.RecentRecalls(r.Context(), bearer(r), scope, 20)
 		respond(w, out, e)
 	})
 	mux.HandleFunc("GET /v1/memories/{id}/usage", func(w http.ResponseWriter, r *http.Request) {

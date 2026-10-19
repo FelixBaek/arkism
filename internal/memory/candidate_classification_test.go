@@ -121,3 +121,27 @@ func TestCaptureOwnerCredentialAndHighRiskCannotSelfApprove(t *testing.T) {
 		t.Fatal(rep, e)
 	}
 }
+
+func TestClassifyCandidateKeepsVerdictAndSemanticAdvice(t *testing.T) {
+	f, cls := classifierFixture(t)
+	c := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "proposal", Sources: refs(f.source())}))
+	in := CandidateClassifyInput{Scope: scopeA, ExpectedRevision: c.Revision, Risk: "medium",
+		Verdict:  &CandidateVerdict{Action: "fix", Text: "검수 전에는 올리지 않는다", Reason: "저장소 언급이 빠졌어요"},
+		Semantic: []SemanticCheck{{Check: "same_meaning", OK: true}, {Check: "missing_content", OK: false, Note: "저장소"}}}
+	r, e := f.svc.ClassifyCandidate(testCtx, cls, c.ID, in)
+	if e != nil || r.Status != "candidate" || r.Text != c.Text {
+		t.Fatal(r, e)
+	}
+	if k := r.Classification; k.Verdict == nil || k.Verdict.Action != "fix" || len(k.Semantic) != 2 || k.Semantic[1].OK {
+		t.Fatal(k)
+	}
+	for name, bad := range map[string]CandidateClassifyInput{
+		"action": {Verdict: &CandidateVerdict{Action: "approve"}},
+		"check":  {Semantic: []SemanticCheck{{Check: "vibes"}}},
+	} {
+		bad.Scope, bad.ExpectedRevision, bad.Risk = scopeA, r.Revision, "low"
+		if _, e := f.svc.ClassifyCandidate(testCtx, cls, c.ID, bad); !errors.Is(e, ErrInvalid) {
+			t.Fatal(name, e)
+		}
+	}
+}

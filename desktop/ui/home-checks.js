@@ -46,28 +46,32 @@ window.ArkismHomeChecks = (ctx) => {
   const live = () => state.view === "todo" && !state.selected && !state.todoAll;
 
   // ---- 기억 처리 멈춤 (same rule as overview.js stages())
-  let S = { g: -1, sessions: null };
-  function load(generation) {
-    if (S.g === generation) return;
-    S = { g: generation, sessions: null };
+  // Refetched at most once a minute: the home only re-renders on data changes, so a timer keeps the warning current.
+  let S = { g: -1, sessions: null, at: 0 }, timer = 0;
+  function load(generation, force = false) {
+    if (!force && S.g === generation && Date.now() - S.at < 60000) return;
+    if (S.g !== generation) S = { g: generation, sessions: null, at: 0 };
+    S.at = Date.now();
     const g = generation;
     request(`/v1/usage/sessions?${query({ range: "7d", limit: 300 })}`).then((d) => (Array.isArray(d?.items) ? d.items : []), () => [])
       .then((items) => { if (S.g !== g) return; S.sessions = items; if (live()) render(false); });
   }
-  function stall(sessions, extracted, now = Date.now()) {
+  function stall(sessions, lastExtract, now = Date.now()) {
     const ends = sessions.map((s) => time(s.ended_at || s.started_at)).filter(Boolean);
-    const lastSession = Math.max(0, ...ends), lastExtract = Math.max(0, ...extracted);
+    const lastSession = Math.max(0, ...ends);
     const pending = lastExtract ? ends.filter((t) => t > lastExtract) : ends;
     const since = pending.length ? Math.min(...pending) : lastExtract;
     const stalled = ends.length > 0 && since > 0 && lastSession - since > 6 * HOUR && now - since > 6 * HOUR;
     return { stalled, hours: Math.floor((now - since) / HOUR), lastExtract, pending: pending.length };
   }
   function stalledItem(generation) {
+    timer ||= setInterval(() => { if (live() && S.g >= 0) load(S.g, true); }, 60000); // forced: a tick just short of 60s after the last fetch must not skip a whole minute
     load(generation);
     if (!S.sessions) return null;
     const d = state.data;
-    const extracted = [...d.candidates, ...d.conflicted, ...d.memories].map((m) => time(m.created_at)).filter(Boolean);
-    const r = stall(S.sessions, extracted);
+    let lastExtract = 0;
+    for (const list of [d.candidates, d.conflicted, d.memories]) for (const m of list) lastExtract = Math.max(lastExtract, time(m.created_at));
+    const r = stall(S.sessions, lastExtract);
     if (!r.stalled) return null;
     return { id: "stalled", n: 1, icon: "warning-circle", label: "기억 처리 멈춤", title: `기억 추출이 ${r.hours}시간째 멈췄어요`, warn: true,
       sub: `${r.lastExtract ? `마지막 추출 ${ago(r.lastExtract)}` : "추출 기록 없음"} · 멈춘 뒤 끝난 대화 ${r.pending}건`, action: "처리 흐름 보기",

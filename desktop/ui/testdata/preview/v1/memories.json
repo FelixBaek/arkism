@@ -15,7 +15,7 @@
    "updated_at": "2026-10-13T11:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude-code:s1"
+    "event_id:claude_code:session_01JX8K2M2QWERTY"
    ],
    "created_by_type": "agent"
   },
@@ -34,7 +34,7 @@
    "updated_at": "2026-10-13T10:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude-code:s1"
+    "event_id:claude_code:session_01JX8K2M2QWERTY"
    ],
    "created_by_type": "agent"
   },
@@ -53,7 +53,7 @@
    "updated_at": "2026-09-24T13:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude-code:s1"
+    "event_id:claude_code:session_01JX8K2M2QWERTY"
    ],
    "created_by_type": "agent"
   },
@@ -93,7 +93,7 @@
    "updated_at": "2026-09-13T13:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude-code:s1"
+    "event_id:claude_code:session_01JX8K2M2QWERTY"
    ],
    "created_by_type": "agent"
   },
@@ -112,7 +112,7 @@
    "updated_at": "2026-10-12T08:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude-code:s1"
+    "event_id:claude_code:session_01JX8K2M2QWERTY"
    ],
    "created_by_type": "agent"
   },
@@ -173,7 +173,7 @@
    "updated_at": "2026-09-03T13:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude-code:s1"
+    "event_id:claude_code:session_01JX8K2M2QWERTY"
    ],
    "created_by_type": "agent"
   },
@@ -192,7 +192,7 @@
    "updated_at": "2026-10-04T13:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude-code:s1"
+    "event_id:claude_code:session_01JX8K2M2QWERTY"
    ],
    "created_by_type": "agent"
   },
@@ -211,7 +211,7 @@
    "updated_at": "2026-10-11T13:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude-code:s1",
+    "event_id:claude_code:session_01JX8K2M2QWERTY",
     "repo:acme/arkism"
    ],
    "created_by_type": "agent"
