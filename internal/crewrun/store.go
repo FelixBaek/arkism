@@ -53,15 +53,16 @@ type Trigger struct {
 // Crew is the part of a crew item the engine needs: a workflow, or a persona
 // whose instructions an AI node may take.
 type Crew struct {
-	Type         string   `json:"type"`
-	Name         string   `json:"name"`
-	Handle       string   `json:"handle,omitempty"`
-	Model        string   `json:"model,omitempty"`
-	Instructions string   `json:"instructions,omitempty"`
-	Trigger      *Trigger `json:"trigger,omitempty"`
-	Enabled      bool     `json:"enabled,omitempty"`
-	Limits       *Limits  `json:"limits,omitempty"`
-	Graph        *Graph   `json:"graph,omitempty"`
+	Type         string      `json:"type"`
+	Name         string      `json:"name"`
+	Handle       string      `json:"handle,omitempty"`
+	Model        string      `json:"model,omitempty"`
+	Instructions string      `json:"instructions,omitempty"`
+	Trigger      *Trigger    `json:"trigger,omitempty"`
+	Enabled      bool        `json:"enabled,omitempty"`
+	Limits       *Limits     `json:"limits,omitempty"`
+	Graph        *Graph      `json:"graph,omitempty"`
+	Notify       *CrewNotify `json:"notify,omitempty"` // 진행 알림 (progress.go)
 	// work agents (type agent, or template saved before agents) and teams, for meetings
 	Role            string            `json:"role,omitempty"`
 	Effort          string            `json:"effort,omitempty"`

@@ -189,7 +189,9 @@ type Crew struct {
 	Enabled bool         `json:"enabled,omitempty"`
 	Limits  *CrewLimits  `json:"limits,omitempty"`
 	Graph   *CrewGraph   `json:"graph,omitempty"`
-	Cover   *CrewCover   `json:"cover,omitempty"` // 카드 배경 사진 (Unsplash)
+	Cover   *CrewCover   `json:"cover,omitempty"`  // 카드 배경 사진 (Unsplash)
+	Goal    *CrewGoal    `json:"goal,omitempty"`   // 목표 (crew_goal.go)
+	Notify  *CrewNotify  `json:"notify,omitempty"` // 진행 알림 (crew_goal.go)
 	// agent
 	ModelMode       string      `json:"model_mode,omitempty"` // fixed | auto (Clef picks)
 	FallbackModel   string      `json:"fallback_model,omitempty"`
@@ -410,7 +412,7 @@ func validCrewWorkflow(c Crew) bool {
 
 func validCrew(c Crew) bool {
 	if !slices.Contains(crewTypes, c.Type) || !validCrewText(c) || !validCrewAvatar(c.Avatar) || !validCrewCover(c.Cover) ||
-		!validCrewPins(c.Pinned) || len(c.Pinned) > 0 && c.Type != "agent" && c.Type != "team" {
+		!validCrewGoalNotify(c) || !validCrewPins(c.Pinned) || len(c.Pinned) > 0 && c.Type != "agent" && c.Type != "team" {
 		return false
 	}
 	switch c.Type {

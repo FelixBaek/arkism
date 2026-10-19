@@ -65,6 +65,7 @@ type UsageWorkflow struct {
 	Runs        int      `json:"runs"`
 	SuccessRate *float64 `json:"success_rate"`
 	CostUSD     float64  `json:"cost_usd"`
+	Tokens      int64    `json:"tokens"`
 }
 
 type UsageFailingNode struct {
@@ -202,7 +203,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 	if want("workflow") && agentID == "" && teamID == "" {
 		for _, r := range u.runs {
 			run := r.CrewRun
-			if run == nil {
+			if run == nil || run.Trigger == "test" { // 시험 실행 fakes AI steps: it would skew runs, rates and tokens per run
 				continue
 			}
 			if run.Status == "waiting" {
@@ -309,6 +310,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 		out.KPI.CostEstimated = out.KPI.CostEstimated || est
 		if w := wf[o.WorkflowID]; w != nil && o.WorkflowID != "" {
 			w.CostUSD += cost
+			w.Tokens += c.InputTokens + c.OutputTokens
 		}
 		if k == "agent" {
 			if c.OK {

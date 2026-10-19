@@ -263,7 +263,7 @@ window.ArkismCrew = (ctx) => {
 
   // ---------------------------------------------------------------- runs
   // 실행: a run the host engine picks up within ten seconds. The editor opens the run view (03b) on it.
-  async function startRun(rec, text, only, nodesFrom) {
+  async function startRun(rec, text, only, nodesFrom, until) {
     const g = rec.crew.graph;
     if (!stepCount(g)) { notice("아직 할 일이 없어요. 편집에서 노드를 넣어 주세요."); return null; }
     const nodes = Object.fromEntries((g.nodes || []).map((n) => [n.id, { status: "pending" }]));
@@ -272,10 +272,12 @@ window.ArkismCrew = (ctx) => {
       for (const [id, st] of Object.entries(nodesFrom.nodes || {})) if (nodes[id] && st.status === "done") nodes[id] = { status: "done", output: st.output, port: st.port, runs: st.runs };
       loops = nodesFrom.loops;
     }
+    // 여기까지: what the chosen step does not need is marked skipped, so the run stops after it.
+    if (until) { const need = new Set([until, ...upstream(g, until).map((n) => n.id)]); for (const id of Object.keys(nodes)) if (!need.has(id)) nodes[id] = { status: "skipped" }; }
     const run = { crew_id: rec.id, crew_revision: rec.revision, trigger: "manual", status: "running", input: runInput(text, only), nodes, ...(only ? { only } : {}), ...(loops ? { loops } : {}) };
     try {
       const r = await request("/v1/crew/runs", { method: "POST", body: JSON.stringify({ scope: state.scope, run }) });
-      notice(only ? "이 노드만 실행을 맡겼어요. 최근 실행에서 볼 수 있어요." : "실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.");
+      notice(only ? "이 노드만 실행을 맡겼어요. 최근 실행에서 볼 수 있어요." : until ? "여기까지 실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요." : "실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.");
       return r;
     } catch (e) {
       if (nodesFrom) return startRun(rec, text, only);
@@ -527,6 +529,7 @@ window.ArkismCrew = (ctx) => {
   let recent = null;
   let recentBusy = false;
   let recentAll = false;
+  let recentOpen = false; // 최근 실행 starts folded under the cards (198:286 has none); kept until the owner decides
   let waiting = [];
   async function loadRecent() {
     if (recentBusy) return;
@@ -563,15 +566,40 @@ window.ArkismCrew = (ctx) => {
   const inTab = (r, tab) => tab === "all" || (tab === "trigger" ? triggered(r.crew) : !triggered(r.crew));
   const shownCards = () => workflows().filter((r) => inTab(r, state.crewTab) && (state.crewCat === "all" || r.crew.category === state.crewCat) &&
     (!state.query || `${r.crew.name} ${r.crew.handle || ""} ${r.crew.role || ""}`.toLowerCase().includes(state.query)));
+  // 자동화 상세·새로 만들기 팝업 (crew-automation.js): built on first use, once every helper below exists.
+  let autoKit = null;
+  const getAuto = () => (autoKit ||= window.ArkismAutomation({
+    state, el, icon, button, notice, request, query, byId, kit, NODES, IS_AI, WORK, UNTITLED, RUN_LABEL,
+    levels, nodeTitle, stepCount, isBack, modelOf, modelMark, avatarMark, personas, workflows, ownerOf, categories, ruleChecks, waitingRuns,
+    cronText, nextRun, parseCron, when, switchEl, copyButton, coverCredit, coverPicker, input, select, modelInput, freeHandle, layoutGraph, defaultGraph,
+    save, reload, archive, remove, errorText, startRun, decide, stopRun, askTask, openGraph, runRow, runRequest, readable, nodeDur, spanText, runMs, runTookText: runTook, ago,
+    duplicate: (r) => dupButton(r).click(),
+    refreshRuns: async () => { recent = null; await loadRecent(); },
+    openSettingsNew: () => openSettings(null),
+    openSettings: (r) => openSettings(r),
+    openAutomation: (id, tab) => { const r = byId(id); if (r) getAuto().open(r, tab); },
+    afterClose: () => { markSelected(); if (state.view === "crew") { drawCards(); drawRecent(); } }
+  }));
   function renderList() {
     if (!TABS.some(([k]) => k === state.crewTab)) state.crewTab = "all";
     const tab = state.crewTab;
     const all = workflows().filter((r) => inTab(r, tab));
     const cats = categories(all);
     if (state.crewCat !== "all" && !cats.some(([c]) => c === state.crewCat)) state.crewCat = "all";
-    // 보기 · 검색 · 카테고리: one row (the search box here and the one on top share state.query)
-    const bar = el("div", "wf-bar");
-    bar.append(segment(TABS.map(([k, l]) => [k, l, workflows().filter((r) => inTab(r, k)).length]), tab, (k) => { state.crewTab = k; state.crewCat = "all"; state.selected = null; render(); }), el("span", "grow"));
+    // 카테고리 칩 · 검색 · 실행 방식 · 새 워크플로우: one row (the search box here and the one on top share state.query)
+    $("#app").classList.add("wide"); // the card opens a popup: no side panel
+    const bar = el("div", "wf-bar auto-bar-top");
+    const chips = el("div", "auto-cats");
+    const chip = (k, label, n) => {
+      const c = el("button", `auto-cat-chip${state.crewCat === k ? " on" : ""}`);
+      c.type = "button";
+      c.setAttribute("aria-pressed", String(state.crewCat === k));
+      c.append(label, el("small", "", String(n)));
+      c.addEventListener("click", () => { state.crewCat = k; state.selected = null; render(); });
+      return c;
+    };
+    chips.append(chip("all", "모든 카테고리", all.length), ...cats.map(([c, n]) => chip(c, c, n)));
+    bar.append(chips, el("span", "grow"));
     const search = el("label", "search wf-search");
     const q = el("input");
     q.type = "search";
@@ -584,19 +612,16 @@ window.ArkismCrew = (ctx) => {
       drawCards();
     });
     search.append(icon("magnifying-glass"), q);
-    bar.append(search);
-    if (cats.length) {
-      const cat = el("select", "wf-select");
-      cat.setAttribute("aria-label", "카테고리");
-      for (const [k, label] of [["all", "모든 카테고리"], ...cats.map(([c, n]) => [c, `${c} · ${n}`])]) {
-        const o = el("option", "", label);
-        o.value = k;
-        o.selected = k === state.crewCat;
-        cat.append(o);
-      }
-      cat.addEventListener("change", () => { state.crewCat = cat.value; drawCards(); });
-      bar.append(cat);
+    const how = el("select", "wf-select");
+    how.setAttribute("aria-label", "실행 방식");
+    for (const [k, l] of TABS) {
+      const o = el("option", "", k === "all" ? "모든 실행 방식" : `${l} · ${workflows().filter((r) => inTab(r, k)).length}`);
+      o.value = k;
+      o.selected = k === tab;
+      how.append(o);
     }
+    how.addEventListener("change", () => { state.crewTab = how.value; state.crewCat = "all"; state.selected = null; render(); });
+    bar.append(search, how, button("+ 새 워크플로우", "primary", null, () => getAuto().create()));
     $("#controls").replaceChildren(bar);
     $("#chips").replaceChildren();
     $("#stats").replaceChildren();
@@ -644,7 +669,7 @@ window.ArkismCrew = (ctx) => {
     const c = el("button", `crew-card workflow wf-card${x.cover?.url ? " has-cover" : ""}${state.selected === `crew:${r.id}` ? " selected" : ""}`);
     c.type = "button";
     c.dataset.id = `crew:${r.id}`;
-    c.addEventListener("click", () => { state.selected = `crew:${r.id}`; markSelected(); renderDetail(); openDetail(); drawRecent(); });
+    c.addEventListener("click", () => { state.selected = `crew:${r.id}`; markSelected(); getAuto().open(r); });
     if (x.cover?.url) {
       const img = el("img", "crew-cover-img");
       img.alt = "";
@@ -654,7 +679,6 @@ window.ArkismCrew = (ctx) => {
       c.append(img);
     }
     const top = el("div", "crew-cover-top");
-    if (x.category) top.append(el("span", "wf-chip", x.category));
     if (x.trigger) top.append(switchEl(x.enabled, `${x.name} 일정·웹훅 켜기`, (on) => quickSave(r, { enabled: on }, on ? "일정·웹훅을 켰어요." : "일정·웹훅을 껐어요.")));
     const n = stepCount(x.graph);
     const workers = collabWorkers(x.graph);
@@ -662,7 +686,12 @@ window.ArkismCrew = (ctx) => {
     const meta = [`$${x.handle}`, n === 1 ? "단계 1개" : `${n}단계`, workers ? `협업 워커 ${workers}명` : "", waits ? `승인 ${waits}건 필요` : ""].filter(Boolean).join(" · ");
     const when2 = x.trigger ? (x.enabled ? (x.trigger.kind === "schedule" ? cronText(x.trigger.cron) : triggerText(x)) : `${triggerText(x)} · 꺼짐`) : "수동 실행";
     const foot = el("div", "crew-cover-foot");
-    foot.append(el("small", "wf-card-meta", meta), el("small", `wf-card-when${triggered(x) ? " on" : ""}`, when2));
+    foot.append(el("small", "wf-card-meta", meta));
+    // 일정 배지: as long as its text, pinned to the card's top right, cut with … past the card's width.
+    const badge = el("span", `wf-card-when${triggered(x) ? " on" : ""}`);
+    badge.title = when2;
+    badge.append(el("i"), el("span", "", when2));
+    top.prepend(badge);
     c.append(top, el("strong", "crew-cover-title", x.name), el("p", "wf-card-role", x.role || ""), el("span", "grow"), foot);
     return c;
   }
@@ -670,10 +699,10 @@ window.ArkismCrew = (ctx) => {
     const c = el("button", "crew-card new workflow wf-card");
     c.type = "button";
     c.append(icon("plus"), el("strong", "", "새 워크플로우"), el("small", "", "AI 하나로 간단히 시작하거나 단계를 이어 그려요"));
-    c.addEventListener("click", openCreate);
+    c.addEventListener("click", () => getAuto().create());
     return c;
   }
-  const headActions = () => [button("새 워크플로우", "primary", null, openCreate)];
+  const headActions = () => []; // 새 워크플로우 sits in the list's own bar
 
   // ---------------------------------------------------------------- 새 워크플로우: AI로 만들기 / 직접 만들기
   const UNTITLED = "제목 없음";
@@ -707,37 +736,6 @@ window.ArkismCrew = (ctx) => {
     }
     return g;
   }
-  function openCreate() {
-    dialog?.remove();
-    dialog = el("dialog", "crew-dialog wf-dialog wf-create");
-    const form = el("form");
-    form.method = "dialog";
-    const head = el("div", "dialog-head");
-    const close = el("button", "icon-btn plain");
-    close.value = "cancel";
-    close.setAttribute("aria-label", "닫기");
-    close.append(icon("x"));
-    head.append(el("h2", "", "새 워크플로우"), close);
-    const pick = el("div", "crew-choice big wf-choice");
-    const opt = (l, sub, fn) => {
-      const b = el("button");
-      b.type = "button";
-      b.append(el("strong", "", l), el("small", "", sub));
-      b.addEventListener("click", fn);
-      return b;
-    };
-    pick.append(opt("AI로 만들기", "하고 싶은 일을 말하면 AI가 물어보고 그래프를 그려요.", () => { dialog.remove(); openBuildChat(); }),
-      opt("직접 만들기", "바로 그래프 편집으로 가요. 제목은 나중에 AI가 채워요.", () => { dialog.remove(); void createBlank(); }));
-    const more = button("템플릿·설정으로 만들기", "ghost small", null, () => { dialog.remove(); openSettings(null); });
-    more.type = "button";
-    const body = el("div", "dialog-body");
-    body.append(pick, more);
-    form.append(head, body);
-    dialog.append(form);
-    dialog.addEventListener("close", () => dialog.remove());
-    document.body.append(dialog);
-    dialog.showModal();
-  }
   function freeHandle(name) {
     const h = name === UNTITLED ? "" : name.replace(/[^\p{L}\p{N}_-]/gu, "").slice(0, 40);
     return h && !workflows().some((r) => r.crew.handle === h) ? h : untitledHandle();
@@ -754,72 +752,6 @@ window.ArkismCrew = (ctx) => {
       notice(errorText(e));
       return false;
     }
-  }
-  function openBuildChat() {
-    dialog?.remove();
-    const box = (dialog = el("dialog", "crew-dialog wf-dialog wf-build"));
-    const form = el("form");
-    const head = el("div", "dialog-head");
-    const close = el("button", "icon-btn plain");
-    close.type = "button";
-    close.setAttribute("aria-label", "닫기");
-    close.append(icon("x"));
-    close.addEventListener("click", () => dialog.close());
-    head.append(el("h2", "", "AI로 만들기"), close);
-    const log = el("div", "wf-build-log");
-    const talk = [];
-    const say = (who, text) => { talk.push([who, text]); log.append(el("p", who === "AI" ? "wf-build-ai" : "wf-build-me", text)); log.scrollTop = log.scrollHeight; };
-    say("AI", "어떤 일을 자동으로 하고 싶어요? 언제 시작하고, 무엇을 받아서, 결과를 어디로 보낼지 알려 주세요.");
-    const q = el("textarea");
-    q.rows = 3;
-    q.maxLength = 2000;
-    q.placeholder = "예: 매일 아침 GitHub PR을 모아 요약해서 슬랙으로 보내 줘";
-    const send = button("보내기", "primary", "paper-plane");
-    send.type = "submit";
-    const err = el("p", "form-error");
-    err.setAttribute("role", "alert");
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const text = q.value.trim();
-      if (!text) return;
-      q.value = "";
-      say("나", text);
-      send.disabled = true;
-      err.textContent = "";
-      const wait = el("p", "dim", "AI가 생각하는 중…");
-      log.append(wait);
-      try {
-        const prompt = `Build an Arkism workflow from this conversation with the user. Ask only when something essential is missing (what it takes in, what it does, where the result goes), at most 3 questions in total; after that decide sensibly and build it.
-${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}`;
-        const a = await kit.assist("build", prompt, { purpose: "workflow" });
-        if (!box.open) return; // closed while the AI was thinking: build nothing
-        if (a.status !== "done") throw new Error(kit.assistError(a));
-        const j = kit.parseJSON(a.output);
-        if (j?.ask) { say("AI", String(j.ask).slice(0, 400)); return; }
-        const g = j?.graph;
-        if (!Array.isArray(g?.nodes) || !g.nodes.length) throw new Error("AI 답을 읽지 못했어요. 다시 보내 주세요.");
-        g.edges = Array.isArray(g.edges) ? g.edges : [];
-        say("AI", `${String(j.name || UNTITLED)}: 단계 ${g.nodes.length}개로 그렸어요. 편집 화면에서 확인해 주세요.`);
-        if (await createBlank(layoutGraph(g), String(j.name || UNTITLED).slice(0, 60), String(j.role || "").slice(0, 200))) box.close();
-      } catch (x) {
-        err.textContent = x.message;
-      } finally {
-        wait.remove();
-        send.disabled = false;
-        q.focus();
-      }
-    });
-    q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
-    const foot = el("div", "dialog-foot");
-    foot.append(q, send);
-    const body = el("div", "dialog-body");
-    body.append(log, err);
-    form.append(head, body, foot);
-    dialog.append(form);
-    dialog.addEventListener("close", () => dialog.remove());
-    document.body.append(dialog);
-    dialog.showModal();
-    q.focus();
   }
   // An untitled workflow gets its name·설명 from the AI once it has a few real steps.
   async function autoTitle(rec) {
@@ -852,17 +784,18 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     if (s < 3600) return `${Math.round(s / 60)}분`;
     return `${Math.floor(s / 3600)}시간 ${Math.round((s % 3600) / 60)}분`;
   }
-  function runTook(run) {
+  function runMs(run) {
     const ends = Object.values(run.crew_run?.nodes || {}).map((n) => n.finished_at).filter(Boolean).map((t) => new Date(t).getTime());
-    return ends.length && run.created_at ? spanText(Math.max(...ends) - new Date(run.created_at).getTime()) : "";
+    return ends.length && run.created_at ? Math.max(...ends) - new Date(run.created_at).getTime() : 0;
   }
+  const runTook = (run) => (runMs(run) ? spanText(runMs(run)) : "");
   function runProgress(run, rec) {
     const work = (rec?.crew.graph?.nodes || []).filter(WORK).map((n) => n.id);
     const nodes = run.crew_run?.nodes || {};
     const ids = work.length ? work : Object.keys(nodes);
     return `${ids.filter((id) => nodes[id]?.status === "done").length}/${ids.length} 단계`;
   }
-  function runRow(run) {
+  function runRow(run, onOpen) {
     const cr = run.crew_run || {};
     const rec = byId(cr.crew_id);
     const row = el("div", "wf-run");
@@ -872,7 +805,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     const bits = [rec?.crew.name, cr.status === "failed" ? (Object.values(cr.nodes || {}).find((n) => n.status === "failed")?.error || readable(cr.summary).split(/[.。]/)[0]).slice(0, 40) : "", runProgress(run, rec), runTook(run), loops ? `되돌아감 ${loops}번` : "", ago(run.created_at)].filter(Boolean);
     t.append(el("strong", "", runRequest(cr) || readable(cr.summary) || rec?.crew.name || "실행"), el("small", "", bits.join(" · ")));
     row.append(t);
-    if (rec) row.append(button("상세 보기", "ghost", null, () => openGraph(rec, { run })));
+    if (rec) row.append(button("상세 보기", "ghost", null, () => (onOpen ? onOpen() : openGraph(rec, { run }))));
     return row;
   }
   let runStatus = "all";
@@ -907,7 +840,14 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     }
     pick.value = runStatus;
     pick.addEventListener("change", () => { runStatus = pick.value; drawRecent(); });
-    head.append(el("strong", "", "최근 실행"), el("small", "", loading && !list.length ? "불러오는 중…" : `${list.length}건`), el("span", "grow"), pick);
+    const fold = el("button", "wf-fold");
+    fold.type = "button";
+    fold.setAttribute("aria-expanded", String(recentOpen));
+    fold.append(icon(recentOpen ? "caret-down" : "caret-right"), el("strong", "", "최근 실행"));
+    fold.addEventListener("click", () => { recentOpen = !recentOpen; drawRecent(); });
+    head.append(fold, el("small", "", loading && !list.length ? "불러오는 중…" : `${list.length}건`), el("span", "grow"));
+    if (!recentOpen) { box.replaceChildren(head); return; }
+    head.append(pick);
     if (list.length > 5) head.append(button(recentAll ? "줄이기" : "실행 기록", "ghost", null, () => { recentAll = !recentAll; drawRecent(); }));
     const rows = el("div", "wf-runs");
     const shown = recentAll ? list : list.slice(0, 5);
@@ -3659,7 +3599,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     detail: renderDetail,
     head: headActions,
     views: {
-      crew: { title: "자동화", count: () => `${workflows().length}개`, sub: () => { const on = workflows().filter((r) => triggered(r.crew)).length; return `단계가 정해진 워크플로우예요. 에이전트가 일하는 방법으로 쓰거나 $이름으로 불러요. ${on ? `일정·웹훅은 ${on}개 켜져 있어요.` : "켜진 일정·웹훅은 없어요."}`; } }
+      crew: { bare: true, title: "자동화", count: () => `${workflows().length}개`, sub: () => { const on = workflows().filter((r) => triggered(r.crew)).length; return `단계가 정해진 워크플로우예요. 에이전트가 일하는 방법으로 쓰거나 $이름으로 불러요. ${on ? `일정·웹훅은 ${on}개 켜져 있어요.` : "켜진 일정·웹훅은 없어요."}`; } }
     },
     pages: {
       workers: { title: () => "전문가", count: () => `${agents().length}명`,
