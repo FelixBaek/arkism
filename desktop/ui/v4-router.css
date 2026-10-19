@@ -116,7 +116,7 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-side .cat-foot { justify-content: flex-start; gap: 8px; }
 
 /* 업데이트 */
-.v4-set > .pg-group.v4-version { flex-direction: row; align-items: center; gap: 16px; padding: 20px; }
+.v4-version { display: flex; align-items: center; gap: 16px; }
 .v4-version-text { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .v4-version-top { display: flex; align-items: center; gap: 8px; font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); }
 .v4-version-top .tag.warn { background: var(--nc-amber-bg); color: var(--nc-amber); }

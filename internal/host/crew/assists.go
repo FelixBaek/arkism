@@ -62,7 +62,7 @@ const crewCatalog = "Node types and their config keys: start, schedule, webhook 
 	"http (method, url, headers, body, key, timeout); github (args: the gh arguments as a JSON list, repo_dir); " +
 	"approval (question; outgoing port approve|reject); condition (expr such as in.x == 1; outgoing port yes|no); merge; " +
 	"loop (path to a list in the input, concurrency; repeats only the one node right after it); wait (duration); " +
-	"notify (channel=telegram|slack|email, to, message, subject); subflow (workflow, task); end (summary). " +
+	"notify (channel=telegram|slack|email, to, message, subject); subflow (workflow, task); expert (expert = a saved expert id, goal, model, instructions); team (team = a team id, topic); n8n (url, mode=sync|async, timeout); end (summary). " +
 	"The previous step's result is {{input}}; never invent other keys. Leave model empty to use the default model. " +
 	"Schedules and webhooks are switched on in settings, so a graph starts with start. "
 

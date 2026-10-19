@@ -1,0 +1,7 @@
+{
+ "items": [
+  {"at": "2026-10-20T09:12:00Z", "model": "claude-sonnet-5.5", "ok": true, "latency_ms": 8200, "input_tokens": 5400, "output_tokens": 1200, "cost_usd": 0.034, "estimated": true, "trigger": "manual"},
+  {"at": "2026-10-19T15:40:00Z", "model": "claude-sonnet-5.5", "ok": false, "latency_ms": 30000, "input_tokens": 4100, "output_tokens": 0, "cost_usd": 0.012, "estimated": true, "error": "timeout", "trigger": "discord"},
+  {"at": "2026-10-18T11:05:00Z", "model": "gpt-5.5", "ok": true, "latency_ms": 6100, "input_tokens": 3900, "output_tokens": 900, "cost_usd": 0.021, "estimated": true, "trigger": "manual"}
+ ]
+}

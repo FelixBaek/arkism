@@ -415,6 +415,10 @@ func TestRoutingCallOriginAndCrewUsage(t *testing.T) {
 	if err != nil || u.KPI.CostUSD < 4 || !u.KPI.CostEstimated || len(u.Agents) != 2 || u.Agents[0].ID != f.a.ID || u.Agents[0].Pct == nil || *u.Agents[0].Pct != 20 {
 		t.Fatal("usage", fmt.Sprintf("%+v", u.KPI), u.Agents, err)
 	}
+	// the assist call is a direct agent call; the meeting call is not
+	if u.Agents[0].Direct != 0 || u.Agents[1].Direct != 1 || u.Agents[1].Failed != 0 || len(u.ByDay) != 1 || u.ByDay[0].Agent != 1 || u.ByDay[0].AgentFailed != 0 {
+		t.Fatal("direct calls", u.Agents, u.ByDay)
+	}
 	if u, _ = f.svc.CrewUsage(testCtx, f.human, scopeA, "30d", "agent", f.b.ID, ""); len(u.Agents) != 1 || u.Agents[0].Calls != 1 {
 		t.Fatal("agent filter", u.Agents)
 	}

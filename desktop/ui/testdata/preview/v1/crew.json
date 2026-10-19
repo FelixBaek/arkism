@@ -1,852 +1,998 @@
 {
- "items": [
-  {
-   "id": "wf-research",
-   "revision": 3,
-   "crew": {
-    "type": "workflow",
-    "name": "리서치",
-    "handle": "리서치",
-    "role": "주제를 받아 검색·출처 확인·정리까지 진행해요.",
-    "category": "글쓰기 · 문서",
-    "model": "deepseek-v4-flash",
-    "limits": {
-     "max_minutes": 30,
-     "max_steps": 40
-    },
-    "graph": {
-     "nodes": [
-      {
-       "id": "start",
-       "type": "start",
-       "title": "시작",
-       "x": 40,
-       "y": 300,
-       "config": {}
-      },
-      {
-       "id": "plan",
-       "type": "ai_once",
-       "title": "검색어 정하기",
-       "x": 300,
-       "y": 270,
-       "config": {
-        "model": "deepseek-v4-flash",
-        "prompt": "주제를 검색어 5개로 나눠 줘"
-       }
-      },
-      {
-       "id": "collect",
-       "type": "loop",
-       "title": "수집",
-       "x": 560,
-       "y": 300,
-       "config": {
-        "path": "검색어마다 · 5개",
-        "concurrency": "5"
-       }
-      },
-      {
-       "id": "research",
-       "type": "ai",
-       "title": "조사",
-       "x": 830,
-       "y": 250,
-       "config": {
-        "model": "qwen3.5-plus",
-        "goal": "하위 질문마다 출처 3개 이상 모아 줘",
-        "access": "read",
-        "collab": "on",
-        "max_workers": "5",
-        "concurrency": "3",
-        "workers": "[{\"name\":\"조사원\",\"model\":\"deepseek-v4-flash\"},{\"name\":\"검증원\",\"model\":\"qwen3.5-plus\"}]",
-        "persona": "p-researcher",
-        "fence": "웹 검색과 자료 읽기만 허용",
-        "done": "질문마다 출처 3개와 요약",
-        "needs": "검색 결과",
-        "makes": "질문별 자료 묶음",
-        "skills": "research,code-review"
-       }
-      },
-      {
-       "id": "verify",
-       "type": "code",
-       "title": "출처 확인",
-       "x": 1110,
-       "y": 110,
-       "config": {
-        "lang": "go",
-        "code": "ok := alive && len>300\nreturn Output{OK: ok}"
-       }
-      },
-      {
-       "id": "check",
-       "type": "ai_once",
-       "title": "내용 확인",
-       "x": 1110,
-       "y": 470,
-       "config": {
-        "model": "glm-5.3-flash",
-        "prompt": "출처가 주장을 뒷받침하는지 봐 줘"
-       }
-      },
-      {
-       "id": "write",
-       "type": "ai",
-       "title": "정리",
-       "x": 1390,
-       "y": 250,
-       "config": {
-        "model": "opus 5.5",
-        "goal": "출처를 붙여 보고서로 써 줘",
-        "access": "read"
-       }
-      },
-      {
-       "id": "end",
-       "type": "end",
-       "title": "보고하고 끝",
-       "x": 1390,
-       "y": 560,
-       "config": {
-        "message": "보고서 + 출처"
-       }
-      }
-     ],
-     "edges": [
-      {
-       "from": "start",
-       "to": "plan"
-      },
-      {
-       "from": "plan",
-       "to": "collect"
-      },
-      {
-       "from": "collect",
-       "to": "research"
-      },
-      {
-       "from": "research",
-       "to": "verify"
-      },
-      {
-       "from": "research",
-       "to": "check"
-      },
-      {
-       "from": "verify",
-       "to": "write",
-       "port": "pass"
-      },
-      {
-       "from": "verify",
-       "to": "research",
-       "port": "fail",
-       "max": 2
-      },
-      {
-       "from": "check",
-       "to": "write",
-       "port": "통과"
-      },
-      {
-       "from": "check",
-       "to": "research",
-       "port": "근거 부족",
-       "max": 2
-      },
-      {
-       "from": "write",
-       "to": "end"
-      }
-     ]
-    }
-   }
-  },
-  {
-   "id": "wf-release",
-   "revision": 2,
-   "crew": {
-    "type": "workflow",
-    "name": "릴리스 점검",
-    "handle": "릴리스점검",
-    "role": "정해진 시간에 릴리스를 점검해요.",
-    "category": "Git · 릴리스",
-    "model": "sonnet 5",
-    "trigger": {
-     "kind": "schedule",
-     "cron": "0 9 * * *"
-    },
-    "enabled": true,
-    "graph": {
-     "nodes": [
-      {
-       "id": "start",
-       "type": "schedule",
-       "title": "매일 09:00",
-       "x": 40,
-       "y": 160,
-       "config": {
-        "cron": "0 9 * * *"
-       }
-      },
-      {
-       "id": "tags",
-       "type": "github",
-       "title": "태그 확인",
-       "x": 300,
-       "y": 140,
-       "config": {
-        "args": "release list --limit 5",
-        "repo_dir": "~/projects/arkism"
-       }
-      },
-      {
-       "id": "ok",
-       "type": "approval",
-       "title": "배포 승인",
-       "x": 560,
-       "y": 140,
-       "config": {
-        "question": "검토한 보고서를 전송할까요?"
-       }
-      },
-      {
-       "id": "ship",
-       "type": "notify",
-       "title": "보고 보내기",
-       "x": 820,
-       "y": 140,
-       "config": {
-        "channel": "slack",
-        "to": "release",
-        "message": "릴리스 점검 결과"
-       }
-      },
-      {
-       "id": "end",
-       "type": "end",
-       "title": "보고하고 끝",
-       "x": 1080,
-       "y": 160,
-       "config": {}
-      }
-     ],
-     "edges": [
-      {
-       "from": "start",
-       "to": "tags"
-      },
-      {
-       "from": "tags",
-       "to": "ok"
-      },
-      {
-       "from": "ok",
-       "to": "ship",
-       "port": "approve"
-      },
-      {
-       "from": "ship",
-       "to": "end"
-      }
-     ]
-    }
-   }
-  },
-  {
-   "id": "wf-water",
-   "revision": 1,
-   "crew": {
-    "type": "workflow",
-    "name": "수채화",
-    "handle": "수채화",
-    "role": "한 단계로 실행하는 이미지 워크플로우예요.",
-    "category": "이미지",
-    "model": "",
-    "graph": {
-     "nodes": [
-      {
-       "id": "start",
-       "type": "start",
-       "title": "시작",
-       "x": 40,
-       "y": 160,
-       "config": {}
-      },
-      {
-       "id": "ai1",
-       "type": "ai",
-       "title": "수채화",
-       "x": 320,
-       "y": 120,
-       "config": {
-        "model": "gpt-image-2",
-        "persona": "p-water",
-        "goal": "원본 이미지를 수채화 느낌으로 바꿔 줘. 구도와 색 배치는 그대로 두고, 종이 질감을 살려.",
-        "fence": "이미지 만들기 · 프리셋 · 수채화 · 결과 폴더에만 쓰기",
-        "done": "1024px 이상 PNG 1장, 원본 옆에 \"-watercolor\"로 저장.",
-        "access": "read",
-        "needs": "원본 이미지",
-        "makes": "수채화 이미지 (PNG)",
-        "retries": "1"
-       }
-      },
-      {
-       "id": "end",
-       "type": "end",
-       "title": "보고하고 끝",
-       "x": 620,
-       "y": 160,
-       "config": {}
-      }
-     ],
-     "edges": [
-      {
-       "from": "start",
-       "to": "ai1"
-      },
-      {
-       "from": "ai1",
-       "to": "end"
-      }
-     ]
-    },
-    "trigger": {
-     "kind": "webhook",
-     "label": "GitHub PR 열림"
-    },
-    "enabled": true
-   }
-  },
-  {
-   "id": "p-researcher",
-   "revision": 1,
-   "crew": {
-    "type": "persona",
-    "name": "리서처",
-    "role": "출처를 꼼꼼히 확인해요",
-    "instructions": "너는 리서처다. 1. 질문을 하위 질문으로 나눈다. 2. 하위 질문마다 출처를 3개 이상 모은다. 3. 출처가 서로 다르면 둘 다 적는다."
-   }
-  },
-  {
-   "id": "p-water",
-   "revision": 1,
-   "crew": {
-    "type": "persona",
-    "name": "수채화 일러스트레이터",
-    "role": "수채화 그림을 그려요",
-    "instructions": "너는 수채화 일러스트레이터다."
-   }
-  },
-  {
-   "id": "tpl-research",
-   "revision": 3,
-   "status": "active",
-   "crew": {
-    "type": "template",
-    "name": "리서처",
-    "role": "주제를 받아 출처까지 정리해요",
-    "category": "리서치",
-    "model": "claude opus 5.5",
-    "effort": "high",
-    "run_mode": "fixed",
-    "skills": [
-     "writing-style"
-    ],
-    "tools": [
-     "arkism"
-    ],
-    "agents": [
-     "claude_code",
-     "codex",
-     "zcode"
-    ],
-    "memory": {
-     "procedural": "all",
-     "decision": "all",
-     "user": "all"
-    },
-    "file_name": "research",
-    "instructions": "## 역할\n너는 리서처다. 출처를 꼭 붙인다."
-   }
-  },
-  {
-   "id": "tpl-review",
-   "revision": 2,
-   "status": "active",
-   "crew": {
-    "type": "template",
-    "name": "코드리뷰어",
-    "role": "커밋 전에 diff를 보고 고칠 곳을 알려 줘요",
-    "category": "개발",
-    "model": "gpt-5.5",
-    "effort": "medium",
-    "run_mode": "fixed",
-    "skills": [
-     "code-review",
-     "test-first",
-     "commit-and-push"
-    ],
-    "tools": [
-     "github"
-    ],
-    "agents": [
-     "claude_code",
-     "codex",
-     "zcode"
-    ],
-    "memory": {
-     "procedural": "all",
-     "decision": "all",
-     "user": "all"
-    },
-    "file_name": "review",
-    "instructions": "너는 코드리뷰어야. 커밋 전에 지금 diff를 보고 버그·빠진 테스트·애매한 이름을 찾아, 고칠 것을 중요한 순서로 적어. 확실하지 않으면 그렇다고 말해."
-   }
-  },
-  {
-   "id": "ag-designer",
-   "revision": 7,
-   "status": "active",
-   "crew": {
-    "type": "agent",
-    "name": "디자이너",
-    "handle": "디자이너",
-    "role": "UI 시안 정리 · 디자인 검토",
-    "instructions": "## 역할\n너는 arkism 디자이너야. 구현된 화면을 보고 디자인 시스템 토큰 기준으로 정리해.\n## 말투\n결론부터 짧게. 고칠 곳은 화면 이름과 부품 이름으로 짚어.\n## 하지 말 것\n토큰에 없는 색을 임의로 만들지 않아요.\n선택 상태를 장식으로만 구분하지 않아요.",
-    "model_mode": "fixed",
-    "effort": "medium",
-    "temperature": 0.7,
-    "max_output_tokens": 2048,
-    "output_format": "text",
-    "skills": [
-     "impeccable",
-     "figma-use",
-     "design-critique"
-    ],
-    "tools": [
-     "figma",
-     "browser"
-    ],
-    "agents": [
-     "claude_code",
-     "codex",
-     "zcode",
-     "discord",
-     "app"
-    ],
-    "memory": {
-     "procedural": "all",
-     "decision": "all",
-     "user": "all"
-    },
-    "file_edits": "ask",
-    "enabled": true,
-    "model": "deepseek-v4-flash",
-    "fallback_model": "claude opus 5.5",
-    "image_model": "claude opus 5.5",
-    "budget": {
-     "monthly_usd": 20,
-     "ask_over_usd": 1
-    },
-    "pinned": [
-     {
-      "collection": "skills",
-      "id": "skill-design-critique",
-      "revision": 4,
-      "injection": "full",
-      "priority": 100
-     },
-     {
-      "collection": "memories",
-      "id": "m-pin-icons",
-      "injection": "full",
-      "priority": 95
-     },
-     {
-      "collection": "knowledge_sources",
-      "id": "ks-orbit-tokens",
-      "revision": 5,
-      "injection": "summary",
-      "priority": 90
-     },
-     {
-      "collection": "memories",
-      "id": "m-pin-select",
-      "injection": "summary",
-      "priority": 85
-     },
-     {
-      "collection": "knowledge_sources",
-      "id": "ks-figma-traps",
-      "injection": "reference",
-      "priority": 80
-     }
-    ],
-    "category": "디자인",
-    "avatar": {
-     "art": "001",
-     "bg": "rose"
-    }
-   }
-  },
-  {
-   "id": "ag-research",
-   "revision": 3,
-   "status": "active",
-   "crew": {
-    "type": "agent",
-    "workflow": "리서치",
-    "name": "리서처",
-    "handle": "리서처",
-    "role": "주제를 받아 출처까지 정리해요",
-    "instructions": "## 역할\n너는 리서처다. 출처를 꼭 붙인다.",
-    "model_mode": "fixed",
-    "effort": "medium",
-    "temperature": 0.7,
-    "max_output_tokens": 2048,
-    "output_format": "text",
-    "skills": [
-     "writing-style"
-    ],
-    "tools": [
-     "arkism"
-    ],
-    "agents": [
-     "claude_code",
-     "codex",
-     "zcode",
-     "discord",
-     "app"
-    ],
-    "memory": {
-     "procedural": "all",
-     "decision": "all",
-     "user": "all"
-    },
-    "file_edits": "ask",
-    "enabled": true,
-    "model": "claude opus 5.5",
-    "category": "리서치",
-    "avatar": {
-     "art": "084",
-     "bg": "sky"
-    }
-   }
-  },
-  {
-   "id": "ag-review",
-   "revision": 2,
-   "status": "active",
-   "crew": {
-    "type": "agent",
-    "name": "코드리뷰어",
-    "handle": "코드리뷰어",
-    "role": "커밋 전에 diff를 보고 고칠 곳을 알려 줘요",
-    "instructions": "너는 코드리뷰어야. 커밋 전에 지금 diff를 보고 버그·빠진 테스트·애매한 이름을 찾아, 고칠 것을 중요한 순서로 적어. 확실하지 않으면 그렇다고 말해.",
-    "model_mode": "fixed",
-    "effort": "medium",
-    "temperature": 0.7,
-    "max_output_tokens": 2048,
-    "output_format": "text",
-    "skills": [
-     "code-review",
-     "test-first",
-     "commit-and-push"
-    ],
-    "tools": [
-     "github"
-    ],
-    "agents": [
-     "claude_code",
-     "codex",
-     "zcode",
-     "discord",
-     "app"
-    ],
-    "memory": {
-     "procedural": "all",
-     "decision": "all",
-     "user": "all"
-    },
-    "file_edits": "ask",
-    "enabled": true,
-    "model": "gpt-5.5",
-    "budget": {
-     "monthly_usd": 20
-    },
-    "category": "코드 품질"
-   }
-  },
-  {
-   "id": "ag-notes",
-   "revision": 1,
-   "status": "active",
-   "crew": {
-    "type": "agent",
-    "name": "기록관",
-    "handle": "기록관",
-    "role": "회의와 결정을 기억으로 남겨요",
-    "instructions": "너는 기록관이다. 결정과 이유를 한 줄씩 남긴다.",
-    "model_mode": "fixed",
-    "effort": "medium",
-    "temperature": 0.7,
-    "max_output_tokens": 2048,
-    "output_format": "text",
-    "skills": [],
-    "tools": [
-     "arkism"
-    ],
-    "agents": [
-     "claude_code",
-     "codex",
-     "zcode",
-     "discord",
-     "app"
-    ],
-    "memory": {
-     "procedural": "all",
-     "decision": "all",
-     "user": "all"
-    },
-    "file_edits": "ask",
-    "enabled": true,
-    "model": "glm-5",
-    "category": "기록·비서",
-    "avatar": {
-     "art": "128",
-     "bg": "sage"
-    }
-   }
-  },
-  {
-   "id": "ag-secretary",
-   "revision": 1,
-   "status": "active",
-   "crew": {
-    "type": "agent",
-    "name": "비서",
-    "handle": "비서",
-    "role": "일정과 메일을 정리해요",
-    "instructions": "너는 비서다. 짧게 정리한다.",
-    "model_mode": "auto",
-    "effort": "medium",
-    "temperature": 0.7,
-    "max_output_tokens": 2048,
-    "output_format": "text",
-    "skills": [],
-    "tools": [],
-    "agents": [
-     "claude_code",
-     "codex",
-     "zcode",
-     "discord",
-     "app"
-    ],
-    "memory": {
-     "procedural": "all",
-     "decision": "all",
-     "user": "all"
-    },
-    "file_edits": "ask",
-    "enabled": false,
-    "category": "기록·비서"
-   }
-  },
-  {
-   "id": "team-design",
-   "revision": 2,
-   "status": "active",
-   "crew": {
-    "type": "team",
-    "name": "디자인 리뷰 팀",
-    "handle": "디자인리뷰",
-    "role": "화면을 토큰·접근성 기준으로 검토하고, 고칠 목록을 만들어요.",
-    "mode": "moderator_picks",
-    "members": [
-     {
-      "agent_id": "ag-research",
-      "order": 1,
-      "role": "moderator",
-      "focus": "자료 찾기"
-     },
-     {
-      "agent_id": "ag-designer",
-      "order": 2,
-      "role": "worker",
-      "focus": "시안 해석"
-     },
-     {
-      "agent_id": "ag-review",
-      "order": 3,
-      "role": "reviewer",
-      "focus": "구현 가능성"
-     },
-     {
-      "agent_id": "ag-notes",
-      "order": 4,
-      "role": "scribe",
-      "focus": "정리·결론"
-     }
-    ],
-    "ending": {
-     "max_rounds": 4,
-     "token_cap": 100000,
-     "end_on_all_approved": true,
-     "end_on_moderator": true
-    },
-    "context": [
-     {
-      "collection": "design_systems",
-      "id": "ds-tokens",
-      "title": "디자인 시스템 토큰 v3",
-      "share": "team"
-     },
-     {
-      "collection": "memories",
-      "id": "m2",
-      "title": "Orbit 화면 규칙",
-      "share": "team"
-     },
-     {
-      "collection": "memories",
-      "id": "m1",
-      "title": "사용자 선호",
-      "share": "shared"
-     }
-    ],
-    "templates": [
-     {
-      "key": "review",
-      "name": "디자인 검토 회의",
-      "prompt": "{화면} 시안을 토큰·접근성 기준으로 검토하고 고칠 목록을 만들어 주세요.",
-      "overrides": {}
-     },
-     {
-      "key": "quick",
-      "name": "빠른 의견",
-      "prompt": "한 라운드만 돌며 각자 한 줄 의견을 주세요.",
-      "overrides": {
-       "ending": {
-        "max_rounds": 1
-       }
-      }
-     }
-    ],
-    "discord_mirror": true,
-    "pinned": [
-     {
-      "collection": "knowledge_sources",
-      "id": "ks-orbit-tokens",
+  "items": [
+    {
+      "id": "wf-research",
       "revision": 3,
-      "injection": "full",
-      "priority": 100
-     },
-     {
-      "collection": "skills",
-      "id": "skill-design-critique",
-      "revision": 4,
-      "injection": "full",
-      "priority": 95
-     },
-     {
-      "collection": "memories",
-      "id": "m-pin-tokens",
-      "injection": "summary",
-      "priority": 90
-     },
-     {
-      "collection": "memories",
-      "id": "m-pin-select",
-      "injection": "full",
-      "priority": 85
-     },
-     {
-      "collection": "knowledge_sources",
-      "id": "ks-orbit-rules",
-      "injection": "reference",
-      "priority": 80
-     }
-    ]
-   }
-  },
-  {
-   "id": "team-plan",
-   "revision": 1,
-   "status": "active",
-   "crew": {
-    "type": "team",
-    "name": "제품 기획 팀",
-    "handle": "제품기획",
-    "role": "기능 범위와 우선순위를 정해요.",
-    "mode": "moderator_picks",
-    "members": [
-     {
-      "agent_id": "ag-research",
-      "order": 1,
-      "role": "moderator"
-     },
-     {
-      "agent_id": "ag-designer",
-      "order": 2,
-      "role": "worker"
-     },
-     {
-      "agent_id": "ag-review",
-      "order": 3,
-      "role": "reviewer"
-     },
-     {
-      "agent_id": "ag-notes",
-      "order": 4,
-      "role": "scribe"
-     }
-    ],
-    "ending": {
-     "max_rounds": 4,
-     "token_cap": 100000,
-     "end_on_all_approved": true,
-     "end_on_moderator": true
+      "crew": {
+        "type": "workflow",
+        "name": "리서치",
+        "handle": "리서치",
+        "role": "주제를 받아 검색·출처 확인·정리까지 진행해요.",
+        "category": "글쓰기 · 문서",
+        "model": "deepseek-v4-flash",
+        "limits": {
+          "max_minutes": 30,
+          "max_steps": 40
+        },
+        "graph": {
+          "nodes": [
+            {
+              "id": "start",
+              "type": "start",
+              "title": "시작",
+              "x": 40,
+              "y": 300,
+              "config": {}
+            },
+            {
+              "id": "plan",
+              "type": "ai_once",
+              "title": "검색어 정하기",
+              "x": 300,
+              "y": 270,
+              "config": {
+                "model": "deepseek-v4-flash",
+                "prompt": "주제를 검색어 5개로 나눠 줘"
+              }
+            },
+            {
+              "id": "collect",
+              "type": "loop",
+              "title": "수집",
+              "x": 560,
+              "y": 300,
+              "config": {
+                "path": "검색어마다 · 5개",
+                "concurrency": "5"
+              }
+            },
+            {
+              "id": "research",
+              "type": "ai",
+              "title": "조사",
+              "x": 830,
+              "y": 250,
+              "config": {
+                "model": "qwen3.5-plus",
+                "goal": "하위 질문마다 출처 3개 이상 모아 줘",
+                "access": "read",
+                "collab": "on",
+                "max_workers": "5",
+                "concurrency": "3",
+                "workers": "[{\"name\":\"조사원\",\"model\":\"deepseek-v4-flash\"},{\"name\":\"검증원\",\"model\":\"qwen3.5-plus\"}]",
+                "persona": "p-researcher",
+                "fence": "웹 검색과 자료 읽기만 허용",
+                "done": "질문마다 출처 3개와 요약",
+                "needs": "검색 결과",
+                "makes": "질문별 자료 묶음",
+                "skills": "research,code-review"
+              }
+            },
+            {
+              "id": "verify",
+              "type": "code",
+              "title": "출처 확인",
+              "x": 1110,
+              "y": 110,
+              "config": {
+                "lang": "go",
+                "code": "ok := alive && len>300\nreturn Output{OK: ok}"
+              }
+            },
+            {
+              "id": "check",
+              "type": "ai_once",
+              "title": "내용 확인",
+              "x": 1110,
+              "y": 470,
+              "config": {
+                "model": "glm-5.3-flash",
+                "prompt": "출처가 주장을 뒷받침하는지 봐 줘"
+              }
+            },
+            {
+              "id": "write",
+              "type": "ai",
+              "title": "정리",
+              "x": 1390,
+              "y": 250,
+              "config": {
+                "model": "opus 5.5",
+                "goal": "출처를 붙여 보고서로 써 줘",
+                "access": "read"
+              }
+            },
+            {
+              "id": "end",
+              "type": "end",
+              "title": "보고하고 끝",
+              "x": 1390,
+              "y": 560,
+              "config": {
+                "message": "보고서 + 출처"
+              }
+            }
+          ],
+          "edges": [
+            {
+              "from": "start",
+              "to": "plan"
+            },
+            {
+              "from": "plan",
+              "to": "collect"
+            },
+            {
+              "from": "collect",
+              "to": "research"
+            },
+            {
+              "from": "research",
+              "to": "verify"
+            },
+            {
+              "from": "research",
+              "to": "check"
+            },
+            {
+              "from": "verify",
+              "to": "write",
+              "port": "pass"
+            },
+            {
+              "from": "verify",
+              "to": "research",
+              "port": "fail",
+              "max": 2
+            },
+            {
+              "from": "check",
+              "to": "write",
+              "port": "통과"
+            },
+            {
+              "from": "check",
+              "to": "research",
+              "port": "근거 부족",
+              "max": 2
+            },
+            {
+              "from": "write",
+              "to": "end"
+            }
+          ]
+        }
+      }
     },
-    "context": [],
-    "templates": [],
-    "discord_mirror": true
-   }
-  },
-  {
-   "id": "team-research",
-   "revision": 1,
-   "status": "active",
-   "crew": {
-    "type": "team",
-    "name": "리서치 팀",
-    "handle": "리서치팀",
-    "role": "질문을 나눠 조사하고 출처와 함께 정리해요.",
-    "mode": "round_robin",
-    "members": [
-     {
-      "agent_id": "ag-research",
-      "order": 1,
-      "role": "worker"
-     },
-     {
-      "agent_id": "ag-notes",
-      "order": 2,
-      "role": "scribe"
-     }
-    ],
-    "ending": {
-     "max_rounds": 3,
-     "token_cap": 60000,
-     "end_on_all_approved": false,
-     "end_on_moderator": false
+    {
+      "id": "wf-release",
+      "revision": 2,
+      "crew": {
+        "type": "workflow",
+        "name": "릴리스 점검",
+        "handle": "릴리스점검",
+        "role": "정해진 시간에 릴리스를 점검해요.",
+        "category": "Git · 릴리스",
+        "model": "sonnet 5",
+        "trigger": {
+          "kind": "schedule",
+          "cron": "0 9 * * *"
+        },
+        "enabled": true,
+        "graph": {
+          "nodes": [
+            {
+              "id": "start",
+              "type": "schedule",
+              "title": "매일 09:00",
+              "x": 40,
+              "y": 160,
+              "config": {
+                "cron": "0 9 * * *"
+              }
+            },
+            {
+              "id": "tags",
+              "type": "github",
+              "title": "태그 확인",
+              "x": 300,
+              "y": 140,
+              "config": {
+                "args": "release list --limit 5",
+                "repo_dir": "~/projects/arkism"
+              }
+            },
+            {
+              "id": "ok",
+              "type": "approval",
+              "title": "배포 승인",
+              "x": 560,
+              "y": 140,
+              "config": {
+                "question": "검토한 보고서를 전송할까요?"
+              }
+            },
+            {
+              "id": "ship",
+              "type": "notify",
+              "title": "보고 보내기",
+              "x": 820,
+              "y": 140,
+              "config": {
+                "channel": "slack",
+                "to": "release",
+                "message": "릴리스 점검 결과"
+              }
+            },
+            {
+              "id": "end",
+              "type": "end",
+              "title": "보고하고 끝",
+              "x": 1080,
+              "y": 160,
+              "config": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "start",
+              "to": "tags"
+            },
+            {
+              "from": "tags",
+              "to": "ok"
+            },
+            {
+              "from": "ok",
+              "to": "ship",
+              "port": "approve"
+            },
+            {
+              "from": "ship",
+              "to": "end"
+            }
+          ]
+        },
+        "cover": {
+          "id": "p1",
+          "url": "img/arkism-art.svg",
+          "thumb": "img/arkism-art.svg",
+          "author": "Kim Lee",
+          "author_url": "https://unsplash.com"
+        },
+        "goal": {
+          "task": "릴리스 전에 변경 목록을 점검해 보고서를 만들어요",
+          "done": "확인할 곳이 모두 정리됨"
+        },
+        "notify": {
+          "channels": [
+            {
+              "kind": "discord",
+              "channel": "#릴리스",
+              "when": "events"
+            },
+            {
+              "kind": "telegram",
+              "channel": "나에게",
+              "when": "approval"
+            }
+          ]
+        }
+      }
     },
-    "context": [],
-    "templates": [],
-    "discord_mirror": false
-   }
-  }
- ]
+    {
+      "id": "wf-water",
+      "revision": 1,
+      "crew": {
+        "type": "workflow",
+        "name": "수채화",
+        "handle": "수채화",
+        "role": "한 단계로 실행하는 이미지 워크플로우예요.",
+        "category": "이미지",
+        "model": "",
+        "graph": {
+          "nodes": [
+            {
+              "id": "start",
+              "type": "start",
+              "title": "시작",
+              "x": 40,
+              "y": 160,
+              "config": {}
+            },
+            {
+              "id": "ai1",
+              "type": "ai",
+              "title": "수채화",
+              "x": 320,
+              "y": 120,
+              "config": {
+                "model": "gpt-image-2",
+                "persona": "p-water",
+                "goal": "원본 이미지를 수채화 느낌으로 바꿔 줘. 구도와 색 배치는 그대로 두고, 종이 질감을 살려.",
+                "fence": "이미지 만들기 · 프리셋 · 수채화 · 결과 폴더에만 쓰기",
+                "done": "1024px 이상 PNG 1장, 원본 옆에 \"-watercolor\"로 저장.",
+                "access": "read",
+                "needs": "원본 이미지",
+                "makes": "수채화 이미지 (PNG)",
+                "retries": "1"
+              }
+            },
+            {
+              "id": "end",
+              "type": "end",
+              "title": "보고하고 끝",
+              "x": 620,
+              "y": 160,
+              "config": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "start",
+              "to": "ai1"
+            },
+            {
+              "from": "ai1",
+              "to": "end"
+            }
+          ]
+        },
+        "trigger": {
+          "kind": "webhook",
+          "label": "GitHub PR 열림"
+        },
+        "enabled": true,
+        "cover": {
+          "id": "p2",
+          "url": "img/arkism-art.svg",
+          "thumb": "img/arkism-art.svg",
+          "author": "Kim Lee",
+          "author_url": "https://unsplash.com"
+        }
+      }
+    },
+    {
+      "id": "p-researcher",
+      "revision": 1,
+      "crew": {
+        "type": "persona",
+        "name": "리서처",
+        "role": "출처를 꼼꼼히 확인해요",
+        "instructions": "너는 리서처다. 1. 질문을 하위 질문으로 나눈다. 2. 하위 질문마다 출처를 3개 이상 모은다. 3. 출처가 서로 다르면 둘 다 적는다."
+      }
+    },
+    {
+      "id": "p-water",
+      "revision": 1,
+      "crew": {
+        "type": "persona",
+        "name": "수채화 일러스트레이터",
+        "role": "수채화 그림을 그려요",
+        "instructions": "너는 수채화 일러스트레이터다."
+      }
+    },
+    {
+      "id": "tpl-research",
+      "revision": 3,
+      "status": "active",
+      "crew": {
+        "type": "template",
+        "name": "리서처",
+        "role": "주제를 받아 출처까지 정리해요",
+        "category": "리서치",
+        "model": "claude opus 5.5",
+        "effort": "high",
+        "run_mode": "fixed",
+        "skills": [
+          "writing-style"
+        ],
+        "tools": [
+          "arkism"
+        ],
+        "agents": [
+          "claude_code",
+          "codex",
+          "zcode"
+        ],
+        "memory": {
+          "procedural": "all",
+          "decision": "all",
+          "user": "all"
+        },
+        "file_name": "research",
+        "instructions": "## 역할\n너는 리서처다. 출처를 꼭 붙인다."
+      }
+    },
+    {
+      "id": "tpl-review",
+      "revision": 2,
+      "status": "active",
+      "crew": {
+        "type": "template",
+        "name": "코드리뷰어",
+        "role": "커밋 전에 diff를 보고 고칠 곳을 알려 줘요",
+        "category": "개발",
+        "model": "gpt-5.5",
+        "effort": "medium",
+        "run_mode": "fixed",
+        "skills": [
+          "code-review",
+          "test-first",
+          "commit-and-push"
+        ],
+        "tools": [
+          "github"
+        ],
+        "agents": [
+          "claude_code",
+          "codex",
+          "zcode"
+        ],
+        "memory": {
+          "procedural": "all",
+          "decision": "all",
+          "user": "all"
+        },
+        "file_name": "review",
+        "instructions": "너는 코드리뷰어야. 커밋 전에 지금 diff를 보고 버그·빠진 테스트·애매한 이름을 찾아, 고칠 것을 중요한 순서로 적어. 확실하지 않으면 그렇다고 말해."
+      }
+    },
+    {
+      "id": "ag-designer",
+      "revision": 7,
+      "status": "active",
+      "crew": {
+        "type": "agent",
+        "name": "디자이너",
+        "handle": "디자이너",
+        "role": "UI 시안 정리 · 디자인 검토",
+        "instructions": "## 역할\n너는 arkism 디자이너야. 구현된 화면을 보고 디자인 시스템 토큰 기준으로 정리해.\n## 말투\n결론부터 짧게. 고칠 곳은 화면 이름과 부품 이름으로 짚어.\n## 하지 말 것\n토큰에 없는 색을 임의로 만들지 않아요.\n선택 상태를 장식으로만 구분하지 않아요.",
+        "model_mode": "fixed",
+        "effort": "medium",
+        "temperature": 0.7,
+        "max_output_tokens": 2048,
+        "output_format": "text",
+        "skills": [
+          "impeccable",
+          "figma-use",
+          "design-critique"
+        ],
+        "tools": [
+          "figma",
+          "browser"
+        ],
+        "agents": [
+          "claude_code",
+          "codex",
+          "zcode",
+          "discord",
+          "app"
+        ],
+        "memory": {
+          "procedural": "all",
+          "decision": "all",
+          "user": "all"
+        },
+        "file_edits": "ask",
+        "enabled": true,
+        "model": "deepseek-v4-flash",
+        "fallback_model": "claude opus 5.5",
+        "image_model": "claude opus 5.5",
+        "budget": {
+          "monthly_usd": 20,
+          "ask_over_usd": 1
+        },
+        "pinned": [
+          {
+            "collection": "skills",
+            "id": "skill-design-critique",
+            "revision": 4,
+            "injection": "full",
+            "priority": 100
+          },
+          {
+            "collection": "memories",
+            "id": "m-pin-icons",
+            "injection": "full",
+            "priority": 95
+          },
+          {
+            "collection": "knowledge_sources",
+            "id": "ks-orbit-tokens",
+            "revision": 5,
+            "injection": "summary",
+            "priority": 90
+          },
+          {
+            "collection": "memories",
+            "id": "m-pin-select",
+            "injection": "summary",
+            "priority": 85
+          },
+          {
+            "collection": "knowledge_sources",
+            "id": "ks-figma-traps",
+            "injection": "reference",
+            "priority": 80
+          }
+        ],
+        "category": "디자인",
+        "avatar": {
+          "art": "001",
+          "bg": "rose"
+        }
+      }
+    },
+    {
+      "id": "ag-research",
+      "revision": 3,
+      "status": "active",
+      "crew": {
+        "type": "agent",
+        "workflow": "리서치",
+        "name": "리서처",
+        "handle": "리서처",
+        "role": "주제를 받아 출처까지 정리해요",
+        "instructions": "## 역할\n너는 리서처다. 출처를 꼭 붙인다.",
+        "model_mode": "fixed",
+        "effort": "medium",
+        "temperature": 0.7,
+        "max_output_tokens": 2048,
+        "output_format": "text",
+        "skills": [
+          "writing-style"
+        ],
+        "tools": [
+          "arkism"
+        ],
+        "agents": [
+          "claude_code",
+          "codex",
+          "zcode",
+          "discord",
+          "app"
+        ],
+        "memory": {
+          "procedural": "all",
+          "decision": "all",
+          "user": "all"
+        },
+        "file_edits": "ask",
+        "enabled": true,
+        "model": "claude opus 5.5",
+        "category": "리서치",
+        "avatar": {
+          "art": "084",
+          "bg": "sky"
+        }
+      }
+    },
+    {
+      "id": "ag-review",
+      "revision": 2,
+      "status": "active",
+      "crew": {
+        "type": "agent",
+        "name": "코드리뷰어",
+        "handle": "코드리뷰어",
+        "role": "커밋 전에 diff를 보고 고칠 곳을 알려 줘요",
+        "instructions": "너는 코드리뷰어야. 커밋 전에 지금 diff를 보고 버그·빠진 테스트·애매한 이름을 찾아, 고칠 것을 중요한 순서로 적어. 확실하지 않으면 그렇다고 말해.",
+        "model_mode": "fixed",
+        "effort": "medium",
+        "temperature": 0.7,
+        "max_output_tokens": 2048,
+        "output_format": "text",
+        "skills": [
+          "code-review",
+          "test-first",
+          "commit-and-push"
+        ],
+        "tools": [
+          "github"
+        ],
+        "agents": [
+          "claude_code",
+          "codex",
+          "zcode",
+          "discord",
+          "app"
+        ],
+        "memory": {
+          "procedural": "all",
+          "decision": "all",
+          "user": "all"
+        },
+        "file_edits": "ask",
+        "enabled": true,
+        "model": "gpt-5.5",
+        "budget": {
+          "monthly_usd": 20
+        },
+        "category": "코드 품질"
+      }
+    },
+    {
+      "id": "ag-notes",
+      "revision": 1,
+      "status": "active",
+      "crew": {
+        "type": "agent",
+        "name": "기록관",
+        "handle": "기록관",
+        "role": "회의와 결정을 기억으로 남겨요",
+        "instructions": "너는 기록관이다. 결정과 이유를 한 줄씩 남긴다.",
+        "model_mode": "fixed",
+        "effort": "medium",
+        "temperature": 0.7,
+        "max_output_tokens": 2048,
+        "output_format": "text",
+        "skills": [],
+        "tools": [
+          "arkism"
+        ],
+        "agents": [
+          "claude_code",
+          "codex",
+          "zcode",
+          "discord",
+          "app"
+        ],
+        "memory": {
+          "procedural": "all",
+          "decision": "all",
+          "user": "all"
+        },
+        "file_edits": "ask",
+        "enabled": true,
+        "model": "glm-5",
+        "category": "기록·비서",
+        "avatar": {
+          "art": "128",
+          "bg": "sage"
+        }
+      }
+    },
+    {
+      "id": "ag-secretary",
+      "revision": 1,
+      "status": "active",
+      "crew": {
+        "type": "agent",
+        "name": "비서",
+        "handle": "비서",
+        "role": "일정과 메일을 정리해요",
+        "instructions": "너는 비서다. 짧게 정리한다.",
+        "model_mode": "auto",
+        "effort": "medium",
+        "temperature": 0.7,
+        "max_output_tokens": 2048,
+        "output_format": "text",
+        "skills": [],
+        "tools": [],
+        "agents": [
+          "claude_code",
+          "codex",
+          "zcode",
+          "discord",
+          "app"
+        ],
+        "memory": {
+          "procedural": "all",
+          "decision": "all",
+          "user": "all"
+        },
+        "file_edits": "ask",
+        "enabled": false,
+        "category": "기록·비서"
+      }
+    },
+    {
+      "id": "team-design",
+      "revision": 2,
+      "status": "active",
+      "crew": {
+        "type": "team",
+        "name": "디자인 리뷰 팀",
+        "handle": "디자인리뷰",
+        "role": "화면을 토큰·접근성 기준으로 검토하고, 고칠 목록을 만들어요.",
+        "mode": "moderator_picks",
+        "members": [
+          {
+            "agent_id": "ag-research",
+            "order": 1,
+            "role": "moderator",
+            "focus": "자료 찾기"
+          },
+          {
+            "agent_id": "ag-designer",
+            "order": 2,
+            "role": "worker",
+            "focus": "시안 해석"
+          },
+          {
+            "agent_id": "ag-review",
+            "order": 3,
+            "role": "reviewer",
+            "focus": "구현 가능성"
+          },
+          {
+            "agent_id": "ag-notes",
+            "order": 4,
+            "role": "scribe",
+            "focus": "정리·결론"
+          }
+        ],
+        "ending": {
+          "max_rounds": 4,
+          "token_cap": 100000,
+          "end_on_all_approved": true,
+          "end_on_moderator": true
+        },
+        "context": [
+          {
+            "collection": "design_systems",
+            "id": "ds-tokens",
+            "title": "디자인 시스템 토큰 v3",
+            "share": "team"
+          },
+          {
+            "collection": "memories",
+            "id": "m2",
+            "title": "Orbit 화면 규칙",
+            "share": "team"
+          },
+          {
+            "collection": "memories",
+            "id": "m1",
+            "title": "사용자 선호",
+            "share": "shared"
+          }
+        ],
+        "templates": [
+          {
+            "key": "review",
+            "name": "디자인 검토 회의",
+            "prompt": "{화면} 시안을 토큰·접근성 기준으로 검토하고 고칠 목록을 만들어 주세요.",
+            "overrides": {}
+          },
+          {
+            "key": "quick",
+            "name": "빠른 의견",
+            "prompt": "한 라운드만 돌며 각자 한 줄 의견을 주세요.",
+            "overrides": {
+              "ending": {
+                "max_rounds": 1
+              }
+            }
+          }
+        ],
+        "discord_mirror": true,
+        "pinned": [
+          {
+            "collection": "knowledge_sources",
+            "id": "ks-orbit-tokens",
+            "revision": 3,
+            "injection": "full",
+            "priority": 100
+          },
+          {
+            "collection": "skills",
+            "id": "skill-design-critique",
+            "revision": 4,
+            "injection": "full",
+            "priority": 95
+          },
+          {
+            "collection": "memories",
+            "id": "m-pin-tokens",
+            "injection": "summary",
+            "priority": 90
+          },
+          {
+            "collection": "memories",
+            "id": "m-pin-select",
+            "injection": "full",
+            "priority": 85
+          },
+          {
+            "collection": "knowledge_sources",
+            "id": "ks-orbit-rules",
+            "injection": "reference",
+            "priority": 80
+          }
+        ],
+        "category": "디자인",
+        "cover": {
+          "id": "p0",
+          "url": "img/arkism-art.svg",
+          "thumb": "img/arkism-art.svg",
+          "author": "Kim Lee",
+          "author_url": "https://unsplash.com/@kimlee"
+        }
+      }
+    },
+    {
+      "id": "team-plan",
+      "revision": 1,
+      "status": "active",
+      "crew": {
+        "type": "team",
+        "name": "제품 기획 팀",
+        "handle": "제품기획",
+        "role": "기능 범위와 우선순위를 정해요.",
+        "mode": "moderator_picks",
+        "members": [
+          {
+            "agent_id": "ag-research",
+            "order": 1,
+            "role": "moderator"
+          },
+          {
+            "agent_id": "ag-designer",
+            "order": 2,
+            "role": "worker"
+          },
+          {
+            "agent_id": "ag-review",
+            "order": 3,
+            "role": "reviewer"
+          },
+          {
+            "agent_id": "ag-notes",
+            "order": 4,
+            "role": "scribe"
+          }
+        ],
+        "ending": {
+          "max_rounds": 4,
+          "token_cap": 100000,
+          "end_on_all_approved": true,
+          "end_on_moderator": true
+        },
+        "context": [],
+        "templates": [],
+        "discord_mirror": true,
+        "category": "기획"
+      }
+    },
+    {
+      "id": "team-research",
+      "revision": 1,
+      "status": "active",
+      "crew": {
+        "type": "team",
+        "name": "리서치 팀",
+        "handle": "리서치팀",
+        "role": "질문을 나눠 조사하고 출처와 함께 정리해요.",
+        "mode": "round_robin",
+        "members": [
+          {
+            "agent_id": "ag-research",
+            "order": 1,
+            "role": "worker"
+          },
+          {
+            "agent_id": "ag-notes",
+            "order": 2,
+            "role": "scribe"
+          }
+        ],
+        "ending": {
+          "max_rounds": 3,
+          "token_cap": 60000,
+          "end_on_all_approved": false,
+          "end_on_moderator": false
+        },
+        "context": [],
+        "templates": [],
+        "discord_mirror": false,
+        "category": "리서치"
+      }
+    },
+    {
+      "id": "wf-v4",
+      "revision": 2,
+      "crew": {
+        "type": "workflow",
+        "name": "시장 조사 회의",
+        "handle": "시장조사회의",
+        "role": "전문가 둘이 조사하고 팀이 정리해요",
+        "category": "Git · 릴리스",
+        "model": "sonnet 5",
+        "trigger": null,
+        "enabled": true,
+        "graph": {
+          "nodes": [
+            {
+              "id": "start",
+              "type": "start",
+              "title": "시작",
+              "x": 40,
+              "y": 200,
+              "config": {}
+            },
+            {
+              "id": "gpt",
+              "type": "expert",
+              "title": "GPT 의견",
+              "x": 300,
+              "y": 80,
+              "config": {
+                "expert": "ag-research",
+                "goal": "{{input}}"
+              }
+            },
+            {
+              "id": "gem",
+              "type": "expert",
+              "title": "Gemini 의견",
+              "x": 300,
+              "y": 320,
+              "config": {
+                "expert": "ag-review",
+                "goal": "{{input}}"
+              }
+            },
+            {
+              "id": "meet",
+              "type": "team",
+              "title": "팀 회의",
+              "x": 600,
+              "y": 200,
+              "config": {
+                "team": "team-research",
+                "topic": "{{input}}"
+              }
+            },
+            {
+              "id": "n8n",
+              "type": "n8n",
+              "title": "n8n으로 보내기",
+              "x": 880,
+              "y": 200,
+              "config": {
+                "url": "https://n8n.example.com/webhook/report",
+                "mode": "sync"
+              }
+            },
+            {
+              "id": "end",
+              "type": "end",
+              "title": "끝",
+              "x": 1140,
+              "y": 220,
+              "config": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "start",
+              "to": "gpt"
+            },
+            {
+              "from": "start",
+              "to": "gem"
+            },
+            {
+              "from": "gpt",
+              "to": "meet"
+            },
+            {
+              "from": "gem",
+              "to": "meet"
+            },
+            {
+              "from": "meet",
+              "to": "n8n"
+            },
+            {
+              "from": "n8n",
+              "to": "end"
+            }
+          ]
+        }
+      }
+    }
+  ]
 }

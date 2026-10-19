@@ -31,6 +31,26 @@
      "revision": 1
     }
    }
+  },
+  {
+   "id": "mt-signal",
+   "revision": 1,
+   "maintenance": {
+    "type": "rule_often_violated",
+    "keep": {},
+    "retire": {},
+    "memory": {
+     "collection": "memories",
+     "id": "m2",
+     "revision": 1
+    },
+    "evidence": {
+     "samples": 12,
+     "passed": 7,
+     "pass_rate": 0.58
+    },
+    "reason": "자주 어겨요"
+   }
   }
  ]
 }

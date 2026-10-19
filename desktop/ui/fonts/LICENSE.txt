@@ -1,3 +1,4 @@
 IBM Plex Sans KR (c) IBM Corp. and Geist Mono (c) Vercel — both under the SIL Open Font License 1.1 (https://openfontlicense.org).
 Files are unmodified copies from the @ibm/plex-sans-kr and geist npm packages.
 Cormorant Garamond (c) Christian Thalmann (Catharsis Fonts) — SIL Open Font License 1.1. CormorantGaramond-Latin.woff2 is the unmodified Latin subset served by Google Fonts (variable weight 300–700).
+Aleo (c) The Aleo Project Authors — SIL Open Font License 1.1. Aleo-Latin-Regular.woff2 is the unmodified Latin 400 file from @fontsource/aleo 5.2.7.

@@ -265,6 +265,9 @@ type runExec struct {
 	back  map[string][]Edge // back edges (max > 0) by source
 	// traced: this run's end was already handed to recordFinished
 	traced bool
+	// events: 진행 알림 moments waiting for the next stored save (progress.go)
+	events  []progressEvent
+	sending chan struct{} // the last batch of notices still being sent
 }
 
 func (x *runExec) index(g *Graph) {
@@ -348,6 +351,14 @@ func (x *runExec) stamp(st *NodeState) {
 
 // closeRun ends the run and skips whatever never ran.
 func (x *runExec) closeRun(status, summary string) {
+	if !terminal(x.run.State.Status) {
+		switch status {
+		case "failed":
+			x.progress("fail", "실패: "+cmp.Or(summary, "이유를 알 수 없어요"))
+		case "succeeded":
+			x.progress("end", "끝: "+cmp.Or(summary, x.run.State.Summary, "마쳤어요"))
+		}
+	}
 	x.run.State.Status, x.run.State.Waiting = status, nil
 	if summary != "" {
 		x.run.State.Summary = clip(summary, 4000)
@@ -383,6 +394,7 @@ func (x *runExec) saveLocked(ctx context.Context, node string) error {
 				x.traced = true
 				x.e.recordFinished(ctx, x.run, x.nodes)
 			}
+			x.flushProgress()
 			return nil
 		}
 		switch apiCode(err) {
@@ -443,6 +455,7 @@ func (x *runExec) dropOutputs(node string, errorsToo bool, nodeErr, summary stri
 		st.Status, st.Error = "failed", nodeErr
 	}
 	x.run.State.Summary = ""
+	x.events = nil // queued notices may quote the refused text
 	x.closeRun("failed", summary)
 }
 
@@ -564,6 +577,9 @@ func (x *runExec) loop(ctx context.Context) error {
 			x.mu.Unlock()
 			return err
 		}
+		if !slices.ContainsFunc(x.order, func(id string) bool { s := x.state(id); return s.Status == "done" || s.Runs > 0 }) {
+			x.progress("start", "시작했어요")
+		}
 		inputs := map[string]any{}
 		for _, id := range batch {
 			inputs[id] = x.inputFor(id)
@@ -656,7 +672,7 @@ func (x *runExec) followBack(id string) {
 			}
 			seen[n] = true
 			st := x.state(n)
-			st.Status, st.Port, st.Output, st.Error, st.StartedAt, st.FinishedAt = "pending", "", "", "", nil, nil
+			st.Status, st.Port, st.Output, st.Error, st.StartedAt, st.FinishedAt, st.Tokens = "pending", "", "", "", nil, nil, 0
 			delete(x.run.State.Decisions, n) // an approval asks again; the server drops it too
 			for _, next := range x.out[n] {
 				todo = append(todo, next.To)
@@ -687,6 +703,7 @@ type result struct {
 	end     bool
 	summary string
 	also    map[string]any // other nodes finished by this one (loop body)
+	tokens  int64          // AI tokens the node used
 }
 
 type nodeError struct{ code, msg string }
@@ -718,15 +735,21 @@ func (x *runExec) runNode(ctx context.Context, id string, input any) error {
 		st.Status = "waiting"
 		res.wait.NodeID = id
 		x.run.State.Status, x.run.State.Waiting = "waiting", res.wait
+		if res.wait.Kind == "approval" {
+			x.progress("approval", "확인이 필요해요: "+cmp.Or(res.wait.Question, x.title(id)))
+		}
 	case res.wait != nil:
 		st.Status = "skipped"
 	default:
-		st.Status, st.Port, st.Output = "done", res.port, encodeStored(res.out)
+		st.Status, st.Port, st.Output, st.Tokens = "done", res.port, encodeStored(res.out), res.tokens
 		x.stamp(st)
 		for other, out := range res.also {
 			o := x.state(other)
 			o.Status, o.Output, o.StartedAt = "done", encodeStored(out), st.StartedAt
 			x.stamp(o)
+		}
+		if open && stepNode(n.Type) {
+			x.progress("step", "단계 끝: "+x.title(id))
 		}
 		if res.end && open {
 			x.closeRun("succeeded", res.summary)

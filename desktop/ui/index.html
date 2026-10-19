@@ -12,17 +12,24 @@
   <link rel="stylesheet" href="inject.css">
   <link rel="stylesheet" href="shell.css">
   <link rel="stylesheet" href="v4-home.css">
+  <link rel="stylesheet" href="v4-state.css">
   <link rel="stylesheet" href="v4-memory.css">
   <link rel="stylesheet" href="v4-skills.css">
   <link rel="stylesheet" href="v4-agent.css">
+  <link rel="stylesheet" href="v4-crew-graph.css">
   <link rel="stylesheet" href="v4-team.css">
+  <link rel="stylesheet" href="v4-crew-usage.css">
+  <link rel="stylesheet" href="v4-crew-automation.css">
+  <link rel="stylesheet" href="v4-team-popup.css">
   <link rel="stylesheet" href="v4-router.css">
+  <link rel="stylesheet" href="v4-messenger.css">
   <link rel="stylesheet" href="v4-connect.css">
   <link rel="stylesheet" href="v4-gallery.css">
   <link rel="stylesheet" href="v4-gallery-delete.css">
   <link rel="stylesheet" href="v4-digests.css">
   <link rel="stylesheet" href="v4-knowledge.css">
   <link rel="stylesheet" href="v4-pins.css">
+  <link rel="stylesheet" href="v4-crew-expert.css">
   <link rel="stylesheet" href="v4-gateway.css">
   <link rel="stylesheet" href="v4-codegraph.css">
   <link rel="stylesheet" href="v4-overview.css">
@@ -35,7 +42,10 @@
   <script src="pins.js" defer></script>
   <script src="gateway-token.js" defer></script>
   <script src="perf.js" defer></script>
+  <script src="crew-popup.js" defer></script>
+  <script src="crew-automation.js" defer></script>
   <script src="crew.js" defer></script>
+  <script src="team-cover.js" defer></script>
   <script src="team.js" defer></script>
   <script src="models.js" defer></script>
   <script src="reviews.js" defer></script>
@@ -48,6 +58,7 @@
   <script src="sessions.js" defer></script>
   <script src="gallery-delete.js" defer></script>
   <script src="knowledge.js" defer></script>
+  <script src="overview-windows.js" defer></script>
   <script src="overview.js" defer></script>
   <script src="arkism-triangle.js" defer></script>
   <script src="originals.js" defer></script>
@@ -66,7 +77,9 @@
   <script src="skill-review.js" defer></script>
   <script src="skill-generate.js" defer></script>
   <script src="catalog.js" defer></script>
+  <script src="messenger.js" defer></script>
   <script src="shell.js" defer></script>
+  <script src="home-checks.js" defer></script>
   <script src="home.js" defer></script>
   <script src="app.js" defer></script>
 </head>
@@ -153,12 +166,12 @@
       </section>
       <div class="rail-line"></div>
       <nav class="nav">
-        <button class="nav-item" data-menu="home" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>HOME</span></button>
-        <button class="nav-item" data-menu="memory" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg><span>MEMORY</span></button>
-        <button class="nav-item" data-menu="agent" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg><span>CREW</span></button>
-        <button class="nav-item" data-menu="router" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span>ROUTER</span></button>
-        <button class="nav-item" data-menu="connect" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="m2 22 3-3"/><path d="M7.5 13.5 10 11"/><path d="M10.5 16.5 13 14"/><path d="m18 3-4 4h6l-4 4"/></svg><span>TOOLS</span></button>
-        <button class="nav-item" data-menu="gallery" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 11.994 2z"/></svg><span>GALLERY</span></button>
+        <button class="nav-item" data-menu="home" type="button"><svg class="ln nav-ic" viewBox="0 0 18 18" aria-hidden="true"><path d="M2.25 6V2.25H6M12 2.25H15.75V6M15.75 12V15.75H12M6 15.75H2.25V12"/><circle cx="9" cy="9" r=".8625" fill="currentColor"/></svg><span>Home</span></button>
+        <button class="nav-item" data-menu="memory" type="button"><svg class="ln nav-ic" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 15.75L15.75 9L9 2.25L2.25 9L9 15.75ZM9 2.25V6M15.75 9H12M9 15.75V12M2.25 9H6M9 6L12 9M9 6L6 9M12 9L9 12M9 12L6 9"/></svg><span>Memory</span></button>
+        <button class="nav-item" data-menu="agent" type="button"><svg class="ln nav-ic" viewBox="0 0 18 18" aria-hidden="true"><path d="M5.625 2.625H12.375L9 7.875L5.625 2.625ZM1.5 9.75H7.125L4.3125 15L1.5 9.75ZM10.875 9.75H16.5L13.6875 15L10.875 9.75Z"/></svg><span>Crew</span></button>
+        <button class="nav-item" data-menu="router" type="button"><svg class="ln nav-ic" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="3.375" r="1.5"/><circle cx="3.375" cy="14.25" r="1.5"/><circle cx="14.625" cy="14.25" r="1.5"/><path d="M9 4.875V9.15M9 9.15L4.5 13.275M9 9.15L13.5 13.275"/></svg><span>Router</span></button>
+        <button class="nav-item" data-menu="connect" type="button"><svg class="ln nav-ic" viewBox="0 0 18 18" aria-hidden="true"><path d="M6 10.5H2.25V2.25H10.5V10.5H9M9 7.5H7.5V15.75H15.75V7.5H12"/></svg><span>Tools</span></button>
+        <button class="nav-item" data-menu="gallery" type="button" hidden><!-- GALLERY 보류(2026-10-20): 메뉴에서 숨김 --><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 11.994 2z"/></svg><span>GALLERY</span></button>
       </nav>
       <div class="rail-counts" hidden><output id="count-todo"></output> <output id="count-sessions"></output> <output id="count-memories"></output> <output id="count-skills"></output> <output id="count-tools"></output> <output id="count-crew"></output> <output id="count-routing"></output> <output id="count-usage"></output> <output id="count-design"></output> <output id="count-image"></output> <output id="count-slide"></output></div>
       <div class="rail-space"></div>

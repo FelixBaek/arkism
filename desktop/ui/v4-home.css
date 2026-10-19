@@ -88,10 +88,6 @@
 .home-table .sub { flex: 1; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 
 /* 빈 홈 */
-.home-empty { display: flex; flex-direction: column; gap: 8px; padding: 20px; border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-surface); }
-.home-empty strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
-.home-empty p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
-.home-empty .actions { margin-top: 4px; }
 
 /* ---------------------------------------------------------------- 홈 detail (right column) */
 .app.home-mode .detail-bar { padding: 24px 20px 0; border-bottom: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
@@ -262,10 +258,6 @@
 .gs-cell small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .gs-badge { flex: none; padding: 2px 8px; border-radius: 6px; background: var(--nc-raised); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .gs-row.active .gs-badge { background: var(--nc-subtle); }
-.gs-empty { display: flex; flex-direction: column; gap: 8px; padding: 18px 20px; border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-canvas); }
-.gs-empty strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
-.gs-empty p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
-.gs-empty .btn { height: auto; padding: 7px 14px; line-height: 1.5; }
 .gs-foot { display: flex; align-items: center; gap: 12px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .gs-foot span { flex: 1; }
 .gs-foot .link-btn { color: var(--nc-muted); }

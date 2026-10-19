@@ -239,6 +239,8 @@
   function setStatus(mode, text) {
     $("#status-dot").className = `dot ${mode}`;
     $("#status-text").textContent = text;
+    // Figma 198:110 has no dot; renderStatusCard hides it once it knows nothing needs a look.
+    if (mode !== "ready") $("#status-toggle").hidden = false;
   }
   function dbLabel() {
     if (state.ready === null) return "확인 중";
@@ -299,6 +301,8 @@
     const issues = items.filter((i) => !i[3]).length + agents.filter((cls) => cls === "warn" || cls === "bad").length;
     const badge = $("#status-toggle");
     badge.classList.toggle("warn", issues > 0);
+    badge.hidden = issues === 0 && $("#status-dot").classList.contains("ready");
+    if (badge.hidden) { $("#status-card").hidden = true; badge.setAttribute("aria-expanded", "false"); }
     $("#status-badge").textContent = issues ? `주의 ${issues}` : "자세히";
     const card = $("#status-card");
     card.querySelector(".status-summary").dataset.issues = issues ? `주의 ${issues}` : "";
@@ -309,7 +313,7 @@
     }));
     if (!card.querySelector(".st-foot")) {
       const foot = el("div", "st-foot");
-      foot.append(el("p", "", "위쪽 점은 서버 연결 상태예요. DB 상태는 따로 확인해요."), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
+      foot.append(el("p", "", "점은 서버 연결 상태예요. DB 상태는 따로 확인해요."), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
       card.append(foot);
       $("#status-agents").before(el("strong", "st-head", "에이전트"));
     }
@@ -339,6 +343,7 @@
   function notice(text) {
     const n = $("#notice");
     n.replaceChildren();
+    n.classList.remove("st-notice");
     n.hidden = !text;
     if (!text) return;
     const close = el("button", "notice-close");
@@ -349,6 +354,24 @@
     n.append(el("span", "", text), close);
   }
 
+  // 알림 자리에 공통 상태 화면 하나 (Figma 198:3554, home-checks.js ArkismState.of), 닫기(×)는 그대로.
+  function stateNotice(kind, on, over) {
+    notice("");
+    const n = $("#notice");
+    n.hidden = false;
+    n.classList.add("st-notice");
+    const close = el("button", "notice-close");
+    close.type = "button";
+    close.setAttribute("aria-label", "알림 닫기");
+    close.append(icon("x"));
+    close.addEventListener("click", () => notice(""));
+    n.replaceChildren(window.ArkismState.of(kind, on, over), close);
+  }
+  // 권한 오류(access_denied)는 공통 권한 화면으로; 다른 오류는 그대로 알림.
+  function failNotice(e, denied, other) {
+    if (e.message !== "access_denied") return notice(other);
+    stateNotice("denied", { account: () => { notice(""); go("settings"); } }, { text: denied });
+  }
   // ---------------------------------------------------------------- data
   async function loadAll() {
     const g = ++generation, t0 = performance.now();
@@ -392,7 +415,7 @@
       state.loadError = e.message;
       setStatus("error", "연결 확인 필요");
       render();
-      notice(`불러오지 못했어요: ${e.message}`);
+      stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: `연결을 확인하고 다시 시도해 주세요 (${e.message}).` });
     }
   }
   // Use counts of every memory in one call (GET /v1/memory_usage: 7·30 days and the last use; unused memories are absent).
@@ -557,7 +580,9 @@
     if (analyzing) return;
     analyzing = true;
     renderHeadActions();
-    notice("AI가 최근 기억과 후보를 보고 새 스킬을 찾는 중이에요…");
+    const waitText = "AI가 최근 기억과 후보를 보고 새 스킬을 찾는 중이에요…";
+    stateNotice("aiWait", {}, { text: waitText });
+    const slow = setTimeout(() => { if (analyzing && !$("#notice").hidden) stateNotice("aiWait", {}, { text: waitText, slow: true }); }, 60000);
     const d = state.data;
     const lines = [...d.candidates, ...d.memories].filter((m) => ["procedural", "lesson", "decision"].includes(m.kind) || d.candidates.includes(m)).slice(0, 80).map((m) => `- ${(m.text || "").slice(0, 160)}`).join("\n");
     const prompt = `Existing skills: ${d.skills.map((sk) => sk.name).join(", ").slice(0, 4000)}\n\nRecent memories and memory candidates (traces of work the user asked for again and again):\n${lines || "(none)"}`;
@@ -575,6 +600,7 @@
     } catch (e) {
       notice(e.message.startsWith("Unexpected") ? "AI 답을 읽지 못했어요. 다시 해 주세요." : e.message);
     } finally {
+      clearTimeout(slow);
       analyzing = false;
       render(false);
     }
@@ -938,6 +964,8 @@
       pollTools();
     } catch (e) { notice(`요청하지 못했어요 (${e.message}).`); }
   }
+  // 먼저 확인 holds three rows; 기억 처리 멈춤 is a fourth row on top while it lasts (Figma 523:35767).
+  const firstCount = (items) => (items[0]?.id === "stalled" ? 4 : 3);
   function todoItems() {
     const d = state.data;
     const suspect = d.candidates.filter((c) => (c.tags || []).includes("review:instruction_like"));
@@ -988,7 +1016,9 @@
       { id: "adapter", n: adapter.length, icon: "stack", label: "어댑터 필요", title: `어댑터가 필요한 스킬 ${adapter.length}개`, sub: "그대로는 일부 에이전트에서 제대로 안 돌 수 있어요",
         action: "보기", go: ["skills", "adapter"], preview: adapter.slice(0, 5).map((sk) => sk.name) }
     ];
-    const ORDER = ["suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh", "adapter"];
+    const ORDER = ["stalled", "suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh", "adapter"];
+    const stalled = homeChecks.stalledItem(generation);
+    if (stalled) items.push(stalled);
     return items.filter((t) => t.n === null || t.n > 0).sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   }
   function updateCounts() {
@@ -1278,7 +1308,7 @@
     if (lost && !items.length) { wrap.replaceChildren(lost); return; }
     if (!items.length) { wrap.replaceChildren(homeEmpty()); return; }
     if (page.kind === "all") { wrap.replaceChildren(todoTable(items)); return; }
-    const now = items.slice(0, 3), rest = items.slice(3);
+    const now = items.slice(0, firstCount(items)), rest = items.slice(firstCount(items));
     const parts = [...(lost ? [lost] : []), homeHead("먼저 확인", el("output", "", String(now.length))), firstList(now)];
     if (!state.selected) {
       const menus = menuRows(rest);
@@ -1298,12 +1328,8 @@
     wrap.replaceChildren(...parts);
   }
   function homeEmpty() {
-    const box = el("div", "home-empty");
-    box.append(el("strong", "", "지금은 확인할 일이 없어요"), el("p", "", "새 기억 후보나 스킬 제안이 생기면 여기에 모여요."));
-    const row = el("div", "actions");
-    row.append(button("기억 보기", "", null, () => go("memories", "active")), button("다시 불러오기", "ghost", null, loadAll));
-    box.append(row);
-    return box;
+    return window.ArkismState.panel({ title: "지금은 확인할 일이 없어요", text: "새 기억 후보나 스킬 제안이 생기면 여기에 모여요.",
+      actions: [["기억 보기", () => go("memories", "active")], ["다시 불러오기", loadAll, "ghost"]] });
   }
   function homeHead(text, count, aside) {
     const h = el("h2", "home-head", text);
@@ -1325,15 +1351,15 @@
     let n = 0;
     const row = (t, id, title, sub, warn) => {
       const on = state.selected === id;
-      const item = el("div", `todo-item${on ? " selected" : ""}`);
+      const item = el("div", `todo-item${on ? " selected" : ""}${t.id === "stalled" ? " stalled" : ""}`);
       item.dataset.id = id;
       const cell = el("div", "cell");
       const meta = el("div", `sub${warn ? " warn-text" : ""}`);
       if (t.id === "blocked" && t.agent) meta.append(agentLogo(...t.agent));
       meta.append(sub || "");
       cell.append(raw(el("div", "text", tr(title))), meta);
-      item.append(el("span", "todo-num", String(++n)), cell, todoAct(t, id));
-      item.addEventListener("click", () => pickTodo(id));
+      item.append(el("span", "todo-num", t.id === "stalled" ? (++n, "!") : String(++n)), cell, todoAct(t, id));
+      item.addEventListener("click", () => (t.id === "stalled" ? go(...t.go) : pickTodo(id)));
       list.append(item);
     };
     for (const t of now) {
@@ -1364,7 +1390,7 @@
     const of = (m) => TODO_MENUS.filter(([menu]) => menu === m).map(([menu, name, ids, target]) => [menu, name, rest.filter((t) => ids.includes(t.id) && t.n), target]);
     const rows = of("MEMORY");
     digests.menuRows(rows); // 병합 제안 · 모아보기 (digests.js)
-    rows.push(...home.menuExtras(generation), ...of("TOOLS")); // 워크플로우 · 라우팅, then 스킬 (TOOLS)
+    rows.push(homeChecks.knowledgeRow(generation), ...of("TOOLS"), ...home.menuExtras(generation), homeChecks.repoRow(generation)); // 지식 · 스킬 (TOOLS) · 워크플로우 · 라우팅 · 저장소
     const tools = state.data.tools;
     if (tools) {
       const login = tools.servers.filter((s) => Object.values(s.login || {}).includes("needed"));
@@ -1434,7 +1460,7 @@
   // The right column on 홈 when nothing is picked (Figma 198:200 Detail).
   function homeSummary() {
     const body = detailShell("오늘 요약");
-    const items = todoItems(), now = items.slice(0, 3), rest = items.slice(3);
+    const items = todoItems(), now = items.slice(0, firstCount(items)), rest = items.slice(firstCount(items));
     const head = el("div", "home-sum-head");
     head.append(el("h2", "", now.length ? `확인할 일 ${now.length}개가 먼저 기다려요` : "지금은 확인할 일이 없어요"),
       el("p", "meta", rest.length ? `나머지 ${todoTotal(rest)}개는 메뉴별로 모아 두었어요.` : "새 일이 생기면 여기에 모여요."));
@@ -1775,7 +1801,7 @@
       notice(done ? `후보 ${done}개를 정리했어요.` : "정리할 후보가 없었어요.");
       state.selected = null;
       await reloadMemories();
-    } catch (e) { notice(e.message === "access_denied" ? "이 계정은 후보를 정리할 수 없어요." : `정리하지 못했어요 (${e.message}).`); trigger.disabled = false; }
+    } catch (e) { failNotice(e, "이 계정은 후보를 정리할 수 없어요.", `정리하지 못했어요 (${e.message}).`); trigger.disabled = false; }
   }
   async function reloadMemories() {
     const [candidates, conflicted, memories, maintenance] = await Promise.all([
@@ -1794,7 +1820,8 @@
     if (reviewing.has(id)) return;
     reviewing.add(id);
     try { await work(); } catch (e) {
-      notice(e.message === "revision_conflict" ? "이미 처리됐거나 다른 곳에서 바뀌었어요. 새로 불러왔어요." : `처리하지 못했어요: ${e.message}`);
+      if (e.message === "revision_conflict") stateNotice("changed", {}, { text: "이미 처리됐거나 다른 곳에서 바뀌었어요. 새로 불러왔어요." });
+      else notice(`처리하지 못했어요: ${e.message}`);
       await reloadMemories().catch(() => {});
     } finally { reviewing.delete(id); }
   }
@@ -4193,7 +4220,7 @@
       notice("잊었어요.");
       state.selected = null;
       await reloadMemories();
-    } catch (e) { notice(e.message === "access_denied" ? "이 계정은 기억을 지울 수 없어요." : `잊지 못했어요 (${e.message}).`); }
+    } catch (e) { failNotice(e, "이 계정은 기억을 지울 수 없어요.", `잊지 못했어요 (${e.message}).`); }
   }
   // 직접 추가·고치기 go through the same path as a sentence the user said in a chat (explicit_remember):
   // the server applies its own rules, and a fix names the memory it replaces.
@@ -4756,6 +4783,7 @@
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request, query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel, sshErrorText, useLocal, lock, reconnect });
+  const homeChecks = window.ArkismHomeChecks({ state, request, query, go, ago, render }); // 홈 › 기억 처리 멈춤 · 지식 줄 (home-checks.js)
   home.wireSearch();
   shell = window.ArkismShell({ state, $, el, go, render });
   Object.assign(views, pages.views);

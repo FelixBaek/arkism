@@ -97,7 +97,7 @@ func TestCrewWorkflowShapes(t *testing.T) {
 		func(c *Crew) { c.Skills = []string{"x"} },
 		func(c *Crew) {
 			g := crewGraph()
-			g.Nodes[1].Type = "expert"
+			g.Nodes[1].Type = "mystery"
 			c.Graph = g
 		},
 		func(c *Crew) {

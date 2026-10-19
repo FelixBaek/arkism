@@ -38,7 +38,8 @@ window.ArkismHome = function (ctx) {
       .forEach((s) => out.push({ kind: "skill", id: s.id, title: s.name, mono: true, where: `스킬${ctx.skillCategory(s) ? ` › ${ctx.skillCategory(s)}` : ""}`, badge: "스킬" }));
     (d.crew || []).filter((r) => has(r.crew?.name, q) || has(r.crew?.handle, q) || has(r.crew?.role, q)).slice(0, MAX_EACH)
       .forEach((r) => out.push({ kind: "crew", id: r.id, title: `$${r.crew.handle || r.crew.name}`, where: "CREW › 워크플로우", badge: "워크플로우" }));
-    (d.prompts || []).filter((p) => has(p.title, q) || has(p.prompt, q)).slice(0, MAX_EACH)
+    // GALLERY 보류 중: 숨긴 메뉴로 가는 검색 결과는 내지 않는다.
+    if (!document.querySelector('.nav-item[data-menu="gallery"]')?.hidden) (d.prompts || []).filter((p) => has(p.title, q) || has(p.prompt, q)).slice(0, MAX_EACH)
       .forEach((p) => out.push({ kind: "prompt", id: p.id, title: p.title || "프롬프트", where: `GALLERY › ${p.kind === "slide" ? "슬라이드" : "프롬프트"}`, badge: "프롬프트", item: p }));
     return out;
   }
@@ -69,12 +70,7 @@ window.ArkismHome = function (ctx) {
     head.append(el("strong", "", "전체 검색"), el("span", "", "Ctrl / ⌘ K"));
     const parts = [head];
     if (!hits.length) {
-      const empty = el("div", "gs-empty");
-      empty.append(el("strong", "", "검색 결과 없음"), el("p", "", serverQ !== q && q.length >= 2 ? "서버에서도 찾는 중이에요…" : "조건에 맞는 항목이 없어요."));
-      const row = el("div", "actions");
-      row.append(button("검색 지우기", "small", null, clear));
-      empty.append(row);
-      parts.push(empty);
+      parts.push(window.ArkismState.of("noResults", { clear }, serverQ !== q && q.length >= 2 ? { text: "서버에서도 찾는 중이에요…" } : {}));
     } else {
       const list = el("div", "gs-list");
       hits.forEach((h, i) => {
