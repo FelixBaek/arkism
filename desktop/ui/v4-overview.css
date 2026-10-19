@@ -285,5 +285,9 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .mm-labels { position: absolute; left: 0; top: 0; pointer-events: none; } .mm-label { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 13px; color: var(--nc-muted); } .mm-label b { color: var(--nc-text); font-weight: 500; }
 .mm-tip { position: absolute; left: 0; top: 0; max-width: 280px; padding: 6px 10px; border-radius: 999px; background: var(--nc-canvas); border: 1px solid var(--nc-line); color: var(--nc-text); font-size: 12px; pointer-events: none; opacity: 0; transition: opacity .15s; white-space: nowrap; display: flex; gap: 6px; }
 .mm-tip.on { opacity: 1; } .mm-tip-t { overflow: hidden; text-overflow: ellipsis; } .mm-tip-m { color: var(--nc-muted); flex: none; }
+.mm-cards { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.mm-card { position: absolute; left: 0; top: 0; display: grid; gap: 2px; max-width: 190px; padding: 7px 12px; border-radius: 8px; background: color-mix(in srgb, var(--nc-canvas) 88%, transparent); border: 1px solid var(--nc-line); white-space: nowrap; }
+.mm-card b { font-size: 13px; font-weight: 500; color: var(--nc-text); overflow: hidden; text-overflow: ellipsis; } .mm-card small { font-size: 11px; color: var(--nc-muted); }
+.mm-card.main { max-width: 260px; padding: 10px 16px; border-color: color-mix(in srgb, var(--nc-text) 30%, var(--nc-line)); } .mm-card.main b { font-size: 15px; }
 .mm-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (prefers-reduced-motion: reduce) { .mm-pill, .mm-tip { transition: none; } }

@@ -9,18 +9,18 @@ window.ArkismMemoryBubbles = (() => {
   const SPRING = { len: 60, k: 0.5 };          // weak pull along a relation (same group only, attract only)
 
   function create(opts) {
-    const { tabs, groupOf, tip, onSelect, onClear } = opts;
+    const { tabs, groupOf, tip, card, onSelect, onClear } = opts;
     const doc = document, mk = (tag, cls, txt) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
     const root = mk("div", "mm-bubbles"), canvas = mk("canvas", "mm-canvas"), ctx = canvas.getContext("2d");
-    const tabBar = mk("div", "mm-tabs"), pill = mk("span", "mm-pill"), live = mk("div", "mm-live"), tipEl = mk("div", "mm-tip"), labels = mk("div", "mm-labels");
+    const cardsEl = mk("div", "mm-cards"), tabBar = mk("div", "mm-tabs"), pill = mk("span", "mm-pill"), live = mk("div", "mm-live"), tipEl = mk("div", "mm-tip"), labels = mk("div", "mm-labels");
     canvas.tabIndex = 0; canvas.setAttribute("role", "application"); canvas.setAttribute("aria-label", "기억 버블 지도");
     live.setAttribute("aria-live", "polite"); tipEl.setAttribute("aria-hidden", "true");
     const tipT = mk("span", "mm-tip-t"), tipM = mk("span", "mm-tip-m"); tipT.setAttribute("data-no-i18n", ""); tipEl.append(tipT, tipM);
     live.setAttribute("data-no-i18n", "");
-    tabBar.append(pill); root.append(canvas, labels, tabBar, tipEl, live);
+    tabBar.append(pill); cardsEl.setAttribute("aria-hidden", "true"); root.append(canvas, cardsEl, labels, tabBar, tipEl, live);
 
     const reducedMq = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
-    let W = 0, H = 0, dpr = 1, items = [], byId = new Map(), links = [], edgesAll = [], groups = [], mode = tabs[0][0], idsKey = "";
+    let cards = [], cardKey = "", W = 0, H = 0, dpr = 1, items = [], byId = new Map(), links = [], edgesAll = [], groups = [], mode = tabs[0][0], idsKey = "";
     let sel = null, kb = null, hover = null, showAll = true, zoom = 1, scale = 1, raf = 0, last = 0, calm = 0, visible = true, energy = 99;
     const btns = new Map();
     for (const [k, l] of tabs) { const b = mk("button", "mm-tab", l); b.type = "button"; b.addEventListener("click", () => setGroup(k)); btns.set(k, b); tabBar.append(b); }
@@ -57,30 +57,35 @@ window.ArkismMemoryBubbles = (() => {
       items = list.map((x) => { const o = byId.get(x.id); return o ? Object.assign(o, x) : { ...x, x: 0, y: 0, vx: 0, vy: 0, r: 8, g: null, placed: false }; });
       byId = new Map(items.map((p) => [p.id, p]));
       regroup(); if (W) for (const p of items) if (!p.placed) place(p);
-      linkUp(); run();
+      linkUp(); aim(); run();
     }
-    function setEdges(list) { edgesAll = list; linkUp(); draw(); }
+    function setEdges(list) { edgesAll = list; linkUp(); aim(); cardKey = "x"; run(); draw(); }
     function linkUp() { links = edgesAll.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({ a: byId.get(e.from), b: byId.get(e.to), t: e.t })); }
-    function setGroup(k) { if (k === mode) return; mode = k; placePill(); regroup(); kick(30); run(); }
+    function setGroup(k) { if (k === mode) return; mode = k; placePill(); regroup(); aim(); kick(30); run(); }
     function kick(a) { for (const p of items) { p.vx += (Math.random() - 0.5) * 2 * a; p.vy += (Math.random() - 0.5) * 2 * a; } }
-    function setSelected(id) { const n = id && byId.has(id) ? id : null; if (n && n !== sel) announce(n); const moved = n !== sel; sel = n; if (moved) run(); draw(); }
+    function setSelected(id) { const n = id && byId.has(id) ? id : null; if (n && n !== sel) announce(n); const moved = n !== sel; sel = n; if (moved) { aim(); kick(20); run(); } draw(); }
+    // Selected memory (Figma 기억 지도): it moves to the middle and its related memories fan out around it; the rest stay in their groups, dimmed.
+    function aim() {
+      for (const p of items) p.tx = p.ty = undefined;
+      const sp = sel && byId.get(sel); if (!sp || !W) return;
+      const nb = []; for (const l of links) { const o = l.a === sp ? l.b : l.b === sp ? l.a : null; if (o && !nb.includes(o)) nb.push(o); }
+      const cx = PAD.l + (W - PAD.l - PAD.r) / 2, cy = PAD.t + (H - PAD.t - PAD.b) / 2, rx = (W - PAD.l - PAD.r) * 0.36, ry = (H - PAD.t - PAD.b) * 0.4;
+      sp.tx = cx; sp.ty = cy;
+      nb.sort((a, b) => (a.g.ord - b.g.ord) || a.g.key.localeCompare(b.g.key)); // neighbours of one group sit side by side
+      nb.forEach((p, i) => { const t = -Math.PI / 2 + (i + 0.5) / nb.length * Math.PI * 2; p.tx = cx + Math.cos(t) * rx; p.ty = cy + Math.sin(t) * ry; });
+    }
     function setEdgeAll(v) { showAll = !!v; draw(); }
     function setZoom(z) { zoom = z; draw(); }
     function announce(id) { const t = tip(id); if (t) live.textContent = `${t.text} ${t.meta}`; }
 
     function step(dt) {
       const damp = Math.exp(-5 * dt);
-      for (const p of items) { p.vx += (p.g.cx - p.x) * 5 * dt; p.vy += (p.g.cy - p.y) * 5 * dt; }
-      for (const l of links) {
-        if (l.a.g !== l.b.g) continue; const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
-        // the selected memory holds its neighbours a little apart so the relation lines between them have room to show
-        const open = sel && (l.a.id === sel || l.b.id === sel), len = open ? (l.a.r + l.b.r) * 3.4 : SPRING.len;
-        if (!open && d <= len) continue; const f = (d - len) * (open ? 3 : SPRING.k) * dt, fx = dx / d * f, fy = dy / d * f; l.a.vx += fx; l.a.vy += fy; l.b.vx -= fx; l.b.vy -= fy;
-      }
+      for (const p of items) { const tx = p.tx ?? p.g.cx, ty = p.ty ?? p.g.cy; p.vx += (tx - p.x) * 5 * dt; p.vy += (ty - p.y) * 5 * dt; }
+      if (!sel) for (const l of links) { if (l.a.g !== l.b.g) continue; const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1; if (d <= SPRING.len) continue; const f = (d - SPRING.len) * SPRING.k * dt, fx = dx / d * f, fy = dy / d * f; l.a.vx += fx; l.a.vy += fy; l.b.vx -= fx; l.b.vy -= fy; }
       const sp = sel && byId.get(sel);
-      if (sp) { // clear a little room around the selected memory: neighbours sit on their springs, the rest drift out of the way
-        const nb = new Set(links.filter((l) => l.a === sp || l.b === sp).map((l) => (l.a === sp ? l.b : l.a)));
-        for (const p of items) { if (p === sp || nb.has(p) || p.g !== sp.g) continue; const dx = p.x - sp.x, dy = p.y - sp.y, d = Math.hypot(dx, dy) || 1, room = sp.r * 2 + p.r * 3; if (d < room) { p.vx += dx / d * (room - d) * 6 * dt; p.vy += dy / d * (room - d) * 6 * dt; } }
+      if (sp) for (const p of items) { // memories not on the fan move out of the middle so the fan reads clearly
+        if (p === sp || p.tx != null) continue; const dx = p.x - sp.x, dy = p.y - sp.y, d = Math.hypot(dx, dy) || 1, room = Math.min(W, H) * 0.22;
+        if (d < room) { p.vx += dx / d * (room - d) * 8 * dt; p.vy += dy / d * (room - d) * 8 * dt; }
       }
       let e = 0;
       for (const p of items) { p.vx *= damp; p.vy *= damp; p.x += p.vx * dt * 1.6; p.y += p.vy * dt * 1.6; e += p.vx * p.vx + p.vy * p.vy; }
@@ -148,7 +153,10 @@ window.ArkismMemoryBubbles = (() => {
         const path = () => { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(cx, cy, bx, by); ctx.stroke(); };
         ctx.globalAlpha = 0.55; ctx.strokeStyle = bg; ctx.lineWidth = 4; ctx.setLineDash([]); path(); // faint backing so the line reads over bubbles
         ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.setLineDash(s.dash); path();
-        if (d > l.a.r + l.b.r + 40) tags.push([s, col, (mx + cx) / 2, (my + cy) / 2]); // curve midpoint; skip the pill when the pair sits too close
+        if (d > l.a.r + l.b.r + 40) { // pill a little past the middle, toward the related memory, so the focus card does not cover it
+          const t = foci.has(l.a.id) ? 0.6 : 0.4, u = 1 - t;
+          tags.push([s, col, u * u * l.a.x + 2 * u * t * cx + t * t * l.b.x, u * u * l.a.y + 2 * u * t * cy + t * t * l.b.y]);
+        }
       }
       ctx.setLineDash([]); ctx.font = `500 11px ${tok("--sans", "sans-serif")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       for (const [s, c, x, y] of tags) {
@@ -163,9 +171,43 @@ window.ArkismMemoryBubbles = (() => {
       }
       for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 2.5), 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
+      labels.hidden = !!sel; // group names would float over the fan
       for (const g of groups) { if (!g.top) continue; const [x, y] = scr(g.top.x, g.top.y - g.top.r); g.el.style.transform = `translate(${x}px,${y - 8 * zoom}px) translate(-50%,-100%)`; }
+      placeCards();
       const id = hover || kb, p = id && byId.get(id), t = p && tip(id);
       if (p && t) { const [sx, y] = scr(p.x, p.y - p.r); tipT.textContent = t.text; tipM.textContent = t.meta; const hw = tipEl.offsetWidth / 2 + 6, x = Math.max(hw, Math.min(W - hw, sx)); tipEl.style.transform = `translate(${x}px,${y - 8}px) translate(-50%,-100%)`; tipEl.classList.add("on"); } else tipEl.classList.remove("on");
+    }
+
+    // Name cards (Figma 기억 지도): the selected memory gets a card under it, each related memory a small card beside it
+    function buildCards() {
+      const sp = sel && byId.get(sel), key = sp ? `${sel}|${links.length}|${items.length}` : "";
+      if (key === cardKey) return; cardKey = key; cards = [];
+      if (sp && card) {
+        const c = card(sel); if (c) cards.push({ p: sp, main: true, title: c.title, sub: [c.place, c.meta].filter(Boolean).join(" · ") });
+        const tr = (x) => window.ArkismI18n?.translate(x) || x, seen = new Set([sp]);
+        for (const l of links) { const o = l.a === sp ? l.b : l.b === sp ? l.a : null; if (!o || seen.has(o)) continue; seen.add(o); const c2 = card(o.id); if (c2) cards.push({ p: o, title: c2.title, sub: [c2.place, tr((EDGE[l.t] || EDGE.supports).n)].filter(Boolean).join(" · ") }); }
+      }
+      cardsEl.replaceChildren(...cards.map((c) => { c.el = mk("div", c.main ? "mm-card main" : "mm-card"); const t = mk("b", "", c.title); t.setAttribute("data-no-i18n", ""); c.el.append(t, mk("small", "", c.sub)); return c.el; }));
+      for (const c of cards) { c.w = c.el.offsetWidth; c.h = c.el.offsetHeight; }
+    }
+    function placeCards() {
+      buildCards(); if (!cards.length) return;
+      const box = [];
+      for (const c of cards) {
+        const [x, y] = scr(c.p.x, c.p.y), r = c.p.r * zoom;
+        let L, T;
+        if (c.main) { L = x - c.w / 2; T = y + r + 14; }
+        else { // beside the bubble on the outer side when it fits, otherwise above (upper half) or below (lower half)
+          const out = x >= W / 2 ? x + r + 10 : x - r - 10 - c.w;
+          if (out >= 8 && out + c.w <= W - 8) { L = out; T = y - c.h / 2; } else { L = x - c.w / 2; T = y < H / 2 ? y - r - 8 - c.h : y + r + 8; }
+        }
+        L = Math.max(8, Math.min(W - c.w - 8, L)); T = Math.max(PAD.t - 30, Math.min(H - PAD.b - c.h, T)); // stay clear of the tabs and the legend bar
+        const up = !c.main && y < H / 2;
+        for (let i = 0; i < 6; i++) { const hitB = box.find((b) => L < b[0] + b[2] && L + c.w > b[0] && T < b[1] + b[3] && T + c.h > b[1]); if (!hitB) break; T = up ? hitB[1] - c.h - 4 : hitB[1] + hitB[3] + 4; } // nudge away from the middle past an earlier card
+        const clash = T < PAD.t - 30 || T + c.h > H - PAD.b || box.some((b) => L < b[0] + b[2] && L + c.w > b[0] && T < b[1] + b[3] && T + c.h > b[1]);
+        c.el.hidden = clash && !c.main; if (c.el.hidden) continue; // a small window drops the cards that do not fit; the side panel still lists them
+        box.push([L, T, c.w, c.h]); c.el.style.transform = `translate(${L}px,${T}px)`;
+      }
     }
 
     function hit(ev) {
@@ -191,7 +233,7 @@ window.ArkismMemoryBubbles = (() => {
       const r = root.getBoundingClientRect(); if (!r.width || !r.height) return;
       W = r.width; H = r.height; dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
-      layout(); for (const p of items) if (!p.placed) place(p);
+      layout(); for (const p of items) if (!p.placed) place(p); aim();
       placePill(); run(); draw();
     }
     if (window.ResizeObserver) new ResizeObserver(resize).observe(root);

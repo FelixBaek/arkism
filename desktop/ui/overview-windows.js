@@ -465,6 +465,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       tabs: [["all", "전체"], ["reach", "칸별"], ["kind", "종류별"]],
       groupOf: (m, p) => m === "reach" ? { key: p.reach, name: REACH[p.reach][0] + (p.reach === "project" && proj ? ` · ${proj}` : ""), ord: REACH[p.reach][1] } : m === "kind" ? { key: p.kind, name: kind(p.kind) } : { key: "all", name: "전체" },
       tip: (id) => { const n = byId.get(id); return n ? { text: label(id), meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
+      card: (id) => { const n = byId.get(id); return n ? { title: label(id), place: (REACH[reachOf(n)] || REACH.general)[0], meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
       onSelect: (id) => { sel = id; mode = "sel"; moreOpen = false; paint(); },
       onClear: () => { sel = null; mode = "all"; paint(); },
     });
