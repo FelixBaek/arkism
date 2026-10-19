@@ -123,7 +123,7 @@ var searchQueryScaffolding = map[string]bool{
 	"has": true, "have": true, "had": true, "can": true, "could": true,
 	"would": true, "should": true, "the": true, "an": true,
 	"and": true, "or": true, "of": true, "in": true, "on": true,
-	"at": true, "to": true, "for": true, "with": true, "by": true,
+	"at": true, "to": true, "for": true, "with": true, "by": true, "from": true,
 	"you": true, "your": true, "me": true, "my": true, "his": true,
 	"her": true, "their": true, "they": true, "he": true, "she": true,
 }
@@ -170,6 +170,44 @@ func searchQueryConcepts(terms []string) []string {
 		}
 	}
 	return concepts
+}
+
+// A pair of generic procedure words is not evidence about the subject of a
+// longer question. Keep these words in the query and its rank, but require a
+// substantive concept too when one is present. Short and entirely generic
+// lookups remain permissive. This applies only to the lexical lane.
+var searchQueryFraming = map[string]bool{
+	"규칙": true, "체계": true, "분류": true, "분류체계": true,
+	"경로": true, "이동": true, "방법": true, "방식": true,
+	"기준": true, "절차": true, "정책": true,
+	"관련": true, "대한": true, "관한": true, "대해": true,
+	"무엇": true, "어떤": true, "어떻게": true,
+	"알려줘": true, "알려주세요": true, "설명": true,
+	"설명해줘": true, "설명해주세요": true, "정리": true, "정리해줘": true,
+	"rule": true, "rules": true, "system": true, "systems": true,
+	"classification": true, "classify": true, "path": true, "paths": true,
+	"method": true, "methods": true, "procedure": true, "procedures": true,
+	"criteria": true, "policy": true, "policies": true,
+	"about": true, "regarding": true, "please": true, "tell": true,
+	"explain": true, "describe": true, "use": true, "used": true, "using": true,
+}
+
+func searchQueryTopics(terms []string) []string {
+	if len(searchQueryConcepts(terms)) < 3 {
+		return nil
+	}
+	topics := []string{}
+	for _, term := range terms {
+		if searchQueryFraming[term] {
+			continue
+		}
+		// A shared date or quantity cannot supply the missing subject. Numeric
+		// terms still participate in the distinct-match threshold and rank.
+		if strings.IndexFunc(term, unicode.IsLetter) >= 0 {
+			topics = append(topics, term)
+		}
+	}
+	return searchQueryConcepts(topics)
 }
 
 func tsQuote(token string) string {
