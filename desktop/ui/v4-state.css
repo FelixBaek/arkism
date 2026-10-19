@@ -6,5 +6,5 @@
 .st-actions { display: flex; gap: 8px; align-items: center; }
 .notice.st-denied { align-items: flex-start; background: var(--nc-surface, var(--bg-muted)); border-color: var(--nc-line, var(--border)); }
 .notice.st-denied .st-panel { flex: 1; padding: 0; border: 0; background: none; }
-.todo-item.stalled { background: color-mix(in srgb, #ff5160 14%, transparent); }
-.todo-item.stalled .text { color: #ffb3b9; }
+.todo-item.stalled { background: var(--status-danger-tint); }
+.todo-item.stalled .text { color: var(--status-danger); }

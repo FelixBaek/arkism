@@ -13,7 +13,7 @@ window.ArkismState = (() => {
     if (note) box.append(el("p", "st-note", note));
     if (actions.length) {
       const row = el("div", "st-actions");
-      for (const [label, fn, kind] of actions) { const b = el("button", kind === "ghost" ? "ghost" : "", label); b.type = "button"; b.addEventListener("click", fn); row.append(b); }
+      for (const [label, fn, kind] of actions) { const b = el("button", kind === "ghost" ? "btn ghost" : "btn", label); b.type = "button"; b.addEventListener("click", fn); row.append(b); }
       box.append(row);
     }
     return box;

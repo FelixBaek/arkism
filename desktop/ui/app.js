@@ -363,7 +363,7 @@
     close.setAttribute("aria-label", "알림 닫기");
     close.append(icon("x"));
     close.addEventListener("click", () => notice(""));
-    n.replaceChildren(window.ArkismState.panel({ title: d[0], text: denied, actions: [[d[1], () => { notice(""); go("settings"); }, "ghost"]] }), close);
+    n.replaceChildren(window.ArkismState.panel({ title: d[0], text: denied, actions: [[d[1], () => { notice(""); go("settings"); }]] }), close);
   }
   // ---------------------------------------------------------------- data
   async function loadAll() {
