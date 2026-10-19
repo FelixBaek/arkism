@@ -288,10 +288,15 @@ class ReleaseQualityTests(unittest.TestCase):
         self.assertIn('run: python3 tools/check_release_quality.py', validate)
         self.assertIn('actions: read', validate)
         self.assertIn('RELEASE_SHA: ${{ github.sha }}', validate)
-        for job, following in [("windows", "unix"), ("unix", "release")]:
-            section = workflow.split(f"\n  {job}:\n")[1].split(f"\n  {following}:\n")[0]
-            self.assertIn("needs: validate", section)
+        windows = workflow.split("\n  windows:\n")[1].split("\n  release:\n")[0]
+        self.assertIn("needs: validate", windows)
+        self.assertNotIn("\n  unix:\n", workflow)
+        self.assertNotIn("macos-", workflow)
+        self.assertNotIn("build-unix.sh", workflow)
         release = workflow.split("\n  release:\n")[1]
+        self.assertIn("needs: [windows]", release)
+        self.assertIn("name: windows", release)
+        self.assertNotIn("merge-multiple: true", release)
         recheck = release.index("--timeout-seconds 0")
         self.assertLess(recheck, release.index("- name: Draft tag release"))
         self.assertLess(recheck, release.index("- name: Publish the verified initial release"))

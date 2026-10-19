@@ -1,16 +1,13 @@
 name: Release
 
-# A tag vX.Y.Z builds the Windows installer, the macOS app (Apple silicon) and the Linux AppImage
-# and .deb, checks that each starts its built-in Arkism, and puts them in a draft release with the
-# update file (latest.json) the app reads. Publishing the draft is a person's step. Running the
-# workflow by hand, or changing packaging in a pull request, builds workflow artifacts without
-# a release. Pull request artifacts use version 0.1.0 and are disposable validation builds.
+# A tag vX.Y.Z builds and checks the Windows installer, then puts it and the
+# update file (latest.json) in a draft release. Publishing the draft is a person's
+# step. Manual and pull request builds produce artifacts without a release.
+# Pull request artifacts use version 0.1.0 and are disposable validation builds.
 #
 # Signing is optional and happens only when the secrets are set:
 #   Windows: WINDOWS_CERTIFICATE (base64 .pfx), WINDOWS_CERTIFICATE_PASSWORD
-#   macOS:   APPLE_CERTIFICATE (base64 .p12), APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
-#            and for notarization APPLE_ID, APPLE_PASSWORD (app-specific), APPLE_TEAM_ID
-# Without them Windows SmartScreen and macOS Gatekeeper warn on first open (README explains).
+# Without them Windows SmartScreen warns on first open (README explains).
 
 on:
   workflow_call:
@@ -28,7 +25,6 @@ on:
       - ".github/workflows/release.yml"
       - "tools/check_release_quality.py"
       - "tools/test_check_release_quality.py"
-      - "desktop/build-unix.sh"
       - "desktop/installer/**"
       - "desktop/src-tauri/**"
       - "internal/memory/migrations/**"
@@ -153,78 +149,13 @@ jobs:
           path: desktop/dist/Arkism-*-setup.exe*
           if-no-files-found: error
 
-  unix:
-    permissions:
-      contents: read
-    needs: validate
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14 # Apple silicon
-            name: macos
-          - os: ubuntu-22.04 # the oldest glibc the AppImage still runs on
-            name: linux
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.sha }}
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-      - name: Rust
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-      - name: Linux build packages
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
-            build-essential file bison flex zlib1g-dev
-      - name: macOS signing (only when the secrets are set)
-        if: runner.os == 'macOS' && github.event_name != 'pull_request'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          # Tauri signs (and notarizes) when these are present; an empty one would make it try and fail.
-          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
-            value="${!name}"
-            if [ -n "$value" ]; then
-              echo "::add-mask::$value"
-              { echo "$name<<ARKISM_EOF"; echo "$value"; echo "ARKISM_EOF"; } >> "$GITHUB_ENV"
-            fi
-          done
-      - name: Build app
-        run: ./desktop/build-unix.sh --version "${VERSION#v}"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ matrix.name }}
-          path: |
-            desktop/dist/*.dmg*
-            desktop/dist/*.app.zip*
-            desktop/dist/*.AppImage*
-            desktop/dist/*.deb*
-          if-no-files-found: error
-
   release:
     if: >-
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && inputs.publish_initial &&
        inputs.version == '0.1.0' && github.ref == 'refs/heads/main' &&
        github.repository == 'FelixBaek/arkism')
-    needs: [windows, unix]
+    needs: [windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -237,8 +168,7 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
-          pattern: "{windows,macos,linux}"
-          merge-multiple: true
+          name: windows
       - name: Update file
         run: |
           version="${VERSION#v}"

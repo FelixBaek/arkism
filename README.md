@@ -35,15 +35,13 @@ The screenshots use made-up sample data and show the Korean interface. Switch to
 
 ## Install
 
-Download the file for your system from [Releases](../../releases/latest).
+Download the Windows installer from [Releases](../../releases/latest).
 
 | System | File |
 |---|---|
 | Windows 10/11 | `Arkism-X.Y.Z-setup.exe` |
-| macOS (Apple silicon) | `.dmg` |
-| Linux | `.AppImage` or `.deb` |
 
-The builds are not signed yet. The first time you open the app, Windows SmartScreen asks you to confirm ("More info" → "Run anyway"). On macOS, right-click the app and choose "Open".
+The builds are not signed yet. The first time you open the app, Windows SmartScreen asks you to confirm ("More info" → "Run anyway").
 
 ## Quick start
 

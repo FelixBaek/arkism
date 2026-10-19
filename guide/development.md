@@ -131,7 +131,8 @@ python3 -I desktop/ui/testdata/preview/serve.py 8795
 ## Building the desktop app
 
 - Windows: `desktop/installer/build-windows.ps1 -Version X.Y.Z`
-- macOS and Linux: `desktop/build-unix.sh --version X.Y.Z`. It builds the built-in Postgres and pgvector from source, so it needs a C compiler, bison and flex, and on Linux the WebKitGTK build packages.
+
+The release workflow builds only the Windows app.
 
 Values compiled into the app:
 
@@ -144,9 +145,9 @@ Values compiled into the app:
 
 ## Releases
 
-Pushing a `vX.Y.Z` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds the Windows installer, the macOS app and the Linux AppImage and `.deb`, checks that each starts its built-in Arkism and can back it up and restore it, and uploads them with `latest.json` as a **draft release**. A maintainer publishes it. Signing happens only when the signing secrets exist (see the workflow header).
+Pushing a `vX.Y.Z` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds only the Windows installer, checks that it starts its built-in Arkism and can back it up and restore it, and uploads it with `latest.json` as a **draft release**. A maintainer publishes it. Signing happens only when the signing secrets exist (see the workflow header).
 
-The app checks the update feed for new versions: Windows installs the update in the app, macOS and Linux download the new file.
+The Windows app checks the update feed and installs new versions in the app.
 
 ## Memory conditions in retrieval
 
