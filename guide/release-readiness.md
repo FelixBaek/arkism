@@ -4,7 +4,7 @@ The current milestone is approval-policy consistency, public installation, reuse
 
 ## Packaging preflight
 
-Changes to the release workflow, installer, Unix build script or Tauri shell trigger the Release workflow on pull requests. Windows, macOS and Linux build independently and upload test installers as Actions artifacts. These builds use version `0.1.0`; they do not create tags, publish a release or update the public update feed. The existing platform build scripts run their built-in runtime smoke checks.
+Changes to the release workflow, installer or Tauri shell trigger the Windows Release preflight on pull requests. It builds only the Windows installer and uploads it as an Actions artifact. These builds use version `0.1.0`; they do not create tags, publish a release or update the public update feed. The Windows build script runs its built-in runtime smoke checks.
 
 Download artifacts only from the expected repository, pull request and commit. Record that commit alongside results. A successful packaging build is not evidence that memory quality or approval policy is correct.
 
@@ -93,7 +93,7 @@ the separate hosted installed-runtime check covers the narrower case above.
 
 - Land and verify the approval-policy changes, including captured user statements and background extraction. AI classification must not activate a memory by itself.
 - Require the database integration and boundary checks selected by maintainers in branch protection. A workflow file alone does not configure required checks.
-- Build installers from the exact release candidate commit on all supported platforms.
+- Build the Windows installer from the exact release candidate commit.
 - On clean profiles, verify installation, agent connection, candidate creation, human approval, recall through a second agent, correction/revocation, backup and restore, and uninstall. Preserve existing agent configuration and check that uninstallation restores it.
 - Record platform, agent versions, commit, steps and outcomes. Do not substitute preview data or unit-test results for an installed-app check.
 

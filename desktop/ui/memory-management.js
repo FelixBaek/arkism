@@ -1,7 +1,8 @@
 /* Review presentation never changes a proposal, its trust, or its approval. */
 (function (root) {
   "use strict";
-  const normalized = text => String(text || "").normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
+  // Case can distinguish units and identifiers (MB/mb, Path/PATH).
+  const normalized = text => String(text || "").normalize("NFKC").replace(/\s+/gu, " ").trim();
   const scopeKey = r => JSON.stringify([r.scope?.workspace_id, r.scope?.project_id, r.scope?.user_id, r.scope?.agent_id]);
   function approval(record) {
     const review = record?.review;
