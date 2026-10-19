@@ -4914,3 +4914,26 @@ Object.assign(window.ArkismI18nEN.strings, {"기억 처리 멈춤": "Memory proc
 Object.assign(window.ArkismI18nEN.patterns, {"기억 추출이 {0}시간째 멈췄어요": "Memory extraction has been stalled for {0} hours", "마지막 추출 {0}": "Last extraction {0}", "{0} · 멈춘 뒤 끝난 대화 {1}건": "{0} · {1} sessions ended since", "위키 초안 {0}": "Wiki drafts {0}", "출처 바뀜 {0}": "Sources changed {0}", "검토 대기 자료 {0}": "Sources awaiting review {0}"});
 Object.assign(window.ArkismI18nEN.strings, {"필터 초기화": "Reset filters", "불러오지 못했어요": "Couldn't load", "연결을 확인하고 다시 시도해 주세요.": "Check the connection and try again.", "다른 곳에서 내용이 바뀌었어요": "Changed elsewhere", "작성 중인 내용은 유지했어요. 최신 내용을 확인해 주세요.": "Your draft is kept. Check the latest version.", "최신 내용 보기": "View latest", "입력 복사": "Copy input", "데스크톱에서 사용하세요": "Use the desktop app", "Git 작업과 비교 실행은 Arkism 데스크톱 앱에서 열 수 있어요.": "Git work and comparison runs open in the Arkism desktop app.", "이 서버는 아직 이 기능을 지원하지 않아요.": "This server doesn't support this feature yet.", "AI 도움을 기다리는 중": "Waiting for AI", "요청을 처리하고 있어요.": "Working on the request.", "너무 오래 걸려요. 잠시 후 다시 시도해 주세요.": "This is taking too long. Try again in a moment.", "이 작업은 관리 계정에서 사용할 수 있어요.": "This action needs an admin account."});
 Object.assign(window.ArkismI18nEN.patterns, {"연결을 확인하고 다시 시도해 주세요 ({0}).": "Check the connection and try again ({0}).", "{0} 색인 {1}": "{0} indexed {1}"});
+{ const add = (t, o) => { for (const k in o) if (!(k in t)) t[k] = o[k]; };
+add(window.ArkismI18nEN.strings, {
+  "자동화": "Automations", "시작": "Trigger", "실행": "Runs", "평균 시간": "Avg time", "마지막 실패": "Last failure", "마지막 회의": "Last meeting",
+  "부르는 곳": "Called from", "쓰는 곳": "Used in", "평균 토큰": "Avg tokens", "모델": "Model", "이름": "Name", "비용": "Cost", "호출": "Calls", "성공률": "Success rate",
+  "회의": "Meetings", "전문가": "Experts", "팀": "Teams", "직접": "Direct", "일정": "Schedule", "웹훅": "Webhook", "디스코드": "Discord",
+  "오늘": "Today", "전체 기간": "All time", "회의 기록 전체 보기 →": "View all meeting records →", "실행 기록 전체 보기 →": "View all run records →",
+  "이 기간에 회의한 팀이 없어요.": "No team met in this period.",
+  "호출 기록 전체 보기 →": "View all call records →", "실패한 곳부터 다시 →": "Retry from failures →", "다시 실행": "Run again", "실패한 자동화마다 마지막 실행을": "the last run of each failed automation",
+  "다시 돌릴 실패 기록을 찾지 못했어요. 실행 기록에서 열어 주세요.": "Couldn't find the failed run to retry. Open it from run records.", "이 기간에 돈 자동화가 없어요.": "No automation ran in this period."
+});
+add(window.ArkismI18nEN.patterns, {
+  "최근 {0}": "Last {0}", "전문가 {0} · 팀 {1} · 자동화 {2}": "Experts {0} · Teams {1} · Automations {2}",
+  "{0} · 성공 {1} · 실패 {2} · 막대에 올리면 전문가·팀·자동화로 나뉘어 보여요": "{0} · {1} succeeded · {2} failed · hover a bar to see experts, teams and automations",
+  "{0} · 실행 {1} · 실패 {2}": "{0} · {1} runs · {2} failed", "{0} · 실행 {1}": "{0} · {1} runs",
+  "{0}명 · 호출 {1}번(단독 {2}) · 줄을 누르면 호출 기록으로 가요": "{0} experts · {1} calls ({2} direct) · click a row for call records",
+  "{0}개 · 회의 {1}번 · 줄을 누르면 회의 기록으로 가요": "{0} teams · {1} meetings · click a row for meeting records",
+  "{0}개 · 줄을 누르면 실행 기록으로 가요": "{0} · click a row for run records",
+  "{0} · 실패 {1}번이 {2}곳에서": "{0} · {1} failures in {2} places",
+  "{0} 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.": "Retry {0} from where it failed? Finished steps keep their results.",
+  "${0}의 마지막 실패 실행을": "the last failed run of ${0}",
+  "${0}을 다시 돌리지 못했어요 ({1}).": "Couldn't rerun ${0} ({1}).", "{0}개 실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.": "Queued {0} runs. The server runner will start within 10 seconds.",
+  "자동화 {0} · 팀 {1}": "Automations {0} · Teams {1}", "자동화 {0}": "Automations {0}", "팀 {0}": "Teams {0}"
+}); }

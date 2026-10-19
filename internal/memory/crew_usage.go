@@ -51,6 +51,12 @@ type UsageDay struct {
 	Date   string `json:"date"`
 	OK     int    `json:"ok"`
 	Failed int    `json:"failed"`
+	// ok runs by kind, plus a person's direct agent calls (Agent ok, AgentFailed failed).
+	Workflow    int `json:"workflow"`
+	Team        int `json:"team"`
+	Agent       int `json:"agent"`
+	AgentFailed int `json:"agent_failed"`
+	TeamFailed  int `json:"team_failed"` // part of Failed; the rest of Failed is workflow runs
 }
 
 type UsageWorkflow struct {
@@ -71,6 +77,8 @@ type UsageAgent struct {
 	ID       string   `json:"id"`
 	Name     string   `json:"name"`
 	Calls    int      `json:"calls"`
+	Direct   int      `json:"direct"` // calls a person made straight to the agent
+	Failed   int      `json:"failed"`
 	Tokens   int64    `json:"tokens"`
 	CostUSD  float64  `json:"cost_usd"`
 	LimitUSD *float64 `json:"limit_usd"`
@@ -83,6 +91,7 @@ type UsageTeam struct {
 	Meetings      int      `json:"meetings"`
 	AvgRounds     float64  `json:"avg_rounds"`
 	AvgCostUSD    float64  `json:"avg_cost_usd"`
+	CostUSD       float64  `json:"cost_usd"`
 	ConcludedRate *float64 `json:"concluded_rate"`
 }
 
@@ -218,6 +227,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 				wfOK[run.CrewID]++
 				wfDone[run.CrewID]++
 				day(r.UpdatedAt).OK++
+				day(r.UpdatedAt).Workflow++
 			case "failed":
 				doneN++
 				wfDone[run.CrewID]++
@@ -264,8 +274,10 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 					okN++
 					tmConcluded[m.TeamID]++
 					day(r.UpdatedAt).OK++
+					day(r.UpdatedAt).Team++
 				} else if m.Status == "failed" || m.Status == "no_conclusion" {
 					day(r.UpdatedAt).Failed++
+					day(r.UpdatedAt).TeamFailed++
 				}
 			}
 		}
@@ -298,8 +310,21 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 		if w := wf[o.WorkflowID]; w != nil && o.WorkflowID != "" {
 			w.CostUSD += cost
 		}
+		if k == "agent" {
+			if c.OK {
+				day(r.CreatedAt).Agent++
+			} else {
+				day(r.CreatedAt).AgentFailed++
+			}
+		}
 		if a := ag[o.AgentID]; a != nil {
 			a.Calls++
+			if !c.OK {
+				a.Failed++
+			}
+			if k == "agent" {
+				a.Direct++
+			}
 			a.Tokens += c.InputTokens + c.OutputTokens
 			a.CostUSD += cost
 		}
@@ -339,7 +364,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 	}
 	for id, t := range tm {
 		t.AvgRounds = math.Round(10*float64(tmRounds[id])/float64(t.Meetings)) / 10
-		t.AvgCostUSD = roundUSD(tmCost[id] / float64(t.Meetings))
+		t.AvgCostUSD, t.CostUSD = roundUSD(tmCost[id]/float64(t.Meetings)), roundUSD(tmCost[id])
 		t.ConcludedRate = rate(tmConcluded[id], tmEnded[id])
 		out.Teams = append(out.Teams, *t)
 	}
