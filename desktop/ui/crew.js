@@ -13,7 +13,7 @@ window.ArkismCrew = (ctx) => {
   // 팀 이름(데이터)과 화면 문구가 한 줄에 섞일 때: 줄은 raw로 두고 문구만 만들 때 번역한다.
   const raw = (n) => { n.setAttribute("data-no-i18n", ""); return n; };
   const tr = (s) => (window.ArkismI18n ? window.ArkismI18n.translate(s) : s);
-  const { state, $, el, icon, button, segment, render, request, query, notice, detailShell, section, copyButton, markSelected, openDetail, ago, models } = ctx;
+  const { state, $, el, icon, button, segment, render, request, query, notice, detailShell, section, copyButton, markSelected, ago, models } = ctx;
   const kit = window.ArkismAssist(ctx);
   const pins = window.ArkismPins?.(ctx); // 항상 넣는 자료 (pins.js)
 
@@ -61,7 +61,6 @@ window.ArkismCrew = (ctx) => {
   const KIND_OF = (t) => (IS_AI(t) || t === "team" ? "ai" : t === "http" || t === "n8n" ? "http" : t === "approval" ? "human" : "plain");
   const MODES = { round_robin: "정해진 순서대로", moderator_picks: "사회자가 고름" };
   const PORTS = { condition: [["yes", "예"], ["no", "아니오"]], approval: [["approve", "승인"], ["reject", "거절"]], code: [["pass", "통과"], ["fail", "실패"]] };
-  const ACCESS = [["read", "읽기만 (동시에 돌 수 있어요)"], ["write", "쓰기 (차례로 돌아요)"]];
   // Settings of the non-AI nodes: [key, label, kind, options]. Keys are what the run engine reads (contract.md).
   const FIELDS = {
     start: [], merge: [],
@@ -2821,7 +2820,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   const agents = () => items().filter((r) => r.crew.type === "agent");
   const teams = () => items().filter((r) => r.crew.type === "team");
   const teamsOf = (id) => teams().filter((t) => (t.crew.members || []).some((m) => m.agent_id === id));
-  const depthText = (e) => DEPTH.find(([k]) => k === e)?.[1] || "보통";
   const blankAgent = () => ({ type: "agent", name: "", handle: "", role: "", instructions: "", model_mode: "fixed", model: "", fallback_model: "", effort: "medium",
     skills: [], tools: [], agents: ["claude_code", "codex", "zcode", "app"], memory: { procedural: "all", decision: "all", lesson: "all" }, file_edits: "ask", enabled: true });
   const wk = { id: null, draft: null, dirty: false, q: "", busy: false, status: {}, usage: null, statusAt: 0, teamsPick: new Set(), test: null, cat: "" };
@@ -2853,11 +2851,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.usage = use;
     if (state.view === "workers" && !wk.dirty) render(false);
   }
-  const statusBadge = (id) => {
-    const [label, cls] = AGENT_STATUS[wk.status[id]] || AGENT_STATUS.idle;
-    return el("span", `wf-badge small ${cls}`, label);
-  };
-  const workerMeta = (x) => [`@${x.handle || "이름"}`, x.model_mode === "auto" ? "Clef 자동" : x.model || "모델 미정"].join(" · ");
   function toggleChips(options, has, flip) {
     const row = el("div", "wk-chips");
     for (const [k, label] of options) {
@@ -3221,7 +3214,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       mode.title = tr("눌러서 바꿔요");
       const warn = ["needs_permission", "token_invalid"].includes(b.state);
       r.append(raw(el("span", "t", `디스코드 · #${c.name || c.channel_id}`)), raw(el("small", "", b.name || "")), ...(warn ? [el("span", "wf-badge small warn", "확인 필요")] : []), mode,
-        button("빼기", "ghost small", null, () => { if (confirm(tr(`#${c.name || c.channel_id} 연결을 뺄까요?`))) saveBotChannels(b, b.channels.filter((x) => x !== c), "연결을 뺐어요."); }));
+        button("빼기", "ghost small", null, () => { if (confirm(tr(`#${c.name || c.channel_id} 연결을 뺄까요?`))) saveBotChannels(b, b.channels.filter((x) => x !== c), "연결을 뺐어요.").catch(() => {}); }));
       list.append(r);
     }
     if (wk.bots === null) list.append(el("p", "dim", "불러오는 중…"));
@@ -3252,7 +3245,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         if (had && !confirm(tr("이 채널은 이미 다른 곳에 연결돼 있어요. 이 전문가로 바꿀까요?"))) return;
         const ch = { channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "agent", id: rec.id }, auto_start: false };
         wk.chAdd = null;
-        saveBotChannels(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.");
+        saveBotChannels(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.").catch(() => {});
       }));
       out.push(row);
     } else if (wk.chAdd) out.push(el("small", "dim", "먼저 디스코드 봇을 추가해 주세요."));

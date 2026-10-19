@@ -87,7 +87,7 @@ window.ArkismMessenger = (ctx) => {
         button("권한 다시 확인", "", null, () => act(() => request(`/v1/discord/bots/${encodeURIComponent(b.id)}/check`, { method: "POST", body: body({}) }), "권한을 다시 확인하는 중이에요.")));
       kids.push(w);
     }
-    const off = button("연결 끊기", "ghost", null, () => { if (confirm("디스코드 연결을 끊을까요? 저장된 토큰이 지워져요.")) act(() => upd(b, { archive: true }), "디스코드 연결을 끊었어요."); });
+    const off = button("연결 끊기", "ghost", null, () => { if (confirm("디스코드 연결을 끊을까요? 저장된 토큰이 지워져요.")) act(() => upd(b, { archive: true }), "디스코드 연결을 끊었어요.").catch(() => {}); });
     return card("디스코드", st, off, ...kids);
   }
   const soon = (name, hint) => {

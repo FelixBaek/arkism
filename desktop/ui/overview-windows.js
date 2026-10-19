@@ -251,7 +251,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (c.conflict_id || c.status === "conflicted") { sec("충돌", el("p", "", "기존 기억과 충돌하는 후보예요. 어느 쪽을 남길지는 전체 화면에서 골라요.")); act.append(button("전체 화면으로", "primary small", null, () => { dlg.close(); go("memories", "conflicted"); })); }
       else {
         act.append(button("따로 승인", "primary small", null, () => go1("approve")),
-          button("고쳐서 승인", "small", null, () => { if (edit.hidden) { edit.hidden = false; edit.focus(); return; } if (!edit.value.trim()) return; go1("edit_approve", { content: edit.value.trim() }); }),
+          button("고쳐서 승인", "small", null, () => { if (edit.hidden) { edit.hidden = false; edit.focus(); return; } if (!edit.value.trim()) return; go1("edit_approve", { content: edit.value.trim() }).catch(() => {}); }),
           button("버리기", "small", null, () => askReason("후보를 버릴까요?", (reason) => go1("reject", { reason }))));
       }
       detail.append(st, act);

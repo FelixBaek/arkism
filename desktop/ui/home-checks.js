@@ -40,7 +40,7 @@ window.ArkismState = (() => {
 
 window.ArkismHomeChecks = (ctx) => {
   "use strict";
-  const { state, request, query, go, ago, render } = ctx;
+  const { state, request, query, ago, render } = ctx;
   const HOUR = 3600000;
   const time = (v) => { const t = new Date(v || 0).getTime(); return Number.isNaN(t) ? 0 : t; };
   const live = () => state.view === "todo" && !state.selected && !state.todoAll;
@@ -82,7 +82,7 @@ window.ArkismHomeChecks = (ctx) => {
       const g = generation, get = (p, extra) => request(`${p}?${query(extra)}`).then((r) => (Array.isArray(r?.items) ? r.items : null), () => null);
       Promise.all([get("/v1/wiki/pages", { state: "all" }), get("/v1/knowledge/sources", { limit: 500 })]).then(([pages, sources]) => {
         if (K.g !== g) return; K.pages = pages; K.sources = sources; if (live()) render(false);
-      });
+      }, () => {});
     }
     const pages = (K.pages || []).filter((p) => p.review_state !== "deleted");
     const drafts = pages.filter((p) => p.review_state === "draft").length;

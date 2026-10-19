@@ -291,7 +291,6 @@ window.ArkismTeams = (ctx) => {
   const popup = window.ArkismCrewPopup?.({ el, button });
   const covers = window.ArkismCoverPicker?.({ el, icon, request, query, state, notice });
   let kit = null;
-  const KEYS = ["name", "role", "handle", "category", "cover", "mode", "ending", "members", "context", "templates", "pinned", "discord_mirror"];
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   const norm = (c) => ({ ...c, mode: c.mode || "round_robin", discord_mirror: !!c.discord_mirror, members: sorted(c.members).map((m) => ({ ...m, focus: m.focus || "" })), ending: { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(c.ending || {}) } });
   const modeName = (k) => MODES.find(([x]) => x === (k || "round_robin"))?.[1] || k;
@@ -632,7 +631,7 @@ window.ArkismTeams = (ctx) => {
       raw(mode);
       mode.addEventListener("click", () => saveTeamBot(pop, b, { channels: b.channels.map((c) => (c.channel_id === x.channel_id ? { ...c, auto_start: !c.auto_start } : c)) }, "바꿨어요."));
       const del = el("button", "icon-btn plain tm-x"); del.type = "button"; del.setAttribute("aria-label", "빼기"); del.append(icon("x"));
-      del.addEventListener("click", () => { if (confirm(tr(`#${x.name || x.channel_id} 연결을 뺄까요?`))) saveTeamBot(pop, b, { channels: b.channels.filter((c) => c.channel_id !== x.channel_id) }, "연결을 뺐어요."); });
+      del.addEventListener("click", () => { if (confirm(tr(`#${x.name || x.channel_id} 연결을 뺄까요?`))) saveTeamBot(pop, b, { channels: b.channels.filter((c) => c.channel_id !== x.channel_id) }, "연결을 뺐어요.").catch(() => {}); });
       r.append(raw(el("span", "", `디스코드 · #${x.name || x.channel_id}`)), raw(el("small", "", b.name || "")), ...(warn ? [badge("확인 필요", "warn")] : []), mode, del);
       list.append(r);
     }

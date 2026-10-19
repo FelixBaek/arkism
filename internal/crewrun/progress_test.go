@@ -70,3 +70,36 @@ func TestProgressNoticeFailureKeepsRun(t *testing.T) {
 		t.Fatal("run", r.State.Status, statuses(r))
 	}
 }
+
+// A refused output ends the run; no notice queued before that may carry it out.
+func TestProgressNoticesDropRefusedText(t *testing.T) {
+	var mu sync.Mutex
+	var sent []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		defer mu.Unlock()
+		sent = append(sent, body["text"].(string))
+	}))
+	defer srv.Close()
+	g := &Graph{Nodes: []Node{node("start", "start"), node("ok", "code", "lang", "sh", "code", `echo fine`),
+		node("leak", "code", "lang", "sh", "code", `echo sk-live-abc >&2; exit 3`), node("end", "end")},
+		Edges: []Edge{edge("start", "ok"), edge("ok", "leak"), edge("leak", "end")}}
+	it := wf("w", g)
+	it.Crew.Notify = &CrewNotify{Channels: []NotifyChannel{{Kind: "slack", Channel: "#x", When: "events"}}, Moments: []string{"start", "step", "fail", "end"}}
+	e := testEngine(t, newFakeStore(it))
+	_ = os.WriteFile(e.NotifyFile, []byte(`{"slack":{"default":{"webhook_url":"`+srv.URL+`"}}}`), 0o600)
+	r := runOnce(t, e, "w", nil)
+	e.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+	if r.State.Status != "failed" || len(sent) == 0 {
+		t.Fatal("run", r.State.Status, sent)
+	}
+	for _, s := range sent {
+		if strings.Contains(s, "sk-live-") {
+			t.Fatal("notice leaked", s)
+		}
+	}
+}

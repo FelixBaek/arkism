@@ -70,9 +70,9 @@ window.ArkismAutomation = (h) => {
   // ------------------------------------------------------------------ the window
   function open(rec, startTab = "overview") {
     const creating = !rec;
-    const base = creating ? { type: "workflow", name: "", handle: "", role: "", category: "", model: "", enabled: false, graph: h.defaultGraph("simple", {}) } : rec.crew;
+    const base = creating ? { type: "workflow", name: "", handle: "", role: "", category: "", model: "", enabled: false, graph: h.defaultGraph("simple", {}) } : structuredClone(rec.crew);
+    base.graph?.nodes?.forEach((n) => { n.config ||= {}; }); // so a just-opened popup does not count as edited
     const d = structuredClone(base);
-    d.graph.nodes.forEach((n) => { n.config ||= {}; });
     if (creating) { const s = d.graph.nodes.find((n) => n.id === "ai1"); s.title = ""; s.config.goal = ""; }
     let handleTouched = !creating;
     let aiOpen = true;
@@ -238,7 +238,7 @@ window.ArkismAutomation = (h) => {
       updateBar();
     }
     // Back to what was saved: close and open again so every row redraws.
-    function reset() { const t = pop; leaveSilently(); h.openAutomation(rec.id); void t; }
+    function reset() { leaveSilently(); h.openAutomation(rec.id); }
     function leaveSilently() { pop.dialog.close(); }
     const leave = (fn) => {
       if (dirty() && !confirm("저장하지 않은 변경은 사라져요. 계속할까요?")) return;
@@ -461,7 +461,7 @@ window.ArkismAutomation = (h) => {
       const addStep = () => {
         const g = d.graph;
         const last = flat(g).filter(h.WORK).pop();
-        const id = `n${Math.random().toString(36).slice(2, 7)}`;
+        const id = `n${crypto.randomUUID().slice(0, 8)}`;
         g.nodes.push({ id, type: "ai_once", title: "", x: 0, y: 0, config: { prompt: "", access: "read" } });
         const toEnd = g.edges.find((e) => e.from === last?.id && g.nodes.find((n) => n.id === e.to)?.type === "end");
         if (toEnd) { toEnd.to = id; } else if (last) g.edges.push({ from: last.id, to: id });
@@ -662,7 +662,7 @@ window.ArkismAutomation = (h) => {
           mode.title = "눌러서 바꿔요";
           const warn = ["needs_permission", "token_invalid"].includes(b.state);
           r.append(el("span", "auto-key", `디스코드 · #${c.name || c.channel_id}`), el("small", "auto-dim", b.name || ""), ...(warn ? [el("span", "wf-badge small warn", "확인 필요")] : []), el("span", "grow"), mode,
-            pill("빼기", () => { if (confirm(`#${c.name || c.channel_id} 연결을 뺄까요?`)) saveBot(b, b.channels.filter((x) => x !== c), "연결을 뺐어요."); }));
+            pill("빼기", () => { if (confirm(`#${c.name || c.channel_id} 연결을 뺄까요?`)) saveBot(b, b.channels.filter((x) => x !== c), "연결을 뺐어요.").catch(() => {}); }));
           list.append(r);
         }
         const note = (text) => { const r = el("div", "auto-row"); r.append(el("span", "auto-dim", text)); list.append(r); };
@@ -689,7 +689,7 @@ window.ArkismAutomation = (h) => {
             if ((b.channels || []).some((x) => x.channel_id === id) && !confirm("이 채널은 이미 다른 곳에 연결돼 있어요. 이 자동화로 바꿀까요?")) return;
             const ch = { channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "workflow", id: rec.id }, auto_start: false };
             st.add = null;
-            saveBot(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.");
+            saveBot(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.").catch(() => {});
           }));
           list.append(row);
         }

@@ -551,7 +551,6 @@ window.ArkismPages = (ctx) => {
       line("테마", "‘시스템’은 Windows 설정을 따라요.", segment(THEMES, cur.theme, (k) => pick({ theme: k }))),
       line("글자 크기", "글자만 키우거나 줄여요", segment(FONTS, cur.font, (k) => pick({ font: k }))),
       line("화면 배율", "화면 전체를 확대·축소해요", zoom));
-    const name = (list, k) => list.find(([x]) => x === k)?.[1] || k;
     const keys = el("div", "v4-table");
     const th = el("div", "v4-tr th two"); th.append(el("span", "", "단축키"), el("span", "", "동작")); keys.append(th);
     for (const [k, v] of [["Ctrl +", "확대"], ["Ctrl −", "축소"], ["Ctrl 0", "기본값으로"]]) { const r = el("div", "v4-tr two"); r.append(el("span", "mono", k), el("span", "", v)); keys.append(r); }

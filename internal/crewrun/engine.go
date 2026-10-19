@@ -455,6 +455,7 @@ func (x *runExec) dropOutputs(node string, errorsToo bool, nodeErr, summary stri
 		st.Status, st.Error = "failed", nodeErr
 	}
 	x.run.State.Summary = ""
+	x.events = nil // queued notices may quote the refused text
 	x.closeRun("failed", summary)
 }
 
