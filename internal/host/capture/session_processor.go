@@ -73,9 +73,10 @@ A planned action is not evidence that it already happened. Preserve a proposal's
 Keep the named project/product in each candidate; never broaden a project rule to all projects.
 Preserve every condition, exception, negation, uncertainty and change-effective time in statement itself.
 For user_statement candidates, applicability, uncertainty and valid_from must be exact contiguous source wording,
-all contained together in one cited user quote. Use empty strings when unstated; do not add diagnostic explanations
+each contained in a cited quote from the same original user message. Prefer one quote covering all fields.
+Use empty strings when unstated; do not add diagnostic explanations
 such as "scope unknown" to those fields. Put your own doubts in session_state.uncertainties instead.
-If qualifiers cannot share one quote, leave those fields empty and retain all qualifiers in statement.
+If qualifiers cannot be supported by one message's quoted evidence, leave those fields empty and retain all qualifiers in statement.
 Leave observed_at empty; the host binds observation time to archived evidence.
 Distinguish user statements, actual tool observations, agent claims and inferences. Completed means observed completed,
 not a plan or success claim. Tests without tool evidence must be not_run or unknown, never passed.
@@ -429,10 +430,22 @@ func sessionCandidateContextSupported(candidate any) bool {
 	if len(phrases) == 0 {
 		return true
 	}
+	// refsValid has already bound every quote to this source's exact revision
+	// and user role. Separate quotations from that one message are sufficient;
+	// joining evidence from different messages is not.
+	groups := map[string][]string{}
 	for _, ref := range anyList(autosaveGet(candidate, "source_refs")) {
-		quote, supported := str(autosaveGet(ref, "quote")), true
+		id := str(autosaveGet(ref, "source_id"))
+		groups[id] = append(groups[id], str(autosaveGet(ref, "quote")))
+	}
+	for _, quotes := range groups {
+		supported := true
 		for _, phrase := range phrases {
-			supported = supported && strings.Contains(quote, phrase)
+			found := false
+			for _, quote := range quotes {
+				found = found || strings.Contains(quote, phrase)
+			}
+			supported = supported && found
 		}
 		if supported {
 			return true

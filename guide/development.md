@@ -68,7 +68,8 @@ Before publishing, maintainers run `ARKISM_PUBLIC_DENYLIST=<their own denylist f
 New memory extraction uses `capture-extract-v5` and `harness-session-v4`.
 One-off permissions, budgets and assignment corrections belong in session state;
 durable candidates retain the named project and every condition. Session
-user-statement context fields must share one verbatim cited user quote. Inferred
+user-statement context fields must be supported by verbatim quotes from the same
+original user message. Separate messages cannot be combined to justify a condition. Inferred
 scope diagnostics belong in state uncertainties, not in quoted condition fields.
 This literal check prevents invented metadata wording; it does not prove semantic
 completeness. Older prepared requests retain their original delivery contract.
