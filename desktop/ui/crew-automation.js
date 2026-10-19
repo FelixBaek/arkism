@@ -402,6 +402,11 @@ window.ArkismAutomation = (h) => {
           hook.append("주소와 토큰은 서버에서 이 명령으로 받아요 · ", el("code", "mono", cmd), h.copyButton(cmd));
         } else hook.append(creating ? "만들고 나면 주소가 생겨요" : "이 주소로 요청이 오면 시작해요");
         list.append(valueRow("웹훅", hook, h.switchEl(on("webhook"), "웹훅 켜기", (v) => { if (v && trig() === "schedule" && d.enabled && !confirm("일정을 끄고 웹훅으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.")) return; setTrigger("webhook", v); draw(); })));
+        if (trig() === "webhook") {
+          const name = el("span", "");
+          inlineText(name, () => d.trigger.label || "", (v) => { d.trigger.label = v; touch(); }, { maxLength: 60, placeholder: "예: GitHub PR 열림" });
+          list.append(valueRow("웹훅 이름", name, el("span", "")));
+        }
         if (!creating && d.trigger?.kind === "webhook") list.append(el("p", "auto-hint", "웹훅 토큰은 Arkism에 저장하지 않아요."));
       }
       draw();
@@ -446,7 +451,8 @@ window.ArkismAutomation = (h) => {
         const work = flat(g).filter(h.WORK);
         const ais = work.filter(IS_AI);
         card.append(el("p", "auto-count", creating ? "" : `AI 노드 ${ais.length}개 · 노드를 눌러 바로 고치거나, 여기서 따로 시험해요`));
-        work.forEach((n, i) => card.append(stepRow(n, i)));
+        (creating ? work : ais).forEach((n, i) => card.append(stepRow(n, i)));
+        if (!creating && work.length > ais.length) card.append(el("p", "auto-hint", `외 ${work.length - ais.length}단계 · 그래프에서 봐요`));
         if (!work.length) card.append(el("p", "wf-empty", "아직 할 일이 없어요. 그래프에서 노드를 이어 주세요."));
         if (creating) {
           card.append(el("p", "auto-hint", "단계는 전문가·한 번 호출·처리(코드·HTTP)·사람 확인 중에서 골라요. 둘 이상이면 그래프로 이어져요."), link("+ 단계 추가", () => { addStep(); paint(); touch(); }));
@@ -556,7 +562,7 @@ window.ArkismAutomation = (h) => {
       const head2 = el("div", "auto-sec-head");
       const t = el("h3", "");
       t.append(icon("chat-text"), "진행 알림");
-      head2.append(t, link("+ 채널 연결", () => { (d.notify ||= {}).channels = [...(d.notify.channels || []), { kind: "discord", channel: "", when: "events" }]; touch(); paint(); }), el("span", "grow"), el("small", "auto-dim", "보낼 곳과 시점을 저장해 둬요 · 실행 중 알림 보내기는 아직 준비 중이에요"));
+      head2.append(t, link("+ 채널 연결", () => { (d.notify ||= {}).channels = [...(d.notify.channels || []), { kind: "discord", channel: "", when: "events" }]; touch(); paint(); }), el("span", "grow"), el("small", "auto-dim", "설정 › 메신저에 연결한 곳으로 보내요 · 디스코드는 준비 중이에요"));
       const list = el("div", "auto-box");
       const channels = () => d.notify?.channels || [];
       const setNotify = (fn) => { d.notify ||= {}; fn(d.notify); if (!d.notify.channels?.length && !d.notify.moments) delete d.notify; touch(); };
@@ -571,7 +577,7 @@ window.ArkismAutomation = (h) => {
           const r = el("div", "auto-row notify");
           const kind = h.select(NOTIFY_KINDS, c.kind);
           kind.setAttribute("aria-label", "메신저");
-          kind.addEventListener("change", () => { c.kind = kind.value; touch(); });
+          kind.addEventListener("change", () => { c.kind = kind.value; touch(); paint(); });
           const ch = h.input(c.channel, { maxLength: 80, placeholder: c.kind === "telegram" ? "나에게" : "#채널" });
           ch.setAttribute("aria-label", "채널");
           ch.addEventListener("input", () => { c.channel = ch.value.trim(); touch(); });
@@ -583,7 +589,7 @@ window.ArkismAutomation = (h) => {
           del.setAttribute("aria-label", "채널 빼기");
           del.append(icon("x"));
           del.addEventListener("click", () => { setNotify((n) => { n.channels = channels().filter((_, j) => j !== i); if (!n.channels.length) delete n.channels; }); paint(); });
-          r.append(kind, ch, el("span", "grow"), when, del);
+          r.append(kind, ch, el("span", "grow"), ...(c.kind === "discord" ? [el("small", "auto-dim", "준비 중")] : []), when, del);
           list.append(r);
         });
         const mo = el("div", "auto-row");
@@ -652,6 +658,7 @@ window.ArkismAutomation = (h) => {
     function manageSection() {
       const s = section("gear-six", "관리");
       const rows = [
+        ["설정", "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요", () => leave(() => h.openSettings(rec))],
         ["복제", "같은 단계로 새 자동화를 만들어요", () => leave(() => h.duplicate(rec))],
         ["보관", `목록에서 숨기고 $${base.handle} 부르기를 멈춰요`, async () => { if (dirty() && !confirm("저장하지 않은 변경은 사라져요. 계속할까요?")) return; await h.archive(rec); if (!h.byId(rec.id) || h.byId(rec.id).archived) leaveSilently(); }],
         ["지우기", "정의를 영구히 지워요 · 지난 실행 기록은 남아요", async () => { if (await h.remove(rec)) leaveSilently(); }]

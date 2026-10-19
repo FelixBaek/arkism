@@ -167,5 +167,8 @@
 .v4-auto .empty { padding: 0; text-align: inherit; color: var(--nc-quiet); }
 .v4-auto .auto-names { max-width: 560px; }
 .v4-auto .auto-sec > .form-error:empty { display: none; }
-.v4-auto .auto-flow > .auto-hint { padding: 4px 14px 0; }
+.v4-auto .auto-box > .auto-hint { padding: 4px 14px 0; }
+.v4-auto .auto-box > .auto-hint:last-child { padding-bottom: 10px; }
 .v4-auto .auto-versions .auto-empty { padding: 12px 14px; }
+.wf-recent .wf-fold { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.wf-recent .wf-fold:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: 2px; border-radius: 4px; }

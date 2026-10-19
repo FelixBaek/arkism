@@ -388,3 +388,18 @@ func TestWorkflowOfAnAgentRunsOnlyThroughThatAgent(t *testing.T) {
 		t.Fatal("a test run of an owned workflow was refused", err)
 	}
 }
+
+func TestCrewUsageLeavesOutTestRuns(t *testing.T) {
+	f, auto := crewRunFixture(t)
+	for _, trigger := range []string{"manual", "test"} {
+		run := newCrewRun(auto.ID)
+		run.Trigger = trigger
+		if _, err := f.svc.CreateCrewRun(testCtx, f.human, CrewRunInput{Scope: scopeA, Run: run}); err != nil {
+			t.Fatal(trigger, err)
+		}
+	}
+	u, err := f.svc.CrewUsage(testCtx, f.human, scopeA, "today", "workflow", "", "")
+	if err != nil || u.KPI.Runs != 1 || len(u.Workflows) != 1 || u.Workflows[0].Runs != 1 {
+		t.Fatal("usage", err, u.KPI.Runs, u.Workflows)
+	}
+}

@@ -4983,7 +4983,10 @@ Object.assign(window.ArkismI18nEN.strings, {
   "모든 실행 방식": "All run modes",
   "+ 새 워크플로우": "+ New workflow",
   "직접": "Direct",
-  "보낼 곳과 시점을 저장해 둬요 · 실행 중 알림 보내기는 아직 준비 중이에요": "Saves where and when to send · sending during runs is coming soon",
+  "설정 › 메신저에 연결한 곳으로 보내요 · 디스코드는 준비 중이에요": "Sends to the places linked in Settings › Messengers · Discord is coming soon",
+  "준비 중": "Coming soon",
+  "예: GitHub PR 열림": "e.g. GitHub PR opened",
+  "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요": "Change the template, run mode and webhook in the classic settings window",
   "판 이력": "Version history",
   "지난 판 보기·되돌리기는 준비 중이에요.": "Viewing and restoring past versions is coming soon.",
 });
@@ -5009,4 +5012,5 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "${0}에게 맡길 주제…": "Topic to give ${0}…",
   "{0}단계 중 {1}단계 · {2}": "Step {1} of {0} · {2}",
   "저장할 때마다 판이 하나 생겨요 · 지금 v{0}": "Each save makes a version · now v{0}",
+  "외 {0}단계 · 그래프에서 봐요": "{0} more steps · see them in the graph",
 });

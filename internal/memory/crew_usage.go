@@ -194,7 +194,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 	if want("workflow") && agentID == "" && teamID == "" {
 		for _, r := range u.runs {
 			run := r.CrewRun
-			if run == nil {
+			if run == nil || run.Trigger == "test" { // 시험 실행 fakes AI steps: it would skew runs, rates and tokens per run
 				continue
 			}
 			if run.Status == "waiting" {

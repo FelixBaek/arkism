@@ -529,6 +529,7 @@ window.ArkismCrew = (ctx) => {
   let recent = null;
   let recentBusy = false;
   let recentAll = false;
+  let recentOpen = false; // 최근 실행 starts folded under the cards (198:286 has none); kept until the owner decides
   let waiting = [];
   async function loadRecent() {
     if (recentBusy) return;
@@ -575,6 +576,7 @@ window.ArkismCrew = (ctx) => {
     duplicate: (r) => dupButton(r).click(),
     refreshRuns: async () => { recent = null; await loadRecent(); },
     openSettingsNew: () => openSettings(null),
+    openSettings: (r) => openSettings(r),
     openAutomation: (id, tab) => { const r = byId(id); if (r) getAuto().open(r, tab); },
     afterClose: () => { markSelected(); if (state.view === "crew") { drawCards(); drawRecent(); } }
   }));
@@ -838,7 +840,14 @@ window.ArkismCrew = (ctx) => {
     }
     pick.value = runStatus;
     pick.addEventListener("change", () => { runStatus = pick.value; drawRecent(); });
-    head.append(el("strong", "", "최근 실행"), el("small", "", loading && !list.length ? "불러오는 중…" : `${list.length}건`), el("span", "grow"), pick);
+    const fold = el("button", "wf-fold");
+    fold.type = "button";
+    fold.setAttribute("aria-expanded", String(recentOpen));
+    fold.append(icon(recentOpen ? "caret-down" : "caret-right"), el("strong", "", "최근 실행"));
+    fold.addEventListener("click", () => { recentOpen = !recentOpen; drawRecent(); });
+    head.append(fold, el("small", "", loading && !list.length ? "불러오는 중…" : `${list.length}건`), el("span", "grow"));
+    if (!recentOpen) { box.replaceChildren(head); return; }
+    head.append(pick);
     if (list.length > 5) head.append(button(recentAll ? "줄이기" : "실행 기록", "ghost", null, () => { recentAll = !recentAll; drawRecent(); }));
     const rows = el("div", "wf-runs");
     const shown = recentAll ? list : list.slice(0, 5);
