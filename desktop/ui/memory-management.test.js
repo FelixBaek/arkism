@@ -73,3 +73,14 @@ test("a mostly identical rule with another product name or hidden qualifier rema
   assert.equal(management.groups([candidate("a", { text }), candidate("b", { text: text.replace("Cedar", "Maple") })]).length, 2);
   assert.equal(management.groups([candidate("a", { text }), candidate("b", { text: text + " 예외적으로" })]).length, 2);
 });
+
+test("wording groups preserve signs, units, comparisons and directional word order", () => {
+  for (const [first, second] of [
+    ["허용 값 -1", "허용 값 1"],
+    ["허용 값 1 %", "허용 값 1"],
+    ["허용 값 < 1", "허용 값 > 1"],
+    ["비용 $ 1", "비용 € 1"],
+    ["Maple 에서 Cedar 로 복사", "Cedar 에서 Maple 로 복사"],
+    ["설명서 는 짧게", "응답서 는 짧게"]
+  ]) assert.equal(management.groups([candidate("a", { text: first }), candidate("b", { text: second })]).length, 2);
+});
