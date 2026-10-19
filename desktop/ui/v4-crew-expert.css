@@ -108,3 +108,33 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-bars i { width: 3px; background: var(--accent); opacity: .8; border-radius: 1px; }
 .ex-bars i.bad { background: var(--nc-amber); }
 .ex-skill-dlg .segment { flex-direction: row; flex: none; width: auto; }
+
+/* 868:61909 실행 rows, 흐름도, 예산 */
+.ex-run-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 32px; }
+.ex-run-row > .k { flex: none; width: 84px; color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
+.ex-run-row > input { flex: 1; min-width: 160px; max-width: 280px; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-muted); color: var(--text-1); font: inherit; box-sizing: border-box; }
+.ex-run-row > small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.ex-flow-wrap { overflow-x: auto; padding: 4px 0 8px; }
+.ex-flow { display: grid; align-items: center; justify-content: start; column-gap: 8px; row-gap: 2px; width: max-content; }
+.ex-flow-end { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); }
+.ex-flow-end i { width: 12px; height: 12px; border-radius: 50%; background: var(--nc-muted); }
+.ex-flow-end.stop i { background: none; border: 2px solid var(--nc-muted); box-sizing: border-box; }
+.ex-flow-arrow { color: var(--nc-quiet); text-align: center; }
+.ex-flow-col { display: flex; flex-direction: column; gap: 6px; }
+.ex-flow-node { display: flex; flex-direction: column; gap: 2px; min-width: 104px; max-width: 150px; padding: 8px 10px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--bg-muted); }
+.ex-flow-node.ai { border-color: var(--nc-accent); }
+.ex-flow-node .kind { color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); }
+.ex-flow-node strong { font: 500 calc(12.5px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
+.ex-flow-node .m { color: var(--nc-muted); font-size: calc(11px * var(--fs, 1)); }
+.ex-flow-back { height: 12px; margin: 0 40px; border: 1.5px dashed var(--nc-quiet); border-top: 0; border-radius: 0 0 8px 8px; }
+.ex-flow-back-t { padding-left: 40px; color: var(--nc-quiet); font-size: calc(11.5px * var(--fs, 1)); white-space: nowrap; }
+.ex-money { position: relative; display: flex; align-items: center; height: 36px; padding: 0 10px; gap: 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-muted); }
+.ex-money:focus-within { outline: 2px solid var(--nc-accent); outline-offset: -1px; }
+.ex-money .cur { color: var(--text-2); font-family: var(--mono); }
+.ex-money input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: var(--text-1); font: 400 calc(14px * var(--fs, 1)) var(--mono); outline: none; }
+.ex-money .lab { flex: none; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.ex-spend { display: flex; flex-direction: column; gap: 6px; }
+.ex-spend-top { display: flex; justify-content: space-between; gap: 12px; color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
+.ex-spend-top small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.ex-pin-sum { display: block; }
+.ex-pins { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--nc-line); }
