@@ -4872,3 +4872,5 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {"비슷한 후보 {0}개": "{0} similar candidates"});
+Object.assign(window.ArkismI18nEN.strings, {"기억 처리 멈춤": "Memory processing stalled", "추출 기록 없음": "No extraction on record", "처리 흐름 보기": "View processing flow", "관리 계정이 필요해요": "An admin account is required", "계정 확인": "Check account"});
+Object.assign(window.ArkismI18nEN.patterns, {"기억 추출이 {0}시간째 멈췄어요": "Memory extraction has been stalled for {0} hours", "마지막 추출 {0}": "Last extraction {0}", "{0} · 멈춘 뒤 끝난 대화 {1}건": "{0} · {1} sessions ended since", "위키 초안 {0}": "Wiki drafts {0}", "출처 바뀜 {0}": "Sources changed {0}", "검토 대기 자료 {0}": "Sources awaiting review {0}"});
