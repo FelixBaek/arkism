@@ -115,3 +115,19 @@ Values compiled into the app:
 Pushing a `vX.Y.Z` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds the Windows installer, the macOS app and the Linux AppImage and `.deb`, checks that each starts its built-in Arkism and can back it up and restore it, and uploads them with `latest.json` as a **draft release**. A maintainer publishes it. Signing happens only when the signing secrets exist (see the workflow header).
 
 The app checks the update feed for new versions: Windows installs the update in the app, macOS and Linux download the new file.
+
+## Memory conditions in retrieval
+
+Full-text retrieval includes descriptive applicability, uncertainty and valid-from
+phrases alongside the body, summary and keywords. The same Korean normalizer is
+used for new writes, replacements and bounded index backfill. Domain, evidence
+and semantic-kind labels do not become generic search terms. Descriptive dates
+do not change lifecycle dates or make an unapproved memory eligible for recall.
+
+The HTTP/PostgreSQL regression captures a tool observation, requires human
+approval, then retrieves it using only condition terms. It checks returned
+context, scope, unrelated queries and deletion. The schema upgrade regression
+checks old indexes are refreshed without changing canonical records, and that
+paused recovery remains paused. See [database migrations](database-migrations.md)
+for upgrade and rollback. These deterministic tests do not measure extraction
+completeness or semantic retrieval accuracy on live conversations.

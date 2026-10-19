@@ -9,14 +9,19 @@ import (
 
 const pgTextSearchExpression = `to_tsvector('simple', COALESCE(doc->>'text','') || ' ' || COALESCE(doc->>'summary','') || ' ' || COALESCE((doc->'keywords')::text,''))`
 
+// Keep the original expression (and its expression index) intact. Pending rows
+// additionally match descriptive context until the normalized backfill finishes.
+const pgContextSearchExpression = `to_tsvector('simple', COALESCE(doc->'memory_context'->>'applicability','') || ' ' || COALESCE(doc->'memory_context'->>'uncertainty','') || ' ' || COALESCE(doc->'memory_context'->>'valid_from',''))`
+const pgLegacySearchVector = `(` + pgTextSearchExpression + ` || ` + pgContextSearchExpression + `)`
+
 // pgSearchVector is what the fts lane matches and ranks: the normalized
 // search_tokens (see search_tokens.go), or the legacy expression for a row the
 // backfill has not reached yet.
-const pgSearchVector = `COALESCE(search_tokens, ` + pgTextSearchExpression + `)`
+const pgSearchVector = `(COALESCE(search_tokens, ` + pgTextSearchExpression + `) || CASE WHEN search_context_indexed AND search_tokens IS NOT NULL THEN ''::tsvector ELSE ` + pgContextSearchExpression + ` END)`
 
 // pgSearchMatch ORs query terms over search_tokens; rows not yet backfilled
 // are matched through the legacy expression index with the same terms.
-const pgSearchMatch = `(search_tokens @@ $%d::tsquery OR (search_tokens IS NULL AND ` + pgTextSearchExpression + ` @@ $%d::tsquery)) AND cardinality($%d::text[]) > 0`
+const pgSearchMatch = `(search_tokens @@ $%d::tsquery OR ((search_tokens IS NULL OR (` + searchContextPending + `)) AND ` + pgLegacySearchVector + ` @@ $%d::tsquery)) AND cardinality($%d::text[]) > 0`
 
 // pgSearchOrder ranks by how many distinct query terms a row contains, then by
 // the cover-density rank the lane used before, then by recency.

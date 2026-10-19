@@ -19,9 +19,10 @@ import (
 // keep search_tokens NULL and are never backfilled.
 var searchTokenCollections = []string{colMemories, colSkillVersions, colReflections}
 
-// searchTokensPending is a literal, not a parameter, so the planner can prove
-// the partial index memory_records_search_tokens_pending applies.
-const searchTokensPending = `search_tokens IS NULL AND collection IN ('memories','skill_versions','reflections')`
+// searchTokensPending is literal so PostgreSQL can use the pending indexes
+// for missing tokens and for pre-context indexes that need refreshing.
+const searchContextPending = `NOT search_context_indexed AND (COALESCE(doc->'memory_context'->>'applicability','') <> '' OR COALESCE(doc->'memory_context'->>'uncertainty','') <> '' OR COALESCE(doc->'memory_context'->>'valid_from','') <> '')`
+const searchTokensPending = `collection IN ('memories','skill_versions','reflections') AND (search_tokens IS NULL OR (` + searchContextPending + `))`
 
 const (
 	searchTokenMinRunes   = 2
@@ -165,6 +166,21 @@ func searchTokensText(text, summary string, keywords []string) string {
 	return text + " " + summary + " " + strings.Join(keywords, " ")
 }
 
+// searchTokensRecordText also indexes the descriptive conditions under which a
+// memory applies. Classification labels and observation timestamps are omitted:
+// they describe provenance, not a subject a user is trying to recall.
+func searchTokensRecordText(r Record) string {
+	text := searchTokensText(r.Text, r.Summary, r.Keywords)
+	if c := r.MemoryContext; c != nil {
+		for _, qualifier := range []string{c.Applicability, c.Uncertainty, c.ValidFrom} {
+			if qualifier != "" {
+				text += " " + qualifier
+			}
+		}
+	}
+	return text
+}
+
 // pgSearchTokens is the search_tokens value for a write: NULL for collections
 // the fts lane never reads.
 func pgSearchTokens(collection string, r Record) any {
@@ -174,15 +190,15 @@ func pgSearchTokens(collection string, r Record) any {
 	if !slices.Contains(searchTokenCollections, collection) {
 		return nil
 	}
-	return searchTokensVector(searchTokensText(r.Text, r.Summary, r.Keywords))
+	return searchTokensVector(searchTokensRecordText(r))
 }
 
 const searchTokensBackfillBatch = 500
 
-// BackfillSearchTokens fills search_tokens for rows written before the column
+// BackfillSearchTokens fills search_tokens for rows written before the column or context-aware indexing
 // existed, in batches of searchTokensBackfillBatch, each its own transaction,
 // until none remain or budget elapses. It is idempotent and resumable: a later
-// call continues with the rows still NULL. A row whose revision changed since
+// call continues with the rows still pending. A row whose revision changed since
 // it was read is left for the next call. Until a row is filled, the fts lane
 // still finds it through the legacy expression index. It returns the number of
 // rows filled and whether rows remain.
@@ -195,7 +211,8 @@ func (p *Postgres) BackfillSearchTokens(ctx context.Context, budget time.Duratio
 			return filled, true, nil
 		}
 		rows, err := p.q().Query(ctx, `SELECT collection, id, revision, COALESCE(doc->>'text',''), COALESCE(doc->>'summary',''),
-COALESCE(ARRAY(SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(doc->'keywords')='array' THEN doc->'keywords' ELSE '[]'::jsonb END)),'{}')
+COALESCE(ARRAY(SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(doc->'keywords')='array' THEN doc->'keywords' ELSE '[]'::jsonb END)),'{}'),
+COALESCE(doc->'memory_context'->>'applicability',''), COALESCE(doc->'memory_context'->>'uncertainty',''), COALESCE(doc->'memory_context'->>'valid_from','')
 FROM memory_records WHERE `+searchTokensPending+` AND (collection,id) > ($1,$2)
 ORDER BY collection, id LIMIT $3`, lastCollection, lastID, searchTokensBackfillBatch)
 		if err != nil {
@@ -207,12 +224,13 @@ ORDER BY collection, id LIMIT $3`, lastCollection, lastID, searchTokensBackfillB
 			var c, id, text, summary string
 			var rev int64
 			var keywords []string
-			if err = rows.Scan(&c, &id, &rev, &text, &summary, &keywords); err != nil {
+			var applicability, uncertainty, validFrom string
+			if err = rows.Scan(&c, &id, &rev, &text, &summary, &keywords, &applicability, &uncertainty, &validFrom); err != nil {
 				rows.Close()
 				return filled, true, pgErr(err)
 			}
 			cols, ids, revs = append(cols, c), append(ids, id), append(revs, rev)
-			vecs = append(vecs, searchTokensVector(searchTokensText(text, summary, keywords)))
+			vecs = append(vecs, searchTokensVector(searchTokensRecordText(Record{Text: text, Summary: summary, Keywords: keywords, MemoryContext: &MemoryContext{Applicability: applicability, Uncertainty: uncertainty, ValidFrom: validFrom}})))
 		}
 		rows.Close()
 		if err = rows.Err(); err != nil {
@@ -221,9 +239,9 @@ ORDER BY collection, id LIMIT $3`, lastCollection, lastID, searchTokensBackfillB
 		if len(ids) == 0 {
 			return filled, false, nil
 		}
-		tag, err := p.q().Exec(ctx, `UPDATE memory_records m SET search_tokens=v.t::tsvector
+		tag, err := p.q().Exec(ctx, `UPDATE memory_records m SET search_tokens=v.t::tsvector,search_context_indexed=true
 FROM unnest($1::text[],$2::text[],$3::bigint[],$4::text[]) AS v(c,i,r,t)
-WHERE m.collection=v.c AND m.id=v.i AND m.revision=v.r AND m.search_tokens IS NULL`, cols, ids, revs, vecs)
+WHERE m.collection=v.c AND m.id=v.i AND m.revision=v.r AND (`+searchTokensPending+`)`, cols, ids, revs, vecs)
 		if err != nil {
 			return filled, true, pgErr(err)
 		}

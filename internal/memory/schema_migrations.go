@@ -22,6 +22,9 @@ const schemaMigrationLock int64 = 0x41524b49534d0001
 //go:embed migrations/0001_baseline.sql
 var schemaBaselineSQL string
 
+//go:embed migrations/0002_memory_context_search.sql
+var schemaMemoryContextSearchSQL string
+
 type schemaMigration struct {
 	version int
 	name    string
@@ -29,7 +32,7 @@ type schemaMigration struct {
 }
 
 func schemaMigrations() []schemaMigration {
-	return []schemaMigration{{1, "baseline", schemaBaselineSQL}}
+	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}}
 }
 
 func (m schemaMigration) checksum() string {
