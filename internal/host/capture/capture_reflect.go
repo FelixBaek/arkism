@@ -950,7 +950,7 @@ func stats(stdout io.Writer) error {
 	}
 	out := host.Obj{}
 	for _, k := range []string{"capture_events", "candidates", "accepted", "merged", "rejected", "privacy_rejected", "skipped_no_cue",
-		"no_claims", "writeback_failures", "hook_errors", "recalls", "recall_hits_from_capture"} {
+		"no_claims", "writeback_failures", "hook_errors", "recalls", "recall_hits_from_capture", "transport_copies_expired", "expiry_receipt_failures", "session_validation_withheld"} {
 		out.Set(k, int64(0))
 	}
 	out.Set("spool_pending", countJSON(spoolDir()))
@@ -965,6 +965,15 @@ func stats(stdout io.Writer) error {
 	for _, r := range rows {
 		st, ev := r["status"], r["event"]
 		switch {
+		case ev == "capture_copies_expired":
+			n, _ := host.Int(r["count"])
+			if n > 0 {
+				bump("transport_copies_expired", n)
+			}
+		case ev == "capture_expiry_receipt_failed":
+			bump("expiry_receipt_failures", 1)
+		case ev == "session_validation_withheld":
+			bump("session_validation_withheld", 1)
 		case ev == "recall":
 			bump("recalls", 1)
 			n, _ := host.Int(or(r["captured"], 0))

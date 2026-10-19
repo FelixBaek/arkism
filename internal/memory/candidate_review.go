@@ -17,11 +17,14 @@ type CandidateReviewInput struct {
 	Reason           string                   `json:"reason,omitempty"`
 }
 type ReviewDecision struct {
-	Action string    `json:"action" bson:"action"`
-	By     string    `json:"by" bson:"by"`
-	At     time.Time `json:"at" bson:"at"`
-	Reason string    `json:"reason,omitempty" bson:"reason,omitempty"`
-	// Person marks a human's own call; only those measure the classifier. AIRisk is the candidate's risk call
+	ReceiptID string    `json:"receipt_id,omitempty" bson:"receipt_id,omitempty"`
+	ActorRole string    `json:"actor_role,omitempty" bson:"actor_role,omitempty"`
+	Channel   string    `json:"channel,omitempty" bson:"channel,omitempty"`
+	Action    string    `json:"action" bson:"action"`
+	By        string    `json:"by" bson:"by"`
+	At        time.Time `json:"at" bson:"at"`
+	Reason    string    `json:"reason,omitempty" bson:"reason,omitempty"`
+	// Person is a legacy classifier-measurement flag, not proof of physical human presence. AIRisk is the candidate's risk call
 	// when the person decided; Overturned marks a decision against it.
 	Person     bool   `json:"person,omitempty" bson:"person,omitempty"`
 	AIRisk     string `json:"ai_risk,omitempty" bson:"ai_risk,omitempty"`

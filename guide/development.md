@@ -165,3 +165,54 @@ checks old indexes are refreshed without changing canonical records, and that
 paused recovery remains paused. See [database migrations](database-migrations.md)
 for upgrade and rollback. These deterministic tests do not measure extraction
 completeness or semantic retrieval accuracy on live conversations.
+
+### Memory storage and management evidence
+
+Storage/management is separate from recall ranking. Raw session archives, capture
+transport copies, work checkpoints, pending candidates and active memories retain
+their existing independent lifecycles. A successful citation validator checks literal
+support; it does not establish semantic completeness or an actual human decision.
+
+The pending review screen groups similar proposals for display only. Four-part scope,
+kind, reach, keywords, repository, applicability, exceptions, effective date and polarity
+must agree; legacy proposals without applicability only group by normalized exact text.
+Each proposal keeps its own revision, sources and review action. A repeated statement
+never approves a proposal or raises trust. Expanding a group checks at most32 proposals,
+two requests at a time. The evidence endpoint reads at most64 original message references
+and counts distinct canonical user turns only where the candidate's literal citation
+occurs. Conversation-window membership alone does not count. Expired, reconstructed,
+unreadable, inferred and unmatched evidence stays unknown. Candidate source tracing
+also provides the existing privacy-fenced original-message reader before approval.
+
+New explicit review decisions store a server receipt id, authenticated actor role and
+channel. These identify a human-role account request, not physical human presence.
+Historical role labels, trust1, user-speech tags or old `person` flags are not upgraded
+into this evidence. Existing memories and trust values are preserved. Recall exposes
+`approval_origin` as provenance without changing relevance or usage ranking.
+
+Human review reminders (`review_due_at`) are independent of expiry. Scheduling/clearing
+uses the current revision, source checks and an atomic audit, and refuses a pending
+correction. An overdue reminder appears in the review list; it never approves, deletes,
+expires or renews original archives. Correction-pending warnings reuse the existing
+conflict guard. Server delivery and answer-text overlap are displayed separately from
+actual answer use; a zero overlap is not proof of uselessness.
+
+Capture copy expiry leaves bodyless, mode0600 local receipts for seven days, capped at256.
+They record copy removal and whether extraction was prepared; successful delivery stays
+unverified. Raw paths, utterances, session ids and model responses are excluded. Failed
+receipt writes do not extend raw-copy retention. Session extraction records bodyless
+withholding reason/window diagnostics only while collection policy permits persistence.
+`capture stats` reports expired transport copies, receipt failures and validation holds.
+Neither these counters nor successful literal checks claim complete collection or
+semantic extraction coverage.
+
+Deletion displays distinguish request acceptance, server stage reports and unverified
+external copies. The desktop keeps at most32 bodyless receipt ids per server/scope for
+seven days; it reads status on demand. The optional archive audit has a25-row/2second
+bound, exact scope and human authorization. A full page is partial; errors/timeouts
+return unknown without a residue count. It never attests external backups or client
+caches. Restore receipt-ledger and publication-review gates remain in force.
+
+The approval-origin review list surfaces existing active memories whose new explicit
+review receipt is missing. Listing them never changes their active status or trust;
+the historical attribution remains unproven until a separately authorized review flow.

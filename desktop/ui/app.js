@@ -224,14 +224,16 @@
   const keptMemories = () => { try { return JSON.parse(localStorage.getItem(KEEP_KEY) || "[]"); } catch (_) { return []; } };
   const overlapReview = (m) => { const s = memStat(m.id); return !!s && s.injected >= 3 && s.used === 0 && !keptMemories().includes(m.id); };
   function savedHow(m) {
-    if (originOf(m) === "사용자 말") return "사용자가 직접 말해서 바로 저장";
-    return m.review?.by ? `검토 후 승인 (${m.review.by})` : originOf(m);
+    return `${originOf(m)} · ${window.ArkismMemoryManagement.approval(m).label}`;
   }
-  const idle = (m) => {
+  const reviewOverdue = (m) => !!m.review_due_at && new Date(m.review_due_at).getTime() <= Date.now();
+  const idleFromUsage = (m) => {
     if (pages.prefs.collectUnused !== false && typeof overlapReview === "function" && overlapReview(m)) return true;
     const u = usageOf(m.id);
     return !!u && u.d30 === 0 && !standing(m) && Date.now() - new Date(m.created_at).getTime() > 7 * DAY;
   };
+  const idle = m => reviewOverdue(m) || idleFromUsage(m);
+  const approvalUnproven = m => window.ArkismMemoryManagement.approval(m).state !== "review_recorded";
   const matches = (text) => !state.query || text.toLowerCase().includes(state.query);
 
   function setStatus(mode, text) {
@@ -980,7 +982,7 @@
         agent: blocked.length ? [AGENTS.find(([k]) => k === blocked[0][1])?.[2] || "sym:i-plug", agentName(blocked[0][1])] : null,
         preview: blocked.slice(0, 5).map(([sk, k]) => `${sk.name} → ${agentName(k)}`) },
       { id: "idle", n: state.usageDone ? idleList.length : null, icon: "clock-counter-clockwise", label: "호출과 문구 검토", title: `검토할 기억 ${idleList.length}개`,
-        sub: "최근 호출이나 답변 문구 겹침이 적어요. 필요성은 직접 확인해 주세요", action: "보기", go: ["memories", "idle"], preview: idleList.slice(0, 5).map((m) => m.text) },
+        sub: "재검토 예정일이 지났거나 최근 호출·문구 겹침이 적어요. 직접 확인해 주세요", action: "보기", go: ["memories", "idle"], preview: idleList.slice(0, 5).map((m) => m.text) },
       { id: "fresh", n: fresh.length, icon: "sparkle", label: "새 기억", title: `최근 3일 새 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
         action: "훑어보기", go: ["memories", "active"], preview: fresh.slice(0, 5).map((m) => m.text) },
       { id: "adapter", n: adapter.length, icon: "stack", label: "어댑터 필요", title: `어댑터가 필요한 스킬 ${adapter.length}개`, sub: "그대로는 일부 에이전트에서 제대로 안 돌 수 있어요",
@@ -1098,7 +1100,7 @@
       box.replaceChildren(...pageView.head());
     } else if (state.view === "crew") {
       box.replaceChildren(...crew.head());
-    } else if (state.view === "memories" && ["past", "reflections", "traits", "relations", "candidate", "conflicted", "idle", "digests", "merge"].includes(state.memTab)) {
+    } else if (state.view === "memories" && ["past", "reflections", "traits", "relations", "candidate", "provenance", "conflicted", "idle", "digests", "merge"].includes(state.memTab)) {
       box.replaceChildren();
     } else if (state.view === "memories" && state.memTab === "originals") {
       box.replaceChildren(button("다시 불러오기", "", "arrows-clockwise", originals.reload));
@@ -1397,7 +1399,7 @@
     if (!k) return null;
     const f = usage.fmt;
     const mem = state.data.memories.length;
-    const used = state.usageDone && mem ? `${Math.round(((mem - state.data.memories.filter(idle).length) / mem) * 100)}%` : "…";
+    const used = state.usageDone && mem ? `${Math.round(((mem - state.data.memories.filter(idleFromUsage).length) / mem) * 100)}%` : "…";
     const box = el("div", "home-week");
     for (const [label, value, sub] of [["이번 주 세션", f.num(k.sessions), "최근 7일"], ["이번 주 토큰", f.num(k.tokens), `캐시 적중 ${k.cache_hit_pct}%`],
       ["이번 주 비용", f.usd(k.cost_usd, k.priced), "공시 단가로 계산"], ["기억 사용", used, "최근 30일 답변에 쓰인 기억"]]) {
@@ -1498,19 +1500,19 @@
   // ---------------------------------------------------------------- 기억
   // Figma v4 Brain › 기억 (198:630): 확인해 주세요 card → search + dropdowns → kind chips → list.
   // 확인할 것 (검토 대기·확인 필요·안 쓰임) and 모아보기 (작업 관계·사용자 특성·반성 교훈·과거 시점·대화) are sub-screens with "← 기억".
-  const MEM_CHECK = [["candidate", "새로 저장"], ["conflicted", "헷갈림"], ["idle", "호출과 문구 검토"], ["merge", "병합 제안"]]; // merge: digests.js
+  const MEM_CHECK = [["candidate", "승인 대기"], ["provenance", "승인 경로"], ["conflicted", "헷갈림"], ["idle", "호출과 문구 검토"], ["merge", "병합 제안"]]; // merge: digests.js
   const MEM_LOOK = [["digests", "주제 요약"], ["relations", "작업 관계"], ["traits", "사용자 특성"], ["reflections", "반성 교훈"], ["past", "과거 시점"], ["originals", "대화"]];
   const memPanels = () => ({ relations, traits, reflections, past: memoryTime, originals });
   function checkCounts() {
     const d = state.data;
-    return { candidate: d.candidates.length, conflicted: d.conflicted.length, idle: state.usageDone ? d.memories.filter(idle).length : null, merge: digests.mergeCount() };
+    return { candidate: d.candidates.length, provenance: d.memories.filter(approvalUnproven).length, conflicted: d.conflicted.length, idle: state.usageDone ? d.memories.filter(idle).length : null, merge: digests.mergeCount() };
   }
   const checkTotal = () => Object.values(checkCounts()).reduce((a, n) => a + (n || 0), 0);
   // [title, one line under it, count next to the title]
   function memTitle() {
     const t = state.memTab;
-    const check = { candidate: "AI가 대화에서 새로 뽑은 기억이에요. 저장할지 버릴지 정해 주세요.", conflicted: "이미 있는 기억과 다른 내용이 들어왔어요. 어느 쪽이 맞는지 골라 주세요.",
-      idle: "최근 호출이나 답변 문구 겹침이 적은 기억이에요. 실제 활용 여부는 측정하지 않았어요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요." }[t];
+    const check = { provenance: "과거 처리 계정만으로 직접 사용자 확인을 증명할 수 없는 기억이에요. 기존 내용이나 상태는 자동으로 바꾸지 않아요.", candidate: "AI가 대화에서 새로 뽑은 기억이에요. 저장할지 버릴지 정해 주세요.", conflicted: "이미 있는 기억과 다른 내용이 들어왔어요. 어느 쪽이 맞는지 골라 주세요.",
+      idle: "재검토 예정일이 지났거나 최근 호출·문구 겹침이 적은 기억이에요. 실제 활용 여부와는 구분해요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요." }[t];
     if (check) return ["확인해 주세요", check, `${checkTotal()}개`];
     if (t === "digests") return ["모아보기", "비슷한 기억을 주제로 묶고 AI가 요약해요. 요약이 바뀌면 바로 쓰지 않고 먼저 확인을 받아요.", digests.title()];
     const look = { relations: "같은 작업에서 이어서 쓰인 스킬 순서예요. 관찰한 것일 뿐, 실행 허가는 아니에요.", traits: "대화에서 관찰한 사용자 성향이에요. 지시나 실행 승인으로 쓰지 않아요.",
@@ -1524,6 +1526,7 @@
   function memorySource() {
     const d = state.data;
     if (state.memTab === "candidate") return d.candidates;
+    if (state.memTab === "provenance") return d.memories.filter(approvalUnproven);
     if (state.memTab === "conflicted") return d.conflicted;
     if (state.memTab === "idle") return d.memories.filter(idle);
     return d.memories;
@@ -1542,6 +1545,7 @@
   // One badge per row: how often it is used, or why it needs a look.
   function memBadge(m) {
     const badge = (text, cls = "") => el("span", `mem-badge${cls ? ` ${cls}` : ""}`, text);
+    if (reviewOverdue(m)) return badge("재검토 예정일 지남", "warn");
     if (standing(m)) return badge("항상 적용");
     if (state.usageDone && idle(m)) return badge("검토 필요", "warn");
     const fresh = Date.now() - new Date(m.created_at).getTime() < DAY;
@@ -1584,7 +1588,7 @@
       const card = el("div", "mem-check");
       const txt = el("div", "mem-check-text");
       const line = el("p", "mem-check-title"); line.append("확인해 주세요", el("strong", "", String(total)));
-      txt.append(line, el("p", "mem-check-sub", `새로 저장 ${n.candidate} · 내용이 헷갈림 ${n.conflicted} · 검토 필요 ${n.idle ?? "…"}`));
+      txt.append(line, el("p", "mem-check-sub", `승인 대기 ${n.candidate} · 내용이 헷갈림 ${n.conflicted} · 검토 필요 ${n.idle ?? "…"}`));
       if (n.merge) txt.lastChild.append(` · 병합 제안 ${n.merge}`);
       const first = MEM_CHECK.find(([k]) => n[k])?.[0] || "candidate";
       card.append(txt, button("하나씩 확인하기", "primary small", null, () => go("memories", first)));
@@ -1667,7 +1671,7 @@
     if (state.memTab === "candidate" && items.length) {
       const hint = el("div", "mem-hint");
       const p = el("p", "");
-      p.append(`${items.length}개 · `, icon("check"), "저장 ", icon("x"), "버리기");
+      p.append(`${items.length}개 후보 · 비슷한 내용은 묶어서 보여줘요. 펼쳐서 항목별로 결정해 주세요.`);
       hint.append(p);
       if (canDecide && d.candidates.length > 1) hint.append(button("여러 개 한 번에 처리", "small", null, () => { state.selected = "batch"; markSelected(); renderDetail(); openDetail(); }));
       const stale = canDecide ? staleCandidates() : [];
@@ -1675,13 +1679,56 @@
       $("#chips").replaceChildren(hint);
     } else $("#chips").replaceChildren();
     const table = $("#table");
+    if (state.memTab === "candidate") {
+      const groups = window.ArkismMemoryManagement.groups(items);
+      const shownGroups = memPage(groups);
+      const candidateRow = c => row(c.id, "minmax(0,1fr) auto", [
+        memCell(c, [kindLabel(c.kind), riskLabel(c), withAgent(c), ago(c.created_at), memRepo(c).split("/").pop()]),
+        el("span", "mem-badge", "확인하기")
+      ], renderDetail);
+      table.replaceChildren(...shownGroups.map(group => {
+        if (group.items.length === 1) return candidateRow(group.items[0]);
+        const box = el("details", "candidate-group");
+        const head = el("summary", "");
+        head.append(el("strong", "", group.items[0].text), el("span", "meta", `비슷한 후보 ${group.items.length}개 · 언급 횟수 확인 전`));
+        const evidence = el("p", "meta", "펼치면 서로 다른 원문 발화 수를 확인해요. 횟수는 승인이나 신뢰 점수가 아니에요.");
+        evidence.setAttribute("aria-live", "polite");
+        box.append(head, evidence, el("p", "meta", "각 문장의 조건과 예외를 확인하고 항목별로 결정해 주세요."), ...group.items.map(candidateRow));
+        let loading = false;
+        box.addEventListener("toggle", async () => {
+          if (!box.open || loading) return;
+          loading = true;
+          evidence.textContent = "원문 근거를 확인하는 중…";
+          const selected = group.items.slice(0, 32), summaries = [];
+          let next = 0;
+          const worker = async () => {
+            while (next < selected.length && box.open && box.isConnected) {
+              const c = selected[next++];
+              try { summaries.push(await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/evidence-summary?${query()}`)); }
+              catch (_) { summaries.push(null); }
+            }
+          };
+          await Promise.all([worker(), worker()]);
+          if (summaries.length < group.items.length) summaries.push(null);
+          if (box.isConnected) evidence.textContent = window.ArkismMemoryManagement.evidence(summaries).label;
+          loading = false;
+        });
+        return box;
+      }));
+      if (!groups.length) table.append(el("div", "empty", state.query ? "검색과 맞는 기억이 없어요." : "확인할 기억이 없어요."));
+      memMore(groups.length, shownGroups.length);
+      return;
+    }
     const shown = memPage(items);
-    if (state.memTab === "idle") {
+    if (state.memTab === "provenance") {
+      table.replaceChildren(...shown.map(m => row(m.id, "minmax(0,1fr) auto", [memCell(m, [kindLabel(m.kind), savedHow(m)]), el("span", "mem-badge warn", "승인 경로 확인")], renderDetail)));
+    } else if (state.memTab === "idle") {
       const w = memUse();
       table.replaceChildren(...shown.map((m) => {
         const s = memStat(m.id), often = overlapReview(m);
-        const use = often && w ? `최근 ${w.days}일 ${s.injected}번 전달 · 문구 겹침 ${s.used}번` : "30일 넘게 참고 안 됨";
-        return row(m.id, "minmax(0,1fr) auto", [memCell(m, [kindLabel(m.kind), use]), el("span", `mem-badge${often ? " warn" : ""}`, often ? "문구 겹침 미확인" : "최근 호출 없음")], renderDetail);
+        const due = reviewOverdue(m);
+        const use = due ? "재검토 예정일이 지났어요" : often && w ? `최근 ${w.days}일 ${s.injected}번 전달 · 문구 겹침 ${s.used}번` : "30일 넘게 참고 안 됨";
+        return row(m.id, "minmax(0,1fr) auto", [memCell(m, [kindLabel(m.kind), use]), el("span", `mem-badge${often ? " warn" : ""}`, due ? "재검토 예정일 지남" : often ? "문구 겹침 미확인" : "최근 호출 없음")], renderDetail);
       }));
     } else {
       const quickCol = state.memTab === "candidate" && canDecide;
@@ -3997,7 +4044,7 @@
     const byKind = Object.keys(KINDS).map((k) => [kindLabel(k), `${d.memories.filter((m) => m.kind === k).length}개`]).filter(([, v]) => v !== "0개");
     const s = section("사용 중인 기억"); s.append(facts(byKind)); body.append(s);
     const r = section("어떻게 쓰이나요");
-    r.append(facts([["대화 시작", "선호·작업 규칙을 모두 넣어요"], ["질문할 때", "관련 있는 기억만 최대 6개"], ["자동 저장", "내가 직접 말한 것 · AI가 추론한 교훈·결정(시험 적용)"], ["저장소", "저장소에서 나온 기억은 그 저장소에서만, 나머지는 어디서나 써요"]]));
+    r.append(facts([["대화 시작", "선호·작업 규칙을 모두 넣어요"], ["질문할 때", "관련 있는 기억만 최대 6개"], ["승인 대기", "대화에서 후보를 추출해요. 저장 여부는 사람이 검토해요."], ["저장소", "저장소에서 나온 기억은 그 저장소에서만, 나머지는 어디서나 써요"]]));
     body.append(r);
   }
   const renderMemoryContext = window.ArkismMemoryContext({ el });
@@ -4025,14 +4072,15 @@
     if (modelPanel) body.append(modelPanel);
     const fix = () => button("고치기", "small", null, () => openMemoryFix(m));
     if (overlapReview(m)) {
-      body.append(actionCard(`최근 ${memUse().days}일 동안 ${s.injected}번 참고됐지만, 답변에는 한 번도 쓰이지 않았어요. 아직 맞는 내용인가요?`,
+      body.append(actionCard(`최근 ${memUse().days}일 동안 ${s.injected}번 전달됐고 답변 문구 겹침은 0번이에요. 실제 활용 여부는 미확인이에요. 아직 맞는 내용인가요?`,
         button("맞아요, 유지", "primary small", null, () => {
           try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), m.id])); } catch (_) { /* private window */ }
           notice("유지할게요. 이 기억은 다시 묻지 않아요.");
           render(false);
           renderDetail();
         }), fix(), button("잊기", "ghost small", null, () => forgetMemory(m))));
-    } else if (idle(m)) body.append(actionCard("30일 동안 한 번도 참고되지 않았어요. 질문과 관련된 적이 없어서예요. 아직 필요한 기억인가요?", ...(state.caps?.actions?.propose ? [fix()] : []), button("잊기", "ghost small", null, () => forgetMemory(m))));
+    } else if (reviewOverdue(m)) body.append(actionCard("재검토 예정일이 지났어요. 내용이 아직 맞는지 직접 확인해 주세요."));
+    else if (idle(m)) body.append(actionCard("최근 30일 동안 검색으로 전달된 기록이 없어요. 실제 활용 여부와 내용의 필요성은 따로 확인해 주세요.", ...(state.caps?.actions?.propose ? [fix()] : []), button("잊기", "ghost small", null, () => forgetMemory(m))));
     else if (state.caps?.actions?.propose) body.append(button("고치기", "small", "pencil-simple", () => openMemoryFix(m)));
     const why = section("어디서 왔나요");
     const quoteBox = el("div", "quote");
@@ -4050,6 +4098,41 @@
     ]));
     if (!standing(m) && u) use.append(el("p", "meta", "질문에 자료로 들어간 횟수예요. 최근 30일만 세요."));
     body.append(use);
+    const management = section("기억 관리");
+    const approval = window.ArkismMemoryManagement.approval(m);
+    management.append(el("p", "", approval.label), el("p", "meta", approval.detail));
+    if (m.conflict_id) management.append(el("p", "warn-text", "정정 또는 충돌 검토가 대기 중이에요. 기존 기억이 계속 전달될 수 있으니 먼저 확인해 주세요."));
+    management.append(facts([["다음 재검토", m.review_due_at ? shortDate(m.review_due_at) : "예정일 없음"], ["사용 종료", m.expires_at ? shortDate(m.expires_at) : "만료일 없음"]]));
+    management.append(el("p", "meta", "재검토 예정일은 삭제·자동 승인·보관 연장과 별개예요."));
+    const originalStatus = el("p", "meta", "원본 보관 상태는 별도로 확인할 수 있어요.");
+    management.append(originalStatus, button("원본 보관 확인", "ghost small", null, async event => {
+      const trigger = event.currentTarget; trigger.disabled = true;
+      try {
+        const result = await request(`/v1/memories/${encodeURIComponent(m.id)}/management-status?${query()}`);
+        originalStatus.textContent = `원본 보관 중 ${result.originals_available}개 · 만료 ${result.originals_expired}개 · 확인 불가 ${result.originals_unknown}개${result.complete ? "" : " · 일부만 확인"}. 원본 만료와 장기 기억의 유효성은 별개예요.`;
+      } catch (_) { originalStatus.textContent = "원본 상태를 확인하지 못했어요. 보관 중이라고 간주하지 않아요."; }
+      finally { trigger.disabled = false; }
+    }));
+    if (state.caps?.actions?.review_decide && !m.conflict_id) {
+      const field = el("label", "field", "재검토 예정일");
+      const date = el("input"); date.type = "date"; date.setAttribute("aria-label", "재검토 예정일");
+      date.addEventListener("input", () => date.setCustomValidity(""));
+      if (m.review_due_at) date.value = m.review_due_at.slice(0, 10);
+      field.append(date); management.append(field);
+      const saveDue = value => reviewOnce(`due:${m.id}`, async () => {
+        try {
+          await request(`/v1/memories/${encodeURIComponent(m.id)}/review-due`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision, review_due_at: value }) });
+          notice("재검토 예정일을 변경했어요."); await reloadMemories();
+        } catch (error) { notice(`변경하지 못했어요 (${error.message}).`); }
+      });
+      management.append(button("예정일 저장", "small", null, () => {
+        const when = new Date(`${date.value}T23:59:59`);
+        if (!date.value || !Number.isFinite(when.getTime()) || when.getTime() <= Date.now()) { date.setCustomValidity("앞으로의 날짜를 선택해 주세요."); date.reportValidity(); return; }
+        date.setCustomValidity(""); void saveDue(when.toISOString());
+      }));
+      if (m.review_due_at) management.append(button("예정일 해제", "ghost small", null, () => saveDue(null)));
+    }
+    body.append(management);
     window.ArkismMemoryEvaluation.mount({ container: body, record: m, scope: { ...state.scope },
       request, el, section, facts, button });
     // 변경 이력 N건 › (folded) · 이전으로 되돌리기 (Figma 198:630): the lineage walk fills both once it answers.
@@ -4204,11 +4287,23 @@
     const modelPanel = renderModelGeneration(c);
     if (modelPanel) body.append(modelPanel);
     const [why] = waitReason(c);
+    const originalEvidence = section("실제 근거와 원문");
+    originalEvidence.append(el("p", "meta", "AI의 추출 이유와 실제 원문은 별개예요. 원문을 확인하고 승인해 주세요."));
+    const sourceBox = el("div", ""); originalEvidence.append(sourceBox);
+    const readSources = button("근거 확인", "ghost small", null, async event => {
+      const trigger = event.currentTarget; trigger.disabled = true;
+      try {
+        const response = await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/sources?${query()}`);
+        if (sourceBox.isConnected && state.selected === c.id) originals.sourceDetails(sourceBox, c, response);
+      } catch (_) { sourceBox.replaceChildren(el("p", "meta", "원문 근거를 확인하지 못했어요. 확인된 내용으로 간주하지 않아요.")); }
+      finally { trigger.disabled = false; }
+    });
+    originalEvidence.append(readSources); body.append(originalEvidence);
     const rules = el("details", "d-rules");
     rules.append(el("summary", "", "기억 검토 규칙 보기"), facts([["검토 대기", "새로 수집한 모든 기억"], ["AI 역할", "위험도 분류와 근거 정리"], ["사람 결정", "승인·고쳐서 승인·거절"]]));
     const reasonSection = () => {
       if (!c.summary) return null;
-      const s = section("어디서 왔나요");
+      const s = section("AI가 제안한 이유");
       const q = el("div", "quote");
       q.append(raw(el("div", "", c.summary)), el("footer", "", withAgent(c)));
       s.append(q);

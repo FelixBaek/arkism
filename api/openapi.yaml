@@ -61,6 +61,676 @@
         "response": "Chat completion JSON or SSE delta chunks. Uses the existing execution and group failover. Native Chat providers receive the validated original Chat request without double translation; parallel tool indices and settings are preserved. Truncated/error streams never finish with [DONE].",
         "authentication": "Caller credentials are never sent upstream. Host Claude API key, selected Codex account or stored provider key is used. Claude subscriptions use the host-selected CLI and SDK MCP caller tools. Exact owner/model/settings/history matches resume the same process. Tools wait for caller results; expired/mismatched results are rejected without replay. Up to 8 runs, 600-second active deadline, 300-second idle expiry and 16 MiB lifetime stdout. No host built-in tools or hooks. Unsupported sampling/forced tools/parallel-disable options fail before launch. OAuth is not copied into the gateway.",
         "limits": {"input_bytes": 8388608, "upstream_response_bytes": 16777216}
+      },
+      "/v1/memory_candidates/{id}/sources": {
+        "get": {
+          "summary": "Pending candidate source trace",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "workspace_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "user_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "agent_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Source trace (untrusted data)",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/MemorySources"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "400": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "403": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "404": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "409": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "503": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            }
+          },
+          "description": "Human review permission plus per-source read authorization. Same source span, privacy and audit fences as memory source tracing. The response memory reference names the candidate collection. No approval occurs."
+        }
+      },
+      "/v1/memory_candidates/{id}/evidence-summary": {
+        "get": {
+          "summary": "Checked candidate citation occurrences",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "workspace_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "user_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "agent_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Source trace (untrusted data)",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/CandidateEvidenceSummary"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "400": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "403": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "404": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "409": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "503": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            }
+          },
+          "description": "Human review permission. Up to64 raw message references,8second bound. Counts only user_statement candidates whose verified source span occurs literally in a readable user turn. Opaque canonical session/turn keys deduplicate retries and mirrored snapshots. Missing, expired, inferred, reconstructed or nonmatching evidence makes complete=false; this is not semantic correctness or human approval."
+        }
+      },
+      "/v1/memories/{id}/management-status": {
+        "get": {
+          "summary": "Read memory management evidence",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "workspace_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "user_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "agent_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Source trace (untrusted data)",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/MemoryManagementStatus"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "400": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "403": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "404": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "409": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "503": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            }
+          },
+          "description": "Human read permission. At most32 archive headers and8seconds. Reports recorded review origin, correction hold, review date and original availability. Actual answer use and semantic completeness are not evaluated by this check. No retention renewal or approval occurs."
+        }
+      },
+      "/v1/session-archives/storage-audit": {
+        "get": {
+          "summary": "Bounded read-only archive orphan audit",
+          "parameters": [
+            {
+              "name": "workspace_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "user_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "agent_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Source trace (untrusted data)",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ArchiveStorageAudit"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "400": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "403": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "404": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "409": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "503": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            }
+          },
+          "description": "Human archive read permission; exact scope. Limit25 and2seconds. Timeout/store failure returns incomplete without a count, never a clean result. A full batch is partial. External backups and client copies are not verified."
+        }
+      },
+      "/v1/memories/{id}/review-due": {
+        "post": {
+          "summary": "Schedule or clear a human review reminder",
+          "parameters": [
+            {
+              "name": "id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Source trace (untrusted data)",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Record"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "400": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "403": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "404": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "409": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            },
+            "503": {
+              "description": "Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              },
+              "headers": {
+                "X-Request-ID": {
+                  "$ref": "#/components/headers/RequestID"
+                }
+              }
+            }
+          },
+          "description": "Human transition:memories permission and expected revision. Future review_due_at; null or omission clears the reminder. Does not approve, expire, renew originals, change trust or resolve a conflict. Source/deletion fences and audit commit in the same transaction.",
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryReviewDueInput"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -13371,6 +14041,10 @@
                 "exclusiveMaximum": 2
               }
             }
+          },
+          "approval_origin": {
+            "type": "string",
+            "description": "Recorded review provenance; historical human confirmation may be unproven. Does not change ranking or trust."
           }
         },
         "required": [
@@ -14897,6 +15571,11 @@
           },
           "memory_context": {
             "$ref": "#/components/schemas/MemoryContext"
+          },
+          "review_due_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Human review reminder, independent of expiry and approval."
           }
         },
         "required": [
@@ -16204,6 +16883,19 @@
           },
           "reason": {
             "type": "string"
+          },
+          "receipt_id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "actor_role": {
+            "type": "string",
+            "readOnly": true
+          },
+          "channel": {
+            "type": "string",
+            "readOnly": true,
+            "description": "New explicit_review_api receipt records an authenticated role, not physical human presence. Legacy missing receipts are not upgraded."
           }
         }
       },
@@ -21018,6 +21710,147 @@
           }
         },
         "description": "Atomic resolution of an existing candidate/memory conflict and review. Requires operation_id. keep_old requires reject; keep_both/replace_old require approve or edit_approve. All endpoints and revisions are rechecked with current per-record transition permissions; scoped service policy also applies to the existing memory kind."
+      },
+      "CandidateEvidenceSummary": {
+        "type": "object",
+        "required": [
+          "user_mention_keys",
+          "source_keys",
+          "complete",
+          "authority"
+        ],
+        "properties": {
+          "user_mention_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "authority": {
+            "const": "data_only_untrusted"
+          }
+        }
+      },
+      "MemoryManagementStatus": {
+        "type": "object",
+        "required": [
+          "approval_origin",
+          "actual_use_status",
+          "semantic_completeness",
+          "authority",
+          "conflict_pending",
+          "review_overdue",
+          "complete",
+          "sources_checked",
+          "originals_available",
+          "originals_expired",
+          "originals_unknown"
+        ],
+        "properties": {
+          "approval_origin": {
+            "type": "string"
+          },
+          "actual_use_status": {
+            "type": "string"
+          },
+          "semantic_completeness": {
+            "type": "string"
+          },
+          "authority": {
+            "type": "string"
+          },
+          "conflict_pending": {
+            "type": "boolean"
+          },
+          "review_overdue": {
+            "type": "boolean"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "sources_checked": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "originals_available": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "originals_expired": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "originals_unknown": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ArchiveStorageAudit": {
+        "type": "object",
+        "required": [
+          "state",
+          "limit",
+          "external_copies",
+          "authority"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "not_verified",
+              "incomplete",
+              "partial",
+              "checked_scope"
+            ]
+          },
+          "orphan_candidates": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "external_copies": {
+            "const": "not_verified"
+          },
+          "authority": {
+            "const": "data_only_untrusted"
+          }
+        }
+      },
+      "MemoryReviewDueInput": {
+        "type": "object",
+        "required": [
+          "scope",
+          "expected_revision"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "review_due_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
       }
     },
     "headers": {

@@ -587,8 +587,16 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 				category = "korean_correction"
 			}
 			if prepared, err = sessionPrepare(scope, sid, chunk, chunkStart, end, expected, previous, nil, category, authorize, str(or(job["cwd"], "")), str(or(job["repository"], "")), repository); err != nil {
+				if sessionQualityDefects.MatchString(errorCode(err)) && privateCapturePolicy("capture_policy_wait", str(or(job["cwd"], "")), str(or(job["repository"], "")), repository) == nil {
+					job["session_validation"] = sessionValidationDiagnostic(errorCode(err), chunkStart, end, 0)
+					if saveErr := persist(); saveErr != nil {
+						return saveErr
+					}
+					metric(kv("event", "session_validation_withheld"), kv("reason", job["session_validation"].(map[string]any)["reason"]))
+				}
 				return err
 			}
+			job["session_validation"] = sessionValidationDiagnostic("", chunkStart, end, len(anyList(prepared["output"].(map[string]any)["memory_candidates"])))
 			pkg := sessionCheckpointPackage(prepared, sid, origin, str(or(job["cwd"], job["repository"], "")))
 			pkg["source_refs"] = dedupeRefs(append(chunkSources(chunk), anyList(autosaveGet(or(previous, map[string]any{}), "source_refs"))...))
 			// Only this window's refs: the server takes at most 8, all from the current archive snapshot,

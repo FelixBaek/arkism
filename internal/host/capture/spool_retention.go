@@ -53,6 +53,9 @@ func cleanupSpool(root, key string, now float64) (int, error) {
 	if now < 0 {
 		now = timeNow()
 	}
+	if err := pruneCaptureExpiryReceipts(root, now); err != nil {
+		metric(kv("event", "capture_expiry_receipt_failed"))
+	}
 	paths, _ := filepath.Glob(filepath.Join(globEscape(root), "*.json"))
 	removed := 0
 	for _, path := range paths {
@@ -61,8 +64,10 @@ func cleanupSpool(root, key string, now float64) (int, error) {
 			continue
 		}
 		at := mtime(info)
+		prepared := false
 		if raw, err := os.ReadFile(path); err == nil {
 			if body, err := loadObjBytes(raw); err == nil {
+				prepared = body["prepared_capture"] != nil || body["session_prepared"] != nil
 				if v, has := body[key]; has {
 					if q, err := queuedAt(v, now); err == nil {
 						at = q
@@ -73,8 +78,14 @@ func cleanupSpool(root, key string, now float64) (int, error) {
 			return removed, err
 		}
 		if at+spoolTTL <= now {
+			if err := saveCaptureExpiryReceipt(root, path, at, now, prepared, false); err != nil {
+				metric(kv("event", "capture_expiry_receipt_failed"))
+			}
 			if err := os.Remove(path); err != nil {
 				return removed, err
+			}
+			if err := saveCaptureExpiryReceipt(root, path, at, now, prepared, true); err != nil {
+				metric(kv("event", "capture_expiry_receipt_failed"))
 			}
 			removed++
 		}
