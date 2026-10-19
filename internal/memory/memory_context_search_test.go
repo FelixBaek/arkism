@@ -204,8 +204,8 @@ func TestMemoryContextSearchHasIndexPathsPostgres(t *testing.T) {
 	terms := searchQueryTerms("conditionprobe")
 	q := searchTermsQuery(terms)
 	var raw []byte
-	query := `EXPLAIN (FORMAT JSON, COSTS OFF) SELECT id FROM memory_records WHERE ` + fmt.Sprintf(pgSearchMatch, 1, 2, 3, 4)
-	if err = tx.QueryRow(ctx, query, q, q, q, terms).Scan(&raw); err != nil {
+	query := `EXPLAIN (FORMAT JSON, COSTS OFF) SELECT id FROM memory_records WHERE ` + fmt.Sprintf(pgSearchMatch, 1, 2, 3, 4, 5, 6)
+	if err = tx.QueryRow(ctx, query, q, q, q, terms, terms, terms).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var plans []struct{ Plan map[string]any }

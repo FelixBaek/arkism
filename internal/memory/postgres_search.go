@@ -18,15 +18,16 @@ const pgContextSearchExpression = `to_tsvector('simple', COALESCE(doc->'memory_c
 // backfill has not reached yet.
 const pgSearchVector = `(COALESCE(search_tokens, ` + pgTextSearchExpression + `) || CASE WHEN search_context_indexed AND search_tokens IS NOT NULL THEN ''::tsvector ELSE ` + pgContextSearchExpression + ` END)`
 
-// pgSearchMatch ORs query terms over search_tokens; rows not yet backfilled
+// pgSearchMatch retrieves OR matches but requires two distinct matches for queries
+// with at least three normalized terms. Rows not yet backfilled
 // are matched through the legacy expression index with the same terms.
-const pgSearchMatch = `(search_tokens @@ $%d::tsquery OR (search_tokens IS NULL AND ` + pgTextSearchExpression + ` @@ $%d::tsquery) OR ((search_tokens IS NULL OR (` + searchContextPending + `)) AND ` + pgContextSearchExpression + ` @@ $%d::tsquery)) AND cardinality($%d::text[]) > 0`
+const pgSearchMatch = `(search_tokens @@ $%d::tsquery OR (search_tokens IS NULL AND ` + pgTextSearchExpression + ` @@ $%d::tsquery) OR ((search_tokens IS NULL OR (` + searchContextPending + `)) AND ` + pgContextSearchExpression + ` @@ $%d::tsquery)) AND cardinality($%d::text[]) > 0 AND (SELECT count(*) FROM unnest($%d::text[]) q WHERE ` + pgSearchVector + ` @@ q::tsquery) >= CASE WHEN cardinality($%d::text[]) >= 3 THEN 2 ELSE 1 END`
 
 // pgSearchOrder ranks by how many distinct query terms a row contains, then by
 // the cover-density rank the lane used before, then by recency.
 func pgSearchOrder(queryParam, termsParam int) string {
-	return fmt.Sprintf("(SELECT count(*) FROM unnest(tsvector_to_array(%s)) l WHERE l = ANY($%d::text[])) DESC,ts_rank_cd(%s,$%d::tsquery) DESC,updated_at DESC,id ASC",
-		pgSearchVector, termsParam, pgSearchVector, queryParam)
+	return fmt.Sprintf("(SELECT count(*) FROM unnest($%d::text[]) q WHERE %s @@ q::tsquery) DESC,ts_rank_cd(%s,$%d::tsquery) DESC,updated_at DESC,id ASC",
+		termsParam, pgSearchVector, pgSearchVector, queryParam)
 }
 
 // selectRecords keeps the tenant fence in one place. The caller's predicates
@@ -270,10 +271,12 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 		args = append(args, terms)
 	}
 	if lane == "fts" {
-		// terms are normalized (searchQueryTerms); any one of them matches.
-		q := searchTermsQuery(terms)
+		// Long queries need two distinct terms; a single generic word must not
+		// fill the finite candidate window. Exact/vector/relation lanes stay independent.
+		concepts := searchQueryConcepts(terms)
+		q := strings.Join(concepts, " | ")
 		extra = pgSearchMatch
-		args = append(args, q, q, q, terms)
+		args = append(args, q, q, q, concepts, concepts, concepts)
 	}
 	// shortcut: exact vector scan; add a measured ANN index when corpus latency requires it.
 	if lane == "vector" {

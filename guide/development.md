@@ -65,7 +65,7 @@ Before publishing, maintainers run `ARKISM_PUBLIC_DENYLIST=<their own denylist f
 
 ## Skill improvement generation
 
-New memory extraction uses `capture-extract-v5` and `harness-session-v4`.
+New memory extraction uses `capture-extract-v5` and `harness-session-v6`.
 One-off permissions, budgets and assignment corrections belong in session state;
 durable candidates retain the named project and every condition. Session
 user-statement context fields must be supported by verbatim quotes from the same
@@ -76,6 +76,21 @@ Inferred scope diagnostics belong in state uncertainties, not in quoted conditio
 This literal check prevents invented metadata wording; it does not prove semantic
 completeness. Older prepared requests retain their original delivery contract.
 An older session quality gate does not enable the new prompt's fast model.
+Inherited scope stays in the statement, with exact original citations. Context
+fields copy the actual subject or condition phrase; they do not concatenate a
+name and a subject from different clauses, replace the scope with an exception,
+or invent a translated name. Previously prepared v4/v5 context still requires
+literal evidence.
+
+The full-text lane omits English question scaffolding from query terms while
+preserving negation, quantities and temporal operators. Queries with at least
+three distinct topic concepts need two distinct matches, including descriptive
+memory context. This check runs before the candidate limit and also applies to
+rows awaiting backfill. Short lookups remain permissive; exact keyword,
+semantic and relation retrieval keep their independent contracts. These rules
+reduce lexical noise; they are not a semantic relevance guarantee.
+Korean backup/copy and restore/recovery wording is expanded as a single concept
+per pair. The alternative spellings cannot count as two independent matches.
 
 On Windows, state-file publications to the same destination may wait up to two
 seconds for their turn. Transient replacement retries retain their separate

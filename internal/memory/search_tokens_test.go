@@ -44,6 +44,26 @@ func TestSearchTokensQuerySideMatchesDocumentSide(t *testing.T) {
 	}
 }
 
+func TestSearchQueryScaffoldingRetainsActualConditions(t *testing.T) {
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{
+		{"When did Lee not deploy before 2027?", []string{"lee", "not", "deploy", "before", "2027"}},
+		{"What is the UI for?", []string{"ui"}},
+		{"How was the", []string{}},
+		{"서버가 배포되지 않으면 API를 중단하지 마", []string{"서버", "배포되지", "않으면", "api", "중단하지"}},
+	} {
+		if got := searchQueryTerms(tc.query); !slices.Equal(got, tc.want) {
+			t.Errorf("query %q: got %q, want %q", tc.query, got, tc.want)
+		}
+	}
+	// Posting text keeps its original words; only the query lane is filtered.
+	if !slices.Contains(SearchTokens("What is the UI for?"), "what") || !slices.Contains(exactQueryKeywords("What"), "what") {
+		t.Fatal("query filtering escaped into postings or explicit keywords")
+	}
+}
+
 func TestSearchTokensLiterals(t *testing.T) {
 	if got := searchTokensVector("서버를 배포 서버"); got != "'서버':1 '배포':2 '서버':3" {
 		t.Fatalf("vector literal=%q", got)
@@ -96,9 +116,9 @@ func TestPostgresSearchKoreanParticlesIntegration(t *testing.T) {
 	if hits := fts("서버 배포 롤백"); !hasPostgresHit(hits, ko.ID) {
 		t.Fatalf("extra-word hits=%v", hits)
 	}
-	// English: the row with every term ranks first; partial matches follow; misses stay out.
+	// A long query requires more than one shared term; a generic one-term match stays out.
 	hits := fts("release server deploy")
-	if len(hits) != 2 || hits[0].ID != full.ID || hits[1].ID != partial.ID || hasPostgresHit(hits, other.ID) {
+	if len(hits) != 1 || hits[0].ID != full.ID || hasPostgresHit(hits, partial.ID) || hasPostgresHit(hits, other.ID) {
 		t.Fatalf("english hits=%v", hits)
 	}
 	if hits := fts("server"); len(hits) != 1 || hits[0].ID != full.ID {
