@@ -107,8 +107,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       judge: () => D().memories.map((m) => [m, w?.items?.find((x) => x.id === m.id)]).filter(([, u]) => u && u.injected >= 3 && !u.used).slice(0, cap).map(([m, u]) => row("안 쓰임", clip(m.text), `${w.days}일 동안 ${num(u.injected)}번 넣었는데 한 번도 안 쓰였어요`, "", [button("정리하러 가기", "small", null, () => { dlg.close(); go("memories", "idle"); })])),
       dream: () => (D().maintenance || []).slice(0, cap).map((p) => {
         const t = p.maintenance || {}, ev = t.evidence, when = p.created_at ? ago(p.created_at) : "";
-        if (t.memory) return row("고치기", clip(memText(t.memory.id)), ev ? (t.type === "lesson_often_failing" ? `실패가 잦은 교훈 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})` : `자주 어기는 규칙 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})`) : t.type === "lesson_often_failing" ? "실패가 잦은 교훈" : "자주 어기는 규칙", when, []);
-        return row({ duplicate: "합치기", contradiction: "고치기" }[t.type] || "정리", clip(memText(t.keep?.id)), `→ ${clip(memText(t.retire?.id), 40)}`, when, []);
+        if (t.memory) return row("고치기", clip(memText(t.memory.id)), ev ? (t.type === "lesson_often_failing" ? `실패가 잦은 교훈 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})` : `자주 어기는 규칙 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})`) : t.type === "lesson_often_failing" ? "실패가 잦은 교훈" : "자주 어기는 규칙", "승인 대기로 보냄", []);
+        return row({ duplicate: "합치기", contradiction: "고치기" }[t.type] || "정리", clip(memText(t.keep?.id)), `→ ${clip(memText(t.retire?.id), 40)}`, "승인 대기로 보냄", []);
       }),
       active: () => D().memories.slice().sort((a, b) => (usage(b.id)?.d7 || 0) - (usage(a.id)?.d7 || 0)).slice(0, cap).map((m) => row(kind(m.kind), clip(m.text), tag(m, "repo:") || ago(m.created_at), usage(m.id) ? `7일 ${num(usage(m.id).d7 || 0)}번 쓰임` : "", []))
     };
@@ -178,9 +178,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (key === "dream") body.append(note("n", "드리밍 제안도 승인 대기로 가요", "바로 바뀌지 않아요. 승인해야 반영돼요."));
     if (key === "recall") body.append(recallBox());
     const rows = stageRows(key, body, expanded), total = expandTotal(key);
-    body.append(el("div", "ov-win-list-title", LIST_TITLE[key]));
     const ul = el("div", "ov-win-list");
-    if (!rows.length) ul.append(el("p", "ov-win-empty", "지금 보여 줄 항목이 없어요."));
+    if (key !== "recall" || rows.length) body.append(el("div", "ov-win-list-title", LIST_TITLE[key])); // 불러오기: 영수증 상자가 빈 목록을 대신해요
+    if (!rows.length && key !== "recall") ul.append(el("p", "ov-win-empty", "지금 보여 줄 항목이 없어요."));
     ul.append(...rows); body.append(ul);
     const foot = el("div", "ov-win-foot");
     if (expanded) { ul.classList.add("ov-win-list-scroll"); foot.append(el("span", "ov-wide-foot-note", `${num(total)}건 중 ${num(rows.length)}건 · 창 안에서 내리면 더 나와요`), button("접기 ⌃", "ghost small", null, () => open(key, false))); }
@@ -354,6 +354,15 @@ window.ArkismOverviewWindows = (ctx, env) => {
     body.append(el("h2", "", title), el("p", "meta", text)); d.append(body, foot); d.addEventListener("close", () => d.remove()); document.body.append(d); d.showModal();
   }
 
+  // 세션 → 후보: 후보의 event_id:<agent>:<session_id> 태그가 유일한 연결. 서버에 분석 실패 기록은 없어 "후보 없음"으로만 보여요.
+  const FLOW = ["저장", "분석", "분류", "승인"];
+  function sessionState(x) {
+    const mine = (m) => tag(m, "event_id:").split(":").slice(1).join(":") === x.session_id;
+    const cands = waiting().filter(mine), approved = D().memories.filter(mine);
+    const fresh = Date.now() - time(x.ended_at || x.started_at) < 30 * 60000;
+    const step = approved.length ? 4 : cands.some((m) => m.classification) ? 3 : cands.length ? 2 : 1;
+    return { cands, approved, step, ...(cands.length || approved.length ? { tone: "ok", label: "분석 끝" } : fresh ? { tone: "wait", label: "분석 대기" } : { tone: "none", label: "후보 없음" }) };
+  }
   // 세션 기록 (580:51861)
   function wideSessions() {
     const items = env.sessions(), today = items.filter((x) => time(x.ended_at || x.started_at) >= new Date().setHours(0, 0, 0, 0)).length;
@@ -369,7 +378,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       for (const x of shown.slice(0, 80)) {
         const r = el("div", `ov-wide-row${x.id === sel ? " on" : ""}`), t = el("div", "ov-wide-row-t");
         t.append(el("span", "ov-win-item-title", x.title || x.session_id), el("small", "", [x.agent, x.project, `메시지 ${num(x.messages)}개`].filter(Boolean).join(" · ")));
-        r.append(t, el("span", "ov-wide-row-r", ago(x.ended_at || x.started_at))); r.addEventListener("click", () => { sel = x.id; paint(); }); list.append(r);
+        const st = sessionState(x), rr = el("span", "ov-wide-row-r"); rr.append(el("span", `ov-pill ov-pill-${st.tone}`, st.label), ...(st.cands.length ? [el("span", "ov-wide-row-n", `후보 ${num(st.cands.length)}개`)] : []), el("span", "", ago(x.ended_at || x.started_at)));
+        r.append(t, rr); r.addEventListener("click", () => { sel = x.id; paint(); }); list.append(r);
       }
       const cur = shown.find((x) => x.id === sel) || shown[0]; sel = cur?.id; list.querySelectorAll(".ov-wide-row").forEach((rw, k) => rw.classList.toggle("on", shown[k]?.id === sel));
       detail.replaceChildren(); if (!cur) return;
@@ -377,7 +387,14 @@ window.ArkismOverviewWindows = (ctx, env) => {
       detail.append(h, el("h3", "", cur.title || cur.session_id));
       const f = el("div", "ov-detail-facts"); const fact = (a, b) => { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); };
       fact("메시지", `${num(cur.messages)}개`); if (cur.active_seconds) fact("작업 시간", `${Math.round(cur.active_seconds / 60)}분`); if (cur.tokens) fact("토큰", num(cur.tokens)); if (cur.requests) fact("요청", `${num(cur.requests)}회`); if (cur.device) fact("기기", cur.device);
+      const ss = sessionState(cur), fl = el("div", "ov-flow");
+      FLOW.forEach((n, k) => { if (k) fl.append(el("i", "", "›")); fl.append(el("span", `ov-flow-step${k + 1 < ss.step ? " done" : k + 1 === ss.step ? " now" : ""}`, n)); });
+      const fs = el("div", "ov-detail-sec"); fs.append(el("small", "", "이 세션의 흐름"), fl); detail.append(fs);
       const s = el("div", "ov-detail-sec"); s.append(el("small", "", "이 세션"), f); detail.append(s);
+      const cs = el("div", "ov-detail-sec"); cs.append(el("small", "", "여기서 나온 후보"));
+      for (const m of [...ss.cands, ...ss.approved]) { const rw = el("div", "ov-detail-cand"); rw.append(el("span", "", clip(m.text, 60)), el("small", "", ss.cands.includes(m) ? "승인 대기" : "승인됨")); if (ss.cands.includes(m)) { rw.classList.add("link"); rw.addEventListener("click", () => wide("review", m.id)); } cs.append(rw); }
+      if (!ss.cands.length && !ss.approved.length) cs.append(el("p", "ov-win-empty", "이 세션에서 나온 후보가 없어요."));
+      detail.append(cs);
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
       act.append(button("대화 원문 보기", "primary small", null, () => { dlg.close(); go("sessions"); }),
         button("저장 안 함", "small", null, () => askConfirm("이 세션을 지울까요?", "세션과 보관된 대화가 지워지고 되돌릴 수 없어요. 에이전트의 원래 파일은 그대로 남고, 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.", async () => {
@@ -444,11 +461,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const near = new Set(); if (mode === "sel" && sel) { edges.forEach((e) => { if (e.from === sel) near.add(e.to); if (e.to === sel) near.add(e.from); }); near.add(sel); }
       const vis = (n) => reachF.has(n.reach || "general") && inTopic(n.id) && (mode === "all" || near.has(n.id)) && (!q || label(n.id).includes(q));
       for (const [r, [cx, cy]] of Object.entries(centers)) { if (!groups[r] || !reachF.has(r) || mode === "sel") continue; const c = document.createElementNS(SVGNS, "ellipse"); c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("rx", 40 + Math.sqrt(groups[r].length) * 17); c.setAttribute("ry", 34 + Math.sqrt(groups[r].length) * 14); c.setAttribute("class", `ov-map-ring ov-map-${r}`); svg.append(c); const t = document.createElementNS(SVGNS, "text"); t.setAttribute("x", cx); t.setAttribute("y", cy - 46 - Math.sqrt(groups[r].length) * 14); t.setAttribute("class", "ov-map-label"); t.setAttribute("text-anchor", "middle"); t.textContent = `${REACH[r]?.[0] || r} ${groups[r].length}`; svg.append(t); }
-      for (const e of edges) { if (mode === "sel" && sel && e.from !== sel && e.to !== sel) continue; const a = pos.get(e.from), b = pos.get(e.to); if (!a || !b || !vis(byId.get(e.from)) || !vis(byId.get(e.to))) continue; const l = document.createElementNS(SVGNS, "line"); l.setAttribute("x1", a[0]); l.setAttribute("y1", a[1]); l.setAttribute("x2", b[0]); l.setAttribute("y2", b[1]); l.setAttribute("class", `ov-map-edge ov-map-e-${e.type}`); svg.append(l); }
+      for (const e of edges) { if (mode === "sel" && sel && e.from !== sel && e.to !== sel) continue; const a = pos.get(e.from), b = pos.get(e.to); if (!a || !b || !vis(byId.get(e.from)) || !vis(byId.get(e.to))) continue; const l = document.createElementNS(SVGNS, "line"); l.setAttribute("x1", a[0]); l.setAttribute("y1", a[1]); l.setAttribute("x2", b[0]); l.setAttribute("y2", b[1]); l.setAttribute("class", `ov-map-edge ov-map-e-${e.type}`); svg.append(l); if (mode === "sel") { const t = document.createElementNS(SVGNS, "text"); t.setAttribute("x", (a[0] + b[0]) / 2); t.setAttribute("y", (a[1] + b[1]) / 2); t.setAttribute("text-anchor", "middle"); t.setAttribute("class", `ov-map-elabel ov-map-e-${e.type}`); t.textContent = EDGE[e.type] || e.type; svg.append(t); } }
       for (const n of nodes) { if (!vis(n)) continue; const p = pos.get(n.id), c = document.createElementNS(SVGNS, "circle"); c.setAttribute("cx", p[0]); c.setAttribute("cy", p[1]); c.setAttribute("r", n.id === sel ? 8 : 2.5 + Math.min(4, Math.sqrt(n.uses || 0))); c.setAttribute("class", `ov-map-dot ov-map-${n.reach || "general"}${n.id === sel ? " on" : ""}`);
         c.addEventListener("click", () => { sel = n.id; mode = "sel"; paint(); }); const tt = document.createElementNS(SVGNS, "title"); tt.textContent = label(n.id); c.append(tt); svg.append(c);
         if (mode === "sel") { const t = document.createElementNS(SVGNS, "text"); t.setAttribute("x", p[0] + 10); t.setAttribute("y", p[1] + 3); t.setAttribute("class", "ov-map-label"); t.textContent = label(n.id); svg.append(t); } }
       canvas.append(svg);
+      const lg = el("div", "ov-map-legend"); for (const t of ["supports", "same_session", "conflicts", "supersedes"]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t])); lg.append(i); } canvas.append(lg);
     }
     function paint() {
       seg.replaceChildren(...[["all", "전체 지도"], ["sel", "선택한 기억"]].map(([k, l]) => { const b = el("button", `ov-wide-chip${mode === k ? " on" : ""}`, l); b.type = "button"; b.disabled = k === "sel" && !sel; b.addEventListener("click", () => { mode = k; paint(); }); return b; }));
@@ -467,13 +485,17 @@ window.ArkismOverviewWindows = (ctx, env) => {
         right.append(el("p", "ov-win-empty", "점을 누르면 그 기억과 이어진 기억이 보여요."));
         return;
       }
-      const m = D().memories.find((x) => x.id === sel), n = byId.get(sel);
-      const h = el("div", "ov-detail-head"); h.append(el("span", "ov-win-tag", REACH[n.reach]?.[0] || "범용"), el("span", "ov-win-tag", kind(n.kind)), button("닫기", "ghost small", null, () => { sel = null; mode = "all"; paint(); })); right.append(h, el("h3", "", m?.text || "이 기억의 내용은 지도에 없어요"));
-      const u = usage(sel); if (u) { const f = el("div", "ov-detail-facts"); const p = el("p", ""); p.append(el("span", "", "최근 7일"), el("strong", "", `${num(u.d7 || 0)}번 쓰임`)); f.append(p); sec("쓰임", f); }
-      const links = edges.filter((e) => e.from === sel || e.to === sel), ul = el("div", "ov-detail-list");
-      for (const e of links.slice(0, 12)) { const other = e.from === sel ? e.to : e.from; const r = row(EDGE[e.type] || e.type, label(other), REACH[byId.get(other)?.reach]?.[0] || "", "", []); r.classList.add("ov-win-click"); r.addEventListener("click", () => { sel = other; paint(); }); ul.append(r); }
-      sec(`연결된 기억 ${links.length}`, links.length ? ul : el("p", "ov-win-empty", "이어진 기억이 없어요."));
-      const act = el("div", "ov-detail-actions"); act.append(button("기억 화면에서 보기", "small", null, () => { dlg.close(); go("memories", "active"); })); right.append(act);
+      const m = D().memories.find((x) => x.id === sel), n = byId.get(sel), ev = m && tag(m, "event_id:"), basis = m && tag(m, "basis:");
+      const h = el("div", "ov-detail-head"); h.append(el("span", `ov-win-tag ov-map-${n.reach || "general"}`, REACH[n.reach]?.[0] || "범용"), el("span", "ov-win-tag", kind(n.kind)), button("닫기", "ghost small", null, () => { sel = null; mode = "all"; paint(); })); right.append(h, el("h3", "", m?.text || "이 기억의 내용은 지도에 없어요"));
+      if (basis) right.append(el("small", "ov-detail-basis", basis === "explicit_user" ? "● 직접 말한 기억" : basis === "inferred" ? "● AI가 짐작한 기억" : "● 대화 원문 기반"));
+      const u = usage(sel); if (u) { const f = el("div", "ov-detail-facts"); const p = el("p", ""); p.append(el("span", "", "최근 7일"), el("strong", "", `${num(u.d7 || 0)}번 쓰임${u.last ? ` · ${ago(u.last)}` : ""}`)); f.append(p); sec("쓰임", f); }
+      if (ev) { const b = el("div", "ov-detail-from"), [agent, ...rest] = ev.split(":"), sid = rest.join(":"), ses = env.sessions().find((x) => x.session_id === sid); b.append(el("span", "", `대화 · ${ses ? ses.title || ses.project || agent : agent} · ${new Date(m.created_at).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" })}`), button("원문 대화 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec("출처", b); }
+      const links = edges.filter((e) => e.from === sel || e.to === sel), real = links.filter((e) => e.type !== "similar"), ul = el("div", "ov-detail-list");
+      for (const e of real.slice(0, 12)) { const other = e.from === sel ? e.to : e.from; const r = row(EDGE[e.type] || e.type, label(other), REACH[byId.get(other)?.reach]?.[0] || "", "", []); r.classList.add("ov-win-click"); r.addEventListener("click", () => { sel = other; paint(); }); ul.append(r); }
+      sec(`연결된 기억 ${real.length}`, real.length ? ul : el("p", "ov-win-empty", "이어진 기억이 없어요."));
+      const sim = links.find((e) => e.type === "similar");
+      if (sim) { const other = sim.from === sel ? sim.to : sim.from, box = el("div", "ov-map-suggest"); box.append(el("small", "", "AI 관계 제안"), el("p", "", `“${label(other)}”와 비슷한 기억이에요. 같은 뜻이면 기억 화면에서 합치거나 연결해 주세요.`)); right.append(box); }
+      const act = el("div", "ov-detail-actions"); if (m?.updated_at) act.append(el("small", "", `수정 ${new Date(m.updated_at).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" })}`)); act.append(button("기억 수정", "small", null, () => { dlg.close(); go("memories", "active"); })); right.append(act);
     }
     search.addEventListener("input", () => { q = search.value.trim(); drawMap(); });
     left.append(bar, canvas); paint();

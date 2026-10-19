@@ -5607,3 +5607,25 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "AI 판단{0}": "AI verdict{0}",
   "기존 기억 · {0}번 쓰임": "Existing memory · used {0} times"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "승인 대기로 보냄": "Sent to review",
+  "분석 끝": "Analyzed",
+  "분석 대기": "Waiting for analysis",
+  "후보 없음": "No candidates",
+  "이 세션의 흐름": "This session's flow",
+  "여기서 나온 후보": "Candidates from here",
+  "이 세션에서 나온 후보가 없어요.": "No candidates came from this session.",
+  "● 직접 말한 기억": "● Said directly",
+  "● AI가 짐작한 기억": "● Guessed by the AI",
+  "● 대화 원문 기반": "● Based on the chat text",
+  "원문 대화 보기 ›": "View original chat ›",
+  "AI 관계 제안": "AI relation suggestion",
+  "기억 수정": "Edit memory"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "후보 {0}개": "{0} candidates",
+  "{0}번 쓰임{1}": "Used {0} times{1}",
+  "대화 · {0} · {1}": "Chat · {0} · {1}",
+  "“{0}”와 비슷한 기억이에요. 같은 뜻이면 기억 화면에서 합치거나 연결해 주세요.": "Similar to “{0}”. If it means the same, merge or link them on the Memory screen.",
+  "수정 {0}": "Edited {0}"
+});

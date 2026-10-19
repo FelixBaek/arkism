@@ -225,3 +225,19 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-lane { padding: 0 7px; border-radius: 6px; background: rgba(100,140,255,.16); color: #8fb0ff; font-size: 11px; }
 .ov-kinds { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 12.5px; color: var(--text-2); }
 .ov-detail-quote small { display: block; margin-top: 6px; color: var(--text-2); font-size: 12px; }
+/* 세션 기록: 상태 알약·흐름·후보 */
+.ov-wide-row-r { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.ov-wide-row-n { font-size: 12px; color: var(--text); }
+.ov-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; } .ov-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ov-pill-ok { color: #6fbf8f; } .ov-pill-wait { color: #e0a43a; } .ov-pill-none { color: var(--text-2); }
+.ov-flow { display: flex; align-items: center; gap: 6px; } .ov-flow i { color: var(--text-2); font-style: normal; font-size: 11px; }
+.ov-flow-step { padding: 2px 10px; border-radius: 999px; background: var(--surface-2, rgba(128,128,128,.14)); color: var(--text-2); font-size: 12px; }
+.ov-flow-step.done { color: #6fbf8f; } .ov-flow-step.now { color: #e0a43a; background: rgba(224,164,58,.16); }
+.ov-detail-cand { display: flex; justify-content: space-between; gap: 8px; padding: 9px 12px; margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; } .ov-detail-cand small { color: var(--text-2); flex: none; } .ov-detail-cand.link { cursor: pointer; }
+/* 기억 지도: 간선 이름·범례·AI 제안·출처 */
+.ov-map-elabel { font-size: 10px; fill: currentColor; stroke: none; paint-order: stroke; }
+.ov-map-legend { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; color: var(--text-2); } .ov-map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ov-map-legend i { width: 18px; height: 0; border-top: 2px solid currentColor; }
+.ov-map-suggest { margin-top: 12px; padding: 10px 12px; border: 1px dashed #8b7cf6; border-radius: 10px; font-size: 13px; } .ov-map-suggest small { color: #8b7cf6; } .ov-map-suggest p { margin: 4px 0 0; }
+.ov-detail-basis { display: block; margin: 6px 0 2px; color: #6fbf8f; }
+.ov-detail-actions small { margin-right: auto; color: var(--text-2); }
