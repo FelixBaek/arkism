@@ -339,7 +339,7 @@
   function notice(text) {
     const n = $("#notice");
     n.replaceChildren();
-    n.classList.remove("st-denied");
+    n.classList.remove("st-notice");
     n.hidden = !text;
     if (!text) return;
     const close = el("button", "notice-close");
@@ -350,20 +350,23 @@
     n.append(el("span", "", text), close);
   }
 
-  // 권한 오류(access_denied)는 알림 한 줄 대신 공통 권한 화면으로 (Figma 198:3554); 다른 오류는 그대로 알림.
-  function failNotice(e, denied, other) {
-    const d = e.message === "access_denied" ? window.ArkismState.denied("access_denied") : null;
-    if (!d) return notice(other);
+  // 알림 자리에 공통 상태 화면 하나 (Figma 198:3554, home-checks.js ArkismState.of), 닫기(×)는 그대로.
+  function stateNotice(kind, on, over) {
     notice("");
     const n = $("#notice");
     n.hidden = false;
-    n.classList.add("st-denied");
+    n.classList.add("st-notice");
     const close = el("button", "notice-close");
     close.type = "button";
     close.setAttribute("aria-label", "알림 닫기");
     close.append(icon("x"));
     close.addEventListener("click", () => notice(""));
-    n.replaceChildren(window.ArkismState.panel({ title: d[0], text: denied, actions: [[d[1], () => { notice(""); go("settings"); }]] }), close);
+    n.replaceChildren(window.ArkismState.of(kind, on, over), close);
+  }
+  // 권한 오류(access_denied)는 공통 권한 화면으로; 다른 오류는 그대로 알림.
+  function failNotice(e, denied, other) {
+    if (e.message !== "access_denied") return notice(other);
+    stateNotice("denied", { account: () => { notice(""); go("settings"); } }, { text: denied });
   }
   // ---------------------------------------------------------------- data
   async function loadAll() {
@@ -408,7 +411,7 @@
       state.loadError = e.message;
       setStatus("error", "연결 확인 필요");
       render();
-      notice(`불러오지 못했어요: ${e.message}`);
+      stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: `연결을 확인하고 다시 시도해 주세요 (${e.message}).` });
     }
   }
   // Use counts of every memory in one call (GET /v1/memory_usage: 7·30 days and the last use; unused memories are absent).
@@ -573,7 +576,9 @@
     if (analyzing) return;
     analyzing = true;
     renderHeadActions();
-    notice("AI가 최근 기억과 후보를 보고 새 스킬을 찾는 중이에요…");
+    const waitText = "AI가 최근 기억과 후보를 보고 새 스킬을 찾는 중이에요…";
+    stateNotice("aiWait", {}, { text: waitText });
+    const slow = setTimeout(() => { if (analyzing && !$("#notice").hidden) stateNotice("aiWait", {}, { text: waitText, slow: true }); }, 60000);
     const d = state.data;
     const lines = [...d.candidates, ...d.memories].filter((m) => ["procedural", "lesson", "decision"].includes(m.kind) || d.candidates.includes(m)).slice(0, 80).map((m) => `- ${(m.text || "").slice(0, 160)}`).join("\n");
     const prompt = `Existing skills: ${d.skills.map((sk) => sk.name).join(", ").slice(0, 4000)}\n\nRecent memories and memory candidates (traces of work the user asked for again and again):\n${lines || "(none)"}`;
@@ -591,6 +596,7 @@
     } catch (e) {
       notice(e.message.startsWith("Unexpected") ? "AI 답을 읽지 못했어요. 다시 해 주세요." : e.message);
     } finally {
+      clearTimeout(slow);
       analyzing = false;
       render(false);
     }
@@ -1380,7 +1386,7 @@
     const of = (m) => TODO_MENUS.filter(([menu]) => menu === m).map(([menu, name, ids, target]) => [menu, name, rest.filter((t) => ids.includes(t.id) && t.n), target]);
     const rows = of("MEMORY");
     digests.menuRows(rows); // 병합 제안 · 모아보기 (digests.js)
-    rows.push(homeChecks.knowledgeRow(generation), ...of("TOOLS"), ...home.menuExtras(generation)); // 지식 · 스킬 (TOOLS), then 워크플로우 · 라우팅
+    rows.push(homeChecks.knowledgeRow(generation), ...of("TOOLS"), ...home.menuExtras(generation), homeChecks.repoRow(generation)); // 지식 · 스킬 (TOOLS) · 워크플로우 · 라우팅 · 저장소
     const tools = state.data.tools;
     if (tools) {
       const login = tools.servers.filter((s) => Object.values(s.login || {}).includes("needed"));
@@ -1810,7 +1816,8 @@
     if (reviewing.has(id)) return;
     reviewing.add(id);
     try { await work(); } catch (e) {
-      notice(e.message === "revision_conflict" ? "이미 처리됐거나 다른 곳에서 바뀌었어요. 새로 불러왔어요." : `처리하지 못했어요: ${e.message}`);
+      if (e.message === "revision_conflict") stateNotice("changed", {}, { text: "이미 처리됐거나 다른 곳에서 바뀌었어요. 새로 불러왔어요." });
+      else notice(`처리하지 못했어요: ${e.message}`);
       await reloadMemories().catch(() => {});
     } finally { reviewing.delete(id); }
   }

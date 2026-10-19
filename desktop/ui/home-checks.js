@@ -1,7 +1,8 @@
 // 홈 확인 줄 · 공통 상태 화면 (Figma 385:30743 · 523:35767 · 198:3554).
 // - stalledItem: 기억 처리 멈춤 경고. 판정은 overview.js stages()의 stalled 와 같은 식(대화는 계속 끝나는데 6시간 넘게 새 후보가 없음).
 // - knowledgeRow: 메뉴별 확인할 것의 "지식" 줄 (위키 초안 · 출처 바뀜 · 검토 대기 자료).
-// - ArkismState: 빈 화면 · 오류 · 권한 공통 부품 (panel · denied).
+// - repoRow: 저장소 줄. 코드 그래프 색인 커밋·시각만 본다(HEAD와 비교하는 git 호출은 저장소 화면에서만).
+// - ArkismState: 빈 화면 · 오류 · 권한 공통 부품 (panel · of).
 window.ArkismState = (() => {
   "use strict";
   const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
@@ -18,10 +19,23 @@ window.ArkismState = (() => {
     }
     return box;
   }
-  // The server's error codes that need a different account or server, in the design's words.
-  const DENIED = { access_denied: ["관리 계정이 필요해요", "계정 확인"] };
-  const denied = (code) => DENIED[code] || null;
-  return { panel, denied };
+  // 198:3554 states in the design's words. of(kind, on, over): an action shows only when `on` has its handler;
+  // over replaces title/text/note, and over.slow adds the kind's slow note (AI 대기).
+  const KINDS = {
+    noResults: { title: "검색 결과 없음", text: "조건에 맞는 항목이 없어요.", actions: [["검색 지우기", "clear"], ["필터 초기화", "reset", "ghost"]] },
+    loadFailed: { title: "불러오지 못했어요", note: "연결을 확인하고 다시 시도해 주세요.", actions: [["다시 시도", "retry"]] },
+    changed: { title: "다른 곳에서 내용이 바뀌었어요", text: "작성 중인 내용은 유지했어요. 최신 내용을 확인해 주세요.", actions: [["최신 내용 보기", "latest"], ["입력 복사", "copy", "ghost"]] },
+    desktopOnly: { title: "데스크톱에서 사용하세요", text: "Git 작업과 비교 실행은 Arkism 데스크톱 앱에서 열 수 있어요." },
+    serverUpdate: { title: "서버 업데이트가 필요해요", text: "이 서버는 아직 이 기능을 지원하지 않아요.", actions: [["다시 확인", "recheck"]] },
+    aiWait: { title: "AI 도움을 기다리는 중", text: "요청을 처리하고 있어요.", slow: "너무 오래 걸려요. 잠시 후 다시 시도해 주세요." },
+    denied: { title: "관리 계정이 필요해요", text: "이 작업은 관리 계정에서 사용할 수 있어요.", actions: [["계정 확인", "account"]] },
+  };
+  function of(kind, on = {}, over = {}) {
+    const k = KINDS[kind];
+    return panel({ title: over.title || k.title, text: over.text || k.text, note: over.note || (over.slow ? k.slow : k.note),
+      actions: (k.actions || []).filter(([, key]) => on[key]).map(([label, key, cls]) => [label, on[key], cls]) });
+  }
+  return { panel, of };
 })();
 
 window.ArkismHomeChecks = (ctx) => {
@@ -77,5 +91,20 @@ window.ArkismHomeChecks = (ctx) => {
     const parts = [{ label: `위키 초안 ${drafts}`, n: drafts }, { label: `출처 바뀜 ${stale}`, n: stale }, { label: `검토 대기 자료 ${wait}`, n: wait }].filter((p) => p.n);
     return ["TOOLS", "지식", parts, ["knowledge"]];
   }
-  return { stalledItem, knowledgeRow };
+
+  // ---- 저장소 (코드 그래프 색인)
+  // shortcut: an index older than a day stands in for "new commits since the index"; the exact count needs the Git screen's graph call.
+  let R = { g: -1, repos: null };
+  function repoRow(generation) {
+    if (R.g !== generation) {
+      R = { g: generation, repos: null };
+      const g = generation;
+      request(`/v1/code_graph/repos?${query()}`).then((r) => (Array.isArray(r?.repos) ? r.repos : null), () => null)
+        .then((repos) => { if (R.g !== g) return; R.repos = repos; if (live()) render(false); });
+    }
+    const at = (r) => r.indexed_at || r.updated_at;
+    const old = (R.repos || []).filter((r) => time(at(r)) && Date.now() - time(at(r)) > 24 * HOUR);
+    return ["TOOLS", "저장소", old.map((r) => ({ label: `${r.repo.split("/").pop()} 색인 ${ago(at(r))}`, n: 1 })), ["git"]];
+  }
+  return { stalledItem, knowledgeRow, repoRow };
 };

@@ -4,7 +4,7 @@
 .st-panel p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans, inherit); color: var(--nc-muted, var(--text-2)); }
 .st-panel .st-note { align-self: stretch; padding: 8px 12px; border-radius: 6px; background: var(--nc-amber-bg, var(--warn-tint)); color: var(--nc-text, var(--text-1)); }
 .st-actions { display: flex; gap: 8px; align-items: center; }
-.notice.st-denied { align-items: flex-start; background: var(--nc-surface, var(--bg-muted)); border-color: var(--nc-line, var(--border)); }
-.notice.st-denied .st-panel { flex: 1; padding: 0; border: 0; background: none; }
+.notice.st-notice { align-items: flex-start; background: var(--nc-surface, var(--bg-muted)); border-color: var(--nc-line, var(--border)); }
+.notice.st-notice .st-panel { flex: 1; padding: 0; border: 0; background: none; }
 .todo-item.stalled { background: var(--status-danger-tint); }
 .todo-item.stalled .text { color: var(--status-danger); }
