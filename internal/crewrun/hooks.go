@@ -125,5 +125,6 @@ func (e *Engine) Handler(ctx context.Context) http.Handler {
 		e.Go(ctx, run.ID)
 		writeJSON(w, 202, map[string]string{"run_id": run.ID})
 	})
+	mux.HandleFunc("POST /callbacks/{token}", n8nCallback)
 	return mux
 }

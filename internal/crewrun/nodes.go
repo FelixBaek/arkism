@@ -86,6 +86,14 @@ func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (re
 	case "subflow":
 		out, err := e.runSubflow(ctx, c, input)
 		return result{out: out}, err
+	case "expert":
+		return e.runExpert(ctx, x, n, input)
+	case "team":
+		out, err := e.runTeam(ctx, c, input)
+		return result{out: out}, err
+	case "n8n":
+		out, err := e.runN8N(ctx, c, input)
+		return result{out: out}, err
 	case "code":
 		out, err := e.runCode(ctx, c, input)
 		port := ""
@@ -160,7 +168,7 @@ func (x *runExec) fake(n Node, input any) (any, bool) {
 		if n.Config["access"] == "read" {
 			return nil, false
 		}
-	case "ai", "ai_once", "http", "github", "notify", "subflow":
+	case "ai", "ai_once", "expert", "team", "n8n", "http", "github", "notify", "subflow":
 	case "wait":
 		return input, true
 	default:
