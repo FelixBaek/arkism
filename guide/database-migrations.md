@@ -16,7 +16,7 @@ paused.
 
 Version two refreshes full-text indexes for descriptive memory conditions:
 `memory_context.applicability`, `uncertainty` and `valid_from`. It adds a derived
-index marker and a pending-row index without rewriting canonical records during
+index marker, a pending-row index and a GIN context-expression index without rewriting canonical records during
 the schema transaction. The bounded backfill refreshes pre-context token vectors;
 rows without descriptive context keep their existing vectors. New inserts and
 replacements index the qualifiers immediately. Pending rows retain the existing

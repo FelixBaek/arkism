@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -183,5 +184,53 @@ func TestSchemaMigrationContextIndexUpgradePreservesRecord(t *testing.T) {
 	}
 	if len(search("보고서")) != 0 || len(search("새로운환경")) != 1 {
 		t.Fatal("replacement kept stale context tokens")
+	}
+}
+
+// A small fixture normally favors a sequential scan. Disabling that preference
+// checks that every OR arm has an index path, not that production always picks
+// one or meets a latency target. A concatenated legacy/context vector fails this.
+func TestMemoryContextSearchHasIndexPathsPostgres(t *testing.T) {
+	p := isolatedPostgres(t)
+	ctx := context.Background()
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SET LOCAL enable_seqscan=off`); err != nil {
+		t.Fatal(err)
+	}
+	terms := searchQueryTerms("conditionprobe")
+	q := searchTermsQuery(terms)
+	var raw []byte
+	query := `EXPLAIN (FORMAT JSON, COSTS OFF) SELECT id FROM memory_records WHERE ` + fmt.Sprintf(pgSearchMatch, 1, 2, 3, 4)
+	if err = tx.QueryRow(ctx, query, q, q, q, terms).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var plans []struct{ Plan map[string]any }
+	if err = json.Unmarshal(raw, &plans); err != nil || len(plans) != 1 {
+		t.Fatal("invalid explain output", err)
+	}
+	indexes := map[string]bool{}
+	var walk func(map[string]any)
+	walk = func(plan map[string]any) {
+		if plan["Node Type"] == "Seq Scan" {
+			t.Fatal("FTS predicate lost its index path")
+		}
+		if name, ok := plan["Index Name"].(string); ok {
+			indexes[name] = true
+		}
+		if children, ok := plan["Plans"].([]any); ok {
+			for _, child := range children {
+				walk(child.(map[string]any))
+			}
+		}
+	}
+	walk(plans[0].Plan)
+	for _, name := range []string{"memory_records_search_tokens", "memory_records_fts", "memory_records_context_fts"} {
+		if !indexes[name] {
+			t.Fatalf("FTS arm cannot use %s", name)
+		}
 	}
 }

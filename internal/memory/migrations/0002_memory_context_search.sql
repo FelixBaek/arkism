@@ -7,3 +7,5 @@ WHERE collection IN ('memories','skill_versions','reflections') AND NOT search_c
 AND (COALESCE(doc->'memory_context'->>'applicability','') <> ''
   OR COALESCE(doc->'memory_context'->>'uncertainty','') <> ''
   OR COALESCE(doc->'memory_context'->>'valid_from','') <> '');
+CREATE INDEX memory_records_context_fts ON arkism.memory_records USING gin
+(to_tsvector('simple', COALESCE(doc->'memory_context'->>'applicability','') || ' ' || COALESCE(doc->'memory_context'->>'uncertainty','') || ' ' || COALESCE(doc->'memory_context'->>'valid_from','')));
