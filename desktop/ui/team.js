@@ -1544,13 +1544,6 @@ window.ArkismTeams = (ctx) => {
     S.bot = null; S.settingsOpen = false;
     if (!here("discord")) go("discord"); else render(false);
   }
-  function section(n, title, sub) { // numbered step card of the 봇 연결 screen
-    const c = el("section", "tm-card tm-step");
-    const h = el("div", "tm-step-head"); h.append(el("span", "tm-step-n", String(n)), el("h3", "", title));
-    c.append(h);
-    if (sub) c.append(el("p", "tm-step-sub", sub));
-    return c;
-  }
   // Back goes to where 봇 연결 was opened (e.g. the team list), never into the hidden 디스코드 list.
   function leaveConnect() {
     const from = S.connect?.from;
