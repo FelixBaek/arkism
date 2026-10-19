@@ -4921,3 +4921,8 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "제안 {0}개를 받았어요.": "Got {0} suggestions.",
   "고친 횟수 {0} · 마크다운으로 써요": "Edited {0} times · written in Markdown"
 });
+
+// 크루 › 전문가: 스킬 칩·상세
+Object.assign(window.ArkismI18nEN.strings, {"고정 풀기": "Unpin", "항상 먼저 넣기": "Always put in first", "스킬 목록에서 찾지 못했어요. 이름이 바뀌었거나 아직 승인되지 않았을 수 있어요.": "This skill is not in the skill list. It may have been renamed or not approved yet.", "켜면 이 전문가가 일할 때마다 이 스킬을 먼저 넣어요": "When on, this expert gets this skill first every time it works", "넣는 방식": "How it is put in", "전체는 길고 정확하게, 요약·참조는 짧게 넣어요": "Full is long and exact; summary and reference are short", "요약": "Summary", "참조": "Reference", "버전": "Version", "최신": "Latest", "최신으로": "Use latest", "이 전문가에서 빼기": "Remove from this expert", "항상 넣는 자료는 20개까지예요.": "You can pin up to 20 items.", "+ 스킬 추가": "+ Add skill"});
+Object.assign(window.ArkismI18nEN.patterns, {"고정 {0}개": "{0} pinned", "새 버전 v{0}이 있어요. 지금은 v{1}을 쓰고 있어요.": "A new version v{0} is available. Using v{1} now.", "고정 v{0}": "Pinned v{0}"});
+Object.assign(window.ArkismI18nEN.patterns, {"↺ {0}{1} → {2} · 최대 {3}번": "↺ {0}{1} → {2} · up to {3} times"});
