@@ -1540,13 +1540,26 @@ window.ArkismTeams = (ctx) => {
   }
   function startConnect(retry, preset) {
     const s0 = S.discord?.settings || {};
-    S.connect = { mode: s0.bot_mode || "shared", name: retry?.name || "", token: "", appId: retry?.application_id || "", intent: false, target: "", bot: null, busy: false, retry: retry?.id || null, ...preset };
+    S.connect = { mode: s0.bot_mode || "shared", name: retry?.name || "", token: "", appId: retry?.application_id || "", intent: false, target: "", bot: null, busy: false, retry: retry?.id || null, from: { view: state.view, tab: state.settingsTab }, ...preset };
     S.bot = null; S.settingsOpen = false;
     if (!here("discord")) go("discord"); else render(false);
   }
+  function section(n, title, sub) { // numbered step card of the 봇 연결 screen
+    const c = el("section", "tm-card tm-step");
+    const h = el("div", "tm-step-head"); h.append(el("span", "tm-step-n", String(n)), el("h3", "", title));
+    c.append(h);
+    if (sub) c.append(el("p", "tm-step-sub", sub));
+    return c;
+  }
+  // Back goes to where 봇 연결 was opened (e.g. the team list), never into the hidden 디스코드 list.
+  function leaveConnect() {
+    const from = S.connect?.from;
+    S.connect = null; clearTimeout(S.connectTimer);
+    if (from && from.view !== "discord") { if (from.view === "settings") state.settingsTab = from.tab; go(from.view); } else render(false);
+  }
   function connectSteps() {
     const c = S.connect;
-    const back = link("← 디스코드", () => { S.connect = null; clearTimeout(S.connectTimer); render(false); }, "tm-link quiet");
+    const back = link(S.connect.from && S.connect.from.view !== "discord" ? "← 돌아가기" : "← 디스코드", leaveConnect, "tm-link quiet");
     const s1 = section(1, "봇 쓰는 방식");
     s1.append(modeChooser(c.mode, (k) => { c.mode = k; render(false); }));
     const s2 = section(2, "디스코드에서 봇 만들기");
@@ -1574,7 +1587,7 @@ window.ArkismTeams = (ctx) => {
     s5.append(perms, S.inviteBox);
     const foot = el("div", "tm-foot");
     S.connectBtn = button(c.bot ? "다시 연결" : "연결", "primary", null, submitConnect);
-    foot.append(S.connectBtn, link("취소", () => { S.connect = null; clearTimeout(S.connectTimer); render(false); }, "tm-link plain"));
+    foot.append(S.connectBtn, link("취소", leaveConnect, "tm-link plain"));
     S.connectState = el("span", "tm-connect-state");
     foot.append(S.connectState);
     const main = el("div", "tm-form-main");
@@ -1601,7 +1614,7 @@ window.ArkismTeams = (ctx) => {
     const b = c.bot;
     if (S.connectState) {
       S.connectState.replaceChildren();
-      if (b) { const [label, tone] = BOT_STATE[b.state] || [b.state, "line"]; S.connectState.append(badge(label, tone)); if (b.state === "connected") S.connectState.append(link("채널 정하기 →", () => { S.connect = null; S.bot = b.id; render(false); })); }
+      if (b) { const [label, tone] = BOT_STATE[b.state] || [b.state, "line"]; S.connectState.append(badge(label, tone)); if (b.state === "connected") S.connectState.append(link("채널 정하기 →", () => { if (c.from && c.from.view !== "discord") leaveConnect(); else { S.connect = null; S.bot = b.id; render(false); } })); }
       else if (!c.intent) S.connectState.append(el("small", "", "3번을 켜면 연결할 수 있어요."));
     }
   }

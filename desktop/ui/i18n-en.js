@@ -3123,6 +3123,7 @@ window.ArkismI18nEN = {
   "진행 중인 회의를 멈춰요": "Stops the running meeting",
   "아직 없음": "None yet",
   "봇 쓰는 방식": "Bot setup",
+  "← 돌아가기": "← Back",
   "이 팀 전용 봇 연결하기 →": "Connect a bot just for this team →",
   "같은 스레드": "Same thread",
   "봇 설정": "Bot settings",
