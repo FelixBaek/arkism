@@ -4909,7 +4909,9 @@ Object.assign(window.ArkismI18nEN.strings, {
   "팀을 만들면 저장할 때마다 판이 남아요.": "Once the team exists, each save keeps a version.", "판 이력": "Version history",
   "저장할 때마다 판이 하나 생겨요. 되돌려도 지금 판은 남아요.": "Each save makes a version. Restoring keeps the current one.", "지금 쓰는 판": "Current version",
   "바뀐 점 보기": "View changes", "이 판으로 되돌리기": "Restore this version", "바뀐 점을 찾지 못했어요.": "No changes found.",
-  "최근 회의": "Recent meetings", "테스트 탭에서 연 회의도 여기 남아요": "Meetings opened in the Test tab appear here too", "아직 연 회의가 없어요.": "No meetings yet."
+  "최근 회의": "Recent meetings", "테스트 탭에서 연 회의도 여기 남아요": "Meetings opened in the Test tab appear here too", "아직 연 회의가 없어요.": "No meetings yet.",
+  "판 이력을 불러오지 못했어요.": "Could not load the version history.",
+  "저장하지 않은 변경이 있어요. 버리고 회의 화면으로 갈까요?": "You have unsaved changes. Discard them and go to meetings?"
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {
@@ -4917,5 +4919,6 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "회의 방식 → {0}": "Meeting mode → {0}", "최대 라운드 {0} → {1}": "Max rounds {0} → {1}", "토큰 상한 {0} → {1}": "Token cap {0} → {1}",
   "{0} 추가 ({1})": "Added {0} ({1})", "{0} 뺌": "Removed {0}", "디스코드 · #{0}": "Discord · #{0}",
   "저장하면 v{0}이 돼요 · 기록 탭에서 되돌릴 수 있어요": "Saving makes v{0} · restore from the History tab",
-  "{0} 토큰 · {1}": "{0} tokens · {1}", "v{0}로 되돌릴까요? 새 판으로 저장돼요.": "Restore v{0}? It is saved as a new version."
+  "{0} 토큰 · {1}": "{0} tokens · {1}", "v{0}로 되돌릴까요? 새 판으로 저장돼요.": "Restore v{0}? It is saved as a new version.",
+  "제안 {0}개 대기 · 저장하면 반영돼요": "{0} suggestions waiting · saved when you save"
 });

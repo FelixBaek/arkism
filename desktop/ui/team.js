@@ -329,21 +329,30 @@ window.ArkismTeams = (ctx) => {
     pop.h.select(tab);
     body.scrollTop = top;
   }
-  const histKey = (id) => `arkism.team-versions.${id}`;
-  function readHist(id) { try { return JSON.parse(localStorage.getItem(histKey(id)) || "[]"); } catch { return []; } }
-  function writeHist(id, list) { try { localStorage.setItem(histKey(id), JSON.stringify(list.slice(0, 20))); } catch { /* storage full or blocked: the history is a convenience */ } }
+  // 판 이력 from the server (GET /v1/crew/versions/{id}): the live definition first, then the ones each save replaced.
+  async function loadVersions(pop) {
+    try {
+      const items = (await request(`/v1/crew/versions/${encodeURIComponent(pop.id)}?${query()}`)).items || [];
+      pop.versions = items.map((x, i) => ({ v: x.revision, at: Date.parse(x.at) || 0, crew: x.crew,
+        summary: items[i + 1] ? changes(items[i + 1].crew, x.crew).slice(0, 2).join(" · ") || "저장" : x.revision === 1 ? "처음 만듦" : "처음 기록" }));
+    } catch { pop.versions = []; }
+    popRedraw("history");
+  }
 
   function openPopup(id) {
     if (S.pop || !popup) return;
     const rec = id ? byId(id) : null;
     const base = rec ? clone(rec.crew) : blankTeam();
     const pop = S.pop = { id: id || null, rec, base, d: clone(base), aiOpen: true, aiBusy: false, ai: "", est: null, estKey: "", estTimer: 0, meetings: null, tab: "overview", test: { text: "", m: null, busy: false }, newCat: false, handleTouched: !!rec, from: "" };
-    if (rec) { S.stats.delete(id); loadStats(id); void loadMeetingsOf(pop); if (!readHist(id).length) writeHist(id, [{ v: rec.revision || 1, at: Date.parse(rec.updated_at) || Date.now(), summary: "처음 기록", crew: clone(rec.crew) }]); }
+    if (rec) { S.stats.delete(id); loadStats(id); void loadMeetingsOf(pop); void loadVersions(pop); }
     pop.estBox = el("div", "tm-est-box");
     const tabs = [["overview", "개요"], ["test", "테스트"], ["history", "기록"]].map(([key, label]) => ({ key, label, render: (box) => { pop.tab = key; paintTab(pop, box); } }));
     const actions = [pop.estBox];
-    if (rec) actions.push(button("보관", "ghost", null, () => archiveTeam(pop)));
-    pop.h = popup.open({ title: "", sub: "", tabs, initial: "overview", actions, cls: "tm-pop", onClose: () => { clearTimeout(pop.estTimer); clearTimeout(pop.testTimer); S.pop = null; } });
+    if (rec) actions.push(button("보관", "ghost", null, () => archiveTeam(pop)), button("새 회의", "ghost", null, () => {
+      if (pdiff(pop).length && !confirm("저장하지 않은 변경이 있어요. 버리고 회의 화면으로 갈까요?")) return;
+      pop.base = clone(pop.d); closePopup(); S.newMeeting = { team_id: pop.id }; S.meetTab = "running"; go("meetings");
+    }));
+    pop.h = popup.open({ title: "", sub: "", tabs, initial: "overview", actions, cls: rec ? "tm-pop" : "tm-pop is-new", onClose: () => { clearTimeout(pop.estTimer); clearTimeout(pop.testTimer); S.pop = null; } });
     const dlg = pop.h.dialog;
     // closing with unsaved changes asks first (Esc and 닫기)
     const guard = (e) => { if (pdiff(pop).length && !confirm(pop.id ? "저장하지 않은 변경이 있어요. 버리고 닫을까요?" : "아직 만들지 않았어요. 버리고 닫을까요?")) { e.preventDefault(); e.stopImmediatePropagation(); } };
@@ -494,7 +503,11 @@ window.ArkismTeams = (ctx) => {
     const h = el("button", "tm-sec-head tm-ai-head"); h.type = "button"; h.setAttribute("aria-expanded", String(pop.aiOpen));
     const t = el("h3", ""); t.append(icon("sparkle"), el("span", "", mine ? "AI로 고치기" : "AI로 초안 만들기"));
     const car = icon("caret-down"); car.classList.add("tm-caret"); if (!pop.aiOpen) car.classList.add("shut");
-    h.append(t, car);
+    // 대기 중인 제안: what the last AI answer changed that is not saved yet, shown even when folded
+    const waiting = pop.aiFrom ? changes(pop.aiFrom, pop.d).length : 0;
+    h.append(t);
+    if (waiting) h.append(el("small", "tm-ai-count", `제안 ${waiting}개 대기 · 저장하면 반영돼요`));
+    h.append(car);
     h.addEventListener("click", () => { pop.aiOpen = !pop.aiOpen; popRedraw("overview"); });
     s.append(h);
     if (pop.aiOpen) {
@@ -514,7 +527,7 @@ window.ArkismTeams = (ctx) => {
     if (!text) { notice("무엇을 할지 적어 주세요."); return; }
     kit = kit || window.ArkismAssist?.(ctx);
     if (!kit) { notice("AI 도움을 쓸 수 없어요."); return; }
-    const d = pop.d;
+    const d = pop.d, from = clone(d);
     btn.disabled = true; btn.textContent = "만드는 중…"; pop.aiBusy = true;
     const roster = agents().map((a) => ({ id: a.id, name: a.crew.name, about: a.crew.role || a.crew.category || "" }));
     const cur = { name: d.name, role: d.role, mode: d.mode, max_rounds: d.ending?.max_rounds, token_cap: d.ending?.token_cap, members: sorted(d.members).map((m) => ({ agent_id: m.agent_id, role: m.role, focus: m.focus })) };
@@ -534,7 +547,7 @@ window.ArkismTeams = (ctx) => {
         const ok = j.members.filter((m) => agents().some((x) => x.id === m?.agent_id));
         if (ok.length) d.members = ok.map((m, i) => ({ agent_id: m.agent_id, order: i + 1, role: ROLES.some(([k]) => k === m.role) ? m.role : i ? "worker" : "moderator", focus: String(m.focus || "").slice(0, 120) }));
       }
-      pop.ai = ""; pop.aiBusy = false;
+      pop.ai = ""; pop.aiBusy = false; pop.aiFrom = pop.aiFrom || from;
       if (!pop.handleTouched) d.handle = handleFrom(d.name);
       paintHead(pop); changed(pop, true);
       notice(pop.id ? "고쳤어요. 저장하면 반영돼요." : "초안을 만들었어요. 다듬어서 만들어 주세요.");
@@ -627,7 +640,7 @@ window.ArkismTeams = (ctx) => {
     pop.bar.replaceChildren();
     const left = el("div", "tm-bar2-acts");
     left.append(button(pop.id ? "저장" : "팀 만들기", "primary", null, () => savePopup(pop)), button("취소", "ghost", null, () => {
-      if (pop.id) { pop.d = clone(pop.base); pop.handleTouched = true; paintHead(pop); changed(pop, true); } else closePopup();
+      if (pop.id) { pop.d = clone(pop.base); pop.handleTouched = true; pop.aiFrom = null; paintHead(pop); changed(pop, true); } else closePopup();
     }));
     if (pop.id) left.append(el("small", "", `바뀐 칸 ${diff.length}개`));
     const hint = pop.id ? `저장하면 v${(pop.rec.revision || 1) + 1}이 돼요 · 기록 탭에서 되돌릴 수 있어요`
@@ -644,18 +657,18 @@ window.ArkismTeams = (ctx) => {
         const saved = await request("/v1/crew", { method: "POST", body: body({ crew: d }) });
         await reloadCrew().catch(() => replaceRecord(saved));
         pop.id = saved?.id; pop.rec = byId(pop.id) || saved; pop.base = clone(d); pop.d = clone(d); pop.handleTouched = true;
-        if (pop.id) { writeHist(pop.id, [{ v: pop.rec.revision || 1, at: Date.now(), summary: "처음 만듦", crew: clone(d) }]); loadStats(pop.id); void loadMeetingsOf(pop); }
+        pop.h.dialog.classList.remove("is-new");
+        if (pop.id) { loadStats(pop.id); void loadMeetingsOf(pop); void loadVersions(pop); }
         notice("팀을 만들었어요.");
       } else {
-        const before = pop.base;
         const saved = await request(`/v1/crew/${encodeURIComponent(pop.id)}`, { method: "POST", body: body({ expected_revision: pop.rec.revision, crew: d }) });
         const rec = saved?.id ? saved : { ...pop.rec, revision: (pop.rec.revision || 0) + 1, crew: clone(d) };
         replaceRecord(rec);
         pop.rec = byId(pop.id) || rec; pop.base = clone(d); pop.d = clone(d);
-        const sum = changes(before, d).slice(0, 2).join(" · ") || "저장";
-        writeHist(pop.id, [{ v: pop.rec.revision, at: Date.now(), summary: sum, crew: clone(d) }, ...readHist(pop.id)]);
+        void loadVersions(pop);
         notice("저장했어요.");
       }
+      pop.aiFrom = null;
       if (here("teams")) render(false);
       paintHead(pop); popRedraw("overview"); popRedraw("history");
     } catch (e) { notice(errorText(e)); }
@@ -742,7 +755,7 @@ window.ArkismTeams = (ctx) => {
   // ---------------------------------------------------------------- 기록 (981:60196): 판 이력 · 최근 회의
   function historyTab(pop) {
     if (!pop.id) return [empty("팀을 만들면 저장할 때마다 판이 남아요.")];
-    const list = readHist(pop.id); pop.histOpen = pop.histOpen || new Set();
+    const list = pop.versions || []; pop.histOpen = pop.histOpen || new Set();
     const s1 = sec("clock-counter-clockwise", "판 이력", "저장할 때마다 판이 하나 생겨요. 되돌려도 지금 판은 남아요.");
     const box = el("div", "tm-hist");
     list.forEach((h, i) => {
@@ -760,15 +773,16 @@ window.ArkismTeams = (ctx) => {
       }
       r.append(acts);
       box.append(r);
-      if (pop.histOpen.has(h.v)) { const lines = changes(list[i + 1]?.crew || h.crew, h.crew); const p = el("p", "tm-hist-diff"); p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((x) => raw(el("span", "", tr(x))))); box.append(p); }
+      if (pop.histOpen.has(h.v)) { const lines = changes(list[0].crew, h.crew); /* what restoring this version would change */ const p = el("p", "tm-hist-diff"); p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((x) => raw(el("span", "", tr(x))))); box.append(p); }
     });
+    if (!list.length) box.append(empty(pop.versions ? "판 이력을 불러오지 못했어요." : "불러오는 중…"));
     s1.append(box);
     const s2 = sec("chat-text", "최근 회의", "테스트 탭에서 연 회의도 여기 남아요");
     const rows = el("div", "tm-hist");
     for (const m of (pop.meetings || []).slice(0, 8)) {
       const r = el("button", "tm-hist-row meet"); r.type = "button";
       const ok = m.status === "concluded";
-      r.append(el("b", ok ? "ok" : "warn", ok ? "✓" : "!"), el("time", "", (() => { const t = new Date(m.created_at || m.updated_at); return `${pad2(t.getMonth() + 1)}-${pad2(t.getDate())} ${pad2(t.getHours())}:${pad2(t.getMinutes())}`; })()),
+      r.append(el("b", ok ? "ok" : "warn", ok ? "✓" : "!"), el("time", "", (() => { const t = new Date(m.created_at || m.updated_at); return isNaN(t) ? "" : `${pad2(t.getMonth() + 1)}-${pad2(t.getDate())} ${pad2(t.getHours())}:${pad2(t.getMinutes())}`; })()),
         raw(el("span", "", m.title || "")), el("small", "", `${tr(MEETING_STATUS[m.status]?.[0] || "")} · ${usd(m.cost_usd)}`));
       r.addEventListener("click", () => { closePopup(); S.meetSel = m.id; S.meeting = m; S.meetTab = LIVE.has(m.status) ? "running" : "ended"; go("meetings"); });
       rows.append(r);
