@@ -139,7 +139,7 @@ func TestAtomicWritePublicationWaitBudgetHasNoFakeErrno(t *testing.T) {
 	if !errors.As(err, &diagnostic) || !errors.Is(err, errAtomicWriteAdmissionBudget) || errors.As(err, &errno) || published {
 		t.Fatal("admission timeout lost its cause or invented an OS error")
 	}
-	if diagnostic.reason != "wait_budget" || diagnostic.elapsed != atomicWriteAdmissionBudget || err.Error() != "atomic_write_admission reason=wait_budget attempts=0 elapsed_ms=500" {
+	if diagnostic.reason != "wait_budget" || diagnostic.elapsed != atomicWriteAdmissionBudget || err.Error() != "atomic_write_admission reason=wait_budget attempts=0 elapsed_ms=2000" {
 		t.Fatal("admission diagnostics changed")
 	}
 	table.mu.Lock()

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -413,14 +414,34 @@ func validateSessionOutput(output map[string]any, request map[string]any) (err e
 		}
 		// A literal citation is not evidence for paraphrased or invented metadata.
 		// Previously prepared versions keep their original delivery contract.
-		if request["prompt_version"] == sessionPromptVersion && autosaveGet(c, "evidence_kind") == "user_statement" && !sessionCandidateContextSupported(c) {
+		if request["prompt_version"] == sessionPromptVersion && autosaveGet(c, "evidence_kind") == "user_statement" && !sessionCandidateContextSupported(c, records) {
 			return sessionWait("candidate_context_evidence_mismatch")
 		}
 	}
 	return nil
 }
 
-func sessionCandidateContextSupported(candidate any) bool {
+type sessionContextOrigin struct {
+	id       string
+	revision int64
+}
+
+func sessionContextSource(id string, record any) sessionContextOrigin {
+	revision, valid := host.Int(autosaveGet(record, "revision"))
+	origin := sessionContextOrigin{id, revision}
+	parent, isString := autosaveGet(record, "split_of").(string)
+	if !valid || !isString || parent == "" || !strings.HasPrefix(id, parent+"-p") {
+		return origin
+	}
+	// Only the host's splitRecord naming convention shares an origin. Missing
+	// or malformed metadata must never merge otherwise independent messages.
+	if part, err := strconv.Atoi(strings.TrimPrefix(id, parent+"-p")); err == nil && part > 0 {
+		origin.id = parent
+	}
+	return origin
+}
+
+func sessionCandidateContextSupported(candidate any, records map[string]any) bool {
 	phrases := []string{}
 	for _, key := range []string{"applicability", "uncertainty", "valid_from"} {
 		if phrase := str(autosaveGet(candidate, key)); phrase != "" {
@@ -433,10 +454,11 @@ func sessionCandidateContextSupported(candidate any) bool {
 	// refsValid has already bound every quote to this source's exact revision
 	// and user role. Separate quotations from that one message are sufficient;
 	// joining evidence from different messages is not.
-	groups := map[string][]string{}
+	groups := map[sessionContextOrigin][]string{}
 	for _, ref := range anyList(autosaveGet(candidate, "source_refs")) {
 		id := str(autosaveGet(ref, "source_id"))
-		groups[id] = append(groups[id], str(autosaveGet(ref, "quote")))
+		origin := sessionContextSource(id, records[id])
+		groups[origin] = append(groups[origin], str(autosaveGet(ref, "quote")))
 	}
 	for _, quotes := range groups {
 		supported := true
