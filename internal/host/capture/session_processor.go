@@ -324,7 +324,7 @@ func sessionMissingEvidenceMetric(field string, request map[string]any) {
 }
 
 // validateSessionOutput rejects fabricated or stale evidence, false test success and summary-only candidates.
-func validateSessionOutput(output map[string]any, request map[string]any) (err error) {
+func validateSessionOutput(output, request map[string]any) (err error) {
 	defer recovered(&err)
 	if err := validateSessionSchema(output, sessionSchema); err != nil {
 		if errorCode(err) == "schema_array_min_items" {
@@ -697,7 +697,7 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 		if err := authorize(content); err != nil {
 			return nil, err
 		}
-		if why := LLMBudgetReason(model); why != "" {
+		if LLMBudgetReason(model) != "" {
 			return nil, sessionWait("session_model_budget_wait")
 		}
 		system := sessionSystem

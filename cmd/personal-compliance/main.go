@@ -33,14 +33,16 @@ type Table struct {
 	Rules   []Rule `json:"rules"`
 }
 
+type target struct {
+	ID       string `json:"id"`
+	Revision int64  `json:"revision"`
+}
+
 type input struct {
 	Input struct {
 		Dimension string `json:"dimension"`
-		Target    struct {
-			ID       string `json:"id"`
-			Revision int64  `json:"revision"`
-		} `json:"target"`
-		Events []struct {
+		Target    target `json:"target"`
+		Events    []struct {
 			Payload json.RawMessage `json:"payload"`
 		} `json:"events"`
 	} `json:"input"`

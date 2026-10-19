@@ -173,8 +173,7 @@ window.ArkismCrew = (ctx) => {
     queue.forEach((id) => { depth[id] = 0; });
     const left = { ...incoming };
     const outs = outsOf(edges);
-    for (let qi = 0; qi < queue.length; qi++) {
-      const id = queue[qi];
+    for (const id of queue) { // the array iterator also visits ids pushed during the loop
       for (const e of outs.get(id) || []) {
         depth[e.to] = Math.max(depth[e.to] || 0, depth[id] + 1);
         if (--left[e.to] === 0) queue.push(e.to);
@@ -747,19 +746,6 @@ window.ArkismCrew = (ctx) => {
   function freeHandle(name) {
     const h = name === UNTITLED ? "" : name.replace(/[^\p{L}\p{N}_-]/gu, "").slice(0, 40);
     return h && !workflows().some((r) => r.crew.handle === h) ? h : untitledHandle();
-  }
-  async function createBlank(graph, name = UNTITLED, role = "") {
-    try {
-      const out = { type: "workflow", name, handle: freeHandle(name), role, category: "", model: "", enabled: false,
-        graph: graph || defaultGraph("blank", {}) };
-      const saved = await save(null, out);
-      await reload(saved.id);
-      openGraph(byId(saved.id) || saved, { graphMode: true });
-      return true;
-    } catch (e) {
-      notice(errorText(e));
-      return false;
-    }
   }
   // An untitled workflow gets its name·설명 from the AI once it has a few real steps.
   async function autoTitle(rec) {

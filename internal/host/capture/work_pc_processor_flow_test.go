@@ -53,7 +53,7 @@ func (f *processorCodexFlow) marker() map[string]any {
 }
 
 // queue writes one event at the head of the queue and returns the entry as the drain reads it.
-func (f *processorCodexFlow) queue(event map[string]any, extra map[string]any) map[string]any {
+func (f *processorCodexFlow) queue(event, extra map[string]any) map[string]any {
 	f.t.Helper()
 	event["origin"], event["created_at"], event["session_id"] = "codex", timeNow(), f.session
 	entry := map[string]any{"event": event, "sha256": "e1"}
