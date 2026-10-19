@@ -20,7 +20,7 @@ import (
 var (
 	capState         = host.CaptureState
 	capOrigin        = host.Env("ARKISM_ORIGIN", "claude_code")
-	capProjects      = host.Env("ARKISM_CLAUDE_PROJECTS", filepath.Join(host.Home, ".claude/projects"))
+	capProjects      = or(os.Getenv("ARKISM_CLAUDE_PROJECTS"), filepath.Join(host.Home, ".claude/projects")).(string)
 	capCodexSessions = host.CodexSessionsDir(host.Home)
 	capZcodeDB       = host.Env("ARKISM_ZCODE_DB", filepath.Join(host.Home, ".zcode/cli/db/db.sqlite"))
 	capModel         = host.Env("ARKISM_CAPTURE_MODEL", "haiku")
