@@ -138,3 +138,13 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-spend-top small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 .ex-pin-sum { display: block; }
 .ex-pins { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--nc-line); }
+/* 채널 연결 */
+.ex-ch-list { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: 8px; }
+.ex-ch-list > p { margin: 0; padding: 12px; }
+.ex-ch-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 8px 4px 14px; }
+.ex-ch-row + .ex-ch-row { border-top: 1px solid var(--nc-line); }
+.ex-ch-row .t { flex: 1; min-width: 0; color: var(--nc-text); font-size: calc(13px * var(--fs, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-ch-row small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.ex-ch-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ex-ch-add select { flex: 1; min-width: 160px; }
+.wk-card-head > .btn { margin-left: auto; }

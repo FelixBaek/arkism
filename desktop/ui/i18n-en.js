@@ -2,6 +2,20 @@
 // edit freely. strings: exact Korean → English. patterns: Korean with {0}… placeholders → English.
 window.ArkismI18nEN = {
  "strings": {
+  "+ 채널 연결": "+ Connect channel",
+  "글이 올라오면 답해요": "Answers every post",
+  "바꿨어요.": "Changed.",
+  "눌러서 바꿔요": "Click to change",
+  "연결을 뺐어요.": "Disconnected.",
+  "연결된 디스코드 봇이 없어요.": "No Discord bot is connected.",
+  "채널 고르기": "Pick a channel",
+  "채널 불러오는 중…": "Loading channels…",
+  "채널을 골라 주세요.": "Pick a channel.",
+  "이 채널은 이미 다른 곳에 연결돼 있어요. 이 전문가로 바꿀까요?": "This channel is already connected elsewhere. Switch it to this expert?",
+  "채널을 연결했어요.": "Channel connected.",
+  "먼저 디스코드 봇을 추가해 주세요.": "Add a Discord bot first.",
+  "봇 토큰·연결 상태는 봇 설정에서 관리해요. 바꾸면 바로 저장돼요.": "Bot tokens and connection state live in the bot settings. Changes here save right away.",
+  "채널 연결": "Channel connections",
   "끝": "End",
   "예비 모델": "Fallback model",
   "막히면 넘겨요": "Used when the main one is stuck",
@@ -3531,6 +3545,9 @@ window.ArkismI18nEN = {
   "최근 턴": "Recent turns"
  },
  "patterns": {
+  "@{0}로 부를 때만": "Only when called as @{0}",
+  "디스코드 · #{0}": "Discord · #{0}",
+  "#{0} 연결을 뺄까요?": "Disconnect #{0}?",
   "{0} · 동시에": "{0} · in parallel",
   "이미지는 {0}이 보고, 답은 이 전문가 이름으로 올려요": "{0} reads images, and the answer is posted as this expert",
   "고정 {0}개 · 약 {1} 토큰 · 넣는 순서는 아래 표에서 바꿔요": "{0} pinned · about {1} tokens · reorder them in the table below",
