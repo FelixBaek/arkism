@@ -116,7 +116,7 @@ func TestSchemaMigrationsFreshAndNoReplay(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(gate, afterGate) {
 		t.Fatal("identity/gate changed", err)
 	}
-	if schemaCount(t, p) != 1 || !reflect.DeepEqual(before, schemaSnapshot(t, p)) {
+	if schemaCount(t, p) != len(schemaMigrations()) || !reflect.DeepEqual(before, schemaSnapshot(t, p)) {
 		t.Fatal("applied baseline replayed")
 	}
 }
@@ -132,7 +132,7 @@ func TestSchemaMigrationsAdoptLegacyPreservesDataAndPausedGate(t *testing.T) {
 	gate := []byte(`{"version":1,"state":"open","generation":"` + strings.Repeat("a", 64) + `","changed_at":"2026-10-18T00:00:00Z"}`)
 	schemaExec(t, p, string(legacy))
 	schemaExec(t, p, `INSERT INTO memory_storage_metadata(key,value) VALUES('storage_identity',$1),('recovery_write_gate',$2)`, identity, gate)
-	row := Record{ID: "before-upgrade", Scope: scopeA, Status: statusActive, Kind: "decision", Revision: 7, Text: "기존 승인된 자료는 그대로 보존한다", UpdatedAt: time.Now().UTC()}
+	row := Record{ID: "before-upgrade", Scope: scopeA, Status: statusActive, Kind: "decision", Revision: 7, Text: "기존 승인된 자료는 그대로 보존한다", UpdatedAt: time.Now().UTC(), MemoryContext: &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: "fact", Applicability: "검수된 보고서에서만"}}
 	if err := p.Insert(ctx, "memories", row); err != nil {
 		t.Fatal(err)
 	}
@@ -159,6 +159,10 @@ func TestSchemaMigrationsAdoptLegacyPreservesDataAndPausedGate(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(beforeGate, afterGate) {
 		t.Fatal("paused gate/identity changed", err)
 	}
+	var indexed bool
+	if err := p.pool.QueryRow(ctx, `SELECT search_context_indexed FROM memory_records WHERE id=$1`, row.ID).Scan(&indexed); err != nil || indexed {
+		t.Fatal("paused upgrade rewrote derived index", err)
+	}
 	if err := p.SearchReady(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +175,7 @@ func TestSchemaMigrationsRollbackAndRetry(t *testing.T) {
 	p := isolatedPostgres(t)
 	ctx := context.Background()
 	before := schemaSnapshot(t, p)
-	failed := append(schemaMigrations(), schemaMigration{2, "atomic-change", `CREATE TABLE arkism.migration_probe(id integer); INSERT INTO arkism.migration_probe VALUES(1); SELECT 1/0;`})
+	failed := append(schemaMigrations(), schemaMigration{len(schemaMigrations()) + 1, "atomic-change", `CREATE TABLE arkism.migration_probe(id integer); INSERT INTO arkism.migration_probe VALUES(1); SELECT 1/0;`})
 	if err := p.migrateSchema(ctx, failed); !errors.Is(err, ErrUnavailable) || !strings.Contains(err.Error(), "SQLSTATE 22012") {
 		t.Fatal("failed migration did not retain safe diagnostic code", err)
 	}
@@ -182,11 +186,11 @@ func TestSchemaMigrationsRollbackAndRetry(t *testing.T) {
 	if !reflect.DeepEqual(before, schemaSnapshot(t, p)) {
 		t.Fatal("failed migration changed history")
 	}
-	fixed := append(schemaMigrations(), schemaMigration{2, "atomic-change", `CREATE TABLE arkism.migration_probe(id integer); INSERT INTO arkism.migration_probe VALUES(1);`})
+	fixed := append(schemaMigrations(), schemaMigration{len(schemaMigrations()) + 1, "atomic-change", `CREATE TABLE arkism.migration_probe(id integer); INSERT INTO arkism.migration_probe VALUES(1);`})
 	if err := p.migrateSchema(ctx, fixed); err != nil {
 		t.Fatal("retry", err)
 	}
-	if schemaCount(t, p) != 2 {
+	if schemaCount(t, p) != len(schemaMigrations())+1 {
 		t.Fatal("retry not recorded exactly once")
 	}
 	if err := p.migrateSchema(ctx, fixed); err != nil {
@@ -235,8 +239,8 @@ func TestSchemaMigrationsRejectIncompatibleHistory(t *testing.T) {
 	for name, sql := range map[string]string{
 		"checksum": `UPDATE arkism.schema_migrations SET checksum=repeat('0',64)`,
 		"name":     `UPDATE arkism.schema_migrations SET name='modified'`,
-		"future":   `INSERT INTO arkism.schema_migrations VALUES(2,'unknown',repeat('a',64),now())`,
-		"gap":      `UPDATE arkism.schema_migrations SET version=3`,
+		"future":   fmt.Sprintf(`INSERT INTO arkism.schema_migrations VALUES(%d,'unknown',repeat('a',64),now())`, len(schemaMigrations())+1),
+		"gap":      `DELETE FROM arkism.schema_migrations WHERE version=1`,
 		"missing":  `DELETE FROM arkism.schema_migrations`,
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -267,7 +271,7 @@ func TestSchemaMigrationsConcurrentInitialization(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if schemaCount(t, p) != 1 {
+	if schemaCount(t, p) != len(schemaMigrations()) {
 		t.Fatal("concurrent migration duplicated")
 	}
 	if err := p.SearchReady(context.Background()); err != nil {
@@ -322,10 +326,10 @@ func TestSchemaMigrationsApplicationCannotChangeHistory(t *testing.T) {
 	if err := app.SearchReady(ctx); err != nil {
 		t.Fatal("app cannot check readiness", err)
 	}
-	if schemaCount(t, app) != 1 {
+	if schemaCount(t, app) != len(schemaMigrations()) {
 		t.Fatal("history not readable")
 	}
-	for _, sql := range []string{`DELETE FROM arkism.schema_migrations`, `UPDATE arkism.schema_migrations SET checksum=repeat('b',64)`, `INSERT INTO arkism.schema_migrations VALUES(2,'bad',repeat('c',64),now())`, `TRUNCATE arkism.schema_migrations`} {
+	for _, sql := range []string{`DELETE FROM arkism.schema_migrations`, `UPDATE arkism.schema_migrations SET checksum=repeat('b',64)`, fmt.Sprintf(`INSERT INTO arkism.schema_migrations VALUES(%d,'bad',repeat('c',64),now())`, len(schemaMigrations())+1), `TRUNCATE arkism.schema_migrations`} {
 		if _, err := app.pool.Exec(ctx, sql); err == nil {
 			t.Fatal("app can change migration history")
 		}

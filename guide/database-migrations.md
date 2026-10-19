@@ -14,6 +14,18 @@ apply only pending versions. Search-token backfill remains bounded and resumable
 after the schema transaction commits; it is skipped while recovery writes are
 paused.
 
+Version two refreshes full-text indexes for descriptive memory conditions:
+`memory_context.applicability`, `uncertainty` and `valid_from`. It adds a derived
+index marker, a pending-row index and a GIN context-expression index without rewriting canonical records during
+the schema transaction. The bounded backfill refreshes pre-context token vectors;
+rows without descriptive context keep their existing vectors. New inserts and
+replacements index the qualifiers immediately. Pending rows retain the existing
+body index and use PostgreSQL's simple parser for context until normalized
+backfill finishes; Korean particle matching on those qualifiers requires that
+backfill. A paused recovery gate keeps backfill paused. Resume through the normal
+recovery procedure, then rerun initialization to finish pending index work.
+Approvals, source references, revisions and embeddings are unchanged.
+
 ## Upgrade
 
 1. Keep a tested backup and its matching binary. Stop the API, worker, timers and

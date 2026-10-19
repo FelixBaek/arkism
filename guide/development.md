@@ -63,6 +63,28 @@ The database user must be able to create disposable test databases. The local Do
 
 Before publishing, maintainers run `ARKISM_PUBLIC_DENYLIST=<their own denylist file> tools/check_public.sh`, which fails if any tracked file matches one of its private regexes.
 
+## Skill improvement generation
+
+`POST /v1/skills/generate` reuses verified lessons and the pinned baseline. The
+configured chat and Anthropic adapters request localized changes to an existing
+skill instead of asking the model to rewrite the full document. Each of up to
+eight replacements names a literal `old_text`, its `new_text`, and a zero-based
+`lesson_index` into the supplied verified lessons. These are internal provider
+fields; the HTTP request and canonical `SkillDraft` format are unchanged.
+
+Every anchor must occur exactly once in the original baseline. Missing,
+ambiguous, overlapping, chained, empty, and ineffective changes are rejected.
+Replacements are composed against original byte locations, preserving all
+untouched text and line endings. New skills continue to use full content.
+The resulting full document still passes the existing capability, size, source,
+comparison, and approval checks. A patch identifies a proposed change; it does
+not establish its semantic correctness or performance benefit.
+
+Candidate generation leaves the active baseline unchanged. The Anthropic
+prepared-result path stores the composed document, so a retry after candidate
+storage failure can recover it without repeating the provider call. Provider
+prompt versions distinguish this format from older whole-document generation.
+
 ## UI preview
 
 The desktop screens can run in a browser against made-up data, without a real Arkism:
@@ -93,3 +115,21 @@ Values compiled into the app:
 Pushing a `vX.Y.Z` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds the Windows installer, the macOS app and the Linux AppImage and `.deb`, checks that each starts its built-in Arkism and can back it up and restore it, and uploads them with `latest.json` as a **draft release**. A maintainer publishes it. Signing happens only when the signing secrets exist (see the workflow header).
 
 The app checks the update feed for new versions: Windows installs the update in the app, macOS and Linux download the new file.
+
+## Memory conditions in retrieval
+
+Full-text retrieval includes descriptive applicability, uncertainty and valid-from
+phrases alongside the body, summary and keywords. Bounded condition phrases
+precede body tokens so long records cannot exhaust the index budget before
+the conditions are included. The same Korean normalizer is
+used for new writes, replacements and bounded index backfill. Domain, evidence
+and semantic-kind labels do not become generic search terms. Descriptive dates
+do not change lifecycle dates or make an unapproved memory eligible for recall.
+
+The HTTP/PostgreSQL regression captures a tool observation, requires human
+approval, then retrieves it using only condition terms. It checks returned
+context, scope, unrelated queries and deletion. The schema upgrade regression
+checks old indexes are refreshed without changing canonical records, and that
+paused recovery remains paused. See [database migrations](database-migrations.md)
+for upgrade and rollback. These deterministic tests do not measure extraction
+completeness or semantic retrieval accuracy on live conversations.

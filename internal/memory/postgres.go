@@ -254,7 +254,7 @@ func (p *Postgres) Replace(ctx context.Context, c string, r Record, revision int
 	if err != nil {
 		return err
 	}
-	res, err := p.q().Exec(ctx, `UPDATE memory_records SET revision=$7,status=$8,kind=$9,updated_at=$10,run_at=$11,lease_until=$12,lease_token=$13,attempts=$14,payload=$15,doc=$16,embedding=$17::vector,embedding_space=$18,embedding_dimension=$19,search_tokens=$21::tsvector WHERE collection=$1 AND id=$2 AND workspace_id=$3 AND project_id=$4 AND user_id=$5 AND agent_id=$6 AND revision=$20`, c, r.ID, r.Scope.WorkspaceID, r.Scope.ProjectID, r.Scope.UserID, r.Scope.AgentID, r.Revision, r.Status, r.Kind, r.UpdatedAt, r.RunAt, r.LeaseUntil, r.LeaseToken, r.Attempts, b, j, vec, space, dim, revision, pgSearchTokens(c, r))
+	res, err := p.q().Exec(ctx, `UPDATE memory_records SET revision=$7,status=$8,kind=$9,updated_at=$10,run_at=$11,lease_until=$12,lease_token=$13,attempts=$14,payload=$15,doc=$16,embedding=$17::vector,embedding_space=$18,embedding_dimension=$19,search_tokens=$21::tsvector,search_context_indexed=true WHERE collection=$1 AND id=$2 AND workspace_id=$3 AND project_id=$4 AND user_id=$5 AND agent_id=$6 AND revision=$20`, c, r.ID, r.Scope.WorkspaceID, r.Scope.ProjectID, r.Scope.UserID, r.Scope.AgentID, r.Revision, r.Status, r.Kind, r.UpdatedAt, r.RunAt, r.LeaseUntil, r.LeaseToken, r.Attempts, b, j, vec, space, dim, revision, pgSearchTokens(c, r))
 	if err != nil {
 		return pgErr(err)
 	}

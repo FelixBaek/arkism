@@ -9,14 +9,18 @@ import (
 
 const pgTextSearchExpression = `to_tsvector('simple', COALESCE(doc->>'text','') || ' ' || COALESCE(doc->>'summary','') || ' ' || COALESCE((doc->'keywords')::text,''))`
 
+// Keep the original expression (and its expression index) intact. Pending rows
+// additionally match descriptive context until the normalized backfill finishes.
+const pgContextSearchExpression = `to_tsvector('simple', COALESCE(doc->'memory_context'->>'applicability','') || ' ' || COALESCE(doc->'memory_context'->>'uncertainty','') || ' ' || COALESCE(doc->'memory_context'->>'valid_from',''))`
+
 // pgSearchVector is what the fts lane matches and ranks: the normalized
 // search_tokens (see search_tokens.go), or the legacy expression for a row the
 // backfill has not reached yet.
-const pgSearchVector = `COALESCE(search_tokens, ` + pgTextSearchExpression + `)`
+const pgSearchVector = `(COALESCE(search_tokens, ` + pgTextSearchExpression + `) || CASE WHEN search_context_indexed AND search_tokens IS NOT NULL THEN ''::tsvector ELSE ` + pgContextSearchExpression + ` END)`
 
 // pgSearchMatch ORs query terms over search_tokens; rows not yet backfilled
 // are matched through the legacy expression index with the same terms.
-const pgSearchMatch = `(search_tokens @@ $%d::tsquery OR (search_tokens IS NULL AND ` + pgTextSearchExpression + ` @@ $%d::tsquery)) AND cardinality($%d::text[]) > 0`
+const pgSearchMatch = `(search_tokens @@ $%d::tsquery OR (search_tokens IS NULL AND ` + pgTextSearchExpression + ` @@ $%d::tsquery) OR ((search_tokens IS NULL OR (` + searchContextPending + `)) AND ` + pgContextSearchExpression + ` @@ $%d::tsquery)) AND cardinality($%d::text[]) > 0`
 
 // pgSearchOrder ranks by how many distinct query terms a row contains, then by
 // the cover-density rank the lane used before, then by recency.
@@ -269,7 +273,7 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 		// terms are normalized (searchQueryTerms); any one of them matches.
 		q := searchTermsQuery(terms)
 		extra = pgSearchMatch
-		args = append(args, q, q, terms)
+		args = append(args, q, q, q, terms)
 	}
 	// shortcut: exact vector scan; add a measured ANN index when corpus latency requires it.
 	if lane == "vector" {
@@ -288,7 +292,7 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 		order = fmt.Sprintf("(SELECT count(DISTINCT k) FROM jsonb_array_elements_text(doc->'keywords_lower') k WHERE k=ANY($%d::text[])) DESC,updated_at DESC,id ASC", termParam)
 	}
 	if lane == "fts" {
-		order = pgSearchOrder(termParam, termParam+2)
+		order = pgSearchOrder(termParam, termParam+3)
 	}
 	if lane == "vector" {
 		_, stateArgs := pgSearchState(criteria, now, 6)
