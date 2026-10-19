@@ -59,6 +59,7 @@ type UsageWorkflow struct {
 	Runs        int      `json:"runs"`
 	SuccessRate *float64 `json:"success_rate"`
 	CostUSD     float64  `json:"cost_usd"`
+	Tokens      int64    `json:"tokens"`
 }
 
 type UsageFailingNode struct {
@@ -297,6 +298,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 		out.KPI.CostEstimated = out.KPI.CostEstimated || est
 		if w := wf[o.WorkflowID]; w != nil && o.WorkflowID != "" {
 			w.CostUSD += cost
+			w.Tokens += c.InputTokens + c.OutputTokens
 		}
 		if a := ag[o.AgentID]; a != nil {
 			a.Calls++

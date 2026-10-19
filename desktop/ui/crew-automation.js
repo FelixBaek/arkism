@@ -14,6 +14,8 @@ window.ArkismAutomation = (h) => {
   const goalKey = (n) => (n.type === "ai_once" ? "prompt" : "goal");
   const kindText = (n) => (n.type === "ai_once" ? "한 번 호출" : n.config?.collab === "on" ? `전문가 · 워커 최대 ${n.config.max_workers || 5}` : IS_AI(n) ? "전문가" : h.NODES[n.type]?.label || n.type);
   const IS_AI = (n) => h.IS_AI(n.type);
+  const fmtTokens = (n) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n)));
+  const TRIGGERS = { manual: "직접", schedule: "일정", webhook: "웹훅", call: "$이름", discord: "디스코드", agent: "에이전트", test: "테스트" };
 
   function section(iconName, title, aside) {
     const s = el("section", "auto-sec");
@@ -148,7 +150,7 @@ window.ArkismAutomation = (h) => {
         if (d.cover) { const c = h.coverCredit({ cover: d.cover }); if (c) credit.append(c); }
       };
       paintHead();
-      // 예상: no token meter exists for workflows, so only what recent runs show.
+      // 예상: per-run averages of the last 30 days (usage API: tokens·cost, runs: time).
       const est = el("dl", "auto-est");
       const estRow = (k, v) => { const r = el("div", ""); r.append(el("dt", "", k), el("dd", "", v)); est.append(r); };
       est.dataset.est = "1";
@@ -157,7 +159,7 @@ window.ArkismAutomation = (h) => {
       function paintEst() {
         est.replaceChildren();
         const avg = stats?.avgMs;
-        estRow("예상 토큰", "—");
+        estRow("예상 토큰", stats?.tokens && stats.runs ? `약 ${fmtTokens(stats.tokens / stats.runs)}` : "—");
         estRow("예상 비용", stats?.cost != null && stats.runs ? `약 $${(stats.cost / stats.runs).toFixed(2)}` : "—");
         estRow("예상 시간", avg ? `약 ${h.spanText(avg)}` : "—");
       }
@@ -273,13 +275,14 @@ window.ArkismAutomation = (h) => {
       const runs = [];
       try { runs.push(...((await request(`/v1/crew/runs?${query({ crew_id: rec.id, limit: 30 })}`)).items || [])); } catch (_) { /* empty */ }
       let cost = null;
-      try { cost = (await request(`/v1/crew/usage?${query({ range: "30d", kind: "workflow" })}`)).workflows?.find((w) => w.id === rec.id)?.cost_usd ?? null; } catch (_) { /* no usage yet */ }
+      let tokens = 0;
+      try { const w = (await request(`/v1/crew/usage?${query({ range: "30d", kind: "workflow" })}`)).workflows?.find((x) => x.id === rec.id); cost = w?.cost_usd ?? null; tokens = w?.tokens || 0; } catch (_) { /* no usage yet */ }
       const now = Date.now();
       const recentRuns = runs.filter((r) => now - new Date(r.created_at).getTime() < 30 * 864e5);
       const bin = (list) => { const a = Array(15).fill(0); for (const r of list) a[14 - Math.min(14, Math.floor((now - new Date(r.created_at).getTime()) / (2 * 864e5)))]++; const m = Math.max(1, ...a); return a.map((n) => n / m); };
       const done = recentRuns.filter((r) => r.crew_run?.status === "succeeded");
       const spans = done.map((r) => h.runMs(r)).filter(Boolean);
-      stats = { runs: recentRuns.length, ok: done.length, cost, avgMs: spans.length ? spans.reduce((a, b) => a + b, 0) / spans.length : 0, bins: { runs: bin(recentRuns), done: bin(done) } };
+      stats = { runs: recentRuns.length, ok: done.length, cost, tokens, avgMs: spans.length ? spans.reduce((a, b) => a + b, 0) / spans.length : 0, bins: { runs: bin(recentRuns), done: bin(done) } };
       statsBox?.paint?.();
       head.paintEst?.();
     }
@@ -500,9 +503,9 @@ window.ArkismAutomation = (h) => {
         for (const b of [only, upto]) { b.classList.add("auto-try"); }
         const ok = !creating && !h.ownerOf(rec) && !graphDirty() && !dirty();
         only.disabled = upto.disabled = !ok;
-        only.title = upto.title = creating ? "만든 뒤에 시험할 수 있어요" : h.ownerOf(rec) ? "에이전트를 통해서만 돌아요" : ok ? (only === upto ? "" : "") : "저장한 뒤에 시험할 수 있어요";
-        only.title = ok ? "앞 단계는 건너뛰고 이 단계에만 값을 넣어 돌려요" : only.title;
-        upto.title = ok ? "처음부터 이 단계까지 돌려요" : upto.title;
+        const why = creating ? "만든 뒤에 시험할 수 있어요" : h.ownerOf(rec) ? "에이전트를 통해서만 돌아요" : "저장한 뒤에 시험할 수 있어요";
+        only.title = ok ? "앞 단계는 건너뛰고 이 단계에만 값을 넣어 돌려요" : why;
+        upto.title = ok ? "처음부터 이 단계까지 돌려요" : why;
         top.append(only, upto);
         row.append(top);
         if (IS_AI(n)) {
@@ -553,7 +556,7 @@ window.ArkismAutomation = (h) => {
       const head2 = el("div", "auto-sec-head");
       const t = el("h3", "");
       t.append(icon("chat-text"), "진행 알림");
-      head2.append(t, link("+ 채널 연결", () => { (d.notify ||= {}).channels = [...(d.notify.channels || []), { kind: "discord", channel: "", when: "events" }]; touch(); paint(); }), el("span", "grow"), el("small", "auto-dim", "진행 상황을 어디로 보낼지 정해요 · 봇은 설정 › 메신저에서 연결해요"));
+      head2.append(t, link("+ 채널 연결", () => { (d.notify ||= {}).channels = [...(d.notify.channels || []), { kind: "discord", channel: "", when: "events" }]; touch(); paint(); }), el("span", "grow"), el("small", "auto-dim", "보낼 곳과 시점을 저장해 둬요 · 실행 중 알림 보내기는 아직 준비 중이에요"));
       const list = el("div", "auto-box");
       const channels = () => d.notify?.channels || [];
       const setNotify = (fn) => { d.notify ||= {}; fn(d.notify); if (!d.notify.channels?.length && !d.notify.moments) delete d.notify; touch(); };
@@ -770,6 +773,12 @@ window.ArkismAutomation = (h) => {
     function historyTab(body) {
       body.classList.remove("auto-body");
       body.classList.add("auto-history");
+      // 판 이력 (되돌리기): the crew revision API is not here yet; the slot keeps the design's place.
+      const ver = el("section", "auto-sec auto-versions");
+      const vh = el("div", "wf-sec-head");
+      vh.append(el("strong", "", "판 이력"), el("span", "grow"), el("small", "auto-dim", `저장할 때마다 판이 하나 생겨요 · 지금 v${rec.revision || 1}`));
+      ver.append(vh, box(el("p", "auto-hint auto-empty", "지난 판 보기·되돌리기는 준비 중이에요.")));
+      body.append(ver);
       const sec = el("section", "auto-sec");
       const head2 = el("div", "wf-sec-head");
       const pick = el("select", "wf-select small");
@@ -789,7 +798,12 @@ window.ArkismAutomation = (h) => {
         try { items = (await request(`/v1/crew/runs?${query({ crew_id: rec.id, ...(pick.value !== "all" ? { status: pick.value } : {}), limit: 30 })}`)).items || []; } catch (_) { /* empty */ }
         if (!pop.dialog.isConnected) return;
         count.textContent = `${items.length}건`;
-        list.replaceChildren(...(all ? items : items.slice(0, 10)).map((r) => h.runRow(r, () => leave(() => h.openGraph(rec, { run: r })))));
+        list.replaceChildren(...(all ? items : items.slice(0, 10)).map((r) => {
+          const row = h.runRow(r, () => leave(() => h.openGraph(rec, { run: r })));
+          const t = TRIGGERS[r.crew_run?.trigger];
+          if (t) row.querySelector("small")?.prepend(`${t} · `);
+          return row;
+        }));
         if (items.length > 10 && !all) list.append(button("더 보기", "ghost small", null, () => { all = true; void load(); }));
         if (!items.length) list.append(el("p", "wf-empty", pick.value !== "all" ? "이 상태인 실행이 없어요." : "이 자동화는 아직 실행한 적이 없어요."));
       };

@@ -6,7 +6,7 @@
 .auto-cat-chip small { color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); }
 .auto-cat-chip:hover { border-color: var(--nc-quiet); }
 .auto-cat-chip.on { color: var(--nc-accent); border-color: var(--nc-accent); }
-.wf-card .crew-cover-top { justify-content: flex-end; flex-direction: row-reverse; }
+.wf-card .crew-cover-top { justify-content: space-between; flex-direction: row-reverse; } /* badge pinned top right, switch on the left */
 .wf-card .crew-cover-top .switch { margin-left: 0; }
 .wf-card .wf-card-when { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; height: 24px; padding: 0 9px; border-radius: 999px; background: rgb(0 0 0 / .55); color: #fff; font: 400 calc(12px * var(--fs, 1))/1 var(--sans); }
 .wf-card .wf-card-when > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -166,3 +166,6 @@
 .v4-auto .auto-hint { margin: 0; padding: 0; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
 .v4-auto .empty { padding: 0; text-align: inherit; color: var(--nc-quiet); }
 .v4-auto .auto-names { max-width: 560px; }
+.v4-auto .auto-sec > .form-error:empty { display: none; }
+.v4-auto .auto-flow > .auto-hint { padding: 4px 14px 0; }
+.v4-auto .auto-versions .auto-empty { padding: 12px 14px; }
