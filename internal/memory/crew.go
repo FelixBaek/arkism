@@ -387,9 +387,15 @@ func validCrewTrigger(t *CrewTrigger) bool {
 	return t.Cron == ""
 }
 
+// A photo the person uploaded: the desktop shrinks it to a small JPEG and sends it as a data URL (id "mine").
+const crewCoverUploadMax = 150_000
+
 func validCrewCover(c *CrewCover) bool {
 	if c == nil {
 		return true
+	}
+	if c.ID == "mine" {
+		return strings.HasPrefix(c.URL, "data:image/jpeg;base64,") && len(c.URL) <= crewCoverUploadMax && c.Thumb == "" && c.Author != "" && runes(c.Author) <= 80 && c.AuthorURL == ""
 	}
 	img := func(u string) bool { return len(u) <= 600 && strings.HasPrefix(u, "https://images.unsplash.com/") }
 	return unsplashIDRe.MatchString(c.ID) && img(c.URL) && img(c.Thumb) && strings.TrimSpace(c.Author) != "" && runes(c.Author) <= 80 &&
