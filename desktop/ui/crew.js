@@ -162,7 +162,7 @@ window.ArkismCrew = (ctx) => {
     const work = (g?.nodes || []).filter(WORK);
     return work.length === 1 && IS_AI(work[0].type) && !(g.edges || []).some(isBack) ? work[0] : null;
   };
-  const modelOf = (n, x) => n.config?.model || x?.model || "기본 모델";
+  const modelOf = (n, x) => n.config?.model || (n.type === "expert" && byId(n.config?.expert)?.crew.model) || x?.model || "기본 모델";
   function levels(graph) {
     const g = graph || { nodes: [], edges: [] };
     const edges = fwd(g);
@@ -1023,9 +1023,11 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
         row.addEventListener("click", () => openGraph(r, { select: n.id }));
         const who = el("div", "");
         const persona = byId(n.config?.persona);
-        const kind = n.type === "ai_once" ? "한 번 호출" : n.config?.collab === "on" ? `에이전트 · 협업 워커 ${n.config?.max_workers || 5}` : "에이전트";
-        who.append(el("strong", "", nodeTitle(n)), el("small", "", [kind, persona?.crew.name].filter(Boolean).join(" · ")));
-        row.append(modelMark(modelOf(n, x)), who, el("span", "mono dim", modelOf(n, x)));
+        const expert = n.type === "expert" ? byId(n.config?.expert) : null;
+        const who0 = n.type === "expert" ? "전문가" : "에이전트";
+        const kind = n.type === "ai_once" ? "한 번 호출" : n.config?.collab === "on" ? `${who0} · 협업 워커 ${n.config?.max_workers || 5}` : who0;
+        who.append(el("strong", "", nodeTitle(n)), el("small", "", [kind, expert?.crew.name || persona?.crew.name].filter(Boolean).join(" · ")));
+        row.append(expert ? avatarMark(expert.crew) : modelMark(modelOf(n, x)), who, el("span", "mono dim", modelOf(n, x)));
         list.append(row);
       }
       s.append(list);
@@ -1371,8 +1373,9 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     // The newest run of this workflow: each selected node's bottom row shows how that node did there.
     ed.last = null;
     if (!ed.run) request(`/v1/crew/runs?${query({ crew_id: rec.id, limit: 1 })}`).then((r) => {
-      if (ed.rec !== rec || !(r.items || []).length) return;
-      ed.last = r.items[0];
+      const last = (r.items || []).find((x) => x.crew_run?.crew_id === rec.id);
+      if (ed.rec !== rec || !last) return;
+      ed.last = last;
       if (state.view === "graph" && !nodeDlg && !ed.run) render(false);
     }, () => {});
     state.view = "graph";
@@ -1715,7 +1718,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
   function nodeFoot(n) {
     const foot = el("div", "g-node-foot");
     const st = ed.last?.crew_run?.nodes?.[n.id];
-    foot.append(el("small", "dim", st && st.status !== "pending" ? [NODE_LABEL[st.status] || st.status, nodeDur(st)].filter(Boolean).join(" · ") : "아직 실행 안 함"));
+    foot.append(el("small", "dim", st && st.status !== "pending" ? [NODE_LABEL[st.status] || st.status, nodeDur(st), st.tokens ? `${st.tokens.toLocaleString()} 토큰` : ""].filter(Boolean).join(" · ") : "아직 실행 안 함"));
     const go = el("button", "g-node-run");
     go.type = "button";
     go.append(icon("play"), "실행");
@@ -1936,33 +1939,27 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
   let nodeDlg = null;
 
   // ---------------------------------------------------------------- node window (1024:60724 … 1033:69906)
+  // A field whose control is a row of buttons: a <div>, since a <label> would click its first button.
+  function group(label, control, hint) {
+    const f = el("div", "field", label);
+    f.append(control);
+    if (hint) f.append(el("small", "dim", hint));
+    return f;
+  }
   function nodeBody(box, n) {
+    if (IS_AI(n.type) || n.type === "team") { aiFields(box, n); return; }
     const title = input(n.title, { maxLength: 80 });
     title.addEventListener("input", () => { n.title = title.value; touch(); });
     box.append(field("이름", title));
-    if (IS_AI(n.type)) aiFields(box, n);
-    else if (n.type === "team") {
-      const pick = select([["", "고르세요"], ...teams().map((t) => [t.id, t.crew.name])], n.config.team || "");
-      pick.addEventListener("change", () => { n.config.team = pick.value; const t = byId(pick.value); if (t && !n.title) n.title = t.crew.name; touch(); redraw(); });
-      box.append(field("팀", pick, "고른 팀이 회의를 열어 결론을 다음 단계에 넘겨요"));
-      const topic = input(n.config.topic, { tag: "textarea", rows: 4, maxLength: 4000 });
-      topic.addEventListener("input", () => { n.config.topic = topic.value; touch(); });
-      box.append(field("회의 주제 ({{input}}에 앞 결과가 들어가요)", topic));
-    } else for (const [key, label, kind, opt, hint] of FIELDS[n.type] || []) {
+    let pair = null; // n8n: 결과 받기 and 기다릴 최대 시간 share a row (1033:69906)
+    for (const [key, label, kind, opt, hint] of FIELDS[n.type] || []) {
       let i;
-      if (kind === "select") i = select(opt, n.config[key] ?? opt[0][0]);
-      else if (kind === "radio") {
-        const cur = n.config[key] ?? opt[0][0];
-        i = el("div", "seg");
-        for (const [v, l] of opt) {
-          const b = el("button", v === cur ? "on" : "", l);
-          b.type = "button";
-          b.addEventListener("click", () => { n.config[key] = v; touch(); redraw(); });
-          i.append(b);
-        }
-        box.append(field(label, i, hint));
+      if (kind === "radio") {
+        const f = group(label, segment(opt, n.config[key] ?? opt[0][0], (v) => { n.config[key] = v; touch(); redraw(); }), hint);
+        if (n.type === "n8n") { pair = el("div", "scope-fields"); pair.append(f); box.append(pair); } else box.append(f);
         continue;
       }
+      if (kind === "select") i = select(opt, n.config[key] ?? opt[0][0]);
       else if (kind === "workflow") i = select([["", "고르세요"], ...workflows().filter((w) => w.id !== ed.rec.id).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (n.config[key] || "").replace(/^\$/, ""));
       else if (kind === "area" || kind === "code") i = input(n.config[key], { tag: "textarea", rows: kind === "code" ? 12 : 4, cls: kind === "code" ? "code" : "" });
       else i = input(n.config[key], { placeholder: typeof opt === "string" ? opt : "" });
@@ -1973,6 +1970,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
         touch();
         redraw();
       });
+      if (pair) { pair.append(field(label, i)); if (hint) box.append(el("p", "meta", hint)); pair = null; continue; }
       box.append(field(label, i, hint));
     }
     if (n.type === "start") box.append(kv([["시작 조건", ed.rec.crew.trigger ? triggerText(ed.rec.crew) : "정하지 않음"]]), el("p", "meta", "시작 조건은 워크플로우 설정에서 바꿔요."));
@@ -1980,34 +1978,59 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     if (n.type === "code") box.append(el("p", "meta", "출력이 {\"ok\": true/false, …}면 통과·실패 갈래로 나뉘어요. 처음 한 번은 빌드에 1~2초, 30초 안에 끝나야 해요. 토큰은 들지 않아요."));
     if (n.type === "approval") box.append(el("p", "meta", "배포·게시처럼 되돌릴 수 없는 단계 바로 앞에 두세요. 답이 올 때까지 멈춰요."));
     if (n.type === "subflow") box.append(el("p", "meta", "부른 워크플로우를 끝까지 돌리고 그 결과를 다음 단계에 넘겨요. 세 겹까지만 부를 수 있어요."));
-    if (n.type === "n8n") box.append(el("p", "meta", "기다리기를 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요."));
+    if (n.type === "n8n") box.append(el("p", "meta", "끝나면 알려줌을 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요."));
     if (WORK(n) && !ownerOf(ed.rec)) box.append(onlyRun(n));
   }
-  function openNodeDialog(n) {
+  const nodeKind = (n) => (n.type === "team" ? "팀 노드" : HUMAN_KIND[NODES[n.type]?.group] || "노드");
+  const nodeLine = (n) => (IS_AI(n.type) || n.type === "team" ? nodeKind(n) : `${nodeKind(n)} · ${NODES[n.type]?.sub || ""}`);
+  // The node window edits the node in place; 취소 (or ×, Esc) puts the graph back as it was when the window opened.
+  function openNodeDialog(n, before = { graph: structuredClone(ed.graph), dirty: ed.dirty }) {
     if (!n) return;
     nodeDlg?.remove();
-    const dlg = (nodeDlg = el("dialog", `crew-dialog wf-dialog node-dialog kind-${KIND_OF(n.type)}`));
+    let keep = false;
+    const dlg = (nodeDlg = el("dialog", `crew-dialog wf-dialog node-dialog${IS_AI(n.type) || n.type === "team" ? " wide" : ""}`));
     const head = el("div", "dialog-head");
     const lead = el("span", "g-icon");
-    const ex = n.type === "expert" ? byId(n.config?.expert) : null;
-    lead.append(ex ? avatarMark(ex.crew) : icon(NODES[n.type]?.icon || "stack"));
     const t = el("div", "");
-    const h = el("h2", "", nodeTitle(n));
-    t.append(h, el("p", "", `${NODES[n.type]?.label || n.type} · ${NODES[n.type]?.sub || ""}`));
+    const h = el("h2", "");
+    const sub = el("p", "");
+    t.append(h, sub);
     head.append(lead, t, closeX("노드 설정 닫기", () => dlg.close()));
     const body = el("div", "dialog-body");
+    const card = el("div", "node-card");
+    body.append(card);
     const foot = el("div", "dialog-foot");
-    foot.append(button("노드 지우기", "ghost danger", "trash", async () => {
-      if (await confirmBox("노드를 지울까요?", "이 노드와 이어진 선이 함께 지워져요. 저장하기 전까지는 되돌리기로 살릴 수 있어요.", "노드 지우기")) { dlg.close(); removeNode(n.id); }
-    }), button("닫기", "primary", null, () => dlg.close()));
-    const draw = () => { body.replaceChildren(); nodeBody(body, n); h.textContent = nodeTitle(n); };
+    const left = el("div", ""), right = el("div", "");
+    left.append(button("적용", "primary", null, () => { keep = true; dlg.close(); }), button("취소", "ghost", null, () => dlg.close()));
+    if (WORK(n) && !ownerOf(ed.rec)) right.append(button("이 노드만 실행", "", null, () => {
+      const saved = !ed.dirty && (ed.rec.crew.graph?.nodes || []).some((x) => x.id === n.id);
+      if (!saved) { notice("저장한 뒤에 실행할 수 있어요."); return; }
+      keep = true;
+      dlg.close();
+      void startRun(ed.rec, "", n.id);
+    }));
+    right.append(button("노드 지우기", "ghost", null, async () => {
+      if (await confirmBox("노드를 지울까요?", "이 노드와 이어진 선이 함께 지워져요. 저장하기 전까지는 되돌리기로 살릴 수 있어요.", "노드 지우기")) { keep = true; dlg.close(); removeNode(n.id); }
+    }));
+    foot.append(left, right);
+    const draw = () => {
+      card.replaceChildren();
+      nodeBody(card, n);
+      const ex = n.type === "expert" ? byId(n.config?.expert) : null;
+      lead.replaceChildren(ex ? avatarMark(ex.crew) : n.type === "team" ? teamMark(byId(n.config?.team)) : icon(NODES[n.type]?.icon || "stack"));
+      lead.classList.toggle("plain", !ex && n.type !== "team");
+      h.textContent = nodeTitle(n);
+      sub.textContent = nodeLine(n);
+    };
     redraw = () => { const y = body.scrollTop; draw(); body.scrollTop = y; render(false); keepDlg(); };
     const keepDlg = () => { if (nodeDlg === dlg && !dlg.isConnected) document.body.append(dlg); };
     dlg.append(head, body, foot);
     dlg.addEventListener("close", () => {
       dlg.remove();
       if (nodeDlg === dlg) { nodeDlg = null; redraw = () => render(false); }
-      if (ed.sel === n.id) { ed.sel = null; render(false); }
+      if (!keep) { ed.graph.nodes = before.graph.nodes; ed.graph.edges = before.graph.edges; ed.dirty = before.dirty; }
+      if (ed.sel === n.id || !keep) ed.sel = null;
+      render(false);
     });
     draw();
     document.body.append(dlg);
@@ -2033,71 +2056,175 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
       return box;
     }
   }
-  // AI 노드: 무엇·어디까지(목표·울타리·완료 기준)만 정하고, 어떻게는 AI가 정해요.
+  // A team's mark: its cover photo, or the members' faces.
+  function teamMark(t) {
+    const x = t?.crew;
+    if (x?.cover?.thumb || x?.cover?.url) {
+      const img = el("img", "node-team-photo");
+      img.alt = "";
+      img.src = x.cover.thumb || x.cover.url;
+      return img;
+    }
+    return x ? teamFaces(x) : icon("users-three");
+  }
+  function teamFaces(x) {
+    const f = el("span", "node-faces");
+    for (const m of (x.members || []).slice(0, 5)) { const a = byId(m.agent_id); if (a) f.append(avatarMark(a.crew)); }
+    if (!f.childElementCount) f.append(icon("users-three"));
+    return f;
+  }
+  // 전문가·팀 고르기 (1024:60724 · 1024:61783): the picked one as a face card with 바꾸기, the others as chips.
+  function pickCard(label, cur, all, onPick) {
+    const wrap = el("div", "field");
+    wrap.append(label);
+    const card = el("div", "node-pick");
+    const lead = el("span", "node-pick-lead");
+    const txt = el("div", "");
+    if (cur) {
+      const x = cur.crew;
+      lead.append(x.type === "team" ? teamMark(cur) : avatarMark(x));
+      const line = x.type === "team"
+        ? [`@${x.handle}`, MODES[x.mode] || "", x.ending?.max_rounds ? `최대 ${x.ending.max_rounds}라운드` : ""]
+        : [`@${x.handle}`, x.model || "모델 자동", x.skills?.length ? `스킬 ${x.skills.length}개` : ""];
+      txt.append(el("strong", "", x.name), el("small", "dim", line.filter(Boolean).join(" · ")));
+      if (x.type === "team") txt.append(teamFaces(x));
+    } else txt.append(el("strong", "dim", "고르세요"));
+    const change = select([["", cur ? "바꾸기" : "고르기"], ...all.map((r) => [r.id, r.crew.name])], "");
+    change.className = "node-pick-change";
+    change.setAttribute("aria-label", `${label} 바꾸기`);
+    change.addEventListener("change", () => { const r = byId(change.value); if (r) onPick(r); });
+    card.append(lead, txt, change);
+    const chips = el("div", "chip-row");
+    for (const r of all.filter((r) => r !== cur).slice(0, 4)) {
+      const b = el("button", "chip node-chip");
+      b.type = "button";
+      b.append(r.crew.type === "team" ? teamMark(r) : avatarMark(r.crew), r.crew.name);
+      b.addEventListener("click", () => onPick(r));
+      chips.append(b);
+    }
+    wrap.append(card, chips);
+    return wrap;
+  }
+  // AI·전문가·팀 노드 (1024:60724 · 1024:61783): 누가 맡나 · 무엇을 하나 on the left, 실행 범위 · 나눠서 맡기기 on the right.
+  // 무엇·어디까지(목표·울타리·완료 기준)만 정하고, 어떻게는 AI가 정해요.
   function aiFields(box, n) {
     const c = n.config;
-    const bind = (i, key, redraw) => {
+    const bind = (i, key, again) => {
       i.addEventListener("input", () => { c[key] = i.value; touch(); });
-      i.addEventListener("change", () => { c[key] = i.value; touch(); if (redraw) redraw(); });
+      i.addEventListener("change", () => { c[key] = i.value; touch(); if (again) redraw(); });
       return i;
     };
-    const row = el("div", "scope-fields");
-    row.append(field("모델", bind(modelInput(c.model, ed.rec.crew.model || "deepseek-v4-flash"), "model", true), ed.rec.crew.model ? `비우면 ${ed.rec.crew.model}` : ""),
-      field("추론", bind(select(EFFORTS, c.effort || "medium"), "effort")));
-    box.append(modelList(), row);
+    const cols = el("div", "node-cols");
+    const L = el("div", "node-col"), R = el("div", "node-col");
+    cols.append(L, R);
+    box.append(modelList(), cols);
+    // 누가 맡나
+    L.append(el("h3", "", "누가 맡나"));
+    L.append(group("노드 종류", segment([["expert", "전문가"], ["team", "팀"], ["ai", "AI 에이전트"], ["ai_once", "AI 한 번 호출"]], n.type, (k) => {
+      if (k === n.type) return;
+      const was = n.type, text = c.goal || c.prompt || c.topic || "{{input}}";
+      n.type = k;
+      if (k === "team") c.topic ||= text;
+      else if (k === "ai_once") c.prompt ||= text;
+      else { c.goal ||= text; c.access ||= "read"; }
+      if (!n.title || n.title === NODES[was]?.label) n.title = NODES[k].label;
+      touch();
+      redraw();
+    })));
+    const named = (r, label) => { if (!n.title || n.title === label || n.title === NODES[n.type].label) n.title = r.crew.name; };
     let p = null;
     if (n.type === "expert") {
-      const pick = bind(select([["", "고르세요"], ...agents().map((a) => [a.id, a.crew.name])], c.expert || ""), "expert", true);
-      box.prepend(field("전문가", pick, "고른 전문가의 모델·지시가 기본값이에요. 아래에서 이 단계만 다르게 정할 수 있어요"));
-      p = byId(c.expert);
+      const cur = byId(c.expert);
+      L.append(pickCard("전문가", cur, agents(), (r) => { named(r, cur?.crew.name); c.expert = r.id; touch(); redraw(); }));
+      p = cur;
+    } else if (n.type === "team") {
+      const cur = byId(c.team);
+      L.append(pickCard("팀", cur, teams(), (r) => { named(r, cur?.crew.name); c.team = r.id; touch(); redraw(); }));
     } else {
-      const persona = bind(select([["", "직접 쓰기"], ...personas().map((p) => [p.id, p.crew.name])], c.persona || ""), "persona", true);
-      box.append(field("페르소나", persona, "설정 › 워크플로우에서 만든 페르소나를 고르거나 아래에 직접 써요"));
+      const row = el("div", "scope-fields");
+      row.append(field("모델", bind(modelInput(c.model, ed.rec.crew.model || "deepseek-v4-flash"), "model", true), ed.rec.crew.model ? `비우면 ${ed.rec.crew.model}` : ""),
+        field("추론", bind(select(EFFORTS, c.effort || "medium"), "effort")));
+      L.append(row);
+      const persona = bind(select([["", "직접 쓰기"], ...personas().map((x) => [x.id, x.crew.name])], c.persona || ""), "persona", true);
+      L.append(field("페르소나", persona, "설정 › 워크플로우에서 만든 페르소나를 고르거나 아래에 직접 써요"));
       p = byId(c.persona);
+      if (p) { const q = el("div", "quote"); q.append(el("div", "", p.crew.instructions || "")); L.append(q); }
     }
-    if (p && n.type !== "expert") { const q = el("div", "quote"); q.append(el("div", "", p.crew.instructions || "")); box.append(q); }
-    box.append(field(p ? "더할 지시" : "페르소나 지시", bind(input(c.instructions, { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "너는 ○○다. …한다." }), "instructions")), skillsField(c));
-    if (n.type === "ai_once") {
-      box.append(field("질문 ({{input}}에 앞 결과가 들어가요)", bind(input(c.prompt, { tag: "textarea", rows: 4, maxLength: 8000 }), "prompt", true)));
-      return;
+    // 무엇을 하나
+    L.append(el("i", "wf-rule"), el("h3", "", "무엇을 하나"));
+    const title = input(n.title, { maxLength: 80 });
+    title.addEventListener("input", () => { n.title = title.value; touch(); });
+    L.append(field("노드 이름", title));
+    const slot = "{{input}} 자리에 앞 단계 결과가 들어가요";
+    if (n.type === "team") L.append(field("회의 주제", bind(input(c.topic, { tag: "textarea", rows: 3, maxLength: 4000 }), "topic", true), slot));
+    else if (n.type === "ai_once") L.append(field("질문", bind(input(c.prompt, { tag: "textarea", rows: 4, maxLength: 8000 }), "prompt", true), slot));
+    else L.append(field("목표", bind(input(c.goal, { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "하위 질문마다 출처 3개 이상 모아 줘." }), "goal", true), slot));
+    if (n.type !== "team") L.append(field(p ? "더할 지시" : "페르소나 지시", bind(input(c.instructions, { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "너는 ○○다. …한다." }), "instructions")), skillsField(c));
+    if (n.type === "team") R.append(el("p", "meta", "고른 팀이 회의를 열어 결론(요약·결정·할 일)을 다음 단계에 넘겨요. 사람의 결정을 기다리는 회의는 이 단계를 멈추게 해요."));
+    if (n.type === "expert" || n.type === "ai") {
+      // 실행 범위
+      R.append(el("h3", "", "실행 범위"),
+        field("허용 범위", bind(input(c.fence, { maxLength: 4000, placeholder: "웹 검색과 자료 읽기만 허용" }), "fence")),
+        field("완료 기준", bind(input(c.done, { maxLength: 1000, placeholder: "질문마다 출처 3개와 요약" }), "done")),
+        group("하는 일", segment([["read", "읽기만 · 동시"], ["write", "쓰기 · 차례로"]], c.access || "read", (v) => { c.access = v; touch(); redraw(); })),
+        field("실패하면 다시", bind(select([["0", "안 함"], ["1", "1번"], ["2", "2번"], ["3", "3번"]], c.retries || "0"), "retries")));
+      collabFields(R, n, bind);
     }
-    box.append(field("목표 — 무엇을", bind(input(c.goal, { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "하위 질문마다 출처 3개 이상 모아 줘. {{input}}에 앞 결과가 들어가요." }), "goal", true)),
-      field("울타리 — 어디까지", bind(input(c.fence, { tag: "textarea", rows: 2, maxLength: 4000, placeholder: "웹 검색·브라우저만. 로그인·결제가 필요한 곳은 가지 않기." }), "fence")),
-      field("완료 기준", bind(input(c.done, { maxLength: 1000, placeholder: "질문마다 출처 3개, 출처마다 요약 한 줄" }), "done")));
-    const row2 = el("div", "scope-fields");
-    row2.append(field("하는 일", bind(select(ACCESS, c.access || "read"), "access")), field("실패하면 다시", bind(select([["0", "안 함"], ["1", "1번"], ["2", "2번"], ["3", "3번"]], c.retries || "0"), "retries")));
-    box.append(row2);
-    // 협업 — 나눠서 맡기기: this node plans, workers do the parts at the same time, this node merges them.
+    sends(R, n);
+    if (WORK(n) && !ownerOf(ed.rec)) R.append(onlyRun(n));
+  }
+  // 나눠서 맡기기: this node plans, workers (saved experts) do the parts at the same time, this node merges them.
+  function collabFields(R, n, bind) {
+    const c = n.config;
     const on = c.collab === "on";
+    const first = () => agents()[0];
     const ch = el("div", "g-collab-head");
-    ch.append(el("strong", "", "협업 — 나눠서 맡기기"), switchEl(on, "협업 켜기", (v) => { c.collab = v ? "on" : ""; if (v && !c.workers) c.workers = JSON.stringify([{ name: "워커", model: ed.rec.crew.model || "deepseek-v4-flash" }]); touch(); redraw(); }));
-    box.append(ch);
-    if (!on) { box.append(el("p", "meta", "켜면 이 칸이 일을 나눠 워커에게 맡기고 결과를 합쳐요. 하위 질문이 몇 개일지 미리 모를 때 써요.")); return; }
+    ch.append(el("h3", "", "나눠서 맡기기"), switchEl(on, "나눠서 맡기기 켜기", (v) => {
+      c.collab = v ? "on" : "";
+      if (v && !c.workers) c.workers = JSON.stringify([first() ? { expert: first().id } : { name: "워커", model: ed.rec.crew.model || "deepseek-v4-flash" }]);
+      touch();
+      redraw();
+    }));
+    R.append(el("i", "wf-rule"), ch);
+    if (!on) { R.append(el("p", "meta", "켜면 이 노드가 일을 나눠 워커에게 맡기고 결과를 합쳐요. 하위 질문이 몇 개일지 미리 모를 때 써요.")); return; }
     let workers = [];
     try { workers = JSON.parse(c.workers || "[]"); } catch { workers = []; }
     const saveWorkers = () => { c.workers = JSON.stringify(workers); touch(); };
     const list = el("div", "g-workers");
     workers.forEach((w, i) => {
       const r = el("div", "g-worker");
-      const nm = input(w.name, { maxLength: 40, placeholder: "조사원" });
-      const md = modelInput(w.model, ed.rec.crew.model || "deepseek-v4-flash");
-      nm.addEventListener("input", () => { w.name = nm.value; saveWorkers(); });
-      md.addEventListener("input", () => { w.model = md.value; saveWorkers(); });
       const del = el("button", "icon-btn plain");
       del.type = "button";
       del.setAttribute("aria-label", "워커 빼기");
       del.append(icon("x"));
       del.addEventListener("click", () => { workers.splice(i, 1); saveWorkers(); redraw(); });
-      r.append(nm, md, del);
+      if (w.expert || !w.model) {
+        // An expert worker: its model and instructions follow the expert (the runner reads them).
+        const a = byId(w.expert);
+        const lead = el("span", "node-pick-lead");
+        lead.append(a ? avatarMark(a.crew) : icon("robot"));
+        const pick = select([["", "전문가 고르기"], ...agents().map((x) => [x.id, x.crew.role ? `${x.crew.name} · ${x.crew.role}` : x.crew.name])], w.expert || "");
+        pick.setAttribute("aria-label", "워커 전문가");
+        pick.addEventListener("change", () => { workers[i] = pick.value ? { expert: pick.value } : { name: "", model: "" }; saveWorkers(); redraw(); });
+        r.classList.add("expert");
+        r.append(lead, pick, del);
+      } else {
+        // A worker saved before experts: a name and a model.
+        const nm = input(w.name, { maxLength: 40, placeholder: "조사원" });
+        const md = modelInput(w.model, ed.rec.crew.model || "deepseek-v4-flash");
+        nm.addEventListener("input", () => { w.name = nm.value; saveWorkers(); });
+        md.addEventListener("input", () => { w.model = md.value; saveWorkers(); });
+        r.append(nm, md, del);
+      }
       list.append(r);
     });
-    box.append(el("small", "dim", "워커 역할 · 모델"), list, button("워커 역할 더하기", "ghost small", "plus", () => { workers.push({ name: "", model: ed.rec.crew.model || "" }); saveWorkers(); redraw(); }));
+    R.append(group("워커 — 전문가", list, "워커의 모델은 그 전문가 설정을 따라요"),
+      button("워커 더하기", "ghost small", "plus", () => { workers.push(first() ? { expert: first().id } : { name: "", model: ed.rec.crew.model || "" }); saveWorkers(); redraw(); }));
     const row3 = el("div", "scope-fields");
     row3.append(field("최대 개수", bind(input(c.max_workers || "5", { type: "number", min: 1, max: 16 }), "max_workers", true)), field("동시에", bind(input(c.concurrency || "3", { type: "number", min: 1, max: 16 }), "concurrency", true)));
-    box.append(row3, el("p", "meta", "실행할 때 AI가 일을 몇 개로 나눌지 정하고, 워커 결과를 이 칸이 합쳐요."));
     const row4 = el("div", "scope-fields");
-    row4.append(field("필요한 것", bind(input(c.needs, { maxLength: 200, placeholder: "검색 결과 목록" }), "needs")), field("만드는 것", bind(input(c.makes, { maxLength: 200, placeholder: "질문별 자료 묶음" }), "makes")));
-    box.append(row4);
+    row4.append(field("필요한 것", bind(input(c.needs, { maxLength: 200, placeholder: "검색 결과" }), "needs")), field("만드는 것", bind(input(c.makes, { maxLength: 200, placeholder: "질문별 자료 묶음" }), "makes")));
+    R.append(row3, row4, el("p", "meta", "실행할 때 AI가 일을 몇 개로 나눌지 정하고, 워커 결과를 이 노드가 합쳐요."));
   }
   // 스킬: the hub skills this step must follow (the runner puts their SKILL.md into its instructions).
   // Empty leaves it to the AI, which finds skills through the skill router as usual.

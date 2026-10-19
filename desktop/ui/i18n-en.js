@@ -4908,3 +4908,38 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {"비슷한 후보 {0}개": "{0} similar candidates"});
+
+Object.assign(window.ArkismI18nEN.strings, {
+  "끝나면 알려줌을 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요.": "With notify-when-done, the run waits until n8n posts the result to callback_url. The server needs a public address.",
+  "팀 노드": "Team node",
+  "누가 맡나": "Who does it",
+  "노드 종류": "Node type",
+  "무엇을 하나": "What it does",
+  "노드 이름": "Node name",
+  "{{input}} 자리에 앞 단계 결과가 들어가요": "{{input}} is replaced with the previous step's result",
+  "회의 주제": "Meeting topic",
+  "하위 질문마다 출처 3개 이상 모아 줘.": "Collect at least 3 sources for each sub-question.",
+  "고른 팀이 회의를 열어 결론(요약·결정·할 일)을 다음 단계에 넘겨요. 사람의 결정을 기다리는 회의는 이 단계를 멈추게 해요.": "The chosen team holds a meeting and passes its conclusion (summary, decisions, to-dos) to the next step. A meeting waiting on a human decision pauses this step.",
+  "실행 범위": "Run scope",
+  "허용 범위": "Allowed scope",
+  "웹 검색과 자료 읽기만 허용": "Web search and reading only",
+  "질문마다 출처 3개와 요약": "3 sources and a summary per question",
+  "읽기만 · 동시": "Read only · parallel",
+  "쓰기 · 차례로": "Write · in turn",
+  "나눠서 맡기기": "Split the work",
+  "나눠서 맡기기 켜기": "Turn on split work",
+  "켜면 이 노드가 일을 나눠 워커에게 맡기고 결과를 합쳐요. 하위 질문이 몇 개일지 미리 모를 때 써요.": "When on, this node splits the work across workers and merges the results. Use it when you can't tell in advance how many sub-questions there are.",
+  "전문가 고르기": "Choose an expert",
+  "워커 전문가": "Worker expert",
+  "워커 — 전문가": "Workers — experts",
+  "워커의 모델은 그 전문가 설정을 따라요": "Each worker uses its expert's model",
+  "워커 더하기": "Add worker",
+  "검색 결과": "Search results",
+  "실행할 때 AI가 일을 몇 개로 나눌지 정하고, 워커 결과를 이 노드가 합쳐요.": "At run time the AI decides how many pieces to split the work into, and this node merges the workers' results."
+});
+
+Object.assign(window.ArkismI18nEN.patterns, {
+  "최대 {0}라운드": "Up to {0} rounds",
+  "{0} 바꾸기": "Change {0}",
+  "{0} · 협업 워커 {1}": "{0} · up to {1} collab workers"
+});
