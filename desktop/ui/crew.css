@@ -337,7 +337,7 @@ button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor
 .crew-popup-who h2 { margin: 0; font-size: calc(17px * var(--fs, 1)); font-weight: 600; }
 .crew-popup-who p { margin: 4px 0 0; color: var(--text-2); font-size: calc(12.5px * var(--fs, 1)); }
 .crew-popup-actions { display: flex; gap: 8px; }
-.crew-popup-tabs { display: flex; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--border); }
+.crew-popup-tabs { display: flex; justify-content: flex-end; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--border); }
 .crew-popup-tab { background: none; border: 0; padding: 10px 12px; color: var(--text-2); cursor: pointer; font: inherit; }
 .crew-popup-tab.on { color: var(--accent); }
 .crew-popup-body { padding: 18px 24px 24px; max-height: calc(100vh - 260px); }
