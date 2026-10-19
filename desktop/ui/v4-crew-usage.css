@@ -1,0 +1,39 @@
+/* CREW › 사용량 (Figma 325:37545): stacked day bars in one violet, hover tooltip, four tables. */
+.tm-usage { --cu-violet: #9d8cf0; }
+.tm-col i.bad { background: var(--nc-amber); border-radius: 2px 2px 0 0; }
+.tm-col i.agent, .tm-col i.team, .tm-col i.auto { border-radius: 0; }
+.tm-col i.agent { background: color-mix(in srgb, var(--cu-violet) 45%, #fff); opacity: 1; }
+.tm-col i.team { background: color-mix(in srgb, var(--cu-violet) 72%, #fff); opacity: 1; }
+.tm-col i.auto { background: var(--cu-violet); opacity: 1; }
+.tm-col.hot i.auto, .tm-col.hot i.team, .tm-col.hot i.agent { filter: brightness(1.12); }
+.tm-col.hot i.bad { filter: brightness(1.1); }
+.tm-legend span:not(.bad)::before { background: var(--cu-violet); opacity: 1; }
+.tm-cols { position: relative; }
+.cu-tip { position: absolute; top: 0; z-index: 2; min-width: 148px; padding: 8px 10px; border-radius: 8px; background: var(--nc-raised); border: 1px solid var(--nc-line); box-shadow: 0 6px 18px rgba(0, 0, 0, .3); pointer-events: none; }
+.cu-tip[hidden] { display: none; }
+.cu-tip b { display: block; margin-bottom: 4px; color: var(--nc-text); font: 500 12px/1.5 var(--sans); white-space: nowrap; }
+.cu-tip p { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--nc-muted); font: 400 12px/1.6 var(--sans); }
+.cu-tip i { width: 8px; min-width: 8px; max-width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--cu-violet); }
+.cu-tip i.agent { background: color-mix(in srgb, var(--cu-violet) 45%, #fff); }
+.cu-tip i.team { background: color-mix(in srgb, var(--cu-violet) 72%, #fff); }
+.cu-tip i.bad { background: var(--nc-amber); }
+.cu-tip em { margin-left: auto; padding-left: 12px; color: var(--nc-text); font-style: normal; }
+.cu-card .tm-utable { margin-top: 12px; }
+.cu-table .tm-urow { gap: 12px; }
+.cu-expert .tm-urow { grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 1fr) 56px 72px 84px 80px minmax(110px, 1.4fr); }
+.cu-team .tm-urow { grid-template-columns: minmax(120px, 1.2fr) minmax(80px, .9fr) 56px 96px 96px 80px minmax(140px, 1.8fr); }
+.cu-auto .tm-urow { grid-template-columns: minmax(110px, 1.1fr) minmax(80px, .8fr) 56px 72px 84px 80px minmax(140px, 1.8fr); }
+.cu-table .tm-urow > span, .cu-table .tm-urow > .cu-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cu-table .tm-urow > span:first-child, .cu-table .tm-urow > .cu-name { text-align: left; }
+.cu-table .tm-urow > span:nth-child(2) { text-align: left; }
+.cu-expert .tm-urow > span:last-child, .cu-team .tm-urow > span:last-child, .cu-auto .tm-urow > span:last-child { text-align: left; }
+.cu-table .quiet { color: var(--nc-muted); }
+.cu-table .amber { color: var(--nc-amber); }
+.cu-name { display: flex; align-items: center; gap: 8px; }
+.cu-name .tm-mark { width: 22px; height: 22px; flex: none; }
+.cu-name .tm-mark img, .cu-name .tm-mark svg { width: 22px; height: 22px; }
+.cu-face { border-radius: 50%; overflow: hidden; }
+.cu-face img { object-fit: cover; }
+@media (max-width: 900px) { .cu-table { overflow-x: auto; } .cu-table .tm-urow { min-width: 720px; } }
+.cu-table .tm-urow > span:last-child { padding-left: 12px; }
+.cu-table .tm-urow > span:nth-child(6) { text-align: right; }

@@ -4872,3 +4872,22 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {"비슷한 후보 {0}개": "{0} similar candidates"});
+
+{ const add = (t, o) => { for (const k in o) if (!(k in t)) t[k] = o[k]; };
+add(window.ArkismI18nEN.strings, {
+  "자동화": "Automations", "시작": "Trigger", "실행": "Runs", "평균 시간": "Avg time", "마지막 실패": "Last failure", "마지막 회의": "Last meeting",
+  "부르는 곳": "Called from", "쓰는 곳": "Used in", "평균 토큰": "Avg tokens", "모델": "Model", "이름": "Name", "비용": "Cost", "호출": "Calls", "성공률": "Success rate",
+  "회의": "Meetings", "전문가": "Experts", "팀": "Teams", "직접": "Direct", "일정": "Schedule", "웹훅": "Webhook", "디스코드": "Discord",
+  "오늘": "Today", "전체 기간": "All time", "회의 기록 전체 보기 →": "View all meeting records →", "실행 기록 전체 보기 →": "View all run records →",
+  "이 기간에 회의한 팀이 없어요.": "No team met in this period.", "이 기간에 돈 자동화가 없어요.": "No automation ran in this period."
+});
+add(window.ArkismI18nEN.patterns, {
+  "최근 {0}": "Last {0}", "전문가 {0} · 팀 {1} · 자동화 {2}": "Experts {0} · Teams {1} · Automations {2}",
+  "{0} · 성공 {1} · 실패 {2} · 막대에 올리면 전문가·팀·자동화로 나뉘어 보여요": "{0} · {1} succeeded · {2} failed · hover a bar to see experts, teams and automations",
+  "{0} · 실행 {1} · 실패 {2}": "{0} · {1} runs · {2} failed", "{0} · 실행 {1}": "{0} · {1} runs",
+  "{0}명 · 호출 {1}번(단독 {2}) · 줄을 누르면 전문가로 가요": "{0} experts · {1} calls ({2} direct) · click a row to open experts",
+  "{0}개 · 회의 {1}번 · 줄을 누르면 회의 기록으로 가요": "{0} teams · {1} meetings · click a row for meeting records",
+  "{0}개 · 줄을 누르면 실행 기록으로 가요": "{0} · click a row for run records",
+  "{0} · 실패 {1}번이 {2}곳에서": "{0} · {1} failures in {2} places",
+  "자동화 {0} · 팀 {1}": "Automations {0} · Teams {1}", "자동화 {0}": "Automations {0}", "팀 {0}": "Teams {0}"
+}); }

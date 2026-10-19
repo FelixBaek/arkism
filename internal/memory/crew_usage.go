@@ -51,6 +51,11 @@ type UsageDay struct {
 	Date   string `json:"date"`
 	OK     int    `json:"ok"`
 	Failed int    `json:"failed"`
+	// ok runs by kind, plus a person's direct agent calls (Agent ok, AgentFailed failed).
+	Workflow    int `json:"workflow"`
+	Team        int `json:"team"`
+	Agent       int `json:"agent"`
+	AgentFailed int `json:"agent_failed"`
 }
 
 type UsageWorkflow struct {
@@ -71,6 +76,8 @@ type UsageAgent struct {
 	ID       string   `json:"id"`
 	Name     string   `json:"name"`
 	Calls    int      `json:"calls"`
+	Direct   int      `json:"direct"` // calls a person made straight to the agent
+	Failed   int      `json:"failed"`
 	Tokens   int64    `json:"tokens"`
 	CostUSD  float64  `json:"cost_usd"`
 	LimitUSD *float64 `json:"limit_usd"`
@@ -218,6 +225,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 				wfOK[run.CrewID]++
 				wfDone[run.CrewID]++
 				day(r.UpdatedAt).OK++
+				day(r.UpdatedAt).Workflow++
 			case "failed":
 				doneN++
 				wfDone[run.CrewID]++
@@ -264,6 +272,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 					okN++
 					tmConcluded[m.TeamID]++
 					day(r.UpdatedAt).OK++
+					day(r.UpdatedAt).Team++
 				} else if m.Status == "failed" || m.Status == "no_conclusion" {
 					day(r.UpdatedAt).Failed++
 				}
@@ -298,8 +307,21 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 		if w := wf[o.WorkflowID]; w != nil && o.WorkflowID != "" {
 			w.CostUSD += cost
 		}
+		if k == "agent" {
+			if c.OK {
+				day(r.CreatedAt).Agent++
+			} else {
+				day(r.CreatedAt).AgentFailed++
+			}
+		}
 		if a := ag[o.AgentID]; a != nil {
 			a.Calls++
+			if !c.OK {
+				a.Failed++
+			}
+			if k == "agent" {
+				a.Direct++
+			}
 			a.Tokens += c.InputTokens + c.OutputTokens
 			a.CostUSD += cost
 		}

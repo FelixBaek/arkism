@@ -42,7 +42,6 @@ window.ArkismTeams = (ctx) => {
   const PERM_BITS = PERMS.reduce((s, [, , bit]) => s + (1n << BigInt(bit)), 0n).toString(); // 311385197568
   const inviteURL = (appId) => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(appId)}&scope=bot%20applications.commands&permissions=${PERM_BITS}`;
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
-  const USAGE_KINDS = [["all", "전체"], ["workflow", "워크플로우"], ["agent", "전문가"], ["team", "팀"]];
   const ERRORS = {
     secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요.",
     invalid_request: "빈 칸이나 형식을 확인해 주세요. @이름은 띄어쓰기 없이 글자·숫자·_·-만 써요.",
@@ -1265,14 +1264,21 @@ window.ArkismTeams = (ctx) => {
   }
 
   // ================================================================ 사용량 (325:37545)
+  // Everything the usage API does not sum up is worked out here from the same data: runs and meetings are read once more
+  // (newest 200 / 50) for each table's 시작·평균 시간·마지막 실패·마지막 회의; 쓰는 곳 comes from the crew records.
+  const USAGE_FILTERS = [["all", "전체"], ["agent", "전문가"], ["team", "팀"], ["workflow", "자동화"]];
   async function loadUsage() {
     S.uState = "loading"; paintUsage();
     const ticket = (S.uTicket = (S.uTicket || 0) + 1);
     try {
-      const doc = await request(`/v1/crew/usage?${query({ range: S.uRange, kind: S.uKind })}`);
+      const [doc, runs, meets] = await Promise.all([
+        request(`/v1/crew/usage?${query({ range: S.uRange })}`),
+        request(`/v1/crew/runs?${query({ limit: 200 })}`).catch(() => null),
+        request(`/v1/crew/meetings?${query({ status: "all", limit: 50 })}`).catch(() => null)]);
+      if (!S.discord) await loadDiscord(true);
       if (ticket !== S.uTicket) return;
       if (!doc || !doc.kpi) throw new Error("invalid_response");
-      S.usage = doc; S.uState = "ready";
+      S.usage = doc; S.uRuns = runs?.items || []; S.uMeets = meets?.items || []; S.uState = "ready";
     } catch (e) {
       if (ticket !== S.uTicket) return;
       S.usage = null; S.uState = unsupported(e) ? "unsupported" : "error"; S.uErr = e.message;
@@ -1285,9 +1291,25 @@ window.ArkismTeams = (ctx) => {
     for (const [k, l] of tabs) { const t = el("button", `tm-seg-tab${k === cur ? " active" : ""}`, l); t.type = "button"; t.setAttribute("role", "tab"); t.addEventListener("click", () => onPick(k)); s.append(t); }
     return s;
   }
+  const rangeLabel = () => (S.uRange === "today" ? "오늘" : S.uRange === "all" ? "전체 기간" : `최근 ${RANGES.find(([k]) => k === S.uRange)?.[1] || ""}`);
+  const usageFrom = () => { const d = { today: 0, "7d": 7, "30d": 30, "90d": 90 }[S.uRange]; if (d == null) return 0; if (!d) { const t = new Date(); t.setHours(0, 0, 0, 0); return t.getTime(); } return Date.now() - d * 86400000; };
+  const inRange = (rec) => Date.parse(rec.created_at || rec.crew_meeting?.created_at) >= usageFrom();
+  const runAt = (r) => Date.parse(r.updated_at || r.created_at);
+  const meetAt = (r) => Date.parse(r.crew_meeting.finished_at || r.crew_meeting.updated_at || r.updated_at);
+  const sumBy = (rows, key) => rows.reduce((s, x) => s + (x[key] || 0), 0);
+  const dur = (ms) => { const s = Math.round(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, "0")}초` : `${s}초`; };
+  const TRIGGERS = { manual: "직접", call: "직접", test: "직접", schedule: "일정", webhook: "웹훅", discord: "디스코드", agent: "전문가" };
+  const dayParts = (x) => { const f = (x.failed || 0) + (x.agent_failed || 0); const hasKinds = x.workflow != null || x.team != null || x.agent != null; return { agent: x.agent || 0, team: hasKinds ? x.team || 0 : 0, auto: hasKinds ? x.workflow || 0 : x.ok || 0, failed: f }; };
+  function usageAvatar(rec, model) {
+    const art = rec?.crew?.avatar?.art;
+    if (!art || !/^[\w-]+$/.test(art)) return mark(model);
+    const box = el("span", "tm-mark cu-face"); const img = el("img"); img.src = `img/avatars/${art}.png`; img.alt = ""; box.append(img);
+    if (/^[\w-]+$/.test(rec.crew.avatar.bg || "")) box.style.background = `var(--avatar-${rec.crew.avatar.bg})`;
+    return box;
+  }
   function renderUsage() {
     const ctl = el("div", "tm-uctl");
-    ctl.append(segBox(RANGES, S.uRange, (k) => { if (S.uRange !== k) { S.uRange = k; void loadUsage(); } }), segBox(USAGE_KINDS, S.uKind, (k) => { if (S.uKind !== k) { S.uKind = k; void loadUsage(); } }));
+    ctl.append(segBox(RANGES, S.uRange, (k) => { if (S.uRange !== k) { S.uRange = k; void loadUsage(); } }), segBox(USAGE_FILTERS, S.uKind, (k) => { if (S.uKind !== k) { S.uKind = k; render(false); } }));
     const span = el("span", "tm-urange mono");
     const days = { today: 1, "7d": 7, "30d": 30, "90d": 90 }[S.uRange];
     if (days) { const to = new Date(), from = new Date(Date.now() - (days - 1) * 86400000); const f = (x) => x.toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" }); span.textContent = days === 1 ? f(to) : `${f(from)} – ${f(to)}`; }
@@ -1300,109 +1322,145 @@ window.ArkismTeams = (ctx) => {
       table.replaceChildren(empty(S.uState === "unsupported" ? "이 서버는 아직 워크플로우·에이전트 사용량을 지원하지 않아요." : S.uState === "error" ? `사용량을 불러오지 못했어요 (${S.uErr}).` : "불러오는 중…"));
       return;
     }
-    const d = S.usage, k = d.kpi;
-    const runs = (d.by_day || []).reduce((s, x) => s + (x.ok || 0) + (x.failed || 0), 0);
-    const failed = (d.by_day || []).reduce((s, x) => s + (x.failed || 0), 0);
+    const d = S.usage, k = d.kpi, byDay = d.by_day || [];
+    const kind = S.uKind;
+    const direct = sumBy(d.agents || [], "direct"), meetings = sumBy(d.teams || [], "meetings"), autoRuns = sumBy(d.workflows || [], "runs");
+    const total = direct + meetings + autoRuns;
+    const ok = byDay.reduce((s, x) => { const p = dayParts(x); return s + p.agent + p.team + p.auto; }, 0), failed = byDay.reduce((s, x) => s + dayParts(x).failed, 0);
     const kp = el("div", "tm-ukpis");
     const tile = (value, label, sub, cls, extra) => { const c = el("div", `tm-ukpi ${cls || ""}`.trim()); const v = el("strong", "", value); if (extra) v.append(extra); c.append(v, el("p", "", label)); if (sub) c.append(sub); return c; };
     const waitSub = el("small", "");
     if (k.waiting) { waitSub.append(k.oldest_waiting_at ? `가장 오래된 것 ${ago(k.oldest_waiting_at)} ` : ""); waitSub.append(link("확인하기 →", () => go("crew"))); } else waitSub.append("기다리는 일이 없어요");
-    kp.append(tile(Number(k.runs || 0).toLocaleString("en-US"), "실행", el("small", "", `실패 ${failed}번`)),
-      tile(pct(k.success_rate), "성공률", el("small", "", runs ? `기록 ${runs}번 중` : "")),
-      tile(`≈${k.cost_usd >= 100 ? `$${Math.round(k.cost_usd).toLocaleString("en-US")}` : usd(k.cost_usd)}`, "비용", el("small", "", k.runs ? `실행당 평균 ${usd((k.cost_usd || 0) / k.runs)}` : ""), "", k.cost_estimated !== false ? est() : null),
+    const cost = Number(k.cost_usd || 0);
+    kp.append(tile(total.toLocaleString("en-US"), "실행", el("small", "", `전문가 ${direct} · 팀 ${meetings} · 자동화 ${autoRuns}`)),
+      tile(ok + failed ? pct((ok / (ok + failed)) * 100) : "—", "성공률", el("small", "", `실패 ${failed}번`)),
+      tile(`≈${cost >= 100 ? `$${Math.round(cost).toLocaleString("en-US")}` : usd(cost)}`, "비용", el("small", "", total ? `실행당 평균 ${usd(cost / total)}` : ""), "", k.cost_estimated !== false ? est() : null),
       tile(String(k.waiting || 0), "사람 확인 대기", waitSub, k.waiting ? "amber" : ""));
-    const kids = [kp, dayChart(d.by_day || [])];
-    if (S.uKind === "all" || S.uKind === "workflow") kids.push(workflowTable(d.workflows || []));
-    const two = el("div", "tm-utwo");
-    if (S.uKind === "all" || S.uKind === "workflow") two.append(failingCard(d.failing_nodes || []));
-    if (S.uKind === "all" || S.uKind === "agent") two.append(agentCard(d.agents || []));
-    if (two.children.length) kids.push(two);
-    if (S.uKind === "all" || S.uKind === "team") kids.push(teamStrip(d.teams || []));
+    const kids = [kp, dayChart(byDay)];
+    if (kind === "all" || kind === "agent") kids.push(expertTable(d.agents || [], direct));
+    if (kind === "all" || kind === "team") kids.push(teamTable(d.teams || [], meetings));
+    if (kind === "all" || kind === "workflow") kids.push(autoTable(d.workflows || []), failingCard(d.failing_nodes || []));
     table.replaceChildren(...kids);
   }
   function dayChart(days) {
     const c = card("tm-chart", "날짜별 실행");
-    const ok = days.reduce((s, x) => s + (x.ok || 0), 0), bad = days.reduce((s, x) => s + (x.failed || 0), 0);
+    const show = (key) => S.uKind === "all" || S.uKind === key;
+    const parts = days.map((x) => { const p = dayParts(x); return { x, p, agent: show("agent") ? p.agent : 0, team: show("team") ? p.team : 0, auto: show("workflow") ? p.auto : 0, failed: p.failed }; });
+    const ok = sumBy(parts, "agent") + sumBy(parts, "team") + sumBy(parts, "auto"), bad = sumBy(parts, "failed");
     const head = c.firstChild;
-    head.append(el("p", "", `${RANGES.find(([k2]) => k2 === S.uRange)?.[1] || ""} · 성공 ${ok} · 실패 ${bad}`));
+    head.append(el("p", "", `${rangeLabel()} · 성공 ${ok} · 실패 ${bad} · 막대에 올리면 전문가·팀·자동화로 나뉘어 보여요`));
     const legend = el("div", "tm-legend"); legend.append(el("span", "ok", "성공"), el("span", "bad", "실패")); head.append(legend);
-    const max = Math.max(1, ...days.map((x) => (x.ok || 0) + (x.failed || 0)));
+    const sum = (q) => q.agent + q.team + q.auto + q.failed;
+    const max = Math.max(1, ...parts.map(sum));
     const top = Math.ceil(max / 10) * 10 || 10;
     const plot = el("div", "tm-plot");
     const axis = el("div", "tm-axis"); [top, Math.round(top / 2), 0].forEach((v) => axis.append(el("span", "mono", String(v))));
     const cols = el("div", "tm-cols");
+    const tip = el("div", "cu-tip"); tip.hidden = true;
     const step = Math.max(1, Math.ceil(days.length / 5));
-    days.forEach((x, i) => {
-      const col = el("div", `tm-col${i === days.length - 1 ? " last" : ""}`);
-      const f = el("i", "bad"), o = el("i", "ok");
-      f.style.height = `${((x.failed || 0) / top) * 100}%`; o.style.height = `${((x.ok || 0) / top) * 100}%`;
-      col.title = `${x.date} · 성공 ${x.ok || 0} · 실패 ${x.failed || 0}`;
-      col.append(f, o, el("small", "mono", i % step === 0 || i === days.length - 1 ? (x.date || "").slice(5).replace("-", ".").replace(/^0/, "") : ""));
+    parts.forEach((q, i) => {
+      const col = el("div", "tm-col");
+      for (const [cls, v] of [["bad", q.failed], ["agent", q.agent], ["team", q.team], ["auto", q.auto]]) { const b = el("i", cls); b.style.height = `${(v / top) * 100}%`; col.append(b); }
+      const [, mm, dd] = (q.x.date || "").split("-");
+      col.append(el("small", "mono", i % step === 0 || i === parts.length - 1 ? `${Number(mm)}.${Number(dd)}` : ""));
+      const label = new Date(`${q.x.date}T12:00:00`).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" });
+      col.setAttribute("aria-label", `${label} · 실행 ${sum(q)} · 실패 ${q.failed}`);
+      col.addEventListener("mouseenter", () => {
+        tip.replaceChildren(el("b", "", `${label} · 실행 ${sum(q)}`));
+        for (const [cls, name, v] of [["agent", "전문가", q.agent], ["team", "팀", q.team], ["auto", "자동화", q.auto], ["bad", "실패", q.failed]]) { const r = el("p", ""); r.append(el("i", cls), el("span", "", name), el("em", "mono", String(v))); tip.append(r); }
+        tip.hidden = false;
+        const left = col.offsetLeft + col.offsetWidth + 8;
+        tip.style.left = `${left + tip.offsetWidth > cols.clientWidth ? Math.max(0, col.offsetLeft - tip.offsetWidth - 8) : left}px`;
+        col.classList.add("hot");
+      });
+      col.addEventListener("mouseleave", () => { tip.hidden = true; col.classList.remove("hot"); });
       cols.append(col);
     });
     if (!days.length) cols.append(empty("이 기간에는 실행 기록이 없어요."));
+    cols.append(tip);
     plot.append(axis, cols);
     c.append(plot);
     return c;
   }
-  function workflowTable(rows) {
-    const c = card("", "워크플로우", `${rows.length}개 · 줄을 누르면 실행 기록으로 가요`);
-    c.firstChild.append(link("실행 기록 전체 보기 →", () => go("crew")));
-    const t = el("div", "tm-utable");
-    const h = el("div", "tm-urow head"); ["이름", "실행", "성공률", "비용"].forEach((x) => h.append(el("span", "", x))); t.append(h);
-    for (const w of rows) {
-      const r = el("button", "tm-urow"); r.type = "button";
-      const handle = byId(w.id)?.crew?.handle || w.name;
-      const rate = el("span", `mono${w.success_rate != null && w.success_rate < 90 ? " amber" : ""}`, pct(w.success_rate));
-      r.append(raw(el("span", "", `$${handle}`)), el("span", "mono", String(w.runs || 0)), rate, el("span", "mono", `≈${usd(w.cost_usd)}`));
-      r.addEventListener("click", () => { go("crew"); state.selected = `crew:${w.id}`; render(); });
-      t.append(r);
-    }
-    if (!rows.length) t.append(empty("이 기간에 돈 워크플로우가 없어요."));
+  // A table card: title + subtitle + link on the right, then a grid of rows (first column left, the rest right-aligned).
+  function usageTable(title, sub, linkText, linkGo, cols, rows, emptyText, cls) {
+    const c = card("cu-card", title, sub);
+    if (linkText) c.firstChild.append(link(linkText, linkGo));
+    const t = el("div", `tm-utable cu-table ${cls}`);
+    const h = el("div", "tm-urow head"); cols.forEach((x) => h.append(el("span", "", x))); t.append(h);
+    for (const r of rows) t.append(r);
+    if (!rows.length) t.append(empty(emptyText));
     c.append(t);
     return c;
   }
+  function urow(cells, onClick) {
+    const r = el(onClick ? "button" : "div", "tm-urow"); if (onClick) { r.type = "button"; r.addEventListener("click", onClick); }
+    for (const x of cells) r.append(typeof x === "string" || x == null ? el("span", "mono", x ?? "—") : x);
+    return r;
+  }
+  const lowRate = (v) => (v != null && v < 90 ? " amber" : "");
+  const cell = (text, cls = "") => el("span", cls, text);
+  function expertTable(rows, direct) {
+    const list = rows.filter((a) => a.calls > 0);
+    const body = list.map((a) => {
+      const rec = byId(a.id), model = agentModel(rec);
+      const name = el("span", "cu-name"); name.append(usageAvatar(rec, model), raw(el("span", "", `@${rec?.crew?.handle || a.name}`)));
+      const rateV = a.calls ? ((a.calls - (a.failed || 0)) / a.calls) * 100 : null;
+      const teamN = teams().filter((t) => (t.crew.members || []).some((m) => m.agent_id === a.id)).length;
+      const autoN = items().filter((r) => r.crew.type === "workflow" && (r.crew.graph?.nodes || []).some((n) => n.config?.agent === a.id || n.config?.agent_id === a.id)).length;
+      const where = [autoN ? `자동화 ${autoN}` : "", teamN ? `팀 ${teamN}` : ""].filter(Boolean).join(" · ") || "—";
+      const cost = el("span", "mono", usd(a.cost_usd));
+      return urow([name, cell(modelLabel(model), "mono quiet"), cell(String(a.calls), "mono"), cell(pct(rateV), `mono${lowRate(rateV)}`), cell(num(a.tokens / a.calls), "mono"), cost, cell(where, "quiet")], () => go("workers"));
+    });
+    return usageTable("전문가", `${list.length}명 · 호출 ${sumBy(list, "calls")}번(단독 ${direct}) · 줄을 누르면 전문가로 가요`, null, null,
+      ["이름", "모델", "호출", "성공률", "평균 토큰", "비용", "쓰는 곳"], body, "이 기간에 부른 전문가가 없어요.", "cu-expert");
+  }
+  function teamTable(rows, meetings) {
+    const recs = (S.uMeets || []).filter((m) => inRange(m) && m.crew_meeting);
+    const body = rows.map((t) => {
+      const mine = recs.filter((m) => m.crew_meeting.team_id === t.id).sort((a, b) => meetAt(b) - meetAt(a));
+      const from = [...new Set(mine.map((m) => TRIGGERS[m.crew_meeting.trigger] || "직접"))];
+      if (!from.length && channelsFor(t.id).length) from.push("디스코드");
+      const last = mine[0];
+      const lastText = last ? `${ago(new Date(meetAt(last)))} · ${last.crew_meeting.title || last.crew_meeting.topic || ""}` : "—";
+      return urow([raw(el("span", "", `@${byId(t.id)?.crew?.handle || t.name}`)), cell(from.join("·") || "—", "quiet"), cell(String(t.meetings), "mono"), cell(pct(t.concluded_rate), `mono${lowRate(t.concluded_rate)}`), cell((t.avg_rounds || 0).toFixed(1), "mono"), cell(usd(t.avg_cost_usd * t.meetings), "mono"), raw(cell(lastText, "quiet cu-clip"))], () => { go("meetings"); });
+    });
+    return usageTable("팀", `${rows.length}개 · 회의 ${meetings}번 · 줄을 누르면 회의 기록으로 가요`, "회의 기록 전체 보기 →", () => go("meetings"),
+      ["이름", "부르는 곳", "회의", "결론 난 비율", "평균 라운드", "비용", "마지막 회의"], body, "이 기간에 회의한 팀이 없어요.", "cu-team");
+  }
+  function autoTable(rows) {
+    const runs = (S.uRuns || []).filter((r) => inRange(r) && r.crew_run);
+    const body = rows.map((w) => {
+      const rec = byId(w.id), x = rec?.crew || {};
+      const mine = runs.filter((r) => r.crew_run.crew_id === w.id);
+      const done = mine.filter((r) => r.crew_run.status === "succeeded");
+      const avg = done.length ? done.reduce((s, r) => s + (runAt(r) - Date.parse(r.created_at)), 0) / done.length : null;
+      const avgOK = Number.isFinite(avg) && avg >= 0;
+      const bad = mine.filter((r) => r.crew_run.status === "failed").sort((a, b) => runAt(b) - runAt(a))[0];
+      const reason = bad && Object.values(bad.crew_run.nodes || {}).find((n) => n.status === "failed" && n.error)?.error;
+      const start = [x.trigger ? (x.trigger.kind === "schedule" ? "일정" : "웹훅") : "직접"];
+      if (bots().some((b) => (b.channels || []).some((c) => c.action?.kind === "workflow" && c.action.id === w.id))) start.push("디스코드");
+      const rateCell = cell(pct(w.success_rate), `mono${lowRate(w.success_rate)}`);
+      return urow([raw(el("span", "", `$${x.handle || w.name}`)), cell(start.join("·"), "quiet"), cell(String(w.runs || 0), "mono"), rateCell, cell(avgOK ? dur(avg) : "—", "mono"), cell(usd(w.cost_usd), "mono"), raw(cell(bad ? `${ago(new Date(runAt(bad)))}${reason ? ` · ${reason}` : ""}` : "—", "quiet cu-clip"))],
+        () => { go("crew"); state.selected = `crew:${w.id}`; render(); });
+    });
+    return usageTable("자동화", `${rows.length}개 · 줄을 누르면 실행 기록으로 가요`, "실행 기록 전체 보기 →", () => go("crew"),
+      ["이름", "시작", "실행", "성공률", "평균 시간", "비용", "마지막 실패"], body, "이 기간에 돈 자동화가 없어요.", "cu-auto");
+  }
   function failingCard(rows) {
-    const total = rows.reduce((s, x) => s + (x.failures || 0), 0);
-    const c = card("", "실패가 많은 노드", `실패 ${total}번이 ${rows.length}곳에서`);
+    const total = sumBy(rows, "failures");
+    const c = card("cu-card cu-fail", "실패가 많은 노드", `${rangeLabel()} · 실패 ${total}번이 ${rows.length}곳에서`);
     for (const f of rows) {
       const wf = byId(f.workflow_id);
       const node = (wf?.crew?.graph?.nodes || []).find((n) => n.id === f.node_id);
+      const run = (S.uRuns || []).filter((r) => r.crew_run?.crew_id === f.workflow_id && r.crew_run.nodes?.[f.node_id]?.error).sort((a, b) => runAt(b) - runAt(a))[0];
+      const reason = run?.crew_run.nodes[f.node_id].error;
       const r = el("div", "tm-ulist");
-      const t = el("div", ""); t.append(raw(el("b", "", node?.title || f.node_id)), raw(el("small", "", `$${wf?.crew?.handle || f.workflow_id}`)));
+      const t = el("div", ""); t.append(raw(el("b", "", node?.title || f.node_id)), raw(el("small", "", `$${wf?.crew?.handle || f.workflow_id}${reason ? ` · ${reason}` : ""}`)));
       const right = el("div", "tm-ulist-right"); right.append(el("span", "amber mono", `${f.failures}번`), link("열기", () => { go("crew"); state.selected = `crew:${f.workflow_id}`; render(); }));
       r.append(t, right); c.append(r);
     }
     if (!rows.length) c.append(empty("실패한 노드가 없어요."));
-    return c;
-  }
-  function agentCard(rows) {
-    const calls = rows.reduce((s, x) => s + (x.calls || 0), 0);
-    const c = card("", "전문가 호출", `${calls}번 호출`);
-    for (const a of rows) {
-      const rec = byId(a.id);
-      const r = el("div", "tm-ulist");
-      const t = el("div", "");
-      const limit = a.limit_usd ? ` · 이번 달 한도 ${Math.round(a.pct || 0)}%` : "";
-      t.append(raw(el("b", "", `@${rec?.crew?.handle || a.name}`)), raw(el("small", "", tr(`${modelLabel(agentModel(rec))}${limit}`))));
-      if (a.limit_usd) t.append(bar(a.cost_usd || 0, a.limit_usd));
-      const right = el("div", "tm-ulist-right col");
-      const cost = el("small", "mono"); cost.append(`≈${usd(a.cost_usd)}`, est());
-      right.append(el("b", "mono", `${a.calls || 0}번`), el("small", "accent mono", `평균 ${num(a.calls ? a.tokens / a.calls : 0)} 토큰`), cost);
-      r.append(mark(agentModel(rec)), t, right);
-      c.append(r);
-    }
-    if (!rows.length) c.append(empty("이 기간에 부른 전문가가 없어요."));
-    return c;
-  }
-  function teamStrip(rows) {
-    const c = el("section", "tm-card tm-ustrip");
-    const meetings = rows.reduce((s, x) => s + (x.meetings || 0), 0);
-    const w = (key) => (meetings ? rows.reduce((s, x) => s + (x[key] || 0) * (x.meetings || 0), 0) / meetings : 0);
-    const t = el("div", "tm-card-head"); t.append(el("h3", "", "팀 회의"), el("p", "", `${RANGES.find(([k]) => k === S.uRange)?.[1] || ""} · 팀 ${rows.length}개`));
-    const box = (v, l, e) => { const b = el("div", "tm-ubox"); const s = el("strong", "mono", v); if (e) s.append(est()); b.append(s, el("small", "", l)); return b; };
-    const rate = w("concluded_rate");
-    c.append(t, box(String(meetings), "회의"), box(w("avg_rounds").toFixed(1), "평균 라운드"), box(usd(w("avg_cost_usd")), "평균 비용", true), box(meetings ? pct(rate) : "—", "결론 난 비율"));
     return c;
   }
 
