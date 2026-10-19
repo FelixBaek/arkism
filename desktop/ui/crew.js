@@ -2631,9 +2631,12 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.dirty = false;
     wk.test = null;
   }
-  function openWorkers(id, isNew = false) {
+  // Usage › expert row asks for that expert's history tab (team.js openExpertHistory).
+  window.addEventListener("arkism:open-expert", (e) => { if (e.detail?.id) openWorkers(e.detail.id, false, e.detail.tab || "edit"); });
+  function openWorkers(id, isNew = false, tab = "edit") {
     if (wk.pop) return;
     state.workerNew = isNew;
+    wk.openTab = tab;
     wk.open = true;
     if (isNew) { wk.id = null; wk.draft = blankAgent(); wk.dirty = false; wk.teamsPick = new Set(); } else workerPick(id);
     if (state.view === "workers") render(false); else ctx.go("workers");
@@ -3269,10 +3272,11 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         { key: "test", label: "테스트", render: (box) => { wk.tab = "test"; drawWorkerSave = baseSave; wk.bar = wk.okBtn = null; box.append(testPanel(byId(wk.id))); } },
         { key: "history", label: "기록", render: (box) => { wk.tab = "history"; wk.bar = wk.okBtn = null; historyTab(box, byId(wk.id)); } }];
     const pop = expertPopup.open({
-      title: "", sub: "", avatar: face, tabs, initial: "edit", actions: [acts], cls: `ex-pop${isNew ? " ex-new" : ""}`,
+      title: "", sub: "", avatar: face, tabs, initial: isNew ? "edit" : (wk.openTab || "edit"), actions: [acts], cls: `ex-pop${isNew ? " ex-new" : ""}`,
       onClose: () => { if (wk.pop !== pop) return; wk.pop = null; state.workerNew = false; wk.bar = wk.okBtn = wk.estPaint = null; if (isNew && !wk.keep) wk.draft = null; wk.keep = false; render(false); }
     });
     wk.pop = pop;
+    wk.openTab = "edit";
     const names = pop.dialog.querySelector(".crew-popup-who > div");
     // Closing with unsaved changes asks first (the shared frame's 닫기 button, 바깥 Esc).
     const guard = (e) => { if (wk.dirty && !wk.busy && !confirm("저장하지 않은 변경이 있어요. 버리고 닫을까요?")) { e.preventDefault(); e.stopImmediatePropagation(); } };
