@@ -1690,7 +1690,7 @@
         if (group.items.length === 1) return candidateRow(group.items[0]);
         const box = el("details", "candidate-group");
         const head = el("summary", "");
-        head.append(el("strong", "", group.items[0].text), el("span", "meta", `비슷한 후보 ${group.items.length}개 · 언급 횟수 확인 전`));
+        head.append(el("strong", "", group.items[0].text), el("span", "meta", `비슷한 후보 ${group.items.length}개`));
         const evidence = el("p", "meta", "펼치면 서로 다른 원문 발화 수를 확인해요. 횟수는 승인이나 신뢰 점수가 아니에요.");
         evidence.setAttribute("aria-live", "polite");
         box.append(head, evidence, el("p", "meta", "각 문장의 조건과 예외를 확인하고 항목별로 결정해 주세요."), ...group.items.map(candidateRow));
