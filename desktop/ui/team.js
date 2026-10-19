@@ -469,7 +469,6 @@ window.ArkismTeams = (ctx) => {
     const out = [];
     if (rec) out.push(kpis(pop));
     out.push(aiSection(pop));
-    if (!rec) out.push(fromSection(pop));
     const mode = sec("tree-structure", "회의 방식", "누가 언제 말하고, 언제 끝낼지 정해요");
     mode.append(modeCard(d, (s) => changed(pop, s), null, null, true));
     out.push(mode);
@@ -478,10 +477,11 @@ window.ArkismTeams = (ctx) => {
     mem.querySelector(".tm-sec-head > small").before(...mc.heads);
     mem.append(...mc.childNodes);
     out.push(mem);
-    out.push(templatesSection(pop));
+    if (rec) out.push(templatesSection(pop));
     out.push(contextSection(pop));
     if (rec) { const pc = pins?.card({ rec, draft: d, cls: "tm-card", sub: tr(`회의를 열 때마다 ${d.name || rec.crew.name}에게 먼저 넣어요. 위에 있을수록 먼저 들어가요.`), noun: tr("이 팀은"), onChange: () => changed(pop) }); if (pc) out.push(pc); }
     out.push(channelsSection(pop));
+    if (!rec) out.push(fromSection(pop), templatesSection(pop)); // new team: these sit at the bottom (Figma 310:19981 has no slot for them)
     pop.bar = el("div", "tm-bar2"); out.push(pop.bar);
     updateBar(pop);
     return out;
