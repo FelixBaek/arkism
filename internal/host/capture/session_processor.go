@@ -575,6 +575,27 @@ func trimPreviousState(request map[string]any, content *string) bool {
 
 var sessionQualityDefects = regexp.MustCompile(`^(schema_|evidence_|coverage_|candidate_|user_provenance_|tool_provenance_|structured_output_)`)
 
+// Retry only defects a fresh model output can repair. Conflicting input
+// revisions, policy denials, transport failures and budgets are not quality
+// retries. The caller permits one additional generation at most.
+func sessionEvidenceRepairable(code string) bool {
+	switch code {
+	case "evidence_missing", "evidence_mismatch", "schema_array_min_items", "coverage_mismatch",
+		"user_provenance_mismatch", "tool_provenance_mismatch", "structured_output_invalid":
+		return true
+	}
+	return false
+}
+
+const sessionEvidenceRepair = `
+The previous response failed evidence validation. Rebuild from the ORIGINAL supplied records only.
+Every source_id, revision and quote must identify an actual supplied record. Empty placeholders
+such as source_id="" or quote="" are invalid, including in session_state.source_refs.
+Even when session_state has no task facts, cite a real relevant input record without inventing
+a goal, completion, check or new fact. Keep unsupported fields empty and omit unsupported candidates.
+Do not alter coverage or weaken conditions, exceptions, uncertainty or provenance to pass validation.
+`
+
 // maskSessionRecords keeps provenance identifiers stable while redacting content.
 func maskSessionRecords(records []any) ([]any, error) {
 	for _, row := range records {
@@ -669,7 +690,7 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 	if !trimPreviousState(request, &content) || len(content)+len(sessionSystem)+len(sessionSchemaJSON) >= 100000 {
 		return nil, sessionWait("input_chunk_required")
 	}
-	generate := func(model string) (map[string]any, error) {
+	generate := func(model string, repair bool) (map[string]any, error) {
 		if err := privateCapturePolicy("session_capture_policy_wait", policyPaths...); err != nil {
 			return nil, err
 		}
@@ -679,7 +700,11 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 		if why := LLMBudgetReason(model); why != "" {
 			return nil, sessionWait("session_model_budget_wait")
 		}
-		out, err := privateModel(sessionSystem, content, model, 300*time.Second, sessionSchemaJSON, "", policyPaths...)
+		system := sessionSystem
+		if repair {
+			system += sessionEvidenceRepair
+		}
+		out, err := privateModel(system, content, model, 300*time.Second, sessionSchemaJSON, "", policyPaths...)
 		if err != nil {
 			return nil, err
 		}
@@ -693,12 +718,19 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 	if gateOK {
 		model = sessionFastModel
 	}
-	output, err := generate(model)
+	output, err := generate(model, false)
 	escalated := false
-	// Only a quality defect of the gated Haiku call earns one Sonnet retry; Opus is never automatic.
+	repairReason := ""
+	// Gated Haiku quality failures retain their one Sonnet escalation. A
+	// primary-model evidence defect earns one repair with explicit feedback;
+	// both paths recheck policy, authorization, budget and the full validator.
 	if err != nil && gateOK && sessionQualityDefects.MatchString(errorCode(err)) {
+		repairReason = errorCode(err)
 		model, escalated = sessionModel, true
-		output, err = generate(model)
+		output, err = generate(model, true)
+	} else if err != nil && sessionEvidenceRepairable(errorCode(err)) {
+		repairReason = errorCode(err)
+		output, err = generate(model, true)
 	}
 	if err != nil {
 		return nil, err
@@ -706,6 +738,9 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 	metadata := map[string]any{"model_id": model, "prompt_version": sessionPromptVersion, "operation_id": op}
 	if escalated {
 		metadata["quality_escalation"] = true
+	}
+	if repairReason != "" {
+		metadata["quality_repair_reason"] = repairReason
 	}
 	return map[string]any{"operation_id": op, "output": output, "metadata": metadata, "start": start, "end": end, "expected_revision": expectedRevision}, nil
 }
