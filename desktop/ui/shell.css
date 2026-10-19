@@ -16,11 +16,10 @@
 .status-dot .dot { width: 7px; height: 7px; }
 .rail-line { height: 1px; background: var(--nc-line); flex: none; }
 .sidebar .nav { gap: 6px; }
-.sidebar .nav-item { height: 44px; gap: 12px; padding: 0 16px 0 14px; border-radius: var(--nc-radius-control); color: var(--nc-muted); font: 600 calc(15px * var(--fs, 1))/20px "Cormorant Garamond", "Noto Serif KR", Georgia, serif; }
+.sidebar .nav-item { height: 44px; gap: 12px; padding: 0 16px 0 14px; border-radius: var(--nc-radius-control); color: var(--nc-muted); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); }
 .sidebar .nav-item:hover { color: var(--nc-text); }
 .sidebar .nav-item.active { background: none; color: var(--nc-text); }
 .sidebar .nav-ic { stroke-width: 1.125; }
-.sidebar .rail-settings { font: 500 calc(13px * var(--fs, 1))/20px var(--sans); }
 .ln { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .rail-space { flex: 1; min-height: 0; }
 .rail-art { width: 178px; height: 118px; opacity: .85; flex: none; }
