@@ -432,51 +432,96 @@ window.ArkismOverviewWindows = (ctx, env) => {
     body.append(left, right); d.append(body);
   }
 
-  // 기억 지도 (611:54134 · 611:56374): GET /v1/memory-graph?mode=all, grouped by 칸 (reach), lines between memories
+  // 기억 지도 (611:54134 · 611:56374): GET /v1/memory-graph?mode=all, grouped by 칸 (reach), curved lines between memories.
+  // The map has no AI-suggestion write API (POST /v1/knowledge-graph/relations writes a separate store the map never reads), so 연결/아니요 are not drawn.
   const REACH = { personal: ["개인", 0], general: ["범용", 1], project: ["프로젝트", 2] };
   const EDGE = { supports: "지지", supersedes: "대체", conflicts: "충돌", human_link: "연결", same_session: "관련", similar: "비슷" };
+  const MAP_W = 752, MAP_H = 1032; // 611:56374 canvas box; the SVG scales with the window
+  const CLUSTER = { personal: { c: [225, 377], rx: 220, ry: 220, lab: [100, 185], base: -2.3 }, general: { c: [570, 327], rx: 185, ry: 185, lab: [468, 155], base: -0.6 }, project: { c: [395, 769], rx: 340, ry: 188, lab: [447, 612], base: 0.5 } };
+  const textW = (s, px) => [...s].reduce((w, ch) => w + (ch.charCodeAt(0) > 255 ? px : px * 0.56), 0);
   async function wideMap() {
-    const d = shell("기억 지도", "", "", null); // 611:54134 has no small window, only ✕
-    const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left ov-map-left"), right = el("div", "ov-wide-right ov-wide-detail");
+    const d = modal("ov-wide-win ov-map-win"), SVGNS = "http://www.w3.org/2000/svg";
+    const sv = (tag, attrs = {}, text) => { const n = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); if (text != null) n.textContent = text; return n; };
+    const head = el("div", "ov-win-head ov-map-head"), ttl = el("div", "ov-win-title");
+    ttl.append(button("‹ 개요", "ghost small", null, () => d.close()), el("i", "ov-dot"), el("h2", "", "기억 지도"));
+    const x = button("✕", "ghost small", null, () => d.close()); x.setAttribute("aria-label", "닫기"); head.append(ttl, x); d.append(head);
+    const body = el("div", "ov-map-body"), left = el("div", "ov-map-main"), right = el("div", "ov-map-side ov-wide-detail");
     const status = el("p", "ov-win-empty", "지도를 불러오는 중…"); left.append(status); body.append(left, right); d.append(body);
     let graph; try { graph = await request(`/v1/memory-graph?${query({ mode: "all" })}`); } catch (e) { status.textContent = `지도를 불러오지 못했어요: ${e.message}`; return; }
     const nodes = graph.nodes || [], edges = graph.edges || [];
     if (!nodes.length) { status.textContent = "지도에 그릴 기억이 아직 없어요."; return; }
     status.remove();
-    let mode = "all", sel = null, q = "", reachF = new Set(Object.keys(REACH)), topicF = null;
+    let mode = "all", sel = null, q = "", reachF = new Set(Object.keys(REACH)), topicF = null, allEdges = false, zoom = 1, moreOpen = false;
     const topics = (await request(`/v1/digests?${query({ kind: "topic", status: "active" })}`).catch(() => null))?.items || [];
     const inTopic = (id) => !topicF || (topics.find((t) => t.id === topicF)?.members || []).some((r) => r.id === id);
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    const bar = el("div", "ov-wide-bar"), seg = el("div", "ov-wide-seg"), search = el("input", "ov-wide-search"); search.placeholder = "기억 찾기"; search.setAttribute("aria-label", "기억 찾기");
-    const chipHost = el("div"); bar.append(seg, search, chipHost, button("작업 관계 보기", "ghost small", null, () => { dlg.close(); go("memories", "relations"); }));
-    const SVGNS = "http://www.w3.org/2000/svg", canvas = el("div", "ov-map-canvas");
-    // layout: one cluster per reach, nodes on a deterministic spiral (index based, no randomness)
-    const W = 760, H = 560, centers = { personal: [W * 0.27, H * 0.38], general: [W * 0.7, H * 0.33], project: [W * 0.5, H * 0.78] };
-    const pos = new Map(), groups = {}; nodes.forEach((n) => { (groups[n.reach || "general"] ||= []).push(n); });
-    for (const [r, list] of Object.entries(groups)) { const [cx, cy] = centers[r] || [W / 2, H / 2], step = Math.min(26, 150 / Math.sqrt(list.length || 1)); list.forEach((n, i) => { const a = i * 2.399963, rad = step * Math.sqrt(i + 0.5); pos.set(n.id, [cx + Math.cos(a) * rad, cy + Math.sin(a) * rad * 0.85]); }); }
-    const label = (id) => clip(D().memories.find((m) => m.id === id)?.text || kind(byId.get(id)?.kind), 26);
+    const byId = new Map(nodes.map((n) => [n.id, n])), reachOf = (n) => n?.reach || "general";
+    const bar = el("div", "ov-map-bar"), seg = el("div", "ov-wide-seg ov-map-seg"), searchBox = el("label", "ov-map-search"), search = el("input", "ov-wide-search"); search.placeholder = "기억·주제 찾기"; search.setAttribute("aria-label", "기억·주제 찾기"); searchBox.append(search);
+    const chipHost = el("div", "ov-map-reach"); bar.append(seg, searchBox, el("small", "", "칸"), chipHost);
+    const canvas = el("div", "ov-map-canvas"), stage = el("div", "ov-map-stage"); canvas.append(stage);
+    const groups = {}; nodes.forEach((n) => { (groups[reachOf(n)] ||= []).push(n); });
+    const proj = state.scope?.project_id && state.scope.project_id !== "default" ? state.scope.project_id : "";
+    // dots: a deterministic sunflower spread inside each cluster; the picked memory and its neighbours get fixed spots instead
+    const pos = new Map();
+    for (const [r, list] of Object.entries(groups)) { const g = CLUSTER[r] || CLUSTER.general; list.forEach((n, i) => { const a = i * 2.399963, t = Math.sqrt((i + 0.5) / list.length) * 0.93; pos.set(n.id, [g.c[0] + Math.cos(a) * g.rx * t, g.c[1] + Math.sin(a) * g.ry * t]); }); }
+    const label = (id) => clip(D().memories.find((m) => m.id === id)?.text || kind(byId.get(id)?.kind), 22);
+    const rel = (id) => edges.filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
+    const fmt = (v) => new Date(v).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" });
+    function focusPos() { // sel + neighbours -> fixed spots (Figma 611:56374)
+      const out = new Map(), g = CLUSTER[reachOf(byId.get(sel))] || CLUSTER.general; out.set(sel, [g.c[0] + (g === CLUSTER.personal ? 20 : 0), g.c[1] + (g === CLUSTER.personal ? 63 : 0)]);
+      const seen = {}; for (const e of rel(sel)) { const o = e.from === sel ? e.to : e.from, c = CLUSTER[reachOf(byId.get(o))] || CLUSTER.general, k = seen[reachOf(byId.get(o))] = (seen[reachOf(byId.get(o))] ?? -1) + 1; if (out.has(o)) continue; const a = c.base + k * 1.25, rad = 0.62 + (k % 2) * 0.12; out.set(o, [c.c[0] + Math.cos(a) * c.rx * rad, c.c[1] + Math.sin(a) * c.ry * rad]); }
+      return out;
+    }
     function drawMap() {
-      canvas.replaceChildren();
-      const svg = document.createElementNS(SVGNS, "svg"); svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("class", "ov-map-svg");
-      const near = new Set(); if (mode === "sel" && sel) { edges.forEach((e) => { if (e.from === sel) near.add(e.to); if (e.to === sel) near.add(e.from); }); near.add(sel); }
-      const vis = (n) => reachF.has(n.reach || "general") && inTopic(n.id) && (mode === "all" || near.has(n.id)) && (!q || label(n.id).includes(q));
-      for (const [r, [cx, cy]] of Object.entries(centers)) { if (!groups[r] || !reachF.has(r) || mode === "sel") continue; const c = document.createElementNS(SVGNS, "ellipse"); c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("rx", 40 + Math.sqrt(groups[r].length) * 17); c.setAttribute("ry", 34 + Math.sqrt(groups[r].length) * 14); c.setAttribute("class", `ov-map-ring ov-map-${r}`); svg.append(c); const t = document.createElementNS(SVGNS, "text"); t.setAttribute("x", cx); t.setAttribute("y", cy - 46 - Math.sqrt(groups[r].length) * 14); t.setAttribute("class", "ov-map-label"); t.setAttribute("text-anchor", "middle"); t.textContent = `${REACH[r]?.[0] || r} ${groups[r].length}`; svg.append(t); }
-      for (const e of edges) { if (mode === "sel" && sel && e.from !== sel && e.to !== sel) continue; const a = pos.get(e.from), b = pos.get(e.to); if (!a || !b || !vis(byId.get(e.from)) || !vis(byId.get(e.to))) continue; const l = document.createElementNS(SVGNS, "line"); l.setAttribute("x1", a[0]); l.setAttribute("y1", a[1]); l.setAttribute("x2", b[0]); l.setAttribute("y2", b[1]); l.setAttribute("class", `ov-map-edge ov-map-e-${e.type}`); svg.append(l); if (mode === "sel") { const t = document.createElementNS(SVGNS, "text"); t.setAttribute("x", (a[0] + b[0]) / 2); t.setAttribute("y", (a[1] + b[1]) / 2); t.setAttribute("text-anchor", "middle"); t.setAttribute("class", `ov-map-elabel ov-map-e-${e.type}`); t.textContent = EDGE[e.type] || e.type; svg.append(t); } }
-      for (const n of nodes) { if (!vis(n)) continue; const p = pos.get(n.id), c = document.createElementNS(SVGNS, "circle"); c.setAttribute("cx", p[0]); c.setAttribute("cy", p[1]); c.setAttribute("r", n.id === sel ? 8 : 2.5 + Math.min(4, Math.sqrt(n.uses || 0))); c.setAttribute("class", `ov-map-dot ov-map-${n.reach || "general"}${n.id === sel ? " on" : ""}`);
-        c.addEventListener("click", () => { sel = n.id; mode = "sel"; paint(); }); const tt = document.createElementNS(SVGNS, "title"); tt.textContent = label(n.id); c.append(tt); svg.append(c);
-        if (mode === "sel") { const t = document.createElementNS(SVGNS, "text"); t.setAttribute("x", p[0] + 10); t.setAttribute("y", p[1] + 3); t.setAttribute("class", "ov-map-label"); t.textContent = label(n.id); svg.append(t); } }
-      canvas.append(svg);
-      const lg = el("div", "ov-map-legend"); for (const t of ["supports", "same_session", "conflicts", "supersedes"]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t])); lg.append(i); } canvas.append(lg);
+      stage.replaceChildren();
+      const svg = sv("svg", { viewBox: `0 0 ${MAP_W} ${MAP_H}`, class: "ov-map-svg", preserveAspectRatio: "xMidYMid meet" });
+      const fp = mode === "sel" && sel ? focusPos() : null, P = (id) => fp?.get(id) || pos.get(id);
+      const vis = (n) => n && reachF.has(reachOf(n)) && inTopic(n.id) && (!q || label(n.id).includes(q));
+      for (const [r, g] of Object.entries(CLUSTER)) { if (!groups[r] || !reachF.has(r)) continue; const gr = sv("g", { class: `ov-map-${r}` });
+        gr.append(sv("ellipse", { cx: g.c[0], cy: g.c[1], rx: g.rx, ry: g.ry, class: "ov-map-ring" }));
+        const lab = sv("g", { class: "ov-map-clab" }); lab.append(sv("circle", { cx: g.lab[0], cy: g.lab[1] - 4, r: 4, class: "ov-map-pt" }), sv("text", { x: g.lab[0] + 12, y: g.lab[1], class: "ov-map-label" }, `${REACH[r][0]}${r === "project" && proj ? ` · ${proj}` : ""} `), sv("text", { x: g.lab[0] + 12 + textW(`${REACH[r][0]}${r === "project" && proj ? ` · ${proj}` : ""} `, 13), y: g.lab[1], class: "ov-map-count" }, num(groups[r].length)));
+        gr.append(lab); svg.append(gr); }
+      const near = new Set(fp ? fp.keys() : []);
+      const dots = sv("g"); for (const n of nodes) { if (!vis(n) || near.has(n.id)) continue; const p = pos.get(n.id), r = 1.4 + Math.min(2.2, Math.sqrt(n.uses || 0) / 2);
+        const c = sv("circle", { cx: p[0], cy: p[1], r, class: `ov-map-dot ov-map-${reachOf(n)}${fp ? " dim" : ""}` }); c.addEventListener("click", () => { sel = n.id; mode = "sel"; moreOpen = false; paint(); }); c.append(sv("title", {}, label(n.id))); dots.append(c); }
+      svg.append(dots);
+      const lines = sv("g"), pills = sv("g"); let drawn = 0;
+      for (const e of edges) { if (e.type === "similar") continue; const focus = fp && (e.from === sel || e.to === sel); if (!focus && !(mode === "all" || allEdges)) continue;
+        const a = P(e.from), b = P(e.to); if (!a || !b || !vis(byId.get(e.from)) || !vis(byId.get(e.to)) || (!focus && ++drawn > 500)) continue;
+        const dx = b[0] - a[0], dy = b[1] - a[1], k = focus ? 0.12 : 0.06, c = [(a[0] + b[0]) / 2 - dy * k, (a[1] + b[1]) / 2 + dx * k], t = e.type === "human_link" ? "supports" : e.type;
+        lines.append(sv("path", { d: `M${a[0]} ${a[1]} Q${c[0]} ${c[1]} ${b[0]} ${b[1]}`, class: `ov-map-edge ov-map-e-${t}${focus ? " on" : ""}` }));
+        if (focus) { const m = [(a[0] + 2 * c[0] + b[0]) / 4, (a[1] + 2 * c[1] + b[1]) / 4], txt = EDGE[e.type] || e.type, w = textW(txt, 11) + 18, pg = sv("g", { class: `ov-map-pill ov-map-e-${t}` }); pg.append(sv("rect", { x: m[0] - w / 2, y: m[1] - 10, width: w, height: 20, rx: 10 }), sv("text", { x: m[0], y: m[1] + 4, "text-anchor": "middle" }, txt)); pills.append(pg); } }
+      svg.append(lines);
+      if (fp) {
+        const nodeBox = (id) => { const n = byId.get(id), p = fp.get(id), main = id === sel, r = main ? 15 : 9, g = sv("g", { class: `ov-map-node ov-map-${reachOf(n)}` });
+          if (!vis(n)) return g;
+          const edge = rel(sel).find((e) => e.from === id || e.to === id), t1 = label(id), sub = main ? [REACH[reachOf(n)]?.[0], kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") : `${REACH[reachOf(n)]?.[0] || ""} · ${EDGE[edge?.type] || ""}`;
+          const w = Math.max(textW(t1, main ? 14 : 12), textW(sub, 10)) + 24, h = main ? 54 : 36, bx = main ? p[0] - w / 2 : p[0] > MAP_W * 0.62 ? p[0] - r - 8 - w : p[0] + r + 8, by = main ? p[1] + r + 14 : p[1] - h / 2;
+          if (main) { g.append(sv("circle", { cx: p[0], cy: p[1], r: 33, class: "ov-map-halo" }), sv("circle", { cx: p[0], cy: p[1], r: 25, class: "ov-map-ring2" })); }
+          const dot = sv("circle", { cx: p[0], cy: p[1], r, class: "ov-map-big" }); g.append(dot, sv("rect", { x: bx, y: by, width: w, height: h, rx: 6, class: `ov-map-box${main ? " on" : ""}` }), sv("text", { x: bx + 12, y: by + (main ? 24 : 16), class: `ov-map-t1${main ? " main" : ""}` }, t1), sv("text", { x: bx + 12, y: by + (main ? 42 : 29), class: "ov-map-t2" }, sub));
+          if (!main) g.addEventListener("click", () => { sel = id; paint(); }); if (!main) g.classList.add("ov-map-click"); return g; };
+        svg.append(pills); fp.forEach((_, id) => { if (id !== sel) svg.append(nodeBox(id)); }); svg.append(nodeBox(sel));
+      }
+      stage.append(svg); stage.style.transform = `scale(${zoom})`; zoomLab.textContent = `${Math.round(zoom * 100)}%`;
+    }
+    // floating bar: 4 line styles · 전체 관계/선택한 연결 · zoom
+    const legend = el("div", "ov-map-legend"), zoomLab = el("span", "ov-map-zoom", "100%");
+    const setZoom = (z) => { zoom = Math.min(2.5, Math.max(0.5, Math.round(z * 100) / 100)); stage.style.transform = `scale(${zoom})`; zoomLab.textContent = `${Math.round(zoom * 100)}%`; };
+    const zb = (txt, label, fn) => { const b = el("button", "ov-map-zbtn", txt); b.type = "button"; b.setAttribute("aria-label", label); b.addEventListener("click", fn); return b; };
+    function drawLegend() {
+      const items = el("div", "ov-map-lg-items"); for (const t of ["supports", "same_session", "conflicts", "supersedes"]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t])); items.append(i); }
+      const tog = el("div", "ov-map-lg-tog"); for (const [v, l] of [[true, "전체 관계"], [false, "선택한 연결"]]) { const b = el("button", v === (allEdges) ? "on" : "", l); b.type = "button"; b.addEventListener("click", () => { allEdges = v; drawMap(); drawLegend(); }); tog.append(b); }
+      legend.replaceChildren(items, el("em", ""), tog, el("em", ""), zb("−", "축소", () => setZoom(zoom - 0.25)), zoomLab, zb("+", "확대", () => setZoom(zoom + 0.25)), zb("⤢", "화면에 맞추기", () => setZoom(1)));
     }
     function paint() {
-      seg.replaceChildren(...[["all", "전체 지도"], ["sel", "선택한 기억"]].map(([k, l]) => { const b = el("button", `ov-wide-chip${mode === k ? " on" : ""}`, l); b.type = "button"; b.disabled = k === "sel" && !sel; b.addEventListener("click", () => { mode = k; paint(); }); return b; }));
-      chipHost.replaceChildren(chipBar(Object.entries(REACH).map(([k, [l]]) => [k, l, (groups[k] || []).length]).map(([k, l, n]) => [k, `${reachF.has(k) ? "● " : "○ "}${l}`, n]), "", (k) => { reachF.has(k) ? reachF.delete(k) : reachF.add(k); paint(); }));
-      drawMap(); drawSide();
+      seg.replaceChildren(...[["all", "전체 지도"], ["sel", "선택한 기억"]].map(([k, l]) => { const b = el("button", `ov-map-tab${mode === k ? " on" : ""}`, l); b.type = "button"; b.disabled = k === "sel" && !sel; b.addEventListener("click", () => { mode = k; paint(); }); return b; }));
+      chipHost.replaceChildren(...Object.entries(REACH).map(([k, [l]]) => { const b = el("button", `ov-map-chip ov-map-${k}${reachF.has(k) ? " on" : ""}`); b.type = "button"; b.append(el("i", ""), document.createTextNode(l)); b.addEventListener("click", () => { reachF.has(k) ? reachF.delete(k) : reachF.add(k); paint(); }); return b; }));
+      drawMap(); drawLegend(); drawSide();
     }
     function drawSide() {
-      right.replaceChildren(); const sec = (title, ...nodes) => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", title), ...nodes); right.append(s); };
+      right.replaceChildren(); const sec = (title, ...kids) => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", title), ...kids); right.append(s); return s; };
+      const top = el("div", "ov-map-sidehead"); top.append(el("h4", "", sel ? "기억 상세" : "지도 요약")); if (sel) { const c = el("button", "ov-map-x", "✕"); c.type = "button"; c.setAttribute("aria-label", "닫기"); c.addEventListener("click", () => { sel = null; mode = "all"; paint(); }); top.append(c); } right.append(top);
       if (!sel) {
-        right.append(el("h3", "", "지도 요약")); const f = el("div", "ov-detail-facts");
+        const f = el("div", "ov-detail-facts");
         for (const [a, b] of [["전체 기억", num(nodes.length)], ["이어진 선", num(edges.length)]]) { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); } sec("", f);
         const list = el("div", "ov-detail-list"); for (const [r, [l]] of Object.entries(REACH)) if (groups[r]) list.append(row("", l, "", num(groups[r].length))); sec("칸", list);
         const kinds = {}; nodes.forEach((n) => { kinds[n.kind] = (kinds[n.kind] || 0) + 1; }); const kl = el("div", "ov-detail-list"); Object.entries(kinds).sort((a, b) => b[1] - a[1]).forEach(([k, n]) => kl.append(row("", kind(k), "", num(n)))); sec("종류", kl);
@@ -486,19 +531,24 @@ window.ArkismOverviewWindows = (ctx, env) => {
         return;
       }
       const m = D().memories.find((x) => x.id === sel), n = byId.get(sel), ev = m && tag(m, "event_id:"), basis = m && tag(m, "basis:");
-      const h = el("div", "ov-detail-head"); h.append(el("span", `ov-win-tag ov-map-${n.reach || "general"}`, REACH[n.reach]?.[0] || "범용"), el("span", "ov-win-tag", kind(n.kind)), button("닫기", "ghost small", null, () => { sel = null; mode = "all"; paint(); })); right.append(h, el("h3", "", m?.text || "이 기억의 내용은 지도에 없어요"));
+      const chips = el("div", "ov-map-tags"), rc = el("span", `ov-map-chip on ov-map-${reachOf(n)}`); rc.append(el("i", ""), document.createTextNode(REACH[reachOf(n)]?.[0] || "범용")); chips.append(rc, el("span", "ov-win-tag", kind(n.kind))); right.append(chips);
+      right.append(el("h3", "ov-map-title", m ? clip(m.text, 60) : "이 기억의 내용은 지도에 없어요"));
       if (basis) right.append(el("small", "ov-detail-basis", basis === "explicit_user" ? "● 직접 말한 기억" : basis === "inferred" ? "● AI가 짐작한 기억" : "● 대화 원문 기반"));
-      const u = usage(sel); if (u) { const f = el("div", "ov-detail-facts"); const p = el("p", ""); p.append(el("span", "", "최근 7일"), el("strong", "", `${num(u.d7 || 0)}번 쓰임${u.last ? ` · ${ago(u.last)}` : ""}`)); f.append(p); sec("쓰임", f); }
-      if (ev) { const b = el("div", "ov-detail-from"), [agent, ...rest] = ev.split(":"), sid = rest.join(":"), ses = env.sessions().find((x) => x.session_id === sid); b.append(el("span", "", `대화 · ${ses ? ses.title || ses.project || agent : agent} · ${new Date(m.created_at).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" })}`), button("원문 대화 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec("출처", b); }
-      const links = edges.filter((e) => e.from === sel || e.to === sel), real = links.filter((e) => e.type !== "similar"), ul = el("div", "ov-detail-list");
-      for (const e of real.slice(0, 12)) { const other = e.from === sel ? e.to : e.from; const r = row(EDGE[e.type] || e.type, label(other), REACH[byId.get(other)?.reach]?.[0] || "", "", []); r.classList.add("ov-win-click"); r.addEventListener("click", () => { sel = other; paint(); }); ul.append(r); }
-      sec(`연결된 기억 ${real.length}`, real.length ? ul : el("p", "ov-win-empty", "이어진 기억이 없어요."));
-      const sim = links.find((e) => e.type === "similar");
+      if (m) right.append((() => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", "기억 내용"), el("p", "ov-map-body-text", m.text)); return s; })());
+      const u = usage(sel), used = n.uses || u?.d7;
+      if (used || u?.last) { const p = el("p", "ov-map-use"); p.append(el("span", "", `${num(n.uses || 0)}회 쓰임`), ...(u?.last ? [el("span", "", ` · ${ago(u.last)}`)] : [])); right.append(p); }
+      if (ev) { const b = el("div", "ov-map-quote"), [agent, ...r2] = ev.split(":"), sid = r2.join(":"), ses = env.sessions().find((x) => x.session_id === sid);
+        b.append(el("small", "", `대화 · ${ses ? ses.title || ses.project || agent : agent} · ${fmt(m.created_at)}`), button("원문 대화 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec("출처", b); }
+      const real = rel(sel), shown = moreOpen ? real : real.slice(0, 3), ul = el("div", "ov-map-rels");
+      for (const e of shown) { const other = e.from === sel ? e.to : e.from, o = byId.get(other), r = el("button", "ov-map-rel"); r.type = "button"; const tx = el("span", "ov-map-rel-t"), pr = el("span", `ov-map-chip on ov-map-${reachOf(o)}`); pr.append(el("i", ""), document.createTextNode(REACH[reachOf(o)]?.[0] || "")); tx.append(el("b", "", label(other)), pr); r.append(el("span", `ov-map-tagpill ov-map-e-${e.type === "human_link" ? "supports" : e.type}`, EDGE[e.type] || e.type), tx, el("span", "ov-map-chev", "›")); r.addEventListener("click", () => { sel = other; moreOpen = false; paint(); }); ul.append(r); }
+      const lh = el("div", "ov-map-relhead"); lh.append(el("small", "", "연결된 기억"), el("small", "", num(real.length))); right.append(lh);
+      if (real.length) { right.append(ul); if (real.length > 3) { const mb = el("button", "ov-map-more", moreOpen ? "접기" : `나머지 ${real.length - 3}개 펼치기`); mb.type = "button"; mb.addEventListener("click", () => { moreOpen = !moreOpen; drawSide(); }); right.append(mb); } } else right.append(el("p", "ov-win-empty", "이어진 기억이 없어요."));
+      const sim = edges.find((e) => e.type === "similar" && (e.from === sel || e.to === sel));
       if (sim) { const other = sim.from === sel ? sim.to : sim.from, box = el("div", "ov-map-suggest"); box.append(el("small", "", "AI 관계 제안"), el("p", "", `“${label(other)}”와 비슷한 기억이에요. 같은 뜻이면 기억 화면에서 합치거나 연결해 주세요.`)); right.append(box); }
-      const act = el("div", "ov-detail-actions"); if (m?.updated_at) act.append(el("small", "", `수정 ${new Date(m.updated_at).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" })}`)); act.append(button("기억 수정", "small", null, () => { dlg.close(); go("memories", "active"); })); right.append(act);
+      const act = el("div", "ov-map-foot"); if (m?.updated_at) act.append(el("small", "", `수정 ${fmt(m.updated_at)}`)); act.append(button("기억 수정", "small", null, () => { dlg.close(); go("memories", "active"); })); right.append(act);
     }
     search.addEventListener("input", () => { q = search.value.trim(); drawMap(); });
-    left.append(bar, canvas); paint();
+    left.append(bar, canvas); canvas.append(legend); paint();
   }
 
   return { open, wide };

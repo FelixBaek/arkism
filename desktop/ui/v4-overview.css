@@ -199,11 +199,6 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-detail-from { display: flex; align-items: center; justify-content: space-between; }
 .ov-detail-list { display: flex; flex-direction: column; gap: 4px; }
 .ov-detail-bar p { display: flex; justify-content: space-between; margin: 0 0 3px; font-size: 12.5px; } .ov-detail-bar i { display: block; height: 5px; border-radius: 3px; background: var(--bg-muted); } .ov-detail-bar b { display: block; height: 100%; border-radius: 3px; background: var(--text-2); }
-.ov-map-left { padding-bottom: 8px; } .ov-map-canvas { flex: 1; min-height: 320px; } .ov-map-svg { width: 100%; height: 100%; }
-.ov-map-ring { fill: none; stroke: var(--border); stroke-dasharray: 3 4; }
-.ov-map-label { fill: var(--text-2); font-size: 11px; }
-.ov-map-dot { fill: var(--text-2); cursor: pointer; } .ov-map-dot.on { fill: var(--accent, var(--text-1)); }
-.ov-map-edge { stroke: var(--border); stroke-width: 1; } .ov-map-e-conflicts { stroke: #ff5160; } .ov-map-e-supersedes { stroke: #f5b955; }
 .ov-wide-search, .ov-detail-edit, .ov-ask textarea { background: var(--bg-muted); color: var(--text-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; }
 .ov-wide-left > .ov-wide-bar .ghost { border: 1px solid var(--border); }
 .ov-detail-list .ov-win-item { padding: 6px 10px; }
@@ -235,9 +230,49 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-flow-step.done { color: #6fbf8f; } .ov-flow-step.now { color: #e0a43a; background: rgba(224,164,58,.16); }
 .ov-detail-cand { display: flex; justify-content: space-between; gap: 8px; padding: 9px 12px; margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; } .ov-detail-cand small { color: var(--text-2); flex: none; } .ov-detail-cand.link { cursor: pointer; }
 /* 기억 지도: 간선 이름·범례·AI 제안·출처 */
-.ov-map-elabel { font-size: 10px; fill: currentColor; stroke: none; paint-order: stroke; }
-.ov-map-legend { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; color: var(--text-2); } .ov-map-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.ov-map-legend i { width: 18px; height: 0; border-top: 2px solid currentColor; }
 .ov-map-suggest { margin-top: 12px; padding: 10px 12px; border: 1px dashed #8b7cf6; border-radius: 10px; font-size: 13px; } .ov-map-suggest small { color: #8b7cf6; } .ov-map-suggest p { margin: 4px 0 0; }
 .ov-detail-basis { display: block; margin: 6px 0 2px; color: #6fbf8f; }
 .ov-detail-actions small { margin-right: auto; color: var(--text-2); }
+/* 기억 지도 (611:54134 · 611:56374): fills the content area beside the rail */
+.ov-map-win { position: fixed; inset: 16px 32px 16px calc(var(--nc-rail-w) + 32px); width: auto; max-width: 1168px; height: auto; margin: 0 auto; border-radius: 14px; background: var(--nc-canvas); }
+.ov-map-head { padding: 16px 24px; } .ov-map-head .ov-win-title h2 { font-size: 20px; } .ov-map-head .ov-win-title .ghost { border: 1px solid var(--nc-line); background: var(--nc-raised); border-radius: 6px; font-size: 12px; }
+.ov-map-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 346px; gap: 20px; padding: 0 24px 24px; }
+.ov-map-main { display: flex; flex-direction: column; gap: 16px; min-height: 0; min-width: 0; }
+.ov-map-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 16px; } .ov-map-bar > small { color: var(--nc-quiet); }
+.ov-map-seg { gap: 0; padding: 4px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: 8px; }
+.ov-map-tab { border: 1px solid transparent; background: transparent; color: var(--nc-muted); font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 6px; cursor: pointer; } .ov-map-tab.on { background: var(--nc-subtle); color: var(--nc-text); border-color: var(--nc-line); } .ov-map-tab:disabled { opacity: .4; cursor: default; }
+.ov-map-search { flex: 1 1 200px; max-width: 240px; } .ov-map-search .ov-wide-search { width: 100%; box-sizing: border-box; background: var(--nc-surface); }
+.ov-map-reach { display: flex; gap: 8px; }
+.ov-map-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--nc-line); background: transparent; color: var(--nc-muted); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 12px; cursor: pointer; } .ov-map-chip i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.ov-map-chip.on { color: var(--c); border-color: color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 12%, transparent); } .ov-map-chip.on i { background: var(--c); }
+.ov-map-personal { --c: #7fc79c; color: var(--c); } .ov-map-general { --c: #6aa3ff; color: var(--c); } .ov-map-project { --c: #f5b955; color: var(--c); }
+.ov-map-chip { color: var(--nc-muted); } .ov-map-chip.on { color: var(--c); }
+.ov-map-canvas { position: relative; flex: 1; min-height: 320px; overflow: hidden; border: 1px solid var(--nc-line); border-radius: 12px; background: var(--nc-rail); }
+.ov-map-stage { position: absolute; inset: 0; transform-origin: 50% 50%; } .ov-map-svg { width: 100%; height: 100%; display: block; }
+.ov-map-ring { fill: color-mix(in srgb, var(--c) 7%, transparent); stroke: color-mix(in srgb, var(--c) 40%, transparent); stroke-width: 1; }
+.ov-map-pt { fill: var(--c); } .ov-map-label { fill: var(--nc-text); font-size: 13px; } .ov-map-count { fill: var(--nc-muted); font-size: 12px; }
+.ov-map-dot { fill: var(--c); opacity: .65; cursor: pointer; stroke: transparent; stroke-width: 8px; paint-order: stroke; } .ov-map-dot.dim { opacity: .35; } .ov-map-dot:hover { opacity: 1; }
+.ov-map-edge { fill: none; stroke: var(--nc-line); stroke-width: 1; opacity: .7; } .ov-map-edge.on { stroke-width: 1.6; opacity: 1; }
+.ov-map-e-supports { --e: #6fbf8f; } .ov-map-e-same_session { --e: #9a9a94; } .ov-map-e-conflicts { --e: #ff5160; } .ov-map-e-supersedes { --e: #8b7cf6; }
+.ov-map-edge.ov-map-e-supports { stroke: var(--e); } .ov-map-edge.ov-map-e-same_session { stroke: var(--e); stroke-dasharray: 1 5; stroke-linecap: round; } .ov-map-edge.ov-map-e-conflicts { stroke: var(--e); stroke-dasharray: 5 4; } .ov-map-edge.ov-map-e-supersedes { stroke: var(--e); stroke-dasharray: 1 4; stroke-linecap: round; }
+.ov-map-pill rect { fill: var(--nc-canvas); stroke: var(--e); } .ov-map-pill text { fill: var(--e); font-size: 11px; }
+.ov-map-halo { fill: color-mix(in srgb, var(--c) 14%, transparent); } .ov-map-ring2 { fill: none; stroke: var(--c); stroke-opacity: .6; stroke-dasharray: 3 4; } .ov-map-big { fill: var(--c); } .ov-map-node .ov-map-big { stroke: color-mix(in srgb, var(--c) 40%, transparent); stroke-width: 3; }
+.ov-map-box { fill: var(--nc-surface); fill-opacity: .94; stroke: var(--nc-line); } .ov-map-box.on { stroke: var(--c); fill: var(--nc-canvas); }
+.ov-map-t1 { fill: var(--nc-text); font-size: 12px; } .ov-map-t1.main { font-size: 14px; } .ov-map-t2 { fill: var(--nc-quiet); font-size: 10px; } .ov-map-click { cursor: pointer; }
+.ov-map-legend { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 8px 14px; background: color-mix(in srgb, var(--nc-surface) 92%, transparent); border: 1px solid var(--nc-line); border-radius: 10px; font-size: 12px; color: var(--nc-muted); white-space: nowrap; max-width: calc(100% - 24px); }
+.ov-map-lg-items { display: flex; gap: 14px; } .ov-map-lg-items span { display: inline-flex; align-items: center; gap: 6px; } .ov-map-legend em { width: 1px; height: 18px; background: var(--nc-line); }
+.ov-map-lg-items i { width: 22px; height: 0; border-top: 2px solid var(--e); } .ov-map-lg-items .ov-map-e-same_session, .ov-map-lg-items .ov-map-e-supersedes { border-top-style: dotted; } .ov-map-lg-items .ov-map-e-conflicts { border-top-style: dashed; }
+.ov-map-lg-tog { display: flex; gap: 2px; } .ov-map-lg-tog button { border: 0; background: transparent; color: var(--nc-muted); font: inherit; padding: 4px 10px; border-radius: 6px; cursor: pointer; } .ov-map-lg-tog button.on { background: var(--nc-subtle); color: var(--nc-text); }
+.ov-map-zbtn { border: 0; background: transparent; color: var(--nc-muted); font: inherit; font-size: 14px; cursor: pointer; padding: 2px 6px; } .ov-map-zoom { min-width: 40px; text-align: center; color: var(--nc-text); }
+.ov-map-side { display: flex; flex-direction: column; gap: 14px; overflow: auto; min-height: 0; padding: 20px; margin-top: 16px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: 12px; }
+.ov-map-sidehead { display: flex; justify-content: space-between; align-items: center; } .ov-map-sidehead h4 { margin: 0; font-size: 16px; font-weight: 500; } .ov-map-x { border: 0; background: transparent; color: var(--nc-muted); font-size: 16px; cursor: pointer; }
+.ov-map-tags { display: flex; gap: 6px; } .ov-map-title { font-size: 20px !important; font-weight: 600; line-height: 1.35 !important; }
+.ov-map-body-text { line-height: 1.55; color: var(--nc-text); } .ov-map-use { margin: 0; color: var(--nc-muted); font-size: 12.5px; }
+.ov-map-quote { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; background: var(--nc-raised); border-radius: 8px; } .ov-map-quote small { color: var(--nc-quiet); font-size: 11.5px; }
+.ov-map-relhead { display: flex; justify-content: space-between; color: var(--nc-muted); font-size: 11.5px; } .ov-map-rels { display: flex; flex-direction: column; gap: 8px; }
+.ov-map-rel { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 0; background: var(--nc-raised); border-radius: 8px; padding: 10px 12px; color: var(--nc-text); font: inherit; cursor: pointer; }
+.ov-map-rel-t { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; } .ov-map-rel-t b { font-weight: 500; font-size: 13px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ov-map-rel-t .ov-map-chip { border: 0; padding: 0; background: transparent; font-size: 11px; }
+.ov-map-tagpill { flex: none; font-size: 11px; padding: 2px 8px; border-radius: 5px; color: var(--e); background: color-mix(in srgb, var(--e) 16%, transparent); } .ov-map-chev { color: var(--nc-quiet); }
+.ov-map-more { align-self: flex-start; border: 0; background: transparent; color: var(--nc-muted); font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
+.ov-map-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 12px; } .ov-map-foot small { color: var(--nc-quiet); }
+@media (max-width: 1000px) { .ov-map-body { grid-template-columns: 1fr; overflow: auto; } }

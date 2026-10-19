@@ -3555,7 +3555,15 @@ window.ArkismI18nEN = {
   "단계 이은 순서 바꿈": "Step order changed",
   "부르기": "Calling",
   "채널 추가": "Add channel",
-  "맡을 전문가 고르기": "Pick an expert"
+  "맡을 전문가 고르기": "Pick an expert",
+  "‹ 개요": "‹ Overview",
+  "기억·주제 찾기": "Search memories · topics",
+  "전체 관계": "All relations",
+  "선택한 연결": "Selected links",
+  "화면에 맞추기": "Fit to screen",
+  "기억 상세": "Memory detail",
+  "기억 내용": "Memory text",
+  "연결된 기억": "Linked memories"
  },
  "patterns": {
   "@{0}로 부를 때만": "Only when called as @{0}",
@@ -4429,7 +4437,10 @@ window.ArkismI18nEN = {
   "되돌아가는 선 {0} 최대 {1}번": "Loop-back {0}, up to {1} times",
   "되돌아가는 선 {0} {1} → {2}번": "Loop-back {0} {1} → {2} times",
   "되돌아가는 선 {0} 뺌": "Loop-back {0} removed",
-  "채널에서 ${0}로 이 자동화를 부르게 연결해요": "Connect a channel so ${0} calls this automation"
+  "채널에서 ${0}로 이 자동화를 부르게 연결해요": "Connect a channel so ${0} calls this automation",
+  "쓰임 {0}회": "Used {0} times",
+  "{0}회 쓰임": "Used {0} times",
+  "나머지 {0}개 펼치기": "Show {0} more"
  }
 };
 // adopt-digests: MEMORY › 기억 › 모아보기 주제 요약 · 나에 대한 요약, 확인해 주세요 › 병합 제안 (digests.js)
