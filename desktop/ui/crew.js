@@ -3266,7 +3266,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     tile.append(bars);
     request(`/v1/crew/usage?${query({ range: "30d", kind: "agent", agent_id: id })}`).then((u) => {
       const days = (u.by_day || []).slice(-30).map((x) => [Number(x.agent) || 0, Number(x.agent_failed) || 0]);
-      const top = Math.max(1, ...days.map(([a, f]) => a + f));
+      const top = Math.max(0, ...days.map(([a, f]) => a + f));
+      if (!top) { bars.remove(); return; } // no per-day agent counts from this server: no flat dotted line
       bars.replaceChildren(...days.map(([a, f]) => { const i = el("i", f ? "bad" : ""); i.style.height = `${Math.max(2, Math.round(((a + f) / top) * 28))}px`; return i; }));
     }, () => {});
   }
@@ -3437,7 +3438,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     teamRow.append(nt);
     const bar = el("div", "ex-savebar always");
     const ok = button("만들기", "primary small", null, () => saveWorker(null));
-    bar.append(ok, button("취소", "ghost small", null, () => wk.pop.dialog.close()), el("small", "ex-hint", "만들면 바로 @이름으로 부를 수 있어요"));
+    bar.append(ok, button("취소", "ghost small", null, () => { if (wk.dirty && !confirm("쓰던 내용을 버릴까요?")) return; wk.pop.dialog.close(); }), el("small", "ex-hint", "만들면 바로 @이름으로 부를 수 있어요"));
     wk.bar = null;
     wk.okBtn = ok;
     drawWorkerSave = baseSave;
