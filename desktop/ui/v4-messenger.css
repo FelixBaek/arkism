@@ -24,3 +24,4 @@
 .v4-roles-server .v4-role .setting { align-items: flex-start; }
 .v4-roles-server .pill { white-space: nowrap; }
 .mg-actions { display: flex; align-items: center; gap: 8px; }
+.mg-card > a.btn { align-self: flex-start; text-decoration: none; }

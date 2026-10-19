@@ -41,6 +41,7 @@ window.ArkismTeams = (ctx) => {
     ["Send Messages in Threads", "스레드에서 메시지 보내기", 38], ["Create Public Threads", "공개 스레드 만들기", 35], ["Use Application Commands", "앱 명령어 사용", 31]];
   const PERM_BITS = PERMS.reduce((s, [, , bit]) => s + (1n << BigInt(bit)), 0n).toString(); // 311385197568
   const inviteURL = (appId) => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(appId)}&scope=bot%20applications.commands&permissions=${PERM_BITS}`;
+  window.ArkismDiscordInvite = inviteURL; // 설정 › 메신저 uses the same invite link
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
   const ERRORS = {
     secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요.",
@@ -646,6 +647,14 @@ window.ArkismTeams = (ctx) => {
     mirror.append(el("span", "", "회의 진행을 디스코드 스레드에도 올리기"), sw(d.discord_mirror, "디스코드에도 올리기", (v) => { d.discord_mirror = v; changed(pop, true); }));
     list.append(mirror);
     s.append(list);
+    if (mine && S.discord) {
+      // 봇 쓰는 방식 (한 봇을 나눠 쓰기 / 팀마다 봇) moved here from the old 디스코드 screen; same chooser and save.
+      const perTeam = (S.discord.settings?.bot_mode || "shared") === "per_target";
+      const modeBox = el("div", "tm-side-sec");
+      modeBox.append(sideLabel("봇 쓰는 방식"), modeChooser(S.discord.settings?.bot_mode || "shared", (k) => { void saveSettings({ bot_mode: k }).then((ok) => { if (ok) popRedraw("overview"); }); }));
+      if (perTeam) modeBox.append(link("이 팀 전용 봇 연결하기 →", () => { closePopup(); startConnect(null, { mode: "per_target", target: `meeting:${pop.id}` }); }));
+      s.append(modeBox);
+    }
     if (mine && pop.chAdd) {
       const f = pop.chAdd;
       if (!bots().length) s.append(empty("먼저 디스코드 봇을 추가해 주세요."));
@@ -1529,9 +1538,9 @@ window.ArkismTeams = (ctx) => {
     if (sub) c.append(el("p", "tm-step-sub", sub));
     return c;
   }
-  function startConnect(retry) {
+  function startConnect(retry, preset) {
     const s0 = S.discord?.settings || {};
-    S.connect = { mode: s0.bot_mode || "shared", name: retry?.name || "", token: "", appId: retry?.application_id || "", intent: false, target: "", bot: null, busy: false, retry: retry?.id || null };
+    S.connect = { mode: s0.bot_mode || "shared", name: retry?.name || "", token: "", appId: retry?.application_id || "", intent: false, target: "", bot: null, busy: false, retry: retry?.id || null, ...preset };
     S.bot = null; S.settingsOpen = false;
     if (!here("discord")) go("discord"); else render(false);
   }

@@ -90,6 +90,11 @@ window.ArkismMessenger = (ctx) => {
         button("권한 다시 확인", "", null, () => act(() => request(`/v1/discord/bots/${encodeURIComponent(b.id)}/check`, { method: "POST", body: body({}) }), "권한을 다시 확인하는 중이에요.")));
       kids.push(w);
     }
+    const invite = window.ArkismDiscordInvite?.(b.application_id || "");
+    if (invite && /^\d{5,24}$/.test(b.application_id || "")) {
+      const a = el("a", "btn", "서버에 초대하기"); a.href = invite; a.target = "_blank"; a.rel = "noreferrer";
+      kids.push(a);
+    }
     const off = button("연결 끊기", "ghost", null, () => { if (confirm("디스코드 연결을 끊을까요? 저장된 토큰이 지워져요.")) act(() => upd(b, { archive: true }), "디스코드 연결을 끊었어요.").catch(() => {}); });
     return card("디스코드", st, off, ...kids);
   }
