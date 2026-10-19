@@ -436,12 +436,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // The map has no AI-suggestion write API (POST /v1/knowledge-graph/relations writes a separate store the map never reads), so 연결/아니요 are not drawn.
   const REACH = { personal: ["개인", 0], general: ["범용", 1], project: ["프로젝트", 2] };
   const EDGE = { supports: "지지", supersedes: "대체", conflicts: "충돌", human_link: "연결", same_session: "관련", similar: "비슷" };
-  const MAP_W = 752, MAP_H = 1032; // 611:56374 canvas box; the SVG scales with the window
-  const CLUSTER = { personal: { c: [225, 377], rx: 220, ry: 220, lab: [100, 185], base: -2.3 }, general: { c: [570, 327], rx: 185, ry: 185, lab: [468, 155], base: -0.6 }, project: { c: [395, 769], rx: 340, ry: 188, lab: [447, 612], base: 0.5 } };
-  const textW = (s, px) => [...s].reduce((w, ch) => w + (ch.charCodeAt(0) > 255 ? px : px * 0.56), 0);
+  const REACH_COLOR = { personal: "#7fc79c", general: "#6aa3ff", project: "#f5b955" }; // same colours as the 칸 chips (v4-overview.css .ov-map-personal …)
   async function wideMap() {
-    const d = modal("ov-wide-win ov-map-win"), SVGNS = "http://www.w3.org/2000/svg";
-    const sv = (tag, attrs = {}, text) => { const n = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); if (text != null) n.textContent = text; return n; };
+    const d = modal("ov-wide-win ov-map-win");
     const head = el("div", "ov-win-head ov-map-head"), ttl = el("div", "ov-win-title");
     ttl.append(button("‹ 개요", "ghost small", null, () => d.close()), el("i", "ov-dot"), el("h2", "", "기억 지도"));
     const x = button("✕", "ghost small", null, () => d.close()); x.setAttribute("aria-label", "닫기"); head.append(ttl, x); d.append(head);
@@ -457,55 +454,30 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const byId = new Map(nodes.map((n) => [n.id, n])), reachOf = (n) => n?.reach || "general";
     const bar = el("div", "ov-map-bar"), seg = el("div", "ov-wide-seg ov-map-seg"), searchBox = el("label", "ov-map-search"), search = el("input", "ov-wide-search"); search.placeholder = "기억·주제 찾기"; search.setAttribute("aria-label", "기억·주제 찾기"); searchBox.append(search);
     const chipHost = el("div", "ov-map-reach"); bar.append(seg, searchBox, el("small", "", "칸"), chipHost);
-    const canvas = el("div", "ov-map-canvas"), stage = el("div", "ov-map-stage"); canvas.append(stage);
+    const canvas = el("div", "ov-map-canvas");
     const groups = {}; nodes.forEach((n) => { (groups[reachOf(n)] ||= []).push(n); });
     const proj = state.scope?.project_id && state.scope.project_id !== "default" ? state.scope.project_id : "";
-    // dots: a deterministic sunflower spread inside each cluster; the picked memory and its neighbours get fixed spots instead
-    const pos = new Map();
-    for (const [r, list] of Object.entries(groups)) { const g = CLUSTER[r] || CLUSTER.general; list.forEach((n, i) => { const a = i * 2.399963, t = Math.sqrt((i + 0.5) / list.length) * 0.93; pos.set(n.id, [g.c[0] + Math.cos(a) * g.rx * t, g.c[1] + Math.sin(a) * g.ry * t]); }); }
-    const label = (id) => clip(D().memories.find((m) => m.id === id)?.text || kind(byId.get(id)?.kind), 22);
+    const memById = new Map(D().memories.map((m) => [m.id, m])), labMemo = new Map();
+    const label = (id) => { let t = labMemo.get(id); if (t == null) labMemo.set(id, t = clip(memById.get(id)?.text || kind(byId.get(id)?.kind), 22)); return t; };
     const rel = (id) => edges.filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
     const fmt = (v) => new Date(v).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" });
-    function focusPos() { // sel + neighbours -> fixed spots (Figma 611:56374)
-      const out = new Map(), g = CLUSTER[reachOf(byId.get(sel))] || CLUSTER.general; out.set(sel, [g.c[0] + (g === CLUSTER.personal ? 20 : 0), g.c[1] + (g === CLUSTER.personal ? 63 : 0)]);
-      const seen = {}; for (const e of rel(sel)) { const o = e.from === sel ? e.to : e.from, c = CLUSTER[reachOf(byId.get(o))] || CLUSTER.general, k = seen[reachOf(byId.get(o))] = (seen[reachOf(byId.get(o))] ?? -1) + 1; if (out.has(o)) continue; const a = c.base + k * 1.25, rad = 0.62 + (k % 2) * 0.12; out.set(o, [c.c[0] + Math.cos(a) * c.rx * rad, c.c[1] + Math.sin(a) * c.ry * rad]); }
-      return out;
-    }
+    const bubbles = window.ArkismMemoryBubbles.create({
+      tabs: [["all", "전체"], ["reach", "칸별"], ["kind", "종류별"]],
+      groupOf: (m, p) => m === "reach" ? { key: p.reach, name: REACH[p.reach][0] + (p.reach === "project" && proj ? ` · ${proj}` : ""), ord: REACH[p.reach][1] } : m === "kind" ? { key: p.kind, name: kind(p.kind) } : { key: "all", name: "전체" },
+      tip: (id) => { const n = byId.get(id); return n ? { text: label(id), meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
+      onSelect: (id) => { sel = id; mode = "sel"; moreOpen = false; paint(); },
+      onClear: () => { sel = null; mode = "all"; paint(); },
+    });
+    canvas.append(bubbles.el);
     function drawMap() {
-      stage.replaceChildren();
-      const svg = sv("svg", { viewBox: `0 0 ${MAP_W} ${MAP_H}`, class: "ov-map-svg", preserveAspectRatio: "xMidYMid meet" });
-      const fp = mode === "sel" && sel ? focusPos() : null, P = (id) => fp?.get(id) || pos.get(id);
       const vis = (n) => n && reachF.has(reachOf(n)) && inTopic(n.id) && (!q || label(n.id).includes(q));
-      for (const [r, g] of Object.entries(CLUSTER)) { if (!groups[r] || !reachF.has(r)) continue; const gr = sv("g", { class: `ov-map-${r}` });
-        gr.append(sv("ellipse", { cx: g.c[0], cy: g.c[1], rx: g.rx, ry: g.ry, class: "ov-map-ring" }));
-        const lab = sv("g", { class: "ov-map-clab" }); lab.append(sv("circle", { cx: g.lab[0], cy: g.lab[1] - 4, r: 4, class: "ov-map-pt" }), sv("text", { x: g.lab[0] + 12, y: g.lab[1], class: "ov-map-label" }, `${REACH[r][0]}${r === "project" && proj ? ` · ${proj}` : ""} `), sv("text", { x: g.lab[0] + 12 + textW(`${REACH[r][0]}${r === "project" && proj ? ` · ${proj}` : ""} `, 13), y: g.lab[1], class: "ov-map-count" }, num(groups[r].length)));
-        gr.append(lab); svg.append(gr); }
-      const near = new Set(fp ? fp.keys() : []);
-      const dots = sv("g"); for (const n of nodes) { if (!vis(n) || near.has(n.id)) continue; const p = pos.get(n.id), r = 1.4 + Math.min(2.2, Math.sqrt(n.uses || 0) / 2);
-        const c = sv("circle", { cx: p[0], cy: p[1], r, class: `ov-map-dot ov-map-${reachOf(n)}${fp ? " dim" : ""}` }); c.addEventListener("click", () => { sel = n.id; mode = "sel"; moreOpen = false; paint(); }); c.append(sv("title", {}, label(n.id))); dots.append(c); }
-      svg.append(dots);
-      const lines = sv("g"), pills = sv("g"); let drawn = 0;
-      for (const e of edges) { if (e.type === "similar") continue; const focus = fp && (e.from === sel || e.to === sel); if (!focus && !(mode === "all" || allEdges)) continue;
-        const a = P(e.from), b = P(e.to); if (!a || !b || !vis(byId.get(e.from)) || !vis(byId.get(e.to)) || (!focus && ++drawn > 500)) continue;
-        const dx = b[0] - a[0], dy = b[1] - a[1], k = focus ? 0.12 : 0.06, c = [(a[0] + b[0]) / 2 - dy * k, (a[1] + b[1]) / 2 + dx * k], t = e.type === "human_link" ? "supports" : e.type;
-        lines.append(sv("path", { d: `M${a[0]} ${a[1]} Q${c[0]} ${c[1]} ${b[0]} ${b[1]}`, class: `ov-map-edge ov-map-e-${t}${focus ? " on" : ""}` }));
-        if (focus) { const m = [(a[0] + 2 * c[0] + b[0]) / 4, (a[1] + 2 * c[1] + b[1]) / 4], txt = EDGE[e.type] || e.type, w = textW(txt, 11) + 18, pg = sv("g", { class: `ov-map-pill ov-map-e-${t}` }); pg.append(sv("rect", { x: m[0] - w / 2, y: m[1] - 10, width: w, height: 20, rx: 10 }), sv("text", { x: m[0], y: m[1] + 4, "text-anchor": "middle" }, txt)); pills.append(pg); } }
-      svg.append(lines);
-      if (fp) {
-        const nodeBox = (id) => { const n = byId.get(id), p = fp.get(id), main = id === sel, r = main ? 15 : 9, g = sv("g", { class: `ov-map-node ov-map-${reachOf(n)}` });
-          if (!vis(n)) return g;
-          const edge = rel(sel).find((e) => e.from === id || e.to === id), t1 = label(id), sub = main ? [REACH[reachOf(n)]?.[0], kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") : `${REACH[reachOf(n)]?.[0] || ""} · ${EDGE[edge?.type] || ""}`;
-          const w = Math.max(textW(t1, main ? 14 : 12), textW(sub, 10)) + 24, h = main ? 54 : 36, bx = main ? p[0] - w / 2 : p[0] > MAP_W * 0.62 ? p[0] - r - 8 - w : p[0] + r + 8, by = main ? p[1] + r + 14 : p[1] - h / 2;
-          if (main) { g.append(sv("circle", { cx: p[0], cy: p[1], r: 33, class: "ov-map-halo" }), sv("circle", { cx: p[0], cy: p[1], r: 25, class: "ov-map-ring2" })); }
-          const dot = sv("circle", { cx: p[0], cy: p[1], r, class: "ov-map-big" }); g.append(dot, sv("rect", { x: bx, y: by, width: w, height: h, rx: 6, class: `ov-map-box${main ? " on" : ""}` }), sv("text", { x: bx + 12, y: by + (main ? 24 : 16), class: `ov-map-t1${main ? " main" : ""}` }, t1), sv("text", { x: bx + 12, y: by + (main ? 42 : 29), class: "ov-map-t2" }, sub));
-          if (!main) g.addEventListener("click", () => { sel = id; paint(); }); if (!main) g.classList.add("ov-map-click"); return g; };
-        svg.append(pills); fp.forEach((_, id) => { if (id !== sel) svg.append(nodeBox(id)); }); svg.append(nodeBox(sel));
-      }
-      stage.append(svg); stage.style.transform = `scale(${zoom})`; zoomLab.textContent = `${Math.round(zoom * 100)}%`;
+      bubbles.setItems(nodes.filter(vis).map((n) => ({ id: n.id, v: n.uses || 1, color: REACH_COLOR[reachOf(n)] || REACH_COLOR.general, reach: reachOf(n) in REACH ? reachOf(n) : "general", kind: n.kind || "" })));
+      bubbles.setEdges(edges.filter((e) => e.type !== "similar").map((e) => ({ from: e.from, to: e.to, t: e.type === "human_link" ? "supports" : e.type })));
+      bubbles.setEdgeAll(mode === "all" || allEdges); bubbles.setSelected(sel);
     }
     // floating bar: 4 line styles · 전체 관계/선택한 연결 · zoom
     const legend = el("div", "ov-map-legend"), zoomLab = el("span", "ov-map-zoom", "100%");
-    const setZoom = (z) => { zoom = Math.min(2.5, Math.max(0.5, Math.round(z * 100) / 100)); stage.style.transform = `scale(${zoom})`; zoomLab.textContent = `${Math.round(zoom * 100)}%`; };
+    const setZoom = (z) => { zoom = Math.min(2.5, Math.max(0.5, Math.round(z * 100) / 100)); bubbles.setZoom(zoom); zoomLab.textContent = `${Math.round(zoom * 100)}%`; };
     const zb = (txt, label, fn) => { const b = el("button", "ov-map-zbtn", txt); b.type = "button"; b.setAttribute("aria-label", label); b.addEventListener("click", fn); return b; };
     function drawLegend() {
       const items = el("div", "ov-map-lg-items"); for (const t of ["supports", "same_session", "conflicts", "supersedes"]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t])); items.append(i); }

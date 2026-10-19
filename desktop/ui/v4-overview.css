@@ -248,7 +248,7 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-map-personal { --c: #7fc79c; color: var(--c); } .ov-map-general { --c: #6aa3ff; color: var(--c); } .ov-map-project { --c: #f5b955; color: var(--c); }
 .ov-map-chip { color: var(--nc-muted); } .ov-map-chip.on { color: var(--c); }
 .ov-map-canvas { position: relative; flex: 1; min-height: 320px; overflow: hidden; border: 1px solid var(--nc-line); border-radius: 12px; background: var(--nc-rail); }
-.ov-map-stage { position: absolute; inset: 0; transform-origin: 50% 50%; } .ov-map-svg { width: 100%; height: 100%; display: block; }
+
 .ov-map-ring { fill: color-mix(in srgb, var(--c) 7%, transparent); stroke: color-mix(in srgb, var(--c) 40%, transparent); stroke-width: 1; }
 .ov-map-pt { fill: var(--c); } .ov-map-label { fill: var(--nc-text); font-size: 13px; } .ov-map-count { fill: var(--nc-muted); font-size: 12px; }
 .ov-map-dot { fill: var(--c); opacity: .65; cursor: pointer; stroke: transparent; stroke-width: 8px; paint-order: stroke; } .ov-map-dot.dim { opacity: .35; } .ov-map-dot:hover { opacity: 1; }
@@ -276,3 +276,14 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-map-more { align-self: flex-start; border: 0; background: transparent; color: var(--nc-muted); font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
 .ov-map-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 12px; } .ov-map-foot small { color: var(--nc-quiet); }
 @media (max-width: 1000px) { .ov-map-body { grid-template-columns: 1fr; overflow: auto; } }
+
+/* 기억 지도 bubble canvas (memory-bubbles.js) */
+.mm-bubbles { position: absolute; inset: 0; } .mm-canvas { display: block; outline: 0; border-radius: 12px; } .mm-canvas:focus-visible { outline: 2px solid var(--nc-text); outline-offset: -3px; }
+.mm-tabs { position: absolute; left: 14px; top: 14px; display: flex; padding: 4px; gap: 0; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: 8px; }
+.mm-pill { position: absolute; top: 4px; bottom: 4px; left: 4px; width: 0; border-radius: 6px; background: var(--nc-subtle); transition: left .35s cubic-bezier(.3, 1.3, .5, 1), width .35s cubic-bezier(.3, 1.3, .5, 1); }
+.mm-tab { position: relative; border: 0; background: transparent; color: var(--nc-muted); font: inherit; font-size: 13px; padding: 5px 14px; border-radius: 6px; cursor: pointer; } .mm-tab.on { color: var(--nc-text); }
+.mm-labels { position: absolute; left: 0; top: 0; pointer-events: none; } .mm-label { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 13px; color: var(--nc-muted); } .mm-label b { color: var(--nc-text); font-weight: 500; }
+.mm-tip { position: absolute; left: 0; top: 0; max-width: 280px; padding: 6px 10px; border-radius: 999px; background: var(--nc-canvas); border: 1px solid var(--nc-line); color: var(--nc-text); font-size: 12px; pointer-events: none; opacity: 0; transition: opacity .15s; white-space: nowrap; display: flex; gap: 6px; }
+.mm-tip.on { opacity: 1; } .mm-tip-t { overflow: hidden; text-overflow: ellipsis; } .mm-tip-m { color: var(--nc-muted); flex: none; }
+.mm-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (prefers-reduced-motion: reduce) { .mm-pill, .mm-tip { transition: none; } }
