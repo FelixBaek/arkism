@@ -65,6 +65,15 @@ Before publishing, maintainers run `ARKISM_PUBLIC_DENYLIST=<their own denylist f
 
 ## Skill improvement generation
 
+New memory extraction uses `capture-extract-v5` and `harness-session-v4`.
+One-off permissions, budgets and assignment corrections belong in session state;
+durable candidates retain the named project and every condition. Session
+user-statement context fields must share one verbatim cited user quote. Inferred
+scope diagnostics belong in state uncertainties, not in quoted condition fields.
+This literal check prevents invented metadata wording; it does not prove semantic
+completeness. Older prepared requests retain their original delivery contract.
+An older session quality gate does not enable the new prompt's fast model.
+
 `POST /v1/skills/generate` reuses verified lessons and the pinned baseline. The
 configured chat and Anthropic adapters request localized changes to an existing
 skill instead of asking the model to rewrite the full document. Each of up to

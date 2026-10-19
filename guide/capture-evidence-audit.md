@@ -61,7 +61,8 @@ The session processor and its citation contract are now part of main
 (internal/host/capture/session_processor.go, covered by
 session_citation_contract_test.go). The earlier source patch is removed.
 
-The prompt contract becomes harness-session-v3. Existing v2 quality evidence
+The citation contract introduced harness-session-v3; the current durable-memory
+and quoted-condition contract is harness-session-v4. Existing v2/v3 quality evidence
 cannot qualify the new prompt, so routing falls back to Sonnet until new quality
 measurements qualify cheaper categories. This may increase cost. Deterministic
 tests establish contract behavior, not model acceptance-rate improvement.

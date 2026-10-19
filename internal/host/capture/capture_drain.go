@@ -21,8 +21,15 @@ Rules:
   instructions ("앞으로/항상/하지 마"), project goals, decisions, facts about their own systems, corrections of facts.
 - Ignore one-off task requests ("고쳐줘", "처리해", "해줘"), questions, complaints, chit-chat, temporary ideas, and anything
   only the assistant said. Do not infer habits or guess intent.
+  Task-specific permissions, spending limits, temporary research goals and corrections of your current assignment
+  are not standing rules. Quoted proposals and hypothetical examples are not adopted decisions.
+  A pasted draft of a policy, world or character is reference material, not evidence of the user's adopted decision.
+  Keep supported standing project rules from mixed turns and omit only their temporary task requests.
+  A commit-size constraint is a procedural rule, not a spending permission. Keep explicit lasting dislikes and
+  ongoing system/account facts, including a stated monthly API grant; retain any tentative wording in text.
 - text: one standalone Korean sentence, faithful to the user's meaning, understandable without this chat. Add nothing.
   It must name what it is about (the product, project, screen or tool). A rule whose subject only this chat knows is not a claim.
+  Retain the explicitly named project in every extracted rule; never turn a project-specific rule into a global one.
 - Record the content itself, not the user's action: not "the user asked for X" but what X is.
 - Only the user's words count: never extract something the assistant said, proposed or restated, even if the user agreed with "응".
 - A change keeps both sides: "<what> uses Y instead of X". Turn relative dates (today, next week) into absolute ones using TODAY.
