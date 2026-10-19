@@ -293,7 +293,7 @@ window.ArkismAutomation = (h) => {
         c.dataset.k = k;
         c.paint = () => {
           const s = stats;
-          val.textContent = !s ? "…" : k === "runs" ? `${s.runs}회` : k === "done" ? (s.runs ? `${s.ok} / ${s.runs}` : "—") : s.cost != null ? `$${s.cost.toFixed(2)}` : "—";
+          val.textContent = !s ? "…" : k === "runs" ? `${s.runs}회` : k === "done" ? (s.listed ? `${s.ok} / ${s.listed}` : "—") : s.cost != null ? `$${s.cost.toFixed(2)}` : "—";
           bars.replaceChildren(...(s && k !== "cost" ? s.bins[k] : []).map((n, i, all) => { const b = el("i", i === all.length - 1 ? "now" : ""); b.style.height = `${Math.max(2, Math.round(n * 22))}px`; return b; }));
         };
         c.paint();
@@ -312,13 +312,14 @@ window.ArkismAutomation = (h) => {
       try { runs.push(...((await request(`/v1/crew/runs?${query({ crew_id: rec.id, limit: 30 })}`)).items || [])); } catch (_) { /* empty */ }
       let cost = null;
       let tokens = 0;
-      try { const w = (await request(`/v1/crew/usage?${query({ range: "30d", kind: "workflow" })}`)).workflows?.find((x) => x.id === rec.id); cost = w?.cost_usd ?? null; tokens = w?.tokens || 0; } catch (_) { /* no usage yet */ }
+      let usageRuns = null; // the usage total counts every non-test run in 30 days; the runs list stops at 30
+      try { const w = (await request(`/v1/crew/usage?${query({ range: "30d", kind: "workflow" })}`)).workflows?.find((x) => x.id === rec.id); cost = w?.cost_usd ?? null; tokens = w?.tokens || 0; usageRuns = w?.runs ?? null; } catch (_) { /* no usage yet */ }
       const now = Date.now();
-      const recentRuns = runs.filter((r) => now - new Date(r.created_at).getTime() < 30 * 864e5);
+      const recentRuns = runs.filter((r) => r.crew_run?.trigger !== "test" && now - new Date(r.created_at).getTime() < 30 * 864e5);
       const bin = (list) => { const a = Array(15).fill(0); for (const r of list) a[14 - Math.min(14, Math.floor((now - new Date(r.created_at).getTime()) / (2 * 864e5)))]++; const m = Math.max(1, ...a); return a.map((n) => n / m); };
       const done = recentRuns.filter((r) => r.crew_run?.status === "succeeded");
       const spans = done.map((r) => h.runMs(r)).filter(Boolean);
-      stats = { runs: recentRuns.length, ok: done.length, cost, tokens, avgMs: spans.length ? spans.reduce((a, b) => a + b, 0) / spans.length : 0, bins: { runs: bin(recentRuns), done: bin(done) } };
+      stats = { runs: usageRuns ?? recentRuns.length, listed: recentRuns.length, ok: done.length, cost, tokens, avgMs: spans.length ? spans.reduce((a, b) => a + b, 0) / spans.length : 0, bins: { runs: bin(recentRuns), done: bin(done) } };
       statsBox?.paint?.();
       head.paintEst?.();
     }
