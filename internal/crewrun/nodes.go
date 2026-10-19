@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -478,6 +479,7 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 }
 
 type collabWorker struct {
+	Expert       string `json:"expert,omitempty"` // a saved expert: its model and instructions are the defaults
 	Name         string `json:"name"`
 	Model        string `json:"model"`
 	Instructions string `json:"instructions"`
@@ -498,8 +500,13 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 	}
 	most, conc := intIn(c["max_workers"], 1, 16, 5), intIn(c["concurrency"], 1, 16, 3)
 	var names []string
-	for _, w := range workers {
-		names = append(names, w.Name)
+	for i, w := range workers {
+		if it, ok := e.item(w.Expert); ok && w.Expert != "" && (it.Crew.Type == "agent" || it.Crew.Type == "persona" || it.Crew.Type == "template") {
+			workers[i].Name = cmp.Or(w.Name, it.Crew.Name)
+			workers[i].Model = cmp.Or(w.Model, it.Crew.Model)
+			workers[i].Instructions = joinText(it.Crew.Instructions, w.Instructions)
+		}
+		names = append(names, workers[i].Name)
 	}
 	plan := s
 	plan.Once, plan.Skills = true, nil // splitting the work needs no skill bodies
@@ -509,6 +516,8 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 	if err != nil {
 		return result{}, err
 	}
+	var used atomic.Int64
+	used.Add(planned.tokens())
 	var subs []struct {
 		Worker string `json:"worker"`
 		Task   string `json:"task"`
@@ -537,6 +546,7 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 			defer wg.Done()
 			defer func() { <-sem }()
 			res, err := e.callAI(ctx, ws, limit, retries)
+			used.Add(res.tokens())
 			out := res.Output
 			if err != nil {
 				out = errText(err)
@@ -553,7 +563,7 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 		return result{}, err
 	}
 	text, port := routePick(res.Output, ports, def)
-	return result{out: map[string]any{"output": text, "workers": results}, port: port}, nil
+	return result{out: map[string]any{"output": text, "workers": results}, port: port, tokens: used.Load() + res.tokens()}, nil
 }
 
 // skillList reads a node's "skills" config: hub skill ids separated by commas or new lines.

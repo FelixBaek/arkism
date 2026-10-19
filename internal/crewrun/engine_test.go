@@ -957,12 +957,13 @@ func TestAINodeRoutesByPort(t *testing.T) {
 }
 
 func TestCollabPlansRunsWorkersAndSumsUp(t *testing.T) {
-	workers := `[{"name":"조사원","model":"glm-5","instructions":"조사한다"},{"name":"작성자"}]`
+	workers := `[{"name":"조사원","model":"glm-5","instructions":"조사한다"},{"name":"작성자","expert":"ex"}]`
+	ex := CrewItem{ID: "ex", Revision: 1, Crew: Crew{Type: "agent", Name: "작가", Model: "deepseek-v4", Instructions: "쓴다"}}
 	g := &Graph{Nodes: []Node{node("start", "start"),
 		node("team", "ai", "collab", "on", "workers", workers, "max_workers", "2", "fence", "읽기만", "goal", "보고서: {{input}}"),
 		node("ok", "end"), node("more", "end")},
 		Edges: []Edge{edge("start", "team"), edge("team", "ok", "done"), edge("team", "more", "more")}}
-	e := testEngine(t, newFakeStore(wf("w", g)))
+	e := testEngine(t, newFakeStore(ex, wf("w", g)))
 	log := fakeAI(t, e)
 	r := runOnce(t, e, "w", "주제")
 	var out struct {
@@ -971,7 +972,7 @@ func TestCollabPlansRunsWorkersAndSumsUp(t *testing.T) {
 	}
 	_ = json.Unmarshal([]byte(r.State.Nodes["team"].Output), &out)
 	if r.State.Status != "succeeded" || r.State.Nodes["team"].Port != "done" || out.Output != "종합 끝" || len(out.Workers) != 2 ||
-		out.Workers[0].Worker != "조사원" || !out.Workers[0].OK || out.Workers[0].Output != "glm-5|medium|false|A 조사" || out.Workers[1].Output != "opus 5.5|medium|false|B 쓰기" {
+		out.Workers[0].Worker != "조사원" || !out.Workers[0].OK || out.Workers[0].Output != "glm-5|medium|false|A 조사" || out.Workers[1].Output != "deepseek-v4|medium|false|B 쓰기" || r.State.Nodes["team"].Tokens != 480 {
 		t.Fatalf("collab %s %+v %v", r.State.Status, out, statuses(r))
 	}
 	s := specs(t, log)
