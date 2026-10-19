@@ -40,10 +40,8 @@ Claude Code, Codex, Gemini CLI 같은 에이전트는 어제 알려 준 것을 �
 | 운영체제 | 파일 |
 |---|---|
 | Windows 10/11 | `Arkism-X.Y.Z-setup.exe` |
-| macOS(Apple silicon) | `.dmg` |
-| Linux | `.AppImage` 또는 `.deb` |
 
-아직 서명하지 않은 빌드입니다. 처음 열 때 Windows SmartScreen이 확인을 묻습니다("추가 정보" → "실행"). macOS에서는 앱을 우클릭하고 "열기"를 고릅니다.
+아직 서명하지 않은 빌드입니다. 처음 열 때 Windows SmartScreen이 확인을 묻습니다("추가 정보" → "실행").
 
 ## 빠른 시작
 
