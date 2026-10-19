@@ -21,19 +21,19 @@
     return JSON.stringify([scopeKey(r), r.kind, r.reach, r.reach_project, r.conflict_id || "", (r.tags || []).filter(t => t.startsWith("repo:") || t.startsWith("review:")).sort(),
       [...(c.domains || [])].sort(), c.applicability || "", c.uncertainty || "", c.valid_from || "", c.evidence_kind || "", c.semantic_kind || "", polarity]);
   }
-  function terms(text) {
-    return new Set(normalized(text).replace(/간결하게|간단히|핵심만|요약해서|짧게/gu, " short ")
-      .replace(/답변|대답|응답|설명|답해|말해/gu, " response ").match(/[\p{L}\p{N}]+/gu) || []);
+  function wording(text) {
+    // Preserve order, signs, operators and units. Only these explicit wording
+    // variants may change; token sets would erase direction and numeric signs.
+    return normalized(text).replace(/(^|\s)(?:간결하게|간단히|핵심만|요약해서|짧게)(?=\s|[.,!?。！？]|$)/gu, "$1 short ")
+      .replace(/(^|\s)(?:(?:답변|대답|응답|설명)(?=은|는|을|를|이|가|\s|$)|(?:답해|말해)(?=\s|[.,!?。！？]|$))/gu, "$1 response ")
+      .replace(/\s+/gu, " ").trim();
   }
   function similar(a, b) {
     if (normalized(a.text) === normalized(b.text)) return true;
     // Legacy proposals without explicit scope qualifiers are only grouped exactly.
     if (!a.memory_context?.applicability || !b.memory_context?.applicability) return false;
-    const x = terms(a.text), y = terms(b.text);
-    const overlap = [...x].filter(t => y.has(t)).length;
-    // Only recognized wording variants may differ. A changed proper name or
-    // unmodelled qualifier must not disappear inside an approximate group.
-    return overlap >= 2 && overlap === x.size && overlap === y.size;
+    const x = wording(a.text), y = wording(b.text);
+    return x === y && new Set(x.match(/[\p{L}\p{N}]+/gu) || []).size >= 2;
   }
   function groups(records) {
     const result = [];

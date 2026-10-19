@@ -216,3 +216,9 @@ caches. Restore receipt-ledger and publication-review gates remain in force.
 The approval-origin review list surfaces existing active memories whose new explicit
 review receipt is missing. Listing them never changes their active status or trust;
 the historical attribution remains unproven until a separately authorized review flow.
+
+Desktop runtime launches omit inherited Windows shell pseudo variables (for example
+`=C:` drive-directory state) from their explicit application environment. Programs
+and working directories are already absolute. Ordinary inherited variables, command
+overrides/removals and replay snapshots remain intact. Explicit malformed names still
+reach the existing native rejection boundary; the native validator is unchanged.

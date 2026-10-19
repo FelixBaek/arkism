@@ -4870,3 +4870,5 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "일부 삭제 요청을 접수했어요. 기억 {0}개는 요청하지 못했어요. 다시 확인해 주세요.": "Some deletion requests were accepted. Requests failed for {0} memories. Please check again.",
   "“{0}” 삭제 요청을 접수했어요. 원본 기록 {1}개 · 원본 없는 기억 {2}개. 서버와 백업의 완료 여부는 처리 내역에서 확인해 주세요.": "Deletion requested for “{0}”. {1} source records · {2} memories without sources. Check server and backup completion in processing history."
 });
+
+Object.assign(window.ArkismI18nEN.patterns, {"비슷한 후보 {0}개": "{0} similar candidates"});
