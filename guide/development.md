@@ -63,6 +63,28 @@ The database user must be able to create disposable test databases. The local Do
 
 Before publishing, maintainers run `ARKISM_PUBLIC_DENYLIST=<their own denylist file> tools/check_public.sh`, which fails if any tracked file matches one of its private regexes.
 
+## Skill improvement generation
+
+`POST /v1/skills/generate` reuses verified lessons and the pinned baseline. The
+configured chat and Anthropic adapters request localized changes to an existing
+skill instead of asking the model to rewrite the full document. Each of up to
+eight replacements names a literal `old_text`, its `new_text`, and a zero-based
+`lesson_index` into the supplied verified lessons. These are internal provider
+fields; the HTTP request and canonical `SkillDraft` format are unchanged.
+
+Every anchor must occur exactly once in the original baseline. Missing,
+ambiguous, overlapping, chained, empty, and ineffective changes are rejected.
+Replacements are composed against original byte locations, preserving all
+untouched text and line endings. New skills continue to use full content.
+The resulting full document still passes the existing capability, size, source,
+comparison, and approval checks. A patch identifies a proposed change; it does
+not establish its semantic correctness or performance benefit.
+
+Candidate generation leaves the active baseline unchanged. The Anthropic
+prepared-result path stores the composed document, so a retry after candidate
+storage failure can recover it without repeating the provider call. Provider
+prompt versions distinguish this format from older whole-document generation.
+
 ## UI preview
 
 The desktop screens can run in a browser against made-up data, without a real Arkism:

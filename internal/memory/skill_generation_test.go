@@ -28,7 +28,11 @@ func generationFixture(t *testing.T, f *fixture) (GenerateSkillInput, *atomic.In
 		if json.Unmarshal([]byte(request.Messages[1].Content), &material) != nil || len(material.Lessons) != 3 || material.Lessons[0].Lesson != "verify the result" || strings.Contains(request.Messages[1].Content, in.ComparisonPlan.DatasetSHA256) {
 			t.Error("unverified lessons or evaluation plan sent")
 		}
-		_ = json.NewEncoder(w).Encode(draftResponse(structuredText(answer)))
+		wire := any(answer)
+		if material.BaselineContent != "" {
+			wire = skillDraftPatch{Edits: []skillDraftEdit{{OldText: material.BaselineContent, NewText: material.BaselineContent + "\n" + answer.Content, LessonIndex: 0}}, Analysis: answer.Analysis}
+		}
+		_ = json.NewEncoder(w).Encode(draftResponse(structuredText(wire)))
 	}))
 	t.Cleanup(server.Close)
 	f.svc.Drafter = &ChatSkillDrafter{Config: LLMConfig{Endpoint: server.URL, APIKey: "test", Model: "draft-model"}}

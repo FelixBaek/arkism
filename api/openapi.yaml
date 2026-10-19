@@ -3329,6 +3329,7 @@
       "post": {
         "operationId": "generateSkill",
         "summary": "Generate a candidate from verified lessons; recover completed requests without repeating the provider call",
+        "description": "Configured model adapters improve an existing baseline using 1–8 non-overlapping literal edits, each linked to a supplied verified lesson. Anchors must occur exactly once in the original baseline. The server preserves untouched bytes and stores the resulting full candidate; the provider edit format is internal, not a request field. New skills still use full content. Generation neither approves nor applies a candidate; independent comparison and review remain required.",
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GenerateSkillInput"}}}},
         "responses": {
           "200": {"description": "Candidate or currently valid reused version", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImportSkillResult"}}}},

@@ -47,7 +47,11 @@ func TestChatSkillDraft(t *testing.T) {
 		if json.Unmarshal([]byte(req.Messages[1].Content), &sent) != nil {
 			t.Error("invalid input")
 		}
-		_ = json.NewEncoder(w).Encode(draftResponse(structuredText(answer)))
+		wire := any(answer)
+		if sent.BaselineContent != "" {
+			wire = skillDraftPatch{Edits: []skillDraftEdit{{OldText: sent.BaselineContent, NewText: sent.BaselineContent + "\n" + answer.Content, LessonIndex: 0}}, Analysis: answer.Analysis}
+		}
+		_ = json.NewEncoder(w).Encode(draftResponse(structuredText(wire)))
 	}))
 	defer server.Close()
 	drafter := &ChatSkillDrafter{Config: LLMConfig{Endpoint: server.URL, APIKey: "test", Model: "draft-model"}}
@@ -58,8 +62,12 @@ func TestChatSkillDraft(t *testing.T) {
 			a.SkillID, a.ContentHash = in.SkillID, ContentHash(in.BaselineContent)
 			in.BaselineAnalysis = &a
 		}
+		want := answer.Content
+		if baseline {
+			want = in.BaselineContent + "\n" + answer.Content
+		}
 		got, usage, err := drafter.Draft(testCtx, in)
-		if err != nil || got.Content != answer.Content || got.Analysis.SkillID != in.SkillID || got.Analysis.SourcePath != in.Path || got.Analysis.ContentHash != ContentHash(got.Content) || got.Analysis.EvaluationStats["runs"] != 0 || usage.TotalTokens != 27 {
+		if err != nil || got.Content != want || got.Analysis.SkillID != in.SkillID || got.Analysis.SourcePath != in.Path || got.Analysis.ContentHash != ContentHash(got.Content) || got.Analysis.EvaluationStats["runs"] != 0 || usage.TotalTokens != 27 {
 			t.Fatalf("draft: %+v %+v %v", got, usage, err)
 		}
 		if len(sent.Lessons) != 3 || sent.Lessons[0].Lesson != in.Lessons[0].Lesson || sent.BaselineContent != in.BaselineContent {
@@ -69,7 +77,7 @@ func TestChatSkillDraft(t *testing.T) {
 			t.Fatal("baseline identity/stats leaked or caller mutated")
 		}
 	}
-	if g := drafter.Generator(); !validGenerator(&g) || g.PromptVersion != "skill-draft-v2" {
+	if g := drafter.Generator(); !validGenerator(&g) || g.PromptVersion != "skill-draft-v3" {
 		t.Fatal("provenance")
 	}
 }
@@ -195,7 +203,16 @@ func TestChatSkillDraftCapabilityCeiling(t *testing.T) {
 				answer.Analysis.ExternalTransfer = true
 			}
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_ = json.NewEncoder(w).Encode(draftResponse(structuredText(answer)))
+				var request struct{ Messages []struct{ Content string } }
+				var material SkillDraftInput
+				if json.NewDecoder(r.Body).Decode(&request) != nil || len(request.Messages) != 2 || json.Unmarshal([]byte(request.Messages[1].Content), &material) != nil {
+					t.Error("invalid draft request")
+				}
+				wire := any(answer)
+				if material.BaselineContent != "" {
+					wire = skillDraftPatch{Edits: []skillDraftEdit{{OldText: material.BaselineContent, NewText: material.BaselineContent + "\n" + answer.Content, LessonIndex: 0}}, Analysis: answer.Analysis}
+				}
+				_ = json.NewEncoder(w).Encode(draftResponse(structuredText(wire)))
 			}))
 			defer server.Close()
 			d := &ChatSkillDrafter{Config: LLMConfig{Endpoint: server.URL, APIKey: "test", Model: "draft-model"}}
