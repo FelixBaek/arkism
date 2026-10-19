@@ -155,3 +155,56 @@
 .ov-win-empty { color: var(--text-2); font-size: 12.5px; margin: 0; }
 .ov-win-foot { display: flex; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--border); }
 .ov-win-body { padding-top: 16px; }
+/* stage + wide windows (overview-windows.js) */
+.ov-win-badge { padding: 2px 9px; border-radius: 999px; background: var(--bg-muted); color: var(--tone); font-size: 12px; font-weight: 600; }
+.ov-win-how { background: var(--bg-muted); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.ov-win-how > p { margin: 0; } .ov-win-how strong { font-weight: 600; }
+.ov-win-cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ov-win-cell { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); text-align: left; color: inherit; font: inherit; }
+.ov-win-cell small { color: var(--text-2); font-size: 11px; } .ov-win-cell strong { font-size: 12.5px; }
+button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(--accent, var(--text-1)); }
+.ov-win-bars i.r { background: #ff5160; opacity: .85; } .ov-win-bars i.a { background: #f5b955; opacity: .85; }
+.ov-win-note { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); font-size: 12.5px; }
+.ov-win-note span { color: var(--text-2); }
+.ov-win-note-r { border-color: #ff5160; } .ov-win-note-r strong { color: #ff5160; } .ov-win-note-a { border-color: #f5b955; } .ov-win-note-a strong { color: #f5b955; }
+.ov-win-list-title { font-size: 12px; color: var(--text-2); }
+.ov-win-item-l { min-width: 0; display: flex; flex-direction: column; gap: 3px; } .ov-win-item-r { display: flex; align-items: center; gap: 6px; flex: none; color: var(--text-2); font-size: 12px; }
+.ov-win-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-win-err { color: #ff5160; font-size: 12px; margin: 0; }
+.ov-win-foot { gap: 8px; } .ov-win-click { cursor: pointer; }
+.ov-win-tiles-4 { grid-template-columns: repeat(4, 1fr); }
+.ov-ask { width: min(420px, calc(100vw - 32px)); padding: 0; } .ov-ask textarea { width: 100%; box-sizing: border-box; }
+.ov-wide-win { width: min(1100px, calc(100vw - 32px)); height: min(720px, calc(100vh - 32px)); display: flex; flex-direction: column; }
+.ov-wide-win[open] { display: flex; }
+.ov-wide-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); }
+.ov-wide-left { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-height: 0; overflow: auto; border-right: 1px solid var(--border); }
+.ov-wide-right { padding: 16px 18px; overflow: auto; min-height: 0; }
+.ov-wide-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ov-wide-search { flex: 1 1 140px; min-width: 120px; }
+.ov-wide-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ov-wide-chip { border: 1px solid var(--border); background: transparent; color: var(--text-2); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.ov-wide-chip.on { color: var(--accent, var(--text-1)); border-color: currentColor; } .ov-wide-chip:disabled { opacity: .4; cursor: default; }
+.ov-wide-list { display: flex; flex-direction: column; gap: 4px; }
+.ov-wide-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-size: 13px; }
+.ov-wide-row.on { background: var(--bg-muted); }
+.ov-wide-row-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; } .ov-wide-row-t small, .ov-wide-row-r { color: var(--text-2); font-size: 12px; } .ov-wide-row-r { flex: none; }
+.ov-wide-foot-note { color: var(--text-2); font-size: 12px; }
+.ov-wide-seg { display: flex; gap: 6px; }
+.ov-wide-detail { display: flex; flex-direction: column; gap: 12px; } .ov-wide-detail h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
+.ov-detail-head { display: flex; align-items: center; gap: 8px; } .ov-detail-head small { color: var(--text-2); }
+.ov-detail-sec { display: flex; flex-direction: column; gap: 6px; font-size: 13px; } .ov-detail-sec > small { color: var(--text-2); font-size: 11.5px; } .ov-detail-sec p { margin: 0; }
+.ov-detail-quote { margin: 0; padding: 8px 12px; background: var(--bg-muted); border-radius: 8px; color: var(--text-2); font-size: 12.5px; }
+.ov-detail-edit { width: 100%; box-sizing: border-box; }
+.ov-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.ov-detail-facts p { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 4px; } .ov-detail-facts span { color: var(--text-2); }
+.ov-detail-from { display: flex; align-items: center; justify-content: space-between; }
+.ov-detail-list { display: flex; flex-direction: column; gap: 4px; }
+.ov-detail-bar p { display: flex; justify-content: space-between; margin: 0 0 3px; font-size: 12.5px; } .ov-detail-bar i { display: block; height: 5px; border-radius: 3px; background: var(--bg-muted); } .ov-detail-bar b { display: block; height: 100%; border-radius: 3px; background: var(--text-2); }
+.ov-map-left { padding-bottom: 8px; } .ov-map-canvas { flex: 1; min-height: 320px; } .ov-map-svg { width: 100%; height: 100%; }
+.ov-map-ring { fill: none; stroke: var(--border); stroke-dasharray: 3 4; }
+.ov-map-label { fill: var(--text-2); font-size: 11px; }
+.ov-map-dot { fill: var(--text-2); cursor: pointer; } .ov-map-dot.on { fill: var(--accent, var(--text-1)); }
+.ov-map-edge { stroke: var(--border); stroke-width: 1; } .ov-map-e-conflicts { stroke: #ff5160; } .ov-map-e-supersedes { stroke: #f5b955; }
+.ov-wide-search, .ov-detail-edit, .ov-ask textarea { background: var(--bg-muted); color: var(--text-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; }
+.ov-wide-left > .ov-wide-bar .ghost { border: 1px solid var(--border); }
+.ov-detail-list .ov-win-item { padding: 6px 10px; }

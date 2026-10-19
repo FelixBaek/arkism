@@ -65,16 +65,22 @@ window.ArkismOverview = (ctx) => {
     const waitRow = row(waiting.map((m) => time(m.created_at)), "a");
     const reportRow = row(reported ? [reported] : [], "n");
 
-    const memItem = (m) => ({ title: m.text || m.summary || "", meta: m.created_at ? ago(time(m.created_at)) : "", tag: m.classification?.label || m.kind || "" });
-    const ITEMS = {
-      collect: (S.sessions || []).slice(0, 8).map((x) => ({ title: x.title || x.session_id || "", meta: `${x.agent || ""} · ${ago(time(x.ended_at || x.started_at))}` })),
-      extract: [...waiting, ...(d.memories || [])].sort((a, b) => time(b.created_at) - time(a.created_at)).slice(0, 8).map(memItem),
-      classify: unclassified.slice(0, 8).map(memItem),
-      review: waiting.slice().sort((a, b) => time(a.created_at) - time(b.created_at)).slice(0, 8).map(memItem),
-      dream: (d.maintenance || []).slice(0, 8).map((p) => ({ title: `${p.maintenance?.type || ""} · ${p.maintenance?.reason || ""}`, meta: p.created_at ? ago(time(p.created_at)) : "" }))
+    const n24 = (arr) => num(slots(arr).reduce((x, y) => x + y, 0));
+    const todayCount = (arr) => arr.map((m) => time(m.created_at)).filter(today).length;
+    const BADGE = { collect: [lastSession ? "정상" : "기록 없음", "n"], extract: stalled ? [`${stalledHours}시간째 멈춤`, "r"] : ["정상", "n"],
+      classify: [unclassified.length ? `대기 ${unclassified.length}` : "모두 분류됨", "n"], review: [waiting.length ? `${waiting.length}건` : "비어 있음", waiting.length ? "a" : "n"],
+      recall: ["정상", "n"], trace: [reported ? "정상" : "보고 없음", "n"], judge: [tidy ? `확인 전 ${tidy}` : "확인 끝", "n"], dream: [proposals.length ? `제안 ${proposals.length}` : "제안 없음", "n"] };
+    const TILES = {
+      collect: [[`${num(sessions.filter(today).length)}건`, "오늘 저장"], [lastSession ? ago(lastSession) : "—", "마지막 저장"], [`${num(sessions.length)}건`, "최근 7일"]],
+      extract: [[stalled ? `${stalledHours}시간` : `${num(extracted.filter(today).length)}건`, stalled ? "멈춘 시간" : "오늘 추출"], [`${n24(extracted)}건`, "최근 24시간 추출"], [lastExtract ? ago(lastExtract) : "—", "마지막 추출"]],
+      classify: [[`${num(unclassified.length)}건`, "대기"], [classified.length ? ago(latest(classified)) : "—", "마지막 처리"], [`${n24(classified)}건`, "최근 24시간 분류"]],
+      review: [[`${num(waiting.length)}건`, "대기"], [oldest ? (days ? `${days}일` : ago(oldest)) : "—", "제일 오래된 것"], [`${num(todayCount(waiting))}건`, "오늘 들어온 것"]],
+      recall: [[`${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, "최근 7일 불러오기"], [recallTimes.length ? ago(latest(recallTimes)) : "—", "마지막"], [`${num(recalls.filter((u) => u.d7 > 0).length)}개`, "7일 안에 불러온 기억"]],
+      trace: [[reported ? ago(reported) : "—", "마지막 기록"], [w ? `${num(w.sessions)}` : "—", w ? `세션 · ${w.days}일` : "보고 없음"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"]],
+      judge: [[`${num(tidy)}건`, "정리할 기억"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"], [w ? `${num(w.injections)}회` : "—", "넣은 횟수"]],
+      dream: [[`${num(proposals.length)}건`, "정리 제안"], [proposals.length ? ago(latest(proposals)) : "—", "마지막 제안"], [`${num((d.maintenance || []).filter((p) => p.maintenance?.type === "contradiction").length)}건`, "충돌 제안"]]
     };
-    const NEXT = { collect: "분석", extract: "분류", classify: "승인 대기", review: "쓰는 중인 기억", recall: "사용 기록", trace: "검증", judge: "드리밍", dream: "승인 대기" };
-    const withItems = (list) => list.map((s) => ({ ...s, items: ITEMS[s.key] || null, next: NEXT[s.key] }));
+    const withItems = (list) => list.map((s) => ({ ...s, tiles: TILES[s.key], badge: BADGE[s.key] }));
     return withItems([
       { key: "collect", group: "save", label: "대화 저장", region: "두정엽", tone: "n", note: ago(lastSession),
         big: `${num(sessions.filter(today).length)}건`, bigSub: "오늘", step: lastSession ? ago(lastSession) : "기록 없음",
@@ -208,38 +214,10 @@ window.ArkismOverview = (ctx) => {
     root.style.width = `${Math.floor(W * s)}px`; root.style.height = `${Math.floor(H * s)}px`;
   }
 
-  // ---------------------------------------------------------------- stage window (Figma 573:40303 … 573:50266)
-  // Opens in place; "전체 화면으로" goes to the existing screen. Approving stays on that screen (the window is read-only).
-  function openStage(key) {
-    const open = (k) => {
-      const list = stages(), i = list.findIndex((x) => x.key === k), s = list[i];
-      const dlg = el("dialog", `crew-dialog ov-win ov-t-${s.tone}`);
-      const nav = (d) => () => { dlg.close(); open(list[(i + d + list.length) % list.length].key); };
-      const head = el("div", "ov-win-head"), title = el("div", "ov-win-title");
-      title.append(el("span", "ov-win-crumb", "기억 처리"), el("span", "ov-win-crumb", "›"), el("i", "ov-dot"), el("h2", "", s.label));
-      const step = el("div", "ov-win-step"), prev = button("‹", "ghost small", null, nav(-1)), next = button("›", "ghost small", null, nav(1)), x = button("닫기", "ghost small", null, () => dlg.close());
-      prev.setAttribute("aria-label", "이전 단계"); next.setAttribute("aria-label", "다음 단계");
-      step.append(prev, el("span", "", `${i + 1} / ${list.length} 단계`), next, x); head.append(title, step);
-      const body = el("div", "dialog-body ov-win-body"), tiles = el("div", "ov-win-tiles");
-      for (const [v, l] of [[s.big, s.bigSub], [s.small, s.smallSub], [s.step, "지금 상태"]]) if (v) { const t = el("div", "ov-win-tile"); t.append(el("strong", "", v), el("span", "", l || "")); tiles.append(t); }
-      const flow = el("div", "ov-win-flow"); flow.append(el("span", "", "다음 단계"), el("strong", "", s.next), el("span", "", `· ${s.region}`));
-      const chart = el("div", "ov-win-chart"), max = Math.max(1, ...s.counts);
-      chart.append(el("div", "ov-win-chart-title", "최근 24시간"));
-      const bars = el("div", "ov-win-bars"); s.counts.forEach((n, k) => { const b = el("i", n ? "" : "none"); b.style.height = `${6 + (n / max) * 54}px`; b.title = `${n}`; if (k === 23) b.classList.add("now"); bars.append(b); });
-      chart.append(bars, el("div", "ov-win-axis", "24시간 전 ··· 지금"));
-      body.append(tiles, flow, chart);
-      if (s.items) {
-        const ul = el("div", "ov-win-list");
-        if (!s.items.length) ul.append(el("p", "ov-win-empty", "지금 보여 줄 항목이 없어요."));
-        for (const it of s.items) { const r = el("div", "ov-win-item"); const t = el("div", "ov-win-item-t"); if (it.tag) t.append(el("span", "ov-win-tag", it.tag)); t.append(el("span", "", it.title)); r.append(t, el("small", "", it.meta)); ul.append(r); }
-        body.append(ul);
-      }
-      const foot = el("div", "ov-win-foot"); foot.append(button("전체 화면으로", "primary small", null, () => { dlg.close(); s.open(); }));
-      dlg.append(head, body, foot); dlg.addEventListener("close", () => dlg.remove());
-      document.body.append(dlg); dlg.showModal();
-    };
-    open(key);
-  }
+  let win = null;
+  const windows = () => (win = win || window.ArkismOverviewWindows(ctx, { stages, sessions: () => S.sessions || [], reloadSessions: () => { S.at = 0; return loadSessions(); } }));
+  const openStage = (key) => windows().open(key);
+  const openWide = (kind) => windows().wide(kind);
 
   // ---------------------------------------------------------------- paint
   function chip(label, value, open) {
@@ -275,10 +253,10 @@ window.ArkismOverview = (ctx) => {
     const h = new Date().getHours();
     ui.ticks.replaceChildren(...Array.from({ length: 24 }, (_, i) => { const hour = (h - 23 + i + 24) % 24; return el("span", i === 23 ? "now" : "", i === 23 ? "지금" : hour % 6 === 0 ? `${String(hour).padStart(2, "0")}:00` : ""); }));
     const d = state.data, todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
-    ui.chips.replaceChildren(chip( "쓰는 중인 기억", num(d.memories.length), () => go("memories", "active")),
-      chip( "세션 기록", `오늘 ${num(todaySessions)}`, () => go("sessions")),
-      chip( "사용량", `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => go("usage")),
-      chip( "관계 그래프", `점 ${num(d.memories.length)}`, () => go("memories", "relations")));
+    ui.chips.replaceChildren(chip("쓰는 중인 기억", num(d.memories.length), () => openWide("active")),
+      chip("세션 기록", `오늘 ${num(todaySessions)}`, () => openWide("sessions")),
+      chip("사용량", `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
+      chip("기억 지도", `점 ${num(d.memories.length)}`, () => openWide("map")));
   }
 
   // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone or hidden.
