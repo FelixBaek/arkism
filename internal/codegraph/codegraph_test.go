@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -278,5 +279,37 @@ func TestIndexArkismMemoryPackage(t *testing.T) {
 	)
 	if res.Stats.TypeErrors != 0 {
 		t.Fatalf("type errors %d %v", res.Stats.TypeErrors, res.Warnings)
+	}
+}
+
+// An oversized JS file is hashed by streaming and never loaded into memory.
+func TestOversizedFileIsSkippedWithoutLoading(t *testing.T) {
+	root := t.TempDir()
+	big := filepath.Join(root, "big.js")
+	f, err := os.Create(big)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const size = 64 << 20
+	if err := f.Truncate(size); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	res, err := Index(context.Background(), Options{Root: root, MaxFileBytes: 1 << 10})
+	runtime.ReadMemStats(&after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := after.TotalAlloc - before.TotalAlloc; got > size/4 {
+		t.Fatalf("indexing allocated %d bytes for a skipped %d-byte file", got, size)
+	}
+	if res.Stats.SkippedLarge != 1 || len(res.Files) != 1 {
+		t.Fatalf("stats %+v files %d", res.Stats, len(res.Files))
+	}
+	if want := HashBytes(make([]byte, size)); res.Files[0].Hash != want || len(res.Files[0].Symbols) != 0 {
+		t.Fatalf("hash %s want %s symbols %d", res.Files[0].Hash, want, len(res.Files[0].Symbols))
 	}
 }

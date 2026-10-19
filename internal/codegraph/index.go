@@ -2,7 +2,10 @@ package codegraph
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -20,7 +23,8 @@ type Options struct {
 	Known map[string]string
 	// Tests includes Go _test.go files (as test variants of their packages).
 	Tests bool
-	// MaxFileBytes skips larger JS/TS files (their hash is still recorded). Default 1 MiB.
+	// MaxFileBytes skips larger JS/TS files without loading them into memory
+	// (their streamed hash is still recorded). Default 1 MiB.
 	MaxFileBytes int64
 	// Only limits the run to these directory prefixes (slash paths relative to
 	// Root, e.g. internal/memory). Known paths outside them are left alone.
@@ -118,15 +122,28 @@ func scan(root string, keep func(string) bool) (map[string]srcFile, []string, er
 		if !keep(rel) {
 			return nil
 		}
-		b, err := os.ReadFile(p)
+		hash, size, err := hashFile(p)
 		if err != nil {
 			return err
 		}
-		files[rel] = srcFile{path: rel, hash: HashBytes(b), lang: lang, abs: p, size: int64(len(b))}
+		files[rel] = srcFile{path: rel, hash: hash, lang: lang, abs: p, size: size}
 		return nil
 	})
 	sort.Strings(modules)
 	return files, modules, err
+}
+
+// hashFile streams the file, so the scan never holds a whole file in memory;
+// it matches HashBytes of the same content.
+func hashFile(p string) (string, int64, error) {
+	f, err := os.Open(p)
+	if err != nil {
+		return "", 0, err
+	}
+	defer f.Close()
+	h := sha256.New()
+	n, err := io.Copy(h, f)
+	return hex.EncodeToString(h.Sum(nil)), n, err
 }
 
 // moduleOf is the innermost module directory containing rel ("" if none).

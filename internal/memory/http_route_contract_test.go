@@ -20,12 +20,15 @@ type routeSpec struct {
 
 // sourceRoutes reads every mux.HandleFunc pattern from the package's own
 // sources, so a newly added route is covered without editing this test.
+// Patterns built in a loop over a literal list ("GET /v1/"+col) are expanded;
+// any other non-literal pattern fails the test instead of being skipped.
 func sourceRoutes(t *testing.T) []routeSpec {
 	t.Helper()
-	files, _ := filepath.Glob("*.go")
+	names, _ := filepath.Glob("*.go")
 	fset := token.NewFileSet()
-	var out []routeSpec
-	for _, name := range files {
+	files := map[string]*ast.File{}
+	consts := map[string]string{}
+	for _, name := range names {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
 		}
@@ -33,7 +36,81 @@ func sourceRoutes(t *testing.T) []routeSpec {
 		if err != nil {
 			t.Fatal(err)
 		}
+		files[name] = f
+		for _, d := range f.Decls {
+			if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.CONST {
+				for _, sp := range g.Specs {
+					vs := sp.(*ast.ValueSpec)
+					for i, id := range vs.Names {
+						if i < len(vs.Values) {
+							if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+								consts[id.Name], _ = strconv.Unquote(lit.Value)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	var out []routeSpec
+	for name, f := range files {
+		type loopVar struct {
+			name     string
+			from, to token.Pos
+			vals     []string
+		}
+		var loops []loopVar // outer loops come before the loops they contain
+		var eval func(e ast.Expr, at token.Pos) []string
+		eval = func(e ast.Expr, at token.Pos) []string {
+			switch e := e.(type) {
+			case *ast.BasicLit:
+				if s, err := strconv.Unquote(e.Value); err == nil && e.Kind == token.STRING {
+					return []string{s}
+				}
+			case *ast.Ident:
+				for i := len(loops) - 1; i >= 0; i-- {
+					if l := loops[i]; l.name == e.Name && l.from <= at && at < l.to {
+						return l.vals
+					}
+				}
+				if s, ok := consts[e.Name]; ok {
+					return []string{s}
+				}
+			case *ast.ParenExpr:
+				return eval(e.X, at)
+			case *ast.BinaryExpr:
+				var joined []string
+				if e.Op == token.ADD {
+					for _, a := range eval(e.X, at) {
+						for _, b := range eval(e.Y, at) {
+							joined = append(joined, a+b)
+						}
+					}
+				}
+				return joined
+			}
+			return nil
+		}
 		ast.Inspect(f, func(n ast.Node) bool {
+			if rs, ok := n.(*ast.RangeStmt); ok {
+				if cl, ok := rs.X.(*ast.CompositeLit); ok {
+					v := rs.Value
+					if _, isMap := cl.Type.(*ast.MapType); isMap {
+						v = rs.Key
+					}
+					var vals []string
+					for _, el := range cl.Elts {
+						if kv, ok := el.(*ast.KeyValueExpr); ok {
+							el = kv.Key
+						}
+						vals = append(vals, eval(el, el.Pos())...)
+					}
+					if id, ok := v.(*ast.Ident); ok && len(vals) == len(cl.Elts) {
+						loops = append(loops, loopVar{id.Name, rs.Body.Pos(), rs.Body.End(), vals})
+					}
+				}
+				return true
+			}
 			call, ok := n.(*ast.CallExpr)
 			if !ok || len(call.Args) != 2 {
 				return true
@@ -42,30 +119,31 @@ func sourceRoutes(t *testing.T) []routeSpec {
 			if !ok || sel.Sel.Name != "HandleFunc" {
 				return true
 			}
-			lit, ok := call.Args[0].(*ast.BasicLit)
-			if !ok {
-				return true
+			patterns := eval(call.Args[0], call.Pos())
+			if len(patterns) == 0 {
+				t.Fatalf("%s: HandleFunc pattern is neither a literal nor built from a literal loop list; the route contract tests cannot see it", fset.Position(call.Pos()))
 			}
-			pattern, _ := strconv.Unquote(lit.Value)
-			method, path, ok := strings.Cut(pattern, " ")
-			if !ok {
-				return true
-			}
-			spec := routeSpec{file: name, method: method, path: path}
+			decodesFirst := false
 			if fn, ok := call.Args[1].(*ast.FuncLit); ok && len(fn.Body.List) >= 2 {
 				if _, isDecl := fn.Body.List[0].(*ast.DeclStmt); isDecl {
 					if ifs, isIf := fn.Body.List[1].(*ast.IfStmt); isIf {
 						if u, isNot := ifs.Cond.(*ast.UnaryExpr); isNot {
 							if c, isCall := u.X.(*ast.CallExpr); isCall {
 								if id, isID := c.Fun.(*ast.Ident); isID && strings.HasPrefix(id.Name, "decode") {
-									spec.decodesFirst = true
+									decodesFirst = true
 								}
 							}
 						}
 					}
 				}
 			}
-			out = append(out, spec)
+			for _, pattern := range patterns {
+				method, path, ok := strings.Cut(pattern, " ")
+				if !ok {
+					continue
+				}
+				out = append(out, routeSpec{file: name, method: method, path: path, decodesFirst: decodesFirst})
+			}
 			return true
 		})
 	}
