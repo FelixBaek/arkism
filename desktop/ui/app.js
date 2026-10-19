@@ -1507,7 +1507,7 @@
     const d = state.data;
     return { candidate: d.candidates.length, provenance: d.memories.filter(approvalUnproven).length, conflicted: d.conflicted.length, idle: state.usageDone ? d.memories.filter(idle).length : null, merge: digests.mergeCount() };
   }
-  const checkTotal = () => Object.values(checkCounts()).reduce((a, n) => a + (n || 0), 0);
+  const checkTotal = () => Object.entries(checkCounts()).reduce((a, [key, n]) => key === "provenance" ? a : a + (n || 0), 0);
   // [title, one line under it, count next to the title]
   function memTitle() {
     const t = state.memTab;
@@ -1590,7 +1590,7 @@
       const line = el("p", "mem-check-title"); line.append("확인해 주세요", el("strong", "", String(total)));
       txt.append(line, el("p", "mem-check-sub", `승인 대기 ${n.candidate} · 내용이 헷갈림 ${n.conflicted} · 검토 필요 ${n.idle ?? "…"}`));
       if (n.merge) txt.lastChild.append(` · 병합 제안 ${n.merge}`);
-      const first = MEM_CHECK.find(([k]) => n[k])?.[0] || "candidate";
+      const first = MEM_CHECK.find(([k]) => k !== "provenance" && n[k])?.[0] || "candidate";
       card.append(txt, button("하나씩 확인하기", "primary small", null, () => go("memories", first)));
       top.push(card);
     }
@@ -1612,7 +1612,7 @@
       tools.append(memSelect("저장소", [["", "저장소: 모두"], ["shared", `저장소: 공용 ${shared}`], ...repos.map((r) => [r, `저장소: ${r.split("/").pop()} ${source.filter((m) => memRepo(m) === r).length}`])],
         state.repo || "", (v) => { state.repo = v; render(false); }));
     }
-    tools.append(memSelect("모아보기", [["", "모아보기: 전체"], ...MEM_LOOK.map(([k, l]) => [k, `모아보기: ${l}`])], "", (v) => { if (v) go("memories", v); }));
+    tools.append(memSelect("모아보기", [["", "모아보기: 전체"], ...[["provenance", "승인 경로"], ...MEM_LOOK].map(([k, l]) => [k, `모아보기: ${l}`])], "", (v) => { if (v) go("memories", v); }));
     tools.append(memSelect("정렬", [["recent", "최근 순"], ["used", "많이 불린 순"], ["old", "오래된 순"]], state.sort, (v) => { state.sort = v; render(false); }));
     tools.append(inject.button());
     $("#controls").replaceChildren(...top, tools);

@@ -18,7 +18,7 @@
   function boundary(r) {
     const c = r.memory_context || {};
     const polarity = (normalized(r.text).match(/\b(?:not|never|only|before|after|except)\b|(?:^|\s)안(?=\s)|않|없이|금지|제외|말고|하지\s*마|개인|업무|한국어|영어|\d+(?:\.\d+)?/gu) || []).sort();
-    return JSON.stringify([scopeKey(r), r.kind, r.reach, r.reach_project, r.conflict_id || "", [...(r.keywords || [])].sort(), (r.tags || []).filter(t => t.startsWith("repo:") || t.startsWith("review:")).sort(),
+    return JSON.stringify([scopeKey(r), r.kind, r.reach, r.reach_project, r.conflict_id || "", (r.tags || []).filter(t => t.startsWith("repo:") || t.startsWith("review:")).sort(),
       [...(c.domains || [])].sort(), c.applicability || "", c.uncertainty || "", c.valid_from || "", c.evidence_kind || "", c.semantic_kind || "", polarity]);
   }
   function terms(text) {

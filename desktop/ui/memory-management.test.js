@@ -17,7 +17,7 @@ test("approval labels do not turn user speech, trust or old actor names into a h
 });
 
 test("similar pending requests share a presentation group without changing individual proposals", () => {
-  const input = [candidate("a"), candidate("b", { text: "응답은 간결하게" })];
+  const input = [candidate("a"), candidate("b", { text: "응답은 간결하게", keywords: ["style"] })];
   const before = JSON.stringify(input);
   assert.equal(management.groups(input).length, 1);
   assert.equal(management.groups(input)[0].items.length, 2);

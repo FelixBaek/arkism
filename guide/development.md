@@ -174,7 +174,7 @@ their existing independent lifecycles. A successful citation validator checks li
 support; it does not establish semantic completeness or an actual human decision.
 
 The pending review screen groups similar proposals for display only. Four-part scope,
-kind, reach, keywords, repository, applicability, exceptions, effective date and polarity
+kind, reach, repository, applicability, exceptions, effective date and polarity
 must agree; legacy proposals without applicability only group by normalized exact text.
 Each proposal keeps its own revision, sources and review action. A repeated statement
 never approves a proposal or raises trust. Expanding a group checks at most32 proposals,
