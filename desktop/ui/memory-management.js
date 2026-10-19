@@ -24,8 +24,8 @@
   function wording(text) {
     // Preserve order, signs, operators and units. Only these explicit wording
     // variants may change; token sets would erase direction and numeric signs.
-    return normalized(text).replace(/(?:간결하게|간단히|핵심만|요약해서|짧게)(?=\s|[.,!?。！？]|$)/gu, " short ")
-      .replace(/(?:답변|대답|응답|설명)(?=은|는|을|를|이|가|\s|$)|(?:답해|말해)(?=\s|[.,!?。！？]|$)/gu, " response ")
+    return normalized(text).replace(/(^|\s)(?:간결하게|간단히|핵심만|요약해서|짧게)(?=\s|[.,!?。！？]|$)/gu, "$1 short ")
+      .replace(/(^|\s)(?:(?:답변|대답|응답|설명)(?=은|는|을|를|이|가|\s|$)|(?:답해|말해)(?=\s|[.,!?。！？]|$))/gu, "$1 response ")
       .replace(/\s+/gu, " ").trim();
   }
   function similar(a, b) {

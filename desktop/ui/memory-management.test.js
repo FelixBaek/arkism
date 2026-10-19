@@ -81,6 +81,8 @@ test("wording groups preserve signs, units, comparisons and directional word ord
     ["허용 값 < 1", "허용 값 > 1"],
     ["비용 $ 1", "비용 € 1"],
     ["Maple 에서 Cedar 로 복사", "Cedar 에서 Maple 로 복사"],
-    ["설명서 는 짧게", "응답서 는 짧게"]
+    ["설명서 는 짧게", "응답서 는 짧게"],
+    ["자동설명은 짧게", "자동응답은 짧게"],
+    ["표현은 자동짧게", "표현은 자동간결하게"]
   ]) assert.equal(management.groups([candidate("a", { text: first }), candidate("b", { text: second })]).length, 2);
 });
