@@ -99,7 +99,7 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-skill.pinned .ex-pin { color: var(--nc-accent); }
 .ex-skill-name { border: 0; background: none; padding: 0 4px; color: inherit; font: inherit; cursor: pointer; }
 .ex-skill-name:hover { text-decoration: underline; }
-.ex-pin-sum { margin-left: 4px; }
+.ex-pin-sum { margin-left: 4px; display: block; }
 .ex-skill-dlg { width: min(520px, calc(100vw - 32px)); }
 .ex-skill-dlg .dialog-body { display: flex; flex-direction: column; gap: 14px; }
 .ex-newver { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-radius: 8px; background: var(--nc-amber-bg); }
@@ -136,7 +136,6 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-spend { display: flex; flex-direction: column; gap: 6px; }
 .ex-spend-top { display: flex; justify-content: space-between; gap: 12px; color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
 .ex-spend-top small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
-.ex-pin-sum { display: block; }
 .ex-pins { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--nc-line); }
 /* 채널 연결 */
 .ex-ch-list { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: 8px; }

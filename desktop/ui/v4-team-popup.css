@@ -98,9 +98,9 @@
 .tm-bars i { flex: 1; background: var(--nc-subtle); border-radius: 1px; }
 .tm-bars i.last { background: var(--nc-accent); }
 .tm-pop-body .tm-mlist .tm-mrow.free { cursor: default; }
-.tm-pop-body .tm-mlist .tm-mrow { min-height: 52px; }
+.tm-pop-body .tm-mlist .tm-mrow { min-height: 52px; gap: 12px; }
 .tm-pop-body > .pn-card { margin: 0 0 22px; }
-.tm-pop-body .tm-mode-wrap { gap: 16px; }
+.tm-pop-body .tm-mode-wrap { gap: 16px; padding: 16px; border: 1px solid var(--nc-line); border-radius: 10px; }
 .tm-pop-body .tm-mode-wrap > .tm-block + .tm-block { padding-top: 0; }
 
 /* save bar: only when something changed (always while making a team) */
@@ -192,13 +192,11 @@
 .tm-pop .tm-test-form { flex-direction: row; }
 
 /* 회의 방식 (961:60688): one bordered box holding two compact cards and 끝나는 조건 */
-.tm-pop-body .tm-mode-wrap { padding: 16px; border: 1px solid var(--nc-line); border-radius: 10px; gap: 16px; }
 .tm-pop-body .tm-mode { gap: 4px; padding: 10px 14px; }
 .tm-pop-body .tm-mode .tm-diagram { height: 56px; max-height: 56px; }
 .tm-pop-body .tm-mode .tm-svg-name, .tm-pop-body .tm-mode .tm-svg-cap, .tm-pop-body .tm-mode .tm-svg-tag, .tm-pop-body .tm-mode .tm-svg-pill, .tm-pop-body .tm-mode .tm-svg-pilltext { display: none; }
 .tm-pop-body .tm-ending { padding-top: 0; border-top: 0; }
 /* 전문가 · 채널 연결 rows */
-.tm-pop-body .tm-mlist .tm-mrow { gap: 12px; }
 .tm-pop-body .tm-mwho .tm-mrole { appearance: none; -webkit-appearance: none; background-image: none; align-self: flex-start; height: 18px; padding: 0; border: 0; background-color: transparent; color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; width: auto; }
 .tm-mmodelr { flex: none; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); white-space: nowrap; }
 .tm-ch-mode { cursor: pointer; }

@@ -137,7 +137,7 @@
 .ov-win-crumb { color: var(--text-2); font-size: 12px; }
 .ov-win .ov-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); display: inline-block; }
 .ov-win-step { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12px; }
-.ov-win-body { display: flex; flex-direction: column; gap: 14px; }
+.ov-win-body { display: flex; flex-direction: column; gap: 14px; padding-top: 16px; }
 .ov-win-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .ov-win-tile { background: var(--bg-muted); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
 .ov-win-tile strong { font-size: 22px; font-weight: 600; color: var(--tone); } .ov-win-tile span { color: var(--text-2); font-size: 12px; }
@@ -153,8 +153,7 @@
 .ov-win-item small { color: var(--text-2); white-space: nowrap; }
 .ov-win-tag { flex: none; padding: 1px 7px; border-radius: 6px; background: var(--bg-muted); color: var(--text-2); font-size: 11px; }
 .ov-win-empty { color: var(--text-2); font-size: 12.5px; margin: 0; }
-.ov-win-foot { display: flex; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--border); }
-.ov-win-body { padding-top: 16px; }
+.ov-win-foot { display: flex; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--border); gap: 8px; }
 /* stage + wide windows (overview-windows.js) */
 .ov-win-badge { padding: 2px 9px; border-radius: 999px; background: var(--bg-muted); color: var(--tone); font-size: 12px; font-weight: 600; }
 .ov-win-how { background: var(--bg-muted); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
@@ -171,7 +170,7 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-win-item-l { min-width: 0; display: flex; flex-direction: column; gap: 3px; } .ov-win-item-r { display: flex; align-items: center; gap: 6px; flex: none; color: var(--text-2); font-size: 12px; }
 .ov-win-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-win-err { color: #ff5160; font-size: 12px; margin: 0; }
-.ov-win-foot { gap: 8px; } .ov-win-click { cursor: pointer; }
+.ov-win-click { cursor: pointer; }
 .ov-win-tiles-4 { grid-template-columns: repeat(4, 1fr); }
 .ov-ask { width: min(420px, calc(100vw - 32px)); padding: 0; } .ov-ask textarea { width: 100%; box-sizing: border-box; }
 .ov-wide-win { width: min(1100px, calc(100vw - 32px)); height: min(720px, calc(100vh - 32px)); display: flex; flex-direction: column; }
