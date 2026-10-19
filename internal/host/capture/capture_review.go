@@ -124,7 +124,7 @@ func classifyRequest(c map[string]any, risk string, reasons []any, dup string) m
 }
 
 // withJudgement adds the model's advice (verdict and meaning checks) to a risk call; an answer without them adds nothing.
-func withJudgement(req map[string]any, d map[string]any) map[string]any {
+func withJudgement(req, d map[string]any) map[string]any {
 	body := req["body"].(map[string]any)
 	if a, _ := d["verdict"].(string); a != "" {
 		v := map[string]any{"action": a}

@@ -62,7 +62,8 @@ window.ArkismMemoryBubbles = (() => {
     function setEdges(list) { edgesAll = list; linkUp(); aim(); cardKey = "x"; run(); draw(); }
     function linkUp() { links = edgesAll.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({ a: byId.get(e.from), b: byId.get(e.to), t: e.t })); }
     function setGroup(k) { if (k === mode) return; mode = k; placePill(); regroup(); aim(); kick(30); run(); }
-    function kick(a) { for (const p of items) { p.vx += (Math.random() - 0.5) * 2 * a; p.vy += (Math.random() - 0.5) * 2 * a; } }
+    let kicks = 0; // a visual nudge, so the per-memory hash is jitter enough (no randomness needed)
+    function kick(a) { kicks++; for (const p of items) { p.vx += (seed(p.id + kicks) - 0.5) * 2 * a; p.vy += (seed(p.id + "v" + kicks) - 0.5) * 2 * a; } }
     function setSelected(id) { const n = id && byId.has(id) ? id : null; if (n && n !== sel) announce(n); const moved = n !== sel; sel = n; if (moved) { aim(); kick(20); run(); } draw(); }
     // Selected memory (Figma 기억 지도): it moves to the middle and its related memories fan out around it; the rest stay in their groups, dimmed.
     function aim() {

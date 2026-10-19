@@ -186,7 +186,7 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-wide-list { display: flex; flex-direction: column; gap: 4px; }
 .ov-wide-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; font-size: 13px; }
 .ov-wide-row.on { background: var(--bg-muted); }
-.ov-wide-row-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; } .ov-wide-row-t small, .ov-wide-row-r { color: var(--text-2); font-size: 12px; } .ov-wide-row-r { flex: none; }
+.ov-wide-row-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; } .ov-wide-row-t small, .ov-wide-row-r { color: var(--text-2); font-size: 12px; } .ov-wide-row-r { flex: none; display: flex; align-items: center; gap: 12px; white-space: nowrap; }
 .ov-wide-foot-note { color: var(--text-2); font-size: 12px; }
 .ov-wide-seg { display: flex; gap: 6px; }
 .ov-wide-detail { display: flex; flex-direction: column; gap: 12px; } .ov-wide-detail h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
@@ -206,28 +206,27 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-win-foot .ov-wide-foot-note { margin-right: auto; align-self: center; }
 .ov-detail-list .ov-win-item.on { background: var(--bg-muted); }
 
+:root { --ov-amber: #f5b955; --ov-red: #ff8a92; --ov-green: #8fd19e; --ov-blue: #8fb0ff; --ov-ok: #6fbf8f; --ov-wait: #e0a43a; }
 /* 승인 대기·불러오기·세션 improvements (Figma 592:*, 764:61615, 580:51861) */
-.ov-win-tag.ov-tag-a { background: rgba(245,185,85,.16); color: #f5b955; } .ov-win-tag.ov-tag-r { background: rgba(255,81,96,.16); color: #ff8a92; } .ov-win-tag.ov-tag-g { background: rgba(143,209,158,.16); color: #8fd19e; }
-.ov-wide-row-r.ov-r-a { color: #f5b955; }
-.ov-check { margin: 0; font-size: 12.5px; } .ov-check.ok { color: #8fd19e; } .ov-check.no { color: #f5b955; } .ov-check-note { display: block; color: var(--text-2); font-size: 12px; }
-.ov-verdict { display: flex; flex-direction: column; gap: 4px; } .ov-verdict strong { font-size: 13px; color: #f5b955; } .ov-verdict .ov-verdict-keep { color: #8fd19e; } .ov-verdict .ov-verdict-discard { color: #ff8a92; } .ov-verdict p { color: var(--text-2); }
-.ov-cmp { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 8px; background: var(--bg-muted); font-size: 13px; } .ov-cmp small { font-size: 11px; color: var(--text-2); } .ov-cmp-new { border: 1px solid #f5b955; } .ov-cmp-new small { color: #f5b955; }
-.ov-flow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .ov-flow i { font-style: normal; color: var(--text-2); } .ov-flow span { padding: 2px 9px; border-radius: 999px; background: var(--bg-muted); color: var(--text-2); font-size: 12px; } .ov-flow span.on { color: #f5b955; border: 1px solid currentColor; } .ov-flow span.done { color: #8fd19e; } .ov-flow span.bad { color: #ff8a92; border: 1px solid currentColor; }
+.ov-win-tag.ov-tag-a { background: rgba(245,185,85,.16); color: var(--ov-amber); } .ov-win-tag.ov-tag-r { background: rgba(255,81,96,.16); color: var(--ov-red); } .ov-win-tag.ov-tag-g { background: rgba(143,209,158,.16); color: var(--ov-green); }
+.ov-wide-row-r.ov-r-a { color: var(--ov-amber); }
+.ov-check { margin: 0; font-size: 12.5px; } .ov-check.ok { color: var(--ov-green); } .ov-check.no { color: var(--ov-amber); } .ov-check-note { display: block; color: var(--text-2); font-size: 12px; }
+.ov-verdict { display: flex; flex-direction: column; gap: 4px; } .ov-verdict strong { font-size: 13px; color: var(--ov-amber); } .ov-verdict .ov-verdict-keep { color: var(--ov-green); } .ov-verdict .ov-verdict-discard { color: var(--ov-red); } .ov-verdict p { color: var(--text-2); }
+.ov-cmp { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-radius: 8px; background: var(--bg-muted); font-size: 13px; } .ov-cmp small { font-size: 11px; color: var(--text-2); } .ov-cmp-new { border: 1px solid #f5b955; } .ov-cmp-new small { color: var(--ov-amber); }
+.ov-flow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .ov-flow i { font-style: normal; color: var(--text-2); font-size: 11px; } .ov-flow span { padding: 2px 9px; border-radius: 999px; background: var(--bg-muted); color: var(--text-2); font-size: 12px; } .ov-flow span.on { color: var(--ov-amber); border: 1px solid currentColor; } .ov-flow span.done { color: var(--ov-green); } .ov-flow span.bad { color: var(--ov-red); border: 1px solid currentColor; }
 .ov-dot-a, .ov-dot-r, .ov-dot-g { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; } .ov-dot-a { background: #f5b955; } .ov-dot-r { background: #ff5160; } .ov-dot-g { background: #8fd19e; }
 .ov-recall { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
 .ov-recall-head { display: flex; justify-content: space-between; gap: 8px; } .ov-recall-head span { color: var(--text-2); font-size: 12px; }
 .ov-recall-row { display: flex; align-items: center; gap: 8px; } .ov-recall-row b { flex: none; width: 36px; font-variant-numeric: tabular-nums; font-weight: 500; } .ov-recall-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ov-lane { padding: 0 7px; border-radius: 6px; background: rgba(100,140,255,.16); color: #8fb0ff; font-size: 11px; }
+.ov-lane { padding: 0 7px; border-radius: 6px; background: rgba(100,140,255,.16); color: var(--ov-blue); font-size: 11px; }
 .ov-kinds { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 12.5px; color: var(--text-2); }
 .ov-detail-quote small { display: block; margin-top: 6px; color: var(--text-2); font-size: 12px; }
 /* 세션 기록: 상태 알약·흐름·후보 */
-.ov-wide-row-r { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
 .ov-wide-row-n { font-size: 12px; color: var(--text); }
 .ov-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; } .ov-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.ov-pill-ok { color: #6fbf8f; } .ov-pill-wait { color: #e0a43a; } .ov-pill-none { color: var(--text-2); }
-.ov-flow { display: flex; align-items: center; gap: 6px; } .ov-flow i { color: var(--text-2); font-style: normal; font-size: 11px; }
+.ov-pill-ok { color: var(--ov-ok); } .ov-pill-wait { color: var(--ov-wait); } .ov-pill-none { color: var(--text-2); }
 .ov-flow-step { padding: 2px 10px; border-radius: 999px; background: var(--surface-2, rgba(128,128,128,.14)); color: var(--text-2); font-size: 12px; }
-.ov-flow-step.done { color: #6fbf8f; } .ov-flow-step.now { color: #e0a43a; background: rgba(224,164,58,.16); }
+.ov-flow-step.done { color: var(--ov-ok); } .ov-flow-step.now { color: var(--ov-wait); background: rgba(224,164,58,.16); }
 .ov-detail-cand { display: flex; justify-content: space-between; gap: 8px; padding: 9px 12px; margin-top: 6px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; } .ov-detail-cand small { color: var(--text-2); flex: none; } .ov-detail-cand.link { cursor: pointer; }
 /* 기억 지도: 간선 이름·범례·AI 제안·출처 */
 .ov-map-suggest { margin-top: 12px; padding: 10px 12px; border: 1px dashed #8b7cf6; border-radius: 10px; font-size: 13px; } .ov-map-suggest small { color: #8b7cf6; } .ov-map-suggest p { margin: 4px 0 0; }
@@ -243,10 +242,9 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-map-tab { border: 1px solid transparent; background: transparent; color: var(--nc-muted); font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 6px; cursor: pointer; } .ov-map-tab.on { background: var(--nc-subtle); color: var(--nc-text); border-color: var(--nc-line); } .ov-map-tab:disabled { opacity: .4; cursor: default; }
 .ov-map-search { flex: 1 1 200px; max-width: 240px; } .ov-map-search .ov-wide-search { width: 100%; box-sizing: border-box; background: var(--nc-surface); }
 .ov-map-reach { display: flex; gap: 8px; }
+.ov-map-personal { --c: #7fc79c; color: var(--c); } .ov-map-general { --c: #6aa3ff; color: var(--c); } .ov-map-project { --c: #f5b955; color: var(--c); }
 .ov-map-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--nc-line); background: transparent; color: var(--nc-muted); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 12px; cursor: pointer; } .ov-map-chip i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .ov-map-chip.on { color: var(--c); border-color: color-mix(in srgb, var(--c) 55%, transparent); background: color-mix(in srgb, var(--c) 12%, transparent); } .ov-map-chip.on i { background: var(--c); }
-.ov-map-personal { --c: #7fc79c; color: var(--c); } .ov-map-general { --c: #6aa3ff; color: var(--c); } .ov-map-project { --c: #f5b955; color: var(--c); }
-.ov-map-chip { color: var(--nc-muted); } .ov-map-chip.on { color: var(--c); }
 .ov-map-canvas { position: relative; flex: 1; min-height: 320px; overflow: hidden; border: 1px solid var(--nc-line); border-radius: 12px; background: var(--nc-rail); }
 
 .ov-map-ring { fill: color-mix(in srgb, var(--c) 7%, transparent); stroke: color-mix(in srgb, var(--c) 40%, transparent); stroke-width: 1; }
@@ -266,7 +264,7 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-map-zbtn { border: 0; background: transparent; color: var(--nc-muted); font: inherit; font-size: 14px; cursor: pointer; padding: 2px 6px; } .ov-map-zoom { min-width: 40px; text-align: center; color: var(--nc-text); }
 .ov-map-side { display: flex; flex-direction: column; gap: 14px; overflow: auto; min-height: 0; padding: 20px; margin-top: 16px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: 12px; }
 .ov-map-sidehead { display: flex; justify-content: space-between; align-items: center; } .ov-map-sidehead h4 { margin: 0; font-size: 16px; font-weight: 500; } .ov-map-x { border: 0; background: transparent; color: var(--nc-muted); font-size: 16px; cursor: pointer; }
-.ov-map-tags { display: flex; gap: 6px; } .ov-map-title { font-size: 20px !important; font-weight: 600; line-height: 1.35 !important; }
+.ov-map-tags { display: flex; gap: 6px; } .ov-map-side .ov-map-title { font-size: 20px; font-weight: 600; line-height: 1.35; }
 .ov-map-body-text { line-height: 1.55; color: var(--nc-text); } .ov-map-use { margin: 0; color: var(--nc-muted); font-size: 12.5px; }
 .ov-map-quote { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; background: var(--nc-raised); border-radius: 8px; } .ov-map-quote small { color: var(--nc-quiet); font-size: 11.5px; }
 .ov-map-relhead { display: flex; justify-content: space-between; color: var(--nc-muted); font-size: 11.5px; } .ov-map-rels { display: flex; flex-direction: column; gap: 8px; }

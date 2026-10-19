@@ -17,8 +17,7 @@
 .tm-card2 > * { position: relative; }
 .tm-card2-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .tm-card2.has-cover::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 26.5%, #131313); }
-.tm-card2.has-cover { border-color: rgb(255 255 255 / .08); }
-.tm-card2.has-cover { color: #fff; }
+.tm-card2.has-cover { border-color: rgb(255 255 255 / .08); color: #fff; }
 .tm-card2.has-cover p { color: rgb(255 255 255 / .85); }
 .tm-card2-top { position: absolute; top: 12px; left: 14px; right: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .tm-card2 strong { font: 600 calc(24px * var(--fs, 1))/1.25 var(--sans); word-break: keep-all; }

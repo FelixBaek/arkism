@@ -122,7 +122,7 @@ window.ArkismMessenger = (ctx) => {
   function messengerCard(ch, name, d, note, kids) {
     if (S.nerr === "unsupported") return card(name, ["연결 안 됨", ""], null, el("p", "mg-note", "이 서버는 아직 이 연결을 지원하지 않아요. 서버를 새 버전으로 올려 주세요."));
     const right = el("div", "mg-actions");
-    if (d) right.append(button("시험 보내기", "", null, () => testDest(ch)), button("연결 끊기", "ghost", null, () => { if (confirm(OFF[ch][0])) act(() => dropDest(ch), OFF[ch][1]); }));
+    if (d) right.append(button("시험 보내기", "", null, () => testDest(ch)), button("연결 끊기", "ghost", null, () => { if (confirm(OFF[ch][0])) void act(() => dropDest(ch), OFF[ch][1]); }));
     return card(name, d ? ["연결됨", "on"] : ["연결 안 됨", ""], d ? right : null, ...kids, note);
   }
   function telegramCard() {
@@ -130,7 +130,7 @@ window.ArkismMessenger = (ctx) => {
     const row = tokenRow("telegram", d?.last4, "텔레그램 봇 토큰 (123456:ABC…)", (t) => {
       const chat = (S.draft.chat ?? d?.chat_id ?? "").trim();
       if (!chat) { notice("채팅 ID를 먼저 넣어 주세요."); return; }
-      act(() => saveDest("telegram", { bot_token: t, chat_id: chat }), "텔레그램을 연결했어요.");
+      void act(() => saveDest("telegram", { bot_token: t, chat_id: chat }), "텔레그램을 연결했어요.");
     }, d ? "저장" : "저장하고 연결");
     return messengerCard("telegram", "텔레그램", d, el("p", "mg-note", "토큰은 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. @BotFather로 만든 봇을 그룹이나 DM에 먼저 추가해 두세요."), [row, chatRow(d)]);
   }
