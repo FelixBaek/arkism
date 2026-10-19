@@ -178,6 +178,7 @@ window.ArkismTeams = (ctx) => {
       if (!quiet || !S.discord) { S.discord = S.discord || { bots: [], settings: {}, stats: {} }; S.discordErr = unsupported(e) ? "unsupported" : e.message; }
     } finally { S.discordLoading = false; }
     if (["teams", "discord", "teamNew"].includes(state.view)) render(false);
+    popRedraw("overview");
   }
   const bots = () => S.discord?.bots || [];
   const botById = (id) => bots().find((b) => b.id === id);
@@ -473,7 +474,9 @@ window.ArkismTeams = (ctx) => {
     mode.append(modeCard(d, (s) => changed(pop, s), null, null, true));
     out.push(mode);
     const mem = sec("users-three", "전문가", d.mode === "moderator_picks" ? "진행자가 매번 다음 사람을 골라요" : "위에서부터 순서대로 말해요 · 끌어서 순서를 바꿔요");
-    mem.append(...membersCard(d, (s) => changed(pop, s), true).childNodes);
+    const mc = membersCard(d, (s) => changed(pop, s), true);
+    mem.querySelector(".tm-sec-head > small").before(...mc.heads);
+    mem.append(...mc.childNodes);
     out.push(mem);
     out.push(templatesSection(pop));
     out.push(contextSection(pop));
@@ -614,22 +617,53 @@ window.ArkismTeams = (ctx) => {
     if (S.ctxAdding) s.append(contextAdder(d, (st) => changed(pop, st)));
     return s;
   }
+  // 채널 연결 (961:60688): the Discord channels whose action is this team's meeting; same bot API as the expert card (crew.js channelCard).
+  async function saveTeamBot(pop, b, patch, okText) { await saveBot(b, patch, okText); popRedraw("overview"); }
   function channelsSection(pop) {
-    const d = pop.d;
-    const s = sec("chat-text", "채널 연결", "어디서 이 팀을 부를지 정해요 · 봇 설정은 디스코드 화면에서");
+    const d = pop.d, mine = !!pop.id;
+    const add = mine ? link("+ 채널 연결", () => { pop.chAdd = pop.chAdd ? null : { bot: bots()[0]?.id || "", channel: "" }; popRedraw("overview"); }) : null;
+    const s = sec("chat-text", "채널 연결", "어디서 이 팀을 부를지 정해요 · 봇 설정은 설정 › 메신저에서 연결해요", ...(add ? [add] : []));
     const list = el("div", "tm-ctx-list");
-    const ch = pop.id ? channelsFor(pop.id) : [];
+    const ch = mine ? channelsFor(pop.id) : [];
     for (const x of ch) {
+      const b = x.bot, warn = ["needs_permission", "token_invalid"].includes(b.state);
       const r = el("div", "tm-ctx-row");
-      r.append(raw(el("span", "", `디스코드 · #${x.name || x.channel_id}`)), raw(el("small", "", x.bot.name || "")), badge(["needs_permission", "token_invalid"].includes(x.bot.state) ? "확인 필요" : "글이 올라오면 시작", ["needs_permission", "token_invalid"].includes(x.bot.state) ? "warn" : "line"));
+      const mode = el("button", "tm-badge tm-ch-mode", x.auto_start ? tr("글이 올라오면 자동 시작") : tr(`@${d.handle || handleFrom(d.name)}로 부를 때만`)); mode.type = "button"; mode.title = tr("눌러서 바꿔요");
+      raw(mode);
+      mode.addEventListener("click", () => saveTeamBot(pop, b, { channels: b.channels.map((c) => (c.channel_id === x.channel_id ? { ...c, auto_start: !c.auto_start } : c)) }, "바꿨어요."));
+      const del = el("button", "icon-btn plain tm-x"); del.type = "button"; del.setAttribute("aria-label", "빼기"); del.append(icon("x"));
+      del.addEventListener("click", () => { if (confirm(tr(`#${x.name || x.channel_id} 연결을 뺄까요?`))) saveTeamBot(pop, b, { channels: b.channels.filter((c) => c.channel_id !== x.channel_id) }, "연결을 뺐어요."); });
+      r.append(raw(el("span", "", `디스코드 · #${x.name || x.channel_id}`)), raw(el("small", "", b.name || "")), ...(warn ? [badge("확인 필요", "warn")] : []), mode, del);
       list.append(r);
     }
-    if (!ch.length) list.append(empty(pop.id ? "연결된 채널이 없어요." : "팀을 만든 뒤 채널을 연결해요."));
+    if (!ch.length) list.append(empty(!mine ? "팀을 만든 뒤 채널을 연결해요." : S.discord ? (bots().length ? "연결된 채널이 없어요." : "연결된 디스코드 봇이 없어요.") : "불러오는 중…"));
     const mirror = el("div", "tm-ctx-row");
     mirror.append(el("span", "", "회의 진행을 디스코드 스레드에도 올리기"), sw(d.discord_mirror, "디스코드에도 올리기", (v) => { d.discord_mirror = v; changed(pop, true); }));
     list.append(mirror);
     s.append(list);
-    if (pop.id) s.append(link("디스코드에서 채널 정하기 →", () => { closePopup(); go("discord"); }));
+    if (mine && pop.chAdd) {
+      const f = pop.chAdd;
+      if (!bots().length) s.append(empty("먼저 디스코드 봇을 추가해 주세요."));
+      else {
+        const b = botById(f.bot) || bots()[0];
+        void loadChannels(b);
+        const known = S.channels.get(b.id);
+        const row = el("div", "tm-ch-add");
+        const botSel = select(bots().map((x) => [x.id, x.name || x.id]), b.id, (v) => { f.bot = v; f.channel = ""; popRedraw("overview"); }); botSel.setAttribute("aria-label", "봇");
+        const chSel = select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], f.channel, (v) => { f.channel = v; }); chSel.setAttribute("aria-label", "채널");
+        row.append(botSel, chSel, button("연결", "primary", null, () => {
+          const id = f.channel;
+          if (!id) { notice("채널을 골라 주세요."); return; }
+          const had = (b.channels || []).find((x) => x.channel_id === id);
+          if (had && !confirm(tr("이 채널은 이미 다른 곳에 연결돼 있어요. 이 팀으로 바꿀까요?"))) return;
+          const c = { channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "meeting", id: pop.id }, auto_start: false };
+          pop.chAdd = null;
+          void saveTeamBot(pop, b, { channels: [...(b.channels || []).filter((x) => x.channel_id !== id), c] }, "채널을 연결했어요.");
+        }), link("취소", () => { pop.chAdd = null; popRedraw("overview"); }, "tm-link quiet"));
+        s.append(row);
+      }
+    }
+    if (mine) s.append(link("디스코드에서 채널 정하기 →", () => { closePopup(); go("discord"); }));
     return s;
   }
   function updateBar(pop) {
@@ -819,14 +853,14 @@ window.ArkismTeams = (ctx) => {
         });
       } else row.classList.add("free");
       const model = memberModel(m);
-      const roleSel = select(ROLES, m.role || "worker", (v) => { m.role = v; changed(); }, compact ? "tm-pill-select" : "tm-plain-select");
+      const roleSel = select(ROLES, m.role || "worker", (v) => { m.role = v; changed(); }, compact ? "tm-mrole" : "tm-plain-select");
       roleSel.setAttribute("aria-label", "역할");
       const remove = el("button", "icon-btn plain tm-x"); remove.type = "button"; remove.setAttribute("aria-label", "빼기"); remove.append(icon("x"));
       remove.addEventListener("click", () => { renumber(members.filter((x) => x !== m)); changed(true); });
       if (compact) {
-        const who = el("div", "tm-mwho"); who.append(raw(el("b", "", memberName(m))), el("small", "", modelLabel(model)));
+        const who = el("div", "tm-mwho"); who.append(raw(el("b", "", memberName(m))), roleSel);
         const focus = raw(input(m.focus, (v) => { m.focus = v; changed(); }, { max: 120, placeholder: "맡을 일" })); focus.className = "tm-pill-input"; focus.setAttribute("aria-label", "맡을 일");
-        row.append(...(picks ? [] : [el("span", "tm-grip", "⠿"), el("span", "tm-ord", pad2(i + 1))]), face(byId(m.agent_id), "m"), who, focus, roleSel, remove);
+        row.append(...(picks ? [] : [el("span", "tm-grip", "⠿"), el("span", "tm-ord", pad2(i + 1))]), face(byId(m.agent_id), "m"), who, focus, raw(el("span", "tm-mmodelr", modelLabel(model))), remove);
       } else {
         const mc = el("span", "tm-mmodel"); mc.append(mark(model), el("span", "", modelLabel(model)));
         row.append(el("span", "tm-ord", pad2(i + 1)), raw(el("span", "tm-mname", memberName(m))), mc, roleSel, remove);
@@ -836,6 +870,7 @@ window.ArkismTeams = (ctx) => {
     if (!members.length) box.append(empty("아직 참여자가 없어요. 전문가를 넣어 주세요."));
     c.append(box);
     const acts = el("div", "tm-row-acts");
+    const heads = [];
     const free = agents().filter((a) => !members.some((m) => m.agent_id === a.id));
     if (S.adding && free.length) {
       const pick = select([["", "넣을 전문가 고르기"], ...free.map((a) => [a.id, `${a.crew.name} · ${modelLabel(agentModel(a))}`])], "", (v) => {
@@ -847,11 +882,13 @@ window.ArkismTeams = (ctx) => {
       acts.append(pick, link("취소", () => { S.adding = false; render(false); }, "tm-link quiet"));
       queueMicrotask(() => pick.focus());
     } else {
-      const add = button(compact ? "+ 전문가 추가" : "전문가 추가", "", null, () => { if (!free.length) { notice(agents().length ? "넣을 수 있는 전문가를 모두 넣었어요." : "먼저 전문가를 만들어 주세요."); return; } S.adding = true; render(false); });
-      acts.append(add);
-      if (compact) acts.append(link("+ 새로 만들기", () => { if (ctx.hasView?.("workers")) { state.workerNew = true; go("workers"); } else notice("전문가 화면에서 만들어 주세요."); }, "tm-link plain"));
+      const addFn = () => { if (!free.length) { notice(agents().length ? "넣을 수 있는 전문가를 모두 넣었어요." : "먼저 전문가를 만들어 주세요."); return; } S.adding = true; render(false); };
+      if (compact) heads.push(link("+ 추가", addFn));
+      else acts.append(button("전문가 추가", "", null, addFn));
+      if (compact) heads.push(link("+ 새로 만들기", () => { if (ctx.hasView?.("workers")) { state.workerNew = true; go("workers"); } else notice("전문가 화면에서 만들어 주세요."); }, "tm-link quiet"));
     }
-    c.append(acts);
+    if (acts.childNodes.length) c.append(acts);
+    c.heads = heads;
     return c;
   }
 
@@ -861,19 +898,20 @@ window.ArkismTeams = (ctx) => {
     d.ending = { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(d.ending || {}) };
     const members = sorted(d.members);
     const pick = el("div", "tm-block");
-    pick.append(el("h4", "tm-label", "진행 방식"));
-    const opts = el("div", "tm-modes");
+    if (!bare) pick.append(el("h4", "tm-label", "진행 방식"));
+    const opts = el("div", "tm-modes"); opts.setAttribute("role", "radiogroup"); opts.setAttribute("aria-label", "진행 방식");
     for (const [key, label, text] of MODES) {
       const o = el("button", `tm-mode${(d.mode || "round_robin") === key ? " active" : ""}`); o.type = "button";
       o.setAttribute("role", "radio"); o.setAttribute("aria-checked", String((d.mode || "round_robin") === key));
       const t = el("div", "tm-mode-title"); t.append(el("i", "tm-radio"), el("b", "", label));
-      o.append(t, el("p", "", text), key === "round_robin" ? diagramRound(members, d.ending.max_rounds) : diagramPick(members));
+      if (bare) o.title = text; // popup: compact card, the sentence stays as a tooltip
+      o.append(t, ...(bare ? [] : [el("p", "", text)]), key === "round_robin" ? diagramRound(members, d.ending.max_rounds, bare) : diagramPick(members));
       o.addEventListener("click", () => { if (d.mode !== key) { d.mode = key; changed(true); } });
       opts.append(o);
     }
     pick.append(opts);
     const end = el("div", "tm-block tm-ending");
-    const eh = el("div", "tm-label-row"); eh.append(el("h4", "tm-label", "끝나는 조건"), el("span", "", "먼저 닿는 조건에서 끝나요"));
+    const eh = el("div", "tm-label-row"); eh.append(el("h4", "tm-label", "끝나는 조건"), ...(bare ? [] : [el("span", "", "먼저 닿는 조건에서 끝나요")]));
     const grid = el("div", "tm-two");
     const rounds = el("div", "tm-stepper");
     const rIn = input(d.ending.max_rounds, (v) => { const n = Math.max(1, Math.min(10, Number(v) || 1)); d.ending.max_rounds = n; changed(); }, { type: "number" });
@@ -914,9 +952,9 @@ window.ArkismTeams = (ctx) => {
     }
     svg.append(defs);
   }
-  function diagramRound(members, maxRounds) {
+  function diagramRound(members, maxRounds, bare) {
     const list = members.slice(0, 5);
-    const svg = svgEl("svg", { viewBox: "0 0 371 112", class: "tm-diagram", "aria-hidden": "true" });
+    const svg = svgEl("svg", { viewBox: bare ? "0 18 371 74" : "0 0 371 112", class: "tm-diagram", "aria-hidden": "true" });
     arrowDefs(svg);
     if (!list.length) { svg.append(svgEl("text", { x: 185, y: 60, class: "tm-svg-cap", "text-anchor": "middle" }, "참여자를 넣으면 순서가 보여요")); return svg; }
     const xs = list.map((_, i) => (list.length === 1 ? 185 : 28 + (i * (343 - 28)) / (list.length - 1)));
@@ -1367,6 +1405,7 @@ window.ArkismTeams = (ctx) => {
     S.channels.set(b.id, null);
     try { S.channels.set(b.id, (await request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${query()}`)).items || []); } catch { S.channels.set(b.id, []); }
     if (here("discord") && S.bot === b.id) render(false);
+    popRedraw("overview");
   }
   function targetOptions() {
     const out = [["", "정하지 않음"]];
