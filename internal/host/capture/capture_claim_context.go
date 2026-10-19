@@ -242,7 +242,7 @@ func buildClaimsWithReceipt(raw []any, userText string, related []map[string]any
 // requests retain their original v2 generator.
 func extractionGenerator(pipeline string) host.Obj {
 	gen := generator(pipeline)
-	gen.Set("prompt_version", "capture-extract-v4")
+	gen.Set("prompt_version", "capture-extract-v5")
 	return gen
 }
 

@@ -65,6 +65,23 @@ Before publishing, maintainers run `ARKISM_PUBLIC_DENYLIST=<their own denylist f
 
 ## Skill improvement generation
 
+New memory extraction uses `capture-extract-v5` and `harness-session-v4`.
+One-off permissions, budgets and assignment corrections belong in session state;
+durable candidates retain the named project and every condition. Session
+user-statement context fields must be supported by verbatim quotes from the same
+original user message. Separate messages cannot be combined to justify a condition.
+Host-created fragments may share that origin only at the same revision, including
+authorized prior evidence; absent or malformed fragment metadata keeps them separate.
+Inferred scope diagnostics belong in state uncertainties, not in quoted condition fields.
+This literal check prevents invented metadata wording; it does not prove semantic
+completeness. Older prepared requests retain their original delivery contract.
+An older session quality gate does not enable the new prompt's fast model.
+
+On Windows, state-file publications to the same destination may wait up to two
+seconds for their turn. Transient replacement retries retain their separate
+500 ms budget. These bound additional waits and attempts, not kernel or scheduler
+latency; neither bound is a promise of absolute write completion time.
+
 `POST /v1/skills/generate` reuses verified lessons and the pinned baseline. The
 configured chat and Anthropic adapters request localized changes to an existing
 skill instead of asking the model to rewrite the full document. Each of up to

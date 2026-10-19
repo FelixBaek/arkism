@@ -460,7 +460,7 @@ func TestCaptureOptionalContextGeneratorIsFixedInPreparedRetry(t *testing.T) {
 	if errorCode(process(job, func() error { return nil })) != "synthetic_delivery_failure" {
 		t.Fatal("first delivery did not fail")
 	}
-	if field(job["prepared_capture"], "generator") == nil || field(first, "prompt_version") != "capture-extract-v4" {
+	if field(job["prepared_capture"], "generator") == nil || field(first, "prompt_version") != "capture-extract-v5" {
 		t.Fatal("new extraction has no fixed version")
 	}
 	job = mustLoad(t, dumps(job))

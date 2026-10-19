@@ -10,7 +10,7 @@ import (
 	"unicode/utf16"
 )
 
-const atomicWriteAdmissionBudget = 500 * time.Millisecond
+const atomicWriteAdmissionBudget = 2 * time.Second
 
 var errAtomicWriteAdmissionBudget = errors.New("atomic_write_admission_budget")
 var errAtomicWriteAdmissionKey = errors.New("atomic_write_admission_key_invalid")
