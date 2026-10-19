@@ -578,16 +578,18 @@ window.ArkismPages = (ctx) => {
     link.type = "button";
     link.addEventListener("click", toRouterModels);
     const summary = sideSec("지금 쓰는 모델");
-    toSide(summary, sideNote("서버에 연결해 쓰면 이 칸은 보이지 않고, 서버의 설정을 따라요."), link);
-    if (!(tauri && state.mode === "local")) {
-      // Figma 764:64196: the server decides; show its defaults.
-      const ROWS = [["임베딩 모델", "의미로 기억을 찾을 때 써요. 자동은 이 PC의 Ollama에 모델이 있을 때만 켜요. 끄면 키워드로만 찾아요.", "자동 (qwen3-embedding:0.6b)"],
-        ["판정 모델", "요청마다 맞는 모델과 스킬을 골라요.", "고정 규칙"],
-        ["기억 추출 모델", "대화에서 기억 후보를 뽑아요. 자주 돌아서 가벼운 모델이 좋아요.", "Haiku"],
-        ["반성·검토 모델", "3시간마다 교훈을 정리하고 검토 대기와 정리 제안을 판단해요.", "Sonnet"]];
-      summary.append(...ROWS.map(([k, , v]) => kvRow(k.replace(" 모델", ""), v)));
+    const local = tauri && state.mode === "local";
+    toSide(summary, ...(local ? [sideNote("서버에 연결해 쓰면 이 칸은 보이지 않고, 서버의 설정을 따라요.")] : []), link);
+    if (!local) {
+      // Figma 764:64196 shows "서버 기본값: …", but no server API reports its role models (they are env on the host),
+      // so naming a value here could be wrong; say only that the server decides.
+      const ROWS = [["임베딩 모델", "의미로 기억을 찾을 때 써요. 끄면 키워드로만 찾아요."],
+        ["판정 모델", "요청마다 맞는 모델과 스킬을 골라요."],
+        ["기억 추출 모델", "대화에서 기억 후보를 뽑아요. 자주 돌아서 가벼운 모델이 좋아요."],
+        ["반성·검토 모델", "3시간마다 교훈을 정리하고 검토 대기와 정리 제안을 판단해요."]];
+      summary.append(el("p", "", "서버의 설정을 따르고 있어요."));
       const card = el("section", "pg-group v4-rows v4-roles-server");
-      for (const [t, hint, v] of ROWS) card.append(roleBlock(line(t, hint, pill("서버가 정함")), el("small", "v4-default", `서버 기본값: ${v}`)));
+      for (const [t, hint] of ROWS) card.append(roleBlock(line(t, hint, pill("서버가 정함"))));
       card.append(el("p", "pg-hint", "서버에 연결해 쓰는 동안에는 서버가 정한 모델을 써요. 바꾸려면 서버의 Arkism 설정을 고치거나, 이 PC의 Arkism으로 돌아가 여기서 바꿔요."));
       return [card];
     }
