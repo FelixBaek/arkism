@@ -1516,6 +1516,13 @@ window.ArkismTeams = (ctx) => {
 
   // 봇 연결: pick how bots are used, make one in the Developer Portal, turn on Message Content Intent, paste the
   // token (it goes to the host keyring through a short handoff), invite it with exactly the permissions it needs.
+  function section(n, title, sub) { // numbered step card of the 봇 연결 screen
+    const c = el("section", "tm-card tm-step");
+    const h = el("div", "tm-step-head"); h.append(el("span", "tm-step-n", String(n)), el("h3", "", title));
+    c.append(h);
+    if (sub) c.append(el("p", "tm-step-sub", sub));
+    return c;
+  }
   function startConnect(retry) {
     const s0 = S.discord?.settings || {};
     S.connect = { mode: s0.bot_mode || "shared", name: retry?.name || "", token: "", appId: retry?.application_id || "", intent: false, target: "", bot: null, busy: false, retry: retry?.id || null };
