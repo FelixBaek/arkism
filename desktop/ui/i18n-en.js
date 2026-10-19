@@ -3569,6 +3569,7 @@ window.ArkismI18nEN = {
   "연결된 기억": "Linked memories"
  },
  "patterns": {
+  "· {0}개": "· {0}",
   "@{0}로 부를 때만": "Only when called as @{0}",
   "${0}로 부를 때만": "Only when called as ${0}",
   "디스코드 · #{0}": "Discord · #{0}",
