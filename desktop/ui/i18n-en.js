@@ -2,6 +2,23 @@
 // edit freely. strings: exact Korean → English. patterns: Korean with {0}… placeholders → English.
 window.ArkismI18nEN = {
  "strings": {
+  "끝": "End",
+  "예비 모델": "Fallback model",
+  "막히면 넘겨요": "Used when the main one is stuck",
+  "답변 길이": "Answer length",
+  "짧게": "Short",
+  "길게": "Long",
+  "토큰 수 상한이에요": "A cap on tokens",
+  "핀을 누르면 부를 때마다 먼저 넣어요": "Pin one to load it first on every call",
+  "핀을 꽂은 것은 부를 때마다 먼저 넣어요. 칩을 누르면 자세히 볼 수 있어요.": "Pinned items load first on every call. Click a chip for details.",
+  "일을 맡길 때마다 먼저 넣어요. 위에 있을수록 먼저 들어가요.": "Loaded first every time work is handed over. Higher rows go in first.",
+  "월 한도": "Monthly cap",
+  "1회 한도": "Per-run cap",
+  "1회 실행 상한": "Per-run cap",
+  "답함": "Answered",
+  "예: 릴리스 팀": "e.g. Release team",
+  "만들기를 누르면 이 전문가를 넣은 팀이 같이 만들어져요": "Creating the expert also creates this team with the expert in it",
+  "이름과 @이름(띄어쓰기 없이)을 채워 주세요.": "Fill in the name and @name (no spaces).",
   "적용 맥락 확인": "Check the memory's full context",
   "로 불러요": "to call it",
   "같은 @이름이 이미 있어요. 전문가와 팀은 이름을 함께 써요.": "That @name is taken. Experts and teams share one set of names.",
@@ -3514,6 +3531,15 @@ window.ArkismI18nEN = {
   "최근 턴": "Recent turns"
  },
  "patterns": {
+  "{0} · 동시에": "{0} · in parallel",
+  "이미지는 {0}이 보고, 답은 이 전문가 이름으로 올려요": "{0} reads images, and the answer is posted as this expert",
+  "고정 {0}개 · 약 {1} 토큰 · 넣는 순서는 아래 표에서 바꿔요": "{0} pinned · about {1} tokens · reorder them in the table below",
+  "${0} · 한도 없음": "${0} · no cap",
+  "${0} · 넘으면 멈추고 물어봐요": "${0} · stops and asks when exceeded",
+  "{0} · {1} 토큰{2}{3}": "{0} · {1} tokens{2}{3}",
+  "직접 호출 · {0} · {1}": "Direct call · {0} · {1}",
+  "{0} · 새 팀": "{0} · new team",
+  "{0} 새 팀 빼기": "Remove new team {0}",
   "전문가 · @{0}": "Expert · @{0}",
   "'{0}' 전문가를 지울까요? 되돌릴 수 없어요.": "Delete the expert '{0}'? This can't be undone.",
   "모든 카테고리 {0}": "All categories {0}",
@@ -4937,3 +4963,56 @@ add(window.ArkismI18nEN.patterns, {
   "${0}을 다시 돌리지 못했어요 ({1}).": "Couldn't rerun ${0} ({1}).", "{0}개 실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.": "Queued {0} runs. The server runner will start within 10 seconds.",
   "자동화 {0} · 팀 {1}": "Automations {0} · Teams {1}", "자동화 {0}": "Automations {0}", "팀 {0}": "Teams {0}"
 }); }
+// 크루 › 전문가 (카드 목록 · 상세 팝업 · 새로 만들기)
+Object.assign(window.ArkismI18nEN.strings, {
+  "워크플로우 없음 · 지시대로 일해요": "No workflow · works from its instructions",
+  "워크플로우 연결": "Connect a workflow",
+  "+ 새 전문가": "+ New expert",
+  "페르소나와 워크플로우를 정해 시작해요": "Start by choosing a persona and a workflow",
+  "+ 새 카테고리": "+ New category",
+  "테스트": "Test",
+  "저장하지 않은 변경이 있어요. 버리고 닫을까요?": "You have unsaved changes. Discard them and close?",
+  "이름·소개를 쓰면 여기에 바로 보여요": "Type a name and intro and they show up here",
+  "@이름을 비울 수 없어요.": "The @name cannot be empty.",
+  "이미 쓰는 이름이에요.": "That name is already in use.",
+  "@이름 복사": "Copy @name",
+  "이름을 비울 수 없어요.": "The name cannot be empty.",
+  "어떻게 바꿀까요? 예: 배포 전에는 꼭 나한테 물어보게 해 줘": "What should change? e.g. Always ask me before deploying",
+  "어떻게 바꿀지": "What to change",
+  "초안 만들기": "Make a draft",
+  "저장하기 전에는 바뀌지 않아요": "Nothing changes until you save",
+  "모두 적용": "Apply all",
+  "어떻게 바꿀지 한 줄 써 주세요.": "Write one line on what to change.",
+  "AI가 제안을 만드는 중이에요…": "The AI is writing suggestions…",
+  "소개": "Intro",
+  "바꿀 곳이 없다고 해요. 말을 바꿔 다시 눌러 주세요.": "The AI found nothing to change. Reword and try again.",
+  "최근 30일 실행": "Runs in the last 30 days",
+  "모델·실행": "Model and run",
+  "최근 30일 호출": "Calls in the last 30 days",
+  "일하는 방법에 워크플로우를 연결하면 부를 때마다 실행 기록이 여기에 남아요. 직접 답한 호출은 위 숫자로만 보여요.": "Connect a workflow to its way of working and every call leaves a run record here. Calls it answered directly only show in the numbers above.",
+  "아직 호출 기록이 없어요.": "No call records yet.",
+  "(입력 없음)": "(no input)",
+  "기록을 불러오지 못했어요.": "Could not load the records.",
+  "예: 코드리뷰어": "e.g. Code reviewer",
+  "예: 커밋 전에 diff를 보고 고칠 곳을 알려 줘요": "e.g. Reads the diff before a commit and points out what to fix",
+  "Claude Code·Codex에서 @이름으로 부르면 이 전문가에게 일을 맡겨요": "Call @name in Claude Code or Codex to hand work to this expert",
+  "쓰던 내용을 버리고 새 팀을 만들러 갈까요?": "Discard what you wrote and go make a new team?",
+  "만들면 바로 @이름으로 부를 수 있어요": "Once made, you can call it with @name right away",
+  "또는 비슷한 것에서 시작": "Or start from something similar",
+  "팀에 넣기 (선택)": "Add to a team (optional)",
+  "만든 뒤 팀 화면에서도 넣을 수 있어요": "You can also add it from the team screen later",
+  "아직 팀이 없어요. 새 팀을 만들면 거기서 넣어요.": "No teams yet. Make a team and add it there."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}단계 넘으면 멈춤": "Stops past {0} steps",
+  "멈추는 조건 {0}": "Stops when {0}",
+  "약 {0}": "About {0}",
+  "제안 {0}개": "{0} suggestions",
+  "제안 {0}개를 받았어요.": "Got {0} suggestions.",
+  "고친 횟수 {0} · 마크다운으로 써요": "Edited {0} times · written in Markdown"
+});
+
+// 크루 › 전문가: 스킬 칩·상세
+Object.assign(window.ArkismI18nEN.strings, {"고정 풀기": "Unpin", "항상 먼저 넣기": "Always put in first", "스킬 목록에서 찾지 못했어요. 이름이 바뀌었거나 아직 승인되지 않았을 수 있어요.": "This skill is not in the skill list. It may have been renamed or not approved yet.", "켜면 이 전문가가 일할 때마다 이 스킬을 먼저 넣어요": "When on, this expert gets this skill first every time it works", "넣는 방식": "How it is put in", "전체는 길고 정확하게, 요약·참조는 짧게 넣어요": "Full is long and exact; summary and reference are short", "요약": "Summary", "참조": "Reference", "버전": "Version", "최신": "Latest", "최신으로": "Use latest", "이 전문가에서 빼기": "Remove from this expert", "항상 넣는 자료는 20개까지예요.": "You can pin up to 20 items.", "+ 스킬 추가": "+ Add skill"});
+Object.assign(window.ArkismI18nEN.patterns, {"고정 {0}개": "{0} pinned", "새 버전 v{0}이 있어요. 지금은 v{1}을 쓰고 있어요.": "A new version v{0} is available. Using v{1} now.", "고정 v{0}": "Pinned v{0}"});
+Object.assign(window.ArkismI18nEN.patterns, {"↺ {0}{1} → {2} · 최대 {3}번": "↺ {0}{1} → {2} · up to {3} times"});
