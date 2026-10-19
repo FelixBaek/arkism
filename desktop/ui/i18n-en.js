@@ -3542,7 +3542,17 @@ window.ArkismI18nEN = {
   "본대화와 부속 호출을 따로 세요": "Main and side calls counted apart",
   "부속 호출": "Side calls",
   "부속 호출은 Claude Code가 제목·요약·대화 압축 같은 일로 따로 보내는 호출이에요. 비용은 공개 가격으로 셈한 추정이에요.": "Side calls are the extra calls Claude Code makes for titles, summaries, compaction and the like. Costs are estimates from public prices.",
-  "최근 턴": "Recent turns"
+  "최근 턴": "Recent turns",
+  "켬": "On",
+  "끔": "Off",
+  "배경 사진 바꿈": "Cover photo changed",
+  "권한": "Access",
+  "되돌아가는": "Loop-back",
+  "단계 추가": "Step added",
+  "단계 뺌": "Step removed",
+  "단계 이은 순서 바꿈": "Step order changed",
+  "부르기": "Calling",
+  "채널 추가": "Add channel"
  },
  "patterns": {
   "@{0}로 부를 때만": "Only when called as @{0}",
@@ -4404,7 +4414,19 @@ window.ArkismI18nEN = {
   "실패 {0}건 · 토큰 {1} · {2}{3}": "{0} failed · {1} tokens · {2}{3}",
   "토큰 {0}": "{0} tokens",
   "{0}번째 턴": "turn {0}",
-  "본대화 {0} · 부속 {1}": "main {0} · side {1}"
+  "본대화 {0} · 부속 {1}": "main {0} · side {1}",
+  "일정·웹훅 {0} → {1}": "Schedule/webhook {0} → {1}",
+  "켜기 {0} → {1}": "Switch {0} → {1}",
+  "멈추는 조건 {0} → {1}": "Stop conditions {0} → {1}",
+  "진행 알림 채널 {0}개 → {1}개": "Progress channels {0} → {1}",
+  "단계 추가 {0}": "Step added {0}",
+  "단계 이름 {0} → {1}": "Step name {0} → {1}",
+  "{0} {1} 바꿈": "{0} {1} changed",
+  "단계 뺌 {0}": "Step removed {0}",
+  "되돌아가는 선 {0} 최대 {1}번": "Loop-back {0}, up to {1} times",
+  "되돌아가는 선 {0} {1} → {2}번": "Loop-back {0} {1} → {2} times",
+  "되돌아가는 선 {0} 뺌": "Loop-back {0} removed",
+  "채널에서 ${0}로 이 자동화를 부르게 연결해요": "Connect a channel so ${0} calls this automation"
  }
 };
 // adopt-digests: MEMORY › 기억 › 모아보기 주제 요약 · 나에 대한 요약, 확인해 주세요 › 병합 제안 (digests.js)

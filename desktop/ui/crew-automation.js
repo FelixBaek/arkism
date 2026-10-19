@@ -17,6 +17,41 @@ window.ArkismAutomation = (h) => {
   const fmtTokens = (n) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n)));
   const TRIGGERS = { manual: "직접", schedule: "일정", webhook: "웹훅", call: "$이름", discord: "디스코드", agent: "에이전트", test: "테스트" };
 
+  // 판 이력: what differs between two saved definitions, value by value ("조사 워커 3 → 5"). a = older, b = newer.
+  const short = (v) => { const t = String(v ?? "").trim(); return t.length > 24 ? "" : t; };
+  const limitText = (l) => [l?.max_minutes ? `${l.max_minutes}분` : "", l?.max_steps ? `단계 ${l.max_steps}번` : ""].filter(Boolean).join(" · ") || "없음";
+  const change = (label, x, y) => (short(x) && short(y) ? `${label} ${short(x)} → ${short(y)}` : `${label} 바꿈`);
+  function diffLines(a, b) {
+    const out = [];
+    const sub = (k, label, f = (v) => v) => { if (!same(a[k], b[k])) out.push(k === "name" || k === "handle" ? `${label} ${f(a[k]) || "없음"} → ${f(b[k]) || "없음"}` : change(label, f(a[k]), f(b[k]))); };
+    sub("name", "이름"); sub("handle", "$이름", (v) => (v ? `$${v}` : "")); sub("role", "설명"); sub("category", "카테고리");
+    for (const [k, label] of [["task", "하려는 일"], ["done", "끝난 기준"], ["output", "결과물"]]) if (!same(a.goal?.[k], b.goal?.[k])) out.push(change(label, a.goal?.[k], b.goal?.[k]));
+    if (!same(a.trigger, b.trigger)) out.push(`일정·웹훅 ${a.trigger?.kind === "schedule" ? h.cronText(a.trigger.cron) : a.trigger?.kind === "webhook" ? "웹훅" : "없음"} → ${b.trigger?.kind === "schedule" ? h.cronText(b.trigger.cron) : b.trigger?.kind === "webhook" ? "웹훅" : "없음"}`);
+    if (!!a.enabled !== !!b.enabled) out.push(`켜기 ${a.enabled ? "켬" : "끔"} → ${b.enabled ? "켬" : "끔"}`);
+    sub("model", "모델", (v) => v || "기본");
+    if (!same(a.limits, b.limits)) out.push(`멈추는 조건 ${limitText(a.limits)} → ${limitText(b.limits)}`);
+    if (!same(a.notify, b.notify)) out.push(`진행 알림 채널 ${(a.notify?.channels || []).length}개 → ${(b.notify?.channels || []).length}개`);
+    if (!same(a.cover, b.cover)) out.push("배경 사진 바꿈");
+    const A = new Map((a.graph?.nodes || []).map((n) => [n.id, n]));
+    const B = new Map((b.graph?.nodes || []).map((n) => [n.id, n]));
+    for (const [id, n] of B) {
+      const o = A.get(id);
+      if (!o) { out.push(`단계 추가 ${h.nodeTitle(n)}`); continue; }
+      const t = h.nodeTitle(n);
+      if ((o.title || "") !== (n.title || "")) out.push(`단계 이름 ${h.nodeTitle(o)} → ${t}`);
+      for (const [k, label] of [["model", "모델"], ["max_workers", "워커"], ["persona", "전문가"], ["collab", "협업"], ["access", "권한"]]) if (!same(o.config?.[k], n.config?.[k])) out.push(`${t} ${label} ${o.config?.[k] ?? "기본"} → ${n.config?.[k] ?? "기본"}`);
+      for (const k of ["goal", "prompt", "question", "code", "url"]) if (!same(o.config?.[k], n.config?.[k])) out.push(`${t} ${k === "prompt" ? "질문" : "목표"} 바꿈`);
+    }
+    for (const [id, n] of A) if (!B.has(id)) out.push(`단계 뺌 ${h.nodeTitle(n)}`);
+    const back = (g) => new Map((g?.edges || []).filter(h.isBack).map((e) => [`${e.from}>${e.to}`, e]));
+    const ba = back(a.graph), bb = back(b.graph);
+    const name = (e) => `${h.nodeTitle(B.get(e.from) || A.get(e.from) || { id: e.from })} → ${h.nodeTitle(B.get(e.to) || A.get(e.to) || { id: e.to })}`;
+    for (const [k, e] of bb) { const o = ba.get(k); if (!o) out.push(`되돌아가는 선 ${name(e)} 최대 ${e.max}번`); else if (o.max !== e.max) out.push(`되돌아가는 선 ${name(e)} ${o.max} → ${e.max}번`); }
+    for (const [k, e] of ba) if (!bb.has(k)) out.push(`되돌아가는 선 ${name(e)} 뺌`);
+    if (!same(a.graph?.edges, b.graph?.edges) && !out.some((x) => x.startsWith("되돌아가는") || x.startsWith("단계 추가") || x.startsWith("단계 뺌"))) out.push("단계 이은 순서 바꿈");
+    return out;
+  }
+
   function section(iconName, title, aside) {
     const s = el("section", "auto-sec");
     const head = el("div", "auto-sec-head");
@@ -226,7 +261,7 @@ window.ArkismAutomation = (h) => {
           top.append(card);
         }
       }
-      body.append(goalSection(), aiSection(), whenSection(), flowSection(), notifySection(), channelSection(), settingSection());
+      body.append(goalSection(), aiSection(), whenSection(), flowSection(), notifySection(), settingSection());
       if (!creating) body.append(manageSection());
       bar = el("div", "auto-bar");
       const save = button(creating ? "자동화 만들기" : "저장", "primary", null, doSave);
@@ -576,19 +611,78 @@ window.ArkismAutomation = (h) => {
       if (r) { live.run = r; pop.select("test"); }
     }
 
-    // 진행 알림: where progress goes. Saved with the workflow; bot tokens and connection state live in 설정 › 메신저.
+    // 진행 알림 + 채널 연결 (993:60224): one section. The rows are where progress goes (saved with the workflow, 저장 bar) and, below them, the
+    // bot channels that start this workflow (channel action kind "workflow", same data as the expert and team popups; those save at once:
+    // POST /v1/discord/bots/{id}/update with the whole channel list). Bot tokens and connection state live in 설정 › 메신저.
     function notifySection() {
       const s = el("section", "auto-sec");
       const head2 = el("div", "auto-sec-head");
       const t = el("h3", "");
       t.append(icon("chat-text"), "진행 알림");
-      head2.append(t, link("+ 채널 연결", () => { (d.notify ||= {}).channels = [...(d.notify.channels || []), { kind: "discord", channel: "", when: "events" }]; touch(); paint(); }), el("span", "grow"), el("small", "auto-dim", "설정 › 메신저에 연결한 곳으로 보내요"));
+      head2.append(t, link("+ 채널 연결", () => { (d.notify ||= {}).channels = [...(d.notify.channels || []), { kind: "discord", channel: "", when: "events" }]; touch(); paint(); }), el("span", "grow"), el("small", "auto-dim", "진행 상황을 어디로 보낼지 정해요 · 봇은 설정 › 메신저에서 연결해요"));
       const list = el("div", "auto-box");
       const channels = () => d.notify?.channels || [];
       const setNotify = (fn) => { d.notify ||= {}; fn(d.notify); if (!d.notify.channels?.length && !d.notify.moments) delete d.notify; touch(); };
+      const st = { bots: creating ? [] : null, add: null, known: {} };
+      const botOf = (r) => (r?.discord_bot ? { ...r.discord_bot, id: r.id, revision: r.revision } : r);
+      const alive = () => pop?.dialog.isConnected;
+      const saveBot = async (b, chans, okText) => {
+        try {
+          const saved = await request(`/v1/discord/bots/${encodeURIComponent(b.id)}/update`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: b.revision,
+            bot: { name: b.name, channels: chans, allowed: b.allowed || { user_ids: [], role_ids: [] }, ...(b.target ? { target: b.target } : {}), ...(b.guild_id ? { guild_id: b.guild_id } : {}) } }) });
+          Object.assign(b, saved?.id ? botOf(saved) : { channels: chans, revision: (b.revision || 0) + 1 });
+          notice(okText);
+        } catch (e) { notice(h.errorText(e)); }
+        if (alive()) paint();
+      };
+      // The bot channels that call this workflow: 메신저 · 채널 · 시작 방식 (자동 시작 / 부를 때만) · 빼기.
+      function botRows() {
+        const bots = st.bots || [];
+        const mine = bots.flatMap((b) => (b.channels || []).filter((c) => c.action?.kind === "workflow" && c.action.id === rec?.id).map((c) => ({ c, b })));
+        const rows = mine.map(({ c, b }) => {
+          const r = el("div", "auto-row notify");
+          const mode = pill(c.auto_start ? "글이 올라오면 시작" : `$${rec.crew.handle}로 부를 때만`, () => saveBot(b, b.channels.map((x) => (x === c ? { ...x, auto_start: !x.auto_start } : x)), "바꿨어요."));
+          mode.title = "눌러서 바꿔요";
+          const warn = ["needs_permission", "token_invalid"].includes(b.state);
+          r.append(el("span", "auto-key chan", `디스코드 · #${c.name || c.channel_id}`), el("small", "auto-dim", b.name || ""), ...(warn ? [el("span", "wf-badge small warn", "확인 필요")] : []), el("span", "grow"), mode,
+            pill("빼기", () => { if (confirm(`#${c.name || c.channel_id} 연결을 뺄까요?`)) saveBot(b, b.channels.filter((x) => x !== c), "연결을 뺐어요.").catch(() => {}); }));
+          return r;
+        });
+        if (!creating && bots.length) {
+          const r = el("div", "auto-row");
+          r.append(el("span", "auto-key", "부르기"), el("span", "auto-dim", `채널에서 $${rec.crew.handle}로 이 자동화를 부르게 연결해요`), pill(st.add ? "닫기" : "채널 추가", () => { st.add = st.add ? null : { bot: bots[0].id }; paint(); }));
+          rows.push(r);
+        }
+        if (st.add && bots.length) {
+          const f = st.add;
+          const b = bots.find((x) => x.id === f.bot) || bots[0];
+          const known = st.known[b.id];
+          if (known === undefined) {
+            st.known[b.id] = null;
+            request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${query()}`).then((r) => r.items || [], () => []).then((items) => { st.known[b.id] = items; if (alive()) paint(); });
+          }
+          const row = el("div", "auto-row");
+          const botSel = h.select(bots.map((x) => [x.id, x.name || x.id]), b.id);
+          botSel.setAttribute("aria-label", "봇");
+          botSel.addEventListener("change", () => { f.bot = botSel.value; paint(); });
+          const chSel = h.select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], "");
+          chSel.setAttribute("aria-label", "채널");
+          row.append(botSel, chSel, el("span", "grow"), pill("연결", () => {
+            const id = chSel.value;
+            if (!id) { notice("채널을 골라 주세요."); return; }
+            if ((b.channels || []).some((x) => x.channel_id === id) && !confirm("이 채널은 이미 다른 곳에 연결돼 있어요. 이 자동화로 바꿀까요?")) return;
+            const ch = { channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "workflow", id: rec.id }, auto_start: false };
+            st.add = null;
+            saveBot(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.").catch(() => {});
+          }));
+          rows.push(row);
+        }
+        return { rows, count: mine.length };
+      }
       function paint() {
         list.replaceChildren();
-        if (!channels().length) {
+        const bot = botRows();
+        if (!channels().length && !bot.count) {
           const empty = el("div", "auto-row");
           empty.append(el("span", "auto-dim", "아직 연결한 채널이 없어요 · 디스코드·텔레그램·슬랙"), el("span", "grow"), pill("연결하기", () => { setNotify((n) => { n.channels = [{ kind: "discord", channel: "", when: "events" }]; }); paint(); }));
           list.append(empty);
@@ -612,6 +706,7 @@ window.ArkismAutomation = (h) => {
           r.append(kind, ch, el("span", "grow"), ...(c.kind === "discord" ? [el("small", "auto-dim", "준비 중")] : []), when, del);
           list.append(r);
         });
+        list.append(...bot.rows);
         const mo = el("div", "auto-row");
         const chips = el("span", "auto-chips");
         const cur = () => d.notify?.moments || DEFAULT_MOMENTS;
@@ -624,75 +719,6 @@ window.ArkismAutomation = (h) => {
         }
         mo.append(el("span", "auto-key", "알림 시점"), el("span", "grow"), chips);
         list.append(mo);
-      }
-      paint();
-      s.append(head2, list);
-      return s;
-    }
-
-    // 채널 연결 (1052:65139): the bot channels that start this workflow (channel action kind "workflow"). Same data as the expert and team popups;
-    // changes save at once (POST /v1/discord/bots/{id}/update with the whole channel list), not with the 저장 bar.
-    function channelSection() {
-      const s = el("section", "auto-sec");
-      const head2 = el("div", "auto-sec-head");
-      const t = el("h3", "");
-      t.append(icon("chat-text"), "채널 연결");
-      const add = link("+ 채널 추가", () => { st.add = st.add ? null : { bot: st.bots?.[0]?.id || "" }; paint(); });
-      head2.append(t, ...(creating ? [] : [add]), el("span", "grow"), el("small", "auto-dim", "어디서 이 자동화를 부를지 정해요 · 봇 토큰·연결 상태는 디스코드 봇 설정에서"));
-      const list = el("div", "auto-box");
-      const st = { bots: creating ? [] : null, add: null, known: {} };
-      const botOf = (r) => (r?.discord_bot ? { ...r.discord_bot, id: r.id, revision: r.revision } : r);
-      const alive = () => pop?.dialog.isConnected;
-      const saveBot = async (b, channels, okText) => {
-        try {
-          const saved = await request(`/v1/discord/bots/${encodeURIComponent(b.id)}/update`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: b.revision,
-            bot: { name: b.name, channels, allowed: b.allowed || { user_ids: [], role_ids: [] }, ...(b.target ? { target: b.target } : {}), ...(b.guild_id ? { guild_id: b.guild_id } : {}) } }) });
-          Object.assign(b, saved?.id ? botOf(saved) : { channels, revision: (b.revision || 0) + 1 });
-          notice(okText);
-        } catch (e) { notice(h.errorText(e)); }
-        if (alive()) paint();
-      };
-      function paint() {
-        list.replaceChildren();
-        const bots = st.bots || [];
-        const mine = bots.flatMap((b) => (b.channels || []).filter((c) => c.action?.kind === "workflow" && c.action.id === rec?.id).map((c) => ({ c, b })));
-        for (const { c, b } of mine) {
-          const r = el("div", "auto-row notify");
-          const mode = pill(c.auto_start ? "글이 올라오면 시작" : `$${rec.crew.handle}로 부를 때만`, () => saveBot(b, b.channels.map((x) => (x === c ? { ...x, auto_start: !x.auto_start } : x)), "바꿨어요."));
-          mode.title = "눌러서 바꿔요";
-          const warn = ["needs_permission", "token_invalid"].includes(b.state);
-          r.append(el("span", "auto-key", `디스코드 · #${c.name || c.channel_id}`), el("small", "auto-dim", b.name || ""), ...(warn ? [el("span", "wf-badge small warn", "확인 필요")] : []), el("span", "grow"), mode,
-            pill("빼기", () => { if (confirm(`#${c.name || c.channel_id} 연결을 뺄까요?`)) saveBot(b, b.channels.filter((x) => x !== c), "연결을 뺐어요.").catch(() => {}); }));
-          list.append(r);
-        }
-        const note = (text) => { const r = el("div", "auto-row"); r.append(el("span", "auto-dim", text)); list.append(r); };
-        if (creating) note("자동화를 만든 뒤 채널을 연결해요.");
-        else if (st.bots === null) note("불러오는 중…");
-        else if (!mine.length) note(bots.length ? "연결된 채널이 없어요." : "연결된 디스코드 봇이 없어요. 디스코드 화면에서 봇을 먼저 추가해 주세요.");
-        if (st.add && bots.length) {
-          const f = st.add;
-          const b = bots.find((x) => x.id === f.bot) || bots[0];
-          const known = st.known[b.id];
-          if (known === undefined) {
-            st.known[b.id] = null;
-            request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${query()}`).then((r) => r.items || [], () => []).then((items) => { st.known[b.id] = items; if (alive()) paint(); });
-          }
-          const row = el("div", "auto-row");
-          const botSel = h.select(bots.map((x) => [x.id, x.name || x.id]), b.id);
-          botSel.setAttribute("aria-label", "봇");
-          botSel.addEventListener("change", () => { f.bot = botSel.value; paint(); });
-          const chSel = h.select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], "");
-          chSel.setAttribute("aria-label", "채널");
-          row.append(botSel, chSel, el("span", "grow"), pill("연결", () => {
-            const id = chSel.value;
-            if (!id) { notice("채널을 골라 주세요."); return; }
-            if ((b.channels || []).some((x) => x.channel_id === id) && !confirm("이 채널은 이미 다른 곳에 연결돼 있어요. 이 자동화로 바꿀까요?")) return;
-            const ch = { channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "workflow", id: rec.id }, auto_start: false };
-            st.add = null;
-            saveBot(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.").catch(() => {});
-          }));
-          list.append(row);
-        }
       }
       if (!creating) request(`/v1/discord?${query()}`).then((r) => { st.bots = (r.bots || []).map(botOf); }, () => { st.bots = []; }).then(() => { if (alive()) paint(); });
       paint();
@@ -859,7 +885,8 @@ window.ArkismAutomation = (h) => {
       const text = h.readable(cr.summary);
       wrap.append(text ? el("pre", "auto-run-out", text) : el("p", "auto-hint", cr.status === "running" ? "중간 결과가 생기면 여기에 보여요." : ""));
       const foot = el("div", "auto-run-foot");
-      foot.append(el("small", "auto-dim", [h.runTookText(run), h.ago(run.created_at)].filter(Boolean).join(" · ")), el("span", "grow"));
+      const tokens = Object.values(nodes).reduce((n, x) => n + (x.tokens || 0), 0);
+      foot.append(el("small", "auto-dim", [tokens ? `${tokens.toLocaleString()} 토큰` : "", h.runTookText(run), h.ago(run.created_at)].filter(Boolean).join(" · ")), el("span", "grow"));
       foot.append(link("그래프로 보기", () => leave(() => h.openGraph(rec, { run }))));
       if (cr.status === "running" || cr.status === "waiting") foot.append(button("멈추기", "ghost small", null, async () => { await h.stopRun(run); live.run = (await request(`/v1/crew/runs/${encodeURIComponent(run.id)}?${query()}`).catch(() => run)); pop.select("test"); }));
       wrap.append(foot);
@@ -877,8 +904,7 @@ window.ArkismAutomation = (h) => {
       const vbox = el("div", "tm-hist");
       ver.append(vh, vbox);
       const pad2 = (n) => String(n).padStart(2, "0");
-      const LABELS = CHANGE;
-      const what = (a, b) => LABELS.filter(([k]) => !same(a[k], b[k])).map(([k, l]) => (k === "name" ? `이름 ${a.name || "없음"} → ${b.name || "없음"}` : k === "model" ? `모델 ${a.model || "기본"} → ${b.model || "기본"}` : `${l} 바꿈`));
+      const what = (a, b) => diffLines(a, b);
       const open = new Set();
       let items = null;
       const paintVersions = () => {
@@ -924,6 +950,21 @@ window.ArkismAutomation = (h) => {
       const list = el("div", "wf-runs");
       sec.append(head2, list);
       body.append(sec);
+      // One run as one line (998:60693): ✓ done · ! stopped or failed · ● live, time, how it started, what was asked, then how it went.
+      const MARK = { succeeded: "✓", failed: "!", stopped: "!", waiting: "●", running: "●" };
+      const runLine = (r) => {
+        const cr = r.crew_run || {};
+        const at = new Date(r.created_at);
+        const row = el("button", `auto-runline st-${cr.status || ""}`);
+        row.type = "button";
+        const tokens = Object.values(cr.nodes || {}).reduce((n, x) => n + (x.tokens || 0), 0);
+        const bad = ["failed", "stopped"].includes(cr.status);
+        const err = bad ? (Object.values(cr.nodes || {}).find((n) => n.status === "failed")?.error || h.readable(cr.summary).split(/[.。]/)[0]).slice(0, 40) : "";
+        const end = bad ? [h.RUN_LABEL[cr.status], err].filter(Boolean).join(" · ") : cr.status === "running" || cr.status === "waiting" ? h.RUN_LABEL[cr.status] : [h.runTookText(r), tokens ? `${fmtTokens(tokens)} 토큰` : ""].filter(Boolean).join(" · ");
+        row.append(el("span", "auto-runline-mark", MARK[cr.status] || "○"), el("time", "", isNaN(at) ? "" : `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), el("small", "", TRIGGERS[cr.trigger] || ""), el("span", "auto-runline-title", h.runRequest(cr) || h.readable(cr.summary) || rec.crew.name), el("small", "auto-runline-end", end));
+        row.addEventListener("click", () => leave(() => h.openGraph(rec, { run: r })));
+        return row;
+      };
       let all = false;
       const load = async () => {
         count.textContent = "불러오는 중…";
@@ -931,12 +972,7 @@ window.ArkismAutomation = (h) => {
         try { items = (await request(`/v1/crew/runs?${query({ crew_id: rec.id, ...(pick.value !== "all" ? { status: pick.value } : {}), limit: 30 })}`)).items || []; } catch (_) { /* empty */ }
         if (!pop.dialog.isConnected) return;
         count.textContent = `${items.length}건`;
-        list.replaceChildren(...(all ? items : items.slice(0, 10)).map((r) => {
-          const row = h.runRow(r, () => leave(() => h.openGraph(rec, { run: r })));
-          const t = TRIGGERS[r.crew_run?.trigger];
-          if (t) row.querySelector("small")?.prepend(`${t} · `);
-          return row;
-        }));
+        list.replaceChildren(...(all ? items : items.slice(0, 10)).map(runLine));
         if (items.length > 10 && !all) list.append(button("더 보기", "ghost small", null, () => { all = true; void load(); }));
         if (!items.length) list.append(el("p", "wf-empty", pick.value !== "all" ? "이 상태인 실행이 없어요." : "이 자동화는 아직 실행한 적이 없어요."));
       };
@@ -956,5 +992,5 @@ window.ArkismAutomation = (h) => {
     return pop;
   }
 
-  return { open: (rec, tab) => open(rec, tab), create: () => open(null) };
+  return { open: (rec, tab) => open(rec, tab), create: () => open(null), diffLines };
 };
