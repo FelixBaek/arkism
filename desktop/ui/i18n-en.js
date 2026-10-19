@@ -4872,3 +4872,12 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {"비슷한 후보 {0}개": "{0} similar candidates"});
+
+Object.assign(window.ArkismI18nEN.strings, {
+  "이전 단계": "Previous stage",
+  "다음 단계": "Next stage",
+  "24시간 전 ··· 지금": "24 hours ago ··· now",
+  "지금 보여 줄 항목이 없어요.": "Nothing to show right now.",
+  "전체 화면으로": "Open full screen"
+});
+Object.assign(window.ArkismI18nEN.patterns, {"{0} / {1} 단계": "Stage {0} / {1}"});
