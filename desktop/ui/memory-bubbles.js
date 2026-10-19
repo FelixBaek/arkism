@@ -4,7 +4,7 @@
 window.ArkismMemoryBubbles = (() => {
   "use strict";
   // Line styles = the legend bar (v4-overview.css .ov-map-e-*): 지지 solid, 관련 dotted, 충돌 red dashed, 대체 purple dotted.
-  const EDGE = { supports: { c: "#6fbf8f", dash: [] }, same_session: { c: "#9a9a94", dash: [1, 5] }, conflicts: { c: "#ff5160", dash: [5, 4] }, supersedes: { c: "#8b7cf6", dash: [1, 4] } };
+  const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "지지" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "관련" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "충돌" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "대체" } };
   const PAD = { l: 18, r: 18, t: 84, b: 76 }; // top clears the tabs + group labels, bottom clears the legend bar
   const SPRING = { len: 60, k: 0.5 };          // weak pull along a relation (same group only, attract only)
 
@@ -74,8 +74,13 @@ window.ArkismMemoryBubbles = (() => {
       for (const l of links) {
         if (l.a.g !== l.b.g) continue; const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
         // the selected memory holds its neighbours a little apart so the relation lines between them have room to show
-        const open = sel && (l.a.id === sel || l.b.id === sel), len = open ? (l.a.r + l.b.r) * 2.2 : SPRING.len;
+        const open = sel && (l.a.id === sel || l.b.id === sel), len = open ? (l.a.r + l.b.r) * 3.4 : SPRING.len;
         if (!open && d <= len) continue; const f = (d - len) * (open ? 3 : SPRING.k) * dt, fx = dx / d * f, fy = dy / d * f; l.a.vx += fx; l.a.vy += fy; l.b.vx -= fx; l.b.vy -= fy;
+      }
+      const sp = sel && byId.get(sel);
+      if (sp) { // clear a little room around the selected memory: neighbours sit on their springs, the rest drift out of the way
+        const nb = new Set(links.filter((l) => l.a === sp || l.b === sp).map((l) => (l.a === sp ? l.b : l.a)));
+        for (const p of items) { if (p === sp || nb.has(p) || p.g !== sp.g) continue; const dx = p.x - sp.x, dy = p.y - sp.y, d = Math.hypot(dx, dy) || 1, room = sp.r * 2 + p.r * 3; if (d < room) { p.vx += dx / d * (room - d) * 6 * dt; p.vy += dy / d * (room - d) * 6 * dt; } }
       }
       let e = 0;
       for (const p of items) { p.vx *= damp; p.vy *= damp; p.x += p.vx * dt * 1.6; p.y += p.vy * dt * 1.6; e += p.vx * p.vx + p.vy * p.vy; }
@@ -132,22 +137,31 @@ window.ArkismMemoryBubbles = (() => {
         ctx.globalAlpha = dim ? 0.22 : 0.55; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.ellipse(p.x - p.r * 0.32, p.y - p.r * 0.42, p.r * 0.28, p.r * 0.16, -0.6, 0, 7); ctx.fill();
         if (!p.g.top || p.y - p.r < p.g.top.y - p.g.top.r) p.g.top = p;
       }
-      const bg = tok("--nc-canvas", "#0b0b0b");
-      for (const l of hot) { // focused relations: on top, centre to centre as an arc bowed away from the cluster, so they read even when the bubbles touch
+      const bg = tok("--nc-canvas", "#0b0b0b"), tr = (x) => window.ArkismI18n?.translate(x) || x, tags = [];
+      for (const l of hot) { // focused relations (Figma 기억 지도): thin soft curves on top of the bubbles, the relation name in a pill at the middle
         const s = EDGE[l.t] || EDGE.supports, dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
         const mx = (l.a.x + l.b.x) / 2, my = (l.a.y + l.b.y) / 2, gx = (l.a.g.cx + l.b.g.cx) / 2, gy = (l.a.g.cy + l.b.g.cy) / 2;
         let nx = -dy / d, ny = dx / d; if ((mx - gx) * nx + (my - gy) * ny < 0) { nx = -nx; ny = -ny; }
-        const bow = Math.max(28, d * 0.35), cx = mx + nx * bow, cy = my + ny * bow;
-        ctx.globalAlpha = 1; ctx.setLineDash([]); ctx.strokeStyle = bg; ctx.lineWidth = 6; // halo keeps the line apart from the bubbles under it
-        ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.quadraticCurveTo(cx, cy, l.b.x, l.b.y); ctx.stroke();
-        ctx.strokeStyle = s.c; ctx.lineWidth = 2.5; ctx.setLineDash(s.dash.map((v) => v * 2)); ctx.shadowColor = s.c; ctx.shadowBlur = 6;
-        ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.quadraticCurveTo(cx, cy, l.b.x, l.b.y); ctx.stroke();
-        ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.shadowColor = "transparent";
-        for (const q of [l.a, l.b]) { ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, 7); ctx.fill(); ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(q.x, q.y, 3.5, 0, 7); ctx.fill(); }
-        const o = foci.has(l.a.id) ? l.b : l.a; // ring the memory on the other end in the relation colour
-        ctx.strokeStyle = s.c; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 2, 0, 7); ctx.stroke();
+        const bow = Math.max(10, d * 0.16), cx = mx + nx * bow, cy = my + ny * bow;
+        const edge = (q) => { const ex = cx - q.x, ey = cy - q.y, el = Math.hypot(ex, ey) || 1; return [q.x + ex / el * (q.r + 2), q.y + ey / el * (q.r + 2)]; }; // start at the rim, not inside the bubble
+        const [ax, ay] = edge(l.a), [bx, by] = edge(l.b), col = l.t === "same_session" ? tok("--nc-muted", s.c) : s.c;
+        const path = () => { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(cx, cy, bx, by); ctx.stroke(); };
+        ctx.globalAlpha = 0.55; ctx.strokeStyle = bg; ctx.lineWidth = 4; ctx.setLineDash([]); path(); // faint backing so the line reads over bubbles
+        ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.setLineDash(s.dash); path();
+        if (d > l.a.r + l.b.r + 40) tags.push([s, col, (mx + cx) / 2, (my + cy) / 2]); // curve midpoint; skip the pill when the pair sits too close
       }
-      for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 4), 0, 7); ctx.stroke(); }
+      ctx.setLineDash([]); ctx.font = `500 11px ${tok("--sans", "sans-serif")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (const [s, c, x, y] of tags) {
+        const t = tr(s.n), w = ctx.measureText(t).width + 16;
+        ctx.globalAlpha = 1; ctx.fillStyle = bg; ctx.strokeStyle = c; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.roundRect(x - w / 2, y - 10, w, 20, 10); ctx.fill(); ctx.globalAlpha = 0.7; ctx.stroke();
+        ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, x, y + 0.5);
+      }
+      for (const id of [sel, kb].filter(Boolean)) { const p = byId.get(id); if (!p) continue; // soft halo + dashed orbit like the Figma focus node
+        ctx.globalAlpha = 0.07; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 14, 0, 7); ctx.fill();
+        ctx.globalAlpha = 0.45; ctx.strokeStyle = p.color; ctx.lineWidth = 1; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 9, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+      }
+      for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 2.5), 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
       for (const g of groups) { if (!g.top) continue; const [x, y] = scr(g.top.x, g.top.y - g.top.r); g.el.style.transform = `translate(${x}px,${y - 8 * zoom}px) translate(-50%,-100%)`; }
       const id = hover || kb, p = id && byId.get(id), t = p && tip(id);
