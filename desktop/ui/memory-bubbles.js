@@ -63,7 +63,7 @@ window.ArkismMemoryBubbles = (() => {
     function linkUp() { links = edgesAll.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({ a: byId.get(e.from), b: byId.get(e.to), t: e.t })); }
     function setGroup(k) { if (k === mode) return; mode = k; placePill(); regroup(); kick(30); run(); }
     function kick(a) { for (const p of items) { p.vx += (Math.random() - 0.5) * 2 * a; p.vy += (Math.random() - 0.5) * 2 * a; } }
-    function setSelected(id) { const n = id && byId.has(id) ? id : null; if (n && n !== sel) announce(n); sel = n; draw(); }
+    function setSelected(id) { const n = id && byId.has(id) ? id : null; if (n && n !== sel) announce(n); const moved = n !== sel; sel = n; if (moved) run(); draw(); }
     function setEdgeAll(v) { showAll = !!v; draw(); }
     function setZoom(z) { zoom = z; draw(); }
     function announce(id) { const t = tip(id); if (t) live.textContent = `${t.text} ${t.meta}`; }
@@ -71,7 +71,12 @@ window.ArkismMemoryBubbles = (() => {
     function step(dt) {
       const damp = Math.exp(-5 * dt);
       for (const p of items) { p.vx += (p.g.cx - p.x) * 5 * dt; p.vy += (p.g.cy - p.y) * 5 * dt; }
-      for (const l of links) { if (l.a.g !== l.b.g) continue; const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1; if (d <= SPRING.len) continue; const f = (d - SPRING.len) * SPRING.k * dt, fx = dx / d * f, fy = dy / d * f; l.a.vx += fx; l.a.vy += fy; l.b.vx -= fx; l.b.vy -= fy; }
+      for (const l of links) {
+        if (l.a.g !== l.b.g) continue; const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
+        // the selected memory holds its neighbours a little apart so the relation lines between them have room to show
+        const open = sel && (l.a.id === sel || l.b.id === sel), len = open ? (l.a.r + l.b.r) * 2.2 : SPRING.len;
+        if (!open && d <= len) continue; const f = (d - len) * (open ? 3 : SPRING.k) * dt, fx = dx / d * f, fy = dy / d * f; l.a.vx += fx; l.a.vy += fy; l.b.vx -= fx; l.b.vy -= fy;
+      }
       let e = 0;
       for (const p of items) { p.vx *= damp; p.vy *= damp; p.x += p.vx * dt * 1.6; p.y += p.vy * dt * 1.6; e += p.vx * p.vx + p.vy * p.vy; }
       energy = items.length ? e / items.length : 0;
@@ -93,6 +98,10 @@ window.ArkismMemoryBubbles = (() => {
       if (!raf && visible && W) { last = performance.now(); raf = requestAnimationFrame(frame); }
     }
 
+    // blend two colours (hex / rgb() / CSS names via a 1px canvas); cached per pair
+    const mixCache = new Map(), probe = doc.createElement("canvas").getContext("2d");
+    const rgb = (c) => { probe.fillStyle = "#000"; probe.fillStyle = c; const h = probe.fillStyle; if (h[0] === "#") return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); return h.match(/[\d.]+/g).slice(0, 3).map(Number); };
+    function mix(a, b, t) { const k = `${a}|${b}|${t}`; let v = mixCache.get(k); if (!v) { const x = rgb(a), y = rgb(b); v = `rgb(${x.map((n, i) => Math.round(n + (y[i] - n) * t)).join(",")})`; mixCache.set(k, v); } return v; }
     const scr = (x, y) => [W / 2 + (x - W / 2) * zoom, H / 2 + (y - H / 2) * zoom];
     function draw() {
       if (!W) return;
@@ -102,19 +111,43 @@ window.ArkismMemoryBubbles = (() => {
       const foci = new Set([hover, kb, sel].filter(Boolean)), near = new Set(foci);
       for (const l of links) if (foci.has(l.a.id) || foci.has(l.b.id)) { near.add(l.a.id); near.add(l.b.id); }
       ctx.lineCap = "round";
-      for (const l of links) { // under the bubbles, centre to centre, every frame
-        const on = foci.has(l.a.id) || foci.has(l.b.id); if (!on && !showAll) continue;
-        const s = EDGE[l.t] || EDGE.supports; ctx.globalAlpha = on ? 1 : foci.size ? 0.05 : 0.25; ctx.strokeStyle = s.c; ctx.lineWidth = on ? 2 : 1.2; ctx.setLineDash(s.dash);
+      const hot = [];
+      for (const l of links) { // quiet lines sit under the bubbles; lines of the focused memory are drawn on top (below)
+        const on = foci.has(l.a.id) || foci.has(l.b.id); if (on) { hot.push(l); continue; } if (!showAll) continue;
+        const s = EDGE[l.t] || EDGE.supports; ctx.globalAlpha = foci.size ? 0.05 : 0.3; ctx.strokeStyle = s.c; ctx.lineWidth = 1.2; ctx.setLineDash(s.dash);
         ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
       }
       ctx.setLineDash([]);
       for (const g of groups) g.top = null;
       for (const p of items) {
-        ctx.globalAlpha = !foci.size || near.has(p.id) ? 1 : 0.45; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,.28)"; ctx.beginPath(); ctx.arc(p.x - p.r * 0.3, p.y - p.r * 0.35, p.r * 0.35, 0, 7); ctx.fill();
-        if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 0 : 3), 0, 7); ctx.stroke(); }
+        const dim = foci.size && !near.has(p.id);
+        ctx.globalAlpha = dim ? 0.22 : 1;
+        // glossy sphere: lit top-left, darker rim, soft drop shadow
+        const gr = ctx.createRadialGradient(p.x - p.r * 0.35, p.y - p.r * 0.4, p.r * 0.1, p.x, p.y, p.r);
+        gr.addColorStop(0, mix(p.color, "#ffffff", 0.45)); gr.addColorStop(0.55, p.color); gr.addColorStop(1, mix(p.color, "#000000", 0.35));
+        ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = dim ? 0 : p.r * 0.6; ctx.shadowOffsetY = p.r * 0.15;
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = mix(p.color, "#ffffff", 0.3); ctx.lineWidth = 1; ctx.globalAlpha *= 0.6; ctx.beginPath(); ctx.arc(p.x, p.y, p.r - 0.5, 0, 7); ctx.stroke();
+        ctx.globalAlpha = dim ? 0.22 : 0.55; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.ellipse(p.x - p.r * 0.32, p.y - p.r * 0.42, p.r * 0.28, p.r * 0.16, -0.6, 0, 7); ctx.fill();
         if (!p.g.top || p.y - p.r < p.g.top.y - p.g.top.r) p.g.top = p;
       }
+      const bg = tok("--nc-canvas", "#0b0b0b");
+      for (const l of hot) { // focused relations: on top, centre to centre as an arc bowed away from the cluster, so they read even when the bubbles touch
+        const s = EDGE[l.t] || EDGE.supports, dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
+        const mx = (l.a.x + l.b.x) / 2, my = (l.a.y + l.b.y) / 2, gx = (l.a.g.cx + l.b.g.cx) / 2, gy = (l.a.g.cy + l.b.g.cy) / 2;
+        let nx = -dy / d, ny = dx / d; if ((mx - gx) * nx + (my - gy) * ny < 0) { nx = -nx; ny = -ny; }
+        const bow = Math.max(28, d * 0.35), cx = mx + nx * bow, cy = my + ny * bow;
+        ctx.globalAlpha = 1; ctx.setLineDash([]); ctx.strokeStyle = bg; ctx.lineWidth = 6; // halo keeps the line apart from the bubbles under it
+        ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.quadraticCurveTo(cx, cy, l.b.x, l.b.y); ctx.stroke();
+        ctx.strokeStyle = s.c; ctx.lineWidth = 2.5; ctx.setLineDash(s.dash.map((v) => v * 2)); ctx.shadowColor = s.c; ctx.shadowBlur = 6;
+        ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.quadraticCurveTo(cx, cy, l.b.x, l.b.y); ctx.stroke();
+        ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.shadowColor = "transparent";
+        for (const q of [l.a, l.b]) { ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(q.x, q.y, 5, 0, 7); ctx.fill(); ctx.fillStyle = s.c; ctx.beginPath(); ctx.arc(q.x, q.y, 3.5, 0, 7); ctx.fill(); }
+        const o = foci.has(l.a.id) ? l.b : l.a; // ring the memory on the other end in the relation colour
+        ctx.strokeStyle = s.c; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 2, 0, 7); ctx.stroke();
+      }
+      for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 4), 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
       for (const g of groups) { if (!g.top) continue; const [x, y] = scr(g.top.x, g.top.y - g.top.r); g.el.style.transform = `translate(${x}px,${y - 8 * zoom}px) translate(-50%,-100%)`; }
       const id = hover || kb, p = id && byId.get(id), t = p && tip(id);
