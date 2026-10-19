@@ -1,0 +1,36 @@
+/* 워크플로우 그래프 편집기 (198:2350): 24px 점 격자, 1.4px 선, 점 링, 노드 바닥 줄, 이름 붙은 입력 점, 노드 설정 팝업 */
+.g-stage { background-size: 24px 24px; }
+.g-edge { stroke-width: 1.4; }
+.g-port { box-sizing: border-box; width: 12px; height: 12px; border-width: 2px; }
+.g-port.unused { opacity: .45; }
+.g-node[data-kind="ai"] .g-port { border-color: var(--nc-accent); }
+.g-node[data-kind="http"] .g-port { border-color: var(--nc-amber); }
+.g-node[data-kind="human"] .g-port { border-color: var(--nc-muted); }
+.g-ins { display: flex; flex-direction: column; gap: 4px; margin-left: -18px; }
+.g-in { display: flex; align-items: center; gap: 6px; }
+.g-in .g-port.in { position: static; flex: none; }
+.g-in small { font: 400 calc(10px * var(--fs, 1))/1.45 var(--sans); }
+.g-node .g-icon .wf-mark { width: 28px; height: 28px; }
+.g-node-foot { display: none; align-items: center; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid var(--nc-line); }
+.g-node:hover .g-node-foot, .g-node.selected .g-node-foot { display: flex; }
+.g-node-foot small { font: 400 calc(10.5px * var(--fs, 1))/1.45 var(--sans); }
+.g-node-run { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 0; border-radius: 5px; background: none; color: var(--nc-muted); font: 500 calc(11px * var(--fs, 1))/1.45 var(--sans); cursor: pointer; }
+.g-node-run:hover { color: var(--nc-accent); }
+.g-node-run .icon { width: 11px; height: 11px; }
+.g-legend { position: absolute; right: 16px; bottom: 16px; display: flex; gap: 12px; padding: 6px 10px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); font: 400 calc(11px * var(--fs, 1))/1.45 var(--sans); color: var(--nc-quiet); }
+.g-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.g-legend-item .g-port { width: 9px; height: 9px; border-width: 1.5px; }
+.g-legend-item[data-kind="ai"] .g-port { border-color: var(--nc-accent); }
+.g-legend-item[data-kind="http"] .g-port { border-color: var(--nc-amber); }
+.g-legend-item[data-kind="human"] .g-port { border-color: var(--nc-muted); }
+
+.node-dialog { width: min(560px, calc(100vw - 48px)); }
+.node-dialog .dialog-head { padding: 20px 24px 16px; display: flex; align-items: center; gap: 12px; }
+.node-dialog .dialog-head > div { flex: 1; min-width: 0; }
+.node-dialog .dialog-head h2 { margin: 0; font-size: calc(15px * var(--fs, 1)); }
+.node-dialog .dialog-head p { margin: 2px 0 0; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.node-dialog .dialog-body { padding: 18px 24px; display: flex; flex-direction: column; gap: 14px; max-height: min(640px, calc(100vh - 220px)); overflow: auto; }
+.node-dialog .dialog-foot { padding: 14px 24px; display: flex; justify-content: space-between; gap: 8px; }
+.node-dialog .seg { display: flex; gap: 4px; }
+.node-dialog .seg button { padding: 5px 12px; border: 1px solid var(--nc-line); border-radius: 6px; background: none; color: var(--nc-muted); font: inherit; cursor: pointer; }
+.node-dialog .seg button.on { color: var(--nc-accent); border-color: var(--nc-accent); }

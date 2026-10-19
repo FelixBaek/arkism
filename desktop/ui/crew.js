@@ -38,6 +38,8 @@ window.ArkismCrew = (ctx) => {
     start: { label: "시작", sub: "$이름·화면에서 부르면", icon: "play", group: "시작" },
     schedule: { label: "일정 시작", sub: "정한 시간마다", icon: "calendar", group: "시작", hidden: true },
     webhook: { label: "웹훅 받기", sub: "주소로 요청이 오면", icon: "link", group: "시작", hidden: true },
+    expert: { label: "전문가", sub: "페르소나·모델이 정해진 채로 들어가요", icon: "brain", group: "전문가", hidden: true },
+    team: { label: "팀", sub: "여럿이 회의해 결론을 내요", icon: "users-three", group: "전문가", hidden: true },
     ai: { label: "AI 에이전트", sub: "도구를 쓰며 스스로 일해요", icon: "robot", group: "AI" },
     ai_once: { label: "AI 한 번 호출", sub: "질문 한 번 · 빠르고 싸요", icon: "sparkle", group: "AI" },
     code: { label: "코드", sub: "Go·셸로 결과 다듬기 · 토큰 0", icon: "code", group: "처리" },
@@ -50,9 +52,14 @@ window.ArkismCrew = (ctx) => {
     wait: { label: "기다리기", sub: "정한 시간 뒤 이어서", icon: "clock-counter-clockwise", group: "흐름" },
     subflow: { label: "하위 워크플로우", sub: "다른 워크플로우를 노드로", icon: "tree-structure", group: "흐름" },
     notify: { label: "알림 보내기", sub: "텔레그램·슬랙·메일", icon: "paper-plane", group: "알림·끝" },
-    end: { label: "보고하고 끝", sub: "부른 자리에 결과 돌려주기", icon: "flag", group: "알림·끝" }
+    end: { label: "보고하고 끝", sub: "부른 자리에 결과 돌려주기", icon: "flag", group: "알림·끝" },
+    n8n: { label: "n8n으로 보내기", sub: "위 노드로 안 되는 연동", icon: "plug", group: "그 밖의 연동" }
   };
-  const IS_AI = (t) => t === "ai" || t === "ai_once";
+  const IS_AI = (t) => t === "ai" || t === "ai_once" || t === "expert";
+  const HUMAN_KIND = { 시작: "흐름 노드", 처리: "처리 노드", 흐름: "흐름 노드", "알림·끝": "알림·연동 노드", "그 밖의 연동": "알림·연동 노드", 전문가: "전문가 노드", AI: "AI 노드" };
+  // Port colour of a node card: AI yellow · HTTP blue · 사람 확인 green · the rest grey (Figma 198:2350).
+  const KIND_OF = (t) => (IS_AI(t) || t === "team" ? "ai" : t === "http" || t === "n8n" ? "http" : t === "approval" ? "human" : "plain");
+  const MODES = { round_robin: "정해진 순서대로", moderator_picks: "사회자가 고름" };
   const PORTS = { condition: [["yes", "예"], ["no", "아니오"]], approval: [["approve", "승인"], ["reject", "거절"]], code: [["pass", "통과"], ["fail", "실패"]] };
   const ACCESS = [["read", "읽기만 (동시에 돌 수 있어요)"], ["write", "쓰기 (차례로 돌아요)"]];
   // Settings of the non-AI nodes: [key, label, kind, options]. Keys are what the run engine reads (contract.md).
@@ -60,16 +67,18 @@ window.ArkismCrew = (ctx) => {
     start: [], merge: [],
     schedule: [["cron", "언제 (분 시 일 월 요일)", "text", "0 9 * * 1-5"]],
     webhook: [["note", "메모", "text", "주소와 토큰은 서버에서 arkism-crew hook-url로 받아요"]],
-    code: [["lang", "언어", "select", [["go", "Go"], ["sh", "셸"]]], ["code", "코드 (stdin JSON → stdout JSON)", "code"], ["timeout", "최대 실행 시간 (기본 30s, 최대 2h)", "text", "30s"]],
-    http: [["method", "방식", "select", [["GET", "GET"], ["POST", "POST"], ["PUT", "PUT"], ["PATCH", "PATCH"], ["DELETE", "DELETE"]]], ["url", "주소", "text", "https://"], ["headers", "헤더 (한 줄에 하나)", "area"], ["body", "본문", "area"], ["key", "쓸 키 이름 (모델 설정에 저장한 키)", "text"]],
+    code: [["lang", "언어", "radio", [["go", "Go"], ["sh", "셸"]]], ["code", "코드 (stdin JSON → stdout JSON)", "code", "stdin JSON → 처리 → stdout JSON"], ["timeout", "최대 실행 시간", "text", "30s", "기본 30s · 최대 2h"]],
+    http: [["method", "방식", "select", [["GET", "GET"], ["POST", "POST"], ["PUT", "PUT"], ["PATCH", "PATCH"], ["DELETE", "DELETE"]]], ["url", "주소", "text", "https://"], ["headers", "헤더 (한 줄에 하나)", "area"], ["body", "본문", "area"], ["key", "쓸 키 이름", "text", "", "설정 › 모델 설정에 저장한 키"]],
     github: [["args", "gh 인자", "text", "pr create --fill"], ["repo_dir", "작업 폴더", "text", "/srv/…"]],
     approval: [["question", "물어볼 것", "area"]],
-    condition: [["expr", "조건 (예: in.tests.failed == 0 and in.risky == false)", "text"]],
+    condition: [["expr", "조건", "text", "in.tests.failed == 0", "예: in.tests.failed == 0 and in.risky == false"]],
     loop: [["path", "목록 위치", "text", "in.items"], ["concurrency", "동시에 도는 개수", "text", "1"]],
-    wait: [["duration", "기다릴 시간 (예: 30m, 2h)", "text", "30m"]],
-    subflow: [["workflow", "부를 워크플로우", "workflow"], ["task", "넘길 일 ({{input}}에 앞 결과가 들어가요)", "area"]],
-    notify: [["channel", "보내는 곳", "select", [["telegram", "텔레그램"], ["slack", "슬랙"], ["email", "메일"]]], ["to", "받는 곳 이름 (서버 notify.json)", "text"], ["message", "보낼 말", "area"]],
-    end: [["message", "보고 형식", "text", "요약 + 링크"]]
+    wait: [["duration", "기다릴 시간", "text", "30m", "예: 30m, 2h"]],
+    subflow: [["workflow", "부를 워크플로우", "workflow"], ["task", "넘길 일", "area", "", "{{input}}에 앞 결과가 들어가요"]],
+    notify: [["channel", "보내는 곳", "radio", [["telegram", "텔레그램"], ["slack", "슬랙"], ["email", "메일"]]], ["to", "받는 곳 이름", "text", "", "서버 notify.json에 적은 이름"], ["message", "보낼 말", "area"]],
+    end: [["message", "보고 형식", "text", "요약 + 링크", "부른 대화나 화면에 이 형식으로 돌려줘요."]],
+    n8n: [["url", "n8n 웹훅 주소", "text", "https://automation.example.com/webhook/…"], ["mode", "결과 받기", "radio", [["sync", "바로 응답 (짧은 일)"], ["async", "끝나면 알려줌 (오래 걸리는 일)"]]], ["timeout", "기다릴 최대 시간", "text", "30m", "오래 걸리는 일은 n8n이 끝나면 결과를 보내 줘요."]],
+    expert: [], team: []
   };
 
   // ---------------------------------------------------------------- data
@@ -1359,6 +1368,13 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     Object.assign(ed, { sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false,
       graphMode: !!opts.graphMode, review: !!opts.review, suggestions: null, reviewBusy: false, run: opts.run || null, runList: false });
     if (opts.select && ed.graph.nodes.some((n) => n.id === opts.select)) ed.sel = opts.select;
+    // The newest run of this workflow: each selected node's bottom row shows how that node did there.
+    ed.last = null;
+    if (!ed.run) request(`/v1/crew/runs?${query({ crew_id: rec.id, limit: 1 })}`).then((r) => {
+      if (ed.rec !== rec || !(r.items || []).length) return;
+      ed.last = r.items[0];
+      if (state.view === "graph" && !nodeDlg && !ed.run) render(false);
+    }, () => {});
     state.view = "graph";
     state.selected = null;
     render();
@@ -1404,8 +1420,9 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     const g = ed.graph;
     const anchor = g.nodes.find((n) => n.id === ed.sel) || g.nodes.filter((n) => n.type !== "end").at(-1) || g.nodes.at(-1);
     const n = { id: uid(type === "ai_once" ? "once" : type), type, title: preset.title || NODES[type].label, x: (anchor?.x || 0) + 260, y: anchor?.y || 120, config: { ...(preset.config || {}) } };
-    for (const [k, , kind, opts] of FIELDS[type] || []) if (kind === "select" && n.config[k] === undefined) n.config[k] = opts[0][0];
-    if (type === "ai") Object.assign(n.config, { goal: "{{input}}", access: "read", ...preset.config });
+    for (const [k, , kind, opts] of FIELDS[type] || []) if ((kind === "select" || kind === "radio") && n.config[k] === undefined) n.config[k] = opts[0][0];
+    if (type === "ai" || type === "expert") Object.assign(n.config, { goal: "{{input}}", access: "read", ...preset.config });
+    if (type === "team") Object.assign(n.config, { topic: "{{input}}", ...preset.config });
     if (type === "ai_once") Object.assign(n.config, { prompt: "{{input}}", ...preset.config });
     if (type === "subflow") n.config.task ||= "{{input}}";
     g.nodes.push(n);
@@ -1421,6 +1438,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     ed.graphMode = true;
     touch();
     render(false);
+    openNodeDialog(n);
   }
   function removeNode(id) {
     const g = ed.graph;
@@ -1435,8 +1453,9 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
   const TAB_NAMES = { "저장한 페르소나": "페르소나" };
   function presetItems() {
     const out = [];
-    const order = ["AI", "저장한 페르소나", "시작", "처리", "흐름", "알림·끝"];
+    const order = ["전문가", "AI", "저장한 페르소나", "시작", "처리", "흐름", "알림·끝", "그 밖의 연동"];
     for (const [type, n] of Object.entries(NODES)) if (!n.hidden) out.push({ group: n.group, type, title: n.label, sub: n.sub, preset: {} });
+    for (const a of items().filter((r) => r.crew.type === "agent")) out.push({ group: "전문가", type: "expert", title: a.crew.name, sub: a.crew.model || "모델 자동", expert: a, preset: { title: a.crew.name, config: { expert: a.id } } });
     for (const p of personas()) out.push({ group: "저장한 페르소나", type: "ai", title: p.crew.name, sub: "AI 에이전트로 넣어요", persona: true, preset: { title: p.crew.name, config: { persona: p.id } } });
     return out.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
   }
@@ -1478,9 +1497,9 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
       const b = el("button", "g-preset");
       b.type = "button";
       const lead = el("span", "g-icon");
-      lead.append(icon(it.persona ? "users-three" : NODES[it.type].icon));
+      lead.append(it.expert ? avatarMark(it.expert.crew) : icon(it.persona ? "users-three" : NODES[it.type].icon));
       const t = el("div", "");
-      t.append(el("strong", "", it.title), el("small", "dim", it.sub));
+      t.append(el("strong", "", it.title), el("small", it.expert ? "dim mono" : "dim", it.sub));
       b.append(lead, t, icon("plus", "icon dim"));
       b.addEventListener("click", () => addNode(it.type, it.preset));
       list.append(b);
@@ -1496,6 +1515,12 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
       if (c.collab === "on") rows.push(["협업", `워커 최대 ${c.max_workers || 5} · 동시 ${c.concurrency || 3}`]);
       return rows;
     }
+    if (n.type === "expert") {
+      const a = byId(c.expert);
+      return [["모델", c.model || a?.crew.model || x?.model || "자동"], ["목표", c.goal && c.goal !== "{{input}}" ? c.goal : "앞 단계 결과로 일해요"]];
+    }
+    if (n.type === "team") return [["팀", byId(c.team)?.crew.name || "고르지 않았어요"], ["주제", c.topic && c.topic !== "{{input}}" ? c.topic : "앞 단계 결과"]];
+    if (n.type === "n8n") return [["주소", (c.url || "").replace(/^https?:\/\//, "") || "—"]];
     if (n.type === "ai_once") return [["모델", modelOf(n, x)], ["질문", c.prompt && c.prompt !== "{{input}}" ? c.prompt : "앞 단계 결과를 그대로 물어요"]];
     if (n.type === "subflow") return [["부르는 것", c.workflow ? `$${c.workflow.replace(/^\$/, "")}` : "고르지 않았어요"]];
     if (n.type === "code") return [["코드", `${c.lang === "sh" ? "셸" : "Go"} · ${(c.code || "").split("\n").length}줄 · 토큰 0`]];
@@ -1513,7 +1538,8 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
   }
   function nodeSub(n) {
     const c = n.config || {};
-    if (n.type === "ai") return [c.collab === "on" ? "에이전트 · 협업" : "에이전트", byId(c.persona)?.crew.name].filter(Boolean).join(" · ");
+    if (n.type === "ai" || n.type === "expert") return [c.collab === "on" ? "전문가 · 협업" : "전문가", n.type === "ai" ? byId(c.persona)?.crew.name : ""].filter(Boolean).join(" · ");
+    if (n.type === "team") return "팀 · 회의";
     if (n.type === "ai_once") return "한 번 호출";
     if (n.type === "code") return "코드 · 토큰 0";
     return NODES[n.type]?.label || n.type;
@@ -1545,9 +1571,11 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
       box.style.left = `${n.x}px`;
       box.style.top = `${n.y}px`;
       box.dataset.id = n.id;
+      box.dataset.kind = KIND_OF(n.type);
       const head = el("div", "g-node-head");
       const lead = el("span", "g-icon");
-      lead.append(icon(NODES[n.type]?.icon || "stack"));
+      const expertRec = n.type === "expert" ? byId(n.config?.expert) : null;
+      lead.append(expertRec ? avatarMark(expertRec.crew) : icon(NODES[n.type]?.icon || "stack"));
       const t = el("div", "");
       const sub = st ? [NODE_LABEL[st.status] || st.status, st.runs > 1 ? `${st.runs}회째` : ""].filter(Boolean).join(" · ") : nodeSub(n);
       t.append(el("strong", "", nodeTitle(n)), el("small", "dim", sub));
@@ -1559,12 +1587,31 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
         s.append(el("small", "dim", k), el("span", k === "모델" ? "mono" : "", v));
         box.append(s);
       }
-      if (!["start", "schedule", "webhook"].includes(n.type)) box.append(el("i", "g-port in"));
+      if (!["start", "schedule", "webhook"].includes(n.type)) {
+        // Several lines into one node: one named input point per line (GPT 의견 · Gemini 의견 …).
+        const incoming = g.edges.filter((e) => e.to === n.id);
+        if (incoming.length > 1) {
+          const ins = el("div", "g-ins");
+          for (const e of incoming) {
+            const row = el("div", "g-in");
+            const dot = el("i", "g-port in");
+            dot.dataset.edge = edgeKey(e);
+            const src = g.nodes.find((x) => x.id === e.from);
+            row.append(dot, el("small", "dim", src ? nodeTitle(src) : e.from));
+            ins.append(row);
+          }
+          head.after(ins);
+          box.append(ins);
+        } else {
+          const dot = el("i", `g-port in${incoming.length ? "" : " unused"}`);
+          box.append(dot);
+        }
+      }
       const portBox = el("div", "g-outs");
       for (const [port, label] of portsOf(n, g)) {
         const row = el("div", "g-out");
         if (label) row.append(el("small", "dim", label));
-        const dot = el("i", "g-port out");
+        const dot = el("i", `g-port out${g.edges.some((e) => e.from === n.id && (e.port || "") === port) ? "" : " unused"}`);
         dot.dataset.port = port;
         dot.title = "끌어서 다음 노드에 이어요";
         if (!ed.run) dot.addEventListener("pointerdown", (ev) => startLink(ev, n, port, canvas, svg));
@@ -1572,8 +1619,9 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
         portBox.append(row);
       }
       box.append(portBox);
+      if (!ed.run && WORK(n) && !ownerOf(rec)) box.append(nodeFoot(n));
       if (!ed.run) head.addEventListener("pointerdown", (ev) => startDrag(ev, n, box, canvas, svg));
-      box.addEventListener("click", (ev) => { ev.stopPropagation(); if (ed.sel !== n.id) selectOnCanvas(n.id); });
+      box.addEventListener("click", (ev) => { ev.stopPropagation(); if (!ed.run || ed.sel !== n.id) selectOnCanvas(n.id); });
       canvas.append(box);
       nodeEls.set(n.id, box);
     }
@@ -1637,6 +1685,16 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     if (!ed.run) tools.append(el("i", "g-sep"));
     tools.append(button("−", "ghost small", null, () => z(-0.1)), zoomOut, button("+", "ghost small", null, () => z(0.1)), el("i", "g-sep"), button("맞추기", "ghost small", null, fit));
     stage.append(tools);
+    if (!ed.menu) {
+      const legend = el("div", "g-legend");
+      for (const [k, label] of [["ai", "AI"], ["http", "HTTP"], ["human", "사람 확인"], ["plain", "시작·끝"]]) {
+        const it = el("span", "g-legend-item");
+        it.dataset.kind = k;
+        it.append(el("i", "g-port"), label);
+        legend.append(it);
+      }
+      stage.append(legend);
+    }
     if (ed.menu && !ed.run) {
       const menu = presetList();
       menu.addEventListener("click", (ev) => ev.stopPropagation());
@@ -1652,8 +1710,29 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
       window.ArkismPerf?.note("canvas.render", performance.now() - t0, g.nodes.length);
     });
   }
+  const edgeKey = (e) => `${e.from}>${e.to}:${e.port || ""}`;
+  // 노드 바닥 줄: the node's last result and ▷ 실행 (this node only); it shows on the selected or hovered node.
+  function nodeFoot(n) {
+    const foot = el("div", "g-node-foot");
+    const st = ed.last?.crew_run?.nodes?.[n.id];
+    foot.append(el("small", "dim", st && st.status !== "pending" ? [NODE_LABEL[st.status] || st.status, nodeDur(st)].filter(Boolean).join(" · ") : "아직 실행 안 함"));
+    const go = el("button", "g-node-run");
+    go.type = "button";
+    go.append(icon("play"), "실행");
+    go.title = "이 노드만 실행";
+    go.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+    go.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const saved = !ed.dirty && (ed.rec.crew.graph?.nodes || []).some((x) => x.id === n.id);
+      if (!saved) { notice("저장한 뒤에 실행할 수 있어요."); return; }
+      void startRun(ed.rec, "", n.id);
+    });
+    foot.append(go);
+    return foot;
+  }
+  // Both ends leave and enter flat; the handle is 45% of the gap, at least 40px (Figma 198:2350).
   function curve(a, b) {
-    const dx = Math.max(40, Math.abs(b.x - a.x) / 2);
+    const dx = Math.max(40, Math.abs(b.x - a.x) * 0.45);
     return `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}`;
   }
   // A back edge leaves the right side, arcs over the top and comes into the target from the left.
@@ -1661,7 +1740,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     const top = Math.min(a.y, b.y) - lift;
     // Labels of back edges that share a span sit at different points of the top line, not on each other.
     const at = 0.3 + 0.4 * (k % 2);
-    return { d: `M${a.x},${a.y} C${a.x + 60},${a.y} ${a.x + 60},${top} ${a.x - 40},${top} L${b.x + 40},${top} C${b.x - 60},${top} ${b.x - 60},${b.y} ${b.x},${b.y}`, mid: { x: b.x + (a.x - b.x) * at, y: top } };
+    return { d: `M${a.x},${a.y} C${a.x + 110},${a.y} ${a.x + 110},${top} ${a.x - 40},${top} L${b.x + 40},${top} C${b.x - 110},${top} ${b.x - 110},${b.y} ${b.x},${b.y}`, mid: { x: b.x + (a.x - b.x) * at, y: top } };
   }
   const edgeShape = (e, pa, pb, lift, k) => isBack(e) ? backCurve(pa, pb, lift, k) : { d: curve(pa, pb), mid: { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 } };
   function drawEdges(svg, labels, nodeEls) {
@@ -1675,7 +1754,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     // Read every port position before writing anything: a write between reads makes the browser lay out again each time.
     const points = ed.graph.edges.map((e) => {
       const a = nodeEls.get(e.from), b = nodeEls.get(e.to);
-      return a && b ? [outPoint(a, e.port), inPoint(b)] : [];
+      return a && b ? [outPoint(a, e.port), inPoint(b, e)] : [];
     });
     ed.graph.edges.forEach((e, i) => {
       const [pa, pb] = points[i];
@@ -1717,19 +1796,23 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     ed.selEdge = edge;
     const page = $("#table .graph-page");
     const side = page?.querySelector(":scope > .g-right");
-    if (ed.run || ed.review || !side) { render(false); return; }
-    const t0 = performance.now();
-    page.querySelectorAll(".g-node.selected").forEach((b) => b.classList.remove("selected"));
-    if (id) page.querySelector(`.g-node[data-id="${CSS.escape(id)}"]`)?.classList.add("selected");
-    for (const d of page.querySelector(".g-edges")?.drawn || []) d.p.classList.toggle("selected", d.i === edge);
-    side.replaceWith(inspector());
-    window.ArkismPerf?.note("canvas.select", performance.now() - t0, ed.graph.nodes.length);
+    if (ed.run) { render(false); return; }
+    if (!side) render(false);
+    else {
+      const t0 = performance.now();
+      page.querySelectorAll(".g-node.selected").forEach((b) => b.classList.remove("selected"));
+      if (id) page.querySelector(`.g-node[data-id="${CSS.escape(id)}"]`)?.classList.add("selected");
+      for (const d of page.querySelector(".g-edges")?.drawn || []) d.p.classList.toggle("selected", d.i === edge);
+      if (!ed.review) side.replaceWith(inspector());
+      window.ArkismPerf?.note("canvas.select", performance.now() - t0, ed.graph.nodes.length);
+    }
+    if (id && edge === null) openNodeDialog(nodeIn(id));
   }
   // While a node is dragged only the lines touching it move; the rest of the canvas stays as drawn.
   function moveEdges(svg, nodeEls, id) {
     for (const d of svg.drawn || []) {
       if (d.e.from !== id && d.e.to !== id) continue;
-      const pa = outPoint(nodeEls.get(d.e.from), d.e.port), pb = inPoint(nodeEls.get(d.e.to));
+      const pa = outPoint(nodeEls.get(d.e.from), d.e.port), pb = inPoint(nodeEls.get(d.e.to), d.e);
       if (!pa || !pb) continue;
       const shape = edgeShape(d.e, pa, pb, d.lift, d.k);
       d.p.setAttribute("d", shape.d);
@@ -1741,7 +1824,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     const dot = box.querySelector(`.g-port.out[data-port="${CSS.escape(port || "")}"]`) || box.querySelector(".g-port.out");
     return dot ? centerIn(dot, box) : null;
   }
-  const inPoint = (box) => { const dot = box.querySelector(".g-port.in"); return dot ? centerIn(dot, box) : { x: box.offsetLeft, y: box.offsetTop + 24 }; };
+  const inPoint = (box, e) => { const dot = (e && box.querySelector(`.g-port.in[data-edge="${CSS.escape(edgeKey(e))}"]`)) || box.querySelector(".g-port.in"); return dot ? centerIn(dot, box) : { x: box.offsetLeft, y: box.offsetTop + 24 }; };
   function centerIn(dot, box) {
     let x = dot.offsetWidth / 2, y = dot.offsetHeight / 2, n = dot;
     while (n && n !== box) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
@@ -1848,13 +1931,93 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     return x;
   };
   const deselect = () => { ed.sel = null; ed.selEdge = null; render(false); };
+  // Field builders call redraw(): the canvas normally, the open node window while one is up.
+  let redraw = () => render(false);
+  let nodeDlg = null;
 
+  // ---------------------------------------------------------------- node window (1024:60724 … 1033:69906)
+  function nodeBody(box, n) {
+    const title = input(n.title, { maxLength: 80 });
+    title.addEventListener("input", () => { n.title = title.value; touch(); });
+    box.append(field("이름", title));
+    if (IS_AI(n.type)) aiFields(box, n);
+    else if (n.type === "team") {
+      const pick = select([["", "고르세요"], ...teams().map((t) => [t.id, t.crew.name])], n.config.team || "");
+      pick.addEventListener("change", () => { n.config.team = pick.value; const t = byId(pick.value); if (t && !n.title) n.title = t.crew.name; touch(); redraw(); });
+      box.append(field("팀", pick, "고른 팀이 회의를 열어 결론을 다음 단계에 넘겨요"));
+      const topic = input(n.config.topic, { tag: "textarea", rows: 4, maxLength: 4000 });
+      topic.addEventListener("input", () => { n.config.topic = topic.value; touch(); });
+      box.append(field("회의 주제 ({{input}}에 앞 결과가 들어가요)", topic));
+    } else for (const [key, label, kind, opt, hint] of FIELDS[n.type] || []) {
+      let i;
+      if (kind === "select") i = select(opt, n.config[key] ?? opt[0][0]);
+      else if (kind === "radio") {
+        const cur = n.config[key] ?? opt[0][0];
+        i = el("div", "seg");
+        for (const [v, l] of opt) {
+          const b = el("button", v === cur ? "on" : "", l);
+          b.type = "button";
+          b.addEventListener("click", () => { n.config[key] = v; touch(); redraw(); });
+          i.append(b);
+        }
+        box.append(field(label, i, hint));
+        continue;
+      }
+      else if (kind === "workflow") i = select([["", "고르세요"], ...workflows().filter((w) => w.id !== ed.rec.id).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (n.config[key] || "").replace(/^\$/, ""));
+      else if (kind === "area" || kind === "code") i = input(n.config[key], { tag: "textarea", rows: kind === "code" ? 12 : 4, cls: kind === "code" ? "code" : "" });
+      else i = input(n.config[key], { placeholder: typeof opt === "string" ? opt : "" });
+      i.addEventListener("input", () => { n.config[key] = i.value; touch(); });
+      i.addEventListener("change", () => {
+        n.config[key] = i.value;
+        if (key === "workflow") { const w = byHandle(i.value); if (w && (!n.title || n.title === NODES.subflow.label)) n.title = w.crew.name; }
+        touch();
+        redraw();
+      });
+      box.append(field(label, i, hint));
+    }
+    if (n.type === "start") box.append(kv([["시작 조건", ed.rec.crew.trigger ? triggerText(ed.rec.crew) : "정하지 않음"]]), el("p", "meta", "시작 조건은 워크플로우 설정에서 바꿔요."));
+    sends(box, n);
+    if (n.type === "code") box.append(el("p", "meta", "출력이 {\"ok\": true/false, …}면 통과·실패 갈래로 나뉘어요. 처음 한 번은 빌드에 1~2초, 30초 안에 끝나야 해요. 토큰은 들지 않아요."));
+    if (n.type === "approval") box.append(el("p", "meta", "배포·게시처럼 되돌릴 수 없는 단계 바로 앞에 두세요. 답이 올 때까지 멈춰요."));
+    if (n.type === "subflow") box.append(el("p", "meta", "부른 워크플로우를 끝까지 돌리고 그 결과를 다음 단계에 넘겨요. 세 겹까지만 부를 수 있어요."));
+    if (n.type === "n8n") box.append(el("p", "meta", "기다리기를 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요."));
+    if (WORK(n) && !ownerOf(ed.rec)) box.append(onlyRun(n));
+  }
+  function openNodeDialog(n) {
+    if (!n) return;
+    nodeDlg?.remove();
+    const dlg = (nodeDlg = el("dialog", `crew-dialog wf-dialog node-dialog kind-${KIND_OF(n.type)}`));
+    const head = el("div", "dialog-head");
+    const lead = el("span", "g-icon");
+    const ex = n.type === "expert" ? byId(n.config?.expert) : null;
+    lead.append(ex ? avatarMark(ex.crew) : icon(NODES[n.type]?.icon || "stack"));
+    const t = el("div", "");
+    const h = el("h2", "", nodeTitle(n));
+    t.append(h, el("p", "", `${NODES[n.type]?.label || n.type} · ${NODES[n.type]?.sub || ""}`));
+    head.append(lead, t, closeX("노드 설정 닫기", () => dlg.close()));
+    const body = el("div", "dialog-body");
+    const foot = el("div", "dialog-foot");
+    foot.append(button("노드 지우기", "ghost danger", "trash", async () => {
+      if (await confirmBox("노드를 지울까요?", "이 노드와 이어진 선이 함께 지워져요. 저장하기 전까지는 되돌리기로 살릴 수 있어요.", "노드 지우기")) { dlg.close(); removeNode(n.id); }
+    }), button("닫기", "primary", null, () => dlg.close()));
+    const draw = () => { body.replaceChildren(); nodeBody(body, n); h.textContent = nodeTitle(n); };
+    redraw = () => { const y = body.scrollTop; draw(); body.scrollTop = y; render(false); keepDlg(); };
+    const keepDlg = () => { if (nodeDlg === dlg && !dlg.isConnected) document.body.append(dlg); };
+    dlg.append(head, body, foot);
+    dlg.addEventListener("close", () => {
+      dlg.remove();
+      if (nodeDlg === dlg) { nodeDlg = null; redraw = () => render(false); }
+      if (ed.sel === n.id) { ed.sel = null; render(false); }
+    });
+    draw();
+    document.body.append(dlg);
+    dlg.showModal();
+  }
   // ---------------------------------------------------------------- inspector (198:2350 · 321:19936 · 321:21027)
   function inspector() {
     const box = el("aside", "g-right");
     if (ed.selEdge !== null && ed.graph.edges[ed.selEdge]) return edgeInspector(box, ed.graph.edges[ed.selEdge]);
-    const n = ed.graph.nodes.find((x) => x.id === ed.sel);
-    if (!n) {
+    {
       const x = ed.rec.crew;
       const backs = ed.graph.edges.filter(isBack);
       box.append(el("h3", "", "워크플로우"), kv([
@@ -1869,59 +2032,30 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
       box.append(button("구조 검토", "", "sparkle", () => { ed.review = true; render(false); }));
       return box;
     }
-    const head = el("div", "g-right-head");
-    const lead = el("span", "g-icon");
-    lead.append(icon(NODES[n.type]?.icon || "stack"));
-    const t = el("div", "");
-    t.append(el("strong", "", nodeTitle(n)), el("small", "dim", `${NODES[n.type]?.label || n.type} · ${NODES[n.type]?.sub || ""}`));
-    head.append(lead, t, closeX("노드 설정 닫기", deselect));
-    box.append(head);
-    const title = input(n.title, { maxLength: 80 });
-    title.addEventListener("input", () => { n.title = title.value; touch(); });
-    title.addEventListener("change", () => render(false));
-    box.append(field("이름", title));
-    if (IS_AI(n.type)) aiFields(box, n);
-    else for (const [key, label, kind, opt] of FIELDS[n.type] || []) {
-      let i;
-      if (kind === "select") i = select(opt, n.config[key] ?? opt[0][0]);
-      else if (kind === "workflow") i = select([["", "고르세요"], ...workflows().filter((w) => w.id !== ed.rec.id).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (n.config[key] || "").replace(/^\$/, ""));
-      else if (kind === "area" || kind === "code") i = input(n.config[key], { tag: "textarea", rows: kind === "code" ? 12 : 4, cls: kind === "code" ? "code" : "" });
-      else i = input(n.config[key], { placeholder: opt || "" });
-      i.addEventListener("input", () => { n.config[key] = i.value; touch(); });
-      i.addEventListener("change", () => {
-        n.config[key] = i.value;
-        if (key === "workflow") { const w = byHandle(i.value); if (w && (!n.title || n.title === NODES.subflow.label)) n.title = w.crew.name; }
-        touch();
-        render(false);
-      });
-      box.append(field(label, i));
-    }
-    sends(box, n);
-    if (n.type === "code") box.append(el("p", "meta", "출력이 {\"ok\": true/false, …}면 통과·실패 갈래로 나뉘어요. 처음 한 번은 빌드에 1~2초, 30초 안에 끝나야 해요. 토큰은 들지 않아요."));
-    if (n.type === "approval") box.append(el("p", "meta", "배포·게시처럼 되돌릴 수 없는 단계 바로 앞에 두세요. 답이 올 때까지 멈춰요."));
-    if (n.type === "subflow") box.append(el("p", "meta", "부른 워크플로우를 끝까지 돌리고 그 결과를 다음 단계에 넘겨요. 세 겹까지만 부를 수 있어요."));
-    if (WORK(n) && !ownerOf(ed.rec)) box.append(onlyRun(n));
-    box.append(button("노드 지우기", "ghost danger", "trash", async () => {
-      if (await confirmBox("노드를 지울까요?", "이 노드와 이어진 선이 함께 지워져요. 저장하기 전까지는 되돌리기로 살릴 수 있어요.", "노드 지우기")) removeNode(n.id);
-    }));
-    return box;
   }
   // AI 노드: 무엇·어디까지(목표·울타리·완료 기준)만 정하고, 어떻게는 AI가 정해요.
   function aiFields(box, n) {
     const c = n.config;
     const bind = (i, key, redraw) => {
       i.addEventListener("input", () => { c[key] = i.value; touch(); });
-      i.addEventListener("change", () => { c[key] = i.value; touch(); if (redraw) render(false); });
+      i.addEventListener("change", () => { c[key] = i.value; touch(); if (redraw) redraw(); });
       return i;
     };
     const row = el("div", "scope-fields");
     row.append(field("모델", bind(modelInput(c.model, ed.rec.crew.model || "deepseek-v4-flash"), "model", true), ed.rec.crew.model ? `비우면 ${ed.rec.crew.model}` : ""),
       field("추론", bind(select(EFFORTS, c.effort || "medium"), "effort")));
     box.append(modelList(), row);
-    const persona = bind(select([["", "직접 쓰기"], ...personas().map((p) => [p.id, p.crew.name])], c.persona || ""), "persona", true);
-    box.append(field("페르소나", persona, "설정 › 워크플로우에서 만든 페르소나를 고르거나 아래에 직접 써요"));
-    const p = byId(c.persona);
-    if (p) { const q = el("div", "quote"); q.append(el("div", "", p.crew.instructions || "")); box.append(q); }
+    let p = null;
+    if (n.type === "expert") {
+      const pick = bind(select([["", "고르세요"], ...agents().map((a) => [a.id, a.crew.name])], c.expert || ""), "expert", true);
+      box.prepend(field("전문가", pick, "고른 전문가의 모델·지시가 기본값이에요. 아래에서 이 단계만 다르게 정할 수 있어요"));
+      p = byId(c.expert);
+    } else {
+      const persona = bind(select([["", "직접 쓰기"], ...personas().map((p) => [p.id, p.crew.name])], c.persona || ""), "persona", true);
+      box.append(field("페르소나", persona, "설정 › 워크플로우에서 만든 페르소나를 고르거나 아래에 직접 써요"));
+      p = byId(c.persona);
+    }
+    if (p && n.type !== "expert") { const q = el("div", "quote"); q.append(el("div", "", p.crew.instructions || "")); box.append(q); }
     box.append(field(p ? "더할 지시" : "페르소나 지시", bind(input(c.instructions, { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "너는 ○○다. …한다." }), "instructions")), skillsField(c));
     if (n.type === "ai_once") {
       box.append(field("질문 ({{input}}에 앞 결과가 들어가요)", bind(input(c.prompt, { tag: "textarea", rows: 4, maxLength: 8000 }), "prompt", true)));
@@ -1936,7 +2070,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
     // 협업 — 나눠서 맡기기: this node plans, workers do the parts at the same time, this node merges them.
     const on = c.collab === "on";
     const ch = el("div", "g-collab-head");
-    ch.append(el("strong", "", "협업 — 나눠서 맡기기"), switchEl(on, "협업 켜기", (v) => { c.collab = v ? "on" : ""; if (v && !c.workers) c.workers = JSON.stringify([{ name: "워커", model: ed.rec.crew.model || "deepseek-v4-flash" }]); touch(); render(false); }));
+    ch.append(el("strong", "", "협업 — 나눠서 맡기기"), switchEl(on, "협업 켜기", (v) => { c.collab = v ? "on" : ""; if (v && !c.workers) c.workers = JSON.stringify([{ name: "워커", model: ed.rec.crew.model || "deepseek-v4-flash" }]); touch(); redraw(); }));
     box.append(ch);
     if (!on) { box.append(el("p", "meta", "켜면 이 칸이 일을 나눠 워커에게 맡기고 결과를 합쳐요. 하위 질문이 몇 개일지 미리 모를 때 써요.")); return; }
     let workers = [];
@@ -1953,11 +2087,11 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
       del.type = "button";
       del.setAttribute("aria-label", "워커 빼기");
       del.append(icon("x"));
-      del.addEventListener("click", () => { workers.splice(i, 1); saveWorkers(); render(false); });
+      del.addEventListener("click", () => { workers.splice(i, 1); saveWorkers(); redraw(); });
       r.append(nm, md, del);
       list.append(r);
     });
-    box.append(el("small", "dim", "워커 역할 · 모델"), list, button("워커 역할 더하기", "ghost small", "plus", () => { workers.push({ name: "", model: ed.rec.crew.model || "" }); saveWorkers(); render(false); }));
+    box.append(el("small", "dim", "워커 역할 · 모델"), list, button("워커 역할 더하기", "ghost small", "plus", () => { workers.push({ name: "", model: ed.rec.crew.model || "" }); saveWorkers(); redraw(); }));
     const row3 = el("div", "scope-fields");
     row3.append(field("최대 개수", bind(input(c.max_workers || "5", { type: "number", min: 1, max: 16 }), "max_workers", true)), field("동시에", bind(input(c.concurrency || "3", { type: "number", min: 1, max: 16 }), "concurrency", true)));
     box.append(row3, el("p", "meta", "실행할 때 AI가 일을 몇 개로 나눌지 정하고, 워커 결과를 이 칸이 합쳐요."));
@@ -1970,7 +2104,7 @@ ${talk.map(([w, t]) => `${w === "AI" ? "Assistant" : "User"}: ${t}`).join("\n")}
   function skillsField(c) {
     const all = state.data.skills || [];
     const picked = (c.skills || "").split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
-    const save = (list) => { c.skills = list.join(","); touch(); render(false); };
+    const save = (list) => { c.skills = list.join(","); touch(); redraw(); };
     const row = el("div", "chip-row");
     for (const id of picked) {
       const chip = el("span", "chip", all.find((s) => s.id === id)?.name || id);

@@ -165,6 +165,110 @@
    }
   },
   {
+   "id": "wf-v4",
+   "revision": 2,
+   "crew": {
+    "type": "workflow",
+    "name": "시장 조사 회의",
+    "handle": "시장조사회의",
+    "role": "전문가 둘이 조사하고 팀이 정리해요",
+    "category": "Git · 릴리스",
+    "model": "sonnet 5",
+    "trigger": null,
+    "enabled": true,
+    "graph": {
+     "nodes": [
+      {
+       "id": "start",
+       "type": "start",
+       "title": "시작",
+       "x": 40,
+       "y": 200,
+       "config": {}
+      },
+      {
+       "id": "gpt",
+       "type": "expert",
+       "title": "GPT 의견",
+       "x": 300,
+       "y": 80,
+       "config": {
+        "expert": "ag-research",
+        "goal": "{{input}}"
+       }
+      },
+      {
+       "id": "gem",
+       "type": "expert",
+       "title": "Gemini 의견",
+       "x": 300,
+       "y": 320,
+       "config": {
+        "expert": "ag-review",
+        "goal": "{{input}}"
+       }
+      },
+      {
+       "id": "meet",
+       "type": "team",
+       "title": "팀 회의",
+       "x": 600,
+       "y": 200,
+       "config": {
+        "team": "team-research",
+        "topic": "{{input}}"
+       }
+      },
+      {
+       "id": "n8n",
+       "type": "n8n",
+       "title": "n8n으로 보내기",
+       "x": 880,
+       "y": 200,
+       "config": {
+        "url": "https://n8n.example.com/webhook/report",
+        "mode": "sync"
+       }
+      },
+      {
+       "id": "end",
+       "type": "end",
+       "title": "끝",
+       "x": 1140,
+       "y": 220,
+       "config": {}
+      }
+     ],
+     "edges": [
+      {
+       "from": "start",
+       "to": "gpt"
+      },
+      {
+       "from": "start",
+       "to": "gem"
+      },
+      {
+       "from": "gpt",
+       "to": "meet"
+      },
+      {
+       "from": "gem",
+       "to": "meet"
+      },
+      {
+       "from": "meet",
+       "to": "n8n"
+      },
+      {
+       "from": "n8n",
+       "to": "end"
+      }
+     ]
+    }
+   }
+  },
+  {
    "id": "wf-release",
    "revision": 2,
    "crew": {
