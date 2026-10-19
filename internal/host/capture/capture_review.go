@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/FelixBaek/arkism/internal/host"
 )
@@ -124,28 +125,46 @@ func classifyRequest(c map[string]any, risk string, reasons []any, dup string) m
 }
 
 // withJudgement adds the model's advice (verdict and meaning checks) to a risk call; an answer without them adds nothing.
+// It stays inside the server's limits (validJudgement), or the whole risk call would be refused: a fix too long to
+// send whole is dropped rather than cut, since a cut text would be a wrong fix.
 func withJudgement(req, d map[string]any) map[string]any {
 	body := req["body"].(map[string]any)
 	if a, _ := d["verdict"].(string); a != "" {
 		v := map[string]any{"action": a}
-		if t, _ := d["verdict_text"].(string); t != "" && a == "fix" {
+		t, _ := d["verdict_text"].(string)
+		if t != "" && a == "fix" && len(t) <= 2000 {
 			v["text"] = t
 		}
 		if r, _ := d["verdict_reason"].(string); r != "" {
-			v["reason"] = r
+			v["reason"] = clipBytes(r, 1000)
 		}
-		body["verdict"] = v
+		if a != "fix" || v["text"] != nil || t == "" {
+			body["verdict"] = v
+		}
 	}
 	var checks []any
 	for _, x := range listOf(d["semantic"]) {
-		if m, ok := x.(map[string]any); ok && m["check"] != nil {
-			checks = append(checks, map[string]any{"check": m["check"], "ok": m["ok"] == true, "note": m["note"]})
+		if m, ok := x.(map[string]any); ok && m["check"] != nil && len(checks) < 3 {
+			note, _ := m["note"].(string)
+			checks = append(checks, map[string]any{"check": m["check"], "ok": m["ok"] == true, "note": clipBytes(note, 1000)})
 		}
 	}
 	if len(checks) > 0 {
 		body["semantic"] = checks
 	}
 	return req
+}
+
+// clipBytes cuts s to at most n bytes without splitting a character.
+func clipBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	s = s[:n]
+	for !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 // sendClassify posts one spooled write under the reviewer's credential.

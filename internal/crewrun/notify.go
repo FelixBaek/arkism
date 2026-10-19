@@ -40,6 +40,18 @@ type NotifyConfig struct {
 	} `json:"email"`
 }
 
+// pickDest prefers the runner scope's own destination ("<workspace>/<project>/<name>", saved from the
+// desktop) over a host-wide hand-edited one of the same name.
+func pickDest[T any](m map[string]T, scope, to string) (T, bool) {
+	if scope != "" {
+		if d, ok := m[scope+"/"+to]; ok {
+			return d, true
+		}
+	}
+	d, ok := m[to]
+	return d, ok
+}
+
 // Errors here never include URLs or addresses: a bot token or webhook URL
 // would otherwise reach the run record.
 func (e *Engine) notify(ctx context.Context, c map[string]string, input any) (any, error) {
@@ -62,7 +74,7 @@ func (e *Engine) notify(ctx context.Context, c map[string]string, input any) (an
 	msg = clip(msg, 4000)
 	switch c["channel"] {
 	case "telegram":
-		d, ok := cfg.Telegram[to]
+		d, ok := pickDest(cfg.Telegram, e.NotifyScope, to)
 		if !ok || d.BotToken == "" {
 			return nil, failf("notify", "no telegram destination %q", to)
 		}
@@ -72,13 +84,13 @@ func (e *Engine) notify(ctx context.Context, c map[string]string, input any) (an
 		}
 		err = e.postJSON(ctx, base+"/bot"+d.BotToken+"/sendMessage", map[string]any{"chat_id": d.ChatID, "text": msg})
 	case "slack":
-		d, ok := cfg.Slack[to]
+		d, ok := pickDest(cfg.Slack, e.NotifyScope, to)
 		if !ok || d.WebhookURL == "" {
 			return nil, failf("notify", "no slack destination %q", to)
 		}
 		err = e.postJSON(ctx, d.WebhookURL, map[string]any{"text": msg})
 	case "email":
-		d, ok := cfg.Email[to]
+		d, ok := pickDest(cfg.Email, e.NotifyScope, to)
 		if !ok || d.Host == "" || d.From == "" || len(d.To) == 0 {
 			return nil, failf("notify", "no email destination %q", to)
 		}

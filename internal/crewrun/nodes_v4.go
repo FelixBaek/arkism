@@ -58,13 +58,14 @@ type MeetingCreator interface {
 var teamPoll = 2 * time.Second
 
 // runTeam holds one meeting for the node. 실행 범위: fence and done join the meeting topic, and a failed meeting is
-// held again up to retries (0-3) times; one waiting on a person or a bad config is not repeated.
+// held again up to retries (0-3) times; one waiting on a person, a bad config or a timeout is not repeated
+// (a timed-out meeting is not ended by the engine, so a retry would leave it open beside a new one).
 func (e *Engine) runTeam(ctx context.Context, c map[string]string, input any) (any, error) {
 	retries := intIn(c["retries"], 0, 3, 0)
 	for try := 0; ; try++ {
 		out, err := e.runMeeting(ctx, c, input)
 		var f *nodeError
-		if err == nil || try >= retries || ctx.Err() != nil || !errors.As(err, &f) || f.code == "team_waiting" || f.code == "bad_config" {
+		if err == nil || try >= retries || ctx.Err() != nil || !errors.As(err, &f) || f.code == "team_waiting" || f.code == "team_timeout" || f.code == "bad_config" {
 			return out, err
 		}
 	}

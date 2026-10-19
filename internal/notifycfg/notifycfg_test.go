@@ -20,22 +20,22 @@ const (
 func TestSaveListMaskRemoveKeepsOthers(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "notify.json")
 	_ = os.WriteFile(p, []byte(`{"email":{"default":{"host":"smtp.x"}}}`), 0o600)
-	if err := Save(p, "telegram", "", map[string]string{"bot_token": tok, "chat_id": "-100123"}); err != nil {
+	if err := Save(p, "", "telegram", "", map[string]string{"bot_token": tok, "chat_id": "-100123"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Save(p, "slack", "", map[string]string{"webhook_url": hook}); err != nil {
+	if err := Save(p, "", "slack", "", map[string]string{"webhook_url": hook}); err != nil {
 		t.Fatal(err)
 	}
-	l, _ := List(p)
+	l, _ := List(p, "")
 	raw, _ := json.Marshal(l)
 	if len(l) != 2 || l[1].Last4 != "wxyz" || l[1].ChatID != "-100123" || strings.Contains(string(raw), "AAH3") || strings.Contains(string(raw), "hooks.slack") {
 		t.Fatalf("list leaked or wrong: %s", raw)
 	}
 	// Changing only the chat keeps the stored token.
-	if err := Save(p, "telegram", "", map[string]string{"chat_id": "@felixchat"}); err != nil {
+	if err := Save(p, "", "telegram", "", map[string]string{"chat_id": "@felixchat"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Remove(p, "slack", "default"); err != nil {
+	if err := Remove(p, "", "slack", "default"); err != nil {
 		t.Fatal(err)
 	}
 	disk, _ := os.ReadFile(p)
@@ -59,11 +59,11 @@ func TestSaveRejectsBadInput(t *testing.T) {
 		{"slack", map[string]string{"webhook_url": "http://evil.example/hook"}},
 		{"email", nil},
 	} {
-		if err := Save(p, c.ch, "", c.f); err != ErrInvalid {
+		if err := Save(p, "", c.ch, "", c.f); err != ErrInvalid {
 			t.Errorf("%s %v: %v", c.ch, c.f, err)
 		}
 	}
-	if Save(p, "slack", "Bad Name", map[string]string{"webhook_url": hook}) != ErrInvalid {
+	if Save(p, "", "slack", "Bad Name", map[string]string{"webhook_url": hook}) != ErrInvalid {
 		t.Error("name accepted")
 	}
 }
@@ -82,16 +82,16 @@ func TestTestSendsAndHidesSecrets(t *testing.T) {
 	TelegramAPI = srv.URL
 	defer func() { TelegramAPI = old }()
 	p := filepath.Join(t.TempDir(), "notify.json")
-	_ = Save(p, "telegram", "", map[string]string{"bot_token": tok, "chat_id": "-100123"})
-	if err := Test(context.Background(), p, "telegram", "default"); err != nil || !strings.Contains(got, "/bot"+tok+"/sendMessage") || !strings.Contains(got, "-100123") {
+	_ = Save(p, "", "telegram", "", map[string]string{"bot_token": tok, "chat_id": "-100123"})
+	if err := Test(context.Background(), p, "", "telegram", "default"); err != nil || !strings.Contains(got, "/bot"+tok+"/sendMessage") || !strings.Contains(got, "-100123") {
 		t.Fatalf("err=%v got=%s", err, got)
 	}
-	_ = Save(p, "telegram", "bad", map[string]string{"bot_token": "123456:badbadbadbadbadbadbadbad", "chat_id": "-100123"})
-	err := Test(context.Background(), p, "telegram", "bad")
+	_ = Save(p, "", "telegram", "bad", map[string]string{"bot_token": "123456:badbadbadbadbadbadbadbad", "chat_id": "-100123"})
+	err := Test(context.Background(), p, "", "telegram", "bad")
 	if err == nil || strings.Contains(err.Error(), "badbad") || strings.Contains(err.Error(), srv.URL) {
 		t.Fatalf("err=%v", err)
 	}
-	if Test(context.Background(), p, "slack", "default") != ErrInvalid {
+	if Test(context.Background(), p, "", "slack", "default") != ErrInvalid {
 		t.Error("missing dest should be invalid")
 	}
 }

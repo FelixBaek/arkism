@@ -267,4 +267,14 @@ func TestWithJudgementKeepsAdviceOnly(t *testing.T) {
 	if b := withJudgement(classifyRequest(map[string]any{"id": "p", "revision": 1}, "low", nil, ""), map[string]any{})["body"].(map[string]any); b["verdict"] != nil || b["semantic"] != nil {
 		t.Fatal(b)
 	}
+	// Over the server's limits: an overlong fix is dropped (never cut), notes are clipped, at most 3 checks.
+	long := strings.Repeat("가", 1000)
+	var many []any
+	for range 5 {
+		many = append(many, map[string]any{"check": "same_meaning", "ok": true, "note": long})
+	}
+	b = withJudgement(classifyRequest(map[string]any{"id": "p", "revision": 1}, "low", nil, ""), map[string]any{"verdict": "fix", "verdict_text": long, "verdict_reason": long, "semantic": many})["body"].(map[string]any)
+	if sem := b["semantic"].([]any); b["verdict"] != nil || len(sem) != 3 || len(sem[0].(map[string]any)["note"].(string)) > 1000 {
+		t.Fatal(b["verdict"], len(sem))
+	}
 }

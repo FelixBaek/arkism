@@ -76,8 +76,17 @@ func write(path string, cfg map[string]map[string]map[string]any) error {
 
 func str(m map[string]any, k string) string { s, _ := m[k].(string); return s }
 
-// List returns the telegram and slack destinations, secrets masked.
-func List(path string) ([]Dest, error) {
+// Key is how a destination is stored: "<scope>/<name>", so one scope never sees or edits another's
+// (crewrun looks up its own scope first). An empty scope is the host's own, hand-edited entries.
+func Key(scope, name string) string {
+	if scope == "" {
+		return name
+	}
+	return scope + "/" + name
+}
+
+// List returns the scope's telegram and slack destinations, secrets masked.
+func List(path, scope string) ([]Dest, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	cfg, err := read(path)
@@ -86,7 +95,11 @@ func List(path string) ([]Dest, error) {
 	}
 	out := []Dest{}
 	for _, ch := range []string{"telegram", "slack"} {
-		for name, d := range cfg[ch] {
+		for k, d := range cfg[ch] {
+			name, ok := strings.CutPrefix(k, Key(scope, ""))
+			if !ok || strings.Contains(name, "/") {
+				continue
+			}
 			secret := str(d, "bot_token")
 			if ch == "slack" {
 				secret = str(d, "webhook_url")
@@ -109,13 +122,14 @@ func List(path string) ([]Dest, error) {
 
 // Save adds or replaces a destination. telegram: bot_token + chat_id; slack: webhook_url.
 // A telegram save without bot_token keeps the stored token (changing only the chat).
-func Save(path, channel, name string, f map[string]string) error {
+func Save(path, scope, channel, name string, f map[string]string) error {
 	if name == "" {
 		name = "default"
 	}
 	if !nameRe.MatchString(name) {
 		return ErrInvalid
 	}
+	key := Key(scope, name)
 	mu.Lock()
 	defer mu.Unlock()
 	cfg, err := read(path)
@@ -127,7 +141,7 @@ func Save(path, channel, name string, f map[string]string) error {
 	case "telegram":
 		tok, chat := strings.TrimSpace(f["bot_token"]), strings.TrimSpace(f["chat_id"])
 		if tok == "" {
-			tok = str(cfg["telegram"][name], "bot_token")
+			tok = str(cfg["telegram"][key], "bot_token")
 		}
 		if !tgTokenRe.MatchString(tok) || !tgChatRe.MatchString(chat) {
 			return ErrInvalid
@@ -145,12 +159,12 @@ func Save(path, channel, name string, f map[string]string) error {
 	if cfg[channel] == nil {
 		cfg[channel] = map[string]map[string]any{}
 	}
-	cfg[channel][name] = dest
+	cfg[channel][key] = dest
 	return write(path, cfg)
 }
 
 // Remove deletes a destination; a missing one is not an error.
-func Remove(path, channel, name string) error {
+func Remove(path, scope, channel, name string) error {
 	if channel != "telegram" && channel != "slack" || !nameRe.MatchString(name) {
 		return ErrInvalid
 	}
@@ -160,10 +174,11 @@ func Remove(path, channel, name string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := cfg[channel][name]; !ok {
+	key := Key(scope, name)
+	if _, ok := cfg[channel][key]; !ok {
 		return nil
 	}
-	delete(cfg[channel], name)
+	delete(cfg[channel], key)
 	if len(cfg[channel]) == 0 {
 		delete(cfg, channel)
 	}
@@ -171,14 +186,14 @@ func Remove(path, channel, name string) error {
 }
 
 // Test sends one short message through a saved destination. Errors never carry the token or URL.
-func Test(ctx context.Context, path, channel, name string) error {
+func Test(ctx context.Context, path, scope, channel, name string) error {
 	mu.Lock()
 	cfg, err := read(path)
 	mu.Unlock()
 	if err != nil {
 		return err
 	}
-	d, ok := cfg[channel][name]
+	d, ok := cfg[channel][Key(scope, name)]
 	if !ok {
 		return ErrInvalid
 	}

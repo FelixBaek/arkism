@@ -246,12 +246,18 @@ window.ArkismTeams = (ctx) => {
   // ================================================================ 팀 목록 (208:18425)
   function teamCard(r) {
     const x = r.crew, cv = x.cover;
-    const c = el("button", `tm-card2${cv ? " has-cover" : ""}`); c.type = "button"; c.dataset.id = r.id;
+    // A card holds three controls (open the team, each face, the photo credit), so it is a box with a full-size open button
+    // underneath rather than one button with buttons inside it.
+    const c = el("div", `tm-card2${cv ? " has-cover" : ""}`); c.dataset.id = r.id;
+    const open = el("button", "tm-card2-open"); open.type = "button"; open.setAttribute("aria-label", x.name || "팀"); open.addEventListener("click", () => openPopup(r.id)); c.append(open);
     if (cv) { const img = el("img", "tm-card2-img"); img.alt = ""; img.src = coverSrc(cv); c.append(img); }
     const top = el("div", "tm-card2-top");
     const b = teamBadge(r); top.append(b && b[1] === "warn" ? badge(b[0], b[1]) : el("span")); // Figma shows no status badge; only the needs-attention one stays
     const faces = el("span", "tm-faces");
-    sorted(x.members).slice(0, 5).forEach((m) => { const a = byId(m.agent_id), f = face(a, "l"); f.dataset.name = a?.crew?.name || ""; f.addEventListener("click", (e) => { e.stopPropagation(); window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: m.agent_id } })); }); faces.append(f); });
+    sorted(x.members).slice(0, 5).forEach((m) => {
+      const a = byId(m.agent_id), f = el("button", "tm-face-btn"); f.type = "button"; f.dataset.name = a?.crew?.name || ""; f.setAttribute("aria-label", a?.crew?.name || "전문가"); f.append(face(a, "l"));
+      f.addEventListener("click", () => window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: m.agent_id } }))); faces.append(f);
+    });
     top.append(faces);
     const title = raw(el("strong", /[A-Za-z]/.test(x.name || "") ? "tm-title-en" : "", x.name)); // English names read as the big uppercase title: DESIGN REVIEW.
     c.append(top, title);
@@ -260,7 +266,6 @@ window.ArkismTeams = (ctx) => {
     const plate = el("span", "tm-card2-plate");
     plate.append(el("span", "tm-card2-cat", x.category || ""), raw(el("b", "", x.handle ? `@${x.handle}` : "")));
     c.append(plate);
-    c.addEventListener("click", () => openPopup(r.id));
     return c;
   }
   const catIcon = (c) => (/git|release|릴리/i.test(c) ? "git-branch" : /plan|기획/i.test(c) ? "file-text" : /research|리서/i.test(c) ? "magnifying-glass" : /design|디자/i.test(c) ? "palette" : c ? "tag" : "list-bullets"); // categories are the person's own words

@@ -277,11 +277,13 @@ window.ArkismOverviewWindows = (ctx, env) => {
       }
       const ev = tag(c, "event_id:");
       if (ev) {
-        const [agent, ...rest] = ev.split(":"), sid = rest.join(":"), ses = env.sessions().find((x) => x.session_id === sid), b = el("div", "ov-detail-from");
+        const [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid), b = el("div", "ov-detail-from");
         b.append(el("span", "", ses ? `${agent} · ${ses.title || ses.project || ""}` : agent), button("세션 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec("어디서 왔나요", b);
       }
       const f = el("div", "ov-detail-facts"), fact = (a2, b2) => { const p = el("p", ""); p.append(el("span", "", a2), el("strong", "", b2)); f.append(p); };
-      fact("들어갈 곳", "쓰는 중인 기억"); fact("쓰는 곳", REACH_WHERE[rs?.reach] || REACH_WHERE.general); sec("승인하면", f);
+      // approve takes no reach: an empty one becomes personal for a user memory, general otherwise (the suggestion stays advice)
+      const reachOnApprove = c.reach || (c.kind === "user" ? "personal" : "general");
+      fact("들어갈 곳", "쓰는 중인 기억"); fact("쓰는 곳", REACH_WHERE[reachOnApprove] || REACH_WHERE.general); sec("승인하면", f);
       detail.append(edit);
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
       const go1 = async (action, extra) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true)); const r = await decide(c, action, extra); if (r?.error) { st.textContent = r.error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); } else { sel = null; wideReview(); } };
@@ -354,10 +356,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
     body.append(el("h2", "", title), el("p", "meta", text)); d.append(body, foot); d.addEventListener("close", () => d.remove()); document.body.append(d); d.showModal();
   }
 
-  // 세션 → 후보: 후보의 event_id:<agent>:<session_id> 태그가 유일한 연결. 서버에 분석 실패 기록은 없어 "후보 없음"으로만 보여요.
+  // 세션 → 후보: 후보의 event_id:<agent>:<session_id>:<kind>:<end> 태그가 유일한 연결. 서버에 분석 실패 기록은 없어 "후보 없음"으로만 보여요.
   const FLOW = ["저장", "분석", "분류", "승인"];
   function sessionState(x) {
-    const mine = (m) => tag(m, "event_id:").split(":").slice(1).join(":") === x.session_id;
+    const mine = (m) => tag(m, "event_id:").split(":")[1] === x.session_id;
     const cands = waiting().filter(mine), approved = D().memories.filter(mine);
     const fresh = Date.now() - time(x.ended_at || x.started_at) < 30 * 60000;
     const step = approved.length ? 4 : cands.some((m) => m.classification) ? 3 : cands.length ? 2 : 1;
@@ -469,10 +471,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
       onSelect: (id) => { sel = id; mode = "sel"; moreOpen = false; paint(); },
       onClear: () => { sel = null; mode = "all"; paint(); },
     });
-    canvas.append(bubbles.el);
+    canvas.append(bubbles.el); d.addEventListener("close", () => bubbles.destroy());
     function drawMap() {
       const vis = (n) => n && reachF.has(reachOf(n)) && inTopic(n.id) && (!q || label(n.id).includes(q));
-      bubbles.setItems(nodes.filter(vis).map((n) => ({ id: n.id, v: n.uses || 1, color: REACH_COLOR[reachOf(n)] || REACH_COLOR.general, reach: reachOf(n) in REACH ? reachOf(n) : "general", kind: n.kind || "" })));
+      const shown = nodes.filter(vis);
+      if (sel && !shown.some((n) => n.id === sel)) { sel = null; mode = "all"; moreOpen = false; }
+      bubbles.setItems(shown.map((n) => ({ id: n.id, v: n.uses || 1, color: REACH_COLOR[reachOf(n)] || REACH_COLOR.general, reach: reachOf(n) in REACH ? reachOf(n) : "general", kind: n.kind || "" })));
       bubbles.setEdges(edges.filter((e) => e.type !== "similar").map((e) => ({ from: e.from, to: e.to, t: e.type === "human_link" ? "supports" : e.type })));
       bubbles.setEdgeAll(mode === "all" || allEdges); bubbles.setSelected(sel);
     }
@@ -482,13 +486,14 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const zb = (txt, label, fn) => { const b = el("button", "ov-map-zbtn", txt); b.type = "button"; b.setAttribute("aria-label", label); b.addEventListener("click", fn); return b; };
     function drawLegend() {
       const items = el("div", "ov-map-lg-items"); for (const t of ["supports", "same_session", "conflicts", "supersedes"]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t])); items.append(i); }
-      const tog = el("div", "ov-map-lg-tog"); for (const [v, l] of [[true, "전체 관계"], [false, "선택한 연결"]]) { const b = el("button", v === (allEdges) ? "on" : "", l); b.type = "button"; b.addEventListener("click", () => { allEdges = v; drawMap(); drawLegend(); }); tog.append(b); }
+      const tog = el("div", "ov-map-lg-tog"); for (const [v, l] of [[true, "전체 관계"], [false, "선택한 연결"]]) { const b = el("button", (mode === "all" ? v : v === allEdges) ? "on" : "", l); b.type = "button"; b.disabled = mode === "all"; b.addEventListener("click", () => { allEdges = v; drawMap(); drawLegend(); }); tog.append(b); }
       legend.replaceChildren(items, el("em", ""), tog, el("em", ""), zb("−", "축소", () => setZoom(zoom - 0.25)), zoomLab, zb("+", "확대", () => setZoom(zoom + 0.25)), zb("⤢", "화면에 맞추기", () => setZoom(1)));
     }
     function paint() {
+      drawMap(); // first: it drops a selection the filters now hide
       seg.replaceChildren(...[["all", "전체 지도"], ["sel", "선택한 기억"]].map(([k, l]) => { const b = el("button", `ov-map-tab${mode === k ? " on" : ""}`, l); b.type = "button"; b.disabled = k === "sel" && !sel; b.addEventListener("click", () => { mode = k; paint(); }); return b; }));
       chipHost.replaceChildren(...Object.entries(REACH).map(([k, [l]]) => { const b = el("button", `ov-map-chip ov-map-${k}${reachF.has(k) ? " on" : ""}`); b.type = "button"; b.append(el("i", ""), document.createTextNode(l)); b.addEventListener("click", () => { reachF.has(k) ? reachF.delete(k) : reachF.add(k); paint(); }); return b; }));
-      drawMap(); drawLegend(); drawSide();
+      drawLegend(); drawSide();
     }
     function drawSide() {
       right.replaceChildren(); const sec = (title, ...kids) => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", title), ...kids); right.append(s); return s; };
@@ -509,8 +514,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (basis) right.append(el("small", "ov-detail-basis", basis === "explicit_user" ? "● 직접 말한 기억" : basis === "inferred" ? "● AI가 짐작한 기억" : "● 대화 원문 기반"));
       if (m) right.append((() => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", "기억 내용"), el("p", "ov-map-body-text", m.text)); return s; })());
       const u = usage(sel), used = n.uses || u?.d7;
-      if (used || u?.last) { const p = el("p", "ov-map-use"); p.append(el("span", "", `${num(n.uses || 0)}회 쓰임`), ...(u?.last ? [el("span", "", ` · ${ago(u.last)}`)] : [])); right.append(p); }
-      if (ev) { const b = el("div", "ov-map-quote"), [agent, ...r2] = ev.split(":"), sid = r2.join(":"), ses = env.sessions().find((x) => x.session_id === sid);
+      if (used || u?.last) { const p = el("p", "ov-map-use"); p.append(el("span", "", `${num(used || 0)}회 쓰임`), ...(u?.last ? [el("span", "", ` · ${ago(u.last)}`)] : [])); right.append(p); }
+      if (ev) { const b = el("div", "ov-map-quote"), [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid);
         b.append(el("small", "", `대화 · ${ses ? ses.title || ses.project || agent : agent} · ${fmt(m.created_at)}`), button("원문 대화 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec("출처", b); }
       const real = rel(sel), shown = moreOpen ? real : real.slice(0, 3), ul = el("div", "ov-map-rels");
       for (const e of shown) { const other = e.from === sel ? e.to : e.from, o = byId.get(other), r = el("button", "ov-map-rel"); r.type = "button"; const tx = el("span", "ov-map-rel-t"), pr = el("span", `ov-map-chip on ov-map-${reachOf(o)}`); pr.append(el("i", ""), document.createTextNode(REACH[reachOf(o)]?.[0] || "")); tx.append(el("b", "", label(other)), pr); r.append(el("span", `ov-map-tagpill ov-map-e-${e.type === "human_link" ? "supports" : e.type}`, EDGE[e.type] || e.type), tx, el("span", "ov-map-chev", "›")); r.addEventListener("click", () => { sel = other; moreOpen = false; paint(); }); ul.append(r); }
@@ -520,7 +525,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (sim) { const other = sim.from === sel ? sim.to : sim.from, box = el("div", "ov-map-suggest"); box.append(el("small", "", "AI 관계 제안"), el("p", "", `“${label(other)}”와 비슷한 기억이에요. 같은 뜻이면 기억 화면에서 합치거나 연결해 주세요.`)); right.append(box); }
       const act = el("div", "ov-map-foot"); if (m?.updated_at) act.append(el("small", "", `수정 ${fmt(m.updated_at)}`)); act.append(button("기억 수정", "small", null, () => { dlg.close(); go("memories", "active"); })); right.append(act);
     }
-    search.addEventListener("input", () => { q = search.value.trim(); drawMap(); });
+    search.addEventListener("input", () => { q = search.value.trim(); paint(); });
     left.append(bar, canvas); canvas.append(legend); paint();
   }
 

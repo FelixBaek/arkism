@@ -12,7 +12,14 @@
 .tm-grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(254px, 1fr)); gap: 12px; }
 .tm-card2 { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; min-height: 226px; padding: 14px 16px 16px; text-align: left;
   border: 1px solid var(--nc-line); border-radius: 12px; background: var(--nc-surface); color: var(--nc-text); cursor: pointer; }
-.tm-card2:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
+.tm-card2:focus-visible, .tm-card2:has(> .tm-card2-open:focus-visible) { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
+/* the card's open button fills it underneath; only the faces and the credit link sit above it and take clicks */
+.tm-card2 > .tm-card2-open { position: absolute; inset: 0; z-index: 0; padding: 0; border: 0; border-radius: inherit; background: none; cursor: pointer; }
+.tm-card2-open:focus-visible { outline: none; }
+.tm-card2:has(> .tm-card2-open) > :not(.tm-card2-open) { pointer-events: none; }
+.tm-card2 .tm-faces > button, .tm-card2 .tm-credit a { pointer-events: auto; }
+.tm-face-btn { position: relative; display: inline-flex; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.tm-face-btn:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .tm-card2:hover { border-color: var(--nc-muted); } }
 .tm-card2 > * { position: relative; }
 .tm-card2-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -26,8 +33,8 @@
 /* yellow plate: category + @handle rise from the bottom edge on hover (837:3) */
 .tm-card2-plate { position: absolute; left: 0; right: 0; bottom: 0; height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; background: var(--nc-action); color: var(--nc-on-accent); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); transform: translateY(100%); transition: transform .2s ease-out; }
 .tm-card2-plate:has(:empty:only-child), .tm-card2-new .tm-card2-plate { display: none; }
-@media (hover: hover) and (pointer: fine) { .tm-card2:hover .tm-card2-plate, .tm-card2:focus-visible .tm-card2-plate { transform: none; }
-  .tm-card2:not(.tm-card2-new):hover > :is(strong, .tm-credit), .tm-card2:focus-visible > :is(strong, .tm-credit) { transform: translateY(-36px); } }
+@media (hover: hover) and (pointer: fine) { .tm-card2:hover .tm-card2-plate, .tm-card2:focus-visible .tm-card2-plate, .tm-card2:has(> .tm-card2-open:focus-visible) .tm-card2-plate { transform: none; }
+  .tm-card2:not(.tm-card2-new):hover > :is(strong, .tm-credit), .tm-card2:focus-visible > :is(strong, .tm-credit), .tm-card2:has(> .tm-card2-open:focus-visible) > :is(strong, .tm-credit) { transform: translateY(-36px); } }
 .tm-card2 > :is(strong, .tm-credit) { transition: transform .2s ease-out; }
 @media (prefers-reduced-motion: reduce) { .tm-card2-plate { transition: none; } }
 .tm-card2 p { margin: 0; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

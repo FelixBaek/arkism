@@ -48,8 +48,8 @@ window.ArkismHomeChecks = (ctx) => {
   // ---- 기억 처리 멈춤 (same rule as overview.js stages())
   // Refetched at most once a minute: the home only re-renders on data changes, so a timer keeps the warning current.
   let S = { g: -1, sessions: null, at: 0 }, timer = 0;
-  function load(generation) {
-    if (S.g === generation && Date.now() - S.at < 60000) return;
+  function load(generation, force = false) {
+    if (!force && S.g === generation && Date.now() - S.at < 60000) return;
     if (S.g !== generation) S = { g: generation, sessions: null, at: 0 };
     S.at = Date.now();
     const g = generation;
@@ -65,7 +65,7 @@ window.ArkismHomeChecks = (ctx) => {
     return { stalled, hours: Math.floor((now - since) / HOUR), lastExtract, pending: pending.length };
   }
   function stalledItem(generation) {
-    timer ||= setInterval(() => { if (live() && S.g >= 0) load(S.g); }, 60000);
+    timer ||= setInterval(() => { if (live() && S.g >= 0) load(S.g, true); }, 60000); // forced: a tick just short of 60s after the last fetch must not skip a whole minute
     load(generation);
     if (!S.sessions) return null;
     const d = state.data;

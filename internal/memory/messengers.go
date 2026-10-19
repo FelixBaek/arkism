@@ -45,6 +45,9 @@ func notifyErr(err error) error {
 	return err
 }
 
+// notifyScope keys a scope's destinations in the shared host file, so one tenant never reads or edits another's.
+func notifyScope(sc Scope) string { return sc.WorkspaceID + "/" + sc.ProjectID }
+
 func refName(n string) string {
 	if n == "" {
 		return "default"
@@ -59,7 +62,7 @@ func (s *Service) Messengers(ctx context.Context, token string, scope Scope) (ma
 	if _, err := s.authorize(ctx, token, "read:"+colProviders, scope, providersID(scope), ""); err != nil {
 		return nil, err
 	}
-	l, err := notifycfg.List(notifyPath())
+	l, err := notifycfg.List(notifyPath(), notifyScope(scope))
 	return map[string]any{"destinations": l}, err
 }
 
@@ -70,7 +73,7 @@ func (s *Service) SaveMessenger(ctx context.Context, token string, in MessengerS
 	if _, err := s.humanProviders(ctx, token, in.Scope); err != nil {
 		return nil, err
 	}
-	if err := notifyErr(notifycfg.Save(notifyPath(), in.Channel, in.Name, map[string]string{"bot_token": in.BotToken, "chat_id": in.ChatID, "webhook_url": in.Webhook})); err != nil {
+	if err := notifyErr(notifycfg.Save(notifyPath(), notifyScope(in.Scope), in.Channel, in.Name, map[string]string{"bot_token": in.BotToken, "chat_id": in.ChatID, "webhook_url": in.Webhook})); err != nil {
 		return nil, err
 	}
 	return map[string]any{"ok": true}, nil
@@ -83,7 +86,7 @@ func (s *Service) RemoveMessenger(ctx context.Context, token string, in Messenge
 	if _, err := s.humanProviders(ctx, token, in.Scope); err != nil {
 		return nil, err
 	}
-	if err := notifyErr(notifycfg.Remove(notifyPath(), in.Channel, refName(in.Name))); err != nil {
+	if err := notifyErr(notifycfg.Remove(notifyPath(), notifyScope(in.Scope), in.Channel, refName(in.Name))); err != nil {
 		return nil, err
 	}
 	return map[string]any{"ok": true}, nil
@@ -97,7 +100,7 @@ func (s *Service) TestMessenger(ctx context.Context, token string, in MessengerR
 	if _, err := s.humanProviders(ctx, token, in.Scope); err != nil {
 		return nil, err
 	}
-	err := notifycfg.Test(ctx, notifyPath(), in.Channel, refName(in.Name))
+	err := notifycfg.Test(ctx, notifyPath(), notifyScope(in.Scope), in.Channel, refName(in.Name))
 	if err == notifycfg.ErrInvalid {
 		return nil, ErrInvalid
 	}

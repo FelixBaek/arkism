@@ -30,7 +30,9 @@ window.ArkismAutomation = (h) => {
     if (!!a.enabled !== !!b.enabled) out.push(`켜기 ${a.enabled ? "켬" : "끔"} → ${b.enabled ? "켬" : "끔"}`);
     sub("model", "모델", (v) => v || "기본");
     if (!same(a.limits, b.limits)) out.push(`멈추는 조건 ${limitText(a.limits)} → ${limitText(b.limits)}`);
-    if (!same(a.notify, b.notify)) out.push(`진행 알림 채널 ${(a.notify?.channels || []).length}개 → ${(b.notify?.channels || []).length}개`);
+    const chans = (x) => (x.notify?.channels || []).map((c) => `${c.kind}${c.channel ? ` ${c.channel}` : ""}`).join(", ") || "없음";
+    if (!same(a.notify?.channels, b.notify?.channels)) out.push(`진행 알림 채널 ${chans(a)} → ${chans(b)}`);
+    else if (!same(a.notify, b.notify)) out.push("진행 알림 바꿈");
     if (!same(a.cover, b.cover)) out.push("배경 사진 바꿈");
     const A = new Map((a.graph?.nodes || []).map((n) => [n.id, n]));
     const B = new Map((b.graph?.nodes || []).map((n) => [n.id, n]));
@@ -40,7 +42,8 @@ window.ArkismAutomation = (h) => {
       const t = h.nodeTitle(n);
       if ((o.title || "") !== (n.title || "")) out.push(`단계 이름 ${h.nodeTitle(o)} → ${t}`);
       for (const [k, label] of [["model", "모델"], ["max_workers", "워커"], ["persona", "전문가"], ["collab", "협업"], ["access", "권한"]]) if (!same(o.config?.[k], n.config?.[k])) out.push(`${t} ${label} ${o.config?.[k] ?? "기본"} → ${n.config?.[k] ?? "기본"}`);
-      for (const k of ["goal", "prompt", "question", "code", "url"]) if (!same(o.config?.[k], n.config?.[k])) out.push(`${t} ${k === "prompt" ? "질문" : "목표"} 바꿈`);
+      const CFG = { goal: "목표", prompt: "질문", question: "질문", code: "코드", url: "주소", instructions: "지시", fence: "실행 범위" };
+      for (const [k, label] of Object.entries(CFG)) if (!same(o.config?.[k], n.config?.[k])) out.push(`${t} ${label} 바꿈`);
     }
     for (const [id, n] of A) if (!B.has(id)) out.push(`단계 뺌 ${h.nodeTitle(n)}`);
     const back = (g) => new Map((g?.edges || []).filter(h.isBack).map((e) => [`${e.from}>${e.to}`, e]));
@@ -937,7 +940,7 @@ window.ArkismAutomation = (h) => {
           }
           r.append(acts);
           vbox.append(r);
-          if (open.has(x.revision)) { const lines = what(items[0].crew, x.crew); const p = el("p", "tm-hist-diff"); p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((t) => el("span", "", t))); vbox.append(p); }
+          if (open.has(x.revision)) { const lines = what(x.crew, items[0].crew); const p = el("p", "tm-hist-diff"); p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((t) => el("span", "", t))); vbox.append(p); }
         });
         if (!items?.length) vbox.append(el("p", "auto-hint auto-empty", items ? "판 이력을 불러오지 못했어요." : "불러오는 중…"));
       };

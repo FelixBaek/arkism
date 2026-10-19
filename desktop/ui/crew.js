@@ -2049,7 +2049,7 @@ window.ArkismCrew = (ctx) => {
     return wrap;
   }
   // + 새 전문가 · + 새 팀 (1024:60724 · 1024:61783): make one right from the node. A new expert needs a name, @이름 and instruction;
-  // a new team starts with the first expert as its worker.
+  // a new team starts with the expert picked here as its worker.
   function newMemberPopup(isTeam, onPick) {
     const first = agents()[0];
     if (isTeam && !first) { notice("팀은 전문가로 만들어요. 먼저 전문가를 만들어 주세요."); return; }
@@ -2062,14 +2062,15 @@ window.ArkismCrew = (ctx) => {
     name.addEventListener("input", () => { if (!handle.dataset.touched) handle.value = name.value.replace(/\s+/g, "").slice(0, 40); });
     handle.addEventListener("input", () => { handle.dataset.touched = handle.value ? "1" : ""; });
     const ins = input("", { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "너는 ○○다. …한다." });
-    body.append(field("이름", name), field("@이름", handle), ...(isTeam ? [el("p", "meta", "첫 번째 전문가를 넣어 만들어요. 팀 화면에서 더 고칠 수 있어요.")] : [field("지시", ins)]));
+    const firstPick = select(agents().map((r) => [r.id, r.crew.name]), first?.id);
+    body.append(field("이름", name), field("@이름", handle), ...(isTeam ? [field("첫 전문가", firstPick), el("p", "meta", "팀 화면에서 더 넣거나 고칠 수 있어요.")] : [field("지시", ins)]));
     const foot = el("div", "dialog-foot");
     foot.append(button("취소", "ghost", null, () => dlg.close()), button("만들기", "primary", null, async () => {
       const n = name.value.trim(), h = handle.value.trim().replace(/^@/, "");
       if (!n || !/^[\p{L}\p{N}_-]{1,40}$/u.test(h) || (!isTeam && !ins.value.trim())) { notice(isTeam ? "이름과 @이름(띄어쓰기 없이)을 채워 주세요." : "이름·@이름·지시를 채워 주세요."); return; }
       if (agents().some((r) => r.crew.handle === h) || teams().some((r) => r.crew.handle === h)) { notice(`@${h}은 이미 있어요. 다른 이름을 써 주세요.`); return; }
       const crew = isTeam
-        ? { type: "team", name: n, handle: h, role: "", members: [{ agent_id: first.id, order: 1, role: "worker" }], mode: "round_robin",
+        ? { type: "team", name: n, handle: h, role: "", members: [{ agent_id: firstPick.value, order: 1, role: "worker" }], mode: "round_robin",
           ending: { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true }, context: [], templates: [] }
         : workerOut({ ...blankAgent(), name: n, handle: h, instructions: ins.value });
       try {

@@ -121,6 +121,8 @@ window.ArkismMessenger = (ctx) => {
   }
   function messengerCard(ch, name, d, note, kids) {
     if (S.nerr === "unsupported") return card(name, ["연결 안 됨", ""], null, el("p", "mg-note", "이 서버는 아직 이 연결을 지원하지 않아요. 서버를 새 버전으로 올려 주세요."));
+    // A failed read is not "not connected": say so and offer a retry instead of showing a saved link as missing.
+    if (S.nerr) return card(name, ["상태 모름", ""], button("다시 불러오기", "", null, () => void load()), el("p", "mg-note warn", `연결 상태를 불러오지 못했어요 (${S.nerr}).`));
     const right = el("div", "mg-actions");
     if (d) right.append(button("시험 보내기", "", null, () => testDest(ch)), button("연결 끊기", "ghost", null, () => { if (confirm(OFF[ch][0])) void act(() => dropDest(ch), OFF[ch][1]); }));
     return card(name, d ? ["연결됨", "on"] : ["연결 안 됨", ""], d ? right : null, ...kids, note);

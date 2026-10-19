@@ -21,7 +21,7 @@ window.ArkismMemoryBubbles = (() => {
 
     const reducedMq = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
     let cards = [], cardKey = "", W = 0, H = 0, dpr = 1, items = [], byId = new Map(), links = [], edgesAll = [], groups = [], mode = tabs[0][0], idsKey = "";
-    let sel = null, kb = null, hover = null, showAll = true, zoom = 1, scale = 1, raf = 0, last = 0, calm = 0, visible = true, energy = 99;
+    let sel = null, kb = null, hover = null, showAll = true, zoom = 1, scale = 1, raf = 0, last = 0, calm = 0, visible = true, energy = 99, dead = false;
     const btns = new Map();
     for (const [k, l] of tabs) { const b = mk("button", "mm-tab", l); b.type = "button"; b.addEventListener("click", () => setGroup(k)); btns.set(k, b); tabBar.append(b); }
 
@@ -91,19 +91,31 @@ window.ArkismMemoryBubbles = (() => {
       let e = 0;
       for (const p of items) { p.vx *= damp; p.vy *= damp; p.x += p.vx * dt * 1.6; p.y += p.vy * dt * 1.6; e += p.vx * p.vx + p.vy * p.vy; }
       energy = items.length ? e / items.length : 0;
-      for (let it = 0; it < 3; it++) for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
-        const a = items[i], b = items[j]; let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); const min = a.r + b.r + 1.5; if (d >= min) continue;
-        if (!d) { dx = 1; dy = 0; d = 1; } const push = (min - d) / 2, nx = dx / d, ny = dy / d; a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+      // overlap pass on a grid (cell = widest pair), so each bubble only meets its neighbours: O(n), not all pairs
+      let maxR = 1; for (const p of items) maxR = Math.max(maxR, p.r);
+      const cell = 2 * maxR + 2;
+      for (let it = 0; it < 3; it++) {
+        const grid = new Map(), key = (gx, gy) => gx * 65536 + gy;
+        items.forEach((p, i) => { const k = key(Math.floor(p.x / cell), Math.floor(p.y / cell)); (grid.get(k) || grid.set(k, []).get(k)).push(i); });
+        items.forEach((a, i) => {
+          const gx = Math.floor(a.x / cell), gy = Math.floor(a.y / cell);
+          for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) for (const j of grid.get(key(gx + ox, gy + oy)) || []) {
+            if (j <= i) continue;
+            const b = items[j]; let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); const min = a.r + b.r + 1.5; if (d >= min) continue;
+            if (!d) { dx = 1; dy = 0; d = 1; } const push = (min - d) / 2, nx = dx / d, ny = dy / d; a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
+          }
+        });
       }
       for (const p of items) { p.x = Math.max(PAD.l + p.r, Math.min(W - PAD.r - p.r, p.x)); p.y = Math.max(PAD.t + p.r, Math.min(H - PAD.b - p.r, p.y)); }
     }
     function frame(t) {
-      raf = 0; if (!visible || !root.isConnected) return;
+      raf = 0; if (dead || !visible || !root.isConnected) return;
       const dt = Math.min(0.033, (t - last) / 1000 || 0.016); last = t; step(dt); draw();
       if (energy < 8) { if (++calm >= 30) return; } else calm = 0;
       raf = requestAnimationFrame(frame);
     }
     function run() {
+      if (dead) return;
       calm = 0;
       if (reducedMq.matches) { for (let i = 0; i < 400; i++) step(1 / 60); draw(); return; }
       if (!raf && visible && W) { last = performance.now(); raf = requestAnimationFrame(frame); }
@@ -237,11 +249,13 @@ window.ArkismMemoryBubbles = (() => {
       layout(); for (const p of items) if (!p.placed) place(p); aim();
       placePill(); run(); draw();
     }
-    if (window.ResizeObserver) new ResizeObserver(resize).observe(root);
-    if (window.IntersectionObserver) new IntersectionObserver((es) => { visible = es[es.length - 1].isIntersecting; if (visible) run(); }).observe(root);
-    if (reducedMq.addEventListener) reducedMq.addEventListener("change", () => run());
+    const ro = window.ResizeObserver ? new ResizeObserver(resize) : null, io = window.IntersectionObserver ? new IntersectionObserver((es) => { visible = es[es.length - 1].isIntersecting; if (visible) run(); }) : null;
+    ro?.observe(root); io?.observe(root);
+    if (reducedMq.addEventListener) reducedMq.addEventListener("change", run);
+    // the map's window calls this on close, so no observer or listener keeps the old map alive
+    function destroy() { dead = true; if (raf) cancelAnimationFrame(raf); raf = 0; ro?.disconnect(); io?.disconnect(); reducedMq.removeEventListener?.("change", run); }
 
-    return { el: root, setItems, setEdges, setSelected, setEdgeAll, setZoom, setGroup };
+    return { el: root, setItems, setEdges, setSelected, setEdgeAll, setZoom, setGroup, destroy };
   }
   return { create };
 })();
