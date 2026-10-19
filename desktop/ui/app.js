@@ -239,6 +239,9 @@
   function setStatus(mode, text) {
     $("#status-dot").className = `dot ${mode}`;
     $("#status-text").textContent = text;
+    // Figma 198:110 has no dot: show it only when something needs a look.
+    $("#status-toggle").hidden = mode === "ready";
+    if (mode === "ready") $("#status-card").hidden = true;
   }
   function dbLabel() {
     if (state.ready === null) return "확인 중";
