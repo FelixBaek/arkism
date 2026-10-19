@@ -7,21 +7,31 @@
 .tm-cats .tm-chip output { margin-left: 6px; color: var(--nc-quiet); font: 400 11px/1.5 var(--mono); }
 .tm-cats .tm-chip.active output { color: inherit; }
 .tm-cats .btn { height: auto; padding: 7px 14px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
-.tm-grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-.tm-card2 { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; min-height: 224px; padding: 14px 16px 16px; text-align: left;
-  border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-surface); color: var(--nc-text); cursor: pointer; }
+.tm-cats .tm-chip { gap: 5px; height: 26px; padding: 0 10px; font-size: calc(12px * var(--fs, 1)); }
+.tm-cats .tm-chip .icon { width: 12px; height: 12px; }
+.tm-grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(254px, 1fr)); gap: 12px; }
+.tm-card2 { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; min-height: 226px; padding: 14px 16px 16px; text-align: left;
+  border: 1px solid var(--nc-line); border-radius: 12px; background: var(--nc-surface); color: var(--nc-text); cursor: pointer; }
 .tm-card2:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .tm-card2:hover { border-color: var(--nc-muted); } }
 .tm-card2 > * { position: relative; }
 .tm-card2-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.tm-card2.has-cover::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgb(0 0 0 / .1), rgb(0 0 0 / .78)); }
+.tm-card2.has-cover::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 26.5%, #131313); }
+.tm-card2.has-cover { border-color: rgb(255 255 255 / .08); }
 .tm-card2.has-cover { color: #fff; }
 .tm-card2.has-cover p { color: rgb(255 255 255 / .85); }
 .tm-card2-top { position: absolute; top: 12px; left: 14px; right: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.tm-card2 strong { font: 600 calc(22px * var(--fs, 1))/1.25 var(--sans); word-break: keep-all; }
+.tm-card2 strong { font: 600 calc(24px * var(--fs, 1))/1.25 var(--sans); word-break: keep-all; }
+.tm-card2 strong.tm-title-en { font-size: calc(28px * var(--fs, 1)); line-height: 1.23; text-transform: uppercase; word-break: normal; }
+.tm-card2 strong.tm-title-en::after { content: "."; }
+/* yellow plate: category + @handle rise from the bottom edge on hover (837:3) */
+.tm-card2-plate { position: absolute; left: 0; right: 0; bottom: 0; height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; background: var(--nc-action); color: var(--nc-on-accent); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); transform: translateY(100%); transition: transform .2s ease-out; }
+.tm-card2-plate:has(:empty:only-child), .tm-card2-new .tm-card2-plate { display: none; }
+@media (hover: hover) and (pointer: fine) { .tm-card2:hover .tm-card2-plate, .tm-card2:focus-visible .tm-card2-plate { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .tm-card2-plate { transition: none; } }
 .tm-card2 p { margin: 0; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.tm-card2-new { align-items: center; justify-content: center; text-align: center; border-style: dashed; background: none; }
-.tm-card2-new .icon { width: 18px; height: 18px; }
+.tm-card2-new { align-items: center; justify-content: center; text-align: center; border-style: dashed; border-radius: 20px; background: none; }
+.tm-card2-new .icon { width: 22px; height: 22px; color: var(--nc-muted); }
 .tm-card2-new small { color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); max-width: 190px; word-break: keep-all; }
 .tm-credit { color: rgb(255 255 255 / .8); font: 400 10px/1.4 var(--sans); }
 .tm-credit a { color: inherit; text-decoration: none; }
@@ -34,6 +44,13 @@
 .tm-face { position: relative; display: inline-grid; flex: none; overflow: hidden; width: 28px; height: 28px; border-radius: 50%; background: var(--face-bg, var(--nc-raised)); }
 .tm-face.s { width: 30px; height: 30px; border: 2px solid var(--nc-surface); }
 .tm-face.m { width: 32px; height: 32px; }
+.tm-face.l, .tm-card2 .tm-faces .tm-mark { width: 40px; height: 40px; }
+.tm-face.l { border: 1px solid #000; }
+.tm-card2 .tm-faces .tm-mark { border: 1px solid #000; }
+/* name tag on hover (841:59198) */
+.tm-card2 .tm-faces > [data-name]:not([data-name=""]):hover::after { content: attr(data-name); position: absolute; z-index: 2; left: 50%; top: calc(100% + 4px); transform: translateX(-50%); padding: 3px 8px; border-radius: 6px; background: #181818; color: #fff; font: 500 11px/1.4 var(--sans); white-space: nowrap; }
+.tm-card2 .tm-faces > [data-name] { overflow: visible; }
+.tm-card2 .tm-face.l img { border-radius: 50%; }
 .tm-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .tm-faces .tm-mark { width: 30px; height: 30px; border-radius: 50%; background: var(--nc-raised); border: 2px solid var(--nc-surface); }
 .tm-card2.has-cover .tm-face.s, .tm-card2.has-cover .tm-faces .tm-mark { border-color: #fff; }

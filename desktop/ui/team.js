@@ -248,15 +248,21 @@ window.ArkismTeams = (ctx) => {
     const c = el("button", `tm-card2${cv ? " has-cover" : ""}`); c.type = "button"; c.dataset.id = r.id;
     if (cv) { const img = el("img", "tm-card2-img"); img.alt = ""; img.src = coverSrc(cv); c.append(img); }
     const top = el("div", "tm-card2-top");
-    const b = teamBadge(r); top.append(b ? badge(b[0], b[1]) : el("span"));
+    const b = teamBadge(r); top.append(b && b[1] === "warn" ? badge(b[0], b[1]) : el("span")); // Figma shows no status badge; only the needs-attention one stays
     const faces = el("span", "tm-faces");
-    sorted(x.members).slice(0, 5).forEach((m) => faces.append(face(byId(m.agent_id), "s")));
+    sorted(x.members).slice(0, 5).forEach((m) => { const a = byId(m.agent_id), f = face(a, "l"); f.dataset.name = a?.crew?.name || ""; faces.append(f); });
     top.append(faces);
-    c.append(top, raw(el("strong", "", x.name)), raw(el("p", "", x.role || "")));
+    const title = raw(el("strong", /[A-Za-z]/.test(x.name || "") ? "tm-title-en" : "", x.name)); // English names read as the big uppercase title: DESIGN REVIEW.
+    c.append(top, title);
     const credit = coverCredit(cv); if (credit) c.append(credit);
+    // hover plate: category + @handle slide up from the bottom edge
+    const plate = el("span", "tm-card2-plate");
+    plate.append(el("span", "tm-card2-cat", x.category || ""), raw(el("b", "", x.handle ? `@${x.handle}` : "")));
+    c.append(plate);
     c.addEventListener("click", () => openPopup(r.id));
     return c;
   }
+  const catIcon = (c) => (/git|release|릴리/i.test(c) ? "git-branch" : /plan|기획/i.test(c) ? "file-text" : /research|리서/i.test(c) ? "magnifying-glass" : /design|디자/i.test(c) ? "palette" : c ? "tag" : "list-bullets"); // categories are the person's own words
   function renderTeams() {
     $("#controls").replaceChildren();
     const table = $("#table");
@@ -271,7 +277,7 @@ window.ArkismTeams = (ctx) => {
     for (const [key, label] of [["", "모든 카테고리"], ...cats.map((c) => [c, c])]) {
       const n = key ? list.filter((r) => r.crew.category === key).length : list.length;
       const c = el("button", `tm-chip${S.cat === key ? " active" : ""}`); c.type = "button";
-      c.append(key ? raw(el("span", "", label)) : el("span", "", label), el("output", "", String(n)));
+      c.append(icon(catIcon(key)), key ? raw(el("span", "", label)) : el("span", "", label), el("output", "", String(n)));
       c.addEventListener("click", () => { S.cat = key; render(false); });
       chips.append(c);
     }
