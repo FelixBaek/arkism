@@ -278,6 +278,8 @@ type Repository interface {
 	BlobStorageIdentity(context.Context) (string, error)
 	ExpiringCandidates(context.Context, Scope, time.Time, int) ([]Record, error)
 	MemoryUsage(context.Context, Scope, string) ([]Record, error)
+	// RecentContextUsage returns the newest context_usage receipts of one scope (limit rows).
+	RecentContextUsage(context.Context, Scope, int) ([]Record, error)
 	// MemoryOutcomes pages one memory's memory_outcome evaluations, newest first (limit+1 rows).
 	MemoryOutcomes(context.Context, MemoryOutcomeQuery) ([]Record, error)
 	// MemoryOutcomeCounts aggregates memory_outcome evaluations per memory id under the same filters.

@@ -5575,3 +5575,35 @@ Object.assign(window.ArkismI18nEN.strings, {
   "지운 뒤 빈 Arkism으로 다시 시작해요.": "Starts again as an empty Arkism.",
   "목록을 누르면 펼쳐서 고쳐요. 노드에서 쓰는 페르소나는 지울 수 없어요.": "Click an item to expand and edit it. Personas used by nodes can't be deleted."
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "나만 (개인)": "Only me (personal)",
+  "모든 프로젝트 (범용)": "All projects (general)",
+  "그대로 저장 추천": "Suggest saving as is",
+  "고쳐서 저장 추천": "Suggest fixing, then saving",
+  "합치기 추천": "Suggest merging",
+  "버리기 추천": "Suggest discarding",
+  "뜻이 원문과 같아요": "Meaning matches the original",
+  "뜻이 원문과 달라요": "Meaning differs from the original",
+  "빠진 내용이 없어요": "Nothing is missing",
+  "빠진 내용이 있어요": "Something is missing",
+  "원문에 없는 말을 더하지 않았어요": "Nothing was added to the original",
+  "원문에 없는 말을 더했어요": "Something was added to the original",
+  "정확": "Exact",
+  "키워드": "Keyword",
+  "최근 불러오기 · 점수와 고른 이유 (질문 내용은 저장하지 않아요)": "Recent recalls · score and why picked (question text isn't stored)",
+  "아직 불러온 기록이 없어요.": "No recalls yet.",
+  "한 번에 넣는 양": "Amount put in at once",
+  "불러오기 기록을 읽지 못했어요.": "Couldn't read the recall log.",
+  "AI가 헷갈림으로 본 이유": "Why the AI saw this as confusing",
+  "AI가 짐작": "AI's guess",
+  "AI 의미 검사 · 표시만 해요": "AI meaning check · shown only",
+  "비교": "Compare",
+  "들어갈 곳": "Goes into"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} · 넣음 {1}": "{0} · put in {1}",
+  "“{0}”와 같은 뜻": "Same meaning as “{0}”",
+  "분류 · {0}": "Classified · {0}",
+  "AI 판단{0}": "AI verdict{0}",
+  "기존 기억 · {0}번 쓰임": "Existing memory · used {0} times"
+});

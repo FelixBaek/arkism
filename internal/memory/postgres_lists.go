@@ -217,6 +217,13 @@ func (p *Postgres) MemoryUsage(ctx context.Context, s Scope, id string) ([]Recor
 	return p.selectRecords(ctx, "jobs", s, `kind='context_usage' AND doc @> $6::jsonb`, []any{fmt.Sprintf(`{"usage":{"items":[{"memory":{"collection":"memories","id":%q}}]}}`, id)}, pgDate+" DESC,id DESC", 10)
 }
 
+func (p *Postgres) RecentContextUsage(ctx context.Context, s Scope, limit int) ([]Record, error) {
+	if checkScope(s) != nil || limit < 1 || limit > 50 {
+		return nil, ErrInvalid
+	}
+	return p.selectRecords(ctx, "jobs", s, `kind='context_usage' AND status='done'`, nil, pgDate+" DESC,id DESC", limit)
+}
+
 func (p *Postgres) ExpiringCandidates(ctx context.Context, s Scope, before time.Time, limit int) ([]Record, error) {
 	if checkScope(s) != nil || before.IsZero() || limit < 1 || limit > 100 {
 		return nil, ErrInvalid

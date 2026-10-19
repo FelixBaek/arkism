@@ -219,3 +219,77 @@ func scopeOnly(a Authorizer) bool {
 	x, ok := a.(scopeOnlyAuthorizer)
 	return ok && x.ScopeOnly()
 }
+
+// RecallEntry is one context handed out: who asked, for what, and the memories returned with their fused score and lanes.
+type RecallEntry struct {
+	ContextID   string      `json:"id"`
+	CreatedAt   time.Time   `json:"created_at"`
+	RequestedBy string      `json:"requested_by"`
+	Purpose     string      `json:"purpose,omitempty"`
+	ProjectKey  string      `json:"project_key,omitempty"`
+	Items       []MemoryUse `json:"items"`
+}
+type RecallPage struct {
+	MeasurementBasis string        `json:"measurement_basis"`
+	Items            []RecallEntry `json:"items"`
+	Authority        string        `json:"authority"`
+}
+
+// RecentRecalls lists the newest context receipts (불러오기 window). Receipts keep what was returned, not what was
+// left out below the score cut, so nothing about "안 넣음" can be shown from them.
+func (s *Service) RecentRecalls(ctx context.Context, token string, scope Scope, limit int) (RecallPage, error) {
+	if limit < 1 || limit > 50 {
+		return RecallPage{}, ErrInvalid
+	}
+	who, e := s.authorize(ctx, token, "read:memories", scope, "", "")
+	if e != nil {
+		return RecallPage{}, e
+	}
+	allowed, e := s.authorize(ctx, token, "read:usage", scope, "", "")
+	if e != nil {
+		return RecallPage{}, e
+	}
+	if allowed.PrincipalID != who.PrincipalID || allowed.Role != who.Role {
+		return RecallPage{}, ErrDenied
+	}
+	if s.Repo == nil {
+		return RecallPage{}, ErrUnavailable
+	}
+	rows, e := s.Repo.RecentContextUsage(ctx, scope, limit)
+	if e != nil {
+		return RecallPage{}, e
+	}
+	out := RecallPage{Items: []RecallEntry{}, Authority: AuthorityDataOnly, MeasurementBasis: "server_return"}
+	perRow := !scopeOnly(s.Auth)
+	for _, r := range rows {
+		if r.Scope != scope || r.Kind != "context_usage" || r.Usage == nil {
+			return RecallPage{}, ErrUnavailable
+		}
+		entry := RecallEntry{ContextID: r.ID, CreatedAt: r.CreatedAt, RequestedBy: r.CreatedBy, Purpose: r.Usage.Purpose, ProjectKey: r.Usage.ProjectKey, Items: []MemoryUse{}}
+		for _, it := range r.Usage.Items {
+			if it.Memory.Collection != colMemories || !validRunLabel(it.Memory.ID, 256) || containsSecret(it.Memory.ID) {
+				continue
+			}
+			if perRow {
+				d, e := s.authorize(ctx, token, "read:memories", scope, it.Memory.ID, "")
+				if errors.Is(e, ErrDenied) {
+					continue
+				}
+				if e != nil {
+					return RecallPage{}, e
+				}
+				if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
+					return RecallPage{}, ErrDenied
+				}
+			}
+			entry.Items = append(entry.Items, it)
+		}
+		out.Items = append(out.Items, entry)
+	}
+	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		return audit(ctx, tx, scope, who.PrincipalID, "read:memory_usage", "")
+	}); e != nil {
+		return RecallPage{}, e
+	}
+	return out, nil
+}

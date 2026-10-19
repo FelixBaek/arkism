@@ -1179,6 +1179,19 @@ func (f *fakeRepo) MemoryUsage(_ context.Context, scope Scope, id string) ([]Rec
 	return rows, nil
 }
 
+func (f *fakeRepo) RecentContextUsage(_ context.Context, scope Scope, limit int) ([]Record, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	rows := []Record{}
+	for _, r := range f.store["jobs"] {
+		if r.Scope == scope && r.Kind == "context_usage" && r.Status == "done" && r.Usage != nil {
+			rows = append(rows, r)
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].CreatedAt.After(rows[j].CreatedAt) })
+	return rows[:min(limit, len(rows))], nil
+}
+
 func (f *fakeRepo) ExpiringCandidates(_ context.Context, scope Scope, before time.Time, limit int) ([]Record, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

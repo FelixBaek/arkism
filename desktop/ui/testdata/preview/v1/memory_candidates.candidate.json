@@ -79,7 +79,34 @@
     "basis:inferred",
     "event_id:codex:s8"
    ],
-   "created_by_type": "agent"
+   "created_by_type": "agent",
+   "classification": {
+    "risk": "low",
+    "risk_reasons": [
+     "사용자가 직접 한 말"
+    ],
+    "evidence_span": "나는 보통 오전에 코드 리뷰해",
+    "by": "arkism-memory-reviewer",
+    "at": "2026-10-19T03:00:00Z",
+    "verdict": {
+     "action": "keep",
+     "reason": "원문과 뜻이 같아요."
+    },
+    "semantic": [
+     {
+      "check": "same_meaning",
+      "ok": true
+     },
+     {
+      "check": "missing_content",
+      "ok": true
+     },
+     {
+      "check": "no_additions",
+      "ok": true
+     }
+    ]
+   }
   },
   {
    "id": "c6",
@@ -98,7 +125,37 @@
     "basis:assistant_result",
     "event_id:claude-code:s9"
    ],
-   "created_by_type": "agent"
+   "created_by_type": "agent",
+   "classification": {
+    "risk": "medium",
+    "risk_reasons": [
+     "규칙 표현 포함"
+    ],
+    "evidence_span": "코드 고치면 테스트 돌려줘",
+    "dup_hint": "m7",
+    "by": "arkism-memory-reviewer",
+    "at": "2026-10-18T03:00:00Z",
+    "verdict": {
+     "action": "fix",
+     "text": "코드를 수정한 뒤에는 관련 테스트를 실행한다",
+     "reason": "뜻은 맞지만 원문에 있던 “수정한 뒤”가 빠졌어요."
+    },
+    "semantic": [
+     {
+      "check": "same_meaning",
+      "ok": true
+     },
+     {
+      "check": "missing_content",
+      "ok": false,
+      "note": "“수정한 뒤”가 후보 문장에 없어요."
+     },
+     {
+      "check": "no_additions",
+      "ok": true
+     }
+    ]
+   }
   }
  ]
 }

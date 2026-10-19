@@ -256,3 +256,15 @@ func TestCaptureAIReviewOutboxFailsClosedOnForbidden(t *testing.T) {
 		}
 	}
 }
+
+func TestWithJudgementKeepsAdviceOnly(t *testing.T) {
+	req := withJudgement(classifyRequest(map[string]any{"id": "p", "revision": 1}, "medium", nil, ""), map[string]any{"verdict": "fix", "verdict_text": "고친 문장", "verdict_reason": "빠진 말",
+		"semantic": []any{map[string]any{"check": "no_additions", "ok": false, "note": "더함"}}})
+	b := req["body"].(map[string]any)
+	if v := b["verdict"].(map[string]any); v["action"] != "fix" || v["text"] != "고친 문장" || len(b["semantic"].([]any)) != 1 {
+		t.Fatal(b)
+	}
+	if b := withJudgement(classifyRequest(map[string]any{"id": "p", "revision": 1}, "low", nil, ""), map[string]any{})["body"].(map[string]any); b["verdict"] != nil || b["semantic"] != nil {
+		t.Fatal(b)
+	}
+}

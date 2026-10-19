@@ -2,6 +2,7 @@ package memory
 
 import (
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -66,5 +67,31 @@ func TestHitLanes(t *testing.T) {
 	}
 	if got = hitLanes(nil); len(got) != 0 {
 		t.Fatal(got)
+	}
+}
+
+func TestRecentRecallsListsNewestReceiptsWithScore(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Embedder = nil
+	m := f.activeMemory("recalllog body", "recalllog")
+	var last ContextBundle
+	for i := 0; i < 3; i++ {
+		last = f.search(f.human, SearchInput{Scope: scopeA, Query: "recalllog"})
+	}
+	page, e := f.svc.RecentRecalls(testCtx, f.human, scopeA, 2)
+	if e != nil || len(page.Items) != 2 || page.Authority != AuthorityDataOnly {
+		t.Fatal(page, e)
+	}
+	if it := page.Items[0].Items; len(it) != 1 || it[0].Memory.ID != m.ID || it[0].Score <= 0 || len(it[0].Lanes) == 0 || page.Items[0].RequestedBy == "" {
+		t.Fatal(page.Items[0])
+	}
+	if page.Items[0].ContextID != last.ContextID && page.Items[0].CreatedAt.Before(page.Items[1].CreatedAt) {
+		t.Fatal("not newest first")
+	}
+	if _, e = f.svc.RecentRecalls(testCtx, f.human, scopeA, 0); !errors.Is(e, ErrInvalid) {
+		t.Fatal(e)
+	}
+	if page, e = f.svc.RecentRecalls(testCtx, f.human, scopeB, 5); e == nil && len(page.Items) != 0 {
+		t.Fatal("scope leak", page)
 	}
 }
