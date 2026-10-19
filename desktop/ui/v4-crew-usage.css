@@ -1,12 +1,14 @@
 /* CREW › 사용량 (Figma 325:37545): stacked day bars in one violet, hover tooltip, four tables. */
-.tm-usage { --cu-violet: #9d8cf0; }
+/* Figma chart/agent (#a594f9 dark, #6e5bd8 light); team and expert are its lighter steps. Bars sit at 45% until hovered. */
+.tm-usage { --cu-violet: #a594f9; --cu-team: #beb2fb; --cu-agent: #d2c9fc; }
+:root[data-theme="light"] .tm-usage { --cu-violet: #6e5bd8; --cu-team: color-mix(in srgb, #6e5bd8 72%, #fff); --cu-agent: color-mix(in srgb, #6e5bd8 45%, #fff); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .tm-usage { --cu-violet: #6e5bd8; --cu-team: color-mix(in srgb, #6e5bd8 72%, #fff); --cu-agent: color-mix(in srgb, #6e5bd8 45%, #fff); } }
 .tm-col i.bad { background: var(--nc-amber); border-radius: 2px 2px 0 0; }
-.tm-col i.cu-ag, .tm-col i.team, .tm-col i.auto { border-radius: 0; }
-.tm-col i.cu-ag { background: color-mix(in srgb, var(--cu-violet) 45%, #fff); opacity: 1; }
-.tm-col i.team { background: color-mix(in srgb, var(--cu-violet) 72%, #fff); opacity: 1; }
-.tm-col i.auto { background: var(--cu-violet); opacity: 1; }
-.tm-col.hot i.auto, .tm-col.hot i.team, .tm-col.hot i.cu-ag { filter: brightness(1.12); }
-.tm-col.hot i.bad { filter: brightness(1.1); }
+.tm-col i.cu-ag, .tm-col i.team, .tm-col i.auto { border-radius: 0; opacity: .45; }
+.tm-col i.cu-ag { background: var(--cu-agent); }
+.tm-col i.team { background: var(--cu-team); }
+.tm-col i.auto { background: var(--cu-violet); }
+.tm-col.hot i { opacity: 1; }
 .tm-legend span:not(.bad)::before { background: var(--cu-violet); opacity: 1; }
 .tm-cols { position: relative; }
 .cu-tip { position: absolute; top: 0; z-index: 2; min-width: 148px; padding: 8px 10px; border-radius: 8px; background: var(--nc-raised); border: 1px solid var(--nc-line); box-shadow: 0 6px 18px rgba(0, 0, 0, .3); pointer-events: none; }
@@ -14,8 +16,8 @@
 .cu-tip b { display: block; margin-bottom: 4px; color: var(--nc-text); font: 500 12px/1.5 var(--sans); white-space: nowrap; }
 .cu-tip p { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--nc-muted); font: 400 12px/1.6 var(--sans); }
 .cu-tip i { width: 8px; min-width: 8px; max-width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--cu-violet); }
-.cu-tip i.cu-ag { background: color-mix(in srgb, var(--cu-violet) 45%, #fff); }
-.cu-tip i.team { background: color-mix(in srgb, var(--cu-violet) 72%, #fff); }
+.cu-tip i.cu-ag { background: var(--cu-agent); }
+.cu-tip i.team { background: var(--cu-team); }
 .cu-tip i.bad { background: var(--nc-amber); }
 .cu-tip em { margin-left: auto; padding-left: 12px; color: var(--nc-text); font-style: normal; }
 .cu-card .tm-utable { margin-top: 12px; }
@@ -34,6 +36,13 @@
 .cu-name .tm-mark img, .cu-name .tm-mark svg { width: 22px; height: 22px; }
 .cu-face { border-radius: 50%; overflow: hidden; }
 .cu-face img { object-fit: cover; }
-@media (max-width: 900px) { .cu-table { overflow-x: auto; } .cu-table .tm-urow { min-width: 720px; } }
 .cu-table .tm-urow > span:last-child { padding-left: 12px; }
 .cu-table .tm-urow > span:nth-child(6) { text-align: right; }
+/* Narrow windows: drop the 평균 column (5th) and let the last column wrap instead of cutting it off. */
+@media (max-width: 1200px) {
+  .cu-table .tm-urow > :nth-child(5) { display: none; }
+  .cu-expert .tm-urow { grid-template-columns: minmax(110px, 1.2fr) minmax(80px, 1fr) 48px 64px 72px minmax(80px, 1.2fr); }
+  .cu-team .tm-urow { grid-template-columns: minmax(100px, 1.1fr) minmax(64px, .8fr) 48px 84px 64px minmax(120px, 1.8fr); }
+  .cu-auto .tm-urow { grid-template-columns: minmax(100px, 1.1fr) minmax(64px, .8fr) 48px 64px 72px minmax(120px, 1.8fr); }
+  .cu-table .tm-urow > span:last-child { white-space: normal; overflow-wrap: anywhere; }
+}

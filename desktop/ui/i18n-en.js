@@ -4879,15 +4879,20 @@ add(window.ArkismI18nEN.strings, {
   "부르는 곳": "Called from", "쓰는 곳": "Used in", "평균 토큰": "Avg tokens", "모델": "Model", "이름": "Name", "비용": "Cost", "호출": "Calls", "성공률": "Success rate",
   "회의": "Meetings", "전문가": "Experts", "팀": "Teams", "직접": "Direct", "일정": "Schedule", "웹훅": "Webhook", "디스코드": "Discord",
   "오늘": "Today", "전체 기간": "All time", "회의 기록 전체 보기 →": "View all meeting records →", "실행 기록 전체 보기 →": "View all run records →",
-  "이 기간에 회의한 팀이 없어요.": "No team met in this period.", "이 기간에 돈 자동화가 없어요.": "No automation ran in this period."
+  "이 기간에 회의한 팀이 없어요.": "No team met in this period.",
+  "호출 기록 전체 보기 →": "View all call records →", "실패한 곳부터 다시 →": "Retry from failures →", "다시 실행": "Run again", "실패한 자동화마다 마지막 실행을": "the last run of each failed automation",
+  "다시 돌릴 실패 기록을 찾지 못했어요. 실행 기록에서 열어 주세요.": "Couldn't find the failed run to retry. Open it from run records.", "이 기간에 돈 자동화가 없어요.": "No automation ran in this period."
 });
 add(window.ArkismI18nEN.patterns, {
   "최근 {0}": "Last {0}", "전문가 {0} · 팀 {1} · 자동화 {2}": "Experts {0} · Teams {1} · Automations {2}",
   "{0} · 성공 {1} · 실패 {2} · 막대에 올리면 전문가·팀·자동화로 나뉘어 보여요": "{0} · {1} succeeded · {2} failed · hover a bar to see experts, teams and automations",
   "{0} · 실행 {1} · 실패 {2}": "{0} · {1} runs · {2} failed", "{0} · 실행 {1}": "{0} · {1} runs",
-  "{0}명 · 호출 {1}번(단독 {2}) · 줄을 누르면 전문가로 가요": "{0} experts · {1} calls ({2} direct) · click a row to open experts",
+  "{0}명 · 호출 {1}번(단독 {2}) · 줄을 누르면 호출 기록으로 가요": "{0} experts · {1} calls ({2} direct) · click a row for call records",
   "{0}개 · 회의 {1}번 · 줄을 누르면 회의 기록으로 가요": "{0} teams · {1} meetings · click a row for meeting records",
   "{0}개 · 줄을 누르면 실행 기록으로 가요": "{0} · click a row for run records",
   "{0} · 실패 {1}번이 {2}곳에서": "{0} · {1} failures in {2} places",
+  "{0} 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.": "Retry {0} from where it failed? Finished steps keep their results.",
+  "${0}의 마지막 실패 실행을": "the last failed run of ${0}",
+  "${0}을 다시 돌리지 못했어요 ({1}).": "Couldn't rerun ${0} ({1}).", "{0}개 실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.": "Queued {0} runs. The server runner will start within 10 seconds.",
   "자동화 {0} · 팀 {1}": "Automations {0} · Teams {1}", "자동화 {0}": "Automations {0}", "팀 {0}": "Teams {0}"
 }); }

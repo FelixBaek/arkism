@@ -1413,9 +1413,9 @@ window.ArkismTeams = (ctx) => {
       const autoN = own ? items().filter((r) => r.crew.type === "workflow" && r.crew.handle !== own && (r.crew.graph?.nodes || []).some((n) => n.type === "subflow" && (n.config?.workflow || "").replace(/^\$/, "") === own)).length : 0;
       const where = [autoN ? `자동화 ${autoN}` : "", teamN ? `팀 ${teamN}` : ""].filter(Boolean).join(" · ") || "—";
       const cost = el("span", "mono", usd(a.cost_usd));
-      return urow([name, cell(modelLabel(model), "mono quiet"), cell(String(a.calls), "mono"), cell(pct(rateV), `mono${lowRate(rateV)}`), cell(num(a.tokens / a.calls), "mono"), cost, cell(where, "quiet")], () => go("workers"));
+      return urow([name, cell(modelLabel(model), "mono quiet"), cell(String(a.calls), "mono"), cell(pct(rateV), `mono${lowRate(rateV)}`), cell(num(a.tokens / a.calls), "mono"), cost, cell(where, "quiet")], () => openExpertHistory(a.id));
     });
-    return usageTable("전문가", `${list.length}명 · 호출 ${sumBy(list, "calls")}번(단독 ${direct}) · 줄을 누르면 전문가로 가요`, null, null,
+    return usageTable("전문가", `${list.length}명 · 호출 ${sumBy(list, "calls")}번(단독 ${direct}) · 줄을 누르면 호출 기록으로 가요`, "호출 기록 전체 보기 →", () => go("workers"),
       ["이름", "모델", "호출", "성공률", "평균 토큰", "비용", "쓰는 곳"], body, "이 기간에 부른 전문가가 없어요.", "cu-expert");
   }
   function teamTable(rows, meetings) {
@@ -1450,9 +1450,28 @@ window.ArkismTeams = (ctx) => {
     return usageTable("자동화", `${rows.length}개 · 줄을 누르면 실행 기록으로 가요`, "실행 기록 전체 보기 →", () => go("crew"),
       ["이름", "시작", "실행", "성공률", "평균 시간", "비용", "마지막 실패"], body, "이 기간에 돈 자동화가 없어요.", "cu-auto");
   }
+  // The expert popup (crew.js) owns the history tab; it listens for this event.
+  function openExpertHistory(id) { go("workers"); window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id, tab: "history" } })); }
+  // 실패한 곳부터 다시: the same request crew.js sends from a failed run (POST /v1/crew/runs, done nodes kept).
+  const lastFailed = (wfId, nodeId) => (S.uRuns || []).filter((r) => r.crew_run?.crew_id === wfId && r.crew_run.status === "failed" && (!nodeId || r.crew_run.nodes?.[nodeId]?.status === "failed")).sort((a, b) => runAt(b) - runAt(a))[0];
+  async function retryFailed(runs, what) {
+    const todo = runs.filter((r) => r && byId(r.crew_run.crew_id));
+    if (!todo.length) { notice("다시 돌릴 실패 기록을 찾지 못했어요. 실행 기록에서 열어 주세요."); return; }
+    if (!confirm(`${what} 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.`)) return;
+    let ok = 0;
+    for (const run of todo) {
+      const rec = byId(run.crew_run.crew_id), cr = run.crew_run;
+      const nodes = Object.fromEntries((rec.crew.graph?.nodes || []).map((n) => [n.id, { status: "pending" }]));
+      for (const [id, st] of Object.entries(cr.nodes || {})) if (nodes[id] && st.status === "done") nodes[id] = { status: "done", output: st.output, port: st.port, runs: st.runs };
+      const next = { crew_id: rec.id, crew_revision: rec.revision, trigger: "manual", status: "running", input: cr.input || JSON.stringify({ request: "" }), nodes, ...(cr.loops ? { loops: cr.loops } : {}) };
+      try { await request("/v1/crew/runs", { method: "POST", body: body({ run: next }) }); ok++; } catch (e) { notice(`$${rec.crew.handle}을 다시 돌리지 못했어요 (${e.message}).`); }
+    }
+    if (ok) { notice(`${ok}개 실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.`); void loadUsage(); }
+  }
   function failingCard(rows) {
     const total = sumBy(rows, "failures");
     const c = card("cu-card cu-fail", "실패가 많은 노드", `${rangeLabel()} · 실패 ${total}번이 ${rows.length}곳에서`);
+    if (rows.length) c.firstChild.append(link("실패한 곳부터 다시 →", () => retryFailed([...new Set(rows.map((f) => f.workflow_id))].map((id) => lastFailed(id)), "실패한 자동화마다 마지막 실행을")));
     for (const f of rows) {
       const wf = byId(f.workflow_id);
       const node = (wf?.crew?.graph?.nodes || []).find((n) => n.id === f.node_id);
@@ -1460,7 +1479,7 @@ window.ArkismTeams = (ctx) => {
       const reason = run?.crew_run.nodes[f.node_id].error;
       const r = el("div", "tm-ulist");
       const t = el("div", ""); t.append(raw(el("b", "", node?.title || f.node_id)), raw(el("small", "", `$${wf?.crew?.handle || f.workflow_id}${reason ? ` · ${reason}` : ""}`)));
-      const right = el("div", "tm-ulist-right"); right.append(el("span", "amber mono", `${f.failures}번`), link("열기", () => { go("crew"); state.selected = `crew:${f.workflow_id}`; render(); }));
+      const right = el("div", "tm-ulist-right"); right.append(el("span", "amber mono", `${f.failures}번`), link("다시 실행", () => retryFailed([lastFailed(f.workflow_id, f.node_id)], `$${wf?.crew?.handle || f.workflow_id}의 마지막 실패 실행을`)));
       r.append(t, right); c.append(r);
     }
     if (!rows.length) c.append(empty("실패한 노드가 없어요."));
