@@ -10,6 +10,9 @@ func TestPickDestPrefersRunnerScope(t *testing.T) {
 	if d, _ := pickDest(m, "", "default"); d != 1 {
 		t.Fatal("host", d)
 	}
+	if _, ok := pickDest(m, "ws/p", "other/p/default"); ok {
+		t.Fatal("reached another scope's destination")
+	}
 	if _, ok := pickDest(m, "ws/p", "missing"); ok {
 		t.Fatal("missing found")
 	}

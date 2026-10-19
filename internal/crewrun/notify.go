@@ -42,7 +42,12 @@ type NotifyConfig struct {
 
 // pickDest prefers the runner scope's own destination ("<workspace>/<project>/<name>", saved from the
 // desktop) over a host-wide hand-edited one of the same name.
+// A name holding "/" is refused outright: it could name another scope's destination.
 func pickDest[T any](m map[string]T, scope, to string) (T, bool) {
+	if strings.Contains(to, "/") {
+		var zero T
+		return zero, false
+	}
 	if scope != "" {
 		if d, ok := m[scope+"/"+to]; ok {
 			return d, true
