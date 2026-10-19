@@ -123,7 +123,7 @@ var searchQueryScaffolding = map[string]bool{
 	"has": true, "have": true, "had": true, "can": true, "could": true,
 	"would": true, "should": true, "the": true, "an": true,
 	"and": true, "or": true, "of": true, "in": true, "on": true,
-	"at": true, "to": true, "for": true, "with": true, "by": true, "from": true,
+	"at": true, "to": true, "for": true, "with": true, "by": true,
 	"you": true, "your": true, "me": true, "my": true, "his": true,
 	"her": true, "their": true, "they": true, "he": true, "she": true,
 }
@@ -190,10 +190,26 @@ var searchQueryFraming = map[string]bool{
 	"criteria": true, "policy": true, "policies": true,
 	"about": true, "regarding": true, "please": true, "tell": true,
 	"explain": true, "describe": true, "use": true, "used": true, "using": true,
+	"from": true,
 }
 
 func searchQueryTopics(terms []string) []string {
 	if len(searchQueryConcepts(terms)) < 3 {
+		return nil
+	}
+	// Apply the additional subject gate to procedural framing, where generic
+	// overlaps cause unrelated matches. Ordinary questions can need several
+	// complementary partial facts (for example current age and graduation age).
+	procedural := false
+	for _, term := range terms {
+		switch term {
+		case "규칙", "체계", "분류", "분류체계", "경로", "방법", "방식", "기준", "절차", "정책",
+			"rule", "rules", "system", "systems", "classification", "classify", "path", "paths",
+			"method", "methods", "procedure", "procedures", "criteria", "policy", "policies":
+			procedural = true
+		}
+	}
+	if !procedural {
 		return nil
 	}
 	topics := []string{}

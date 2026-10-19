@@ -23,6 +23,8 @@ func TestPostgresLexicalProcedureWordsNeedQuerySubject(t *testing.T) {
 				{ID: "waiting", Text: "작업 대기 분류 규칙 이동 경로"},
 				{ID: "atomic", Text: "원자 갱신 이동 경로 규칙"},
 				{ID: "registration", Text: "Registration after term begins follows these rules"},
+				{ID: "graduation", Text: "Graduated from college at age 25."},
+				{ID: "current-age", Text: "At 32 years old, I work from home."},
 			}
 			for _, r := range rows {
 				r.Scope, r.Status, r.Kind = scopeA, statusActive, "fact"
@@ -70,6 +72,10 @@ func TestPostgresLexicalProcedureWordsNeedQuerySubject(t *testing.T) {
 			}
 			if ids := lookup("해왕성 분류 규칙", "exact"); !slices.Contains(ids, "generic") {
 				t.Fatalf("lexical filter affected independent keyword lane: %v", ids)
+			}
+			ids := lookup("How many years older am I than when I graduated from college?", "fts")
+			if !slices.Contains(ids, "graduation") || !slices.Contains(ids, "current-age") {
+				t.Fatalf("complementary temporal evidence was suppressed: %v", ids)
 			}
 		})
 	}
