@@ -4,7 +4,7 @@ import "testing"
 
 func TestSessionCandidateContextRequiresOneSupportingUserMessage(t *testing.T) {
 	const source = "업무용 가람 보고서는 검수한 초안에만 적용한다. 긴급 보고서는 제외한다. 아직 잠정안이다. 2027년부터 시행한다."
-	for _, mode := range []string{"literal", "empty", "invented", "paraphrase", "outside_quote", "split_quotes", "cross_message", "assistant", "legacy"} {
+	for _, mode := range []string{"literal", "empty", "invented", "paraphrase", "outside_quote", "split_quotes", "split_record", "cross_message", "assistant", "legacy"} {
 		t.Run(mode, func(t *testing.T) {
 			request, output := sessionFixture(t)
 			request["records"].([]any)[0].(map[string]any)["text"] = source
@@ -37,6 +37,14 @@ func TestSessionCandidateContextRequiresOneSupportingUserMessage(t *testing.T) {
 			case "split_quotes":
 				ref["quote"] = "긴급 보고서는 제외한다."
 				c["source_refs"] = append(c["source_refs"].([]any), map[string]any{"source_id": "s1", "revision": 1, "quote": "아직 잠정안이다. 2027년부터 시행한다."})
+			case "split_record":
+				first := request["records"].([]any)[0].(map[string]any)
+				first["source_id"], first["split_of"], first["text"] = "s1-p1", "s1", "업무용 가람 보고서는 검수한 초안에만 적용한다. 긴급 보고서는 제외한다."
+				request["records"] = append(request["records"].([]any), map[string]any{"source_id": "s1-p2", "split_of": "s1", "revision": 1, "role": "user", "text": " 아직 잠정안이다. 2027년부터 시행한다."})
+				output["coverage"].(map[string]any)["source_ids"] = []any{"s1-p1", "s1-p2"}
+				stateRef["source_id"], stateRef["quote"] = "s1-p1", first["text"]
+				ref["source_id"], ref["quote"] = "s1-p1", "긴급 보고서는 제외한다."
+				c["source_refs"] = append(c["source_refs"].([]any), map[string]any{"source_id": "s1-p2", "revision": 1, "quote": "아직 잠정안이다. 2027년부터 시행한다."})
 			case "assistant":
 				request["records"].([]any)[0].(map[string]any)["role"] = "assistant"
 				want = "user_provenance_mismatch"

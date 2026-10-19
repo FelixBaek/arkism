@@ -413,14 +413,14 @@ func validateSessionOutput(output map[string]any, request map[string]any) (err e
 		}
 		// A literal citation is not evidence for paraphrased or invented metadata.
 		// Previously prepared versions keep their original delivery contract.
-		if request["prompt_version"] == sessionPromptVersion && autosaveGet(c, "evidence_kind") == "user_statement" && !sessionCandidateContextSupported(c) {
+		if request["prompt_version"] == sessionPromptVersion && autosaveGet(c, "evidence_kind") == "user_statement" && !sessionCandidateContextSupported(c, records) {
 			return sessionWait("candidate_context_evidence_mismatch")
 		}
 	}
 	return nil
 }
 
-func sessionCandidateContextSupported(candidate any) bool {
+func sessionCandidateContextSupported(candidate any, records map[string]any) bool {
 	phrases := []string{}
 	for _, key := range []string{"applicability", "uncertainty", "valid_from"} {
 		if phrase := str(autosaveGet(candidate, key)); phrase != "" {
@@ -432,10 +432,14 @@ func sessionCandidateContextSupported(candidate any) bool {
 	}
 	// refsValid has already bound every quote to this source's exact revision
 	// and user role. Separate quotations from that one message are sufficient;
-	// joining evidence from different messages is not.
+	// joining evidence from different messages is not. Parts of a split record
+	// are still one message.
 	groups := map[string][]string{}
 	for _, ref := range anyList(autosaveGet(candidate, "source_refs")) {
 		id := str(autosaveGet(ref, "source_id"))
+		if whole := autosaveGet(records[id], "split_of"); whole != nil {
+			id = str(whole)
+		}
 		groups[id] = append(groups[id], str(autosaveGet(ref, "quote")))
 	}
 	for _, quotes := range groups {
