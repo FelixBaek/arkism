@@ -4872,3 +4872,52 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {"비슷한 후보 {0}개": "{0} similar candidates"});
+
+// 크루 › 전문가 (카드 목록 · 상세 팝업 · 새로 만들기)
+Object.assign(window.ArkismI18nEN.strings, {
+  "워크플로우 없음 · 지시대로 일해요": "No workflow · works from its instructions",
+  "워크플로우 연결": "Connect a workflow",
+  "+ 새 전문가": "+ New expert",
+  "페르소나와 워크플로우를 정해 시작해요": "Start by choosing a persona and a workflow",
+  "+ 새 카테고리": "+ New category",
+  "테스트": "Test",
+  "저장하지 않은 변경이 있어요. 버리고 닫을까요?": "You have unsaved changes. Discard them and close?",
+  "이름·소개를 쓰면 여기에 바로 보여요": "Type a name and intro and they show up here",
+  "@이름을 비울 수 없어요.": "The @name cannot be empty.",
+  "이미 쓰는 이름이에요.": "That name is already in use.",
+  "@이름 복사": "Copy @name",
+  "이름을 비울 수 없어요.": "The name cannot be empty.",
+  "어떻게 바꿀까요? 예: 배포 전에는 꼭 나한테 물어보게 해 줘": "What should change? e.g. Always ask me before deploying",
+  "어떻게 바꿀지": "What to change",
+  "초안 만들기": "Make a draft",
+  "저장하기 전에는 바뀌지 않아요": "Nothing changes until you save",
+  "모두 적용": "Apply all",
+  "어떻게 바꿀지 한 줄 써 주세요.": "Write one line on what to change.",
+  "AI가 제안을 만드는 중이에요…": "The AI is writing suggestions…",
+  "소개": "Intro",
+  "바꿀 곳이 없다고 해요. 말을 바꿔 다시 눌러 주세요.": "The AI found nothing to change. Reword and try again.",
+  "최근 30일 실행": "Runs in the last 30 days",
+  "모델·실행": "Model and run",
+  "최근 30일 호출": "Calls in the last 30 days",
+  "일하는 방법에 워크플로우를 연결하면 부를 때마다 실행 기록이 여기에 남아요. 직접 답한 호출은 위 숫자로만 보여요.": "Connect a workflow to its way of working and every call leaves a run record here. Calls it answered directly only show in the numbers above.",
+  "아직 호출 기록이 없어요.": "No call records yet.",
+  "(입력 없음)": "(no input)",
+  "기록을 불러오지 못했어요.": "Could not load the records.",
+  "예: 코드리뷰어": "e.g. Code reviewer",
+  "예: 커밋 전에 diff를 보고 고칠 곳을 알려 줘요": "e.g. Reads the diff before a commit and points out what to fix",
+  "Claude Code·Codex에서 @이름으로 부르면 이 전문가에게 일을 맡겨요": "Call @name in Claude Code or Codex to hand work to this expert",
+  "쓰던 내용을 버리고 새 팀을 만들러 갈까요?": "Discard what you wrote and go make a new team?",
+  "만들면 바로 @이름으로 부를 수 있어요": "Once made, you can call it with @name right away",
+  "또는 비슷한 것에서 시작": "Or start from something similar",
+  "팀에 넣기 (선택)": "Add to a team (optional)",
+  "만든 뒤 팀 화면에서도 넣을 수 있어요": "You can also add it from the team screen later",
+  "아직 팀이 없어요. 새 팀을 만들면 거기서 넣어요.": "No teams yet. Make a team and add it there."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}단계 넘으면 멈춤": "Stops past {0} steps",
+  "멈추는 조건 {0}": "Stops when {0}",
+  "약 {0}": "About {0}",
+  "제안 {0}개": "{0} suggestions",
+  "제안 {0}개를 받았어요.": "Got {0} suggestions.",
+  "고친 횟수 {0} · 마크다운으로 써요": "Edited {0} times · written in Markdown"
+});
