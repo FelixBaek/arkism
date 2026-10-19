@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -75,6 +76,12 @@ func write(path string, cfg map[string]map[string]map[string]any) error {
 }
 
 func str(m map[string]any, k string) string { s, _ := m[k].(string); return s }
+
+// ScopeKey names a workspace/project in Key. Each part is path-escaped, so an ID holding "/" can never
+// make two scopes share a key ("a/b"+"c" vs "a"+"b/c").
+func ScopeKey(workspace, project string) string {
+	return url.PathEscape(workspace) + "/" + url.PathEscape(project)
+}
 
 // Key is how a destination is stored: "<scope>/<name>", so one scope never sees or edits another's
 // (crewrun looks up its own scope first). An empty scope is the host's own, hand-edited entries.

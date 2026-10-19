@@ -95,3 +95,9 @@ func TestTestSendsAndHidesSecrets(t *testing.T) {
 		t.Error("missing dest should be invalid")
 	}
 }
+
+func TestScopeKeyNoCollision(t *testing.T) {
+	if ScopeKey("a/b", "c") == ScopeKey("a", "b/c") {
+		t.Fatal("scope keys collide")
+	}
+}

@@ -46,7 +46,7 @@ func notifyErr(err error) error {
 }
 
 // notifyScope keys a scope's destinations in the shared host file, so one tenant never reads or edits another's.
-func notifyScope(sc Scope) string { return sc.WorkspaceID + "/" + sc.ProjectID }
+func notifyScope(sc Scope) string { return notifycfg.ScopeKey(sc.WorkspaceID, sc.ProjectID) }
 
 func refName(n string) string {
 	if n == "" {
