@@ -121,6 +121,8 @@
 .auto-try { height: 24px; padding: 0 8px; font-size: calc(11.5px * var(--fs, 1)); }
 .auto-goal { margin: 6px 0 0 76px; }
 .auto-goal textarea { width: 100%; }
+.auto-goal-edit { display: flex; flex-direction: column; gap: 6px; }
+.auto-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .auto-goal-text { display: block; cursor: text; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 .auto-var { font-style: normal; color: var(--nc-accent); }
 .auto-row.notify select { height: 28px; }
@@ -172,3 +174,4 @@
 .v4-auto .auto-versions .auto-empty { padding: 12px 14px; }
 .wf-recent .wf-fold { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .wf-recent .wf-fold:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: 2px; border-radius: 4px; }
+.auto-row.notify .auto-key { white-space: nowrap; }
