@@ -331,7 +331,7 @@ button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor
 .crew-popup { width: min(880px, calc(100vw - 32px)); padding: 0; }
 .crew-popup-head { display: flex; align-items: flex-start; gap: 12px; padding: 20px 20px 14px 24px; background: var(--cover, none) center / cover; position: relative; }
 .crew-popup-head.has-cover { min-height: 140px; align-items: flex-end; }
-.crew-popup-head.has-cover::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent, var(--surface, #111)); }
+.crew-popup-head.has-cover::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent, var(--bg-window)); }
 .crew-popup-head > * { position: relative; }
 .crew-popup-who { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .crew-popup-who h2 { margin: 0; font-size: calc(17px * var(--fs, 1)); font-weight: 600; }
