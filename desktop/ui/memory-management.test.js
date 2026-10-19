@@ -80,6 +80,8 @@ test("wording groups preserve signs, units, comparisons and directional word ord
     ["허용 값 1 %", "허용 값 1"],
     ["허용 값 < 1", "허용 값 > 1"],
     ["비용 $ 1", "비용 € 1"],
+    ["속도 1 MB/s", "속도 1 mb/s"],
+    ["환경 변수 Path 유지", "환경 변수 PATH 유지"],
     ["Maple 에서 Cedar 로 복사", "Cedar 에서 Maple 로 복사"],
     ["설명서 는 짧게", "응답서 는 짧게"],
     ["자동설명은 짧게", "자동응답은 짧게"],
