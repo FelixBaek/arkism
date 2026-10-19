@@ -9,9 +9,8 @@
 .mg-state.on::before { background: #6fcf97; }
 .mg-state.warn { color: var(--nc-accent); }
 .mg-state.warn::before { background: var(--nc-accent); }
-.mg-token { display: grid; grid-template-columns: 100%; gap: 8px; }
+.mg-token { display: grid; gap: 8px; grid-template-columns: 1fr auto auto; align-items: center; }
 .mg-label { font: 400 calc(12px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-muted); }
-.mg-token { grid-template-columns: 1fr auto auto; align-items: center; }
 .mg-token .mg-label { grid-column: 1 / -1; }
 .mg-field input, .mg-masked { width: 100%; height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-bg, transparent); color: var(--nc-text); font-size: calc(13px * var(--fs, 1)); }
 .mg-masked { display: flex; align-items: center; justify-content: space-between; overflow: hidden; white-space: nowrap; }

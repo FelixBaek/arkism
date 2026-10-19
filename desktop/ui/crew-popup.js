@@ -5,7 +5,7 @@ window.ArkismCrewPopup = ({ el, button }) => {
   function open({ title, sub = "", cover = "", avatar = null, tabs, initial, actions = [], onClose, cls = "" }) {
     const dlg = el("dialog", `crew-dialog crew-popup ${cls}`.trim());
     const head = el("div", "crew-popup-head");
-    if (cover) head.style.setProperty("--cover", `url("${cover}")`), head.classList.add("has-cover");
+    if (cover) { head.style.setProperty("--cover", `url("${cover}")`); head.classList.add("has-cover"); }
     const who = el("div", "crew-popup-who");
     if (avatar) who.append(avatar);
     const names = el("div", "");

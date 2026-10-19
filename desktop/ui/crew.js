@@ -2816,7 +2816,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   const MODEL_MODES = [["auto", "Clef 자동 선택"], ["fixed", "모델 고정"]];
   const FORMATS = [["text", "자유 텍스트"], ["markdown", "마크다운"], ["json", "JSON"]];
   const FILE_EDITS = [["ask", "확인 받고 진행"], ["auto", "알아서 고침"], ["never", "고치지 않음"]];
-  const AGENT_STATUS = { working: ["일하는 중", "live"], idle: ["대기", "line"], off: ["꺼짐", "line"] };
   const agents = () => items().filter((r) => r.crew.type === "agent");
   const teams = () => items().filter((r) => r.crew.type === "team");
   const teamsOf = (id) => teams().filter((t) => (t.crew.members || []).some((m) => m.agent_id === id));
