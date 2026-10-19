@@ -5020,7 +5020,16 @@ Object.assign(window.ArkismI18nEN.strings, {
  "7일 안에 불러온 기억": "Memories recalled within 7 days",
  "넣은 횟수": "Times injected",
  "충돌 제안": "Conflict proposals",
- "접기 ⌃": "Collapse ⌃"
+ "접기 ⌃": "Collapse ⌃",
+ "자주 어기는 규칙": "Rule often broken",
+ "실패가 잦은 교훈": "Lesson often failing",
+ "기존": "Existing",
+ "AI 합치기 제안": "AI merge suggestion",
+ "후보나 대상 기억이 바뀌어 이 제안은 낡았어요.": "The candidate or target memory changed, so this suggestion is out of date.",
+ "저장 안 함": "Don't keep",
+ "이 세션을 지울까요?": "Delete this session?",
+ "세션과 보관된 대화가 지워지고 되돌릴 수 없어요. 에이전트의 원래 파일은 그대로 남고, 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.": "The session and its archived conversation are deleted and cannot be restored. The agent's original files stay, and memories that cite this conversation keep their content but lose the source link.",
+ "불러온 횟수": "Recalls"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
  "메시지 {0}개 · {1}": "{0} messages · {1}",
@@ -5044,5 +5053,9 @@ Object.assign(window.ArkismI18nEN.patterns, {
  "지도를 불러오지 못했어요: {0}": "Could not load the map: {0}",
  "연결된 기억 {0}": "Linked memories {0}",
  "확인 전 {0}": "Unchecked {0}",
- "{0}건 중 {1}건 · 창 안에서 내리면 더 나와요": "{1} of {0} · scroll inside the window for more"
+ "{0}건 중 {1}건 · 창 안에서 내리면 더 나와요": "{1} of {0} · scroll inside the window for more",
+ "자주 어기는 규칙 · 통과율 {0}% ({1}/{2})": "Rule often broken · pass rate {0}% ({1}/{2})",
+ "실패가 잦은 교훈 · 통과율 {0}% ({1}/{2})": "Lesson often failing · pass rate {0}% ({1}/{2})",
+ "AI 합치기 제안 · {0}": "AI merge suggestion · {0}",
+ "합치지 못했어요: {0}": "Could not merge: {0}"
 });

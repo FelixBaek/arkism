@@ -45,6 +45,7 @@ window.ArkismOverview = (ctx) => {
     const recallTimes = recalls.map((u) => time(u.last)).filter(Boolean);
     const w = d.tools?.memory_use || null, reported = time(d.tools?.collected_at);
     const proposals = (d.maintenance || []).map((p) => time(p.created_at)).filter(Boolean);
+    const nProp = (d.maintenance || []).length; // a proposal without created_at still counts
     const lastSession = latest(sessions), lastExtract = latest(extracted);
     // the stall clock starts at the first session that ended after the last extraction (the oldest session if never extracted);
     // extraction runs on finished sessions, so a session that ended after it is still unprocessed even if it started before
@@ -69,7 +70,7 @@ window.ArkismOverview = (ctx) => {
     const todayCount = (arr) => arr.map((m) => time(m.created_at)).filter(today).length;
     const BADGE = { collect: [lastSession ? "정상" : "기록 없음", "n"], extract: stalled ? [`${stalledHours}시간째 멈춤`, "r"] : ["정상", "n"],
       classify: [unclassified.length ? `대기 ${unclassified.length}` : "모두 분류됨", "n"], review: [waiting.length ? `${waiting.length}건` : "비어 있음", waiting.length ? "a" : "n"],
-      recall: ["정상", "n"], trace: [reported ? "정상" : "보고 없음", "n"], judge: [tidy ? `확인 전 ${tidy}` : "확인 끝", "n"], dream: [proposals.length ? `제안 ${proposals.length}` : "제안 없음", "n"] };
+      recall: ["정상", "n"], trace: [reported ? "정상" : "보고 없음", "n"], judge: [tidy ? `확인 전 ${tidy}` : "확인 끝", "n"], dream: [nProp ? `제안 ${nProp}` : "제안 없음", "n"] };
     const TILES = {
       collect: [[`${num(sessions.filter(today).length)}건`, "오늘 저장"], [lastSession ? ago(lastSession) : "—", "마지막 저장"], [`${num(sessions.length)}건`, "최근 7일"]],
       extract: [[stalled ? `${stalledHours}시간` : `${num(extracted.filter(today).length)}건`, stalled ? "멈춘 시간" : "오늘 추출"], [`${n24(extracted)}건`, "최근 24시간 추출"], [lastExtract ? ago(lastExtract) : "—", "마지막 추출"]],
@@ -78,7 +79,7 @@ window.ArkismOverview = (ctx) => {
       recall: [[`${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, "최근 7일 불러오기"], [recallTimes.length ? ago(latest(recallTimes)) : "—", "마지막"], [`${num(recalls.filter((u) => u.d7 > 0).length)}개`, "7일 안에 불러온 기억"]],
       trace: [[reported ? ago(reported) : "—", "마지막 기록"], [w ? `${num(w.sessions)}` : "—", w ? `세션 · ${w.days}일` : "보고 없음"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"]],
       judge: [[`${num(tidy)}건`, "정리할 기억"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"], [w ? `${num(w.injections)}회` : "—", "넣은 횟수"]],
-      dream: [[`${num(proposals.length)}건`, "정리 제안"], [proposals.length ? ago(latest(proposals)) : "—", "마지막 제안"], [`${num((d.maintenance || []).filter((p) => p.maintenance?.type === "contradiction").length)}건`, "충돌 제안"]]
+      dream: [[`${num(nProp)}건`, "정리 제안"], [nProp ? ago(latest(proposals)) : "—", "마지막 제안"], [`${num((d.maintenance || []).filter((p) => p.maintenance?.type === "contradiction").length)}건`, "충돌 제안"]]
     };
     const withItems = (list) => list.map((s) => ({ ...s, tiles: TILES[s.key], badge: BADGE[s.key] }));
     return withItems([
@@ -106,8 +107,8 @@ window.ArkismOverview = (ctx) => {
         big: `${num(tidy)}건`, bigSub: "정리할 기억", small: rate === null ? "—" : `${rate}%`, smallSub: "쓰인 비율",
         step: tidy ? `대기 ${num(tidy)}` : "확인 끝", row: new Array(24).fill(""), counts: new Array(24).fill(0), open: () => go("memories", "idle") },
       { key: "dream", group: "dream", label: "드리밍", region: "뇌간", tone: "n",
-        big: `${num(proposals.length)}건`, bigSub: "정리 제안", small: proposals.length ? ago(latest(proposals)) : "—", smallSub: "마지막 제안",
-        step: proposals.length ? `제안 ${num(proposals.length)}` : "제안 없음", row: row(proposals, "n"), counts: slots(proposals), open: () => go("memories", "merge") }
+        big: `${num(nProp)}건`, bigSub: "정리 제안", small: nProp ? ago(latest(proposals)) : "—", smallSub: "마지막 제안",
+        step: nProp ? `제안 ${num(nProp)}` : "제안 없음", row: row(proposals, "n"), counts: slots(proposals), open: () => go("memories", "merge") }
     ]);
   }
 
