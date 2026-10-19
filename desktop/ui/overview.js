@@ -202,14 +202,17 @@ window.ArkismOverview = (ctx) => {
 
     
   }
-  // Scale the 1157 × 930 stage to the free area of the window (width and height); below MIN_SCALE the page scrolls instead.
-  const MIN_SCALE = 0.7, MAX_SCALE = 1.7;
+  // Scale the 1157 × 930 stage to the free area of the window (width and height) so the whole overview fits without scrolling;
+  // the footer under the panel is subtracted too. MIN_SCALE only guards against a nonsense size in a tiny window.
+  const MIN_SCALE = 0.4, MAX_SCALE = 1.7;
   function fit() {
     const host = root?.closest(".main");
-    if (!host) return;
+    if (!host || !root.isConnected) return;
     const cs = getComputedStyle(host), padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight), padB = parseFloat(cs.paddingBottom);
-    const top = root.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop;
-    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((host.clientWidth - padX) / W, (host.clientHeight - top - padB) / H)));
+    const box = root.getBoundingClientRect(), foot = host.querySelector(".page-foot");
+    const top = box.top - host.getBoundingClientRect().top + host.scrollTop;
+    const below = foot?.offsetParent ? Math.max(0, foot.getBoundingClientRect().bottom - box.bottom) : 0; // gap + footer, independent of the scale
+    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((host.clientWidth - padX) / W, (host.clientHeight - top - below - padB) / H)));
     ui.stage.style.transform = `scale(${s})`;
     root.style.width = `${Math.floor(W * s)}px`; root.style.height = `${Math.floor(H * s)}px`;
   }

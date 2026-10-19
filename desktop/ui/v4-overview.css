@@ -208,3 +208,5 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-wide-search, .ov-detail-edit, .ov-ask textarea { background: var(--bg-muted); color: var(--text-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; }
 .ov-wide-left > .ov-wide-bar .ghost { border: 1px solid var(--border); }
 .ov-detail-list .ov-win-item { padding: 6px 10px; }
+.ov-win-list-scroll { max-height: min(46vh, 520px); overflow: auto; }
+.ov-win-foot .ov-wide-foot-note { margin-right: auto; align-self: center; }

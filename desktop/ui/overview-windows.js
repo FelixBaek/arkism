@@ -15,6 +15,21 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const tag = (m, p) => (m.tags || []).find((t) => t.startsWith(p))?.slice(p.length) || "";
   const clip = (t, n = 80) => (t.length > n ? `${t.slice(0, n)}…` : t);
 
+  // ctx has no reload, so re-read the lists the review/delete changed from the server (same calls as app.js reloadMemories)
+  async function listAll(path, extra) {
+    const items = []; let cursor = "";
+    do { const page = await request(`${path}?${query({ ...extra, limit: 100, ...(cursor ? { cursor } : {}) })}`); items.push(...(page.items || [])); cursor = page.next_cursor || ""; } while (cursor && items.length < 100000);
+    return items;
+  }
+  async function reload() {
+    try {
+      const [candidates, conflicted, memories] = await Promise.all([listAll("/v1/memory_candidates", { status: "candidate" }),
+        listAll("/v1/memory_candidates", { status: "conflicted" }).catch(() => []), listAll("/v1/memories", { status: "active" })]);
+      Object.assign(D(), { candidates, conflicted, memories });
+    } catch { /* keep the optimistic lists; the overview's own refresh tries again */ }
+    render(false);
+  }
+
   let dlg = null;
   function modal(cls) {
     dlg?.close();
@@ -36,16 +51,16 @@ window.ArkismOverviewWindows = (ctx, env) => {
 
   // ------------------------------------------------------------ in-place review (the same API the 기억 screen calls)
   const reviewing = new Set();
-  async function decide(c, action, extra = {}) {
+  async function decide(c, action, extra = {}, quiet = false) { // quiet: the caller reloads once after a batch
     if (reviewing.has(c.id)) return null;
     reviewing.add(c.id);
     try {
       const payload = window.ArkismMemoryEvaluation.reviewPayload(c.id, { scope: state.scope, expected_revision: c.revision, action, ...extra });
       await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/review`, { method: "POST", body: JSON.stringify(payload) });
       D().candidates = D().candidates.filter((x) => x.id !== c.id); D().conflicted = (D().conflicted || []).filter((x) => x.id !== c.id);
-      render(false);
+      if (!quiet) await reload();
       return { ok: true };
-    } catch (e) { return { error: e.message === "revision_conflict" ? "이미 처리됐거나 다른 곳에서 바뀌었어요. 개요를 새로 고쳐 주세요." : `처리하지 못했어요: ${e.message}` }; }
+    } catch (e) { if (e.message === "revision_conflict") await reload(); return { error: e.message === "revision_conflict" ? "이미 처리됐거나 다른 곳에서 바뀌었어요. 개요를 새로 고쳐 주세요." : `처리하지 못했어요: ${e.message}` }; }
     finally { reviewing.delete(c.id); }
   }
   function askReason(title, onOk) {
@@ -126,17 +141,24 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (key === "extract" && s.badge?.[1] === "r") body.append(note("r", `${s.badge[0]}이에요`, "세션은 계속 들어오는데 새 후보가 만들어지지 않았어요. 서버의 분석 로그인·연결을 확인해 주세요."));
     if (key === "judge") body.append(note("a", "AI가 “실제로 쓰였는지” 판정했어요", "판정이 맞는지 확인하고, 틀림이 쌓이면 그 기억을 다시 봐요."));
     if (key === "dream") body.append(note("n", "드리밍 제안도 승인 대기로 가요", "바로 바뀌지 않아요. 승인해야 반영돼요."));
-    const rows = stageRows(key, body, expanded), total = { review: waiting().length, collect: env.sessions().length, active: D().memories.length, dream: (D().maintenance || []).length }[key];
+    const rows = stageRows(key, body, expanded), total = expandTotal(key);
     body.append(el("div", "ov-win-list-title", LIST_TITLE[key]));
     const ul = el("div", "ov-win-list");
     if (!rows.length) ul.append(el("p", "ov-win-empty", "지금 보여 줄 항목이 없어요."));
     ul.append(...rows); body.append(ul);
     const foot = el("div", "ov-win-foot");
-    if (total && total > rows.length) foot.append(button(`${num(total)}건 모두 보기 ›`, "ghost small", null, () => open(key, true)));
-    else if (expanded) foot.append(button("접기 ^", "ghost small", null, () => open(key, false)));
+    if (expanded) { ul.classList.add("ov-win-list-scroll"); foot.append(el("span", "ov-wide-foot-note", `${num(total)}건 중 ${num(rows.length)}건 · 창 안에서 내리면 더 나와요`), button("접기 ⌃", "ghost small", null, () => open(key, false))); }
+    else if (total && total > rows.length) foot.append(button(`${num(total)}건 모두 보기 ›`, "ghost small", null, () => open(key, true)));
     else if (FULL[key]) foot.append(button(FULL[key][0], "ghost small", null, FULL[key][1]));
     if (expanded && FULL[key]) foot.append(button(FULL[key][0], "ghost small", null, FULL[key][1]));
     d.append(head, body, foot);
+  }
+  // Figma 펼침 580:63994 분석 · 580:66175 분류 · 580:68368 불러오기 · 580:70537 검증 · 580:72743 드리밍; other stages open a wide window instead
+  function expandTotal(key) {
+    const w = D().tools?.memory_use;
+    return { extract: waiting().length + D().memories.length, classify: waiting().filter((m) => !m.classification).length,
+      recall: [...(state.usage?.values() || [])].filter((u) => u.last).length, judge: D().memories.filter((m) => { const u = w?.items?.find((x) => x.id === m.id); return u && u.injected >= 3 && !u.used; }).length,
+      dream: (D().maintenance || []).length }[key] || 0;
   }
   const note = (tone, a, b) => { const n = el("div", `ov-win-note ov-win-note-${tone}`); n.append(el("strong", "", a), el("span", "", b)); return n; };
   function activeStage() {
@@ -148,7 +170,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
   function shell(titleText, badgeText, hint, back) {
     const d = modal("ov-wide-win");
     const head = el("div", "ov-win-head"), t = el("div", "ov-win-title");
-    t.append(button("‹ 작게 보기", "ghost small", null, back || (() => d.close())), el("i", "ov-dot"), el("h2", "", titleText));
+    if (back) t.append(button("‹ 작게 보기", "ghost small", null, back));
+    t.append(el("i", "ov-dot"), el("h2", "", titleText));
     if (badgeText) t.append(el("span", "ov-win-badge", badgeText));
     const r = el("div", "ov-win-step"); if (hint) r.append(el("span", "", hint)); r.append(button("닫기", "ghost small", null, () => d.close()));
     head.append(t, r); d.append(head);
@@ -172,7 +195,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const kinds = [...new Set(all.map((c) => c.kind))];
     const chipHost = el("div");
     const search = el("input", "ov-wide-search"); search.placeholder = "후보 찾기"; search.setAttribute("aria-label", "후보 찾기");
-    const batch = button("선택 0개 승인", "small", null, async () => { const items = all.filter((c) => checked.has(c.id)); if (!items.length) return; batch.disabled = true; let fail = 0; for (const c of items) { const r = await decide(c, "approve"); if (r?.error) fail++; else checked.delete(c.id); } wideReview(); if (fail) dlg.querySelector(".ov-wide-foot-note").textContent = `${fail}건은 처리하지 못했어요.`; });
+    const batch = button("선택 0개 승인", "small", null, async () => { const items = all.filter((c) => checked.has(c.id)); if (!items.length) return; batch.disabled = true; let fail = 0; for (const c of items) { const r = await decide(c, "approve", {}, true); if (r?.error) fail++; else checked.delete(c.id); } await reload(); wideReview(); if (fail) dlg.querySelector(".ov-wide-foot-note").textContent = `${fail}건은 처리하지 못했어요.`; });
     batch.disabled = true;
     const bar = el("div", "ov-wide-bar"); bar.append(search, chipHost, batch);
     const filtered = () => waiting().filter((c) => (kindF === "all" || c.kind === kindF) && (!q || c.text.includes(q)));
@@ -258,7 +281,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
       act.append(button("고치기", "primary small", null, () => { dlg.close(); go("memories", "active"); }),
         button("지우기", "small", null, () => askConfirm("이 기억을 지울까요?", "지운 기억은 이력에 남지만 더는 쓰이지 않아요.", async () => {
-          try { await request(`/v1/memories/${encodeURIComponent(m.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) }); D().memories = D().memories.filter((x) => x.id !== m.id); sel = null; render(false); wideActive(); }
+          try { await request(`/v1/memories/${encodeURIComponent(m.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) }); D().memories = D().memories.filter((x) => x.id !== m.id); sel = null; await reload(); wideActive(); }
           catch (e) { st.textContent = `지우지 못했어요: ${e.message}`; }
         })));
       detail.append(st, act);
@@ -329,7 +352,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const REACH = { personal: ["개인", 0], general: ["범용", 1], project: ["프로젝트", 2] };
   const EDGE = { supports: "지지", supersedes: "대체", conflicts: "충돌", human_link: "연결", same_session: "관련", similar: "비슷" };
   async function wideMap() {
-    const d = shell("기억 지도", "", "", () => d.close());
+    const d = shell("기억 지도", "", "", null); // 611:54134 has no small window, only ✕
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left ov-map-left"), right = el("div", "ov-wide-right ov-wide-detail");
     const status = el("p", "ov-win-empty", "지도를 불러오는 중…"); left.append(status); body.append(left, right); d.append(body);
     let graph; try { graph = await request(`/v1/memory-graph?${query({ mode: "all" })}`); } catch (e) { status.textContent = `지도를 불러오지 못했어요: ${e.message}`; return; }

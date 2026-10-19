@@ -5019,7 +5019,8 @@ Object.assign(window.ArkismI18nEN.strings, {
  "최근 7일 불러오기": "Recalls in the last 7 days",
  "7일 안에 불러온 기억": "Memories recalled within 7 days",
  "넣은 횟수": "Times injected",
- "충돌 제안": "Conflict proposals"
+ "충돌 제안": "Conflict proposals",
+ "접기 ⌃": "Collapse ⌃"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
  "메시지 {0}개 · {1}": "{0} messages · {1}",
@@ -5042,5 +5043,6 @@ Object.assign(window.ArkismI18nEN.patterns, {
  "{0}번 중 0번": "0 of {0}",
  "지도를 불러오지 못했어요: {0}": "Could not load the map: {0}",
  "연결된 기억 {0}": "Linked memories {0}",
- "확인 전 {0}": "Unchecked {0}"
+ "확인 전 {0}": "Unchecked {0}",
+ "{0}건 중 {1}건 · 창 안에서 내리면 더 나와요": "{1} of {0} · scroll inside the window for more"
 });
