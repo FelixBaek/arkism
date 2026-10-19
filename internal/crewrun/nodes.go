@@ -324,6 +324,14 @@ type aiUsage struct {
 	Estimated    bool     `json:"estimated"`
 }
 
+// tokens is the call's input + output tokens, 0 when the runner did not say.
+func (a aiAnswer) tokens() int64 {
+	if a.Usage == nil {
+		return 0
+	}
+	return a.Usage.InputTokens + a.Usage.OutputTokens
+}
+
 type aiAnswer struct {
 	OK     bool     `json:"ok"`
 	Output string   `json:"output"`
@@ -466,7 +474,7 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 		return result{}, err
 	}
 	text, port := routePick(res.Output, ports, def)
-	return result{out: map[string]any{"output": text, "model": res.Model, "effort": res.Effort, "cli": res.CLI, "duration_ms": res.Ms}, port: port}, nil
+	return result{out: map[string]any{"output": text, "model": res.Model, "effort": res.Effort, "cli": res.CLI, "duration_ms": res.Ms}, port: port, tokens: res.tokens()}, nil
 }
 
 type collabWorker struct {

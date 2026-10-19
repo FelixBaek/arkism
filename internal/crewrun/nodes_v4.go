@@ -7,7 +7,8 @@ package crewrun
 //	        instructions win (instructions add to the expert's).
 //	team    A team meeting on a topic: team (team record id), topic (template, default "{{input}}"). Starts a
 //	        meeting (trigger "workflow"), drives it here and outputs its conclusion
-//	        {summary, decisions, todos, open_questions, meeting_id}. A meeting that waits for a person fails the node.
+//	        {summary, decisions, todos, open_questions, meeting_id}. A meeting that waits for a person fails the node,
+//	        and so does one that has no conclusion within timeout (default 1h).
 //	n8n     Sends the input to an n8n webhook: url, mode (sync: the answer is the output; async: the request carries
 //	        callback_url and the node waits until n8n posts the result there, at most timeout, default 30m, which
 //	        needs ARKISM_CREW public URL), message (body template, default {"input": …}).
@@ -17,6 +18,7 @@ import (
 	"cmp"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"maps"
@@ -65,6 +67,9 @@ func (e *Engine) runTeam(ctx context.Context, c map[string]string, input any) (a
 	if topic == "" {
 		return nil, failf("bad_config", "회의 주제가 비었어요")
 	}
+	parent := ctx
+	ctx, cancel := context.WithTimeout(ctx, durationOr(c["timeout"], time.Hour))
+	defer cancel()
 	rec, err := mc.CreateMeeting(ctx, team.ID, clip(team.Crew.Name, 100), clip(topic, 20000))
 	if err != nil {
 		return nil, failf("team", "회의를 만들지 못했어요")
@@ -89,7 +94,10 @@ func (e *Engine) runTeam(ctx context.Context, c map[string]string, input any) (a
 		}
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			if parent.Err() != nil {
+				return nil, parent.Err()
+			}
+			return nil, failf("team_timeout", "%s 회의가 정해진 시간 안에 끝나지 않았어요", team.Crew.Name)
 		case <-time.After(teamPoll):
 		}
 	}
@@ -103,9 +111,10 @@ func (c *Client) CreateMeeting(ctx context.Context, teamID, title, topic string)
 	return out, err
 }
 
-// n8nWaits holds the async n8n nodes by one-time token until n8n posts the result to /callbacks/{token}.
+// n8nWaits holds the async n8n nodes by the SHA-256 of their one-time token until n8n posts the result to
+// /callbacks/{token}; keying by the hash keeps the lookup from leaking the token through timing.
 // shortcut: in memory only, so a restart settles the node as interrupted; keep it until n8n runs are long and common.
-var n8nWaits sync.Map // token → chan any
+var n8nWaits sync.Map // sha256(token) → chan any
 
 func (e *Engine) runN8N(ctx context.Context, c map[string]string, input any) (any, error) {
 	u, err := url.Parse(strings.TrimSpace(render(c["url"], input)))
@@ -127,8 +136,9 @@ func (e *Engine) runN8N(ctx context.Context, c map[string]string, input any) (an
 		_, _ = rand.Read(b)
 		token := hex.EncodeToString(b)
 		wait = make(chan any, 1)
-		n8nWaits.Store(token, wait)
-		defer n8nWaits.Delete(token)
+		key := tokenKey(token)
+		n8nWaits.Store(key, wait)
+		defer n8nWaits.Delete(key)
 		body["callback_url"] = strings.TrimRight(e.PublicURL, "/") + "/callbacks/" + token
 	}
 	raw, _ := json.Marshal(body)
@@ -162,9 +172,14 @@ func (e *Engine) runN8N(ctx context.Context, c map[string]string, input any) (an
 	}
 }
 
+func tokenKey(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}
+
 // n8nCallback delivers an async n8n result; the token is the secret.
 func n8nCallback(w http.ResponseWriter, r *http.Request) {
-	v, ok := n8nWaits.Load(r.PathValue("token"))
+	v, ok := n8nWaits.Load(tokenKey(r.PathValue("token")))
 	if !ok {
 		writeJSON(w, 404, map[string]string{"code": "not_found"})
 		return

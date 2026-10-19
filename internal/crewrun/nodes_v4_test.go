@@ -30,6 +30,9 @@ func TestExpertNodeUsesExpertDefaults(t *testing.T) {
 	if got[1].Model != "glm-5" || got[1].Effort != "low" {
 		t.Fatalf("node wins %+v", got[1])
 	}
+	if r.State.Nodes["a"].Tokens != 120 || r.State.Nodes["start"].Tokens != 0 {
+		t.Fatal("node tokens", r.State.Nodes["a"].Tokens)
+	}
 	g.Nodes[1].Config["expert"] = "nope"
 	if r = runOnce(t, e, "w", nil); r.State.Status != "failed" || !strings.HasPrefix(r.State.Nodes["a"].Error, "bad_config") {
 		t.Fatal("missing expert", r.State.Nodes["a"].Error)

@@ -656,7 +656,7 @@ func (x *runExec) followBack(id string) {
 			}
 			seen[n] = true
 			st := x.state(n)
-			st.Status, st.Port, st.Output, st.Error, st.StartedAt, st.FinishedAt = "pending", "", "", "", nil, nil
+			st.Status, st.Port, st.Output, st.Error, st.StartedAt, st.FinishedAt, st.Tokens = "pending", "", "", "", nil, nil, 0
 			delete(x.run.State.Decisions, n) // an approval asks again; the server drops it too
 			for _, next := range x.out[n] {
 				todo = append(todo, next.To)
@@ -687,6 +687,7 @@ type result struct {
 	end     bool
 	summary string
 	also    map[string]any // other nodes finished by this one (loop body)
+	tokens  int64          // AI tokens the node used
 }
 
 type nodeError struct{ code, msg string }
@@ -721,7 +722,7 @@ func (x *runExec) runNode(ctx context.Context, id string, input any) error {
 	case res.wait != nil:
 		st.Status = "skipped"
 	default:
-		st.Status, st.Port, st.Output = "done", res.port, encodeStored(res.out)
+		st.Status, st.Port, st.Output, st.Tokens = "done", res.port, encodeStored(res.out), res.tokens
 		x.stamp(st)
 		for other, out := range res.also {
 			o := x.state(other)

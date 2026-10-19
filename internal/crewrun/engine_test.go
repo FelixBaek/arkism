@@ -845,7 +845,8 @@ func fakeRunner() {
 	case strings.Contains(s.Task, "골라 적어"):
 		out = "고른 답\n**ROUTE: b**"
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "output": out, "model": s.Model, "effort": s.Effort, "cli": "fake", "duration_ms": 1})
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "output": out, "model": s.Model, "effort": s.Effort, "cli": "fake", "duration_ms": 1,
+		"usage": map[string]any{"input_tokens": 100, "output_tokens": 20, "estimated": true}})
 }
 
 // fakeAI points the engine at the fake runner and returns the spec log path.
