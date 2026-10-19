@@ -45,7 +45,7 @@ window.ArkismShell = (ctx) => {
     ] },
     // 설정 tabs (Figma 07 · 설정): one area tab per settings page. 라우팅·모델 설정 live under ROUTER.
     settings: { label: "설정", tabs: [
-      ["general", "일반"], ["connect", "연결"], ["roles", "역할별 모델"], ["appearance", "모양"], ["agents", "에이전트"],
+      ["general", "일반"], ["connect", "연결"], ["messenger", "메신저"], ["roles", "역할별 모델"], ["appearance", "모양"], ["agents", "에이전트"],
       ["workflow", "페르소나"], ["categories", "카테고리"], ["update", "업데이트"], ["advanced", "고급"]
     ].map(([k, label]) => [k, label, () => settings(k), () => state.view === "settings" && state.settingsTab === k]) }
   };
