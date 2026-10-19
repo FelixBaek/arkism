@@ -170,15 +170,18 @@ func searchTokensText(text, summary string, keywords []string) string {
 // memory applies. Classification labels and observation timestamps are omitted:
 // they describe provenance, not a subject a user is trying to recall.
 func searchTokensRecordText(r Record) string {
-	text := searchTokensText(r.Text, r.Summary, r.Keywords)
+	// Reserve the bounded context ahead of the body so a long record cannot
+	// consume the document token budget before its conditions are indexed.
+	var prefix strings.Builder
 	if c := r.MemoryContext; c != nil {
 		for _, qualifier := range []string{c.Applicability, c.Uncertainty, c.ValidFrom} {
 			if qualifier != "" {
-				text += " " + qualifier
+				prefix.WriteString(qualifier)
+				prefix.WriteByte(' ')
 			}
 		}
 	}
-	return text
+	return prefix.String() + searchTokensText(r.Text, r.Summary, r.Keywords)
 }
 
 // pgSearchTokens is the search_tokens value for a write: NULL for collections

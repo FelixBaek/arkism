@@ -119,7 +119,9 @@ The app checks the update feed for new versions: Windows installs the update in 
 ## Memory conditions in retrieval
 
 Full-text retrieval includes descriptive applicability, uncertainty and valid-from
-phrases alongside the body, summary and keywords. The same Korean normalizer is
+phrases alongside the body, summary and keywords. Bounded condition phrases
+precede body tokens so long records cannot exhaust the index budget before
+the conditions are included. The same Korean normalizer is
 used for new writes, replacements and bounded index backfill. Domain, evidence
 and semantic-kind labels do not become generic search terms. Descriptive dates
 do not change lifecycle dates or make an unapproved memory eligible for recall.

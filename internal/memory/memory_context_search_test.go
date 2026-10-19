@@ -234,3 +234,29 @@ func TestMemoryContextSearchHasIndexPathsPostgres(t *testing.T) {
 		}
 	}
 }
+
+func TestMemoryContextLongBodyQualifiersPostgres(t *testing.T) {
+	p := isolatedPostgres(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	r := Record{ID: ID(), Scope: scopeA, Kind: "memory", Status: statusActive, Revision: 1, ApprovedBy: "reviewer", CreatedAt: now, UpdatedAt: now,
+		Text: strings.Repeat("word ", searchTokenMaxPerDoc+1), MemoryContext: &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: "lesson", Applicability: "conditiononlytoken", Uncertainty: "uncertaintoken", ValidFrom: "futuretoken"}}
+	if err := p.Insert(ctx, colMemories, r); err != nil {
+		t.Fatal(err)
+	}
+	check := func() {
+		t.Helper()
+		for _, q := range []string{"conditiononlytoken", "uncertaintoken", "futuretoken"} {
+			lanes, err := p.Search(ctx, scopeA, q, nil, "", 3, "fts")
+			if err != nil || len(lanes[1]) != 1 || lanes[1][0].ID != r.ID {
+				t.Fatalf("long body lost qualifier %s: %v", q, err)
+			}
+		}
+	}
+	check()
+	schemaExec(t, p, `UPDATE memory_records SET search_tokens=NULL,search_context_indexed=false WHERE id=$1`, r.ID)
+	if n, more, err := p.BackfillSearchTokens(ctx, time.Minute); err != nil || more || n != 1 {
+		t.Fatal("long context backfill", n, more, err)
+	}
+	check()
+}
