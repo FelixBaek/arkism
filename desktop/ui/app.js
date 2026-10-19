@@ -239,9 +239,8 @@
   function setStatus(mode, text) {
     $("#status-dot").className = `dot ${mode}`;
     $("#status-text").textContent = text;
-    // Figma 198:110 has no dot: show it only when something needs a look.
-    $("#status-toggle").hidden = mode === "ready";
-    if (mode === "ready") $("#status-card").hidden = true;
+    // Figma 198:110 has no dot; renderStatusCard hides it once it knows nothing needs a look.
+    if (mode !== "ready") $("#status-toggle").hidden = false;
   }
   function dbLabel() {
     if (state.ready === null) return "확인 중";
@@ -302,6 +301,8 @@
     const issues = items.filter((i) => !i[3]).length + agents.filter((cls) => cls === "warn" || cls === "bad").length;
     const badge = $("#status-toggle");
     badge.classList.toggle("warn", issues > 0);
+    badge.hidden = issues === 0 && $("#status-dot").classList.contains("ready");
+    if (badge.hidden) { $("#status-card").hidden = true; badge.setAttribute("aria-expanded", "false"); }
     $("#status-badge").textContent = issues ? `주의 ${issues}` : "자세히";
     const card = $("#status-card");
     card.querySelector(".status-summary").dataset.issues = issues ? `주의 ${issues}` : "";
@@ -312,7 +313,7 @@
     }));
     if (!card.querySelector(".st-foot")) {
       const foot = el("div", "st-foot");
-      foot.append(el("p", "", "위쪽 점은 서버 연결 상태예요. DB 상태는 따로 확인해요."), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
+      foot.append(el("p", "", "점은 서버 연결 상태예요. DB 상태는 따로 확인해요."), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
       card.append(foot);
       $("#status-agents").before(el("strong", "st-head", "에이전트"));
     }

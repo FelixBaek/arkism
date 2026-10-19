@@ -2117,7 +2117,7 @@ window.ArkismI18nEN = {
   "자주 쓰는 서버": "Popular servers",
   "GitHub에서 설치": "Install from GitHub",
   "연결 설정 ›": "Connection settings ›",
-  "위쪽 점은 서버 연결 상태예요. DB 상태는 따로 확인해요.": "The dot at the top shows the server connection. The DB status is checked separately.",
+  "점은 서버 연결 상태예요. DB 상태는 따로 확인해요.": "The dot shows the server connection. The DB status is checked separately.",
   "휴지통·중복": "Trash & duplicates",
   "개선안 만들기 → 기존 버전과 비교 → 검토·승인 → 실제 작업에 시험 적용 순서로 진행해요.": "Make an improvement → compare it with the current version → review and approve → trial it on real work.",
   "안 쓰는 스킬은 휴지통으로 옮기고, 여러 곳에 같은 이름으로 있는 스킬을 정리해요.": "Move skills you don't use to the trash, and clean up skills that share a name in several places.",
