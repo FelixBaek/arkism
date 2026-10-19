@@ -1299,7 +1299,8 @@ window.ArkismTeams = (ctx) => {
   const sumBy = (rows, key) => rows.reduce((s, x) => s + (x[key] || 0), 0);
   const dur = (ms) => { const s = Math.round(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, "0")}초` : `${s}초`; };
   const TRIGGERS = { manual: "직접", call: "직접", test: "직접", schedule: "일정", webhook: "웹훅", discord: "디스코드", agent: "전문가" };
-  const dayParts = (x) => { const f = (x.failed || 0) + (x.agent_failed || 0); const hasKinds = x.workflow != null || x.team != null || x.agent != null; return { agent: x.agent || 0, team: hasKinds ? x.team || 0 : 0, auto: hasKinds ? x.workflow || 0 : x.ok || 0, failed: f }; };
+  // failed splits by kind: agent_failed, team_failed, and the rest of failed is automations (older servers: all automations).
+  const dayParts = (x) => { const hasKinds = x.workflow != null || x.team != null || x.agent != null; const tf = x.team_failed || 0; return { agent: x.agent || 0, team: hasKinds ? x.team || 0 : 0, auto: hasKinds ? x.workflow || 0 : x.ok || 0, failed: (x.failed || 0) + (x.agent_failed || 0), fAgent: x.agent_failed || 0, fTeam: tf, fAuto: Math.max(0, (x.failed || 0) - tf) }; };
   function usageAvatar(rec, model) {
     const art = rec?.crew?.avatar?.art;
     if (!art || !/^[\w-]+$/.test(art)) return mark(model);
@@ -1345,7 +1346,7 @@ window.ArkismTeams = (ctx) => {
   function dayChart(days) {
     const c = card("tm-chart", "날짜별 실행");
     const show = (key) => S.uKind === "all" || S.uKind === key;
-    const parts = days.map((x) => { const p = dayParts(x); return { x, p, agent: show("agent") ? p.agent : 0, team: show("team") ? p.team : 0, auto: show("workflow") ? p.auto : 0, failed: p.failed }; });
+    const parts = days.map((x) => { const p = dayParts(x); return { x, p, agent: show("agent") ? p.agent : 0, team: show("team") ? p.team : 0, auto: show("workflow") ? p.auto : 0, failed: (show("agent") ? p.fAgent : 0) + (show("team") ? p.fTeam : 0) + (show("workflow") ? p.fAuto : 0) }; });
     const ok = sumBy(parts, "agent") + sumBy(parts, "team") + sumBy(parts, "auto"), bad = sumBy(parts, "failed");
     const head = c.firstChild;
     head.append(el("p", "", `${rangeLabel()} · 성공 ${ok} · 실패 ${bad} · 막대에 올리면 전문가·팀·자동화로 나뉘어 보여요`));
@@ -1360,14 +1361,14 @@ window.ArkismTeams = (ctx) => {
     const step = Math.max(1, Math.ceil(days.length / 5));
     parts.forEach((q, i) => {
       const col = el("div", "tm-col");
-      for (const [cls, v] of [["bad", q.failed], ["agent", q.agent], ["team", q.team], ["auto", q.auto]]) { const b = el("i", cls); b.style.height = `${(v / top) * 100}%`; col.append(b); }
+      for (const [cls, v] of [["bad", q.failed], ["cu-ag", q.agent], ["team", q.team], ["auto", q.auto]]) { const b = el("i", cls); b.style.height = `${(v / top) * 100}%`; col.append(b); }
       const [, mm, dd] = (q.x.date || "").split("-");
       col.append(el("small", "mono", i % step === 0 || i === parts.length - 1 ? `${Number(mm)}.${Number(dd)}` : ""));
       const label = new Date(`${q.x.date}T12:00:00`).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" });
       col.setAttribute("aria-label", `${label} · 실행 ${sum(q)} · 실패 ${q.failed}`);
       col.addEventListener("mouseenter", () => {
         tip.replaceChildren(el("b", "", `${label} · 실행 ${sum(q)}`));
-        for (const [cls, name, v] of [["agent", "전문가", q.agent], ["team", "팀", q.team], ["auto", "자동화", q.auto], ["bad", "실패", q.failed]]) { const r = el("p", ""); r.append(el("i", cls), el("span", "", name), el("em", "mono", String(v))); tip.append(r); }
+        for (const [cls, name, v] of [["cu-ag", "전문가", q.agent], ["team", "팀", q.team], ["auto", "자동화", q.auto], ["bad", "실패", q.failed]]) { const r = el("p", ""); r.append(el("i", cls), el("span", "", name), el("em", "mono", String(v))); tip.append(r); }
         tip.hidden = false;
         const left = col.offsetLeft + col.offsetWidth + 8;
         tip.style.left = `${left + tip.offsetWidth > cols.clientWidth ? Math.max(0, col.offsetLeft - tip.offsetWidth - 8) : left}px`;
@@ -1407,7 +1408,9 @@ window.ArkismTeams = (ctx) => {
       const name = el("span", "cu-name"); name.append(usageAvatar(rec, model), raw(el("span", "", `@${rec?.crew?.handle || a.name}`)));
       const rateV = a.calls ? ((a.calls - (a.failed || 0)) / a.calls) * 100 : null;
       const teamN = teams().filter((t) => (t.crew.members || []).some((m) => m.agent_id === a.id)).length;
-      const autoN = items().filter((r) => r.crew.type === "workflow" && (r.crew.graph?.nodes || []).some((n) => n.config?.agent === a.id || n.config?.agent_id === a.id)).length;
+      // An automation uses an agent through a subflow node that calls the agent's own workflow ($handle).
+      const own = (rec?.crew?.workflow || "").replace(/^\$/, "");
+      const autoN = own ? items().filter((r) => r.crew.type === "workflow" && r.crew.handle !== own && (r.crew.graph?.nodes || []).some((n) => n.type === "subflow" && (n.config?.workflow || "").replace(/^\$/, "") === own)).length : 0;
       const where = [autoN ? `자동화 ${autoN}` : "", teamN ? `팀 ${teamN}` : ""].filter(Boolean).join(" · ") || "—";
       const cost = el("span", "mono", usd(a.cost_usd));
       return urow([name, cell(modelLabel(model), "mono quiet"), cell(String(a.calls), "mono"), cell(pct(rateV), `mono${lowRate(rateV)}`), cell(num(a.tokens / a.calls), "mono"), cost, cell(where, "quiet")], () => go("workers"));
@@ -1423,7 +1426,7 @@ window.ArkismTeams = (ctx) => {
       if (!from.length && channelsFor(t.id).length) from.push("디스코드");
       const last = mine[0];
       const lastText = last ? `${ago(new Date(meetAt(last)))} · ${last.crew_meeting.title || last.crew_meeting.topic || ""}` : "—";
-      return urow([raw(el("span", "", `@${byId(t.id)?.crew?.handle || t.name}`)), cell(from.join("·") || "—", "quiet"), cell(String(t.meetings), "mono"), cell(pct(t.concluded_rate), `mono${lowRate(t.concluded_rate)}`), cell((t.avg_rounds || 0).toFixed(1), "mono"), cell(usd(t.avg_cost_usd * t.meetings), "mono"), raw(cell(lastText, "quiet cu-clip"))], () => { go("meetings"); });
+      return urow([raw(el("span", "", `@${byId(t.id)?.crew?.handle || t.name}`)), cell(from.join("·") || "—", "quiet"), cell(String(t.meetings), "mono"), cell(pct(t.concluded_rate), `mono${lowRate(t.concluded_rate)}`), cell((t.avg_rounds || 0).toFixed(1), "mono"), cell(usd(t.cost_usd ?? t.avg_cost_usd * t.meetings), "mono"), raw(cell(lastText, "quiet cu-clip"))], () => { go("meetings"); });
     });
     return usageTable("팀", `${rows.length}개 · 회의 ${meetings}번 · 줄을 누르면 회의 기록으로 가요`, "회의 기록 전체 보기 →", () => go("meetings"),
       ["이름", "부르는 곳", "회의", "결론 난 비율", "평균 라운드", "비용", "마지막 회의"], body, "이 기간에 회의한 팀이 없어요.", "cu-team");

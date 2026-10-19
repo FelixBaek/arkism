@@ -56,6 +56,7 @@ type UsageDay struct {
 	Team        int `json:"team"`
 	Agent       int `json:"agent"`
 	AgentFailed int `json:"agent_failed"`
+	TeamFailed  int `json:"team_failed"` // part of Failed; the rest of Failed is workflow runs
 }
 
 type UsageWorkflow struct {
@@ -90,6 +91,7 @@ type UsageTeam struct {
 	Meetings      int      `json:"meetings"`
 	AvgRounds     float64  `json:"avg_rounds"`
 	AvgCostUSD    float64  `json:"avg_cost_usd"`
+	CostUSD       float64  `json:"cost_usd"`
 	ConcludedRate *float64 `json:"concluded_rate"`
 }
 
@@ -275,6 +277,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 					day(r.UpdatedAt).Team++
 				} else if m.Status == "failed" || m.Status == "no_conclusion" {
 					day(r.UpdatedAt).Failed++
+					day(r.UpdatedAt).TeamFailed++
 				}
 			}
 		}
@@ -361,7 +364,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 	}
 	for id, t := range tm {
 		t.AvgRounds = math.Round(10*float64(tmRounds[id])/float64(t.Meetings)) / 10
-		t.AvgCostUSD = roundUSD(tmCost[id] / float64(t.Meetings))
+		t.AvgCostUSD, t.CostUSD = roundUSD(tmCost[id]/float64(t.Meetings)), roundUSD(tmCost[id])
 		t.ConcludedRate = rate(tmConcluded[id], tmEnded[id])
 		out.Teams = append(out.Teams, *t)
 	}

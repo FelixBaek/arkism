@@ -15,7 +15,8 @@
    "team": 0,
    "agent": 4,
    "workflow": 22,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-15",
@@ -24,7 +25,8 @@
    "team": 1,
    "agent": 4,
    "workflow": 23,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 1
   },
   {
    "date": "2026-09-16",
@@ -33,7 +35,8 @@
    "team": 2,
    "agent": 0,
    "workflow": 6,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-17",
@@ -42,7 +45,8 @@
    "team": 1,
    "agent": 2,
    "workflow": 17,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-18",
@@ -51,7 +55,8 @@
    "team": 0,
    "agent": 3,
    "workflow": 22,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-19",
@@ -60,7 +65,8 @@
    "team": 2,
    "agent": 3,
    "workflow": 6,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 1
   },
   {
    "date": "2026-09-20",
@@ -69,7 +75,8 @@
    "team": 0,
    "agent": 1,
    "workflow": 18,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-21",
@@ -78,7 +85,8 @@
    "team": 2,
    "agent": 3,
    "workflow": 8,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-22",
@@ -87,7 +95,8 @@
    "team": 2,
    "agent": 0,
    "workflow": 22,
-   "agent_failed": 1
+   "agent_failed": 1,
+   "team_failed": 0
   },
   {
    "date": "2026-09-23",
@@ -96,7 +105,8 @@
    "team": 2,
    "agent": 0,
    "workflow": 16,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-24",
@@ -105,7 +115,8 @@
    "team": 0,
    "agent": 2,
    "workflow": 18,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-25",
@@ -114,7 +125,8 @@
    "team": 2,
    "agent": 3,
    "workflow": 6,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 1
   },
   {
    "date": "2026-09-26",
@@ -123,7 +135,8 @@
    "team": 1,
    "agent": 3,
    "workflow": 9,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-27",
@@ -132,7 +145,8 @@
    "team": 2,
    "agent": 3,
    "workflow": 7,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-28",
@@ -141,7 +155,8 @@
    "team": 0,
    "agent": 2,
    "workflow": 9,
-   "agent_failed": 1
+   "agent_failed": 1,
+   "team_failed": 0
   },
   {
    "date": "2026-09-29",
@@ -150,7 +165,8 @@
    "team": 0,
    "agent": 3,
    "workflow": 24,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-09-30",
@@ -159,7 +175,8 @@
    "team": 2,
    "agent": 3,
    "workflow": 16,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-01",
@@ -168,7 +185,8 @@
    "team": 1,
    "agent": 3,
    "workflow": 17,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-02",
@@ -177,7 +195,8 @@
    "team": 1,
    "agent": 4,
    "workflow": 19,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-03",
@@ -186,7 +205,8 @@
    "team": 2,
    "agent": 3,
    "workflow": 12,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-04",
@@ -195,7 +215,8 @@
    "team": 1,
    "agent": 0,
    "workflow": 9,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-05",
@@ -204,7 +225,8 @@
    "team": 2,
    "agent": 1,
    "workflow": 18,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-06",
@@ -213,7 +235,8 @@
    "team": 1,
    "agent": 4,
    "workflow": 13,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-07",
@@ -222,7 +245,8 @@
    "team": 2,
    "agent": 0,
    "workflow": 7,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-08",
@@ -231,7 +255,8 @@
    "team": 0,
    "agent": 4,
    "workflow": 18,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-09",
@@ -240,7 +265,8 @@
    "team": 0,
    "agent": 0,
    "workflow": 10,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-10",
@@ -249,7 +275,8 @@
    "team": 2,
    "agent": 3,
    "workflow": 8,
-   "agent_failed": 1
+   "agent_failed": 1,
+   "team_failed": 0
   },
   {
    "date": "2026-10-11",
@@ -258,7 +285,8 @@
    "team": 0,
    "agent": 3,
    "workflow": 8,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-12",
@@ -267,7 +295,8 @@
    "team": 0,
    "agent": 2,
    "workflow": 18,
-   "agent_failed": 0
+   "agent_failed": 0,
+   "team_failed": 0
   },
   {
    "date": "2026-10-13",
@@ -276,7 +305,8 @@
    "team": 1,
    "agent": 0,
    "workflow": 17,
-   "agent_failed": 1
+   "agent_failed": 1,
+   "team_failed": 0
   }
  ],
  "workflows": [
@@ -393,6 +423,7 @@
    "meetings": 9,
    "avg_rounds": 3.4,
    "avg_cost_usd": 0.52,
+   "cost_usd": 4.68,
    "concluded_rate": 88.9
   },
   {
@@ -401,6 +432,7 @@
    "meetings": 5,
    "avg_rounds": 2.8,
    "avg_cost_usd": 0.41,
+   "cost_usd": 2.05,
    "concluded_rate": 80.0
   }
  ]

@@ -1,11 +1,11 @@
 /* CREW › 사용량 (Figma 325:37545): stacked day bars in one violet, hover tooltip, four tables. */
 .tm-usage { --cu-violet: #9d8cf0; }
 .tm-col i.bad { background: var(--nc-amber); border-radius: 2px 2px 0 0; }
-.tm-col i.agent, .tm-col i.team, .tm-col i.auto { border-radius: 0; }
-.tm-col i.agent { background: color-mix(in srgb, var(--cu-violet) 45%, #fff); opacity: 1; }
+.tm-col i.cu-ag, .tm-col i.team, .tm-col i.auto { border-radius: 0; }
+.tm-col i.cu-ag { background: color-mix(in srgb, var(--cu-violet) 45%, #fff); opacity: 1; }
 .tm-col i.team { background: color-mix(in srgb, var(--cu-violet) 72%, #fff); opacity: 1; }
 .tm-col i.auto { background: var(--cu-violet); opacity: 1; }
-.tm-col.hot i.auto, .tm-col.hot i.team, .tm-col.hot i.agent { filter: brightness(1.12); }
+.tm-col.hot i.auto, .tm-col.hot i.team, .tm-col.hot i.cu-ag { filter: brightness(1.12); }
 .tm-col.hot i.bad { filter: brightness(1.1); }
 .tm-legend span:not(.bad)::before { background: var(--cu-violet); opacity: 1; }
 .tm-cols { position: relative; }
@@ -14,7 +14,7 @@
 .cu-tip b { display: block; margin-bottom: 4px; color: var(--nc-text); font: 500 12px/1.5 var(--sans); white-space: nowrap; }
 .cu-tip p { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--nc-muted); font: 400 12px/1.6 var(--sans); }
 .cu-tip i { width: 8px; min-width: 8px; max-width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--cu-violet); }
-.cu-tip i.agent { background: color-mix(in srgb, var(--cu-violet) 45%, #fff); }
+.cu-tip i.cu-ag { background: color-mix(in srgb, var(--cu-violet) 45%, #fff); }
 .cu-tip i.team { background: color-mix(in srgb, var(--cu-violet) 72%, #fff); }
 .cu-tip i.bad { background: var(--nc-amber); }
 .cu-tip em { margin-left: auto; padding-left: 12px; color: var(--nc-text); font-style: normal; }
