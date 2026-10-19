@@ -110,6 +110,7 @@ window.ArkismAutomation = (h) => {
     const d = structuredClone(base);
     if (creating) { const s = d.graph.nodes.find((n) => n.id === "ai1"); s.title = ""; s.config.goal = ""; }
     let handleTouched = !creating;
+    const picked = new Set(); // new automation: steps whose expert was chosen on purpose (until then the picker reads 맡을 전문가 고르기)
     let aiOpen = true;
     let pop = null;
     let bar = null;
@@ -536,9 +537,13 @@ window.ArkismAutomation = (h) => {
         if (!creating && !n.title) title.textContent = h.nodeTitle(n);
         const kind = el("small", "");
         if (creating && IS_AI(n)) {
-          const pick = h.select([["", "한 번 호출"], ["agent", "전문가 (직접 쓰기)"], ...h.personas().map((x) => [x.id, `전문가 · ${x.crew.name}`])], n.type === "ai_once" ? "" : n.config.persona || "agent");
+          const chosen = picked.has(n.id);
+          const pick = h.select([...(chosen ? [] : [["__pick", "맡을 전문가 고르기"]]), ["", "한 번 호출"], ["agent", "전문가 (직접 쓰기)"], ...h.personas().map((x) => [x.id, `전문가 · ${x.crew.name}`])], chosen ? (n.type === "ai_once" ? "" : n.config.persona || "agent") : "__pick");
+          pick.classList.add("auto-pick");
+          if (!chosen) face.classList.add("blank");
           pick.setAttribute("aria-label", "맡을 전문가");
           pick.addEventListener("change", () => {
+            picked.add(n.id);
             const key = goalKey(n);
             const text = n.config[key] || "";
             delete n.config.goal; delete n.config.prompt; delete n.config.persona;

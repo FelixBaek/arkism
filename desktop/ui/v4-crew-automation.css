@@ -187,3 +187,6 @@
 .auto-runline-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .auto-runline-end { flex: none; }
 .auto-row > .auto-key.chan { width: auto; }
+.auto-face.blank { background: none; border: 1px dashed var(--nc-quiet); }
+.auto-face.blank > * { display: none; }
+.v4-auto .auto-box select.auto-pick { height: 24px; padding-left: 0; border: 0; background-color: transparent; color: var(--nc-muted); font-size: calc(11.5px * var(--fs, 1)); }

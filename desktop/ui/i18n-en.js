@@ -3552,7 +3552,8 @@ window.ArkismI18nEN = {
   "단계 뺌": "Step removed",
   "단계 이은 순서 바꿈": "Step order changed",
   "부르기": "Calling",
-  "채널 추가": "Add channel"
+  "채널 추가": "Add channel",
+  "맡을 전문가 고르기": "Pick an expert"
  },
  "patterns": {
   "@{0}로 부를 때만": "Only when called as @{0}",
