@@ -189,6 +189,57 @@
      "question": "검토한 보고서를 전송할까요?"
     }
    }
+  },
+  {
+   "id": "run-v4",
+   "revision": 5,
+   "created_at": "2026-10-14T02:00:00Z",
+   "crew_run": {
+    "crew_id": "wf-v4",
+    "crew_revision": 2,
+    "trigger": "manual",
+    "status": "succeeded",
+    "input": "{\"request\": \"전기 자전거 시장\"}",
+    "summary": "결론 1개 · 할 일 3개",
+    "nodes": {
+     "start": {
+      "status": "done",
+      "started_at": "2026-10-14T02:00:00Z",
+      "finished_at": "2026-10-14T02:00:03Z"
+     },
+     "gpt": {
+      "status": "done",
+      "started_at": "2026-10-14T02:00:00Z",
+      "finished_at": "2026-10-14T02:00:03Z",
+      "tokens": 1820,
+      "output": "{\"output\": \"시장 규모 요약\"}"
+     },
+     "gem": {
+      "status": "done",
+      "started_at": "2026-10-14T02:00:00Z",
+      "finished_at": "2026-10-14T02:00:03Z",
+      "tokens": 1430,
+      "output": "{\"output\": \"경쟁사 정리\"}"
+     },
+     "meet": {
+      "status": "done",
+      "started_at": "2026-10-14T02:00:00Z",
+      "finished_at": "2026-10-14T02:00:03Z",
+      "tokens": 5210,
+      "output": "{\"summary\": \"출시를 미룬다\"}"
+     },
+     "n8n": {
+      "status": "done",
+      "started_at": "2026-10-14T02:00:00Z",
+      "finished_at": "2026-10-14T02:00:03Z"
+     },
+     "end": {
+      "status": "done",
+      "started_at": "2026-10-14T02:00:00Z",
+      "finished_at": "2026-10-14T02:00:03Z"
+     }
+    }
+   }
   }
  ]
 }

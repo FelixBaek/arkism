@@ -55,7 +55,7 @@ var crewAvatarBgs = []string{"sand", "tan", "sage", "sky", "lilac", "rose", "cre
 
 // Node kinds a graph may use. Everything here runs on Arkism itself.
 var crewNodeTypes = []string{"start", "schedule", "webhook", "ai", "ai_once", "code", "http", "github", "approval",
-	"condition", "merge", "loop", "wait", "notify", "end", "subflow"}
+	"condition", "merge", "loop", "wait", "notify", "end", "subflow", "expert", "team", "n8n"}
 
 var crewHandleRe = regexp.MustCompile(`^[\p{L}\p{N}_-]{1,40}$`)
 var crewModelRe = regexp.MustCompile(`^[a-zA-Z0-9._ -]{1,80}$`)

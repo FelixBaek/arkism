@@ -4896,7 +4896,43 @@ Object.assign(window.ArkismI18nEN.strings, {
   "보관소 잔여 점검": "Check archive residues",
   "시간 제한이나 읽기 오류로 점검을 마치지 못했어요. 잔여 데이터가 없다고 확인한 것은 아니에요.": "The check did not finish because of a time limit or read error. Absence of residual data has not been established.",
   "점검하지 못했어요. 삭제 완료로 간주하지 않아요.": "The check failed. Deletion completion is not assumed.",
-  "삭제 요청을 접수했어요. 정리와 백업 처리 상태는 삭제 처리 내역에서 확인해 주세요.": "Deletion requested. Check cleanup and backup status in deletion history."
+  "삭제 요청을 접수했어요. 정리와 백업 처리 상태는 삭제 처리 내역에서 확인해 주세요.": "Deletion requested. Check cleanup and backup status in deletion history.",
+  "페르소나·모델이 정해진 채로 들어가요": "Comes in with its persona and model set",
+  "여럿이 회의해 결론을 내요": "Several members meet and reach a conclusion",
+  "n8n으로 보내기": "Send to n8n",
+  "그 밖의 연동": "Other integrations",
+  "흐름 노드": "Flow nodes",
+  "처리 노드": "Processing nodes",
+  "알림·연동 노드": "Notification and integration nodes",
+  "전문가 노드": "Expert nodes",
+  "사회자가 고름": "Moderator picks",
+  "stdin JSON → 처리 → stdout JSON": "stdin JSON → process → stdout JSON",
+  "최대 실행 시간": "Max run time",
+  "기본 30s · 최대 2h": "Default 30s · max 2h",
+  "쓸 키 이름": "Key name to use",
+  "설정 › 모델 설정에 저장한 키": "A key saved in Settings › Model settings",
+  "예: in.tests.failed == 0 and in.risky == false": "e.g. in.tests.failed == 0 and in.risky == false",
+  "기다릴 시간": "Time to wait",
+  "예: 30m, 2h": "e.g. 30m, 2h",
+  "넘길 일": "Work to hand over",
+  "{{input}}에 앞 결과가 들어가요": "{{input}} receives the previous result",
+  "받는 곳 이름": "Recipient name",
+  "서버 notify.json에 적은 이름": "A name listed in the server's notify.json",
+  "부른 대화나 화면에 이 형식으로 돌려줘요.": "Returned to the calling chat or screen in this format.",
+  "n8n 웹훅 주소": "n8n webhook URL",
+  "오래 걸리는 일은 n8n이 끝나면 결과를 보내 줘요.": "For long jobs, n8n sends the result when it finishes.",
+  "모델 자동": "Model: auto",
+  "전문가 · 협업": "Expert · collaboration",
+  "팀 · 회의": "Team · meeting",
+  "시작·끝": "Start/End",
+  "아직 실행 안 함": "Not run yet",
+  "저장한 뒤에 실행할 수 있어요.": "You can run it after saving.",
+  "고른 팀이 회의를 열어 결론을 다음 단계에 넘겨요": "The chosen team holds a meeting and passes its conclusion to the next step",
+  "회의 주제 ({{input}}에 앞 결과가 들어가요)": "Meeting topic ({{input}} receives the previous result)",
+  "시작 조건": "Start condition",
+  "시작 조건은 워크플로우 설정에서 바꿔요.": "Change the start condition in the workflow settings.",
+  "기다리기를 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요.": "If you choose to wait, the run pauses until n8n returns the result to callback_url. The server needs a public address.",
+  "고른 전문가의 모델·지시가 기본값이에요. 아래에서 이 단계만 다르게 정할 수 있어요": "The chosen expert's model and instructions are the defaults. You can override them for this step below."
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {
@@ -5413,4 +5449,38 @@ Object.assign(window.ArkismI18nEN.patterns, {
  "실패가 잦은 교훈 · 통과율 {0}% ({1}/{2})": "Lesson often failing · pass rate {0}% ({1}/{2})",
  "AI 합치기 제안 · {0}": "AI merge suggestion · {0}",
  "합치지 못했어요: {0}": "Could not merge: {0}"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "끝나면 알려줌을 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요.": "With notify-when-done, the run waits until n8n posts the result to callback_url. The server needs a public address.",
+  "팀 노드": "Team node",
+  "누가 맡나": "Who does it",
+  "노드 종류": "Node type",
+  "무엇을 하나": "What it does",
+  "노드 이름": "Node name",
+  "{{input}} 자리에 앞 단계 결과가 들어가요": "{{input}} is replaced with the previous step's result",
+  "회의 주제": "Meeting topic",
+  "하위 질문마다 출처 3개 이상 모아 줘.": "Collect at least 3 sources for each sub-question.",
+  "고른 팀이 회의를 열어 결론(요약·결정·할 일)을 다음 단계에 넘겨요. 사람의 결정을 기다리는 회의는 이 단계를 멈추게 해요.": "The chosen team holds a meeting and passes its conclusion (summary, decisions, to-dos) to the next step. A meeting waiting on a human decision pauses this step.",
+  "실행 범위": "Run scope",
+  "허용 범위": "Allowed scope",
+  "웹 검색과 자료 읽기만 허용": "Web search and reading only",
+  "질문마다 출처 3개와 요약": "3 sources and a summary per question",
+  "읽기만 · 동시": "Read only · parallel",
+  "쓰기 · 차례로": "Write · in turn",
+  "나눠서 맡기기": "Split the work",
+  "나눠서 맡기기 켜기": "Turn on split work",
+  "켜면 이 노드가 일을 나눠 워커에게 맡기고 결과를 합쳐요. 하위 질문이 몇 개일지 미리 모를 때 써요.": "When on, this node splits the work across workers and merges the results. Use it when you can't tell in advance how many sub-questions there are.",
+  "전문가 고르기": "Choose an expert",
+  "워커 전문가": "Worker expert",
+  "워커 — 전문가": "Workers — experts",
+  "워커의 모델은 그 전문가 설정을 따라요": "Each worker uses its expert's model",
+  "워커 더하기": "Add worker",
+  "검색 결과": "Search results",
+  "실행할 때 AI가 일을 몇 개로 나눌지 정하고, 워커 결과를 이 노드가 합쳐요.": "At run time the AI decides how many pieces to split the work into, and this node merges the workers' results."
+});
+
+Object.assign(window.ArkismI18nEN.patterns, {
+  "최대 {0}라운드": "Up to {0} rounds",
+  "{0} 바꾸기": "Change {0}",
+  "{0} · 협업 워커 {1}": "{0} · up to {1} collab workers"
 });

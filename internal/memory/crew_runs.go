@@ -38,6 +38,8 @@ type CrewRunNode struct {
 	Error      string     `json:"error,omitempty" bson:"error,omitempty"`
 	// Runs counts the node's starts; a back edge makes it 2, 3, …
 	Runs int `json:"runs,omitempty" bson:"runs,omitempty"`
+	// Tokens is the AI token use (input + output) of the node's last finish.
+	Tokens int64 `json:"tokens,omitempty" bson:"tokens,omitempty"`
 }
 
 type CrewRunWaiting struct {
@@ -115,7 +117,7 @@ func terminalCrewRun(status string) bool {
 
 func validCrewRunNode(n CrewRunNode) bool {
 	return slices.Contains(crewNodeStatuses, n.Status) && len(n.Port) <= 20 && runes(n.Output) <= 20000 && runes(n.Error) <= 500 &&
-		n.Runs >= 0 && n.Runs <= 10000
+		n.Runs >= 0 && n.Runs <= 10000 && n.Tokens >= 0
 }
 
 func validCrewRunLoops(loops map[string]int) bool {

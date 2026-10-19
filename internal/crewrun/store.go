@@ -91,7 +91,8 @@ type NodeState struct {
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 	Output     string     `json:"output,omitempty"`
 	Error      string     `json:"error,omitempty"`
-	Runs       int        `json:"runs,omitempty"` // starts of this node in the run
+	Runs       int        `json:"runs,omitempty"`   // starts of this node in the run
+	Tokens     int64      `json:"tokens,omitempty"` // AI tokens (input + output) of its last finish
 }
 
 type Waiting struct {
