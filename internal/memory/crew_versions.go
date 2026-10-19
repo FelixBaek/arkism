@@ -30,12 +30,21 @@ func crewVersionID(id string, revision int64) string {
 	return id + ".v" + strconv.FormatInt(revision, 10)
 }
 
-// keepCrewVersion stores r's current definition before UpdateCrew replaces it.
-// shortcut: versions are never pruned (one row per save); prune past crewVersionsMax if saves pile up.
+// keepCrewVersion stores r's current definition before UpdateCrew replaces it, and drops the row
+// that just left the window CrewVersions reads, so each item keeps at most crewVersionsMax-1 rows.
 func keepCrewVersion(ctx context.Context, tx Tx, r Record) error {
 	c := *r.Crew
-	return tx.Insert(ctx, colCrewVersions, Record{ID: crewVersionID(r.ID, r.Revision), Scope: r.Scope, Kind: colCrewVersions, Status: statusActive,
-		Revision: 1, Text: c.Name, Crew: &c, CreatedAt: r.UpdatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: r.CreatedBy, CreatedByType: r.CreatedByType})
+	if err := tx.Insert(ctx, colCrewVersions, Record{ID: crewVersionID(r.ID, r.Revision), Scope: r.Scope, Kind: colCrewVersions, Status: statusActive,
+		Revision: 1, Text: c.Name, Crew: &c, CreatedAt: r.UpdatedAt, UpdatedAt: r.UpdatedAt, CreatedBy: r.CreatedBy, CreatedByType: r.CreatedByType}); err != nil {
+		return err
+	}
+	// After this save the live revision is r.Revision+1; CrewVersions reads down to r.Revision+2-crewVersionsMax.
+	if old := r.Revision + 1 - crewVersionsMax; old >= 1 {
+		if err := tx.Delete(ctx, colCrewVersions, r.Scope, crewVersionID(r.ID, old), 1); err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+	}
+	return nil
 }
 
 // CrewVersions returns the live definition and the kept ones among the crewVersionsMax-1 before it, newest first.
