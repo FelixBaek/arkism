@@ -5148,7 +5148,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "예: GitHub PR 열림": "e.g. GitHub PR opened",
   "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요": "Change the template, run mode and webhook in the classic settings window",
   "판 이력": "Version history",
-  "지난 판 보기·되돌리기는 준비 중이에요.": "Viewing and restoring past versions is coming soon.",
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {
@@ -5216,6 +5215,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {
+  "모델 {0} → {1}": "Model {0} → {1}", "{0} 바꿈": "{0} changed", "v{0}로 되돌렸어요.": "Restored v{0}.",
   "이름 {0} → {1}": "Name {0} → {1}", "@이름 {0} → {1}": "@name {0} → {1}", "카테고리 {0} → {1}": "Category {0} → {1}",
   "회의 방식 → {0}": "Meeting mode → {0}", "최대 라운드 {0} → {1}": "Max rounds {0} → {1}", "토큰 상한 {0} → {1}": "Token cap {0} → {1}",
   "{0} 추가 ({1})": "Added {0} ({1})", "{0} 뺌": "Removed {0}", "디스코드 · #{0}": "Discord · #{0}",

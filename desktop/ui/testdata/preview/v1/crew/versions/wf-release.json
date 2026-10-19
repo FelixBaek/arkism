@@ -1,0 +1,236 @@
+{
+ "items": [
+  {
+   "revision": 2,
+   "at": "2026-10-18T05:20:00Z",
+   "crew": {
+    "type": "workflow",
+    "name": "릴리스 점검",
+    "handle": "릴리스점검",
+    "role": "정해진 시간에 릴리스를 점검해요.",
+    "category": "Git · 릴리스",
+    "model": "sonnet 5",
+    "trigger": {
+     "kind": "schedule",
+     "cron": "0 9 * * *"
+    },
+    "enabled": true,
+    "graph": {
+     "nodes": [
+      {
+       "id": "start",
+       "type": "schedule",
+       "title": "매일 09:00",
+       "x": 40,
+       "y": 160,
+       "config": {
+        "cron": "0 9 * * *"
+       }
+      },
+      {
+       "id": "tags",
+       "type": "github",
+       "title": "태그 확인",
+       "x": 300,
+       "y": 140,
+       "config": {
+        "args": "release list --limit 5",
+        "repo_dir": "~/projects/arkism"
+       }
+      },
+      {
+       "id": "ok",
+       "type": "approval",
+       "title": "배포 승인",
+       "x": 560,
+       "y": 140,
+       "config": {
+        "question": "검토한 보고서를 전송할까요?"
+       }
+      },
+      {
+       "id": "ship",
+       "type": "notify",
+       "title": "보고 보내기",
+       "x": 820,
+       "y": 140,
+       "config": {
+        "channel": "slack",
+        "to": "release",
+        "message": "릴리스 점검 결과"
+       }
+      },
+      {
+       "id": "end",
+       "type": "end",
+       "title": "보고하고 끝",
+       "x": 1080,
+       "y": 160,
+       "config": {}
+      }
+     ],
+     "edges": [
+      {
+       "from": "start",
+       "to": "tags"
+      },
+      {
+       "from": "tags",
+       "to": "ok"
+      },
+      {
+       "from": "ok",
+       "to": "ship",
+       "port": "approve"
+      },
+      {
+       "from": "ship",
+       "to": "end"
+      }
+     ]
+    },
+    "cover": {
+     "id": "p1",
+     "url": "img/arkism-art.svg",
+     "thumb": "img/arkism-art.svg",
+     "author": "Kim Lee",
+     "author_url": "https://unsplash.com"
+    },
+    "goal": {
+     "task": "릴리스 전에 변경 목록을 점검해 보고서를 만들어요",
+     "done": "확인할 곳이 모두 정리됨"
+    },
+    "notify": {
+     "channels": [
+      {
+       "kind": "discord",
+       "channel": "#릴리스",
+       "when": "events"
+      },
+      {
+       "kind": "telegram",
+       "channel": "나에게",
+       "when": "approval"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "revision": 1,
+   "at": "2026-10-15T00:12:00Z",
+   "crew": {
+    "type": "workflow",
+    "name": "릴리스 점검",
+    "handle": "릴리스점검",
+    "role": "정해진 시간에 릴리스를 점검해요.",
+    "category": "Git · 릴리스",
+    "model": "opus-5-5",
+    "trigger": {
+     "kind": "schedule",
+     "cron": "0 9 * * *"
+    },
+    "enabled": true,
+    "graph": {
+     "nodes": [
+      {
+       "id": "start",
+       "type": "schedule",
+       "title": "매일 09:00",
+       "x": 40,
+       "y": 160,
+       "config": {
+        "cron": "0 9 * * *"
+       }
+      },
+      {
+       "id": "tags",
+       "type": "github",
+       "title": "태그 확인",
+       "x": 300,
+       "y": 140,
+       "config": {
+        "args": "release list --limit 5",
+        "repo_dir": "~/projects/arkism"
+       }
+      },
+      {
+       "id": "ok",
+       "type": "approval",
+       "title": "배포 승인",
+       "x": 560,
+       "y": 140,
+       "config": {
+        "question": "검토한 보고서를 전송할까요?"
+       }
+      },
+      {
+       "id": "ship",
+       "type": "notify",
+       "title": "보고 보내기",
+       "x": 820,
+       "y": 140,
+       "config": {
+        "channel": "slack",
+        "to": "release",
+        "message": "릴리스 점검 결과"
+       }
+      },
+      {
+       "id": "end",
+       "type": "end",
+       "title": "보고하고 끝",
+       "x": 1080,
+       "y": 160,
+       "config": {}
+      }
+     ],
+     "edges": [
+      {
+       "from": "start",
+       "to": "tags"
+      },
+      {
+       "from": "tags",
+       "to": "ok"
+      },
+      {
+       "from": "ok",
+       "to": "ship",
+       "port": "approve"
+      },
+      {
+       "from": "ship",
+       "to": "end"
+      }
+     ]
+    },
+    "cover": {
+     "id": "p1",
+     "url": "img/arkism-art.svg",
+     "thumb": "img/arkism-art.svg",
+     "author": "Kim Lee",
+     "author_url": "https://unsplash.com"
+    },
+    "goal": {
+     "task": "릴리스 전에 변경 목록을 점검해 보고서를 만들어요",
+     "done": "확인할 곳이 모두 정리됨"
+    },
+    "notify": {
+     "channels": [
+      {
+       "kind": "discord",
+       "channel": "#릴리스",
+       "when": "events"
+      },
+      {
+       "kind": "telegram",
+       "channel": "나에게",
+       "when": "approval"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

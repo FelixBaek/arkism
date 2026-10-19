@@ -780,11 +780,47 @@ window.ArkismAutomation = (h) => {
     function historyTab(body) {
       body.classList.remove("auto-body");
       body.classList.add("auto-history");
-      // 판 이력 (되돌리기): the crew revision API is not here yet; the slot keeps the design's place.
+      // 판 이력 from the server (GET /v1/crew/versions/{id}, same as the team popup): the live definition first, then each one a save replaced.
       const ver = el("section", "auto-sec auto-versions");
       const vh = el("div", "wf-sec-head");
-      vh.append(el("strong", "", "판 이력"), el("span", "grow"), el("small", "auto-dim", `저장할 때마다 판이 하나 생겨요 · 지금 v${rec.revision || 1}`));
-      ver.append(vh, box(el("p", "auto-hint auto-empty", "지난 판 보기·되돌리기는 준비 중이에요.")));
+      vh.append(el("strong", "", "판 이력"), el("span", "grow"), el("small", "auto-dim", `저장할 때마다 판이 하나 생겨요. 되돌려도 지금 판은 남아요.`));
+      const vbox = el("div", "tm-hist");
+      ver.append(vh, vbox);
+      const pad2 = (n) => String(n).padStart(2, "0");
+      const LABELS = CHANGE;
+      const what = (a, b) => LABELS.filter(([k]) => !same(a[k], b[k])).map(([k, l]) => (k === "name" ? `이름 ${a.name || "없음"} → ${b.name || "없음"}` : k === "model" ? `모델 ${a.model || "기본"} → ${b.model || "기본"}` : `${l} 바꿈`));
+      const open = new Set();
+      let items = null;
+      const paintVersions = () => {
+        vbox.replaceChildren();
+        (items || []).forEach((x, i) => {
+          const cur = x.revision === rec.revision, at = new Date(x.at);
+          const r = el("div", "tm-hist-row");
+          const sum = items[i + 1] ? what(items[i + 1].crew, x.crew).slice(0, 2).join(" · ") || "저장" : x.revision === 1 ? "처음 만듦" : "처음 기록";
+          r.append(el("b", "", `v${x.revision}`), el("time", "", isNaN(at) ? "" : `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), el("span", "", sum));
+          const acts = el("span", "tm-hist-acts");
+          if (cur) acts.append(el("em", "", "지금 쓰는 판"));
+          else {
+            const lk = (label, cls, fn) => { const b = el("button", `tm-link ${cls}`, label); b.type = "button"; b.addEventListener("click", fn); return b; };
+            acts.append(lk("바뀐 점 보기", "quiet", () => { if (!open.delete(x.revision)) open.add(x.revision); paintVersions(); }), lk("이 판으로 되돌리기", "plain", async () => {
+              if (!confirm(`v${x.revision}로 되돌릴까요? 새 판으로 저장돼요.`)) return;
+              try {
+                const saved = await h.save(rec, { ...structuredClone(x.crew), type: "workflow" });
+                leaveSilently();
+                await h.reload(saved.id);
+                notice(`v${x.revision}로 되돌렸어요.`);
+                h.openAutomation(saved.id, "history");
+              } catch (e) { notice(h.errorText(e)); }
+            }));
+          }
+          r.append(acts);
+          vbox.append(r);
+          if (open.has(x.revision)) { const lines = what(items[0].crew, x.crew); const p = el("p", "tm-hist-diff"); p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((t) => el("span", "", t))); vbox.append(p); }
+        });
+        if (!items?.length) vbox.append(el("p", "auto-hint auto-empty", items ? "판 이력을 불러오지 못했어요." : "불러오는 중…"));
+      };
+      paintVersions();
+      request(`/v1/crew/versions/${encodeURIComponent(rec.id)}?${query()}`).then((r) => { items = r.items || []; }).catch(() => { items = []; }).then(() => { if (pop?.dialog.isConnected) paintVersions(); });
       body.append(ver);
       const sec = el("section", "auto-sec");
       const head2 = el("div", "wf-sec-head");
