@@ -2987,6 +2987,76 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     out.push(el("small", "dim", "한도에 닿으면 멈추지 않고 확인을 물어요. 비용은 공개 가격으로 셈한 추정이에요."));
     return workerCard("예산", "", ...out);
   }
+  // 채널 연결 (868:61909, 1012:60747): the Discord channels bound to this expert (bot channel action kind "agent").
+  // Same data as the team popup: GET /v1/discord, POST /v1/discord/bots/{id}/update with the whole channel list.
+  const botOf = (r) => (r?.discord_bot ? { ...r.discord_bot, id: r.id, revision: r.revision } : r);
+  function loadBots() {
+    if (wk.bots !== undefined) return;
+    wk.bots = null;
+    request(`/v1/discord?${query()}`).then((d) => { wk.bots = (d.bots || []).map(botOf); }, () => { wk.bots = []; }).then(() => wk.pop?.dialog.open && wk.redraw());
+  }
+  async function saveBotChannels(b, channels, okText) {
+    try {
+      const saved = await request(`/v1/discord/bots/${encodeURIComponent(b.id)}/update`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: b.revision,
+        bot: { name: b.name, channels, allowed: b.allowed || { user_ids: [], role_ids: [] }, ...(b.target ? { target: b.target } : {}), ...(b.guild_id ? { guild_id: b.guild_id } : {}) } }) });
+      Object.assign(b, saved?.id ? botOf(saved) : { channels, revision: (b.revision || 0) + 1 });
+      notice(okText);
+    } catch (e) { notice(errorText(e)); }
+    wk.redraw();
+  }
+  function channelCard(rec) {
+    loadBots();
+    const add = button("+ 채널 연결", "ghost small", null, () => { wk.chAdd = wk.chAdd ? null : { bot: wk.bots?.[0]?.id || "", channel: "" }; wk.redraw(); });
+    const list = el("div", "ex-ch-list");
+    const bots = wk.bots || [];
+    const mine = bots.flatMap((b) => (b.channels || []).filter((c) => c.action?.kind === "agent" && c.action.id === rec.id).map((c) => ({ c, b })));
+    for (const { c, b } of mine) {
+      const r = el("div", "ex-ch-row");
+      const mode = button(c.auto_start ? "글이 올라오면 답해요" : `@${rec.crew.handle}로 부를 때만`, "ghost small", null,
+        () => saveBotChannels(b, b.channels.map((x) => (x === c ? { ...x, auto_start: !x.auto_start } : x)), "바꿨어요."));
+      mode.title = tr("눌러서 바꿔요");
+      const warn = ["needs_permission", "token_invalid"].includes(b.state);
+      r.append(raw(el("span", "t", `디스코드 · #${c.name || c.channel_id}`)), raw(el("small", "", b.name || "")), ...(warn ? [el("span", "wf-badge small warn", "확인 필요")] : []), mode,
+        button("빼기", "ghost small", null, () => { if (confirm(tr(`#${c.name || c.channel_id} 연결을 뺄까요?`))) saveBotChannels(b, b.channels.filter((x) => x !== c), "연결을 뺐어요."); }));
+      list.append(r);
+    }
+    if (wk.bots === null) list.append(el("p", "dim", "불러오는 중…"));
+    else if (!mine.length) list.append(el("p", "dim", bots.length ? "연결된 채널이 없어요." : "연결된 디스코드 봇이 없어요."));
+    const out = [list];
+    if (wk.chAdd && bots.length) {
+      const f = wk.chAdd;
+      const b = bots.find((x) => x.id === f.bot) || bots[0];
+      const known = wk.chKnown?.[b.id];
+      if (known === undefined) {
+        wk.chKnown = { ...(wk.chKnown || {}), [b.id]: null };
+        request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${query()}`).then((r) => r.items || [], () => [])
+          .then((items) => { wk.chKnown[b.id] = items; wk.redraw(); });
+      }
+      const row = el("div", "ex-ch-add");
+      const botSel = select(bots.map((x) => [x.id, x.name || x.id]), b.id);
+      botSel.className = "wf-select";
+      botSel.setAttribute("aria-label", "봇");
+      botSel.addEventListener("change", () => { f.bot = botSel.value; f.channel = ""; wk.redraw(); });
+      const chSel = select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], f.channel);
+      chSel.className = "wf-select";
+      chSel.setAttribute("aria-label", "채널");
+      chSel.addEventListener("change", () => { f.channel = chSel.value; });
+      row.append(botSel, chSel, button("연결", "primary small", null, () => {
+        const id = chSel.value;
+        if (!id) { notice("채널을 골라 주세요."); return; }
+        const had = (b.channels || []).find((x) => x.channel_id === id);
+        if (had && !confirm(tr("이 채널은 이미 다른 곳에 연결돼 있어요. 이 전문가로 바꿀까요?"))) return;
+        const ch = { channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "agent", id: rec.id }, auto_start: false };
+        wk.chAdd = null;
+        saveBotChannels(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.");
+      }));
+      out.push(row);
+    } else if (wk.chAdd) out.push(el("small", "dim", "먼저 디스코드 봇을 추가해 주세요."));
+    out.push(el("small", "dim", "봇 토큰·연결 상태는 봇 설정에서 관리해요. 바꾸면 바로 저장돼요."));
+    const c = workerCard("채널 연결", "", ...out);
+    c.querySelector(".wk-card-head")?.append(add);
+    return c;
+  }
   // What goes to the server: the contract fields only, empty ones left out.
   function workerOut(d) {
     const out = { type: "agent", name: (d.name || "").trim(), handle: (d.handle || "").trim().replace(/^@/, ""), role: (d.role || "").trim(), instructions: d.instructions || "",
@@ -3250,6 +3320,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     if (wk.pop) return;
     const isNew = !rec;
     if (isNew) { wk.id = null; wk.draft = blankAgent(); wk.dirty = false; wk.teamsPick = new Set(); wk.newTeams = []; wk.ai = null; }
+    wk.bots = undefined; wk.chAdd = null; wk.chKnown = {}; // fresh channel bindings per opening
     wk.tab = "edit";
     const face = el("button", "ex-face");
     face.type = "button";
@@ -3428,7 +3499,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     box.append(m, aiBox("fix"),
       modelCard(d), runCard(d),
       workerCard("일하는 방법", `고친 횟수 ${rec.revision} · 마크다운으로 써요`, instructionsField(d), workflowField(d)),
-      useCard(d, rec), budgetCard(rec.id, d),
+      useCard(d, rec), budgetCard(rec.id, d), channelCard(rec),
       workerCard("속한 팀", "", team), bar);
   }
 
