@@ -81,10 +81,17 @@ impl LaunchSpec {
     }
 
     fn capture(cmd: &mut Command, log: Option<PathBuf>, endpoint: Option<String>) -> Result<Self, String> {
-        // Command uses the platform's environment-key comparison (case-insensitive on
-        // Windows); a plain map merge would retain conflicting Path/PATH entries there.
+        Self::capture_with_environment(cmd, log, endpoint, std::env::vars_os())
+    }
+
+    fn capture_with_environment(cmd: &mut Command, log: Option<PathBuf>, endpoint: Option<String>, parent: impl IntoIterator<Item = (OsString, OsString)>) -> Result<Self, String> {
+        // Hidden Windows shell entries such as =C: describe drive-relative working
+        // directories, not application variables. Every launch has an explicit cwd.
+        // Filter only inherited pseudo entries; explicit command overrides still go
+        // through the strict native environment validator unchanged.
+        // Command retains the platform's case-insensitive Path/PATH comparison.
         let mut environment = Command::new(cmd.get_program());
-        environment.env_clear().envs(std::env::vars_os());
+        environment.env_clear().envs(parent.into_iter().filter(|(key, _)| !key.as_encoded_bytes().starts_with(b"=")));
         for (key, value) in cmd.get_envs() {
             match value {
                 Some(value) => { environment.env(key, value); }
@@ -2460,6 +2467,32 @@ mod tests {
         rt.update_handoff(|| Ok(())).unwrap();
         rt.shutdown(); // app-exit teardown is permitted without reopening the gate
         assert!(rt.activity().is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn launch_capture_excludes_inherited_shell_pseudo_entries_but_preserves_overrides() {
+        let dir = update_test_dir();
+        let program = dir.join("inert-program");
+        fs::write(&program, b"never executed").unwrap();
+        let parent = vec![
+            (OsString::from("=C:"), OsString::from("C:/shell-directory")),
+            (OsString::from("=ExitCode"), OsString::from("1")),
+            (OsString::from("ARKISM_TEST_KEEP"), OsString::from("parent")),
+            (OsString::from("ARKISM_TEST_REMOVE"), OsString::from("remove")),
+        ];
+        let mut command = Command::new(&program);
+        command.current_dir(&dir).env("ARKISM_TEST_KEEP", "override").env_remove("ARKISM_TEST_REMOVE");
+        let spec = LaunchSpec::capture_with_environment(&mut command, None, None, parent).unwrap();
+        assert_eq!(spec.env, BTreeMap::from([(OsString::from("ARKISM_TEST_KEEP"), OsString::from("override"))]));
+        let replay = spec.command().unwrap();
+        assert_eq!(replay.get_current_dir(), Some(dir.as_path()));
+        assert!(replay.get_envs().all(|(key, _)| !key.as_encoded_bytes().starts_with(b"=")));
+        // An explicit invalid name is not silently removed or made acceptable.
+        let mut invalid = Command::new(&program);
+        invalid.current_dir(&dir).env("bad=name", "explicit");
+        let spec = LaunchSpec::capture_with_environment(&mut invalid, None, None, Vec::new()).unwrap();
+        assert!(spec.env.iter().any(|(key, _)| key == "bad=name"));
         fs::remove_dir_all(dir).unwrap();
     }
 
