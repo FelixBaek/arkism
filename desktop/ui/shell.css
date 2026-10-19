@@ -1,3 +1,4 @@
+@font-face { font-family: "Aleo"; src: url("fonts/Aleo-Latin-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Cormorant Garamond"; src: url("fonts/CormorantGaramond-Latin.woff2") format("woff2"); font-weight: 300 700; font-display: swap; }
 /* v4 · NOCTURNE shell — Figma 아키즘 v4 (198:2) "v4/Shell/Layout"(198:112) 과 화면 틀(Brain › 기억 198:630).
    메뉴 레일 | 영역 탭 줄 · 구분선 · 제목 줄 · 패널(본문 | 상세 366px) · 푸터. 색은 tokens.css 의 --nc-* */
@@ -10,13 +11,13 @@
 /* Figma 198:110: the mark sits alone on top, the word below it with the status dot */
 .sidebar .brand { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 43px; padding: 0; font-weight: 400; }
 .brand-mark { grid-column: 1 / -1; width: 21px; height: 19px; flex: none; }
-.brand-word { font: 400 32px/42px "Suseong Batang", "Cormorant Garamond", "Noto Serif KR", Georgia, serif; color: var(--nc-text); letter-spacing: 0; }
+.brand-word { font: 400 40px/42px "Aleo", "Cormorant Garamond", "Noto Serif KR", Georgia, serif; color: var(--nc-text); letter-spacing: 0; }
 .status-dot { margin-left: auto; display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; padding: 0; }
 .status-dot:hover { background: var(--nc-raised); }
 .status-dot .dot { width: 7px; height: 7px; }
 .rail-line { height: 1px; background: var(--nc-line); flex: none; }
 .sidebar .nav { gap: 6px; }
-.sidebar .nav-item { height: 44px; gap: 12px; padding: 0 16px 0 14px; border-radius: var(--nc-radius-control); color: var(--nc-muted); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); }
+.sidebar .nav-item { height: 44px; gap: 12px; padding: 0 16px 0 14px; border-radius: var(--nc-radius-control); color: var(--nc-muted); font: 400 calc(16px * var(--fs, 1))/20px "Aleo", "Noto Serif KR", Georgia, serif; }
 .sidebar .nav-item:hover { color: var(--nc-text); }
 .sidebar .nav-item.active { background: none; color: var(--nc-text); }
 .sidebar .nav-ic { stroke-width: 1.125; }
@@ -32,7 +33,7 @@
   :root:not([data-theme="dark"]) .rail-art .ark-line { stroke: rgb(117,117,112); }
   :root:not([data-theme="dark"]) .rail-art .ark-accent { stroke: rgb(125,98,0); }
 }
-.sidebar .rail-settings { height: 40px; padding-left: 12px; color: var(--nc-text); }
+.sidebar .rail-settings { height: 40px; padding-left: 12px; color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); }
 .sidebar .rail-settings.active { background: var(--nc-raised); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
