@@ -60,6 +60,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	crewUsageRoutes(mux, s)
 	crewAgentCallRoutes(mux, s)
 	discordRoutes(mux, s)
+	messengerRoutes(mux, s)
 	skillUsageRoutes(mux, s)
 	codeReviewRoutes(mux, s)
 	codeGraphRoutes(mux, s)

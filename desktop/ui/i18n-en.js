@@ -4997,7 +4997,24 @@ Object.assign(window.ArkismI18nEN.strings, {
   "필요한 권한이 빠졌어요. 서버 관리자가 역할을 다시 줘야 해요.": "A required permission is missing. A server admin needs to grant the role again.",
   "토큰은 서버 PC의 키 저장소에 암호화해 저장해요. 화면에는 끝 4자리만 보여요. 넣기 전에 디스코드 개발자 포털에서 Message Content Intent를 켜 주세요. 봇을 만들고 서버에 초대하는 방법은 CREW › 디스코드에서 이어서 볼 수 있어요.": "The token is stored encrypted in the server PC's key store. Only the last 4 characters are shown. Turn on Message Content Intent in the Discord Developer Portal first. See CREW › Discord for how to create the bot and invite it to your server.",
   "의미로 기억을 찾을 때 써요. 끄면 키워드로만 찾아요.": "Used to find memories by meaning. When off, only keywords are used.",
-  "서버가 아직 지원하지 않아요. 서버에 연결 기능이 들어오면 여기서 토큰을 넣어 연결해요.": "The server doesn't support this yet. Once it does, enter the token here to connect.",
+  "이 서버는 아직 이 연결을 지원하지 않아요. 서버를 새 버전으로 올려 주세요.": "This server doesn't support this connection yet. Update the server to a newer version.",
+  "시험 보내기": "Send a test",
+  "채팅 ID": "Chat ID",
+  "웹훅 주소": "Webhook URL",
+  "-1001234567890 또는 @채널이름": "-1001234567890 or @channelname",
+  "https://hooks.slack.com/services/…": "https://hooks.slack.com/services/…",
+  "값을 끝까지 붙여 넣어 주세요.": "Paste the whole value.",
+  "채팅 ID를 먼저 넣어 주세요.": "Enter the chat ID first.",
+  "채팅 ID를 바꿨어요.": "Chat ID changed.",
+  "시험 메시지를 보냈어요.": "Test message sent.",
+  "텔레그램을 연결했어요.": "Telegram connected.",
+  "슬랙을 연결했어요.": "Slack connected.",
+  "텔레그램 연결을 끊었어요.": "Telegram disconnected.",
+  "슬랙 연결을 끊었어요.": "Slack disconnected.",
+  "텔레그램 연결을 끊을까요? 저장된 값이 지워져요.": "Disconnect Telegram? The saved values will be deleted.",
+  "슬랙 연결을 끊을까요? 저장된 값이 지워져요.": "Disconnect Slack? The saved values will be deleted.",
+  "토큰은 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. @BotFather로 만든 봇을 그룹이나 DM에 먼저 추가해 두세요.": "The token is stored on this PC and only the last 4 characters are shown. Add the bot you made with @BotFather to the group or DM first.",
+  "웹훅 주소는 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. 슬랙의 Incoming Webhooks에서 만들어요.": "The webhook URL is stored on this PC and only the last 4 characters are shown. Create it in Slack's Incoming Webhooks.",
   "어느 팀·전문가가 어디서 불러지는지 한눈에 봐요. 바꾸려면 팀·전문가 상세의 채널 연결에서 해요.": "See at a glance which team or expert is called from where. To change it, use the channel connection in the team or expert detail."
 });
 
@@ -5451,6 +5468,7 @@ Object.assign(window.ArkismI18nEN.strings, {
  "불러온 횟수": "Recalls"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
+  "보내지 못했어요 ({0}).": "Couldn't send ({0}).",
  "메시지 {0}개 · {1}": "{0} messages · {1}",
  "넣음 {0}번": "Injected {0} times",
  "쓰임 {0}번": "Used {0} times",
