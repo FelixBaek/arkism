@@ -4872,3 +4872,50 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 
 Object.assign(window.ArkismI18nEN.patterns, {"비슷한 후보 {0}개": "{0} similar candidates"});
+
+Object.assign(window.ArkismI18nEN.strings, {
+  "우주": "Space", "숲": "Forest", "바다": "Sea", "도시": "City", "추상": "Abstract",
+  "카드 사진": "Card photo", "팀 목록 카드에 깔리는 사진이에요": "The photo behind the card in the team list",
+  "↑ 내 사진 올리기": "↑ Upload my photo", "배경 없애기": "Remove background",
+  "영어로 찾으면 더 많아요 (예: space, desk)": "English finds more (e.g. space, desk)",
+  "Unsplash 무료 사진 · 찍은 사람 이름이 카드 구석에 같이 보여요": "Free Unsplash photos · the photographer's name shows in the card corner",
+  "Unsplash 키가 없어요. 서버에 ARKISM_UNSPLASH_KEY를 넣으면 검색할 수 있어요. 내 사진 올리기는 그대로 쓸 수 있어요.": "No Unsplash key. Set ARKISM_UNSPLASH_KEY on the server to search. Uploading your own photo still works.",
+  "내 사진": "My photo", "사진을 줄이지 못했어요. 다른 사진으로 해 주세요.": "Could not shrink the photo. Try another one.",
+  "전문가를 골라 순서를 정하면 @이름으로 불러요": "Pick experts and an order, then call the team by @name",
+  "설명 바꿈": "Description changed", "카드 사진 바꿈": "Card photo changed", "리뷰어 승인 종료 바꿈": "Reviewer-approval ending changed",
+  "진행자 종료 바꿈": "Moderator ending changed", "발언 순서 바꿈": "Speaking order changed", "전문가 역할·맡을 일 바꿈": "Expert role/task changed",
+  "팀 자료 바꿈": "Team materials changed", "회의 템플릿 바꿈": "Meeting templates changed", "항상 넣는 자료 바꿈": "Always-included materials changed",
+  "디스코드에도 올리기 바꿈": "Discord mirroring changed", "처음 기록": "First record", "테스트": "Test",
+  "저장하지 않은 변경이 있어요. 버리고 닫을까요?": "You have unsaved changes. Discard and close?", "아직 만들지 않았어요. 버리고 닫을까요?": "Not created yet. Discard and close?",
+  "카드 사진 바꾸기": "Change card photo", "+ 새 카테고리": "+ New category", "팀 이름을 적어 주세요": "Enter a team name",
+  "@이름 복사": "Copy @name", "이미 쓰는 이름이에요": "Name already in use", "무엇을 하는 팀인가요? 목적을 한 줄로 적어요": "What does this team do? Write the purpose in one line",
+  "예상 시간": "Est. time", "한 번 회의할 때 · 공시 단가로 계산한 추정": "Per meeting · estimated from list prices",
+  "누가 언제 말하고, 언제 끝낼지 정해요": "Decide who speaks when, and when to end", "진행자가 매번 다음 사람을 골라요": "The moderator picks the next speaker each time",
+  "위에서부터 순서대로 말해요 · 끌어서 순서를 바꿔요": "Speaks in order from the top · drag to reorder", "최근 30일 회의": "Meetings in last 30 days",
+  "무엇을 고칠까요? 예: 접근성 검토자를 넣고 라운드를 3번으로 줄여 줘": "What should change? e.g. add an accessibility reviewer and cut rounds to 3",
+  "어떤 팀이 필요해요? 예: 시안을 여러 관점에서 보고 고칠 목록을 만드는 팀": "What team do you need? e.g. a team that reviews a design from several angles and lists fixes",
+  "초안 만들기": "Draft it", "무엇을 할지 적어 주세요.": "Describe what to do.", "AI 도움을 쓸 수 없어요.": "AI help is unavailable.", "만드는 중…": "Working…",
+  "AI의 답을 읽지 못했어요. 다시 해 보세요.": "Could not read the AI's answer. Try again.", "고쳤어요. 저장하면 반영돼요.": "Edited. Save to apply.",
+  "초안을 만들었어요. 다듬어서 만들어 주세요.": "Draft ready. Polish it, then create.", "AI가 답하지 못했어요.": "The AI did not answer.",
+  "자주 여는 회의의 주제 틀": "Topic templates for frequent meetings", "+ 추가": "+ Add", "팀 자료": "Team materials",
+  "회의 내내 모든 멤버가 보는 자료예요": "Materials every member sees throughout the meeting", "채널 연결": "Channels",
+  "어디서 이 팀을 부를지 정해요 · 봇 설정은 디스코드 화면에서": "Choose where to call this team · bot settings are on the Discord screen",
+  "글이 올라오면 시작": "Start when a post appears", "팀을 만든 뒤 채널을 연결해요.": "Connect channels after the team is created.",
+  "이미 쓰는 이름이에요. 다른 @이름을 써 주세요.": "Name already in use. Use another @name.", "처음 만듦": "Created",
+  "팀을 만든 뒤 여기서 회의를 열어 볼 수 있어요.": "After the team is created you can open a meeting here.",
+  "여기서 연 회의도 실제 실행이에요. 회의 기록은 이번 달 한도에 남아요.": "Meetings opened here are real runs. They count toward this month's limit.",
+  "저장하지 않은 변경은 반영되지 않아요.": "Unsaved changes are not applied.", "아래에 맡길 일을 적고 회의를 시작해 보세요.": "Write a task below and start a meeting.",
+  "회의 중…": "In meeting…", "회의 기록 보기": "View meeting log", "말하는 중…": "Speaking…", "마침": "Done", "맡길 일을 적어 주세요.": "Write the task to hand over.",
+  "팀을 만들면 저장할 때마다 판이 남아요.": "Once the team exists, each save keeps a version.", "판 이력": "Version history",
+  "저장할 때마다 판이 하나 생겨요. 되돌려도 지금 판은 남아요.": "Each save makes a version. Restoring keeps the current one.", "지금 쓰는 판": "Current version",
+  "바뀐 점 보기": "View changes", "이 판으로 되돌리기": "Restore this version", "바뀐 점을 찾지 못했어요.": "No changes found.",
+  "최근 회의": "Recent meetings", "테스트 탭에서 연 회의도 여기 남아요": "Meetings opened in the Test tab appear here too", "아직 연 회의가 없어요.": "No meetings yet."
+});
+
+Object.assign(window.ArkismI18nEN.patterns, {
+  "이름 {0} → {1}": "Name {0} → {1}", "@이름 {0} → {1}": "@name {0} → {1}", "카테고리 {0} → {1}": "Category {0} → {1}",
+  "회의 방식 → {0}": "Meeting mode → {0}", "최대 라운드 {0} → {1}": "Max rounds {0} → {1}", "토큰 상한 {0} → {1}": "Token cap {0} → {1}",
+  "{0} 추가 ({1})": "Added {0} ({1})", "{0} 뺌": "Removed {0}", "디스코드 · #{0}": "Discord · #{0}",
+  "저장하면 v{0}이 돼요 · 기록 탭에서 되돌릴 수 있어요": "Saving makes v{0} · restore from the History tab",
+  "{0} 토큰 · {1}": "{0} tokens · {1}", "v{0}로 되돌릴까요? 새 판으로 저장돼요.": "Restore v{0}? It is saved as a new version."
+});
