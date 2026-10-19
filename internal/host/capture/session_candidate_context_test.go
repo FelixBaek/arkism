@@ -4,7 +4,7 @@ import "testing"
 
 func TestSessionCandidateContextRequiresOneSupportingUserMessage(t *testing.T) {
 	const source = "업무용 가람 보고서는 검수한 초안에만 적용한다. 긴급 보고서는 제외한다. 아직 잠정안이다. 2027년부터 시행한다."
-	for _, mode := range []string{"literal", "empty", "invented", "paraphrase", "outside_quote", "split_quotes", "split_record", "cross_message", "split_parts", "prior_split_part", "parts_different_revisions", "parts_missing_parent", "parts_invalid_parent", "parts_invalid_number", "assistant", "legacy"} {
+	for _, mode := range []string{"literal", "empty", "invented", "prepared_v4", "paraphrase", "outside_quote", "split_quotes", "split_record", "cross_message", "split_parts", "prior_split_part", "parts_different_revisions", "parts_missing_parent", "parts_invalid_parent", "parts_invalid_number", "assistant", "legacy"} {
 		t.Run(mode, func(t *testing.T) {
 			request, output := sessionFixture(t)
 			request["records"].([]any)[0].(map[string]any)["text"] = source
@@ -19,7 +19,11 @@ func TestSessionCandidateContextRequiresOneSupportingUserMessage(t *testing.T) {
 			switch mode {
 			case "empty":
 				c["applicability"], c["uncertainty"], c["valid_from"] = "", "", ""
-			case "invented":
+			case "invented", "prepared_v4":
+				if mode == "prepared_v4" {
+					request["prompt_version"] = "harness-session-v4"
+					output["coverage"].(map[string]any)["prompt_version"] = "harness-session-v4"
+				}
 				c["applicability"] = "미검수 초안은 원문을 유지한다."
 				want = "candidate_context_evidence_mismatch"
 			case "cross_message":
@@ -88,5 +92,25 @@ func TestSessionCandidateContextRequiresOneSupportingUserMessage(t *testing.T) {
 				t.Fatalf("context validation: got %v, want %q", err, want)
 			}
 		})
+	}
+}
+
+func TestSessionInheritedScopeUsesAnExactSubjectPhrase(t *testing.T) {
+	const source = "선율 앱에서 개인 메모는 한국어로 쓴다. 업무 메모는 상대방 언어를 유지한다."
+	for _, invented := range []bool{false, true} {
+		request, output := sessionFixture(t)
+		request["records"].([]any)[0].(map[string]any)["text"] = source
+		output["session_state"].(map[string]any)["source_refs"].([]any)[0].(map[string]any)["quote"] = source
+		c := output["memory_candidates"].([]any)[0].(map[string]any)
+		c["statement"] = "선율 앱의 업무 메모는 상대방 언어를 유지한다."
+		c["applicability"], c["uncertainty"], c["valid_from"] = "업무 메모", "", ""
+		c["source_refs"].([]any)[0].(map[string]any)["quote"] = source
+		if invented {
+			c["applicability"] = "선율 앱에서 업무 메모"
+		}
+		err := validateSessionOutput(output, request)
+		if !invented && err != nil || invented && errorCode(err) != "candidate_context_evidence_mismatch" {
+			t.Fatalf("invented=%v: %v", invented, err)
+		}
 	}
 }

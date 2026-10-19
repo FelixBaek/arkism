@@ -1031,7 +1031,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		r.Revision++
 		r.UpdatedAt = time.Now().UTC()
 		if review != nil {
-			r.Review = &ReviewDecision{Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
+			r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
 			if d.Role == roleHuman {
 				r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
 				if r.Classification != nil {
@@ -1354,6 +1354,7 @@ func HitFromRecord(col string, r Record) Hit {
 	}
 	hit := Hit{MemoryContext: copyMemoryContext(r.MemoryContext), TrustLevel: r.TrustLevel, CreatedBy: r.CreatedBy, CreatedAt: &r.CreatedAt, Tags: r.Tags, EffectiveAt: r.EffectiveAt, Digest: ContentHash(recordContent(r)), Kind: r.Kind, Sensitivity: r.Sensitivity, ID: r.ID, Collection: col, Origin: origin, Scope: r.Scope, Status: r.Status, Revision: r.Revision, Text: r.Text, Summary: r.Summary, Sources: r.Sources, SourceEventID: r.SourceEventID, TraceID: r.TraceID, VerificationStatus: r.VerificationStatus, UpdatedAt: r.UpdatedAt, Trust: r.Trust, Relations: r.Relations, Authority: "data_only_untrusted"}
 	if col == colMemories {
+		hit.ApprovalOrigin = memoryApprovalOrigin(r)
 		hit.Reach, hit.ReachProject = memoryReach(r), r.ReachProject
 		hit.ConflictPending = r.ConflictID != ""
 		hit.Supersedes = append([]Ref(nil), r.Supersedes...)

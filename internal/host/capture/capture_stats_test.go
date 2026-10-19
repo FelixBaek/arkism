@@ -29,7 +29,7 @@ func TestCaptureStatsCountsTheLocalMetrics(t *testing.T) {
 	writeMetrics(t, `{"event": "recall", "captured": 2}`, `{"event": "recall"}`, `{"event": "writeback_failure"}`, `{"event": "hook_error"}`,
 		`{"status": "skipped_no_cue"}`, `{"status": "no_claims"}`, `{"status": "candidate", "latency_ms": 30}`,
 		`{"status": "accepted", "latency_ms": 10}`, `{"status": "rejected", "reason": "secret_detected", "latency_ms": 20}`,
-		`{"status": "weird"}`)
+		`{"status": "weird"}`, `{"event":"capture_copies_expired","count":3}`, `{"event":"capture_expiry_receipt_failed"}`, `{"event":"session_validation_withheld"}`)
 	for _, d := range []string{spoolDir(), failedDir()} {
 		os.MkdirAll(d, 0o700)
 	}
@@ -46,7 +46,8 @@ func TestCaptureStatsCountsTheLocalMetrics(t *testing.T) {
 	}
 	want := map[string]any{"capture_events": 4.0, "candidates": 1.0, "accepted": 1.0, "merged": 0.0, "rejected": 1.0, "privacy_rejected": 1.0,
 		"skipped_no_cue": 1.0, "no_claims": 1.0, "writeback_failures": 1.0, "hook_errors": 1.0, "recalls": 2.0, "recall_hits_from_capture": 2.0,
-		"spool_pending": 2.0, "failed_jobs": 1.0, "capture_latency_ms_p50": 20.0}
+		"spool_pending": 2.0, "failed_jobs": 1.0, "capture_latency_ms_p50": 20.0,
+		"transport_copies_expired": 3.0, "expiry_receipt_failures": 1.0, "session_validation_withheld": 1.0}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatal(got)
 	}

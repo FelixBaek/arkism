@@ -24,7 +24,7 @@ import (
 
 const (
 	sessionSchemaVersion = "session-state-v1"
-	sessionPromptVersion = "harness-session-v4"
+	sessionPromptVersion = "harness-session-v6"
 )
 
 // The CLI subscription aliases for the session_processor and consolidator roles (config/harness-models.json).
@@ -75,6 +75,14 @@ Keep the named project/product in each candidate; never broaden a project rule t
 Preserve every condition, exception, negation, uncertainty and change-effective time in statement itself.
 For user_statement candidates, applicability, uncertainty and valid_from must be exact contiguous source wording,
 each contained in a cited quote from the same original user message. Prefer one quote covering all fields.
+Copy proper names exactly as written; never invent English aliases, translations, transliterations or app/project labels.
+Applicability identifies the subject or situation where the rule applies, not the rule's command or just an exception.
+Copy a short exact subject/condition phrase from the quote. Never join a name from one clause with a subject from another.
+When scope is inherited from an earlier clause in the SAME message, keep the name in statement, cite both clauses
+(or the full message), and copy only the actual subject phrase for applicability. Leave applicability empty if uncertain.
+An exception alone is not the scope of the whole rule. Preserve every exception and contrast in statement even when
+splitting a message into several candidates. Do not omit a second clause about new accounts, deadlines or exclusions.
+Before returning, verify every nonempty qualifier is literally a substring of one of that candidate's quotes.
 Use empty strings when unstated; do not add diagnostic explanations
 such as "scope unknown" to those fields. Put your own doubts in session_state.uncertainties instead.
 If qualifiers cannot be supported by one message's quoted evidence, leave those fields empty and retain all qualifiers in statement.
@@ -414,7 +422,7 @@ func validateSessionOutput(output map[string]any, request map[string]any) (err e
 		}
 		// A literal citation is not evidence for paraphrased or invented metadata.
 		// Previously prepared versions keep their original delivery contract.
-		if request["prompt_version"] == sessionPromptVersion && autosaveGet(c, "evidence_kind") == "user_statement" && !sessionCandidateContextSupported(c, records) {
+		if (request["prompt_version"] == sessionPromptVersion || request["prompt_version"] == "harness-session-v4" || request["prompt_version"] == "harness-session-v5") && autosaveGet(c, "evidence_kind") == "user_statement" && !sessionCandidateContextSupported(c, records) {
 			return sessionWait("candidate_context_evidence_mismatch")
 		}
 	}

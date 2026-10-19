@@ -54,10 +54,25 @@ func parseSourceTraceQuery(raw string) (Scope, error) {
 }
 
 func (s *Service) TraceMemorySources(ctx context.Context, token string, scope Scope, id string) (MemorySources, error) {
+	return s.traceRecordSources(ctx, token, scope, id, colMemories)
+}
+
+func (s *Service) TraceCandidateSources(ctx context.Context, token string, scope Scope, id string) (MemorySources, error) {
+	actor, err := s.authorize(ctx, token, reviewAction, scope, id, "")
+	if err != nil {
+		return MemorySources{}, err
+	}
+	if actor.Role != roleHuman {
+		return MemorySources{}, ErrDenied
+	}
+	return s.traceRecordSources(bindRequestActor(ctx, actor), token, scope, id, "memory_candidates")
+}
+
+func (s *Service) traceRecordSources(ctx context.Context, token string, scope Scope, id, collection string) (MemorySources, error) {
 	if len(id) == 0 || len(id) > 256 {
 		return MemorySources{}, ErrInvalid
 	}
-	d, e := s.authorize(ctx, token, "read:memories", scope, id, "")
+	d, e := s.authorize(ctx, token, "read:"+collection, scope, id, "")
 	if e != nil {
 		return MemorySources{}, e
 	}
@@ -69,14 +84,17 @@ func (s *Service) TraceMemorySources(ctx context.Context, token string, scope Sc
 	var out MemorySources
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		out = MemorySources{}
-		r, e := tx.Get(ctx, "memories", scope, id)
+		r, e := tx.Get(ctx, collection, scope, id)
 		if e != nil {
 			return e
+		}
+		if r.ContentErased || r.PrivacyQuarantined {
+			return ErrNotFound
 		}
 		if len(r.Sources) == 0 || len(r.Sources) > 64 {
 			return ErrInvalid
 		}
-		out = MemorySources{Memory: Ref{Collection: "memories", ID: r.ID, Revision: r.Revision}, ApprovedBy: r.ApprovedBy, Sources: []SourceTrace{}, Authority: "data_only_untrusted"}
+		out = MemorySources{Memory: Ref{Collection: collection, ID: r.ID, Revision: r.Revision}, ApprovedBy: r.ApprovedBy, Sources: []SourceTrace{}, Authority: "data_only_untrusted"}
 		// Cache only within this transaction attempt; duplicate locations keep their own proofs.
 		rows := map[string]Record{}
 		states := map[string]string{}
@@ -155,7 +173,11 @@ func (s *Service) TraceMemorySources(ctx context.Context, token string, scope Sc
 			}
 			out.Sources = append(out.Sources, item)
 		}
-		return audit(ctx, tx, scope, d.PrincipalID, "read:memory_sources", id)
+		action := "read:memory_sources"
+		if collection == "memory_candidates" {
+			action = "read:candidate_sources"
+		}
+		return audit(ctx, tx, scope, d.PrincipalID, action, id)
 	})
 	if e != nil {
 		return MemorySources{}, e

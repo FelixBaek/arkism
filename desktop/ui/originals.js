@@ -49,6 +49,7 @@ window.ArkismOriginals = (ctx) => {
       const row = el("section", "original-source");
       row.append(el("p", "meta", `${origins[source.origin_product] || source.origin_product || "출처"} · ${date(source.collected_at)}`));
       if (source.origin_agent_id) row.append(el("p", "meta", `원래 실행 에이전트   ${source.origin_agent_id} · 실행기가 기록한 정보`));
+      row.append(el("p", "meta", "저장된 근거 발췌예요. 실제 발화는 연결된 원문에서 확인해 주세요."));
       row.append(el("p", "original-excerpt", source.excerpt || "조회할 수 있는 근거 본문이 없어요."));
       const refs = source.archive_messages || [];
       refs.forEach((ref, index) => {

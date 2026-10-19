@@ -187,6 +187,7 @@ type Record struct {
 	UpdatedAt          time.Time                `json:"updated_at" bson:"updated_at"`
 	EffectiveAt        *time.Time               `json:"effective_at,omitempty" bson:"effective_at,omitempty"`
 	ExpiresAt          *time.Time               `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
+	ReviewDueAt        *time.Time               `json:"review_due_at,omitempty" bson:"review_due_at,omitempty"`
 	CreatedBy          string                   `json:"created_by" bson:"created_by"`
 	Trust              float64                  `json:"trust" bson:"trust"`
 	SkillID            string                   `json:"skill_id,omitempty" bson:"skill_id,omitempty"`
@@ -345,6 +346,7 @@ type MeteredEmbedder interface {
 	EmbedMeasured(context.Context, []string, string) (EmbeddingBatch, error)
 }
 type Hit struct {
+	ApprovalOrigin     string         `json:"approval_origin,omitempty" bson:"-"`
 	MemoryContext      *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
 	Reach              string         `json:"reach,omitempty" bson:"reach,omitempty"`
 	ReachProject       string         `json:"reach_project,omitempty" bson:"reach_project,omitempty"`

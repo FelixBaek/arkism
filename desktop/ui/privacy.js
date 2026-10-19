@@ -28,12 +28,45 @@ window.ArkismPrivacy = (ctx) => {
     } while (cursor && items.length < SCAN_CAP);
     return { items, more: Boolean(cursor) };
   }
+  // Keep only bodyless request ids, scoped to the current server and owner. No token is stored.
+  const receiptKey = () => `arkism.privacyReceipts:${JSON.stringify([state.server, state.scope])}`;
+  const receipts = () => { try { const rows = JSON.parse(localStorage.getItem(receiptKey()) || "[]"); return Array.isArray(rows) ? rows.filter(r => typeof r.id === "string" && /^[A-Za-z0-9_.:-]{1,256}$/.test(r.id) && Number.isFinite(Date.parse(r.at)) && Date.now() - Date.parse(r.at) < 7 * 86400000).slice(-32) : []; } catch (_) { return []; } };
+  function rememberReceipt(job) {
+    if (!job?.id) return;
+    try { localStorage.setItem(receiptKey(), JSON.stringify([...receipts().filter(r => r.id !== job.id), { id: job.id, at: new Date().toISOString() }].slice(-32))); } catch (_) { /* status can still be read from the server */ }
+  }
+  function deletionHistory() {
+    const box = el("details", "d-history"); box.append(el("summary", "", "삭제 처리 내역"));
+    const content = el("div", ""); box.append(content);
+    let loading = false;
+    box.addEventListener("toggle", async () => {
+      if (!box.open || loading) return;
+      loading = true; const owner = identity(); content.replaceChildren(el("p", "meta", "서버 처리 기록을 확인하는 중…"));
+      const nodes = [];
+      for (const receipt of receipts().slice(-12).reverse()) {
+        if (!box.open || owner !== identity()) break;
+        const card = el("div", "quote");
+        try {
+          const job = await request(`/v1/privacy/deletions/${encodeURIComponent(receipt.id)}?${query()}`);
+          const status = window.ArkismMemoryManagement.deletionStatus(job);
+          card.append(el("strong", "", status.label));
+          for (const [label, done] of [["접근 차단", status.accessRemoved], ["실행 데이터", status.runtimePurged], ["파생 데이터", status.derivedPurged], ["첨부 파일", status.artifactsPurged]]) card.append(el("p", "meta", `${label}: ${done ? "서버 완료 보고" : "완료 보고 전"}`));
+          card.append(el("p", "meta", `백업: ${status.backup}`), el("p", "meta", status.externalVerification));
+        } catch (_) { card.append(el("p", "meta", "처리 기록을 읽지 못했어요. 완료로 간주하지 않아요.")); }
+        nodes.push(card);
+      }
+      if (owner === identity() && box.isConnected) content.replaceChildren(...(nodes.length ? nodes : [el("p", "meta", "이 앱에서 접수한 삭제 요청 기록이 없어요.")]));
+      loading = false;
+    });
+    return box;
+  }
   // Ask the server to erase these source records (and what came from them), 64 at a time.
   async function eraseSources(ids) {
     const list = [...ids].sort((a, b) => String(a).localeCompare(String(b)));
     const done = [];
     for (let i = 0; i < list.length; i += BATCH) {
       const r = await request("/v1/privacy/deletions", { method: "POST", body: JSON.stringify({ scope: state.scope, idempotency_key: idempotency(), target_type: "source_event", target_ids: list.slice(i, i + BATCH), reason: REASON }) });
+      rememberReceipt(r);
       done.push(r);
     }
     return done;
@@ -60,7 +93,7 @@ window.ArkismPrivacy = (ctx) => {
       if (!confirm("정말 지울까요? 모든 에이전트가 더 이상 쓰지 못하고 되돌릴 수 없어요.")) return;
       if (ids.size) await eraseSources(ids);
       else await deleteMemory(m);
-      notice("영구히 지웠어요. 남은 정리는 서버가 이어서 해요.");
+      notice("삭제 요청을 접수했어요. 정리·백업 처리 상태는 설정의 삭제 처리 내역에서 확인해 주세요.");
       state.selected = null;
       await afterChange();
     } catch (e) { notice(fail(e)); } finally { trigger.disabled = false; }
@@ -128,7 +161,17 @@ window.ArkismPrivacy = (ctx) => {
     const actions = el("div", "pg-actions");
     form.append(label, actions);
     actions.append(find);
-    g.append(form, status);
+    g.append(form, status, deletionHistory());
+    const auditResult = el("p", "pg-hint", "보관소 점검은 읽기 전용이며 외부 백업과 사용자 앱 사본은 별도 확인이 필요해요.");
+    g.append(button("보관소 잔여 점검", "ghost small", null, async event => {
+      const trigger = event.currentTarget; trigger.disabled = true;
+      try {
+        const result = await request(`/v1/session-archives/storage-audit?${query()}`);
+        auditResult.textContent = result.state === "checked_scope" ? `이 범위의 고아 청크 후보 ${result.orphan_candidates}개. 외부 사본은 별도 확인이 필요해요.`
+          : result.state === "partial" ? `일부만 확인했어요. 고아 청크 후보 ${result.orphan_candidates}개 이상이에요.` : "시간 제한이나 읽기 오류로 점검을 마치지 못했어요. 잔여 데이터가 없다고 확인한 것은 아니에요.";
+      } catch (_) { auditResult.textContent = "점검하지 못했어요. 삭제 완료로 간주하지 않아요."; }
+      finally { trigger.disabled = false; }
+    }), auditResult);
     const show = () => {
       for (const b of actions.querySelectorAll(".danger")) b.remove();
       if (!preview || preview.owner !== identity()) { status.textContent = ""; return; }
@@ -173,8 +216,8 @@ window.ArkismPrivacy = (ctx) => {
           try { await deleteMemory(m); erased++; } catch (_) { failed++; }
         }
         preview = null;
-        notice(failed ? `지웠어요. 기억 ${failed}개는 지우지 못했어요. 다시 찾아보세요.` : "영구히 지웠어요. 남은 정리는 서버가 이어서 해요.");
-        status.textContent = failed ? `기억 ${failed}개는 지우지 못했어요.` : `“${p.phrase}”를 지웠어요. 원본 기록 ${p.ids.size}개 · 원본 없는 기억 ${erased}개.`;
+        notice(failed ? `일부 삭제 요청을 접수했어요. 기억 ${failed}개는 요청하지 못했어요. 다시 확인해 주세요.` : "삭제 요청을 접수했어요. 정리와 백업 처리 상태는 삭제 처리 내역에서 확인해 주세요.");
+        status.textContent = failed ? `기억 ${failed}개는 지우지 못했어요.` : `“${p.phrase}” 삭제 요청을 접수했어요. 원본 기록 ${p.ids.size}개 · 원본 없는 기억 ${erased}개. 서버와 백업의 완료 여부는 처리 내역에서 확인해 주세요.`;
         await afterChange().catch(() => {});
       } catch (e) {
         status.textContent = fail(e);

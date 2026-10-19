@@ -113,18 +113,63 @@ func SearchTokens(text string) []string {
 	return out
 }
 
-// searchQueryTerms are the distinct normalized tokens of a query.
+// Question scaffolding is not topic evidence. Keep negation, quantities and
+// temporal operators; exact keyword search remains independent of this lane.
+var searchQueryScaffolding = map[string]bool{
+	"what": true, "when": true, "where": true, "who": true, "whose": true,
+	"why": true, "how": true, "which": true,
+	"do": true, "does": true, "did": true, "is": true, "are": true,
+	"was": true, "were": true, "be": true, "been": true,
+	"has": true, "have": true, "had": true, "can": true, "could": true,
+	"would": true, "should": true, "the": true, "an": true,
+	"and": true, "or": true, "of": true, "in": true, "on": true,
+	"at": true, "to": true, "for": true, "with": true, "by": true,
+	"you": true, "your": true, "me": true, "my": true, "his": true,
+	"her": true, "their": true, "they": true, "he": true, "she": true,
+}
+
+// searchQueryTerms are the distinct normalized topic tokens of a query, capped
+// at searchQueryMaxTokens concepts so alias spellings do not consume the budget.
 func searchQueryTerms(query string) []string {
 	terms := []string{}
 	for _, t := range SearchTokens(query) {
+		if searchQueryScaffolding[t] {
+			continue
+		}
 		if !slices.Contains(terms, t) {
 			terms = append(terms, t)
-			if len(terms) == searchQueryMaxTokens {
+			if len(searchQueryConcepts(terms)) == searchQueryMaxTokens {
 				break
 			}
 		}
 	}
 	return terms
+}
+
+// Related backup terminology forms one lexical concept. Count the concept
+// once even when the query or document contains both spellings, so expansion
+// cannot manufacture the two independent matches a long query requires.
+func searchQueryConcepts(terms []string) []string {
+	groups := [][]string{{"사본", "백업"}, {"복원", "복구"}}
+	concepts := []string{}
+	for _, term := range terms {
+		words := []string{term}
+		for _, group := range groups {
+			if slices.Contains(group, term) {
+				words = group
+				break
+			}
+		}
+		parts := make([]string, len(words))
+		for i, word := range words {
+			parts[i] = tsQuote(word)
+		}
+		concept := "(" + strings.Join(parts, " | ") + ")"
+		if !slices.Contains(concepts, concept) {
+			concepts = append(concepts, concept)
+		}
+	}
+	return concepts
 }
 
 func tsQuote(token string) string {
