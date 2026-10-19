@@ -277,6 +277,18 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 		q := strings.Join(concepts, " | ")
 		extra = pgSearchMatch
 		args = append(args, q, q, q, concepts, concepts, concepts)
+		if topics := searchQueryTopics(terms); len(topics) > 0 {
+			// Filter before the candidate LIMIT. Use the same vector as the
+			// ordinary match, including pending context and legacy rows.
+			// With several subject concepts, one ambiguous word ("대기" as
+			// atmosphere versus waiting, for example) is still insufficient.
+			minimum := 1
+			if len(topics) >= 3 {
+				minimum = 2
+			}
+			extra += fmt.Sprintf(" AND (SELECT count(*) FROM unnest($%%d::text[]) topic WHERE %s @@ topic::tsquery) >= %d", pgSearchVector, minimum)
+			args = append(args, topics)
+		}
 	}
 	// shortcut: exact vector scan; add a measured ANN index when corpus latency requires it.
 	if lane == "vector" {
