@@ -38,18 +38,21 @@ var harnessPlan = sync.OnceValue(func() map[string]HarnessRole {
 	return parseHarnessPlan(raw)
 })
 
+// harnessAPI is one role's api_parameters in config/harness-models.json.
+type harnessAPI struct {
+	Model     string `json:"model"`
+	MaxTokens int    `json:"max_tokens"`
+	Output    struct {
+		Effort string `json:"effort"`
+	} `json:"output_config"`
+}
+
 func parseHarnessPlan(raw []byte) map[string]HarnessRole {
 	var doc struct {
 		Prompts map[string]string `json:"prompts"`
 		Roles   map[string]struct {
-			API struct {
-				Model     string `json:"model"`
-				MaxTokens int    `json:"max_tokens"`
-				Output    struct {
-					Effort string `json:"effort"`
-				} `json:"output_config"`
-			} `json:"api_parameters"`
-			Components []string `json:"prompt_components"`
+			API        harnessAPI `json:"api_parameters"`
+			Components []string   `json:"prompt_components"`
 		} `json:"roles"`
 	}
 	out := map[string]HarnessRole{}

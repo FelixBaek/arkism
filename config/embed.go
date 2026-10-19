@@ -2,6 +2,7 @@
 // installed host has the same defaults as the repository (ST-620, FR-012).
 package config
 
+// The blank import enables the //go:embed directives below.
 import _ "embed"
 
 //go:embed harness-models.json

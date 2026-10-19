@@ -29,7 +29,7 @@ func TestInstallerTaskPayloadIncludesEveryDependencyAndBacksUpReplacement(t *tes
 		if err != nil || len(raw) == 0 {
 			t.Fatal("missing embedded dependency", name, err)
 		}
-		if got := lfText(t, filepath.Join(folder, name)); got != string(raw) {
+		if lfText(t, filepath.Join(folder, name)) != string(raw) {
 			t.Fatal("installed script differs from embedded payload", name)
 		}
 	}

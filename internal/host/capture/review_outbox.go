@@ -83,7 +83,7 @@ func intField(v any) (int64, bool) {
 
 // checkReviewAck accepts only the server's answer to exactly this write: the same candidate one
 // revision on, still waiting, carrying the risk that was sent.
-func checkReviewAck(req map[string]any, res map[string]any) error {
+func checkReviewAck(req, res map[string]any) error {
 	body := req["body"].(map[string]any)
 	want, _ := intField(body["expected_revision"])
 	rev, ok := intField(res["revision"])
