@@ -8,8 +8,7 @@ window.ArkismOverview = (ctx) => {
   "use strict";
   const { state, $, el, button, request, query, ago, go, render } = ctx;
   const HOUR = 3600000, W = 1157, H = 930;
-  const C = { g: "#8fd19e", r: "#ff5160", a: "#f5b955", p: "#c58cff" };
-  const SVG = "http://www.w3.org/2000/svg";
+    const SVG = "http://www.w3.org/2000/svg";
   const svg = (tag, attrs = {}) => { const n = document.createElementNS(SVG, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
   const num = (n) => Number(n || 0).toLocaleString("ko-KR");
   const time = (v) => { const t = new Date(v || 0).getTime(); return Number.isNaN(t) ? 0 : t; };
@@ -46,6 +45,7 @@ window.ArkismOverview = (ctx) => {
     const recallTimes = recalls.map((u) => time(u.last)).filter(Boolean);
     const w = d.tools?.memory_use || null, reported = time(d.tools?.collected_at);
     const proposals = (d.maintenance || []).map((p) => time(p.created_at)).filter(Boolean);
+    const nProp = (d.maintenance || []).length; // a proposal without created_at still counts
     const lastSession = latest(sessions), lastExtract = latest(extracted);
     // the stall clock starts at the first session that ended after the last extraction (the oldest session if never extracted);
     // extraction runs on finished sessions, so a session that ended after it is still unprocessed even if it started before
@@ -60,40 +60,56 @@ window.ArkismOverview = (ctx) => {
     const days = oldest ? Math.floor((now - oldest) / 86400000) : 0;
 
     const row = (times, tone) => slots(times).map((n) => (n ? tone : ""));
-    const extractRow = row(extracted, "g");
+    const extractRow = row(extracted, "n");
     if (stalled) slots(sessions).forEach((n, i) => { if (n && new Date().setMinutes(0, 0, 0) - (23 - i) * HOUR > since) extractRow[i] = "r"; });
-    const classRow = row(classified, "g"); slots(unclassified.map((m) => time(m.created_at))).forEach((n, i) => { if (n && !classRow[i]) classRow[i] = "a"; });
+    const classRow = row(classified, "n"); slots(unclassified.map((m) => time(m.created_at))).forEach((n, i) => { if (n && !classRow[i]) classRow[i] = "d"; });
     const waitRow = row(waiting.map((m) => time(m.created_at)), "a");
-    const reportRow = row(reported ? [reported] : [], "g");
+    const reportRow = row(reported ? [reported] : [], "n");
 
-    return [
-      { key: "collect", group: "save", label: "대화 저장", region: "두정엽", tone: "g", note: ago(lastSession),
+    const n24 = (arr) => num(slots(arr).reduce((x, y) => x + y, 0));
+    const todayCount = (arr) => arr.map((m) => time(m.created_at)).filter(today).length;
+    const BADGE = { collect: [lastSession ? "정상" : "기록 없음", "n"], extract: stalled ? [`${stalledHours}시간째 멈춤`, "r"] : ["정상", "n"],
+      classify: [unclassified.length ? `대기 ${unclassified.length}` : "모두 분류됨", "n"], review: [waiting.length ? `${waiting.length}건` : "비어 있음", waiting.length ? "a" : "n"],
+      recall: ["정상", "n"], trace: [reported ? "정상" : "보고 없음", "n"], judge: [tidy ? `확인 전 ${tidy}` : "확인 끝", "n"], dream: [nProp ? `제안 ${nProp}` : "제안 없음", "n"] };
+    const TILES = {
+      collect: [[`${num(sessions.filter(today).length)}건`, "오늘 저장"], [lastSession ? ago(lastSession) : "—", "마지막 저장"], [`${num(sessions.length)}건`, "최근 7일"]],
+      extract: [[stalled ? `${stalledHours}시간` : `${num(extracted.filter(today).length)}건`, stalled ? "멈춘 시간" : "오늘 추출"], [`${n24(extracted)}건`, "최근 24시간 추출"], [lastExtract ? ago(lastExtract) : "—", "마지막 추출"]],
+      classify: [[`${num(unclassified.length)}건`, "대기"], [classified.length ? ago(latest(classified)) : "—", "마지막 처리"], [`${n24(classified)}건`, "최근 24시간 분류"]],
+      review: [[`${num(waiting.length)}건`, "대기"], [oldest ? (days ? `${days}일` : ago(oldest)) : "—", "제일 오래된 것"], [`${num(todayCount(waiting))}건`, "오늘 들어온 것"]],
+      recall: [[`${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, "최근 7일 불러오기"], [recallTimes.length ? ago(latest(recallTimes)) : "—", "마지막"], [`${num(recalls.filter((u) => u.d7 > 0).length)}개`, "7일 안에 불러온 기억"]],
+      trace: [[reported ? ago(reported) : "—", "마지막 기록"], [w ? `${num(w.sessions)}` : "—", w ? `세션 · ${w.days}일` : "보고 없음"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"]],
+      judge: [[`${num(tidy)}건`, "정리할 기억"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"], [w ? `${num(w.injections)}회` : "—", "넣은 횟수"]],
+      dream: [[`${num(nProp)}건`, "정리 제안"], [nProp ? ago(latest(proposals)) : "—", "마지막 제안"], [`${num((d.maintenance || []).filter((p) => p.maintenance?.type === "contradiction").length)}건`, "충돌 제안"]]
+    };
+    const withItems = (list) => list.map((s) => ({ ...s, tiles: TILES[s.key], badge: BADGE[s.key] }));
+    return withItems([
+      { key: "collect", group: "save", label: "대화 저장", region: "두정엽", tone: "n", note: ago(lastSession),
         big: `${num(sessions.filter(today).length)}건`, bigSub: "오늘", step: lastSession ? ago(lastSession) : "기록 없음",
-        row: row(sessions, "g"), counts: slots(sessions), open: () => go("sessions") },
-      { key: "extract", group: "save", label: "분석", region: "전전두엽", tone: stalled ? "r" : "g",
+        row: row(sessions, "n"), counts: slots(sessions), open: () => go("sessions") },
+      { key: "extract", group: "save", label: "분석", region: "전전두엽", tone: stalled ? "r" : "n",
         big: stalled ? `${stalledHours}시간` : `${num(extracted.filter(today).length)}건`, bigSub: stalled ? "멈춘 시간" : "오늘 추출",
         small: stalled ? `${num(slots(extracted).reduce((a, b) => a + b, 0))}건` : ago(lastExtract), smallSub: stalled ? "최근 24시간" : "마지막 추출",
         step: stalled ? `${stalledHours}시간째 멈춤` : lastExtract ? ago(lastExtract) : "기록 없음",
         row: extractRow, counts: slots(extracted), open: () => go("sessions") },
-      { key: "classify", group: "save", label: "분류", region: "측두엽", tone: unclassified.length ? "a" : "g",
+      { key: "classify", group: "save", label: "분류", region: "측두엽", tone: "n",
         big: `${num(unclassified.length)}건`, bigSub: "대기", small: classified.length ? ago(latest(classified)) : "—", smallSub: "마지막 처리",
         step: unclassified.length ? `대기 ${num(unclassified.length)}` : "모두 분류됨", row: classRow, counts: slots(classified), open: () => go("memories", "candidate") },
-      { key: "review", group: "save", label: "승인 대기", region: "안와전두엽", tone: waiting.length ? "a" : "g",
+      { key: "review", group: "save", label: "승인 대기", region: "안와전두엽", tone: waiting.length ? "a" : "n",
         big: `${num(waiting.length)}건`, bigSub: "대기 중", small: oldest ? (days ? `${days}일` : ago(oldest)) : "—", smallSub: "제일 오래된 것",
         step: `${num(waiting.length)}건`, row: waitRow, counts: slots(waiting.map((m) => time(m.created_at))), open: () => go("memories", "candidate") },
-      { key: "recall", group: "use", label: "불러오기", region: "운동 피질", tone: "g",
+      { key: "recall", group: "use", label: "불러오기", region: "운동 피질", tone: "n",
         big: `${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, bigSub: "최근 7일", small: recallTimes.length ? ago(latest(recallTimes)) : "—", smallSub: "마지막",
-        step: recallTimes.length ? ago(latest(recallTimes)) : "기록 없음", row: row(recallTimes, "g"), counts: slots(recallTimes), open: () => go("usage") },
-      { key: "trace", group: "use", label: "사용 기록", region: "해마", tone: "g",
+        step: recallTimes.length ? ago(latest(recallTimes)) : "기록 없음", row: row(recallTimes, "n"), counts: slots(recallTimes), open: () => go("usage") },
+      { key: "trace", group: "use", label: "사용 기록", region: "해마", tone: "n",
         big: reported ? ago(reported) : "—", bigSub: "마지막 기록", small: w ? `${num(w.sessions)}` : "—", smallSub: w ? `세션 · ${w.days}일` : "보고 없음",
         step: reported ? ago(reported) : "보고 없음", row: reportRow, counts: slots(reported ? [reported] : []), open: () => go("usage") },
-      { key: "judge", group: "use", label: "검증", region: "소뇌", tone: tidy ? "a" : "g",
+      { key: "judge", group: "use", label: "검증", region: "소뇌", tone: "n",
         big: `${num(tidy)}건`, bigSub: "정리할 기억", small: rate === null ? "—" : `${rate}%`, smallSub: "쓰인 비율",
         step: tidy ? `대기 ${num(tidy)}` : "확인 끝", row: new Array(24).fill(""), counts: new Array(24).fill(0), open: () => go("memories", "idle") },
-      { key: "dream", group: "dream", label: "드리밍", region: "뇌간", tone: "p",
-        big: `${num(proposals.length)}건`, bigSub: "정리 제안", small: proposals.length ? ago(latest(proposals)) : "—", smallSub: "마지막 제안",
-        step: proposals.length ? `제안 ${num(proposals.length)}` : "제안 없음", row: row(proposals, "p"), counts: slots(proposals), open: () => go("memories", "merge") }
-    ];
+      { key: "dream", group: "dream", label: "드리밍", region: "뇌간", tone: "n",
+        big: `${num(nProp)}건`, bigSub: "정리 제안", small: nProp ? ago(latest(proposals)) : "—", smallSub: "마지막 제안",
+        step: nProp ? `제안 ${num(nProp)}` : "제안 없음", row: row(proposals, "n"), counts: slots(proposals), open: () => go("memories", "merge") }
+    ]);
   }
 
   // ---------------------------------------------------------------- layout (Figma coordinates, 1157 × 930 panel)
@@ -185,17 +201,31 @@ window.ArkismOverview = (ctx) => {
     // 입구 줄
     ui.chips = el("div", "ov-chips"); stage.append(ui.chips);
 
-    sized = new ResizeObserver(() => fit()); sized.observe(root);
+    
   }
+  // Scale the 1157 × 930 stage to the free area of the window (width and height) so the whole overview fits without scrolling;
+  // the footer under the panel is subtracted too. MIN_SCALE only guards against a nonsense size in a tiny window.
+  const MIN_SCALE = 0.4, MAX_SCALE = 1.7;
   function fit() {
-    if (!root) return;
-    const w = root.clientWidth, s = Math.min(1.3, Math.max(0.5, w / W)); // fit the width; the page scrolls like the Figma frame
-    ui.stage.style.transform = `scale(${s})`; ui.stage.style.left = `${Math.max(0, (w - W * s) / 2)}px`; root.style.height = `${Math.floor(H * s)}px`;
+    const host = root?.closest(".main");
+    if (!host || !root.isConnected) return;
+    const cs = getComputedStyle(host), padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight), padB = parseFloat(cs.paddingBottom);
+    const box = root.getBoundingClientRect(), foot = host.querySelector(".page-foot");
+    const top = box.top - host.getBoundingClientRect().top + host.scrollTop;
+    const below = foot?.offsetParent ? Math.max(0, foot.getBoundingClientRect().bottom - box.bottom) : 0; // gap + footer, independent of the scale
+    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((host.clientWidth - padX) / W, (host.clientHeight - top - below - padB) / H)));
+    ui.stage.style.transform = `scale(${s})`;
+    root.style.width = `${Math.floor(W * s)}px`; root.style.height = `${Math.floor(H * s)}px`;
   }
 
+  let win = null;
+  const windows = () => (win = win || window.ArkismOverviewWindows(ctx, { stages, sessions: () => S.sessions || [], reloadSessions: () => { S.at = 0; return loadSessions(); } }));
+  const openStage = (key) => windows().open(key);
+  const openWide = (kind) => windows().wide(kind);
+
   // ---------------------------------------------------------------- paint
-  function chip(dot, label, value, open) {
-    const b = el("button", "ov-chip"); b.type = "button"; const i = el("i", "ov-dot"); i.style.background = dot;
+  function chip(label, value, open) {
+    const b = el("button", "ov-chip"); b.type = "button"; const i = el("i", "ov-dot");
     b.append(i, el("strong", "", label), el("span", "", value), el("span", "ov-chev", "›")); b.addEventListener("click", open); return b;
   }
   function paint() {
@@ -206,13 +236,13 @@ window.ArkismOverview = (ctx) => {
         if (i) line.append(el("span", `ov-step-join${s.tone === "r" || list.filter((x) => x.group === g)[i - 1].tone === "r" ? " r" : ""}`));
         const b = el("button", `ov-step ov-t-${s.tone}`); b.type = "button";
         const t = el("span", "ov-step-name"); t.append(el("i", "ov-dot"), document.createTextNode(s.label));
-        b.append(t, el("span", "ov-step-sub", s.step)); b.addEventListener("click", s.open); line.append(b);
+        b.append(t, el("span", "ov-step-sub", s.step)); b.addEventListener("click", () => openStage(s.key)); line.append(b);
       });
     }
     for (const s of list) {
       const c = ui.cards[s.key];
       c.card.className = `ov-card ov-card-${PLACE.find((p) => p[0] === s.key)[1]} ov-t-${s.tone}`;
-      c.card.onclick = s.open;
+      c.card.onclick = () => openStage(s.key);
       c.name.textContent = s.label; c.note.textContent = s.note || ""; c.region.textContent = s.region;
       c.big.firstChild.textContent = s.big; c.big.lastChild.textContent = s.bigSub;
       c.small.hidden = !s.small; c.small.firstChild.textContent = s.small || ""; c.small.lastChild.textContent = s.smallSub || "";
@@ -227,10 +257,10 @@ window.ArkismOverview = (ctx) => {
     const h = new Date().getHours();
     ui.ticks.replaceChildren(...Array.from({ length: 24 }, (_, i) => { const hour = (h - 23 + i + 24) % 24; return el("span", i === 23 ? "now" : "", i === 23 ? "지금" : hour % 6 === 0 ? `${String(hour).padStart(2, "0")}:00` : ""); }));
     const d = state.data, todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
-    ui.chips.replaceChildren(chip(C.g, "쓰는 중인 기억", num(d.memories.length), () => go("memories", "active")),
-      chip(C.g, "세션 기록", `오늘 ${num(todaySessions)}`, () => go("sessions")),
-      chip(C.g, "사용량", `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => go("usage")),
-      chip(C.p, "관계 그래프", `점 ${num(d.memories.length)}`, () => go("memories", "relations")));
+    ui.chips.replaceChildren(chip("쓰는 중인 기억", num(d.memories.length), () => openWide("active")),
+      chip("세션 기록", `오늘 ${num(todaySessions)}`, () => openWide("sessions")),
+      chip("사용량", `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
+      chip("기억 지도", `점 ${num(d.memories.length)}`, () => openWide("map")));
   }
 
   // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone or hidden.
@@ -267,6 +297,8 @@ window.ArkismOverview = (ctx) => {
     if (table.firstChild !== root || table.childNodes.length !== 1) table.replaceChildren(root); // re-adding would restart the motion
     void loadSessions();
     paint(); fit(); startFiring();
+    const host = root.closest(".main");
+    if (host && sized?.host !== host) { sized?.ro.disconnect(); sized = { host, ro: new ResizeObserver(fit) }; sized.ro.observe(host); }
   }
 
   return {

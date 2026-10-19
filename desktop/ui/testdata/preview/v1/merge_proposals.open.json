@@ -191,6 +191,40 @@
      "pool_id": "pool1"
     }
    }
+  },
+  {
+   "id": "mp7",
+   "kind": "merge_proposal",
+   "status": "open",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "text": "",
+   "created_at": "2026-10-14T05:02:00Z",
+   "updated_at": "2026-10-14T05:02:00Z",
+   "merge": {
+    "proposal": {
+     "candidate": {
+      "collection": "memory_candidates",
+      "id": "c6",
+      "revision": 1
+     },
+     "action": "merge",
+     "targets": [
+      {
+       "collection": "memories",
+       "id": "m1",
+       "revision": 1
+      }
+     ],
+     "reason_code": "more_specific",
+     "reason": "같은 뜻이에요",
+     "pool_id": "pool1"
+    }
+   }
   }
  ],
  "authority": "data_only_untrusted"
