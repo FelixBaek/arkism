@@ -627,10 +627,7 @@ window.ArkismTeams = (ctx) => {
       name.setAttribute("aria-label", "템플릿 이름");
       const prompt = raw(input(t.prompt, (v) => { t.prompt = v; }, { tag: "textarea", rows: 6, max: 4000, placeholder: "예:\n- 바뀐 화면을 접근성·디자인 토큰 기준으로 봐요\n- 한 사람이 문제를 3개까지 말해요\n- 끝에 고칠 목록을 중요한 순서로 정리해요" }));
       prompt.setAttribute("aria-label", "이 회의의 진행 방법");
-      const promptAI = window.ArkismAIChat.field(prompt, { state: promptTalk, title: "진행 방법 다듬기", sub: "이 템플릿의 진행 방법을 같이 고쳐요",
-        greeting: "진행 방법을 어떻게 바꿀까요? 순서·볼 기준·결과 모양을 목록으로 정리해 드려요.", placeholder: "예: 끝에 투표로 하나를 고르게",
-        quick: ["순서를 정리해 줘", "결과 모양을 정해 줘", "더 짧게"],
-        preset: "You write the 'how this meeting goes' part of a meeting template for a team of AI experts: steps, what to check, the shape of the result. Korean Markdown list, at most 1500 characters, no topic placeholder (the topic is typed when the meeting opens).",
+      const promptAI = window.ArkismAIChat.field(prompt, { state: promptTalk, title: "진행 방법 다듬기", preset: "You write the 'how this meeting goes' part of a meeting template for a team of AI experts: steps, what to check, the shape of the result. Korean Markdown list, at most 1500 characters, no topic placeholder (the topic is typed when the meeting opens).",
         context: () => JSON.stringify({ template: t.name, team: d.name, members: sorted(d.members).map((m) => ({ name: memberName(m), role: m.role })) }) });
       // where each part comes from when the meeting starts (the scribe's brief, meeting.go brief())
       const flow = el("ol", "tm-tpl-flow");
@@ -1501,9 +1498,7 @@ window.ArkismTeams = (ctx) => {
     const facts = team ? el("p", "tm-side-text", `${(team.crew.members || []).length}명 · ${team.crew.mode === "round_robin" ? "정해진 순서" : "진행자 지명"} · 최대 ${team.crew.ending?.max_rounds || 4}라운드 · 파일은 고치지 않아요`) : null;
     const acts = el("div", "tm-side-acts");
     acts.append(button("시작", "primary", null, () => startMeeting()), button("취소", "ghost", null, () => { S.newMeeting = null; render(false); }));
-    return [head, field("팀", teamSel), ...(facts ? [facts] : []), field("템플릿", tplSel), field("제목", title), field("주제", window.ArkismAIChat.field(topic, { state: f.talk ||= {}, title: "주제 다듬기", sub: "회의에 넘길 주제를 같이 정리해요",
-      greeting: "무엇을 회의할까요? 정할 것·볼 자료·원하는 결과를 정리해 드려요.", placeholder: "예: 결론은 고칠 목록 다섯 개로 받고 싶어", quick: ["정할 것을 분명하게", "더 짧게 정리"],
-      preset: "You write the topic a team of AI experts gets when a meeting opens: what to decide, what material to look at, the result wanted. Keep links and pasted text the user wrote. Korean, short.",
+    return [head, field("팀", teamSel), ...(facts ? [facts] : []), field("템플릿", tplSel), field("제목", title), field("주제", window.ArkismAIChat.field(topic, { state: f.talk ||= {}, title: "주제 다듬기", preset: "You write the topic a team of AI experts gets when a meeting opens: what to decide, what material to look at, the result wanted. Keep links and pasted text the user wrote. Korean, short.",
       context: () => JSON.stringify({ team: team?.crew?.name || "", title: f.title || "", template: tpls.find((x) => x.key === f.template_key)?.name || "" }) })), acts];
   }
   async function startMeeting() {

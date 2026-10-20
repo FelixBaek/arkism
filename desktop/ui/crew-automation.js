@@ -149,7 +149,6 @@ window.ArkismAutomation = (h) => {
     let handleTouched = !creating;
     const picked = new Set(); // new automation: steps whose expert was chosen on purpose (until then the picker reads 맡을 전문가 고르기)
     const aiTalk = { open: withAI }; // AI 제안 / AI로 초안 talk (ai-chat.js state), kept while this window is open
-    const whenTalk = {}; // 언제 실행 AI talk
     let pop = null;
     let bar = null;
     let paintHead = () => {};
@@ -371,10 +370,7 @@ window.ArkismAutomation = (h) => {
         const i = h.input(d.goal?.[k] || "", { maxLength: 300, placeholder: hint, cls: "auto-goal-input" });
         i.setAttribute("aria-label", label);
         i.addEventListener("input", () => { const v = i.value.trim(); if (v) (d.goal ||= {})[k] = v; else if (d.goal) { delete d.goal[k]; if (!Object.keys(d.goal).length) delete d.goal; } touch(); });
-        const f = window.ArkismAIChat.field(i, { state: goalRowTalk[k], title: `${label} 다듬기`, sub: "이 자동화의 목표를 같이 정리해요",
-          greeting: `${label}을 어떻게 적을까요? 하려는 일을 말해 주면 한 줄로 정리해 드려요.`,
-          placeholder: "예: 매일 아침 열린 PR을 모아 요약해요", quick: ["한 줄로 정리해 줘", "더 구체적으로", "단계를 보고 채워 줘"],
-          preset: `You write the "${k}" line of an automation's goal (${GOAL_HINT[k]}). Korean, one short line, at most 300 characters.`,
+        const f = window.ArkismAIChat.field(i, { state: goalRowTalk[k], title: `${label} 다듬기`, preset: `You write the "${k}" line of an automation's goal (${GOAL_HINT[k]}). Korean, one short line, at most 300 characters.`,
           context: () => JSON.stringify({ workflow: d.name || "", role: d.role || "", goal: d.goal || {}, steps: flat(d.graph).filter((n) => !["start", "end"].includes(n.type)).map((n) => n.title || h.nodeTitle(n)) }) });
         return valueRow(label, f);
       };
@@ -387,13 +383,10 @@ window.ArkismAutomation = (h) => {
     function goalAI(n, ta) {
       if (!goalTalk.has(n)) goalTalk.set(n, {});
       const ask = goalKey(n) === "prompt";
-      return window.ArkismAIChat.field(ta, { state: goalTalk.get(n), title: ask ? "질문 다듬기" : "목표 다듬기", sub: "이 단계가 할 일을 같이 정리해요",
-        greeting: ask ? "AI에게 한 번 물을 질문을 어떻게 바꿀까요?" : "이 단계의 목표를 어떻게 바꿀까요? 할 일·끝난 기준·결과 모양을 정리해 드려요.",
-        placeholder: "예: 출처는 3개 이상, 표로 정리하게", quick: ["더 분명하게", "끝난 기준을 넣어 줘", "결과 모양을 정해 줘"],
-        preset: `You write the ${ask ? "question for a one-shot AI step" : "goal for an AI step"} of an automation workflow: what to do, when it is done, and the shape of the result. Keep {{input}} and other {{variables}} that are there. Korean, at most 8000 characters, short and clear.`,
+      return window.ArkismAIChat.field(ta, { state: goalTalk.get(n), title: ask ? "질문 다듬기" : "목표 다듬기", preset: `You write the ${ask ? "question for a one-shot AI step" : "goal for an AI step"} of an automation workflow: what to do, when it is done, and the shape of the result. Keep {{input}} and other {{variables}} that are there. Korean, at most 8000 characters, short and clear.`,
         context: () => JSON.stringify({ workflow: d.name || "", step: n.title || h.nodeTitle(n), goal: d.goal || {} }) });
     }
-    // AI proposals for 목표 and 언제 실행 (shared by AI 제안 and the 언제 실행 chat). null = nothing to change.
+    // AI proposals for 목표 and 언제 실행 (from AI 제안). null = nothing to change.
     const GOAL_LABEL = { task: "하려는 일", done: "끝난 기준", output: "결과물" };
     function goalProps(goal, redraw) {
       if (!goal || typeof goal !== "object") return [];
@@ -420,13 +413,13 @@ window.ArkismAutomation = (h) => {
     // proposals in the purple list; 적용 puts them in the draft, the user reviews and saves.
     function aiSection() {
       return window.ArkismAIChat.button({ state: aiTalk, label: creating ? "AI로 초안" : "AI 제안", title: creating ? "AI로 초안 만들기" : "AI 제안",
-        sub: creating ? "어떤 일을 자동으로 할지 말하면 단계를 그려요" : "고칠 곳을 말하면 바뀐 목표·일정·단계를 보여 줘요",
-        greeting: creating ? "어떤 일을 자동으로 할까요? 언제, 무엇을 하고, 결과를 어디로 보낼지 말해 주세요." : "무엇을 고칠까요? 목표와 언제 실행을 바꾸고, 단계를 넣거나 빼고, 순서와 조건을 바꿀 수 있어요.",
-        placeholder: creating ? "예: 매일 아침 열린 PR을 모아 요약해서 슬랙으로 보내 줘" : "예: 출처 확인이 실패하면 2번까지 다시 찾게 해 줘",
-        quick: creating ? ["매일 아침 PR 요약", "새 이슈 분류해서 알림", "주간 보고서 쓰기"] : ["실패하면 다시 시도", "보내기 전에 확인 받기", "단계를 줄여 줘"],
+        sub: creating ? "어떤 일을 자동으로 할지 말하면 단계를 그려요" : "고칠 곳이나 언제 실행할지 평소 말로 적으면 바뀐 목표·일정·단계를 보여 줘요",
+        greeting: creating ? "어떤 일을 자동으로 할까요? 언제, 무엇을 하고, 결과를 어디로 보낼지 말해 주세요." : "무엇을 고칠까요? '평일 아침 9시마다'처럼 평소 말로 적으면 언제 실행을 일정이나 웹훅으로 바꿔요. 목표를 바꾸고, 단계를 넣거나 빼고, 순서와 조건도 바꿀 수 있어요.",
+        placeholder: creating ? "예: 매일 아침 열린 PR을 모아 요약해서 슬랙으로 보내 줘" : "예: 평일 아침마다 돌려 줘 · 실패하면 2번까지 다시 찾게",
+        quick: creating ? ["매일 아침 PR 요약", "새 이슈 분류해서 알림", "주간 보고서 쓰기"] : ["평일 아침마다 실행", "실패하면 다시 시도", "보내기 전에 확인 받기", "단계를 줄여 줘"],
         ask: async (text) => {
           const cur = JSON.stringify({ nodes: d.graph.nodes.map(({ id, type, title, config }) => ({ id, type, title, config })), edges: d.graph.edges }).slice(0, 12000);
-          const extra = `Also give "goal": {"task","done","output"} (one short Korean line each) and, when the request says when to run, "trigger": {"kind":"schedule","cron":"m h dom mon dow"} or {"kind":"webhook","label":"..."}.`;
+          const extra = `Also give "goal": {"task","done","output"} (one short Korean line each) and, when the request says when to run, "trigger": {"kind":"schedule","cron":"m h dom mon dow"} or {"kind":"webhook","label":"..."} (local time zone, 1-5 = weekdays; something arriving from outside, like a PR opening, is a webhook).`;
           const prompt = creating
             ? `Build an Arkism workflow from this request. Decide sensibly without asking. ${extra}\nUser: ${text}`
             : `Change this Arkism workflow as the user asks. Keep every node id, type, title and setting the request does not touch. Answer with the whole changed workflow as {"graph":{"nodes":[],"edges":[]}} (plus "name" and "role" only if they should change). ${extra}\nWorkflow: ${cur}\nGoal: ${JSON.stringify(d.goal || {})}\nTrigger: ${JSON.stringify(d.enabled ? d.trigger || null : null)}\nRequest: ${text}`;
@@ -558,18 +551,7 @@ window.ArkismAutomation = (h) => {
         if (!creating && d.trigger?.kind === "webhook") list.append(el("p", "auto-hint", "웹훅 토큰은 Arkism에 저장하지 않아요."));
       }
       draw();
-      s.append(list, window.ArkismAIChat.button({ state: whenTalk, label: "AI로 정하기", title: "언제 실행 정하기", sub: "평소 말로 적으면 일정이나 웹훅으로 바꿔요",
-        greeting: "언제 시작할까요? '평일 아침 9시마다'처럼 평소 말로 적어 주세요.", placeholder: "예: 평일 아침마다", quick: ["평일 아침마다", "매주 월요일 오전 10시", "PR이 열리면"],
-        ask: async (text, history) => {
-          const talk = history.map((m) => `${m.who === "me" ? "User" : "You"}: ${m.text}`).join("\n");
-          const prompt = `Turn when this automation should start into a trigger. Now: ${JSON.stringify(d.enabled ? d.trigger || null : null)}. Local time zone; cron is "m h dom mon dow" (5 fields, 1-5 = weekdays). Something arriving from outside (a PR opens, a form is sent) is a webhook.\n${talk ? `Conversation so far:\n${talk}\n` : ""}Request: ${text}\nAnswer with ONE JSON object: {"say": "one short sentence in the language of the request", "trigger": {"kind":"schedule","cron":"..."} or {"kind":"webhook","label":"..."} or null}.`;
-          const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You set when an automation runs. Reply with the JSON object only." } } });
-          if (a.status !== "done") throw new Error(kit.assistError(a));
-          const j = kit.parseJSON(a.output || "");
-          if (!j || typeof j !== "object") throw new Error("AI 답을 읽지 못했어요. 다시 보내 주세요.");
-          const p = triggerProp(j.trigger, () => { touch(); draw(); });
-          return { say: typeof j.say === "string" ? j.say.slice(0, 300) : "", props: p ? [p] : [] };
-        } }));
+      s.append(list);
       return s;
     }
 

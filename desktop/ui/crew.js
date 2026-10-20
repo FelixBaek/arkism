@@ -3061,9 +3061,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         const props = [prop(name, "name", "이름", 60), prop(role, "role", "한 줄 설명", 200), prop(text, "instructions", "지시", 20000)].filter(Boolean);
         return { say: props.length ? "마무리한 곳을 아래에 넣었어요. 보고 적용한 뒤 저장해 주세요." : "", props };
       } });
-    const textAI = window.ArkismAIChat.field(text, { state: talk.text, title: "지시 다듬기", sub: "이 페르소나의 지시를 같이 고쳐요",
-      greeting: "지시를 어떻게 바꿀까요? 역할·말투·꼭 지킬 것을 정리해 드려요.", placeholder: "예: 근거 없는 말은 하지 않게", quick: ["더 짧고 분명하게", "하지 말 것을 넣어 줘"],
-      preset: "You edit the instructions of a persona for AI agents (who it is, tone, must-dos, must-nots). Write short, clear Korean, as a numbered list. No keys or tokens.",
+    const textAI = window.ArkismAIChat.field(text, { state: talk.text, title: "지시 다듬기", preset: "You edit the instructions of a persona for AI agents (who it is, tone, must-dos, must-nots). Write short, clear Korean, as a numbered list. No keys or tokens.",
       context: () => JSON.stringify({ name: d.name, role: d.role }) });
     box.append(ai, field("이름", name), field("한 줄 설명", role, "목록과 노드 선택에서 보여요"), field("지시", textAI, "역할·말투·꼭 지킬 것을 써요. 키나 토큰은 넣지 마세요."));
     const bar = el("div", "crew-actions");
@@ -4051,10 +4049,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   // 지시 칸의 반짝이: the same talk, about this one field (preset per field, ai-chat.js field()).
   function instructionsAI(t) {
     wk.instrAI ||= {};
-    return window.ArkismAIChat.field(t, { state: wk.instrAI, title: "지시 다듬기", sub: "이 칸의 지시를 같이 고쳐요",
-      greeting: "지시를 어떻게 바꿀까요? 역할·말투·순서·하지 말 것을 정리해 드려요.", placeholder: "예: 답은 세 줄로, 모르면 모른다고 하게",
-      quick: ["더 짧고 분명하게", "하지 말 것을 넣어 줘", "번호 목록으로 정리"],
-      preset: "You edit the instructions of an AI work agent: who it is, tone, order of work, things not to do. Write Korean Markdown, at most 4000 characters, short and clear.",
+    return window.ArkismAIChat.field(t, { state: wk.instrAI, title: "지시 다듬기", preset: "You edit the instructions of an AI work agent: who it is, tone, order of work, things not to do. Write Korean Markdown, at most 4000 characters, short and clear.",
       context: () => JSON.stringify({ name: wk.draft.name || "", role: wk.draft.role || "", skills: wk.draft.skills || [] }) });
   }
   async function proposeFix(ask) {

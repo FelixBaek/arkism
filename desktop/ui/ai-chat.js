@@ -1,8 +1,8 @@
 // AI 도움 한 틀 (전문가 창의 AI 제안 · Figma 868:61909): 반짝이 알약 버튼 → 말풍선 대화 → 보라색 제안 목록 (버튼은 아래 저장 줄 오른쪽 끝에 둘 수 있어요: root.dock).
 // 적용은 화면의 초안만 바꾸고, 저장은 각 화면의 저장 버튼이 해요. 화면들이 같은 모양·같은 동작을 쓰도록 여기 하나만 둔다.
 //   ArkismAIChat.button(opts) → 알약 + 말풍선 + 제안 목록
-//   ArkismAIChat.field(input, opts) → 칸 오른쪽 끝의 반짝이 아이콘; 그 칸에 맞춘 preset으로 대화하고 제안을 칸에 넣는다
-// opts: { label, title, sub, greeting, placeholder, quick, preset, context, ask, state, kit, onDrop }
+//   ArkismAIChat.field(input, opts) → 칸 오른쪽 끝의 반짝이 아이콘; 누르면 대화 없이 그 칸의 글(비었으면 주변 맥락)로 바로 채우거나 다듬는다
+// opts: { label, title, sub, greeting, placeholder, quick, ask, state, onDrop } · field(): { title, preset, context, state, kit }
 //   ask(text, history) → { say, props: [{ label, from, to, apply, undo? }] }; apply가 false를 돌려주면 적용 안 한 것으로 둔다
 //   from이 null이면 비교 없이 제안 글만 보여 준다
 //   state: 화면이 다시 그려져도 대화가 남게 화면이 들고 있는 빈 객체 (없으면 이 요소 안에만 남음)
@@ -31,7 +31,7 @@ window.ArkismAIChat = (() => {
     b.addEventListener("click", onClick);
     return b;
   }
-  const api = { kit: null }; // app.js puts the assist runner here (assist.js) for field()'s default ask
+  const api = { kit: null }; // app.js puts the assist runner here (assist.js) for field()
 
   // 전→후: short values as "앞 → 뒤", lists as gone/come, longer text as a word diff.
   function valueView(p) {
@@ -57,23 +57,18 @@ window.ArkismAIChat = (() => {
     return v;
   }
 
-  function mount(opts, inp) {
+  function mount(opts) {
     const st = opts.state || {};
     st.log ||= [];
     st.props ||= [];
     st.ask ??= "";
-    const root = el(inp ? "div" : "section", inp ? "ex-ai ex-ai-field" : "ex-ai");
-    if (inp) {
-      st.input = inp; // a redraw hands in a new field; proposals write into the one on screen
-      if (inp.tagName === "TEXTAREA") root.classList.add("is-area");
-      if (inp.parentNode) inp.replaceWith(root);
-    }
+    const root = el("section", "ex-ai");
     const label = opts.label || "AI 제안";
     const title = opts.title || label;
-    const anchor = el("button", inp ? "ex-ai-spark" : "ex-ai-btn");
+    const anchor = el("button", "ex-ai-btn");
     anchor.type = "button";
     anchor.setAttribute("aria-haspopup", "dialog");
-    if (inp) { anchor.setAttribute("aria-label", tr(`${title} · AI에게 묻기`)); anchor.title = tr("AI에게 묻기"); anchor.append(icon("sparkle")); } else anchor.append(icon("sparkle"), el("span", "", label));
+    anchor.append(icon("sparkle"), el("span", "", label));
     anchor.addEventListener("click", () => toggle(!st.open));
     const zone = el("div", "ex-ai-zone");
     // Inside a <label>, a click on the bubble's text would jump to the field: keep clicks here.
@@ -81,8 +76,8 @@ window.ArkismAIChat = (() => {
     // dock: the button with its bubble. A caller may move it into the window's bottom bar (root.dock);
     // the purple list stays in root, where the caller put it in the body.
     const dock = el("span", "ex-ai-dock");
-    if (inp) root.append(inp, anchor, zone); else { dock.append(anchor); root.append(dock, zone); root.dock = dock; }
-    const docked = () => !inp && dock.parentNode !== root;
+    dock.append(anchor); root.append(dock, zone); root.dock = dock;
+    const docked = () => dock.parentNode !== root;
     const toggle = (on) => { st.open = on; st.grow = on; paint(); if (!on) anchor.focus(); };
     const busy = () => st.log.some((m) => m.busy);
     const line = (who, text, more = {}) => { const m = { who, text, fresh: true, ...more }; st.log.push(m); if (st.log.length > 12) st.log.shift(); return m; };
@@ -97,30 +92,13 @@ window.ArkismAIChat = (() => {
       const reply = line("ai", tr("생각하는 중이에요…"), { busy: true });
       repaint();
       try {
-        const r = (await (opts.ask || defaultAsk)(text, history)) || {};
+        const r = (await opts.ask(text, history)) || {};
         const props = Array.isArray(r.props) ? r.props.filter(Boolean) : [];
         if (props.length) { st.props = props.map((p) => ({ ...p, applied: false })); st.open = false; } // the bubble steps aside so the purple list shows
         Object.assign(reply, { busy: false, text: r.say || (props.length ? tr("아래 보라색 목록에 제안을 넣었어요. 보고 적용하세요.") : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요.")) });
       } catch (e) { Object.assign(reply, { busy: false, err: true, text: e?.message || tr("AI가 답하지 못했어요.") }); }
       repaint();
       if (st.props.length && !st.open && docked() && root.isConnected) root.scrollIntoView({ block: "nearest", behavior: "smooth" }); // the list is up in the body, away from the bar
-    }
-    // field()'s own ask: the field's preset, what is around it and the talk so far → { say, value }.
-    async function defaultAsk(text, history) {
-      const kit = opts.kit || api.kit;
-      if (!kit) throw new Error(tr("AI 도움을 쓸 수 없어요."));
-      const cur = st.input?.value || "";
-      const talk = history.map((m) => `${m.who === "me" ? "User" : "You"}: ${m.text}`).join("\n");
-      const prompt = `${opts.preset || "Help write this field."}\n\n${opts.context ? `Context:\n${opts.context()}\n\n` : ""}Current text of the field:\n${cur || "(empty)"}\n\n${talk ? `Conversation so far:\n${talk}\n\n` : ""}Request: ${text}\n\nAnswer with ONE JSON object: {"say": "one or two short sentences to the user, in the language of the request", "value": "the whole new text for the field, or null when nothing should change"}.`;
-      const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You help write one field of a form. Reply with the JSON object only." } } });
-      if (a.status !== "done") throw new Error(kit.assistError(a));
-      const j = kit.parseJSON(a.output || "");
-      if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error(tr("AI의 답을 읽지 못했어요. 다시 해 보세요."));
-      const max = st.input?.maxLength > 0 ? st.input.maxLength : 20000;
-      const value = typeof j.value === "string" ? j.value.slice(0, max) : null;
-      const write = (v) => { const i = st.input; if (!i) return; i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); };
-      const props = value !== null && value !== cur ? [{ label: title, from: cur, to: value, apply: () => write(value), undo: () => write(cur) }] : [];
-      return { say: typeof j.say === "string" ? j.say.slice(0, 600) : "", props };
     }
     async function apply(p, on) {
       const r = await (on ? p.apply() : p.undo?.());
@@ -129,7 +107,7 @@ window.ArkismAIChat = (() => {
     }
 
     function bubble() {
-      const pop = el("div", `ex-ai-pop${st.grow ? " grow" : ""}${inp ? " at-field" : ""}`);
+      const pop = el("div", `ex-ai-pop${st.grow ? " grow" : ""}`);
       st.grow = false; // the grow plays once, not on every redraw while talking
       pop.setAttribute("role", "dialog");
       pop.setAttribute("aria-label", title);
@@ -211,11 +189,83 @@ window.ArkismAIChat = (() => {
     }
     st.paint = paint;
     paint();
-    if (!inp) queueMicrotask(() => { if (st.paint === paint) paint(); }); // again once the caller has docked the button
+    queueMicrotask(() => { if (st.paint === paint) paint(); }); // again once the caller has docked the button
     return root;
   }
 
   api.button = (opts = {}) => mount(opts, null);
-  api.field = (inp, opts = {}) => mount(opts, inp);
+  // field(): the sparkle fills this one field at once — improves what is written, or writes it from the context when empty.
+  // No chat. The result goes in like typing (Ctrl+Z works, the screen's input listener marks it unsaved); 되돌리기 in the note too.
+  function field(inp, opts) {
+    const st = opts.state || {};
+    st.input = inp; // a redraw hands in a new field; the result goes into the one on screen
+    const root = el("div", "ex-ai ex-ai-field");
+    if (inp.tagName === "TEXTAREA") root.classList.add("is-area");
+    if (inp.parentNode) inp.replaceWith(root);
+    const title = opts.title || "AI 제안";
+    const star = el("button", "ex-ai-spark");
+    star.type = "button";
+    star.setAttribute("aria-label", tr(`${title} · AI로 채우기`));
+    star.title = tr("AI로 채우기");
+    star.append(icon("sparkle"));
+    const note = el("div", "ex-ai-note");
+    note.setAttribute("role", "status");
+    root.append(inp, star, note);
+    inp.addEventListener("input", (e) => { if (e.isTrusted && !st.writing && st.note) { st.note = null; show(); } }); // the user typed on: the old note (and its undo) is stale
+    const write = (v) => {
+      const i = st.input;
+      if (!i) return;
+      st.writing = true;
+      try {
+        i.focus({ preventScroll: true });
+        i.select();
+        // insertText keeps the browser's undo stack (Ctrl+Z) and fires input itself; plain assignment is the fallback
+        const typed = document.activeElement === i && document.execCommand?.("insertText", false, v); // only into this field, never whatever else has focus
+        if (!typed || i.value !== v) { i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); }
+      } finally { st.writing = false; }
+    };
+    async function run() {
+      if (st.busy) return;
+      const kit = opts.kit || api.kit;
+      const cur = st.input?.value || "";
+      st.busy = true; st.note = null; show();
+      try {
+        if (!kit) throw new Error(tr("AI 도움을 쓸 수 없어요."));
+        const task = cur.trim() ? "Improve the current text: keep what the user meant and every link, name and {{variable}} they wrote; make it clearer and complete." : "The field is empty: write it from the context.";
+        const prompt = `${opts.preset || "Help write this field."}\n\n${opts.context ? `Context:\n${opts.context()}\n\n` : ""}Current text of the field:\n${cur || "(empty)"}\n\nTask: ${task}\n\nAnswer with ONE JSON object: {"value": "the whole new text for the field"}.`;
+        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You write one field of a form. Reply with the JSON object only." } } });
+        if (a.status !== "done") throw new Error(kit.assistError(a));
+        const j = kit.parseJSON(a.output || "");
+        if (!j || typeof j.value !== "string") throw new Error(tr("AI의 답을 읽지 못했어요. 다시 해 보세요."));
+        let v = j.value.trim();
+        if (st.input?.tagName === "INPUT") v = v.split("\n").map((x) => x.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim()).find(Boolean) || ""; // one line for a one-line box
+        const max = st.input?.maxLength > 0 ? st.input.maxLength : 20000;
+        v = v.slice(0, max);
+        if (!v || v === cur) st.note = { text: tr("더 고칠 곳이 없어요.") };
+        else { write(v); st.note = { text: tr("AI가 채웠어요 · 저장하면 반영돼요"), undo: cur }; }
+      } catch (e) { st.note = { text: e?.message || tr("AI가 답하지 못했어요."), err: true }; }
+      finally { st.busy = false; show(); }
+    }
+    star.addEventListener("click", () => void run());
+    function show() {
+      if (!root.isConnected && st.show && st.show !== show) return st.show(); // a newer copy of this field is on screen
+      st.show = show;
+      star.disabled = !!st.busy;
+      star.classList.toggle("busy", !!st.busy);
+      star.setAttribute("aria-busy", String(!!st.busy));
+      star.title = tr(st.busy ? "AI가 쓰는 중이에요…" : "AI로 채우기");
+      const n = st.note;
+      note.replaceChildren();
+      note.className = `ex-ai-note${n?.err ? " err" : ""}`;
+      note.hidden = !n;
+      if (!n) return;
+      note.append(el("span", "", n.text));
+      if (n.undo !== undefined) note.append(btn("되돌리기", "ghost small", () => { write(n.undo); st.note = null; show(); }));
+    }
+    show();
+    return root;
+  }
+
+  api.field = (inp, opts = {}) => field(inp, opts);
   return api;
 })();
