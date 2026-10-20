@@ -28,6 +28,13 @@ minisign-verify = "=0.3.0"
 [target.'cfg(windows)'.dependencies]
 windows-registry = "=0.6.1"
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
+# The SSH login password, kept in the OS credential store (never in a file): Windows Credential
+# Manager, macOS Keychain, the Secret Service on Linux.
+keyring = { version = "3.6", features = ["windows-native"] }
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", features = ["apple-native"] }
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6", features = ["sync-secret-service", "crypto-rust"] }
 
 [profile.release]
 opt-level = "s"

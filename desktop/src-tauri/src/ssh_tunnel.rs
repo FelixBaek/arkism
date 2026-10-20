@@ -5,8 +5,10 @@
 //! as it would to the built-in Arkism. The forward is restarted on the same port if it drops.
 //!
 //! Authentication is whatever the user's ssh already does (keys, agent, ~/.ssh/config), or a
-//! password the user types. The password stays in memory only: ssh asks for it through
-//! SSH_ASKPASS, which runs this app again in askpass mode (see `askpass`). A host key must be
+//! password the user types. After a login works the password goes to the OS credential store
+//! (Windows Credential Manager, macOS Keychain, Linux Secret Service), never to a file, so the
+//! next launch connects without asking. ssh gets it through SSH_ASKPASS, which runs this app
+//! again in askpass mode (see `askpass`). A host key must be
 //! reviewed and pinned before target authentication, so a password only reaches a pinned host.
 
 use crate::lifecycle::Gate;
@@ -162,6 +164,11 @@ fn home() -> Option<std::path::PathBuf> {
 }
 
 pub fn target_from_form(form: &Form) -> Result<Target, String> {
+    target_with(form, saved_password)
+}
+
+/// `saved` looks up the stored password when the password field is left empty.
+fn target_with(form: &Form, saved: impl Fn(&Target) -> Option<String>) -> Result<Target, String> {
     let blank = |v: &Option<String>| {
         v.as_deref()
             .map(str::trim)
@@ -183,10 +190,11 @@ pub fn target_from_form(form: &Form) -> Result<Target, String> {
         // Taken as typed: spaces can be part of a password.
         let pw = form
             .password
-            .as_deref()
+            .clone()
             .filter(|p| !p.is_empty())
+            .or_else(|| saved(&t))
             .ok_or("ssh_password_missing")?;
-        t.password = Some(Password(pw.to_string()));
+        t.password = Some(Password(pw));
     } else if let Some(k) = blank(&form.key) {
         let path = match k.strip_prefix("~/").or_else(|| k.strip_prefix("~\\")) {
             Some(rest) => home().ok_or("ssh_key_missing")?.join(rest),
@@ -239,6 +247,44 @@ pub fn list_keys() -> Vec<String> {
         .collect();
     keys.sort();
     keys
+}
+
+// The credential store entry: one per login (`user@host:port`).
+const KEYRING_SERVICE: &str = "Arkism SSH";
+
+fn account(t: &Target) -> String {
+    format!("{}:{}", t.host, t.port.unwrap_or(22))
+}
+
+fn keyring_entry(t: &Target) -> Option<keyring::Entry> {
+    keyring::Entry::new(KEYRING_SERVICE, &account(t)).ok()
+}
+
+fn saved_password(t: &Target) -> Option<String> {
+    keyring_entry(t)?.get_password().ok().filter(|p| !p.is_empty())
+}
+
+/// After a login works: keep the password for the next launch, or drop an old one once the
+/// same login uses a key. Best effort; without a credential store the app just asks again.
+fn remember(t: &Target) {
+    let Some(entry) = keyring_entry(t) else {
+        return;
+    };
+    let _ = match &t.password {
+        Some(Password(pw)) => entry.set_password(pw),
+        None => entry.delete_credential(),
+    };
+}
+
+/// 연결 끊기 forgets the open login's saved password.
+pub fn forget_current() {
+    let target = TUNNEL
+        .lock()
+        .ok()
+        .and_then(|g| g.as_ref().map(|t| t.target.clone()));
+    if let Some(entry) = target.as_ref().and_then(keyring_entry) {
+        let _ = entry.delete_credential();
+    }
 }
 
 /// Host aliases from ~/.ssh/config, for the host picker. Patterns (`*`, `?`, `!`) are skipped.
@@ -546,6 +592,7 @@ pub fn connect(target: Target, gate: Arc<Gate>, store: Store) -> Result<Connecte
         pin: pin.clone(),
     });
     drop(guard);
+    remember(&target);
     watch(generation, Arc::clone(&gate));
     Ok(Connected {
         server: format!("http://127.0.0.1:{local}"),
@@ -634,15 +681,18 @@ mod tests {
                  port: Option<u16>,
                  key: Option<&str>,
                  bin: Option<&str>| {
-            target_from_form(&Form {
-                host: host.into(),
-                user: user.map(Into::into),
-                port,
-                key: key.map(Into::into),
-                bin: bin.map(Into::into),
-                auth: None,
-                password: None,
-            })
+            target_with(
+                &Form {
+                    host: host.into(),
+                    user: user.map(Into::into),
+                    port,
+                    key: key.map(Into::into),
+                    bin: bin.map(Into::into),
+                    auth: None,
+                    password: None,
+                },
+                |_| None,
+            )
         };
         assert_eq!(
             f("h", Some("root"), None, None, None).unwrap().host,
@@ -717,16 +767,31 @@ mod tests {
             auth: auth.map(Into::into),
             password: pw.map(Into::into),
         };
+        let none = |_: &Target| None;
         assert_eq!(
-            target_from_form(&form(Some("password"), None)).unwrap_err(),
+            target_with(&form(Some("password"), None), none).unwrap_err(),
             "ssh_password_missing"
         );
         assert_eq!(
-            target_from_form(&form(Some("password"), Some(""))).unwrap_err(),
+            target_with(&form(Some("password"), Some("")), none).unwrap_err(),
             "ssh_password_missing"
+        );
+        // An empty field takes the saved password for that login; a typed one wins over it.
+        let saved = |t: &Target| (account(t) == "h:22").then(|| "kept".to_string());
+        assert_eq!(
+            target_with(&form(Some("password"), None), saved)
+                .unwrap()
+                .password,
+            Some(Password("kept".into()))
+        );
+        assert_eq!(
+            target_with(&form(Some("password"), Some("new")), saved)
+                .unwrap()
+                .password,
+            Some(Password("new".into()))
         );
         // The key field is ignored in password mode, so a stale path does not block it.
-        let t = target_from_form(&form(Some("password"), Some(" s3cret "))).unwrap();
+        let t = target_with(&form(Some("password"), Some(" s3cret ")), none).unwrap();
         assert_eq!(
             (t.key.as_ref(), t.password.as_ref()),
             (None, Some(&Password(" s3cret ".into())))
@@ -755,6 +820,23 @@ mod tests {
     fn config_hosts_lists_plain_aliases() {
         let cfg = "Host *\n  User x\nhost web db\n  HostName 10.0.0.1\nHost=gpu !bad dev-*\nHostName nope\n# Host commented\nHost web\n";
         assert_eq!(config_hosts(cfg), ["db", "gpu", "web"]);
+    }
+
+    // Touches the real credential store, so run by hand: cargo test -- --ignored keyring
+    #[test]
+    #[ignore]
+    fn keyring_roundtrip_on_this_machine() {
+        let t = Target {
+            password: Some(Password("pw-test".into())),
+            ..parse_target("arkism-test@example.invalid:2299").unwrap()
+        };
+        remember(&t);
+        assert_eq!(saved_password(&t).as_deref(), Some("pw-test"));
+        remember(&Target {
+            password: None,
+            ..t.clone()
+        });
+        assert_eq!(saved_password(&t), None);
     }
 
     #[test]

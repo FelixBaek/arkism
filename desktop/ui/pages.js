@@ -805,7 +805,7 @@ window.ArkismPages = (ctx) => {
         return c;
       }));
       // 고른 카드 아래에는 그 모드의 설정만: SSH 폼 또는 저장 위치.
-      body.replaceChildren(...(pick === "ssh" ? [form.node, el("p", "pg-hint", "SSH 키 또는 비밀번호로 접속해요. 비밀번호는 저장하지 않아서 앱을 다시 켜면 다시 물어요.")] : storage ? [storage.node] : []));
+      body.replaceChildren(...(pick === "ssh" ? [form.node, el("p", "pg-hint", "SSH 키 또는 비밀번호로 접속해요. 비밀번호는 이 PC의 키체인에 저장해 다시 묻지 않고, 연결 끊기를 누르면 지워요.")] : storage ? [storage.node] : []));
       // 연결 끊기: only while on a server; next launch goes back to the first-run choice.
       actions.replaceChildren(...(pick === "ssh" ? [test, save] : [save]), ...(pick === "ssh" && state.mode !== "local" ? [off] : []));
     };

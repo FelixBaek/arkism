@@ -58,7 +58,8 @@ export function createAppConnection(deps) {
   const sshErrorText = (code) => SSH_ERRORS[code] || (code.startsWith("arkism_connect_failed") ? `서버의 Arkism이 접속 정보를 주지 못했어요 (${code.split(": ")[1] || "알 수 없음"}).` : `연결하지 못했어요 (${code}).`);
 
   // 저장된 SSH 연결: {host, user, port, key, bin, auth}. 예전 판은 주소 문자열 하나만 저장했다.
-  // 비밀번호는 저장하지 않고 이 창이 열려 있는 동안만 기억한다(다시 연결용). 앱을 다시 켜면 다시 묻는다.
+  // 비밀번호는 arkism.ssh에 넣지 않는다. 연결되면 앱(Rust)이 OS 키체인에 저장하고, 빈 칸이면 거기서 꺼내 쓴다.
+  // 여기 sshPassword는 키체인이 없는 PC에서 이 창이 열려 있는 동안 다시 연결할 때 쓴다.
   let sshPassword = "";
 
   function readSSH(v) {
@@ -95,7 +96,7 @@ export function createAppConnection(deps) {
     authRow.setAttribute("aria-label", "인증 방식");
     box.append(authRow);
     const key = row("키 파일", "개인 키 경로. 비우면 ssh-agent 또는 ~/.ssh/config", "~/.ssh/id_ed25519", f.key);
-    const pass = row("비밀번호", "저장하지 않아요. 앱을 다시 켜면 다시 물어요", "", "");
+    const pass = row("비밀번호", "연결되면 이 PC의 키체인(자격 증명 관리자)에 저장해 다시 묻지 않아요. 비워 두면 저장된 비밀번호를 써요", "", "");
     pass.type = "password";
     const drawAuth = () => {
       const seg = deps.segment([["key", "SSH 키"], ["password", "비밀번호"]], auth, (k) => { auth = k; drawAuth(); (k === "password" ? pass : key).focus(); });
@@ -123,7 +124,7 @@ export function createAppConnection(deps) {
       return { host: host.value.trim(), user: user.value.trim() || null, port: p ? Number(p) : null, key: key.value.trim() || null, bin: bin.value.trim() || null,
         auth, password: auth === "password" ? pass.value || null : null };
     };
-    // 비밀번호 방식인데 이번에 넣은 적이 없으면(앱을 다시 켬) 비밀번호 칸부터.
+    // 비밀번호 방식으로 저장된 연결이면 비밀번호 칸부터.
     const focus = () => (auth === "password" && f.host ? pass : host).focus();
     return { node: box, read, focus };
   }
@@ -131,7 +132,6 @@ export function createAppConnection(deps) {
   function sshFormError(form) {
     if (!form.host) return "호스트를 넣어 주세요.";
     if (form.port !== null && !(Number.isInteger(form.port) && form.port > 0 && form.port < 65536)) return "포트는 1~65535 사이 숫자예요.";
-    if (form.auth === "password" && !form.password) return SSH_ERRORS.ssh_password_missing;
     return "";
   }
 
@@ -207,6 +207,14 @@ export function createAppConnection(deps) {
       if (manual === true) { deps.state.start = 2; deps.go("todo"); }
     } catch (err) {
       deps.state.token = "";
+      // 키체인에 저장된 비밀번호가 없음: 오류가 아니라 비밀번호 칸으로 안내한다.
+      if (err.code === "ssh_password_missing") {
+        unlocked(false);
+        unlockMode();
+        deps.$("#ssh-test-result").textContent = "저장된 비밀번호가 없어요. 비밀번호를 넣고 연결하세요.";
+        unlockSSH().focus();
+        return;
+      }
       deps.$("#unlock-error").textContent = err.message;
       deps.home.sshError(err.code || "error", err.message, { ...form, password: null });
       unlocked(false);

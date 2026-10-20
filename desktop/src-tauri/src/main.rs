@@ -369,6 +369,7 @@ fn ssh_hosts() -> Vec<String> {
 
 #[tauri::command]
 fn ssh_disconnect(rt: tauri::State<Arc<runtime::Runtime>>) -> Result<(), String> {
+    ssh_tunnel::forget_current();
     ssh_tunnel::stop(&rt.gate())
 }
 
