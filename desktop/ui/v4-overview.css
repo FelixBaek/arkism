@@ -63,7 +63,7 @@
 .ov-link { fill: none; stroke: var(--tone, #fff); stroke-width: 1.3; opacity: .6; stroke-dasharray: 1; stroke-dashoffset: 1; animation: ov-draw 1.4s cubic-bezier(.6,0,.2,1) forwards; }
 .ov-particle { position: absolute; left: 0; top: 0; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; offset-rotate: 0deg; opacity: 0;
   background: var(--tone, #fff); box-shadow: 0 0 10px 3px var(--tone, #fff); animation: ov-travel ease-in-out infinite; pointer-events: none; }
-.ov-node { position: absolute; width: 0; height: 0; pointer-events: none; }
+.ov-node { position: absolute; z-index: 1; width: 0; height: 0; pointer-events: none; }
 .ov-node-white { --tone: rgba(var(--ov-fg-rgb),.7); --halo: rgba(var(--ov-fg-rgb),.2); }
 .ov-node > i { position: absolute; left: 0; top: 0; border-radius: 50%; }
 .ov-node .ov-ring { width: 30px; height: 30px; border: 1.5px solid var(--tone); animation: ov-ring var(--ring, 3.2s) ease-out var(--delay, 0s) infinite; }
@@ -95,7 +95,7 @@
 .ov-chart i.none { opacity: .12; }
 
 /* 기억 처리 grid */
-.ov-grid { position: absolute; left: 389px; top: 302px; width: 420px; min-height: 320px; padding: 14px 16px; border-radius: 15.6px; background: var(--ov-card);
+.ov-grid { position: absolute; z-index: 2; left: 389px; top: 302px; width: 420px; min-height: 320px; padding: 14px 16px; border-radius: 15.6px; background: var(--ov-card);
   border: 1px solid rgba(var(--ov-fg-rgb),.1); display: flex; flex-direction: column; gap: 8px; backdrop-filter: blur(6px); }
 .ov-grid-head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .ov-badge { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; color: rgba(var(--ov-fg-rgb),.8); background: rgba(var(--ov-fg-rgb),.1); }
