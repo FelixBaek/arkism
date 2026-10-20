@@ -181,7 +181,7 @@ window.ArkismAIChat = (() => {
         const list = el("div", "ex-props");
         const hd = el("div", "ex-props-head");
         hd.append(icon("sparkle"), el("strong", "", `AI 제안 ${st.props.length}개`), el("small", "", "적용해도 저장하기 전에는 바뀌지 않아요"));
-        if (open.length) hd.append(btn("모두 적용", "ghost small", async () => { for (const p of open) await apply(p, true); repaint(); }));
+        if (open.length) hd.append(btn("모두 적용", "ghost small", async () => { await open.reduce((prev, p) => prev.then(() => apply(p, true)), Promise.resolve()); repaint(); }));
         list.append(hd, ...st.props.map(propRow));
         zone.append(list);
       }
@@ -193,7 +193,7 @@ window.ArkismAIChat = (() => {
     return root;
   }
 
-  api.button = (opts = {}) => mount(opts, null);
+  api.button = (opts = {}) => mount(opts);
   // field(): the sparkle fills this one field at once — improves what is written, or writes it from the context when empty.
   // No chat. The result goes in like typing (Ctrl+Z works, the screen's input listener marks it unsaved); 되돌리기 in the note too.
   function field(inp, opts) {

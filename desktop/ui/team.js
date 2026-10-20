@@ -680,7 +680,7 @@ window.ArkismTeams = (ctx) => {
     function setT(key, v) {
       if (key === "name" || key === "prompt") t[key] = v;
       else if (key === "mode") { if (v) t.overrides.mode = v; else delete t.overrides.mode; }
-      else { t.overrides.ending = { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(d.ending || {}), ...(t.overrides.ending || {}), max_rounds: v }; }
+      else { t.overrides.ending = { token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(d.ending || {}), ...(t.overrides.ending || {}), max_rounds: v }; }
     }
     if (src) foot.append(link("이 템플릿 지우기", async () => {
       if (!await ask(`'${src.name || tr("이름 없음")}' 템플릿을 지울까요? 팀을 저장하면 반영돼요.`)) return;

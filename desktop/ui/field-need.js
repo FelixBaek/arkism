@@ -22,9 +22,9 @@ window.ArkismNeed = (() => {
   return function need(target, message) {
     const f = typeof target === "string" ? find(target) : target;
     if (message) window.ArkismNotice?.(message);
-    if (!f?.isConnected) return false;
+    if (!f?.isConnected) return;
     clear(f);
-    void f.offsetWidth; // restart the shake
+    f.getBoundingClientRect(); // reflow restarts the shake
     f.classList.add("field-need", "field-shake");
     if (message) {
       const m = document.createElement("small");
@@ -39,6 +39,5 @@ window.ArkismNeed = (() => {
     const off = () => { clear(f); f.removeEventListener("input", off); f.removeEventListener("change", off); f.removeEventListener("click", off); };
     f.addEventListener("input", off); f.addEventListener("change", off); f.addEventListener("click", off);
     setTimeout(() => f.classList.remove("field-shake"), 400);
-    return false;
   };
 })();

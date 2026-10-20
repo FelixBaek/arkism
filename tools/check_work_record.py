@@ -24,15 +24,35 @@ SECTIONS = {"Why": "why", "Task": "task", "Verified": "verified", "Limits": "lim
             "제목": "title_ko", "이유": "why_ko", "작업": "task", "검증": "verified_ko", "한계": "limits_ko",
             "연구": "research"}
 REQUIRED = ("Why", "Verified", "제목", "이유", "검증")
-NOT_RUN = re.compile(r"not[ _]run|미실행|skipped|못 ?(했|함|돌)", re.I)
+NOT_RUN = re.compile(r"not[ _]run|미실행|skipped|못 ?[했함돌]", re.I)
 PASSED = re.compile(r"\bpass(ed)?\b|통과|\bok\b", re.I)
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
-PATH = re.compile(r"(?<![\w/:.])((?:[\w.-]+/)+[\w.-]+\.\w+)")
+PATH = re.compile(r"[\w.-]+(?:/[\w.-]+)+")  # checked per token, so no backtracking across a line
 REPORT_FIELDS = ("작업 ID", "실행한 검증", "미실행", "커밋 상태")
 
 
+GIT_ARG = re.compile(r"(?:-r|--[\w-]+(?:=[\w%.-]+)?|\w[\w./{}^~@:-]*)", re.ASCII)
+RANGE = re.compile(r"\w[\w./^~@-]*\.\.\w[\w./^~@-]*", re.ASCII)
+
+
 def git(*args):
+    """Run Git with arguments that cannot smuggle in an option or a shell word."""
+    if any(not GIT_ARG.fullmatch(a) for a in args):
+        raise ValueError("invalid Git argument")
     return subprocess.run(["git", "-C", str(ROOT), *args], check=True, capture_output=True, text=True).stdout
+
+
+def safe_range(text):
+    if not RANGE.fullmatch(text):
+        raise SystemExit(f"--range must look like base..head: {text!r}")
+    return text
+
+
+def evidence_paths(line):
+    for word in line.split():
+        word = word.strip("`'\"()[],;")
+        if "://" not in word and PATH.fullmatch(word) and "." in word.rsplit("/", 1)[1].strip("."):
+            yield word
 
 
 def sections(message):
@@ -54,7 +74,7 @@ def verified_problems(text, exists):
     for line in text.splitlines():
         if NOT_RUN.search(line) and PASSED.search(line):
             problems.append(f"a check marked not run is also called passed: {line.strip()[:80]}")
-        for path in PATH.findall(line):
+        for path in evidence_paths(line):
             if not exists(path):
                 problems.append(f"evidence path does not exist: {path}")
     return problems
@@ -100,9 +120,12 @@ def main(argv=None):
     ap.add_argument("--report", type=pathlib.Path, help="a worker completion report to check instead of commits")
     args = ap.parse_args(argv)
     if args.report:
-        problems = check_report(args.report.read_text(encoding="utf-8"), commit_exists, commit_has("HEAD"))
+        report = args.report.resolve()
+        if not report.is_file() or not report.is_relative_to(pathlib.Path.cwd().resolve()):
+            raise SystemExit("--report must be a file under the current directory")
+        problems = check_report(report.read_text(encoding="utf-8"), commit_exists, commit_has("HEAD"))
     else:
-        base = args.range.split("..")[0]
+        base = safe_range(args.range).split("..")[0]
         if subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--verify", "-q", base], capture_output=True).returncode:
             print(f"Work record check skipped: {base} is not in this checkout.")
             return 0

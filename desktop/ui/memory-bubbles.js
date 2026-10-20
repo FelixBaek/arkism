@@ -130,11 +130,7 @@ window.ArkismMemoryBubbles = (() => {
       draw();
     }
 
-    // blend two colours (hex / rgb() / CSS names via a 1px canvas); cached per pair
-    const mixCache = new Map(), probe = doc.createElement("canvas").getContext("2d");
-    const rgb = (c) => { probe.fillStyle = "#000"; probe.fillStyle = c; const h = probe.fillStyle; if (h[0] === "#") return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); return h.match(/[\d.]+/g).slice(0, 3).map(Number); };
     const segDist = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(px - ax - t * dx, py - ay - t * dy); };
-    function mix(a, b, t) { const k = `${a}|${b}|${t}`; let v = mixCache.get(k); if (!v) { const x = rgb(a), y = rgb(b); v = `rgb(${x.map((n, i) => Math.round(n + (y[i] - n) * t)).join(",")})`; mixCache.set(k, v); } return v; }
     const scr = (x, y) => [W / 2 + (x - W / 2) * zoom + panX, H / 2 + (y - H / 2) * zoom + panY];
     function draw() {
       if (!W) return;

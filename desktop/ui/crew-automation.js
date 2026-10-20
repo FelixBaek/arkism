@@ -20,10 +20,11 @@ window.ArkismAutomation = (h) => {
     else if (/매일|날마다|하루/.test(t)) dow = "*";
     else {
       const found = [...new Set([...t.matchAll(/([일월화수목금토])(?:요일)?(?=[\s,·.요]|$)/g)].map((m) => DAYS.indexOf(m[1])))];
-      if (found.length) dow = found.sort((a, b) => a - b).join(",");
+      found.sort((a, b) => a - b);
+      if (found.length) dow = found.join(",");
     }
     let hour = null, min = 0;
-    const hm = t.match(/(\d{1,2})\s*[:시]\s*(\d{1,2})?\s*(분|반)?/);
+    const hm = /(\d{1,2})\s*[:시]\s*(\d{1,2})?\s*([분반])?/.exec(t);
     if (hm) { hour = Number(hm[1]); min = hm[3] === "반" || /반/.test(t.slice(hm.index, hm.index + hm[0].length + 1)) && !hm[2] ? 30 : Number(hm[2] || 0); }
     else if (/아침/.test(t)) hour = 9; else if (/점심/.test(t)) hour = 12; else if (/저녁/.test(t)) hour = 18; else if (/밤/.test(t)) hour = 21;
     if (hour == null || hour > 23 || min > 59) return null;
@@ -558,7 +559,7 @@ window.ArkismAutomation = (h) => {
     function flowSection() {
       const s = section("tree-structure", "워크플로우", link(creating ? "그래프로 만들기 →" : "그래프로 편집 →", () => {
         if (creating) { notice("먼저 자동화를 만든 뒤 그래프로 이어요."); return; }
-        leave(() => h.openGraph(rec, { graphMode: true, fromPopup: true }));
+        leave(() => h.openGraph(rec, { graphMode: true, fromPopup: true })).catch(console.error);
       }));
       const card = el("div", "auto-box auto-flow");
       const paint = () => {

@@ -7,25 +7,20 @@ record show only the English one.
 """
 import argparse
 import re
-import subprocess
 import sys
 from collections import Counter
 
-from check_work_record import ROOT, sections
+from check_work_record import ROOT, git, safe_range, sections
 
 GROUPS = [  # (key, Korean title, English title, path pattern)
     ("research", "연구 변경", "Research changes", None),
     ("app", "앱 화면", "App", re.compile(r"^desktop/(ui|src-tauri)/")),
     ("engine", "엔진·서버", "Engine & server", re.compile(r"^(internal|cmd|api|config)/")),
-    ("build", "빌드·배포·도구", "Build, release & tools", re.compile(r"^(\.github/|tools/|desktop/(installer/|[^/]+\.sh$))")),
-    ("docs", "문서", "Docs", re.compile(r"^guide/|\.md$")),
+    ("build", "빌드·배포·도구", "Build, release & tools", re.compile(r"^(?:(?:\.github|tools|desktop/installer)/.*|desktop/[^/]+\.sh)$")),
+    ("docs", "문서", "Docs", re.compile(r"^(?:guide/.*|.*\.md)$")),
     ("other", "기타", "Other", None),
 ]
 NONE = re.compile(r"^\s*(none|해당 ?없음|없음)\b", re.I)
-
-
-def git(*args):
-    return subprocess.run(["git", "-C", str(ROOT), *args], check=True, capture_output=True, text=True).stdout
 
 
 def group_of(found, files):
@@ -63,7 +58,7 @@ def main(argv=None):
     ap.add_argument("--range", required=True, help="e.g. v0.1.2..v0.1.3")
     ap.add_argument("--title", default="Arkism")
     args = ap.parse_args(argv)
-    log = git("log", "--no-merges", "--reverse", "--format=%H%x00%B%x00", args.range).split("\0")
+    log = git("log", "--no-merges", "--reverse", "--format=%H%x00%B%x00", safe_range(args.range)).split("\0")
     commits = []
     for sha, message in zip(log[0::2], log[1::2]):
         sha = sha.strip()

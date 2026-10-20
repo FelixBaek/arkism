@@ -218,8 +218,8 @@ window.ArkismHome = function (ctx) {
     if (h.kind === "setting") return ctx.openSettings(h.id);
     if (h.kind === "mcp" || h.kind === "plugin") { state.toolTab = h.kind; go("tools"); state.selected = `tool:${h.id}`; ctx.markSelected(); ctx.renderDetail(); ctx.openDetail(); return; }
     if (h.kind === "skill") go("skills");
-    if (h.kind === "crew" && h.type === "agent") return void window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: h.id } }));
-    if (h.kind === "crew" && h.type === "team") return void window.dispatchEvent(new CustomEvent("arkism:open-team", { detail: { id: h.id } }));
+    if (h.kind === "crew" && h.type === "agent") { window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: h.id } })); return; }
+    if (h.kind === "crew" && h.type === "team") { window.dispatchEvent(new CustomEvent("arkism:open-team", { detail: { id: h.id } })); return; }
     if (h.kind === "crew") go("crew");
     if (h.kind === "prompt") go("images", h.item.kind === "slide" ? "slide" : "image");
     state.selected = `${h.kind}:${h.id}`;

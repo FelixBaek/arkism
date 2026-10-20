@@ -2690,7 +2690,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     if (a.type === "insert_before") return !!nodeIn(a.node) && ["code", "ai_once", "approval"].includes(a.new?.type);
     return false;
   }
-  const applyLabel = (a) => ({ set_model: "모델 바꾸기", set_access: "바꾸기", set_edge_max: "횟수 바꾸기", insert_before: `${NODES[a.new?.type]?.label || "노드"} 넣기` })[a.type] || "적용";
   function applyAction(a) {
     const g = ed.graph;
     if (a.type === "set_model") nodeIn(a.node).config.model = String(a.model || "").slice(0, 80);
@@ -3358,7 +3357,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     d.pinned = list;
     return true;
   }
-  const setSkillPin = (d, sk, on, patch) => setPin(d, "skills", sk.id, on, patch);
   // 고정 칩 합계 토큰: the same rough estimate as the 항상 넣는 자료 table (pins.js: chars kept per mode / 2.5).
   const PIN_CAP = { full: 8000, summary: 380, reference: 80 };
   function pinChars(p) {
@@ -4241,7 +4239,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
           raw(el("span", "", (said || run.summary || tr("(입력 없음)")).slice(0, 120))), el("small", "", RUN_LABEL[run.status] || run.status || ""));
         return row;
       }));
-    });
+    }).catch(() => rbox.replaceChildren(el("p", "ex-hist-empty", "실행 기록을 불러오지 못했어요.")));
   }
 
   // 새 전문가: start from an existing expert (a copy) instead of empty fields.

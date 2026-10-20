@@ -1546,7 +1546,6 @@ window.ArkismI18nEN = {
   "설치하지 못했어요. 잠시 뒤 다시 눌러 주세요.": "Couldn't install. Try again in a moment.",
   "다시 시도": "Try again",
   "위험도 높은 순": "Highest risk",
-  "오래된 순": "Oldest",
   "최신 순": "Newest",
   "일반": "General",
   "모양": "Appearance",
@@ -5839,7 +5838,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "아바타 바꿈": "Changed the avatar",
   "판 이력이 아직 없어요.": "No versions yet.",
   "테스트 탭에서 보낸 것도 여기 남아요": "Requests from the Test tab show here too",
-  "아직 실행 기록이 없어요.": "No runs yet."
+  "아직 실행 기록이 없어요.": "No runs yet.",
+  "실행 기록을 불러오지 못했어요.": "Could not load runs."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "이미지는 {0}이 대신 보고, 답은 이 전문가 이름으로 돌려줘요.": "{0} looks at images for it, and the answer comes back under this expert's name.",
