@@ -1010,7 +1010,7 @@ window.ArkismTeams = (ctx) => {
       }
       r.append(acts);
       box.append(r);
-      if (pop.histOpen.has(h.v)) { const lines = changes(list[0].crew, h.crew); /* what restoring this version would change */ const p = el("p", "tm-hist-diff"); p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((x) => raw(el("span", "", tr(x))))); box.append(p); }
+      if (pop.histOpen.has(h.v)) box.append(window.ArkismVersionDiff.render(el, list[0].crew, h.crew, `v${h.v} 버전으로 바꾸면`)); // now (-) against that version (+)
     });
     if (!list.length) box.append(empty(pop.versions ? "버전 기록을 불러오지 못했어요." : "불러오는 중…"));
     s1.append(box);

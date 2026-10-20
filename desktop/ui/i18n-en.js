@@ -5949,3 +5949,4 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "v{0} 버전으로 변경할까요? 새 버전으로 저장돼요.": "Switch to v{0}? It saves as a new version.", "v{0} 버전으로 바꾸면": "Switching to v{0} changes",
   "지시 {0}": "Instructions {0}", "소개 {0}": "Intro {0}"
 });
+Object.assign(window.ArkismI18nEN.strings, { "이미지 모델": "Image model", "기억 종류": "Memory kinds", "고정한 것": "Pinned", "바꾸면": "After" });

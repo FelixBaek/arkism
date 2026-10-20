@@ -4305,21 +4305,14 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   }
 
   // What differs between two saved versions of an expert, in the person's words (기록 › 판 이력).
-  function agentChanges(a, b, full) {
+  function agentChanges(a, b) {
     const out = [];
     const s = (v) => v || "없음";
-    // full: show the text itself around the first place the two differ, not just "바꿈"
-    const pair = (x, y) => {
-      const [p, q] = [x, y].map((v) => String(v || "").replace(/\s+/g, " ").trim());
-      let i = 0; while (i < p.length && p[i] === q[i]) i++;
-      const from = Math.max(0, i - 20), one = (t) => t ? `“${from ? "…" : ""}${t.slice(from, from + 90)}${t.length > from + 90 ? "…" : ""}”` : "없음";
-      return `${one(p)} → ${one(q)}`;
-    };
     if ((a.name || "") !== (b.name || "")) out.push(`이름 ${s(a.name)} → ${s(b.name)}`);
     if ((a.handle || "") !== (b.handle || "")) out.push(`@이름 ${s(a.handle)} → ${s(b.handle)}`);
-    if ((a.role || "") !== (b.role || "")) out.push(full ? `소개 ${pair(a.role, b.role)}` : "소개 바꿈");
+    if ((a.role || "") !== (b.role || "")) out.push("소개 바꿈");
     if ((a.category || "") !== (b.category || "")) out.push(`카테고리 ${s(a.category)} → ${s(b.category)}`);
-    if ((a.instructions || "") !== (b.instructions || "")) out.push(full ? `지시 ${pair(a.instructions, b.instructions)}` : "지시 바꿈");
+    if ((a.instructions || "") !== (b.instructions || "")) out.push("지시 바꿈");
     if ((a.model || "") !== (b.model || "")) out.push(`기본 모델 ${s(a.model)} → ${s(b.model)}`);
     if ((a.fallback_model || "") !== (b.fallback_model || "")) out.push(`예비 모델 ${s(a.fallback_model)} → ${s(b.fallback_model)}`);
     if ((a.effort || "medium") !== (b.effort || "medium")) out.push("생각 깊이 바꿈");
@@ -4368,12 +4361,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       }
       r.append(acts);
       vbox.append(r);
-      if (wk.histOpen.has(h.revision)) {
-        const lines = agentChanges(list[0].crew, h.crew, true); // what changing to this version would change
-        const p = el("p", "tm-hist-diff");
-        p.append(el("b", "", `v${h.revision} 버전으로 바꾸면`), ...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((x) => raw(el("span", "", tr(x)))));
-        vbox.append(p);
-      }
+      // what changing to this version would change: now (-) against that version (+)
+      if (wk.histOpen.has(h.revision)) vbox.append(window.ArkismVersionDiff.render(el, list[0].crew, h.crew, `v${h.revision} 버전으로 바꾸면`));
     });
     if (!list.length) vbox.append(el("p", "ex-hist-empty", wk.versions ? "버전 기록이 아직 없어요." : "불러오는 중…"));
     const rbox = el("div", "tm-hist");

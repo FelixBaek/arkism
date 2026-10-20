@@ -991,7 +991,7 @@ window.ArkismAutomation = (h) => {
           }
           r.append(acts);
           vbox.append(r);
-          if (open.has(x.revision)) { const lines = what(x.crew, items[0].crew); const p = el("p", "tm-hist-diff"); p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((t) => el("span", "", t))); vbox.append(p); }
+          if (open.has(x.revision)) vbox.append(window.ArkismVersionDiff.render(el, items[0].crew, x.crew, `v${x.revision} 버전으로 바꾸면`)); // now (-) against that version (+)
         });
         if (!items?.length) vbox.append(el("p", "auto-hint auto-empty", items ? "버전 기록을 불러오지 못했어요." : "불러오는 중…"));
       };
