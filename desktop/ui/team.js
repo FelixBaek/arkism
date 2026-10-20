@@ -614,13 +614,14 @@ window.ArkismTeams = (ctx) => {
     dlg.addEventListener("cancel", (e) => { e.preventDefault(); void leave(); });
     const ok = button("저장", "primary", null, () => {
       t.name = t.name.trim();
+      if (!t.name) { window.ArkismNeed(dlg.querySelector(".tm-tpl-body input"), "템플릿 이름을 적어 주세요."); return; }
       if (!t.overrides.mode && !t.overrides.ending) delete t.overrides;
       const list = d.templates || [];
       d.templates = src ? list.map((y) => (y.key === src.key ? t : y)) : [...list, t];
       dlg.close(); changed(pop, true);
       notice("템플릿을 넣었어요. 팀을 저장하면 반영돼요.");
     });
-    const sync = () => { ok.disabled = !t.name.trim(); ok.title = ok.disabled ? tr("이름을 적어 주세요") : ""; };
+    const sync = () => {}; // 저장 stays pressable; an empty name is pointed at on press (field-need.js)
     const help = (label, what, ...kids) => { const f = el("div", "tm-tpl-field"); const h = el("div", "tm-tpl-label"); h.append(el("b", "", label), el("small", "", what)); f.append(h, ...kids); return f; };
     const draw = () => {
       const name = raw(input(t.name, (v) => { t.name = v; sync(); }, { max: 60, placeholder: "예: 코드 리뷰, 주간 회고, 시안 검토" }));
@@ -777,7 +778,7 @@ window.ArkismTeams = (ctx) => {
       const chSel = select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], f.channel, (v) => { f.channel = v; }); chSel.setAttribute("aria-label", "채널");
       row.append(botSel, chSel, button(f.edit ? "바꾸기" : "연결", "primary", null, async () => {
         const id = f.channel;
-        if (!id) { notice("채널을 골라 주세요."); return; }
+        if (!id) { window.ArkismNeed(chSel, "채널을 골라 주세요."); return; }
         const had = id !== f.edit && (b.channels || []).find((x) => x.channel_id === id);
         if (had && !await ask(tr("이 채널은 이미 다른 곳에 연결돼 있어요. 이 팀으로 바꿀까요?"))) return;
         const old = f.edit ? (b.channels || []).find((x) => x.channel_id === f.edit) : null;
@@ -895,7 +896,7 @@ window.ArkismTeams = (ctx) => {
   }
   async function startTest(pop) {
     const t = pop.test, text = t.text.trim();
-    if (!text) { notice("맡길 일을 적어 주세요."); return; }
+    if (!text) { window.ArkismNeed(pop.h?.dialog?.querySelector("textarea") ?? null, "맡길 일을 적어 주세요."); return; }
     t.busy = true;
     try {
       const r = mt(await request("/v1/crew/meetings", { method: "POST", body: body({ meeting: { team_id: pop.id, title: text.slice(0, 40), topic: text } }) }));
@@ -1504,7 +1505,7 @@ window.ArkismTeams = (ctx) => {
   async function startMeeting() {
     const f = S.newMeeting;
     if (!f.team_id) { notice("팀을 골라 주세요."); return; }
-    if (!(f.title || "").trim()) { notice("제목을 넣어 주세요."); return; }
+    if (!(f.title || "").trim()) { window.ArkismNeed("제목", "제목을 넣어 주세요."); return; }
     try {
       const r = mt(await request("/v1/crew/meetings", { method: "POST", body: body({ meeting: { team_id: f.team_id, template_key: f.template_key || undefined, title: f.title.trim(), topic: (f.topic || "").trim() } }) }));
       S.newMeeting = null; S.meetTab = "running";

@@ -4478,7 +4478,7 @@
       const ok = button("그대로 저장", instructionLike ? "ghost small" : "primary small", null, () => { ok.disabled = no.disabled = true; void decide(c, "approve", ""); });
       const fix = button("고쳐서 저장", "small", null, () => openCandidateFix(c));
       const no = button("버리기", instructionLike ? "primary small" : "ghost small", null, () => {
-        if (!reason.value.trim()) { reason.focus(); notice("버리는 이유를 적어 주세요."); return; }
+        if (!reason.value.trim()) { window.ArkismNeed(reason, "버리는 이유를 적어 주세요."); return; }
         ok.disabled = no.disabled = true; void decide(c, "reject", reason.value.trim());
       });
       const card = actionCard(text, ...(instructionLike ? [no, fix, ok] : [ok, fix, no]));
@@ -4807,6 +4807,7 @@
     render(false);
   });
   const openSettings = () => go("settings");
+  window.addEventListener("arkism:open-settings", (e) => { if (e.detail?.tab) state.settingsTab = e.detail.tab; go("settings"); });
   $("#search-toggle").addEventListener("click", () => home.palette());
   document.addEventListener("keydown", (e) => {
     const editing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);

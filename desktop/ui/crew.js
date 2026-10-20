@@ -41,7 +41,7 @@ window.ArkismCrew = (ctx) => {
     expert: { label: "전문가", sub: "페르소나·모델이 정해진 채로 들어가요", icon: "brain", group: "전문가", hidden: true },
     team: { label: "팀", sub: "여럿이 회의해 결론을 내요", icon: "users-three", group: "전문가", hidden: true },
     ai: { label: "AI 에이전트", sub: "도구를 쓰며 스스로 일해요", icon: "robot", group: "AI" },
-    ai_once: { label: "AI 한 번 호출", sub: "질문 한 번 · 빠르고 싸요", icon: "sparkle", group: "AI" },
+    ai_once: { label: "AI에게 한 번 묻기", sub: "도구 없이 질문 한 번 · 빠르고 싸요", icon: "sparkle", group: "AI" },
     code: { label: "코드", sub: "Go·셸로 결과 다듬기 · 토큰 0", icon: "code", group: "처리" },
     http: { label: "HTTP 요청", sub: "외부 API 부르기", icon: "globe", group: "처리" },
     github: { label: "GitHub", sub: "PR·이슈·릴리스 (gh)", icon: "git-merge", group: "처리" },
@@ -881,7 +881,7 @@ window.ArkismCrew = (ctx) => {
         const persona = byId(n.config?.persona);
         const expert = n.type === "expert" ? byId(n.config?.expert) : null;
         const who0 = n.type === "expert" ? "전문가" : "에이전트";
-        const kind = n.type === "ai_once" ? "한 번 호출" : n.config?.collab === "on" ? `${who0} · 협업 워커 ${n.config?.max_workers || 5}` : who0;
+        const kind = n.type === "ai_once" ? "한 번 묻기" : n.config?.collab === "on" ? `${who0} · 협업 워커 ${n.config?.max_workers || 5}` : who0;
         who.append(el("strong", "", nodeTitle(n)), el("small", "", [kind, expert?.crew.name || persona?.crew.name].filter(Boolean).join(" · ")));
         row.append(expert ? avatarMark(expert.crew) : modelMark(modelOf(n, x)), who, el("span", "mono dim", modelOf(n, x)));
         list.append(row);
@@ -1413,7 +1413,7 @@ window.ArkismCrew = (ctx) => {
     const c = n.config || {};
     if (n.type === "ai" || n.type === "expert") return [c.collab === "on" ? "전문가 · 협업" : "전문가", n.type === "ai" ? byId(c.persona)?.crew.name : ""].filter(Boolean).join(" · ");
     if (n.type === "team") return "팀 · 회의";
-    if (n.type === "ai_once") return "한 번 호출";
+    if (n.type === "ai_once") return "한 번 묻기";
     if (n.type === "code") return "코드 · 토큰 0";
     return NODES[n.type]?.label || n.type;
   }
@@ -2280,7 +2280,7 @@ window.ArkismCrew = (ctx) => {
     box.append(modelList(), cols);
     // 누가 맡나
     L.append(el("h3", "", "누가 맡나"));
-    L.append(group("노드 종류", segment([["expert", "전문가"], ["team", "팀"], ["ai", "AI 에이전트"], ["ai_once", "AI 한 번 호출"]], n.type, (k) => {
+    L.append(group("노드 종류", segment([["expert", "전문가"], ["team", "팀"], ["ai", "AI 에이전트"], ["ai_once", "AI에게 한 번 묻기"]], n.type, (k) => {
       if (k === n.type) return;
       const was = n.type, text = c.goal || c.prompt || c.topic || "{{input}}";
       n.type = k;
@@ -3066,7 +3066,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     box.append(ai, field("이름", name), field("한 줄 설명", role, "목록과 노드 선택에서 보여요"), field("지시", textAI, "역할·말투·꼭 지킬 것을 써요. 키나 토큰은 넣지 마세요."));
     const bar = el("div", "crew-actions");
     const ok = button("저장", "primary", null, async () => {
-      if (!d.name.trim() || !d.instructions.trim()) { notice("이름과 지시를 채워 주세요."); return; }
+      if (!d.name.trim()) { window.ArkismNeed(name, "이름을 적어 주세요."); return; }
+      if (!d.instructions.trim()) { window.ArkismNeed(text, "지시를 적어 주세요."); return; }
       ok.disabled = true;
       try {
         await save(rec, { ...(rec?.crew || {}), type: "persona", name: d.name.trim(), role: d.role.trim(), instructions: d.instructions });
@@ -3665,7 +3666,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       chSel.addEventListener("change", () => { f.channel = chSel.value; });
       row.append(botSel, chSel, button("연결", "primary small", null, async () => {
         const id = chSel.value;
-        if (!id) { notice("채널을 골라 주세요."); return; }
+        if (!id) { window.ArkismNeed(chSel, "채널을 골라 주세요."); return; }
         const had = (b.channels || []).find((x) => x.channel_id === id);
         if (had && !await ask(tr("이 채널은 이미 다른 곳에 연결돼 있어요. 이 전문가로 바꿀까요?"))) return;
         const ch = { channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "agent", id: rec.id }, auto_start: false };
@@ -3700,7 +3701,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   }
   async function saveWorker(rec) {
     const out = workerOut(wk.draft);
-    if (!out.name || !out.handle || !out.instructions.trim()) { notice("이름·@이름·지시를 채워 주세요."); return; }
+    if (!out.name || !out.handle || !out.instructions.trim()) { window.ArkismNeed(!out.name ? "이름" : !out.handle ? "@이름" : "지시", !out.name ? "이름을 적어 주세요." : !out.handle ? "@이름을 적어 주세요." : "지시를 적어 주세요."); return; }
     if (agents().some((r) => r.id !== rec?.id && r.crew.handle === out.handle) || teams().some((r) => r.crew.handle === out.handle)) { notice(`@${out.handle}은 이미 있어요. 다른 이름을 써 주세요.`); return; }
     wk.busy = true;
     drawWorkerSave();
@@ -4334,7 +4335,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const foot = el("div", "dialog-foot");
     foot.append(button("취소", "ghost", null, () => dlg.close()), button("추가", "primary", null, () => {
       const n = name.value.trim(), h = handle.value.trim().replace(/^@/, "");
-      if (!n || !/^[\p{L}\p{N}_-]{1,40}$/u.test(h)) { notice("이름과 @이름(띄어쓰기 없이)을 채워 주세요."); return; }
+      if (!n) { window.ArkismNeed(name, "이름을 적어 주세요."); return; }
+      if (!/^[\p{L}\p{N}_-]{1,40}$/u.test(h)) { window.ArkismNeed(handle, "@이름은 띄어쓰기 없이 글자·숫자·_·-로 적어 주세요."); return; }
       if (h === wk.draft.handle || agents().some((r) => r.crew.handle === h) || teams().some((r) => r.crew.handle === h) || (wk.newTeams || []).some((t) => t.handle === h)) { notice("이미 쓰는 이름이에요."); return; }
       wk.newTeams = [...(wk.newTeams || []), { name: n, handle: h }];
       dlg.close();

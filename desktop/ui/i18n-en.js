@@ -6134,3 +6134,33 @@ Object.assign(window.ArkismI18nEN.patterns, { "이 창을 열지 못했어요 ({
 Object.assign(window.ArkismI18nEN.strings, { "많이 쓰인 순 ▾": "Most used first ▾", "기억 버블 지도 · 화살표로 고르고 +/−로 확대·축소, 끌어서 옮기기": "Memory bubble map · arrows to pick, +/− to zoom, drag to move" });
 Object.assign(window.ArkismI18nEN.strings, { "AI로 채우기": "Fill with AI", "더 고칠 곳이 없어요.": "Nothing more to improve.", "AI가 채웠어요 · 저장하면 반영돼요": "AI filled it in · save to keep it", "AI가 쓰는 중이에요…": "AI is writing…", "고칠 곳이나 언제 실행할지 평소 말로 적으면 바뀐 목표·일정·단계를 보여 줘요": "Say what to change or when to run, in plain words, and see the new goal, schedule and steps", "무엇을 고칠까요? '평일 아침 9시마다'처럼 평소 말로 적으면 언제 실행을 일정이나 웹훅으로 바꿔요. 목표를 바꾸고, 단계를 넣거나 빼고, 순서와 조건도 바꿀 수 있어요.": "What should change? Say when to run in plain words, like 'every weekday at 9am', and it becomes a schedule or a webhook. You can also change the goal, add or remove steps, and change the order and conditions.", "예: 평일 아침마다 돌려 줘 · 실패하면 2번까지 다시 찾게": "e.g. run it every weekday morning · retry up to 2 times on failure", "평일 아침마다 실행": "Run every weekday morning" });
 Object.assign(window.ArkismI18nEN.patterns, { "{0} · AI로 채우기": "{0} · Fill with AI" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "일월화수목금토": "SMTWTFS",
+  "반": "half",
+  "시": "Hour",
+  "평소 말로 적어요 · 예: 평일 아침 9시, 매주 월·목 오후 3시 반": "Say it in plain words · e.g. weekdays at 9 am, every Mon·Thu 3:30 pm",
+  "언제인지 알아듣지 못했어요. 요일과 시간을 넣어 다시 적어 주세요.": "Couldn't tell when. Write the days and the time again.",
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "한 번 묻기": "One question",
+  "단계마다 맡길 전문가를 고르고 할 일을 적어요. 위에서 아래로 차례대로 실행되고, 앞 단계 결과가 다음 단계로 넘어가요.": "Pick who handles each step and write what to do. Steps run top to bottom, and each step's result goes to the next.",
+  "자료 모으기": "Gather material",
+  "핵심 정리": "Sum up",
+  "검토하기": "Review",
+  "보고서 쓰기": "Write the report",
+  "AI에게 한 번 묻기 (빠르고 싸요)": "Ask the AI once (fast, cheap)",
+  "이 단계에서 할 일을 평소 말로 적어요 · 예: 받은 자료에서 핵심 3가지만 뽑아 표로 정리해 줘. 앞 단계 결과는 알아서 넘어와요": "Say what this step does in plain words · e.g. pull the 3 key points into a table. The previous step's result comes along by itself",
+  "나에게 (기본)": "To me (default)",
+  "설정 › 메신저에서 먼저 연결해요": "Connect one in Settings › Messengers first",
+  "AI에게 한 번 묻기": "Ask the AI once",
+  "도구 없이 질문 한 번 · 빠르고 싸요": "One question, no tools · fast and cheap",
+  "이름을 적어 주세요.": "Enter a name.",
+  "지시를 적어 주세요.": "Enter the instructions.",
+  "@이름을 적어 주세요.": "Enter the @name.",
+  "@이름은 띄어쓰기 없이 글자·숫자·_·-로 적어 주세요.": "Use letters, numbers, _ or - for the @name, no spaces.",
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "한 번 묻기 {0}": "One question {0}",
+  "단계 {0} 이름 · 예: {1}": "Step {0} name · e.g. {1}",
+});
+Object.assign(window.ArkismI18nEN.strings, { "템플릿 이름을 적어 주세요.": "Enter a template name." });
