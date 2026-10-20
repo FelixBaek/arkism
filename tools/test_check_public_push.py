@@ -85,7 +85,8 @@ class PublicPushTests(unittest.TestCase):
         """Verify forbidden names at any depth."""
         for name in (".gitignore", ".dockerignore", ".env.example", "held-out/task.json"):
             self.write("nested/" + name, "public")
-        self.git("add", "-f", "nested")
+        self.write("notes/held-out", "public")  # only a held-out directory is private, not a file by that name
+        self.git("add", "-f", "nested", "notes")
         self.assertEqual(sum("forbidden path" in x for x in self.check()), 4)
 
     def test_unrelated_public_base_rejected(self):
