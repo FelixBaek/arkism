@@ -5860,7 +5860,9 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "도구 {0} 추가": "Added tool {0}",
   "도구 {0} 뺌": "Removed tool {0}",
   "한 달 한도 ${0} → ${1}": "Monthly limit ${0} → ${1}",
-  "1회 한도 ${0} → ${1}": "Per-run limit ${0} → ${1}",
+  "1회 한도 ${0} → ${1}": "Per-run limit ${0} → ${1}"
+});
+Object.assign(window.ArkismI18nEN.strings, {
   "시작 노드의 언제 칸 형식을 확인해 주세요.": "Check the format of the start node's When field.",
   "실행 완료": "Run finished",
   "실행 기록에서 보기": "View in run history",
@@ -5903,56 +5905,6 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "'{0}' 팀을 삭제할까요?\n되돌릴 수 없어요. 확인하려면 이름 '{1}'을 그대로 입력하세요.": "Delete team '{0}'?\nThis can't be undone. Type its name '{1}' to confirm."
 });
 Object.assign(window.ArkismI18nEN.strings, { "진행자": "Moderator" });
-Object.assign(window.ArkismI18nEN.strings, {
-  "매일": "Daily",
-  "평일": "Weekdays",
-  "전문가 기본": "Expert default",
-  "AI와 같이 쓰기": "Write with AI",
-  "이 칸에 들어갈 글을 같이 다듬어요. 무엇을 바꿀까요?": "Let's polish what goes in this field. What should change?",
-  "예: 더 짧고 구체적으로": "e.g. shorter and more specific",
-  "더 짧게": "Shorter",
-  "더 구체적으로": "More specific",
-  "완료 기준 넣기": "Add a done condition",
-  "이 노드와 이어진 선이 함께 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.": "Lines connected to this node are deleted too. Leave without saving to get it back.",
-  "전문가·팀 고르기, 실행 범위, 나눠서 맡기기, 스킬은 자세히에서 정해요.": "Pick the expert or team, scope, splitting work and skills under Details.",
-  "눌러서 바로 고쳐요": "Click to edit here"
-});
-Object.assign(window.ArkismI18nEN.patterns, {
-  "{0} · AI와 같이 쓰기": "{0} · Write with AI",
-  "{0} → {1} 선이 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.": "The {0} → {1} line is deleted. Leave without saving to get it back."
-});
-Object.assign(window.ArkismI18nEN.strings, {
-  "항상": "Always",
-  "성공 시": "On success",
-  "실패 시": "On failure",
-  "선 종류": "Line kind",
-  "아직 서버 미지원": "Not supported by the server yet",
-  "다른 노드는 항상과 같아요": "Same as Always for other nodes",
-  "사람 확인 노드에서만": "Only from a human check node",
-  "조건 노드에서만": "Only from a condition node",
-  "동시에 보내기": "Send to several at once",
-  "+ 함께 보낼 노드": "+ Also send to"
-});
-Object.assign(window.ArkismI18nEN.patterns, {
-  "{0}에서 이을 노드를 누르세요 · Esc 취소": "Click the node to connect from {0} · Esc to cancel",
-  "동시에 · {0}곳": "At once · {0} nodes",
-  "이 갈래는 {0}곳으로 동시에 가요: {1}": "This branch goes to {0} nodes at once: {1}"
-});
-Object.assign(window.ArkismI18nEN.strings, { "+ 기억 추가": "+ Add memory", "기억·스킬·도구·지식에서 찾기": "Find in memories, skills, tools, knowledge" });
-Object.assign(window.ArkismI18nEN.strings, {
-  "버전 기록": "Version history", "이 버전으로 변경": "Switch to this version", "지금 버전": "Current version", "접기": "Collapse",
-  "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.": "Each save makes a version. Switching keeps the current one.",
-  "버전 기록을 불러오지 못했어요.": "Couldn't load the version history.", "버전 기록이 아직 없어요.": "No versions yet.",
-  "팀을 만들면 저장할 때마다 버전이 남아요.": "Once the team exists, each save keeps a version."
-});
-Object.assign(window.ArkismI18nEN.patterns, {
-  "v{0} 버전으로 변경할까요? 새 버전으로 저장돼요.": "Switch to v{0}? It saves as a new version.", "v{0} 버전으로 바꾸면": "Switching to v{0} changes",
-  "지시 {0}": "Instructions {0}", "소개 {0}": "Intro {0}"
-});
-Object.assign(window.ArkismI18nEN.strings, { "이미지 모델": "Image model", "기억 종류": "Memory kinds", "고정한 것": "Pinned", "바꾸면": "After" });
-Object.assign(window.ArkismI18nEN.strings, { "저장할 내용 · 고칠 수 있어요": "Text to save · you can edit it", "판단 근거": "Why the AI thinks so", "자세한 정보": "Details", "곧 확인": "Check soon" });
-Object.assign(window.ArkismI18nEN.strings, { "새 카테고리 이름": "New category name" });
-Object.assign(window.ArkismI18nEN.strings, { "쓸 수 있는 것 추가": "Add what it can use", "찾는 것이 없어요.": "Nothing matches." });
 // ai-chat.js: one AI chat for every "AI does it / proposes it" button and the sparkle on prompt fields
 Object.assign(window.ArkismI18nEN.strings, {
   "AI에게 묻기": "Ask AI",

@@ -355,7 +355,7 @@ window.ArkismTeams = (ctx) => {
     if (S.pop || !popup) return;
     const rec = id ? byId(id) : null;
     const base = rec ? clone(rec.crew) : blankTeam();
-    const pop = S.pop = { id: id || null, rec, base, d: clone(base), est: null, estKey: "", estTimer: 0, meetings: null, tab: "overview", test: { text: "", m: null, busy: false }, newCat: false, handleTouched: !!rec, from: "" };
+    const pop = S.pop = { id: id || null, rec, base, d: clone(base), est: null, estKey: "", estTimer: 0, meetings: null, tab: "overview", test: { text: "", m: null, busy: false }, handleTouched: !!rec, from: "" };
     if (rec) { S.stats.delete(id); loadStats(id); void loadMeetingsOf(pop); void loadVersions(pop); }
     pop.estBox = el("div", "tm-est-box");
     const tabs = [["overview", "개요"], ["test", "테스트"], ["history", "기록"]].map(([key, label]) => ({ key, label, render: (box) => { pop.tab = key; paintTab(pop, box); } }));
@@ -416,19 +416,10 @@ window.ArkismTeams = (ctx) => {
     const row = el("div", "tm-pop-row");
     const cats = [...new Set([...teams(), ...workflows()].map((r) => r.crew.category).filter(Boolean))];
     if (d.category && !cats.includes(d.category)) cats.push(d.category);
-    if (pop.newCat) {
-      const ni = raw(input("", () => {}, { max: 40, placeholder: "새 카테고리" })); ni.className = "tm-chip-input";
-      const done = () => { const v = ni.value.trim(); pop.newCat = false; if (v) d.category = v; paintHead(pop); changed(pop); };
-      ni.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); done(); } if (e.key === "Escape") { e.stopPropagation(); pop.newCat = false; paintHead(pop); } });
-      ni.addEventListener("blur", () => { if (pop.newCat) done(); });
-      row.append(ni); queueMicrotask(() => ni.focus());
-    } else {
-      const cs = raw(select([["", "카테고리"], ...cats.map((c) => [c, c]), ["\u0000new", "+ 새 카테고리"]], d.category || "", (v) => {
-        if (v === "\u0000new") { pop.newCat = true; paintHead(pop); return; }
-        d.category = v; if (!v) delete d.category; changed(pop);
-      }, "tm-chip tm-chip-select")); cs.setAttribute("aria-label", "카테고리");
-      row.append(cs);
-    }
+    const cs = el("button", "tm-chip tm-cat"); cs.type = "button"; cs.setAttribute("aria-label", "카테고리");
+    cs.append(...ctx.catChipBody(d.category));
+    cs.addEventListener("click", () => ctx.catMenu(cs, { list: cats, current: d.category || "", onPick: (v) => { if (v) d.category = v; else delete d.category; paintHead(pop); changed(pop); } }));
+    row.append(cs);
     if (!pop.id) { // 310:19981 shows the members' faces on a new team; 961:60688 shows only the category
       const faces = el("span", "tm-faces"); sorted(d.members).slice(0, 5).forEach((m) => faces.append(face(byId(m.agent_id), "s")));
       row.prepend(faces);
@@ -920,9 +911,9 @@ window.ArkismTeams = (ctx) => {
 
   // ---------------------------------------------------------------- 기록 (981:60196): 판 이력 · 최근 회의
   function historyTab(pop) {
-    if (!pop.id) return [empty("팀을 만들면 저장할 때마다 판이 남아요.")];
+    if (!pop.id) return [empty("팀을 만들면 저장할 때마다 버전이 남아요.")];
     const list = pop.versions || []; pop.histOpen = pop.histOpen || new Set();
-    const s1 = sec("clock-counter-clockwise", "판 이력", "저장할 때마다 판이 하나 생겨요. 되돌려도 지금 판은 남아요.");
+    const s1 = sec("clock-counter-clockwise", "버전 기록", "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.");
     const box = el("div", "tm-hist");
     list.forEach((h, i) => {
       const cur = h.v === pop.rec.revision;
@@ -930,18 +921,18 @@ window.ArkismTeams = (ctx) => {
       const at = new Date(h.at);
       r.append(el("b", cur ? "cur" : "", `v${h.v}`), el("time", "", `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), raw(el("span", "", tr(h.summary))));
       const acts = el("span", "tm-hist-acts");
-      if (cur) acts.append(el("em", "", "지금 쓰는 판"));
+      if (cur) acts.append(el("em", "", "지금 버전"));
       else {
-        acts.append(link("바뀐 점 보기", () => { if (!pop.histOpen.delete(h.v)) pop.histOpen.add(h.v); popRedraw("history"); }, "tm-link quiet"), link("이 판으로 되돌리기", async () => {
-          if (!await ask(`v${h.v}로 되돌릴까요? 새 판으로 저장돼요.`)) return;
+        acts.append(link("바뀐 점 보기", () => { if (!pop.histOpen.delete(h.v)) pop.histOpen.add(h.v); popRedraw("history"); }, "tm-link quiet"), link("이 버전으로 변경", async () => {
+          if (!await ask(`v${h.v} 버전으로 변경할까요? 새 버전으로 저장돼요.`)) return;
           void savePopup(pop, { ...clone(h.crew), cover: h.crew.cover ? clone(h.crew.cover) : undefined });
         }, "tm-link plain"));
       }
       r.append(acts);
       box.append(r);
-      if (pop.histOpen.has(h.v)) { const lines = changes(list[0].crew, h.crew); /* what restoring this version would change */ const p = el("p", "tm-hist-diff"); p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((x) => raw(el("span", "", tr(x))))); box.append(p); }
+      if (pop.histOpen.has(h.v)) box.append(window.ArkismVersionDiff.render(el, list[0].crew, h.crew, `v${h.v} 버전으로 바꾸면`)); // now (-) against that version (+)
     });
-    if (!list.length) box.append(empty(pop.versions ? "판 이력을 불러오지 못했어요." : "불러오는 중…"));
+    if (!list.length) box.append(empty(pop.versions ? "버전 기록을 불러오지 못했어요." : "불러오는 중…"));
     s1.append(box);
     const s2 = sec("chat-text", "최근 회의", "테스트 탭에서 연 회의도 여기 남아요");
     const rows = el("div", "tm-hist");

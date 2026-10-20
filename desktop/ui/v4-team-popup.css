@@ -272,6 +272,7 @@
 .tm-mface { position: relative; display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; }
 .tm-crown { position: absolute; right: -5px; bottom: -4px; width: 16px; height: 16px; padding: 2px; border-radius: 50%; background: var(--nc-surface); box-shadow: 0 0 0 1px var(--nc-line); color: var(--nc-accent); }
 .tm-mrow.lead .tm-mwho b { color: var(--nc-accent); }
+.tm-sec.tm-ai:has(> .ex-ai[hidden]) { display: none; } /* the button is in the bottom bar; the section shows only with proposals */
 /* 버전 기록 › 바뀐 점 보기: git-style diff, - now in red, + that version in green */
 .vdiff { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px 14px 58px; background: var(--nc-raised); border-top: 1px solid var(--nc-line); }
 .vdiff-title { margin-bottom: 6px; color: var(--nc-text); font: 600 calc(12.5px * var(--fs, 1))/1.5 var(--sans); }
@@ -282,4 +283,3 @@
 .vdiff-row.add { color: var(--status-ok); background: color-mix(in srgb, var(--status-ok) 12%, transparent); }
 .vdiff-none { color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
 .tm-hist-row + .vdiff { border-top: 1px solid var(--nc-line); }
-.tm-sec.tm-ai:has(> .ex-ai[hidden]) { display: none; } /* the button is in the bottom bar; the section shows only with proposals */
