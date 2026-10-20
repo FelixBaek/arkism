@@ -1,7 +1,7 @@
 # Memory reuse benchmark v2 preregistration draft
 
 **Status: DRAFT.** This document proposes a text contract for a future study.
-The decisions below remain pending; no v2 protocol has been preregistered or
+Decisions below not marked DECIDED remain pending; no v2 protocol has been preregistered or
 frozen, and no v2 runner, schema or validator is supplied by this document.
 Publishing it does not authorize experiments, model calls or human recruitment.
 The scope is Arkism's own memory delivery and reuse in a coding workflow.
@@ -31,7 +31,8 @@ status until decisions, artifacts and analysis are reviewed before outcomes.
 | Executor, real human reviewers, independent judges and analysis owners | PENDING |
 | Meaningful effect, any noninferiority margin and uncertainty method | PENDING |
 | Retry, exclusion, stopping, amendment and resumption rules | PENDING |
-| Public/private evidence boundaries, retention and review consent | PENDING |
+| Public/private evidence boundary ([evaluation guide](../../guide/memory-evaluation.md#2-freeze-the-experiment-before-collecting-results)) | DECIDED |
+| Evidence retention and review consent | PENDING |
 
 Record unavailable provider settings as unknown and unsupported caps as unenforced.
 Historical settings and exploratory thresholds are not defaults for these decisions.
