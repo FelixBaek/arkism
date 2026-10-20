@@ -32,11 +32,11 @@ class ReleaseNotesTest(unittest.TestCase):
         self.assertIn("바뀐 점 없음 · No changes", r.notes([], "Arkism"))
 
     def test_one_ref_covers_its_whole_history(self):
-        # the first tag has no previous one: a bare ref must still include the commit it points at
+        # the first tag has no previous one: a bare ref must still include the commit it points at; notes skip merge commits
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             r.main(["--range", "HEAD"])
-        subject = subprocess.run(["git", "log", "-1", "--format=%s"], capture_output=True, text=True, check=True).stdout.strip()
+        subject = subprocess.run(["git", "log", "-1", "--no-merges", "--format=%s"], capture_output=True, text=True, check=True).stdout.strip()
         self.assertIn(subject, out.getvalue())
 
 
