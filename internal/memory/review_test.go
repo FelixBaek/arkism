@@ -73,6 +73,17 @@ func TestReviewPaginationAndPermissions(t *testing.T) {
 	if _, e = f.svc.ListCandidates(testCtx, "reader", ReviewInput{Scope: scopeA}); !errors.Is(e, ErrDenied) {
 		t.Fatal("read-only reviewer", e)
 	}
+	f.auth.actors["reviewer"] = actor("reviewer", "service", false, "review")
+	if page, e := f.svc.ListCandidates(testCtx, "reviewer", ReviewInput{Scope: scopeA}); e != nil || len(page.Items) != 3 {
+		t.Fatal("memory reviewer could not read the waiting list", e)
+	}
+	if _, e = f.svc.ReviewCandidate(testCtx, "reviewer", records[1].ID, CandidateReviewInput{Scope: scopeA, Action: "approve", ExpectedRevision: records[1].Revision}); !errors.Is(e, ErrDenied) {
+		t.Fatal("service approved a candidate", e)
+	}
+	f.auth.actors["harness"] = actor("harness", "service", false, "read", "write")
+	if _, e = f.svc.ListCandidates(testCtx, "harness", ReviewInput{Scope: scopeA}); !errors.Is(e, ErrDenied) {
+		t.Fatal("service without a review grant saw the list", e)
+	}
 	f.repo.failAudit = true
 	if _, e = f.svc.ListCandidates(testCtx, f.human, ReviewInput{Scope: scopeA}); e == nil {
 		t.Fatal("audit failed open")
