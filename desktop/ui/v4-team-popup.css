@@ -282,7 +282,7 @@
 .vdiff-none { color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
 .tm-hist-row + .vdiff { border-top: 1px solid var(--nc-line); }
 /* 전문가 list: fixed columns (맡을 일 · 모델 · 빼기) so rows line up whatever the model name, and a quiet column head */
-.tm-pop-body .tm-mlist .tm-pill-input { flex: none; width: 128px; }
+.tm-pop-body .tm-mlist .tm-pill-input { flex: none; width: 128px; background: transparent; }
 .tm-pop-body .tm-mlist .tm-mmodelr { flex: none; width: 148px; overflow: hidden; text-overflow: ellipsis; }
 .tm-pop-body .tm-mlist .tm-mrow.tm-mhead { min-height: 0; padding-top: 6px; padding-bottom: 6px; cursor: default; }
 .tm-mhead > span { color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); }
@@ -291,4 +291,3 @@
 .tm-mhead > .tm-mhead-focus { flex: none; width: 128px; text-align: center; }
 .tm-mhead > .tm-mhead-x { flex: none; width: 24px; }
 .tm-pop-body .tm-mlist .tm-grip, .tm-pop-body .tm-mlist .tm-ord { flex: none; width: 10px; }
-.tm-pop-body .tm-mlist .tm-pill-input { background: transparent; }

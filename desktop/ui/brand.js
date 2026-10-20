@@ -43,11 +43,12 @@
   }
   // shortcut: the provider list has no input kinds, so they come from the model name; move to the server's model
   // list once it reports them. Unknown names count as text only, so the 이미지 모델 row still shows for them.
+  const VISION = [/^(claude|opus|sonnet|haiku|fable|gemini|antigravity-gemini|grok|kimi|llava|pixtral)/, /^gpt-?[4-9]/, /^o\d/, /vision|-vl\b|vl-/, /glm-?[\d.]+-?v\b/];
   function kind(model) {
     const m = String(model || "").trim().toLowerCase();
     if (!m || m === "auto") return "";
     if (/embed|bge-|^e5-|nomic/.test(m)) return "embed";
-    if (/^(claude|opus|sonnet|haiku|fable|gpt-?[4-9]|o\d|gemini|antigravity-gemini|grok|kimi|llava|pixtral)|vision|-vl\b|vl-|glm-?[\d.]+v\b|glm-?[\d.]+-?v\b/.test(m)) return "vision";
+    if (VISION.some((r) => r.test(m))) return "vision";
     return "text";
   }
   const KIND_LABEL = { text: "텍스트 전용", vision: "비전", embed: "임베딩" };
