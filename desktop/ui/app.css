@@ -1031,3 +1031,6 @@ input:is(:not([type]), [type="text"], [type="email"], [type="url"], [type="passw
 .ex-model, .tm-stepper, .tm-suffix, .ex-money { border: 0 !important; border-bottom: 1px solid var(--nc-accent) !important; border-radius: 0 !important; background: transparent !important; }
 .ex-money:focus-within, .ex-model:focus-within, .tm-stepper:focus-within, .tm-suffix:focus-within { border-bottom-width: 2px !important; }
 .tm-stepper button { border-left: 0 !important; }
+/* Popups move by their head (popup-drag.js). */
+dialog[open] :is(.dialog-head, .crew-popup-head, .ov-win-head, .ov-detail-head, .ov-recall-head, .git-dialog-head, .keys-head) { cursor: grab; }
+dialog.dragging, dialog.dragging * { cursor: grabbing !important; user-select: none; }
