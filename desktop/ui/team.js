@@ -1956,7 +1956,7 @@ window.ArkismTeams = (ctx) => {
     const cost = Number(k.cost_usd || 0);
     kp.append(tile(total.toLocaleString("en-US"), "실행", el("small", "", `전문가 ${direct} · 팀 ${meetings} · 자동화 ${autoRuns}`)),
       tile(ok + failed ? pct((ok / (ok + failed)) * 100) : "—", "성공률", el("small", "", `실패 ${failed}번`)),
-      tile(`≈${cost >= 100 ? `$${Math.round(cost).toLocaleString("en-US")}` : usd(cost)}`, "비용", el("small", "", total ? `실행당 평균 ${usd(cost / total)}` : ""), "", k.cost_estimated !== false ? est() : null),
+      tile(`≈${cost >= 100 ? `$${Math.round(cost).toLocaleString("en-US")}` : usd(cost)}`, "비용", el("small", "", total ? `실행당 평균 ${usd(cost / total)}` : "")), // ≈ marks the estimate (325:37545 has no 추정 badge)
       tile(String(k.waiting || 0), "사람 확인 대기", waitSub, k.waiting ? "amber" : ""));
     const kids = [kp, dayChart(byDay)];
     if (kind === "all" || kind === "agent") kids.push(expertTable(d.agents || [], direct));
@@ -2116,7 +2116,7 @@ window.ArkismTeams = (ctx) => {
     meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [], render: renderMeetings }, // 팀 보기 sits beside 새 회의 (208:19103)
     discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord },
     crewUsage: { title: "사용량", sub: () => "워크플로우·전문가·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.",
-      head: () => [button("새로고침", "ghost", null, loadUsage)], render: renderUsage }
+      headInTitle: true, head: () => [button("새로고침", "ghost", null, loadUsage)], render: renderUsage }
   };
   return { pages, _test: { inviteURL, PERM_BITS, modelLabel, handleFrom } };
 };

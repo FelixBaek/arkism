@@ -804,7 +804,7 @@ window.ArkismCrew = (ctx) => {
     const bits = [rec?.crew.name, cr.status === "failed" ? (Object.values(cr.nodes || {}).find((n) => n.status === "failed")?.error || readable(cr.summary).split(/[.。]/)[0]).slice(0, 40) : "", runProgress(run, rec), runTook(run), loops ? `되돌아감 ${loops}번` : "", ago(run.created_at)].filter(Boolean);
     t.append(el("strong", "", runRequest(cr) || readable(cr.summary) || rec?.crew.name || "실행"), el("small", "", bits.join(" · ")));
     row.append(t);
-    if (rec) row.append(button("상세 보기", "ghost", null, () => (onOpen ? onOpen() : openGraph(rec, { run }))));
+    if (rec) row.append(button("상세 보기", "ghost", null, () => (typeof onOpen === "function" ? onOpen() : openGraph(rec, { run })))); // .map(runRow) passes the index as onOpen
     return row;
   }
   let runStatus = "all";
@@ -1298,7 +1298,7 @@ window.ArkismCrew = (ctx) => {
     ed.graph = structuredClone(rec.crew.graph || defaultGraph("blank", rec.crew));
     ed.graph.nodes.forEach((n) => { n.config ||= {}; });
     Object.assign(ed, { sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false,
-      graphMode: !!opts.graphMode, review: !!opts.review, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, run: opts.run || null, runList: false });
+      graphMode: !!opts.graphMode, review: !!opts.review, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, run: opts.run || null, test: null, trigger: undefined, runList: false });
     if (opts.select && ed.graph.nodes.some((n) => n.id === opts.select)) ed.sel = opts.select;
     // The newest run of this workflow: each selected node's bottom row shows how that node did there.
     ed.last = null;
@@ -1329,7 +1329,15 @@ window.ArkismCrew = (ctx) => {
   }
   async function saveGraph() {
     try {
-      const saved = await save(ed.rec, { ...ed.rec.crew, graph: ed.graph });
+      const crew = { ...ed.rec.crew, graph: ed.graph };
+      const tr = ed.trigger;
+      if (tr?.kind === "schedule" && !parseCron(tr.cron)) { notice("시작 노드의 언제 칸 형식을 확인해 주세요."); return false; }
+      if (tr) {
+        // A newly set schedule or webhook starts on; one that was already there keeps its on/off.
+        if (tr.kind) { crew.trigger = tr.kind === "schedule" ? { kind: "schedule", cron: tr.cron.trim() } : { kind: "webhook", label: tr.label.trim() }; crew.enabled = ed.rec.crew.trigger ? !!ed.rec.crew.enabled : true; } else { delete crew.trigger; crew.enabled = false; }
+      }
+      const saved = await save(ed.rec, crew);
+      ed.trigger = undefined;
       ed.dirty = false;
       await reload();
       ed.rec = byId(saved.id) || saved;
@@ -1497,7 +1505,7 @@ window.ArkismCrew = (ctx) => {
     const g = ed.graph;
     const W = 220;
     const nodeEls = new Map();
-    const runNodes = ed.run?.crew_run?.nodes || {};
+    const runNodes = (ed.run || ed.test)?.crew_run?.nodes || {};
     const flagged = new Set((ed.review && ed.suggestions || []).flatMap((s) => [s.action?.node, s.action?.from, s.action?.to]).filter(Boolean));
     for (const n of g.nodes) {
       const st = runNodes[n.id];
@@ -1511,10 +1519,17 @@ window.ArkismCrew = (ctx) => {
       const expertRec = n.type === "expert" ? byId(n.config?.expert) : null;
       lead.append(expertRec ? avatarMark(expertRec.crew) : icon(NODES[n.type]?.icon || "stack"));
       const t = el("div", "");
-      const sub = st ? [NODE_LABEL[st.status] || st.status, st.runs > 1 ? `${st.runs}회째` : ""].filter(Boolean).join(" · ") : nodeSub(n);
+      // 테스트 실행 (859:59212–63707): a finished node shows the first line of its result in its subtitle.
+      const sub = ed.test && st ? (st.status === "done" && readable(st.output || "").split("\n")[0].slice(0, 28)) || stepState(n, st).split(" · ")[0]
+        : st ? [NODE_LABEL[st.status] || st.status, st.runs > 1 ? `${st.runs}회째` : ""].filter(Boolean).join(" · ") : nodeSub(n);
       t.append(el("strong", "", nodeTitle(n)), el("small", "dim", sub));
       head.append(lead, t);
-      if (st) head.append(el("i", `dot ${{ done: "ready", running: "warn", waiting: "warn", failed: "error" }[st.status] || ""}`));
+      if (ed.test && st) {
+        const mark = el("i", `g-state ${{ done: "done", running: "live", waiting: "live", failed: "fail" }[st.status] || ""}`);
+        if (st.status === "done") mark.append(icon("check"));
+        head.append(mark);
+        if (st.status === "done" && st.started_at && st.finished_at) box.append(el("small", "g-node-dur mono", secText(new Date(st.finished_at) - new Date(st.started_at))));
+      } else if (st) head.append(el("i", `dot ${{ done: "ready", running: "warn", waiting: "warn", failed: "error" }[st.status] || ""}`));
       box.append(head);
       for (const [k, v] of nodeSummary(n)) {
         const s = el("div", "g-node-field");
@@ -1634,6 +1649,8 @@ window.ArkismCrew = (ctx) => {
       menu.addEventListener("click", (ev) => ev.stopPropagation());
       stage.append(menu);
     }
+    const tb = testBadge();
+    if (tb) stage.append(tb);
     let side = inspector;
     if (ed.run) side = runPanel;
     else if (ed.review) side = reviewPanel;
@@ -1643,6 +1660,22 @@ window.ArkismCrew = (ctx) => {
       drawEdges(svg, labels, nodeEls);
       window.ArkismPerf?.note("canvas.render", performance.now() - t0, g.nodes.length);
     });
+  }
+  // 실행 완료 · 5.0초 · 5단계 (859:63707): the pill on top of the stage once the editor's test run has ended.
+  const secText = (ms) => (ms < 60000 ? `${(ms / 1000).toFixed(1)}초` : spanText(ms)); // 0.3초 (859:63707)
+  function testBadge() {
+    const cr = ed.test?.crew_run;
+    if (!cr || cr.status === "running") return null;
+    const steps = Object.entries(cr.nodes || {}).filter(([id, st]) => st.status === "done" && WORK(nodeIn(id) || {}));
+    const t = Object.values(cr.nodes || {}).flatMap((st) => [st.started_at, st.finished_at]).filter(Boolean).map((x) => +new Date(x));
+    const span = t.length ? secText(Math.max(...t) - Math.min(...t)) : "";
+    const ok = cr.status === "succeeded";
+    const b = el("button", `g-test-badge${ok ? "" : " warn"}`);
+    b.type = "button";
+    b.append(icon(ok ? "check" : "warning-circle"), [ok ? "실행 완료" : RUN_LABEL[cr.status] || cr.status, span, `${steps.length}단계`].filter(Boolean).join(" · "));
+    b.title = "실행 기록에서 보기";
+    b.addEventListener("click", (ev) => { ev.stopPropagation(); const r = ed.test; ed.test = null; ed.run = r; render(false); void pollRun(); });
+    return b;
   }
   const edgeKey = (e) => `${e.from}>${e.to}:${e.port || ""}`;
   // 노드 바닥 줄: the node's last result and ▷ 실행 (this node only); it shows on the selected or hovered node.
@@ -1883,7 +1916,12 @@ window.ArkismCrew = (ctx) => {
     title.addEventListener("input", () => { n.title = title.value; touch(); });
     box.append(field("이름", title));
     let pair = null; // n8n: 결과 받기 and 기다릴 최대 시간 share a row (1033:69906)
-    for (const [key, label, kind, opt, hint] of FIELDS[n.type] || []) {
+    const starts = ["start", "schedule", "webhook"].includes(n.type);
+    if (starts) triggerFields(box, n);
+    // 반복 (목록 위치 · 동시에 도는 개수) and 하위 워크플로우 (부를 워크플로우 · 넘길 일) sit side by side (1033:67xxx)
+    const row = ["loop", "subflow"].includes(n.type) ? el("div", "scope-fields") : null;
+    if (row) box.append(row);
+    for (const [key, label, kind, opt, hint] of starts ? [] : FIELDS[n.type] || []) {
       let i;
       if (kind === "radio") {
         const f = group(label, segment(opt, n.config[key] ?? opt[0][0], (v) => { n.config[key] = v; touch(); redraw(); }), hint);
@@ -1892,7 +1930,7 @@ window.ArkismCrew = (ctx) => {
       }
       if (kind === "select") i = select(opt, n.config[key] ?? opt[0][0]);
       else if (kind === "workflow") i = select([["", "고르세요"], ...workflows().filter((w) => w.id !== ed.rec.id).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (n.config[key] || "").replace(/^\$/, ""));
-      else if (kind === "area" || kind === "code") i = input(n.config[key], { tag: "textarea", rows: kind === "code" ? 12 : 4, cls: kind === "code" ? "code" : "" });
+      else if (kind === "code" || (kind === "area" && n.type !== "subflow")) i = input(n.config[key], { tag: "textarea", rows: kind === "code" ? 12 : 4, cls: kind === "code" ? "code" : "" });
       else i = input(n.config[key], { placeholder: typeof opt === "string" ? opt : "" });
       i.addEventListener("input", () => { n.config[key] = i.value; touch(); });
       i.addEventListener("change", () => {
@@ -1902,20 +1940,40 @@ window.ArkismCrew = (ctx) => {
         redraw();
       });
       if (pair) { pair.append(field(label, i)); if (hint) box.append(el("p", "meta", hint)); pair = null; continue; }
-      box.append(field(label, i, hint));
+      (row || box).append(field(label, i, hint));
     }
-    if (n.type === "start") box.append(kv([["시작 조건", ed.rec.crew.trigger ? triggerText(ed.rec.crew) : "정하지 않음"]]), el("p", "meta", "시작 조건은 워크플로우 설정에서 바꿔요."));
     sends(box, n);
     if (n.type === "code") box.append(el("p", "meta", "출력이 {\"ok\": true/false, …}면 통과·실패 갈래로 나뉘어요. 처음 한 번은 빌드에 1~2초, 30초 안에 끝나야 해요. 토큰은 들지 않아요."));
     if (n.type === "approval") box.append(el("p", "meta", "배포·게시처럼 되돌릴 수 없는 단계 바로 앞에 두세요. 답이 올 때까지 멈춰요."));
-    if (n.type === "subflow") box.append(el("p", "meta", "부른 워크플로우를 끝까지 돌리고 그 결과를 다음 단계에 넘겨요. 세 겹까지만 부를 수 있어요."));
+    if (n.type === "subflow") box.append(el("div", "wf-attn small", "자기 자신을 부를 수 없어요. 최대 세 겹까지 연결해요."));
     if (n.type === "n8n") box.append(el("p", "meta", "끝나면 알려줌을 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요."));
     if (WORK(n) && !ownerOf(ed.rec)) box.append(onlyRun(n));
+  }
+  // 시작 노드 팝업 (1033:66756): how the workflow starts. It edits a draft of the workflow's trigger that 저장 keeps.
+  function triggerFields(box, n) {
+    const now = ed.rec.crew.trigger;
+    const tr = (ed.trigger ||= { kind: now?.kind || "", cron: now?.cron || n.config.cron || "0 9 * * 1-5", label: now?.label || n.config.note || "" });
+    box.append(group("시작", segment([["", "직접 부름"], ["schedule", "일정"], ["webhook", "웹훅"]], tr.kind, (v) => { tr.kind = v; touch(); redraw(); })));
+    if (tr.kind === "schedule") {
+      const cron = input(tr.cron, { maxLength: 64, cls: "mono" });
+      const hintOf = () => { const x = nextRun(cron.value); return x ? `${cronText(cron.value)} · 다음 실행 ${new Intl.DateTimeFormat(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" }).format(x)}` : "형식: 분 시 일 월 요일 (예: 0 9 * * 1-5)"; };
+      const f = field("언제 (분 시 일 월 요일)", cron);
+      const hint = el("small", "dim", hintOf());
+      f.append(hint);
+      cron.addEventListener("input", () => { tr.cron = cron.value; if (n.type === "schedule") n.config.cron = cron.value; hint.textContent = hintOf(); touch(); });
+      box.append(f);
+    }
+    if (tr.kind === "webhook") {
+      const label = input(tr.label, { maxLength: 60, placeholder: "GitHub PR 열림" });
+      label.addEventListener("input", () => { tr.label = label.value; if (n.type === "webhook") n.config.note = label.value; touch(); });
+      box.append(field("웹훅 메모", label, "주소와 토큰은 서버에서 arkism-crew hook-url로 받아요"));
+    }
+    if (!tr.kind) box.append(el("p", "meta", `$${ed.rec.crew.handle}로 부르거나 실행을 눌렀을 때 시작해요.`));
   }
   const nodeKind = (n) => (n.type === "team" ? "팀 노드" : HUMAN_KIND[NODES[n.type]?.group] || "노드");
   const nodeLine = (n) => (IS_AI(n.type) || n.type === "team" ? nodeKind(n) : `${nodeKind(n)} · ${NODES[n.type]?.sub || ""}`);
   // The node window edits the node in place; 취소 (or ×, Esc) puts the graph back as it was when the window opened.
-  function openNodeDialog(n, before = { graph: structuredClone(ed.graph), dirty: ed.dirty }) {
+  function openNodeDialog(n, before = { graph: structuredClone(ed.graph), dirty: ed.dirty, trigger: structuredClone(ed.trigger) }) {
     if (!n) return;
     nodeDlg?.remove();
     let keep = false;
@@ -1959,7 +2017,7 @@ window.ArkismCrew = (ctx) => {
     dlg.addEventListener("close", () => {
       dlg.remove();
       if (nodeDlg === dlg) { nodeDlg = null; redraw = () => render(false); }
-      if (!keep) { ed.graph.nodes = before.graph.nodes; ed.graph.edges = before.graph.edges; ed.dirty = before.dirty; }
+      if (!keep) { ed.graph.nodes = before.graph.nodes; ed.graph.edges = before.graph.edges; ed.dirty = before.dirty; ed.trigger = before.trigger; }
       if (ed.sel === n.id || !keep) ed.sel = null;
       render(false);
     });
@@ -2485,14 +2543,15 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   function stopPolling() { if (ed.timer) { clearTimeout(ed.timer); ed.timer = null; } }
   async function pollRun() {
     stopPolling();
-    if (!ed.run || state.view !== "graph") return;
+    const key = ed.run ? "run" : "test"; // the run view, or the test run drawn on the editor
+    if (!ed[key]?.id || state.view !== "graph") return;
     try {
-      const r = await request(`/v1/crew/runs/${encodeURIComponent(ed.run.id)}?${query()}`);
-      if (!ed.run || r.id !== ed.run.id) return;
-      ed.run = r;
-      if (state.view === "graph") render(false);
+      const r = await request(`/v1/crew/runs/${encodeURIComponent(ed[key].id)}?${query()}`);
+      if (!ed[key] || r.id !== ed[key].id) return;
+      ed[key] = r;
+      if (state.view === "graph" && !nodeDlg) render(false);
     } catch (_) { /* a short outage: try again on the next tick */ }
-    const st = ed.run?.crew_run?.status;
+    const st = ed[key]?.crew_run?.status;
     if (st === "running" || st === "waiting") ed.timer = setTimeout(pollRun, 2500);
   }
   // 이번 실행 (198:2436 오른쪽): when and how it goes, the steps, why it went back, the workers, the budget.
@@ -2546,6 +2605,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     head.append(el("small", "", "이번 실행"), el("strong", "", `${hhmm(run.created_at)} 시작 · ${RUN_STATE[cr.status] || cr.status || ""}`));
     if (req) head.append(el("small", "", `“${req.slice(0, 60)}”`));
     box.append(head);
+    const again = rerunOf();
+    if (again) box.append(el("h4", "", "다시 실행"), kv([["시작한 곳", again.from || "—"], ["다시 쓰는 결과", `${again.reused}단계 (앞선 실행)`], ["설정", "실패했을 때와 같아요"]]),
+      el("h4", "", "끝나면"), el("p", "meta", "새 결과가 실행 기록에 쌓이고, 실패 기록도 함께 남아요."));
     const attn = ed.runList ? null : runAttn(run, pollRun); // the list view shows it above the table
     if (attn) box.append(attn);
     const steps = runSteps(cr);
@@ -2630,8 +2692,17 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       cr = { ...cr, loops: {}, nodes: Object.fromEntries(Object.entries(cr.nodes || {}).filter(([id]) => !again.has(id))) };
     }
     const r = await startRun(ed.rec, runRequest(cr), null, cr);
-    if (r) { ed.run = r; render(false); void pollRun(); }
+    if (!r) return;
+    // 실패한 곳부터 재실행 (198:6994): the list of steps, where it started again and how many results it reuses.
+    const work = levels(ed.graph).flat().filter(WORK);
+    const at = work.findIndex((n) => cr.nodes?.[n.id]?.status !== "done");
+    ed.rerun = { id: r.id, from: at < 0 ? "" : `${at + 1} · ${nodeTitle(work[at])}`, reused: work.filter((n) => cr.nodes?.[n.id]?.status === "done").length };
+    ed.run = r;
+    ed.runList = true;
+    render(false);
+    void pollRun();
   }
+  const rerunOf = () => (ed.rerun && ed.run && ed.rerun.id === ed.run.id ? ed.rerun : null);
   // 목록으로 보기 (198:5360 · 198:6908): the same run as a table of steps instead of the graph.
   function runList() {
     const run = ed.run;
@@ -2642,17 +2713,21 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       if (cr.status === "failed") attn.append(button("실패한 곳부터 다시", "primary", null, retryRun));
       page.append(attn);
     }
-    page.append(el("h4", "", "실행 단계"));
+    const again = rerunOf();
+    page.append(el("h4", "", again ? "현재 단계" : "실행 단계"));
     const table = el("div", "wf-steptable");
     const headRow = el("div", "wf-steprow head");
     headRow.append(el("span", "", "단계"), el("span", "", "결과"), el("span", "", "시간"));
     table.append(headRow);
-    runSteps(cr).filter(WORK).forEach((n, i) => {
+    runSteps(cr).filter(WORK).forEach((n, i, all) => {
       const st = cr.nodes[n.id];
       const row = el("div", `wf-steprow st-${st.status}`);
       const name = el("span", "");
       name.append(el("strong", "", `${i + 1} · ${nodeTitle(n)}${st.runs > 1 ? ` · ${st.runs}회째` : ""}`));
       if (st.error) name.append(el("small", "", st.error));
+      else if (again && st.status === "done" && !st.started_at) name.append(el("small", "", "앞선 실행 결과를 사용해요."));
+      else if (again && st.status === "running") name.append(el("small", "", "같은 설정으로 다시 실행하고 있어요."));
+      else if (again && st.status === "pending" && i) name.append(el("small", "", `${nodeTitle(all[i - 1])}가 끝나면 이어서 실행해요.`));
       else if (st.status === "pending") name.append(el("small", "", "앞 단계가 끝나면 실행해요."));
       if (st.status === "done" && ["succeeded", "failed", "stopped"].includes(cr.status)) name.append(button("여기부터 다시", "ghost", null, () => retryRun(n.id)));
       row.append(name, el("span", `wf-badge small ${{ failed: "fail", waiting: "wait", running: "live", pending: "line", skipped: "line" }[st.status] || ""}`, st.status === "pending" ? "실행 전" : stepState(n, st).split(" · ")[0]), el("span", "mono", nodeDur(st) || "—"));
@@ -2661,6 +2736,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     page.append(table);
     const loops = Object.values(cr.loops || {}).reduce((a, b) => a + b, 0);
     if (loops) page.append(el("p", "meta", `되돌아가는 선을 ${loops}번 따라가 앞 단계를 다시 돌았어요.`));
+    if (again) page.append(el("p", "meta", "새 결과가 도착하면 실행 기록에 표시돼요."));
     return page;
   }
 
@@ -2695,7 +2771,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const text = await askTask(ed.rec);
     if (text === null) return;
     const r = await startRun(ed.rec, text);
-    if (r) { ed.run = r; render(false); void pollRun(); }
+    if (r) { ed.test = r; render(false); void pollRun(); }
   }
 
   function graphHead() {
@@ -2711,8 +2787,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const revert = button("되돌리기", "ghost", null, () => { ed.dirty = false; openGraph(byId(rec.id) || rec, { graphMode: ed.graphMode }); });
     revert.disabled = !ed.dirty;
     const review = button(`구조 검토${ed.suggestions?.length ? ` · ${ed.suggestions.length}` : ""}`, ed.review ? "active" : "", "sparkle", () => { ed.review = !ed.review; render(false); });
-    const trial = button("실행", "", "play", runFromEditor);
-    trial.disabled = ed.dirty;
+    const testing = ["running", "waiting"].includes(ed.test?.crew_run?.status);
+    const trial = button(testing ? "실행 중…" : ed.test ? "다시 실행" : "실행", "", "play", runFromEditor);
+    trial.disabled = ed.dirty || testing;
     trial.title = ed.dirty ? "저장한 뒤에 실행할 수 있어요" : "저장된 워크플로우로 지금 한 번 돌려요";
     const settings = button("설정", "ghost", "gear-six", () => openSettings(ed.rec, null, true));
     settings.title = "이름·$이름·워커 기본 모델·멈추는 조건·일정·웹훅·배경 사진";
@@ -4286,7 +4363,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       workers: { title: () => "전문가", count: () => `${agents().length}명`,
         sub: () => "",
         bare: () => true, head: () => [], render: renderWorkers },
-      graph: { title: () => (ed.rec ? `${ed.rec.crew.name} · ${ed.run ? "실행" : "워크플로우 편집"}` : "워크플로우 편집"), sub: pageSub, head: graphHead, render: renderGraph }
+      graph: { title: () => (rerunOf() ? "실패한 곳부터 재실행" : ed.rec ? `${ed.rec.crew.name} · ${ed.run ? "실행" : "워크플로우 편집"}` : "워크플로우 편집"), sub: pageSub, headInTitle: true, head: graphHead, render: renderGraph }
     },
     // exported for tests in a browser console
     _test: { parseCron, nextRun, cronText, levels, wouldCycle, cliOf, ruleChecks, simpleNode, portsOf }

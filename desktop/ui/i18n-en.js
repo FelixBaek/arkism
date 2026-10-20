@@ -5860,5 +5860,27 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "도구 {0} 추가": "Added tool {0}",
   "도구 {0} 뺌": "Removed tool {0}",
   "한 달 한도 ${0} → ${1}": "Monthly limit ${0} → ${1}",
-  "1회 한도 ${0} → ${1}": "Per-run limit ${0} → ${1}"
+  "1회 한도 ${0} → ${1}": "Per-run limit ${0} → ${1}",
+  "시작 노드의 언제 칸 형식을 확인해 주세요.": "Check the format of the start node's When field.",
+  "실행 완료": "Run finished",
+  "실행 기록에서 보기": "View in run history",
+  "자기 자신을 부를 수 없어요. 최대 세 겹까지 연결해요.": "It can't call itself. Up to three levels deep.",
+  "웹훅 메모": "Webhook note",
+  "시작한 곳": "Started from",
+  "다시 쓰는 결과": "Reused results",
+  "실패했을 때와 같아요": "Same as when it failed",
+  "끝나면": "When it ends",
+  "새 결과가 실행 기록에 쌓이고, 실패 기록도 함께 남아요.": "The new result goes into run history, and the failed run stays too.",
+  "현재 단계": "Current steps",
+  "앞선 실행 결과를 사용해요.": "Uses the earlier run's result.",
+  "같은 설정으로 다시 실행하고 있어요.": "Running again with the same settings.",
+  "새 결과가 도착하면 실행 기록에 표시돼요.": "New results show in run history when they arrive.",
+  "실행 중…": "Running…",
+  "실패한 곳부터 재실행": "Rerun from the failure"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} · 다음 실행 {1}": "{0} · next run {1}",
+  "${0}로 부르거나 실행을 눌렀을 때 시작해요.": "Starts when called as ${0} or when you press Run.",
+  "{0}단계 (앞선 실행)": "{0} steps (earlier run)",
+  "{0}가 끝나면 이어서 실행해요.": "Runs after {0} finishes."
 });

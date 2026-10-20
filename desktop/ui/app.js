@@ -1135,7 +1135,10 @@
     const box = $("#head-actions");
     const refresh = button("새로고침", "", "arrows-clockwise", loadAll);
     const pageView = pages.views[state.view] || crew.pages[state.view];
-    if (pageView) {
+    if (pageView?.headInTitle) { // Figma v4 (198:2350 · 325:37545): the buttons sit at the right of the title row, not in the tab bar
+      box.replaceChildren();
+      headExtras({ count: $("#title-count").textContent, aside: pageView.head() });
+    } else if (pageView) {
       box.replaceChildren(...pageView.head());
     } else if (state.view === "crew") {
       box.replaceChildren(...crew.head());
