@@ -359,6 +359,11 @@ window.ArkismCrew = (ctx) => {
     i.setAttribute("list", "crew-models");
     return i;
   }
+  // The same live list as a plain choice (자동화 팝업): "" = the fallback, "auto" = the router picks; a saved model off the list stays choosable.
+  function modelSelect(value, emptyLabel) {
+    const ids = [...new Set([...(models?.enabledModels() || []), ...(value && value !== "auto" ? [value] : [])])];
+    return select([["", emptyLabel], ["auto", "자동 — 라우터가 일마다 골라요"], ...ids.map((m) => [m, m])], value || "");
+  }
   function modelList() {
     const dl = el("datalist");
     dl.id = "crew-models";
@@ -577,8 +582,8 @@ window.ArkismCrew = (ctx) => {
   let autoKit = null;
   const getAuto = () => (autoKit ||= window.ArkismAutomation({
     state, el, icon, button, notice, request, query, byId, kit, NODES, IS_AI, WORK, UNTITLED, RUN_LABEL,
-    levels, nodeTitle, stepCount, isBack, modelOf, modelMark, avatarMark, personas, workflows, ownerOf, categories, ruleChecks, waitingRuns,
-    cronText, nextRun, parseCron, when, switchEl, copyButton, coverCredit, coverPicker, input, select, modelInput, freeHandle, layoutGraph, defaultGraph,
+    levels, nodeTitle, stepCount, isBack, modelOf, modelMark, avatarMark, personas, agents, workflows, ownerOf, categories, ruleChecks, waitingRuns,
+    cronText, nextRun, parseCron, when, switchEl, copyButton, coverCredit, coverPicker, input, select, modelInput, modelSelect, freeHandle, layoutGraph, defaultGraph,
     save, reload, archive, remove, errorText, startRun, decide, stopRun, askTask, openGraph, runRow, runRequest, readable, nodeDur, spanText, runMs, runTookText: runTook, ago,
     duplicate: (r) => dupButton(r).click(),
     refreshRuns: async () => { recent = null; await loadRecent(); },

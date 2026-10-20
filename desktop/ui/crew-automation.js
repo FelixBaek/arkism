@@ -5,7 +5,6 @@ window.ArkismAutomation = (h) => {
   const { state, el, icon, button, notice, request, query, byId, kit } = h;
   const popup = window.ArkismCrewPopup({ el, button });
   const NOTIFY_KINDS = [["discord", "디스코드"], ["telegram", "텔레그램"], ["slack", "슬랙"]];
-  const NOTIFY_WHEN = [["events", "시작 · 끝 · 실패"], ["approval", "사람 확인이 필요할 때만"], ["report", "끝나면 보고서 올리기"]];
   const MOMENTS = [["start", "시작"], ["step", "단계마다"], ["approval", "확인 필요"], ["fail", "실패"], ["end", "끝"]];
   const DEFAULT_MOMENTS = ["start", "approval", "fail", "end"];
   const DEFAULT_CRON = "0 9 * * 1-5";
@@ -412,7 +411,29 @@ window.ArkismAutomation = (h) => {
 
     // 언제 실행: 직접 부르기 is always on; 일정 and 웹훅 share the workflow's one trigger.
     function whenSection() {
-      const s = section("clock-counter-clockwise", "언제 실행", link("+ 시작 조건 추가", () => { if (d.trigger?.kind !== "schedule" || !d.enabled) setTrigger("schedule", true); draw(); }));
+      // Before, the link only switched 일정 on, so with 일정 already on it did nothing: now it lists every way to start.
+      const add = link("+ 시작 조건 추가", () => triggerMenu());
+      const s = section("clock-counter-clockwise", "언제 실행", add);
+      s.querySelector(".auto-sec-head").classList.add("auto-chiprow");
+      function triggerMenu() {
+        const old = document.querySelector(".auto-menu");
+        if (old) { old.remove(); return; }
+        const m = el("div", "auto-menu right");
+        const close = () => { m.remove(); document.removeEventListener("click", away, true); };
+        const away = (e) => { if (!m.contains(e.target) && e.target !== add) close(); };
+        const item = (label, sub, fn, cls = "") => { const b = el("button", cls); b.type = "button"; b.append(el("span", "", label), el("small", "", sub)); b.addEventListener("click", () => { close(); fn(); }); m.append(b); };
+        const name = (k) => (k === "schedule" ? "일정" : "웹훅");
+        const turn = async (kind, other) => {
+          if (on(kind)) { notice(`${name(kind)}은 이미 켜져 있어요.`); return; }
+          if (on(other) && !await ask(`${name(other)}을 끄고 ${name(kind)}으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.`)) return;
+          setTrigger(kind, true); draw();
+        };
+        item("일정", on("schedule") ? "켜져 있어요" : "정해 둔 요일·시간에 시작", () => turn("schedule", "webhook"), on("schedule") ? "on" : "");
+        item("웹훅", on("webhook") ? "켜져 있어요" : "주소로 요청이 오면 시작", () => turn("webhook", "schedule"), on("webhook") ? "on" : "");
+        item("이벤트", "GitHub·메일·폴더 · 준비 중", () => notice("이벤트로 시작하기는 아직 준비 중이에요. 웹훅으로 받을 수 있어요."), "soon");
+        s.querySelector(".auto-sec-head").append(m);
+        setTimeout(() => document.addEventListener("click", away, true));
+      }
       const list = el("div", "auto-box");
       const trig = () => d.trigger?.kind;
       const on = (k) => trig() === k && !!d.enabled;
@@ -473,7 +494,7 @@ window.ArkismAutomation = (h) => {
             const grp = el("span", "auto-grp");
             for (const n of nodes) {
               const c = el("span", "auto-node");
-              const p = byId(n.config?.persona);
+              const p = byId(n.type === "expert" ? n.config?.expert : n.config?.persona);
               c.append(IS_AI(n) && p ? h.avatarMark(p.crew) : icon(h.NODES[n.type]?.icon || "play"), h.nodeTitle(n));
               grp.append(c);
             }
@@ -543,7 +564,7 @@ window.ArkismAutomation = (h) => {
         const row = el("div", "auto-step");
         const top = el("div", "auto-step-top");
         top.append(el("span", "mono auto-idx", String(i + 1).padStart(2, "0")));
-        const p = byId(n.config?.persona);
+        const p = byId(n.type === "expert" ? n.config?.expert : n.config?.persona);
         const face = el("span", "auto-face");
         face.append(IS_AI(n) ? (p ? h.avatarMark(p.crew) : h.modelMark(h.modelOf(n, d))) : icon(h.NODES[n.type]?.icon || "play"));
         const who = el("div", "auto-step-who");
@@ -553,7 +574,9 @@ window.ArkismAutomation = (h) => {
         const kind = el("small", "");
         if (creating && IS_AI(n)) {
           const chosen = picked.has(n.id);
-          const pick = h.select([...(chosen ? [] : [["__pick", "맡을 전문가 고르기"]]), ["", "한 번 호출"], ["agent", "전문가 (직접 쓰기)"], ...h.personas().map((x) => [x.id, `전문가 · ${x.crew.name}`])], chosen ? (n.type === "ai_once" ? "" : n.config.persona || "agent") : "__pick");
+          // The 전문가 menu's own experts (crew type "agent"); the old list showed every saved persona instead.
+          const cur = n.type === "ai_once" ? "" : n.type === "expert" ? `x:${n.config.expert}` : n.config.persona ? `p:${n.config.persona}` : "agent";
+          const pick = h.select([...(chosen ? [] : [["__pick", "맡을 전문가 고르기"]]), ...h.agents().map((x) => [`x:${x.id}`, x.crew.name]), ...(cur.startsWith("p:") ? [[cur, `페르소나 · ${p?.crew.name || "?"}`]] : []), ["agent", "AI 에이전트 (직접 쓰기)"], ["", "AI 한 번 호출"]], chosen ? cur : "__pick");
           pick.classList.add("auto-pick");
           if (!chosen) face.classList.add("blank");
           pick.setAttribute("aria-label", "맡을 전문가");
@@ -561,8 +584,9 @@ window.ArkismAutomation = (h) => {
             picked.add(n.id);
             const key = goalKey(n);
             const text = n.config[key] || "";
-            delete n.config.goal; delete n.config.prompt; delete n.config.persona;
-            if (pick.value === "") n.type = "ai_once"; else { n.type = "ai"; if (pick.value !== "agent") n.config.persona = pick.value; }
+            delete n.config.goal; delete n.config.prompt; delete n.config.persona; delete n.config.expert;
+            const v = pick.value;
+            if (v === "") n.type = "ai_once"; else if (v.startsWith("x:")) { n.type = "expert"; n.config.expert = v.slice(2); } else { n.type = "ai"; if (v.startsWith("p:")) n.config.persona = v.slice(2); }
             n.config[goalKey(n)] = text;
             touch(); paint();
           });
@@ -571,10 +595,10 @@ window.ArkismAutomation = (h) => {
         who.append(title, kind);
         top.append(face, who, el("span", "grow"));
         if (IS_AI(n)) {
-          const model = h.modelInput(n.config.model || "", d.model || "deepseek-v4-flash");
+          const model = h.modelSelect(n.config.model || "", n.type === "expert" && p?.crew.model ? `전문가 모델 · ${p.crew.model}` : `기본 · ${d.model || "자동"}`);
           model.classList.add("auto-model");
           model.setAttribute("aria-label", "모델");
-          model.addEventListener("input", () => { n.config.model = model.value; touch(); });
+          model.addEventListener("change", () => { if (model.value) n.config.model = model.value; else delete n.config.model; touch(); });
           top.append(creating ? model : el("span", "mono auto-model-text", h.modelOf(n, d)));
         }
         const only = button("이 단계만", "ghost small", "play", () => trial(n.id, false));
@@ -639,7 +663,8 @@ window.ArkismAutomation = (h) => {
       const head2 = el("div", "auto-sec-head");
       const t = el("h3", "");
       t.append(icon("chat-text"), "진행 알림");
-      head2.append(t, link("+ 채널 연결", () => { (d.notify ||= {}).channels = [...(d.notify.channels || []), { kind: "discord", channel: "", when: "events" }]; touch(); paint(); }), el("span", "grow"), el("small", "auto-dim", "진행 상황을 어디로 보낼지 정해요 · 봇은 설정 › 메신저에서 연결해요"));
+      const addChannel = () => { setNotify((n) => { n.channels = [...(n.channels || []), { kind: "telegram", channel: "", when: "events" }]; }); paint(); };
+      head2.append(t, link("+ 보낼 곳 추가", addChannel));
       const list = el("div", "auto-box");
       const channels = () => d.notify?.channels || [];
       const setNotify = (fn) => { d.notify ||= {}; fn(d.notify); if (!d.notify.channels?.length && !d.notify.moments) delete d.notify; touch(); };
@@ -699,12 +724,14 @@ window.ArkismAutomation = (h) => {
         }
         return { rows, count: mine.length };
       }
+      // 보낼 곳 (one line per channel: 메신저 · 채널 · 빼기) and 알림 시점 (a check list). The per-channel 시작 방식 choice
+      // (events / approval / report) said the same as 알림 시점, so it is no longer shown; a saved value is kept as it is.
       function paint() {
         list.replaceChildren();
         const bot = botRows();
-        if (!channels().length && !bot.count) {
+        if (!channels().length) {
           const empty = el("div", "auto-row");
-          empty.append(el("span", "auto-dim", "아직 연결한 채널이 없어요 · 디스코드·텔레그램·슬랙"), el("span", "grow"), pill("연결하기", () => { setNotify((n) => { n.channels = [{ kind: "discord", channel: "", when: "events" }]; }); paint(); }));
+          empty.append(el("span", "auto-key", "보낼 곳"), el("span", "auto-dim", "아직 없어요 · 텔레그램·슬랙·디스코드"), pill("추가", addChannel));
           list.append(empty);
         }
         channels().forEach((c, i) => {
@@ -715,30 +742,32 @@ window.ArkismAutomation = (h) => {
           const ch = h.input(c.channel, { maxLength: 80, placeholder: c.kind === "telegram" ? "나에게" : "#채널" });
           ch.setAttribute("aria-label", "채널");
           ch.addEventListener("input", () => { c.channel = ch.value.trim(); touch(); });
-          const when = h.select(NOTIFY_WHEN, c.when);
-          when.setAttribute("aria-label", "시작 방식");
-          when.addEventListener("change", () => { c.when = when.value; touch(); });
           const del = el("button", "icon-btn plain");
           del.type = "button";
-          del.setAttribute("aria-label", "채널 빼기");
+          del.setAttribute("aria-label", "보낼 곳 빼기");
           del.append(icon("x"));
           del.addEventListener("click", () => { setNotify((n) => { n.channels = channels().filter((_, j) => j !== i); if (!n.channels.length) delete n.channels; }); paint(); });
-          r.append(kind, ch, el("span", "grow"), ...(c.kind === "discord" ? [el("small", "auto-dim", "준비 중")] : []), when, del);
+          r.append(el("span", "auto-key", i ? "" : "보낼 곳"), kind, ch, el("span", "grow"), ...(c.kind === "discord" ? [el("small", "auto-dim", "디스코드 알림은 준비 중")] : []), del);
           list.append(r);
         });
-        list.append(...bot.rows);
         const mo = el("div", "auto-row");
-        const chips = el("span", "auto-chips");
+        const checks = el("span", "auto-checks");
         const cur = () => d.notify?.moments || DEFAULT_MOMENTS;
         for (const [k, label] of MOMENTS) {
-          const b = el("button", `auto-pill toggle${cur().includes(k) ? " on" : ""}`, `${cur().includes(k) ? "✓ " : ""}${label}`);
-          b.type = "button";
-          b.setAttribute("aria-pressed", String(cur().includes(k)));
-          b.addEventListener("click", () => { const next = cur().includes(k) ? cur().filter((x) => x !== k) : MOMENTS.map(([m]) => m).filter((m) => m === k || cur().includes(m)); setNotify((n) => { n.moments = next; if (same(next, DEFAULT_MOMENTS)) delete n.moments; }); paint(); });
-          chips.append(b);
+          const lb = el("label", "auto-check");
+          const box = el("input");
+          box.type = "checkbox";
+          box.checked = cur().includes(k);
+          box.addEventListener("change", () => { const next = MOMENTS.map(([m]) => m).filter((m) => (m === k ? box.checked : cur().includes(m))); setNotify((n) => { n.moments = next; if (same(next, DEFAULT_MOMENTS)) delete n.moments; }); });
+          lb.append(box, label);
+          checks.append(lb);
         }
-        mo.append(el("span", "auto-key", "알림 시점"), el("span", "grow"), chips);
+        mo.append(el("span", "auto-key", "알림 시점"), checks);
         list.append(mo);
+        if (bot.rows.length) {
+          list.append(el("div", "auto-subhead", "채널에서 부르기 · 봇은 설정 › 메신저에서 연결해요"));
+          list.append(...bot.rows);
+        }
       }
       if (!creating) request(`/v1/discord?${query()}`).then((r) => { st.bots = (r.bots || []).map(botOf); }, () => { st.bots = []; }).then(() => { if (alive()) paint(); });
       paint();
@@ -752,9 +781,11 @@ window.ArkismAutomation = (h) => {
       const list = el("div", "auto-box");
       const draw = () => {
         list.replaceChildren();
-        const modelText = el("span", "");
-        const paintModel = () => { modelText.replaceChildren(el("span", "mono", d.model || "노드마다 정해요"), el("span", "auto-dim", d.model ? " · 모델을 비워 둔 AI 단계가 이걸 써요" : creating ? " · 기본값, 단계마다 바꿀 수 있어요" : " · 단계마다 정해요")); };
-        paintModel();
+        const model = h.modelSelect(d.model || "", "단계마다 정해요");
+        model.setAttribute("aria-label", "기본 모델");
+        model.addEventListener("change", () => { d.model = model.value; touch(); draw(); });
+        const modelRow = el("span", "auto-model-row");
+        modelRow.append(model, el("span", "auto-dim", d.model ? "모델을 비워 둔 AI 단계가 이걸 써요" : "단계마다 바꿀 수 있어요"));
         const backs = (d.graph.edges || []).filter(h.isBack);
         const stops = [d.limits?.max_minutes ? `최대 ${d.limits.max_minutes}분` : "", d.limits?.max_steps ? `단계 ${d.limits.max_steps}번` : "", backs.length ? `되돌아가는 선은 ${Math.max(...backs.map((e) => e.max))}번까지` : ""].filter(Boolean).join(" · ") || "정하지 않음";
         const editRow = (label, valueEl, mk) => {
@@ -764,13 +795,7 @@ window.ArkismAutomation = (h) => {
           }));
           return r;
         };
-        list.append(editRow("모델", modelText, (done) => {
-          const m = h.modelInput(d.model || "", "deepseek-v4-flash");
-          m.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); m.blur(); } });
-          m.addEventListener("blur", () => { d.model = m.value.trim(); touch(); done(); });
-          setTimeout(() => m.focus());
-          return m;
-        }), editRow("멈추는 조건", el("span", "", stops), (done) => {
+        list.append(valueRow("기본 모델", modelRow), editRow("멈추는 조건", el("span", "", stops), (done) => {
           const wrap = el("span", "auto-limits");
           const mins = h.input(d.limits?.max_minutes || "", { type: "number", min: 1, max: 1440, placeholder: "30" });
           const steps = h.input(d.limits?.max_steps || "", { type: "number", min: 1, max: 500, placeholder: "60" });
@@ -793,13 +818,17 @@ window.ArkismAutomation = (h) => {
     // 관리: 복제 · 보관 · 지우기 (the old button row), plus the one-line call hint.
     function manageSection() {
       const s = section("gear-six", "관리");
-      const rows = [
-        ["설정", "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요", () => leave(() => h.openSettings(rec))],
+      // One row: the four used to take a row each, and 예전 설정 창 repeats what this window already edits.
+      const acts = [
         ["복제", "같은 단계로 새 자동화를 만들어요", () => leave(() => h.duplicate(rec))],
         ["보관", `목록에서 숨기고 $${base.handle} 부르기를 멈춰요`, async () => { if (dirty() && !await ask("저장하지 않은 변경은 사라져요. 계속할까요?")) return; await h.archive(rec); if (!h.byId(rec.id) || h.byId(rec.id).archived) leaveSilently(); }],
-        ["지우기", "정의를 영구히 지워요 · 지난 실행 기록은 남아요", async () => { if (await h.remove(rec)) leaveSilently(); }]
+        ["지우기", "정의를 영구히 지워요 · 지난 실행 기록은 남아요", async () => { if (await h.remove(rec)) leaveSilently(); }],
+        ["예전 설정 창", "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요", () => leave(() => h.openSettings(rec))]
       ];
-      s.append(box(...rows.map(([label, sub, fn]) => valueRow(label, el("span", "", sub), pill(label, fn)))));
+      const r = el("div", "auto-row");
+      r.append(el("span", "auto-dim", "지우기는 정의만 지워요 · 지난 실행 기록은 남아요"));
+      for (const [label, sub, fn] of acts) { const b = pill(label, fn); b.title = sub; r.append(b); }
+      s.append(box(r));
       return s;
     }
 

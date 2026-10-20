@@ -168,6 +168,8 @@ textarea.tm-input { height: auto; padding: 9px 12px; resize: none; }
 .tm-svg-cap { fill: var(--nc-quiet); font: 400 8px var(--mono); }
 .tm-svg-pill { fill: var(--nc-text); }
 .tm-svg-pilltext { fill: var(--nc-canvas); font: 500 7px var(--sans); }
+.tm-svg-spot { fill: color-mix(in srgb, var(--nc-accent) 14%, transparent); stroke: var(--nc-accent); stroke-width: 1; stroke-opacity: .5; pointer-events: none; } /* 순서대로: the walking highlight */
+.tm-svg-ray { stroke-width: 1.6; } /* 진행자 지명: the arrow that grows to the one picked */
 .tm-ending { padding-top: 18px; border-top: 1px solid var(--nc-line); }
 .tm-mode-wrap { display: flex; flex-direction: column; gap: 18px; }
 .tm-stepper, .tm-suffix { display: flex; align-items: stretch; height: 36px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-raised); overflow: hidden; }

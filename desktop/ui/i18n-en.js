@@ -5713,3 +5713,67 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, {
   "AI 단계 {0}개 · 펼쳐서 바로 고치거나 따로 시험해요": "{0} AI steps · open to edit or try them on their own"
 });
+// 자동화 팝업 정리 (시작 조건 메뉴 · 보낼 곳 · 모델 고르기 · 관리 한 줄)
+Object.assign(window.ArkismI18nEN.strings, {
+  "정해 둔 요일·시간에 시작": "Starts on the days and times you set",
+  "주소로 요청이 오면 시작": "Starts when a request hits the address",
+  "GitHub·메일·폴더 · 준비 중": "GitHub · mail · folders · coming soon",
+  "AI 에이전트 (직접 쓰기)": "AI agent (write it yourself)",
+  "+ 보낼 곳 추가": "+ Add destination",
+  "보낼 곳": "Send to",
+  "아직 없어요 · 텔레그램·슬랙·디스코드": "None yet · Telegram · Slack · Discord",
+  "보낼 곳 빼기": "Remove destination",
+  "디스코드 알림은 준비 중": "Discord notices coming soon",
+  "채널에서 부르기 · 봇은 설정 › 메신저에서 연결해요": "Call from a channel · connect bots in Settings › Messengers",
+  "단계마다 정해요": "Set per step",
+  "모델을 비워 둔 AI 단계가 이걸 써요": "AI steps with no model use this",
+  "단계마다 바꿀 수 있어요": "Each step can change it",
+  "예전 설정 창": "Old settings window",
+  "지우기는 정의만 지워요 · 지난 실행 기록은 남아요": "Delete removes the definition only · past runs stay"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}은 이미 켜져 있어요.": "{0} is already on.",
+  "{0}을 끄고 {1}으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.": "Turn off {0} and switch to {1}? Only one of schedule and webhook can be on.",
+  "페르소나 · {0}": "Persona · {0}",
+  "전문가 모델 · {0}": "Expert model · {0}",
+  "기본 · {0}": "Default · {0}"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "자주 여는 회의의 진행 방법을 저장해 두고, 회의를 열 때 골라요": "Save how your usual meetings go, then pick one when you open a meeting",
+  "+ 템플릿 만들기": "+ Make a template",
+  "회의 템플릿 고치기": "Edit meeting template",
+  "새 회의 템플릿": "New meeting template",
+  "회의를 열 때 이 템플릿을 고르면, 아래 내용이 그 회의에만 들어가요.": "Pick this template when you open a meeting and what's below goes into that meeting only.",
+  "템플릿을 넣었어요. 팀을 저장하면 반영돼요.": "Template added. Save the team to make it stick.",
+  "이름을 적어 주세요": "Write a name",
+  "예: 코드 리뷰, 주간 회고, 시안 검토": "e.g. Code review, Weekly retro, Mockup review",
+  "템플릿 이름": "Template name",
+  "예:\n- 바뀐 화면을 접근성·디자인 토큰 기준으로 봐요\n- 한 사람이 문제를 3개까지 말해요\n- 끝에 고칠 목록을 중요한 순서로 정리해요": "e.g.\n- Check the changed screens for accessibility and design tokens\n- Each person raises up to 3 problems\n- At the end, list what to fix, most important first",
+  "이 회의의 진행 방법": "How this meeting goes",
+  "회의를 열 때마다 적어요": "typed each time you open one",
+  "이 템플릿의 진행 방법": "This template's steps",
+  "여기 적은 글": "what you write here",
+  "팀에 넣어 둔 자료": "the team's material",
+  "팀 설정대로": "Same as the team",
+  "끝나는 조건을 이 템플릿만 따로 정하기": "Set its own ending for this template",
+  "끝나는 조건 따로 정하기": "Set its own ending",
+  "최대 라운드 (1~10)": "Max rounds (1–10)",
+  "회의를 열 때 목록에서 고르는 이름이에요": "The name you pick from the list when you open a meeting",
+  "주제는 회의를 열 때 따로 적어요. 여기에는 매번 같은 진행 순서·볼 기준·결과 모양을 적어요.": "The topic is typed when you open the meeting. Here, write what stays the same: the steps, what to check, the shape of the result.",
+  "회의가 시작되면 서기가 이 순서로 읽고 브리핑해요": "When the meeting starts, the scribe reads these in order and briefs everyone",
+  "이 템플릿만 바꿀 설정": "Settings only this template changes",
+  "비워 두면 팀 설정대로 해요. 이 템플릿으로 연 회의에서만 바뀌어요.": "Leave empty to follow the team. Changes apply only to meetings opened with this template.",
+  "어떤 회의인지 말하면 이름·진행 방법을 채워 드려요": "Say what the meeting is for and it fills in the name and steps",
+  "어떤 회의에 쓸 템플릿인가요? 무엇을 정하고, 결과를 어떤 모양으로 받고 싶은지 말해 주세요.": "What meeting is this template for? Say what should be decided and what shape the result should take.",
+  "예: PR을 올리기 전에 보안·테스트를 점검하는 회의": "e.g. a meeting that checks security and tests before a PR",
+  "어떤 회의인지": "What meeting it is",
+  "코드 리뷰 회의": "Code review meeting",
+  "주간 회고": "Weekly retro",
+  "시안 검토 후 고칠 목록": "Mockup review into a fix list",
+  "어떤 회의인지 한 줄 써 주세요.": "Write one line about the meeting.",
+  "진행 방법": "Steps"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}을 제안해요. 버튼 아래 보라색 목록에서 보고 적용하세요.": "Suggests {0}. Review them in the purple list under the button and apply.",
+  "'{0}' 템플릿을 지울까요? 팀을 저장하면 반영돼요.": "Delete the template '{0}'? Save the team to make it stick."
+});

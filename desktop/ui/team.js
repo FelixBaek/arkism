@@ -151,7 +151,7 @@ window.ArkismTeams = (ctx) => {
   const side = (...kids) => { const s = el("div", "tm-side"); s.append(...kids); $("#detail").replaceChildren(s); };
 
   const S = {
-    team: null, draft: null, draftFor: null, dirty: false, tpl: null, stats: new Map(), adding: false, ctxAdding: false, drag: -1,
+    team: null, draft: null, draftFor: null, dirty: false, stats: new Map(), adding: false, ctxAdding: false, drag: -1,
     nd: null, ndFrom: "", estimate: null, estTimer: 0, estKey: "",
     meetTab: "running", meetings: null, counts: {}, meetErr: "", meetSel: null, meeting: null, note: "", noteFocus: false, newMeeting: null, tick: 0, timer: 0,
     discord: null, discordErr: "", discordLoading: false, bot: null, settingsOpen: false, connect: null, channels: new Map(), botDraft: null, botDraftFor: null, connectTimer: 0,
@@ -592,26 +592,187 @@ window.ArkismTeams = (ctx) => {
   }
   function templatesSection(pop) {
     const d = pop.d;
-    const s = sec("chat-text", "회의 템플릿", "자주 여는 회의의 주제 틀");
+    const s = sec("chat-text", "회의 템플릿", "자주 여는 회의의 진행 방법을 저장해 두고, 회의를 열 때 골라요");
     const chips = el("div", "tm-chips");
     (d.templates || []).forEach((t) => {
-      const c = raw(el("button", `tm-chip${S.tpl === t.key ? " active" : ""}`, t.name || "이름 없음")); c.type = "button";
-      c.addEventListener("click", () => { S.tpl = S.tpl === t.key ? null : t.key; popRedraw("overview"); });
+      const c = raw(el("button", "tm-chip", t.name || tr("이름 없음"))); c.type = "button";
+      c.addEventListener("click", () => templateDialog(pop, t));
       chips.append(c);
     });
-    const add = el("button", "tm-chip add", "+ 새 템플릿"); add.type = "button";
-    add.addEventListener("click", () => { const key = `t${Date.now().toString(36)}`; d.templates = [...(d.templates || []), { key, name: "새 템플릿", prompt: "", overrides: {} }]; S.tpl = key; changed(pop, true); });
+    const add = el("button", "tm-chip add", (d.templates || []).length ? "+ 추가" : "+ 템플릿 만들기"); add.type = "button";
+    add.addEventListener("click", () => templateDialog(pop, null));
     chips.append(add);
     s.append(chips);
-    const open = (d.templates || []).find((t) => t.key === S.tpl);
-    if (open) {
-      const ed = el("div", "tm-tpl");
-      ed.append(field("이름", raw(input(open.name, (v) => { open.name = v; changed(pop); }, { max: 60 }))),
-        field("회의 주제 틀", raw(input(open.prompt, (v) => { open.prompt = v; changed(pop); }, { tag: "textarea", rows: 3, max: 4000, placeholder: "예: {주제} 화면을 접근성·토큰 기준으로 검토하고 고칠 목록을 만들어 주세요." }))));
-      ed.append(link("이 템플릿 지우기", () => { d.templates = d.templates.filter((t) => t.key !== open.key); S.tpl = null; changed(pop, true); }, "tm-link quiet"));
-      s.append(ed);
-    }
     return s;
+  }
+  // 템플릿 창: its own dialog over the team window. Edits a copy; 저장 puts it in the team draft (saved with the team).
+  // What a template holds is what the engine reads (crewrun meeting.go): prompt goes into the scribe's brief as
+  // "이 회의의 방식" under the topic typed when the meeting opens; overrides.mode and overrides.ending replace the team's.
+  function templateDialog(pop, src) {
+    const d = pop.d;
+    const t = src ? clone(src) : { key: `t${Date.now().toString(36)}`, name: "", prompt: "", overrides: {} };
+    t.overrides = t.overrides || {};
+    const start = JSON.stringify(t);
+    const ai = { open: false, grow: false, log: [], ask: "", props: [] };
+    const dlg = el("dialog", "crew-dialog tm-tpl-dlg");
+    const head = el("div", "dialog-head");
+    const hw = el("div", "");
+    hw.append(el("h2", "", src ? "회의 템플릿 고치기" : "새 회의 템플릿"), el("p", "", "회의를 열 때 이 템플릿을 고르면, 아래 내용이 그 회의에만 들어가요."));
+    const x = el("button", "icon-btn plain"); x.type = "button"; x.setAttribute("aria-label", "닫기"); x.append(icon("x"));
+    head.append(hw, x);
+    const body = el("div", "dialog-body tm-tpl-body");
+    const foot = el("div", "dialog-foot");
+    const dirty = () => JSON.stringify(t) !== start;
+    const leave = async () => { if (!dirty() || await ask("저장하지 않은 변경이 있어요. 버리고 닫을까요?")) dlg.close(); };
+    x.addEventListener("click", () => void leave());
+    dlg.addEventListener("cancel", (e) => { e.preventDefault(); void leave(); });
+    const ok = button("저장", "primary", null, () => {
+      t.name = t.name.trim();
+      if (!t.overrides.mode && !t.overrides.ending) delete t.overrides;
+      const list = d.templates || [];
+      d.templates = src ? list.map((y) => (y.key === src.key ? t : y)) : [...list, t];
+      dlg.close(); changed(pop, true);
+      notice("템플릿을 넣었어요. 팀을 저장하면 반영돼요.");
+    });
+    const sync = () => { ok.disabled = !t.name.trim(); ok.title = ok.disabled ? tr("이름을 적어 주세요") : ""; };
+    const help = (label, what, ...kids) => { const f = el("div", "tm-tpl-field"); const h = el("div", "tm-tpl-label"); h.append(el("b", "", label), el("small", "", what)); f.append(h, ...kids); return f; };
+    const draw = () => {
+      const name = raw(input(t.name, (v) => { t.name = v; sync(); }, { max: 60, placeholder: "예: 코드 리뷰, 주간 회고, 시안 검토" }));
+      name.setAttribute("aria-label", "템플릿 이름");
+      const prompt = raw(input(t.prompt, (v) => { t.prompt = v; }, { tag: "textarea", rows: 6, max: 4000, placeholder: "예:\n- 바뀐 화면을 접근성·디자인 토큰 기준으로 봐요\n- 한 사람이 문제를 3개까지 말해요\n- 끝에 고칠 목록을 중요한 순서로 정리해요" }));
+      prompt.setAttribute("aria-label", "이 회의의 진행 방법");
+      // where each part comes from when the meeting starts (the scribe's brief, meeting.go brief())
+      const flow = el("ol", "tm-tpl-flow");
+      for (const [k, v, on] of [["회의 주제", "회의를 열 때마다 적어요", false], ["이 템플릿의 진행 방법", "여기 적은 글", true], ["팀 자료", "팀에 넣어 둔 자료", false]]) {
+        const li = el("li", on ? "on" : ""); li.append(el("b", "", k), el("span", "", v)); flow.append(li);
+      }
+      const o = t.overrides;
+      const modeSel = select([["", "팀 설정대로"], ...MODES.map(([k, l]) => [k, l])], o.mode || "", (v) => { if (v) o.mode = v; else delete o.mode; draw(); });
+      modeSel.setAttribute("aria-label", "회의 방식");
+      const endRow = el("div", "tm-toggle");
+      endRow.append(el("span", "", "끝나는 조건을 이 템플릿만 따로 정하기"), sw(!!o.ending, "끝나는 조건 따로 정하기", (v) => { if (v) o.ending = { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(d.ending || {}) }; else delete o.ending; draw(); }));
+      const over = el("div", "tm-tpl-over");
+      over.append(field("회의 방식", modeSel), endRow);
+      if (o.ending) {
+        const e = o.ending;
+        const r = input(e.max_rounds, (v) => { e.max_rounds = Math.max(1, Math.min(10, Number(v) || 1)); }, { type: "number" }); r.min = 1; r.max = 10;
+        const cap = input(Number(e.token_cap || 0).toLocaleString("en-US"), (v) => { e.token_cap = Math.min(5_000_000, Number(String(v).replace(/[^\d]/g, "")) || 0); }); cap.inputMode = "numeric"; cap.classList.add("mono");
+        const g = el("div", "tm-two"); g.append(field("최대 라운드 (1~10)", r), field("토큰 상한", cap));
+        over.append(g);
+        for (const [k, label] of [["end_on_all_approved", "리뷰어가 모두 승인하면 끝"], ["end_on_moderator", "진행자가 끝내면 끝"]]) {
+          const row = el("div", "tm-toggle"); row.append(el("span", "", label), sw(!!e[k], label, (v) => { e[k] = v; draw(); })); over.append(row);
+        }
+      }
+      body.replaceChildren(aiBox(),
+        help("이름", "회의를 열 때 목록에서 고르는 이름이에요", name),
+        help("이 회의의 진행 방법", "주제는 회의를 열 때 따로 적어요. 여기에는 매번 같은 진행 순서·볼 기준·결과 모양을 적어요.", prompt, el("small", "tm-tpl-cap", "회의가 시작되면 서기가 이 순서로 읽고 브리핑해요"), flow),
+        help("이 템플릿만 바꿀 설정", "비워 두면 팀 설정대로 해요. 이 템플릿으로 연 회의에서만 바뀌어요.", over));
+      sync();
+    };
+    // AI 제안: the same button → bubble → purple list as the expert window (crew.js aiBox); nothing lands before 저장.
+    function aiBox() {
+      const box = el("section", "ex-ai");
+      const btn = el("button", `ex-ai-btn${ai.open ? " on" : ""}`); btn.type = "button";
+      btn.setAttribute("aria-expanded", String(ai.open)); btn.setAttribute("aria-haspopup", "dialog");
+      btn.append(icon("sparkle"), el("span", "", "AI 제안"));
+      const toggle = (on) => { ai.open = on; ai.grow = on; draw(); if (!on) body.querySelector(".ex-ai-btn")?.focus(); };
+      btn.addEventListener("click", () => toggle(!ai.open));
+      box.append(btn);
+      if (ai.open) box.append(bubble(() => toggle(false)));
+      if (ai.props.length) {
+        const open = ai.props.filter((p) => !p.applied);
+        const list = el("div", "ex-props"), hd = el("div", "ex-props-head");
+        hd.append(icon("sparkle"), el("strong", "", `AI 제안 ${ai.props.length}개`), el("small", "", "적용해도 저장하기 전에는 바뀌지 않아요"));
+        if (open.length) hd.append(button("모두 적용", "ghost small", null, () => { for (const p of open) applyProp(p, true); draw(); }));
+        list.append(hd, ...ai.props.map(propRow));
+        box.append(list);
+      }
+      return box;
+    }
+    function bubble(close) {
+      const b = el("div", `ex-ai-pop${ai.grow ? " grow" : ""}`); ai.grow = false;
+      b.setAttribute("role", "dialog"); b.setAttribute("aria-label", "AI 제안");
+      const h = el("div", "ex-ai-pop-head");
+      const cx = el("button", "icon-btn plain"); cx.type = "button"; cx.setAttribute("aria-label", "닫기"); cx.append(icon("x")); cx.addEventListener("click", close);
+      h.append(icon("sparkle"), el("strong", "", "AI 제안"), el("small", "", "어떤 회의인지 말하면 이름·진행 방법을 채워 드려요"), cx);
+      const log = el("ol", "ex-chat"); log.setAttribute("aria-live", "polite");
+      if (!ai.log.length) log.append(el("li", "ex-chat-ai", "어떤 회의에 쓸 템플릿인가요? 무엇을 정하고, 결과를 어떤 모양으로 받고 싶은지 말해 주세요."));
+      for (const m of ai.log) {
+        const li = el("li", `ex-chat-${m.who}${m.busy ? " busy" : ""}${m.err ? " err" : ""}${m.fresh ? " fresh" : ""}`);
+        if (m.busy) { li.setAttribute("aria-label", m.text); li.append(el("i"), el("i"), el("i")); } else li.textContent = m.text;
+        m.fresh = false; log.append(li);
+      }
+      const busy = ai.log.some((m) => m.busy);
+      const q = raw(input(ai.ask, (v) => { ai.ask = v; }, { max: 400, placeholder: "예: PR을 올리기 전에 보안·테스트를 점검하는 회의" }));
+      q.setAttribute("aria-label", "어떤 회의인지");
+      const go2 = button("보내기", "primary small", null, () => void propose(q.value, go2)); go2.disabled = busy;
+      q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); if (!go2.disabled) go2.click(); } });
+      const quick = el("div", "ex-ai-quick");
+      for (const s of ["코드 리뷰 회의", "주간 회고", "시안 검토 후 고칠 목록"]) { const c = el("button", "ex-ai-chip", s); c.type = "button"; c.disabled = busy; c.addEventListener("click", () => void propose(s, go2)); quick.append(c); }
+      const row = el("div", "ex-ai-row"); row.append(q, go2);
+      b.append(h, log, quick, row);
+      b.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); close(); } });
+      requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; if (!busy) q.focus({ preventScroll: true }); });
+      return b;
+    }
+    const line = (who, text, busy = false) => { const m = { who, text, busy, fresh: true }; ai.log.push(m); if (ai.log.length > 12) ai.log.shift(); draw(); return m; };
+    const modeName = (k) => MODES.find(([m]) => m === k)?.[1] || tr("팀 설정대로");
+    async function propose(text, btn) {
+      if (!text.trim()) { notice("어떤 회의인지 한 줄 써 주세요."); return; }
+      kit = kit || window.ArkismAssist?.(ctx);
+      if (!kit) { notice("AI 도움을 쓸 수 없어요."); return; }
+      btn.disabled = true; ai.ask = "";
+      line("me", text);
+      const reply = line("ai", "제안을 만드는 중이에요…", true);
+      try {
+        const cur = { name: t.name, prompt: t.prompt, mode: t.overrides.mode || "", max_rounds: t.overrides.ending?.max_rounds };
+        const team = { name: d.name, role: d.role, mode: d.mode, members: sorted(d.members).map((m) => ({ name: memberName(m), role: m.role, focus: m.focus })) };
+        const prompt = `Request: ${text}\nTeam: ${JSON.stringify(team)}\nCurrent meeting template: ${JSON.stringify(cur)}\nA template is picked when a meeting opens. The topic is typed then, separately; the template's prompt is read with it as "how this meeting goes": steps, what to check, the shape of the result. Answer with ONE JSON object holding only the keys that change: name (<=60 chars), prompt (Korean Markdown list, <=1500 chars, no topic placeholder), mode ("round_robin" or "moderator_picks", only if it clearly fits better than the team's), max_rounds (1-10). Write in the language of the request.`;
+        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You write meeting templates for small teams of AI experts. Reply with the JSON object only." } } });
+        if (a.status !== "done") throw new Error(kit.assistError(a));
+        const j = kit.parseJSON(a.output || "");
+        if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error(tr("AI의 답을 읽지 못했어요. 다시 해 보세요."));
+        const props = [];
+        const add = (key, label, from, to) => { if (to !== undefined && to !== from) props.push({ key, label, from, to }); };
+        if (typeof j.name === "string" && j.name.trim()) add("name", tr("이름"), t.name, j.name.trim().slice(0, 60));
+        if (typeof j.prompt === "string" && j.prompt.trim()) add("prompt", tr("진행 방법"), t.prompt, j.prompt.trim().slice(0, 4000));
+        if (MODES.some(([k]) => k === j.mode)) add("mode", tr("회의 방식"), t.overrides.mode || "", j.mode);
+        if (Number.isFinite(+j.max_rounds) && +j.max_rounds >= 1) add("max_rounds", tr("최대 라운드"), t.overrides.ending?.max_rounds ?? d.ending?.max_rounds ?? 4, Math.min(10, Math.round(+j.max_rounds)));
+        ai.props = props;
+        if (props.length) ai.open = false; // the bubble steps aside so the purple list shows
+        Object.assign(reply, { busy: false, text: props.length ? `${props.map((p) => p.label).join("·")}을 제안해요. 버튼 아래 보라색 목록에서 보고 적용하세요.` : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요.") });
+      } catch (e) { Object.assign(reply, { busy: false, err: true, text: e.message || tr("AI가 답하지 못했어요.") }); }
+      draw();
+    }
+    function applyProp(p, on) {
+      const v = on ? p.to : p.from;
+      if (p.key === "name" || p.key === "prompt") t[p.key] = v;
+      else if (p.key === "mode") { if (v) t.overrides.mode = v; else delete t.overrides.mode; }
+      else { t.overrides.ending = { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(d.ending || {}), ...(t.overrides.ending || {}), max_rounds: v }; }
+      p.applied = on;
+    }
+    function propRow(p) {
+      const r = el("div", `ex-prop${p.applied ? " applied" : ""}`);
+      const v = el("div", "v");
+      if (p.key === "prompt" || p.key === "name") { v.classList.add("text"); for (const [op, s] of window.ArkismTextDiff(p.from || "", p.to)) v.append(op === "=" ? document.createTextNode(s) : el(op === "-" ? "del" : "ins", "", s)); raw(v); }
+      else v.append(el("del", "", p.key === "mode" ? modeName(p.from) : String(p.from)), el("span", "arrow", "→"), el("ins", "", p.key === "mode" ? modeName(p.to) : String(p.to)));
+      const acts = el("div", "acts");
+      if (p.applied) acts.append(el("small", "done", "적용함 · 저장하면 반영돼요"), button("되돌리기", "ghost small", null, () => { applyProp(p, false); draw(); }));
+      else acts.append(button("적용", "ghost small", null, () => { applyProp(p, true); draw(); }), button("빼기", "ghost small", null, () => { ai.props = ai.props.filter((y) => y !== p); draw(); }));
+      r.append(el("span", "k", p.label), v, acts);
+      return r;
+    }
+    if (src) foot.append(link("이 템플릿 지우기", async () => {
+      if (!await ask(`'${src.name || tr("이름 없음")}' 템플릿을 지울까요? 팀을 저장하면 반영돼요.`)) return;
+      d.templates = (d.templates || []).filter((y) => y.key !== src.key); dlg.close(); changed(pop, true);
+    }, "tm-link quiet tm-tpl-del"));
+    foot.append(button("취소", "ghost", null, () => void leave()), ok);
+    dlg.append(head, body, foot);
+    dlg.addEventListener("close", () => dlg.remove());
+    document.body.append(dlg);
+    draw();
+    dlg.showModal();
+    if (!src) body.querySelector("input")?.focus();
   }
   function contextSection(pop) {
     const d = pop.d;
@@ -980,24 +1141,57 @@ window.ArkismTeams = (ctx) => {
     }
     svg.append(defs);
   }
+  // Motion (SMIL, so it plays inside the SVG): 순서대로 = the highlight walks node to node; 진행자 지명 = an arrow
+  // grows from the moderator to whoever is picked next. Reduced motion keeps the still picture.
+  const still = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const STEP = 1.2; // seconds per turn
+  function anim(node, attr, values, times, dur, calcMode = "linear") {
+    node.append(svgEl("animate", { attributeName: attr, values: values.join(";"), keyTimes: times.map((t) => +t.toFixed(4)).join(";"), dur: `${dur}s`, repeatCount: "indefinite", calcMode }));
+  }
+  // class "base on" only during turn i of n (from a to b of that turn)
+  const turnOn = (node, base, i, n, dur, a = 0, b = 1) => anim(node, "class", [base, `${base} on`, base], [0, (i + a) / n, (i + b) / n], dur, "discrete");
   function diagramRound(members, maxRounds, bare) {
     const list = members.slice(0, 5);
     const svg = svgEl("svg", { viewBox: bare ? "0 18 371 74" : "0 0 371 112", class: "tm-diagram", "aria-hidden": "true" });
     arrowDefs(svg);
     if (!list.length) { svg.append(svgEl("text", { x: 185, y: 60, class: "tm-svg-cap", "text-anchor": "middle" }, "참여자를 넣으면 순서가 보여요")); return svg; }
     const xs = list.map((_, i) => (list.length === 1 ? 185 : 28 + (i * (343 - 28)) / (list.length - 1)));
-    const now = list.length > 1 ? 1 : 0;
-    for (let i = 0; i < list.length - 1; i++) svg.append(svgEl("line", { x1: xs[i] + 18, y1: 34, x2: xs[i + 1] - 18, y2: 34, class: "tm-svg-line", "marker-end": "url(#tm-ah)" }));
-    if (list.length > 1) svg.append(svgEl("path", { d: `M${xs[xs.length - 1]} 64 V86 H${xs[0]} V66`, class: "tm-svg-line dash", "marker-end": "url(#tm-ah)" }));
+    const n = list.length, move = n > 1 && !still(), dur = n * STEP;
+    const now = move ? -1 : n > 1 ? 1 : 0;
+    for (let i = 0; i < n - 1; i++) {
+      const ln = svgEl("line", { x1: xs[i] + 18, y1: 34, x2: xs[i + 1] - 18, y2: 34, class: "tm-svg-line", "marker-end": "url(#tm-ah)" });
+      if (move) { turnOn(ln, "tm-svg-line", i, n, dur, .6, 1.1); anim(ln, "marker-end", ["url(#tm-ah)", "url(#tm-ah-on)", "url(#tm-ah)"], [0, (i + .6) / n, (i + 1.1) / n], dur, "discrete"); }
+      svg.append(ln);
+    }
+    if (n > 1) {
+      const back = svgEl("path", { d: `M${xs[n - 1]} 64 V86 H${xs[0]} V66`, class: "tm-svg-line dash", "marker-end": "url(#tm-ah)" });
+      if (move) { anim(back, "class", ["tm-svg-line dash", "tm-svg-line dash on"], [0, (n - .4) / n], dur, "discrete"); anim(back, "marker-end", ["url(#tm-ah)", "url(#tm-ah-on)"], [0, (n - .4) / n], dur, "discrete"); }
+      svg.append(back);
+    }
     list.forEach((m, i) => {
       const g = svgEl("g");
-      g.append(svgEl("circle", { cx: xs[i], cy: 34, r: 13, class: `tm-svg-node${i === now ? " on" : ""}` }));
+      const c = svgEl("circle", { cx: xs[i], cy: 34, r: 13, class: `tm-svg-node${i === now ? " on" : ""}` });
+      if (move) turnOn(c, "tm-svg-node", i, n, dur);
+      g.append(c);
       nodeLogo(g, memberModel(m), xs[i], 34);
       const name = svgEl("text", { x: xs[i], y: 61, "text-anchor": "middle", class: `tm-svg-name${i === now ? " on" : ""}` }, memberName(m)); name.setAttribute("data-no-i18n", "");
+      if (move) turnOn(name, "tm-svg-name", i, n, dur);
       g.append(name);
       if (i === now) g.append(svgEl("text", { x: xs[i], y: 14, "text-anchor": "middle", class: "tm-svg-tag" }, "지금"));
       svg.append(g);
     });
+    if (move) {
+      // the walking highlight: holds on a node, then slides to the next one
+      const vals = [], times = [];
+      xs.forEach((x, i) => { vals.push(x, x); times.push(i / n, (i + .6) / n); });
+      vals.push(xs[n - 1]); times.push(1);
+      const spot = svgEl("circle", { cx: xs[0], cy: 34, r: 17, class: "tm-svg-spot" });
+      anim(spot, "cx", vals, times, dur);
+      anim(spot, "opacity", [0, 1, 1, 0], [0, .04, .96, 1], dur);
+      const tag = svgEl("text", { x: xs[0], y: 14, "text-anchor": "middle", class: "tm-svg-tag" }, "지금");
+      anim(tag, "x", vals, times, dur);
+      svg.append(spot, tag);
+    }
     svg.append(svgEl("text", { x: 185, y: 104, "text-anchor": "middle", class: "tm-svg-cap" }, `다 돌면 처음부터 · 라운드 1/${maxRounds || 4}`));
     return svg;
   }
@@ -1008,10 +1202,23 @@ window.ArkismTeams = (ctx) => {
     const rest = members.filter((m) => m !== mod).slice(0, 3);
     if (!mod) { svg.append(svgEl("text", { x: 185, y: 60, class: "tm-svg-cap", "text-anchor": "middle" }, "참여자를 넣으면 순서가 보여요")); return svg; }
     const ys = rest.length === 1 ? [56] : rest.map((_, i) => 16 + (i * 80) / (rest.length - 1));
-    const on = rest.length > 1 ? 1 : 0;
+    const k = rest.length, move = k > 0 && !still();
+    // the picks jump around (not top to bottom), so it reads as 지명 rather than a fixed order
+    const order = k === 3 ? [1, 0, 2] : k === 2 ? [1, 0] : [0];
+    const turns = order.length, dur = turns * STEP;
+    const turnOf = (i) => order.indexOf(i);
+    const on = move ? -1 : k > 1 ? 1 : 0;
     rest.forEach((m, i) => {
-      const y = ys[i];
-      svg.append(svgEl("path", { d: `M54 56 C150 56 180 ${y} 272 ${y}`, class: `tm-svg-line${i === on ? " on" : " dash"}`, "marker-end": i === on ? "url(#tm-ah-on)" : "url(#tm-ah)" }));
+      const y = ys[i], d = `M54 56 C150 56 180 ${y} 272 ${y}`;
+      svg.append(svgEl("path", { d, class: `tm-svg-line${i === on ? " on" : " dash"}`, "marker-end": i === on ? "url(#tm-ah-on)" : "url(#tm-ah)" }));
+      if (move) {
+        // the arrow grows from the moderator to the picked one, stays a moment, then the next pick
+        const t = turnOf(i), s = t / turns, grow = .45 / turns;
+        const ray = svgEl("path", { d, pathLength: 100, class: "tm-svg-line on tm-svg-ray", "stroke-dasharray": "100 100", "stroke-dashoffset": 100, opacity: 0 });
+        anim(ray, "stroke-dashoffset", [100, 100, 0, 0], [0, s, s + grow, 1], dur);
+        anim(ray, "opacity", [0, 1, 0], [0, s, s + .95 / turns], dur, "discrete");
+        svg.append(ray);
+      }
     });
     const g = svgEl("g");
     g.append(svgEl("circle", { cx: 38, cy: 56, r: 13, class: "tm-svg-node" }));
@@ -1020,14 +1227,23 @@ window.ArkismTeams = (ctx) => {
     const mn = svgEl("text", { x: 38, y: 84, "text-anchor": "middle", class: "tm-svg-name" }, memberName(mod)); mn.setAttribute("data-no-i18n", ""); g.append(mn);
     svg.append(g);
     rest.forEach((m, i) => {
-      const y = ys[i], gg = svgEl("g");
-      gg.append(svgEl("circle", { cx: 288, cy: y, r: 13, class: `tm-svg-node${i === on ? " on" : ""}` }));
+      const y = ys[i], gg = svgEl("g"), t = turnOf(i);
+      const c = svgEl("circle", { cx: 288, cy: y, r: 13, class: `tm-svg-node${i === on ? " on" : ""}` });
+      if (move) turnOn(c, "tm-svg-node", t, turns, dur, .4, .95);
+      gg.append(c);
       nodeLogo(gg, memberModel(m), 288, y);
-      const t = svgEl("text", { x: 308, y: y + (i === on ? 0 : 4), class: `tm-svg-name${i === on ? " on" : ""}` }, memberName(m)); t.setAttribute("data-no-i18n", "");
-      gg.append(t);
+      const nm = svgEl("text", { x: 308, y: y + (i === on ? 0 : 4), class: `tm-svg-name${i === on ? " on" : ""}` }, memberName(m)); nm.setAttribute("data-no-i18n", "");
+      if (move) turnOn(nm, "tm-svg-name", t, turns, dur, .4, .95);
+      gg.append(nm);
       if (i === on) gg.append(svgEl("text", { x: 308, y: y + 12, class: "tm-svg-tag left" }, "지금 차례"));
       svg.append(gg);
     });
+    if (move) {
+      const tag = svgEl("text", { x: 308, y: ys[order[0]] + 16, class: "tm-svg-tag left", opacity: 0 }, "지금 차례");
+      anim(tag, "y", order.map((i) => ys[i] + 16), order.map((_, t) => t / turns), dur, "discrete");
+      anim(tag, "opacity", order.flatMap(() => [0, 1]), order.flatMap((_, t) => [t / turns, (t + .4) / turns]), dur, "discrete");
+      svg.append(tag);
+    }
     return svg;
   }
 

@@ -230,3 +230,23 @@
 /* 제자리 고치기 칸: 포커스는 상자 대신 노란 밑줄 하나 (팀·전문가 머리) */
 .tm-plain:focus, .tm-plain:focus-visible, .ex-inline-input:focus, .ex-inline-input:focus-visible { outline: none; box-shadow: none; background: none; border: 0; border-bottom: 2px solid var(--nc-accent); border-radius: 0; }
 .tm-plain:hover { background: none; }
+/* 회의 템플릿 창: its own dialog over the team window; each field says what goes in it */
+.tm-tpl-dlg { width: min(620px, calc(100vw - 32px)); background: var(--nc-surface); }
+.tm-tpl-dlg[open] { display: flex; flex-direction: column; }
+.tm-tpl-body { gap: 20px; padding-top: 4px; padding-bottom: 16px; }
+.tm-tpl-body > * { flex: none; }
+.tm-tpl-field { display: flex; flex-direction: column; gap: 8px; }
+.tm-tpl-label { display: flex; flex-direction: column; gap: 2px; }
+.tm-tpl-label b { color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.tm-tpl-label small { color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
+.tm-tpl-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; counter-reset: tpl; }
+.tm-tpl-flow li { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border: 1px solid var(--nc-line); border-radius: 999px; color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); counter-increment: tpl; }
+.tm-tpl-flow li::before { content: counter(tpl); color: var(--nc-quiet); font-family: var(--mono); }
+.tm-tpl-flow li b { color: var(--nc-muted); font-weight: 500; }
+.tm-tpl-flow li.on { border-color: var(--nc-accent); color: var(--nc-muted); }
+.tm-tpl-flow li.on b, .tm-tpl-flow li.on::before { color: var(--nc-accent); }
+.tm-tpl-over { display: flex; flex-direction: column; gap: 10px; }
+.tm-tpl-over .tm-toggle { border-radius: 8px; }
+.tm-tpl-dlg .dialog-foot { align-items: center; }
+.tm-tpl-del { margin-right: auto; }
+.tm-tpl-cap { margin-bottom: -2px; color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); }
