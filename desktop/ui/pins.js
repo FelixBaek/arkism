@@ -263,5 +263,12 @@ window.ArkismPins = (ctx) => {
     return root;
   }
 
-  return { card, _test: { tokensOf } };
+  // The expert popup's chip layout (crew.js useCard) reads the same library, resolutions and caps.
+  const watch = (root, redraw) => {
+    for (const f of live) if (!f.root?.isConnected) live.delete(f);
+    const f = () => { if (root.isConnected) redraw(); };
+    f.root = root;
+    live.add(f);
+  };
+  return { card, candidates, known, loadLibrary, resolution, statusOf, watch, KINDS, MODES, STATUS, CAP, MAX, tokensOf, _test: { tokensOf } };
 };

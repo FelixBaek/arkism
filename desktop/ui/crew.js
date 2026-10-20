@@ -2937,37 +2937,39 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     return s;
   };
   function instructionsField(d) {
-    const t = bindText(input(d.instructions, { tag: "textarea", rows: 8, maxLength: 4000, placeholder: "## 역할\n너는 …다.\n## 말투\n…\n## 하지 말 것\n…", cls: "wk-instr" }), d, "instructions");
+    const t = bindText(input(d.instructions, { tag: "textarea", rows: 3, maxLength: 4000, placeholder: "이 전문가가 지킬 역할·말투·순서를 적어 주세요", cls: "wk-instr" }), d, "instructions");
     return field("지시", t, "최대 4,000자 · 기억은 자료로만 쓰고 지시로 따르지 않아요");
   }
-  // 일하는 방법: the workflow this agent runs when it is called; empty means it answers on its own.
+  // 일하는 순서 (868:61909 · 310:19277): the workflow this agent runs when it is called, in one box — name, 단계 고치기,
+  // the chart, and at the bottom the choice to switch (empty means it answers on its own).
   function workflowField(d) {
-    const s = pick([["", "정하지 않음 (직접 답해요)"], ...allWorkflows().filter((w) => ownerOf(w) ? ownerOf(w).id === wk.id : !triggered(w.crew)).map((w) => [w.crew.handle, `$${w.crew.handle} · ${w.crew.name}`])], (d.workflow || "").replace(/^\$/, ""),
-      (v) => { d.workflow = v; touchWorker(); }, "일하는 방법");
+    const s = pick([["", "없음 · 지시대로"], ...allWorkflows().filter((w) => ownerOf(w) ? ownerOf(w).id === wk.id : !triggered(w.crew)).map((w) => [w.crew.handle, w.crew.name])], (d.workflow || "").replace(/^\$/, ""),
+      (v) => { d.workflow = v; touchWorker(); }, "일하는 순서");
+    s.classList.add("ex-flow-pick");
     const w = allWorkflows().find((x) => x.crew.handle === (d.workflow || "").replace(/^\$/, ""));
-    // The chosen workflow is shown as its own panel (name, numbered steps, one clear edit button) so it reads as part of this agent.
-    if (!w) { const none = el("div", "wk-flow"); none.append(el("strong", "", "워크플로우 없음 · 지시대로 일해요")); const wr = el("div", "wk-flow-wrap"); wr.append(none, field("워크플로우 연결", s)); return wr; }
     const box = el("div", "wk-flow");
-    {
+    const head = el("div", "wk-flow-head");
+    const mark = el("span", "wk-flow-mark"); mark.append(icon("tree-structure"));
+    head.append(mark, el("strong", "", w ? w.crew.name : "워크플로우 없음 · 지시대로 일해요"));
+    box.append(head);
+    if (w) {
       // Nodes on the same level run together, so they share one number (as in workflowDetail).
       const lvls = levels(w.crew.graph).map((lv) => lv.filter(WORK)).filter((lv) => lv.length);
-      const steps = lvls.flat();
-      const ai = steps.filter((n) => IS_AI(n.type)).length;
-      const head = el("div", "wk-flow-head");
-      const who = el("div", "wk-flow-who");
-      const meta = el("small", "");
-      meta.append(el("code", "", `$${w.crew.handle}`), el("span", "", `${lvls.length}단계`));
-      if (ai) meta.append(el("span", "", `AI ${ai}곳`));
-      who.append(el("strong", "", w.crew.name), meta);
-      const mark = el("span", "wk-flow-mark"); mark.append(icon("tree-structure"));
-      head.append(mark, who, button("단계 고치기", "small", "pencil-simple", () => openGraph(w)));
+      head.append(button("단계 고치기", "small", "pencil-simple", () => openGraph(w)));
       const lim = w.crew.limits || {};
-      box.append(head, flowChart(w, lvls));
-      if (lim.max_minutes || lim.max_steps) box.append(el("small", "wk-flow-limit", `멈추는 조건 ${[lim.max_minutes ? `${lim.max_minutes}분` : "", lim.max_steps ? `${lim.max_steps}단계 넘으면 멈춤` : ""].filter(Boolean).join(" · ")}`));
+      box.append(flowChart(w, lvls));
+      if (lim.max_minutes || lim.max_steps) {
+        const l = el("small", "wk-flow-limit");
+        l.append(el("span", "k", "멈추는 조건"), el("span", "", [lim.max_minutes ? tr(`${lim.max_minutes}분`) : "", lim.max_steps ? tr(`${lim.max_steps}단계 넘으면 멈춤`) : ""].filter(Boolean).join(" · ")));
+        box.append(l);
+      }
     }
-    const wrap = el("div", "wk-flow-wrap");
-    wrap.append(box, field("다른 워크플로우로 바꾸기", s));
-    return wrap;
+    const foot = el("label", "wk-flow-foot");
+    foot.append(el("span", "", w ? "다른 워크플로우로 바꾸기" : "+ 워크플로우 연결"), s);
+    box.append(foot);
+    const f = el("div", "field", "일하는 순서");
+    f.append(box);
+    return f;
   }
   // 흐름도 (868:61909): 시작 → one column per level (boxes of the same level stacked) → 끝, arrows between,
   // and each 되돌아가는 선 drawn under the columns it spans with its label. A CSS grid: col 1 start, then arrow/level pairs.
@@ -3009,37 +3011,50 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   }
   function depthRow(d) {
     const r = el("div", "wk-depth");
-    const l = el("div", "");
-    l.append(el("strong", "", "생각 깊이"), el("small", "", "깊을수록 느리고 비싸요"));
-    r.append(l, segment(DEPTH, d.effort || "medium", (k) => { d.effort = k; touchWorker(); }));
+    r.append(el("strong", "", "생각 깊이"), segment(DEPTH, d.effort || "medium", (k) => { d.effort = k; touchWorker(); }));
     return r;
   }
-  // 모델 (868:61909): 기본·예비 모델 and 생각 깊이. A new expert also picks 방식 here (it has no 실행 card).
-  function modelCard(d, isNew) {
+  // A model box with the maker's mark in front (868:61909); the mark follows what is typed.
+  function modelBox(d, key, ph, label) {
+    const w = el("span", "ex-model");
+    const i = bindText(modelInput(d[key], ph), d, key);
+    i.setAttribute("aria-label", label);
+    let mark = modelMark(d[key] || "");
+    i.addEventListener("input", () => { const m = modelMark(i.value); mark.replaceWith(m); mark = m; });
+    w.append(mark, i);
+    return w;
+  }
+  // 모델 (868:61909): 기본·예비 모델 and 생각 깊이.
+  function modelCard(d) {
     const models2 = el("div", "scope-fields");
-    models2.append(field("기본 모델", bindText(modelInput(d.model, "claude sonnet 5.5"), d, "model"), d.model_mode === "auto" ? "Clef가 일마다 고르고, 정해 두면 이 모델을 먼저 봐요" : ""),
-      field("예비 모델", bindText(modelInput(d.fallback_model, "gpt-5.5"), d, "fallback_model"), "막히면 넘겨요"));
-    const out = [modelList(), models2, depthRow(d)];
-    if (isNew) out.push(exRow("방식", segment(MODEL_MODES, d.model_mode || "fixed", (k) => { d.model_mode = k; touchWorker(); })));
-    return workerCard("모델", "", ...out);
+    models2.append(field("기본 모델", modelBox(d, "model", "claude sonnet 5.5", "기본 모델"), d.model_mode === "auto" ? "Clef가 일마다 고르고, 정해 두면 이 모델을 먼저 봐요" : ""),
+      field("예비 모델", modelBox(d, "fallback_model", "고르기 (선택)", "예비 모델")));
+    return workerCard("모델", "", modelList(), models2, depthRow(d));
   }
   const exRow = (label, ...nodes) => { const r = el("div", "ex-run-row"); r.append(el("span", "k", label), ...nodes); return r; };
   // A segment whose saved value is not one of the presets keeps it as an extra choice.
   const presetSeg = (opts, cur, onPick) => segment(opts.some(([k]) => k === cur) ? opts : [...opts, [cur, cur]], cur, onPick);
-  // 실행: 방식 · 창의성 · 답변 길이 · 출력 형식 · 이미지 · 파일 고치기 · 부르는 곳, one row each (all saved fields as before).
+  // 실행 (868:61909): the title above one box of rows — 방식 · 창의성 · 답변 길이 · 출력 형식 · 파일 고치기 · 부르는 곳 · 이미지.
   function runCard(d) {
     const temp = String(d.temperature ?? "0.7");
     const len = String(Number(d.max_output_tokens) > 0 ? d.max_output_tokens : 0);
     const img = bindText(modelInput(d.image_model, "claude opus 5.5"), d, "image_model");
     img.setAttribute("aria-label", "이미지가 오면 볼 모델");
-    return workerCard("실행", "",
+    const c = el("section", "ex-run");
+    const rows = el("div", "ex-run-box");
+    rows.append(
       exRow("방식", segment(MODEL_MODES, d.model_mode || "fixed", (k) => { d.model_mode = k; touchWorker(); })),
       exRow("창의성", presetSeg([["0.2", "낮음"], ["0.7", "보통"], ["1", "높음"]], temp, (k) => { d.temperature = Number(k); touchWorker(); })),
       exRow("답변 길이", presetSeg([["0", "자동"], ["1024", "짧게"], ["4096", "길게"]], len, (k) => { d.max_output_tokens = Number(k); touchWorker(); }), el("small", "dim", "토큰 수 상한이에요")),
       exRow("출력 형식", segment(FORMATS, d.output_format || "text", (k) => { d.output_format = k; touchWorker(); })),
       exRow("파일 고치기", segment(FILE_EDITS, d.file_edits || "ask", (k) => { d.file_edits = k; touchWorker(); })),
       exRow("부르는 곳", placeChips(d)),
-      exRow("이미지", img, el("small", "dim", `이미지는 ${d.image_model || "기본 모델"}이 보고, 답은 이 전문가 이름으로 올려요`)));
+      exRow("이미지", img));
+    const note = raw(el("p", "ex-run-note", tr(`이미지는 ${d.image_model || "기본 모델"}이 대신 보고, 답은 이 전문가 이름으로 돌려줘요.`)));
+    rows.append(note);
+    img.addEventListener("input", () => { note.textContent = tr(`이미지는 ${img.value.trim() || "기본 모델"}이 대신 보고, 답은 이 전문가 이름으로 돌려줘요.`); });
+    c.append(el("h3", "", "실행"), rows);
+    return c;
   }
   // 스킬 칩 (Figma 929:61931): the pin on a chip keeps the skill in d.pinned (the same list as the 항상 넣는 자료 card), the name opens its detail.
   const pinSvg = (on) => {
@@ -3064,128 +3079,257 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   const skillVerCount = (sk) => Math.max(1, (sk.version_history || []).length);
   const skillActiveVer = (sk) => { const i = (sk.version_history || []).indexOf(sk.active_version); return i >= 0 ? i + 1 : skillVerCount(sk); };
   // Pins up to the server's 20; a new one goes after the others (priority 5 below the lowest).
-  function setSkillPin(d, sk, on, patch = {}) {
+  const pinOf = (d, collection, id) => (d.pinned || []).find((p) => p.collection === collection && p.id === id);
+  const pinOrder = (d) => (d.pinned || []).map((p, i) => [p, i]).sort((a, b) => b[0].priority - a[0].priority || a[1] - b[1]).map(([p]) => p);
+  function setPin(d, collection, id, on, patch = {}) {
     const list = (d.pinned || []).slice();
-    const at = list.findIndex((p) => p.collection === "skills" && p.id === sk.id);
+    const at = list.findIndex((p) => p.collection === collection && p.id === id);
     if (on && at < 0) {
       if (list.length >= 20) { notice("항상 넣는 자료는 20개까지예요."); return false; }
-      list.push({ collection: "skills", id: sk.id, revision: 0, injection: "full", priority: list.length ? Math.max(0, Math.min(...list.map((p) => p.priority)) - 5) : 100, ...patch });
+      list.push({ collection, id, revision: 0, injection: collection === "knowledge_sources" ? "summary" : "full", priority: list.length ? Math.max(0, Math.min(...list.map((p) => p.priority)) - 5) : 100, ...patch });
     } else if (on) list[at] = { ...list[at], ...patch };
     else if (at >= 0) list.splice(at, 1);
     d.pinned = list;
     return true;
   }
-  function skillChips(d, suggest) {
-    const row = el("div", "wk-chips");
-    for (const name of d.skills || []) {
-      const sk = skillRec(name);
-      const pinned = !!(sk && skillPin(d, sk));
-      const chip = el("span", `wk-chip on mono ex-skill${pinned ? " pinned" : ""}`);
-      if (sk) {
-        const pb = el("button", "icon-btn plain ex-pin");
-        pb.type = "button";
-        pb.setAttribute("aria-pressed", String(pinned));
-        pb.setAttribute("aria-label", `${name} ${pinned ? "고정 풀기" : "항상 먼저 넣기"}`);
-        pb.append(pinSvg(pinned));
-        pb.addEventListener("click", () => { if (setSkillPin(d, sk, !pinned)) touchWorker(); });
-        chip.append(pb);
-      }
-      const nm = el("button", "ex-skill-name", name);
-      nm.type = "button";
-      nm.addEventListener("click", () => openSkillDetail(d, name));
-      const x = el("button", "icon-btn plain");
-      x.type = "button";
-      x.setAttribute("aria-label", `${name} 빼기`);
-      x.append(icon("x"));
-      x.addEventListener("click", () => { if (sk) setSkillPin(d, sk, false); d.skills = d.skills.filter((n) => n !== name); touchWorker(); });
-      chip.append(nm, x);
-      row.append(chip);
-    }
-    const dl = el("datalist");
-    dl.id = "wk-skills";
-    for (const [v, sub] of suggest) if (!(d.skills || []).includes(v)) { const o = el("option", "", sub || ""); o.value = v; dl.append(o); }
-    const add = input("", { maxLength: 128, placeholder: "+ 스킬 추가", cls: "wk-add" });
-    add.setAttribute("list", "wk-skills");
-    add.addEventListener("change", () => { const v = add.value.trim(); if (v && !(d.skills || []).includes(v)) { d.skills = [...(d.skills || []), v]; touchWorker(); } });
-    row.append(add, dl);
-    return row;
+  const setSkillPin = (d, sk, on, patch) => setPin(d, "skills", sk.id, on, patch);
+  // 고정 칩 합계 토큰: the same rough estimate as the 항상 넣는 자료 table (pins.js: chars kept per mode / 2.5).
+  const PIN_CAP = { full: 8000, summary: 380, reference: 80 };
+  function pinChars(p) {
+    const src = p.collection === "skills" ? (state.data.skills || []).find((x) => x.id === p.id)
+      : p.collection === "memories" ? (state.data.memories || []).find((x) => x.id === p.id) : null;
+    return p.collection === "skills" ? (src?.description || "").length * 6 : p.collection === "memories" ? (src?.text || "").length : 600; // shortcut: knowledge counts one chunk (the table has chunk_count), fine for a hint
   }
-  // 스킬 상세 팝업: description, 항상 먼저 넣기, 넣는 방식, 버전 고정 · 새 버전 안내, 이 전문가에서 빼기.
-  function openSkillDetail(d, name) {
-    const sk = skillRec(name);
+  const pinTok = (p, mode = p.injection) => Math.max(1, Math.round(Math.min(PIN_CAP[mode] || 0, pinChars(p)) / 2.5));
+  const pinTokens = (d) => (d.pinned || []).reduce((n, p) => n + pinTok(p), 0);
+  // One chip in 쓸 수 있는 것 (929:61931): a pinned one has the pin and the accent, and can be dragged to change the order.
+  function useChip(d, label, { pin, mono, fresh, bad, onOpen }) {
+    const b = el("button", `wk-chip on ex-uchip${pin ? " pinned" : ""}${mono ? " mono" : ""}${bad ? " bad" : ""}`);
+    b.type = "button";
+    if (fresh) { const dot = el("i", "ex-dot"); dot.title = tr("새 버전이 있어요"); b.append(dot); }
+    if (pin) b.append(pinSvg(true));
+    b.append(raw(el("span", "", label)));
+    if (bad) b.title = tr(pins?.STATUS[bad]?.[1] || "");
+    b.addEventListener("click", onOpen);
+    if (pin) {
+      b.draggable = true;
+      b.addEventListener("dragstart", (e) => { wk.dragPin = pin; e.dataTransfer.effectAllowed = "move"; b.classList.add("dragging"); });
+      b.addEventListener("dragend", () => b.classList.remove("dragging"));
+      b.addEventListener("dragover", (e) => { if (wk.dragPin && wk.dragPin !== pin) { e.preventDefault(); b.classList.add("over"); } });
+      b.addEventListener("dragleave", () => b.classList.remove("over"));
+      b.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const from = wk.dragPin;
+        wk.dragPin = null;
+        if (!from || from === pin) return;
+        const list = pinOrder(d).filter((p) => p !== from);
+        list.splice(list.indexOf(pin), 0, from);
+        list.forEach((p, i) => { p.priority = Math.max(0, 100 - i * 5); }); // 위에 있을수록 먼저: 100, 95, 90 …
+        d.pinned = list;
+        touchWorker();
+      });
+    }
+    return b;
+  }
+  const USE_KINDS = [["memories", "기억"], ["skills", "스킬"], ["tools", "도구"], ["knowledge_sources", "지식"]];
+  // 쓸 수 있는 것 (929:61931): 스킬·도구·기억·지식 rows of chips (필요할 때 쓰기; a pin = 항상 먼저 넣기), the pin total,
+  // then one box to find and add any of the four.
+  function useCard(d, rec) {
+    const c = workerCard("쓸 수 있는 것", "핀을 꽂은 것은 부를 때마다 먼저 넣어요. 칩을 누르면 자세히 볼 수 있어요.");
+    const body = el("div", "ex-use");
+    let q = null;
+    const find = (kind) => { if (kind) wk.useKind = kind; wk.useOpen = true; draw(); q?.focus(); };
+    c.querySelector(".wk-card-head").append(button("+ 추가", "small", null, () => find()));
+    c.append(body);
+    const draw = () => {
+      pins?.loadLibrary();
+      const res = rec && pins ? pins.resolution(rec) : null;
+      const badOf = (p) => { const st = rec && pins?.statusOf(rec, p, res); return st && st.status !== "ok" ? st.status : ""; };
+      const grid = el("div", "ex-use-rows");
+      const row = (label, ...kids) => { const r = el("div", "wk-chips"); r.append(...kids); grid.append(el("span", "ex-use-k", label), r); return r; };
+      // 스킬: the ones it may use, and any pinned skill.
+      const pinnedSkills = pinOrder(d).filter((p) => p.collection === "skills").map((p) => (state.data.skills || []).find((x) => x.id === p.id)?.name).filter(Boolean);
+      const names = [...new Set([...(d.skills || []), ...pinnedSkills])];
+      const skillKids = names.map((name) => {
+        const sk = skillRec(name);
+        const pin = sk ? skillPin(d, sk) : null;
+        return useChip(d, name, { pin, mono: true, fresh: !!(pin?.revision && skillActiveVer(sk) > pin.revision), bad: pin ? badOf(pin) : "", onOpen: () => openUseDetail(d, rec, { collection: "skills", id: sk?.id, name }) });
+      });
+      const sdl = el("datalist");
+      sdl.id = "wk-skills";
+      for (const s of state.data.skills || []) if (!names.includes(s.name)) { const o = el("option", "", (s.description || "").slice(0, 80)); o.value = s.name; sdl.append(o); }
+      const sadd = input("", { maxLength: 128, placeholder: "+ 스킬 추가", cls: "wk-add" });
+      sadd.setAttribute("list", "wk-skills");
+      sadd.addEventListener("change", () => { const v = sadd.value.trim(); if (v && !(d.skills || []).includes(v)) { d.skills = [...(d.skills || []), v]; touchWorker(); } });
+      row("스킬", ...skillKids, sadd, sdl);
+      const servers = (ctx.toolServers?.() || []).map((s) => [s.name, s.desc || ""]);
+      const tools = listChips(d.tools || [], servers, "+ 도구 추가", (v) => { d.tools = v; touchWorker(); }, "wk-tools");
+      tools.classList.add("ex-tools");
+      grid.append(el("span", "ex-use-k", "도구"), tools);
+      // 기억: pinned memories, then the kinds it reads when it looks things up.
+      const memPins = pinOrder(d).filter((p) => p.collection === "memories").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p) }));
+      const kinds = toggleChips(MEMORY_KINDS, (k) => !!d.memory?.[k] && d.memory[k] !== "off", (k, on) => {
+        const m = { ...(d.memory || {}) };
+        if (on) m[k] = "all"; else delete m[k];
+        d.memory = m;
+        touchWorker();
+      });
+      for (const k of kinds.children) k.classList.add("ex-kind");
+      row("기억", ...memPins, ...kinds.children);
+      const kAdd = el("button", "wk-chip ex-plus-chip", "+ 지식 추가");
+      kAdd.type = "button";
+      kAdd.addEventListener("click", () => find("knowledge_sources"));
+      row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p) })), kAdd);
+      const n = (d.pinned || []).length;
+      const sum = raw(el("small", "ex-pin-sum", n ? tr(`고정 ${n}개 · 약 ${pinTokens(d).toLocaleString("ko-KR")} 토큰 · 넣는 순서는 고정 칩을 끌어서 바꿔요`) : tr("핀을 꽂으면 부를 때마다 먼저 넣어요")));
+      // 찾아 추가: memories and documents come in pinned; skills and tools join their lists.
+      const wrap = el("div", `pn-add ex-use-add${wk.useOpen ? " open" : ""}`);
+      const bar = el("div", "pn-add-bar");
+      const search = el("label", "search pn-search");
+      q = el("input");
+      q.type = "search";
+      q.placeholder = tr("스킬·도구·기억·지식에서 찾아 추가");
+      q.setAttribute("aria-label", tr("찾아 추가"));
+      q.value = wk.useQ || "";
+      search.append(el("span", "pn-glass", "⌕"), q);
+      const kind = wk.useKind || "memories";
+      const chips = el("div", "pn-kinds");
+      for (const [k, label] of USE_KINDS) {
+        const b = el("button", `pn-kindchip${kind === k ? " on" : ""}`, label);
+        b.type = "button";
+        b.setAttribute("aria-pressed", String(kind === k));
+        b.addEventListener("mousedown", (e) => e.preventDefault());
+        b.addEventListener("click", () => find(k));
+        chips.append(b);
+      }
+      const drop = el("div", "pn-drop");
+      const fill = () => {
+        const words = (wk.useQ || "").toLowerCase();
+        const all = kind === "tools" ? (ctx.toolServers?.() || []).filter((s) => !(d.tools || []).includes(s.name)).map((s) => ({ title: s.name, meta: s.desc || "", mono: true, add: () => { d.tools = [...(d.tools || []), s.name]; } }))
+          : kind === "skills" ? (pins?.candidates("skills") || []).filter((x) => !names.includes(x.title)).map((x) => ({ ...x, add: () => { d.skills = [...(d.skills || []), x.title]; } }))
+          : (pins?.candidates(kind) || []).filter((x) => !pinOf(d, kind, x.id)).map((x) => ({ ...x, add: () => setPin(d, kind, x.id, true) }));
+        const found = all.filter((x) => !words || `${x.title} ${x.meta}`.toLowerCase().includes(words)).slice(0, 8);
+        drop.hidden = !wk.useOpen;
+        drop.replaceChildren(...found.map((x) => {
+          const b = el("button", "pn-option");
+          b.type = "button";
+          b.append(raw(el("span", x.mono ? "mono" : "", x.title)), raw(el("small", "", x.meta || "")));
+          b.addEventListener("mousedown", (e) => e.preventDefault()); // keep the box open while picking
+          b.addEventListener("click", () => { if (x.add() !== false) { wk.useQ = ""; wk.useRefocus = true; touchWorker(); } });
+          return b;
+        }));
+        if (!found.length) drop.append(el("p", "pn-none", "더할 수 있는 승인된 자료가 없어요."));
+      };
+      q.addEventListener("focus", () => { wk.useOpen = true; wrap.classList.add("open"); fill(); });
+      q.addEventListener("blur", () => { wk.useOpen = false; wrap.classList.remove("open"); drop.hidden = true; });
+      q.addEventListener("input", () => { wk.useQ = q.value.trim(); fill(); });
+      q.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); q.blur(); } });
+      fill();
+      bar.append(search, chips);
+      wrap.append(bar, drop);
+      body.replaceChildren(grid, sum, wrap, el("small", "ex-use-hint", "칩을 누르면 넣는 방식(전체·요약·참조)과 버전(고정·최신)을 바꿀 수 있어요. 도구는 부를 때만 실행돼서 고정이 없어요."));
+      if (wk.useRefocus) { wk.useRefocus = false; requestAnimationFrame(() => q?.focus({ preventScroll: true })); }
+    };
+    pins?.watch(body, draw);
+    draw();
+    return c;
+  }
+  // 칩 상세 (929:61931): what it is, 항상 먼저 넣기, 넣는 방식, 버전 · 새 버전 안내, 이 전문가에서 빼기 · 완료.
+  const MODE_LINE = { full: "전체: 내용을 다 넣어요", summary: "요약: 줄여서 넣어요", reference: "참조: 제목만 넣고 필요할 때 읽어요" };
+  const USE_KIND_NAME = { skills: "스킬", memories: "기억", knowledge_sources: "지식" };
+  function openUseDetail(d, rec, item) {
+    const isSkill = item.collection === "skills";
+    const sk = isSkill ? skillRec(item.name) : null;
+    const id = isSkill ? sk?.id : item.id;
+    const known = !isSkill && pins ? pins.known(item) : null;
+    const title = isSkill ? item.name : known?.title || item.id;
     const dlg = el("dialog", "crew-dialog ex-skill-dlg");
     const head = el("div", "dialog-head");
-    head.append(raw(el("h2", "mono", name)));
+    const words = el("div", "ex-dlg-title");
+    words.append(el("small", "ex-dlg-kind", USE_KIND_NAME[item.collection] || ""), raw(el("h2", isSkill ? "mono" : "", title)));
+    const x = el("button", "icon-btn ghost");
+    x.type = "button";
+    x.setAttribute("aria-label", "닫기");
+    x.append(icon("x"));
+    x.addEventListener("click", () => dlg.close());
+    head.append(words, x);
     const body = el("div", "dialog-body");
     const foot = el("div", "dialog-foot");
     const draw = () => {
       body.replaceChildren();
-      if (!sk) { body.append(el("p", "dim", "스킬 목록에서 찾지 못했어요. 이름이 바뀌었거나 아직 승인되지 않았을 수 있어요.")); return; }
-      const pin = skillPin(d, sk);
-      body.append(raw(el("p", "", sk.description || "")));
-      const tgl = el("div", "wk-depth");
+      if (isSkill && !sk) { body.append(el("p", "dim", "스킬 목록에서 찾지 못했어요. 이름이 바뀌었거나 아직 승인되지 않았을 수 있어요.")); return; }
+      const pin = pinOf(d, item.collection, id);
+      const text = isSkill ? sk.description : item.collection === "memories" ? (state.data.memories || []).find((m) => m.id === id)?.text : known?.meta;
+      if (text) body.append(raw(el("p", "ex-dlg-text", text)));
+      const order = pinOrder(d);
+      const tgl = el("div", "ex-pin-toggle");
       const l = el("div", "");
-      l.append(el("strong", "", "항상 먼저 넣기"), el("small", "", "켜면 이 전문가가 일할 때마다 이 스킬을 먼저 넣어요"));
-      tgl.append(l, switchEl(!!pin, "항상 먼저 넣기", (on) => { if (setSkillPin(d, sk, on)) { touchWorker(); draw(); } }));
+      l.append(el("strong", "", "항상 먼저 넣기"), raw(el("small", "", pin ? tr(`켜면 부를 때마다 먼저 넣어요 · 고정 ${order.length}개 중 ${order.indexOf(pin) + 1}번째`) : tr("켜면 부를 때마다 먼저 넣어요"))));
+      tgl.append(l, switchEl(!!pin, "항상 먼저 넣기", (on) => { if (setPin(d, item.collection, id, on)) { touchWorker(); draw(); } }));
       body.append(tgl);
       if (pin) {
-        const mode = el("div", "wk-depth");
-        const l2 = el("div", "");
-        l2.append(el("strong", "", "넣는 방식"), el("small", "", "전체는 길고 정확하게, 요약·참조는 짧게 넣어요"));
-        mode.append(l2, segment([["full", "전체"], ["summary", "요약"], ["reference", "참조"]], pin.injection || "full", (k) => { setSkillPin(d, sk, true, { injection: k }); touchWorker(); draw(); }));
-        const act = skillActiveVer(sk);
+        const mode = el("div", "ex-dlg-sec");
+        mode.append(el("span", "ex-dlg-k", "넣는 방식"), segment(pins?.MODES || [["full", "전체"], ["summary", "요약"], ["reference", "참조"]], pin.injection || "full", (k) => { setPin(d, item.collection, id, true, { injection: k }); touchWorker(); draw(); }),
+          raw(el("small", "", `${tr(MODE_LINE[pin.injection] || "")} · ${tr(`약 ${pinTok(pin).toLocaleString("ko-KR")} 토큰`)}`)));
         const vers = [["0", "최신"]];
-        for (let v = Math.max(skillVerCount(sk), pin.revision || 0); v >= 1; v--) vers.push([String(v), tr(`고정 v${v}`)]);
-        body.append(mode, field("버전", pick(vers, String(pin.revision || 0), (v) => { setSkillPin(d, sk, true, { revision: Number(v) }); touchWorker(); draw(); }, "버전")));
-        if (pin.revision && pin.revision < act) {
+        if (isSkill) for (let v = Math.max(skillVerCount(sk), pin.revision || 0); v >= 1; v--) vers.push([String(v), tr(`고정 v${v}`)]);
+        else for (const v of new Set([known?.revision, pin.revision].filter(Boolean))) vers.push([String(v), tr(`고정 v${v}`)]);
+        const ver = el("div", "ex-dlg-sec");
+        const vrow = el("div", "ex-dlg-row");
+        vrow.append(pick(vers, String(pin.revision || 0), (v) => { setPin(d, item.collection, id, true, { revision: Number(v) }); touchWorker(); draw(); }, "버전"), el("small", "", "고정이면 이 버전만 써요. 최신이면 새 버전을 따라가요."));
+        ver.append(el("span", "ex-dlg-k", "버전"), vrow);
+        body.append(mode, ver);
+        const act = isSkill ? skillActiveVer(sk) : 0;
+        const keep = `${id}:${act}:${pin.revision}`;
+        if (isSkill && pin.revision && pin.revision < act && !wk.keptVer?.has(keep)) {
           const note = el("div", "ex-newver");
-          note.append(el("span", "", tr(`새 버전 v${act}이 있어요. 지금은 v${pin.revision}을 쓰고 있어요.`)), button("최신으로", "ghost small", null, () => { setSkillPin(d, sk, true, { revision: 0 }); touchWorker(); draw(); }));
+          const acts = el("div", "ex-newver-acts");
+          acts.append(button(tr(`v${act}로 바꾸기`), "primary small", null, () => { setPin(d, item.collection, id, true, { revision: act }); touchWorker(); draw(); }),
+            button(tr(`v${pin.revision} 유지`), "small", null, () => { (wk.keptVer ||= new Set()).add(keep); draw(); }));
+          note.append(raw(el("span", "", tr(`v${act}가 나왔어요`))), acts);
           body.append(note);
         }
       }
+      if (isSkill) {
+        const users = agents().filter((r) => (r.crew.skills || []).includes(item.name)).length;
+        const at = sk.updated_at ? new Date(sk.updated_at) : null;
+        body.append(raw(el("small", "ex-dlg-meta", [tr(`이 스킬을 쓰는 전문가 ${users}명`), at && !isNaN(at) ? tr(`마지막 업데이트 ${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`) : ""].filter(Boolean).join(" · "))));
+      }
     };
-    foot.append(button("이 전문가에서 빼기", "ghost", null, () => { if (sk) setSkillPin(d, sk, false); d.skills = (d.skills || []).filter((n) => n !== name); dlg.close(); touchWorker(); }), button("닫기", "primary", null, () => dlg.close()));
+    const out = el("button", "ex-dlg-out", "이 전문가에서 빼기");
+    out.type = "button";
+    out.addEventListener("click", () => { if (id) setPin(d, item.collection, id, false); if (isSkill) d.skills = (d.skills || []).filter((n) => n !== item.name); dlg.close(); touchWorker(); });
+    foot.append(out, button("완료", "primary", null, () => dlg.close()));
     dlg.append(head, body, foot);
     dlg.addEventListener("close", () => dlg.remove());
     document.body.append(dlg);
     draw();
     dlg.showModal();
   }
-  // 고정 칩 합계 토큰: the same rough estimate as the 항상 넣는 자료 table (pins.js: chars kept per mode / 2.5).
-  const PIN_CAP = { full: 8000, summary: 380, reference: 80 };
-  function pinTokens(d) {
-    let n = 0;
-    for (const p of d.pinned || []) {
-      const src = p.collection === "skills" ? (state.data.skills || []).find((x) => x.id === p.id)
-        : p.collection === "memories" ? (state.data.memories || []).find((x) => x.id === p.id) : null;
-      const chars = p.collection === "skills" ? (src?.description || "").length * 6 : p.collection === "memories" ? (src?.text || "").length : 600; // shortcut: knowledge counts one chunk (the table has chunk_count), fine for a hint
-      n += Math.max(1, Math.round(Math.min(PIN_CAP[p.injection] || 0, chars) / 2.5));
-    }
-    return n;
+  // 부르는 곳 (868:61909): the agents as their logos, the rest by name; a pressed one is lit.
+  const PLACE_LOGO = { claude_code: "img:claude.svg", codex: "sym:a-codex", zcode: "sym:a-zcode" };
+  function placeChips(d) {
+    const row = toggleChips(CALL_PLACES, (k) => (d.agents || []).includes(k), (k, on) => { d.agents = on ? [...(d.agents || []), k] : (d.agents || []).filter((a) => a !== k); touchWorker(); });
+    [...row.children].forEach((b, i) => {
+      const [k, label] = CALL_PLACES[i];
+      const spec = PLACE_LOGO[k];
+      if (!spec) return;
+      const [kind, ref] = spec.split(":");
+      let logo;
+      if (kind === "img") { logo = el("img"); logo.src = `img/${ref}`; logo.alt = ""; } else {
+        logo = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        logo.setAttribute("aria-hidden", "true");
+        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+        use.setAttribute("href", `#${ref}`);
+        logo.append(use);
+      }
+      b.classList.add("ex-place-logo");
+      b.setAttribute("aria-label", label);
+      b.title = label;
+      b.replaceChildren(logo);
+    });
+    return row;
   }
-  // 쓸 수 있는 것 + 항상 넣는 자료 in one card: chips on top (필요할 때 쓰기), the pin table below (항상 먼저 넣기).
-  function useCard(d, rec) {
-    const n = (d.pinned || []).length;
-    const sum = el("small", "dim ex-pin-sum", n ? `고정 ${n}개 · 약 ${pinTokens(d).toLocaleString("ko-KR")} 토큰 · 넣는 순서는 아래 표에서 바꿔요` : "핀을 누르면 부를 때마다 먼저 넣어요");
-    const c = workerCard("쓸 수 있는 것", "핀을 꽂은 것은 부를 때마다 먼저 넣어요. 칩을 누르면 자세히 볼 수 있어요.", ...useFields(d), sum);
-    if (pins) c.append(pins.card({ rec: rec || { id: "", revision: 0, crew: {} }, draft: d, cls: "ex-pins",
-      sub: tr(d.handle ? `@${d.handle}에게 일을 맡길 때마다 먼저 넣어요. 위에 있을수록 먼저 들어가요.` : "일을 맡길 때마다 먼저 넣어요. 위에 있을수록 먼저 들어가요."), noun: tr("이 전문가는"),
-      onChange: () => { wk.dirty = true; drawWorkerSave(); sum.textContent = tr(`고정 ${(d.pinned || []).length}개 · 약 ${pinTokens(d).toLocaleString("ko-KR")} 토큰 · 넣는 순서는 아래 표에서 바꿔요`); } }));
-    return c;
-  }
-  function useFields(d) {
-    const skills = (state.data.skills || []).map((s) => [s.name, (s.description || "").slice(0, 80)]);
-    const servers = (ctx.toolServers?.() || []).map((s) => [s.name, s.desc || ""]);
-    return [el("h4", "wk-label", "스킬"), skillChips(d, skills),
-      el("h4", "wk-label", "MCP·도구"), listChips(d.tools || [], servers, "+ 도구 추가", (v) => { d.tools = v; touchWorker(); }, "wk-tools"),
-      el("h4", "wk-label", "읽는 기억"), toggleChips(MEMORY_KINDS, (k) => !!d.memory?.[k] && d.memory[k] !== "off", (k, on) => {
-        const m = { ...(d.memory || {}) };
-        if (on) m[k] = "all"; else delete m[k];
-        d.memory = m;
-        touchWorker();
-      })];
-  }
-  const placeChips = (d) => toggleChips(CALL_PLACES, (k) => (d.agents || []).includes(k), (k, on) => { d.agents = on ? [...(d.agents || []), k] : (d.agents || []).filter((a) => a !== k); touchWorker(); });
   // 예산 (868:61909): amounts with the name inside the box on the right ('월 한도' · '1회 한도'), then this month's use.
   function budgetCard(id, d) {
     const money = (key, label, ph, step) => {
@@ -3214,7 +3358,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       box.append(foot);
       out.push(box);
     }
-    out.push(el("small", "dim", "한도에 닿으면 멈추지 않고 확인을 물어요. 비용은 공개 가격으로 셈한 추정이에요."));
     return workerCard("예산", "", ...out);
   }
   // 채널 연결 (868:61909, 1012:60747): the Discord channels bound to this expert (bot channel action kind "agent").
@@ -3282,8 +3425,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       }));
       out.push(row);
     } else if (wk.chAdd) out.push(el("small", "dim", "먼저 디스코드 봇을 추가해 주세요."));
-    out.push(el("small", "dim", "봇 토큰·연결 상태는 봇 설정에서 관리해요. 바꾸면 바로 저장돼요."));
+    out.push(el("small", "dim", "봇 토큰·연결 상태는 설정 › 메신저에서 관리해요. 바꾸면 바로 저장돼요."));
     const c = workerCard("채널 연결", "", ...out);
+    c.classList.add("ex-ch");
     c.querySelector(".wk-card-head")?.append(add);
     return c;
   }
@@ -3384,39 +3528,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       wk.paintHead?.();
     } catch (e) { Object.assign(reply, { busy: false, err: true, text: e.message }); } finally { btn.disabled = false; wk.redraw?.(); }
   }
-  // 대화 테스트: one question to the saved agent (assist kind try, by @이름); the answer shows under the question.
-  function testPanel(rec) {
-    const box = el("section", "wk-card wk-test");
-    const q = input("", { tag: "textarea", rows: 2, maxLength: 4000, placeholder: `@${rec.crew.handle}에게 물어볼 말` });
-    q.setAttribute("aria-label", "테스트 질문");
-    // 주고받은 말 (AI로 고치기와 같은 모양): the question shows at once, then a waiting line that the answer replaces.
-    const answer = el("ol", "ex-chat");
-    const paint = () => answer.replaceChildren(...(wk.test?.q ? [el("li", "ex-chat-me", wk.test.q), el("li", `ex-chat-ai${wk.test.busy ? " busy" : ""}`, wk.test.a)] : []));
-    paint();
-    const send = button("보내기", "primary small", null, async () => {
-      if (!q.value.trim()) { q.focus(); return; }
-      if (wk.dirty) { answer.replaceChildren(el("li", "ex-chat-ai err", "저장하지 않은 변경이 있어요. 테스트는 저장된 설정으로 답하니 먼저 개요에서 저장해 주세요.")); return; }
-      send.disabled = true;
-      wk.test = { q: q.value, a: "답을 기다리는 중…", busy: true };
-      q.value = "";
-      paint();
-      try {
-        const a = await kit.assist("try", wk.test.q, { expert: rec.crew.handle, persona: { crew: { instructions: rec.crew.instructions || "" } } });
-        wk.test.a = a.status === "done" ? a.output || "(빈 답)" : kit.assistError(a);
-      } catch (e) { wk.test.a = e.message; }
-      wk.test.busy = false;
-      paint();
-      send.disabled = false;
-    });
-    q.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send.click(); } });
-    const bar = el("div", "wk-foot");
-    bar.append(send);
-    const h = el("div", "wk-card-head");
-    h.append(el("h3", "", "대화 테스트"), el("small", "", "저장된 설정으로 한 번 답해요 · 파일은 고치지 않아요"));
-    box.append(h, answer, q, bar);
-    return box;
-  }
-
   // 전문가 (208:17763 · 868:61909 · 310:19277): photo cards in one panel; a card opens the detail popup (개요·테스트·기록),
   // and 새 전문가 opens the same popup frame as a form. Everything the old right-hand panel did lives in the popup.
   const catsOf = (all) => [...new Set(all.map((r) => r.crew.category).filter(Boolean))];
@@ -3543,7 +3654,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     row.append(plus);
     return row;
   }
-  // 1회 예상: a rough size of one call (instructions + a base prompt) and, when there is a history, its average price.
+  // 1회 예상 (868:61909): a rough size of one call (instructions + a base prompt), its average price and how long recent calls took.
   function estimateNode() {
     const box = el("div", "ex-est");
     const paint = () => {
@@ -3551,26 +3662,31 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       const row = (wk.usage?.agents || []).find((a) => a.id === wk.id);
       const tok = 1200 + Math.round((d?.instructions || "").length / 2);
       const avg = row?.calls ? row.cost_usd / row.calls : null;
-      // 868:61909: label · dotted leader · value on each line
-      const line = (k, v) => { const r = el("div", "ex-est-row"); r.append(el("span", "", k), el("i", ""), el("span", "v", v)); return r; };
-      box.replaceChildren(line("예상 토큰", `약 ${tok >= 1000 ? `${(tok / 1000).toFixed(1)}K` : tok}`), line("예상 비용", avg == null ? "기록 없음" : `약 ${"$" + avg.toFixed(avg < 0.1 ? 3 : 2)}`));
+      const secs = (wk.calls || []).filter((c) => c.ok && c.latency_ms > 0).map((c) => Math.max(1, Math.round(c.latency_ms / 1000))).sort((a, b) => a - b);
+      const time = !secs.length ? "기록 없음" : secs[0] === secs[secs.length - 1] ? tr(`약 ${secs[0]}초`) : tr(`${secs[0]}~${secs[secs.length - 1]}초`);
+      // label · dotted leader · value on each line
+      const line = (k, v) => { const r = el("div", "ex-est-row"); r.append(el("span", "", k), el("i", ""), raw(el("span", "v", v))); return r; };
+      box.replaceChildren(line("예상 토큰", tr(`약 ${tok >= 1000 ? `${(tok / 1000).toFixed(1)}K` : tok}`)), line("예상 비용", avg == null ? tr("기록 없음") : tr(`약 ${"$" + avg.toFixed(avg < 0.1 ? 3 : 2)}`)), line("예상 시간", time));
     };
     paint();
     wk.estPaint = paint;
     return box;
   }
-  drawWorkerSave = () => { if (wk.bar) wk.bar.hidden = !wk.dirty; if (wk.okBtn) wk.okBtn.disabled = !!wk.busy; wk.estPaint?.(); };
+  // 저장 줄: always there (868:61909); 저장 lights up once something changed.
+  drawWorkerSave = () => { if (wk.okBtn) wk.okBtn.disabled = !!wk.busy || (!!wk.bar && !wk.dirty); if (wk.bar) wk.bar.classList.toggle("dirty", !!wk.dirty); wk.estPaint?.(); };
 
   function openExpertPopup(rec) {
     if (wk.pop) return;
     const isNew = !rec;
     if (isNew) { wk.id = null; wk.draft = blankAgent(); wk.dirty = false; wk.teamsPick = new Set(); wk.newTeams = []; wk.ai = null; }
     wk.bots = undefined; wk.chAdd = null; wk.chKnown = {}; // fresh channel bindings per opening
+    wk.versions = undefined; wk.histOpen = new Set(); wk.calls = null; wk.useOpen = false; wk.useQ = "";
     wk.tab = "edit";
     const face = el("button", "ex-face");
     face.type = "button";
     face.setAttribute("aria-label", "아바타 고르기");
-    const paintFace = () => face.replaceChildren(wk.draft.avatar && validAvatar(wk.draft.avatar) ? faceOf(wk.draft, "big") : (() => { const s = el("span", "ex-art big none"); s.append(avatarMark(wk.draft)); return s; })());
+    const paintFace = () => face.replaceChildren(wk.draft.avatar && validAvatar(wk.draft.avatar) ? faceOf(wk.draft, "big")
+      : isNew ? el("span", "ex-art big none plus", "+") : (() => { const s = el("span", "ex-art big none"); s.append(avatarMark(wk.draft)); return s; })());
     face.addEventListener("click", async () => {
       const a = await pickAvatar(wk.draft.avatar);
       if (a === undefined) return;
@@ -3580,10 +3696,13 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       drawWorkerSave();
     });
     const acts = el("div", "ex-acts");
-    const tabs = isNew ? [{ key: "edit", label: "새 전문가", render: (box) => newBody(box) }]
-      : [{ key: "edit", label: "개요", render: (box) => { wk.tab = "edit"; editBody(box, byId(wk.id)); } },
-        { key: "test", label: "테스트", render: (box) => { wk.tab = "test"; drawWorkerSave = baseSave; wk.bar = wk.okBtn = null; box.append(testPanel(byId(wk.id))); } },
-        { key: "history", label: "기록", render: (box) => { wk.tab = "history"; wk.bar = wk.okBtn = null; historyTab(box, byId(wk.id)); } }];
+    // Each tab marks the window (data-tab) so the head can lay itself out the way that screen's design does.
+    const mark = (box, key) => { wk.tab = key; const dl = box.closest("dialog"); if (dl) dl.dataset.tab = key; };
+    const tabs = isNew ? [{ key: "edit", label: "새 전문가", render: (box) => { mark(box, "edit"); newBody(box); } }]
+      : [{ key: "edit", label: "개요", render: (box) => { mark(box, "edit"); editBody(box, byId(wk.id)); } },
+        { key: "form", label: "편집", render: (box) => { mark(box, "form"); formBody(box, byId(wk.id)); } },
+        { key: "test", label: "테스트", render: (box) => { mark(box, "test"); drawWorkerSave = baseSave; wk.bar = wk.okBtn = null; box.append(testPanel(byId(wk.id))); } },
+        { key: "history", label: "기록", render: (box) => { mark(box, "history"); wk.bar = wk.okBtn = null; historyTab(box, byId(wk.id)); } }];
     const pop = expertPopup.open({
       title: "", sub: "", avatar: face, tabs, initial: isNew ? "edit" : (wk.openTab || "edit"), actions: [acts], cls: `ex-pop${isNew ? " ex-new" : ""}`,
       onClose: () => { if (wk.pop !== pop) return; wk.pop = null; state.workerNew = false; wk.bar = wk.okBtn = wk.estPaint = null; if (isNew && !wk.keep) wk.draft = null; wk.keep = false; render(false); }
@@ -3591,6 +3710,14 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.pop = pop;
     wk.openTab = "edit";
     const names = pop.dialog.querySelector(".crew-popup-who > div");
+    // 868:61909: the tabs sit in the head (a pill group); on 편집 (938:62634) they move under it, next to the @이름 line.
+    const headEl = pop.dialog.querySelector(".crew-popup-head");
+    headEl.append(pop.dialog.querySelector(".crew-popup-tabs"));
+    const callHead = el("div", "ex-callhead");
+    if (!isNew) {
+      headEl.append(callHead);
+      request(`/v1/crew/agents/${encodeURIComponent(rec.id)}/calls?${query({ limit: "30" })}`).then((r) => { wk.calls = r.items || []; wk.estPaint?.(); }, () => { wk.calls = []; });
+    }
     // Closing with unsaved changes asks first (the shared frame's 닫기 button, 바깥 Esc).
     const guard = (e) => {
       if (!wk.dirty || wk.busy) return;
@@ -3599,6 +3726,14 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     };
     pop.dialog.addEventListener("cancel", guard);
     pop.dialog.querySelector(".crew-popup-actions > .btn:last-child, .crew-popup-actions > button:last-child")?.addEventListener("click", guard, true);
+    const copyBtn = (d, cls) => {
+      const copy = el("button", cls);
+      copy.type = "button";
+      copy.setAttribute("aria-label", "@이름 복사");
+      copy.append(icon("copy"));
+      copy.addEventListener("click", () => { navigator.clipboard?.writeText(`@${d.handle}`).then(() => notice("복사했어요."), () => {}); });
+      return copy;
+    };
     wk.paintHead = () => {
       const d = wk.draft;
       paintFace();
@@ -3613,7 +3748,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         // A pick closes the menu and repaints the head, so the chip and the menu never show an old choice.
         const close = () => { m.remove(); document.removeEventListener("pointerdown", away, true); };
         const away = (e) => { if (!m.contains(e.target) && e.target !== cat && !cat.contains(e.target)) close(); };
-        m.append(categoryRow(d, () => { close(); wk.dirty = true; wk.paintHead(); drawWorkerSave(); }));
+        m.append(categoryRow(d, () => { close(); wk.dirty = true; wk.paintHead(); drawWorkerSave(); if (wk.tab === "form") wk.redraw(); }));
         m.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); close(); cat.focus(); } });
         document.addEventListener("pointerdown", away, true);
         names.append(m);
@@ -3622,13 +3757,12 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       const line = el("div", "ex-line");
       const handle = inlineEdit("span", "ex-handle", () => (d.handle ? `@${d.handle}` : ""), (v) => { d.handle = v.replace(/^@/, ""); wk.dirty = true; drawWorkerSave(); wk.paintHead(); },
         { max: 41, ph: "@이름", validate: (v) => (!v.replace(/^@/, "") ? "@이름을 비울 수 없어요." : taken(v.replace(/^@/, "")) ? "이미 쓰는 이름이에요." : "") });
-      const copy = el("button", "icon-btn plain ex-copy");
-      copy.type = "button";
-      copy.setAttribute("aria-label", "@이름 복사");
-      copy.append(icon("copy"));
-      copy.addEventListener("click", () => { navigator.clipboard?.writeText(`@${d.handle}`).then(() => notice("복사했어요."), () => {}); });
-      line.append(inlineEdit("h2", "ex-name", () => d.name, (v) => { d.name = v; wk.dirty = true; drawWorkerSave(); }, { max: 60, ph: "이름", validate: (v) => (v ? "" : "이름을 비울 수 없어요.") }), handle, copy);
-      names.replaceChildren(cat, line, inlineEdit("p", "ex-role", () => d.role, (v) => { d.role = v; wk.dirty = true; drawWorkerSave(); }, { max: 200, ph: "한 줄 소개" }));
+      line.append(inlineEdit("h2", "ex-name", () => d.name, (v) => { d.name = v; wk.dirty = true; drawWorkerSave(); if (wk.tab === "form") wk.redraw(); }, { max: 60, ph: "이름", validate: (v) => (v ? "" : "이름을 비울 수 없어요.") }), handle, copyBtn(d, "icon-btn plain ex-copy"));
+      names.replaceChildren(cat, line, inlineEdit("p", "ex-role", () => d.role, (v) => { d.role = v; wk.dirty = true; drawWorkerSave(); if (wk.tab === "form") wk.redraw(); }, { max: 200, ph: "한 줄 소개" }));
+      // 938:62634: @이름 · where it is called · 복사, beside the tabs on 편집.
+      const cp = copyBtn(d, "ex-callhead-copy");
+      cp.append(el("span", "", "복사"));
+      callHead.replaceChildren(raw(el("strong", "", d.handle ? `@${d.handle}` : "@이름")), el("small", "", "어디서든 이 이름으로 불러요"), cp);
     };
     wk.paintAct = () => {
       acts.replaceChildren();
@@ -3729,6 +3863,61 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; if (!busy) ask.focus({ preventScroll: true }); });
     return pop;
   }
+  // AI로 고치기 · AI로 초안 만들기 as one row (938:62634 접힘 · 929:61931 펼침 · 310:19277): folded it shows how many
+  // proposals wait; open it takes one line and lists the proposals under it (nothing lands before 저장).
+  function aiRow(mode) {
+    const draft = mode === "draft";
+    wk.ai = wk.ai || { open: false, props: [], row: draft };
+    const open = !!wk.ai.row;
+    const box = el("section", `ex-airow${open ? " open" : ""}${draft ? " draft" : ""}`);
+    const waiting = wk.ai.props.filter((p) => !p.applied).length;
+    const toggle = el("button", "ex-airow-toggle");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.append(icon("sparkle"), el("strong", "", draft ? "AI로 초안 만들기" : "AI로 고치기"));
+    const caret = icon("caret-down");
+    caret.classList.add("caret");
+    const flip = () => { wk.ai.row = !open; wk.redraw(); if (!open) requestAnimationFrame(() => wk.pop?.dialog.querySelector(".ex-airow input")?.focus()); };
+    toggle.addEventListener("click", flip);
+    const lines = wk.ai.log || [];
+    const busy = lines.some((m) => m.busy);
+    const ask = input(wk.ai.ask || "", { maxLength: 400, placeholder: draft ? "어떤 동료가 필요하세요? 예: PR 올리기 전에 테스트 빠진 곳을 찾아 주는 동료" : "어떻게 바꿀까요? 예: 배포 전에는 꼭 나한테 물어보게 해 줘" });
+    ask.setAttribute("aria-label", draft ? "어떤 동료가 필요한지" : "어떻게 바꿀지");
+    ask.addEventListener("input", () => { wk.ai.ask = ask.value; });
+    const go = button(draft ? "초안 만들기" : "제안 받기", "primary small", null, () => (draft ? draftWorker(ask.value, go) : proposeFix(ask.value, go)));
+    go.disabled = busy;
+    ask.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); if (!go.disabled) go.click(); } });
+    const line = el("div", "ex-airow-line");
+    if (draft) {
+      line.append(toggle, caret);
+      caret.addEventListener("click", flip);
+      box.append(line);
+      if (open) { const bar = el("div", "ex-airow-ask"); bar.append(ask, go); box.append(bar); }
+    } else if (open) {
+      line.append(toggle, ask, go);
+      box.append(line);
+    } else {
+      line.append(toggle, el("span", "ex-airow-gap"));
+      if (waiting) line.append(el("small", "ex-airow-wait", tr(`제안 ${waiting}개 대기 중`)));
+      line.append(caret);
+      line.addEventListener("click", (e) => { if (e.target === line || e.target.closest(".ex-airow-wait, .caret, .ex-airow-gap")) flip(); });
+      box.append(line);
+    }
+    // The last thing the AI said (working… · filled · failed) under the line.
+    const last = [...lines].reverse().find((m) => m.who === "ai");
+    if (open && last) box.append(raw(el("small", `ex-airow-said${last.busy ? " busy" : ""}${last.err ? " err" : ""}`, last.text)));
+    if (open && !draft && wk.ai.props.length) {
+      const left = wk.ai.props.filter((p) => !p.applied);
+      const list = el("div", "ex-props");
+      const hd = el("div", "ex-props-head");
+      hd.append(el("strong", "", tr(`제안 ${wk.ai.props.length}개`)), el("small", "", "저장하기 전에는 바뀌지 않아요"));
+      if (left.length) hd.append(button("모두 적용", "ghost small", null, () => { for (const p of left) applyProp(p, true); touchWorker(); }));
+      list.append(hd);
+      for (const p of wk.ai.props) list.append(propRow(p));
+      box.append(list);
+    }
+    return box;
+  }
   function applyProp(p, on) { wk.draft[p.key] = on ? p.to : p.from; p.applied = on; }
   // One proposal as 전→후: words that go are struck out, words that come are marked, nothing is cut short.
   function propRow(p) {
@@ -3789,7 +3978,17 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     } catch (e) { Object.assign(reply, { busy: false, err: true, text: e.message }); } finally { btn.disabled = false; wk.redraw?.(); }
   }
 
-  // 일하는 방법 sits with 모델 and 실행 in one card list; each is a wk-card.
+  // 저장 · 취소 (868:61909 · 938:62634): always at the bottom; 저장 lights up once something changed.
+  function saveBar(rec) {
+    const bar = el("div", "ex-savebar");
+    const ok = button("저장", "primary small", null, () => saveWorker(rec));
+    bar.append(ok, button("취소", "ghost small", null, () => { wk.draft = structuredClone(rec.crew); wk.dirty = false; wk.ai = null; wk.paintHead(); wk.paintAct(); wk.redraw(); drawWorkerSave(); }));
+    wk.bar = bar;
+    wk.okBtn = ok;
+    drawWorkerSave = baseSave;
+    return bar;
+  }
+  // 개요 (868:61909): numbers, AI 제안, 모델, 실행, 일하는 방법, 쓸 수 있는 것, 예산, 채널, 삭제.
   function editBody(box, rec) {
     const d = wk.draft;
     box.classList.add("ex-body");
@@ -3798,20 +3997,26 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const runsTile = metric(`${use?.calls || 0}회`, "최근 30일 실행");
     m.append(runsTile, metric(fmtTok(use?.tokens || 0), "전체 토큰"), metric(use ? `$${Number(use.cost_usd || 0).toFixed(2)}` : "$0.00", "추정 비용"));
     dailyBars(rec.id, runsTile);
-    const inTeams = teamsOf(rec.id);
-    const team = raw(el("p", "wk-side-sub", inTeams.length ? inTeams.map((t) => `${t.crew.name} · ${tr(({ moderator: "진행자", worker: "작업자", reviewer: "리뷰어", scribe: "기록자" })[t.crew.members.find((mm) => mm.agent_id === rec.id)?.role] || "작업자")}`).join("  /  ") : tr("아직 어느 팀에도 없어요.")));
-    const bar = el("div", "ex-savebar");
-    bar.hidden = !wk.dirty;
-    const ok = button("저장", "primary small", null, () => saveWorker(rec));
-    bar.append(ok, button("취소", "ghost small", null, () => { wk.draft = structuredClone(rec.crew); wk.dirty = false; wk.ai = null; wk.paintHead(); wk.paintAct(); wk.redraw(); drawWorkerSave(); }));
-    wk.bar = bar;
-    wk.okBtn = ok;
-    drawWorkerSave = baseSave;
-    box.append(m, aiBox("fix"),
-      modelCard(d), runCard(d),
-      workerCard("일하는 방법", `고친 횟수 ${rec.revision} · 마크다운으로 써요`, instructionsField(d), workflowField(d)),
-      useCard(d, rec), budgetCard(rec.id, d), channelCard(rec),
-      workerCard("속한 팀", "", team), dangerRow(rec), bar);
+    box.append(m, aiBox("fix"), modelCard(d), runCard(d),
+      workerCard("일하는 방법", "", instructionsField(d), workflowField(d)),
+      useCard(d, rec), budgetCard(rec.id, d), channelCard(rec), dangerRow(rec), saveBar(rec));
+  }
+  // 기본 (938:62634 · 310:19277): 이름 · 한 줄 소개 · 카테고리.
+  function basicCard(d) {
+    const name = bindText(input(d.name, { maxLength: 60, required: true, placeholder: "예: 코드리뷰어" }), d, "name");
+    const role = bindText(input(d.role, { maxLength: 200, placeholder: "예: 커밋 전에 diff를 보고 고칠 곳을 알려 줘요" }), d, "role");
+    name.addEventListener("input", () => wk.paintHead());
+    role.addEventListener("input", () => wk.paintHead());
+    const f = el("div", "scope-fields");
+    f.append(field("이름", name), field("한 줄 소개", role));
+    return { card: workerCard("기본", "", f, el("h4", "wk-label", "카테고리"), categoryRow(d, () => { wk.dirty = true; wk.paintHead(); wk.redraw(); drawWorkerSave(); })), name };
+  }
+  // 편집 (938:62634): AI로 고치기, 기본, 일하는 방법, 모델, 쓸 수 있는 것, 예산 (amounts only).
+  function formBody(box, rec) {
+    const d = wk.draft;
+    box.classList.add("ex-body");
+    box.append(aiRow("fix"), basicCard(d).card, workerCard("일하는 방법", "", instructionsField(d), workflowField(d)),
+      modelCard(d), useCard(d, rec), budgetCard(null, d), saveBar(rec));
   }
   // 전문가 삭제: last thing in 개요, apart from everything else, and it asks for the name typed back.
   function dangerRow(rec) {
@@ -3822,57 +4027,164 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     return row;
   }
 
-  // 기록: this expert's calls. A direct answer leaves a total in the usage numbers; a workflow it works by leaves one run per call.
+  // 테스트 (868:62591): what was asked on the right, the expert's answer under its face, the line to type at the bottom.
+  function testPanel(rec) {
+    const box = el("div", "ex-test");
+    const log = el("ol", "ex-test-log");
+    log.setAttribute("aria-live", "polite");
+    const turns = (wk.testLog ||= []);
+    const paint = () => {
+      log.replaceChildren(...turns.flatMap((t) => {
+        const me = el("li", "ex-test-me", t.q);
+        const ai = el("li", `ex-test-ai${t.busy ? " busy" : ""}${t.err ? " err" : ""}`);
+        const who = el("div", "ex-test-who");
+        const face = faceOf(rec.crew, "small");
+        who.append(face, raw(el("strong", "", rec.crew.name)), raw(el("small", "", [rec.crew.role, rec.crew.model].filter(Boolean).join(" · "))));
+        const text = el("div", "ex-test-text", t.a);
+        ai.append(who, text);
+        if (!t.busy && t.secs) ai.append(raw(el("small", "ex-test-meta", tr(`${t.secs}초`))));
+        return [me, ai];
+      }));
+      if (!turns.length) log.append(el("li", "ex-test-empty", "물어볼 말을 보내면 저장된 설정으로 답해요."));
+      log.scrollTop = log.scrollHeight;
+    };
+    paint();
+    const q = input("", { maxLength: 4000, placeholder: tr(`@${rec.crew.handle}에게 맡길 일…`) });
+    q.setAttribute("aria-label", "테스트 질문");
+    const send = button("실행", "primary", null, async () => {
+      if (!q.value.trim()) { q.focus(); return; }
+      if (wk.dirty) { notice("저장하지 않은 변경이 있어요. 테스트는 저장된 설정으로 답하니 먼저 저장해 주세요."); return; }
+      send.disabled = true;
+      const t = { q: q.value, a: "답을 기다리는 중…", busy: true };
+      turns.push(t);
+      q.value = "";
+      paint();
+      const t0 = Date.now();
+      try {
+        const a = await kit.assist("try", t.q, { expert: rec.crew.handle, persona: { crew: { instructions: rec.crew.instructions || "" } } });
+        if (a.status === "done") t.a = a.output || "(빈 답)"; else { t.a = kit.assistError(a); t.err = true; }
+      } catch (e) { t.a = e.message; t.err = true; }
+      t.busy = false;
+      t.secs = Math.max(1, Math.round((Date.now() - t0) / 1000));
+      if (box.isConnected) paint();
+      send.disabled = false;
+    });
+    q.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); send.click(); } });
+    const bar = el("div", "ex-test-bar");
+    const hist = el("button", "ex-link", "실행 기록 보기");
+    hist.type = "button";
+    hist.addEventListener("click", () => { wk.tab = "history"; wk.redraw(); });
+    bar.append(q, send, hist);
+    box.append(el("p", "ex-test-note", "여기서 보낸 요청도 실제 실행이에요. 실행 기록과 이번 달 한도에 남아요."), log, bar);
+    return box;
+  }
+
+  // What differs between two saved versions of an expert, in the person's words (기록 › 판 이력).
+  function agentChanges(a, b) {
+    const out = [];
+    const s = (v) => v || "없음";
+    if ((a.name || "") !== (b.name || "")) out.push(`이름 ${s(a.name)} → ${s(b.name)}`);
+    if ((a.handle || "") !== (b.handle || "")) out.push(`@이름 ${s(a.handle)} → ${s(b.handle)}`);
+    if ((a.role || "") !== (b.role || "")) out.push("소개 바꿈");
+    if ((a.category || "") !== (b.category || "")) out.push(`카테고리 ${s(a.category)} → ${s(b.category)}`);
+    if ((a.instructions || "") !== (b.instructions || "")) out.push("지시 바꿈");
+    if ((a.model || "") !== (b.model || "")) out.push(`기본 모델 ${s(a.model)} → ${s(b.model)}`);
+    if ((a.fallback_model || "") !== (b.fallback_model || "")) out.push(`예비 모델 ${s(a.fallback_model)} → ${s(b.fallback_model)}`);
+    if ((a.effort || "medium") !== (b.effort || "medium")) out.push("생각 깊이 바꿈");
+    if ((a.workflow || "") !== (b.workflow || "")) out.push(`일하는 순서 ${s(a.workflow)} → ${s(b.workflow)}`);
+    for (const n of b.skills || []) if (!(a.skills || []).includes(n)) out.push(`스킬 ${n} 추가`);
+    for (const n of a.skills || []) if (!(b.skills || []).includes(n)) out.push(`스킬 ${n} 뺌`);
+    for (const n of b.tools || []) if (!(a.tools || []).includes(n)) out.push(`도구 ${n} 추가`);
+    for (const n of a.tools || []) if (!(b.tools || []).includes(n)) out.push(`도구 ${n} 뺌`);
+    if ((a.budget?.monthly_usd || 0) !== (b.budget?.monthly_usd || 0)) out.push(`한 달 한도 $${a.budget?.monthly_usd || 0} → $${b.budget?.monthly_usd || 0}`);
+    if ((a.budget?.ask_over_usd || 0) !== (b.budget?.ask_over_usd || 0)) out.push(`1회 한도 $${a.budget?.ask_over_usd || 0} → $${b.budget?.ask_over_usd || 0}`);
+    if (JSON.stringify(a.pinned || []) !== JSON.stringify(b.pinned || [])) out.push("고정한 것 바꿈");
+    if (JSON.stringify(a.agents || []) !== JSON.stringify(b.agents || [])) out.push("부르는 곳 바꿈");
+    if (JSON.stringify(a.memory || {}) !== JSON.stringify(b.memory || {})) out.push("기억 종류 바꿈");
+    if ((a.avatar?.art || "") !== (b.avatar?.art || "")) out.push("아바타 바꿈");
+    return out;
+  }
+  const stamp = (at) => { const t = new Date(at); const p = (n) => String(n).padStart(2, "0"); return isNaN(t) ? "" : `${p(t.getMonth() + 1)}-${p(t.getDate())} ${p(t.getHours())}:${p(t.getMinutes())}`; };
+  const CALL_FROM = { manual: "직접", test: "테스트", discord: "디스코드", claude_code: "Claude Code", codex: "Codex", zcode: "ZCode", app: "arkism 앱", schedule: "일정", webhook: "웹훅", meeting: "회의" };
+  // 기록 (868:63273): 판 이력 (GET /v1/crew/versions/{id}) and 최근 실행 (its calls and the runs of the workflow it works by).
   function historyTab(box, rec) {
     box.classList.add("ex-body");
-    const use = (wk.usage?.agents || []).find((a) => a.id === rec.id);
-    const sum = el("div", "ex-metrics");
-    sum.append(metric(`${use?.calls || 0}회`, "최근 30일 호출"), metric(fmtTok(use?.tokens || 0), "토큰"), metric(use ? `$${Number(use.cost_usd || 0).toFixed(2)}` : "$0.00", "추정 비용"));
-    const list = el("div", "ex-hist");
-    box.append(sum, list);
+    const sec = (title, sub, body) => { const s = el("section", "ex-hsec"); const h = el("div", "ex-hsec-head"); h.append(el("h3", "", title), el("small", "", sub)); s.append(h, body); return s; };
+    const vbox = el("div", "tm-hist");
+    if (wk.versions === undefined) {
+      wk.versions = null;
+      request(`/v1/crew/versions/${encodeURIComponent(rec.id)}?${query()}`).then((r) => { wk.versions = r.items || []; }, () => { wk.versions = []; }).then(() => { if (wk.tab === "history") wk.redraw(); });
+    }
+    const list = wk.versions || [];
+    list.forEach((h, i) => {
+      const cur = h.revision === rec.revision;
+      const r = el("div", "tm-hist-row");
+      const sum = list[i + 1] ? agentChanges(list[i + 1].crew, h.crew).slice(0, 2).join(" · ") || "저장" : h.revision === 1 ? "처음 만듦" : "처음 기록";
+      r.append(el("b", cur ? "cur" : "", `v${h.revision}`), el("time", "", stamp(h.at)), raw(el("span", "", sum.split(" · ").map((x) => tr(x)).join(" · "))));
+      const acts = el("span", "tm-hist-acts");
+      if (cur) acts.append(el("em", "", "지금 쓰는 판"));
+      else {
+        const see = el("button", "tm-link quiet", "바뀐 점 보기"); see.type = "button";
+        see.addEventListener("click", () => { if (!wk.histOpen.delete(h.revision)) wk.histOpen.add(h.revision); wk.redraw(); });
+        const back = el("button", "tm-link plain", "이 판으로 되돌리기"); back.type = "button";
+        back.addEventListener("click", async () => {
+          if (!await ask(`v${h.revision}로 되돌릴까요? 새 판으로 저장돼요.`)) return;
+          wk.draft = structuredClone(h.crew); wk.dirty = true; wk.versions = undefined;
+          await saveWorker(rec);
+        });
+        acts.append(see, back);
+      }
+      r.append(acts);
+      vbox.append(r);
+      if (wk.histOpen.has(h.revision)) {
+        const lines = agentChanges(list[0].crew, h.crew); // what restoring this version would change
+        const p = el("p", "tm-hist-diff");
+        p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((x) => raw(el("span", "", tr(x)))));
+        vbox.append(p);
+      }
+    });
+    if (!list.length) vbox.append(el("p", "ex-hist-empty", wk.versions ? "판 이력이 아직 없어요." : "불러오는 중…"));
+    const rbox = el("div", "tm-hist");
+    rbox.append(el("p", "ex-hist-empty", "불러오는 중…"));
+    box.append(sec("판 이력", "저장할 때마다 판이 하나 생겨요. 되돌려도 지금 판은 남아요.", vbox), sec("최근 실행", "테스트 탭에서 보낸 것도 여기 남아요", rbox));
     const wf = allWorkflows().find((w) => w.crew.handle === (rec.crew.workflow || "").replace(/^\$/, ""));
-    list.append(el("p", "dim", "불러오는 중…"));
-    // 워크플로우 실행 and the calls this expert answered itself (GET /v1/crew/agents/{id}/calls), newest first.
-    const runsP = wf ? request(`/v1/crew/runs?${query({ crew_id: wf.id, limit: "30" })}`).then((r) => r.items || []) : Promise.resolve([]);
+    const runsP = wf ? request(`/v1/crew/runs?${query({ crew_id: wf.id, limit: "30" })}`).then((r) => r.items || [], () => []) : Promise.resolve([]);
     const callsP = request(`/v1/crew/agents/${encodeURIComponent(rec.id)}/calls?${query({ limit: "30" })}`).then((r) => r.items || [], () => []);
     Promise.all([runsP, callsP]).then(([runs, calls]) => {
       const rows = [...runs.map((x) => ({ at: String(x.created_at), x })), ...calls.map((c) => ({ at: String(c.at), c }))].sort((a, b) => b.at.localeCompare(a.at));
-      if (!rows.length) { list.replaceChildren(el("p", "dim", "아직 호출 기록이 없어요.")); return; }
-      list.replaceChildren(...rows.slice(0, 50).map(({ x, c }) => {
-        const row = el("div", "ex-hrow");
-        const when = (at) => (ago ? ago(at) : at);
+      if (!rows.length) { rbox.replaceChildren(el("p", "ex-hist-empty", "아직 실행 기록이 없어요.")); return; }
+      rbox.replaceChildren(...rows.slice(0, 50).map(({ x, c }) => {
+        const row = el("div", "tm-hist-row");
         if (c) {
           const cost = Number(c.cost_usd) || 0;
-          row.append(el("span", `wf-badge small ${c.ok ? "line" : "warn"}`, c.ok ? "답함" : "실패"),
-            raw(el("span", "t", `${c.model || "-"} · ${fmtTok((c.input_tokens || 0) + (c.output_tokens || 0))} 토큰${cost ? ` · $${cost.toFixed(c.estimated ? 3 : 4)}${c.estimated ? " 추정" : ""}` : ""}${c.error ? ` · ${c.error}` : ""}`)),
-            el("small", "", `직접 호출 · ${c.trigger || "manual"} · ${when(c.at)}`));
+          const secs = c.latency_ms > 0 ? tr(`${Math.max(1, Math.round(c.latency_ms / 1000))}초`) : "";
+          row.append(el("b", c.ok ? "ok" : "warn", c.ok ? "✓" : "!"), el("time", "", stamp(c.at)), el("i", "tm-hist-src", CALL_FROM[c.trigger] || c.trigger || "직접"),
+            raw(el("span", "", `${c.model || "-"} · ${fmtTok((c.input_tokens || 0) + (c.output_tokens || 0))} ${tr("토큰")}`)),
+            raw(el("small", "", c.ok ? [secs, `$${cost.toFixed(2)}`].filter(Boolean).join(" · ") : [tr("멈춤"), c.error].filter(Boolean).join(" · "))));
           return row;
         }
         const run = x.crew_run || {};
         let said = "";
         try { said = JSON.parse(run.input || "{}").request || ""; } catch { said = run.input || ""; }
-        row.append(el("span", `wf-badge small ${run.status === "failed" ? "warn" : "line"}`, RUN_LABEL[run.status] || run.status || ""),
-          el("span", "t", (said || run.summary || "(입력 없음)").slice(0, 120)), el("small", "", `${run.trigger || ""} · ${when(x.created_at)}`));
+        const ok = run.status === "succeeded";
+        row.append(el("b", ok ? "ok" : "warn", ok ? "✓" : "!"), el("time", "", stamp(x.created_at)), el("i", "tm-hist-src", CALL_FROM[run.trigger] || run.trigger || "직접"),
+          raw(el("span", "", (said || run.summary || tr("(입력 없음)")).slice(0, 120))), el("small", "", RUN_LABEL[run.status] || run.status || ""));
         return row;
       }));
-    }, () => list.replaceChildren(el("p", "dim", "기록을 불러오지 못했어요.")));
+    });
   }
 
-  // 새로 만들기 (310:19277): head shows the preview, then 이름 → AI 초안 → 비슷한 것에서 시작 → 기본 → 방법 → 모델 → 쓸 수 있는 것 → 예산 → 팀.
+  // 새로 만들기 (310:19277): @이름 line, AI로 초안 만들기, 비슷한 것에서 시작, 기본, 일하는 방법, 모델, 쓸 수 있는 것, 예산, 팀에 넣기.
   function newBody(box) {
     const d = wk.draft;
     box.classList.add("ex-body");
-    const upd = () => wk.paintHead();
-    const name = bindText(input(d.name, { maxLength: 60, required: true, placeholder: "예: 코드리뷰어" }), d, "name");
-    const role = bindText(input(d.role, { maxLength: 200, placeholder: "예: 커밋 전에 diff를 보고 고칠 곳을 알려 줘요" }), d, "role");
-    const handle = bindText(input(d.handle, { maxLength: 40, pattern: "[\\p{L}\\p{N}_\\-]{1,40}", placeholder: "띄어쓰기 없이" }), d, "handle", (v) => v.replace(/^@/, ""));
+    const handle = bindText(input(d.handle, { maxLength: 40, pattern: "[\\p{L}\\p{N}_\\-]{1,40}", placeholder: "@이름" }), d, "handle", (v) => v.replace(/^@/, ""));
     handle.setAttribute("aria-label", "@이름");
-    name.addEventListener("input", () => { if (!handle.dataset.touched) { handle.value = d.handle = name.value.replace(/\s+/g, "").slice(0, 40); wk.callHint?.(); } upd(); });
-    role.addEventListener("input", upd);
-    handle.addEventListener("input", () => { handle.dataset.touched = d.handle ? "1" : ""; wk.callHint?.(); });
+    handle.addEventListener("input", () => { handle.dataset.touched = d.handle ? "1" : ""; });
     const callRow = el("label", "ex-call");
-    callRow.append(el("span", "at", "@이름"), handle, el("small", "", "Claude Code·Codex에서 @이름으로 부르면 이 전문가에게 일을 맡겨요"));
-    wk.callHint = () => {};
+    callRow.append(handle, el("small", "", "Claude Code·Codex에서 @이름으로 부르면 이 전문가에게 일을 맡겨요"));
+    const basic = basicCard(d);
+    basic.name.addEventListener("input", () => { if (!handle.dataset.touched) handle.value = d.handle = basic.name.value.replace(/\s+/g, "").slice(0, 40); });
     const like = toggleChips([["", "빈 칸에서"], ...agents().map((r) => [r.id, r.crew.name])], (k) => (d.copy_of || "") === k, (k) => {
       const src = k ? byId(k)?.crew : null;
       const keepTeams = wk.teamsPick;
@@ -3882,7 +4194,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       wk.paintHead();
       wk.redraw();
     });
-    const card = (title, sub, ...nodes) => workerCard(title, sub, ...nodes);
     const teamRow = el("div", "wk-chips");
     for (const t of teams()) {
       const on = wk.teamsPick.has(t.id);
@@ -3910,15 +4221,10 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.bar = null;
     wk.okBtn = ok;
     drawWorkerSave = baseSave;
-    const basic = card("기본", "", el("div", "scope-fields"), el("h4", "wk-label", "카테고리"), categoryRow(d, () => wk.redraw()));
-    basic.querySelector(".scope-fields").append(field("이름", name), field("한 줄 소개", role));
-    box.append(callRow, aiBox("draft"), el("h4", "wk-label", "또는 비슷한 것에서 시작"), like, basic,
-      card("일하는 방법", "전문가가 일할 때 지키는 역할·말투·순서예요.", instructionsField(d), workflowField(d)),
-      modelCard(d, true),
-      (() => { const u = useCard(d, null); u.querySelector(".ex-pin-sum").before(el("h4", "wk-label", "부르는 곳"), placeChips(d)); return u; })(),
-      budgetCard(null, d),
-      card("팀에 넣기 (선택)", teams().length ? "만든 뒤 팀 화면에서도 넣을 수 있어요" : "아직 팀이 없어요. 새 팀을 만들면 거기서 넣어요.", teamRow),
-      bar);
+    const teamsCard = workerCard("팀에 넣기 (선택)", "", el("small", "wk-label", teams().length ? "만든 뒤 팀 화면에서도 넣을 수 있어요" : "아직 팀이 없어요. 새 팀을 만들면 거기서 넣어요."), teamRow);
+    box.append(callRow, aiRow("draft"), el("h4", "wk-label", "또는 비슷한 것에서 시작"), like, basic.card,
+      workerCard("일하는 방법", "", instructionsField(d), workflowField(d)),
+      modelCard(d), useCard(d, null), budgetCard(null, d), teamsCard, bar);
   }
 
   // + 새 팀 (310:19277): name and @이름 only. A team needs at least one member, so it is created right after this
