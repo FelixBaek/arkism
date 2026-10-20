@@ -260,20 +260,17 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const cur = items.find((c) => c.id === sel) || items[0]; sel = cur?.id; list.querySelectorAll(".ov-wide-row").forEach((rw, k) => rw.classList.toggle("on", items[k]?.id === sel)); detailFor(cur);
     }
     search.addEventListener("input", () => { q = search.value.trim(); paint(); });
+    // reading order (2026-10-21): what it says → AI 판단 → final text + buttons; then 판단 근거; then 어디서 왔나요·승인하면 as compact meta
     function detailFor(c) {
       detail.replaceChildren();
       if (!c) { detail.append(el("p", "ov-win-empty", "고를 후보가 없어요.")); return; }
       const k = c.classification, conf = confusing(c, merges), mp = merges.get(c.id), v = k?.verdict;
       const h = el("div", "ov-detail-head"); h.append(el("span", `ov-win-tag ${conf ? "ov-tag-r" : "ov-tag-a"}`, conf ? "헷갈림" : "새로 저장"), el("small", "", `${k?.by ? "AI 분류 · " : ""}${ago(k?.at || c.created_at)}`));
-      const edit = el("textarea", "ov-detail-edit"); edit.value = v?.action === "fix" && v.text ? v.text : c.text; edit.rows = 2; edit.hidden = !(v?.action === "fix" && v.text); edit.setAttribute("aria-label", "고쳐서 저장할 내용");
-      detail.append(h, el("h3", "", c.text));
-      const sec = (title, ...nodes) => { const s2 = el("div", "ov-detail-sec"); s2.append(el("small", "", title), ...nodes); detail.append(s2); return s2; };
-      if (conf && (c.summary || k?.risk_reasons?.length)) sec("AI가 헷갈림으로 본 이유", el("p", "", c.summary || k.risk_reasons.join(" · ")));
-      else if (c.summary) sec("요약", el("p", "", c.summary));
-      if (k?.evidence_span) { const q2 = el("blockquote", "ov-detail-quote", `“${clip(k.evidence_span, 240)}”`); const basis = tag(c, "basis:"); q2.append(el("small", "", `${basis === "explicit_user" ? "사용자 말" : basis === "inferred" ? "AI가 짐작" : "원문"} · ${new Date(c.created_at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}`)); sec("원문 근거", q2); }
-      if (!conf && k?.risk_reasons?.length) sec(`AI 분류 · 위험도 ${k.risk}`, el("p", "", k.risk_reasons.join(" · ")));
-      // AI 의미 검사 (592:51366): shown only when the classifier sent it; it marks, a person decides
-      if (k?.semantic?.length) { const box = el("div", "ov-detail-list"); for (const x of k.semantic) { const lab = SEMANTIC[x.check]; if (!lab) continue; const p = el("p", `ov-check ${x.ok ? "ok" : "no"}`, `${x.ok ? "✓" : "!"} ${lab[x.ok ? 0 : 1]}`); box.append(p); if (!x.ok && x.note) box.append(el("small", "ov-check-note", clip(x.note, 120))); } sec("AI 의미 검사 · 표시만 해요", box); }
+      const edit = el("textarea", "ov-detail-edit"); edit.value = v?.action === "fix" && v.text ? v.text : c.text; edit.rows = 3; edit.hidden = !(v?.action === "fix" && v.text); edit.setAttribute("aria-label", "고쳐서 저장할 내용");
+      const head = el("div", "ov-detail-group"); head.append(h, el("h3", "", c.text)); detail.append(head);
+      const decide1 = el("div", "ov-detail-group"), basisG = el("div", "ov-detail-group ov-detail-group-sub"), metaG = el("div", "ov-detail-group ov-detail-group-sub");
+      basisG.append(el("h4", "ov-detail-group-t", "판단 근거")); metaG.append(el("h4", "ov-detail-group-t", "자세한 정보"));
+      const sec = (into, title, ...nodes) => { const s2 = el("div", "ov-detail-sec"); s2.append(el("small", "", title), ...nodes); into.append(s2); return s2; };
       // AI 판단 (764:61615): advice only, the buttons below stay the person's
       if (v && VERDICT[v.action]) {
         const box = el("div", "ov-verdict"); box.append(el("strong", `ov-verdict-${v.action}`, VERDICT[v.action])); if (v.reason) box.append(el("p", "", v.reason));
@@ -284,28 +281,18 @@ window.ArkismOverviewWindows = (ctx, env) => {
           catch (e) { again.disabled = false; again.textContent = "다시 시도"; }
         });
         if (!k.by) { again.disabled = true; box.append(el("small", "ov-verdict-wait", "다시 보는 중이에요. 다음 AI 검토(매시 정각)에 바뀌어요.")); }
-        const s3 = sec(`AI 판단${k.at ? ` · ${new Date(k.at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}` : ""}`, box); s3.classList.add("ov-detail-sec-act", "ov-detail-sec-box"); s3.firstChild.after(again);
+        const s3 = sec(decide1, `AI 판단${k.at ? ` · ${new Date(k.at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}` : ""}`, box); s3.classList.add("ov-detail-sec-act", "ov-detail-sec-box"); s3.firstChild.after(again);
       }
       const rs = c.reach_suggestion;
-      if (rs) { const chips = el("div", "ov-wide-chips"); for (const [val, l] of [["personal", "개인"], ["general", "범용"], ["project", "이 프로젝트만"]]) chips.append(el("span", `ov-wide-chip${val === rs.reach ? " on" : ""}`, val === rs.reach ? `${l} · AI 추천` : l)); sec("AI 칸 제안 · 정하는 건 사람이에요", chips, el("p", "", rs.reason || "")).classList.add("ov-detail-sec-box"); }
+      if (rs) { const chips = el("div", "ov-wide-chips"); for (const [val, l] of [["personal", "개인"], ["general", "범용"], ["project", "이 프로젝트만"]]) chips.append(el("span", `ov-wide-chip${val === rs.reach ? " on" : ""}`, val === rs.reach ? `${l} · AI 추천` : l)); sec(decide1, "AI 칸 제안 · 정하는 건 사람이에요", chips, ...(rs.reason ? [el("p", "", rs.reason)] : [])); }
       const oldId = mp?.merge?.proposal?.targets?.[0]?.id || k?.dup_hint, oldMem = oldId && D().memories.find((m) => m.id === oldId);
       if (oldMem) {
         const cmp = el("div", "ov-detail-list"), nw = el("div", "ov-cmp diff-add"), od = el("div", "ov-cmp diff-del"), u = usage(oldId), n = u ? u.d30 || u.d7 || 0 : 0;
-        nw.append(el("small", "", "새 후보"), el("span", "", c.text)); od.append(el("small", "", n ? `기존 기억 · ${num(n)}번 쓰임` : "기존 기억"), el("span", "", oldMem.text)); cmp.append(od, nw); sec("비교", cmp);
+        nw.append(el("small", "", "새 후보"), el("span", "", c.text)); od.append(el("small", "", n ? `기존 기억 · ${num(n)}번 쓰임` : "기존 기억"), el("span", "", oldMem.text)); cmp.append(od, nw); sec(decide1, "비교", cmp);
       }
-      const ev = tag(c, "event_id:");
-      if (ev) {
-        const [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid), b = el("div", "ov-detail-from");
-        b.append(el("span", "", ses ? `${agent} · ${ses.title || ses.project || ""}` : agent), button("세션 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec("어디서 왔나요", b);
-      }
-      const f = el("div", "ov-detail-facts"), fact = (a2, b2) => { const p = el("p", ""); p.append(el("span", "", a2), el("strong", "", b2)); f.append(p); };
-      // approve takes no reach: an empty one becomes personal for a user memory, general otherwise (the suggestion stays advice)
-      const reachOnApprove = c.reach || (c.kind === "user" ? "personal" : "general");
-      fact("들어갈 곳", "쓰는 중인 기억"); fact("쓰는 곳", REACH_WHERE[reachOnApprove] || REACH_WHERE.general); sec("승인하면", f);
-      detail.append(edit);
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
       const go1 = async (action, extra) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true)); const r = await decide(c, action, extra); if (r?.error) { st.textContent = r.error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); } else { sel = null; wideReview(); } };
-      if (c.conflict_id || c.status === "conflicted") { sec("충돌", el("p", "", "기존 기억과 충돌하는 후보예요. 어느 쪽을 남길지는 전체 화면에서 골라요.")); act.append(button("전체 화면으로", "primary small", null, () => { dlg.close(); go("memories", "conflicted"); })); }
+      if (c.conflict_id || c.status === "conflicted") { sec(decide1, "충돌", el("p", "", "기존 기억과 충돌하는 후보예요. 어느 쪽을 남길지는 전체 화면에서 골라요.")); act.append(button("전체 화면으로", "primary small", null, () => { dlg.close(); go("memories", "conflicted"); })); }
       else {
         const pick = v?.action === "fix" ? "fix" : v?.action === "merge" && mp ? "merge" : "approve"; // the AI's pick only takes the accent; nothing runs on its own
         const mk = (key, label, fn) => button(label, `small${pick === key ? " primary" : ""}`, null, fn);
@@ -315,10 +302,33 @@ window.ArkismOverviewWindows = (ctx, env) => {
           catch (er) { st.textContent = er.message === "revision_conflict" ? "후보나 대상 기억이 바뀌어 이 제안은 낡았어요." : `합치지 못했어요: ${er.message}`; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); mb.focus(); }
         }));
         act.append(mk("approve", "따로 승인", () => go1("approve")),
-          mk("fix", edit.hidden ? "고쳐서 승인" : "고쳐서 저장", () => { if (edit.hidden) { edit.hidden = false; edit.focus(); return; } if (!edit.value.trim()) return; go1("edit_approve", { content: edit.value.trim() }).catch(() => {}); }),
+          mk("fix", edit.hidden ? "고쳐서 승인" : "고쳐서 저장", () => { if (edit.hidden) { edit.hidden = false; editSec.hidden = false; edit.focus(); return; } if (!edit.value.trim()) return; go1("edit_approve", { content: edit.value.trim() }).catch(() => {}); }),
           button("버리기", "small", null, () => askReason("후보를 버릴까요?", (reason) => go1("reject", { reason }))));
       }
-      detail.append(st, act);
+      const editSec = sec(decide1, "저장할 내용 · 고칠 수 있어요", edit); editSec.hidden = edit.hidden;
+      decide1.append(act, st); detail.append(decide1);
+      // 판단 근거: why it was flagged, the source quote, the meaning checks
+      if (conf && (c.summary || k?.risk_reasons?.length)) sec(basisG, "AI가 헷갈림으로 본 이유", el("p", "", c.summary || k.risk_reasons.join(" · ")));
+      else if (c.summary) sec(basisG, "요약", el("p", "", c.summary));
+      if (!conf && k?.risk_reasons?.length) sec(basisG, `AI 분류 · 위험도 ${k.risk}`, el("p", "", k.risk_reasons.join(" · ")));
+      if (k?.evidence_span) { const q2 = el("blockquote", "ov-detail-quote", `“${clip(k.evidence_span, 240)}”`); const basis = tag(c, "basis:"); q2.append(el("small", "", `${basis === "explicit_user" ? "사용자 말" : basis === "inferred" ? "AI가 짐작" : "원문"} · ${new Date(c.created_at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}`)); sec(basisG, "원문 근거", q2); }
+      // AI 의미 검사 (592:51366): shown only when the classifier sent it; it marks, a person decides. Icon + words, the note indented under its item
+      if (k?.semantic?.length) {
+        const box = el("ul", "ov-checks");
+        for (const x of k.semantic) { const lab = SEMANTIC[x.check]; if (!lab) continue; const li = el("li", `ov-check ${x.ok ? "ok" : "no"}`); const ic = el("span", "ov-check-i", x.ok ? "✓" : "!"); ic.setAttribute("aria-hidden", "true"); li.append(ic, el("span", "", lab[x.ok ? 0 : 1])); if (!x.ok && x.note) li.append(el("small", "ov-check-note", clip(x.note, 120))); box.append(li); }
+        if (box.children.length) sec(basisG, "AI 의미 검사 · 표시만 해요", box);
+      }
+      if (basisG.children.length > 1) detail.append(basisG);
+      const ev = tag(c, "event_id:");
+      if (ev) {
+        const [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid), b = el("div", "ov-detail-from");
+        b.append(el("span", "", ses ? `${agent} · ${ses.title || ses.project || ""}` : agent), button("세션 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec(metaG, "어디서 왔나요", b);
+      }
+      const f = el("div", "ov-detail-facts"), fact = (a2, b2) => { const p = el("p", ""); p.append(el("span", "", a2), el("strong", "", b2)); f.append(p); };
+      // approve takes no reach: an empty one becomes personal for a user memory, general otherwise (the suggestion stays advice)
+      const reachOnApprove = c.reach || (c.kind === "user" ? "personal" : "general");
+      fact("들어갈 곳", "쓰는 중인 기억"); fact("쓰는 곳", REACH_WHERE[reachOnApprove] || REACH_WHERE.general); sec(metaG, "승인하면", f);
+      detail.append(metaG);
     }
     twoPane(d, bar, list, detail); d.lastChild.querySelector(".ov-wide-left").append(more); paint();
   }

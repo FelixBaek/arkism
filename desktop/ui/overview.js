@@ -81,7 +81,13 @@ window.ArkismOverview = (ctx) => {
       judge: [[`${num(tidy)}건`, "정리할 기억"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"], [w ? `${num(w.injections)}회` : "—", "넣은 횟수"]],
       dream: [[`${num(nProp)}건`, "정리 제안"], [nProp ? ago(latest(proposals)) : "—", "마지막 제안"], [`${num((d.maintenance || []).filter((p) => p.maintenance?.type === "contradiction").length)}건`, "충돌 제안"]]
     };
-    const withItems = (list) => list.map((s) => ({ ...s, tiles: TILES[s.key], badge: BADGE[s.key] }));
+    // dot health — g 정상 · y 곧 확인 · o 확인 필요 · r 멈춤: last event <24h g, <3d y, older/none o (불러오기 <7d y); waiting work: none g, 분류 <6h y else o, 승인 <3d y else o, 검증·드리밍 y; 분석 멈춤 r
+    const age = (t, yMax = 3 * 24 * HOUR) => !t ? "o" : now - t < 24 * HOUR ? "g" : now - t < yMax ? "y" : "o";
+    const oldestUnclassified = unclassified.length ? Math.min(...unclassified.map((m) => time(m.created_at) || now)) : 0;
+    const HEALTH = { collect: age(lastSession), extract: stalled ? "r" : age(lastExtract), classify: !unclassified.length ? "g" : now - oldestUnclassified < 6 * HOUR ? "y" : "o",
+      review: !waiting.length ? "g" : now - oldest < 3 * 24 * HOUR ? "y" : "o", recall: age(latest(recallTimes), 7 * 24 * HOUR), trace: age(reported),
+      judge: !w ? "o" : tidy ? "y" : "g", dream: nProp ? "y" : "g" };
+    const withItems = (list) => list.map((s) => ({ ...s, tiles: TILES[s.key], badge: BADGE[s.key], health: HEALTH[s.key] }));
     return withItems([
       { key: "collect", group: "save", label: "대화 저장", region: "두정엽", tone: "n", note: ago(lastSession),
         big: `${num(sessions.filter(today).length)}건`, bigSub: "오늘", step: lastSession ? ago(lastSession) : "기록 없음",
@@ -177,12 +183,12 @@ window.ArkismOverview = (ctx) => {
 
       const card = el("button", `ov-card ov-card-${side}`); card.type = "button"; card.style.top = `${top}px`;
       const head = el("div", "ov-card-head"), name = el("span", "ov-card-name"), note = el("span", "ov-card-note"), region = el("span", "ov-card-region");
-      head.append(el("i", "ov-dot"), name, note, region);
+      const dot = el("i", "ov-dot"); dot.setAttribute("role", "img"); head.append(dot, name, note, region);
       const body = el("div", "ov-card-body"), big = el("div", "ov-big"), small = el("div", "ov-small"), chart = el("div", "ov-chart");
       big.append(el("strong"), el("small")); small.append(el("strong"), el("small"));
       for (let k = 0; k < 7; k++) chart.append(el("i"));
       body.append(big, small, chart); card.append(head, body); stage.append(card);
-      ui.cards[key] = { card, name, note, region, big, small, chart };
+      ui.cards[key] = { card, dot, name, note, region, big, small, chart };
     });
     const mid = el("div", "ov-node ov-node-white"); Object.assign(mid.style, { left: "624px", top: "692px" });
     mid.append(el("i", "ov-ring"), el("i", "ov-halo"), el("i", "ov-frame"), el("i", "ov-core")); stage.append(mid);
@@ -231,27 +237,29 @@ window.ArkismOverview = (ctx) => {
     const b = el("button", "ov-chip"); b.type = "button"; const i = el("i", "ov-dot");
     b.append(i, el("strong", "", label), el("span", "", value), el("span", "ov-chev", "›")); b.addEventListener("click", open); return b;
   }
+  const HEALTH_WORD = { g: "정상", y: "곧 확인", o: "확인 필요", r: "멈춤" };
+  const healthDot = (dot, h) => { dot.setAttribute("aria-label", HEALTH_WORD[h]); dot.title = HEALTH_WORD[h]; };
   function paint() {
     const list = stages(), by = Object.fromEntries(list.map((s) => [s.key, s]));
     for (const g of ["save", "use", "dream"]) {
       const line = ui.steps[g]; line.replaceChildren();
       list.filter((s) => s.group === g).forEach((s, i) => {
         if (i) line.append(el("span", `ov-step-join${s.tone === "r" || list.filter((x) => x.group === g)[i - 1].tone === "r" ? " r" : ""}`));
-        const b = el("button", `ov-step ov-t-${s.tone}`); b.type = "button";
-        const t = el("span", "ov-step-name"); t.append(el("i", "ov-dot"), document.createTextNode(s.label));
+        const b = el("button", `ov-step ov-t-${s.tone} ov-h-${s.health}`); b.type = "button";
+        const t = el("span", "ov-step-name"), dot = el("i", "ov-dot"); healthDot(dot, s.health); t.append(dot, document.createTextNode(s.label));
         b.append(t, el("span", "ov-step-sub", s.step)); b.addEventListener("click", () => openStage(s.key)); line.append(b);
       });
     }
     for (const s of list) {
       const c = ui.cards[s.key];
-      c.card.className = `ov-card ov-card-${PLACE.find((p) => p[0] === s.key)[1]} ov-t-${s.tone}`;
+      c.card.className = `ov-card ov-card-${PLACE.find((p) => p[0] === s.key)[1]} ov-t-${s.tone} ov-h-${s.health}`; healthDot(c.dot, s.health);
       c.card.onclick = () => openStage(s.key);
       c.name.textContent = s.label; c.note.textContent = s.note || ""; c.region.textContent = s.region;
       c.big.firstChild.textContent = s.big; c.big.lastChild.textContent = s.bigSub;
       c.small.hidden = !s.small; c.small.firstChild.textContent = s.small || ""; c.small.lastChild.textContent = s.smallSub || "";
       const last7 = s.counts.slice(-7), max = Math.max(1, ...last7);
       [...c.chart.children].forEach((bar, k) => { bar.style.height = `${8 + (last7[k] / max) * 24}px`; bar.classList.toggle("now", k === 6); bar.classList.toggle("none", !last7[k]); });
-      const l = ui.links[s.key]; l.node.className = `ov-node ov-t-${s.tone}${s.tone === "r" ? " alert" : ""}`; l.line.setAttribute("class", `ov-link ov-t-${s.tone}`); l.pt.className = `ov-particle ov-t-${s.tone}`;
+      const l = ui.links[s.key]; l.node.className = `ov-node ov-t-${s.tone} ov-h-${s.health}${s.tone === "r" ? " alert" : ""}`; l.line.setAttribute("class", `ov-link ov-t-${s.tone}`); l.pt.className = `ov-particle ov-t-${s.tone}`;
       const r = ui.rows[s.key]; r.name.textContent = s.label; r.name.className = `ov-grid-name${s.tone === "r" ? " r" : ""}`;
       [...r.cells.children].forEach((cell, k) => { cell.className = s.row[k] ? `ov-c-${s.row[k]}` : ""; });
     }
