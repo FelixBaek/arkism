@@ -3123,7 +3123,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   window.addEventListener("arkism:open-expert", (e) => {
     const { id, tab = "edit", over } = e.detail || {};
     if (!id) return;
-    if (over && byId(id) && !wk.pop) { workerPick(id); wk.openTab = tab; openExpertPopup(byId(id)); loadAgentInfo().catch(console.error); } else openWorkers(id, false, tab);
+    if (over && byId(id) && !wk.pop) { workerPick(id); wk.openTab = tab; openExpertPopup(byId(id));
+      // loadAgentInfo repaints only the expert list, so swap in the numbers it fetched here
+      loadAgentInfo().then(() => { const r = byId(id); if (r) wk.pop?.dialog.querySelectorAll(".ex-metrics").forEach((x) => x.replaceWith(usageMetrics(r))); }).catch(console.error); } else openWorkers(id, false, tab);
   });
   function openWorkers(id, isNew = false, tab = "edit") {
     if (wk.pop) return;

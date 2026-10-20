@@ -37,7 +37,7 @@ window.ArkismSessions = (ctx) => {
   async function transcript(id, more = false, mark = "") {
     const ticket = ++txEpoch;
     const prev = more && S.tx?.id === id ? S.tx : null;
-    S.tx = { id, mark: prev ? prev.mark : mark, pages: prev ? prev.pages + 1 : 1, items: prev ? prev.items : [], hidden: prev ? prev.hidden : 0, state: prev ? prev.state : "", archives: prev ? prev.archives : [],
+    S.tx = { id, mark: prev ? prev.mark : mark, scrolled: !!prev?.scrolled, pages: prev ? prev.pages + 1 : 1, items: prev ? prev.items : [], hidden: prev ? prev.hidden : 0, state: prev ? prev.state : "", archives: prev ? prev.archives : [],
       archive: prev ? prev.archive : "", next: prev ? prev.next : "", loading: true, error: "" };
     paint();
     try {
@@ -82,7 +82,7 @@ window.ArkismSessions = (ctx) => {
       if (at >= 0) { // 승인 대기 › 세션 보기: underline the words the memory came from, and bring them into view
         const hit = el("mark", "ss-hit", tx.mark); hit.dataset.noI18n = "";
         text.replaceChildren(m.text.slice(0, at), hit, m.text.slice(at + tx.mark.length));
-        requestAnimationFrame(() => hit.scrollIntoView({ block: "center" }));
+        if (!tx.scrolled) { tx.scrolled = true; requestAnimationFrame(() => hit.scrollIntoView({ block: "center" })); } // once: repaints keep the reader's place
       }
       box.append(el("b", "", m.role === "user" ? "사용자" : "에이전트"), text);
       if (m.truncated) box.append(el("small", "ss-note", "길어서 앞부분만 보여요."));
@@ -258,12 +258,14 @@ window.ArkismSessions = (ctx) => {
     if (!S.doc.items.length) list.append(el("div", "empty", "조건에 맞는 세션이 없어요."));
     parts.push(list, el("p", "v4s-foot", S.doc.total > S.doc.items.length ? `${num(S.doc.total)}개 중 ${S.doc.items.length}개 표시` : `세션 ${num(S.doc.total)}개`));
     table.replaceChildren(...parts);
+    let missed = false;
     if (S.find) { // 승인 대기 › 세션 보기: open the session the memory came from, with its dialogue
       const f = S.find; S.find = null; // cleared first: transcript() repaints, which comes back here
       const hit = S.doc.items.find((x) => x.session_id === f.sid);
-      if (hit) { S.selected = hit.id; void transcript(hit.id, false, f.quote); } else S.notice = "이 기억이 나온 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요.";
+      if (hit) { S.selected = hit.id; void transcript(hit.id, false, f.quote); }
+      else { S.notice = "이 기억이 나온 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요."; table.prepend(el("p", "ss-note", S.notice)); missed = true; }
     }
-    if (!S.selected && S.doc.items[0]) S.selected = S.doc.items[0].id;
+    if (!S.selected && !missed && S.doc.items[0]) S.selected = S.doc.items[0].id; // a missing session must not look like the first one
     detail();
   }
   // 사용량 › 세션 상세 → 대화 내용 보기: open this session here, widening the range when it is older than the list.

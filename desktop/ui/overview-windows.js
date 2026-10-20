@@ -268,9 +268,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // 승인 대기 (580:49518 + improvements 592:51366 / 764:61615)
   // 드리밍 정리 제안 (maintenance proposals) wait here too, as [정리] rows with their own decide
   const DREAM_LABEL = { duplicate: "합치기", contradiction: "고치기" };
-  const known = (id) => D().memories.some((m) => m.id === id);
-  // a proposal whose memory is gone is hidden, as on the 기억 screen: deciding it would only go stale
-  const dreamItems = () => (D().maintenance || []).filter((p) => { const t = p.maintenance || {}; return t.memory ? known(t.memory.id) : known(t.keep?.id) && known(t.retire?.id); }).map((p) => { const t = p.maintenance || {};
+  const known = (ref) => !!ref && D().memories.some((m) => m.id === ref.id && (ref.revision == null || m.revision === ref.revision));
+  // a proposal whose memory is gone or changed since is hidden, as on the 기억 screen: deciding it would only go stale
+  const dreamItems = () => (D().maintenance || []).filter((p) => { const t = p.maintenance || {}; return t.memory ? known(t.memory) : known(t.keep) && known(t.retire); }).map((p) => { const t = p.maintenance || {};
     return { dream: p, id: p.id, created_at: p.created_at, text: memText(t.memory?.id || t.keep?.id), label: t.memory ? "고치기" : DREAM_LABEL[t.type] || "정리" }; });
   function wideReview(focusId, startKind) {
     const all = waiting(), dreams = dreamItems(), d = shell("승인 대기", `${num(all.length + dreams.length)}건`, "AI는 분류만 해요. 승인은 사람이 해요.", () => { open("review"); });
