@@ -36,7 +36,7 @@
 .ov-steps { position: absolute; left: 24px; top: 38px; width: calc(1109px / var(--ov-k, 1)); display: flex; gap: 16px; transform: scale(var(--ov-k, 1)); transform-origin: 0 0; --ov-sw: calc((100% - 168px) / 8); }
 .ov-group { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: none; padding: 6px 10px 10px; border: 1px solid rgba(var(--ov-fg-rgb),.1); border-radius: 12px; background: rgba(var(--ov-fg-rgb),.02); }
 /* one step width for all 8 steps: (strip − 3×22 padding+border − 5×14 joins − 2×16 gaps) ÷ 8; border-box */
-.ov-group-save { width: calc(var(--ov-sw) * 4 + 64px); } .ov-group-use { width: calc(var(--ov-sw) * 3 + 50px); } .ov-group-dream { width: calc(var(--ov-sw) + 22px); }
+.ov-group-save { width: calc(var(--ov-sw) * 4 + 64px); } .ov-group-use { width: calc(var(--ov-sw) * 3 + 50px); } .ov-group-dream { width: calc(var(--ov-sw) + 22px); border-color: color-mix(in srgb, var(--ov-p) 40%, transparent); background: color-mix(in srgb, var(--ov-p) 6%, transparent); }
 .ov-group-head { display: flex; align-items: center; height: 16px; color: rgba(var(--ov-fg-rgb),.55); font-size: 11px; }
 .ov-group-head i { display: none; }
 .ov-group-line { display: flex; align-items: center; height: 46px; }
@@ -298,7 +298,6 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .mm-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (prefers-reduced-motion: reduce) { .mm-pill, .mm-tip { transition: none; } }
 /* 승인 대기 정렬·다시 보기 (764:61615) */
-.ov-wide-bar .ov-wide-sort { margin-left: 4px; color: var(--text-2); white-space: nowrap; }
 .ov-detail-sec-act { position: relative; }
 .ov-detail-sec-act > .ov-verdict-again { position: absolute; top: -6px; right: 0; }
 .ov-verdict-wait { color: var(--text-3, var(--text-2)); font-size: 12px; }
@@ -324,9 +323,22 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-detail-group > .ov-win-err:empty { display: none; }
 /* light theme: the dark-theme amber/red on white is too faint for the wait count and tags */
 :root[data-theme="light"] .ov-wide-row-r.ov-r-a { color: #8a5a00; } :root[data-theme="light"] .ov-win-tag.ov-tag-a { color: #8a5a00; } :root[data-theme="light"] .ov-win-tag.ov-tag-r { color: #b4202e; }
-/* wide windows: sort at the far left, a divider, then kind chips on one line that scrolls sideways */
-.ov-wide-filter { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; }
-.ov-wide-filter .ov-wide-sort { flex: none; margin-left: 0; }
-.ov-wide-div { flex: none; width: 1px; height: 18px; background: var(--nc-line, var(--border)); }
-.ov-wide-chipscroll { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
-.ov-wide-chipscroll .ov-wide-chips { flex-wrap: nowrap; } .ov-wide-chipscroll .ov-wide-chip { flex: none; white-space: nowrap; }
+/* wide windows: sort, search, then the kind chips wrapping on their own line */
+.ov-wide-filter { flex: 1 1 100%; min-width: 0; }
+.ov-wide-bar select.ov-wide-sort { flex: none; margin-left: 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-2); font: inherit; font-size: 12px; cursor: pointer; }
+/* kind tags (overview-windows.js KIND_COLOR) and dreaming in purple (--ov-p) */
+.ov-win-tag.ov-tag-k { background: color-mix(in srgb, var(--tag) 16%, transparent); color: color-mix(in srgb, var(--tag) 82%, var(--text, #fff)); }
+.ov-win-tag.ov-tag-p, .ov-win-dream { --ov-p: #c58cff; }
+:root[data-theme="light"] :is(.ov-win-tag.ov-tag-p, .ov-win-dream) { --ov-p: #8a4fd1; }
+.ov-win-tag.ov-tag-p { background: color-mix(in srgb, var(--ov-p) 16%, transparent); color: var(--ov-p); }
+.ov-win-dream { --tone: var(--ov-p); }
+.ov-win-dream .ov-win-badge { color: var(--ov-p); background: color-mix(in srgb, var(--ov-p) 14%, transparent); }
+.ov-group-dream .ov-group-head { color: var(--ov-p); }
+.ov-group-dream .ov-step { border-color: color-mix(in srgb, var(--ov-p) 50%, var(--ov-step-line)); }
+/* 승인 대기 detail: [헷갈림] reason, the merge hint, the sparkle 다시 보기 */
+.ov-detail-why { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin: 0; }
+.ov-detail-hint { display: block; margin-top: 6px; color: var(--text-2); font-size: 12px; }
+.ov-verdict-again.icon-btn { width: 28px; height: 28px; padding: 0; display: inline-grid; place-items: center; }
+.ov-verdict-again svg { width: 15px; height: 15px; fill: currentColor; }
+.ov-verdict .ov-checks { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.ov-wide-row-cb { flex: none; width: 13px; } /* a dreaming row has no checkbox: keeps the text in line */

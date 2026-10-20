@@ -20,9 +20,9 @@
     const out = [];
     let group = "";
     for (const o of dl?.options || []) {
-      const it = { value: o.value, hint: o.label && o.label !== o.value ? o.label : "", on: o.value === ctl.value, key: o.dataset.key || "", group: o.dataset.group || "" };
+      const it = { value: o.value, hint: o.label && o.label !== o.value ? o.label : "", on: o.value === ctl.value, key: o.dataset.key || "", group: o.dataset.group || "", icon: o.dataset.icon || "", tag: o.dataset.tag || "" };
       if (tab && o.dataset.tab !== tab || q && !it.value.toLowerCase().includes(q) && !it.hint.toLowerCase().includes(q)) continue;
-      if (it.group && it.group !== group) out.push({ head: it.group, disabled: true });
+      if (it.group && it.group !== group) out.push({ head: it.group, icon: o.dataset.groupIcon || it.group, disabled: true });
       group = it.group;
       out.push(it);
     }
@@ -60,7 +60,13 @@
       }
     }
     const rows = open.items.map((o, i) => {
-      if (o.head) { const h = document.createElement("div"); h.className = "combo-head"; h.setAttribute("role", "presentation"); h.textContent = o.head; return h; }
+      if (o.head) {
+        const h = document.createElement("div"); h.className = "combo-head"; h.setAttribute("role", "presentation");
+        const m = window.ArkismBrand?.mark(o.icon); // data-group-icon: the provider's logo before its name
+        const t = document.createElement("span"); t.textContent = o.head; // one flex item, so the gap never splits the name
+        h.append(...(m ? [m] : []), t);
+        return h;
+      }
       const b = document.createElement("div");
       b.className = `combo-opt${o.on ? " on" : ""}${i === open.at ? " at" : ""}${o.disabled ? " off" : ""}`;
       b.id = `combo-opt-${i}`;
@@ -68,8 +74,11 @@
       b.setAttribute("aria-selected", String(!!o.on));
       const t = document.createElement("span");
       t.textContent = o.label ?? o.value;
+      const m = o.icon && window.ArkismBrand?.mark(o.icon);
+      if (m) b.append(m);
       b.append(t);
       if (o.hint) { const h = document.createElement("small"); h.textContent = o.hint; b.append(h); }
+      if (o.tag) { const g = document.createElement("em"); g.className = "combo-tag"; g.textContent = o.tag; b.append(g); } // data-tag: a label at the right end
       b.addEventListener("pointerdown", (e) => { e.preventDefault(); if (!o.disabled) pick(o); });
       return b;
     });

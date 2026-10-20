@@ -13,15 +13,16 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8790
 
 def many(n):
     import random
-    r = random.Random(7); reach = ["personal", "general", "project"]; kinds = ["decision", "procedural", "lesson", "user", "episodic"]
+    r, days = random.Random(7), random.Random(11); reach = ["personal", "general", "project"]; kinds = ["decision", "procedural", "lesson", "user", "episodic"]
     with open(os.path.join(HERE, "v1/digests.topic.active.json"), encoding="utf-8") as fh: topics = json.load(fh)
     nodes, mems, edges = [], [], []
     for t in topics["items"] + [None]:
         ids = [f"{t['id'] if t else 'un'}-{i}" for i in range(n)]
         if t: t["members"] = [{"collection": "memories", "id": x, "revision": 1} for x in ids]
         for x in ids:
+            when = f"2026-10-{days.randint(1, 13):02d}T{days.randint(0, 23):02d}:16:34Z"  # spread out, so the sort orders differ
             k = r.choice(kinds); nodes.append({"id": x, "reach": r.choice(reach), "kind": k, "uses": int(r.paretovariate(1.5)) - 1, "vector_pending": False})
-            mems.append({"id": x, "text": f"{t['title'] if t else '분류 대기'} 예시 기억 {x}", "kind": k, "status": "active", "revision": 1, "created_at": "2026-10-13T11:16:34Z", "updated_at": "2026-10-13T11:16:34Z", "tags": []})
+            mems.append({"id": x, "text": f"{t['title'] if t else '분류 대기'} 예시 기억 {x}", "kind": k, "status": "active", "revision": 1, "created_at": when, "updated_at": when, "tags": []})
         for x in ids[1:]:
             if r.random() < 0.5: edges.append({"from": x, "to": r.choice(ids), "type": r.choice(["supports", "same_session", "same_session", "conflicts", "supersedes"])})
     for _ in range(n // 10): edges.append({"from": r.choice(nodes)["id"], "to": r.choice(nodes)["id"], "type": "supports"})

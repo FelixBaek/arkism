@@ -36,7 +36,8 @@ window.ArkismMessenger = (ctx) => {
     const c = el("section", "mg-card");
     const head = el("div", "mg-head");
     const t = el("div", "mg-title");
-    t.append(el("strong", "", name));
+    const logo = window.ArkismBrand?.mark(name, "mg-logo"); // 디스코드·텔레그램·슬랙 logo before the name
+    t.append(...(logo ? [logo] : []), el("strong", "", name));
     if (st) t.append(el("span", `mg-state ${st[1]}`, st[0]));
     head.append(t);
     if (right) head.append(right);
@@ -144,16 +145,20 @@ window.ArkismMessenger = (ctx) => {
   function channelsPanel() {
     const sec = el("section", "v4-side-sec");
     sec.append(el("h3", "", "연결된 채널"), el("p", "mg-note", "바꾸려면 팀·전문가 상세의 채널 연결에서 해요."));
-    const rows = [];
-    for (const b of S.bots) for (const c of b.channels || []) {
-      const need = (b.missing || []).some((m) => m.channel_id === c.channel_id);
-      rows.push([`디스코드 #${c.name || c.channel_id}`, c.label || "", need]);
-    }
-    if (!rows.length) sec.append(el("p", "mg-note", "연결된 채널이 없어요."));
-    for (const [t, sub, need] of rows) {
-      const r = el("div", "mg-chan"); r.append(el("strong", "", t));
-      const s = el("small", need ? "warn" : ""); s.append(raw(el("span", "", sub))); if (need) s.append(" · ", el("span", "", "권한 필요"));
-      r.append(s); sec.append(r);
+    // one group per messenger, each under its logo; telegram and slack have one destination each
+    const groups = [["디스코드", S.bots.flatMap((b) => (b.channels || []).map((c) => [`#${c.name || c.channel_id}`, c.label || "", (b.missing || []).some((m) => m.channel_id === c.channel_id)]))],
+      ["텔레그램", dest("telegram") ? [[dest("telegram").chat_id || "채팅 ID 없음", "알림을 보내는 곳", false]] : []],
+      ["슬랙", dest("slack") ? [[`웹훅 ····${dest("slack").last4 || ""}`, "알림을 보내는 곳", false]] : []]].filter(([, rows]) => rows.length);
+    if (!groups.length) sec.append(el("p", "mg-note", "연결된 채널이 없어요."));
+    for (const [name, rows] of groups) {
+      const g = el("div", "mg-chan-group"), h = el("div", "mg-chan-head"), logo = window.ArkismBrand?.mark(name, "mg-logo");
+      h.append(...(logo ? [logo] : []), el("strong", "", name), el("span", "mg-chan-n", `${rows.length}`)); g.append(h);
+      for (const [t, sub, need] of rows) {
+        const r = el("div", "mg-chan"); r.append(el("strong", "", t));
+        const s2 = el("small", need ? "warn" : ""); s2.append(raw(el("span", "", sub))); if (need) s2.append(" · ", el("span", "", "권한 필요"));
+        r.append(s2); g.append(r);
+      }
+      sec.append(g);
     }
     return sec;
   }

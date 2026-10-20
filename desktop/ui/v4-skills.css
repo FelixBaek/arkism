@@ -186,6 +186,7 @@
 .ss-msg { padding: 10px 12px; border-radius: var(--nc-radius-control); border: 1px solid var(--nc-line); min-width: 0; }
 .ss-msg.user { background: var(--nc-raised); border-color: transparent; }
 .ss-msg b { display: block; margin-bottom: 4px; font: 400 11px/1.5 var(--sans); color: var(--nc-quiet); }
+.ss-hit { background: none; color: inherit; text-decoration: underline 2px var(--nc-accent); text-underline-offset: 3px; }
 .ss-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 13px/1.5 var(--sans); color: var(--nc-text); }
 .ss-tools summary { cursor: pointer; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
 .ss-tools ul { margin: 6px 0 0; padding-left: 18px; font: 400 12px/1.5 var(--sans); color: var(--nc-muted); }

@@ -97,14 +97,7 @@ window.ArkismTeams = (ctx) => {
   function mark(model) {
     const m = (model || "").toLowerCase();
     const box = el("span", "tm-mark");
-    if (/^(claude|opus|sonnet|haiku|fable)/.test(m)) { const img = el("img"); img.src = "img/claude.svg"; img.alt = ""; box.append(img); return box; }
-    const ref = /^(gpt|o\d|codex)/.test(m) ? "a-codex" : m.startsWith("glm") ? "a-zcode" : m.startsWith("gemini") ? "a-gemini" : m.startsWith("grok") ? "i-x" : "";
-    if (!ref) { box.append(icon(m === "auto" ? "sparkle" : "robot")); return box; }
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("aria-hidden", "true");
-    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    use.setAttribute("href", `#${ref}`);
-    svg.append(use); box.append(svg);
+    box.append(window.ArkismBrand?.mark(m) || icon(m === "auto" ? "sparkle" : "robot"));
     return box;
   }
   const badge = (text, tone = "line") => el("span", `tm-badge ${tone}`, text);
@@ -336,9 +329,10 @@ window.ArkismTeams = (ctx) => {
   function popRedraw(tab) {
     const pop = S.pop;
     if (!pop?.h?.dialog.isConnected || pop.tab !== tab) return;
-    const body = pop.h.body, top = body.scrollTop;
+    // every box that may be the one scrolling (the body, the dialog in a short window, the page in a 새 창으로 window)
+    const kept = [pop.h.body, pop.h.dialog, document.scrollingElement].filter(Boolean).map((e) => [e, e.scrollTop]);
     pop.h.select(tab);
-    body.scrollTop = top;
+    for (const [e, top] of kept) e.scrollTop = top;
   }
   // 판 이력 from the server (GET /v1/crew/versions/{id}): the live definition first, then the ones each save replaced.
   async function loadVersions(pop) {
@@ -716,11 +710,16 @@ window.ArkismTeams = (ctx) => {
     return s;
   }
   // 채널 연결 (961:60688): the Discord channels whose action is this team's meeting; same bot API as the expert card (crew.js channelCard).
-  async function saveTeamBot(pop, b, patch, okText) { await saveBot(b, patch, okText); popRedraw("overview"); }
+  async function saveTeamBot(pop, b, patch, okText) { await saveBot(b, patch, okText); chRedraw(pop); }
+  // Channel edits swap only this section, so the popup never re-renders and the scroll stays where the click was.
+  function chRedraw(pop) {
+    if (pop?.chSec?.isConnected) pop.chSec.replaceWith(channelsSection(pop));
+    else popRedraw("overview");
+  }
   function channelsSection(pop) {
     const d = pop.d, mine = !!pop.id;
-    const add = mine ? link("+ 채널 연결", () => { pop.chAdd = pop.chAdd ? null : { bot: bots()[0]?.id || "", channel: "" }; popRedraw("overview"); }) : null;
-    const s = sec("chat-text", "채널 연결", "어디서 이 팀을 부를지 정해요 · 봇 설정은 설정 › 메신저에서 연결해요", ...(add ? [add] : []));
+    const add = mine ? link("+ 채널 연결", () => { pop.chAdd = pop.chAdd ? null : { bot: bots()[0]?.id || "", channel: "" }; chRedraw(pop); }) : null;
+    const s = pop.chSec = sec("chat-text", "채널 연결", "어디서 이 팀을 부를지 정해요 · 봇 설정은 설정 › 메신저에서 연결해요", ...(add ? [add] : []));
     const list = el("div", "tm-ctx-list");
     const ch = mine ? channelsFor(pop.id) : [];
     for (const x of ch) {
@@ -734,7 +733,7 @@ window.ArkismTeams = (ctx) => {
       // the channel name opens the same picker in place, so the Discord channel changes right here
       const name = el("button", "tm-ch-name", `디스코드 · #${x.name || x.channel_id}`); name.type = "button"; name.title = tr("눌러서 채널을 바꿔요");
       raw(name);
-      name.addEventListener("click", () => { pop.chAdd = { bot: b.id, channel: x.channel_id, edit: x.channel_id }; popRedraw("overview"); });
+      name.addEventListener("click", () => { pop.chAdd = { bot: b.id, channel: x.channel_id, edit: x.channel_id }; chRedraw(pop); });
       r.append(name, raw(el("small", "", b.name || "")), ...(warn ? [badge("확인 필요", "warn")] : []), mode, del);
       list.append(r);
       if (pop.chAdd?.edit === x.channel_id && pop.chAdd.bot === b.id) list.append(channelForm(pop));
@@ -747,7 +746,7 @@ window.ArkismTeams = (ctx) => {
     if (mine && S.discord) {
       // 봇 쓰는 방식 (한 봇을 나눠 쓰기 / 팀마다 봇) moved here from the old 디스코드 screen; same chooser and save.
       const modeBox = el("div", "tm-side-sec");
-      modeBox.append(sideLabel("봇 쓰는 방식"), modeChooser(S.discord.settings?.bot_mode || "shared", (k) => { void saveSettings({ bot_mode: k }).then((ok) => { if (ok) popRedraw("overview"); }); }));
+      modeBox.append(sideLabel("봇 쓰는 방식"), modeChooser(S.discord.settings?.bot_mode || "shared", (k) => { void saveSettings({ bot_mode: k }).then((ok) => { if (ok) chRedraw(pop); }); }));
       s.append(modeBox);
     }
     if (mine && pop.chAdd && !pop.chAdd.edit) s.append(channelForm(pop));
@@ -767,7 +766,7 @@ window.ArkismTeams = (ctx) => {
       void loadChannels(b);
       const known = S.channels.get(b.id);
       const row = el("div", "tm-ch-add");
-      const botSel = select(bots().map((x) => [x.id, x.name || x.id]), b.id, (v) => { f.bot = v; f.channel = ""; popRedraw("overview"); }); botSel.setAttribute("aria-label", "봇"); botSel.disabled = !!f.edit; // changing a link keeps its bot: moving it to another bot would leave the old link behind
+      const botSel = select(bots().map((x) => [x.id, x.name || x.id]), b.id, (v) => { f.bot = v; f.channel = ""; chRedraw(pop); }); botSel.setAttribute("aria-label", "봇"); botSel.disabled = !!f.edit; // changing a link keeps its bot: moving it to another bot would leave the old link behind
       const chSel = select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], f.channel, (v) => { f.channel = v; }); chSel.setAttribute("aria-label", "채널");
       row.append(botSel, chSel, button(f.edit ? "바꾸기" : "연결", "primary", null, async () => {
         const id = f.channel;
@@ -778,7 +777,7 @@ window.ArkismTeams = (ctx) => {
         const c = { ...(old || {}), channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "meeting", id: pop.id }, auto_start: !!old?.auto_start };
         pop.chAdd = null;
         void saveTeamBot(pop, b, { channels: [...(b.channels || []).filter((x) => x.channel_id !== id && x.channel_id !== f.edit), c] }, f.edit ? "채널을 바꿨어요." : "채널을 연결했어요.");
-      }), link("취소", () => { pop.chAdd = null; popRedraw("overview"); }, "tm-link quiet"));
+      }), link("취소", () => { pop.chAdd = null; chRedraw(pop); }, "tm-link quiet"));
       return row;
     }
   }
@@ -966,6 +965,13 @@ window.ArkismTeams = (ctx) => {
       ["순서", "참여자", "모델", "역할", ""].forEach((t) => h.append(el("span", "", t)));
       box.append(h);
     }
+    if (compact && members.length) {
+      // column names, so the pill reads as 맡을 일 (what this expert covers in the meeting) and not as a stray tag
+      const h = el("div", "tm-mrow tm-mhead");
+      const lead = el("span", d.mode === "moderator_picks" ? "tm-mhead-lead" : "tm-mhead-lead ordered"); // same width as face (and grip + number)
+      h.append(lead, el("span", "tm-mwho", "전문가 · 역할"), el("span", "tm-mhead-focus", "맡을 일"), el("span", "tm-mmodelr", "모델"), el("span", "tm-mhead-x"));
+      box.append(h);
+    }
     const picks = d.mode === "moderator_picks"; // 진행자 지명 (972:60042): no order numbers, no drag handles
     members.forEach((m, i) => {
       const row = el("div", "tm-mrow");
@@ -989,7 +995,7 @@ window.ArkismTeams = (ctx) => {
       remove.addEventListener("click", () => { renumber(members.filter((x) => x !== m)); changed(true); });
       if (compact) {
         const who = el("div", "tm-mwho"); who.append(raw(el("b", "", memberName(m))), roleSel);
-        const focus = raw(input(m.focus, (v) => { m.focus = v; changed(); }, { max: 120, placeholder: "맡을 일" })); focus.className = "tm-pill-input"; focus.setAttribute("aria-label", "맡을 일");
+        const focus = raw(input(m.focus, (v) => { m.focus = v; changed(); }, { max: 120, placeholder: "맡을 일" })); focus.className = "tm-pill-input"; focus.setAttribute("aria-label", "맡을 일"); focus.title = tr("이 회의에서 이 전문가가 맡을 일");
         // 진행자 at a glance: a crown on the face and the row tinted
         const fc = el("span", "tm-mface"); fc.append(face(byId(m.agent_id), "m"));
         if (m.role === "moderator") { row.classList.add("lead"); const c = icon("crown"); c.classList.add("tm-crown"); c.setAttribute("aria-label", tr("진행자")); fc.append(c); }
@@ -1608,7 +1614,7 @@ window.ArkismTeams = (ctx) => {
     S.channels.set(b.id, null);
     try { S.channels.set(b.id, (await request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${query()}`)).items || []); } catch { S.channels.set(b.id, []); }
     if (here("discord") && S.bot === b.id) render(false);
-    popRedraw("overview");
+    chRedraw(S.pop);
   }
   function targetOptions() {
     const out = [["", "정하지 않음"]];
@@ -1989,7 +1995,7 @@ window.ArkismTeams = (ctx) => {
       const cost = el("span", "mono", usd(a.cost_usd));
       return urow([name, cell(modelLabel(model), "mono quiet"), cell(String(a.calls), "mono"), cell(pct(rateV), `mono${lowRate(rateV)}`), cell(num(a.tokens / a.calls), "mono"), cost, cell(where, "quiet")], () => openExpertHistory(a.id));
     });
-    return usageTable("전문가", `${list.length}명 · 호출 ${sumBy(list, "calls")}번(단독 ${direct}) · 줄을 누르면 호출 기록으로 가요`, ["호출 기록 전체 보기 →", () => go("workers")],
+    return usageTable("전문가", `${list.length}명 · 호출 ${sumBy(list, "calls")}번(단독 ${direct}) · 줄을 누르면 사용 기록을 봐요`, ["호출 기록 전체 보기 →", () => go("workers")],
       ["이름", "모델", "호출", "성공률", "평균 토큰", "비용", "쓰는 곳"], body, "이 기간에 부른 전문가가 없어요.", "cu-expert");
   }
   function teamTable(rows, meetings) {
@@ -2024,8 +2030,8 @@ window.ArkismTeams = (ctx) => {
     return usageTable("자동화", `${rows.length}개 · 줄을 누르면 실행 기록으로 가요`, ["실행 기록 전체 보기 →", () => go("crew")],
       ["이름", "시작", "실행", "성공률", "평균 시간", "비용", "마지막 실패"], body, "이 기간에 돈 자동화가 없어요.", "cu-auto");
   }
-  // The expert popup (crew.js) owns the history tab; it listens for this event.
-  function openExpertHistory(id) { go("workers"); window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id, tab: "history" } })); }
+  // The expert popup (crew.js) opens over this page on its 사용량 tab; it listens for this event.
+  function openExpertHistory(id) { window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id, tab: "usage", over: true } })); }
   // 실패한 곳부터 다시: the same request crew.js sends from a failed run (POST /v1/crew/runs, done nodes kept).
   const lastFailed = (wfId, nodeId) => (S.uRuns || []).filter((r) => r.crew_run?.crew_id === wfId && r.crew_run.status === "failed" && (!nodeId || r.crew_run.nodes?.[nodeId]?.status === "failed")).sort((a, b) => runAt(b) - runAt(a))[0];
   async function retryFailed(runs, what) {
