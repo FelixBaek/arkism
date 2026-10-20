@@ -178,9 +178,11 @@ impl Client {
     }
     pub fn command(&self, target: &Target) -> Command {
         let mut command = Command::new(&self.program);
+        // A password login needs ssh to ask (askpass); it is answered only after the host is pinned.
+        if target.password.is_none() {
+            command.args(["-o", "BatchMode=yes"]);
+        }
         command.args([
-            "-o",
-            "BatchMode=yes",
             "-o",
             "ConnectTimeout=10",
             "-o",
@@ -534,6 +536,9 @@ impl Store {
         self.ready()?;
         let mut command = self.client.command(target);
         pin.apply(&mut command)?;
+        if let Some(password) = &target.password {
+            crate::ssh_tunnel::password_login(&mut command, password);
+        }
         Ok(command)
     }
 }

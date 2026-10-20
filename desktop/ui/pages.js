@@ -804,7 +804,7 @@ window.ArkismPages = (ctx) => {
         return c;
       }));
       // 고른 카드 아래에는 그 모드의 설정만: SSH 폼 또는 저장 위치.
-      body.replaceChildren(...(pick === "ssh" ? [form.node, el("p", "pg-hint", "비밀번호 접속은 안 돼요. SSH 키가 필요해요.")] : storage ? [storage.node] : []));
+      body.replaceChildren(...(pick === "ssh" ? [form.node, el("p", "pg-hint", "SSH 키 또는 비밀번호로 접속해요. 비밀번호는 저장하지 않아서 앱을 다시 켜면 다시 물어요.")] : storage ? [storage.node] : []));
       actions.replaceChildren(...(pick === "ssh" ? [test, save] : [save]));
     };
     draw();

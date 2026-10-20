@@ -4,8 +4,10 @@
 //! forwards the API port to this PC (`ssh -N -L`). The UI then talks to `http://127.0.0.1:PORT`
 //! as it would to the built-in Arkism. The forward is restarted on the same port if it drops.
 //!
-//! Authentication is whatever the user's ssh already does (keys, agent, ~/.ssh/config); the app
-//! never sees a password. A host key must be reviewed and pinned before target authentication.
+//! Authentication is whatever the user's ssh already does (keys, agent, ~/.ssh/config), or a
+//! password the user types. The password stays in memory only: ssh asks for it through
+//! SSH_ASKPASS, which runs this app again in askpass mode (see `askpass`). A host key must be
+//! reviewed and pinned before target authentication, so a password only reaches a pinned host.
 
 use crate::lifecycle::Gate;
 use crate::ssh_exec::{self, Process};
@@ -32,6 +34,70 @@ pub struct Target {
     pub key: Option<std::path::PathBuf>,
     /// Arkism 경로: the remote arkism program, tried before the usual places.
     pub bin: Option<String>,
+    /// 비밀번호: log in with this instead of keys. Never written anywhere.
+    pub password: Option<Password>,
+}
+
+/// A login password; `{:?}` never prints it.
+#[derive(Clone, PartialEq)]
+pub struct Password(String);
+
+impl std::fmt::Debug for Password {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Password(***)")
+    }
+}
+
+// ssh runs SSH_ASKPASS (this app) with the prompt; the password reaches it in this variable,
+// set only on the ssh child, never on the app itself.
+const ASKPASS_ENV: &str = "ARKISM_SSH_ASKPASS";
+
+/// Askpass mode: when ssh started this program to ask for the password, prints it and returns
+/// the exit code. `None` means a normal app launch.
+pub fn askpass() -> Option<i32> {
+    let password = std::env::var(ASKPASS_ENV).ok()?;
+    let prompt = std::env::args().nth(1).unwrap_or_default();
+    Some(match askpass_answer(&prompt, &password) {
+        Some(a) => {
+            use std::io::Write;
+            let mut out = std::io::stdout();
+            if out.write_all(a.as_bytes()).and_then(|_| out.write_all(b"\n")).is_ok() {
+                0
+            } else {
+                1
+            }
+        }
+        None => 1,
+    })
+}
+
+/// Only password prompts get the password; a yes/no question (an unknown or changed host) gets no.
+fn askpass_answer<'a>(prompt: &str, password: &'a str) -> Option<&'a str> {
+    let p = prompt.to_ascii_lowercase();
+    (!p.contains("yes/no") && !p.contains("passphrase")).then_some(password)
+}
+
+/// Turns a pinned, non-batch ssh command into a password login answered by `askpass`.
+pub(crate) fn password_login(command: &mut std::process::Command, password: &Password) {
+    // One try per login, so a wrong password does not count three times against the server.
+    command.args([
+        "-o",
+        "PreferredAuthentications=password,keyboard-interactive",
+        "-o",
+        "PubkeyAuthentication=no",
+        "-o",
+        "NumberOfPasswordPrompts=1",
+    ]);
+    if let Ok(exe) = std::env::current_exe() {
+        command.env("SSH_ASKPASS", exe);
+    }
+    // OpenSSH 8.4+ honours `force`; older ones (Windows 10's 8.1) use askpass when DISPLAY is set and there is no tty.
+    command
+        .env("SSH_ASKPASS_REQUIRE", "force")
+        .env(ASKPASS_ENV, &password.0);
+    if std::env::var_os("DISPLAY").is_none() {
+        command.env("DISPLAY", "arkism:0");
+    }
 }
 
 /// Parses what the user typed. Anything ssh could read as an option or a second word is refused.
@@ -72,6 +138,7 @@ pub fn parse_target(input: &str) -> Result<Target, String> {
         port,
         key: None,
         bin: None,
+        password: None,
     })
 }
 
@@ -84,6 +151,9 @@ pub struct Form {
     pub port: Option<u16>,
     pub key: Option<String>,
     pub bin: Option<String>,
+    /// "password" logs in with `password`; anything else uses keys (the default).
+    pub auth: Option<String>,
+    pub password: Option<String>,
 }
 
 fn home() -> Option<std::path::PathBuf> {
@@ -109,7 +179,15 @@ pub fn target_from_form(form: &Form) -> Result<Target, String> {
         }
         t.port = Some(p);
     }
-    if let Some(k) = blank(&form.key) {
+    if form.auth.as_deref() == Some("password") {
+        // Taken as typed: spaces can be part of a password.
+        let pw = form
+            .password
+            .as_deref()
+            .filter(|p| !p.is_empty())
+            .ok_or("ssh_password_missing")?;
+        t.password = Some(Password(pw.to_string()));
+    } else if let Some(k) = blank(&form.key) {
         let path = match k.strip_prefix("~/").or_else(|| k.strip_prefix("~\\")) {
             Some(rest) => home().ok_or("ssh_key_missing")?.join(rest),
             None => std::path::PathBuf::from(&k),
@@ -202,10 +280,15 @@ pub struct Connected {
 }
 
 /// Turns ssh's exit and message into one code the UI explains.
-fn ssh_error(code: Option<i32>, stderr: &str) -> String {
+fn ssh_error(target: &Target, code: Option<i32>, stderr: &str) -> String {
     let s = stderr.to_ascii_lowercase();
     if s.contains("permission denied") || s.contains("too many authentication failures") {
-        "ssh_auth_failed".into()
+        if target.password.is_some() {
+            "ssh_password_rejected"
+        } else {
+            "ssh_auth_failed"
+        }
+        .into()
     } else if s.contains("host key verification failed")
         || s.contains("remote host identification has changed")
     {
@@ -252,6 +335,7 @@ fn connect_info(target: &Target, store: &Store, pin: &Pin) -> Result<Info, Strin
     let out = ssh_exec::run(command, Vec::new(), 65536, Duration::from_secs(20))?;
     if out.code != 0 {
         return Err(ssh_error(
+            target,
             Some(out.code),
             &String::from_utf8_lossy(&out.err),
         ));
@@ -329,6 +413,7 @@ fn spawn_forward(
 }
 
 fn wait_ready(
+    target: &Target,
     child: &mut Process,
     errors: &Receiver<Result<Vec<u8>, String>>,
     local: u16,
@@ -340,7 +425,11 @@ fn wait_ready(
             let bytes = errors
                 .recv_timeout(Duration::from_secs(1))
                 .map_err(|_| "ssh_process_failed")??;
-            return Err(ssh_error(Some(code), &String::from_utf8_lossy(&bytes)));
+            return Err(ssh_error(
+                target,
+                Some(code),
+                &String::from_utf8_lossy(&bytes),
+            ));
         }
         if let Ok(result) = errors.try_recv() {
             result?;
@@ -420,7 +509,7 @@ pub fn connect(target: Target, gate: Arc<Gate>, store: Store) -> Result<Connecte
     let local = free_port()?;
     let forward = format!("127.0.0.1:{local}:{rhost}:{rport}");
     let (mut child, errors) = spawn_forward(&target, &forward, &store, &pin)?;
-    wait_ready(&mut child, &errors, local)?;
+    wait_ready(&target, &mut child, &errors, local)?;
     let mut guard = TUNNEL.lock().map_err(|_| "ssh_process_failed")?;
     if let Some(previous) = guard.as_mut() {
         previous.child.stop()?;
@@ -477,7 +566,8 @@ mod tests {
                 host: "alex@example.com".into(),
                 port: None,
                 key: None,
-                bin: None
+                bin: None,
+                password: None
             }
         );
         assert_eq!(
@@ -486,7 +576,8 @@ mod tests {
                 host: "myserver".into(),
                 port: None,
                 key: None,
-                bin: None
+                bin: None,
+                password: None
             }
         );
         assert_eq!(
@@ -495,7 +586,8 @@ mod tests {
                 host: "root@10.0.0.5".into(),
                 port: Some(2222),
                 key: None,
-                bin: None
+                bin: None,
+                password: None
             }
         );
         for bad in [
@@ -526,6 +618,8 @@ mod tests {
                 port,
                 key: key.map(Into::into),
                 bin: bin.map(Into::into),
+                auth: None,
+                password: None,
             })
         };
         assert_eq!(
@@ -578,20 +672,101 @@ mod tests {
         assert!(remote_endpoint("http://a b:1").is_err());
     }
 
+    fn args(cmd: &std::process::Command) -> Vec<String> {
+        cmd.get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    fn env(cmd: &std::process::Command, name: &str) -> Option<String> {
+        cmd.get_envs()
+            .find(|(k, _)| *k == name)
+            .and_then(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+    }
+
+    #[test]
+    fn password_login_uses_askpass_not_batch_mode() {
+        let form = |auth: Option<&str>, pw: Option<&str>| Form {
+            host: "h".into(),
+            user: None,
+            port: None,
+            key: Some("/no/such/key".into()),
+            bin: None,
+            auth: auth.map(Into::into),
+            password: pw.map(Into::into),
+        };
+        assert_eq!(
+            target_from_form(&form(Some("password"), None)).unwrap_err(),
+            "ssh_password_missing"
+        );
+        assert_eq!(
+            target_from_form(&form(Some("password"), Some(""))).unwrap_err(),
+            "ssh_password_missing"
+        );
+        // The key field is ignored in password mode, so a stale path does not block it.
+        let t = target_from_form(&form(Some("password"), Some(" s3cret "))).unwrap();
+        assert_eq!(
+            (t.key.as_ref(), t.password.as_ref()),
+            (None, Some(&Password(" s3cret ".into())))
+        );
+        assert!(!format!("{t:?}").contains("s3cret"));
+
+        let mut cmd = crate::ssh_identity::Client::system().command(&t);
+        password_login(&mut cmd, t.password.as_ref().unwrap());
+        let a = args(&cmd).join(" ");
+        assert!(!a.contains("BatchMode") && !a.contains("s3cret"), "{a}");
+        assert!(
+            a.contains("PreferredAuthentications=password,keyboard-interactive")
+                && a.contains("NumberOfPasswordPrompts=1"),
+            "{a}"
+        );
+        assert_eq!(env(&cmd, "SSH_ASKPASS_REQUIRE").as_deref(), Some("force"));
+        assert_eq!(env(&cmd, ASKPASS_ENV).as_deref(), Some(" s3cret "));
+        assert!(env(&cmd, "SSH_ASKPASS").is_some());
+
+        let key = crate::ssh_identity::Client::system().command(&parse_target("h").unwrap());
+        assert!(args(&key).join(" ").contains("BatchMode=yes"));
+        assert_eq!(env(&key, ASKPASS_ENV), None);
+    }
+
+    #[test]
+    fn askpass_answers_only_password_prompts() {
+        assert_eq!(askpass_answer("alex@h's password: ", "pw"), Some("pw"));
+        assert_eq!(askpass_answer("(alex@h) Password: ", "pw"), Some("pw"));
+        assert_eq!(askpass_answer("암호:", "pw"), Some("pw"));
+        assert_eq!(
+            askpass_answer(
+                "Are you sure you want to continue connecting (yes/no/[fingerprint])? ",
+                "pw"
+            ),
+            None
+        );
+        assert_eq!(askpass_answer("Enter passphrase for key '/k': ", "pw"), None);
+    }
+
     #[test]
     fn ssh_failures_get_one_code() {
+        let t = parse_target("h").unwrap();
         assert_eq!(
-            ssh_error(Some(255), "alex@h: Permission denied (publickey)."),
+            ssh_error(&t, Some(255), "alex@h: Permission denied (publickey)."),
             "ssh_auth_failed"
         );
         assert_eq!(
-            ssh_error(Some(255), "ssh: Could not resolve hostname x"),
+            ssh_error(&t, Some(255), "ssh: Could not resolve hostname x"),
             "ssh_unreachable"
         );
-        assert_eq!(ssh_error(Some(127), ""), "arkism_not_found");
+        assert_eq!(ssh_error(&t, Some(127), ""), "arkism_not_found");
         assert_eq!(
-            ssh_error(Some(2), "usage: arkism COMMAND [ARGS]\ncommands:"),
+            ssh_error(&t, Some(2), "usage: arkism COMMAND [ARGS]\ncommands:"),
             "arkism_too_old"
+        );
+        let pw = Target {
+            password: Some(Password("x".into())),
+            ..t
+        };
+        assert_eq!(
+            ssh_error(&pw, Some(255), "alex@h: Permission denied (password)."),
+            "ssh_password_rejected"
         );
     }
 }

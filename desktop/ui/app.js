@@ -2220,6 +2220,10 @@ export function startApp() {
     state.mode = state.defaults.local && picked !== "remote" ? "choose" : "remote";
     appConnection.lock();
     // 지난번에 연결한 서버로 다시 붙는다.
-    if (state.ssh && stored("arkism.mode") === "remote" && tauri) void appConnection.unlockConnect();
+    // 비밀번호 방식은 비밀번호를 저장하지 않으므로 폼에서 다시 받는다.
+    if (state.ssh && stored("arkism.mode") === "remote" && tauri) {
+      if (state.ssh.auth === "password") { appConnection.unlockSSH().focus(); $("#ssh-test-result").textContent = "비밀번호를 넣고 연결하세요. 비밀번호는 저장하지 않아요."; }
+      else void appConnection.unlockConnect();
+    }
   })();
 }

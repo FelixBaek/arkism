@@ -302,11 +302,13 @@ struct SshForm {
     port: Option<u16>,
     key: Option<String>,
     bin: Option<String>,
+    auth: Option<String>,
+    password: Option<String>,
 }
 
 impl From<SshForm> for ssh_tunnel::Form {
     fn from(f: SshForm) -> Self {
-        ssh_tunnel::Form { host: f.host, user: f.user, port: f.port, key: f.key, bin: f.bin }
+        ssh_tunnel::Form { host: f.host, user: f.user, port: f.port, key: f.key, bin: f.bin, auth: f.auth, password: f.password }
     }
 }
 
@@ -838,6 +840,10 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
 }
 
 fn main() {
+    // ssh runs this program as its SSH_ASKPASS for a password login; answer and quit before any app setup.
+    if let Some(code) = ssh_tunnel::askpass() {
+        std::process::exit(code);
+    }
     let args: Vec<String> = std::env::args().collect();
     #[cfg(windows)]
     if args.iter().any(|arg| arg == "--remove-autostart") {

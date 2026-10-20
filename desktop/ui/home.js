@@ -321,12 +321,12 @@ window.ArkismHome = function (ctx) {
   }
 
   // ------------------------------------------------------------ SSH 오류 안내 (198:3382)
-  const SSH_KINDS = [["ssh_auth_failed", "SSH 로그인이 거부됐어요"], ["ssh_unreachable", "서버에 닿지 못했어요"], ["ssh_missing", "ssh 프로그램이 없어요"],
+  const SSH_KINDS = [["ssh_auth_failed", "SSH 로그인이 거부됐어요"], ["ssh_password_rejected", "비밀번호 로그인이 거부됐어요"], ["ssh_unreachable", "서버에 닿지 못했어요"], ["ssh_missing", "ssh 프로그램이 없어요"],
     ["ssh_host_key_changed", "서버의 SSH 키가 바뀌었어요"], ["arkism_not_found", "서버에 Arkism이 없어요"], ["arkism_too_old", "서버의 Arkism이 오래됐어요"], ["ssh_address_invalid", "주소 형식이 틀렸어요"]];
   function sshCommand(f) {
     if (!f?.host) return "";
     const user = f.user && !f.host.includes("@") ? `${f.user}@` : "";
-    return ["ssh", f.port ? `-p ${f.port}` : "", f.key ? `-i ${f.key}` : "", `${user}${f.host}`].filter(Boolean).join(" ");
+    return ["ssh", f.port ? `-p ${f.port}` : "", f.key && f.auth !== "password" ? `-i ${f.key}` : "", `${user}${f.host}`].filter(Boolean).join(" ");
   }
   // Shows what went wrong in the right column of the connect screen; null puts the usual "이렇게 연결돼요" back.
   function sshError(code, text, form) {
@@ -340,7 +340,7 @@ window.ArkismHome = function (ctx) {
     const parts = [el("small", "ssh-err-kicker", "지금 오류"), el("h2", "", known ? known[1] : "연결하지 못했어요"), el("p", "", text)];
     const cmd = sshCommand(form);
     if (cmd && code !== "ssh_missing" && code !== "ssh_address_invalid") {
-      parts.push(el("p", "", "이 PC의 터미널에서 아래 명령이 비밀번호 없이 되는지 먼저 확인하세요."));
+      parts.push(el("p", "", form?.auth === "password" ? "이 PC의 터미널에서 아래 명령으로 같은 비밀번호로 접속되는지 먼저 확인하세요." : "이 PC의 터미널에서 아래 명령이 비밀번호 없이 되는지 먼저 확인하세요."));
       const pre = el("code", "ssh-err-cmd", cmd); pre.setAttribute("data-no-i18n", ""); parts.push(pre);
     }
     const row = el("div", "unlock-actions");

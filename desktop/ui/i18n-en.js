@@ -6306,3 +6306,19 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, {
   "저장 위치를 바꿀까요?\n\n지금 데이터는 옮기지 않고 {0}에 그대로 둬요. 새 폴더가 비어 있으면 빈 Arkism으로 시작해요.": "Change the storage location?\n\nThe current data is not moved; it stays in {0}. If the new folder is empty, Arkism starts empty."
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "SSH 로그인이 거부됐어요. 이 PC에서 ‘ssh 주소’가 비밀번호 없이(SSH 키로) 되는지 확인하세요. 키가 없으면 인증 방식을 비밀번호로 바꾸세요.": "SSH login was refused. Check that ‘ssh address’ works on this PC without a password (with an SSH key). Without a key, switch the sign-in method to password.",
+  "비밀번호 로그인이 거부됐어요. 비밀번호를 확인하세요. 서버가 비밀번호 로그인을 막아 두었으면 SSH 키가 필요해요.": "Password login was refused. Check the password. If the server blocks password login, you need an SSH key.",
+  "비밀번호 로그인이 거부됐어요": "Password login was refused",
+  "비밀번호를 넣어 주세요.": "Enter the password.",
+  "인증 방식": "Sign-in method",
+  "SSH 키": "SSH key",
+  "비밀번호": "Password",
+  "저장하지 않아요. 앱을 다시 켜면 다시 물어요": "Not saved. You'll be asked again when the app restarts",
+  "서버의 Git·스킬 화면은 이 연결로 돼요. 에이전트의 기억 수집은 SSH 키가 있어야 서버로 가요.": "The server's Git and Skills screens use this connection. Agents' memory capture reaches the server only with an SSH key.",
+  "SSH 키 또는 ssh-agent로 로그인해요": "Signs in with an SSH key or ssh-agent",
+  "비밀번호를 넣고 연결하세요. 비밀번호는 저장하지 않아요.": "Enter the password and connect. The password isn't saved.",
+  "SSH 키 또는 비밀번호로 접속해요. 비밀번호는 저장하지 않아서 앱을 다시 켜면 다시 물어요.": "Signs in with an SSH key or a password. The password isn't saved, so you'll be asked again when the app restarts.",
+  "이 PC의 터미널에서 아래 명령으로 같은 비밀번호로 접속되는지 먼저 확인하세요.": "First check that this command logs in with the same password in a terminal on this PC.",
+  "서버에서 따로 켜거나 포트를 열 것은 없어요. SSH 키나 비밀번호로 접속되면 돼요.": "Nothing to start or open on the server. SSH login with a key or a password is enough."
+});

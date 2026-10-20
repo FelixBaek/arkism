@@ -40,7 +40,9 @@ export function createAppConnection(deps) {
   const SSH_ERRORS = {
     ssh_address_invalid: "주소를 확인하세요. user@서버주소 또는 user@서버주소:포트 처럼 적어요.",
     ssh_missing: "이 PC에서 ssh 프로그램을 찾지 못했어요. OpenSSH(또는 Git for Windows)를 설치해 주세요.",
-    ssh_auth_failed: "SSH 로그인이 거부됐어요. 이 PC에서 ‘ssh 주소’가 비밀번호 없이(SSH 키로) 되는지 확인하세요.",
+    ssh_auth_failed: "SSH 로그인이 거부됐어요. 이 PC에서 ‘ssh 주소’가 비밀번호 없이(SSH 키로) 되는지 확인하세요. 키가 없으면 인증 방식을 비밀번호로 바꾸세요.",
+    ssh_password_rejected: "비밀번호 로그인이 거부됐어요. 비밀번호를 확인하세요. 서버가 비밀번호 로그인을 막아 두었으면 SSH 키가 필요해요.",
+    ssh_password_missing: "비밀번호를 넣어 주세요.",
     ssh_host_key_changed: "서버의 SSH 키가 예전과 달라 접속을 막았어요. 관리자에게 새 지문을 확인한 뒤 다시 연결하세요.",
     ssh_host_key_cancelled: "서버 지문 확인을 취소했어요. 접속하지 않았습니다.",
     ssh_host_key_confirmation_required: "서버 지문 확인이 필요해요. 다시 연결해 주세요.",
@@ -55,7 +57,10 @@ export function createAppConnection(deps) {
 
   const sshErrorText = (code) => SSH_ERRORS[code] || (code.startsWith("arkism_connect_failed") ? `서버의 Arkism이 접속 정보를 주지 못했어요 (${code.split(": ")[1] || "알 수 없음"}).` : `연결하지 못했어요 (${code}).`);
 
-  // 저장된 SSH 연결: {host, user, port, key, bin}. 예전 판은 주소 문자열 하나만 저장했다.
+  // 저장된 SSH 연결: {host, user, port, key, bin, auth}. 예전 판은 주소 문자열 하나만 저장했다.
+  // 비밀번호는 저장하지 않고 이 창이 열려 있는 동안만 기억한다(다시 연결용). 앱을 다시 켜면 다시 묻는다.
+  let sshPassword = "";
+
   function readSSH(v) {
     if (!v) return null;
     try { const o = JSON.parse(v); if (o && typeof o.host === "string") return o; } catch (_) { /* a plain address */ }
@@ -84,7 +89,23 @@ export function createAppConnection(deps) {
     const user = row("User", "비우면 ~/.ssh/config 또는 지금 사용자", "root", f.user);
     const port = row("Port", "비우면 22 또는 ~/.ssh/config의 포트", "22", f.port ? String(f.port) : "");
     port.inputMode = "numeric";
+    let auth = f.auth === "password" ? "password" : "key";
+    const authRow = deps.el("div", "ssh-row ssh-auth");
+    authRow.setAttribute("role", "group");
+    authRow.setAttribute("aria-label", "인증 방식");
+    box.append(authRow);
     const key = row("Identity file", "개인 키 경로. 비우면 ssh-agent 또는 ~/.ssh/config", "~/.ssh/id_ed25519", f.key);
+    const pass = row("비밀번호", "저장하지 않아요. 앱을 다시 켜면 다시 물어요", "", "");
+    pass.type = "password";
+    const drawAuth = () => {
+      const seg = deps.segment([["key", "SSH 키"], ["password", "비밀번호"]], auth, (k) => { auth = k; drawAuth(); (k === "password" ? pass : key).focus(); });
+      const text = deps.el("span", "ssh-row-text");
+      text.append(deps.el("strong", "", "인증 방식"), deps.el("small", "", auth === "password" ? "서버의 Git·스킬 화면은 이 연결로 돼요. 에이전트의 기억 수집은 SSH 키가 있어야 서버로 가요." : "SSH 키 또는 ssh-agent로 로그인해요"));
+      authRow.replaceChildren(text, seg);
+      key.closest(".ssh-row").hidden = auth === "password";
+      pass.closest(".ssh-row").hidden = auth !== "password";
+    };
+    drawAuth();
     const bin = row("Arkism 경로 (선택)", "서버의 arkism 프로그램 전체 경로. 비우면 자동으로 찾아요", "자동", f.bin);
     const list = deps.el("datalist");
     list.id = `ssh-keys-${++sshFormSeq}`;
@@ -93,14 +114,18 @@ export function createAppConnection(deps) {
     deps.tauri?.invoke("ssh_keys").then((keys) => { for (const k of keys || []) { const o = deps.el("option"); o.value = k; list.append(o); } }).catch(() => {});
     const read = () => {
       const p = port.value.trim();
-      return { host: host.value.trim(), user: user.value.trim() || null, port: p ? Number(p) : null, key: key.value.trim() || null, bin: bin.value.trim() || null };
+      return { host: host.value.trim(), user: user.value.trim() || null, port: p ? Number(p) : null, key: key.value.trim() || null, bin: bin.value.trim() || null,
+        auth, password: auth === "password" ? pass.value || null : null };
     };
-    return { node: box, read, focus: () => host.focus() };
+    // 비밀번호 방식인데 이번에 넣은 적이 없으면(앱을 다시 켬) 비밀번호 칸부터.
+    const focus = () => (auth === "password" && f.host ? pass : host).focus();
+    return { node: box, read, focus };
   }
 
   function sshFormError(form) {
     if (!form.host) return "Host를 넣어 주세요.";
     if (form.port !== null && !(Number.isInteger(form.port) && form.port > 0 && form.port < 65536)) return "Port는 1~65535 사이 숫자예요.";
+    if (form.auth === "password" && !form.password) return SSH_ERRORS.ssh_password_missing;
     return "";
   }
 
@@ -144,8 +169,9 @@ export function createAppConnection(deps) {
       deps.state.defaults.ssh_host = before.sshHost;
       throw new Error("연결은 됐지만 서버의 Arkism을 열지 못했어요. 서버에서 Arkism이 켜져 있는지 확인하세요.");
     }
-    deps.state.ssh = form;
-    deps.store("arkism.ssh", JSON.stringify(form));
+    sshPassword = form.password || "";
+    deps.state.ssh = { ...form, password: null };
+    deps.store("arkism.ssh", JSON.stringify(deps.state.ssh));
     deps.store("arkism.mode", "remote");
     deps.store("arkism.server", null);
     deps.store("arkism.scope", null);
@@ -176,7 +202,7 @@ export function createAppConnection(deps) {
     } catch (err) {
       deps.state.token = "";
       deps.$("#unlock-error").textContent = err.message;
-      deps.home.sshError(err.code || "error", err.message, form);
+      deps.home.sshError(err.code || "error", err.message, { ...form, password: null });
       unlocked(false);
       unlockMode();
     } finally {
@@ -259,7 +285,7 @@ export function createAppConnection(deps) {
   async function reconnect(b) {
     if (b) b.disabled = true;
     try {
-      if (deps.state.mode === "remote" && deps.tauri && deps.state.ssh) await sshConnect(deps.state.ssh);
+      if (deps.state.mode === "remote" && deps.tauri && deps.state.ssh) await sshConnect({ ...deps.state.ssh, password: sshPassword || null });
       else if (deps.state.mode === "local" && deps.tauri) await startLocal();
       else await deps.loadAll();
     } catch (e) { deps.notice(e.message); } finally { if (b?.isConnected) b.disabled = false; }
@@ -410,6 +436,7 @@ export function createAppConnection(deps) {
     get startLocal() { return startLocal; },
     get storageRow() { return storageRow; },
     get unlockConnect() { return unlockConnect; },
+    get unlockSSH() { return unlockSSH; },
     get useLocal() { return useLocal; },
     get useServer() { return useServer; }
   };

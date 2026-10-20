@@ -329,6 +329,10 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-set-connect .ssh-rows { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 90px; gap: 12px 10px; }
 .v4-set-connect .ssh-row { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 0; border: 0; }
 .v4-set-connect .ssh-row:nth-child(n + 4) { grid-column: 1 / -1; }
+.v4-set-connect .ssh-row[hidden] { display: none; }
+.v4-set-connect .ssh-auth .segment { display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control, 8px); background: var(--nc-surface); }
+.v4-set-connect .ssh-auth .segment .tab { padding: 5px 12px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.v4-set-connect .ssh-auth .segment .tab.active { background: var(--nc-raised); color: var(--nc-accent); font-weight: 600; box-shadow: 0 0 0 1px var(--nc-line); }
 .v4-set-connect .ssh-row-text strong { font: 400 calc(12px * var(--fs, 1)) var(--sans); color: var(--nc-muted); }
 .v4-set-connect .ssh-row-text small { display: none; }
 .v4-set-connect .ssh-row:nth-child(n + 4) .ssh-row-text small { display: inline; margin-left: 6px; font-size: calc(11px * var(--fs, 1)); color: var(--nc-quiet); }
