@@ -39,6 +39,20 @@ Use synthetic repository fixtures and rules. Do not publish personal session
 transcripts, credentials, or unrelated source data. Record unavailable provider
 fields as unknown rather than guessing them.
 
+What is public and what stays private:
+
+| Public | Private |
+| --- | --- |
+| Code, tools and the evaluation harness | Personal session transcripts and memory text written from them |
+| Synthetic fixtures and the development task set | Held-out test sets: tasks, expected checks and answers |
+| Aggregate results, analysis and the frozen run settings | Raw per-item review decisions (for example the 677 AI-review judgments behind the review-classifier numbers) |
+| Redacted references to private evidence | Credentials, reviewer identities and billing ledgers |
+
+Keep a held-out set under a directory named `held-out` outside this repository;
+`tools/check_public_push.py` rejects any path with that directory name. Publish
+only aggregates of review decisions, and decide how fine-grained they are before
+publishing, since the decisions come from a single reviewer.
+
 Use at least five scenario types, with multiple independently worded tasks:
 
 | Scenario | Setup and expected behavior |

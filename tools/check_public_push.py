@@ -11,7 +11,7 @@ import re
 import subprocess
 import sys
 
-FORBIDDEN = {".private", ".gitignore", ".dockerignore", ".env.example"}
+FORBIDDEN = {".private", ".gitignore", ".dockerignore", ".env.example", "held-out"}  # held-out: private test sets (guide/memory-evaluation.md)
 GIT_FLAGS = {"--verify", "--end-of-options", "--show-toplevel", "--is-ancestor",
              "-r", "-z", "--stage", "-s", "--format=%B%x00%an%x00%ae%x00%cn%x00%ce"}
 SAFE_ARGUMENT = re.compile(r"\w[\w./{}^:-]*", re.ASCII)

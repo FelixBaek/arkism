@@ -83,10 +83,10 @@ class PublicPushTests(unittest.TestCase):
 
     def test_forbidden_names_at_any_depth(self):
         """Verify forbidden names at any depth."""
-        for name in (".gitignore", ".dockerignore", ".env.example"):
+        for name in (".gitignore", ".dockerignore", ".env.example", "held-out/task.json"):
             self.write("nested/" + name, "public")
         self.git("add", "-f", "nested")
-        self.assertEqual(sum("forbidden path" in x for x in self.check()), 3)
+        self.assertEqual(sum("forbidden path" in x for x in self.check()), 4)
 
     def test_unrelated_public_base_rejected(self):
         """Verify unrelated public base rejected."""
