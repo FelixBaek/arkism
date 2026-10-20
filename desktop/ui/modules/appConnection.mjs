@@ -85,16 +85,16 @@ export function createAppConnection(deps) {
       box.append(r);
       return i;
     };
-    const host = row("Host", "user@host 또는 ~/.ssh/config의 Host 별칭", "server.example.com", f.host);
-    const user = row("User", "비우면 ~/.ssh/config 또는 지금 사용자", "root", f.user);
-    const port = row("Port", "비우면 22 또는 ~/.ssh/config의 포트", "22", f.port ? String(f.port) : "");
+    const host = row("호스트", "user@host 또는 ~/.ssh/config의 Host 별칭", "server.example.com", f.host);
+    const user = row("사용자", "비우면 ~/.ssh/config 또는 지금 사용자", "root", f.user);
+    const port = row("포트", "비우면 22 또는 ~/.ssh/config의 포트", "22", f.port ? String(f.port) : "");
     port.inputMode = "numeric";
     let auth = f.auth === "password" ? "password" : "key";
     const authRow = deps.el("div", "ssh-row ssh-auth");
     authRow.setAttribute("role", "group");
     authRow.setAttribute("aria-label", "인증 방식");
     box.append(authRow);
-    const key = row("Identity file", "개인 키 경로. 비우면 ssh-agent 또는 ~/.ssh/config", "~/.ssh/id_ed25519", f.key);
+    const key = row("키 파일", "개인 키 경로. 비우면 ssh-agent 또는 ~/.ssh/config", "~/.ssh/id_ed25519", f.key);
     const pass = row("비밀번호", "저장하지 않아요. 앱을 다시 켜면 다시 물어요", "", "");
     pass.type = "password";
     const drawAuth = () => {
@@ -111,7 +111,13 @@ export function createAppConnection(deps) {
     list.id = `ssh-keys-${++sshFormSeq}`;
     key.setAttribute("list", list.id);
     box.append(list);
-    deps.tauri?.invoke("ssh_keys").then((keys) => { for (const k of keys || []) { const o = deps.el("option"); o.value = k; list.append(o); } }).catch(() => {});
+    const hosts = deps.el("datalist");
+    hosts.id = `ssh-hosts-${sshFormSeq}`;
+    host.setAttribute("list", hosts.id);
+    box.append(hosts);
+    const fill = (cmd, into) => deps.tauri?.invoke(cmd).then((items) => { for (const k of items || []) { const o = deps.el("option"); o.value = k; into.append(o); } }).catch(() => {});
+    fill("ssh_keys", list);
+    fill("ssh_hosts", hosts); // ~/.ssh/config의 Host 별칭
     const read = () => {
       const p = port.value.trim();
       return { host: host.value.trim(), user: user.value.trim() || null, port: p ? Number(p) : null, key: key.value.trim() || null, bin: bin.value.trim() || null,
@@ -123,8 +129,8 @@ export function createAppConnection(deps) {
   }
 
   function sshFormError(form) {
-    if (!form.host) return "Host를 넣어 주세요.";
-    if (form.port !== null && !(Number.isInteger(form.port) && form.port > 0 && form.port < 65536)) return "Port는 1~65535 사이 숫자예요.";
+    if (!form.host) return "호스트를 넣어 주세요.";
+    if (form.port !== null && !(Number.isInteger(form.port) && form.port > 0 && form.port < 65536)) return "포트는 1~65535 사이 숫자예요.";
     if (form.auth === "password" && !form.password) return SSH_ERRORS.ssh_password_missing;
     return "";
   }

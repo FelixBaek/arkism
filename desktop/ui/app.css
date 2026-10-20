@@ -164,9 +164,6 @@ textarea { width: 100%; min-height: 64px; padding: 8px 10px; border-radius: 8px;
 .ssh-row-text strong { color: var(--text-1); font-weight: 600; font-size: calc(13px * var(--fs, 1)); }
 .ssh-row-text small { color: var(--text-3); font-size: calc(12px * var(--fs, 1)); }
 .ssh-row input { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); color: var(--text-1); font: 13px var(--mono); min-width: 0; }
-.unlock-card .ssh-row { display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: left; }
-.unlock-card .ssh-row-text { flex-direction: row; justify-content: flex-start; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.unlock-card .ssh-row input { width: 100%; }
 .unlock-actions { display: flex; justify-content: space-between; gap: 8px; }
 .unlock-actions .btn.primary { justify-content: center; min-width: 120px; height: 36px; }
 .unlock-hint.warn, .mode-out.warn { color: var(--warn); }

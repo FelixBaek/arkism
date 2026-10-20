@@ -241,6 +241,28 @@ pub fn list_keys() -> Vec<String> {
     keys
 }
 
+/// Host aliases from ~/.ssh/config, for the host picker. Patterns (`*`, `?`, `!`) are skipped.
+pub fn list_hosts() -> Vec<String> {
+    let Some(text) = home().and_then(|h| std::fs::read_to_string(h.join(".ssh").join("config")).ok()) else { return Vec::new() };
+    config_hosts(&text)
+}
+
+fn config_hosts(text: &str) -> Vec<String> {
+    let mut hosts: Vec<String> = text
+        .lines()
+        .filter_map(|l| {
+            let l = l.trim();
+            let (key, rest) = l.split_once(|c: char| c.is_whitespace() || c == '=')?;
+            key.eq_ignore_ascii_case("host").then_some(rest)
+        })
+        .flat_map(|rest| rest.split(|c: char| c.is_whitespace() || c == '=').filter(|w| !w.is_empty()).map(str::to_string).collect::<Vec<_>>())
+        .filter(|w| !w.contains(['*', '?', '!']))
+        .collect();
+    hosts.sort();
+    hosts.dedup();
+    hosts
+}
+
 /// The ssh program: Git for Windows' OpenSSH when present (Windows' own can hang on pipes),
 /// otherwise `ssh` on PATH.
 pub fn ssh_program() -> std::ffi::OsString {
@@ -727,6 +749,12 @@ mod tests {
         let key = crate::ssh_identity::Client::system().command(&parse_target("h").unwrap());
         assert!(args(&key).join(" ").contains("BatchMode=yes"));
         assert_eq!(env(&key, ASKPASS_ENV), None);
+    }
+
+    #[test]
+    fn config_hosts_lists_plain_aliases() {
+        let cfg = "Host *\n  User x\nhost web db\n  HostName 10.0.0.1\nHost=gpu !bad dev-*\nHostName nope\n# Host commented\nHost web\n";
+        assert_eq!(config_hosts(cfg), ["db", "gpu", "web"]);
     }
 
     #[test]

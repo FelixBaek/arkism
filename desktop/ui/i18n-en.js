@@ -6321,4 +6321,9 @@ Object.assign(window.ArkismI18nEN.strings, {
   "SSH 키 또는 비밀번호로 접속해요. 비밀번호는 저장하지 않아서 앱을 다시 켜면 다시 물어요.": "Signs in with an SSH key or a password. The password isn't saved, so you'll be asked again when the app restarts.",
   "이 PC의 터미널에서 아래 명령으로 같은 비밀번호로 접속되는지 먼저 확인하세요.": "First check that this command logs in with the same password in a terminal on this PC.",
   "서버에서 따로 켜거나 포트를 열 것은 없어요. SSH 키나 비밀번호로 접속되면 돼요.": "Nothing to start or open on the server. SSH login with a key or a password is enough."
+,
+  "호스트": "Host",
+  "포트": "Port",
+  "호스트를 넣어 주세요.": "Enter a host.",
+  "포트는 1~65535 사이 숫자예요.": "Port must be a number from 1 to 65535."
 });

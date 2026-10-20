@@ -72,6 +72,8 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-set .mode-card.active { background: var(--nc-raised); border-color: var(--nc-text); }
 .v4-set .mode-card.active .mode-card-title { color: var(--nc-accent); }
 .v4-set .mode-card-text { color: var(--nc-muted); }
+/* 연결: the picked card is marked by a text-colour border and a check, no accent colour */
+.v4-set-connect .mode-card.active .mode-card-title, .v4-set-connect .mode-card.active .mode-card-title .icon { color: var(--nc-text); }
 .v4-set .mode-out:empty { display: none; }
 .v4-set .mode-out { margin: 0; padding: 8px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); color: var(--nc-text); }
 .v4-set .mode-actions { flex-direction: row-reverse; justify-content: flex-end; }
@@ -324,20 +326,6 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-side .rt-foot .btn { height: auto; padding: 7px 14px; }
 .rt-note-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: var(--nc-radius-control); background: var(--nc-raised); }
 .rt-note-card p { margin: 0; font-size: calc(12px * var(--fs, 1)); line-height: 1.55; color: var(--nc-muted); }
-
-/* 연결 › SSH form (Figma 293:18786): label over input; Host · User · Port on one line */
-.v4-set-connect .ssh-rows { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 90px; gap: 12px 10px; }
-.v4-set-connect .ssh-row { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 0; border: 0; }
-.v4-set-connect .ssh-row:nth-child(n + 4) { grid-column: 1 / -1; }
-.v4-set-connect .ssh-row[hidden] { display: none; }
-.v4-set-connect .ssh-auth .segment { display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control, 8px); background: var(--nc-surface); }
-.v4-set-connect .ssh-auth .segment .tab { padding: 5px 12px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
-.v4-set-connect .ssh-auth .segment .tab.active { background: var(--nc-raised); color: var(--nc-accent); font-weight: 600; box-shadow: 0 0 0 1px var(--nc-line); }
-.v4-set-connect .ssh-row-text strong { font: 400 calc(12px * var(--fs, 1)) var(--sans); color: var(--nc-muted); }
-.v4-set-connect .ssh-row-text small { display: none; }
-.v4-set-connect .ssh-row:nth-child(n + 4) .ssh-row-text small { display: inline; margin-left: 6px; font-size: calc(11px * var(--fs, 1)); color: var(--nc-quiet); }
-.v4-set-connect .ssh-row input { width: 100%; height: 40px; padding: 0 12px; border-radius: var(--nc-radius-control); border: 1px solid var(--nc-line); background: var(--nc-raised); color: var(--nc-text); font: 13px var(--sans); }
-.v4-set-connect .ssh-row:nth-child(n + 4) input { font-family: var(--mono); }
 
 /* round 3 (v4c-router): 라우팅 그룹 · 시험해 보기 · 이벤트 전체 보기 */
 .rt-events-more { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 4px 12px 0; }
