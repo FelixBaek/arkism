@@ -5705,3 +5705,11 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0}에 적용했어요. 저장해야 반영돼요.": "Applied to {0}. Save to make it stick.",
   "{0}을 바꾸자고 제안해요. 버튼 아래 보라색 목록에서 바뀌는 곳을 보고 적용하세요.": "Suggests changing {0}. Review the changes in the purple list under the button and apply."
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "노드 추가·연결·모델은 그래프에서 고쳐요. 저장한 뒤 '창으로 돌아가기'로 여기서 마무리해요.": "Add nodes, links and models in the graph. Save there, then use 'Back to window' to finish here.",
+  "저장했어요. '창으로 돌아가기'를 눌러 마무리해요.": "Saved. Press 'Back to window' to finish.",
+  "창으로 돌아가기": "Back to window"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "AI 단계 {0}개 · 펼쳐서 바로 고치거나 따로 시험해요": "{0} AI steps · open to edit or try them on their own"
+});

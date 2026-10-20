@@ -1293,7 +1293,7 @@ window.ArkismCrew = (ctx) => {
     ed.graph = structuredClone(rec.crew.graph || defaultGraph("blank", rec.crew));
     ed.graph.nodes.forEach((n) => { n.config ||= {}; });
     Object.assign(ed, { sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false,
-      graphMode: !!opts.graphMode, review: !!opts.review, suggestions: null, reviewBusy: false, run: opts.run || null, runList: false });
+      graphMode: !!opts.graphMode, review: !!opts.review, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, run: opts.run || null, runList: false });
     if (opts.select && ed.graph.nodes.some((n) => n.id === opts.select)) ed.sel = opts.select;
     // The newest run of this workflow: each selected node's bottom row shows how that node did there.
     ed.last = null;
@@ -1320,6 +1320,7 @@ window.ArkismCrew = (ctx) => {
     state.view = "crew";
     state.selected = `crew:${rec.id}`;
     render();
+    if (ed.fromPopup) getAuto().open(byId(rec.id) || rec); // opened from the workflow window: finish there
   }
   async function saveGraph() {
     try {
@@ -1329,7 +1330,7 @@ window.ArkismCrew = (ctx) => {
       ed.rec = byId(saved.id) || saved;
       state.view = "graph";
       render();
-      notice("워크플로우를 저장했어요.");
+      notice(ed.fromPopup ? "저장했어요. '창으로 돌아가기'를 눌러 마무리해요." : "워크플로우를 저장했어요.");
       void autoTitle(ed.rec);
       return true;
     } catch (e) {
@@ -2711,7 +2712,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const settings = button("설정", "ghost", "gear-six", () => openSettings(ed.rec, null, true));
     settings.title = "이름·$이름·워커 기본 모델·멈추는 조건·일정·웹훅·배경 사진";
     // An owned workflow runs only through its agent (@); the server refuses a manual run.
-    return [button("돌아가기", "ghost", "arrow-left", leaveGraph), settings, review, ...(ownerOf(rec) ? [] : [trial]), revert, save2];
+    const back = ed.fromPopup ? button("창으로 돌아가기", "", "arrow-left", leaveGraph) : button("돌아가기", "ghost", "arrow-left", leaveGraph);
+    return [back, settings, review, ...(ownerOf(rec) ? [] : [trial]), revert, save2];
   }
   // Space held = hand tool on the graph, as in Figma.
   let spaceDown = false;

@@ -690,7 +690,7 @@ window.ArkismTeams = (ctx) => {
     return s;
   }
   function updateBar(pop) {
-    if (!pop.bar?.isConnected) return;
+    if (!pop.bar) return; // filled before it is mounted: overviewTab builds it off-DOM
     const diff = pdiff(pop), d = pop.d;
     pop.bar.hidden = !!pop.id && !diff.length;
     pop.bar.replaceChildren();

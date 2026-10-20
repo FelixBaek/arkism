@@ -227,3 +227,6 @@
 .tm-ch-mode { cursor: pointer; }
 .tm-ch-add { display: flex; align-items: center; gap: 10px; }
 .tm-ch-add .tm-select { width: auto; flex: 1; min-width: 0; }
+/* 제자리 고치기 칸: 포커스는 상자 대신 노란 밑줄 하나 (팀·전문가 머리) */
+.tm-plain:focus, .tm-plain:focus-visible, .ex-inline-input:focus, .ex-inline-input:focus-visible { outline: none; box-shadow: none; background: none; border: 0; border-bottom: 2px solid var(--nc-accent); border-radius: 0; }
+.tm-plain:hover { background: none; }

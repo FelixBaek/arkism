@@ -455,10 +455,11 @@ window.ArkismAutomation = (h) => {
     }
 
     // 워크플로우: the mini flow, then each AI step with its goal and the two trial buttons.
+    let stepsOpen = false;
     function flowSection() {
       const s = section("tree-structure", "워크플로우", link(creating ? "그래프로 만들기 →" : "그래프로 편집 →", () => {
         if (creating) { notice("먼저 자동화를 만든 뒤 그래프로 이어요."); return; }
-        leave(() => h.openGraph(rec, { graphMode: true }));
+        leave(() => h.openGraph(rec, { graphMode: true, fromPopup: true }));
       }));
       const card = el("div", "auto-box auto-flow");
       const paint = () => {
@@ -490,13 +491,23 @@ window.ArkismAutomation = (h) => {
         }
         const work = flat(g).filter(h.WORK);
         const ais = work.filter(IS_AI);
-        card.append(el("p", "auto-count", creating ? "" : `AI 노드 ${ais.length}개 · 노드를 눌러 바로 고치거나, 여기서 따로 시험해요`));
-        (creating ? work : ais).forEach((n, i) => card.append(stepRow(n, i)));
-        if (!creating && work.length > ais.length) card.append(el("p", "auto-hint", `외 ${work.length - ais.length}단계 · 그래프에서 봐요`));
+        if (creating) work.forEach((n, i) => card.append(stepRow(n, i)));
+        else if (ais.length) { // the overview stays a glance: AI steps fold away, the graph is where detail is edited
+          const more = el("details", "auto-steps");
+          more.open = stepsOpen;
+          more.addEventListener("toggle", () => { stepsOpen = more.open; });
+          more.append(el("summary", "auto-count", `AI 단계 ${ais.length}개 · 펼쳐서 바로 고치거나 따로 시험해요`));
+          ais.forEach((n, i) => more.append(stepRow(n, i)));
+          card.append(more);
+        }
         if (!work.length) card.append(el("p", "wf-empty", "아직 할 일이 없어요. 그래프에서 노드를 이어 주세요."));
         if (creating) {
           card.append(el("p", "auto-hint", "단계는 전문가·한 번 호출·처리(코드·HTTP)·사람 확인 중에서 골라요. 둘 이상이면 그래프로 이어져요."), link("+ 단계 추가", () => { addStep(); paint(); touch(); }));
-        } else card.append(link("+ 노드 추가 — 그래프에서 이어 붙여요", () => leave(() => h.openGraph(rec, { graphMode: true }))));
+        } else {
+          const go = el("div", "auto-flow-go");
+          go.append(button("그래프로 편집", "primary", "tree-structure", () => leave(() => h.openGraph(rec, { graphMode: true, fromPopup: true }))), el("small", "", "노드 추가·연결·모델은 그래프에서 고쳐요. 저장한 뒤 '창으로 돌아가기'로 여기서 마무리해요."));
+          card.append(go);
+        }
       };
       const addStep = () => {
         const g = d.graph;
