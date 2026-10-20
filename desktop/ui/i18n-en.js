@@ -1106,7 +1106,7 @@ window.ArkismI18nEN = {
   "없어요": "None",
   "워크플로우 설정": "Workflow settings",
   "노드 설정": "Node settings",
-  "노드를 누르면 여기서 고쳐요. 출력 점을 끌어 다음 노드에 이어요. 앞 노드로 이으면 되돌아가는 선이 돼요. 선을 누르면 선 설정이 열려요. 휠 클릭이나 스페이스를 누른 채 끌면 화면이 움직여요.": "Click a node to edit it here. Drag an output dot to connect to the next node; connecting to an earlier node makes a loop-back line. Click a line to open its settings. Middle-click drag or hold Space and drag to pan.",
+  "노드를 누르면 여기서 고쳐요. 출력 점을 끌어 다음 노드에 이어요. 앞 노드로 이으면 되돌아가는 선이 돼요. 선을 누르면 선 설정이 열려요. 휠로 확대·축소하고, 휠 클릭이나 스페이스를 누른 채 끌면 화면이 움직여요.": "Click a node to edit it here. Drag an output dot to connect to the next node; connecting to an earlier node makes a loop-back line. Click a line to open its settings. Scroll to zoom; middle-click drag or hold Space and drag to pan.",
   "노드": "Node",
   "되돌아가는 선": "Loop-back line",
   "고르세요": "Choose",

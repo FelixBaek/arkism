@@ -1727,8 +1727,16 @@ window.ArkismCrew = (ctx) => {
     stage.addEventListener("auxclick", (ev) => { if (ev.button === 1) ev.preventDefault(); });
     stage.classList.toggle("space", spaceDown);
     stage.addEventListener("wheel", (ev) => {
-      if (!ev.ctrlKey) { ed.panX -= ev.deltaX; ed.panY -= ev.deltaY; } else ed.zoom = Math.min(2, Math.max(0.4, ed.zoom - ev.deltaY / 500));
+      // 휠 = 마우스 자리를 기준으로 확대·축소; 가로 휠(트랙패드)·Shift+휠은 화면 이동.
       ev.preventDefault();
+      if (ev.shiftKey || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) { ed.panX -= ev.deltaX || ev.deltaY; ed.panY -= ev.shiftKey ? 0 : ev.deltaY; }
+      else {
+        const r = stage.getBoundingClientRect(), mx = ev.clientX - r.left, my = ev.clientY - r.top;
+        const next = Math.min(2, Math.max(0.4, ed.zoom * Math.exp(-ev.deltaY / 500)));
+        ed.panX = mx - (mx - ed.panX) * next / ed.zoom;
+        ed.panY = my - (my - ed.panY) * next / ed.zoom;
+        ed.zoom = next;
+      }
       canvas.style.transform = `translate(${ed.panX}px, ${ed.panY}px) scale(${ed.zoom})`;
       zoomOut.textContent = `${Math.round(ed.zoom * 100)}%`;
     }, { passive: false });
@@ -2171,7 +2179,7 @@ window.ArkismCrew = (ctx) => {
         ["멈추는 조건", [backs.length ? `되돌아가기 ${Math.max(...backs.map((e) => e.max))}번` : "", x.limits?.max_steps ? `단계 ${x.limits.max_steps}번` : "", x.limits?.max_minutes ? `${x.limits.max_minutes}분` : ""].filter(Boolean).join(" · ") || "정하지 않음"],
         ["일정·웹훅", x.trigger ? `${triggerText(x)}${x.enabled ? "" : " · 꺼짐"}` : "없어요"]
       ]), button("워크플로우 설정", "", "gear-six", () => openSettings(ed.rec, null, true)), el("i", "wf-rule"));
-      box.append(el("h3", "", "노드 설정"), el("p", "dim", "노드를 누르면 여기서 고쳐요. 출력 점을 끌어 다음 노드에 이어요. 앞 노드로 이으면 되돌아가는 선이 돼요. 선을 누르면 선 설정이 열려요. 휠 클릭이나 스페이스를 누른 채 끌면 화면이 움직여요."));
+      box.append(el("h3", "", "노드 설정"), el("p", "dim", "노드를 누르면 여기서 고쳐요. 출력 점을 끌어 다음 노드에 이어요. 앞 노드로 이으면 되돌아가는 선이 돼요. 선을 누르면 선 설정이 열려요. 휠로 확대·축소하고, 휠 클릭이나 스페이스를 누른 채 끌면 화면이 움직여요."));
       const g = ed.graph;
       box.append(kv([["노드", `${g.nodes.length}개`], ["AI 노드", `${aiNodes(g).length}개`], ["되돌아가는 선", `${g.edges.filter(isBack).length}개`]]));
       box.append(button("구조 검토", "", "sparkle", () => { ed.review = true; render(false); }));
