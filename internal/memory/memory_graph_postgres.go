@@ -58,14 +58,21 @@ func (p *Postgres) MemoryGraphSessions(ctx context.Context, in MemoryGraphQuery,
 	w, args := memoryGraphWhere(in, "m.", 6)
 	params := append([]any{in.Scope.WorkspaceID, in.Scope.ProjectID, in.Scope.UserID, in.Scope.AgentID, colMemories}, args...)
 	params = append(params, ids, limit)
-	// sessionTags in SQL: tags starting with "session:" and longer than it.
-	rows, err := p.q().Query(ctx, `SELECT c.id, n.payload FROM memory_records c CROSS JOIN LATERAL (
-SELECT m.id, m.payload FROM memory_records m WHERE m.collection=$5 AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4
-AND m.id<>c.id AND `+pgReach("m.")+`=`+pgReach("c.")+` AND COALESCE(m.doc->>'reach_project','')=COALESCE(c.doc->>'reach_project','')
-AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(c.doc->'tags') t WHERE t LIKE 'session:_%' AND m.doc->'tags' ? t)
-AND `+w+` ORDER BY m.id LIMIT $9) n
-WHERE c.collection=$5 AND c.workspace_id=$1 AND c.project_id=$2 AND c.user_id=$3 AND c.agent_id=$4 AND c.id=ANY($8::text[]) AND jsonb_typeof(c.doc->'tags')='array'
-ORDER BY c.id, n.id`, params...)
+	// sessionTags in SQL: tags starting with "session:" and longer than it. Both sides are
+	// MATERIALIZED and joined on the tag: a lateral per asking row re-read each large doc (7 s at 600 memories).
+	rows, err := p.q().Query(ctx, `WITH asking AS MATERIALIZED (
+SELECT c.id, `+pgReach("c.")+` AS reach, COALESCE(c.doc->>'reach_project','') AS rp, t FROM memory_records c, jsonb_array_elements_text(c.doc->'tags') t
+WHERE c.collection=$5 AND c.workspace_id=$1 AND c.project_id=$2 AND c.user_id=$3 AND c.agent_id=$4 AND c.id=ANY($8::text[]) AND jsonb_typeof(c.doc->'tags')='array' AND t LIKE 'session:_%'
+), cand AS MATERIALIZED (
+SELECT m.id, `+pgReach("m.")+` AS reach, COALESCE(m.doc->>'reach_project','') AS rp, t FROM memory_records m, jsonb_array_elements_text(m.doc->'tags') t
+WHERE m.collection=$5 AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4 AND jsonb_typeof(m.doc->'tags')='array' AND t LIKE 'session:_%' AND `+w+`
+), pairs AS (
+SELECT DISTINCT a.id AS cid, m.id AS mid FROM asking a JOIN cand m ON m.t=a.t AND m.id<>a.id AND m.reach=a.reach AND m.rp=a.rp
+), ranked AS (
+SELECT cid, mid, row_number() OVER (PARTITION BY cid ORDER BY mid) AS rn FROM pairs
+)
+SELECT r.cid, n.payload FROM ranked r JOIN memory_records n ON n.collection=$5 AND n.workspace_id=$1 AND n.project_id=$2 AND n.user_id=$3 AND n.agent_id=$4 AND n.id=r.mid
+WHERE r.rn <= $9 ORDER BY r.cid, r.mid`, params...)
 	if err != nil {
 		return nil, pgErr(err)
 	}

@@ -64,7 +64,7 @@ try {
       await page.locator('#table [data-id="candidate1"]').click();await page.getByRole('button',{name:'새 내용으로 바꾸기',exact:true}).click();await page.waitForTimeout(150);
     }
     assert.equal(writes.length,2);assert.equal(writes[0].operation_id,writes[1].operation_id);assert.equal(writes[0].conflict.resolution,'replace_old');assert.equal(writes[0].expected_revision,1);
-    await page.locator('.nav-item[data-menu="memory"]').click();await page.locator('.area-tab',{hasText:'사용량'}).click();await page.locator('.model-budget').getByText('$12.00 / $100.00',{exact:true}).waitFor();
+    await page.locator('.nav-item[data-menu="router"]').click();await page.locator('.area-tab',{hasText:'사용량'}).click();await page.locator('.model-budget').getByText('$12.00 / $100.00',{exact:true}).waitFor();
     const budget=page.locator('.model-budget');assert((await budget.innerText()).includes('오늘 목표'));assert(!(await budget.innerText()).includes('오늘 상한'));assert((await budget.innerText()).includes('7회 · API 환산 $1.50 (예산 밖)'));
     budgetExceeded=true;await budget.getByRole('button',{name:'예산 다시 조회'}).click();await budget.getByText('오늘 목표를 넘었어요.',{exact:false}).waitFor();assert((await budget.innerText()).includes('$4.00 / $3.00'));
     budgetHard=true;await budget.getByRole('button',{name:'예산 다시 조회'}).click();await budget.getByText('오늘 상한',{exact:true}).waitFor();

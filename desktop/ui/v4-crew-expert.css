@@ -1,26 +1,29 @@
 /* 크루 › 전문가 (Figma 208:17763 카드 목록 · 868:61909 상세 팝업 · 310:19277 새로 만들기) */
 .ex-main { padding: 0; }
-.table-wrap > .ex-main { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+.table-wrap > .ex-main { flex: 1; min-width: 0; }
+/* 208:17763: the panel hugs the cards and the footer line sits right under it */
+.app:has(#table.ex-main) .panel { flex: none; overflow: visible; }
 .ex-panel { display: flex; flex-direction: column; gap: 16px; }
-.ex-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ex-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 132px)); gap: 12px; }
-.ex-card { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; width: 132px; height: 171px; padding: 0 8px 14px; border: 0; border-radius: 16px;
+.ex-card { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px; width: 132px; min-height: 171px; padding: 7px 7px 14px; border: 0; border-radius: 20px;
   background: var(--face-bg, var(--avatar-cream)); color: #1d1b18; font: inherit; cursor: pointer; overflow: hidden; }
 .ex-card:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .ex-card:hover { box-shadow: 0 0 0 2px var(--nc-accent); } }
-.ex-card-art { position: absolute; inset: 0; display: grid; place-items: center; }
-.ex-card-art::after { content: ""; position: absolute; inset: 45% 0 0; background: linear-gradient(to bottom, transparent, var(--face-bg, var(--avatar-cream)) 70%); pointer-events: none; }
-.ex-card-art .ex-art, .ex-card-art .ex-art img { width: 100%; height: 100%; }
+/* 208:17763: a 100×100 portrait on top, badge and name under it — nothing laid over the drawing */
+.ex-card-art { flex: none; display: grid; place-items: center; width: 100%; height: 101px; margin-bottom: auto; }
+.ex-card-art .ex-art, .ex-card-art .ex-art img { width: 100px; height: 100px; }
 .ex-card-art .ex-art { background: none; }
-.ex-card-art .ex-art img { object-fit: cover; object-position: top; }
+.ex-card-art .ex-art img { object-fit: cover; object-position: top; mix-blend-mode: multiply; -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent); mask-image: radial-gradient(closest-side, #000 72%, transparent); } /* the drawing's paper fades into the card colour */
 .ex-card-art .ex-mark { width: 56px; height: 56px; align-self: center; color: #1d1b18; background: color-mix(in srgb, currentColor 8%, transparent); border-radius: 50%; display: grid; place-items: center; }
-.ex-card-cat { position: relative; padding: 1px 8px; border: 1px solid rgba(0, 0, 0, .35); border-radius: 999px; font-size: calc(11px * var(--fs, 1)); color: #3a3732; background: rgba(255, 255, 255, .55); }
-.ex-card strong { position: relative; font: 600 calc(15px * var(--fs, 1))/1.3 var(--sans); }
-.ex-card.off { filter: grayscale(1); opacity: .6; }
+.ex-card-cat { position: relative; display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px 2px 7px; border: 1px solid rgba(140, 136, 129, .45); border-radius: 999px; font: 400 calc(12px * var(--fs, 1))/1.3 var(--sans); letter-spacing: .04em; color: #67635c; } /* Figma #8c8881 is under 4.5:1 on the light cards */
+.ex-card-cat .icon { width: 11px; height: 11px; }
+.ex-card strong { position: relative; font: 700 calc(18px * var(--fs, 1))/1.3 var(--sans); color: #262523; }
+.ex-card.off { filter: grayscale(1); opacity: .55; }
 .ex-card-off { position: absolute; top: 8px; right: 8px; padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, .65); color: #fff; font-size: calc(11px * var(--fs, 1)); }
-.ex-card-new { justify-content: center; gap: 4px; background: none; border: 1px dashed var(--nc-quiet); color: var(--nc-text); text-align: center; }
+.ex-card-new { justify-content: center; gap: 4px; padding: 0 10px; background: none; border: 1px dashed var(--nc-quiet); color: var(--nc-text); text-align: center; }
+.ex-card-new strong { font: 500 calc(14px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-text); }
 .ex-card-new small { color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); line-height: 1.4; word-break: keep-all; }
-.ex-plus { font-size: 22px; line-height: 1; color: var(--nc-muted); }
+.ex-plus { font-size: 26px; line-height: 1; color: var(--nc-muted); }
 .ex-empty { margin: 0; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
 
 /* popup */

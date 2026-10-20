@@ -334,3 +334,30 @@ func TestCaptureToolErrorJoinsTextBlocks(t *testing.T) {
 	}
 }
 
+// With the session processor on, reflect still asks the reviewer about waiting candidates (the review
+// screen's AI advice came from nowhere else).
+func TestCaptureReflectWithSessionProcessorClassifiesWaiting(t *testing.T) {
+	capFake(t)
+	reflectDirs(t)
+	reflectServer(t)
+	t.Setenv("ARKISM_SESSION_PROCESSOR", "1")
+	t.Setenv("ARKISM_HARNESS_TOKEN_FILE", filepath.Join(t.TempDir(), "harness.token"))
+	t.Setenv("ARKISM_SHARED_AUDIENCE_SCOPE", "")
+	keep := host.TokenFile
+	t.Cleanup(func() { host.TokenFile = keep })
+	get := capGet
+	var listed []string
+	capGet = func(path string, d time.Duration) (map[string]any, error) {
+		if strings.Contains(path, "status=candidate") || strings.Contains(path, "status=conflicted") {
+			listed = append(listed, path)
+		}
+		return get(path, d)
+	}
+	var stderr bytes.Buffer
+	if code := captureMain([]string{"reflect"}, nil, &bytes.Buffer{}, &stderr); code != 0 {
+		t.Fatal(code, stderr.String())
+	}
+	if len(listed) != 2 {
+		t.Fatal(listed)
+	}
+}

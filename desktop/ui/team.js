@@ -268,7 +268,7 @@ window.ArkismTeams = (ctx) => {
     c.append(plate);
     return c;
   }
-  const catIcon = (c) => (/git|release|릴리/i.test(c) ? "git-branch" : /plan|기획/i.test(c) ? "file-text" : /research|리서/i.test(c) ? "magnifying-glass" : /design|디자/i.test(c) ? "palette" : c ? "tag" : "list-bullets"); // categories are the person's own words
+  const catIcon = ctx.catIcon;
   function renderTeams() {
     $("#controls").replaceChildren();
     const table = $("#table");
