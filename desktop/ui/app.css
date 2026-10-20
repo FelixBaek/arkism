@@ -1015,3 +1015,8 @@ input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--nc-action); }
 textarea { resize: none; field-sizing: content; max-height: 60vh; }
+/* One-line fields everywhere: no box, a yellow line under the text. Search bars keep their own box. */
+input:is(:not([type]), [type="text"], [type="email"], [type="url"], [type="password"], [type="number"], [type="tel"], [type="datetime-local"], [type="date"], [type="time"]):not([class*="search"] *):not([class*="search"]):not(:read-only) {
+  border: 0 !important; border-bottom: 1px solid var(--nc-accent) !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+input:is(:not([type]), [type="text"], [type="email"], [type="url"], [type="password"], [type="number"], [type="tel"]):not([class*="search"] *):not([class*="search"]):not(:read-only):focus-visible { outline: none; border-bottom-width: 2px !important; }

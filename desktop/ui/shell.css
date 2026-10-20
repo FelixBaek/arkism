@@ -75,9 +75,6 @@
 .panel > .detail { width: var(--nc-detail-w); flex: none; background: none; border-left: 1px solid var(--nc-line); overflow: auto; }
 .app.wide .panel > .detail { display: none; }
 
-.page-foot { display: flex; gap: 24px; flex: none; color: var(--nc-quiet); font: 400 12px/20px var(--sans); }
-.page-foot span:first-child { flex: 1; }
-.page-foot .mono { font: 400 11px/18px var(--mono); width: 170px; }
 
 /* ---------------------------------------------------------------- shared parts (v3/Button …) */
 .btn { border-radius: var(--nc-radius-control); border-color: var(--nc-line); background: var(--nc-surface); color: var(--nc-text); }
