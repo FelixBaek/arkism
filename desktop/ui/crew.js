@@ -3389,8 +3389,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const c = workerCard("쓸 수 있는 것", "핀을 꽂은 것은 부를 때마다 먼저 넣어요. 칩을 누르면 자세히 볼 수 있어요.");
     const body = el("div", "ex-use");
     const head = c.querySelector(".wk-card-head");
-    const plus = button("+ 추가", "small", null, () => { plus.hidden = true; all.parentNode.hidden = false; all.focus(); window.ArkismCombo?.open(all); });
-    let all = null;
+    let leftOf = () => [];
+    const plus = button("+ 추가", "small", null, () => openUseAdd(leftOf));
     head.append(plus);
     c.append(body);
     const draw = () => {
@@ -3411,43 +3411,12 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       const left = (kind) => kind === "tools" ? (ctx.toolServers?.() || []).filter((s) => !(d.tools || []).includes(s.name)).map((s) => ({ id: s.name, title: s.name, meta: s.desc || "", add: () => { d.tools = [...(d.tools || []), s.name]; } }))
         : kind === "skills" ? (pins?.candidates("skills") || []).filter((x) => !names.includes(x.title)).map((x) => ({ ...x, add: () => { d.skills = [...(d.skills || []), x.title]; } }))
         : (pins?.candidates(kind) || []).filter((x) => !pinOf(d, kind, x.id)).map((x) => ({ ...x, add: () => setPin(d, kind, x.id, true) }));
-      const kindName = Object.fromEntries(USE_KINDS);
-      // tabs: the four kinds on the all-kinds box; skill categories (스킬 › 카테고리) and memory kinds on their own rows.
-      const tabOf = (kind, x, many) => many ? tr(kindName[kind]) : kind === "skills" ? ctx.skillCategory?.((state.data.skills || []).find((s) => s.id === x.id) || {}) || tr("분류 안 됨") : kind === "memories" ? x.meta : "";
-      const addBox = (kinds, placeholder, typed) => {
-        const many = kinds.length > 1;
-        const dl = el("datalist");
-        dl.id = `ex-use-${kinds.length > 1 ? "all" : kinds[0]}`;
-        const items = new Map();
-        for (const kind of kinds) for (const x of left(kind)) {
-          const key = `${kind}:${x.id}`;
-          items.set(key, x);
-          const o = el("option");
-          o.value = x.title;
-          o.label = many ? [tr(kindName[kind]), x.meta].filter(Boolean).join(" · ") : x.meta || "";
-          o.dataset.key = key;
-          const t = tabOf(kind, x, many);
-          if (t) o.dataset.tab = t;
-          dl.append(o);
-        }
-        if (dl.querySelector("[data-tab]")) dl.dataset.tabs = tr("전체");
-        const box = input("", { maxLength: 128, placeholder, cls: "wk-add" });
-        box.setAttribute("list", dl.id);
-        box.dataset.comboEmpty = tr("더할 수 있는 승인된 자료가 없어요.");
-        box.addEventListener("change", () => {
-          const v = box.value.trim();
-          const x = items.get(box.dataset.comboKey || "") || [...items.values()].find((y) => y.title === v);
-          if (x) { if (x.add() !== false) touchWorker(); return; }
-          if (v && typed) typed(v); // 스킬·도구 may name one the list does not show yet
-        });
-        const w = el("span", "ex-use-addbox");
-        w.append(box, dl);
-        return w;
-      };
-      row("스킬", ...skillKids, addBox(["skills"], "+ 스킬 추가", (v) => { if (!(d.skills || []).includes(v)) { d.skills = [...(d.skills || []), v]; touchWorker(); } }));
+      leftOf = left;
+      row("스킬", ...skillKids);
       const servers = (ctx.toolServers?.() || []).map((s) => [s.name, s.desc || ""]);
       const tools = listChips(d.tools || [], servers, "+ 도구 추가", (v) => { d.tools = v; touchWorker(); }, "wk-tools");
       tools.classList.add("ex-tools");
+      tools.querySelectorAll(".wk-add, datalist").forEach((n) => n.remove()); // adding goes through + 추가
       grid.append(el("span", "ex-use-k", "도구"), tools);
       // 기억: pinned memories, then the kinds it reads when it looks things up.
       const memPins = pinOrder(d).filter((p) => p.collection === "memories").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p) }));
@@ -3458,24 +3427,68 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         touchWorker();
       });
       for (const k of kinds.children) k.classList.add("ex-kind");
-      row("기억", ...memPins, ...kinds.children, addBox(["memories"], "+ 기억 추가"));
-      row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p) })), addBox(["knowledge_sources"], "+ 지식 추가"));
+      row("기억", ...memPins, ...kinds.children);
+      row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p) })));
       const n = (d.pinned || []).length;
       const sum = raw(el("small", "ex-pin-sum", n ? tr(`고정 ${n}개 · 약 ${pinTokens(d).toLocaleString("ko-KR")} 토큰 · 넣는 순서는 고정 칩을 끌어서 바꿔요`) : tr("핀을 꽂으면 부를 때마다 먼저 넣어요")));
-      // + 추가 (card head): one box over all four kinds, tabbed; it stands in for the button while open.
-      const allBox = addBox(USE_KINDS.map(([k]) => k), "기억·스킬·도구·지식에서 찾기");
-      all?.closest(".ex-use-addbox")?.remove();
-      all = allBox.querySelector("input");
-      all.classList.add("ex-use-all");
-      all.setAttribute("aria-label", tr("찾아 추가"));
-      allBox.hidden = plus.hidden === false;
-      all.addEventListener("blur", () => { if (!all.value.trim()) { allBox.hidden = true; plus.hidden = false; } });
-      head.append(allBox);
-      body.replaceChildren(grid, sum, el("small", "ex-use-hint", "칩을 누르면 넣는 방식(전체·요약·참조)과 버전(고정·최신)을 바꿀 수 있어요. 도구는 부를 때만 실행돼서 고정이 없어요."));
+      body.replaceChildren(grid, sum);
     };
     pins?.watch(body, draw);
     draw();
     return c;
+  }
+  // + 추가 (쓸 수 있는 것): one popup to find and add from 기억·스킬·도구·지식 — a search box over tabs and a list.
+  function openUseAdd(leftOf) {
+    const dlg = el("dialog", "crew-dialog ex-add-dlg");
+    const head = el("div", "dialog-head");
+    head.append(el("h2", "", "쓸 수 있는 것 추가"));
+    const x = el("button", "icon-btn ghost");
+    x.type = "button";
+    x.setAttribute("aria-label", "닫기");
+    x.append(icon("x"));
+    x.addEventListener("click", () => dlg.close());
+    head.append(x);
+    const q = el("input", "ex-add-search");
+    q.type = "search";
+    q.placeholder = tr("기억·스킬·도구·지식에서 찾기");
+    q.setAttribute("aria-label", q.placeholder);
+    const tabs = el("div", "ex-add-tabs");
+    tabs.setAttribute("role", "tablist");
+    const list = el("div", "ex-add-list");
+    let tab = "";
+    const draw = () => {
+      tabs.replaceChildren(...[["", "전체"], ...USE_KINDS].map(([k, name]) => {
+        const b = button(name, `ex-add-tab${k === tab ? " on" : ""}`, null, () => { tab = k; draw(); });
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-selected", String(k === tab));
+        return b;
+      }));
+      const term = q.value.trim().toLowerCase();
+      const rows = [];
+      for (const [kind, name] of USE_KINDS) {
+        if (tab && tab !== kind) continue;
+        for (const it of leftOf(kind)) {
+          if (term && !`${it.title} ${it.meta || ""}`.toLowerCase().includes(term)) continue;
+          const r = el("div", "ex-add-row");
+          const words = el("div", "ex-add-words");
+          words.append(raw(el("b", kind === "skills" || kind === "tools" ? "mono" : "", it.title)), el("small", "", [tab ? "" : tr(name), it.meta || ""].filter(Boolean).join(" · ")));
+          r.append(words, button("추가", "small", null, () => { if (it.add() !== false) { touchWorker(); draw(); } }));
+          rows.push(r);
+        }
+      }
+      list.replaceChildren(...(rows.length ? rows : [el("p", "dim", term ? "찾는 것이 없어요." : "더할 수 있는 승인된 자료가 없어요.")]));
+    };
+    q.addEventListener("input", draw);
+    const body = el("div", "dialog-body");
+    body.append(q, tabs, list);
+    const foot = el("div", "dialog-foot");
+    foot.append(button("완료", "primary", null, () => dlg.close()));
+    dlg.append(head, body, foot);
+    dlg.addEventListener("close", () => dlg.remove());
+    document.body.append(dlg);
+    draw();
+    dlg.showModal();
+    q.focus();
   }
   // 칩 상세 (929:61931): what it is, 항상 먼저 넣기, 넣는 방식, 버전 · 새 버전 안내, 이 전문가에서 빼기 · 완료.
   const MODE_LINE = { full: "전체: 내용을 다 넣어요", summary: "요약: 줄여서 넣어요", reference: "참조: 제목만 넣고 필요할 때 읽어요" };

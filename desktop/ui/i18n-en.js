@@ -5952,3 +5952,4 @@ Object.assign(window.ArkismI18nEN.patterns, {
 Object.assign(window.ArkismI18nEN.strings, { "이미지 모델": "Image model", "기억 종류": "Memory kinds", "고정한 것": "Pinned", "바꾸면": "After" });
 Object.assign(window.ArkismI18nEN.strings, { "저장할 내용 · 고칠 수 있어요": "Text to save · you can edit it", "판단 근거": "Why the AI thinks so", "자세한 정보": "Details", "곧 확인": "Check soon" });
 Object.assign(window.ArkismI18nEN.strings, { "새 카테고리 이름": "New category name" });
+Object.assign(window.ArkismI18nEN.strings, { "쓸 수 있는 것 추가": "Add what it can use", "찾는 것이 없어요.": "Nothing matches." });

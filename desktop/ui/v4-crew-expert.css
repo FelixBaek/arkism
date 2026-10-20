@@ -330,3 +330,16 @@ dialog.ex-skill-dlg { margin-top: 18vh; }
 .ex-run-row .ex-model { width: 280px; height: 34px; }
 .ex-like { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ex-like > .wk-label { margin: 0; color: var(--nc-quiet); font-size: calc(12.5px * var(--fs, 1)); }
+/* + 추가 (쓸 수 있는 것): search, tabs, then one row per thing that can be added. */
+.ex-add-dlg { width: min(560px, calc(100vw - 32px)); }
+.ex-add-dlg .dialog-body { display: flex; flex-direction: column; gap: 12px; height: min(60vh, 520px); }
+.ex-add-search { height: 36px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-subtle); color: var(--nc-text); font: inherit; }
+.ex-add-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.ex-add-tab { height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--nc-muted); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.ex-add-tab:hover { color: var(--nc-text); }
+.ex-add-tab.on { background: var(--nc-subtle); color: var(--nc-accent); }
+.ex-add-list { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+.ex-add-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--nc-line); }
+.ex-add-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ex-add-words b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-add-words small { color: var(--nc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
