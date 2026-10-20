@@ -84,7 +84,8 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-ai-chip:hover:not(:disabled) { border-color: var(--nc-ai); color: var(--nc-ai); }
 .ex-ai-chip:disabled { opacity: .5; cursor: default; }
 .ex-ai-row { display: flex; gap: 8px; }
-.ex-ai-row input { flex: 1; min-width: 0; }
+.ex-ai-row input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-canvas); color: var(--text-1); font: 400 calc(13px * var(--fs, 1))/1 var(--sans); }
+.ex-ai-row input:focus-visible { outline: none; border-color: var(--nc-ai); } /* the global offset outline doubled the border inside the AI popup */
 .ex-props { align-self: stretch; border: 1px solid var(--nc-ai); border-radius: 8px; } /* 보라 테두리 = AI가 낸 제안 */
 .ex-props-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--nc-ai) 35%, transparent); border-radius: 8px 8px 0 0; background: var(--nc-ai-bg); }
 .ex-props-head > .icon { width: 14px; height: 14px; color: var(--nc-ai); }
