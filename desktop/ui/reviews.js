@@ -200,7 +200,7 @@ window.ArkismReviews = (ctx) => {
     } catch (e) { notice(`요청하지 못했어요 (${e.message}).`); }
   }
   function stepsSection(it) {
-    const steps = sec("처리 과정", it.finished_at ? `총 ${fmt(dur(it.started_at, it.finished_at))}` : "도는 중");
+    const steps = sec("처리 과정", it.finished_at ? `총 ${fmt(dur(it.started_at, it.finished_at))}` : "실행 중");
     const ul = el("ul", "rv-steps");
     for (const s of it.steps || []) ul.append(stepRow(it, s));
     steps.append(ul);

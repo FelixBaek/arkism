@@ -292,7 +292,7 @@ window.ArkismCrew = (ctx) => {
       return null;
     }
   }
-  const RUN_LABEL = { succeeded: "완료", failed: "실패", waiting: "확인 대기", running: "도는 중", stopped: "멈춤" };
+  const RUN_LABEL = { succeeded: "완료", failed: "실패", waiting: "확인 대기", running: "실행 중", stopped: "멈춤" };
   const NODE_LABEL = { done: "완료", running: "실행 중", waiting: "기다리는 중", failed: "실패", skipped: "건너뜀", pending: "기다리는 중" };
   async function decide(run, approve) {
     const cr = run.crew_run;

@@ -1002,7 +1002,7 @@ window.ArkismAutomation = (h) => {
       const head2 = el("div", "wf-sec-head");
       const pick = el("select", "wf-select small");
       pick.setAttribute("aria-label", "실행 상태");
-      for (const [k, label] of [["all", "모든 상태"], ["failed", "실패"], ["waiting", "확인 대기"], ["running", "도는 중"], ["succeeded", "완료"], ["stopped", "멈춤"]]) { const o = el("option", "", label); o.value = k; pick.append(o); }
+      for (const [k, label] of [["all", "모든 상태"], ["failed", "실패"], ["waiting", "확인 대기"], ["running", "실행 중"], ["succeeded", "완료"], ["stopped", "멈춤"]]) { const o = el("option", "", label); o.value = k; pick.append(o); }
       const count = el("small", "", "불러오는 중…");
       const title = el("strong", "", "최근 실행");
       head2.append(title, count, el("span", "grow"), pick);
@@ -1011,7 +1011,7 @@ window.ArkismAutomation = (h) => {
       sec.append(head2, list);
       body.append(sec);
       // One run as one line (998:60693): ✓ done · ! stopped or failed · ● live, time, how it started, what was asked, then how it went.
-      const MARK = { succeeded: "✓", failed: "!", stopped: "!", waiting: "●", running: "●" };
+      const MARK = { succeeded: "✓", failed: "!", stopped: "!", waiting: "●", running: "" };
       const runLine = (r) => {
         const cr = r.crew_run || {};
         const at = new Date(r.created_at);
@@ -1021,7 +1021,7 @@ window.ArkismAutomation = (h) => {
         const bad = ["failed", "stopped"].includes(cr.status);
         const err = bad ? (Object.values(cr.nodes || {}).find((n) => n.status === "failed")?.error || h.readable(cr.summary).split(/[.。]/)[0]).slice(0, 40) : "";
         const end = bad ? [h.RUN_LABEL[cr.status], err].filter(Boolean).join(" · ") : cr.status === "running" || cr.status === "waiting" ? h.RUN_LABEL[cr.status] : [h.runTookText(r), tokens ? `${fmtTokens(tokens)} 토큰` : ""].filter(Boolean).join(" · ");
-        row.append(el("span", "auto-runline-mark", MARK[cr.status] || "○"), el("time", "", isNaN(at) ? "" : `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), el("small", "", TRIGGERS[cr.trigger] || ""), el("span", "auto-runline-title", h.runRequest(cr) || h.readable(cr.summary) || rec.crew.name), el("small", "auto-runline-end", end));
+        row.append(el("span", "auto-runline-mark", MARK[cr.status] ?? "○"), el("time", "", isNaN(at) ? "" : `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), el("small", "", TRIGGERS[cr.trigger] || ""), el("span", "auto-runline-title", h.runRequest(cr) || h.readable(cr.summary) || rec.crew.name), el("small", "auto-runline-end", end));
         row.addEventListener("click", () => leave(() => h.openGraph(rec, { run: r })));
         return row;
       };

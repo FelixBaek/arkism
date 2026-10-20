@@ -219,3 +219,6 @@
 .v4-auto-new .auto-goal { margin: 10px 0 0; padding: 10px 12px; border-radius: 6px; background: var(--nc-subtle); }
 .v4-auto-new .auto-goal > small { display: block; color: var(--nc-muted); }
 .v4-auto-new .auto-goal > textarea { width: 100%; padding: 4px 0; border: 0; background: none; box-shadow: none; color: var(--nc-text); resize: vertical; }
+/* 실행 중: a turning ring instead of the waiting dot */
+.auto-runline.st-running .auto-runline-mark::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; }
+@media (prefers-reduced-motion: reduce) { .auto-runline.st-running .auto-runline-mark::before { animation: none; } }
