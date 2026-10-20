@@ -212,8 +212,11 @@
     // Fixed under the chip, inside its dialog (the top layer), kept on screen.
     function place() {
       const r = anchor.getBoundingClientRect(), w = m.offsetWidth, hgt = m.offsetHeight;
-      m.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
-      m.style.top = `${r.bottom + 4 + hgt > innerHeight - 8 ? Math.max(8, r.top - 4 - hgt) : r.bottom + 4}px`;
+      const left = Math.max(8, Math.min(r.left, innerWidth - w - 8)), top = r.bottom + 4 + hgt > innerHeight - 8 ? Math.max(8, r.top - 4 - hgt) : r.bottom + 4;
+      m.style.left = `${left}px`; m.style.top = `${top}px`;
+      // a dragged dialog (translate) holds its fixed children: move by what the menu actually landed off
+      const got = m.getBoundingClientRect();
+      m.style.left = `${2 * left - got.left}px`; m.style.top = `${2 * top - got.top}px`;
     }
     (anchor.closest("dialog") || document.body).append(m);
     place();
@@ -1726,16 +1729,7 @@
       top.push(card);
     }
     const tools = el("div", "mem-tools");
-    const search = el("label", "panel-search");
-    const q = el("input"); q.type = "search"; q.placeholder = "기억 검색"; q.setAttribute("aria-label", "기억 검색"); q.value = $("#search").value;
-    q.addEventListener("input", () => {
-      $("#search").value = q.value; state.query = q.value.trim().toLowerCase();
-      const at = q.selectionStart;
-      render(false);
-      const again = $(".panel-search input"); again?.focus(); again?.setSelectionRange(at, at);
-    });
-    search.append(icon("magnifying-glass"), q);
-    tools.append(search);
+    tools.append(memSearch());
     const repos = [...new Set(source.map(memRepo).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     if (state.repo && state.repo !== "shared" && !repos.includes(state.repo)) state.repo = "";
     if (repos.length) {
@@ -1790,11 +1784,26 @@
     $("#table").append(foot);
   }
   // 확인해 주세요 (198:716 · 198:1748 · 198:3984): one 3-way segment, rows with a reason badge, ✓ ✕ on new ones.
+  // The list filter (state.query): the top-bar #search is hidden (shell.css), so each memory list draws this box.
+  function memSearch() {
+    const search = el("label", "panel-search");
+    const q = el("input"); q.type = "search"; q.placeholder = "기억 검색"; q.setAttribute("aria-label", "기억 검색"); q.value = $("#search").value;
+    q.addEventListener("input", () => {
+      $("#search").value = q.value; state.query = q.value.trim().toLowerCase();
+      const at = q.selectionStart;
+      render(false);
+      const again = $(".panel-search input"); again?.focus(); again?.setSelectionRange(at, at);
+    });
+    search.append(icon("magnifying-glass"), q);
+    return search;
+  }
   function renderMemoryCheck() {
     const d = state.data, n = checkCounts();
     const seg = segment(MEM_CHECK.map(([k, l]) => [k, l, n[k], true]), state.memTab, (k) => go("memories", k)); seg.classList.add("mem-seg");
     $("#controls").replaceChildren(seg);
     if (state.memTab === "merge") { digests.drawMerge(); return; }
+    const tools = el("div", "mem-tools"); tools.append(memSearch());
+    $("#controls").append(tools);
     $("#stats").replaceChildren();
     const time = (m) => new Date(m.created_at).getTime();
     const items = memorySource().filter((m) => matches(`${m.text} ${m.summary || ""}`)).sort(state.memTab === "candidate" ? byRisk : (a, b) => time(b) - time(a));

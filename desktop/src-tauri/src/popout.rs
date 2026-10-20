@@ -19,9 +19,10 @@ pub fn is_popout(label: &str) -> bool {
 }
 
 /// Opens a window for one popup at (x, y) in screen pixels; `payload` is the UI's own JSON, kept here until the window takes it.
+/// Async: building a window inside a sync command deadlocks on Windows (WebView2).
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn popout_open(app: AppHandle, window: Window, store: State<'_, Popouts>, payload: String, title: String, x: f64, y: f64, width: f64, height: f64) -> Result<String, String> {
+pub async fn popout_open(app: AppHandle, window: Window, store: State<'_, Popouts>, payload: String, title: String, x: f64, y: f64, width: f64, height: f64) -> Result<String, String> {
     if window.label() != "main" {
         return Err("popout_from_main_only".into());
     }

@@ -583,7 +583,11 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 		return result{}, err
 	}
 	text, port := routePick(res.Output, ports, def)
-	return result{out: map[string]any{"output": text, "workers": results}, port: port, tokens: used.Load() + res.tokens()}, nil
+	out := map[string]any{"output": text, "workers": results}
+	if res.Rules != "" {
+		out["rules"] = res.Rules
+	}
+	return result{out: out, port: port, tokens: used.Load() + res.tokens()}, nil
 }
 
 // skillList reads a node's "skills" config: hub skill ids separated by commas or new lines.

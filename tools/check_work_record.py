@@ -27,6 +27,7 @@ REQUIRED = ("Why", "Verified", "제목", "이유", "검증")
 NOT_RUN = re.compile(r"not[ _]run|미실행|skipped|못 ?[했함돌]", re.I)
 PASSED = re.compile(r"\bpass(ed)?\b|통과|\bok\b", re.I)
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
+CLAUSE = re.compile(r"[;,·]|\s/\s")  # one Verified line may list several checks
 PATH = re.compile(r"[\w.-]+(?:/[\w.-]+)+")  # checked per token, so no backtracking across a line
 REPORT_FIELDS = ("작업 ID", "실행한 검증", "미실행", "커밋 상태")
 
@@ -68,8 +69,8 @@ def resolve_range(text):
 
 def evidence_paths(line):
     for word in line.split():
-        word = word.strip("`'\"()[],;")
-        if "://" not in word and PATH.fullmatch(word) and "." in word.rsplit("/", 1)[1].strip("."):
+        word = re.sub(r":\d+(?:[-,]\d+)*$", "", word.strip("`'\"()[],;").rstrip(".:!?"))  # sentence end, path:line
+        if "://" not in word and ".." not in word and PATH.fullmatch(word) and "." in word.rsplit("/", 1)[1].strip("."):
             yield word
 
 
@@ -87,10 +88,21 @@ def sections(message):
     return out
 
 
+def clauses(line):
+    """A line's checks one by one; a bare verdict ("…, 통과") stays with the check before it."""
+    out = []
+    for c in CLAUSE.split(line):
+        if out and not PASSED.sub("", NOT_RUN.sub("", c)).strip(" .!"):
+            out[-1] += c
+        else:
+            out.append(c)
+    return out
+
+
 def verified_problems(text, exists):
     problems = []
     for line in text.splitlines():
-        if NOT_RUN.search(line) and PASSED.search(line):
+        if any(NOT_RUN.search(c) and PASSED.search(c) for c in clauses(line)):
             problems.append(f"a check marked not run is also called passed: {line.strip()[:80]}")
         for path in evidence_paths(line):
             if not exists(path):
@@ -134,9 +146,12 @@ def commit_exists(sha):
 
 def check_range(rng):
     """Problems in the commits of rng authored since RULE_START, or None when the base is not here."""
+    base, _, head = safe_range(rng).partition("..")
+    if known_rev(head) is None:
+        raise SystemExit(f"--range head {head!r} is not HEAD, a ref, or a full commit id here")
     resolved = resolve_range(rng)
     if resolved is None:
-        print(f"Work record check skipped: {rng} is not in this checkout.")
+        print(f"Work record check skipped: {base} is not in this checkout.")
         return None
     rng = resolved
     problems = []

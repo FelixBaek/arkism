@@ -14,5 +14,10 @@ test("whenToCron reads plain Korean times", () => {
   assert.equal(whenToCron("매일 18:30"), "30 18 * * *");
   assert.equal(whenToCron("주말 저녁"), "0 18 * * 0,6");
   assert.equal(whenToCron("오전 12시"), "0 0 * * *");
+  assert.equal(whenToCron("밤 12시"), "0 0 * * *");
+  assert.equal(whenToCron("밤 2시"), "0 2 * * *");
+  assert.equal(whenToCron("밤 9시"), "0 21 * * *");
+  assert.equal(whenToCron("매월 1일 오전 9시"), null);
+  assert.equal(whenToCron("월요일 9시"), "0 9 * * 1");
   assert.equal(whenToCron("PR이 열리면"), null);
 });

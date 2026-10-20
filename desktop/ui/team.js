@@ -670,11 +670,13 @@ window.ArkismTeams = (ctx) => {
       const j = kit.parseJSON(a.output || "");
       if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error(tr("AI의 답을 읽지 못했어요. 다시 해 보세요."));
       const props = [];
-      const add = (key, label, from, to, show = (v) => v) => { if (to !== undefined && to !== from) props.push({ label, from: show(from), to: show(to), apply: () => { setT(key, to); draw(); }, undo: () => { setT(key, from); draw(); } }); };
+      const add = (key, label, from, to, show = (v) => v, back = () => setT(key, from)) => { if (to !== undefined && to !== from) props.push({ label, from: show(from), to: show(to), apply: () => { setT(key, to); draw(); }, undo: () => { back(); draw(); } }); };
       if (typeof j.name === "string" && j.name.trim()) add("name", tr("이름"), t.name, j.name.trim().slice(0, 60));
       if (typeof j.prompt === "string" && j.prompt.trim()) add("prompt", tr("진행 방법"), t.prompt, j.prompt.trim().slice(0, 4000));
       if (MODES.some(([k]) => k === j.mode)) add("mode", tr("회의 방식"), t.overrides.mode || "", j.mode, modeName);
-      if (Number.isFinite(+j.max_rounds) && +j.max_rounds >= 1) add("max_rounds", tr("최대 라운드"), t.overrides.ending?.max_rounds ?? d.ending?.max_rounds ?? 4, Math.min(10, Math.round(+j.max_rounds)), String);
+      const own = t.overrides.ending; // undo puts this back, so a template that followed the team's ending follows it again
+      if (Number.isFinite(+j.max_rounds) && +j.max_rounds >= 1) add("max_rounds", tr("최대 라운드"), own?.max_rounds ?? d.ending?.max_rounds ?? 4, Math.min(10, Math.round(+j.max_rounds)), String,
+        () => { if (own) t.overrides.ending = own; else delete t.overrides.ending; });
       return { say: props.length ? `${props.map((p) => p.label).join("·")}을 제안해요. 보라색 목록에서 보고 적용하세요.` : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요."), props };
     }
     function setT(key, v) {
@@ -887,7 +889,7 @@ window.ArkismTeams = (ctx) => {
   }
   async function startTest(pop) {
     const t = pop.test, text = t.text.trim();
-    if (!text) { window.ArkismNeed(pop.h?.dialog?.querySelector("textarea") ?? null, "맡길 일을 적어 주세요."); return; }
+    if (!text) { window.ArkismNeed(pop.h?.dialog?.querySelector(".tm-test-form input") ?? null, "맡길 일을 적어 주세요."); return; }
     t.busy = true;
     try {
       const r = mt(await request("/v1/crew/meetings", { method: "POST", body: body({ meeting: { team_id: pop.id, title: text.slice(0, 40), topic: text } }) }));

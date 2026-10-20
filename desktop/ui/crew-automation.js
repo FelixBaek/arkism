@@ -13,6 +13,7 @@ window.ArkismAutomation = (h) => {
   function whenToCron(text) {
     const t = String(text || "").replace(/\s+/g, " ").trim();
     if (!t) return null;
+    if (/매월|매달|달마다|\d\s*일(?!요)/.test(t)) return null; // monthly or a day of the month: the AI handles it
     const DAYS = "일월화수목금토";
     let dow = null;
     if (/평일|주중/.test(t)) dow = "1-5";
@@ -28,8 +29,9 @@ window.ArkismAutomation = (h) => {
     if (hm) { hour = Number(hm[1]); min = hm[3] === "반" || /반/.test(t.slice(hm.index, hm.index + hm[0].length + 1)) && !hm[2] ? 30 : Number(hm[2] || 0); }
     else if (/아침/.test(t)) hour = 9; else if (/점심/.test(t)) hour = 12; else if (/저녁/.test(t)) hour = 18; else if (/밤/.test(t)) hour = 21;
     if (hour == null || hour > 23 || min > 59) return null;
-    if (/오후|저녁|밤|pm/i.test(t) && hour < 12) hour += 12;
-    if (/오전|새벽|am/i.test(t) && hour === 12) hour = 0;
+    if (/오후|저녁|pm/i.test(t) && hour < 12) hour += 12;
+    else if (/밤/.test(t) && hour >= 6 && hour < 12) hour += 12; // 밤 2시 is 2 at night, 밤 9시 is 21
+    if (/오전|새벽|밤|am/i.test(t) && hour === 12) hour = 0;
     return `${min} ${hour} * * ${dow ?? "*"}`;
   }
   // "m h * * dow" with plain numbers is what the picker edits; anything else stays a raw cron line.
@@ -434,7 +436,11 @@ window.ArkismAutomation = (h) => {
           const steps = (gr) => flat(gr).filter((n) => !["start", "end"].includes(n.type)).map((n, i) => `${i + 1}. ${n.title || h.nodeTitle(n)} · ${kindText(n)}`).join("\n");
           const redraw = () => { pop.select("overview"); touch(); };
           const was = d.graph;
-          const props = steps(was) === steps(next) ? [] : [{ label: "단계", from: steps(was), to: steps(next), apply: () => { d.graph = structuredClone(next); redraw(); }, undo: () => { d.graph = was; redraw(); } }];
+          // edges and step settings count too, not only the step list; layout (x, y) does not
+          const shape = (gr) => JSON.stringify({ nodes: gr.nodes.map((n) => ({ id: n.id, type: n.type, title: h.nodeTitle(n), config: n.config || {} })),
+            edges: (gr.edges || []).map(({ from, to, port, max }) => JSON.stringify([from, to, port || "", max || 0])).sort() }); // the shape layoutGraph keeps
+          const more = diffLines({ graph: was }, { graph: next }).filter((x) => !x.startsWith("단계 추가") && !x.startsWith("단계 뺌"));
+          const props = shape(was) === shape(next) ? [] : [{ label: "단계", from: steps(was), to: [steps(next), ...more].join("\n"), apply: () => { d.graph = structuredClone(next); redraw(); }, undo: () => { d.graph = was; redraw(); } }];
           if (creating && j.name && !d.name) {
             const name = String(j.name).slice(0, 60);
             props.push({ label: "이름", from: "", to: name, apply: () => { d.name = name; if (!handleTouched) d.handle = h.freeHandle(name); redraw(); }, undo: () => { d.name = ""; redraw(); } });

@@ -47,6 +47,11 @@ class CommitRecordTest(unittest.TestCase):
         self.assertTrue(any("not run is also called passed" in p for p in problems))
         self.assertTrue(any("evaluations/run-9/result.json" in p for p in problems))
 
+    def test_one_line_may_hold_a_passed_check_and_a_not_run_one(self):
+        self.assertEqual(w.verified_problems("go vet passed; node tests not run (no node)", exists()), [])
+        self.assertEqual(w.verified_problems("go test 통과, 스크린샷 미실행", exists()), [])
+        self.assertEqual(len(w.verified_problems("node tests not run · passed", exists())), 1)
+
     def test_korean_task_and_research_keys_count(self):
         ok = GOOD + "작업: PSY-02\n연구: 해당 없음\n"
         self.assertEqual(w.check_commit("e" * 40, ok, ["desktop/ui/memory-time.js"],
@@ -78,6 +83,13 @@ class InputTest(unittest.TestCase):
     def test_evidence_paths(self):
         self.assertEqual(list(w.evidence_paths("ran `tools/a.py`, see https://x.io/a/b.md and v1.2/3")),
                          ["tools/a.py"])
+        self.assertEqual(list(w.evidence_paths("Ran python3 tools/check_local.py. See desktop/ui/app.js:120.")),
+                         ["tools/check_local.py", "desktop/ui/app.js"])
+        self.assertEqual(list(w.evidence_paths("release notes for origin/main..HEAD; ran it")), [])
+
+    def test_an_unknown_range_head_fails_instead_of_skipping(self):
+        with self.assertRaises(SystemExit):
+            w.check_range("HEAD..no-such-ref-here")
 
 
 if __name__ == "__main__":

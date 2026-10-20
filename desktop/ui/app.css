@@ -1047,8 +1047,9 @@ html.popout dialog.popout-root[open] { display: flex; flex-direction: column; }
 html.popout dialog.popout-root[open] > * { flex: none; }
 html.popout dialog.popout-root[open] > .crew-popup-body, html.popout dialog.popout-root[open] > .dialog-body { flex: 1; min-height: 0; max-height: none; height: auto; overflow: auto; }
 /* 채울 칸 (field-need.js): red line + one short shake + the reason under it. */
-.field-need, .field-need:focus { border-bottom: 2px solid var(--status-danger) !important; }
-select.field-need, .auto-inline.field-need, h2.field-need { box-shadow: inset 0 -2px 0 var(--status-danger) !important; }
+/* :is(#app, body) outranks the one-line field rule above, which is !important too */
+:is(#app, body) .field-need, :is(#app, body) .field-need:focus { border-bottom: 2px solid var(--status-danger) !important; }
+:is(#app, body) :is(select.field-need, .auto-inline.field-need, h2.field-need) { box-shadow: inset 0 -2px 0 var(--status-danger) !important; }
 .field-need-msg { display: block; margin-top: 4px; color: var(--status-danger); font: 400 calc(12px * var(--fs, 1))/1.4 var(--sans); }
 .field-shake { animation: field-shake .36s ease-in-out; }
 @keyframes field-shake { 20%, 60% { translate: -5px 0; } 40%, 80% { translate: 5px 0; } }
