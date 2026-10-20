@@ -24,7 +24,7 @@ window.ArkismGatewayToken = (ctx) => {
     let busy = false;
     async function regenerate(st) {
       if (busy) return;
-      if (st?.state === "set" && !confirm("중계기 토큰을 다시 만들까요? 에이전트 설정에 새 토큰을 넣어요.")) return;
+      if (st?.state === "set" && !await ask("중계기 토큰을 다시 만들까요? 에이전트 설정에 새 토큰을 넣어요.")) return;
       busy = true;
       try {
         const r = await tauri.invoke("gateway_token_regenerate");

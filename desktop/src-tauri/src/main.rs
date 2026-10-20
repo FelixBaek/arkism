@@ -21,6 +21,7 @@ mod runtime;
 mod update_installer;
 mod ssh_tunnel;
 mod work_handoff;
+mod popout;
 
 // Build-time settings, read from desktop/local.env by build-windows.sh. A build without them
 // talks to a local server and has no update feed. The WebView can read them (app_defaults)
@@ -782,6 +783,7 @@ fn main() {
                 });
             }
             app.manage(rt);
+            app.manage(popout::Popouts::default());
             let open = MenuItem::with_id(app, "open", "Arkism 열기", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "끝내기", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &quit_item])?;
@@ -808,11 +810,14 @@ fn main() {
         // Closing the window keeps Arkism in the tray, so agents can keep saving memories.
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                if popout::is_popout(window.label()) {
+                    return; // a torn-off popup really closes
+                }
                 api.prevent_close();
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_disconnect, ssh_keys, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate])
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_disconnect, ssh_keys, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, popout::popout_open, popout::popout_take, popout::popout_close])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {

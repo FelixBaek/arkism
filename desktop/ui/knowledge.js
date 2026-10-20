@@ -7,7 +7,7 @@
 // doesn't know it gets a plain confirm instead. Everything read here is data, never instructions.
 window.ArkismKnowledge = (ctx) => {
   "use strict";
-  const { state, $, el, button, render, request, query, ago, detailShell, headExtras, confirmPop } = ctx;
+  const { state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop } = ctx;
   const PROFILES = [["design_consultant", "디자인 상담"], ["illustrator", "일러스트"], ["listing_reviewer", "상품 검수"]];
   const FORMATS = [["", "전체"], [".md", "Markdown"], [".txt", "텍스트"], [".json", "JSON"]];
   const MIME = { ".md": "text/markdown", ".txt": "text/plain", ".json": "application/json" };
@@ -102,7 +102,7 @@ window.ArkismKnowledge = (ctx) => {
     const box = el("label", "v4s-search v4k-search");
     const input = el("input"); input.type = "search"; input.placeholder = placeholder; input.value = value; input.setAttribute("aria-label", placeholder);
     input.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(() => onInput(input.value.trim()), 250); });
-    box.append(el("span", "ss-glass", "⌕"), input);
+    box.append(icon("magnifying-glass"), input);
     return box;
   }
   function select(label, opts, cur, pick) {
@@ -443,7 +443,7 @@ window.ArkismKnowledge = (ctx) => {
     const bar = el("form", "v4s-bar");
     const box = el("label", "v4s-search v4k-search");
     const input = el("input"); input.type = "search"; input.placeholder = "찾을 내용을 적어 보세요"; input.value = S.q; input.setAttribute("aria-label", "시험 검색");
-    box.append(el("span", "ss-glass", "⌕"), input);
+    box.append(icon("magnifying-glass"), input);
     const go = button(S.busy ? "찾는 중…" : "찾기", "primary"); go.type = "submit"; go.disabled = S.busy;
     bar.append(box, select("전문가", PROFILES, S.profile, (v) => { S.profile = v; }), go);
     bar.addEventListener("submit", (e) => { e.preventDefault(); S.q = input.value.trim(); void runSearch(); });

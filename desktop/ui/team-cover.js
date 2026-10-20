@@ -32,7 +32,7 @@ window.ArkismCoverPicker = ({ el, icon, request, query, state, notice }) => {
     });
   }
 
-  function open({ current, onPick }) {
+  function open({ current, onPick, anchor }) {
     const dlg = el("dialog", "crew-dialog tp-cover");
     const head = el("div", "tp-cover-head");
     const title = el("div", "tp-cover-title");
@@ -108,6 +108,15 @@ window.ArkismCoverPicker = ({ el, icon, request, query, state, notice }) => {
     dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
     document.body.append(dlg);
     dlg.showModal();
+    // 985:60681 · 967:60615: the window hangs 8px under the card photo, its left edge on the photo's
+    if (anchor) {
+      const r = anchor.getBoundingClientRect(), w = dlg.offsetWidth;
+      const top = Math.max(16, Math.min(r.bottom + 8, innerHeight - 410)); // ~400px tall once photos load
+      dlg.classList.add("anchored");
+      dlg.style.left = `${Math.max(16, Math.min(r.left, innerWidth - w - 16))}px`;
+      dlg.style.top = `${top}px`;
+      dlg.style.maxHeight = `${innerHeight - top - 16}px`;
+    }
     chips.firstChild.click();
   }
   return { open, src };

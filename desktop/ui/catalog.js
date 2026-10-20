@@ -84,7 +84,7 @@
       const alive = () => dlg.open;
       look.addEventListener("click", async () => {
         const name = parseSource(src.value);
-        if (!name) { notice("GitHub 주소를 owner/repo 또는 owner/repo/경로 형태로 넣어 주세요."); return; }
+        if (!name) { window.ArkismNeed(src, "GitHub 주소를 owner/repo 또는 owner/repo/경로 형태로 넣어 주세요."); return; }
         look.disabled = true; ok.hidden = true; found = null; preview.replaceChildren();
         status.textContent = "서버가 저장소를 내려받아 확인하고 있어요. 1분쯤 걸려요…";
         try {
@@ -217,7 +217,7 @@
       top.addEventListener("submit", async (e) => {
         e.preventDefault();
         const name = parseSource(src.value);
-        if (!name) { notice("GitHub 주소를 owner/repo 또는 owner/repo/경로 형태로 넣어 주세요."); return; }
+        if (!name) { window.ArkismNeed(src, "GitHub 주소를 owner/repo 또는 owner/repo/경로 형태로 넣어 주세요."); return; }
         look.disabled = true; found = null; pick = 0; update.checked = false; list.hidden = foot.hidden = updateL.hidden = true; drawSide();
         status.textContent = "서버가 저장소를 내려받아 확인하고 있어요. 1분쯤 걸려요…";
         try {

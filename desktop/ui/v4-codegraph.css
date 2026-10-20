@@ -125,7 +125,9 @@
 /* 바뀐 줄 */
 .cg-patch { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--nc-radius-quote); background: var(--nc-surface); border: 1px solid var(--nc-line); }
 .cg-patch pre { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-text); white-space: pre-wrap; overflow-wrap: anywhere; }
-.cg-patch pre .del { color: var(--nc-quiet); }
+.cg-patch pre :is(.add, .del) { display: block; margin: 0 -12px; padding: 0 12px; }
+.cg-patch pre .add { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); }
+.cg-patch pre .del { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); }
 .cg-patch small { font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 
 @media (max-width: 900px) {

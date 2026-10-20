@@ -29,7 +29,7 @@ button.tm-badge:hover { color: var(--nc-text); }
 .tm-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 .tm-input, .tm-select { width: 100%; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-raised); color: var(--nc-text);
   font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
-textarea.tm-input { height: auto; padding: 9px 12px; resize: vertical; }
+textarea.tm-input { height: auto; padding: 9px 12px; resize: none; }
 .tm-input.mono, .tm-mono-field .tm-input { font-family: var(--mono); }
 .tm-input::placeholder { color: var(--nc-quiet); }
 .tm-select option { background: var(--nc-surface); color: var(--nc-text); }
@@ -168,6 +168,8 @@ textarea.tm-input { height: auto; padding: 9px 12px; resize: vertical; }
 .tm-svg-cap { fill: var(--nc-quiet); font: 400 8px var(--mono); }
 .tm-svg-pill { fill: var(--nc-text); }
 .tm-svg-pilltext { fill: var(--nc-canvas); font: 500 7px var(--sans); }
+.tm-svg-spot { fill: color-mix(in srgb, var(--nc-accent) 14%, transparent); stroke: var(--nc-accent); stroke-width: 1; stroke-opacity: .5; pointer-events: none; } /* 순서대로: the walking highlight */
+.tm-svg-ray { stroke-width: 1.6; } /* 진행자 지명: the arrow that grows to the one picked */
 .tm-ending { padding-top: 18px; border-top: 1px solid var(--nc-line); }
 .tm-mode-wrap { display: flex; flex-direction: column; gap: 18px; }
 .tm-stepper, .tm-suffix { display: flex; align-items: stretch; height: 36px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-raised); overflow: hidden; }
@@ -236,8 +238,7 @@ textarea.tm-input { height: auto; padding: 9px 12px; resize: vertical; }
 .tm-meet-row .tm-badge { font-size: calc(12px * var(--fs, 1)); }
 .tm-trans { flex: none; display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: 8px; }
 .tm-trans-head { display: flex; align-items: baseline; gap: 10px; }
-.tm-trans-head h3 { flex: 1; min-width: 0; margin: 0; text-align: center; color: var(--nc-text); font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); }
-.tm-concl .tm-trans-head h3 { text-align: left; }
+.tm-trans-head h3 { flex: 1; min-width: 0; margin: 0; text-align: left; color: var(--nc-text); font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); }
 .tm-trans-head .mono { color: var(--nc-quiet); font: 400 12px/1.5 var(--mono); white-space: nowrap; }
 .tm-topic { margin: 0; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.6 var(--sans); white-space: pre-wrap; }
 .tm-turn { display: flex; align-items: flex-start; gap: 12px; }
@@ -401,3 +402,8 @@ textarea.tm-input { height: auto; padding: 9px 12px; resize: vertical; }
 .tm-split > .tm-edit .tm-edit-words { flex: 1 1 100%; }
 .tm-split > .tm-edit .tm-mtable .tm-mrow { grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1.4fr) 64px 24px; gap: 10px; }
 .tm-split > .tm-edit .tm-mtable .tm-mrow > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 회의 머리 (208:19103): 팀 보기 is an outlined button beside 새 회의 */
+.page-head .head-aside .btn.tm-outline { border: 1px solid var(--nc-line); background: none; color: var(--nc-accent); }
+.page-head .head-aside .btn.tm-outline:hover { background: var(--nc-raised); }
+.panel:has(#table.tm-meet) { flex: 0 1 auto; } /* 208:19103: the meetings panel hugs its content instead of reaching the window's foot */

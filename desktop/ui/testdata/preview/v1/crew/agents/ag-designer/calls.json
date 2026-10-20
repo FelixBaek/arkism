@@ -1,0 +1,38 @@
+{
+ "items": [
+  {
+   "at": "2026-10-18T05:31:00Z",
+   "model": "deepseek-v4-flash",
+   "ok": true,
+   "latency_ms": 18000,
+   "input_tokens": 2600,
+   "output_tokens": 640,
+   "cost_usd": 0.01,
+   "estimated": true,
+   "trigger": "test"
+  },
+  {
+   "at": "2026-10-18T02:02:00Z",
+   "model": "deepseek-v4-flash",
+   "ok": true,
+   "latency_ms": 42000,
+   "input_tokens": 5200,
+   "output_tokens": 1300,
+   "cost_usd": 0.03,
+   "estimated": true,
+   "trigger": "meeting"
+  },
+  {
+   "at": "2026-10-17T13:15:00Z",
+   "model": "deepseek-v4-flash",
+   "ok": false,
+   "latency_ms": 20000,
+   "input_tokens": 4100,
+   "output_tokens": 0,
+   "cost_usd": 0.0,
+   "estimated": true,
+   "error": "검사 실패",
+   "trigger": "claude_code"
+  }
+ ]
+}

@@ -607,8 +607,8 @@ window.ArkismRouting = (ctx) => {
     box.append(sec);
     if (!g.discovered) {
       const foot = el("div", "rt-foot");
-      foot.append(button("그룹 저장", "primary", null, () => saveGroups()), button("그룹 지우기", "ghost", null, () => {
-        if (!confirm(`'${g.name}' 그룹을 지울까요? 이 그룹을 부르던 에이전트는 모델을 못 찾게 돼요.`)) return;
+      foot.append(button("그룹 저장", "primary", null, () => saveGroups()), button("그룹 지우기", "ghost", null, async () => {
+        if (!await ask(`'${g.name}' 그룹을 지울까요? 이 그룹을 부르던 에이전트는 모델을 못 찾게 돼요.`)) return;
         const list2 = editGroups(); list2.splice(list2.findIndex((x) => x.id === g.id), 1); S.group = ""; void saveGroups();
       }));
       box.append(foot);

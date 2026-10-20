@@ -12,11 +12,16 @@
 .sidebar .brand { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 53px; padding: 0; font-weight: 400; }
 .brand-mark { grid-column: 1 / -1; width: 21px; height: 19px; flex: none; }
 .brand-word { font: 400 40px/42px "Aleo", "Cormorant Garamond", "Noto Serif KR", Georgia, serif; color: var(--nc-text); letter-spacing: 0; }
-/* Figma 198:110 puts the problem dot on the settings row (x144). */
-.sidebar .status-dot { position: absolute; left: 140px; bottom: 28px; z-index: 1; }
-.status-dot { margin-left: auto; display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 6px; background: none; padding: 0; }
-.status-dot:hover { background: var(--nc-raised); }
-.status-dot .dot { width: 7px; height: 7px; }
+/* Search, status and help sit as icons at the right end of the settings row. */
+.rail-tools { position: absolute; right: 16px; bottom: 28px; z-index: 1; display: flex; gap: 2px; }
+.rail-tool { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; padding: 0; color: var(--nc-quiet); }
+.rail-tool:hover, .rail-tool[aria-expanded="true"] { background: var(--nc-raised); color: var(--nc-text); }
+.rail-tool .icon { width: 16px; height: 16px; }
+.rail-tool.ok { color: var(--status-ok); }
+.rail-tool.warn { color: var(--warn); }
+.rail-tool.bad { color: var(--status-danger); }
+/* Search lives in the 통합 검색 dialog (home.js); the top-bar box stays as the hidden list filter. */
+.area-bar > .search { display: none; }
 .rail-line { height: 1px; background: var(--nc-line); flex: none; }
 .sidebar .nav { gap: 6px; }
 .sidebar .nav-item { height: 44px; gap: 12px; padding: 0 16px 0 14px; border-radius: var(--nc-radius-control); color: var(--nc-muted); font: 400 calc(16px * var(--fs, 1))/20px "Aleo", "Noto Serif KR", Georgia, serif; }
@@ -70,9 +75,6 @@
 .panel > .detail { width: var(--nc-detail-w); flex: none; background: none; border-left: 1px solid var(--nc-line); overflow: auto; }
 .app.wide .panel > .detail { display: none; }
 
-.page-foot { display: flex; gap: 24px; flex: none; color: var(--nc-quiet); font: 400 12px/20px var(--sans); }
-.page-foot span:first-child { flex: 1; }
-.page-foot .mono { font: 400 11px/18px var(--mono); width: 170px; }
 
 /* ---------------------------------------------------------------- shared parts (v3/Button …) */
 .btn { border-radius: var(--nc-radius-control); border-color: var(--nc-line); background: var(--nc-surface); color: var(--nc-text); }
@@ -110,7 +112,7 @@
   .sidebar { flex-direction: column; flex-wrap: nowrap; align-items: center; gap: 16px; padding: 24px 12px 16px; border-bottom: 0; }
   .sidebar .brand { flex-direction: column; height: auto; gap: 8px; }
   .sidebar .brand-word, .rail-art { display: none; }
-  .sidebar .status-dot { position: static; margin-left: 0; }
+  .rail-tools { position: static; flex-direction: column; }
   .rail-line { align-self: stretch; }
   .sidebar .nav { flex-direction: column; }
   .sidebar .nav-item { width: 44px; padding: 0; justify-content: center; }
@@ -126,3 +128,7 @@
   .area-bar .search kbd { display: none; }
   .panel-main { padding: 12px; }
 }
+
+/* diff (GitHub 방식): 뺀 것은 빨강 바탕, 넣은 것은 초록 바탕. 줄 단위·글자 단위·상자 단위 어디서나 이 두 클래스(또는 같은 토큰)를 쓴다. */
+.diff-del { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); }
+.diff-add { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); }

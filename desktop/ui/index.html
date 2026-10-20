@@ -34,6 +34,11 @@
   <link rel="stylesheet" href="v4-codegraph.css">
   <link rel="stylesheet" href="v4-overview.css">
   <script src="look.js"></script>
+  <script src="ask.js"></script>
+  <script src="text-diff.js"></script>
+  <script src="combo.js"></script>
+  <script src="popup-drag.js"></script>
+  <script src="field-need.js"></script>
   <script src="i18n-en.js"></script>
   <script src="i18n.js"></script>
   <script src="preference-transfer.js" defer></script>
@@ -42,6 +47,8 @@
   <script src="pins.js" defer></script>
   <script src="gateway-token.js" defer></script>
   <script src="perf.js" defer></script>
+  <script src="ai-chat.js" defer></script>
+  <script src="version-diff.js" defer></script>
   <script src="crew-popup.js" defer></script>
   <script src="crew-automation.js" defer></script>
   <script src="crew.js" defer></script>
@@ -145,13 +152,13 @@
 <symbol id="i-flag" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M48 224V48"/><path d="M48 168c64-48 96 32 160 0V48c-64 32-96-48-160 0"/></g></symbol>
 <symbol id="i-terminal" viewBox="0 0 256 256"><g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><rect x="32" y="48" width="192" height="160" rx="12"/><path d="M72 104l32 24-32 24M128 160h48"/></g></symbol>
 <symbol id="i-arrow-left" viewBox="0 0 256 256"><path fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" d="M216 128H40M112 56l-72 72 72 72"/></symbol>
+<symbol id="i-crown" viewBox="0 0 256 256"><path d="M248,80a28,28,0,1,0-51.12,15.77l-26.79,33L146,73.4a28,28,0,1,0-36.06,0L85.91,128.74l-26.79-33a28,28,0,1,0-26.6,12L47,194.63A16,16,0,0,0,62.78,208H193.22A16,16,0,0,0,209,194.63l14.47-86.85A28,28,0,0,0,248,80ZM128,40a12,12,0,1,1-12,12A12,12,0,0,1,128,40ZM24,80A12,12,0,1,1,36,92,12,12,0,0,1,24,80ZM193.22,192H62.78L48.86,108.52,81.79,149A8,8,0,0,0,88,152a7.83,7.83,0,0,0,1.08-.07,8,8,0,0,0,6.26-4.74l29.3-67.4a27,27,0,0,0,6.72,0l29.3,67.4a8,8,0,0,0,6.26,4.74A7.83,7.83,0,0,0,168,152a8,8,0,0,0,6.21-3l32.93-40.52ZM220,92a12,12,0,1,1,12-12A12,12,0,0,1,220,92Z"/></symbol><symbol id="i-pulse" viewBox="0 0 256 256"><path fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" d="M24 128h40l24-56 48 112 24-56h72"/></symbol>
 <symbol id="a-gemini" viewBox="0 0 24 24"><path fill="#3186ff" d="M12 1c.6 5.6 4.4 10.4 11 11-6.6.6-10.4 5.4-11 11-.6-5.6-4.4-10.4-11-11 6.6-.6 10.4-5.4 11-11z"/></symbol>
   </svg>
 
   <div id="app" class="app" inert aria-hidden="true">
     <aside class="sidebar" aria-label="Arkism 메뉴">
-      <div class="brand"><img class="brand-mark" src="img/arkism-triangle.svg" alt="" width="16" height="15"><span class="brand-word">arkism</span>
-        <button id="status-toggle" class="status-dot" type="button" aria-expanded="false" aria-controls="status-card" title="연결 상태"><i id="status-dot" class="dot"></i><span id="status-badge" class="sr-only">자세히</span></button></div>
+      <div class="brand"><img class="brand-mark" src="img/arkism-triangle.svg" alt="" width="16" height="15"><span class="brand-word">arkism</span></div>
       <section id="status-card" class="status-card" aria-label="연결 상태" hidden>
         <div class="status-head">
           <strong>연결 상태</strong>
@@ -180,6 +187,10 @@
       <div class="rail-space"></div>
       <div class="rail-art" id="rail-art" aria-hidden="true"></div>
       <button id="settings-button" class="nav-item rail-settings" data-menu="settings" type="button"><svg class="ln" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg><span>설정</span></button>
+      <div class="rail-tools">
+        <button id="search-toggle" class="rail-tool" type="button" aria-label="검색" title="검색 (Ctrl K)"><svg class="icon" aria-hidden="true"><use href="#i-magnifying-glass"/></svg></button>
+        <button id="status-toggle" class="rail-tool" type="button" aria-expanded="false" aria-controls="status-card" aria-label="상태" title="연결 상태"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg><i id="status-dot" class="dot" hidden></i><span id="status-badge" class="sr-only">자세히</span></button>
+      </div>
     </aside>
 
     <main class="main">
@@ -207,7 +218,6 @@
         </div>
         <aside id="detail" class="detail" aria-label="상세"></aside>
       </section>
-      <footer class="page-foot"><span>arkism. / 기억은 저장이 아니라 전승이다</span><span class="mono">NOCTURNE</span></footer>
     </main>
   </div>
 
@@ -239,7 +249,6 @@
           <p class="quiet">OpenSSH(또는 Git for Windows)가 이 PC에 있어야 해요.</p>
         </aside>
       </div>
-      <footer class="page-foot"><span>arkism. / 기억은 저장이 아니라 전승이다</span><span class="mono">NOCTURNE</span></footer>
     </form>
   </div>
   <dialog id="prompt-dialog" class="page-dialog">

@@ -1106,7 +1106,7 @@ window.ArkismI18nEN = {
   "없어요": "None",
   "워크플로우 설정": "Workflow settings",
   "노드 설정": "Node settings",
-  "노드를 누르면 여기서 고쳐요. 출력 점을 끌어 다음 노드에 이어요. 앞 노드로 이으면 되돌아가는 선이 돼요. 선을 누르면 선 설정이 열려요. 휠 클릭이나 스페이스를 누른 채 끌면 화면이 움직여요.": "Click a node to edit it here. Drag an output dot to connect to the next node; connecting to an earlier node makes a loop-back line. Click a line to open its settings. Middle-click drag or hold Space and drag to pan.",
+  "노드를 누르면 여기서 고쳐요. 출력 점을 끌어 다음 노드에 이어요. 앞 노드로 이으면 되돌아가는 선이 돼요. 선을 누르면 선 설정이 열려요. 휠로 확대·축소하고, 휠 클릭이나 스페이스를 누른 채 끌면 화면이 움직여요.": "Click a node to edit it here. Drag an output dot to connect to the next node; connecting to an earlier node makes a loop-back line. Click a line to open its settings. Scroll to zoom; middle-click drag or hold Space and drag to pan.",
   "노드": "Node",
   "되돌아가는 선": "Loop-back line",
   "고르세요": "Choose",
@@ -1545,6 +1545,8 @@ window.ArkismI18nEN = {
   "내려받은 파일이 맞지 않아 설치하지 않았어요.": "The downloaded file didn't verify, so it wasn't installed.",
   "설치하지 못했어요. 잠시 뒤 다시 눌러 주세요.": "Couldn't install. Try again in a moment.",
   "다시 시도": "Try again",
+  "위험도 높은 순": "Highest risk",
+  "최신 순": "Newest",
   "일반": "General",
   "모양": "Appearance",
   "라우팅 설정": "Routing settings",
@@ -2124,7 +2126,7 @@ window.ArkismI18nEN = {
   "자주 쓰는 서버": "Popular servers",
   "GitHub에서 설치": "Install from GitHub",
   "연결 설정 ›": "Connection settings ›",
-  "점은 서버 연결 상태예요. DB 상태는 따로 확인해요.": "The dot shows the server connection. The DB status is checked separately.",
+  "상태 아이콘 색: 초록 정상 · 주황 확인 필요 · 빨강 연결 문제": "Status icon: green fine · amber needs a look · red connection problem",
   "휴지통·중복": "Trash & duplicates",
   "개선안 만들기 → 기존 버전과 비교 → 검토·승인 → 실제 작업에 시험 적용 순서로 진행해요.": "Make an improvement → compare it with the current version → review and approve → trial it on real work.",
   "안 쓰는 스킬은 휴지통으로 옮기고, 여러 곳에 같은 이름으로 있는 스킬을 정리해요.": "Move skills you don't use to the trash, and clean up skills that share a name in several places.",
@@ -5673,3 +5675,444 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "“{0}”와 비슷한 기억이에요. 같은 뜻이면 기억 화면에서 합치거나 연결해 주세요.": "Similar to “{0}”. If it means the same, merge or link them on the Memory screen.",
   "수정 {0}": "Edited {0}"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "확인용 이름": "Name to confirm",
+  "초안을 쓰는 중이에요…": "Writing a draft…",
+  "아래 칸을 채웠어요. 확인하고 만들어 주세요.": "Filled in the fields below. Check them and create.",
+  "저장하지 않은 변경이 있어요. 테스트는 저장된 설정으로 답하니 먼저 개요에서 저장해 주세요.": "You have unsaved changes. Tests answer with the saved setup, so save in Overview first.",
+  "AI로 초안": "AI draft",
+  "적용해도 저장하기 전에는 바뀌지 않아요": "Applying changes nothing until you save",
+  "필요한 동료를 말하면 초안을 채워요": "Describe the teammate you need and it fills a draft",
+  "바꾸고 싶은 걸 말하면 바뀌는 곳을 보여 줘요": "Say what to change and it shows what would change",
+  "어떤 일을 맡길 동료가 필요하세요?": "What kind of teammate do you need?",
+  "어떻게 바꿀까요? 지시·스킬·도구·생각 깊이를 바꿔 볼 수 있어요.": "What should change? You can adjust instructions, skills, tools and thinking depth.",
+  "예: PR 올리기 전에 테스트 빠진 곳을 찾아 주는 동료": "e.g. a teammate who finds missing tests before a PR",
+  "예: 배포 전에는 꼭 나한테 물어보게 해 줘": "e.g. always ask me before deploying",
+  "코드 리뷰해 주는 동료": "A code reviewer",
+  "회의록 정리하는 동료": "A meeting-notes keeper",
+  "자료 찾아 요약하는 동료": "A researcher who summarizes",
+  "배포 전엔 꼭 물어보게": "Ask before deploying",
+  "더 짧게 답하게": "Answer shorter",
+  "필요한 스킬 골라 줘": "Pick the skills it needs",
+  "순서만 바뀌어요": "Only the order changes",
+  "적용함 · 저장하면 반영돼요": "Applied · takes effect when saved",
+  "제안을 만드는 중이에요…": "Making suggestions…",
+  "바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요.": "Found nothing to change. Try asking another way.",
+  "전문가 삭제": "Delete expert",
+  "이 전문가와 설정을 지워요. 되돌릴 수 없어요.": "Deletes this expert and its setup. This can't be undone."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "'{0}' 전문가를 삭제할까요?\n되돌릴 수 없어요. 확인하려면 이름 '{1}'을 그대로 입력하세요.": "Delete the expert '{0}'?\nThis can't be undone. Type the name '{1}' to confirm.",
+  "AI 제안 {0}개": "{0} AI suggestions",
+  "{0}에 적용했어요. 저장해야 반영돼요.": "Applied to {0}. Save to make it stick.",
+  "{0}을 바꾸자고 제안해요. 보라색 목록에서 바뀌는 곳을 보고 적용하세요.": "Suggests changing {0}. Review the changes in the purple list and apply."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "노드 추가·연결·모델은 그래프에서 고쳐요. 저장한 뒤 '창으로 돌아가기'로 여기서 마무리해요.": "Add nodes, links and models in the graph. Save there, then use 'Back to window' to finish here.",
+  "저장했어요. '창으로 돌아가기'를 눌러 마무리해요.": "Saved. Press 'Back to window' to finish.",
+  "창으로 돌아가기": "Back to window"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "AI 단계 {0}개 · 펼쳐서 바로 고치거나 따로 시험해요": "{0} AI steps · open to edit or try them on their own"
+});
+// 자동화 팝업 정리 (시작 조건 메뉴 · 보낼 곳 · 모델 고르기 · 관리 한 줄)
+Object.assign(window.ArkismI18nEN.strings, {
+  "정해 둔 요일·시간에 시작": "Starts on the days and times you set",
+  "주소로 요청이 오면 시작": "Starts when a request hits the address",
+  "GitHub·메일·폴더 · 준비 중": "GitHub · mail · folders · coming soon",
+  "AI 에이전트 (직접 쓰기)": "AI agent (write it yourself)",
+  "+ 보낼 곳 추가": "+ Add destination",
+  "보낼 곳": "Send to",
+  "아직 없어요 · 텔레그램·슬랙·디스코드": "None yet · Telegram · Slack · Discord",
+  "보낼 곳 빼기": "Remove destination",
+  "디스코드 알림은 준비 중": "Discord notices coming soon",
+  "채널에서 부르기 · 봇은 설정 › 메신저에서 연결해요": "Call from a channel · connect bots in Settings › Messengers",
+  "단계마다 정해요": "Set per step",
+  "모델을 비워 둔 AI 단계가 이걸 써요": "AI steps with no model use this",
+  "단계마다 바꿀 수 있어요": "Each step can change it",
+  "예전 설정 창": "Old settings window",
+  "지우기는 정의만 지워요 · 지난 실행 기록은 남아요": "Delete removes the definition only · past runs stay"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}은 이미 켜져 있어요.": "{0} is already on.",
+  "{0}을 끄고 {1}으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.": "Turn off {0} and switch to {1}? Only one of schedule and webhook can be on.",
+  "페르소나 · {0}": "Persona · {0}",
+  "전문가 모델 · {0}": "Expert model · {0}",
+  "기본 · {0}": "Default · {0}"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "자주 여는 회의의 진행 방법을 저장해 두고, 회의를 열 때 골라요": "Save how your usual meetings go, then pick one when you open a meeting",
+  "+ 템플릿 만들기": "+ Make a template",
+  "회의 템플릿 고치기": "Edit meeting template",
+  "새 회의 템플릿": "New meeting template",
+  "회의를 열 때 이 템플릿을 고르면, 아래 내용이 그 회의에만 들어가요.": "Pick this template when you open a meeting and what's below goes into that meeting only.",
+  "템플릿을 넣었어요. 팀을 저장하면 반영돼요.": "Template added. Save the team to make it stick.",
+  "이름을 적어 주세요": "Write a name",
+  "예: 코드 리뷰, 주간 회고, 시안 검토": "e.g. Code review, Weekly retro, Mockup review",
+  "템플릿 이름": "Template name",
+  "예:\n- 바뀐 화면을 접근성·디자인 토큰 기준으로 봐요\n- 한 사람이 문제를 3개까지 말해요\n- 끝에 고칠 목록을 중요한 순서로 정리해요": "e.g.\n- Check the changed screens for accessibility and design tokens\n- Each person raises up to 3 problems\n- At the end, list what to fix, most important first",
+  "이 회의의 진행 방법": "How this meeting goes",
+  "회의를 열 때마다 적어요": "typed each time you open one",
+  "이 템플릿의 진행 방법": "This template's steps",
+  "여기 적은 글": "what you write here",
+  "팀에 넣어 둔 자료": "the team's material",
+  "팀 설정대로": "Same as the team",
+  "끝나는 조건을 이 템플릿만 따로 정하기": "Set its own ending for this template",
+  "끝나는 조건 따로 정하기": "Set its own ending",
+  "최대 라운드 (1~10)": "Max rounds (1–10)",
+  "회의를 열 때 목록에서 고르는 이름이에요": "The name you pick from the list when you open a meeting",
+  "주제는 회의를 열 때 따로 적어요. 여기에는 매번 같은 진행 순서·볼 기준·결과 모양을 적어요.": "The topic is typed when you open the meeting. Here, write what stays the same: the steps, what to check, the shape of the result.",
+  "회의가 시작되면 서기가 이 순서로 읽고 브리핑해요": "When the meeting starts, the scribe reads these in order and briefs everyone",
+  "이 템플릿만 바꿀 설정": "Settings only this template changes",
+  "비워 두면 팀 설정대로 해요. 이 템플릿으로 연 회의에서만 바뀌어요.": "Leave empty to follow the team. Changes apply only to meetings opened with this template.",
+  "어떤 회의인지 말하면 이름·진행 방법을 채워 드려요": "Say what the meeting is for and it fills in the name and steps",
+  "어떤 회의에 쓸 템플릿인가요? 무엇을 정하고, 결과를 어떤 모양으로 받고 싶은지 말해 주세요.": "What meeting is this template for? Say what should be decided and what shape the result should take.",
+  "예: PR을 올리기 전에 보안·테스트를 점검하는 회의": "e.g. a meeting that checks security and tests before a PR",
+  "어떤 회의인지": "What meeting it is",
+  "코드 리뷰 회의": "Code review meeting",
+  "주간 회고": "Weekly retro",
+  "시안 검토 후 고칠 목록": "Mockup review into a fix list",
+  "어떤 회의인지 한 줄 써 주세요.": "Write one line about the meeting.",
+  "진행 방법": "Steps"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}을 제안해요. 보라색 목록에서 보고 적용하세요.": "Suggests {0}. Review them in the purple list and apply.",
+  "'{0}' 템플릿을 지울까요? 팀을 저장하면 반영돼요.": "Delete the template '{0}'? Save the team to make it stick."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "오래된 순 ▾": "Oldest ▾",
+  "최신 순 ▾": "Newest ▾",
+  "위험도 높은 순 ▾": "Highest risk ▾",
+  "정렬 바꾸기": "Change order",
+  "다시 보기": "Judge again",
+  "다시 시도": "Try again",
+  "다시 보는 중이에요. 다음 AI 검토(매시 정각)에 바뀌어요.": "Judging again. The next AI review (on the hour) updates it."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}일 대기": "Waiting {0} days"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "주제별": "By topic",
+  "분류 대기": "Unsorted",
+  "검색 (Ctrl K)": "Search (Ctrl K)",
+  "통합 검색": "Search everything",
+  "최근 기억": "Recent memories",
+  "기억 후보 검토": "Review memory candidates",
+  "설정 열기": "Open settings",
+  "유형 변경": "Change type",
+  "찾는 결과가 없어요.": "No results.",
+  "TOOLS › 플러그인": "TOOLS › Plugins",
+  "크루": "Crew"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "이 전문가가 지킬 역할·말투·순서를 적어 주세요": "Write the role, tone and steps this expert keeps",
+  "없음 · 지시대로": "None · by the instructions",
+  "일하는 순서": "Steps",
+  "+ 워크플로우 연결": "+ Connect a workflow",
+  "고르기 (선택)": "Pick (optional)",
+  "새 버전이 있어요": "A new version is out",
+  "+ 지식 추가": "+ Add knowledge",
+  "핀을 꽂으면 부를 때마다 먼저 넣어요": "Pinned items go in first on every call",
+  "스킬·도구·기억·지식에서 찾아 추가": "Find and add from skills, tools, memories, knowledge",
+  "찾아 추가": "Find and add",
+  "더할 수 있는 승인된 자료가 없어요.": "No approved items to add.",
+  "칩을 누르면 넣는 방식(전체·요약·참조)과 버전(고정·최신)을 바꿀 수 있어요. 도구는 부를 때만 실행돼서 고정이 없어요.": "Click a chip to change how it goes in (full, summary, reference) and its version (fixed, latest). Tools only run when called, so they have no pin.",
+  "전체: 내용을 다 넣어요": "Full: puts in everything",
+  "요약: 줄여서 넣어요": "Summary: puts in a shorter version",
+  "참조: 제목만 넣고 필요할 때 읽어요": "Reference: puts in the title and reads it when needed",
+  "켜면 부를 때마다 먼저 넣어요": "When on, it goes in first on every call",
+  "고정이면 이 버전만 써요. 최신이면 새 버전을 따라가요.": "Fixed uses only this version. Latest follows new versions.",
+  "봇 토큰·연결 상태는 설정 › 메신저에서 관리해요. 바꾸면 바로 저장돼요.": "Bot tokens and connection status live in Settings › Messengers. Changes save right away.",
+  "어디서든 이 이름으로 불러요": "Call it by this name anywhere",
+  "어떤 동료가 필요하세요? 예: PR 올리기 전에 테스트 빠진 곳을 찾아 주는 동료": "What teammate do you need? e.g. one that finds missing tests before a PR",
+  "제안 받기": "Get suggestions",
+  "물어볼 말을 보내면 저장된 설정으로 답해요.": "Send a request and it answers with the saved settings.",
+  "저장하지 않은 변경이 있어요. 테스트는 저장된 설정으로 답하니 먼저 저장해 주세요.": "You have unsaved changes. Tests answer with the saved settings, so save first.",
+  "여기서 보낸 요청도 실제 실행이에요. 실행 기록과 이번 달 한도에 남아요.": "Requests sent here are real runs. They count in the run log and this month's limit.",
+  "소개 바꿈": "Changed the description",
+  "지시 바꿈": "Changed the instructions",
+  "생각 깊이 바꿈": "Changed the thinking depth",
+  "고정한 것 바꿈": "Changed the pinned items",
+  "부르는 곳 바꿈": "Changed where it is called",
+  "기억 종류 바꿈": "Changed the memory kinds",
+  "아바타 바꿈": "Changed the avatar",
+  "판 이력이 아직 없어요.": "No versions yet.",
+  "테스트 탭에서 보낸 것도 여기 남아요": "Requests from the Test tab show here too",
+  "아직 실행 기록이 없어요.": "No runs yet.",
+  "실행 기록을 불러오지 못했어요.": "Could not load runs."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "이미지는 {0}이 대신 보고, 답은 이 전문가 이름으로 돌려줘요.": "{0} looks at images for it, and the answer comes back under this expert's name.",
+  "고정 {0}개 · 약 {1} 토큰 · 넣는 순서는 고정 칩을 끌어서 바꿔요": "{0} pinned · about {1} tokens · drag pinned chips to change the order",
+  "켜면 부를 때마다 먼저 넣어요 · 고정 {0}개 중 {1}번째": "When on, it goes in first on every call · {1} of {0} pinned",
+  "v{0}가 나왔어요": "v{0} is out",
+  "이 스킬을 쓰는 전문가 {0}명": "{0} experts use this skill",
+  "마지막 업데이트 {0}-{1}": "Last updated {0}-{1}",
+  "약 {0}초": "About {0}s",
+  "{0}~{1}초": "{0}–{1}s",
+  "제안 {0}개 대기 중": "{0} suggestions waiting",
+  "@{0}에게 맡길 일…": "A task for @{0}…",
+  "기본 모델 {0} → {1}": "Main model {0} → {1}",
+  "예비 모델 {0} → {1}": "Backup model {0} → {1}",
+  "일하는 순서 {0} → {1}": "Steps {0} → {1}",
+  "스킬 {0} 추가": "Added skill {0}",
+  "스킬 {0} 뺌": "Removed skill {0}",
+  "도구 {0} 추가": "Added tool {0}",
+  "도구 {0} 뺌": "Removed tool {0}",
+  "한 달 한도 ${0} → ${1}": "Monthly limit ${0} → ${1}",
+  "1회 한도 ${0} → ${1}": "Per-run limit ${0} → ${1}"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "시작 노드의 언제 칸 형식을 확인해 주세요.": "Check the format of the start node's When field.",
+  "실행 완료": "Run finished",
+  "실행 기록에서 보기": "View in run history",
+  "자기 자신을 부를 수 없어요. 최대 세 겹까지 연결해요.": "It can't call itself. Up to three levels deep.",
+  "웹훅 메모": "Webhook note",
+  "시작한 곳": "Started from",
+  "다시 쓰는 결과": "Reused results",
+  "실패했을 때와 같아요": "Same as when it failed",
+  "끝나면": "When it ends",
+  "새 결과가 실행 기록에 쌓이고, 실패 기록도 함께 남아요.": "The new result goes into run history, and the failed run stays too.",
+  "현재 단계": "Current steps",
+  "앞선 실행 결과를 사용해요.": "Uses the earlier run's result.",
+  "같은 설정으로 다시 실행하고 있어요.": "Running again with the same settings.",
+  "새 결과가 도착하면 실행 기록에 표시돼요.": "New results show in run history when they arrive.",
+  "실행 중…": "Running…",
+  "실패한 곳부터 재실행": "Rerun from the failure"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} · 다음 실행 {1}": "{0} · next run {1}",
+  "${0}로 부르거나 실행을 눌렀을 때 시작해요.": "Starts when called as ${0} or when you press Run.",
+  "{0}단계 (앞선 실행)": "{0} steps (earlier run)",
+  "{0}가 끝나면 이어서 실행해요.": "Runs after {0} finishes."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "보내지 않음": "Nothing sent",
+  "눌러서 바꿔요 · 알림 시점마다 / 확인 필요할 때만 / 끝나면 보고서": "Click to change · at each notice moment / only when approval is needed / report at the end",
+  "기본 채널": "Default channel"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "바뀐 칸 {0}개 · 저장하면 v{1}가 돼요 · 기록 탭에서 되돌릴 수 있어요": "{0} fields changed · saving makes v{1} · you can roll back in the History tab"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "팀 삭제": "Delete team",
+  "이 팀과 설정을 지워요. 지난 회의 기록은 남고, 되돌릴 수 없어요.": "Deletes this team and its settings. Past meetings stay. This can't be undone.",
+  "눌러서 채널을 바꿔요": "Click to change the channel",
+  "채널을 바꿨어요.": "Changed the channel.",
+  "바꾸기": "Change"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "'{0}' 팀을 삭제할까요?\n되돌릴 수 없어요. 확인하려면 이름 '{1}'을 그대로 입력하세요.": "Delete team '{0}'?\nThis can't be undone. Type its name '{1}' to confirm."
+});
+Object.assign(window.ArkismI18nEN.strings, { "진행자": "Moderator" });
+// ai-chat.js: one AI chat for every "AI does it / proposes it" button and the sparkle on prompt fields
+Object.assign(window.ArkismI18nEN.strings, {
+  "AI에게 묻기": "Ask AI",
+  "생각하는 중이에요…": "Thinking…",
+  "아래 보라색 목록에 제안을 넣었어요. 보고 적용하세요.": "The proposals are in the purple list below. Look them over and apply.",
+  "이 스킬을 쉬운 말로 풀어 줘요": "Explains this skill in plain words",
+  "이 스킬의 무엇이 궁금하세요? 무엇을 하는지, 언제 쓰는지 쉬운 말로 알려 드려요.": "What would you like to know about this skill? I'll explain what it does and when to use it in plain words.",
+  "예: 내 작업에서는 언제 쓰면 돼?": "e.g. When should I use it in my work?",
+  "쉽게 설명해 줘": "Explain it simply",
+  "언제 쓰면 좋아?": "When is it useful?",
+  "예시를 들어 줘": "Give an example",
+  "질문 다듬기": "Refine the question",
+  "목표 다듬기": "Refine the goal",
+  "이 단계가 할 일을 같이 정리해요": "Work out what this step does together",
+  "AI에게 한 번 물을 질문을 어떻게 바꿀까요?": "How should I change the question asked once?",
+  "이 단계의 목표를 어떻게 바꿀까요? 할 일·끝난 기준·결과 모양을 정리해 드려요.": "How should I change this step's goal? I'll sort out the task, when it's done and the shape of the result.",
+  "예: 출처는 3개 이상, 표로 정리하게": "e.g. At least 3 sources, as a table",
+  "더 분명하게": "Make it clearer",
+  "끝난 기준을 넣어 줘": "Add when it's done",
+  "결과 모양을 정해 줘": "Set the result's shape",
+  "어떤 일을 자동으로 할지 말하면 단계를 그려요": "Say what to automate and I'll draw the steps",
+  "고칠 곳을 말하면 바뀐 단계를 보여 줘요": "Say what to change and I'll show the changed steps",
+  "어떤 일을 자동으로 할까요? 언제, 무엇을 하고, 결과를 어디로 보낼지 말해 주세요.": "What should run automatically? Say when, what it does and where the result goes.",
+  "무엇을 고칠까요? 단계를 넣거나 빼고, 순서와 조건을 바꿀 수 있어요.": "What should change? I can add or remove steps and change their order and conditions.",
+  "예: 매일 아침 열린 PR을 모아 요약해서 슬랙으로 보내 줘": "e.g. Every morning, gather open PRs, summarize them and send to Slack",
+  "예: 출처 확인이 실패하면 2번까지 다시 찾게 해 줘": "e.g. If the source check fails, search again up to 2 times",
+  "매일 아침 PR 요약": "Morning PR summary",
+  "새 이슈 분류해서 알림": "Sort new issues and notify",
+  "주간 보고서 쓰기": "Write a weekly report",
+  "실패하면 다시 시도": "Retry on failure",
+  "보내기 전에 확인 받기": "Ask before sending",
+  "단계를 줄여 줘": "Use fewer steps",
+  "AI가 단계를 그렸어요. 아래에서 보고 적용한 뒤 만들어 주세요.": "AI drew the steps. Look them over below, apply, then create it.",
+  "AI가 고친 단계예요. 아래에서 보고 적용한 뒤 저장해 주세요.": "These are the steps AI changed. Look them over below, apply, then save.",
+  "이 제안은 직접 고쳐 주세요. 노드를 눌러 바꿀 수 있어요.": "Make this change yourself. Click a node to edit it.",
+  "토큰을 줄일 칸, 순서 문제, 멈추는 조건을 짚어 줘요": "Points out steps that can save tokens, order problems and stop conditions",
+  "이 그래프를 읽고 고칠 곳을 4개까지 짚어 드려요. 특히 볼 곳이 있으면 말해 주세요. 실행할 때는 검토하지 않아요.": "I'll read this graph and point out up to 4 things to fix. Tell me if there's somewhere to look at first. Runs aren't reviewed.",
+  "예: 비용이 많이 드는 곳을 먼저 봐 줘": "e.g. Look at the costly parts first",
+  "전체를 검토해 줘": "Review all of it",
+  "토큰 줄일 곳": "Where to save tokens",
+  "멈추는 조건 확인": "Check stop conditions",
+  "고칠 곳을 찾지 못했어요.": "Found nothing to fix.",
+  "쓴 데까지 보고 빈 칸과 지시를 마무리해요": "Finishes the empty fields and instructions from what's written",
+  "어떻게 마무리할까요? '그대로 마무리해 줘'를 누르면 쓴 데까지 보고 빈 칸을 채우고 지시를 번호 목록으로 정리해요.": "How should I finish it? 'Finish it as is' fills the empty fields from what's written and turns the instructions into a numbered list.",
+  "예: 말투는 정중하게, 보안 문제는 꼭 먼저 말하게": "e.g. Polite tone, always raise security issues first",
+  "그대로 마무리해 줘": "Finish it as is",
+  "더 짧게": "Shorter",
+  "하지 말 것을 넣어 줘": "Add things not to do",
+  "마무리한 곳을 아래에 넣었어요. 보고 적용한 뒤 저장해 주세요.": "The finished parts are below. Look them over, apply, then save.",
+  "지시 다듬기": "Refine instructions",
+  "이 페르소나의 지시를 같이 고쳐요": "Edit this persona's instructions together",
+  "지시를 어떻게 바꿀까요? 역할·말투·꼭 지킬 것을 정리해 드려요.": "How should I change the instructions? I'll sort out the role, tone and must-dos.",
+  "예: 근거 없는 말은 하지 않게": "e.g. Never claim anything without evidence",
+  "더 짧고 분명하게": "Shorter and clearer",
+  "초안을 만들었어요. 버튼 아래 목록에서 보고 적용한 뒤 만들어 주세요.": "Made a draft. Look it over in the list under the button, apply, then create it.",
+  "채울 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요.": "Found nothing to fill. Try asking another way.",
+  "이 칸의 지시를 같이 고쳐요": "Edit the instructions in this field together",
+  "지시를 어떻게 바꿀까요? 역할·말투·순서·하지 말 것을 정리해 드려요.": "How should I change the instructions? I'll sort out the role, tone, order and things not to do.",
+  "예: 답은 세 줄로, 모르면 모른다고 하게": "e.g. Answer in three lines, say so when unsure",
+  "번호 목록으로 정리": "As a numbered list",
+  "AI로 다시 분류": "Re-sort with AI",
+  "분류 안 된 스킬을 맞는 카테고리에 넣어요": "Puts unsorted skills in matching categories",
+  "분류 안 된 스킬을 지금 카테고리에 나눠 넣을게요. 기준이 있으면 말해 주세요.": "I'll put the unsorted skills into the current categories. Tell me if you have a rule.",
+  "예: 깃 관련은 전부 릴리스로": "e.g. Everything git goes to release",
+  "전부 분류해 줘": "Sort them all",
+  "확실한 것만 넣어 줘": "Only the clear ones",
+  "어떻게 고칠지 말하면 방법을 알려 주고, 적용하면 커밋해요": "Say how to fix it; I explain the approach and commit when you apply",
+  "예: 테스트도 같이 고쳐 줘": "e.g. Fix the tests too",
+  "지적대로 고쳐 줘": "Fix as pointed out",
+  "가장 작은 변경으로": "With the smallest change",
+  "AI가 고치는 중이에요… (몇 분)": "AI is fixing it… (a few minutes)",
+  "고칠 곳을 말하면 바뀌는 곳을 보여 줘요": "Say what to change and I'll show what changes",
+  "어떤 팀인지 말하면 초안을 채워요": "Describe the team and I'll fill in a draft",
+  "이 팀의 무엇을 고칠까요? 멤버·회의 방식·라운드를 바꿔 볼 수 있어요.": "What should change in this team? I can change members, meeting style and rounds.",
+  "어떤 팀이 필요하세요? 무엇을 회의할 팀인지 말해 주세요.": "What team do you need? Say what it should meet about.",
+  "예: 접근성 검토자를 넣고 라운드를 3번으로 줄여 줘": "e.g. Add an accessibility reviewer and cut rounds to 3",
+  "예: 시안을 여러 관점에서 보고 고칠 목록을 만드는 팀": "e.g. A team that looks at mockups from several angles and lists fixes",
+  "리뷰어를 한 명 더": "One more reviewer",
+  "라운드를 줄여 줘": "Fewer rounds",
+  "진행자가 지명하게": "Moderator picks",
+  "코드 리뷰 팀": "Code review team",
+  "시안 검토 팀": "Mockup review team",
+  "자료 조사 팀": "Research team",
+  "멤버": "Members",
+  "진행 방법 다듬기": "Refine how it goes",
+  "이 템플릿의 진행 방법을 같이 고쳐요": "Edit how this template's meeting goes, together",
+  "진행 방법을 어떻게 바꿀까요? 순서·볼 기준·결과 모양을 목록으로 정리해 드려요.": "How should the meeting go? I'll list the steps, what to check and the result's shape.",
+  "예: 끝에 투표로 하나를 고르게": "e.g. Pick one by vote at the end",
+  "순서를 정리해 줘": "Sort out the steps",
+  "주제 다듬기": "Refine the topic",
+  "회의에 넘길 주제를 같이 정리해요": "Work out the topic for the meeting together",
+  "무엇을 회의할까요? 정할 것·볼 자료·원하는 결과를 정리해 드려요.": "What is the meeting about? I'll sort out what to decide, what to look at and the result wanted.",
+  "예: 결론은 고칠 목록 다섯 개로 받고 싶어": "e.g. I want the outcome as five fixes",
+  "정할 것을 분명하게": "Make the decision clear",
+  "더 짧게 정리": "Shorten it"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} · AI에게 묻기": "{0} · Ask AI",
+  "제안 {0}개를 찾았어요. 버튼 아래 목록에서 보고 적용하세요.": "Found {0} proposals. Look them over in the list under the button and apply.",
+  "{0}개를 {1}개 카테고리에 나눠 넣자고 제안해요. 아래에서 보고 적용한 뒤 저장해 주세요.": "Proposes putting {0} skills into {1} categories. Look them over below, apply, then save.",
+  "{0}:{1} 지적을 어떻게 고칠까요? 그냥 보내면 지적대로 고쳐요.": "How should I fix the note at {0}:{1}? Just send to fix it as pointed out.",
+  "{0}을 바꾸자고 제안해요. 보라색 목록에서 보고 적용하세요.": "Proposes changing {0}. Look them over in the purple list and apply."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "매일": "Daily",
+  "평일": "Weekdays",
+  "전문가 기본": "Expert default",
+  "AI와 같이 쓰기": "Write with AI",
+  "이 칸에 들어갈 글을 같이 다듬어요. 무엇을 바꿀까요?": "Let's polish what goes in this field. What should change?",
+  "예: 더 짧고 구체적으로": "e.g. shorter and more specific",
+  "더 짧게": "Shorter",
+  "더 구체적으로": "More specific",
+  "완료 기준 넣기": "Add a done condition",
+  "이 노드와 이어진 선이 함께 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.": "Lines connected to this node are deleted too. Leave without saving to get it back.",
+  "전문가·팀 고르기, 실행 범위, 나눠서 맡기기, 스킬은 자세히에서 정해요.": "Pick the expert or team, scope, splitting work and skills under Details.",
+  "눌러서 바로 고쳐요": "Click to edit here"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} · AI와 같이 쓰기": "{0} · Write with AI",
+  "{0} → {1} 선이 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.": "The {0} → {1} line is deleted. Leave without saving to get it back."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "항상": "Always",
+  "성공 시": "On success",
+  "실패 시": "On failure",
+  "선 종류": "Line kind",
+  "아직 서버 미지원": "Not supported by the server yet",
+  "다른 노드는 항상과 같아요": "Same as Always for other nodes",
+  "사람 확인 노드에서만": "Only from a human check node",
+  "조건 노드에서만": "Only from a condition node",
+  "동시에 보내기": "Send to several at once",
+  "+ 함께 보낼 노드": "+ Also send to"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}에서 이을 노드를 누르세요 · Esc 취소": "Click the node to connect from {0} · Esc to cancel",
+  "동시에 · {0}곳": "At once · {0} nodes",
+  "이 갈래는 {0}곳으로 동시에 가요: {1}": "This branch goes to {0} nodes at once: {1}"
+});
+Object.assign(window.ArkismI18nEN.strings, { "+ 기억 추가": "+ Add memory", "기억·스킬·도구·지식에서 찾기": "Find in memories, skills, tools, knowledge" });
+// ai-chat.js on automations: 목표 lines, 언제 실행, AI 제안
+Object.assign(window.ArkismI18nEN.strings, {
+  "이 자동화의 목표를 같이 정리해요": "Work out this automation's goal together",
+  "예: 매일 아침 열린 PR을 모아 요약해요": "e.g. Gathers open PRs every morning and summarizes them",
+  "한 줄로 정리해 줘": "Sum it up in one line",
+  "단계를 보고 채워 줘": "Fill it in from the steps",
+  "직접 부르기만": "Called directly only",
+  "고칠 곳을 말하면 바뀐 목표·일정·단계를 보여 줘요": "Say what to change and I'll show the changed goal, schedule and steps",
+  "무엇을 고칠까요? 목표와 언제 실행을 바꾸고, 단계를 넣거나 빼고, 순서와 조건을 바꿀 수 있어요.": "What should change? I can change the goal and when it runs, add or remove steps, and change their order and conditions.",
+  "AI로 정하기": "Set with AI",
+  "언제 실행 정하기": "Set when it runs",
+  "평소 말로 적으면 일정이나 웹훅으로 바꿔요": "Write it in plain words and I'll turn it into a schedule or a webhook",
+  "언제 시작할까요? '평일 아침 9시마다'처럼 평소 말로 적어 주세요.": "When should it start? Write it in plain words, like 'every weekday at 9 am'.",
+  "예: 평일 아침마다": "e.g. Every weekday morning",
+  "평일 아침마다": "Every weekday morning",
+  "매주 월요일 오전 10시": "Mondays at 10 am",
+  "PR이 열리면": "When a PR opens",
+  "적용했어요. 저장하면 반영돼요.": "Applied. It takes effect when you save."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} 다듬기": "Refine {0}",
+  "{0}을 어떻게 적을까요? 하려는 일을 말해 주면 한 줄로 정리해 드려요.": "How should {0} read? Tell me what it should do and I'll sum it up in one line."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "버전 기록": "Version history", "이 버전으로 변경": "Switch to this version", "지금 버전": "Current version", "접기": "Collapse",
+  "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.": "Each save makes a version. Switching keeps the current one.",
+  "버전 기록을 불러오지 못했어요.": "Couldn't load the version history.", "버전 기록이 아직 없어요.": "No versions yet.",
+  "팀을 만들면 저장할 때마다 버전이 남아요.": "Once the team exists, each save keeps a version."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "v{0} 버전으로 변경할까요? 새 버전으로 저장돼요.": "Switch to v{0}? It saves as a new version.", "v{0} 버전으로 바꾸면": "Switching to v{0} changes",
+  "지시 {0}": "Instructions {0}", "소개 {0}": "Intro {0}"
+});
+Object.assign(window.ArkismI18nEN.strings, { "이미지 모델": "Image model", "기억 종류": "Memory kinds", "고정한 것": "Pinned", "바꾸면": "After" });
+Object.assign(window.ArkismI18nEN.strings, { "저장할 내용 · 고칠 수 있어요": "Text to save · you can edit it", "판단 근거": "Why the AI thinks so", "자세한 정보": "Details", "곧 확인": "Check soon" });
+Object.assign(window.ArkismI18nEN.strings, { "새 카테고리 이름": "New category name" });
+Object.assign(window.ArkismI18nEN.strings, { "쓸 수 있는 것 추가": "Add what it can use", "찾는 것이 없어요.": "Nothing matches." });
+Object.assign(window.ArkismI18nEN.strings, { "새 창으로 열기": "Open in a new window" });
+Object.assign(window.ArkismI18nEN.patterns, { "이 창을 열지 못했어요 ({0}).": "Couldn't open this window ({0}).", "새 창으로 열지 못했어요 ({0}).": "Couldn't open it in a new window ({0})." });
+Object.assign(window.ArkismI18nEN.strings, { "많이 쓰인 순 ▾": "Most used first ▾", "기억 버블 지도 · 화살표로 고르고 +/−로 확대·축소, 끌어서 옮기기": "Memory bubble map · arrows to pick, +/− to zoom, drag to move" });
+Object.assign(window.ArkismI18nEN.strings, { "AI로 채우기": "Fill with AI", "더 고칠 곳이 없어요.": "Nothing more to improve.", "AI가 채웠어요 · 저장하면 반영돼요": "AI filled it in · save to keep it", "AI가 쓰는 중이에요…": "AI is writing…", "고칠 곳이나 언제 실행할지 평소 말로 적으면 바뀐 목표·일정·단계를 보여 줘요": "Say what to change or when to run, in plain words, and see the new goal, schedule and steps", "무엇을 고칠까요? '평일 아침 9시마다'처럼 평소 말로 적으면 언제 실행을 일정이나 웹훅으로 바꿔요. 목표를 바꾸고, 단계를 넣거나 빼고, 순서와 조건도 바꿀 수 있어요.": "What should change? Say when to run in plain words, like 'every weekday at 9am', and it becomes a schedule or a webhook. You can also change the goal, add or remove steps, and change the order and conditions.", "예: 평일 아침마다 돌려 줘 · 실패하면 2번까지 다시 찾게": "e.g. run it every weekday morning · retry up to 2 times on failure", "평일 아침마다 실행": "Run every weekday morning" });
+Object.assign(window.ArkismI18nEN.patterns, { "{0} · AI로 채우기": "{0} · Fill with AI" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "일월화수목금토": "SMTWTFS",
+  "반": "half",
+  "시": "Hour",
+  "평소 말로 적어요 · 예: 평일 아침 9시, 매주 월·목 오후 3시 반": "Say it in plain words · e.g. weekdays at 9 am, every Mon·Thu 3:30 pm",
+  "언제인지 알아듣지 못했어요. 요일과 시간을 넣어 다시 적어 주세요.": "Couldn't tell when. Write the days and the time again.",
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "한 번 묻기": "One question",
+  "단계마다 맡길 전문가를 고르고 할 일을 적어요. 위에서 아래로 차례대로 실행되고, 앞 단계 결과가 다음 단계로 넘어가요.": "Pick who handles each step and write what to do. Steps run top to bottom, and each step's result goes to the next.",
+  "자료 모으기": "Gather material",
+  "핵심 정리": "Sum up",
+  "검토하기": "Review",
+  "보고서 쓰기": "Write the report",
+  "AI에게 한 번 묻기 (빠르고 싸요)": "Ask the AI once (fast, cheap)",
+  "이 단계에서 할 일을 평소 말로 적어요 · 예: 받은 자료에서 핵심 3가지만 뽑아 표로 정리해 줘. 앞 단계 결과는 알아서 넘어와요": "Say what this step does in plain words · e.g. pull the 3 key points into a table. The previous step's result comes along by itself",
+  "나에게 (기본)": "To me (default)",
+  "설정 › 메신저에서 먼저 연결해요": "Connect one in Settings › Messengers first",
+  "AI에게 한 번 묻기": "Ask the AI once",
+  "도구 없이 질문 한 번 · 빠르고 싸요": "One question, no tools · fast and cheap",
+  "이름을 적어 주세요.": "Enter a name.",
+  "지시를 적어 주세요.": "Enter the instructions.",
+  "@이름을 적어 주세요.": "Enter the @name.",
+  "@이름은 띄어쓰기 없이 글자·숫자·_·-로 적어 주세요.": "Use letters, numbers, _ or - for the @name, no spaces.",
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "한 번 묻기 {0}": "One question {0}",
+  "단계 {0} 이름 · 예: {1}": "Step {0} name · e.g. {1}",
+});
+Object.assign(window.ArkismI18nEN.strings, { "템플릿 이름을 적어 주세요.": "Enter a template name." });

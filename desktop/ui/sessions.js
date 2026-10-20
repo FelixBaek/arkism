@@ -5,7 +5,7 @@
 // removes the selected sessions and their archived transcripts, never the agent's own files.
 window.ArkismSessions = (ctx) => {
   "use strict";
-  const { state, $, el, button, render, request, query, detailShell, usage } = ctx;
+  const { state, $, el, button, icon, render, request, query, detailShell, usage } = ctx;
   const { num, usd, dur, logo, agentName, bars } = usage.fmt;
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
   const S = { range: "7d", source: "", q: "", sort: "recent", selecting: false, doc: null, state: "idle", error: "", selected: "", picked: new Set(), busy: false, notice: "", tx: null };
@@ -110,7 +110,7 @@ window.ArkismSessions = (ctx) => {
 
   async function deleteSessions(ids) {
     if (!ids.length || S.busy) return;
-    if (!confirm(`세션 ${ids.length}개와 보관된 대화를 지울까요? 되돌릴 수 없어요.\n\n에이전트의 원래 파일은 그대로 남아요. 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.`)) return;
+    if (!await ask(`세션 ${ids.length}개와 보관된 대화를 지울까요? 되돌릴 수 없어요.\n\n에이전트의 원래 파일은 그대로 남아요. 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.`)) return;
     S.busy = true; S.notice = "지우는 중…"; paint();
     try {
       const r = await request("/v1/usage/sessions/delete", { method: "POST", body: JSON.stringify({ scope: state.scope, ids }) });
@@ -215,7 +215,7 @@ window.ArkismSessions = (ctx) => {
     const box = el("label", "v4s-search ss-search");
     const search = el("input"); search.type = "search"; search.placeholder = "제목 · 프로젝트 · 세션 ID"; search.value = S.q; search.setAttribute("aria-label", "세션 검색");
     search.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(() => { S.q = search.value.trim(); void load(); }, 300); });
-    box.append(el("span", "ss-glass", "⌕"), search);
+    box.append(icon("magnifying-glass"), search);
     const sel = (label, opts, cur, pick) => { const s = el("select", "v4s-select"); s.setAttribute("aria-label", label); for (const [k, l] of opts) { const o = el("option", "", l); o.value = k; o.selected = k === cur; s.append(o); } s.addEventListener("change", () => pick(s.value)); return s; };
     const pickMode = el("button", `link-btn ss-pick${S.selecting ? " on" : ""}`, S.selecting ? "선택 끝내기" : "선택해서 지우기"); pickMode.type = "button";
     pickMode.addEventListener("click", () => { S.selecting = !S.selecting; if (!S.selecting) S.picked.clear(); render(false); });

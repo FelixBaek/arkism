@@ -10,22 +10,22 @@
    "members": [
     {
      "collection": "memories",
-     "id": "td1m1",
+     "id": "m1",
      "revision": 1
     },
     {
      "collection": "memories",
-     "id": "td1m2",
+     "id": "m2",
      "revision": 1
     },
     {
      "collection": "memories",
-     "id": "td1m3",
+     "id": "m3",
      "revision": 1
     },
     {
      "collection": "memories",
-     "id": "td1m4",
+     "id": "m4",
      "revision": 1
     },
     {
@@ -250,17 +250,17 @@
    "members": [
     {
      "collection": "memories",
-     "id": "td2m1",
+     "id": "m5",
      "revision": 1
     },
     {
      "collection": "memories",
-     "id": "td2m2",
+     "id": "m6",
      "revision": 1
     },
     {
      "collection": "memories",
-     "id": "td2m3",
+     "id": "m7",
      "revision": 1
     },
     {
@@ -435,22 +435,22 @@
    "members": [
     {
      "collection": "memories",
-     "id": "td3m1",
+     "id": "m8",
      "revision": 1
     },
     {
      "collection": "memories",
-     "id": "td3m2",
+     "id": "m-pin-icons",
      "revision": 1
     },
     {
      "collection": "memories",
-     "id": "td3m3",
+     "id": "m-pin-select",
      "revision": 1
     },
     {
      "collection": "memories",
-     "id": "td3m4",
+     "id": "m-pin-tokens",
      "revision": 1
     },
     {
@@ -620,12 +620,12 @@
    "members": [
     {
      "collection": "memories",
-     "id": "td4m1",
+     "id": "m9",
      "revision": 1
     },
     {
      "collection": "memories",
-     "id": "td4m2",
+     "id": "m10",
      "revision": 1
     },
     {
@@ -745,7 +745,7 @@
    "members": [
     {
      "collection": "memories",
-     "id": "td5m1",
+     "id": "m11",
      "revision": 1
     },
     {

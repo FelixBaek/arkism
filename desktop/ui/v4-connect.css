@@ -133,6 +133,7 @@ dialog.cn-confirm form { display: flex; flex-direction: column; gap: 20px; paddi
 dialog.cn-confirm h2 { margin: 0; font: 500 calc(17px * var(--fs, 1))/1.5 var(--sans); }
 dialog.cn-confirm p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); white-space: pre-line; }
 .cn-confirm-btns { display: flex; gap: 8px; }
+.cn-confirm-input { min-height: 36px; padding: 7px 10px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-bg, transparent); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 dialog.cn-confirm .btn.danger { border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-amber); }
 .app.v4-connect .table-wrap > .cn-list { width: 100%; }
 
@@ -227,14 +228,14 @@ dialog.cn-confirm .btn.danger { border-color: transparent; background: var(--nc-
 .app.v4-connect .git-file:not(:disabled):hover, .app.v4-connect .git-file.on { background: var(--nc-raised); }
 .app.v4-connect .git-file:disabled { cursor: default; opacity: 1; }
 .app.v4-connect .git-num { gap: 8px; font: 400 calc(12px * var(--fs, 1)) var(--mono); }
-.app.v4-connect .git-num .add { color: var(--nc-muted); }
-.app.v4-connect .git-num .del { color: var(--nc-amber); }
+.app.v4-connect .git-num .add { color: var(--nc-diff-add-fg); }
+.app.v4-connect .git-num .del { color: var(--nc-diff-del-fg); }
 .app.v4-connect .git-diff { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 0; padding: 0; border: 0; }
 .app.v4-connect .git-diff-path { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-muted); }
 .app.v4-connect .git-patch { max-height: 420px; padding: 6px 0; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); font: 400 calc(11.5px * var(--fs, 1))/1.6 var(--mono); color: var(--nc-text); }
 .app.v4-connect .git-patch span { padding: 2px 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.app.v4-connect .git-patch .add { background: none; }
-.app.v4-connect .git-patch .del { background: var(--nc-amber-bg); }
+.app.v4-connect .git-patch .add { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); }
+.app.v4-connect .git-patch .del { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); }
 .app.v4-connect .git-patch .hunk { color: var(--nc-quiet); }
 .app.v4-connect .git-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
 .app.v4-connect .git-badge { display: inline-flex; align-items: center; padding: 1px 8px; border: 0; border-radius: 999px; background: var(--nc-raised); color: var(--nc-text); font: 500 calc(12px * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; flex: none; }
@@ -287,7 +288,7 @@ dialog.git-dialog .git-field { display: flex; flex-direction: column; gap: 8px; 
 .git-field-label { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 dialog.git-dialog .git-field input:not([type="checkbox"]), dialog.git-dialog .git-field select, dialog.git-dialog .git-field textarea,
 .app.v4-connect .git-error-box .git-field input { width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--mono); }
-dialog.git-dialog .git-field textarea { min-height: 96px; font-family: var(--sans); resize: vertical; }
+dialog.git-dialog .git-field textarea { min-height: 96px; font-family: var(--sans); resize: none; }
 dialog.git-dialog .git-hint { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .git-pair { display: flex; align-items: flex-end; gap: 12px; }
 .git-pair .git-field { flex: 1; min-width: 0; }

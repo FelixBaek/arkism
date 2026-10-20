@@ -3,5 +3,11 @@
 .inject-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: calc(12.5px * var(--fs, 1)); overflow-wrap: anywhere; }
 .inject-list small { color: var(--text-3); }
 .inject-try { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.inject-try textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); color: var(--text-1); font: 13px var(--sans); resize: vertical; }
+.inject-try textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); color: var(--text-1); font: 13px var(--sans); resize: none; }
 .code-box code[data-no-i18n] { max-height: 320px; }
+/* 들어가는 기억 popup (opened from 설정 › 일반 and the 기억 toolbar) */
+.inject-dialog { width: min(760px, calc(100vw - 32px)); padding: 0; }
+.inject-dialog .inject-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 0; }
+.inject-dialog .inject-head h2 { margin: 0; font-size: 16px; }
+.inject-dialog .dialog-body { max-height: calc(100vh - 140px); }
+.inject-dialog .inject-try textarea { border-color: var(--nc-line, var(--border)); background: var(--nc-surface, var(--bg-window)); color: var(--nc-text, var(--text-1)); }

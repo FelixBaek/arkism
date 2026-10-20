@@ -1,0 +1,7 @@
+{
+ "id": "title",
+ "crew_assist": {
+  "status": "done",
+  "output": "{\"name\": \"릴리스 점검\", \"role\": \"태그를 확인하고 승인 뒤 보고를 보내요\"}"
+ }
+}

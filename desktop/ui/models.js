@@ -48,6 +48,8 @@ window.ArkismModels = (ctx) => {
   const modelsOf = (p) => [...new Set([...(p.models || []), ...extraOf(p.id)])];
   // Models workflow AI nodes may pick: every listed model that is on.
   const enabledModels = () => providers().flatMap((p) => modelsOf(p).filter((m) => enabled(p.id, m)));
+  // The same, per provider ({name, models}), for pickers that show where a model comes from.
+  const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
 
   const ERR = {
     access_denied: "이 계정은 모델 설정을 바꿀 수 없어요.",
@@ -116,7 +118,7 @@ window.ArkismModels = (ctx) => {
     dlg.showModal();
   }
   async function removeKey(pid, key) {
-    if (!confirm(`'${key.name}' 키(끝 ${key.last4})를 서버에서 지울까요?`)) return;
+    if (!await ask(`'${key.name}' 키(끝 ${key.last4})를 서버에서 지울까요?`)) return;
     try {
       const r = await request("/v1/providers/keys/remove", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: pid, key_id: key.id }) });
       state.data.providers = r.providers;
@@ -165,7 +167,7 @@ window.ArkismModels = (ctx) => {
   const labelOf = (kind, pid, id) => doc().labels?.[`${kind}:${pid}/${id}`] || "";
   const modelName = (pid, m) => labelOf("model", pid, m) || m.replace(/^antigravity-/, "");
   async function rename(kind, pid, id, current) {
-    const name = prompt(kind === "account" ? "이 계정을 뭐라고 부를까요? (비우면 기본 이름)" : "이 모델을 뭐라고 부를까요? (비우면 모델 이름 그대로)", current);
+    const name = await askText(kind === "account" ? "이 계정을 뭐라고 부를까요? (비우면 기본 이름)" : "이 모델을 뭐라고 부를까요? (비우면 모델 이름 그대로)", current);
     if (name === null) return;
     try {
       const rec = await request("/v1/providers/labels", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: pid, kind, id, label: name.trim() }) });
@@ -376,7 +378,7 @@ window.ArkismModels = (ctx) => {
       plug.setAttribute("aria-label", `${m} 연결 시험`);
       acts.append(plug);
       if (extra.includes(m) && !(p.models || []).includes(m)) {
-        const del = button("", "icon-btn plain", "trash", () => { if (confirm(`${m}를 목록에서 뺄까요?`)) void switchModel(p.id, m, true, { remove: true }); });
+        const del = button("", "icon-btn plain", "trash", async () => { if (await ask(`${m}를 목록에서 뺄까요?`)) void switchModel(p.id, m, true, { remove: true }); });
         del.setAttribute("aria-label", `${m} 빼기`);
         acts.append(del);
       }
@@ -607,5 +609,5 @@ window.ArkismModels = (ctx) => {
     (p.custom ? base : key).focus();
   }
 
-  return { load, tab, enabledModels, openKeyDialog };
+  return { load, tab, enabledModels, enabledByProvider, openKeyDialog };
 };
