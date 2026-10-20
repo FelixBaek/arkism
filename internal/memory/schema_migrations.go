@@ -25,6 +25,9 @@ var schemaBaselineSQL string
 //go:embed migrations/0002_memory_context_search.sql
 var schemaMemoryContextSearchSQL string
 
+//go:embed migrations/0003_classifier_review_list.sql
+var schemaClassifierReviewListSQL string
+
 type schemaMigration struct {
 	version int
 	name    string
@@ -32,7 +35,7 @@ type schemaMigration struct {
 }
 
 func schemaMigrations() []schemaMigration {
-	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}}
+	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "classifier_review_list", schemaClassifierReviewListSQL}}
 }
 
 func (m schemaMigration) checksum() string {
