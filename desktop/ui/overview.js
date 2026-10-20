@@ -215,6 +215,8 @@ window.ArkismOverview = (ctx) => {
     const below = foot?.offsetParent ? Math.max(0, foot.getBoundingClientRect().bottom - box.bottom) : 0; // gap + footer, independent of the scale
     const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((host.clientWidth - padX) / W, (host.clientHeight - top - below - padB) / H)));
     ui.stage.style.transform = `scale(${s})`;
+    // Cards and labels shrink less than the brain: their effective scale is √s, capped so they don't collide.
+    ui.stage.style.setProperty("--ov-k", s < 1 ? Math.min(1.25, 1 / Math.sqrt(s)).toFixed(3) : "1");
     root.style.width = `${Math.floor(W * s)}px`; root.style.height = `${Math.floor(H * s)}px`;
   }
 
