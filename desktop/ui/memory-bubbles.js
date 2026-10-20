@@ -5,6 +5,7 @@ window.ArkismMemoryBubbles = (() => {
   "use strict";
   // Line styles = the legend bar (v4-overview.css .ov-map-e-*): 지지 solid, 관련 dotted, 충돌 red dashed, 대체 purple dotted.
   const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "지지" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "관련" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "충돌" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "대체" } };
+  const RIM = 16, MANY = 150; // area rim past its outer dots · above MANY dots the overview shows topic-to-topic lines, not every line
   const PAD = { l: 18, r: 18, t: 84, b: 76 }; // top clears the tabs + group labels, bottom clears the legend bar
   const SPRING = { len: 60, k: 0.5 };          // weak pull along a relation (same group only, attract only)
 
@@ -45,7 +46,10 @@ window.ArkismMemoryBubbles = (() => {
       const base = Math.max(0.8, Math.min(1.6, Math.min(W, H) / 520));
       const dot = (p) => Math.min(6, 2 + Math.sqrt(p.v) * 0.9), gap = 7; // a dot plus its breathing room
       const need = items.reduce((a, p) => a + Math.PI * (dot(p) + gap) ** 2, 0) * base * base;
-      scale = base * Math.min(1, Math.sqrt(aw * ah * 0.32 / Math.max(1, need)));
+      // and the biggest group must fit its grid cell as a circle, so neighbouring areas never overlap
+      const per = new Map(); for (const p of items) per.set(p.g, (per.get(p.g) || 0) + Math.PI * (dot(p) + gap) ** 2 * base * base);
+      const cellR = Math.max(20, Math.min(aw / cols, ah / rows) / 2 - RIM - 14), fit = Math.PI * cellR * cellR * 0.7;
+      scale = base * Math.min(1, Math.sqrt(aw * ah * 0.32 / Math.max(1, need)), Math.sqrt(fit / Math.max(1, ...per.values())));
       for (const p of items) { p.r = dot(p) * scale; p.cr = (dot(p) + gap) * scale; }
       items.sort((a, b) => b.r - a.r);
     }
@@ -107,7 +111,7 @@ window.ArkismMemoryBubbles = (() => {
           }
         });
       }
-      for (const p of items) { p.x = Math.max(PAD.l + p.r, Math.min(W - PAD.r - p.r, p.x)); p.y = Math.max(PAD.t + p.r, Math.min(H - PAD.b - p.r, p.y)); }
+      for (const p of items) { const m = p.r + RIM; p.x = Math.max(PAD.l + m, Math.min(W - PAD.r - m, p.x)); p.y = Math.max(PAD.t + m, Math.min(H - PAD.b - m, p.y)); }
     }
     function frame(t) {
       raf = 0; if (dead || !visible || !root.isConnected) return;
@@ -125,6 +129,7 @@ window.ArkismMemoryBubbles = (() => {
     // blend two colours (hex / rgb() / CSS names via a 1px canvas); cached per pair
     const mixCache = new Map(), probe = doc.createElement("canvas").getContext("2d");
     const rgb = (c) => { probe.fillStyle = "#000"; probe.fillStyle = c; const h = probe.fillStyle; if (h[0] === "#") return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); return h.match(/[\d.]+/g).slice(0, 3).map(Number); };
+    const segDist = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(px - ax - t * dx, py - ay - t * dy); };
     function mix(a, b, t) { const k = `${a}|${b}|${t}`; let v = mixCache.get(k); if (!v) { const x = rgb(a), y = rgb(b); v = `rgb(${x.map((n, i) => Math.round(n + (y[i] - n) * t)).join(",")})`; mixCache.set(k, v); } return v; }
     const scr = (x, y) => [W / 2 + (x - W / 2) * zoom, H / 2 + (y - H / 2) * zoom];
     function draw() {
@@ -137,17 +142,23 @@ window.ArkismMemoryBubbles = (() => {
       ctx.lineCap = "round";
       const hot = [];
       for (const l of links) { // quiet lines sit under the bubbles; lines of the focused memory are drawn on top (below)
-        const on = foci.has(l.a.id) || foci.has(l.b.id); if (on) { hot.push(l); continue; } if (!showAll) continue;
+        const on = foci.has(l.a.id) || foci.has(l.b.id); if (on) { hot.push(l); continue; } if (!showAll || items.length > MANY) continue;
         const s = EDGE[l.t] || EDGE.supports; ctx.globalAlpha = foci.size ? 0.05 : 0.3; ctx.strokeStyle = s.c; ctx.lineWidth = 1.2; ctx.setLineDash(s.dash);
         ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
       }
       ctx.setLineDash([]);
+      // shortcut: a topic pair whose line would cross a third area is left out; draw curves if that hides too much
+      if (showAll && items.length > MANY && groups.length > 1) {
+        const pair = new Map(); for (const l of links) if (l.a.g !== l.b.g) { const k = l.a.g.key < l.b.g.key ? `${l.a.g.key}|${l.b.g.key}` : `${l.b.g.key}|${l.a.g.key}`; const o = pair.get(k) || pair.set(k, { a: l.a.g, b: l.b.g, n: 0 }).get(k); o.n++; }
+        ctx.strokeStyle = tok("--nc-muted", "#888");
+        for (const { a, b, n } of pair.values()) { if (!a.rr || !b.rr) continue; ctx.globalAlpha = foci.size ? 0.05 : 0.35; ctx.lineWidth = Math.min(6, 1 + Math.log2(n)); const dx = b.rx - a.rx, dy = b.ry - a.ry, d = Math.hypot(dx, dy) || 1; if (d <= a.rr + b.rr || groups.some((g) => g !== a && g !== b && g.rr && segDist(g.rx, g.ry, a.rx, a.ry, b.rx, b.ry) < g.rr)) continue; ctx.beginPath(); ctx.moveTo(a.rx + dx / d * a.rr, a.ry + dy / d * a.rr); ctx.lineTo(b.rx - dx / d * b.rr, b.ry - dy / d * b.rr); ctx.stroke(); } // rim to rim, never across the dots
+      }
       for (const g of groups) g.top = null;
       // topic areas (Figma 611:54134): a soft tinted circle with a dashed rim around each group's dots
       for (const g of groups) {
         let sx = 0, sy = 0, n = 0; for (const p of items) if (p.g === g) { sx += p.x; sy += p.y; n++; } if (!n) continue;
         g.rx = sx / n; g.ry = sy / n; let rr = 0; for (const p of items) if (p.g === g) rr = Math.max(rr, Math.hypot(p.x - g.rx, p.y - g.ry) + p.r);
-        g.rr = rr + 22;
+        g.rr = rr + RIM;
         ctx.globalAlpha = foci.size ? 0.03 : 0.06; ctx.fillStyle = g.color; ctx.beginPath(); ctx.arc(g.rx, g.ry, g.rr, 0, 7); ctx.fill();
         ctx.globalAlpha = foci.size ? 0.15 : 0.35; ctx.strokeStyle = g.color; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
       }

@@ -2,6 +2,7 @@
 
     python3 -I testdata/preview/serve.py [port]   # serves desktop/ui, answers /v1/* from testdata/preview/v1/*.json
 
+PREVIEW_MANY=300 swaps in a made-up big map: every topic gets that many memories, plus that many unsorted.
 A GET for /v1/memories reads v1/memories.json; a missing file answers {"items": []}. Writes answer {} so buttons don't break.
 All names, projects and texts in the data are made up.
 """
@@ -9,6 +10,23 @@ import http.server, json, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 UI = os.path.dirname(os.path.dirname(HERE))
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8790
+
+def many(n):
+    import random
+    r = random.Random(7); reach = ["personal", "general", "project"]; kinds = ["decision", "procedural", "lesson", "user", "episodic"]
+    with open(os.path.join(HERE, "v1/digests.topic.active.json"), encoding="utf-8") as fh: topics = json.load(fh)
+    nodes, mems, edges = [], [], []
+    for t in topics["items"] + [None]:
+        ids = [f"{t['id'] if t else 'un'}-{i}" for i in range(n)]
+        if t: t["members"] = [{"collection": "memories", "id": x, "revision": 1} for x in ids]
+        for x in ids:
+            k = r.choice(kinds); nodes.append({"id": x, "reach": r.choice(reach), "kind": k, "uses": int(r.paretovariate(1.5)) - 1, "vector_pending": False})
+            mems.append({"id": x, "text": f"{t['title'] if t else '분류 대기'} 예시 기억 {x}", "kind": k, "status": "active", "revision": 1, "created_at": "2026-10-13T11:16:34Z", "updated_at": "2026-10-13T11:16:34Z", "tags": []})
+        for x in ids[1:]:
+            if r.random() < 0.5: edges.append({"from": x, "to": r.choice(ids), "type": r.choice(["supports", "same_session", "same_session", "conflicts", "supersedes"])})
+    for _ in range(n // 10): edges.append({"from": r.choice(nodes)["id"], "to": r.choice(nodes)["id"], "type": "supports"})
+    return {"/v1/memory-graph": {"nodes": nodes, "edges": edges, "truncated": False}, "/v1/memories": {"items": mems}, "/v1/digests?topic": topics}
+MANY = many(int(os.environ["PREVIEW_MANY"])) if os.environ.get("PREVIEW_MANY") else {}
 
 class H(http.server.SimpleHTTPRequestHandler):
     def __init__(s, *a, **k): super().__init__(*a, directory=UI, **k)
@@ -34,6 +52,8 @@ class H(http.server.SimpleHTTPRequestHandler):
     def do_GET(s):
         p = s.path.split("?")[0]
         if p in ("/readyz", "/healthz"): return s._json(200, {"status": "ready"})
+        key = p + ("?topic" if "kind=topic" in s.path and "status=active" in s.path else "")
+        if key in MANY: return s._json(200, MANY[key])
         if p.startswith("/v1/"): return s._json(200, s._fixture())
         return super().do_GET()
     def _write(s):
