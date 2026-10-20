@@ -2601,7 +2601,6 @@ window.ArkismI18nEN = {
   "라우터를 거친 요청의 토큰·비용을 봐요. 모델별 성능은 라우팅 현황에서 봐요.": "See tokens and cost of requests through the router. Per-model performance is in Routing status.",
   "세션을 프로젝트·모델·스킬별로 모아 봐요. 세션 하나하나는 MEMORY › 세션에서 봐요.": "Group sessions by project, model and skill. Individual sessions are in MEMORY › Sessions.",
   "언제 많이 일하는지 요일·시간별로 봐요.": "See when you work most, by day and hour.",
-  "arkism. / 기억은 저장이 아니라 전승이다": "arkism. / Memory is not storage, but inheritance",
   "서버의 Arkism에 연결": "Connect to Arkism on a server",
   "서버 없이 이 PC에서 쓰기 ›": "Use on this PC without a server ›",
   "이렇게 연결돼요": "How it connects",

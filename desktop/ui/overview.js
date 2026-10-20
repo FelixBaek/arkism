@@ -226,18 +226,17 @@ window.ArkismOverview = (ctx) => {
 
     
   }
-  // Scale the 1157 × 930 stage to the free area of the window (width and height) so the whole overview fits without scrolling;
-  // the footer under the panel is subtracted too. MIN_SCALE only guards against a nonsense size in a tiny window.
+  // Scale the 1157 × 930 stage to the free area of the window (width and height) so the whole overview fits without scrolling.
+  // MIN_SCALE only guards against a nonsense size in a tiny window.
   const MIN_SCALE = 0.4, MAX_SCALE = 1.7;
   const MAP_NODES = 5000; // memoryGraphMapNodes (internal/memory/memory_graph.go): the most dots the 기억 지도 draws
   function fit() {
     const host = root?.closest(".main");
     if (!host || !root.isConnected) return;
     const cs = getComputedStyle(host), padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight), padB = parseFloat(cs.paddingBottom);
-    const box = root.getBoundingClientRect(), foot = host.querySelector(".page-foot");
+    const box = root.getBoundingClientRect();
     const top = box.top - host.getBoundingClientRect().top + host.scrollTop;
-    const below = foot?.offsetParent ? Math.max(0, foot.getBoundingClientRect().bottom - box.bottom) : 0; // gap + footer, independent of the scale
-    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((host.clientWidth - padX) / W, (host.clientHeight - top - below - padB) / H)));
+    const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((host.clientWidth - padX) / W, (host.clientHeight - top - padB) / H)));
     ui.stage.style.transform = `scale(${s})`;
     // Cards and labels shrink less than the brain (effective scale √s); 1.12 keeps the grown cards clear of the
     // nearest region nodes (extract at x 310, judge at x 840), which also draw above the cards.
