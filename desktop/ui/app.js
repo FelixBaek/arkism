@@ -241,6 +241,7 @@
 
   function setStatus(mode, text) {
     $("#status-dot").className = `dot ${mode}`;
+    $("#status-dot").dataset.mode = mode;
     $("#status-text").textContent = text;
     // Figma 198:110 has no dot; renderStatusCard hides it once it knows nothing needs a look.
     if (mode !== "ready") $("#status-toggle").hidden = false;
@@ -304,7 +305,10 @@
     const issues = items.filter((i) => !i[3]).length + agents.filter((cls) => cls === "warn" || cls === "bad").length;
     const badge = $("#status-toggle");
     badge.classList.toggle("warn", issues > 0);
-    badge.hidden = issues === 0 && $("#status-dot").classList.contains("ready");
+    const dot = $("#status-dot"), ready = dot.dataset.mode === "ready";
+    // The dot only shows when something needs a look, so a connected-but-warning state must not stay green.
+    if (ready) dot.className = `dot ${issues ? "warn" : "ready"}`;
+    badge.hidden = issues === 0 && ready;
     if (badge.hidden) { $("#status-card").hidden = true; badge.setAttribute("aria-expanded", "false"); }
     $("#status-badge").textContent = issues ? `주의 ${issues}` : "자세히";
     const card = $("#status-card");
