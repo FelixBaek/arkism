@@ -2209,8 +2209,10 @@ export function startApp() {
     if (pop?.popout) return startPopout(pop.payload);
     const defaults = tauri ? await tauri.invoke("app_defaults").catch(() => null) : null;
     if (defaults) Object.assign(state.defaults, defaults);
-    if (state.defaults.local && stored("arkism.mode") !== "remote") return appConnection.startLocal();
-    state.mode = "remote";
+    // 처음 실행이면(고른 적 없음) 이 PC / SSH를 고르게 한다. 연결 끊기도 고른 것을 지워 이 화면으로 돌아온다.
+    const picked = stored("arkism.mode");
+    if (state.defaults.local && picked === "local") return appConnection.startLocal();
+    state.mode = state.defaults.local && picked !== "remote" ? "choose" : "remote";
     appConnection.lock();
     // 지난번에 연결한 서버로 다시 붙는다.
     if (state.ssh && stored("arkism.mode") === "remote" && tauri) void appConnection.unlockConnect();

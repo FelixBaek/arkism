@@ -197,13 +197,16 @@ export function createAppConnection(deps) {
   });
 
   function unlockMode() {
-    // 내장 Arkism을 켜는 중이거나 켜지 못했을 때는 연결 칸 대신 진행 상태만 보여 준다.
-    const builtIn = deps.state.mode === "local";
-    for (const id of ["#ssh-form", "#ssh-actions", "#ssh-hint", "#ssh-test-result"]) deps.$(id).hidden = builtIn;
+    // 처음 실행(choose): 이 PC / SSH 두 카드만. 내장 Arkism을 켜는 중이거나 켜지 못했을 때는 연결 칸 대신 진행 상태만 보여 준다.
+    const choose = deps.state.mode === "choose", builtIn = deps.state.mode === "local";
+    deps.$("#start-choice").hidden = !choose;
+    deps.$("#unlock-box").hidden = choose;
+    deps.$("#unlock-title").textContent = choose ? "Arkism을 어디서 쓸까요?" : "서버의 Arkism에 연결";
+    for (const id of ["#ssh-form", "#ssh-actions", "#ssh-hint", "#ssh-test-result"]) deps.$(id).hidden = builtIn || choose;
     deps.$("#local-retry").hidden = !builtIn || !deps.state.localError;
     deps.$("#remote-link").hidden = !builtIn || !deps.state.localError;
-    deps.$("#local-link").hidden = builtIn || !deps.state.defaults.local;
-    deps.$("#unlock-intro").textContent = builtIn
+    deps.$("#local-link").hidden = builtIn || choose || !deps.state.defaults.local;
+    deps.$("#unlock-intro").textContent = choose ? "처음 한 번만 고르면 돼요. 나중에 설정 › 연결에서 바꿀 수 있어요." : builtIn
       ? (deps.state.localError ? `이 PC의 Arkism을 켜지 못했어요 (${deps.state.localError}). 다시 시도하거나 서버에 연결할 수 있어요.` : "이 PC의 Arkism을 준비하고 있어요…")
       : "SSH로 접속하듯 서버 주소만 넣으면 돼요. 토큰이나 로그인은 필요 없어요.";
   }
@@ -237,7 +240,7 @@ export function createAppConnection(deps) {
 
   function useLocal() {
     deps.tauri?.invoke("ssh_disconnect").catch(() => {});
-    deps.store("arkism.mode", null);
+    deps.store("arkism.mode", "local");
     deps.store("arkism.token", null);
     location.reload();
   }
@@ -265,6 +268,10 @@ export function createAppConnection(deps) {
   deps.$("#remote-link").addEventListener("click", useServer);
 
   deps.$("#local-link").addEventListener("click", useLocal);
+
+  deps.$("#choose-local").addEventListener("click", () => { deps.store("arkism.mode", "local"); void startLocal(); });
+
+  deps.$("#choose-ssh").addEventListener("click", () => { deps.state.mode = "remote"; unlockMode(); unlockSSH().focus(); });
 
   deps.$("#unlock-form").addEventListener("submit", (e) => {
     e.preventDefault();

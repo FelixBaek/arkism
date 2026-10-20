@@ -6280,3 +6280,10 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "기억 추출이 {0}일째 멈췄어요": "Memory extraction has been stalled for {0} days",
   "{0}일 전 확인": "Checked {0} d ago"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "서버에 SSH로 연결": "Connect to a server over SSH",
+  "이 PC에서 Arkism을 실행해요. 인터넷 없이도 되고, 기억은 이 PC에만 저장돼요.": "Runs Arkism on this PC. Works offline; memories stay on this PC.",
+  "서버에서 돌고 있는 Arkism을 SSH로 이어요. 여러 PC가 같은 기억을 써요.": "Connects to the Arkism running on your server over SSH. Several PCs share the same memories.",
+  "Arkism을 어디서 쓸까요?": "Where do you want to use Arkism?",
+  "처음 한 번만 고르면 돼요. 나중에 설정 › 연결에서 바꿀 수 있어요.": "You only choose once. Change it later in Settings › Connection."
+});

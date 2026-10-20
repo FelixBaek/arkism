@@ -393,3 +393,10 @@
 .pal-foot { display: flex; flex-wrap: wrap; gap: 20px; padding: 12px 24px; border-top: 1px solid var(--nc-line); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); color: var(--nc-quiet); }
 .pal-foot > span { display: inline-flex; align-items: center; gap: 6px; }
 .pal-foot kbd { padding: 3px 6px; border: 1px solid var(--nc-line); border-radius: 5px; font: 400 11px/1 var(--mono); color: var(--nc-muted); }
+/* 처음 실행: 이 PC / SSH 고르기 (Hermes처럼 카드 두 장, 누르면 바로 진행) */
+.start-choice { align-self: stretch; margin: 0; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.start-choice[hidden], .unlock-box[hidden] { display: none; }
+.start-choice .mode-card { padding: 20px 18px; gap: 10px; border-radius: 10px; border-color: var(--nc-line); background: var(--nc-surface); }
+.start-choice .mode-card:hover, .start-choice .mode-card:focus-visible { border-color: var(--nc-text); background: var(--nc-raised); }
+.start-choice .mode-card-title small { margin-left: auto; font-weight: 400; color: var(--nc-muted); letter-spacing: .06em; }
+.start-choice .mode-card-text { color: var(--nc-muted); line-height: 1.5; }
