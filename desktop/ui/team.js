@@ -767,7 +767,7 @@ window.ArkismTeams = (ctx) => {
       void loadChannels(b);
       const known = S.channels.get(b.id);
       const row = el("div", "tm-ch-add");
-      const botSel = select(bots().map((x) => [x.id, x.name || x.id]), b.id, (v) => { f.bot = v; f.channel = ""; popRedraw("overview"); }); botSel.setAttribute("aria-label", "봇");
+      const botSel = select(bots().map((x) => [x.id, x.name || x.id]), b.id, (v) => { f.bot = v; f.channel = ""; popRedraw("overview"); }); botSel.setAttribute("aria-label", "봇"); botSel.disabled = !!f.edit; // changing a link keeps its bot: moving it to another bot would leave the old link behind
       const chSel = select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], f.channel, (v) => { f.channel = v; }); chSel.setAttribute("aria-label", "채널");
       row.append(botSel, chSel, button(f.edit ? "바꾸기" : "연결", "primary", null, async () => {
         const id = f.channel;

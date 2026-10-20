@@ -823,7 +823,7 @@ window.ArkismAutomation = (h) => {
           } else {
             const kind = h.select(NOTIFY_KINDS, c.kind);
             kind.setAttribute("aria-label", "메신저");
-            kind.addEventListener("change", () => { c.kind = kind.value; touch(); paint(); });
+            kind.addEventListener("change", () => { c.kind = kind.value; const m = (st.dests || []).find((x) => x.channel === c.kind); c.channel = m && m.name !== "default" ? m.name : ""; touch(); paint(); }); // the old kind's place is not valid here: take the first one the picker shows
             // 보낼 곳 = a destination already set up in 설정 › 메신저 (GET /v1/messengers), picked, never typed.
             if (st.dests === undefined) { st.dests = null; request(`/v1/messengers?${query()}`).then((x) => x.destinations || [], () => []).then((x) => { st.dests = x; if (alive()) paint(); }); }
             const mine = (st.dests || []).filter((x) => x.channel === c.kind);

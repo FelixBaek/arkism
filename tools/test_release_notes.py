@@ -1,3 +1,6 @@
+import contextlib
+import io
+import subprocess
 import unittest
 
 import release_notes as r
@@ -27,6 +30,14 @@ class ReleaseNotesTest(unittest.TestCase):
 
     def test_empty_range(self):
         self.assertIn("바뀐 점 없음 · No changes", r.notes([], "Arkism"))
+
+    def test_one_ref_covers_its_whole_history(self):
+        # the first tag has no previous one: a bare ref must still include the commit it points at
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            r.main(["--range", "HEAD"])
+        subject = subprocess.run(["git", "log", "-1", "--format=%s"], capture_output=True, text=True, check=True).stdout.strip()
+        self.assertIn(subject, out.getvalue())
 
 
 if __name__ == "__main__":

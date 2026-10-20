@@ -188,8 +188,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          prev="$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || git rev-list --max-parents=0 HEAD | tail -1)"
-          python3 tools/release_notes.py --range "$prev..$GITHUB_REF_NAME" --title "Arkism ${VERSION#v}" > "$RUNNER_TEMP/notes.md"
+          prev="$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)"  # none on the first tag: notes cover its whole history
+          python3 tools/release_notes.py --range "${prev:+$prev..}$GITHUB_REF_NAME" --title "Arkism ${VERSION#v}" > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
             --title "Arkism ${VERSION#v}" --notes-file "$RUNNER_TEMP/notes.md" dist/*
       - name: Publish the verified initial release

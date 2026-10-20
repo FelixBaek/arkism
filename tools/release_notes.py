@@ -10,7 +10,7 @@ import re
 import sys
 from collections import Counter
 
-from check_work_record import git, resolve_range, sections
+from check_work_record import git, known_rev, resolve_range, sections
 
 GROUPS = [  # (key, Korean title, English title, path pattern)
     ("research", "연구 변경", "Research changes", None),
@@ -55,10 +55,10 @@ def notes(commits, title):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--range", required=True, help="e.g. v0.1.2..v0.1.3")
+    ap.add_argument("--range", required=True, help="e.g. v0.1.2..v0.1.3, or one tag for everything up to it (the first release)")
     ap.add_argument("--title", default="Arkism")
     args = ap.parse_args(argv)
-    rng = resolve_range(args.range)
+    rng = resolve_range(args.range) if ".." in args.range else known_rev(args.range)
     if rng is None:
         raise SystemExit(f"{args.range} is not in this checkout")
     log = git("log", "--no-merges", "--reverse", "--format=%H%x00%B%x00", "--end-of-options", rng).split("\0")
