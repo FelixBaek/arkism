@@ -256,10 +256,17 @@ func stringList(v any) []string {
 	return out
 }
 
-// runNode runs one AI step of a workflow node and returns {ok, output, model, effort, cli, duration_ms, error}.
+// runNode runs one AI step of a workflow node and returns {ok, output, model, effort, cli, duration_ms, error}, plus
+// rules (short sha256 of the shared record rules) when a step that may change files got them.
 // A *host.CrewError is for what the caller must fix (no task, an unknown effort or access, a write step without cwd,
 // no CLI for the model, no working folder).
-func runNode(spec map[string]any) (map[string]any, error) {
+func runNode(spec map[string]any) (res map[string]any, err error) {
+	rulesSum := ""
+	defer func() { // the run record names which shared rules the step got
+		if res != nil && rulesSum != "" {
+			res["rules"] = rulesSum
+		}
+	}()
 	selected := strings.TrimSpace(sOr(spec["model"]))
 	if strings.HasPrefix(selected, "group/") {
 		return runRoutedFn(withKey(spec, "group", selected), nil, nil, nil)
@@ -312,7 +319,23 @@ func runNode(spec map[string]any) (map[string]any, error) {
 			return nil, crewErr(model + "에 맞는 직접 추가 키가 없어요")
 		}
 	}
-	own := strings.TrimSpace(sOr(spec["instructions"]))
+	// ai_once answers one question and never needs to change anything.
+	access := "read"
+	if !truthy(spec["once"]) {
+		access = sOr(spec["access"])
+		if access == "" {
+			access = "write"
+		}
+	}
+	if !in(accessModes, access) {
+		return nil, crewErr("access는 read·write·full 중 하나여야 해요")
+	}
+	rules, sum, err := workerRules(access, truthy(spec["once"]))
+	rulesSum = sum
+	if err != nil {
+		return nil, err
+	}
+	own := withRules(rules, strings.TrimSpace(sOr(spec["instructions"])))
 	skills, err := skillText(stringList(spec["skills"]))
 	if err != nil {
 		return nil, err
@@ -331,17 +354,6 @@ func runNode(spec map[string]any) (map[string]any, error) {
 			}
 			return runChat(key, model, effort, joined, task, timeout, started)
 		}
-	}
-	// ai_once answers one question and never needs to change anything.
-	access := "read"
-	if !truthy(spec["once"]) {
-		access = sOr(spec["access"])
-		if access == "" {
-			access = "write"
-		}
-	}
-	if !in(accessModes, access) {
-		return nil, crewErr("access는 read·write·full 중 하나여야 해요")
 	}
 	cwd := expandUser(sOr(spec["cwd"]))
 	if access != "read" && cwd == "" {

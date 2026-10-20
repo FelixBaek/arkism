@@ -357,6 +357,7 @@ type aiAnswer struct {
 	Ms     int64    `json:"duration_ms"`
 	Error  string   `json:"error"`
 	Usage  *aiUsage `json:"usage,omitempty"`
+	Rules  string   `json:"rules,omitempty"` // short sha256 of the shared record rules the runner added
 }
 
 // callAI runs one AI step, again up to retries times when it fails. The
@@ -490,7 +491,11 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 		return result{}, err
 	}
 	text, port := routePick(res.Output, ports, def)
-	return result{out: map[string]any{"output": text, "model": res.Model, "effort": res.Effort, "cli": res.CLI, "duration_ms": res.Ms}, port: port, tokens: res.tokens()}, nil
+	out := map[string]any{"output": text, "model": res.Model, "effort": res.Effort, "cli": res.CLI, "duration_ms": res.Ms}
+	if res.Rules != "" {
+		out["rules"] = res.Rules
+	}
+	return result{out: out, port: port, tokens: res.tokens()}, nil
 }
 
 type collabWorker struct {
