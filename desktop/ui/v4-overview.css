@@ -292,3 +292,11 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .mm-card.main { max-width: 260px; padding: 10px 16px; border-color: color-mix(in srgb, var(--nc-text) 30%, var(--nc-line)); } .mm-card.main b { font-size: 15px; }
 .mm-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 @media (prefers-reduced-motion: reduce) { .mm-pill, .mm-tip { transition: none; } }
+/* 승인 대기 정렬·다시 보기 (764:61615) */
+.ov-wide-bar .ov-wide-sort { margin-left: 4px; color: var(--text-2); white-space: nowrap; }
+.ov-detail-sec-act { position: relative; }
+.ov-detail-sec-act > .ov-verdict-again { position: absolute; top: -6px; right: 0; }
+.ov-verdict-wait { color: var(--text-3, var(--text-2)); font-size: 12px; }
+.ov-detail-sec-box { padding: 12px 14px; border: 1px solid var(--line, var(--nc-line)); border-radius: 10px; }
+.ov-detail-sec-box.ov-detail-sec-act > .ov-verdict-again { top: 8px; right: 10px; }
+.ov-win-step .ov-wide-x { font-size: 16px; padding: 2px 8px; }

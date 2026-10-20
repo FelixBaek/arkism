@@ -1545,6 +1545,9 @@ window.ArkismI18nEN = {
   "내려받은 파일이 맞지 않아 설치하지 않았어요.": "The downloaded file didn't verify, so it wasn't installed.",
   "설치하지 못했어요. 잠시 뒤 다시 눌러 주세요.": "Couldn't install. Try again in a moment.",
   "다시 시도": "Try again",
+  "위험도 높은 순": "Highest risk",
+  "오래된 순": "Oldest",
+  "최신 순": "Newest",
   "일반": "General",
   "모양": "Appearance",
   "라우팅 설정": "Routing settings",
@@ -5776,4 +5779,16 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0}을 제안해요. 버튼 아래 보라색 목록에서 보고 적용하세요.": "Suggests {0}. Review them in the purple list under the button and apply.",
   "'{0}' 템플릿을 지울까요? 팀을 저장하면 반영돼요.": "Delete the template '{0}'? Save the team to make it stick."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "오래된 순 ▾": "Oldest ▾",
+  "최신 순 ▾": "Newest ▾",
+  "위험도 높은 순 ▾": "Highest risk ▾",
+  "정렬 바꾸기": "Change order",
+  "다시 보기": "Judge again",
+  "다시 시도": "Try again",
+  "다시 보는 중이에요. 다음 AI 검토(매시 정각)에 바뀌어요.": "Judging again. The next AI review (on the hour) updates it."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}일 대기": "Waiting {0} days"
 });

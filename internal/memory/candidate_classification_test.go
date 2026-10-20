@@ -145,3 +145,26 @@ func TestClassifyCandidateKeepsVerdictAndSemanticAdvice(t *testing.T) {
 		}
 	}
 }
+
+// 다시 보기 (764:61615): a person drops who judged it, so the next AI run judges it again; nobody else may.
+func TestRequestReclassifyClearsTheJudge(t *testing.T) {
+	f, cls := classifierFixture(t)
+	c := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "proposal", Sources: refs(f.source()),
+		Classification: &CandidateClassification{Risk: "low", EvidenceSpan: "user said so"}}))
+	r, e := f.svc.ClassifyCandidate(testCtx, cls, c.ID, CandidateClassifyInput{Scope: scopeA, ExpectedRevision: c.Revision, Risk: "high",
+		Verdict: &CandidateVerdict{Action: "fix", Text: "better"}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e := f.svc.RequestReclassify(testCtx, cls, c.ID, ReclassifyInput{Scope: scopeA, ExpectedRevision: r.Revision}); !errors.Is(e, ErrDenied) {
+		t.Fatal("classifier asked for its own re-judge", e)
+	}
+	out, e := f.svc.RequestReclassify(testCtx, f.human, c.ID, ReclassifyInput{Scope: scopeA, ExpectedRevision: r.Revision})
+	if e != nil || out.Revision != r.Revision+1 || out.Classification.By != "" || out.Classification.At != nil ||
+		out.Classification.Verdict == nil || out.Classification.EvidenceSpan != "user said so" {
+		t.Fatal(out.Classification, e)
+	}
+	if _, e := f.svc.RequestReclassify(testCtx, f.human, c.ID, ReclassifyInput{Scope: scopeA, ExpectedRevision: r.Revision}); !errors.Is(e, ErrConflict) {
+		t.Fatal("stale revision", e)
+	}
+}

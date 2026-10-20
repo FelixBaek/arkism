@@ -127,6 +127,56 @@ func (s *Service) ClassifyCandidate(ctx context.Context, token, id string, in Ca
 	return out, e
 }
 
+// ReclassifyInput asks the classifier to judge a waiting candidate again (Figma 764:61615 "다시 보기").
+type ReclassifyInput struct {
+	Scope            Scope `json:"scope"`
+	ExpectedRevision int64 `json:"expected_revision"`
+}
+
+// RequestReclassify drops who judged the candidate, so the next AI review run (hourly) judges it again.
+// Only a person asks; the old advice stays on screen until the new one lands.
+func (s *Service) RequestReclassify(ctx context.Context, token, id string, in ReclassifyInput) (Record, error) {
+	if in.ExpectedRevision < 1 || id == "" || len(id) > 256 {
+		return Record{}, ErrInvalid
+	}
+	d, e := s.authorize(ctx, token, reviewAction, in.Scope, id, "")
+	if e != nil {
+		return Record{}, e
+	}
+	if d.Role != "human" {
+		return Record{}, ErrDenied
+	}
+	ctx = bindRequestActor(ctx, d)
+	var out Record
+	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		r, e := tx.Get(ctx, "memory_candidates", in.Scope, id)
+		if e != nil {
+			return e
+		}
+		if r.ContentErased || r.PrivacyQuarantined {
+			return ErrNotFound
+		}
+		if r.Revision != in.ExpectedRevision || r.Status != "candidate" && r.Status != "conflicted" {
+			return ErrConflict
+		}
+		if r.Classification == nil || r.Classification.By == "" {
+			out = r // nothing judged yet: the next run picks it up anyway
+			return nil
+		}
+		k := *r.Classification
+		k.By, k.At = "", nil
+		r.Classification = &k
+		r.Revision++
+		r.UpdatedAt = time.Now().UTC()
+		if e = tx.Replace(ctx, "memory_candidates", r, in.ExpectedRevision); e != nil {
+			return e
+		}
+		out = r
+		return audit(ctx, tx, in.Scope, d.PrincipalID, "reclassify:memory_candidates", id)
+	})
+	return out, e
+}
+
 // overturned: a person approved what was called high risk, or rejected what was called low risk.
 func overturned(c *CandidateClassification, action string) bool {
 	if c == nil {
