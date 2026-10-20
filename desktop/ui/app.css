@@ -7,7 +7,7 @@
 
 :root { --sans: var(--font-family-sans); --mono: var(--font-family-mono); }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--nc-line) transparent; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg-window); color: var(--text-1); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
 button, input, textarea, select { font: inherit; color: inherit; }
@@ -144,7 +144,7 @@ select.sort { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px sol
 .history strong { display: block; color: var(--text-1); font-weight: 500; font-size: calc(12.5px * var(--fs, 1)); }
 ul.plain { margin: 0; padding: 0; list-style: none; }
 ul.bullets { margin: 0; padding-left: 18px; color: var(--text-2); font-size: calc(12.5px * var(--fs, 1)); display: flex; flex-direction: column; gap: 4px; }
-textarea { width: 100%; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); resize: none; font-size: calc(12.5px * var(--fs, 1)); }
+textarea { width: 100%; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); font-size: calc(12.5px * var(--fs, 1)); resize: none; field-sizing: content; max-height: 60vh; }
 .agents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .agent { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); font-size: calc(12px * var(--fs, 1)); }
 .agent.adapter { border-color: var(--warn); color: var(--warn); }
@@ -456,7 +456,6 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .sec.bad { font-weight: 600; }
 .sec.off { color: var(--text-3); }
 .table > .foot-note { margin: 0; padding: 12px 14px; }
-
 
 /* Design system library */
 .ds-library { display: flex; flex-direction: column; gap: 22px; padding-bottom: 24px; }
@@ -1010,8 +1009,6 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .combo-opt.on { color: var(--nc-accent); }
 .combo-opt.off { opacity: .45; cursor: default; }
 /* 웹 티 지우기: thin app scrollbars, no number spinners, app-coloured checks; textareas grow with their text instead of a resize grip */
-* { scrollbar-width: thin; scrollbar-color: var(--nc-line) transparent; }
 input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--nc-action); }
-textarea { resize: none; field-sizing: content; max-height: 60vh; }

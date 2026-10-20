@@ -98,8 +98,8 @@
     const t = e.target;
     if (!open || open.ctl !== t) {
       // Space/Enter/Alt+↓/F4 on a closed select, or ↓ in a list input, opens our list instead of the browser's.
-      if (isSelect(t) && (e.key === " " || e.key === "Enter" || e.key === "F4" || (e.altKey && e.key === "ArrowDown"))) { e.preventDefault(); show(t); }
-      else if (adopt(t) && e.key === "ArrowDown") { e.preventDefault(); show(t); }
+      const opens = (isSelect(t) && (e.key === " " || e.key === "Enter" || e.key === "F4" || (e.altKey && e.key === "ArrowDown"))) || (adopt(t) && e.key === "ArrowDown");
+      if (opens) { e.preventDefault(); show(t); }
       return;
     }
     const n = open.items.length;

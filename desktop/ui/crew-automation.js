@@ -480,7 +480,7 @@ window.ArkismAutomation = (h) => {
     function flowSection() {
       const s = section("tree-structure", "워크플로우", link(creating ? "그래프로 만들기 →" : "그래프로 편집 →", () => {
         if (creating) { notice("먼저 자동화를 만든 뒤 그래프로 이어요."); return; }
-        leave(() => h.openGraph(rec, { graphMode: true, fromPopup: true }));
+        leave(() => h.openGraph(rec, { graphMode: true, fromPopup: true })).catch(console.error);
       }));
       const card = el("div", "auto-box auto-flow");
       const paint = () => {
