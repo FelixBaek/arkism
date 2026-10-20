@@ -58,12 +58,12 @@ def main(argv=None):
     ap.add_argument("--range", required=True, help="e.g. v0.1.2..v0.1.3")
     ap.add_argument("--title", default="Arkism")
     args = ap.parse_args(argv)
-    log = git("log", "--no-merges", "--reverse", "--format=%H%x00%B%x00", safe_range(args.range)).split("\0")
+    log = git("log", "--no-merges", "--reverse", "--format=%H%x00%B%x00", "--end-of-options", safe_range(args.range)).split("\0")
     commits = []
     for sha, message in zip(log[0::2], log[1::2]):
         sha = sha.strip()
         if sha:
-            commits.append((sha, message.strip(), git("diff-tree", "--no-commit-id", "--name-only", "-r", sha).split()))
+            commits.append((sha, message.strip(), git("diff-tree", "--no-commit-id", "--name-only", "-r", "--end-of-options", sha).split()))
     sys.stdout.write(notes(commits, args.title))
     return 0
 

@@ -66,5 +66,19 @@ class ReportTest(unittest.TestCase):
         self.assertIn("report names a commit this repository does not have: deadbeef", problems)
 
 
+class InputTest(unittest.TestCase):
+    def test_range_and_git_arguments(self):
+        self.assertEqual(w.safe_range("origin/main..HEAD"), "origin/main..HEAD")
+        for bad in ("-x..y", "a..b..c", "HEAD", "a..--output=x"):
+            with self.assertRaises(SystemExit):
+                w.safe_range(bad)
+        with self.assertRaises(ValueError):
+            w.git("log", "--output=/tmp/x")
+
+    def test_evidence_paths(self):
+        self.assertEqual(list(w.evidence_paths("ran `tools/a.py`, see https://x.io/a/b.md and v1.2/3")),
+                         ["tools/a.py"])
+
+
 if __name__ == "__main__":
     unittest.main()
