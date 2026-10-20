@@ -6286,3 +6286,33 @@ Object.assign(window.ArkismI18nEN.strings, {
   "Arkism을 어디서 쓸까요?": "Where do you want to use Arkism?",
   "처음 한 번만 고르면 돼요. 나중에 설정 › 연결에서 바꿀 수 있어요.": "You only choose once. Change it later in Settings › Connection."
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "데이터를 어디에 저장할까요?": "Where should Arkism keep its data?",
+  "기억·설정·토큰이 모두 이 폴더에 저장돼요. 나중에 설정 › 연결에서 바꿀 수 있어요.": "Memories, settings and tokens all live in this folder. Change it later in Settings › Connection.",
+  "저장 위치": "Storage location",
+  "기본 위치": "Default location",
+  "직접 고르기": "Choose a folder",
+  "빈 폴더나 전에 쓰던 Arkism 데이터 폴더를 써요.": "Use an empty folder or an Arkism data folder you used before.",
+  "폴더 경로": "Folder path",
+  "전체 경로를 넣어 주세요. 없는 폴더는 새로 만들어요.": "Enter the full path. A missing folder is created.",
+  "기본 위치에 있던 데이터는 옮기지 않아요. 그 자리에 그대로 남아요.": "Data in the default location is not moved. It stays where it is.",
+  "뒤로": "Back",
+  "폴더 경로를 넣어 주세요.": "Enter a folder path.",
+  "C:\\ 나 /로 시작하는 전체 경로를 넣어 주세요.": "Enter a full path starting with C:\\ or /.",
+  "파일이 아니라 폴더 경로를 넣어 주세요.": "Enter a folder path, not a file.",
+  "빈 폴더나 Arkism 데이터 폴더만 쓸 수 있어요.": "Only an empty folder or an Arkism data folder can be used.",
+  "이 폴더를 읽을 수 없어요.": "This folder can't be read.",
+  "이 폴더에 쓸 수 없어요. 권한을 확인해 주세요.": "Can't write to this folder. Check its permissions.",
+  "기억·설정·토큰이 들어 있는 폴더예요. 바꿔도 지금 데이터는 옮기지 않아요.": "The folder with memories, settings and tokens. Changing it does not move the current data.",
+  "다음부터": "Next start",
+  "새 폴더 경로": "New folder path",
+  "이 폴더로 바꾸기": "Use this folder",
+  "기본 위치로": "Back to default",
+  "이미 그 위치예요.": "Already using that location.",
+  "저장 위치를 바꿨어요.": "Storage location changed.",
+  "앱을 다시 열면 새 위치에서 시작해요.": "Arkism starts in the new location the next time you open the app.",
+  "저장 위치를 읽지 못했어요.": "Couldn't read the storage location."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "저장 위치를 바꿀까요?\n\n지금 데이터는 옮기지 않고 {0}에 그대로 둬요. 새 폴더가 비어 있으면 빈 Arkism으로 시작해요.": "Change the storage location?\n\nThe current data is not moved; it stays in {0}. If the new folder is empty, Arkism starts empty."
+});

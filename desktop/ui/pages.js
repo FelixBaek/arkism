@@ -808,7 +808,45 @@ window.ArkismPages = (ctx) => {
       : "연결을 끊으면 다음에 앱을 켤 때 자동으로 다시 붙지 않아요. 이 PC로 돌아가도 서버의 기억은 그대로 남아요."));
     const gw = window.ArkismGatewayToken?.({ el, button, tauri, notice })?.side(sideSec) || []; // 모델 중계기 (gateway-token.js)
     toSide(...gw.slice(0, 1), now, ...gw.slice(1));
-    return [g];
+    return tauri && state.mode === "local" ? [g, storageGroup()] : [g];
+  }
+  // 저장 위치: 내장 Arkism의 데이터 폴더. 바꾸면 데이터는 옮기지 않고, 다음에 앱을 열 때 새 폴더에서 시작한다.
+  function storageGroup() {
+    const g = group("저장 위치", "기억·설정·토큰이 들어 있는 폴더예요. 바꿔도 지금 데이터는 옮기지 않아요.");
+    const info = el("div"), out = el("p", "pg-hint mode-out");
+    out.setAttribute("role", "status");
+    const say = (text, bad) => { out.textContent = text; out.classList.toggle("warn", !!bad); };
+    const input = el("input", "mono");
+    input.setAttribute("aria-label", "새 폴더 경로");
+    input.spellcheck = false;
+    const field = el("label", "field", "새 폴더 경로");
+    field.append(input);
+    let loc = null;
+    const draw = () => {
+      info.replaceChildren(kvRow("지금", el("b", "mono", loc.path)));
+      if (loc.next !== loc.path) info.append(kvRow("다음부터", el("b", "mono", loc.next)));
+      reset.hidden = loc.next === loc.default;
+    };
+    const apply = async (path) => {
+      const target = path || loc.default;
+      if (target === loc.next) { say("이미 그 위치예요."); return; }
+      if (!confirm(`저장 위치를 바꿀까요?\n\n지금 데이터는 옮기지 않고 ${loc.path}에 그대로 둬요. 새 폴더가 비어 있으면 빈 Arkism으로 시작해요.`)) return;
+      try {
+        loc = await tauri.invoke("local_location_set", { path });
+        say(loc.next === loc.path ? "저장 위치를 바꿨어요." : "앱을 다시 열면 새 위치에서 시작해요.");
+        input.value = "";
+        draw();
+      } catch (err) {
+        const code = String(err?.message || err);
+        say({ local_location_absolute: "C:\\ 나 /로 시작하는 전체 경로를 넣어 주세요.", local_location_not_folder: "파일이 아니라 폴더 경로를 넣어 주세요.",
+          local_location_not_empty: "빈 폴더나 Arkism 데이터 폴더만 쓸 수 있어요.", local_location_unwritable: "이 폴더에 쓸 수 없어요. 권한을 확인해 주세요." }[code.split(":")[0]] || code, true);
+      }
+    };
+    const change = button("이 폴더로 바꾸기", "", null, () => { const p = input.value.trim(); if (!p) { say("폴더 경로를 넣어 주세요.", true); input.focus(); return; } void apply(p); });
+    const reset = button("기본 위치로", "ghost", null, () => void apply(null));
+    g.append(info, field, out, actionsRow(change, reset));
+    tauri.invoke("local_location").then((r) => { loc = r; draw(); }, () => say("저장 위치를 읽지 못했어요.", true));
+    return g;
   }
   // 설정 › 고급 (Figma 198:6392): 수집·데이터·지우기 on the left; 진단, 설정 옮기기, ComfyUI on the right.
   function tabAdvanced() {

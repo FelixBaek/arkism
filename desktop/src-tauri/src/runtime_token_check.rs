@@ -106,7 +106,7 @@ impl Runtime {
     ) -> Result<(Started, serde_json::Value), String> {
         require(self.home.is_none(), "token_check_requires_isolation")?;
         require(
-            fs::read(self.data.join(".runtime-check-owned"))
+            fs::read(self.data_dir().join(".runtime-check-owned"))
                 .map_err(|_| "token_check_requires_fresh_marker")?
                 == MARKER.as_bytes(),
             "token_check_requires_fresh_marker",
@@ -144,7 +144,7 @@ impl Runtime {
 
         self.pending_token_fixture(ManagedPrincipal::Owner, true)?;
         let pending = self.secrets()?;
-        let backups = self.data.join("token-backups");
+        let backups = self.data_dir().join("token-backups");
         let backup = self.backup_into(&backups)?;
         let info: BackupInfo = serde_json::from_slice(
             &fs::read(backups.join(&backup.name).join("backup.json"))

@@ -32,6 +32,7 @@ mod ssh_tunnel;
 mod ssh_exec;
 mod ssh_private;
 mod ssh_identity;
+mod storage_location;
 mod work_handoff;
 mod popout;
 
@@ -71,6 +72,44 @@ struct Defaults {
 #[tauri::command]
 fn app_defaults(rt: tauri::State<Arc<runtime::Runtime>>) -> Defaults {
     Defaults { server: DEFAULT_SERVER, ssh_host: SSH_HOST, updates: FEED.is_some(), local: rt.available(), workspace: DEFAULT_WORKSPACE, project: DEFAULT_PROJECT }
+}
+
+/// 저장 위치: the folder the built-in Arkism uses now, the one the next start uses (they differ
+/// after a change while it runs) and the default.
+#[derive(serde::Serialize)]
+struct Location {
+    path: std::path::PathBuf,
+    next: std::path::PathBuf,
+    default: std::path::PathBuf,
+    /// The default folder already holds data, which a new folder would leave behind (not move).
+    default_has_data: bool,
+}
+
+fn location(app: &tauri::AppHandle, rt: &runtime::Runtime) -> Result<Location, String> {
+    let app_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let default = app_dir.join("runtime");
+    Ok(Location { path: rt.data_dir(), next: storage_location::read(&app_dir).unwrap_or_else(|| default.clone()), default_has_data: storage_location::has_data(&default), default })
+}
+
+#[tauri::command]
+fn local_location(app: tauri::AppHandle, rt: tauri::State<Arc<runtime::Runtime>>) -> Result<Location, String> {
+    location(&app, &rt)
+}
+
+/// Remembers the chosen folder (None: the default) and uses it right away when nothing runs yet,
+/// as on the first start; otherwise from the next app start. Existing data is never moved.
+#[tauri::command]
+fn local_location_set(app: tauri::AppHandle, rt: tauri::State<Arc<runtime::Runtime>>, path: Option<String>) -> Result<Location, String> {
+    let app_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let default = app_dir.join("runtime");
+    let chosen = path.as_deref().map(storage_location::check).transpose()?;
+    storage_location::write(&app_dir, &default, chosen.as_deref())?;
+    let target = chosen.unwrap_or(default);
+    if target != rt.data_dir() {
+        // Running: keeps the folder it started with; `next` shows the change.
+        let _ = rt.move_data_dir(target);
+    }
+    location(&app, &rt)
 }
 
 /// Starts (or reuses) the built-in Arkism and returns its address and owner token.
@@ -239,7 +278,7 @@ async fn ssh_connect(rt: tauri::State<'_, Arc<runtime::Runtime>>, form: SshForm)
     tauri::async_runtime::spawn_blocking(move || {
         let _activity = rt.activity()?;
         let target = ssh_tunnel::target_from_form(&form.into())?;
-        let c = ssh_tunnel::connect(target, rt.gate(), ssh_identity::Store::new(rt.data_dir()))?;
+        let c = ssh_tunnel::connect(target, rt.gate(), ssh_identity::Store::new(&rt.data_dir()))?;
         // Stop the built-in Arkism's agents file pointing at this PC; capture follows the server.
         rt.agents_use_server(&c.ssh_host, c.ssh_port, c.ssh_key.as_deref(), &c.pin)?;
         Ok(c)
@@ -270,7 +309,7 @@ async fn ssh_test(rt: tauri::State<'_, Arc<runtime::Runtime>>, form: SshForm) ->
     tauri::async_runtime::spawn_blocking(move || {
         let _activity = rt.activity()?;
         let target = ssh_tunnel::target_from_form(&form.into())?;
-        let (api, workspace) = ssh_tunnel::connect_info_for(&target, &ssh_identity::Store::new(rt.data_dir()))?;
+        let (api, workspace) = ssh_tunnel::connect_info_for(&target, &ssh_identity::Store::new(&rt.data_dir()))?;
         Ok(serde_json::json!({ "host": target.host, "api": api, "workspace_id": workspace }))
     })
     .await
@@ -288,7 +327,7 @@ async fn ssh_host_key_check(rt: tauri::State<'_, Arc<runtime::Runtime>>, form: O
             (None, Some(host)) => ssh_tunnel::target_for_host(&host)?,
             _ => return Err("ssh_address_invalid".into()),
         };
-        ssh_identity::Store::new(rt.data_dir()).inspect(&target, force.unwrap_or(false))
+        ssh_identity::Store::new(&rt.data_dir()).inspect(&target, force.unwrap_or(false))
     }).await.map_err(|_| "ssh_host_key_probe_failed".to_string())?
 }
 
@@ -297,13 +336,13 @@ async fn ssh_host_key_approve(rt: tauri::State<'_, Arc<runtime::Runtime>>, chall
     let rt = Arc::clone(&rt);
     tauri::async_runtime::spawn_blocking(move || {
         let _activity = rt.activity()?;
-        ssh_identity::Store::new(rt.data_dir()).approve(&challenge, replace)
+        ssh_identity::Store::new(&rt.data_dir()).approve(&challenge, replace)
     }).await.map_err(|_| "ssh_host_key_probe_failed".to_string())?
 }
 
 #[tauri::command]
 fn ssh_host_key_cancel(rt: tauri::State<Arc<runtime::Runtime>>, challenge: String) {
-    ssh_identity::Store::new(rt.data_dir()).cancel(&challenge);
+    ssh_identity::Store::new(&rt.data_dir()).cancel(&challenge);
 }
 
 /// 인증 키 파일 choices: the private keys in ~/.ssh.
@@ -382,14 +421,14 @@ fn quit(app: &tauri::AppHandle) {
 #[tauri::command]
 async fn git_op(rt: tauri::State<'_, Arc<runtime::Runtime>>, host: String, request: serde_json::Value) -> Result<serde_json::Value, String> {
     let rt = Arc::clone(&rt);
-    tauri::async_runtime::spawn_blocking(move || { let _activity = rt.activity()?; work_handoff::git(&host, request, &ssh_identity::Store::new(rt.data_dir())) })
+    tauri::async_runtime::spawn_blocking(move || { let _activity = rt.activity()?; work_handoff::git(&host, request, &ssh_identity::Store::new(&rt.data_dir())) })
         .await.map_err(|_| "git_unavailable".to_string())?
 }
 
 #[tauri::command]
 async fn skill_execution(rt: tauri::State<'_, Arc<runtime::Runtime>>, host: String, request: serde_json::Value) -> Result<serde_json::Value, String> {
     let rt = Arc::clone(&rt);
-    tauri::async_runtime::spawn_blocking(move || { let _activity = rt.activity()?; work_handoff::skill_execution(&host, request, &ssh_identity::Store::new(rt.data_dir())) })
+    tauri::async_runtime::spawn_blocking(move || { let _activity = rt.activity()?; work_handoff::skill_execution(&host, request, &ssh_identity::Store::new(&rt.data_dir())) })
         .await.map_err(|_| "skill_execution_unavailable".to_string())?
 }
 
@@ -814,9 +853,13 @@ fn main() {
                     let _ = w.hide();
                 }
             }
-            let data = app.path().app_local_data_dir()?.join("runtime");
+            let app_dir = app.path().app_local_data_dir()?;
+            // The default folder keeps what is about the app, not the data: agents.json (the agents
+            // look for it there) and the autostart marker. The rest follows the chosen 저장 위치.
+            let default = app_dir.join("runtime");
+            let data = storage_location::read(&app_dir).unwrap_or_else(|| default.clone());
             let programs = runtime::find_programs(app.path().resource_dir().ok());
-            let rt = Arc::new(runtime::Runtime::new(programs, data));
+            let rt = Arc::new(runtime::Runtime::new(programs, data).agents_file(default.join("agents.json")));
             #[cfg(windows)]
             {
                 let logging_runtime = Arc::downgrade(&rt);
@@ -834,23 +877,24 @@ fn main() {
             // or a server: on the first start and after each update (the client they run is refreshed
             // then). Uninstalling the app disconnects them again.
             // Start at login by default, once: after that the user's choice in 설정 › 일반 stays.
-            let autostart_marker = rt.data_dir().join("autostart-default");
+            let autostart_marker = default.join("autostart-default");
             #[cfg(windows)]
             let _ = app_autostart::migrate_owned();
             if !autostart_marker.exists() {
                 if write_autostart(app.handle(), true).is_ok() {
-                    let _ = std::fs::create_dir_all(rt.data_dir());
+                    let _ = std::fs::create_dir_all(&default);
                     let _ = std::fs::write(&autostart_marker, "on");
                 }
             }
             let version = app.package_info().version.to_string();
-            let marker = rt.data_dir().join("agents-connected");
-            if std::fs::read_to_string(&marker).ok().as_deref() != Some(version.as_str()) {
+            if std::fs::read_to_string(rt.data_dir().join("agents-connected")).ok().as_deref() != Some(version.as_str()) {
                 let rt = Arc::clone(&rt);
                 std::thread::spawn(move || {
                     let Ok(_activity) = rt.activity() else { return };
                     if run_agent_setup(&rt, "install-arkism").is_ok() {
-                        let _ = std::fs::create_dir_all(marker.parent().unwrap_or(&marker));
+                        // Read after the setup: the first start may have picked another 저장 위치 meanwhile.
+                        let marker = rt.data_dir().join("agents-connected");
+                        let _ = std::fs::create_dir_all(rt.data_dir());
                         let _ = std::fs::write(&marker, version);
                     }
                 });
@@ -890,7 +934,7 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, popout::popout_open, popout::popout_take, popout::popout_close])
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, popout::popout_open, popout::popout_take, popout::popout_close])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {

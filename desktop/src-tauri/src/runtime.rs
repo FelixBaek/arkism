@@ -523,7 +523,10 @@ impl Backend for UpdateRuntime<'_> {
 
 pub struct Runtime {
     programs: Option<PathBuf>,
-    data: PathBuf,
+    /// Changes only before anything runs (the first start's 저장 위치), see `move_data_dir`.
+    data: std::sync::RwLock<PathBuf>,
+    /// The agents look for `agents.json` at one fixed path, wherever the data is.
+    agents_file: PathBuf,
     children: Mutex<Vec<ManagedChild>>,
     /// `arkism crew providers watch`: model accounts, quotas, model tests and AI help.
     watcher: Mutex<Option<ManagedChild>>,
@@ -553,7 +556,7 @@ pub struct Runtime {
 impl Runtime {
     /// `programs` is the folder with the bundled programs; None when this build has none.
     pub fn new(programs: Option<PathBuf>, data: PathBuf) -> Self {
-        Runtime { programs, data, children: Mutex::new(Vec::new()), watcher: Mutex::new(None), gateway: Mutex::new(None), postgres: Mutex::new(None), gate: Arc::new(Gate::default()), unverified: Mutex::new(Vec::new()), pending_installer: Mutex::new(None),
+        Runtime { programs, agents_file: data.join("agents.json"), data: std::sync::RwLock::new(data), children: Mutex::new(Vec::new()), watcher: Mutex::new(None), gateway: Mutex::new(None), postgres: Mutex::new(None), gate: Arc::new(Gate::default()), unverified: Mutex::new(Vec::new()), pending_installer: Mutex::new(None),
             #[cfg(windows)] generation: AtomicU64::new(0),
             #[cfg(test)] process_factory: Mutex::new(None),
             #[cfg(test)] postgres_boundary: Mutex::new(None),
@@ -709,8 +712,31 @@ impl Runtime {
         self.home.as_deref()
     }
 
-    pub fn data_dir(&self) -> &Path {
-        &self.data
+    pub fn data_dir(&self) -> PathBuf {
+        self.data.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// Keeps `agents.json` at `path` instead of beside the data (the app's default data folder).
+    pub fn agents_file(mut self, path: PathBuf) -> Self {
+        self.agents_file = path;
+        self
+    }
+
+    /// Points the built-in Arkism at another data folder. Only while nothing of it runs: a running
+    /// Postgres or server keeps the old folder, so the change waits for the next app start.
+    pub fn move_data_dir(&self, path: PathBuf) -> Result<(), String> {
+        let _activity = self.activity()?;
+        let _turn = self.busy.lock().map_err(|_| "local_busy".to_string())?;
+        let idle = self.postgres.lock().map(|p| p.is_none()).unwrap_or(false)
+            && self.children.lock().map(|c| c.is_empty()).unwrap_or(false)
+            && self.gateway.lock().map(|g| g.is_none()).unwrap_or(false)
+            && self.watcher.lock().map(|w| w.is_none()).unwrap_or(false)
+            && !self.pgdata().join("postmaster.pid").exists();
+        if !idle {
+            return Err("local_location_running".into());
+        }
+        *self.data.write().unwrap_or_else(|e| e.into_inner()) = path;
+        Ok(())
     }
 
     pub fn available(&self) -> bool {
@@ -726,7 +752,7 @@ impl Runtime {
     }
 
     fn pgdata(&self) -> PathBuf {
-        self.data.join("pg")
+        self.data_dir().join("pg")
     }
 
     /// Starts Postgres, prepares the database and starts the server. Safe to call again:
@@ -739,7 +765,7 @@ impl Runtime {
 
     fn start_locked(&self) -> Result<Started, String> {
         self.programs()?;
-        fs::create_dir_all(self.data.join("logs")).map_err(|e| format!("local_data_folder: {e}"))?;
+        fs::create_dir_all(self.data_dir().join("logs")).map_err(|e| format!("local_data_folder: {e}"))?;
         let mut secrets = self.secrets()?;
         self.start_postgres(&mut secrets)?;
         self.prepare_database(&mut secrets)?;
@@ -766,11 +792,11 @@ impl Runtime {
         }
         let listen = format!("127.0.0.1:{}", secrets.gateway_port);
         let mut cmd = self.host_command(&["gateway"]).ok_or("local_unavailable")?;
-        let log = fs::OpenOptions::new().create(true).append(true).open(self.data.join("logs").join("gateway.log")).map_err(|e| e.to_string())?;
+        let log = fs::OpenOptions::new().create(true).append(true).open(self.data_dir().join("logs").join("gateway.log")).map_err(|e| e.to_string())?;
         let err = log.try_clone().map_err(|e| e.to_string())?;
         cmd.env("GOMEMLIMIT", "512MiB").env("ARKISM_GATEWAY_LISTEN", &listen).stdin(Stdio::null()).stdout(log).stderr(err);
         no_window(&mut cmd);
-        let child = self.spawn_child(Role::Gateway, &mut cmd, Some(self.data.join("logs").join("gateway.log")), Some(gateway_url(secrets.gateway_port)))?;
+        let child = self.spawn_child(Role::Gateway, &mut cmd, Some(self.data_dir().join("logs").join("gateway.log")), Some(gateway_url(secrets.gateway_port)))?;
         // A gateway that exits at once (bad config, port taken) is not reported as running.
         *gateway = Some(child);
         std::thread::sleep(std::time::Duration::from_millis(300));
@@ -805,7 +831,7 @@ impl Runtime {
     /// of a server: `agents.json` and the owner token beside it, both readable by this user only.
     /// `server: None` hands the agents back to the server connection (mode "server").
     fn write_agent_connection(&self, server: Option<&str>, secrets: Option<&Secrets>, ssh: Option<(&str, Option<u16>, Option<&str>, &crate::ssh_identity::Pin)>) -> Result<(), String> {
-        let token_file = self.data.join("owner.token");
+        let token_file = self.data_dir().join("owner.token");
         let conn = match (server, secrets) {
             (Some(url), Some(secrets)) => {
                 write_private(&token_file, secrets.owner.as_bytes()).map_err(|e| format!("local_agent_file: {e}"))?;
@@ -820,7 +846,8 @@ impl Runtime {
                 }
             }
         };
-        write_private(&self.data.join("agents.json"), conn.to_string().as_bytes()).map_err(|e| format!("local_agent_file: {e}"))
+        fs::create_dir_all(self.agents_file.parent().unwrap_or(Path::new("."))).map_err(|e| format!("local_agent_file: {e}"))?;
+        write_private(&self.agents_file, conn.to_string().as_bytes()).map_err(|e| format!("local_agent_file: {e}"))
     }
 
     /// What the server's timers do, run here for the built-in Arkism: find the agents and their MCP
@@ -830,12 +857,12 @@ impl Runtime {
     /// The bundled `arkism` program, set up to work against this built-in Arkism.
     fn host_command(&self, args: &[&str]) -> Option<Command> {
         let secrets = self.secrets().ok()?;
-        let token_file = self.data.join("owner.token");
+        let token_file = self.data_dir().join("owner.token");
         let client = self.agent_client()?;
         if !token_file.is_file() {
             return None;
         }
-        let state = self.data.join("host");
+        let state = self.data_dir().join("host");
         let mut cmd = Command::new(client);
         cmd.args(args)
             .env("ARKISM_URL", format!("http://127.0.0.1:{}", secrets.api_port))
@@ -976,7 +1003,7 @@ impl Runtime {
     pub fn expire(&self) -> Result<(), String> {
         let _activity = self.activity()?;
         let secrets = self.secrets()?;
-        let state = self.data.join("host").join("session-archive").join("state.json");
+        let state = self.data_dir().join("host").join("session-archive").join("state.json");
         let mut archive = self.host_command(&["session-archive", "expire", "--execute"]).ok_or("local_unavailable")?;
         archive.env("ARKISM_SESSION_STATE", state);
         self.host_status(quiet(&mut archive), "local_expire_archive_failed")?;
@@ -996,7 +1023,7 @@ impl Runtime {
     }
 
     pub fn model_roles(&self) -> ModelRoles {
-        fs::read_to_string(self.data.join("models.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+        fs::read_to_string(self.data_dir().join("models.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
     }
 
     /// Saves the roles and restarts the server so the embedder and judge take effect (a new embedder
@@ -1013,7 +1040,7 @@ impl Runtime {
             return Err("model_roles_invalid".into());
         }
         let text = serde_json::to_string_pretty(&roles).map_err(|e| e.to_string())?;
-        write_private(&self.data.join("models.json"), text.as_bytes()).map_err(|e| e.to_string())?;
+        write_private(&self.data_dir().join("models.json"), text.as_bytes()).map_err(|e| e.to_string())?;
         let _turn = self.busy.lock().map_err(|_| "local_busy".to_string())?;
         if self.pgdata().join("PG_VERSION").exists() {
             self.stop_server();
@@ -1066,7 +1093,6 @@ impl Runtime {
     /// The app switched to a server: agents follow it.
     pub fn agents_use_server(&self, ssh_host: &str, ssh_port: Option<u16>, ssh_key: Option<&str>, pin: &crate::ssh_identity::Pin) -> Result<(), String> {
         let _activity = self.activity()?;
-        fs::create_dir_all(&self.data).map_err(|e| e.to_string())?;
         self.write_agent_connection(None, None, Some((ssh_host, ssh_port, ssh_key, pin)))
     }
 
@@ -1110,7 +1136,7 @@ impl Runtime {
     }
 
     fn secrets(&self) -> Result<Secrets, String> {
-        let path = self.data.join("runtime.json");
+        let path = self.data_dir().join("runtime.json");
         if let Ok(text) = fs::read_to_string(&path) {
             let mut secrets: Secrets = serde_json::from_str(&text).map_err(|_| "local_settings_damaged".to_string())?;
             if secrets.archive_key.is_empty() {
@@ -1139,7 +1165,7 @@ impl Runtime {
     }
 
     fn save(&self, secrets: &Secrets) -> Result<(), String> {
-        let path = self.data.join("runtime.json");
+        let path = self.data_dir().join("runtime.json");
         let text = serde_json::to_string_pretty(secrets).map_err(|e| e.to_string())?;
         write_private(&path, text.as_bytes()).map_err(|e| format!("local_settings_write: {e}"))
     }
@@ -1151,7 +1177,7 @@ impl Runtime {
                 // A first run that stopped half way left an unusable folder.
                 fs::remove_dir_all(&pgdata).map_err(|e| format!("local_database_reset: {e}"))?;
             }
-            let pwfile = self.data.join("initdb.pw");
+            let pwfile = self.data_dir().join("initdb.pw");
             write_private(&pwfile, secrets.admin.as_bytes()).map_err(|e| e.to_string())?;
             let status = quiet(Command::new(self.pg_bin("initdb")?)
                 .arg("-D").arg(&pgdata)
@@ -1176,8 +1202,8 @@ impl Runtime {
             self.save(secrets)?;
         }
         // Erasing removes the logs folder; a restore starts Postgres before anything else makes it.
-        fs::create_dir_all(self.data.join("logs")).map_err(|e| format!("local_data_folder: {e}"))?;
-        let log = self.data.join("logs").join("postgres.log");
+        fs::create_dir_all(self.data_dir().join("logs")).map_err(|e| format!("local_data_folder: {e}"))?;
+        let log = self.data_dir().join("logs").join("postgres.log");
         let mut command = Command::new(&pg_ctl);
         quiet(command.arg("-D").arg(&pgdata)
             .arg("-l").arg(&log)
@@ -1303,7 +1329,7 @@ impl Runtime {
             self.save(secrets)?;
         }
         let app_url = self.url("arkism_app", &secrets.app, secrets.pg_port);
-        let logs = self.data.join("logs");
+        let logs = self.data_dir().join("logs");
         // Meaning search when the user has Ollama with the embedding model (`ollama pull
         // qwen3-embedding:0.6b`); otherwise keyword search. Switching re-queues every record once.
         let roles = self.model_roles();
@@ -1552,13 +1578,13 @@ impl Runtime {
         let _turn = self.busy.lock().map_err(|_| "local_busy".to_string())?;
         self.stop();
         for name in ["pg", "host", "logs"] {
-            let path = self.data.join(name);
+            let path = self.data_dir().join(name);
             if path.exists() {
                 fs::remove_dir_all(&path).map_err(|e| format!("local_erase_failed: {e}"))?;
             }
         }
         for name in ["runtime.json", "owner.token", "initdb.pw"] {
-            let _ = fs::remove_file(self.data.join(name));
+            let _ = fs::remove_file(self.data_dir().join(name));
         }
         if let Some(home) = &self.home {
             if let Ok(entries) = fs::read_dir(home.join(".config").join("arkism")) {
@@ -2261,7 +2287,7 @@ mod tests {
         assert!(panic.is_err());
         assert!(matches!(rt.update_installer_handoff(||panic!("poisoned storage cannot launch")),Err(InstallerHandoffFailure::Unstarted(ref e)) if e=="update_installer_owner_storage_unavailable"));
         assert!(rt.activity().is_err());
-        assert!(!rt.data.join("runtime.json").exists());
+        assert!(!rt.data_dir().join("runtime.json").exists());
         fs::remove_dir_all(dir).unwrap();
     }
 
@@ -2816,6 +2842,21 @@ mod tests {
         assert!(dir.join("keep.txt").exists());
         assert!(!queue.exists(), "waiting captures are deleted");
         assert!(dir.join("home").join(".config").join("arkism").join("backups").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn data_moves_only_while_idle_and_agents_file_stays_put() {
+        let dir = std::env::temp_dir().join(format!("arkism-move-test-{}", secret().unwrap()));
+        let rt = Runtime::new(None, dir.join("default")).isolated().agents_file(dir.join("default").join("agents.json"));
+        rt.move_data_dir(dir.join("chosen")).unwrap();
+        assert_eq!(rt.data_dir(), dir.join("chosen"));
+        rt.write_agent_connection(None, None, None).unwrap();
+        assert!(dir.join("default").join("agents.json").is_file() && !dir.join("chosen").join("agents.json").exists());
+        fs::create_dir_all(dir.join("chosen").join("pg")).unwrap();
+        fs::write(dir.join("chosen").join("pg").join("postmaster.pid"), b"1").unwrap();
+        assert_eq!(rt.move_data_dir(dir.join("other")).unwrap_err(), "local_location_running");
+        assert_eq!(rt.data_dir(), dir.join("chosen"));
         fs::remove_dir_all(dir).unwrap();
     }
 
