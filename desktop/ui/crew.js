@@ -1263,7 +1263,12 @@ window.ArkismCrew = (ctx) => {
     }
   }
   // Edits keep the AI suggestions: applying one must not wipe the others (each re-checks with canApply).
-  const touch = () => { ed.dirty = true; };
+  const touch = () => {
+    ed.dirty = true;
+    const save = document.querySelector(".page-head .g-save"), run = document.querySelector(".page-head .g-trial");
+    if (save) save.disabled = false;
+    if (run) { run.disabled = true; run.title = "저장한 뒤에 실행할 수 있어요"; }
+  };
   function uid(type) {
     let i = 1;
     while (ed.graph.nodes.some((n) => n.id === `${type}${i}`)) i++;
@@ -1398,6 +1403,182 @@ window.ArkismCrew = (ctx) => {
     return NODES[n.type]?.label || n.type;
   }
 
+  // 캔버스에서 바로 고치기: the card rows that are one value each. 모델 is a choice, 언제 a small schedule editor, the rest plain text.
+  const INLINE = {
+    모델: (n) => ["ai", "ai_once", "expert"].includes(n.type) && { key: "model", kind: "model" },
+    목표: () => ({ key: "goal", area: true }),
+    질문: () => ({ key: "prompt", area: true }),
+    주제: () => ({ key: "topic", area: true }),
+    "물어볼 것": () => ({ key: "question", area: true }),
+    조건: () => ({ key: "expr" }),
+    gh: () => ({ key: "args" }),
+    기다림: () => ({ key: "duration" }),
+    목록: () => ({ key: "path" }),
+    형식: () => ({ key: "message" }),
+    보내기: () => ({ key: "to" }),
+    주소: () => ({ key: "url" }),
+    요청: () => ({ key: "url" }),
+    언제: () => ({ key: "cron", kind: "cron" })
+  };
+  // The workflow's trigger draft that 저장 keeps (shared by the start node popup and the canvas schedule editor).
+  const trigDraft = (n) => {
+    const now = ed.rec.crew.trigger;
+    return (ed.trigger ||= { kind: now?.kind || "", cron: now?.cron || n.config.cron || "0 9 * * 1-5", label: now?.label || n.config.note || "" });
+  };
+  function setCron(n, v) {
+    const was = n.config.cron;
+    n.config.cron = v;
+    if (n.title === cronText(was)) n.title = cronText(v);
+    const tr = trigDraft(n);
+    tr.kind = "schedule";
+    tr.cron = v;
+  }
+  function cardEdit(s, n, { key, kind, area }) {
+    if (s.querySelector("input, textarea, select")) return;
+    const c = n.config;
+    let over = false;
+    const finish = (v) => {
+      if (over) return;
+      over = true;
+      if (v !== undefined && v !== (c[key] ?? "")) {
+        if (kind === "cron") setCron(n, v);
+        else if (kind === "model" && !v) delete c.model;
+        else c[key] = v;
+        touch();
+      }
+      render(false);
+    };
+    const span = s.querySelector("span");
+    if (kind === "cron") {
+      // 매일·평일·주말 + 시각, or any 5-field cron underneath.
+      const box = el("div", "g-inline-cron");
+      const f = (c.cron || "0 9 * * *").trim().split(/\s+/);
+      const time = el("input");
+      time.type = "time";
+      time.value = /^\d+$/.test(f[0]) && /^\d+$/.test(f[1]) ? `${f[1].padStart(2, "0")}:${f[0].padStart(2, "0")}` : "09:00";
+      const days = select([["*", "매일"], ["1-5", "평일"], ["0,6", "주말"]], f[4] || "*");
+      const raw = input(c.cron || "0 9 * * *", { maxLength: 64, cls: "mono" });
+      const hint = el("small", "dim");
+      const show = () => { const x = parseCron(raw.value); hint.textContent = x ? cronText(raw.value) : "형식: 분 시 일 월 요일 (예: 0 9 * * 1-5)"; };
+      const fromParts = () => { const [h, m] = time.value.split(":").map(Number); raw.value = `${m || 0} ${h || 0} * * ${days.value}`; show(); };
+      time.addEventListener("change", fromParts);
+      days.addEventListener("change", fromParts);
+      raw.addEventListener("input", show);
+      const row = el("div", "g-inline-row");
+      row.append(days, time);
+      box.append(row, raw, hint);
+      show();
+      box.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") finish();
+        if (e.key === "Enter") { e.preventDefault(); if (parseCron(raw.value)) finish(raw.value.trim()); }
+      });
+      box.addEventListener("focusout", (e) => { if (!box.contains(e.relatedTarget)) finish(parseCron(raw.value) ? raw.value.trim() : undefined); });
+      for (const x of [box, time, days, raw]) x.addEventListener("click", (e) => e.stopPropagation());
+      span.replaceWith(box);
+      days.focus();
+      return;
+    }
+    const i = kind === "model"
+      ? modelSelect(c.model, n.type === "expert" ? "전문가 기본" : ed.rec.crew.model ? `기본 · ${ed.rec.crew.model}` : "기본")
+      : input(c[key], { tag: area ? "textarea" : "input", rows: 3, maxLength: 8000 });
+    i.classList.add("g-inline");
+    i.addEventListener("click", (e) => e.stopPropagation());
+    i.addEventListener("pointerdown", (e) => e.stopPropagation());
+    if (kind === "model") i.addEventListener("change", () => finish(i.value));
+    i.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); finish(); }
+      if (e.key === "Enter" && (!area || e.ctrlKey || e.metaKey)) { e.preventDefault(); finish(i.value); }
+    });
+    i.addEventListener("blur", () => finish(kind === "model" ? undefined : i.value));
+    span.replaceWith(i);
+    i.focus();
+    if (i.select && kind !== "model") i.select();
+  }
+  // A panel edit shows on the canvas card without redrawing the page (a redraw would drop the field being typed in).
+  function syncCard(n) {
+    const box = document.querySelector(`.g-node[data-id="${CSS.escape(n.id)}"]`);
+    if (box) {
+      box.querySelector(".g-node-head strong").textContent = nodeTitle(n);
+      const rows = box.querySelectorAll(".g-node-field > span");
+      nodeSummary(n).forEach(([, v], i) => { if (rows[i]) rows[i].textContent = v; });
+    }
+    const t = document.querySelector(".g-right .g-node-name");
+    if (t) t.textContent = nodeTitle(n);
+  }
+  // ✦ on a prompt-like field: an AI chat about just that field (shared component; no icon until it is loaded).
+  const AI_PRESET = {
+    goal: "You help write the goal of one AI step in an Arkism workflow. Reply in the user's language (Korean by default). A good goal says what to produce and when it is done, in one or two sentences; keep {{input}} where the previous step's result goes. Do not decide how to do it.",
+    instructions: "You help write the persona instruction of one AI step in an Arkism workflow. Reply in the user's language (Korean by default). Write it as role, tone and limits, as 'You are X. You do Y.' sentences in the user's language, short and concrete.",
+    prompt: "You help write a one-shot LLM prompt for one step in an Arkism workflow. Reply in the user's language (Korean by default). Keep {{input}} where the previous step's result goes; ask for a clear output format.",
+    topic: "You help write the meeting topic for a team of AI experts in an Arkism workflow. Reply in the user's language (Korean by default). State the question to settle and what a finished answer looks like; keep {{input}} where the previous step's result goes.",
+    question: "You help write the question a person answers before an Arkism workflow continues (approve or reject). Reply in the user's language (Korean by default). One short question that says what will happen if they approve.",
+    message: "You help write the message an Arkism workflow sends or returns at this step. Reply in the user's language (Korean by default). Short, scannable, with the result first.",
+    task: "You help write the task an Arkism workflow hands to a sub-workflow. Reply in the user's language (Korean by default). Keep {{input}} where the previous step's result goes."
+  };
+  function aiField(i, n, key, label) {
+    const chat = window.ArkismAIChat;
+    if (!chat?.field || !AI_PRESET[key]) return i;
+    const w = el("span", "g-ai-field");
+    const b = el("button", "icon-btn g-ai-btn");
+    b.type = "button";
+    b.title = "AI와 같이 쓰기";
+    b.setAttribute("aria-label", `${label} · AI와 같이 쓰기`);
+    b.append(icon("sparkle"));
+    const side = (dir) => ed.graph.edges.filter((e) => (dir ? e.from : e.to) === n.id).map((e) => nodeIn(dir ? e.to : e.from)).filter(Boolean).map((x) => ({ type: x.type, title: nodeTitle(x) }));
+    b.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      chat.field(i, {
+        title: label, sub: `${nodeTitle(n)} · ${NODES[n.type]?.label || n.type}`,
+        greeting: "이 칸에 들어갈 글을 같이 다듬어요. 무엇을 바꿀까요?", placeholder: "예: 더 짧고 구체적으로",
+        quick: ["더 짧게", "더 구체적으로", "완료 기준 넣기"], preset: AI_PRESET[key],
+        context: () => JSON.stringify({ workflow: ed.rec.crew.name, node: { type: n.type, title: nodeTitle(n), config: n.config }, field: key, before: side(false), after: side(true) })
+      });
+    });
+    w.append(i, b);
+    return w;
+  }
+  // 노드를 누르면 오른쪽 패널에 기본 설정이 열리고, 자세히는 노드 설정 팝업을 열어요.
+  function nodePanel(box, n) {
+    box.classList.add("node");
+    const head = el("div", "g-right-head");
+    const lead = el("span", "g-icon");
+    const ex = n.type === "expert" ? byId(n.config?.expert) : null;
+    lead.append(ex ? avatarMark(ex.crew) : icon(NODES[n.type]?.icon || "stack"));
+    const t = el("div", "");
+    t.append(el("strong", "g-node-name", nodeTitle(n)), el("small", "dim", nodeLine(n)));
+    const close = closeX("노드 설정 닫기", () => selectOnCanvas(null));
+    head.append(lead, t, close);
+    box.append(head);
+    if (IS_AI(n.type) || n.type === "team") basicAI(box, n);
+    else nodeBody(box, n);
+    const acts = el("div", "g-right-acts");
+    acts.append(button("자세히", "", "arrow-square-out", () => openNodeDialog(n)), button("노드 지우기", "ghost", null, async () => {
+      if (await confirmBox("노드를 지울까요?", "이 노드와 이어진 선이 함께 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.", "노드 지우기")) removeNode(n.id);
+    }));
+    box.append(acts);
+    return box;
+  }
+  // AI·전문가·팀 노드의 기본: 이름 · 모델 · 무엇을 할지. 실행 범위·협업·스킬은 자세히에서.
+  function basicAI(box, n) {
+    const c = n.config;
+    const bind = (i, key) => { i.addEventListener("input", () => { c[key] = i.value; touch(); syncCard(n); }); return i; };
+    const title = input(n.title, { maxLength: 80 });
+    title.addEventListener("input", () => { n.title = title.value; touch(); syncCard(n); });
+    box.append(field("노드 이름", title));
+    if (n.type === "expert") box.append(kv([["전문가", byId(c.expert)?.crew.name || "고르지 않았어요"]]));
+    if (n.type === "team") box.append(kv([["팀", byId(c.team)?.crew.name || "고르지 않았어요"]]));
+    if (n.type === "ai" || n.type === "ai_once") box.append(modelList(), field("모델", bind(modelInput(c.model, ed.rec.crew.model || "deepseek-v4-flash"), "model"), ed.rec.crew.model ? `비우면 ${ed.rec.crew.model}` : ""));
+    const slot = "{{input}} 자리에 앞 단계 결과가 들어가요";
+    const [key, label] = n.type === "team" ? ["topic", "회의 주제"] : n.type === "ai_once" ? ["prompt", "질문"] : ["goal", "목표"];
+    box.append(field(label, aiField(bind(input(c[key], { tag: "textarea", rows: 4, maxLength: key === "topic" ? 4000 : 8000 }), key), n, key, label), slot));
+    if (n.type !== "team") {
+      const lab = byId(c.persona) ? "더할 지시" : "페르소나 지시";
+      box.append(field(lab, aiField(bind(input(c.instructions, { tag: "textarea", rows: 3, maxLength: 8000, placeholder: "너는 ○○다. …한다." }), "instructions"), n, "instructions", lab)));
+    }
+    box.append(el("p", "meta", "전문가·팀 고르기, 실행 범위, 나눠서 맡기기, 스킬은 자세히에서 정해요."));
+  }
+
   function renderGraph() {
     const t0 = performance.now();
     const rec = ed.rec;
@@ -1445,6 +1626,12 @@ window.ArkismCrew = (ctx) => {
       for (const [k, v] of nodeSummary(n)) {
         const s = el("div", "g-node-field");
         s.append(el("small", "dim", k), el("span", k === "모델" ? "mono" : "", v));
+        const spec = !ed.run && INLINE[k]?.(n);
+        if (spec) {
+          s.classList.add("editable");
+          s.title = "눌러서 바로 고쳐요";
+          s.addEventListener("click", (ev) => { ev.stopPropagation(); if (ed.sel !== n.id) selectOnCanvas(n.id); cardEdit(s, n, spec); });
+        }
         box.append(s);
       }
       if (!["start", "schedule", "webhook"].includes(n.type)) {
@@ -1675,6 +1862,7 @@ window.ArkismCrew = (ctx) => {
     const page = $("#table .graph-page");
     const side = page?.querySelector(":scope > .g-right");
     if (ed.run) { render(false); return; }
+    if (id && ed.review) { ed.review = false; render(false); return; }
     if (!side) render(false);
     else {
       const t0 = performance.now();
@@ -1684,7 +1872,6 @@ window.ArkismCrew = (ctx) => {
       if (!ed.review) side.replaceWith(inspector());
       window.ArkismPerf?.note("canvas.select", performance.now() - t0, ed.graph.nodes.length);
     }
-    if (id && edge === null) openNodeDialog(nodeIn(id));
   }
   // While a node is dragged only the lines touching it move; the rest of the canvas stays as drawn.
   function moveEdges(svg, nodeEls, id) {
@@ -1824,7 +2011,7 @@ window.ArkismCrew = (ctx) => {
   function nodeBody(box, n) {
     if (IS_AI(n.type) || n.type === "team") { aiFields(box, n); return; }
     const title = input(n.title, { maxLength: 80 });
-    title.addEventListener("input", () => { n.title = title.value; touch(); });
+    title.addEventListener("input", () => { n.title = title.value; touch(); syncCard(n); });
     box.append(field("이름", title));
     let pair = null; // n8n: 결과 받기 and 기다릴 최대 시간 share a row (1033:69906)
     const starts = ["start", "schedule", "webhook"].includes(n.type);
@@ -1846,12 +2033,12 @@ window.ArkismCrew = (ctx) => {
       i.addEventListener("input", () => { n.config[key] = i.value; touch(); });
       i.addEventListener("change", () => {
         n.config[key] = i.value;
-        if (key === "workflow") { const w = byHandle(i.value); if (w && (!n.title || n.title === NODES.subflow.label)) n.title = w.crew.name; }
         touch();
-        redraw();
+        if (key === "workflow") { const w = byHandle(i.value); if (w && (!n.title || n.title === NODES.subflow.label)) n.title = w.crew.name; redraw(); } else syncCard(n);
       });
-      if (pair) { pair.append(field(label, i)); if (hint) box.append(el("p", "meta", hint)); pair = null; continue; }
-      (row || box).append(field(label, i, hint));
+      const fi = ["question", "message", "task"].includes(key) ? aiField(i, n, key, label) : i;
+      if (pair) { pair.append(field(label, fi)); if (hint) box.append(el("p", "meta", hint)); pair = null; continue; }
+      (row || box).append(field(label, fi, hint));
     }
     sends(box, n);
     if (n.type === "code") box.append(el("p", "meta", "출력이 {\"ok\": true/false, …}면 통과·실패 갈래로 나뉘어요. 처음 한 번은 빌드에 1~2초, 30초 안에 끝나야 해요. 토큰은 들지 않아요."));
@@ -1862,8 +2049,7 @@ window.ArkismCrew = (ctx) => {
   }
   // 시작 노드 팝업 (1033:66756): how the workflow starts. It edits a draft of the workflow's trigger that 저장 keeps.
   function triggerFields(box, n) {
-    const now = ed.rec.crew.trigger;
-    const tr = (ed.trigger ||= { kind: now?.kind || "", cron: now?.cron || n.config.cron || "0 9 * * 1-5", label: now?.label || n.config.note || "" });
+    const tr = trigDraft(n);
     box.append(group("시작", segment([["", "직접 부름"], ["schedule", "일정"], ["webhook", "웹훅"]], tr.kind, (v) => { tr.kind = v; touch(); redraw(); })));
     if (tr.kind === "schedule") {
       const cron = input(tr.cron, { maxLength: 64, cls: "mono" });
@@ -1910,7 +2096,7 @@ window.ArkismCrew = (ctx) => {
       void startRun(ed.rec, "", n.id);
     }));
     right.append(button("노드 지우기", "ghost", null, async () => {
-      if (await confirmBox("노드를 지울까요?", "이 노드와 이어진 선이 함께 지워져요. 저장하기 전까지는 되돌리기로 살릴 수 있어요.", "노드 지우기")) { keep = true; dlg.close(); removeNode(n.id); }
+      if (await confirmBox("노드를 지울까요?", "이 노드와 이어진 선이 함께 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.", "노드 지우기")) { keep = true; dlg.close(); removeNode(n.id); }
     }));
     foot.append(left, right);
     const draw = () => {
@@ -1929,7 +2115,7 @@ window.ArkismCrew = (ctx) => {
       dlg.remove();
       if (nodeDlg === dlg) { nodeDlg = null; redraw = () => render(false); }
       if (!keep) { ed.graph.nodes = before.graph.nodes; ed.graph.edges = before.graph.edges; ed.dirty = before.dirty; ed.trigger = before.trigger; }
-      if (ed.sel === n.id || !keep) ed.sel = null;
+      if (!ed.graph.nodes.some((x) => x.id === ed.sel)) ed.sel = null; // the panel stays on this node
       render(false);
     });
     draw();
@@ -1940,6 +2126,7 @@ window.ArkismCrew = (ctx) => {
   function inspector() {
     const box = el("aside", "g-right");
     if (ed.selEdge !== null && ed.graph.edges[ed.selEdge]) return edgeInspector(box, ed.graph.edges[ed.selEdge]);
+    if (ed.sel && nodeIn(ed.sel)) return nodePanel(box, nodeIn(ed.sel));
     {
       const x = ed.rec.crew;
       const backs = ed.graph.edges.filter(isBack);
@@ -2250,7 +2437,7 @@ window.ArkismCrew = (ctx) => {
       box.append(info);
     }
     box.append(button("선 지우기", "ghost danger", "trash", async () => {
-      if (!(await confirmBox("선을 지울까요?", `${nodeTitle(from || {})} → ${nodeTitle(to || {})} 선이 지워져요. 저장하기 전까지는 되돌리기로 살릴 수 있어요.`, "선 지우기"))) return;
+      if (!(await confirmBox("선을 지울까요?", `${nodeTitle(from || {})} → ${nodeTitle(to || {})} 선이 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.`, "선 지우기"))) return;
       ed.graph.edges = ed.graph.edges.filter((x) => x !== e);
       ed.selEdge = null;
       touch();
@@ -2691,22 +2878,30 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     if (ed.run) {
       const view = segment([["graph", "그래프"], ["list", "목록"]], ed.runList ? "list" : "graph", (k) => { ed.runList = k === "list"; render(false); });
       view.classList.add("wf-view");
-      return [button("돌아가기", "ghost", "arrow-left", leaveGraph), view];
+      headTitle(button("돌아가기", "ghost", "arrow-left", leaveGraph));
+      return [view];
     }
-    const save2 = button("저장", "primary", null, saveGraph);
+    const save2 = button("저장", "primary g-save", null, saveGraph);
     save2.disabled = !ed.dirty;
-    const revert = button("되돌리기", "ghost", null, () => { ed.dirty = false; openGraph(byId(rec.id) || rec, { graphMode: ed.graphMode }); });
-    revert.disabled = !ed.dirty;
     const review = button(`구조 검토${ed.suggestions?.length ? ` · ${ed.suggestions.length}` : ""}`, ed.review ? "active" : "", "sparkle", () => { ed.review = !ed.review; render(false); });
     const testing = ["running", "waiting"].includes(ed.test?.crew_run?.status);
-    const trial = button(testing ? "실행 중…" : ed.test ? "다시 실행" : "실행", "", "play", runFromEditor);
+    const trial = button(testing ? "실행 중…" : ed.test ? "다시 실행" : "실행", "g-trial", "play", runFromEditor);
     trial.disabled = ed.dirty || testing;
     trial.title = ed.dirty ? "저장한 뒤에 실행할 수 있어요" : "저장된 워크플로우로 지금 한 번 돌려요";
     const settings = button("설정", "ghost", "gear-six", () => openSettings(ed.rec, null, true));
     settings.title = "이름·$이름·워커 기본 모델·멈추는 조건·일정·웹훅·배경 사진";
     // An owned workflow runs only through its agent (@); the server refuses a manual run.
-    const back = ed.fromPopup ? button("창으로 돌아가기", "", "arrow-left", leaveGraph) : button("돌아가기", "ghost", "arrow-left", leaveGraph);
-    return [back, settings, review, ...(ownerOf(rec) ? [] : [trial]), revert, save2];
+    headTitle(button(ed.fromPopup ? "창으로 돌아가기" : "돌아가기", "ghost", "arrow-left", leaveGraph));
+    return [settings, review, ...(ownerOf(rec) ? [] : [trial]), save2];
+  }
+  // 제목 줄: ← 돌아가기 at the far left, then the workflow's name with what this screen is on a smaller line under it.
+  // page-back is the class the app clears on every screen change (head-back would be cleared again right after head()).
+  function headTitle(back) {
+    const line = $(".page-head .title-line");
+    if (!line) return;
+    back.classList.add("page-back", "g-head-back");
+    line.prepend(back);
+    if (!rerunOf()) $("#title").replaceChildren(el("span", "", ed.rec.crew.name), el("small", "g-title-sub", ed.run ? "실행" : "워크플로우 편집"));
   }
   // Space held = hand tool on the graph, as in Figma.
   let spaceDown = false;

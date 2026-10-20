@@ -5903,3 +5903,21 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "'{0}' 팀을 삭제할까요?\n되돌릴 수 없어요. 확인하려면 이름 '{1}'을 그대로 입력하세요.": "Delete team '{0}'?\nThis can't be undone. Type its name '{1}' to confirm."
 });
 Object.assign(window.ArkismI18nEN.strings, { "진행자": "Moderator" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "매일": "Daily",
+  "평일": "Weekdays",
+  "전문가 기본": "Expert default",
+  "AI와 같이 쓰기": "Write with AI",
+  "이 칸에 들어갈 글을 같이 다듬어요. 무엇을 바꿀까요?": "Let's polish what goes in this field. What should change?",
+  "예: 더 짧고 구체적으로": "e.g. shorter and more specific",
+  "더 짧게": "Shorter",
+  "더 구체적으로": "More specific",
+  "완료 기준 넣기": "Add a done condition",
+  "이 노드와 이어진 선이 함께 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.": "Lines connected to this node are deleted too. Leave without saving to get it back.",
+  "전문가·팀 고르기, 실행 범위, 나눠서 맡기기, 스킬은 자세히에서 정해요.": "Pick the expert or team, scope, splitting work and skills under Details.",
+  "눌러서 바로 고쳐요": "Click to edit here"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} · AI와 같이 쓰기": "{0} · Write with AI",
+  "{0} → {1} 선이 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.": "The {0} → {1} line is deleted. Leave without saving to get it back."
+});
