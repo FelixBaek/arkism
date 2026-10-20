@@ -148,7 +148,7 @@ window.ArkismPages = (ctx) => {
     grok: ["~/.grok/skills · ~/.claude/skills", "~/.grok/sessions"]
   };
 
-  const openInjectPreview = () => { go("memories", "active"); window.dispatchEvent(new Event("arkism:inject-preview")); };
+  const openInjectPreview = () => window.dispatchEvent(new Event("arkism:inject-preview")); // a popup over 설정, no page change
   function tabGeneral() {
     // 이 규칙은 서버가 정한다. 바꿀 수 있는 것처럼 보이지 않게 스위치·알약 대신 글자로만 보여 준다.
     const fixed = (text) => el("output", "", text);

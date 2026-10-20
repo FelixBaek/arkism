@@ -99,11 +99,11 @@
   if (typeof window === "undefined") return;
 
   window.ArkismInject = (ctx) => {
-    const { state, el, button, request, query, detailShell, openDetail, section, facts } = ctx;
+    const { state, el, button, request, query, section, facts } = ctx;
     const raw = (node) => { node.setAttribute("data-no-i18n", ""); return node; };
     let repo = "", session = null, prompt = null, busy = "", error = "", promptText = "", tokens = {}, ticket = 0;
     const identity = () => JSON.stringify([state.server, state.token, state.scope]);
-    let key = "";
+    let key = "", host = null; // host: the body of the open popup (no page of its own: 설정 and 기억 both open it in place)
     const use7 = () => effect(state.data.tools?.memory_use);
     const use30 = () => effect(state.data.tools?.memory_use_30);
     const memRepo = (m) => (m.tags || []).find((t) => t.startsWith("repo:"))?.slice(5) || "";
@@ -241,16 +241,20 @@
       return s;
     }
     function paint() {
-      if (state.selected !== "inject" || state.view !== "memories") return;
-      const body = detailShell("들어가는 기억");
-      body.append(el("h2", "", "에이전트에게 들어가는 기억"), el("p", "lead", "새 세션과 질문마다 Arkism이 에이전트에게 넣는 글을 그대로 보여 줘요."));
+      if (!host?.isConnected) return;
+      const body = host; body.replaceChildren(el("p", "lead", "새 세션과 질문마다 Arkism이 에이전트에게 넣는 글을 그대로 보여 줘요."));
       if (error) body.append(el("p", "warn-text", error));
       body.append(effectSection(), sessionSection(), promptSection());
     }
     function open() {
       if (key !== identity()) { key = identity(); session = null; prompt = null; promptText = ""; tokens = {}; }
-      state.selected = "inject";
-      paint(); openDetail();
+      document.querySelector("dialog.inject-dialog")?.close();
+      const d = el("dialog", "crew-dialog inject-dialog"), head = el("div", "inject-head"), x = button("✕", "ghost small", null, () => d.close());
+      x.setAttribute("aria-label", "닫기"); head.append(el("h2", "", "에이전트에게 들어가는 기억"), x);
+      host = el("div", "dialog-body"); d.append(head, host);
+      d.addEventListener("close", () => { d.remove(); if (host?.parentNode === d) host = null; });
+      document.body.append(d); d.showModal();
+      paint();
       if (!session && busy !== "session") void loadSession();
     }
     // The memory page stats row: use ratio over 7 and 30 days, average injected per session.
@@ -266,7 +270,7 @@
     }
     const openButton = () => button("들어가는 기억", "small", "eye", open);
     window.addEventListener("arkism:inject-preview", () => setTimeout(open, 0));
-    return { open, detail: paint, tiles, button: openButton };
+    return { open, tiles, button: openButton };
   };
   window.ArkismInject.core = core;
 })();

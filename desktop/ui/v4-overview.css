@@ -240,7 +240,7 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-detail-basis { display: block; margin: 6px 0 2px; color: #6fbf8f; }
 .ov-detail-actions small { margin-right: auto; color: var(--text-2); }
 /* 기억 지도 (611:54134 · 611:56374): fills the content area beside the rail */
-.ov-map-win { position: fixed; inset: 16px 32px 16px calc(var(--nc-rail-w) + 32px); width: auto; max-width: 1168px; height: auto; margin: 0 auto; border-radius: 14px; background: var(--nc-canvas); }
+.ov-map-win { position: fixed; inset: 12px 12px 12px calc(var(--nc-rail-w) + 12px); z-index: 50; width: auto; max-width: none; height: auto; max-height: none; margin: 0; border-radius: 14px; background: var(--nc-canvas); border: 1px solid var(--nc-line); }
 .ov-map-head { padding: 16px 24px; } .ov-map-head .ov-win-title h2 { font-size: 20px; } .ov-map-head .ov-win-title .ghost { border: 1px solid var(--nc-line); background: var(--nc-raised); border-radius: 6px; font-size: 12px; }
 .ov-map-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 346px; gap: 20px; padding: 0 24px 24px; }
 .ov-map-main { display: flex; flex-direction: column; gap: 16px; min-height: 0; min-width: 0; }
@@ -285,7 +285,7 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 @media (max-width: 1000px) { .ov-map-body { grid-template-columns: 1fr; overflow: auto; } }
 
 /* 기억 지도 bubble canvas (memory-bubbles.js) */
-.mm-bubbles { position: absolute; inset: 0; } .mm-canvas { display: block; outline: 0; border-radius: 12px; } .mm-canvas:focus-visible { outline: 2px solid var(--nc-text); outline-offset: -3px; }
+.mm-bubbles { position: absolute; inset: 0; } .mm-canvas { display: block; outline: 0; border-radius: 12px; cursor: grab; touch-action: none; } .mm-canvas:focus-visible { outline: 2px solid var(--nc-text); outline-offset: -3px; }
 .mm-tabs { position: absolute; left: 14px; top: 14px; display: flex; padding: 4px; gap: 0; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: 8px; }
 .mm-pill { position: absolute; top: 4px; bottom: 4px; left: 4px; width: 0; border-radius: 6px; background: var(--nc-subtle); transition: left .35s cubic-bezier(.3, 1.3, .5, 1), width .35s cubic-bezier(.3, 1.3, .5, 1); }
 .mm-tab { position: relative; border: 0; background: transparent; color: var(--nc-muted); font: inherit; font-size: 13px; padding: 5px 14px; border-radius: 6px; cursor: pointer; } .mm-tab.on { color: var(--nc-text); }
@@ -349,3 +349,9 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-detail-group > .ov-win-err:empty { display: none; }
 /* light theme: the dark-theme amber/red on white is too faint for the wait count and tags */
 :root[data-theme="light"] .ov-wide-row-r.ov-r-a { color: #8a5a00; } :root[data-theme="light"] .ov-win-tag.ov-tag-a { color: #8a5a00; } :root[data-theme="light"] .ov-win-tag.ov-tag-r { color: #b4202e; }
+/* wide windows: sort at the far left, a divider, then kind chips on one line that scrolls sideways */
+.ov-wide-filter { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; }
+.ov-wide-filter .ov-wide-sort { flex: none; margin-left: 0; }
+.ov-wide-div { flex: none; width: 1px; height: 18px; background: var(--nc-line, var(--border)); }
+.ov-wide-chipscroll { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+.ov-wide-chipscroll .ov-wide-chips { flex-wrap: nowrap; } .ov-wide-chipscroll .ov-wide-chip { flex: none; white-space: nowrap; }

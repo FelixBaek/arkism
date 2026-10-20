@@ -4155,7 +4155,6 @@
       const s = [...trashed(), ...state.data.skills].find((x) => `skill:${x.id}` === id);
       return s ? skillDetailV4(s) : summaryDetail();
     }
-    if (state.view === "memories" && id === "inject") return inject.detail();
     if (state.view === "memories" && id === "batch") return reviewBatchDetail(detailShell("한 번에 처리"));
     if (state.view === "memories" && id) {
       const all = [...state.data.memories, ...state.data.candidates, ...state.data.conflicted];
@@ -4874,7 +4873,7 @@
   const digests = window.ArkismDigests({ canRefresh: () => !syncBlocked(), state, $, el, raw, tr, icon, button, request, query, detailShell, openDetail, notice, ago, render, row, markSelected,
     kindLabel, originOf, memSelect, section, facts, openRecord: (r) => openIntelligenceRecord(r), reloadMemories });
   const memoryTime = window.ArkismMemoryTime({ state, $, el, icon, button, request, detailShell, openDetail });
-  const inject = window.ArkismInject({ state, el, button, request, query, detailShell, openDetail, section, facts });
+  const inject = window.ArkismInject({ state, el, button, request, query, section, facts });
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request, detailShell, openDetail, ago });
   const privacy = window.ArkismPrivacy({ state, el, button, request, query, notice, section, afterChange: async () => { await reloadMemories(); renderDetail(); } });
   const codegraph = window.ArkismCodeGraph ? window.ArkismCodeGraph({ state, el, raw, button, request, query, notice, ago }) : null; // TOOLS › 저장소 › 코드 그래프 (codegraph.js)

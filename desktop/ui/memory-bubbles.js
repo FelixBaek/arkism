@@ -1,20 +1,25 @@
 // Lucian UX/UI Prompt #204 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#204
 // 기억 지도 canvas: one physics bubble per memory, regrouped by 전체 / 칸별 / 종류별, with relation lines drawn under the bubbles.
-// Ported from the reference (same step() maths, rAF loop, tab pill, hover/tooltip, reduced-motion settle); the data mapping is Arkism's.
+// Ported from the reference (tab pill, hover/tooltip, name cards); the data mapping is Arkism's.
+// The layout is static: each group is a sunflower spiral (biggest dots in the middle) around its area centre, so it never drifts.
+// The reference's force simulation never came to rest with a few thousand dots (they kept jittering toward the centre).
+// A change (group tab, selection, resize) computes the new places and the dots glide there once (no glide with reduced motion).
+// Zoom (wheel · pinch · +/− keys · buttons) and drag-to-pan only move the view; past LABEL_ZOOM the visible dots get short names.
 window.ArkismMemoryBubbles = (() => {
   "use strict";
   // Line styles = the legend bar (v4-overview.css .ov-map-e-*): 지지 solid, 관련 dotted, 충돌 red dashed, 대체 purple dotted.
   const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "지지" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "관련" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "충돌" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "대체" } };
   const RIM = 16, MANY = 150; // area rim past its outer dots · above MANY dots the overview shows topic-to-topic lines, not every line
   const PAD = { l: 18, r: 18, t: 84, b: 76 }; // top clears the tabs + group labels, bottom clears the legend bar
-  const SPRING = { len: 60, k: 0.5 };          // weak pull along a relation (same group only, attract only)
+  const GOLDEN = Math.PI * (3 - Math.sqrt(5)), ROOM = 0.22; // spiral step · free circle around a selected memory (share of the canvas)
+  const GLIDE = 420, ZMIN = 0.5, ZMAX = 4, LABEL_ZOOM = 1.6, LABEL_MAX = 60, LABEL_CHARS = 10;
 
   function create(opts) {
-    const { tabs, groupOf, tip, card, onSelect, onClear } = opts;
+    const { tabs, groupOf, tip, card, onSelect, onClear, onZoom } = opts;
     const doc = document, mk = (tag, cls, txt) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (txt != null) n.textContent = txt; return n; };
     const root = mk("div", "mm-bubbles"), canvas = mk("canvas", "mm-canvas"), ctx = canvas.getContext("2d");
     const cardsEl = mk("div", "mm-cards"), tabBar = mk("div", "mm-tabs"), pill = mk("span", "mm-pill"), live = mk("div", "mm-live"), tipEl = mk("div", "mm-tip"), labels = mk("div", "mm-labels");
-    canvas.tabIndex = 0; canvas.setAttribute("role", "application"); canvas.setAttribute("aria-label", "기억 버블 지도");
+    canvas.tabIndex = 0; canvas.setAttribute("role", "application"); canvas.setAttribute("aria-label", "기억 버블 지도 · 화살표로 고르고 +/−로 확대·축소, 끌어서 옮기기");
     live.setAttribute("aria-live", "polite"); tipEl.setAttribute("aria-hidden", "true");
     const tipT = mk("span", "mm-tip-t"), tipM = mk("span", "mm-tip-m"); tipT.setAttribute("data-no-i18n", ""); tipEl.append(tipT, tipM);
     live.setAttribute("data-no-i18n", "");
@@ -22,13 +27,12 @@ window.ArkismMemoryBubbles = (() => {
 
     const reducedMq = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
     let cards = [], cardKey = "", W = 0, H = 0, dpr = 1, items = [], byId = new Map(), links = [], edgesAll = [], groups = [], mode = tabs[0][0], idsKey = "";
-    let sel = null, kb = null, hover = null, showAll = true, zoom = 1, scale = 1, raf = 0, last = 0, calm = 0, visible = true, energy = 99, dead = false;
+    let sel = null, kb = null, hover = null, showAll = true, zoom = 1, panX = 0, panY = 0, scale = 1, raf = 0, glide = null, dead = false, edgeKey = "", nameBoxes = [];
     const btns = new Map();
     for (const [k, l] of tabs) { const b = mk("button", "mm-tab", l); b.type = "button"; b.addEventListener("click", () => setGroup(k)); btns.set(k, b); tabBar.append(b); }
 
     const tok = (n, d) => getComputedStyle(root).getPropertyValue(n).trim() || d;
     function placePill() { const b = btns.get(mode); if (!b || !b.offsetWidth) return; pill.style.left = `${b.offsetLeft}px`; pill.style.width = `${b.offsetWidth}px`; for (const [k, x] of btns) x.classList.toggle("on", k === mode); }
-    const seed = (s) => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return ((h >>> 0) % 1000) / 1000; };
 
     function regroup() {
       const m = new Map();
@@ -53,23 +57,39 @@ window.ArkismMemoryBubbles = (() => {
       for (const p of items) { p.r = dot(p) * scale; p.cr = (dot(p) + gap) * scale; }
       items.sort((a, b) => b.r - a.r);
     }
-    function place(p) { p.placed = true; p.x = (p.g?.cx ?? W / 2) + (seed(p.id) - 0.5) * 40; p.y = (p.g?.cy ?? H / 2) + (seed(p.id + "y") - 0.5) * 40; }
+    // Final places: a spiral per group (Vogel: radius c·√k, golden-angle turns; c from the dots' own room, so neighbours never touch).
+    // With a selection, it and its related memories take the fan places from aim(); the dots inside the free circle move out of it.
+    function arrange() {
+      const by = new Map(); for (const p of items) { const l = by.get(p.g); if (l) l.push(p); else by.set(p.g, [p]); }
+      for (const [g, list] of by) {
+        list.sort((a, b) => b.r - a.r || (a.id < b.id ? -1 : 1));
+        const c = list.reduce((a, p) => a + p.cr, 0) / list.length * 0.92;
+        list.forEach((p, k) => { const rad = c * Math.sqrt(k + 0.5), t = k * GOLDEN; p.x = g.cx + Math.cos(t) * rad; p.y = g.cy + Math.sin(t) * rad; });
+      }
+      const sp = sel && byId.get(sel), room = Math.min(W, H) * ROOM;
+      for (const p of items) {
+        if (p.tx != null) { p.x = p.tx; p.y = p.ty; continue; }
+        if (sp) { const dx = p.x - sp.tx, dy = p.y - sp.ty, d = Math.hypot(dx, dy) || 1; if (d < room) { const nd = room + (room - d) * 0.6; p.x = sp.tx + dx / d * nd; p.y = sp.ty + dy / d * nd; } }
+        const m = p.r + RIM; p.x = Math.max(PAD.l + m, Math.min(W - PAD.r - m, p.x)); p.y = Math.max(PAD.t + m, Math.min(H - PAD.b - m, p.y));
+      }
+    }
 
     function setItems(list) {
       const key = list.map((x) => `${x.id}:${x.v}:${x.reach}:${x.kind}`).join("|");
       const same = key === idsKey; idsKey = key;
       if (same) { draw(); return; }
-      items = list.map((x) => { const o = byId.get(x.id); return o ? Object.assign(o, x) : { ...x, x: 0, y: 0, vx: 0, vy: 0, r: 8, g: null, placed: false }; });
+      items = list.map((x) => { const o = byId.get(x.id); return o ? Object.assign(o, x) : { ...x, x: 0, y: 0, r: 8, g: null }; });
       byId = new Map(items.map((p) => [p.id, p]));
-      regroup(); if (W) for (const p of items) if (!p.placed) place(p);
+      regroup();
       linkUp(); aim(); run();
     }
-    function setEdges(list) { edgesAll = list; linkUp(); aim(); cardKey = "x"; run(); draw(); }
+    function setEdges(list) {
+      const key = list.map((e) => `${e.from}>${e.to}:${e.t}`).join("|"); if (key === edgeKey) { draw(); return; } // the map repaints often; same lines → no re-settle
+      edgeKey = key; edgesAll = list; linkUp(); aim(); cardKey = "x"; run();
+    }
     function linkUp() { links = edgesAll.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({ a: byId.get(e.from), b: byId.get(e.to), t: e.t })); }
-    function setGroup(k) { if (k === mode) return; mode = k; placePill(); regroup(); aim(); kick(30); run(); }
-    let kicks = 0; // a visual nudge, so the per-memory hash is jitter enough (no randomness needed)
-    function kick(a) { kicks++; for (const p of items) { p.vx += (seed(p.id + kicks) - 0.5) * 2 * a; p.vy += (seed(p.id + "v" + kicks) - 0.5) * 2 * a; } }
-    function setSelected(id) { const n = id && byId.has(id) ? id : null; if (n && n !== sel) announce(n); const moved = n !== sel; sel = n; if (moved) { aim(); kick(20); run(); } draw(); }
+    function setGroup(k) { if (k === mode) return; mode = k; placePill(); regroup(); aim(); run(); }
+    function setSelected(id) { const n = id && byId.has(id) ? id : null; if (n && n !== sel) { announce(n); panX = panY = 0; } const moved = n !== sel; sel = n; if (moved) { aim(); run(); } else draw(); } // a new selection sits in the middle of the view
     // Selected memory (Figma 기억 지도): it moves to the middle and its related memories fan out around it; the rest stay in their groups, dimmed.
     function aim() {
       for (const p of items) p.tx = p.ty = undefined;
@@ -81,49 +101,33 @@ window.ArkismMemoryBubbles = (() => {
       nb.forEach((p, i) => { const t = -Math.PI / 2 + (i + 0.5) / nb.length * Math.PI * 2; p.tx = cx + Math.cos(t) * rx; p.ty = cy + Math.sin(t) * ry; });
     }
     function setEdgeAll(v) { showAll = !!v; draw(); }
-    function setZoom(z) { zoom = z; draw(); }
+    // view only: screen = centre + (world − centre) · zoom + pan; (cx, cy) stays under the cursor while zooming
+    function setZoom(z, cx = W / 2, cy = H / 2) {
+      const nz = Math.min(ZMAX, Math.max(ZMIN, z)); if (!W) { zoom = nz; return; }
+      const wx = (cx - W / 2 - panX) / zoom, wy = (cy - H / 2 - panY) / zoom;
+      zoom = nz; panX = cx - W / 2 - wx * zoom; panY = cy - H / 2 - wy * zoom; onZoom?.(zoom); draw();
+    }
+    const zoomBy = (f, cx, cy) => setZoom(zoom * f, cx, cy);
+    function resetView() { zoom = 1; panX = panY = 0; onZoom?.(zoom); draw(); }
     function announce(id) { const t = tip(id); if (t) live.textContent = `${t.text} ${t.meta}`; }
 
-    function step(dt) {
-      const damp = Math.exp(-5 * dt);
-      for (const p of items) { const tx = p.tx ?? p.g.cx, ty = p.ty ?? p.g.cy; p.vx += (tx - p.x) * 5 * dt; p.vy += (ty - p.y) * 5 * dt; }
-      if (!sel) for (const l of links) { if (l.a.g !== l.b.g) continue; const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1; if (d <= SPRING.len) continue; const f = (d - SPRING.len) * SPRING.k * dt, fx = dx / d * f, fy = dy / d * f; l.a.vx += fx; l.a.vy += fy; l.b.vx -= fx; l.b.vy -= fy; }
-      const sp = sel && byId.get(sel);
-      if (sp) for (const p of items) { // memories not on the fan move out of the middle so the fan reads clearly
-        if (p === sp || p.tx != null) continue; const dx = p.x - sp.x, dy = p.y - sp.y, d = Math.hypot(dx, dy) || 1, room = Math.min(W, H) * 0.22;
-        if (d < room) { p.vx += dx / d * (room - d) * 8 * dt; p.vy += dy / d * (room - d) * 8 * dt; }
-      }
-      let e = 0;
-      for (const p of items) { p.vx *= damp; p.vy *= damp; p.x += p.vx * dt * 1.6; p.y += p.vy * dt * 1.6; e += p.vx * p.vx + p.vy * p.vy; }
-      energy = items.length ? e / items.length : 0;
-      // overlap pass on a grid (cell = widest pair), so each bubble only meets its neighbours: O(n), not all pairs
-      let maxR = 1; for (const p of items) maxR = Math.max(maxR, p.cr || p.r);
-      const cell = 2 * maxR + 2;
-      for (let it = 0; it < 3; it++) {
-        const grid = new Map(), key = (gx, gy) => gx * 65536 + gy;
-        items.forEach((p, i) => { const k = key(Math.floor(p.x / cell), Math.floor(p.y / cell)); (grid.get(k) || grid.set(k, []).get(k)).push(i); });
-        items.forEach((a, i) => {
-          const gx = Math.floor(a.x / cell), gy = Math.floor(a.y / cell);
-          for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) for (const j of grid.get(key(gx + ox, gy + oy)) || []) {
-            if (j <= i) continue;
-            const b = items[j]; let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); const min = (a.cr || a.r) + (b.cr || b.r); if (d >= min) continue;
-            if (!d) { dx = 1; dy = 0; d = 1; } const push = (min - d) / 2, nx = dx / d, ny = dy / d; a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
-          }
-        });
-      }
-      for (const p of items) { const m = p.r + RIM; p.x = Math.max(PAD.l + m, Math.min(W - PAD.r - m, p.x)); p.y = Math.max(PAD.t + m, Math.min(H - PAD.b - m, p.y)); }
+    // Compute the final places, then glide once from where the dots are drawn now.
+    function run() {
+      if (dead || !W || !items.length) { draw(); return; }
+      const shown = new Map(); for (const p of items) if (p.seen) shown.set(p, [p.x, p.y]);
+      glide = null;
+      arrange();
+      for (const p of items) p.seen = true;
+      if (reducedMq.matches || !shown.size) { draw(); return; }
+      glide = { from: shown, to: new Map(items.map((p) => [p, [p.x, p.y]])), t0: performance.now() };
+      if (!raf) raf = requestAnimationFrame(frame);
     }
     function frame(t) {
-      raf = 0; if (dead || !visible || !root.isConnected) return;
-      const dt = Math.min(0.033, (t - last) / 1000 || 0.016); last = t; step(dt); draw();
-      if (energy < 8) { if (++calm >= 30) return; } else calm = 0;
-      raf = requestAnimationFrame(frame);
-    }
-    function run() {
-      if (dead) return;
-      calm = 0;
-      if (reducedMq.matches) { for (let i = 0; i < 400; i++) step(1 / 60); draw(); return; }
-      if (!raf && visible && W) { last = performance.now(); raf = requestAnimationFrame(frame); }
+      raf = 0; if (dead || !glide) return;
+      const k = Math.min(1, (t - glide.t0) / GLIDE), e = 1 - (1 - k) ** 3;
+      for (const [p, [x, y]] of glide.to) { const f = glide.from.get(p); if (f) { p.x = f[0] + (x - f[0]) * e; p.y = f[1] + (y - f[1]) * e; } }
+      if (k >= 1) glide = null; else raf = requestAnimationFrame(frame);
+      draw();
     }
 
     // blend two colours (hex / rgb() / CSS names via a 1px canvas); cached per pair
@@ -131,12 +135,12 @@ window.ArkismMemoryBubbles = (() => {
     const rgb = (c) => { probe.fillStyle = "#000"; probe.fillStyle = c; const h = probe.fillStyle; if (h[0] === "#") return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); return h.match(/[\d.]+/g).slice(0, 3).map(Number); };
     const segDist = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(px - ax - t * dx, py - ay - t * dy); };
     function mix(a, b, t) { const k = `${a}|${b}|${t}`; let v = mixCache.get(k); if (!v) { const x = rgb(a), y = rgb(b); v = `rgb(${x.map((n, i) => Math.round(n + (y[i] - n) * t)).join(",")})`; mixCache.set(k, v); } return v; }
-    const scr = (x, y) => [W / 2 + (x - W / 2) * zoom, H / 2 + (y - H / 2) * zoom];
+    const scr = (x, y) => [W / 2 + (x - W / 2) * zoom + panX, H / 2 + (y - H / 2) * zoom + panY];
     function draw() {
       if (!W) return;
       const text = tok("--nc-text", "#eee");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-      ctx.translate(W / 2, H / 2); ctx.scale(zoom, zoom); ctx.translate(-W / 2, -H / 2);
+      ctx.translate(W / 2 + panX, H / 2 + panY); ctx.scale(zoom, zoom); ctx.translate(-W / 2, -H / 2);
       const foci = new Set([hover, kb, sel].filter(Boolean)), near = new Set(foci);
       for (const l of links) if (foci.has(l.a.id) || foci.has(l.b.id)) { near.add(l.a.id); near.add(l.b.id); }
       ctx.lineCap = "round";
@@ -198,11 +202,32 @@ window.ArkismMemoryBubbles = (() => {
       }
       for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 2.5), 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
+      drawNames(foci, near, bg, text);
       labels.hidden = !!sel; // group names would float over the fan
       for (const g of groups) { if (!g.rr) continue; const [x, y] = scr(g.rx, g.ry - g.rr); g.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`; }
       placeCards();
       const id = hover || kb, p = id && byId.get(id), t = p && tip(id);
       if (p && t) { const [sx, y] = scr(p.x, p.y - p.r); tipT.textContent = t.text; tipM.textContent = t.meta; const hw = tipEl.offsetWidth / 2 + 6, x = Math.max(hw, Math.min(W - hw, sx)); tipEl.style.transform = `translate(${x}px,${y - 8}px) translate(-50%,-100%)`; tipEl.classList.add("on"); } else tipEl.classList.remove("on");
+    }
+
+    // Zoomed in: short names beside the dots on screen, biggest first, capped and never overlapping; they are clickable (hit()).
+    function drawNames(foci, near, bg, text) {
+      nameBoxes = []; if (zoom < LABEL_ZOOM) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = `500 11px ${tok("--sans", "sans-serif")}`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      const muted = tok("--nc-muted", "#999"), taken = [];
+      const on = items.filter((p) => { if (foci.size && !near.has(p.id)) return false; const [x, y] = scr(p.x, p.y); return x > 0 && x < W - 40 && y > PAD.t - 40 && y < H - PAD.b; }).sort((a, b) => b.v - a.v);
+      for (const p of on) {
+        if (nameBoxes.length >= LABEL_MAX) break;
+        const full = tip(p.id)?.text || ""; if (!full) continue;
+        const t = [...full].length > LABEL_CHARS ? `${[...full].slice(0, LABEL_CHARS).join("")}…` : full;
+        const [x, y] = scr(p.x, p.y), w = ctx.measureText(t).width + 10, L = x + p.r * zoom + 3, T = y - 8, R = [L, T, w, 16];
+        if (L + w > W - 4 || taken.some((b) => L < b[0] + b[2] && L + w > b[0] && T < b[1] + b[3] && T + 16 > b[1])) continue;
+        let dot = false; for (const q of on) { if (q === p) continue; const [qx, qy] = scr(q.x, q.y), rr = q.r * zoom; if (qx + rr > L && qx - rr < L + w && qy + rr > T && qy - rr < T + 16) { dot = true; break; } } // a name never covers another dot
+        if (dot) continue;
+        taken.push(R); nameBoxes.push([...R, p.id]);
+        ctx.globalAlpha = 0.85; ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(L, T, w, 16, 5); ctx.fill();
+        ctx.globalAlpha = 1; ctx.fillStyle = p.id === sel || p.id === hover ? text : muted; ctx.fillText(t, L + 5, y + 0.5);
+      }
     }
 
     // Name cards (Figma 기억 지도): the selected memory gets a card under it, each related memory a small card beside it
@@ -238,18 +263,38 @@ window.ArkismMemoryBubbles = (() => {
     }
 
     function hit(ev) {
-      const r = canvas.getBoundingClientRect(), x = (ev.clientX - r.left - W / 2) / zoom + W / 2, y = (ev.clientY - r.top - H / 2) / zoom + H / 2;
+      const r = canvas.getBoundingClientRect(), sx = ev.clientX - r.left, sy = ev.clientY - r.top;
+      for (const [L, T, w, h, id] of nameBoxes) if (sx >= L && sx <= L + w && sy >= T && sy <= T + h) return id;
+      const x = (sx - W / 2 - panX) / zoom + W / 2, y = (sy - H / 2 - panY) / zoom + H / 2;
       let best = null, bd = 1e9;
-      for (const p of items) { const d = Math.hypot(p.x - x, p.y - y) - p.r; if (d <= 2 && d < bd) { bd = d; best = p.id; } }
+      for (const p of items) { const d = Math.hypot(p.x - x, p.y - y) - p.r; if (d <= 3 / zoom && d < bd) { bd = d; best = p.id; } }
       return best;
     }
-    canvas.addEventListener("pointermove", (ev) => { const id = hit(ev); if (id !== hover) { hover = id; if (id) announce(id); canvas.style.cursor = id ? "pointer" : ""; draw(); } });
+    // drag pans the view; two fingers pinch-zoom; a drag never counts as a click
+    const ptrs = new Map(); let drag = null, dragged = false, pinch = 0;
+    const local = (ev) => { const r = canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+    canvas.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return; ptrs.set(ev.pointerId, local(ev)); canvas.setPointerCapture?.(ev.pointerId); dragged = false;
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); drag = null; } else drag = { x: ev.clientX, y: ev.clientY, px: panX, py: panY };
+    });
+    canvas.addEventListener("pointermove", (ev) => {
+      if (ptrs.has(ev.pointerId)) ptrs.set(ev.pointerId, local(ev));
+      if (ptrs.size === 2 && pinch) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (d) { zoomBy(d / pinch, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pinch = d; dragged = true; } return; }
+      if (drag) { const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y; if (dragged || Math.hypot(dx, dy) > 4) { dragged = true; panX = drag.px + dx; panY = drag.py + dy; canvas.style.cursor = "grabbing"; draw(); return; } }
+      const id = hit(ev); if (id !== hover) { hover = id; if (id) announce(id); canvas.style.cursor = id ? "pointer" : "grab"; draw(); }
+    });
+    const up = (ev) => { ptrs.delete(ev.pointerId); if (ptrs.size < 2) pinch = 0; drag = null; canvas.style.cursor = hover ? "pointer" : "grab"; };
+    canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
     canvas.addEventListener("pointerleave", () => { if (hover) { hover = null; draw(); } });
-    canvas.addEventListener("click", (ev) => { const id = hit(ev); if (id) { kb = null; onSelect(id); } });
+    canvas.addEventListener("wheel", (ev) => { ev.preventDefault(); const [x, y] = local(ev); zoomBy(Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0015)), x, y); }, { passive: false }); // ctrlKey: a trackpad pinch
+    canvas.addEventListener("click", (ev) => { if (dragged) { dragged = false; return; } const id = hit(ev); if (id) { kb = null; onSelect(id); } });
     canvas.addEventListener("blur", () => { if (kb) { kb = null; draw(); } });
     canvas.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape") { kb = null; draw(); onClear(); return; }
       if (ev.key === "Enter") { const id = kb || sel; if (id) { ev.preventDefault(); onSelect(id); } return; }
+      if (ev.key === "+" || ev.key === "=") { ev.preventDefault(); zoomBy(1.25); return; }
+      if (ev.key === "-" || ev.key === "_") { ev.preventDefault(); zoomBy(0.8); return; }
+      if (ev.key === "0") { ev.preventDefault(); resetView(); return; }
       const dir = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }[ev.key]; if (!dir || !items.length) return;
       ev.preventDefault(); const cur = byId.get(kb || sel); let pick = null;
       if (!cur) pick = items[0]; else { let bs = 1e9; for (const p of items) { if (p === cur) continue; const dx = p.x - cur.x, dy = p.y - cur.y, along = dx * dir[0] + dy * dir[1], perp = Math.abs(dx * dir[1] - dy * dir[0]); if (along <= 0) continue; const s = along + perp * 2; if (s < bs) { bs = s; pick = p; } } }
@@ -258,18 +303,18 @@ window.ArkismMemoryBubbles = (() => {
 
     function resize() {
       const r = root.getBoundingClientRect(); if (!r.width || !r.height) return;
+      if (r.width === W && r.height === H) return;
       W = r.width; H = r.height; dpr = Math.min(2, window.devicePixelRatio || 1);
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); canvas.style.width = `${W}px`; canvas.style.height = `${H}px`;
-      layout(); for (const p of items) if (!p.placed) place(p); aim();
-      placePill(); run(); draw();
+      layout(); aim();
+      placePill(); run();
     }
-    const ro = window.ResizeObserver ? new ResizeObserver(resize) : null, io = window.IntersectionObserver ? new IntersectionObserver((es) => { visible = es[es.length - 1].isIntersecting; if (visible) run(); }) : null;
-    ro?.observe(root); io?.observe(root);
-    if (reducedMq.addEventListener) reducedMq.addEventListener("change", run);
-    // the map's window calls this on close, so no observer or listener keeps the old map alive
-    function destroy() { dead = true; if (raf) cancelAnimationFrame(raf); raf = 0; ro?.disconnect(); io?.disconnect(); reducedMq.removeEventListener?.("change", run); }
+    const ro = window.ResizeObserver ? new ResizeObserver(resize) : null;
+    ro?.observe(root);
+    // the map's window calls this on close, so no observer keeps the old map alive
+    function destroy() { dead = true; if (raf) cancelAnimationFrame(raf); raf = 0; ro?.disconnect(); }
 
-    return { el: root, setItems, setEdges, setSelected, setEdgeAll, setZoom, setGroup, destroy };
+    return { el: root, setItems, setEdges, setSelected, setEdgeAll, setZoom, zoomBy, resetView, setGroup, destroy };
   }
   return { create };
 })();

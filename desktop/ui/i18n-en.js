@@ -6131,3 +6131,4 @@ Object.assign(window.ArkismI18nEN.strings, { "새 카테고리 이름": "New cat
 Object.assign(window.ArkismI18nEN.strings, { "쓸 수 있는 것 추가": "Add what it can use", "찾는 것이 없어요.": "Nothing matches." });
 Object.assign(window.ArkismI18nEN.strings, { "새 창으로 열기": "Open in a new window" });
 Object.assign(window.ArkismI18nEN.patterns, { "이 창을 열지 못했어요 ({0}).": "Couldn't open this window ({0}).", "새 창으로 열지 못했어요 ({0}).": "Couldn't open it in a new window ({0})." });
+Object.assign(window.ArkismI18nEN.strings, { "많이 쓰인 순 ▾": "Most used first ▾", "기억 버블 지도 · 화살표로 고르고 +/−로 확대·축소, 끌어서 옮기기": "Memory bubble map · arrows to pick, +/− to zoom, drag to move" });
