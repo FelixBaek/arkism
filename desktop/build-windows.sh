@@ -100,3 +100,7 @@ OUT="$DIR/dist/Arkism-$VERSION-setup.exe"
 scp -q -o BatchMode=yes "$HOST:$REMOTE/Arkism-$VERSION-setup.exe" "$OUT" 2>/dev/null
 [[ -n "$LOCKED" ]] || scp -q -o BatchMode=yes "$HOST:$REMOTE/src-tauri/Cargo.lock" "$DIR/src-tauri/Cargo.lock" 2>/dev/null
 sha256sum "$OUT" | tee "$OUT.sha256"
+# What changed since the last tag, grouped (연구·앱·엔진·빌드·문서) in Korean and English, beside the installer.
+if prev="$(git -C "$DIR" describe --tags --abbrev=0 2>/dev/null)"; then
+  python3 "$DIR/../tools/release_notes.py" --range "$prev..HEAD" --title "Arkism $VERSION" > "$OUT.notes.md" && echo "== notes: $OUT.notes.md"
+fi

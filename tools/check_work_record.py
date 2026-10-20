@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Check the record a change leaves: why, what was verified, and the research link where one is needed.
 
-Commits (default origin/main..HEAD) need a "Why:" and a "Verified:" section. Commits that touch what a memory study
-shows people (memory display, explanation text, trust display, feedback and correction) also need "Task:" and
-"Research:" ("Research: none" is fine). A worker's completion report (--report) needs its task ID, checks, failures
+Commits (default origin/main..HEAD) carry the record twice, in English and in Korean: "Why:" and "Verified:", then
+"제목:" (Korean subject), "이유:" and "검증:". Commits that touch what a memory study shows people (memory display,
+explanation text, trust display, feedback and correction) also need "Task:" and "Research:" ("Research: none" is
+fine). A worker's completion report (--report) needs its task ID, checks, failures
 and commit state, and the commit it names must exist.
 
 This proves the record has its form, not that its content is true or that a change works.
@@ -19,8 +20,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # shortcut: commits authored before the rule began are exempt; replace with a baseline commit once main has one.
 RULE_START = "2026-10-21T03:40:00+09:00"
 RESEARCH_PATHS = re.compile(r"^desktop/ui/(memory-[\w-]+|inject|overview[\w-]*|reviews|intelligence)\.js$")
-SECTIONS = {"why": ("Why", "이유"), "task": ("Task", "작업"), "verified": ("Verified", "검증"),
-            "limits": ("Limits", "한계"), "research": ("Research", "연구")}
+SECTIONS = {"Why": "why", "Task": "task", "Verified": "verified", "Limits": "limits", "Research": "research",
+            "제목": "title_ko", "이유": "why_ko", "작업": "task", "검증": "verified_ko", "한계": "limits_ko",
+            "연구": "research"}
+REQUIRED = ("Why", "Verified", "제목", "이유", "검증")
 NOT_RUN = re.compile(r"not[ _]run|미실행|skipped|못 ?(했|함|돌)", re.I)
 PASSED = re.compile(r"\bpass(ed)?\b|통과|\bok\b", re.I)
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
@@ -36,8 +39,8 @@ def sections(message):
     """Split "Key: text" sections (English or Korean key) out of a commit message body."""
     out, key = {}, None
     for line in message.splitlines()[1:]:
-        hit = next(((k, line.split(":", 1)[1]) for k, names in SECTIONS.items()
-                    for name in names if re.match(rf"\s*{name}\s*:", line)), None)
+        hit = next(((k, line.split(":", 1)[1]) for name, k in SECTIONS.items()
+                    if re.match(rf"\s*{name}\s*:", line)), None)
         if hit:
             key = hit[0]
             out[key] = hit[1].strip()
@@ -59,14 +62,15 @@ def verified_problems(text, exists):
 
 def check_commit(sha, message, files, exists):
     found, problems = sections(message), []
-    for key in ("why", "verified"):
-        if not found.get(key):
-            problems.append(f"missing {SECTIONS[key][0]}:")
+    for name in REQUIRED:
+        if not found.get(SECTIONS[name]):
+            problems.append(f"missing {name}:")
     if any(RESEARCH_PATHS.match(f) for f in files):
-        for key in ("task", "research"):
-            if not found.get(key):
-                problems.append(f"touches a study-facing screen; missing {SECTIONS[key][0]}: (none is fine)")
-    problems += verified_problems(found.get("verified", ""), exists)
+        for name in ("Task", "Research"):
+            if not found.get(SECTIONS[name]):
+                problems.append(f"touches a study-facing screen; missing {name}: (none is fine)")
+    for key in ("verified", "verified_ko"):
+        problems += verified_problems(found.get(key, ""), exists)
     return [f"{sha[:9]} {p}" for p in problems]
 
 

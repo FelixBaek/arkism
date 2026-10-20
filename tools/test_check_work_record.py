@@ -7,6 +7,10 @@ GOOD = """Automation: steps in plain words
 Why: users wrote variables by hand and got lost.
 Verified: node --test desktop/ui/schedule-words.test.js passed; screenshot shots/auto.png
 Limits: channel select not screenshotted (not run).
+
+제목: 자동화 단계를 평소 말로 적기
+이유: 사용자가 변수를 직접 적다가 헤맸다.
+검증: node --test desktop/ui/schedule-words.test.js 통과
 """
 
 
@@ -21,7 +25,13 @@ class CommitRecordTest(unittest.TestCase):
 
     def test_missing_why_and_verified_are_named(self):
         problems = w.check_commit("b" * 40, "Fix popup\n\nMoved the button.\n", ["desktop/ui/crew.js"], exists())
-        self.assertEqual([p.split(" ", 1)[1] for p in problems], ["missing Why:", "missing Verified:"])
+        self.assertEqual([p.split(" ", 1)[1] for p in problems],
+                         ["missing Why:", "missing Verified:", "missing 제목:", "missing 이유:", "missing 검증:"])
+
+    def test_english_only_is_not_enough(self):
+        english = GOOD.split("\n\n제목:")[0]
+        problems = w.check_commit("f" * 40, english, [], exists("desktop/ui/schedule-words.test.js", "shots/auto.png"))
+        self.assertEqual([p.split(" ", 1)[1] for p in problems], ["missing 제목:", "missing 이유:", "missing 검증:"])
 
     def test_study_facing_screens_need_task_and_research(self):
         problems = w.check_commit("c" * 40, GOOD, ["desktop/ui/memory-time.js"],
@@ -32,14 +42,15 @@ class CommitRecordTest(unittest.TestCase):
                                         exists("desktop/ui/schedule-words.test.js", "shots/auto.png")), [])
 
     def test_not_run_called_passed_and_missing_evidence_are_caught(self):
-        msg = "X\n\nWhy: y\nVerified: go test ./... not run, passed\nsee evaluations/run-9/result.json\n"
+        msg = "X\n\nWhy: y\nVerified: see evaluations/run-9/result.json\n\n제목: x\n이유: y\n검증: go test 미실행, 통과\n"
         problems = w.check_commit("d" * 40, msg, [], exists())
         self.assertTrue(any("not run is also called passed" in p for p in problems))
         self.assertTrue(any("evaluations/run-9/result.json" in p for p in problems))
 
-    def test_korean_keys_count(self):
-        msg = "X\n\n이유: 버튼이 안 눌림\n검증: 화면 확인 통과\n"
-        self.assertEqual(w.check_commit("e" * 40, msg, [], exists()), [])
+    def test_korean_task_and_research_keys_count(self):
+        ok = GOOD + "작업: PSY-02\n연구: 해당 없음\n"
+        self.assertEqual(w.check_commit("e" * 40, ok, ["desktop/ui/memory-time.js"],
+                                        exists("desktop/ui/schedule-words.test.js", "shots/auto.png")), [])
 
 
 class ReportTest(unittest.TestCase):
