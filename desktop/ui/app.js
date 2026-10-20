@@ -4791,7 +4791,7 @@
   const overview = window.ArkismOverview({ state, $, el, button, request, query, ago, go, render }); // MEMORY › 개요 (overview.js)
   Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request, query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
-    skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], openRecord: openIntelligenceRecord,
+    skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel, sshErrorText, useLocal, lock, reconnect });
   const homeChecks = window.ArkismHomeChecks({ state, request, query, go, ago, render }); // 홈 › 기억 처리 멈춤 · 지식 줄 (home-checks.js)
   home.wireSearch();
