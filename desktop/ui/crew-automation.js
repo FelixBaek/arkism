@@ -8,6 +8,41 @@ window.ArkismAutomation = (h) => {
   const MOMENTS = [["start", "시작"], ["step", "단계마다"], ["approval", "확인 필요"], ["fail", "실패"], ["end", "끝"]];
   const DEFAULT_MOMENTS = ["start", "approval", "fail", "end"];
   const DEFAULT_CRON = "0 9 * * 1-5";
+  // 일정 in plain words → cron, for the common Korean shapes ("평일 아침 9시", "매주 월·수 오후 3시 반", "매일 18:30").
+  // null when it can't tell; the caller then asks the AI.
+  function whenToCron(text) {
+    const t = String(text || "").replace(/\s+/g, " ").trim();
+    if (!t) return null;
+    const DAYS = "일월화수목금토";
+    let dow = null;
+    if (/평일|주중/.test(t)) dow = "1-5";
+    else if (/주말/.test(t)) dow = "0,6";
+    else if (/매일|날마다|하루/.test(t)) dow = "*";
+    else {
+      const found = [...new Set([...t.matchAll(/([일월화수목금토])(?:요일)?(?=[\s,·.요]|$)/g)].map((m) => DAYS.indexOf(m[1])))];
+      if (found.length) dow = found.sort((a, b) => a - b).join(",");
+    }
+    let hour = null, min = 0;
+    const hm = t.match(/(\d{1,2})\s*[:시]\s*(\d{1,2})?\s*(분|반)?/);
+    if (hm) { hour = Number(hm[1]); min = hm[3] === "반" || /반/.test(t.slice(hm.index, hm.index + hm[0].length + 1)) && !hm[2] ? 30 : Number(hm[2] || 0); }
+    else if (/아침/.test(t)) hour = 9; else if (/점심/.test(t)) hour = 12; else if (/저녁/.test(t)) hour = 18; else if (/밤/.test(t)) hour = 21;
+    if (hour == null || hour > 23 || min > 59) return null;
+    if (/오후|저녁|밤|pm/i.test(t) && hour < 12) hour += 12;
+    if (/오전|새벽|am/i.test(t) && hour === 12) hour = 0;
+    return `${min} ${hour} * * ${dow ?? "*"}`;
+  }
+  // "m h * * dow" with plain numbers is what the picker edits; anything else stays a raw cron line.
+  function simpleCron(cron) {
+    const f = String(cron || "").trim().split(/\s+/);
+    if (f.length !== 5 || !/^\d+$/.test(f[0]) || !/^\d+$/.test(f[1]) || f[2] !== "*" || f[3] !== "*") return null;
+    const days = f[4] === "*" ? [0, 1, 2, 3, 4, 5, 6] : f[4] === "1-5" ? [1, 2, 3, 4, 5] : /^[0-7](,[0-7])*$/.test(f[4]) ? f[4].split(",").map((x) => Number(x) % 7) : null;
+    return days ? { min: Number(f[0]), hour: Number(f[1]), days } : null;
+  }
+  const cronOf = ({ min, hour, days }) => {
+    const ds = [...new Set(days)].sort((a, b) => a - b);
+    const dow = ds.length === 7 || !ds.length ? "*" : ds.join(",") === "1,2,3,4,5" ? "1-5" : ds.join(",");
+    return `${min} ${hour} * * ${dow}`;
+  };
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   const flat = (g) => h.levels(g).flat();
   const goalKey = (n) => (n.type === "ai_once" ? "prompt" : "goal");
@@ -459,11 +494,52 @@ window.ArkismAutomation = (h) => {
         const paintCron = () => {
           cronWrap.replaceChildren();
           if (trig() !== "schedule") { cronWrap.append(creating ? "요일·시간 고르기 · 예: 월·수·금 09:00" : "정해 둔 시간에 시작해요"); return; }
-          const text = el("span", "");
           const n = h.nextRun(d.trigger.cron);
-          inlineText(text, () => d.trigger.cron, (v) => { if (!h.parseCron(v)) { notice("언제 칸의 형식을 확인해 주세요. 분 시 일 월 요일 (예: 0 9 * * 1-5)"); return; } d.trigger.cron = v; touch(); draw(); }, { maxLength: 64, cls: "mono" });
-          const label = el("span", "auto-dim", `${h.cronText(d.trigger.cron)}${d.enabled && n ? ` · 다음 실행 ${h.when(n)}` : ""} · `);
-          cronWrap.append(label, text);
+          const put = (cron) => { d.trigger.cron = cron; touch(); draw(); };
+          // 평소 말로: simple shapes are read here, the rest goes to the AI once.
+          const say = h.input("", { maxLength: 80, placeholder: "평소 말로 적어요 · 예: 평일 아침 9시, 매주 월·목 오후 3시 반", cls: "auto-sched-say" });
+          say.addEventListener("keydown", async (e) => {
+            if (e.isComposing || e.key !== "Enter" || !say.value.trim()) return;
+            e.preventDefault();
+            const local = whenToCron(say.value);
+            if (local && h.parseCron(local)) { put(local); return; }
+            say.disabled = true;
+            try {
+              const a = await kit.assist("json", `Turn this into a 5-field cron "m h dom mon dow" in local time (1-5 = weekdays). Text: ${say.value.trim()}\nAnswer with ONE JSON object: {"cron": "..."} or {"cron": null} when it is not a time.`, { persona: { crew: { instructions: "You set when an automation runs. Reply with the JSON object only." } } });
+              const j = a.status === "done" ? kit.parseJSON(a.output || "") : null;
+              if (j?.cron && h.parseCron(j.cron)) put(j.cron); else notice("언제인지 알아듣지 못했어요. 요일과 시간을 넣어 다시 적어 주세요.");
+            } catch (err) { notice(`AI가 답하지 못했어요 (${err?.message || err}).`); } finally { say.disabled = false; }
+          });
+          const sc = simpleCron(d.trigger.cron);
+          const pick = el("div", "auto-sched-pick");
+          if (sc) {
+            const days = el("div", "auto-days");
+            ["일", "월", "화", "수", "목", "금", "토"].forEach((label, i) => {
+              const b = pill(label, () => { const next = sc.days.includes(i) ? sc.days.filter((x) => x !== i) : [...sc.days, i]; if (next.length) put(cronOf({ ...sc, days: next })); });
+              b.classList.add("toggle"); b.classList.toggle("on", sc.days.includes(i)); b.setAttribute("aria-pressed", String(sc.days.includes(i)));
+              days.append(b);
+            });
+            const pm = sc.hour >= 12;
+            const ampm = el("div", "auto-ampm");
+            [["오전", false], ["오후", true]].forEach(([label, isPm]) => {
+              const b = pill(label, () => { if (pm !== isPm) put(cronOf({ ...sc, hour: (sc.hour + 12) % 24 })); });
+              b.classList.add("toggle"); b.classList.toggle("on", pm === isPm); b.setAttribute("aria-pressed", String(pm === isPm));
+              ampm.append(b);
+            });
+            const num = (v, max, label, fn) => { const i = h.input(String(v).padStart(2, "0"), { maxLength: 2, cls: "auto-num" }); i.inputMode = "numeric"; i.setAttribute("aria-label", label); i.addEventListener("change", () => { const x = Number(i.value); if (Number.isInteger(x) && x >= 0 && x <= max) fn(x); else i.value = String(v).padStart(2, "0"); }); return i; };
+            const h12 = sc.hour % 12 || 12;
+            const hh = num(h12, 12, "시", (x) => { if (x < 1) return draw(); put(cronOf({ ...sc, hour: (x % 12) + (pm ? 12 : 0) })); });
+            const mm = num(sc.min, 59, "분", (x) => put(cronOf({ ...sc, min: x })));
+            const time = el("div", "auto-time");
+            time.append(hh, el("span", "auto-dim", ":"), mm);
+            pick.append(days, ampm, time);
+          } else {
+            const raw = el("span", "");
+            inlineText(raw, () => d.trigger.cron, (v) => { if (!h.parseCron(v)) { notice("언제 칸의 형식을 확인해 주세요. 분 시 일 월 요일 (예: 0 9 * * 1-5)"); return; } put(v); }, { maxLength: 64, cls: "mono" });
+            pick.append(raw);
+          }
+          const label = el("span", "auto-dim auto-sched-next", `${h.cronText(d.trigger.cron)}${d.enabled && n ? ` · 다음 실행 ${h.when(n)}` : ""}`);
+          cronWrap.append(say, pick, label);
         };
         paintCron();
         list.append(valueRow("일정", cronWrap, h.switchEl(on("schedule"), "일정 켜기", async (v) => { if (v && trig() === "webhook" && d.enabled && !await ask("웹훅을 끄고 일정으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.")) return; setTrigger("schedule", v); draw(); })));
@@ -1077,5 +1153,5 @@ window.ArkismAutomation = (h) => {
     return pop;
   }
 
-  return { open: (rec, tab) => open(rec, tab), create: (ai) => open(null, "overview", !!ai), diffLines };
+  return { open: (rec, tab) => open(rec, tab), create: (ai) => open(null, "overview", !!ai), diffLines, whenToCron };
 };

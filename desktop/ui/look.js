@@ -7,7 +7,7 @@ window.ArkismLook = (() => {
   const LANGS = ["ko", "en"];
   // 저장한 언어가 없으면 시스템 언어를 따른다: ko로 시작하면 한국어, 아니면 영어.
   const systemLang = () => (String(navigator.language || "ko").toLowerCase().startsWith("ko") ? "ko" : "en");
-  const FONTS = { sm: 0.92, md: 1, lg: 1.1, xl: 1.2 };
+  const FONTS = { sm: 1, md: 1.1, lg: 1.2, xl: 1.32 }; // md was 1: 13px body read too small (10-21)
   const ZOOM_MIN = 0.7, ZOOM_MAX = 1.6, ZOOM_STEP = 0.1;
   const clampZoom = (z) => Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 100) / 100;
   function read() {

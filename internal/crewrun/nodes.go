@@ -233,6 +233,21 @@ func render(tpl string, input any) string {
 	})
 }
 
+// taskText fills a step's goal: written in plain words with no {{input}}, the previous step's result is added after it,
+// so nobody has to place variables by hand.
+func taskText(tpl string, input any) string {
+	if strings.TrimSpace(tpl) == "" {
+		return render("{{input}}", input)
+	}
+	if tmplRe.MatchString(tpl) {
+		return render(tpl, input)
+	}
+	if prev := strings.TrimSpace(textOf(input)); prev != "" {
+		return tpl + "\n\nInput from the previous step:\n" + prev
+	}
+	return tpl
+}
+
 func durationOr(s string, def time.Duration) time.Duration {
 	if d, err := time.ParseDuration(s); err == nil && d > 0 {
 		return d
@@ -457,9 +472,9 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 	s := aiSpec{Model: cmp.Or(c["model"], x.item.Crew.Model, e.DefaultModel), Effort: cmp.Or(c["effort"], "medium"), Instructions: instr,
 		CWD: expandHome(render(c["cwd"], input)), Access: c["access"], Once: n.Type == "ai_once", Skills: skillList(c["skills"])}
 	limit := durationOr(c["timeout"], 20*time.Minute)
-	s.Task = render(cmp.Or(c["goal"], "{{input}}"), input)
+	s.Task = taskText(c["goal"], input)
 	if s.Once {
-		limit, s.Task = durationOr(c["timeout"], 5*time.Minute), render(cmp.Or(c["prompt"], "{{input}}"), input)
+		limit, s.Task = durationOr(c["timeout"], 5*time.Minute), taskText(c["prompt"], input)
 	}
 	retries := intIn(c["retries"], 0, 3, 0)
 	ports, def := x.ports(n.ID), ""
