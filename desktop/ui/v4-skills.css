@@ -169,7 +169,6 @@
 .ss-item { cursor: pointer; }
 .ss-item input[type="checkbox"] { flex: none; width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: var(--nc-action); }
 .ss-cost { flex: none; font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-muted); white-space: nowrap; }
-.ss-glass { font-size: 14px; color: var(--nc-quiet); }
 .ss-pick { flex: none; padding: 0 8px; color: var(--nc-text); font: 500 13px/1.5 var(--sans); white-space: nowrap; }
 .ss-pick.on { color: var(--nc-accent); }
 .ss-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
@@ -262,6 +261,7 @@
 .v4u-tools .v4u-tr { grid-template-columns: minmax(0, 1.4fr) minmax(0, .8fr) minmax(60px, 1fr) 60px 50px; }
 .v4u-tr.th { border-top: 0; background: var(--nc-raised); font-size: 12px; color: var(--nc-quiet); }
 .v4u-tr.th span:not(:first-child) { text-align: right; }
+.v4u-tools .v4u-tr.th span:nth-child(2) { text-align: left; } /* 서버 names sit left under it */
 .v4u-mono { font: 400 12px/1.5 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v4u-mix { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 20px; align-items: start; }
 .v4u-share { display: flex; flex-direction: column; gap: 12px; }

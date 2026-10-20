@@ -3563,8 +3563,7 @@
       table.replaceChildren(el("div", "empty", "MCP 목록을 불러오지 못했어요. 서버의 arkism-agents.timer가 돌고 있는지 확인해 주세요."));
       return;
     }
-    const seg = segment([["plugin", "플러그인", t.plugins.length], ["mcp", "MCP 서버", t.servers.length]], state.toolTab, (k) => { state.toolTab = k; state.selected = null; render(); });
-    headExtras({ count: `${(plugin ? t.plugins : t.servers).length}개`, aside: [seg] });
+    headExtras({ count: `${(plugin ? t.plugins : t.servers).length}개` }); // 플러그인 · MCP are area tabs already
     const age = t.collected_at ? Date.now() - new Date(t.collected_at).getTime() : Infinity;
     if (age > 5 * 60000) notice("서버에서 최근 5분 동안 목록이 올라오지 않았어요. arkism-agents.timer를 확인해 주세요.");
     if (plugin) $("#stats").replaceChildren();
@@ -4752,7 +4751,7 @@
       openMemory: (id) => { state.menu = "memory"; go("memories", "active"); state.selected = id; renderDetail(); } }),
     skillAgents: (name) => { const by = {}; for (const sk of state.data.skills.filter((x) => x.name === name)) for (const [k, n] of Object.entries(state.data.skillUse?.get(sk.id)?.by_runtime || {})) by[k] = (by[k] || 0) + n; return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k]) => k); } });
   const gallery = window.ArkismGalleryDelete({ state, $, el, button, icon, raw, render, request, query, notice, confirmPop, shortDate });
-  const sessions = window.ArkismSessions({ state, $, el, button, segment, render, request, query, agentLogo, AGENTS, ago, detailShell, usage, go });
+  const sessions = window.ArkismSessions({ state, $, el, button, icon, segment, render, request, query, agentLogo, AGENTS, ago, detailShell, usage, go });
   const crew = window.ArkismCrew({ state, $, el, icon, catIcon, button, segment, go, render, request, query, notice, detailShell, section, facts, callout, copyButton, markSelected, openDetail, agentLogo, ago, models,
     allowed, skillCategory: (sk) => pages.categoryOf(sk)?.name || "", skillCategories: () => pages.prefs.categories.map((c) => ({ name: c.name, icon: c.icon })),
     toolServers: () => state.data.tools?.servers || [] });
@@ -4787,7 +4786,7 @@
   const codegraph = window.ArkismCodeGraph ? window.ArkismCodeGraph({ state, el, raw, button, request, query, notice, ago }) : null; // TOOLS › 저장소 › 코드 그래프 (codegraph.js)
   const git = window.ArkismGit({ state, $, el, button, icon, tauri, ago, notice, go, headExtras, codegraph,
     openReview: (key) => { go("reviews"); state.selected = key; markSelected(); reviews.detail(); openDetail(); } });
-  const knowledge = window.ArkismKnowledge({ state, $, el, button, render, request, query, ago, detailShell, headExtras, confirmPop }); // TOOLS › 지식 (knowledge.js)
+  const knowledge = window.ArkismKnowledge({ state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop }); // TOOLS › 지식 (knowledge.js)
   const overview = window.ArkismOverview({ state, $, el, button, request, query, ago, go, render }); // MEMORY › 개요 (overview.js)
   Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request, query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,

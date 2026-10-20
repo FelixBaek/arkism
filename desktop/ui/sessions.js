@@ -5,7 +5,7 @@
 // removes the selected sessions and their archived transcripts, never the agent's own files.
 window.ArkismSessions = (ctx) => {
   "use strict";
-  const { state, $, el, button, render, request, query, detailShell, usage } = ctx;
+  const { state, $, el, button, icon, render, request, query, detailShell, usage } = ctx;
   const { num, usd, dur, logo, agentName, bars } = usage.fmt;
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
   const S = { range: "7d", source: "", q: "", sort: "recent", selecting: false, doc: null, state: "idle", error: "", selected: "", picked: new Set(), busy: false, notice: "", tx: null };
@@ -215,7 +215,7 @@ window.ArkismSessions = (ctx) => {
     const box = el("label", "v4s-search ss-search");
     const search = el("input"); search.type = "search"; search.placeholder = "제목 · 프로젝트 · 세션 ID"; search.value = S.q; search.setAttribute("aria-label", "세션 검색");
     search.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(() => { S.q = search.value.trim(); void load(); }, 300); });
-    box.append(el("span", "ss-glass", "⌕"), search);
+    box.append(icon("magnifying-glass"), search);
     const sel = (label, opts, cur, pick) => { const s = el("select", "v4s-select"); s.setAttribute("aria-label", label); for (const [k, l] of opts) { const o = el("option", "", l); o.value = k; o.selected = k === cur; s.append(o); } s.addEventListener("change", () => pick(s.value)); return s; };
     const pickMode = el("button", `link-btn ss-pick${S.selecting ? " on" : ""}`, S.selecting ? "선택 끝내기" : "선택해서 지우기"); pickMode.type = "button";
     pickMode.addEventListener("click", () => { S.selecting = !S.selecting; if (!S.selecting) S.picked.clear(); render(false); });
