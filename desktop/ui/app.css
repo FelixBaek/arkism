@@ -1009,6 +1009,13 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .combo-opt.at, .combo-opt:hover { background: var(--nc-subtle); }
 .combo-opt.on { color: var(--nc-accent); }
 .combo-opt.off { opacity: .45; cursor: default; }
+.combo-head { padding: 8px 10px 4px; color: var(--nc-quiet); font: 600 calc(11px * var(--fs, 1))/1.3 var(--sans); letter-spacing: .02em; }
+.combo-opt + .combo-head { margin-top: 4px; border-top: 1px solid var(--nc-line); }
+.combo-tabs { position: sticky; top: -4px; z-index: 1; display: flex; flex-wrap: wrap; gap: 4px; margin: -4px -4px 4px; padding: 6px; border-bottom: 1px solid var(--nc-line); background: var(--nc-raised); }
+.combo-tab { height: 24px; padding: 0 10px; border: 0; border-radius: 999px; background: none; color: var(--nc-muted); font: 500 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.combo-tab:hover { color: var(--nc-text); }
+.combo-tab.on { background: var(--nc-subtle); color: var(--nc-text); }
+.combo-none { padding: 8px 10px; color: var(--nc-quiet); font: 400 calc(12.5px * var(--fs, 1))/1.4 var(--sans); }
 /* 웹 티 지우기: thin app scrollbars, no number spinners, app-coloured checks; textareas grow with their text instead of a resize grip */
 * { scrollbar-width: thin; scrollbar-color: var(--nc-line) transparent; }
 input[type="number"] { appearance: textfield; -moz-appearance: textfield; }

@@ -5938,3 +5938,4 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "동시에 · {0}곳": "At once · {0} nodes",
   "이 갈래는 {0}곳으로 동시에 가요: {1}": "This branch goes to {0} nodes at once: {1}"
 });
+Object.assign(window.ArkismI18nEN.strings, { "+ 기억 추가": "+ Add memory", "기억·스킬·도구·지식에서 찾기": "Find in memories, skills, tools, knowledge" });

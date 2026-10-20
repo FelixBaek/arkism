@@ -15,8 +15,24 @@
     if (ctl.tagName === "SELECT") return [...ctl.options].filter((o) => !o.hidden).map((o) => ({ value: o.value, label: o.label || o.textContent, disabled: o.disabled, on: o.selected }));
     const dl = document.getElementById(ctl.dataset.comboList || "");
     const q = ctl.dataset.comboTyped === "1" ? ctl.value.trim().toLowerCase() : "";
-    return [...(dl?.options || [])].map((o) => ({ value: o.value, hint: o.label && o.label !== o.value ? o.label : "", on: o.value === ctl.value }))
-      .filter((o) => !q || o.value.toLowerCase().includes(q) || o.hint.toLowerCase().includes(q));
+    const tab = open?.ctl === ctl ? open.tab : "";
+    // data-group on options: a header row before each run of the same group (the options come in group order).
+    const out = [];
+    let group = "";
+    for (const o of dl?.options || []) {
+      const it = { value: o.value, hint: o.label && o.label !== o.value ? o.label : "", on: o.value === ctl.value, key: o.dataset.key || "", group: o.dataset.group || "" };
+      if (tab && o.dataset.tab !== tab || q && !it.value.toLowerCase().includes(q) && !it.hint.toLowerCase().includes(q)) continue;
+      if (it.group && it.group !== group) out.push({ head: it.group, disabled: true });
+      group = it.group;
+      out.push(it);
+    }
+    return out;
+  }
+  // data-tabs on the datalist ("all" tab's label): tabs over the list, one per distinct option data-tab, in order.
+  function tabsOf(ctl) {
+    const dl = ctl.tagName === "SELECT" ? null : document.getElementById(ctl.dataset.comboList || "");
+    if (!dl?.dataset.tabs) return null;
+    return [["", dl.dataset.tabs], ...[...new Set([...dl.options].map((o) => o.dataset.tab).filter(Boolean))].map((t) => [t, t])];
   }
   function place() {
     const r = open.ctl.getBoundingClientRect();
@@ -28,7 +44,23 @@
     pop.style.top = up ? `${Math.round(r.top - 4 - Math.min(pop.scrollHeight, 320, above))}px` : `${Math.round(r.bottom + 4)}px`;
   }
   function paint() {
-    pop.replaceChildren(...open.items.map((o, i) => {
+    const bar = open.tabs && document.createElement("div");
+    if (bar) {
+      bar.className = "combo-tabs";
+      bar.setAttribute("role", "tablist");
+      for (const [t, label] of open.tabs) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = `combo-tab${t === open.tab ? " on" : ""}`;
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-selected", String(t === open.tab));
+        b.textContent = label;
+        b.addEventListener("pointerdown", (e) => { e.preventDefault(); open.tab = t; open.items = optionsOf(open.ctl); open.at = -1; paint(); place(); });
+        bar.append(b);
+      }
+    }
+    const rows = open.items.map((o, i) => {
+      if (o.head) { const h = document.createElement("div"); h.className = "combo-head"; h.setAttribute("role", "presentation"); h.textContent = o.head; return h; }
       const b = document.createElement("div");
       b.className = `combo-opt${o.on ? " on" : ""}${i === open.at ? " at" : ""}${o.disabled ? " off" : ""}`;
       b.id = `combo-opt-${i}`;
@@ -40,19 +72,26 @@
       if (o.hint) { const h = document.createElement("small"); h.textContent = o.hint; b.append(h); }
       b.addEventListener("pointerdown", (e) => { e.preventDefault(); if (!o.disabled) pick(o); });
       return b;
-    }));
+    });
+    if (!rows.length) { const none = document.createElement("div"); none.className = "combo-none"; none.textContent = open.ctl.dataset.comboEmpty || "—"; rows.push(none); }
+    pop.replaceChildren(...(bar ? [bar] : []), ...rows);
     open.ctl.setAttribute("aria-activedescendant", open.at >= 0 ? `combo-opt-${open.at}` : "");
     pop.querySelector(".at")?.scrollIntoView({ block: "nearest" });
   }
   function show(ctl) {
-    const items = optionsOf(ctl);
-    if (!items.length) { hide(); return; }
+    const keep = open?.ctl === ctl ? open.tab : "";
     if (open?.ctl !== ctl) hide();
-    open = { ctl, items, at: items.findIndex((o) => o.on) };
+    const tabs = tabsOf(ctl);
+    open = { ctl, tabs, tab: keep, items: [], at: -1 };
+    const items = open.items = optionsOf(ctl);
+    if (!items.length && !tabs && !ctl.dataset.comboEmpty) { hide(); return; }
+    open.at = items.findIndex((o) => o.on);
     ctl.setAttribute("aria-expanded", "true");
     pop.id ||= `combo-pop-${++uid}`;
     ctl.setAttribute("aria-controls", pop.id);
-    if (!pop.isConnected) document.body.append(pop);
+    // Inside the open modal window, or the page under it is inert and a wheel over the list scrolls (and closes) the window.
+    const host = ctl.closest("dialog[open]") || document.body;
+    if (pop.parentNode !== host) host.append(pop);
     if (pop.matches(":popover-open")) pop.hidePopover(); // re-show so it sits above a window opened since
     pop.showPopover();
     paint();
@@ -68,8 +107,9 @@
   function pick(o) {
     const ctl = open.ctl;
     hide();
-    if (ctl.value === o.value) return;
+    if (ctl.value === o.value && !o.key) return;
     ctl.value = o.value;
+    if (o.key) ctl.dataset.comboKey = o.key;
     if (ctl.tagName !== "SELECT") ctl.dataset.comboTyped = "0";
     ctl.dispatchEvent(new Event("input", { bubbles: true }));
     ctl.dispatchEvent(new Event("change", { bubbles: true }));
@@ -90,7 +130,7 @@
   document.addEventListener("focusin", (e) => { adopt(e.target); }, true);
   document.addEventListener("input", (e) => {
     const t = e.target;
-    if (t instanceof HTMLInputElement && t.dataset.comboList && e.isTrusted) { t.dataset.comboTyped = "1"; show(t); }
+    if (t instanceof HTMLInputElement && t.dataset.comboList && e.isTrusted) { t.dataset.comboTyped = "1"; delete t.dataset.comboKey; show(t); }
   }, true);
   document.addEventListener("keydown", (e) => {
     const t = e.target;
@@ -101,7 +141,7 @@
       return;
     }
     const n = open.items.length;
-    const step = (d) => { let i = open.at; for (let k = 0; k < n; k++) { i = (i + d + n) % n; if (!open.items[i].disabled) break; } open.at = i; paint(); };
+    const step = (d) => { if (!n) return; let i = open.at; for (let k = 0; k < n; k++) { i = (i + d + n) % n; if (!open.items[i].disabled) break; } open.at = i; paint(); };
     if (e.key === "ArrowDown") { e.preventDefault(); step(1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); step(-1); }
     else if (e.key === "Enter" && open.at >= 0) { e.preventDefault(); pick(open.items[open.at]); }
@@ -110,6 +150,7 @@
   }, true);
   document.addEventListener("focusout", (e) => { if (open?.ctl === e.target) setTimeout(() => { if (open && document.activeElement !== open.ctl) hide(); }, 0); }, true);
   addEventListener("resize", hide);
+  window.ArkismCombo = { open: (ctl) => { if (adopt(ctl)) { ctl.dataset.comboTyped = "0"; show(ctl); } } }; // a button that opens a list input's list
   document.addEventListener("scroll", (e) => { if (open && !pop.contains(e.target)) hide(); }, true);
   document.addEventListener("close", hide, true); // a window closing takes its list with it
 })();

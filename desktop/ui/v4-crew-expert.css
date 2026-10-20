@@ -38,17 +38,6 @@
 .ex-pop .crew-popup-tab.on { background: var(--nc-raised); color: var(--nc-accent); }
 .ex-pop .crew-popup-tab:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 1px; }
 .ex-pop .crew-popup-body { padding: 4px 28px 24px; max-height: calc(100vh - 240px); }
-.ex-callhead { display: none; }
-.ex-pop[data-tab="form"] .crew-popup-head { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "who side" "tabs call"; }
-.ex-pop[data-tab="form"] .crew-popup-tabs { justify-self: start; }
-.ex-pop[data-tab="form"] .ex-callhead { grid-area: call; display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 12px 0 14px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); }
-.ex-callhead strong { color: var(--nc-text); font: 600 calc(13.5px * var(--fs, 1))/1 var(--sans); }
-.ex-callhead small { flex: 1; min-width: 0; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ex-callhead-copy { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--nc-muted); font: inherit; font-size: calc(12px * var(--fs, 1)); cursor: pointer; }
-.ex-callhead-copy .icon { width: 13px; height: 13px; }
-.ex-callhead-copy:hover { color: var(--nc-text); }
-.ex-pop[data-tab="form"] .ex-acts, .ex-pop[data-tab="form"] .ex-handle, .ex-pop[data-tab="form"] .ex-copy { display: none; }
-.ex-pop[data-tab="form"] .ex-face { width: 74px; height: 74px; }
 .ex-pop.ex-new .crew-popup-head { grid-template-areas: "who side"; }
 .ex-pop .crew-popup-who { align-items: flex-start; gap: 16px; }
 .ex-face { flex: none; width: 110px; height: 110px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--bg-muted); }
@@ -63,7 +52,7 @@
 .ex-cat-pop { position: absolute; top: 30px; left: 0; z-index: 5; max-width: 420px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-window); box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
 .ex-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .ex-inline { width: fit-content; max-width: 100%; margin: 0; cursor: text; border-radius: 4px; border-bottom: 1px dashed var(--border); }
-.ex-inline.empty { color: var(--text-2); }
+.ex-inline.empty { padding: 0; text-align: start; color: var(--text-2); } /* not the page-wide .empty state box */
 .ex-inline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h2.ex-name { font-size: calc(20px * var(--fs, 1)); font-weight: 600; }
 .ex-handle { padding: 1px 8px; border-radius: 6px; background: var(--nc-amber-bg, var(--nc-raised)); color: var(--nc-accent); font-size: calc(12.5px * var(--fs, 1)); } /* 868:61909: @이름 as a small amber chip */
@@ -79,7 +68,6 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-est-row .v { color: var(--text-1); font-variant-numeric: tabular-nums; }
 .ex-new .crew-popup-tabs { display: none; }
 .ex-new .ex-face .none { background: #f7efe7; }
-.ex-new .ex-face { width: 74px; height: 74px; }
 .ex-art.plus { color: #8c8881; font: 300 30px/1 var(--sans); }
 .ex-new h2.dim { color: var(--nc-muted); }
 .ex-body { display: flex; flex-direction: column; gap: 14px; }
@@ -155,10 +143,6 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-savebar { position: sticky; bottom: -24px; z-index: 2; display: flex; align-items: center; gap: 10px; margin: 0 -24px -24px; padding: 14px 24px 18px; background: var(--nc-surface); border-top: 1px solid var(--border); box-shadow: 0 -8px 16px rgba(0, 0, 0, .25); } /* spans the window and sits on its bottom edge, so 저장·취소 are never cut */
 .ex-savebar[hidden] { display: none; }
 .ex-hint { margin-left: auto; color: var(--text-2); }
-.ex-call { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; }
-.ex-call .at { color: var(--nc-accent); font-weight: 500; }
-.ex-call input { width: 160px; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-muted); color: var(--text-1); font: inherit; }
-.ex-call small { color: var(--text-2); }
 .ex-hist { display: flex; flex-direction: column; }
 .ex-hrow { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
 .ex-hrow .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -236,7 +220,14 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-run-box > * + * { border-top: 1px solid var(--nc-line); }
 .ex-run-note { margin: 0; padding: 12px; color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
 .ex-place-logo { width: 30px; padding: 0; justify-content: center; }
-.ex-place-logo img, .ex-place-logo svg { width: 15px; height: 15px; }
+.ex-place-logo img, .ex-place-logo svg { width: 15px; height: 15px; fill: currentColor; }
+/* 부르는 곳: off = an outline with a dim mark; on = filled, ringed in the text colour, the mark at full strength */
+.ex-place-logo:not(.on) img, .ex-place-logo:not(.on) svg { opacity: .45; filter: grayscale(1); }
+.ex-place-logo.on { background: var(--nc-raised); border-color: transparent; box-shadow: inset 0 0 0 1.5px var(--nc-text); color: var(--nc-text); }
+.ex-place-logo:not(.on):hover img, .ex-place-logo:not(.on):hover svg { opacity: .8; }
+.ex-use-addbox { display: contents; }
+.ex-use-addbox[hidden] { display: none; }
+.wk-card-head .ex-use-all { position: absolute; top: 14px; right: 20px; width: 260px; }
 /* 일하는 순서 box: the switch sits on its last line */
 .wk-flow-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
 .wk-flow-foot select.ex-flow-pick { width: auto; max-width: 50%; height: 28px; border: 0; background: none; color: var(--nc-muted); text-align: right; font-size: calc(12px * var(--fs, 1)); cursor: pointer; }
@@ -318,12 +309,9 @@ dialog.ex-skill-dlg { margin-top: 18vh; }
 .ex-hsec .tm-hist-row b.cur { color: var(--nc-accent); }
 .ex-hist-empty { margin: 0; padding: 12px 16px; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
 /* 새로 만들기 (310:19277) */
-.ex-call input { width: auto; flex: none; field-sizing: content; min-width: 4em; height: 28px; padding: 0; border: 0; background: none; color: var(--nc-accent); font-weight: 600; outline: none; }
-.ex-call input::placeholder { color: var(--nc-muted); }
-.ex-call { background: var(--nc-surface); min-height: 42px; box-sizing: border-box; }
 .ex-call:focus-within { border-color: var(--nc-accent); }
 @media (max-width: 640px) {
-  .ex-pop .crew-popup-head, .ex-pop[data-tab="form"] .crew-popup-head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who side" "tabs tabs" "call call"; }
+  .ex-pop .crew-popup-head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who side" "tabs tabs" "call call"; }
   .ex-pop .crew-popup-tabs { justify-self: start; }
   .ex-use-rows { grid-template-columns: 1fr; }
 }
@@ -340,3 +328,6 @@ dialog.ex-skill-dlg { margin-top: 18vh; }
 .ex-skill-dlg .dialog-foot { border-top: 0; }
 .ex-dlg-out { color: var(--nc-muted); }
 .ex-dlg-out:hover { color: var(--status-danger); }
+.ex-run-row .ex-model { width: 280px; height: 34px; }
+.ex-like { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ex-like > .wk-label { margin: 0; color: var(--nc-quiet); font-size: calc(12.5px * var(--fs, 1)); }

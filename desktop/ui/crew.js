@@ -370,9 +370,20 @@ window.ArkismCrew = (ctx) => {
     // "auto" lets the router pick per run; the rest is the live list the runner reports (모델 설정), never a fixed one.
     const auto = el("option");
     auto.value = "auto";
-    auto.label = "자동 — 라우터가 일마다 골라요";
+    auto.label = tr("자동 — 라우터가 일마다 골라요");
     dl.append(auto);
-    for (const m of new Set(models?.enabledModels() || [])) { const o = el("option"); o.value = m; dl.append(o); }
+    // Grouped by provider. The server keeps a plain model name (no provider), so a name offered by several providers
+    // says so on every copy: picking either saves the same name, and the runner picks the CLI from the name.
+    const byProvider = models?.enabledByProvider?.() || [];
+    const where = new Map();
+    for (const p of byProvider) for (const m of p.models) where.set(m, [...(where.get(m) || []), p.name]);
+    for (const p of byProvider) for (const m of p.models) {
+      const o = el("option");
+      o.value = m;
+      o.label = where.get(m).join(" · ");
+      o.dataset.group = p.name;
+      dl.append(o);
+    }
     return dl;
   }
 
@@ -3278,8 +3289,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   function runCard(d) {
     const temp = String(d.temperature ?? "0.7");
     const len = String(Number(d.max_output_tokens) > 0 ? d.max_output_tokens : 0);
-    const img = bindText(modelInput(d.image_model, "claude opus 5.5"), d, "image_model");
-    img.setAttribute("aria-label", "이미지가 오면 볼 모델");
+    const imgBox = modelBox(d, "image_model", "claude opus 5.5", "이미지가 오면 볼 모델");
+    const img = imgBox.querySelector("input");
     const c = el("section", "ex-run");
     const rows = el("div", "ex-run-box");
     rows.append(
@@ -3289,7 +3300,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       exRow("출력 형식", segment(FORMATS, d.output_format || "text", (k) => { d.output_format = k; touchWorker(); })),
       exRow("파일 고치기", segment(FILE_EDITS, d.file_edits || "ask", (k) => { d.file_edits = k; touchWorker(); })),
       exRow("부르는 곳", placeChips(d)),
-      exRow("이미지", img));
+      exRow("이미지", imgBox));
     const note = raw(el("p", "ex-run-note", tr(`이미지는 ${d.image_model || "기본 모델"}이 대신 보고, 답은 이 전문가 이름으로 돌려줘요.`)));
     rows.append(note);
     img.addEventListener("input", () => { note.textContent = tr(`이미지는 ${img.value.trim() || "기본 모델"}이 대신 보고, 답은 이 전문가 이름으로 돌려줘요.`); });
@@ -3377,9 +3388,10 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   function useCard(d, rec) {
     const c = workerCard("쓸 수 있는 것", "핀을 꽂은 것은 부를 때마다 먼저 넣어요. 칩을 누르면 자세히 볼 수 있어요.");
     const body = el("div", "ex-use");
-    let q = null;
-    const find = (kind) => { if (kind) wk.useKind = kind; wk.useOpen = true; draw(); q?.focus(); };
-    c.querySelector(".wk-card-head").append(button("+ 추가", "small", null, () => find()));
+    const head = c.querySelector(".wk-card-head");
+    const plus = button("+ 추가", "small", null, () => { plus.hidden = true; all.parentNode.hidden = false; all.focus(); window.ArkismCombo?.open(all); });
+    let all = null;
+    head.append(plus);
     c.append(body);
     const draw = () => {
       pins?.loadLibrary();
@@ -3395,13 +3407,44 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         const pin = sk ? skillPin(d, sk) : null;
         return useChip(d, name, { pin, mono: true, fresh: !!(pin?.revision && skillActiveVer(sk) > pin.revision), bad: pin ? badOf(pin) : "", onOpen: () => openUseDetail(d, rec, { collection: "skills", id: sk?.id, name }) });
       });
-      const sdl = el("datalist");
-      sdl.id = "wk-skills";
-      for (const s of state.data.skills || []) if (!names.includes(s.name)) { const o = el("option", "", (s.description || "").slice(0, 80)); o.value = s.name; sdl.append(o); }
-      const sadd = input("", { maxLength: 128, placeholder: "+ 스킬 추가", cls: "wk-add" });
-      sadd.setAttribute("list", "wk-skills");
-      sadd.addEventListener("change", () => { const v = sadd.value.trim(); if (v && !(d.skills || []).includes(v)) { d.skills = [...(d.skills || []), v]; touchWorker(); } });
-      row("스킬", ...skillKids, sadd, sdl);
+      // What may still be added, per kind (the four "+ X 추가" lists and the card's "+ 추가" share it).
+      const left = (kind) => kind === "tools" ? (ctx.toolServers?.() || []).filter((s) => !(d.tools || []).includes(s.name)).map((s) => ({ id: s.name, title: s.name, meta: s.desc || "", add: () => { d.tools = [...(d.tools || []), s.name]; } }))
+        : kind === "skills" ? (pins?.candidates("skills") || []).filter((x) => !names.includes(x.title)).map((x) => ({ ...x, add: () => { d.skills = [...(d.skills || []), x.title]; } }))
+        : (pins?.candidates(kind) || []).filter((x) => !pinOf(d, kind, x.id)).map((x) => ({ ...x, add: () => setPin(d, kind, x.id, true) }));
+      const kindName = Object.fromEntries(USE_KINDS);
+      // tabs: the four kinds on the all-kinds box; skill categories (스킬 › 카테고리) and memory kinds on their own rows.
+      const tabOf = (kind, x, many) => many ? tr(kindName[kind]) : kind === "skills" ? ctx.skillCategory?.((state.data.skills || []).find((s) => s.id === x.id) || {}) || tr("분류 안 됨") : kind === "memories" ? x.meta : "";
+      const addBox = (kinds, placeholder, typed) => {
+        const many = kinds.length > 1;
+        const dl = el("datalist");
+        dl.id = `ex-use-${kinds.length > 1 ? "all" : kinds[0]}`;
+        const items = new Map();
+        for (const kind of kinds) for (const x of left(kind)) {
+          const key = `${kind}:${x.id}`;
+          items.set(key, x);
+          const o = el("option");
+          o.value = x.title;
+          o.label = many ? [tr(kindName[kind]), x.meta].filter(Boolean).join(" · ") : x.meta || "";
+          o.dataset.key = key;
+          const t = tabOf(kind, x, many);
+          if (t) o.dataset.tab = t;
+          dl.append(o);
+        }
+        if (dl.querySelector("[data-tab]")) dl.dataset.tabs = tr("전체");
+        const box = input("", { maxLength: 128, placeholder, cls: "wk-add" });
+        box.setAttribute("list", dl.id);
+        box.dataset.comboEmpty = tr("더할 수 있는 승인된 자료가 없어요.");
+        box.addEventListener("change", () => {
+          const v = box.value.trim();
+          const x = items.get(box.dataset.comboKey || "") || [...items.values()].find((y) => y.title === v);
+          if (x) { if (x.add() !== false) touchWorker(); return; }
+          if (v && typed) typed(v); // 스킬·도구 may name one the list does not show yet
+        });
+        const w = el("span", "ex-use-addbox");
+        w.append(box, dl);
+        return w;
+      };
+      row("스킬", ...skillKids, addBox(["skills"], "+ 스킬 추가", (v) => { if (!(d.skills || []).includes(v)) { d.skills = [...(d.skills || []), v]; touchWorker(); } }));
       const servers = (ctx.toolServers?.() || []).map((s) => [s.name, s.desc || ""]);
       const tools = listChips(d.tools || [], servers, "+ 도구 추가", (v) => { d.tools = v; touchWorker(); }, "wk-tools");
       tools.classList.add("ex-tools");
@@ -3415,60 +3458,20 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         touchWorker();
       });
       for (const k of kinds.children) k.classList.add("ex-kind");
-      row("기억", ...memPins, ...kinds.children);
-      const kAdd = el("button", "wk-chip ex-plus-chip", "+ 지식 추가");
-      kAdd.type = "button";
-      kAdd.addEventListener("click", () => find("knowledge_sources"));
-      row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p) })), kAdd);
+      row("기억", ...memPins, ...kinds.children, addBox(["memories"], "+ 기억 추가"));
+      row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p) })), addBox(["knowledge_sources"], "+ 지식 추가"));
       const n = (d.pinned || []).length;
       const sum = raw(el("small", "ex-pin-sum", n ? tr(`고정 ${n}개 · 약 ${pinTokens(d).toLocaleString("ko-KR")} 토큰 · 넣는 순서는 고정 칩을 끌어서 바꿔요`) : tr("핀을 꽂으면 부를 때마다 먼저 넣어요")));
-      // 찾아 추가: memories and documents come in pinned; skills and tools join their lists.
-      const wrap = el("div", `pn-add ex-use-add${wk.useOpen ? " open" : ""}`);
-      const bar = el("div", "pn-add-bar");
-      const search = el("label", "search pn-search");
-      q = el("input");
-      q.type = "search";
-      q.placeholder = tr("스킬·도구·기억·지식에서 찾아 추가");
-      q.setAttribute("aria-label", tr("찾아 추가"));
-      q.value = wk.useQ || "";
-      search.append(el("span", "pn-glass", "⌕"), q);
-      const kind = wk.useKind || "memories";
-      const chips = el("div", "pn-kinds");
-      for (const [k, label] of USE_KINDS) {
-        const b = el("button", `pn-kindchip${kind === k ? " on" : ""}`, label);
-        b.type = "button";
-        b.setAttribute("aria-pressed", String(kind === k));
-        b.addEventListener("mousedown", (e) => e.preventDefault());
-        b.addEventListener("click", () => find(k));
-        chips.append(b);
-      }
-      const drop = el("div", "pn-drop");
-      const fill = () => {
-        const words = (wk.useQ || "").toLowerCase();
-        const all = kind === "tools" ? (ctx.toolServers?.() || []).filter((s) => !(d.tools || []).includes(s.name)).map((s) => ({ title: s.name, meta: s.desc || "", mono: true, add: () => { d.tools = [...(d.tools || []), s.name]; } }))
-          : kind === "skills" ? (pins?.candidates("skills") || []).filter((x) => !names.includes(x.title)).map((x) => ({ ...x, add: () => { d.skills = [...(d.skills || []), x.title]; } }))
-          : (pins?.candidates(kind) || []).filter((x) => !pinOf(d, kind, x.id)).map((x) => ({ ...x, add: () => setPin(d, kind, x.id, true) }));
-        const found = all.filter((x) => !words || `${x.title} ${x.meta}`.toLowerCase().includes(words)).slice(0, 8);
-        drop.hidden = !wk.useOpen;
-        drop.replaceChildren(...found.map((x) => {
-          const b = el("button", "pn-option");
-          b.type = "button";
-          b.append(raw(el("span", x.mono ? "mono" : "", x.title)), raw(el("small", "", x.meta || "")));
-          b.addEventListener("mousedown", (e) => e.preventDefault()); // keep the box open while picking
-          b.addEventListener("click", () => { if (x.add() !== false) { wk.useQ = ""; wk.useRefocus = true; touchWorker(); } });
-          return b;
-        }));
-        if (!found.length) drop.append(el("p", "pn-none", "더할 수 있는 승인된 자료가 없어요."));
-      };
-      q.addEventListener("focus", () => { wk.useOpen = true; wrap.classList.add("open"); fill(); });
-      q.addEventListener("blur", () => { wk.useOpen = false; wrap.classList.remove("open"); drop.hidden = true; });
-      q.addEventListener("input", () => { wk.useQ = q.value.trim(); fill(); });
-      q.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); q.blur(); } });
-      fill();
-      bar.append(search, chips);
-      wrap.append(bar, drop);
-      body.replaceChildren(grid, sum, wrap, el("small", "ex-use-hint", "칩을 누르면 넣는 방식(전체·요약·참조)과 버전(고정·최신)을 바꿀 수 있어요. 도구는 부를 때만 실행돼서 고정이 없어요."));
-      if (wk.useRefocus) { wk.useRefocus = false; requestAnimationFrame(() => q?.focus({ preventScroll: true })); }
+      // + 추가 (card head): one box over all four kinds, tabbed; it stands in for the button while open.
+      const allBox = addBox(USE_KINDS.map(([k]) => k), "기억·스킬·도구·지식에서 찾기");
+      all?.closest(".ex-use-addbox")?.remove();
+      all = allBox.querySelector("input");
+      all.classList.add("ex-use-all");
+      all.setAttribute("aria-label", tr("찾아 추가"));
+      allBox.hidden = plus.hidden === false;
+      all.addEventListener("blur", () => { if (!all.value.trim()) { allBox.hidden = true; plus.hidden = false; } });
+      head.append(allBox);
+      body.replaceChildren(grid, sum, el("small", "ex-use-hint", "칩을 누르면 넣는 방식(전체·요약·참조)과 버전(고정·최신)을 바꿀 수 있어요. 도구는 부를 때만 실행돼서 고정이 없어요."));
     };
     pins?.watch(body, draw);
     draw();
@@ -3918,9 +3921,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   function openExpertPopup(rec) {
     if (wk.pop) return;
     const isNew = !rec;
-    if (isNew) { wk.id = null; wk.draft = blankAgent(); wk.dirty = false; wk.teamsPick = new Set(); wk.newTeams = []; wk.ai = null; }
+    if (isNew) { wk.id = null; wk.draft = blankAgent(); wk.dirty = false; wk.teamsPick = new Set(); wk.newTeams = []; wk.ai = null; wk.autoHandle = ""; }
     wk.bots = undefined; wk.chAdd = null; wk.chKnown = {}; // fresh channel bindings per opening
-    wk.versions = undefined; wk.histOpen = new Set(); wk.calls = null; wk.useOpen = false; wk.useQ = "";
+    wk.versions = undefined; wk.histOpen = new Set(); wk.calls = null;
     wk.tab = "edit";
     const face = el("button", "ex-face");
     face.type = "button";
@@ -3938,9 +3941,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const acts = el("div", "ex-acts");
     // Each tab marks the window (data-tab) so the head can lay itself out the way that screen's design does.
     const mark = (box, key) => { wk.tab = key; const dl = box.closest("dialog"); if (dl) dl.dataset.tab = key; };
-    const tabs = isNew ? [{ key: "edit", label: "새 전문가", render: (box) => { mark(box, "edit"); newBody(box); } }]
+    const tabs = isNew ? [{ key: "edit", label: "새 전문가", render: (box) => { mark(box, "edit"); editBody(box, null); } }]
       : [{ key: "edit", label: "개요", render: (box) => { mark(box, "edit"); editBody(box, byId(wk.id)); } },
-        { key: "form", label: "편집", render: (box) => { mark(box, "form"); formBody(box, byId(wk.id)); } },
         { key: "test", label: "테스트", render: (box) => { mark(box, "test"); drawWorkerSave = baseSave; wk.bar = wk.okBtn = null; box.append(testPanel(byId(wk.id))); } },
         { key: "history", label: "기록", render: (box) => { mark(box, "history"); wk.bar = wk.okBtn = null; historyTab(box, byId(wk.id)); } }];
     const pop = expertPopup.open({
@@ -3950,12 +3952,10 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.pop = pop;
     wk.openTab = "edit";
     const names = pop.dialog.querySelector(".crew-popup-who > div");
-    // 868:61909: the tabs sit in the head (a pill group); on 편집 (938:62634) they move under it, next to the @이름 line.
+    // 868:61909: the tabs sit in the head (a pill group).
     const headEl = pop.dialog.querySelector(".crew-popup-head");
     headEl.append(pop.dialog.querySelector(".crew-popup-tabs"));
-    const callHead = el("div", "ex-callhead");
     if (!isNew) {
-      headEl.append(callHead);
       request(`/v1/crew/agents/${encodeURIComponent(rec.id)}/calls?${query({ limit: "30" })}`).then((r) => { wk.calls = r.items || []; wk.estPaint?.(); }, () => { wk.calls = []; });
     }
     // Closing with unsaved changes asks first (the shared frame's 닫기 button, 바깥 Esc).
@@ -3977,7 +3977,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.paintHead = () => {
       const d = wk.draft;
       paintFace();
-      if (isNew) { pop.setTitle(d.name || "새 전문가", d.role || "이름·소개를 쓰면 여기에 바로 보여요"); names.querySelector("h2").classList.toggle("dim", !d.name); return; }
       const cat = el("button", "ex-cat", d.category || "카테고리");
       cat.type = "button";
       cat.append(icon("caret-down"));
@@ -3988,7 +3987,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         // A pick closes the menu and repaints the head, so the chip and the menu never show an old choice.
         const close = () => { m.remove(); document.removeEventListener("pointerdown", away, true); };
         const away = (e) => { if (!m.contains(e.target) && e.target !== cat && !cat.contains(e.target)) close(); };
-        m.append(categoryRow(d, () => { close(); wk.dirty = true; wk.paintHead(); drawWorkerSave(); if (wk.tab === "form") wk.redraw(); }));
+        m.append(categoryRow(d, () => { close(); wk.dirty = true; wk.paintHead(); drawWorkerSave(); }));
         m.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); close(); cat.focus(); } });
         document.addEventListener("pointerdown", away, true);
         names.append(m);
@@ -3997,12 +3996,10 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       const line = el("div", "ex-line");
       const handle = inlineEdit("span", "ex-handle", () => (d.handle ? `@${d.handle}` : ""), (v) => { d.handle = v.replace(/^@/, ""); wk.dirty = true; drawWorkerSave(); wk.paintHead(); },
         { max: 41, ph: "@이름", validate: (v) => (!v.replace(/^@/, "") ? "@이름을 비울 수 없어요." : taken(v.replace(/^@/, "")) ? "이미 쓰는 이름이에요." : "") });
-      line.append(inlineEdit("h2", "ex-name", () => d.name, (v) => { d.name = v; wk.dirty = true; drawWorkerSave(); if (wk.tab === "form") wk.redraw(); }, { max: 60, ph: "이름", validate: (v) => (v ? "" : "이름을 비울 수 없어요.") }), handle, copyBtn(d, "icon-btn plain ex-copy"));
-      names.replaceChildren(cat, line, inlineEdit("p", "ex-role", () => d.role, (v) => { d.role = v; wk.dirty = true; drawWorkerSave(); if (wk.tab === "form") wk.redraw(); }, { max: 200, ph: "한 줄 소개" }));
-      // 938:62634: @이름 · where it is called · 복사, beside the tabs on 편집.
-      const cp = copyBtn(d, "ex-callhead-copy");
-      cp.append(el("span", "", "복사"));
-      callHead.replaceChildren(raw(el("strong", "", d.handle ? `@${d.handle}` : "@이름")), el("small", "", "어디서든 이 이름으로 불러요"), cp);
+      // A new expert's @이름 follows its name until the @이름 itself is edited.
+      const named = (v) => { if (isNew && (!d.handle || d.handle === wk.autoHandle)) { d.handle = wk.autoHandle = v.replace(/\s+/g, "").slice(0, 40); wk.paintHead(); } };
+      line.append(inlineEdit("h2", "ex-name", () => d.name, (v) => { d.name = v; wk.dirty = true; named(v); drawWorkerSave(); }, { max: 60, ph: "이름", validate: (v) => (v ? "" : "이름을 비울 수 없어요.") }), handle, ...(isNew ? [] : [copyBtn(d, "icon-btn plain ex-copy")]));
+      names.replaceChildren(cat, line, inlineEdit("p", "ex-role", () => d.role, (v) => { d.role = v; wk.dirty = true; drawWorkerSave(); }, { max: 200, ph: "한 줄 소개" }));
     };
     wk.paintAct = () => {
       acts.replaceChildren();
@@ -4229,34 +4226,22 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     return bar;
   }
   // 개요 (868:61909): numbers, AI 제안, 모델, 실행, 일하는 방법, 쓸 수 있는 것, 예산, 채널, 삭제.
+  // 새 전문가 (rec null): the same screen with empty fields — AI로 초안 and 비슷한 것에서 시작 in place of the numbers,
+  // 팀에 넣기 in place of 채널, and 만들기 in place of 저장.
   function editBody(box, rec) {
     const d = wk.draft;
     box.classList.add("ex-body");
-    const use = (wk.usage?.agents || []).find((a) => a.id === rec.id);
-    const m = el("div", "ex-metrics");
-    const runsTile = metric(`${use?.calls || 0}회`, "최근 30일 실행");
-    m.append(runsTile, metric(fmtTok(use?.tokens || 0), "전체 토큰"), metric(use ? `$${Number(use.cost_usd || 0).toFixed(2)}` : "$0.00", "추정 비용"));
-    dailyBars(rec.id, runsTile);
-    box.append(m, aiBox("fix"), modelCard(d), runCard(d),
+    if (rec) {
+      const use = (wk.usage?.agents || []).find((a) => a.id === rec.id);
+      const m = el("div", "ex-metrics");
+      const runsTile = metric(`${use?.calls || 0}회`, "최근 30일 실행");
+      m.append(runsTile, metric(fmtTok(use?.tokens || 0), "전체 토큰"), metric(use ? `$${Number(use.cost_usd || 0).toFixed(2)}` : "$0.00", "추정 비용"));
+      dailyBars(rec.id, runsTile);
+      box.append(m, aiBox("fix"));
+    } else box.append(aiBox("draft"), likeRow());
+    box.append(modelCard(d), runCard(d),
       workerCard("일하는 방법", "", instructionsField(d), workflowField(d)),
-      useCard(d, rec), budgetCard(rec.id, d), channelCard(rec), dangerRow(rec), saveBar(rec));
-  }
-  // 기본 (938:62634 · 310:19277): 이름 · 한 줄 소개 · 카테고리.
-  function basicCard(d) {
-    const name = bindText(input(d.name, { maxLength: 60, required: true, placeholder: "예: 코드리뷰어" }), d, "name");
-    const role = bindText(input(d.role, { maxLength: 200, placeholder: "예: 커밋 전에 diff를 보고 고칠 곳을 알려 줘요" }), d, "role");
-    name.addEventListener("input", () => wk.paintHead());
-    role.addEventListener("input", () => wk.paintHead());
-    const f = el("div", "scope-fields");
-    f.append(field("이름", name), field("한 줄 소개", role));
-    return { card: workerCard("기본", "", f, el("h4", "wk-label", "카테고리"), categoryRow(d, () => { wk.dirty = true; wk.paintHead(); wk.redraw(); drawWorkerSave(); })), name };
-  }
-  // 편집 (938:62634): AI로 고치기, 기본, 일하는 방법, 모델, 쓸 수 있는 것, 예산 (amounts only).
-  function formBody(box, rec) {
-    const d = wk.draft;
-    box.classList.add("ex-body");
-    box.append(aiRow("fix"), basicCard(d).card, workerCard("일하는 방법", "", instructionsField(d), workflowField(d)),
-      modelCard(d), useCard(d, rec), budgetCard(null, d), saveBar(rec));
+      useCard(d, rec), budgetCard(rec ? rec.id : null, d), ...(rec ? [channelCard(rec), dangerRow(rec), saveBar(rec)] : [teamsCard(), createBar()]));
   }
   // 전문가 삭제: last thing in 개요, apart from everything else, and it asks for the name typed back.
   function dangerRow(rec) {
@@ -4414,17 +4399,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     });
   }
 
-  // 새로 만들기 (310:19277): @이름 line, AI로 초안 만들기, 비슷한 것에서 시작, 기본, 일하는 방법, 모델, 쓸 수 있는 것, 예산, 팀에 넣기.
-  function newBody(box) {
+  // 새 전문가: start from an existing expert (a copy) instead of empty fields.
+  function likeRow() {
     const d = wk.draft;
-    box.classList.add("ex-body");
-    const handle = bindText(input(d.handle, { maxLength: 40, pattern: "[\\p{L}\\p{N}_\\-]{1,40}", placeholder: "@이름" }), d, "handle", (v) => v.replace(/^@/, ""));
-    handle.setAttribute("aria-label", "@이름");
-    handle.addEventListener("input", () => { handle.dataset.touched = d.handle ? "1" : ""; });
-    const callRow = el("label", "ex-call");
-    callRow.append(handle, el("small", "", "Claude Code·Codex에서 @이름으로 부르면 이 전문가에게 일을 맡겨요"));
-    const basic = basicCard(d);
-    basic.name.addEventListener("input", () => { if (!handle.dataset.touched) handle.value = d.handle = basic.name.value.replace(/\s+/g, "").slice(0, 40); });
     const like = toggleChips([["", "빈 칸에서"], ...agents().map((r) => [r.id, r.crew.name])], (k) => (d.copy_of || "") === k, (k) => {
       const src = k ? byId(k)?.crew : null;
       const keepTeams = wk.teamsPick;
@@ -4434,6 +4411,12 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       wk.paintHead();
       wk.redraw();
     });
+    const r = el("div", "ex-like");
+    r.append(el("span", "wk-label", "비슷한 것에서 시작"), like);
+    return r;
+  }
+  // 팀에 넣기 (선택): teams the new expert joins once made, or a new team made with it.
+  function teamsCard() {
     const teamRow = el("div", "wk-chips");
     for (const t of teams()) {
       const on = wk.teamsPick.has(t.id);
@@ -4455,16 +4438,17 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     nt.type = "button";
     nt.addEventListener("click", () => newTeamPopup());
     teamRow.append(nt);
+    return workerCard("팀에 넣기 (선택)", "", el("small", "wk-label", teams().length ? "만든 뒤 팀 화면에서도 넣을 수 있어요" : "아직 팀이 없어요. 새 팀을 만들면 거기서 넣어요."), teamRow);
+  }
+  // 만들기 · 취소: 취소 asks before throwing away what was typed.
+  function createBar() {
     const bar = el("div", "ex-savebar always");
     const ok = button("만들기", "primary small", null, () => saveWorker(null));
     bar.append(ok, button("취소", "ghost small", null, async () => { if (wk.dirty && !await ask("쓰던 내용을 버릴까요?")) return; wk.pop.dialog.close(); }), el("small", "ex-hint", "만들면 바로 @이름으로 부를 수 있어요"));
     wk.bar = null;
     wk.okBtn = ok;
     drawWorkerSave = baseSave;
-    const teamsCard = workerCard("팀에 넣기 (선택)", "", el("small", "wk-label", teams().length ? "만든 뒤 팀 화면에서도 넣을 수 있어요" : "아직 팀이 없어요. 새 팀을 만들면 거기서 넣어요."), teamRow);
-    box.append(callRow, aiRow("draft"), el("h4", "wk-label", "또는 비슷한 것에서 시작"), like, basic.card,
-      workerCard("일하는 방법", "", instructionsField(d), workflowField(d)),
-      modelCard(d), useCard(d, null), budgetCard(null, d), teamsCard, bar);
+    return bar;
   }
 
   // + 새 팀 (310:19277): name and @이름 only. A team needs at least one member, so it is created right after this
