@@ -197,18 +197,17 @@ export function createAppConnection(deps) {
   });
 
   function unlockMode() {
-    // 처음 실행(choose): 이 PC / SSH 두 카드만. 이 PC를 고르면(storage) 저장 위치부터 정한다.
+    // 처음 실행(choose): 이 PC / SSH 두 카드. 이 PC를 고르면 카드 아래에 저장 위치가 펼쳐진다.
     // 내장 Arkism을 켜는 중이거나 켜지 못했을 때는 연결 칸 대신 진행 상태만 보여 준다.
-    const storage = deps.state.mode === "storage", choose = deps.state.mode === "choose" || storage, builtIn = deps.state.mode === "local";
-    deps.$("#start-choice").hidden = deps.state.mode !== "choose";
-    deps.$("#start-storage").hidden = !storage;
+    const choose = deps.state.mode === "choose", builtIn = deps.state.mode === "local";
+    deps.$("#start-choice").hidden = !choose;
     deps.$("#unlock-box").hidden = choose;
-    deps.$("#unlock-title").textContent = storage ? "데이터를 어디에 저장할까요?" : choose ? "Arkism을 어디서 쓸까요?" : "서버의 Arkism에 연결";
+    deps.$("#unlock-title").textContent = choose ? "Arkism을 어디서 쓸까요?" : "서버의 Arkism에 연결";
     for (const id of ["#ssh-form", "#ssh-actions", "#ssh-hint", "#ssh-test-result"]) deps.$(id).hidden = builtIn || choose;
     deps.$("#local-retry").hidden = !builtIn || !deps.state.localError;
     deps.$("#remote-link").hidden = !builtIn || !deps.state.localError;
     deps.$("#local-link").hidden = builtIn || choose || !deps.state.defaults.local;
-    deps.$("#unlock-intro").textContent = storage ? "기억·설정·토큰이 모두 이 폴더에 저장돼요. 나중에 설정 › 연결에서 바꿀 수 있어요." : choose ? "처음 한 번만 고르면 돼요. 나중에 설정 › 연결에서 바꿀 수 있어요." : builtIn
+    deps.$("#unlock-intro").textContent = choose ? "처음 한 번만 고르면 돼요. 나중에 설정 › 연결에서 바꿀 수 있어요." : builtIn
       ? (deps.state.localError ? `이 PC의 Arkism을 켜지 못했어요 (${deps.state.localError}). 다시 시도하거나 서버에 연결할 수 있어요.` : "이 PC의 Arkism을 준비하고 있어요…")
       : "SSH로 접속하듯 서버 주소만 넣으면 돼요. 토큰이나 로그인은 필요 없어요.";
   }
@@ -271,7 +270,8 @@ export function createAppConnection(deps) {
 
   deps.$("#local-link").addEventListener("click", useLocal);
 
-  // 저장 위치: 기본(앱 데이터 폴더) 또는 직접 고른 폴더. 고른 폴더는 앱이 검사한 뒤 local_start 전에 쓴다.
+  // 저장 위치 줄 (처음 실행과 설정 › 연결의 '이 PC' 카드 아래): 왼쪽 제목·설명, 오른쪽 기본값/사용자 지정과 경로.
+  // 고른 폴더는 앱이 검사해 runtime-location.json에 남기고, 내장 Arkism이 아직 안 돌면 바로 쓴다.
   const STORAGE_ERRORS = {
     local_location_absolute: "C:\\ 나 /로 시작하는 전체 경로를 넣어 주세요.",
     local_location_not_folder: "파일이 아니라 폴더 경로를 넣어 주세요.",
@@ -280,60 +280,95 @@ export function createAppConnection(deps) {
     local_location_unwritable: "이 폴더에 쓸 수 없어요. 권한을 확인해 주세요.",
   };
 
-  const storageError = (err) => { const m = String(err?.message || err); return STORAGE_ERRORS[m.split(":")[0]] || m; };
-
-  function pickStorage(custom) {
-    deps.$("#storage-default").setAttribute("aria-checked", String(!custom));
-    deps.$("#storage-custom").setAttribute("aria-checked", String(custom));
-    deps.$("#storage-path-field").hidden = !custom;
-    deps.$("#storage-note").hidden = !(custom && deps.state.location?.default_has_data);
-    deps.$("#storage-error").textContent = "";
-    if (custom) deps.$("#storage-path").focus();
+  function storageRow() {
+    const row = deps.el("div", "storage-row");
+    const text = deps.el("div");
+    text.append(deps.el("strong", "", "저장 위치"), deps.el("small", "", "기억·설정·토큰이 저장되는 폴더예요. 바꿔도 지금 데이터는 옮기지 않아요."));
+    const right = deps.el("div", "storage-pick");
+    const path = deps.raw(deps.el("p", "storage-path mono"));
+    const input = deps.el("input", "mono");
+    input.setAttribute("aria-label", "폴더 경로");
+    input.placeholder = "빈 폴더의 전체 경로";
+    input.spellcheck = false;
+    const note = deps.el("p", "storage-note", "기본 위치에 있던 데이터는 그대로 남아요.");
+    const err = deps.el("p", "form-error");
+    err.setAttribute("role", "alert");
+    let loc = null, custom = false;
+    const draw = () => {
+      path.textContent = loc?.default || "…";
+      const seg = deps.segment([["default", "기본값"], ["custom", "사용자 지정"]], custom ? "custom" : "default", (k) => {
+        custom = k === "custom";
+        err.textContent = "";
+        draw();
+        if (custom) input.focus();
+      });
+      right.replaceChildren(seg, custom ? input : path, ...(custom && loc?.default_has_data ? [note] : []), err);
+    };
+    draw();
+    row.append(text, right);
+    const ready = deps.tauri.invoke("local_location").then((l) => {
+      loc = l;
+      custom = l.next !== l.default;
+      if (custom) input.value = l.next;
+      draw();
+      return l;
+    }, () => { err.textContent = "저장 위치를 읽지 못했어요."; return null; });
+    const wanted = () => (custom ? input.value.trim() : null);
+    return {
+      node: row,
+      ready,
+      get loc() { return loc; },
+      // 지금 기억된 위치와 다른 것을 골랐는지.
+      changed: () => !!loc && (wanted() ?? loc.default) !== loc.next,
+      // 고른 것을 저장한다. 실패하면 줄 안에 이유를 보여 주고 null.
+      async save() {
+        err.textContent = "";
+        if (custom && !wanted()) { err.textContent = "폴더 경로를 넣어 주세요."; input.focus(); return null; }
+        try {
+          loc = await deps.tauri.invoke("local_location_set", { path: wanted() });
+          return loc;
+        } catch (e) {
+          const m = String(e?.message || e);
+          err.textContent = STORAGE_ERRORS[m.split(":")[0]] || m;
+          return null;
+        }
+      },
+    };
   }
 
-  async function chooseStorage() {
-    deps.state.mode = "storage";
-    unlockMode();
-    const loc = await deps.tauri.invoke("local_location").catch(() => null);
-    deps.state.location = loc;
-    deps.$("#storage-default-path").textContent = loc?.default || "";
-    const custom = !!loc && loc.next !== loc.default;
-    if (custom) deps.$("#storage-path").value = loc.next;
-    pickStorage(custom);
+  // 처음 실행 › 이 PC: 카드를 고르면 아래에 저장 위치와 시작 버튼이 펼쳐진다.
+  let startStorage = null;
+
+  function chooseLocal() {
+    deps.$("#choose-local").setAttribute("aria-pressed", "true");
+    const body = deps.$("#start-mode-body");
+    if (!startStorage) {
+      startStorage = storageRow();
+      const startBtn = deps.button("시작", "primary", null, startChosen);
+      const acts = deps.el("div", "unlock-actions");
+      acts.append(startBtn);
+      body.replaceChildren(startStorage.node, acts);
+    }
+    body.hidden = false;
   }
 
-  async function startStorage() {
-    const custom = deps.$("#storage-custom").getAttribute("aria-checked") === "true";
-    const path = custom ? deps.$("#storage-path").value.trim() : null;
-    if (custom && !path) { deps.$("#storage-error").textContent = "폴더 경로를 넣어 주세요."; deps.$("#storage-path").focus(); return; }
-    const b = deps.$("#storage-start");
-    b.disabled = true;
-    try {
-      await deps.tauri.invoke("local_location_set", { path });
-    } catch (err) {
-      deps.$("#storage-error").textContent = storageError(err);
-      return;
-    } finally { b.disabled = false; }
+  async function startChosen(e) {
+    const b = e?.currentTarget;
+    if (b) b.disabled = true;
+    const saved = await startStorage.save();
+    if (b?.isConnected) b.disabled = false;
+    if (!saved) return;
     deps.store("arkism.mode", "local");
     void startLocal();
   }
 
-  deps.$("#storage-default").addEventListener("click", () => pickStorage(false));
-
-  deps.$("#storage-custom").addEventListener("click", () => pickStorage(true));
-
-  deps.$("#storage-start").addEventListener("click", startStorage);
-
-  deps.$("#storage-back").addEventListener("click", () => { deps.state.mode = "choose"; unlockMode(); });
-
-  deps.$("#choose-local").addEventListener("click", () => void chooseStorage());
+  deps.$("#choose-local").addEventListener("click", chooseLocal);
 
   deps.$("#choose-ssh").addEventListener("click", () => { deps.state.mode = "remote"; unlockMode(); unlockSSH().focus(); });
 
   deps.$("#unlock-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    if (deps.state.mode === "storage") return void startStorage();
-    if (deps.state.mode === "choose") return;
+    if (deps.state.mode === "choose") { if (startStorage) void startChosen(); return; }
     void unlockConnect(true);
   });
 
@@ -359,6 +394,7 @@ export function createAppConnection(deps) {
     get sshLabel() { return sshLabel; },
     get sshTest() { return sshTest; },
     get startLocal() { return startLocal; },
+    get storageRow() { return storageRow; },
     get unlockConnect() { return unlockConnect; },
     get useLocal() { return useLocal; },
     get useServer() { return useServer; }

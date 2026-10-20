@@ -186,19 +186,13 @@
       </header>
       <div class="unlock-panel">
         <div class="unlock-main">
-          <div id="start-choice" class="mode-cards start-choice" hidden>
-            <button id="choose-local" class="mode-card" type="button"><span class="mode-card-title"><svg class="icon" aria-hidden="true"><use href="#i-desktop"/></svg><span>이 PC에서 쓰기</span><small class="mono">LOCAL</small></span><span class="mode-card-text">이 PC에서 Arkism을 실행해요. 인터넷 없이도 되고, 기억은 이 PC에만 저장돼요.</span></button>
-            <button id="choose-ssh" class="mode-card" type="button"><span class="mode-card-title"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg><span>서버에 SSH로 연결</span><small class="mono">SSH</small></span><span class="mode-card-text">서버에서 돌고 있는 Arkism을 SSH로 이어요. 여러 PC가 같은 기억을 써요.</span></button>
-          </div>
-          <div id="start-storage" class="start-storage" hidden>
-            <div class="mode-cards start-choice" role="radiogroup" aria-label="저장 위치">
-              <button id="storage-default" class="mode-card" type="button" role="radio" aria-checked="true"><span class="mode-card-title"><svg class="icon" aria-hidden="true"><use href="#i-database"/></svg><span>기본 위치</span></span><span id="storage-default-path" class="mode-card-text mono"></span></button>
-              <button id="storage-custom" class="mode-card" type="button" role="radio" aria-checked="false"><span class="mode-card-title"><svg class="icon" aria-hidden="true"><use href="#i-pencil-simple"/></svg><span>직접 고르기</span></span><span class="mode-card-text">빈 폴더나 전에 쓰던 Arkism 데이터 폴더를 써요.</span></button>
+          <!-- 처음 실행: 연결 방식 카드 두 장, 고른 카드 아래(#start-mode-body)에 그 모드의 설정만. -->
+          <div id="start-choice" class="start-choice-wrap" hidden>
+            <div class="mode-cards start-choice">
+              <button id="choose-local" class="mode-card" type="button" aria-pressed="false"><span class="mode-card-title"><svg class="icon" aria-hidden="true"><use href="#i-desktop"/></svg><span>이 PC에서 쓰기</span><small class="mono">LOCAL</small><svg class="icon mode-check" aria-hidden="true"><use href="#i-check"/></svg></span><span class="mode-card-text">이 PC에서 Arkism을 실행해요. 인터넷 없이도 되고, 기억은 이 PC에만 저장돼요.</span></button>
+              <button id="choose-ssh" class="mode-card" type="button"><span class="mode-card-title"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg><span>서버에 SSH로 연결</span><small class="mono">SSH</small></span><span class="mode-card-text">서버에서 돌고 있는 Arkism을 SSH로 이어요. 여러 PC가 같은 기억을 써요.</span></button>
             </div>
-            <label id="storage-path-field" hidden>폴더 경로<input id="storage-path" autocomplete="off" spellcheck="false" aria-describedby="storage-hint"><small id="storage-hint" class="field-hint">전체 경로를 넣어 주세요. 없는 폴더는 새로 만들어요.</small></label>
-            <p id="storage-note" class="unlock-hint" hidden>기본 위치에 있던 데이터는 옮기지 않아요. 그 자리에 그대로 남아요.</p>
-            <p id="storage-error" class="form-error" role="alert"></p>
-            <div class="unlock-actions"><button id="storage-start" class="btn primary" type="button">시작</button><button id="storage-back" class="btn" type="button">뒤로</button></div>
+            <div id="start-mode-body" class="start-mode-body" hidden></div>
           </div>
           <div id="unlock-box" class="unlock-box">
             <div id="ssh-form"></div>

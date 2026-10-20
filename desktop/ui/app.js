@@ -2066,6 +2066,7 @@ export function startApp() {
     get virtualList() { return virtualList; },
     get similarity() { return similarity; },
     get $() { return $; },
+    get button() { return button; },
     get crew() { return crew; },
     get defaults() { return defaults; },
     get el() { return el; },
@@ -2081,9 +2082,11 @@ export function startApp() {
     get notice() { return notice; },
     get pages() { return pages; },
     get query() { return appApi.query; },
+    get raw() { return raw; },
     get render() { return render; },
     get request() { return appApi.request; },
     get routing() { return routing; },
+    get segment() { return segment; },
     get sessions() { return sessions; },
     get setStatus() { return setStatus; },
     get state() { return state; },
@@ -2138,7 +2141,7 @@ export function startApp() {
   window.ArkismAIChat.kit = { assist: crew.assist, assistError: crew.assistError, parseJSON: crew.parseJSON }; // field()'s default ask (ai-chat.js)
   const reviews = window.ArkismReviews({ state, $, el, icon, button, render, request: appApi.request, query: appApi.query, notice, detailShell, section, facts, markSelected, openDetail, ago, stat, go, headExtras, confirmPop: toolViews.confirmPop,
     assist: (kind, prompt) => crew.assist(kind, prompt) });
-  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed: skillViews.allowed, notice, store, stored, lock: appConnection.lock, disconnect: appConnection.disconnect, useServer: appConnection.useServer, useLocal: appConnection.useLocal, startLocal: appConnection.startLocal, sshFields: appConnection.sshFields, sshTest: appConnection.sshTest, sshConnect: appConnection.sshConnect, sshLabel: appConnection.sshLabel, reopen: appConnection.open, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES,
+  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed: skillViews.allowed, notice, store, stored, lock: appConnection.lock, disconnect: appConnection.disconnect, useServer: appConnection.useServer, useLocal: appConnection.useLocal, startLocal: appConnection.startLocal, sshFields: appConnection.sshFields, sshTest: appConnection.sshTest, sshConnect: appConnection.sshConnect, sshLabel: appConnection.sshLabel, storageRow: appConnection.storageRow, reopen: appConnection.open, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES,
     request: appApi.request, query: appApi.query, reloadTools: async () => { await toolViews.refreshTools(); toolViews.pollTools(); }, assist: (...a) => crew.assist(...a), privacyGroup: () => privacy.settingsGroup() });
   function openIntelligenceRecord(record) {
     const list = record.status === "active" ? "memories" : record.conflict_id ? "conflicted" : "candidates";
