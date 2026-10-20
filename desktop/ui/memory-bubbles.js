@@ -31,9 +31,9 @@ window.ArkismMemoryBubbles = (() => {
 
     function regroup() {
       const m = new Map();
-      for (const p of items) { const g = groupOf(mode, p); let o = m.get(g.key); if (!o) m.set(g.key, o = { key: g.key, name: g.name, ord: g.ord ?? 0, count: 0, el: null, cx: 0, cy: 0, top: null }); o.count++; p.g = o; }
+      for (const p of items) { const g = groupOf(mode, p); let o = m.get(g.key); if (!o) m.set(g.key, o = { key: g.key, name: g.name, ord: g.ord ?? 0, color: g.color || p.color, count: 0, el: null, cx: 0, cy: 0, top: null, rx: 0, ry: 0, rr: 0 }); o.count++; p.g = o; }
       groups = [...m.values()].sort((a, b) => a.ord - b.ord || b.count - a.count);
-      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); g.el.append(mk("b", "", g.name), doc.createTextNode(` · ${g.count}개`)); return g.el; }));
+      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", String(g.count))); return g.el; }));
       layout();
     }
     function layout() {
@@ -43,9 +43,10 @@ window.ArkismMemoryBubbles = (() => {
       groups.forEach((g, i) => { const r = Math.floor(i / cols), inRow = r === rows - 1 ? n - r * cols : cols, c = i % cols + (cols - inRow) / 2; g.cx = PAD.l + (c + 0.5) / cols * aw; g.cy = PAD.t + (r + 0.5) / rows * ah; });
       // bubble size follows the canvas; shrink when many memories would not fit the free area (area share ~ 40%)
       const base = Math.max(0.8, Math.min(1.6, Math.min(W, H) / 520));
-      const need = items.reduce((a, p) => a + Math.PI * (4.5 + Math.sqrt(p.v) * 5) ** 2, 0) * base * base;
-      scale = base * Math.min(1, Math.sqrt(aw * ah * 0.4 / Math.max(1, need)));
-      for (const p of items) p.r = (4.5 + Math.sqrt(p.v) * 5) * scale;
+      const dot = (p) => Math.min(6, 2 + Math.sqrt(p.v) * 0.9), gap = 7; // a dot plus its breathing room
+      const need = items.reduce((a, p) => a + Math.PI * (dot(p) + gap) ** 2, 0) * base * base;
+      scale = base * Math.min(1, Math.sqrt(aw * ah * 0.32 / Math.max(1, need)));
+      for (const p of items) { p.r = dot(p) * scale; p.cr = (dot(p) + gap) * scale; }
       items.sort((a, b) => b.r - a.r);
     }
     function place(p) { p.placed = true; p.x = (p.g?.cx ?? W / 2) + (seed(p.id) - 0.5) * 40; p.y = (p.g?.cy ?? H / 2) + (seed(p.id + "y") - 0.5) * 40; }
@@ -92,7 +93,7 @@ window.ArkismMemoryBubbles = (() => {
       for (const p of items) { p.vx *= damp; p.vy *= damp; p.x += p.vx * dt * 1.6; p.y += p.vy * dt * 1.6; e += p.vx * p.vx + p.vy * p.vy; }
       energy = items.length ? e / items.length : 0;
       // overlap pass on a grid (cell = widest pair), so each bubble only meets its neighbours: O(n), not all pairs
-      let maxR = 1; for (const p of items) maxR = Math.max(maxR, p.r);
+      let maxR = 1; for (const p of items) maxR = Math.max(maxR, p.cr || p.r);
       const cell = 2 * maxR + 2;
       for (let it = 0; it < 3; it++) {
         const grid = new Map(), key = (gx, gy) => gx * 65536 + gy;
@@ -101,7 +102,7 @@ window.ArkismMemoryBubbles = (() => {
           const gx = Math.floor(a.x / cell), gy = Math.floor(a.y / cell);
           for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) for (const j of grid.get(key(gx + ox, gy + oy)) || []) {
             if (j <= i) continue;
-            const b = items[j]; let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); const min = a.r + b.r + 1.5; if (d >= min) continue;
+            const b = items[j]; let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy); const min = (a.cr || a.r) + (b.cr || b.r); if (d >= min) continue;
             if (!d) { dx = 1; dy = 0; d = 1; } const push = (min - d) / 2, nx = dx / d, ny = dy / d; a.x -= nx * push; a.y -= ny * push; b.x += nx * push; b.y += ny * push;
           }
         });
@@ -142,17 +143,19 @@ window.ArkismMemoryBubbles = (() => {
       }
       ctx.setLineDash([]);
       for (const g of groups) g.top = null;
+      // topic areas (Figma 611:54134): a soft tinted circle with a dashed rim around each group's dots
+      for (const g of groups) {
+        let sx = 0, sy = 0, n = 0; for (const p of items) if (p.g === g) { sx += p.x; sy += p.y; n++; } if (!n) continue;
+        g.rx = sx / n; g.ry = sy / n; let rr = 0; for (const p of items) if (p.g === g) rr = Math.max(rr, Math.hypot(p.x - g.rx, p.y - g.ry) + p.r);
+        g.rr = rr + 22;
+        ctx.globalAlpha = foci.size ? 0.03 : 0.06; ctx.fillStyle = g.color; ctx.beginPath(); ctx.arc(g.rx, g.ry, g.rr, 0, 7); ctx.fill();
+        ctx.globalAlpha = foci.size ? 0.15 : 0.35; ctx.strokeStyle = g.color; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
+      }
       for (const p of items) {
         const dim = foci.size && !near.has(p.id);
         ctx.globalAlpha = dim ? 0.22 : 1;
-        // glossy sphere: lit top-left, darker rim, soft drop shadow
-        const gr = ctx.createRadialGradient(p.x - p.r * 0.35, p.y - p.r * 0.4, p.r * 0.1, p.x, p.y, p.r);
-        gr.addColorStop(0, mix(p.color, "#ffffff", 0.45)); gr.addColorStop(0.55, p.color); gr.addColorStop(1, mix(p.color, "#000000", 0.35));
-        ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = dim ? 0 : p.r * 0.6; ctx.shadowOffsetY = p.r * 0.15;
-        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
-        ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-        ctx.strokeStyle = mix(p.color, "#ffffff", 0.3); ctx.lineWidth = 1; ctx.globalAlpha *= 0.6; ctx.beginPath(); ctx.arc(p.x, p.y, p.r - 0.5, 0, 7); ctx.stroke();
-        ctx.globalAlpha = dim ? 0.22 : 0.55; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.ellipse(p.x - p.r * 0.32, p.y - p.r * 0.42, p.r * 0.28, p.r * 0.16, -0.6, 0, 7); ctx.fill();
+        // flat dot in the group's colour (Figma 611:54134), no gloss or shadow
+        ctx.fillStyle = p.g.color || p.color; ctx.globalAlpha = dim ? 0.22 : 0.9; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
         if (!p.g.top || p.y - p.r < p.g.top.y - p.g.top.r) p.g.top = p;
       }
       const bg = tok("--nc-canvas", "#0b0b0b"), tr = (x) => window.ArkismI18n?.translate(x) || x, tags = [];
@@ -185,7 +188,7 @@ window.ArkismMemoryBubbles = (() => {
       for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 2.5), 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
       labels.hidden = !!sel; // group names would float over the fan
-      for (const g of groups) { if (!g.top) continue; const [x, y] = scr(g.top.x, g.top.y - g.top.r); g.el.style.transform = `translate(${x}px,${y - 8 * zoom}px) translate(-50%,-100%)`; }
+      for (const g of groups) { if (!g.rr) continue; const [x, y] = scr(g.rx, g.ry - g.rr); g.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`; }
       placeCards();
       const id = hover || kb, p = id && byId.get(id), t = p && tip(id);
       if (p && t) { const [sx, y] = scr(p.x, p.y - p.r); tipT.textContent = t.text; tipM.textContent = t.meta; const hw = tipEl.offsetWidth / 2 + 6, x = Math.max(hw, Math.min(W - hw, sx)); tipEl.style.transform = `translate(${x}px,${y - 8}px) translate(-50%,-100%)`; tipEl.classList.add("on"); } else tipEl.classList.remove("on");

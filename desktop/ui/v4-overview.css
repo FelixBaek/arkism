@@ -300,3 +300,7 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-detail-sec-box { padding: 12px 14px; border: 1px solid var(--line, var(--nc-line)); border-radius: 10px; }
 .ov-detail-sec-box.ov-detail-sec-act > .ov-verdict-again { top: 8px; right: 10px; }
 .ov-win-step .ov-wide-x { font-size: 16px; padding: 2px 8px; }
+/* topic area label (Figma 611:54134): pill with colour dot, name, count */
+.mm-label { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: var(--nc-bg, #111); border: 1px solid var(--nc-line, #2a2a2a); font-size: 12px; }
+.mm-label i { width: 6px; height: 6px; border-radius: 50%; }
+.mm-label em { font-style: normal; color: var(--nc-muted); font-variant-numeric: tabular-nums; }

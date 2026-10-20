@@ -5792,3 +5792,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0}일 대기": "Waiting {0} days"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "주제별": "By topic",
+  "분류 대기": "Unsorted"
+});

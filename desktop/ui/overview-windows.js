@@ -481,9 +481,13 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const label = (id) => { let t = labMemo.get(id); if (t == null) labMemo.set(id, t = clip(memById.get(id)?.text || kind(byId.get(id)?.kind), 22)); return t; };
     const rel = (id) => edges.filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
     const fmt = (v) => new Date(v).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" });
+    // Figma 611:54134: one area per topic digest; memories in no topic sit in a grey "분류 대기" area
+    const TOPIC_COLORS = ["#7c9cff", "#5fc6a8", "#e8a65d", "#c48ef0", "#e57b8f", "#6cc3e0", "#b9c56b", "#d98b5f"];
+    const topicOf = new Map(); topics.forEach((t, i) => (t.members || []).forEach((r) => { if (!topicOf.has(r.id)) topicOf.set(r.id, { key: t.id, name: t.title || "주제", ord: i, color: TOPIC_COLORS[i % TOPIC_COLORS.length] }); }));
+    const UNSORTED = { key: "_unsorted", name: "분류 대기", ord: 999, color: "#8a8f98" };
     const bubbles = window.ArkismMemoryBubbles.create({
-      tabs: [["all", "전체"], ["reach", "칸별"], ["kind", "종류별"]],
-      groupOf: (m, p) => m === "reach" ? { key: p.reach, name: REACH[p.reach][0] + (p.reach === "project" && proj ? ` · ${proj}` : ""), ord: REACH[p.reach][1] } : m === "kind" ? { key: p.kind, name: kind(p.kind) } : { key: "all", name: "전체" },
+      tabs: [...(topics.length ? [["topic", "주제별"]] : []), ["reach", "칸별"], ["kind", "종류별"]],
+      groupOf: (m, p) => m === "reach" ? { key: p.reach, name: REACH[p.reach][0] + (p.reach === "project" && proj ? ` · ${proj}` : ""), ord: REACH[p.reach][1], color: REACH_COLOR[p.reach] } : m === "kind" ? { key: p.kind, name: kind(p.kind) } : topicOf.get(p.id) || UNSORTED,
       tip: (id) => { const n = byId.get(id); return n ? { text: label(id), meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
       card: (id) => { const n = byId.get(id); return n ? { title: label(id), place: (REACH[reachOf(n)] || REACH.general)[0], meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
       onSelect: (id) => { sel = id; mode = "sel"; moreOpen = false; paint(); },
