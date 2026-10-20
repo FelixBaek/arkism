@@ -5884,3 +5884,11 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0}단계 (앞선 실행)": "{0} steps (earlier run)",
   "{0}가 끝나면 이어서 실행해요.": "Runs after {0} finishes."
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "보내지 않음": "Nothing sent",
+  "눌러서 바꿔요 · 알림 시점마다 / 확인 필요할 때만 / 끝나면 보고서": "Click to change · at each notice moment / only when approval is needed / report at the end",
+  "기본 채널": "Default channel"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "바뀐 칸 {0}개 · 저장하면 v{1}가 돼요 · 기록 탭에서 되돌릴 수 있어요": "{0} fields changed · saving makes v{1} · you can roll back in the History tab"
+});

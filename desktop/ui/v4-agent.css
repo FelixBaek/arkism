@@ -70,7 +70,6 @@
 .crew-card.new.wf-card strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); }
 .crew-card.new.wf-card small { width: 191px; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 
-.wf-recent { display: flex; flex-direction: column; gap: 10px; }
 .wf-sec-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .wf-sec-head strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .wf-sec-head small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }

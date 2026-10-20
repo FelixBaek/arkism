@@ -127,7 +127,7 @@ window.ArkismAutomation = (h) => {
       if (!bar) return;
       const n = creating ? 0 : changed().length;
       bar.hidden = !creating && !n;
-      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 테스트 탭에서 전체를 시험해요` : `바뀐 칸 ${n}개 · 저장하면 지금 설정으로 바뀌어요`;
+      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 테스트 탭에서 전체를 시험해요` : `바뀐 칸 ${n}개 · 저장하면 v${(rec.revision || 0) + 1}가 돼요 · 기록 탭에서 되돌릴 수 있어요`;
       bar.querySelector(".primary").disabled = creating && !d.name.trim();
     };
     const touch = () => { updateBar(); paintHead(); };
@@ -193,6 +193,7 @@ window.ArkismAutomation = (h) => {
       const estRow = (k, v) => { const r = el("div", ""); r.append(el("dt", "", k), el("dd", "", v)); est.append(r); };
       est.dataset.est = "1";
       side.prepend(est);
+      dlg.querySelector(".crew-popup-head").append(dlg.querySelector(".crew-popup-tabs")); // 993:60224: tabs are a pill group under the estimate, like the expert and team popups
       paintEst();
       function paintEst() {
         est.replaceChildren();
@@ -476,7 +477,6 @@ window.ArkismAutomation = (h) => {
     }
 
     // 워크플로우: the mini flow, then each AI step with its goal and the two trial buttons.
-    let stepsOpen = false;
     function flowSection() {
       const s = section("tree-structure", "워크플로우", link(creating ? "그래프로 만들기 →" : "그래프로 편집 →", () => {
         if (creating) { notice("먼저 자동화를 만든 뒤 그래프로 이어요."); return; }
@@ -513,21 +513,15 @@ window.ArkismAutomation = (h) => {
         const work = flat(g).filter(h.WORK);
         const ais = work.filter(IS_AI);
         if (creating) work.forEach((n, i) => card.append(stepRow(n, i)));
-        else if (ais.length) { // the overview stays a glance: AI steps fold away, the graph is where detail is edited
-          const more = el("details", "auto-steps");
-          more.open = stepsOpen;
-          more.addEventListener("toggle", () => { stepsOpen = more.open; });
-          more.append(el("summary", "auto-count", `AI 단계 ${ais.length}개 · 펼쳐서 바로 고치거나 따로 시험해요`));
-          ais.forEach((n, i) => more.append(stepRow(n, i)));
-          card.append(more);
+        else if (ais.length) {
+          card.append(el("p", "auto-count", `AI 노드 ${ais.length}개 · 노드를 눌러 바로 고치거나, 여기서 따로 시험해요`));
+          ais.forEach((n, i) => card.append(stepRow(n, i)));
         }
         if (!work.length) card.append(el("p", "wf-empty", "아직 할 일이 없어요. 그래프에서 노드를 이어 주세요."));
         if (creating) {
           card.append(el("p", "auto-hint", "단계는 전문가·한 번 호출·처리(코드·HTTP)·사람 확인 중에서 골라요. 둘 이상이면 그래프로 이어져요."), link("+ 단계 추가", () => { addStep(); paint(); touch(); }));
         } else {
-          const go = el("div", "auto-flow-go");
-          go.append(button("그래프로 편집", "primary", "tree-structure", () => leave(() => h.openGraph(rec, { graphMode: true, fromPopup: true }))), el("small", "", "노드 추가·연결·모델은 그래프에서 고쳐요. 저장한 뒤 '창으로 돌아가기'로 여기서 마무리해요."));
-          card.append(go);
+          card.append(link("+ 노드 추가 — 그래프에서 이어 붙여요", () => leave(() => h.openGraph(rec, { graphMode: true, fromPopup: true }))));
         }
       };
       const addStep = () => {
@@ -663,8 +657,9 @@ window.ArkismAutomation = (h) => {
       const head2 = el("div", "auto-sec-head");
       const t = el("h3", "");
       t.append(icon("chat-text"), "진행 알림");
-      const addChannel = () => { setNotify((n) => { n.channels = [...(n.channels || []), { kind: "telegram", channel: "", when: "events" }]; }); paint(); };
-      head2.append(t, link("+ 보낼 곳 추가", addChannel));
+      let editing = -1; // the channel row open for editing; the others read 메신저 · 채널
+      const addChannel = () => { setNotify((n) => { n.channels = [...(n.channels || []), { kind: "telegram", channel: "", when: "events" }]; }); editing = channels().length - 1; paint(); };
+      head2.append(t, link("+ 채널 연결", addChannel), el("span", "auto-dim", "진행 상황을 어디로 보낼지 정해요 · 봇은 설정 › 메신저에서 연결해요"));
       const list = el("div", "auto-box");
       const channels = () => d.notify?.channels || [];
       const setNotify = (fn) => { d.notify ||= {}; fn(d.notify); if (!d.notify.channels?.length && !d.notify.moments) delete d.notify; touch(); };
@@ -731,36 +726,51 @@ window.ArkismAutomation = (h) => {
         const bot = botRows();
         if (!channels().length) {
           const empty = el("div", "auto-row");
-          empty.append(el("span", "auto-key", "보낼 곳"), el("span", "auto-dim", "아직 없어요 · 텔레그램·슬랙·디스코드"), pill("추가", addChannel));
+          empty.append(el("span", "auto-dim", "아직 연결한 채널이 없어요 · 디스코드·텔레그램·슬랙"), pill("연결하기", addChannel));
           list.append(empty);
         }
+        const cur = () => d.notify?.moments || DEFAULT_MOMENTS;
+        // What one channel gets (progress.go wants): events → every 알림 시점, approval → only 확인 필요, report → the end with the whole summary.
+        const whenText = (c) => (c.when === "approval" ? "사람 확인이 필요할 때만" : c.when === "report" ? "끝나면 보고서 올리기" : MOMENTS.filter(([k]) => cur().includes(k)).map(([, l]) => l).join(" · ") || "보내지 않음");
+        const NEXT = { events: "approval", approval: "report", report: "events" };
         channels().forEach((c, i) => {
           const r = el("div", "auto-row notify");
-          const kind = h.select(NOTIFY_KINDS, c.kind);
-          kind.setAttribute("aria-label", "메신저");
-          kind.addEventListener("change", () => { c.kind = kind.value; touch(); paint(); });
-          const ch = h.input(c.channel, { maxLength: 80, placeholder: c.kind === "telegram" ? "나에게" : "#채널" });
-          ch.setAttribute("aria-label", "채널");
-          ch.addEventListener("input", () => { c.channel = ch.value.trim(); touch(); });
+          const kindName = NOTIFY_KINDS.find(([k]) => k === c.kind)?.[1] || c.kind;
           const del = el("button", "icon-btn plain");
           del.type = "button";
           del.setAttribute("aria-label", "보낼 곳 빼기");
           del.append(icon("x"));
-          del.addEventListener("click", () => { setNotify((n) => { n.channels = channels().filter((_, j) => j !== i); if (!n.channels.length) delete n.channels; }); paint(); });
-          r.append(el("span", "auto-key", i ? "" : "보낼 곳"), kind, ch, el("span", "grow"), ...(c.kind === "discord" ? [el("small", "auto-dim", "디스코드 알림은 준비 중")] : []), del);
+          del.addEventListener("click", () => { setNotify((n) => { n.channels = channels().filter((_, j) => j !== i); if (!n.channels.length) delete n.channels; }); editing = -1; paint(); });
+          const when = pill(whenText(c), () => { c.when = NEXT[c.when] || "approval"; touch(); paint(); });
+          when.title = "눌러서 바꿔요 · 알림 시점마다 / 확인 필요할 때만 / 끝나면 보고서";
+          const note = c.kind === "discord" ? [el("small", "auto-dim", "디스코드 알림은 준비 중")] : [];
+          if (editing !== i) {
+            const label = el("button", "auto-chan", `${kindName} · ${c.channel || (c.kind === "telegram" ? "나에게" : "기본 채널")}`);
+            label.type = "button";
+            label.title = "눌러서 고치기";
+            label.addEventListener("click", () => { editing = i; paint(); });
+            r.append(label, el("span", "grow"), ...note, when, del);
+          } else {
+            const kind = h.select(NOTIFY_KINDS, c.kind);
+            kind.setAttribute("aria-label", "메신저");
+            kind.addEventListener("change", () => { c.kind = kind.value; touch(); paint(); });
+            const ch = h.input(c.channel, { maxLength: 80, placeholder: c.kind === "telegram" ? "나에게" : "#채널" });
+            ch.setAttribute("aria-label", "채널");
+            ch.addEventListener("input", () => { c.channel = ch.value.trim(); touch(); });
+            ch.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { editing = -1; paint(); } });
+            r.append(kind, ch, pill("완료", () => { editing = -1; paint(); }), el("span", "grow"), ...note, when, del);
+          }
           list.append(r);
         });
         const mo = el("div", "auto-row");
-        const checks = el("span", "auto-checks");
-        const cur = () => d.notify?.moments || DEFAULT_MOMENTS;
+        const checks = el("span", "auto-chips auto-moments");
         for (const [k, label] of MOMENTS) {
-          const lb = el("label", "auto-check");
-          const box = el("input");
-          box.type = "checkbox";
-          box.checked = cur().includes(k);
-          box.addEventListener("change", () => { const next = MOMENTS.map(([m]) => m).filter((m) => (m === k ? box.checked : cur().includes(m))); setNotify((n) => { n.moments = next; if (same(next, DEFAULT_MOMENTS)) delete n.moments; }); });
-          lb.append(box, label);
-          checks.append(lb);
+          const on = cur().includes(k);
+          const b = pill(`${on ? "✓ " : ""}${label}`, () => { const next = MOMENTS.map(([m]) => m).filter((m) => (m === k ? !on : cur().includes(m))); setNotify((n) => { n.moments = next; if (same(next, DEFAULT_MOMENTS)) delete n.moments; }); paint(); });
+          b.classList.add("toggle");
+          b.classList.toggle("on", on);
+          b.setAttribute("aria-pressed", String(on));
+          checks.append(b);
         }
         mo.append(el("span", "auto-key", "알림 시점"), checks);
         list.append(mo);
@@ -781,11 +791,6 @@ window.ArkismAutomation = (h) => {
       const list = el("div", "auto-box");
       const draw = () => {
         list.replaceChildren();
-        const model = h.modelSelect(d.model || "", "단계마다 정해요");
-        model.setAttribute("aria-label", "기본 모델");
-        model.addEventListener("change", () => { d.model = model.value; touch(); draw(); });
-        const modelRow = el("span", "auto-model-row");
-        modelRow.append(model, el("span", "auto-dim", d.model ? "모델을 비워 둔 AI 단계가 이걸 써요" : "단계마다 바꿀 수 있어요"));
         const backs = (d.graph.edges || []).filter(h.isBack);
         const stops = [d.limits?.max_minutes ? `최대 ${d.limits.max_minutes}분` : "", d.limits?.max_steps ? `단계 ${d.limits.max_steps}번` : "", backs.length ? `되돌아가는 선은 ${Math.max(...backs.map((e) => e.max))}번까지` : ""].filter(Boolean).join(" · ") || "정하지 않음";
         const editRow = (label, valueEl, mk) => {
@@ -795,7 +800,16 @@ window.ArkismAutomation = (h) => {
           }));
           return r;
         };
-        list.append(valueRow("기본 모델", modelRow), editRow("멈추는 조건", el("span", "", stops), (done) => {
+        const modelText = el("span", "", `${d.model || "단계마다 정해요"} · ${d.model ? "모델을 비워 둔 AI 단계가 이걸 써요" : "단계마다 바꿀 수 있어요"}`);
+        list.append(editRow("모델", modelText, () => {
+          const model = h.modelSelect(d.model || "", "단계마다 정해요");
+          model.setAttribute("aria-label", "기본 모델");
+          model.addEventListener("change", () => { d.model = model.value; touch(); draw(); });
+          setTimeout(() => model.focus());
+          const wrap = el("span", "auto-model-row");
+          wrap.append(model, pill("취소", () => draw()));
+          return wrap;
+        }), editRow("멈추는 조건", el("span", "", stops), (done) => {
           const wrap = el("span", "auto-limits");
           const mins = h.input(d.limits?.max_minutes || "", { type: "number", min: 1, max: 1440, placeholder: "30" });
           const steps = h.input(d.limits?.max_steps || "", { type: "number", min: 1, max: 500, placeholder: "60" });
@@ -815,7 +829,7 @@ window.ArkismAutomation = (h) => {
       return s;
     }
 
-    // 관리: 복제 · 보관 · 지우기 (the old button row), plus the one-line call hint.
+    // 관리 (993:60224): one row each, label · what it does · its button. 지우기 and 예전 설정 창 are not in Figma but keep their jobs.
     function manageSection() {
       const s = section("gear-six", "관리");
       // One row: the four used to take a row each, and 예전 설정 창 repeats what this window already edits.
@@ -825,10 +839,7 @@ window.ArkismAutomation = (h) => {
         ["지우기", "정의를 영구히 지워요 · 지난 실행 기록은 남아요", async () => { if (await h.remove(rec)) leaveSilently(); }],
         ["예전 설정 창", "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요", () => leave(() => h.openSettings(rec))]
       ];
-      const r = el("div", "auto-row");
-      r.append(el("span", "auto-dim", "지우기는 정의만 지워요 · 지난 실행 기록은 남아요"));
-      for (const [label, sub, fn] of acts) { const b = pill(label, fn); b.title = sub; r.append(b); }
-      s.append(box(r));
+      s.append(box(...acts.map(([label, sub, fn]) => valueRow(label, el("span", "", sub), pill(label === "예전 설정 창" ? "열기" : label, fn)))));
       return s;
     }
 

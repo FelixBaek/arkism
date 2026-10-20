@@ -537,11 +537,9 @@ window.ArkismCrew = (ctx) => {
       grid.querySelector("input:checked")?.closest("label").scrollIntoView({ block: "center" });
     });
   }
-  // The latest runs of every workflow, for 최근 실행 under the cards and the approvals card on top.
+  // The latest runs of every workflow, for the approvals card on top (a workflow's own runs are in its popup's 기록 tab).
   let recent = null;
   let recentBusy = false;
-  let recentAll = false;
-  let recentOpen = false; // 최근 실행 starts folded under the cards (198:286 has none); kept until the owner decides
   let waiting = [];
   async function loadRecent() {
     if (recentBusy) return;
@@ -551,25 +549,14 @@ window.ArkismCrew = (ctx) => {
       request(`/v1/crew/runs?${query({ limit: 30 })}`).then((r) => r.items || [], () => null),
       request(`/v1/crew/runs?${query({ status: "waiting", limit: 100 })}`).then((r) => r.items || [], () => null)]);
     recent = all || recent || [];
-    byStatus = { key: "", items: null }; // a status filter reads again too
     waiting = wait || [];
-    runsOf.clear();
     recentBusy = false;
-    if (state.view === "crew") { drawCards(); drawRecent(); drawWaiting(); }
-  }
-  // One workflow's own history: the shared list above only holds the latest 30 runs of all workflows.
-  const runsOf = new Map();
-  async function loadRunsOf(id) {
-    if (runsOf.get(id) === "busy") return;
-    runsOf.set(id, "busy");
-    try { runsOf.set(id, (await request(`/v1/crew/runs?${query({ crew_id: id, limit: 30 })}`)).items || []); } catch (_) { runsOf.set(id, []); }
-    if (state.view === "crew") drawRecent();
+    if (state.view === "crew") { drawCards(); drawWaiting(); }
   }
   const waitingRuns = () => {
     const seen = new Set();
     return [...waiting, ...(recent || [])].filter((x) => x.crew_run?.status === "waiting" && x.crew_run.waiting?.kind === "approval" && !seen.has(x.id) && seen.add(x.id));
   };
-  const collabWorkers = (g) => aiNodes(g).filter((a) => a.config?.collab === "on").reduce((s, a) => s + (Number(a.config.max_workers) || 5), 0);
   function categories(list) {
     const counts = new Map();
     list.forEach((r) => { if (r.crew.category) counts.set(r.crew.category, (counts.get(r.crew.category) || 0) + 1); });
@@ -584,13 +571,13 @@ window.ArkismCrew = (ctx) => {
     state, el, icon, button, notice, request, query, byId, kit, NODES, IS_AI, WORK, UNTITLED, RUN_LABEL,
     levels, nodeTitle, stepCount, isBack, modelOf, modelMark, avatarMark, personas, agents, workflows, ownerOf, categories, ruleChecks, waitingRuns,
     cronText, nextRun, parseCron, when, switchEl, copyButton, coverCredit, coverPicker, input, select, modelInput, modelSelect, freeHandle, layoutGraph, defaultGraph,
-    save, reload, archive, remove, errorText, startRun, decide, stopRun, askTask, openGraph, runRow, runRequest, readable, nodeDur, spanText, runMs, runTookText: runTook, ago,
+    save, reload, archive, remove, errorText, startRun, decide, stopRun, askTask, openGraph, runRequest, readable, nodeDur, spanText, runMs, runTookText: runTook, ago,
     duplicate: (r) => dupButton(r).click(),
     refreshRuns: async () => { recent = null; await loadRecent(); },
     openSettingsNew: () => openSettings(null),
     openSettings: (r) => openSettings(r),
     openAutomation: (id, tab) => { const r = byId(id); if (r) getAuto().open(r, tab); },
-    afterClose: () => { markSelected(); if (state.view === "crew") { drawCards(); drawRecent(); } }
+    afterClose: () => { markSelected(); if (state.view === "crew") drawCards(); }
   }));
   function renderList() {
     if (!TABS.some(([k]) => k === state.crewTab)) state.crewTab = "all";
@@ -639,11 +626,9 @@ window.ArkismCrew = (ctx) => {
     $("#stats").replaceChildren();
     const main = $("#table");
     main.className = "wf-main";
-    const recentBox = el("section", "wf-recent");
-    main.replaceChildren(el("div", "wf-grid"), recentBox);
+    main.replaceChildren(el("div", "wf-grid")); // 최근 실행 moved into the popup's 기록 tab (198:286)
     drawWaiting();
     drawCards();
-    drawRecent();
     void loadRecent();
   }
   // 확인해 주세요: runs that wait for a person's answer, with the answer buttons right there.
@@ -674,7 +659,7 @@ window.ArkismCrew = (ctx) => {
     grid.replaceChildren(...shownCards().map(workflowCard), newCard());
     markSelected();
   }
-  // Card (198:286): category chip and the 일정·웹훅 switch on top, name, one line, then $이름 · 단계 · 일정.
+  // Card (198:286): photo, the 일정 badge and the name. The 일정·웹훅 switch, one line and $이름 · 단계 live in the popup.
   // A cover photo (배경 사진) sits as a band on top of the card.
   function workflowCard(r) {
     const x = r.crew;
@@ -691,20 +676,14 @@ window.ArkismCrew = (ctx) => {
       c.append(img);
     }
     const top = el("div", "crew-cover-top");
-    if (x.trigger) top.append(switchEl(x.enabled, `${x.name} 일정·웹훅 켜기`, (on) => quickSave(r, { enabled: on }, on ? "일정·웹훅을 켰어요." : "일정·웹훅을 껐어요.")));
-    const n = stepCount(x.graph);
-    const workers = collabWorkers(x.graph);
-    const waits = waitingRuns().filter((w) => w.crew_run.crew_id === r.id).length;
-    const meta = [`$${x.handle}`, n === 1 ? "단계 1개" : `${n}단계`, workers ? `협업 워커 ${workers}명` : "", waits ? `승인 ${waits}건 필요` : ""].filter(Boolean).join(" · ");
     const when2 = x.trigger ? (x.enabled ? (x.trigger.kind === "schedule" ? cronText(x.trigger.cron) : triggerText(x)) : `${triggerText(x)} · 꺼짐`) : "수동 실행";
-    const foot = el("div", "crew-cover-foot");
-    foot.append(el("small", "wf-card-meta", meta));
     // 일정 배지: as long as its text, pinned to the card's top right, cut with … past the card's width.
     const badge = el("span", `wf-card-when${triggered(x) ? " on" : ""}`);
     badge.title = when2;
     badge.append(el("i"), el("span", "", when2));
     top.prepend(badge);
-    c.append(top, el("strong", "crew-cover-title", x.name), el("p", "wf-card-role", x.role || ""), el("span", "grow"), foot);
+    c.title = [x.role, `$${x.handle}`].filter(Boolean).join(" · ");
+    c.append(top, el("strong", "crew-cover-title", x.name));
     return c;
   }
   function newCard() {
@@ -772,8 +751,6 @@ window.ArkismCrew = (ctx) => {
     } catch { /* naming is best effort */ }
   }
 
-  // 최근 실행 (198:286): the chosen workflow's runs, or every workflow's when none is chosen. 실행 기록 shows more.
-  const RUN_BADGE = { succeeded: "done", failed: "fail", waiting: "wait", running: "live", stopped: "done" };
   function runRequest(cr) {
     try { return JSON.parse(cr.input || "{}").request || ""; } catch { return ""; }
   }
@@ -788,72 +765,6 @@ window.ArkismCrew = (ctx) => {
     return ends.length && run.created_at ? Math.max(...ends) - new Date(run.created_at).getTime() : 0;
   }
   const runTook = (run) => (runMs(run) ? spanText(runMs(run)) : "");
-  function runProgress(run, rec) {
-    const work = (rec?.crew.graph?.nodes || []).filter(WORK).map((n) => n.id);
-    const nodes = run.crew_run?.nodes || {};
-    const ids = work.length ? work : Object.keys(nodes);
-    return `${ids.filter((id) => nodes[id]?.status === "done").length}/${ids.length} 단계`;
-  }
-  function runRow(run, onOpen) {
-    const cr = run.crew_run || {};
-    const rec = byId(cr.crew_id);
-    const row = el("div", "wf-run");
-    row.append(el("span", `wf-badge ${RUN_BADGE[cr.status] || ""}`, RUN_LABEL[cr.status] || cr.status || ""));
-    const t = el("div", "wf-run-text");
-    const loops = Object.values(cr.loops || {}).reduce((a, b) => a + b, 0);
-    const bits = [rec?.crew.name, cr.status === "failed" ? (Object.values(cr.nodes || {}).find((n) => n.status === "failed")?.error || readable(cr.summary).split(/[.。]/)[0]).slice(0, 40) : "", runProgress(run, rec), runTook(run), loops ? `되돌아감 ${loops}번` : "", ago(run.created_at)].filter(Boolean);
-    t.append(el("strong", "", runRequest(cr) || readable(cr.summary) || rec?.crew.name || "실행"), el("small", "", bits.join(" · ")));
-    row.append(t);
-    if (rec) row.append(button("상세 보기", "ghost", null, () => (typeof onOpen === "function" ? onOpen() : openGraph(rec, { run })))); // .map(runRow) passes the index as onOpen
-    return row;
-  }
-  let runStatus = "all";
-  let byStatus = { key: "", items: null };
-  async function loadByStatus(key, crewId) {
-    byStatus = { key, items: null };
-    let items = [];
-    try { items = (await request(`/v1/crew/runs?${query({ ...(crewId ? { crew_id: crewId } : {}), status: runStatus, limit: 30 })}`)).items || []; } catch (_) { /* empty list */ }
-    if (byStatus.key !== key) return;
-    byStatus = { key, items };
-    if (state.view === "crew") drawRecent();
-  }
-  function drawRecent() {
-    const box = $("#table .wf-recent");
-    if (!box) return;
-    const picked = state.selected?.startsWith("crew:") ? state.selected.slice(5) : null;
-    const own = picked ? runsOf.get(picked) : null;
-    if (picked && own === undefined) void loadRunsOf(picked);
-    // 상태로 거르기: the server filters (status=…), so a failure older than the latest 30 runs still shows.
-    const key = `${picked || ""}|${runStatus}`;
-    if (runStatus !== "all" && byStatus.key !== key) void loadByStatus(key, picked);
-    const filtered = runStatus !== "all" ? (byStatus.key === key && Array.isArray(byStatus.items) ? byStatus.items : null) : undefined;
-    const loading = filtered === null || (filtered === undefined && (picked ? !Array.isArray(own) : recent === null));
-    const list = filtered || (filtered === null ? [] : picked ? (Array.isArray(own) ? own : (recent || []).filter((x) => x.crew_run?.crew_id === picked)) : recent || []);
-    const head = el("div", "wf-sec-head");
-    const pick = el("select", "wf-select small");
-    pick.setAttribute("aria-label", "실행 상태");
-    for (const [k, label] of [["all", "모든 상태"], ["failed", "실패"], ["waiting", "확인 대기"], ["running", "도는 중"], ["succeeded", "완료"], ["stopped", "멈춤"]]) {
-      const o = el("option", "", label);
-      o.value = k;
-      pick.append(o);
-    }
-    pick.value = runStatus;
-    pick.addEventListener("change", () => { runStatus = pick.value; drawRecent(); });
-    const fold = el("button", "wf-fold");
-    fold.type = "button";
-    fold.setAttribute("aria-expanded", String(recentOpen));
-    fold.append(icon(recentOpen ? "caret-down" : "caret-right"), el("strong", "", "최근 실행"));
-    fold.addEventListener("click", () => { recentOpen = !recentOpen; drawRecent(); });
-    head.append(fold, el("small", "", loading && !list.length ? "불러오는 중…" : `${list.length}건`), el("span", "grow"));
-    if (!recentOpen) { box.replaceChildren(head); return; }
-    head.append(pick);
-    if (list.length > 5) head.append(button(recentAll ? "줄이기" : "실행 기록", "ghost", null, () => { recentAll = !recentAll; drawRecent(); }));
-    const rows = el("div", "wf-runs");
-    const shown = recentAll ? list : list.slice(0, 5);
-    rows.append(...shown.map(runRow));
-    if (!loading && !list.length) rows.append(el("p", "wf-empty", runStatus !== "all" ? "이 상태인 실행이 없어요." : picked ? "이 워크플로우는 아직 실행한 적이 없어요." : "아직 실행한 적이 없어요."));
-    box.replaceChildren(head, rows);
-  }
 
   // ---------------------------------------------------------------- detail (198:286 오른쪽)
   function renderDetail() {
