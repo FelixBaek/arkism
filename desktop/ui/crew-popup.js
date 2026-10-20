@@ -36,6 +36,8 @@ window.ArkismCrewPopup = ({ el, button }) => {
       tabs.find((t) => t.key === current).render(body);
     };
     dlg.append(head, bar, body);
+    // Once the body scrolls, a line and a gap under the head keep the content from running into it.
+    dlg.addEventListener("scroll", (e) => { if (e.target instanceof Element && e.target !== dlg) head.classList.toggle("scrolled", e.target.scrollTop > 0); }, true);
     dlg.addEventListener("close", () => { dlg.remove(); onClose?.(); });
     document.body.append(dlg);
     draw();

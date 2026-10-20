@@ -344,3 +344,4 @@ button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor
 /* ✕: the corner, same gap from the top and right edges (pulled out of the head's 28/32px padding) */
 .v4-auto .crew-popup-close, .tm-pop .crew-popup-close, .ex-pop .crew-popup-close { flex: none; width: 28px; height: 28px; margin: -13px -17px 0 4px; }
 .ex-pop .crew-popup-close { margin: -9px -9px 0 4px; } /* expert head pads 24px, not 28/32 */
+.crew-popup-head.scrolled { box-shadow: 0 1px 0 var(--nc-line, var(--border)), 0 12px 16px -12px rgba(0, 0, 0, .5); z-index: 2; }

@@ -277,3 +277,8 @@
 .tm-ctx-list > .tm-ch-add { padding: 10px 12px; border-top: 1px solid var(--nc-line); background: var(--nc-surface); }
 .tm-ch-links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 .tm-pop-body > .ex-danger { margin: 8px 0 24px; }
+.tm-pop .crew-popup-head { padding-bottom: 16px; }
+/* 진행자: crown above the face; a face-less member (model logo) keeps the same 32px slot so names line up */
+.tm-mface { position: relative; display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; }
+.tm-crown { position: absolute; right: -5px; bottom: -4px; width: 16px; height: 16px; padding: 2px; border-radius: 50%; background: var(--nc-surface); box-shadow: 0 0 0 1px var(--nc-line); color: var(--nc-accent); }
+.tm-mrow.lead .tm-mwho b { color: var(--nc-accent); }

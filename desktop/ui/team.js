@@ -1068,7 +1068,10 @@ window.ArkismTeams = (ctx) => {
       if (compact) {
         const who = el("div", "tm-mwho"); who.append(raw(el("b", "", memberName(m))), roleSel);
         const focus = raw(input(m.focus, (v) => { m.focus = v; changed(); }, { max: 120, placeholder: "맡을 일" })); focus.className = "tm-pill-input"; focus.setAttribute("aria-label", "맡을 일");
-        row.append(...(picks ? [] : [el("span", "tm-grip", "⠿"), el("span", "tm-ord", pad2(i + 1))]), face(byId(m.agent_id), "m"), who, focus, raw(el("span", "tm-mmodelr", modelLabel(model))), remove);
+        // 진행자 at a glance: a crown on the face and the row tinted
+        const fc = el("span", "tm-mface"); fc.append(face(byId(m.agent_id), "m"));
+        if (m.role === "moderator") { row.classList.add("lead"); const c = icon("crown"); c.classList.add("tm-crown"); c.setAttribute("aria-label", tr("진행자")); fc.append(c); }
+        row.append(...(picks ? [] : [el("span", "tm-grip", "⠿"), el("span", "tm-ord", pad2(i + 1))]), fc, who, focus, raw(el("span", "tm-mmodelr", modelLabel(model))), remove);
       } else {
         const mc = el("span", "tm-mmodel"); mc.append(mark(model), el("span", "", modelLabel(model)));
         row.append(el("span", "tm-ord", pad2(i + 1)), raw(el("span", "tm-mname", memberName(m))), mc, roleSel, remove);

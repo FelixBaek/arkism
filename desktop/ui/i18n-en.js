@@ -5902,3 +5902,4 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, {
   "'{0}' 팀을 삭제할까요?\n되돌릴 수 없어요. 확인하려면 이름 '{1}'을 그대로 입력하세요.": "Delete team '{0}'?\nThis can't be undone. Type its name '{1}' to confirm."
 });
+Object.assign(window.ArkismI18nEN.strings, { "진행자": "Moderator" });
