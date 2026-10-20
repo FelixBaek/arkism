@@ -106,9 +106,9 @@ func (s *Service) ListCandidates(ctx context.Context, token string, in ReviewInp
 	if e != nil {
 		return out, e
 	}
-	// The memory reviewer (classifier role) reads the queue it classifies with an explicit review grant;
+	// A service reads the queue only with an explicit review grant (the memory reviewer, which classifies it);
 	// approving stays human-only in ReviewCandidate (ADR-0022).
-	if actor.Role != roleHuman && actor.Role != roleClassifier {
+	if actor.Role != "human" && actor.Role != "service" {
 		return out, ErrDenied
 	}
 	in, _, e = normalizeReview(in)

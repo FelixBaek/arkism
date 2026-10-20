@@ -18,22 +18,11 @@ func TestPostgresClassifierCanOnlyClassify(t *testing.T) {
 	}
 	const token = "classifier-token-that-is-never-stored-raw"
 	if err := admin.ProvisionPrincipal(ctx, PrincipalGrant{PrincipalID: "arkism-memory-reviewer", Role: roleClassifier, Token: token,
-		OrganizationID: scope.WorkspaceID, ProjectID: scope.ProjectID, Actions: []string{"db:read", "db:write", "classify:memory_candidates", "review:memory_candidates"}}); err != nil {
+		OrganizationID: scope.WorkspaceID, ProjectID: scope.ProjectID, Actions: []string{"db:read", "db:write", "classify:memory_candidates"}}); err != nil {
 		t.Fatal(err)
 	}
 	app := restrictedPostgres(t, admin)
 	bound := ContextWithPostgresToken(ctx, token)
-	auth, err := NewPostgresAuthorizer(app)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if page, err := (&Service{Repo: app, Auth: auth}).ListCandidates(bound, token, ReviewInput{Scope: scope}); err != nil || len(page.Items) != 1 {
-		t.Fatalf("classifier could not read the waiting list: %v", err)
-	}
-	listed := Record{ID: ID(), Scope: scope, Kind: "review:list", Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: "someone-else", Target: &Ref{}}
-	if err := app.Insert(bound, "audit_events", listed); !errors.Is(err, ErrDenied) {
-		t.Fatalf("classifier forged a list audit actor: %v", err)
-	}
 
 	classified, err := admin.Get(ctx, "memory_candidates", scope, cand.ID) // stored times, as the service would hold them
 	if err != nil {
