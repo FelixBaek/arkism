@@ -125,8 +125,104 @@
     return svg;
   }
   // Category chips and badges (208:17763): categories are the person's own words, so the icon is a guess from them.
-  const catIcon = (c) => (/git|release|릴리/i.test(c) ? "git-branch" : /plan|기획/i.test(c) ? "file-text" : /research|리서/i.test(c) ? "magnifying-glass"
-    : /design|디자/i.test(c) ? "palette" : /code|코드/i.test(c) ? "code" : /기록|비서|doc|note/i.test(c) ? "book-open" : c ? "tag" : "squares-four");
+  // An icon the person picked wins: crew categories they made (arkism.crewCatIcons, this PC only — the server keeps a crew
+  // category as a plain string), then a 설정 › 카테고리 entry with the same name (arkism.prefs), then the guess.
+  const guessCatIcon = (c) => (/git|release|릴리/i.test(c) ? "git-branch" : /plan|기획/i.test(c) ? "file-text" : /research|리서/i.test(c) ? "magnifying-glass"
+    : /design|디자/i.test(c) ? "palette" : /code|코드/i.test(c) ? "code" : /image|이미지/i.test(c) ? "image" : /기록|비서|doc|note/i.test(c) ? "book-open" : c ? "tag" : "squares-four");
+  const CAT_ICON_CHOICES = ["tag", "stack", "code", "terminal", "git-branch", "file-text", "book-open", "palette", "image", "presentation", "magnifying-glass", "lightbulb",
+    "brain", "sparkle", "robot", "database", "archive", "chart-bar", "globe", "calendar", "paper-plane", "chat-text", "users-three", "puzzle-piece"];
+  let crewCatIcons = {};
+  try { crewCatIcons = JSON.parse(stored("arkism.crewCatIcons") || "{}") || {}; } catch (_) { /* start fresh */ }
+  let prefsRaw, prefsIcons = new Map();
+  function prefsCatIcon(c) {
+    const now = stored("arkism.prefs");
+    if (now !== prefsRaw) {
+      prefsRaw = now; prefsIcons = new Map();
+      try { for (const x of JSON.parse(now || "null")?.categories || []) if (x?.name && x.icon) prefsIcons.set(x.name, x.icon); } catch (_) { /* no saved categories */ }
+    }
+    return prefsIcons.get(c);
+  }
+  const catIcon = (c) => (c && (crewCatIcons[c] || prefsCatIcon(c))) || guessCatIcon(c);
+  // The category chip in a crew popup head: its icon, the name (or 카테고리) and a caret.
+  function catChipBody(c) { return [icon(c ? catIcon(c) : "tag"), raw(el("span", "", c || tr("카테고리"))), icon("caret-down")]; }
+  // Category menu for the crew popups (expert · team · automation): pick one, clear it, or make a new one with a name and an icon.
+  function catMenu(anchor, { list, current, onPick }) {
+    document.querySelector(".cat-menu")?.remove();
+    if (current && !list.includes(current)) list = [...list, current];
+    const m = el("div", "cat-menu");
+    m.setAttribute("role", "dialog");
+    m.setAttribute("aria-label", "카테고리");
+    const close = (refocus) => { m.remove(); document.removeEventListener("pointerdown", away, true); if (refocus && anchor.isConnected) anchor.focus(); };
+    const away = (e) => { if (!m.contains(e.target) && !anchor.contains(e.target)) close(); };
+    const pickNow = (v) => { close(true); onPick(v); };
+    const item = (label, ic, on, fn, mine = true) => {
+      const b = el("button", `cat-menu-item${on ? " on" : ""}`);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(on));
+      b.append(icon(ic), mine ? raw(el("span", "", label)) : el("span", "", label));
+      b.addEventListener("click", fn);
+      m.append(b);
+      return b;
+    };
+    for (const c of list) item(c, catIcon(c), c === current, () => pickNow(c));
+    if (current) item("카테고리 없음", "x", false, () => pickNow(""), false);
+    const add = item("새 카테고리", "plus", false, () => { const f = newForm(); add.replaceWith(f); f.querySelector("input").focus(); place(); }, false);
+    function newForm() {
+      const f = el("div", "cat-new");
+      const name = el("input");
+      name.maxLength = 40; name.placeholder = "새 카테고리"; name.setAttribute("aria-label", "새 카테고리 이름");
+      let pick = "tag", picked = false;
+      const grid = el("div", "cat-icons");
+      grid.setAttribute("role", "radiogroup"); grid.setAttribute("aria-label", "아이콘");
+      const paint = () => grid.querySelectorAll("button").forEach((b) => { const on = b.dataset.icon === pick; b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1; });
+      const choose = (n, focus) => { pick = n; picked = true; paint(); if (focus) grid.querySelector(`[data-icon="${n}"]`).focus(); };
+      for (const n of CAT_ICON_CHOICES) {
+        const b = el("button", "cat-icon");
+        b.type = "button"; b.dataset.icon = n; b.title = n;
+        b.setAttribute("role", "radio"); b.setAttribute("aria-label", n);
+        b.append(icon(n));
+        b.addEventListener("click", () => choose(n));
+        grid.append(b);
+      }
+      // Arrow keys move the choice, like any radio group; up/down jump a row of 8.
+      grid.addEventListener("keydown", (e) => {
+        const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 8, ArrowUp: -8 }[e.key];
+        if (!step) return;
+        e.preventDefault();
+        const i = CAT_ICON_CHOICES.indexOf(pick), n = CAT_ICON_CHOICES.length;
+        choose(CAT_ICON_CHOICES[(i + step + n) % n], true);
+      });
+      // Until an icon is picked, it follows the name (디자인 → palette).
+      name.addEventListener("input", () => { if (!picked) { const g = guessCatIcon(name.value.trim()); pick = CAT_ICON_CHOICES.includes(g) ? g : "tag"; paint(); } });
+      const ok = () => {
+        const v = name.value.trim();
+        if (!v) { name.focus(); return; }
+        crewCatIcons[v] = pick;
+        store("arkism.crewCatIcons", JSON.stringify(crewCatIcons));
+        pickNow(v);
+      };
+      name.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); ok(); } });
+      const foot = el("div", "cat-new-foot");
+      foot.append(button("취소", "ghost", null, () => close(true)), button("추가", "primary", null, ok));
+      f.append(name, el("div", "cat-new-label", "아이콘"), grid, foot);
+      paint();
+      return f;
+    }
+    m.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); close(true); } });
+    // Fixed under the chip, inside its dialog (the top layer), kept on screen.
+    function place() {
+      const r = anchor.getBoundingClientRect(), w = m.offsetWidth, hgt = m.offsetHeight;
+      const left = Math.max(8, Math.min(r.left, innerWidth - w - 8)), top = r.bottom + 4 + hgt > innerHeight - 8 ? Math.max(8, r.top - 4 - hgt) : r.bottom + 4;
+      m.style.left = `${left}px`; m.style.top = `${top}px`;
+      // a dragged dialog (translate) holds its fixed children: move by what the menu actually landed off
+      const got = m.getBoundingClientRect();
+      m.style.left = `${2 * left - got.left}px`; m.style.top = `${2 * top - got.top}px`;
+    }
+    (anchor.closest("dialog") || document.body).append(m);
+    place();
+    document.addEventListener("pointerdown", away, true);
+    (m.querySelector(".cat-menu-item.on") || m.querySelector(".cat-menu-item"))?.focus();
+  }
   function button(label, cls, iconName, onClick) {
     const b = el("button", `btn ${cls || ""}`.trim());
     b.type = "button";
@@ -241,9 +337,8 @@
 
   function setStatus(mode, text) {
     $("#status-dot").className = `dot ${mode}`;
+    $("#status-dot").dataset.mode = mode;
     $("#status-text").textContent = text;
-    // Figma 198:110 has no dot; renderStatusCard hides it once it knows nothing needs a look.
-    if (mode !== "ready") $("#status-toggle").hidden = false;
   }
   function dbLabel() {
     if (state.ready === null) return "확인 중";
@@ -303,9 +398,9 @@
     });
     const issues = items.filter((i) => !i[3]).length + agents.filter((cls) => cls === "warn" || cls === "bad").length;
     const badge = $("#status-toggle");
-    badge.classList.toggle("warn", issues > 0);
-    badge.hidden = issues === 0 && $("#status-dot").classList.contains("ready");
-    if (badge.hidden) { $("#status-card").hidden = true; badge.setAttribute("aria-expanded", "false"); }
+    // Icon colour follows the worst state: red = server/DB down or an agent missing, amber = needs a look, green = fine.
+    const level = $("#status-dot").dataset.mode !== "ready" || items.some((i) => !i[3]) || agents.includes("bad") ? "bad" : issues ? "warn" : "ok";
+    badge.classList.remove("ok", "warn", "bad"); badge.classList.add(level);
     $("#status-badge").textContent = issues ? `주의 ${issues}` : "자세히";
     const card = $("#status-card");
     card.querySelector(".status-summary").dataset.issues = issues ? `주의 ${issues}` : "";
@@ -316,7 +411,7 @@
     }));
     if (!card.querySelector(".st-foot")) {
       const foot = el("div", "st-foot");
-      foot.append(el("p", "", "점은 서버 연결 상태예요. DB 상태는 따로 확인해요."), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
+      foot.append(el("p", "", "상태 아이콘 색: 초록 정상 · 주황 확인 필요 · 빨강 연결 문제"), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
       card.append(foot);
       $("#status-agents").before(el("strong", "st-head", "에이전트"));
     }
@@ -1136,7 +1231,10 @@
     const box = $("#head-actions");
     const refresh = button("새로고침", "", "arrows-clockwise", loadAll);
     const pageView = pages.views[state.view] || crew.pages[state.view];
-    if (pageView) {
+    if (pageView?.headInTitle) { // Figma v4 (198:2350 · 325:37545): the buttons sit at the right of the title row, not in the tab bar
+      box.replaceChildren();
+      headExtras({ count: $("#title-count").textContent, aside: pageView.head() });
+    } else if (pageView) {
       box.replaceChildren(...pageView.head());
     } else if (state.view === "crew") {
       box.replaceChildren(...crew.head());
@@ -1631,16 +1729,7 @@
       top.push(card);
     }
     const tools = el("div", "mem-tools");
-    const search = el("label", "panel-search");
-    const q = el("input"); q.type = "search"; q.placeholder = "기억 검색"; q.setAttribute("aria-label", "기억 검색"); q.value = $("#search").value;
-    q.addEventListener("input", () => {
-      $("#search").value = q.value; state.query = q.value.trim().toLowerCase();
-      const at = q.selectionStart;
-      render(false);
-      const again = $(".panel-search input"); again?.focus(); again?.setSelectionRange(at, at);
-    });
-    search.append(icon("magnifying-glass"), q);
-    tools.append(search);
+    tools.append(memSearch());
     const repos = [...new Set(source.map(memRepo).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     if (state.repo && state.repo !== "shared" && !repos.includes(state.repo)) state.repo = "";
     if (repos.length) {
@@ -1695,11 +1784,26 @@
     $("#table").append(foot);
   }
   // 확인해 주세요 (198:716 · 198:1748 · 198:3984): one 3-way segment, rows with a reason badge, ✓ ✕ on new ones.
+  // The list filter (state.query): the top-bar #search is hidden (shell.css), so each memory list draws this box.
+  function memSearch() {
+    const search = el("label", "panel-search");
+    const q = el("input"); q.type = "search"; q.placeholder = "기억 검색"; q.setAttribute("aria-label", "기억 검색"); q.value = $("#search").value;
+    q.addEventListener("input", () => {
+      $("#search").value = q.value; state.query = q.value.trim().toLowerCase();
+      const at = q.selectionStart;
+      render(false);
+      const again = $(".panel-search input"); again?.focus(); again?.setSelectionRange(at, at);
+    });
+    search.append(icon("magnifying-glass"), q);
+    return search;
+  }
   function renderMemoryCheck() {
     const d = state.data, n = checkCounts();
     const seg = segment(MEM_CHECK.map(([k, l]) => [k, l, n[k], true]), state.memTab, (k) => go("memories", k)); seg.classList.add("mem-seg");
     $("#controls").replaceChildren(seg);
     if (state.memTab === "merge") { digests.drawMerge(); return; }
+    const tools = el("div", "mem-tools"); tools.append(memSearch());
+    $("#controls").append(tools);
     $("#stats").replaceChildren();
     const time = (m) => new Date(m.created_at).getTime();
     const items = memorySource().filter((m) => matches(`${m.text} ${m.summary || ""}`)).sort(state.memTab === "candidate" ? byRisk : (a, b) => time(b) - time(a));
@@ -2191,27 +2295,23 @@
       renderDetail();
     } catch (e) { notice(`되돌리지 못했어요 (${e.message}).`); }
   }
+  const skillTalk = new Map(); // AI로 쉽게 설명 talks per skill, kept while the app is open
   async function skillDetailV4(sk) {
     const cat = pages.categoryOf(sk)?.name || "분류 안 됨";
     const body = detailShell(cat);
     const top = el("div", "v4s-head");
     top.append(raw(el("h2", "v4s-name", sk.name)));
     if (sk.description) top.append(raw(el("p", "v4s-lead", sk.description)));
-    const explain = el("div", "");
-    const aiBtn = el("button", "link-btn", "AI로 쉽게 설명"); aiBtn.type = "button";
-    aiBtn.addEventListener("click", async () => {
-      aiBtn.disabled = true;
-      explain.replaceChildren(el("p", "dim", "AI가 쉬운 말로 풀어 쓰는 중이에요…"));
-      try {
-        const text = await crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n\nExplain in two or three plain Korean sentences what this skill does and when to use it.`);
-        explain.replaceChildren(Object.assign(el("div", "quote"), { textContent: text }));
-      } catch (e) { explain.replaceChildren(el("p", "warn-text", e.message)); } finally { aiBtn.disabled = false; }
-    });
+    // AI로 쉽게 설명 (ai-chat.js): the same bubble as AI 제안; it only answers, nothing to apply.
+    const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI로 쉽게 설명", title: "AI로 쉽게 설명",
+      sub: "이 스킬을 쉬운 말로 풀어 줘요", greeting: "이 스킬의 무엇이 궁금하세요? 무엇을 하는지, 언제 쓰는지 쉬운 말로 알려 드려요.",
+      placeholder: "예: 내 작업에서는 언제 쓰면 돼?", quick: ["쉽게 설명해 줘", "언제 쓰면 좋아?", "예시를 들어 줘"],
+      ask: async (q, history) => ({ say: await crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n${history.length ? `Conversation so far:\n${history.map((m) => `${m.who === "me" ? "User" : "You"}: ${m.text}`).join("\n")}\n` : ""}\nQuestion: ${q}\n\nAnswer in two or three plain Korean sentences about what this skill does and when to use it.`) }) });
     const c = skillChecks(sk), u = useOf(sk);
     const chips = el("div", "v4s-chips");
     if (c) chips.append(el("span", `v4s-pill${c.quality.cls === "ok" ? "" : " amber"}`, `품질 ${c.quality.grade}${c.quality.score === null ? "" : ` · ${c.quality.score}`}`), el("span", `v4s-pill${c.security.cls === "ok" ? "" : " amber"}`, `보안 ${c.security.label}`));
     if (state.data.skillUse) chips.append(el("span", "v4s-pill muted", u ? `${u.count}번 사용 · ${ago(u.last_used_at)}` : "최근 60일 안 씀"));
-    top.append(chips, aiBtn, explain);
+    top.append(chips, aiBtn);
     const parts = [top];
     if (sk.status === "deprecated") {
       const card = el("div", "v4s-attn small");
@@ -4064,7 +4164,6 @@
       const s = [...trashed(), ...state.data.skills].find((x) => `skill:${x.id}` === id);
       return s ? skillDetailV4(s) : summaryDetail();
     }
-    if (state.view === "memories" && id === "inject") return inject.detail();
     if (state.view === "memories" && id === "batch") return reviewBatchDetail(detailShell("한 번에 처리"));
     if (state.view === "memories" && id) {
       const all = [...state.data.memories, ...state.data.candidates, ...state.data.conflicted];
@@ -4388,7 +4487,7 @@
       const ok = button("그대로 저장", instructionLike ? "ghost small" : "primary small", null, () => { ok.disabled = no.disabled = true; void decide(c, "approve", ""); });
       const fix = button("고쳐서 저장", "small", null, () => openCandidateFix(c));
       const no = button("버리기", instructionLike ? "primary small" : "ghost small", null, () => {
-        if (!reason.value.trim()) { reason.focus(); notice("버리는 이유를 적어 주세요."); return; }
+        if (!reason.value.trim()) { window.ArkismNeed(reason, "버리는 이유를 적어 주세요."); return; }
         ok.disabled = no.disabled = true; void decide(c, "reject", reason.value.trim());
       });
       const card = actionCard(text, ...(instructionLike ? [no, fix, ok] : [ok, fix, no]));
@@ -4717,9 +4816,12 @@
     render(false);
   });
   const openSettings = () => go("settings");
+  window.addEventListener("arkism:open-settings", (e) => { if (e.detail?.tab) state.settingsTab = e.detail.tab; go("settings"); });
+  $("#search-toggle").addEventListener("click", () => home.palette());
   document.addEventListener("keydown", (e) => {
     const editing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
-    if ((e.key === "/" && !editing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); const own = $(".panel-search input"); (own?.offsetParent ? own : $("#search")).focus(); return; }
+    if (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); home.palette(); return; }
+    if (e.key === "/" && !editing) { e.preventDefault(); const own = $(".panel-search input"); own?.offsetParent ? own.focus() : home.palette(); return; }
     if (e.key === "?" && !editing && !document.querySelector("dialog[open]")) { e.preventDefault(); home.shortcuts(); return; }
     if (e.key === "Escape" && $("#app").classList.contains("detail-open")) { closeDetail(); return; }
     if (!editing && (e.key === "j" || e.key === "k")) {
@@ -4752,12 +4854,13 @@
     skillAgents: (name) => { const by = {}; for (const sk of state.data.skills.filter((x) => x.name === name)) for (const [k, n] of Object.entries(state.data.skillUse?.get(sk.id)?.by_runtime || {})) by[k] = (by[k] || 0) + n; return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k]) => k); } });
   const gallery = window.ArkismGalleryDelete({ state, $, el, button, icon, raw, render, request, query, notice, confirmPop, shortDate });
   const sessions = window.ArkismSessions({ state, $, el, button, icon, segment, render, request, query, agentLogo, AGENTS, ago, detailShell, usage, go });
-  const crew = window.ArkismCrew({ state, $, el, icon, catIcon, button, segment, go, render, request, query, notice, detailShell, section, facts, callout, copyButton, markSelected, openDetail, agentLogo, ago, models,
+  const crew = window.ArkismCrew({ state, $, el, icon, catIcon, catMenu, catChipBody, button, segment, go, render, request, query, notice, detailShell, section, facts, callout, copyButton, markSelected, openDetail, agentLogo, ago, models,
     allowed, skillCategory: (sk) => pages.categoryOf(sk)?.name || "", skillCategories: () => pages.prefs.categories.map((c) => ({ name: c.name, icon: c.icon })),
     toolServers: () => state.data.tools?.servers || [] });
+  window.ArkismAIChat.kit = { assist: crew.assist, assistError: crew.assistError, parseJSON: crew.parseJSON }; // field()'s default ask (ai-chat.js)
   const reviews = window.ArkismReviews({ state, $, el, icon, button, render, request, query, notice, detailShell, section, facts, markSelected, openDetail, ago, stat, go, headExtras, confirmPop,
     assist: (kind, prompt) => crew.assist(kind, prompt) });
-  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, lock, disconnect, useServer, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, reopen: open, trimSlash, tauri, stat, models, routing, crew,
+  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, lock, disconnect, useServer, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, reopen: open, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES,
     request, query, reloadTools: async () => { await refreshTools(); pollTools(); }, assist: (...a) => crew.assist(...a), privacyGroup: () => privacy.settingsGroup() });
   function openIntelligenceRecord(record) {
     const list = record.status === "active" ? "memories" : record.conflict_id ? "conflicted" : "candidates";
@@ -4780,7 +4883,7 @@
   const digests = window.ArkismDigests({ canRefresh: () => !syncBlocked(), state, $, el, raw, tr, icon, button, request, query, detailShell, openDetail, notice, ago, render, row, markSelected,
     kindLabel, originOf, memSelect, section, facts, openRecord: (r) => openIntelligenceRecord(r), reloadMemories });
   const memoryTime = window.ArkismMemoryTime({ state, $, el, icon, button, request, detailShell, openDetail });
-  const inject = window.ArkismInject({ state, el, button, request, query, detailShell, openDetail, section, facts });
+  const inject = window.ArkismInject({ state, el, button, request, query, section, facts });
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request, detailShell, openDetail, ago });
   const privacy = window.ArkismPrivacy({ state, el, button, request, query, notice, section, afterChange: async () => { await reloadMemories(); renderDetail(); } });
   const codegraph = window.ArkismCodeGraph ? window.ArkismCodeGraph({ state, el, raw, button, request, query, notice, ago }) : null; // TOOLS › 저장소 › 코드 그래프 (codegraph.js)
@@ -4790,15 +4893,40 @@
   const overview = window.ArkismOverview({ state, $, el, button, request, query, ago, go, render }); // MEMORY › 개요 (overview.js)
   Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request, query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
-    skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], openRecord: openIntelligenceRecord,
+    skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel, sshErrorText, useLocal, lock, reconnect });
   const homeChecks = window.ArkismHomeChecks({ state, request, query, go, ago, render }); // 홈 › 기억 처리 멈춤 · 지식 줄 (home-checks.js)
   home.wireSearch();
   shell = window.ArkismShell({ state, $, el, go, render });
   Object.assign(views, pages.views);
-  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
+  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, catMenu, catChipBody, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
   Object.assign(views, crew.views, crew.pages, reviews.views);
+  window.ArkismNotice = notice;
+  // 새 창으로 (popup-drag.js): what a separate window needs to reach the same Arkism as this one.
+  window.ArkismPopoutSession = () => state.token ? { mode: state.mode, server: state.server, token: state.token, scope: state.scope } : null;
+  // A separate window shows just one popup: take over this window's connection, open the popup, close with it.
+  async function startPopout(payload) {
+    const quit = () => void tauri.invoke("popout_close").catch(() => window.close());
+    let job;
+    try { job = JSON.parse(payload); } catch (_) { job = null; }
+    if (!job?.session?.token || !job.recipe?.event?.startsWith("arkism:open-")) return quit(); // e.g. reloaded: nothing to show
+    document.documentElement.classList.add("popout");
+    Object.assign(state, { mode: job.session.mode, server: job.session.server, token: job.session.token, scope: { ...defaults, ...job.session.scope } });
+    try { await open(); } catch (err) { notice(`이 창을 열지 못했어요 (${err?.message || err}).`); return; }
+    window.dispatchEvent(new CustomEvent(job.recipe.event, { detail: job.recipe.detail || {} }));
+    let root = null;
+    for (let i = 0; i < 40 && !root; i++) { await new Promise((r) => setTimeout(r, 100)); root = document.querySelector("dialog[open]"); }
+    if (!root) return quit();
+    root.classList.add("popout-root");
+    const saved = () => store("arkism.popout-saved", String(Date.now()));
+    addEventListener("pagehide", saved); // the window's own ✕
+    root.addEventListener("close", () => { saved(); quit(); });
+  }
+  // A separate window saved or closed: show its changes here too.
+  window.addEventListener("storage", (e) => { if (e.key === "arkism.popout-saved" && state.token && !document.documentElement.classList.contains("popout")) void loadAll(); });
   void (async () => {
+    const pop = tauri ? await tauri.invoke("popout_take").catch(() => null) : null;
+    if (pop?.popout) return startPopout(pop.payload);
     const defaults = tauri ? await tauri.invoke("app_defaults").catch(() => null) : null;
     if (defaults) Object.assign(state.defaults, defaults);
     if (state.defaults.local && stored("arkism.mode") !== "remote") return startLocal();

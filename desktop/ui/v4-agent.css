@@ -3,7 +3,7 @@
    확인 대기/실패 198:5360/6908 · 간단 편집 198:2608 · 새로 만들기 198:2952 · 배경 사진 198:3038. Old rules live in crew.css. */
 
 /* ---------------------------------------------------------------- shared bits */
-.wf-chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; background: var(--nc-raised); color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; }
+.wf-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; background: var(--nc-raised); color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; }
 .wf-chip.mono { font-family: var(--mono); color: var(--nc-text); }
 .wf-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .wf-chips .icon-btn { width: 22px; height: 22px; border-color: transparent; color: var(--nc-quiet); }
@@ -70,7 +70,6 @@
 .crew-card.new.wf-card strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); }
 .crew-card.new.wf-card small { width: 191px; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 
-.wf-recent { display: flex; flex-direction: column; gap: 10px; }
 .wf-sec-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .wf-sec-head strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .wf-sec-head small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }

@@ -48,6 +48,8 @@ window.ArkismModels = (ctx) => {
   const modelsOf = (p) => [...new Set([...(p.models || []), ...extraOf(p.id)])];
   // Models workflow AI nodes may pick: every listed model that is on.
   const enabledModels = () => providers().flatMap((p) => modelsOf(p).filter((m) => enabled(p.id, m)));
+  // The same, per provider ({name, models}), for pickers that show where a model comes from.
+  const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
 
   const ERR = {
     access_denied: "이 계정은 모델 설정을 바꿀 수 없어요.",
@@ -607,5 +609,5 @@ window.ArkismModels = (ctx) => {
     (p.custom ? base : key).focus();
   }
 
-  return { load, tab, enabledModels, openKeyDialog };
+  return { load, tab, enabledModels, enabledByProvider, openKeyDialog };
 };

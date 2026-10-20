@@ -344,3 +344,23 @@ button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor
 /* ✕: the corner, same gap from the top and right edges (pulled out of the head's 28/32px padding) */
 .v4-auto .crew-popup-close, .tm-pop .crew-popup-close, .ex-pop .crew-popup-close { flex: none; width: 28px; height: 28px; margin: -13px -17px 0 4px; }
 .ex-pop .crew-popup-close { margin: -9px -9px 0 4px; } /* expert head pads 24px, not 28/32 */
+.crew-popup-head.scrolled { box-shadow: 0 1px 0 var(--nc-line, var(--border)), 0 12px 16px -12px rgba(0, 0, 0, .5); z-index: 2; }
+
+/* 카테고리 칩·메뉴 (app.js catMenu): the icon before the name, one menu for the expert, team and automation popups */
+.auto-cat .icon, .tm-cat .icon, .wf-chip .icon { width: 12px; height: 12px; flex: none; }
+.tm-cat { gap: 4px; color: var(--nc-muted); }
+.cat-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; gap: 2px; min-width: 200px; max-width: 320px; max-height: min(420px, calc(100vh - 16px)); overflow: auto; padding: 6px; border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-raised); color: var(--nc-text); box-shadow: 0 8px 24px rgb(0 0 0 / .3); }
+.cat-menu-item { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; border: 0; border-radius: 6px; background: none; color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.3 var(--sans); text-align: left; cursor: pointer; }
+.cat-menu-item .icon { width: 14px; height: 14px; flex: none; color: var(--nc-muted); }
+.cat-menu-item:hover, .cat-menu-item:focus-visible { background: var(--nc-subtle); }
+.cat-menu-item.on, .cat-menu-item.on .icon { color: var(--nc-accent); }
+.cat-new { display: flex; flex-direction: column; gap: 8px; padding: 6px 4px 2px; border-top: 1px solid var(--nc-line); margin-top: 4px; }
+.cat-new input { width: 100%; }
+.cat-new-label { color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
+.cat-icons { display: grid; grid-template-columns: repeat(8, 32px); gap: 4px; }
+.cat-icon { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--nc-muted); cursor: pointer; }
+.cat-icon .icon { width: 16px; height: 16px; }
+.cat-icon:hover { background: var(--nc-subtle); color: var(--nc-text); }
+.cat-icon[aria-checked="true"] { background: var(--nc-subtle); border-color: var(--nc-line); color: var(--nc-accent); }
+.cat-icon:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 1px; }
+.cat-new-foot { display: flex; justify-content: flex-end; gap: 6px; }

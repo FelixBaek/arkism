@@ -2,8 +2,9 @@
 // Head (cover photo or avatar, name, one line, actions) → tabs (편집 · 테스트 · 기록 …) → the picked tab's body.
 // Each tab's render(box) fills its own body; switching tabs keeps the window and only redraws the body.
 window.ArkismCrewPopup = ({ el, button }) => {
-  function open({ title, sub = "", cover = "", avatar = null, tabs, initial, actions = [], onClose, cls = "" }) {
+  function open({ title, sub = "", cover = "", avatar = null, tabs, initial, actions = [], onClose, cls = "", popout = null }) {
     const dlg = el("dialog", `crew-dialog crew-popup ${cls}`.trim());
+    if (popout) { dlg.dataset.popout = JSON.stringify(popout); dlg.dataset.popoutTitle = popout.title || title || ""; } // how a separate window reopens it (popup-drag.js)
     const head = el("div", "crew-popup-head");
     if (cover) { head.style.setProperty("--cover", `url("${cover}")`); head.classList.add("has-cover"); }
     const who = el("div", "crew-popup-who");
@@ -36,6 +37,8 @@ window.ArkismCrewPopup = ({ el, button }) => {
       tabs.find((t) => t.key === current).render(body);
     };
     dlg.append(head, bar, body);
+    // Once the body scrolls, a line and a gap under the head keep the content from running into it.
+    dlg.addEventListener("scroll", (e) => { if (e.target instanceof Element && e.target !== dlg) head.classList.toggle("scrolled", e.target.scrollTop > 0); }, true);
     dlg.addEventListener("close", () => { dlg.remove(); onClose?.(); });
     document.body.append(dlg);
     draw();

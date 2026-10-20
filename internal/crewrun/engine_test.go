@@ -1214,3 +1214,15 @@ func TestTestRunFakesOutsideSteps(t *testing.T) {
 		t.Fatalf("test run: %s %q", r.State.Status, r.State.Summary)
 	}
 }
+
+func TestTaskTextAddsPreviousResult(t *testing.T) {
+	if got := taskText("요약해 줘", "본문"); got != "요약해 줘\n\nInput from the previous step:\n본문" {
+		t.Fatalf("plain goal: %q", got)
+	}
+	if got := taskText("앞: {{input}}", "본문"); got != "앞: 본문" {
+		t.Fatalf("template: %q", got)
+	}
+	if got := taskText("", "본문"); got != "본문" {
+		t.Fatalf("empty: %q", got)
+	}
+}

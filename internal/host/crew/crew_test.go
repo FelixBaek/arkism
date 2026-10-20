@@ -537,7 +537,8 @@ func TestEachCustomKeyIsItsOwnProviderAndRunsItsModels(t *testing.T) {
 	if url != "https://inference-api.nousresearch.com/v1/chat/completions" || auth != "Bearer "+nous {
 		t.Fatal(url, auth)
 	}
-	eq(t, list(body["messages"])[0], map[string]any{"role": "system", "content": "숫자만"})
+	// the direct API reads no AGENTS.md, so a step that may change files gets the shared record rules here
+	eq(t, list(body["messages"])[0], map[string]any{"role": "system", "content": defaultWorkerRules + "\n\n숫자만"})
 	// 연결 시험 names the provider: the model must belong to that key
 	runs := []map[string]any{}
 	record := func(s map[string]any) (map[string]any, error) {

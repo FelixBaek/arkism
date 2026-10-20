@@ -14,7 +14,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const memText = (id) => D().memories.find((m) => m.id === id)?.text || id;
   const tag = (m, p) => (m.tags || []).find((t) => t.startsWith(p))?.slice(p.length) || "";
   const clip = (t, n = 80) => (t.length > n ? `${t.slice(0, n)}…` : t);
-  const waitFor = (v) => ago(v).replace(/ 전$/, " 대기");
+  const waitFor = (v) => { const d = Math.floor((Date.now() - time(v)) / (24 * HOUR)); return d >= 1 ? `${d}일 대기` : ago(v).replace(/ 전$/, " 대기"); }; // ago() turns old ones into a date
   const REACH_WHERE = { personal: "나만 (개인)", general: "모든 프로젝트 (범용)", project: "이 프로젝트만" };
   // 승인 대기 list kinds (Figma 592:51366): a candidate that repeats or contradicts an existing memory is 헷갈림
   const confusing = (c, merges) => !!(c.conflict_id || c.status === "conflicted" || merges?.has(c.id) || c.classification?.dup_hint);
@@ -37,11 +37,15 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
 
   let dlg = null;
-  function modal(cls) {
+  // beside: a non-modal window over the content area only, so the left menu stays usable (a menu click closes it)
+  function modal(cls, beside = false) {
     dlg?.close();
-    const d = el("dialog", `crew-dialog ov-win ${cls || ""}`);
-    d.addEventListener("close", () => { d.remove(); if (dlg === d) dlg = null; });
-    document.body.append(d); d.showModal(); dlg = d;
+    const d = el("dialog", `crew-dialog ov-win ${cls || ""}`), rail = document.querySelector(".sidebar"), shut = () => d.close();
+    d.addEventListener("close", () => { d.remove(); rail?.removeEventListener("click", shut); if (dlg === d) dlg = null; });
+    document.body.append(d); dlg = d;
+    if (!beside) { d.showModal(); return d; }
+    d.show(); rail?.addEventListener("click", shut);
+    d.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !ev.defaultPrevented) { ev.preventDefault(); d.close(); } });
     return d;
   }
   const row = (tagText, title, meta, right, btns = []) => {
@@ -93,7 +97,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const LIST_TITLE = { collect: "최근 저장된 대화", extract: "최근 추출된 후보·기억", classify: "분류 기다리는 후보", review: "승인 기다리는 후보", recall: "최근 불러온 기억 (질문 내용은 저장하지 않아요)",
     trace: "기억별 넣음·쓰임", judge: "확인 기다리는 기억", dream: "정리 제안", active: "많이 쓰인 순" };
   const FULL = { collect: ["세션 기록 전체 보기 ›", () => wide("sessions")], extract: ["세션 기록 보기 ›", () => wide("sessions")], classify: ["승인 대기 열기 ›", () => wide("review")], review: ["넓게 보기 ›", () => wide("review")],
-    recall: ["사용량 보기 ›", () => wide("usage")], trace: ["사용량 보기 ›", () => wide("usage")], judge: ["정리할 기억 전체 보기 ›", () => { dlg?.close(); go("memories", "idle"); }], dream: ["정리 제안 전체 보기 ›", () => { dlg?.close(); go("memories", "merge"); }], active: ["넓게 보기 ›", () => wide("active")] };
+    recall: ["사용량 보기 ›", () => wide("usage")], trace: ["사용량 보기 ›", () => wide("usage")], judge: ["정리할 기억 전체 보기 ›", () => wide("active", "idle")], dream: ["정리 제안 전체 보기 ›", () => { dlg?.close(); go("memories", "merge"); }], active: ["넓게 보기 ›", () => wide("active")] };
 
   function stageRows(key, box, expanded) {
     const sessions = env.sessions(), w = D().tools?.memory_use, cap = expanded ? 60 : 6, out = [];
@@ -104,7 +108,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       review: () => waiting().slice(0, cap).map((m) => reviewRow(m, box)),
       recall: () => [...(state.usage?.entries() || [])].filter(([, u]) => u.last).sort((a, b) => time(b[1].last) - time(a[1].last)).slice(0, cap).map(([id, u]) => row("", clip(memText(id)), ago(u.last), `7일 ${num(u.d7 || 0)}회`)),
       trace: () => (w?.items || []).slice().sort((a, b) => b.used - a.used || b.injected - a.injected).slice(0, cap).map((u) => row("", clip(memText(u.id)), `넣음 ${num(u.injected)}번`, `쓰임 ${num(u.used)}번`)),
-      judge: () => D().memories.map((m) => [m, w?.items?.find((x) => x.id === m.id)]).filter(([, u]) => u && u.injected >= 3 && !u.used).slice(0, cap).map(([m, u]) => row("안 쓰임", clip(m.text), `${w.days}일 동안 ${num(u.injected)}번 넣었는데 한 번도 안 쓰였어요`, "", [button("정리하러 가기", "small", null, () => { dlg.close(); go("memories", "idle"); })])),
+      judge: () => D().memories.map((m) => [m, w?.items?.find((x) => x.id === m.id)]).filter(([, u]) => u && u.injected >= 3 && !u.used).slice(0, cap).map(([m, u]) => row("안 쓰임", clip(m.text), `${w.days}일 동안 ${num(u.injected)}번 넣었는데 한 번도 안 쓰였어요`, "", [button("정리하러 가기", "small", null, () => wide("active", "idle", m.id))])),
       dream: () => (D().maintenance || []).slice(0, cap).map((p) => {
         const t = p.maintenance || {}, ev = t.evidence;
         if (t.memory) return row("고치기", clip(memText(t.memory.id)), ev ? (t.type === "lesson_often_failing" ? `실패가 잦은 교훈 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})` : `자주 어기는 규칙 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})`) : t.type === "lesson_often_failing" ? "실패가 잦은 교훈" : "자주 어기는 규칙", "승인 대기로 보냄", []);
@@ -209,24 +213,30 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (back) t.append(button("‹ 작게 보기", "ghost small", null, back));
     t.append(el("i", "ov-dot"), el("h2", "", titleText));
     if (badgeText) t.append(el("span", "ov-win-badge", badgeText));
-    const r = el("div", "ov-win-step"); if (hint) r.append(el("span", "", hint)); r.append(button("닫기", "ghost small", null, () => d.close()));
+    const r = el("div", "ov-win-step"); if (hint) r.append(el("span", "", hint)); const x = button("✕", "ghost small ov-wide-x", null, () => d.close()); x.setAttribute("aria-label", "닫기"); r.append(x);
     head.append(t, r); d.append(head);
     return d;
   }
-  const chipBar = (items, cur, set) => { const bar = el("div", "ov-wide-chips"); for (const [k, l, n] of items) { const b = el("button", `ov-wide-chip${k === cur ? " on" : ""}`); b.type = "button"; b.append(document.createTextNode(l), ...(n == null ? [] : [el("small", "", ` ${num(n)}`)])); b.addEventListener("click", () => set(k)); bar.append(b); } return bar; };
+  const chipBar = (items, cur, set) => { const bar = el("div", "ov-wide-chips"); for (const [k, l, n] of items) { const b = el("button", `ov-wide-chip${k === cur ? " on" : ""}`); b.type = "button"; b.append(document.createTextNode(l), ...(n == null ? [] : [el("small", "", ` ${num(n)}`)])); b.addEventListener("click", () => set(k)); bar.append(b); } requestAnimationFrame(() => bar.querySelector(".on")?.scrollIntoView({ block: "nearest", inline: "nearest" })); return bar; }; // the picked chip stays in view when the row scrolls
   function twoPane(d, bar, listBox, detail) {
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right");
     left.append(bar, listBox); right.append(detail); body.append(left, right); d.append(body);
   }
 
-  function wide(kindKey, focusId) {
-    ({ review: wideReview, active: wideActive, sessions: wideSessions, usage: wideUsage, map: wideMap }[kindKey])(focusId);
+  function wide(kindKey, ...args) {
+    ({ review: wideReview, active: wideActive, sessions: wideSessions, usage: wideUsage, map: wideMap }[kindKey])(...args);
+  }
+  // Search on its own line; under it the sort control at the far left, a divider, then the filter chips on one line that scrolls sideways (never wraps).
+  function filterBar(first, sorter, chipHost) {
+    const bar = el("div", "ov-wide-bar"), row2 = el("div", "ov-wide-filter"); chipHost.className = "ov-wide-chipscroll";
+    row2.append(sorter, el("i", "ov-wide-div"), chipHost); bar.append(...first, row2);
+    return bar;
   }
 
   // 승인 대기 (580:49518 + improvements 592:51366 / 764:61615)
   function wideReview(focusId) {
     const all = waiting(), d = shell("승인 대기", `${num(all.length)}건`, "AI는 분류만 해요. 승인은 사람이 해요.", () => { open("review"); });
-    let q = "", kindF = "all", sel = focusId || all[0]?.id; const checked = new Set();
+    let q = "", kindF = "all", sel = focusId || all[0]?.id, order = "old"; const checked = new Set();
     const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), more = el("div", "ov-wide-foot-note");
     const merges = new Map();
     request(`/v1/merge_proposals?${query({ status: "open" })}`).then((r) => { for (const x of r?.items || []) { const pr = x.merge?.proposal; if (pr?.action === "merge" && pr.candidate?.id) merges.set(pr.candidate.id, x); } if (merges.size && d.isConnected) paint(); }, () => {});
@@ -234,8 +244,16 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const search = el("input", "ov-wide-search"); search.placeholder = "후보 찾기"; search.setAttribute("aria-label", "후보 찾기");
     const batch = button("선택 0개 승인", "small", null, async () => { const items = all.filter((c) => checked.has(c.id)); if (!items.length) return; batch.disabled = true; let fail = 0; for (const c of items) { const r = await decide(c, "approve", {}, true); if (r?.error) fail++; else checked.delete(c.id); } await reload(); wideReview(); if (fail) dlg.querySelector(".ov-wide-foot-note").textContent = `${fail}건은 처리하지 못했어요.`; });
     batch.disabled = true;
-    const bar = el("div", "ov-wide-bar"); bar.append(search, chipHost, batch);
-    const filtered = () => waiting().filter((c) => (kindF === "all" || (kindF === "confusing") === confusing(c, merges)) && (!q || c.text.includes(q)));
+    // 정렬 (764:61615): oldest first by default, so nothing waits forever
+    const ORDERS = [["old", "오래된 순"], ["new", "최신 순"], ["risk", "위험도 높은 순"]];
+    const sorter = button("오래된 순 ▾", "ghost small ov-wide-sort", null, () => { order = ORDERS[(ORDERS.findIndex(([k]) => k === order) + 1) % ORDERS.length][0]; sorter.textContent = `${ORDERS.find(([k]) => k === order)[1]} ▾`; paint(); });
+    sorter.setAttribute("aria-label", "정렬 바꾸기");
+    const bar = filterBar([search, batch], sorter, chipHost);
+    const RISK_RANK = { high: 0, medium: 1, low: 2 };
+    const byOrder = (a, b) => order === "new" ? time(b.created_at) - time(a.created_at)
+      : order === "risk" ? (RISK_RANK[a.classification?.risk] ?? 3) - (RISK_RANK[b.classification?.risk] ?? 3) || time(a.created_at) - time(b.created_at)
+      : time(a.created_at) - time(b.created_at);
+    const filtered = () => waiting().filter((c) => (kindF === "all" || (kindF === "confusing") === confusing(c, merges)) && (!q || c.text.includes(q))).sort(byOrder);
     const drawChips = () => chipHost.replaceChildren(chipBar([["all", "전체", all.length], ["new", "새로 저장", all.filter((c) => !confusing(c, merges)).length], ["confusing", "헷갈림", all.filter((c) => confusing(c, merges)).length]], kindF, (k) => { kindF = k; paint(); }));
     function paint() {
       drawChips(); const items = filtered(); list.replaceChildren();
@@ -252,42 +270,39 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const cur = items.find((c) => c.id === sel) || items[0]; sel = cur?.id; list.querySelectorAll(".ov-wide-row").forEach((rw, k) => rw.classList.toggle("on", items[k]?.id === sel)); detailFor(cur);
     }
     search.addEventListener("input", () => { q = search.value.trim(); paint(); });
+    // reading order (2026-10-21): what it says → AI 판단 → final text + buttons; then 판단 근거; then 어디서 왔나요·승인하면 as compact meta
     function detailFor(c) {
       detail.replaceChildren();
       if (!c) { detail.append(el("p", "ov-win-empty", "고를 후보가 없어요.")); return; }
       const k = c.classification, conf = confusing(c, merges), mp = merges.get(c.id), v = k?.verdict;
       const h = el("div", "ov-detail-head"); h.append(el("span", `ov-win-tag ${conf ? "ov-tag-r" : "ov-tag-a"}`, conf ? "헷갈림" : "새로 저장"), el("small", "", `${k?.by ? "AI 분류 · " : ""}${ago(k?.at || c.created_at)}`));
-      const edit = el("textarea", "ov-detail-edit"); edit.value = v?.action === "fix" && v.text ? v.text : c.text; edit.rows = 2; edit.hidden = !(v?.action === "fix" && v.text); edit.setAttribute("aria-label", "고쳐서 저장할 내용");
-      detail.append(h, el("h3", "", c.text));
-      const sec = (title, ...nodes) => { const s2 = el("div", "ov-detail-sec"); s2.append(el("small", "", title), ...nodes); detail.append(s2); return s2; };
-      if (conf && (c.summary || k?.risk_reasons?.length)) sec("AI가 헷갈림으로 본 이유", el("p", "", c.summary || k.risk_reasons.join(" · ")));
-      else if (c.summary) sec("요약", el("p", "", c.summary));
-      if (k?.evidence_span) { const q2 = el("blockquote", "ov-detail-quote", `“${clip(k.evidence_span, 240)}”`); const basis = tag(c, "basis:"); q2.append(el("small", "", `${basis === "explicit_user" ? "사용자 말" : basis === "inferred" ? "AI가 짐작" : "원문"} · ${new Date(c.created_at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}`)); sec("원문 근거", q2); }
-      if (!conf && k?.risk_reasons?.length) sec(`AI 분류 · 위험도 ${k.risk}`, el("p", "", k.risk_reasons.join(" · ")));
-      // AI 의미 검사 (592:51366): shown only when the classifier sent it; it marks, a person decides
-      if (k?.semantic?.length) { const box = el("div", "ov-detail-list"); for (const x of k.semantic) { const lab = SEMANTIC[x.check]; if (!lab) continue; const p = el("p", `ov-check ${x.ok ? "ok" : "no"}`, `${x.ok ? "✓" : "!"} ${lab[x.ok ? 0 : 1]}`); box.append(p); if (!x.ok && x.note) box.append(el("small", "ov-check-note", `“${clip(x.note, 120)}”`)); } sec("AI 의미 검사 · 표시만 해요", box); }
+      const edit = el("textarea", "ov-detail-edit"); edit.value = v?.action === "fix" && v.text ? v.text : c.text; edit.rows = 3; edit.hidden = !(v?.action === "fix" && v.text); edit.setAttribute("aria-label", "고쳐서 저장할 내용");
+      const head = el("div", "ov-detail-group"); head.append(h, el("h3", "", c.text)); detail.append(head);
+      const decide1 = el("div", "ov-detail-group"), basisG = el("div", "ov-detail-group ov-detail-group-sub"), metaG = el("div", "ov-detail-group ov-detail-group-sub");
+      basisG.append(el("h4", "ov-detail-group-t", "판단 근거")); metaG.append(el("h4", "ov-detail-group-t", "자세한 정보"));
+      const sec = (into, title, ...nodes) => { const s2 = el("div", "ov-detail-sec"); s2.append(el("small", "", title), ...nodes); into.append(s2); return s2; };
       // AI 판단 (764:61615): advice only, the buttons below stay the person's
-      if (v && VERDICT[v.action]) { const box = el("div", "ov-verdict"); box.append(el("strong", `ov-verdict-${v.action}`, VERDICT[v.action])); if (v.reason) box.append(el("p", "", v.reason)); sec(`AI 판단${k.at ? ` · ${new Date(k.at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}` : ""}`, box); }
+      if (v && VERDICT[v.action]) {
+        const box = el("div", "ov-verdict"); box.append(el("strong", `ov-verdict-${v.action}`, VERDICT[v.action])); if (v.reason) box.append(el("p", "", v.reason));
+        // 다시 보기: a person asks for a fresh judgement; the hourly AI review writes it, the old one stays until then
+        const again = button("다시 보기", "small ov-verdict-again", null, async () => {
+          again.disabled = true;
+          try { const r = await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/reclassify`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: c.revision }) }); Object.assign(c, r || {}); if (c.classification) c.classification.by = ""; detailFor(c); }
+          catch (e) { again.disabled = false; again.textContent = "다시 시도"; }
+        });
+        if (!k.by) { again.disabled = true; box.append(el("small", "ov-verdict-wait", "다시 보는 중이에요. 다음 AI 검토(매시 정각)에 바뀌어요.")); }
+        const s3 = sec(decide1, `AI 판단${k.at ? ` · ${new Date(k.at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}` : ""}`, box); s3.classList.add("ov-detail-sec-act", "ov-detail-sec-box"); s3.firstChild.after(again);
+      }
       const rs = c.reach_suggestion;
-      if (rs) { const chips = el("div", "ov-wide-chips"); for (const [val, l] of [["personal", "개인"], ["general", "범용"], ["project", "이 프로젝트만"]]) chips.append(el("span", `ov-wide-chip${val === rs.reach ? " on" : ""}`, val === rs.reach ? `${l} · AI 추천` : l)); sec("AI 칸 제안 · 정하는 건 사람이에요", chips, el("p", "", rs.reason || "")); }
+      if (rs) { const chips = el("div", "ov-wide-chips"); for (const [val, l] of [["personal", "개인"], ["general", "범용"], ["project", "이 프로젝트만"]]) chips.append(el("span", `ov-wide-chip${val === rs.reach ? " on" : ""}`, val === rs.reach ? `${l} · AI 추천` : l)); sec(decide1, "AI 칸 제안 · 정하는 건 사람이에요", chips, ...(rs.reason ? [el("p", "", rs.reason)] : [])); }
       const oldId = mp?.merge?.proposal?.targets?.[0]?.id || k?.dup_hint, oldMem = oldId && D().memories.find((m) => m.id === oldId);
       if (oldMem) {
         const cmp = el("div", "ov-detail-list"), nw = el("div", "ov-cmp diff-add"), od = el("div", "ov-cmp diff-del"), u = usage(oldId), n = u ? u.d30 || u.d7 || 0 : 0;
-        nw.append(el("small", "", "새 후보"), el("span", "", c.text)); od.append(el("small", "", n ? `기존 기억 · ${num(n)}번 쓰임` : "기존 기억"), el("span", "", oldMem.text)); cmp.append(od, nw); sec("비교", cmp);
+        nw.append(el("small", "", "새 후보"), el("span", "", c.text)); od.append(el("small", "", n ? `기존 기억 · ${num(n)}번 쓰임` : "기존 기억"), el("span", "", oldMem.text)); cmp.append(od, nw); sec(decide1, "비교", cmp);
       }
-      const ev = tag(c, "event_id:");
-      if (ev) {
-        const [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid), b = el("div", "ov-detail-from");
-        b.append(el("span", "", ses ? `${agent} · ${ses.title || ses.project || ""}` : agent), button("세션 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec("어디서 왔나요", b);
-      }
-      const f = el("div", "ov-detail-facts"), fact = (a2, b2) => { const p = el("p", ""); p.append(el("span", "", a2), el("strong", "", b2)); f.append(p); };
-      // approve takes no reach: an empty one becomes personal for a user memory, general otherwise (the suggestion stays advice)
-      const reachOnApprove = c.reach || (c.kind === "user" ? "personal" : "general");
-      fact("들어갈 곳", "쓰는 중인 기억"); fact("쓰는 곳", REACH_WHERE[reachOnApprove] || REACH_WHERE.general); sec("승인하면", f);
-      detail.append(edit);
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
       const go1 = async (action, extra) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true)); const r = await decide(c, action, extra); if (r?.error) { st.textContent = r.error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); } else { sel = null; wideReview(); } };
-      if (c.conflict_id || c.status === "conflicted") { sec("충돌", el("p", "", "기존 기억과 충돌하는 후보예요. 어느 쪽을 남길지는 전체 화면에서 골라요.")); act.append(button("전체 화면으로", "primary small", null, () => { dlg.close(); go("memories", "conflicted"); })); }
+      if (c.conflict_id || c.status === "conflicted") { sec(decide1, "충돌", el("p", "", "기존 기억과 충돌하는 후보예요. 어느 쪽을 남길지는 전체 화면에서 골라요.")); act.append(button("전체 화면으로", "primary small", null, () => { dlg.close(); go("memories", "conflicted"); })); }
       else {
         const pick = v?.action === "fix" ? "fix" : v?.action === "merge" && mp ? "merge" : "approve"; // the AI's pick only takes the accent; nothing runs on its own
         const mk = (key, label, fn) => button(label, `small${pick === key ? " primary" : ""}`, null, fn);
@@ -297,22 +312,47 @@ window.ArkismOverviewWindows = (ctx, env) => {
           catch (er) { st.textContent = er.message === "revision_conflict" ? "후보나 대상 기억이 바뀌어 이 제안은 낡았어요." : `합치지 못했어요: ${er.message}`; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); mb.focus(); }
         }));
         act.append(mk("approve", "따로 승인", () => go1("approve")),
-          mk("fix", edit.hidden ? "고쳐서 승인" : "고쳐서 저장", () => { if (edit.hidden) { edit.hidden = false; edit.focus(); return; } if (!edit.value.trim()) return; go1("edit_approve", { content: edit.value.trim() }).catch(() => {}); }),
+          mk("fix", edit.hidden ? "고쳐서 승인" : "고쳐서 저장", () => { if (edit.hidden) { edit.hidden = false; editSec.hidden = false; edit.focus(); return; } if (!edit.value.trim()) return; go1("edit_approve", { content: edit.value.trim() }).catch(() => {}); }),
           button("버리기", "small", null, () => askReason("후보를 버릴까요?", (reason) => go1("reject", { reason }))));
       }
-      detail.append(st, act);
+      const editSec = sec(decide1, "저장할 내용 · 고칠 수 있어요", edit); editSec.hidden = edit.hidden;
+      decide1.append(act, st); detail.append(decide1);
+      // 판단 근거: why it was flagged, the source quote, the meaning checks
+      if (conf && (c.summary || k?.risk_reasons?.length)) sec(basisG, "AI가 헷갈림으로 본 이유", el("p", "", c.summary || k.risk_reasons.join(" · ")));
+      else if (c.summary) sec(basisG, "요약", el("p", "", c.summary));
+      if (!conf && k?.risk_reasons?.length) sec(basisG, `AI 분류 · 위험도 ${k.risk}`, el("p", "", k.risk_reasons.join(" · ")));
+      if (k?.evidence_span) { const q2 = el("blockquote", "ov-detail-quote", `“${clip(k.evidence_span, 240)}”`); const basis = tag(c, "basis:"); q2.append(el("small", "", `${basis === "explicit_user" ? "사용자 말" : basis === "inferred" ? "AI가 짐작" : "원문"} · ${new Date(c.created_at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}`)); sec(basisG, "원문 근거", q2); }
+      // AI 의미 검사 (592:51366): shown only when the classifier sent it; it marks, a person decides. Icon + words, the note indented under its item
+      if (k?.semantic?.length) {
+        const box = el("ul", "ov-checks");
+        for (const x of k.semantic) { const lab = SEMANTIC[x.check]; if (!lab) continue; const li = el("li", `ov-check ${x.ok ? "ok" : "no"}`); const ic = el("span", "ov-check-i", x.ok ? "✓" : "!"); ic.setAttribute("aria-hidden", "true"); li.append(ic, el("span", "", lab[x.ok ? 0 : 1])); if (!x.ok && x.note) li.append(el("small", "ov-check-note", clip(x.note, 120))); box.append(li); }
+        if (box.children.length) sec(basisG, "AI 의미 검사 · 표시만 해요", box);
+      }
+      if (basisG.children.length > 1) detail.append(basisG);
+      const ev = tag(c, "event_id:");
+      if (ev) {
+        const [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid), b = el("div", "ov-detail-from");
+        b.append(el("span", "", ses ? `${agent} · ${ses.title || ses.project || ""}` : agent), button("세션 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec(metaG, "어디서 왔나요", b);
+      }
+      const f = el("div", "ov-detail-facts"), fact = (a2, b2) => { const p = el("p", ""); p.append(el("span", "", a2), el("strong", "", b2)); f.append(p); };
+      // approve takes no reach: an empty one becomes personal for a user memory, general otherwise (the suggestion stays advice)
+      const reachOnApprove = c.reach || (c.kind === "user" ? "personal" : "general");
+      fact("들어갈 곳", "쓰는 중인 기억"); fact("쓰는 곳", REACH_WHERE[reachOnApprove] || REACH_WHERE.general); sec(metaG, "승인하면", f);
+      detail.append(metaG);
     }
     twoPane(d, bar, list, detail); d.lastChild.querySelector(".ov-wide-left").append(more); paint();
   }
 
   // 쓰는 중인 기억 (579:48597)
-  function wideActive() {
-    const d = shell("쓰는 중인 기억", `${num(D().memories.length)}개`, "승인된 기억만 불러오기에 쓰여요", () => open("active"));
-    let q = "", kindF = "all", sel = null, sort = "used";
+  // filter "idle" (검증 › 정리할 기억): the same 안 쓰임 rule as the 검증 step, opened in place; ‹ 작게 보기 goes back to 검증
+  function wideActive(filter, focusId) {
+    const d = shell("쓰는 중인 기억", `${num(D().memories.length)}개`, "승인된 기억만 불러오기에 쓰여요", () => open(filter === "idle" ? "judge" : "active"));
+    let q = "", kindF = filter || "all", sel = focusId || null, sort = "used";
     const mems = () => D().memories, list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
     const search = el("input", "ov-wide-search"); search.placeholder = "기억 찾기"; search.setAttribute("aria-label", "기억 찾기");
-    const sorter = button("많이 쓰인 순", "ghost small", null, () => { sort = sort === "used" ? "new" : "used"; sorter.textContent = sort === "used" ? "많이 쓰인 순" : "최신 순"; paint(); });
-    const bar = el("div", "ov-wide-bar"); bar.append(search, chipHost, sorter);
+    const sorter = button("많이 쓰인 순 ▾", "ghost small ov-wide-sort", null, () => { sort = sort === "used" ? "new" : "used"; sorter.textContent = `${sort === "used" ? "많이 쓰인 순" : "최신 순"} ▾`; paint(); });
+    sorter.setAttribute("aria-label", "정렬 바꾸기");
+    const bar = filterBar([search], sorter, chipHost);
     const w = D().tools?.memory_use, kinds = [...new Set(mems().map((m) => m.kind))];
     const idle = (m) => { const u = w?.items?.find((x) => x.id === m.id); return u && u.injected >= 3 && !u.used; };
     function paint() {
@@ -343,7 +383,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
       act.append(button("고치기", "primary small", null, () => { dlg.close(); go("memories", "active"); }),
         button("지우기", "small", null, () => askConfirm("이 기억을 지울까요?", "지운 기억은 이력에 남지만 더는 쓰이지 않아요.", async () => {
-          try { await request(`/v1/memories/${encodeURIComponent(m.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) }); D().memories = D().memories.filter((x) => x.id !== m.id); sel = null; await reload(); wideActive(); }
+          try { await request(`/v1/memories/${encodeURIComponent(m.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) }); D().memories = D().memories.filter((x) => x.id !== m.id); sel = null; await reload(); wideActive(filter); }
           catch (e) { st.textContent = `지우지 못했어요: ${e.message}`; }
         })));
       detail.append(st, act);
@@ -440,7 +480,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const EDGE = { supports: "지지", supersedes: "대체", conflicts: "충돌", human_link: "연결", same_session: "관련", similar: "비슷" };
   const REACH_COLOR = { personal: "#7fc79c", general: "#6aa3ff", project: "#f5b955" }; // same colours as the 칸 chips (v4-overview.css .ov-map-personal …)
   async function wideMap() {
-    const d = modal("ov-wide-win ov-map-win");
+    const d = modal("ov-wide-win ov-map-win", true);
     const head = el("div", "ov-win-head ov-map-head"), ttl = el("div", "ov-win-title");
     ttl.append(button("‹ 개요", "ghost small", null, () => d.close()), el("i", "ov-dot"), el("h2", "", "기억 지도"));
     const x = button("✕", "ghost small", null, () => d.close()); x.setAttribute("aria-label", "닫기"); head.append(ttl, x); d.append(head);
@@ -450,7 +490,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const nodes = graph.nodes || [], edges = graph.edges || [];
     if (!nodes.length) { status.textContent = "지도에 그릴 기억이 아직 없어요."; return; }
     status.remove();
-    let mode = "all", sel = null, q = "", reachF = new Set(Object.keys(REACH)), topicF = null, allEdges = false, zoom = 1, moreOpen = false;
+    let mode = "all", sel = null, q = "", reachF = new Set(Object.keys(REACH)), topicF = null, allEdges = false, moreOpen = false;
     const topics = (await request(`/v1/digests?${query({ kind: "topic", status: "active" })}`).catch(() => null))?.items || [];
     const inTopic = (id) => !topicF || (topics.find((t) => t.id === topicF)?.members || []).some((r) => r.id === id);
     const byId = new Map(nodes.map((n) => [n.id, n])), reachOf = (n) => n?.reach || "general";
@@ -463,13 +503,18 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const label = (id) => { let t = labMemo.get(id); if (t == null) labMemo.set(id, t = clip(memById.get(id)?.text || kind(byId.get(id)?.kind), 22)); return t; };
     const rel = (id) => edges.filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
     const fmt = (v) => new Date(v).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" });
+    // Figma 611:54134: one area per topic digest; memories in no topic sit in a grey "분류 대기" area
+    const TOPIC_COLORS = ["#7c9cff", "#5fc6a8", "#e8a65d", "#c48ef0", "#e57b8f", "#6cc3e0", "#b9c56b", "#d98b5f"];
+    const topicOf = new Map(); topics.forEach((t, i) => (t.members || []).forEach((r) => { if (!topicOf.has(r.id)) topicOf.set(r.id, { key: t.id, name: t.title || "주제", ord: i, color: TOPIC_COLORS[i % TOPIC_COLORS.length] }); }));
+    const UNSORTED = { key: "_unsorted", name: "분류 대기", ord: 999, color: "#8a8f98" };
     const bubbles = window.ArkismMemoryBubbles.create({
-      tabs: [["all", "전체"], ["reach", "칸별"], ["kind", "종류별"]],
-      groupOf: (m, p) => m === "reach" ? { key: p.reach, name: REACH[p.reach][0] + (p.reach === "project" && proj ? ` · ${proj}` : ""), ord: REACH[p.reach][1] } : m === "kind" ? { key: p.kind, name: kind(p.kind) } : { key: "all", name: "전체" },
+      tabs: [...(topics.length ? [["topic", "주제별"]] : []), ["reach", "칸별"], ["kind", "종류별"]],
+      groupOf: (m, p) => m === "reach" ? { key: p.reach, name: REACH[p.reach][0] + (p.reach === "project" && proj ? ` · ${proj}` : ""), ord: REACH[p.reach][1], color: REACH_COLOR[p.reach] } : m === "kind" ? { key: p.kind, name: kind(p.kind) } : topicOf.get(p.id) || UNSORTED,
       tip: (id) => { const n = byId.get(id); return n ? { text: label(id), meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
       card: (id) => { const n = byId.get(id); return n ? { title: label(id), place: (REACH[reachOf(n)] || REACH.general)[0], meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
       onSelect: (id) => { sel = id; mode = "sel"; moreOpen = false; paint(); },
       onClear: () => { sel = null; mode = "all"; paint(); },
+      onZoom: (z) => { zoomLab.textContent = `${Math.round(z * 100)}%`; },
     });
     canvas.append(bubbles.el); d.addEventListener("close", () => bubbles.destroy());
     function drawMap() {
@@ -482,12 +527,11 @@ window.ArkismOverviewWindows = (ctx, env) => {
     }
     // floating bar: 4 line styles · 전체 관계/선택한 연결 · zoom
     const legend = el("div", "ov-map-legend"), zoomLab = el("span", "ov-map-zoom", "100%");
-    const setZoom = (z) => { zoom = Math.min(2.5, Math.max(0.5, Math.round(z * 100) / 100)); bubbles.setZoom(zoom); zoomLab.textContent = `${Math.round(zoom * 100)}%`; };
     const zb = (txt, label, fn) => { const b = el("button", "ov-map-zbtn", txt); b.type = "button"; b.setAttribute("aria-label", label); b.addEventListener("click", fn); return b; };
     function drawLegend() {
       const items = el("div", "ov-map-lg-items"); for (const t of ["supports", "same_session", "conflicts", "supersedes"]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t])); items.append(i); }
       const tog = el("div", "ov-map-lg-tog"); for (const [v, l] of [[true, "전체 관계"], [false, "선택한 연결"]]) { const b = el("button", (mode === "all" ? v : v === allEdges) ? "on" : "", l); b.type = "button"; b.disabled = mode === "all"; b.addEventListener("click", () => { allEdges = v; drawMap(); drawLegend(); }); tog.append(b); }
-      legend.replaceChildren(items, el("em", ""), tog, el("em", ""), zb("−", "축소", () => setZoom(zoom - 0.25)), zoomLab, zb("+", "확대", () => setZoom(zoom + 0.25)), zb("⤢", "화면에 맞추기", () => setZoom(1)));
+      legend.replaceChildren(items, el("em", ""), tog, el("em", ""), zb("−", "축소", () => bubbles.zoomBy(0.8)), zoomLab, zb("+", "확대", () => bubbles.zoomBy(1.25)), zb("⤢", "화면에 맞추기", () => bubbles.resetView()));
     }
     function paint() {
       drawMap(); // first: it drops a selection the filters now hide

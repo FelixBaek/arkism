@@ -26,9 +26,19 @@
 .ex-empty { margin: 0; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
 
 /* popup */
-.ex-pop { width: min(880px, calc(100vw - 32px)); }
-.ex-pop .crew-popup-head { align-items: flex-start; padding: 24px 24px 16px; }
-.ex-pop .crew-popup-who { align-items: flex-start; gap: 16px; }
+.ex-pop { width: min(940px, calc(100vw - 32px)); }
+/* 868:61909: face and names on the left, the estimate and ✕ top right, the tabs (a pill group) under them.
+   938:62634 (편집): the tabs drop under the names, beside the @이름 line; the estimate steps away. */
+.ex-pop .crew-popup-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who side" "who tabs"; align-items: start; column-gap: 16px; row-gap: 12px; padding: 22px 28px 12px; }
+.ex-pop .crew-popup-who { grid-area: who; align-items: flex-start; gap: 16px; }
+.ex-pop .crew-popup-actions { grid-area: side; justify-self: end; align-items: flex-start; flex-wrap: wrap; justify-content: flex-end; max-width: 300px; }
+.ex-pop .crew-popup-tabs { grid-area: tabs; align-self: end; justify-self: end; gap: 4px; padding: 0; border: 0; }
+.ex-pop .crew-popup-tab { height: 40px; padding: 0 18px; border-radius: 8px; color: var(--nc-text); font-size: calc(13.5px * var(--fs, 1)); }
+.ex-pop .crew-popup-tab:hover { background: var(--nc-raised); }
+.ex-pop .crew-popup-tab.on { background: var(--nc-raised); color: var(--nc-accent); }
+.ex-pop .crew-popup-tab:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 1px; }
+.ex-pop .crew-popup-body { padding: 4px 28px 24px; max-height: calc(100vh - 240px); }
+.ex-pop.ex-new .crew-popup-head { grid-template-areas: "who side"; }
 .ex-face { flex: none; width: 110px; height: 110px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--bg-muted); }
 .ex-face .ex-art, .ex-face .ex-art img { width: 100%; height: 100%; display: block; }
 .ex-face .ex-art { background: var(--face-bg); }
@@ -38,32 +48,33 @@
 .ex-pop .crew-popup-who > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; position: relative; }
 .ex-cat { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--text-2); font: inherit; font-size: calc(12px * var(--fs, 1)); cursor: pointer; }
 .ex-cat .icon { width: 12px; height: 12px; }
-.ex-cat-pop { position: absolute; top: 30px; left: 0; z-index: 5; max-width: 420px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-window); box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
 .ex-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .ex-inline { width: fit-content; max-width: 100%; margin: 0; cursor: text; border-radius: 4px; border-bottom: 1px dashed var(--border); }
-.ex-inline.empty { color: var(--text-2); }
+.ex-inline.empty { padding: 0; text-align: start; color: var(--text-2); } /* not the page-wide .empty state box */
 .ex-inline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h2.ex-name { font-size: calc(20px * var(--fs, 1)); font-weight: 600; }
-.ex-handle { color: var(--nc-accent); font-size: calc(13px * var(--fs, 1)); }
+.ex-handle { padding: 1px 8px; border-radius: 6px; background: var(--nc-amber-bg, var(--nc-raised)); color: var(--nc-accent); font-size: calc(12.5px * var(--fs, 1)); } /* 868:61909: @이름 as a small amber chip */
 p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-inline-input { max-width: 100%; field-sizing: content; min-width: 6em; } /* the box grows with the text instead of a fixed web-form width */
 .ex-copy { opacity: 0; }
 .ex-line:hover .ex-copy, .ex-copy:focus-visible { opacity: 1; }
-.ex-pop .crew-popup-actions { align-items: flex-start; flex-wrap: wrap; justify-content: flex-end; max-width: 300px; }
 .ex-acts { display: flex; align-items: center; gap: 12px; }
 .ex-est { display: flex; flex-direction: column; gap: 5px; width: 200px; color: var(--text-2); font-size: calc(11px * var(--fs, 1)); line-height: 14px; }
 .ex-est-row { display: flex; align-items: center; gap: 6px; }
 .ex-est-row i { flex: 1; border-bottom: 1px dotted var(--border); }
 .ex-est-row .v { color: var(--text-1); font-variant-numeric: tabular-nums; }
 .ex-new .crew-popup-tabs { display: none; }
-.ex-new .ex-face .none { background: var(--bg-muted); }
+.ex-new .ex-face .none { background: #f7efe7; }
+.ex-art.plus { color: #8c8881; font: 300 30px/1 var(--sans); }
+.ex-new h2.dim { color: var(--nc-muted); }
 .ex-body { display: flex; flex-direction: column; gap: 14px; }
 .ex-metrics { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.ex-metric { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; }
+.ex-metric { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; }
+.ex-metric .ex-bars { position: absolute; right: 14px; top: 50%; margin: 0; transform: translateY(-50%); }
 .ex-metric + .ex-metric { border-left: 1px solid var(--border); }
 .ex-metric strong { font-size: calc(20px * var(--fs, 1)); font-weight: 500; }
 .ex-metric small { color: var(--text-2); }
-.ex-ai { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.ex-ai { position: relative; align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .ex-ai-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--nc-ai) 45%, transparent); border-radius: 999px; background: var(--nc-ai-bg); color: var(--nc-ai); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
 .ex-ai-btn .icon { width: 14px; height: 14px; }
 .ex-ai-btn:hover, .ex-ai-btn.on { border-color: var(--nc-ai); }
@@ -86,7 +97,7 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-ai-row { display: flex; gap: 8px; }
 .ex-ai-row input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-canvas); color: var(--text-1); font: 400 calc(13px * var(--fs, 1))/1 var(--sans); }
 .ex-ai-row input:focus-visible { outline: none; border-color: var(--nc-ai); } /* the global offset outline doubled the border inside the AI popup */
-.ex-props { align-self: stretch; border: 1px solid var(--nc-ai); border-radius: 8px; } /* 보라 테두리 = AI가 낸 제안 */
+.ex-props { align-self: stretch; border: 1px solid var(--nc-ai); border-radius: 8px; container-type: inline-size; } /* 보라 테두리 = AI가 낸 제안 */
 .ex-props-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--nc-ai) 35%, transparent); border-radius: 8px 8px 0 0; background: var(--nc-ai-bg); }
 .ex-props-head > .icon { width: 14px; height: 14px; color: var(--nc-ai); }
 .ex-props-head strong { color: var(--nc-ai); }
@@ -121,6 +132,24 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 @keyframes ex-in { from { opacity: 0; transform: translateY(6px) scale(.96); } }
 @media (prefers-reduced-motion: reduce) { .ex-chat-ai.busy, .ex-chat-ai.busy i, .ex-chat li.fresh, .ex-ai-pop.grow { animation: none; } }
 .wk-test .ex-chat { margin-bottom: 4px; }
+/* ai-chat.js: the same AI 제안 in every screen; field() puts the sparkle at the field's right edge */
+.ex-ai-zone { align-self: stretch; display: flex; flex-direction: column; gap: 10px; }
+.ex-ai-zone:empty { display: none; }
+.ex-ai.ex-ai-field { align-items: stretch; gap: 8px; }
+.ex-ai-field > input, .ex-ai-field > textarea { width: 100%; padding-right: 38px; }
+.ex-ai-spark { position: absolute; top: 5px; right: 6px; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--nc-ai); cursor: pointer; }
+.ex-ai-spark .icon { width: 15px; height: 15px; }
+.ex-ai-spark:hover:not(:disabled) .icon { transform: scale(1.15); }
+.ex-ai-spark:focus-visible { outline: 2px solid var(--nc-ai); outline-offset: 1px; }
+.ex-ai-spark:disabled { cursor: progress; opacity: 1; } /* the twinkle is the progress; dimming would hide it */
+/* while the AI writes the field: the star twinkles and shifts violet ↔ accent */
+.ex-ai-spark.busy .icon { animation: ex-ai-twinkle 1.1s ease-in-out infinite; }
+@keyframes ex-ai-twinkle { 0%, 100% { color: var(--nc-ai); transform: scale(.85) rotate(0); opacity: .7; } 50% { color: var(--nc-accent); transform: scale(1.25) rotate(25deg); opacity: 1; filter: drop-shadow(0 0 4px var(--nc-accent)); } }
+@keyframes ex-ai-tint { 50% { color: var(--nc-accent); } }
+@media (prefers-reduced-motion: reduce) { .ex-ai-spark.busy .icon { animation: ex-ai-tint 1.6s ease-in-out infinite; } .ex-ai-spark:hover:not(:disabled) .icon { transform: none; } }
+.ex-ai-note { display: flex; align-items: center; gap: 8px; color: var(--nc-ai); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
+.ex-ai-note[hidden] { display: none; }
+.ex-ai-note.err { color: var(--status-danger); }
 .ex-danger { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 16px 20px; border: 1px solid color-mix(in srgb, var(--status-danger) 45%, transparent); border-radius: 8px; }
 .ex-danger > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .ex-danger strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--status-danger); }
@@ -129,10 +158,6 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-savebar { position: sticky; bottom: -24px; z-index: 2; display: flex; align-items: center; gap: 10px; margin: 0 -24px -24px; padding: 14px 24px 18px; background: var(--nc-surface); border-top: 1px solid var(--border); box-shadow: 0 -8px 16px rgba(0, 0, 0, .25); } /* spans the window and sits on its bottom edge, so 저장·취소 are never cut */
 .ex-savebar[hidden] { display: none; }
 .ex-hint { margin-left: auto; color: var(--text-2); }
-.ex-call { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; }
-.ex-call .at { color: var(--nc-accent); font-weight: 500; }
-.ex-call input { width: 160px; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-muted); color: var(--text-1); font: inherit; }
-.ex-call small { color: var(--text-2); }
 .ex-hist { display: flex; flex-direction: column; }
 .ex-hrow { display: flex; align-items: center; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
 .ex-hrow .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -179,7 +204,7 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-flow-back { height: 12px; margin: 0 40px; border: 1.5px dashed var(--nc-quiet); border-top: 0; border-radius: 0 0 8px 8px; }
 .ex-flow-back-t { padding-left: 40px; color: var(--nc-quiet); font-size: calc(11.5px * var(--fs, 1)); white-space: nowrap; }
 .ex-money { position: relative; display: flex; align-items: center; height: 36px; padding: 0 10px; gap: 4px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-muted); }
-.ex-money:focus-within { outline: 2px solid var(--nc-accent); outline-offset: -1px; }
+.ex-money:focus-within { outline: none; border-color: var(--nc-accent); }
 .ex-money .cur { color: var(--text-2); font-family: var(--mono); }
 .ex-money input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: var(--text-1); font: 400 calc(14px * var(--fs, 1)) var(--mono); outline: none; }
 .ex-money .lab { flex: none; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
@@ -196,4 +221,134 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-ch-row small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 .ex-ch-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ex-ch-add select { flex: 1; min-width: 160px; }
-.wk-card-head > .btn { margin-left: auto; }
+.wk-card-head > .btn { margin-left: auto; position: absolute; top: 18px; right: 20px; }
+
+/* 868:61909 · 938:62634 모델 · 실행 */
+.ex-model { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: 6px; background: var(--nc-surface); }
+.ex-model:focus-within { border-color: var(--nc-accent); }
+.ex-model .wf-mark { flex: none; width: 16px; height: 16px; }
+.ex-model input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: var(--nc-text); font: 400 calc(13.5px * var(--fs, 1))/1 var(--sans); outline: none; }
+.ex-run { display: flex; flex-direction: column; gap: 10px; }
+.ex-run > h3 { margin: 0; font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.ex-run-box { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-canvas); }
+.ex-run-box > * { padding: 8px 12px; }
+.ex-run-box > * + * { border-top: 1px solid var(--nc-line); }
+.ex-run-note { margin: 0; padding: 12px; color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
+.ex-place-logo { width: 30px; padding: 0; justify-content: center; }
+.ex-place-logo img, .ex-place-logo svg { width: 15px; height: 15px; fill: currentColor; }
+/* 부르는 곳: off = an outline with a dim mark; on = filled, ringed in the text colour, the mark at full strength */
+.ex-place-logo:not(.on) img, .ex-place-logo:not(.on) svg { opacity: .45; filter: grayscale(1); }
+.ex-place-logo.on { background: var(--nc-raised); border-color: transparent; box-shadow: inset 0 0 0 1.5px var(--nc-text); color: var(--nc-text); }
+.ex-place-logo:not(.on):hover img, .ex-place-logo:not(.on):hover svg { opacity: .8; }
+.ex-use-addbox { display: contents; }
+.ex-use-addbox[hidden] { display: none; }
+.wk-card-head .ex-use-all { position: absolute; top: 14px; right: 20px; width: 260px; }
+/* 일하는 순서 box: the switch sits on its last line */
+.wk-flow-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
+.wk-flow-foot select.ex-flow-pick { width: auto; max-width: 50%; height: 28px; border: 0; background: none; color: var(--nc-muted); text-align: right; font-size: calc(12px * var(--fs, 1)); cursor: pointer; }
+.wk-flow-limit .k { margin-right: 10px; color: var(--nc-quiet); }
+/* 쓸 수 있는 것 (868:61909): a label column and chip rows */
+.ex-use { display: flex; flex-direction: column; gap: 12px; }
+.ex-use-rows { display: grid; grid-template-columns: 76px minmax(0, 1fr); row-gap: 10px; align-items: start; }
+.ex-use-k { color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); padding-top: 7px; }
+.ex-use-rows .wk-chips { gap: 6px; }
+.ex-uchip { position: relative; cursor: pointer; font-size: calc(13px * var(--fs, 1)); }
+.ex-uchip .icon { width: 13px; height: 13px; }
+.ex-uchip.pinned { cursor: grab; }
+.ex-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--nc-muted); }
+.ex-uchip.bad { color: var(--nc-amber); }
+.ex-kind:not(.on) { color: var(--nc-muted); }
+.ex-plus-chip, .ex-use .wk-add { color: var(--nc-muted); }
+.ex-tools .wk-chip .icon-btn { width: 0; overflow: hidden; transition: width .12s; }
+.ex-tools .wk-chip:hover .icon-btn, .ex-tools .wk-chip:focus-within .icon-btn { width: 18px; }
+.ex-use-hint, .ex-pin-sum { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+/* AI로 고치기 · AI로 초안 만들기 (938:62634 · 310:19277) */
+/* 쓸 수 있는 것 › 칩 상세 (929:61931): near the top, over the popup */
+dialog.ex-skill-dlg { margin-top: 18vh; }
+.ex-skill-dlg .dialog-head { align-items: flex-start; }
+.ex-dlg-title { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.ex-dlg-kind { font-size: calc(12px * var(--fs, 1)); color: var(--nc-accent); }
+.ex-dlg-text { margin: 0; color: var(--nc-muted); font-size: calc(13px * var(--fs, 1)); line-height: 1.6; }
+.ex-pin-toggle { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px; border: 0; background: var(--nc-raised); }
+.ex-pin-toggle > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ex-pin-toggle small { color: var(--nc-quiet); }
+.ex-dlg-sec { display: flex; flex-direction: column; gap: 6px; }
+.ex-dlg-sec small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.ex-dlg-meta { display: flex; justify-content: space-between; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.ex-skill-dlg .dialog-foot { justify-content: space-between; border-top: 0; }
+.ex-dlg-out { border: 0; background: none; font: inherit; cursor: pointer; color: var(--nc-muted); }
+/* 테스트 (868:62591) */
+.ex-test { display: flex; flex-direction: column; gap: 12px; }
+.ex-test-note { margin: 0; color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
+.ex-test-log { display: flex; flex-direction: column; gap: 18px; min-height: 420px; max-height: calc(100vh - 420px); margin: 0; padding: 20px; overflow: auto; list-style: none; border-radius: 10px; background: var(--nc-raised); }
+.ex-test-empty { margin: auto; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
+.ex-test-me { align-self: flex-end; max-width: 75%; padding: 8px 14px; border-radius: 10px; background: var(--nc-accent); color: #1d1b18; font-size: calc(13px * var(--fs, 1)); line-height: 1.6; white-space: pre-wrap; }
+.ex-test-ai { display: flex; flex-direction: column; gap: 6px; padding-left: 42px; position: relative; }
+.ex-test-who { display: flex; align-items: center; gap: 8px; margin-left: -42px; }
+.ex-test-who .ex-art, .ex-test-who .ex-mark { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; background: var(--face-bg, #f7efe7); }
+.ex-test-who .ex-art img { width: 100%; height: 100%; object-fit: cover; object-position: top; mix-blend-mode: multiply; }
+.ex-test-who strong { color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); }
+.ex-test-who small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.ex-test-text { color: var(--nc-text); font-size: calc(13px * var(--fs, 1)); line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ex-test-ai.busy .ex-test-text { color: var(--nc-muted); animation: ex-wait 1.4s ease-in-out infinite; }
+.ex-test-ai.err .ex-test-text { color: var(--status-danger); }
+.ex-test-meta { color: var(--nc-quiet); font-size: calc(11.5px * var(--fs, 1)); }
+.ex-test-bar { display: flex; align-items: center; gap: 10px; }
+.ex-test-bar input { flex: 1; min-width: 0; height: 40px; padding: 0 14px; border: 1px solid transparent; border-radius: 8px; background: var(--nc-raised); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1 var(--sans); }
+.ex-test-bar input:focus-visible { outline: none; border-color: var(--nc-accent); }
+.ex-link { border: 0; background: none; color: var(--nc-muted); font: inherit; font-size: calc(12.5px * var(--fs, 1)); cursor: pointer; }
+.ex-link:hover { color: var(--nc-text); }
+@media (prefers-reduced-motion: reduce) { .ex-test-ai.busy .ex-test-text { animation: none; } }
+/* 기록 (868:63273) */
+.ex-hsec { display: flex; flex-direction: column; gap: 8px; }
+.ex-hsec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ex-hsec-head h3 { margin: 0; font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.ex-hsec-head small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.ex-hsec .tm-hist-row b.cur { color: var(--nc-accent); }
+.ex-hist-empty { margin: 0; padding: 12px 16px; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
+/* 새로 만들기 (310:19277) */
+.ex-call:focus-within { border-color: var(--nc-accent); }
+@media (max-width: 640px) {
+  .ex-pop .crew-popup-head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who side" "tabs tabs" "call call"; }
+  .ex-pop .crew-popup-tabs { justify-self: start; }
+  .ex-use-rows { grid-template-columns: 1fr; }
+}
+.ex-uchip, .ex-tools .wk-chip { font-family: var(--sans); }
+.wk-card:has(> .wk-card-head > .btn) { position: relative; }
+.wk-card-head:has(> .btn) { padding-right: 90px; }
+.ex-use .wk-chip.mono { font-family: var(--sans); font-size: calc(13px * var(--fs, 1)); }
+.ex-skill-dlg select { height: 26px; padding: 0 8px; border: 1px solid var(--nc-line); border-radius: 6px; background: var(--nc-surface); color: var(--nc-text); font: inherit; font-size: calc(12px * var(--fs, 1)); margin-right: 8px; }
+.ex-dlg-out:hover { color: var(--status-danger); }
+.ex-run-row .ex-model { width: 280px; height: 34px; }
+.ex-like { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ex-like > .wk-label { margin: 0; color: var(--nc-quiet); font-size: calc(12.5px * var(--fs, 1)); }
+/* + 추가 (쓸 수 있는 것): search, tabs, then one row per thing that can be added. */
+.ex-add-dlg { width: min(560px, calc(100vw - 32px)); }
+.ex-add-dlg .dialog-body { display: flex; flex-direction: column; gap: 12px; height: min(60vh, 520px); }
+.ex-add-search { height: 36px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-subtle); color: var(--nc-text); font: inherit; }
+.ex-add-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.ex-add-tab { height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--nc-muted); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.ex-add-tab:hover { color: var(--nc-text); }
+.ex-add-tab.on { background: var(--nc-subtle); color: var(--nc-accent); }
+.ex-add-list { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+.ex-add-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--nc-line); }
+.ex-add-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ex-add-words b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-add-words small { color: var(--nc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-add-dlg .dialog-head { align-items: center; justify-content: space-between; }
+/* Narrow homes (the graph's right panel): label and buttons go above and below the text so it keeps the width. */
+@container (max-width: 420px) {
+  .ex-prop { flex-wrap: wrap; }
+  .ex-prop .k { width: 100%; }
+  .ex-prop .v { flex-basis: 100%; }
+  .ex-prop .acts { margin-left: auto; }
+  .ex-props-head small { display: none; }
+}
+/* AI 제안 docked at the right end of a bottom bar: the bubble opens upward from it. */
+.ex-ai-dock { position: relative; display: inline-flex; }
+:not(.ex-ai) > .ex-ai-dock { margin-left: auto; }
+.ex-ai[hidden] { display: none; }
+.ex-ai-dock > .ex-ai-pop { top: auto; bottom: 42px; left: auto; right: 0; width: min(440px, calc(100vw - 48px)); transform-origin: calc(100% - 16px) calc(100% + 8px); text-align: left; }
+.ex-ai-dock > .ex-ai-pop::before { top: auto; bottom: -6px; left: auto; right: 14px; transform: rotate(225deg); }
+.dialog-foot > .ex-ai-dock { order: 1; margin-left: 8px; }
+.ex-hint + .ex-ai-dock, .auto-bar-note + .ex-ai-dock { margin-left: 8px; }

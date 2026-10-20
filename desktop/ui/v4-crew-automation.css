@@ -7,8 +7,7 @@
 .auto-cat-chip:hover { border-color: var(--nc-quiet); }
 .auto-cat-chip.on { color: var(--nc-accent); border-color: transparent; background: var(--nc-raised); }
 .auto-cat-chip .icon { width: 12px; height: 12px; }
-.wf-card .crew-cover-top { justify-content: space-between; flex-direction: row-reverse; min-width: 0; } /* badge top right, switch left; a long webhook name shortens the badge */
-.wf-card .crew-cover-top .switch { flex: none; margin-left: 0; }
+.wf-card .crew-cover-top { justify-content: flex-end; min-width: 0; } /* the 일정 badge, top right; a long webhook name shortens it */
 .wf-card .wf-card-when { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; max-width: 100%; min-width: 0; height: 24px; overflow: hidden; padding: 0 9px; border-radius: 999px; background: rgb(0 0 0 / .55); color: #fff; font: 400 calc(12px * var(--fs, 1))/1 var(--sans); }
 .wf-card .wf-card-when > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wf-card .wf-card-when i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #8d8d88; }
@@ -18,38 +17,39 @@
 .crew-card.wf-card.has-cover .crew-cover-img { inset: 0; height: 100%; border: 0; }
 .crew-card.wf-card.has-cover::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, rgb(0 0 0 / .9) 40%, rgb(0 0 0 / .35) 75%, rgb(0 0 0 / .15)); } /* the text sits on the lower half: keep it dark enough to read on any photo */
 .crew-card.wf-card.has-cover .crew-cover-title { margin-top: auto; color: #fff; font-size: calc(24px * var(--fs, 1)); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; text-transform: uppercase; }
-.crew-card.wf-card.has-cover .wf-card-role, .crew-card.wf-card.has-cover .wf-card-meta { color: rgb(255 255 255 / .88); text-shadow: 0 1px 2px rgb(0 0 0 / .6); }
-.crew-card.wf-card.has-cover .grow { display: none; }
 
 /* ---- popup */
-.v4-auto { width: min(940px, calc(100vw - 32px)); position: relative; }
-.v4-auto .crew-popup-head { align-items: flex-start; padding: 28px 32px 8px; gap: 20px; flex-wrap: wrap; }
-.v4-auto .crew-popup-who { align-items: flex-start; gap: 20px; }
-.v4-auto .crew-popup-actions { flex-direction: row; align-items: flex-start; gap: 12px; margin-left: auto; }
+.v4-auto { width: min(940px, calc(100vw - 32px)); position: relative; margin: 16px auto auto; } /* 993:60224 · 998:60693: anchored to the top, so switching tabs never moves the window */
+.v4-auto .crew-popup-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who side" "who tabs"; align-items: start; column-gap: 20px; row-gap: 12px; padding: 28px 32px 20px; }
+.v4-auto .crew-popup-who { grid-area: who; align-items: flex-start; gap: 20px; min-width: 0; }
+.v4-auto .crew-popup-actions { grid-area: side; justify-self: end; flex-direction: row; align-items: flex-start; gap: 12px; }
 .v4-auto .crew-popup-actions > .crew-popup-close { flex: none; }
-.v4-auto .crew-popup-tabs { justify-content: flex-end; margin: 0 32px; padding: 0; gap: 4px; border-bottom: 1px solid var(--nc-line); } /* a row of its own under the head, so a long description never runs under it */
-.v4-auto .crew-popup-tab { padding: 10px 14px; }
-.v4-auto .crew-popup-tab.on { color: var(--nc-accent); }
+.v4-auto .crew-popup-tabs { grid-area: tabs; align-self: end; justify-self: end; gap: 4px; margin: 0; padding: 0; border: 0; } /* the expert/team pill group, under the estimate */
+.v4-auto .crew-popup-tab { height: 40px; padding: 0 18px; border-radius: 8px; color: var(--nc-text); font-size: calc(13.5px * var(--fs, 1)); }
+.v4-auto .crew-popup-tab:hover { background: var(--nc-raised); }
+.v4-auto .crew-popup-tab.on { background: var(--nc-raised); color: var(--nc-accent); }
 .v4-auto.v4-auto-new .crew-popup-tabs { display: none; }
 .v4-auto .crew-popup-body { padding: 8px 32px 0; }
 .auto-thumb { flex: none; align-self: stretch; width: 120px; min-height: 110px; padding: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--nc-line); background: var(--nc-subtle); color: var(--nc-quiet); cursor: pointer; font: 700 calc(14px * var(--fs, 1))/1.2 var(--sans); letter-spacing: -.01em; }
 .auto-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .auto-names { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; max-width: 520px; position: relative; }
 .auto-chiprow { position: relative; }
-.auto-cat { height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--nc-line); background: none; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.auto-cat { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--nc-line); background: none; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
 .auto-menu { position: absolute; top: 30px; left: 0; z-index: 5; display: flex; flex-direction: column; gap: 2px; min-width: 180px; padding: 6px; border-radius: 8px; border: 1px solid var(--nc-line); background: var(--nc-raised); box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
 .auto-menu button { text-align: left; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--nc-text); font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
 .auto-menu button:hover { background: var(--nc-subtle); }
 .auto-menu button.on { color: var(--nc-accent); }
 .auto-menu input { margin-top: 4px; }
-.auto-namerow { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.auto-namerow { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: nowrap; }
+.auto-namerow > * { flex: none; white-space: nowrap; }
+.auto-namerow > h2, .auto-namerow > .auto-inline-edit { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .auto-names h2 { margin: 0; font: 600 calc(22px * var(--fs, 1))/1.3 var(--sans); }
 .auto-names p { margin: 0; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 .auto-handle { padding: 2px 8px; border-radius: 6px; background: var(--nc-raised); color: var(--nc-accent); font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); }
 .auto-inline { cursor: text; border-bottom: 1px dashed var(--nc-line); }
 .auto-inline.empty { color: var(--nc-quiet); }
 .auto-handle .auto-inline { border: 0; }
-.auto-inline-edit, .auto-inline-edit:focus, .auto-inline-edit:focus-visible { min-width: 220px; max-width: 100%; height: auto; padding: 0 0 1px; border: 0; border-bottom: 2px solid var(--nc-accent); border-radius: 0; outline: none; box-shadow: none; background: none; color: var(--nc-text); font: inherit; field-sizing: content; } /* edits in place: a yellow underline, never a box */
+.auto-inline-edit, .auto-inline-edit:focus, .auto-inline-edit:focus-visible { min-width: 4ch; max-width: 100%; height: auto; padding: 0 0 1px; border: 0; border-bottom: 2px solid var(--nc-accent); border-radius: 0; outline: none; box-shadow: none; background: none; color: var(--nc-text); font: inherit; field-sizing: content; } /* edits in place: a yellow underline, never a box */
 .auto-credit { color: var(--nc-quiet); }
 .auto-est { margin: 0; display: grid; gap: 5px; width: 201px; font: 400 calc(11px * var(--fs, 1))/1.3 var(--mono); }
 .auto-est > div { display: flex; align-items: center; gap: 6px; }
@@ -89,14 +89,11 @@
 .auto-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .auto-hint { margin: 6px 14px; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 .auto-switch-soon, .switch.soon { opacity: .45; }
-.auto-ai-head { display: flex; align-items: center; gap: 8px; width: 100%; margin-bottom: 12px; padding: 0; border: 0; background: none; color: var(--nc-text); font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
-.auto-ai-head .icon:first-child { color: var(--nc-accent); }
-.auto-ai-head .icon:last-child { margin-left: auto; transition: transform .15s; }
-.auto-ai-head.open .icon:last-child { transform: rotate(180deg); }
-.auto-ai { display: flex; gap: 8px; padding: 6px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); }
-.auto-ai input { flex: 1; border: 0; background: none; }
 .auto-flow { padding: 14px 0 6px; }
-.auto-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 14px; }
+.auto-strip { display: flex; align-items: center; gap: 8px; padding: 0 14px 4px; overflow-x: auto; } /* one line across the full width: the arrows stretch between the steps */
+.auto-strip > .auto-grp { flex: none; }
+.auto-strip > .auto-arrow { flex: 1 1 24px; min-width: 24px; position: relative; height: 1px; background: var(--nc-line); font-size: 0; }
+.auto-strip > .auto-arrow::after { content: ""; position: absolute; right: -1px; top: -4px; border: 4.5px solid transparent; border-left: 6px solid var(--nc-line); border-right: 0; }
 .auto-grp { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .auto-arrow { color: var(--nc-quiet); }
 .auto-node { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: 6px; font: 400 calc(12px * var(--fs, 1))/1 var(--sans); }
@@ -134,7 +131,8 @@
 .auto-bar-note { margin-left: auto; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 
 /* ---- test / history */
-.auto-test, .auto-history { padding-top: 56px; }
+.auto-test, .auto-history { padding-top: 0; }
+.v4-auto .crew-popup-body.auto-test { display: flex; flex-direction: column; height: calc(100vh - 260px); overflow: hidden; } /* 998:59605: the chat takes what is left, so the ask row stays on screen */
 .auto-chat { min-height: 300px; margin: 12px 0; padding: 18px; border-radius: 10px; background: var(--nc-surface); }
 .auto-bubble { align-self: flex-end; margin-left: auto; width: fit-content; max-width: 80%; padding: 10px 14px; border-radius: 10px; background: var(--nc-accent); color: var(--nc-on-accent); }
 .auto-run { display: flex; flex-direction: column; gap: 12px; }
@@ -155,13 +153,10 @@
 
 /* ---- polish after capture review */
 .v4-auto .auto-est { margin-top: 0; }
-.v4-auto form.auto-ai { display: flex; flex-direction: row; align-items: center; gap: 8px; }
-.v4-auto form.auto-ai > input { flex: 1 1 auto; width: auto; min-width: 0; padding: 8px 10px; }
-.v4-auto form.auto-ai > .btn { flex: none; width: auto; }
 .v4-auto .auto-box select, .v4-auto .auto-box input:not([type="checkbox"]) { height: 32px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--nc-line); background: var(--nc-surface); color: var(--nc-text); font: 400 calc(12.5px * var(--fs, 1))/1 var(--sans); }
 .v4-auto .auto-box select { appearance: none; padding-right: 24px; background-image: linear-gradient(45deg, transparent 50%, var(--nc-muted) 50%), linear-gradient(135deg, var(--nc-muted) 50%, transparent 50%); background-position: calc(100% - 13px) 14px, calc(100% - 9px) 14px; background-size: 4px 4px; background-repeat: no-repeat; }
 .v4-auto .auto-goal-row { min-height: 0; }
-.v4-auto .auto-chat { min-height: 640px; background: var(--nc-subtle); display: flex; flex-direction: column; }
+.v4-auto .auto-chat { flex: 1 1 auto; min-height: 200px; overflow: auto; background: var(--nc-subtle); display: flex; flex-direction: column; }
 .v4-auto .auto-chat > .wf-empty { margin: auto; text-align: center; color: var(--nc-quiet); }
 .v4-auto .auto-ask input { height: 40px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--nc-subtle); color: var(--nc-text); }
 .v4-auto .auto-hint { margin: 0; padding: 0; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
@@ -171,8 +166,6 @@
 .v4-auto .auto-box > .auto-hint { padding: 4px 14px 0; }
 .v4-auto .auto-box > .auto-hint:last-child { padding-bottom: 10px; }
 .v4-auto .auto-versions .auto-empty { padding: 12px 14px; }
-.wf-recent .wf-fold { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
-.wf-recent .wf-fold:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: 2px; border-radius: 4px; }
 .auto-row.notify .auto-key { white-space: nowrap; }
 
 /* ---- 기록 tab: one line per run (998:60693) */
@@ -192,11 +185,6 @@
 .v4-auto .auto-box select.auto-pick { height: 24px; padding-left: 0; border: 0; background-color: transparent; color: var(--nc-text); font-size: calc(12px * var(--fs, 1)); }
 .auto-row > .auto-inline-edit { flex: 1 1 auto; field-sizing: fixed; } /* a row value: the underline runs to the button */
 .v4-auto .auto-box input.auto-inline-edit { height: auto; padding: 0 0 1px; border: 0; border-bottom: 2px solid var(--nc-accent); border-radius: 0; background: none; font-size: inherit; } /* beats the boxed .auto-box input rule */
-.auto-flow-go { display: flex; align-items: center; gap: 12px; margin: 6px 14px 8px; }
-.auto-flow-go small { color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
-.auto-steps { border-top: 1px solid var(--nc-line); margin-top: 10px; }
-.auto-steps > summary.auto-count { margin: 0; padding: 10px 14px; cursor: pointer; }
-.auto-steps > summary.auto-count:hover { color: var(--nc-text); }
 
 /* ---- 10-20 정리: 시작 조건 메뉴 · 읽히는 글자색 · 모델 고르기 · 진행 알림 체크 목록 */
 .auto-sec-head.auto-chiprow { position: relative; }
@@ -208,11 +196,33 @@
 .v4-auto .auto-box select.auto-model { width: 190px; height: 28px; color: var(--nc-text); }
 .auto-model-row { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .v4-auto .auto-model-row select { width: 220px; }
-.auto-checks { display: flex; flex-wrap: wrap; gap: 6px 18px; flex: 1; }
-.auto-check { display: inline-flex; align-items: center; gap: 6px; color: var(--nc-text); cursor: pointer; }
-.auto-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--nc-accent); cursor: pointer; }
 .auto-subhead { padding: 10px 14px 2px; border-top: 1px solid var(--nc-line); color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 .v4-auto .auto-box input:not([type="checkbox"]):focus, .v4-auto .auto-box input:not([type="checkbox"]):focus-visible { outline: none; box-shadow: none; border-color: var(--nc-line); border-bottom: 2px solid var(--nc-accent); } /* focus: a yellow underline, never a box */
 .v4-auto .auto-box select:focus-visible { outline: none; box-shadow: none; border-bottom: 2px solid var(--nc-accent); }
 .auto-sec-head.auto-chiprow > .auto-link { margin-left: auto; }
 .auto-row > .auto-dim:first-child { flex: 1; min-width: 0; }
+
+/* ---- 10-21 Figma 993:60224: 진행 알림 rows · 알림 시점 chips */
+.auto-chan { padding: 0; border: 0; background: none; color: var(--nc-text); font: inherit; cursor: pointer; }
+.auto-chan:hover { text-decoration: underline; text-underline-offset: 3px; }
+.auto-row > .auto-chips.auto-moments { justify-content: flex-end; }
+.auto-flow > .auto-count { margin: 12px 14px 0; }
+.v4-auto .auto-top { padding-top: 0; }
+/* 1044:65953: the new step's goal sits in one filled box with its label and + 변수 추가 */
+.v4-auto-new .auto-goal { margin: 10px 0 0; padding: 10px 12px; border-radius: 6px; background: var(--nc-subtle); }
+.v4-auto-new .auto-goal > small { display: block; color: var(--nc-muted); }
+.v4-auto-new .auto-goal > textarea { width: 100%; padding: 4px 0; border: 0; background: none; box-shadow: none; color: var(--nc-text); resize: vertical; }
+/* 실행 중: a turning ring instead of the waiting dot */
+.auto-runline.st-running .auto-runline-mark::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; }
+@media (prefers-reduced-motion: reduce) { .auto-runline.st-running .auto-runline-mark::before { animation: none; } }
+.auto-row > .ex-ai-field { flex: 1; min-width: 0; }
+.auto-goal-input { width: 100%; height: 32px; }
+.v4-auto .auto-body > .ex-ai, .auto-sec > .ex-ai { margin-bottom: 4px; }
+.auto-sec > .auto-box + .ex-ai { margin-top: 10px; }
+/* 일정: words on top, then 요일 · 오전/오후 · 시:분 as buttons and two small number fields. */
+.auto-sched { display: flex; flex-direction: column; align-items: stretch; gap: 8px; flex: 1; min-width: 0; padding: 4px 0; }
+.auto-sched-pick, .auto-days, .auto-ampm, .auto-time { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.auto-sched-pick { gap: 12px; }
+.auto-sched-say { width: 100%; }
+.auto-num { width: 3ch; text-align: center; font-variant-numeric: tabular-nums; field-sizing: fixed; }
+.auto-sched-next { font-size: calc(12px * var(--fs, 1)); }

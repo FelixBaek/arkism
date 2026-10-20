@@ -22,7 +22,7 @@ window.ArkismPages = (ctx) => {
 
   // ---------------------------------------------------------------- categories: a skill belongs to the first category with a matching rule
   const RULE_KINDS = [["name", "이름이"], ["path", "경로에"], ["desc", "설명에"]];
-  const CAT_ICONS = ["git-merge", "file-text", "code", "database", "image", "stack", "lightbulb", "archive"];
+  const CAT_ICONS = ctx.catIconChoices; // the same choices as a crew category's icon (app.js)
   const globRe = (g) => new RegExp(g.split("*").map((p) => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*"), "i");
   function ruleHit([kind, value], sk) {
     const v = value.trim();
@@ -148,7 +148,7 @@ window.ArkismPages = (ctx) => {
     grok: ["~/.grok/skills · ~/.claude/skills", "~/.grok/sessions"]
   };
 
-  const openInjectPreview = () => { go("memories", "active"); window.dispatchEvent(new Event("arkism:inject-preview")); };
+  const openInjectPreview = () => window.dispatchEvent(new Event("arkism:inject-preview")); // a popup over 설정, no page change
   function tabGeneral() {
     // 이 규칙은 서버가 정한다. 바꿀 수 있는 것처럼 보이지 않게 스위치·알약 대신 글자로만 보여 준다.
     const fixed = (text) => el("output", "", text);
@@ -385,6 +385,7 @@ window.ArkismPages = (ctx) => {
 
   // Categories are edited in a draft and saved together.
   let draft = null;
+  const catTalk = {}; // AI로 다시 분류 talk (ai-chat.js state)
   let open = null;
   const dirty = () => draft && JSON.stringify(draft) !== JSON.stringify(prefs.categories);
   // Figma 198:6220: a table of categories on the left, the open one's editor on the right.
@@ -417,38 +418,45 @@ window.ArkismPages = (ctx) => {
       render(false);
     });
     const rest = skills.filter((sk) => !categoryOf(sk, draft)).length;
-    // AI로 전부 다시 분류: the category persona puts each unsorted skill in one category, as a name rule there.
-    const ai = button("AI로 전부 다시 분류", "", null, async () => {
-      const todo = skills.filter((sk) => !categoryOf(sk, draft));
-      if (!todo.length || !draft.length) { notice(draft.length ? "분류 안 된 스킬이 없어요." : "카테고리를 먼저 만들어 주세요."); return; }
-      ai.disabled = true;
-      notice("AI가 분류하는 중이에요…");
-      try {
+    // AI로 전부 다시 분류 (ai-chat.js): the category persona puts each unsorted skill in one category; each category
+    // it fills is a proposal (name rules there), nothing is kept before 저장.
+    const ai = window.ArkismAIChat.button({ state: catTalk, label: "AI로 전부 다시 분류", title: "AI로 다시 분류", sub: "분류 안 된 스킬을 맞는 카테고리에 넣어요",
+      greeting: "분류 안 된 스킬을 지금 카테고리에 나눠 넣을게요. 기준이 있으면 말해 주세요.", placeholder: "예: 깃 관련은 전부 릴리스로",
+      quick: ["전부 분류해 줘", "확실한 것만 넣어 줘"],
+      ask: async (want) => {
+        const todo = skills.filter((sk) => !categoryOf(sk, draft || prefs.categories));
+        const cats = draft || prefs.categories;
+        if (!todo.length || !cats.length) return { say: cats.length ? "분류 안 된 스킬이 없어요." : "카테고리를 먼저 만들어 주세요." };
         const skillLines = todo.slice(0, 150).map((sk) => `${sk.name}: ${(sk.description || "").slice(0, 100)}`).join("\n");
-        const prompt = `Categories: ${draft.map((c) => c.name).join(", ")}\n\nSkills (name: description):\n${skillLines}\n\nShape: {"skill name": "category name"}, using only the categories above. Leave out a skill no category fits.`;
+        const prompt = `Categories: ${cats.map((c) => c.name).join(", ")}\nThe owner says: ${want}\n\nSkills (name: description):\n${skillLines}\n\nShape: {"skill name": "category name"}, using only the categories above. Leave out a skill no category fits.`;
         const a = await assist("json", prompt, { purpose: "category" });
         if (a.status !== "done") throw new Error(a.error || "AI가 답하지 못했어요");
         const text = a.output || "";
         const start = text.indexOf("{");
         const end = text.lastIndexOf("}");
         const map = start >= 0 && end > start ? JSON.parse(text.slice(start, end + 1)) : {};
-        let n = 0;
+        const by = new Map();
         for (const [skill, catName] of Object.entries(map)) {
-          const cat = draft.find((c) => c.name === catName);
+          const cat = cats.find((c) => c.name === catName);
           if (!cat || !todo.some((sk) => sk.name === skill)) continue;
-          cat.rules = [...cat.rules.filter(([, v]) => v.trim()), ["name", skill]];
-          n++;
+          by.set(cat.id, [...(by.get(cat.id) || []), skill]);
         }
-        notice(n ? `${n}개를 분류했어요. 확인하고 저장해 주세요.` : "AI가 맞는 카테고리를 찾지 못했어요.");
-        render(false);
-      } catch (e) { notice(`분류하지 못했어요 (${e.message}).`); } finally { ai.disabled = false; }
-    });
+        const props = [...by].map(([id, names]) => ({ label: cats.find((c) => c.id === id).name, from: [], to: names, apply: () => {
+          draft ||= structuredClone(prefs.categories);
+          const cat = draft.find((c) => c.id === id);
+          if (!cat) return false;
+          cat.rules = [...cat.rules.filter(([, v]) => v.trim()), ...names.filter((n) => !cat.rules.some(([k, v]) => k === "name" && v === n)).map((n) => ["name", n])];
+          render(false);
+        } }));
+        const n = props.reduce((t, p) => t + p.to.length, 0);
+        return { say: n ? `${n}개를 ${props.length}개 카테고리에 나눠 넣자고 제안해요. 아래에서 보고 적용한 뒤 저장해 주세요.` : "AI가 맞는 카테고리를 찾지 못했어요.", props };
+      } });
     toHead(add);
     const restBar = el("div", "v4-bar");
     const restText = el("div", "");
     restText.append(el("span", "", `분류 안 된 스킬 ${rest}개`), el("small", "", "AI로 다시 분류하면 맞는 곳에 넣어요 · 규칙을 바꾸면 숫자가 바로 바뀌어요"));
-    restBar.append(restText, ai);
-    g.append(list, restBar);
+    restBar.append(restText, ai.dock); // AI at the right end of this row; its purple list below it
+    g.append(list, restBar, ai);
     const out = [g];
     if (dirty()) {
       const bar = el("div", "pg-save");

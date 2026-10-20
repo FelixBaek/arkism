@@ -5,7 +5,7 @@
 @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap; }
 @font-face { font-family: "Geist Mono"; src: url("fonts/GeistMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 
-:root { --sans: var(--font-family-sans); --mono: var(--font-family-mono); }
+:root { --sans: var(--font-family-sans); --mono: var(--font-family-mono); --field-line: color-mix(in srgb, var(--nc-accent) 30%, transparent); --field-tint: color-mix(in srgb, var(--nc-text) 4%, transparent); }
 
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--nc-line) transparent; }
 html, body { height: 100%; margin: 0; }
@@ -399,7 +399,7 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .cat-rules { flex: 1; min-width: 0; text-align: right; color: var(--text-3); font-size: calc(12px * var(--fs, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-body { padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
 .cat-top { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: end; }
-.icon-pick { display: flex; gap: 6px; }
+.icon-pick { display: flex; flex-wrap: wrap; gap: 6px; }
 .icon-pick .icon-btn.on { background: var(--bg-selected); color: var(--text-1); border-color: var(--border-strong); }
 .rule { display: grid; grid-template-columns: 110px minmax(0, 1fr) 26px; gap: 8px; align-items: center; }
 .rule input { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); font: 12.5px var(--mono); }
@@ -1008,7 +1008,45 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .combo-opt.at, .combo-opt:hover { background: var(--nc-subtle); }
 .combo-opt.on { color: var(--nc-accent); }
 .combo-opt.off { opacity: .45; cursor: default; }
-/* 웹 티 지우기: thin app scrollbars, no number spinners, app-coloured checks; textareas grow with their text instead of a resize grip */
+.combo-head { padding: 8px 10px 4px; color: var(--nc-quiet); font: 600 calc(11px * var(--fs, 1))/1.3 var(--sans); letter-spacing: .02em; }
+.combo-opt + .combo-head { margin-top: 4px; border-top: 1px solid var(--nc-line); }
+.combo-tabs { position: sticky; top: -4px; z-index: 1; display: flex; flex-wrap: wrap; gap: 4px; margin: -4px -4px 4px; padding: 6px; border-bottom: 1px solid var(--nc-line); background: var(--nc-raised); }
+.combo-tab { height: 24px; padding: 0 10px; border: 0; border-radius: 999px; background: none; color: var(--nc-muted); font: 500 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.combo-tab:hover { color: var(--nc-text); }
+.combo-tab.on { background: var(--nc-subtle); color: var(--nc-text); }
+.combo-none { padding: 8px 10px; color: var(--nc-quiet); font: 400 calc(12.5px * var(--fs, 1))/1.4 var(--sans); }
+/* 웹 티 지우기: no number spinners, app-coloured checks (thin scrollbars and growing textareas sit in the * and textarea rules at the top) */
 input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--nc-action); }
+/* One-line fields everywhere: no box, a yellow line under the text. Search bars keep their own box. */
+input:is(:not([type]), [type="text"], [type="email"], [type="url"], [type="password"], [type="number"], [type="tel"], [type="datetime-local"], [type="date"], [type="time"]):not([class*="search"] *):not([class*="search"]):not(:read-only):not(.ex-model *, .tm-stepper *, .tm-suffix *, .ex-money *) {
+  border: 0 !important; border-bottom: 1px solid var(--field-line) !important; border-radius: 0 !important; background: var(--field-tint) !important; box-shadow: none !important;
+}
+/* Only the field being typed in gets the strong yellow line; the rest are a faint line on a faint tint, so they still read as "type here". */
+input:is(:not([type]), [type="text"], [type="email"], [type="url"], [type="password"], [type="number"], [type="tel"]):not([class*="search"] *):not([class*="search"]):not(:read-only):focus { outline: none; border-bottom: 2px solid var(--nc-accent) !important; }
+/* Fields that wrap their input with an icon, unit or +/- buttons carry the underline themselves. */
+.ex-model, .tm-stepper, .tm-suffix, .ex-money { border: 0 !important; border-bottom: 1px solid var(--field-line) !important; border-radius: 0 !important; background: var(--field-tint) !important; }
+.ex-money:focus-within, .ex-model:focus-within, .tm-stepper:focus-within, .tm-suffix:focus-within { border-bottom: 2px solid var(--nc-accent) !important; }
+.tm-stepper button { border-left: 0 !important; }
+/* Popups move by their head (popup-drag.js). */
+dialog[open] :is(.dialog-head, .crew-popup-head, .ov-win-head, .ov-detail-head, .ov-recall-head, .git-dialog-head, .keys-head) { cursor: grab; }
+dialog.dragging, dialog.dragging * { cursor: grabbing !important; user-select: none; }
+/* 새 창으로: a separate window shows only its popup, filling the window. */
+html.popout #app, html.popout #unlock { visibility: hidden; }
+html.popout dialog { visibility: visible; }
+html.popout dialog.popout-root { inset: 0; margin: 0; width: 100vw; max-width: none; height: 100vh; max-height: none; border: 0; border-radius: 0; translate: none !important; }
+html.popout dialog.popout-root::backdrop { background: var(--nc-canvas); }
+dialog.tear-off { opacity: .6; }
+.popout-btn { flex: none; }
+html.popout dialog.popout-root[open] { display: flex; flex-direction: column; }
+html.popout dialog.popout-root[open] > * { flex: none; }
+html.popout dialog.popout-root[open] > .crew-popup-body, html.popout dialog.popout-root[open] > .dialog-body { flex: 1; min-height: 0; max-height: none; height: auto; overflow: auto; }
+/* 채울 칸 (field-need.js): red line + one short shake + the reason under it. */
+/* :is(#app, body) outranks the one-line field rule above, which is !important too */
+:is(#app, body) .field-need, :is(#app, body) .field-need:focus { border-bottom: 2px solid var(--status-danger) !important; }
+:is(#app, body) :is(select.field-need, .auto-inline.field-need, h2.field-need) { box-shadow: inset 0 -2px 0 var(--status-danger) !important; }
+.field-need-msg { display: block; margin-top: 4px; color: var(--status-danger); font: 400 calc(12px * var(--fs, 1))/1.4 var(--sans); }
+.field-shake { animation: field-shake .36s ease-in-out; }
+@keyframes field-shake { 20%, 60% { translate: -5px 0; } 40%, 80% { translate: 5px 0; } }
+@media (prefers-reduced-motion: reduce) { .field-shake { animation: none; } }

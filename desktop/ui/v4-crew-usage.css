@@ -22,9 +22,8 @@
 .cu-tip em { margin-left: auto; padding-left: 12px; color: var(--nc-text); font-style: normal; }
 .cu-card .tm-utable { margin-top: 12px; }
 .cu-table .tm-urow { gap: 12px; }
-.cu-expert .tm-urow { grid-template-columns: minmax(140px, 1.2fr) minmax(110px, 1fr) 56px 72px 84px 80px minmax(110px, 1.4fr); }
-.cu-team .tm-urow { grid-template-columns: minmax(120px, 1.2fr) minmax(80px, .9fr) 56px 96px 96px 80px minmax(140px, 1.8fr); }
-.cu-auto .tm-urow { grid-template-columns: minmax(110px, 1.1fr) minmax(80px, .8fr) 56px 72px 84px 80px minmax(140px, 1.8fr); }
+/* 325:37545: 180·130·110·110·130·110·198 at 1440, scaled with the window */
+.cu-expert .tm-urow, .cu-team .tm-urow, .cu-auto .tm-urow { grid-template-columns: minmax(0, 180fr) minmax(0, 130fr) minmax(0, 110fr) minmax(0, 110fr) minmax(0, 130fr) minmax(0, 110fr) minmax(0, 198fr); }
 .cu-table .tm-urow > span, .cu-table .tm-urow > .cu-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cu-table .tm-urow > span:first-child, .cu-table .tm-urow > .cu-name { text-align: left; }
 .cu-table .tm-urow > span:nth-child(2) { text-align: left; }
@@ -36,7 +35,6 @@
 .cu-name .tm-mark img, .cu-name .tm-mark svg { width: 22px; height: 22px; }
 .cu-face { border-radius: 50%; overflow: hidden; }
 .cu-face img { object-fit: cover; }
-.cu-table .tm-urow > span:last-child { padding-left: 12px; }
 .cu-table .tm-urow > span:nth-child(6) { text-align: right; }
 /* Narrow windows: drop the 평균 column (5th) and let the last column wrap instead of cutting it off. */
 @media (max-width: 1200px) {
