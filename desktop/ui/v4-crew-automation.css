@@ -213,3 +213,7 @@
 /* 실행 중: a turning ring instead of the waiting dot */
 .auto-runline.st-running .auto-runline-mark::before { content: ""; display: inline-block; width: 10px; height: 10px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; }
 @media (prefers-reduced-motion: reduce) { .auto-runline.st-running .auto-runline-mark::before { animation: none; } }
+.auto-row > .ex-ai-field { flex: 1; min-width: 0; }
+.auto-goal-input { width: 100%; height: 32px; }
+.v4-auto .auto-body > .ex-ai, .auto-sec > .ex-ai { margin-bottom: 4px; }
+.auto-sec > .auto-box + .ex-ai { margin-top: 10px; }

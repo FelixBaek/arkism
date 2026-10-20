@@ -620,7 +620,11 @@ window.ArkismCrew = (ctx) => {
       how.append(o);
     }
     how.addEventListener("change", () => { state.crewTab = how.value; state.crewCat = "all"; state.selected = null; render(); });
-    bar.append(search, how, button("+ 새 워크플로우", "primary", null, () => getAuto().create()));
+    const aiNew = el("button", "ex-ai-btn"); // 새 워크플로우 with the AI chat already open (ai-chat.js look)
+    aiNew.type = "button";
+    aiNew.append(icon("sparkle"), el("span", "", "AI로 초안"));
+    aiNew.addEventListener("click", () => getAuto().create(true));
+    bar.append(search, how, aiNew, button("+ 새 워크플로우", "primary", null, () => getAuto().create()));
     $("#controls").replaceChildren(bar);
     $("#chips").replaceChildren();
     $("#stats").replaceChildren();
