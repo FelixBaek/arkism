@@ -260,7 +260,7 @@ window.ArkismAutomation = (h) => {
           const t = el("div", "");
           t.append(el("strong", "", `구조 검토 · 확인할 곳 ${ruleBad.length}`));
           for (const c of ruleBad) t.append(el("p", "", `${c.label}: ${c.detail}`));
-          card.append(t, button("구조 검토", "", null, () => leave(() => h.openGraph(rec, { review: true }))));
+          card.append(t, button("구조 검토", "", null, () => leave(() => h.openGraph(rec, { review: true, fromPopup: true }))));
           top.append(card);
         }
       }

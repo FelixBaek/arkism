@@ -19,17 +19,17 @@
       const row = document.createElement("div");
       row.className = "cn-confirm-btns";
       const mk = (label, value, cls) => { const b = document.createElement("button"); b.type = "submit"; b.value = value; b.className = cls; b.textContent = label; return b; };
-      const no = mk("취소", "no", "btn");
+      const no = mk("취소", "cancel", "btn"); // "cancel": app.js's dialog Enter never picks it
       const ok = mk(okLabel || "확인", "ok", "btn danger");
       if (match != null) { // 확인 opens only once the field holds exactly this text (지우기처럼 되돌릴 수 없는 일)
         ok.disabled = true;
         field.addEventListener("input", () => { ok.disabled = field.value.trim() !== match; });
-        form.addEventListener("submit", (e) => { if (e.submitter?.value !== "no" && field.value.trim() !== match) e.preventDefault(); });
+        form.addEventListener("submit", (e) => { if (e.submitter?.value !== "cancel" && field.value.trim() !== match) e.preventDefault(); });
       }
       row.append(no, ok);
       form.append(row);
       dlg.append(form);
-      let answer = "no";
+      let answer = "cancel";
       form.addEventListener("submit", (e) => { answer = e.submitter?.value || "ok"; }); // Enter in the field submits as 확인
       dlg.addEventListener("close", () => { dlg.remove(); resolve(answer === "ok"); });
       document.body.append(dlg);

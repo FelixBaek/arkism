@@ -52,8 +52,10 @@
     ctl.setAttribute("aria-expanded", "true");
     pop.id ||= `combo-pop-${++uid}`;
     ctl.setAttribute("aria-controls", pop.id);
-    if (!pop.isConnected) document.body.append(pop);
+    // A modal window makes everything outside it inert, so the list lives inside the topmost one.
+    const host = [...document.querySelectorAll("dialog:modal")].pop() || document.body;
     if (pop.matches(":popover-open")) pop.hidePopover(); // re-show so it sits above a window opened since
+    if (pop.parentNode !== host) host.append(pop);
     pop.showPopover();
     paint();
     place();

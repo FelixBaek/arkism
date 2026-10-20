@@ -748,7 +748,11 @@ window.ArkismTeams = (ctx) => {
       const v = on ? p.to : p.from;
       if (p.key === "name" || p.key === "prompt") t[p.key] = v;
       else if (p.key === "mode") { if (v) t.overrides.mode = v; else delete t.overrides.mode; }
-      else { t.overrides.ending = { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(d.ending || {}), ...(t.overrides.ending || {}), max_rounds: v }; }
+      else if (on) {
+        if (!("prevEnding" in p)) p.prevEnding = t.overrides.ending ? clone(t.overrides.ending) : null; // 되돌리기 puts back exactly this, "follows the team" included
+        t.overrides.ending = { max_rounds: 4, token_cap: 100000, end_on_all_approved: true, end_on_moderator: true, ...(d.ending || {}), ...(t.overrides.ending || {}), max_rounds: v };
+      } else if (p.prevEnding) t.overrides.ending = clone(p.prevEnding);
+      else delete t.overrides.ending;
       p.applied = on;
     }
     function propRow(p) {

@@ -2708,7 +2708,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     }
     const save2 = button("저장", "primary", null, saveGraph);
     save2.disabled = !ed.dirty;
-    const revert = button("되돌리기", "ghost", null, () => { ed.dirty = false; openGraph(byId(rec.id) || rec, { graphMode: ed.graphMode }); });
+    const revert = button("되돌리기", "ghost", null, () => { ed.dirty = false; openGraph(byId(rec.id) || rec, { graphMode: ed.graphMode, fromPopup: ed.fromPopup }); });
     revert.disabled = !ed.dirty;
     const review = button(`구조 검토${ed.suggestions?.length ? ` · ${ed.suggestions.length}` : ""}`, ed.review ? "active" : "", "sparkle", () => { ed.review = !ed.review; render(false); });
     const trial = button("실행", "", "play", runFromEditor);
@@ -3633,7 +3633,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.paintAct = () => {
       acts.replaceChildren();
       if (isNew) return;
-      acts.append(estimateNode()); // 868:61909 keeps only the estimate up here; 전문가 삭제 sits at the end of 개요
+      acts.append(estimateNode(), switchEl(wk.draft.enabled !== false, "켜기", (on) => { wk.draft.enabled = on; wk.dirty = true; wk.paintAct(); drawWorkerSave(); })); // 전문가 삭제 sits at the end of 개요
     };
     wk.redraw = () => { const sc = pop.body.scrollTop; pop.select(wk.tab); pop.body.scrollTop = sc; };
     if (isNew) names.replaceChildren(el("h2", ""), el("p", ""));
