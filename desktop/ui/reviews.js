@@ -192,12 +192,13 @@ window.ArkismReviews = (ctx) => {
         } }] };
       } });
     if (it.pr_state !== "open") { fixBtn.disabled = true; fixBtn.title = "열린 PR에서만 고칠 수 있어요"; }
-    acts.append(fixBtn, button("무시", "ghost small", null, () => {
+    acts.append(button("무시", "ghost small", null, () => {
       try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...dismissed(), findingKey(it, f)])); } catch (_) { /* private window */ }
       render(false);
       detail();
-    }));
+    }), fixBtn.dock || fixBtn); // AI at the right end of the row; its purple list under the card's text
     card.append(top, el("p", "", f.text), acts);
+    if (fixBtn.dock) card.append(fixBtn);
     return card;
   }
   async function rerunReview(it) {

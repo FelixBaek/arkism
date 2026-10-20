@@ -522,12 +522,13 @@ window.ArkismTeams = (ctx) => {
     const mine = !!pop.id;
     pop.aiTalk ||= {};
     const s = el("section", "tm-sec tm-ai");
-    s.append(window.ArkismAIChat.button({ state: pop.aiTalk, label: mine ? "AI로 고치기" : "AI로 초안", title: mine ? "AI로 고치기" : "AI로 초안 만들기",
+    s.append(window.ArkismAIChat.button({ state: pop.aiTalk, label: mine ? "AI 제안" : "AI로 초안", title: mine ? "AI 제안" : "AI로 초안 만들기",
       sub: mine ? "고칠 곳을 말하면 바뀌는 곳을 보여 줘요" : "어떤 팀인지 말하면 초안을 채워요",
       greeting: mine ? "이 팀의 무엇을 고칠까요? 멤버·회의 방식·라운드를 바꿔 볼 수 있어요." : "어떤 팀이 필요하세요? 무엇을 회의할 팀인지 말해 주세요.",
       placeholder: mine ? "예: 접근성 검토자를 넣고 라운드를 3번으로 줄여 줘" : "예: 시안을 여러 관점에서 보고 고칠 목록을 만드는 팀",
       quick: mine ? ["리뷰어를 한 명 더", "라운드를 줄여 줘", "진행자가 지명하게"] : ["코드 리뷰 팀", "시안 검토 팀", "자료 조사 팀"],
       ask: (text) => runAI(pop, text) }));
+    pop.aiRoot = s.firstChild; // its button goes to the right end of the bottom bar (updateBar)
     return s;
   }
   async function runAI(pop, text) {
@@ -556,7 +557,7 @@ window.ArkismTeams = (ctx) => {
       const label = (list) => sorted(list || []).map((m) => `${memberName(m)} · ${roleName(m.role)}`);
       if (next.length && !same(label(d.members), label(next))) props.push({ label: tr("멤버"), from: label(d.members), to: label(next), apply: () => { pop.d.members = clone(next); changed(pop, true); }, undo: ((was) => () => { pop.d.members = was; changed(pop, true); })(clone(d.members || [])) });
     }
-    return { say: props.length ? `${props.map((p) => p.label).join("·")}을 바꾸자고 제안해요. 버튼 아래 보라색 목록에서 보고 적용하세요.` : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요."), props };
+    return { say: props.length ? `${props.map((p) => p.label).join("·")}을 바꾸자고 제안해요. 보라색 목록에서 보고 적용하세요.` : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요."), props };
   }
   // 비슷한 팀에서 시작 (new team only)
   function fromSection(pop) {
@@ -653,7 +654,10 @@ window.ArkismTeams = (ctx) => {
           const row = el("div", "tm-toggle"); row.append(el("span", "", label), sw(!!e[k], label, (v) => { e[k] = v; draw(); })); over.append(row);
         }
       }
-      body.replaceChildren(aiBox(),
+      const aiRoot = aiBox();
+      foot.querySelector(".ex-ai-dock")?.remove();
+      foot.append(aiRoot.dock); // AI 제안 at the right end of the foot (CSS order), its purple list in the body
+      body.replaceChildren(aiRoot,
         help("이름", "회의를 열 때 목록에서 고르는 이름이에요", name),
         help("이 회의의 진행 방법", "주제는 회의를 열 때 따로 적어요. 여기에는 매번 같은 진행 순서·볼 기준·결과 모양을 적어요.", promptAI, el("small", "tm-tpl-cap", "회의가 시작되면 서기가 이 순서로 읽고 브리핑해요"), flow),
         help("이 템플릿만 바꿀 설정", "비워 두면 팀 설정대로 해요. 이 템플릿으로 연 회의에서만 바뀌어요.", over));
@@ -682,7 +686,7 @@ window.ArkismTeams = (ctx) => {
       if (typeof j.prompt === "string" && j.prompt.trim()) add("prompt", tr("진행 방법"), t.prompt, j.prompt.trim().slice(0, 4000));
       if (MODES.some(([k]) => k === j.mode)) add("mode", tr("회의 방식"), t.overrides.mode || "", j.mode, modeName);
       if (Number.isFinite(+j.max_rounds) && +j.max_rounds >= 1) add("max_rounds", tr("최대 라운드"), t.overrides.ending?.max_rounds ?? d.ending?.max_rounds ?? 4, Math.min(10, Math.round(+j.max_rounds)), String);
-      return { say: props.length ? `${props.map((p) => p.label).join("·")}을 제안해요. 버튼 아래 보라색 목록에서 보고 적용하세요.` : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요."), props };
+      return { say: props.length ? `${props.map((p) => p.label).join("·")}을 제안해요. 보라색 목록에서 보고 적용하세요.` : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요."), props };
     }
     function setT(key, v) {
       if (key === "name" || key === "prompt") t[key] = v;
@@ -790,16 +794,19 @@ window.ArkismTeams = (ctx) => {
   function updateBar(pop) {
     if (!pop.bar) return; // filled before it is mounted: overviewTab builds it off-DOM
     const diff = pdiff(pop), d = pop.d;
-    pop.bar.hidden = !!pop.id && !diff.length;
     pop.bar.replaceChildren();
     const left = el("div", "tm-bar2-acts");
-    left.append(button(pop.id ? "저장" : "팀 만들기", "primary", null, () => savePopup(pop)), button("취소", "ghost", null, () => {
+    const ok = button(pop.id ? "저장" : "팀 만들기", "primary", null, () => savePopup(pop));
+    ok.disabled = !!pop.id && !diff.length; // the bar stays: AI 제안 lives at its right end
+    left.append(ok, button("취소", "ghost", null, () => {
       if (pop.id) { pop.d = clone(pop.base); pop.handleTouched = true; pop.aiTalk = null; paintHead(pop); changed(pop, true); } else closePopup();
     }));
     if (pop.id) left.append(el("small", "", `바뀐 칸 ${diff.length}개`));
     const hint = pop.id ? `저장하면 v${(pop.rec.revision || 1) + 1}이 돼요 · 기록 탭에서 되돌릴 수 있어요`
       : `${(d.members || []).length}명 · ${d.mode === "round_robin" ? "정해진 순서" : "진행자 지명"} · 최대 ${d.ending?.max_rounds || 4}라운드`;
-    pop.bar.append(left, el("small", "", hint));
+    left.append(el("small", "", hint));
+    pop.bar.append(left);
+    if (pop.aiRoot?.dock) pop.bar.append(pop.aiRoot.dock);
   }
   async function savePopup(pop, replace) {
     const d = replace || pop.d;

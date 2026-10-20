@@ -282,3 +282,4 @@
 .vdiff-row.add { color: var(--status-ok); background: color-mix(in srgb, var(--status-ok) 12%, transparent); }
 .vdiff-none { color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
 .tm-hist-row + .vdiff { border-top: 1px solid var(--nc-line); }
+.tm-sec.tm-ai:has(> .ex-ai[hidden]) { display: none; } /* the button is in the bottom bar; the section shows only with proposals */

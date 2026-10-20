@@ -455,7 +455,7 @@ window.ArkismPages = (ctx) => {
     const restBar = el("div", "v4-bar");
     const restText = el("div", "");
     restText.append(el("span", "", `분류 안 된 스킬 ${rest}개`), el("small", "", "AI로 다시 분류하면 맞는 곳에 넣어요 · 규칙을 바꾸면 숫자가 바로 바뀌어요"));
-    restBar.append(restText);
+    restBar.append(restText, ai.dock); // AI at the right end of this row; its purple list below it
     g.append(list, restBar, ai);
     const out = [g];
     if (dirty()) {

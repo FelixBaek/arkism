@@ -5706,7 +5706,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "'{0}' 전문가를 삭제할까요?\n되돌릴 수 없어요. 확인하려면 이름 '{1}'을 그대로 입력하세요.": "Delete the expert '{0}'?\nThis can't be undone. Type the name '{1}' to confirm.",
   "AI 제안 {0}개": "{0} AI suggestions",
   "{0}에 적용했어요. 저장해야 반영돼요.": "Applied to {0}. Save to make it stick.",
-  "{0}을 바꾸자고 제안해요. 버튼 아래 보라색 목록에서 바뀌는 곳을 보고 적용하세요.": "Suggests changing {0}. Review the changes in the purple list under the button and apply."
+  "{0}을 바꾸자고 제안해요. 보라색 목록에서 바뀌는 곳을 보고 적용하세요.": "Suggests changing {0}. Review the changes in the purple list and apply."
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "노드 추가·연결·모델은 그래프에서 고쳐요. 저장한 뒤 '창으로 돌아가기'로 여기서 마무리해요.": "Add nodes, links and models in the graph. Save there, then use 'Back to window' to finish here.",
@@ -5777,7 +5777,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "진행 방법": "Steps"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "{0}을 제안해요. 버튼 아래 보라색 목록에서 보고 적용하세요.": "Suggests {0}. Review them in the purple list under the button and apply.",
+  "{0}을 제안해요. 보라색 목록에서 보고 적용하세요.": "Suggests {0}. Review them in the purple list and apply.",
   "'{0}' 템플릿을 지울까요? 팀을 저장하면 반영돼요.": "Delete the template '{0}'? Save the team to make it stick."
 });
 Object.assign(window.ArkismI18nEN.strings, {
@@ -6054,5 +6054,74 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "제안 {0}개를 찾았어요. 버튼 아래 목록에서 보고 적용하세요.": "Found {0} proposals. Look them over in the list under the button and apply.",
   "{0}개를 {1}개 카테고리에 나눠 넣자고 제안해요. 아래에서 보고 적용한 뒤 저장해 주세요.": "Proposes putting {0} skills into {1} categories. Look them over below, apply, then save.",
   "{0}:{1} 지적을 어떻게 고칠까요? 그냥 보내면 지적대로 고쳐요.": "How should I fix the note at {0}:{1}? Just send to fix it as pointed out.",
-  "{0}을 바꾸자고 제안해요. 버튼 아래 보라색 목록에서 보고 적용하세요.": "Proposes changing {0}. Look them over in the purple list under the button and apply."
+  "{0}을 바꾸자고 제안해요. 보라색 목록에서 보고 적용하세요.": "Proposes changing {0}. Look them over in the purple list and apply."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "매일": "Daily",
+  "평일": "Weekdays",
+  "전문가 기본": "Expert default",
+  "AI와 같이 쓰기": "Write with AI",
+  "이 칸에 들어갈 글을 같이 다듬어요. 무엇을 바꿀까요?": "Let's polish what goes in this field. What should change?",
+  "예: 더 짧고 구체적으로": "e.g. shorter and more specific",
+  "더 짧게": "Shorter",
+  "더 구체적으로": "More specific",
+  "완료 기준 넣기": "Add a done condition",
+  "이 노드와 이어진 선이 함께 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.": "Lines connected to this node are deleted too. Leave without saving to get it back.",
+  "전문가·팀 고르기, 실행 범위, 나눠서 맡기기, 스킬은 자세히에서 정해요.": "Pick the expert or team, scope, splitting work and skills under Details.",
+  "눌러서 바로 고쳐요": "Click to edit here"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} · AI와 같이 쓰기": "{0} · Write with AI",
+  "{0} → {1} 선이 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.": "The {0} → {1} line is deleted. Leave without saving to get it back."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "항상": "Always",
+  "성공 시": "On success",
+  "실패 시": "On failure",
+  "선 종류": "Line kind",
+  "아직 서버 미지원": "Not supported by the server yet",
+  "다른 노드는 항상과 같아요": "Same as Always for other nodes",
+  "사람 확인 노드에서만": "Only from a human check node",
+  "조건 노드에서만": "Only from a condition node",
+  "동시에 보내기": "Send to several at once",
+  "+ 함께 보낼 노드": "+ Also send to"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}에서 이을 노드를 누르세요 · Esc 취소": "Click the node to connect from {0} · Esc to cancel",
+  "동시에 · {0}곳": "At once · {0} nodes",
+  "이 갈래는 {0}곳으로 동시에 가요: {1}": "This branch goes to {0} nodes at once: {1}"
+});
+Object.assign(window.ArkismI18nEN.strings, { "+ 기억 추가": "+ Add memory", "기억·스킬·도구·지식에서 찾기": "Find in memories, skills, tools, knowledge" });
+// ai-chat.js on automations: 목표 lines, 언제 실행, AI 제안
+Object.assign(window.ArkismI18nEN.strings, {
+  "이 자동화의 목표를 같이 정리해요": "Work out this automation's goal together",
+  "예: 매일 아침 열린 PR을 모아 요약해요": "e.g. Gathers open PRs every morning and summarizes them",
+  "한 줄로 정리해 줘": "Sum it up in one line",
+  "단계를 보고 채워 줘": "Fill it in from the steps",
+  "직접 부르기만": "Called directly only",
+  "고칠 곳을 말하면 바뀐 목표·일정·단계를 보여 줘요": "Say what to change and I'll show the changed goal, schedule and steps",
+  "무엇을 고칠까요? 목표와 언제 실행을 바꾸고, 단계를 넣거나 빼고, 순서와 조건을 바꿀 수 있어요.": "What should change? I can change the goal and when it runs, add or remove steps, and change their order and conditions.",
+  "AI로 정하기": "Set with AI",
+  "언제 실행 정하기": "Set when it runs",
+  "평소 말로 적으면 일정이나 웹훅으로 바꿔요": "Write it in plain words and I'll turn it into a schedule or a webhook",
+  "언제 시작할까요? '평일 아침 9시마다'처럼 평소 말로 적어 주세요.": "When should it start? Write it in plain words, like 'every weekday at 9 am'.",
+  "예: 평일 아침마다": "e.g. Every weekday morning",
+  "평일 아침마다": "Every weekday morning",
+  "매주 월요일 오전 10시": "Mondays at 10 am",
+  "PR이 열리면": "When a PR opens",
+  "적용했어요. 저장하면 반영돼요.": "Applied. It takes effect when you save."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} 다듬기": "Refine {0}",
+  "{0}을 어떻게 적을까요? 하려는 일을 말해 주면 한 줄로 정리해 드려요.": "How should {0} read? Tell me what it should do and I'll sum it up in one line."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "버전 기록": "Version history", "이 버전으로 변경": "Switch to this version", "지금 버전": "Current version", "접기": "Collapse",
+  "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.": "Each save makes a version. Switching keeps the current one.",
+  "버전 기록을 불러오지 못했어요.": "Couldn't load the version history.", "버전 기록이 아직 없어요.": "No versions yet.",
+  "팀을 만들면 저장할 때마다 버전이 남아요.": "Once the team exists, each save keeps a version."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "v{0} 버전으로 변경할까요? 새 버전으로 저장돼요.": "Switch to v{0}? It saves as a new version.", "v{0} 버전으로 바꾸면": "Switching to v{0} changes",
+  "지시 {0}": "Instructions {0}", "소개 {0}": "Intro {0}"
 });

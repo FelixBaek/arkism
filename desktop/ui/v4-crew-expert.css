@@ -349,3 +349,11 @@ dialog.ex-skill-dlg { margin-top: 18vh; }
   .ex-prop .acts { margin-left: auto; }
   .ex-props-head small { display: none; }
 }
+/* AI 제안 docked at the right end of a bottom bar: the bubble opens upward from it. */
+.ex-ai-dock { position: relative; display: inline-flex; }
+:not(.ex-ai) > .ex-ai-dock { margin-left: auto; }
+.ex-ai[hidden] { display: none; }
+.ex-ai-dock > .ex-ai-pop { top: auto; bottom: 42px; left: auto; right: 0; width: min(440px, calc(100vw - 48px)); transform-origin: calc(100% - 16px) calc(100% + 8px); text-align: left; }
+.ex-ai-dock > .ex-ai-pop::before { top: auto; bottom: -6px; left: auto; right: 14px; transform: rotate(225deg); }
+.dialog-foot > .ex-ai-dock { order: 1; margin-left: 8px; }
+.ex-hint + .ex-ai-dock, .auto-bar-note + .ex-ai-dock { margin-left: 8px; }

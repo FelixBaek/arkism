@@ -1,4 +1,4 @@
-// AI 도움 한 틀 (전문가 창의 AI 제안 · Figma 868:61909): 반짝이 알약 버튼 → 말풍선 대화 → 버튼 아래 보라색 제안 목록.
+// AI 도움 한 틀 (전문가 창의 AI 제안 · Figma 868:61909): 반짝이 알약 버튼 → 말풍선 대화 → 보라색 제안 목록 (버튼은 아래 저장 줄 오른쪽 끝에 둘 수 있어요: root.dock).
 // 적용은 화면의 초안만 바꾸고, 저장은 각 화면의 저장 버튼이 해요. 화면들이 같은 모양·같은 동작을 쓰도록 여기 하나만 둔다.
 //   ArkismAIChat.button(opts) → 알약 + 말풍선 + 제안 목록
 //   ArkismAIChat.field(input, opts) → 칸 오른쪽 끝의 반짝이 아이콘; 그 칸에 맞춘 preset으로 대화하고 제안을 칸에 넣는다
@@ -78,7 +78,11 @@ window.ArkismAIChat = (() => {
     const zone = el("div", "ex-ai-zone");
     // Inside a <label>, a click on the bubble's text would jump to the field: keep clicks here.
     zone.addEventListener("click", (e) => { if (!e.target.closest("input, textarea")) e.preventDefault(); });
-    if (inp) root.append(inp, anchor, zone); else root.append(anchor, zone);
+    // dock: the button with its bubble. A caller may move it into the window's bottom bar (root.dock);
+    // the purple list stays in root, where the caller put it in the body.
+    const dock = el("span", "ex-ai-dock");
+    if (inp) root.append(inp, anchor, zone); else { dock.append(anchor); root.append(dock, zone); root.dock = dock; }
+    const docked = () => !inp && dock.parentNode !== root;
     const toggle = (on) => { st.open = on; st.grow = on; paint(); if (!on) anchor.focus(); };
     const busy = () => st.log.some((m) => m.busy);
     const line = (who, text, more = {}) => { const m = { who, text, fresh: true, ...more }; st.log.push(m); if (st.log.length > 12) st.log.shift(); return m; };
@@ -99,6 +103,7 @@ window.ArkismAIChat = (() => {
         Object.assign(reply, { busy: false, text: r.say || (props.length ? tr("아래 보라색 목록에 제안을 넣었어요. 보고 적용하세요.") : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요.")) });
       } catch (e) { Object.assign(reply, { busy: false, err: true, text: e?.message || tr("AI가 답하지 못했어요.") }); }
       repaint();
+      if (st.props.length && !st.open && docked() && root.isConnected) root.scrollIntoView({ block: "nearest", behavior: "smooth" }); // the list is up in the body, away from the bar
     }
     // field()'s own ask: the field's preset, what is around it and the talk so far → { say, value }.
     async function defaultAsk(text, history) {
@@ -191,7 +196,8 @@ window.ArkismAIChat = (() => {
       anchor.classList.toggle("on", !!st.open);
       anchor.setAttribute("aria-expanded", String(!!st.open));
       zone.replaceChildren();
-      if (st.open) zone.append(bubble());
+      dock.querySelector(".ex-ai-pop")?.remove();
+      if (st.open) (docked() ? dock : zone).append(bubble());
       if (st.props.length) {
         const open = st.props.filter((p) => !p.applied);
         const list = el("div", "ex-props");
@@ -201,9 +207,11 @@ window.ArkismAIChat = (() => {
         list.append(hd, ...st.props.map(propRow));
         zone.append(list);
       }
+      root.hidden = docked() && !st.props.length; // only the list is left in the body
     }
     st.paint = paint;
     paint();
+    if (!inp) queueMicrotask(() => { if (st.paint === paint) paint(); }); // again once the caller has docked the button
     return root;
   }
 

@@ -127,9 +127,9 @@ window.ArkismAutomation = (h) => {
     const updateBar = () => {
       if (!bar) return;
       const n = creating ? 0 : changed().length;
-      bar.hidden = !creating && !n;
+      bar.querySelector(".primary").disabled = !creating && !n; // the bar stays for AI 제안
       bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 테스트 탭에서 전체를 시험해요` : `바뀐 칸 ${n}개 · 저장하면 v${(rec.revision || 0) + 1}가 돼요 · 기록 탭에서 되돌릴 수 있어요`;
-      bar.querySelector(".primary").disabled = creating && !d.name.trim();
+      if (creating) bar.querySelector(".primary").disabled = !d.name.trim();
     };
     const touch = () => { updateBar(); paintHead(); };
     const dirty = () => !creating && changed().length > 0;
@@ -251,7 +251,8 @@ window.ArkismAutomation = (h) => {
           top.append(card);
         }
       }
-      body.prepend(aiSection());
+      const ai = aiSection();
+      body.prepend(ai);
       body.append(goalSection(), whenSection(), flowSection(), notifySection(), settingSection());
       if (!creating) body.append(manageSection());
       bar = el("div", "auto-bar");
@@ -259,7 +260,7 @@ window.ArkismAutomation = (h) => {
       const cancel = button("취소", "ghost", null, () => { if (creating) pop.dialog.close(); else { reset(); } });
       bar.append(save, cancel);
       if (creating) bar.append(button("템플릿·설정으로 만들기", "ghost", null, () => { pop.dialog.close(); h.openSettingsNew(); }));
-      bar.append(el("span", "auto-bar-note"));
+      bar.append(el("span", "auto-bar-note"), ai.dock); // AI 제안 at the right end; its purple list stays on top of the body
       body.append(bar);
       updateBar();
     }
