@@ -54,13 +54,32 @@ var reviewSearch = func(text string) ([]any, error) {
 	return listOf(res["items"]), nil
 }
 
-// revPost classifies under the reviewer's own credential, never the owner's; tests replace it.
-var revPost = func(path string, payload any, timeout time.Duration) (map[string]any, error) {
+// reviewerToken is the reviewer's own credential file, never the owner's.
+func reviewerToken() (string, error) {
 	file := host.Env("ARKISM_REVIEW_TOKEN_FILE", "/srv/arkism/config/arkism-memory-reviewer.token")
 	if raw, err := os.ReadFile(file); err != nil || filepath.Base(file) == "owner.token" || strings.TrimSpace(string(raw)) == "" {
-		return nil, errReviewerCredential
+		return "", errReviewerCredential
+	}
+	return file, nil
+}
+
+// revPost classifies under the reviewer's credential; tests replace it.
+var revPost = func(path string, payload any, timeout time.Duration) (map[string]any, error) {
+	file, err := reviewerToken()
+	if err != nil {
+		return nil, err
 	}
 	return host.PostWith(file, path, payload, timeout)
+}
+
+// revGet reads the waiting list and conflict memories under the reviewer's credential: the harness that
+// runs the session processor holds no review grant; tests replace it.
+var revGet = func(path string, timeout time.Duration) (map[string]any, error) {
+	file, err := reviewerToken()
+	if err != nil {
+		return nil, err
+	}
+	return host.GetWith(file, path, timeout)
 }
 
 func basisTag(c map[string]any) string {
@@ -240,7 +259,7 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 	}
 	var waiting []map[string]any
 	for _, status := range []string{"candidate", "conflicted"} {
-		res, err := capGet(fmt.Sprintf("/v1/memory_candidates?%s&status=%s&limit=100", scopeQuery(false), status), 8*time.Second)
+		res, err := revGet(fmt.Sprintf("/v1/memory_candidates?%s&status=%s&limit=100", scopeQuery(false), status), 8*time.Second)
 		if err != nil {
 			return err
 		}
@@ -368,7 +387,7 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 
 func conflictOld(c map[string]any) (old map[string]any, err error) {
 	defer recovered(&err)
-	rel, err := capGet(fmt.Sprintf("/v1/memory_relations/%s?%s", str(c["conflict_id"]), scopeQuery(false)), 8*time.Second)
+	rel, err := revGet(fmt.Sprintf("/v1/memory_relations/%s?%s", str(c["conflict_id"]), scopeQuery(false)), 8*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +397,7 @@ func conflictOld(c map[string]any) (old map[string]any, err error) {
 			if privatePayload(m["id"]) {
 				return nil, errStop
 			}
-			return capGet(memoryPath(m["id"]), 8*time.Second)
+			return revGet(memoryPath(m["id"]), 8*time.Second)
 		}
 	}
 	return nil, errStop

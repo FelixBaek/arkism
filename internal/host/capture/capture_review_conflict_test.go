@@ -278,3 +278,22 @@ func TestWithJudgementKeepsAdviceOnly(t *testing.T) {
 		t.Fatal(b["verdict"], len(sem))
 	}
 }
+
+// The session processor runs as the harness, which holds no review grant: the waiting list is read as the reviewer.
+func TestCaptureAIReviewListsWaitingAsTheReviewer(t *testing.T) {
+	capFake(t)
+	capGet = func(path string, _ time.Duration) (map[string]any, error) {
+		if strings.HasPrefix(path, "/v1/memory_candidates") {
+			t.Fatal("waiting list read with the harness token")
+		}
+		return map[string]any{"items": []any{}}, nil
+	}
+	var listed []string
+	revGet = func(path string, _ time.Duration) (map[string]any, error) {
+		listed = append(listed, path)
+		return map[string]any{"items": []any{}}, nil
+	}
+	if err := aiReview(true, &bytes.Buffer{}); err != nil || len(listed) != 2 {
+		t.Fatal(err, listed)
+	}
+}

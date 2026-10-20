@@ -36,10 +36,12 @@ func capFake(t *testing.T) string {
 		save(func() { evLocatePrompt, evPrepareUsers = lp, pu })
 	}
 	{
-		rp, rs, tn := revPost, reviewSearch, timeNow
-		save(func() { revPost, reviewSearch, timeNow = rp, rs, tn })
+		rp, rg, rs, tn := revPost, revGet, reviewSearch, timeNow
+		save(func() { revPost, revGet, reviewSearch, timeNow = rp, rg, rs, tn })
 		// never the live reviewer credential: a test that classifies sets revPost itself
 		revPost = func(string, any, time.Duration) (map[string]any, error) { return nil, errReviewerCredential }
+		// reviewer reads go to the test's capGet stub (looked up per call, so a later stub applies)
+		revGet = func(path string, d time.Duration) (map[string]any, error) { return capGet(path, d) }
 	}
 	t.Cleanup(func() {
 		for _, f := range keep {
