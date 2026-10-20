@@ -1,0 +1,7 @@
+{
+ "id": "json",
+ "crew_assist": {
+  "status": "done",
+  "output": "{\"say\": \"목표를 할 일·끝난 기준·결과 모양으로 나눠 정리했어요.\", \"value\": \"- 열린 PR을 모두 모아 바뀐 화면을 접근성·디자인 토큰 기준으로 봐요\\n- 한 사람이 문제를 3개까지 말해요\\n- 끝에 고칠 목록을 중요한 순서로 5개까지 정리해요\", \"role\": \"시안을 접근성·디자인 토큰 기준으로 보고 고칠 목록을 만들어요\", \"instructions\": \"## 역할\\n- 시안과 화면을 보고 고칠 곳을 짚어요\\n\\n## 말투\\n- 짧고 분명하게, 근거를 함께 말해요\\n\\n## 하지 말 것\\n- 배포 전에는 꼭 먼저 물어봐요\\n- 파일을 직접 고치지 않아요\", \"effort\": \"high\", \"skills\": [\"impeccable\", \"figma-use\", \"design-critique\", \"ui-check\"], \"name\": \"시안 검토\", \"mode\": \"moderator_picks\", \"max_rounds\": 3, \"prompt\": \"- 바뀐 화면을 접근성·디자인 토큰 기준으로 봐요\\n- 한 사람이 문제를 3개까지 말해요\\n- 끝에 고칠 목록을 중요한 순서로 정리해요\", \"members\": [{\"agent_id\": \"ag-designer\", \"role\": \"moderator\", \"focus\": \"시안 흐름과 토큰\"}, {\"agent_id\": \"ag-review\", \"role\": \"reviewer\", \"focus\": \"접근성\"}, {\"agent_id\": \"ag-notes\", \"role\": \"scribe\", \"focus\": \"고칠 목록 정리\"}], \"commit-and-push\": \"개발·코드\", \"test-first\": \"개발·코드\", \"sql-migration\": \"개발·코드\", \"release-notes\": \"글쓰기·블로그\", \"csv-report\": \"문서·PDF\", \"ui-check\": \"브라우저·수집\"}"
+ }
+}

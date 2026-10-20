@@ -2286,27 +2286,23 @@
       renderDetail();
     } catch (e) { notice(`되돌리지 못했어요 (${e.message}).`); }
   }
+  const skillTalk = new Map(); // AI로 쉽게 설명 talks per skill, kept while the app is open
   async function skillDetailV4(sk) {
     const cat = pages.categoryOf(sk)?.name || "분류 안 됨";
     const body = detailShell(cat);
     const top = el("div", "v4s-head");
     top.append(raw(el("h2", "v4s-name", sk.name)));
     if (sk.description) top.append(raw(el("p", "v4s-lead", sk.description)));
-    const explain = el("div", "");
-    const aiBtn = el("button", "link-btn", "AI로 쉽게 설명"); aiBtn.type = "button";
-    aiBtn.addEventListener("click", async () => {
-      aiBtn.disabled = true;
-      explain.replaceChildren(el("p", "dim", "AI가 쉬운 말로 풀어 쓰는 중이에요…"));
-      try {
-        const text = await crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n\nExplain in two or three plain Korean sentences what this skill does and when to use it.`);
-        explain.replaceChildren(Object.assign(el("div", "quote"), { textContent: text }));
-      } catch (e) { explain.replaceChildren(el("p", "warn-text", e.message)); } finally { aiBtn.disabled = false; }
-    });
+    // AI로 쉽게 설명 (ai-chat.js): the same bubble as AI 제안; it only answers, nothing to apply.
+    const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI로 쉽게 설명", title: "AI로 쉽게 설명",
+      sub: "이 스킬을 쉬운 말로 풀어 줘요", greeting: "이 스킬의 무엇이 궁금하세요? 무엇을 하는지, 언제 쓰는지 쉬운 말로 알려 드려요.",
+      placeholder: "예: 내 작업에서는 언제 쓰면 돼?", quick: ["쉽게 설명해 줘", "언제 쓰면 좋아?", "예시를 들어 줘"],
+      ask: async (q, history) => ({ say: await crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n${history.length ? `Conversation so far:\n${history.map((m) => `${m.who === "me" ? "User" : "You"}: ${m.text}`).join("\n")}\n` : ""}\nQuestion: ${q}\n\nAnswer in two or three plain Korean sentences about what this skill does and when to use it.`) }) });
     const c = skillChecks(sk), u = useOf(sk);
     const chips = el("div", "v4s-chips");
     if (c) chips.append(el("span", `v4s-pill${c.quality.cls === "ok" ? "" : " amber"}`, `품질 ${c.quality.grade}${c.quality.score === null ? "" : ` · ${c.quality.score}`}`), el("span", `v4s-pill${c.security.cls === "ok" ? "" : " amber"}`, `보안 ${c.security.label}`));
     if (state.data.skillUse) chips.append(el("span", "v4s-pill muted", u ? `${u.count}번 사용 · ${ago(u.last_used_at)}` : "최근 60일 안 씀"));
-    top.append(chips, aiBtn, explain);
+    top.append(chips, aiBtn);
     const parts = [top];
     if (sk.status === "deprecated") {
       const card = el("div", "v4s-attn small");
@@ -4852,6 +4848,7 @@
   const crew = window.ArkismCrew({ state, $, el, icon, catIcon, catMenu, catChipBody, button, segment, go, render, request, query, notice, detailShell, section, facts, callout, copyButton, markSelected, openDetail, agentLogo, ago, models,
     allowed, skillCategory: (sk) => pages.categoryOf(sk)?.name || "", skillCategories: () => pages.prefs.categories.map((c) => ({ name: c.name, icon: c.icon })),
     toolServers: () => state.data.tools?.servers || [] });
+  window.ArkismAIChat.kit = { assist: crew.assist, assistError: crew.assistError, parseJSON: crew.parseJSON }; // field()'s default ask (ai-chat.js)
   const reviews = window.ArkismReviews({ state, $, el, icon, button, render, request, query, notice, detailShell, section, facts, markSelected, openDetail, ago, stat, go, headExtras, confirmPop,
     assist: (kind, prompt) => crew.assist(kind, prompt) });
   const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, lock, disconnect, useServer, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, reopen: open, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES,

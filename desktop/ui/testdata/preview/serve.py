@@ -61,7 +61,12 @@ class H(http.server.SimpleHTTPRequestHandler):
         return super().do_GET()
     def _write(s):
         n = int(s.headers.get("Content-Length") or 0)
-        if n: s.rfile.read(n)
+        data = s.rfile.read(n) if n else b""
+        # An AI assist answers from v1/crew/assists/<kind>.json (review, json, fill, explain, build, title, fix …).
+        if s.command == "POST" and s.path.split("?")[0] == "/v1/crew/assists":
+            try: kind = str(json.loads(data or b"{}").get("assist", {}).get("kind") or "undefined")
+            except ValueError: kind = "undefined"
+            return s._json(200, {"id": kind if kind.replace("_", "").isalnum() else "undefined"})
         return s._json(200, s._fixture(".post") if s.command == "POST" else {})
     do_POST = do_PUT = do_PATCH = do_DELETE = _write
 

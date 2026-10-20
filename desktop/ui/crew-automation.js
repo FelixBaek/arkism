@@ -113,7 +113,7 @@ window.ArkismAutomation = (h) => {
     if (creating) { const s = d.graph.nodes.find((n) => n.id === "ai1"); s.title = ""; s.config.goal = ""; }
     let handleTouched = !creating;
     const picked = new Set(); // new automation: steps whose expert was chosen on purpose (until then the picker reads 맡을 전문가 고르기)
-    let aiOpen = true;
+    const aiTalk = {}; // AI로 고치기 talk (ai-chat.js state), kept while this window is open
     let pop = null;
     let bar = null;
     let paintHead = () => {};
@@ -337,32 +337,27 @@ window.ArkismAutomation = (h) => {
       return s;
     }
 
-    // AI로 고치기 / 초안 만들기: the assist runner rewrites the graph (and in a new one the name); the user reviews and saves.
+    // 단계 목표·질문 칸의 반짝이 (ai-chat.js field): talks about this one step's goal; the proposal goes into the box.
+    const goalTalk = new WeakMap();
+    function goalAI(n, ta) {
+      if (!goalTalk.has(n)) goalTalk.set(n, {});
+      const ask = goalKey(n) === "prompt";
+      return window.ArkismAIChat.field(ta, { state: goalTalk.get(n), title: ask ? "질문 다듬기" : "목표 다듬기", sub: "이 단계가 할 일을 같이 정리해요",
+        greeting: ask ? "AI에게 한 번 물을 질문을 어떻게 바꿀까요?" : "이 단계의 목표를 어떻게 바꿀까요? 할 일·끝난 기준·결과 모양을 정리해 드려요.",
+        placeholder: "예: 출처는 3개 이상, 표로 정리하게", quick: ["더 분명하게", "끝난 기준을 넣어 줘", "결과 모양을 정해 줘"],
+        preset: `You write the ${ask ? "question for a one-shot AI step" : "goal for an AI step"} of an automation workflow: what to do, when it is done, and the shape of the result. Keep {{input}} and other {{variables}} that are there. Korean, at most 8000 characters, short and clear.`,
+        context: () => JSON.stringify({ workflow: d.name || "", step: n.title || h.nodeTitle(n), goal: d.goal || {} }) });
+    }
+    // AI로 고치기 / AI로 초안 (ai-chat.js): the assist runner rewrites the graph (and in a new one the name) as
+    // proposals in the purple list; 적용 puts them in the draft, the user reviews and saves.
     function aiSection() {
       const s = el("section", "auto-sec");
-      const head2 = el("button", "auto-ai-head");
-      head2.type = "button";
-      const draw = () => {
-        head2.replaceChildren(icon("sparkle"), creating ? "AI로 초안 만들기" : "AI로 고치기", icon("caret-down"));
-        head2.classList.toggle("open", aiOpen);
-        form.hidden = !aiOpen;
-      };
-      head2.addEventListener("click", () => { aiOpen = !aiOpen; draw(); });
-      const form = el("form", "auto-ai");
-      const q = h.input("", { maxLength: 2000, placeholder: creating ? "어떤 일을 자동으로 할까요? 예: 매일 아침 열린 PR을 모아 요약해서 슬랙으로 보내 줘" : "무엇을 고칠까요? 예: 출처 확인이 실패하면 2번까지 다시 찾게 해 줘" });
-      const go = button(creating ? "초안 만들기" : "고치기", "primary");
-      go.type = "submit";
-      form.append(q, go);
-      const err = el("p", "form-error");
-      err.setAttribute("role", "alert");
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const text = q.value.trim();
-        if (!text) return;
-        go.disabled = true;
-        err.textContent = "";
-        go.textContent = "AI가 생각하는 중…";
-        try {
+      s.append(window.ArkismAIChat.button({ state: aiTalk, label: creating ? "AI로 초안" : "AI로 고치기", title: creating ? "AI로 초안 만들기" : "AI로 고치기",
+        sub: creating ? "어떤 일을 자동으로 할지 말하면 단계를 그려요" : "고칠 곳을 말하면 바뀐 단계를 보여 줘요",
+        greeting: creating ? "어떤 일을 자동으로 할까요? 언제, 무엇을 하고, 결과를 어디로 보낼지 말해 주세요." : "무엇을 고칠까요? 단계를 넣거나 빼고, 순서와 조건을 바꿀 수 있어요.",
+        placeholder: creating ? "예: 매일 아침 열린 PR을 모아 요약해서 슬랙으로 보내 줘" : "예: 출처 확인이 실패하면 2번까지 다시 찾게 해 줘",
+        quick: creating ? ["매일 아침 PR 요약", "새 이슈 분류해서 알림", "주간 보고서 쓰기"] : ["실패하면 다시 시도", "보내기 전에 확인 받기", "단계를 줄여 줘"],
+        ask: async (text) => {
           const cur = JSON.stringify({ nodes: d.graph.nodes.map(({ id, type, title, config }) => ({ id, type, title, config })), edges: d.graph.edges }).slice(0, 12000);
           const prompt = creating
             ? `Build an Arkism workflow from this request. Decide sensibly without asking.\nUser: ${text}`
@@ -373,25 +368,22 @@ window.ArkismAutomation = (h) => {
           const g = j?.graph;
           if (!Array.isArray(g?.nodes) || !g.nodes.length) throw new Error(j?.ask ? String(j.ask).slice(0, 300) : "AI 답을 읽지 못했어요. 다시 보내 주세요.");
           g.edges = Array.isArray(g.edges) ? g.edges : [];
-          d.graph = h.layoutGraph(g);
-          d.graph.nodes.forEach((n) => { n.config ||= {}; });
-          if (creating) {
-            if (!d.name && j.name) { d.name = String(j.name).slice(0, 60); if (!handleTouched) d.handle = h.freeHandle(d.name); }
-            if (!d.role && j.role) d.role = String(j.role).slice(0, 200);
+          const next = h.layoutGraph(g);
+          next.nodes.forEach((n) => { n.config ||= {}; });
+          const steps = (gr) => flat(gr).filter((n) => !["start", "end"].includes(n.type)).map((n, i) => `${i + 1}. ${n.title || h.nodeTitle(n)} · ${kindText(n)}`).join("\n");
+          const redraw = () => { pop.select("overview"); touch(); };
+          const was = d.graph;
+          const props = [{ label: "단계", from: steps(was), to: steps(next), apply: () => { d.graph = structuredClone(next); redraw(); }, undo: () => { d.graph = was; redraw(); } }];
+          if (creating && j.name && !d.name) {
+            const name = String(j.name).slice(0, 60);
+            props.push({ label: "이름", from: "", to: name, apply: () => { d.name = name; if (!handleTouched) d.handle = h.freeHandle(name); redraw(); }, undo: () => { d.name = ""; redraw(); } });
           }
-          q.value = "";
-          notice(creating ? "AI가 단계를 그렸어요. 확인하고 만들어 주세요." : "AI가 고쳤어요. 확인하고 저장해 주세요.");
-          pop.select("overview");
-          touch();
-        } catch (x) {
-          err.textContent = x.message;
-        } finally {
-          go.disabled = false;
-          go.textContent = creating ? "초안 만들기" : "고치기";
-        }
-      });
-      s.append(head2, form, err);
-      draw();
+          if (creating && j.role && !d.role) {
+            const role = String(j.role).slice(0, 200);
+            props.push({ label: "설명", from: "", to: role, apply: () => { d.role = role; redraw(); }, undo: () => { d.role = ""; redraw(); } });
+          }
+          return { say: creating ? "AI가 단계를 그렸어요. 아래에서 보고 적용한 뒤 만들어 주세요." : "AI가 고친 단계예요. 아래에서 보고 적용한 뒤 저장해 주세요.", props };
+        } }));
       return s;
     }
 
@@ -596,7 +588,7 @@ window.ArkismAutomation = (h) => {
           if (creating) {
             const ta = h.input(n.config[gk] || "", { tag: "textarea", rows: 2, maxLength: 8000, placeholder: "무엇을 할지 적어요. {{input}}으로 앞 단계 결과를 넣을 수 있어요" });
             ta.addEventListener("input", () => { n.config[gk] = ta.value; touch(); });
-            wrap.append(el("small", "", gk === "goal" ? "목표" : "질문"), ta, varBar(n, ta));
+            wrap.append(el("small", "", gk === "goal" ? "목표" : "질문"), goalAI(n, ta), varBar(n, ta));
           } else {
             const t = el("span", "auto-goal-text");
             const paintG = () => { t.replaceChildren(el("small", "", gk === "goal" ? "목표 · " : "질문 · "), varText(n.config[gk] || "(비어 있어요)")); };
@@ -606,10 +598,14 @@ window.ArkismAutomation = (h) => {
             const edit = () => {
               const ta = h.input(n.config[gk] || "", { tag: "textarea", rows: 3, maxLength: 8000 });
               const edit2 = el("div", "auto-goal-edit");
-              edit2.append(ta, varBar(n, ta));
+              edit2.append(goalAI(n, ta), varBar(n, ta));
               let done = false;
-              const end = (c) => { if (done) return; done = true; if (c) { n.config[gk] = ta.value; touch(); } edit2.replaceWith(t); paintG(); };
-              ta.addEventListener("blur", () => end(true));
+              const away = (e) => { if (!edit2.contains(e.target)) end(true); };
+              const end = (c) => { if (done) return; done = true; document.removeEventListener("pointerdown", away, true); if (c) { n.config[gk] = ta.value; touch(); } edit2.replaceWith(t); paintG(); };
+              // leaving the box ends the edit; the AI bubble and the variable chips are inside it, and a bubble
+              // redraw drops focus to the page without the person leaving (so no plain blur here)
+              edit2.addEventListener("focusout", (e) => { if (e.relatedTarget && !edit2.contains(e.relatedTarget)) end(true); });
+              document.addEventListener("pointerdown", away, true);
               ta.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); end(false); } });
               t.replaceWith(edit2);
               ta.focus();

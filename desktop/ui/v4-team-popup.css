@@ -114,14 +114,7 @@
 .tm-sec-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .tm-sec-head h3 .icon { width: 15px; height: 15px; color: var(--nc-muted); }
 .tm-sec-head > small { margin-left: auto; color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); }
-.tm-ai-head { width: 100%; padding: 0; border: 0; background: none; cursor: pointer; justify-content: space-between; text-align: left; }
-.tm-ai-head h3 .icon { color: var(--nc-accent); }
-.tm-ai-count { margin-left: auto; margin-right: 8px; color: var(--accent); font-size: 12px; }
-.tm-caret { width: 14px; height: 14px; color: var(--nc-muted); transform: rotate(180deg); transition: transform .15s; }
-.tm-caret.shut { transform: none; }
-.tm-ai-row { display: flex; gap: 8px; }
-.tm-ai-row .tm-input { flex: 1; }
-.tm-ai-row .btn, .tm-test-form .btn { height: auto; padding: 7px 16px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.tm-test-form .btn { height: auto; padding: 7px 16px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 .tm-pop-body > .tm-kpis2 { margin: 24px 0 4px; gap: 0; border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-surface); overflow: hidden; }
 .tm-kpis2 .tm-kpi { flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 12px; border: 0; border-radius: 0; background: none; }
 .tm-kpis2 .tm-kpi + .tm-kpi { border-left: 1px solid var(--nc-line); }
@@ -230,7 +223,6 @@
 
 /* flex children of the popup body keep their own height (the body scrolls instead) */
 .tm-pop-body > * { flex: none; }
-.tm-pop .tm-ai-row { display: flex; flex-direction: row; align-items: center; }
 .tm-pop .tm-test-form { flex-direction: row; }
 
 /* 회의 방식 (961:60688): one bordered box holding two compact cards and 끝나는 조건 */

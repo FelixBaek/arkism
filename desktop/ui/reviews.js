@@ -163,27 +163,35 @@ window.ArkismReviews = (ctx) => {
     li.append(el("i", "rv-step-dot"), t);
     return li;
   }
+  const fixTalk = new Map(); // AI로 고치기 talks per finding (ai-chat.js state)
   function findingCard(it, f) {
     const isBlocking = f.severity === "blocking";
     const card = el("div", "rv-finding");
     const top = el("div", "rv-finding-top");
     top.append(el("span", "cn-badge warn", isBlocking ? "blocking" : "권고"), el("code", "", `${f.path}:${f.line}`));
     const acts = el("div", "rv-finding-acts");
-    // AI로 고치기: 서버 clones the PR branch, Claude Code changes this spot, and the commit goes to the same PR.
-    const fixBtn = button("AI로 고치기", "small", null, async () => {
-      if (!await confirmPop("AI로 고치기", `${f.path}:${f.line} 지적을 AI가 고쳐서 ${it.branch} 브랜치에 커밋할까요?\n\nPR #${it.number}에 새 커밋이 올라가고 CI가 다시 검사해요.`, "AI로 고치기")) return;
-      fixBtn.disabled = true;
-      fixBtn.textContent = "고치는 중… (몇 분)";
-      try {
-        const a = await assist("fix", JSON.stringify({ repo: it.repo, number: it.number, path: f.path, line: f.line, text: f.text }));
-        if (a.status === "done") notice(a.output.split("\n")[0]);
-        else notice(`고치지 못했어요: ${a.error || "알 수 없음"}`);
-      } catch (e) { notice(`고치지 못했어요 (${e.message}).`); }
-      fixBtn.disabled = false;
-      fixBtn.replaceChildren("AI로 고치기");
-    });
-    fixBtn.disabled = it.pr_state !== "open";
-    if (it.pr_state !== "open") fixBtn.title = "열린 PR에서만 고칠 수 있어요";
+    // AI로 고치기 (ai-chat.js): say what to change, the AI answers how it would fix it, and 적용 (after a confirm)
+    // has the server clone the PR branch, Claude Code change this spot, and the commit go to the same PR.
+    const key = findingKey(it, f);
+    if (!fixTalk.has(key)) fixTalk.set(key, {});
+    const fixBtn = it.pr_state !== "open" ? button("AI로 고치기", "small", null, null) : window.ArkismAIChat.button({ state: fixTalk.get(key), label: "AI로 고치기", title: "AI로 고치기",
+      sub: "어떻게 고칠지 말하면 방법을 알려 주고, 적용하면 커밋해요", greeting: `${f.path}:${f.line} 지적을 어떻게 고칠까요? 그냥 보내면 지적대로 고쳐요.`,
+      placeholder: "예: 테스트도 같이 고쳐 줘", quick: ["지적대로 고쳐 줘", "가장 작은 변경으로"],
+      ask: async (want) => {
+        const a = await assist("explain", `A code review found this at ${f.path}:${f.line} in PR #${it.number} (${it.repo}):\n${f.text}\n\nThe owner says: ${want}\n\nIn two short sentences, say how you would fix it. No code.`);
+        if (a.status !== "done") throw new Error(`AI가 답하지 못했어요 (${(a.error || "실패").slice(0, 120)}).`);
+        return { say: (a.output || "").trim(), props: [{ label: "커밋", from: null, to: `${f.path}:${f.line} → ${it.branch}\n${want}`, apply: async () => {
+          if (!await confirmPop("AI로 고치기", `${f.path}:${f.line} 지적을 AI가 고쳐서 ${it.branch} 브랜치에 커밋할까요?\n\nPR #${it.number}에 새 커밋이 올라가고 CI가 다시 검사해요.`, "AI로 고치기")) return false;
+          notice("AI가 고치는 중이에요… (몇 분)");
+          try {
+            const r = await assist("fix", JSON.stringify({ repo: it.repo, number: it.number, path: f.path, line: f.line, text: `${f.text}\n\n${want}` }));
+            if (r.status === "done") { notice(r.output.split("\n")[0]); return true; }
+            notice(`고치지 못했어요: ${r.error || "알 수 없음"}`);
+          } catch (e) { notice(`고치지 못했어요 (${e.message}).`); }
+          return false;
+        } }] };
+      } });
+    if (it.pr_state !== "open") { fixBtn.disabled = true; fixBtn.title = "열린 PR에서만 고칠 수 있어요"; }
     acts.append(fixBtn, button("무시", "ghost small", null, () => {
       try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...dismissed(), findingKey(it, f)])); } catch (_) { /* private window */ }
       render(false);

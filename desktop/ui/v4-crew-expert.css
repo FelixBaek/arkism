@@ -134,6 +134,19 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 @keyframes ex-in { from { opacity: 0; transform: translateY(6px) scale(.96); } }
 @media (prefers-reduced-motion: reduce) { .ex-chat-ai.busy, .ex-chat-ai.busy i, .ex-chat li.fresh, .ex-ai-pop.grow { animation: none; } }
 .wk-test .ex-chat { margin-bottom: 4px; }
+/* ai-chat.js: the same AI 제안 in every screen; field() puts the sparkle at the field's right edge */
+.ex-ai-zone { align-self: stretch; display: flex; flex-direction: column; gap: 10px; }
+.ex-ai-zone:empty { display: none; }
+.ex-ai.ex-ai-field { align-items: stretch; gap: 8px; }
+.ex-ai-field > input, .ex-ai-field > textarea { width: 100%; padding-right: 38px; }
+.ex-ai-spark { position: absolute; top: 5px; right: 6px; z-index: 1; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px solid color-mix(in srgb, var(--nc-ai) 45%, transparent); border-radius: 999px; background: var(--nc-ai-bg); color: var(--nc-ai); cursor: pointer; }
+.ex-ai-spark .icon { width: 13px; height: 13px; }
+.ex-ai-spark:hover, .ex-ai-spark.on { border-color: var(--nc-ai); }
+.ex-ai-spark:focus-visible { outline: 2px solid var(--nc-ai); outline-offset: 2px; }
+.ex-ai-field .ex-ai-zone { position: relative; }
+.ex-ai-pop.at-field { top: 4px; left: auto; right: 0; transform-origin: calc(100% - 16px) -8px; }
+.ex-ai-pop.at-field::before { left: auto; right: 14px; }
+.ex-ai-field .ex-props { font-weight: 400; }
 .ex-danger { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 16px 20px; border: 1px solid color-mix(in srgb, var(--status-danger) 45%, transparent); border-radius: 8px; }
 .ex-danger > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .ex-danger strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--status-danger); }
@@ -247,23 +260,6 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-tools .wk-chip:hover .icon-btn, .ex-tools .wk-chip:focus-within .icon-btn { width: 18px; }
 .ex-use-hint, .ex-pin-sum { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 /* AI로 고치기 · AI로 초안 만들기 (938:62634 · 310:19277) */
-.ex-airow { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-canvas); }
-.ex-airow.draft { border: 0; background: none; }
-.ex-airow-line { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 14px; cursor: pointer; }
-.ex-airow-toggle { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; color: var(--nc-text); font: 500 calc(13.5px * var(--fs, 1))/1 var(--sans); cursor: pointer; padding: 0; }
-.ex-airow-toggle .icon { width: 14px; height: 14px; color: var(--nc-accent); }
-.ex-airow-gap { flex: 1; }
-.ex-airow-wait { color: var(--nc-accent); font-size: calc(12px * var(--fs, 1)); }
-.ex-airow .caret { width: 14px; height: 14px; color: var(--nc-muted); transition: transform .15s; }
-.ex-airow.draft .ex-airow-line .caret { margin-left: auto; }
-.ex-airow.open .caret { transform: rotate(180deg); }
-.ex-airow-line input, .ex-airow-ask input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 0; background: none; color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1 var(--sans); outline: none; }
-.ex-airow-ask { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 4px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); }
-.ex-airow-ask:focus-within, .ex-airow.open:not(.draft):focus-within { border-color: var(--nc-accent); }
-.ex-airow-said { padding: 0 14px 10px; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
-.ex-airow.draft .ex-airow-said { padding: 0 4px; }
-.ex-airow-said.err { color: var(--status-danger); }
-.ex-airow .ex-props { margin: 0 10px 10px; }
 /* 쓸 수 있는 것 › 칩 상세 (929:61931): near the top, over the popup */
 dialog.ex-skill-dlg { margin-top: 18vh; }
 .ex-skill-dlg .dialog-head { align-items: flex-start; }
