@@ -1,6 +1,6 @@
 /* MEMORY › 개요 (overview.js). The stage is drawn in Figma units (1157 × 930) and scaled to the window. */
 .app.overview-mode .main { overflow: auto; }
-.app.overview-mode .page-head, .app.overview-mode #controls, .app.overview-mode #chips, .app.overview-mode #stats { display: none; }
+.app.overview-mode .area-bar, .app.overview-mode .page-head, .app.overview-mode #controls, .app.overview-mode #chips, .app.overview-mode #stats { display: none; }
 .app.overview-mode .panel { flex: none; overflow: visible; border: 0; }
 .app.overview-mode .panel-main { padding: 0; }
 .app.overview-mode .panel-main > .table-wrap { flex: none; display: block; padding: 0; }
@@ -28,7 +28,8 @@
 .ov-t-n .ov-dot, .ov-t-r .ov-dot, .ov-t-a .ov-dot { background: var(--tone); }
 
 /* top stepper */
-.ov-steps { position: absolute; left: 24px; right: 24px; top: 38px; display: flex; gap: 16px; }
+/* --ov-k (overview.js fit): in small windows cards, steps and chips shrink less than the brain */
+.ov-steps { position: absolute; left: 24px; top: 38px; width: calc(1109px / var(--ov-k, 1)); display: flex; gap: 16px; transform: scale(var(--ov-k, 1)); transform-origin: 0 0; }
 .ov-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ov-group-save { flex: 4; } .ov-group-use { flex: 3; } .ov-group-dream { flex: 1.1; }
 .ov-group-head { display: flex; align-items: center; gap: 8px; color: rgba(var(--ov-fg-rgb),.55); font-size: 11px; }
@@ -62,7 +63,7 @@
 .ov-link { fill: none; stroke: var(--tone, #fff); stroke-width: 1.3; opacity: .6; stroke-dasharray: 1; stroke-dashoffset: 1; animation: ov-draw 1.4s cubic-bezier(.6,0,.2,1) forwards; }
 .ov-particle { position: absolute; left: 0; top: 0; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; offset-rotate: 0deg; opacity: 0;
   background: var(--tone, #fff); box-shadow: 0 0 10px 3px var(--tone, #fff); animation: ov-travel ease-in-out infinite; pointer-events: none; }
-.ov-node { position: absolute; width: 0; height: 0; pointer-events: none; }
+.ov-node { position: absolute; z-index: 1; width: 0; height: 0; pointer-events: none; }
 .ov-node-white { --tone: rgba(var(--ov-fg-rgb),.7); --halo: rgba(var(--ov-fg-rgb),.2); }
 .ov-node > i { position: absolute; left: 0; top: 0; border-radius: 50%; }
 .ov-node .ov-ring { width: 30px; height: 30px; border: 1.5px solid var(--tone); animation: ov-ring var(--ring, 3.2s) ease-out var(--delay, 0s) infinite; }
@@ -74,10 +75,10 @@
 
 /* cards */
 .ov-card { position: absolute; width: 258px; height: 102px; padding: 12px 14px; border-radius: 14px; background: var(--ov-card); border: 1px solid rgba(var(--ov-fg-rgb),.12);
-  display: flex; flex-direction: column; gap: 10px; text-align: left; backdrop-filter: blur(6px); }
+  display: flex; flex-direction: column; gap: 10px; text-align: left; backdrop-filter: blur(6px); transform: scale(var(--ov-k, 1)); }
 .ov-card:hover { border-color: rgba(var(--ov-fg-rgb),.32); }
 .ov-card:focus-visible { outline: 2px solid var(--tone); outline-offset: 2px; }
-.ov-card-l { left: 24px; } .ov-card-r { left: 876px; }
+.ov-card-l { left: 24px; transform-origin: 0 50%; } .ov-card-r { left: 876px; transform-origin: 100% 50%; }
 .ov-card.ov-t-r { border-color: var(--ov-r); }
 .ov-card-head { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .ov-card-name { font-size: 15px; font-weight: 600; }
@@ -94,7 +95,7 @@
 .ov-chart i.none { opacity: .12; }
 
 /* 기억 처리 grid */
-.ov-grid { position: absolute; left: 389px; top: 302px; width: 420px; min-height: 320px; padding: 14px 16px; border-radius: 15.6px; background: var(--ov-card);
+.ov-grid { position: absolute; z-index: 2; left: 389px; top: 302px; width: 420px; min-height: 320px; padding: 14px 16px; border-radius: 15.6px; background: var(--ov-card);
   border: 1px solid rgba(var(--ov-fg-rgb),.1); display: flex; flex-direction: column; gap: 8px; backdrop-filter: blur(6px); }
 .ov-grid-head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
 .ov-badge { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; color: rgba(var(--ov-fg-rgb),.8); background: rgba(var(--ov-fg-rgb),.1); }
@@ -115,7 +116,7 @@
 .ov-ticks .now { color: rgb(var(--ov-fg-rgb)); justify-self: end; }
 
 /* bottom chips */
-.ov-chips { position: absolute; left: 24px; right: 24px; top: 872px; display: flex; justify-content: center; gap: 10px; }
+.ov-chips { position: absolute; left: 24px; right: 24px; top: 872px; display: flex; justify-content: center; gap: 10px; transform: scale(var(--ov-k, 1)); transform-origin: 50% 100%; }
 .ov-chip { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 999px; background: var(--ov-card); border: 1px solid rgba(var(--ov-fg-rgb),.12); white-space: nowrap; }
 .ov-chip:hover { border-color: rgba(var(--ov-fg-rgb),.32); }
 .ov-chip span { color: rgba(var(--ov-fg-rgb),.6); }

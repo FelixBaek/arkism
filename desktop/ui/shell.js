@@ -68,7 +68,9 @@ window.ArkismShell = (ctx) => {
     });
     const box = $("#area-tabs");
     // MEMORY draws no tabs: the overview's own links open 기억·세션·사용량, and the rail goes back to 개요.
-    const tabs = key === "memory" ? [] : MENUS[key].tabs;
+    // 역할별 모델 has nothing to set while a server decides the models (pages.js), so only this PC shows it.
+    const local = window.__TAURI__ && state.mode === "local";
+    const tabs = key === "memory" ? [] : MENUS[key].tabs.filter(([id]) => key !== "settings" || id !== "roles" || local);
     box.replaceChildren(...tabs.map(([id, label, open, active, n]) => {
       const t = el("button", `area-tab${active() ? " active" : ""}`);
       t.type = "button";

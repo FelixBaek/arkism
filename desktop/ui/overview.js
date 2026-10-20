@@ -215,6 +215,9 @@ window.ArkismOverview = (ctx) => {
     const below = foot?.offsetParent ? Math.max(0, foot.getBoundingClientRect().bottom - box.bottom) : 0; // gap + footer, independent of the scale
     const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min((host.clientWidth - padX) / W, (host.clientHeight - top - below - padB) / H)));
     ui.stage.style.transform = `scale(${s})`;
+    // Cards and labels shrink less than the brain (effective scale √s); 1.12 keeps the grown cards clear of the
+    // nearest region nodes (extract at x 310, judge at x 840), which also draw above the cards.
+    ui.stage.style.setProperty("--ov-k", s < 1 ? Math.min(1.12, 1 / Math.sqrt(s)).toFixed(3) : "1");
     root.style.width = `${Math.floor(W * s)}px`; root.style.height = `${Math.floor(H * s)}px`;
   }
 
