@@ -1,0 +1,7 @@
+{
+ "id": "comfy",
+ "crew_assist": {
+  "status": "done",
+  "output": "이미지를 만들었어요. ComfyUI 기록에서 볼 수 있어요."
+ }
+}

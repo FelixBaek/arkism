@@ -76,7 +76,7 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-metric + .ex-metric { border-left: 1px solid var(--border); }
 .ex-metric strong { font-size: calc(20px * var(--fs, 1)); font-weight: 500; }
 .ex-metric small { color: var(--text-2); }
-.ex-ai { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.ex-ai { position: relative; align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .ex-ai-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--nc-ai) 45%, transparent); border-radius: 999px; background: var(--nc-ai-bg); color: var(--nc-ai); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
 .ex-ai-btn .icon { width: 14px; height: 14px; }
 .ex-ai-btn:hover, .ex-ai-btn.on { border-color: var(--nc-ai); }
@@ -340,3 +340,12 @@ dialog.ex-skill-dlg { margin-top: 18vh; }
 .ex-add-words b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ex-add-words small { color: var(--nc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ex-add-dlg .dialog-head { align-items: center; justify-content: space-between; }
+/* Narrow homes (the graph's right panel): label and buttons go above and below the text so it keeps the width. */
+.ex-props { container-type: inline-size; }
+@container (max-width: 420px) {
+  .ex-prop { flex-wrap: wrap; }
+  .ex-prop .k { width: 100%; }
+  .ex-prop .v { flex-basis: 100%; }
+  .ex-prop .acts { margin-left: auto; }
+  .ex-props-head small { display: none; }
+}

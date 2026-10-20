@@ -1,0 +1,7 @@
+{
+ "id": "suggest",
+ "crew_assist": {
+  "status": "done",
+  "output": "[{\"name\": \"release-notes\", \"why\": \"릴리스마다 변경 목록을 손으로 모으고 있어요\", \"skill_md\": \"---\\nname: release-notes\\ndescription: 태그 사이 커밋을 모아 릴리스 노트를 써요\\n---\\n\\n# 릴리스 노트\\n\\n1. 지난 태그 이후 커밋을 모아요.\\n2. 기능·수정·기타로 나눠 정리해요.\\n\"}]"
+ }
+}
