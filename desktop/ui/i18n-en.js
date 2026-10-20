@@ -5921,3 +5921,20 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0} · AI와 같이 쓰기": "{0} · Write with AI",
   "{0} → {1} 선이 지워져요. 저장하지 않고 나가면 원래대로 돌아가요.": "The {0} → {1} line is deleted. Leave without saving to get it back."
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "항상": "Always",
+  "성공 시": "On success",
+  "실패 시": "On failure",
+  "선 종류": "Line kind",
+  "아직 서버 미지원": "Not supported by the server yet",
+  "다른 노드는 항상과 같아요": "Same as Always for other nodes",
+  "사람 확인 노드에서만": "Only from a human check node",
+  "조건 노드에서만": "Only from a condition node",
+  "동시에 보내기": "Send to several at once",
+  "+ 함께 보낼 노드": "+ Also send to"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}에서 이을 노드를 누르세요 · Esc 취소": "Click the node to connect from {0} · Esc to cancel",
+  "동시에 · {0}곳": "At once · {0} nodes",
+  "이 갈래는 {0}곳으로 동시에 가요: {1}": "This branch goes to {0} nodes at once: {1}"
+});

@@ -123,3 +123,16 @@ textarea.g-inline { resize: vertical; }
 #app.graph-mode #title { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
 #app.graph-mode #title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #app.graph-mode #title .g-title-sub { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+/* 선 잇기: a node's output points show + on hover; click then pick a node, or drag. 선 종류 in the right panel. */
+.graph-page:not(.run) .g-node:hover .g-port.out, .g-port.out.linking { transform: scale(1.8); opacity: 1; background: var(--nc-surface); }
+.graph-page:not(.run) .g-node:hover .g-port.out::before, .g-port.out.linking::before { content: "+"; position: absolute; inset: 0; display: grid; place-items: center; font: 600 7px/1 var(--sans); color: var(--text-1); }
+.graph-page:not(.run) .g-node .g-port.out:hover, .g-port.out.linking { background: var(--accent); }
+.graph-page:not(.run) .g-node .g-port.out:hover::before, .g-port.out.linking::before { color: var(--accent-on); }
+.g-stage.linking .g-node { cursor: copy; }
+.g-link-hint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border: 1px solid var(--nc-line); border-radius: 999px; background: var(--nc-surface); color: var(--text-1); font: 500 calc(12px * var(--fs, 1))/1.5 var(--sans); z-index: 3; }
+.g-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.g-kind { display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 6px 10px; border: 1px solid var(--nc-line); border-radius: 8px; background: none; color: var(--text-1); font: 500 calc(12.5px * var(--fs, 1))/1.45 var(--sans); text-align: left; cursor: pointer; }
+.g-kind:hover:not(:disabled) { background: var(--nc-raised); }
+.g-kind.active { border-color: var(--nc-accent); background: var(--nc-amber-bg); color: var(--nc-accent); }
+.g-kind:disabled { cursor: default; color: var(--nc-quiet); }
+.g-kind small { font-size: calc(10.5px * var(--fs, 1)); font-weight: 400; }

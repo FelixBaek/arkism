@@ -1209,7 +1209,7 @@ window.ArkismCrew = (ctx) => {
     ed.graph = structuredClone(rec.crew.graph || defaultGraph("blank", rec.crew));
     ed.graph.nodes.forEach((n) => { n.config ||= {}; });
     Object.assign(ed, { sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false,
-      graphMode: !!opts.graphMode, review: !!opts.review, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, run: opts.run || null, test: null, trigger: undefined, runList: false });
+      graphMode: !!opts.graphMode, review: !!opts.review, linking: null, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, run: opts.run || null, test: null, trigger: undefined, runList: false });
     if (opts.select && ed.graph.nodes.some((n) => n.id === opts.select)) ed.sel = opts.select;
     // The newest run of this workflow: each selected node's bottom row shows how that node did there.
     ed.last = null;
@@ -1630,7 +1630,7 @@ window.ArkismCrew = (ctx) => {
         if (spec) {
           s.classList.add("editable");
           s.title = "눌러서 바로 고쳐요";
-          s.addEventListener("click", (ev) => { ev.stopPropagation(); if (ed.sel !== n.id) selectOnCanvas(n.id); cardEdit(s, n, spec); });
+          s.addEventListener("click", (ev) => { if (ed.linking) return; ev.stopPropagation(); if (ed.sel !== n.id) selectOnCanvas(n.id); cardEdit(s, n, spec); });
         }
         box.append(s);
       }
@@ -1668,13 +1668,18 @@ window.ArkismCrew = (ctx) => {
       box.append(portBox);
       if (!ed.run && WORK(n) && !ownerOf(rec)) box.append(nodeFoot(n));
       if (!ed.run) head.addEventListener("pointerdown", (ev) => startDrag(ev, n, box, canvas, svg));
-      box.addEventListener("click", (ev) => { ev.stopPropagation(); if (!ed.run || ed.sel !== n.id) selectOnCanvas(n.id); });
+      box.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        if (ed.linking && !ed.run) { if (ed.linking.from !== n.id) linkTo(nodeIn(ed.linking.from), ed.linking.port, n.id); return; }
+        if (!ed.run || ed.sel !== n.id) selectOnCanvas(n.id);
+      });
       canvas.append(box);
       nodeEls.set(n.id, box);
     }
     stage.append(canvas);
     stage.addEventListener("click", () => {
       if (ed.justPanned) { ed.justPanned = false; return; }
+      if (ed.linking) { ed.linking = null; render(false); return; }
       if (ed.sel || ed.selEdge !== null) selectOnCanvas(null);
     });
     // 화면 이동: 휠 클릭(가운데 버튼)으로 끌거나 스페이스를 누른 채 끌어요 (Figma와 같아요).
@@ -1746,6 +1751,14 @@ window.ArkismCrew = (ctx) => {
       const menu = presetList();
       menu.addEventListener("click", (ev) => ev.stopPropagation());
       stage.append(menu);
+    }
+    if (ed.linking && !ed.run) {
+      stage.classList.add("linking");
+      const from = nodeIn(ed.linking.from);
+      const pick = PORTS[from?.type]?.find(([k]) => k === ed.linking.port)?.[1] || ed.linking.port;
+      const src = pick ? `${nodeTitle(from || {})} · ${pick}` : nodeTitle(from || {});
+      stage.append(el("div", "g-link-hint", `${src}에서 이을 노드를 누르세요 · Esc 취소`));
+      stage.querySelector(`.g-node[data-id="${CSS.escape(ed.linking.from)}"] .g-port.out[data-port="${CSS.escape(ed.linking.port)}"]`)?.classList.add("linking");
     }
     const tb = testBadge();
     if (tb) stage.append(tb);
@@ -1841,7 +1854,10 @@ window.ArkismCrew = (ctx) => {
       svg.append(p, hit);
       const fromType = typeOf.get(e.from);
       const portText = PORTS[fromType]?.find(([k]) => k === e.port)?.[1] || e.port;
-      const text = back ? `${portText ? `${portText} → ` : ""}다시 · ${used ? `${used}/${e.max}번째` : `최대 ${e.max}번`}` : (IS_AI(fromType) && e.port ? `${e.port} · AI가 고름` : "");
+      const fan = !back && ed.graph.edges.filter((x) => x.from === e.from && (x.port || "") === (e.port || "") && !isBack(x)).length;
+      const text = back ? `${portText ? `${portText} → ` : ""}다시 · ${used ? `${used}/${e.max}번째` : `최대 ${e.max}번`}`
+        : IS_AI(fromType) && e.port ? `${e.port} · AI가 고름`
+        : [PORTS[fromType] ? portText || "항상" : "", fan > 1 ? `동시에 · ${fan}곳` : ""].filter(Boolean).join(" · ");
       if (text) {
         const chip = el("span", `g-edge-label${back ? " back" : ""}${used ? " used" : ""}`, text);
         chip.style.left = `${shape.mid.x}px`;
@@ -1934,33 +1950,41 @@ window.ArkismCrew = (ctx) => {
     const temp = document.createElementNS("http://www.w3.org/2000/svg", "path");
     temp.setAttribute("class", "g-edge drawing");
     svg.append(temp);
+    const sx = ev.clientX, sy = ev.clientY;
     const move = (e) => temp.setAttribute("d", curve(from, toCanvas(e, canvas)));
     const up = (e) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       temp.remove();
+      // A click on the + (no drag): pick the target node next.
+      if (Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) < 5) { ed.linking = { from: n.id, port }; render(false); return; }
       const target = document.elementFromPoint(e.clientX, e.clientY)?.closest(".g-node");
-      if (!target || target.dataset.id === n.id) return;
-      const to = target.dataset.id;
-      const toNode = ed.graph.nodes.find((x) => x.id === to);
-      if (["start", "schedule", "webhook"].includes(toNode.type)) { notice("시작 노드에는 선을 이을 수 없어요."); return; }
-      if (ed.graph.edges.some((x) => x.from === n.id && x.to === to && (x.port || "") === port)) return;
-      const edge = { from: n.id, to };
-      if (port) edge.port = port;
-      if (wouldCycle(ed.graph, n.id, to)) {
-        edge.max = 2;
-        notice("되돌아가는 선이에요. 최대 2번까지 다시 돌아요. 선을 눌러 횟수와 갈래 이름을 바꿀 수 있어요.");
-      }
-      ed.graph.edges.push(edge);
-      ed.selEdge = ed.graph.edges.length - 1;
-      ed.sel = null;
-      touch();
-      render(false);
+      if (target && target.dataset.id !== n.id) linkTo(n, port, target.dataset.id);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   }
 
+  // A new line from n's port to node `to`; it opens in the right panel to pick its kind.
+  function linkTo(n, port, to) {
+    ed.linking = null;
+    const toNode = nodeIn(to);
+    if (!n || !toNode || to === n.id) { render(false); return; }
+    if (["start", "schedule", "webhook"].includes(toNode.type)) { notice("시작 노드에는 선을 이을 수 없어요."); render(false); return; }
+    if (ed.graph.edges.some((x) => x.from === n.id && x.to === to && (x.port || "") === port)) { render(false); return; }
+    const edge = { from: n.id, to };
+    if (port) edge.port = port;
+    if (wouldCycle(ed.graph, n.id, to)) {
+      edge.max = 2;
+      notice("되돌아가는 선이에요. 최대 2번까지 다시 돌아요. 선을 눌러 횟수와 갈래 이름을 바꿀 수 있어요.");
+    }
+    ed.graph.edges.push(edge);
+    ed.selEdge = ed.graph.edges.length - 1;
+    ed.sel = null;
+    ed.review = false;
+    touch();
+    render(false);
+  }
   // 지우기 확인 (241:27886 · 241:27897): a small window instead of window.confirm.
   function confirmBox(title, text, okLabel) {
     return new Promise((resolve) => {
@@ -2420,11 +2444,8 @@ window.ArkismCrew = (ctx) => {
       const port = input(e.port, { maxLength: 20, placeholder: "통과, 근거 부족…" });
       port.addEventListener("change", () => { const v = port.value.trim(); if (v) e.port = v; else delete e.port; touch(); render(false); });
       box.append(field("갈래 이름", port, "이름 붙은 갈래가 둘 이상이면 AI가 결과를 보고 하나를 골라요"));
-    } else if (PORTS[from?.type]) {
-      const port = select(PORTS[from.type], e.port || PORTS[from.type][0][0]);
-      port.addEventListener("change", () => { e.port = port.value; touch(); render(false); });
-      box.append(field("갈래", port));
-    }
+    } else if (from) box.append(edgeKinds(e, from));
+    if (from && !isBack(e)) box.append(fanOut(e, from));
     const back = wouldCycle({ ...ed.graph, edges: ed.graph.edges.filter((x) => x !== e) }, e.from, e.to);
     if (back) {
       const max = select(Array.from({ length: 10 }, (_, i) => [String(i + 1), `${i + 1}번`]), String(e.max || 2));
@@ -2444,6 +2465,41 @@ window.ArkismCrew = (ctx) => {
       render(false);
     }));
     return box;
+  }
+  // 선 종류: what the engine follows. A plain line (no port) always goes on; approval·condition·code end on a named port.
+  // There is no line for "the node failed": a failed node stops the run (code's 실패 is its {"ok": false} output).
+  const EDGE_KINDS = [["", "항상", null], ["approve", "승인", "approval"], ["reject", "거절", "approval"], ["yes", "예", "condition"], ["no", "아니오", "condition"], ["pass", "성공 시", "code"], ["fail", "실패 시", "code"]];
+  function edgeKinds(e, from) {
+    const wrap = el("div", "field");
+    wrap.append("선 종류");
+    const list = el("div", "g-kinds");
+    for (const [port, label, only] of EDGE_KINDS) {
+      const b = el("button", `g-kind${(e.port || "") === port ? " active" : ""}`);
+      b.type = "button";
+      const why = !only || only === from.type ? ""
+        : port === "fail" ? "아직 서버 미지원"
+        : port === "pass" ? "다른 노드는 항상과 같아요"
+        : only === "approval" ? "사람 확인 노드에서만" : "조건 노드에서만";
+      b.append(el("span", "", label));
+      if (why) { b.disabled = true; b.append(el("small", "dim", why)); }
+      b.setAttribute("aria-pressed", String((e.port || "") === port));
+      b.addEventListener("click", () => { if (port) e.port = port; else delete e.port; touch(); render(false); });
+      list.append(b);
+    }
+    wrap.append(list);
+    return wrap;
+  }
+  // 동시에 보내기: more lines from the same port; the engine follows every one of them at once.
+  function fanOut(e, from) {
+    const same = ed.graph.edges.filter((x) => x.from === e.from && (x.port || "") === (e.port || "") && !isBack(x));
+    const wrap = el("div", "field");
+    wrap.append("동시에 보내기");
+    if (same.length > 1) wrap.append(el("small", "dim", `이 갈래는 ${same.length}곳으로 동시에 가요: ${same.map((x) => nodeTitle(nodeIn(x.to) || {})).join(", ")}`));
+    const free = ed.graph.nodes.filter((x) => x.id !== from.id && !["start", "schedule", "webhook"].includes(x.type) && !same.some((y) => y.to === x.id));
+    const add = select([["", "+ 함께 보낼 노드"], ...free.map((x) => [x.id, nodeTitle(x)])], "");
+    add.addEventListener("change", () => { if (add.value) linkTo(from, e.port || "", add.value); });
+    wrap.append(add);
+    return wrap;
   }
   // 이 노드만 실행: the saved graph with just this node, given the value typed here (as {{input}}).
   function onlyRun(n) {
@@ -2913,6 +2969,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     if (!spaceDown) setSpace(true);
   });
   document.addEventListener("keyup", (e) => { if (e.code === "Space") setSpace(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && ed.linking && state.view === "graph") { ed.linking = null; render(false); } });
   window.addEventListener("blur", () => setSpace(false));
   document.addEventListener("keydown", (e) => {
     if (state.view !== "graph" || ed.run || (!ed.sel && ed.selEdge === null)) return;
