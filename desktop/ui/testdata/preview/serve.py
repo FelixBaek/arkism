@@ -55,6 +55,9 @@ class H(http.server.SimpleHTTPRequestHandler):
         key = p + ("?topic" if "kind=topic" in s.path and "status=active" in s.path else "")
         if key in MANY: return s._json(200, MANY[key])
         if p.startswith("/v1/"): return s._json(200, s._fixture())
+        if p in ("/", "/index.html"): # a plain browser gets the desktop stand-in so it opens on the local Arkism, not the SSH form
+            with open(os.path.join(UI, "index.html"), encoding="utf-8") as fh: html = fh.read().replace("<head>", '<head><script src="/testdata/preview/fake-app.js"></script>', 1)
+            body = html.encode(); s.send_response(200); s.send_header("Content-Type", "text/html; charset=utf-8"); s.send_header("Content-Length", str(len(body))); s.end_headers(); s.wfile.write(body); return
         return super().do_GET()
     def _write(s):
         n = int(s.headers.get("Content-Length") or 0)
