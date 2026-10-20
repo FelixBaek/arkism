@@ -1,0 +1,10 @@
+{
+  "authority": "data_only_untrusted",
+  "state": "ok",
+  "items": [
+    { "role": "user", "text": "리뷰 일정 좀 같이 잡아 줘. 나는 보통 오전에 코드 리뷰해, 오후는 회의가 많아서." },
+    { "role": "assistant", "text": "알겠어요. 오전 10시에 리뷰 시간을 잡아 둘게요." },
+    { "role": "user", "text": "그리고 코드 고치면 테스트 돌려줘. 매번 말 안 해도." },
+    { "role": "assistant", "text": "네, 코드를 바꾸면 테스트까지 돌리고 결과를 알려 드릴게요." }
+  ]
+}

@@ -364,3 +364,9 @@ button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor
 .cat-icon[aria-checked="true"] { background: var(--nc-subtle); border-color: var(--nc-line); color: var(--nc-accent); }
 .cat-icon:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 1px; }
 .cat-new-foot { display: flex; justify-content: flex-end; gap: 6px; }
+/* category menu: a pencil at the right of each row, shown on hover or keyboard focus */
+.cat-menu-row { position: relative; display: flex; }
+.cat-menu-row .cat-menu-item { flex: 1; padding-right: 30px; }
+.cat-menu-edit { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 5px; background: none; color: var(--nc-muted); cursor: pointer; opacity: 0; }
+.cat-menu-edit .icon { width: 13px; height: 13px; }
+.cat-menu-row:hover .cat-menu-edit, .cat-menu-edit:focus-visible { opacity: 1; } .cat-menu-edit:hover { color: var(--nc-text); background: var(--nc-line); }

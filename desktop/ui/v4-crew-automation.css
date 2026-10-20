@@ -69,8 +69,8 @@
 .auto-bars i.now { background: var(--nc-accent); }
 .auto-sec { padding: 20px 0; border-top: 1px solid var(--nc-line); }
 .auto-top + .auto-sec { margin-top: 16px; }
-.auto-sec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.auto-sec-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); }
+.auto-sec-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding-top: 12px; }
+.auto-sec-head h3, .crew-dialog .dialog-body .auto-sec-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); }
 .auto-sec-head h3 .icon { width: 16px; height: 16px; color: var(--nc-muted); }
 .auto-sec-head > .auto-link:last-child, .auto-sec-head > .auto-dim { margin-left: auto; }
 .auto-dim { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
@@ -224,5 +224,5 @@
 .auto-sched-pick, .auto-days, .auto-ampm, .auto-time { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .auto-sched-pick { gap: 12px; }
 .auto-sched-say { width: 100%; }
-.auto-num { width: 3ch; text-align: center; font-variant-numeric: tabular-nums; field-sizing: fixed; }
+.auto-num { width: calc(44px * var(--fs, 1)); height: 30px; padding: 0 6px; box-sizing: border-box; text-align: center; font-size: calc(14px * var(--fs, 1)); font-variant-numeric: tabular-nums; field-sizing: fixed; }
 .auto-sched-next { font-size: calc(12px * var(--fs, 1)); }

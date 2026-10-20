@@ -8,7 +8,7 @@ window.ArkismSessions = (ctx) => {
   const { state, $, el, button, icon, render, request, query, detailShell, usage } = ctx;
   const { num, usd, dur, logo, agentName, bars } = usage.fmt;
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
-  const S = { range: "7d", source: "", q: "", sort: "recent", selecting: false, doc: null, state: "idle", error: "", selected: "", picked: new Set(), busy: false, notice: "", tx: null };
+  const S = { find: null, range: "7d", source: "", q: "", sort: "recent", selecting: false, doc: null, state: "idle", error: "", selected: "", picked: new Set(), busy: false, notice: "", tx: null };
   let epoch = 0, typing = 0, txEpoch = 0;
 
   async function load(silent = false) {
@@ -34,10 +34,10 @@ window.ArkismSessions = (ctx) => {
   const when = (t) => new Date(t).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
   // ---------------------------------------------------------------- 대화 보기
-  async function transcript(id, more = false) {
+  async function transcript(id, more = false, mark = "") {
     const ticket = ++txEpoch;
     const prev = more && S.tx?.id === id ? S.tx : null;
-    S.tx = { id, items: prev ? prev.items : [], hidden: prev ? prev.hidden : 0, state: prev ? prev.state : "", archives: prev ? prev.archives : [],
+    S.tx = { id, mark: prev ? prev.mark : mark, pages: prev ? prev.pages + 1 : 1, items: prev ? prev.items : [], hidden: prev ? prev.hidden : 0, state: prev ? prev.state : "", archives: prev ? prev.archives : [],
       archive: prev ? prev.archive : "", next: prev ? prev.next : "", loading: true, error: "" };
     paint();
     try {
@@ -47,6 +47,8 @@ window.ArkismSessions = (ctx) => {
       if (r?.authority !== "data_only_untrusted" || !Array.isArray(r.items)) throw new Error("invalid_response");
       Object.assign(S.tx, { state: r.state, archives: r.archives || [], archive: r.archive_id || "", next: r.next_cursor || "",
         items: [...S.tx.items, ...r.items], hidden: S.tx.hidden + (r.hidden?.secret_records || 0), loading: false });
+      // shortcut: looks at most 10 pages (300 messages) for the quoted words; add a server-side search if sessions get longer
+      if (S.tx.mark && S.tx.next && S.tx.pages < 10 && !S.tx.items.some((x) => x.text.includes(S.tx.mark))) { void transcript(id, true); return; }
     } catch (e) {
       if (ticket !== txEpoch) return;
       S.tx.loading = false;
@@ -76,6 +78,12 @@ window.ArkismSessions = (ctx) => {
     for (const m of tx.items) {
       const box = el("div", `ss-msg ${m.role === "user" ? "user" : "assistant"}`);
       const text = el("p", "", m.text); text.dataset.noI18n = "";
+      const at = tx.mark ? m.text.indexOf(tx.mark) : -1;
+      if (at >= 0) { // 승인 대기 › 세션 보기: underline the words the memory came from, and bring them into view
+        const hit = el("mark", "ss-hit", tx.mark); hit.dataset.noI18n = "";
+        text.replaceChildren(m.text.slice(0, at), hit, m.text.slice(at + tx.mark.length));
+        requestAnimationFrame(() => hit.scrollIntoView({ block: "center" }));
+      }
       box.append(el("b", "", m.role === "user" ? "사용자" : "에이전트"), text);
       if (m.truncated) box.append(el("small", "ss-note", "길어서 앞부분만 보여요."));
       msgs.append(box);
@@ -250,6 +258,11 @@ window.ArkismSessions = (ctx) => {
     if (!S.doc.items.length) list.append(el("div", "empty", "조건에 맞는 세션이 없어요."));
     parts.push(list, el("p", "v4s-foot", S.doc.total > S.doc.items.length ? `${num(S.doc.total)}개 중 ${S.doc.items.length}개 표시` : `세션 ${num(S.doc.total)}개`));
     table.replaceChildren(...parts);
+    if (S.find) { // 승인 대기 › 세션 보기: open the session the memory came from, with its dialogue
+      const f = S.find; S.find = null; // cleared first: transcript() repaints, which comes back here
+      const hit = S.doc.items.find((x) => x.session_id === f.sid);
+      if (hit) { S.selected = hit.id; void transcript(hit.id, false, f.quote); } else S.notice = "이 기억이 나온 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요.";
+    }
     if (!S.selected && S.doc.items[0]) S.selected = S.doc.items[0].id;
     detail();
   }
@@ -259,6 +272,15 @@ window.ArkismSessions = (ctx) => {
     if (!S.doc?.items.some((x) => x.id === id)) { S.range = "all"; S.q = ""; S.state = "idle"; }
     ctx.go("sessions");
   }
+
+  // From a memory (승인 대기 · 쓰는 중인 기억): its session over the whole range, the quote underlined in the dialogue.
+  window.addEventListener("arkism:open-session", (e) => {
+    const { session_id: sid, quote = "" } = e.detail || {};
+    if (!sid) return;
+    S.find = { sid, quote: quote.trim() }; S.selected = ""; S.tx = null; txEpoch++; S.notice = "";
+    S.range = "all"; S.q = ""; S.source = ""; S.state = "idle";
+    ctx.go("sessions");
+  });
 
   return {
     load, open, refresh: () => load(true), count: () => (S.doc ? num(S.doc.total) : ""),

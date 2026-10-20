@@ -25,3 +25,10 @@
 .v4-roles-server .pill { white-space: nowrap; }
 .mg-actions { display: flex; align-items: center; gap: 8px; }
 .mg-card > a.btn { align-self: flex-start; text-decoration: none; }
+/* messenger logos: on each card title and over each group of connected channels */
+.mg-logo { width: 16px; height: 16px; flex: none; color: var(--nc-text); }
+.mg-chan-group { padding-top: 6px; }
+.mg-chan-head { display: flex; align-items: center; gap: 8px; padding: 12px 0 4px; border-top: 1px solid var(--nc-line); }
+.mg-chan-head strong { font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.mg-chan-n { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.mg-chan-group .mg-chan { padding-left: 24px; border-top: 0; }

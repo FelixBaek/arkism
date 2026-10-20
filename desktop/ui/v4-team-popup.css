@@ -109,8 +109,8 @@
 /* sections */
 .tm-sec { display: flex; flex-direction: column; gap: 12px; padding: 22px 0; border-top: 1px solid var(--nc-line); }
 .tm-sec > .tm-chips, .tm-sec > .tm-ctx-list { margin: 0; }
-.tm-sec-head { display: flex; align-items: center; gap: 12px; }
-.tm-sec-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.tm-sec-head { display: flex; align-items: center; gap: 12px; padding: 12px 0 2px; }
+.tm-sec-head h3, .crew-dialog .dialog-body .tm-sec-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .tm-sec-head h3 .icon { width: 15px; height: 15px; color: var(--nc-muted); }
 .tm-sec-head > small { margin-left: auto; color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); }
 .tm-test-form .btn { height: auto; padding: 7px 16px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
@@ -281,3 +281,14 @@
 .vdiff-row.add { color: var(--status-ok); background: color-mix(in srgb, var(--status-ok) 12%, transparent); }
 .vdiff-none { color: var(--nc-muted); font-size: calc(12.5px * var(--fs, 1)); }
 .tm-hist-row + .vdiff { border-top: 1px solid var(--nc-line); }
+/* 전문가 list: fixed columns (맡을 일 · 모델 · 빼기) so rows line up whatever the model name, and a quiet column head */
+.tm-pop-body .tm-mlist .tm-pill-input { flex: none; width: 128px; }
+.tm-pop-body .tm-mlist .tm-mmodelr { flex: none; width: 148px; overflow: hidden; text-overflow: ellipsis; }
+.tm-pop-body .tm-mlist .tm-mrow.tm-mhead { min-height: 0; padding-top: 6px; padding-bottom: 6px; cursor: default; }
+.tm-mhead > span { color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); }
+.tm-mhead > .tm-mhead-lead { flex: none; width: 32px; }
+.tm-mhead > .tm-mhead-lead.ordered { width: calc(var(--tm-grip-w, 10px) + var(--tm-ord-w, 10px) + 56px); }
+.tm-mhead > .tm-mhead-focus { flex: none; width: 128px; text-align: center; }
+.tm-mhead > .tm-mhead-x { flex: none; width: 24px; }
+.tm-pop-body .tm-mlist .tm-grip, .tm-pop-body .tm-mlist .tm-ord { flex: none; width: 10px; }
+.tm-pop-body .tm-mlist .tm-pill-input { background: transparent; }

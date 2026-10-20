@@ -354,9 +354,9 @@ window.ArkismCrew = (ctx) => {
     for (const [k, label] of options) { const o = el("option", "", label); o.value = k; o.selected = k === value; s.append(o); }
     return s;
   }
-  function modelInput(value, placeholder = "deepseek-v4-flash") {
+  function modelInput(value, placeholder = "deepseek-v4-flash", list = "crew-models") {
     const i = input(value, { maxLength: 80, placeholder });
-    i.setAttribute("list", "crew-models");
+    i.setAttribute("list", list);
     return i;
   }
   // The same live list as a plain choice (자동화 팝업): "" = the fallback, "auto" = the router picks; a saved model off the list stays choosable.
@@ -364,24 +364,28 @@ window.ArkismCrew = (ctx) => {
     const ids = [...new Set([...(models?.enabledModels() || []), ...(value && value !== "auto" ? [value] : [])])];
     return select([["", emptyLabel], ["auto", "자동 — 라우터가 일마다 골라요"], ...ids.map((m) => [m, m])], value || "");
   }
-  function modelList() {
+  // only: keep the models this returns true for (the 이미지 picker lists vision models only).
+  function modelList(id = "crew-models", only = null) {
     const dl = el("datalist");
-    dl.id = "crew-models";
+    dl.id = id;
     // "auto" lets the router pick per run; the rest is the live list the runner reports (모델 설정), never a fixed one.
     const auto = el("option");
     auto.value = "auto";
     auto.label = tr("자동 — 라우터가 일마다 골라요");
-    dl.append(auto);
-    // Grouped by provider. The server keeps a plain model name (no provider), so a name offered by several providers
+    if (!only) dl.append(auto);
+    // Grouped by provider, the provider's logo before its name; each model says on the right what it takes in. The server keeps a plain model name (no provider), so a name offered by several providers
     // says so on every copy: picking either saves the same name, and the runner picks the CLI from the name.
     const byProvider = models?.enabledByProvider?.() || [];
     const where = new Map();
     for (const p of byProvider) for (const m of p.models) where.set(m, [...(where.get(m) || []), p.name]);
     for (const p of byProvider) for (const m of p.models) {
+      if (only && !only(m)) continue;
       const o = el("option");
       o.value = m;
-      o.label = where.get(m).join(" · ");
+      o.label = where.get(m).length > 1 ? where.get(m).join(" · ") : m; // the head already names a single provider
       o.dataset.group = p.name;
+      o.dataset.groupIcon = p.id;
+      o.dataset.tag = tr(window.ArkismBrand?.kindLabel(m) || "");
       dl.append(o);
     }
     return dl;
@@ -447,21 +451,7 @@ window.ArkismCrew = (ctx) => {
   function modelMark(model) {
     const m = (model || "").toLowerCase();
     const box = el("span", "wf-mark");
-    if (/^(opus|sonnet|haiku|fable|claude)/.test(m)) {
-      const img = el("img");
-      img.src = "img/claude.svg";
-      img.alt = "";
-      box.append(img);
-      return box;
-    }
-    const ref = /^(gpt|o\d|codex)/.test(m) ? "a-codex" : m.startsWith("gemini") ? "a-gemini" : "";
-    if (!ref) { box.append(icon("robot")); return box; }
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("aria-hidden", "true");
-    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-    use.setAttribute("href", `#${ref}`);
-    svg.append(use);
-    box.append(svg);
+    box.append(window.ArkismBrand?.mark(m) || icon(m === "auto" ? "sparkle" : "robot"));
     return box;
   }
   // 전문가 아바타 (Figma 아바타 635:57217): a preset drawing on one of the server's background colours
@@ -3129,7 +3119,12 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   // Usage › expert row asks for that expert's history tab (team.js openExpertHistory).
   // A separate window (popup-drag.js) reopens an automation by id.
   window.addEventListener("arkism:open-automation", (e) => { const r = byId(e.detail?.id); if (r) getAuto().open(r, e.detail.tab); });
-  window.addEventListener("arkism:open-expert", (e) => { if (e.detail?.id) openWorkers(e.detail.id, false, e.detail.tab || "edit"); });
+  // over: open on top of the page the user is on (사용량), without going to the expert list.
+  window.addEventListener("arkism:open-expert", (e) => {
+    const { id, tab = "edit", over } = e.detail || {};
+    if (!id) return;
+    if (over && byId(id) && !wk.pop) { workerPick(id); wk.openTab = tab; openExpertPopup(byId(id)); loadAgentInfo(); } else openWorkers(id, false, tab);
+  });
   function openWorkers(id, isNew = false, tab = "edit") {
     if (wk.pop) return;
     state.workerNew = isNew;
@@ -3280,13 +3275,18 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     return r;
   }
   // A model box with the maker's mark in front (868:61909); the mark follows what is typed.
-  function modelBox(d, key, ph, label) {
+  function modelBox(d, key, ph, label, list) {
     const w = el("span", "ex-model");
-    const i = bindText(modelInput(d[key], ph), d, key);
+    const i = bindText(modelInput(d[key], ph, list), d, key);
     i.setAttribute("aria-label", label);
     let mark = modelMark(d[key] || "");
-    i.addEventListener("input", () => { const m = modelMark(i.value); mark.replaceWith(m); mark = m; });
-    w.append(mark, i);
+    const tag = el("em", "ex-model-kind", tr(window.ArkismBrand?.kindLabel(d[key]) || ""));
+    i.addEventListener("input", () => {
+      const m = modelMark(i.value); mark.replaceWith(m); mark = m;
+      tag.textContent = tr(window.ArkismBrand?.kindLabel(i.value) || "");
+      if (key === "model") wk.onModel?.();
+    });
+    w.append(mark, i, tag);
     return w;
   }
   // 모델 (868:61909): 기본·예비 모델 and 생각 깊이.
@@ -3303,8 +3303,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   function runCard(d) {
     const temp = String(d.temperature ?? "0.7");
     const len = String(Number(d.max_output_tokens) > 0 ? d.max_output_tokens : 0);
-    const imgBox = modelBox(d, "image_model", "claude opus 5.5", "이미지가 오면 볼 모델");
-    const img = imgBox.querySelector("input");
+    const imgBox = modelBox(d, "image_model", "claude opus 5.5", "이미지가 오면 볼 모델", "crew-models-vision");
+    // 이미지 모델 is only asked for when the main model reads text only (a vision model looks at images itself).
+    const needsImage = () => window.ArkismBrand?.kind(d.model) !== "vision";
     const c = el("section", "ex-run");
     const rows = el("div", "ex-run-box");
     rows.append(
@@ -3314,10 +3315,10 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       exRow("출력 형식", segment(FORMATS, d.output_format || "text", (k) => { d.output_format = k; touchWorker(); })),
       exRow("파일 고치기", segment(FILE_EDITS, d.file_edits || "ask", (k) => { d.file_edits = k; touchWorker(); })),
       exRow("부르는 곳", placeChips(d)),
-      exRow("이미지", imgBox));
-    const note = raw(el("p", "ex-run-note", tr(`이미지는 ${d.image_model || "기본 모델"}이 대신 보고, 답은 이 전문가 이름으로 돌려줘요.`)));
-    rows.append(note);
-    img.addEventListener("input", () => { note.textContent = tr(`이미지는 ${img.value.trim() || "기본 모델"}이 대신 보고, 답은 이 전문가 이름으로 돌려줘요.`); });
+      exRow("이미지 모델", imgBox, modelList("crew-models-vision", (m) => window.ArkismBrand?.kind(m) === "vision")));
+    const imgRow = rows.lastElementChild;
+    imgRow.hidden = !needsImage();
+    wk.onModel = () => { imgRow.hidden = !needsImage(); }; // the 기본 모델 box calls this as it changes
     c.append(el("h3", "", "실행"), rows);
     return c;
   }
@@ -3367,7 +3368,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   const pinTok = (p, mode = p.injection) => Math.max(1, Math.round(Math.min(PIN_CAP[mode] || 0, pinChars(p)) / 2.5));
   const pinTokens = (d) => (d.pinned || []).reduce((n, p) => n + pinTok(p), 0);
   // One chip in 쓸 수 있는 것 (929:61931): a pinned one has the pin and the accent, and can be dragged to change the order.
-  function useChip(d, label, { pin, mono, fresh, bad, onOpen }) {
+  function useChip(d, label, { pin, mono, fresh, bad, onOpen, onRemove }) {
     const b = el("button", `wk-chip on ex-uchip${pin ? " pinned" : ""}${mono ? " mono" : ""}${bad ? " bad" : ""}`);
     b.type = "button";
     if (fresh) { const dot = el("i", "ex-dot"); dot.title = tr("새 버전이 있어요"); b.append(dot); }
@@ -3393,7 +3394,16 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         touchWorker();
       });
     }
-    return b;
+    if (!onRemove) return b;
+    // ✕ at the top right on hover takes it off the list (a pin and the skill name both go)
+    const w = el("span", "ex-uchip-wrap");
+    const x = el("button", "ex-uchip-x");
+    x.type = "button";
+    x.setAttribute("aria-label", `${tr("목록에서 빼기")}: ${label}`);
+    x.append(icon("x"));
+    x.addEventListener("click", (e) => { e.stopPropagation(); onRemove(); touchWorker(); });
+    w.append(b, x);
+    return w;
   }
   const USE_KINDS = [["memories", "기억"], ["skills", "스킬"], ["tools", "도구"], ["knowledge_sources", "지식"]];
   // 쓸 수 있는 것 (929:61931): 스킬·도구·기억·지식 rows of chips (필요할 때 쓰기; a pin = 항상 먼저 넣기), the pin total,
@@ -3418,7 +3428,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       const skillKids = names.map((name) => {
         const sk = skillRec(name);
         const pin = sk ? skillPin(d, sk) : null;
-        return useChip(d, name, { pin, mono: true, fresh: !!(pin?.revision && skillActiveVer(sk) > pin.revision), bad: pin ? badOf(pin) : "", onOpen: () => openUseDetail(d, rec, { collection: "skills", id: sk?.id, name }) });
+        return useChip(d, name, { pin, mono: true, fresh: !!(pin?.revision && skillActiveVer(sk) > pin.revision), bad: pin ? badOf(pin) : "", onOpen: () => openUseDetail(d, rec, { collection: "skills", id: sk?.id, name }),
+          onRemove: () => { d.skills = (d.skills || []).filter((n) => n !== name); if (sk) setPin(d, "skills", sk.id, false); } });
       });
       // What may still be added, per kind (the four "+ X 추가" lists and the card's "+ 추가" share it).
       const left = (kind) => kind === "tools" ? (ctx.toolServers?.() || []).filter((s) => !(d.tools || []).includes(s.name)).map((s) => ({ id: s.name, title: s.name, meta: s.desc || "", add: () => { d.tools = [...(d.tools || []), s.name]; } }))
@@ -3432,7 +3443,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       tools.querySelectorAll(".wk-add, datalist").forEach((n) => n.remove()); // adding goes through + 추가
       grid.append(el("span", "ex-use-k", "도구"), tools);
       // 기억: pinned memories, then the kinds it reads when it looks things up.
-      const memPins = pinOrder(d).filter((p) => p.collection === "memories").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p) }));
+      const memPins = pinOrder(d).filter((p) => p.collection === "memories").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p), onRemove: () => setPin(d, p.collection, p.id, false) }));
       const kinds = toggleChips(MEMORY_KINDS, (k) => !!d.memory?.[k] && d.memory[k] !== "off", (k, on) => {
         const m = { ...(d.memory || {}) };
         if (on) m[k] = "all"; else delete m[k];
@@ -3441,7 +3452,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       });
       for (const k of kinds.children) k.classList.add("ex-kind");
       row("기억", ...memPins, ...kinds.children);
-      row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p) })));
+      row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p), onRemove: () => setPin(d, p.collection, p.id, false) })));
       const n = (d.pinned || []).length;
       const sum = raw(el("small", "ex-pin-sum", n ? tr(`고정 ${n}개 · 약 ${pinTokens(d).toLocaleString("ko-KR")} 토큰 · 넣는 순서는 고정 칩을 끌어서 바꿔요`) : tr("핀을 꽂으면 부를 때마다 먼저 넣어요")));
       body.replaceChildren(grid, sum);
@@ -3576,22 +3587,13 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     dlg.showModal();
   }
   // 부르는 곳 (868:61909): the agents as their logos, the rest by name; a pressed one is lit.
-  const PLACE_LOGO = { claude_code: "img:claude.svg", codex: "sym:a-codex", zcode: "sym:a-zcode" };
+  const PLACE_LOGO = { claude_code: "claude", codex: "openai", zcode: "zai", discord: "discord", app: "arkism" }; // brand.js names
   function placeChips(d) {
     const row = toggleChips(CALL_PLACES, (k) => (d.agents || []).includes(k), (k, on) => { d.agents = on ? [...(d.agents || []), k] : (d.agents || []).filter((a) => a !== k); touchWorker(); });
     [...row.children].forEach((b, i) => {
       const [k, label] = CALL_PLACES[i];
-      const spec = PLACE_LOGO[k];
-      if (!spec) return;
-      const [kind, ref] = spec.split(":");
-      let logo;
-      if (kind === "img") { logo = el("img"); logo.src = `img/${ref}`; logo.alt = ""; } else {
-        logo = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        logo.setAttribute("aria-hidden", "true");
-        const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-        use.setAttribute("href", `#${ref}`);
-        logo.append(use);
-      }
+      const logo = window.ArkismBrand?.mark(PLACE_LOGO[k]);
+      if (!logo) return;
       b.classList.add("ex-place-logo");
       b.setAttribute("aria-label", label);
       b.title = label;
@@ -3935,6 +3937,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const tabs = isNew ? [{ key: "edit", label: "새 전문가", render: (box) => { mark(box, "edit"); editBody(box, null); } }]
       : [{ key: "edit", label: "개요", render: (box) => { mark(box, "edit"); editBody(box, byId(wk.id)); } },
         { key: "test", label: "테스트", render: (box) => { mark(box, "test"); drawWorkerSave = baseSave; wk.bar = wk.okBtn = null; box.append(testPanel(byId(wk.id))); } },
+        { key: "usage", label: "사용량", render: (box) => { mark(box, "usage"); wk.bar = wk.okBtn = null; usageTab(box, byId(wk.id)); } },
         { key: "history", label: "기록", render: (box) => { mark(box, "history"); wk.bar = wk.okBtn = null; historyTab(box, byId(wk.id)); } }];
     const pop = expertPopup.open({
       title: "", sub: "", avatar: face, tabs, initial: isNew ? "edit" : (wk.openTab || "edit"), actions: [acts], cls: `ex-pop${isNew ? " ex-new" : ""}`, popout: isNew ? null : { event: "arkism:open-expert", detail: { id: wk.id }, title: byId(wk.id)?.crew?.name || "" },
@@ -4073,14 +4076,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   function editBody(box, rec) {
     const d = wk.draft;
     box.classList.add("ex-body");
-    if (rec) {
-      const use = (wk.usage?.agents || []).find((a) => a.id === rec.id);
-      const m = el("div", "ex-metrics");
-      const runsTile = metric(`${use?.calls || 0}회`, "최근 30일 실행");
-      m.append(runsTile, metric(fmtTok(use?.tokens || 0), "전체 토큰"), metric(use ? `$${Number(use.cost_usd || 0).toFixed(2)}` : "$0.00", "추정 비용"));
-      dailyBars(rec.id, runsTile);
-      box.append(m);
-    }
+    if (rec) box.append(usageMetrics(rec));
     const ai = aiBox(rec ? "fix" : "draft"); // the button sits at the right end of the bottom bar; its purple list here
     box.append(ai);
     if (!rec) box.append(likeRow());
@@ -4179,9 +4175,24 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   const stamp = (at) => { const t = new Date(at); const p = (n) => String(n).padStart(2, "0"); return isNaN(t) ? "" : `${p(t.getMonth() + 1)}-${p(t.getDate())} ${p(t.getHours())}:${p(t.getMinutes())}`; };
   const CALL_FROM = { manual: "직접", test: "테스트", discord: "디스코드", claude_code: "Claude Code", codex: "Codex", zcode: "ZCode", app: "arkism 앱", schedule: "일정", webhook: "웹훅", meeting: "회의" };
   // 기록 (868:63273): 판 이력 (GET /v1/crew/versions/{id}) and 최근 실행 (its calls and the runs of the workflow it works by).
+  // 최근 30일 실행 · 전체 토큰 · 추정 비용 (개요 and 사용량 tabs).
+  function usageMetrics(rec) {
+    const use = (wk.usage?.agents || []).find((a) => a.id === rec.id);
+    const m = el("div", "ex-metrics");
+    const runsTile = metric(`${use?.calls || 0}회`, "최근 30일 실행");
+    m.append(runsTile, metric(fmtTok(use?.tokens || 0), "전체 토큰"), metric(use ? `$${Number(use.cost_usd || 0).toFixed(2)}` : "$0.00", "추정 비용"));
+    dailyBars(rec.id, runsTile);
+    return m;
+  }
+  const histSec = (title, sub, body) => { const s = el("section", "ex-hsec"); const h = el("div", "ex-hsec-head"); h.append(el("h3", "", title), el("small", "", sub)); s.append(h, body); return s; };
+  // 사용량 (from Usage › 전문가): the numbers, then every call with its model, tokens, time and cost.
+  function usageTab(box, rec) {
+    box.classList.add("ex-body");
+    box.append(usageMetrics(rec), histSec("사용 기록", "부를 때마다 한 줄씩 남아요", runsBox(rec)));
+  }
   function historyTab(box, rec) {
     box.classList.add("ex-body");
-    const sec = (title, sub, body) => { const s = el("section", "ex-hsec"); const h = el("div", "ex-hsec-head"); h.append(el("h3", "", title), el("small", "", sub)); s.append(h, body); return s; };
+    const sec = histSec;
     const vbox = el("div", "tm-hist");
     if (wk.versions === undefined) {
       wk.versions = null;
@@ -4212,9 +4223,12 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       if (wk.histOpen.has(h.revision)) vbox.append(window.ArkismVersionDiff.render(el, list[0].crew, h.crew, `v${h.revision} 버전으로 바꾸면`));
     });
     if (!list.length) vbox.append(el("p", "ex-hist-empty", wk.versions ? "버전 기록이 아직 없어요." : "불러오는 중…"));
+    box.append(sec("버전 기록", "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.", vbox), sec("최근 실행", "테스트 탭에서 보낸 것도 여기 남아요", runsBox(rec)));
+  }
+  // Runs of its workflow and its own calls, newest first.
+  function runsBox(rec) {
     const rbox = el("div", "tm-hist");
     rbox.append(el("p", "ex-hist-empty", "불러오는 중…"));
-    box.append(sec("버전 기록", "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.", vbox), sec("최근 실행", "테스트 탭에서 보낸 것도 여기 남아요", rbox));
     const wf = allWorkflows().find((w) => w.crew.handle === (rec.crew.workflow || "").replace(/^\$/, ""));
     const runsP = wf ? request(`/v1/crew/runs?${query({ crew_id: wf.id, limit: "30" })}`).then((r) => r.items || [], () => []) : Promise.resolve([]);
     const callsP = request(`/v1/crew/agents/${encodeURIComponent(rec.id)}/calls?${query({ limit: "30" })}`).then((r) => r.items || [], () => []);
@@ -4240,6 +4254,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         return row;
       }));
     }).catch(() => rbox.replaceChildren(el("p", "ex-hist-empty", "실행 기록을 불러오지 못했어요.")));
+    return rbox;
   }
 
   // 새 전문가: start from an existing expert (a copy) instead of empty fields.

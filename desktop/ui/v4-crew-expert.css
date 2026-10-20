@@ -226,8 +226,10 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 /* 868:61909 · 938:62634 모델 · 실행 */
 .ex-model { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: 6px; background: var(--nc-surface); }
 .ex-model:focus-within { border-color: var(--nc-accent); }
-.ex-model .wf-mark { flex: none; width: 16px; height: 16px; }
+.ex-model :is(.wf-mark, .brand-mark) { flex: none; width: 16px; height: 16px; }
 .ex-model input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; background: none; color: var(--nc-text); font: 400 calc(13.5px * var(--fs, 1))/1 var(--sans); outline: none; }
+.ex-model-kind { flex: none; padding: 1px 6px; border: 1px solid var(--nc-line); border-radius: 4px; color: var(--nc-muted); font: 500 calc(11px * var(--fs, 1))/1.4 var(--sans); font-style: normal; white-space: nowrap; }
+.ex-model-kind:empty, .ex-run-row[hidden] { display: none; }
 .ex-run { display: flex; flex-direction: column; gap: 10px; }
 .ex-run > h3 { margin: 0; font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .ex-run-box { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-canvas); }
@@ -352,3 +354,9 @@ dialog.ex-skill-dlg { margin-top: 18vh; }
 .ex-ai-dock > .ex-ai-pop::before { top: auto; bottom: -6px; left: auto; right: 14px; transform: rotate(225deg); }
 .dialog-foot > .ex-ai-dock { order: 1; margin-left: 8px; }
 .ex-hint + .ex-ai-dock, .auto-bar-note + .ex-ai-dock { margin-left: 8px; }
+/* 쓸 수 있는 것: ✕ on a chip's top right corner while hovered, to take it off the list */
+.ex-uchip-wrap { position: relative; display: inline-flex; }
+.ex-uchip-x { position: absolute; top: -6px; right: -6px; display: grid; place-items: center; width: 16px; height: 16px; padding: 0; border: 1px solid var(--nc-line); border-radius: 50%; background: var(--nc-surface); color: var(--nc-muted); opacity: 0; cursor: pointer; transition: opacity .12s; }
+.ex-uchip-x svg { width: 9px; height: 9px; }
+.ex-uchip-x:hover { color: var(--nc-text); border-color: var(--nc-text); }
+.ex-uchip-wrap:hover .ex-uchip-x, .ex-uchip-x:focus-visible { opacity: 1; }

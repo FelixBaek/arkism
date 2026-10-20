@@ -164,14 +164,33 @@
       m.append(b);
       return b;
     };
-    for (const c of list) item(c, catIcon(c), c === current, () => pickNow(c));
+    // Each category: hover shows a pencil on the right that turns the row into the same name + icon form
+    for (const c of list) {
+      const b = item(c, catIcon(c), c === current, () => pickNow(c)), row = el("div", "cat-menu-row");
+      const pen = el("button", "cat-menu-edit"); pen.type = "button"; pen.title = tr("카테고리 고치기"); pen.setAttribute("aria-label", `${tr("카테고리 고치기")}: ${c}`); pen.append(icon("pencil-simple"));
+      pen.addEventListener("click", (e) => { e.stopPropagation(); const f = newForm({ name: c, icon: catIcon(c), onOk: (v, ic) => renameCat(c, v, ic) }); row.replaceWith(f); f.querySelector("input").focus(); place(); });
+      b.replaceWith(row); row.append(b, pen);
+    }
+    // A new name moves every expert, team and automation in that category with it; the icon is kept on this PC.
+    async function renameCat(old, v, ic) {
+      if (v !== old && list.includes(v)) { notice(tr("같은 이름의 카테고리가 있어요.")); return; }
+      crewCatIcons[v] = ic; if (v !== old) delete crewCatIcons[old];
+      store("arkism.crewCatIcons", JSON.stringify(crewCatIcons));
+      let fail = 0;
+      if (v !== old) for (const rec of (state.data.crew || []).filter((r) => r.crew?.category === old)) {
+        try { const saved = await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: rec.revision, crew: { ...rec.crew, category: v } }) });
+          Object.assign(rec, saved?.crew ? saved : { crew: { ...rec.crew, category: v } }); } catch (_) { fail++; }
+      }
+      if (fail) notice(`${fail}개는 이름을 바꾸지 못했어요. 다시 해 주세요.`);
+      if (current === old) pickNow(v); else { close(true); onPick(current); } // repaint the chip and lists with the new name/icon
+    }
     if (current) item("카테고리 없음", "x", false, () => pickNow(""), false);
     const add = item("새 카테고리", "plus", false, () => { const f = newForm(); add.replaceWith(f); f.querySelector("input").focus(); place(); }, false);
-    function newForm() {
+    function newForm(edit) { // edit: { name, icon, onOk(name, icon) } for an existing category
       const f = el("div", "cat-new");
       const name = el("input");
-      name.maxLength = 40; name.placeholder = "새 카테고리"; name.setAttribute("aria-label", "새 카테고리 이름");
-      let pick = "tag", picked = false;
+      name.maxLength = 40; name.placeholder = "새 카테고리"; name.setAttribute("aria-label", edit ? "카테고리 이름" : "새 카테고리 이름"); if (edit) name.value = edit.name;
+      let pick = edit && CAT_ICON_CHOICES.includes(edit.icon) ? edit.icon : "tag", picked = !!edit;
       const grid = el("div", "cat-icons");
       grid.setAttribute("role", "radiogroup"); grid.setAttribute("aria-label", "아이콘");
       const paint = () => grid.querySelectorAll("button").forEach((b) => { const on = b.dataset.icon === pick; b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1; });
@@ -197,13 +216,14 @@
       const ok = () => {
         const v = name.value.trim();
         if (!v) { name.focus(); return; }
+        if (edit) { edit.onOk(v, pick); return; }
         crewCatIcons[v] = pick;
         store("arkism.crewCatIcons", JSON.stringify(crewCatIcons));
         pickNow(v);
       };
       name.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); ok(); } });
       const foot = el("div", "cat-new-foot");
-      foot.append(button("취소", "ghost", null, () => close(true)), button("추가", "primary", null, ok));
+      foot.append(button("취소", "ghost", null, () => close(true)), button(edit ? "저장" : "추가", "primary", null, ok));
       f.append(name, el("div", "cat-new-label", "아이콘"), grid, foot);
       paint();
       return f;
@@ -4890,7 +4910,7 @@
   const git = window.ArkismGit({ state, $, el, button, icon, tauri, ago, notice, go, headExtras, codegraph,
     openReview: (key) => { go("reviews"); state.selected = key; markSelected(); reviews.detail(); openDetail(); } });
   const knowledge = window.ArkismKnowledge({ state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop }); // TOOLS › 지식 (knowledge.js)
-  const overview = window.ArkismOverview({ state, $, el, button, request, query, ago, go, render }); // MEMORY › 개요 (overview.js)
+  const overview = window.ArkismOverview({ state, $, el, button, icon, request, query, ago, go, render }); // MEMORY › 개요 (overview.js)
   Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request, query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,

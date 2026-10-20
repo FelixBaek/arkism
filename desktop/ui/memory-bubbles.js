@@ -11,7 +11,7 @@ window.ArkismMemoryBubbles = (() => {
   const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "지지" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "관련" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "충돌" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "대체" } };
   const RIM = 16, MANY = 150; // area rim past its outer dots · above MANY dots the overview shows topic-to-topic lines, not every line
   const PAD = { l: 18, r: 18, t: 84, b: 76 }; // top clears the tabs + group labels, bottom clears the legend bar
-  const GOLDEN = Math.PI * (3 - Math.sqrt(5)), ROOM = 0.22; // spiral step · free circle around a selected memory (share of the canvas)
+  const GOLDEN = Math.PI * (3 - Math.sqrt(5)); // spiral step
   const GLIDE = 420, ZMIN = 0.5, ZMAX = 4, LABEL_ZOOM = 1.6, LABEL_MAX = 60, LABEL_CHARS = 10;
 
   function create(opts) {
@@ -48,7 +48,7 @@ window.ArkismMemoryBubbles = (() => {
       groups.forEach((g, i) => { const r = Math.floor(i / cols), inRow = r === rows - 1 ? n - r * cols : cols, c = i % cols + (cols - inRow) / 2; g.cx = PAD.l + (c + 0.5) / cols * aw; g.cy = PAD.t + (r + 0.5) / rows * ah; });
       // bubble size follows the canvas; shrink when many memories would not fit the free area (area share ~ 40%)
       const base = Math.max(0.8, Math.min(1.6, Math.min(W, H) / 520));
-      const dot = (p) => Math.min(6, 2 + Math.sqrt(p.v) * 0.9), gap = 7; // a dot plus its breathing room
+      const dot = (p) => Math.min(9, 2 + Math.sqrt(p.deg || 0) * 1.6), gap = 7; // a dot (bigger with more relations) plus its breathing room
       const need = items.reduce((a, p) => a + Math.PI * (dot(p) + gap) ** 2, 0) * base * base;
       // and the biggest group must fit its grid cell as a circle, so neighbouring areas never overlap
       const per = new Map(); for (const p of items) per.set(p.g, (per.get(p.g) || 0) + Math.PI * (dot(p) + gap) ** 2 * base * base);
@@ -58,7 +58,7 @@ window.ArkismMemoryBubbles = (() => {
       items.sort((a, b) => b.r - a.r);
     }
     // Final places: a spiral per group (Vogel: radius c·√k, golden-angle turns; c from the dots' own room, so neighbours never touch).
-    // With a selection, it and its related memories take the fan places from aim(); the dots inside the free circle move out of it.
+    // With a selection, it and its related memories take the fan places from aim(); the other dots stay put, dimmed under them.
     function arrange() {
       const by = new Map(); for (const p of items) { const l = by.get(p.g); if (l) l.push(p); else by.set(p.g, [p]); }
       for (const [g, list] of by) {
@@ -66,10 +66,8 @@ window.ArkismMemoryBubbles = (() => {
         const c = list.reduce((a, p) => a + p.cr, 0) / list.length * 0.92;
         list.forEach((p, k) => { const rad = c * Math.sqrt(k + 0.5), t = k * GOLDEN; p.x = g.cx + Math.cos(t) * rad; p.y = g.cy + Math.sin(t) * rad; });
       }
-      const sp = sel && byId.get(sel), room = Math.min(W, H) * ROOM;
       for (const p of items) {
         if (p.tx != null) { p.x = p.tx; p.y = p.ty; continue; }
-        if (sp) { const dx = p.x - sp.tx, dy = p.y - sp.ty, d = Math.hypot(dx, dy) || 1; if (d < room) { const nd = room + (room - d) * 0.6; p.x = sp.tx + dx / d * nd; p.y = sp.ty + dy / d * nd; } }
         const m = p.r + RIM; p.x = Math.max(PAD.l + m, Math.min(W - PAD.r - m, p.x)); p.y = Math.max(PAD.t + m, Math.min(H - PAD.b - m, p.y));
       }
     }
@@ -80,14 +78,16 @@ window.ArkismMemoryBubbles = (() => {
       if (same) { draw(); return; }
       items = list.map((x) => { const o = byId.get(x.id); return o ? Object.assign(o, x) : { ...x, x: 0, y: 0, r: 8, g: null }; });
       byId = new Map(items.map((p) => [p.id, p]));
-      regroup();
-      linkUp(); aim(); run();
+      linkUp(); regroup(); aim(); run();
     }
     function setEdges(list) {
       const key = list.map((e) => `${e.from}>${e.to}:${e.t}`).join("|"); if (key === edgeKey) { draw(); return; } // the map repaints often; same lines → no re-settle
-      edgeKey = key; edgesAll = list; linkUp(); aim(); cardKey = "x"; run();
+      edgeKey = key; edgesAll = list; linkUp(); layout(); aim(); cardKey = "x"; run();
     }
-    function linkUp() { links = edgesAll.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({ a: byId.get(e.from), b: byId.get(e.to), t: e.t })); }
+    function linkUp() {
+      links = edgesAll.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({ a: byId.get(e.from), b: byId.get(e.to), t: e.t }));
+      for (const p of items) p.deg = 0; for (const l of links) { l.a.deg++; l.b.deg++; }
+    }
     function setGroup(k) { if (k === mode) return; mode = k; placePill(); regroup(); aim(); run(); }
     function setSelected(id) { const n = id && byId.has(id) ? id : null; if (n && n !== sel) { announce(n); panX = panY = 0; } const moved = n !== sel; sel = n; if (moved) { aim(); run(); } else draw(); } // a new selection sits in the middle of the view
     // Selected memory (Figma 기억 지도): it moves to the middle and its related memories fan out around it; the rest stay in their groups, dimmed.
@@ -156,13 +156,14 @@ window.ArkismMemoryBubbles = (() => {
       for (const g of groups) g.top = null;
       // topic areas (Figma 611:54134): a soft tinted circle with a dashed rim around each group's dots
       for (const g of groups) {
-        let sx = 0, sy = 0, n = 0; for (const p of items) if (p.g === g) { sx += p.x; sy += p.y; n++; } if (!n) continue;
-        g.rx = sx / n; g.ry = sy / n; let rr = 0; for (const p of items) if (p.g === g) rr = Math.max(rr, Math.hypot(p.x - g.rx, p.y - g.ry) + p.r);
+        let sx = 0, sy = 0, n = 0; const home = (p) => p.g === g && p.tx == null; for (const p of items) if (home(p)) { sx += p.x; sy += p.y; n++; } if (!n) continue;
+        g.rx = sx / n; g.ry = sy / n; let rr = 0; for (const p of items) if (home(p)) rr = Math.max(rr, Math.hypot(p.x - g.rx, p.y - g.ry) + p.r);
         g.rr = rr + RIM;
         ctx.globalAlpha = foci.size ? 0.03 : 0.06; ctx.fillStyle = g.color; ctx.beginPath(); ctx.arc(g.rx, g.ry, g.rr, 0, 7); ctx.fill();
         ctx.globalAlpha = foci.size ? 0.15 : 0.35; ctx.strokeStyle = g.color; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
       }
-      for (const p of items) {
+      // dimmed dots first, then the focused ones on top of them
+      for (const p of [...items.filter((q) => foci.size && !near.has(q.id)), ...items.filter((q) => !foci.size || near.has(q.id))]) {
         const dim = foci.size && !near.has(p.id);
         ctx.globalAlpha = dim ? 0.22 : 1;
         // flat dot in the group's colour (Figma 611:54134), no gloss or shadow
@@ -202,7 +203,7 @@ window.ArkismMemoryBubbles = (() => {
       labels.hidden = !!sel; // group names would float over the fan
       for (const g of groups) { if (!g.rr) continue; const [x, y] = scr(g.rx, g.ry - g.rr); g.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`; }
       placeCards();
-      const id = hover || kb, p = id && byId.get(id), t = p && tip(id);
+      const id = [hover, kb].find((x) => x && x !== sel), p = id && byId.get(id), t = p && tip(id); // the selection has its card
       if (p && t) { const [sx, y] = scr(p.x, p.y - p.r); tipT.textContent = t.text; tipM.textContent = t.meta; const hw = tipEl.offsetWidth / 2 + 6, x = Math.max(hw, Math.min(W - hw, sx)); tipEl.style.transform = `translate(${x}px,${y - 8}px) translate(-50%,-100%)`; tipEl.classList.add("on"); } else tipEl.classList.remove("on");
     }
 
