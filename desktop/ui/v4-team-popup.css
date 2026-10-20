@@ -64,13 +64,12 @@
 .tm-card2.has-cover .tm-face.s, .tm-card2.has-cover .tm-faces .tm-mark { border-color: #fff; }
 
 /* ---------------------------------------------------------------- popup */
-.tm-pop { width: min(940px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
-.tm-pop[open] { display: flex; }
-.tm-pop { margin-top: 16px; } /* 961:60688 · 981:59766 · 981:60196: the window hangs 16px from the top, its height follows the tab */
+.tm-pop { width: min(940px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; margin-top: 16px; }
+.tm-pop[open] { display: flex; } /* 961:60688 · 981:59766 · 981:60196: the window hangs 16px from the top, its height follows the tab */
 .tm-pop:has(.tm-test-log) { height: calc(100vh - 50px); }
 .tm-pop-body:has(> .tm-test-log) { display: flex; flex-direction: column; }
 .tm-pop-body > .tm-test-log { flex: 1 0 280px; background: var(--nc-raised); }
-.tm-pop .crew-popup-head { padding: 28px 32px 0; align-items: stretch; gap: 20px; }
+.tm-pop .crew-popup-head { padding: 28px 32px 0; align-items: stretch; gap: 20px; padding-bottom: 16px; }
 .tm-pop .crew-popup-who { align-items: flex-start; gap: 20px; }
 /* right side (961:60688): estimate on top, the 개요 · 테스트 · 기록 pills at the bottom, level with the card's foot */
 .tm-pop .crew-popup-actions { flex-direction: column; align-items: flex-end; justify-content: space-between; gap: 12px; }
@@ -267,7 +266,6 @@
 .tm-ctx-list > .tm-ch-add { padding: 10px 12px; border-top: 1px solid var(--nc-line); background: var(--nc-surface); }
 .tm-ch-links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 .tm-pop-body > .ex-danger { margin: 8px 0 24px; }
-.tm-pop .crew-popup-head { padding-bottom: 16px; }
 /* 진행자: crown above the face; a face-less member (model logo) keeps the same 32px slot so names line up */
 .tm-mface { position: relative; display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; }
 .tm-crown { position: absolute; right: -5px; bottom: -4px; width: 16px; height: 16px; padding: 2px; border-radius: 50%; background: var(--nc-surface); box-shadow: 0 0 0 1px var(--nc-line); color: var(--nc-accent); }

@@ -29,8 +29,7 @@ window.ArkismAutomation = (h) => {
     if (hm) { hour = Number(hm[1]); min = hm[3] === "반" || /반/.test(t.slice(hm.index, hm.index + hm[0].length + 1)) && !hm[2] ? 30 : Number(hm[2] || 0); }
     else if (/아침/.test(t)) hour = 9; else if (/점심/.test(t)) hour = 12; else if (/저녁/.test(t)) hour = 18; else if (/밤/.test(t)) hour = 21;
     if (hour == null || hour > 23 || min > 59) return null;
-    if (/오후|저녁|pm/i.test(t) && hour < 12) hour += 12;
-    else if (/밤/.test(t) && hour >= 6 && hour < 12) hour += 12; // 밤 2시 is 2 at night, 밤 9시 is 21
+    if ((/오후|저녁|pm/i.test(t) || /밤/.test(t) && hour >= 6) && hour < 12) hour += 12; // 밤 2시 is 2 at night, 밤 9시 is 21
     if (/오전|새벽|밤|am/i.test(t) && hour === 12) hour = 0;
     return `${min} ${hour} * * ${dow ?? "*"}`;
   }

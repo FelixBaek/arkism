@@ -19,8 +19,7 @@
 .crew-card.wf-card.has-cover .crew-cover-title { margin-top: auto; color: #fff; font-size: calc(24px * var(--fs, 1)); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; text-transform: uppercase; }
 
 /* ---- popup */
-.v4-auto { width: min(940px, calc(100vw - 32px)); position: relative; }
-.v4-auto { margin: 16px auto auto; } /* 993:60224 · 998:60693: anchored to the top, so switching tabs never moves the window */
+.v4-auto { width: min(940px, calc(100vw - 32px)); position: relative; margin: 16px auto auto; } /* 993:60224 · 998:60693: anchored to the top, so switching tabs never moves the window */
 .v4-auto .crew-popup-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who side" "who tabs"; align-items: start; column-gap: 20px; row-gap: 12px; padding: 28px 32px 20px; }
 .v4-auto .crew-popup-who { grid-area: who; align-items: flex-start; gap: 20px; min-width: 0; }
 .v4-auto .crew-popup-actions { grid-area: side; justify-self: end; flex-direction: row; align-items: flex-start; gap: 12px; }
@@ -37,7 +36,7 @@
 .auto-chiprow { position: relative; }
 .auto-cat { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--nc-line); background: none; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
 .auto-menu { position: absolute; top: 30px; left: 0; z-index: 5; display: flex; flex-direction: column; gap: 2px; min-width: 180px; padding: 6px; border-radius: 8px; border: 1px solid var(--nc-line); background: var(--nc-raised); box-shadow: 0 8px 24px rgb(0 0 0 / .35); }
-.auto-menu button { text-align: left; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--nc-text); font: inherit; cursor: pointer; }
+.auto-menu button { text-align: left; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--nc-text); font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
 .auto-menu button:hover { background: var(--nc-subtle); }
 .auto-menu button.on { color: var(--nc-accent); }
 .auto-menu input { margin-top: 4px; }
@@ -183,19 +182,17 @@
 .auto-row > .auto-key.chan { width: auto; }
 .auto-face.blank { background: none; border: 1px dashed var(--nc-quiet); }
 .auto-face.blank > * { display: none; }
-.v4-auto .auto-box select.auto-pick { height: 24px; padding-left: 0; border: 0; background-color: transparent; color: var(--nc-muted); font-size: calc(11.5px * var(--fs, 1)); }
+.v4-auto .auto-box select.auto-pick { height: 24px; padding-left: 0; border: 0; background-color: transparent; color: var(--nc-text); font-size: calc(12px * var(--fs, 1)); }
 .auto-row > .auto-inline-edit { flex: 1 1 auto; field-sizing: fixed; } /* a row value: the underline runs to the button */
 .v4-auto .auto-box input.auto-inline-edit { height: auto; padding: 0 0 1px; border: 0; border-bottom: 2px solid var(--nc-accent); border-radius: 0; background: none; font-size: inherit; } /* beats the boxed .auto-box input rule */
 
 /* ---- 10-20 정리: 시작 조건 메뉴 · 읽히는 글자색 · 모델 고르기 · 진행 알림 체크 목록 */
 .auto-sec-head.auto-chiprow { position: relative; }
 .auto-menu.right { left: auto; right: 0; top: 28px; min-width: 220px; }
-.auto-menu button { display: flex; flex-direction: column; gap: 2px; }
 .auto-menu button small { color: var(--nc-muted); font-size: calc(11.5px * var(--fs, 1)); }
 .auto-menu button.soon { opacity: .6; }
 .auto-sched .auto-dim, .auto-row .auto-sched { color: var(--nc-muted); }
 .v4-auto select option { background: var(--nc-raised); color: var(--nc-text); }
-.v4-auto .auto-box select.auto-pick { color: var(--nc-text); font-size: calc(12px * var(--fs, 1)); }
 .v4-auto .auto-box select.auto-model { width: 190px; height: 28px; color: var(--nc-text); }
 .auto-model-row { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .v4-auto .auto-model-row select { width: 220px; }
