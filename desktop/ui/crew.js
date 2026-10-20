@@ -579,7 +579,7 @@ window.ArkismCrew = (ctx) => {
   // 자동화 상세·새로 만들기 팝업 (crew-automation.js): built on first use, once every helper below exists.
   let autoKit = null;
   const getAuto = () => (autoKit ||= window.ArkismAutomation({
-    state, el, icon, button, notice, request, query, byId, kit, NODES, IS_AI, WORK, UNTITLED, RUN_LABEL,
+    state, el, icon, button, notice, request, query, byId, kit, catMenu: ctx.catMenu, catChipBody: ctx.catChipBody, NODES, IS_AI, WORK, UNTITLED, RUN_LABEL,
     levels, nodeTitle, stepCount, isBack, modelOf, modelMark, avatarMark, personas, agents, workflows, ownerOf, categories, ruleChecks, waitingRuns,
     cronText, nextRun, parseCron, when, switchEl, copyButton, coverCredit, coverPicker, input, select, modelInput, modelSelect, freeHandle, layoutGraph, defaultGraph,
     save, reload, archive, remove, errorText, startRun, decide, stopRun, askTask, openGraph, runRequest, readable, nodeDur, spanText, runMs, runTookText: runTook, ago,
@@ -808,7 +808,7 @@ window.ArkismCrew = (ctx) => {
     const head = el("div", "wf-d-title");
     head.append(el("h2", "", x.name), el("p", "", x.role || ""));
     const chips = el("div", "wf-chips");
-    if (x.category) chips.append(el("span", "wf-chip", x.category));
+    if (x.category) { const c = el("span", "wf-chip"); c.append(icon(ctx.catIcon(x.category)), x.category); chips.append(c); }
     const handle = el("span", "wf-chip mono", `$${x.handle}`);
     chips.append(handle, copyButton(`$${x.handle}`));
     head.append(chips);
@@ -973,7 +973,7 @@ window.ArkismCrew = (ctx) => {
         mini.append(img);
       } else mini.append(el("span", "wf-preview-empty", "배경 없음"));
       const top = el("div", "crew-cover-top");
-      if (x.category) top.append(el("span", "wf-chip", x.category));
+      if (x.category) { const c = el("span", "wf-chip"); c.append(icon(ctx.catIcon(x.category)), x.category); top.append(c); }
       const foot = el("div", "crew-cover-foot");
       foot.append(el("small", "wf-card-meta", x.meta || ""));
       mini.append(top, el("strong", "crew-cover-title", x.name || "이름"));
@@ -3869,34 +3869,6 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); start(); } });
     return b;
   }
-  // 카테고리: chips to pick one, or a new one typed in.
-  function categoryRow(d, onChange) {
-    const row = el("div", "wk-chips");
-    const cats = catsOf(agents());
-    if (d.category && !cats.includes(d.category)) cats.push(d.category);
-    for (const c of cats) {
-      const on = d.category === c;
-      const b = el("button", `wk-chip${on ? " on" : ""}`, c);
-      b.type = "button";
-      b.setAttribute("aria-pressed", String(on));
-      b.addEventListener("click", () => { if (on) delete d.category; else d.category = c; onChange(); });
-      row.append(b);
-    }
-    const plus = el("button", "wk-chip", "+ 새 카테고리");
-    plus.type = "button";
-    plus.addEventListener("click", () => {
-      const i = input("", { maxLength: 40, placeholder: "새 카테고리", cls: "wk-add" });
-      i.setAttribute("aria-label", "새 카테고리");
-      plus.replaceWith(i);
-      i.focus();
-      let done = false;
-      const fin = (ok) => { if (done) return; done = true; if (ok && i.value.trim()) { d.category = i.value.trim(); onChange(); } else onChange(); };
-      i.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); fin(true); } if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); fin(false); } });
-      i.addEventListener("blur", () => fin(true));
-    });
-    row.append(plus);
-    return row;
-  }
   // 1회 예상 (868:61909): a rough size of one call (instructions + a base prompt), its average price and how long recent calls took.
   function estimateNode() {
     const box = el("div", "ex-est");
@@ -3977,21 +3949,15 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.paintHead = () => {
       const d = wk.draft;
       paintFace();
-      const cat = el("button", "ex-cat", d.category || "카테고리");
+      const cat = el("button", "ex-cat");
       cat.type = "button";
-      cat.append(icon("caret-down"));
-      cat.addEventListener("click", () => {
-        const old = names.querySelector(".ex-cat-pop");
-        if (old) { old.remove(); return; }
-        const m = el("div", "ex-cat-pop");
-        // A pick closes the menu and repaints the head, so the chip and the menu never show an old choice.
-        const close = () => { m.remove(); document.removeEventListener("pointerdown", away, true); };
-        const away = (e) => { if (!m.contains(e.target) && e.target !== cat && !cat.contains(e.target)) close(); };
-        m.append(categoryRow(d, () => { close(); wk.dirty = true; wk.paintHead(); drawWorkerSave(); }));
-        m.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); close(); cat.focus(); } });
-        document.addEventListener("pointerdown", away, true);
-        names.append(m);
-      });
+      cat.setAttribute("aria-label", "카테고리");
+      cat.append(...ctx.catChipBody(d.category));
+      // A pick repaints the head, so the chip never shows an old choice.
+      cat.addEventListener("click", () => ctx.catMenu(cat, { list: catsOf(agents()), current: d.category || "", onPick: (v) => {
+        if (v) d.category = v; else delete d.category;
+        wk.dirty = true; wk.paintHead(); drawWorkerSave();
+      } }));
       const taken = (h) => agents().some((r) => r.id !== wk.id && r.crew.handle === h) || teams().some((r) => r.crew.handle === h);
       const line = el("div", "ex-line");
       const handle = inlineEdit("span", "ex-handle", () => (d.handle ? `@${d.handle}` : ""), (v) => { d.handle = v.replace(/^@/, ""); wk.dirty = true; drawWorkerSave(); wk.paintHead(); },

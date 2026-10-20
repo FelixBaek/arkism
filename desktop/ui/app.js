@@ -125,8 +125,101 @@
     return svg;
   }
   // Category chips and badges (208:17763): categories are the person's own words, so the icon is a guess from them.
-  const catIcon = (c) => (/git|release|릴리/i.test(c) ? "git-branch" : /plan|기획/i.test(c) ? "file-text" : /research|리서/i.test(c) ? "magnifying-glass"
-    : /design|디자/i.test(c) ? "palette" : /code|코드/i.test(c) ? "code" : /기록|비서|doc|note/i.test(c) ? "book-open" : c ? "tag" : "squares-four");
+  // An icon the person picked wins: crew categories they made (arkism.crewCatIcons, this PC only — the server keeps a crew
+  // category as a plain string), then a 설정 › 카테고리 entry with the same name (arkism.prefs), then the guess.
+  const guessCatIcon = (c) => (/git|release|릴리/i.test(c) ? "git-branch" : /plan|기획/i.test(c) ? "file-text" : /research|리서/i.test(c) ? "magnifying-glass"
+    : /design|디자/i.test(c) ? "palette" : /code|코드/i.test(c) ? "code" : /image|이미지/i.test(c) ? "image" : /기록|비서|doc|note/i.test(c) ? "book-open" : c ? "tag" : "squares-four");
+  const CAT_ICON_CHOICES = ["tag", "stack", "code", "terminal", "git-branch", "file-text", "book-open", "palette", "image", "presentation", "magnifying-glass", "lightbulb",
+    "brain", "sparkle", "robot", "database", "archive", "chart-bar", "globe", "calendar", "paper-plane", "chat-text", "users-three", "puzzle-piece"];
+  let crewCatIcons = {};
+  try { crewCatIcons = JSON.parse(stored("arkism.crewCatIcons") || "{}") || {}; } catch (_) { /* start fresh */ }
+  let prefsRaw, prefsIcons = new Map();
+  function prefsCatIcon(c) {
+    const now = stored("arkism.prefs");
+    if (now !== prefsRaw) {
+      prefsRaw = now; prefsIcons = new Map();
+      try { for (const x of JSON.parse(now || "null")?.categories || []) if (x?.name && x.icon) prefsIcons.set(x.name, x.icon); } catch (_) { /* no saved categories */ }
+    }
+    return prefsIcons.get(c);
+  }
+  const catIcon = (c) => (c && (crewCatIcons[c] || prefsCatIcon(c))) || guessCatIcon(c);
+  // The category chip in a crew popup head: its icon, the name (or 카테고리) and a caret.
+  function catChipBody(c) { return [icon(c ? catIcon(c) : "tag"), raw(el("span", "", c || tr("카테고리"))), icon("caret-down")]; }
+  // Category menu for the crew popups (expert · team · automation): pick one, clear it, or make a new one with a name and an icon.
+  function catMenu(anchor, { list, current, onPick }) {
+    document.querySelector(".cat-menu")?.remove();
+    if (current && !list.includes(current)) list = [...list, current];
+    const m = el("div", "cat-menu");
+    m.setAttribute("role", "dialog");
+    m.setAttribute("aria-label", "카테고리");
+    const close = (refocus) => { m.remove(); document.removeEventListener("pointerdown", away, true); if (refocus && anchor.isConnected) anchor.focus(); };
+    const away = (e) => { if (!m.contains(e.target) && !anchor.contains(e.target)) close(); };
+    const pickNow = (v) => { close(true); onPick(v); };
+    const item = (label, ic, on, fn, mine = true) => {
+      const b = el("button", `cat-menu-item${on ? " on" : ""}`);
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(on));
+      b.append(icon(ic), mine ? raw(el("span", "", label)) : el("span", "", label));
+      b.addEventListener("click", fn);
+      m.append(b);
+      return b;
+    };
+    for (const c of list) item(c, catIcon(c), c === current, () => pickNow(c));
+    if (current) item("카테고리 없음", "x", false, () => pickNow(""), false);
+    const add = item("새 카테고리", "plus", false, () => { const f = newForm(); add.replaceWith(f); f.querySelector("input").focus(); place(); }, false);
+    function newForm() {
+      const f = el("div", "cat-new");
+      const name = el("input");
+      name.maxLength = 40; name.placeholder = "새 카테고리"; name.setAttribute("aria-label", "새 카테고리 이름");
+      let pick = "tag", picked = false;
+      const grid = el("div", "cat-icons");
+      grid.setAttribute("role", "radiogroup"); grid.setAttribute("aria-label", "아이콘");
+      const paint = () => grid.querySelectorAll("button").forEach((b) => { const on = b.dataset.icon === pick; b.setAttribute("aria-checked", String(on)); b.tabIndex = on ? 0 : -1; });
+      const choose = (n, focus) => { pick = n; picked = true; paint(); if (focus) grid.querySelector(`[data-icon="${n}"]`).focus(); };
+      for (const n of CAT_ICON_CHOICES) {
+        const b = el("button", "cat-icon");
+        b.type = "button"; b.dataset.icon = n; b.title = n;
+        b.setAttribute("role", "radio"); b.setAttribute("aria-label", n);
+        b.append(icon(n));
+        b.addEventListener("click", () => choose(n));
+        grid.append(b);
+      }
+      // Arrow keys move the choice, like any radio group; up/down jump a row of 8.
+      grid.addEventListener("keydown", (e) => {
+        const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 8, ArrowUp: -8 }[e.key];
+        if (!step) return;
+        e.preventDefault();
+        const i = CAT_ICON_CHOICES.indexOf(pick), n = CAT_ICON_CHOICES.length;
+        choose(CAT_ICON_CHOICES[(i + step + n) % n], true);
+      });
+      // Until an icon is picked, it follows the name (디자인 → palette).
+      name.addEventListener("input", () => { if (!picked) { const g = guessCatIcon(name.value.trim()); pick = CAT_ICON_CHOICES.includes(g) ? g : "tag"; paint(); } });
+      const ok = () => {
+        const v = name.value.trim();
+        if (!v) { name.focus(); return; }
+        crewCatIcons[v] = pick;
+        store("arkism.crewCatIcons", JSON.stringify(crewCatIcons));
+        pickNow(v);
+      };
+      name.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); ok(); } });
+      const foot = el("div", "cat-new-foot");
+      foot.append(button("취소", "ghost", null, () => close(true)), button("추가", "primary", null, ok));
+      f.append(name, el("div", "cat-new-label", "아이콘"), grid, foot);
+      paint();
+      return f;
+    }
+    m.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); close(true); } });
+    // Fixed under the chip, inside its dialog (the top layer), kept on screen.
+    function place() {
+      const r = anchor.getBoundingClientRect(), w = m.offsetWidth, hgt = m.offsetHeight;
+      m.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+      m.style.top = `${r.bottom + 4 + hgt > innerHeight - 8 ? Math.max(8, r.top - 4 - hgt) : r.bottom + 4}px`;
+    }
+    (anchor.closest("dialog") || document.body).append(m);
+    place();
+    document.addEventListener("pointerdown", away, true);
+    (m.querySelector(".cat-menu-item.on") || m.querySelector(".cat-menu-item"))?.focus();
+  }
   function button(label, cls, iconName, onClick) {
     const b = el("button", `btn ${cls || ""}`.trim());
     b.type = "button";
@@ -4756,12 +4849,12 @@
     skillAgents: (name) => { const by = {}; for (const sk of state.data.skills.filter((x) => x.name === name)) for (const [k, n] of Object.entries(state.data.skillUse?.get(sk.id)?.by_runtime || {})) by[k] = (by[k] || 0) + n; return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k]) => k); } });
   const gallery = window.ArkismGalleryDelete({ state, $, el, button, icon, raw, render, request, query, notice, confirmPop, shortDate });
   const sessions = window.ArkismSessions({ state, $, el, button, icon, segment, render, request, query, agentLogo, AGENTS, ago, detailShell, usage, go });
-  const crew = window.ArkismCrew({ state, $, el, icon, catIcon, button, segment, go, render, request, query, notice, detailShell, section, facts, callout, copyButton, markSelected, openDetail, agentLogo, ago, models,
+  const crew = window.ArkismCrew({ state, $, el, icon, catIcon, catMenu, catChipBody, button, segment, go, render, request, query, notice, detailShell, section, facts, callout, copyButton, markSelected, openDetail, agentLogo, ago, models,
     allowed, skillCategory: (sk) => pages.categoryOf(sk)?.name || "", skillCategories: () => pages.prefs.categories.map((c) => ({ name: c.name, icon: c.icon })),
     toolServers: () => state.data.tools?.servers || [] });
   const reviews = window.ArkismReviews({ state, $, el, icon, button, render, request, query, notice, detailShell, section, facts, markSelected, openDetail, ago, stat, go, headExtras, confirmPop,
     assist: (kind, prompt) => crew.assist(kind, prompt) });
-  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, lock, disconnect, useServer, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, reopen: open, trimSlash, tauri, stat, models, routing, crew,
+  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, lock, disconnect, useServer, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, reopen: open, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES,
     request, query, reloadTools: async () => { await refreshTools(); pollTools(); }, assist: (...a) => crew.assist(...a), privacyGroup: () => privacy.settingsGroup() });
   function openIntelligenceRecord(record) {
     const list = record.status === "active" ? "memories" : record.conflict_id ? "conflicted" : "candidates";
@@ -4800,7 +4893,7 @@
   home.wireSearch();
   shell = window.ArkismShell({ state, $, el, go, render });
   Object.assign(views, pages.views);
-  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
+  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, catMenu, catChipBody, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
   Object.assign(views, crew.views, crew.pages, reviews.views);
   void (async () => {
     const defaults = tauri ? await tauri.invoke("app_defaults").catch(() => null) : null;

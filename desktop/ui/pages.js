@@ -22,7 +22,7 @@ window.ArkismPages = (ctx) => {
 
   // ---------------------------------------------------------------- categories: a skill belongs to the first category with a matching rule
   const RULE_KINDS = [["name", "이름이"], ["path", "경로에"], ["desc", "설명에"]];
-  const CAT_ICONS = ["git-merge", "file-text", "code", "database", "image", "stack", "lightbulb", "archive"];
+  const CAT_ICONS = ctx.catIconChoices; // the same choices as a crew category's icon (app.js)
   const globRe = (g) => new RegExp(g.split("*").map((p) => p.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*"), "i");
   function ruleHit([kind, value], sk) {
     const v = value.trim();

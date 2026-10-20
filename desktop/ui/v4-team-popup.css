@@ -83,8 +83,6 @@
 .tm-prev-credit { z-index: 1; position: absolute; left: 6px; bottom: 4px; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 0 4px rgb(0 0 0 / .8); }
 .tm-pop-words { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .tm-pop-row { display: flex; align-items: center; gap: 12px; }
-.tm-pop-row .tm-chip-select { width: auto; field-sizing: content; height: 26px; background-color: transparent; color: var(--nc-muted); padding: 0 22px 0 10px; background-image: linear-gradient(45deg, transparent 50%, var(--nc-quiet) 50%), linear-gradient(135deg, var(--nc-quiet) 50%, transparent 50%); background-position: calc(100% - 13px) 55%, calc(100% - 9px) 55%; background-size: 4px 4px; background-repeat: no-repeat; } /* the ▾ that says it is a dropdown (961:60688) */
-.tm-chip-select { appearance: none; -webkit-appearance: none; border: 1px solid var(--nc-line); border-radius: 999px; background-color: var(--nc-surface); color: var(--nc-text); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 .tm-chip-input { width: 140px; height: 24px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: 999px; background: var(--nc-surface); color: var(--nc-text); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 .tm-pop-title { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; max-width: 100%; padding-bottom: 4px; border-bottom: 1px dashed var(--nc-line); } /* one dashed line under name + @이름 */
 .tm-pop-title .tm-plain-title { font: 500 calc(20px * var(--fs, 1))/24px var(--sans); max-width: 100%; }

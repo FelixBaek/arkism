@@ -147,7 +147,8 @@ window.ArkismAutomation = (h) => {
       const chipRow = el("div", "auto-chiprow");
       const cat = el("button", "auto-cat");
       cat.type = "button";
-      cat.addEventListener("click", () => catMenu(cat));
+      cat.setAttribute("aria-label", "카테고리");
+      cat.addEventListener("click", () => h.catMenu(cat, { list: h.categories(h.workflows()).map(([c]) => c), current: d.category || "", onPick: (v) => { d.category = v; touch(); } }));
       const name = el("h2", "");
       const handle = el("span", "auto-handle");
       const nameRow = el("div", "auto-namerow");
@@ -177,7 +178,7 @@ window.ArkismAutomation = (h) => {
       paintHead = () => {
         thumb.replaceChildren();
         if (d.cover?.thumb) { const img = el("img"); img.alt = ""; img.src = d.cover.thumb; thumb.append(img); } else thumb.append(el("span", "", (d.name || "NEW").slice(0, 8).toUpperCase() + "."));
-        cat.replaceChildren(d.category || "카테고리", el("small", "", " ▾"));
+        cat.replaceChildren(...h.catChipBody(d.category));
         name.textContent = d.name || "자동화 이름을 적어 주세요";
         name.classList.toggle("empty", !d.name);
         hv.textContent = d.handle ? `$${d.handle}` : "$이름";
@@ -203,22 +204,6 @@ window.ArkismAutomation = (h) => {
         estRow("예상 시간", avg ? `약 ${h.spanText(avg)}` : "—");
       }
       head.paintEst = paintEst;
-    }
-
-    function catMenu(anchor) {
-      document.querySelector(".auto-menu")?.remove();
-      const m = el("div", "auto-menu");
-      const close = () => { m.remove(); document.removeEventListener("click", away, true); };
-      const away = (e) => { if (!m.contains(e.target) && e.target !== anchor) close(); };
-      const set = (v) => { d.category = v; touch(); close(); };
-      for (const [c] of h.categories(h.workflows())) { const b = el("button", c === d.category ? "on" : "", c); b.type = "button"; b.addEventListener("click", () => set(c)); m.append(b); }
-      if (d.category) { const b = el("button", "", "카테고리 없음"); b.type = "button"; b.addEventListener("click", () => set("")); m.append(b); }
-      const add = h.input("", { maxLength: 40, placeholder: "+ 새 카테고리" });
-      add.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing && add.value.trim()) { e.preventDefault(); set(add.value.trim()); } });
-      m.append(add);
-      anchor.parentElement.append(m);
-      add.focus();
-      setTimeout(() => document.addEventListener("click", away, true));
     }
 
     // 배경 사진: the same Unsplash picker the settings window used.

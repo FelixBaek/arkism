@@ -399,7 +399,7 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .cat-rules { flex: 1; min-width: 0; text-align: right; color: var(--text-3); font-size: calc(12px * var(--fs, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-body { padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
 .cat-top { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: end; }
-.icon-pick { display: flex; gap: 6px; }
+.icon-pick { display: flex; flex-wrap: wrap; gap: 6px; }
 .icon-pick .icon-btn.on { background: var(--bg-selected); color: var(--text-1); border-color: var(--border-strong); }
 .rule { display: grid; grid-template-columns: 110px minmax(0, 1fr) 26px; gap: 8px; align-items: center; }
 .rule input { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); font: 12.5px var(--mono); }

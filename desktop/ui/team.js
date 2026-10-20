@@ -355,7 +355,7 @@ window.ArkismTeams = (ctx) => {
     if (S.pop || !popup) return;
     const rec = id ? byId(id) : null;
     const base = rec ? clone(rec.crew) : blankTeam();
-    const pop = S.pop = { id: id || null, rec, base, d: clone(base), aiOpen: true, aiBusy: false, ai: "", est: null, estKey: "", estTimer: 0, meetings: null, tab: "overview", test: { text: "", m: null, busy: false }, newCat: false, handleTouched: !!rec, from: "" };
+    const pop = S.pop = { id: id || null, rec, base, d: clone(base), aiOpen: true, aiBusy: false, ai: "", est: null, estKey: "", estTimer: 0, meetings: null, tab: "overview", test: { text: "", m: null, busy: false }, handleTouched: !!rec, from: "" };
     if (rec) { S.stats.delete(id); loadStats(id); void loadMeetingsOf(pop); void loadVersions(pop); }
     pop.estBox = el("div", "tm-est-box");
     const tabs = [["overview", "개요"], ["test", "테스트"], ["history", "기록"]].map(([key, label]) => ({ key, label, render: (box) => { pop.tab = key; paintTab(pop, box); } }));
@@ -416,19 +416,10 @@ window.ArkismTeams = (ctx) => {
     const row = el("div", "tm-pop-row");
     const cats = [...new Set([...teams(), ...workflows()].map((r) => r.crew.category).filter(Boolean))];
     if (d.category && !cats.includes(d.category)) cats.push(d.category);
-    if (pop.newCat) {
-      const ni = raw(input("", () => {}, { max: 40, placeholder: "새 카테고리" })); ni.className = "tm-chip-input";
-      const done = () => { const v = ni.value.trim(); pop.newCat = false; if (v) d.category = v; paintHead(pop); changed(pop); };
-      ni.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); done(); } if (e.key === "Escape") { e.stopPropagation(); pop.newCat = false; paintHead(pop); } });
-      ni.addEventListener("blur", () => { if (pop.newCat) done(); });
-      row.append(ni); queueMicrotask(() => ni.focus());
-    } else {
-      const cs = raw(select([["", "카테고리"], ...cats.map((c) => [c, c]), ["\u0000new", "+ 새 카테고리"]], d.category || "", (v) => {
-        if (v === "\u0000new") { pop.newCat = true; paintHead(pop); return; }
-        d.category = v; if (!v) delete d.category; changed(pop);
-      }, "tm-chip tm-chip-select")); cs.setAttribute("aria-label", "카테고리");
-      row.append(cs);
-    }
+    const cs = el("button", "tm-chip tm-cat"); cs.type = "button"; cs.setAttribute("aria-label", "카테고리");
+    cs.append(...ctx.catChipBody(d.category));
+    cs.addEventListener("click", () => ctx.catMenu(cs, { list: cats, current: d.category || "", onPick: (v) => { if (v) d.category = v; else delete d.category; paintHead(pop); changed(pop); } }));
+    row.append(cs);
     if (!pop.id) { // 310:19981 shows the members' faces on a new team; 961:60688 shows only the category
       const faces = el("span", "tm-faces"); sorted(d.members).slice(0, 5).forEach((m) => faces.append(face(byId(m.agent_id), "s")));
       row.prepend(faces);
