@@ -67,7 +67,8 @@ window.ArkismShell = (ctx) => {
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
     const box = $("#area-tabs");
-    const tabs = MENUS[key].tabs;
+    // MEMORY draws no tabs: the overview's own links open 기억·세션·사용량, and the rail goes back to 개요.
+    const tabs = key === "memory" ? [] : MENUS[key].tabs;
     box.replaceChildren(...tabs.map(([id, label, open, active, n]) => {
       const t = el("button", `area-tab${active() ? " active" : ""}`);
       t.type = "button";

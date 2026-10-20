@@ -601,7 +601,7 @@ window.ArkismCrew = (ctx) => {
       const c = el("button", `auto-cat-chip${state.crewCat === k ? " on" : ""}`);
       c.type = "button";
       c.setAttribute("aria-pressed", String(state.crewCat === k));
-      c.append(label, el("small", "", String(n)));
+      c.append(icon(ctx.catIcon(k === "all" ? "" : k)), label, el("small", "", String(n)));
       c.addEventListener("click", () => { state.crewCat = k; state.selected = null; render(); });
       return c;
     };
@@ -3426,7 +3426,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const art = el("span", "ex-card-art");
     art.append(faceOf(x));
     b.append(art);
-    if (x.category) b.append(el("small", "ex-card-cat", x.category));
+    if (x.category) { const c = el("small", "ex-card-cat"); c.append(icon(ctx.catIcon(x.category)), el("span", "", x.category)); b.append(c); }
     b.append(el("strong", "", x.name));
     if (x.enabled === false) b.append(el("span", "ex-card-off", "꺼짐"));
     b.addEventListener("click", () => { workerPick(r.id); openExpertPopup(r); });
@@ -3442,10 +3442,18 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     if (wk.cat && !cats.includes(wk.cat)) wk.cat = "";
     const shown = all.filter((r) => !wk.cat || r.crew.category === wk.cat);
     const panel = el("section", "ex-panel");
-    const top = el("div", "ex-top");
-    top.append(toggleChips([["", `모든 카테고리 ${all.length}`], ...cats.map((c) => [c, `${c} ${all.filter((r) => r.crew.category === c).length}`])],
-      (k) => (wk.cat || "") === k, (k) => { wk.cat = k; render(false); }),
-      button("+ 새 전문가", "primary small", null, () => openWorkers(null, true)));
+    // Same chips as 팀 (tm-cats): icon, name, count.
+    const top = el("div", "tm-cats");
+    const chips = el("div", "tm-chips");
+    for (const key of ["", ...cats]) {
+      const c = el("button", `tm-chip${(wk.cat || "") === key ? " active" : ""}`); c.type = "button";
+      const name = el("span", "", key || "모든 카테고리");
+      if (key) name.setAttribute("data-no-i18n", "");
+      c.append(icon(ctx.catIcon(key)), name, el("output", "", String(key ? all.filter((r) => r.crew.category === key).length : all.length)));
+      c.addEventListener("click", () => { wk.cat = key; render(false); });
+      chips.append(c);
+    }
+    top.append(chips, button("+ 새 전문가", "primary", null, () => openWorkers(null, true)));
     const grid = el("div", "ex-cards");
     const add = el("button", "ex-card ex-card-new");
     add.type = "button";

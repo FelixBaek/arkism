@@ -830,7 +830,12 @@ func reflectRun(dryRun bool, stdout io.Writer) error {
 	if err := trialReview(); err != nil {
 		return err
 	}
-	if err := aiReview(false, stdout); err != nil { // the next run retries; reflection itself is done
+	return classifyWaiting(stdout)
+}
+
+// classifyWaiting gives waiting candidates the AI advice the review screen shows; the next run retries a failure.
+func classifyWaiting(stdout io.Writer) error {
+	if err := aiReview(false, stdout); err != nil {
 		if !networkish(err) && !errors.Is(err, errReviewerCredential) {
 			return err
 		}

@@ -124,6 +124,9 @@
     svg.append(use);
     return svg;
   }
+  // Category chips and badges (208:17763): categories are the person's own words, so the icon is a guess from them.
+  const catIcon = (c) => (/git|release|릴리/i.test(c) ? "git-branch" : /plan|기획/i.test(c) ? "file-text" : /research|리서/i.test(c) ? "magnifying-glass"
+    : /design|디자/i.test(c) ? "palette" : /code|코드/i.test(c) ? "code" : /기록|비서|doc|note/i.test(c) ? "book-open" : c ? "tag" : "squares-four");
   function button(label, cls, iconName, onClick) {
     const b = el("button", `btn ${cls || ""}`.trim());
     b.type = "button";
@@ -4743,7 +4746,7 @@
     skillAgents: (name) => { const by = {}; for (const sk of state.data.skills.filter((x) => x.name === name)) for (const [k, n] of Object.entries(state.data.skillUse?.get(sk.id)?.by_runtime || {})) by[k] = (by[k] || 0) + n; return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k]) => k); } });
   const gallery = window.ArkismGalleryDelete({ state, $, el, button, icon, raw, render, request, query, notice, confirmPop, shortDate });
   const sessions = window.ArkismSessions({ state, $, el, button, segment, render, request, query, agentLogo, AGENTS, ago, detailShell, usage, go });
-  const crew = window.ArkismCrew({ state, $, el, icon, button, segment, go, render, request, query, notice, detailShell, section, facts, callout, copyButton, markSelected, openDetail, agentLogo, ago, models,
+  const crew = window.ArkismCrew({ state, $, el, icon, catIcon, button, segment, go, render, request, query, notice, detailShell, section, facts, callout, copyButton, markSelected, openDetail, agentLogo, ago, models,
     allowed, skillCategory: (sk) => pages.categoryOf(sk)?.name || "", skillCategories: () => pages.prefs.categories.map((c) => ({ name: c.name, icon: c.icon })),
     toolServers: () => state.data.tools?.servers || [] });
   const reviews = window.ArkismReviews({ state, $, el, icon, button, render, request, query, notice, detailShell, section, facts, markSelected, openDetail, ago, stat, go, headExtras, confirmPop,
@@ -4787,7 +4790,7 @@
   home.wireSearch();
   shell = window.ArkismShell({ state, $, el, go, render });
   Object.assign(views, pages.views);
-  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
+  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
   Object.assign(views, crew.views, crew.pages, reviews.views);
   void (async () => {
     const defaults = tauri ? await tauri.invoke("app_defaults").catch(() => null) : null;

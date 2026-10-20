@@ -2,22 +2,24 @@
 /* ---- list: category chips · search · 실행 방식 · new */
 .auto-bar-top { flex-wrap: wrap; gap: 8px; padding-bottom: 4px; }
 .auto-cats { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.auto-cat-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--nc-line); background: none; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.auto-cat-chip { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--nc-line); background: none; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
 .auto-cat-chip small { color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); }
 .auto-cat-chip:hover { border-color: var(--nc-quiet); }
-.auto-cat-chip.on { color: var(--nc-accent); border-color: var(--nc-accent); }
+.auto-cat-chip.on { color: var(--nc-accent); border-color: transparent; background: var(--nc-raised); }
+.auto-cat-chip .icon { width: 12px; height: 12px; }
 .wf-card .crew-cover-top { justify-content: space-between; flex-direction: row-reverse; } /* badge pinned top right, switch on the left */
-.wf-card .crew-cover-top .switch { margin-left: 0; }
-.wf-card .wf-card-when { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; height: 24px; padding: 0 9px; border-radius: 999px; background: rgb(0 0 0 / .55); color: #fff; font: 400 calc(12px * var(--fs, 1))/1 var(--sans); }
+.wf-card .crew-cover-top .switch { flex: none; margin-left: 0; }
+.wf-card .crew-cover-top { min-width: 0; } /* a long webhook name shortens the badge, never pushes onto the switch */
+.wf-card .wf-card-when { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; max-width: 100%; min-width: 0; height: 24px; overflow: hidden; padding: 0 9px; border-radius: 999px; background: rgb(0 0 0 / .55); color: #fff; font: 400 calc(12px * var(--fs, 1))/1 var(--sans); }
 .wf-card .wf-card-when > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wf-card .wf-card-when i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #8d8d88; }
 .wf-card .wf-card-when.on { color: #fff; }
 .wf-card .wf-card-when.on i { background: var(--nc-accent); }
 .crew-card.wf-card.has-cover { padding: 16px; justify-content: flex-start; color: #fff; }
 .crew-card.wf-card.has-cover .crew-cover-img { inset: 0; height: 100%; border: 0; }
-.crew-card.wf-card.has-cover::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, rgb(0 0 0 / .86) 14%, rgb(0 0 0 / 0) 70%); }
+.crew-card.wf-card.has-cover::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, rgb(0 0 0 / .9) 40%, rgb(0 0 0 / .35) 75%, rgb(0 0 0 / .15)); } /* the text sits on the lower half: keep it dark enough to read on any photo */
 .crew-card.wf-card.has-cover .crew-cover-title { margin-top: auto; color: #fff; font-size: calc(24px * var(--fs, 1)); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; text-transform: uppercase; }
-.crew-card.wf-card.has-cover .wf-card-role, .crew-card.wf-card.has-cover .wf-card-meta { color: rgb(255 255 255 / .8); }
+.crew-card.wf-card.has-cover .wf-card-role, .crew-card.wf-card.has-cover .wf-card-meta { color: rgb(255 255 255 / .88); text-shadow: 0 1px 2px rgb(0 0 0 / .6); }
 .crew-card.wf-card.has-cover .grow { display: none; }
 
 /* ---- popup */

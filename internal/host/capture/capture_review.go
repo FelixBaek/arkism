@@ -426,7 +426,9 @@ func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		// The same raw source ranges belong to the session processor, never double-extract.
 		if !has("--dry-run") {
 			if err = drain(false); err == nil {
-				err = trialReview()
+				if err = trialReview(); err == nil {
+					err = classifyWaiting(stdout)
+				}
 			}
 		}
 	case cmd == "reflect":
