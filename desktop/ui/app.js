@@ -1104,7 +1104,7 @@
     renderHeadActions();
     renderChangeBar();
     if (page) {
-      ["#chips", "#stats"].forEach((q) => $(q).replaceChildren());
+      ["#chips", "#stats", "#controls"].forEach((q) => $(q).replaceChildren()); // a page that wants controls draws them in render()
       page.render();
       table.scrollTop = scroll;
       return;
@@ -4355,11 +4355,11 @@
       else detailHead(body, `${kindLabel(c.kind)} · 내용이 달라요`, "기존 기억과 내용이 달라요", "어느 쪽이 맞나요?");
       if (instructionLike) body.append(actionCard("AI에게 명령하는 문장처럼 보여요. 붙여 넣은 글이나 웹 문서에서 섞여 들어온 문장일 수 있어요."));
       const cmp = section("지금 기억");
-      const oldBox = el("div", "quote");
+      const oldBox = el("div", correction ? "quote diff-del" : "quote");
       oldBox.append(el("div", "meta", "불러오는 중…"));
       cmp.append(oldBox);
       const fresh = section(correction ? "고친 내용" : "새로 들어온 내용");
-      const newBox = el("div", "quote");
+      const newBox = el("div", correction ? "quote diff-add" : "quote");
       const foot = el("footer", "");
       foot.append(`${ago(c.created_at)} · ${withAgent(c)}`);
       newBox.append(raw(el("div", "", `“${c.text}”`)), foot);

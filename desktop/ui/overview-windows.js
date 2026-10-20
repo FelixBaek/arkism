@@ -93,7 +93,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const LIST_TITLE = { collect: "최근 저장된 대화", extract: "최근 추출된 후보·기억", classify: "분류 기다리는 후보", review: "승인 기다리는 후보", recall: "최근 불러온 기억 (질문 내용은 저장하지 않아요)",
     trace: "기억별 넣음·쓰임", judge: "확인 기다리는 기억", dream: "정리 제안", active: "많이 쓰인 순" };
   const FULL = { collect: ["세션 기록 전체 보기 ›", () => wide("sessions")], extract: ["세션 기록 보기 ›", () => wide("sessions")], classify: ["승인 대기 열기 ›", () => wide("review")], review: ["넓게 보기 ›", () => wide("review")],
-    recall: ["사용량 보기 ›", () => wide("usage")], trace: ["사용량 보기 ›", () => wide("usage")], judge: ["정리할 기억 전체 보기 ›", () => go("memories", "idle")], dream: ["정리 제안 전체 보기 ›", () => go("memories", "merge")], active: ["넓게 보기 ›", () => wide("active")] };
+    recall: ["사용량 보기 ›", () => wide("usage")], trace: ["사용량 보기 ›", () => wide("usage")], judge: ["정리할 기억 전체 보기 ›", () => { dlg?.close(); go("memories", "idle"); }], dream: ["정리 제안 전체 보기 ›", () => { dlg?.close(); go("memories", "merge"); }], active: ["넓게 보기 ›", () => wide("active")] };
 
   function stageRows(key, box, expanded) {
     const sessions = env.sessions(), w = D().tools?.memory_use, cap = expanded ? 60 : 6, out = [];
@@ -272,8 +272,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (rs) { const chips = el("div", "ov-wide-chips"); for (const [val, l] of [["personal", "개인"], ["general", "범용"], ["project", "이 프로젝트만"]]) chips.append(el("span", `ov-wide-chip${val === rs.reach ? " on" : ""}`, val === rs.reach ? `${l} · AI 추천` : l)); sec("AI 칸 제안 · 정하는 건 사람이에요", chips, el("p", "", rs.reason || "")); }
       const oldId = mp?.merge?.proposal?.targets?.[0]?.id || k?.dup_hint, oldMem = oldId && D().memories.find((m) => m.id === oldId);
       if (oldMem) {
-        const cmp = el("div", "ov-detail-list"), nw = el("div", "ov-cmp ov-cmp-new"), od = el("div", "ov-cmp"), u = usage(oldId), n = u ? u.d30 || u.d7 || 0 : 0;
-        nw.append(el("small", "", "새 후보"), el("span", "", c.text)); od.append(el("small", "", n ? `기존 기억 · ${num(n)}번 쓰임` : "기존 기억"), el("span", "", oldMem.text)); cmp.append(nw, od); sec("비교", cmp);
+        const cmp = el("div", "ov-detail-list"), nw = el("div", "ov-cmp diff-add"), od = el("div", "ov-cmp diff-del"), u = usage(oldId), n = u ? u.d30 || u.d7 || 0 : 0;
+        nw.append(el("small", "", "새 후보"), el("span", "", c.text)); od.append(el("small", "", n ? `기존 기억 · ${num(n)}번 쓰임` : "기존 기억"), el("span", "", oldMem.text)); cmp.append(od, nw); sec("비교", cmp);
       }
       const ev = tag(c, "event_id:");
       if (ev) {
