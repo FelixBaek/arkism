@@ -2127,7 +2127,7 @@ window.ArkismI18nEN = {
   "자주 쓰는 서버": "Popular servers",
   "GitHub에서 설치": "Install from GitHub",
   "연결 설정 ›": "Connection settings ›",
-  "점은 서버 연결 상태예요. DB 상태는 따로 확인해요.": "The dot shows the server connection. The DB status is checked separately.",
+  "상태 아이콘이 주황색이면 확인할 게 있어요.": "An amber status icon means something needs a look.",
   "휴지통·중복": "Trash & duplicates",
   "개선안 만들기 → 기존 버전과 비교 → 검토·승인 → 실제 작업에 시험 적용 순서로 진행해요.": "Make an improvement → compare it with the current version → review and approve → trial it on real work.",
   "안 쓰는 스킬은 휴지통으로 옮기고, 여러 곳에 같은 이름으로 있는 스킬을 정리해요.": "Move skills you don't use to the trash, and clean up skills that share a name in several places.",
@@ -5794,5 +5794,8 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "주제별": "By topic",
-  "분류 대기": "Unsorted"
+  "분류 대기": "Unsorted",
+  "검색 (Ctrl K)": "Search (Ctrl K)",
+  "도움말": "Help",
+  "도움말 (?)": "Help (?)"
 });

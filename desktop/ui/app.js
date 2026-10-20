@@ -243,8 +243,6 @@
     $("#status-dot").className = `dot ${mode}`;
     $("#status-dot").dataset.mode = mode;
     $("#status-text").textContent = text;
-    // Figma 198:110 has no dot; renderStatusCard hides it once it knows nothing needs a look.
-    if (mode !== "ready") $("#status-toggle").hidden = false;
   }
   function dbLabel() {
     if (state.ready === null) return "확인 중";
@@ -304,12 +302,7 @@
     });
     const issues = items.filter((i) => !i[3]).length + agents.filter((cls) => cls === "warn" || cls === "bad").length;
     const badge = $("#status-toggle");
-    badge.classList.toggle("warn", issues > 0);
-    const dot = $("#status-dot"), ready = dot.dataset.mode === "ready";
-    // The dot only shows when something needs a look, so a connected-but-warning state must not stay green.
-    if (ready) dot.className = `dot ${issues ? "warn" : "ready"}`;
-    badge.hidden = issues === 0 && ready;
-    if (badge.hidden) { $("#status-card").hidden = true; badge.setAttribute("aria-expanded", "false"); }
+    badge.classList.toggle("warn", issues > 0 || $("#status-dot").dataset.mode !== "ready");
     $("#status-badge").textContent = issues ? `주의 ${issues}` : "자세히";
     const card = $("#status-card");
     card.querySelector(".status-summary").dataset.issues = issues ? `주의 ${issues}` : "";
@@ -320,7 +313,7 @@
     }));
     if (!card.querySelector(".st-foot")) {
       const foot = el("div", "st-foot");
-      foot.append(el("p", "", "점은 서버 연결 상태예요. DB 상태는 따로 확인해요."), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
+      foot.append(el("p", "", "상태 아이콘이 주황색이면 확인할 게 있어요."), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
       card.append(foot);
       $("#status-agents").before(el("strong", "st-head", "에이전트"));
     }
@@ -4721,9 +4714,14 @@
     render(false);
   });
   const openSettings = () => go("settings");
+  const bar = $(".area-bar");
+  const openSearch = () => { bar.classList.add("search-open"); $("#search").focus(); };
+  $("#search-toggle").addEventListener("click", () => { const own = $(".panel-search input"); own?.offsetParent ? own.focus() : openSearch(); });
+  $("#search").addEventListener("blur", (e) => { if (!e.target.value) bar.classList.remove("search-open"); });
+  $("#help-toggle").addEventListener("click", () => home.shortcuts());
   document.addEventListener("keydown", (e) => {
     const editing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
-    if ((e.key === "/" && !editing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); const own = $(".panel-search input"); (own?.offsetParent ? own : $("#search")).focus(); return; }
+    if ((e.key === "/" && !editing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); const own = $(".panel-search input"); own?.offsetParent ? own.focus() : openSearch(); return; }
     if (e.key === "?" && !editing && !document.querySelector("dialog[open]")) { e.preventDefault(); home.shortcuts(); return; }
     if (e.key === "Escape" && $("#app").classList.contains("detail-open")) { closeDetail(); return; }
     if (!editing && (e.key === "j" || e.key === "k")) {
