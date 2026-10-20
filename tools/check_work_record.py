@@ -31,7 +31,7 @@ PATH = re.compile(r"[\w.-]+(?:/[\w.-]+)+")  # checked per token, so no backtrack
 REPORT_FIELDS = ("작업 ID", "실행한 검증", "미실행", "커밋 상태")
 
 
-GIT_FLAGS = {"-r", "--no-merges", "--reverse", "--no-commit-id", "--name-only", "--end-of-options",
+GIT_FLAGS = {"-r", "--all", "--format=%(refname:short)", "--no-merges", "--reverse", "--no-commit-id", "--name-only", "--end-of-options",
              "--format=%H%x00%aI%x00%B%x00", "--format=%H%x00%B%x00"}
 SAFE_ARGUMENT = re.compile(r"\w[\w./^~@-]*", re.ASCII)
 
@@ -43,11 +43,27 @@ def git(*args):
     return subprocess.run(["git", "-C", str(ROOT), *args], check=True, capture_output=True, text=True).stdout
 
 
+def known_rev(name):
+    """name as Git itself spells it (HEAD, a ref, or a full commit id), so no user text reaches a Git call."""
+    names = ["HEAD", *git("for-each-ref", "--format=%(refname:short)").split()]
+    found = next((n for n in names if n == name), None)
+    if found is None and re.fullmatch(r"[0-9a-f]{40}", name):
+        found = next((c for c in git("rev-list", "--all").split() if c == name), None)
+    return found
+
+
 def safe_range(text):
     base, sep, head = text.partition("..")
     if not (sep and SAFE_ARGUMENT.fullmatch(base) and SAFE_ARGUMENT.fullmatch(head) and ".." not in head):
         raise SystemExit(f"--range must look like base..head: {text!r}")
     return text
+
+
+def resolve_range(text):
+    """safe_range, then each end swapped for Git's own name; None when an end is not in this checkout."""
+    base, _, head = safe_range(text).partition("..")
+    base, head = known_rev(base), known_rev(head)
+    return f"{base}..{head}" if base and head else None
 
 
 def evidence_paths(line):
@@ -118,11 +134,11 @@ def commit_exists(sha):
 
 def check_range(rng):
     """Problems in the commits of rng authored since RULE_START, or None when the base is not here."""
-    base = rng.split("..")[0]
-    if subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--verify", "-q", "--end-of-options", base],
-                      capture_output=True).returncode:
-        print(f"Work record check skipped: {base} is not in this checkout.")
+    resolved = resolve_range(rng)
+    if resolved is None:
+        print(f"Work record check skipped: {rng} is not in this checkout.")
         return None
+    rng = resolved
     problems = []
     start = datetime.fromisoformat(RULE_START)
     log = git("log", "--no-merges", "--format=%H%x00%aI%x00%B%x00", "--end-of-options", rng).split("\0")

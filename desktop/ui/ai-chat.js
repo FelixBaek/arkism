@@ -220,7 +220,7 @@ window.ArkismAIChat = (() => {
         i.focus({ preventScroll: true });
         i.select();
         // insertText keeps the browser's undo stack (Ctrl+Z) and fires input itself; plain assignment is the fallback
-        const typed = document.activeElement === i && document.execCommand?.("insertText", false, v); // only into this field, never whatever else has focus
+        const typed = document.activeElement === i && document.execCommand?.("insertText", false, v); // NOSONAR: only insertText keeps native undo; only into this field
         if (!typed || i.value !== v) { i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); }
       } finally { st.writing = false; }
     };

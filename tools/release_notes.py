@@ -10,7 +10,7 @@ import re
 import sys
 from collections import Counter
 
-from check_work_record import ROOT, git, safe_range, sections
+from check_work_record import git, resolve_range, sections
 
 GROUPS = [  # (key, Korean title, English title, path pattern)
     ("research", "연구 변경", "Research changes", None),
@@ -58,7 +58,10 @@ def main(argv=None):
     ap.add_argument("--range", required=True, help="e.g. v0.1.2..v0.1.3")
     ap.add_argument("--title", default="Arkism")
     args = ap.parse_args(argv)
-    log = git("log", "--no-merges", "--reverse", "--format=%H%x00%B%x00", "--end-of-options", safe_range(args.range)).split("\0")
+    rng = resolve_range(args.range)
+    if rng is None:
+        raise SystemExit(f"{args.range} is not in this checkout")
+    log = git("log", "--no-merges", "--reverse", "--format=%H%x00%B%x00", "--end-of-options", rng).split("\0")
     commits = []
     for sha, message in zip(log[0::2], log[1::2]):
         sha = sha.strip()
