@@ -4305,14 +4305,21 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   }
 
   // What differs between two saved versions of an expert, in the person's words (기록 › 판 이력).
-  function agentChanges(a, b) {
+  function agentChanges(a, b, full) {
     const out = [];
     const s = (v) => v || "없음";
+    // full: show the text itself around the first place the two differ, not just "바꿈"
+    const pair = (x, y) => {
+      const [p, q] = [x, y].map((v) => String(v || "").replace(/\s+/g, " ").trim());
+      let i = 0; while (i < p.length && p[i] === q[i]) i++;
+      const from = Math.max(0, i - 20), one = (t) => t ? `“${from ? "…" : ""}${t.slice(from, from + 90)}${t.length > from + 90 ? "…" : ""}”` : "없음";
+      return `${one(p)} → ${one(q)}`;
+    };
     if ((a.name || "") !== (b.name || "")) out.push(`이름 ${s(a.name)} → ${s(b.name)}`);
     if ((a.handle || "") !== (b.handle || "")) out.push(`@이름 ${s(a.handle)} → ${s(b.handle)}`);
-    if ((a.role || "") !== (b.role || "")) out.push("소개 바꿈");
+    if ((a.role || "") !== (b.role || "")) out.push(full ? `소개 ${pair(a.role, b.role)}` : "소개 바꿈");
     if ((a.category || "") !== (b.category || "")) out.push(`카테고리 ${s(a.category)} → ${s(b.category)}`);
-    if ((a.instructions || "") !== (b.instructions || "")) out.push("지시 바꿈");
+    if ((a.instructions || "") !== (b.instructions || "")) out.push(full ? `지시 ${pair(a.instructions, b.instructions)}` : "지시 바꿈");
     if ((a.model || "") !== (b.model || "")) out.push(`기본 모델 ${s(a.model)} → ${s(b.model)}`);
     if ((a.fallback_model || "") !== (b.fallback_model || "")) out.push(`예비 모델 ${s(a.fallback_model)} → ${s(b.fallback_model)}`);
     if ((a.effort || "medium") !== (b.effort || "medium")) out.push("생각 깊이 바꿈");
@@ -4347,13 +4354,13 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       const sum = list[i + 1] ? agentChanges(list[i + 1].crew, h.crew).slice(0, 2).join(" · ") || "저장" : h.revision === 1 ? "처음 만듦" : "처음 기록";
       r.append(el("b", cur ? "cur" : "", `v${h.revision}`), el("time", "", stamp(h.at)), raw(el("span", "", sum.split(" · ").map((x) => tr(x)).join(" · "))));
       const acts = el("span", "tm-hist-acts");
-      if (cur) acts.append(el("em", "", "지금 쓰는 판"));
+      if (cur) acts.append(el("em", "", "지금 버전"));
       else {
-        const see = el("button", "tm-link quiet", "바뀐 점 보기"); see.type = "button";
+        const see = el("button", "tm-link quiet", wk.histOpen.has(h.revision) ? "접기" : "바뀐 점 보기"); see.type = "button"; see.setAttribute("aria-expanded", String(wk.histOpen.has(h.revision)));
         see.addEventListener("click", () => { if (!wk.histOpen.delete(h.revision)) wk.histOpen.add(h.revision); wk.redraw(); });
-        const back = el("button", "tm-link plain", "이 판으로 되돌리기"); back.type = "button";
+        const back = el("button", "tm-link plain", "이 버전으로 변경"); back.type = "button";
         back.addEventListener("click", async () => {
-          if (!await ask(`v${h.revision}로 되돌릴까요? 새 판으로 저장돼요.`)) return;
+          if (!await ask(`v${h.revision} 버전으로 변경할까요? 새 버전으로 저장돼요.`)) return;
           wk.draft = structuredClone(h.crew); wk.dirty = true; wk.versions = undefined;
           await saveWorker(rec);
         });
@@ -4362,16 +4369,16 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       r.append(acts);
       vbox.append(r);
       if (wk.histOpen.has(h.revision)) {
-        const lines = agentChanges(list[0].crew, h.crew); // what restoring this version would change
+        const lines = agentChanges(list[0].crew, h.crew, true); // what changing to this version would change
         const p = el("p", "tm-hist-diff");
-        p.append(...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((x) => raw(el("span", "", tr(x)))));
+        p.append(el("b", "", `v${h.revision} 버전으로 바꾸면`), ...(lines.length ? lines : ["바뀐 점을 찾지 못했어요."]).map((x) => raw(el("span", "", tr(x)))));
         vbox.append(p);
       }
     });
-    if (!list.length) vbox.append(el("p", "ex-hist-empty", wk.versions ? "판 이력이 아직 없어요." : "불러오는 중…"));
+    if (!list.length) vbox.append(el("p", "ex-hist-empty", wk.versions ? "버전 기록이 아직 없어요." : "불러오는 중…"));
     const rbox = el("div", "tm-hist");
     rbox.append(el("p", "ex-hist-empty", "불러오는 중…"));
-    box.append(sec("판 이력", "저장할 때마다 판이 하나 생겨요. 되돌려도 지금 판은 남아요.", vbox), sec("최근 실행", "테스트 탭에서 보낸 것도 여기 남아요", rbox));
+    box.append(sec("버전 기록", "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.", vbox), sec("최근 실행", "테스트 탭에서 보낸 것도 여기 남아요", rbox));
     const wf = allWorkflows().find((w) => w.crew.handle === (rec.crew.workflow || "").replace(/^\$/, ""));
     const runsP = wf ? request(`/v1/crew/runs?${query({ crew_id: wf.id, limit: "30" })}`).then((r) => r.items || [], () => []) : Promise.resolve([]);
     const callsP = request(`/v1/crew/agents/${encodeURIComponent(rec.id)}/calls?${query({ limit: "30" })}`).then((r) => r.items || [], () => []);

@@ -5939,3 +5939,13 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "이 갈래는 {0}곳으로 동시에 가요: {1}": "This branch goes to {0} nodes at once: {1}"
 });
 Object.assign(window.ArkismI18nEN.strings, { "+ 기억 추가": "+ Add memory", "기억·스킬·도구·지식에서 찾기": "Find in memories, skills, tools, knowledge" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "버전 기록": "Version history", "이 버전으로 변경": "Switch to this version", "지금 버전": "Current version", "접기": "Collapse",
+  "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.": "Each save makes a version. Switching keeps the current one.",
+  "버전 기록을 불러오지 못했어요.": "Couldn't load the version history.", "버전 기록이 아직 없어요.": "No versions yet.",
+  "팀을 만들면 저장할 때마다 버전이 남아요.": "Once the team exists, each save keeps a version."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "v{0} 버전으로 변경할까요? 새 버전으로 저장돼요.": "Switch to v{0}? It saves as a new version.", "v{0} 버전으로 바꾸면": "Switching to v{0} changes",
+  "지시 {0}": "Instructions {0}", "소개 {0}": "Intro {0}"
+});
