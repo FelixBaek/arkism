@@ -5892,3 +5892,13 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, {
   "바뀐 칸 {0}개 · 저장하면 v{1}가 돼요 · 기록 탭에서 되돌릴 수 있어요": "{0} fields changed · saving makes v{1} · you can roll back in the History tab"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "팀 삭제": "Delete team",
+  "이 팀과 설정을 지워요. 지난 회의 기록은 남고, 되돌릴 수 없어요.": "Deletes this team and its settings. Past meetings stay. This can't be undone.",
+  "눌러서 채널을 바꿔요": "Click to change the channel",
+  "채널을 바꿨어요.": "Changed the channel.",
+  "바꾸기": "Change"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "'{0}' 팀을 삭제할까요?\n되돌릴 수 없어요. 확인하려면 이름 '{1}'을 그대로 입력하세요.": "Delete team '{0}'?\nThis can't be undone. Type its name '{1}' to confirm."
+});

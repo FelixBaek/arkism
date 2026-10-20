@@ -269,3 +269,11 @@
 .tm-tpl-dlg .dialog-foot { align-items: center; }
 .tm-tpl-del { margin-right: auto; }
 .tm-tpl-cap { margin-bottom: -2px; color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); }
+
+/* 채널 연결: the channel name is the way into its picker; links share one row; head link sits on the title's baseline */
+.tm-sec-head > .tm-link, .tm-sec-head > small { line-height: 21px; }
+.tm-ch-name { flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: var(--nc-text); font: inherit; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-ch-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+.tm-ctx-list > .tm-ch-add { padding: 10px 12px; border-top: 1px solid var(--nc-line); background: var(--nc-surface); }
+.tm-ch-links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.tm-pop-body > .ex-danger { margin: 8px 0 24px; }
