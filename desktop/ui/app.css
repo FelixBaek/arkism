@@ -1034,3 +1034,13 @@ input:is(:not([type]), [type="text"], [type="email"], [type="url"], [type="passw
 /* Popups move by their head (popup-drag.js). */
 dialog[open] :is(.dialog-head, .crew-popup-head, .ov-win-head, .ov-detail-head, .ov-recall-head, .git-dialog-head, .keys-head) { cursor: grab; }
 dialog.dragging, dialog.dragging * { cursor: grabbing !important; user-select: none; }
+/* 새 창으로: a separate window shows only its popup, filling the window. */
+html.popout #app, html.popout #unlock { visibility: hidden; }
+html.popout dialog { visibility: visible; }
+html.popout dialog.popout-root { inset: 0; margin: 0; width: 100vw; max-width: none; height: 100vh; max-height: none; border: 0; border-radius: 0; translate: none !important; }
+html.popout dialog.popout-root::backdrop { background: var(--nc-canvas); }
+dialog.tear-off { opacity: .6; }
+.popout-btn { flex: none; }
+html.popout dialog.popout-root[open] { display: flex; flex-direction: column; }
+html.popout dialog.popout-root[open] > * { flex: none; }
+html.popout dialog.popout-root[open] > .crew-popup-body, html.popout dialog.popout-root[open] > .dialog-body { flex: 1; min-height: 0; max-height: none; height: auto; overflow: auto; }

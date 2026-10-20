@@ -3121,6 +3121,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.test = null;
   }
   // Usage › expert row asks for that expert's history tab (team.js openExpertHistory).
+  // A separate window (popup-drag.js) reopens an automation by id.
+  window.addEventListener("arkism:open-automation", (e) => { const r = byId(e.detail?.id); if (r) getAuto().open(r, e.detail.tab); });
   window.addEventListener("arkism:open-expert", (e) => { if (e.detail?.id) openWorkers(e.detail.id, false, e.detail.tab || "edit"); });
   function openWorkers(id, isNew = false, tab = "edit") {
     if (wk.pop) return;
@@ -3945,7 +3947,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         { key: "test", label: "테스트", render: (box) => { mark(box, "test"); drawWorkerSave = baseSave; wk.bar = wk.okBtn = null; box.append(testPanel(byId(wk.id))); } },
         { key: "history", label: "기록", render: (box) => { mark(box, "history"); wk.bar = wk.okBtn = null; historyTab(box, byId(wk.id)); } }];
     const pop = expertPopup.open({
-      title: "", sub: "", avatar: face, tabs, initial: isNew ? "edit" : (wk.openTab || "edit"), actions: [acts], cls: `ex-pop${isNew ? " ex-new" : ""}`,
+      title: "", sub: "", avatar: face, tabs, initial: isNew ? "edit" : (wk.openTab || "edit"), actions: [acts], cls: `ex-pop${isNew ? " ex-new" : ""}`, popout: isNew ? null : { event: "arkism:open-expert", detail: { id: wk.id }, title: byId(wk.id)?.crew?.name || "" },
       onClose: () => { if (wk.pop !== pop) return; wk.pop = null; state.workerNew = false; wk.bar = wk.okBtn = wk.estPaint = null; if (isNew && !wk.keep) wk.draft = null; wk.keep = false; render(false); }
     });
     wk.pop = pop;

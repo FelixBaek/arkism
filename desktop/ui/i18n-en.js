@@ -6125,3 +6125,9 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "v{0} 버전으로 변경할까요? 새 버전으로 저장돼요.": "Switch to v{0}? It saves as a new version.", "v{0} 버전으로 바꾸면": "Switching to v{0} changes",
   "지시 {0}": "Instructions {0}", "소개 {0}": "Intro {0}"
 });
+Object.assign(window.ArkismI18nEN.strings, { "이미지 모델": "Image model", "기억 종류": "Memory kinds", "고정한 것": "Pinned", "바꾸면": "After" });
+Object.assign(window.ArkismI18nEN.strings, { "저장할 내용 · 고칠 수 있어요": "Text to save · you can edit it", "판단 근거": "Why the AI thinks so", "자세한 정보": "Details", "곧 확인": "Check soon" });
+Object.assign(window.ArkismI18nEN.strings, { "새 카테고리 이름": "New category name" });
+Object.assign(window.ArkismI18nEN.strings, { "쓸 수 있는 것 추가": "Add what it can use", "찾는 것이 없어요.": "Nothing matches." });
+Object.assign(window.ArkismI18nEN.strings, { "새 창으로 열기": "Open in a new window" });
+Object.assign(window.ArkismI18nEN.patterns, { "이 창을 열지 못했어요 ({0}).": "Couldn't open this window ({0}).", "새 창으로 열지 못했어요 ({0}).": "Couldn't open it in a new window ({0})." });
