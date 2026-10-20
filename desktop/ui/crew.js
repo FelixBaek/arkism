@@ -3989,7 +3989,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     wk.paintAct = () => {
       acts.replaceChildren();
       if (isNew) return;
-      acts.append(estimateNode()); // 868:61909 keeps only the estimate up here; 전문가 삭제 sits at the end of 개요
+      acts.append(estimateNode(), switchEl(wk.draft.enabled !== false, "켜기", (on) => { wk.draft.enabled = on; wk.dirty = true; wk.paintAct(); drawWorkerSave(); })); // 전문가 삭제 sits at the end of 개요
     };
     wk.redraw = () => { const sc = pop.body.scrollTop; pop.select(wk.tab); pop.body.scrollTop = sc; };
     if (isNew) names.replaceChildren(el("h2", ""), el("p", ""));
