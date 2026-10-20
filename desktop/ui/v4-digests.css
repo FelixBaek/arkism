@@ -29,10 +29,8 @@
 .dg-line { display: flex; align-items: flex-start; gap: 8px; padding: 5px 10px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
 .dg-line > span:last-child { flex: 1; min-width: 0; }
 .dg-op { flex: none; font-family: var(--mono); color: var(--nc-quiet); }
-.dg-line.del { background: color-mix(in srgb, var(--nc-amber) 14%, var(--nc-surface)); }
-.dg-line.del .dg-op { color: var(--nc-amber); }
-.dg-line.add { background: var(--nc-subtle); }
-.dg-line.add .dg-op { color: var(--nc-text); }
+.dg-line.del, .dg-line.del .dg-op { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); }
+.dg-line.add, .dg-line.add .dg-op { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); }
 
 .memory-mode .detail-body .dg-quote { display: flex; flex-direction: column; }
 .dg-quote p { margin: 0; overflow-wrap: anywhere; }

@@ -97,8 +97,8 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-prop .v { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; font-size: calc(13px * var(--fs, 1)); line-height: 1.6; overflow-wrap: anywhere; }
 .ex-prop .v.text { display: block; max-height: 320px; overflow: auto; white-space: pre-wrap; }
 .ex-prop del, .ex-prop ins { padding: 0 2px; border-radius: 3px; text-decoration: none; }
-.ex-prop del { background: var(--status-danger-tint); color: var(--status-danger); text-decoration: line-through; }
-.ex-prop ins { background: var(--status-ok-tint); color: var(--status-ok); }
+.ex-prop del { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); text-decoration: line-through; }
+.ex-prop ins { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); }
 .ex-prop .arrow { color: var(--text-3); }
 .ex-prop .acts { flex: none; display: flex; align-items: center; gap: 6px; }
 .ex-prop .done { color: var(--text-2); }

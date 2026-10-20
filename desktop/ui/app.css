@@ -714,11 +714,11 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .git-file:hover, .git-file.on { background: var(--bg-selected); }
 .git-file .git-ellipsis { flex: 1; }
 .git-num { display: flex; gap: 6px; font-size: calc(11.5px * var(--fs, 1)); }
-.git-num .add { color: var(--status-ok); } .git-num .del { color: var(--status-danger); }
+.git-num .add { color: var(--nc-diff-add-fg); } .git-num .del { color: var(--nc-diff-del-fg); }
 .git-diff { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
 .git-patch { margin: 0; max-height: 420px; overflow: auto; font: 11.5px/1.45 var(--mono); background: var(--bg-window); border: 1px solid var(--border); border-radius: 6px; padding: 6px 0; }
 .git-patch span { display: block; padding: 0 8px; white-space: pre; }
-.git-patch .add { background: var(--status-ok-tint); } .git-patch .del { background: var(--status-danger-tint); } .git-patch .hunk { color: var(--text-3); }
+.git-patch .add { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); } .git-patch .del { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); } .git-patch .hunk { color: var(--text-3); }
 .git-sec { margin-top: 14px; }
 .git-check, .git-review { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; font-size: calc(12.5px * var(--fs, 1)); }
 .git-review p { flex-basis: 100%; margin: 2px 0 0; color: var(--text-2); white-space: pre-wrap; }

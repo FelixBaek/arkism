@@ -126,3 +126,7 @@
   .area-bar .search kbd { display: none; }
   .panel-main { padding: 12px; }
 }
+
+/* diff (GitHub 방식): 뺀 것은 빨강 바탕, 넣은 것은 초록 바탕. 줄 단위·글자 단위·상자 단위 어디서나 이 두 클래스(또는 같은 토큰)를 쓴다. */
+.diff-del { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); }
+.diff-add { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); }
