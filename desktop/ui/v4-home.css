@@ -344,3 +344,31 @@
 .start-card.start-ok { flex-direction: row; }
 .start-kv span:not(.mono):not(:first-child) { color: var(--nc-text); }
 @media (min-width: 1181px) { .unlock:has(#ssh-error-side:not([hidden])) #unlock-error { display: none; } }
+
+/* ---------------------------------------------------------------- 통합 검색 창 (설정 줄 검색 아이콘 · Ctrl K) */
+.palette { width: min(720px, calc(100vw - 32px)); max-height: min(640px, calc(100vh - 64px)); margin: 10vh auto auto; padding: 0; display: none; flex-direction: column;
+  border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); background: var(--nc-surface); color: var(--nc-text); box-shadow: 0 24px 64px rgb(0 0 0 / .45); }
+.palette[open] { display: flex; }
+.palette::backdrop { background: rgb(0 0 0 / .5); }
+.pal-head { display: flex; align-items: center; gap: 12px; padding: 20px 20px 12px 24px; }
+.pal-input { flex: 1; min-width: 0; border: 0; background: none; outline: none; color: var(--nc-text); font: 400 calc(18px * var(--fs, 1))/1.4 var(--sans); }
+.pal-input::placeholder { color: var(--nc-quiet); }
+.pal-input::-webkit-search-cancel-button { display: none; }
+.pal-close { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--nc-muted); }
+.pal-close:hover { background: var(--nc-raised); color: var(--nc-text); }
+.pal-tabs { display: flex; gap: 4px; padding: 0 20px 12px; border-bottom: 1px solid var(--nc-line); }
+.pal-tab { height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--nc-muted); font: 400 calc(14px * var(--fs, 1))/1 var(--sans); }
+.pal-tab:hover { color: var(--nc-text); }
+.pal-tab[aria-selected="true"] { background: var(--nc-raised); color: var(--nc-text); font-weight: 500; }
+.pal-body { flex: 1; min-height: 120px; overflow: auto; padding: 8px 12px 12px; }
+.pal-group h3 { margin: 12px 12px 6px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.pal-row { width: 100%; display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; border: 0; border-radius: 8px; background: none; text-align: left; color: var(--nc-text); }
+.pal-row .icon { flex: none; width: 18px; height: 18px; color: var(--nc-muted); }
+.pal-row.active { background: var(--nc-raised); }
+.pal-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 calc(14px * var(--fs, 1))/1.4 var(--sans); }
+.pal-title.mono { font-family: var(--mono); font-size: 13px; }
+.pal-row small { flex: none; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.pal-empty { margin: 24px 12px; color: var(--nc-quiet); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.pal-foot { display: flex; flex-wrap: wrap; gap: 20px; padding: 12px 24px; border-top: 1px solid var(--nc-line); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); color: var(--nc-quiet); }
+.pal-foot > span { display: inline-flex; align-items: center; gap: 6px; }
+.pal-foot kbd { padding: 3px 6px; border: 1px solid var(--nc-line); border-radius: 5px; font: 400 11px/1 var(--mono); color: var(--nc-muted); }

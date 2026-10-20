@@ -17,9 +17,11 @@
 .rail-tool { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; padding: 0; color: var(--nc-quiet); }
 .rail-tool:hover, .rail-tool[aria-expanded="true"] { background: var(--nc-raised); color: var(--nc-text); }
 .rail-tool .icon { width: 16px; height: 16px; }
+.rail-tool.ok { color: var(--status-ok); }
 .rail-tool.warn { color: var(--warn); }
-/* The top-bar search box only opens from the icon, Ctrl K or "/". */
-.area-bar:not(.search-open) > .search { display: none; }
+.rail-tool.bad { color: var(--status-danger); }
+/* Search lives in the 통합 검색 dialog (home.js); the top-bar box stays as the hidden list filter. */
+.area-bar > .search { display: none; }
 .rail-line { height: 1px; background: var(--nc-line); flex: none; }
 .sidebar .nav { gap: 6px; }
 .sidebar .nav-item { height: 44px; gap: 12px; padding: 0 16px 0 14px; border-radius: var(--nc-radius-control); color: var(--nc-muted); font: 400 calc(16px * var(--fs, 1))/20px "Aleo", "Noto Serif KR", Georgia, serif; }

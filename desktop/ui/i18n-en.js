@@ -2127,7 +2127,7 @@ window.ArkismI18nEN = {
   "자주 쓰는 서버": "Popular servers",
   "GitHub에서 설치": "Install from GitHub",
   "연결 설정 ›": "Connection settings ›",
-  "상태 아이콘이 주황색이면 확인할 게 있어요.": "An amber status icon means something needs a look.",
+  "상태 아이콘 색: 초록 정상 · 주황 확인 필요 · 빨강 연결 문제": "Status icon: green fine · amber needs a look · red connection problem",
   "휴지통·중복": "Trash & duplicates",
   "개선안 만들기 → 기존 버전과 비교 → 검토·승인 → 실제 작업에 시험 적용 순서로 진행해요.": "Make an improvement → compare it with the current version → review and approve → trial it on real work.",
   "안 쓰는 스킬은 휴지통으로 옮기고, 여러 곳에 같은 이름으로 있는 스킬을 정리해요.": "Move skills you don't use to the trash, and clean up skills that share a name in several places.",
@@ -5796,6 +5796,10 @@ Object.assign(window.ArkismI18nEN.strings, {
   "주제별": "By topic",
   "분류 대기": "Unsorted",
   "검색 (Ctrl K)": "Search (Ctrl K)",
-  "도움말": "Help",
-  "도움말 (?)": "Help (?)"
+  "통합 검색": "Search everything",
+  "최근 기억": "Recent memories",
+  "기억 후보 검토": "Review memory candidates",
+  "설정 열기": "Open settings",
+  "유형 변경": "Change type",
+  "찾는 결과가 없어요.": "No results."
 });

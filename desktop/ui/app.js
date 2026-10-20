@@ -302,7 +302,9 @@
     });
     const issues = items.filter((i) => !i[3]).length + agents.filter((cls) => cls === "warn" || cls === "bad").length;
     const badge = $("#status-toggle");
-    badge.classList.toggle("warn", issues > 0 || $("#status-dot").dataset.mode !== "ready");
+    // Icon colour follows the worst state: red = server/DB down or an agent missing, amber = needs a look, green = fine.
+    const level = $("#status-dot").dataset.mode !== "ready" || items.some((i) => !i[3]) || agents.includes("bad") ? "bad" : issues ? "warn" : "ok";
+    badge.classList.remove("ok", "warn", "bad"); badge.classList.add(level);
     $("#status-badge").textContent = issues ? `주의 ${issues}` : "자세히";
     const card = $("#status-card");
     card.querySelector(".status-summary").dataset.issues = issues ? `주의 ${issues}` : "";
@@ -313,7 +315,7 @@
     }));
     if (!card.querySelector(".st-foot")) {
       const foot = el("div", "st-foot");
-      foot.append(el("p", "", "상태 아이콘이 주황색이면 확인할 게 있어요."), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
+      foot.append(el("p", "", "상태 아이콘 색: 초록 정상 · 주황 확인 필요 · 빨강 연결 문제"), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
       card.append(foot);
       $("#status-agents").before(el("strong", "st-head", "에이전트"));
     }
@@ -4714,14 +4716,11 @@
     render(false);
   });
   const openSettings = () => go("settings");
-  const bar = $(".area-bar");
-  const openSearch = () => { bar.classList.add("search-open"); $("#search").focus(); };
-  $("#search-toggle").addEventListener("click", () => { const own = $(".panel-search input"); own?.offsetParent ? own.focus() : openSearch(); });
-  $("#search").addEventListener("blur", (e) => { if (!e.target.value) bar.classList.remove("search-open"); });
-  $("#help-toggle").addEventListener("click", () => home.shortcuts());
+  $("#search-toggle").addEventListener("click", () => home.palette());
   document.addEventListener("keydown", (e) => {
     const editing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
-    if ((e.key === "/" && !editing) || (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); const own = $(".panel-search input"); own?.offsetParent ? own.focus() : openSearch(); return; }
+    if (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); home.palette(); return; }
+    if (e.key === "/" && !editing) { e.preventDefault(); const own = $(".panel-search input"); own?.offsetParent ? own.focus() : home.palette(); return; }
     if (e.key === "?" && !editing && !document.querySelector("dialog[open]")) { e.preventDefault(); home.shortcuts(); return; }
     if (e.key === "Escape" && $("#app").classList.contains("detail-open")) { closeDetail(); return; }
     if (!editing && (e.key === "j" || e.key === "k")) {

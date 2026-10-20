@@ -26,20 +26,20 @@ window.ArkismHome = function (ctx) {
     return box;
   }
   // Results in Figma order: 기억 · 스킬 · 워크플로우 · 프롬프트, each row = title + where it lives + one badge.
-  function collect(q) {
+  function collect(q, each = MAX_EACH) {
     const d = state.data;
     const out = [];
     const mems = [];
     const seen = new Set();
     for (const h of serverHits) if ((!h.collection || h.collection === "memories") && h.text && !seen.has(h.id)) { seen.add(h.id); mems.push(h); }
     for (const m of d.memories) if (!seen.has(m.id) && has(m.text, q)) { seen.add(m.id); mems.push(m); }
-    mems.slice(0, MAX_EACH).forEach((m) => out.push({ kind: "memory", id: m.id, title: m.text, where: "MEMORY › 기억", badge: "기억", item: m }));
-    d.skills.filter((s) => has(s.name, q) || has(s.description, q)).slice(0, MAX_EACH)
+    mems.slice(0, each).forEach((m) => out.push({ kind: "memory", id: m.id, title: m.text, where: "MEMORY › 기억", badge: "기억", item: m }));
+    d.skills.filter((s) => has(s.name, q) || has(s.description, q)).slice(0, each)
       .forEach((s) => out.push({ kind: "skill", id: s.id, title: s.name, mono: true, where: `스킬${ctx.skillCategory(s) ? ` › ${ctx.skillCategory(s)}` : ""}`, badge: "스킬" }));
-    (d.crew || []).filter((r) => has(r.crew?.name, q) || has(r.crew?.handle, q) || has(r.crew?.role, q)).slice(0, MAX_EACH)
+    (d.crew || []).filter((r) => has(r.crew?.name, q) || has(r.crew?.handle, q) || has(r.crew?.role, q)).slice(0, each)
       .forEach((r) => out.push({ kind: "crew", id: r.id, title: `$${r.crew.handle || r.crew.name}`, where: "CREW › 워크플로우", badge: "워크플로우" }));
     // GALLERY 보류 중: 숨긴 메뉴로 가는 검색 결과는 내지 않는다.
-    if (!document.querySelector('.nav-item[data-menu="gallery"]')?.hidden) (d.prompts || []).filter((p) => has(p.title, q) || has(p.prompt, q)).slice(0, MAX_EACH)
+    if (!document.querySelector('.nav-item[data-menu="gallery"]')?.hidden) (d.prompts || []).filter((p) => has(p.title, q) || has(p.prompt, q)).slice(0, each)
       .forEach((p) => out.push({ kind: "prompt", id: p.id, title: p.title || "프롬프트", where: `GALLERY › ${p.kind === "slide" ? "슬라이드" : "프롬프트"}`, badge: "프롬프트", item: p }));
     return out;
   }
@@ -57,6 +57,7 @@ window.ArkismHome = function (ctx) {
       if (t !== ticket) return;
       serverHits = items; serverQ = q;
       if (!box?.hidden) paint();
+      if (pal?.open) paintPal();
     }, 250);
   }
   const query$ = () => $("#search").value.trim().toLowerCase();
@@ -103,6 +104,96 @@ window.ArkismHome = function (ctx) {
     box?.querySelectorAll(".gs-row")[active]?.scrollIntoView({ block: "nearest" });
   }
   function hide() { if (box) box.hidden = true; }
+
+  // ------------------------------------------------------------ 통합 검색 창 (설정 줄의 검색 아이콘 · Ctrl K)
+  // One dialog over every screen: type tabs, results grouped by kind, recent memories and quick actions while empty.
+  const TABS = [["all", "전체"], ["memory", "기억"], ["skill", "스킬"], ["crew", "워크플로우"]];
+  const KIND_ICON = { memory: "brain", skill: "puzzle-piece", crew: "users-three", prompt: "image", action: "arrow-right" };
+  let pal = null, palTab = "all", palHits = [], palActive = 0;
+  const palQ = () => pal.querySelector(".pal-input").value.trim().toLowerCase();
+  function palRow(h, i) {
+    const r = el("button", `pal-row${i === palActive ? " active" : ""}`);
+    r.type = "button";
+    r.setAttribute("role", "option");
+    const title = el("span", `pal-title${h.mono ? " mono" : ""}`, h.title);
+    if (h.kind !== "action") title.setAttribute("data-no-i18n", "");
+    r.append(ctx.icon(KIND_ICON[h.kind] || "file-text"), title, el("small", "", h.where || ""));
+    r.addEventListener("mouseenter", () => { palActive = i; palMark(); });
+    r.addEventListener("click", () => palOpen(h));
+    return r;
+  }
+  function paintPal() {
+    const q = palQ();
+    pal.querySelectorAll(".pal-tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tab === palTab)));
+    const groups = [];
+    if (!q) {
+      const recent = [...state.data.memories].sort((a, b) => String(b.updated_at || b.created_at || "").localeCompare(String(a.updated_at || a.created_at || ""))).slice(0, 5)
+        .map((m) => ({ kind: "memory", id: m.id, title: m.text, where: "기억", item: m }));
+      if (palTab === "all" || palTab === "memory") groups.push(["최근 기억", recent]);
+      if (palTab === "all") groups.push(["작업", [
+        { kind: "action", title: "기억 후보 검토", run: () => { state.menu = "memory"; go("memories", "candidate"); } },
+        { kind: "action", title: "연결 상태 보기", run: () => { const t = $("#status-toggle"); if ($("#status-card").hidden) t.click(); } },
+        { kind: "action", title: "설정 열기", run: () => ctx.openSettings() }]]);
+    } else {
+      const hits = collect(q, palTab === "all" ? MAX_EACH : 20).filter((h) => palTab === "all" || h.kind === palTab);
+      for (const [key, name] of TABS.slice(1)) { const g = hits.filter((h) => h.kind === key); if (g.length) groups.push([name, g]); }
+    }
+    palHits = groups.flatMap(([, g]) => g);
+    palActive = Math.min(palActive, Math.max(0, palHits.length - 1));
+    const body = pal.querySelector(".pal-body");
+    let i = 0;
+    const parts = groups.filter(([, g]) => g.length).map(([name, g]) => {
+      const sec = el("section", "pal-group");
+      sec.append(el("h3", "", name), ...g.map((h) => palRow(h, i++)));
+      return sec;
+    });
+    if (!parts.length) parts.push(el("p", "pal-empty", q.length >= 2 && serverQ !== q ? "서버에서도 찾는 중이에요…" : "찾는 결과가 없어요."));
+    body.replaceChildren(...parts);
+  }
+  function palMark() {
+    pal.querySelectorAll(".pal-row").forEach((r, i) => r.classList.toggle("active", i === palActive));
+    pal.querySelectorAll(".pal-row")[palActive]?.scrollIntoView({ block: "nearest" });
+  }
+  function palOpen(h) {
+    pal.close();
+    if (h.kind === "action") return h.run();
+    void openHit(h);
+  }
+  function palette() {
+    if (!pal) {
+      pal = el("dialog", "palette");
+      pal.setAttribute("aria-label", "통합 검색");
+      const head = el("div", "pal-head");
+      const input = el("input", "pal-input");
+      input.type = "search"; input.placeholder = "검색"; input.setAttribute("aria-label", "검색");
+      const x = el("button", "pal-close"); x.type = "button"; x.setAttribute("aria-label", "닫기"); x.append(ctx.icon("x"));
+      x.addEventListener("click", () => pal.close());
+      head.append(input, x);
+      const tabs = el("div", "pal-tabs"); tabs.setAttribute("role", "tablist");
+      for (const [key, name] of TABS) {
+        const t = el("button", "pal-tab", name); t.type = "button"; t.dataset.tab = key; t.setAttribute("role", "tab");
+        t.addEventListener("click", () => { palTab = key; palActive = 0; paintPal(); input.focus(); });
+        tabs.append(t);
+      }
+      const foot = el("div", "pal-foot");
+      for (const [what, keys] of [["닫기", ["Esc"]], ["유형 변경", ["Tab"]], ["고르기", ["↑", "↓"]], ["열기", ["Enter"]]]) {
+        const s = el("span"); s.append(el("span", "", what), ...keys.map((k) => el("kbd", "", k))); foot.append(s);
+      }
+      pal.append(head, tabs, el("div", "pal-body"), foot);
+      input.addEventListener("input", () => { palActive = 0; askServer(palQ()); paintPal(); });
+      input.addEventListener("keydown", (e) => {
+        if (e.isComposing) return;
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (palHits.length) { palActive = (palActive + (e.key === "ArrowDown" ? 1 : palHits.length - 1)) % palHits.length; palMark(); } }
+        else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !input.value) { e.preventDefault(); const i = TABS.findIndex(([k]) => k === palTab); palTab = TABS[(i + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length][0]; palActive = 0; paintPal(); }
+        else if (e.key === "Tab") { e.preventDefault(); const i = TABS.findIndex(([k]) => k === palTab); palTab = TABS[(i + (e.shiftKey ? TABS.length - 1 : 1)) % TABS.length][0]; palActive = 0; paintPal(); }
+        else if (e.key === "Enter") { e.preventDefault(); if (palHits[palActive]) palOpen(palHits[palActive]); }
+      });
+      pal.addEventListener("click", (e) => { if (e.target === pal) pal.close(); });
+      document.body.append(pal);
+    }
+    if (!pal.open) { pal.querySelector(".pal-input").value = ""; palTab = "all"; palActive = 0; serverHits = []; paintPal(); pal.showModal(); }
+    pal.querySelector(".pal-input").focus();
+  }
   function clear() { $("#search").value = ""; state.query = ""; serverHits = []; hide(); $("#search").focus(); }
   async function openHit(h) {
     hide();
@@ -394,5 +485,5 @@ window.ArkismHome = function (ctx) {
     return rows;
   }
 
-  return { onInput, wireSearch, hide, shortcuts, lostCard, lostSide, sshError, startTitle, startSub, startMain, startDetail, menuExtras };
+  return { onInput, wireSearch, hide, palette, shortcuts, lostCard, lostSide, sshError, startTitle, startSub, startMain, startDetail, menuExtras };
 };
