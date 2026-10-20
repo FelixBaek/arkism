@@ -174,13 +174,14 @@
     // A new name moves every expert, team and automation in that category with it; the icon is kept on this PC.
     async function renameCat(old, v, ic) {
       if (v !== old && list.includes(v)) { notice(tr("같은 이름의 카테고리가 있어요.")); return; }
-      crewCatIcons[v] = ic; if (v !== old) delete crewCatIcons[old];
-      store("arkism.crewCatIcons", JSON.stringify(crewCatIcons));
+      crewCatIcons[v] = ic;
       let fail = 0;
       if (v !== old) for (const rec of (state.data.crew || []).filter((r) => r.crew?.category === old)) {
         try { const saved = await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: rec.revision, crew: { ...rec.crew, category: v } }) });
           Object.assign(rec, saved?.crew ? saved : { crew: { ...rec.crew, category: v } }); } catch (_) { fail++; }
       }
+      if (v !== old && !fail) delete crewCatIcons[old]; // records that failed to move keep the old name, so keep its icon too
+      store("arkism.crewCatIcons", JSON.stringify(crewCatIcons));
       if (fail) notice(`${fail}개는 이름을 바꾸지 못했어요. 다시 해 주세요.`);
       if (current === old) pickNow(v); else { close(true); onPick(current); } // repaint the chip and lists with the new name/icon
     }
@@ -216,7 +217,7 @@
       const ok = () => {
         const v = name.value.trim();
         if (!v) { name.focus(); return; }
-        if (edit) { edit.onOk(v, pick); return; }
+        if (edit) { if (!f.inert) { f.inert = true; edit.onOk(v, pick); } return; } // one rename at a time while the moves run
         crewCatIcons[v] = pick;
         store("arkism.crewCatIcons", JSON.stringify(crewCatIcons));
         pickNow(v);
