@@ -7,9 +7,8 @@
 .auto-cat-chip:hover { border-color: var(--nc-quiet); }
 .auto-cat-chip.on { color: var(--nc-accent); border-color: transparent; background: var(--nc-raised); }
 .auto-cat-chip .icon { width: 12px; height: 12px; }
-.wf-card .crew-cover-top { justify-content: space-between; flex-direction: row-reverse; } /* badge pinned top right, switch on the left */
+.wf-card .crew-cover-top { justify-content: space-between; flex-direction: row-reverse; min-width: 0; } /* badge top right, switch left; a long webhook name shortens the badge */
 .wf-card .crew-cover-top .switch { flex: none; margin-left: 0; }
-.wf-card .crew-cover-top { min-width: 0; } /* a long webhook name shortens the badge, never pushes onto the switch */
 .wf-card .wf-card-when { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; max-width: 100%; min-width: 0; height: 24px; overflow: hidden; padding: 0 9px; border-radius: 999px; background: rgb(0 0 0 / .55); color: #fff; font: 400 calc(12px * var(--fs, 1))/1 var(--sans); }
 .wf-card .wf-card-when > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wf-card .wf-card-when i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #8d8d88; }
