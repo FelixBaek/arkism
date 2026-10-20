@@ -350,6 +350,7 @@ window.ArkismTeams = (ctx) => {
     popRedraw("history");
   }
 
+  window.addEventListener("arkism:open-team", (e) => { go("teams"); setTimeout(() => openPopup(e.detail?.id)); });
   function openPopup(id) {
     if (S.pop || !popup) return;
     const rec = id ? byId(id) : null;

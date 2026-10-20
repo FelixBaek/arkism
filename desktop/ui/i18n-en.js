@@ -5802,5 +5802,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "설정 열기": "Open settings",
   "유형 변경": "Change type",
   "찾는 결과가 없어요.": "No results.",
-  "TOOLS › 플러그인": "TOOLS › Plugins"
+  "TOOLS › 플러그인": "TOOLS › Plugins",
+  "크루": "Crew"
 });

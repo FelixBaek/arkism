@@ -36,8 +36,10 @@ window.ArkismHome = function (ctx) {
     mems.slice(0, each).forEach((m) => out.push({ kind: "memory", id: m.id, title: m.text, where: "MEMORY › 기억", badge: "기억", item: m }));
     d.skills.filter((s) => has(s.name, q) || has(s.description, q)).slice(0, each)
       .forEach((s) => out.push({ kind: "skill", id: s.id, title: s.name, mono: true, where: `스킬${ctx.skillCategory(s) ? ` › ${ctx.skillCategory(s)}` : ""}`, badge: "스킬" }));
-    (d.crew || []).filter((r) => has(r.crew?.name, q) || has(r.crew?.handle, q) || has(r.crew?.role, q)).slice(0, each)
-      .forEach((r) => out.push({ kind: "crew", id: r.id, title: `$${r.crew.handle || r.crew.name}`, where: "CREW › 워크플로우", badge: "워크플로우" }));
+    // 크루: 전문가 · 팀 · 자동화 (personas and templates are not things you open from search).
+    const CREW_WHERE = { agent: "전문가", team: "팀", workflow: "자동화" };
+    (d.crew || []).filter((r) => CREW_WHERE[r.crew?.type] && (has(r.crew.name, q) || has(r.crew.handle, q) || has(r.crew.role, q))).slice(0, each)
+      .forEach((r) => out.push({ kind: "crew", type: r.crew.type, id: r.id, title: r.crew.type === "workflow" ? `$${r.crew.handle || r.crew.name}` : r.crew.name || r.crew.handle, where: `CREW › ${CREW_WHERE[r.crew.type]}`, badge: CREW_WHERE[r.crew.type] }));
     const tools = d.tools || {};
     (tools.servers || []).filter((x) => has(x.name, q) || has(x.desc, q)).slice(0, each)
       .forEach((x) => out.push({ kind: "mcp", id: x.name, title: x.name, mono: true, where: "TOOLS › MCP", badge: "MCP" }));
@@ -114,7 +116,7 @@ window.ArkismHome = function (ctx) {
 
   // ------------------------------------------------------------ 통합 검색 창 (설정 줄의 검색 아이콘 · Ctrl K)
   // One dialog over every screen: type tabs, results grouped by kind, recent memories and quick actions while empty.
-  const TABS = [["all", "전체"], ["memory", "기억"], ["skill", "스킬"], ["crew", "워크플로우"], ["mcp", "MCP"], ["plugin", "플러그인"], ["setting", "설정"]];
+  const TABS = [["all", "전체"], ["memory", "기억"], ["skill", "스킬"], ["crew", "크루"], ["mcp", "MCP"], ["plugin", "플러그인"], ["setting", "설정"]];
   const KIND_ICON = { memory: "brain", skill: "puzzle-piece", crew: "users-three", prompt: "image", mcp: "plug", plugin: "stack", setting: "gear-six", action: "arrow-right" };
   let pal = null, palTab = "all", palHits = [], palActive = 0;
   const palQ = () => pal.querySelector(".pal-input").value.trim().toLowerCase();
@@ -216,6 +218,8 @@ window.ArkismHome = function (ctx) {
     if (h.kind === "setting") return ctx.openSettings(h.id);
     if (h.kind === "mcp" || h.kind === "plugin") { state.toolTab = h.kind; go("tools"); state.selected = `tool:${h.id}`; ctx.markSelected(); ctx.renderDetail(); ctx.openDetail(); return; }
     if (h.kind === "skill") go("skills");
+    if (h.kind === "crew" && h.type === "agent") return void window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: h.id } }));
+    if (h.kind === "crew" && h.type === "team") return void window.dispatchEvent(new CustomEvent("arkism:open-team", { detail: { id: h.id } }));
     if (h.kind === "crew") go("crew");
     if (h.kind === "prompt") go("images", h.item.kind === "slide" ? "slide" : "image");
     state.selected = `${h.kind}:${h.id}`;
