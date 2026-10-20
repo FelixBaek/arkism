@@ -3723,7 +3723,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       notice(rec ? "저장했어요." : wk.teamsPick.size + fresh.length && joined < wk.teamsPick.size + fresh.length ? "만들었어요. 팀에 못 넣은 곳이 있어요 — 팀 화면에서 넣어 주세요." : "전문가를 만들었어요.");
       state.workerNew = false;
       await reload();
-      workerPick(saved.id);
+      workerPick(saved.id || rec?.id); // the preview server answers {} — keep the open record
       if (!rec && wk.pop) { const dlg = wk.pop.dialog; wk.pop = null; dlg.close(); openExpertPopup(byId(saved.id)); } else { wk.ai = null; wk.paintHead?.(); wk.paintAct?.(); wk.redraw?.(); }
     } catch (e) { notice(errorText(e)); } finally { wk.busy = false; drawWorkerSave(); }
   }
