@@ -238,8 +238,7 @@ textarea.tm-input { height: auto; padding: 9px 12px; resize: none; }
 .tm-meet-row .tm-badge { font-size: calc(12px * var(--fs, 1)); }
 .tm-trans { flex: none; display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: 8px; }
 .tm-trans-head { display: flex; align-items: baseline; gap: 10px; }
-.tm-trans-head h3 { flex: 1; min-width: 0; margin: 0; text-align: center; color: var(--nc-text); font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); }
-.tm-concl .tm-trans-head h3 { text-align: left; }
+.tm-trans-head h3 { flex: 1; min-width: 0; margin: 0; text-align: left; color: var(--nc-text); font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); }
 .tm-trans-head .mono { color: var(--nc-quiet); font: 400 12px/1.5 var(--mono); white-space: nowrap; }
 .tm-topic { margin: 0; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.6 var(--sans); white-space: pre-wrap; }
 .tm-turn { display: flex; align-items: flex-start; gap: 12px; }
@@ -403,3 +402,8 @@ textarea.tm-input { height: auto; padding: 9px 12px; resize: none; }
 .tm-split > .tm-edit .tm-edit-words { flex: 1 1 100%; }
 .tm-split > .tm-edit .tm-mtable .tm-mrow { grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1.4fr) 64px 24px; gap: 10px; }
 .tm-split > .tm-edit .tm-mtable .tm-mrow > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 회의 머리 (208:19103): 팀 보기 is an outlined button beside 새 회의 */
+.page-head .head-aside .btn.tm-outline { border: 1px solid var(--nc-line); background: none; color: var(--nc-accent); }
+.page-head .head-aside .btn.tm-outline:hover { background: var(--nc-raised); }
+.panel:has(#table.tm-meet) { flex: 0 1 auto; } /* 208:19103: the meetings panel hugs its content instead of reaching the window's foot */

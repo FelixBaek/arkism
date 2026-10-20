@@ -366,6 +366,9 @@ window.ArkismTeams = (ctx) => {
     }));
     pop.h = popup.open({ title: "", sub: "", tabs, initial: "overview", actions, cls: rec ? "tm-pop" : "tm-pop is-new", onClose: () => { clearTimeout(pop.estTimer); clearTimeout(pop.testTimer); S.pop = null; } });
     const dlg = pop.h.dialog;
+    // 961:60688: the tabs sit at the head's right under the estimate, as pills
+    const side = dlg.querySelector(".crew-popup-actions"), top = el("div", "tm-pop-side-top");
+    top.append(...side.childNodes); side.replaceChildren(top, dlg.querySelector(".crew-popup-tabs"));
     // closing with unsaved changes asks first (Esc and 닫기)
     const guard = (e) => {
       if (!pdiff(pop).length) return;
@@ -373,7 +376,7 @@ window.ArkismTeams = (ctx) => {
       void ask(pop.id ? "저장하지 않은 변경이 있어요. 버리고 닫을까요?" : "아직 만들지 않았어요. 버리고 닫을까요?").then((yes) => { if (yes) { pop.base = clone(pop.d); dlg.close(); } });
     };
     dlg.addEventListener("cancel", guard);
-    dlg.addEventListener("click", (e) => { if (e.target.closest(".crew-popup-actions > .btn:last-child")) guard(e); }, true);
+    dlg.addEventListener("click", (e) => { if (e.target.closest(".crew-popup-close")) guard(e); }, true);
     paintHead(pop);
     queueEst(pop);
   }
@@ -412,7 +415,7 @@ window.ArkismTeams = (ctx) => {
     const card = el("button", `tm-prev${d.cover ? " has-cover" : ""}`); card.type = "button"; card.setAttribute("aria-label", "카드 사진 바꾸기");
     if (d.cover) { const img = el("img"); img.alt = ""; img.src = coverSrc(d.cover); card.append(img); } else card.append(icon("image"));
     const credit = coverCredit(d.cover); if (credit) { credit.classList.add("tm-prev-credit"); card.append(credit); }
-    card.addEventListener("click", () => covers?.open({ current: d.cover, onPick: (c) => { if (c) d.cover = c; else delete d.cover; paintHead(pop); changed(pop); } }));
+    card.addEventListener("click", () => covers?.open({ anchor: card, current: d.cover, onPick: (c) => { if (c) d.cover = c; else delete d.cover; paintHead(pop); changed(pop); } }));
     const words = el("div", "tm-pop-words");
     const row = el("div", "tm-pop-row");
     const cats = [...new Set([...teams(), ...workflows()].map((r) => r.crew.category).filter(Boolean))];
@@ -430,8 +433,10 @@ window.ArkismTeams = (ctx) => {
       }, "tm-chip tm-chip-select")); cs.setAttribute("aria-label", "카테고리");
       row.append(cs);
     }
-    const faces = el("span", "tm-faces"); sorted(d.members).slice(0, 5).forEach((m) => faces.append(face(byId(m.agent_id), "s")));
-    row.append(faces);
+    if (!pop.id) { // 310:19981 shows the members' faces on a new team; 961:60688 shows only the category
+      const faces = el("span", "tm-faces"); sorted(d.members).slice(0, 5).forEach((m) => faces.append(face(byId(m.agent_id), "s")));
+      row.prepend(faces);
+    }
     const line = el("div", "tm-pop-title");
     const name = inline(pop, () => d.name, (v) => { d.name = v; if (!pop.handleTouched) tag.value = handleFrom(v); }, { max: 60, placeholder: "팀 이름을 적어 주세요", cls: "tm-plain-title" });
     name.setAttribute("aria-label", "팀 이름");
@@ -980,7 +985,7 @@ window.ArkismTeams = (ctx) => {
       const cur = h.v === pop.rec.revision;
       const r = el("div", "tm-hist-row");
       const at = new Date(h.at);
-      r.append(el("b", "", `v${h.v}`), el("time", "", `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), raw(el("span", "", tr(h.summary))));
+      r.append(el("b", cur ? "cur" : "", `v${h.v}`), el("time", "", `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), raw(el("span", "", tr(h.summary))));
       const acts = el("span", "tm-hist-acts");
       if (cur) acts.append(el("em", "", "지금 쓰는 판"));
       else {
@@ -1010,6 +1015,7 @@ window.ArkismTeams = (ctx) => {
     }
     if (!(pop.meetings || []).length) rows.append(empty(pop.meetings ? "아직 연 회의가 없어요." : "불러오는 중…"));
     s2.append(rows);
+    s1.classList.add("tm-hist-sec"); s2.classList.add("tm-hist-sec"); // 981:60196: plain titles, no rule or icon
     return [s1, s2];
   }
 
@@ -1323,7 +1329,7 @@ window.ArkismTeams = (ctx) => {
     if (focused) { const n = $(".tm-note-input"); if (n) { n.focus(); try { n.setSelectionRange(...pos); } catch { /* number input */ } } }
   }
   function renderMeetings() {
-    ctx.headExtras?.({ aside: [button("새 회의", "primary", null, () => { S.newMeeting = { team_id: S.meeting?.team_id || teams()[0]?.id || "" }; render(false); })] });
+    ctx.headExtras?.({ aside: [button("팀 보기", "tm-outline", null, () => go("teams")), button("새 회의", "primary", null, () => { S.newMeeting = { team_id: S.meeting?.team_id || teams()[0]?.id || "" }; render(false); })] });
     $("#controls").replaceChildren();
     const table = $("#table");
     table.className = "tm-wrap tm-meet";
@@ -2107,7 +2113,7 @@ window.ArkismTeams = (ctx) => {
     teams: { title: "팀", count: () => `${teams().length}개`, sub: () => "전문가 여럿이 정한 순서대로 말하며 하나의 결과를 만들어요. 연결된 채널에 글을 쓰면 회의가 시작돼요.",
       bare: true, head: () => [button("회의 보기", "ghost", null, () => go("meetings"))], render: renderTeams },
     teamNew: { title: "새 팀", sub: () => "", keepDetail: true, head: () => [], render: () => { setTimeout(() => { go("teams"); setTimeout(() => openPopup(null)); }); $("#table").replaceChildren(); } },
-    meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [button("팀 보기", "ghost", null, () => go("teams"))], render: renderMeetings },
+    meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [], render: renderMeetings }, // 팀 보기 sits beside 새 회의 (208:19103)
     discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord },
     crewUsage: { title: "사용량", sub: () => "워크플로우·전문가·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.",
       head: () => [button("새로고침", "ghost", null, loadUsage)], render: renderUsage }
