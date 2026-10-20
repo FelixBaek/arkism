@@ -1,6 +1,6 @@
 # Discord bots
 
-`arkism discord` connects the Discord bots you add in **AGENT › 디스코드 (Discord)** and turns channel posts into work.
+`arkism discord` connects the Discord bots you add in **Settings › 메신저 (Messengers)** and turns channel posts into work.
 
 - It collects each bot token once from Arkism and keeps it in the OS keyring (service `arkism-discord`), or in a `0600` file on a machine without one. It never sends the token back. The app keeps only the last four characters.
 - Only allowed users are heard (by default, the Discord server owner). Other bots are ignored.
@@ -9,7 +9,7 @@
 ## 1. Create the bot
 
 1. Create an application at <https://discord.com/developers/applications>.
-2. Open **Bot** and press **Reset Token**. Paste the token into Arkism (**AGENT › 디스코드 › 봇 추가 (Add bot)**).
+2. Open **Bot** and press **Reset Token**. Paste the token into Arkism (**Settings › 메신저 (Messengers)**).
    You can use one bot for every channel, or one bot per team or workflow.
 3. On the same **Bot** page, turn on **Message Content Intent**. Without it the bot sees empty messages, so `@name` questions and auto-start channels do nothing.
 

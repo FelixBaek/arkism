@@ -13,6 +13,8 @@
 
 [한국어](README.ko.md)
 
+> **Note:** Arkism is still in testing and development, so it has many limitations.
+
 Arkism gives your AI coding agents one shared memory.
 
 Claude Code, Codex, Gemini CLI and other agents each forget what you told them yesterday, and each keeps its own skills. Arkism sits next to them. It collects what is worth remembering from your sessions, lets you review it, and hands the right memories and skills back to every agent. A desktop app shows all of it in one place, together with usage, model routing and multi-agent workflows.
@@ -28,7 +30,7 @@ Claude Code, Codex, Gemini CLI and other agents each forget what you told them y
 | HOME | MEMORY |
 |---|---|
 | ![Home screen](guide/images/home.png) | ![Memory screen](guide/images/memory.png) |
-| **AGENT** | **ROUTER** |
+| **CREW** | **ROUTER** |
 | ![Agent screen](guide/images/agent.png) | ![Router screen](guide/images/router.png) |
 
 The screenshots use made-up sample data and show the Korean interface. Switch to English in **Settings › 모양 (Appearance)**.
@@ -57,12 +59,11 @@ Want several PCs to share one Arkism? See [Server mode](#server-mode-optional).
 | Menu | What you can do |
 |---|---|
 | **HOME** | Search memories, skills, workflows and prompts at once, and see what needs your attention in each menu. |
-| **MEMORY** | Memories, skills, sessions and usage. Search, review, edit, merge and delete memories. Browse skills with their versions and test results. Read and export past agent sessions. |
-| **AGENT** | Build workflows on a canvas, set up work agents and teams, run team meetings, connect Discord, and track the cost of runs. |
+| **MEMORY** | Overview, memories, sessions and usage. Search, review, edit, merge and delete memories. Read and export past agent sessions. |
+| **CREW** | Set up experts (work agents) and teams, run team meetings, build automations that run on a schedule or webhook, and track the cost of runs. |
 | **ROUTER** | See which model handled which task, set routing rules and fallbacks, and add model providers and accounts. |
-| **CONNECT** | Turn agents, MCP servers and plugins on or off per agent, and browse Git repositories and pull requests. |
-| **GALLERY** | Design systems, generated images and slides. |
-| **Settings** | Connection (built-in or server), models per role, appearance (Korean or English, light or dark), capture, backups and data deletion. |
+| **TOOLS** | Browse skills with their versions and test results, turn plugins and MCP servers on or off per agent, add knowledge sources, and browse Git repositories and pull requests. |
+| **Settings** | Connection (built-in or server), messengers (Discord, Telegram, Slack), models per role, appearance (Korean or English, light or dark), capture, backups and data deletion. |
 
 ## How it works
 
@@ -101,7 +102,7 @@ Capture settings and agent setting backups are in `~/.config/arkism`. In server 
 **Keeping things out**
 
 - Wrap words in `<private>…</private>`. They are removed from user, assistant and tool text before extraction or model transfer. Nested spans stay private until the outer span closes; an unfinished span hides the rest of that message.
-- **Settings › 고급 (Advanced) › 수집 (Capture)**: pause capture, or list folders Arkism must ignore.
+- **Settings › 일반 (General) › 수집 (Capture)**: pause capture, or list folders Arkism must ignore.
 - Put an empty `.arkism-ignore` file in a folder to keep Arkism out of it and everything below it.
 
 Raw session archives keep the original bytes, so a session containing a private marker is skipped as a whole. Archive upload also checks the source folder and recorded project folders, including when it retries. Invalid or unreadable capture settings pause capture; an archive that cannot be inspected waits instead of being uploaded. These settings apply to new capture. Use the deletion controls below to remove data already saved.
@@ -128,7 +129,7 @@ Configuration, systemd and backups: [guide/server.md](guide/server.md) and [guid
 
 ## Discord bot
 
-`arkism discord` connects Discord bots you add in **AGENT › 디스코드 (Discord)**. A post in a connected channel can start a team meeting, a workflow or one agent answer.
+`arkism discord` connects Discord bots you add in **Settings › 메신저 (Messengers)**. A post in a connected channel can start a team meeting, a workflow or one agent answer.
 
 Short version:
 
