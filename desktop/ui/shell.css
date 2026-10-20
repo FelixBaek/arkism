@@ -73,6 +73,7 @@
 .panel-main > .table-wrap { padding: 0; }
 .panel > .detail { width: var(--nc-detail-w); flex: none; background: none; border-left: 1px solid var(--nc-line); overflow: auto; }
 .app.wide .panel > .detail { display: none; }
+.panel > .detail:has(> .v4-side:empty) { display: none; } /* a settings tab with nothing on the right gets the full width */
 
 
 /* ---------------------------------------------------------------- shared parts (v3/Button …) */

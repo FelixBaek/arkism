@@ -791,6 +791,7 @@ window.ArkismPages = (ctx) => {
         save.disabled = false;
       }
     });
+    const off = button("연결 끊기", "ghost", null, disconnect);
     const draw = () => {
       cards.replaceChildren(...modes.map(([key, ic, title, text]) => {
         const c = el("button", `mode-card${key === pick ? " active" : ""}`);
@@ -805,28 +806,17 @@ window.ArkismPages = (ctx) => {
       }));
       // 고른 카드 아래에는 그 모드의 설정만: SSH 폼 또는 저장 위치.
       body.replaceChildren(...(pick === "ssh" ? [form.node, el("p", "pg-hint", "SSH 키 또는 비밀번호로 접속해요. 비밀번호는 저장하지 않아서 앱을 다시 켜면 다시 물어요.")] : storage ? [storage.node] : []));
-      actions.replaceChildren(...(pick === "ssh" ? [test, save] : [save]));
+      // 연결 끊기: only while on a server; next launch goes back to the first-run choice.
+      actions.replaceChildren(...(pick === "ssh" ? [test, save] : [save]), ...(pick === "ssh" && state.mode !== "local" ? [off] : []));
     };
     draw();
     g.append(cards, body, out, actions);
-    const now = sideSec("지금 연결", kvRow("방식", state.mode === "local" ? "이 PC" : "SSH"));
-    if (state.mode !== "local" && state.ssh) now.append(kvRow("서버", sshLabel(state.ssh)));
-    if (state.mode === "local" && storage) {
-      const where = kvRow("저장 위치", el("b", "mono", "…"));
-      now.append(where);
-      void storage.ready.then((l) => { if (l) where.lastChild.textContent = l.path; });
-    }
-    const acts = el("div", "v4-side-actions");
-    if (state.mode === "local") acts.append(button("서버에 연결하기", "", null, useServer));
-    else {
-      acts.append(button("연결 끊기", "", null, disconnect));
-      if (state.defaults.local) acts.append(button("이 PC로 돌아가기", "ghost", null, useLocal));
-    }
-    now.append(acts, sideNote(state.mode === "local" ? "기억은 이 PC에만 저장돼요. 서버의 Arkism을 쓰려면 서버에 연결하세요."
-      : "연결을 끊으면 다음에 앱을 켤 때 자동으로 다시 붙지 않아요. 이 PC로 돌아가도 서버의 기억은 그대로 남아요."));
-    const gw = window.ArkismGatewayToken?.({ el, button, tauri, notice })?.side(sideSec) || []; // 모델 중계기 (gateway-token.js)
-    toSide(...gw.slice(0, 1), now, ...gw.slice(1));
-    return [g];
+    // 모델 중계기 (gateway-token.js): its own group under 연결 방식, so the page needs no right column.
+    const gw = window.ArkismGatewayToken?.({ el, button, tauri, notice })?.side((_, ...nodes) => { const d = el("div", "gw-sec"); d.append(...nodes); return d; });
+    if (!gw) return [g];
+    const relay = group("모델 중계기");
+    relay.append(...gw);
+    return [g, relay];
   }
   // 설정 › 고급 (Figma 198:6392): 수집·데이터·지우기 on the left; 진단, 설정 옮기기, ComfyUI on the right.
   function tabAdvanced() {
