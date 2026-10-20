@@ -29,7 +29,7 @@ button.tm-badge:hover { color: var(--nc-text); }
 .tm-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 .tm-input, .tm-select { width: 100%; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-raised); color: var(--nc-text);
   font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
-textarea.tm-input { height: auto; padding: 9px 12px; resize: vertical; }
+textarea.tm-input { height: auto; padding: 9px 12px; resize: none; }
 .tm-input.mono, .tm-mono-field .tm-input { font-family: var(--mono); }
 .tm-input::placeholder { color: var(--nc-quiet); }
 .tm-select option { background: var(--nc-surface); color: var(--nc-text); }

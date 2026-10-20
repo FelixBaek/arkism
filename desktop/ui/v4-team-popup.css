@@ -5,9 +5,9 @@
 .tm-panel { display: flex; flex-direction: column; gap: 16px; padding: 4px; }
 .tm-cats { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .tm-cats .tm-chip output { margin-left: 6px; color: var(--nc-quiet); font: 400 11px/1.5 var(--mono); }
-.tm-cats .tm-chip.active output { color: inherit; }
 .tm-cats .btn { height: auto; padding: 7px 14px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
-.tm-cats .tm-chip { gap: 5px; height: 26px; padding: 0 10px; font-size: calc(12px * var(--fs, 1)); }
+.tm-cats .tm-chip { gap: 5px; height: 26px; padding: 0 10px; background: none; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
+.tm-cats .tm-chip.active { border-color: transparent; background: var(--nc-raised); color: var(--nc-accent); } /* 787:59649 */
 .tm-cats .tm-chip .icon { width: 12px; height: 12px; }
 .tm-grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(254px, 1fr)); gap: 12px; }
 .tm-card2 { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; min-height: 226px; padding: 14px 16px 16px; text-align: left;

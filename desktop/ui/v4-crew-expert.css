@@ -6,20 +6,19 @@
 .ex-panel { display: flex; flex-direction: column; gap: 16px; }
 .ex-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 132px)); gap: 12px; }
 .ex-card { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px; width: 132px; min-height: 171px; padding: 7px 7px 14px; border: 0; border-radius: 20px;
-  background: var(--face-bg, var(--avatar-cream)); color: #1d1b18; font: inherit; cursor: pointer; overflow: hidden; }
+  background: #f7efe7; color: #1d1b18; font: inherit; cursor: pointer; overflow: hidden; }
 .ex-card:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
 @media (hover: hover) and (pointer: fine) { .ex-card:hover { box-shadow: 0 0 0 2px var(--nc-accent); } }
 /* 208:17763: a 100×100 portrait on top, badge and name under it — nothing laid over the drawing */
 .ex-card-art { flex: none; display: grid; place-items: center; width: 100%; height: 101px; margin-bottom: auto; }
 .ex-card-art .ex-art, .ex-card-art .ex-art img { width: 100px; height: 100px; }
-.ex-card-art .ex-art { background: none; }
-.ex-card-art .ex-art img { object-fit: cover; object-position: top; mix-blend-mode: multiply; -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent); mask-image: radial-gradient(closest-side, #000 72%, transparent); } /* the drawing's paper fades into the card colour */
+.ex-card-art .ex-art { border-radius: 10px; overflow: hidden; background: var(--face-bg, #f7efe7); } /* 763:57203: a 100px square; the chosen colour shows here, the card stays cream */
+.ex-card-art .ex-art img { display: block; object-fit: contain; mix-blend-mode: multiply; }
 .ex-card-art .ex-mark { width: 56px; height: 56px; align-self: center; color: #1d1b18; background: color-mix(in srgb, currentColor 8%, transparent); border-radius: 50%; display: grid; place-items: center; }
 .ex-card-cat { position: relative; display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px 2px 7px; border: 1px solid rgba(140, 136, 129, .45); border-radius: 999px; font: 400 calc(12px * var(--fs, 1))/1.3 var(--sans); letter-spacing: .04em; color: #67635c; } /* Figma #8c8881 is under 4.5:1 on the light cards */
 .ex-card-cat .icon { width: 11px; height: 11px; }
 .ex-card strong { position: relative; font: 700 calc(18px * var(--fs, 1))/1.3 var(--sans); color: #262523; }
-.ex-card.off { filter: grayscale(1); opacity: .55; }
-.ex-card-off { position: absolute; top: 8px; right: 8px; padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, .65); color: #fff; font-size: calc(11px * var(--fs, 1)); }
+.ex-card.off { opacity: .55; }
 .ex-card-new { justify-content: center; gap: 4px; padding: 0 10px; background: none; border: 1px dashed var(--nc-quiet); color: var(--nc-text); text-align: center; }
 .ex-card-new strong { font: 500 calc(14px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-text); }
 .ex-card-new small { color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); line-height: 1.4; word-break: keep-all; }
@@ -33,7 +32,7 @@
 .ex-face { flex: none; width: 110px; height: 110px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--bg-muted); }
 .ex-face .ex-art, .ex-face .ex-art img { width: 100%; height: 100%; display: block; }
 .ex-face .ex-art { background: var(--face-bg); }
-.ex-face .ex-art img { object-fit: cover; object-position: top; }
+.ex-face .ex-art img { object-fit: cover; object-position: top; mix-blend-mode: multiply; } /* the drawing carries a cream ground; multiply lets the chosen colour through */
 .ex-face .none { display: grid; place-items: center; }
 .ex-face .none .wf-mark { width: 56px; height: 56px; }
 .ex-pop .crew-popup-who > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; position: relative; }
@@ -41,45 +40,92 @@
 .ex-cat .icon { width: 12px; height: 12px; }
 .ex-cat-pop { position: absolute; top: 30px; left: 0; z-index: 5; max-width: 420px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-window); box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
 .ex-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.ex-inline { margin: 0; cursor: text; border-radius: 4px; border-bottom: 1px dashed var(--border); }
+.ex-inline { width: fit-content; max-width: 100%; margin: 0; cursor: text; border-radius: 4px; border-bottom: 1px dashed var(--border); }
 .ex-inline.empty { color: var(--text-2); }
 .ex-inline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h2.ex-name { font-size: calc(20px * var(--fs, 1)); font-weight: 600; }
 .ex-handle { color: var(--nc-accent); font-size: calc(13px * var(--fs, 1)); }
 p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
-.ex-inline-input { max-width: 100%; }
+.ex-inline-input { max-width: 100%; field-sizing: content; min-width: 6em; } /* the box grows with the text instead of a fixed web-form width */
 .ex-copy { opacity: 0; }
 .ex-line:hover .ex-copy, .ex-copy:focus-visible { opacity: 1; }
 .ex-pop .crew-popup-actions { align-items: flex-start; flex-wrap: wrap; justify-content: flex-end; max-width: 300px; }
 .ex-acts { display: flex; align-items: center; gap: 12px; }
-.ex-est { display: grid; grid-template-columns: auto auto; gap: 2px 14px; margin: 0; color: var(--text-2); font-size: calc(11.5px * var(--fs, 1)); }
-.ex-est dt, .ex-est dd { margin: 0; }
-.ex-est dd { text-align: right; }
+.ex-est { display: flex; flex-direction: column; gap: 5px; width: 200px; color: var(--text-2); font-size: calc(11px * var(--fs, 1)); line-height: 14px; }
+.ex-est-row { display: flex; align-items: center; gap: 6px; }
+.ex-est-row i { flex: 1; border-bottom: 1px dotted var(--border); }
+.ex-est-row .v { color: var(--text-1); font-variant-numeric: tabular-nums; }
 .ex-new .crew-popup-tabs { display: none; }
-.ex-new .ex-face .ex-art, .ex-new .ex-face .none { background: var(--bg-muted); }
+.ex-new .ex-face .none { background: var(--bg-muted); }
 .ex-body { display: flex; flex-direction: column; gap: 14px; }
 .ex-metrics { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
 .ex-metric { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; }
 .ex-metric + .ex-metric { border-left: 1px solid var(--border); }
 .ex-metric strong { font-size: calc(20px * var(--fs, 1)); font-weight: 500; }
 .ex-metric small { color: var(--text-2); }
-.ex-ai { display: flex; flex-direction: column; gap: 8px; }
-.ex-ai-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 0; border: 0; background: none; color: var(--text-1); font: inherit; cursor: pointer; }
-.ex-ai-name { display: inline-flex; align-items: center; gap: 8px; }
-.ex-ai-name .icon { color: var(--nc-accent); width: 14px; height: 14px; }
-.ex-ai-name small { color: var(--text-2); }
-.ex-caret { width: 16px; height: 16px; transition: transform .15s; transform: rotate(180deg); }
-.ex-caret.open { transform: none; }
-.ex-ai-head[aria-expanded="false"] .ex-caret { transform: none; }
-.ex-ai-head[aria-expanded="true"] .ex-caret { transform: rotate(180deg); }
-.ex-props { border: 1px solid var(--border); border-radius: 8px; }
-.ex-props-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.ex-ai { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.ex-ai-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--nc-ai) 45%, transparent); border-radius: 999px; background: var(--nc-ai-bg); color: var(--nc-ai); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.ex-ai-btn .icon { width: 14px; height: 14px; }
+.ex-ai-btn:hover, .ex-ai-btn.on { border-color: var(--nc-ai); }
+.ex-ai-btn:focus-visible { outline: 2px solid var(--nc-ai); outline-offset: 2px; }
+/* The bubble grows out of the button (transform-origin top left), as in Lucian #215 */
+.ex-ai-pop { position: absolute; top: 42px; left: 0; z-index: 20; display: flex; flex-direction: column; gap: 10px; width: min(440px, 100%); padding: 14px; border: 1px solid var(--nc-ai); border-radius: 14px; background: var(--nc-surface); box-shadow: 0 12px 32px rgba(0, 0, 0, .35); transform-origin: 16px -8px; }
+.ex-ai-pop::before { content: ""; position: absolute; top: -6px; left: 14px; width: 10px; height: 10px; border-top: 1px solid var(--nc-ai); border-left: 1px solid var(--nc-ai); background: var(--nc-surface); transform: rotate(45deg); }
+.ex-ai-pop.grow { animation: ex-ai-grow .45s cubic-bezier(.3, 1.15, .4, 1); }
+@keyframes ex-ai-grow { from { opacity: 0; transform: scale(.1); } to { opacity: 1; transform: none; } }
+.ex-ai-pop-head { display: flex; align-items: center; gap: 8px; }
+.ex-ai-pop-head > .icon { width: 14px; height: 14px; color: var(--nc-ai); }
+.ex-ai-pop-head strong { font: 500 calc(14px * var(--fs, 1))/1.4 var(--sans); color: var(--text-1); }
+.ex-ai-pop-head small { flex: 1; min-width: 0; color: var(--text-3); font-size: calc(12px * var(--fs, 1)); }
+.ex-ai-pop .ex-chat { max-height: 260px; overflow: auto; padding: 2px; }
+.ex-ai-pop .ex-chat-ai { border-color: color-mix(in srgb, var(--nc-ai) 40%, transparent); background: var(--nc-ai-bg); }
+.ex-ai-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.ex-ai-chip { height: 26px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; color: var(--text-2); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.ex-ai-chip:hover:not(:disabled) { border-color: var(--nc-ai); color: var(--nc-ai); }
+.ex-ai-chip:disabled { opacity: .5; cursor: default; }
+.ex-ai-row { display: flex; gap: 8px; }
+.ex-ai-row input { flex: 1; min-width: 0; }
+.ex-props { align-self: stretch; border: 1px solid var(--nc-ai); border-radius: 8px; } /* 보라 테두리 = AI가 낸 제안 */
+.ex-props-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--nc-ai) 35%, transparent); border-radius: 8px 8px 0 0; background: var(--nc-ai-bg); }
+.ex-props-head > .icon { width: 14px; height: 14px; color: var(--nc-ai); }
+.ex-props-head strong { color: var(--nc-ai); }
 .ex-props-head small { flex: 1; color: var(--text-2); }
-.ex-prop { display: flex; align-items: center; gap: 10px; padding: 6px 12px; }
+.ex-prop { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; }
 .ex-prop + .ex-prop { border-top: 1px solid var(--border); }
-.ex-prop .k { width: 64px; flex: none; color: var(--text-2); }
-.ex-prop .v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ex-savebar { position: sticky; bottom: -24px; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 12px 0; background: var(--bg-window); border-top: 1px solid var(--border); }
+.ex-prop .k { width: 64px; flex: none; padding-top: 2px; color: var(--text-2); font-size: calc(12px * var(--fs, 1)); }
+/* 전→후 in full: struck-out words go, marked words come (the same red/green as 저장소 diff) */
+.ex-prop .v { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; font-size: calc(13px * var(--fs, 1)); line-height: 1.6; overflow-wrap: anywhere; }
+.ex-prop .v.text { display: block; max-height: 320px; overflow: auto; white-space: pre-wrap; }
+.ex-prop del, .ex-prop ins { padding: 0 2px; border-radius: 3px; text-decoration: none; }
+.ex-prop del { background: var(--status-danger-tint); color: var(--status-danger); text-decoration: line-through; }
+.ex-prop ins { background: var(--status-ok-tint); color: var(--status-ok); }
+.ex-prop .arrow { color: var(--text-3); }
+.ex-prop .acts { flex: none; display: flex; align-items: center; gap: 6px; }
+.ex-prop .done { color: var(--text-2); }
+.ex-prop.applied .v { opacity: .75; }
+/* 주고받은 말 (AI로 고치기·테스트): my line on the right, the answer on the left */
+.ex-chat { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ex-chat li { max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: calc(13px * var(--fs, 1)); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ex-chat-me { align-self: flex-end; background: var(--nc-raised, var(--bg-muted)); color: var(--text-1); }
+.ex-chat-ai { align-self: flex-start; border: 1px solid var(--border); color: var(--text-1); }
+.ex-chat-ai.busy { color: var(--text-2); animation: ex-wait 1.4s ease-in-out infinite; }
+.ex-chat-ai.err { border-color: var(--status-danger); color: var(--status-danger); }
+@keyframes ex-wait { 50% { opacity: .5; } }
+.ex-chat-ai.busy:has(i) { display: inline-flex; gap: 4px; padding: 12px 14px; animation: none; }
+.ex-chat-ai.busy i { width: 6px; height: 6px; border-radius: 50%; background: var(--nc-ai); animation: ex-dot 1.1s ease-in-out infinite; }
+.ex-chat-ai.busy i:nth-child(2) { animation-delay: .15s; }
+.ex-chat-ai.busy i:nth-child(3) { animation-delay: .3s; }
+@keyframes ex-dot { 0%, 60%, 100% { transform: none; opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
+.ex-chat li.fresh { animation: ex-in .35s ease-out; }
+@keyframes ex-in { from { opacity: 0; transform: translateY(6px) scale(.96); } }
+@media (prefers-reduced-motion: reduce) { .ex-chat-ai.busy, .ex-chat-ai.busy i, .ex-chat li.fresh, .ex-ai-pop.grow { animation: none; } }
+.wk-test .ex-chat { margin-bottom: 4px; }
+.ex-danger { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 16px 20px; border: 1px solid color-mix(in srgb, var(--status-danger) 45%, transparent); border-radius: 8px; }
+.ex-danger > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ex-danger strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--status-danger); }
+.ex-danger small { color: var(--text-2); font-size: calc(12px * var(--fs, 1)); }
+.ex-danger .btn.danger { background: var(--status-danger); border-color: var(--status-danger); color: #fff; }
+.ex-savebar { position: sticky; bottom: -24px; z-index: 2; display: flex; align-items: center; gap: 10px; margin: 0 -24px -24px; padding: 14px 24px 18px; background: var(--nc-surface); border-top: 1px solid var(--border); box-shadow: 0 -8px 16px rgba(0, 0, 0, .25); } /* spans the window and sits on its bottom edge, so 저장·취소 are never cut */
 .ex-savebar[hidden] { display: none; }
 .ex-hint { margin-left: auto; color: var(--text-2); }
 .ex-call { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 8px; }

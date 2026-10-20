@@ -144,7 +144,7 @@ select.sort { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px sol
 .history strong { display: block; color: var(--text-1); font-weight: 500; font-size: calc(12.5px * var(--fs, 1)); }
 ul.plain { margin: 0; padding: 0; list-style: none; }
 ul.bullets { margin: 0; padding-left: 18px; color: var(--text-2); font-size: calc(12.5px * var(--fs, 1)); display: flex; flex-direction: column; gap: 4px; }
-textarea { width: 100%; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); resize: vertical; font-size: calc(12.5px * var(--fs, 1)); }
+textarea { width: 100%; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); resize: none; font-size: calc(12.5px * var(--fs, 1)); }
 .agents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .agent { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); font-size: calc(12px * var(--fs, 1)); }
 .agent.adapter { border-color: var(--warn); color: var(--warn); }
@@ -732,7 +732,7 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .git-dialog form { display: grid; gap: 10px; }
 .git-dialog h3 { margin: 0; font-size: calc(15px * var(--fs, 1)); }
 .git-field { display: grid; gap: 4px; font-size: calc(12.5px * var(--fs, 1)); color: var(--text-2); }
-.git-field textarea { min-height: 100px; resize: vertical; }
+.git-field textarea { min-height: 100px; resize: none; }
 .git-hint { margin: -4px 0 0; color: var(--text-3); font-size: calc(11.5px * var(--fs, 1)); }
 .git-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 @media (max-width: 1100px) { .git-grid { grid-template-columns: 180px minmax(0, 1fr); } .git-right { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border); max-height: 50vh; } }
@@ -878,7 +878,7 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .rt-sec { display: flex; flex-direction: column; gap: 8px; }
 .rt-sec h4 { margin: 0; font-size: calc(13px * var(--fs, 1)); font-weight: 600; }
 .rt-sec small { color: var(--text-3); font-size: calc(11.5px * var(--fs, 1)); }
-.rt-sec textarea { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); color: var(--text-1); font: inherit; resize: vertical; }
+.rt-sec textarea { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); color: var(--text-1); font: inherit; resize: none; }
 .rt-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .rt-field { display: flex; flex-direction: column; gap: 4px; position: relative; font-size: calc(11.5px * var(--fs, 1)); color: var(--text-3); }
 .rt-field input { height: 32px; padding: 0 28px 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); color: var(--text-1); font: 13px var(--sans); }
@@ -1000,3 +1000,18 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .skill-trial-status .btn { justify-self: start; }
 .skill-trial-status h4, .skill-trial-status strong { font-size: inherit; line-height: inherit; font-weight: 400; }
 .tidy-cards .sim-card p.one-line { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notice.dlg-notice { position: fixed; z-index: 20; left: 50%; bottom: 24px; transform: translateX(-50%); width: max-content; max-width: min(560px, calc(100vw - 48px)); margin: 0; box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
+/* 드롭다운 (combo.js): the one app-styled list for every select and model/skill input */
+.combo-pop { position: fixed; inset: auto; margin: 0; box-sizing: border-box; max-width: min(420px, calc(100vw - 16px)); padding: 4px; overflow-y: auto; overscroll-behavior: contain;
+  border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); box-shadow: 0 12px 32px rgba(0, 0, 0, .35); scrollbar-width: thin; }
+.combo-opt { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 6px; font: 400 calc(13px * var(--fs, 1))/1.4 var(--sans); cursor: pointer; }
+.combo-opt small { color: var(--nc-quiet); font-size: calc(11.5px * var(--fs, 1)); }
+.combo-opt.at, .combo-opt:hover { background: var(--nc-subtle); }
+.combo-opt.on { color: var(--nc-accent); }
+.combo-opt.off { opacity: .45; cursor: default; }
+/* 웹 티 지우기: thin app scrollbars, no number spinners, app-coloured checks; textareas grow with their text instead of a resize grip */
+* { scrollbar-width: thin; scrollbar-color: var(--nc-line) transparent; }
+input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--nc-action); }
+textarea { resize: none; field-sizing: content; max-height: 60vh; }

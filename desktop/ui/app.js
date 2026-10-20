@@ -344,7 +344,14 @@
   });
   // 알림 줄: 문구 하나와 닫기(×). 다른 화면으로 가도 지워진다.
   function notice(text) {
-    const n = $("#notice");
+    // An open window (dialog) covers the page, so its messages show inside that window instead.
+    const top = [...document.querySelectorAll("dialog[open]")].pop();
+    document.querySelectorAll(".dlg-notice").forEach((x) => { if (x.parentElement !== top) x.remove(); });
+    let n = $("#notice");
+    if (top) {
+      n.hidden = true;
+      n = top.querySelector(":scope > .dlg-notice") || top.appendChild(el("output", "notice dlg-notice"));
+    }
     n.replaceChildren();
     n.classList.remove("st-notice");
     n.hidden = !text;
@@ -957,7 +964,7 @@
   // 업데이트 가능: 서버 pulls each skill repository forward (git pull --ff-only), never merging.
   async function updateSkills(updates) {
     const repos = [...new Set(updates.map((u) => u.repo))];
-    if (!confirm(`스킬 ${updates.length}개를 새 버전으로 받을까요?\n\n${repos.join("\n")}\n\n저장소를 앞으로만 당겨요(병합하지 않아요).`)) return;
+    if (!await ask(`스킬 ${updates.length}개를 새 버전으로 받을까요?\n\n${repos.join("\n")}\n\n저장소를 앞으로만 당겨요(병합하지 않아요).`)) return;
     try {
       for (const repo of repos) {
         const r = await request("/v1/agent_tools/requests", { method: "POST", body: JSON.stringify({ scope: state.scope, agent: "shared", kind: "skill_update", name: repo, enabled: true }) });
@@ -1795,7 +1802,7 @@
     return state.data.candidates.filter((c) => !c.conflict_id && new Date(c.created_at).getTime() <= before && new Date(c.updated_at || c.created_at).getTime() <= before);
   }
   async function expireStale(n, trigger) {
-    if (!confirm(`${STALE_DAYS}일 넘게 결정하지 않은 후보 ${n}개를 정리할까요?\n\n저장되지 않고 만료돼요. 에이전트는 쓰지 않아요.`)) return;
+    if (!await ask(`${STALE_DAYS}일 넘게 결정하지 않은 후보 ${n}개를 정리할까요?\n\n저장되지 않고 만료돼요. 에이전트는 쓰지 않아요.`)) return;
     trigger.disabled = true;
     try {
       const before = new Date(Date.now() - STALE_DAYS * DAY).toISOString();
@@ -2672,7 +2679,7 @@
     async function comfyUrl(ask) {
       let url = pages.prefs.comfyUrl;
       if (!url) {
-        url = trimSlash(prompt(ask, "http://127.0.0.1:8188") || "");
+        url = trimSlash(await askText(ask, "http://127.0.0.1:8188") || "");
         if (!url) return "";
         pages.prefs.comfyUrl = url;
         pages.savePrefs();
@@ -2840,8 +2847,8 @@
       const c = el("section", "v4g-card v4g-comfy");
       const head = el("div", "v4g-card-head");
       const url = pages.prefs.comfyUrl;
-      head.append(el("strong", "", "ComfyUI"), el("span", `v4g-badge${url ? " on" : ""}`, url ? "주소 저장됨" : "주소 없음"), button("연결 설정", "small", null, () => {
-        const next = trimSlash(prompt("ComfyUI 주소를 넣어 주세요. 서버에서 열 수 있는 주소여야 해요.", url || "http://127.0.0.1:8188") ?? url ?? "");
+      head.append(el("strong", "", "ComfyUI"), el("span", `v4g-badge${url ? " on" : ""}`, url ? "주소 저장됨" : "주소 없음"), button("연결 설정", "small", null, async () => {
+        const next = trimSlash(await askText("ComfyUI 주소를 넣어 주세요. 서버에서 열 수 있는 주소여야 해요.", url || "http://127.0.0.1:8188") ?? url ?? "");
         if (next === (url || "")) return;
         pages.prefs.comfyUrl = next;
         pages.savePrefs();
@@ -3045,7 +3052,7 @@
     }
   });
   async function archivePrompt(p) {
-    if (!confirm(`'${p.image_prompt?.title || "이 프롬프트"}'를 보관함에서 뺄까요? 목록에서 사라지지만 기록은 남아요.`)) return;
+    if (!await ask(`'${p.image_prompt?.title || "이 프롬프트"}'를 보관함에서 뺄까요? 목록에서 사라지지만 기록은 남아요.`)) return;
     try {
       await request(`/v1/prompts/${encodeURIComponent(p.id)}`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: p.revision, archive: true }) });
       state.data.prompts = (await request(`/v1/prompts?${query()}`)).items || [];
@@ -3274,7 +3281,7 @@
     }
   }
   async function archiveSystem(r) {
-    if (!confirm(`'${r.design_system?.title || r.title || "이 디자인 시스템"}'을 보관함에서 뺄까요? 목록에서 사라지지만 기록은 남아요.`)) return;
+    if (!await ask(`'${r.design_system?.title || r.title || "이 디자인 시스템"}'을 보관함에서 뺄까요? 목록에서 사라지지만 기록은 남아요.`)) return;
     try {
       await request(`/v1/design_systems/${encodeURIComponent(r.id)}`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: r.revision, archive: true }) });
       state.data.designSystems = (await request(`/v1/design_systems?${query()}`)).items || [];
@@ -3608,7 +3615,7 @@
     if (t?.collected_at) d.append(el("p", "cn-desc", `마지막 확인 ${ago(t.collected_at)}`));
     body.append(d);
   }
-  // A styled yes/no box (Figma 확인 팝업 253:18954) in place of the browser's confirm().
+  // A styled yes/no box (Figma 확인 팝업 253:18954) in place of the browser's await ask().
   function confirmPop(title, text, okLabel) {
     return new Promise((resolve) => {
       const dlg = el("dialog", "cn-confirm");
@@ -4209,7 +4216,7 @@
     await reloadMemories();
   }
   async function revertMemory(m, text, trigger) {
-    if (!confirm(`이전 내용으로 되돌릴까요?\n\n지금: “${m.text}”\n이전: “${text}”\n\n지금 내용은 변경 이력에 남아요.`)) return;
+    if (!await ask(`이전 내용으로 되돌릴까요?\n\n지금: “${m.text}”\n이전: “${text}”\n\n지금 내용은 변경 이력에 남아요.`)) return;
     trigger.disabled = true;
     try {
       const item = await captureMemory(text, m.kind, m, "Arkism 앱에서 사용자가 이전 내용으로 되돌림");
@@ -4217,7 +4224,7 @@
     } catch (e) { notice(`되돌리지 못했어요 (${e.message}).`); trigger.disabled = false; }
   }
   async function forgetMemory(m) {
-    if (!confirm(`이 기억을 잊을까요?\n\n“${m.text}”\n\n모든 에이전트가 더 이상 쓰지 않아요.`)) return;
+    if (!await ask(`이 기억을 잊을까요?\n\n“${m.text}”\n\n모든 에이전트가 더 이상 쓰지 않아요.`)) return;
     try {
       await request(`/v1/memories/${encodeURIComponent(m.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) });
       notice("잊었어요.");
@@ -4239,8 +4246,8 @@
   }
   function openMemoryAdd() { openMemoryFix(null); }
   // 고쳐서 저장: the corrected sentence is saved as the user's own, and the candidate is set aside with that reason.
-  function openCandidateFix(c) {
-    const text = prompt("고친 문장을 쓰세요. 내가 직접 말한 기억으로 저장돼요.", c.text);
+  async function openCandidateFix(c) {
+    const text = await askText("고친 문장을 쓰세요. 내가 직접 말한 기억으로 저장돼요.", c.text);
     if (!text?.trim() || text.trim() === c.text) return;
     void (async () => {
       try {  // edit_approve keeps the candidate's sources and kind
@@ -4363,7 +4370,7 @@
         const act = el("div", "d-buttons");
         act.append(button("새 내용으로 바꾸기", "primary small", null, () => resolveConflict(c, "new")),
           button("지금 기억 유지", "small", null, () => resolveConflict(c, "keep_old")),
-          correction ? button("둘 다 지우기", "ghost small", null, () => { if (confirm("고친 내용과 지금 기억을 모두 지울까요?")) void resolveConflict(c, "drop"); })
+          correction ? button("둘 다 지우기", "ghost small", null, async () => { if (await ask("고친 내용과 지금 기억을 모두 지울까요?")) void resolveConflict(c, "drop"); })
             : button("둘 다 맞아요", "ghost small", null, () => resolveConflict(c, "both")));
         parts.push(el("p", "meta", "선택한 내용과 기존 기억의 변경을 함께 저장해요. 응답을 못 받은 경우 같은 선택으로 다시 시도할 수 있어요."), act);
       }

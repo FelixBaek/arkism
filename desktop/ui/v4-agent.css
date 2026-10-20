@@ -221,7 +221,7 @@
 .g-right .field input, .g-right .field select, .g-right .field textarea, .g-right .try-row input,
 .wf-dialog .field input, .wf-dialog .field select, .wf-dialog .field textarea, .wf-dialog .crew-cover-search input {
   min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--nc-line); background: var(--nc-raised); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.45 var(--sans); }
-.g-right .field textarea, .wf-dialog .field textarea { padding: 9px 12px; line-height: 1.55; resize: vertical; }
+.g-right .field textarea, .wf-dialog .field textarea { padding: 9px 12px; line-height: 1.55; resize: none; }
 .g-right .field textarea.code { font: 400 calc(12px * var(--fs, 1))/1.55 var(--mono); }
 .g-right .field input[list="crew-models"], .wf-dialog .field input[list="crew-models"] { font-family: var(--mono); font-size: calc(12px * var(--fs, 1)); }
 .g-right .field select, .wf-dialog .field select { appearance: none; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, var(--nc-muted) 50%), linear-gradient(135deg, var(--nc-muted) 50%, transparent 50%);
@@ -350,7 +350,7 @@ dialog.wf-settings { width: min(1000px, calc(100vw - 48px)); }
 .wf-build-ai { background: var(--nc-surface); color: var(--nc-text); align-self: flex-start; }
 .wf-build-me { background: var(--nc-raised); color: var(--nc-text); align-self: flex-end; }
 .wf-build .dialog-foot { display: flex; gap: 8px; align-items: flex-end; padding: 12px 24px 20px; }
-.wf-build .dialog-foot textarea { flex: 1; resize: vertical; }
+.wf-build .dialog-foot textarea { flex: 1; resize: none; }
 .crew-choice.wf-choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; padding: 0; background: none; }
 .crew-choice.wf-choice button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--nc-line); background: var(--nc-surface); text-align: left; }
 .crew-choice.wf-choice button strong { font: 500 calc(13px * var(--fs, 1))/1.45 var(--sans); color: var(--nc-text); }
@@ -426,7 +426,7 @@ dialog.wf-confirm { width: min(420px, calc(100vw - 32px)); }
 .wk-head-actions { display: flex; align-items: center; gap: 20px; }
 .wk-card { display: flex; flex-direction: column; gap: 12px; padding: 20px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-canvas); }
 .wk-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-.wk-card-head h3 { margin: 0; font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.wk-card .wk-card-head h3 { margin: 0; font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .wk-card-head small { flex-basis: 100%; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 .wk-step { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: var(--nc-subtle); color: var(--nc-muted); font: 400 11px/1 var(--mono); }
 .wk-instr { font: 400 calc(13px * var(--fs, 1))/1.7 var(--mono); min-height: 160px; }

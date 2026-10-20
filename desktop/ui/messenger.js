@@ -95,7 +95,7 @@ window.ArkismMessenger = (ctx) => {
       const a = el("a", "btn", "서버에 초대하기"); a.href = invite; a.target = "_blank"; a.rel = "noreferrer";
       kids.push(a);
     }
-    const off = button("연결 끊기", "ghost", null, () => { if (confirm("디스코드 연결을 끊을까요? 저장된 토큰이 지워져요.")) act(() => upd(b, { archive: true }), "디스코드 연결을 끊었어요.").catch(() => {}); });
+    const off = button("연결 끊기", "ghost", null, async () => { if (await ask("디스코드 연결을 끊을까요? 저장된 토큰이 지워져요.")) act(() => upd(b, { archive: true }), "디스코드 연결을 끊었어요.").catch(() => {}); });
     return card("디스코드", st, off, ...kids);
   }
   const OFF = { telegram: ["텔레그램 연결을 끊을까요? 저장된 값이 지워져요.", "텔레그램 연결을 끊었어요."], slack: ["슬랙 연결을 끊을까요? 저장된 값이 지워져요.", "슬랙 연결을 끊었어요."] };
@@ -124,7 +124,7 @@ window.ArkismMessenger = (ctx) => {
     // A failed read is not "not connected": say so and offer a retry instead of showing a saved link as missing.
     if (S.nerr) return card(name, ["상태 모름", ""], button("다시 불러오기", "", null, () => void load()), el("p", "mg-note warn", `연결 상태를 불러오지 못했어요 (${S.nerr}).`));
     const right = el("div", "mg-actions");
-    if (d) right.append(button("시험 보내기", "", null, () => testDest(ch)), button("연결 끊기", "ghost", null, () => { if (confirm(OFF[ch][0])) void act(() => dropDest(ch), OFF[ch][1]); }));
+    if (d) right.append(button("시험 보내기", "", null, () => testDest(ch)), button("연결 끊기", "ghost", null, async () => { if (await ask(OFF[ch][0])) void act(() => dropDest(ch), OFF[ch][1]); }));
     return card(name, d ? ["연결됨", "on"] : ["연결 안 됨", ""], d ? right : null, ...kids, note);
   }
   function telegramCard() {

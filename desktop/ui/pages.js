@@ -240,7 +240,7 @@ window.ArkismPages = (ctx) => {
         more.title = a.custom ? "빼기" : "Arkism이 읽지 않게 하기";
         more.setAttribute("aria-label", `${a.name} 빼기`);
         more.append(icon("trash"));
-        more.addEventListener("click", () => { if (confirm(`${a.name}를 목록에서 뺄까요? 에이전트 쪽 파일은 그대로 둬요.`)) void agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: false }, `${a.name}를 뺐어요.`); });
+        more.addEventListener("click", async () => { if (await ask(`${a.name}를 목록에서 뺄까요? 에이전트 쪽 파일은 그대로 둬요.`)) void agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: false }, `${a.name}를 뺐어요.`); });
         right.append(more);
       }
       row.append(logoOf(a), info, right);
@@ -1001,7 +1001,7 @@ window.ArkismPages = (ctx) => {
       try { r = await tauri.invoke("local_backups"); } catch (_) { list.replaceChildren(el("p", "pg-hint", "백업 목록을 읽지 못했어요.")); return; }
       if (!r.backups.length) { list.replaceChildren(el("p", "pg-hint", "아직 백업이 없어요.")); return; }
       list.replaceChildren(...r.backups.slice(0, 10).map((b) => line(when(b.created), `${b.auto ? "자동 · " : ""}${size(b.bytes)}${b.app_version ? ` · Arkism ${b.app_version}` : ""}`, button("이 백업으로 되돌리기", "", null, guard(async () => {
-        if (!confirm(`${when(b.created)} 백업으로 되돌릴까요?\n\n지금 데이터는 먼저 새 백업으로 남겨 둬요. 그 뒤의 기억·세션 기록은 사라져요.`)) return;
+        if (!await ask(`${when(b.created)} 백업으로 되돌릴까요?\n\n지금 데이터는 먼저 새 백업으로 남겨 둬요. 그 뒤의 기억·세션 기록은 사라져요.`)) return;
         notice("되돌리는 중이에요. 잠시 기다려 주세요.");
         try {
           const done = await tauri.invoke("local_restore", { name: b.name });
@@ -1027,7 +1027,7 @@ window.ArkismPages = (ctx) => {
         try { plan = await tauri.invoke("import_agent_memories", { dryRun: true }); } catch (e) { notice("기억 파일을 읽지 못했어요."); return; }
         const n = plan.statements || 0;
         if (!n) { notice("새로 가져올 기억이 없어요."); return; }
-        if (!confirm(`기억 ${n}개를 파일 ${plan.files || 0}개에서 찾았어요. 검토 대기로 가져올까요?`)) return;
+        if (!await ask(`기억 ${n}개를 파일 ${plan.files || 0}개에서 찾았어요. 검토 대기로 가져올까요?`)) return;
         notice("가져오는 중이에요.");
         try {
           const r = await tauri.invoke("import_agent_memories", { dryRun: false });
@@ -1042,8 +1042,8 @@ window.ArkismPages = (ctx) => {
     g.lastChild.append(button("백업 폴더 열기", "", null, () => tauri.invoke("open_backups").catch(() => notice("폴더를 열지 못했어요."))));
     const danger = group("모든 데이터 지우기", "이 PC의 기억·세션·스킬 기록·설정을 모두 지워요. 백업 폴더와 에이전트 파일은 남아요. 되돌릴 수 없어요.");
     danger.append(line("처음 상태로 되돌리기", "지운 뒤 빈 Arkism으로 다시 시작해요.", button("모든 데이터 지우기", "danger", null, guard(async () => {
-      if (!confirm("이 PC의 Arkism 데이터를 모두 지울까요?\n\n백업하지 않은 기억은 되찾을 수 없어요.")) return;
-      if (!confirm("정말 지울까요? 이 작업은 되돌릴 수 없어요.")) return;
+      if (!await ask("이 PC의 Arkism 데이터를 모두 지울까요?\n\n백업하지 않은 기억은 되찾을 수 없어요.")) return;
+      if (!await ask("정말 지울까요? 이 작업은 되돌릴 수 없어요.")) return;
       try { await tauri.invoke("local_erase"); notice("모두 지웠어요. 빈 Arkism으로 다시 시작해요."); } catch (e) { notice(errorText(e)); }
       await startLocal();
     }))));

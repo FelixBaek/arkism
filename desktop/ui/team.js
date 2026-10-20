@@ -359,14 +359,18 @@ window.ArkismTeams = (ctx) => {
     pop.estBox = el("div", "tm-est-box");
     const tabs = [["overview", "개요"], ["test", "테스트"], ["history", "기록"]].map(([key, label]) => ({ key, label, render: (box) => { pop.tab = key; paintTab(pop, box); } }));
     const actions = [pop.estBox];
-    if (rec) actions.push(button("보관", "ghost", null, () => archiveTeam(pop)), button("새 회의", "ghost", null, () => {
-      if (pdiff(pop).length && !confirm("저장하지 않은 변경이 있어요. 버리고 회의 화면으로 갈까요?")) return;
+    if (rec) actions.push(button("보관", "ghost", null, () => archiveTeam(pop)), button("새 회의", "ghost", null, async () => {
+      if (pdiff(pop).length && !await ask("저장하지 않은 변경이 있어요. 버리고 회의 화면으로 갈까요?")) return;
       pop.base = clone(pop.d); closePopup(); S.newMeeting = { team_id: pop.id }; S.meetTab = "running"; go("meetings");
     }));
     pop.h = popup.open({ title: "", sub: "", tabs, initial: "overview", actions, cls: rec ? "tm-pop" : "tm-pop is-new", onClose: () => { clearTimeout(pop.estTimer); clearTimeout(pop.testTimer); S.pop = null; } });
     const dlg = pop.h.dialog;
     // closing with unsaved changes asks first (Esc and 닫기)
-    const guard = (e) => { if (pdiff(pop).length && !confirm(pop.id ? "저장하지 않은 변경이 있어요. 버리고 닫을까요?" : "아직 만들지 않았어요. 버리고 닫을까요?")) { e.preventDefault(); e.stopImmediatePropagation(); } };
+    const guard = (e) => {
+      if (!pdiff(pop).length) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      void ask(pop.id ? "저장하지 않은 변경이 있어요. 버리고 닫을까요?" : "아직 만들지 않았어요. 버리고 닫을까요?").then((yes) => { if (yes) { pop.base = clone(pop.d); dlg.close(); } });
+    };
     dlg.addEventListener("cancel", guard);
     dlg.addEventListener("click", (e) => { if (e.target.closest(".crew-popup-actions > .btn:last-child")) guard(e); }, true);
     paintHead(pop);
@@ -643,7 +647,7 @@ window.ArkismTeams = (ctx) => {
       raw(mode);
       mode.addEventListener("click", () => saveTeamBot(pop, b, { channels: b.channels.map((c) => (c.channel_id === x.channel_id ? { ...c, auto_start: !c.auto_start } : c)) }, "바꿨어요."));
       const del = el("button", "icon-btn plain tm-x"); del.type = "button"; del.setAttribute("aria-label", "빼기"); del.append(icon("x"));
-      del.addEventListener("click", () => { if (confirm(tr(`#${x.name || x.channel_id} 연결을 뺄까요?`))) saveTeamBot(pop, b, { channels: b.channels.filter((c) => c.channel_id !== x.channel_id) }, "연결을 뺐어요.").catch(() => {}); });
+      del.addEventListener("click", async () => { if (await ask(tr(`#${x.name || x.channel_id} 연결을 뺄까요?`))) saveTeamBot(pop, b, { channels: b.channels.filter((c) => c.channel_id !== x.channel_id) }, "연결을 뺐어요.").catch(() => {}); });
       r.append(raw(el("span", "", `디스코드 · #${x.name || x.channel_id}`)), raw(el("small", "", b.name || "")), ...(warn ? [badge("확인 필요", "warn")] : []), mode, del);
       list.append(r);
     }
@@ -670,11 +674,11 @@ window.ArkismTeams = (ctx) => {
         const row = el("div", "tm-ch-add");
         const botSel = select(bots().map((x) => [x.id, x.name || x.id]), b.id, (v) => { f.bot = v; f.channel = ""; popRedraw("overview"); }); botSel.setAttribute("aria-label", "봇");
         const chSel = select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], f.channel, (v) => { f.channel = v; }); chSel.setAttribute("aria-label", "채널");
-        row.append(botSel, chSel, button("연결", "primary", null, () => {
+        row.append(botSel, chSel, button("연결", "primary", null, async () => {
           const id = f.channel;
           if (!id) { notice("채널을 골라 주세요."); return; }
           const had = (b.channels || []).find((x) => x.channel_id === id);
-          if (had && !confirm(tr("이 채널은 이미 다른 곳에 연결돼 있어요. 이 팀으로 바꿀까요?"))) return;
+          if (had && !await ask(tr("이 채널은 이미 다른 곳에 연결돼 있어요. 이 팀으로 바꿀까요?"))) return;
           const c = { channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "meeting", id: pop.id }, auto_start: false };
           pop.chAdd = null;
           void saveTeamBot(pop, b, { channels: [...(b.channels || []).filter((x) => x.channel_id !== id), c] }, "채널을 연결했어요.");
@@ -727,7 +731,7 @@ window.ArkismTeams = (ctx) => {
   }
   async function archiveTeam(pop) {
     const rec = pop.rec;
-    if (!confirm(`'${rec.crew.name}' 팀을 보관할까요? 지난 회의 기록은 남아요.`)) return;
+    if (!await ask(`'${rec.crew.name}' 팀을 보관할까요? 지난 회의 기록은 남아요.`)) return;
     try {
       await request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "POST", body: body({ expected_revision: rec.revision, archive: true }) });
       state.data.crew = items().filter((r) => r.id !== rec.id);
@@ -818,8 +822,8 @@ window.ArkismTeams = (ctx) => {
       const acts = el("span", "tm-hist-acts");
       if (cur) acts.append(el("em", "", "지금 쓰는 판"));
       else {
-        acts.append(link("바뀐 점 보기", () => { if (!pop.histOpen.delete(h.v)) pop.histOpen.add(h.v); popRedraw("history"); }, "tm-link quiet"), link("이 판으로 되돌리기", () => {
-          if (!confirm(`v${h.v}로 되돌릴까요? 새 판으로 저장돼요.`)) return;
+        acts.append(link("바뀐 점 보기", () => { if (!pop.histOpen.delete(h.v)) pop.histOpen.add(h.v); popRedraw("history"); }, "tm-link quiet"), link("이 판으로 되돌리기", async () => {
+          if (!await ask(`v${h.v}로 되돌릴까요? 새 판으로 저장돼요.`)) return;
           void savePopup(pop, { ...clone(h.crew), cover: h.crew.cover ? clone(h.crew.cover) : undefined });
         }, "tm-link plain"));
       }
@@ -1261,7 +1265,7 @@ window.ArkismTeams = (ctx) => {
     } catch (e) { notice(errorText(e)); }
   }
   async function stopMeeting(m) {
-    if (!confirm("회의를 멈출까요? 지금까지의 기록은 남아요.")) return;
+    if (!await ask("회의를 멈출까요? 지금까지의 기록은 남아요.")) return;
     try {
       await request(`/v1/crew/meetings/${encodeURIComponent(m.id)}/stop`, { method: "POST", body: body({}) });
       notice("멈추는 중이에요. 지금 말하는 차례가 끝나면 멈춰요.");
@@ -1489,7 +1493,7 @@ window.ArkismTeams = (ctx) => {
     side(back, ...parts, chs, who, acts);
   }
   async function removeBot(b) {
-    if (!confirm(`'${b.name}' 봇 연결을 끊을까요? 디스코드 서버에서 봇이 나가지는 않아요.`)) return;
+    if (!await ask(`'${b.name}' 봇 연결을 끊을까요? 디스코드 서버에서 봇이 나가지는 않아요.`)) return;
     try {
       await request(botURL(b), { method: "POST", body: body({ expected_revision: b.revision, archive: true }) });
       S.discord.bots = bots().filter((x) => x.id !== b.id); S.bot = null;
@@ -1852,7 +1856,7 @@ window.ArkismTeams = (ctx) => {
   async function retryFailed(runs, what) {
     const todo = runs.filter((r) => r && byId(r.crew_run.crew_id));
     if (!todo.length) { notice("다시 돌릴 실패 기록을 찾지 못했어요. 실행 기록에서 열어 주세요."); return; }
-    if (!confirm(`${what} 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.`)) return;
+    if (!await ask(`${what} 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.`)) return;
     let ok = 0;
     for (const run of todo) {
       const rec = byId(run.crew_run.crew_id), cr = run.crew_run;

@@ -26,7 +26,7 @@ function setup(item) {
   const context = vm.createContext({
     el, button: (text, cls) => el("button", cls, text),
     document: {body}, state: {selected: "before"},
-    confirm: () => true, notice: text => notices.push(text),
+    confirm: () => true, ask: async () => true, notice: text => notices.push(text),
     captureMemory: async (...args) => { captures.push(args); return item; },
     reloadMemories: async () => { reloads++; }
   });

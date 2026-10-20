@@ -163,7 +163,7 @@
 .app.home-mode .detail .home-input { width: 100%; height: auto; padding: 8px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); font: 400 13px/1.5 var(--mono); }
 .home-md { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); }
 .home-md > span { font: 400 11px/1.5 var(--mono); color: var(--nc-quiet); }
-.home-md textarea { width: 100%; border: 0; padding: 0; background: none; color: var(--nc-text); font: 400 12px/1.5 var(--mono); resize: vertical; outline: none; }
+.home-md textarea { width: 100%; border: 0; padding: 0; background: none; color: var(--nc-text); font: 400 12px/1.5 var(--mono); resize: none; outline: none; }
 .home-targets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .home-target { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid transparent; border-radius: 6px; background: none; opacity: .4; }
 .home-target.on { opacity: 1; background: var(--nc-raised); }

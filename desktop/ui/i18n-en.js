@@ -5673,3 +5673,35 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "“{0}”와 비슷한 기억이에요. 같은 뜻이면 기억 화면에서 합치거나 연결해 주세요.": "Similar to “{0}”. If it means the same, merge or link them on the Memory screen.",
   "수정 {0}": "Edited {0}"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "확인용 이름": "Name to confirm",
+  "초안을 쓰는 중이에요…": "Writing a draft…",
+  "아래 칸을 채웠어요. 확인하고 만들어 주세요.": "Filled in the fields below. Check them and create.",
+  "저장하지 않은 변경이 있어요. 테스트는 저장된 설정으로 답하니 먼저 개요에서 저장해 주세요.": "You have unsaved changes. Tests answer with the saved setup, so save in Overview first.",
+  "AI로 초안": "AI draft",
+  "적용해도 저장하기 전에는 바뀌지 않아요": "Applying changes nothing until you save",
+  "필요한 동료를 말하면 초안을 채워요": "Describe the teammate you need and it fills a draft",
+  "바꾸고 싶은 걸 말하면 바뀌는 곳을 보여 줘요": "Say what to change and it shows what would change",
+  "어떤 일을 맡길 동료가 필요하세요?": "What kind of teammate do you need?",
+  "어떻게 바꿀까요? 지시·스킬·도구·생각 깊이를 바꿔 볼 수 있어요.": "What should change? You can adjust instructions, skills, tools and thinking depth.",
+  "예: PR 올리기 전에 테스트 빠진 곳을 찾아 주는 동료": "e.g. a teammate who finds missing tests before a PR",
+  "예: 배포 전에는 꼭 나한테 물어보게 해 줘": "e.g. always ask me before deploying",
+  "코드 리뷰해 주는 동료": "A code reviewer",
+  "회의록 정리하는 동료": "A meeting-notes keeper",
+  "자료 찾아 요약하는 동료": "A researcher who summarizes",
+  "배포 전엔 꼭 물어보게": "Ask before deploying",
+  "더 짧게 답하게": "Answer shorter",
+  "필요한 스킬 골라 줘": "Pick the skills it needs",
+  "순서만 바뀌어요": "Only the order changes",
+  "적용함 · 저장하면 반영돼요": "Applied · takes effect when saved",
+  "제안을 만드는 중이에요…": "Making suggestions…",
+  "바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요.": "Found nothing to change. Try asking another way.",
+  "전문가 삭제": "Delete expert",
+  "이 전문가와 설정을 지워요. 되돌릴 수 없어요.": "Deletes this expert and its setup. This can't be undone."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "'{0}' 전문가를 삭제할까요?\n되돌릴 수 없어요. 확인하려면 이름 '{1}'을 그대로 입력하세요.": "Delete the expert '{0}'?\nThis can't be undone. Type the name '{1}' to confirm.",
+  "AI 제안 {0}개": "{0} AI suggestions",
+  "{0}에 적용했어요. 저장해야 반영돼요.": "Applied to {0}. Save to make it stick.",
+  "{0}을 바꾸자고 제안해요. 버튼 아래 보라색 목록에서 바뀌는 곳을 보고 적용하세요.": "Suggests changing {0}. Review the changes in the purple list under the button and apply."
+});

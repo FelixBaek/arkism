@@ -13,7 +13,9 @@ window.ArkismCrewPopup = ({ el, button }) => {
     who.append(names);
     const side = el("div", "crew-popup-actions");
     side.append(...actions);
-    const close = button("닫기", "ghost");
+    const close = button("", "ghost icon-btn crew-popup-close", "x"); // Figma ✕ (868:61909 닫기)
+    close.setAttribute("aria-label", "닫기");
+    close.title = "닫기";
     close.addEventListener("click", () => dlg.close());
     side.append(close);
     head.append(who, side);

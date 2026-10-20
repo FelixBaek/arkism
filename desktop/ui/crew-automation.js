@@ -279,8 +279,8 @@ window.ArkismAutomation = (h) => {
     // Back to what was saved: close and open again so every row redraws.
     function reset() { leaveSilently(); h.openAutomation(rec.id); }
     function leaveSilently() { pop.dialog.close(); }
-    const leave = (fn) => {
-      if (dirty() && !confirm("저장하지 않은 변경은 사라져요. 계속할까요?")) return;
+    const leave = async (fn) => {
+      if (dirty() && !await ask("저장하지 않은 변경은 사라져요. 계속할까요?")) return;
       leaveSilently();
       fn();
     };
@@ -434,14 +434,14 @@ window.ArkismAutomation = (h) => {
           cronWrap.append(label, text);
         };
         paintCron();
-        list.append(valueRow("일정", cronWrap, h.switchEl(on("schedule"), "일정 켜기", (v) => { if (v && trig() === "webhook" && d.enabled && !confirm("웹훅을 끄고 일정으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.")) return; setTrigger("schedule", v); draw(); })));
+        list.append(valueRow("일정", cronWrap, h.switchEl(on("schedule"), "일정 켜기", async (v) => { if (v && trig() === "webhook" && d.enabled && !await ask("웹훅을 끄고 일정으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.")) return; setTrigger("schedule", v); draw(); })));
         list.append(valueRow("이벤트", el("span", "auto-dim", "GitHub·메일·폴더에서 일이 생기면 · 준비 중이에요"), (() => { const b = h.switchEl(false, "이벤트 (준비 중)", () => notice("이벤트로 시작하기는 아직 준비 중이에요. 웹훅으로 받을 수 있어요.")); b.classList.add("soon"); return b; })()));
         const hook = el("span", "");
         if (!creating && trig() === "webhook") {
           const cmd = `arkism-crew hook-url ${rec.id}`;
           hook.append("주소와 토큰은 서버에서 이 명령으로 받아요 · ", el("code", "mono", cmd), h.copyButton(cmd));
         } else hook.append(creating ? "만들고 나면 주소가 생겨요" : "이 주소로 요청이 오면 시작해요");
-        list.append(valueRow("웹훅", hook, h.switchEl(on("webhook"), "웹훅 켜기", (v) => { if (v && trig() === "schedule" && d.enabled && !confirm("일정을 끄고 웹훅으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.")) return; setTrigger("webhook", v); draw(); })));
+        list.append(valueRow("웹훅", hook, h.switchEl(on("webhook"), "웹훅 켜기", async (v) => { if (v && trig() === "schedule" && d.enabled && !await ask("일정을 끄고 웹훅으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.")) return; setTrigger("webhook", v); draw(); })));
         if (trig() === "webhook") {
           const name = el("span", "");
           inlineText(name, () => d.trigger.label || "", (v) => { d.trigger.label = v; touch(); }, { maxLength: 60, placeholder: "예: GitHub PR 열림" });
@@ -654,7 +654,7 @@ window.ArkismAutomation = (h) => {
           mode.title = "눌러서 바꿔요";
           const warn = ["needs_permission", "token_invalid"].includes(b.state);
           r.append(el("span", "auto-key chan", `디스코드 · #${c.name || c.channel_id}`), el("small", "auto-dim", b.name || ""), ...(warn ? [el("span", "wf-badge small warn", "확인 필요")] : []), el("span", "grow"), mode,
-            pill("빼기", () => { if (confirm(`#${c.name || c.channel_id} 연결을 뺄까요?`)) saveBot(b, b.channels.filter((x) => x !== c), "연결을 뺐어요.").catch(() => {}); }));
+            pill("빼기", async () => { if (await ask(`#${c.name || c.channel_id} 연결을 뺄까요?`)) saveBot(b, b.channels.filter((x) => x !== c), "연결을 뺐어요.").catch(() => {}); }));
           return r;
         });
         if (!creating && bots.length) {
@@ -676,10 +676,10 @@ window.ArkismAutomation = (h) => {
           botSel.addEventListener("change", () => { f.bot = botSel.value; paint(); });
           const chSel = h.select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], "");
           chSel.setAttribute("aria-label", "채널");
-          row.append(botSel, chSel, el("span", "grow"), pill("연결", () => {
+          row.append(botSel, chSel, el("span", "grow"), pill("연결", async () => {
             const id = chSel.value;
             if (!id) { notice("채널을 골라 주세요."); return; }
-            if ((b.channels || []).some((x) => x.channel_id === id) && !confirm("이 채널은 이미 다른 곳에 연결돼 있어요. 이 자동화로 바꿀까요?")) return;
+            if ((b.channels || []).some((x) => x.channel_id === id) && !await ask("이 채널은 이미 다른 곳에 연결돼 있어요. 이 자동화로 바꿀까요?")) return;
             const ch = { channel_id: id, name: (known || []).find((x) => x.channel_id === id)?.name || "", action: { kind: "workflow", id: rec.id }, auto_start: false };
             st.add = null;
             saveBot(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.").catch(() => {});
@@ -785,7 +785,7 @@ window.ArkismAutomation = (h) => {
       const rows = [
         ["설정", "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요", () => leave(() => h.openSettings(rec))],
         ["복제", "같은 단계로 새 자동화를 만들어요", () => leave(() => h.duplicate(rec))],
-        ["보관", `목록에서 숨기고 $${base.handle} 부르기를 멈춰요`, async () => { if (dirty() && !confirm("저장하지 않은 변경은 사라져요. 계속할까요?")) return; await h.archive(rec); if (!h.byId(rec.id) || h.byId(rec.id).archived) leaveSilently(); }],
+        ["보관", `목록에서 숨기고 $${base.handle} 부르기를 멈춰요`, async () => { if (dirty() && !await ask("저장하지 않은 변경은 사라져요. 계속할까요?")) return; await h.archive(rec); if (!h.byId(rec.id) || h.byId(rec.id).archived) leaveSilently(); }],
         ["지우기", "정의를 영구히 지워요 · 지난 실행 기록은 남아요", async () => { if (await h.remove(rec)) leaveSilently(); }]
       ];
       s.append(box(...rows.map(([label, sub, fn]) => valueRow(label, el("span", "", sub), pill(label, fn)))));
@@ -928,7 +928,7 @@ window.ArkismAutomation = (h) => {
           else {
             const lk = (label, cls, fn) => { const b = el("button", `tm-link ${cls}`, label); b.type = "button"; b.addEventListener("click", fn); return b; };
             acts.append(lk("바뀐 점 보기", "quiet", () => { if (!open.delete(x.revision)) open.add(x.revision); paintVersions(); }), lk("이 판으로 되돌리기", "plain", async () => {
-              if (!confirm(`v${x.revision}로 되돌릴까요? 새 판으로 저장돼요.`)) return;
+              if (!await ask(`v${x.revision}로 되돌릴까요? 새 판으로 저장돼요.`)) return;
               try {
                 const saved = await h.save(rec, { ...structuredClone(x.crew), type: "workflow" });
                 leaveSilently();

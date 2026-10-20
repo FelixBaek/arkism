@@ -110,7 +110,7 @@ window.ArkismSessions = (ctx) => {
 
   async function deleteSessions(ids) {
     if (!ids.length || S.busy) return;
-    if (!confirm(`세션 ${ids.length}개와 보관된 대화를 지울까요? 되돌릴 수 없어요.\n\n에이전트의 원래 파일은 그대로 남아요. 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.`)) return;
+    if (!await ask(`세션 ${ids.length}개와 보관된 대화를 지울까요? 되돌릴 수 없어요.\n\n에이전트의 원래 파일은 그대로 남아요. 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.`)) return;
     S.busy = true; S.notice = "지우는 중…"; paint();
     try {
       const r = await request("/v1/usage/sessions/delete", { method: "POST", body: JSON.stringify({ scope: state.scope, ids }) });

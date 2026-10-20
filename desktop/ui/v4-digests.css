@@ -23,7 +23,7 @@
 .dg-merge-title, .dg-note { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .dg-warn { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-amber); }
 .dg-reason { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control);
-  background: var(--nc-surface); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); resize: vertical; }
+  background: var(--nc-surface); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); resize: none; }
 
 .dg-diff { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-quote); background: var(--nc-surface); }
 .dg-line { display: flex; align-items: flex-start; gap: 8px; padding: 5px 10px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
