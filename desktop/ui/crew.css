@@ -341,3 +341,6 @@ button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor
 .crew-popup-tab { background: none; border: 0; padding: 10px 12px; color: var(--text-2); cursor: pointer; font: inherit; }
 .crew-popup-tab.on { color: var(--accent); }
 .crew-popup-body { padding: 18px 24px 24px; max-height: calc(100vh - 260px); }
+/* ✕: the corner, same gap from the top and right edges (pulled out of the head's 28/32px padding) */
+.v4-auto .crew-popup-close, .tm-pop .crew-popup-close, .ex-pop .crew-popup-close { flex: none; width: 28px; height: 28px; margin: -13px -17px 0 4px; }
+.ex-pop .crew-popup-close { margin: -9px -9px 0 4px; } /* expert head pads 24px, not 28/32 */

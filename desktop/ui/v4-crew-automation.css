@@ -26,7 +26,7 @@
 .v4-auto .crew-popup-head { align-items: flex-start; padding: 28px 32px 8px; gap: 20px; flex-wrap: wrap; }
 .v4-auto .crew-popup-who { align-items: flex-start; gap: 20px; }
 .v4-auto .crew-popup-actions { flex-direction: row; align-items: flex-start; gap: 12px; margin-left: auto; }
-.v4-auto .crew-popup-actions > .crew-popup-close { flex: none; width: 28px; height: 28px; margin-top: -6px; } /* ✕ sits beside 예상, on its first line */
+.v4-auto .crew-popup-actions > .crew-popup-close { flex: none; }
 .v4-auto .crew-popup-tabs { justify-content: flex-end; margin: 0 32px; padding: 0; gap: 4px; border-bottom: 1px solid var(--nc-line); } /* a row of its own under the head, so a long description never runs under it */
 .v4-auto .crew-popup-tab { padding: 10px 14px; }
 .v4-auto .crew-popup-tab.on { color: var(--nc-accent); }
