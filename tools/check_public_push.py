@@ -11,7 +11,8 @@ import re
 import subprocess
 import sys
 
-FORBIDDEN = {".private", ".gitignore", ".dockerignore", ".env.example", "held-out"}  # held-out: private test sets (guide/memory-evaluation.md)
+FORBIDDEN = {".private", ".gitignore", ".dockerignore", ".env.example"}
+PRIVATE_DIRS = {"held-out"}  # private test sets (guide/memory-evaluation.md)
 GIT_FLAGS = {"--verify", "--end-of-options", "--show-toplevel", "--is-ancestor",
              "-r", "-z", "--stage", "-s", "--format=%B%x00%an%x00%ae%x00%cn%x00%ce"}
 SAFE_ARGUMENT = re.compile(r"\w[\w./{}^:-]*", re.ASCII)
@@ -27,8 +28,9 @@ def git(root, *args):
 
 def forbidden(path):
     """Reject private storage and locally managed ignore/environment files."""
+    parts = path.split("/")
     return any(part in FORBIDDEN or part == ".env" or part.startswith(".env.")
-               for part in path.split("/"))
+               for part in parts) or any(part in PRIVATE_DIRS for part in parts[:-1])
 
 
 def entries(data):
