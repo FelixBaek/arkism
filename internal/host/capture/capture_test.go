@@ -121,6 +121,7 @@ func TestCaptureCodexAmbientPromptsSkipCaptureAndPendingEvidence(t *testing.T) {
 	for _, prompt := range []string{
 		"# Overview\n\nGenerate 0 to 3 hyperpersonalized suggestions for what this user can do with Codex in this local project: /tmp\nAlways help",
 		"You are an expert at upholding safety and compliance standards for Codex ambient suggestions.\n\nAlways exclude unsafe content",
+		"This is an app-generated request for a suggested next user message. The user did not write this message.\n\nPredict the single message",
 	} {
 		if skipped, err := promptCapture(map[string]any{"session_id": "ephemeral", "prompt": prompt}); !skipped || err != nil {
 			t.Fatal(skipped, err)

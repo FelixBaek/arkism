@@ -845,12 +845,13 @@ func markShown(sid, output string, delivery *promptDelivery, cwd ...string) {
 	}
 }
 
-// internalCodexPrompt: ambient suggestions use ephemeral sessions with no saved user transcript.
+// internalCodexPrompt: ambient and composer suggestions use ephemeral sessions with no saved user transcript.
 // shortcut: exact known templates only; use hook provenance if Codex exposes it.
 func internalCodexPrompt(origin string, text any) bool {
 	s, ok := text.(string)
 	return origin == "codex" && ok && (strings.HasPrefix(s, "# Overview\n\nGenerate 0 to 3 hyperpersonalized suggestions for what this user can do with Codex ") ||
-		strings.HasPrefix(s, "You are an expert at upholding safety and compliance standards for Codex ambient suggestions.\n\n"))
+		strings.HasPrefix(s, "You are an expert at upholding safety and compliance standards for Codex ambient suggestions.\n\n") ||
+		strings.HasPrefix(s, "This is an app-generated request for a suggested next user message. The user did not write this message.\n\n"))
 }
 
 // promptCapture spools the typed prompt itself (Codex, ZCode); the prompt hash names the event,
