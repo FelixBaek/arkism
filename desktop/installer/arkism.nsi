@@ -35,10 +35,21 @@ VIAddVersionKey "LegalCopyright" "Arkism contributors"
 
 !define MUI_ICON "${__FILEDIR__}\..\src-tauri\icons\icon.ico"
 !define MUI_UNICON "${__FILEDIR__}\..\src-tauri\icons\icon.ico"
+; Friendly Korean page copy replaces the stock MUI wording.
+!define MUI_WELCOMEPAGE_TITLE "Arkism ${VERSION} 설치"
+!define MUI_WELCOMEPAGE_TEXT "Arkism을 이 PC에 설치합니다.$\r$\n$\r$\n설치 전에 열려 있는 프로그램을 닫아 주세요.$\r$\n$\r$\n준비되면 '설치'를 눌러 주세요."
+!define MUI_FINISHPAGE_TITLE "설치를 마쳤습니다"
+!define MUI_FINISHPAGE_TEXT "Arkism을 쓸 준비가 됐습니다.$\r$\n$\r$\n'마침'을 누르면 창이 닫힙니다."
 !ifdef ARKISM_EMIT_UNINSTALLER
   ; Build-only executable: write the uninstaller next to this emitter. It has
   ; no installation page, launch action, registry or shortcut writes.
   SilentInstall silent
+  !define MUI_PAGE_HEADER_TEXT "Arkism 제거"
+  !define MUI_PAGE_HEADER_SUBTEXT "잠시만 기다려 주세요."
+  !define MUI_INSTFILESPAGE_FINISHHEADER_TEXT "제거를 마쳤습니다"
+  !define MUI_INSTFILESPAGE_FINISHHEADER_SUBTEXT "Arkism을 이 PC에서 지웠습니다."
+  !define MUI_INSTFILESPAGE_ABORTHEADER_TEXT "제거하지 못했습니다"
+  !define MUI_INSTFILESPAGE_ABORTHEADER_SUBTEXT "아래 기록을 확인해 주세요."
   !insertmacro MUI_UNPAGE_INSTFILES
   !insertmacro MUI_LANGUAGE "Korean"
   Section "Emit uninstaller"
