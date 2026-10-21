@@ -42,6 +42,10 @@
 .tm-card2-new .icon { width: 22px; height: 22px; color: var(--nc-muted); }
 .tm-card2-new small { color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); max-width: 190px; word-break: keep-all; }
 .tm-credit { color: rgb(255 255 255 / .8); font: 400 10px/1.4 var(--sans); }
+/* on a card the credit waits for hover or focus, so the photo itself stays clean */
+.tm-card2 > .tm-credit { opacity: 0; transition: opacity .2s ease-out, transform .2s ease-out; }
+.tm-card2:hover > .tm-credit, .tm-card2:focus-within > .tm-credit { opacity: 1; }
+@media (hover: none) { .tm-card2 > .tm-credit { opacity: 1; } }
 .tm-credit a { color: inherit; text-decoration: none; }
 .tm-credit a:hover { text-decoration: underline; }
 .tm-card2.has-cover .tm-badge { color: #fff; border-color: rgb(255 255 255 / .5); background: rgb(0 0 0 / .35); }
@@ -78,8 +82,7 @@
 .tm-prev { position: relative; overflow: hidden; flex: none; display: grid; place-items: center; width: 119px; height: 110px; padding: 0; border: 1px solid rgb(255 255 255 / .08); border-radius: 12px; background: var(--nc-raised); color: var(--nc-quiet); cursor: pointer; }
 .tm-prev img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .tm-prev:hover, .tm-prev:focus-visible { border-color: var(--nc-muted); }
-.tm-prev.has-cover::after { content: ""; position: absolute; inset: auto 0 0; height: 40%; background: linear-gradient(transparent, rgb(0 0 0 / .55)); pointer-events: none; } /* keeps the credit readable on light photos */
-.tm-prev-credit { z-index: 1; position: absolute; left: 6px; bottom: 4px; max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 0 4px rgb(0 0 0 / .8); }
+.tm-pop-credit { color: var(--nc-quiet); }
 .tm-pop-words { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .tm-pop-row { display: flex; align-items: center; gap: 12px; }
 .tm-chip-input { width: 140px; height: 24px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: 999px; background: var(--nc-surface); color: var(--nc-text); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }

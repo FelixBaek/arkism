@@ -109,7 +109,7 @@ export function createCrewWorkers(deps) {
     return row;
   }
 
-  const touchWorker = () => { wk.dirty = true; if (wk.redraw && wk.pop) { wk.redraw(); drawWorkerSave(); } else deps.render(false); };
+  const touchWorker = () => { wk.dirty = true; if (wk.redraw && wk.pop) { wk.redraw(); wk.paintHead?.(); drawWorkerSave(); } else deps.render(false); };
 
   function workerCard(title, sub, ...nodes) {
     const c = deps.el("section", "wk-card");
@@ -234,7 +234,7 @@ export function createCrewWorkers(deps) {
   // 모델 (868:61909): 기본·예비 모델 and 생각 깊이.
   function modelCard(d) {
     const models2 = deps.el("div", "scope-fields");
-    models2.append(deps.field("기본 모델", modelBox(d, "model", "claude sonnet 5.5", "기본 모델"), d.model_mode === "auto" ? "Clef가 일마다 고르고, 정해 두면 이 모델을 먼저 봐요" : ""),
+    models2.append(deps.field("기본 모델", modelBox(d, "model", "고르기 · 예: claude sonnet 5.5", "기본 모델"), d.model_mode === "auto" ? "Clef가 일마다 고르고, 정해 두면 이 모델을 먼저 봐요" : ""),
       deps.field("예비 모델", modelBox(d, "fallback_model", "고르기 (선택)", "예비 모델")));
     return workerCard("모델", "", deps.modelList(), models2, depthRow(d));
   }
@@ -373,7 +373,7 @@ export function createCrewWorkers(deps) {
     c.append(body);
     const draw = () => {
       deps.pins?.loadLibrary();
-      const res = rec && pins ? deps.pins.resolution(rec) : null;
+      const res = rec && deps.pins ? deps.pins.resolution(rec) : null;
       const badOf = (p) => { const st = rec && deps.pins?.statusOf(rec, p, res); return st && st.status !== "ok" ? st.status : ""; };
       const grid = deps.el("div", "ex-use-rows");
       const row = (label, ...kids) => { const r = deps.el("div", "wk-chips"); r.append(...kids); grid.append(deps.el("span", "ex-use-k", label), r); return r; };
@@ -663,6 +663,7 @@ export function createCrewWorkers(deps) {
   async function saveWorker(rec) {
     const out = workerOut(wk.draft);
     if (!out.name || !out.handle || !out.instructions.trim()) { window.ArkismNeed(!out.name ? "이름" : !out.handle ? "@이름" : "지시", !out.name ? "이름을 적어 주세요." : !out.handle ? "@이름을 적어 주세요." : "지시를 적어 주세요."); return; }
+    if (out.model_mode === "fixed" && !out.model) { window.ArkismNeed("기본 모델", "기본 모델을 고르거나 방식을 자동(Clef)으로 바꿔 주세요."); return; }
     if (agents().some((r) => r.id !== rec?.id && r.crew.handle === out.handle) || teams().some((r) => r.crew.handle === out.handle)) { deps.notice(`@${out.handle}은 이미 있어요. 다른 이름을 써 주세요.`); return; }
     wk.busy = true;
     drawWorkerSave();
@@ -868,7 +869,7 @@ export function createCrewWorkers(deps) {
     const isNew = !rec;
     if (isNew) { wk.id = null; wk.draft = blankAgent(); wk.dirty = false; wk.teamsPick = new Set(); wk.newTeams = []; wk.ai = wk.instrAI = null; wk.autoHandle = ""; }
     wk.bots = undefined; wk.chAdd = null; wk.chKnown = {}; // fresh channel bindings per opening
-    wk.versions = undefined; wk.histOpen = new Set(); wk.calls = null;
+    wk.versions = undefined; wk.histOpen = new Set(); wk.calls = null; wk.testLog = []; // 테스트 기록 belongs to this expert only
     wk.tab = "edit";
     const face = deps.el("button", "ex-face");
     face.type = "button";
@@ -1030,6 +1031,7 @@ export function createCrewWorkers(deps) {
     wk.bar = bar;
     wk.okBtn = ok;
     drawWorkerSave = baseSave;
+    drawWorkerSave(); // 저장 starts off until something changes
     return bar;
   }
 
@@ -1237,7 +1239,7 @@ export function createCrewWorkers(deps) {
     const like = toggleChips([["", "빈 칸에서"], ...agents().map((r) => [r.id, r.crew.name])], (k) => (d.copy_of || "") === k, (k) => {
       const src = k ? deps.byId(k)?.crew : null;
       const keepTeams = wk.teamsPick;
-      wk.draft = src ? { ...structuredClone(src), name: `${src.name} 복사`.slice(0, 60), handle: `${src.handle || ""}2`.slice(0, 40), copy_of: k } : blankAgent();
+      wk.draft = src ? { ...structuredClone(src), name: `${src.name} 복사`.slice(0, 60), handle: `${src.handle || ""}2`.slice(0, 40), copy_of: k, workflow: "" } : blankAgent(); // a workflow has one owner, so the copy starts without it
       wk.teamsPick = keepTeams;
       wk.dirty = !!src;
       wk.paintHead();

@@ -3014,6 +3014,9 @@ window.ArkismI18nEN = {
   "같은 @이름이 이미 있어요. 에이전트와 팀은 이름을 함께 써요.": "That @name is taken. Agents and teams share one set of names.",
   "추정": "est.",
   "모델 없음": "No model",
+  "없는 전문가는 뺐어요": "Left out experts that do not exist",
+  "기본 모델을 고르거나 방식을 자동(Clef)으로 바꿔 주세요.": "Pick a default model, or switch the mode to auto (Clef).",
+  "고르기 · 예: claude sonnet 5.5": "Pick · e.g. claude sonnet 5.5",
   "저장하지 않은 변경이 있어요. 버리고 다른 팀을 볼까요?": "You have unsaved changes. Discard them and open another team?",
   "+ 새 팀": "+ New team",
   "아직 팀이 없어요. 새 팀을 만들어 작업 에이전트 여럿이 함께 회의하게 해 보세요.": "No teams yet. Make one so several work agents can hold a meeting together.",
@@ -5396,7 +5399,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "이름 {0} → {1}": "Name {0} → {1}", "@이름 {0} → {1}": "@name {0} → {1}", "카테고리 {0} → {1}": "Category {0} → {1}",
   "회의 방식 → {0}": "Meeting mode → {0}", "최대 라운드 {0} → {1}": "Max rounds {0} → {1}", "토큰 상한 {0} → {1}": "Token cap {0} → {1}",
   "{0} 추가 ({1})": "Added {0} ({1})", "{0} 뺌": "Removed {0}", "디스코드 · #{0}": "Discord · #{0}",
-  "저장하면 v{0}이 돼요 · 기록 탭에서 되돌릴 수 있어요": "Saving makes v{0} · restore from the History tab",
+  "저장하면 다음 판 v{0} · 기록 탭에서 되돌릴 수 있어요": "Saving makes v{0} · restore from the History tab",
   "{0} 토큰 · {1}": "{0} tokens · {1}", "v{0}로 되돌릴까요? 새 판으로 저장돼요.": "Restore v{0}? It is saved as a new version.",
   "제안 {0}개 대기 · 저장하면 반영돼요": "{0} suggestions waiting · saved when you save"
 });
@@ -5969,7 +5972,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "기본 채널": "Default channel"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "바뀐 칸 {0}개 · 저장하면 v{1}가 돼요 · 기록 탭에서 되돌릴 수 있어요": "{0} fields changed · saving makes v{1} · you can roll back in the History tab"
+  "바뀐 칸 {0}개 · 저장하면 다음 판 v{1} · 기록 탭에서 되돌릴 수 있어요": "{0} fields changed · saving makes v{1} · you can roll back in the History tab"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "팀 삭제": "Delete team",

@@ -259,6 +259,8 @@ func errorResponse(e error) (string, int) {
 		return e.Error(), http.StatusTooManyRequests
 	case errors.Is(e, ErrCandidateQuota):
 		code, status = "candidate_daily_limit", 429
+	case errors.Is(e, ErrHandleTaken):
+		code, status = "handle_taken", 409
 	case errors.Is(e, ErrConflict):
 		code, status = "revision_conflict", 409
 	}

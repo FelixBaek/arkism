@@ -148,6 +148,7 @@ window.ArkismAutomation = (h) => {
     base.graph?.nodes?.forEach((n) => { n.config ||= {}; }); // so a just-opened popup does not count as edited
     const d = structuredClone(base);
     if (creating) { const s = d.graph.nodes.find((n) => n.id === "ai1"); s.title = ""; s.config.goal = ""; }
+    const blank = structuredClone(d); // what a new one looks like before anything is typed
     let handleTouched = !creating;
     const picked = new Set(); // new automation: steps whose expert was chosen on purpose (until then the picker reads 맡을 전문가 고르기)
     const aiTalk = { open: withAI }; // AI 제안 / AI로 초안 talk (ai-chat.js state), kept while this window is open
@@ -164,7 +165,7 @@ window.ArkismAutomation = (h) => {
       if (!bar) return;
       const n = creating ? 0 : changed().length;
       bar.querySelector(".primary").disabled = !creating && !n; // the bar stays for AI 제안
-      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 테스트 탭에서 전체를 시험해요` : `바뀐 칸 ${n}개 · 저장하면 v${(rec.revision || 0) + 1}가 돼요 · 기록 탭에서 되돌릴 수 있어요`;
+      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 테스트 탭에서 전체를 시험해요` : `바뀐 칸 ${n}개 · 저장하면 다음 판 v${(rec.revision || 0) + 1} · 기록 탭에서 되돌릴 수 있어요`;
     };
     const touch = () => { updateBar(); paintHead(); };
     const dirty = () => !creating && changed().length > 0;
@@ -1122,6 +1123,14 @@ window.ArkismAutomation = (h) => {
       { key: "history", label: "기록", render: (b) => { b.className = "dialog-body crew-popup-body"; historyTab(b); } }
     ];
     pop = popup.open({ title: d.name, sub: "", tabs, initial: startTab, cls: `v4-auto${creating ? " v4-auto-new" : ""}`, popout: creating ? null : { event: "arkism:open-automation", detail: { id: rec.id } }, onClose: () => { stopLive(); document.querySelector(".auto-menu")?.remove(); state.selected = null; h.afterClose(); } });
+    // closing with unsaved changes asks first (Esc and 닫기); saving closes with dialog.close(), which skips this
+    const guard = (e) => {
+      if (!(creating ? !same(d, blank) : dirty())) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      void ask(creating ? "아직 만들지 않았어요. 버리고 닫을까요?" : "저장하지 않은 변경이 있어요. 버리고 닫을까요?").then((yes) => { if (yes) leaveSilently(); });
+    };
+    pop.dialog.addEventListener("cancel", guard);
+    pop.dialog.addEventListener("click", (e) => { if (e.target.closest(".crew-popup-close")) guard(e); }, true);
     head(pop.dialog);
     void loadStats();
     return pop;

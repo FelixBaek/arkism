@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -12,9 +13,11 @@ var (
 	ErrSecretDetected     = errors.New("secret_detected")
 	ErrNotFound           = errors.New("not_found")
 	ErrConflict           = errors.New("revision_conflict")
-	ErrInvalid            = errors.New("invalid_request")
-	ErrDenied             = errors.New("access_denied")
-	ErrUnavailable        = errors.New("dependency_unavailable")
+	// ErrHandleTaken is a conflict (errors.Is ErrConflict holds) that the API names apart, so a client can say "name taken".
+	ErrHandleTaken = fmt.Errorf("handle_taken: %w", ErrConflict)
+	ErrInvalid     = errors.New("invalid_request")
+	ErrDenied      = errors.New("access_denied")
+	ErrUnavailable = errors.New("dependency_unavailable")
 	// ErrSemanticLaneDown is the typed retrieval failure for a strict semantic
 	// or fusion request whose embedding lane failed and whose policy forbids
 	// the deterministic fallback.
