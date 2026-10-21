@@ -105,7 +105,15 @@ class RuntimeDownloadTests(unittest.TestCase):
         # Portable CI Python needs its own shared library. Keep the fixture's
         # clean environment; do not inherit arbitrary host library paths.
         if sys.platform.startswith("linux") and sysconfig.get_config_var("Py_ENABLE_SHARED"):
-            env["LD_LIBRARY_PATH"] = sysconfig.get_config_var("LIBDIR")
+            # sysconfig LIBDIR can retain the build machine's prefix in a
+            # relocated setup-python distribution. Use the deployed prefix.
+            library = sysconfig.get_config_var("INSTSONAME") or sysconfig.get_config_var("LDLIBRARY")
+            candidates = (Path(sys.base_prefix) / "lib", Path(sys.base_prefix) / "lib64",
+                          Path(sysconfig.get_config_var("LIBDIR")))
+            directory = next((p for p in candidates if (p / library).is_file()), None)
+            if directory is None:
+                raise RuntimeError("active Python shared library is unavailable")
+            env["LD_LIBRARY_PATH"] = str(directory)
         for key, value in (("ARKISM_PRINT_SHA", print_sha), ("RUNTIME_TEST_BAD", bad),
                            ("RUNTIME_TEST_CURL_FAIL", curl_fail)):
             if value is not None:

@@ -80,24 +80,30 @@ func (s *Service) QuerySkillCatalog(ctx context.Context, token string, in Catalo
 func catalogSkillCategory(item SkillListItem, categories []CatalogCategory) string {
 	for _, category := range categories {
 		for _, rule := range category.Rules {
-			pattern := "(?i)" + strings.ReplaceAll(regexp.QuoteMeta(strings.TrimSpace(rule[1])), `\*`, ".*")
-			text := item.Description
-			if rule[0] == "name" {
-				pattern = "^(?:" + pattern + ")$"
-				text = item.Name
-			}
-			if rule[0] == "path" {
-				text = item.ID + " " + item.SourcePath
-			}
-			if strings.TrimSpace(rule[1]) != "" {
-				if ok, _ := regexp.MatchString(pattern, text); ok {
-					return category.ID
-				}
+			if catalogCategoryRule(item, rule) {
+				return category.ID
 			}
 		}
 	}
 	return ""
 }
+func catalogCategoryRule(item SkillListItem, rule []string) bool {
+	if strings.TrimSpace(rule[1]) == "" {
+		return false
+	}
+	pattern := "(?i)" + strings.ReplaceAll(regexp.QuoteMeta(strings.TrimSpace(rule[1])), `\*`, ".*")
+	text := item.Description
+	switch rule[0] {
+	case "name":
+		pattern = "^(?:" + pattern + ")$"
+		text = item.Name
+	case "path":
+		text = item.ID + " " + item.SourcePath
+	}
+	ok, _ := regexp.MatchString(pattern, text)
+	return ok
+}
+
 func skillCatalogMatches(entry catalogSkill, in CatalogQueryInput) bool {
 	item := entry.Item
 	if in.Category != "" && in.Category != "all" && entry.Category != in.Category && !(in.Category == "none" && entry.Category == "") {
@@ -194,20 +200,26 @@ func catalogSkillChecks(version Record, tools *AgentTools, name string) (float64
 			}
 		}
 		quality = math.Round(float64(filled) * 100 / 6)
-		security = 2
-		if a.ExternalTransfer || len(a.SecretNames) > 0 || len(a.IrreversibleActions) > 0 {
-			security = 1
-		}
-		if version.Inspection != nil {
-			if version.Inspection.PersonalData {
-				security = min(security, 1)
-			}
-			if version.Inspection.Redacted {
-				security = 0
-			}
-		}
+		security = catalogVersionSecurity(version)
 	}
 	return catalogHostSkillChecks(tools, name, quality, security)
+}
+func catalogVersionSecurity(version Record) int {
+	a := version.Analysis
+	security := 2
+	if a.ExternalTransfer || len(a.SecretNames) > 0 || len(a.IrreversibleActions) > 0 {
+		security = 1
+	}
+	if version.Inspection == nil {
+		return security
+	}
+	if version.Inspection.PersonalData {
+		security = min(security, 1)
+	}
+	if version.Inspection.Redacted {
+		return 0
+	}
+	return security
 }
 func catalogHostSkillChecks(tools *AgentTools, name string, quality float64, security int) (float64, int) {
 	if tools == nil {
@@ -220,27 +232,7 @@ func catalogHostSkillChecks(tools *AgentTools, name string, quality float64, sec
 		}
 	}
 	ranks := map[string]int{"SAFE": 0, "CAUTION": 1, "DO_NOT_INSTALL": 2}
-	sort.SliceStable(checks, func(i, j int) bool {
-		a, aok := ranks[checks[i].Verdict]
-		b, bok := ranks[checks[j].Verdict]
-		if !aok {
-			a = -1
-		}
-		if !bok {
-			b = -1
-		}
-		if a != b {
-			return a > b
-		}
-		aq, bq := 101.0, 101.0
-		if checks[i].QualityScore != nil {
-			aq = *checks[i].QualityScore
-		}
-		if checks[j].QualityScore != nil {
-			bq = *checks[j].QualityScore
-		}
-		return aq < bq
-	})
+	sort.SliceStable(checks, func(i, j int) bool { return catalogHostCheckLess(checks[i], checks[j], ranks) })
 	qKnown, sKnown := false, false
 	for _, check := range checks {
 		if !qKnown && check.QualityScore != nil {
@@ -253,6 +245,28 @@ func catalogHostSkillChecks(tools *AgentTools, name string, quality float64, sec
 		}
 	}
 	return quality, security
+}
+
+func catalogHostCheckLess(a, b SkillCheck, ranks map[string]int) bool {
+	ar, aok := ranks[a.Verdict]
+	br, bok := ranks[b.Verdict]
+	if !aok {
+		ar = -1
+	}
+	if !bok {
+		br = -1
+	}
+	if ar != br {
+		return ar > br
+	}
+	aq, bq := 101.0, 101.0
+	if a.QualityScore != nil {
+		aq = *a.QualityScore
+	}
+	if b.QualityScore != nil {
+		bq = *b.QualityScore
+	}
+	return aq < bq
 }
 
 func (s *Service) catalogSkillRows(ctx context.Context, token string, in CatalogQueryInput) ([]SkillListItem, error) {
