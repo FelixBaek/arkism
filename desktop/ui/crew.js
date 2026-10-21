@@ -731,7 +731,7 @@ window.ArkismCrew = (ctx) => {
     for (const n of g.nodes) {
       const d = depth[n.id] ?? 0;
       rows[d] = (rows[d] || 0) + 1;
-      Object.assign(n, { x: 40 + d * 280, y: 40 + (rows[d] - 1) * 140, config: n.config || {} });
+      Object.assign(n, { x: 40 + d * (188 + 67), y: 40 + (rows[d] - 1) * 140, config: n.config || {} });
     }
     return g;
   }
@@ -1285,7 +1285,7 @@ window.ArkismCrew = (ctx) => {
   function addNode(type, preset = {}) {
     const g = ed.graph;
     const anchor = g.nodes.find((n) => n.id === ed.sel) || g.nodes.filter((n) => n.type !== "end").at(-1) || g.nodes.at(-1);
-    const n = { id: uid(type === "ai_once" ? "once" : type), type, title: preset.title || NODES[type].label, x: (anchor?.x || 0) + 260, y: anchor?.y || 120, config: { ...(preset.config || {}) } };
+    const n = { id: uid(type === "ai_once" ? "once" : type), type, title: preset.title || NODES[type].label, x: (anchor?.x || 0) + 188 + 67, y: anchor?.y || 120, config: { ...(preset.config || {}) } };
     for (const [k, , kind, opts] of FIELDS[type] || []) if ((kind === "select" || kind === "radio") && n.config[k] === undefined) n.config[k] = opts[0][0];
     if (type === "ai" || type === "expert") Object.assign(n.config, { goal: "{{input}}", access: "read", ...preset.config });
     if (type === "team") Object.assign(n.config, { topic: "{{input}}", ...preset.config });
@@ -1595,7 +1595,7 @@ window.ArkismCrew = (ctx) => {
     const labels = el("div", "g-labels");
     canvas.append(svg, labels);
     const g = ed.graph;
-    const W = 220;
+    const W = 188;
     const nodeEls = new Map();
     const runNodes = (ed.run || ed.test)?.crew_run?.nodes || {};
     const flagged = new Set((ed.review && ed.suggestions || []).flatMap((s) => [s.action?.node, s.action?.from, s.action?.to]).filter(Boolean));
