@@ -274,6 +274,8 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-map-lg-tog button:disabled { cursor: default; }
 @media (max-width: 900px) { .ov-map-legend em { display: none; } }
 .ov-map-lg-tog { display: flex; gap: 2px; } .ov-map-lg-tog button { border: 0; background: transparent; color: var(--nc-muted); font: inherit; padding: 4px 10px; border-radius: 6px; cursor: pointer; } .ov-map-lg-tog button.on { background: var(--nc-subtle); color: var(--nc-text); }
+.ov-map-lg-note { color: var(--nc-quiet); }
+.ov-map-cut { position: absolute; right: 14px; top: 14px; z-index: 1; margin: 0; padding: 6px 10px; border-radius: 8px; background: var(--nc-surface); border: 1px solid var(--nc-line); color: var(--nc-muted); font-size: 12px; max-width: calc(100% - 28px); }
 .ov-map-zbtn { border: 0; background: transparent; color: var(--nc-muted); font: inherit; font-size: 14px; cursor: pointer; padding: 2px 6px; } .ov-map-zoom { min-width: 40px; text-align: center; color: var(--nc-text); }
 .ov-map-side { display: flex; flex-direction: column; gap: 14px; overflow: auto; min-height: 0; padding: 20px; margin-top: 16px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: 12px; }
 .ov-map-sidehead { display: flex; justify-content: space-between; align-items: center; } .ov-map-sidehead h4 { margin: 0; font-size: 16px; font-weight: 500; } .ov-map-x { border: 0; background: transparent; color: var(--nc-muted); font-size: 16px; cursor: pointer; }

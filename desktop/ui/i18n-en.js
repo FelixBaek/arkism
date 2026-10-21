@@ -3622,6 +3622,8 @@ window.ArkismI18nEN = {
   "전체 관계": "All relations",
   "선택한 연결": "Selected links",
   "화면에 맞추기": "Fit to screen",
+  "점이 많아 무리 사이 선만 그려요": "Many points: only lines between groups are drawn",
+  "선이 많아 일부 선은 빠졌어요": "Too many lines: some are left out",
   "기억 상세": "Memory detail",
   "기억 내용": "Memory text",
   "연결된 기억": "Linked memories"
@@ -4260,6 +4262,7 @@ window.ArkismI18nEN = {
   "{0} 읽기": "{0} read",
   "가장 바쁜 때: {0}요일 {1}시": "Busiest time: {0} {1}:00",
   "{0}회": "{0} times",
+  "기억이 많아 {0}개까지만 그렸어요": "Too many memories: only the first {0} are drawn",
   "토큰 {0} · {1}": "Tokens {0} · {1}",
   "세션당 {0} 토큰": "{0} tokens per session",
   "세션당 {0}": "{0} per session",

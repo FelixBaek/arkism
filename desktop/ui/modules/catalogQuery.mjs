@@ -60,7 +60,7 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
   return { snapshot, ensure, record, currentName, visible,
     more: name => read(name),
     refreshVisible: () => visible() ? read(currentName(), true) : Promise.resolve(),
-    pin(id) { const item = record(id); if (item) picked = { id, record: item, identity: identity() }; },
+    pin(id, item = record(id)) { if (item) picked = { id, record: item, identity: identity() }; }, // item: a record opened from elsewhere, maybe past the loaded pages
     reset() { for (const value of entries.values()) value.pager.reset(); entries.clear(); picked = null; }
   };
 }
