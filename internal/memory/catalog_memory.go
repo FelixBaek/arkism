@@ -138,10 +138,7 @@ func filterMemoryCatalog(rows []Record, in CatalogQueryInput, candidates bool, u
 		if !strings.Contains(strings.ToLower(row.Text+" "+row.Summary), strings.ToLower(in.Query)) || !memoryCatalogState(row, in, usage, tools) {
 			continue
 		}
-		category := "new"
-		if row.ConflictID != "" || row.Status == "conflicted" || row.Classification != nil && row.Classification.DupHint != "" {
-			category = "confusing"
-		}
+		category := memoryCatalogCategory(row)
 		facets.States[category]++
 		if candidates && in.Category != "" && category != in.Category {
 			continue
@@ -166,4 +163,11 @@ func catalogReportedUnused(id string, in CatalogQueryInput, tools *AgentTools) b
 		}
 	}
 	return false
+}
+
+func memoryCatalogCategory(row Record) string {
+	if row.ConflictID != "" || row.Status == "conflicted" || row.Classification != nil && row.Classification.DupHint != "" {
+		return "confusing"
+	}
+	return "new"
 }

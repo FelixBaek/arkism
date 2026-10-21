@@ -122,10 +122,16 @@ func validateCatalogPreferences(in CatalogQueryInput) error {
 			return ErrInvalid
 		}
 		seen[category.ID] = true
-		for _, rule := range category.Rules {
-			if len(rule) != 2 || !slices.Contains([]string{"name", "path", "desc"}, rule[0]) || !catalogText(rule[1], 256) {
-				return ErrInvalid
-			}
+		if err := validateCatalogRules(category.Rules); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func validateCatalogRules(rules [][]string) error {
+	for _, rule := range rules {
+		if len(rule) != 2 || !slices.Contains([]string{"name", "path", "desc"}, rule[0]) || !catalogText(rule[1], 256) {
+			return ErrInvalid
 		}
 	}
 	return nil

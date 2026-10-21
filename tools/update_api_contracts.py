@@ -217,15 +217,15 @@ def main():
     args = parser.parse_args()
     types = json.loads(read_ci_text(args.types, input_roots(ROOT / "api"))) if args.types else json.loads(subprocess.check_output(["go", "run", "./tools/apitypes"], cwd=ROOT, env={**os.environ, "GOTOOLCHAIN": "local", "GOPROXY": "off"}))
     dest = ROOT / "api/openapi.yaml"
-    original = json.loads(dest.read_text())
-    manifest = json.loads((ROOT / "api/management-contracts.json").read_text())
+    original = json.loads(dest.read_text(encoding="utf-8"))
+    manifest = json.loads((ROOT / "api/management-contracts.json").read_text(encoding="utf-8"))
     generated = build(copy.deepcopy(original), manifest, types)
     if args.check:
         if original != generated:
             raise SystemExit("Go DTO / OpenAPI drift: run python3 tools/update_api_contracts.py, then review the contract diff")
         print(f"Management contracts: {len(manifest['operations'])} operations and Go DTO fields match")
     else:
-        dest.write_text(patch_json(dest.read_text(), original, generated))
+        dest.write_text(patch_json(dest.read_text(encoding="utf-8"), original, generated), encoding="utf-8")
 
 
 if __name__ == "__main__":

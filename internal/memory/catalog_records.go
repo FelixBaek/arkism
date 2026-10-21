@@ -24,21 +24,24 @@ func collectCatalogRecords(ctx context.Context, repo Repository, scope Scope, co
 		if err != nil {
 			return nil, "", err
 		}
-		if len(rows) > 501 {
+		return catalogRecordWindow(rows, scope, after)
+	})
+}
+func catalogRecordWindow(rows []Record, scope Scope, after string) ([]Record, string, error) {
+	if len(rows) > 501 {
+		return nil, "", ErrUnavailable
+	}
+	previous := after
+	for _, row := range rows {
+		if row.Scope != scope || row.ID <= previous {
 			return nil, "", ErrUnavailable
 		}
-		previous := after
-		for _, row := range rows {
-			if row.Scope != scope || row.ID <= previous {
-				return nil, "", ErrUnavailable
-			}
-			previous = row.ID
-		}
-		if len(rows) > 500 {
-			return rows[:500], rows[499].ID, nil
-		}
-		return rows, "", nil
-	})
+		previous = row.ID
+	}
+	if len(rows) > 500 {
+		return rows[:500], rows[499].ID, nil
+	}
+	return rows, "", nil
 }
 func (p *Postgres) ListCatalogRecords(ctx context.Context, scope Scope, collection, after string, limit int) ([]Record, error) {
 	if !validScope(scope) || !knownCollection(collection) || limit < 1 || limit > 500 {
