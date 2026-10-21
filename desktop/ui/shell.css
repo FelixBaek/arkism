@@ -41,7 +41,6 @@
   :root:not([data-theme="dark"]) .rail-art .ark-accent { stroke: rgb(125,98,0); }
 }
 .sidebar .rail-settings { height: 40px; padding-left: 12px; color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); }
-.sidebar .rail-settings.active { background: var(--nc-raised); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* connection details: a small card under the logo */

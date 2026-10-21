@@ -69,7 +69,7 @@ window.ArkismPages = (ctx) => {
   function setUpdate(text, label) {
     update.text = text; update.label = label;
     $("#settings-button").classList.toggle("has-update", !!update.info?.newer);
-    if (state.view === "settings" && state.settingsTab === "general") render(false);
+    if (state.view === "settings" && state.settingsTab === "info") render(false);
   }
   async function checkUpdate(quiet) {
     if (!tauri || update.busy) return;
@@ -109,7 +109,7 @@ window.ArkismPages = (ctx) => {
   const messenger = window.ArkismMessenger(ctx);
   // 설정 pages (Figma 07 · 설정, 03 · 모델): [title, one-line description]. The tabs themselves are the area tabs in shell.js.
   const SETTINGS_TABS = {
-    general: ["일반", "기억·수집·시작과 앱 업데이트를 정해요."],
+    general: ["일반", "대화 수집과 앱 시작을 정해요."],
     connect: ["연결", "이 PC의 Arkism을 쓸지, 서버의 Arkism에 이을지 정해요."],
     messenger: ["메신저", "디스코드·텔레그램 같은 메신저에 봇을 연결해요. 메신저마다 봇은 1개예요."],
     roles: ["역할별 모델", "기억을 찾고, 뽑고, 검토할 때 쓰는 모델이에요."],
@@ -118,6 +118,7 @@ window.ArkismPages = (ctx) => {
     workflow: ["페르소나", "AI 노드가 맡을 역할과 말투예요."],
     categories: ["카테고리", "스킬을 규칙에 따라 묶어요. 위에 있는 카테고리가 먼저 맞춰져요."],
     advanced: ["고급", "백업·진단·데이터 지우기처럼 자주 바꾸지 않는 설정이에요."],
+    info: ["정보", "앱 버전과 Arkism이 기억을 다루는 규칙이에요."],
     models: ["모델 설정", "공급자 → 계정 → 모델 순서로 설정해요."],
     routing: ["라우팅 설정", "질문마다 어떤 모델로 보낼지, 실패하면 어디로 넘길지 정해요."]
   };
@@ -149,22 +150,26 @@ window.ArkismPages = (ctx) => {
   };
 
   const openInjectPreview = () => window.dispatchEvent(new Event("arkism:inject-preview")); // a popup over 설정, no page change
-  function tabGeneral() {
+  // 설정 › 정보: what the owner cannot change (the server's memory rules) and the app version.
+  function tabInfo() {
     // 이 규칙은 서버가 정한다. 바꿀 수 있는 것처럼 보이지 않게 스위치·알약 대신 글자로만 보여 준다.
     const fixed = (text) => el("output", "", text);
     const a = group("기억이 쓰이는 방식", "Arkism이 정한 규칙이라 바꿀 수 없어요.");
     a.append(line("선호·작업 규칙", "말투·보고 방식·작업 절차처럼 늘 지킬 것", fixed("대화 시작마다")),
       line("결정·교훈", "질문과 관련 있을 때만 넣어요", fixed("질문할 때")));
-    toSide(sideSec("새 세션이 받는 기억", actionsRow(button("미리보기 열기", "", null, openInjectPreview))),
-      sideNote("저장소마다 달라요. 미리보기에서 저장소를 골라 보세요."));
     const c = group("자동으로 저장하는 방식", "저장한 기억은 참고 자료로만 쓰고, 지시로 따르지 않아요.");
     c.append(line("내가 직접 말한 것", "“앞으로 ~해”처럼 말한 선호·결정·규칙", fixed("바로 저장")),
       line("AI가 추론한 교훈·결정", "내가 승인해야 쓰여요", fixed("검토 후 저장")),
       line("명령처럼 보이는 문장", "붙여 넣은 글이나 웹 문서에 섞인 지시", fixed("항상 내가 확인")));
+    return tauri ? [updateGroup(), a, c] : [a, c];
+  }
+  function tabGeneral() {
+    toSide(sideSec("새 세션이 받는 기억", actionsRow(button("미리보기 열기", "", null, openInjectPreview))),
+      sideNote("저장소마다 달라요. 미리보기에서 저장소를 골라 보세요."));
     const d = group("정리");
     d.append(line("답에 안 드러난 기억 모으기", "7일 동안 3번 넘게 넣었는데 답과 겹치지 않으면 검토 목록에 모아요",
       sw(prefs.collectUnused !== false, "답에 안 드러난 기억 모으기", (on) => { prefs.collectUnused = on; savePrefs(); render(false); })));
-    if (!tauri) return [a, c, d];
+    if (!tauri) return [d];
     const capture = captureGroup();
     // 앱이 떠 있어야 수집·정리가 돈다: 로그인할 때 트레이로 시작(기본 켜짐).
     const start = group("시작");
@@ -175,7 +180,7 @@ window.ArkismPages = (ctx) => {
       .catch(() => notice("시작 설정을 바꾸지 못했어요."))));
     tauri.invoke("autostart_get").then(draw, () => slot.replaceChildren(el("output", "", "확인 못 함")));
     start.append(startLine);
-    return [a, c, ...capture, d, start, updateGroup()];
+    return [...capture, d, start];
   }
 
   // 07 설정 › 에이전트: what the server found plus the owner's own switch for this app's tables.
@@ -1069,7 +1074,7 @@ window.ArkismPages = (ctx) => {
     sideParts = []; headParts = [];
     const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote };
     const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), roles: tabRoles, appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => routing.tab(kit),
-      workflow: () => crew.settingsTab({ group }), categories: tabCategories, advanced: tabAdvanced }[tab]();
+      workflow: () => crew.settingsTab({ group }), categories: tabCategories, advanced: tabAdvanced, info: tabInfo }[tab]();
     if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고쳐요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
     const content = el("div", `pg-content v4-set v4-set-${tab}`);
     content.append(...body);
