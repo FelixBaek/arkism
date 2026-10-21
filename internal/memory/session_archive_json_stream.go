@@ -640,7 +640,7 @@ func archiveJSONArrayText(p *archiveJSONParser, src *archiveJSONSource, w io.Wri
 				return err
 			}
 			if typ == "text" || typ == "input_text" || typ == "output_text" {
-				if sep := archiveBlockSeparator(prev, typ); prev != "" && sep != "" {
+				if sep := archiveBlockSeparator(prev, typ); sep != "" {
 					if _, err = io.WriteString(w, sep); err != nil {
 						return err
 					}

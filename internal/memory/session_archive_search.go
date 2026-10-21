@@ -312,9 +312,7 @@ func archiveSafeMessage(raw []byte) (text, role string, valid bool) {
 	for _, block := range blocks {
 		kind := str(block, "type")
 		if kind == "text" || kind == "input_text" || kind == "output_text" {
-			if prev != "" {
-				b.WriteString(archiveBlockSeparator(prev, kind))
-			}
+			b.WriteString(archiveBlockSeparator(prev, kind))
 			b.WriteString(str(block, "text"))
 			prev = kind
 		}
@@ -324,9 +322,9 @@ func archiveSafeMessage(raw []byte) (text, role string, valid bool) {
 
 // archiveBlockSeparator goes between two text blocks of one message. Codex splits one typed
 // prompt into input_text blocks around images and hands its hook their plain concatenation,
-// so those join with nothing; every other pair keeps the newline.
+// so those join with nothing; every other pair keeps the newline. The first block has none.
 func archiveBlockSeparator(prev, kind string) string {
-	if prev == "input_text" && kind == "input_text" {
+	if prev == "" || prev == "input_text" && kind == "input_text" {
 		return ""
 	}
 	return "\n"
