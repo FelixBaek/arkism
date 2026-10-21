@@ -140,7 +140,8 @@ func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListI
 	}
 	rows := []Record{}
 	scan := in
-	// shortcut: denied rows may require a full scoped scan; batch policy only with equivalent per-row decisions.
+	read := s.itemAuthorizer(ctx, token, "read:memories", in.Scope)
+	// shortcut: denied rows may require a full scoped scan.
 	for len(rows) < in.Limit+1 {
 		if ctx.Err() != nil {
 			return MemoryPage{}, ErrUnavailable
@@ -158,7 +159,7 @@ func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListI
 				return MemoryPage{}, ErrUnavailable
 			}
 			after = r.ID
-			d, e := s.authorize(ctx, token, "read:memories", in.Scope, r.ID, structuredText(r))
+			d, e := read(r.ID, structuredText(r))
 			if errors.Is(e, ErrDenied) {
 				continue
 			}

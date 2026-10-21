@@ -220,6 +220,34 @@ func scopeOnly(a Authorizer) bool {
 	return ok && x.ScopeOnly()
 }
 
+// itemAuthorizer answers one action's per-item checks within one request (#166: one policy query
+// per listed row made the memory screens take seconds). A scope-only authorizer cannot answer
+// differently per item, so it is asked once and that decision is reused; an item authorizeAt
+// refuses by itself (a secret-looking id, a changed request actor) still takes the full call, so
+// every item gets the allow or deny a separate call would give. Callers read only the principal
+// and role of the decision; a repeated denial is audited once instead of once per item.
+func (s *Service) itemAuthorizer(ctx context.Context, token, action string, scope Scope) func(id, content string) (Decision, error) {
+	ask := func(id, content string) (Decision, error) { return s.authorize(ctx, token, action, scope, id, content) }
+	if !scopeOnly(s.Auth) {
+		return ask
+	}
+	var (
+		d     Decision
+		err   error
+		asked bool
+	)
+	return func(id, content string) (Decision, error) {
+		if actor, ok := ctx.Value(httpActorKey{}).(*httpActor); containsSecret(id) || ok && actor.changed.Load() {
+			return ask(id, content)
+		}
+		if !asked {
+			d, err = ask(id, content)
+			asked = true
+		}
+		return d, err
+	}
+}
+
 // RecallEntry is one context handed out: who asked, for what, and the memories returned with their fused score and lanes.
 type RecallEntry struct {
 	ContextID   string      `json:"id"`

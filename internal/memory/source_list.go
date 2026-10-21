@@ -120,6 +120,7 @@ func (s *Service) ListSources(ctx context.Context, token string, in SourceListIn
 	}
 	var rows []Record
 	scan := in
+	read := s.itemAuthorizer(ctx, token, "read:sources", in.Scope)
 	for {
 		if ctx.Err() != nil {
 			return SourcePage{}, ErrUnavailable
@@ -135,7 +136,7 @@ func (s *Service) ListSources(ctx context.Context, token string, in SourceListIn
 			if r.Scope != in.Scope || r.CollectedAt == nil || r.CollectedAt.IsZero() || !live(r) {
 				return SourcePage{}, ErrConflict
 			}
-			d, err := s.authorize(ctx, token, "read:sources", in.Scope, r.ID, structuredText(sourceListItem(r)))
+			d, err := read(r.ID, structuredText(sourceListItem(r)))
 			// Search must not expose denied body matches through a 403-vs-200 oracle.
 			if in.Query != "" && errors.Is(err, ErrDenied) {
 				continue

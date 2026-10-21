@@ -52,7 +52,7 @@ AND jsonb_typeof(doc->'relations')='array' AND EXISTS (SELECT 1 FROM jsonb_array
 
 func (p *Postgres) MemoryGraphSessions(ctx context.Context, in MemoryGraphQuery, ids []string, limit int) ([]MemoryGraphSessionHit, error) {
 	in, err := normalizeMemoryGraphQuery(in)
-	if err != nil || len(ids) == 0 || len(ids) > memoryGraphMaxNodes || limit < 1 || limit > memoryGraphMaxNodes {
+	if err != nil || len(ids) == 0 || len(ids) > memoryGraphMapNodes || limit < 1 || limit > memoryGraphMaxNodes {
 		return nil, ErrInvalid
 	}
 	w, args := memoryGraphWhere(in, "m.", 6)
@@ -71,21 +71,27 @@ SELECT DISTINCT a.id AS cid, m.id AS mid FROM asking a JOIN cand m ON m.t=a.t AN
 ), ranked AS (
 SELECT cid, mid, row_number() OVER (PARTITION BY cid ORDER BY mid) AS rn FROM pairs
 )
-SELECT r.cid, n.payload FROM ranked r JOIN memory_records n ON n.collection=$5 AND n.workspace_id=$1 AND n.project_id=$2 AND n.user_id=$3 AND n.agent_id=$4 AND n.id=r.mid
+SELECT r.cid, r.mid, n.payload FROM ranked r JOIN memory_records n ON n.collection=$5 AND n.workspace_id=$1 AND n.project_id=$2 AND n.user_id=$3 AND n.agent_id=$4 AND n.id=r.mid
 WHERE r.rn <= $9 ORDER BY r.cid, r.mid`, params...)
 	if err != nil {
 		return nil, pgErr(err)
 	}
 	defer rows.Close()
 	out := []MemoryGraphSessionHit{}
+	decoded := map[string]Record{} // one row is the same payload for every asking memory: decode it once (#166)
 	for rows.Next() {
 		var h MemoryGraphSessionHit
+		var id string
 		var payload []byte
-		if err = rows.Scan(&h.From, &payload); err != nil {
+		if err = rows.Scan(&h.From, &id, &payload); err != nil {
 			return nil, ErrUnavailable
 		}
-		if h.Memory, err = pgDecode(payload); err != nil || !sameScope(h.Memory.Scope, in.Scope) {
-			return nil, ErrUnavailable
+		var ok bool
+		if h.Memory, ok = decoded[id]; !ok {
+			if h.Memory, err = pgDecode(payload); err != nil || !sameScope(h.Memory.Scope, in.Scope) || h.Memory.ID != id {
+				return nil, ErrUnavailable
+			}
+			decoded[id] = h.Memory
 		}
 		out = append(out, h)
 	}
@@ -96,18 +102,24 @@ WHERE r.rn <= $9 ORDER BY r.cid, r.mid`, params...)
 // embedding space and dimension, same reach and reach_project as the asking memory.
 func (p *Postgres) MemoryGraphSimilar(ctx context.Context, in MemoryGraphQuery, ids []string, maxDistance float64, limit int) ([]MemoryGraphSimilarPair, error) {
 	in, err := normalizeMemoryGraphQuery(in)
-	if err != nil || len(ids) == 0 || len(ids) > memoryGraphMaxNodes || maxDistance < 0 || maxDistance > 1 || limit < 1 || limit > memoryGraphMaxNodes {
+	if err != nil || len(ids) == 0 || len(ids) > memoryGraphMapNodes || maxDistance < 0 || maxDistance > 1 || limit < 1 || limit > memoryGraphMaxNodes {
 		return nil, ErrInvalid
 	}
 	w, args := memoryGraphWhere(in, "m.", 6)
 	params := append([]any{in.Scope.WorkspaceID, in.Scope.ProjectID, in.Scope.UserID, in.Scope.AgentID, colMemories}, args...)
 	params = append(params, ids, maxDistance, limit, VectorDimension)
-	rows, err := p.q().Query(ctx, `SELECT c.id, n.id, n.d FROM memory_records c CROSS JOIN LATERAL (
-SELECT m.id, m.embedding <=> c.embedding AS d FROM memory_records m WHERE m.collection=$5 AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4
-AND m.id<>c.id AND m.embedding IS NOT NULL AND m.embedding_space=c.embedding_space AND m.embedding_dimension=$11
-AND `+pgReach("m.")+`=`+pgReach("c.")+` AND COALESCE(m.doc->>'reach_project','')=COALESCE(c.doc->>'reach_project','')
-AND `+w+` AND (m.embedding <=> c.embedding) <= $9 ORDER BY 2, 1 LIMIT $10) n
+	// Both sides are MATERIALIZED once and their vectors detoasted (the text round trip is exact):
+	// a lateral over memory_records re-read every doc and out-of-line vector per asking row (#166: 2.4 s per 100 at 2000 memories).
+	rows, err := p.q().Query(ctx, `WITH asking AS MATERIALIZED (
+SELECT c.id, (c.embedding::text)::vector AS embedding, c.embedding_space, `+pgReach("c.")+` AS reach, COALESCE(c.doc->>'reach_project','') AS rp FROM memory_records c
 WHERE c.collection=$5 AND c.workspace_id=$1 AND c.project_id=$2 AND c.user_id=$3 AND c.agent_id=$4 AND c.id=ANY($8::text[]) AND c.embedding IS NOT NULL AND c.embedding_dimension=$11
+), cand AS MATERIALIZED (
+SELECT m.id, (m.embedding::text)::vector AS embedding, m.embedding_space, `+pgReach("m.")+` AS reach, COALESCE(m.doc->>'reach_project','') AS rp FROM memory_records m
+WHERE m.collection=$5 AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4 AND m.embedding IS NOT NULL AND m.embedding_dimension=$11 AND `+w+`
+)
+SELECT c.id, n.id, n.d FROM asking c CROSS JOIN LATERAL (
+SELECT m.id, m.embedding <=> c.embedding AS d FROM cand m WHERE m.id<>c.id AND m.embedding_space=c.embedding_space AND m.reach=c.reach AND m.rp=c.rp
+AND (m.embedding <=> c.embedding) <= $9 ORDER BY 2, 1 LIMIT $10) n
 ORDER BY c.id, n.d, n.id`, params...)
 	if err != nil {
 		return nil, pgErr(err)

@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func restrictedPostgres(t *testing.T, admin *Postgres) *Postgres {
+func restrictedPostgres(t testing.TB, admin *Postgres) *Postgres {
 	t.Helper()
 	ctx := context.Background()
 	role := "arkism_rls_test_" + ID()
