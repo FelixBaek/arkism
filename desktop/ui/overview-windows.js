@@ -580,22 +580,30 @@ window.ArkismOverviewWindows = (ctx, env) => {
     ttl.append(button("‹ 개요", "ghost small", null, () => d.close()), el("i", "ov-dot"), el("h2", "", "기억 지도"));
     const x = button("✕", "ghost small", null, () => d.close()); x.setAttribute("aria-label", "닫기"); head.append(ttl, x); d.append(head);
     const body = el("div", "ov-map-body"), left = el("div", "ov-map-main"), right = el("div", "ov-map-side ov-wide-detail");
-    const status = el("p", "ov-win-empty", "지도를 불러오는 중…"); left.append(status); body.append(left, right); d.append(body);
-    let graph; try { graph = await request(`/v1/memory-graph?${query({ mode: "all" })}`); } catch (e) { status.textContent = `지도를 불러오지 못했어요: ${e.message}`; return; }
+    // loading: a spinner in the middle of the canvas area and a skeleton summary on the right
+    const status = el("div", "ov-map-loading"), msg = el("p", "", "지도를 불러오는 중…"); status.append(el("i", "ov-map-spin"), msg); left.append(status);
+    const sk = el("div", "ov-map-sidehead"); sk.append(el("h4", "", "지도 요약")); right.append(sk, ...Array.from({ length: 4 }, () => el("div", "skeleton ov-map-sk")));
+    body.append(left, right); d.append(body);
+    let graph, topics;
+    try { [graph, topics] = await Promise.all([request(`/v1/memory-graph?${query({ mode: "all" })}`), request(`/v1/digests?${query({ kind: "topic", status: "active" })}`).then((r) => r.items || [], () => [])]); }
+    catch (e) { if (!d.isConnected) return; status.classList.add("off"); msg.textContent = /access_denied/.test(e?.message || "") ? "지도를 볼 권한이 없어요." : "지도를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."; status.append(button("다시 시도", "small", null, () => { d.close(); wideMap(); })); right.replaceChildren(); return; }
+    if (!d.isConnected) return;
     const nodes = graph.nodes || [], edges = graph.edges || [];
-    if (!nodes.length) { status.textContent = "지도에 그릴 기억이 아직 없어요."; return; }
+    if (!nodes.length) { status.classList.add("off"); msg.textContent = "지도에 그릴 기억이 아직 없어요."; right.replaceChildren(); return; }
     status.remove();
-    let mode = "all", sel = null, q = "", reachF = new Set(Object.keys(REACH)), topicF = null, allEdges = false, moreOpen = false;
-    const topics = (await request(`/v1/digests?${query({ kind: "topic", status: "active" })}`).catch(() => null))?.items || [];
-    const inTopic = (id) => !topicF || (topics.find((t) => t.id === topicF)?.members || []).some((r) => r.id === id);
+    let mode = "all", sel = null, lastSel = null, q = "", reachF = new Set(Object.keys(REACH)), topicF = null, allEdges = false, moreOpen = false;
+    let topicSet = null; // members of the picked topic
+    const inTopic = (id) => !topicF || topicSet.has(id);
     const byId = new Map(nodes.map((n) => [n.id, n])), reachOf = (n) => n?.reach || "general";
     const bar = el("div", "ov-map-bar"), seg = el("div", "ov-wide-seg ov-map-seg"), searchBox = el("label", "ov-map-search"), search = el("input", "ov-wide-search"); search.placeholder = "기억·주제 찾기"; search.setAttribute("aria-label", "기억·주제 찾기"); searchBox.append(search);
     const chipHost = el("div", "ov-map-reach"); bar.append(seg, searchBox, el("small", "", "칸"), chipHost);
     const canvas = el("div", "ov-map-canvas");
     const groups = {}; nodes.forEach((n) => { (groups[reachOf(n)] ||= []).push(n); });
     const proj = state.scope?.project_id && state.scope.project_id !== "default" ? state.scope.project_id : "";
-    const memById = new Map(D().memories.map((m) => [m.id, m])), labMemo = new Map();
-    const label = (id) => { let t = labMemo.get(id); if (t == null) labMemo.set(id, t = clip(memById.get(id)?.text || kind(byId.get(id)?.kind), 22)); return t; };
+    // node labels come with the map (first 40 characters); the full record is read when a memory is picked
+    const fetched = new Map(), memRec = (id) => fetched.get(id) || memOf(id);
+    const label = (id) => clip(byId.get(id)?.label || memRec(id)?.text || kind(byId.get(id)?.kind), 22);
+    const readMemory = (id) => { if (fetched.has(id) || memOf(id)) return; fetched.set(id, null); request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => { fetched.set(id, r); }, () => { fetched.set(id, false); }).then(() => { if (d.isConnected && sel === id) drawSide(); }); };
     const rel = (id) => edges.filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
     const fmt = (v) => new Date(v).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" });
     // Figma 611:54134: one area per topic digest; memories in no topic sit in a grey "분류 대기" area
@@ -607,15 +615,17 @@ window.ArkismOverviewWindows = (ctx, env) => {
       groupOf: (m, p) => m === "reach" ? { key: p.reach, name: REACH[p.reach][0] + (p.reach === "project" && proj ? ` · ${proj}` : ""), ord: REACH[p.reach][1], color: REACH_COLOR[p.reach] } : m === "kind" ? { key: p.kind, name: kind(p.kind), color: KIND_COLOR[p.kind] } : topicOf.get(p.id) || UNSORTED,
       tip: (id) => { const n = byId.get(id); return n ? { text: label(id), meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
       card: (id) => { const n = byId.get(id); return n ? { title: label(id), place: (REACH[reachOf(n)] || REACH.general)[0], meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
-      onSelect: (id) => { sel = id; mode = "sel"; moreOpen = false; paint(); },
-      onClear: () => { sel = null; mode = "all"; paint(); },
+      onSelect: (id) => { sel = lastSel = id; mode = "sel"; moreOpen = false; paint(); },
+      onClear: () => { sel = lastSel = null; mode = "all"; paint(); },
       onZoom: (z) => { zoomLab.textContent = `${Math.round(z * 100)}%`; },
     });
     canvas.append(bubbles.el); d.addEventListener("close", () => bubbles.destroy());
     function drawMap() {
-      const vis = (n) => n && reachF.has(reachOf(n)) && inTopic(n.id) && (!q || label(n.id).includes(q));
+      const qq = q.toLowerCase(), topicHit = new Set(qq ? topics.filter((t) => (t.title || "").toLowerCase().includes(qq)).flatMap((t) => (t.members || []).map((r) => r.id)) : []);
+      const vis = (n) => n && reachF.has(reachOf(n)) && inTopic(n.id) && (!qq || (n.label || label(n.id)).toLowerCase().includes(qq) || topicHit.has(n.id));
       const shown = nodes.filter(vis);
-      if (sel && !shown.some((n) => n.id === sel)) { sel = null; mode = "all"; moreOpen = false; }
+      if (sel && !shown.some((n) => n.id === sel)) { sel = lastSel = null; mode = "all"; moreOpen = false; }
+      empty.hidden = shown.length > 0;
       bubbles.setItems(shown.map((n) => ({ id: n.id, v: n.uses || 1, color: REACH_COLOR[reachOf(n)] || REACH_COLOR.general, reach: reachOf(n) in REACH ? reachOf(n) : "general", kind: n.kind || "" })));
       bubbles.setEdges(edges.filter((e) => e.type !== "similar").map((e) => ({ from: e.from, to: e.to, t: e.type === "human_link" ? "supports" : e.type })));
       bubbles.setEdgeAll(mode === "all" || allEdges); bubbles.setSelected(sel);
@@ -630,42 +640,46 @@ window.ArkismOverviewWindows = (ctx, env) => {
     }
     function paint() {
       drawMap(); // first: it drops a selection the filters now hide
-      seg.replaceChildren(...[["all", "전체 지도"], ["sel", "선택한 기억"]].map(([k, l]) => { const b = el("button", `ov-map-tab${mode === k ? " on" : ""}`, l); b.type = "button"; b.disabled = k === "sel" && !sel; b.addEventListener("click", () => { mode = k; paint(); }); return b; }));
+      seg.replaceChildren(...[["all", "전체 지도"], ["sel", "선택한 기억"]].map(([k, l]) => { const b = el("button", `ov-map-tab${mode === k ? " on" : ""}`, l); b.type = "button"; b.disabled = k === "sel" && !lastSel; b.setAttribute("aria-pressed", String(mode === k)); b.addEventListener("click", () => { mode = k; sel = k === "sel" ? lastSel : null; moreOpen = false; paint(); }); return b; }));
       chipHost.replaceChildren(...Object.entries(REACH).map(([k, [l]]) => { const b = el("button", `ov-map-chip ov-map-${k}${reachF.has(k) ? " on" : ""}`); b.type = "button"; b.append(el("i", ""), document.createTextNode(l)); b.addEventListener("click", () => { reachF.has(k) ? reachF.delete(k) : reachF.add(k); paint(); }); return b; }));
       drawLegend(); drawSide();
     }
     function drawSide() {
       right.replaceChildren(); const sec = (title, ...kids) => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", title), ...kids); right.append(s); return s; };
-      const top = el("div", "ov-map-sidehead"); top.append(el("h4", "", sel ? "기억 상세" : "지도 요약")); if (sel) { const c = el("button", "ov-map-x", "✕"); c.type = "button"; c.setAttribute("aria-label", "닫기"); c.addEventListener("click", () => { sel = null; mode = "all"; paint(); }); top.append(c); } right.append(top);
+      const top = el("div", "ov-map-sidehead"); top.append(el("h4", "", sel ? "기억 상세" : "지도 요약")); if (sel) { const c = el("button", "ov-map-x", "✕"); c.type = "button"; c.setAttribute("aria-label", "닫기"); c.addEventListener("click", () => { sel = lastSel = null; mode = "all"; paint(); }); top.append(c); } right.append(top);
       if (!sel) {
         const f = el("div", "ov-detail-facts");
-        for (const [a, b] of [["전체 기억", num(nodes.length)], ["이어진 선", num(edges.length)]]) { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); } sec("", f);
+        for (const [a, b] of [["전체 기억", num(nodes.length)], ["이어진 선", num(edges.filter((e) => e.type !== "similar").length)]]) { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); } sec("", f);
         const list = el("div", "ov-detail-list"); for (const [r, [l]] of Object.entries(REACH)) if (groups[r]) list.append(row("", l, "", num(groups[r].length))); sec("칸", list);
         const kinds = {}; nodes.forEach((n) => { kinds[n.kind] = (kinds[n.kind] || 0) + 1; }); const kl = el("div", "ov-detail-list"); Object.entries(kinds).sort((a, b) => b[1] - a[1]).forEach(([k, n]) => kl.append(row("", kind(k), "", num(n)))); sec("종류", kl);
-        if (topics.length) { const tl = el("div", "ov-detail-list"); topics.forEach((t) => { const r = row("", t.title || "주제", "", num((t.members || []).length)); r.classList.add("ov-win-click"); r.addEventListener("click", () => { topicF = topicF === t.id ? null : t.id; paint(); }); if (topicF === t.id) r.classList.add("on"); tl.append(r); }); sec("주제", tl); }
+        if (topics.length) { const tl = el("div", "ov-detail-list"); topics.forEach((t) => { const r = row("", t.title || "주제", "", num((t.members || []).filter((m) => byId.has(m.id)).length)); r.classList.add("ov-win-click"); r.tabIndex = 0; r.setAttribute("role", "button"); r.setAttribute("aria-pressed", String(topicF === t.id));
+          const pick = () => { topicF = topicF === t.id ? null : t.id; topicSet = new Set(topicF ? (t.members || []).map((m) => m.id) : []); paint(); }; r.addEventListener("click", pick); r.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } }); if (topicF === t.id) r.classList.add("on"); tl.append(r); }); sec("주제", tl); }
         if (graph.truncated) right.append(el("p", "ov-win-empty", "기억이 많아 일부만 그렸어요."));
         right.append(el("p", "ov-win-empty", "점을 누르면 그 기억과 이어진 기억이 보여요."));
         return;
       }
-      const m = D().memories.find((x) => x.id === sel), n = byId.get(sel), ev = m && tag(m, "event_id:"), basis = m && tag(m, "basis:");
+      readMemory(sel);
+      const m = memRec(sel) || null, n = byId.get(sel), ev = m && tag(m, "event_id:"), basis = m && tag(m, "basis:"), wait = fetched.get(sel) === null;
       const chips = el("div", "ov-map-tags"), rc = el("span", `ov-map-chip on ov-map-${reachOf(n)}`); rc.append(el("i", ""), document.createTextNode(REACH[reachOf(n)]?.[0] || "범용")); chips.append(rc, tagEl(kind(n.kind))); right.append(chips);
-      right.append(el("h3", "ov-map-title", m ? clip(m.text, 60) : "이 기억의 내용은 지도에 없어요"));
+      right.append(el("h3", "ov-map-title", m ? clip(m.text, 60) : n.label || (wait ? "기억을 불러오는 중…" : "이 기억은 읽을 수 없어요")));
+      if (n.status === "superseded") right.append(el("small", "ov-detail-basis", "● 새 기억으로 대체됨"));
       if (basis) right.append(el("small", "ov-detail-basis", basis === "explicit_user" ? "● 직접 말한 기억" : basis === "inferred" ? "● AI가 짐작한 기억" : "● 대화 원문 기반"));
       if (m) right.append((() => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", "기억 내용"), el("p", "ov-map-body-text", m.text)); return s; })());
       const u = usage(sel), used = n.uses || u?.d7;
       if (used || u?.last) { const p = el("p", "ov-map-use"); p.append(el("span", "", `${num(used || 0)}회 쓰임`), ...(u?.last ? [el("span", "", ` · ${ago(u.last)}`)] : [])); right.append(p); }
       if (ev) { const b = el("div", "ov-map-quote"), [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid);
-        b.append(el("small", "", `대화 · ${ses ? ses.title || ses.project || agent : agent} · ${fmt(m.created_at)}`), button("원문 대화 보기 ›", "ghost small", null, () => { dlg.close(); go("sessions"); })); sec("출처", b); }
+        b.append(el("small", "", `대화 · ${ses ? ses.title || ses.project || agent : agent} · ${fmt(m.created_at)}`), button("원문 대화 보기 ›", "ghost small", null, () => openSession(ev, ""))); sec("출처", b); }
       const real = rel(sel), shown = moreOpen ? real : real.slice(0, 3), ul = el("div", "ov-map-rels");
-      for (const e of shown) { const other = e.from === sel ? e.to : e.from, o = byId.get(other), r = el("button", "ov-map-rel"); r.type = "button"; const tx = el("span", "ov-map-rel-t"), pr = el("span", `ov-map-chip on ov-map-${reachOf(o)}`); pr.append(el("i", ""), document.createTextNode(REACH[reachOf(o)]?.[0] || "")); tx.append(el("b", "", label(other)), pr); r.append(el("span", `ov-map-tagpill ov-map-e-${e.type === "human_link" ? "supports" : e.type}`, EDGE[e.type] || e.type), tx, el("span", "ov-map-chev", "›")); r.addEventListener("click", () => { sel = other; moreOpen = false; paint(); }); ul.append(r); }
+      for (const e of shown) { const other = e.from === sel ? e.to : e.from, o = byId.get(other), r = el("button", "ov-map-rel"); r.type = "button"; const tx = el("span", "ov-map-rel-t"), pr = el("span", `ov-map-chip on ov-map-${reachOf(o)}`); pr.append(el("i", ""), document.createTextNode(REACH[reachOf(o)]?.[0] || "")); tx.append(el("b", "", label(other)), pr); r.append(el("span", `ov-map-tagpill ov-map-e-${e.type === "human_link" ? "supports" : e.type}`, EDGE[e.type] || e.type), tx, el("span", "ov-map-chev", "›")); r.addEventListener("click", () => { sel = lastSel = other; moreOpen = false; paint(); }); ul.append(r); }
       const lh = el("div", "ov-map-relhead"); lh.append(el("small", "", "연결된 기억"), el("small", "", num(real.length))); right.append(lh);
       if (real.length) { right.append(ul); if (real.length > 3) { const mb = el("button", "ov-map-more", moreOpen ? "접기" : `나머지 ${real.length - 3}개 펼치기`); mb.type = "button"; mb.addEventListener("click", () => { moreOpen = !moreOpen; drawSide(); }); right.append(mb); } } else right.append(el("p", "ov-win-empty", "이어진 기억이 없어요."));
       const sim = edges.find((e) => e.type === "similar" && (e.from === sel || e.to === sel));
       if (sim) { const other = sim.from === sel ? sim.to : sim.from, box = el("div", "ov-map-suggest"); box.append(el("small", "", "AI 관계 제안"), el("p", "", `“${label(other)}”와 비슷한 기억이에요. 같은 뜻이면 기억 화면에서 합치거나 연결해 주세요.`)); right.append(box); }
       const act = el("div", "ov-map-foot"); if (m?.updated_at) act.append(el("small", "", `수정 ${fmt(m.updated_at)}`)); act.append(button("기억 수정", "small", null, () => { dlg.close(); go("memories", "active"); })); right.append(act);
     }
-    search.addEventListener("input", () => { q = search.value.trim(); paint(); });
-    left.append(bar, canvas); canvas.append(legend); paint();
+    let typing; search.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(() => { q = search.value.trim(); paint(); }, 150); });
+    const empty = el("div", "ov-map-loading off"); empty.hidden = true; empty.append(el("p", "", "조건에 맞는 기억이 없어요."), button("조건 지우기", "small", null, () => { q = search.value = ""; topicF = null; reachF = new Set(Object.keys(REACH)); paint(); }));
+    left.append(bar, canvas); canvas.append(legend, empty); paint();
   }
 
   return { open, wide, reset() { dlg?.close(); } };

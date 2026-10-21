@@ -347,3 +347,15 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-verdict-again svg { width: 15px; height: 15px; fill: currentColor; }
 .ov-verdict .ov-checks { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .ov-wide-row-cb { flex: none; width: 13px; } /* a dreaming row has no checkbox: keeps the text in line */
+/* 기억 지도 loading: spinner centred in the map area, skeleton rows in the summary */
+.ov-map-loading { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; color: var(--nc-muted); font-size: 13px; z-index: 2; pointer-events: none; }
+.ov-map-loading > * { pointer-events: auto; }
+.ov-map-loading p { margin: 0; }
+.ov-map-loading[hidden] { display: none; }
+.ov-map-main > .ov-map-loading { position: relative; inset: auto; flex: 1; min-height: 320px; margin-top: 16px; }
+.ov-map-spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--nc-line); border-top-color: var(--nc-accent); animation: ov-map-spin .9s linear infinite; }
+.ov-map-loading.off .ov-map-spin { display: none; }
+@keyframes ov-map-spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .ov-map-spin { animation-duration: 3s; } }
+.ov-map-sk { height: 18px; border-radius: 6px; border: 0; }
+.ov-map-sk:nth-child(3) { width: 70%; } .ov-map-sk:nth-child(5) { width: 55%; }

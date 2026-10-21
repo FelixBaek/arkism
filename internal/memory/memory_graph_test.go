@@ -290,7 +290,7 @@ func checkGraph(t *testing.T, svc *Service, token string) {
 	}
 }
 
-// checkGraphMap: all mode returns every visible memory and its lines, never text, and
+// checkGraphMap: all mode returns every visible memory and its lines, a short label only, and
 // keeps derived lines inside one reach.
 func checkGraphMap(t *testing.T, svc *Service, token string) {
 	t.Helper()
@@ -302,6 +302,9 @@ func checkGraphMap(t *testing.T, svc *Service, token string) {
 	nodes := map[string]MemoryGraphMapNode{}
 	for _, n := range g.Nodes {
 		nodes[n.ID] = n
+	}
+	if n := nodes["c"]; n.Label == "" || len([]rune(n.Label)) > memoryGraphMapLabelRunes+1 || n.Status != statusActive {
+		t.Fatal("map label", n)
 	}
 	edges := map[string]string{}
 	for _, l := range g.Edges {
@@ -329,7 +332,7 @@ func checkGraphMap(t *testing.T, svc *Service, token string) {
 		t.Fatal("unexpected map line", edges)
 	}
 	raw, _ := json.Marshal(g)
-	for _, bad := range []string{"center rule body", "label", "relation reason"} {
+	for _, bad := range []string{`"text"`, `"summary"`, "relation reason"} {
 		if strings.Contains(string(raw), bad) {
 			t.Fatal("text in map", bad)
 		}
@@ -359,7 +362,7 @@ func seedGraphUses(t *testing.T, repo interface {
 	useReceipt(t, repo, "use-2", scopeA, Ref{Collection: colMemories, ID: "c", Revision: 1}, now)
 }
 
-// ST-820 / FR-012 / TC-FUNC-035: all mode, the whole visible map without text.
+// ST-820 / FR-012 / TC-FUNC-035: all mode, the whole visible map with short labels only.
 func TestMemoryGraphMap(t *testing.T) {
 	f := newFixture(t)
 	seedGraph(newGraphWorld(t, func(col string, r Record) error { return f.repo.Insert(testCtx, col, r) }, f.emb.space))
@@ -549,7 +552,7 @@ func TestMemoryGraphHTTP(t *testing.T) {
 	}
 	code, body = call("&mode=all&reach=general&limit=5000")
 	var m MemoryGraphMap
-	if code != http.StatusOK || json.Unmarshal([]byte(body), &m) != nil || len(m.Nodes) != 17 || strings.Contains(body, "label") || strings.Contains(body, "center") {
+	if code != http.StatusOK || json.Unmarshal([]byte(body), &m) != nil || len(m.Nodes) != 17 || !strings.Contains(body, `"label":"center rule body"`) || strings.Contains(body, `"text"`) {
 		t.Fatal(code, body)
 	}
 	for _, bad := range []string{"", "&memory_id=c&depth=0", "&memory_id=c&depth=x", "&memory_id=c&extra=1", "&memory_id=c&reach=", "&memory_id=c&limit=0",
