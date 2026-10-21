@@ -3818,7 +3818,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     b.append(art);
     if (x.category) { const c = el("small", "ex-card-cat"); c.append(icon(ctx.catIcon(x.category)), el("span", "", x.category)); b.append(c); }
     b.append(el("strong", "", x.name));
-    if (x.enabled === false) b.title = "꺼짐"; // 763:57845: an off card is only dimmed
+    b.title = x.enabled === false ? `${x.name} · 꺼짐` : x.name; // the full name, when two lines cut it; 763:57845: an off card is only dimmed
     b.addEventListener("click", () => { workerPick(r.id); openExpertPopup(r); });
     return b;
   }
