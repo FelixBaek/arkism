@@ -710,7 +710,7 @@ func (s *Service) markPosted(ctx context.Context, scope Scope, actor, botID stri
 	})
 }
 
-func discordRoutes(mux *http.ServeMux, s *Service) {
+func discordRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/discord", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.Discord(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, out, e)

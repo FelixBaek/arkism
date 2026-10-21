@@ -26,7 +26,7 @@ function New-SmokeTestState {
 function New-SmokeTestFixture {
   $root = Join-Path ([IO.Path]::GetTempPath()) ('arkism installed offline ' + [Guid]::NewGuid().ToString('N'))
   $stage = Join-Path $root 'stage'
-  $files = @('Arkism.exe', 'integration/arkism.exe', 'runtime/memoryd.exe', 'runtime/memory-principal.exe', 'runtime/roles.sql',
+  $files = @('uninstall.exe', 'runtime/arkism-installer.exe', 'Arkism.exe', 'integration/arkism.exe', 'runtime/memoryd.exe', 'runtime/memory-principal.exe', 'runtime/roles.sql',
     'runtime/pgsql/bin/postgres.exe', 'runtime/pgsql/bin/pg_ctl.exe', 'runtime/pgsql/bin/initdb.exe',
     'runtime/pgsql/bin/psql.exe', 'runtime/pgsql/bin/pg_dump.exe', 'runtime/pgsql/bin/pg_restore.exe',
     'runtime/pgsql/lib/vector.dll', 'runtime/pgsql/share/extension/vector.control', 'runtime/pgsql/share/extension/vector--0.8.1.sql')
@@ -40,7 +40,8 @@ function New-SmokeTestFixture {
     Root = $root; Stage = $stage; Installer = $installer; Context = $context; Files = $files
     Evidence = (Join-Path $root 'evidence.json'); State = (New-SmokeTestState)
     Events = [Collections.Generic.List[string]]::new(); Links = [Collections.Generic.List[string]]::new(); Mode = ''; CleanupMode = ''
-    Result = @{ ok = $true; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = 128; expiry = 'ok'; safety_copy = $false; server = 'http://127.0.0.1:8091' }
+    Result = @{ ok = $true; phase = 'complete'; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = 128; expiry = 'ok'; safety_copy = $false; server = 'http://127.0.0.1:8091'
+      token_checks = @{ expiry_rotation = $true; pending_before_commit = $true; pending_after_commit = $true; pending_backup_restore = $true; retired_token_http_403 = $true } }
   }
 }
 
@@ -77,7 +78,7 @@ function Copy-SmokeTestInstall($Fixture, [string]$Arguments) {
     [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path)) | Out-Null
     [IO.File]::Copy((Join-Path $Fixture.Stage $name), $path)
   }
-  Write-SmokeTestFile (Join-Path $install 'uninstall.exe') 'inert forbidden-to-run uninstaller'
+  # The exact emitted uninstaller is already copied as part of the signed payload.
   Set-SmokeTestRegistration $Fixture $install
   if ($Fixture.Mode -eq 'wrong_hash') { Write-SmokeTestFile (Join-Path $install 'Arkism.exe') 'different bytes' }
   if ($Fixture.Mode -eq 'changed_installer') { Write-SmokeTestFile $Fixture.Installer 'changed setup bytes' }
@@ -91,8 +92,7 @@ function Write-SmokeTestResult($Fixture, [string]$FilePath, [string]$Arguments) 
   Assert-SmokeTest ($FilePath -ceq (Join-Path $Fixture.Install 'Arkism.exe')) 'Must run the installed binary'
   Assert-SmokeTest ($Arguments -match '^--runtime-check "([^"]+)"$') 'Data directory must be a quoted explicit argument'
   $data = $Matches[1]
-  $models = [IO.File]::ReadAllText((Join-Path $data 'models.json')) | ConvertFrom-Json
-  Assert-SmokeTest ($models.embedder -eq 'none' -and $models.judge -eq 'fixed') 'Owned check must disable model selection'
+  Assert-SmokeTest ([IO.Directory]::GetFileSystemEntries($data).Length -eq 0) 'Owned runtime check must receive a fresh directory'
   if ($Fixture.Mode -eq 'timeout') { throw 'synthetic runtime timeout' }
   if ($Fixture.Mode -eq 'runtime_failure') { throw 'synthetic runtime exit 1' }
   $text = $Fixture.Result | ConvertTo-Json
@@ -127,10 +127,14 @@ function Invoke-SmokeTestFixture($Fixture) {
   }
   function Invoke-InstalledSmokeProcess([string]$FilePath, [string]$Arguments, $Environment, [int]$TimeoutSeconds, [string]$Phase) {
     $Fixture.Events.Add("process:$Phase")
-    Assert-SmokeTest ($Phase -in @('install', 'runtime_check') -and $FilePath -notlike '*uninstall.exe') 'Product uninstaller is forbidden'
+    Assert-SmokeTest ($Phase -in @('profile_check', 'install', 'runtime_check') -and $FilePath -notlike '*uninstall.exe') 'Product uninstaller is forbidden'
     Assert-SmokeTest ($TimeoutSeconds -gt 0 -and $TimeoutSeconds -le 300) 'Every process needs a finite timeout'
     Assert-SmokeTest (-not $Environment.ContainsKey('GH_TOKEN') -and -not $Environment.ContainsKey('ARKISM_GATEWAY_TOKEN_FILE')) 'No inherited credential/config overrides'
-    if ($Phase -eq 'install') { Copy-SmokeTestInstall $Fixture $Arguments }
+    if ($Phase -eq 'profile_check') {
+      Assert-SmokeTest ($FilePath -eq (Join-Path $Fixture.Stage 'runtime/arkism-installer.exe') -and $Arguments.StartsWith('check-folders ')) 'Preflight must use staged helper'
+      if ($Fixture.Mode -eq 'profile_mismatch') { throw 'synthetic known folder mismatch' }
+    }
+    elseif ($Phase -eq 'install') { Copy-SmokeTestInstall $Fixture $Arguments }
     else { Write-SmokeTestResult $Fixture $FilePath $Arguments }
     return @{ Phase = $Phase; ExitCode = 0 }
   }
@@ -173,7 +177,7 @@ Invoke-SmokeTestCase 'fresh installed binary and owned manual cleanup' {
   param($f)
   $result = Invoke-SmokeTestFixture $f
   Assert-SmokeTest ($result.ok -and $result.cleanup -eq 'owned_manual_cleanup') 'Fresh install must pass'
-  Assert-SmokeTest (($f.Events -join ',') -eq 'process:install,process:runtime_check,delete:shortcut,delete:shortcut,delete:registry') 'Only two allowed processes and owned registration cleanup'
+  Assert-SmokeTest (($f.Events -join ',') -eq 'process:profile_check,process:install,process:runtime_check,delete:shortcut,delete:shortcut,delete:registry') 'Only preflight and two allowed processes with owned registration cleanup'
   Assert-SmokeTest ([IO.Directory]::GetDirectories($f.Context.RunnerTemp).Length -eq 0) 'Owned root must be removed'
   $evidence = [IO.File]::ReadAllText($f.Evidence)
   Assert-SmokeTest ($evidence -notmatch 'owner.token|runtime.json|Bearer|password') 'Evidence must contain no runtime secrets'
@@ -244,7 +248,7 @@ Invoke-SmokeTestCase 'primary survives evidence publication failure' {
   Assert-SmokeTest ($errorText.Contains('synthetic runtime exit 1') -and $errorText.Contains('synthetic evidence write denied')) 'Evidence failure must retain the primary cause'
 }
 
-foreach ($binding in @(@('expiry', 'expiry failed'), @('capabilities', 500), @('restored_capabilities', 500), @('reused', $false),
+foreach ($binding in @(@('phase', 'start'), @('expiry', 'expiry failed'), @('capabilities', 500), @('restored_capabilities', 500), @('reused', $false),
     @('backup_bytes', 0), @('safety_copy', $true), @('server', 'http://example.invalid:8091'), @('ok', 'true'), @('capabilities', 200.0), @('backup_bytes', $true))) {
   Invoke-SmokeTestCase "strict runtime result $($binding[0])=$($binding[1]) [$($binding[1].GetType().Name)]" {
     param($f)
@@ -252,10 +256,26 @@ foreach ($binding in @(@('expiry', 'expiry failed'), @('capabilities', 500), @('
     # Windows PowerShell serializes the Double 200.0 as the valid integer 200.
     # Preserve the literal JSON type that this rejection case intends to supply.
     if ($binding[0] -eq 'capabilities' -and $binding[1] -is [double]) {
-      $f.ResultJson = '{"ok":true,"capabilities":200.0,"restored_capabilities":200,"reused":true,"backup_bytes":128,"expiry":"ok","safety_copy":false,"server":"http://127.0.0.1:8091"}'
+      $f.ResultJson = '{"ok":true,"phase":"complete","token_checks":{"expiry_rotation":true,"pending_before_commit":true,"pending_after_commit":true,"pending_backup_restore":true,"retired_token_http_403":true},"capabilities":200.0,"restored_capabilities":200,"reused":true,"backup_bytes":128,"expiry":"ok","safety_copy":false,"server":"http://127.0.0.1:8091"}'
     }
     Assert-SmokeTest ((Get-SmokeTestError $f).Length -gt 0) 'False success runtime report must be rejected'
   }
+}
+
+foreach ($tokenCase in @('expiry_rotation', 'pending_before_commit', 'pending_after_commit', 'pending_backup_restore', 'retired_token_http_403')) {
+  foreach ($badTokenValue in @($false, 'true', $null)) {
+    Invoke-SmokeTestCase "missing or false token evidence $tokenCase" {
+      param($f)
+      $f.Result.token_checks[$tokenCase] = $badTokenValue
+      Assert-SmokeTest ((Get-SmokeTestError $f).Contains('runtime_token_evidence_failed')) 'Token lifecycle evidence cannot be missing, false or a string'
+    }
+  }
+}
+
+Invoke-SmokeTestCase 'old runtime without token checks cannot pass' {
+  param($f)
+  $f.Result.Remove('token_checks')
+  Assert-SmokeTest ((Get-SmokeTestError $f).Contains('runtime_token_evidence_failed')) 'Old runtime report must fail the current gate'
 }
 
 Invoke-SmokeTestCase 'child environment does not change caller secrets or paths' {
@@ -550,4 +570,12 @@ Invoke-SmokeTestCase 'noautorun observes its complete bounded interval without r
 Assert-SmokeTest ((Get-FileHash -LiteralPath $nsisSourcePath -Algorithm SHA256).Hash -ceq $nsisSourceHash) 'Native control source changed during offline tests'
 
 Assert-SmokeTest ((Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash -ceq $sourceHash) 'Wrapper source changed during offline tests'
+
+Invoke-SmokeTestCase 'unsafe known folders stop before installer' {
+  param($f)
+  $f.Mode = 'profile_mismatch'
+  Assert-SmokeTest ((Get-SmokeTestError $f) -match 'known folder mismatch') 'Folder mismatch must fail'
+  Assert-SmokeTest (($f.Events -join ',') -eq 'process:profile_check') 'Unsafe folder must prevent installation and runtime effects'
+}
+
 Write-Host "All $caseCount offline installed-runtime smoke cases passed. No native product effects executed."

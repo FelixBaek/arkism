@@ -749,7 +749,7 @@ func (s *Service) ResolveCrew(ctx context.Context, token string, scope Scope, ha
 	return CrewResolution{}, ErrNotFound
 }
 
-func crewRoutes(mux *http.ServeMux, s *Service) {
+func crewRoutes(mux routeRegistrar, s *Service) {
 	unsplashRoutes(mux, s)
 	crewVersionRoutes(mux, s)
 	mux.HandleFunc("GET /v1/crew", func(w http.ResponseWriter, r *http.Request) {

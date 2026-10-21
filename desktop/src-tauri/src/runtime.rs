@@ -19,6 +19,9 @@ use std::time::{Duration, Instant};
 use crate::lifecycle::{self, Activity, Backend, Gate, Role, Stopped};
 use crate::runtime_process::{self, Process};
 
+#[path = "runtime_token_check.rs"]
+pub(crate) mod token_check;
+
 const PG_PORT: u16 = 55491;
 const API_PORT: u16 = 8091;
 /// The model gateway agents point at (`arkism gateway`): Claude Code, Codex and Gemini CLI.
@@ -33,6 +36,12 @@ struct Secrets {
     app: String,
     owner: String,
     worker: String,
+    // Persist intent before changing the database, so a crash can replay the
+    // exact rotation instead of losing the only current credential.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_worker: Option<String>,
     pg_port: u16,
     api_port: u16,
     /// Set once the owner and worker tokens are registered.
@@ -759,7 +768,7 @@ impl Runtime {
         let mut cmd = self.host_command(&["gateway"]).ok_or("local_unavailable")?;
         let log = fs::OpenOptions::new().create(true).append(true).open(self.data.join("logs").join("gateway.log")).map_err(|e| e.to_string())?;
         let err = log.try_clone().map_err(|e| e.to_string())?;
-        cmd.env("ARKISM_GATEWAY_LISTEN", &listen).stdin(Stdio::null()).stdout(log).stderr(err);
+        cmd.env("GOMEMLIMIT", "512MiB").env("ARKISM_GATEWAY_LISTEN", &listen).stdin(Stdio::null()).stdout(log).stderr(err);
         no_window(&mut cmd);
         let child = self.spawn_child(Role::Gateway, &mut cmd, Some(self.data.join("logs").join("gateway.log")), Some(gateway_url(secrets.gateway_port)))?;
         // A gateway that exits at once (bad config, port taken) is not reported as running.
@@ -795,7 +804,7 @@ impl Runtime {
     /// What the PC agent client (`arkism windows hook|mcp`) reads to talk to this Arkism instead
     /// of a server: `agents.json` and the owner token beside it, both readable by this user only.
     /// `server: None` hands the agents back to the server connection (mode "server").
-    fn write_agent_connection(&self, server: Option<&str>, secrets: Option<&Secrets>, ssh: Option<(&str, Option<u16>, Option<&str>)>) -> Result<(), String> {
+    fn write_agent_connection(&self, server: Option<&str>, secrets: Option<&Secrets>, ssh: Option<(&str, Option<u16>, Option<&str>, &crate::ssh_identity::Pin)>) -> Result<(), String> {
         let token_file = self.data.join("owner.token");
         let conn = match (server, secrets) {
             (Some(url), Some(secrets)) => {
@@ -806,7 +815,7 @@ impl Runtime {
                 let _ = fs::remove_file(&token_file);
                 // The agents reach the server over the same SSH address the app connected with.
                 match ssh {
-                    Some((host, port, key)) => serde_json::json!({ "mode": "server", "ssh_host": host, "ssh_port": port, "ssh_key": key }),
+                    Some((host, port, key, pin)) => serde_json::json!({ "mode": "server", "ssh_host": host, "ssh_port": port, "ssh_key": key, "ssh_known_hosts": pin.file, "ssh_host_alias": pin.alias, "ssh_host_algorithms": pin.algorithms }),
                     None => serde_json::json!({ "mode": "server" }),
                 }
             }
@@ -1055,10 +1064,10 @@ impl Runtime {
     }
 
     /// The app switched to a server: agents follow it.
-    pub fn agents_use_server(&self, ssh_host: &str, ssh_port: Option<u16>, ssh_key: Option<&str>) -> Result<(), String> {
+    pub fn agents_use_server(&self, ssh_host: &str, ssh_port: Option<u16>, ssh_key: Option<&str>, pin: &crate::ssh_identity::Pin) -> Result<(), String> {
         let _activity = self.activity()?;
         fs::create_dir_all(&self.data).map_err(|e| e.to_string())?;
-        self.write_agent_connection(None, None, Some((ssh_host, ssh_port, ssh_key)))
+        self.write_agent_connection(None, None, Some((ssh_host, ssh_port, ssh_key, pin)))
     }
 
     /// Stops the server and Postgres. Called when the app quits or before an update.
@@ -1116,6 +1125,8 @@ impl Runtime {
             app: secret()?,
             owner: secret()?,
             worker: secret()?,
+            pending_owner: None,
+            pending_worker: None,
             pg_port: free_port(PG_PORT)?,
             api_port: free_port(API_PORT)?,
             registered: false,
@@ -1229,6 +1240,37 @@ impl Runtime {
             secrets.registered = true;
             self.save(secrets)?;
         }
+        self.rotate_managed_tokens(secrets, &init_url)?;
+        Ok(())
+    }
+
+    fn rotate_managed_tokens(&self, secrets: &mut Secrets, init_url: &str) -> Result<(), String> {
+        let program = self.programs()?.join(exe("memory-principal"));
+        for principal in [ManagedPrincipal::Owner, ManagedPrincipal::Worker] {
+            let mut status = |id: &str, token: &str| {
+                let mut cmd = Command::new(&program);
+                quiet(&mut cmd).args(["--token-status", "--principal", id])
+                    .stdout(Stdio::piped())
+                    .env("MEMORY_DATABASE_URL", init_url).env("MEMORY_PRINCIPAL_TOKEN", token);
+                let output = self.command_output(&mut cmd)?;
+                if output.code != 0 { return Err("local_token_status_failed".into()); }
+                managed_token_status(&output.stdout, id)
+            };
+            let mut rotate = |id: &str, old: &str, next: &str| {
+                self.stop_server();
+                let mut cmd = Command::new(&program);
+                quiet(&mut cmd).args(["--rotate-token", "--principal", id])
+                    .env("MEMORY_DATABASE_URL", init_url).env("MEMORY_PRINCIPAL_TOKEN", next)
+                    .env("MEMORY_PREVIOUS_PRINCIPAL_TOKEN", old);
+                self.host_status(&mut cmd, "local_token_rotation_failed")
+            };
+            // A pending rotation may itself have expired while the PC was off.
+            // Finish its replay, then check once more before starting workers.
+            for _ in 0..2 {
+                if !rotate_managed_token(secrets, principal, &mut status, &|s| self.save(s), &mut rotate)? { break; }
+            }
+            if status(principal.id(), principal.current(secrets))? { return Err("local_token_refresh_failed".into()); }
+        }
         Ok(())
     }
 
@@ -1313,6 +1355,7 @@ impl Runtime {
             let err = file.try_clone().map_err(|e| e.to_string())?;
             let mut cmd = Command::new(self.programs()?.join(exe("memoryd")));
             cmd.args(args)
+                .env("GOMEMLIMIT", "512MiB")
                 .env("MEMORY_STORE", "postgres")
                 .env("MEMORY_DATABASE_URL", &app_url)
                 .envs(embed_env.iter().map(|(k, v)| (*k, v.as_str())))
@@ -1391,11 +1434,13 @@ impl Runtime {
             return Err("local_backup_failed".into());
         }
         let info = BackupInfo {
-            format: 1,
+            format: 2,
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             created: name.trim_start_matches("arkism-").to_string(),
             owner: secrets.owner.clone(),
             worker: secrets.worker.clone(),
+            pending_owner: secrets.pending_owner.clone(),
+            pending_worker: secrets.pending_worker.clone(),
             archive_key: secrets.archive_key.clone(),
             auto,
         };
@@ -1449,7 +1494,7 @@ impl Runtime {
         let backup = valid_backup_name(name).then(|| Backup::read(&dir.join(name))).flatten().ok_or("local_backup_missing")?;
         let info: BackupInfo = serde_json::from_str(&fs::read_to_string(dir.join(name).join("backup.json")).map_err(|e| e.to_string())?)
             .map_err(|_| "local_backup_damaged".to_string())?;
-        if info.format != 1 {
+        if !matches!(info.format, 1 | 2) {
             return Err("local_backup_newer".into());
         }
         let safety = if self.pgdata().join("PG_VERSION").exists() { Some(self.backup_locked(dir, false)?.name) } else { None };
@@ -1488,6 +1533,8 @@ impl Runtime {
         }
         secrets.owner = info.owner;
         secrets.worker = info.worker;
+        secrets.pending_owner = info.pending_owner;
+        secrets.pending_worker = info.pending_worker;
         secrets.archive_key = info.archive_key;
         secrets.registered = true;
         secrets.embedder.clear(); // the restored records are indexed again for this computer's embedder
@@ -1670,6 +1717,10 @@ struct BackupInfo {
     created: String,
     owner: String,
     worker: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_worker: Option<String>,
     archive_key: String,
     /// Made by the daily automatic backup (only those are pruned).
     #[serde(default)]
@@ -1818,6 +1869,47 @@ fn free_port(preferred: u16) -> Result<u16, String> {
         .and_then(|l| l.local_addr())
         .map(|a| a.port())
         .map_err(|e| format!("local_no_port: {e}"))
+}
+
+#[derive(Clone, Copy)]
+enum ManagedPrincipal { Owner, Worker }
+
+impl ManagedPrincipal {
+    fn id(self) -> &'static str { match self { Self::Owner => "management:owner", Self::Worker => "worker" } }
+    fn current(self, s: &Secrets) -> &str { match self { Self::Owner => &s.owner, Self::Worker => &s.worker } }
+    fn pending(self, s: &Secrets) -> Option<&str> { match self { Self::Owner => s.pending_owner.as_deref(), Self::Worker => s.pending_worker.as_deref() } }
+    fn stage(self, s: &mut Secrets, token: String) { match self { Self::Owner => s.pending_owner = Some(token), Self::Worker => s.pending_worker = Some(token) } }
+    fn complete(self, s: &mut Secrets, token: String) { match self {
+        Self::Owner => { s.owner = token; s.pending_owner = None; }
+        Self::Worker => { s.worker = token; s.pending_worker = None; }
+    } }
+}
+
+fn managed_token_status(data: &[u8], id: &str) -> Result<bool, String> {
+    #[derive(serde::Deserialize)]
+    struct Status { principal_id: String, active: bool, needs_rotation: bool }
+    let status: Status = serde_json::from_slice(data).map_err(|_| "local_token_status_failed")?;
+    if status.principal_id != id || !status.active { return Err("local_token_revoked".into()); }
+    Ok(status.needs_rotation)
+}
+
+fn rotate_managed_token(
+    secrets: &mut Secrets, principal: ManagedPrincipal,
+    status: &mut impl FnMut(&str, &str) -> Result<bool, String>,
+    save: &impl Fn(&Secrets) -> Result<(), String>,
+    rotate: &mut impl FnMut(&str, &str, &str) -> Result<(), String>,
+) -> Result<bool, String> {
+    let old = principal.current(secrets).to_owned();
+    if principal.pending(secrets).is_none() {
+        if !status(principal.id(), &old)? { return Ok(false); }
+        principal.stage(secrets, secret()?);
+        save(secrets)?;
+    }
+    let next = principal.pending(secrets).ok_or("local_token_pending_missing")?.to_owned();
+    rotate(principal.id(), &old, &next)?;
+    principal.complete(secrets, next);
+    save(secrets)?;
+    Ok(true)
 }
 
 fn secret() -> Result<String, String> {
@@ -2584,6 +2676,71 @@ mod tests {
         let (a, b) = (secret().unwrap(), secret().unwrap());
         assert_eq!(a.len(), 64);
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn managed_token_rotation_resumes_after_database_failure() {
+        let dir = std::env::temp_dir().join(format!("arkism-token-test-{}", secret().unwrap()));
+        fs::create_dir_all(&dir).unwrap();
+        let rt = Runtime::new(None, dir.clone());
+        let mut secrets = rt.secrets().unwrap();
+        let old = secrets.owner.clone();
+        let worker = secrets.worker.clone();
+        let mut status = |_: &str, _: &str| Ok(true);
+        let mut failed = |_: &str, _: &str, _: &str| Err("injected_database_failure".into());
+        assert!(rotate_managed_token(&mut secrets, ManagedPrincipal::Owner, &mut status, &|s| rt.save(s), &mut failed).is_err());
+        let mut persisted = rt.secrets().unwrap();
+        assert_eq!(persisted.owner, old);
+        assert!(persisted.pending_owner.is_some());
+        let next = persisted.pending_owner.clone().unwrap();
+        let mut no_status = |_: &str, _: &str| -> Result<bool,String> { panic!("pending intent must replay before status") };
+        let mut succeed = |id: &str, previous: &str, token: &str| {
+            assert_eq!(id, "management:owner"); assert_eq!(previous, old); assert_eq!(token, next); Ok(())
+        };
+        assert!(rotate_managed_token(&mut persisted, ManagedPrincipal::Owner, &mut no_status, &|s| rt.save(s), &mut succeed).unwrap());
+        let saved = rt.secrets().unwrap();
+        assert_eq!(saved.owner, next);
+        assert_eq!(saved.worker, worker);
+        assert!(saved.pending_owner.is_none());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn managed_token_rotation_recovers_after_final_save_failure() {
+        use std::cell::RefCell;
+        let dir = std::env::temp_dir().join(format!("arkism-token-test-{}", secret().unwrap()));
+        fs::create_dir_all(&dir).unwrap();
+        let rt = Runtime::new(None, dir.clone());
+        let mut secrets = rt.secrets().unwrap();
+        let old = secrets.worker.clone();
+        let database = RefCell::new(old.clone());
+        let saves = RefCell::new(0);
+        let save = |s: &Secrets| {
+            *saves.borrow_mut() += 1;
+            if *saves.borrow() == 2 { Err("injected_settings_failure".into()) } else { rt.save(s) }
+        };
+        let mut rotate = |_: &str, previous: &str, next: &str| {
+            assert_eq!(*database.borrow(), previous); *database.borrow_mut() = next.to_owned(); Ok(())
+        };
+        assert!(rotate_managed_token(&mut secrets, ManagedPrincipal::Worker, &mut |_,_| Ok(true), &save, &mut rotate).is_err());
+        let mut persisted = rt.secrets().unwrap();
+        assert_eq!(persisted.worker, old);
+        assert_eq!(persisted.pending_worker.as_deref(), Some(database.borrow().as_str()));
+        let mut replay = |_: &str, previous: &str, next: &str| {
+            assert_eq!(previous, old); assert_eq!(*database.borrow(), next); Ok(())
+        };
+        assert!(rotate_managed_token(&mut persisted, ManagedPrincipal::Worker, &mut |_,_| panic!("unexpected status"), &|s| rt.save(s), &mut replay).unwrap());
+        assert_eq!(rt.secrets().unwrap().worker, *database.borrow());
+        assert!(rt.secrets().unwrap().pending_worker.is_none());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn managed_token_status_rejects_revoked_or_mismatched_identity() {
+        assert!(managed_token_status(br#"{"principal_id":"worker","active":false,"needs_rotation":true}"#, "worker").is_err());
+        assert!(managed_token_status(br#"{"principal_id":"other","active":true,"needs_rotation":false}"#, "worker").is_err());
+        assert!(managed_token_status(br#"{}"#, "worker").is_err());
+        assert!(!managed_token_status(br#"{"principal_id":"worker","active":true,"needs_rotation":false}"#, "worker").unwrap());
     }
 
     #[test]

@@ -227,7 +227,7 @@ func TestPostgresPrivacyArtifactHoldScopeAndProvenance(t *testing.T) {
 
 func TestPostgresPrivacyArtifactHoldAfterMarkerRestricted(t *testing.T) {
 	p, f, artifact, _, request := privacyArtifactFixture(t)
-	const token = "artifact-human-without-storage-permission"
+	token := testPrincipalToken("artifact-human-without-storage-permission")
 	if err := p.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: "human-1", Role: roleHuman, Token: token, OrganizationID: artifactHoldScope.WorkspaceID, ProjectID: artifactHoldScope.ProjectID, Actions: []string{"db:read", "db:write"}}); err != nil {
 		t.Fatal(err)
 	}
@@ -263,8 +263,8 @@ func TestPostgresPrivacyArtifactHoldAfterMarkerRestricted(t *testing.T) {
 
 func TestPostgresPrivacyArtifactRestrictedPermissions(t *testing.T) {
 	p, f, artifact, job, request := privacyArtifactFixture(t)
-	const humanToken = "artifact-scoped-human-token"
-	const workerToken = "artifact-storage-other-project-token"
+	humanToken := testPrincipalToken("artifact-scoped-human-token")
+	workerToken := testPrincipalToken("artifact-storage-other-project-token")
 	for _, grant := range []PrincipalGrant{
 		{PrincipalID: "human-1", Role: roleHuman, Token: humanToken, OrganizationID: artifactHoldScope.WorkspaceID, ProjectID: artifactHoldScope.ProjectID, Actions: []string{"db:read", "db:write"}},
 		{PrincipalID: "storage-worker", Role: roleService, Token: workerToken, OrganizationID: "other-org", ProjectID: "other-project", Actions: []string{"db:read", "db:write", "storage:internal"}},

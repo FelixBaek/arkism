@@ -562,7 +562,7 @@ func (s *Service) EstimateTeam(ctx context.Context, token string, in TeamEstimat
 	return estimateTeam(in.Team, crew), nil
 }
 
-func crewUsageRoutes(mux *http.ServeMux, s *Service) {
+func crewUsageRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/crew/usage", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		out, e := s.CrewUsage(r.Context(), bearer(r), scopeQuery(r), q.Get("range"), q.Get("kind"), q.Get("agent_id"), q.Get("team_id"))

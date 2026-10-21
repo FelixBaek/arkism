@@ -12,7 +12,7 @@ func TestCandidateConflictHoldAtomicServiceAndReplay(t *testing.T) {
 	f, c, _ := autoReviewFixture(t)
 	old := reviewedForEvaluation(t, f)
 	in := CandidateConflictHoldInput{Scope: scopeA, ExpectedRevision: c.Revision, Memory: Ref{Collection: colMemories, ID: old.ID, Revision: old.Revision}, OperationID: "correction-1"}
-	got, e := f.svc.HoldCandidateConflict(testCtx, "reviewer", c.ID, in)
+	got, e := f.svc.HoldCandidateConflict(testCtx, testPrincipalToken("reviewer"), c.ID, in)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -25,7 +25,7 @@ func TestCandidateConflictHoldAtomicServiceAndReplay(t *testing.T) {
 	if !live(current) || current.ConflictID != got.Conflict.ID {
 		t.Fatal("corrected memory left retrieval or lost its conflict link")
 	}
-	again, e := f.svc.HoldCandidateConflict(testCtx, "reviewer", c.ID, in)
+	again, e := f.svc.HoldCandidateConflict(testCtx, testPrincipalToken("reviewer"), c.ID, in)
 	if e != nil || again != got {
 		t.Fatal("replay", again, e)
 	}
@@ -33,7 +33,7 @@ func TestCandidateConflictHoldAtomicServiceAndReplay(t *testing.T) {
 	if e = f.repo.Replace(testCtx, colMemories, current, current.Revision); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = f.svc.HoldCandidateConflict(testCtx, "reviewer", c.ID, in); !errors.Is(e, ErrConflict) {
+	if _, e = f.svc.HoldCandidateConflict(testCtx, testPrincipalToken("reviewer"), c.ID, in); !errors.Is(e, ErrConflict) {
 		t.Fatal("deleted replay", e)
 	}
 }
@@ -42,7 +42,7 @@ func TestCandidateConflictHoldAuthorizationAndAtomicFailure(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			f, c, _ := autoReviewFixture(t)
 			old := reviewedForEvaluation(t, f)
-			token := "reviewer"
+			token := testPrincipalToken("reviewer")
 			switch mode {
 			case "human":
 				token = f.human
@@ -72,7 +72,7 @@ func TestCaptureAutomatedCorrectionRetriesFailedHold(t *testing.T) {
 	in := captureInput(scopeA, "correction-event", claim)
 	in.Automated = true
 	f.svc.MemoryReviewPolicies[0].ExpiresAt = time.Now().Add(-time.Hour)
-	out := f.capture("reviewer", in)
+	out := f.capture(testPrincipalToken("reviewer"), in)
 	if out[0].Status != "rejected" {
 		t.Fatal(out)
 	}
@@ -86,10 +86,10 @@ func TestCaptureAutomatedCorrectionRetriesFailedHold(t *testing.T) {
 		t.Fatal("missing approval fence")
 	}
 	f.svc.MemoryReviewPolicies[0].ExpiresAt = time.Now().Add(time.Hour)
-	if _, e = f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, CandidateReviewInput{Scope: scopeA, ExpectedRevision: c.Revision, Action: "approve", OperationID: "premature"}); !errors.Is(e, ErrDenied) {
+	if _, e = f.svc.ReviewCandidate(testCtx, testPrincipalToken("reviewer"), c.ID, CandidateReviewInput{Scope: scopeA, ExpectedRevision: c.Revision, Action: "approve", OperationID: "premature"}); !errors.Is(e, ErrDenied) {
 		t.Fatal("pending correction approved", e)
 	}
-	out = f.capture("reviewer", in)
+	out = f.capture(testPrincipalToken("reviewer"), in)
 	if out[0].Reason != "conflict_review" || out[0].CandidateID != c.ID {
 		t.Fatal("retry lost correction", out)
 	}
@@ -97,7 +97,7 @@ func TestCaptureAutomatedCorrectionRetriesFailedHold(t *testing.T) {
 	if current.Status != "active" || current.ConflictID == "" {
 		t.Fatal("old memory left retrieval or lost its conflict link", current.Status, current.ConflictID)
 	}
-	if again := f.capture("reviewer", in); again[0].Reason != "duplicate_event" {
+	if again := f.capture(testPrincipalToken("reviewer"), in); again[0].Reason != "duplicate_event" {
 		t.Fatal(again)
 	}
 }
@@ -136,7 +136,7 @@ func TestCaptureCorrectionRecoversAfterCommittedHoldBeforePointerCompletion(t *t
 	c.Supersedes = &Ref{Collection: colMemories, ID: old.ID, Revision: old.Revision}
 	in := captureInput(scopeA, "retry-committed-hold", c)
 	in.Automated = true
-	first := f.capture("reviewer", in)
+	first := f.capture(testPrincipalToken("reviewer"), in)
 	if first[0].Status != "rejected" {
 		t.Fatal(first)
 	}
@@ -145,7 +145,7 @@ func TestCaptureCorrectionRecoversAfterCommittedHoldBeforePointerCompletion(t *t
 		t.Fatal("hold not committed")
 	}
 	conflict := current.ConflictID
-	second := f.capture("reviewer", in)
+	second := f.capture(testPrincipalToken("reviewer"), in)
 	if second[0].Reason != "conflict_review" {
 		t.Fatal("completion retry merged prematurely", second)
 	}
@@ -172,7 +172,7 @@ func TestCaptureSameCorrectionTextDifferentTargetsDoesNotMerge(t *testing.T) {
 		c.Supersedes = &Ref{Collection: colMemories, ID: old.ID, Revision: old.Revision}
 		in := captureInput(scopeA, []string{"target-a", "target-b"}[i], c)
 		in.Automated = true
-		out := f.capture("reviewer", in)
+		out := f.capture(testPrincipalToken("reviewer"), in)
 		if out[0].Reason != "conflict_review" {
 			t.Fatal(out)
 		}
@@ -187,12 +187,12 @@ func TestPostgresCandidateConflictHoldApplicationRole(t *testing.T) {
 	f := newFixture(t)
 	p := isolatedPostgres(t)
 	f.svc.Repo = p
-	f.auth.actors["reviewer"] = actor("memory-reviewer", roleService, true, append(allVerbs, "auto_review")...)
+	f.auth.actors[testPrincipalToken("reviewer")] = actor("memory-reviewer", roleService, true, append(allVerbs, "auto_review")...)
 	f.svc.MemoryReviewPolicies = []MemoryReviewPolicy{{PrincipalID: "memory-reviewer", Scope: scopeA, Kinds: []string{"semantic", "user", "lesson", "decision"}, ExpiresAt: time.Now().Add(time.Hour)}}
 	c := f.create(f.agent, "memory_candidates", generatedCandidate(scopeA, refs(f.source())))
 	old := reviewedForEvaluation(t, f)
 	app := restrictedPostgres(t, p)
-	if e := p.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: "memory-reviewer", Role: roleService, Token: "reviewer", OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", "transition:memory_candidates", "transition:memories", "auto_review:memory_candidates"}}); e != nil {
+	if e := p.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: "memory-reviewer", Role: roleService, Token: testPrincipalToken("reviewer"), OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", "transition:memory_candidates", "transition:memories", "auto_review:memory_candidates"}}); e != nil {
 		t.Fatal(e)
 	}
 	f.svc.Repo = app
@@ -201,13 +201,13 @@ func TestPostgresCandidateConflictHoldApplicationRole(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	ctx := ContextWithPostgresToken(testCtx, "reviewer")
+	ctx := ContextWithPostgresToken(testCtx, testPrincipalToken("reviewer"))
 	in := CandidateConflictHoldInput{Scope: scopeA, ExpectedRevision: c.Revision, Memory: Ref{Collection: colMemories, ID: old.ID, Revision: old.Revision}, OperationID: "pg-correction"}
-	got, e := f.svc.HoldCandidateConflict(ctx, "reviewer", c.ID, in)
+	got, e := f.svc.HoldCandidateConflict(ctx, testPrincipalToken("reviewer"), c.ID, in)
 	if e != nil {
 		t.Fatal("application hold", e)
 	}
-	again, e := f.svc.HoldCandidateConflict(ctx, "reviewer", c.ID, in)
+	again, e := f.svc.HoldCandidateConflict(ctx, testPrincipalToken("reviewer"), c.ID, in)
 	if e != nil || again != got {
 		t.Fatal("application replay", again, e)
 	}

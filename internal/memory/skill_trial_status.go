@@ -87,7 +87,7 @@ func (s *Service) ReadSkillTrialStatus(ctx context.Context, token, id string, in
 	})
 	return out, err
 }
-func skillTrialStatusRoutes(mux *http.ServeMux, s *Service) {
+func skillTrialStatusRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/skill-trials/{id}/status", func(w http.ResponseWriter, r *http.Request) {
 		var in SkillTrialReadInput
 		if !decode(w, r, &in) {

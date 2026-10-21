@@ -51,11 +51,18 @@ A new host key is accepted on first use, like answering "yes" once in `ssh`.
 3. Register an owner token and a worker token, still with the `arkism_init` connection. The token is read only from `MEMORY_PRINCIPAL_TOKEN` and is never printed. `'*'` grants every action in that project; list actions (for example `read:memories`) to narrow it.
 
    ```bash
-   MEMORY_PRINCIPAL_TOKEN='owner-secret' go run ./cmd/memory-principal \
+   install -d -m 700 "$HOME/.local/share/arkism-admin"
+   go run ./cmd/memory-principal --generate-token-file "$HOME/.local/share/arkism-admin/owner-token"
+   go run ./cmd/memory-principal --generate-token-file "$HOME/.local/share/arkism-admin/worker-token"
+   MEMORY_PRINCIPAL_TOKEN="$(cat "$HOME/.local/share/arkism-admin/owner-token")" go run ./cmd/memory-principal \
      --principal management:owner --role human --organization default --project default --actions '*'
-   MEMORY_PRINCIPAL_TOKEN='worker-secret' go run ./cmd/memory-principal \
+   MEMORY_PRINCIPAL_TOKEN="$(cat "$HOME/.local/share/arkism-admin/worker-token")" go run ./cmd/memory-principal \
      --principal worker --role service --organization default --project default --actions '*'
    ```
+
+   Tokens expire within 90 days. Existing grants do not extend that lifetime.
+   See [token generation, rotation and upgrade](principal-tokens.md) for the
+   Windows commands and the legacy-token transition period.
 
 4. Put the settings in an env file of your own, with `MEMORY_DATABASE_URL` set to the `arkism_app` connection, and start the API and the worker. `memoryd` does not read the file by itself.
 
@@ -81,6 +88,13 @@ Arkism only needs Postgres with pgvector, so a Supabase project works as a manag
 4. Run the API and worker with the same URL but the `arkism_app` role.
 
 ## `memoryd` flags
+
+Choose exactly one execution mode per invocation. API is the default; worker,
+initialization, reindex, snapshots and offline maintenance are mutually exclusive.
+Combining them is rejected before connecting to the database. `--recovery` is
+allowed only with the API or worker mode. Existing individual flags and defaults
+remain supported.
+
 
 | Flag | What it does |
 |---|---|

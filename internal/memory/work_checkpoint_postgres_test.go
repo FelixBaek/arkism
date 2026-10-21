@@ -125,9 +125,9 @@ func TestPostgresWorkCheckpointPermissionsScopeAndRefs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	codex := "codex-checkpoint-tok"
+	codex := testPrincipalToken("codex-checkpoint-tok")
 	grant("codex-wp", "agent", codex, "db:read", "db:write", "write:work_checkpoints", "read:work_checkpoints", "read:sources", "write:sources")
-	claude := "claude-checkpoint-tok"
+	claude := testPrincipalToken("claude-checkpoint-tok")
 	grant("claude-wp", "agent", claude, "db:read", "db:write", "write:work_checkpoints", "read:work_checkpoints")
 	src, err := f.svc.Create(boundContext(codex), codex, "sources", sourceInput(CreateInput{Scope: scopeA, Text: "checkpoint evidence source"}))
 	if err != nil {

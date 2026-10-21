@@ -1,4 +1,4 @@
-"""Require successful main-push quality runs for the exact release commit."""
+"""Require exact-commit correctness, Sonar, coverage and default-setup CodeQL."""
 import argparse
 import json
 import os
@@ -11,7 +11,8 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from http.client import HTTPException
 
 
-WORKFLOWS = ("checks.yml", "sonarcloud.yml")
+WORKFLOWS = ("checks.yml", "sonarcloud.yml", "coverage.yml", "codeql")
+CODEQL_PATH = "dynamic/github-code-scanning/codeql"
 PENDING = {"queued", "in_progress", "waiting", "pending", "requested"}
 MAX_PAGES = 10
 MAX_PAGE_BYTES = 5 * 1024 * 1024
@@ -70,19 +71,70 @@ def fetch_runs(repository, sha, workflow, timeout):
         raise GateError("unknown release quality workflow")
     deadline = time.monotonic() + timeout
     auth = github_auth(timeout)
-    pages = fetch_pages(repository, sha, workflow, auth, deadline)
+    identifier = resolve_codeql(repository, auth, deadline) if workflow == "codeql" else workflow
+    pages = fetch_pages(repository, sha, workflow, auth, deadline, identifier)
     return validate_run_inventory(pages, workflow)
 
 
-def fetch_pages(repository, sha, workflow, auth, deadline):
+def workflow_path(workflow):
+    return CODEQL_PATH if workflow == "codeql" else f".github/workflows/{workflow}"
+
+
+def workflow_event(workflow):
+    return "dynamic" if workflow == "codeql" else "push"
+
+
+def resolve_codeql(repository, auth, deadline):
+    """Default-setup CodeQL has a dynamic path, not a repository YAML filename."""
+    found, received, total = [], 0, None
+    for number in range(1, MAX_PAGES + 1):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise GateError("CodeQL inventory request timed out")
+        page = request_page(f"https://api.github.com/repos/{repository}/actions/workflows?per_page=100&page={number}", auth, remaining)
+        total, items = codeql_inventory(page, total)
+        for item in items:
+            identifier = active_codeql(item)
+            if identifier:
+                found.append(identifier)
+        received += len(items)
+        if received >= total:
+            if received != total or len(found) != 1:
+                raise GateError("missing or ambiguous active CodeQL workflow")
+            return found[0]
+        if not items:
+            break
+    raise GateError("incomplete CodeQL workflow inventory")
+
+
+def codeql_inventory(page, previous_total):
+    if not isinstance(page, dict) or type(page.get("total_count")) is not int or not isinstance(page.get("workflows"), list):
+        raise GateError("invalid CodeQL workflow inventory")
+    total = page["total_count"]
+    if total < 0 or (previous_total is not None and previous_total != total):
+        raise GateError("CodeQL workflow inventory changed")
+    return total, page["workflows"]
+
+
+def active_codeql(item):
+    if not isinstance(item, dict):
+        raise GateError("invalid CodeQL workflow entry")
+    if item.get("path") != CODEQL_PATH or item.get("state") != "active":
+        return None
+    if type(item.get("id")) is not int or item["id"] <= 0:
+        raise GateError("invalid CodeQL workflow identifier")
+    return str(item["id"])
+
+
+def fetch_pages(repository, sha, workflow, auth, deadline, identifier=None):
     pages, received = [], 0
     for number in range(1, MAX_PAGES + 1):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise GateError("GitHub API request timed out")
-        query = urlencode({"head_sha": sha, "event": "push", "branch": "main",
+        query = urlencode({"head_sha": sha, "event": workflow_event(workflow), "branch": "main",
                            "per_page": 100, "page": number})
-        url = f"https://api.github.com/repos/{repository}/actions/workflows/{workflow}/runs?{query}"
+        url = f"https://api.github.com/repos/{repository}/actions/workflows/{identifier or workflow}/runs?{query}"
         page = request_page(url, auth, remaining)
         total, items = page_inventory(page, workflow)
         pages.append(page)
@@ -130,9 +182,9 @@ def validate_run_inventory(pages, workflow):
 def latest_run(runs, repository, sha, workflow):
     matching = []
     for run in runs:
-        if (run.get("head_sha") != sha or run.get("event") != "push"
+        if (run.get("head_sha") != sha or run.get("event") != workflow_event(workflow)
                 or run.get("head_branch") != "main"
-                or run.get("path") != f".github/workflows/{workflow}"):
+                or run.get("path") != workflow_path(workflow)):
             continue
         for field in ("repository", "head_repository"):
             value = run.get(field)

@@ -1,7 +1,6 @@
-use std::io::{Read, Write};
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use crate::ssh_identity::Store;
+use std::process::Command;
+use std::time::Duration;
 
 const LIMIT: usize = 256 * 1024;
 // The arkism binary on the server (build-time ARKISM_SERVER_BIN).
@@ -24,6 +23,7 @@ fn valid(host: &str, origin: &str, client: &str) -> bool {
 pub fn skill_execution(
     host: &str,
     request: serde_json::Value,
+    store: &Store,
 ) -> Result<serde_json::Value, String> {
     if !valid(host, "codex", "server") {
         return Err("skill_execution_invalid".into());
@@ -33,19 +33,26 @@ pub fn skill_execution(
         return Err("skill_execution_invalid".into());
     }
     execute(
-        ssh_command(
-            host,
-            &format!("{SERVER_BIN} skill-execution"),
-        ),
+        ssh_command(host, &format!("{SERVER_BIN} skill-execution"), store)?,
         raw,
         Duration::from_secs(25),
     )
-    .map_err(|_| "skill_execution_unavailable".to_string())
+    .map_err(|e| {
+        if e.starts_with("ssh_") {
+            e
+        } else {
+            "skill_execution_unavailable".into()
+        }
+    })
 }
 
 // Git screen: the server reads the ARKISM_GIT_ORG repositories and makes bounded GitHub changes
 // (arkism git). A first clone of a large repository can take about a minute.
-pub fn git(host: &str, request: serde_json::Value) -> Result<serde_json::Value, String> {
+pub fn git(
+    host: &str,
+    request: serde_json::Value,
+    store: &Store,
+) -> Result<serde_json::Value, String> {
     if !valid(host, "codex", "server") {
         return Err("git_invalid_request".into());
     }
@@ -54,116 +61,54 @@ pub fn git(host: &str, request: serde_json::Value) -> Result<serde_json::Value, 
         return Err("git_invalid_request".into());
     }
     execute(
-        ssh_command(host, &format!("{SERVER_BIN} git")),
+        ssh_command(host, &format!("{SERVER_BIN} git"), store)?,
         raw,
         Duration::from_secs(180),
     )
 }
 
-fn ssh_command(host: &str, remote: &str) -> Command {
-    let git_ssh = std::path::PathBuf::from(
-        std::env::var_os("ProgramFiles").unwrap_or_else(|| "C:/Program Files".into()),
-    )
-    .join("Git/usr/bin/ssh.exe");
-    let mut cmd = Command::new(if cfg!(windows) && git_ssh.is_file() {
-        git_ssh.as_os_str()
-    } else {
-        std::ffi::OsStr::new("ssh")
-    });
-    cmd.args([
-        "-T",
-        "-o",
-        "BatchMode=yes",
-        "-o",
-        "ConnectTimeout=5",
-        "-o",
-        "ServerAliveInterval=5",
-        "-o",
-        "ServerAliveCountMax=2",
-        host,
-        remote,
-    ]);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000);
-    }
-    cmd
+fn ssh_command(host: &str, remote: &str, store: &Store) -> Result<Command, String> {
+    let target = crate::ssh_tunnel::target_for_host(host)?;
+    let pin = store.required(&target)?;
+    let mut cmd = store.command(&target, &pin)?;
+    cmd.args(["-T", "-o", "ClearAllForwardings=yes"])
+        .arg(&target.host)
+        .arg(remote);
+    Ok(cmd)
 }
 
-fn execute(mut cmd: Command, raw: Vec<u8>, timeout: Duration) -> Result<serde_json::Value, String> {
-    let mut child = cmd
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|_| "work_admin_unavailable")?;
-    let mut input = child.stdin.take().ok_or("work_admin_unavailable")?;
-    let output = child.stdout.take().ok_or("work_admin_unavailable")?;
-    std::thread::spawn(move || {
-        let _ = input.write_all(&raw);
-    });
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let result = output
-            .take((LIMIT + 1) as u64)
-            .read_to_end(&mut bytes)
-            .map(|_| bytes);
-        let _ = tx.send(result);
-    });
-    let start = Instant::now();
-    let mut received = None;
-    loop {
-        if let Ok(value) = rx.try_recv() {
-            received = Some(value);
+fn execute(cmd: Command, raw: Vec<u8>, timeout: Duration) -> Result<serde_json::Value, String> {
+    let result = crate::ssh_exec::run(cmd, raw, LIMIT, timeout).map_err(|e| -> String {
+        match e.as_str() {
+            "ssh_unreachable" => "work_admin_timeout".into(),
+            "ssh_output_invalid" => "work_admin_response_invalid".into(),
+            _ => "work_admin_unavailable".into(),
         }
-        if received
-            .as_ref()
-            .is_some_and(|r| r.as_ref().map_or(true, |b| b.len() > LIMIT))
-        {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("work_admin_response_invalid".into());
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let bytes = received
-                    .unwrap_or_else(|| {
-                        rx.recv_timeout(Duration::from_millis(500))
-                            .unwrap_or_else(|_| {
-                                Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "read"))
-                            })
-                    })
-                    .map_err(|_| "work_admin_response_invalid")?;
-                if bytes.len() > LIMIT {
-                    return Err("work_admin_response_invalid".into());
-                }
-                let value: serde_json::Value =
-                    serde_json::from_slice(&bytes).map_err(|_| "work_admin_response_invalid")?;
-                if !status.success() {
-                    let code = value.get("error").and_then(|v| v.as_str()).unwrap_or("");
-                    return Err(
-                        if (code.starts_with("work_") || code.starts_with("git_"))
-                            && code.len() <= 80
-                            && code.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
-                        {
-                            code.to_string()
-                        } else {
-                            "work_admin_unavailable".into()
-                        },
-                    );
-                }
-                return Ok(value);
-            }
-            Ok(None) if start.elapsed() < timeout => std::thread::sleep(Duration::from_millis(20)),
-            _ => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err("work_admin_timeout".into());
-            }
-        }
+    })?;
+    // Host-key rejection precedes target authentication and must reach the shared review UI.
+    let stderr = String::from_utf8_lossy(&result.err).to_ascii_lowercase();
+    if result.code != 0
+        && (stderr.contains("host key verification failed")
+            || stderr.contains("remote host identification has changed"))
+    {
+        return Err("ssh_host_key_changed".into());
     }
+    let value: serde_json::Value =
+        serde_json::from_slice(&result.out).map_err(|_| "work_admin_response_invalid")?;
+    if result.code != 0 {
+        let code = value.get("error").and_then(|v| v.as_str()).unwrap_or("");
+        return Err(
+            if (code.starts_with("work_") || code.starts_with("git_"))
+                && code.len() <= 80
+                && code.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
+            {
+                code.to_string()
+            } else {
+                "work_admin_unavailable".into()
+            },
+        );
+    }
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -181,14 +126,19 @@ mod tests {
         for host in ["-oProxyCommand=x", "host;id", "@host", "host\n", ""] {
             assert!(!valid(host, "codex", "pc"));
             assert_eq!(
-                skill_execution(host, serde_json::json!({})),
+                skill_execution(
+                    host,
+                    serde_json::json!({}),
+                    &Store::new(std::path::Path::new("unused"))
+                ),
                 Err("skill_execution_invalid".into())
             );
         }
         assert_eq!(
             skill_execution(
                 "server",
-                serde_json::json!({"oversized": "x".repeat(8193)})
+                serde_json::json!({"oversized": "x".repeat(8193)}),
+                &Store::new(std::path::Path::new("unused"))
             ),
             Err("skill_execution_invalid".into())
         );
@@ -250,7 +200,15 @@ mod tests {
             let remote = scenario["remote"].as_str().unwrap();
             let invoke = |request: &serde_json::Value| {
                 execute(
-                    ssh_command(host, remote),
+                    ssh_command(
+                        host,
+                        remote,
+                        &Store::new(&std::path::PathBuf::from(
+                            std::env::var_os("ARKISM_HANDOFF_TEST_DATA")
+                                .expect("isolated approved store"),
+                        )),
+                    )
+                    .unwrap(),
                     serde_json::to_vec(request).unwrap(),
                     Duration::from_secs(25),
                 )

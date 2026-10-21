@@ -107,7 +107,7 @@ namespace Arkism.InstallerChecks {
       [IO.Directory]::CreateDirectory($path) | Out-Null
     }
     Assert-ProductProfileBeforeSetup $fixture
-    $names=@('Arkism.exe','integration/arkism.exe','runtime/memoryd.exe','runtime/memory-principal.exe','runtime/roles.sql',
+    $names=@('uninstall.exe','runtime/arkism-installer.exe','Arkism.exe','integration/arkism.exe','runtime/memoryd.exe','runtime/memory-principal.exe','runtime/roles.sql',
       'runtime/pgsql/bin/postgres.exe','runtime/pgsql/bin/pg_ctl.exe','runtime/pgsql/bin/initdb.exe','runtime/pgsql/bin/psql.exe',
       'runtime/pgsql/bin/pg_dump.exe','runtime/pgsql/bin/pg_restore.exe','runtime/pgsql/lib/vector.dll','runtime/pgsql/share/extension/vector.control')
     foreach($name in $names) {
@@ -117,7 +117,7 @@ namespace Arkism.InstallerChecks {
       }
     }
     [IO.File]::WriteAllText($fixture.Setup,'inert setup; never executed')
-    [IO.File]::WriteAllText((Join-Path $fixture.Install 'uninstall.exe'),'inert uninstaller; never executed')
+    # Uninstaller bytes belong to the staged manifest and must match exactly.
     $fixture.SetupHash=Get-InstalledSmokeHash $fixture.Setup
     $fixture.UninstallerHash=Get-InstalledSmokeHash (Join-Path $fixture.Install 'uninstall.exe')
     $fixture.UninstallerBytes=[IO.File]::ReadAllBytes((Join-Path $fixture.Install 'uninstall.exe'))

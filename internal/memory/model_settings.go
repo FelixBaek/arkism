@@ -728,7 +728,7 @@ func (s *Service) ReportProviders(ctx context.Context, token string, in Provider
 	}, "", "")
 }
 
-func providersRoutes(mux *http.ServeMux, s *Service) {
+func providersRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/providers", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.Providers(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, out, e)

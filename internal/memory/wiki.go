@@ -710,7 +710,7 @@ func parseWikiQuery(raw string, extra ...string) (Scope, url.Values, error) {
 	return scope, q, nil
 }
 
-func registerWikiHTTP(mux *http.ServeMux, s *Service) {
+func registerWikiHTTP(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/wiki/jobs", func(w http.ResponseWriter, r *http.Request) {
 		var in WikiJobInput
 		if !decode(w, r, &in) {

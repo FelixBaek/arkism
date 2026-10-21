@@ -487,63 +487,25 @@ mod abi {
         pub active: u32,
         pub terminated: u32,
     }
-    #[repr(C)]
-    pub struct StartupInfo {
-        pub cb: u32,
-        pub reserved: *mut u16,
-        pub desktop: *mut u16,
-        pub title: *mut u16,
-        pub x: u32,
-        pub y: u32,
-        pub x_size: u32,
-        pub y_size: u32,
-        pub x_chars: u32,
-        pub y_chars: u32,
-        pub fill: u32,
-        pub flags: u32,
-        pub show: u16,
-        pub reserved_count: u16,
-        pub reserved_bytes: *mut u8,
-        pub stdin: Handle,
-        pub stdout: Handle,
-        pub stderr: Handle,
-    }
-    #[repr(C)]
-    pub struct StartupEx {
-        pub startup: StartupInfo,
-        pub attributes: *mut c_void,
-    }
-    #[repr(C)]
-    #[derive(Default)]
-    pub struct ProcessInfo {
-        pub process: Handle,
-        pub thread: Handle,
-        pub pid: u32,
-        pub tid: u32,
-    }
-    #[repr(C)]
-    pub struct SecurityAttributes {
-        pub length: u32,
-        pub descriptor: *mut c_void,
-        pub inherit: i32,
-    }
 }
 
 #[cfg(windows)]
 mod native {
-    use super::abi::{
-        BasicAccounting, ExtendedLimit, Handle, ProcessInfo, SecurityAttributes, StartupEx,
-    };
+    use super::abi::{BasicAccounting, ExtendedLimit, Handle};
     use super::{
         command_line, environment_block, inheritance_list, no_nul, valid_handle, Accounting, Api,
         Cause, Created, JobError, Owner, Status,
+    };
+    use crate::windows_process::{
+        CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
+        UpdateProcThreadAttribute, PROCESS_INFORMATION, SECURITY_ATTRIBUTES, STARTUPINFOEXW,
     };
     use std::alloc::{alloc_zeroed, dealloc, Layout};
     use std::cmp::Ordering;
     use std::ffi::{c_void, OsString};
     use std::fmt;
     use std::fs::File;
-    use std::mem::{size_of, zeroed};
+    use std::mem::size_of;
     use std::os::windows::ffi::{OsStrExt, OsStringExt};
     use std::os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle};
     use std::path::PathBuf;
@@ -562,7 +524,7 @@ mod native {
 
     #[link(name = "kernel32")]
     extern "system" {
-        fn CreateJobObjectW(attributes: *const SecurityAttributes, name: *const u16) -> Handle;
+        fn CreateJobObjectW(attributes: *const SECURITY_ATTRIBUTES, name: *const u16) -> Handle;
         fn SetInformationJobObject(
             job: Handle,
             class: u32,
@@ -579,18 +541,6 @@ mod native {
         fn AssignProcessToJobObject(job: Handle, process: Handle) -> i32;
         fn IsProcessInJob(process: Handle, job: Handle, result: *mut i32) -> i32;
         fn TerminateJobObject(job: Handle, code: u32) -> i32;
-        fn CreateProcessW(
-            application: *const u16,
-            command: *mut u16,
-            process_attributes: *const SecurityAttributes,
-            thread_attributes: *const SecurityAttributes,
-            inherit: i32,
-            flags: u32,
-            environment: *const c_void,
-            directory: *const u16,
-            startup: *mut StartupEx,
-            process: *mut ProcessInfo,
-        ) -> i32;
         fn ResumeThread(thread: Handle) -> u32;
         fn QueryFullProcessImageNameW(
             process: Handle,
@@ -606,7 +556,7 @@ mod native {
         fn CreatePipe(
             read: *mut Handle,
             write: *mut Handle,
-            attributes: *const SecurityAttributes,
+            attributes: *const SECURITY_ATTRIBUTES,
             size: u32,
         ) -> i32;
         fn SetHandleInformation(handle: Handle, mask: u32, flags: u32) -> i32;
@@ -620,22 +570,6 @@ mod native {
             inherit: i32,
             options: u32,
         ) -> i32;
-        fn InitializeProcThreadAttributeList(
-            list: *mut c_void,
-            count: u32,
-            flags: u32,
-            bytes: *mut usize,
-        ) -> i32;
-        fn UpdateProcThreadAttribute(
-            list: *mut c_void,
-            flags: u32,
-            attribute: usize,
-            value: *const c_void,
-            bytes: usize,
-            previous: *mut c_void,
-            returned: *mut usize,
-        ) -> i32;
-        fn DeleteProcThreadAttributeList(list: *mut c_void);
         fn CompareStringOrdinal(
             first: *const u16,
             first_len: i32,
@@ -849,10 +783,10 @@ mod native {
         }
 
         fn pipe(&mut self) -> Result<(Handle, Handle), Cause> {
-            let sa = SecurityAttributes {
-                length: size_of::<SecurityAttributes>() as u32,
-                descriptor: null_mut(),
-                inherit: 1,
+            let sa = SECURITY_ATTRIBUTES {
+                nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: null_mut(),
+                bInheritHandle: 1,
             };
             let mut read = null_mut();
             let mut write = null_mut();
@@ -925,14 +859,14 @@ mod native {
             let handles = inheritance_list(handles, &forbidden)?;
             let mut attributes = Attributes::new(handles)?;
             attributes.install()?;
-            let mut startup: StartupEx = unsafe { zeroed() };
-            startup.startup.cb = size_of::<StartupEx>() as u32;
-            startup.startup.flags = STARTF_USESTDHANDLES;
-            startup.startup.stdin = handles[0] as Handle;
-            startup.startup.stdout = handles[1] as Handle;
-            startup.startup.stderr = handles[2] as Handle;
-            startup.attributes = attributes.pointer;
-            let mut process = ProcessInfo::default();
+            let mut startup = STARTUPINFOEXW::default();
+            startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
+            startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+            startup.StartupInfo.hStdInput = handles[0] as Handle;
+            startup.StartupInfo.hStdOutput = handles[1] as Handle;
+            startup.StartupInfo.hStdError = handles[2] as Handle;
+            startup.lpAttributeList = attributes.pointer;
+            let mut process = PROCESS_INFORMATION::default();
             let flags = CREATE_SUSPENDED
                 | CREATE_UNICODE_ENVIRONMENT
                 | EXTENDED_STARTUPINFO_PRESENT
@@ -948,7 +882,7 @@ mod native {
                     flags,
                     self.prepared.environment.as_ptr().cast(),
                     self.prepared.directory.as_ptr(),
-                    &mut startup,
+                    &startup.StartupInfo,
                     &mut process,
                 )
             };
@@ -970,9 +904,9 @@ mod native {
                 }
             }
             Ok(Created {
-                process: process.process as usize,
-                thread: process.thread as usize,
-                pid: process.pid,
+                process: process.hProcess as usize,
+                thread: process.hThread as usize,
+                pid: process.dwProcessId,
                 errors,
             })
         }
@@ -1987,19 +1921,77 @@ mod tests {
         assert_eq!(align_of::<BasicLimit>(), 8);
         assert_eq!(size_of::<ExtendedLimit>(), 144);
         assert_eq!(size_of::<BasicAccounting>(), 48);
-        assert_eq!(size_of::<StartupInfo>(), 104);
-        assert_eq!(size_of::<StartupEx>(), 112);
-        assert_eq!(size_of::<ProcessInfo>(), 24);
-        assert_eq!(size_of::<SecurityAttributes>(), 24);
         assert_eq!(offset_of!(BasicLimit, min_working_set), 24);
         assert_eq!(offset_of!(BasicLimit, affinity), 48);
         assert_eq!(offset_of!(ExtendedLimit, io), 64);
         assert_eq!(offset_of!(ExtendedLimit, process_memory), 112);
-        assert_eq!(offset_of!(StartupInfo, flags), 60);
-        assert_eq!(offset_of!(StartupInfo, stdin), 80);
-        assert_eq!(offset_of!(StartupEx, attributes), 104);
-        assert_eq!(offset_of!(ProcessInfo, pid), 16);
         assert_eq!(offset_of!(BasicAccounting, active), 40);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_sdk_process_creation_owns_child_and_captures_both_pipes() {
+        use super::{JobChild, LaunchSpec, Stderr};
+        use std::ffi::OsString;
+        use std::io::Read;
+        use std::sync::mpsc;
+        let mut bytes = [0; 16];
+        getrandom::fill(&mut bytes).unwrap();
+        let nonce: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+        let executable = std::env::current_exe().unwrap();
+        let mut environment = vec![(
+            OsString::from("ARKISM_SDK_PIPE_PEER"),
+            OsString::from(&nonce),
+        )];
+        if let Some(root) = std::env::var_os("SystemRoot") {
+            environment.push((OsString::from("SystemRoot"), root));
+        }
+        let spec = LaunchSpec {
+            directory: executable.parent().unwrap().to_path_buf(),
+            executable,
+            arguments: [
+                "--exact",
+                "windows_process::tests::inert_pipe_peer",
+                "--nocapture",
+            ]
+            .map(OsString::from)
+            .to_vec(),
+            environment,
+            stderr: Stderr::Capture,
+        };
+        let mut child = JobChild::spawn(spec).unwrap_or_else(|mut failure| {
+            panic!(
+                "native SDK launch: {}",
+                failure.cleanup(Duration::from_secs(5))
+            )
+        });
+        assert!(child.root_pid() > 0);
+        let mut results = Vec::new();
+        for file in [child.take_stdout().unwrap(), child.take_stderr().unwrap()] {
+            let (sender, receiver) = mpsc::channel();
+            std::thread::spawn(move || {
+                let mut text = String::new();
+                let result = file.take(4096).read_to_string(&mut text).map(|_| text);
+                let _ = sender.send(result);
+            });
+            results.push(receiver);
+        }
+        drop(child.take_stdin());
+        let result = child.wait_empty(Duration::from_secs(10));
+        if result.is_err() {
+            child.terminate_and_wait(Duration::from_secs(5)).unwrap();
+        }
+        result.unwrap();
+        assert!(child.status().empty_confirmed);
+        assert_eq!(child.root_exit_code().unwrap(), Some(7));
+        child.close_empty().unwrap();
+        for (receiver, stream) in results.into_iter().zip(["stdout", "stderr"]) {
+            let text = receiver
+                .recv_timeout(Duration::from_secs(3))
+                .unwrap()
+                .unwrap();
+            assert!(text.contains(&format!("sdk-{stream}:{nonce}")));
+        }
     }
 
     #[test]

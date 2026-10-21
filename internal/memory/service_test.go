@@ -510,7 +510,7 @@ func newFixture(t *testing.T) *fixture {
 	f := &fixture{
 		t: t, repo: newFakeRepo(), auth: &fakeAuth{actors: map[string]fakeActor{}},
 		emb:   &fakeEmbedder{space: "fake:embed:v1:1024d", dim: VectorDimension},
-		human: "tok-human", human2: "tok-human2", agent: "tok-agent", work: "tok-worker",
+		human: testPrincipalToken("tok-human"), human2: testPrincipalToken("tok-human2"), agent: testPrincipalToken("tok-agent"), work: testPrincipalToken("tok-worker"),
 	}
 	f.auth.actors[f.human] = actor("human-1", "human", true, allVerbs...)
 	f.auth.actors[f.human2] = actor("human-2", "human", true, allVerbs...)

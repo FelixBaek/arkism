@@ -40,7 +40,11 @@ func TestRecoveryPrivacyPermissionsAndIsolation(t *testing.T) {
 	defer server.Close()
 	request := PrivacyDeletionRequest{Scope: scopeA, IdempotencyKey: "denied", TargetType: "work_checkpoint", TargetIDs: []string{"work"}, Reason: "owner_request"}
 	for _, token := range []string{"", f.agent, f.work} {
-		recoveryHTTP(t, server.URL, token, "POST", "/v1/privacy/deletions", request, nil, 403)
+		want := 403
+		if token == "" {
+			want = 401
+		}
+		recoveryHTTP(t, server.URL, token, "POST", "/v1/privacy/deletions", request, nil, want)
 	}
 	recoveryHTTP(t, server.URL, f.human, "POST", "/v1/privacy/deletions/runtime/claim", PrivacyScopeInput{Scope: scopeA}, nil, 403)
 	recoveryHTTP(t, server.URL, f.agent, "POST", "/v1/session-archives/expire", SessionArchiveExpireInput{Scope: scopeA}, nil, 403)

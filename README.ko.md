@@ -33,17 +33,19 @@ Claude Code, Codex, Gemini CLI 같은 에이전트는 어제 알려 준 것을 �
 | **CREW** | **ROUTER** |
 | ![에이전트 화면](guide/images/agent.png) | ![라우터 화면](guide/images/router.png) |
 
-화면의 데이터는 모두 지어낸 예시입니다.
+화면의 데이터는 모두 지어낸 예시입니다. 일부 화면은 현재 메뉴명이 적용되기 전의 모습입니다.
 
 ## 설치
 
-[Releases](../../releases/latest)에서 내 운영체제 파일을 받습니다.
+Windows 설치 파일만 배포합니다. 현재 공개된 구버전과 이 소스의 서명 검증 변경은 구분해야 합니다. 새 서명 릴리스 절차는 [업데이트 보안](guide/security-operations.md)을 보세요.
+
+[Releases](../../releases/latest)에서 Windows 설치 파일을 받습니다.
 
 | 운영체제 | 파일 |
 |---|---|
 | Windows 10/11 | `Arkism-X.Y.Z-setup.exe` |
 
-아직 서명하지 않은 빌드입니다. 처음 열 때 Windows SmartScreen이 확인을 묻습니다("추가 정보" → "실행").
+현재 공개된 Windows 설치 파일에는 Authenticode 게시자 서명이 없어 SmartScreen 경고가 나올 수 있습니다. 설치 전에 배포 출처를 확인하세요. 업데이트 서명과 Windows 게시자 인증서는 별개입니다. 위 보안 가이드를 참고하세요.
 
 ## 빠른 시작
 
@@ -92,8 +94,6 @@ Claude Code, Codex, Gemini CLI 같은 에이전트는 어제 알려 준 것을 �
 | 운영체제 | 폴더 |
 |---|---|
 | Windows | `%LOCALAPPDATA%\dev.arkism.desktop\runtime` |
-| macOS | `~/Library/Application Support/dev.arkism.desktop/runtime` |
-| Linux | `~/.local/share/dev.arkism.desktop/runtime` |
 
 수집 설정과 에이전트 설정 백업은 `~/.config/arkism`에 있습니다. 서버 모드에서는 서버의 Postgres 데이터베이스에 있습니다.
 
@@ -105,12 +105,14 @@ Claude Code, Codex, Gemini CLI 같은 에이전트는 어제 알려 준 것을 �
 - **설정 › 일반 › 수집**: 수집을 멈추거나, Arkism이 건드리지 않을 폴더를 적습니다.
 - 폴더에 빈 `.arkism-ignore` 파일을 두면 그 폴더와 아래 폴더 전체에서 Arkism이 빠집니다.
 
+세션 원문 보관은 원래 바이트를 유지하므로, 비공개 표시가 있는 세션은 통째로 업로드하지 않습니다. 업로드를 재시도할 때도 원본 폴더와 기록된 프로젝트 폴더를 확인합니다. 수집 설정을 읽거나 검증할 수 없으면 수집을 멈추고, 검사할 수 없는 보관 파일은 전송을 보류합니다. 이 설정은 새 수집에 적용됩니다. 이미 저장된 자료는 아래 삭제 기능을 사용하세요.
+
 **지우기·내보내기·백업**
 
 - 앱에서 기억이나 세션을 지웁니다. 출처를 지우면 거기서 만든 기억도 함께 지워집니다.
 - **MEMORY › 세션**에서 세션을 Markdown이나 JSON으로 내보냅니다.
 - **설정 › 고급 › 데이터 › 지금 백업**은 전체 백업을 `문서/Arkism Backups`에 저장합니다. 앱은 하루에 한 번 스스로 백업하고 최근 7개를 남깁니다. 같은 화면에서 백업으로 되돌리거나 모든 데이터를 지울 수 있습니다.
-- 앱을 지우면 에이전트 연결이 풀립니다(Windows 설치 제거 프로그램, 그 밖에는 `arkism uninstall-arkism`). 데이터 폴더는 직접 지우기 전까지 남습니다.
+- 앱을 지우면 에이전트 연결이 풀립니다(Windows 설치 제거 프로그램). 데이터 폴더는 직접 지우기 전까지 남습니다.
 
 ## 서버 모드(선택)
 

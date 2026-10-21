@@ -110,7 +110,7 @@ func TestSearchFilters(t *testing.T) { exerciseSearchFilters(t, newFakeRepo()) }
 func TestSearchFilterValidation(t *testing.T) {
 	f := newFixture(t)
 	called := false
-	f.svc.Auth = requestActorAuth{Authorizer: f.auth, change: func(a Authorization, d *Decision) error { called = true; return nil }}
+	f.svc.Auth = requestActorAuth{Authorizer: f.auth, payloadOnly: true, change: func(a Authorization, d *Decision) error { called = true; return nil }}
 	tooManyNames := make([]string, 17)
 	for i := range tooManyNames {
 		tooManyNames[i] = fmt.Sprintf("principal-%02d", i)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -174,7 +175,7 @@ func TestImportSessionsRunIsResumableAndIdempotent(t *testing.T) {
 		t.Fatal("citation", cand)
 	}
 	info, err := os.Stat(siLedgerFile())
-	if err != nil || info.Mode().Perm() != 0o600 {
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatal("ledger", err)
 	}
 	// Re-run: the ledger skips it, no model call.

@@ -13,7 +13,7 @@ func TestSkillTrialCannotCherryPickIndependentOutcomes(t *testing.T) {
 	if _, e := f.svc.RecordSkillTrialOutcome(testCtx, "checker", SkillTrialOutcomeInput{Scope: scopeA, TrialScope: scopeA, TrialID: trial.ID, EventID: "failed", Source: target, Evidence: []Ref{target}, CheckerSHA256: ContentHash("fixed checker"), Passed: false}); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false); e == nil {
+	if _, e := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false); e == nil {
 		t.Fatal("negative independent observation ignored")
 	}
 }
@@ -48,11 +48,11 @@ func TestSkillTrialFreshComparisonAndPromotion(t *testing.T) {
 
 		t.Fatal("promotion guard", e)
 	}
-	actor, _ := f.svc.authorize(testCtx, "learner", "apply:skills", scopeA, candidate.SkillID, "")
-	if e = f.svc.authorizeTrialEvidence(bindRequestActor(testCtx, actor), "learner", actor, in, f.svc.SkillAutomationPolicies[0]); e != nil {
+	actor, _ := f.svc.authorize(testCtx, testPrincipalToken("learner"), "apply:skills", scopeA, candidate.SkillID, "")
+	if e = f.svc.authorizeTrialEvidence(bindRequestActor(testCtx, actor), testPrincipalToken("learner"), actor, in, f.svc.SkillAutomationPolicies[0]); e != nil {
 		t.Fatal("evidence authorization", e)
 	}
-	applied, e := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false)
+	applied, e := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false)
 	if e != nil || applied.ActiveVersion != candidate.ID {
 		t.Fatal("measured promotion", e)
 	}

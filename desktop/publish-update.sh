@@ -18,20 +18,35 @@ if [[ -f "$DIR/local.env" ]]; then
   done < "$DIR/local.env"
 fi
 FEED="${ARKISM_FEED_DIR:-/srv/arkism-updates}"
-FILE="Arkism-$VERSION-setup.exe"
-[[ -f "$DIR/dist/$FILE" ]] || { echo "missing $DIR/dist/$FILE (run build-windows.sh)" >&2; exit 1; }
+RELEASE="${ARKISM_RELEASE_DIR:-$DIR/dist}"
+CHANNEL="${ARKISM_UPDATE_CHANNEL:-stable}"
+: "${ARKISM_UPDATE_FEED:?Set the HTTPS URL compiled into the Windows app}"
+: "${ARKISM_UPDATE_PUBLIC_KEY:?Set the independently trusted Tauri-encoded minisign public key}"
+# This host receives only a pre-signed bundle. It never needs a private key.
+python3 "$DIR/../tools/release_artifacts.py" verify --directory "$RELEASE" \
+  --version "$VERSION" --feed "$ARKISM_UPDATE_FEED" --channel "$CHANNEL"
 mkdir -p "$FEED"
-# One publish at a time: the check below and the latest.json write happen under the same lock.
 exec 9>"$FEED/.publish.lock"
 flock 9
-# Other sessions publish too: never move the feed back. The newest is whatever latest.json or any
-# installer already in the feed says, and the new version must be above it.
 NEWEST="$("$DIR/feed-newest.sh")"
 if [[ -n "$NEWEST" ]] && { [[ "$NEWEST" = "$VERSION" ]] || [[ "$(printf '%s\n%s\n' "$NEWEST" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]]; }; then
   echo "feed already has $NEWEST: publish a newer version than that" >&2; exit 1
 fi
-cp "$DIR/dist/$FILE" "$FEED/$FILE"
-SUM="$(sha256sum "$FEED/$FILE" | cut -d' ' -f1)"
-printf '{"version":"%s","file":"%s","sha256":"%s"}\n' "$VERSION" "$FILE" "$SUM" > "$FEED/latest.json.tmp"
-mv "$FEED/latest.json.tmp" "$FEED/latest.json"
-echo "published $VERSION ($SUM)"
+stage="$(mktemp -d "$FEED/.publish.XXXXXX")"
+trap 'rm -rf -- "$stage"' EXIT
+cp "$RELEASE"/* "$stage/"
+# Verify the staged bytes again before exposing any new feed assets.
+python3 "$DIR/../tools/release_artifacts.py" verify --directory "$stage" \
+  --version "$VERSION" --feed "$ARKISM_UPDATE_FEED" --channel "$CHANNEL"
+manifest=latest.json
+[[ "$CHANNEL" != beta ]] || manifest=latest-beta.json
+for file in "$stage"/*; do
+  name="${file##*/}"
+  [[ "$name" == "$manifest" || "$name" == "$manifest.minisig" ]] && continue
+  mv -- "$file" "$FEED/$name"
+done
+# Readers overlapping these two renames fail signature verification and retry;
+# they cannot install unauthenticated bytes. The manifest is always last.
+mv -- "$stage/$manifest.minisig" "$FEED/$manifest.minisig"
+mv -- "$stage/$manifest" "$FEED/$manifest"
+echo "published verified Windows release $VERSION"

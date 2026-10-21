@@ -23,9 +23,9 @@ import (
 // person reviewed or approved anything. No model/agent inference runs here.
 func TestCrossAgentHTTPPostgresReuse(t *testing.T) {
 	admin := isolatedPostgres(t)
-	const a = "synthetic-client-a"
-	const b = "synthetic-client-b"
-	const owner = "synthetic-human-fixture"
+	a := testPrincipalToken("synthetic-client-a")
+	b := testPrincipalToken("synthetic-client-b")
+	owner := testPrincipalToken("synthetic-human-fixture")
 	for token, role := range map[string]string{a: "agent", b: "agent", owner: "human"} {
 		for _, scope := range []Scope{scopeA, scopeB} {
 			if err := admin.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: token, Role: role, Token: token, OrganizationID: scope.WorkspaceID, ProjectID: scope.ProjectID, Actions: []string{"*"}}); err != nil {
@@ -309,5 +309,5 @@ func TestCrossAgentHTTPPostgresReuse(t *testing.T) {
 	if err := admin.SetPrincipalActive(testCtx, b, false); err != nil {
 		t.Fatal(err)
 	}
-	call(t, b, "POST", "/v1/search", SearchInput{Scope: scopeA, Query: "reusechanged"}, 503, nil)
+	call(t, b, "POST", "/v1/search", SearchInput{Scope: scopeA, Query: "reusechanged"}, 403, nil)
 }

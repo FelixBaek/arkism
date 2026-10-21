@@ -205,9 +205,9 @@ func TestPostgresTraceLearningCycleWithRLS(t *testing.T) {
 	}
 	scope := Scope{WorkspaceID: "team-org", ProjectID: "team-project", UserID: "owner", AgentID: "agent-1"}
 	for _, grant := range []PrincipalGrant{
-		{PrincipalID: "agent-1", Role: "agent", Token: "trace-agent"},
-		{PrincipalID: "independent-checker", Role: "service", Token: "trace-checker"},
-		{PrincipalID: "owner", Role: "human", Token: "trace-owner"},
+		{PrincipalID: "agent-1", Role: "agent", Token: testPrincipalToken("trace-agent")},
+		{PrincipalID: "independent-checker", Role: "service", Token: testPrincipalToken("trace-checker")},
+		{PrincipalID: "owner", Role: "human", Token: testPrincipalToken("trace-owner")},
 	} {
 		grant.OrganizationID, grant.ProjectID, grant.Actions = scope.WorkspaceID, scope.ProjectID, []string{"*"}
 		if err := admin.ProvisionPrincipal(testCtx, grant); err != nil {
@@ -222,7 +222,7 @@ func TestPostgresTraceLearningCycleWithRLS(t *testing.T) {
 	h := Handler(svc)
 	start := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
 	var trace TraceIngestResult
-	doPostgresHTTP(t, h, "trace-agent", http.MethodPost, "/v1/execution_traces/completed", TraceIngestInput{
+	doPostgresHTTP(t, h, testPrincipalToken("trace-agent"), http.MethodPost, "/v1/execution_traces/completed", TraceIngestInput{
 		Scope: scope, TraceID: "cycle-trace", ThreadID: "cycle-thread", LangSmithRunID: "cycle-observation",
 		AgentRun: CompletedAgentRunInput{ID: "cycle-run", TaskType: "repair", Outcome: "success", StartedAt: start, FinishedAt: start.Add(time.Second), Text: "verified query repair"},
 		Events:   []TraceEventInput{{ID: "cycle-event", Kind: "tool_result", OccurredAt: start, Payload: json.RawMessage(`{"check":"query succeeded"}`)}},
@@ -233,17 +233,17 @@ func TestPostgresTraceLearningCycleWithRLS(t *testing.T) {
 	}
 	passed := true
 	var evaluation Record
-	doPostgresHTTP(t, h, "trace-checker", http.MethodPost, "/v1/evaluations", CreateInput{Scope: scope, Text: "independently replayed", Sources: refs(src), Target: &trace.Run, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &passed}}, http.StatusCreated, &evaluation)
+	doPostgresHTTP(t, h, testPrincipalToken("trace-checker"), http.MethodPost, "/v1/evaluations", CreateInput{Scope: scope, Text: "independently replayed", Sources: refs(src), Target: &trace.Run, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &passed}}, http.StatusCreated, &evaluation)
 	var lesson LearningResult
-	doPostgresHTTP(t, h, "trace-agent", http.MethodPost, "/v1/learning", LearningInput{Scope: scope, Run: trace.Run, Evaluation: Ref{Collection: "evaluations", ID: evaluation.ID, Revision: evaluation.Revision}, TaskType: "repair", Lesson: "verify-cycle-keyword", VerificationMethod: "independent query replay"}, http.StatusOK, &lesson)
+	doPostgresHTTP(t, h, testPrincipalToken("trace-agent"), http.MethodPost, "/v1/learning", LearningInput{Scope: scope, Run: trace.Run, Evaluation: Ref{Collection: "evaluations", ID: evaluation.ID, Revision: evaluation.Revision}, TaskType: "repair", Lesson: "verify-cycle-keyword", VerificationMethod: "independent query replay"}, http.StatusOK, &lesson)
 	candidate, err := admin.Get(testCtx, "memory_candidates", scope, lesson.Lesson.ID)
 	if err != nil || candidate.TraceID != trace.Trace.ID || candidate.VerificationStatus != VerificationCandidate || candidate.Status != "candidate" {
 		t.Fatalf("candidate provenance: %+v %v", candidate, err)
 	}
 	var approved Record
-	doPostgresHTTP(t, h, "trace-owner", http.MethodPost, "/v1/memory_candidates/"+candidate.ID+"/review", CandidateReviewInput{Scope: scope, ExpectedRevision: candidate.Revision, Action: "approve"}, http.StatusOK, &approved)
+	doPostgresHTTP(t, h, testPrincipalToken("trace-owner"), http.MethodPost, "/v1/memory_candidates/"+candidate.ID+"/review", CandidateReviewInput{Scope: scope, ExpectedRevision: candidate.Revision, Action: "approve"}, http.StatusOK, &approved)
 	var bundle ContextBundle
-	doPostgresHTTP(t, h, "trace-agent", http.MethodPost, "/v1/search", SearchInput{Scope: scope, Query: "verify-cycle-keyword", Modes: []string{"exact", "fts"}}, http.StatusOK, &bundle)
+	doPostgresHTTP(t, h, testPrincipalToken("trace-agent"), http.MethodPost, "/v1/search", SearchInput{Scope: scope, Query: "verify-cycle-keyword", Modes: []string{"exact", "fts"}}, http.StatusOK, &bundle)
 	if len(bundle.Items) != 1 || bundle.Items[0].VerificationStatus != VerificationVerified || bundle.Items[0].TraceID != trace.Trace.ID || bundle.Items[0].Authority != "data_only_untrusted" {
 		t.Fatalf("next-run context: %+v", bundle.Items)
 	}

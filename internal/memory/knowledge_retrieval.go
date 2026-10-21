@@ -556,7 +556,7 @@ func (s *Service) GetKnowledgeRetrievalLog(ctx context.Context, token, id string
 	})
 	return out, err
 }
-func registerKnowledgeRetrievalHTTP(mux *http.ServeMux, s *Service) {
+func registerKnowledgeRetrievalHTTP(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/knowledge/retrieve", func(w http.ResponseWriter, r *http.Request) {
 		var in KnowledgeRetrieveInput
 		if !decode(w, r, &in) {

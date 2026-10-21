@@ -278,7 +278,7 @@ func (s *Service) RerunCodeReview(ctx context.Context, token string, in CodeRevi
 	})
 }
 
-func codeReviewRoutes(mux *http.ServeMux, s *Service) {
+func codeReviewRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/code_reviews", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.CodeReviews(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, out, e)

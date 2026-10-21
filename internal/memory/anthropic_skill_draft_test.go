@@ -37,11 +37,11 @@ func checkAnthropicPrepared(t *testing.T, f *fixture, mode string) {
 		baseline = imported.Record
 		in.ComparisonPlan.BaselineVersion = baseline.ID
 	}
-	f.auth.actors["drafter"] = actor("drafter", roleService, true, append(allVerbs, "reserve", "settle", "priority", "transfer")...)
+	f.auth.actors[testPrincipalToken("drafter")] = actor("drafter", roleService, true, append(allVerbs, "reserve", "settle", "priority", "transfer")...)
 	f.svc.ModelBudgetPolicy = &ModelBudgetPolicy{Scope: scopeA, Principals: []string{"drafter"}, MonthlyPicoUSD: 100 * picoDollar, GeneralPicoUSD: 90 * picoDollar, DailyPicoUSD: 3 * picoDollar, ExpiresAt: time.Now().Add(time.Hour)}
 	if strings.HasPrefix(mode, "pg:") {
 		p := f.svc.Repo.(*Postgres)
-		if err := p.ProvisionPrincipal(ctx, PrincipalGrant{PrincipalID: "drafter", Role: roleService, Token: "drafter", OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"*"}}); err != nil {
+		if err := p.ProvisionPrincipal(ctx, PrincipalGrant{PrincipalID: "drafter", Role: roleService, Token: testPrincipalToken("drafter"), OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"*"}}); err != nil {
 			t.Fatal(err)
 		}
 		app := restrictedPostgres(t, p)
@@ -51,7 +51,7 @@ func checkAnthropicPrepared(t *testing.T, f *fixture, mode string) {
 			t.Fatal(err)
 		}
 		f.svc.Repo = app
-		ctx = ContextWithPostgresToken(ctx, "drafter")
+		ctx = ContextWithPostgresToken(ctx, testPrincipalToken("drafter"))
 		mode = strings.TrimPrefix(mode, "pg:")
 	}
 	_, answer := draftFixture()
@@ -92,7 +92,7 @@ func checkAnthropicPrepared(t *testing.T, f *fixture, mode string) {
 	f.svc.Drafter = &AnthropicSkillDrafter{Service: f.svc, APIKey: "test", WorkspaceID: "workspace", Endpoint: server.URL, BudgetScope: scopeA}
 	store := f.svc.Repo
 	f.svc.Repo = preparedFailureRepo{store}
-	if _, err := f.svc.GenerateSkill(ctx, "drafter", in); err == nil {
+	if _, err := f.svc.GenerateSkill(ctx, testPrincipalToken("drafter"), in); err == nil {
 		t.Fatal("candidate persist failure not injected")
 	}
 	if calls.Load() != 1 {
@@ -100,7 +100,7 @@ func checkAnthropicPrepared(t *testing.T, f *fixture, mode string) {
 	}
 	f.svc.Repo = store
 	preparedID := preparedDraftID(scopeA, "drafter", in.EventID)
-	prepared, err := f.svc.Get(ctx, "drafter", "sources", scopeA, preparedID)
+	prepared, err := f.svc.Get(ctx, testPrincipalToken("drafter"), "sources", scopeA, preparedID)
 	if err != nil {
 		t.Fatal("prepared source unavailable", err)
 	}
@@ -125,10 +125,10 @@ func checkAnthropicPrepared(t *testing.T, f *fixture, mode string) {
 		if err = store.Replace(ctx, "memory_candidates", lesson, old); err != nil {
 			t.Fatal(err)
 		}
-		if _, err = f.svc.Get(ctx, "drafter", "sources", scopeA, preparedID); err == nil {
+		if _, err = f.svc.Get(ctx, testPrincipalToken("drafter"), "sources", scopeA, preparedID); err == nil {
 			t.Fatal("generic read exposed invalid derivative")
 		}
-		if _, err = f.svc.GenerateSkill(ctx, "drafter", in); err == nil {
+		if _, err = f.svc.GenerateSkill(ctx, testPrincipalToken("drafter"), in); err == nil {
 			t.Fatal("withdrawn evidence reused")
 		}
 		if calls.Load() != 1 {
@@ -136,7 +136,7 @@ func checkAnthropicPrepared(t *testing.T, f *fixture, mode string) {
 		}
 		return
 	}
-	out, e := f.svc.GenerateSkill(ctx, "drafter", in)
+	out, e := f.svc.GenerateSkill(ctx, testPrincipalToken("drafter"), in)
 	if e != nil {
 		t.Fatal(e, "calls", calls.Load())
 	}
@@ -145,7 +145,7 @@ func checkAnthropicPrepared(t *testing.T, f *fixture, mode string) {
 	}
 	if patchMode {
 		want := strings.Replace(baselineContent, "Check results.", "Check results before reporting completion.", 1)
-		current, err := f.svc.Get(ctx, "drafter", colSkills, scopeA, in.SkillID)
+		current, err := f.svc.Get(ctx, testPrincipalToken("drafter"), colSkills, scopeA, in.SkillID)
 		if err != nil || current.ActiveVersion != baseline.ID || out.Record.BaseVersion != baseline.ID || out.Record.Analysis.ContentHash != ContentHash(want) {
 			t.Fatal("baseline changed or candidate lost unrelated detail", err)
 		}
@@ -154,11 +154,11 @@ func checkAnthropicPrepared(t *testing.T, f *fixture, mode string) {
 			t.Fatal("prepared recovery did not preserve canonical content")
 		}
 	}
-	replay, e := f.svc.GenerateSkill(ctx, "drafter", in)
+	replay, e := f.svc.GenerateSkill(ctx, testPrincipalToken("drafter"), in)
 	if e != nil || replay.Record.ID != out.Record.ID || calls.Load() != 1 {
 		t.Fatal("replay", e, calls.Load())
 	}
-	status, e := f.svc.ModelBudgetStatus(ctx, "drafter", scopeA)
+	status, e := f.svc.ModelBudgetStatus(ctx, testPrincipalToken("drafter"), scopeA)
 	if e != nil || status.Outstanding != 0 || status.MonthlyCommitted != 100*2000000+200*10000000 {
 		t.Fatal(status, e)
 	}
@@ -186,7 +186,7 @@ func TestAnthropicSkillDraftFailureAccountingAndTransferFence(t *testing.T) {
 			if mode != "transfer-denied" {
 				verbs = append(verbs, "transfer")
 			}
-			f.auth.actors["drafter"] = actor("drafter", roleService, true, verbs...)
+			f.auth.actors[testPrincipalToken("drafter")] = actor("drafter", roleService, true, verbs...)
 			f.svc.ModelBudgetPolicy = &ModelBudgetPolicy{Scope: scopeA, Principals: []string{"drafter"}, MonthlyPicoUSD: 100 * picoDollar, GeneralPicoUSD: 90 * picoDollar, DailyPicoUSD: 3 * picoDollar, ExpiresAt: time.Now().Add(time.Hour)}
 			var calls atomic.Int64
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -219,10 +219,10 @@ func TestAnthropicSkillDraftFailureAccountingAndTransferFence(t *testing.T) {
 			}))
 			defer server.Close()
 			f.svc.Drafter = &AnthropicSkillDrafter{Service: f.svc, APIKey: "test", WorkspaceID: "workspace", Endpoint: server.URL, BudgetScope: scopeA}
-			if _, e := f.svc.GenerateSkill(testCtx, "drafter", in); e == nil {
+			if _, e := f.svc.GenerateSkill(testCtx, testPrincipalToken("drafter"), in); e == nil {
 				t.Fatal("unsafe output accepted")
 			}
-			status, e := f.svc.ModelBudgetStatus(testCtx, "drafter", scopeA)
+			status, e := f.svc.ModelBudgetStatus(testCtx, testPrincipalToken("drafter"), scopeA)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -251,7 +251,7 @@ func TestAnthropicSkillDraftFailureAccountingAndTransferFence(t *testing.T) {
 			if (mode == "transfer-denied" || mode == "missing-model") && (calls.Load() != 0 || status.MonthlyCommitted != 0) {
 				t.Fatal("dispatch before authorization/discovery")
 			}
-			f.svc.GenerateSkill(testCtx, "drafter", in)
+			f.svc.GenerateSkill(testCtx, testPrincipalToken("drafter"), in)
 			if calls.Load() > 1 {
 				t.Fatal("failure retry dispatched again")
 			}

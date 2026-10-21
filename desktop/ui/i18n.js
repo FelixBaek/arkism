@@ -157,16 +157,24 @@
   }
 
   // Node(테스트)에서는 번역기만 쓴다.
-  if (typeof module !== "undefined" && module.exports) {
+  if (typeof window === "undefined" && typeof module !== "undefined" && module.exports) {
     module.exports = { makeTranslator, compile, HANGUL };
     if (typeof document === "undefined") return;
   }
 
-  const translator = makeTranslator(root.ArkismI18nEN || {});
-  const translate = translator.translate;
+  let translator = makeTranslator({});
+  const translate = (text) => translator.translate(text);
+  let dictionaryTask = null;
+  let languageSequence = 0;
+  async function englishDictionary() {
+    if (!dictionaryTask) dictionaryTask = import("./i18n-en.js").then(() => {
+      translator = makeTranslator(root.ArkismI18nEN);
+    }).catch((error) => { dictionaryTask = null; throw error; });
+    return dictionaryTask;
+  }
   const ATTRS = ["title", "placeholder", "aria-label"];
   const FIELD = /^(INPUT|TEXTAREA|SELECT)$/;
-  const SKIP = "[data-no-i18n],script,style,code,textarea,[contenteditable=''],[contenteditable='true']";
+  const SKIP = "[data-i18n-id],[data-no-i18n],script,style,code,textarea,[contenteditable=''],[contenteditable='true']";
   const textOrig = new WeakMap(); // Text → { o: 원문, t: 번역 }
   const attrOrig = new WeakMap(); // Element → { [attr]: { o, t } }
   let lang = "ko";
@@ -231,10 +239,34 @@
     }
   });
 
+  // Stable message IDs are used by the shell; legacy screens retain the DOM adapter.
+  const messages = new Map();
+  function registerMessages(entries) {
+    for (const [id, original] of Object.entries(entries)) {
+      if (messages.has(id) && messages.get(id) !== original) throw new Error("Duplicate message ID: " + id);
+      messages.set(id, original);
+    }
+  }
+  function bindMessage(node, id) {
+    if (!messages.has(id)) throw new Error("Unknown message ID: " + id);
+    node.setAttribute("data-i18n-id", id);
+    node.textContent = lang === "en" ? translate(messages.get(id)) : messages.get(id);
+    return node;
+  }
+  function updateMessages() {
+    for (const node of document.querySelectorAll("[data-i18n-id]")) bindMessage(node, node.getAttribute("data-i18n-id"));
+  }
+
   let titleOrig = null;
-  function setLang(next) {
+  async function setLang(next) {
     next = next === "en" ? "en" : "ko";
-    if (next === lang) return;
+    const sequence = ++languageSequence;
+    if (next === "en") {
+      try { await englishDictionary(); }
+      catch (error) { if (sequence === languageSequence) document.documentElement.lang = lang; console.warn("English dictionary unavailable", error); return false; }
+      if (sequence !== languageSequence) return false;
+    }
+    if (next === lang) return true;
     lang = next;
     document.documentElement.lang = lang;
     if (lang === "en") {
@@ -246,6 +278,7 @@
       walk(document.documentElement, restore);
       if (titleOrig) { document.title = titleOrig; titleOrig = null; }
     }
+    updateMessages();
   }
 
   // 대화 상자 문구
@@ -258,9 +291,9 @@
   }
 
   const wanted = () => (root.ArkismLook && root.ArkismLook.get().lang) || "ko";
-  root.addEventListener("arkism-look", () => setLang(wanted()));
-  setLang(wanted());
+  root.addEventListener("arkism-look", () => { void setLang(wanted()); });
+  const initialLanguage = setLang(wanted());
 
   // 화면 코드가 직접 쓰는 것: translate(s)는 data-no-i18n 안에 넣을 화면 문구용, locale()은 날짜·시각 형식용.
-  root.ArkismI18n = { translate: (s) => (lang === "en" ? translate(s) : s), lang: () => lang, locale: () => (lang === "en" ? "en-US" : "ko-KR"), setLang };
+  root.ArkismI18n = { ready: () => initialLanguage, registerMessages, bindMessage, translate: (s) => (lang === "en" ? translate(s) : s), lang: () => lang, locale: () => (lang === "en" ? "en-US" : "ko-KR"), setLang };
 })(typeof window !== "undefined" ? window : globalThis);

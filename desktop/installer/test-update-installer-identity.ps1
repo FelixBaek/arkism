@@ -176,6 +176,7 @@ if ($report.ok -isnot [bool] -or -not $report.ok -or $report.source_sha -cne $so
     $report.inert_nsis_self_archive -isnot [bool] -or
     $report.production_nsis_executed -isnot [bool] -or $report.production_nsis_executed -or
     $report.module_sha256 -cne (Get-FileHash -LiteralPath 'desktop/src-tauri/src/update_installer.rs' -Algorithm SHA256).Hash.ToLowerInvariant() -or
+    $report.process_ffi_sha256 -cne (Get-FileHash -LiteralPath 'desktop/src-tauri/src/windows_process.rs' -Algorithm SHA256).Hash.ToLowerInvariant() -or
     $report.fixture_sha256 -cne (Get-FileHash -LiteralPath 'desktop/src-tauri/tests/windows_update_installer_identity.rs' -Algorithm SHA256).Hash.ToLowerInvariant() -or
     $report.inert_nsis_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_NSIS_SHA256 -or
     $report.comparison_source_sha256 -cne $env:ARKISM_WINDOWS_INSTALLER_IDENTITY_CONTROL_SOURCE_SHA256 -or

@@ -201,7 +201,7 @@ func (s *Service) AuthorizeHandoffTransfer(ctx context.Context, token string, in
 	}
 	return HandoffTransferOutput{Authorized: true, ContentHash: ContentHash(in.Content), SourceRefs: checked, ArchiveMessages: archiveRefs}, nil
 }
-func handoffTransferRoutes(mux *http.ServeMux, s *Service) {
+func handoffTransferRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/work-checkpoints/authorize-handoff", func(w http.ResponseWriter, r *http.Request) {
 		var in HandoffTransferInput
 		if !decode(w, r, &in) {

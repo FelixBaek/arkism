@@ -81,5 +81,5 @@ func TestUsageSessionsUpsertAndSummaryCountsByDay(t *testing.T) {
 
 // UsageSessionRows lets the summary read every fake row, like the Postgres reader does.
 func (f *fakeRepo) UsageSessionRows(ctx context.Context, scope Scope) ([]Record, error) {
-	return f.ListRecords(ctx, scope, colUsageSessions, usageSessionsRead)
+	return collectCatalogRecords(ctx, f, scope, colUsageSessions)
 }

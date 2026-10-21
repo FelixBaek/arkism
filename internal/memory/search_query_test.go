@@ -31,7 +31,7 @@ func TestSearchQueryCharacterBounds(t *testing.T) {
 				f := newFixture(t)
 				called := false
 				content := ""
-				f.svc.Auth = requestActorAuth{Authorizer: f.auth, change: func(a Authorization, d *Decision) error {
+				f.svc.Auth = requestActorAuth{Authorizer: f.auth, payloadOnly: true, change: func(a Authorization, d *Decision) error {
 					called = true
 					if strings.HasPrefix(a.Action, "search:") {
 						content = a.Content
@@ -60,7 +60,7 @@ func TestSearchQueryCharacterBounds(t *testing.T) {
 func TestSearchQueryInvalidUTF8(t *testing.T) {
 	f := newFixture(t)
 	called := false
-	f.svc.Auth = requestActorAuth{Authorizer: f.auth, change: func(a Authorization, d *Decision) error { called = true; return nil }}
+	f.svc.Auth = requestActorAuth{Authorizer: f.auth, payloadOnly: true, change: func(a Authorization, d *Decision) error { called = true; return nil }}
 	for _, route := range []bool{false, true} {
 		in := SearchInput{Scope: scopeA, Query: string([]byte{255}), Modes: []string{"fts"}}
 		var err error

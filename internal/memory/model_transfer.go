@@ -149,7 +149,7 @@ func (s *Service) AuthorizeModelArchiveTransfer(ctx context.Context, token strin
 	}
 	return ModelArchiveTransferOutput{Authorized: true, ContentHash: ContentHash(in.Content)}, nil
 }
-func modelTransferRoutes(mux *http.ServeMux, s *Service) {
+func modelTransferRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/session-archives/authorize-transfer", func(w http.ResponseWriter, r *http.Request) {
 		var in ModelArchiveTransferInput
 		if !decode(w, r, &in) {

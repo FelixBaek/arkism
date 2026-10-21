@@ -23,7 +23,7 @@ func (v *MemoryOutcomeInput) UnmarshalJSON(data []byte) error {
 	type plain MemoryOutcomeInput
 	return decodeComparison(data, (*plain)(v), []string{"scope", "target", "trace", "evidence", "event_id", "checker_sha256", "dimension", "passed"})
 }
-func memoryOutcomeRoutes(mux *http.ServeMux, s *Service) {
+func memoryOutcomeRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/memory-outcomes", func(w http.ResponseWriter, r *http.Request) {
 		var in MemoryOutcomeInput
 		if !decode(w, r, &in) {

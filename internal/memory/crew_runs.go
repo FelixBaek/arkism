@@ -495,7 +495,7 @@ func (s *Service) DecideCrewRun(ctx context.Context, token, id string, in CrewRu
 	return out, err
 }
 
-func crewRunRoutes(mux *http.ServeMux, s *Service) {
+func crewRunRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/crew/runs", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit := 0

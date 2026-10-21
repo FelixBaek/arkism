@@ -34,13 +34,13 @@ func skillAutomationFixture(t *testing.T, supplied ...*fixture) (*fixture, Recor
 	if e != nil {
 		t.Fatal(e)
 	}
-	f.auth.actors["learner"] = actor("learner", "service", true, append(allVerbs, "auto_learn")...)
+	f.auth.actors[testPrincipalToken("learner")] = actor("learner", "service", true, append(allVerbs, "auto_learn")...)
 	f.svc.SkillAutomationPolicies = []SkillAutomationPolicy{{PrincipalID: "learner", Scope: scopeA, SkillIDs: []string{proposal.Skill.ID}, Runtimes: []string{"codex"}, ExpiresAt: time.Now().Add(2 * time.Hour), MaxTrialSeconds: 3600, MinTrialRuns: 2}}
-	approved, e := f.svc.Transition(testCtx, "learner", colSkillVersions, proposal.Record.ID, ChangeInput{Scope: scopeA, ExpectedRevision: 1, Status: "approved", ValidationID: recorded.Evaluation.ID})
+	approved, e := f.svc.Transition(testCtx, testPrincipalToken("learner"), colSkillVersions, proposal.Record.ID, ChangeInput{Scope: scopeA, ExpectedRevision: 1, Status: "approved", ValidationID: recorded.Evaluation.ID})
 	if e != nil {
 		t.Fatal("auto approve", e)
 	}
-	trial, e := f.svc.StartSkillTrial(testCtx, "learner", SkillTrialInput{Scope: scopeA, SkillID: proposal.Skill.ID, EventID: "trial", Candidate: Ref{Collection: colSkillVersions, ID: approved.ID, Revision: approved.Revision}, Runtime: "codex", EndsAt: time.Now().Add(30 * time.Minute)})
+	trial, e := f.svc.StartSkillTrial(testCtx, testPrincipalToken("learner"), SkillTrialInput{Scope: scopeA, SkillID: proposal.Skill.ID, EventID: "trial", Candidate: Ref{Collection: colSkillVersions, ID: approved.ID, Revision: approved.Revision}, Runtime: "codex", EndsAt: time.Now().Add(30 * time.Minute)})
 	if e != nil {
 		t.Fatal("trial", e)
 	}
@@ -109,13 +109,13 @@ func TestSkillAutomationPolicy(t *testing.T) {
 		}
 	}
 	f.svc.SkillAutomationPolicies[0].Scope.AgentID = "other"
-	if _, e := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false); !errors.Is(e, ErrDenied) {
+	if _, e := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false); !errors.Is(e, ErrDenied) {
 		t.Fatal("scope widened", e)
 	}
 }
 func TestSkillAutomationTrialPromotion(t *testing.T) {
 	f, candidate, _, in := skillAutomationFixture(t)
-	got, e := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false)
+	got, e := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false)
 	if e != nil || got.ActiveVersion != candidate.ID {
 		t.Fatal("promotion", e, got.ActiveVersion)
 	}
@@ -134,7 +134,7 @@ func TestSkillAutomationPromotionRejectsMissingOrStaleEvidence(t *testing.T) {
 			case "self":
 				ev, _ := f.svc.Repo.Get(testCtx, "evaluations", scopeA, in.ValidationID)
 				ev.Evaluation.EvalType = "automated_check"
-				self := f.create("learner", "evaluations", CreateInput{Scope: scopeA, Text: ev.Text, Target: ev.Target, Sources: ev.Sources, Evaluation: ev.Evaluation})
+				self := f.create(testPrincipalToken("learner"), "evaluations", CreateInput{Scope: scopeA, Text: ev.Text, Target: ev.Target, Sources: ev.Sources, Evaluation: ev.Evaluation})
 				in.ValidationID = self.ID
 			case "trial_bound":
 				trial.SkillTrial.Candidate.Revision++
@@ -156,7 +156,7 @@ func TestSkillAutomationPromotionRejectsMissingOrStaleEvidence(t *testing.T) {
 				}
 				f.svc.Repo.Replace(testCtx, "sources", source, source.Revision)
 			}
-			if _, e := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false); e == nil {
+			if _, e := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false); e == nil {
 				t.Fatal("unsafe promotion accepted")
 			}
 			parent, _ := f.svc.Repo.Get(testCtx, colSkills, scopeA, candidate.SkillID)
@@ -192,7 +192,7 @@ func TestPostgresSkillAutomationActualTrialEvidence(t *testing.T) {
 	if _, e = p.q().Exec(testCtx, "GRANT SELECT ON source_events,execution_traces TO "+pgx.Identifier{role}.Sanitize()); e != nil {
 		t.Fatal(e)
 	}
-	if e = p.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: "learner", Role: "service", Token: "learner", OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", "apply:skills", "auto_learn:skills", "read:sources", "read:execution_traces", "read:evaluations"}}); e != nil {
+	if e = p.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: "learner", Role: "service", Token: testPrincipalToken("learner"), OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", "apply:skills", "auto_learn:skills", "read:sources", "read:execution_traces", "read:evaluations"}}); e != nil {
 		t.Fatal(e)
 	}
 	f.svc.Repo = app
@@ -200,16 +200,16 @@ func TestPostgresSkillAutomationActualTrialEvidence(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	bound := ContextWithPostgresToken(testCtx, "learner")
-	lease, e := f.svc.ClaimSkillTrialCheck(bound, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+	bound := ContextWithPostgresToken(testCtx, testPrincipalToken("learner"))
+	lease, e := f.svc.ClaimSkillTrialCheck(bound, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 	if e != nil {
 		t.Fatal("claim under application RLS", e)
 	}
-	got, e := f.svc.ApplySkill(bound, "learner", candidate.SkillID, in, false)
+	got, e := f.svc.ApplySkill(bound, testPrincipalToken("learner"), candidate.SkillID, in, false)
 	if e != nil || got.ActiveVersion != candidate.ID {
 		t.Fatal("promote canonical trial under application RLS", e)
 	}
-	if e = f.svc.FinishSkillTrialCheck(bound, "learner", trial.ID, SkillTrialCheckFinish{Scope: scopeA, SkillID: candidate.SkillID, ExpectedRevision: lease.Revision, LeaseToken: lease.LeaseToken, Outcome: "checked"}); e != nil {
+	if e = f.svc.FinishSkillTrialCheck(bound, testPrincipalToken("learner"), trial.ID, SkillTrialCheckFinish{Scope: scopeA, SkillID: candidate.SkillID, ExpectedRevision: lease.Revision, LeaseToken: lease.LeaseToken, Outcome: "checked"}); e != nil {
 		t.Fatal("finish under application RLS", e)
 	}
 

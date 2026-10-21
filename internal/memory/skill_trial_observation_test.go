@@ -14,7 +14,7 @@ func (f *fakeRepo) SkillTrialSourceIDs(ctx context.Context, scope Scope, id stri
 }
 func TestSkillTrialObservationRequiresIndependentOutcomes(t *testing.T) {
 	f, candidate, trial, _ := skillAutomationFixture(t)
-	out, e := f.svc.ObserveSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+	out, e := f.svc.ObserveSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 	if e != nil || out.State != "awaiting_independent_evaluation" || len(out.Items) != 2 {
 		t.Fatal(out, e)
 	}
@@ -41,7 +41,7 @@ func TestSkillTrialObservationStopsRegressionAtomically(t *testing.T) {
 				t.Fatal(e)
 			}
 			f.repo.failAudit = auditFailure
-			out, e := f.svc.ObserveSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+			out, e := f.svc.ObserveSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 			current, _ := f.repo.Get(testCtx, colSkillTrials, scopeA, trial.ID)
 			if auditFailure {
 				if !errors.Is(e, ErrUnavailable) || current.Status != "active" {

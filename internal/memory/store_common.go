@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	mathrand "math/rand/v2"
 	"slices"
 	"strings"
 	"time"
@@ -159,11 +160,9 @@ func retryDelay(attempts int) time.Duration {
 	if attempts > 16 {
 		attempts = 16
 	}
-	if delay := baseRetryDelay << (attempts - 1); delay < maxRetryDelay {
-		return delay
-	}
-
-	return maxRetryDelay
+	delay := min(baseRetryDelay<<(attempts-1), maxRetryDelay)
+	// Equal jitter keeps a positive floor and never exceeds the configured cap.
+	return delay/2 + time.Duration(mathrand.Int64N(int64(delay-delay/2)+1))
 }
 
 func newLeaseToken() (string, error) {

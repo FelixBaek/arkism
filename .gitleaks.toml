@@ -3,10 +3,16 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "fake values in tests and test fixtures"
 paths = [
   '''(^|/)[^/]+_test\.go$''',
   '''(^|/)internal/host/capture/testdata/(autosave_extract|evidence_hints|handoff_key)\.json$''',
   '''(^|/)internal/host/skills/testdata/hub\.json$''',
 ]
+
+# Match the exact hash field, not an entire line or arbitrary 64-hex secrets.
+[[allowlists]]
+description = "public tokenizer artifact digest (not a credential)"
+regexTarget = "match"
+regexes = ['''^tokenizer_sha256"\s*:\s*"[a-f0-9]{64}"$''']

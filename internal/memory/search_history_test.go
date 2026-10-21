@@ -118,7 +118,7 @@ func TestSearchHistoryRejectsInvalidHTTP(t *testing.T) {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			f := newFixture(t)
 			called := false
-			f.svc.Auth = requestActorAuth{Authorizer: f.auth, change: func(a Authorization, d *Decision) error { called = true; return nil }}
+			f.svc.Auth = requestActorAuth{Authorizer: f.auth, payloadOnly: true, change: func(a Authorization, d *Decision) error { called = true; return nil }}
 			in := map[string]any{"scope": scopeA, "query": "needle", "modes": []string{"fts"}}
 			for k, v := range patch {
 				in[k] = v

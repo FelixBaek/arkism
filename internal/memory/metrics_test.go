@@ -39,7 +39,11 @@ func TestMetricsAuthorizationAndFailure(t *testing.T) {
 		return w
 	}
 	for _, token := range []string{"", f.agent} {
-		if w := request(token); w.Code != 403 {
+		want := 403
+		if token == "" {
+			want = 401
+		}
+		if w := request(token); w.Code != want {
 			t.Fatalf("unauthorized status %d", w.Code)
 		}
 	}

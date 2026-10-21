@@ -552,7 +552,7 @@ func TestRoutingGroupsHTTPContract(t *testing.T) {
 	for _, tc := range []struct {
 		method, token string
 		code          int
-	}{{"GET", "", 403}, {"POST", f.agent, 403}} {
+	}{{"GET", "", 401}, {"POST", f.agent, 403}} {
 		path := "/v1/routing/groups"
 		if tc.method == "GET" {
 			path += query

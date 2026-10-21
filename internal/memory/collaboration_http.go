@@ -4,7 +4,7 @@ import "net/http"
 
 // Collaboration uses the same authentication, scope and evidence checks as
 // ordinary memory reads. A role profile narrows relevance, never permissions.
-func collaborationRoutes(mux *http.ServeMux, s *Service) {
+func collaborationRoutes(mux routeRegistrar, s *Service) {
 	handoffTransferRoutes(mux, s)
 	mux.HandleFunc("POST /v1/memory/role-search", func(w http.ResponseWriter, r *http.Request) {
 		var in RoleSearchInput

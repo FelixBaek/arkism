@@ -39,8 +39,8 @@ func TestPostgresContextValidationHTTPUsesForcedRLSAndSourcePermission(t *testin
 	f.svc.Repo = admin
 	memory := f.activeMemory("synthetic current memory body")
 	for _, grant := range []PrincipalGrant{
-		{PrincipalID: "synthetic-validator", Role: roleAgent, Token: "synthetic-validator-token", OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", "read:memories", "read:sources"}},
-		{PrincipalID: "synthetic-memory-only", Role: roleAgent, Token: "synthetic-memory-only-token", OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", "read:memories"}},
+		{PrincipalID: "synthetic-validator", Role: roleAgent, Token: testPrincipalToken("synthetic-validator-token"), OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", "read:memories", "read:sources"}},
+		{PrincipalID: "synthetic-memory-only", Role: roleAgent, Token: testPrincipalToken("synthetic-memory-only-token"), OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", "read:memories"}},
 	} {
 		if e := admin.ProvisionPrincipal(testCtx, grant); e != nil {
 			t.Fatal(e)
@@ -54,7 +54,7 @@ func TestPostgresContextValidationHTTPUsesForcedRLSAndSourcePermission(t *testin
 	h := Handler(&Service{Repo: app, Auth: auth})
 	in := validationInput(memory)
 	var out ContextValidationOutput
-	doPostgresHTTP(t, h, "synthetic-validator-token", http.MethodPost, "/v1/context/validate", in, http.StatusOK, &out)
+	doPostgresHTTP(t, h, testPrincipalToken("synthetic-validator-token"), http.MethodPost, "/v1/context/validate", in, http.StatusOK, &out)
 	if !out.Integrity || len(out.Items) != 1 || out.Items[0].Status != "valid" {
 		t.Fatal("valid restricted-role HTTP snapshot", out)
 	}
@@ -63,7 +63,7 @@ func TestPostgresContextValidationHTTPUsesForcedRLSAndSourcePermission(t *testin
 	}
 	// A memory read grant must not silently grant current original-source access.
 	out = ContextValidationOutput{}
-	doPostgresHTTP(t, h, "synthetic-memory-only-token", http.MethodPost, "/v1/context/validate", in, http.StatusOK, &out)
+	doPostgresHTTP(t, h, testPrincipalToken("synthetic-memory-only-token"), http.MethodPost, "/v1/context/validate", in, http.StatusOK, &out)
 	if out.Integrity || out.Fingerprint != "" || len(out.Items) != 1 || out.Items[0].Status != "unavailable" || out.Items[0].Fingerprint != "" {
 		t.Fatal("source policy bypassed", out)
 	}

@@ -20,8 +20,8 @@ API_DIAGNOSTIC = "provider diagnostic that must not reach release logs"
 
 def run(workflow="checks.yml", run_id=10, **changes):
     value = {"id": run_id, "run_attempt": 1, "head_sha": SHA,
-             "event": "push", "head_branch": "main",
-             "path": f".github/workflows/{workflow}",
+             "event": gate.workflow_event(workflow), "head_branch": "main",
+             "path": gate.workflow_path(workflow),
              "repository": {"full_name": REPOSITORY},
              "head_repository": {"full_name": REPOSITORY},
              "status": "completed", "conclusion": "success"}
@@ -34,6 +34,46 @@ def response(runs):
 
 
 class ReleaseQualityTests(unittest.TestCase):
+    def test_default_codeql_resolves_dynamic_path_and_event(self):
+        catalog = {"total_count": 1, "workflows": [{"id": 99, "path": gate.CODEQL_PATH, "state": "active"}]}
+        pages = [catalog, response([run("codeql")])[0]]
+        with patch.object(gate, "github_auth", return_value="test-auth"), \
+                patch.object(gate, "request_page", side_effect=pages) as fetch:
+            evidence = gate.fetch_runs(REPOSITORY, SHA, "codeql", 30)
+        self.assertIsNotNone(gate.latest_run(evidence, REPOSITORY, SHA, "codeql"))
+        parsed = urlsplit(fetch.call_args_list[1].args[0])
+        self.assertTrue(parsed.path.endswith("/actions/workflows/99/runs"))
+        self.assertEqual(parse_qs(parsed.query)["event"], ["dynamic"])
+        self.assertIsNone(gate.latest_run([run("codeql", event="push")], REPOSITORY, SHA, "codeql"))
+
+    def test_signing_and_provenance_failures_block_release_creation(self):
+        root = Path(gate.__file__).resolve().parents[1]
+        text = (root / ".github/workflows/release.yml").read_text()
+        windows = text.split("\n  windows:\n")[1].split("\n  release:\n")[0]
+        release = text.split("\n  release:\n")[1]
+        self.assertNotIn("secrets.ARKISM_UPDATE_SIGNING_KEY", windows)
+        self.assertIn("environment: release-signing", release)
+        steps = ["Verify build provenance before signing", "Sign and verify Windows release assets",
+                 "Independent final signature and checksum gate", "Recheck exact-commit quality before release",
+                 "Draft tag release", "Publish the verified initial release"]
+        positions = [release.index(name) for name in steps]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn("continue-on-error", release)
+        for constraint in ["--source-digest", "--signer-workflow", "--deny-self-hosted-runners"]:
+            self.assertIn(constraint, release)
+
+    def test_codeql_missing_disabled_duplicate_or_invalid_catalog_blocks_release(self):
+        valid = {"id": 99, "path": gate.CODEQL_PATH, "state": "active"}
+        cases = [{"total_count": 0, "workflows": []},
+                 {"total_count": 1, "workflows": [dict(valid, state="disabled_manually")]},
+                 {"total_count": 2, "workflows": [valid, valid]},
+                 {"total_count": 1, "workflows": [dict(valid, id=True)]},
+                 {"total_count": 1, "workflows": [None]}, {"total_count": -1, "workflows": []}]
+        for page in cases:
+            with self.subTest(page=page), patch.object(gate, "request_page", return_value=page):
+                with self.assertRaises(gate.GateError):
+                    gate.resolve_codeql(REPOSITORY, "test-auth", gate.time.monotonic() + 30)
+
     def check(self, by_workflow):
         with patch.object(gate, "fetch_runs", side_effect=lambda repo, sha, workflow, timeout:
                           by_workflow.get(workflow, [run(workflow)])):
@@ -119,7 +159,7 @@ class ReleaseQualityTests(unittest.TestCase):
 
     def test_wait_deadline_expires_without_another_poll(self):
         with patch.object(gate, "fetch_runs", return_value=[]), \
-                patch.object(gate.time, "monotonic", side_effect=[0, 0, 0, 21]), \
+                patch.object(gate.time, "monotonic", side_effect=[0] * (len(gate.WORKFLOWS) + 1) + [21]), \
                 patch.object(gate.time, "sleep") as sleep:
             with self.assertRaisesRegex(gate.GateError, "timed out"):
                 gate.verify(REPOSITORY, SHA, timeout_seconds=20)
@@ -268,6 +308,7 @@ class ReleaseQualityTests(unittest.TestCase):
         args = [gate.__file__, "--repository", REPOSITORY, "--sha", SHA, "--timeout-seconds", "0"]
         output = io.StringIO()
         pages = [response([run(w)])[0] for w in gate.WORKFLOWS]
+        pages.insert(len(gate.WORKFLOWS) - 1, {"total_count": 1, "workflows": [{"id": 99, "state": "active", "path": gate.CODEQL_PATH}]})
         with patch.object(sys, "argv", args), patch.object(gate, "github_auth", return_value="test-auth"), \
                 patch.object(gate, "request_page", side_effect=pages), contextlib.redirect_stdout(output):
             result = gate.main()
@@ -285,7 +326,7 @@ class ReleaseQualityTests(unittest.TestCase):
         workflow = (Path(gate.__file__).resolve().parents[1] / ".github/workflows/release.yml").read_text()
         validate = workflow.split("\n  validate:\n")[1].split("\n  windows:\n")[0]
         self.assertIn("if: github.event_name == 'push'", validate)
-        self.assertIn('run: python3 tools/check_release_quality.py', validate)
+        self.assertIn('python3 tools/check_release_quality.py --repository', validate)
         self.assertIn('actions: read', validate)
         self.assertIn('RELEASE_SHA: ${{ github.sha }}', validate)
         windows = workflow.split("\n  windows:\n")[1].split("\n  release:\n")[0]

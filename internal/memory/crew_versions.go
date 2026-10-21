@@ -79,7 +79,7 @@ func (s *Service) CrewVersions(ctx context.Context, token string, scope Scope, i
 	return out, nil
 }
 
-func crewVersionRoutes(mux *http.ServeMux, s *Service) {
+func crewVersionRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/crew/versions/{id}", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.CrewVersions(r.Context(), bearer(r), scopeQuery(r), r.PathValue("id"))
 		respond(w, out, e)

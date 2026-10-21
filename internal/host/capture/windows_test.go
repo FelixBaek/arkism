@@ -249,7 +249,7 @@ func TestWinDrainWorkReportsShape(t *testing.T) {
 }
 
 // With the app's built-in Arkism running, agents talk to it in this program instead of over SSH;
-// a connection file that points anywhere but loopback is ignored.
+// a connection file that points elsewhere or has no approved SSH identity fails closed.
 func TestWinLocalConnectionRunsHereInsteadOfSSH(t *testing.T) {
 	dir := t.TempDir()
 	token := filepath.Join(dir, "owner.token")
@@ -288,8 +288,8 @@ func TestWinLocalConnectionRunsHereInsteadOfSSH(t *testing.T) {
 		`not json`,
 	} {
 		write(bad)
-		if argv, _ := winSSHCommand("codex", "hook"); argv[len(argv)-2] != "host" {
-			t.Fatal("expected ssh for", bad, argv)
+		if argv, err := winSSHCommand("codex", "hook"); err == nil {
+			t.Fatal("invalid profile must not fall back to SSH", bad, argv)
 		}
 	}
 }

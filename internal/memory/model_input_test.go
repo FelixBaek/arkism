@@ -59,7 +59,7 @@ func TestAutomatedInputsRefuseOwnerCredential(t *testing.T) {
 	if _, err := f.svc.Capture(testCtx, f.human, in); !errors.Is(err, ErrDenied) {
 		t.Fatal("automated capture accepted owner", err)
 	}
-	if _, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, review); !errors.Is(err, ErrDenied) {
+	if _, err := f.svc.ReviewCandidate(testCtx, testPrincipalToken("reviewer"), c.ID, review); !errors.Is(err, ErrDenied) {
 		t.Fatal("configured service reviewer bypassed human decision", err)
 	}
 }

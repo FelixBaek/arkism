@@ -159,7 +159,7 @@ func (s *Service) AuditArchiveStorage(ctx context.Context, token string, scope S
 	return out, nil
 }
 
-func memoryManagementRoutes(mux *http.ServeMux, s *Service) {
+func memoryManagementRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/memories/{id}/management-status", func(w http.ResponseWriter, r *http.Request) {
 		scope, err := parseSourceTraceQuery(r.URL.RawQuery)
 		if err != nil {

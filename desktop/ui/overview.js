@@ -14,14 +14,17 @@ window.ArkismOverview = (ctx) => {
   const time = (v) => { const t = new Date(v || 0).getTime(); return Number.isNaN(t) ? 0 : t; };
 
   // ---------------------------------------------------------------- data
-  const S = { sessions: null, at: 0, loading: false };
+  const S = { sessions: null, total: 0, cursor: "", at: 0, loading: false };
+  let sessionEpoch = 0;
   async function loadSessions() {
     if (S.loading || Date.now() - S.at < 60000) return;
     S.loading = true;
+    const ticket = ++sessionEpoch, generation = state.connection.generation;
     try {
-      const doc = await request(`/v1/usage/sessions?${query({ range: "7d", limit: 300 })}`);
-      S.sessions = Array.isArray(doc?.items) ? doc.items : [];
-    } catch { S.sessions = S.sessions || []; }
+      const doc = await request(`/v1/usage/sessions?${query({ range: "7d", limit: 50 })}`);
+      if (ticket !== sessionEpoch || generation !== state.connection.generation) return;
+      S.sessions = Array.isArray(doc?.items) ? doc.items : []; S.total = doc.total || 0; S.cursor = doc.next_cursor || "";
+    } catch { if (ticket !== sessionEpoch || generation !== state.connection.generation) return; S.sessions = S.sessions || []; }
     S.at = Date.now(); S.loading = false;
     if (state.view === "overview") render();
     ctx.onSessions?.(); // 연결 상태 card shows the same stages
@@ -73,7 +76,7 @@ window.ArkismOverview = (ctx) => {
       classify: [unclassified.length ? `대기 ${unclassified.length}` : "모두 분류됨", "n"], review: [waiting.length ? `${waiting.length}건` : "비어 있음", waiting.length ? "a" : "n"],
       recall: ["정상", "n"], trace: [reported ? "정상" : "보고 없음", "n"], judge: [tidy ? `확인 전 ${tidy}` : "확인 끝", "n"], dream: [nProp ? `제안 ${nProp}` : "제안 없음", "n"] };
     const TILES = {
-      collect: [[`${num(sessions.filter(today).length)}건`, "오늘 저장"], [lastSession ? ago(lastSession) : "—", "마지막 저장"], [`${num(sessions.length)}건`, "최근 7일"]],
+      collect: [[`${num(sessions.filter(today).length)}건`, "오늘 저장"], [lastSession ? ago(lastSession) : "—", "마지막 저장"], [`${num(S.total)}건`, "최근 7일"]],
       extract: [[stalled ? `${stalledHours}시간` : `${num(extracted.filter(today).length)}건`, stalled ? "멈춘 시간" : "오늘 추출"], [`${n24(extracted)}건`, "최근 24시간 추출"], [lastExtract ? ago(lastExtract) : "—", "마지막 추출"]],
       classify: [[`${num(unclassified.length)}건`, "대기"], [classified.length ? ago(latest(classified)) : "—", "마지막 처리"], [`${n24(classified)}건`, "최근 24시간 분류"]],
       review: [[`${num(waiting.length)}건`, "대기"], [oldest ? (days ? `${days}일` : ago(oldest)) : "—", "제일 오래된 것"], [`${num(todayCount(waiting))}건`, "오늘 들어온 것"]],
@@ -314,6 +317,8 @@ window.ArkismOverview = (ctx) => {
   }
 
   return {
+    partial: () => !!S.cursor,
+    reset() { sessionEpoch++; Object.assign(S, { sessions:null,total:0,cursor:"",at:0,loading:false }); win?.reset(); },
     stages, loadSessions, openStage, // 연결 상태 card (app.js renderStatusStages)
     views: { overview: { title: "개요", render: renderView, head: () => [button("새로고침", "ghost", "arrows-clockwise", () => { S.at = 0; void loadSessions(); })] } }
   };

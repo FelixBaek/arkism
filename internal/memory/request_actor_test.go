@@ -178,11 +178,14 @@ func TestRequestActorConsistency(t *testing.T) {
 type requestActorAuth struct {
 	Authorizer
 	change func(Authorization, *Decision) error
+	// Validation tests distinguish the empty-content route check from the
+	// service's payload policy call. Both still invoke the real test authorizer.
+	payloadOnly bool
 }
 
 func (a requestActorAuth) Authorize(ctx context.Context, token string, in Authorization) (Decision, error) {
 	d, e := a.Authorizer.Authorize(ctx, token, in)
-	if e == nil {
+	if e == nil && !(a.payloadOnly && ctx.Value(httpPreflightKey{}) == true) {
 		e = a.change(in, &d)
 	}
 	return d, e

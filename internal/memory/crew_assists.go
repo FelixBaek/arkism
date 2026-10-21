@@ -216,7 +216,7 @@ func (s *Service) FinishCrewAssist(ctx context.Context, token, id string, in Cre
 	return out, err
 }
 
-func crewAssistRoutes(mux *http.ServeMux, s *Service) {
+func crewAssistRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/crew/assists", func(w http.ResponseWriter, r *http.Request) {
 		var in CrewAssistInput
 		if !decodeLimit(w, r, &in, 1<<20) {

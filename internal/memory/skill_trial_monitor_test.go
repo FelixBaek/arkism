@@ -24,7 +24,7 @@ func (x fakeTx) SkillRegressionSourceIDs(_ context.Context, scope Scope, version
 }
 func TestSkillTrialMonitorDisablesFailedPromotionWithoutInventingBaseline(t *testing.T) {
 	f, candidate, trial, in := skillAutomationFixture(t)
-	if _, e := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false); e != nil {
+	if _, e := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false); e != nil {
 		t.Fatal(e)
 	}
 	current, _ := f.repo.Get(testCtx, colSkillVersions, scopeA, candidate.ID)
@@ -45,7 +45,7 @@ func TestSkillTrialMonitorDisablesFailedPromotionWithoutInventingBaseline(t *tes
 	if e := f.repo.Replace(testCtx, "sources", src, prev); e != nil {
 		t.Fatal(e)
 	}
-	got, e := f.svc.MonitorSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+	got, e := f.svc.MonitorSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 	if e != nil || got.State != "recovery_unavailable" || len(got.Evidence) != 1 {
 		t.Fatal(got, e)
 	}
@@ -57,7 +57,7 @@ func TestSkillTrialMonitorDisablesFailedPromotionWithoutInventingBaseline(t *tes
 	if tr.Text == "" {
 		t.Fatal("lost canonical failure evidence")
 	}
-	got, e = f.svc.MonitorSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+	got, e = f.svc.MonitorSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 	if e != nil || got.State != "recovery_unavailable" {
 		t.Fatal("recovery replay", got, e)
 	}
@@ -82,7 +82,7 @@ func TestSkillTrialMonitorIndependentFailureAndAtomicAudit(t *testing.T) {
 	for _, mode := range []string{"independent", "model_self", "audit_failure"} {
 		t.Run(mode, func(t *testing.T) {
 			f, candidate, trial, in := skillAutomationFixture(t)
-			if _, e := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false); e != nil {
+			if _, e := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false); e != nil {
 				t.Fatal(e)
 			}
 			current, _ := f.repo.Get(testCtx, colSkillVersions, scopeA, candidate.ID)
@@ -109,7 +109,7 @@ func TestSkillTrialMonitorIndependentFailureAndAtomicAudit(t *testing.T) {
 				t.Fatal(e)
 			}
 			f.repo.failAudit = mode == "audit_failure"
-			got, e := f.svc.MonitorSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+			got, e := f.svc.MonitorSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 			current, _ = f.repo.Get(testCtx, colSkillVersions, scopeA, candidate.ID)
 			if mode == "audit_failure" {
 				if e == nil || current.Status != "active" {
@@ -130,7 +130,7 @@ func TestSkillTrialMonitorIndependentFailureAndAtomicAudit(t *testing.T) {
 			if e = f.repo.Replace(testCtx, "sources", src, src.Revision); e != nil {
 				t.Fatal(e)
 			}
-			if _, e = f.svc.MonitorSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID}); e == nil {
+			if _, e = f.svc.MonitorSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID}); e == nil {
 				t.Fatal("recovery reused deleted failure evidence")
 			}
 		})
@@ -139,7 +139,7 @@ func TestSkillTrialMonitorIndependentFailureAndAtomicAudit(t *testing.T) {
 
 func TestSkillTrialMonitorRestoresOnlyValidatedBaseline(t *testing.T) {
 	f, candidate, trial, in := skillAutomationFixture(t)
-	if _, e := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false); e != nil {
+	if _, e := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false); e != nil {
 		t.Fatal(e)
 	}
 	baseline := candidate
@@ -179,28 +179,28 @@ func TestSkillTrialMonitorRestoresOnlyValidatedBaseline(t *testing.T) {
 	if e := f.repo.Replace(testCtx, "sources", src, src.Revision); e != nil {
 		t.Fatal(e)
 	}
-	got, e := f.svc.MonitorSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+	got, e := f.svc.MonitorSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 	if e != nil || got.State != "rolled_back" {
 		parent, _ := f.repo.Get(testCtx, colSkills, scopeA, candidate.SkillID)
-		_, retryErr := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, ChangeInput{Scope: scopeA, ExpectedRevision: parent.Revision, VersionID: baseline.ID}, true)
+		_, retryErr := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, ChangeInput{Scope: scopeA, ExpectedRevision: parent.Revision, VersionID: baseline.ID}, true)
 		t.Fatal(got, e, retryErr)
 	}
 	parent, _ := f.repo.Get(testCtx, colSkills, scopeA, candidate.SkillID)
 	if parent.ActiveVersion != baseline.ID {
 		t.Fatal("baseline not restored")
 	}
-	if again, e := f.svc.MonitorSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID}); e != nil || again.State != "rolled_back" {
+	if again, e := f.svc.MonitorSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID}); e != nil || again.State != "rolled_back" {
 		t.Fatal("repeated monitor lost rollback", again, e)
 	}
-	view, e := f.svc.ObserveSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+	view, e := f.svc.ObserveSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 	if e != nil || view.State != "rolled_back" {
 		t.Fatal("terminal recovery observation", view, e)
 	}
-	lease, e := f.svc.ClaimSkillTrialCheck(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+	lease, e := f.svc.ClaimSkillTrialCheck(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = f.svc.FinishSkillTrialCheck(testCtx, "learner", trial.ID, SkillTrialCheckFinish{Scope: scopeA, SkillID: candidate.SkillID, ExpectedRevision: lease.Revision, LeaseToken: lease.LeaseToken, Outcome: "checked"}); e != nil {
+	if e = f.svc.FinishSkillTrialCheck(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialCheckFinish{Scope: scopeA, SkillID: candidate.SkillID, ExpectedRevision: lease.Revision, LeaseToken: lease.LeaseToken, Outcome: "checked"}); e != nil {
 		t.Fatal(e)
 	}
 	job, _ := f.repo.Get(testCtx, colJobs, scopeA, lease.ID)

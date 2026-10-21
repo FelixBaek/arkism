@@ -86,7 +86,7 @@ func TestPostgresRecoveryWriteGateLifecycle(t *testing.T) {
 	if _, err := p.ManageRecoveryWrites(testCtx, "resume", paused.StorageIdentity, initial.Gate.Generation); !errors.Is(err, ErrConflict) {
 		t.Fatal("stale resume", err)
 	}
-	columns := []string{"collection", "id", "id", "organization_id", "organization_id", "id", "organization_id", "organization_id", "organization_id", "day"}
+	columns := []string{"collection", "id", "id", "organization_id", "organization_id", "id", "organization_id", "organization_id", "organization_id", "day", "token_sha256"}
 	for i, table := range recoveryWriteTables {
 		name := pgx.Identifier{"arkism", table}.Sanitize()
 		column := pgx.Identifier{columns[i]}.Sanitize()

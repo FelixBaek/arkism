@@ -102,9 +102,7 @@ func TestMemoryContextConditionSearchAfterCaptureReviewPostgres(t *testing.T) {
 func TestSchemaMigrationContextIndexUpgradePreservesRecord(t *testing.T) {
 	p := isolatedPostgresSchema(t, false)
 	ctx := context.Background()
-	if err := p.migrateSchema(ctx, schemaMigrations()[:1]); err != nil {
-		t.Fatal(err)
-	}
+	historicalSchema(t, p, 1)
 	now := time.Now().UTC()
 	r := Record{ID: ID(), Scope: scopeA, Kind: "memory", Status: statusActive, ApprovedBy: "reviewer", Revision: 7, Text: "검증한 복구 절차", UpdatedAt: now, CreatedAt: now, MemoryContext: &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: "lesson", Applicability: "검수된 보고서에서만", Uncertainty: "타부서는 미확인", ValidFrom: "2027년부터"}}
 	if err := p.Insert(ctx, colMemories, r); err != nil {

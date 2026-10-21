@@ -1,51 +1,122 @@
 package capture
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
+	"strings"
 	"testing"
+
+	"golang.org/x/crypto/ssh"
 )
 
-func TestAgentsUseTheAppsSSHAddress(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "agents.json")
+func approvedSSHProfile(t *testing.T, file string) winLocalConn {
+	t.Helper()
+	public, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := ssh.NewPublicKey(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := strings.Repeat("a", 64)
+	root := filepath.Join(filepath.Dir(file), "ssh-hosts")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, fmt.Sprintf("%s.%x.known_hosts", id, sha256.Sum256(key.Marshal())))
+	c := winLocalConn{Mode: "server", SSHHost: "alex@example.com", SSHPort: 2222, SSHKnownHosts: path, SSHHostAlias: "arkism-" + id, SSHHostAlgorithms: "ssh-ed25519"}
+	if err := os.WriteFile(path, append([]byte(c.SSHHostAlias+" "), ssh.MarshalAuthorizedKey(key)...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	writeSSHProfile(t, file, c)
+	return c
+}
+func writeSSHProfile(t *testing.T, file string, c winLocalConn) {
+	t.Helper()
+	data, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(file, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestAgentsUseTheAppsApprovedSSHKey(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "with spaces % store", "agents.json")
+	if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("ARKISM_AGENT_CONNECTION", file)
 	t.Setenv("ARKISM_SSH_HOST", "from-env")
 	winSSHFlag = ""
-
 	if h, p := winServerSSH(); h != "from-env" || p != 0 {
-		t.Fatalf("no app file: got %s:%d", h, p)
+		t.Fatalf("got %s:%d", h, p)
 	}
-	if err := os.WriteFile(file, []byte(`{"mode":"server","ssh_host":"alex@example.com","ssh_port":2222}`), 0o600); err != nil {
+	c := approvedSSHProfile(t, file)
+	c.SSHKey = filepath.Join(t.TempDir(), "id_ed25519")
+	if err := os.WriteFile(c.SSHKey, []byte("fixture"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	writeSSHProfile(t, file, c)
 	argv, err := winSSHCommand("codex", "mcp")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if i := slices.Index(argv, "-p"); i < 0 || argv[i+1] != "2222" || argv[len(argv)-2] != "alex@example.com" {
+	if i := slices.Index(argv, "-p"); i < 0 || argv[i+1] != "2222" || argv[len(argv)-2] != c.SSHHost {
 		t.Fatalf("argv %v", argv)
 	}
-	key := filepath.Join(t.TempDir(), "id_ed25519")
-	_ = os.WriteFile(key, []byte("k"), 0o600)
-	_ = os.WriteFile(file, []byte(`{"mode":"server","ssh_host":"h","ssh_key":`+strconv.Quote(key)+`}`), 0o600)
-	if argv, _ := winSSHCommand("codex", "mcp"); !slices.Contains(argv, key) || !slices.Contains(argv, "IdentitiesOnly=yes") {
-		t.Fatalf("key not passed: %v", argv)
+	for _, required := range []string{c.SSHKey, "IdentitiesOnly=yes", "StrictHostKeyChecking=yes", "HostKeyAlias=" + c.SSHHostAlias, "GlobalKnownHostsFile=none", "KnownHostsCommand=none", "ControlPath=none"} {
+		if !slices.Contains(argv, required) {
+			t.Errorf("missing %s", required)
+		}
 	}
-	_ = os.WriteFile(file, []byte(`{"mode":"server","ssh_host":"h","ssh_key":"/no/such"}`), 0o600)
-	if argv, _ := winSSHCommand("codex", "mcp"); slices.Contains(argv, "-i") {
-		t.Fatalf("missing key must be dropped: %v", argv)
+	if !slices.Contains(argv, "UserKnownHostsFile=\""+strings.ReplaceAll(filepath.ToSlash(c.SSHKnownHosts), "%", "%%")+"\"") {
+		t.Fatal("pin path was not quoted/escaped")
 	}
-	for _, bad := range []string{`{"mode":"server","ssh_host":"-oProxyCommand=x"}`, `{"mode":"server","ssh_host":"a b"}`, `{"mode":"local","ssh_host":"x"}`} {
-		_ = os.WriteFile(file, []byte(bad), 0o600)
-		if h, _ := winServerSSH(); h != "from-env" {
-			t.Fatalf("%s: got %s", bad, h)
+	if strings.Contains(strings.Join(argv, " "), "accept-new") {
+		t.Fatal("TOFU enabled")
+	}
+	// Modifying the key cannot turn the profile into a new approval.
+	if err := os.WriteFile(c.SSHKnownHosts, []byte("attacker key"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := winSSHCommand("codex", "mcp"); err == nil {
+		t.Fatal("modified pin accepted")
+	}
+}
+func TestAgentsRejectLegacyOrRedirectedApprovals(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "agents.json")
+	t.Setenv("ARKISM_AGENT_CONNECTION", file)
+	winSSHFlag = ""
+	c := approvedSSHProfile(t, file)
+	for _, mutate := range []func(*winLocalConn){
+		func(c *winLocalConn) { c.SSHKnownHosts = "" },
+		func(c *winLocalConn) { c.SSHHostAlgorithms = "+ssh-dss" },
+		func(c *winLocalConn) { c.SSHHostAlias = "*" },
+		func(c *winLocalConn) { c.SSHHost = "-oProxyCommand=x" },
+		func(c *winLocalConn) { c.SSHKnownHosts = filepath.Join(filepath.Dir(file), "outside.known_hosts") },
+	} {
+		bad := c
+		mutate(&bad)
+		writeSSHProfile(t, file, bad)
+		if _, err := winSSHCommand("codex", "mcp"); err == nil {
+			t.Fatal("invalid approval accepted")
 		}
 	}
 	winSSHFlag = "flag-host"
 	defer func() { winSSHFlag = "" }()
-	if h, _ := winServerSSH(); h != "flag-host" {
-		t.Fatalf("flag must win, got %s", h)
+	argv, err := winSSHCommand("codex", "mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if argv[len(argv)-2] != "flag-host" || !slices.Contains(argv, "StrictHostKeyChecking=yes") {
+		t.Fatalf("unsafe explicit SSH: %v", argv)
 	}
 }

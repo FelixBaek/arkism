@@ -32,12 +32,12 @@ func TestPostgresSharedAudienceOriginAndCheckpointFences(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	grant("agent-a", "shared-token-a", actions)
-	grant("agent-b", "shared-token-b", actions)
+	grant("agent-a", testPrincipalToken("shared-token-a"), actions)
+	grant("agent-b", testPrincipalToken("shared-token-b"), actions)
 	start := time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
 	var first Ref
 	for _, agent := range []string{"a", "b"} {
-		token := "shared-token-" + agent
+		token := testPrincipalToken("shared-token-" + agent)
 		in := TraceIngestInput{Scope: scope, TraceID: "shared-trace-" + agent, ThreadID: "shared-thread", AgentRun: CompletedAgentRunInput{ID: "shared-run-" + agent, OriginAgentID: "runtime-" + agent, TaskType: "work", Outcome: "partial", StartedAt: start, FinishedAt: start.Add(time.Second), Text: "unfinished task"}, Events: []TraceEventInput{{ID: "shared-event-" + agent, Kind: "langgraph.input", OccurredAt: start, Payload: json.RawMessage(`{"origin_agent_id":"runtime-` + agent + `","input":"continue"}`)}}}
 		out, e := svc.IngestCompletedTrace(boundContext(token), token, in)
 		if e != nil {
@@ -59,11 +59,11 @@ func TestPostgresSharedAudienceOriginAndCheckpointFences(t *testing.T) {
 	pkg.Status = "in_progress"
 	pkg.SourceRefs = []Ref{first}
 	in := workCheckpointPGInput(scope, "shared-work", "save-shared", 0, pkg)
-	saved, e := svc.SaveWorkCheckpoint(boundContext("shared-token-a"), "shared-token-a", in)
+	saved, e := svc.SaveWorkCheckpoint(boundContext(testPrincipalToken("shared-token-a")), testPrincipalToken("shared-token-a"), in)
 	if e != nil {
 		t.Fatal(e)
 	}
-	view, e := svc.GetWorkCheckpoint(boundContext("shared-token-b"), "shared-token-b", WorkCheckpointGetInput{Scope: scope, ID: in.ID})
+	view, e := svc.GetWorkCheckpoint(boundContext(testPrincipalToken("shared-token-b")), testPrincipalToken("shared-token-b"), WorkCheckpointGetInput{Scope: scope, ID: in.ID})
 	if e != nil || view.Revision != saved.Revision || len(view.Package.NextSteps) == 0 || view.Authority != AuthorityDataOnly {
 		t.Fatalf("cross agent resume %+v %v", view, e)
 	}
@@ -76,18 +76,18 @@ func TestPostgresSharedAudienceOriginAndCheckpointFences(t *testing.T) {
 	}
 	bad := pkg
 	bad.SourceRefs = []Ref{{Collection: "sources", ID: src.ID, Revision: 1}}
-	if _, e = svc.SaveWorkCheckpoint(boundContext("shared-token-a"), "shared-token-a", workCheckpointPGInput(scope, "bad-shared", "bad-event", 0, bad)); e == nil {
+	if _, e = svc.SaveWorkCheckpoint(boundContext(testPrincipalToken("shared-token-a")), testPrincipalToken("shared-token-a"), workCheckpointPGInput(scope, "bad-shared", "bad-event", 0, bad)); e == nil {
 		t.Fatal("private reference relabelled")
 	}
-	if _, e = svc.GetWorkCheckpoint(boundContext("shared-token-b"), "shared-token-b", WorkCheckpointGetInput{Scope: private, ID: in.ID}); !errors.Is(e, ErrNotFound) {
+	if _, e = svc.GetWorkCheckpoint(boundContext(testPrincipalToken("shared-token-b")), testPrincipalToken("shared-token-b"), WorkCheckpointGetInput{Scope: private, ID: in.ID}); !errors.Is(e, ErrNotFound) {
 		t.Fatalf("wrong partition read %v", e)
 	}
 	// Removing source permission invalidates a previously readable checkpoint.
-	grant("agent-b", "shared-token-b", []string{"db:read", "db:write", "read:work_checkpoints"})
-	if _, e = svc.GetWorkCheckpoint(boundContext("shared-token-b"), "shared-token-b", WorkCheckpointGetInput{Scope: scope, ID: in.ID}); !errors.Is(e, ErrDenied) {
+	grant("agent-b", testPrincipalToken("shared-token-b"), []string{"db:read", "db:write", "read:work_checkpoints"})
+	if _, e = svc.GetWorkCheckpoint(boundContext(testPrincipalToken("shared-token-b")), testPrincipalToken("shared-token-b"), WorkCheckpointGetInput{Scope: scope, ID: in.ID}); !errors.Is(e, ErrDenied) {
 		t.Fatalf("revocation %v", e)
 	}
-	grant("agent-b", "shared-token-b", actions)
+	grant("agent-b", testPrincipalToken("shared-token-b"), actions)
 	source, e := p.Get(testCtx, "sources", scope, first.ID)
 	if e != nil {
 		t.Fatal(e)
@@ -97,7 +97,7 @@ func TestPostgresSharedAudienceOriginAndCheckpointFences(t *testing.T) {
 	if e = p.Replace(testCtx, "sources", source, first.Revision); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = svc.GetWorkCheckpoint(boundContext("shared-token-b"), "shared-token-b", WorkCheckpointGetInput{Scope: scope, ID: in.ID}); e == nil {
+	if _, e = svc.GetWorkCheckpoint(boundContext(testPrincipalToken("shared-token-b")), testPrincipalToken("shared-token-b"), WorkCheckpointGetInput{Scope: scope, ID: in.ID}); e == nil {
 		t.Fatal("deleted evidence returned checkpoint")
 	}
 }

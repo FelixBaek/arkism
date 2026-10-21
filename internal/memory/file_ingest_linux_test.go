@@ -356,6 +356,7 @@ func TestFileIngestSlowBody(t *testing.T) {
 	second := fileRequest(t, in, []byte("code"), f.human)
 	second.URL.Scheme = "http"
 	second.URL.Host = server.Listener.Addr().String()
+	second.Host = second.URL.Host
 	second.RequestURI = ""
 	resp, err := server.Client().Do(second)
 	if err != nil {
@@ -381,6 +382,7 @@ func TestFileIngestSlowBody(t *testing.T) {
 	for {
 		next := fileRequest(t, in, []byte("code"), f.human)
 		next.URL.Scheme, next.URL.Host, next.RequestURI = "http", server.Listener.Addr().String(), ""
+		next.Host = next.URL.Host
 		resp, err = server.Client().Do(next)
 		if err != nil {
 			t.Fatal(err)

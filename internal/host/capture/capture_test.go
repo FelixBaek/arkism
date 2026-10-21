@@ -21,6 +21,7 @@ import (
 func capFake(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
+	t.Setenv("ARKISM_AGENT_CONNECTION", filepath.Join(dir, "no-agents.json"))
 	keep := []func(){}
 	save := func(restore func()) { keep = append(keep, restore) }
 	{

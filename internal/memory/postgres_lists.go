@@ -76,7 +76,11 @@ func (p *Postgres) ListMemories(ctx context.Context, in MemoryListInput) ([]Reco
 	}
 	w, args := `COALESCE((doc->>'content_erased')::boolean,false)=false AND COALESCE((doc->>'privacy_quarantined')::boolean,false)=false`, []any{}
 	if in.Query != "" {
-		w += ` AND strpos(COALESCE(doc->>'text',''),$6)>0`
+		if in.FoldQuery {
+			w += ` AND strpos(lower(COALESCE(doc->>'text','') || ' ' || COALESCE(doc->>'summary','')),lower($6))>0`
+		} else {
+			w += ` AND strpos(COALESCE(doc->>'text',''),$6)>0`
+		}
 		args = append(args, in.Query)
 	}
 	if in.Kind != "" {

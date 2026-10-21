@@ -29,6 +29,7 @@ import (
 	"github.com/FelixBaek/arkism/internal/host"
 	"github.com/FelixBaek/arkism/internal/host/desktopcontrol"
 	"github.com/FelixBaek/arkism/internal/host/subscription"
+	"github.com/FelixBaek/arkism/internal/httpguard"
 )
 
 // The model gateway. Claude Code points ANTHROPIC_BASE_URL here; its
@@ -584,14 +585,14 @@ func mediaType(h http.Header) string {
 
 // chatStream is _chat_stream: a Messages body sent to a provider's Chat API, answered in
 // Messages form. A rejection is a *statusError before the first chunk.
-func chatStream(base, key string, body host.Obj) byteSeq {
+func chatStream(parent context.Context, base, key string, body host.Obj) byteSeq {
 	return func(yield func([]byte, error) bool) {
 		raw, err := pyDumps(body)
 		if err != nil {
 			yield(nil, err)
 			return
 		}
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/chat/completions", bytes.NewReader(raw))
 		if err != nil {
@@ -757,12 +758,14 @@ func (x *exchange) send(status int, data byteSeq, ctype string, headers [][2]str
 	for _, kv := range headers {
 		h.Add(kv[0], kv[1])
 	}
+	_ = http.NewResponseController(x.w).SetWriteDeadline(time.Now().Add(30 * time.Second))
 	x.w.WriteHeader(status)
 	flusher, _ := x.w.(http.Flusher)
 	for chunk, err := range data {
 		if err != nil {
 			return err
 		}
+		_ = http.NewResponseController(x.w).SetWriteDeadline(time.Now().Add(30 * time.Second))
 		if _, err := x.w.Write(chunk); err != nil {
 			return err
 		}
@@ -1194,7 +1197,7 @@ func (x *exchange) body() ([]byte, error) {
 	if length < 0 || len(x.r.TransferEncoding) > 0 {
 		return nil, errors.New("invalid_request")
 	}
-	if (x.geminiAPI || x.systemoneAPI || entrances[x.path()]) && length > int64(subscription.MaxInput) {
+	if length > int64(subscription.MaxInput) {
 		return nil, errors.New("input_too_large")
 	}
 	raw := make([]byte, length)
@@ -2336,7 +2339,9 @@ func (x *exchange) forwardHeaders(target string, data []byte, headers [][2]strin
 	if len(data) > 0 {
 		body = bytes.NewReader(data)
 	}
-	req, err := http.NewRequest(x.r.Method, target, body)
+	ctx, cancel := context.WithTimeout(x.r.Context(), 10*time.Minute)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, x.r.Method, target, body)
 	if err == nil {
 		for _, kv := range headers {
 			req.Header.Add(kv[0], kv[1])
@@ -2403,7 +2408,7 @@ func (x *exchange) chatAPI(base, key string, body host.Obj, hostChatAPI bool) er
 		request.Del("max_tokens")
 		request.Set("max_completion_tokens", limit)
 	}
-	next, stop := iter.Pull2(chatStream(base, key, request))
+	next, stop := iter.Pull2(chatStream(x.r.Context(), base, key, request))
 	defer stop()
 	first, err, ok := next()
 	if !ok {
@@ -2453,6 +2458,11 @@ func (x *exchange) chatAPI(base, key string, body host.Obj, hostChatAPI bool) er
 
 // runGateway serves until SIGINT or SIGTERM, then ends every live Claude run.
 func runGateway(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	host, _, splitErr := net.SplitHostPort(Listen)
+	if splitErr != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
+		fmt.Fprintln(stderr, "arkism gateway: listen address must be a loopback IP")
+		return 1
+	}
 	control, err := desktopcontrol.FromEnvironment("gateway", stdin, stdout)
 	if err != nil {
 		fmt.Fprintln(stderr, "arkism gateway: desktop control configuration invalid")
@@ -2469,14 +2479,14 @@ func runGateway(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "arkism gateway: local token:", err)
 		return 1
 	}
-	server := &http.Server{Handler: Guard{Next: Handler{}, Token: token, Optional: tokenOptional(), Warn: stderr}}
+	server := &http.Server{Handler: httpguard.Protect(Guard{Next: Handler{}, Token: token, Optional: tokenOptional(), Warn: stderr, Attempts: httpguard.NewLimiter(20, time.Second)}),
+		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+	// A global write timeout would truncate valid SSE streams. Upstream calls
+	// have a request-scoped deadline instead.
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-signals
-		server.Close()
-	}()
-	err = serveDesktopGateway(server, listener, control, claudeRuns)
+	defer signal.Stop(signals)
+	err = serveGatewayLifecycle(server, listener, control, claudeRuns, signals)
 	if control == nil || !control.Requested() {
 		claudeRuns.close()
 	}
@@ -2485,4 +2495,27 @@ func runGateway(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintln(stderr, err)
 	return 1
+}
+
+// Serve returns when listeners close; the process must additionally wait for
+// Shutdown to finish before stopping provider children or returning from main.
+func serveGatewayLifecycle(server *http.Server, listener net.Listener, control *desktopcontrol.Controller, bridge *claudeBridge, signals <-chan os.Signal) error {
+	drained, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(drained)
+		select {
+		case <-signals:
+		case <-stopped:
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if server.Shutdown(ctx) != nil {
+			_ = server.Close()
+		}
+	}()
+	err := serveDesktopGateway(server, listener, control, bridge)
+	close(stopped)
+	<-drained
+	return err
 }

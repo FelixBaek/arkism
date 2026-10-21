@@ -127,7 +127,10 @@ function extract(dir = __dirname) {
   const statics = new Map();
   const templates = new Map();
   const put = (map, k, where) => { if (!map.has(k)) map.set(k, []); map.get(k).push(where); };
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".js") && !f.endsWith(".test.js") && !f.startsWith("i18n")).sort();
+  const files = [
+    ...fs.readdirSync(dir).filter((f) => /\.(js|mjs)$/.test(f) && !f.endsWith(".test.js") && !f.startsWith("i18n")),
+    ...(fs.existsSync(path.join(dir, "modules")) ? fs.readdirSync(path.join(dir, "modules")).filter(f => f.endsWith(".mjs")).map(f => "modules/" + f) : [])
+  ].sort();
   for (const f of files) {
     const src = fs.readFileSync(path.join(dir, f), "utf8");
     lexJS(src,

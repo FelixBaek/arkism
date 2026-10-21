@@ -35,9 +35,12 @@ type winLocalConn struct {
 	URL       string `json:"url"`
 	TokenFile string `json:"token_file"`
 	// With mode "server": the SSH address the app connected with (설정에서 서버에 연결).
-	SSHHost string `json:"ssh_host"`
-	SSHPort int    `json:"ssh_port"`
-	SSHKey  string `json:"ssh_key"`
+	SSHHost           string `json:"ssh_host"`
+	SSHPort           int    `json:"ssh_port"`
+	SSHKey            string `json:"ssh_key"`
+	SSHKnownHosts     string `json:"ssh_known_hosts"`
+	SSHHostAlias      string `json:"ssh_host_alias"`
+	SSHHostAlgorithms string `json:"ssh_host_algorithms"`
 }
 
 // winLocalConnPath is the app's agents.json, in Tauri's local data folder for the app on each system.
@@ -163,6 +166,14 @@ func winSSHCommand(origin, mode string) ([]string, error) {
 	}
 	argv := []string{ssh, "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2"}
 	sshHost, sshPort, sshKey := winServerSSHKey()
+	if !winSSHHostOK(sshHost) {
+		return nil, valueErr("invalid SSH host")
+	}
+	trust, err := winSSHTrust(sshHost)
+	if err != nil {
+		return nil, err
+	}
+	argv = append(argv, trust...)
 	if sshPort > 0 && sshPort < 65536 {
 		argv = append(argv, "-p", fmt.Sprint(sshPort))
 	}

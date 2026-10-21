@@ -1,0 +1,9 @@
+.memory-page-note { padding: var(--space-8); color: var(--text-2); }
+.stats:has(> .memory-page-note) { display: block; }
+/* Spacer heights are measured geometry; colours and row typography stay shared. */
+.virtual-list, .virtual-item, .virtual-spacer { flex: none; min-width: 0; }
+.virtual-list { overflow-anchor: none; }
+.virtual-spacer { pointer-events: none; }
+:is(.memory-mode, .skills-mode) .virtual-list > .virtual-item .row { border-bottom: 0.0625rem solid var(--nc-line); }
+:is(.memory-mode, .skills-mode) .virtual-list > .virtual-item[data-virtual-last] .row { border-bottom: 0; }
+.collection-more { flex: none; }

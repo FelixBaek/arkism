@@ -85,7 +85,7 @@ GROUP BY 1, 2`, scope.WorkspaceID, scope.ProjectID, scope.UserID, skillUsageEven
 	return out, nil
 }
 
-func skillUsageRoutes(mux *http.ServeMux, s *Service) {
+func skillUsageRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/skills/usage", func(w http.ResponseWriter, r *http.Request) {
 		days := 60
 		if v := r.URL.Query().Get("days"); v != "" {

@@ -995,7 +995,7 @@ func (s *Service) RoutingOverview(ctx context.Context, token string, scope Scope
 
 // ------------------------------------------------------------------ HTTP
 
-func routingRoutes(mux *http.ServeMux, s *Service) {
+func routingRoutes(mux routeRegistrar, s *Service) {
 	routingGroupRoutes(mux, s)
 	mux.HandleFunc("GET /v1/routing/overview", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.RoutingOverview(r.Context(), bearer(r), scopeQuery(r), r.URL.Query().Get("range"))

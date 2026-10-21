@@ -238,7 +238,7 @@ func TestCandidateReviewBatchHTTPBoundary(t *testing.T) {
 	}
 	raw, _ := json.Marshal(in)
 	request(raw, f.agent, 403)
-	request(raw, "", 403)
+	request(raw, "", 401)
 	request(bytes.Replace(raw, []byte(`"action":"approve"`), []byte(`"action":"approve","scope":{}`), 1), f.human, 400)
 	over := in
 	over.Items = make([]CandidateReviewBatchItem, 21)

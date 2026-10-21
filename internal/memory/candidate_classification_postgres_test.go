@@ -16,7 +16,7 @@ func TestPostgresClassifierCanOnlyClassify(t *testing.T) {
 	if err := admin.Insert(ctx, "memory_candidates", cand); err != nil {
 		t.Fatal(err)
 	}
-	const token = "classifier-token-that-is-never-stored-raw"
+	token := testPrincipalToken("classifier-token-that-is-never-stored-raw")
 	if err := admin.ProvisionPrincipal(ctx, PrincipalGrant{PrincipalID: "arkism-memory-reviewer", Role: roleClassifier, Token: token,
 		OrganizationID: scope.WorkspaceID, ProjectID: scope.ProjectID, Actions: []string{"db:read", "db:write", "classify:memory_candidates"}}); err != nil {
 		t.Fatal(err)

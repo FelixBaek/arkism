@@ -69,7 +69,7 @@ func (s *Service) SetMemoryReviewDue(ctx context.Context, token, id string, in M
 	return out, nil
 }
 
-func memoryReviewDueRoutes(mux *http.ServeMux, s *Service) {
+func memoryReviewDueRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/memories/{id}/review-due", func(w http.ResponseWriter, r *http.Request) {
 		var in MemoryReviewDueInput
 		if !decode(w, r, &in) {

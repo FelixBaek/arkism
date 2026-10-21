@@ -615,7 +615,7 @@ func eraseSessionArchive(ctx context.Context, tx Tx, scope Scope, id string, now
 	return true, tx.Replace(ctx, colSessionArchives, r, previous)
 }
 
-func sessionManageRoutes(mux *http.ServeMux, s *Service) {
+func sessionManageRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/usage/sessions/transcript", func(w http.ResponseWriter, r *http.Request) {
 		var in SessionTranscriptInput
 		if !decode(w, r, &in) {

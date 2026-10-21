@@ -22,6 +22,7 @@ def main():
                         "-p", "test_*.py"], cwd=ROOT, check=True)
     # Commits on this branch must say why, what was verified, and link research where a study screen changed.
     subprocess.run([sys.executable, "tools/check_work_record.py"], cwd=ROOT, check=True)
+    subprocess.run(["go", "run", "./tools/complexity"], cwd=ROOT, check=True)
     subprocess.run(["go", "vet", "./..."], cwd=ROOT, check=True)
     subprocess.run(["go", "test", "-race", "./..."], cwd=ROOT, check=True)
     subprocess.run(["node", "--test", *sorted(str(path) for path in

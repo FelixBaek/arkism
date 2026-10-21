@@ -15,12 +15,14 @@ import (
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/httpguard"
 )
 
 // Guard requires the local token before Next sees a request.
 type Guard struct {
-	Next  http.Handler
-	Token string
+	Next     http.Handler
+	Token    string
+	Attempts *httpguard.Limiter
 	// Optional lets a call without the header through (one-release grace, ARKISM_GATEWAY_TOKEN_OPTIONAL=1);
 	// a wrong token is refused either way.
 	Optional bool
@@ -40,6 +42,7 @@ func unauthorized(w http.ResponseWriter, message string) {
 	status, body := 401, mustPy(host.Obj{{Key: "type", Value: "error"}, {Key: "error", Value: host.Obj{
 		{Key: "type", Value: "authentication_error"}, {Key: "message", Value: message}}}})
 	w.Header().Set("content-type", "application/json")
+	w.Header().Set("WWW-Authenticate", `Bearer realm="arkism-gateway"`)
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
 }
@@ -63,9 +66,15 @@ func (g Guard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		warned.Unlock()
 	case len(values) == 0:
+		if !g.allowAttempt(w) {
+			return
+		}
 		unauthorized(w, "gateway_token_missing: send the "+host.GatewayTokenHeader+" header (run install-arkism to set ANTHROPIC_CUSTOM_HEADERS)")
 		return
 	default:
+		if !g.allowAttempt(w) {
+			return
+		}
 		unauthorized(w, "gateway_token_invalid: the "+host.GatewayTokenHeader+" header does not match this host's gateway token")
 		return
 	}
@@ -84,3 +93,12 @@ func gatewayToken() (string, error) {
 }
 
 func tokenOptional() bool { return os.Getenv("ARKISM_GATEWAY_TOKEN_OPTIONAL") == "1" }
+
+func (g Guard) allowAttempt(w http.ResponseWriter) bool {
+	if g.Attempts == nil || g.Attempts.Allow() {
+		return true
+	}
+	w.Header().Set("Retry-After", "1")
+	w.WriteHeader(http.StatusTooManyRequests)
+	return false
+}

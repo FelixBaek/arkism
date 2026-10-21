@@ -1,5 +1,9 @@
 //! Hosted-only inert PE and NSIS fixture; no download or product installation.
 #![cfg(windows)]
+#![deny(clashing_extern_declarations)]
+
+#[path = "../src/windows_process.rs"]
+mod windows_process;
 
 #[path = "../src/update_installer.rs"]
 mod update_installer;
@@ -471,7 +475,11 @@ fn production_unstarted(
             .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound);
         production_update(index, |case| {
             case.cleanup_confirmed = removed;
-            case.record.outcome = if removed { "passed" } else { "cleanup_unconfirmed" };
+            case.record.outcome = if removed {
+                "passed"
+            } else {
+                "cleanup_unconfirmed"
+            };
             case.record.phase = "complete";
         });
         assert!(removed, "production_exact_owned_cleanup_unconfirmed");
@@ -606,8 +614,9 @@ fn write_evidence(passed: bool) -> std::io::Result<()> {
         let production_cases = report.production.iter().map(ProductionCase::json).collect::<Vec<_>>().join(",");
         let production_required_pass = report.production.len() == PRODUCTION_CASES.len()
             && report.production.iter().all(|case| case.record.outcome == "passed");
-        format!("{{\"ok\":{ok},\"scope\":\"inert_images_only\",\"native_windows\":true,\"source_sha\":\"{}\",\"module_sha256\":\"{}\",\"fixture_sha256\":\"{}\",\"writable_mapping_outcome\":\"{}\",\"inert_nsis_self_archive\":{},\"inert_nsis_sha256\":\"{}\",\"nsis_compiler_sha256\":{compiler},\"rust_peer_complete\":{},\"rust_peer_long_complete\":{},\"parent_drop_delayed_read\":{peers},\"selective_inheritance_checked\":{peers},\"owned_root_preserved\":{},\"production_nsis_executed\":false,\"comparison_source_sha256\":\"{}\",\"comparison_manifest_sha256\":\"{}\",\"comparison_compiler_sha256\":\"{}\",\"comparison_all_required_passed\":{matrix_complete},\"comparison_cases\":[{cases}],\"production_required_pass\":{production_required_pass},\"production_bound_cases\":[{production_cases}],\"dos_device_mapping_atomicity_proven\":false,\"diagnostic\":{}}}\n",
+        format!("{{\"ok\":{ok},\"scope\":\"inert_images_only\",\"native_windows\":true,\"source_sha\":\"{}\",\"module_sha256\":\"{}\",\"process_ffi_sha256\":\"{}\",\"fixture_sha256\":\"{}\",\"writable_mapping_outcome\":\"{}\",\"inert_nsis_self_archive\":{},\"inert_nsis_sha256\":\"{}\",\"nsis_compiler_sha256\":{compiler},\"rust_peer_complete\":{},\"rust_peer_long_complete\":{},\"parent_drop_delayed_read\":{peers},\"selective_inheritance_checked\":{peers},\"owned_root_preserved\":{},\"production_nsis_executed\":false,\"comparison_source_sha256\":\"{}\",\"comparison_manifest_sha256\":\"{}\",\"comparison_compiler_sha256\":\"{}\",\"comparison_all_required_passed\":{matrix_complete},\"comparison_cases\":[{cases}],\"production_required_pass\":{production_required_pass},\"production_bound_cases\":[{production_cases}],\"dos_device_mapping_atomicity_proven\":false,\"diagnostic\":{}}}\n",
             report.source, hash(include_bytes!("../src/update_installer.rs")),
+            hash(include_bytes!("../src/windows_process.rs")),
             hash(include_bytes!("windows_update_installer_identity.rs")), report.mapping,
             report.nsis, report.nsis_hash, report.rust_peer, report.rust_peer_long,
             report.preserved, report.control_source_hash, report.control_manifest_hash, report.control_compiler_hash, diagnostic::json())

@@ -3,7 +3,7 @@ package memory
 import "net/http"
 
 // digestRoutes serves /v1/digests/*. kind is "topic" or "user" (query or body).
-func digestRoutes(mux *http.ServeMux, s *Service) {
+func digestRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/digests", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		v, e := s.ListDigests(r.Context(), bearer(r), scopeQuery(r), q.Get("kind"), q.Get("status"))

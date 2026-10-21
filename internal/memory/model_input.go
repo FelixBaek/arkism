@@ -132,7 +132,7 @@ func (s *Service) AuthorizeModelInput(ctx context.Context, token string, in Mode
 	}
 	return ModelArchiveTransferOutput{Authorized: true, ContentHash: ContentHash(in.Content)}, nil
 }
-func modelInputRoutes(mux *http.ServeMux, s *Service) {
+func modelInputRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/model-input/authorize", func(w http.ResponseWriter, r *http.Request) {
 		var in ModelInputTransferInput
 		if !decode(w, r, &in) {

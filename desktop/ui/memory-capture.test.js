@@ -1,19 +1,9 @@
 // Execute the actual dialog and restore handlers with a small DOM/API stand-in.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
-const source = fs.readFileSync(path.join(__dirname, "app.js"), "utf8");
+const moduleTask = import("./modules/memoryDetail.mjs");
 
-function handler(from, to) {
-  const start = source.indexOf(from);
-  const end = source.indexOf(to, start);
-  assert.ok(start >= 0 && end > start, "handler boundaries");
-  return source.slice(start, end);
-}
-
-function setup(item) {
+async function setup(item) {
   const notices = [], captures = [];
   let reloads = 0;
   function el(tag, className, text) {
@@ -23,16 +13,16 @@ function setup(item) {
       close() { this.closed = true; }, showModal() {}, remove() {}};
   }
   const body = el("body");
-  const context = vm.createContext({
+  const context = { state: {selected: "before", scope: {}},
     el, button: (text, cls) => el("button", cls, text),
-    document: {body}, state: {selected: "before"},
-    confirm: () => true, ask: async () => true, notice: text => notices.push(text),
-    captureMemory: async (...args) => { captures.push(args); return item; },
+    notice: text => notices.push(text),
+    request: async (route, options) => { captures.push(JSON.parse(options.body)); return {items: [item]}; },
     reloadMemories: async () => { reloads++; }
-  });
-  vm.runInContext(
-    handler("  async function finishMemoryCapture(", "  async function forgetMemory(") +
-    handler("  function openMemoryFix(", "  function historyItem("), context);
+  };
+  globalThis.document = {body};
+  globalThis.ask = async () => true;
+  const { createMemoryDetail } = await moduleTask;
+  Object.assign(context, createMemoryDetail(context));
   return {context, body, notices, captures, reloads: () => reloads};
 }
 
@@ -43,14 +33,14 @@ for (const [name, item, expected] of [
   ["merged source without candidate", {status: "merged", reason: "duplicate_source"}, "duplicate"]
 ]) {
   test("manual Add reports " + name + " accurately", async () => {
-    const h = setup(item);
+    const h = await setup(item);
     h.context.openMemoryFix(null);
     const dialog = h.body.children[0], form = dialog.children[0];
     form.children[1].children[0].children[0].value = "a lasting preference";
     form.children[1].children[1].children[0].value = "user";
     await form.listeners.submit({submitter: {value: "ok"}, preventDefault() {}});
     assert.equal(h.captures.length, 1);
-    assert.equal(h.captures[0][0], "a lasting preference");
+    assert.equal(h.captures[0].claims[0].text, "a lasting preference");
     assert.equal(dialog.closed, true);
     assert.equal(h.reloads(), 1);
     assert.equal(h.context.state.selected, null);
@@ -61,10 +51,10 @@ for (const [name, item, expected] of [
   });
 
   test("restore reports " + name + " accurately", async () => {
-    const h = setup(item), memory = {id: "m1", revision: 2, text: "current", kind: "user"};
+    const h = await setup(item), memory = {id: "m1", revision: 2, text: "current", kind: "user"};
     await h.context.revertMemory(memory, "previous", {});
     assert.equal(h.captures.length, 1);
-    assert.equal(h.captures[0][2], memory);
+    assert.deepEqual(h.captures[0].claims[0].supersedes, {collection: "memories", id: memory.id, revision: memory.revision});
     assert.equal(h.reloads(), 1);
     const notice = h.notices[0];
     if (expected === "saved") assert.equal(notice, "이전 내용으로 되돌렸어요.");

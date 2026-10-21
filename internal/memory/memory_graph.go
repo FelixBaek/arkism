@@ -210,7 +210,7 @@ func parseMemoryGraphQuery(raw string) (MemoryGraphQuery, error) {
 	return in, nil
 }
 
-func memoryGraphRoutes(mux *http.ServeMux, s *Service) {
+func memoryGraphRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/memory-graph", func(w http.ResponseWriter, r *http.Request) {
 		in, e := parseMemoryGraphQuery(r.URL.RawQuery)
 		if e != nil {

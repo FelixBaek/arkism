@@ -29,22 +29,21 @@
       .replace(/(^|\s)(?:(?:답변|대답|응답|설명)(?=은|는|을|를|이|가|\s|$)|(?:답해|말해)(?=\s|[.,!?。！？]|$))/gu, "$1 response ")
       .replace(/\s+/gu, " ").trim();
   }
-  function similar(a, b) {
-    if (normalized(a.text) === normalized(b.text)) return true;
-    // Legacy proposals without explicit scope qualifiers are only grouped exactly.
-    if (!a.memory_context?.applicability || !b.memory_context?.applicability) return false;
-    const x = wording(a.text), y = wording(b.text);
-    return x === y && new Set(x.match(/[\p{L}\p{N}]+/gu) || []).size >= 2;
-  }
   function groups(records) {
-    const result = [];
+    const result = [], indexed = new Map();
     for (const record of records) {
       if (record.status !== "candidate") continue;
-      const key = boundary(record);
-      // Every member must agree; do not connect a chain through a weak middle match.
-      const group = result.find(g => g.boundary === key && g.items.every(item => similar(item, record)));
-      if (group) group.items.push(record);
-      else result.push({ id: record.id, boundary: key, items: [record] });
+      const key = boundary(record), exact = normalized(record.text), variant = wording(record.text);
+      // boundary already includes applicability. A qualified wording match is
+      // allowed only with two distinct words; otherwise retain exact matching.
+      const text = record.memory_context?.applicability && new Set(variant.match(/[\p{L}\p{N}]+/gu) || []).size >= 2 ? variant : exact;
+      const lookup = JSON.stringify([key, text]);
+      let group = indexed.get(lookup);
+      if (!group) {
+        group = { id: record.id, boundary: key, items: [] };
+        indexed.set(lookup, group); result.push(group);
+      }
+      group.items.push(record);
     }
     return result;
   }
@@ -69,5 +68,5 @@
   }
   const api = { approval, groups, evidence, deletionStatus };
   root.ArkismMemoryManagement = api;
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  if (typeof window === "undefined" && typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

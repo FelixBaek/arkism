@@ -33,7 +33,7 @@ BUILD_DIR="${ARKISM_BUILD_DIR:-C:/arkism-build}"
 MAKENSIS="${ARKISM_MAKENSIS:-makensis}"
 # Values compiled into the app (option_env! in src-tauri); unset ones keep the public defaults.
 BUILD_ENV=""
-for name in ARKISM_DEFAULT_SERVER ARKISM_DEFAULT_WORKSPACE ARKISM_DEFAULT_PROJECT ARKISM_UPDATE_FEED ARKISM_SSH_HOST ARKISM_SERVER_BIN; do
+for name in ARKISM_DEFAULT_SERVER ARKISM_DEFAULT_WORKSPACE ARKISM_DEFAULT_PROJECT ARKISM_UPDATE_FEED ARKISM_UPDATE_PUBLIC_KEY ARKISM_UPDATE_CHANNEL ARKISM_SSH_HOST ARKISM_SERVER_BIN; do
   value="${!name:-}"
   # Unset here means unset in the app: a variable left in the build PC's own environment must not leak in.
   if [[ -z "$value" ]]; then BUILD_ENV+="Remove-Item Env:$name -ErrorAction SilentlyContinue"$'\n'; continue; fi
@@ -51,9 +51,14 @@ quiet() { grep -a -v -i 'post-quantum\|store now\|pq.html' || true; }
 run() { "$@" 2>&1 | quiet; [[ "${PIPESTATUS[0]}" -eq 0 ]] || { echo "== FAILED: $1 ${*: -1}" >&2; exit 1; }; }
 LOCKED=""; [[ -f "$DIR/src-tauri/Cargo.lock" ]] && [[ "$RELOCK" = 0 ]] && LOCKED="--locked"
 
+# The remote builder receives the production assets, never build dependencies.
+npm ci --prefix "$DIR/frontend" --no-audit --no-fund
+node "$DIR/frontend/build.cjs"
+node "$DIR/frontend/check.cjs"
+
 echo "== ship to $HOST:$REMOTE"
 ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemType Directory '$REMOTE/stage' | Out-Null\"" 2>&1 | quiet
-( cd "$DIR" && tar cf - --exclude=src-tauri/target --exclude=dist ui src-tauri installer ) | ssh -o BatchMode=yes "$HOST" "tar xf - -C $REMOTE" 2>&1 | quiet
+( cd "$DIR" && tar cf - --exclude=src-tauri/target --exclude=dist ui ui-dist src-tauri installer ) | ssh -o BatchMode=yes "$HOST" "tar xf - -C $REMOTE" 2>&1 | quiet
 
 WORK="$(mktemp -d)"; trap 'rm -rf -- "$WORK"' EXIT
 # The client embeds the Windows task helpers; both packaging paths ship the same payload.
@@ -65,12 +70,13 @@ run scp -q -o BatchMode=yes "$WORK/arkism.exe" "$HOST:$REMOTE/stage/integration/
 # Postgres and pgvector (installer/prepare-runtime.ps1) because pgvector needs its C compiler.
 GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/memoryd.exe" ./cmd/memoryd
 GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/memory-principal.exe" ./cmd/memory-principal
+GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -ldflags=-H=windowsgui -o "$WORK/arkism-installer.exe" ./cmd/arkism-installer
 run ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemType Directory '$REMOTE/stage/runtime' | Out-Null\""
-run scp -q -o BatchMode=yes "$WORK/memoryd.exe" "$WORK/memory-principal.exe" "$DIR/../tools/roles.sql" "$HOST:$REMOTE/stage/runtime/"
+run scp -q -o BatchMode=yes "$WORK/memoryd.exe" "$WORK/memory-principal.exe" "$WORK/arkism-installer.exe" "$DIR/../tools/roles.sql" "$HOST:$REMOTE/stage/runtime/"
 
 cat > "$WORK/remote.ps1" <<PS1
 \$ErrorActionPreference = 'Stop'
-\$env:TAURI_CONFIG = '{"version":"$VERSION"}'
+\$env:TAURI_CONFIG = '{"version":"$VERSION","build":{"frontendDist":"../ui-dist"}}'
 \$env:CARGO_TARGET_DIR = '$BUILD_DIR/target'
 # Keep the build PC's paths (user name, folders) out of the binary's panic locations.
 \$env:RUSTFLAGS = "--remap-path-prefix=\$(\$env:USERPROFILE)=~ --remap-path-prefix=$BUILD_DIR=build --remap-path-prefix=${BUILD_DIR//\//\\}=build"
@@ -89,8 +95,8 @@ Get-Content ../test.log -Tail 4
 if (\$code -ne 0) { throw 'cargo test failed' }
 \$ErrorActionPreference = 'Stop'
 Copy-Item '$BUILD_DIR/target/release/arkism-desktop.exe' '$REMOTE/stage/Arkism.exe' -Force
-& '$MAKENSIS' /V2 /DVERSION=$VERSION "/DSTAGE_DIR=$REMOTE/stage" "/DOUT_FILE=$REMOTE/Arkism-$VERSION-setup.exe" '$REMOTE/installer/arkism.nsi'
-if (\$LASTEXITCODE -ne 0) { throw 'makensis failed' }
+. '$REMOTE/installer/package-windows.ps1'
+\$package = Invoke-WindowsInstallerPackage -Version '$VERSION' -Stage '$REMOTE/stage' -Makensis '$MAKENSIS' -Output '$REMOTE/Arkism-$VERSION-setup.exe'
 PS1
 echo "== cargo build + installer on $HOST"
 scp -q -o BatchMode=yes "$WORK/remote.ps1" "$HOST:$REMOTE/remote.ps1" 2>/dev/null

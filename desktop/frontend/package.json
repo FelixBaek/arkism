@@ -1,0 +1,15 @@
+{
+  "name": "arkism-frontend-tools",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Build tools only; never included in frontendDist",
+  "scripts": {
+    "build": "node build.cjs",
+    "check": "node check.cjs",
+    "test:browser": "node ../tests/memory-pages.browser.cjs && node ../tests/ui-structure.browser.cjs && node ../tests/list-loading.browser.cjs && node ../tests/virtual-list.browser.cjs && node ../tests/catalog-lists.browser.cjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "playwright-core": "1.63.0"
+  }
+}

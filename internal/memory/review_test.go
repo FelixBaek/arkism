@@ -73,11 +73,11 @@ func TestReviewPaginationAndPermissions(t *testing.T) {
 	if _, e = f.svc.ListCandidates(testCtx, "reader", ReviewInput{Scope: scopeA}); !errors.Is(e, ErrDenied) {
 		t.Fatal("read-only reviewer", e)
 	}
-	f.auth.actors["reviewer"] = actor("reviewer", "service", false, "review")
-	if page, e := f.svc.ListCandidates(testCtx, "reviewer", ReviewInput{Scope: scopeA}); e != nil || len(page.Items) != 3 {
+	f.auth.actors[testPrincipalToken("reviewer")] = actor("reviewer", "service", false, "review")
+	if page, e := f.svc.ListCandidates(testCtx, testPrincipalToken("reviewer"), ReviewInput{Scope: scopeA}); e != nil || len(page.Items) != 3 {
 		t.Fatal("memory reviewer could not read the waiting list", e)
 	}
-	if _, e = f.svc.ReviewCandidate(testCtx, "reviewer", records[1].ID, CandidateReviewInput{Scope: scopeA, Action: "approve", ExpectedRevision: records[1].Revision}); !errors.Is(e, ErrDenied) {
+	if _, e = f.svc.ReviewCandidate(testCtx, testPrincipalToken("reviewer"), records[1].ID, CandidateReviewInput{Scope: scopeA, Action: "approve", ExpectedRevision: records[1].Revision}); !errors.Is(e, ErrDenied) {
 		t.Fatal("service approved a candidate", e)
 	}
 	f.auth.actors["harness"] = actor("harness", "service", false, "read", "write")
@@ -130,7 +130,7 @@ func TestReviewHTTPAndRevokedLookahead(t *testing.T) {
 	for _, suffix := range []string{"&limit=0", "&limit=101", "&limit=1&limit=2", "&group=true", "&unknown=1", "&created_from=broken", "&cursor=bad!", "&kind=unknown", "&status=active", "&bad=%ZZ"} {
 		request(q.Encode()+suffix, f.human, 400)
 	}
-	request(q.Encode(), "", 403)
+	request(q.Encode(), "", 401)
 	request(q.Encode(), f.agent, 403)
 	f.svc.Auth = reviewDenyAuth{Authorizer: f.auth, outage: true}
 	request(q.Encode(), f.human, 503)

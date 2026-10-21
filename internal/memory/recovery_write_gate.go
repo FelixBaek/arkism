@@ -15,6 +15,7 @@ import (
 var recoveryWriteTables = []string{
 	"memory_records", "execution_traces", "source_events", "entities", "relations",
 	"principals", "organization_memberships", "project_memberships", "principal_permissions", "candidate_daily_usage",
+	"principal_token_history",
 }
 
 type RecoveryWriteGate struct {

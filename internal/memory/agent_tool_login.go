@@ -123,7 +123,7 @@ func (s *Service) AgentToolLoginStep(ctx context.Context, token, id string, in A
 	return out, err
 }
 
-func agentToolLoginRoutes(mux *http.ServeMux, s *Service) {
+func agentToolLoginRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/agent_tools/requests/{id}/login", func(w http.ResponseWriter, r *http.Request) {
 		var in AgentToolLogin
 		if !decode(w, r, &in) {
