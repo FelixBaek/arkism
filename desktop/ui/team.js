@@ -2074,7 +2074,7 @@ window.ArkismTeams = (ctx) => {
     meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [], render: renderMeetings }, // 팀 보기 sits beside 새 회의 (208:19103)
     discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord },
     crewUsage: { title: "사용량", sub: () => "워크플로우·전문가·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.",
-      headInTitle: true, head: () => [button("새로고침", "ghost", null, loadUsage)], render: renderUsage }
+      bare: true, head: () => [button("새로고침", "ghost", null, loadUsage)], render: renderUsage } // like 팀: no repeated title, the button sits on the tab bar
   };
   return { pages, _test: { inviteURL, PERM_BITS, modelLabel, handleFrom } };
 };
