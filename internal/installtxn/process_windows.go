@@ -82,6 +82,17 @@ func processTargets(live string, manifest Manifest) (imageTargets, error) {
 	}
 	return result, nil
 }
+
+// samePath also matches an 8.3 short spelling (C:\Users\RUNNER~1) of the same existing path.
+func samePath(a, b string) bool {
+	if strings.EqualFold(a, b) {
+		return true
+	}
+	longA, errA := longPath(a)
+	longB, errB := longPath(b)
+	return errA == nil && errB == nil && strings.EqualFold(longA, longB)
+}
+
 func longPath(path string) (string, error) {
 	path = strings.TrimPrefix(path, `\\?\`)
 	p, err := windows.UTF16PtrFromString(path)

@@ -680,7 +680,7 @@ func TestInstallNativeMetadataResolvesConfiguredFolderWithoutFollowingLaterRedir
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.EqualFold(resolved, directory) {
+	if !samePath(resolved, directory) {
 		t.Fatal("configured known folder not resolved")
 	}
 	release, err := pinMetadataDirectory(resolved)

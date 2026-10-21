@@ -48,6 +48,11 @@ func startPeerAt(t *testing.T, root string, extended bool) peer {
 	if err = os.WriteFile(exe, image, 0600); err != nil {
 		t.Fatal(err)
 	}
+	// The process reports its long image path even when TEMP uses an 8.3 short name.
+	ownedPath, err := longPath(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
 	marker := filepath.Join(root, "ready.txt")
 	launch := exe
 	if extended {
@@ -61,7 +66,7 @@ func startPeerAt(t *testing.T, root string, extended bool) peer {
 	if err = command.Start(); err != nil {
 		t.Fatal(err)
 	}
-	handle, err := inspectProcess(uint32(command.Process.Pid), imageTargets{names: map[string]bool{"arkism.exe": true}, paths: map[string]bool{strings.ToLower(exe): true}})
+	handle, err := inspectProcess(uint32(command.Process.Pid), imageTargets{names: map[string]bool{"arkism.exe": true}, paths: map[string]bool{strings.ToLower(ownedPath): true}})
 	if err != nil || handle == 0 {
 		command.Process.Kill()
 		command.Wait()

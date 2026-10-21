@@ -152,7 +152,7 @@ func readOldLinks(scope metadataScope) (result [2]linkSnapshot, err error) {
 			if err != nil {
 				return result, err
 			}
-			if !strings.EqualFold(target.Path, filepath.Join(scope.Live, "Arkism.exe")) || target.Arguments != "" {
+			if !samePath(target.Path, filepath.Join(scope.Live, "Arkism.exe")) || target.Arguments != "" {
 				return result, errors.New("install_shortcut_not_owned")
 			}
 		}
@@ -237,7 +237,7 @@ func (m *nativeMetadata) validate(snapshot metadataCheckpoint) error {
 	if err != nil {
 		return err
 	}
-	if !strings.EqualFold(parsed.Path, target) || parsed.Arguments != "" || parsed.Flags&fixedShortcutFlags != fixedShortcutFlags {
+	if !samePath(parsed.Path, target) || parsed.Arguments != "" || parsed.Flags&fixedShortcutFlags != fixedShortcutFlags {
 		return errors.New("install_metadata_target_link_invalid")
 	}
 	return nil
@@ -492,7 +492,7 @@ func validateOldLink(link linkSnapshot, target string) error {
 	if err != nil {
 		return err
 	}
-	if !strings.EqualFold(parsed.Path, target) || parsed.Arguments != "" {
+	if !samePath(parsed.Path, target) || parsed.Arguments != "" {
 		return errors.New("install_metadata_original_link_not_owned")
 	}
 	return nil

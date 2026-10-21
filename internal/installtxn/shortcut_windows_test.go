@@ -11,7 +11,16 @@ import (
 
 func TestInstallShortcutUsesFixedPathAcrossFolderSwap(t *testing.T) {
 	f := newFixture(t, true)
-	target := filepath.Join(f.live, "Arkism.exe")
+	// The shell link stores long paths; compare against long spellings even when TEMP is an 8.3 name.
+	live, err := longPath(f.live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := longPath(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(live, "Arkism.exe")
 	data, err := newShortcut(target)
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +32,7 @@ func TestInstallShortcutUsesFixedPathAcrossFolderSwap(t *testing.T) {
 	if !strings.EqualFold(before.Path, target) || before.Arguments != "" || before.Flags&fixedShortcutFlags != fixedShortcutFlags {
 		t.Fatalf("unexpected fixed shortcut: %+v", before)
 	}
-	previous := filepath.Join(f.root, "previous")
+	previous := filepath.Join(root, "previous")
 	if err = os.Rename(f.live, previous); err != nil {
 		t.Fatal(err)
 	}
