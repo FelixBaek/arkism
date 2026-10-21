@@ -140,6 +140,14 @@
      "deepseek-v4",
      "deepseek-v4-flash"
     ]
+   },
+   {
+    "id": "opencode",
+    "name": "OpenCode",
+    "kind": "api",
+    "accounts": [],
+    "keys": [],
+    "models": ["glm-5.3"]
    }
   ],
   "requests": [],

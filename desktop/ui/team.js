@@ -1055,9 +1055,8 @@ window.ArkismTeams = (ctx) => {
       const o = el("button", `tm-mode${(d.mode || "round_robin") === key ? " active" : ""}`); o.type = "button";
       o.setAttribute("role", "radio"); o.setAttribute("aria-checked", String((d.mode || "round_robin") === key));
       const t = el("div", "tm-mode-title"); t.append(el("i", "tm-radio"), el("b", "", label));
-      if (bare) o.title = text; // popup: compact card, the sentence stays as a tooltip
       const svg = key === "round_robin" ? diagramRound(shape, d.ending.max_rounds, bare) : diagramPick(shape);
-      o.append(t, ...(bare ? [] : [el("p", "", text)]), svg);
+      o.append(t, el("p", "", text), svg);
       playOnHover(o, svg, playKey === key);
       o.addEventListener("click", () => { playKey = key; if (d.mode !== key) { d.mode = key; changed(true); } else svg.unpauseAnimations?.(); });
       opts.append(o);

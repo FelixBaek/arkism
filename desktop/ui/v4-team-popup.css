@@ -167,6 +167,7 @@
 .tm-hist-row b { min-width: 28px; font-weight: 600; }
 .tm-hist-row b.ok { color: var(--nc-text); }
 .tm-hist-row b.warn { color: var(--nc-amber); }
+.tm-hist-row b.run { color: var(--nc-accent); }
 .tm-hist-row time { min-width: 84px; color: var(--nc-quiet); font: 400 12px/1.5 var(--mono); }
 .tm-hist-src { min-width: 64px; color: var(--nc-quiet); font-style: normal; font-size: calc(12px * var(--fs, 1)); }
 .tm-hist-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -226,7 +227,8 @@
 
 /* 회의 방식 (961:60688): one bordered box holding two compact cards and 끝나는 조건 */
 .tm-pop-body .tm-mode { gap: 4px; padding: 10px 14px; }
-.tm-pop-body .tm-mode .tm-diagram { height: 56px; max-height: 56px; }
+/* 763:60761: the picture at 60% with icons and arrows only; the sentence stays above it */
+.tm-pop-body .tm-mode .tm-diagram { width: 60%; height: auto; max-height: none; }
 .tm-pop-body .tm-mode .tm-svg-name, .tm-pop-body .tm-mode .tm-svg-cap, .tm-pop-body .tm-mode .tm-svg-tag, .tm-pop-body .tm-mode .tm-svg-pill, .tm-pop-body .tm-mode .tm-svg-pilltext { display: none; }
 .tm-pop-body .tm-ending { padding-top: 0; border-top: 0; }
 /* 전문가 · 채널 연결 rows */
