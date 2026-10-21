@@ -1917,7 +1917,7 @@ window.ArkismTeams = (ctx) => {
     if (k.waiting) { waitSub.append(k.oldest_waiting_at ? `가장 오래된 것 ${ago(k.oldest_waiting_at)} ` : ""); waitSub.append(link("확인하기 →", () => go("crew"))); } else waitSub.append("기다리는 일이 없어요");
     const cost = Number(k.cost_usd || 0);
     kp.append(tile(total.toLocaleString("en-US"), "실행", el("small", "", `전문가 ${direct} · 팀 ${meetings} · 자동화 ${autoRuns}`)),
-      tile(ok + failed ? pct((ok / (ok + failed)) * 100) : "—", "성공률", el("small", "", `실패 ${failed}번`)),
+      tile(ok + failed ? pct((ok / (ok + failed)) * 100) : "—", "성공률", el("small", "", `끝난 ${ok + failed}번 중 실패 ${failed}번`)), // 실행 also counts runs still going or cancelled
       tile(`≈${cost >= 100 ? `$${Math.round(cost).toLocaleString("en-US")}` : usd(cost)}`, "비용", el("small", "", total ? `실행당 평균 ${usd(cost / total)}` : "")), // ≈ marks the estimate (325:37545 has no 추정 badge)
       tile(String(k.waiting || 0), "사람 확인 대기", waitSub, k.waiting ? "amber" : ""));
     const kids = [kp, dayChart(byDay)];

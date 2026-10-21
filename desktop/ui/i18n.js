@@ -67,6 +67,8 @@
       const c = m[n + 1];
       if (!c) return true;
       if (p.seps.some((x) => c.includes(x))) return false;
+      // a one-letter unit ("{0}회") belongs to the last " · " piece only: "개인 · 교훈 · 쓰임 3회" is translated piece by piece
+      if (p.hl < 2 && c.includes(" · ")) return false;
       if (before && HANGUL.test(c[0])) return false;
       if (unit && /[\s가-힣ㄱ-ㆎ]/.test(c[c.length - 1])) return false;
       return true;

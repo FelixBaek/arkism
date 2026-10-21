@@ -274,10 +274,12 @@ window.ArkismOverview = (ctx) => {
     const h = new Date().getHours();
     ui.ticks.replaceChildren(...Array.from({ length: 24 }, (_, i) => { const hour = (h - 23 + i + 24) % 24; return el("span", i === 23 ? "now" : "", i === 23 ? "지금" : hour % 6 === 0 ? `${String(hour).padStart(2, "0")}:00` : ""); }));
     const d = state.data, todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
-    ui.chips.replaceChildren(chip("쓰는 중인 기억", num(d.memories.length), () => openWide("active")),
+    // every active memory on the server (the map draws them all), not the loaded first page
+    const memN = ctx.memoryCount().replace(/\d+/, (n) => num(n));
+    ui.chips.replaceChildren(chip("쓰는 중인 기억", memN, () => openWide("active")),
       chip("세션 기록", `오늘 ${num(todaySessions)}`, () => openWide("sessions")),
       chip("사용량", `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
-      chip("기억 지도", `점 ${num(d.memories.length)}`, () => openWide("map")));
+      chip("기억 지도", `점 ${memN}`, () => openWide("map")));
   }
 
   // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone or hidden.

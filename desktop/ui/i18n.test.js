@@ -73,3 +73,9 @@ test("translator keeps words whole and leaves half-translated data alone", () =>
   assert.equal(t("빠진 곳 있음 10"), "Missing 10");
   assert.equal(t("금요일"), "금day"); // a particle-like unit after a one-letter word is allowed
 });
+
+test("a one-letter unit stays with the last piece", () => {
+  const t = makeTranslator({ strings: { "개인": "Personal", "교훈": "Lesson", "쓰임": "Usage" }, patterns: { "{0}회": "{0} times", "쓰임 {0}회": "Used {0} times", "교훈 · {0}": "Lesson · {0}" } }).translate;
+  assert.equal(t("교훈 · 쓰임 3회"), "Lesson · Used 3 times");
+  assert.equal(t("개인 · 교훈 · 쓰임 3회"), "Personal · Lesson · Used 3 times"); // not "{0}회" over the whole line
+});

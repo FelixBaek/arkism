@@ -121,8 +121,9 @@ export function createMemoryList(deps) {
     tools.append(deps.inject.button());
     deps.$("#controls").replaceChildren(...top, tools);
 
-    const counts = deps.catalogQuery.snapshot("memories").facets.kinds || {};
-    const chips = [["all", "전체", Object.values(counts).reduce((sum, n) => sum + n, 0)], ...Object.keys(deps.KINDS).map((k) => [k, deps.kindLabel(k), counts[k] || 0])];
+    // An older server sends no kind facets: 전체 shows the total, the kinds no number rather than 0.
+    const snap = deps.catalogQuery.snapshot("memories"), counts = snap.facets.kinds;
+    const chips = [["all", "전체", counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : snap.total ?? ""], ...Object.keys(deps.KINDS).map((k) => [k, deps.kindLabel(k), counts ? counts[k] || 0 : ""])];
     deps.$("#chips").replaceChildren(...chips.map(([k, label, num]) => {
       const c = deps.el("button", `chip mem-kind${deps.memory.kind === k ? " active" : ""}`); c.type = "button";
       c.append(deps.el("span", "", label), deps.el("output", "", String(num)));

@@ -298,7 +298,7 @@ window.ArkismHome = function (ctx) {
     if (!state.loadError) return null;
     const card = el("div", "home-lost");
     const where = state.mode === "remote" ? `${ctx.sshLabel(state.ssh) || "서버"}에 SSH로` : state.mode === "local" ? "이 PC의 Arkism에" : "서버에";
-    card.append(el("p", "", `${where} 연결하지 못했어요 (${state.loadError}).`));
+    card.append(el("p", "", state.loadError.reached ? state.loadError.text : `${where} 연결하지 못했어요.`));
     const row = el("div", "actions");
     row.append(button("지금 다시 연결", "primary small", null, (e) => ctx.reconnect(e.currentTarget)));
     row.append(button("연결 설정", "small", null, () => ctx.openSettings("connect")));

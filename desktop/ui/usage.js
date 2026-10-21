@@ -198,8 +198,10 @@ window.ArkismUsage = (ctx) => {
     const pts = S.ov?.series?.points || [];
     if (pts.length) {
       const seg = segment([["traffic", "요청"], ["cost", "비용"]], S.rday, (m) => { S.rday = m; render(false); }); seg.classList.add("v4u-seg");
-      const fmtT = (t) => { const x = new Date(t); return S.range === "30d" ? `${x.getMonth() + 1}-${String(x.getDate()).padStart(2, "0")}` : x.toLocaleTimeString(globalThis.ArkismI18n?.locale() || "ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }); };
-      parts.push(card(S.range === "30d" ? "날짜별" : "시간별", seg, columns(pts, (p) => p[S.rday] || 0, (p) => fmtT(p.t), S.rday === "cost" ? usd : num),
+      // Label by the points' own spacing, not the asked range: daily points get a date, sub-day points over several days get date and time.
+      const at = (i) => new Date(pts[i]?.t).getTime(), daily = pts.length > 1 && at(1) - at(0) >= 864e5, days = at(pts.length - 1) - at(0) > 864e5;
+      const fmtT = (t) => { const x = new Date(t), date = `${x.getMonth() + 1}-${String(x.getDate()).padStart(2, "0")}`; if (daily) return date; const time = x.toLocaleTimeString(globalThis.ArkismI18n?.locale() || "ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }); return days ? `${date} ${time}` : time; };
+      parts.push(card(daily ? "날짜별" : "시간별", seg, columns(pts, (p) => p[S.rday] || 0, (p) => fmtT(p.t), S.rday === "cost" ? usd : num),
         el("p", "v4u-hint", S.rday === "traffic" ? `라우팅 현황 기준 · 막대 = ${S.range === "30d" ? "하루" : S.range === "7d" ? "6시간마다 시간당" : "분당"} 요청` : "라우팅 현황 기준 · 막대 = 그 구간 비용")));
     } else if (!OV_RANGE[S.range]) parts.push(el("p", "v4u-hint", "날짜별 그래프는 오늘·7일·30일에서 볼 수 있어요."));
     parts.push(flowCard(r));

@@ -6259,3 +6259,21 @@ Object.assign(window.ArkismI18nEN.patterns, {
 Object.assign(window.ArkismI18nEN.strings, {
 
 });
+// #166: totals, connection errors and info tab
+Object.assign(window.ArkismI18nEN.strings, {
+  "서버 답을 읽지 못했어요": "Couldn't read the server's answer",
+  "서버가 이 앱이 읽을 수 없는 형식으로 답했어요. 앱과 서버의 Arkism 버전을 맞춰 주세요.": "The server answered in a format this app can't read. Make the app and server Arkism versions match.",
+  "서버가 접속을 거절했어요": "The server refused the connection",
+  "접속 토큰이나 이 계정의 권한을 확인해 주세요.": "Check the access token or this account's permissions.",
+  "서버에 문제가 생겼어요": "The server ran into a problem",
+  "서버가 요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.": "The server couldn't handle the request. Try again in a moment.",
+  "서버가 요청을 받지 않았어요": "The server didn't accept the request",
+  "앱과 서버의 Arkism 버전이 맞지 않을 수 있어요. 둘 다 업데이트해 주세요.": "The app and server Arkism versions may not match. Update both.",
+  "스킬 목록을 불러오지 못했어요.": "Couldn't load the skill list.",
+  "기억 규칙은 연결한 Arkism 서버가 정해요. 앱을 업데이트해도 저장한 기억은 그대로예요.": "The connected Arkism server sets the memory rules. Updating the app keeps your saved memories."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "사용 중인 기억 · 불러온 {0}개 기준": "Memory in use · from the {0} loaded",
+  "{0} 연결하지 못했어요.": "Couldn't connect {0}.",
+  "끝난 {0}번 중 실패 {1}번": "{1} failed of {0} finished"
+});
