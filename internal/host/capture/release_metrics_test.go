@@ -118,6 +118,8 @@ func TestReleaseMetrics(t *testing.T) {
 	t.Setenv("ARKISM_WORK_ID", "")
 	t.Setenv("ARKISM_WORK_AGENT", "")
 	t.Setenv("ARKISM_SESSION_PROCESSOR", "")
+	scope := capScope
+	t.Cleanup(func() { capScope = scope })
 	capScope = func() map[string]any {
 		return map[string]any{"workspace_id": "w", "project_id": "p", "user_id": "u", "agent_id": ""}
 	}

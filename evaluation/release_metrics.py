@@ -106,7 +106,8 @@ def main(argv=None):
     }
     METRICS.mkdir(exist_ok=True)
     (METRICS / f'{version}.json').write_text(json.dumps(result, indent=1) + '\n')
-    update_readme(METRICS / 'README.md', [json.loads(p.read_text()) for p in METRICS.glob('v*.json')])
+    update_readme(METRICS / 'README.md', [json.loads(p.read_text()) for p in METRICS.glob('*.json')
+                                          if p.name != 'fixture.json'])
     json.dump(result['summary'], sys.stdout, indent=1)
     print()
 
