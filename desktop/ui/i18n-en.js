@@ -1052,7 +1052,7 @@ window.ArkismI18nEN = {
   "단계가 하나면 간단한 입력 칸으로, 단계를 더하면 그래프로 바뀌어요": "With one step it's a simple form; add steps and it becomes a graph",
   "없음 — $이름·화면에서만": "None — only via $name or the app",
   "일정": "Schedule",
-  "웹훅": "Webhook",
+  "웹훅": "Webhook", "스케줄": "Schedule",
   "GitHub PR 열림": "GitHub PR opened",
   "형식: 분 시 일 월 요일 (예: 0 9 * * 1-5)": "Format: min hour day month weekday (e.g. 0 9 * * 1-5)",
   "웹훅 이름": "Webhook name",
@@ -6153,3 +6153,5 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "단계 {0} 이름 · 예: {1}": "Step {0} name · e.g. {1}",
 });
 Object.assign(window.ArkismI18nEN.strings, { "템플릿 이름을 적어 주세요.": "Enter a template name." });
+Object.assign(window.ArkismI18nEN.strings, { "새 워크플로우 만들기": "New workflow", "찾아볼 기억": "Memory it searches", "이렇게 일하라고 정해 둔 규칙": "Rules for how to work", "이미 정한 결정": "Decisions already made", "실수에서 배운 것": "Lessons from mistakes", "사용자가 좋아하는 방식": "What the user prefers" });
+Object.assign(window.ArkismI18nEN.strings, { "저장한 뒤에 앱 밖 새 창으로 옮길 수 있어요.": "Save it first, then it can move out to its own window." });
