@@ -154,7 +154,7 @@ def verify_inventory(directory, required, public, version):
     verify_signature(directory / SUMS, directory / SUMS_SIG, public, version)
     sums = {}
     for line in (directory / SUMS).read_text(encoding="ascii").splitlines():
-        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9._-]+)", line)
+        match = re.fullmatch(r"([0-9a-f]{64}) {2}([A-Za-z0-9._-]+)", line)
         if not match or match[2] in sums:
             raise ReleaseError("invalid or duplicate checksum entry")
         sums[match[2]] = match[1]

@@ -25,10 +25,12 @@ class PackageCoverageTests(unittest.TestCase):
         self.assertEqual(enforce(totals, floors), ["internal/crewrun"])
 
     def test_missing_package_and_corrupt_profiles_are_refused(self):
+        profile = self.profile()
         with self.assertRaises(ValueError):
-            package_totals(self.profile(), ["internal/missing"])
+            package_totals(profile, ["internal/missing"])
+        duplicated = profile + profile.splitlines()[1] + "\n"
         with self.assertRaises(ValueError):
-            package_totals(self.profile() + self.profile().splitlines()[1] + "\n", ["internal/memory"])
+            package_totals(duplicated, ["internal/memory"])
         for floor in [0, -1, 101, "90", True]:
             with self.subTest(floor=floor), self.assertRaises(ValueError):
                 enforce({"internal/memory": [9, 10]}, {"internal/memory": floor})

@@ -50,7 +50,7 @@ function Invoke-WindowsInstallerPackage {
   $root = Join-Path $TempRoot ('arkism-uninstaller-' + $owner)
   $null = New-Item -ItemType Directory -Path $root -ErrorAction Stop
   [IO.File]::WriteAllText((Join-Path $root 'TASK-OWNER.txt'), $owner)
-  Write-Host "Owned uninstaller emission directory: $root"
+  Write-Information "Owned uninstaller emission directory: $root" -InformationAction Continue
   $emitter = Join-Path $root 'emit-uninstaller.exe'
   & $compiler.Source /V2 "/DVERSION=$Version" /DARKISM_EMIT_UNINSTALLER "/DSTAGE_DIR=$Stage" "/DOUT_FILE=$emitter" $source
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $emitter -PathType Leaf)) { throw 'packaging_uninstaller_compile_failed' }

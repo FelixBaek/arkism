@@ -23,7 +23,7 @@ const ui = path.resolve(__dirname, '../ui');
    const core={async invoke(name,args){
     window.calls.push({name,args});
     if(name==='ssh_host_key_check')return args.force?{...review,state:'changed',fingerprint:'SHA256:'+'B'.repeat(43),previous_fingerprint:review.fingerprint,challenge:'changed-review'}:review;
-    if(name==='ssh_host_key_approve'){if(mode==='stale')throw new Error('ssh_host_key_review_stale');return {state:'trusted'};}
+    if(name==='ssh_host_key_approve'){if(mode==='stale'){throw new Error('ssh_host_key_review_stale');}return {state:'trusted'};}
     if(name==='ssh_host_key_cancel')return;
     if(mode==='changed'&&window.calls.filter(c=>c.name===command).length===1)throw new Error('ssh_host_key_changed');
     return {ok:true};

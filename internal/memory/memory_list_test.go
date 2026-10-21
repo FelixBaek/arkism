@@ -151,7 +151,14 @@ func exerciseMemoryList(t *testing.T, repo Repository) {
 		t.Fatal("kind filter")
 	}
 	in.Kind = ""
-	cut := time.Now().UTC().Truncate(time.Millisecond)
+	// Windows clocks can stamp the rows in the same millisecond as Now, so cut after the newest row.
+	cut := time.Now().UTC()
+	for _, row := range rows {
+		if row.UpdatedAt.After(cut) {
+			cut = row.UpdatedAt
+		}
+	}
+	cut = cut.Truncate(time.Millisecond).Add(time.Millisecond)
 	changed := rows[2]
 	changed.UpdatedAt = cut.Add(time.Second)
 	if e := repo.Replace(testCtx, colMemories, changed, changed.Revision); e != nil {

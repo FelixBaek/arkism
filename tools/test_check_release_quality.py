@@ -71,8 +71,9 @@ class ReleaseQualityTests(unittest.TestCase):
                  {"total_count": 1, "workflows": [None]}, {"total_count": -1, "workflows": []}]
         for page in cases:
             with self.subTest(page=page), patch.object(gate, "request_page", return_value=page):
+                deadline = gate.time.monotonic() + 30
                 with self.assertRaises(gate.GateError):
-                    gate.resolve_codeql(REPOSITORY, "test-auth", gate.time.monotonic() + 30)
+                    gate.resolve_codeql(REPOSITORY, "test-auth", deadline)
 
     def check(self, by_workflow):
         with patch.object(gate, "fetch_runs", side_effect=lambda repo, sha, workflow, timeout:
