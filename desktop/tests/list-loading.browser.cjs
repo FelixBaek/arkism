@@ -56,8 +56,9 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
       } } };
     });
     await page.goto("https://arkism.fixture/");
-    await page.waitForFunction(() => document.querySelector("#app")?.inert === false && document.querySelector("#count-memories")?.textContent === "50+");
-    assert.deepEqual(await page.evaluate(() => window.listCalls.map(c => [c.name, c.start, c.limit]).sort((a, b) => a[0].localeCompare(b[0]))), ["candidates", "conflicted", "memories", "skills", "skillTrash"].map(name => [name, 0, 50]).sort((a, b) => a[0].localeCompare(b[0])));
+    await page.waitForFunction(() => document.querySelector("#app")?.inert === false && document.querySelector("#count-memories")?.textContent === "5000");
+    // limit-1 reads are the server totals (active and idle), not list pages.
+    assert.deepEqual(await page.evaluate(() => window.listCalls.filter(c => c.limit !== 1).map(c => [c.name, c.start, c.limit]).sort((a, b) => a[0].localeCompare(b[0]))), ["candidates", "conflicted", "memories", "skills", "skillTrash"].map(name => [name, 0, 50]).sort((a, b) => a[0].localeCompare(b[0])));
     await page.getByRole("button", { name: /^기억 보기/ }).click();
     async function next(name) {
       const foot = page.locator(`[data-collection="${name}"]`);
