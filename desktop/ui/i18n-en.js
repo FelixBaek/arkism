@@ -6245,5 +6245,5 @@ Object.assign(window.ArkismI18nEN.patterns, {
 
 Object.assign(window.ArkismI18nEN.strings, {
  "요약은 처음 불러온 기억 기준이에요. 기억 목록에서는 전체를 검색·정렬할 수 있어요.": "The summary covers initially loaded memories. Search and order cover all results in the memory list.",
- "요약은 처음 불러온 목록 기준이에요. 각 목록에서 전체 검색과 다음 페이지를 확인하세요.": "The summary covers initially loaded items. Each list offers full search and additional pages."
+
 });

@@ -172,7 +172,7 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-win-note { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); font-size: 12.5px; }
 .ov-win-note span { color: var(--text-2); }
 .ov-win-note-r { border-color: #ff5160; } .ov-win-note-r strong { color: #ff5160; } .ov-win-note-a { border-color: #f5b955; } .ov-win-note-a strong { color: #f5b955; }
-.ov-win-list-title { font-size: 12px; color: var(--text-2); }
+.ov-win-list-title { font-size: 12px; color: var(--text-2); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ov-win-item-l { min-width: 0; display: flex; flex-direction: column; gap: 3px; } .ov-win-item-r { display: flex; align-items: center; gap: 6px; flex: none; color: var(--text-2); font-size: 12px; }
 .ov-win-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ov-win-err { color: #ff5160; font-size: 12px; margin: 0; }

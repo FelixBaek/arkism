@@ -64,15 +64,15 @@ export function createMemoryPaging(deps) {
   }
 
   async function hydrateMaintenance(g) {
-    const refs = (deps.state.data.maintenance || []).flatMap(p => [p.maintenance?.keep, p.maintenance?.retire]).filter(Boolean);
+    const refs = (deps.state.data.maintenance || []).flatMap(p => [p.maintenance?.keep, p.maintenance?.retire, p.maintenance?.memory]).filter(Boolean);
     const cached = new Map(deps.state.data.memories.map(m => [m.id, m]));
-    const queue = [...new Map(refs.filter(ref => cached.get(ref.id)?.revision !== ref.revision).map(ref => [ref.id, ref])).values()];
+    const queue = [...new Map(refs.filter(ref => !cached.has(ref.id) || (ref.revision != null && cached.get(ref.id).revision !== ref.revision)).map(ref => [ref.id, ref])).values()];
     await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
       while (queue.length && g === deps.generation) {
         const ref = queue.shift();
         const record = await deps.request(`/v1/memories/${encodeURIComponent(ref.id)}?${deps.query()}`).catch(() => null);
         if (g !== deps.generation) return;
-        if (record?.id === ref.id && record.revision === ref.revision) maintenanceRecords.set(ref.id, record);
+        if (record?.id === ref.id && (ref.revision == null || record.revision === ref.revision)) maintenanceRecords.set(ref.id, record);
         else maintenanceRecords.delete(ref.id);
       }
     }));
