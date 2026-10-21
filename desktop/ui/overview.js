@@ -24,6 +24,7 @@ window.ArkismOverview = (ctx) => {
     } catch { S.sessions = S.sessions || []; }
     S.at = Date.now(); S.loading = false;
     if (state.view === "overview") render();
+    ctx.onSessions?.(); // 연결 상태 card shows the same stages
   }
   // counts[i] = events in the clock hour slot i (0 = 23 hours ago, 23 = this hour so far), matching the HH:00 ticks.
   function slots(times) {
@@ -313,6 +314,7 @@ window.ArkismOverview = (ctx) => {
   }
 
   return {
+    stages, loadSessions, openStage, // 연결 상태 card (app.js renderStatusStages)
     views: { overview: { title: "개요", render: renderView, head: () => [button("새로고침", "ghost", "arrows-clockwise", () => { S.at = 0; void loadSessions(); })] } }
   };
 };
