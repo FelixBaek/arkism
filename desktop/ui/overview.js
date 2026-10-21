@@ -273,7 +273,7 @@ window.ArkismOverview = (ctx) => {
     ui.badge.className = `ov-badge${stopped ? " r" : ""}`; ui.badge.textContent = stopped ? `${stopped}곳 멈춤` : "모두 움직임";
     const h = new Date().getHours();
     ui.ticks.replaceChildren(...Array.from({ length: 24 }, (_, i) => { const hour = (h - 23 + i + 24) % 24; return el("span", i === 23 ? "now" : "", i === 23 ? "지금" : hour % 6 === 0 ? `${String(hour).padStart(2, "0")}:00` : ""); }));
-    const d = state.data, todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
+    const todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
     // every active memory on the server (the map draws them all), not the loaded first page
     const memN = ctx.memoryCount().replace(/\d+/, (n) => num(n));
     ui.chips.replaceChildren(chip("쓰는 중인 기억", memN, () => openWide("active")),

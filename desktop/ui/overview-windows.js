@@ -599,7 +599,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     body.append(left, right); d.append(body);
     let graph, topics;
     try { [graph, topics] = await Promise.all([request(`/v1/memory-graph?${query({ mode: "all" })}`), request(`/v1/digests?${query({ kind: "topic", status: "active" })}`).then((r) => r.items || [], () => [])]); }
-    catch (e) { if (!d.isConnected) return; status.classList.add("off"); msg.textContent = /access_denied/.test(e?.message || "") ? "지도를 볼 권한이 없어요." : "지도를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."; status.append(button("다시 시도", "small", null, () => { d.close(); wideMap(); })); right.replaceChildren(); return; }
+    catch (e) { if (!d.isConnected) return; status.classList.add("off"); msg.textContent = /access_denied/.test(e?.message || "") ? "지도를 볼 권한이 없어요." : "지도를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."; status.append(button("다시 시도", "small", null, () => { d.close(); void wideMap(); })); right.replaceChildren(); return; }
     if (!d.isConnected) return;
     const nodes = graph.nodes || [], edges = graph.edges || [];
     if (!nodes.length) { status.classList.add("off"); msg.textContent = "지도에 그릴 기억이 아직 없어요."; right.replaceChildren(); return; }
