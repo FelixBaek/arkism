@@ -75,7 +75,22 @@ func codexEffort(effort string) string {
 	return effort
 }
 
-func binOf(row host.CLI) string { return host.Bin(row.BinEnv, row.BinName) }
+func binOf(row host.CLI) string {
+	if row.Name == "glm" && !glmWrapper() {
+		return host.Bin(host.CustomCLI.BinEnv, host.CustomCLI.BinName)
+	}
+	return host.Bin(row.BinEnv, row.BinName)
+}
+
+// glmWrapper: a claude-glm wrapper is installed (or named by ARKISM_GLM_BIN). Without one, GLM models run in
+// Claude Code against Z.ai's Anthropic-compatible address with the stored Z.ai key.
+func glmWrapper() bool {
+	if os.Getenv("ARKISM_GLM_BIN") != "" {
+		return true
+	}
+	exe := host.Bin("ARKISM_GLM_BIN", "claude-glm")
+	return exists(exe) || onPath(exe)
+}
 
 // buildCommand is argv and stdin for one run. Instructions go where the CLI keeps standing instructions; the task is
 // the prompt. once (ai_once): one question, one answer; Claude Code gets --max-turns 1. access: one of accessModes.

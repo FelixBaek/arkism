@@ -1326,3 +1326,38 @@ func TestCrewArgumentsFollowArgparse(t *testing.T) {
 		}
 	}
 }
+
+func TestGLMWithoutWrapperRunsClaudeCodeAgainstZAI(t *testing.T) {
+	keyFiles(t)
+	patch(t, &host.Home, t.TempDir()) // no claude-glm wrapper under ~/.local/bin
+	t.Setenv("ARKISM_GLM_BIN", "")
+	r := row(t, "glm-5.3")
+	_, err := childEnv(r, nil, "glm-5.3", nil)
+	mustCrewErr(t, err, "Z.ai API 키가 없어요")
+	if _, err := addKey("zai", "z", "zai-test-key", "", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	env, err := childEnv(r, nil, "glm-5.3", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eq(t, []string{env["ANTHROPIC_BASE_URL"], env["ANTHROPIC_AUTH_TOKEN"], env["ANTHROPIC_MODEL"]},
+		[]string{zaiAnthropic, "zai-test-key", "glm-5.3"})
+	if filepath.Base(binOf(r)) == "claude-glm" {
+		t.Fatal(binOf(r))
+	}
+	argv, _ := buildCommand(r, "glm-5.3", "", "", "일", "", false, "read")
+	eq(t, argv[1:3], []string{"--bare", "-p"})
+	// a wrapper that is there keeps the old path: its own key handling, no Z.ai address forced on it
+	wrapper := filepath.Join(t.TempDir(), "claude-glm")
+	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ARKISM_GLM_BIN", wrapper)
+	if binOf(r) != wrapper {
+		t.Fatal(binOf(r))
+	}
+	if env, _ := childEnv(r, nil, "glm-5.3", nil); env["ANTHROPIC_BASE_URL"] == zaiAnthropic {
+		t.Fatal("wrapper got the Z.ai address")
+	}
+}
