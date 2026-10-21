@@ -69,8 +69,8 @@ type catalogCursor struct {
 	Offset   int    `json:"offset"`
 }
 
-func catalogText(value string, max int) bool {
-	return len(value) <= max && utf8.ValidString(value) && strings.IndexFunc(value, unicode.IsControl) < 0 && !containsSecret(value)
+func catalogText(value string, maxBytes int) bool {
+	return len(value) <= maxBytes && utf8.ValidString(value) && strings.IndexFunc(value, unicode.IsControl) < 0 && !containsSecret(value)
 }
 func normalizeCatalog(in CatalogQueryInput, domain string) (CatalogQueryInput, error) {
 	in.Query = strings.TrimSpace(in.Query)

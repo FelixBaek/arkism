@@ -437,7 +437,6 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const bar = filterBar([search], sorter, chipHost);
     const w = D().tools?.memory_use;
     const remote = pagedWindow(d, "/v1/memories/query", () => ({ q, state: kindF === "idle" ? "idle" : "active", kind: ["all", "idle"].includes(kindF) ? "" : kindF, sort: sort === "new" ? "recent" : sort }), paint);
-    const idle = (m) => { const u = w?.items?.find((x) => x.id === m.id); return u && u.injected >= 3 && !u.used; };
     function paint() {
       const snap = remote.snapshot(), kinds = Object.entries(snap.facets.kinds || {});
       chipHost.replaceChildren(chipBar([["all", "전체", Object.values(snap.facets.kinds || {}).reduce((a,b)=>a+b,0)], ...kinds.map(([k,n]) => [k,kind(k),n]), ["idle", "안 쓰임", kindF === "idle" ? snap.total ?? 0 : ""]], kindF, k => { kindF=k;paint(); }));

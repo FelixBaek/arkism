@@ -29,6 +29,7 @@ func sourceRoutes(t *testing.T) []routeSpec {
 	fset := token.NewFileSet()
 	files := map[string]*ast.File{}
 	consts := map[string]string{}
+	coreHandlers := map[string]*ast.BlockStmt{}
 	for _, name := range names {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
@@ -39,6 +40,9 @@ func sourceRoutes(t *testing.T) []routeSpec {
 		}
 		files[name] = f
 		for _, d := range f.Decls {
+			if fn, ok := d.(*ast.FuncDecl); ok && fn.Recv != nil && strings.HasPrefix(fn.Name.Name, "coreHTTP") {
+				coreHandlers[fn.Name.Name] = fn.Body
+			}
 			if g, ok := d.(*ast.GenDecl); ok && g.Tok == token.CONST {
 				for _, sp := range g.Specs {
 					vs := sp.(*ast.ValueSpec)
@@ -125,9 +129,21 @@ func sourceRoutes(t *testing.T) []routeSpec {
 				t.Fatalf("%s: HandleFunc pattern is neither a literal nor built from a literal loop list; the route contract tests cannot see it", fset.Position(call.Pos()))
 			}
 			decodesFirst := false
-			if fn, ok := call.Args[1].(*ast.FuncLit); ok && len(fn.Body.List) >= 2 {
-				if _, isDecl := fn.Body.List[0].(*ast.DeclStmt); isDecl {
-					if ifs, isIf := fn.Body.List[1].(*ast.IfStmt); isIf {
+			var body *ast.BlockStmt
+			switch handler := call.Args[1].(type) {
+			case *ast.FuncLit:
+				body = handler.Body
+			case *ast.SelectorExpr:
+				if strings.HasPrefix(handler.Sel.Name, "coreHTTP") {
+					body = coreHandlers[handler.Sel.Name]
+					if body == nil {
+						t.Fatalf("unresolved named core handler %s", handler.Sel.Name)
+					}
+				}
+			}
+			if body != nil && len(body.List) >= 2 {
+				if _, isDecl := body.List[0].(*ast.DeclStmt); isDecl {
+					if ifs, isIf := body.List[1].(*ast.IfStmt); isIf {
 						if u, isNot := ifs.Cond.(*ast.UnaryExpr); isNot {
 							if c, isCall := u.X.(*ast.CallExpr); isCall {
 								if id, isID := c.Fun.(*ast.Ident); isID && strings.HasPrefix(id.Name, "decode") {

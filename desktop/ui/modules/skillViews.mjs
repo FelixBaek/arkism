@@ -11,7 +11,6 @@ export function createSkillViews(deps) {
 
   const blockedAny = (sk) => deps.shownAgents().some(([k]) => !allowed(sk, k));
 
-  const categoryFilter = (sk) => deps.state.skillCat === "all" || (deps.state.skillCat === "none" ? !deps.pages.categoryOf(sk) : deps.pages.categoryOf(sk)?.id === deps.state.skillCat);
 
   // 최근 60일 사용 (skill.usage traces); null while the server has no usage API.
   const useOf = (sk) => deps.state.data.skillUse?.get(sk.id) || null;
@@ -72,18 +71,6 @@ export function createSkillViews(deps) {
   const skillFolder = (sk) => (sk.source_path || "").split("/").slice(-2, -1)[0] || sk.name;
  // 표시 이름이 아니라 SKILL.md가 든 폴더 이름
   const updatesOf = (sk) => (deps.state.data.tools?.skill_updates || []).filter((u) => u.name === skillFolder(sk) && (sk.source_path || "").includes(`${(u.repo || "").replace(/^~/, "")}/`));
-
-  function skillFilter(sk) {
-    if (deps.state.skillModel && allowed(sk, deps.state.skillModel.replace("!", "")) === deps.state.skillModel.startsWith("!")) return false; // "!key" = 못 쓰는 스킬
-    if (deps.state.skillTab === "trash") return sk.status === "deprecated";
-    if (sk.status === "deprecated") return false;
-    if (deps.state.skillTab === "unused") return unused(sk);
-    if (deps.state.skillTab === "plugin") return fromPlugin(sk);
-    if (deps.state.skillTab === "update") return updatesOf(sk).length > 0;
-    if (deps.state.skillTab === "missing") return blockedAny(sk);
-    if (deps.state.skillTab === "caution") return ["warn", "bad"].includes(skillChecks(sk)?.security.cls);
-    return true;
-  }
 
   function stage(skillId, key, want) {
     const sk = deps.catalogQuery.record(`skill:${skillId}`) || deps.state.data.skills.find((x) => x.id === skillId);
@@ -276,7 +263,6 @@ export function createSkillViews(deps) {
     deps.$("#controls").replaceChildren(...parts, bar);
     // 분류 chips: 전체 + the owner's categories (설정 › 카테고리).
     const cats = deps.pages.prefs.categories;
-    const source = deps.state.skillTab === "trash" ? skills.filter((sk) => sk.status === "deprecated") : live;
     const chip = (id, label, count) => {
       const c = deps.el("button", `chip${deps.state.skillCat === id ? " active" : ""}`); c.type = "button";
       c.append(label, deps.el("output", "", String(count)));

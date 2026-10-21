@@ -57,7 +57,7 @@ window.ArkismKnowledge = (ctx) => {
   async function load() {
     const ticket = ++epoch;
     K.state = K.state === "ready" ? "ready" : "loading"; paint();
-    const [s, p, g, j] = await Promise.allSettled([loadSources(), get("/v1/wiki/pages", { state: "all" }), get("/v1/wiki/graph"), get("/v1/wiki/jobs")]);
+    const [, p, g, j] = await Promise.allSettled([loadSources(), get("/v1/wiki/pages", { state: "all" }), get("/v1/wiki/graph"), get("/v1/wiki/jobs")]);
     if (ticket !== epoch) return;
     if (p.status === "fulfilled" && Array.isArray(p.value?.items)) { K.pages = p.value.items; K.wiki = "ready"; }
     else { K.pages = []; K.wiki = p.status === "rejected" && off(p.reason) ? "off" : "error"; }

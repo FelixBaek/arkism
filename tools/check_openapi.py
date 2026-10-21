@@ -90,7 +90,7 @@ def check_cases(doc, cases, require_management=False):
             response = pointer(doc, response["$ref"])
         schema = response["content"]["application/json"]["schema"]
         validate_value(doc, schema, case["body"])
-        if case["status"] == 403:
+        if case["status"] == 401:
             anonymous.add(case["operation"])
         if case["status"] == 200:
             successful.add(case["operation"])
