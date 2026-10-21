@@ -25,6 +25,8 @@ type daemonOptions struct {
 	Worker             bool
 	MemoryReach        string
 	Reindex            bool
+	TrainReview        string
+	TrainReviewExclude string
 	RecallBaseline     string
 	BaselineScope      string
 	LogLevel           string
@@ -50,6 +52,8 @@ func daemonFlags() daemonOptions {
 	flag.BoolVar(&cfg.Worker, "worker", false, "run embedding worker instead of HTTP API")
 	flag.StringVar(&cfg.MemoryReach, "memory-reach", "", "offline administrator: apply|revert the default memory reach (user=personal, rest=general), then exit")
 	flag.BoolVar(&cfg.Reindex, "reindex", false, "queue embedding jobs for Postgres records not in the configured embedder's space, then exit")
+	flag.StringVar(&cfg.TrainReview, "train-review-classifier", "", "offline: train a scope-bound review advice model and write it to this path")
+	flag.StringVar(&cfg.TrainReviewExclude, "train-review-exclude", "arkism-memory-reviewer", "comma-separated reviewer principals excluded from training")
 	flag.StringVar(&cfg.RecallBaseline, "recall-baseline", "", "read-only measurement: evaluation JSONL path, or self for the known-item set; prints numbers only")
 	flag.StringVar(&cfg.BaselineScope, "recall-baseline-scope", "default/default/management:owner/", "workspace/project/user/agent measured by -recall-baseline")
 	flag.StringVar(&cfg.LogLevel, "log-level", envLogLevel(), "debug|info|warn|error")
@@ -132,7 +136,7 @@ func validateDaemonRuntimeOptions(cfg daemonOptions, standalone string) error {
 	return nil
 }
 func (cfg daemonOptions) usesWorkerToken() bool {
-	return cfg.Worker || cfg.CollectBlobs || cfg.AdoptBlobs || cfg.Reindex || cfg.BackupExpiry != "" || cfg.MemoryReach != ""
+	return cfg.TrainReview != "" || cfg.Worker || cfg.CollectBlobs || cfg.AdoptBlobs || cfg.Reindex || cfg.BackupExpiry != "" || cfg.MemoryReach != ""
 }
 func snapshotDaemonMode(mode string) bool {
 	return mode == "WriteGate" || mode == "ExportSnapshot" || mode == "InspectRestore"
@@ -146,6 +150,7 @@ func daemonMode(cfg daemonOptions) (string, error) {
 		{"ExportSnapshot", cfg.ExportSnapshot},
 		{"InspectRestore", cfg.InspectRestore},
 		{"RecallBaseline", cfg.RecallBaseline != ""},
+		{"TrainReview", cfg.TrainReview != ""},
 		{"InitDB", cfg.InitDB},
 		{"SemanticIndex", cfg.SemanticIndex != ""},
 		{"CheckIndexes", cfg.CheckIndexes},

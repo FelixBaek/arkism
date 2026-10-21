@@ -390,7 +390,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		}
 		lists[i] = clean
 	}
-	scored := FuseScored(lists, in.Limit)
+	scored := fuseRecallHits(lists, collection, in.IncludeInactive, in.Limit)
 	out.Items = make([]Hit, len(scored))
 	for i, r := range scored {
 		r.Hit.Score, r.Hit.Lanes = r.Score, hitLanes(r.Hit.Reasons)

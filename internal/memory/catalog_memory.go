@@ -50,7 +50,7 @@ func (s *Service) memoryCatalogRows(ctx context.Context, token string, in Catalo
 	}
 	return collectCatalogPages(ctx, func(cursor string) ([]Record, string, error) {
 		if candidates {
-			page, err := s.ListCandidates(ctx, token, ReviewInput{Scope: in.Scope, Status: in.State, Limit: 100, Cursor: cursor})
+			page, err := s.ListCandidates(ctx, token, ReviewInput{omitAdvice: true, Scope: in.Scope, Status: in.State, Limit: 100, Cursor: cursor})
 			return page.Items, page.NextCursor, err
 		}
 		page, err := s.ListMemories(ctx, token, MemoryListInput{Scope: in.Scope, Status: statusActive, Query: in.Query, FoldQuery: true, Limit: 100, Cursor: cursor})

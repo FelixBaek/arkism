@@ -124,6 +124,8 @@ func runDaemonMaintenance(ctx context.Context, pg *memory.Postgres, cfg daemonOp
 	switch mode {
 	case "WriteGate":
 		return true, runDaemonWriteGate(ctx, pg, cfg, standalone)
+	case "TrainReview":
+		return true, runTrainReviewClassifier(ctx, pg, cfg.TrainReview, cfg.BaselineScope, cfg.TrainReviewExclude)
 	case "RecallBaseline":
 		return true, runDaemonRecallBaseline(ctx, pg, cfg, standalone)
 	case "InitDB":
