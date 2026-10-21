@@ -14,7 +14,7 @@ import (
 )
 
 func (f *fakeRepo) MemoryUseCounts(_ context.Context, scope Scope, ids []string) ([]MemoryUseCount, error) {
-	if checkScope(scope) != nil || len(ids) == 0 || len(ids) > memorySignalBatch {
+	if checkScope(scope) != nil || len(ids) == 0 || len(ids) > memoryGraphMapNodes {
 		return nil, ErrInvalid
 	}
 	by := map[string]*MemoryUseCount{}

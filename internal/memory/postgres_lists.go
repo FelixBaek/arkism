@@ -687,10 +687,13 @@ SELECT CASE WHEN delivered THEN 'delivered' WHEN returned THEN 'returned_only' E
 // MemoryUseCounts counts distinct context_usage receipts that handed out each
 // memory id; the scope columns are the only range condition for ST-813 uses.
 func (p *Postgres) MemoryUseCounts(ctx context.Context, s Scope, ids []string) ([]MemoryUseCount, error) {
-	if checkScope(s) != nil || len(ids) == 0 || len(ids) > memorySignalBatch {
+	if checkScope(s) != nil || len(ids) == 0 || len(ids) > memoryGraphMapNodes {
 		return nil, ErrInvalid
 	}
-	rows, err := p.q().Query(ctx, `SELECT it->'memory'->>'id', count(DISTINCT id), max(`+pgDate+`), coalesce(jsonb_agg(DISTINCT jsonb_build_object('revision',(it->'memory'->>'revision')::bigint,'project_key',doc->'usage'->>'project_key')) FILTER (WHERE coalesce(doc->'usage'->>'project_key','')<>''), '[]'::jsonb) FROM memory_records, jsonb_array_elements(CASE WHEN jsonb_typeof(doc->'usage'->'items')='array' THEN doc->'usage'->'items' ELSE '[]'::jsonb END) it WHERE collection='jobs' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND kind='context_usage' AND status='done' AND it->'memory'->>'collection'='memories' AND it->'memory'->>'id'=ANY($5) GROUP BY 1 ORDER BY 1`, s.WorkspaceID, s.ProjectID, s.UserID, s.AgentID, ids)
+	// The use rows are cut down to the five aggregated values first, so the DISTINCT sorts never carry a receipt's whole doc (#166).
+	rows, err := p.q().Query(ctx, `WITH used AS MATERIALIZED (SELECT it->'memory'->>'id' AS mid, id AS jid, `+pgDate+` AS at, (it->'memory'->>'revision')::bigint AS rev, doc->'usage'->>'project_key' AS pk
+FROM memory_records, jsonb_array_elements(CASE WHEN jsonb_typeof(doc->'usage'->'items')='array' THEN doc->'usage'->'items' ELSE '[]'::jsonb END) it WHERE collection='jobs' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND kind='context_usage' AND status='done' AND it->'memory'->>'collection'='memories' AND it->'memory'->>'id'=ANY($5))
+SELECT mid, count(DISTINCT jid), max(at), coalesce(jsonb_agg(DISTINCT jsonb_build_object('revision',rev,'project_key',pk)) FILTER (WHERE coalesce(pk,'')<>''), '[]'::jsonb) FROM used GROUP BY 1 ORDER BY 1`, s.WorkspaceID, s.ProjectID, s.UserID, s.AgentID, ids)
 	if err != nil {
 		return nil, pgErr(err)
 	}
@@ -710,10 +713,15 @@ func (p *Postgres) MemoryUsageWindow(ctx context.Context, s Scope, since, recent
 	if checkScope(s) != nil || since.IsZero() || recent.Before(since) {
 		return nil, ErrInvalid
 	}
-	rows, err := p.q().Query(ctx, `SELECT it->'memory'->>'id', count(DISTINCT j.id) FILTER (WHERE `+pgDateOf("j")+` >= $6), count(DISTINCT j.id), max(`+pgDateOf("j")+`)
-FROM memory_records j, jsonb_array_elements(CASE WHEN jsonb_typeof(j.doc->'usage'->'items')='array' THEN j.doc->'usage'->'items' ELSE '[]'::jsonb END) it
-WHERE j.collection='jobs' AND j.workspace_id=$1 AND j.project_id=$2 AND j.user_id=$3 AND j.agent_id=$4 AND j.kind='context_usage' AND j.status='done' AND `+pgDateOf("j")+` >= $5 AND it->'memory'->>'collection'='memories'
-AND EXISTS (SELECT 1 FROM memory_records m WHERE m.collection='memories' AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4 AND m.id=it->'memory'->>'id'
+	// Each receipt's memories are made distinct inside the receipt, so the counts need no DISTINCT and the
+	// sort carries (id, time) only: count(DISTINCT j.id) sorted every receipt with its whole doc (#166: ~110 MB on disk).
+	rows, err := p.q().Query(ctx, `WITH used AS MATERIALIZED (
+SELECT x.id, `+pgDateOf("j")+` AS at FROM memory_records j
+CROSS JOIN LATERAL (SELECT DISTINCT it->'memory'->>'id' AS id FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j.doc->'usage'->'items')='array' THEN j.doc->'usage'->'items' ELSE '[]'::jsonb END) it WHERE it->'memory'->>'collection'='memories') x
+WHERE j.collection='jobs' AND j.workspace_id=$1 AND j.project_id=$2 AND j.user_id=$3 AND j.agent_id=$4 AND j.kind='context_usage' AND j.status='done' AND `+pgDateOf("j")+` >= $5
+)
+SELECT u.id, count(*) FILTER (WHERE u.at >= $6), count(*), max(u.at) FROM used u
+WHERE EXISTS (SELECT 1 FROM memory_records m WHERE m.collection='memories' AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4 AND m.id=u.id
   AND COALESCE((m.doc->>'content_erased')::boolean,false)=false AND COALESCE((m.doc->>'privacy_quarantined')::boolean,false)=false)
 GROUP BY 1 ORDER BY 1`, s.WorkspaceID, s.ProjectID, s.UserID, s.AgentID, since, recent)
 	if err != nil {

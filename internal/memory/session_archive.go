@@ -897,11 +897,12 @@ func (s *Service) ExpireSessionArchives(ctx context.Context, token string, in Se
 	if e != nil {
 		return SessionArchiveExpireOutput{}, e
 	}
+	expire := s.itemAuthorizer(ctx, token, "expire:"+colSessionArchives, in.Scope)
 	for _, r := range rows {
 		if r.Scope != in.Scope || !isSessionArchiveHeader(r) || !sessionArchiveDueForExpiry(r, now) {
 			return SessionArchiveExpireOutput{}, ErrUnavailable
 		}
-		d, e := s.authorize(ctx, token, "expire:"+colSessionArchives, in.Scope, r.ID, "")
+		d, e := expire(r.ID, "")
 		if e != nil {
 			return SessionArchiveExpireOutput{}, e
 		}

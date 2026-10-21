@@ -56,18 +56,39 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 			return MemoryGraphMap{}, ErrDenied
 		}
 	}
-	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{}, depth: map[string]int{}, seen: map[string]bool{}, deny: map[string]bool{}, cap: memoryGraphMapEdges, fresh: map[string]bool{}, labels: map[string]string{}}
+	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{}, depth: map[string]int{}, seen: map[string]bool{}, deny: map[string]bool{}, cap: memoryGraphMapEdges, fresh: map[string]bool{}, labels: map[string]string{}, read: s.itemAuthorizer(ctx, token, "read:memories", in.Scope)}
 	if e = b.mapNodes(ctx); e != nil {
 		return MemoryGraphMap{}, e
 	}
 	nodesCut := b.trunc // from here on only the line caps set trunc
 	b.trunc = false
-	for chunk := range slices.Chunk(b.order, memoryGraphMaxNodes) {
-		for _, lines := range []func(context.Context, []string) ([]MemoryGraphEdge, error){b.storedLines, b.sessionLines, b.similarLines} {
-			found, e := lines(ctx, chunk)
-			if e != nil {
-				return MemoryGraphMap{}, e
-			}
+	// Session and similar lines are asked for every node at once, so each query builds its candidate
+	// set once instead of once per 100 nodes (#166); their lines are then added in the same order as
+	// per-100-node asking, so the line cap keeps the same lines. Stored lines keep their per-chunk scan cap.
+	chunkOf := map[string]int{}
+	for i, id := range b.order {
+		chunkOf[id] = i / memoryGraphMaxNodes
+	}
+	byChunk := make([][]MemoryGraphEdge, 2*(len(b.order)/memoryGraphMaxNodes+1))
+	for i, lines := range []func(context.Context, []string) ([]MemoryGraphEdge, error){b.sessionLines, b.similarLines} {
+		if len(b.order) == 0 {
+			break
+		}
+		found, e := lines(ctx, b.order)
+		if e != nil {
+			return MemoryGraphMap{}, e
+		}
+		for _, edge := range found {
+			k := 2*chunkOf[edge.From] + i
+			byChunk[k] = append(byChunk[k], edge)
+		}
+	}
+	for n, chunk := range slices.Collect(slices.Chunk(b.order, memoryGraphMaxNodes)) {
+		stored, e := b.storedLines(ctx, chunk)
+		if e != nil {
+			return MemoryGraphMap{}, e
+		}
+		for _, found := range [][]MemoryGraphEdge{stored, byChunk[2*n], byChunk[2*n+1]} {
 			for _, edge := range found {
 				_, f := b.depth[edge.From]
 				_, t := b.depth[edge.To]
@@ -78,13 +99,13 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 		}
 	}
 	uses := map[string]int{}
-	for chunk := range slices.Chunk(b.order, memorySignalBatch) {
-		counts, e := s.Repo.MemoryUseCounts(ctx, in.Scope, chunk)
+	if len(b.order) > 0 {
+		counts, e := s.Repo.MemoryUseCounts(ctx, in.Scope, b.order)
 		if e != nil {
 			return MemoryGraphMap{}, e
 		}
 		for _, c := range counts {
-			if !slices.Contains(chunk, c.MemoryID) || c.Uses < 1 {
+			if _, placed := b.depth[c.MemoryID]; !placed || c.Uses < 1 {
 				return MemoryGraphMap{}, ErrUnavailable
 			}
 			uses[c.MemoryID] = c.Uses
@@ -119,8 +140,7 @@ func (b *memoryGraphBuild) mapNodes(ctx context.Context) error {
 			if _, dup := b.nodes[r.ID]; dup || !memoryGraphVisible(r, b.in) {
 				return ErrUnavailable
 			}
-			// shortcut: one authorizer call per node like ListMemories; batch it if the map gets slow.
-			d, e := b.s.authorize(ctx, b.token, "read:memories", b.in.Scope, r.ID, structuredText(r))
+			d, e := b.read(r.ID, structuredText(r))
 			if errors.Is(e, ErrDenied) {
 				continue
 			}

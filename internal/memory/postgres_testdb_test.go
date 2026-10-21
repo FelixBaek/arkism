@@ -11,13 +11,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func isolatedPostgres(t *testing.T) *Postgres {
+func isolatedPostgres(t testing.TB) *Postgres {
 	t.Helper()
 	return isolatedPostgresSchema(t, true)
 }
 
 // Restore tests need a truly empty database: Init must not mask missing schema.
-func isolatedPostgresSchema(t *testing.T, initialize bool) *Postgres {
+func isolatedPostgresSchema(t testing.TB, initialize bool) *Postgres {
 	t.Helper()
 	dsn := os.Getenv("POSTGRES_TEST_DSN")
 	if dsn == "" {

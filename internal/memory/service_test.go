@@ -497,7 +497,7 @@ func (f *fakeEmbedder) Embed(_ context.Context, texts []string, inputType string
 }
 
 type fixture struct {
-	t                          *testing.T
+	t                          testing.TB
 	svc                        *Service
 	repo                       *fakeRepo
 	auth                       *fakeAuth
@@ -505,7 +505,7 @@ type fixture struct {
 	human, human2, agent, work string
 }
 
-func newFixture(t *testing.T) *fixture {
+func newFixture(t testing.TB) *fixture {
 	t.Helper()
 	f := &fixture{
 		t: t, repo: newFakeRepo(), auth: &fakeAuth{actors: map[string]fakeActor{}},

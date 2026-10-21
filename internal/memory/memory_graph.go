@@ -243,6 +243,7 @@ type memoryGraphBuild struct {
 	fresh  map[string]bool   // all mode: vector state kept for slim node records
 	labels map[string]string // all mode: short node labels
 	trunc  bool
+	read   func(id, content string) (Decision, error) // per-memory read:memories check (itemAuthorizer)
 }
 
 func (b *memoryGraphBuild) addEdge(e MemoryGraphEdge) {
@@ -296,7 +297,7 @@ func (s *Service) MemoryGraph(ctx context.Context, token string, in MemoryGraphQ
 	if len(center) != 1 {
 		return MemoryGraph{}, ErrNotFound
 	}
-	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{in.MemoryID: center[0]}, depth: map[string]int{in.MemoryID: 0}, order: []string{in.MemoryID}, seen: map[string]bool{}, deny: map[string]bool{}, cap: memoryGraphMaxEdges}
+	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{in.MemoryID: center[0]}, depth: map[string]int{in.MemoryID: 0}, order: []string{in.MemoryID}, seen: map[string]bool{}, deny: map[string]bool{}, cap: memoryGraphMaxEdges, read: s.itemAuthorizer(ctx, token, "read:memories", in.Scope)}
 	frontier := []string{in.MemoryID}
 	for step := 1; step <= in.Depth && len(frontier) > 0; step++ {
 		if frontier, e = b.expand(ctx, frontier, step); e != nil {
@@ -517,7 +518,7 @@ func (b *memoryGraphBuild) place(ctx context.Context, candidates []MemoryGraphEd
 				continue
 			}
 			// Per-memory read check like ListMemories: a denied neighbour is left out, never labelled.
-			d, e := b.s.authorize(ctx, b.token, "read:memories", b.in.Scope, id, structuredText(r))
+			d, e := b.read(id, structuredText(r))
 			if errors.Is(e, ErrDenied) {
 				b.deny[id] = true
 				continue
