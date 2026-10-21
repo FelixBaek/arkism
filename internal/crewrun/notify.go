@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
-	"fmt"
 	mathrand "math/rand/v2"
 	"net"
 	"net/http"
@@ -98,29 +97,7 @@ func (e *Engine) notify(ctx context.Context, c map[string]string, input any) (an
 		}
 		err = e.postJSON(ctx, d.WebhookURL, map[string]any{"text": msg})
 	case "email":
-		d, ok := pickDest(cfg.Email, e.NotifyScope, to)
-		if !ok || d.Host == "" || d.From == "" || len(d.To) == 0 {
-			return nil, failf("notify", "no email destination %q", to)
-		}
-		port := d.Port
-		if port == "" {
-			port = "587"
-		}
-		var auth smtp.Auth
-		if d.User != "" {
-			auth = smtp.PlainAuth("", d.User, d.Pass, d.Host)
-		}
-		subject := c["subject"]
-		if subject == "" {
-			subject = "Arkism 알림"
-		}
-		body := "From: " + d.From + "\r\nTo: " + strings.Join(d.To, ", ") + "\r\nSubject: " + strings.ReplaceAll(subject, "\n", " ") +
-			"\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" + msg
-		if retryMail(ctx, func() error {
-			return sendMail(ctx, net.JoinHostPort(d.Host, port), d.Host, auth, d.From, d.To, []byte(body))
-		}) != nil {
-			err = failf("notify", "email send failed")
-		}
+		err = e.notifyEmail(ctx, cfg, c, to, msg)
 	default:
 		return nil, failf("bad_config", "channel must be telegram, slack or email")
 	}
@@ -128,6 +105,33 @@ func (e *Engine) notify(ctx context.Context, c map[string]string, input any) (an
 		return nil, err
 	}
 	return map[string]any{"sent": true, "channel": c["channel"], "to": to}, nil
+}
+
+func (e *Engine) notifyEmail(ctx context.Context, cfg NotifyConfig, c map[string]string, to, msg string) error {
+	d, ok := pickDest(cfg.Email, e.NotifyScope, to)
+	if !ok || d.Host == "" || d.From == "" || len(d.To) == 0 {
+		return failf("notify", "no email destination %q", to)
+	}
+	port := d.Port
+	if port == "" {
+		port = "587"
+	}
+	var auth smtp.Auth
+	if d.User != "" {
+		auth = smtp.PlainAuth("", d.User, d.Pass, d.Host)
+	}
+	subject := c["subject"]
+	if subject == "" {
+		subject = "Arkism 알림"
+	}
+	body := "From: " + d.From + "\r\nTo: " + strings.Join(d.To, ", ") + "\r\nSubject: " + strings.ReplaceAll(subject, "\n", " ") +
+		"\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" + msg
+	if retryMail(ctx, func() error {
+		return sendMail(ctx, net.JoinHostPort(d.Host, port), d.Host, auth, d.From, d.To, []byte(body))
+	}) != nil {
+		return failf("notify", "email send failed")
+	}
+	return nil
 }
 
 // sendMail is smtp.SendMail bounded by a minute and by ctx, so a server that
@@ -194,43 +198,16 @@ func (e *Engine) postJSON(ctx context.Context, target string, body any) error {
 	}
 	for attempt := 0; attempt < 3; attempt++ {
 		delay := (200 * time.Millisecond << attempt) + time.Duration(mathrand.IntN(100))*time.Millisecond
-		op, cancel := context.WithTimeout(ctx, 30*time.Second)
-		req, err := http.NewRequestWithContext(op, "POST", target, bytes.NewReader(b))
+		retry, after, err := e.postJSONAttempt(ctx, target, b)
 		if err != nil {
-			cancel()
-			return failf("notify", "bad destination")
+			return err
 		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := e.httpClient().Do(req)
-		retry := err != nil
-		if err == nil {
-			status := resp.StatusCode
-			_ = resp.Body.Close()
-			cancel()
-			if status >= 200 && status < 300 {
-				return nil
-			}
-			retry = status == 429 || status >= 500
-			if !retry {
-				return failf("notify", "%s", fmt.Sprintf("answered %d", status))
-			}
-			header := resp.Header.Get("Retry-After")
-			if n, err := strconv.Atoi(header); err == nil && n > 0 {
-				if n > 30 {
-					return failf("notify", "retry deferred beyond notification budget")
-				}
-				delay = time.Duration(n) * time.Second
-			} else if until, err := http.ParseTime(header); err == nil {
-				wait := time.Until(until)
-				if wait > 30*time.Second {
-					return failf("notify", "retry deferred beyond notification budget")
-				}
-				if wait > delay {
-					delay = wait
-				}
-			}
-		} else {
-			cancel()
+		if !retry {
+			return nil
+		}
+		delay, err = notificationRetryDelay(after, delay)
+		if err != nil {
+			return err
 		}
 
 		if !retry || attempt == 2 {
@@ -243,6 +220,49 @@ func (e *Engine) postJSON(ctx context.Context, target string, body any) error {
 		}
 	}
 	return failf("notify", "send failed after 3 attempts")
+}
+
+// One attempt owns its response and deadline; retries never retain an open body.
+func (e *Engine) postJSONAttempt(ctx context.Context, target string, body []byte) (bool, string, error) {
+	op, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(op, "POST", target, bytes.NewReader(body))
+	if err != nil {
+		return false, "", failf("notify", "bad destination")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := e.httpClient().Do(req)
+	if err != nil {
+		return true, "", nil
+	}
+	defer resp.Body.Close()
+	status := resp.StatusCode
+	if status >= 200 && status < 300 {
+		return false, "", nil
+	}
+	if status == 429 || status >= 500 {
+		return true, resp.Header.Get("Retry-After"), nil
+	}
+	return false, "", failf("notify", "answered %d", status)
+}
+
+func notificationRetryDelay(header string, delay time.Duration) (time.Duration, error) {
+	if n, err := strconv.Atoi(header); err == nil && n > 0 {
+		if n > 30 {
+			return 0, failf("notify", "retry deferred beyond notification budget")
+		}
+		return time.Duration(n) * time.Second, nil
+	}
+	if until, err := http.ParseTime(header); err == nil {
+		wait := time.Until(until)
+		if wait > 30*time.Second {
+			return 0, failf("notify", "retry deferred beyond notification budget")
+		}
+		if wait > delay {
+			return wait, nil
+		}
+	}
+	return delay, nil
 }
 
 func retryMail(ctx context.Context, send func() error) error {
