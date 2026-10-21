@@ -3827,6 +3827,10 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     b.append(el("strong", "", x.name));
     b.title = x.enabled === false ? `${x.name} · 꺼짐` : x.name; // the full name, when two lines cut it; 763:57845: an off card is only dimmed
     b.addEventListener("click", () => { workerPick(r.id); openExpertPopup(r); });
+    b.ctxItems = () => [ // right-click (context-menu.js)
+      { label: "열기", run: () => b.click() },
+      { label: "@이름 복사", off: !x.handle, run: () => navigator.clipboard.writeText(`@${x.handle}`).then(() => notice("복사했어요."), () => notice("복사하지 못했어요.")) },
+    ];
     return b;
   }
   function renderWorkers() {
