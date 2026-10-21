@@ -5,6 +5,19 @@ source changes only; they do not claim that a signed installer is available.
 
 ## Unreleased
 
+- Name every memory-map point, keep line and label size steady when zoomed,
+  show loading and error states, and read memories past the first page.
+- Hide the window buttons while a popup is open; fix expert creation and
+  opening, false "unsaved changes" prompts in teams and automations, and report
+  a taken $name/@name as such (API `409 handle_taken`).
+- Pick the AI tools default model per provider; run GLM models in Claude Code
+  against Z.ai without a wrapper; skip Codex composer-suggestion prompts.
+- Show review editing, kind filters, full lists and dreaming proposals beyond
+  the first loaded page in the memory windows.
+- Add per-release compression, hook latency and token evaluation metrics.
+
+## [0.1.3](https://github.com/FelixBaek/arkism/releases/tag/v0.1.3) — 2026-10-22
+
 - Bound local HTTP hosts, requests and provider lifetimes; distinguish missing
   credentials (401) from permission denials (403), and limit login attempts.
 - Quarantine malformed jobs without losing payload evidence; recover worker
@@ -40,9 +53,7 @@ source changes only; they do not claim that a signed installer is available.
 - Align both READMEs with current menus, Windows-only distribution and capture
   privacy behavior; add contributor templates and a proposed required-check list.
 
-Key provisioning, protected-environment configuration, actual Windows packaging
-and upgrade verification, the proposed ruleset update, and publication remain
-separate operator actions. See [Windows release security](guide/security-operations.md).
+See [Windows release security](guide/security-operations.md) for the signing and release checks.
 
 ## [0.1.2](https://github.com/FelixBaek/arkism/releases/tag/v0.1.2) — 2026-10-20
 
