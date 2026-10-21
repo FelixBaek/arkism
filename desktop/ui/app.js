@@ -1101,7 +1101,6 @@
         if (sk.skill_compatibility?.[k] === "unsupported") blocked.push([sk, k]);
       }
     }
-    const adapter = d.skills.filter((sk) => Object.values(sk.skill_compatibility || {}).includes("requires_adapter"));
     const idleList = d.memories.filter(idle);
     const fresh = d.memories.filter((m) => Date.now() - new Date(m.created_at).getTime() < 3 * DAY);
     const sug = suggestions();
@@ -1138,11 +1137,9 @@
       { id: "idle", n: state.usageDone ? idleList.length : null, icon: "clock-counter-clockwise", label: "호출과 문구 검토", title: `검토할 기억 ${idleList.length}개`,
         sub: "재검토 예정일이 지났거나 최근 호출·문구 겹침이 적어요. 직접 확인해 주세요", action: "보기", go: ["memories", "idle"], preview: idleList.slice(0, 5).map((m) => m.text) },
       { id: "fresh", n: fresh.length, icon: "sparkle", label: "새 기억", title: `최근 3일 새 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
-        action: "훑어보기", go: ["memories", "active"], preview: fresh.slice(0, 5).map((m) => m.text) },
-      { id: "adapter", n: adapter.length, icon: "stack", label: "어댑터 필요", title: `어댑터가 필요한 스킬 ${adapter.length}개`, sub: "그대로는 일부 에이전트에서 제대로 안 돌 수 있어요",
-        action: "보기", go: ["skills", "adapter"], preview: adapter.slice(0, 5).map((sk) => sk.name) }
+        action: "훑어보기", go: ["memories", "active"], preview: fresh.slice(0, 5).map((m) => m.text) }
     ];
-    const ORDER = ["stalled", "suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh", "adapter"];
+    const ORDER = ["stalled", "suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh"];
     const stalled = homeChecks.stalledItem(generation);
     if (stalled) items.push(stalled);
     return items.filter((t) => t.n === null || t.n > 0).sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
@@ -1349,9 +1346,9 @@
   // ---------------------------------------------------------------- 할 일 (Figma v4 · 01 홈: 198:200, 198:2178, 198:2264, 198:3812, 210:17783)
   // 홈 = 맨 위 그림 + 먼저 확인 3가지 + 메뉴별 확인할 것 + 이번 주. 줄을 고르면 그 일의 화면(← 홈)으로, 전체 항목 보기는 표 하나로.
   const TODO_SHORT = { review: "기억 후보", conflicted: "부딪힘", maintenance: "정리 제안", idle: "호출과 문구 검토", fresh: "새로 저장",
-    suggest: "새 스킬", similar: "비슷함", unused: "안 씀", updates: "업데이트", adapter: "어댑터 필요", blocked: "빠진 에이전트" };
+    suggest: "새 스킬", similar: "비슷함", unused: "안 씀", updates: "업데이트", blocked: "빠진 에이전트" };
   const TODO_MENUS = [["MEMORY", "기억", ["fresh", "review", "conflicted", "maintenance", "idle"], ["memories", "active"]],
-    ["TOOLS", "스킬", ["suggest", "similar", "unused", "updates", "adapter", "blocked"], ["skills"]]];
+    ["TOOLS", "스킬", ["suggest", "similar", "unused", "updates", "blocked"], ["skills"]]];
   const todoKey = (id) => (id || "").replace(/^todo:/, "").split("#")[0];
   const todoIndex = (id) => Number((id || "").split("#")[1] || 0);
   const todoTotal = (items) => items.reduce((s, t) => s + (t.n || 0), 0);
@@ -2058,7 +2055,6 @@
     if (state.skillTab === "plugin") return fromPlugin(sk);
     if (state.skillTab === "update") return updatesOf(sk).length > 0;
     if (state.skillTab === "missing") return blockedAny(sk);
-    if (state.skillTab === "adapter") return Object.values(compatOf(sk)).includes("requires_adapter");
     if (state.skillTab === "caution") return ["warn", "bad"].includes(skillChecks(sk)?.security.cls);
     return true;
   }
@@ -2082,7 +2078,7 @@
   const QUALITY_PARTS = [["problem", "풀려는 문제"], ["use_when", "이럴 때 써요"], ["avoid_when", "이럴 땐 쓰지 마세요"], ["output_format", "결과 형식"], ["success_criteria", "성공 기준"], ["verification", "확인 방법"]];
   const filled = (v) => (Array.isArray(v) ? v.length > 0 : !!(v && String(v).trim()));
   const VERDICTS = { SAFE: 0, CAUTION: 1, DO_NOT_INSTALL: 2 };
-  const SECURITY = [{ label: "통과", cls: "ok" }, { label: "주의", cls: "warn" }, { label: "막음", cls: "bad" }];
+  const SECURITY = [{ label: "통과", cls: "ok" }, { label: "주의", cls: "warn" }, { label: "위험", cls: "bad" }];
   const gradeCls = (score) => (score >= 75 ? "ok" : score >= 40 ? "warn" : "bad");
   // Every agent folder holding a skill of this name; the scan with the worst verdict speaks for the skill.
   function hostChecks(sk) {
@@ -2123,7 +2119,7 @@
   }
   // v4 · 스킬 (Figma 198:802): 확인할 것 카드 → 검색·상태·정렬 → 분류 → 목록, 오른쪽은 고른 스킬.
   // state.skillPage opens a page inside the same view: 개선하기 (4 steps), 휴지통·중복, GitHub에서 설치.
-  const SKILL_STATES = [["all", "전체"], ["missing", "빠진 곳 있음"], ["unused", "안 씀"], ["adapter", "어댑터 필요"], ["caution", "보안 주의"], ["update", "업데이트 있음"], ["plugin", "플러그인 스킬"], ["trash", "휴지통"]];
+  const SKILL_STATES = [["all", "전체"], ["missing", "빠진 곳 있음"], ["unused", "안 씀"], ["caution", "보안 주의"], ["update", "업데이트 있음"], ["plugin", "플러그인 스킬"], ["trash", "휴지통"]];
   const IMPROVE_STEPS = [["개선안", "무엇을 고칠까요?", "관련 교훈을 찾아 고를 관측을 선택하고, 평가 과제 파일을 넣어 주세요."],
     ["비교 평가", "기존 버전과 비교해요", "같은 평가 과제로 두 버전을 돌려 점수·비용·시간을 비교해요."],
     ["검토·승인", "무엇이 바뀌었나요", "후보 버전의 원문과 평가를 보고 승인하거나 제외해요."],
@@ -2142,10 +2138,8 @@
   function skillBadge(sk) {
     const c = skillChecks(sk);
     if (["warn", "bad"].includes(c?.security.cls)) return skBadge(`보안 ${c.security.label}`, "amber");
-    const off = shownAgents().find(([k]) => !allowed(sk, k));
-    if (off) { const b = skBadge(`${off[1]}에 없음`, "amber has-dot"); return b; }
+    // An agent without the skill is often on purpose, so only security and updates earn a row badge.
     if (updatesOf(sk).length) return skBadge("업데이트 있음");
-    if (Object.values(compatOf(sk)).includes("requires_adapter")) return skBadge("어댑터 필요");
     return null;
   }
   function agentDots(sk) {
@@ -2179,7 +2173,6 @@
     const versionsKnown = state.versionsDone;
     const n = {
       missing: skills.filter(blockedAny).length, unused: state.data.skillUse ? skills.filter(unused).length : null,
-      adapter: live.filter((sk) => Object.values(compatOf(sk)).includes("requires_adapter")).length,
       caution: versionsKnown ? live.filter((sk) => ["warn", "bad"].includes(skillChecks(sk)?.security.cls)).length : null,
       update: live.filter((sk) => updatesOf(sk).length).length, plugin: skills.filter(fromPlugin).length, trash: skills.length - live.length
     };
@@ -2187,7 +2180,7 @@
     const restore = keepFocus(".v4s-search");
     // 확인해 주세요: what needs a look, the first kind with any opens with 하나씩 확인하기.
     const parts = [];
-    const todo = [["caution", "보안 주의"], ["update", "업데이트"], ["adapter", "어댑터 필요"]].filter(([k]) => n[k]);
+    const todo = [["caution", "보안 주의"], ["update", "업데이트"]].filter(([k]) => n[k]);
     if (state.skillTab === "all" && todo.length) {
       const card = el("div", "v4s-attn");
       const text = el("div", "v4s-attn-text");
@@ -2286,7 +2279,7 @@
       const staged = state.pending.get(`${sk.id}|${k}`);
       const on = allowed(sk, k);
       const a = el("button", `v4s-agent${on ? " on" : " off"}${staged ? " staged" : ""}`); a.type = "button";
-      a.append(agentLogo(logo, n), el("span", "", staged ? n : n + agentNote(sk, k)));
+      a.append(agentLogo(logo, n), el("span", "", n));
       a.title = `${staged ? "누르면 예정을 취소해요" : on ? `${n}에서 써요 · 누르면 뺄 예정` : `${n}에서 못 써요 · 누르면 추가 예정`} · ${pcLink(k).title}`;
       a.addEventListener("click", () => toggleCell(sk, k));
       grid.append(a);
@@ -2316,6 +2309,33 @@
       renderDetail();
     } catch (e) { notice(`되돌리지 못했어요 (${e.message}).`); }
   }
+  // Scanner labels are "category · pattern · SEVERITY[ · file:line]"; say them in plain Korean.
+  const FINDING_KO = { secret: "키나 토큰 같은 비밀값이 그대로 적혀 있어요", remote_exec: "인터넷에서 받은 코드를 바로 실행해요",
+    destructive: "폴더나 디스크를 통째로 지울 수 있는 명령이 있어요", credential_access: "SSH 키·AWS·브라우저 쿠키 같은 로그인 정보 파일을 읽어요",
+    exfiltration: "비밀값을 모르는 주소로 보낼 수 있는 명령이 있어요", prompt_injection: "에이전트에게 원래 지시를 무시하거나 사용자에게 숨기라는 문장이 있어요" };
+  const SEVERITY_KO = { CRITICAL: "심각도 아주 높음", HIGH: "심각도 높음", MEDIUM: "심각도 보통", LOW: "심각도 낮음", INFO: "참고" };
+  function findingText(label) {
+    const parts = String(label).split(" · ");
+    if (parts.length < 2) return label;
+    const at = /^(.+):(\d+)$/.exec(parts[parts.length - 1]);
+    if (at) parts.pop();
+    const sev = parts.find((x) => SEVERITY_KO[x.toUpperCase()]);
+    const what = FINDING_KO[parts[0]] || parts.filter((x) => x !== sev).join(" · ");
+    return [what, at ? `${at[1]} ${at[2]}번째 줄` : "", sev ? SEVERITY_KO[sev.toUpperCase()] : ""].filter(Boolean).join(" · ");
+  }
+  // 보안 주의·위험 says why right under the name; the verdict is advice, nothing blocks the skill.
+  function securityCard(c) {
+    const bad = c.security.cls === "bad";
+    const card = el("div", "v4s-attn small v4s-why");
+    const t = el("div", "v4s-attn-text");
+    const list = el("ul", "");
+    for (const r of c.security.reasons.length ? c.security.reasons : ["검사 도구가 구체적인 이유를 보내지 않았어요"]) list.append(el("li", "", findingText(r)));
+    t.append(el("strong", "", bad ? "보안 위험 · 쓰지 않는 걸 권해요" : "보안 주의 · 아래 내용을 확인해 주세요"),
+      el("p", "", bad ? "검사에서 위험한 내용을 찾았어요. Arkism이 막지는 않아서 지금도 에이전트가 쓸 수 있어요. 믿을 수 없으면 휴지통으로 옮기세요." : "검사에서 조심할 내용을 찾았어요. 막지는 않아서 그대로 쓸 수 있어요."),
+      list);
+    card.append(t);
+    return card;
+  }
   const skillTalk = new Map(); // AI로 쉽게 설명 talks per skill, kept while the app is open
   async function skillDetailV4(sk) {
     const cat = pages.categoryOf(sk)?.name || "분류 안 됨";
@@ -2340,6 +2360,7 @@
       card.append(t, button("되돌리기", "primary", null, () => restoreSkill(sk)));
       parts.push(card);
     } else parts.push(skillAgentsSection(sk));
+    if (c && ["warn", "bad"].includes(c.security.cls)) parts.splice(1, 0, securityCard(c));
     const when = skSection("언제 쓰나요");
     const whenRows = el("div", ""); when.append(whenRows, el("p", "meta", "불러오는 중…"));
     parts.push(when);
@@ -4520,10 +4541,6 @@
     if (r) body.append(r);
     body.append(rules);
   }
-  function agentNote(sk, k, staged) {
-    if (staged) return staged === "allow" ? " · 추가 예정" : " · 뺄 예정";
-    return compatOf(sk)[k] === "requires_adapter" ? " · 어댑터" : "";
-  }
   // PC에서 이 서버로 마지막 통신한 때를 색으로: 24시간 안·밀린 것 없음 초록, 오래됐거나 밀림 주황, 마지막 시도가 실패면 빨강, 기록 없으면 회색.
   const PC_STALE_MS = 24 * 3600 * 1000;
   function pcStatus(l) { // → [색 이름, 설명]
@@ -4561,7 +4578,7 @@
     const q = el("span", "check-cell"); q.append(el("span", `grade ${c.quality.cls}`, c.quality.grade), c.quality.score === null ? "" : `${c.quality.score}점`);
     const s2 = el("span", "check-cell"); s2.append(el("span", `sec ${c.security.cls}`, c.security.label), typeof c.security.risk === "number" ? `위험 ${c.security.risk}` : "");
     const scans = c.scans.map((x) => `${agentName(x.agent)} ${x.path}${x.error ? ` (${x.error})` : ""}`);
-    const dl = facts([["빠진 설명", c.quality.missing.join(", ")], ["걸린 것", c.security.reasons.join(" · ")], ["검사한 폴더", scans.join(", ")], ["검사 시각", c.scans[0] ? shortDate(c.scans[0].scanned_at) : ""], ["독립 검증", c.validated ? "평가 기록 있음" : ""]]);
+    const dl = facts([["빠진 설명", c.quality.missing.join(", ")], ["걸린 것", c.security.reasons.map(findingText).join(" / ")], ["검사한 폴더", scans.join(", ")], ["검사 시각", c.scans[0] ? shortDate(c.scans[0].scanned_at) : ""], ["독립 검증", c.validated ? "평가 기록 있음" : ""]]);
     const add = (k, node) => { const dd = el("dd", ""); dd.append(node); return [el("dt", "", k), dd]; };
     dl.prepend(...add("품질", q), ...add("보안", s2));
     const tools = state.data.tools?.skill_check_tools;
