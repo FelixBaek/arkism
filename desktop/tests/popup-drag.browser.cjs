@@ -10,7 +10,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     await page.setContent('<!doctype html><style>dialog{width:500px;height:300px;padding:0;border:0}.ov-win-head{display:flex;height:50px;margin:0}h2{margin:0}</style><dialog data-popout=\'{"event":"arkism:open-overview-window","detail":{"key":"extract"}}\'><div class="ov-win-head"><h2>분석</h2><span style="flex:1"></span><button>닫기</button></div></dialog>');
     await page.evaluate(() => {
       window.opened = [];
-      window.__TAURI__ = { core: { invoke: async (cmd, args) => { if (cmd === "popout_open") window.opened.push(args); return "popout-1"; } } };
+      window.__TAURI__ = { core: { invoke: async (cmd, args) => { if (cmd === "popout_open") { window.opened.push(args); } return "popout-1"; } } };
       window.ArkismPopoutSession = () => ({ token: "t" });
     });
     await page.addScriptTag({ content: fs.readFileSync(path.resolve(__dirname, "../ui/popup-drag.js"), "utf8") });

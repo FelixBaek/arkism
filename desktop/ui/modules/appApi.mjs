@@ -4,7 +4,7 @@
 // with an error or a shape this app cannot read (HTTP errors carry status; *_invalid is a bad shape).
 export function loadFailure(error) {
   const code = String(error?.code || error?.message || ""), status = Number(error?.status) || 0;
-  if (/_invalid$/.test(code)) return { code, reached: true, title: "서버 답을 읽지 못했어요", text: "서버가 이 앱이 읽을 수 없는 형식으로 답했어요. 앱과 서버의 Arkism 버전을 맞춰 주세요." };
+  if (code.endsWith("_invalid")) return { code, reached: true, title: "서버 답을 읽지 못했어요", text: "서버가 이 앱이 읽을 수 없는 형식으로 답했어요. 앱과 서버의 Arkism 버전을 맞춰 주세요." };
   if (status === 401 || status === 403 || code === "access_denied") return { code, reached: true, title: "서버가 접속을 거절했어요", text: "접속 토큰이나 이 계정의 권한을 확인해 주세요." };
   if (status >= 500) return { code, reached: true, title: "서버에 문제가 생겼어요", text: "서버가 요청을 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요." };
   if (status) return { code, reached: true, title: "서버가 요청을 받지 않았어요", text: "앱과 서버의 Arkism 버전이 맞지 않을 수 있어요. 둘 다 업데이트해 주세요." };
