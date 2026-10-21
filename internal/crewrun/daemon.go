@@ -210,16 +210,12 @@ func Serve(ctx context.Context, cfg Config) error {
 		return err
 	}
 	defer ln.Close()
-	if cfg.LockPath != "" {
-		if err := os.MkdirAll(filepath.Dir(cfg.LockPath), 0700); err != nil {
-			return err
-		}
-		unlock, err := processlock.Acquire(cfg.LockPath)
-		if err != nil {
-			return errors.New("crew daemon already running or lock unavailable")
-		}
-		defer unlock()
+	unlock, err := acquireCrewLock(cfg.LockPath)
+	if err != nil {
+		return err
 	}
+	defer unlock()
+
 	e := cfg.Engine
 	log := e.log()
 	for {
@@ -282,4 +278,19 @@ func loopbackAddr(addr string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+// Lock ownership precedes any resume of persistent runs.
+func acquireCrewLock(path string) (func(), error) {
+	if path == "" {
+		return func() {}, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return nil, err
+	}
+	unlock, err := processlock.Acquire(path)
+	if err != nil {
+		return nil, errors.New("crew daemon already running or lock unavailable")
+	}
+	return unlock, nil
 }
