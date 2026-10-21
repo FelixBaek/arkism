@@ -226,6 +226,9 @@ type Record struct {
 	LeaseUntil         time.Time            `json:"-" bson:"lease_until"`
 	LeaseToken         string               `json:"-" bson:"lease_token"`
 	Attempts           int                  `json:"-" bson:"attempts"`
+
+	// RejectScore is the review classifier's advice when the queue is listed; never stored.
+	RejectScore *float64 `json:"reject_score,omitempty" bson:"-"`
 }
 
 // VectorRank is one pgvector cosine distance for an already-authorized row.

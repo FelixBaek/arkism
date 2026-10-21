@@ -17,6 +17,7 @@ import (
 const reviewAction = "review:memory_candidates"
 
 type ReviewInput struct {
+	omitAdvice  bool       // Internal catalog scans must not trigger optional paid scoring for every row.
 	Scope       Scope      `json:"scope"`
 	Status      string     `json:"status"`
 	Kind        string     `json:"kind,omitempty"`
@@ -122,19 +123,11 @@ func (s *Service) ListCandidates(ctx context.Context, token string, in ReviewInp
 	if len(rows) > in.Limit+1 {
 		return out, ErrUnavailable
 	}
-	// shortcut: sequential policy checks cost up to limit+2 calls; batch only when the authorizer supports equivalent per-record decisions.
-	for _, r := range rows {
-		if r.Scope != in.Scope || r.PrivacyQuarantined {
-			return out, ErrDenied
-		}
-		d, e := s.authorize(ctx, token, reviewAction, in.Scope, r.ID, structuredText(r))
-		if e != nil {
-			return out, e
-		}
-		if d.Role != actor.Role || d.PrincipalID != actor.PrincipalID {
-			return out, ErrDenied
-		}
+	adviceAllowed, e := s.authorizeReviewRows(ctx, token, in.Scope, actor, rows)
+	if e != nil {
+		return out, e
 	}
+
 	if len(rows) > in.Limit {
 		rows = rows[:in.Limit]
 		position := reviewPosition(rows[len(rows)-1], reviewBinding(in))
@@ -143,6 +136,10 @@ func (s *Service) ListCandidates(ctx context.Context, token string, in ReviewInp
 			return out, ErrUnavailable
 		}
 		out.NextCursor = base64.RawURLEncoding.EncodeToString(encoded)
+	}
+	if in.Status == "candidate" && !in.omitAdvice && adviceAllowed {
+		// After the cursor is fixed, so reordering the page cannot skip or repeat rows.
+		s.scoreCandidates(ctx, token, in.Scope, actor, rows)
 	}
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		return audit(ctx, tx, in.Scope, actor.PrincipalID, "review:list", "")
@@ -194,4 +191,23 @@ func parseReviewQuery(raw string) (ReviewInput, error) {
 		}
 	}
 	return in, nil
+}
+
+// A collection-level grant never replaces each record's transfer decision.
+func (s *Service) authorizeReviewRows(ctx context.Context, token string, scope Scope, actor Decision, rows []Record) (bool, error) {
+	advice := actor.ExternalTransfer && actor.ContentSafe
+	for _, r := range rows {
+		if r.Scope != scope || r.PrivacyQuarantined {
+			return false, ErrDenied
+		}
+		decision, err := s.authorize(ctx, token, reviewAction, scope, r.ID, structuredText(r))
+		if err != nil {
+			return false, err
+		}
+		if decision.Role != actor.Role || decision.PrincipalID != actor.PrincipalID {
+			return false, ErrDenied
+		}
+		advice = advice && decision.ExternalTransfer && decision.ContentSafe
+	}
+	return advice, nil
 }

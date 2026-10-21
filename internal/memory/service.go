@@ -60,6 +60,10 @@ type Service struct {
 	CostRates     CostRates
 	// Wiki, when set, is the model the optional LLM-Wiki jobs call.
 	Wiki WikiLLM
+
+	// ReviewClassifier orders pending candidates by likely rejection; nil leaves the queue order alone.
+	ReviewClassifier *ReviewClassifier
+	reviewScores     reviewScoreCache
 }
 type CreateInput struct {
 	capture         *captureWrite       // Server-owned; omitted from all JSON/BSON input.
