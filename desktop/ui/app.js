@@ -1115,7 +1115,7 @@ export function startApp() {
     const v = views[state.view];
     $("#title").textContent = typeof v.title === "function" ? v.title() : v.title;
     $("#title").classList.toggle("sr-only", $("#title").textContent === $("#area-tabs").dataset.active); // the tab already names it; screen readers keep the heading
-    $("#title-count").textContent = typeof v.count === "function" && !state.loading ? v.count() : "";
+    $("#title-count").textContent = typeof v.count === "function" && !state.loading && !$("#title").classList.contains("sr-only") ? v.count() : ""; // a hidden title takes its count along; the tab badge shows it
     const bare = !state.loading && (typeof v.bare === "function" ? v.bare() : !!v.bare); // the rail and tabs already name the screen
     $(".main > .page-head").style.display = bare ? "none" : "";
     $(".main > .page-head .page-back")?.remove(); // a screen that has a ← link draws it again
@@ -1361,7 +1361,6 @@ export function startApp() {
     homeFrame(page);
     const items = todoItems();
     const wrap = $("#table");
-    if (memoryPaging.partialMemories()) $("#stats").replaceChildren(memoryPaging.memoryPageNote());
     if (page.kind === "start") { wrap.replaceChildren(home.startMain()); return; }
     const lost = page.kind === "home" ? home.lostCard() : null;
     if (lost && !items.length) { wrap.replaceChildren(lost); return; }
@@ -1519,7 +1518,6 @@ export function startApp() {
   // The right column on 홈 when nothing is picked (Figma 198:200 Detail).
   function homeSummary() {
     const body = detailShell("오늘 요약");
-    if (memoryPaging.partialMemories()) body.append(memoryPaging.memoryPageNote());
     const items = todoItems(), now = items.slice(0, firstCount(items)), rest = items.slice(firstCount(items));
     const head = el("div", "home-sum-head");
     head.append(el("h2", "", now.length ? `확인할 일 ${now.length}개가 먼저 기다려요` : "지금은 확인할 일이 없어요"),
@@ -1615,7 +1613,6 @@ export function startApp() {
     get matches() { return matches; },
     get memoryCount() { return memoryPaging.memoryCount; },
     get memoryKey() { return memoryPaging.memoryKey; },
-    get memoryPageNote() { return memoryPaging.memoryPageNote; },
     get memoryPages() { return memoryPaging.memoryPages; },
     get memoryResults() { return memoryPaging.memoryResults; },
     get memoryTime() { return memoryTime; },
@@ -1868,7 +1865,7 @@ export function startApp() {
     const d = state.data;
     body.append(el("h2", "", "Arkism"), el("p", "lead", "에이전트들이 함께 쓰는 기억과 스킬이에요. 목록에서 하나를 고르면 왜 저장됐는지와 언제 쓰였는지 볼 수 있어요."));
     const byKind = Object.keys(KINDS).map((k) => [kindLabel(k), `${d.memories.filter((m) => m.kind === k).length}개`]).filter(([, v]) => v !== "0개");
-    const s = section("사용 중인 기억"); s.append(facts(byKind)); if (memoryPaging.partialMemories()) s.append(memoryPaging.memoryPageNote()); body.append(s);
+    const s = section("사용 중인 기억"); s.append(facts(byKind)); body.append(s);
     const r = section("어떻게 쓰이나요");
     r.append(facts([["대화 시작", "선호·작업 규칙을 모두 넣어요"], ["질문할 때", "관련 있는 기억만 최대 6개"], ["승인 대기", "대화에서 후보를 추출해요. 저장 여부는 사람이 검토해요."], ["저장소", "저장소에서 나온 기억은 그 저장소에서만, 나머지는 어디서나 써요"]]));
     body.append(r);
@@ -1976,7 +1973,7 @@ export function startApp() {
     const q = el("span", "check-cell"); q.append(el("span", `grade ${c.quality.cls}`, c.quality.grade), c.quality.score === null ? "" : `${c.quality.score}점`);
     const s2 = el("span", "check-cell"); s2.append(el("span", `sec ${c.security.cls}`, c.security.label), typeof c.security.risk === "number" ? `위험 ${c.security.risk}` : "");
     const scans = c.scans.map((x) => `${agentName(x.agent)} ${x.path}${x.error ? ` (${x.error})` : ""}`);
-    const dl = facts([["빠진 설명", c.quality.missing.join(", ")], ["걸린 것", c.security.reasons.map(findingText).join(" / ")], ["검사한 폴더", scans.join(", ")], ["검사 시각", c.scans[0] ? shortDate(c.scans[0].scanned_at) : ""], ["독립 검증", c.validated ? "평가 기록 있음" : ""]]);
+    const dl = facts([["빠진 설명", c.quality.missing.join(", ")], ["걸린 것", c.security.reasons.map(skillViews.findingText).join(" / ")], ["검사한 폴더", scans.join(", ")], ["검사 시각", c.scans[0] ? shortDate(c.scans[0].scanned_at) : ""], ["독립 검증", c.validated ? "평가 기록 있음" : ""]]);
     const add = (k, node) => { const dd = el("dd", ""); dd.append(node); return [el("dt", "", k), dd]; };
     dl.prepend(...add("품질", q), ...add("보안", s2));
     const tools = state.data.tools?.skill_check_tools;

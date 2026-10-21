@@ -1696,6 +1696,7 @@ window.ArkismI18nEN = {
   "스킬 제안을 내보내지 못했어요. 로그인과 연결 상태를 확인해 주세요.": "Couldn't export skill suggestions. Check your sign-in and connection.",
   "스킬 제안 가져오기": "Import skill suggestions",
   "수집": "Capture",
+  "수집 켜기": "Capture on",
   "멈추거나 뺀 폴더에서는 Arkism이 대화를 저장하지도, 기억을 넣지도 않아요. 저장소에 .arkism-ignore 파일을 두어도 같아요.": "In paused or excluded folders, Arkism neither saves conversations nor injects memories. Placing a .arkism-ignore file in a repository does the same.",
   "수집 설정을 저장하지 못했어요.": "Couldn't save capture settings.",
   "수집 멈추기": "Pause capture",
@@ -4493,7 +4494,7 @@ window.ArkismI18nEN = {
   "합계 약 {0} 토큰": "~{0} tokens in all",
   "최대 {0}개": "up to {0}",
   // adopt-gateway
-  "실패 {0}건 · 토큰 {1} · {2}{3}": "{0} failed · {1} tokens · {2}{3}",
+  "실패 {0}건 · 토큰 {1} · {2}": "{0} failed · {1} tokens · {2}",
   "토큰 {0}": "{0} tokens",
   "{0}번째 턴": "turn {0}",
   "본대화 {0} · 부속 {1}": "main {0} · side {1}",
@@ -6215,7 +6216,6 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.strings, { "기억 개수·저장소·정렬은 불러온 목록 기준이에요. 검색·종류 필터는 전체 기억에서 찾아요.": "Memory counts, repository choices and sorting apply to loaded rows. Search and kind filters query all memories." });
 Object.assign(window.ArkismI18nEN.patterns, { "불러온 기억 {0}개 · 마지막 저장 {1}": "Loaded {0} memories · newest loaded {1}", "불러온 {0}개 중 {1}개 표시 · 다음 목록 있음": "Showing {1} of {0} loaded · more available" });
 
-Object.assign(window.ArkismI18nEN.strings, { "이 서버는 본문만 대소문자를 구분해 검색해요.": "This server searches memory text only, with case-sensitive matching." });
 
 Object.assign(window.ArkismI18nEN.strings, { "이 화면의 검색·개수·정렬은 불러온 목록 기준이에요. 더 보기로 다음 기억을 확인하세요.": "Search, counts and sorting on this screen apply to loaded rows. Use Show more to read the next memories." });
 
@@ -6248,12 +6248,9 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "전체 {0}개 중 {1}개 표시 · 전체에서 검색·정렬": "Showing {1} of {0} · search and order cover all results",
-  "전체 검색 결과 {0}개 · 검색·정렬은 서버 전체 기준이에요. 후보 묶음은 불러온 항목 기준이에요.": "{0} results across the server · candidate groups cover loaded items",
-  "전체 검색 결과 {0}개 · 검색·정렬은 서버 전체 기준이에요. 같은 이름 묶음은 불러온 항목 기준이에요.": "{0} results across the server · name groups cover loaded items",
   "{0} / {1} · 전체에서 검색·정렬": "{0} / {1} · search and order cover all results"
 });
 
 Object.assign(window.ArkismI18nEN.strings, {
- "요약은 처음 불러온 기억 기준이에요. 기억 목록에서는 전체를 검색·정렬할 수 있어요.": "The summary covers initially loaded memories. Search and order cover all results in the memory list.",
 
 });

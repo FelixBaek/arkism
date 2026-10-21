@@ -312,10 +312,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
       : time(a.created_at) - time(b.created_at);
     const remote = pagedWindow(d, "/v1/memory_candidates/query", () => ({ q, state: "all", category: ["new", "confusing"].includes(kindF) ? kindF : "", kind: typeF, sort: order === "new" ? "recent" : order }), paint);
     const filtered = () => [...(kindF === "dream" ? [] : remote.snapshot().items), ...((kindF === "all" && !typeF) || kindF === "dream" ? dreamItems().filter(c => !q || c.text.toLowerCase().includes(q.toLowerCase())).sort(byOrder) : [])];
-    const drawChips = () => { const snap = remote.snapshot(), counts = snap.facets.states || {}; chipHost.replaceChildren(chipBar([["all", "전체", snap.total ?? 0], ["new", "새로 저장", counts.new || 0], ["confusing", "헷갈림", counts.confusing || 0], ...((n) => n ? [["dream", "정리 제안", n]] : [])(dreamItems().length)], kindF, (k) => { kindF = k; if (k === "dream") typeF = ""; paint(); }));
+    const drawChips = () => { const snap = remote.snapshot(), counts = snap.facets.states || {}, sum = Object.values(counts).reduce((a, b) => a + b, 0);
+      const every = (Object.keys(counts).length ? sum : snap.total ?? 0) + dreamItems().length; // 전체 = what the title counts: every waiting item and the proposals
+      chipHost.replaceChildren(chipBar([["all", "전체", every], ["new", "새로 저장", counts.new || 0], ["confusing", "헷갈림", counts.confusing || 0], ...((n) => n ? [["dream", "정리 제안", n]] : [])(dreamItems().length)], kindF, (k) => { kindF = k; if (k === "dream") typeF = ""; paint(); }));
       const kinds = Object.entries(snap.facets.kinds || {});
       if (kindF !== "dream" && kinds.length > 1) chipHost.append(chipBar([["", "모든 종류", null], ...kinds.map(([k, n]) => [k, kind(k), n])], typeF, (k) => { typeF = k; paint(); }));
-      const n = Object.values(counts).reduce((a, b) => a + b, 0) + dreamItems().length; if (n) badge.textContent = `${num(n)}건`; }; // the title counts every waiting item, not only the loaded page
+      if (!snap.loading) badge.textContent = `${num(every)}건`; }; // the title counts every waiting item, not only the loaded page
     const badge = d.querySelector(".ov-win-badge");
     function paint() {
       drawChips(); const items = filtered(); list.replaceChildren();
