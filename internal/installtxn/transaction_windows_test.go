@@ -229,6 +229,59 @@ func TestInstallCommittedArchiveFailureDoesNotRollBack(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Issue #149: a committed checkpoint whose live files were later replaced.
+func staleCommittedFixture(t *testing.T) (fixture, Request) {
+	t.Helper()
+	f := newFixture(t, true)
+	engine := &Engine{checkpoint: func(name string) error {
+		if name == "committed" {
+			return errors.New("injected_archive")
+		}
+		return nil
+	}}
+	if result, err := engine.Install(f.request()); err == nil || !result.Committed {
+		t.Fatalf("%+v %v", result, err)
+	}
+	mustWrite(t, filepath.Join(f.live, "Arkism.exe"), "replaced outside the installer")
+	source := filepath.Join(f.root, "source-next")
+	writePayload(t, source, "next")
+	expected, err := Inventory(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return f, Request{f.live, source, expected, f.metadata, f.metadata.stop}
+}
+func TestInstallSupersedesStaleCommittedJournalWithDriftedPayload(t *testing.T) {
+	f, next := staleCommittedFixture(t)
+	result, err := new(Engine).Install(next)
+	if err != nil || !result.Committed || result.Archive == "" {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if err = verify(f.live, next.Expected); err != nil {
+		t.Fatal(err)
+	}
+	versions, err := filepath.Glob(filepath.Join(f.live+".versions", "version-*"))
+	if err != nil || len(versions) != 2 {
+		t.Fatalf("stale checkpoint not retained beside the new one: %v %v", versions, err)
+	}
+	// Strict repair still refuses to vouch for a drifted committed payload.
+	f2, _ := staleCommittedFixture(t)
+	if result, err = new(Engine).Recover(f2.live, f2.metadata, f2.metadata.stop); err == nil || !strings.Contains(err.Error(), "install_payload_mismatch") {
+		t.Fatalf("%+v %v", result, err)
+	}
+}
+func TestInstallPriorRecoveryFailureIsNotReportedAsCommitted(t *testing.T) {
+	f, next := staleCommittedFixture(t)
+	mustWrite(t, filepath.Join(f.live+".versions", "pending", "foreign"), "blocks archive")
+	result, err := new(Engine).Install(next)
+	if err == nil || result.Committed || !strings.Contains(err.Error(), "install_prior_recovery_failed") {
+		t.Fatalf("%+v %v", result, err)
+	}
+	if mustRead(t, filepath.Join(f.live, "Arkism.exe")) != "replaced outside the installer" {
+		t.Fatal("changed live payload after refusing the install")
+	}
+}
 func TestInstallRefusesTamperingWithoutChangingOldPayload(t *testing.T) {
 	for _, mode := range []string{"bad_hash", "extra_source", "source_overlap", "foreign_versions", "corrupt_journal", "foreign_pending", "busy"} {
 		t.Run(mode, func(t *testing.T) {

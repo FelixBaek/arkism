@@ -88,9 +88,10 @@ func (e *Engine) Install(r Request) (result Result, err error) {
 		return result, err
 	}
 	defer release()
-	recovered, err := recoverLocked(l, r.Metadata, r.Stop)
+	recovered, err := recoverLocked(l, r.Metadata, r.Stop, true)
 	if err != nil {
-		return recovered, err
+		// The checkpoint belongs to an earlier install; its commit is not this one's.
+		return Result{}, fmt.Errorf("install_prior_recovery_failed: %w", err)
 	}
 	result.Recovered = recovered.Recovered
 	j, err := begin(r, l)
@@ -99,7 +100,7 @@ func (e *Engine) Install(r Request) (result Result, err error) {
 	}
 	defer func() {
 		if err != nil && !result.Committed {
-			rollback, rollbackErr := recoverLocked(l, r.Metadata, r.Stop)
+			rollback, rollbackErr := recoverLocked(l, r.Metadata, r.Stop, false)
 			result.Recovered = rollback.Recovered
 			result.Archive = rollback.Archive
 			err = errors.Join(err, rollbackErr)
@@ -222,9 +223,11 @@ func (e *Engine) Recover(live string, metadata Metadata, stop func(string) error
 		return Result{}, err
 	}
 	defer release()
-	return recoverLocked(l, metadata, stop)
+	return recoverLocked(l, metadata, stop, false)
 }
-func recoverLocked(l layout, metadata Metadata, stop func(string) error) (result Result, err error) {
+
+// superseded means a new install will replace and re-verify the live payload.
+func recoverLocked(l layout, metadata Metadata, stop func(string) error, superseded bool) (result Result, err error) {
 	exists, err := directoryExists(l.pending)
 	if err != nil || !exists {
 		return result, err
@@ -237,7 +240,7 @@ func recoverLocked(l layout, metadata Metadata, stop func(string) error) (result
 		return result, err
 	}
 	if j.Phase == "committed" {
-		return recoverCommitted(l, j, metadata)
+		return recoverCommitted(l, j, metadata, superseded)
 	}
 	previous, err := directoryExists(l.previous)
 	if err != nil {
@@ -323,9 +326,10 @@ func restorePayload(l layout, j journal, previous, failed bool) error {
 	return nil
 }
 
-func recoverCommitted(l layout, j journal, metadata Metadata) (result Result, err error) {
+func recoverCommitted(l layout, j journal, metadata Metadata, superseded bool) (result Result, err error) {
 	result.Committed = true
-	if err = verify(l.live, j.New); err != nil {
+	// Live files changed after an earlier commit must not block the install that replaces them.
+	if err = verify(l.live, j.New); err != nil && !superseded {
 		return result, err
 	}
 	if err = metadata.Commit(j.Metadata); err != nil {
