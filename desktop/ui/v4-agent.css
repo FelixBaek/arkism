@@ -527,6 +527,7 @@ span.wk-chip { cursor: default; }
 .wk-flow.empty { flex-direction: row; align-items: center; gap: 12px; border-style: dashed; background: transparent; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
 .wk-flow-mark { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 8px; background: var(--nc-amber-bg); color: var(--nc-amber); }
 .wk-flow-head { display: flex; align-items: center; gap: 12px; }
+.wk-flow-head > .btn { margin-left: auto; } /* 단계 고치기 · 새 워크플로우 만들기 sit at the right */
 .wk-flow-who { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
 .wk-flow-who strong { color: var(--nc-text); font-weight: 500; font-size: calc(14px * var(--fs, 1)); }
 .wk-flow-who small { display: flex; flex-wrap: wrap; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }

@@ -414,7 +414,7 @@ window.ArkismTeams = (ctx) => {
     cs.append(...ctx.catChipBody(d.category));
     cs.addEventListener("click", () => ctx.catMenu(cs, { list: cats, current: d.category || "", onPick: (v) => { if (v) d.category = v; else delete d.category; paintHead(pop); changed(pop); } }));
     row.append(cs);
-    if (!pop.id) { // 310:19981 shows the members' faces on a new team; 961:60688 shows only the category
+    if (!pop.id && d.members?.length) { // 310:19981 shows the members' faces on a new team; 961:60688 shows only the category. No members: no empty faces box pushing the chip off the name's left edge
       const faces = el("span", "tm-faces"); sorted(d.members).slice(0, 5).forEach((m) => faces.append(face(byId(m.agent_id), "s")));
       row.prepend(faces);
     }
@@ -1018,10 +1018,10 @@ window.ArkismTeams = (ctx) => {
         renumber([...members, { agent_id: v, order: members.length + 1, role: members.length ? "worker" : "moderator", focus: "" }]);
         changed(true);
       });
-      acts.append(pick, link("취소", () => { S.adding = false; render(false); }, "tm-link quiet"));
+      acts.append(pick, link("취소", () => { S.adding = false; changed(true); }, "tm-link quiet"));
       queueMicrotask(() => pick.focus());
     } else {
-      const addFn = () => { if (!free.length) { notice(agents().length ? "넣을 수 있는 전문가를 모두 넣었어요." : "먼저 전문가를 만들어 주세요."); return; } S.adding = true; render(false); };
+      const addFn = () => { if (!free.length) { notice(agents().length ? "넣을 수 있는 전문가를 모두 넣었어요." : "먼저 전문가를 만들어 주세요."); return; } S.adding = true; changed(true); }; // the popup redraws itself; render() only redrew the page behind it
       if (compact) heads.push(link("+ 추가", addFn));
       else acts.append(button("전문가 추가", "", null, addFn));
       if (compact) heads.push(link("+ 새로 만들기", () => { if (ctx.hasView?.("workers")) { state.workerNew = true; go("workers"); } else notice("전문가 화면에서 만들어 주세요."); }, "tm-link quiet"));

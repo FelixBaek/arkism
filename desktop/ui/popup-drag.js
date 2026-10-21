@@ -45,6 +45,8 @@
     const up = (e) => {
       head.removeEventListener("pointermove", move); head.removeEventListener("pointerup", up); head.removeEventListener("pointercancel", up);
       dlg.classList.remove("dragging", "tear-off");
+      // A new, unsaved expert/team/automation has no id to reopen in another window yet: say so instead of doing nothing.
+      if (e.type === "pointerup" && out(e) && !dlg.dataset.popout && tauri() && dlg.querySelector(".crew-popup-head")) window.ArkismNotice?.("저장한 뒤에 앱 밖 새 창으로 옮길 수 있어요.");
       if (e.type === "pointerup" && out(e)) void tearOff(dlg, e.screenX - (sx - r.left), e.screenY - (sy - r.top)).then((gone) => { if (!gone) dlg.style.translate = `${x0}px ${y0}px`; });
     };
     dlg.classList.add("dragging");

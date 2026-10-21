@@ -681,10 +681,12 @@ window.ArkismCrew = (ctx) => {
       c.append(img);
     }
     const top = el("div", "crew-cover-top");
-    const when2 = x.trigger ? (x.enabled ? (x.trigger.kind === "schedule" ? cronText(x.trigger.cron) : triggerText(x)) : `${triggerText(x)} · 꺼짐`) : "수동 실행";
+    // The card says only when it runs (스케줄 or 웹훅); the time and the webhook's source are in the popup.
+    const kind = x.trigger?.kind === "schedule" ? "스케줄" : "웹훅";
+    const when2 = x.trigger ? (x.enabled ? kind : `${kind} · 꺼짐`) : "수동 실행";
     // 일정 배지: as long as its text, pinned to the card's top right, cut with … past the card's width.
     const badge = el("span", `wf-card-when${triggered(x) ? " on" : ""}`);
-    badge.title = when2;
+    badge.title = x.trigger ? triggerText(x) : when2;
     badge.append(el("i"), el("span", "", when2));
     top.prepend(badge);
     c.title = [x.role, `$${x.handle}`].filter(Boolean).join(" · ");
@@ -3098,6 +3100,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
   // thinks, the skills·MCP·memory it may use, where it can be called and its monthly budget. Teams list their members by
   // agent id. Status comes from /v1/crew/agents/status, spend from /v1/crew/usage (estimated list prices).
   const MEMORY_KINDS = [["procedural", "작업 규칙"], ["decision", "결정"], ["lesson", "교훈"], ["user", "선호"]];
+  const MEMORY_KIND_HINT = { "작업 규칙": "이렇게 일하라고 정해 둔 규칙", "결정": "이미 정한 결정", "교훈": "실수에서 배운 것", "선호": "사용자가 좋아하는 방식" };
   const CALL_PLACES = [["claude_code", "Claude Code"], ["codex", "Codex"], ["zcode", "ZCode"], ["discord", "디스코드"], ["app", "arkism 앱"]];
   const DEPTH = [["low", "빠르게"], ["medium", "보통"], ["high", "깊게"]];
   const MODEL_MODES = [["auto", "Clef 자동 선택"], ["fixed", "모델 고정"]];
@@ -3214,6 +3217,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     const mark = el("span", "wk-flow-mark"); mark.append(icon("tree-structure"));
     head.append(mark, el("strong", "", w ? w.crew.name : "워크플로우 없음 · 지시대로 일해요"));
     box.append(head);
+    // shortcut: the new workflow opens on its own; it is picked here afterwards, not linked to this expert automatically
+    if (!w) head.append(button("새 워크플로우 만들기", "small", "plus", () => getAuto().create()));
     if (w) {
       // Nodes on the same level run together, so they share one number (as in workflowDetail).
       const lvls = levels(w.crew.graph).map((lv) => lv.filter(WORK)).filter((lv) => lv.length);
@@ -3376,7 +3381,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     if (fresh) { const dot = el("i", "ex-dot"); dot.title = tr("새 버전이 있어요"); b.append(dot); }
     if (pin) b.append(pinSvg(true));
     b.append(raw(el("span", "", label)));
-    if (bad) b.title = tr(pins?.STATUS[bad]?.[1] || "");
+    b.title = bad ? tr(pins?.STATUS[bad]?.[1] || "") : label; // the chip shows one line; the whole text on hover
     b.addEventListener("click", onOpen);
     if (pin) {
       b.draggable = true;
@@ -3452,8 +3457,9 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         d.memory = m;
         touchWorker();
       });
-      for (const k of kinds.children) k.classList.add("ex-kind");
-      row("기억", ...memPins, ...kinds.children);
+      for (const k of kinds.children) { k.classList.add("ex-kind"); k.title = tr(MEMORY_KIND_HINT[k.textContent] || ""); }
+      row("기억", ...memPins);
+      row("찾아볼 기억", ...kinds.children); // which kinds it searches when it looks things up, apart from the pinned ones
       row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p), onRemove: () => setPin(d, p.collection, p.id, false) })));
       const n = (d.pinned || []).length;
       const sum = raw(el("small", "ex-pin-sum", n ? tr(`고정 ${n}개 · 약 ${pinTokens(d).toLocaleString("ko-KR")} 토큰 · 넣는 순서는 고정 칩을 끌어서 바꿔요`) : tr("핀을 꽂으면 부를 때마다 먼저 넣어요")));
@@ -3996,7 +4002,7 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
       if (isNew) return;
       acts.append(estimateNode(), switchEl(wk.draft.enabled !== false, "켜기", (on) => { wk.draft.enabled = on; wk.dirty = true; wk.paintAct(); drawWorkerSave(); })); // 전문가 삭제 sits at the end of 개요
     };
-    wk.redraw = () => { const sc = pop.body.scrollTop; pop.select(wk.tab); pop.body.scrollTop = sc; };
+    wk.redraw = () => { const sc = wk.scrollKeep ?? pop.body.scrollTop; wk.scrollKeep = sc; pop.select(wk.tab); pop.body.scrollTop = sc; requestAnimationFrame(() => { pop.body.scrollTop = sc; wk.scrollKeep = null; }); }; // parts that fill in after the redraw would otherwise pull the page up a little on every click
     if (isNew) names.replaceChildren(el("h2", ""), el("p", ""));
     wk.paintHead();
     wk.paintAct();
