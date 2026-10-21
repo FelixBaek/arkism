@@ -15,6 +15,7 @@ import subprocess
 from ci_inputs import input_roots, read_ci_text
 
 ROOT = Path(__file__).resolve().parent.parent
+JSON_MEDIA = "application/json"
 JSON_VALUE = {"type": ["object", "array", "string", "number", "boolean", "null"],
               "description": "Application-defined JSON value (Go json.RawMessage/any)."}
 
@@ -147,7 +148,7 @@ def build(doc, manifest, types):
         result = {"$ref": "#/components/schemas/" + operation["response"]} if operation["response"] in extra else s.named(operation["response"], "Response")
         responses = {}
         for code in [200, 400, 401, 403, 404, 409, 413, 429, 503]:
-            responses[str(code)] = {"description": "Success" if code == 200 else "Request, authorization, concurrency, size, budget or dependency error; see Error.code.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": result if code == 200 else {"$ref": "#/components/schemas/Error"}}}}
+            responses[str(code)] = {"description": "Success" if code == 200 else "Request, authorization, concurrency, size, budget or dependency error; see Error.code.", "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {JSON_MEDIA: {"schema": result if code == 200 else {"$ref": "#/components/schemas/Error"}}}}
         op = {"operationId": method + "_" + re.sub(r"\W+", "_", path).strip("_"), "tags": ["Management"], "summary": operation["summary"], "description": operation.get("description", ""), "parameters": params, "responses": responses, "x-go-contract": True}
         if operation["request"]:
             request = s.named(operation["request"], "Request")
@@ -155,7 +156,7 @@ def build(doc, manifest, types):
                 request = {"allOf": [request, {"required": operation["required_body"]}]}
             if operation.get("body_properties"):
                 request = {"allOf": [request, {"properties": operation["body_properties"]}]}
-            op["requestBody"] = {"required": True, "content": {"application/json": {"schema": request}}}
+            op["requestBody"] = {"required": True, "content": {JSON_MEDIA: {"schema": request}}}
         doc["paths"].setdefault(path, {})[method] = op
     schemas = doc["components"]["schemas"]
     for name in list(schemas):
@@ -175,7 +176,7 @@ def build(doc, manifest, types):
             operation["responses"]["401"] = {
                 "description": "Missing bearer credentials.",
                 "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": 'Bearer realm="arkism"'}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}},
-                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}},
+                "content": {JSON_MEDIA: {"schema": {"$ref": "#/components/schemas/Error"}}},
             }
     return doc
 

@@ -22,7 +22,7 @@ fn owns_command(value: &str, exe: &str) -> bool {
 
 #[cfg(windows)]
 mod windows {
-    use super::*;
+    use super::{owns_command, quoted_command, APP_NAME};
     use windows_registry::{Key, Transaction, Type, CURRENT_USER};
 
     struct Keys {

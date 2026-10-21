@@ -1,6 +1,9 @@
 //! Real CLI/database checks confined to a fresh, explicitly isolated diagnostic
 //! directory. No IPC command exposes these destructive fixture operations.
-use super::*;
+use super::{
+    exe, fs, http_agent, quiet, run, secret, BackupInfo, Command, Duration, ManagedPrincipal, Path,
+    Runtime, Started, DATABASE,
+};
 
 pub(crate) const MARKER: &str = "arkism-fresh-runtime-check-v2";
 
