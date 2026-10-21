@@ -557,18 +557,26 @@ func evidencePromptHint(context host.Obj, raw []byte, offset int64, key, kind st
 	}
 	content := autosaveGet(message, "content")
 	if blocks, ok := content.([]any); ok {
-		var texts []string
+		// Same joining as the server's archive message text (memory.archiveBlockSeparator):
+		// Codex input_text blocks join with nothing, as its hook prompt does.
+		var joined strings.Builder
+		prev := ""
 		for _, b := range blocks {
 			m, ok := b.(map[string]any)
 			if !ok {
 				continue
 			}
 			text, isStr := m["text"].(string)
-			if (m["type"] == "text" || m["type"] == "input_text") && isStr {
-				texts = append(texts, text)
+			kind, _ := m["type"].(string)
+			if (kind == "text" || kind == "input_text") && isStr {
+				if prev != "" && !(prev == "input_text" && kind == "input_text") {
+					joined.WriteString("\n")
+				}
+				joined.WriteString(text)
+				prev = kind
 			}
 		}
-		content = strings.Join(texts, "\n")
+		content = joined.String()
 	}
 	s, ok := content.(string)
 	if !ok || privatePayload(s) || sha256Hex([]byte(s)) != want {

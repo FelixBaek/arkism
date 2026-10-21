@@ -340,3 +340,52 @@ func TestZcodeEvidencePermissionDenialNeverUploads(t *testing.T) {
 		t.Fatal(err, calls)
 	}
 }
+
+// Codex keeps a prompt with images as input_text blocks around input_image ones and hands
+// its hook the blocks joined with nothing; the locator and the server archive text
+// (memory TestArchiveCodexInputTextBlocksJoinLikeHookPrompt) must join them the same way.
+var codexBlocks = []string{"\n# Browser comments:\n\n## User Comment 1\n버튼 위치", "The next image is page evidence for Comment 1."}
+
+func TestPromptEvidenceCodexMultiBlockPromptFromHookToArchiveCheck(t *testing.T) {
+	dir := capFake(t)
+	capOrigin = "codex"
+	t.Setenv("ARKISM_CLIENT", "server")
+	server, _ := evidenceHome(t)
+	prompt := strings.Join(codexBlocks, "")
+	row := host.Obj{{Key: "type", Value: "response_item"}, {Key: "payload", Value: host.Obj{{Key: "type", Value: "message"}, {Key: "role", Value: "user"},
+		{Key: "content", Value: []any{host.Obj{{Key: "type", Value: "input_text"}, {Key: "text", Value: codexBlocks[0]}},
+			host.Obj{{Key: "type", Value: "input_image"}, {Key: "image_url", Value: "data:image/png;base64,AA=="}},
+			host.Obj{{Key: "type", Value: "input_text"}, {Key: "text", Value: codexBlocks[1]}}}}}}}
+	raw := promptRows("")
+	raw[1] = []byte(host.MustDumps(row, host.DumpOpts{NoASCII: true}) + "\n")
+	os.WriteFile(filepath.Join(server, "rollout-s.jsonl"), bytes.Join(raw, nil), 0o600)
+
+	if _, err := promptCapture(map[string]any{"session_id": "s", "prompt": prompt}); err != nil {
+		t.Fatal(err)
+	}
+	jobs := spoolJobs(t, filepath.Join(dir, "spool"))
+	if len(jobs) != 1 || !truthy(jobs[0]["archive_locator"]) {
+		t.Fatal(jobs)
+	}
+	evPrepareUsers = func(_ any, users []any, _ string) ([]any, error) {
+		u := users[0].(map[string]any)
+		return []any{map[string]any{"text": u["text"], "archive_ref": u["archive_hint"]}}, nil
+	}
+	for _, archived := range []string{prompt, strings.Join(codexBlocks, "\n")} {
+		capPost = func(route string, body any, _ time.Duration) (map[string]any, error) {
+			if route != "/v1/session-archives/message" {
+				t.Fatal(route)
+			}
+			ref := body.(map[string]any)["ref"]
+			return map[string]any{"authority": "data_only_untrusted", "role": "user", "ref": ref, "text": archived}, nil
+		}
+		records, _, err := sessionLinkedUsers(jobs[0], "codex")
+		if archived == prompt {
+			if err != nil || len(records) != 1 || autosaveGet(records[0], "text") != clean(prompt) {
+				t.Fatal(err, records)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), "session_archive_text_mismatch") {
+			t.Fatal("newline-joined archive text must not pass for the hook prompt", err)
+		}
+	}
+}

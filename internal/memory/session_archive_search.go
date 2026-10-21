@@ -307,14 +307,29 @@ func archiveSafeMessage(raw []byte) (text, role string, valid bool) {
 	if json.Unmarshal(content, &blocks) != nil {
 		return "", "", false
 	}
-	var parts []string
+	var b strings.Builder
+	prev := ""
 	for _, block := range blocks {
 		kind := str(block, "type")
 		if kind == "text" || kind == "input_text" || kind == "output_text" {
-			parts = append(parts, str(block, "text"))
+			if prev != "" {
+				b.WriteString(archiveBlockSeparator(prev, kind))
+			}
+			b.WriteString(str(block, "text"))
+			prev = kind
 		}
 	}
-	return strings.Join(parts, "\n"), role, true
+	return b.String(), role, true
+}
+
+// archiveBlockSeparator goes between two text blocks of one message. Codex splits one typed
+// prompt into input_text blocks around images and hands its hook their plain concatenation,
+// so those join with nothing; every other pair keeps the newline.
+func archiveBlockSeparator(prev, kind string) string {
+	if prev == "input_text" && kind == "input_text" {
+		return ""
+	}
+	return "\n"
 }
 func archiveSupported(format string) bool {
 	return format == "sqlite_snapshot" || format == "jsonl" || format == "reconstructed_agentsview" || format == "reconstructed_zcode"
