@@ -1615,6 +1615,7 @@ export function startApp() {
     set generation(value) { state.connection.generation = value; },
     get go() { return go; },
     get hydrateMaintenance() { return memoryPaging.hydrateMaintenance; },
+    get loadMemoryTotals() { return loadMemoryTotals; },
     get icon() { return icon; },
     set icon(value) { icon = value; },
     get idle() { return idle; },

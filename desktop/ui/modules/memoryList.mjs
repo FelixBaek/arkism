@@ -276,6 +276,7 @@ export function createMemoryList(deps) {
     deps.memoryResults.reset();
     await deps.catalogQuery.refreshVisible();
     void deps.hydrateMaintenance(deps.generation);
+    void deps.loadMemoryTotals?.(g); // a change moves the server totals too
     deps.render();
   }
 
