@@ -1,0 +1,14 @@
+version: 1
+
+review:
+  instructions: |
+    Provide all review summaries, finding descriptions, and recommendations in both English and Korean (Bilingual).
+    Format each comment with clear English and Korean sections, for example:
+    
+    ### 🇬🇧 English
+    <English explanation and recommendation>
+
+    ### 🇰🇷 한국어
+    <한국어 설명 및 조치 권장사항>
+
+    Keep code snippets, variable names, and technical identifiers intact in code blocks.
