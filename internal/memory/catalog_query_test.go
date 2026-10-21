@@ -116,8 +116,13 @@ func TestCatalogWindowBindingCyclesAndCancellation(t *testing.T) {
 	}
 }
 func TestCatalogKnowledgeBeyondSourceAndSectionLimits(t *testing.T) {
-	f := handoffFixture(t)
-	in := knowledgeFixtureInput()
+	f := newFixture(t)
+	f.svc.SyntheticHandoff = true
+	f.svc.BlobDirectory = t.TempDir()
+	a := f.auth.actors[f.human]
+	a.verbs["write"] = true
+	f.auth.actors[f.human] = a
+	in := KnowledgeIngestInput{Scope: Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, UserID: "fixture-user", AgentID: "fixture-agent"}, SourceKey: "catalog-fixture", Filename: "catalog.md", MIMEType: "text/markdown", Synthetic: true}
 	var body strings.Builder
 	for i := 0; i < 225; i++ {
 		fmt.Fprintf(&body, "# Heading %03d\nSynthetic detail %03d.\n\n", i, i)

@@ -111,6 +111,9 @@ jobs:
         run: |
           bash tools/install-minisign.sh "$RUNNER_TEMP/release-tools"
           echo "$RUNNER_TEMP/release-tools" >> "$GITHUB_PATH"
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
       - name: Install pinned API contract validator
         run: |
           python3 -m pip install --disable-pip-version-check --only-binary=:all: --target "$RUNNER_TEMP/api-contract-validator" -r tools/requirements-api-contract.txt
