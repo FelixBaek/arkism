@@ -1,2 +1,4 @@
 # Signed test payloads must retain the exact bytes on Windows checkout.
 desktop/src-tauri/tests/fixtures/update/* -text
+# The OpenAPI meta-schema is pinned by SHA-256 and must keep LF bytes.
+api/schema/*.json -text
