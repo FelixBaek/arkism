@@ -29,3 +29,18 @@ test('retry after a failed refresh revalidates the loaded window instead of appe
  let phase=0;const calls=[];const pager=create(async(_,args)=>{calls.push(args.cursor);if(phase===1)throw Error('offline');return {authority:'data_only_untrusted',items:[row(phase===2?(args.cursor?'fresh-b':'fresh-a'):(args.cursor?'old-b':'old-a'))],next_cursor:args.cursor?'tail':'next'};},1);
  await pager.load('x');await pager.load('x');phase=1;await assert.rejects(pager.refresh('x'),/offline/);phase=2;await pager.retry('x');assert.deepEqual(pager.snapshot().items,[row('fresh-a'),row('fresh-b')]);assert.deepEqual(calls.slice(-2),['','next']);
 });
+
+test("dreaming proposals read memories outside the loaded first page, signal ones included", async () => {
+  global.window = global.window || {};
+  window.ArkismMemoryPages = window.ArkismMemoryPages || { create: () => ({ snapshot: () => ({}) }) };
+  const { createMemoryPaging } = await import("./modules/memoryPaging.mjs");
+  const read = [];
+  const state = { data: { memories: [{ id: "a", revision: 1 }], maintenance: [
+    { maintenance: { keep: { id: "a", revision: 1 }, retire: { id: "b", revision: 2 } } },
+    { maintenance: { memory: { id: "c" } } }] } };
+  const paging = createMemoryPaging({ state, generation: 1, query: () => "", render: () => {},
+    request: async (url) => { const id = decodeURIComponent(url.split("/")[3].split("?")[0]); read.push(id); return { id, revision: id === "b" ? 2 : 5 }; } });
+  await paging.hydrateMaintenance(1);
+  assert.deepEqual(read.sort(), ["b", "c"]);
+  assert.deepEqual([...paging.maintenanceRecords.keys()].sort(), ["b", "c"]);
+});

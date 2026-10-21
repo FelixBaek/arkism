@@ -317,7 +317,6 @@ window.ArkismOverview = (ctx) => {
   }
 
   return {
-    partial: () => !!S.cursor,
     reset() { sessionEpoch++; Object.assign(S, { sessions:null,total:0,cursor:"",at:0,loading:false }); win?.reset(); },
     stages, loadSessions, openStage, // 연결 상태 card (app.js renderStatusStages)
     views: { overview: { title: "개요", render: renderView, head: () => [button("새로고침", "ghost", "arrows-clockwise", () => { S.at = 0; void loadSessions(); })] } }

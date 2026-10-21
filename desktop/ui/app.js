@@ -1162,9 +1162,7 @@ export function startApp() {
     if (resetDetail || !state.selected) renderDetail();
   }
   function appendLoadedNote(table) {
-    const partial = overview.partial() || memoryPaging.partialMemories() || ["candidates", "conflicted", "skills", "skillTrash"].some(key => collectionPaging.snapshot(key).cursor);
     if (similarity.busy) table.append(el("p", "meta memory-page-note", "비슷한 스킬을 확인하고 있어요."));
-    if (partial) table.append(el("p", "meta memory-page-note", "요약은 처음 불러온 목록 기준이에요. 각 목록에서 전체 검색과 다음 페이지를 확인하세요."));
   }
   // Title line extras (Figma v4): "← 저장소" above the title, the count after it, buttons at the right of the title row.
   function headExtras({ count = "", back = null, aside = [] } = {}) {
@@ -2120,7 +2118,7 @@ export function startApp() {
   const git = window.ArkismGit({ state, $, el, button, icon, tauri, ago, notice, go, headExtras, codegraph,
     openReview: (key) => { go("reviews"); state.selected = key; markSelected(); reviews.detail(); openDetail(); } });
   const knowledge = window.ArkismKnowledge({ remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
-  const overview = window.ArkismOverview({ remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
+  const overview = window.ArkismOverview({ remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
   Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,

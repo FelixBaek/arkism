@@ -22,7 +22,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const D = () => state.data;
   const tr = (x) => window.ArkismI18n?.translate(x) || x;
   const usage = (id) => state.usage?.get(id);
-  const memText = (id) => D().memories.find((m) => m.id === id)?.text || "(지워졌거나 아직 못 읽은 기억)";
+  const memOf = (id) => D().memories.find((m) => m.id === id) || ctx.maintenanceRecords?.get(id); // proposals point past the loaded first page too
+  const memText = (id) => memOf(id)?.text || "(지워졌거나 아직 못 읽은 기억)";
   const tag = (m, p) => (m.tags || []).find((t) => t.startsWith(p))?.slice(p.length) || "";
   const clip = (t, n = 80) => (t.length > n ? `${t.slice(0, n)}…` : t);
   const waitFor = (v) => { const d = Math.floor((Date.now() - time(v)) / (24 * HOUR)); return d >= 1 ? `${d}일 대기` : ago(v).replace(/ 전$/, " 대기"); }; // ago() turns old ones into a date
@@ -216,7 +217,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (key === "recall") body.append(recallBox());
     const rows = stageRows(key, body, expanded), total = expandTotal(key);
     const ul = el("div", "ov-win-list");
-    if (key !== "recall" || rows.length) body.append(el("div", "ov-win-list-title", LIST_TITLE[key])); // 불러오기: 영수증 상자가 빈 목록을 대신해요
+    const listHead = el("div", "ov-win-list-title", LIST_TITLE[key]);
+    if (expanded) listHead.append(button("접기 ⌃", "ghost small", null, () => open(key, false)));
+    else if (total && total > rows.length) listHead.append(button(`${num(total)}건 모두 보기 ›`, "ghost small", null, () => open(key, true)));
+    if (key !== "recall" || rows.length) body.append(listHead); // 불러오기: 영수증 상자가 빈 목록을 대신해요
     if (!rows.length && key !== "recall") ul.append(el("p", "ov-win-empty", "지금 보여 줄 항목이 없어요."));
     ul.append(...rows); body.append(ul);
     const foot = el("div", "ov-win-foot");
@@ -228,11 +232,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
         if (cap >= total || ul.scrollTop + ul.clientHeight < ul.scrollHeight - 40) return;
         cap += 60; const more = stageRows(key, body, cap); ul.replaceChildren(...more); say(more.length); if (more.length < cap) cap = total;
       });
-      foot.append(left, button("접기 ⌃", "ghost small", null, () => open(key, false)));
+      foot.append(left);
     }
-    else if (total && total > rows.length) foot.append(button(`${num(total)}건 모두 보기 ›`, "ghost small", null, () => open(key, true)));
-    else if (FULL[key]) foot.append(button(FULL[key][0], "ghost small", null, FULL[key][1]));
-    if (expanded && FULL[key]) foot.append(button(FULL[key][0], "ghost small", null, FULL[key][1]));
+    if (FULL[key]) foot.append(button(FULL[key][0], "ghost small", null, FULL[key][1]));
     d.append(head, body, foot);
   }
   // Figma 펼침 580:63994 분석 · 580:66175 분류 · 580:68368 불러오기 · 580:70537 검증 · 580:72743 드리밍; other stages open a wide window instead
@@ -286,7 +288,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // 승인 대기 (580:49518 + improvements 592:51366 / 764:61615)
   // 드리밍 정리 제안 (maintenance proposals) wait here too, as [정리] rows with their own decide
   const DREAM_LABEL = { duplicate: "합치기", contradiction: "고치기" };
-  const known = (ref) => !!ref && D().memories.some((m) => m.id === ref.id && (ref.revision == null || m.revision === ref.revision));
+  const known = (ref) => { const m = ref && memOf(ref.id); return !!m && (ref.revision == null || m.revision === ref.revision); };
   // a proposal whose memory is gone or changed since is hidden, as on the 기억 screen: deciding it would only go stale
   const dreamItems = () => (D().maintenance || []).filter((p) => { const t = p.maintenance || {}; return t.memory ? known(t.memory) : known(t.keep) && known(t.retire); }).map((p) => { const t = p.maintenance || {};
     return { dream: p, id: p.id, created_at: p.created_at, text: memText(t.memory?.id || t.keep?.id), label: t.memory ? "고치기" : DREAM_LABEL[t.type] || "정리" }; });
@@ -310,7 +312,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       : time(a.created_at) - time(b.created_at);
     const remote = pagedWindow(d, "/v1/memory_candidates/query", () => ({ q, state: "all", category: ["new", "confusing"].includes(kindF) ? kindF : "", sort: order === "new" ? "recent" : order }), paint);
     const filtered = () => [...(kindF === "dream" ? [] : remote.snapshot().items), ...(kindF === "all" || kindF === "dream" ? dreamItems().filter(c => !q || c.text.toLowerCase().includes(q.toLowerCase())).sort(byOrder) : [])];
-    const drawChips = () => { const snap = remote.snapshot(), counts = snap.facets.states || {}; chipHost.replaceChildren(chipBar([["all", "전체", snap.total ?? 0], ["new", "새로 저장", counts.new || 0], ["confusing", "헷갈림", counts.confusing || 0], ...(dreams.length ? [["dream", "정리 제안", dreams.length]] : [])], kindF, (k) => { kindF = k; paint(); })); };
+    const drawChips = () => { const snap = remote.snapshot(), counts = snap.facets.states || {}; chipHost.replaceChildren(chipBar([["all", "전체", snap.total ?? 0], ["new", "새로 저장", counts.new || 0], ["confusing", "헷갈림", counts.confusing || 0], ...((n) => n ? [["dream", "정리 제안", n]] : [])(dreamItems().length)], kindF, (k) => { kindF = k; paint(); })); };
     function paint() {
       drawChips(); const items = filtered(); list.replaceChildren();
       if (!items.length) list.append(el("p", "ov-win-empty", "지금 보여 줄 후보가 없어요."));
