@@ -85,10 +85,10 @@ window.ArkismModels = (ctx) => {
     return el("span", `tag ${q.status === "done" ? "ok" : "warn"}`, q.status === "done" ? (q.note || "정상") : "시험 실패");
   }
   // 계정 추가: a CLI login happens on the server, so the window shows the command to run there.
-  const LOGIN = { codex: "codex login", claude: "claude  →  /login", gemini: "gemini  →  로그인 선택", glm: "claude-glm 키는 아래 'API 키'로 넣어요",
+  const LOGIN = { codex: "codex login", claude: "claude  →  /login", gemini: "gemini  →  로그인 선택",
     grok: "grok  →  /login", agy: "agy  →  로그인" };
   function openAccountHelp(p) {
-    const clis = [...new Set([...(p.accounts || []).map((a) => a.cli), { openai: "codex", anthropic: "claude", google: "gemini", zai: "glm" }[p.id]].filter(Boolean))];
+    const clis = [...new Set([...(p.accounts || []).map((a) => a.cli), { openai: "codex", anthropic: "claude", google: "gemini" }[p.id]].filter(Boolean))];
     const dlg = el("dialog", "crew-dialog");
     const form = el("form");
     form.method = "dialog";
@@ -101,16 +101,19 @@ window.ArkismModels = (ctx) => {
     close.append(icon("x"));
     head.append(t, close);
     const body = el("div", "dialog-body");
+    if (!clis.length) body.append(el("p", "", `${p.name}는 API 키로 연결해요. 아래 '키 넣기'에서 키를 넣으면 바로 써요.`));
     for (const c of clis) {
       const row = el("div", "login-row");
       row.append(el("strong", "", `${c} CLI`), el("code", "", LOGIN[c] || `${c} login`));
       body.append(row);
     }
-    body.append(el("p", "pg-hint", "여러 계정을 번갈아 쓰려면 계정마다 따로 로그인한 홈 폴더를 쓰세요. API로 쓰려면 'API 키'에 키를 넣어요."));
+    body.append(el("p", "pg-hint", "여러 계정을 번갈아 쓰려면 계정마다 따로 로그인한 홈 폴더를 쓰세요. API로 쓰려면 '키 넣기'를 눌러요."));
     const foot = el("div", "dialog-foot");
-    const ok = button("닫기", "primary");
+    const key = button("키 넣기", clis.length ? "" : "primary", null, () => { dlg.close(); openKeyDialog(p); });
+    key.type = "button";
+    const ok = button("닫기", clis.length ? "primary" : "");
     ok.type = "submit";
-    foot.append(ok);
+    foot.append(key, ok);
     form.append(head, body, foot);
     dlg.append(form);
     dlg.addEventListener("close", () => dlg.remove());
