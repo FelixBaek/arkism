@@ -52,6 +52,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     d.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !ev.defaultPrevented) { ev.preventDefault(); d.close(); } });
     return d;
   }
+  // how a separate window reopens this one when it is dragged out of the app (popup-drag.js; overview.js listens)
+  const recipe = (d, detail) => { if (d) Object.assign(d.dataset, { popout: JSON.stringify({ event: "arkism:open-overview-window", detail }), popoutTitle: tr("기억 처리") }); };
   const row = (tagText, title, meta, right, btns = []) => {
     const r = el("div", "ov-win-item"), t = el("div", "ov-win-item-t"), left = el("div", "ov-win-item-l");
     if (tagText) t.append(tagEl(tagText));
@@ -190,6 +192,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const list = env.stages(), i = list.findIndex((x) => x.key === key), s = i >= 0 ? list[i] : activeStage();
     const spec = SPEC[key];
     const d = modal(`ov-stage-win ov-t-${s.badge?.[1] || "n"} ov-win-${key}${expanded ? " ov-win-expanded" : ""}`); // 모두 보기: the window becomes the list
+    recipe(d, { key, expanded });
     const nav = (n) => () => open(list[(i + n + list.length) % list.length].key);
     const head = el("div", "ov-win-head"), title = el("div", "ov-win-title");
     title.append(el("span", "ov-win-crumb", "기억 처리"), el("span", "ov-win-crumb", "›"), el("i", "ov-dot"), el("h2", "", LABEL[key] || s.label));
@@ -269,6 +272,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
 
   function wide(kindKey, ...args) {
     ({ review: wideReview, active: wideActive, sessions: wideSessions, usage: wideUsage, map: wideMap }[kindKey])(...args);
+    recipe(dlg, { wide: kindKey, args });
   }
   // Search on its own line; under it the sort control at the far left, a divider, then the filter chips on one line that scrolls sideways (never wraps).
   // wide windows: sort first, then the search, then the kind chips on their own line (they wrap, never scroll sideways)
