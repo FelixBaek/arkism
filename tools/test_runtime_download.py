@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import unittest
 
@@ -101,6 +102,10 @@ class RuntimeDownloadTests(unittest.TestCase):
                "HOME": str(root), "LANG": "C", "RUNTIME_TEST_ROOT": str(root),
                "RUNTIME_TEST_PG": str(pg), "RUNTIME_TEST_URLS": json.dumps(urls),
                "RUNTIME_TEST_VERSIONS": json.dumps(versions)}
+        # Portable CI Python needs its own shared library. Keep the fixture's
+        # clean environment; do not inherit arbitrary host library paths.
+        if sys.platform.startswith("linux") and sysconfig.get_config_var("Py_ENABLE_SHARED"):
+            env["LD_LIBRARY_PATH"] = sysconfig.get_config_var("LIBDIR")
         for key, value in (("ARKISM_PRINT_SHA", print_sha), ("RUNTIME_TEST_BAD", bad),
                            ("RUNTIME_TEST_CURL_FAIL", curl_fail)):
             if value is not None:

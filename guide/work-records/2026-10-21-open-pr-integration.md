@@ -103,3 +103,8 @@ Windows Rust는 210개 통과·서명 fixture 1개 실패·2개 ignored였다. �
 checkout 줄바꿈 변환을 막는 .gitattributes를 추가했다. 서명 검증을 느슨하게
 하거나 fixture에 다시 서명하지 않는다. 로그 핸들·hard-link 회귀 3개는 통과했다.
 이 수정 후 원격 테스트 결과는 후속 실행에서 확인해야 한다.
+
+추가 CI에서 portable Python의 공유 라이브러리 경로가 정리된 fixture 환경에서
+빠진 문제를 확인했다. 런타임 다운로드 회귀의 자식 프로세스에 현재 검사
+인터프리터의 LIBDIR만 전달한다. 호스트의 임의 LD_LIBRARY_PATH나 비밀 환경을
+상속하지 않는다. 로컬 합성 다운로드 검사 3개(15개 하위 사례)는 통과했다.
