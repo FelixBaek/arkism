@@ -9,7 +9,7 @@
   "app": {
     "withGlobalTauri": true,
     "windows": [
-      { "label": "main", "title": "Arkism", "width": 1440, "height": 900, "minWidth": 720, "minHeight": 560, "center": true }
+      { "label": "main", "title": "Arkism", "width": 1440, "height": 900, "minWidth": 720, "minHeight": 560, "center": true, "decorations": false, "shadow": true }
     ],
     "security": {
       "csp": "default-src 'self'; img-src 'self' data: https://images.unsplash.com https://avatars.githubusercontent.com; style-src 'self'; font-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost"
