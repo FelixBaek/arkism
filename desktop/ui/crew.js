@@ -95,6 +95,7 @@ window.ArkismCrew = (ctx) => {
     state.data.crew = (await request(`/v1/crew?${query()}`)).items || [];
     if (selectId !== undefined) state.selected = selectId ? `crew:${selectId}` : null;
     render();
+    if (wk.pop?.dialog.open) wk.redraw(); // an open expert popup lists the workflow just made (render skips it)
   }
   const ERRORS = {
     secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요. 키는 설정 › 모델 설정에 넣어 주세요.",
