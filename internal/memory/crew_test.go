@@ -166,8 +166,10 @@ func TestCrewHandlesAreUniqueAmongWorkflows(t *testing.T) {
 	if _, err := f.svc.CreateCrew(testCtx, f.human, CrewInput{Scope: scopeA, Crew: crewWorkflow("다른 것", "$리서치")}); err == nil {
 		t.Fatal("handle with $ prefix accepted")
 	}
-	if _, err := f.svc.CreateCrew(testCtx, f.human, CrewInput{Scope: scopeA, Crew: crewWorkflow("다른 것", "리서치")}); !errors.Is(err, ErrConflict) {
+	if _, err := f.svc.CreateCrew(testCtx, f.human, CrewInput{Scope: scopeA, Crew: crewWorkflow("다른 것", "리서치")}); !errors.Is(err, ErrHandleTaken) || !errors.Is(err, ErrConflict) {
 		t.Fatal("duplicate handle accepted", err)
+	} else if code, status := errorResponse(err); code != "handle_taken" || status != 409 {
+		t.Fatal("duplicate handle code", code, status)
 	}
 	// Changing a record keeps its own handle.
 	same := *w.Crew

@@ -588,7 +588,7 @@ func (s *Service) checkCrewRefs(ctx context.Context, scope Scope, c Crew, self s
 			flows[crewKey(r.Crew.Handle)] = r.Crew.Trigger != nil && r.Crew.Enabled
 		}
 		if c.Handle != "" && r.Crew.Handle != "" && crewNamespace(r.Crew.Type) == ns && crewKey(r.Crew.Handle) == crewKey(c.Handle) {
-			return ErrConflict
+			return ErrHandleTaken
 		}
 	}
 	for _, m := range c.Members {

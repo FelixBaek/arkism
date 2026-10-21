@@ -52,9 +52,9 @@ export const createCrew = (ctx) => {
     secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요. 키는 설정 › 모델 설정에 넣어 주세요.",
     invalid_request: "빈 칸이나 형식을 확인해 주세요. $이름은 띄어쓰기 없이 글자·숫자·_·-만 써요. 앞으로 가는 선이 원을 이루면 저장되지 않아요(되돌아가는 선은 횟수를 정해요).",
     revision_conflict: "다른 곳에서 먼저 고쳤어요. 닫고 다시 열어 주세요.",
-    conflict: "같은 $이름이 이미 있어요. 다른 이름을 써 주세요."
+    handle_taken: "이미 쓰는 이름이에요. 다른 이름을 써 주세요."
   };
-  const errorText = (e) => ERRORS[e.message] || (e.message === "HTTP 409" ? ERRORS.conflict : `저장하지 못했어요 (${e.message}).`);
+  const errorText = (e) => ERRORS[e.message] || (e.message === "HTTP 409" ? ERRORS.handle_taken : `저장하지 못했어요 (${e.message}).`);
   async function save(rec, crew) {
     if (rec) return request(`/v1/crew/${encodeURIComponent(rec.id)}`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: rec.revision, crew }) });
     return request("/v1/crew", { method: "POST", body: JSON.stringify({ scope: state.scope, crew }) });

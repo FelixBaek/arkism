@@ -47,9 +47,9 @@ window.ArkismTeams = (ctx) => {
     secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요.",
     invalid_request: "빈 칸이나 형식을 확인해 주세요. @이름은 띄어쓰기 없이 글자·숫자·_·-만 써요.",
     revision_conflict: "다른 곳에서 먼저 고쳤어요. 다시 불러와 주세요.",
-    conflict: "같은 @이름이 이미 있어요. 전문가와 팀은 이름을 함께 써요."
+    handle_taken: "같은 @이름이 이미 있어요. 전문가와 팀은 이름을 함께 써요."
   };
-  const errorText = (e) => ERRORS[e.message] || (e.message === "HTTP 409" ? ERRORS.conflict : `처리하지 못했어요 (${e.message}).`);
+  const errorText = (e) => ERRORS[e.message] || (e.message === "HTTP 409" ? ERRORS.handle_taken : `처리하지 못했어요 (${e.message}).`);
   const unsupported = (e) => /HTTP 404|not_found|HTTP 501|not_implemented/.test(e?.message || "");
 
   // ---------------------------------------------------------------- data
@@ -321,7 +321,7 @@ window.ArkismTeams = (ctx) => {
     if (a.members.some((m) => { const n = b.members.find((x) => x.agent_id === m.agent_id); return n && (n.role !== m.role || n.focus !== m.focus); })) out.push("전문가 역할·맡을 일 바꿈");
     if (!same(a.context, b.context)) out.push("팀 자료 바꿈");
     if (!same(a.templates, b.templates)) out.push("회의 템플릿 바꿈");
-    if (!same(a.pinned, b.pinned)) out.push("항상 넣는 자료 바꿈");
+    if (!same(a.pinned || [], b.pinned || [])) out.push("항상 넣는 자료 바꿈");
     if (a.discord_mirror !== b.discord_mirror) out.push("디스코드에도 올리기 바꿈");
     return out;
   }
@@ -404,7 +404,8 @@ window.ArkismTeams = (ctx) => {
     head.classList.remove("has-cover"); head.style.removeProperty("--cover"); // the photo shows on the card preview, not behind the head
     const card = el("button", `tm-prev${d.cover ? " has-cover" : ""}`); card.type = "button"; card.setAttribute("aria-label", "카드 사진 바꾸기");
     if (d.cover) { const img = el("img"); img.alt = ""; img.src = coverSrc(d.cover); card.append(img); } else card.append(icon("image"));
-    const credit = coverCredit(d.cover); if (credit) { credit.classList.add("tm-prev-credit"); card.append(credit); }
+    // the photo credit sits beside the photo, not on it (and a link cannot live inside the button)
+    const credit = coverCredit(d.cover); credit?.classList.add("tm-pop-credit");
     card.addEventListener("click", () => covers?.open({ anchor: card, current: d.cover, onPick: (c) => { if (c) d.cover = c; else delete d.cover; paintHead(pop); changed(pop); } }));
     const words = el("div", "tm-pop-words");
     const row = el("div", "tm-pop-row");
@@ -431,7 +432,7 @@ window.ArkismTeams = (ctx) => {
     const warn = el("small", "tm-warn", "이미 쓰는 이름이에요"); warn.hidden = !takenHandle(pop);
     const purpose = inline(pop, () => d.role, (v) => { d.role = v; }, { max: 200, placeholder: "무엇을 하는 팀인가요? 목적을 한 줄로 적어요", cls: "tm-plain-sub" });
     purpose.setAttribute("aria-label", "목적");
-    words.append(row, line, warn, purpose);
+    words.append(row, line, warn, purpose, ...(credit ? [credit] : []));
     dlg.querySelector(".crew-popup-who").replaceChildren(card, words);
   }
 
@@ -536,13 +537,17 @@ window.ArkismTeams = (ctx) => {
     if (MODES.some(([k]) => k === j.mode)) add(tr("회의 방식"), d.mode || "round_robin", j.mode, (v) => { pop.d.mode = v; }, modeName);
     if (Number.isFinite(+j.max_rounds) && +j.max_rounds >= 1) add(tr("최대 라운드"), d.ending?.max_rounds ?? 4, Math.min(10, Math.round(+j.max_rounds)), end("max_rounds"), String);
     if (Number.isFinite(+j.token_cap) && +j.token_cap > 0) add(tr("토큰 상한"), d.ending?.token_cap ?? 100000, Math.round(+j.token_cap), end("token_cap"), (v) => Number(v).toLocaleString("en-US"));
+    let dropped = [];
     if (Array.isArray(j.members)) {
       const ok = j.members.filter((m) => agents().some((x) => x.id === m?.agent_id));
+      dropped = j.members.filter((m) => !ok.includes(m)).map((m) => String(m?.name || m?.agent_id || "").slice(0, 40)).filter(Boolean);
       const next = ok.map((m, i) => ({ agent_id: m.agent_id, order: i + 1, role: ROLES.some(([k]) => k === m.role) ? m.role : i ? "worker" : "moderator", focus: String(m.focus || "").slice(0, 120) }));
       const label = (list) => sorted(list || []).map((m) => `${memberName(m)} · ${roleName(m.role)}`);
       if (next.length && !same(label(d.members), label(next))) props.push({ label: tr("멤버"), from: label(d.members), to: label(next), apply: () => { pop.d.members = clone(next); changed(pop, true); }, undo: ((was) => () => { pop.d.members = was; changed(pop, true); })(clone(d.members || [])) });
     }
-    return { say: props.length ? `${props.map((p) => p.label).join("·")}을 바꾸자고 제안해요. 보라색 목록에서 보고 적용하세요.` : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요."), props };
+    // the AI may name experts that do not exist; they are left out, and the person is told which
+    const gone = dropped.length ? ` ${tr("없는 전문가는 뺐어요")}: ${dropped.join(", ")}` : "";
+    return { say: (props.length ? `${props.map((p) => p.label).join("·")}을 바꾸자고 제안해요. 보라색 목록에서 보고 적용하세요.` : tr("바꿀 곳을 찾지 못했어요. 말을 바꿔 다시 물어봐 주세요.")) + gone, props };
   }
   // 비슷한 팀에서 시작 (new team only)
   function fromSection(pop) {
@@ -792,7 +797,7 @@ window.ArkismTeams = (ctx) => {
       if (pop.id) { pop.d = clone(pop.base); pop.handleTouched = true; pop.aiTalk = null; paintHead(pop); changed(pop, true); } else closePopup();
     }));
     if (pop.id) left.append(el("small", "", `바뀐 칸 ${diff.length}개`));
-    const hint = pop.id ? `저장하면 v${(pop.rec.revision || 1) + 1}이 돼요 · 기록 탭에서 되돌릴 수 있어요`
+    const hint = pop.id ? `저장하면 다음 판 v${(pop.rec.revision || 1) + 1} · 기록 탭에서 되돌릴 수 있어요`
       : `${(d.members || []).length}명 · ${d.mode === "round_robin" ? "정해진 순서" : "진행자 지명"} · 최대 ${d.ending?.max_rounds || 4}라운드`;
     left.append(el("small", "", hint));
     pop.bar.append(left);
