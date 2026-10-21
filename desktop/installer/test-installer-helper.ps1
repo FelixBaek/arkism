@@ -6,7 +6,7 @@ if (-not $TestRoot) { $TestRoot = Join-Path ([IO.Path]::GetTempPath()) ('arkism-
 $root = [IO.Path]::GetFullPath($TestRoot)
 if ($root -notmatch '^[A-Za-z]:\\[A-Za-z0-9 _\\.-]+$' -or (Test-Path -LiteralPath $root)) { throw 'installer_control_fresh_root_required' }
 for ($parent = [IO.Path]::GetDirectoryName($root); $parent; $parent = [IO.Path]::GetDirectoryName($parent)) {
-  if ((Test-Path -LiteralPath $parent) -and ((Get-Item -LiteralPath $parent).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'installer_control_reparse_root' }
+  if ((Test-Path -LiteralPath $parent) -and ((Get-Item -Force -LiteralPath $parent).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'installer_control_reparse_root' }
 }
 $null = New-Item -ItemType Directory -Path $root
 [IO.File]::WriteAllText((Join-Path $root 'TASK-OWNER.txt'), 'arkism-installer-helper-control')

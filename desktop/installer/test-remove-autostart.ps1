@@ -9,7 +9,7 @@ $root = [IO.Path]::GetFullPath($TestRoot)
 if ($root -notmatch '^[A-Za-z]:\\[A-Za-z0-9 _\\.-]+$' -or (Test-Path -LiteralPath $root)) { throw 'autostart_control_fresh_literal_root_required' }
 for ($ancestor = [IO.Path]::GetDirectoryName($root); $ancestor; $ancestor = [IO.Path]::GetDirectoryName($ancestor)) {
   if (Test-Path -LiteralPath $ancestor) {
-    if ((Get-Item -LiteralPath $ancestor).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'autostart_control_reparse_root' }
+    if ((Get-Item -Force -LiteralPath $ancestor).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'autostart_control_reparse_root' }
   }
 }
 $null = New-Item -ItemType Directory -Path $root
