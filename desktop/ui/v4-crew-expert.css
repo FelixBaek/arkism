@@ -35,7 +35,7 @@
    938:62634 (편집): the tabs drop under the names, beside the @이름 line; the estimate steps away. */
 .ex-pop .crew-popup-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who side" "who tabs"; align-items: start; column-gap: 16px; row-gap: 12px; padding: 22px 28px 12px; }
 .ex-pop .crew-popup-who { grid-area: who; align-items: flex-start; gap: 16px; }
-.ex-pop .crew-popup-actions { grid-area: side; justify-self: end; align-items: flex-start; flex-wrap: wrap; justify-content: flex-end; max-width: 300px; }
+.ex-pop .crew-popup-actions { grid-area: side; justify-self: end; align-items: flex-start; flex-wrap: nowrap; justify-content: flex-end; } /* one row: wrapping dropped the ✕ under the estimate */
 .ex-pop .crew-popup-tabs { grid-area: tabs; align-self: end; justify-self: end; gap: 4px; padding: 0; border: 0; }
 .ex-pop .crew-popup-tab { height: 40px; padding: 0 18px; border-radius: 8px; color: var(--nc-text); font-size: calc(13.5px * var(--fs, 1)); }
 .ex-pop .crew-popup-tab:hover { background: var(--nc-raised); }
