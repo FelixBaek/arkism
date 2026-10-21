@@ -394,10 +394,11 @@ func (b *memoryGraphBuild) sessionLines(ctx context.Context, frontier []string) 
 	if e != nil {
 		return nil, e
 	}
+	asked := idSet(asking)
 	byNode := map[string][]string{}
 	for _, h := range hits {
 		n, ok := b.nodes[h.From]
-		if !ok || !slices.Contains(asking, h.From) || h.Memory.ID == h.From || !sameReach(n, h.Memory) || !memoryGraphVisible(h.Memory, b.in) ||
+		if !ok || !asked[h.From] || h.Memory.ID == h.From || !sameReach(n, h.Memory) || !memoryGraphVisible(h.Memory, b.in) ||
 			!slices.ContainsFunc(sessionTags(n), func(t string) bool { return slices.Contains(h.Memory.Tags, t) }) {
 			return nil, ErrUnavailable
 		}
@@ -442,9 +443,9 @@ func (b *memoryGraphBuild) similarLines(ctx context.Context, frontier []string) 
 		if e != nil {
 			return nil, e
 		}
-		need := []MemoryGraphEdge{}
+		need, asked := []MemoryGraphEdge{}, idSet(asking)
 		for _, p := range pairs {
-			if !slices.Contains(asking, p.From) || p.From == p.To || p.Distance < 0 || p.Distance > 1-memoryGraphSimilarMin {
+			if !asked[p.From] || p.From == p.To || p.Distance < 0 || p.Distance > 1-memoryGraphSimilarMin {
 				return nil, ErrUnavailable
 			}
 			need = append(need, MemoryGraphEdge{From: p.From, To: p.To})
@@ -486,11 +487,11 @@ func (b *memoryGraphBuild) similarLines(ctx context.Context, frontier []string) 
 
 // load reads line ends not seen yet through the node filter; filtered ones stay absent.
 func (b *memoryGraphBuild) load(ctx context.Context, lines []MemoryGraphEdge) error {
-	need := []string{}
+	need, queued := []string{}, map[string]bool{}
 	for _, edge := range lines {
 		for _, id := range []string{edge.From, edge.To} {
-			if _, ok := b.nodes[id]; !ok && !slices.Contains(need, id) {
-				need = append(need, id)
+			if _, ok := b.nodes[id]; !ok && !queued[id] {
+				need, queued[id] = append(need, id), true
 			}
 		}
 	}
@@ -553,4 +554,13 @@ func (b *memoryGraphBuild) place(ctx context.Context, candidates []MemoryGraphEd
 		}
 	}
 	return next, nil
+}
+
+// idSet turns a whole-map id list (up to memoryGraphMapNodes) into a lookup set.
+func idSet(ids []string) map[string]bool {
+	set := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		set[id] = true
+	}
+	return set
 }
