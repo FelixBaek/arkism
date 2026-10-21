@@ -451,7 +451,7 @@ func inventory(home string, keys []map[string]any, refreshUsage bool) ([]any, er
 			if row.Provider != pid {
 				continue
 			}
-			exe := binOf(row)
+			exe := host.Bin(row.BinEnv, row.BinName) // the CLI itself: GLM without its wrapper has no login, only keys
 			if !exists(exe) && !onPath(row.BinName) {
 				continue
 			}

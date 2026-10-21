@@ -265,6 +265,29 @@ func customEnv(env map[string]string, model string, key map[string]any) (map[str
 	return env, nil
 }
 
+// zaiAnthropic is Z.ai's Anthropic-compatible address (docs.z.ai, Claude Code setup).
+const zaiAnthropic = "https://api.z.ai/api/anthropic"
+
+// zaiEnv points Claude Code at Z.ai with the stored Z.ai key; a stored address counts only if it is Anthropic-compatible.
+func zaiEnv(env map[string]string, model string, keys []map[string]any) (map[string]string, error) {
+	if keys == nil {
+		var err error
+		if keys, err = loadKeys(); err != nil {
+			return nil, err
+		}
+	}
+	for _, k := range keys {
+		if k["provider"] == "zai" && truthy(k["key"]) {
+			base := sOr(k["base_url"])
+			if !strings.Contains(base, "/anthropic") {
+				base = zaiAnthropic
+			}
+			return customEnv(env, model, map[string]any{"key": k["key"], "base_url": base})
+		}
+	}
+	return nil, crewErr("Z.ai API 키가 없어요. 모델 설정 › Z.ai › API 키에서 키를 넣어 주세요")
+}
+
 // childEnv is the child's environment: never re-trigger the capture hook; a stored key only for a CLI in API mode
 // (a 직접 추가 provider always uses its key: the one given, or the one its model belongs to). keys nil = load them.
 func childEnv(row host.CLI, keys []map[string]any, model string, key map[string]any) (map[string]string, error) {
@@ -278,6 +301,9 @@ func childEnv(row host.CLI, keys []map[string]any, model string, key map[string]
 			}
 		}
 		return customEnv(env, model, key)
+	}
+	if row.Name == "glm" && !glmWrapper() {
+		return zaiEnv(env, model, keys)
 	}
 	if row.Proxy && host.PCProxy != "" {
 		env["HTTPS_PROXY"], env["HTTP_PROXY"], env["ALL_PROXY"] = host.PCProxy, host.PCProxy, host.PCProxy
