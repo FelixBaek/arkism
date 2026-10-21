@@ -152,7 +152,7 @@ window.ArkismAutomation = (h) => {
     let handleTouched = !creating;
     const picked = new Set(); // new automation: steps whose expert was chosen on purpose (until then the picker reads 맡을 전문가 고르기)
     const aiTalk = { open: withAI }; // AI 제안 / AI로 초안 talk (ai-chat.js state), kept while this window is open
-    let pop = null;
+    let pop = null, closeAsking = () => {};
     let bar = null;
     let paintHead = () => {};
     let stats = null;
@@ -293,7 +293,7 @@ window.ArkismAutomation = (h) => {
       if (!creating) body.append(manageSection());
       bar = el("div", "auto-bar");
       const save = button(creating ? "자동화 만들기" : "저장", "primary", null, doSave);
-      const cancel = button("취소", "ghost", null, () => { if (creating) pop.dialog.close(); else { reset(); } });
+      const cancel = button("취소", "ghost", null, (e) => { if (creating) closeAsking(e); else { reset(); } });
       bar.append(save, cancel);
       if (creating) bar.append(button("템플릿·설정으로 만들기", "ghost", null, () => { pop.dialog.close(); h.openSettingsNew(); }));
       bar.append(el("span", "auto-bar-note"), ai.dock); // AI 제안 at the right end; its purple list stays on top of the body
@@ -1126,9 +1126,10 @@ window.ArkismAutomation = (h) => {
     // closing with unsaved changes asks first (Esc and 닫기); saving closes with dialog.close(), which skips this
     const guard = (e) => {
       if (!(creating ? !same(d, blank) : dirty())) return;
-      e.preventDefault(); e.stopImmediatePropagation();
+      e?.preventDefault(); e?.stopImmediatePropagation();
       void ask(creating ? "아직 만들지 않았어요. 버리고 닫을까요?" : "저장하지 않은 변경이 있어요. 버리고 닫을까요?").then((yes) => { if (yes) leaveSilently(); });
     };
+    closeAsking = (e) => { guard(e); if (!e?.defaultPrevented) leaveSilently(); };
     pop.dialog.addEventListener("cancel", guard);
     pop.dialog.addEventListener("click", (e) => { if (e.target.closest(".crew-popup-close")) guard(e); }, true);
     head(pop.dialog);

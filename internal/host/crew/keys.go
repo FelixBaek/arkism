@@ -174,6 +174,9 @@ func addKey(provider, name, key, baseURL string, budget any, keyID string) (host
 	if host.Len(key) < 8 || strings.IndexFunc(key, unicode.IsSpace) >= 0 {
 		return nil, crewErr("키가 비었거나 올바르지 않아요")
 	}
+	if provider == "zai" && baseURL != "" && !strings.HasPrefix(baseURL, "https://") { // the key travels in the request
+		return nil, crewErr("Z.ai 주소는 https://로 시작해야 해요")
+	}
 	if baseURL != "" && !baseURLRe.MatchString(baseURL) {
 		return nil, crewErr("주소는 http(s)://로 시작해야 해요")
 	}

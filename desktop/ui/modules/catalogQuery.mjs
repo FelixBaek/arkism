@@ -49,13 +49,14 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
     void read(name).catch(() => { if (key(name) === serialized && visible()) render(false); });
   }
   function record(id) {
+    const pinned = picked?.identity === identity() && picked.id === id ? picked.record : null;
     for (const [name, value] of [...entries].sort(([a],[b]) => Number(b === currentName()) - Number(a === currentName()))) {
       const snap = value.pager.snapshot();
       if (!snap.key || JSON.parse(snap.key).identity !== identity()) continue;
       const item = snap.items.find(row => (["skills", "skillTrash"].includes(name) ? `skill:${row.id}` : row.id) === id);
-      if (item) return item;
+      if (item) return (pinned?.revision ?? 0) > (item.revision ?? 0) ? pinned : item; // a record pinned after an edit is newer than the page
     }
-    return picked?.identity === identity() && picked.id === id ? picked.record : null;
+    return pinned;
   }
   return { snapshot, ensure, record, currentName, visible,
     more: name => read(name),

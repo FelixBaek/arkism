@@ -272,8 +272,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
 
   function wide(kindKey, ...args) {
-    ({ review: wideReview, active: wideActive, sessions: wideSessions, usage: wideUsage, map: wideMap }[kindKey])(...args);
-    recipe(dlg, { wide: kindKey, args });
+    ({ review: wideReview, active: wideActive, sessions: wideSessions, usage: wideUsage, map: wideMap }[kindKey])(...args); // each sets its own recipe, so a redraw can still pop out
   }
   // Search on its own line; under it the sort control at the far left, a divider, then the filter chips on one line that scrolls sideways (never wraps).
   // wide windows: sort first, then the search, then the kind chips on their own line (they wrap, never scroll sideways)
@@ -299,6 +298,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     return { dream: p, id: p.id, created_at: p.created_at, text: memText(t.memory?.id || t.keep?.id), label: t.memory ? "고치기" : DREAM_LABEL[t.type] || "정리" }; });
   function wideReview(focusId, startKind) {
     const all = waiting(), dreams = dreamItems(), d = shell("승인 대기", `${num(all.length + dreams.length)}건`, "AI는 분류만 해요. 승인은 사람이 해요.", () => { open("review"); });
+    recipe(d, { wide: "review", args: [focusId, startKind] });
     let q = "", kindF = startKind || "all", typeF = "", sel = focusId || (startKind === "dream" ? dreams[0]?.id : all[0]?.id), order = "old"; const checked = new Set();
     const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), more = el("div", "ov-wide-foot-note");
     const merges = new Map();
@@ -447,6 +447,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // filter "idle" (검증 › 정리할 기억): the same 안 쓰임 rule as the 검증 step, opened in place; ‹ 작게 보기 goes back to 검증
   function wideActive(filter, focusId) {
     const d = shell("쓰는 중인 기억", `${num(D().memories.length)}개`, "승인된 기억만 불러오기에 쓰여요", () => open(filter === "idle" ? "judge" : "active"));
+    recipe(d, { wide: "active", args: [filter, focusId] });
     let q = "", kindF = filter || "all", sel = focusId || null, sort = "used";
     const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
     const search = el("input", "ov-wide-search"); search.placeholder = "기억 찾기"; search.setAttribute("aria-label", "기억 찾기");
@@ -456,6 +457,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const remote = pagedWindow(d, "/v1/memories/query", () => ({ q, state: kindF === "idle" ? "idle" : "active", kind: ["all", "idle"].includes(kindF) ? "" : kindF, sort: sort === "new" ? "recent" : sort }), paint);
     function paint() {
       const snap = remote.snapshot(), kinds = Object.entries(snap.facets.kinds || {});
+      if (!snap.loading && kindF === "all" && !q && snap.total != null) d.querySelector(".ov-win-badge").textContent = `${num(snap.total)}개`; // server total, not the loaded page
       chipHost.replaceChildren(chipBar([["all", "전체", snap.facets.kinds ? Object.values(snap.facets.kinds).reduce((a,b)=>a+b,0) : snap.total ?? null], ...kinds.map(([k,n]) => [k,kind(k),n]), ["idle", "안 쓰임", kindF === "idle" ? snap.total ?? 0 : null]], kindF, k => { kindF=k;paint(); }));
       const items = snap.items;
       list.replaceChildren(); if (!items.length) list.append(el("p", "ov-win-empty", snap.loading ? "불러오는 중…" : "찾은 기억이 없어요."));
@@ -509,6 +511,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   function wideSessions() {
     const items = env.sessions(), today = items.filter((x) => time(x.ended_at || x.started_at) >= new Date().setHours(0, 0, 0, 0)).length;
     const d = shell("세션 기록", `${num(items.length)}건${today ? ` · 오늘 ${num(today)}` : ""}`, "저장된 대화예요. 원문은 여기서만 열려요", () => open("collect"));
+    recipe(d, { wide: "sessions", args: [] });
     let q = "", agent = "all", sel = items[0]?.id; const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
     const search = el("input", "ov-wide-search"); search.placeholder = "세션 찾기"; search.setAttribute("aria-label", "세션 찾기");
     const bar = el("div", "ov-wide-bar"); bar.append(search, chipHost, button("새로고침", "ghost small", null, async () => { await env.reloadSessions(); wideSessions(); }));
@@ -555,6 +558,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   function wideUsage() {
     const items = env.sessions(), w = D().tools?.memory_use, recalls = [...(state.usage?.entries() || [])];
     const d = shell("사용량", `7일 ${num(recalls.reduce((a, [, u]) => a + (u.d7 || 0), 0))}회`, "어떤 기억이 어디에 쓰였는지 보여요", () => open("recall"));
+    recipe(d, { wide: "usage", args: [] });
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
     const tiles = el("div", "ov-win-tiles ov-win-tiles-4"); const rate = w?.injections ? Math.round((w.used / w.injections) * 100) : null;
     for (const [v, l] of [[`${num(recalls.reduce((a, [, u]) => a + (u.d7 || 0), 0))}회`, "7일 불러온 횟수"], [rate === null ? "—" : `${rate}%`, "실제로 쓰임"], [`${num(items.length)}건`, "7일 세션"], [`${num(recalls.filter(([, u]) => u.d7 > 0).length)}개`, "불러온 기억"]]) { const t = el("div", "ov-win-tile"); t.append(el("strong", "", v), el("span", "", l)); tiles.append(t); }
@@ -589,6 +593,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
   async function wideMap() {
     const d = modal("ov-wide-win ov-map-win", true);
+    recipe(d, { wide: "map", args: [] });
     const head = el("div", "ov-win-head ov-map-head"), ttl = el("div", "ov-win-title");
     ttl.append(button("‹ 개요", "ghost small", null, () => d.close()), el("i", "ov-dot"), el("h2", "", "기억 지도"));
     const x = button("✕", "ghost small", null, () => d.close()); x.setAttribute("aria-label", "닫기"); head.append(ttl, x); d.append(head);

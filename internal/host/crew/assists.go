@@ -278,7 +278,7 @@ func personaRun(a map[string]any, runner runFn, work string) (map[string]any, er
 		spec["provider"] = provider
 	}
 	fallback := defaultAssistModel()
-	if model == fallback {
+	if model == fallback && provider == "" { // the same name on another provider still falls back
 		return runner(spec)
 	}
 	out, err := runner(spec)

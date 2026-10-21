@@ -1331,9 +1331,12 @@ func TestGLMWithoutWrapperRunsClaudeCodeAgainstZAI(t *testing.T) {
 	keyFiles(t)
 	patch(t, &host.Home, t.TempDir()) // no claude-glm wrapper under ~/.local/bin
 	t.Setenv("ARKISM_GLM_BIN", "")
+	t.Setenv("PATH", t.TempDir()) // nor one on PATH
 	r := row(t, "glm-5.3")
 	_, err := childEnv(r, nil, "glm-5.3", nil)
 	mustCrewErr(t, err, "Z.ai API 키가 없어요")
+	_, err = addKey("zai", "z", "zai-test-key", "http://api.z.ai/api/anthropic", nil, "")
+	mustCrewErr(t, err, "https://")
 	if _, err := addKey("zai", "z", "zai-test-key", "", nil, ""); err != nil {
 		t.Fatal(err)
 	}

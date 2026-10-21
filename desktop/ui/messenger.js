@@ -155,7 +155,8 @@ window.ArkismMessenger = (ctx) => {
       h.append(...(logo ? [logo] : []), el("strong", "", name), el("span", "mg-chan-n", `${rows.length}`)); g.append(h);
       for (const [t, sub, need, fixed] of rows) {
         const r = el("div", "mg-chan"); r.append(el("strong", "", t));
-        const s2 = el("small", need ? "warn" : ""); s2.append(fixed ? el("span", "", sub) : raw(el("span", "", sub))); // only a channel label is user data if (need) s2.append(" · ", el("span", "", "권한 필요"));
+        const s2 = el("small", need ? "warn" : ""); s2.append(fixed ? el("span", "", sub) : raw(el("span", "", sub))); // only a channel label is user data
+        if (need) s2.append(" · ", el("span", "", "권한 필요"));
         r.append(s2); g.append(r);
       }
       sec.append(g);
