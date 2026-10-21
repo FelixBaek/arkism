@@ -1,0 +1,482 @@
+{
+ "source": "Tasks and facts from evaluation/reuse-v010/benchmark/run.py (frozen v0.1.0 fixture); transcripts and distractors are synthetic.",
+ "tasks": [
+  {
+   "id": "billing",
+   "scenario": "past_rounding_error",
+   "fact": "Amounts are integer cents; partial-cent charges round down.",
+   "keywords": [
+    "billing",
+    "charge",
+    "cents"
+   ],
+   "task": "Implement charge(cents, numerator, denominator) returning a nonnegative integer charge. Inputs are nonnegative integers and denominator is positive. Follow the project billing policy.",
+   "transcript": [
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "The invoice test failed on charge(105, 1, 2); why did we get 53?"
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Let me reproduce it first and read the relevant code."
+       },
+       {
+        "type": "tool_use",
+        "id": "toolu_billing",
+        "name": "Bash",
+        "input": {
+         "command": "pytest -q"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "message": {
+      "role": "user",
+      "content": [
+       {
+        "type": "tool_result",
+        "tool_use_id": "toolu_billing",
+        "content": "FAILED test_billing.py::test_half - assert 53 == 52\n  where 53 = charge(105, 1, 2)\n1 failed, 14 passed in 0.31s"
+       }
+      ]
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "The code does not follow a written policy here, so the behaviour depends on whoever touched it last. What should the rule be?"
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "Remember this project rule: Amounts are integer cents; partial-cent charges round down."
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Understood. I will apply that rule and add a regression test."
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "roster",
+   "scenario": "persistent_project_rule",
+   "fact": "Jobs are permitted Monday–Thursday; Friday–Sunday are blackout days.",
+   "keywords": [
+    "scheduling",
+    "weekday",
+    "jobs"
+   ],
+   "task": "Implement allowed(weekday) returning whether a job may run. weekday is an integer 0 (Monday) through 6 (Sunday). Follow the project scheduling policy.",
+   "transcript": [
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "The nightly job ran on Friday again. Can you look at the scheduler?"
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Let me reproduce it first and read the relevant code."
+       },
+       {
+        "type": "tool_use",
+        "id": "toolu_roster",
+        "name": "Bash",
+        "input": {
+         "command": "pytest -q"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "message": {
+      "role": "user",
+      "content": [
+       {
+        "type": "tool_result",
+        "tool_use_id": "toolu_roster",
+        "content": "scheduler.py:41: if weekday <= 4: return True\nscheduler.py:42: return False\n2024-03-08 02:00 job nightly-export started (weekday=4)"
+       }
+      ]
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "The code does not follow a written policy here, so the behaviour depends on whoever touched it last. What should the rule be?"
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "Remember this project rule: Jobs are permitted Monday–Thursday; Friday–Sunday are blackout days."
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Understood. I will apply that rule and add a regression test."
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "labels",
+   "scenario": "past_normalization_error",
+   "fact": "Trim surrounding whitespace but preserve letter case.",
+   "keywords": [
+    "normalization",
+    "normalize",
+    "label"
+   ],
+   "task": "Implement normalize(label) for a string label according to the project normalization policy.",
+   "transcript": [
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "Search for \"AbC\" stopped matching after the label import."
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Let me reproduce it first and read the relevant code."
+       },
+       {
+        "type": "tool_use",
+        "id": "toolu_labels",
+        "name": "Bash",
+        "input": {
+         "command": "pytest -q"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "message": {
+      "role": "user",
+      "content": [
+       {
+        "type": "tool_result",
+        "tool_use_id": "toolu_labels",
+        "content": "labels.py:12: return label.strip().lower()\nimport.log: 312 labels normalized, 0 skipped"
+       }
+      ]
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "The code does not follow a written policy here, so the behaviour depends on whoever touched it last. What should the rule be?"
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "Remember this project rule: Trim surrounding whitespace but preserve letter case."
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Understood. I will apply that rule and add a regression test."
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "cache",
+   "scenario": "conditional_zero_ttl",
+   "fact": "Zero TTL means do not cache; positive TTL stays unchanged.",
+   "keywords": [
+    "cache",
+    "ttl",
+    "caching"
+   ],
+   "task": "Implement cache_ttl(ttl) for a nonnegative integer TTL. Return None to bypass caching or an integer expiration TTL according to the project policy.",
+   "transcript": [
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "Some responses are cached forever even though the config says ttl 0."
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Let me reproduce it first and read the relevant code."
+       },
+       {
+        "type": "tool_use",
+        "id": "toolu_cache",
+        "name": "Bash",
+        "input": {
+         "command": "pytest -q"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "message": {
+      "role": "user",
+      "content": [
+       {
+        "type": "tool_result",
+        "tool_use_id": "toolu_cache",
+        "content": "cache.py:20: return ttl or DEFAULT_TTL\nconfig.yaml: ttl: 0\nDEFAULT_TTL = 3600"
+       }
+      ]
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "The code does not follow a written policy here, so the behaviour depends on whoever touched it last. What should the rule be?"
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "Remember this project rule: Zero TTL means do not cache; positive TTL stays unchanged."
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Understood. I will apply that rule and add a regression test."
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "handoff",
+   "scenario": "agent_handoff_retry",
+   "fact": "Retrying an event with an already-recorded event_id must leave the ledger unchanged; new events append in arrival order.",
+   "keywords": [
+    "retry",
+    "ledger",
+    "event"
+   ],
+   "task": "Implement apply_event(ledger, event), returning a list of event dicts. Each event has event_id and value. This function is called by a different worker after handoff. Follow the project retry policy.",
+   "transcript": [
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "After the worker handoff we see duplicate rows in the ledger."
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Let me reproduce it first and read the relevant code."
+       },
+       {
+        "type": "tool_use",
+        "id": "toolu_handoff",
+        "name": "Bash",
+        "input": {
+         "command": "pytest -q"
+        }
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "message": {
+      "role": "user",
+      "content": [
+       {
+        "type": "tool_result",
+        "tool_use_id": "toolu_handoff",
+        "content": "ledger.py:30: ledger.append(event)\nworker-b log: replayed 4 events from queue after handoff"
+       }
+      ]
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "The code does not follow a written policy here, so the behaviour depends on whoever touched it last. What should the rule be?"
+       }
+      ]
+     }
+    },
+    {
+     "type": "user",
+     "entrypoint": "cli",
+     "message": {
+      "role": "user",
+      "content": "Remember this project rule: Retrying an event with an already-recorded event_id must leave the ledger unchanged; new events append in arrival order."
+     }
+    },
+    {
+     "type": "assistant",
+     "message": {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Understood. I will apply that rule and add a regression test."
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ],
+ "distractors": [
+  {
+   "id": "deploy",
+   "fact": "Deploys happen only from the release branch after the changelog is updated.",
+   "keywords": [
+    "deploy",
+    "release",
+    "changelog"
+   ]
+  },
+  {
+   "id": "logging",
+   "fact": "Log lines are JSON objects with ts, level and msg fields.",
+   "keywords": [
+    "logging",
+    "json",
+    "level"
+   ]
+  },
+  {
+   "id": "naming",
+   "fact": "Database tables use plural snake_case names.",
+   "keywords": [
+    "database",
+    "tables",
+    "naming"
+   ]
+  },
+  {
+   "id": "review",
+   "fact": "Every pull request needs one approving review before merge.",
+   "keywords": [
+    "review",
+    "merge",
+    "approval"
+   ]
+  },
+  {
+   "id": "timezone",
+   "fact": "Store timestamps in UTC and convert only for display.",
+   "keywords": [
+    "timestamps",
+    "utc",
+    "timezone"
+   ]
+  }
+ ]
+}

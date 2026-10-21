@@ -1,0 +1,119 @@
+{
+ "version": "v0.1.3-50-g1a7e8c9",
+ "commit": "1a7e8c9ad9d0f92c8638ff75e6cee659bb19560c",
+ "date": "2026-10-21",
+ "environment": {
+  "go": "go1.27.3",
+  "os": "Linux",
+  "arch": "x86_64",
+  "cpus": 14
+ },
+ "token_encoding": "cl100k_base",
+ "rounds": 40,
+ "summary": {
+  "compression": {
+   "tasks": 5,
+   "ratio_bytes": 15.59,
+   "ratio_tokens": 19.27
+  },
+  "hook_latency_ms": {
+   "n": 200,
+   "p50": 0.3,
+   "p95": 0.382,
+   "max": 0.782
+  },
+  "prompt_tokens": {
+   "tasks": 5,
+   "none_mean": 0,
+   "recall_mean": 128.0,
+   "static_mean": 140.0,
+   "savings_vs_static": 0.086,
+   "relevant_hit_rate": 1.0,
+   "distractor_hits": 0
+  }
+ },
+ "compression": [
+  {
+   "task": "billing",
+   "transcript_bytes": 1128,
+   "transcript_tokens": 285,
+   "user_text_bytes": 152,
+   "memory_bytes": 59,
+   "memory_tokens": 12
+  },
+  {
+   "task": "roster",
+   "transcript_bytes": 1167,
+   "transcript_tokens": 283,
+   "user_text_bytes": 168,
+   "memory_bytes": 72,
+   "memory_tokens": 14
+  },
+  {
+   "task": "labels",
+   "transcript_bytes": 1090,
+   "transcript_tokens": 251,
+   "user_text_bytes": 139,
+   "memory_bytes": 53,
+   "memory_tokens": 8
+  },
+  {
+   "task": "cache",
+   "transcript_bytes": 1093,
+   "transcript_tokens": 260,
+   "user_text_bytes": 155,
+   "memory_bytes": 58,
+   "memory_tokens": 12
+  },
+  {
+   "task": "handoff",
+   "transcript_bytes": 1165,
+   "transcript_tokens": 270,
+   "user_text_bytes": 210,
+   "memory_bytes": 120,
+   "memory_tokens": 24
+  }
+ ],
+ "injection": [
+  {
+   "task": "billing",
+   "task_tokens": 32,
+   "recall_tokens": 126,
+   "static_tokens": 140,
+   "relevant_hit": true,
+   "distractor_hits": 0
+  },
+  {
+   "task": "roster",
+   "task_tokens": 33,
+   "recall_tokens": 128,
+   "static_tokens": 140,
+   "relevant_hit": true,
+   "distractor_hits": 0
+  },
+  {
+   "task": "labels",
+   "task_tokens": 15,
+   "recall_tokens": 122,
+   "static_tokens": 140,
+   "relevant_hit": true,
+   "distractor_hits": 0
+  },
+  {
+   "task": "cache",
+   "task_tokens": 29,
+   "recall_tokens": 126,
+   "static_tokens": 140,
+   "relevant_hit": true,
+   "distractor_hits": 0
+  },
+  {
+   "task": "handoff",
+   "task_tokens": 41,
+   "recall_tokens": 138,
+   "static_tokens": 140,
+   "relevant_hit": true,
+   "distractor_hits": 0
+  }
+ ]
+}
