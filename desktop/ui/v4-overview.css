@@ -209,6 +209,11 @@ button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(-
 .ov-wide-left > .ov-wide-bar .ghost { border: 1px solid var(--border); }
 .ov-detail-list .ov-win-item { padding: 9px 12px; font-size: 14px; }
 .ov-win-list-scroll { max-height: min(46vh, 520px); overflow: auto; }
+/* 모두 보기: only the list stays, and it fills the window */
+.ov-win.ov-win-expanded[open] { display: flex; flex-direction: column; height: min(86vh, 900px); }
+.ov-win-expanded .ov-win-body > :not(.ov-win-list-title, .ov-win-list) { display: none; }
+.ov-win-expanded .ov-win-body { min-height: 0; flex: 1; overflow: hidden; }
+.ov-win-expanded .ov-win-list-scroll { max-height: none; flex: 1; min-height: 0; }
 .ov-win-foot .ov-wide-foot-note { margin-right: auto; align-self: center; }
 .ov-detail-list .ov-win-item.on { background: var(--bg-muted); }
 
