@@ -163,6 +163,17 @@ func keyStorage(k map[string]any) string {
 
 var baseURLRe = regexp.MustCompile(`^https?://\S+$`)
 
+// checkBaseURL accepts an empty address or http(s); a Z.ai key travels in the request, so its address must be https.
+func checkBaseURL(provider, baseURL string) error {
+	if provider == "zai" && baseURL != "" && !strings.HasPrefix(baseURL, "https://") {
+		return crewErr("Z.ai 주소는 https://로 시작해야 해요")
+	}
+	if baseURL != "" && !baseURLRe.MatchString(baseURL) {
+		return crewErr("주소는 http(s)://로 시작해야 해요")
+	}
+	return nil
+}
+
 func addKey(provider, name, key, baseURL string, budget any, keyID string) (host.Obj, error) {
 	key = strings.TrimSpace(key)
 	if !in(providers, provider) {
@@ -174,11 +185,8 @@ func addKey(provider, name, key, baseURL string, budget any, keyID string) (host
 	if host.Len(key) < 8 || strings.IndexFunc(key, unicode.IsSpace) >= 0 {
 		return nil, crewErr("키가 비었거나 올바르지 않아요")
 	}
-	if provider == "zai" && baseURL != "" && !strings.HasPrefix(baseURL, "https://") { // the key travels in the request
-		return nil, crewErr("Z.ai 주소는 https://로 시작해야 해요")
-	}
-	if baseURL != "" && !baseURLRe.MatchString(baseURL) {
-		return nil, crewErr("주소는 http(s)://로 시작해야 해요")
+	if err := checkBaseURL(provider, baseURL); err != nil {
+		return nil, err
 	}
 	if provider == "custom" && baseURL == "" {
 		return nil, crewErr("직접 추가한 제공자는 주소가 필요해요")
