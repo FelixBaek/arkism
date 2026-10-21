@@ -6348,7 +6348,7 @@
           }}}
     },
     "/v1/providers/assist_model": {
-      "post": {"summary": "Pick the model that answers AI help requests (human principals only)", "description": "Body {scope, model}. model matches the provider model pattern; empty goes back to the runner default (ARKISM_ASSIST_MODEL). Returned as providers.assist_model by GET /v1/providers. If the host runner cannot run the stored model it falls back to its default.", "responses": {"200": {"description": "Updated record"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+      "post": {"summary": "Pick the model that answers AI help requests (human principals only)", "description": "Body {scope, model, provider?}. model matches the provider model pattern; empty goes back to the runner default (ARKISM_ASSIST_MODEL). provider (optional, needs a model) names the provider the model was picked under, since several providers offer the same model name. Returned as providers.assist_model and providers.assist_provider by GET /v1/providers. If the host runner cannot run the stored model it falls back to its default.", "responses": {"200": {"description": "Updated record"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -42846,6 +42846,9 @@
             }
           },
           "assist_model": {
+            "type": "string"
+          },
+          "assist_provider": {
             "type": "string"
           }
         },

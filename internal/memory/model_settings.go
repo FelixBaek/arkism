@@ -130,12 +130,15 @@ type Providers struct {
 	Labels map[string]string `json:"labels,omitempty"`
 	// The model that answers AI 도움 (fill·polish·classify…); empty means the runner's default.
 	AssistModel string `json:"assist_model,omitempty"`
+	// The provider the AI 도움 model was picked under: several providers offer the same model name.
+	AssistProvider string `json:"assist_provider,omitempty"`
 }
 
 // ProviderAssistModel picks the AI 도움 model; an empty Model goes back to the runner's default.
 type ProviderAssistModel struct {
-	Scope Scope  `json:"scope"`
-	Model string `json:"model"`
+	Scope    Scope  `json:"scope"`
+	Model    string `json:"model"`
+	Provider string `json:"provider,omitempty"`
 }
 
 // ProviderLabel names an account or a model on the screen; an empty Label goes back to the default.
@@ -624,7 +627,7 @@ func (s *Service) LabelProvider(ctx context.Context, token string, in ProviderLa
 
 // SetAssistModel stores which model answers AI 도움 requests.
 func (s *Service) SetAssistModel(ctx context.Context, token string, in ProviderAssistModel) (Record, error) {
-	if !validScope(in.Scope) || in.Model != "" && !providerModelRe.MatchString(in.Model) {
+	if !validScope(in.Scope) || in.Model != "" && !providerModelRe.MatchString(in.Model) || in.Provider != "" && (in.Model == "" || !providerIDRe.MatchString(in.Provider)) {
 		return Record{}, ErrInvalid
 	}
 	d, err := s.humanProviders(ctx, token, in.Scope)
@@ -632,7 +635,7 @@ func (s *Service) SetAssistModel(ctx context.Context, token string, in ProviderA
 		return Record{}, err
 	}
 	return s.updateProviders(ctx, in.Scope, func(p *Providers, _ time.Time) error {
-		p.AssistModel = in.Model
+		p.AssistModel, p.AssistProvider = in.Model, in.Provider
 		return nil
 	}, "set:assist_model", d.PrincipalID)
 }

@@ -743,8 +743,17 @@ func TestProviderAssistModelSetReadAndClear(t *testing.T) {
 	if got, err := f.svc.Providers(testCtx, f.runner(), scopeA); err != nil || got.Providers.AssistModel != "haiku 4.5" {
 		t.Fatal("read back", got.Providers, err)
 	}
+	// The provider it was picked under is kept with it; a provider without a model or a bad id is refused.
+	for _, bad := range []ProviderAssistModel{{Scope: scopeA, Provider: "zai"}, {Scope: scopeA, Model: "glm-4.6", Provider: "Bad Id"}} {
+		if _, err := f.svc.SetAssistModel(testCtx, f.human, bad); !errors.Is(err, ErrInvalid) {
+			t.Fatal("bad provider accepted", bad, err)
+		}
+	}
+	if r, err := f.svc.SetAssistModel(testCtx, f.human, ProviderAssistModel{Scope: scopeA, Model: "glm-4.6", Provider: "zai"}); err != nil || r.Providers.AssistProvider != "zai" {
+		t.Fatal("provider", r.Providers, err)
+	}
 	in.Model = ""
-	if r, err := f.svc.SetAssistModel(testCtx, f.human, in); err != nil || r.Providers.AssistModel != "" {
+	if r, err := f.svc.SetAssistModel(testCtx, f.human, in); err != nil || r.Providers.AssistModel != "" || r.Providers.AssistProvider != "" {
 		t.Fatal("clear", r.Providers, err)
 	}
 }

@@ -868,8 +868,8 @@ func TestThePickedAssistModelIsUsedAndFallsBackWhenItCannotRun(t *testing.T) {
 	}
 	eq(t, tried, []string{"haiku 4.5", "nowhere-1", defaultAssistModel(), "logged-out-1", defaultAssistModel()})
 	patch(t, &runnerCall, func(string, any, time.Duration) (map[string]any, error) { return nil, errors.New("no Arkism") })
-	if assistModel() != defaultAssistModel() { // Arkism unreachable: the default
-		t.Fatal(assistModel())
+	if m, p := assistModel(); m != defaultAssistModel() || p != "" { // Arkism unreachable: the default
+		t.Fatal(m, p)
 	}
 	// A request that names its model runs on it, not on the owner's pick.
 	tried = nil

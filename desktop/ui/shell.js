@@ -74,6 +74,7 @@ window.ArkismShell = (ctx) => {
     // 역할별 모델 has nothing to set while a server decides the models (pages.js), so only this PC shows it.
     const local = window.__TAURI__ && state.mode === "local";
     const tabs = key === "memory" ? [] : MENUS[key].tabs.filter(([id]) => key !== "settings" || id !== "roles" || local);
+    box.dataset.active = tabs.find((t) => t[3]())?.[1] || ""; // app.js hides a page title that only repeats this tab
     box.replaceChildren(...tabs.map(([id, label, open, active, n]) => {
       const t = el("button", `area-tab${active() ? " active" : ""}`);
       t.type = "button";
