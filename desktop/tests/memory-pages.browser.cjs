@@ -38,8 +38,9 @@ const ui=path.resolve(process.env.ARKISM_UI_DIRECTORY||path.resolve(__dirname,'.
    }}};
   });
   await page.goto('https://arkism.fixture/');
-  await page.waitForFunction(()=>document.querySelector('#app')?.inert===false&&document.querySelector('#count-memories')?.textContent==='50+');
-  assert.equal(await page.evaluate(()=>window.memoryCalls.length),1);
+  await page.waitForFunction(()=>document.querySelector('#app')?.inert===false&&document.querySelector('#count-memories')?.textContent==='100000');
+  // One first page; the limit-1 reads are the server totals (active and idle).
+  assert.equal(await page.evaluate(()=>window.memoryCalls.filter(c=>c.limit!==1).length),1);
   await page.getByRole('button',{name:/^기억 보기/}).click();
   await page.waitForFunction(()=>document.querySelectorAll('#table [data-id]').length===50);
   assert.equal(await page.evaluate(()=>window.memoryCalls.some(c=>c.cursor)),false);
