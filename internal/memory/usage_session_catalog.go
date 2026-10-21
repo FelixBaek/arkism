@@ -56,23 +56,7 @@ func (s *Service) UsageSessionListPage(ctx context.Context, token string, scope 
 		total++
 		items = append(items, usageCatalogItem(r))
 	}
-	sort.SliceStable(items, func(i, j int) bool {
-		a, b := items[i], items[j]
-		if order == "cost" && a["cost_usd"].(float64) != b["cost_usd"].(float64) {
-			return a["cost_usd"].(float64) > b["cost_usd"].(float64)
-		}
-		key := map[string]string{"tokens": "tokens", "messages": "messages"}[order]
-		if key != "" {
-			av, bv := usageCatalogNumber(a[key]), usageCatalogNumber(b[key])
-			if av != bv {
-				return av > bv
-			}
-		}
-		if !a["ended_at"].(time.Time).Equal(b["ended_at"].(time.Time)) {
-			return a["ended_at"].(time.Time).After(b["ended_at"].(time.Time))
-		}
-		return a["id"].(string) < b["id"].(string)
-	})
+	sort.SliceStable(items, func(i, j int) bool { return usageCatalogLess(items[i], items[j], order) })
 	query := CatalogQueryInput{Scope: scope, Query: q, Model: agent, Sort: order, State: rangeKey, Limit: limit, Cursor: cursor}
 	selected, next, err := catalogWindow(items, query, catalogBinding(query, "sessions", actor.PrincipalID+"/"+actor.Role))
 	if err != nil {
@@ -160,4 +144,21 @@ func parseUsageSessionQuery(raw string) (url.Values, error) {
 		return nil, ErrInvalid
 	}
 	return values, nil
+}
+
+func usageCatalogLess(a, b map[string]any, order string) bool {
+	if order == "cost" && a["cost_usd"].(float64) != b["cost_usd"].(float64) {
+		return a["cost_usd"].(float64) > b["cost_usd"].(float64)
+	}
+	key := map[string]string{"tokens": "tokens", "messages": "messages"}[order]
+	if key != "" {
+		av, bv := usageCatalogNumber(a[key]), usageCatalogNumber(b[key])
+		if av != bv {
+			return av > bv
+		}
+	}
+	if !a["ended_at"].(time.Time).Equal(b["ended_at"].(time.Time)) {
+		return a["ended_at"].(time.Time).After(b["ended_at"].(time.Time))
+	}
+	return a["id"].(string) < b["id"].(string)
 }

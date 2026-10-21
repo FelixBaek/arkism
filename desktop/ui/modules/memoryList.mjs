@@ -196,7 +196,6 @@ export function createMemoryList(deps) {
     const tools = deps.el("div", "mem-tools"); tools.append(memSearch());
     deps.$("#controls").append(tools);
     deps.$("#stats").replaceChildren(catalogNote());
-    const time = (m) => new Date(m.created_at).getTime();
     const items = memorySource();
     const canDecide = !!deps.state.caps?.actions?.review_decide;
     if (deps.memory.memTab === "candidate" && items.length) {

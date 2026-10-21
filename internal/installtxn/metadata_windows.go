@@ -130,12 +130,12 @@ func (m *nativeMetadata) pin() (func(), error) {
 		}
 	}
 	for _, link := range m.scope.Links {
-		close, err := pinMetadataDirectory(filepath.Dir(link))
+		unpin, err := pinMetadataDirectory(filepath.Dir(link))
 		if err != nil {
 			release()
 			return nil, err
 		}
-		releases = append(releases, close)
+		releases = append(releases, unpin)
 	}
 	return release, nil
 }

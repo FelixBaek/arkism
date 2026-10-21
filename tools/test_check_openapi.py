@@ -38,6 +38,25 @@ class OpenAPIContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "incomplete real management coverage"):
             check_cases(self.doc, [], require_management=True)
 
+    def test_anonymous_evidence_requires_authentication_challenge_status(self):
+        doc = copy.deepcopy(self.doc)
+        for path in doc["paths"].values():
+            for operation in path.values():
+                if isinstance(operation, dict):
+                    operation.pop("x-go-contract", None)
+        doc["paths"]["/v1/memories"]["get"]["x-go-contract"] = True
+        cases = [
+            {"operation": "GET /v1/memories", "status": 200,
+             "body": {"items": [], "next_cursor": "", "authority": "data_only_untrusted"}},
+            {"operation": "GET /v1/memories", "status": 401,
+             "body": {"code": "authentication_required"}},
+        ]
+        self.assertEqual(check_cases(doc, cases, require_management=True), 2)
+        cases[1] = {"operation": "GET /v1/memories", "status": 403,
+                    "body": {"code": "access_denied"}}
+        with self.assertRaisesRegex(ValueError, "incomplete real management coverage"):
+            check_cases(doc, cases, require_management=True)
+
     def test_real_request_body_is_validated(self):
         case = {"operation": "POST /v1/context/tokens", "status": 200,
                 "body": {"tokens": 1, "chars": 1, "token_encoding": "cl100k_base"},

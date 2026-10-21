@@ -62,19 +62,7 @@ func (s *Service) QueryKnowledgeCatalog(ctx context.Context, token string, in Ca
 		}
 		items = append(items, item)
 	}
-	sort.SliceStable(items, func(i, j int) bool {
-		a, b := items[i], items[j]
-		if in.Sort == "name" && a.DisplayName != b.DisplayName {
-			return strings.ToLower(a.DisplayName) < strings.ToLower(b.DisplayName)
-		}
-		if in.Sort == "chunks" && a.ChunkCount != b.ChunkCount {
-			return a.ChunkCount > b.ChunkCount
-		}
-		if !a.UpdatedAt.Equal(b.UpdatedAt) {
-			return a.UpdatedAt.After(b.UpdatedAt)
-		}
-		return a.ID < b.ID
-	})
+	sort.SliceStable(items, func(i, j int) bool { return knowledgeCatalogLess(items[i], items[j], in.Sort) })
 	out.Total = len(items)
 	out.Items, out.NextCursor, err = catalogWindow(items, in, catalogBinding(in, "knowledge", actor.PrincipalID+"/"+actor.Role))
 	return out, err
@@ -126,4 +114,17 @@ func (s *Service) catalogKnowledgeBindings(ctx context.Context, token string, sc
 		}
 	}
 	return out, nil
+}
+
+func knowledgeCatalogLess(a, b KnowledgeSourceSummary, order string) bool {
+	if order == "name" && a.DisplayName != b.DisplayName {
+		return strings.ToLower(a.DisplayName) < strings.ToLower(b.DisplayName)
+	}
+	if order == "chunks" && a.ChunkCount != b.ChunkCount {
+		return a.ChunkCount > b.ChunkCount
+	}
+	if !a.UpdatedAt.Equal(b.UpdatedAt) {
+		return a.UpdatedAt.After(b.UpdatedAt)
+	}
+	return a.ID < b.ID
 }
