@@ -3,6 +3,7 @@ package memory
 import (
 	"bytes"
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -185,4 +186,33 @@ func FuzzArchiveSecretPrefix(f *testing.F) {
 			t.Fatalf("secret prefix/suffix mismatch: %q offset=%d", value, observer.candidateOffset)
 		}
 	})
+}
+
+// The capture hook's Codex prompt is its input_text blocks joined with nothing (capture
+// TestPromptEvidenceCodexMultiBlockPromptFromHookToArchiveCheck); both server parsers agree.
+func TestArchiveCodexInputTextBlocksJoinLikeHookPrompt(t *testing.T) {
+	first, second := "\n# Browser comments:\n\n## User Comment 1\n버튼 위치", "The next image is page evidence for Comment 1."
+	row := `{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":` +
+		strconv.Quote(first) + `},{"type":"input_image","image_url":"data:image/png;base64,AA=="},{"type":"input_text","text":` + strconv.Quote(second) + `}]}}`
+	text, role, valid := archiveSafeMessage([]byte(row))
+	if !valid || role != "user" || text != first+second {
+		t.Fatalf("%q %q %v", text, role, valid)
+	}
+	_, open, err := archiveJSONSafeText(archiveJSONSpan{jsonStreamTestSource([]byte(row)), 0, -1, '{'})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, err := open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	streamed, err := io.ReadAll(reader)
+	_ = reader.Close()
+	if err != nil || string(streamed) != first+second {
+		t.Fatalf("%q %v", streamed, err)
+	}
+	// Claude text blocks, and any pair that is not two input_text blocks, keep their newline.
+	if text, _, _ := archiveSafeMessage([]byte(`{"role":"user","content":[{"type":"text","text":"a"},{"type":"text","text":"b"},{"type":"input_text","text":"c"}]}`)); text != "a\nb\nc" {
+		t.Fatalf("%q", text)
+	}
 }

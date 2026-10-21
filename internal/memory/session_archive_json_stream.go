@@ -620,7 +620,7 @@ func archiveJSONArrayText(p *archiveJSONParser, src *archiveJSONSource, w io.Wri
 	if kind == ']' {
 		return p.expect(']')
 	}
-	first := true
+	prev := ""
 	for {
 		start := p.offset
 		kind, _ := p.peek()
@@ -640,12 +640,12 @@ func archiveJSONArrayText(p *archiveJSONParser, src *archiveJSONSource, w io.Wri
 				return err
 			}
 			if typ == "text" || typ == "input_text" || typ == "output_text" {
-				if !first {
-					if _, err = io.WriteString(w, "\n"); err != nil {
+				if sep := archiveBlockSeparator(prev, typ); prev != "" && sep != "" {
+					if _, err = io.WriteString(w, sep); err != nil {
 						return err
 					}
 				}
-				first = false
+				prev = typ
 				if block["text"].kind == '"' {
 					text, err := archiveJSONString(block["text"])
 					if err != nil {
