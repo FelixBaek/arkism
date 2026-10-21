@@ -148,7 +148,8 @@ window.ArkismKnowledge = (ctx) => {
     h.append(el("h3", "", title)); if (aside) h.append(aside);
     s.append(h, ...kids.filter(Boolean)); return s;
   };
-  const facts = (rows) => { const dl = el("dl", "v4s-facts wide"); for (const [k, v] of rows) if (v !== "" && v != null) dl.append(el("dt", "", k), noI18n(el("dd", "", String(v)))); return dl; };
+  // Fixed values translate; a row marked raw (user or server data) stays as written.
+  const facts = (rows) => { const dl = el("dl", "v4s-facts wide"); for (const [k, v, raw] of rows) if (v !== "" && v != null) { const dd = el("dd", "", String(v)); dl.append(el("dt", "", k), raw ? noI18n(dd) : dd); } return dl; };
   const link = (label, onClick) => { const b = el("button", "link-btn v4k-link", label); b.type = "button"; b.addEventListener("click", onClick); return b; };
   function card(textLine, buttons, note) {
     const c = el("div", "v4k-card");
@@ -211,7 +212,8 @@ window.ArkismKnowledge = (ctx) => {
     const side = el("div", "v4k-groups");
     side.append(el("p", "v4k-label", "자료"));
     for (const [k, label] of FORMATS) {
-      const n = k ? K.facets.kinds?.[k] || 0 : Object.values(K.facets.kinds || {}).reduce((a,b) => a+b,0);
+      // an older server sends no facets: 전체 falls back to the total
+      const n = k ? K.facets.kinds?.[k] || 0 : K.facets.kinds ? Object.values(K.facets.kinds).reduce((a,b) => a+b,0) : K.total || 0;
       if (k && !n) continue;
       const g = el("button", `v4k-group${K.src.format === k ? " on" : ""}`); g.type = "button";
       const t = el("span", "v4k-group-text");
@@ -294,7 +296,7 @@ window.ArkismKnowledge = (ctx) => {
     // 위키
     box.append(wikiSection(s));
     // 정보
-    box.append(sec("정보", null, facts([["형식", s.format], ["상태", srcState(s)[0]], ["신뢰", s.trust_level === "reviewed" ? "검토됨" : "사용자가 올림"], ["검토한 사람", s.approved_by || ""],
+    box.append(sec("정보", null, facts([["형식", s.format], ["상태", srcState(s)[0]], ["신뢰", s.trust_level === "reviewed" ? "검토됨" : "사용자가 올림"], ["검토한 사람", s.approved_by || "", true],
       ["색인", d ? `${num(d.indexed_chunks)} / ${num(d.chunk_count)}` : ""], ["나누는 법", d ? `제목 기준 · ${d.chunker_version}` : ""], ["올린 때", ago(s.created_at)]])));
     const tools = el("div", "v4s-actions");
     tools.append(button("새 버전 올리기", "", null, () => pickFile(s)), button("벡터 색인", "ghost", null, () => act(() => post("/v1/knowledge/index", { knowledge_source_id: s.id }),
@@ -313,13 +315,13 @@ window.ArkismKnowledge = (ctx) => {
       const j = last.job || {}, r = j.result;
       const line = [JOB[last.status] || last.status, `호출 ${j.calls || 0}번`, `토큰 ${num(j.tokens)}`, j.generator?.model, ago(last.updated_at)].filter(Boolean).join(" · ");
       const box = el("div", "v4k-job");
-      box.append(noI18n(el("p", "v4k-job-line", line)));
+      box.append(el("p", "v4k-job-line", line)); // fixed words translate piece by piece; the model id has no Hangul
       if (j.error) box.append(el("p", "meta", j.error === "wiki_budget_exceeded" ? "오늘 쓸 수 있는 모델 호출을 다 썼어요." : j.error === "revision_conflict" ? "자료가 바뀌어 멈췄어요. 다시 만들어 주세요." : `오류: ${j.error}`));
       if (r) {
         box.append(el("p", "meta", `새 ${r.created?.length || 0} · 고침 ${r.updated?.length || 0} · 그대로 ${r.unchanged?.length || 0} · 잠겨서 건너뜀 ${r.skipped_locked?.length || 0} · 거부 ${r.rejected?.length || 0}`));
         if ((r.rejected || []).length) {
           const ul = el("ul", "v4k-rejects");
-          for (const x of r.rejected.slice(0, 6)) { const li = el("li"); li.append(noI18n(el("span", "mono", x.path)), ` · ${REJECT[x.reason] || x.reason}`); ul.append(li); }
+          for (const x of r.rejected.slice(0, 6)) { const li = el("li"); li.append(noI18n(el("span", "mono", x.path)), " · ", REJECT[x.reason] || x.reason); ul.append(li); }
           box.append(ul);
           if (r.rejected.length >= 3) box.append(el("p", "v4k-warn", "거부가 많아요. 원문이 모델을 조종하려 했을 수 있어요."));
         }

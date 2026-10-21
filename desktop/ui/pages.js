@@ -65,7 +65,9 @@ window.ArkismPages = (ctx) => {
   const pill = (text, on) => el("span", `pill${on ? " on" : ""}`, text);
 
   // ---------------------------------------------------------------- app update (desktop only)
-  const update = { info: null, busy: false, text: "아직 확인하지 않았어요", label: "업데이트 확인" };
+  const update = { info: null, busy: false, text: "아직 확인하지 않았어요", label: "업데이트 확인", current: "" };
+  // The running version is known at start (Tauri app API), before any update check answers.
+  void window.__TAURI__?.app?.getVersion?.().then((v) => { update.current = v; if (state.view === "settings" && state.settingsTab === "info") render(false); }, () => {});
   function setUpdate(text, label) {
     update.text = text; update.label = label;
     $("#settings-button").classList.toggle("has-update", !!update.info?.newer);
@@ -161,6 +163,8 @@ window.ArkismPages = (ctx) => {
     c.append(line("내가 직접 말한 것", "“앞으로 ~해”처럼 말한 선호·결정·규칙", fixed("바로 저장")),
       line("AI가 추론한 교훈·결정", "내가 승인해야 쓰여요", fixed("검토 후 저장")),
       line("명령처럼 보이는 문장", "붙여 넣은 글이나 웹 문서에 섞인 지시", fixed("항상 내가 확인")));
+    toSide(sideSec("이 앱", ...(tauri ? [kvRow("버전", update.info?.current || update.current || "—")] : []), kvRow("연결", state.mode === "local" ? "이 PC" : state.mode === "remote" ? "SSH" : "서버 주소")),
+      sideNote("기억 규칙은 연결한 Arkism 서버가 정해요. 앱을 업데이트해도 저장한 기억은 그대로예요."));
     return tauri ? [updateGroup(), a, c] : [a, c];
   }
   function tabGeneral() {
@@ -532,7 +536,7 @@ window.ArkismPages = (ctx) => {
     top.append(el("span", "", update.text));
     if (update.info?.newer) top.append(el("span", "tag warn", "새 버전"));
     const ver = el("div", "v4-version-num");
-    ver.append(el("span", "", "Arkism"), el("strong", "mono", update.info ? (update.info.newer ? update.info.latest : update.info.current) : "—"));
+    ver.append(el("span", "", "Arkism"), el("strong", "mono", update.info ? (update.info.newer ? update.info.latest : update.info.current) : update.current || "—"));
     left.append(top, ver);
     if (update.info?.newer) left.append(el("small", "", `현재 버전 ${update.info.current}`));
     const acts = el("div", "v4-version-actions");

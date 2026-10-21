@@ -8,7 +8,7 @@ import { createVirtualList } from "./modules/virtualList.mjs";
 import { createAppState } from "./modules/state.mjs";
 import { createCrew } from "./crew.js";
 import { readSSH } from "./modules/storage.mjs";
-import { createAppApi } from "./modules/appApi.mjs";
+import { createAppApi, loadFailure } from "./modules/appApi.mjs";
 import { createMemoryPaging } from "./modules/memoryPaging.mjs";
 import { createMemoryList } from "./modules/memoryList.mjs";
 import { createSkillViews } from "./modules/skillViews.mjs";
@@ -64,6 +64,7 @@ export function startApp() {
     imgCat: "all",
     usage: new Map(),
     usageDone: false,
+    memoryTotals: null, // { active, idle, kinds } over every memory on the server, not the loaded first page
     loading: true,
     ready: null,
     pending: new Map() // "skillId|agent" -> "allow" | "block", until 적용
@@ -448,7 +449,8 @@ export function startApp() {
     }
     const newest = d.memories.reduce((t, m) => Math.max(t, new Date(m.created_at).getTime() || 0), 0);
     if (!card.hidden) renderStatusStages(card);
-    $("#status-meta").textContent = `불러온 기억 ${memoryPaging.memoryCount()}개 · 마지막 저장 ${newest ? ago(new Date(newest)) : "—"}`;
+    const last = newest ? ago(new Date(newest)) : "—";
+    $("#status-meta").textContent = state.memoryTotals ? `기억 ${memoryPaging.memoryCount()}개 · 마지막 저장 ${last}` : `불러온 기억 ${memoryPaging.memoryCount()}개 · 마지막 저장 ${last}`;
   }
   // 기억 처리 stages in the card: the same stages() the MEMORY › 개요 grid draws (overview.js), so a stopped stage shows here too.
   // Only while the card is open: the sums walk every memory, and overview is set up after the first renders.
@@ -546,6 +548,7 @@ export function startApp() {
     memoryPaging.memoryPages.reset(); memoryPaging.memoryResults.reset(); memoryPaging.maintenanceRecords.clear(); memoryPaging.legacyMemorySearch.clear();
     state.usage = new Map();
     state.usageDone = false;
+    state.memoryTotals = null;
     state.versions = new Map();
     state.versionsDone = false;
     render();
@@ -580,16 +583,27 @@ export function startApp() {
     } catch (e) {
       if (g !== state.connection.generation) return;
       state.loading = false;
-      state.loadError = e.message;
+      state.loadError = loadFailure(e); // { code, reached, title, text }
       setStatus("error", "연결 확인 필요");
       render();
-      stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: `연결을 확인하고 다시 시도해 주세요 (${e.message}).` });
+      stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: state.loadError.reached ? state.loadError.text : "연결을 확인하고 다시 시도해 주세요." });
     }
+  }
+  // Server-wide totals (POST /v1/memories/query, one row each): every active memory and the idle ones, with kinds.
+  // A server without the query keeps memoryTotals null and screens say "loaded so far" instead.
+  async function loadMemoryTotals(g) {
+    const read = (s) => appApi.request("/v1/memories/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: s, limit: 1, kept_ids: keptMemories(), collect_unused: pages.prefs.collectUnused !== false }) })
+      .then((r) => (Number.isSafeInteger(r?.total) ? r : null), () => null);
+    const [active, idleRows] = await Promise.all([read("active"), read("idle")]);
+    if (g !== state.connection.generation || !active) return;
+    state.memoryTotals = { active: active.total, idle: idleRows?.total ?? null, kinds: active.facets?.kinds || null };
+    render(false);
   }
   // Use counts of every memory in one call (GET /v1/memory_usage: 7·30 days and the last use; unused memories are absent).
   async function loadUsage(g) {
     memoryPaging.lastMemoryUsage = Date.now();
     const t0 = performance.now();
+    void loadMemoryTotals(g);
     const items = await appApi.request(`/v1/memory_usage?${appApi.query()}`).then((r) => r.items || [], () => null);
     if (g !== state.connection.generation) return;
     if (!items) return; // older server or no read:usage: 쓰임 stays "…" instead of calling every memory one by one
@@ -1295,7 +1309,7 @@ export function startApp() {
   function todoTitle() {
     const p = homePage();
     if (p.kind === "start") return home.startTitle();
-    if (state.loadError && p.kind === "home") return "서버 연결이 끊겼어요";
+    if (state.loadError && p.kind === "home") return state.loadError.title;
     if (p.kind === "all") return "전체 항목";
     if (p.kind === "item") return { similar: "비슷한 스킬 비교" }[p.t.id] || p.t.label;
     return "오늘 할 일";
@@ -1482,8 +1496,10 @@ export function startApp() {
     const k = week.doc?.kpi;
     if (!k) return null;
     const f = usage.fmt;
-    const mem = state.data.memories.length;
-    const used = state.usageDone && mem && !memoryPaging.partialMemories() ? `${Math.round(((mem - state.data.memories.filter(idleFromUsage).length) / mem) * 100)}%` : "…";
+    // Server totals when known; the loaded rows only when they are every memory (older servers).
+    const t = state.memoryTotals, mem = t?.active ?? state.data.memories.length;
+    const idleN = t ? t.idle : !memoryPaging.partialMemories() && state.usageDone ? state.data.memories.filter(idleFromUsage).length : null;
+    const used = mem && idleN != null ? `${Math.round(((mem - idleN) / mem) * 100)}%` : mem === 0 ? "—" : "…";
     const box = el("div", "home-week");
     for (const [label, value, sub] of [["이번 주 세션", f.num(k.sessions), "최근 7일"], ["이번 주 토큰", f.num(k.tokens), `캐시 적중 ${k.cache_hit_pct}%`],
       ["이번 주 비용", f.usd(k.cost_usd, k.priced), "공시 단가로 계산"], ["기억 사용", used, "최근 30일 답변에 쓰인 기억"]]) {
@@ -1550,7 +1566,7 @@ export function startApp() {
       b.addEventListener("click", () => go(view, tab));
       links.append(b);
     }
-    body.append(head, ...(state.loadError ? [home.lostSide()] : []), nums, team, links, el("p", "meta", "각 줄을 누르면 해당 목록으로 가요. 승인·막기는 실행 전에 무엇이 바뀌는지 보여 줘요."));
+    body.append(head, ...(state.loadError && !state.loadError.reached ? [home.lostSide()] : []), nums, team, links, el("p", "meta", "각 줄을 누르면 해당 목록으로 가요. 승인·막기는 실행 전에 무엇이 바뀌는지 보여 줘요."));
   }
   function todoDetail(t) {
     const i = todoIndex(state.selected);
@@ -1864,8 +1880,10 @@ export function startApp() {
     const body = detailShell("요약");
     const d = state.data;
     body.append(el("h2", "", "Arkism"), el("p", "lead", "에이전트들이 함께 쓰는 기억과 스킬이에요. 목록에서 하나를 고르면 왜 저장됐는지와 언제 쓰였는지 볼 수 있어요."));
-    const byKind = Object.keys(KINDS).map((k) => [kindLabel(k), `${d.memories.filter((m) => m.kind === k).length}개`]).filter(([, v]) => v !== "0개");
-    const s = section("사용 중인 기억"); s.append(facts(byKind)); body.append(s);
+    // Kinds across every memory on the server; without its totals, the loaded rows say so in the title.
+    const kinds = state.memoryTotals?.kinds;
+    const byKind = Object.keys(KINDS).map((k) => [kindLabel(k), `${kinds ? kinds[k] || 0 : d.memories.filter((m) => m.kind === k).length}개`]).filter(([, v]) => v !== "0개");
+    const s = section(kinds || !memoryPaging.partialMemories() ? "사용 중인 기억" : `사용 중인 기억 · 불러온 ${d.memories.length}개 기준`); s.append(facts(byKind)); body.append(s);
     const r = section("어떻게 쓰이나요");
     r.append(facts([["대화 시작", "선호·작업 규칙을 모두 넣어요"], ["질문할 때", "관련 있는 기억만 최대 6개"], ["승인 대기", "대화에서 후보를 추출해요. 저장 여부는 사람이 검토해요."], ["저장소", "저장소에서 나온 기억은 그 저장소에서만, 나머지는 어디서나 써요"]]));
     body.append(r);
@@ -2116,7 +2134,7 @@ export function startApp() {
   const git = window.ArkismGit({ state, $, el, button, icon, tauri, ago, notice, go, headExtras, codegraph,
     openReview: (key) => { go("reviews"); state.selected = key; markSelected(); reviews.detail(); openDetail(); } });
   const knowledge = window.ArkismKnowledge({ remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
-  const overview = window.ArkismOverview({ remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
+  const overview = window.ArkismOverview({ remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, memoryCount: () => memoryPaging.memoryCount(), onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
   Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,

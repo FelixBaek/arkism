@@ -238,7 +238,9 @@ export function createSkillViews(deps) {
       caution: versionsKnown ? live.filter((sk) => ["warn", "bad"].includes(skillChecks(sk)?.security.cls)).length : null,
       update: live.filter((sk) => updatesOf(sk).length).length, plugin: skills.filter(fromPlugin).length, trash: skills.length - live.length
     };
-    deps.$("#title-count").textContent = `${catalogState.total ?? live.length}개`;
+    // The first page failed: one message in the list, no 0개 and no empty-filter text beside it.
+    const failed = !!catalogState.error && !skills.length;
+    deps.$("#title-count").textContent = failed ? "" : `${catalogState.total ?? live.length}개`;
     const restore = keepFocus(".v4s-search");
     // 확인해 주세요: what needs a look, the first kind with any opens with 하나씩 확인하기.
     const parts = [];
@@ -269,11 +271,12 @@ export function createSkillViews(deps) {
       c.addEventListener("click", () => { deps.state.skillCat = id; deps.state.skillLimit = 0; deps.render(false); });
       return c;
     };
-    const counts = catalogState.facets.categories || {}, total = Object.values(counts).reduce((a,b) => a+b,0);
-    const none = counts[""] || 0;
-    deps.$("#chips").replaceChildren(...(cats.length ? [chip("all", "전체", total), ...cats.map((c) => chip(c.id, c.name, counts[c.id] || 0)), ...(none ? [chip("none", "분류 안 됨", none)] : [])] : []));
+    // An older server sends no category facets: 전체 shows the total, the categories no number rather than 0.
+    const counts = catalogState.facets.categories, total = counts ? Object.values(counts).reduce((a,b) => a+b,0) : catalogState.total ?? "";
+    const none = counts?.[""] || 0;
+    deps.$("#chips").replaceChildren(...(cats.length ? [chip("all", "전체", total), ...cats.map((c) => chip(c.id, c.name, counts ? counts[c.id] || 0 : "")), ...(none ? [chip("none", "분류 안 됨", none)] : [])] : []));
     deps.$("#chips").classList.add("v4s-cats");
-    deps.$("#stats").replaceChildren(deps.el("p", "meta memory-page-note", catalogState.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : catalogState.loading ? "전체 목록에서 찾는 중…" : ""));
+    deps.$("#stats").replaceChildren(deps.el("p", "meta memory-page-note", failed ? "" : catalogState.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : catalogState.loading ? "전체 목록에서 찾는 중…" : ""));
     const items = skills;
     const groups = groupSkills(items, true);
     const limit = deps.state.skillLimit || 50;
@@ -287,8 +290,15 @@ export function createSkillViews(deps) {
     table.className = "v4s-wrap";
     table.replaceChildren(list);
     deps.virtualList.mount({ container: list, scrollport: table, items: rows, row: skillRow, id: item => item.sk.id, key: JSON.stringify([deps.generation, deps.state.skillTab, deps.state.skillCat, deps.state.skillModel, deps.state.skillSort, deps.state.skillDir, deps.state.query]) });
-    if (!items.length) list.append(deps.el("div", "empty", deps.state.query ? "검색과 맞는 스킬이 없어요." : "조건에 맞는 스킬이 없어요."));
     const generation = deps.generation, tab = deps.state.skillTab;
+    if (failed) {
+      const box = deps.el("div", "empty", "스킬 목록을 불러오지 못했어요. ");
+      box.append(deps.button("다시 불러오기", "small", null, () => { void deps.catalogQuery.more(collection).catch(() => {}).finally(() => { if (generation === deps.generation && deps.state.view === "skills") deps.render(false); }); deps.render(false); }));
+      list.append(box);
+      restore();
+      return;
+    }
+    if (!items.length) list.append(deps.el("div", "empty", deps.state.query ? "검색과 맞는 스킬이 없어요." : "조건에 맞는 스킬이 없어요."));
     const more = collectionFooter({ document, name: collection, total: groups.length, shown: Math.min(limit, groups.length),
       snapshot: () => deps.catalogQuery.snapshot(collection),
       reveal: () => { deps.state.skillLimit = limit + 50; },

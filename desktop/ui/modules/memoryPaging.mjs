@@ -33,7 +33,8 @@ export function createMemoryPaging(deps) {
 
   const partialMemories = () => !!memoryPages.snapshot().cursor;
 
-  const memoryCount = () => `${deps.state.data.memories.length}${partialMemories() ? "+" : ""}`;
+  // The server total when known; otherwise the loaded rows, marked "+" while more pages remain.
+  const memoryCount = () => String(deps.state.memoryTotals?.active ?? `${deps.state.data.memories.length}${partialMemories() ? "+" : ""}`);
 
   const filteredMemories = () => deps.state.memTab === "active" && (!!deps.state.query || deps.state.kind !== "all");
 

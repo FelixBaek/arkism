@@ -6,6 +6,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const { state, el, button, icon, request, query, ago, go, render } = ctx;
   const HOUR = 3600000;
   const num = (n) => Number(n || 0).toLocaleString("ko-KR");
+  const loc = () => globalThis.ArkismI18n?.locale() || "ko-KR"; // dates follow the screen language
   const time = (v) => { const t = new Date(v || 0).getTime(); return Number.isNaN(t) ? 0 : t; };
   const KIND = { user: "선호", decision: "결정", lesson: "교훈", procedural: "작업 규칙", episodic: "사건", fact: "사실" };
   const kind = (k) => KIND[k] || k || "기억";
@@ -392,7 +393,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
         for (const x of k?.semantic || []) { const lab = SEMANTIC[x.check]; if (!lab) continue; const li = el("li", `ov-check ${x.ok ? "ok" : "no"}`); const ic = el("span", "ov-check-i", x.ok ? "✓" : "!"); ic.setAttribute("aria-hidden", "true"); li.append(ic, el("span", "", lab[x.ok ? 0 : 1])); if (!x.ok && x.note) li.append(el("small", "ov-check-note", clip(x.note, 120))); checks.append(li); }
         if (checks.children.length) box.append(checks);
         if (!k.by) { again.disabled = true; box.append(el("small", "ov-verdict-wait", "다시 보는 중이에요. 다음 AI 검토(매시 정각)에 바뀌어요.")); }
-        const s3 = sec(decide1, `AI 판단${k.at ? ` · ${new Date(k.at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })}` : ""}`, box); s3.classList.add("ov-detail-sec-act", "ov-detail-sec-box"); s3.firstChild.after(again);
+        const s3 = sec(decide1, `AI 판단${k.at ? ` · ${new Date(k.at).toLocaleDateString(loc(), { month: "numeric", day: "numeric" })}` : ""}`, box); s3.classList.add("ov-detail-sec-act", "ov-detail-sec-box"); s3.firstChild.after(again);
       }
       const rs = c.reach_suggestion;
       if (rs) { const chips = el("div", "ov-wide-chips"); for (const [val, l] of [["personal", "개인"], ["general", "범용"], ["project", "이 프로젝트만"]]) chips.append(el("span", `ov-wide-chip${val === rs.reach ? " on" : ""}`, val === rs.reach ? `${l} · AI 추천` : l)); sec(decide1, "AI 칸 제안 · 정하는 건 사람이에요", chips, ...(rs.reason ? [el("p", "", rs.reason)] : [])); }
@@ -426,7 +427,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (conf && (c.summary || k?.risk_reasons?.length)) { const why = el("p", "ov-detail-why"); why.append(tagEl("헷갈림", "ov-tag-r"), el("span", "", c.summary || k.risk_reasons.join(" · "))); sec(basisG, "AI가 본 이유", why); }
       else if (c.summary) sec(basisG, "요약", el("p", "", c.summary));
       if (!conf && k?.risk_reasons?.length) sec(basisG, `AI 분류 · 위험도 ${k.risk}`, el("p", "", k.risk_reasons.join(" · ")));
-      if (k?.evidence_span) { const q2 = el("blockquote", "ov-detail-quote", `“${clip(k.evidence_span, 240)}”`); const basis = tag(c, "basis:"); sec(basisG, ["원문 근거", basis === "explicit_user" ? "사용자 말" : basis === "inferred" ? "AI가 짐작" : "", new Date(c.created_at).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })].filter(Boolean).join(" · "), q2); }
+      if (k?.evidence_span) { const q2 = el("blockquote", "ov-detail-quote", `“${clip(k.evidence_span, 240)}”`); const basis = tag(c, "basis:"); sec(basisG, ["원문 근거", basis === "explicit_user" ? "사용자 말" : basis === "inferred" ? "AI가 짐작" : "", new Date(c.created_at).toLocaleDateString(loc(), { month: "numeric", day: "numeric" })].filter(Boolean).join(" · "), q2); }
       if (basisG.children.length > 1) detail.append(basisG);
       const ev = tag(c, "event_id:");
       if (ev) {
@@ -455,7 +456,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const remote = pagedWindow(d, "/v1/memories/query", () => ({ q, state: kindF === "idle" ? "idle" : "active", kind: ["all", "idle"].includes(kindF) ? "" : kindF, sort: sort === "new" ? "recent" : sort }), paint);
     function paint() {
       const snap = remote.snapshot(), kinds = Object.entries(snap.facets.kinds || {});
-      chipHost.replaceChildren(chipBar([["all", "전체", Object.values(snap.facets.kinds || {}).reduce((a,b)=>a+b,0)], ...kinds.map(([k,n]) => [k,kind(k),n]), ["idle", "안 쓰임", kindF === "idle" ? snap.total ?? 0 : ""]], kindF, k => { kindF=k;paint(); }));
+      chipHost.replaceChildren(chipBar([["all", "전체", snap.facets.kinds ? Object.values(snap.facets.kinds).reduce((a,b)=>a+b,0) : snap.total ?? null], ...kinds.map(([k,n]) => [k,kind(k),n]), ["idle", "안 쓰임", kindF === "idle" ? snap.total ?? 0 : null]], kindF, k => { kindF=k;paint(); }));
       const items = snap.items;
       list.replaceChildren(); if (!items.length) list.append(el("p", "ov-win-empty", snap.loading ? "불러오는 중…" : "찾은 기억이 없어요."));
       for (const m of items) {
@@ -526,7 +527,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       remote.footer(list);
       const cur = shown.find((x) => x.id === sel) || shown[0]; sel = cur?.id; list.querySelectorAll(".ov-wide-row").forEach((rw, k) => rw.classList.toggle("on", shown[k]?.id === sel));
       detail.replaceChildren(); if (!cur) return;
-      const h = el("div", "ov-detail-head"); h.append(el("span", "ov-win-tag", cur.agent || "세션"), el("small", "", `${cur.project || ""} · ${new Date(cur.started_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}`));
+      const h = el("div", "ov-detail-head"); h.append(el("span", "ov-win-tag", cur.agent || "세션"), el("small", "", `${cur.project || ""} · ${new Date(cur.started_at).toLocaleString(loc(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}`));
       detail.append(h, el("h3", "", cur.title || cur.session_id));
       const f = el("div", "ov-detail-facts"); const fact = (a, b) => { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); };
       fact("메시지", `${num(cur.messages)}개`); if (cur.active_seconds) fact("작업 시간", `${Math.round(cur.active_seconds / 60)}분`); if (cur.tokens) fact("토큰", num(cur.tokens)); if (cur.requests) fact("요청", `${num(cur.requests)}회`); if (cur.device) fact("기기", cur.device);
@@ -617,7 +618,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const label = (id) => clip(byId.get(id)?.label || memRec(id)?.text || kind(byId.get(id)?.kind), 22);
     const readMemory = (id) => { if (fetched.has(id) || memOf(id)) return; fetched.set(id, null); request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => { fetched.set(id, r); }, () => { fetched.set(id, false); }).then(() => { if (d.isConnected && sel === id) drawSide(); }); };
     const rel = (id) => edges.filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
-    const fmt = (v) => new Date(v).toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" });
+    const fmt = (v) => new Date(v).toLocaleDateString(loc(), { year: "numeric", month: "numeric", day: "numeric" });
     // Figma 611:54134: one area per topic digest; memories in no topic sit in a grey "분류 대기" area
     const TOPIC_COLORS = ["#7c9cff", "#5fc6a8", "#e8a65d", "#c48ef0", "#e57b8f", "#6cc3e0", "#b9c56b", "#d98b5f"];
     const topicOf = new Map(); topics.forEach((t, i) => (t.members || []).forEach((r) => { if (!topicOf.has(r.id)) topicOf.set(r.id, { key: t.id, name: t.title || "주제", ord: i, color: TOPIC_COLORS[i % TOPIC_COLORS.length] }); }));
