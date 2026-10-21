@@ -383,7 +383,7 @@ window.ArkismCrew = (ctx) => {
       if (only && !only(m)) continue;
       const o = el("option");
       o.value = m;
-      o.label = where.get(m).length > 1 ? where.get(m).join(" · ") : m; // the head already names a single provider
+      o.label = where.get(m).join(" · "); // 1209:68243: every row names its provider; a model on several routes lists them all
       o.dataset.group = p.name;
       o.dataset.groupIcon = p.id;
       o.dataset.tag = tr(window.ArkismBrand?.kindLabel(m) || "");
@@ -3413,16 +3413,11 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     w.append(b, x);
     return w;
   }
-  const USE_KINDS = [["memories", "기억"], ["skills", "스킬"], ["tools", "도구"], ["knowledge_sources", "지식"]];
   // 쓸 수 있는 것 (929:61931): 스킬·도구·기억·지식 rows of chips (필요할 때 쓰기; a pin = 항상 먼저 넣기), the pin total,
-  // then one box to find and add any of the four.
+  // each with its own "+ X 추가" list.
   function useCard(d, rec) {
     const c = workerCard("쓸 수 있는 것", "핀을 꽂은 것은 부를 때마다 먼저 넣어요. 칩을 누르면 자세히 볼 수 있어요.");
     const body = el("div", "ex-use");
-    const head = c.querySelector(".wk-card-head");
-    let leftOf = () => [];
-    const plus = button("+ 추가", "small", null, () => openUseAdd(leftOf));
-    head.append(plus);
     c.append(body);
     const draw = () => {
       pins?.loadLibrary();
@@ -3439,16 +3434,16 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         return useChip(d, name, { pin, mono: true, fresh: !!(pin?.revision && skillActiveVer(sk) > pin.revision), bad: pin ? badOf(pin) : "", onOpen: () => openUseDetail(d, rec, { collection: "skills", id: sk?.id, name }),
           onRemove: () => { d.skills = (d.skills || []).filter((n) => n !== name); if (sk) setPin(d, "skills", sk.id, false); } });
       });
-      // What may still be added, per kind (the four "+ X 추가" lists and the card's "+ 추가" share it).
+      // What may still be added, per kind (the four "+ X 추가" lists).
       const left = (kind) => kind === "tools" ? (ctx.toolServers?.() || []).filter((s) => !(d.tools || []).includes(s.name)).map((s) => ({ id: s.name, title: s.name, meta: s.desc || "", add: () => { d.tools = [...(d.tools || []), s.name]; } }))
         : kind === "skills" ? (pins?.candidates("skills") || []).filter((x) => !names.includes(x.title)).map((x) => ({ ...x, add: () => { d.skills = [...(d.skills || []), x.title]; } }))
         : (pins?.candidates(kind) || []).filter((x) => !pinOf(d, kind, x.id)).map((x) => ({ ...x, add: () => setPin(d, kind, x.id, true) }));
-      leftOf = left;
-      row("스킬", ...skillKids);
+      row("스킬", ...skillKids, ...addPick("skills", "+ 스킬 추가", left("skills")));
       const servers = (ctx.toolServers?.() || []).map((s) => [s.name, s.desc || ""]);
       const tools = listChips(d.tools || [], servers, "+ 도구 추가", (v) => { d.tools = v; touchWorker(); }, "wk-tools");
       tools.classList.add("ex-tools");
-      tools.querySelectorAll(".wk-add, datalist").forEach((n) => n.remove()); // adding goes through + 추가
+      tools.querySelectorAll(".wk-add, datalist").forEach((n) => n.remove()); // the shared "+ 도구 추가" below instead
+      tools.append(...addPick("tools", "+ 도구 추가", left("tools")));
       grid.append(el("span", "ex-use-k", "도구"), tools);
       // 기억: pinned memories, then the kinds it reads when it looks things up.
       const memPins = pinOrder(d).filter((p) => p.collection === "memories").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p), onRemove: () => setPin(d, p.collection, p.id, false) }));
@@ -3459,9 +3454,10 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         touchWorker();
       });
       for (const k of kinds.children) { k.classList.add("ex-kind"); k.title = tr(MEMORY_KIND_HINT[k.textContent] || ""); }
-      row("기억", ...memPins);
+      row("기억", ...memPins, ...addPick("memories", "+ 기억 추가", left("memories")));
       row("찾아볼 기억", ...kinds.children); // which kinds it searches when it looks things up, apart from the pinned ones
-      row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p), onRemove: () => setPin(d, p.collection, p.id, false) })));
+      row("지식", ...pinOrder(d).filter((p) => p.collection === "knowledge_sources").map((p) => useChip(d, pins?.known(p)?.title || p.id, { pin: p, bad: badOf(p), onOpen: () => openUseDetail(d, rec, p), onRemove: () => setPin(d, p.collection, p.id, false) })),
+        ...addPick("knowledge_sources", "+ 지식 추가", left("knowledge_sources")));
       const n = (d.pinned || []).length;
       const sum = raw(el("small", "ex-pin-sum", n ? tr(`고정 ${n}개 · 약 ${pinTokens(d).toLocaleString("ko-KR")} 토큰 · 넣는 순서는 고정 칩을 끌어서 바꿔요`) : tr("핀을 꽂으면 부를 때마다 먼저 넣어요")));
       body.replaceChildren(grid, sum);
@@ -3470,58 +3466,29 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
     draw();
     return c;
   }
-  // + 추가 (쓸 수 있는 것): one popup to find and add from 기억·스킬·도구·지식 — a search box over tabs and a list.
-  function openUseAdd(leftOf) {
-    const dlg = el("dialog", "crew-dialog ex-add-dlg");
-    const head = el("div", "dialog-head");
-    head.append(el("h2", "", "쓸 수 있는 것 추가"));
-    const x = el("button", "icon-btn ghost");
-    x.type = "button";
-    x.setAttribute("aria-label", "닫기");
-    x.append(icon("x"));
-    x.addEventListener("click", () => dlg.close());
-    head.append(x);
-    const q = el("input", "ex-add-search");
-    q.type = "search";
-    q.placeholder = tr("기억·스킬·도구·지식에서 찾기");
-    q.setAttribute("aria-label", q.placeholder);
-    const tabs = el("div", "ex-add-tabs");
-    tabs.setAttribute("role", "tablist");
-    const list = el("div", "ex-add-list");
-    let tab = "";
-    const draw = () => {
-      tabs.replaceChildren(...[["", "전체"], ...USE_KINDS].map(([k, name]) => {
-        const b = button(name, `ex-add-tab${k === tab ? " on" : ""}`, null, () => { tab = k; draw(); });
-        b.setAttribute("role", "tab");
-        b.setAttribute("aria-selected", String(k === tab));
-        return b;
-      }));
-      const term = q.value.trim().toLowerCase();
-      const rows = [];
-      for (const [kind, name] of USE_KINDS) {
-        if (tab && tab !== kind) continue;
-        for (const it of leftOf(kind)) {
-          if (term && !`${it.title} ${it.meta || ""}`.toLowerCase().includes(term)) continue;
-          const r = el("div", "ex-add-row");
-          const words = el("div", "ex-add-words");
-          words.append(raw(el("b", kind === "skills" || kind === "tools" ? "mono" : "", it.title)), el("small", "", [tab ? "" : tr(name), it.meta || ""].filter(Boolean).join(" · ")));
-          r.append(words, button("추가", "small", null, () => { if (it.add() !== false) { touchWorker(); draw(); } }));
-          rows.push(r);
-        }
-      }
-      list.replaceChildren(...(rows.length ? rows : [el("p", "dim", term ? "찾는 것이 없어요." : "더할 수 있는 승인된 자료가 없어요.")]));
-    };
-    q.addEventListener("input", draw);
-    const body = el("div", "dialog-body");
-    body.append(q, tabs, list);
-    const foot = el("div", "dialog-foot");
-    foot.append(button("완료", "primary", null, () => dlg.close()));
-    dlg.append(head, body, foot);
-    dlg.addEventListener("close", () => dlg.remove());
-    document.body.append(dlg);
-    draw();
-    dlg.showModal();
-    q.focus();
+  // + X 추가 (1209:68194): the row's own list opens in place — name + a short line, approved items only (pins.candidates); skills get category tabs.
+  // Typing in it narrows the list; picking adds and the card redraws.
+  function addPick(kind, placeholder, items) {
+    const id = `ex-add-${kind}`;
+    const dl = el("datalist");
+    dl.id = id;
+    if (kind === "skills") dl.dataset.tabs = tr("전체");
+    items.forEach((it, i) => {
+      const o = el("option", "", it.meta || "");
+      o.value = it.title;
+      o.dataset.key = String(i);
+      if (kind === "skills") { const sk = (state.data.skills || []).find((x) => x.id === it.id); o.dataset.tab = (sk && ctx.skillCategory?.(sk)) || tr("분류 안 됨"); }
+      dl.append(o);
+    });
+    const add = input("", { maxLength: 128, placeholder, cls: "wk-add" });
+    add.setAttribute("list", id);
+    add.dataset.comboEmpty = tr("더할 수 있는 승인된 자료가 없어요.");
+    add.addEventListener("change", () => {
+      const it = items[Number(add.dataset.comboKey)] || items.find((x) => x.title === add.value.trim());
+      add.value = "";
+      if (it && it.add() !== false) touchWorker();
+    });
+    return [add, dl];
   }
   // 칩 상세 (929:61931): what it is, 항상 먼저 넣기, 넣는 방식, 버전 · 새 버전 안내, 이 전문가에서 빼기 · 완료.
   const MODE_LINE = { full: "전체: 내용을 다 넣어요", summary: "요약: 줄여서 넣어요", reference: "참조: 제목만 넣고 필요할 때 읽어요" };
@@ -4261,8 +4228,8 @@ Graph: ${JSON.stringify(g).slice(0, 14000)}`;
         const run = x.crew_run || {};
         let said = "";
         try { said = JSON.parse(run.input || "{}").request || ""; } catch { said = run.input || ""; }
-        const ok = run.status === "succeeded";
-        row.append(el("b", ok ? "ok" : "warn", ok ? "✓" : "!"), el("time", "", stamp(x.created_at)), el("i", "tm-hist-src", CALL_FROM[run.trigger] || run.trigger || "직접"),
+        const ok = run.status === "succeeded", live = run.status === "running"; // 실행 중: a turning ring instead of ✓/!
+        row.append(el("b", live ? "run" : ok ? "ok" : "warn", live ? "" : ok ? "✓" : "!"), el("time", "", stamp(x.created_at)), el("i", "tm-hist-src", CALL_FROM[run.trigger] || run.trigger || "직접"),
           raw(el("span", "", (said || run.summary || tr("(입력 없음)")).slice(0, 120))), el("small", "", RUN_LABEL[run.status] || run.status || ""));
         return row;
       }));
