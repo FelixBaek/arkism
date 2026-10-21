@@ -30,7 +30,7 @@ function* compare(skills, dismissed, top) {
     for (let j = i + 1; j < skills.length; j++) {
       const a = skills[i], b = skills[j], similarity = score(sets[i], sets[j]);
       if (similarity >= 0.6) {
-        const key = [a.id, b.id].sort().join("|");
+        const key = [a.id, b.id].sort((x, y) => x < y ? -1 : x > y ? 1 : 0).join("|");
         if (!dismissed.has(key)) retain(top, { a, b, score: similarity, key });
       }
       if (++checks % 256 === 0) yield;

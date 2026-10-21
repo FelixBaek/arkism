@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from check_core_coverage import BLOCK, parse_profile
+from ci_inputs import input_roots, read_ci_text
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,8 +46,8 @@ def main():
     parser.add_argument("--floors", type=Path, default=ROOT / "config/package-coverage.json")
     args = parser.parse_args()
     try:
-        floors = json.loads(args.floors.read_text(encoding="utf-8"))
-        totals = package_totals(args.profile.read_text(encoding="utf-8"), floors)
+        floors = json.loads(read_ci_text(args.floors, input_roots(ROOT / "config"), 1 << 20))
+        totals = package_totals(read_ci_text(args.profile, input_roots(ROOT)), floors)
         failures = enforce(totals, floors)
         for package, (covered, total) in totals.items():
             print(f"{package}: {covered}/{total} = {covered / total:.2%}; required {floors[package]}%")

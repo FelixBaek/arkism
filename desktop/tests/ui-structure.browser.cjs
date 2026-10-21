@@ -42,7 +42,7 @@ fs.mkdirSync(output,{recursive:true});
         if(cmd==="local_start")return {server:"http://127.0.0.1:8091",token:"inert-browser-fixture"};
         if(cmd==="capture_settings")return {paused:false,exclude:[],instructions:""};
         if(cmd!=="api")return null;
-        const url=new URL(args.path,"http://fixture"),base=url.pathname.replace(/^\//,""),q=url.searchParams,status=q.get("status"),kind=q.get("kind");
+        const url=new URL(args.path,"https://fixture.invalid"),base=url.pathname.replace(/^\//,""),q=url.searchParams,status=q.get("status"),kind=q.get("kind");
         if(base.endsWith("/query")) {
           const inq=JSON.parse(args.body||"{}"), original=base.slice(0,-6), suffix=original==="v1/memory_candidates"?"."+(inq.state==="conflicted"?"conflicted":"candidate"):"";
           const source=data[original+suffix+".json"]||data[original+".json"]||{items:[]};

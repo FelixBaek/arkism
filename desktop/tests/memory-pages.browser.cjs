@@ -17,7 +17,7 @@ const ui=path.resolve(process.env.ARKISM_UI_DIRECTORY||path.resolve(__dirname,'.
    window.__TAURI__={event:{listen:async()=>()=>{}},core:{async invoke(command,args){
     if(command==='app_defaults')return {local:true,updates:false};if(command==='local_start')return {server:'http://127.0.0.1:8091',token:'inert-browser-fixture'};
     if(command!=='api')return null;
-    const url=new URL(args.path,'http://fixture'),p=url.pathname;let body={items:[],next_cursor:'',authority:'data_only_untrusted'};
+    const url=new URL(args.path,'https://fixture.invalid'),p=url.pathname;let body={items:[],next_cursor:'',authority:'data_only_untrusted'};
     if(p==='/v1/capabilities')body={role:'human',actions:{review_list:true,review_decide:true}};
     if(p==='/v1/providers')body={providers:[]};
     if(p==='/v1/memories'||p==='/v1/memories/query'){

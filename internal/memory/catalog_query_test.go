@@ -148,7 +148,7 @@ func TestCatalogKnowledgeBeyondSourceAndSectionLimits(t *testing.T) {
 		k.DocumentID = ""
 		k.ChunkIDs = nil
 		r.Knowledge = &k
-		if e = f.repo.Insert(testCtx, colKnowledgeSources, r); e != nil {
+		if e := f.repo.Insert(testCtx, colKnowledgeSources, r); e != nil {
 			t.Fatal(e)
 		}
 	}

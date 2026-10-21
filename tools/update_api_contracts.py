@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+from ci_inputs import input_roots, read_ci_text
 
 ROOT = Path(__file__).resolve().parent.parent
 JSON_VALUE = {"type": ["object", "array", "string", "number", "boolean", "null"],
@@ -214,7 +215,7 @@ def main():
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--types", type=Path, help="Use previously exported Go AST metadata without compiling a tool")
     args = parser.parse_args()
-    types = json.loads(args.types.read_text()) if args.types else json.loads(subprocess.check_output(["go", "run", "./tools/apitypes"], cwd=ROOT, env={**os.environ, "GOTOOLCHAIN": "local", "GOPROXY": "off"}))
+    types = json.loads(read_ci_text(args.types, input_roots(ROOT / "api"))) if args.types else json.loads(subprocess.check_output(["go", "run", "./tools/apitypes"], cwd=ROOT, env={**os.environ, "GOTOOLCHAIN": "local", "GOPROXY": "off"}))
     dest = ROOT / "api/openapi.yaml"
     original = json.loads(dest.read_text())
     manifest = json.loads((ROOT / "api/management-contracts.json").read_text())

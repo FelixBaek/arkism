@@ -130,7 +130,7 @@ function extract(dir = __dirname) {
   const files = [
     ...fs.readdirSync(dir).filter((f) => /\.(js|mjs)$/.test(f) && !f.endsWith(".test.js") && !f.startsWith("i18n")),
     ...(fs.existsSync(path.join(dir, "modules")) ? fs.readdirSync(path.join(dir, "modules")).filter(f => f.endsWith(".mjs")).map(f => "modules/" + f) : [])
-  ].sort();
+  ].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
   for (const f of files) {
     const src = fs.readFileSync(path.join(dir, f), "utf8");
     lexJS(src,

@@ -239,7 +239,7 @@ jobs:
         with:
           node-version: 22
       - name: Install pinned frontend build tools
-        run: npm ci --prefix desktop/frontend --no-audit --no-fund
+        run: npm ci --prefix desktop/frontend --ignore-scripts --no-audit --no-fund
       - name: Build and verify production UI modules
         if: env.ARKISM_PRODUCT_BUILD_CHECKS == 'true'
         run: |
@@ -259,7 +259,7 @@ jobs:
         with:
           node-version: 22
       - name: Install pinned frontend tools
-        run: npm ci --prefix desktop/frontend --no-audit --no-fund
+        run: npm ci --prefix desktop/frontend --ignore-scripts --no-audit --no-fund
       - name: Install Chromium pinned by playwright-core
         run: node desktop/frontend/node_modules/playwright-core/cli.js install chromium
       - name: Build and verify production assets
