@@ -15,7 +15,7 @@ window.ArkismRoutingTurns = (ctx) => {
     const t = el("div", "rtg-tile");
     const v = el("div", "rtg-value");
     v.append(el("strong", "", num(st.requests)), el("span", "", "건"));
-    t.append(el("p", "", title), v, el("small", "", tr(`실패 ${num(st.failures)}건 · 토큰 ${num((st.input_tokens || 0) + (st.output_tokens || 0))} · ${usd(st.cost_usd)}${st.estimated ? " 추정" : ""}`)));
+    t.append(el("p", "", title), v, el("small", "", tr(`실패 ${num(st.failures)}건 · 토큰 ${num((st.input_tokens || 0) + (st.output_tokens || 0))} · ${usd(st.cost_usd)}`) + (st.estimated ? ` ${tr("추정")}` : "")));
     if (sub) t.append(sub);
     return t;
   }

@@ -39,15 +39,6 @@ export function createMemoryPaging(deps) {
 
   const currentMemoryPages = () => filteredMemories() ? memoryResults : memoryPages;
 
-  const pagingNote = "요약은 처음 불러온 기억 기준이에요. 기억 목록에서는 전체를 검색·정렬할 수 있어요.";
-
-  function memoryPageNote() {
-    const text = pagingNote;
-    const note = deps.el("p", "meta memory-page-note", text);
-    if (legacyMemorySearch.has(deps.state.server)) note.append(" ", deps.el("span", "", "이 서버는 본문만 대소문자를 구분해 검색해요."));
-    note.setAttribute("role", "status"); return note;
-  }
-
   function ensureMemoryResults() {
     if (!filteredMemories()) return;
     const key = memoryKey(true), snap = memoryResults.snapshot();
@@ -91,7 +82,6 @@ export function createMemoryPaging(deps) {
     get maintenanceRecords() { return maintenanceRecords; },
     get memoryCount() { return memoryCount; },
     get memoryKey() { return memoryKey; },
-    get memoryPageNote() { return memoryPageNote; },
     get memoryPages() { return memoryPages; },
     get memoryResults() { return memoryResults; },
     get partialMemories() { return partialMemories; }

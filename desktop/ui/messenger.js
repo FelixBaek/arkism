@@ -147,15 +147,15 @@ window.ArkismMessenger = (ctx) => {
     sec.append(el("h3", "", "연결된 채널"), el("p", "mg-note", "바꾸려면 팀·전문가 상세의 채널 연결에서 해요."));
     // one group per messenger, each under its logo; telegram and slack have one destination each
     const groups = [["디스코드", S.bots.flatMap((b) => (b.channels || []).map((c) => [`#${c.name || c.channel_id}`, c.label || "", (b.missing || []).some((m) => m.channel_id === c.channel_id)]))],
-      ["텔레그램", dest("telegram") ? [[dest("telegram").chat_id || "채팅 ID 없음", "알림을 보내는 곳", false]] : []],
-      ["슬랙", dest("slack") ? [[`웹훅 ····${dest("slack").last4 || ""}`, "알림을 보내는 곳", false]] : []]].filter(([, rows]) => rows.length);
+      ["텔레그램", dest("telegram") ? [[dest("telegram").chat_id || "채팅 ID 없음", "알림을 보내는 곳", false, true]] : []],
+      ["슬랙", dest("slack") ? [[`웹훅 ····${dest("slack").last4 || ""}`, "알림을 보내는 곳", false, true]] : []]].filter(([, rows]) => rows.length);
     if (!groups.length) sec.append(el("p", "mg-note", "연결된 채널이 없어요."));
     for (const [name, rows] of groups) {
       const g = el("div", "mg-chan-group"), h = el("div", "mg-chan-head"), logo = window.ArkismBrand?.mark(name, "mg-logo");
       h.append(...(logo ? [logo] : []), el("strong", "", name), el("span", "mg-chan-n", `${rows.length}`)); g.append(h);
-      for (const [t, sub, need] of rows) {
+      for (const [t, sub, need, fixed] of rows) {
         const r = el("div", "mg-chan"); r.append(el("strong", "", t));
-        const s2 = el("small", need ? "warn" : ""); s2.append(raw(el("span", "", sub))); if (need) s2.append(" · ", el("span", "", "권한 필요"));
+        const s2 = el("small", need ? "warn" : ""); s2.append(fixed ? el("span", "", sub) : raw(el("span", "", sub))); // only a channel label is user data if (need) s2.append(" · ", el("span", "", "권한 필요"));
         r.append(s2); g.append(r);
       }
       sec.append(g);

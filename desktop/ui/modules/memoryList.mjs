@@ -172,7 +172,7 @@ export function createMemoryList(deps) {
   // The list filter (state.query): the top-bar #search is hidden (shell.css), so each memory list draws this box.
   function catalogNote() {
     const snap = deps.catalogQuery.snapshot(catalogName());
-    const message = snap.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : snap.loading ? "전체 목록에서 찾는 중…" : `전체 검색 결과 ${snap.total ?? 0}개 · 검색·정렬은 서버 전체 기준이에요. 후보 묶음은 불러온 항목 기준이에요.`;
+    const message = snap.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : snap.loading ? "전체 목록에서 찾는 중…" : ""; // only trouble or waiting is worth a line
     return deps.el("p", "meta memory-page-note", message);
   }
   function memSearch() {

@@ -273,7 +273,7 @@ export function createSkillViews(deps) {
     const none = counts[""] || 0;
     deps.$("#chips").replaceChildren(...(cats.length ? [chip("all", "전체", total), ...cats.map((c) => chip(c.id, c.name, counts[c.id] || 0)), ...(none ? [chip("none", "분류 안 됨", none)] : [])] : []));
     deps.$("#chips").classList.add("v4s-cats");
-    deps.$("#stats").replaceChildren(deps.el("p", "meta memory-page-note", catalogState.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : catalogState.loading ? "전체 목록에서 찾는 중…" : `전체 검색 결과 ${catalogState.total ?? 0}개 · 검색·정렬은 서버 전체 기준이에요. 같은 이름 묶음은 불러온 항목 기준이에요.`));
+    deps.$("#stats").replaceChildren(deps.el("p", "meta memory-page-note", catalogState.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : catalogState.loading ? "전체 목록에서 찾는 중…" : ""));
     const items = skills;
     const groups = groupSkills(items, true);
     const limit = deps.state.skillLimit || 50;

@@ -781,11 +781,11 @@ window.ArkismPages = (ctx) => {
         c.addEventListener("click", () => { pick = key; say(""); draw(); });
         return c;
       }));
-      body.replaceChildren(...(pick === "ssh" ? [form.node] : []));
+      body.replaceChildren(...(pick === "ssh" ? [form.node, el("p", "pg-hint", "비밀번호 접속은 안 돼요. SSH 키가 필요해요.")] : []));
       actions.replaceChildren(...(pick === "ssh" ? [test, save] : [save]));
     };
     draw();
-    g.append(cards, body, out, actions, el("p", "pg-hint", "비밀번호 접속은 안 돼요. SSH 키가 필요해요."));
+    g.append(cards, body, out, actions);
     const now = sideSec("지금 연결", kvRow("방식", state.mode === "local" ? "이 PC" : "SSH"));
     if (state.mode !== "local" && state.ssh) now.append(kvRow("서버", sshLabel(state.ssh)));
     const acts = el("div", "v4-side-actions");
@@ -928,7 +928,7 @@ window.ArkismPages = (ctx) => {
       catch (_) { notice("수집 설정을 저장하지 못했어요."); }
     };
     function draw() {
-      const rows = [line("수집", current.paused ? "멈춰 있어요. 다시 켜면 다음 대화부터 저장해요." : "에이전트 대화를 저장하고 기억을 넣어요",
+      const rows = [line("수집 켜기", current.paused ? "멈춰 있어요. 다시 켜면 다음 대화부터 저장해요." : "에이전트 대화를 저장하고 기억을 넣어요",
         sw(!current.paused, "수집", (on) => save({ ...current, paused: !on }, on ? "수집을 다시 켰어요." : "수집을 멈췄어요.")))];
       for (const folder of current.exclude) {
         rows.push(line(folder, "이 폴더와 그 안의 폴더", button("빼기 취소", "", null, () => save({ ...current, exclude: current.exclude.filter((f) => f !== folder) }, "폴더를 다시 수집해요."))));
