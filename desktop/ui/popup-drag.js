@@ -33,13 +33,14 @@
     if (!dlg || dlg.classList.contains("popout-root") || ev.target.closest(SKIP)) return;
     const [x0, y0] = (dlg.style.translate || "0px 0px").split(" ").map((v) => parseFloat(v) || 0);
     const sx = ev.clientX, sy = ev.clientY, r = dlg.getBoundingClientRect();
+    const barH = () => document.getElementById("window-bar")?.hidden === false ? 32 : 0;
     const out = (e) => e.clientX < 0 || e.clientY < 0 || e.clientX > innerWidth || e.clientY > innerHeight;
     try { head.setPointerCapture(ev.pointerId); } catch { /* the pointer is already gone */ }
     const move = (e) => {
       dlg.classList.toggle("tear-off", !!dlg.dataset.popout && out(e));
       // keep at least 48px of the head on screen so it can always be grabbed again
       const dx = Math.min(innerWidth - 48 - r.left, Math.max(48 - r.right, e.clientX - sx));
-      const dy = Math.min(innerHeight - 48 - r.top, Math.max(-r.top, e.clientY - sy));
+      const dy = Math.min(innerHeight - 48 - r.top, Math.max(barH() - r.top, e.clientY - sy)); // never under the 창 버튼 strip
       dlg.style.translate = `${x0 + dx}px ${y0 + dy}px`;
     };
     const up = (e) => {

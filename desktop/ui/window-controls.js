@@ -19,12 +19,14 @@
   void win.onResized(sync);
   sync();
   // An open modal is drawn above everything else; one that covers the top-right corner (a page dialog, a popout
-  // window's popup) takes the strip inside so the buttons stay on top and clickable.
+  // window's popup) takes the strip inside so the buttons stay on top and clickable; other modals hide it.
   const place = () => {
     const top = [...document.querySelectorAll("dialog[open]")].filter((d) => d.matches(":modal")).pop();
     const r = top?.getBoundingClientRect();
     const host = r && r.top <= 0 && r.right >= innerWidth - 1 ? top : document.body;
     if (bar.parentElement !== host) host.prepend(bar);
+    // any other modal makes the strip inert (a click would only hit its backdrop), so it is hidden until it closes
+    bar.classList.toggle("under-modal", !!top && host === document.body);
   };
   new MutationObserver(place).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
   addEventListener("resize", place);
