@@ -14127,7 +14127,7 @@
     "/v1/memory-graph": {
       "get": {
         "summary": "Relation graph around one memory, or the whole map",
-        "description": "Memories and lines up to two steps from memory_id. Lines: supersedes, conflicts, supports and human_link come from stored memory_relations (active, exactly two memory ends) and may cross reaches; same_session (shared session: tag) and similar (stored vectors, cosine >= 0.80, score) stay inside one reach and reach_project, at most 3 per node. Nodes are visible memories (not erased or quarantined, currently active or superseded) in the asked reaches; a project memory shows only when reach_project equals project_key. vector_pending marks a memory without a current stored vector. No embedding call, no relation reasons, sources or vectors in the response. Caps: limit nodes (default 60, max 100), 300 lines; truncated=true when cut. Exact four-field scope from the storage layer; read:memories on scope and on memory_id and read:memory_relations on scope, all the same principal. Audited as read:memory_graph with the center id only. mode=all: no memory_id or depth; every visible memory of the scope (same node, reach and line rules) with only id, label (memory text, whitespace folded, at most 40 characters plus an ellipsis), status, reach, kind, uses (context_usage receipts) and vector_pending per node and from, to, type per line; no full text, relations or scores. Caps: limit nodes (default and max 5000), 20000 lines; truncated=true when cut. Also needs read:usage on scope and read:memories per node (denied nodes left out with their lines). Audited as read:memory_graph with id all.",
+        "description": "Memories and lines up to two steps from memory_id. Lines: supersedes, conflicts, supports and human_link come from stored memory_relations (active, exactly two memory ends) and may cross reaches; same_session (shared session: tag) and similar (stored vectors, cosine >= 0.80, score) stay inside one reach and reach_project, at most 3 per node. Nodes are visible memories (not erased or quarantined, currently active or superseded) in the asked reaches; a project memory shows only when reach_project equals project_key. vector_pending marks a memory without a current stored vector. No embedding call, no relation reasons, sources or vectors in the response. Caps: limit nodes (default 60, max 100), 300 lines; truncated=true when cut. Exact four-field scope from the storage layer; read:memories on scope and on memory_id and read:memory_relations on scope, all the same principal. Audited as read:memory_graph with the center id only. mode=all: no memory_id or depth; every visible memory of the scope (same node, reach and line rules) with only id, label (memory text, whitespace folded, at most 40 characters plus an ellipsis), status, reach, kind, uses (context_usage receipts) and vector_pending per node and from, to, type per line; no full text, relations or scores. Caps: limit nodes (default and max 5000), 20000 lines; truncated=true when cut, nodes_truncated and edges_truncated say which cap cut. Also needs read:usage on scope and read:memories per node (denied nodes left out with their lines). Audited as read:memory_graph with id all.",
         "parameters": [
           {
             "name": "workspace_id",
@@ -37744,6 +37744,8 @@
           "nodes",
           "edges",
           "truncated",
+          "nodes_truncated",
+          "edges_truncated",
           "authority"
         ],
         "properties": {
@@ -37762,7 +37764,16 @@
             }
           },
           "truncated": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "nodes_truncated or edges_truncated"
+          },
+          "nodes_truncated": {
+            "type": "boolean",
+            "description": "More readable memories exist than the node limit"
+          },
+          "edges_truncated": {
+            "type": "boolean",
+            "description": "A line cap left out lines between the sent nodes"
           },
           "authority": {
             "type": "string",

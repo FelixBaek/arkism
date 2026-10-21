@@ -22,38 +22,49 @@ window.ArkismMemoryBubbles = (() => {
     canvas.tabIndex = 0; canvas.setAttribute("role", "application"); canvas.setAttribute("aria-label", "기억 버블 지도 · 화살표로 고르고 +/−로 확대·축소, 끌어서 옮기기");
     live.setAttribute("aria-live", "polite"); tipEl.setAttribute("aria-hidden", "true");
     const tipT = mk("span", "mm-tip-t"), tipM = mk("span", "mm-tip-m"); tipT.setAttribute("data-no-i18n", ""); tipEl.append(tipT, tipM);
-    live.setAttribute("data-no-i18n", "");
+    const liveT = mk("span", ""), liveM = mk("span", ""); liveT.setAttribute("data-no-i18n", ""); live.append(liveT, " ", liveM); // the memory's own words stay; its kind · uses line is translated
     tabBar.append(pill); cardsEl.setAttribute("aria-hidden", "true"); root.append(canvas, cardsEl, labels, tabBar, tipEl, live);
 
     const reducedMq = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
-    let cards = [], cardKey = "", W = 0, H = 0, dpr = 1, items = [], byId = new Map(), links = [], edgesAll = [], groups = [], mode = tabs[0][0], idsKey = "";
-    let sel = null, kb = null, hover = null, showAll = true, zoom = 1, panX = 0, panY = 0, scale = 1, raf = 0, glide = null, dead = false, edgeKey = "", nameBoxes = [];
+    let cards = [], cardKey = "", W = 0, H = 0, dpr = 1, items = [], byId = new Map(), links = [], edgesAll = [], groups = [], pairs = [], mode = tabs[0][0], lastList = [];
+    let sel = null, kb = null, hover = null, showAll = true, zoom = 1, panX = 0, panY = 0, scale = 1, raf = 0, glide = null, dead = false, nameBoxes = [];
     const btns = new Map();
     for (const [k, l] of tabs) { const b = mk("button", "mm-tab", l); b.type = "button"; b.addEventListener("click", () => setGroup(k)); btns.set(k, b); tabBar.append(b); }
 
-    const tok = (n, d) => getComputedStyle(root).getPropertyValue(n).trim() || d;
-    function placePill() { const b = btns.get(mode); if (!b || !b.offsetWidth) return; pill.style.left = `${b.offsetLeft}px`; pill.style.width = `${b.offsetWidth}px`; for (const [k, x] of btns) x.classList.toggle("on", k === mode); }
+    const css = getComputedStyle(root), tok = (n, d) => css.getPropertyValue(n).trim() || d; // one live style object, read once per draw
+    function placePill() { for (const [k, x] of btns) { x.classList.toggle("on", k === mode); x.setAttribute("aria-pressed", String(k === mode)); } const b = btns.get(mode); if (!b || !b.offsetWidth) return; pill.style.left = `${b.offsetLeft}px`; pill.style.width = `${b.offsetWidth}px`; }
 
     function regroup() {
       const m = new Map();
       for (const p of items) { const g = groupOf(mode, p); let o = m.get(g.key); if (!o) m.set(g.key, o = { key: g.key, name: g.name, ord: g.ord ?? 0, color: g.color || p.color, count: 0, el: null, cx: 0, cy: 0, top: null, rx: 0, ry: 0, rr: 0 }); o.count++; p.g = o; }
       groups = [...m.values()].sort((a, b) => a.ord - b.ord || b.count - a.count);
       labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", String(g.count))); return g.el; }));
-      layout();
+      pairUp(); layout();
+    }
+    // group-to-group line counts for the many-dots overview, built when the groups or lines change rather than on every draw
+    function pairUp() {
+      const m = new Map(); for (const l of links) { if (l.a.g === l.b.g) continue; const [a, b] = l.a.g.key < l.b.g.key ? [l.a.g, l.b.g] : [l.b.g, l.a.g]; let o = m.get(a)?.get(b); if (!o) { if (!m.has(a)) m.set(a, new Map()); m.get(a).set(b, o = { a, b, n: 0 }); } o.n++; }
+      pairs = [...m.values()].flatMap((x) => [...x.values()]);
     }
     function layout() {
       if (!W) return;
-      const n = groups.length || 1, aw = W - PAD.l - PAD.r, ah = H - PAD.t - PAD.b;
-      const cols = n <= 3 ? n : Math.ceil(Math.sqrt(n * aw / ah)), rows = Math.ceil(n / cols);
-      groups.forEach((g, i) => { const r = Math.floor(i / cols), inRow = r === rows - 1 ? n - r * cols : cols, c = i % cols + (cols - inRow) / 2; g.cx = PAD.l + (c + 0.5) / cols * aw; g.cy = PAD.t + (r + 0.5) / rows * ah; });
+      const aw = W - PAD.l - PAD.r, ah = H - PAD.t - PAD.b;
       // bubble size follows the canvas; shrink when many memories would not fit the free area (area share ~ 40%)
       const base = Math.max(0.8, Math.min(1.6, Math.min(W, H) / 520));
       const dot = (p) => Math.min(9, 2 + Math.sqrt(p.deg || 0) * 1.6), gap = 7; // a dot (bigger with more relations) plus its breathing room
-      const need = items.reduce((a, p) => a + Math.PI * (dot(p) + gap) ** 2, 0) * base * base;
-      // and the biggest group must fit its grid cell as a circle, so neighbouring areas never overlap
-      const per = new Map(); for (const p of items) per.set(p.g, (per.get(p.g) || 0) + Math.PI * (dot(p) + gap) ** 2 * base * base);
-      const cellR = Math.max(20, Math.min(aw / cols, ah / rows) / 2 - RIM - 14), fit = Math.PI * cellR * cellR * 0.7;
-      scale = base * Math.min(1, Math.sqrt(aw * ah * 0.32 / Math.max(1, need)), Math.sqrt(fit / Math.max(1, ...per.values())));
+      const room = new Map(); for (const p of items) room.set(p.g, (room.get(p.g) || 0) + (dot(p) + gap) ** 2);
+      const need = Math.PI * [...room.values()].reduce((a, v) => a + v, 0);
+      // each area is a circle whose radius grows with √(its dots' room), so a big group takes a big circle instead of shrinking every dot;
+      // the circles fill rows left to right, and the dot scale is the largest at which every row fits the canvas
+      const rad = (g, s) => s * Math.sqrt((room.get(g) || 0) / 0.7) + RIM + 14;
+      const rows = (s) => { const out = []; let cur = null; for (const g of groups) { const d = 2 * rad(g, s); if (!cur || cur.w + d > aw) out.push(cur = { gs: [], w: 0, h: 0 }); cur.gs.push(g); cur.w += d; cur.h = Math.max(cur.h, d); } return out; };
+      const fits = (s) => groups.every((g) => 2 * rad(g, s) <= Math.min(aw, ah)) && rows(s).reduce((a, r) => a + r.h, 0) <= ah;
+      let lo = 0, hi = Math.min(base, Math.sqrt(aw * ah * 0.32 / Math.max(1, need)));
+      if (fits(hi)) lo = hi; else for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (fits(m)) lo = m; else hi = m; }
+      scale = Math.max(0.05, lo);
+      const rs = rows(scale), gapY = Math.max(0, ah - rs.reduce((a, r) => a + r.h, 0)) / (rs.length + 1);
+      let y = PAD.t + gapY;
+      for (const r of rs) { const gapX = Math.max(0, aw - r.w) / (r.gs.length + 1); let x = PAD.l + gapX; for (const g of r.gs) { const d = 2 * rad(g, scale); g.cx = x + d / 2; g.cy = y + r.h / 2; x += d + gapX; } y += r.h + gapY; }
       for (const p of items) { p.r = dot(p) * scale; p.cr = (dot(p) + gap) * scale; }
       items.sort((a, b) => b.r - a.r);
     }
@@ -73,16 +84,15 @@ window.ArkismMemoryBubbles = (() => {
     }
 
     function setItems(list) {
-      const key = list.map((x) => `${x.id}:${x.v}:${x.reach}:${x.kind}`).join("|");
-      const same = key === idsKey; idsKey = key;
-      if (same) { draw(); return; }
+      const prev = lastList; lastList = list; // the map repaints often; compare field by field instead of building a key string
+      if (list.length === prev.length && list.every((x, i) => { const o = prev[i]; return o.id === x.id && o.v === x.v && o.reach === x.reach && o.kind === x.kind; })) { draw(); return; }
       items = list.map((x) => { const o = byId.get(x.id); return o ? Object.assign(o, x) : { ...x, x: 0, y: 0, r: 8, g: null }; });
       byId = new Map(items.map((p) => [p.id, p]));
       linkUp(); regroup(); aim(); run();
     }
     function setEdges(list) {
-      const key = list.map((e) => `${e.from}>${e.to}:${e.t}`).join("|"); if (key === edgeKey) { draw(); return; } // the map repaints often; same lines → no re-settle
-      edgeKey = key; edgesAll = list; linkUp(); layout(); aim(); cardKey = "x"; run();
+      if (list === edgesAll) { draw(); return; } // the caller keeps one array while the lines stay the same → no re-settle
+      edgesAll = list; linkUp(); pairUp(); layout(); aim(); cardKey = "x"; run();
     }
     function linkUp() {
       links = edgesAll.filter((e) => byId.has(e.from) && byId.has(e.to)).map((e) => ({ a: byId.get(e.from), b: byId.get(e.to), t: e.t }));
@@ -108,8 +118,17 @@ window.ArkismMemoryBubbles = (() => {
       zoom = nz; panX = cx - W / 2 - wx * zoom; panY = cy - H / 2 - wy * zoom; onZoom?.(zoom); draw();
     }
     const zoomBy = (f, cx, cy) => setZoom(zoom * f, cx, cy);
-    function resetView() { zoom = 1; panX = panY = 0; onZoom?.(zoom); draw(); }
-    function announce(id) { const t = tip(id); if (t) live.textContent = `${t.text} ${t.meta}`; }
+    // 화면에 맞추기: zoom and pan so every dot (where it is heading, mid-glide) fills the free area
+    function fitView() {
+      if (!W || !items.length) return;
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const p of items) { const [x, y] = glide?.to.get(p) || [p.x, p.y], m = p.r + RIM; x0 = Math.min(x0, x - m); y0 = Math.min(y0, y - m); x1 = Math.max(x1, x + m); y1 = Math.max(y1, y + m); }
+      const aw = W - PAD.l - PAD.r, ah = H - PAD.t - PAD.b;
+      zoom = Math.min(ZMAX, Math.max(ZMIN, Math.min(aw / (x1 - x0 || 1), ah / (y1 - y0 || 1))));
+      panX = PAD.l + aw / 2 - W / 2 - ((x0 + x1) / 2 - W / 2) * zoom; panY = PAD.t + ah / 2 - H / 2 - ((y0 + y1) / 2 - H / 2) * zoom;
+      onZoom?.(zoom); draw();
+    }
+    function announce(id) { const t = tip(id); if (t) { liveT.textContent = t.text; liveM.textContent = t.meta; } }
 
     // Compute the final places, then glide once from where the dots are drawn now.
     function run() {
@@ -130,16 +149,36 @@ window.ArkismMemoryBubbles = (() => {
       draw();
     }
 
-    const segDist = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(px - ax - t * dx, py - ay - t * dy); };
     const px = (dash) => dash.map((v) => v / zoom); // dash lengths in screen pixels at any zoom
     const scr = (x, y) => [W / 2 + (x - W / 2) * zoom + panX, H / 2 + (y - H / 2) * zoom + panY];
+    // rim to rim between two areas; a line that would cross a third area bows around it (the first bend that clears every other area)
+    function pairPath(a, b) {
+      const dx = b.rx - a.rx, dy = b.ry - a.ry, d = Math.hypot(dx, dy) || 1; if (d <= a.rr + b.rr) return null;
+      const mx = (a.rx + b.rx) / 2, my = (a.ry + b.ry) / 2, nx = -dy / d, ny = dx / d;
+      for (const bow of [0, 0.25, -0.25, 0.5, -0.5, 0.8, -0.8]) {
+        const cx = mx + nx * bow * d, cy = my + ny * bow * d;
+        const end = (g) => { const ex = cx - g.rx, ey = cy - g.ry, el = Math.hypot(ex, ey) || 1; return [g.rx + ex / el * g.rr, g.ry + ey / el * g.rr]; };
+        const [ax, ay] = end(a), [bx, by] = end(b);
+        let clear = true;
+        for (let k = 1; k < 16 && clear; k++) { const t = k / 16, u = 1 - t, x = u * u * ax + 2 * u * t * cx + t * t * bx, y = u * u * ay + 2 * u * t * cy + t * t * by; clear = groups.every((g) => g === a || g === b || !g.rr || Math.hypot(x - g.rx, y - g.ry) >= g.rr); }
+        if (clear) return [ax, ay, cx, cy, bx, by];
+      }
+      return null; // shortcut: a pair boxed in on both sides is left out; route around areas if that hides too much
+    }
     function draw() {
       if (!W) return;
-      const text = tok("--nc-text", "#eee");
+      const text = tok("--nc-text", "#eee"), muted = tok("--nc-muted", "#888"), bg = tok("--nc-canvas", "#0b0b0b"), font = `500 11px ${tok("--sans", "sans-serif")}`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
       ctx.translate(W / 2 + panX, H / 2 + panY); ctx.scale(zoom, zoom); ctx.translate(-W / 2, -H / 2);
       const foci = new Set([hover, kb, sel].filter(Boolean)), near = new Set(foci);
       for (const l of links) if (foci.has(l.a.id) || foci.has(l.b.id)) { near.add(l.a.id); near.add(l.b.id); }
+      // area centre and rim from where its dots are now, before the area-to-area lines use them (a single draw has no earlier values)
+      for (const g of groups) {
+        let sx = 0, sy = 0, n = 0; const home = (p) => p.g === g && p.tx == null; for (const p of items) if (home(p)) { sx += p.x; sy += p.y; n++; }
+        if (!n) { g.rr = 0; continue; }
+        g.rx = sx / n; g.ry = sy / n; let rr = 0; for (const p of items) if (home(p)) rr = Math.max(rr, Math.hypot(p.x - g.rx, p.y - g.ry) + p.r);
+        g.rr = rr + RIM;
+      }
       ctx.lineCap = "round";
       const hot = [];
       for (const l of links) { // quiet lines sit under the bubbles; lines of the focused memory are drawn on top (below)
@@ -148,18 +187,14 @@ window.ArkismMemoryBubbles = (() => {
         ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
       }
       ctx.setLineDash([]);
-      // shortcut: a topic pair whose line would cross a third area is left out; draw curves if that hides too much
-      if (showAll && items.length > MANY && groups.length > 1) {
-        const pair = new Map(); for (const l of links) if (l.a.g !== l.b.g) { const k = l.a.g.key < l.b.g.key ? `${l.a.g.key}|${l.b.g.key}` : `${l.b.g.key}|${l.a.g.key}`; const o = pair.get(k) || pair.set(k, { a: l.a.g, b: l.b.g, n: 0 }).get(k); o.n++; }
-        ctx.strokeStyle = tok("--nc-muted", "#888");
-        for (const { a, b, n } of pair.values()) { if (!a.rr || !b.rr) continue; ctx.globalAlpha = foci.size ? 0.05 : 0.35; ctx.lineWidth = Math.min(6, 1 + Math.log2(n)) / zoom; const dx = b.rx - a.rx, dy = b.ry - a.ry, d = Math.hypot(dx, dy) || 1; if (d <= a.rr + b.rr || groups.some((g) => g !== a && g !== b && g.rr && segDist(g.rx, g.ry, a.rx, a.ry, b.rx, b.ry) < g.rr)) continue; ctx.beginPath(); ctx.moveTo(a.rx + dx / d * a.rr, a.ry + dy / d * a.rr); ctx.lineTo(b.rx - dx / d * b.rr, b.ry - dy / d * b.rr); ctx.stroke(); } // rim to rim, never across the dots
+      if (showAll && items.length > MANY && groups.length > 1) { // rim to rim, never across the dots
+        ctx.strokeStyle = muted;
+        for (const { a, b, n } of pairs) { if (!a.rr || !b.rr) continue; const q = pairPath(a, b); if (!q) continue; ctx.globalAlpha = foci.size ? 0.05 : 0.35; ctx.lineWidth = Math.min(6, 1 + Math.log2(n)) / zoom; ctx.beginPath(); ctx.moveTo(q[0], q[1]); ctx.quadraticCurveTo(q[2], q[3], q[4], q[5]); ctx.stroke(); }
       }
       for (const g of groups) g.top = null;
       // topic areas (Figma 611:54134): a soft tinted circle with a dashed rim around each group's dots
       for (const g of groups) {
-        let sx = 0, sy = 0, n = 0; const home = (p) => p.g === g && p.tx == null; for (const p of items) if (home(p)) { sx += p.x; sy += p.y; n++; } if (!n) continue;
-        g.rx = sx / n; g.ry = sy / n; let rr = 0; for (const p of items) if (home(p)) rr = Math.max(rr, Math.hypot(p.x - g.rx, p.y - g.ry) + p.r);
-        g.rr = rr + RIM;
+        if (!g.rr) continue;
         ctx.globalAlpha = foci.size ? 0.03 : 0.06; ctx.fillStyle = g.color; ctx.beginPath(); ctx.arc(g.rx, g.ry, g.rr, 0, 7); ctx.fill();
         ctx.globalAlpha = foci.size ? 0.15 : 0.35; ctx.strokeStyle = g.color; ctx.lineWidth = 1 / zoom; ctx.setLineDash(px([3, 4])); ctx.stroke(); ctx.setLineDash([]);
       }
@@ -171,14 +206,14 @@ window.ArkismMemoryBubbles = (() => {
         ctx.fillStyle = p.g.color || p.color; ctx.globalAlpha = dim ? 0.22 : 0.9; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
         if (!p.g.top || p.y - p.r < p.g.top.y - p.g.top.r) p.g.top = p;
       }
-      const bg = tok("--nc-canvas", "#0b0b0b"), tr = (x) => window.ArkismI18n?.translate(x) || x, tags = [];
+      const tr = (x) => window.ArkismI18n?.translate(x) || x, tags = [];
       for (const l of hot) { // focused relations (Figma 기억 지도): thin soft curves on top of the bubbles, the relation name in a pill at the middle
         const s = EDGE[l.t] || EDGE.supports, dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
         const mx = (l.a.x + l.b.x) / 2, my = (l.a.y + l.b.y) / 2, gx = (l.a.g.cx + l.b.g.cx) / 2, gy = (l.a.g.cy + l.b.g.cy) / 2;
         let nx = -dy / d, ny = dx / d; if ((mx - gx) * nx + (my - gy) * ny < 0) { nx = -nx; ny = -ny; }
         const bow = Math.max(10, d * 0.16), cx = mx + nx * bow, cy = my + ny * bow;
         const edge = (q) => { const ex = cx - q.x, ey = cy - q.y, el = Math.hypot(ex, ey) || 1; return [q.x + ex / el * (q.r + 2), q.y + ey / el * (q.r + 2)]; }; // start at the rim, not inside the bubble
-        const [ax, ay] = edge(l.a), [bx, by] = edge(l.b), col = l.t === "same_session" ? tok("--nc-muted", s.c) : s.c;
+        const [ax, ay] = edge(l.a), [bx, by] = edge(l.b), col = l.t === "same_session" ? muted : s.c;
         const path = () => { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(cx, cy, bx, by); ctx.stroke(); };
         ctx.globalAlpha = 0.55; ctx.strokeStyle = bg; ctx.lineWidth = 4 / zoom; ctx.setLineDash([]); path(); // faint backing so the line reads over bubbles
         ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.6 / zoom; ctx.setLineDash(px(s.dash)); path();
@@ -188,7 +223,7 @@ window.ArkismMemoryBubbles = (() => {
         }
       }
       ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // pills in screen pixels, like the dot names
-      ctx.setLineDash([]); ctx.font = `500 11px ${tok("--sans", "sans-serif")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.setLineDash([]); ctx.font = font; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       for (const [s, c, x, y] of tags) {
         const t = tr(s.n), w = ctx.measureText(t).width + 16;
         ctx.globalAlpha = 1; ctx.fillStyle = bg; ctx.strokeStyle = c; ctx.lineWidth = 1;
@@ -203,7 +238,7 @@ window.ArkismMemoryBubbles = (() => {
       }
       for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2 / zoom; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 2.5) / zoom, 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
-      drawNames(foci, near, bg, text);
+      drawNames(foci, near, bg, text, muted, font);
       labels.hidden = !!sel; // group names would float over the fan
       for (const g of groups) { if (!g.rr) continue; const [x, y] = scr(g.rx, g.ry - g.rr); g.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`; }
       placeCards();
@@ -212,10 +247,10 @@ window.ArkismMemoryBubbles = (() => {
     }
 
     // Zoomed in: short names beside the dots on screen, biggest first, capped and never overlapping; they are clickable (hit()).
-    function drawNames(foci, near, bg, text) {
+    function drawNames(foci, near, bg, text, muted, font) {
       nameBoxes = []; if (zoom < LABEL_ZOOM) return;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = `500 11px ${tok("--sans", "sans-serif")}`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
-      const muted = tok("--nc-muted", "#999"), taken = [];
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = font; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      const taken = [];
       const on = items.filter((p) => { if (foci.size && !near.has(p.id)) return false; const [x, y] = scr(p.x, p.y); return x > 0 && x < W - 40 && y > PAD.t - 40 && y < H - PAD.b; }).sort((a, b) => b.v - a.v);
       for (const p of on) {
         if (nameBoxes.length >= LABEL_MAX) break;
@@ -295,11 +330,15 @@ window.ArkismMemoryBubbles = (() => {
       if (ev.key === "Enter") { const id = kb || sel; if (id) { ev.preventDefault(); onSelect(id); } return; }
       if (ev.key === "+" || ev.key === "=") { ev.preventDefault(); zoomBy(1.25); return; }
       if (ev.key === "-" || ev.key === "_") { ev.preventDefault(); zoomBy(0.8); return; }
-      if (ev.key === "0") { ev.preventDefault(); resetView(); return; }
+      if (ev.key === "0") { ev.preventDefault(); fitView(); return; }
       const dir = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }[ev.key]; if (!dir || !items.length) return;
       ev.preventDefault(); const cur = byId.get(kb || sel); let pick = null;
       if (!cur) pick = items[0]; else { let bs = 1e9; for (const p of items) { if (p === cur) continue; const dx = p.x - cur.x, dy = p.y - cur.y, along = dx * dir[0] + dy * dir[1], perp = Math.abs(dx * dir[1] - dy * dir[0]); if (along <= 0) continue; const s = along + perp * 2; if (s < bs) { bs = s; pick = p; } } }
-      if (pick) { kb = pick.id; announce(pick.id); draw(); }
+      if (pick) { // a pick outside the visible area pulls the view so it sits in the middle
+        kb = pick.id; announce(pick.id); const [sx, sy] = scr(pick.x, pick.y), m = pick.r * zoom + 24;
+        if (sx < PAD.l + m || sx > W - PAD.r - m || sy < PAD.t + m || sy > H - PAD.b - m) { panX += PAD.l + (W - PAD.l - PAD.r) / 2 - sx; panY += PAD.t + (H - PAD.t - PAD.b) / 2 - sy; }
+        draw();
+      }
     });
 
     function resize() {
@@ -315,7 +354,8 @@ window.ArkismMemoryBubbles = (() => {
     // the map's window calls this on close, so no observer keeps the old map alive
     function destroy() { dead = true; if (raf) cancelAnimationFrame(raf); raf = 0; ro?.disconnect(); }
 
-    return { el: root, setItems, setEdges, setSelected, setEdgeAll, setZoom, zoomBy, resetView, setGroup, destroy };
+    const groupLinesOnly = () => showAll && items.length > MANY; // the legend says so: above MANY dots only area-to-area lines are drawn
+    return { el: root, setItems, setEdges, setSelected, setEdgeAll, setZoom, zoomBy, fitView, groupLinesOnly, setGroup, destroy };
   }
   return { create };
 })();

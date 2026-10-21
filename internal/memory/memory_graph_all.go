@@ -27,8 +27,11 @@ type MemoryGraphMapEdge struct {
 type MemoryGraphMap struct {
 	Nodes     []MemoryGraphMapNode `json:"nodes"`
 	Edges     []MemoryGraphMapEdge `json:"edges"`
-	Truncated bool                 `json:"truncated"`
-	Authority string               `json:"authority"`
+	Truncated bool                 `json:"truncated"` // either cap below; kept for older clients
+	// NodesTruncated: more readable memories than the node limit. EdgesTruncated: a line cap cut lines.
+	NodesTruncated bool   `json:"nodes_truncated"`
+	EdgesTruncated bool   `json:"edges_truncated"`
+	Authority      string `json:"authority"`
 }
 
 func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGraphQuery) (MemoryGraphMap, error) {
@@ -57,6 +60,8 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 	if e = b.mapNodes(ctx); e != nil {
 		return MemoryGraphMap{}, e
 	}
+	nodesCut := b.trunc // from here on only the line caps set trunc
+	b.trunc = false
 	for chunk := range slices.Chunk(b.order, memoryGraphMaxNodes) {
 		for _, lines := range []func(context.Context, []string) ([]MemoryGraphEdge, error){b.storedLines, b.sessionLines, b.similarLines} {
 			found, e := lines(ctx, chunk)
@@ -85,7 +90,7 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 			uses[c.MemoryID] = c.Uses
 		}
 	}
-	out := MemoryGraphMap{Nodes: make([]MemoryGraphMapNode, 0, len(b.order)), Edges: make([]MemoryGraphMapEdge, 0, len(b.edges)), Truncated: b.trunc, Authority: AuthorityDataOnly}
+	out := MemoryGraphMap{Nodes: make([]MemoryGraphMapNode, 0, len(b.order)), Edges: make([]MemoryGraphMapEdge, 0, len(b.edges)), Truncated: nodesCut || b.trunc, NodesTruncated: nodesCut, EdgesTruncated: b.trunc, Authority: AuthorityDataOnly}
 	for _, id := range b.order {
 		r := b.nodes[id]
 		out.Nodes = append(out.Nodes, MemoryGraphMapNode{ID: id, Label: b.labels[id], Status: r.Status, Reach: memoryReach(r), Kind: r.Kind, Uses: uses[id], VectorPending: !b.fresh[id]})

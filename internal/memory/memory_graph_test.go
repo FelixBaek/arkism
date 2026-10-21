@@ -314,7 +314,7 @@ func checkGraphMap(t *testing.T, svc *Service, token string) {
 			t.Fatal("line outside the map or across reaches", l)
 		}
 	}
-	if len(nodes) != 25 || !g.Truncated || nodes["c"].Uses != 2 || nodes["sim1"].Uses != 0 || !nodes["con"].VectorPending || nodes["sim1"].VectorPending || nodes["hum"].Reach != ReachProject {
+	if len(nodes) != 25 || !g.Truncated || !g.EdgesTruncated || g.NodesTruncated || nodes["c"].Uses != 2 || nodes["sim1"].Uses != 0 || !nodes["con"].VectorPending || nodes["sim1"].VectorPending || nodes["hum"].Reach != ReachProject {
 		t.Fatal("map nodes", len(nodes), g.Truncated, nodes["c"], nodes["con"], nodes["sim1"], nodes["hum"])
 	}
 	for _, id := range []string{"sim-other-project", "other-proj"} {
@@ -344,8 +344,8 @@ func checkGraphMap(t *testing.T, svc *Service, token string) {
 		t.Fatal("general map", len(g.Nodes), e)
 	}
 	q.Limit = 5
-	if g, e = svc.MemoryGraphMap(testCtx, token, q); e != nil || len(g.Nodes) != 5 || !g.Truncated {
-		t.Fatal("map cap", len(g.Nodes), g.Truncated, e)
+	if g, e = svc.MemoryGraphMap(testCtx, token, q); e != nil || len(g.Nodes) != 5 || !g.Truncated || !g.NodesTruncated {
+		t.Fatal("map cap", len(g.Nodes), g.Truncated, g.NodesTruncated, e)
 	}
 	for _, bad := range []MemoryGraphQuery{{Scope: scopeA, MemoryID: "c"}, {Scope: scopeA, Depth: 1}, {Scope: scopeA, Limit: memoryGraphMapNodes + 1}} {
 		if _, e = svc.MemoryGraphMap(testCtx, token, bad); e != ErrInvalid {
