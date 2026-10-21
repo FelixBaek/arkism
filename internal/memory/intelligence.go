@@ -173,7 +173,7 @@ func (s *Service) ListTwinClaims(ctx context.Context, token string, scope Scope,
 			if err := ctx.Err(); err != nil {
 				return out, err
 			}
-			page, err := s.ListCandidates(ctx, token, ReviewInput{Scope: scope, Status: st, Kind: "user", Limit: intelligenceListLimit, Cursor: cursor})
+			page, err := s.ListCandidates(ctx, token, ReviewInput{omitAdvice: true, Scope: scope, Status: st, Kind: "user", Limit: intelligenceListLimit, Cursor: cursor})
 			if err != nil {
 				return out, err
 			}
@@ -279,7 +279,7 @@ func (s *Service) ListReflections(ctx context.Context, token string, scope Scope
 			if err := ctx.Err(); err != nil {
 				return out, err
 			}
-			page, err := s.ListCandidates(ctx, token, ReviewInput{Scope: scope, Status: st, Kind: "lesson", Limit: intelligenceListLimit, Cursor: cursor})
+			page, err := s.ListCandidates(ctx, token, ReviewInput{omitAdvice: true, Scope: scope, Status: st, Kind: "lesson", Limit: intelligenceListLimit, Cursor: cursor})
 			if err != nil {
 				return out, err
 			}

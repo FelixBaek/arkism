@@ -217,3 +217,19 @@ func TestReviewCatalogScanCanOmitPaidAdvice(t *testing.T) {
 		t.Fatal(page, err)
 	}
 }
+func TestIntelligenceScansOmitPaidAdvice(t *testing.T) {
+	f := reviewAdviceFixture(t)
+	row := Record{ID: "twin-candidate", Scope: scopeA, Kind: "user", Status: "candidate", Revision: 1, Text: "Synthetic claim", CreatedAt: time.Now().UTC()}
+	if err := f.repo.Insert(testCtx, "memory_candidates", row); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.ListReflections(testCtx, f.human, scopeA, "skill:synthetic"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.ListTwinClaims(testCtx, f.human, scopeA, []string{"candidate"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.emb.calls) != 0 {
+		t.Fatal("internal scan embedded candidates", len(f.emb.calls))
+	}
+}
