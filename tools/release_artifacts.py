@@ -16,6 +16,12 @@ import tempfile
 from urllib.parse import urlsplit
 
 
+SIG = ".minisig"
+TAURI_MANIFEST = "latest-tauri.json"
+SUMS = "SHA256SUMS"
+SUMS_SIG = SUMS + SIG
+
+
 class ReleaseError(Exception):
     pass
 
@@ -84,7 +90,7 @@ def verify_signature(path, signature, key, version=None):
 
 
 def sign_file(path, key, version, public):
-    signature = path.with_name(path.name + ".minisig")
+    signature = path.with_name(path.name + SIG)
     # Modern Tauri recognizes the authenticated `version:` comment field.
     comment = f"file:{path.name}\tversion:{version}"
     run_minisign(["-S", "-s", key, "-m", path, "-x", signature, "-t", comment],
@@ -127,27 +133,27 @@ def sign(directory, version, feed, channel, key):
         # manifest has a different layout, provided explicitly for migration.
         tauri = {"version": version, "platforms": {"windows-x86_64": {
             "url": f"{feed}/{installer}", "signature": wrapped}}}
-        (directory / "latest-tauri.json").write_text(json.dumps(tauri, separators=(",", ":")) + "\n", encoding="utf-8")
-        for name in (manifest, "latest-tauri.json", sbom):
+        (directory / TAURI_MANIFEST).write_text(json.dumps(tauri, separators=(",", ":")) + "\n", encoding="utf-8")
+        for name in (manifest, TAURI_MANIFEST, sbom):
             sign_file(directory / name, key, version, public)
-        files = sorted(p for p in directory.iterdir() if p.name not in ("SHA256SUMS", "SHA256SUMS.minisig"))
+        files = sorted(p for p in directory.iterdir() if p.name not in (SUMS, SUMS_SIG))
         for path in files:
             require_file(path)
             if not re.fullmatch(r"[A-Za-z0-9._-]+", path.name):
                 raise ReleaseError("unsafe release filename")
-        (directory / "SHA256SUMS").write_text("".join(f"{digest(p)}  {p.name}\n" for p in files), encoding="ascii")
-        sign_file(directory / "SHA256SUMS", key, version, public)
+        (directory / SUMS).write_text("".join(f"{digest(p)}  {p.name}\n" for p in files), encoding="ascii")
+        sign_file(directory / SUMS, key, version, public)
     verify(directory, version, feed, channel)
 
 
 def verify_inventory(directory, required, public, version):
-    for name in required | {"SHA256SUMS", "SHA256SUMS.minisig"}:
+    for name in required | {SUMS, SUMS_SIG}:
         require_file(directory / name)
-    if {p.name for p in directory.iterdir()} != required | {"SHA256SUMS", "SHA256SUMS.minisig"}:
+    if {p.name for p in directory.iterdir()} != required | {SUMS, SUMS_SIG}:
         raise ReleaseError("unexpected release assets")
-    verify_signature(directory / "SHA256SUMS", directory / "SHA256SUMS.minisig", public, version)
+    verify_signature(directory / SUMS, directory / SUMS_SIG, public, version)
     sums = {}
-    for line in (directory / "SHA256SUMS").read_text(encoding="ascii").splitlines():
+    for line in (directory / SUMS).read_text(encoding="ascii").splitlines():
         match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9._-]+)", line)
         if not match or match[2] in sums:
             raise ReleaseError("invalid or duplicate checksum entry")
@@ -163,9 +169,9 @@ def verify_inventory(directory, required, public, version):
 def verify(directory, version, feed, channel):
     validate(version, feed, channel)
     installer, manifest, sbom = names(version, channel)
-    required = {installer, installer + ".sha256", installer + ".minisig", installer + ".sig",
-                manifest, manifest + ".minisig", "latest-tauri.json", "latest-tauri.json.minisig",
-                sbom, sbom + ".minisig"}
+    required = {installer, installer + ".sha256", installer + SIG, installer + ".sig",
+                manifest, manifest + SIG, TAURI_MANIFEST, TAURI_MANIFEST + SIG,
+                sbom, sbom + SIG}
     # Provenance, when present, is checked by `gh attestation verify` in CI and
     # is signed into SHA256SUMS too. Never accept arbitrary extra release assets.
     if (directory / "provenance.sigstore.json").exists():
@@ -174,15 +180,15 @@ def verify(directory, version, feed, channel):
         public = Path(tmp) / "public.key"
         public.write_bytes(public_key())
         sums = verify_inventory(directory, required, public, version)
-        for name in (installer, manifest, "latest-tauri.json", sbom):
-            verify_signature(directory / name, directory / (name + ".minisig"), public, version)
+        for name in (installer, manifest, TAURI_MANIFEST, sbom):
+            verify_signature(directory / name, directory / (name + SIG), public, version)
         document = json.loads((directory / manifest).read_bytes())
-        signature = base64.b64encode((directory / (installer + ".minisig")).read_bytes()).decode("ascii")
+        signature = base64.b64encode((directory / (installer + SIG)).read_bytes()).decode("ascii")
         if document != dict(version=version, file=installer, sha256=sums[installer], channel=channel, signature=signature):
             raise ReleaseError("signed manifest does not describe the release")
         if (directory / (installer + ".sig")).read_text(encoding="ascii").strip() != signature:
             raise ReleaseError("Tauri signature wrapper mismatch")
-        tauri = json.loads((directory / "latest-tauri.json").read_bytes())
+        tauri = json.loads((directory / TAURI_MANIFEST).read_bytes())
         if tauri != {"version": version, "platforms": {"windows-x86_64": {
                 "url": f"{feed}/{installer}", "signature": signature}}}:
             raise ReleaseError("Tauri manifest does not describe the release")

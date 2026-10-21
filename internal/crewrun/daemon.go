@@ -283,7 +283,9 @@ func loopbackAddr(addr string) bool {
 // Lock ownership precedes any resume of persistent runs.
 func acquireCrewLock(path string) (func(), error) {
 	if path == "" {
-		return func() {}, nil
+		return func() {
+			// No lock file was taken, so release has nothing to undo.
+		}, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, err
