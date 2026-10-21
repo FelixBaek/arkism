@@ -4307,6 +4307,7 @@ window.ArkismI18nEN = {
   "{0} 안에서 고르기": "Choose within {0}",
   "· {0}초": "· {0}s",
   "Clef가 골랐어요{0}": "Clef chose it{0}",
+  "자동 — {0} 라우터가 일마다 골라요": "Auto — the {0} router picks per task",
   "{0} · 모델 {1}개{2}": "{0} · {1} models{2}",
   "'{0}' 그룹을 지울까요? 이 그룹을 부르던 에이전트는 모델을 못 찾게 돼요.": "Delete the '{0}' group? Agents that ask for it won't find a model.",
   // v4c-agent

@@ -360,10 +360,19 @@ window.ArkismCrew = (ctx) => {
     i.setAttribute("list", list);
     return i;
   }
+  // "auto" names the router that picks (Clef, Jev…), read once from the routing overview; older servers keep the plain label.
+  let router = "";
+  request(`/v1/routing/overview?${query({ range: "1h" })}`).then((d) => {
+    router = d?.policy?.classifier || "";
+    for (const o of document.querySelectorAll("option[data-router]")) { o.label = autoLabel(); if (o.parentElement?.tagName === "SELECT") o.textContent = o.label; }
+  }, () => {});
+  const autoLabel = () => (router ? tr(`자동 — ${router} 라우터가 일마다 골라요`) : tr("자동 — 라우터가 일마다 골라요"));
   // The same live list as a plain choice (자동화 팝업): "" = the fallback, "auto" = the router picks; a saved model off the list stays choosable.
   function modelSelect(value, emptyLabel) {
     const ids = [...new Set([...(models?.enabledModels() || []), ...(value && value !== "auto" ? [value] : [])])];
-    return select([["", emptyLabel], ["auto", "자동 — 라우터가 일마다 골라요"], ...ids.map((m) => [m, m])], value || "");
+    const s = select([["", emptyLabel], ["auto", autoLabel()], ...ids.map((m) => [m, m])], value || "");
+    s.querySelector('option[value="auto"]').dataset.router = "1";
+    return s;
   }
   // only: keep the models this returns true for (the 이미지 picker lists vision models only).
   function modelList(id = "crew-models", only = null) {
@@ -372,7 +381,8 @@ window.ArkismCrew = (ctx) => {
     // "auto" lets the router pick per run; the rest is the live list the runner reports (모델 설정), never a fixed one.
     const auto = el("option");
     auto.value = "auto";
-    auto.label = tr("자동 — 라우터가 일마다 골라요");
+    auto.label = autoLabel();
+    auto.dataset.router = "1";
     if (!only) dl.append(auto);
     // Grouped by provider, the provider's logo before its name; each model says on the right what it takes in. The server keeps a plain model name (no provider), so a name offered by several providers
     // says so on every copy: picking either saves the same name, and the runner picks the CLI from the name.
