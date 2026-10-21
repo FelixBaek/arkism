@@ -432,12 +432,41 @@
     }));
     if (!card.querySelector(".st-foot")) {
       const foot = el("div", "st-foot");
-      foot.append(el("p", "", "상태 아이콘 색: 초록 정상 · 주황 확인 필요 · 빨강 연결 문제"), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
+      foot.append(el("p", "", "상태 아이콘 색: 초록 정상 · 주황 확인 필요 · 빨강 연결 문제·멈춤"), button("설정", "", null, () => { card.hidden = true; openSettings(); }));
       card.append(foot);
-      $("#status-agents").before(el("strong", "st-head", "에이전트"));
     }
     const newest = d.memories.reduce((t, m) => Math.max(t, new Date(m.created_at).getTime() || 0), 0);
+    if (!card.hidden) renderStatusStages(card);
     $("#status-meta").textContent = `기억 ${d.memories.length}개 · 마지막 저장 ${newest ? ago(new Date(newest)) : "—"}`;
+  }
+  // 기억 처리 stages in the card: the same stages() the MEMORY › 개요 grid draws (overview.js), so a stopped stage shows here too.
+  // Only while the card is open: the sums walk every memory, and overview is set up after the first renders.
+  const STAGE_LEVEL = { g: ["ok", "정상"], y: ["warn", "곧 확인"], o: ["warn", "확인 필요"], r: ["bad", "멈춤"] };
+  function renderStatusStages(card) {
+    void overview.loadSessions(); // cached for a minute; calls renderStatusCard again when it lands
+    const list = overview.stages();
+    $("#status-stages").replaceChildren(...[["save", "저장"], ["use", "사용"], ["dream", "드리밍"]].map(([g, label]) => {
+      const sec = el("div", "st-stage-group");
+      sec.append(el("span", "st-stage-sec", label));
+      const ul = el("ul", "status-list");
+      for (const s of list.filter((x) => x.group === g)) {
+        const [lv, word] = STAGE_LEVEL[s.health] || STAGE_LEVEL.o;
+        const b = el("button", `st-stage ${lv}`);
+        b.type = "button";
+        b.title = `${s.label} · ${word} · ${s.bigSub} ${s.big}`;
+        b.append(el("i", `st-dot ${lv}`), el("span", "", s.label), el("output", "", s.big), el("small", "", s.bigSub));
+        b.addEventListener("click", () => { card.hidden = true; $("#status-toggle").setAttribute("aria-expanded", "false"); go("overview"); overview.openStage(s.key); });
+        const li = el("li");
+        li.append(b);
+        ul.append(li);
+      }
+      sec.append(ul);
+      return sec;
+    }));
+    const stopped = list.filter((s) => s.health === "r").length;
+    const badge = $("#status-stages-badge");
+    badge.className = `st-badge${stopped ? " bad" : ""}`;
+    badge.textContent = stopped ? `${stopped}곳 멈춤` : "모두 움직임";
   }
   // 취소·닫기 buttons close their dialog by submitting it with value "cancel": skip the form check,
   // so an empty required field (새 팀·새 자동화의 이름 …) never stops a dialog from closing.
@@ -4928,7 +4957,7 @@
   const git = window.ArkismGit({ state, $, el, button, icon, tauri, ago, notice, go, headExtras, codegraph,
     openReview: (key) => { go("reviews"); state.selected = key; markSelected(); reviews.detail(); openDetail(); } });
   const knowledge = window.ArkismKnowledge({ state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop }); // TOOLS › 지식 (knowledge.js)
-  const overview = window.ArkismOverview({ state, $, el, button, icon, request, query, ago, go, render }); // MEMORY › 개요 (overview.js)
+  const overview = window.ArkismOverview({ state, $, el, button, icon, request, query, ago, go, render, onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
   Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request, query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
@@ -4936,6 +4965,7 @@
   const homeChecks = window.ArkismHomeChecks({ state, request, query, go, ago, render }); // 홈 › 기억 처리 멈춤 · 지식 줄 (home-checks.js)
   home.wireSearch();
   shell = window.ArkismShell({ state, $, el, go, render });
+  $("#status-toggle").addEventListener("click", () => renderStatusCard()); // after shell.js opened it: fill the 기억 처리 stages
   Object.assign(views, pages.views);
   Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, catMenu, catChipBody, button, go, render, request, query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
   Object.assign(views, crew.views, crew.pages, reviews.views);

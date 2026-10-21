@@ -175,7 +175,7 @@
 .home-mem-meta .agent-tile img, .home-mem-meta .agent-tile svg { width: 12px; height: 12px; }
 
 /* ---------------------------------------------------------------- 연결 상태 card under the logo (Figma 08 · 공통 198:3468, right column) */
-.sidebar .status-card { right: auto; width: 366px; padding: 20px; gap: 12px; max-height: calc(100vh - 100px); overflow: auto; background: var(--nc-surface); }
+.sidebar .status-card { right: auto; width: min(980px, calc(100vw - 40px)); padding: 20px; gap: 12px; max-height: calc(100vh - 100px); overflow: auto; background: var(--nc-surface); }
 .status-card .status-head strong { font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .status-card .status-summary { padding: 10px 12px; border-radius: var(--nc-radius-control); background: var(--nc-raised); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .status-card .status-summary[data-issues]:not([data-issues=""]) { background: var(--nc-amber-bg); }
@@ -197,6 +197,27 @@
 .st-badge { flex: none; padding: 0 8px; border-radius: 6px; background: var(--nc-raised); font: 400 calc(12px * var(--fs, 1))/1.6 var(--sans); color: var(--nc-muted); }
 .st-badge.warn, .st-badge.bad { background: var(--nc-amber-bg); color: var(--nc-amber); }
 .status-card .status-meta { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+/* wide card: 연결 · 에이전트 · 기억 처리 side by side, stacked once a column would drop under 260px */
+.st-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: start; }
+.st-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.st-col-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.st-stages { display: flex; flex-direction: column; gap: 8px; }
+.st-stage-group { display: flex; flex-direction: column; gap: 4px; }
+.st-stage-sec { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.status-card .st-stages .status-list li { padding: 0; }
+.st-stage { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px; border: 0; background: none; text-align: left; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); cursor: pointer; }
+.st-stage:hover { background: var(--nc-raised); }
+.st-stage:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: -2px; }
+.st-stage > span { flex: 1; min-width: 0; color: var(--nc-text); }
+.st-stage > output { font: 400 13px/1.5 var(--mono); color: var(--nc-text); }
+.st-stage > small { flex: none; width: 76px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-stage.warn > output { color: var(--nc-amber); }
+.st-stage.bad { background: var(--status-danger-tint); }
+.st-stage.bad > span, .st-stage.bad > output { color: var(--status-danger); }
+.st-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--status-ok); }
+.st-dot.warn { background: var(--nc-amber); }
+.st-dot.bad { background: var(--status-danger); }
+#status-stages-badge.bad { background: var(--status-danger-tint); color: var(--status-danger); }
 .st-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .st-foot p { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 

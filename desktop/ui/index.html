@@ -172,15 +172,20 @@
           <strong>연결 상태</strong>
         </div>
         <div class="status-summary"><i class="dot"></i><span id="status-text">연결 중</span></div>
-        <ul id="status-list" class="status-list"></ul>
+        <div class="st-cols">
+        <div class="st-col"><strong class="st-head">연결</strong><ul id="status-list" class="status-list"></ul></div>
+        <div class="st-col"><strong class="st-head">에이전트</strong>
         <div id="status-agents" class="agent-row" aria-label="함께 쓰는 에이전트 연결">
           <span class="agent-tile" data-agent="claude_code" title="Claude Code"><img src="img/claude.svg" alt="Claude Code"></span>
           <span class="agent-tile mono-logo" data-agent="codex" title="Codex"><svg aria-label="Codex"><use href="#a-codex"/></svg></span>
           <span class="agent-tile mono-logo" data-agent="zcode" title="ZCode"><svg aria-label="ZCode"><use href="#a-zcode"/></svg></span>
           <span class="agent-tile mono-logo" data-agent="gemini" title="Gemini CLI"><svg aria-label="Gemini CLI"><use href="#a-gemini"/></svg></span>
           <span class="agent-tile mono-logo" data-agent="grok" title="Grok"><svg aria-label="Grok"><use href="#i-x"/></svg></span>
+        </div></div>
+        <div class="st-col"><div class="st-col-head"><strong class="st-head">기억 처리</strong><output id="status-stages-badge" class="st-badge"></output></div>
+          <div id="status-stages" class="st-stages"></div>
+          <div id="status-meta" class="status-meta"></div></div>
         </div>
-        <div id="status-meta" class="status-meta"></div>
       </section>
       <div class="rail-line"></div>
       <nav class="nav">
