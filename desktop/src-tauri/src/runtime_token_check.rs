@@ -226,7 +226,7 @@ mod tests {
                     .flat_map(u16::to_le_bytes)
                     .collect::<Vec<_>>(),
             );
-            let shell = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            let shell = std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap())
                 .join("System32/WindowsPowerShell/v1.0/powershell.exe");
             assert!(
                 Command::new(shell)

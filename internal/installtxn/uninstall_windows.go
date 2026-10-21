@@ -4,7 +4,6 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -83,7 +82,7 @@ func (m *nativeMetadata) removeInstalled() error {
 			continue
 		}
 		target, parseErr := inspectShortcut(link.data)
-		if parseErr != nil || !strings.EqualFold(target.Path, filepath.Join(m.scope.Live, "Arkism.exe")) {
+		if parseErr != nil || !samePath(target.Path, filepath.Join(m.scope.Live, "Arkism.exe")) {
 			link.close()
 			links[i] = nil
 		}
