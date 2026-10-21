@@ -16,8 +16,7 @@
 .crew-card.wf-card.has-cover { padding: 16px; justify-content: flex-start; color: #fff; }
 .crew-card.wf-card.has-cover .crew-cover-img { inset: 0; z-index: -2; height: 100%; border: 0; } /* under the ::before shade; on the same layer the photo covered it */
 .crew-card.wf-card.has-cover::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, rgb(0 0 0 / .92) 0%, rgb(0 0 0 / .75) 35%, rgb(0 0 0 / .35) 70%, rgb(0 0 0 / .5) 100%); } /* the name at the bottom and the badge at the top both read on any photo, even a white one */
-.crew-card.wf-card.has-cover .crew-cover-title { color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / .6); }
-.crew-card.wf-card.has-cover .crew-cover-title { margin-top: auto; color: #fff; font-size: calc(24px * var(--fs, 1)); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; text-transform: uppercase; }
+.crew-card.wf-card.has-cover .crew-cover-title { margin-top: auto; color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / .6); font-size: calc(24px * var(--fs, 1)); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; text-transform: uppercase; }
 
 /* ---- popup */
 .v4-auto { width: min(940px, calc(100vw - 32px)); position: relative; margin: 16px auto auto; } /* 993:60224 · 998:60693: anchored to the top, so switching tabs never moves the window */
