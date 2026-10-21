@@ -52,7 +52,7 @@ func (p *Postgres) selectRecords(ctx context.Context, collection string, scope S
 		return nil, pgErr(err)
 	}
 	defer rows.Close()
-	out := make([]Record, 0, limit)
+	out := make([]Record, 0, min(limit, 256)) // capacity hint only; a large limit grows as rows arrive
 	for rows.Next() {
 		var payload []byte
 		if err := rows.Scan(&payload); err != nil {
@@ -323,7 +323,7 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 	if err != nil {
 		return nil, err
 	}
-	hits := make([]Hit, 0, limit)
+	hits := make([]Hit, 0, min(limit, 256))
 	for _, r := range rows {
 		var parent *Record
 		if x, ok := parents[r.SkillID]; ok {
