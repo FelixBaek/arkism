@@ -237,16 +237,18 @@ func expandSkillRefs(prompt string) (string, error) {
 	return b.String(), nil
 }
 
-// assistModel is the model the owner picked in 모델 설정 for AI 도움, or the default when none is set or Arkism is unreachable.
-func assistModel() string {
-	picked := ""
+// assistModel is the model the owner picked in 모델 설정 for AI 도움 and the provider it was picked under,
+// or the default (no provider) when none is set or Arkism is unreachable.
+func assistModel() (string, string) {
+	picked, provider := "", ""
 	if page, err := runnerCall("/v1/providers?"+scopeQuery(), nil, 15*time.Second); err == nil {
-		picked = sOr(obj(page["providers"])["assist_model"])
+		p := obj(page["providers"])
+		picked, provider = sOr(p["assist_model"]), sOr(p["assist_provider"])
 	}
 	if modelID.MatchString(picked) {
-		return picked
+		return picked, provider
 	}
-	return defaultAssistModel()
+	return defaultAssistModel(), ""
 }
 
 // personaRun is a fill·polish·… assist: the fixed persona on the picked model (the default if it cannot run), inside work.
@@ -267,11 +269,14 @@ func personaRun(a map[string]any, runner runFn, work string) (map[string]any, er
 		guide += englishReader
 	}
 	persona = strings.TrimSpace(persona + "\n\n" + guide)
-	model := pyStr(a["model"])
+	model, provider := pyStr(a["model"]), ""
 	if !truthy(a["model"]) || !modelID.MatchString(model) {
-		model = assistModel()
+		model, provider = assistModel()
 	}
 	spec := map[string]any{"model": model, "effort": "medium", "instructions": persona, "task": prompt, "cwd": work}
+	if provider != "" { // 직접 추가 keys are chosen by provider
+		spec["provider"] = provider
+	}
 	fallback := defaultAssistModel()
 	if model == fallback {
 		return runner(spec)
@@ -284,7 +289,9 @@ func personaRun(a map[string]any, runner runFn, work string) (map[string]any, er
 		return nil, err
 	}
 	// It could not run or answer (no CLI or key on this host): the default answers instead.
-	return runner(withKey(spec, "model", fallback))
+	spec = withKey(spec, "model", fallback)
+	delete(spec, "provider")
+	return runner(spec)
 }
 
 // assistResult is the result body for a run that finished, however it finished.

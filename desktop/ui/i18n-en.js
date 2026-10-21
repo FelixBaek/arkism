@@ -3994,6 +3994,7 @@ window.ArkismI18nEN = {
   "{0}를 목록에서 뺄까요?": "Remove {0} from the list?",
   "{0} 켜기": "Turn on {0}",
   "AI 도움은 이제 {0}로 답해요.": "AI assist now answers with {0}.",
+  "AI 도움은 이제 {0}의 {1}로 답해요.": "AI assist now answers with {1} from {0}.",
   "업무용 {0}": "{0} (work)",
   "키 받기 · {0}": "Get a key · {0}",
   "{0} 키": "{0} key",

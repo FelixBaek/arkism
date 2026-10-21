@@ -1114,11 +1114,12 @@ export function startApp() {
     renderStatusCard();
     const v = views[state.view];
     $("#title").textContent = typeof v.title === "function" ? v.title() : v.title;
+    $("#title").classList.toggle("sr-only", $("#title").textContent === $("#area-tabs").dataset.active); // the tab already names it; screen readers keep the heading
     $("#title-count").textContent = typeof v.count === "function" && !state.loading ? v.count() : "";
     const bare = !state.loading && (typeof v.bare === "function" ? v.bare() : !!v.bare); // the rail and tabs already name the screen
     $(".main > .page-head").style.display = bare ? "none" : "";
     $(".main > .page-head .page-back")?.remove(); // a screen that has a ← link draws it again
-    $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); // TOOLS screens add them again via headExtras()
+    $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); $(".page-head .mp-assist")?.remove(); // TOOLS screens add them again via headExtras()
     $("#app").classList.toggle("v4-connect", ["tools", "git", "reviews"].includes(state.view));
     const table = $("#table");
     if (state.loading) {

@@ -403,27 +403,34 @@ window.ArkismModels = (ctx) => {
     if (all.length) c.append(el("small", "mp-count", `${all.length}개 중 ${onCount}개 켜짐`));
     return c;
   }
-  // AI 도움 기본 모델: which model fills prompt fields, polishes text and classifies. Empty = the runner's default.
+  // AI 도움 기본 모델 (in the title row): which model fills prompt fields, polishes text and classifies. Empty = the runner's default.
+  // Grouped by provider and saved with it: several providers offer the same model name. Value = "provider|model" (model names have no |).
   function assistRow(d) {
-    const s = kit.sideSec("AI 도구 기본 모델");
+    const s = el("label", "mp-assist");
     const sel = el("select");
     sel.setAttribute("aria-label", "AI 도구 기본 모델");
-    const current = d.assist_model || "";
-    for (const m of ["", ...new Set([...enabledModels(), ...(current ? [current] : [])])]) {
-      const o = el("option", "", m || "기본값 · 서버 설정");
-      o.value = m;
-      sel.append(o);
+    sel.title = "프롬프트 칸 채우기, 글 다듬기, 분류에 쓰는 모델이에요.";
+    const current = d.assist_model ? `${d.assist_provider || ""}|${d.assist_model}` : "";
+    sel.append(Object.assign(el("option", "", "기본값 · 서버 설정"), { value: "" }));
+    const groups = enabledByProvider();
+    for (const p of groups) {
+      const g = el("optgroup"); g.label = p.name;
+      for (const m of p.models) g.append(Object.assign(el("option", "", m), { value: `${p.id}|${m}` }));
+      sel.append(g);
     }
+    if (current && ![...sel.options].some((o) => o.value === current)) sel.append(Object.assign(el("option", "", d.assist_model), { value: current })); // picked earlier, now off or saved without a provider
     sel.value = current;
     sel.addEventListener("change", async () => {
+      const [provider, model] = sel.value ? sel.value.split("|") : ["", ""];
+      const from = groups.find((p) => p.id === provider)?.name;
       sel.disabled = true;
       try {
-        state.data.providers = (await request("/v1/providers/assist_model", { method: "POST", body: JSON.stringify({ scope: state.scope, model: sel.value }) })).providers;
-        notice(sel.value ? `AI 도움은 이제 ${sel.value}로 답해요.` : "AI 도움은 서버 기본 모델로 답해요.");
+        state.data.providers = (await request("/v1/providers/assist_model", { method: "POST", body: JSON.stringify({ scope: state.scope, model, ...(provider ? { provider } : {}) }) })).providers;
+        notice(!model ? "AI 도움은 서버 기본 모델로 답해요." : from ? `AI 도움은 이제 ${from}의 ${model}로 답해요.` : `AI 도움은 이제 ${model}로 답해요.`);
         render(false);
       } catch (e) { notice(errText(e)); sel.value = current; } finally { sel.disabled = false; }
     });
-    s.append(kit.kvRow("모델", sel), kit.sideNote("프롬프트 칸 채우기, 글 다듬기, 분류에 쓰는 모델이에요."));
+    s.append(el("span", "", "AI 도구 기본 모델"), sel);
     return s;
   }
   let kit = null;
@@ -458,7 +465,8 @@ window.ArkismModels = (ctx) => {
     out.push(chips);
     const p = list.find((x) => x.id === selected);
     out.push(accountsCard(p), modelsCard(p));
-    kit.side(assistRow(d), keysSection(p),
+    document.querySelector(".main > .page-head .title-line")?.append(assistRow(d)); // renderNow drops it on every redraw
+    kit.side(keysSection(p),
       kit.sideSec("한도 안내", el("p", "", "한도를 알려 주지 않는 계정은 안내만 보여 줘요. 계정을 추가하면 로그인 방법을 안내해요.")));
     return out;
   }
