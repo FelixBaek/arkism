@@ -44,13 +44,13 @@ fs.mkdirSync(output,{recursive:true});
         if(cmd!=="api")return null;
         const url=new URL(args.path,"https://fixture.invalid"),base=url.pathname.replace(/^\//,""),q=url.searchParams,status=q.get("status"),kind=q.get("kind");
         if(base.endsWith("/query")) {
-          const inq=JSON.parse(args.body||"{}"), original=base.slice(0,-6), suffix=original==="v1/memory_candidates"?"."+(inq.state==="conflicted"?"conflicted":"candidate"):"";
+          const inq=JSON.parse(args.body||"{}"), original=base.slice(0,-6), candidateState=inq.state==="conflicted"?"conflicted":"candidate", suffix=original==="v1/memory_candidates"?"."+candidateState:"";
           const source=data[original+suffix+".json"]||data[original+".json"]||{items:[]};
           const items=(source.items||[]).filter(x=>!inq.q||String(x.text||x.name||x.display_name||"").toLowerCase().includes(inq.q.toLowerCase()));
           return {status:200,body:JSON.stringify({...source,items,total:items.length,next_cursor:"",facets:{kinds:{},repositories:{},categories:{},states:{}},authority:"data_only_untrusted"})};
         }
         const candidates=[];
-        if((args.method||"GET")==="GET") {if(kind&&status)candidates.push(base+"."+kind+"."+status+".json");if(kind)candidates.push(base+"."+kind+".json");if(status)candidates.push(base+"."+status+".json");candidates.push(base+".json");}
+        if((args.method||"GET")==="GET") {if(kind&&status){candidates.push(base+"."+kind+"."+status+".json");}if(kind){candidates.push(base+"."+kind+".json");}if(status){candidates.push(base+"."+status+".json");}candidates.push(base+".json");}
         else candidates.push(base+".post.json");
         const key=candidates.find(k=>data[k]);
         return {status:200,body:JSON.stringify(key?data[key]:{items:[],next_cursor:"",authority:"data_only_untrusted"})};

@@ -15,7 +15,7 @@ const ui=path.resolve(process.env.ARKISM_UI_DIRECTORY||path.resolve(__dirname,'.
   await page.addInitScript(()=>{
    window.memoryCalls=[];window.failNextPage=false;window.removed=new Set();
    window.__TAURI__={event:{listen:async()=>()=>{}},core:{async invoke(command,args){
-    if(command==='app_defaults')return {local:true,updates:false};if(command==='local_start')return {server:'http://127.0.0.1:8091',token:'inert-browser-fixture'};
+    if(command==='app_defaults'){return {local:true,updates:false};}if(command==='local_start'){return {server:'http://127.0.0.1:8091',token:'inert-browser-fixture'};}
     if(command!=='api')return null;
     const url=new URL(args.path,'https://fixture.invalid'),p=url.pathname;let body={items:[],next_cursor:'',authority:'data_only_untrusted'};
     if(p==='/v1/capabilities')body={role:'human',actions:{review_list:true,review_decide:true}};
@@ -30,9 +30,9 @@ const ui=path.resolve(process.env.ARKISM_UI_DIRECTORY||path.resolve(__dirname,'.
      for(;i<100000&&items.length<limit;i++){
       if(window.removed.has(i))continue;
       const row={id:`m-${String(i).padStart(6,'0')}`,kind:i%2?'decision':'semantic',status:'active',text:i===90000?'RARE outside first page':`memory ${i}`,summary:'',revision:1,tags:[],created_at:'2026-10-20T00:00:00Z',updated_at:'2026-10-20T00:00:00Z',created_by_type:'human'};
-      if(q&&!(window.legacySearch?row.text.includes(q):row.text.toLowerCase().includes(q.toLowerCase()))||kind&&row.kind!==kind)continue;items.push(row);
+      if(q&&!(window.legacySearch?row.text.includes(q):row.text.toLowerCase().includes(q.toLowerCase()))||kind&&row.kind!==kind){continue;}items.push(row);
      }
-     body={items,next_cursor:i<100000?String(i):'',authority:'data_only_untrusted',...(catalog?{total:q?1:kind?50000:100000,facets:{kinds:{semantic:50000,decision:50000},repositories:{}}}:{})};
+     body={items,next_cursor:i<100000?String(i):'',authority:'data_only_untrusted',...(catalog?{total:q?1:(kind&&50000)||100000,facets:{kinds:{semantic:50000,decision:50000},repositories:{}}}:{})};
     }
     return {status:200,body:JSON.stringify(body)};
    }}};

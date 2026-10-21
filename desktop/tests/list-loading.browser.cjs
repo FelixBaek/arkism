@@ -35,7 +35,10 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
         if (p === "/v1/capabilities") body = { role: "human", actions: { review_list: true, review_decide: true } };
         if (p === "/v1/providers") body = { providers: [] };
         if (p.startsWith("/v1/skill_versions/")) { window.versionCalls.push(p.split("/").pop()); body = { id: p.split("/").pop(), analysis: {} }; }
-        const name = route === "/v1/memories" ? "memories" : route === "/v1/memory_candidates" ? (q.get("state") || q.get("status")) === "conflicted" ? "conflicted" : "candidates" : route === "/v1/skills" ? q.get("state") === "trash" ? "skillTrash" : "skills" : p === "/v1/skills/trash" ? "skillTrash" : "";
+        const candidateList = (q.get("state") || q.get("status")) === "conflicted" ? "conflicted" : "candidates";
+        const skillList = q.get("state") === "trash" ? "skillTrash" : "skills";
+        const lists = { "/v1/memories": "memories", "/v1/memory_candidates": candidateList, "/v1/skills": skillList };
+        const name = lists[route] || (p === "/v1/skills/trash" ? "skillTrash" : "");
         if (name) {
           const start = Number(q.get("cursor")) || 0, limit = Number(q.get("limit"));
           window.listCalls.push({ name, start, limit });
@@ -44,7 +47,7 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
           const count = name === "skillTrash" ? 180 : 5000;
           const items = Array.from({ length: Math.min(limit, count - start) }, (_, offset) => {
             const i = start + offset, id = `${name}-${String(i).padStart(5, "0")}`;
-            return { id, name: id, description: `Description ${i}`, kind: "semantic", status: name === "candidates" ? "candidate" : name === "conflicted" ? "conflicted" : "active", version_id: name === "skills" && i >= 50 ? `v-${i}` : "", text: name === "candidates" && window.groupCandidates ? "응답은 짧게" : `${name} ${i}${i % 3 === 0 ? " a long line of text".repeat(15) : ""}`, revision: 1, created_at: "2026-10-20T00:00:00Z", updated_at: "2026-10-20T00:00:00Z", created_by_type: "human", tags: [], sources: [], skill_compatibility: {} };
+            return { id, name: id, description: `Description ${i}`, kind: "semantic", status: { candidates: "candidate", conflicted: "conflicted" }[name] || "active", version_id: name === "skills" && i >= 50 ? `v-${i}` : "", text: name === "candidates" && window.groupCandidates ? "응답은 짧게" : `${name} ${i}${i % 3 === 0 ? " a long line of text".repeat(15) : ""}`, revision: 1, created_at: "2026-10-20T00:00:00Z", updated_at: "2026-10-20T00:00:00Z", created_by_type: "human", tags: [], sources: [], skill_compatibility: {} };
           });
           body = { items, next_cursor: start + limit < count ? String(start + limit) : "", authority: "data_only_untrusted", ...(catalog ? { total: count, facets: {kinds: {}, repositories: {}, categories: {"": count}} } : {}) };
         }
