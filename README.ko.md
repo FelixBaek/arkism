@@ -37,7 +37,7 @@ Claude Code, Codex, Gemini CLI 같은 에이전트는 어제 알려 준 것을 �
 
 ## 설치
 
-Windows 설치 파일만 배포합니다. 현재 공개된 구버전과 이 소스의 서명 검증 변경은 구분해야 합니다. 새 서명 릴리스 절차는 [업데이트 보안](guide/security-operations.md)을 보세요.
+Windows 설치 파일만 배포합니다. 0.1.3부터 업데이트에 서명이 붙습니다. 확인 방법은 [업데이트 보안](guide/security-operations.md)을 보세요.
 
 [Releases](../../releases/latest)에서 Windows 설치 파일을 받습니다.
 

@@ -37,7 +37,7 @@ The screenshots use made-up sample data and show the Korean interface; some pred
 
 ## Install
 
-Only Windows installers are distributed. Existing public releases predate the signed-update changes in this source. See [update security](guide/security-operations.md) for the new release procedure.
+Only Windows installers are distributed. Releases from 0.1.3 on ship signed updates; see [update security](guide/security-operations.md) for how they are checked.
 
 Download the Windows installer from [Releases](../../releases/latest).
 
