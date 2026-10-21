@@ -4183,7 +4183,7 @@
     s.append(itemRows(list.map((sk) => ({ name: sk.name, desc: sk.description, label: ITEM_KIND.skill }))));
     const sc = cnSection("스크립트");
     sc.hidden = true;
-    Promise.all(list.map((sk) => skillScripts(sk).then((fs) => fs.map((f) => ({ name: f, desc: sk.name, label: "스크립트" }))))).then((rows) => {
+    void Promise.all(list.map((sk) => skillScripts(sk).then((fs) => fs.map((f) => ({ name: f, desc: sk.name, label: "스크립트" }))))).then((rows) => {
       const all = rows.flat();
       if (!all.length) return;
       sc.querySelector("h3 small")?.remove();
