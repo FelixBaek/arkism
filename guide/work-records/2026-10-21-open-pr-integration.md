@@ -108,3 +108,9 @@ checkout 줄바꿈 변환을 막는 .gitattributes를 추가했다. 서명 검�
 빠진 문제를 확인했다. 런타임 다운로드 회귀의 자식 프로세스에 현재 검사
 인터프리터의 LIBDIR만 전달한다. 호스트의 임의 LD_LIBRARY_PATH나 비밀 환경을
 상속하지 않는다. 로컬 합성 다운로드 검사 3개(15개 하위 사례)는 통과했다.
+
+수정 후 Windows Rust 서명 검증과 SSH·프로세스 제어 검사는 통과했다.
+후속 불활성 NSIS helper 검사는 숨김 AppData 디렉터리를 PowerShell Get-Item이
+찾지 못해 중단됐다. 두 합성 검사 스크립트의 조상 디렉터리 검사에 -Force를
+추가해 숨김 항목도 실제 속성을 검사하며 reparse 거부는 유지한다.
+이 후속 native script 수정은 다음 Windows CI에서 확인해야 한다.
