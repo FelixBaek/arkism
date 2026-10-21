@@ -1,4 +1,4 @@
-// Popups: drag the head to move one; drop it outside the app (or press 새 창으로) to open it in its own window;
+// Popups: drag the head to move one; drop it outside the app to open it in its own window;
 // a click outside a popup closes it the way Esc does, so a popup that guards unsaved edits still asks first.
 (() => {
   const HEAD = ".dialog-head, .crew-popup-head, .ov-win-head, .ov-detail-head, .ov-recall-head, .git-dialog-head, .keys-head";
@@ -31,7 +31,8 @@
     const head = ev.target.closest?.(HEAD);
     const dlg = head?.closest("dialog[open]");
     if (!dlg || dlg.classList.contains("popout-root") || ev.target.closest(SKIP)) return;
-    const [x0, y0] = (dlg.style.translate || "0px 0px").split(" ").map((v) => parseFloat(v) || 0);
+    // "-80px 0px" reads back as "-80px": a missing y is 0 (NaN here froze the popup after a sideways or top-clamped drag)
+    const [x0 = 0, y0 = 0] = (dlg.style.translate || "0px").split(" ").map((v) => parseFloat(v) || 0);
     const sx = ev.clientX, sy = ev.clientY, r = dlg.getBoundingClientRect();
     const barH = () => document.getElementById("window-bar")?.hidden === false ? 32 : 0;
     const out = (e) => e.clientX < 0 || e.clientY < 0 || e.clientX > innerWidth || e.clientY > innerHeight;
@@ -66,25 +67,6 @@
     pressedOutside = null;
     if (dlg && e.target === dlg && outside(dlg, e) && !dlg.classList.contains("popout-root")) dismiss(dlg);
   }, true);
-
-  // 새 창으로: the same tear-off from a button (keyboard, or when dragging out is awkward). Desktop app only.
-  new MutationObserver(() => {
-    if (document.documentElement.classList.contains("popout") || !tauri()?.invoke) return;
-    for (const dlg of document.querySelectorAll("dialog[data-popout]:not([data-popout-btn])")) {
-      const head = dlg.querySelector(HEAD);
-      if (!head) continue;
-      dlg.dataset.popoutBtn = "1";
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "ghost icon-btn popout-btn";
-      b.setAttribute("aria-label", "새 창으로 열기");
-      b.title = b.getAttribute("aria-label");
-      b.innerHTML = '<svg viewBox="0 0 256 256" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M224 104a8 8 0 0 1-16 0V59.3l-66.3 66.4a8 8 0 0 1-11.4-11.4L196.7 48H152a8 8 0 0 1 0-16h64a8 8 0 0 1 8 8Zm-40 24a8 8 0 0 0-8 8v72H48V80h72a8 8 0 0 0 0-16H48a16 16 0 0 0-16 16v128a16 16 0 0 0 16 16h128a16 16 0 0 0 16-16v-72a8 8 0 0 0-8-8Z"/></svg>';
-      b.addEventListener("click", () => { const r = dlg.getBoundingClientRect(); void tearOff(dlg, window.screenX + r.left + 40, window.screenY + r.top + 40); });
-      const close = head.querySelector(".crew-popup-close");
-      close ? close.before(b) : head.append(b);
-    }
-  }).observe(document.documentElement, { childList: true, subtree: true });
 
   // A reopened popup starts centered again.
   document.addEventListener("close", (ev) => { if (ev.target instanceof HTMLDialogElement) ev.target.style.translate = ""; }, true);

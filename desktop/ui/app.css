@@ -1050,7 +1050,6 @@ html.popout dialog { visibility: visible; }
 html.popout dialog.popout-root { inset: 0; margin: 0; width: 100vw; max-width: none; height: 100vh; max-height: none; border: 0; border-radius: 0; translate: none !important; }
 html.popout dialog.popout-root::backdrop { background: var(--nc-canvas); }
 dialog.tear-off { opacity: .6; }
-.popout-btn { flex: none; }
 html.popout dialog.popout-root[open] { display: flex; flex-direction: column; }
 html.popout dialog.popout-root[open] > * { flex: none; }
 html.popout dialog.popout-root[open] > .crew-popup-body, html.popout dialog.popout-root[open] > .dialog-body { flex: 1; min-height: 0; max-height: none; height: auto; overflow: auto; }

@@ -2144,10 +2144,11 @@ export function startApp() {
     let root = null;
     for (let i = 0; i < 40 && !root; i++) { await new Promise((r) => setTimeout(r, 100)); root = document.querySelector("dialog[open]"); }
     if (!root) return quit();
-    root.classList.add("popout-root");
     const saved = () => store("arkism.popout-saved", String(Date.now()));
     addEventListener("pagehide", saved); // the window's own ✕
-    root.addEventListener("close", () => { saved(); quit(); });
+    // A popup that swaps itself for another (기억 처리 ‹ › · 넓게 보기) hands the window on; the last one closing closes it.
+    const adopt = (d) => { d.classList.add("popout-root"); d.addEventListener("close", () => { const next = document.querySelector("dialog[open]"); if (next) adopt(next); else { saved(); quit(); } }); };
+    adopt(root);
   }
   // A separate window saved or closed: show its changes here too.
   window.addEventListener("storage", (e) => { if (e.key === "arkism.popout-saved" && state.token && !document.documentElement.classList.contains("popout")) void loadAll(); });

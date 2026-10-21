@@ -235,6 +235,8 @@ window.ArkismOverview = (ctx) => {
   const windows = () => (win = win || window.ArkismOverviewWindows(ctx, { stages, sessions: () => S.sessions || [], reloadSessions: () => { S.at = 0; return loadSessions(); } }));
   const openStage = (key) => windows().open(key);
   const openWide = (kind) => windows().wide(kind);
+  // A separate window (popup-drag.js) reopens the stage or wide window that was dragged out of the app.
+  window.addEventListener("arkism:open-overview-window", (e) => { const { key, expanded, wide, args = [] } = e.detail || {}; go("overview"); if (wide) windows().wide(wide, ...args); else windows().open(key, expanded); });
 
   // ---------------------------------------------------------------- paint
   function chip(label, value, open) {
