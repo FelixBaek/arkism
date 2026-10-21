@@ -7,9 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	mathrand "math/rand/v2"
 	"net"
 	"net/http"
 	"net/smtp"
+	"net/textproto"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -113,7 +116,9 @@ func (e *Engine) notify(ctx context.Context, c map[string]string, input any) (an
 		}
 		body := "From: " + d.From + "\r\nTo: " + strings.Join(d.To, ", ") + "\r\nSubject: " + strings.ReplaceAll(subject, "\n", " ") +
 			"\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" + msg
-		if sendMail(ctx, net.JoinHostPort(d.Host, port), d.Host, auth, d.From, d.To, []byte(body)) != nil {
+		if retryMail(ctx, func() error {
+			return sendMail(ctx, net.JoinHostPort(d.Host, port), d.Host, auth, d.From, d.To, []byte(body))
+		}) != nil {
 			err = failf("notify", "email send failed")
 		}
 	default:
@@ -180,22 +185,83 @@ func sendMail(ctx context.Context, addr, host string, auth smtp.Auth, from strin
 	return c.Quit()
 }
 
+// Notifications are at-least-once: a lost acknowledgement may cause a duplicate.
+// Permanent HTTP failures are never retried. No destination or response body is logged.
 func (e *Engine) postJSON(ctx context.Context, target string, body any) error {
-	b, _ := json.Marshal(body)
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", target, bytes.NewReader(b))
+	b, err := json.Marshal(body)
 	if err != nil {
-		return failf("notify", "bad destination")
+		return failf("notify", "invalid message")
 	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := e.httpClient().Do(req)
-	if err != nil {
-		return failf("notify", "send failed")
+	for attempt := 0; attempt < 3; attempt++ {
+		delay := (200 * time.Millisecond << attempt) + time.Duration(mathrand.IntN(100))*time.Millisecond
+		op, cancel := context.WithTimeout(ctx, 30*time.Second)
+		req, err := http.NewRequestWithContext(op, "POST", target, bytes.NewReader(b))
+		if err != nil {
+			cancel()
+			return failf("notify", "bad destination")
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := e.httpClient().Do(req)
+		retry := err != nil
+		if err == nil {
+			status := resp.StatusCode
+			_ = resp.Body.Close()
+			cancel()
+			if status >= 200 && status < 300 {
+				return nil
+			}
+			retry = status == 429 || status >= 500
+			if !retry {
+				return failf("notify", "%s", fmt.Sprintf("answered %d", status))
+			}
+			header := resp.Header.Get("Retry-After")
+			if n, err := strconv.Atoi(header); err == nil && n > 0 {
+				if n > 30 {
+					return failf("notify", "retry deferred beyond notification budget")
+				}
+				delay = time.Duration(n) * time.Second
+			} else if until, err := http.ParseTime(header); err == nil {
+				wait := time.Until(until)
+				if wait > 30*time.Second {
+					return failf("notify", "retry deferred beyond notification budget")
+				}
+				if wait > delay {
+					delay = wait
+				}
+			}
+		} else {
+			cancel()
+		}
+
+		if !retry || attempt == 2 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return failf("notify", "send cancelled")
+		case <-time.After(delay):
+		}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return failf("notify", "%s", fmt.Sprintf("answered %d", resp.StatusCode))
+	return failf("notify", "send failed after 3 attempts")
+}
+
+func retryMail(ctx context.Context, send func() error) error {
+	for attempt := 0; attempt < 3; attempt++ {
+		err := send()
+		if err == nil {
+			return nil
+		}
+		var smtpErr *textproto.Error
+		var netErr net.Error
+		transient := errors.As(err, &smtpErr) && smtpErr.Code >= 400 && smtpErr.Code < 500 || errors.As(err, &netErr)
+		if !transient || attempt == 2 {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After((200 * time.Millisecond << attempt) + time.Duration(mathrand.IntN(100))*time.Millisecond):
+		}
 	}
-	return nil
+	return errors.New("notification attempts exhausted")
 }

@@ -34,6 +34,11 @@ function Invoke-Checked([scriptblock]$Block, [string]$What) {
   if ($LASTEXITCODE -ne 0) { throw "$What failed" }
 }
 
+# Compile the explicit module graph before embedding the Windows WebView assets.
+Invoke-Checked { npm ci --prefix (Join-Path $desktop 'frontend') --no-audit --no-fund } 'frontend dependencies'
+Invoke-Checked { node (Join-Path $desktop 'frontend\build.cjs') } 'frontend bundle'
+Invoke-Checked { node (Join-Path $desktop 'frontend\check.cjs') } 'frontend output checks'
+
 # Build the agent client (including embedded task helpers), the server programs and database roles;
 # then prepare Postgres with pgvector (prepare-runtime.ps1).
 $env:CGO_ENABLED = '0'
@@ -41,11 +46,12 @@ Push-Location $repo
 Invoke-Checked { go build -trimpath -o (Join-Path $stage 'integration\arkism.exe') ./cmd/arkism } 'go build arkism'
 Invoke-Checked { go build -trimpath -o (Join-Path $stage 'runtime\memoryd.exe') ./cmd/memoryd } 'go build memoryd'
 Invoke-Checked { go build -trimpath -o (Join-Path $stage 'runtime\memory-principal.exe') ./cmd/memory-principal } 'go build memory-principal'
+Invoke-Checked { go build -trimpath '-ldflags=-H=windowsgui' -o (Join-Path $stage 'runtime\arkism-installer.exe') ./cmd/arkism-installer } 'go build installer participant'
 Pop-Location
 Copy-Item (Join-Path $repo 'tools\roles.sql') (Join-Path $stage 'runtime')
 & (Join-Path $PSScriptRoot 'prepare-runtime.ps1') -Cache $cache -Stage $stage
 
-$env:TAURI_CONFIG = '{"version":"' + $Version + '"}'
+$env:TAURI_CONFIG = @{ version = $Version; build = @{ frontendDist = (Join-Path $desktop 'ui-dist') } } | ConvertTo-Json -Depth 3 -Compress
 # Keep the build machine's paths (user name, folders) out of the binary's panic locations.
 $env:RUSTFLAGS = "--remap-path-prefix=$($env:USERPROFILE)=~ --remap-path-prefix=$repo=build"
 Push-Location (Join-Path $desktop 'src-tauri')
@@ -63,20 +69,26 @@ function Sign-Files([string[]]$Files) {
 }
 try {
   if ($signing) { [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)) }
-  Sign-Files @((Join-Path $stage 'Arkism.exe'), (Join-Path $stage 'integration\arkism.exe'), (Join-Path $stage 'runtime\memoryd.exe'), (Join-Path $stage 'runtime\memory-principal.exe'))
+  Sign-Files @((Join-Path $stage 'Arkism.exe'), (Join-Path $stage 'integration\arkism.exe'), (Join-Path $stage 'runtime\memoryd.exe'), (Join-Path $stage 'runtime\memory-principal.exe'), (Join-Path $stage 'runtime\arkism-installer.exe'))
   $out = Join-Path $dist "Arkism-$Version-setup.exe"
-  Invoke-Checked { & $Makensis /V2 "/DVERSION=$Version" "/DSTAGE_DIR=$stage" "/DOUT_FILE=$out" (Join-Path $PSScriptRoot 'arkism.nsi') } 'makensis'
+  . (Join-Path $PSScriptRoot 'package-windows.ps1')
+  $package = Invoke-WindowsInstallerPackage -Version $Version -Stage $stage -Makensis $Makensis -Output $out -TempRoot $tmp `
+    -SignUninstaller { param($File) Sign-Files @($File) }
   Sign-Files @($out)
 } finally {
   if (Test-Path $pfx) { Remove-Item -Force $pfx }
 }
 
 # Check the staged app's built-in runtime before testing the installer itself.
-$check = Join-Path $tmp "arkism-runtime-check-$PID"
+$check = Join-Path $tmp ('arkism-runtime-check-' + [guid]::NewGuid().ToString('N'))
 $p = Start-Process (Join-Path $stage 'Arkism.exe') -ArgumentList '--runtime-check', $check -Wait -PassThru
 Copy-Item -LiteralPath (Join-Path $check 'check.json') -Destination (Join-Path $dist 'windows-staged-runtime-check.json')
 Get-Content (Join-Path $check 'check.json')
 if ($p.ExitCode -ne 0) { throw 'runtime check failed' }
+. (Join-Path $PSScriptRoot 'runtime-check-result.ps1')
+$runtimeResult = Get-Content -Raw -LiteralPath (Join-Path $check 'check.json') | ConvertFrom-Json
+if ($runtimeResult.ok -isnot [bool] -or -not $runtimeResult.ok -or $runtimeResult.phase -cne 'complete') { throw 'runtime check evidence failed' }
+Assert-RuntimeTokenEvidence $runtimeResult
 
 $hash = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
 "$hash  $(Split-Path -Leaf $out)" | Set-Content -NoNewline -Encoding ascii "$out.sha256"

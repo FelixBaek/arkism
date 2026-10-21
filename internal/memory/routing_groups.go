@@ -168,7 +168,7 @@ func routingGroupModels(models []routingModel, group RoutingGroup) []routingMode
 	return out
 }
 
-func routingGroupRoutes(mux *http.ServeMux, s *Service) {
+func routingGroupRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/routing/groups", func(w http.ResponseWriter, r *http.Request) {
 		out, err := s.RoutingGroups(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, out, err)

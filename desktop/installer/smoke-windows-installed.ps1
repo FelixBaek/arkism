@@ -61,10 +61,11 @@ function Get-InstalledSmokeTree([string]$Root, [string]$Directory) {
 }
 
 function Get-InstalledSmokePayload([string]$Stage) {
-  $rows = @([pscustomobject]@{ Path = 'Arkism.exe'; Sha256 = Get-InstalledSmokeHash (Join-Path $Stage 'Arkism.exe') })
+  $rows = @([pscustomobject]@{ Path = 'Arkism.exe'; Sha256 = Get-InstalledSmokeHash (Join-Path $Stage 'Arkism.exe') },
+    [pscustomobject]@{ Path = 'uninstall.exe'; Sha256 = Get-InstalledSmokeHash (Join-Path $Stage 'uninstall.exe') })
   $rows += @(Get-InstalledSmokeTree $Stage (Join-Path $Stage 'integration'))
   $rows += @(Get-InstalledSmokeTree $Stage (Join-Path $Stage 'runtime'))
-  $required = @('integration/arkism.exe', 'runtime/memoryd.exe', 'runtime/memory-principal.exe', 'runtime/roles.sql',
+  $required = @('runtime/arkism-installer.exe', 'uninstall.exe', 'integration/arkism.exe', 'runtime/memoryd.exe', 'runtime/memory-principal.exe', 'runtime/roles.sql',
     'runtime/pgsql/bin/postgres.exe', 'runtime/pgsql/bin/pg_ctl.exe', 'runtime/pgsql/bin/initdb.exe',
     'runtime/pgsql/bin/psql.exe', 'runtime/pgsql/bin/pg_dump.exe', 'runtime/pgsql/bin/pg_restore.exe',
     'runtime/pgsql/lib/vector.dll', 'runtime/pgsql/share/extension/vector.control')
@@ -175,8 +176,19 @@ function Add-InstalledSmokeOwnedFolders($Context, [string]$Root, $Environment) {
     $folders[$name] = ConvertTo-InstalledSmokePath $folders[$name]
     if (-not (Test-InstalledSmokeWithin $folders[$name] $Root)) { throw 'smoke_child_folder_not_owned' }
     Assert-InstalledSmokeDirectory $folders[$name] -AllowMissing
+    [IO.Directory]::CreateDirectory($folders[$name]) | Out-Null
   }
   $Context.OwnedShortcutFolders = $folders
+}
+
+# Environment variables alone do not redirect an absolute/OneDrive Desktop.
+# Ask the shipping helper to compare the same physical known folders it uses.
+function Assert-InstalledSmokeIsolatedFolders($Context, [string]$Stage, $Environment) {
+  $helper = Join-Path $Stage 'runtime/arkism-installer.exe'
+  Assert-InstalledSmokeFile $helper
+  $folders = $Context.OwnedShortcutFolders
+  $arguments = 'check-folders "' + $folders.Programs + '" "' + $folders.Desktop + '"'
+  Invoke-InstalledSmokeProcess $helper $arguments $Environment 30 'profile_check'
 }
 
 function Get-InstalledSmokeShortcutCandidates($Context) {
@@ -355,7 +367,7 @@ function Assert-InstalledSmokePayload([string]$InstallPath, $Manifest) {
     if ((Get-InstalledSmokeHash $path) -cne $row.Sha256) { throw "smoke_installed_hash_mismatch: $($row.Path)" }
   }
   Assert-InstalledSmokeFile (Join-Path $InstallPath 'uninstall.exe')
-  $actual = @(Get-InstalledSmokeTree $InstallPath $InstallPath | Where-Object { $_.Path -ne 'uninstall.exe' })
+  $actual = @(Get-InstalledSmokeTree $InstallPath $InstallPath)
   if ($actual.Count -ne @($Manifest).Count) { throw 'smoke_installed_unexpected_file' }
 }
 
@@ -363,6 +375,9 @@ function Read-InstalledSmokeResult([string]$Path) {
   Assert-InstalledSmokeFile $Path
   if (([IO.FileInfo]$Path).Length -gt 65536) { throw 'smoke_result_too_large' }
   $result = [IO.File]::ReadAllText($Path) | ConvertFrom-Json -ErrorAction Stop
+  . (Join-Path $PSScriptRoot 'runtime-check-result.ps1')
+  Assert-RuntimeTokenEvidence $result
+  if ($result.phase -cne 'complete') { throw 'smoke_runtime_incomplete' }
   if ($result.ok -isnot [bool] -or -not $result.ok -or $result.reused -isnot [bool] -or -not $result.reused -or
       $result.safety_copy -isnot [bool] -or $result.safety_copy -or $result.expiry -cne 'ok') { throw 'smoke_result_failed' }
   foreach ($name in @('capabilities', 'restored_capabilities')) {
@@ -372,7 +387,7 @@ function Read-InstalledSmokeResult([string]$Path) {
   $uri = $null
   if (-not [Uri]::TryCreate($result.server, [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -cne 'http' -or
       $uri.Host -cne '127.0.0.1' -or $uri.Port -le 0 -or $uri.UserInfo -or $uri.AbsolutePath -ne '/' -or $uri.Query -or $uri.Fragment) { throw 'smoke_server_not_loopback' }
-  return [ordered]@{ ok = $true; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = $result.backup_bytes; expiry = 'ok'; safety_copy = $false }
+  return [ordered]@{ ok = $true; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = $result.backup_bytes; expiry = 'ok'; safety_copy = $false; token_checks = $result.token_checks }
 }
 
 function Test-InstalledSmokeInteger($Value) {
@@ -509,6 +524,7 @@ function Invoke-InstalledSmoke([string]$InstallerPath, [string]$StagePath, [stri
     foreach ($path in @($data, $childEnv['HOME'], $childEnv['APPDATA'], $childEnv['LOCALAPPDATA'], $childEnv['XDG_CONFIG_HOME'], $childEnv['TEMP'])) { [IO.Directory]::CreateDirectory($path) | Out-Null }
     Add-InstalledSmokeOwnedFolders $context $root $childEnv
     Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
+    $report.profile_check = Assert-InstalledSmokeIsolatedFolders $context $stage $childEnv
     $report.install = Invoke-InstalledSmokeProcess $installer "/S /NoAutoRun /D=$install" $childEnv 180 'install'
     if ((Get-InstalledSmokeHash $installer) -cne $installerHash) { throw 'smoke_installer_changed' }
     Assert-InstalledSmokePayload $install $manifest
@@ -516,7 +532,6 @@ function Invoke-InstalledSmoke([string]$InstallerPath, [string]$StagePath, [stri
     $report.registration = Get-InstalledSmokeRegistrationSummary $state
     Assert-InstalledSmokeRegistration $state $install $Version -RequireComplete
     Assert-InstalledSmokeNoProcesses $install 'smoke_unexpected_autorun'
-    [IO.File]::WriteAllText((Join-Path $data 'models.json'), '{"embedder":"none","judge":"fixed"}')
     $report.runtime = Invoke-InstalledSmokeProcess (Join-Path $install 'Arkism.exe') ('--runtime-check "' + $data + '"') $childEnv 300 'runtime_check'
     $report.result = Read-InstalledSmokeResult (Join-Path $data 'check.json')
     Assert-InstalledSmokePayload $install $manifest

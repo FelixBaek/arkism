@@ -61,6 +61,31 @@ func schemaExec(t *testing.T, p *Postgres, sql string, args ...any) {
 	}
 }
 
+// Materialize an actual older release without applying the current binary's
+// readiness rules to a schema that deliberately predates them.
+func historicalSchema(t *testing.T, p *Postgres, count int) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := p.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if err = lockSchemaMigration(ctx, tx); err != nil {
+		t.Fatal(err)
+	}
+	migrations := schemaMigrations()[:count]
+	if _, err = prepareSchemaHistory(ctx, tx, migrations); err != nil {
+		t.Fatal(err)
+	}
+	if err = applyPendingSchemaMigrations(ctx, tx, migrations); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func schemaCount(t *testing.T, p *Postgres) int {
 	t.Helper()
 	var count int

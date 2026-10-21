@@ -176,6 +176,7 @@ type PrincipalGrant struct {
 	OrganizationID string
 	ProjectID      string
 	Actions        []string
+	TokenTTL       time.Duration
 }
 
 // ProvisionPrincipal replaces one principal's permissions in one project.
@@ -186,7 +187,8 @@ func (p *Postgres) ProvisionPrincipal(ctx context.Context, grant PrincipalGrant)
 	grant.Role = strings.ToLower(strings.TrimSpace(grant.Role))
 	grant.OrganizationID = strings.TrimSpace(grant.OrganizationID)
 	grant.ProjectID = strings.TrimSpace(grant.ProjectID)
-	if !validRunLabel(grant.PrincipalID, 256) || !decisionRoles[grant.Role] || strings.TrimSpace(grant.Token) == "" || len(grant.Token) > 4096 || !validScope(Scope{WorkspaceID: grant.OrganizationID, ProjectID: grant.ProjectID}) || len(grant.Actions) == 0 {
+	ttl, err := principalTokenTTL(grant.TokenTTL)
+	if err != nil || !validRunLabel(grant.PrincipalID, 256) || !decisionRoles[grant.Role] || !ValidPrincipalToken(grant.Token) || !validScope(Scope{WorkspaceID: grant.OrganizationID, ProjectID: grant.ProjectID}) || len(grant.Actions) == 0 {
 		return ErrInvalid
 	}
 	actions := make([]string, 0, len(grant.Actions))
@@ -204,9 +206,8 @@ func (p *Postgres) ProvisionPrincipal(ctx context.Context, grant PrincipalGrant)
 	digest := sha256.Sum256([]byte(grant.Token))
 	return p.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		q := tx.(*Postgres).q()
-		if _, err := q.Exec(ctx, `INSERT INTO principals(id,role,token_sha256,active) VALUES($1,$2,$3,true)
-ON CONFLICT(id) DO UPDATE SET role=EXCLUDED.role,token_sha256=EXCLUDED.token_sha256,active=true`, grant.PrincipalID, grant.Role, digest[:]); err != nil {
-			return pgErr(err)
+		if err := provisionPrincipalToken(ctx, q, grant, digest[:], ttl); err != nil {
+			return err
 		}
 		if _, err := q.Exec(ctx, `INSERT INTO organization_memberships(organization_id,principal_id,active) VALUES($1,$2,true)
 ON CONFLICT(organization_id,principal_id) DO UPDATE SET active=true`, grant.OrganizationID, grant.PrincipalID); err != nil {

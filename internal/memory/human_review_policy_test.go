@@ -50,13 +50,13 @@ func TestServicePolicyCannotDecideCandidates(t *testing.T) {
 			if action == "reject" {
 				in.Reason = "model decision"
 			}
-			if _, err := f.svc.ReviewCandidate(testCtx, "reviewer", c.ID, in); !errors.Is(err, ErrDenied) {
+			if _, err := f.svc.ReviewCandidate(testCtx, testPrincipalToken("reviewer"), c.ID, in); !errors.Is(err, ErrDenied) {
 				t.Fatal("service decision accepted", err)
 			}
-			if _, err := f.svc.ReviewCandidates(testCtx, "reviewer", CandidateReviewBatchInput{Scope: scopeA, Items: []CandidateReviewBatchItem{{ID: c.ID, ExpectedRevision: c.Revision, Action: action, Content: in.Content, Reason: in.Reason, OperationID: in.OperationID}}}); !errors.Is(err, ErrDenied) {
+			if _, err := f.svc.ReviewCandidates(testCtx, testPrincipalToken("reviewer"), CandidateReviewBatchInput{Scope: scopeA, Items: []CandidateReviewBatchItem{{ID: c.ID, ExpectedRevision: c.Revision, Action: action, Content: in.Content, Reason: in.Reason, OperationID: in.OperationID}}}); !errors.Is(err, ErrDenied) {
 				t.Fatal("service batch decision accepted", err)
 			}
-			if _, err := f.svc.Transition(testCtx, "reviewer", "memory_candidates", c.ID, ChangeInput{Scope: scopeA, ExpectedRevision: c.Revision, Status: "approved"}); !errors.Is(err, ErrDenied) {
+			if _, err := f.svc.Transition(testCtx, testPrincipalToken("reviewer"), "memory_candidates", c.ID, ChangeInput{Scope: scopeA, ExpectedRevision: c.Revision, Status: "approved"}); !errors.Is(err, ErrDenied) {
 				t.Fatal("legacy transition bypassed review", err)
 			}
 			if got := f.get(f.human, "memory_candidates", scopeA, c.ID); got.Status != c.Status || got.Revision != c.Revision || got.Text != c.Text {

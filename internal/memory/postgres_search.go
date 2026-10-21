@@ -319,14 +319,9 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 	if err != nil {
 		return nil, err
 	}
-	parents := map[string]Record{}
-	for _, r := range rows {
-		if collection == colSkillVersions && r.SkillID != "" {
-			ps, _ := p.selectRecords(ctx, colSkills, scope, "id=$6", []any{r.SkillID}, "id ASC", 1)
-			if len(ps) > 0 {
-				parents[r.SkillID] = ps[0]
-			}
-		}
+	parents, err := p.pgSearchParents(ctx, collection, scope, rows)
+	if err != nil {
+		return nil, err
 	}
 	hits := make([]Hit, 0, limit)
 	for _, r := range rows {
@@ -452,4 +447,29 @@ func (p *Postgres) InitSemanticIndex(ctx context.Context, enable bool) error {
 		return ErrUnavailable
 	}
 	return nil
+}
+
+// Fetch parent lifecycle state once for the whole result lane.
+func (p *Postgres) pgSearchParents(ctx context.Context, collection string, scope Scope, rows []Record) (map[string]Record, error) {
+	parents := map[string]Record{}
+	if collection == colSkillVersions {
+		ids := make([]string, 0, len(rows))
+		seen := map[string]bool{}
+		for _, r := range rows {
+			if r.SkillID != "" && !seen[r.SkillID] {
+				ids = append(ids, r.SkillID)
+				seen[r.SkillID] = true
+			}
+		}
+		if len(ids) > 0 {
+			ps, err := p.selectRecords(ctx, colSkills, scope, "id=ANY($6::text[])", []any{ids}, "id ASC", len(ids))
+			if err != nil {
+				return nil, err
+			}
+			for _, parent := range ps {
+				parents[parent.ID] = parent
+			}
+		}
+	}
+	return parents, nil
 }

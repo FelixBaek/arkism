@@ -55,7 +55,7 @@ func TestPostgresRLSScopesRevocationAndPoolIsolation(t *testing.T) {
 	if err := admin.Insert(ctx, "memories", rowB); err != nil {
 		t.Fatal(err)
 	}
-	const token = "rls-token-that-is-never-stored-raw"
+	token := testPrincipalToken("rls-token-that-is-never-stored-raw")
 	grant := PrincipalGrant{PrincipalID: "agent-a", Role: roleAgent, Token: token, OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", "read:memories"}}
 	if err := admin.ProvisionPrincipal(ctx, grant); err != nil {
 		t.Fatal(err)
@@ -149,7 +149,7 @@ func TestPostgresCanonicalTablesUseOrganizationRLS(t *testing.T) {
 	ctx := context.Background()
 	scope := Scope{WorkspaceID: "canonical-org", ProjectID: "canonical-project"}
 	other := Scope{WorkspaceID: "other-org", ProjectID: "other-project"}
-	const token = "canonical-table-token"
+	token := testPrincipalToken("canonical-table-token")
 	if err := admin.ProvisionPrincipal(ctx, PrincipalGrant{PrincipalID: "canonical-agent", Role: roleAgent, Token: token, OrganizationID: scope.WorkspaceID, ProjectID: scope.ProjectID, Actions: []string{"db:read"}}); err != nil {
 		t.Fatal(err)
 	}

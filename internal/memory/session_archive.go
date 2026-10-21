@@ -1046,7 +1046,7 @@ func (p *Postgres) SessionArchiveExpiredRows(ctx context.Context, scope Scope, n
 // sessionArchiveRoutes registers the six POST JSON endpoints. Chunk uploads
 // decode with the dedicated 2 MiB cap; commits 1 MiB (2048 chunk IDs plus a
 // 64 KiB escaped projection fit); everything else uses the default decode cap.
-func sessionArchiveRoutes(mux *http.ServeMux, s *Service) {
+func sessionArchiveRoutes(mux routeRegistrar, s *Service) {
 	sessionArchiveSearchRoutes(mux, s)
 	mux.HandleFunc("POST /v1/session-archives/chunks", func(w http.ResponseWriter, r *http.Request) {
 		var in SessionArchiveChunkInput

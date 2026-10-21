@@ -95,7 +95,7 @@
   }
 
   const core = { indexLine, within, forRepo, sessionPreview, promptPreview, effect, SESSION_MAX_CHARS, INDEX_HEADER, CONTRACT_HEADER, PROMPT_HEADER };
-  if (typeof module === "object" && module.exports) module.exports = core;
+  if (typeof window === "undefined" && typeof module === "object" && module.exports) module.exports = core;
   if (typeof window === "undefined") return;
 
   window.ArkismInject = (ctx) => {

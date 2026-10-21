@@ -49,6 +49,9 @@ window.ArkismShell = (ctx) => {
       ["workflow", "페르소나"], ["categories", "카테고리"], ["advanced", "고급"], ["info", "정보"]
     ].map(([k, label]) => [k, label, () => settings(k), () => state.view === "settings" && state.settingsTab === k]) }
   };
+  for (const [key, menu] of Object.entries(MENUS)) {
+    for (const [id, label] of menu.tabs) window.ArkismI18n.registerMessages({["navigation." + key + "." + id]: label});
+  }
   function settings(tab) { state.settingsTab = tab; go("settings"); }
 
   // The menu a screen belongs to. 사용량 shows up under several menus, so the last menu picked wins when it has the screen.
@@ -77,7 +80,7 @@ window.ArkismShell = (ctx) => {
       t.dataset.tab = id;
       t.setAttribute("role", "tab");
       t.setAttribute("aria-selected", String(active()));
-      t.append(el("span", "", label));
+      t.append(window.ArkismI18n.bindMessage(el("span"), "navigation." + key + "." + id));
       const num = n?.();
       if (num) t.append(el("output", "", num));
       t.addEventListener("click", () => { state.menu = key; open(); });

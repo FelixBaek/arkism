@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func codeGraphRoutes(mux *http.ServeMux, s *Service) {
+func codeGraphRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/code_graph/repos", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.CodeGraphRepos(r.Context(), bearer(r), scopeQuery(r))
 		if e == nil {

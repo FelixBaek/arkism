@@ -406,7 +406,7 @@ func (s *Service) ModelBudgetStatus(ctx context.Context, token string, scope Sco
 	return out, e
 }
 
-func modelBudgetRoutes(mux *http.ServeMux, s *Service) {
+func modelBudgetRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/model-budget/reserve", func(w http.ResponseWriter, r *http.Request) {
 		var in ModelBudgetReserveInput
 		if !decode(w, r, &in) {

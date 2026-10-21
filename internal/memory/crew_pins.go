@@ -432,7 +432,7 @@ func (s *Service) InjectPins(ctx context.Context, token string, in PinInjectInpu
 	return res, nil
 }
 
-func contextPinRoutes(mux *http.ServeMux, s *Service) {
+func contextPinRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/context/pins", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()

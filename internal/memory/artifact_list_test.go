@@ -127,7 +127,7 @@ func TestArtifactListHTTPRefuses(t *testing.T) {
 	for _, suffix := range []string{"&limit=0", "&limit=101", "&limit=1&limit=2", "&cursor=bogus", "&cursor=artifact-xyz", "&kind=code", "&bad=%ZZ", "&workspace_id=other"} {
 		request(suffix, f.human, 400)
 	}
-	request("", "", 403)
+	request("", "", 401)
 	f.repo.failAudit = true
 	request("", f.human, 503)
 	f.repo.failAudit = false

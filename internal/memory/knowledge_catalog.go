@@ -20,7 +20,6 @@ const (
 	knowledgeListMax          = 500
 	knowledgeBindingScanLimit = 1000
 	knowledgeSearchBindings   = 8
-	knowledgeSectionListMax   = 200
 )
 
 type KnowledgeBindingSummary struct {
@@ -141,11 +140,7 @@ func (s *Service) ListKnowledgeSources(ctx context.Context, token string, scope 
 		if r.Scope != scope || knowledgeLive(ctx, s.Repo, r) != nil {
 			continue
 		}
-		k := r.Knowledge
-		item := KnowledgeSourceSummary{ID: r.ID, Revision: r.Revision, Status: r.Status, LifecycleStatus: k.LifecycleStatus, TrustLevel: k.TrustLevel, DisplayName: k.DisplayName, SourceType: k.SourceType, Format: k.SourceMetadata["format"], Synthetic: k.SourceMetadata["fixture"] == "synthetic", SourceVersion: k.SourceVersion, DocumentID: k.DocumentID, DocumentCount: len(k.DocumentIDs), ChunkCount: len(k.ChunkIDs), ApprovedBy: r.ApprovedBy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Bindings: bindings[r.ID]}
-		if item.Bindings == nil {
-			item.Bindings = []KnowledgeBindingSummary{}
-		}
+		item := knowledgeCatalogSummary(r, bindings)
 		out.Items = append(out.Items, item)
 	}
 	return out, nil
@@ -186,13 +181,16 @@ func (s *Service) ListKnowledgeDocuments(ctx context.Context, token string, scop
 				if err != nil {
 					return out, err
 				}
-				if chunk.Knowledge == nil {
+				if chunk.Knowledge == nil || chunk.Knowledge.KnowledgeSourceID != head.ID || chunk.Knowledge.DocumentID != doc.ID {
 					return out, ErrConflict
+				}
+				if knowledgeLive(ctx, s.Repo, chunk) != nil {
+					continue
 				}
 				if chunk.Knowledge.IndexStatus == "indexed" {
 					item.IndexedChunks++
 				}
-				if path := chunk.Knowledge.SectionPath; len(item.Sections) < knowledgeSectionListMax && !slices.Contains(item.Sections, path) {
+				if path := chunk.Knowledge.SectionPath; !slices.Contains(item.Sections, path) {
 					item.Sections = append(item.Sections, path)
 				}
 			}
@@ -296,7 +294,7 @@ func parseKnowledgeListQuery(raw, extra string) (Scope, string, error) {
 	return scope, value, nil
 }
 
-func (s *Service) registerKnowledgeCatalogHTTP(mux *http.ServeMux) {
+func (s *Service) registerKnowledgeCatalogHTTP(mux routeRegistrar) {
 	mux.HandleFunc("GET /v1/knowledge/sources", func(w http.ResponseWriter, r *http.Request) {
 		scope, raw, err := parseKnowledgeListQuery(r.URL.RawQuery, "limit")
 		limit := 0
@@ -329,4 +327,13 @@ func (s *Service) registerKnowledgeCatalogHTTP(mux *http.ServeMux) {
 		out, err := s.SearchKnowledge(r.Context(), bearer(r), in)
 		respond(w, out, err)
 	})
+}
+
+func knowledgeCatalogSummary(r Record, bindings map[string][]KnowledgeBindingSummary) KnowledgeSourceSummary {
+	k := r.Knowledge
+	item := KnowledgeSourceSummary{ID: r.ID, Revision: r.Revision, Status: r.Status, LifecycleStatus: k.LifecycleStatus, TrustLevel: k.TrustLevel, DisplayName: k.DisplayName, SourceType: k.SourceType, Format: k.SourceMetadata["format"], Synthetic: k.SourceMetadata["fixture"] == "synthetic", SourceVersion: k.SourceVersion, DocumentID: k.DocumentID, DocumentCount: len(k.DocumentIDs), ChunkCount: len(k.ChunkIDs), ApprovedBy: r.ApprovedBy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Bindings: bindings[r.ID]}
+	if item.Bindings == nil {
+		item.Bindings = []KnowledgeBindingSummary{}
+	}
+	return item
 }

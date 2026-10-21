@@ -58,7 +58,7 @@ func memoryOutcomeGroup(c MemoryOutcomeSessionCount) MemoryOutcomeGroup {
 	return g
 }
 
-func memoryOutcomeComparisonRoutes(mux *http.ServeMux, s *Service) {
+func memoryOutcomeComparisonRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/memories/{id}/outcome-comparison", func(w http.ResponseWriter, r *http.Request) {
 		in, e := parseMemoryOutcomeQuery(r.URL.RawQuery, r.PathValue("id"))
 		if e != nil {

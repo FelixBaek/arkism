@@ -9,6 +9,7 @@ updates:
     open-pull-requests-limit: 0
     groups:
       go-minor:
+        applies-to: security-updates
         update-types: [minor, patch]
   - package-ecosystem: cargo
     directory: /desktop/src-tauri
@@ -17,6 +18,7 @@ updates:
     open-pull-requests-limit: 0
     groups:
       cargo-minor:
+        applies-to: security-updates
         update-types: [minor, patch]
   - package-ecosystem: github-actions
     directory: /
@@ -25,6 +27,7 @@ updates:
     open-pull-requests-limit: 0
     groups:
       actions:
+        applies-to: security-updates
         patterns: ["*"]
   - package-ecosystem: docker
     directory: /

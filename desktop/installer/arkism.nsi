@@ -3,6 +3,8 @@ Unicode true
 ManifestDPIAware true
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "${__FILEDIR__}\remove-autostart.nsh"
+!include "${__FILEDIR__}\installer-helper.nsh"
 
 !ifndef VERSION
   !define VERSION "0.1.0"
@@ -20,6 +22,7 @@ ManifestDPIAware true
 Name "${APP} ${VERSION}"
 OutFile "${OUT_FILE}"
 InstallDir "$LOCALAPPDATA\Programs\${APP}"
+InstallDirRegKey HKCU "${REG_UNINSTALL}" "InstallLocation"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 VIProductVersion "${VERSION}.0"
@@ -32,44 +35,50 @@ VIAddVersionKey "LegalCopyright" "Arkism contributors"
 
 !define MUI_ICON "${__FILEDIR__}\..\src-tauri\icons\icon.ico"
 !define MUI_UNICON "${__FILEDIR__}\..\src-tauri\icons\icon.ico"
-!define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE}"
-!define MUI_FINISHPAGE_RUN_TEXT "Arkism 실행"
-; Opening the installer waits for 다음 before installing; the silent in-app update skips pages.
-!insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_INSTFILES
-!insertmacro MUI_PAGE_FINISH
-!insertmacro MUI_UNPAGE_INSTFILES
-!insertmacro MUI_LANGUAGE "Korean"
+!ifdef ARKISM_EMIT_UNINSTALLER
+  ; Build-only executable: write the uninstaller next to this emitter. It has
+  ; no installation page, launch action, registry or shortcut writes.
+  SilentInstall silent
+  !insertmacro MUI_UNPAGE_INSTFILES
+  !insertmacro MUI_LANGUAGE "Korean"
+  Section "Emit uninstaller"
+    ClearErrors
+    WriteUninstaller "$EXEDIR\uninstall.exe"
+    IfErrors 0 +3
+    SetErrorLevel 1
+    Abort "Uninstaller emission failed"
+  SectionEnd
+!else
+  !ifndef PACKAGE_MANIFEST
+    !error "PACKAGE_MANIFEST is required; emit, sign and pack the payload first"
+  !endif
+  !define MUI_FINISHPAGE_RUN "$INSTDIR\${EXE}"
+  !define MUI_FINISHPAGE_RUN_TEXT "Arkism 실행"
+  ; Opening setup waits for Next; silent updates skip these pages.
+  !insertmacro MUI_PAGE_WELCOME
+  !insertmacro MUI_PAGE_INSTFILES
+  !insertmacro MUI_PAGE_FINISH
+  !insertmacro MUI_LANGUAGE "Korean"
 
 Section "Install"
-  ; Close everything this install replaces, in any session: the app, its built-in Postgres and
-  ; server (runtime\), and the provider watcher it runs from integration\. The app stops them
-  ; itself before an in-app update; this catches a crashed or force-closed app.
-  ; Match by full path: image names are case-insensitive, so Arkism.exe would also hit arkism.exe.
-  nsExec::Exec `powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -eq '$INSTDIR\${EXE}' -or $$_.ExecutablePath -like '$INSTDIR\runtime\*' -or $$_.ExecutablePath -like '$INSTDIR\integration\*' } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force }"`
-  Sleep 500
-  ; The agent client only. The installer does not touch the agents' own settings: the user
-  ; connects them from the app (Settings > Agents), and agents already connected keep using
-  ; this updated client.
-  SetOutPath "$INSTDIR\integration"
+  ; Extract the entire authenticated bundle without changing the old install.
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File /oname=arkism-installer.exe "${STAGE_DIR}\runtime\arkism-installer.exe"
+  File /oname=payload.json "${PACKAGE_MANIFEST}"
+  SetOutPath "$PLUGINSDIR\payload\integration"
   File "${STAGE_DIR}\integration\*"
-  SetOutPath "$INSTDIR\runtime"
+  SetOutPath "$PLUGINSDIR\payload\runtime"
   File /r "${STAGE_DIR}\runtime\*.*"
-  SetOutPath "$INSTDIR"
+  SetOutPath "$PLUGINSDIR\payload"
   File "${STAGE_DIR}\${EXE}"
-  WriteUninstaller "$INSTDIR\uninstall.exe"
-  CreateShortcut "$SMPROGRAMS\${APP}.lnk" "$INSTDIR\${EXE}"
-  CreateShortcut "$DESKTOP\${APP}.lnk" "$INSTDIR\${EXE}"
-  WriteRegStr HKCU "${REG_UNINSTALL}" "DisplayName" "${APP}"
-  WriteRegStr HKCU "${REG_UNINSTALL}" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKCU "${REG_UNINSTALL}" "Publisher" "Arkism contributors"
-  WriteRegStr HKCU "${REG_UNINSTALL}" "DisplayIcon" "$INSTDIR\${EXE}"
-  WriteRegStr HKCU "${REG_UNINSTALL}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKCU "${REG_UNINSTALL}" "UninstallString" '"$INSTDIR\uninstall.exe"'
-  WriteRegDWORD HKCU "${REG_UNINSTALL}" "NoModify" 1
-  WriteRegDWORD HKCU "${REG_UNINSTALL}" "NoRepair" 1
-  ; Silent updates restart the app unless an unattended caller explicitly opts out.
-  ; /NoAutoRun is a runtime option on the same installer; interactive launch stays unchanged.
+  File "${STAGE_DIR}\uninstall.exe"
+  IfErrors arkism_install_failed
+  ; The helper verifies every staged byte, stops verified process handles and
+  ; commits directory publication, shortcuts and registration as one lifecycle.
+  !insertmacro ArkismRunInstallerHelper 'install "${VERSION}"' arkism_install_failed
+  SetOutPath "$INSTDIR"
+  ; Silent updates restart the app unless an unattended caller opts out.
   IfSilent 0 arkism_install_complete
   ${GetParameters} $0
   ClearErrors
@@ -78,23 +87,49 @@ Section "Install"
   StrCmp $1 "" arkism_install_complete
 arkism_launch_after_install:
   Exec '"$INSTDIR\${EXE}"'
+  Goto arkism_install_complete
+arkism_install_failed:
+  ; A timeout can interrupt the helper between renames. Retry its checkpoint
+  ; recovery before returning a failed install; never launch a partial payload.
+  !insertmacro ArkismRunInstallerHelper repair arkism_install_recovery_failed
+  SetErrorLevel 1
+  Abort "설치를 완료하지 못했습니다. 기존 설치를 보존했습니다."
+arkism_install_recovery_failed:
+  SetErrorLevel 1
+  Abort "설치를 복구하지 못했습니다. 복구 기록을 보존했습니다. 설치 프로그램을 다시 실행해 주세요."
 arkism_install_complete:
 SectionEnd
+!endif
 
+!ifdef ARKISM_EMIT_UNINSTALLER
 Section "Uninstall"
-  ; Take Arkism out of the agents' settings first (backed up), while the client still exists.
-  nsExec::Exec '"$INSTDIR\integration\arkism.exe" uninstall-arkism-windows'
-  nsExec::Exec `powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -eq '$INSTDIR\${EXE}' -or $$_.ExecutablePath -like '$INSTDIR\runtime\*' -or $$_.ExecutablePath -like '$INSTDIR\integration\*' } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force }"`
-  Sleep 300
-  ; Only the programs; the memories in the app's data folder stay unless the user removes them.
-  RMDir /r "$INSTDIR\runtime"
-  Delete "$INSTDIR\${EXE}"
-  Delete "$INSTDIR\uninstall.exe"
-  Delete "$INSTDIR\integration\arkism.exe"
-  Delete "$INSTDIR\integration\*.ps1"
-  RMDir "$INSTDIR\integration"
-  RMDir "$INSTDIR"
-  Delete "$SMPROGRAMS\${APP}.lnk"
-  Delete "$DESKTOP\${APP}.lnk"
-  DeleteRegKey HKCU "${REG_UNINSTALL}"
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File /oname=arkism-installer.exe "${STAGE_DIR}\runtime\arkism-installer.exe"
+  !insertmacro ArkismRunInstallerHelper 'check "${VERSION}"' arkism_remove_failed
+  !insertmacro ArkismRunInstallerHelper stop arkism_remove_failed
+  ; Disconnect only after the app and watchers have verifiably stopped.
+  nsExec::ExecToStack /TIMEOUT=120000 '"$INSTDIR\integration\arkism.exe" uninstall-arkism-windows'
+  Pop $0
+  Pop $1
+  DetailPrint $1
+  StrCmp $0 "0" +2
+  Goto arkism_remove_failed
+  ; The executable shares the settings command's per-user, transactional policy.
+  ; Refuse removal if startup cleanup cannot be proven; keep the payload for repair.
+  !insertmacro ArkismRemoveAutostart "$INSTDIR\${EXE}" arkism_autostart_failed
+  Goto arkism_autostart_removed
+arkism_autostart_failed:
+  SetErrorLevel 1
+  Abort "자동 시작 등록을 정리하지 못했습니다. Arkism을 복구한 뒤 제거를 다시 시도해 주세요."
+arkism_autostart_removed:
+  ; Receipt-bound file removal preserves unknown user files and directories.
+  !insertmacro ArkismRunInstallerHelper 'remove-payload "${VERSION}"' arkism_remove_failed
+  !insertmacro ArkismRunInstallerHelper 'remove-metadata "${VERSION}"' arkism_remove_failed
+  Goto arkism_remove_complete
+arkism_remove_failed:
+  SetErrorLevel 1
+  Abort "제거를 완료하지 못했습니다. 남은 파일과 설정을 보존했습니다."
+arkism_remove_complete:
 SectionEnd
+!endif

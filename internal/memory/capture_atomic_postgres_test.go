@@ -113,7 +113,7 @@ func TestPostgresCapturePreparedResumeKeepsApplicationRLS(t *testing.T) {
 	p := isolatedPostgres(t)
 	f := newFixture(t)
 	app := restrictedPostgres(t, p)
-	const token = "capture-atomic-agent"
+	token := testPrincipalToken("capture-atomic-agent")
 	actions := []string{"db:read", "db:write", "read:memory_candidates", "write:memory_candidates", "read:sources", "write:sources"}
 	if err := p.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: "capture-agent", Role: roleAgent, Token: token, OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: actions}); err != nil {
 		t.Fatal(err)
@@ -221,7 +221,7 @@ func TestPostgresCaptureAtomicCorrectionRecovery(t *testing.T) {
 	in := captureInput(scopeA, "atomic-correction", claim)
 	in.Automated = true
 	f.svc.Repo = &captureFailureRepo{Repository: p, pointerError: ErrUnavailable}
-	first := f.capture("reviewer", in)[0]
+	first := f.capture(testPrincipalToken("reviewer"), in)[0]
 	if first.Status != "rejected" || first.Reason != ErrUnavailable.Error() {
 		t.Fatal(first)
 	}
@@ -233,7 +233,7 @@ func TestPostgresCaptureAtomicCorrectionRecovery(t *testing.T) {
 		t.Fatal("failed correction changed approved memory", err)
 	}
 	f.svc.Repo = p
-	next := f.capture("reviewer", in)[0]
+	next := f.capture(testPrincipalToken("reviewer"), in)[0]
 	if next.Status != "candidate" || next.Reason != "conflict_review" {
 		t.Fatal(next)
 	}
@@ -244,7 +244,7 @@ func TestPostgresCaptureAtomicCorrectionRecovery(t *testing.T) {
 	if len(pgCollection(t, p, "memory_candidates")) != before+1 || len(pgCollection(t, p, "memories")) != 1 {
 		t.Fatal("correction retry duplicated or approved")
 	}
-	if again := f.capture("reviewer", in)[0]; again.Reason != "duplicate_event" {
+	if again := f.capture(testPrincipalToken("reviewer"), in)[0]; again.Reason != "duplicate_event" {
 		t.Fatal("correction replay duplicated", again)
 	}
 }

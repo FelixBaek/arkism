@@ -16,9 +16,9 @@ import (
 // the human token is fixture authorization, not evidence of human approval time.
 func TestCollaborationHTTPPostgres(t *testing.T) {
 	admin := isolatedPostgres(t)
-	const writer = "collaboration-agent-a"
-	const reader = "collaboration-agent-b"
-	const owner = "collaboration-human-fixture"
+	writer := testPrincipalToken("collaboration-agent-a")
+	reader := testPrincipalToken("collaboration-agent-b")
+	owner := testPrincipalToken("collaboration-human-fixture")
 	for token, role := range map[string]string{writer: "agent", reader: "agent", owner: "human"} {
 		for _, scope := range []Scope{scopeA, scopeB} {
 			if err := admin.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: token, Role: role, Token: token, OrganizationID: scope.WorkspaceID, ProjectID: scope.ProjectID, Actions: []string{"*"}}); err != nil {

@@ -495,7 +495,7 @@ func (s *Service) recordKnowledgeIndexFailure(ctx context.Context, scope Scope, 
 	return written, nil
 }
 
-func (s *Service) registerKnowledgeSemanticHTTP(mux *http.ServeMux) {
+func (s *Service) registerKnowledgeSemanticHTTP(mux routeRegistrar) {
 	mux.HandleFunc("POST /v1/knowledge/index", func(w http.ResponseWriter, r *http.Request) {
 		var in KnowledgeIndexInput
 		if !decode(w, r, &in) {

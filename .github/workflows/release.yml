@@ -3,11 +3,15 @@ name: Release
 # A tag vX.Y.Z builds and checks the Windows installer, then puts it and the
 # update file (latest.json) in a draft release. Publishing the draft is a person's
 # step. Manual and pull request builds produce artifacts without a release.
-# Pull request artifacts use version 0.1.0 and are disposable validation builds.
+# Pull requests validate workflow metadata only; no installer is built automatically.
 #
-# Signing is optional and happens only when the secrets are set:
+# Windows Authenticode signing is optional:
 #   Windows: WINDOWS_CERTIFICATE (base64 .pfx), WINDOWS_CERTIFICATE_PASSWORD
-# Without them Windows SmartScreen warns on first open (README explains).
+# Minisign publisher authentication is mandatory for public releases.
+# The release-signing environment holds ARKISM_UPDATE_SIGNING_KEY (minisign
+# secret-key file contents) and optional ARKISM_UPDATE_SIGNING_PASSWORD.
+# vars.ARKISM_UPDATE_PUBLIC_KEY is base64 of the full public-key file; it is
+# compiled into the Windows app independently of the update feed.
 
 on:
   workflow_call:
@@ -25,6 +29,9 @@ on:
       - ".github/workflows/release.yml"
       - "tools/check_release_quality.py"
       - "tools/test_check_release_quality.py"
+      - "tools/release_artifacts.py"
+      - "tools/test_release_artifacts.py"
+      - "tools/install-minisign.sh"
       - "desktop/installer/**"
       - "desktop/src-tauri/**"
       - "internal/memory/migrations/**"
@@ -42,6 +49,8 @@ env:
   VERSION: ${{ inputs.version || (github.event_name == 'push' && github.ref_name) || '0.1.0' }}
   # The app checks this address for latest.json and downloads the installer from it.
   ARKISM_UPDATE_FEED: https://github.com/${{ github.repository }}/releases/latest/download
+  ARKISM_UPDATE_PUBLIC_KEY: ${{ vars.ARKISM_UPDATE_PUBLIC_KEY }}
+  ARKISM_UPDATE_CHANNEL: stable
 
 jobs:
   validate:
@@ -65,11 +74,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ github.sha }}
-        run: python3 tools/check_release_quality.py --repository "$GITHUB_REPOSITORY" --sha "$RELEASE_SHA"
+        run: |
+          python3 tools/release_artifacts.py check-key
+          python3 tools/check_release_quality.py --repository "$GITHUB_REPOSITORY" --sha "$RELEASE_SHA"
 
   windows:
+    # Product packaging requires an explicit tag/manual/call event, never PR CI.
+    if: github.event_name != 'pull_request'
     permissions:
       contents: read
+      id-token: write
+      attestations: write
     needs: validate
     runs-on: windows-2022
     timeout-minutes: 90
@@ -83,8 +98,8 @@ jobs:
           go-version-file: go.mod
       - name: Rust and NSIS
         run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup default 1.98.1
           choco install nsis -y --no-progress
       - name: Silent installer launch options (inert payload)
         shell: powershell
@@ -92,6 +107,12 @@ jobs:
           New-Item -ItemType Directory -Force desktop/dist | Out-Null
           $evidence = Join-Path $env:RUNNER_TEMP 'arkism-nsis-autorun-check.json'
           ./desktop/installer/test-nsis-autorun.ps1 -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe" -SourceSha $env:GITHUB_SHA -EvidencePath $evidence
+      - name: Installer helper dispatch and recovery controls (inert peer)
+        shell: powershell
+        run: ./desktop/installer/test-installer-helper.ps1 -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+      - name: Autostart cleanup failure controls (inert peer)
+        shell: powershell
+        run: ./desktop/installer/test-remove-autostart.ps1 -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
       - name: Default uninstaller process tree (inert fixture)
         shell: powershell
         run: |
@@ -113,6 +134,38 @@ jobs:
           $stage = Join-Path $env:GITHUB_WORKSPACE 'desktop/stage'
           $evidence = Join-Path $env:RUNNER_TEMP 'arkism-windows-product-uninstall-check.json'
           ./desktop/installer/smoke-windows-product-uninstall.ps1 -InstallerPath $installer -StagePath $stage -Version $version -SourceSha $env:GITHUB_SHA -EvidencePath $evidence
+      - name: Syft SBOM of the Windows payload and dependency locks
+        env:
+          SYFT_CHECK_FOR_APP_UPDATE: "false"
+        shell: pwsh
+        run: |
+          $version = $env:VERSION.TrimStart('v')
+          $zip = Join-Path $env:RUNNER_TEMP 'syft.zip'
+          Invoke-WebRequest -Uri 'https://github.com/anchore/syft/releases/download/v1.55.0/syft_1.55.0_windows_amd64.zip' -OutFile $zip
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -cne 'ada4c9b93af575f479ce80fce6629897272a2d41f300a14bc49bace020767ca2') { throw 'Syft archive hash mismatch' }
+          $tools = Join-Path $env:RUNNER_TEMP 'syft'
+          Expand-Archive -LiteralPath $zip -DestinationPath $tools
+          $inputDir = Join-Path $env:RUNNER_TEMP 'sbom-input'
+          New-Item -ItemType Directory $inputDir | Out-Null
+          Copy-Item -Recurse desktop/stage (Join-Path $inputDir 'payload')
+          Copy-Item go.mod, go.sum, desktop/src-tauri/Cargo.lock $inputDir
+          & (Join-Path $tools 'syft.exe') scan "dir:$inputDir" --source-name arkism-windows --source-version $version -o "spdx-json=desktop/dist/Arkism-$version-windows.sbom.spdx.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Syft SBOM generation failed' }
+      - name: Attest the Windows installer and SBOM
+        id: provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          create-storage-record: false
+          subject-path: |
+            desktop/dist/Arkism-*-setup.exe
+            desktop/dist/Arkism-*-windows.sbom.spdx.json
+      - name: Keep the public provenance bundle with release inputs
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: Copy-Item -LiteralPath $env:BUNDLE -Destination desktop/dist/provenance.sigstore.json
       - name: Collect installer check evidence
         if: always()
         shell: pwsh
@@ -146,7 +199,10 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows
-          path: desktop/dist/Arkism-*-setup.exe*
+          path: |
+            desktop/dist/Arkism-*-setup.exe*
+            desktop/dist/Arkism-*-windows.sbom.spdx.json
+            desktop/dist/provenance.sigstore.json
           if-no-files-found: error
 
   release:
@@ -156,10 +212,12 @@ jobs:
        inputs.version == '0.1.0' && github.ref == 'refs/heads/main' &&
        github.repository == 'FelixBaek/arkism')
     needs: [windows]
+    environment: release-signing
     runs-on: ubuntu-24.04
     permissions:
       contents: write
       actions: read
+      attestations: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -170,14 +228,31 @@ jobs:
         with:
           path: dist
           name: windows
-      - name: Update file
+      - name: Install pinned minisign verification tool
         run: |
-          version="${VERSION#v}"
-          file="Arkism-$version-setup.exe"
-          test -f "dist/$file"
-          sum="$(sha256sum "dist/$file" | cut -d' ' -f1)"
-          printf '{"version":"%s","file":"%s","sha256":"%s"}\n' "$version" "$file" "$sum" > dist/latest.json
-          ls -l dist
+          bash tools/install-minisign.sh "$RUNNER_TEMP/release-tools"
+          echo "$RUNNER_TEMP/release-tools" >> "$GITHUB_PATH"
+      - name: Verify build provenance before signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for file in "dist/Arkism-${VERSION#v}-setup.exe" "dist/Arkism-${VERSION#v}-windows.sbom.spdx.json"; do
+            gh attestation verify "$file" --bundle dist/provenance.sigstore.json \
+              --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
+          done
+      - name: Sign and verify Windows release assets
+        env:
+          ARKISM_UPDATE_SIGNING_KEY: ${{ secrets.ARKISM_UPDATE_SIGNING_KEY }}
+          ARKISM_UPDATE_SIGNING_PASSWORD: ${{ secrets.ARKISM_UPDATE_SIGNING_PASSWORD }}
+        run: >-
+          python3 tools/release_artifacts.py sign --directory dist
+          --version "${VERSION#v}" --feed "$ARKISM_UPDATE_FEED"
+      - name: Independent final signature and checksum gate
+        run: >-
+          python3 tools/release_artifacts.py verify --directory dist
+          --version "${VERSION#v}" --feed "$ARKISM_UPDATE_FEED"
       - name: Recheck exact-commit quality before release
         env:
           GH_TOKEN: ${{ github.token }}

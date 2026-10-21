@@ -464,7 +464,7 @@ func (s *Service) CreateKnowledgeBinding(ctx context.Context, token string, in K
 	})
 	return out, e
 }
-func (s *Service) registerKnowledgeHTTP(mux *http.ServeMux) {
+func (s *Service) registerKnowledgeHTTP(mux routeRegistrar) {
 	s.registerKnowledgeSemanticHTTP(mux)
 	s.registerKnowledgeCatalogHTTP(mux)
 	mux.HandleFunc("POST /v1/knowledge/ingest", func(w http.ResponseWriter, r *http.Request) {

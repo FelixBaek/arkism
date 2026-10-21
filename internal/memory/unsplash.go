@@ -137,7 +137,7 @@ func (s *Service) UseUnsplash(ctx context.Context, token string, scope Scope, id
 	return s.Unsplash.get(ctx, "/photos/"+id+"/download", url.Values{}, nil)
 }
 
-func unsplashRoutes(mux *http.ServeMux, s *Service) {
+func unsplashRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/unsplash/search", func(w http.ResponseWriter, r *http.Request) {
 		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 		if page == 0 {

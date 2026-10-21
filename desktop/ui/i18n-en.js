@@ -6181,5 +6181,68 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "단계 {0} 이름 · 예: {1}": "Step {0} name · e.g. {1}",
 });
 Object.assign(window.ArkismI18nEN.strings, { "템플릿 이름을 적어 주세요.": "Enter a template name." });
+
+Object.assign(window.ArkismI18nEN.strings, {
+  "서버의 SSH 키가 예전과 달라 접속을 막았어요. 관리자에게 새 지문을 확인한 뒤 다시 연결하세요.": "The server SSH key changed, so the connection was blocked. Confirm its new fingerprint with the administrator before reconnecting.",
+  "서버 지문 확인을 취소했어요. 접속하지 않았습니다.": "Server fingerprint review cancelled. No connection was made.",
+  "서버 지문 확인이 필요해요. 다시 연결해 주세요.": "Review the server fingerprint by connecting again.",
+  "서버 지문을 가져오지 못했어요. 주소·포트와 SSH 연결을 확인하세요.": "Could not retrieve the server fingerprint. Check its address, port and SSH connection.",
+  "지문 확인 시간이 지났어요. 다시 연결해 주세요.": "Fingerprint review expired. Connect again.",
+  "그사이 승인한 키가 바뀌었어요. 다시 연결해 주세요.": "The approved key changed during review. Connect again.",
+  "저장한 서버 키를 확인할 수 없어 접속을 막았어요.": "The saved server key could not be verified, so the connection was blocked.",
+  "서버의 SSH 지문을 확인하세요": "Verify the server SSH fingerprint",
+  "서버를 다시 설치했거나, 다른 서버에 연결되고 있을 수 있어요. 관리자에게 새 지문을 확인하기 전에는 접속하지 마세요.": "The server may have been reinstalled, or you may be reaching a different server. Confirm the new fingerprint with its administrator before connecting.",
+  "서버 관리자에게 다른 연락 수단으로 아래 지문을 확인해 주세요. 확인 전에는 개인 키·비밀번호로 로그인하지 않아요.": "Confirm this fingerprint with the server administrator through another channel. Your private key or password will not be used to log in before approval.",
+  "키 종류": "Key type",
+  "새 지문": "New fingerprint",
+  "이전 지문": "Previous fingerprint",
+  "관리자에게 지문을 확인했고, 위 서버가 맞습니다.": "I verified the fingerprint with the administrator and this is the correct server.",
+  "새 키로 교체하고 계속": "Replace key and continue",
+  "이 키를 저장하고 계속": "Save key and continue"
+});
+
+Object.assign(window.ArkismI18nEN.strings, { "기억 개수·저장소·정렬은 불러온 목록 기준이에요. 검색·종류 필터는 전체 기억에서 찾아요.": "Memory counts, repository choices and sorting apply to loaded rows. Search and kind filters query all memories." });
+Object.assign(window.ArkismI18nEN.patterns, { "불러온 기억 {0}개 · 마지막 저장 {1}": "Loaded {0} memories · newest loaded {1}", "불러온 {0}개 중 {1}개 표시 · 다음 목록 있음": "Showing {1} of {0} loaded · more available" });
+
+Object.assign(window.ArkismI18nEN.strings, { "이 서버는 본문만 대소문자를 구분해 검색해요.": "This server searches memory text only, with case-sensitive matching." });
+
+Object.assign(window.ArkismI18nEN.strings, { "이 화면의 검색·개수·정렬은 불러온 목록 기준이에요. 더 보기로 다음 기억을 확인하세요.": "Search, counts and sorting on this screen apply to loaded rows. Use Show more to read the next memories." });
+
+Object.assign(window.ArkismI18nEN.strings, {
+  "다음 목록에도 후보가 있어요.": "More candidates are available on the next page.",
+  "검색·개수·후보 묶음은 불러온 목록 기준이에요. 더 보기로 다음 목록을 확인하세요.": "Search, counts and candidate groups cover loaded items. Use Show more to load the next page.",
+  "검색·개수·정렬·같은 이름 묶음은 불러온 목록 기준이에요. 더 보기로 다음 목록을 확인하세요.": "Search, counts, sorting and same-name groups cover loaded items. Use Show more to load the next page."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "반영하면 다음 {0}개가 이어서 나와요 · 불러온 남은 후보 {1}개": "After applying, the next {0} appear · {1} loaded candidates left"
+});
+
+Object.assign(window.ArkismI18nEN.strings, { "이전 후보": "Previous candidates", "다음 후보": "Next candidates" });
+Object.assign(window.ArkismI18nEN.patterns, { "{0}개 중 {1}–{2}개 표시": "Showing {1}–{2} of {0}" });
+
+Object.assign(window.ArkismI18nEN.strings, { "요약의 개수·검토 항목은 불러온 목록 기준이에요. 기억·스킬 화면에서 다음 목록을 확인하세요.": "Summary counts and review items cover loaded lists. Open Memory or Skills to load the next page." });
+Object.assign(window.ArkismI18nEN.patterns, { "{0}{1}개": "{0}{1}" });
+
+Object.assign(window.ArkismI18nEN.strings, { "비슷한 스킬을 확인하고 있어요.": "Checking for similar skills." });
+
+Object.assign(window.ArkismI18nEN.patterns, { "불러온 목록에 오래된 후보 {0}개가 있어요. 서버에서 {1}일 넘게 결정하지 않은 후보를 최대 100개 정리할까요?\n\n저장되지 않고 만료돼요. 에이전트는 쓰지 않아요.": "There are {0} old candidates in the loaded list. Expire up to 100 server candidates undecided for more than {1} days?\n\nThey expire without being saved. Agents cannot use them." });
 Object.assign(window.ArkismI18nEN.strings, { "새 워크플로우 만들기": "New workflow", "찾아볼 기억": "Memory it searches", "이렇게 일하라고 정해 둔 규칙": "Rules for how to work", "이미 정한 결정": "Decisions already made", "실수에서 배운 것": "Lessons from mistakes", "사용자가 좋아하는 방식": "What the user prefers" });
 Object.assign(window.ArkismI18nEN.strings, { "저장한 뒤에 앱 밖 새 창으로 옮길 수 있어요.": "Save it first, then it can move out to its own window." });
+
+Object.assign(window.ArkismI18nEN.strings, {
+  "자료 더 보기": "Load more sources",
+  "세션 더 보기": "Load more sessions",
+  "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요.": "Could not load the full catalog. Please retry.",
+  "전체 목록에서 찾는 중…": "Searching the full catalog…"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "전체 {0}개 중 {1}개 표시 · 전체에서 검색·정렬": "Showing {1} of {0} · search and order cover all results",
+  "전체 검색 결과 {0}개 · 검색·정렬은 서버 전체 기준이에요. 후보 묶음은 불러온 항목 기준이에요.": "{0} results across the server · candidate groups cover loaded items",
+  "전체 검색 결과 {0}개 · 검색·정렬은 서버 전체 기준이에요. 같은 이름 묶음은 불러온 항목 기준이에요.": "{0} results across the server · name groups cover loaded items",
+  "{0} / {1} · 전체에서 검색·정렬": "{0} / {1} · search and order cover all results"
+});
+
+Object.assign(window.ArkismI18nEN.strings, {
+ "요약은 처음 불러온 기억 기준이에요. 기억 목록에서는 전체를 검색·정렬할 수 있어요.": "The summary covers initially loaded memories. Search and order cover all results in the memory list.",
+ "요약은 처음 불러온 목록 기준이에요. 각 목록에서 전체 검색과 다음 페이지를 확인하세요.": "The summary covers initially loaded items. Each list offers full search and additional pages."
+});

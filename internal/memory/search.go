@@ -157,6 +157,20 @@ func (s *Service) Search(ctx context.Context, token string, in SearchInput) (Con
 	return out, err
 }
 
+// The HTTP permission and the retrieval lane must resolve the same collection.
+func searchCollection(purpose string) (string, bool) {
+	switch purpose {
+	case "", "answer", "knowledge":
+		return colMemories, true
+	case "skills":
+		return colSkillVersions, true
+	case "self_improvement", "risk", "skill_validation":
+		return colReflections, true
+	default:
+		return "", false
+	}
+}
+
 // Keep the search actor inside the service for multi-step consumers.
 func (s *Service) searchWithActor(ctx context.Context, token string, in SearchInput) (ContextBundle, Decision, error) {
 	if !validSearchRelation(in) {
@@ -210,14 +224,8 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	if in.MaxChars == 0 {
 		in.MaxChars = 12000
 	}
-	collection := colMemories
-	switch in.Purpose {
-	case "", "answer", "knowledge":
-	case "skills":
-		collection = colSkillVersions
-	case "self_improvement", "risk", "skill_validation":
-		collection = colReflections
-	default:
+	collection, ok := searchCollection(in.Purpose)
+	if !ok {
 		return out, Decision{}, ErrInvalid
 	}
 	d, e := s.authorize(ctx, token, "search:"+collection, in.Scope, "", searchContent)
@@ -431,6 +439,11 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 			usage.Items = append(usage.Items, MemoryUse{Memory: Ref{Collection: colMemories, ID: h.ID, Revision: h.Revision}, Rank: len(in.pinned) + i + 1, Score: h.Score, Lanes: h.Lanes})
 		}
 	}
+	releaseCommit, err := s.searchCommits.acquire(ctx, in.Scope)
+	if err != nil {
+		return ContextBundle{}, Decision{}, ErrUnavailable
+	}
+	defer releaseCommit()
 	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		checked := searchReadTx{Tx: tx}
 		if in.RelatedTo != nil {
@@ -527,6 +540,13 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 }
 
 func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result error) {
+	// The claimed job's deferred FinishJob runs before this recovery. A panic
+	// consumes its attempt and cannot terminate the worker or leak raw content.
+	defer func() {
+		if recover() != nil {
+			result = ErrUnavailable
+		}
+	}()
 	if pg, recovery := s.Repo.(*Postgres); !recovery || !pg.erasureOnly {
 		if err := s.CheckRestorePublication(ctx); err != nil {
 			return err

@@ -55,7 +55,7 @@ func TestSearchModesRejectInvalidBeforePolicy(t *testing.T) {
 	for _, modes := range [][]string{{"exact", "exact"}, {"fts", "fts"}, {"unknown"}, {"EXACT"}, {"relation"}, {"hub"}, {"exact", "fts", "vector", "hub", "exact"}} {
 		f := newFixture(t)
 		called := false
-		f.svc.Auth = requestActorAuth{Authorizer: f.auth, change: func(a Authorization, d *Decision) error { called = true; return nil }}
+		f.svc.Auth = requestActorAuth{Authorizer: f.auth, payloadOnly: true, change: func(a Authorization, d *Decision) error { called = true; return nil }}
 		in := SearchInput{Scope: scopeA, Query: "needle", Modes: modes}
 		req := httptest.NewRequest("POST", "/v1/search", strings.NewReader(structuredText(in)))
 		req.Header.Set("Authorization", "Bearer "+f.human)

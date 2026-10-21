@@ -54,7 +54,7 @@ func (s *Service) CrewAgentCalls(ctx context.Context, token string, scope Scope,
 	return out, nil
 }
 
-func crewAgentCallRoutes(mux *http.ServeMux, s *Service) {
+func crewAgentCallRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/crew/agents/{id}/calls", func(w http.ResponseWriter, r *http.Request) {
 		limit := 30
 		if v := r.URL.Query().Get("limit"); v != "" {

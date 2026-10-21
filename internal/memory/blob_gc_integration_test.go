@@ -21,7 +21,7 @@ func TestIntegrationBlobGCCLI(t *testing.T) {
 		t.Fatal(e)
 	}
 	// Postgres is the canonical authorizer: the CLI's worker token needs a grant.
-	grant := PrincipalGrant{PrincipalID: "cli-maintainer", Role: "service", Token: "test-maintainer", OrganizationID: blobScope().WorkspaceID, ProjectID: blobScope().ProjectID, Actions: []string{"maintain:blobs"}}
+	grant := PrincipalGrant{PrincipalID: "cli-maintainer", Role: "service", Token: testPrincipalToken("test-maintainer"), OrganizationID: blobScope().WorkspaceID, ProjectID: blobScope().ProjectID, Actions: []string{"maintain:blobs"}}
 	if e := repo.ProvisionPrincipal(testCtx, grant); e != nil {
 		t.Fatal(e)
 	}
@@ -30,7 +30,7 @@ func TestIntegrationBlobGCCLI(t *testing.T) {
 	if out, e := build.CombinedOutput(); e != nil {
 		t.Fatal("build", e, string(out))
 	}
-	env := []string{"MEMORY_STORE=postgres", "MEMORY_DATABASE_URL=" + itDSN(repo), "MEMORY_BLOB_DIRECTORY=" + f.svc.BlobDirectory, "MEMORY_WORKER_TOKEN=test-maintainer"}
+	env := []string{"MEMORY_STORE=postgres", "MEMORY_DATABASE_URL=" + itDSN(repo), "MEMORY_BLOB_DIRECTORY=" + f.svc.BlobDirectory, "MEMORY_WORKER_TOKEN=" + testPrincipalToken("test-maintainer")}
 	for _, args := range [][]string{{"--collect-blobs", "--recovery"}, {"--collect-blobs", "--worker"}, {"--collect-blobs", "--init-db"}} {
 		cmd := exec.Command(bin, args...)
 		cmd.Env = env

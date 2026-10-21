@@ -23,7 +23,7 @@ func TestPostgresRecoveryBinaryWorkDeletion(t *testing.T) {
 	if _, err := f.svc.SaveWorkCheckpoint(testCtx, f.agent, in); err != nil {
 		t.Fatal(err)
 	}
-	owner, worker := "synthetic-recovery-owner", "synthetic-recovery-worker"
+	owner, worker := testPrincipalToken("synthetic-recovery-owner"), testPrincipalToken("synthetic-recovery-worker")
 	for _, grant := range []PrincipalGrant{
 		{PrincipalID: "restore-owner", Role: "human", Token: owner, OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"delete:work_checkpoints", "read:privacy_deletion", "expire:session_archives"}},
 		{PrincipalID: "restore-worker", Role: "service", Token: worker, OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"purge:runtime", "purge:canonical", "read:privacy_deletion"}},
@@ -126,7 +126,7 @@ func TestPostgresRecoveryBinaryWorkDeletion(t *testing.T) {
 	}
 	recoveryHTTP(t, base, "", "GET", "/readyz", nil, nil, 503)
 	request := PrivacyDeletionRequest{Scope: scopeA, IdempotencyKey: "binary-delete", TargetType: "work_checkpoint", TargetIDs: []string{in.ID}, Reason: "owner_request"}
-	recoveryHTTP(t, base, "", "POST", "/v1/privacy/deletions", request, nil, 403)
+	recoveryHTTP(t, base, "", "POST", "/v1/privacy/deletions", request, nil, 401)
 	recoveryHTTP(t, base, worker, "POST", "/v1/privacy/deletions", request, nil, 403)
 	var deletion PrivacyDeletionStatus
 	recoveryHTTP(t, base, owner, "POST", "/v1/privacy/deletions", request, &deletion, 202)

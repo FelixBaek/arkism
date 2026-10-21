@@ -47,10 +47,11 @@ type Service struct {
 	Drafter             SkillDrafter
 	Router              SkillJudge
 	// ModelPicker picks a model for 라우팅 (Clef-flash); nil sends every task to the fixed or first model.
-	ModelPicker  ModelPicker
-	analysisMu   sync.Mutex
-	draftMu      sync.Mutex
-	providerKeys providerKeyHold
+	ModelPicker   ModelPicker
+	searchCommits searchCommitGate
+	analysisMu    sync.Mutex
+	draftMu       sync.Mutex
+	providerKeys  providerKeyHold
 	// discordTokens holds typed Discord bot tokens until the host collects them, like providerKeys.
 	discordTokens providerKeyHold
 	Repo          Repository
@@ -203,11 +204,25 @@ func (s *Service) authorizeAt(ctx context.Context, token, action string, scope S
 		}
 		return Decision{}, ErrDenied
 	}
-	if actor, ok := ctx.Value(requestActorKey{}).(Decision); ok && (d.PrincipalID != actor.PrincipalID || d.Role != actor.Role || d.Scope != actor.Scope) {
+	if !sameRequestActor(ctx, d) {
 		s.auditDeniedInput(ctx, action, scope, id)
 		return Decision{}, ErrDenied
 	}
 	return d, nil
+}
+
+func sameRequestActor(ctx context.Context, d Decision) bool {
+	match := true
+	if actor, ok := ctx.Value(requestActorKey{}).(Decision); ok {
+		match = d.PrincipalID == actor.PrincipalID && d.Role == actor.Role && d.Scope == actor.Scope
+	}
+	if actor, ok := ctx.Value(httpActorKey{}).(*httpActor); ok {
+		match = match && !actor.changed.Load() && d.PrincipalID == actor.principal && d.Role == actor.role
+		if !match {
+			actor.changed.Store(true)
+		}
+	}
+	return match
 }
 func audit(ctx context.Context, tx Tx, scope Scope, actor, action, id string) error {
 	if containsSecret(structuredText(scope)) || containsSecret(actor) || containsSecret(action) || containsSecret(id) {

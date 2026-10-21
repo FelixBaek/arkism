@@ -224,7 +224,7 @@ func TestSourceListHTTPAndAudit(t *testing.T) {
 	if strings.Contains(logs.String(), "source-search-observation") || strings.Contains(logs.String(), "synthetic-search-secret") || strings.Contains(strings.Join(observed.payloads, ""), "synthetic-search-secret") {
 		t.Fatal("query logged or rejected secret reached policy")
 	}
-	request(q.Encode(), "", 403)
+	request(q.Encode(), "", 401)
 	f.repo.failAudit = true
 	request(q.Encode(), f.human, 503)
 	f.repo.failAudit = false

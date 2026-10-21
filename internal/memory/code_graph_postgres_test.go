@@ -48,9 +48,9 @@ func postgresCodeGraphEnv(t *testing.T) (codeGraphEnv, *Postgres, *Postgres) {
 	admin := isolatedPostgres(t)
 	ctx := context.Background()
 	grants := []PrincipalGrant{
-		{PrincipalID: "cg-human-a", Role: roleHuman, Token: "cg-token-human-a-never-stored", OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", codeGraphRead, codeGraphWrite}},
-		{PrincipalID: "cg-agent-a", Role: roleAgent, Token: "cg-token-agent-a-never-stored", OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", codeGraphRead, codeGraphWrite}},
-		{PrincipalID: "cg-human-b", Role: roleHuman, Token: "cg-token-human-b-never-stored", OrganizationID: scopeB.WorkspaceID, ProjectID: scopeB.ProjectID, Actions: []string{"db:read", "db:write", codeGraphRead, codeGraphWrite}},
+		{PrincipalID: "cg-human-a", Role: roleHuman, Token: testPrincipalToken("cg-token-human-a-never-stored"), OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", codeGraphRead, codeGraphWrite}},
+		{PrincipalID: "cg-agent-a", Role: roleAgent, Token: testPrincipalToken("cg-token-agent-a-never-stored"), OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"db:read", "db:write", codeGraphRead, codeGraphWrite}},
+		{PrincipalID: "cg-human-b", Role: roleHuman, Token: testPrincipalToken("cg-token-human-b-never-stored"), OrganizationID: scopeB.WorkspaceID, ProjectID: scopeB.ProjectID, Actions: []string{"db:read", "db:write", codeGraphRead, codeGraphWrite}},
 	}
 	for _, g := range grants {
 		if err := admin.ProvisionPrincipal(ctx, g); err != nil {

@@ -38,6 +38,8 @@ jobs:
     permissions:
       contents: write
       actions: read
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/release.yml
     with:
       version: "0.1.0"

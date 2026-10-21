@@ -25,13 +25,13 @@ func TestSkillTrialOutcomeProducer(t *testing.T) {
 	input.EventID = "second"
 	input.Source = in.TrialEvidence[1]
 	input.Evidence = []Ref{in.TrialEvidence[1]}
-	if _, e = f.svc.RecordSkillTrialOutcome(testCtx, "learner", input); !errors.Is(e, ErrDenied) {
+	if _, e = f.svc.RecordSkillTrialOutcome(testCtx, testPrincipalToken("learner"), input); !errors.Is(e, ErrDenied) {
 		t.Fatal("manager self-check", e)
 	}
 	if _, e = f.svc.RecordSkillTrialOutcome(testCtx, "checker", input); e != nil {
 		t.Fatal(e)
 	}
-	out, e := f.svc.ObserveSkillTrial(testCtx, "learner", trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
+	out, e := f.svc.ObserveSkillTrial(testCtx, testPrincipalToken("learner"), trial.ID, SkillTrialReadInput{Scope: scopeA, SkillID: candidate.SkillID})
 	if e != nil || out.State != "ready_for_comparison" {
 		t.Fatal(out, e)
 	}

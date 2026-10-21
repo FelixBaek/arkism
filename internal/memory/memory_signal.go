@@ -325,7 +325,7 @@ func (s *Service) MemorySignals(ctx context.Context, token string, in MemorySign
 	return out, nil
 }
 
-func memorySignalRoutes(mux *http.ServeMux, s *Service) {
+func memorySignalRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/memories/{id}/signal", func(w http.ResponseWriter, r *http.Request) {
 		scope, e := parseSourceTraceQuery(r.URL.RawQuery)
 		if e != nil {

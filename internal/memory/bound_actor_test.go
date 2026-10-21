@@ -35,6 +35,32 @@ func exerciseBatchBoundActor(t *testing.T, repo Repository, field string) {
 	req.Header.Set("Authorization", "Bearer "+f.human)
 	w := httptest.NewRecorder()
 	Handler(f.svc).ServeHTTP(w, req)
+	if field != "none" {
+		if w.Code != 403 || !changed || strings.Contains(w.Body.String(), "items") {
+			t.Fatal("changed HTTP actor returned batch data", w.Code, changed, w.Body.String())
+		}
+		// Batches use separate transactions. A completed authorized item remains;
+		// the changed identity and all subsequent items must leave no new memory.
+		for i, item := range input.Items {
+			c, err := repo.Get(testCtx, "memory_candidates", scopeA, item.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if i == 0 {
+				if c.Status != "approved" || c.ApprovedBy != "human-1" {
+					t.Fatal("authorized item lost", c)
+				}
+			} else {
+				if c.Status != "candidate" || c.Revision != 1 || c.ApprovedBy != "" || c.Review != nil {
+					t.Fatal("rejected item changed", c)
+				}
+				if _, err := repo.Get(testCtx, colMemories, scopeA, item.ID); !errors.Is(err, ErrNotFound) {
+					t.Fatal("rejected memory published", err)
+				}
+			}
+		}
+		return
+	}
 	if w.Code != 200 || !changed {
 		t.Fatal("batch HTTP", w.Code, changed, w.Body.String())
 	}

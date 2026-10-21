@@ -20,7 +20,7 @@ window.ArkismKnowledge = (ctx) => {
   const EXCLUDE = { superseded_version: "예전 버전", duplicate_chunk: "같은 조각", result_limit: "개수 제한", context_budget: "토큰 한도", no_text_match: "글자가 안 맞음", embedding_unavailable: "벡터 없음" };
   const JOB = { pending: "대기", running: "실행 중", done: "끝남", failed: "실패" };
   const K = {
-    tab: "sources", state: "idle", error: "", sources: [], truncated: false, wiki: "idle", pages: [], links: [], jobs: [],
+    tab: "sources", state: "idle", error: "", sources: [], total: 0, facets: {}, wiki: "idle", pages: [], links: [], jobs: [],
     src: { q: "", status: "", sort: "recent", format: "" }, srcSel: "", docs: {},
     pg: { q: "", type: "", sort: "recent", chip: "all" }, pageSel: "", compare: false, edit: null,
     doc: "", docTab: "sections", secSel: 0, verSel: "", search: { profile: PROFILES[0][0], q: "", busy: false, result: null, error: "" },
@@ -39,14 +39,26 @@ window.ArkismKnowledge = (ctx) => {
   const noI18n = (n) => { n.dataset.noI18n = ""; return n; };
   const num = (n) => Number(n || 0).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR");
 
+  const sourceFilters = () => ({ q: K.src.q, state: K.src.status || "all", sort: K.src.sort, format: K.src.format });
+  const sourcePages = ctx.remoteCollection((filters, page) => post("/v1/knowledge/sources/query", { ...filters, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) }));
+  let sourceBusy = false, sourceError = "", sourceEpoch = 0;
+  async function loadSources(more = false) {
+    const ticket = ++sourceEpoch, filters = sourceFilters(); sourceBusy = true; sourceError = "";
+    if (!more && !sourcePages.snapshot(filters).ready) { K.sources = []; K.total = 0; }
+    paint();
+    try {
+      const page = await sourcePages.load(filters, more);
+      if (ticket !== sourceEpoch || !page) return;
+      K.sources = page.items; K.total = page.total; K.facets = page.facets; K.state = "ready";
+    } catch (e) { if (ticket === sourceEpoch) { sourceError = e.message; if (!K.sources.length) K.state = off(e) ? "off" : "error"; K.error = e.message; } }
+    if (ticket === sourceEpoch) { sourceBusy = false; paint(); }
+  }
   // ---------------------------------------------------------------- load
   async function load() {
     const ticket = ++epoch;
     K.state = K.state === "ready" ? "ready" : "loading"; paint();
-    const [s, p, g, j] = await Promise.allSettled([get("/v1/knowledge/sources", { limit: 500 }), get("/v1/wiki/pages", { state: "all" }), get("/v1/wiki/graph"), get("/v1/wiki/jobs")]);
+    const [s, p, g, j] = await Promise.allSettled([loadSources(), get("/v1/wiki/pages", { state: "all" }), get("/v1/wiki/graph"), get("/v1/wiki/jobs")]);
     if (ticket !== epoch) return;
-    if (s.status === "fulfilled" && Array.isArray(s.value?.items)) { K.sources = s.value.items; K.truncated = !!s.value.truncated; K.state = "ready"; }
-    else { K.sources = []; K.state = s.status === "rejected" && off(s.reason) ? "off" : "error"; K.error = s.reason?.message || "invalid_response"; }
     if (p.status === "fulfilled" && Array.isArray(p.value?.items)) { K.pages = p.value.items; K.wiki = "ready"; }
     else { K.pages = []; K.wiki = p.status === "rejected" && off(p.reason) ? "off" : "error"; }
     K.links = g.status === "fulfilled" && Array.isArray(g.value?.links) ? g.value.links : [];
@@ -183,13 +195,6 @@ window.ArkismKnowledge = (ctx) => {
   }
 
   // ---------------------------------------------------------------- 자료 (384:30031)
-  function filteredSources() {
-    const { q, status, sort, format } = K.src;
-    let items = K.sources.filter((s) => (!format || s.format === format) && (!status || srcState(s)[0] === status));
-    if (q) { const t = q.toLowerCase(); items = items.filter((s) => s.display_name.toLowerCase().includes(t) || (K.docs[s.id]?.items || []).some((d) => d.sections.some((x) => x.toLowerCase().includes(t)))); }
-    const key = { name: (a, b) => a.display_name.localeCompare(b.display_name), chunks: (a, b) => b.chunk_count - a.chunk_count }[sort] || ((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
-    return [...items].sort(key);
-  }
   function renderSources(table) {
     const parts = [];
     const pending = K.sources.filter((s) => s.lifecycle_status === "draft" || (s.lifecycle_status !== "failed" && s.trust_level !== "reviewed")).length;
@@ -197,36 +202,39 @@ window.ArkismKnowledge = (ctx) => {
     if (pending + failed) parts.push(attn(pending + failed, [pending && `검토 대기 ${pending}`, failed && `추출 실패 ${failed}`].filter(Boolean).join(" · "), "하나씩 확인하기",
       () => { const s = K.sources.find(needs); if (s) openSource(s.id); }));
     const bar = el("div", "v4s-bar");
-    bar.append(searchBox("문서·목차 검색", K.src.q, (v) => { K.src.q = v; paint(); }),
-      select("상태", [["", "상태: 모두"], ["검토 대기", "검토 대기"], ["사용 중", "사용 중"], ["실패", "실패"]], K.src.status, (v) => { K.src.status = v; paint(); }),
-      select("정렬", [["recent", "최근 올린 순"], ["name", "이름 순"], ["chunks", "조각 많은 순"]], K.src.sort, (v) => { K.src.sort = v; paint(); }));
+    bar.append(searchBox("문서·목차 검색", K.src.q, (v) => { K.src.q = v; void loadSources(); }),
+      select("상태", [["", "상태: 모두"], ["검토 대기", "검토 대기"], ["사용 중", "사용 중"], ["실패", "실패"]], K.src.status, (v) => { K.src.status = v; void loadSources(); }),
+      select("정렬", [["recent", "최근 올린 순"], ["name", "이름 순"], ["chunks", "조각 많은 순"]], K.src.sort, (v) => { K.src.sort = v; void loadSources(); }));
     parts.push(bar);
     if (noticeLine()) parts.push(noticeLine());
     const cols = el("div", "v4k-cols");
     const side = el("div", "v4k-groups");
     side.append(el("p", "v4k-label", "자료"));
     for (const [k, label] of FORMATS) {
-      const n = K.sources.filter((s) => !k || s.format === k).length;
+      const n = k ? K.facets.kinds?.[k] || 0 : Object.values(K.facets.kinds || {}).reduce((a,b) => a+b,0);
       if (k && !n) continue;
       const g = el("button", `v4k-group${K.src.format === k ? " on" : ""}`); g.type = "button";
       const t = el("span", "v4k-group-text");
       t.append(el("b", "", label), el("small", "", k ? `파일 ${n}개` : "모든 형식"));
       g.append(t, el("output", "", String(n)));
-      g.addEventListener("click", () => { K.src.format = k; paint(); });
+      g.addEventListener("click", () => { K.src.format = k; void loadSources(); });
       side.append(g);
     }
     side.append(button("+ 파일 올리기", "v4k-add", null, () => pickFile(null)));
     const main = el("div", "v4k-main");
-    const items = filteredSources();
+    const items = K.sources;
     const list = el("div", "v4s-list");
-    for (const s of items) {
+    const sourceRow = (s) => {
       const meta = [s.lifecycle_status === "failed" ? "추출 실패" : `조각 ${num(s.chunk_count)}개`, `버전 ${s.document_count}`, `${ago(s.updated_at)} 올림`];
       if (s.bindings.length) meta.push(s.bindings.map((b) => profileName(b.specialist_profile_id)).join(", "));
       const st = srcState(s);
-      list.append(row("v4k-row", K.srcSel === s.id, [text(s.display_name, meta.join(" · "), true), st[0] === "사용 중" ? el("span", "v4s-uses v4k-uses", `${num(s.chunk_count)}조각`) : badge(st)], () => openSource(s.id)));
-    }
+      const node = row("v4k-row", K.srcSel === s.id, [text(s.display_name, meta.join(" · "), true), st[0] === "사용 중" ? el("span", "v4s-uses v4k-uses", `${num(s.chunk_count)}조각`) : badge(st)], () => openSource(s.id)); node.dataset.id = s.id; return node;
+    };
+    ctx.virtualList.mount({ container: list, scrollport: $("#table"), items, row: sourceRow, key: JSON.stringify(sourceFilters()) });
     if (!items.length) list.append(el("div", "empty", K.sources.length ? "조건에 맞는 자료가 없어요." : "아직 올린 자료가 없어요. Markdown·텍스트·JSON 파일을 올려 보세요."));
-    main.append(list, el("p", "v4s-foot", K.truncated ? `자료 ${items.length}개 표시 · 더 있어요` : `자료 ${K.sources.length}개 중 ${items.length}개 표시`));
+    main.append(list, el("p", "v4s-foot", sourceBusy ? "불러오는 중…" : `전체 ${K.total}개 중 ${items.length}개 표시 · 전체에서 검색·정렬`));
+    if (sourceError) main.append(el("p", "ss-note", `불러오지 못했어요 (${sourceError}).`));
+    if (sourcePages.snapshot(sourceFilters()).cursor || sourceError) { const b = button(sourceError ? "다시 시도" : "자료 더 보기", "", null, () => loadSources(true)); b.disabled = sourceBusy; main.append(b); }
     cols.append(side, main);
     parts.push(cols);
     table.replaceChildren(...parts);
@@ -601,7 +609,7 @@ window.ArkismKnowledge = (ctx) => {
     if (doc) {
       const d = current(doc.id);
       headExtras({ count: `조각 ${num(d?.chunk_count ?? doc.chunk_count)}개`, back: [`자료 · ${doc.display_name}`, () => { K.doc = ""; K.notice = ""; paint(); }] });
-    } else headExtras({ count: K.state === "ready" ? `자료 ${K.sources.length} · 위키 ${K.pages.filter((p) => p.review_state !== "deleted").length}` : "" });
+    } else headExtras({ count: K.state === "ready" ? `자료 ${K.total} · 위키 ${K.pages.filter((p) => p.review_state !== "deleted").length}` : "" });
     if (K.state === "loading") { table.replaceChildren(el("div", "empty", "불러오는 중…")); $("#detail").replaceChildren(); return; }
     if (K.state === "off" || K.state === "error") {
       table.replaceChildren(el("div", "empty", K.state === "off" ? "이 서버에서는 지식 기능이 꺼져 있거나 아직 없어요." : `지식을 불러오지 못했어요 (${K.error}).`));
@@ -609,7 +617,7 @@ window.ArkismKnowledge = (ctx) => {
     }
     if (doc) return renderDoc(table);
     const seg = el("div", "v4s-seg v4k-seg");
-    for (const [k, label, n] of [["sources", "자료", K.sources.length], ["wiki", "위키", K.pages.filter((p) => p.review_state !== "deleted").length]]) {
+    for (const [k, label, n] of [["sources", "자료", K.total], ["wiki", "위키", K.pages.filter((p) => p.review_state !== "deleted").length]]) {
       const b = el("button", K.tab === k ? "on" : ""); b.type = "button"; b.setAttribute("aria-pressed", String(K.tab === k));
       b.append(label, el("output", "", String(n)));
       b.addEventListener("click", () => { K.tab = k; K.notice = ""; K.remove = null; paint(); });
@@ -621,7 +629,7 @@ window.ArkismKnowledge = (ctx) => {
   }
 
   return {
-    reset: () => { epoch++; Object.assign(K, { state: "idle", doc: "", notice: "", remove: null, edit: null, docs: {} }); },
+    reset: () => { sourcePages.reset(); sourceEpoch++; sourceBusy = false; sourceError = ""; K.sources = []; K.total = 0; epoch++; Object.assign(K, { state: "idle", doc: "", notice: "", remove: null, edit: null, docs: {} }); },
     views: { knowledge: {
       title: () => (K.doc ? K.sources.find((x) => x.id === K.doc)?.display_name || "지식" : "지식"),
       sub: () => (K.doc ? "AI는 문서를 통째로 읽지 않고 이 조각 단위로 찾아 써요. 새 버전은 다시 검토해야 검색에 나와요." : "올려 둔 자료를 잘게 나눠 AI가 찾아 써요. 위키는 AI가 자료를 묶어 쓴 문서이고, 검토한 뒤에 쓰여요."),

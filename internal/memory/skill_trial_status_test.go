@@ -34,7 +34,7 @@ func TestSkillTrialStatusCanonicalTerminalStates(t *testing.T) {
 			f, candidate, trial, in := skillAutomationFixture(t)
 			switch state {
 			case "promoted":
-				if _, err := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false); err != nil {
+				if _, err := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false); err != nil {
 					t.Fatal(err)
 				}
 			case "expired":

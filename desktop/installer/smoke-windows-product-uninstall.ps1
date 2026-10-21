@@ -653,6 +653,7 @@ function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePa
     foreach ($path in @($state.Environment.HOME, $state.Environment.APPDATA, $state.Environment.LOCALAPPDATA,
       $state.Environment.XDG_CONFIG_HOME, $state.Environment.TEMP)) { [IO.Directory]::CreateDirectory($path) | Out-Null }
     Add-InstalledSmokeOwnedFolders $context $root $state.Environment
+    $report.profile_check = Assert-InstalledSmokeIsolatedFolders $context $stage $state.Environment
     Assert-ProductProfileBeforeSetup $state
     Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
     $request = New-JobFixtureRequest $context $root (Join-Path $state.Install 'uninstall.exe') '' ('0' * 64)

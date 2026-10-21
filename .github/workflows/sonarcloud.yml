@@ -28,7 +28,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # New code is measured from the last version change, so tag analyses with the app version.
+      # This labels the analysis only; the Sonar project settings define new code.
+      # A source version label does not prove a moving review baseline.
       - name: Read app version
         id: version
         run: |

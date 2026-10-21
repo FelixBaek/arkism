@@ -18,9 +18,7 @@ import (
 // session. No prompt, output or file content is stored here.
 const (
 	colUsageSessions = "usage_sessions"
-	// shortcut: the summary reads up to 20000 sessions in Go; aggregate in SQL if one scope ever holds more.
-	usageSessionsRead = 20000
-	usageBatchMax     = 200
+	usageBatchMax    = 200
 )
 
 type UsageTokens struct {
@@ -424,60 +422,7 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 
 // UsageSessionList is 세션 메뉴: newest first, optionally one agent and a literal title/project/id match.
 func (s *Service) UsageSessionList(ctx context.Context, token string, scope Scope, rangeKey, agent, q string, limit int) (map[string]any, error) {
-	days, ok := usageRanges[rangeKey]
-	if !validScope(scope) || !ok || agent != "" && !usageNameRe.MatchString(agent) || len(q) > 200 || limit < 1 || limit > 500 {
-		return nil, ErrInvalid
-	}
-	if _, err := s.authorize(ctx, token, "read:"+colRouting, scope, routingID(scope), ""); err != nil {
-		return nil, err
-	}
-	rows, err := s.usageRows(ctx, scope)
-	if err != nil {
-		return nil, err
-	}
-	var since time.Time
-	if days > 0 {
-		y, m, d := time.Now().In(usageZone()).AddDate(0, 0, 1-days).Date()
-		since = time.Date(y, m, d, 0, 0, 0, 0, usageZone())
-	}
-	q = strings.ToLower(q)
-	items := []map[string]any{}
-	total := 0
-	for _, r := range rows {
-		u := r.UsageSession
-		if u == nil || u.EndedAt.Before(since) || agent != "" && u.Agent != agent ||
-			q != "" && !strings.Contains(strings.ToLower(u.Title+"\x00"+u.Project+"\x00"+u.SessionID), q) {
-			continue
-		}
-		total++
-		var sum UsageTokens
-		models := map[string]*UsageTokens{}
-		for _, perModel := range u.Days {
-			for m, t := range perModel {
-				sum.add(t)
-				if models[m] == nil {
-					models[m] = &UsageTokens{}
-				}
-				models[m].add(t)
-			}
-		}
-		byModel := []map[string]any{}
-		for m, t := range models {
-			byModel = append(byModel, map[string]any{"name": m, "tokens": t.total(), "input": t.Input, "output": t.Output, "cache_read": t.CacheRead,
-				"cache_write": t.CacheWrite, "requests": t.Requests, "cost_usd": cost(t.CostUSD), "priced": t.CostUSD != nil})
-		}
-		sort.Slice(byModel, func(i, j int) bool { return byModel[i]["tokens"].(int64) > byModel[j]["tokens"].(int64) })
-		items = append(items, map[string]any{"id": r.ID, "agent": u.Agent, "device": u.Device, "session_id": u.SessionID, "title": u.Title,
-			"project": u.Project, "started_at": u.StartedAt, "ended_at": u.EndedAt, "messages": u.Messages, "active_seconds": u.ActiveSeconds,
-			"tokens": sum.total(), "input": sum.Input, "output": sum.Output, "cache_read": sum.CacheRead, "cache_write": sum.CacheWrite,
-			"requests": sum.Requests, "cost_usd": cost(sum.CostUSD), "priced": sum.CostUSD != nil, "models": byModel,
-			"tools": counted(pairs(u.Tools), 50), "skills": counted(pairs(u.Skills), 50)})
-	}
-	sort.SliceStable(items, func(i, j int) bool { return items[i]["ended_at"].(time.Time).After(items[j]["ended_at"].(time.Time)) })
-	if len(items) > limit {
-		items = items[:limit]
-	}
-	return map[string]any{"items": items, "total": total, "authority": AuthorityDataOnly}, nil
+	return s.UsageSessionListPage(ctx, token, scope, rangeKey, agent, q, "recent", "", limit)
 }
 
 func pairs(m map[string]int) map[string][2]int {
@@ -501,11 +446,11 @@ func (s *Service) usageRows(ctx context.Context, scope Scope) ([]Record, error) 
 	}); ok {
 		return all.UsageSessionRows(ctx, scope)
 	}
-	return s.Repo.ListRecords(ctx, scope, colUsageSessions, 1000)
+	return collectCatalogRecords(ctx, s.Repo, scope, colUsageSessions)
 }
 
 func (p *Postgres) UsageSessionRows(ctx context.Context, scope Scope) ([]Record, error) {
-	return p.selectRecords(ctx, colUsageSessions, scope, "", nil, "updated_at DESC, id ASC", usageSessionsRead)
+	return collectCatalogRecords(ctx, p, scope, colUsageSessions)
 }
 
 // usageRequests is 요청 탭: the routed calls the host runner reported (POST /v1/routing/calls).
@@ -552,7 +497,7 @@ func (s *Service) usageRequests(ctx context.Context, scope Scope, days int, now 
 		"models": ranked(byModel, 0), "items": items}, nil
 }
 
-func usageRoutes(mux *http.ServeMux, s *Service) {
+func usageRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/usage/summary", func(w http.ResponseWriter, r *http.Request) {
 		rg := r.URL.Query().Get("range")
 		if rg == "" {
@@ -562,16 +507,14 @@ func usageRoutes(mux *http.ServeMux, s *Service) {
 		respond(w, out, e)
 	})
 	mux.HandleFunc("GET /v1/usage/sessions", func(w http.ResponseWriter, r *http.Request) {
-		v := r.URL.Query()
-		rg, limit := v.Get("range"), 200
-		if rg == "" {
-			rg = "30d"
+		v, err := parseUsageSessionQuery(r.URL.RawQuery)
+		if err != nil {
+			respond(w, nil, err)
+			return
 		}
-		if n, err := strconv.Atoi(v.Get("limit")); err == nil {
-			limit = n
-		}
-		out, e := s.UsageSessionList(r.Context(), bearer(r), scopeQuery(r), rg, v.Get("source"), v.Get("q"), limit)
-		respond(w, out, e)
+		limit, _ := strconv.Atoi(v.Get("limit"))
+		out, e := s.UsageSessionListPage(r.Context(), bearer(r), scopeQuery(r), v.Get("range"), v.Get("source"), v.Get("q"), v.Get("sort"), v.Get("cursor"), limit)
+		respond(w, usageSessionResponse(out), e)
 	})
 	mux.HandleFunc("POST /v1/usage/sessions", func(w http.ResponseWriter, r *http.Request) {
 		var in UsageSessionsInput

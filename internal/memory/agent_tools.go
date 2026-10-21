@@ -654,7 +654,7 @@ func scopeQuery(r *http.Request) Scope {
 	return Scope{WorkspaceID: q.Get("workspace_id"), ProjectID: q.Get("project_id"), UserID: q.Get("user_id"), AgentID: q.Get("agent_id")}
 }
 
-func agentToolsRoutes(mux *http.ServeMux, s *Service) {
+func agentToolsRoutes(mux routeRegistrar, s *Service) {
 	agentToolLoginRoutes(mux, s)
 	galleryArchiveRoutes(mux, s)
 	mux.HandleFunc("GET /v1/agent_tools", func(w http.ResponseWriter, r *http.Request) {

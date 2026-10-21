@@ -131,15 +131,29 @@ func twinFromRecord(r Record, status string, lastConfirmed *time.Time) TwinClaim
 		DistinctRuns: runs, Status: status, LastConfirmed: lastConfirmed, Scope: r.Scope}
 }
 
+// Confirmed claims need only the memory-read grant. Pending claims also expose
+// the review queue, so HTTP and service validation share this distinction.
+func twinClaimPermission(statuses []string) (string, error) {
+	review := len(statuses) == 0
+	for _, st := range statuses {
+		if !slices.Contains([]string{"candidate", "inferred", "confirmed", "superseded", "rejected"}, st) {
+			return "", ErrInvalid
+		}
+		review = review || st == "candidate" || st == "inferred" || st == "rejected"
+	}
+	if review {
+		return reviewAction, nil
+	}
+	return "read:memories", nil
+}
+
 // ListTwinClaims returns Deep Twin claims for one user scope. The twin is the
 // user's model, so specialist (agent) scopes have none of their own.
 // shortcut: scan authorized rows; use tag-aware storage cursors if this exceeds request budgets.
 func (s *Service) ListTwinClaims(ctx context.Context, token string, scope Scope, statuses []string) (IntelligencePage[TwinClaim], error) {
 	out := IntelligencePage[TwinClaim]{Items: []TwinClaim{}, Authority: intelligenceAuthority}
-	for _, st := range statuses {
-		if !slices.Contains([]string{"candidate", "inferred", "confirmed", "superseded", "rejected"}, st) {
-			return out, ErrInvalid
-		}
+	if _, err := twinClaimPermission(statuses); err != nil {
+		return out, err
 	}
 	if !validScope(scope) {
 		return out, ErrInvalid

@@ -19,6 +19,7 @@ type MemoryListInput struct {
 	Scope               Scope
 	Query, Kind, Status string
 	IncludeInactive     bool
+	FoldQuery           bool
 	Limit               int
 	Cursor              string
 	// ProjectKey (ST-824), when set, lists only what recall would show for that project
@@ -73,7 +74,7 @@ func parseMemoryListQuery(raw string) (MemoryListInput, error) {
 		return in, ErrInvalid
 	}
 	for k, v := range q {
-		if len(v) != 1 || !slices.Contains([]string{"workspace_id", "project_id", "user_id", "agent_id", "q", "kind", "status", "include_inactive", "limit", "cursor", "project_key", "updated_since"}, k) {
+		if len(v) != 1 || !slices.Contains([]string{"workspace_id", "project_id", "user_id", "agent_id", "q", "kind", "status", "include_inactive", "limit", "cursor", "project_key", "updated_since", "ignore_case"}, k) {
 			return in, ErrInvalid
 		}
 	}
@@ -82,6 +83,12 @@ func parseMemoryListQuery(raw string) (MemoryListInput, error) {
 		if v, ok := q[key]; ok && v[0] == "" {
 			return in, ErrInvalid
 		}
+	}
+	if v, ok := q["ignore_case"]; ok {
+		if v[0] != "true" && v[0] != "false" {
+			return in, ErrInvalid
+		}
+		in.FoldQuery = v[0] == "true"
 	}
 	if v, ok := q["project_key"]; ok {
 		in.ProjectKey = &v[0]
@@ -108,8 +115,14 @@ func parseMemoryListQuery(raw string) (MemoryListInput, error) {
 	in, _, e = normalizeMemoryList(in)
 	return in, e
 }
+func memoryListTextMatches(r Record, in MemoryListInput) bool {
+	if in.FoldQuery {
+		return strings.Contains(strings.ToLower(r.Text+" "+r.Summary), strings.ToLower(in.Query))
+	}
+	return strings.Contains(r.Text, in.Query)
+}
 func memoryListMatches(r Record, in MemoryListInput) bool {
-	return r.Scope == in.Scope && !r.ContentErased && !r.PrivacyQuarantined && (in.IncludeInactive || live(r)) && (in.Status == "" || r.Status == in.Status) && (in.Kind == "" || r.Kind == in.Kind) && strings.Contains(r.Text, in.Query) &&
+	return r.Scope == in.Scope && !r.ContentErased && !r.PrivacyQuarantined && (in.IncludeInactive || live(r)) && (in.Status == "" || r.Status == in.Status) && (in.Kind == "" || r.Kind == in.Kind) && memoryListTextMatches(r, in) &&
 		(in.ProjectKey == nil || reachVisible(memoryReach(r), r.ReachProject, *in.ProjectKey)) && (in.UpdatedSince == nil || r.UpdatedAt.After(*in.UpdatedSince))
 }
 

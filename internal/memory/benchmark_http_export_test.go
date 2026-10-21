@@ -33,7 +33,7 @@ func TestBenchmarkHTTPFactExport(t *testing.T) {
 	}
 	start := time.Now()
 	pg := isolatedPostgres(t)
-	for token, role := range map[string]string{"bench-a": "agent", "bench-b": "agent", "bench-human": "human"} {
+	for token, role := range map[string]string{testPrincipalToken("bench-a"): "agent", testPrincipalToken("bench-b"): "agent", testPrincipalToken("bench-human"): "human"} {
 		if err := pg.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: token, Role: role, Token: token, OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: []string{"*"}}); err != nil {
 			t.Fatal(err)
 		}
@@ -79,19 +79,19 @@ func TestBenchmarkHTTPFactExport(t *testing.T) {
 		}
 	}
 	var source, candidate, active Record
-	call("bench-a", "/v1/sources", sourceInput(CreateInput{Scope: scopeA, Text: fact}), 201, &source)
-	call("bench-a", "/v1/memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: fact, Keywords: []string{"benchfact"}, Sources: refs(source), Generator: &Generator{Model: "synthetic-host", PromptVersion: "1", PipelineVersion: "1"}}), 201, &candidate)
+	call(testPrincipalToken("bench-a"), "/v1/sources", sourceInput(CreateInput{Scope: scopeA, Text: fact}), 201, &source)
+	call(testPrincipalToken("bench-a"), "/v1/memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: fact, Keywords: []string{"benchfact"}, Sources: refs(source), Generator: &Generator{Model: "synthetic-host", PromptVersion: "1", PipelineVersion: "1"}}), 201, &candidate)
 	input := SearchInput{Scope: scopeA, Query: "benchfact", Modes: []string{"exact"}, BudgetTokens: 2000, TokenEncoding: "cl100k_base"}
 	var before ContextBundle
-	call("bench-b", "/v1/search", input, 200, &before)
+	call(testPrincipalToken("bench-b"), "/v1/search", input, 200, &before)
 	if len(before.Items) != 0 {
 		t.Fatal("unapproved fact leaked")
 	}
-	call("bench-human", "/v1/memory_candidates/"+candidate.ID+"/review", CandidateReviewInput{Scope: scopeA, ExpectedRevision: candidate.Revision, Action: "approve"}, 200, &active)
+	call(testPrincipalToken("bench-human"), "/v1/memory_candidates/"+candidate.ID+"/review", CandidateReviewInput{Scope: scopeA, ExpectedRevision: candidate.Revision, Action: "approve"}, 200, &active)
 	setup := time.Since(start).Seconds()
 	retrievalStart := time.Now()
 	var got ContextBundle
-	call("bench-b", "/v1/search", input, 200, &got)
+	call(testPrincipalToken("bench-b"), "/v1/search", input, 200, &got)
 	latency := float64(time.Since(retrievalStart).Microseconds()) / 1000
 	if len(got.Items) != 1 || got.Items[0].ID != active.ID || got.Items[0].Text != fact || len(got.Items[0].Sources) != 1 || got.Items[0].Sources[0].SourceID != source.ID {
 		t.Fatal("retrieved fact/provenance mismatch")

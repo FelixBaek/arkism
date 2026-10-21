@@ -1,7 +1,7 @@
 name: Coverage
 
-# Codecov = coverage only. It reports but never blocks a merge (codecov.yml makes every status
-# informational and an upload failure does not fail this job). Do not make it a required check.
+# Package floors and coverage uploads fail this job. Require coverage and
+# codecov/patch in the repository ruleset; source YAML does not configure it.
 
 on:
   push:
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   coverage:
-    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.ARKISM_USE_HOSTED_RUNNERS != 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 15
     # Postgres store tests skip without POSTGRES_TEST_DSN; tools/ci_postgres.sh gives them a disposable pgvector DB.
     steps:
@@ -31,11 +31,13 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .node-version
       - name: Postgres for tests
         run: tools/ci_postgres.sh
       - name: Go coverage
         run: python3 tools/ci_go_test.py --coverage
+      - name: Enforce memory and workflow package coverage floors
+        run: python3 tools/check_package_coverage.py go-coverage.out
       - name: UI coverage
         run: >
           node --test --experimental-test-coverage
@@ -48,11 +50,11 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: go-coverage.out
           flags: go
-          fail_ci_if_error: false
+          fail_ci_if_error: true
       - name: Upload UI coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ui-lcov.info
           flags: ui
-          fail_ci_if_error: false
+          fail_ci_if_error: true

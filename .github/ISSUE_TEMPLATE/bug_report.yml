@@ -1,0 +1,24 @@
+name: Bug report / 오류 제보
+description: Report a reproducible Windows app or server issue without private data.
+body:
+  - type: markdown
+    attributes:
+      value: "Security issues belong in SECURITY.md. Remove tokens, conversation text and personal paths."
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened, and what did you expect? / 실제 결과와 기대 결과
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 재현 순서
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: App version, Windows version and built-in or server mode / 버전과 실행 모드
+    validations:
+      required: true

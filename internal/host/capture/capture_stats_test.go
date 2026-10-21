@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -169,7 +170,7 @@ func TestCaptureBackfillSendsOnlyRowsWithText(t *testing.T) {
 	os.WriteFile(note, []byte("결론부터 쓴다"), 0o600)
 	touch(t, note, 1760000000.25)
 	plan := filepath.Join(dir, "plan.json")
-	os.WriteFile(plan, []byte(`[{"path": "`+note+`", "action": "IMPORT", "kind": "preference", "subject": "보고", "text": "결론부터 쓴다"},
+	os.WriteFile(plan, []byte(`[{"path": `+strconv.Quote(note)+`, "action": "IMPORT", "kind": "preference", "subject": "보고", "text": "결론부터 쓴다"},
 		{"path": "x.md", "action": "SKIP"}, {"path": "y.md", "action": "MERGE", "text": ""}]`), 0o600)
 	var sent any
 	capPost = func(path string, body any, _ time.Duration) (map[string]any, error) {
@@ -200,7 +201,7 @@ func TestCaptureBackfillSendsOnlyRowsWithText(t *testing.T) {
 		t.Fatal(id)
 	}
 
-	for body, want := range map[string]string{`[{"path": "x"}]`: "KeyError", `{"a": 1}`: "TypeError", `[{"path": "` + filepath.Join(dir, "gone") + `", "action": "IMPORT", "text": "t"}]`: "URLError"} {
+	for body, want := range map[string]string{`[{"path": "x"}]`: "KeyError", `{"a": 1}`: "TypeError", `[{"path": ` + strconv.Quote(filepath.Join(dir, "gone")) + `, "action": "IMPORT", "text": "t"}]`: "URLError"} {
 		os.WriteFile(plan, []byte(body), 0o600)
 		if err := backfill(plan, &out); pyType(err) != want {
 			t.Fatal(body, pyType(err), err)

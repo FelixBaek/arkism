@@ -12,6 +12,16 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      product_build_checks:
+        description: "Explicitly build product binaries and production UI assets for validation"
+        type: boolean
+        default: false
+
+# Ordinary PR/main CI compiles test targets only. Product artifacts require an
+# explicit manual dispatch; installer/release/update execution is separate.
+env:
+  ARKISM_PRODUCT_BUILD_CHECKS: ${{ github.event_name == 'workflow_dispatch' && inputs.product_build_checks }}
 
 permissions:
   contents: read
@@ -24,10 +34,13 @@ concurrency:
 jobs:
   secrets:
     name: secrets
-    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.ARKISM_USE_HOSTED_RUNNERS != 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Keep local-only files out of the public repository
         run: |
           set -euo pipefail
@@ -43,9 +56,10 @@ jobs:
           echo "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb  gitleaks_8.28.0_linux_x64.tar.gz" | sha256sum -c -
           tar xzf gitleaks_8.28.0_linux_x64.tar.gz gitleaks
           ./gitleaks dir . --no-banner --redact --exit-code 1
+          ./gitleaks git . --log-opts="--all" --no-banner --redact --exit-code 1
 
   go:
-    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.ARKISM_USE_HOSTED_RUNNERS != 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,6 +70,8 @@ jobs:
           go-version-file: go.mod
           # Self-hosted runners keep the Go build and module caches in their own HOME.
           cache: ${{ runner.environment == 'github-hosted' }}
+      - name: Known Go vulnerabilities (pinned govulncheck)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - name: Postgres for tests
         run: tools/ci_postgres.sh
       - name: Vet (Linux, Windows, macOS) and unit + Postgres integration tests (race)
@@ -68,6 +84,14 @@ jobs:
           if ! wait "$vet"; then cat "$RUNNER_TEMP/vet.log"; echo "::error::go vet failed"; exit 1; fi
           cat "$RUNNER_TEMP/vet.log"
           exit "$status"
+      - name: Report Go complexity and reject additional debt
+        run: go run ./tools/complexity --report "$RUNNER_TEMP/go-complexity.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: go-complexity
+          path: ${{ runner.temp }}/go-complexity.json
+          if-no-files-found: error
       - name: Core boundary coverage (90% per file)
         if: ${{ !cancelled() }}
         run: |
@@ -77,12 +101,22 @@ jobs:
         run: bash -n desktop/build-unix.sh desktop/installer/prepare-runtime.sh
 
   evaluation:
-    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.ARKISM_USE_HOSTED_RUNNERS != 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Install pinned minisign for offline signing regression tests
+        run: |
+          bash tools/install-minisign.sh "$RUNNER_TEMP/release-tools"
+          echo "$RUNNER_TEMP/release-tools" >> "$GITHUB_PATH"
+      - name: Install pinned API contract validator
+        run: |
+          python3 -m pip install --disable-pip-version-check --only-binary=:all: --target "$RUNNER_TEMP/api-contract-validator" -r tools/requirements-api-contract.txt
+          echo "PYTHONPATH=$RUNNER_TEMP/api-contract-validator" >> "$GITHUB_ENV"
+      - name: Offline OpenAPI structure and reference validation
+        run: python3 tools/check_openapi.py
       - name: Offline evaluation and measurement regression tests
         run: |
           python3 -m unittest discover -s tools -p 'test_*.py'
@@ -101,10 +135,36 @@ jobs:
           go-version-file: go.mod
           # Self-hosted runners keep the Go build and module caches in their own HOME.
           cache: ${{ runner.environment == 'github-hosted' }}
-      - name: Build Go commands on Windows
-        run: go build ./cmd/...
+      - name: Compile command packages as CI test targets
+        run: go test -run '^$' ./cmd/...
+      - name: Principal token file protection on Windows
+        run: go test -v -count=1 ./cmd/memory-principal
+      - name: Windows catalog, authorization and runtime regressions
+        run: >-
+          go test -race -count=1
+          -run '^Test(Catalog|UsageSession|Review|Recency|Decay|TrainReview|LoadReview|Daemon|Diagnostics|CandidateSweep|SearchCommit|WorkerPanic|RetryJitter|PassBody|ChatUpstream|GatewaySignal|NotifyRetries|ProcessLock|LoopbackHost|Limiter|HTTP)'
+          ./internal/memory ./cmd/memoryd ./internal/httpguard ./internal/processlock
+          ./internal/crewrun ./internal/host/gateway
       - name: Local state replacement ownership on Windows
         run: go test -race -v -count=1 -run '^TestAtomicWrite' ./internal/host
+      - name: Windows API schema and real response contracts
+        shell: powershell
+        run: |
+          python -m pip install --disable-pip-version-check --only-binary=:all: --target "$env:RUNNER_TEMP/api-contract-validator" -r tools/requirements-api-contract.txt
+          $env:PYTHONPATH = "$env:RUNNER_TEMP/api-contract-validator"
+          if ($LASTEXITCODE -ne 0) { throw 'API validator installation failed' }
+          $env:ARKISM_OPENAPI_CASES = Join-Path $env:RUNNER_TEMP ('arkism-api-cases-' + [guid]::NewGuid().ToString('N') + '.json')
+          python tools/update_api_contracts.py --check
+          if ($LASTEXITCODE -ne 0) { throw 'API Go DTO specification drift' }
+          go test -count=1 -run '^TestMemoryList|^TestHTTPRoutes|^TestOpenAPI' ./internal/memory
+          if ($LASTEXITCODE -ne 0) { throw 'API transport and route contract checks failed' }
+          python tools/check_openapi.py --cases $env:ARKISM_OPENAPI_CASES
+          if ($LASTEXITCODE -ne 0) { throw 'API response schema validation failed' }
+      - name: Windows agents SSH host identity
+        run: >-
+          go test -v -count=1
+          -run '^TestAgents(UseTheAppsApprovedSSHKey|RejectLegacyOrRedirectedApprovals)$|^TestWinLocalConnectionRunsHereInsteadOfSSH$'
+          ./internal/host/capture
       - name: Literal user evidence for memory capture on Windows
         run: go test -v -count=1 -run '^TestCaptureClaimEvidence' ./internal/host/capture
       - name: Captured memory context and retry receipts on Windows
@@ -127,6 +187,26 @@ jobs:
         run: go test -v -count=1 -run '^TestWindowsResolved|^TestResolved' ./internal/host/capture
       - name: Windows atomic receipt publication
         run: go test -v -count=1 -run '^TestEnqueueReceipt|^TestWindowsReceiptPublication' ./internal/crewrun
+      - name: Windows install transaction recovery and native process stop
+        shell: powershell
+        run: |
+          go test -v -count=1 "-coverprofile=$env:RUNNER_TEMP/windows-installtxn.cover" ./internal/installtxn ./cmd/arkism-installer
+          if ($LASTEXITCODE -ne 0) { throw 'Windows install transaction checks failed' }
+      - name: Upload Windows install transaction coverage
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-install-transaction-coverage
+          path: ${{ runner.temp }}/windows-installtxn.cover
+          if-no-files-found: error
+          retention-days: 3
+      - name: Upload native Windows coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ${{ runner.temp }}/windows-installtxn.cover
+          flags: go_windows
+          fail_ci_if_error: true
       - name: Windows scheduled task registration contract
         shell: powershell
         run: ./tools/test_windows_scheduled_tasks.ps1
@@ -146,7 +226,7 @@ jobs:
         run: go test -v -count=1 -run '^TestSchemaMigrationChecksumAcrossPlatforms$' ./internal/memory
 
   ui:
-    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ vars.ARKISM_USE_HOSTED_RUNNERS != 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -155,16 +235,71 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      # The UI is plain JavaScript with no package.json, so there is nothing to install.
+      - name: Install pinned frontend build tools
+        run: npm ci --prefix desktop/frontend --no-audit --no-fund
+      - name: Build and verify production UI modules
+        if: env.ARKISM_PRODUCT_BUILD_CHECKS == 'true'
+        run: |
+          node desktop/frontend/build.cjs
+          node desktop/frontend/check.cjs
       - name: UI tests
         run: node --test desktop/ui/*.test.js
+
+  ui-browser-windows:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install pinned frontend tools
+        run: npm ci --prefix desktop/frontend --no-audit --no-fund
+      - name: Install Chromium pinned by playwright-core
+        run: node desktop/frontend/node_modules/playwright-core/cli.js install chromium
+      - name: Build and verify production assets
+        if: env.ARKISM_PRODUCT_BUILD_CHECKS == 'true'
+        run: |
+          node desktop/frontend/build.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
+          node desktop/frontend/check.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend assets invalid' }
+      - name: Source UI keyboard and list regression
+        run: |
+          $env:ARKISM_UI_SCREENSHOTS = Join-Path $env:RUNNER_TEMP 'arkism-ui-source'
+          $env:ARKISM_LIST_EVIDENCE = Join-Path $env:RUNNER_TEMP 'arkism-lists-source'
+          npm run test:browser --prefix desktop/frontend
+          if ($LASTEXITCODE -ne 0) { throw 'Source browser regression failed' }
+      - name: Production UI keyboard and list regression
+        if: env.ARKISM_PRODUCT_BUILD_CHECKS == 'true'
+        run: |
+          $env:ARKISM_UI_DIRECTORY = Join-Path $PWD 'desktop/ui-dist'
+          $env:ARKISM_UI_SCREENSHOTS = Join-Path $env:RUNNER_TEMP 'arkism-ui-bundle'
+          $env:ARKISM_LIST_EVIDENCE = Join-Path $env:RUNNER_TEMP 'arkism-lists-bundle'
+          npm run test:browser --prefix desktop/frontend
+          if ($LASTEXITCODE -ne 0) { throw 'Production browser regression failed' }
+      - name: Source and production screen parity
+        if: env.ARKISM_PRODUCT_BUILD_CHECKS == 'true'
+        run: node desktop/tests/compare-ui-snapshots.cjs "$env:RUNNER_TEMP/arkism-ui-source" "$env:RUNNER_TEMP/arkism-ui-bundle"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: windows-ui-browser-evidence
+          path: |
+            ${{ runner.temp }}/arkism-ui-source
+            ${{ runner.temp }}/arkism-ui-bundle
+            ${{ runner.temp }}/arkism-lists-source
+            ${{ runner.temp }}/arkism-lists-bundle
+          retention-days: 7
 
   rust:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
-    runs-on: ${{ matrix.os == 'ubuntu-24.04' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || matrix.os }}
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -173,13 +308,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         id: rust
         with:
-          toolchain: stable
-      - name: Linux WebView packages
-        # The self-hosted runner has these preinstalled and no sudo.
-        if: runner.os == 'Linux' && runner.environment == 'github-hosted'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+          toolchain: 1.98.1
       - name: Rust build directory
         # Self-hosted runners wipe the workspace after each job but keep their HOME, so the build stays warm there.
         shell: bash
@@ -211,6 +340,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Windows SSH host identity approval
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $fixtureRoot = Join-Path $env:RUNNER_TEMP ('arkism-ssh-fixture-' + [guid]::NewGuid().ToString('N'))
+          $null = New-Item -ItemType Directory -Path $fixtureRoot -ErrorAction Stop
+          $env:ARKISM_SSH_FIXTURE = Join-Path $fixtureRoot 'ssh-fixture.exe'
+          go build -trimpath -o $env:ARKISM_SSH_FIXTURE ./tools/windows-ssh-fixture
+          if ($LASTEXITCODE -ne 0) { throw 'SSH fixture build failed' }
+          cargo test --locked --manifest-path desktop/src-tauri/Cargo.toml native_openssh_approval_and_changed_key_roundtrip -- --ignored --nocapture
+          if ($LASTEXITCODE -ne 0) { throw 'SSH approval and key rotation checks failed' }
       - name: Windows runtime process and control checks
         if: runner.os == 'Windows' && runner.environment == 'github-hosted'
         shell: pwsh
@@ -250,6 +391,14 @@ jobs:
         if: runner.os == 'Windows' && runner.environment == 'github-hosted'
         shell: pwsh
         run: ./desktop/installer/test-update-installer-identity.ps1 -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+      - name: Windows installer helper dispatch and recovery controls
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+        shell: powershell
+        run: ./desktop/installer/test-installer-helper.ps1 -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+      - name: Windows autostart cleanup failure controls
+        if: runner.os == 'Windows' && runner.environment == 'github-hosted'
+        shell: powershell
+        run: ./desktop/installer/test-remove-autostart.ps1 -Makensis "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
       - name: Upload Windows installer file identity evidence
         if: always() && runner.os == 'Windows' && runner.environment == 'github-hosted' && env.ARKISM_UPDATE_IDENTITY_EVIDENCE != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

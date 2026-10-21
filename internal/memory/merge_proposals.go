@@ -722,7 +722,7 @@ func closeMergeTx(ctx context.Context, tx Tx, scope Scope, seen Record, status, 
 	return r, audit(ctx, tx, scope, principal, status+":"+colMergeProposals, r.ID)
 }
 
-func mergeProposalRoutes(mux *http.ServeMux, s *Service) {
+func mergeProposalRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/merge_proposals", func(w http.ResponseWriter, r *http.Request) {
 		v, e := s.ListMergeProposals(r.Context(), bearer(r), scopeQuery(r), r.URL.Query().Get("status"))
 		respond(w, v, e)

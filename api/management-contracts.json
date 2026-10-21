@@ -1,0 +1,1084 @@
+{
+  "description": "Reviewed management API mappings. DTO fields are regenerated from Go source; these operation semantics and query constraints are maintained explicitly.",
+  "operations": [
+    {
+      "method": "get",
+      "path": "/v1/code_graph/repos",
+      "request": null,
+      "response": "CodeGraphReposEnvelope",
+      "summary": "Code graph: repos",
+      "query": {},
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access."
+    },
+    {
+      "method": "get",
+      "path": "/v1/code_graph/files",
+      "request": null,
+      "response": "CodeGraphFiles",
+      "summary": "Code graph: files",
+      "query": {
+        "repo": {
+          "type": "string"
+        }
+      },
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access."
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_graph/batch",
+      "request": "CodeGraphBatch",
+      "response": "CodeGraphBatchResult",
+      "summary": "Code graph: batch",
+      "query": {},
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access.",
+      "required_body": [
+        "scope",
+        "repo"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_graph/finish",
+      "request": "CodeGraphFinish",
+      "response": "CodeRepo",
+      "summary": "Code graph: finish",
+      "query": {},
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access.",
+      "required_body": [
+        "scope",
+        "repo"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_graph/repos/delete",
+      "request": "CodeGraphRepoInput",
+      "response": "DeletedEnvelope",
+      "summary": "Code graph: repos/delete",
+      "query": {},
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access.",
+      "required_body": [
+        "scope",
+        "repo"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_graph/changed",
+      "request": "CodeChangedQuery",
+      "response": "CodeChangedAnswer",
+      "summary": "Code graph: changed",
+      "query": {},
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access.",
+      "required_body": [
+        "scope",
+        "repo",
+        "ranges"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_graph/search",
+      "request": "CodeGraphQuery",
+      "response": "CodeGraphAnswer",
+      "summary": "Code graph: search",
+      "query": {},
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access.",
+      "required_body": [
+        "scope",
+        "query"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_graph/callers",
+      "request": "CodeGraphQuery",
+      "response": "CodeGraphAnswer",
+      "summary": "Code graph: callers",
+      "query": {},
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access.",
+      "required_body": [
+        "scope",
+        "symbol"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_graph/callees",
+      "request": "CodeGraphQuery",
+      "response": "CodeGraphAnswer",
+      "summary": "Code graph: callees",
+      "query": {},
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access.",
+      "required_body": [
+        "scope",
+        "symbol"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_graph/impact",
+      "request": "CodeGraphQuery",
+      "response": "CodeGraphAnswer",
+      "summary": "Code graph: impact",
+      "query": {},
+      "description": "Project-scoped code index. Writes use expected_revision for optimistic concurrency. Queries return data only; symbol ambiguity is returned as candidates. Query limit at most 200; impact depth at most 8. Batch limits: 2,000 files, 20,000 symbols, 60,000 edges. No server filesystem access.",
+      "required_body": [
+        "scope",
+        "symbol"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/code_reviews",
+      "request": null,
+      "response": "Record",
+      "summary": "Code reviews: get",
+      "description": "The response is the record envelope with code_reviews, not a bare CodeReviews object. Report replaces collected findings; settings and rerun require a human. Rerun queues a host request and does not call GitHub directly."
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_reviews",
+      "request": "CodeReviewsReport",
+      "response": "Record",
+      "summary": "Code reviews: post",
+      "description": "The response is the record envelope with code_reviews, not a bare CodeReviews object. Report replaces collected findings; settings and rerun require a human. Rerun queues a host request and does not call GitHub directly.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_reviews/settings",
+      "request": "CodeReviewSettingsInput",
+      "response": "Record",
+      "summary": "Code reviews: /settings",
+      "description": "The response is the record envelope with code_reviews, not a bare CodeReviews object. Report replaces collected findings; settings and rerun require a human. Rerun queues a host request and does not call GitHub directly.",
+      "required_body": [
+        "scope",
+        "settings"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/code_reviews/rerun",
+      "request": "CodeReviewRerunInput",
+      "response": "Record",
+      "summary": "Code reviews: /rerun",
+      "description": "The response is the record envelope with code_reviews, not a bare CodeReviews object. Report replaces collected findings; settings and rerun require a human. Rerun queues a host request and does not call GitHub directly.",
+      "required_body": [
+        "scope",
+        "repo",
+        "number"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/crew/agents/{id}/calls",
+      "request": null,
+      "response": "AgentCalls",
+      "summary": "List direct calls for an agent",
+      "query": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 30
+        }
+      }
+    },
+    {
+      "method": "get",
+      "path": "/v1/crew/versions/{id}",
+      "request": null,
+      "response": "CrewVersionPage",
+      "summary": "List current and retained crew definitions",
+      "description": "Current definition and at most 19 retained previous definitions, newest first. Missing historical snapshots are skipped."
+    },
+    {
+      "method": "get",
+      "path": "/v1/design_systems/archived",
+      "request": null,
+      "response": "ArchivedGalleryEnvelope",
+      "summary": "List archived design_systems",
+      "description": "At most 500 archived gallery records. Does not include active records."
+    },
+    {
+      "method": "post",
+      "path": "/v1/design_systems/{id}/restore",
+      "request": "ChangeInput",
+      "response": "Record",
+      "summary": "Restore archived design_systems",
+      "description": "Human only. expected_revision must match an archived record; the response is the active record with the incremented revision. Other ChangeInput fields do not change the restored content.",
+      "required_body": [
+        "scope",
+        "expected_revision"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/prompts/archived",
+      "request": null,
+      "response": "ArchivedGalleryEnvelope",
+      "summary": "List archived prompts",
+      "description": "At most 500 archived gallery records. Does not include active records."
+    },
+    {
+      "method": "post",
+      "path": "/v1/prompts/{id}/restore",
+      "request": "ChangeInput",
+      "response": "Record",
+      "summary": "Restore archived prompts",
+      "description": "Human only. expected_revision must match an archived record; the response is the active record with the incremented revision. Other ChangeInput fields do not change the restored content.",
+      "required_body": [
+        "scope",
+        "expected_revision"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/digests",
+      "request": null,
+      "response": "DigestPage",
+      "summary": "Digests: list",
+      "query": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "topic",
+            "user"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "description": "kind selects topic or user digests. Only approved, live memories may support a digest. Decisions and regenerate require a human; model proposals remain candidates until approval. User context returns empty id/text when no approved digest is available.",
+      "required_query": [
+        "kind"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/digests/user/context",
+      "request": null,
+      "response": "UserDigestContext",
+      "summary": "Digests: /user/context",
+      "query": {},
+      "description": "kind selects topic or user digests. Only approved, live memories may support a digest. Decisions and regenerate require a human; model proposals remain candidates until approval. User context returns empty id/text when no approved digest is available."
+    },
+    {
+      "method": "get",
+      "path": "/v1/digests/{id}",
+      "request": null,
+      "response": "DigestView",
+      "summary": "Digests: /{id}",
+      "query": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "topic",
+            "user"
+          ]
+        }
+      },
+      "description": "kind selects topic or user digests. Only approved, live memories may support a digest. Decisions and regenerate require a human; model proposals remain candidates until approval. User context returns empty id/text when no approved digest is available.",
+      "required_query": [
+        "kind"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/digests/{id}/decide",
+      "request": "DigestDecisionInput",
+      "response": "DigestView",
+      "summary": "Digests: /{id}/decide",
+      "query": {},
+      "description": "kind selects topic or user digests. Only approved, live memories may support a digest. Decisions and regenerate require a human; model proposals remain candidates until approval. User context returns empty id/text when no approved digest is available.",
+      "required_body": [
+        "scope",
+        "kind",
+        "expected_revision",
+        "decision"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/digests/regenerate",
+      "request": "DigestRegenerateInput",
+      "response": "DigestJudgeResult",
+      "summary": "Digests: /regenerate",
+      "query": {},
+      "description": "kind selects topic or user digests. Only approved, live memories may support a digest. Decisions and regenerate require a human; model proposals remain candidates until approval. User context returns empty id/text when no approved digest is available.",
+      "required_body": [
+        "scope",
+        "kind"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/digests/plan",
+      "request": "DigestPlanInput",
+      "response": "DigestPlan",
+      "summary": "Digests: /plan",
+      "query": {},
+      "description": "kind selects topic or user digests. Only approved, live memories may support a digest. Decisions and regenerate require a human; model proposals remain candidates until approval. User context returns empty id/text when no approved digest is available.",
+      "required_body": [
+        "scope",
+        "kind"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/digests/proposals",
+      "request": "DigestProposalInput",
+      "response": "DigestView",
+      "summary": "Digests: /proposals",
+      "query": {},
+      "description": "kind selects topic or user digests. Only approved, live memories may support a digest. Decisions and regenerate require a human; model proposals remain candidates until approval. User context returns empty id/text when no approved digest is available.",
+      "required_body": [
+        "scope",
+        "kind",
+        "body",
+        "members"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/digests/user/judge",
+      "request": "DigestJudgeInput",
+      "response": "DigestJudgeResult",
+      "summary": "Digests: /user/judge",
+      "query": {},
+      "description": "kind selects topic or user digests. Only approved, live memories may support a digest. Decisions and regenerate require a human; model proposals remain candidates until approval. User context returns empty id/text when no approved digest is available.",
+      "required_body": [
+        "scope",
+        "judged",
+        "verdict"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/digests/recall",
+      "request": "DigestRecallInput",
+      "response": "DigestRecallPage",
+      "summary": "Digests: /recall",
+      "query": {},
+      "description": "kind selects topic or user digests. Only approved, live memories may support a digest. Decisions and regenerate require a human; model proposals remain candidates until approval. User context returns empty id/text when no approved digest is available.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/knowledge/sources",
+      "request": null,
+      "response": "KnowledgeSourceList",
+      "summary": "List knowledge source metadata",
+      "query": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 100
+        }
+      },
+      "description": "Metadata only, no original file or chunk text. truncated signals the list limit."
+    },
+    {
+      "method": "get",
+      "path": "/v1/knowledge/documents",
+      "request": null,
+      "response": "KnowledgeDocumentList",
+      "summary": "List stored document versions",
+      "query": {
+        "source": {
+          "type": "string"
+        }
+      },
+      "description": "Requires source. Newest versions first; sections are listed only for the current document.",
+      "required_query": [
+        "source"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/knowledge/search",
+      "request": "KnowledgeSearchInput",
+      "response": "KnowledgeSearchResult",
+      "summary": "Search active knowledge bindings",
+      "description": "Resolves at most 8 active bindings for the approved synthetic profile and returns a retrieval receipt. Defaults: profile version v1, skill id <profile>.v1, skill version v1. Requires synthetic handoff support and retrieve:knowledge authorization.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/messengers",
+      "request": null,
+      "response": "MessengerDestinationsEnvelope",
+      "summary": "List masked notification destinations",
+      "description": "Only the requested workspace/project destinations. Tokens and webhook secrets are never returned."
+    },
+    {
+      "method": "post",
+      "path": "/v1/messengers",
+      "request": "MessengerSave",
+      "response": "MessengerResult",
+      "summary": "Notifications: save",
+      "description": "Human only. Host-local notification configuration. Empty name means default. Test sends a notification to the configured destination; delivery failure is HTTP 200 with ok=false and error, invalid destination is HTTP 400.",
+      "required_body": [
+        "scope",
+        "channel"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/messengers/remove",
+      "request": "MessengerRef",
+      "response": "MessengerResult",
+      "summary": "Notifications: /remove",
+      "description": "Human only. Host-local notification configuration. Empty name means default. Test sends a notification to the configured destination; delivery failure is HTTP 200 with ok=false and error, invalid destination is HTTP 400.",
+      "required_body": [
+        "scope",
+        "channel"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/messengers/test",
+      "request": "MessengerRef",
+      "response": "MessengerResult",
+      "summary": "Notifications: /test",
+      "description": "Human only. Host-local notification configuration. Empty name means default. Test sends a notification to the configured destination; delivery failure is HTTP 200 with ok=false and error, invalid destination is HTTP 400.",
+      "required_body": [
+        "scope",
+        "channel"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/skills/usage",
+      "request": null,
+      "response": "SkillUsagePage",
+      "summary": "List recent skill usage",
+      "query": {
+        "days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 60
+        }
+      },
+      "description": "Counts by runtime across agents for the workspace/project/user. Repositories without persisted trace events return an empty list."
+    },
+    {
+      "method": "get",
+      "path": "/v1/twin/claims",
+      "request": null,
+      "response": "TwinClaimsPage",
+      "summary": "List projected user claims",
+      "query": {
+        "status": {
+          "type": "string"
+        }
+      },
+      "description": "Comma-separated statuses; derives claims from existing memories/candidates. Claims are untrusted data, not instructions."
+    },
+    {
+      "method": "post",
+      "path": "/v1/context/tokens",
+      "request": "TokenCountInput",
+      "response": "TokenCount",
+      "summary": "Count injection preview tokens",
+      "description": "Default encoding cl100k_base; also accepts o200k_base. Text is bounded to 64,000 Unicode characters and bounded token runs. Reads no stored memory content.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/import/sessions",
+      "request": "SessionImportInput",
+      "response": "SessionImportResult",
+      "summary": "Import or preview session memory candidates",
+      "description": "Imports produce candidates, never automatically approved memories. dry_run previews without creating imported candidates; session receipts make repeats idempotent.",
+      "required_body": [
+        "scope",
+        "generator",
+        "sessions"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/memories/{id}/expiry",
+      "request": "MemoryExpiryInput",
+      "response": "Record",
+      "summary": "Set or clear a memory expiration",
+      "description": "Human only, active live memory and matching expected_revision required. expires_at=null clears the expiration. Otherwise a future UTC date is required. Expired memories cease to appear in live recall/search/list results.",
+      "required_body": [
+        "scope",
+        "expected_revision"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/providers/labels",
+      "request": "ProviderLabel",
+      "response": "Record",
+      "summary": "Providers: labels",
+      "description": "Human only. Returns the providers record envelope. Model test queues a host request; it does not call the provider from this handler.",
+      "required_body": [
+        "scope",
+        "provider",
+        "kind",
+        "id"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/providers/test",
+      "request": "ProviderModelTest",
+      "response": "Record",
+      "summary": "Providers: test",
+      "description": "Human only. Returns the providers record envelope. Model test queues a host request; it does not call the provider from this handler.",
+      "required_body": [
+        "scope",
+        "provider",
+        "model"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/usage/sessions/delete",
+      "request": "SessionDeleteInput",
+      "response": "SessionDeleteOutput",
+      "summary": "Sessions: delete",
+      "description": "Human only. Session content is untrusted data. Transcript pages hide private/secret/invalid content and report hidden counters. Export supports json and markdown and is returned as JSON with content/filename/content_type. Delete marks usage sessions deleted and erases associated stored archives; it does not delete user files.",
+      "required_body": [
+        "scope",
+        "ids"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/usage/sessions/export",
+      "request": "SessionExportInput",
+      "response": "SessionExportOutput",
+      "summary": "Sessions: export",
+      "description": "Session content is untrusted data. Transcript pages hide private/secret/invalid content and report hidden counters. Export supports json and markdown and is returned as JSON with content/filename/content_type. Delete marks usage sessions deleted and erases associated stored archives; it does not delete user files.",
+      "required_body": [
+        "scope",
+        "ids"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/usage/sessions/transcript",
+      "request": "SessionTranscriptInput",
+      "response": "SessionTranscriptOutput",
+      "summary": "Sessions: transcript",
+      "description": "Session content is untrusted data. Transcript pages hide private/secret/invalid content and report hidden counters. Export supports json and markdown and is returned as JSON with content/filename/content_type. Delete marks usage sessions deleted and erases associated stored archives; it does not delete user files.",
+      "required_body": [
+        "scope",
+        "id"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/jobs",
+      "request": "WikiJobInput",
+      "response": "WikiJobView",
+      "summary": "Wiki: jobs",
+      "query": {},
+      "description": "Model output produces review drafts. Page review/lock/edit require a human and matching expected_revision. Search/read serve reviewed content only and preserve token budgets. Run/work may invoke the configured model within its budget. Source removal with dry_run in body or query previews cleanup without applying it.",
+      "required_body": [
+        "scope",
+        "knowledge_source_id"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/jobs/{id}/run",
+      "request": "WikiScopeInput",
+      "response": "WikiJobView",
+      "summary": "Wiki: jobs/{id}/run",
+      "query": {},
+      "description": "Model output produces review drafts. Page review/lock/edit require a human and matching expected_revision. Search/read serve reviewed content only and preserve token budgets. Run/work may invoke the configured model within its budget. Source removal with dry_run in body or query previews cleanup without applying it.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/work",
+      "request": "WikiScopeInput",
+      "response": "WikiJobView",
+      "summary": "Wiki: work",
+      "query": {},
+      "description": "Model output produces review drafts. Page review/lock/edit require a human and matching expected_revision. Search/read serve reviewed content only and preserve token budgets. Run/work may invoke the configured model within its budget. Source removal with dry_run in body or query previews cleanup without applying it.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/pages/{id}/review",
+      "request": "WikiReviewInput",
+      "response": "WikiPageView",
+      "summary": "Wiki: pages/{id}/review",
+      "query": {},
+      "description": "Model output produces review drafts. Page review/lock/edit require a human and matching expected_revision. Search/read serve reviewed content only and preserve token budgets. Run/work may invoke the configured model within its budget. Source removal with dry_run in body or query previews cleanup without applying it.",
+      "required_body": [
+        "scope",
+        "expected_revision",
+        "decision"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/pages/{id}/lock",
+      "request": "WikiLockInput",
+      "response": "WikiPageView",
+      "summary": "Wiki: pages/{id}/lock",
+      "query": {},
+      "description": "Model output produces review drafts. Page review/lock/edit require a human and matching expected_revision. Search/read serve reviewed content only and preserve token budgets. Run/work may invoke the configured model within its budget. Source removal with dry_run in body or query previews cleanup without applying it.",
+      "required_body": [
+        "scope",
+        "expected_revision"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/pages/{id}/edit",
+      "request": "WikiEditInput",
+      "response": "WikiPageView",
+      "summary": "Wiki: pages/{id}/edit",
+      "query": {},
+      "description": "Model output produces review drafts. Page review/lock/edit require a human and matching expected_revision. Search/read serve reviewed content only and preserve token budgets. Run/work may invoke the configured model within its budget. Source removal with dry_run in body or query previews cleanup without applying it.",
+      "required_body": [
+        "scope",
+        "expected_revision",
+        "text"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/search",
+      "request": "WikiSearchInput",
+      "response": "WikiSearchResult",
+      "summary": "Wiki: search",
+      "query": {},
+      "description": "Model output produces review drafts. Page review/lock/edit require a human and matching expected_revision. Search/read serve reviewed content only and preserve token budgets. Run/work may invoke the configured model within its budget. Source removal with dry_run in body or query previews cleanup without applying it.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/read",
+      "request": "WikiSearchInput",
+      "response": "WikiSearchResult",
+      "summary": "Wiki: read",
+      "query": {},
+      "description": "Model output produces review drafts. Page review/lock/edit require a human and matching expected_revision. Search/read serve reviewed content only and preserve token budgets. Run/work may invoke the configured model within its budget. Source removal with dry_run in body or query previews cleanup without applying it.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/sources/{id}/remove",
+      "request": "WikiSourceRemoveInput",
+      "response": "WikiCleanupResult",
+      "summary": "Wiki: sources/{id}/remove",
+      "query": {
+        "dry_run": {
+          "type": "string",
+          "enum": [
+            "1",
+            "true"
+          ]
+        }
+      },
+      "description": "Model output produces review drafts. Page review/lock/edit require a human and matching expected_revision. Search/read serve reviewed content only and preserve token budgets. Run/work may invoke the configured model within its budget. Source removal with dry_run in body or query previews cleanup without applying it.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/wiki/jobs",
+      "request": null,
+      "response": "WikiJobList",
+      "summary": "Wiki: jobs",
+      "query": {
+        "status": {
+          "type": "string"
+        }
+      },
+      "description": "Scoped wiki view. People may see pending drafts; agents see only reviewed pages and reviewed links. Lists are bounded to 1,000 records. Unknown or repeated query parameters are rejected."
+    },
+    {
+      "method": "get",
+      "path": "/v1/wiki/jobs/{id}",
+      "request": null,
+      "response": "WikiJobView",
+      "summary": "Wiki: jobs/{id}",
+      "query": {},
+      "description": "Scoped wiki view. People may see pending drafts; agents see only reviewed pages and reviewed links. Lists are bounded to 1,000 records. Unknown or repeated query parameters are rejected."
+    },
+    {
+      "method": "get",
+      "path": "/v1/wiki/pages",
+      "request": null,
+      "response": "WikiPageList",
+      "summary": "Wiki: pages",
+      "query": {
+        "state": {
+          "type": "string"
+        }
+      },
+      "description": "Scoped wiki view. People may see pending drafts; agents see only reviewed pages and reviewed links. Lists are bounded to 1,000 records. Unknown or repeated query parameters are rejected."
+    },
+    {
+      "method": "get",
+      "path": "/v1/wiki/pages/{id}",
+      "request": null,
+      "response": "WikiPageView",
+      "summary": "Wiki: pages/{id}",
+      "query": {},
+      "description": "Scoped wiki view. People may see pending drafts; agents see only reviewed pages and reviewed links. Lists are bounded to 1,000 records. Unknown or repeated query parameters are rejected."
+    },
+    {
+      "method": "get",
+      "path": "/v1/wiki/graph",
+      "request": null,
+      "response": "WikiGraphEnvelope",
+      "summary": "Wiki: graph",
+      "query": {},
+      "description": "Scoped wiki view. People may see pending drafts; agents see only reviewed pages and reviewed links. Lists are bounded to 1,000 records. Unknown or repeated query parameters are rejected."
+    },
+    {
+      "method": "post",
+      "path": "/v1/memories/query",
+      "request": "CatalogQueryInput",
+      "response": "MemoryCatalogPage",
+      "summary": "Query all authorized memories",
+      "query": {},
+      "description": "Server-wide management query within the authorized exact scope. Filters and ordering precede pagination. Default limit 50; maximum 100. Cursor binds scope, actor, role, filters and the complete ordered snapshot. Changed snapshots return 409 and must be restarted; another query or principal returns 400. Category rules and kept IDs are presentation preferences, never authorization. Existing per-record privacy and provenance fences apply. Reads scan the authorized result set under the request deadline; there is no fixed result-count ceiling.",
+      "required_body": [
+        "scope"
+      ],
+      "body_properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50
+        },
+        "q": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "At most 256 UTF-8 bytes; leading/trailing whitespace is trimmed."
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "direction": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "sort": {
+          "type": "string",
+          "enum": [
+            "",
+            "recent",
+            "old",
+            "used"
+          ],
+          "default": "recent"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "",
+            "active",
+            "idle",
+            "provenance"
+          ],
+          "default": "active"
+        },
+        "categories": {
+          "type": "array",
+          "maxItems": 100
+        },
+        "agents": {
+          "type": "array",
+          "maxItems": 32
+        },
+        "kept_ids": {
+          "type": "array",
+          "maxItems": 2048
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/memory_candidates/query",
+      "request": "CatalogQueryInput",
+      "response": "MemoryCatalogPage",
+      "summary": "Query all authorized memory_candidates",
+      "query": {},
+      "description": "Server-wide management query within the authorized exact scope. Filters and ordering precede pagination. Default limit 50; maximum 100. Cursor binds scope, actor, role, filters and the complete ordered snapshot. Changed snapshots return 409 and must be restarted; another query or principal returns 400. Category rules and kept IDs are presentation preferences, never authorization. Existing per-record privacy and provenance fences apply. Reads scan the authorized result set under the request deadline; there is no fixed result-count ceiling.",
+      "required_body": [
+        "scope"
+      ],
+      "body_properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50
+        },
+        "q": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "At most 256 UTF-8 bytes; leading/trailing whitespace is trimmed."
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "direction": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "sort": {
+          "type": "string",
+          "enum": [
+            "",
+            "risk",
+            "recent",
+            "old"
+          ],
+          "default": "risk"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "",
+            "candidate",
+            "conflicted",
+            "all"
+          ],
+          "default": "candidate"
+        },
+        "categories": {
+          "type": "array",
+          "maxItems": 100
+        },
+        "agents": {
+          "type": "array",
+          "maxItems": 32
+        },
+        "kept_ids": {
+          "type": "array",
+          "maxItems": 2048
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/skills/query",
+      "request": "CatalogQueryInput",
+      "response": "SkillCatalogPage",
+      "summary": "Query all authorized skills",
+      "query": {},
+      "description": "Server-wide management query within the authorized exact scope. Filters and ordering precede pagination. Default limit 50; maximum 100. Cursor binds scope, actor, role, filters and the complete ordered snapshot. Changed snapshots return 409 and must be restarted; another query or principal returns 400. Category rules and kept IDs are presentation preferences, never authorization. Existing per-record privacy and provenance fences apply. Reads scan the authorized result set under the request deadline; there is no fixed result-count ceiling.",
+      "required_body": [
+        "scope"
+      ],
+      "body_properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50
+        },
+        "q": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "At most 256 UTF-8 bytes; leading/trailing whitespace is trimmed."
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "direction": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "sort": {
+          "type": "string",
+          "enum": [
+            "",
+            "used",
+            "recent",
+            "name",
+            "updated",
+            "quality",
+            "security",
+            "agents"
+          ],
+          "default": "used"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "",
+            "all",
+            "trash",
+            "unused",
+            "plugin",
+            "update",
+            "missing",
+            "caution"
+          ],
+          "default": "all"
+        },
+        "categories": {
+          "type": "array",
+          "maxItems": 100
+        },
+        "agents": {
+          "type": "array",
+          "maxItems": 32
+        },
+        "kept_ids": {
+          "type": "array",
+          "maxItems": 2048
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/knowledge/sources/query",
+      "request": "CatalogQueryInput",
+      "response": "KnowledgeCatalogPage",
+      "summary": "Query all authorized knowledge/sources",
+      "query": {},
+      "description": "Server-wide management query within the authorized exact scope. Filters and ordering precede pagination. Default limit 50; maximum 100. Cursor binds scope, actor, role, filters and the complete ordered snapshot. Changed snapshots return 409 and must be restarted; another query or principal returns 400. Category rules and kept IDs are presentation preferences, never authorization. Existing per-record privacy and provenance fences apply. Reads scan the authorized result set under the request deadline; there is no fixed result-count ceiling.",
+      "required_body": [
+        "scope"
+      ],
+      "body_properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50
+        },
+        "q": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "At most 256 UTF-8 bytes; leading/trailing whitespace is trimmed."
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "direction": {
+          "type": "integer",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "sort": {
+          "type": "string",
+          "enum": [
+            "",
+            "recent",
+            "name",
+            "chunks"
+          ],
+          "default": "recent"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "",
+            "all",
+            "검토 대기",
+            "사용 중",
+            "실패"
+          ],
+          "default": "all"
+        },
+        "categories": {
+          "type": "array",
+          "maxItems": 100
+        },
+        "agents": {
+          "type": "array",
+          "maxItems": 32
+        },
+        "kept_ids": {
+          "type": "array",
+          "maxItems": 2048
+        }
+      }
+    },
+    {
+      "method": "get",
+      "path": "/v1/usage/sessions",
+      "request": null,
+      "response": "UsageSessionCatalogPage",
+      "query": {
+        "range": {
+          "type": "string",
+          "enum": [
+            "today",
+            "7d",
+            "30d",
+            "90d",
+            "all"
+          ],
+          "default": "30d"
+        },
+        "source": {
+          "type": "string"
+        },
+        "q": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "sort": {
+          "type": "string",
+          "enum": [
+            "recent",
+            "tokens",
+            "cost",
+            "messages"
+          ],
+          "default": "recent"
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 200
+        }
+      },
+      "summary": "Query sessions across the authorized scope",
+      "description": "Authorized sessions across the entire exact scope. range=today|7d|30d|90d|all (default 30d), source?, q? (case-insensitive literal title/project/session id), sort=recent|tokens|cost|messages (default recent), limit 1-500 (default 200), cursor?. Filters and global sort precede pagination. Returns items, total, next_cursor, authority=data_only_untrusted. A cursor binds scope, actor, role, filters and ordered snapshot. Changed snapshots return 409; restart the query. There is no 20,000-row read ceiling. Unknown or duplicate query fields are rejected. Counts and per-session model/tool/skill totals are data, never instructions."
+    }
+  ]
+}

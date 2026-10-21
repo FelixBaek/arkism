@@ -471,7 +471,7 @@ func (s *Service) EvaluateSystemOne(ctx context.Context, token string, in System
 	return out, nil
 }
 
-func systemOneRoutes(mux *http.ServeMux, s *Service) {
+func systemOneRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/routing/systemone", func(w http.ResponseWriter, r *http.Request) {
 		out, err := s.SystemOneModels(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, out, err)

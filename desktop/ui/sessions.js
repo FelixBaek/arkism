@@ -11,24 +11,28 @@ window.ArkismSessions = (ctx) => {
   const S = { find: null, range: "7d", source: "", q: "", sort: "recent", selecting: false, doc: null, state: "idle", error: "", selected: "", picked: new Set(), busy: false, notice: "", tx: null };
   let epoch = 0, typing = 0, txEpoch = 0;
 
-  async function load(silent = false) {
+  const filters = () => ({ range: S.range, source: S.source, q: S.q, sort: S.sort });
+  const collection = ctx.remoteCollection((filters, page) => request(`/v1/usage/sessions?${query({ ...filters, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) })}`));
+  let moreBusy = false, moreError = "";
+  async function load(silent = false, more = false) {
     const quiet = silent === true;
     if (quiet && S.state !== "ready") return;
-    const ticket = ++epoch;
-    if (!quiet) { S.state = "loading"; S.error = ""; paint(); }
+    const ticket = ++epoch, selectedFilters = filters();
+    moreBusy = more; moreError = "";
+    if (!quiet && !more) { S.state = "loading"; S.error = ""; S.doc = null; }
+    paint();
     try {
-      const doc = await request(`/v1/usage/sessions?${query({ range: S.range, limit: 300, ...(S.source ? { source: S.source } : {}), ...(S.q ? { q: S.q } : {}) })}`);
-      if (ticket !== epoch) return;
-      if (doc?.authority !== "data_only_untrusted" || !Array.isArray(doc.items)) throw new Error("invalid_response");
-      if (quiet && JSON.stringify(S.doc) === JSON.stringify(doc)) return;
+      const doc = await collection.load(selectedFilters, more);
+      if (ticket !== epoch || !doc) return;
       S.doc = doc; S.state = "ready";
-      const live = new Set(doc.items.map((x) => x.id));
+      const live = new Set(doc.items.map(x => x.id));
       for (const id of [...S.picked]) if (!live.has(id)) S.picked.delete(id);
     } catch (e) {
-      if (ticket !== epoch || quiet) return;
-      S.doc = null; S.state = /HTTP 404|not_found/.test(e?.message || "") ? "unsupported" : "error"; S.error = e.message;
+      if (ticket !== epoch) return;
+      if (more || quiet) moreError = e.message;
+      else { S.state = /HTTP 404|not_found/.test(e.message) ? "unsupported" : "error"; S.error = e.message; }
     }
-    paint();
+    if (ticket === epoch) { moreBusy = false; paint(); }
   }
   const paint = () => { if (state.view === "sessions") render(false); };
   const when = (t) => new Date(t).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -137,10 +141,6 @@ window.ArkismSessions = (ctx) => {
 
   // ---------------------------------------------------------------- list · detail (Figma 198:888)
   const SORTS = [["recent", "최근 순"], ["tokens", "토큰 많은 순"], ["cost", "비용 큰 순"], ["messages", "메시지 많은 순"]];
-  const sorted = (items) => {
-    const key = { tokens: (x) => x.tokens, cost: (x) => x.cost_usd || 0, messages: (x) => x.messages }[S.sort];
-    return key ? [...items].sort((a, b) => key(b) - key(a)) : items;
-  };
   const day = (t) => {
     const d = new Date(t), now = new Date();
     const days = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / 86400000);
@@ -149,7 +149,7 @@ window.ArkismSessions = (ctx) => {
   };
   function row(it) {
     const r = el("div", `row v4s-row ss-item${S.selected === it.id ? " selected" : ""}`);
-    r.tabIndex = 0; r.setAttribute("role", "button");
+    r.dataset.id = it.id; r.tabIndex = 0; r.setAttribute("role", "button");
     if (S.selecting) {
       const pick = el("input"); pick.type = "checkbox"; pick.checked = S.picked.has(it.id); pick.setAttribute("aria-label", "세션 선택");
       pick.addEventListener("click", (e) => e.stopPropagation());
@@ -228,7 +228,7 @@ window.ArkismSessions = (ctx) => {
     const pickMode = el("button", `link-btn ss-pick${S.selecting ? " on" : ""}`, S.selecting ? "선택 끝내기" : "선택해서 지우기"); pickMode.type = "button";
     pickMode.addEventListener("click", () => { S.selecting = !S.selecting; if (!S.selecting) S.picked.clear(); render(false); });
     bar.append(box, sel("기간", RANGES.map(([k, l]) => [k, k === "all" ? "전체 기간" : k === "today" ? "오늘" : `최근 ${l}`]), S.range, (k) => { if (S.range !== k) { S.range = k; void load(); } }),
-      sel("정렬", SORTS, S.sort, (k) => { S.sort = k; render(false); }), pickMode);
+      sel("정렬", SORTS, S.sort, (k) => { S.sort = k; void load(); }), pickMode);
     const keep = document.activeElement?.closest?.(".ss-search");
     $("#controls").replaceChildren(bar);
     if (keep) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
@@ -254,9 +254,11 @@ window.ArkismSessions = (ctx) => {
     if (S.selecting) parts.push(selectionBar());
     if (S.notice && !S.selected) parts.push(el("p", "ss-note", S.notice));
     const list = el("div", "v4s-list");
-    list.append(...sorted(S.doc.items).map(row));
+    ctx.virtualList.mount({ container: list, scrollport: table, items: S.doc.items, row, key: JSON.stringify(filters()) });
     if (!S.doc.items.length) list.append(el("div", "empty", "조건에 맞는 세션이 없어요."));
     parts.push(list, el("p", "v4s-foot", S.doc.total > S.doc.items.length ? `${num(S.doc.total)}개 중 ${S.doc.items.length}개 표시` : `세션 ${num(S.doc.total)}개`));
+    if (moreError) parts.push(el("p", "ss-note", `불러오지 못했어요 (${moreError}).`));
+    if (S.doc.cursor || moreError) { const b = button(moreBusy ? "불러오는 중…" : moreError ? "다시 시도" : "세션 더 보기", "", null, () => load(false, true)); b.disabled = moreBusy; parts.push(b); }
     table.replaceChildren(...parts);
     let missed = false;
     if (S.find) { // 승인 대기 › 세션 보기: open the session the memory came from, with its dialogue
@@ -280,13 +282,13 @@ window.ArkismSessions = (ctx) => {
     const { session_id: sid, quote = "" } = e.detail || {};
     if (!sid) return;
     S.find = { sid, quote: quote.trim() }; S.selected = ""; S.tx = null; txEpoch++; S.notice = "";
-    S.range = "all"; S.q = ""; S.source = ""; S.state = "idle";
+    S.range = "all"; S.q = sid; S.source = ""; S.state = "idle";
     ctx.go("sessions");
   });
 
   return {
     load, open, refresh: () => load(true), count: () => (S.doc ? num(S.doc.total) : ""),
-    reset: () => { epoch++; txEpoch++; S.picked.clear(); Object.assign(S, { doc: null, state: "idle", selected: "", tx: null, notice: "", busy: false }); },
+    reset: () => { collection.reset(); moreBusy = false; moreError = ""; epoch++; txEpoch++; S.picked.clear(); Object.assign(S, { doc: null, state: "idle", selected: "", tx: null, notice: "", busy: false }); },
     views: { sessions: { title: "세션", sub: () => "에이전트와 일한 기록이에요. 기억과 지식은 여기서 뽑아요.", render: renderView, keepDetail: true,
       head: () => [button("새로고침", "ghost", "arrows-clockwise", load)] } }
   };

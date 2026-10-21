@@ -33,9 +33,11 @@ Claude Code, Codex, Gemini CLI and other agents each forget what you told them y
 | **CREW** | **ROUTER** |
 | ![Agent screen](guide/images/agent.png) | ![Router screen](guide/images/router.png) |
 
-The screenshots use made-up sample data and show the Korean interface. Switch to English in **Settings › 모양 (Appearance)**.
+The screenshots use made-up sample data and show the Korean interface; some predate the current menu names. Switch to English in **Settings › 모양 (Appearance)**.
 
 ## Install
+
+Only Windows installers are distributed. Existing public releases predate the signed-update changes in this source. See [update security](guide/security-operations.md) for the new release procedure.
 
 Download the Windows installer from [Releases](../../releases/latest).
 
@@ -43,7 +45,7 @@ Download the Windows installer from [Releases](../../releases/latest).
 |---|---|
 | Windows 10/11 | `Arkism-X.Y.Z-setup.exe` |
 
-The builds are not signed yet. The first time you open the app, Windows SmartScreen asks you to confirm ("More info" → "Run anyway").
+Published Windows builds do not yet have Authenticode publisher signing, so SmartScreen may warn. Verify the release source before installing; update signatures and Windows publisher certificates are separate (see the security guide above).
 
 ## Quick start
 
@@ -92,8 +94,6 @@ In built-in mode everything stays on your PC, in the app's data folder:
 | System | Folder |
 |---|---|
 | Windows | `%LOCALAPPDATA%\dev.arkism.desktop\runtime` |
-| macOS | `~/Library/Application Support/dev.arkism.desktop/runtime` |
-| Linux | `~/.local/share/dev.arkism.desktop/runtime` |
 
 Capture settings and agent setting backups are in `~/.config/arkism`. In server mode the data is in the server's Postgres database.
 
@@ -149,6 +149,8 @@ go test -race ./...
 node --test desktop/ui/*.test.js
 cd desktop/src-tauri && cargo test  # desktop app
 ```
+
+Security boundaries, signed updates and long-running service operations: [guide/security-operations.md](guide/security-operations.md).
 
 Repository layout, Postgres integration tests and desktop builds: [guide/development.md](guide/development.md).
 

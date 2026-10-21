@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/httpguard"
 )
 
 // GoogleLogin lets the desktop app sign in with a Google account instead of a
@@ -132,7 +134,8 @@ func (g *GoogleLogin) verifiedEmail(idToken string, now time.Time) (string, erro
 
 var errGoogleLoginOff = errors.New("google login not configured")
 
-func googleLoginRoutes(mux *http.ServeMux, g *GoogleLogin) {
+func googleLoginRoutes(mux routeRegistrar, g *GoogleLogin) {
+	attempts := httpguard.NewLimiter(10, 6*time.Second)
 	mux.HandleFunc("GET /v1/auth/google", func(w http.ResponseWriter, r *http.Request) {
 		if g == nil {
 			respond(w, nil, errors.Join(ErrNotFound, errGoogleLoginOff))
@@ -143,6 +146,11 @@ func googleLoginRoutes(mux *http.ServeMux, g *GoogleLogin) {
 	mux.HandleFunc("POST /v1/auth/google", func(w http.ResponseWriter, r *http.Request) {
 		if g == nil {
 			respond(w, nil, errors.Join(ErrNotFound, errGoogleLoginOff))
+			return
+		}
+		if !attempts.Allow() {
+			w.Header().Set("Retry-After", "6")
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"code": "rate_limited"})
 			return
 		}
 		var in GoogleLoginInput

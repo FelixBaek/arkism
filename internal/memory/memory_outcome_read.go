@@ -159,7 +159,7 @@ func parseMemoryOutcomeQuery(raw, id string) (MemoryOutcomeQuery, error) {
 	return in, nil
 }
 
-func memoryOutcomeReadRoutes(mux *http.ServeMux, s *Service) {
+func memoryOutcomeReadRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/memories/{id}/outcomes", func(w http.ResponseWriter, r *http.Request) {
 		in, e := parseMemoryOutcomeQuery(r.URL.RawQuery, r.PathValue("id"))
 		if e != nil {

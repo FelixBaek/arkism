@@ -12,7 +12,8 @@
 | `internal/host` | The `arkism` subcommands |
 | `internal/crewrun` | Workflow and meeting engine |
 | `desktop/src-tauri` | Desktop app shell (Rust, Tauri): built-in mode, SSH connection, backups |
-| `desktop/ui` | Desktop app screens (plain JavaScript, no build step) |
+| `desktop/ui` | Desktop app source (ES module entry, screen modules and legacy adapters) |
+| `desktop/frontend` | Pinned esbuild tools; build dependencies never enter Tauri assets |
 | `api/openapi.yaml` | HTTP API description |
 
 ## Requirements
@@ -22,13 +23,21 @@
 | Go | The version in `go.mod`. Tests use `-race`, so a C compiler (gcc) is also needed |
 | PostgreSQL | Postgres 17 with pgvector, only for integration tests and server mode. The `vector` extension must live in the `extensions` schema |
 | Docker | Only for `tools/check_postgres_local.sh` |
-| Node.js | 22, for the desktop UI tests |
+| Node.js | 22 with npm, for UI tests and the Windows frontend bundle |
 | Python | 3, for the UI preview |
 | Rust (stable) | Only to build or test the desktop app |
 
 ## Checks
 
-Local checks, with no credentials:
+Local checks, with no credentials (install the pinned minisign verifier for the signing regression suite first):
+
+```bash
+bash tools/install-minisign.sh /tmp/arkism-test-tools
+export MINISIGN=/tmp/arkism-test-tools/minisign
+python3 tools/check_local.py
+```
+
+Individual checks:
 
 ```bash
 go vet ./...
@@ -63,59 +72,7 @@ The database user must be able to create disposable test databases. The local Do
 
 Before publishing, maintainers run `ARKISM_PUBLIC_DENYLIST=<their own denylist file> tools/check_public.sh`, which fails if any tracked file matches one of its private regexes.
 
-## Skill improvement generation
-
-New memory extraction uses `capture-extract-v5` and `harness-session-v6`.
-One-off permissions, budgets and assignment corrections belong in session state;
-durable candidates retain the named project and every condition. Session
-user-statement context fields must be supported by verbatim quotes from the same
-original user message. Separate messages cannot be combined to justify a condition.
-Host-created fragments may share that origin only at the same revision, including
-authorized prior evidence; absent or malformed fragment metadata keeps them separate.
-Inferred scope diagnostics belong in state uncertainties, not in quoted condition fields.
-This literal check prevents invented metadata wording; it does not prove semantic
-completeness. Older prepared requests retain their original delivery contract.
-An older session quality gate does not enable the new prompt's fast model.
-Inherited scope stays in the statement, with exact original citations. Context
-fields copy the actual subject or condition phrase; they do not concatenate a
-name and a subject from different clauses, replace the scope with an exception,
-or invent a translated name. Previously prepared v4/v5 context still requires
-literal evidence.
-
-The full-text lane omits English question scaffolding from query terms while
-preserving negation, quantities and temporal operators. Queries with at least
-three distinct topic concepts need two distinct matches, including descriptive
-memory context. This check runs before the candidate limit and also applies to
-rows awaiting backfill. Short lookups remain permissive; exact keyword,
-semantic and relation retrieval keep their independent contracts. These rules
-reduce lexical noise; they are not a semantic relevance guarantee.
-Korean backup/copy and restore/recovery wording is expanded as a single concept
-per pair. The alternative spellings cannot count as two independent matches.
-
-On Windows, state-file publications to the same destination may wait up to two
-seconds for their turn. Transient replacement retries retain their separate
-500 ms budget. These bound additional waits and attempts, not kernel or scheduler
-latency; neither bound is a promise of absolute write completion time.
-
-`POST /v1/skills/generate` reuses verified lessons and the pinned baseline. The
-configured chat and Anthropic adapters request localized changes to an existing
-skill instead of asking the model to rewrite the full document. Each of up to
-eight replacements names a literal `old_text`, its `new_text`, and a zero-based
-`lesson_index` into the supplied verified lessons. These are internal provider
-fields; the HTTP request and canonical `SkillDraft` format are unchanged.
-
-Every anchor must occur exactly once in the original baseline. Missing,
-ambiguous, overlapping, chained, empty, and ineffective changes are rejected.
-Replacements are composed against original byte locations, preserving all
-untouched text and line endings. New skills continue to use full content.
-The resulting full document still passes the existing capability, size, source,
-comparison, and approval checks. A patch identifies a proposed change; it does
-not establish its semantic correctness or performance benefit.
-
-Candidate generation leaves the active baseline unchanged. The Anthropic
-prepared-result path stores the composed document, so a retry after candidate
-storage failure can recover it without repeating the provider call. Provider
-prompt versions distinguish this format from older whole-document generation.
+Memory extraction and retrieval contracts: [design notes](design-notes/memory-contracts.md).
 
 ## UI preview
 
@@ -127,12 +84,49 @@ python3 -I desktop/ui/testdata/preview/serve.py 8795
 ```
 
 `desktop/ui/testdata/preview/shot.mjs` takes screenshots of it with Playwright.
+The regression harness uses the locked `playwright-core` in `desktop/frontend`:
+
+```bash
+npm ci --prefix desktop/frontend --no-audit --no-fund
+npm exec --prefix desktop/frontend -- playwright-core install chromium
+npm run test:browser --prefix desktop/frontend
+```
+
+An existing compatible Chromium can be selected with `CHROMIUM_PATH`. The harness
+blocks external requests and uses synthetic native/API fixtures. Set
+`ARKISM_UI_DIRECTORY` to `desktop/ui-dist` to check the actual Windows bundle,
+and `ARKISM_UI_SCREENSHOTS` to an owned evidence folder.
+`ARKISM_LIST_EVIDENCE` selects the list screenshots and request report folder.
+The browser suite includes candidate/conflict/skill/trash next-page and retry
+flows, real-screen keyboard/typing checks, and a 10,000-row virtualizer fixture.
+The `ui-browser-windows` job runs source and production assets on Windows and
+compares seven rendered screens. Its remote result must be checked separately.
+See [list loading and virtualization](list-performance.md) for exact limits. The structure harness
+uses fixed data/time and reduced motion so `compare-ui-snapshots.cjs BEFORE AFTER`
+can require identical labels, selection and rendered PNGs. A browser fixture is
+separate from a running Windows product or its native WebView.
 
 ## Building the desktop app
 
 - Windows: `desktop/installer/build-windows.ps1 -Version X.Y.Z`
 
-The release workflow builds only the Windows app.
+The release workflow builds only the Windows app. Both Windows packaging entry
+points install the locked tools in `desktop/frontend`, build `desktop/ui-dist`,
+validate its source hashes/assets, and pass that folder as Tauri's frontendDist.
+Direct `cargo` tests retain the source UI configuration; they do not prove the
+production bundle was built.
+
+```bash
+npm ci --prefix desktop/frontend --no-audit --no-fund
+node desktop/frontend/build.cjs
+node desktop/frontend/check.cjs
+node --test desktop/ui/*.test.js
+```
+
+`desktop/ui/index.html` uses the source `entry.mjs` for browser development.
+Production uses one esbuild module graph with a separate lazy English chunk.
+Keep `desktop/ui-dist` and `desktop/frontend/node_modules` in local Git excludes.
+See [UI ownership and validation](ui-structure-improvement-plan.md).
 
 Values compiled into the app:
 
@@ -141,85 +135,92 @@ Values compiled into the app:
 | `ARKISM_DEFAULT_SERVER` | First server address built into the app | `http://127.0.0.1:8091` |
 | `ARKISM_DEFAULT_WORKSPACE`, `ARKISM_DEFAULT_PROJECT` | Scope a server connection opens first | `default` |
 | `ARKISM_UPDATE_FEED` | HTTPS update feed the app checks | update check off |
+| `ARKISM_UPDATE_PUBLIC_KEY` | Base64 of the complete minisign public-key file compiled into the Windows app | updates refused without a valid key |
+| `ARKISM_UPDATE_CHANNEL` | `stable` or `beta` signed manifest | `stable` |
 | `ARKISM_SERVER_BIN` | `arkism` path tried first on a server | `/srv/arkism/bin/arkism` |
+
+Coverage floors, measured complexity, repository rules and runner setup:
+[quality and maintenance](quality-and-maintenance.md).
 
 ## Releases
 
-Pushing a `vX.Y.Z` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds only the Windows installer, checks that it starts its built-in Arkism and can back it up and restore it, and uploads it with `latest.json` as a **draft release**. A maintainer publishes it. Signing happens only when the signing secrets exist (see the workflow header).
+Pushing a `vX.Y.Z` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml). It builds only the Windows installer, checks that it starts its built-in Arkism and can back it up and restore it, and uploads it with `latest.json` as a **draft release**. A maintainer publishes it. Minisign update authentication, provenance and the signed checksum inventory are mandatory for public releases. Authenticode remains optional. See [Windows update security](security-operations.md).
 
 The Windows app checks the update feed and installs new versions in the app.
 
-## Memory conditions in retrieval
+## API contract checks
 
-Full-text retrieval includes descriptive applicability, uncertainty and valid-from
-phrases alongside the body, summary and keywords. Bounded condition phrases
-precede body tokens so long records cannot exhaust the index budget before
-the conditions are included. The same Korean normalizer is
-used for new writes, replacements and bounded index backfill. Domain, evidence
-and semantic-kind labels do not become generic search terms. Descriptive dates
-do not change lifecycle dates or make an unapproved memory eligible for recall.
+The OpenAPI document remains JSON-compatible YAML. Its pinned official 3.1
+structure schema is vendored under `api/schema`; routine checks need no schema
+network access. In a disposable validation environment:
 
-The HTTP/PostgreSQL regression captures a tool observation, requires human
-approval, then retrieves it using only condition terms. It checks returned
-context, scope, unrelated queries and deletion. The schema upgrade regression
-checks old indexes are refreshed without changing canonical records, and that
-paused recovery remains paused. See [database migrations](database-migrations.md)
-for upgrade and rollback. These deterministic tests do not measure extraction
-completeness or semantic retrieval accuracy on live conversations.
+```bash
+python -m pip install -r tools/requirements-api-contract.txt
+python tools/check_openapi.py
+python -m unittest discover -s tools -p test_check_openapi.py
+```
 
-### Memory storage and management evidence
+The Windows CI job runs the actual Go handlers and exports their responses:
 
-Storage/management is separate from recall ranking. Raw session archives, capture
-transport copies, work checkpoints, pending candidates and active memories retain
-their existing independent lifecycles. A successful citation validator checks literal
-support; it does not establish semantic completeness or an actual human decision.
+```powershell
+$env:ARKISM_OPENAPI_CASES = Join-Path $env:TEMP 'arkism-api-cases.json'
+go test -count=1 -run '^TestMemoryList|^TestHTTPRoutes|^TestOpenAPI' ./internal/memory
+python tools/check_openapi.py --cases $env:ARKISM_OPENAPI_CASES
+```
 
-The pending review screen groups similar proposals for display only. Four-part scope,
-kind, reach, repository, applicability, exceptions, effective date and polarity
-must agree; legacy proposals without applicability only group by normalized exact text.
-Each proposal keeps its own revision, sources and review action. A repeated statement
-never approves a proposal or raises trust. Expanding a group checks at most32 proposals,
-two requests at a time. The evidence endpoint reads at most64 original message references
-and counts distinct canonical user turns only where the candidate's literal citation
-occurs. Conversation-window membership alone does not count. Expired, reconstructed,
-unreadable, inferred and unmatched evidence stays unknown. Candidate source tracing
-also provides the existing privacy-fenced original-message reader before approval.
+Actual response-schema coverage includes the memory-list pagination/search cases
+and all 60 management operations mapped in `api/management-contracts.json`.
+The corpus contains successful requests/responses, anonymous access denial and
+unknown-body-field rejection for every management POST (170 HTTP responses in
+the current fixture). Query values and successful request bodies are validated,
+not just response examples. In-memory storage, a local notification fixture and
+a deterministic model stand in for dependencies; this is not a live provider or
+PostgreSQL integration test.
 
-New explicit review decisions store a server receipt id, authenticated actor role and
-channel. These identify a human-role account request, not physical human presence.
-Historical role labels, trust1, user-speech tags or old `person` flags are not upgraded
-into this evidence. Existing memories and trust values are preserved. Recall exposes
-`approval_origin` as provenance without changing relevance or usage ranking.
+All 271 production registrations must match the spec in both directions. There
+is no undocumented-route allowlist. The reviewed manifest owns summaries, query
+semantics and required request fields. Go AST extraction owns DTO JSON names,
+types, nullability and omitempty, including the record envelope. Regenerate,
+review the diff, and check for source drift:
 
-Human review reminders (`review_due_at`) are independent of expiry. Scheduling/clearing
-uses the current revision, source checks and an atomic audit, and refuses a pending
-correction. An overdue reminder appears in the review list; it never approves, deletes,
-expires or renews original archives. Correction-pending warnings reuse the existing
-conflict guard. Server delivery and answer-text overlap are displayed separately from
-actual answer use; a zero overlap is not proof of uselessness.
+```bash
+python tools/update_api_contracts.py
+python tools/update_api_contracts.py --check
+```
 
-Capture copy expiry leaves bodyless, mode0600 local receipts for seven days, capped at256.
-They record copy removal and whether extraction was prepared; successful delivery stays
-unverified. Raw paths, utterances, session ids and model responses are excluded. Failed
-receipt writes do not extend raw-copy retention. Session extraction records bodyless
-withholding reason/window diagnostics only while collection policy permits persistence.
-`capture stats` reports expired transport copies, receipt failures and validation holds.
-Neither these counters nor successful literal checks claim complete collection or
-semantic extraction coverage.
+The generator fails on unknown DTO syntax. It uses only the local Go standard
+library; it does not start the service or download schemas. Runtime checks still
+need the actual handlers: source shapes alone cannot prove field semantics or
+endpoint authorization. Gateway extension descriptions belong to another
+process and are excluded from management-route coverage.
 
-Deletion displays distinguish request acceptance, server stage reports and unverified
-external copies. The desktop keeps at most32 bodyless receipt ids per server/scope for
-seven days; it reads status on demand. The optional archive audit has a25-row/2second
-bound, exact scope and human authorization. A full page is partial; errors/timeouts
-return unknown without a residue count. It never attests external backups or client
-caches. Restore receipt-ledger and publication-review gates remain in force.
+### Management lists and daemon structure
 
-The approval-origin review list surfaces existing active memories whose new explicit
-review receipt is missing. Listing them never changes their active status or trust;
-the historical attribution remains unproven until a separately authorized review flow.
+Full-scope management search uses the four documented `POST .../query` routes;
+see [list-performance.md](list-performance.md) for filters, cursors and cost limits.
+`GET /v1/usage/sessions` now supports global ordering and cursor continuation.
+The DTO manifest covers 65 management operations; OpenAPI covers 275 routes.
+`tools/update_api_contracts.py --types <exported-AST.json>` regenerates/checks
+contracts using existing parser metadata without compiling an application.
+The default invocation still runs the Go AST exporter.
 
-Desktop runtime launches omit inherited Windows shell pseudo variables (for example
-`=C:` drive-directory state) from their explicit application environment. Programs
-and working directories are already absolute. Ordinary inherited variables, command
-overrides/removals and replay snapshots remain intact. Explicit malformed names still
-reach the existing native rejection boundary; the native validator is unchanged.
+`internal/memory/http.go` owns middleware, deadlines, response handling and the
+small dynamic route tables. `http_core_*.go` owns the existing domain handlers;
+route registration still goes through the common authorization/payload policy.
+`cmd/memoryd/main.go` owns startup sequencing. `daemon_options.go` resolves one
+explicit execution mode, `daemon_environment.go` validates environment and
+Postgres settings, `daemon_maintenance.go` owns offline operations,
+`daemon_service.go` composes service dependencies, and `daemon_runtime.go` owns
+HTTP/worker lifecycles. Flags remain compatible, but combining exclusive modes
+now fails before opening the database. Recovery permits only API/worker modes.
+The frozen complexity baseline is unchanged; existing large functions elsewhere
+remain visible technical debt, not a claim of complete server simplification.
+
+### CI와 제품 빌드 실행
+
+일반 PR/main CI는 Go/Rust 테스트 대상과 불활성 fixture를 컴파일하고 원본 UI를
+검사한다. 제품 실행파일·설치파일·프런트엔드 배포 번들은 생성하지 않는다.
+배포 번들 및 원본/번들 비교는 Checks 수동 실행의 `product_build_checks=true`를
+명시했을 때만 실행한다. Release의 Windows 설치파일 생성도 PR에서는 건너뛰며
+승인된 태그·수동 릴리스 실행에서만 수행한다. 따라서 PR의 CI 성공만으로
+설치파일·업그레이드·배포 번들 검증까지 완료했다고 판단하지 않는다.

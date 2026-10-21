@@ -11,7 +11,7 @@ func TestSkillTrialTerminalDistinguishesPromotionAndExpiration(t *testing.T) {
 		f, candidate, trial, in := skillAutomationFixture(t)
 		want := "expired"
 		if promote {
-			if _, err := f.svc.ApplySkill(testCtx, "learner", candidate.SkillID, in, false); err != nil {
+			if _, err := f.svc.ApplySkill(testCtx, testPrincipalToken("learner"), candidate.SkillID, in, false); err != nil {
 				t.Fatal(err)
 			}
 			want = "promoted"

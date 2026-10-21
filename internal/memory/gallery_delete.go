@@ -72,7 +72,7 @@ func (s *Service) RestoreGallery(ctx context.Context, token, col, id string, in 
 
 // galleryArchiveRoutes: GET /v1/{prompts|design_systems}/archived and
 // POST /v1/{prompts|design_systems}/{id}/restore.
-func galleryArchiveRoutes(mux *http.ServeMux, s *Service) {
+func galleryArchiveRoutes(mux routeRegistrar, s *Service) {
 	for _, col := range []string{colPrompts, colDesignSystems} {
 		mux.HandleFunc("GET /v1/"+col+"/archived", func(w http.ResponseWriter, r *http.Request) {
 			items, e := s.ListArchivedGallery(r.Context(), bearer(r), col, scopeQuery(r))

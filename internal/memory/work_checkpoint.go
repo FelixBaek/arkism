@@ -613,7 +613,7 @@ func (p *Postgres) WorkCheckpointRows(ctx context.Context, scope Scope, after st
 // workCheckpointRoutes registers the three POST JSON endpoints. Save decodes
 // with the dedicated 68 KiB cap (64 KiB package + envelope); get/list use the
 // default decode cap.
-func workCheckpointRoutes(mux *http.ServeMux, s *Service) {
+func workCheckpointRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/work-checkpoints/save", func(w http.ResponseWriter, r *http.Request) {
 		var in WorkCheckpointSaveInput
 		if !decodeLimit(w, r, &in, workCheckpointBodyLimit) {

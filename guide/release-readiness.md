@@ -8,6 +8,22 @@ Changes to the release workflow, installer or Tauri shell trigger the Windows Re
 
 Download artifacts only from the expected repository, pull request and commit. Record that commit alongside results. A successful packaging build is not evidence that memory quality or approval policy is correct.
 
+### Windows startup registration
+
+Windows startup settings use the current user's `Run` entry with a quoted
+executable path. The app and its headless `--remove-autostart` helper share the
+same transactional registry policy. Disabling startup removes `StartupApproved`
+only when the `Run` command belongs to this executable; entries for another
+installation are preserved. Legacy owned commands gain quoting without
+overriding a Task Manager disabled state. Machine-wide entries and orphaned
+approval entries whose ownership cannot be established require separate repair.
+
+The NSIS uninstaller requires successful startup cleanup before deleting its
+payload. The Windows checks and packaging preflight exercise the shared NSIS
+macro with inert success, error, missing-file and timeout controls. Native Rust
+tests use fresh owned registry namespaces. These checks do not constitute an
+actual installed-product uninstall test with an active startup entry.
+
 ### Installed Windows runtime check
 
 The GitHub-hosted Windows packaging job also opts into
@@ -25,7 +41,16 @@ expiry. It uses fresh test data, disabled embedding, a fixed judge and a child
 environment without provider or signing credentials. It does not make a model
 request. Stage-only execution is recorded separately.
 
-This mode refuses local or self-hosted runners and refuses existing product
+The diagnostic requires a fresh absolute directory without linked ancestors;
+it refuses an existing data directory before starting any runtime. It prepares
+its own fixed model settings. It also exercises managed owner/worker token
+rotation near expiry, pending state before and after the database commit,
+restoration of a backup containing pending rotation, and HTTP 403 for retired
+tokens. Reconstructed process-interruption states do not claim power-loss
+testing. Both staged and installed checks require all five Boolean results;
+an older runtime report missing these cases fails the current gate.
+
+The installed-payload wrapper refuses local or self-hosted runners and existing product
 registrations, shortcuts, tasks, autostart entries or affected agent settings.
 It never starts the normal GUI or registers a scheduled task. Cleanup removes
 only its owned files and verified test-created registrations and shortcuts;
@@ -99,8 +124,9 @@ the separate hosted installed-runtime check covers the narrower case above.
 
 ## Draft and publication
 
-Every tag release requires the latest `checks.yml` and `sonarcloud.yml` main-push
-runs for the exact source commit to succeed. Pull-request results, another
+Every tag release requires the latest `checks.yml`, `sonarcloud.yml` and
+`coverage.yml` main-push runs plus the default-setup CodeQL dynamic run for the
+exact source commit to succeed. Pull-request results, another
 commit, another repository, a non-main branch, and older successful runs do not
 satisfy this gate. Missing or running checks are awaited for up to 30 minutes;
 failed, cancelled, skipped, incomplete, or unavailable results block packaging.
@@ -119,10 +145,13 @@ artifacts without creating tags or releases. The retained initial-publication
 workflow requires an explicit manual dispatch and also passes the shared gate;
 editing its file cannot automatically publish. Its caller grants read access to
 quality runs, and existing published tags/assets are never replaced by a retry.
-The release gate does not install branch protection or sign an artifact. The
+The quality gate does not configure branch protection. The subsequent mandatory
+Windows signing/provenance gates are described in [update security](security-operations.md);
+failed authentication prevents release creation. The required-check proposal and
+actual observed ruleset are documented in [quality and maintenance](quality-and-maintenance.md). The
 installed-runtime check does not prove existing-profile upgrade behavior.
 
-After the release candidate passes, create a new `vX.Y.Z` tag on that verified commit. The tag workflow builds the packages and creates a draft release. Inspect its assets and checksums before publishing. Do not move an existing tag or replace published assets. No tag or public release is created by a pull request preflight.
+After the release candidate passes, create a new `vX.Y.Z` tag on that verified commit. The tag workflow builds the packages and creates a draft release. Inspect its signed assets, provenance, SBOM and checksum inventory before publishing. Do not move an existing tag or replace published assets. No tag or public release is created by a pull request preflight.
 
 When publishing, update the English and Korean README installation sections to remove the preparation notice. State which artifacts are signed and which require operating-system confirmation. Do not claim all-local processing when configured extraction sends conversation excerpts to a model provider.
 

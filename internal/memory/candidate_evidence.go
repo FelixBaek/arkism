@@ -123,7 +123,7 @@ func (s *Service) CandidateEvidence(ctx context.Context, token, id string, scope
 	return out, nil
 }
 
-func candidateEvidenceRoutes(mux *http.ServeMux, s *Service) {
+func candidateEvidenceRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/memory_candidates/{id}/sources", func(w http.ResponseWriter, r *http.Request) {
 		scope, err := parseSourceTraceQuery(r.URL.RawQuery)
 		if err != nil {

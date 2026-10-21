@@ -1,6 +1,10 @@
 //! Opt-in inert native coverage; never run production roles or user data here.
 //! The copied module unit tests and cross compilation are not native evidence.
 #![cfg(windows)]
+#![deny(clashing_extern_declarations)]
+
+#[path = "../src/windows_process.rs"]
+mod windows_process;
 
 #[path = "../src/desktop_control.rs"]
 pub mod desktop_control;
@@ -954,7 +958,7 @@ fn hosted_windows_runtime_control() {
     let mut fixture =
         Fixture::new(context, peer, peer_hash).expect("fixture_initialization_failed");
     let mut report = json!({"schema":1,"source_sha":fixture.context.source,"peer_sha256":fixture.peer_hash,
-        "test_executable_sha256":fixture.exe_hash,"scope":"inert_native_only","phase":"start","ok":false,
+        "test_executable_sha256":fixture.exe_hash,"process_ffi_sha256":Sha256::digest(include_bytes!("../src/windows_process.rs")).iter().map(|b|format!("{b:02x}")).collect::<String>(),"scope":"inert_native_only","phase":"start","ok":false,
         "production_roles_executed":false,"models_db_ssh_installers_executed":false});
     let outcome = native_run(&mut fixture, &mut report);
     if let Err(code) = outcome {

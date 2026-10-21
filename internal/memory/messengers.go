@@ -110,7 +110,7 @@ func (s *Service) TestMessenger(ctx context.Context, token string, in MessengerR
 	return map[string]any{"ok": true}, nil
 }
 
-func messengerRoutes(mux *http.ServeMux, s *Service) {
+func messengerRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/messengers", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.Messengers(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, out, e)

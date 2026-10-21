@@ -677,7 +677,7 @@ func (s *Service) ReadSessionArchiveMessage(ctx context.Context, token string, i
 	currentRef.MessageSHA256 = digest
 	return archiveTextView(currentRef, role, text, in.TextOffset, archiveMessagePage, len(raw)), nil
 }
-func sessionArchiveSearchRoutes(mux *http.ServeMux, s *Service) {
+func sessionArchiveSearchRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/session-archives/search", func(w http.ResponseWriter, r *http.Request) {
 		var in ArchiveSearchInput
 		if !decode(w, r, &in) {

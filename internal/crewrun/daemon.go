@@ -11,13 +11,16 @@ import (
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/httpguard"
 	"github.com/FelixBaek/arkism/internal/notifycfg"
+	"github.com/FelixBaek/arkism/internal/processlock"
 )
 
 // Config comes from the environment (see FromEnv).
 type Config struct {
-	Listen string
-	Engine *Engine
+	Listen   string
+	LockPath string
+	Engine   *Engine
 }
 
 func envOr(k, def string) string {
@@ -60,7 +63,7 @@ func FromEnv() Config {
 	if spool := os.Getenv("ARKISM_MEMORY_OUTCOME_SPOOL"); spool != "" {
 		sinks = append(sinks, func(r TraceReceipt) error { return EnqueueReceipt(spool, r) })
 	}
-	return Config{Listen: listen, Engine: &Engine{
+	return Config{Listen: listen, LockPath: envOr("ARKISM_CREW_LOCK_FILE", filepath.Join(state, "crewrun.lock")), Engine: &Engine{
 		Traces:       tracesFromEnv(client),
 		Sinks:        sinks,
 		Store:        client,
@@ -201,6 +204,22 @@ func Serve(ctx context.Context, cfg Config) error {
 	if !loopbackAddr(cfg.Listen) {
 		return errors.New("ARKISM_CREW_LISTEN must be a loopback IP address, got " + cfg.Listen)
 	}
+	// Acquire ownership before loading or resuming any persistent run.
+	ln, err := net.Listen("tcp", cfg.Listen)
+	if err != nil {
+		return err
+	}
+	defer ln.Close()
+	if cfg.LockPath != "" {
+		if err := os.MkdirAll(filepath.Dir(cfg.LockPath), 0700); err != nil {
+			return err
+		}
+		unlock, err := processlock.Acquire(cfg.LockPath)
+		if err != nil {
+			return errors.New("crew daemon already running or lock unavailable")
+		}
+		defer unlock()
+	}
 	e := cfg.Engine
 	log := e.log()
 	for {
@@ -218,11 +237,7 @@ func Serve(ctx context.Context, cfg Config) error {
 	if err := e.ResumeRunning(ctx); err != nil {
 		log.Warn("crew resume", "error", err.Error())
 	}
-	ln, err := net.Listen("tcp", cfg.Listen)
-	if err != nil {
-		return err
-	}
-	srv := &http.Server{Handler: e.Handler(ctx), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second}
+	srv := &http.Server{Handler: httpguard.Protect(e.Handler(ctx)), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Error("crew listener", "error", err.Error())

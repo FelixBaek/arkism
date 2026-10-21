@@ -645,6 +645,10 @@ mod windows {
     use super::test_diagnostics;
     use super::{verify_reader, Installer, SuspendedControl};
     use super::{Error, Storage};
+    use crate::windows_process::{
+        CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
+        UpdateProcThreadAttribute, PROCESS_INFORMATION, STARTUPINFOEXW,
+    };
     use std::ffi::{c_void, OsStr, OsString};
     use std::fs::{File, OpenOptions};
     use std::io::Seek;
@@ -654,6 +658,8 @@ mod windows {
     use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
     use std::path::{Component, Path, PathBuf, Prefix};
     use std::time::Duration;
+    #[cfg(test)]
+    use windows_sys::Win32::System::Threading::STARTUPINFOW;
 
     const READ_ATTRIBUTES: u32 = 0x80;
     const DELETE: u32 = 0x10000;
@@ -687,41 +693,6 @@ mod windows {
         status: usize,
         information: usize,
     }
-    #[repr(C)]
-    struct StartupInfo {
-        size: u32,
-        reserved: *mut u16,
-        desktop: *mut u16,
-        title: *mut u16,
-        x: u32,
-        y: u32,
-        width: u32,
-        height: u32,
-        columns: u32,
-        rows: u32,
-        fill: u32,
-        flags: u32,
-        show: u16,
-        reserved_size: u16,
-        reserved_bytes: *mut u8,
-        stdin: *mut c_void,
-        stdout: *mut c_void,
-        stderr: *mut c_void,
-    }
-    #[repr(C)]
-    struct StartupEx {
-        info: StartupInfo,
-        attributes: *mut c_void,
-    }
-    #[repr(C)]
-    #[derive(Default)]
-    struct ProcessInformation {
-        process: *mut c_void,
-        thread: *mut c_void,
-        pid: u32,
-        tid: u32,
-    }
-
     #[link(name = "ntdll")]
     extern "system" {
         fn NtCreateFile(
@@ -804,34 +775,6 @@ mod windows {
             access: u32,
             inherit: i32,
             options: u32,
-        ) -> i32;
-        fn InitializeProcThreadAttributeList(
-            list: *mut c_void,
-            count: u32,
-            flags: u32,
-            size: *mut usize,
-        ) -> i32;
-        fn UpdateProcThreadAttribute(
-            list: *mut c_void,
-            flags: u32,
-            attribute: usize,
-            value: *mut c_void,
-            size: usize,
-            previous: *mut c_void,
-            returned: *mut usize,
-        ) -> i32;
-        fn DeleteProcThreadAttributeList(list: *mut c_void);
-        fn CreateProcessW(
-            application: *const u16,
-            command: *mut u16,
-            process_security: *const c_void,
-            thread_security: *const c_void,
-            inherit: i32,
-            flags: u32,
-            environment: *const c_void,
-            directory: *const u16,
-            startup: *const StartupInfo,
-            information: *mut ProcessInformation,
         ) -> i32;
         fn WaitForSingleObject(handle: *mut c_void, milliseconds: u32) -> u32;
         fn QueryFullProcessImageNameW(
@@ -1719,13 +1662,13 @@ mod windows {
                 .collect();
             handles.push(null.as_raw_handle());
             let mut attributes = Attributes::new(&mut handles)?;
-            let mut startup: StartupEx = unsafe { std::mem::zeroed() };
-            startup.info.size = std::mem::size_of::<StartupEx>() as u32;
-            startup.info.flags = 0x100;
-            startup.info.stdin = null.as_raw_handle();
-            startup.info.stdout = null.as_raw_handle();
-            startup.info.stderr = null.as_raw_handle();
-            startup.attributes = attributes.pointer();
+            let mut startup = STARTUPINFOEXW::default();
+            startup.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+            startup.StartupInfo.dwFlags = 0x100;
+            startup.StartupInfo.hStdInput = null.as_raw_handle();
+            startup.StartupInfo.hStdOutput = null.as_raw_handle();
+            startup.StartupInfo.hStdError = null.as_raw_handle();
+            startup.lpAttributeList = attributes.pointer();
             let mut application: Vec<_> = self.path.as_os_str().encode_wide().collect();
             if let Some(binding) = binding {
                 application = binding.path.as_os_str().encode_wide().collect();
@@ -1838,12 +1781,12 @@ mod windows {
                     directory_count: self.holds.len(),
                     handles_valid: valid,
                     handles_inheritable: inheritable,
-                    startup_bytes: std::mem::size_of::<StartupInfo>(),
-                    startup_ex_bytes: std::mem::size_of::<StartupEx>(),
+                    startup_bytes: std::mem::size_of::<STARTUPINFOW>(),
+                    startup_ex_bytes: std::mem::size_of::<STARTUPINFOEXW>(),
                     parent_pointer_bits: usize::BITS,
                 })
             };
-            let mut information = ProcessInformation::default();
+            let mut information = PROCESS_INFORMATION::default();
             let created = unsafe {
                 CreateProcessW(
                     application.as_ptr(),
@@ -1856,7 +1799,7 @@ mod windows {
                         .as_ref()
                         .map_or(std::ptr::null(), |b| b.as_ptr() as *const c_void),
                     std::ptr::null(),
-                    &startup.info,
+                    &startup.StartupInfo,
                     &mut information,
                 )
             };
@@ -1871,8 +1814,8 @@ mod windows {
                 return Err(Error::io("spawn", io::Error::last_os_error()));
             }
             // Adopt both exact native handles before any fallible observation.
-            let process = unsafe { OwnedHandle::from_raw_handle(information.process) };
-            let thread = unsafe { OwnedHandle::from_raw_handle(information.thread) };
+            let process = unsafe { OwnedHandle::from_raw_handle(information.hProcess) };
+            let thread = unsafe { OwnedHandle::from_raw_handle(information.hThread) };
             Ok(Created {
                 process: Process { handle: process },
                 thread,

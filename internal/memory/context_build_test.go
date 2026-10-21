@@ -78,7 +78,7 @@ func TestContextBuildInvalidHTTP(t *testing.T) {
 		t.Run(fmt.Sprint(tc.key, tc.value), func(t *testing.T) {
 			f := newFixture(t)
 			called := false
-			f.svc.Auth = requestActorAuth{Authorizer: f.auth, change: func(a Authorization, d *Decision) error { called = true; return nil }}
+			f.svc.Auth = requestActorAuth{Authorizer: f.auth, payloadOnly: true, change: func(a Authorization, d *Decision) error { called = true; return nil }}
 			in := map[string]any{"scope": scopeA, "task": "needle", "token_encoding": "o200k_base", "modes": []string{"fts"}}
 			in[tc.key] = tc.value
 			req := httptest.NewRequest("POST", "/v1/context/build", strings.NewReader(structuredText(in)))

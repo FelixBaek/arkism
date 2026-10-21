@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -161,16 +162,23 @@ func concretePath(p string) string {
 // runs, even for a fully privileged caller.
 func TestHTTPRoutesRejectUnknownJSONFields(t *testing.T) {
 	f := newFixture(t)
+	// Transport validation is exercised with every primary permission granted.
+	// Authorization-denial coverage lives in the common middleware tests.
+	f.svc.Auth = policyDecision(Decision{Allowed: true, PrincipalID: "human-1", Role: roleHuman}, nil)
 	h := Handler(f.svc)
 	n := 0
 	for _, r := range sourceRoutes(t) {
-		if !r.decodesFirst {
+		if httpRoutePolicies[r.method+" "+r.path].scope != routeJSON {
 			continue
 		}
 		n++
-		for _, body := range []string{`{"not_a_field_zz":1}`, `{}{}`, `{`} {
-			req := httptest.NewRequest(r.method, concretePath(r.path), strings.NewReader(body))
-			req.Header.Set("Authorization", "Bearer "+f.agent)
+		// Supply valid coarse metadata so unknown-field checks reach the typed
+		// transport decoder instead of failing only because scope is absent.
+		invalid := structuredText(map[string]any{"scope": scopeA, "skill": map[string]any{"scope": scopeA}, "kind": "topic", "memories": []Ref{{Collection: "memories"}, {Collection: "memories"}}, "not_a_field_zz": 1})
+		for _, body := range []string{invalid, invalid + `{}`, `{`} {
+			path := concretePath(strings.ReplaceAll(r.path, "{collection}", "memories"))
+			req := httptest.NewRequest(r.method, path, strings.NewReader(body))
+			req.Header.Set("Authorization", "Bearer "+f.human)
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, req)
 			var got map[string]string
@@ -199,6 +207,39 @@ func TestHTTPRoutesRefuseAnonymousCallers(t *testing.T) {
 		h.ServeHTTP(w, req)
 		if w.Code < 400 || w.Code >= 500 && w.Code != 503 {
 			t.Errorf("%s %s %s: %d %s", r.file, r.method, r.path, w.Code, w.Body.String())
+		}
+	}
+}
+
+// Route coverage is enforced alongside the runtime authorization/input contracts.
+func TestOpenAPICoversRegisteredRoutes(t *testing.T) {
+	raw, err := os.ReadFile("../../api/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var spec struct {
+		Paths map[string]map[string]json.RawMessage `json:"paths"`
+	}
+	if err = json.Unmarshal(raw, &spec); err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range sourceRoutes(t) {
+		path := strings.ReplaceAll(r.path, "/{$}", "/")
+		if _, ok := spec.Paths[path][strings.ToLower(r.method)]; !ok {
+			t.Errorf("missing OpenAPI operation: %s %s (%s)", r.method, path, r.file)
+		}
+		policy, ok := httpRoutePolicies[r.method+" "+r.path]
+		if !ok || policy.scope == routePublic {
+			continue
+		}
+		var operation struct {
+			Responses map[string]json.RawMessage `json:"responses"`
+		}
+		if err := json.Unmarshal(spec.Paths[path][strings.ToLower(r.method)], &operation); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := operation.Responses["401"]; !ok {
+			t.Errorf("missing authentication response: %s %s", r.method, path)
 		}
 	}
 }

@@ -115,7 +115,7 @@ func TestArchiveOnThePCTheAgentFoldersAreCountedOnce(t *testing.T) {
 	var labels []string
 	for _, r := range archiveRoots() {
 		if r.origin == "claude_code" || r.origin == "codex" {
-			labels = append(labels, r.device+":"+strings.TrimPrefix(r.root, host.Home))
+			labels = append(labels, r.device+":"+filepath.ToSlash(strings.TrimPrefix(r.root, host.Home)))
 		}
 	}
 	if !reflect.DeepEqual(labels, []string{"pc:/.claude/projects", "pc:/.codex/sessions"}) {

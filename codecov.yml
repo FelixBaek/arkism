@@ -1,5 +1,10 @@
-# Codecov = coverage only. It reports but never blocks a merge;
-# SonarCloud owns the quality gate and CodeQL owns security.
+# Project coverage is informational; changed Go/UI lines must reach 80%.
+# Package floors are enforced locally in coverage.yml, independently of Codecov.
+# Rust updater coverage is verified by Rust tests, not reported by this upload.
+codecov:
+  notify:
+    # Linux Go, UI, and native Windows reports belong to the same commit.
+    after_n_builds: 3
 coverage:
   status:
     project:
@@ -7,23 +12,33 @@ coverage:
         informational: true
     patch:
       default:
-        informational: true
+        target: "80%"
+        threshold: "0%"
+        informational: false
 flags:
   go:
     paths:
       - cmd/
       - internal/
     carryforward: true
+  go_windows:
+    paths:
+      - internal/installtxn/
+      - cmd/arkism-installer/
+    carryforward: false
   ui:
     paths:
       - desktop/ui/
     carryforward: true
 ignore:
+  # These reports describe product code; CLI regression checks run separately.
+  - "tools/**"
   - "**/*_test.go"
   - "**/*.test.js"
   - "**/testdata/**"
   # Vendored copy of the Go team's zstd decoder; not our code.
   - "internal/host/capture/dshzstd/**"
 comment:
+  after_n_builds: 3
   layout: "diff, flags, files"
   require_changes: true

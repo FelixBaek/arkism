@@ -100,7 +100,7 @@ func TestSourceDerivedCountHTTP(t *testing.T) {
 	for _, suffix := range []string{"&collection=", "&collection=artifacts", "&collection=memories&collection=memory_candidates", "&limit=1", "&cursor=", "&unknown=x", "&bad=%ZZ"} {
 		request(suffix, f.human, 400)
 	}
-	request("", "", 403)
+	request("", "", 401)
 	f.repo.failAudit = true
 	request("", f.human, 503)
 	f.repo.failAudit = false

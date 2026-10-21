@@ -693,7 +693,7 @@ func (s *Service) UpdateMeetingDiscord(ctx context.Context, token, id string, in
 	})
 }
 
-func crewMeetingRoutes(mux *http.ServeMux, s *Service) {
+func crewMeetingRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/crew/meetings", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit := 0

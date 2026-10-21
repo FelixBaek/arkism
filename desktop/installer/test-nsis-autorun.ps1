@@ -114,9 +114,26 @@ func main() {
   }
   $arguments = 'build -trimpath -o "' + (Join-Path $stage 'Arkism.exe') + '" "' + $source + '"'
   [void](Invoke-InstalledSmokeProcess $compiler.Path $arguments $buildEnv 120 'build_inert_control')
-  # These are data, not agent/server executables. The product uninstaller is never invoked.
-  [IO.File]::WriteAllText((Join-Path $stage 'integration/inert-client.txt'), 'inert client placeholder')
-  [IO.File]::WriteAllText((Join-Path $stage 'runtime/inert-runtime.txt'), 'inert runtime placeholder')
+  # Only Arkism.exe is executed by these launch controls. Other role images
+  # are inert copies; the actual product uninstaller is never invoked.
+  foreach ($relative in @('integration/arkism.exe', 'runtime/memoryd.exe', 'runtime/memory-principal.exe',
+    'runtime/pgsql/bin/postgres.exe', 'runtime/pgsql/bin/pg_ctl.exe', 'runtime/pgsql/bin/initdb.exe',
+    'runtime/pgsql/bin/psql.exe', 'runtime/pgsql/bin/pg_dump.exe', 'runtime/pgsql/bin/pg_restore.exe')) {
+    $target = Join-Path $stage $relative
+    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target)) | Out-Null
+    Copy-Item -LiteralPath (Join-Path $stage 'Arkism.exe') -Destination $target
+  }
+  foreach ($relative in @('runtime/roles.sql', 'runtime/pgsql/lib/vector.dll', 'runtime/pgsql/share/extension/vector.control')) {
+    $target = Join-Path $stage $relative
+    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target)) | Out-Null
+    [IO.File]::WriteAllText($target, 'inert packaging placeholder')
+  }
+  $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
+  $helper = Join-Path $stage 'runtime/arkism-installer.exe'
+  $helperEnv = @{} + $Environment
+  $helperEnv['CGO_ENABLED'] = '0'; $helperEnv['GOOS'] = 'windows'; $helperEnv['GOARCH'] = 'amd64'
+  $helperArguments = '-C "' + $repo + '" build -trimpath -ldflags=-H=windowsgui -o "' + $helper + '" ./cmd/arkism-installer'
+  [void](Invoke-InstalledSmokeProcess $compiler.Path $helperArguments $helperEnv 180 'build_installer_participant')
   return $stage
 }
 
@@ -221,13 +238,14 @@ try {
   Assert-InstalledSmokeFreshState (Get-InstalledSmokeGlobalState $context)
   $report.phase = 'build_inert'
   $stage = New-NsisAutorunPayload $root $environment $report
+  $report.profile_check = Assert-InstalledSmokeIsolatedFolders $context $stage $environment
   $report.phase = 'resolve_source'
   $source = Join-Path $PSScriptRoot 'arkism.nsi'
   $sourceHash = Get-InstalledSmokeHash $source
   $installer = Join-Path $root 'inert-control-setup.exe'
-  $arguments = '/V2 /DVERSION=0.0.0 "/DSTAGE_DIR=' + $stage + '" "/DOUT_FILE=' + $installer + '" "' + $source + '"'
   $report.phase = 'compile_fixture'
-  [void](Invoke-InstalledSmokeProcess $compiler $arguments $environment 120 'compile_product_nsis_inert_control')
+  . (Join-Path $PSScriptRoot 'package-windows.ps1')
+  $package = Invoke-WindowsInstallerPackage -Version '0.0.0' -Stage $stage -Makensis $compiler -Output $installer -TempRoot (Join-Path $root 'temp')
   $report.phase = 'hash_fixture'
   $installerHash = Get-InstalledSmokeHash $installer
   $payloadHash = Get-InstalledSmokeHash (Join-Path $stage 'Arkism.exe')

@@ -183,7 +183,7 @@ func TestSearchRelationInvalid(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			f := newFixture(t)
 			called := false
-			f.svc.Auth = requestActorAuth{Authorizer: f.auth, change: func(Authorization, *Decision) error { called = true; return nil }}
+			f.svc.Auth = requestActorAuth{Authorizer: f.auth, payloadOnly: true, change: func(Authorization, *Decision) error { called = true; return nil }}
 			in := SearchInput{Scope: scopeA, Query: "needle", Modes: []string{"relation"}, RelatedTo: &Ref{Collection: "sources", ID: "source", Revision: 1}}
 			switch mode {
 			case "missing_ref":

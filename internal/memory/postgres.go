@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"reflect"
 	"strings"
@@ -43,6 +44,20 @@ func NewPostgres(ctx context.Context, dsn string) (*Postgres, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, ErrUnavailable
+	}
+	// Bound each process independently of host CPU count. Explicit DSN pool
+	// parameters remain authoritative for dedicated server deployments.
+	if _, ok := cfg.ConnConfig.RuntimeParams["application_name"]; !ok {
+		cfg.ConnConfig.RuntimeParams["application_name"] = "arkism"
+	}
+	if !strings.Contains(dsn, "pool_max_conns") {
+		cfg.MaxConns = 10
+	}
+	if !strings.Contains(dsn, "pool_max_conn_lifetime") {
+		cfg.MaxConnLifetime = time.Hour
+	}
+	if !strings.Contains(dsn, "pool_max_conn_idle_time") {
+		cfg.MaxConnIdleTime = 5 * time.Minute
 	}
 	// Private application schema; Supabase installs vector in extensions.
 	cfg.ConnConfig.RuntimeParams["search_path"] = "arkism,extensions,pg_catalog"
@@ -360,6 +375,7 @@ func (p *Postgres) transactionWithIsolation(ctx context.Context, isolation pgx.T
 			return mapped
 		}
 	}
+	slog.Warn("PostgreSQL transaction retry budget exhausted", "attempts", txAttempts, "isolation", string(isolation))
 	return ErrUnavailable
 }
 
@@ -560,13 +576,15 @@ func (p *Postgres) ClaimJob(ctx context.Context, now time.Time, lease time.Durat
 		return Record{}, ErrInvalid
 	}
 	var out Record
+	quarantined := false
 	e := p.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		quarantined = false
 		pp := tx.(*Postgres)
 		kinds := append([]string{"embedding"}, erasureJobKinds...)
 		if pp.erasureOnly {
 			kinds = erasureJobKinds
 		}
-		rows, e := pp.q().Query(ctx, `SELECT payload FROM memory_records WHERE collection='jobs' AND kind=ANY($1) AND ((status=ANY($2) AND (run_at IS NULL OR run_at<=$3)) OR (status='running' AND lease_until<=$3)) ORDER BY run_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, kinds, []string{JobStatusPending, JobStatusRetry}, now.UTC())
+		rows, e := pp.q().Query(ctx, `SELECT id,workspace_id,project_id,user_id,agent_id,revision,kind,status,attempts,payload FROM memory_records WHERE collection='jobs' AND kind=ANY($1) AND ((status=ANY($2) AND (run_at IS NULL OR run_at<=$3)) OR (status='running' AND lease_until<=$3)) ORDER BY run_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`, kinds, []string{JobStatusPending, JobStatusRetry}, now.UTC())
 		if e != nil {
 			return pgErr(e)
 		}
@@ -579,14 +597,24 @@ func (p *Postgres) ClaimJob(ctx context.Context, now time.Time, lease time.Durat
 			return ErrNotFound
 		}
 		var b []byte
-		if e = rows.Scan(&b); e != nil {
+		var id string
+		var scope Scope
+		var revision int64
+		var kind, status string
+		var attempts int
+		if e = rows.Scan(&id, &scope.WorkspaceID, &scope.ProjectID, &scope.UserID, &scope.AgentID, &revision, &kind, &status, &attempts, &b); e != nil {
 			rows.Close()
 			return ErrUnavailable
 		}
 		rows.Close()
 		out, e = pgDecode(b)
-		if e != nil {
-			return e
+		if e != nil || out.ID != id || out.Scope != scope || out.Revision != revision || out.Kind != kind || out.Status != status || out.Attempts != attempts {
+			// Quarantine in the same committed transaction, preserving the exact
+			// original payload/doc for administrator repair. Column status is the
+			// queue's authority; a corrupt payload must not starve later jobs.
+			_, err := pp.q().Exec(ctx, `UPDATE memory_records SET status='failed',attempts=attempts+1,revision=revision+1,updated_at=$6,lease_token='',lease_until=NULL WHERE collection='jobs' AND id=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5`, id, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, now.UTC())
+			quarantined = err == nil
+			return pgErr(err)
 		}
 		tok, e := newLeaseToken()
 		if e != nil {
@@ -600,6 +628,9 @@ func (p *Postgres) ClaimJob(ctx context.Context, now time.Time, lease time.Durat
 		out.Revision++
 		return pp.writePayload(ctx, "jobs", out)
 	})
+	if e == nil && quarantined {
+		return Record{}, ErrUnavailable
+	}
 	return out, e
 }
 func (p *Postgres) FinishJob(ctx context.Context, r Record, success bool) error {
