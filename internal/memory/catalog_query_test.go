@@ -118,22 +118,29 @@ func TestCatalogWindowBindingCyclesAndCancellation(t *testing.T) {
 func TestCatalogKnowledgeBeyondSourceAndSectionLimits(t *testing.T) {
 	f := newFixture(t)
 	f.svc.SyntheticHandoff = true
-	f.svc.BlobDirectory = t.TempDir()
-	a := f.auth.actors[f.human]
-	a.verbs["write"] = true
-	f.auth.actors[f.human] = a
-	in := KnowledgeIngestInput{Scope: Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, UserID: "fixture-user", AgentID: "fixture-agent"}, SourceKey: "catalog-fixture", Filename: "catalog.md", MIMEType: "text/markdown", Synthetic: true}
-	var body strings.Builder
+	scope := Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, UserID: "fixture-user", AgentID: "fixture-agent"}
+	anchor := f.source()
+	anchor.Scope = scope
+	put := func(col string, r Record) {
+		t.Helper()
+		if err := f.repo.Insert(testCtx, col, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("sources", anchor)
+	source := Record{ID: "catalog-source", Scope: scope, Kind: colKnowledgeSources, Status: "active", Revision: 1, Sources: refs(anchor), Knowledge: &KnowledgeRecord{DisplayName: "Original", LifecycleStatus: "active", TrustLevel: "reviewed", SourceVersion: "v1", DocumentID: "catalog-document", DocumentIDs: []string{"catalog-document"}}}
+	doc := Record{ID: "catalog-document", Scope: scope, Kind: colKnowledgeDocuments, Status: "active", Revision: 1, Sources: refs(anchor), Knowledge: &KnowledgeRecord{KnowledgeSourceID: source.ID, SourceVersion: "v1"}}
+	// Seed canonical current sections: the query test must not depend on the
+	// platform-specific ingestion/artifact writer or exercise a different gate.
 	for i := 0; i < 225; i++ {
-		fmt.Fprintf(&body, "# Heading %03d\nSynthetic detail %03d.\n\n", i, i)
+		chunk := Record{ID: fmt.Sprintf("catalog-chunk-%03d", i), Scope: scope, Kind: colKnowledgeChunks, Status: "active", Revision: 1, Sources: refs(anchor), Knowledge: &KnowledgeRecord{KnowledgeSourceID: source.ID, DocumentID: doc.ID, SectionPath: fmt.Sprintf("Heading %03d", i)}}
+		doc.Knowledge.ChunkIDs = append(doc.Knowledge.ChunkIDs, chunk.ID)
+		put(colKnowledgeChunks, chunk)
 	}
-	in.Content = body.String()
-	ing, e := f.svc.IngestKnowledge(testCtx, f.human, in)
-	if e != nil {
-		t.Fatal(e)
-	}
+	put(colKnowledgeSources, source)
+	put(colKnowledgeDocuments, doc)
 	for i := 0; i < 525; i++ {
-		r := ing.Source
+		r := source
 		r.ID = fmt.Sprintf("source-copy-%03d", i)
 		k := *r.Knowledge
 		k.DisplayName = fmt.Sprintf("copy %03d", i)
@@ -145,11 +152,11 @@ func TestCatalogKnowledgeBeyondSourceAndSectionLimits(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	page, e := f.svc.QueryKnowledgeCatalog(testCtx, f.human, CatalogQueryInput{Scope: in.Scope, Query: "copy 524"})
+	page, e := f.svc.QueryKnowledgeCatalog(testCtx, f.human, CatalogQueryInput{Scope: scope, Query: "copy 524"})
 	if e != nil || page.Total != 1 {
 		t.Fatal("source past 500", page, e)
 	}
-	page, e = f.svc.QueryKnowledgeCatalog(testCtx, f.human, CatalogQueryInput{Scope: in.Scope, Query: "Heading 224"})
+	page, e = f.svc.QueryKnowledgeCatalog(testCtx, f.human, CatalogQueryInput{Scope: scope, Query: "Heading 224"})
 	if e != nil || page.Total < 1 {
 		t.Fatal("heading past 200", page, e)
 	}
