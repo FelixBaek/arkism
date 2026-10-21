@@ -21,13 +21,14 @@ const (
 	GraphSameSession = "same_session"
 	GraphSimilar     = "similar"
 
-	memoryGraphSimilarMin   = 0.80 // cosine; pgvector distance <= 1-0.80
-	memoryGraphPerNode      = 3    // similar and same-session lines per node
-	memoryGraphDefaultNodes = 60
-	memoryGraphMaxNodes     = 100
-	memoryGraphMaxEdges     = 300
-	memoryGraphScan         = 1000 // stored relation rows read per step
-	memoryGraphLabelRunes   = 120
+	memoryGraphSimilarMin    = 0.80 // cosine; pgvector distance <= 1-0.80
+	memoryGraphPerNode       = 3    // similar and same-session lines per node
+	memoryGraphDefaultNodes  = 60
+	memoryGraphMaxNodes      = 100
+	memoryGraphMaxEdges      = 300
+	memoryGraphScan          = 1000 // stored relation rows read per step
+	memoryGraphLabelRunes    = 120
+	memoryGraphMapLabelRunes = 40
 
 	MemoryGraphModeAll  = "all" // whole visible map: no center, no labels
 	memoryGraphMapNodes = 5000
@@ -228,19 +229,20 @@ func memoryGraphRoutes(mux routeRegistrar, s *Service) {
 }
 
 type memoryGraphBuild struct {
-	s     *Service
-	token string
-	who   Decision
-	in    MemoryGraphQuery
-	nodes map[string]Record
-	depth map[string]int
-	order []string
-	edges []MemoryGraphEdge
-	seen  map[string]bool
-	deny  map[string]bool // read denied once; never asked again in this request
-	cap   int             // line cap
-	fresh map[string]bool // all mode: vector state kept for slim node records
-	trunc bool
+	s      *Service
+	token  string
+	who    Decision
+	in     MemoryGraphQuery
+	nodes  map[string]Record
+	depth  map[string]int
+	order  []string
+	edges  []MemoryGraphEdge
+	seen   map[string]bool
+	deny   map[string]bool   // read denied once; never asked again in this request
+	cap    int               // line cap
+	fresh  map[string]bool   // all mode: vector state kept for slim node records
+	labels map[string]string // all mode: short node labels
+	trunc  bool
 }
 
 func (b *memoryGraphBuild) addEdge(e MemoryGraphEdge) {

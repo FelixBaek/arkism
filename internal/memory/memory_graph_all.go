@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 )
 
 // ST-820 all mode: every visible memory of the scope and the lines between them, for the
-// whole-map view. Same node rule and line rules as the center mode; nodes carry no text.
+// whole-map view. Same node rule and line rules as the center mode; nodes carry a short label
+// (the same per-node read:memories check guards it) so the map can name points past the first list page.
 type MemoryGraphMapNode struct {
 	ID            string `json:"id"`
+	Label         string `json:"label"`
+	Status        string `json:"status"`
 	Reach         string `json:"reach"`
 	Kind          string `json:"kind"`
 	Uses          int    `json:"uses"`
@@ -49,7 +53,7 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 			return MemoryGraphMap{}, ErrDenied
 		}
 	}
-	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{}, depth: map[string]int{}, seen: map[string]bool{}, deny: map[string]bool{}, cap: memoryGraphMapEdges, fresh: map[string]bool{}}
+	b := &memoryGraphBuild{s: s, token: token, who: who, in: in, nodes: map[string]Record{}, depth: map[string]int{}, seen: map[string]bool{}, deny: map[string]bool{}, cap: memoryGraphMapEdges, fresh: map[string]bool{}, labels: map[string]string{}}
 	if e = b.mapNodes(ctx); e != nil {
 		return MemoryGraphMap{}, e
 	}
@@ -84,7 +88,7 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 	out := MemoryGraphMap{Nodes: make([]MemoryGraphMapNode, 0, len(b.order)), Edges: make([]MemoryGraphMapEdge, 0, len(b.edges)), Truncated: b.trunc, Authority: AuthorityDataOnly}
 	for _, id := range b.order {
 		r := b.nodes[id]
-		out.Nodes = append(out.Nodes, MemoryGraphMapNode{ID: id, Reach: memoryReach(r), Kind: r.Kind, Uses: uses[id], VectorPending: !b.fresh[id]})
+		out.Nodes = append(out.Nodes, MemoryGraphMapNode{ID: id, Label: b.labels[id], Status: r.Status, Reach: memoryReach(r), Kind: r.Kind, Uses: uses[id], VectorPending: !b.fresh[id]})
 	}
 	for _, edge := range b.edges {
 		out.Edges = append(out.Edges, MemoryGraphMapEdge{From: edge.From, To: edge.To, Type: edge.Type})
@@ -126,7 +130,7 @@ func (b *memoryGraphBuild) mapNodes(ctx context.Context) error {
 				return nil
 			}
 			b.nodes[r.ID] = Record{ID: r.ID, Scope: r.Scope, Kind: r.Kind, Status: r.Status, Revision: r.Revision, Reach: r.Reach, ReachProject: r.ReachProject, Tags: r.Tags}
-			b.fresh[r.ID], b.depth[r.ID] = b.s.vectorCurrent(r), 0
+			b.fresh[r.ID], b.depth[r.ID], b.labels[r.ID] = b.s.vectorCurrent(r), 0, memoryGraphMapLabel(r)
 			b.order = append(b.order, r.ID)
 		}
 		if len(rows) < memoryGraphMapPage {
@@ -134,4 +138,13 @@ func (b *memoryGraphBuild) mapNodes(ctx context.Context) error {
 		}
 		after = rows[len(rows)-1].ID
 	}
+}
+
+// memoryGraphMapLabel keeps map labels short: up to 5000 nodes go out in one answer.
+func memoryGraphMapLabel(r Record) string {
+	t := strings.Join(strings.Fields(r.Text), " ")
+	if rs := []rune(t); len(rs) > memoryGraphMapLabelRunes {
+		t = string(rs[:memoryGraphMapLabelRunes]) + "…"
+	}
+	return t
 }

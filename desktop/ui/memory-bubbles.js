@@ -131,6 +131,7 @@ window.ArkismMemoryBubbles = (() => {
     }
 
     const segDist = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1))); return Math.hypot(px - ax - t * dx, py - ay - t * dy); };
+    const px = (dash) => dash.map((v) => v / zoom); // dash lengths in screen pixels at any zoom
     const scr = (x, y) => [W / 2 + (x - W / 2) * zoom + panX, H / 2 + (y - H / 2) * zoom + panY];
     function draw() {
       if (!W) return;
@@ -143,7 +144,7 @@ window.ArkismMemoryBubbles = (() => {
       const hot = [];
       for (const l of links) { // quiet lines sit under the bubbles; lines of the focused memory are drawn on top (below)
         const on = foci.has(l.a.id) || foci.has(l.b.id); if (on) { hot.push(l); continue; } if (!showAll || items.length > MANY) continue;
-        const s = EDGE[l.t] || EDGE.supports; ctx.globalAlpha = foci.size ? 0.05 : 0.3; ctx.strokeStyle = s.c; ctx.lineWidth = 1.2; ctx.setLineDash(s.dash);
+        const s = EDGE[l.t] || EDGE.supports; ctx.globalAlpha = foci.size ? 0.05 : 0.3; ctx.strokeStyle = s.c; ctx.lineWidth = 1.2 / zoom; ctx.setLineDash(px(s.dash));
         ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
       }
       ctx.setLineDash([]);
@@ -151,7 +152,7 @@ window.ArkismMemoryBubbles = (() => {
       if (showAll && items.length > MANY && groups.length > 1) {
         const pair = new Map(); for (const l of links) if (l.a.g !== l.b.g) { const k = l.a.g.key < l.b.g.key ? `${l.a.g.key}|${l.b.g.key}` : `${l.b.g.key}|${l.a.g.key}`; const o = pair.get(k) || pair.set(k, { a: l.a.g, b: l.b.g, n: 0 }).get(k); o.n++; }
         ctx.strokeStyle = tok("--nc-muted", "#888");
-        for (const { a, b, n } of pair.values()) { if (!a.rr || !b.rr) continue; ctx.globalAlpha = foci.size ? 0.05 : 0.35; ctx.lineWidth = Math.min(6, 1 + Math.log2(n)); const dx = b.rx - a.rx, dy = b.ry - a.ry, d = Math.hypot(dx, dy) || 1; if (d <= a.rr + b.rr || groups.some((g) => g !== a && g !== b && g.rr && segDist(g.rx, g.ry, a.rx, a.ry, b.rx, b.ry) < g.rr)) continue; ctx.beginPath(); ctx.moveTo(a.rx + dx / d * a.rr, a.ry + dy / d * a.rr); ctx.lineTo(b.rx - dx / d * b.rr, b.ry - dy / d * b.rr); ctx.stroke(); } // rim to rim, never across the dots
+        for (const { a, b, n } of pair.values()) { if (!a.rr || !b.rr) continue; ctx.globalAlpha = foci.size ? 0.05 : 0.35; ctx.lineWidth = Math.min(6, 1 + Math.log2(n)) / zoom; const dx = b.rx - a.rx, dy = b.ry - a.ry, d = Math.hypot(dx, dy) || 1; if (d <= a.rr + b.rr || groups.some((g) => g !== a && g !== b && g.rr && segDist(g.rx, g.ry, a.rx, a.ry, b.rx, b.ry) < g.rr)) continue; ctx.beginPath(); ctx.moveTo(a.rx + dx / d * a.rr, a.ry + dy / d * a.rr); ctx.lineTo(b.rx - dx / d * b.rr, b.ry - dy / d * b.rr); ctx.stroke(); } // rim to rim, never across the dots
       }
       for (const g of groups) g.top = null;
       // topic areas (Figma 611:54134): a soft tinted circle with a dashed rim around each group's dots
@@ -160,7 +161,7 @@ window.ArkismMemoryBubbles = (() => {
         g.rx = sx / n; g.ry = sy / n; let rr = 0; for (const p of items) if (home(p)) rr = Math.max(rr, Math.hypot(p.x - g.rx, p.y - g.ry) + p.r);
         g.rr = rr + RIM;
         ctx.globalAlpha = foci.size ? 0.03 : 0.06; ctx.fillStyle = g.color; ctx.beginPath(); ctx.arc(g.rx, g.ry, g.rr, 0, 7); ctx.fill();
-        ctx.globalAlpha = foci.size ? 0.15 : 0.35; ctx.strokeStyle = g.color; ctx.lineWidth = 1; ctx.setLineDash([3, 4]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = foci.size ? 0.15 : 0.35; ctx.strokeStyle = g.color; ctx.lineWidth = 1 / zoom; ctx.setLineDash(px([3, 4])); ctx.stroke(); ctx.setLineDash([]);
       }
       // dimmed dots first, then the focused ones on top of them
       for (const p of [...items.filter((q) => foci.size && !near.has(q.id)), ...items.filter((q) => !foci.size || near.has(q.id))]) {
@@ -179,13 +180,14 @@ window.ArkismMemoryBubbles = (() => {
         const edge = (q) => { const ex = cx - q.x, ey = cy - q.y, el = Math.hypot(ex, ey) || 1; return [q.x + ex / el * (q.r + 2), q.y + ey / el * (q.r + 2)]; }; // start at the rim, not inside the bubble
         const [ax, ay] = edge(l.a), [bx, by] = edge(l.b), col = l.t === "same_session" ? tok("--nc-muted", s.c) : s.c;
         const path = () => { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(cx, cy, bx, by); ctx.stroke(); };
-        ctx.globalAlpha = 0.55; ctx.strokeStyle = bg; ctx.lineWidth = 4; ctx.setLineDash([]); path(); // faint backing so the line reads over bubbles
-        ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.setLineDash(s.dash); path();
-        if (d > l.a.r + l.b.r + 40) { // pill a little past the middle, toward the related memory, so the focus card does not cover it
+        ctx.globalAlpha = 0.55; ctx.strokeStyle = bg; ctx.lineWidth = 4 / zoom; ctx.setLineDash([]); path(); // faint backing so the line reads over bubbles
+        ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.6 / zoom; ctx.setLineDash(px(s.dash)); path();
+        if ((d - l.a.r - l.b.r) * zoom > 40) { // pill a little past the middle, toward the related memory, so the focus card does not cover it
           const t = foci.has(l.a.id) ? 0.6 : 0.4, u = 1 - t;
-          tags.push([s, col, u * u * l.a.x + 2 * u * t * cx + t * t * l.b.x, u * u * l.a.y + 2 * u * t * cy + t * t * l.b.y]);
+          tags.push([s, col, ...scr(u * u * l.a.x + 2 * u * t * cx + t * t * l.b.x, u * u * l.a.y + 2 * u * t * cy + t * t * l.b.y)]);
         }
       }
+      ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // pills in screen pixels, like the dot names
       ctx.setLineDash([]); ctx.font = `500 11px ${tok("--sans", "sans-serif")}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       for (const [s, c, x, y] of tags) {
         const t = tr(s.n), w = ctx.measureText(t).width + 16;
@@ -193,11 +195,13 @@ window.ArkismMemoryBubbles = (() => {
         ctx.beginPath(); ctx.roundRect(x - w / 2, y - 10, w, 20, 10); ctx.fill(); ctx.globalAlpha = 0.7; ctx.stroke();
         ctx.globalAlpha = 1; ctx.fillStyle = c; ctx.fillText(t, x, y + 0.5);
       }
+      ctx.restore();
       for (const id of [sel, kb].filter(Boolean)) { const p = byId.get(id); if (!p) continue; // soft halo + dashed orbit like the Figma focus node
-        ctx.globalAlpha = 0.07; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 14, 0, 7); ctx.fill();
-        ctx.globalAlpha = 0.45; ctx.strokeStyle = p.color; ctx.lineWidth = 1; ctx.setLineDash([2, 4]); ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 9, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+        const hc = p.g.color || p.color; // the dot's own colour
+        ctx.globalAlpha = 0.07; ctx.fillStyle = hc; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 14 / zoom, 0, 7); ctx.fill();
+        ctx.globalAlpha = 0.45; ctx.strokeStyle = hc; ctx.lineWidth = 1 / zoom; ctx.setLineDash(px([2, 4])); ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 9 / zoom, 0, 7); ctx.stroke(); ctx.setLineDash([]);
       }
-      for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 2.5), 0, 7); ctx.stroke(); }
+      for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2 / zoom; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 2.5) / zoom, 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
       drawNames(foci, near, bg, text);
       labels.hidden = !!sel; // group names would float over the fan
@@ -287,7 +291,7 @@ window.ArkismMemoryBubbles = (() => {
     canvas.addEventListener("click", (ev) => { if (dragged) { dragged = false; return; } const id = hit(ev); if (id) { kb = null; onSelect(id); } });
     canvas.addEventListener("blur", () => { if (kb) { kb = null; draw(); } });
     canvas.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape") { kb = null; draw(); onClear(); return; }
+      if (ev.key === "Escape") { if (!sel && !kb) return; ev.preventDefault(); kb = null; draw(); onClear(); return; } // the first Esc only clears; the window closes on the next
       if (ev.key === "Enter") { const id = kb || sel; if (id) { ev.preventDefault(); onSelect(id); } return; }
       if (ev.key === "+" || ev.key === "=") { ev.preventDefault(); zoomBy(1.25); return; }
       if (ev.key === "-" || ev.key === "_") { ev.preventDefault(); zoomBy(0.8); return; }
