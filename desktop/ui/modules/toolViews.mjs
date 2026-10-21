@@ -12,9 +12,9 @@ export function createToolViews(deps) {
       const t = r.agent_tools || {};
       return { servers: t.servers || [], plugins: t.plugins || [], requests: t.requests || [], collected_at: t.collected_at || "", skill_checks: t.skill_checks || [], skill_check_tools: t.skill_check_tools || "",
         agents: t.agents || null, shared_dirs: t.shared_dirs || null, memory_use: t.memory_use || null, skill_updates: t.skill_updates || [], pc_links: t.pc_links || [], skill_repos: t.skill_repos || [] };
-    } catch (err) {
+    } catch {
       // null tells renderTools to explain that the host sync has not reported (older server or stopped timer).
-      console.warn("agent tools unavailable", err.message);
+      console.warn("agent tools unavailable");
       return null;
     }
   }
@@ -38,7 +38,7 @@ export function createToolViews(deps) {
     const pending = requestsFor(entry).filter((q) => q.status === "pending");
     if (pending.length) return ["적용 대기", "warn"];
     const login = Object.keys(entry.login || {}).filter((k) => needsLogin(entry, k));
-    if (login.length) return [`${login.map(deps.agentName).join("·")} 로그인 필요`, "warn"];
+    if (login.length) return [`${login.map(value => deps.agentName(value)).join("·")} 로그인 필요`, "warn"];
     if (entry.note) return [entry.note, "warn"];
     return Object.values(entry.agents).includes("on") ? ["정상", "ok"] : ["꺼짐", "off"];
   }
@@ -593,7 +593,7 @@ export function createToolViews(deps) {
     const parts = [head];
     const loginFor = deps.AGENTS.map(([k]) => k).filter((k) => needsLogin(entry, k));
     if (loginFor.length) {
-      parts.push(cnCallout(`${loginFor.map(deps.agentName).join("·")} 로그인 필요`, "누르면 로그인 창이 열려요. Cloudflare 같은 서비스에서 허용하면 서버의 에이전트에 자동으로 적용돼요.",
+      parts.push(cnCallout(`${loginFor.map(value => deps.agentName(value)).join("·")} 로그인 필요`, "누르면 로그인 창이 열려요. Cloudflare 같은 서비스에서 허용하면 서버의 에이전트에 자동으로 적용돼요.",
         loginFor.map((k) => deps.button(`${deps.agentName(k)} 로그인`, "primary", null, () => toolAgentPopup(entry, kind, k, true)))));
     } else if (entry.note) {
       parts.push(cnCallout(entry.note, kind === "plugin" ? "Claude Code에서 /plugin 으로 다시 확인해 주세요." : "‘다시 연결’을 누르거나, 서버의 에이전트에서 /mcp 를 열어 다시 인증해 주세요. 끝나면 1분 안에 여기 반영돼요.",
@@ -619,7 +619,7 @@ export function createToolViews(deps) {
     const on = Object.entries(entry.agents || {}).filter(([, v]) => v === "on").map(([k]) => k);
     const foot = deps.el("div", "cn-foot");
     if (on.length) foot.append(deps.button(kind === "plugin" ? "끄기" : "연결 끊기", "cn-link", null, async () => {
-      if (!await confirmPop(kind === "plugin" ? "플러그인을 끌까요?" : "연결 끊기할까요?", `${entry.name}를 ${on.map(deps.agentName).join("·")}에서 끌까요? 설정은 보관돼서 다시 켜면 그대로 돌아와요.`, kind === "plugin" ? "끄기" : "연결 끊기")) return;
+      if (!await confirmPop(kind === "plugin" ? "플러그인을 끌까요?" : "연결 끊기할까요?", `${entry.name}를 ${on.map(value => deps.agentName(value)).join("·")}에서 끌까요? 설정은 보관돼서 다시 켜면 그대로 돌아와요.`, kind === "plugin" ? "끄기" : "연결 끊기")) return;
       for (const k of on) await switchTool(entry, k, false);
     }));
     if (kind === "plugin") foot.append(deps.el("span", "cn-grow"), deps.button("제거", "cn-link", null, async () => {
@@ -653,7 +653,7 @@ export function createToolViews(deps) {
   function reconnectTool(entry) {
     const on = reconnectAgents(entry);
     if (entry.transport !== "stdio") return toolAgentPopup(entry, "mcp", on.find((k) => needsLogin(entry, k)) || on[0], true);
-    const names = on.map(deps.agentName).join("·");
+    const names = on.map(value => deps.agentName(value)).join("·");
     let busy = false;
     applyPopup(`다시 연결 · ${entry.name}`, "MCP 서버", [
       `${names} 설정에서 ${entry.name}을 뺐다가 다시 넣어요. 설정 내용은 그대로예요.`,

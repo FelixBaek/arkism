@@ -1,6 +1,6 @@
 // Real product DOM, bounded fake API, keyboard and measured rows. No product data.
 const fs = require("node:fs"), path = require("node:path"), assert = require("node:assert/strict");
-const { chromium } = require(path.resolve(__dirname, "../frontend/node_modules/playwright-core"));
+const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__dirname, "../frontend/node_modules/playwright-core"));
 const output = process.env.ARKISM_LIST_EVIDENCE || path.join(require("node:os").tmpdir(), "arkism-list-evidence");
 fs.mkdirSync(output, { recursive: true });
 const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirname, "../ui"));
@@ -27,7 +27,7 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
         if (command === "app_defaults") return { local: true, updates: false };
         if (command === "local_start") return { server: "http://127.0.0.1:8091", token: "inert-fixture" };
         if (command !== "api") return null;
-        const url = new URL(args.path, "http://fixture"), p = url.pathname;
+        const url = new URL(args.path, "https://fixture.invalid"), p = url.pathname;
         const catalog = p.endsWith("/query");
         const q = catalog ? new URLSearchParams(Object.entries(JSON.parse(args.body)).map(([k,v])=>[k,String(v)])) : url.searchParams;
         const route = catalog ? p.slice(0,-6) : p;
@@ -53,7 +53,7 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
     });
     await page.goto("https://arkism.fixture/");
     await page.waitForFunction(() => document.querySelector("#app")?.inert === false && document.querySelector("#count-memories")?.textContent === "50+");
-    assert.deepEqual(await page.evaluate(() => window.listCalls.map(c => [c.name, c.start, c.limit]).sort()), ["candidates", "conflicted", "memories", "skills", "skillTrash"].map(name => [name, 0, 50]).sort());
+    assert.deepEqual(await page.evaluate(() => window.listCalls.map(c => [c.name, c.start, c.limit]).sort((a, b) => a[0].localeCompare(b[0]))), ["candidates", "conflicted", "memories", "skills", "skillTrash"].map(name => [name, 0, 50]).sort((a, b) => a[0].localeCompare(b[0])));
     await page.getByRole("button", { name: /^기억 보기/ }).click();
     async function next(name) {
       const foot = page.locator(`[data-collection="${name}"]`);

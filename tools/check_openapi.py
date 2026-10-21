@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 from urllib.parse import unquote
+from ci_inputs import input_roots, read_ci_text
 from jsonschema import Draft202012Validator, FormatChecker
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,7 +21,7 @@ def read_json(path):
                 raise ValueError(f"duplicate JSON key: {key}")
             out[key] = value
         return out
-    return json.loads(Path(path).read_text(encoding="utf-8-sig"), object_pairs_hook=unique)
+    return json.loads(read_ci_text(path, input_roots(ROOT / "api")), object_pairs_hook=unique)
 
 
 def pointer(doc, ref):

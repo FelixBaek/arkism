@@ -42,7 +42,7 @@ fs.mkdirSync(output,{recursive:true});
         if(cmd==="local_start")return {server:"http://127.0.0.1:8091",token:"inert-browser-fixture"};
         if(cmd==="capture_settings")return {paused:false,exclude:[],instructions:""};
         if(cmd!=="api")return null;
-        const url=new URL(args.path,"http://fixture"),base=url.pathname.replace(/^\//,""),q=url.searchParams,status=q.get("status"),kind=q.get("kind");
+        const url=new URL(args.path,"https://fixture.invalid"),base=url.pathname.replace(/^\//,""),q=url.searchParams,status=q.get("status"),kind=q.get("kind");
         if(base==="v1/usage/sessions" && (args.method||"GET")==="GET" || base.endsWith("/query")) {
           const input=base.endsWith("/query")?JSON.parse(args.body||"{}"):Object.fromEntries(q), source=base.includes("knowledge"), session=base.includes("sessions"), candidates=base.includes("memory_candidates");
           const all=Array.from({length:1200},(_,i)=>source?{id:`source-${i}`,display_name:i===1199?"Rare source tail":`Source ${i}`,format:".md",revision:1,lifecycle_status:"active",trust_level:"reviewed",chunk_count:i,document_count:1,updated_at:"2026-10-20T00:00:00Z",bindings:[]}:session?{id:`session-${i}`,session_id:`sid-${i}`,title:i===1199?"Rare session tail":`Session ${i}`,agent:"codex",device:"fixture",project:"fixture",started_at:"2026-10-20T00:00:00Z",ended_at:"2026-10-20T00:00:00Z",messages:i,tokens:i,cost_usd:i,priced:true,models:[],tools:[],skills:[]}: {id:`record-${i}`,name:`Skill ${i}`,description:"Fixture",skill_compatibility:{},text:i===1199?"Rare memory tail":`Record ${i}`,summary:"",kind:"decision",status:candidates?"candidate":"active",revision:1,created_at:"2026-10-20T00:00:00Z",updated_at:"2026-10-20T00:00:00Z",tags:[],sources:[]});
