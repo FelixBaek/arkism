@@ -62,41 +62,8 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 	}
 	nodesCut := b.trunc // from here on only the line caps set trunc
 	b.trunc = false
-	// Session and similar lines are asked for every node at once, so each query builds its candidate
-	// set once instead of once per 100 nodes (#166); their lines are then added in the same order as
-	// per-100-node asking, so the line cap keeps the same lines. Stored lines keep their per-chunk scan cap.
-	chunkOf := map[string]int{}
-	for i, id := range b.order {
-		chunkOf[id] = i / memoryGraphMaxNodes
-	}
-	byChunk := make([][]MemoryGraphEdge, 2*(len(b.order)/memoryGraphMaxNodes+1))
-	for i, lines := range []func(context.Context, []string) ([]MemoryGraphEdge, error){b.sessionLines, b.similarLines} {
-		if len(b.order) == 0 {
-			break
-		}
-		found, e := lines(ctx, b.order)
-		if e != nil {
-			return MemoryGraphMap{}, e
-		}
-		for _, edge := range found {
-			k := 2*chunkOf[edge.From] + i
-			byChunk[k] = append(byChunk[k], edge)
-		}
-	}
-	for n, chunk := range slices.Collect(slices.Chunk(b.order, memoryGraphMaxNodes)) {
-		stored, e := b.storedLines(ctx, chunk)
-		if e != nil {
-			return MemoryGraphMap{}, e
-		}
-		for _, found := range [][]MemoryGraphEdge{stored, byChunk[2*n], byChunk[2*n+1]} {
-			for _, edge := range found {
-				_, f := b.depth[edge.From]
-				_, t := b.depth[edge.To]
-				if f && t {
-					b.addEdge(edge)
-				}
-			}
-		}
+	if e = b.mapLines(ctx); e != nil {
+		return MemoryGraphMap{}, e
 	}
 	uses := map[string]int{}
 	if len(b.order) > 0 {
@@ -125,6 +92,47 @@ func (s *Service) MemoryGraphMap(ctx context.Context, token string, in MemoryGra
 		return MemoryGraphMap{}, e
 	}
 	return out, nil
+}
+
+// mapLines adds the session, similar and stored lines between the placed nodes.
+func (b *memoryGraphBuild) mapLines(ctx context.Context) error {
+	// Session and similar lines are asked for every node at once, so each query builds its candidate
+	// set once instead of once per 100 nodes (#166); their lines are then added in the same order as
+	// per-100-node asking, so the line cap keeps the same lines. Stored lines keep their per-chunk scan cap.
+	chunkOf := map[string]int{}
+	for i, id := range b.order {
+		chunkOf[id] = i / memoryGraphMaxNodes
+	}
+	byChunk := make([][]MemoryGraphEdge, 2*(len(b.order)/memoryGraphMaxNodes+1))
+	for i, lines := range []func(context.Context, []string) ([]MemoryGraphEdge, error){b.sessionLines, b.similarLines} {
+		if len(b.order) == 0 {
+			break
+		}
+		found, e := lines(ctx, b.order)
+		if e != nil {
+			return e
+		}
+		for _, edge := range found {
+			k := 2*chunkOf[edge.From] + i
+			byChunk[k] = append(byChunk[k], edge)
+		}
+	}
+	for n, chunk := range slices.Collect(slices.Chunk(b.order, memoryGraphMaxNodes)) {
+		stored, e := b.storedLines(ctx, chunk)
+		if e != nil {
+			return e
+		}
+		for _, found := range [][]MemoryGraphEdge{stored, byChunk[2*n], byChunk[2*n+1]} {
+			for _, edge := range found {
+				_, f := b.depth[edge.From]
+				_, t := b.depth[edge.To]
+				if f && t {
+					b.addEdge(edge)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // mapNodes pages through visible memories by id and keeps those the caller may read, up to
