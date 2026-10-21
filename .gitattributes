@@ -1,0 +1,2 @@
+# Signed test payloads must retain the exact bytes on Windows checkout.
+desktop/src-tauri/tests/fixtures/update/* -text

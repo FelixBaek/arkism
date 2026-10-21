@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -622,9 +623,15 @@ func TestHTTPNodeUsesProviderKey(t *testing.T) {
 	if err != nil || m["path"] != "/items/a1" || m["got"].(map[string]any)["q"] != "a1" {
 		t.Fatal("http", out, err)
 	}
-	_ = os.Chmod(e.KeysFile, 0o644)
-	if _, err = e.runHTTP(context.Background(), cfg, map[string]any{"id": "a1", "trace": 7}); err == nil || strings.Contains(err.Error(), "test-key-value") {
-		t.Fatal("world-readable keys file used", err)
+	// Windows access is represented by ACLs; Chmod cannot create a Unix
+	// world-readable fixture there. The provider-key and 401 checks still run.
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(e.KeysFile, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = e.runHTTP(context.Background(), cfg, map[string]any{"id": "a1", "trace": 7}); err == nil || strings.Contains(err.Error(), "test-key-value") {
+			t.Fatal("world-readable keys file used", err)
+		}
 	}
 	cfg["key"] = ""
 	if _, err = e.runHTTP(context.Background(), cfg, map[string]any{"id": "a1", "trace": 7}); err == nil || !strings.HasPrefix(err.Error(), "http_status") {

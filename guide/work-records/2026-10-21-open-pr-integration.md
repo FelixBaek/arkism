@@ -83,3 +83,23 @@ Checks의 배포 번들 검사는 기본 false인 수동 product_build_checks �
 main의 MCP 상세 연결 스킬·스크립트 표시(0d06873)도 toolViews 모듈로 옮겨
 유지했다. 스크립트 조회 캐시는 서버·scope·연결 세대가 바뀌면 비우고 늦은
 응답을 폐기한다. 표시 대상은 기존처럼 현재 읽은 스킬에 한정된다.
+
+## 첫 원격 CI의 실패와 수정
+
+bf4f444/d271058 원격 실행에서 제품 UI 번들·설치파일·release 잡이 실제로
+skipped임을 확인했다. 원본 Windows 브라우저·Node·비밀 스캔은 통과했다.
+
+Go 취약점 검사가 crypto/x509 GO-2026-6809를 발견했고 수정 버전 1.27.3을
+명시했다. 공식 Go 태그를 확인한 뒤 go.mod를 1.27.3으로 올렸다.
+self-hosted runner의 system Python에 pip가 없어 API 도구 설치가 실패했으므로
+SHA 고정 setup-python으로 검사 전용 Python 3.13을 준비한다.
+
+Windows 카탈로그 검사가 Linux 전용 파일의 fixture를 참조해 컴파일 실패한
+문제는 OS 공통 합성 fixture로 바꿨다. 기존 crew HTTP 테스트의 POSIX chmod
+주장은 Windows에서 적용할 수 없어 해당 주장만 Unix에서 검사하며, 키 사용과
+401 검증은 Windows에서도 유지한다. 이것은 Windows ACL 검증을 추가한 것은 아니다.
+
+Windows Rust는 210개 통과·서명 fixture 1개 실패·2개 ignored였다. 서명된 JSON의
+checkout 줄바꿈 변환을 막는 .gitattributes를 추가했다. 서명 검증을 느슨하게
+하거나 fixture에 다시 서명하지 않는다. 로그 핸들·hard-link 회귀 3개는 통과했다.
+이 수정 후 원격 테스트 결과는 후속 실행에서 확인해야 한다.
