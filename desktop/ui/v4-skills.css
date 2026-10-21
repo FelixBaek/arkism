@@ -366,3 +366,4 @@
 .v4s-route-ask:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 1px; }
 .v4s-route .v4s-actions { align-items: center; }
 .v4s-route .v4s-foot:empty { display: none; }
+.v4s-why ul { margin: 4px 0 0; padding-left: 18px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
