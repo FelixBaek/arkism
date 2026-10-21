@@ -214,8 +214,10 @@ def main():
                     raise ReleaseError("signing key is required")
                 with tempfile.TemporaryDirectory(prefix="arkism-signing-key-") as tmp:
                     key = Path(tmp) / "private.key"
-                    key.write_text(secret, encoding="ascii")
-                    key.chmod(0o600)
+                    # minisign reads the key only from a file: create it owner-only before any byte is written.
+                    fd = os.open(key, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(fd, "w", encoding="ascii") as fh:
+                        fh.write(secret)
                     sign(args.directory, args.version, args.feed, args.channel, key)
         else:
             verify(args.directory, args.version, args.feed, args.channel)
