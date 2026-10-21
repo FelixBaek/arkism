@@ -36,6 +36,8 @@ pub async fn popout_open(app: AppHandle, window: Window, store: State<'_, Popout
         .title(if title.is_empty() { "Arkism".to_string() } else { format!("{title} · Arkism") })
         .inner_size(clamp(width, 360.0, 2400.0), clamp(height, 320.0, 1800.0))
         .min_inner_size(360.0, 320.0)
+        .decorations(false) // the app draws its own drag strip and ✕ (window-controls.js)
+        .shadow(true)
         .position(clamp(x, -10000.0, 10000.0), clamp(y, -10000.0, 10000.0))
         .build();
     if let Err(e) = built {

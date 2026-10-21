@@ -92,6 +92,7 @@
   <script src="home-checks.js" defer></script>
   <script src="home.js" defer></script>
   <script src="app.js" defer></script>
+  <script src="window-controls.js" defer></script>
 </head>
 <body>
   <svg xmlns="http://www.w3.org/2000/svg" hidden>
@@ -158,6 +159,11 @@
 <symbol id="a-gemini" viewBox="0 0 24 24"><path fill="#3186ff" d="M12 1c.6 5.6 4.4 10.4 11 11-6.6.6-10.4 5.4-11 11-.6-5.6-4.4-10.4-11-11 6.6-.6 10.4-5.4 11-11z"/></symbol>
   </svg>
 
+  <div id="window-bar" class="window-bar" data-tauri-drag-region hidden>
+    <button class="win-btn" data-win="min" type="button" aria-label="최소화" title="최소화"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5.5h10"/></svg></button>
+    <button class="win-btn" data-win="max" type="button" aria-label="최대화" title="최대화"><svg class="win-max" viewBox="0 0 10 10" aria-hidden="true"><rect x=".5" y=".5" width="9" height="9"/></svg><svg class="win-restore" viewBox="0 0 10 10" aria-hidden="true"><rect x=".5" y="2.5" width="7" height="7"/><path d="M2.5 2.5V.5h7v7h-2"/></svg></button>
+    <button class="win-btn win-close" data-win="close" type="button" aria-label="닫기" title="닫기"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M.5.5l9 9M9.5.5l-9 9"/></svg></button>
+  </div>
   <div id="app" class="app" inert aria-hidden="true">
     <aside class="sidebar" aria-label="Arkism 메뉴">
       <div class="brand"><img class="brand-mark" src="img/arkism-triangle.svg" alt="" width="16" height="15"><span class="brand-word">arkism</span></div>
@@ -196,7 +202,7 @@
     </aside>
 
     <main class="main">
-      <div class="area-bar">
+      <div class="area-bar" data-tauri-drag-region="deep">
         <div id="area-tabs" class="area-tabs" role="tablist" aria-label="영역 메뉴"></div>
         <label class="search"><svg class="icon" aria-hidden="true"><use href="#i-magnifying-glass"/></svg><input id="search" type="search" placeholder="검색" aria-label="검색"><kbd>Ctrl K</kbd></label>
         <div id="head-actions" class="head-actions"></div>

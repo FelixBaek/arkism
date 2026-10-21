@@ -132,3 +132,18 @@
 /* diff (GitHub 방식): 뺀 것은 빨강 바탕, 넣은 것은 초록 바탕. 줄 단위·글자 단위·상자 단위 어디서나 이 두 클래스(또는 같은 토큰)를 쓴다. */
 .diff-del { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); }
 .diff-add { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); }
+
+/* 창 버튼 (window-controls.js): no native title bar; the top strip drags the window and holds — □ ✕ at the right.
+   32px = --nc-page-pad, so the strip only lies over page padding and never over a tab or button. */
+.window-bar { position: fixed; inset: 0 0 auto 0; z-index: 1000; height: 32px; display: flex; justify-content: flex-end; }
+.window-bar[hidden] { display: none; }
+.win-btn { width: 46px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 0; background: none; color: var(--nc-muted); }
+.win-btn svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; shape-rendering: crispEdges; }
+.win-btn:hover { background: var(--nc-raised); color: var(--nc-text); }
+.win-btn:active { background: var(--nc-subtle); }
+.win-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.win-close:hover, .win-close:active { background: #c42b1c; color: #fff; } /* Windows' own close red, both themes */
+.win-btn .win-restore, .win-btn.on .win-max { display: none; }
+.win-btn.on .win-restore { display: block; }
+html.popout dialog.popout-root { padding-top: 32px; }
+@media (max-width: 760px) { body:has(> .window-bar:not([hidden])) :is(.main, .sidebar, .unlock) { padding-top: 32px; } }
