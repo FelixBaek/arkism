@@ -458,7 +458,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     function paint() {
       const snap = remote.snapshot(), kinds = Object.entries(snap.facets.kinds || {});
       if (!snap.loading && kindF === "all" && !q && snap.total != null) d.querySelector(".ov-win-badge").textContent = `${num(snap.total)}개`; // server total, not the loaded page
-      chipHost.replaceChildren(chipBar([["all", "전체", snap.facets.kinds ? Object.values(snap.facets.kinds).reduce((a,b)=>a+b,0) : snap.total ?? null], ...kinds.map(([k,n]) => [k,kind(k),n]), ["idle", "안 쓰임", kindF === "idle" ? snap.total ?? 0 : null]], kindF, k => { kindF=k;paint(); }));
+      chipHost.replaceChildren(chipBar([["all", "전체", snap.facets.kinds ? Object.values(snap.facets.kinds).reduce((a,b)=>a+b,0) : snap.total ?? null], ...kinds.map(([k,n]) => [k,kind(k),n]), ["idle", "안 쓰임", kindF === "idle" ? snap.total ?? null : null]], kindF, k => { kindF=k;paint(); }));
       const items = snap.items;
       list.replaceChildren(); if (!items.length) list.append(el("p", "ov-win-empty", snap.loading ? "불러오는 중…" : "찾은 기억이 없어요."));
       for (const m of items) {
