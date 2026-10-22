@@ -949,7 +949,7 @@ export function createCrewWorkers(deps) {
     wk.paintAct = () => {
       acts.replaceChildren();
       if (isNew) return;
-      acts.append(estimateNode()); // no on/off switch here (user request); 전문가 삭제 sits at the end of 개요
+      acts.append(estimateNode()); // no on/off switch here (user request); 켜기 and 전문가 삭제 sit at the end of 개요
     };
     wk.redraw = () => { const sc = wk.scrollKeep ?? pop.body.scrollTop; wk.scrollKeep = sc; pop.select(wk.tab); pop.body.scrollTop = sc; requestAnimationFrame(() => { pop.body.scrollTop = sc; wk.scrollKeep = null; }); };
     if (isNew) names.replaceChildren(deps.el("h2", ""), deps.el("p", ""));
@@ -1053,7 +1053,17 @@ export function createCrewWorkers(deps) {
     bar.append(ai.dock);
     box.append(modelCard(d), runCard(d),
       workerCard("일하는 방법", "", instructionsField(d), workflowField(d)),
-      useCard(d, rec), budgetCard(rec ? rec.id : null, d), ...(rec ? [channelCard(rec), dangerRow(rec), bar] : [teamsCard(), bar]));
+      useCard(d, rec), budgetCard(rec ? rec.id : null, d), ...(rec ? [channelCard(rec), enableRow(), dangerRow(rec), bar] : [teamsCard(), bar]));
+  }
+
+  // 켜기: the expert's on/off, moved here from the head (#222); the switch is redrawn on a flip and keeps focus.
+  function enableRow() {
+    const row = deps.el("div", "ex-enable");
+    const paint = () => row.replaceChildren(deps.el("strong", "", "켜기"), deps.switchEl(wk.draft.enabled !== false, "켜기", (on) => {
+      wk.draft.enabled = on; wk.dirty = true; paint(); row.querySelector(".switch")?.focus(); drawWorkerSave();
+    }));
+    paint();
+    return row;
   }
 
   // 전문가 삭제: last thing in 개요, apart from everything else, and it asks for the name typed back.
