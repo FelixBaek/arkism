@@ -1381,8 +1381,9 @@ func TestGLMWithoutWrapperRunsClaudeCodeAgainstZAI(t *testing.T) {
 	if env, _ := childEnv(r, nil, "glm-5.3", nil); env["ANTHROPIC_BASE_URL"] == zaiAnthropic {
 		t.Fatal("wrapper got the Z.ai address")
 	}
-	// in API mode the wrapper gets the key but not the stored http address (#170)
+	// in API mode the wrapper gets the key but not the stored or an inherited http address (#170)
 	patch(t, &host.APIMode, map[string]bool{"glm": true})
+	t.Setenv("ZAI_BASE_URL", "http://inherited.invalid/api/paas/v4")
 	if env, _ := childEnv(r, nil, "glm-5.3", nil); env["ZAI_API_KEY"] != "zai-old-key" || env["ZAI_BASE_URL"] != "" {
 		t.Fatal(env["ZAI_API_KEY"], env["ZAI_BASE_URL"])
 	}
@@ -1439,10 +1440,14 @@ func TestKeyTestErrSentences(t *testing.T) {
 		want string
 	}{
 		{errors.New("dial"), "제공자에 연결하지 못했어요"},
-		{&host.HTTPError{Code: 403, Body: []byte("Cloudflare")}, "Cloudflare"},
+		{&host.HTTPError{Code: 403, Body: []byte("Cloudflare")}, "제공자 방화벽(Cloudflare)이 막았어요 (403)"},
 		{&host.HTTPError{Code: 401}, "키가 맞지 않아요"},
 		{&host.HTTPError{Code: 500}, "연결 실패 (500)"},
 	} {
-		mustCrewErr(t, keyTestErr(c.err), c.want)
+		got := keyTestErr(c.err)
+		mustCrewErr(t, got, c.want)
+		if got.Error() != c.want {
+			t.Fatalf("got %q, want %q", got.Error(), c.want)
+		}
 	}
 }

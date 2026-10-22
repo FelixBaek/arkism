@@ -328,6 +328,15 @@ func childEnv(row host.CLI, keys []map[string]any, model string, key map[string]
 			return nil, err
 		}
 	}
+	applyStoredKey(env, row, keys)
+	return env, nil
+}
+
+// applyStoredKey puts the row's first stored key, and its address, into a CLI's environment.
+func applyStoredKey(env map[string]string, row host.CLI, keys []map[string]any) {
+	if row.Provider == "zai" && !strings.HasPrefix(env[row.BaseEnv], "https://") { // nor an inherited http one
+		delete(env, row.BaseEnv)
+	}
 	for _, k := range keys {
 		if k["provider"] == row.Provider && truthy(k["key"]) {
 			env[row.KeyEnv] = str(k["key"])
@@ -337,10 +346,9 @@ func childEnv(row host.CLI, keys []map[string]any, model string, key map[string]
 			if b := str(k["base_url"]); b != "" && (row.Provider != "zai" || strings.HasPrefix(b, "https://")) { // a wrapper gets no pre-0.1.4 http Z.ai address (#170)
 				env[row.BaseEnv] = b
 			}
-			break
+			return
 		}
 	}
-	return env, nil
 }
 
 // redact keeps a child that echoes its key from carrying it out through our output.
