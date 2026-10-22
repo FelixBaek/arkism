@@ -353,7 +353,7 @@ export const createCrew = (ctx) => {
       const c = el("button", `auto-cat-chip${state.crewCat === k ? " on" : ""}`);
       c.type = "button";
       c.setAttribute("aria-pressed", String(state.crewCat === k));
-      c.append(icon(ctx.catIcon(k === "all" ? "" : k)), label, el("small", "", String(n)));
+      c.append(icon(ctx.catIcon(k === "all" ? "" : k)), k === "all" ? label : raw(el("span", "", label)), el("small", "", String(n)));
       c.addEventListener("click", () => { state.crewCat = k; state.selected = null; render(); });
       return c;
     };

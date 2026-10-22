@@ -97,6 +97,9 @@ fs.mkdirSync(output,{recursive:true});
     // #194: crew names, categories and intros are the user's words, even when one matches a dictionary entry.
     await page.locator('[data-menu="agent"]').click();
     await page.locator("#area-tabs .area-tab").nth(2).click();await page.locator(".wf-card").first().waitFor();
+    const flowCats=new Set(data["v1/crew.json"].items.map(r=>r.crew.category));
+    const chipCats=await page.locator(".auto-cat-chip span").allInnerTexts();
+    assert.ok(chipCats.length>0&&chipCats.every(c=>flowCats.has(c)),"workflow category chips translated: "+chipCats);
     await page.locator("#area-tabs .area-tab").nth(0).click();await page.locator(".ex-card:not(.ex-card-new)").first().waitFor();
     const agentsFixture=data["v1/crew.json"].items.filter(r=>r.crew.type==="agent");
     assert.deepEqual(await page.locator(".ex-card:not(.ex-card-new) strong").allInnerTexts(),agentsFixture.map(r=>r.crew.name));
