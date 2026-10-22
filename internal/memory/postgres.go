@@ -156,9 +156,9 @@ func pgErr(err error) error {
 		if e.Code == "AK403" { // classifier_write_guard
 			return ErrDenied
 		}
-		// 42501 also covers a missing GRANT, an outage that must stay 503; only an RLS refusal is a denial.
+		// 42501 also covers a missing GRANT; only an RLS refusal is marked, and it stays unavailable.
 		if e.Code == "42501" && strings.Contains(e.Message, "row-level security") {
-			return ErrDenied
+			return rlsRefusal{}
 		}
 		if e.Code == "40001" || e.Code == "40P01" {
 			return transientTransactionError{}

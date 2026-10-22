@@ -224,7 +224,8 @@ func (s *Service) authorizeAt(ctx context.Context, token, action string, scope S
 // Row-level security refuses a denial row in a scope the caller cannot write;
 // that refusal confirms the denial, so only other storage failures become 503.
 func denialAuditFailed(err error) bool {
-	return err != nil && !errors.Is(err, ErrDenied)
+	var refused rlsRefusal
+	return err != nil && !errors.As(err, &refused)
 }
 
 func sameRequestActor(ctx context.Context, d Decision) bool {
