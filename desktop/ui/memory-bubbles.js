@@ -243,7 +243,7 @@ window.ArkismMemoryBubbles = (() => {
       ctx.globalAlpha = 1;
       drawNames(foci, near, bg, text, muted, font);
       labels.style.visibility = sel ? "hidden" : ""; // group names would float over the fan; still laid out, so layout() can measure them
-      for (const g of groups) { if (!g.rr) continue; const [x, y] = scr(g.rx, g.ry - g.rr); g.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`; }
+      for (const g of groups) { if (!g.rr) continue; const [x, y] = scr(g.cx, g.ry - g.rr); g.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`; } // x at the reserved centre: wide() spaced labels around g.cx, so a lopsided cloud cannot push two together
       placeCards();
       const id = [hover, kb].find((x) => x && x !== sel), p = id && byId.get(id), t = p && tip(id); // the selection has its card
       if (p && t) { const [sx, y] = scr(p.x, p.y - p.r); tipT.textContent = t.text; tipM.textContent = t.meta; const hw = tipEl.offsetWidth / 2 + 6, x = Math.max(hw, Math.min(W - hw, sx)); tipEl.style.transform = `translate(${x}px,${y - 8}px) translate(-50%,-100%)`; tipEl.classList.add("on"); } else tipEl.classList.remove("on");
