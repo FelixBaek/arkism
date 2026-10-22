@@ -257,6 +257,48 @@ func listSourceIDs(ctx context.Context, tx Tx, scope Scope, rows []Record) ([]st
 	return ids, nil
 }
 
+// listLockSources share-locks every listed memory's sources, then checks their spans with one
+// metadata read per 64 sources instead of one per memory (#174). Locking first means the spans
+// are checked against the same source versions the lock holds. Rows are unchanged since the
+// caller compared them.
+func listLockSources(ctx context.Context, tx Tx, locker readLocker, scope Scope, rows []Record) error {
+	refs := []SourceRef{}
+	seen := map[string]bool{}
+	ids := []string{}
+	for _, r := range rows {
+		if len(r.Sources) == 0 || len(r.Sources) > 64 {
+			return ErrInvalid
+		}
+		refs = append(refs, r.Sources...)
+		for _, ref := range r.Sources {
+			if ref.SourceID != "" && !seen[ref.SourceID] {
+				seen[ref.SourceID] = true
+				ids = append(ids, ref.SourceID)
+			}
+		}
+	}
+	if len(refs) == 0 {
+		return nil
+	}
+	slices.Sort(ids)
+	locked := map[string]Record{}
+	for start := 0; start < len(ids); start += 500 {
+		part, e := locker.LockForRead(ctx, scope, "sources", ids[start:min(start+500, len(ids))])
+		if e != nil {
+			return e
+		}
+		maps.Copy(locked, part)
+	}
+	for _, id := range ids {
+		r, ok := locked[id]
+		if !ok || r.PrivacyQuarantined || r.Status != "active" || (r.ExpiresAt != nil && !r.ExpiresAt.After(time.Now())) {
+			return ErrConflict
+		}
+	}
+	_, e := sourceMetadataBatch(ctx, tx, scope, refs)
+	return e
+}
+
 type readLocker interface {
 	LockForRead(context.Context, Scope, string, []string) (map[string]Record, error)
 }
@@ -278,25 +320,8 @@ func listReadLocked(ctx context.Context, tx Tx, locker readLocker, in MemoryList
 			return ErrConflict
 		}
 	}
-	sourceIDs, e := listSourceIDs(ctx, tx, in.Scope, rows)
-	if e != nil {
+	if e = listLockSources(ctx, tx, locker, in.Scope, rows); e != nil {
 		return e
-	}
-	if len(sourceIDs) > 0 {
-		locked := map[string]Record{}
-		for start := 0; start < len(sourceIDs); start += 500 {
-			part, e := locker.LockForRead(ctx, in.Scope, "sources", sourceIDs[start:min(start+500, len(sourceIDs))])
-			if e != nil {
-				return e
-			}
-			maps.Copy(locked, part)
-		}
-		for _, id := range sourceIDs {
-			r, ok := locked[id]
-			if !ok || r.PrivacyQuarantined || r.Status != "active" || (r.ExpiresAt != nil && !r.ExpiresAt.After(time.Now())) {
-				return ErrConflict
-			}
-		}
 	}
 	return audit(ctx, tx, in.Scope, actor, "read:memory_list", "")
 }
