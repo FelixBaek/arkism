@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -1384,5 +1385,25 @@ func TestGLMWithoutWrapperRunsClaudeCodeAgainstZAI(t *testing.T) {
 	patch(t, &host.APIMode, map[string]bool{"glm": true})
 	if env, _ := childEnv(r, nil, "glm-5.3", nil); env["ZAI_API_KEY"] != "zai-old-key" || env["ZAI_BASE_URL"] != "" {
 		t.Fatal(env["ZAI_API_KEY"], env["ZAI_BASE_URL"])
+	}
+}
+
+func TestProviderDoRefusesHTTPSDowngrade(t *testing.T) {
+	leaked := 0
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			leaked++
+		}
+	}))
+	defer plain.Close()
+	tls := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer tls.Close()
+	client := tls.Client()
+	client.CheckRedirect = providerClient.CheckRedirect
+	patch(t, &providerClient, client)
+	if _, err := providerDo(http.MethodGet, tls.URL+"/models", nil, map[string]string{"Authorization": bearer + "zai-key"}, time.Second, 1<<10); err == nil || leaked != 0 {
+		t.Fatal(err, leaked)
 	}
 }

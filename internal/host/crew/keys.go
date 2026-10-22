@@ -359,7 +359,16 @@ func redact(text string, env map[string]string) string {
 // "키가 맞지 않아요"; provider calls name this runner instead. They honour the environment's proxy.
 const providerAgent = "Arkism-crew/1"
 
-var providerClient = &http.Client{}
+// providerClient follows redirects but never from https to plain http: Go keeps Authorization on a same-host hop.
+var providerClient = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	if via[0].URL.Scheme == "https" && req.URL.Scheme != "https" {
+		return errors.New("provider redirected to plain http")
+	}
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	return nil
+}}
 
 // providerDo sends one provider request; a non-2xx answer is an *host.HTTPError carrying up to 512 bytes of body.
 func providerDo(method, url string, body []byte, headers map[string]string, timeout time.Duration, limit int64) ([]byte, error) {
