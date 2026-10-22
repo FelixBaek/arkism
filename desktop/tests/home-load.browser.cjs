@@ -102,6 +102,7 @@ async function overview(page) {
     await page.waitForFunction(() => document.body.innerText.includes("기억 후보"));
     await page.waitForTimeout(500);
     assert.ok((await text(page)).includes("기억 후보 50개 이상 검토"), "unknown total reads as at least the loaded page");
+    assert.notEqual(await page.locator("#count-todo").innerText(), "0", "a row with an unknown count still counts in the sidebar");
     await overview(page);
     assert.ok((await page.locator(".ov-chip", { hasText: "세션 기록" }).innerText()).includes("—"), "session chip unknown");
     assert.deepEqual(errors, []);
