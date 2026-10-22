@@ -303,3 +303,10 @@ type transientTransactionError struct{}
 
 func (transientTransactionError) Error() string { return ErrUnavailable.Error() }
 func (transientTransactionError) Unwrap() error { return ErrUnavailable }
+
+// rlsRefusal marks a row FORCE RLS refused. Every caller still sees ErrUnavailable;
+// only the denial audit path reads it as confirming the denial.
+type rlsRefusal struct{}
+
+func (rlsRefusal) Error() string { return ErrUnavailable.Error() }
+func (rlsRefusal) Unwrap() error { return ErrUnavailable }

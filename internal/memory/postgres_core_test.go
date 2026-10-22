@@ -33,10 +33,11 @@ func TestPostgresMapsDuplicateAndSerializationErrors(t *testing.T) {
 	if !errors.Is(pgErr(&pgconn.PgError{Code: "40001"}), ErrUnavailable) {
 		t.Fatal("serialization failure must be retryable unavailable")
 	}
-	if !errors.Is(pgErr(&pgconn.PgError{Code: "42501", Message: `new row violates row-level security policy for table "memory_records"`}), ErrDenied) {
-		t.Fatal("RLS refusal must map to denied")
+	var refused rlsRefusal
+	if rls := pgErr(&pgconn.PgError{Code: "42501", Message: `new row violates row-level security policy for table "memory_records"`}); !errors.As(rls, &refused) || !errors.Is(rls, ErrUnavailable) {
+		t.Fatal("RLS refusal must stay unavailable and be marked")
 	}
-	if !errors.Is(pgErr(&pgconn.PgError{Code: "42501", Message: "permission denied for table memory_records"}), ErrUnavailable) {
+	if grant := pgErr(&pgconn.PgError{Code: "42501", Message: "permission denied for table memory_records"}); !errors.Is(grant, ErrUnavailable) || errors.As(grant, &refused) {
 		t.Fatal("missing grant must stay unavailable")
 	}
 }
