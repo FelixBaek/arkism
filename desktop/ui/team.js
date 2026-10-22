@@ -257,7 +257,7 @@ window.ArkismTeams = (ctx) => {
     const credit = coverCredit(cv); if (credit) c.append(credit);
     // hover plate: category + @handle slide up from the bottom edge
     const plate = el("span", "tm-card2-plate");
-    plate.append(el("span", "tm-card2-cat", x.category || ""), raw(el("b", "", x.handle ? `@${x.handle}` : "")));
+    plate.append(raw(el("span", "tm-card2-cat", x.category || "")), raw(el("b", "", x.handle ? `@${x.handle}` : "")));
     c.append(plate);
     return c;
   }
@@ -2009,8 +2009,10 @@ window.ArkismTeams = (ctx) => {
       const from = [...new Set(mine.map((m) => TRIGGERS[m.crew_meeting.trigger] || "직접"))];
       if (!from.length && channelsFor(t.id).length) from.push("디스코드");
       const last = mine[0];
-      const lastText = last ? `${ago(new Date(meetAt(last)))} · ${last.crew_meeting.title || last.crew_meeting.topic || ""}` : "—";
-      return urow([raw(el("span", "", `@${byId(t.id)?.crew?.handle || t.name}`)), cell(from.map(tr).join(" · ") || "—", "quiet"), cell(String(t.meetings), "mono"), cell(pct(t.concluded_rate), `mono${lowRate(t.concluded_rate)}`), cell((t.avg_rounds || 0).toFixed(1), "mono"), cell(usd(t.cost_usd ?? t.avg_cost_usd * t.meetings), "mono"), raw(cell(lastText, "quiet cu-clip"))], () => { go("meetings"); });
+      // the time is UI text and is translated; the meeting title is the user's and stays as written
+      const lastCell = cell(last ? ago(new Date(meetAt(last))) : "—", "quiet cu-clip");
+      if (last) lastCell.append(" · ", raw(el("span", "", last.crew_meeting.title || last.crew_meeting.topic || "")));
+      return urow([raw(el("span", "", `@${byId(t.id)?.crew?.handle || t.name}`)), cell(from.map(tr).join(" · ") || "—", "quiet"), cell(String(t.meetings), "mono"), cell(pct(t.concluded_rate), `mono${lowRate(t.concluded_rate)}`), cell((t.avg_rounds || 0).toFixed(1), "mono"), cell(usd(t.cost_usd ?? t.avg_cost_usd * t.meetings), "mono"), lastCell], () => { go("meetings"); });
     });
     return usageTable("팀", `${rows.length}개 · 회의 ${meetings}번 · 줄을 누르면 회의 기록으로 가요`, ["회의 기록 전체 보기 →", () => go("meetings")],
       ["이름", "부르는 곳", "회의", "결론 난 비율", "평균 라운드", "비용", "마지막 회의"], body, "이 기간에 회의한 팀이 없어요.", "cu-team");

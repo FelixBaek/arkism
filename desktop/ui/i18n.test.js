@@ -79,3 +79,7 @@ test("a one-letter unit stays with the last piece", () => {
   assert.equal(t("교훈 · 쓰임 3회"), "Lesson · Used 3 times");
   assert.equal(t("개인 · 교훈 · 쓰임 3회"), "Personal · Lesson · Used 3 times"); // not "{0}회" over the whole line
 });
+
+test("one API key is singular", () => {
+  assert.equal(translate("API 키"), "API key"); // #192: the key dialog labels a single key
+});

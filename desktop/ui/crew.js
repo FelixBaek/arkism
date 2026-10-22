@@ -447,7 +447,7 @@ export const createCrew = (ctx) => {
     badge.append(el("i"), el("span", "", when2));
     top.prepend(badge);
     c.title = [x.role, `$${x.handle}`].filter(Boolean).join(" · ");
-    c.append(top, el("strong", "crew-cover-title", x.name));
+    c.append(top, raw(el("strong", "crew-cover-title", x.name)));
     return c;
   }
   function newCard() {
@@ -559,9 +559,9 @@ export const createCrew = (ctx) => {
     const body = detailShell("선택한 워크플로우");
     body.classList.add("wf-detail");
     const head = el("div", "wf-d-title");
-    head.append(el("h2", "", x.name), el("p", "", x.role || ""));
+    head.append(raw(el("h2", "", x.name)), raw(el("p", "", x.role || "")));
     const chips = el("div", "wf-chips");
-    if (x.category) { const c = el("span", "wf-chip"); c.append(icon(ctx.catIcon(x.category)), x.category); chips.append(c); }
+    if (x.category) { const c = el("span", "wf-chip"); c.append(icon(ctx.catIcon(x.category)), raw(el("span", "", x.category))); chips.append(c); }
     const handle = el("span", "wf-chip mono", `$${x.handle}`);
     chips.append(handle, copyButton(`$${x.handle}`));
     head.append(chips);
@@ -726,11 +726,11 @@ export const createCrew = (ctx) => {
         mini.append(img);
       } else mini.append(el("span", "wf-preview-empty", "배경 없음"));
       const top = el("div", "crew-cover-top");
-      if (x.category) { const c = el("span", "wf-chip"); c.append(icon(ctx.catIcon(x.category)), x.category); top.append(c); }
+      if (x.category) { const c = el("span", "wf-chip"); c.append(icon(ctx.catIcon(x.category)), raw(el("span", "", x.category))); top.append(c); }
       const foot = el("div", "crew-cover-foot");
       foot.append(el("small", "wf-card-meta", x.meta || ""));
-      mini.append(top, el("strong", "crew-cover-title", x.name || "이름"));
-      if (x.role) mini.append(el("p", "wf-card-role", x.role));
+      mini.append(top, x.name ? raw(el("strong", "crew-cover-title", x.name)) : el("strong", "crew-cover-title", "이름"));
+      if (x.role) mini.append(raw(el("p", "wf-card-role", x.role)));
       mini.append(foot);
       preview.append(mini);
       const credit = cover ? coverCredit({ cover }) : null;
@@ -1167,7 +1167,7 @@ export const createCrew = (ctx) => {
     if (!line) return;
     back.classList.add("page-back", "g-head-back");
     line.prepend(back);
-    if (!crewRunView.rerunOf()) $("#title").replaceChildren(el("span", "", crewEditor.ed.rec.crew.name), el("small", "g-title-sub", crewEditor.ed.run ? "실행" : "워크플로우 편집"));
+    if (!crewRunView.rerunOf()) $("#title").replaceChildren(raw(el("span", "", crewEditor.ed.rec.crew.name)), el("small", "g-title-sub", crewEditor.ed.run ? "실행" : "워크플로우 편집"));
   }
   // Space held = hand tool on the graph, as in Figma.
   let spaceDown = false;
