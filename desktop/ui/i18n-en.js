@@ -1507,6 +1507,7 @@ window.ArkismI18nEN = {
   "연결하지 못했어요": "Couldn't connect",
   "키나 주소를 확인해 주세요.": "Check the key or URL.",
   "키를 넣어 주세요.": "Enter a key.",
+  "Z.ai 주소는 https://로 시작해야 해요.": "A Z.ai address must start with https://.",
   "직접 추가한 제공자는 주소가 필요해요.": "Custom providers need a URL.",
   "서버에 저장하도록 보냈어요.": "Sent to the server to save.",
   "아직 저장되지 않았어요. 서버 실행기를 확인해 주세요.": "Not saved yet. Check the server runner.",

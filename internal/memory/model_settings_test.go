@@ -595,6 +595,7 @@ func TestModelSettingsRejectsBadInput(t *testing.T) {
 		{Scope: scopeA, Provider: "openai", Name: "x", Key: "short"},
 		{Scope: scopeA, Provider: "openai", Name: "x", Key: "has space 0123456789"},
 		{Scope: scopeA, Provider: "openai", Name: "x", Key: testProviderKey, BaseURL: "ftp://x"},
+		{Scope: scopeA, Provider: "zai", Name: "x", Key: testProviderKey, BaseURL: "http://api.z.ai/api/anthropic"},
 	} {
 		if _, err := f.svc.AddProviderKey(testCtx, f.human, in); !errors.Is(err, ErrInvalid) {
 			t.Fatal("bad key input accepted", i, err)

@@ -551,6 +551,8 @@ window.ArkismModels = (ctx) => {
       scope: state.scope, provider: p.id, name: name.value.trim() || (testOnly ? "" : `${p.name} 키`), key: key.value.trim(),
       base_url: base.value.trim(), ...(budget.value !== "" ? { monthly_budget_usd: Number(budget.value) } : {}), ...(testOnly ? { test_only: true } : {})
     });
+    // Z.ai keys go to its https address only; say so here instead of after the dialog closes (#171)
+    const baseError = () => p.id === "zai" && base.value.trim() && !base.value.trim().startsWith("https://") ? "Z.ai 주소는 https://로 시작해야 해요." : "";
     function say(ok, title, text) {
       result.hidden = false;
       result.className = `key-result ${ok ? "ok" : "bad"}`;
@@ -573,6 +575,7 @@ window.ArkismModels = (ctx) => {
     test.addEventListener("click", async () => {
       err.textContent = "";
       if (!key.value.trim()) { err.textContent = "키를 먼저 넣어 주세요."; return; }
+      if (baseError()) { err.textContent = baseError(); return; }
       test.disabled = true;
       say(true, "확인하는 중…", "서버가 공급자에 물어보고 있어요.");
       try {
@@ -596,6 +599,7 @@ window.ArkismModels = (ctx) => {
       err.textContent = "";
       if (!key.value.trim()) { err.textContent = "키를 넣어 주세요."; return; }
       if (p.custom && !base.value.trim()) { err.textContent = "직접 추가한 제공자는 주소가 필요해요."; return; }
+      if (baseError()) { err.textContent = baseError(); return; }
       ok.disabled = true;
       try {
         const r = await request("/v1/providers/keys", { method: "POST", body: JSON.stringify(payload(false)) });
