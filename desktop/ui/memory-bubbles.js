@@ -38,7 +38,7 @@ window.ArkismMemoryBubbles = (() => {
       const m = new Map();
       for (const p of items) { const g = groupOf(mode, p); let o = m.get(g.key); if (!o) m.set(g.key, o = { key: g.key, name: g.name, ord: g.ord ?? 0, color: g.color || p.color, count: 0, el: null, cx: 0, cy: 0, top: null, rx: 0, ry: 0, rr: 0 }); o.count++; p.g = o; }
       groups = [...m.values()].sort((a, b) => a.ord - b.ord || b.count - a.count);
-      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", g.count.toLocaleString("en-US"))); return g.el; }));
+      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); g.el.title = g.name; const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", g.count.toLocaleString("en-US"))); return g.el; }));
       pairUp(); layout();
     }
     // group-to-group line counts for the many-dots overview, built when the groups or lines change rather than on every draw
@@ -49,6 +49,7 @@ window.ArkismMemoryBubbles = (() => {
     function layout() {
       if (!W) return;
       const aw = W - PAD.l - PAD.r, ah = H - PAD.t - PAD.b;
+      labels.style.setProperty("--mm-label-max", `${Math.max(0, aw - 12)}px`); // a long project id ellipsizes inside the canvas; wide() adds the 12px back
       // bubble size follows the canvas; shrink when many memories would not fit the free area (area share ~ 40%)
       const base = Math.max(0.8, Math.min(1.6, Math.min(W, H) / 520));
       const dot = (p) => Math.min(9, 2 + Math.sqrt(p.deg || 0) * 1.6), gap = 7; // a dot (bigger with more relations) plus its breathing room
