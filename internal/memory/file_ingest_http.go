@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"mime"
+	"mime/multipart"
 	"net/http"
 )
 
@@ -49,29 +50,9 @@ func (s *Service) ingestFileHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, ErrInvalid)
 		return
 	}
-	part, err := m.NextRawPart()
-	if err != nil || part.FormName() != "metadata" || part.Header.Get("Content-Transfer-Encoding") != "" {
-		respond(w, nil, fileReadError(err))
-		return
-	}
-	metadata, err := filePartBytes(part, maxFileMetadataBytes)
+	in, err := fileIngestMetadata(m)
 	if err != nil {
 		respond(w, nil, err)
-		return
-	}
-	var in FileIngestInput
-	d := json.NewDecoder(bytes.NewReader(metadata))
-	d.DisallowUnknownFields()
-	if d.Decode(&in) != nil || d.Decode(new(any)) != io.EOF {
-		respond(w, nil, ErrInvalid)
-		return
-	}
-	if !validScope(in.Source.Scope) {
-		respond(w, nil, ErrInvalid)
-		return
-	}
-	if containsSecret(structuredText(in.Source.Scope)) {
-		respond(w, nil, ErrSecretDetected)
 		return
 	}
 	// Refuse unauthorized scopes before reading file bytes. No uninspected body
@@ -85,25 +66,9 @@ func (s *Service) ingestFileHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, nil, ErrDenied)
 		return
 	}
-	part, err = m.NextRawPart()
-	if err != nil || part.FormName() != "file" || part.Header.Get("Content-Transfer-Encoding") != "" {
-		respond(w, nil, fileReadError(err))
-		return
-	}
-	if value := part.Header.Get("Content-Type"); value != "" {
-		mediaType, params, err := mime.ParseMediaType(value)
-		if err != nil || mediaType != in.Artifact.MIME || len(params) > 1 || len(params) == 1 && params["charset"] != "utf-8" {
-			respond(w, nil, ErrInvalid)
-			return
-		}
-	}
-	content, err := filePartBytes(part, maxTextArtifactBytes)
+	content, err := fileIngestContent(m, in.Artifact.MIME)
 	if err != nil {
 		respond(w, nil, err)
-		return
-	}
-	if _, err = m.NextRawPart(); err != io.EOF {
-		respond(w, nil, fileReadError(err))
 		return
 	}
 	// Consume the bounded epilogue too: chunked trailing bytes still count
@@ -118,4 +83,51 @@ func (s *Service) ingestFileHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, out)
+}
+
+// fileIngestMetadata reads and validates the leading metadata part.
+func fileIngestMetadata(m *multipart.Reader) (FileIngestInput, error) {
+	part, err := m.NextRawPart()
+	if err != nil || part.FormName() != "metadata" || part.Header.Get("Content-Transfer-Encoding") != "" {
+		return FileIngestInput{}, fileReadError(err)
+	}
+	metadata, err := filePartBytes(part, maxFileMetadataBytes)
+	if err != nil {
+		return FileIngestInput{}, err
+	}
+	var in FileIngestInput
+	d := json.NewDecoder(bytes.NewReader(metadata))
+	d.DisallowUnknownFields()
+	if d.Decode(&in) != nil || d.Decode(new(any)) != io.EOF {
+		return FileIngestInput{}, ErrInvalid
+	}
+	if !validScope(in.Source.Scope) {
+		return FileIngestInput{}, ErrInvalid
+	}
+	if containsSecret(structuredText(in.Source.Scope)) {
+		return FileIngestInput{}, ErrSecretDetected
+	}
+	return in, nil
+}
+
+// fileIngestContent reads the file part and requires it to be the last part.
+func fileIngestContent(m *multipart.Reader, mimeType string) ([]byte, error) {
+	part, err := m.NextRawPart()
+	if err != nil || part.FormName() != "file" || part.Header.Get("Content-Transfer-Encoding") != "" {
+		return nil, fileReadError(err)
+	}
+	if value := part.Header.Get("Content-Type"); value != "" {
+		mediaType, params, err := mime.ParseMediaType(value)
+		if err != nil || mediaType != mimeType || len(params) > 1 || len(params) == 1 && params["charset"] != "utf-8" {
+			return nil, ErrInvalid
+		}
+	}
+	content, err := filePartBytes(part, maxTextArtifactBytes)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = m.NextRawPart(); err != io.EOF {
+		return nil, fileReadError(err)
+	}
+	return content, nil
 }

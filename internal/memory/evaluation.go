@@ -99,7 +99,7 @@ func checkEvaluationEvidence(ctx context.Context, tx Tx, r Record) error {
 }
 
 func (s *Service) SummarizeEvaluations(ctx context.Context, token string, in EvaluationSummaryInput) (EvaluationSummary, error) {
-	if !validScope(in.Scope) || !knownCollection(in.Target.Collection) || in.Target.Collection == "jobs" || in.Target.Collection == "audit_events" || !validRunLabel(in.Target.ID, 256) || in.Target.Revision < 1 {
+	if !validEvaluationSummaryInput(in) {
 		return EvaluationSummary{}, ErrInvalid
 	}
 	if s.Repo == nil {
@@ -166,48 +166,60 @@ func (s *Service) SummarizeEvaluations(ctx context.Context, token string, in Eva
 		if e != nil {
 			return e
 		}
-		for _, r := range current {
-			if !live(r) || r.Scope != in.Scope || r.Target == nil || *r.Target != in.Target {
-				return ErrConflict
-			}
-			if e = checkEvaluationEvidence(ctx, tx, r); e != nil {
-				return e
-			}
-			if r.Evaluation == nil {
-				out.LegacyCount++
-				continue
-			}
-			x := r.Evaluation
-			if !validEvaluation(x) || !evaluationRole(x.EvalType, r.CreatedByType) || (x.EvalType == "model_self") != (r.CreatedBy == target.CreatedBy) {
-				return ErrUnavailable
-			}
-			out.Groups[x.EvalType] = addEvaluation(out.Groups[x.EvalType], x)
+		if e = groupEvaluations(ctx, tx, in, target, current, &out); e != nil {
+			return e
 		}
-		for _, kind := range []string{"user_rating", "automated_check"} {
-			if out.Groups[kind].Count > 0 {
-				out.PreferredTypes = append(out.PreferredTypes, kind)
-			}
-		}
-		if len(out.PreferredTypes) == 0 && out.Groups["model_self"].Count > 0 {
-			out.PreferredTypes = append(out.PreferredTypes, "model_self")
-		}
-		for _, r := range current {
-			if r.Evaluation != nil {
-				for _, kind := range out.PreferredTypes {
-					if r.Evaluation.EvalType == kind {
-						out.Effective = addEvaluation(out.Effective, r.Evaluation)
-					}
-				}
-			}
-		}
-		if out.Effective.Passed+out.Effective.Failed > 0 {
-			passed := out.Effective.Failed == 0
-			out.Passed = &passed
-		}
+		preferEvaluations(current, &out)
 		return audit(ctx, tx, in.Scope, actor.PrincipalID, "read:evaluation_summary", ContentHash(structuredText(in.Target)))
 	})
 	if e != nil {
 		return EvaluationSummary{}, e
 	}
 	return out, nil
+}
+func validEvaluationSummaryInput(in EvaluationSummaryInput) bool {
+	return validScope(in.Scope) && knownCollection(in.Target.Collection) && in.Target.Collection != "jobs" && in.Target.Collection != "audit_events" && validRunLabel(in.Target.ID, 256) && in.Target.Revision >= 1
+}
+func groupEvaluations(ctx context.Context, tx Tx, in EvaluationSummaryInput, target Record, current []Record, out *EvaluationSummary) error {
+	for _, r := range current {
+		if !live(r) || r.Scope != in.Scope || r.Target == nil || *r.Target != in.Target {
+			return ErrConflict
+		}
+		if e := checkEvaluationEvidence(ctx, tx, r); e != nil {
+			return e
+		}
+		if r.Evaluation == nil {
+			out.LegacyCount++
+			continue
+		}
+		x := r.Evaluation
+		if !validEvaluation(x) || !evaluationRole(x.EvalType, r.CreatedByType) || (x.EvalType == "model_self") != (r.CreatedBy == target.CreatedBy) {
+			return ErrUnavailable
+		}
+		out.Groups[x.EvalType] = addEvaluation(out.Groups[x.EvalType], x)
+	}
+	return nil
+}
+func preferEvaluations(current []Record, out *EvaluationSummary) {
+	for _, kind := range []string{"user_rating", "automated_check"} {
+		if out.Groups[kind].Count > 0 {
+			out.PreferredTypes = append(out.PreferredTypes, kind)
+		}
+	}
+	if len(out.PreferredTypes) == 0 && out.Groups["model_self"].Count > 0 {
+		out.PreferredTypes = append(out.PreferredTypes, "model_self")
+	}
+	for _, r := range current {
+		if r.Evaluation != nil {
+			for _, kind := range out.PreferredTypes {
+				if r.Evaluation.EvalType == kind {
+					out.Effective = addEvaluation(out.Effective, r.Evaluation)
+				}
+			}
+		}
+	}
+	if out.Effective.Passed+out.Effective.Failed > 0 {
+		passed := out.Effective.Failed == 0
+		out.Passed = &passed
+	}
 }

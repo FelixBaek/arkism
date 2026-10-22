@@ -90,18 +90,7 @@ func buildDeletionLedger(ctx context.Context, tx Tx, scope Scope, version int, c
 	seen := map[DeletionTarget]bool{}
 	// As in deletion preview, row policies run within this bounded snapshot.
 	for _, r := range rows {
-		if r.Scope != scope || !slices.Contains(deletionLedgerKinds, r.Kind) || r.Target == nil || r.Revision < 1 || !validRunLabel(r.Target.ID, 256) {
-			return DeletionLedger{}, ErrUnavailable
-		}
-		if r.Kind == "source_deletion" {
-			if r.Target.Collection != "sources" || r.ID != sourceDeletionID(scope, r.Target.ID) {
-				return DeletionLedger{}, ErrUnavailable
-			}
-		} else if r.Kind == workDeletionKind {
-			if !validWorkDeletionReceipt(r, scope) {
-				return DeletionLedger{}, ErrUnavailable
-			}
-		} else if !validSourceErasureJob(r) || !slices.Contains([]string{JobStatusPending, JobStatusRunning, JobStatusRetry, JobStatusDone, JobStatusFailed}, r.Status) {
+		if !validDeletionLedgerRow(r, scope) {
 			return DeletionLedger{}, ErrUnavailable
 		}
 		if e = check("read:deletion", r.Target.ID); e != nil {
@@ -130,4 +119,16 @@ func buildDeletionLedger(ctx context.Context, tx Tx, scope Scope, version int, c
 		out.PrivacyRequests = &requests
 	}
 	return out, nil
+}
+func validDeletionLedgerRow(r Record, scope Scope) bool {
+	if r.Scope != scope || !slices.Contains(deletionLedgerKinds, r.Kind) || r.Target == nil || r.Revision < 1 || !validRunLabel(r.Target.ID, 256) {
+		return false
+	}
+	switch r.Kind {
+	case "source_deletion":
+		return r.Target.Collection == "sources" && r.ID == sourceDeletionID(scope, r.Target.ID)
+	case workDeletionKind:
+		return validWorkDeletionReceipt(r, scope)
+	}
+	return validSourceErasureJob(r) && slices.Contains([]string{JobStatusPending, JobStatusRunning, JobStatusRetry, JobStatusDone, JobStatusFailed}, r.Status)
 }

@@ -234,8 +234,7 @@ func validDiscordSettings(s DiscordSettings) bool {
 }
 
 func validDiscordReport(in DiscordReport) bool {
-	if !validScope(in.Scope) || !validRunLabel(in.BotID, 256) || !slices.Contains(discordStates, in.State) || !discordID(in.ApplicationID) ||
-		!discordID(in.BotUserID) || len(in.TokenLast4) > 4 || len(in.Guilds) > 50 || len(in.Channels) > 500 || len(in.Missing) > 50 || len(in.Posted) > 200 {
+	if !validDiscordReportFields(in) {
 		return false
 	}
 	for _, g := range in.Guilds {
@@ -264,6 +263,10 @@ func validDiscordReport(in DiscordReport) bool {
 		}
 	}
 	return true
+}
+func validDiscordReportFields(in DiscordReport) bool {
+	return validScope(in.Scope) && validRunLabel(in.BotID, 256) && slices.Contains(discordStates, in.State) && discordID(in.ApplicationID) &&
+		discordID(in.BotUserID) && len(in.TokenLast4) <= 4 && len(in.Guilds) <= 50 && len(in.Channels) <= 500 && len(in.Missing) <= 50 && len(in.Posted) <= 200
 }
 
 func (s *Service) humanDiscord(ctx context.Context, token string, scope Scope, id string) (Decision, error) {
@@ -562,20 +565,12 @@ func (s *Service) discordStats(ctx context.Context, scope Scope) (DiscordStats, 
 	if err != nil {
 		return out, err
 	}
-	for _, r := range meetings {
-		if m := r.CrewMeeting; m != nil && m.Discord != nil && m.Discord.ThreadID != "" && !terminalMeeting(m.Status) {
-			out.OpenThreads++
-		}
-	}
+	out.OpenThreads += openDiscordMeetingThreads(meetings)
 	runs, err := s.Repo.ListRecords(ctx, scope, colCrewRuns, 1000)
 	if err != nil {
 		return out, err
 	}
-	for _, r := range runs {
-		if run := r.CrewRun; run != nil && run.Trigger == "discord" && !terminalCrewRun(run.Status) {
-			out.OpenThreads++
-		}
-	}
+	out.OpenThreads += openDiscordRunThreads(runs)
 	calls, err := s.Repo.ListRecords(ctx, scope, colRoutingCalls, routingCallsRead)
 	if err != nil {
 		return out, err
@@ -593,25 +588,11 @@ func (s *Service) discordStats(ctx context.Context, scope Scope) (DiscordStats, 
 		if !r.CreatedAt.Before(day) {
 			out.TodayUSD += cost
 		}
-		kind, id := "workflow", c.Origin.WorkflowID
-		switch {
-		case c.Origin.TeamID != "":
-			kind, id = "meeting", c.Origin.TeamID
-		case c.Origin.AgentID != "" && c.Origin.Kind != "meeting":
-			kind, id = "agent", c.Origin.AgentID
-		}
+		kind, id := discordCallTarget(*c.Origin)
 		if id == "" {
 			continue
 		}
-		t := targets[kind+":"+id]
-		if t == nil {
-			name := id
-			if it, ok := crew[id]; ok {
-				name = it.Crew.Name
-			}
-			t = &DiscordTarget{Kind: kind, ID: id, Name: name}
-			targets[kind+":"+id] = t
-		}
+		t := discordTargetFor(targets, crew, kind, id)
 		t.Calls++
 		t.Cost = roundUSD(t.Cost + cost)
 	}
@@ -621,6 +602,46 @@ func (s *Service) discordStats(ctx context.Context, scope Scope) (DiscordStats, 
 	slices.SortFunc(out.ByTarget, func(a, b DiscordTarget) int { return b.Calls - a.Calls })
 	out.TodayUSD = roundUSD(out.TodayUSD)
 	return out, nil
+}
+func openDiscordMeetingThreads(meetings []Record) int {
+	n := 0
+	for _, r := range meetings {
+		if m := r.CrewMeeting; m != nil && m.Discord != nil && m.Discord.ThreadID != "" && !terminalMeeting(m.Status) {
+			n++
+		}
+	}
+	return n
+}
+func openDiscordRunThreads(runs []Record) int {
+	n := 0
+	for _, r := range runs {
+		if run := r.CrewRun; run != nil && run.Trigger == "discord" && !terminalCrewRun(run.Status) {
+			n++
+		}
+	}
+	return n
+}
+func discordCallTarget(o RoutingOrigin) (string, string) {
+	kind, id := "workflow", o.WorkflowID
+	switch {
+	case o.TeamID != "":
+		kind, id = "meeting", o.TeamID
+	case o.AgentID != "" && o.Kind != "meeting":
+		kind, id = "agent", o.AgentID
+	}
+	return kind, id
+}
+func discordTargetFor(targets map[string]*DiscordTarget, crew map[string]Record, kind, id string) *DiscordTarget {
+	t := targets[kind+":"+id]
+	if t == nil {
+		name := id
+		if it, ok := crew[id]; ok {
+			name = it.Crew.Name
+		}
+		t = &DiscordTarget{Kind: kind, ID: id, Name: name}
+		targets[kind+":"+id] = t
+	}
+	return t
 }
 
 // DiscordHandoff gives the host every live bot, each token once, and the settings.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -44,18 +45,18 @@ func (s *Service) authorizeHandoffContent(ctx context.Context, token string, in 
 }
 func (s *Service) AuthorizeHandoffTransfer(ctx context.Context, token string, in HandoffTransferInput) (HandoffTransferOutput, error) {
 	fail := HandoffTransferOutput{}
-	if !validScope(in.Scope) || in.Work.Collection != colWorkCheckpoints || in.Work.Revision < 1 || !workCheckpointIDPattern.MatchString(in.Work.ID) || len(in.Skills) > 8 || (in.Destination != "external:openai" && in.Destination != "external:anthropic") || len(in.Content) > 100000 {
+	if !validHandoffTransferInput(in) {
 		return fail, ErrInvalid
 	}
-	var prompt map[string]string
-	if json.Unmarshal([]byte(in.Content), &prompt) != nil || len(prompt) != 2 || strings.TrimSpace(prompt["task"]) == "" || strings.TrimSpace(prompt["instructions"]) == "" {
+	prompt, ok := handoffTransferPrompt(in.Content)
+	if !ok {
 		return fail, ErrInvalid
 	}
 	actor, err := s.authorizeHandoffContent(ctx, token, in, "", "private", in.Content)
 	if err != nil {
 		return fail, err
 	}
-	if actor.Role != roleAgent && actor.Role != roleHuman && actor.Role != roleService {
+	if !slices.Contains([]string{roleAgent, roleHuman, roleService}, actor.Role) {
 		return fail, ErrDenied
 	}
 	ctx = bindRequestActor(ctx, actor)
@@ -97,31 +98,11 @@ func (s *Service) AuthorizeHandoffTransfer(ctx context.Context, token string, in
 	if err = addArchives(work.ArchiveMessages); err != nil {
 		return fail, err
 	}
-	resolved := []ResolvedSkill{}
-	seenSkills := map[string]bool{}
-	for _, skill := range in.Skills {
-		if !validRunLabel(skill.SkillID, 256) || strings.Contains(skill.SkillID, "@") || !validRunLabel(skill.VersionID, 256) || !sourceHashPattern.MatchString(skill.ContentHash) || seenSkills[skill.SkillID] {
-			return fail, ErrInvalid
-		}
-		seenSkills[skill.SkillID] = true
-		page, e := s.ResolveSkills(ctx, token, SkillResolveInput{Scope: in.Scope, Refs: []string{skill.SkillID + "@latest-approved"}})
-		if e != nil {
-			return fail, e
-		}
-		if len(page.Items) != 1 {
-			return fail, ErrConflict
-		}
-		item := page.Items[0]
-		if item.Error != "" || !item.LatestApproved || item.SkillID != skill.SkillID || item.VersionID != skill.VersionID || item.ContentHash != skill.ContentHash || !strings.Contains(prompt["instructions"], item.Instructions) {
-			return fail, ErrConflict
-		}
-		version, e := s.Get(ctx, token, colSkillVersions, in.Scope, item.VersionID)
-		if e != nil {
-			return fail, e
-		}
-		evidence = append(evidence, Ref{Collection: colSkillVersions, ID: version.ID, Revision: version.Revision})
-		resolved = append(resolved, item)
+	resolved, skillRefs, err := s.resolveHandoffTransferSkills(ctx, token, in, prompt["instructions"])
+	if err != nil {
+		return fail, err
 	}
+	evidence = append(evidence, skillRefs...)
 	seen := map[Ref]bool{}
 	checked := []Ref{}
 	for at := 0; at < len(evidence); at++ {
@@ -133,25 +114,11 @@ func (s *Service) AuthorizeHandoffTransfer(ctx context.Context, token string, in
 			continue
 		}
 		seen[ref] = true
-		r, e := s.Get(ctx, token, ref.Collection, in.Scope, ref.ID)
+		parents, e := s.handoffTransferEvidenceParents(ctx, token, in, ref, addArchives)
 		if e != nil {
 			return fail, e
 		}
-		if r.Revision != ref.Revision || !live(r) || r.ContentErased {
-			return fail, ErrConflict
-		}
-		if _, e = s.authorizeHandoffContent(ctx, token, in, r.ID, r.Sensitivity, recordContent(r)); e != nil {
-			return fail, e
-		}
-		if e = addArchives(r.ArchiveMessages); e != nil {
-			return fail, e
-		}
-		for _, source := range r.Sources {
-			parent, e := s.Get(ctx, token, "sources", in.Scope, source.SourceID)
-			if e != nil {
-				return fail, e
-			}
-			next := Ref{Collection: "sources", ID: parent.ID, Revision: parent.Revision}
+		for _, next := range parents {
 			if !seen[next] {
 				evidence = append(evidence, next)
 			}
@@ -161,10 +128,8 @@ func (s *Service) AuthorizeHandoffTransfer(ctx context.Context, token string, in
 			return fail, ErrInvalid
 		}
 	}
-	for _, header := range headers {
-		if header.Sensitivity == "restricted" {
-			return fail, ErrDenied
-		}
+	if slices.ContainsFunc(headers, func(header Record) bool { return header.Sensitivity == "restricted" }) {
+		return fail, ErrDenied
 	}
 	// Every policy call is above this transaction, including with a one-connection
 	// authorizer pool. Fence the same revisions and archive retention afterward.
@@ -200,6 +165,75 @@ func (s *Service) AuthorizeHandoffTransfer(ctx context.Context, token string, in
 		return fail, err
 	}
 	return HandoffTransferOutput{Authorized: true, ContentHash: ContentHash(in.Content), SourceRefs: checked, ArchiveMessages: archiveRefs}, nil
+}
+func validHandoffTransferInput(in HandoffTransferInput) bool {
+	return validScope(in.Scope) && in.Work.Collection == colWorkCheckpoints && in.Work.Revision >= 1 && workCheckpointIDPattern.MatchString(in.Work.ID) && len(in.Skills) <= 8 && (in.Destination == "external:openai" || in.Destination == "external:anthropic") && len(in.Content) <= 100000
+}
+func handoffTransferPrompt(content string) (map[string]string, bool) {
+	var prompt map[string]string
+	if json.Unmarshal([]byte(content), &prompt) != nil || len(prompt) != 2 || strings.TrimSpace(prompt["task"]) == "" || strings.TrimSpace(prompt["instructions"]) == "" {
+		return nil, false
+	}
+	return prompt, true
+}
+
+// resolveHandoffTransferSkills returns the resolved skills and the version refs
+// they add to the evidence closure.
+func (s *Service) resolveHandoffTransferSkills(ctx context.Context, token string, in HandoffTransferInput, instructions string) ([]ResolvedSkill, []Ref, error) {
+	resolved := []ResolvedSkill{}
+	refs := []Ref{}
+	seenSkills := map[string]bool{}
+	for _, skill := range in.Skills {
+		if !validRunLabel(skill.SkillID, 256) || strings.Contains(skill.SkillID, "@") || !validRunLabel(skill.VersionID, 256) || !sourceHashPattern.MatchString(skill.ContentHash) || seenSkills[skill.SkillID] {
+			return nil, nil, ErrInvalid
+		}
+		seenSkills[skill.SkillID] = true
+		page, e := s.ResolveSkills(ctx, token, SkillResolveInput{Scope: in.Scope, Refs: []string{skill.SkillID + "@latest-approved"}})
+		if e != nil {
+			return nil, nil, e
+		}
+		if len(page.Items) != 1 {
+			return nil, nil, ErrConflict
+		}
+		item := page.Items[0]
+		if item.Error != "" || !item.LatestApproved || item.SkillID != skill.SkillID || item.VersionID != skill.VersionID || item.ContentHash != skill.ContentHash || !strings.Contains(instructions, item.Instructions) {
+			return nil, nil, ErrConflict
+		}
+		version, e := s.Get(ctx, token, colSkillVersions, in.Scope, item.VersionID)
+		if e != nil {
+			return nil, nil, e
+		}
+		refs = append(refs, Ref{Collection: colSkillVersions, ID: version.ID, Revision: version.Revision})
+		resolved = append(resolved, item)
+	}
+	return resolved, refs, nil
+}
+
+// handoffTransferEvidenceParents checks one evidence record and returns its
+// source parents.
+func (s *Service) handoffTransferEvidenceParents(ctx context.Context, token string, in HandoffTransferInput, ref Ref, addArchives func([]ArchiveMessageRef) error) ([]Ref, error) {
+	r, e := s.Get(ctx, token, ref.Collection, in.Scope, ref.ID)
+	if e != nil {
+		return nil, e
+	}
+	if r.Revision != ref.Revision || !live(r) || r.ContentErased {
+		return nil, ErrConflict
+	}
+	if _, e = s.authorizeHandoffContent(ctx, token, in, r.ID, r.Sensitivity, recordContent(r)); e != nil {
+		return nil, e
+	}
+	if e = addArchives(r.ArchiveMessages); e != nil {
+		return nil, e
+	}
+	parents := []Ref{}
+	for _, source := range r.Sources {
+		parent, e := s.Get(ctx, token, "sources", in.Scope, source.SourceID)
+		if e != nil {
+			return nil, e
+		}
+		parents = append(parents, Ref{Collection: "sources", ID: parent.ID, Revision: parent.Revision})
+	}
+	return parents, nil
 }
 func handoffTransferRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/work-checkpoints/authorize-handoff", func(w http.ResponseWriter, r *http.Request) {

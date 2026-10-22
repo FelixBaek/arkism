@@ -161,7 +161,7 @@ func (s *Service) IngestCompletedTrace(ctx context.Context, token string, in Tra
 
 func prepareCompletedTrace(in TraceIngestInput) (preparedTrace, []byte, error) {
 	agent := cmp.Or(in.Scope.AgentID, in.AgentRun.AgentID)
-	if !validScope(in.Scope) || !traceIdentifier(agent) || in.AgentRun.AgentID != "" && in.AgentRun.AgentID != agent || !traceIdentifier(in.TraceID) || !traceIdentifier(in.ThreadID) || in.LangSmithRunID != "" && !traceIdentifier(in.LangSmithRunID) || len(in.Events) == 0 || len(in.Events) > maxTraceEvents {
+	if !validTraceIdentity(in, agent) {
 		return preparedTrace{}, nil, ErrInvalid
 	}
 	if in.AgentRun.ID == "" {
@@ -170,7 +170,7 @@ func prepareCompletedTrace(in TraceIngestInput) (preparedTrace, []byte, error) {
 	if in.AgentRun.OriginAgentID != "" && !validRunLabel(in.AgentRun.OriginAgentID, 256) {
 		return preparedTrace{}, nil, ErrInvalid
 	}
-	if !traceIdentifier(in.AgentRun.ID) || !validRunLabel(in.AgentRun.TaskType, 128) || !terminalOutcome(in.AgentRun.Outcome) || !traceTime(in.AgentRun.StartedAt) || !traceTime(in.AgentRun.FinishedAt) || in.AgentRun.FinishedAt.Before(in.AgentRun.StartedAt) || in.AgentRun.FinishedAt.After(time.Now()) || strings.TrimSpace(in.AgentRun.Text) == "" || len(in.AgentRun.Text) > 64000 || !utf8.ValidString(in.AgentRun.Text) {
+	if !validCompletedAgentRun(in.AgentRun) {
 		return preparedTrace{}, nil, ErrInvalid
 	}
 	if containsSecret(in.AgentRun.Text) {
@@ -184,39 +184,16 @@ func prepareCompletedTrace(in TraceIngestInput) (preparedTrace, []byte, error) {
 	checked := make([]inspectedTraceEvent, 0, len(in.Events))
 	sensitivity := "public"
 	for i := range in.Events {
-		event := in.Events[i]
-		if !traceIdentifier(event.ID) || seen[event.ID] || !validRunLabel(event.Kind, 128) || !traceTime(event.OccurredAt) || event.OccurredAt.Before(in.AgentRun.StartedAt) || event.OccurredAt.After(in.AgentRun.FinishedAt) || len(event.Payload) == 0 || len(event.Payload) > maxTraceEventBytes || !validSensitivity(event.Sensitivity) {
-			return preparedTrace{}, nil, ErrInvalid
-		}
-		seen[event.ID] = true
-		inspection, err := inspectTraceJSON(event.Payload)
+		event, lineage, err := prepareTraceEvent(in.Events[i], in.AgentRun, seen)
 		if err != nil {
 			return preparedTrace{}, nil, err
-		}
-		lineage, err := tracePayloadSourceIDs(event.Payload)
-		if err != nil {
-			return preparedTrace{}, nil, err
-		}
-		// Payloads become note sources whose origin_agent_id is shown as provenance.
-		var origin struct {
-			OriginAgentID *string `json:"origin_agent_id"`
-		}
-		if json.Unmarshal(event.Payload, &origin) != nil || origin.OriginAgentID != nil && *origin.OriginAgentID != in.AgentRun.OriginAgentID {
-			return preparedTrace{}, nil, ErrInvalid
 		}
 		lineageByEvent[event.ID] = lineage
 		for _, id := range lineage {
 			lineageSeen[id] = true
 		}
-		if event.Sensitivity == "" {
-			event.Sensitivity = "internal"
-		}
-		if inspection.PersonalData && event.Sensitivity != "restricted" {
-			event.Sensitivity = "private"
-		}
-		event.OccurredAt = event.OccurredAt.UTC().Truncate(time.Millisecond)
-		in.Events[i] = event
-		checked = append(checked, inspectedTraceEvent{TraceEventInput: event, Inspection: inspection})
+		in.Events[i] = event.TraceEventInput
+		checked = append(checked, event)
 		if sensitivityRank(event.Sensitivity) > sensitivityRank(sensitivity) {
 			sensitivity = event.Sensitivity
 		}
@@ -234,6 +211,44 @@ func prepareCompletedTrace(in TraceIngestInput) (preparedTrace, []byte, error) {
 		return preparedTrace{}, nil, ErrInvalid
 	}
 	return preparedTrace{input: in, events: checked, lineageByEvent: lineageByEvent, lineageSourceIDs: lineage, requestHash: ContentHash(string(raw)), sensitivity: sensitivity}, raw, nil
+}
+func validTraceIdentity(in TraceIngestInput, agent string) bool {
+	return validScope(in.Scope) && traceIdentifier(agent) && (in.AgentRun.AgentID == "" || in.AgentRun.AgentID == agent) && traceIdentifier(in.TraceID) && traceIdentifier(in.ThreadID) && (in.LangSmithRunID == "" || traceIdentifier(in.LangSmithRunID)) && len(in.Events) != 0 && len(in.Events) <= maxTraceEvents
+}
+func validCompletedAgentRun(run CompletedAgentRunInput) bool {
+	return traceIdentifier(run.ID) && validRunLabel(run.TaskType, 128) && terminalOutcome(run.Outcome) && traceTime(run.StartedAt) && traceTime(run.FinishedAt) && !run.FinishedAt.Before(run.StartedAt) && !run.FinishedAt.After(time.Now()) && strings.TrimSpace(run.Text) != "" && len(run.Text) <= 64000 && utf8.ValidString(run.Text)
+}
+
+// prepareTraceEvent validates and normalizes one event, returning it with its
+// inspection and source lineage.
+func prepareTraceEvent(event TraceEventInput, run CompletedAgentRunInput, seen map[string]bool) (inspectedTraceEvent, []string, error) {
+	if !traceIdentifier(event.ID) || seen[event.ID] || !validRunLabel(event.Kind, 128) || !traceTime(event.OccurredAt) || event.OccurredAt.Before(run.StartedAt) || event.OccurredAt.After(run.FinishedAt) || len(event.Payload) == 0 || len(event.Payload) > maxTraceEventBytes || !validSensitivity(event.Sensitivity) {
+		return inspectedTraceEvent{}, nil, ErrInvalid
+	}
+	seen[event.ID] = true
+	inspection, err := inspectTraceJSON(event.Payload)
+	if err != nil {
+		return inspectedTraceEvent{}, nil, err
+	}
+	lineage, err := tracePayloadSourceIDs(event.Payload)
+	if err != nil {
+		return inspectedTraceEvent{}, nil, err
+	}
+	// Payloads become note sources whose origin_agent_id is shown as provenance.
+	var origin struct {
+		OriginAgentID *string `json:"origin_agent_id"`
+	}
+	if json.Unmarshal(event.Payload, &origin) != nil || origin.OriginAgentID != nil && *origin.OriginAgentID != run.OriginAgentID {
+		return inspectedTraceEvent{}, nil, ErrInvalid
+	}
+	if event.Sensitivity == "" {
+		event.Sensitivity = "internal"
+	}
+	if inspection.PersonalData && event.Sensitivity != "restricted" {
+		event.Sensitivity = "private"
+	}
+	event.OccurredAt = event.OccurredAt.UTC().Truncate(time.Millisecond)
+	return inspectedTraceEvent{TraceEventInput: event, Inspection: inspection}, lineage, nil
 }
 
 func tracePayloadSourceIDs(raw json.RawMessage) ([]string, error) {

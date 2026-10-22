@@ -167,64 +167,18 @@ func (s *Service) ListTwinClaims(ctx context.Context, token string, scope Scope,
 		if st == "candidate" && !want("candidate") && !want("inferred") || st == "rejected" && !want("rejected") {
 			continue
 		}
-		cursor := ""
-		seen := map[string]bool{}
-		for {
-			if err := ctx.Err(); err != nil {
-				return out, err
-			}
-			page, err := s.ListCandidates(ctx, token, ReviewInput{omitAdvice: true, Scope: scope, Status: st, Kind: "user", Limit: intelligenceListLimit, Cursor: cursor})
-			if err != nil {
-				return out, err
-			}
-			for _, r := range page.Items {
-				if twinType(r.Tags) != "" && len(r.Relations) > 0 {
-					claims = append(claims, twinFromRecord(r, st, nil))
-				}
-			}
-			if page.NextCursor == "" {
-				break
-			}
-			if seen[page.NextCursor] {
-				return out, ErrUnavailable
-			}
-			seen[page.NextCursor] = true
-			cursor = page.NextCursor
+		more, err := s.candidateTwinClaims(ctx, token, scope, st)
+		if err != nil {
+			return out, err
 		}
+		claims = append(claims, more...)
 	}
 	if want("confirmed") || want("superseded") {
-		cursor := ""
-		seen := map[string]bool{}
-		for {
-			if err := ctx.Err(); err != nil {
-				return out, err
-			}
-			page, err := s.ListMemories(ctx, token, MemoryListInput{Scope: scope, Kind: "user", IncludeInactive: true, Limit: intelligenceListLimit, Cursor: cursor})
-			if err != nil {
-				return out, err
-			}
-			for _, r := range page.Items {
-				if twinType(r.Tags) == "" || len(r.Relations) == 0 {
-					continue
-				}
-				st := "confirmed"
-				if r.Status == "superseded" {
-					st = "superseded"
-				} else if !live(r) {
-					continue
-				}
-				confirmed := r.CreatedAt
-				claims = append(claims, twinFromRecord(r, st, &confirmed))
-			}
-			if page.NextCursor == "" {
-				break
-			}
-			if seen[page.NextCursor] {
-				return out, ErrUnavailable
-			}
-			seen[page.NextCursor] = true
-			cursor = page.NextCursor
+		more, err := s.memoryTwinClaims(ctx, token, scope)
+		if err != nil {
+			return out, err
 		}
+		claims = append(claims, more...)
 	}
 	for _, c := range claims {
 		if want(c.Status) {
@@ -232,6 +186,71 @@ func (s *Service) ListTwinClaims(ctx context.Context, token string, scope Scope,
 		}
 	}
 	return out, nil
+}
+
+func (s *Service) candidateTwinClaims(ctx context.Context, token string, scope Scope, st string) ([]TwinClaim, error) {
+	claims := []TwinClaim{}
+	cursor := ""
+	seen := map[string]bool{}
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		page, err := s.ListCandidates(ctx, token, ReviewInput{omitAdvice: true, Scope: scope, Status: st, Kind: "user", Limit: intelligenceListLimit, Cursor: cursor})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range page.Items {
+			if twinType(r.Tags) != "" && len(r.Relations) > 0 {
+				claims = append(claims, twinFromRecord(r, st, nil))
+			}
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		if seen[page.NextCursor] {
+			return nil, ErrUnavailable
+		}
+		seen[page.NextCursor] = true
+		cursor = page.NextCursor
+	}
+	return claims, nil
+}
+func (s *Service) memoryTwinClaims(ctx context.Context, token string, scope Scope) ([]TwinClaim, error) {
+	claims := []TwinClaim{}
+	cursor := ""
+	seen := map[string]bool{}
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		page, err := s.ListMemories(ctx, token, MemoryListInput{Scope: scope, Kind: "user", IncludeInactive: true, Limit: intelligenceListLimit, Cursor: cursor})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range page.Items {
+			if twinType(r.Tags) == "" || len(r.Relations) == 0 {
+				continue
+			}
+			st := "confirmed"
+			if r.Status == "superseded" {
+				st = "superseded"
+			} else if !live(r) {
+				continue
+			}
+			confirmed := r.CreatedAt
+			claims = append(claims, twinFromRecord(r, st, &confirmed))
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		if seen[page.NextCursor] {
+			return nil, ErrUnavailable
+		}
+		seen[page.NextCursor] = true
+		cursor = page.NextCursor
+	}
+	return claims, nil
 }
 
 // ListReflections groups lesson candidates for one subject (task type, e.g.
@@ -389,57 +408,9 @@ func (s *Service) Improve(ctx context.Context, token string, in ImprovementInput
 	if actor.Role != "human" {
 		return out, ErrDenied
 	}
-	var status string
-	var confidence float64
-	switch in.Target {
-	case improvementTwinClaim:
-		page, err := s.ListTwinClaims(ctx, token, in.Scope, nil)
-		if err != nil {
-			return out, err
-		}
-		i := slices.IndexFunc(page.Items, func(c TwinClaim) bool { return c.ID == in.ID })
-		if i < 0 {
-			return out, ErrNotFound
-		}
-		c := page.Items[i]
-		status, confidence, out.DistinctRuns, out.EvidenceRefs = c.Status, c.Confidence, c.DistinctRuns, c.EvidenceRefs
-		if in.ExpectedRevision != 0 && in.ExpectedRevision != c.Revision {
-			return out, ErrConflict
-		}
-		in.ExpectedRevision = c.Revision
-	case improvementTacitEdge:
-		parts := strings.Split(in.ID, "|")
-		if len(parts) != 3 {
-			return out, ErrInvalid
-		}
-		page, err := s.ListTacitEdges(ctx, token, in.Scope, parts[0], parts[1])
-		if err != nil {
-			return out, err
-		}
-		i := slices.IndexFunc(page.Items, func(e TacitEdge) bool { return e.Target == parts[2] })
-		if i < 0 {
-			return out, ErrNotFound
-		}
-		e := page.Items[i]
-		status, confidence, out.DistinctRuns, out.EvidenceRefs = e.Status, e.Confidence, e.OccurrenceCount, e.EvidenceRefs
-	case improvementSkillVersio:
-		// Evidence for a new version: an unreviewed reflection on the skill
-		// subject (e.g. "skill:etsy-listing") repeated across >= 3 runs.
-		page, err := s.ListReflections(ctx, token, in.Scope, in.ID)
-		if err != nil {
-			return out, err
-		}
-		for _, r := range page.Items {
-			if r.Status == "candidate" && r.DistinctRuns > out.DistinctRuns {
-				status, confidence, out.DistinctRuns, out.EvidenceRefs = "candidate", r.Confidence, r.DistinctRuns, r.EvidenceRefs
-			}
-		}
-		if status == "" {
-			return out, ErrNotFound
-		}
-		out.Next = "import the revised SKILL.md as a candidate version, then evaluate independently, approve and apply (skill review)"
-	default:
-		return out, ErrInvalid
+	status, confidence, err := s.improvementEvidence(ctx, token, &in, &out)
+	if err != nil {
+		return out, err
 	}
 	out.Reason = promotionReason(status, out.DistinctRuns, confidence)
 	out.Promotable = out.Reason == ""
@@ -474,6 +445,62 @@ func (s *Service) Improve(ctx context.Context, token string, in ImprovementInput
 	}
 	out.Promoted, out.Reason = true, "promoted"
 	return out, nil
+}
+
+// improvementEvidence fills out with the target's evidence and returns its
+// review status and confidence.
+func (s *Service) improvementEvidence(ctx context.Context, token string, in *ImprovementInput, out *ImprovementDecision) (status string, confidence float64, err error) {
+	switch in.Target {
+	case improvementTwinClaim:
+		page, err := s.ListTwinClaims(ctx, token, in.Scope, nil)
+		if err != nil {
+			return "", 0, err
+		}
+		i := slices.IndexFunc(page.Items, func(c TwinClaim) bool { return c.ID == in.ID })
+		if i < 0 {
+			return "", 0, ErrNotFound
+		}
+		c := page.Items[i]
+		status, confidence, out.DistinctRuns, out.EvidenceRefs = c.Status, c.Confidence, c.DistinctRuns, c.EvidenceRefs
+		if in.ExpectedRevision != 0 && in.ExpectedRevision != c.Revision {
+			return "", 0, ErrConflict
+		}
+		in.ExpectedRevision = c.Revision
+	case improvementTacitEdge:
+		parts := strings.Split(in.ID, "|")
+		if len(parts) != 3 {
+			return "", 0, ErrInvalid
+		}
+		page, err := s.ListTacitEdges(ctx, token, in.Scope, parts[0], parts[1])
+		if err != nil {
+			return "", 0, err
+		}
+		i := slices.IndexFunc(page.Items, func(e TacitEdge) bool { return e.Target == parts[2] })
+		if i < 0 {
+			return "", 0, ErrNotFound
+		}
+		e := page.Items[i]
+		status, confidence, out.DistinctRuns, out.EvidenceRefs = e.Status, e.Confidence, e.OccurrenceCount, e.EvidenceRefs
+	case improvementSkillVersio:
+		// Evidence for a new version: an unreviewed reflection on the skill
+		// subject (e.g. "skill:etsy-listing") repeated across >= 3 runs.
+		page, err := s.ListReflections(ctx, token, in.Scope, in.ID)
+		if err != nil {
+			return "", 0, err
+		}
+		for _, r := range page.Items {
+			if r.Status == "candidate" && r.DistinctRuns > out.DistinctRuns {
+				status, confidence, out.DistinctRuns, out.EvidenceRefs = "candidate", r.Confidence, r.DistinctRuns, r.EvidenceRefs
+			}
+		}
+		if status == "" {
+			return "", 0, ErrNotFound
+		}
+		out.Next = "import the revised SKILL.md as a candidate version, then evaluate independently, approve and apply (skill review)"
+	default:
+		return "", 0, ErrInvalid
+	}
+	return status, confidence, nil
 }
 
 func parseIntelligenceQuery(raw string, extra ...string) (Scope, url.Values, error) {

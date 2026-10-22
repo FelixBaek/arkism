@@ -309,50 +309,12 @@ func (s *Service) ConsultationEvent(ctx context.Context, token, id string, in Co
 			r.UpdatedAt = time.Now().UTC()
 			r.Consultation = &c
 			if c.Handoff != nil {
-				h, err := tx.Get(ctx, colHandoffs, in.Scope, c.Handoff.ID)
-				if errors.Is(err, ErrNotFound) {
-					h = consultationRecord(c.Handoff.ID, in.Scope, d.PrincipalID)
-					h.Kind = "synthetic_handoff"
-					h.Handoff = c.Handoff
-					h.Sources = r.Sources
-					h.SourceEventID = r.SourceEventID
-					err = tx.Insert(ctx, colHandoffs, h)
-				} else if err == nil {
-					h.Revision++
-					h.Handoff = c.Handoff
-					h.Sources = r.Sources
-					if c.Child != nil && c.Child.Status == "completed" {
-						h.Relations = []Ref{{Collection: "execution_traces", ID: c.Child.TraceID, Revision: 1}}
-					}
-					h.UpdatedAt = r.UpdatedAt
-					err = tx.Replace(ctx, colHandoffs, h, h.Revision-1)
-				}
-				if err != nil {
+				if err = syncConsultationHandoff(ctx, tx, in.Scope, d, &r, &c); err != nil {
 					return err
 				}
 			}
 			if c.Child != nil {
-				child, err := tx.Get(ctx, colConsultations, in.Scope, c.Child.ID)
-				if err != nil {
-					return err
-				}
-				cc := cloneConsultation(child.Consultation)
-				if c.Child.Status == "completed" {
-					cc.TraceID = c.Child.TraceID
-				}
-				cc.Status = c.Child.Status
-				cc.Revision++
-				cc.Artifacts = c.Artifacts
-				cc.Handoff = c.Handoff
-				cc.ClarificationQuestion = c.ClarificationQuestion
-				cc.ClarificationAnswer = c.ClarificationAnswer
-				child.Consultation = &cc
-				child.Revision++
-				child.Sources = r.Sources
-				if c.Child.Status == "completed" {
-					child.Relations = []Ref{{Collection: "execution_traces", ID: c.Child.TraceID, Revision: 1}}
-				}
-				if err = tx.Replace(ctx, colConsultations, child, child.Revision-1); err != nil {
+				if err = syncConsultationChild(ctx, tx, in.Scope, &r, &c); err != nil {
 					return err
 				}
 			}
@@ -373,269 +335,368 @@ func (s *Service) ConsultationEvent(ctx context.Context, token, id string, in Co
 	}
 	return out, e
 }
+func syncConsultationHandoff(ctx context.Context, tx Tx, scope Scope, d Decision, r *Record, c *Consultation) error {
+	h, err := tx.Get(ctx, colHandoffs, scope, c.Handoff.ID)
+	if errors.Is(err, ErrNotFound) {
+		h = consultationRecord(c.Handoff.ID, scope, d.PrincipalID)
+		h.Kind = "synthetic_handoff"
+		h.Handoff = c.Handoff
+		h.Sources = r.Sources
+		h.SourceEventID = r.SourceEventID
+		err = tx.Insert(ctx, colHandoffs, h)
+	} else if err == nil {
+		h.Revision++
+		h.Handoff = c.Handoff
+		h.Sources = r.Sources
+		if c.Child != nil && c.Child.Status == "completed" {
+			h.Relations = []Ref{{Collection: "execution_traces", ID: c.Child.TraceID, Revision: 1}}
+		}
+		h.UpdatedAt = r.UpdatedAt
+		err = tx.Replace(ctx, colHandoffs, h, h.Revision-1)
+	}
+	return err
+}
+func syncConsultationChild(ctx context.Context, tx Tx, scope Scope, r *Record, c *Consultation) error {
+	child, err := tx.Get(ctx, colConsultations, scope, c.Child.ID)
+	if err != nil {
+		return err
+	}
+	cc := cloneConsultation(child.Consultation)
+	if c.Child.Status == "completed" {
+		cc.TraceID = c.Child.TraceID
+	}
+	cc.Status = c.Child.Status
+	cc.Revision++
+	cc.Artifacts = c.Artifacts
+	cc.Handoff = c.Handoff
+	cc.ClarificationQuestion = c.ClarificationQuestion
+	cc.ClarificationAnswer = c.ClarificationAnswer
+	child.Consultation = &cc
+	child.Revision++
+	child.Sources = r.Sources
+	if c.Child.Status == "completed" {
+		child.Relations = []Ref{{Collection: "execution_traces", ID: c.Child.TraceID, Revision: 1}}
+	}
+	return tx.Replace(ctx, colConsultations, child, child.Revision-1)
+}
 func (s *Service) applyConsultationEvent(ctx context.Context, tx Tx, d Decision, r *Record, c *Consultation, in ConsultationEventInput, writeArtifact handoffArtifactWriter) error {
 	p := in.Payload
 	switch in.Type {
 	case "product_selected":
-		if c.Status != "active" || c.Child != nil && c.Child.Status != "cancelled" && c.Child.Status != "failed" || !slices.Contains([]string{"Printable Poster", "Digital Planner", "Wedding Template", "Sticker / Clipart Pack", "Social Media Template"}, p.Product) {
-			return ErrConflict
-		}
-		if len(c.SelectedOptions) > 0 && c.SelectedOptions[0] != p.Product {
-			rotateParentAttempt(r, c)
-		}
-		c.SelectedOptions = []string{p.Product}
-		c.Parent.Status = "direct_mode"
+		return consultationProductSelected(r, c, p)
 	case "hire_proposed":
-		if c.Status != "active" || c.Child != nil || len(c.SelectedOptions) != 1 {
-			return ErrConflict
-		}
-		if p.MaxHandoffDepth < 0 || p.MaxHandoffDepth > 2 || p.MaxActiveSpecialists < 0 || p.MaxActiveSpecialists > 1 || p.EstimatedBudget < 0 || p.EstimatedBudget > 100 {
-			return ErrInvalid
-		}
-		if c.SelectedOptions[0] != "Printable Poster" {
-			return ErrInvalid
-		}
-		c.Handoff = &SpecialistHandoff{ConsultationID: c.ID, ParentAgentRunID: c.Parent.AgentRunID, FromAgentID: c.Parent.AgentID, ToAgentID: "illustrator_expert", HandoffType: "create", ID: handoffUUID(), Status: "proposed", Reason: "포스터 콘셉트와 제작 명세를 구체화하기 위해 Illustrator Expert의 도움을 받습니다.", ApprovalRequestID: handoffUUID(), EstimatedBudget: 10, EstimatedDurationSeconds: 5, Depth: 1, Package: HandoffPackage{Goal: c.Goal, SelectedChoices: c.SelectedOptions, Constraints: []string{"synthetic data only", "no real model, image generation, upload or external action"}, CompletedWork: []string{"Printable Poster selected"}, RequiredOutput: []string{"poster_concepts", "image_prompts", "print_spec"}, References: []Ref{{Collection: "sources", ID: c.SourceEventID, Revision: 1}}, OpenQuestions: []string{"preferred visual style"}, ExpectedReturnContract: []string{"summary", "artifacts", "decisions", "assumptions", "open_questions", "verification_status", "risks", "source_trace_references", "recommendation_to_parent"}, ScopedPermissions: []string{"read_scoped_evidence", "create_synthetic_text_artifacts"}, MaxBudget: 100, MaxHandoffDepth: 2, PrivacyScope: c.Scope, Authority: "data_only_untrusted"}}
-		if p.EstimatedBudget > 0 {
-			c.Handoff.EstimatedBudget = p.EstimatedBudget
-		}
-		if p.MaxHandoffDepth > 0 {
-			c.Handoff.Package.MaxHandoffDepth = p.MaxHandoffDepth
-		}
-		c.Status = "awaiting_hire_approval"
-		c.Parent.Status = "awaiting_hire_approval"
-		approval := consultationRecord(c.Handoff.ApprovalRequestID, c.Scope, d.PrincipalID)
-		approval.Kind = "synthetic_handoff_approval"
-		approval.Status = "proposed"
-		approval.Target = &Ref{Collection: colHandoffs, ID: c.Handoff.ID, Revision: 1}
-		if err := tx.Insert(ctx, "jobs", approval); err != nil {
-			return err
-		}
+		return consultationHireProposed(ctx, tx, d, c, p)
 	case "hire_approved", "hire_rejected":
-		if c.Status != "awaiting_hire_approval" || c.Handoff == nil || c.Handoff.Status != "proposed" || c.Child != nil {
-			return ErrConflict
-		}
-		if c.Handoff.Depth > c.Handoff.Package.MaxHandoffDepth || c.Handoff.EstimatedBudget > c.Handoff.Package.MaxBudget {
-			return ErrDenied
-		}
-		approval, err := tx.Get(ctx, "jobs", c.Scope, c.Handoff.ApprovalRequestID)
-		if err != nil {
-			return err
-		}
-		if approval.Status != "proposed" {
-			return ErrConflict
-		}
-		approval.Revision++
-		approval.ApprovedBy = d.PrincipalID
-		approval.Status = "rejected"
-		if in.Type == "hire_rejected" {
-			c.Handoff.Status = "rejected"
-			c.Status = "active"
-			c.Parent.Status = "direct_mode"
-		} else {
-			approval.Status = "approved"
-			c.Handoff.Status = "active"
-			c.Handoff.ApprovedBy = d.PrincipalID
-			c.Status = "awaiting_return"
-			c.Parent.Status = "waiting_for_return"
-			c.Child = &ConsultationAgent{ID: handoffUUID(), AgentID: "illustrator_expert", LangsmithRunID: handoffUUID(), InputEventID: handoffUUID(), OutputEventID: handoffUUID(), AgentRunID: handoffUUID(), ThreadID: handoffUUID(), TraceID: handoffUUID(), Status: "active"}
-			c.Handoff.ChildAgentRunID = c.Child.AgentRunID
-			child := consultationRecord(c.Child.ID, c.Scope, d.PrincipalID)
-			child.TraceID = c.Child.TraceID
-			child.SourceEventID = c.SourceEventID
-			child.Sources = r.Sources
-			child.Consultation = &Consultation{ID: c.Child.ID, Revision: 1, Scope: c.Scope, Status: "active", Goal: c.Goal, SourceEventID: c.SourceEventID, RootConsultationID: c.ID, ParentConsultationID: c.ID, Parent: *c.Child, SelectedOptions: c.SelectedOptions, Artifacts: []ConsultationArtifact{}, Events: []ConsultationEvent{}, Synthetic: true}
-			if err = tx.Insert(ctx, colConsultations, child); err != nil {
-				return err
-			}
-		}
-		if err = tx.Replace(ctx, "jobs", approval, approval.Revision-1); err != nil {
-			return err
-		}
+		return consultationHireDecided(ctx, tx, d, r, c, in.Type)
 	case "clarification_requested":
-		if c.Child == nil || c.Child.Status != "active" || c.Handoff.Status != "active" || strings.TrimSpace(p.Question) == "" || len(p.Question) > 1000 {
-			return ErrConflict
-		}
-		c.ClarificationQuestion = p.Question
-		c.ClarificationAnswer = ""
-		c.Child.Status = "waiting_for_user"
-		c.Status = "awaiting_specialist_input"
-		c.Handoff.Status = "awaiting_user"
+		return consultationClarificationRequested(c, p)
 	case "clarification_answered":
-		if c.Child == nil || c.Child.Status != "waiting_for_user" || strings.TrimSpace(p.Answer) == "" || len(p.Answer) > 1000 {
-			return ErrConflict
-		}
-		c.ClarificationAnswer = p.Answer
-		c.Child.Status = "active"
-		c.Status = "awaiting_return"
-		c.Handoff.Status = "active"
+		return consultationClarificationAnswered(c, p)
 	case "artifacts_generated":
-		if c.Child == nil || c.Child.Status != "active" || c.Handoff.Status != "active" || len(p.Artifacts) != 3 || p.TraceID != c.Child.TraceID {
-			return ErrConflict
-		}
-		if err := handoffTrace(ctx, tx, c.Scope, *c.Child, p.TraceID, c.SourceEventID); err != nil {
-			return err
-		}
-
-		if writeArtifact == nil || d.Role != "service" {
-			return ErrDenied
-		}
-		source, err := tx.Get(ctx, "sources", c.Scope, c.SourceEventID)
-		if err != nil {
-			return err
-		}
-		if !live(source) {
-			return ErrNotFound
-		}
-		seenKinds := map[string]bool{}
-		seenDigests := map[string]bool{}
-		for _, a := range p.Artifacts {
-			if seenKinds[a.Kind] || seenDigests[ContentHash(a.Text)] || !slices.Contains([]string{"poster_concepts", "image_prompts", "print_spec"}, a.Kind) || len(a.Title) > 200 || strings.TrimSpace(a.Title) == "" || a.ID != "" || a.SourceEventID != "" || strings.TrimSpace(a.Text) == "" || len(a.Text) > 4000 {
-				return ErrInvalid
-			}
-			seenKinds[a.Kind] = true
-			seenDigests[ContentHash(a.Text)] = true
-			artifact, err := writeArtifact(ctx, tx, c.Scope, Ref{Collection: "sources", ID: source.ID, Revision: source.Revision}, a.Text, d)
-			if err != nil {
-				return err
-			}
-			a.ID = artifact.ID
-			a.SourceEventID = source.ID
-			a.Status = "draft"
-			a.Partial = false
-			a.Text = ""
-			replaced := false
-			for i := range c.Artifacts {
-				if c.Artifacts[i].ID == a.ID {
-					c.Artifacts[i] = a
-					replaced = true
-				}
-			}
-			if !replaced {
-				c.Artifacts = append(c.Artifacts, a)
-			}
-		}
-
-		c.TraceID = p.TraceID
-		r.Relations = append(r.Relations, Ref{Collection: "execution_traces", ID: p.TraceID, Revision: 1})
-		c.Child.Status = "completed"
-		c.Handoff.Status = "awaiting_user"
+		return consultationArtifactsGenerated(ctx, tx, d, r, c, p, writeArtifact)
 	case "capability_resolved":
-		if err := s.applyCapabilityResolution(ctx, tx, r, c, p); err != nil {
-			return err
-		}
+		return s.applyCapabilityResolution(ctx, tx, r, c, p)
 	case "artifact_selected", "artifact_approved":
-		if c.Handoff == nil || c.Handoff.Status != "awaiting_user" || c.Child == nil || c.Child.Status != "completed" {
-			return ErrConflict
-		}
-		found := false
-		for i := range c.Artifacts {
-			a := &c.Artifacts[i]
-			if a.ID == p.ArtifactID {
-				found = true
-				if in.Type == "artifact_selected" && a.Status == "draft" {
-					a.Status = "selected"
-				} else if in.Type == "artifact_approved" && a.Status == "selected" {
-					a.Status = "approved"
-				} else {
-					return ErrConflict
-				}
-			}
-		}
-		if !found {
-			return ErrNotFound
-		}
+		return consultationArtifactReviewed(c, in.Type, p.ArtifactID)
 	case "handoff_returned":
-		if c.Handoff == nil || c.Handoff.Status != "awaiting_user" || c.Child == nil || c.Child.Status != "completed" || len(c.Artifacts) == 0 {
-			return ErrConflict
-		}
-		ids := []string{}
-		for _, a := range c.Artifacts {
-			if a.Status == "superseded" {
-				continue
-			}
-			if a.Status != "approved" {
-				return ErrConflict
-			}
-			ids = append(ids, a.ID)
-		}
-		c.Handoff.ReturnPackage = &HandoffReturn{Status: "returned", Summary: "합성 포스터 콘셉트, 이미지 프롬프트, 인쇄 명세를 전달합니다. 실제 이미지나 외부 상품은 생성하지 않았습니다.", Artifacts: ids, Decisions: []string{"user approved synthetic text artifacts"}, Assumptions: []string{"synthetic brief only"}, OpenQuestions: []string{"real asset quality and commercial suitability remain untested"}, VerificationStatus: "user_approved_synthetic_only", Risks: []string{"untrusted specialist result; no real image or market validation"}, SourceTraceReferences: []Ref{{Collection: "sources", ID: c.SourceEventID, Revision: 1}, {Collection: "execution_traces", ID: c.TraceID, Revision: 1}}, Recommendation: "Review before any real production work.", Authority: "data_only_untrusted"}
-		c.Handoff.Status = "returned"
-		c.Status = "integrating"
-		c.Parent.Status = "integrating"
+		return consultationHandoffReturned(c)
 	case "direct_completed":
-		if c.Status != "active" || c.Parent.Status != "direct_mode" {
-			return ErrConflict
-		}
-		if err := handoffTrace(ctx, tx, c.Scope, c.Parent, p.TraceID, c.SourceEventID); err != nil {
-			return err
-		}
-		c.Status = "completed"
-		c.Parent.Status = "completed"
-		c.TraceID = p.TraceID
-		r.Relations = append(r.Relations, Ref{Collection: "execution_traces", ID: p.TraceID, Revision: 1})
-		c.Summary = "직접 상담으로 합성 기획을 정리했습니다. 선택: " + strings.Join(c.SelectedOptions, ", ") + ". 실제 모델·이미지·상품은 생성하지 않았으며 결과는 미검증입니다."
+		return consultationDirectCompleted(ctx, tx, r, c, p)
 	case "integrated":
-		if c.Status != "integrating" || c.Handoff == nil || c.Handoff.ReturnPackage == nil {
-			return ErrConflict
-		}
-		if err := handoffTrace(ctx, tx, c.Scope, c.Parent, p.TraceID, c.SourceEventID); err != nil {
-			return err
-		}
-		c.TraceID = p.TraceID
-		r.Relations = append(r.Relations, Ref{Collection: "execution_traces", ID: p.TraceID, Revision: 1})
-		c.Status = "completed"
-		c.Parent.Status = "completed"
-		c.Summary = c.Handoff.ReturnPackage.Summary + " 사용자 승인된 합성 텍스트 결과이며 실제 모델·이미지·상업적 사용 검증은 별도입니다."
+		return consultationIntegrated(ctx, tx, r, c, p)
 	case "cancelled", "failed", "timed_out":
-		if c.Status == "completed" || c.Status == "cancelled" || c.Status == "failed" {
-			return ErrConflict
-		}
-		state := "cancelled"
-		if in.Type != "cancelled" {
-			state = "failed"
-		}
-		c.Status = state
-		c.Parent.Status = "recovery_available"
-		if c.Handoff != nil {
-			c.Handoff.Status = state
-		}
-		if c.Child != nil {
-			c.Child.Status = state
-		}
-		for i := range c.Artifacts {
-			c.Artifacts[i].Partial = true
-		}
+		return consultationStopped(c, in.Type)
 	case "direct_continued":
-		if c.Status != "cancelled" && c.Status != "failed" {
-			return ErrConflict
-		}
-		rotateParentAttempt(r, c)
-		c.Status = "active"
-		c.Parent.Status = "direct_mode"
+		return consultationDirectContinued(r, c)
 	case "retried":
-		if c.Status != "cancelled" && c.Status != "failed" {
-			return ErrConflict
-		}
-		rotateParentAttempt(r, c)
-		if c.Child == nil {
-			c.Status = "active"
-			c.Parent.Status = "direct_mode"
-			c.Handoff = nil
-		} else {
-			// Retry resumes the approved child identity; never creates another run.
-			c.Status = "awaiting_return"
-			c.Parent.Status = "waiting_for_return"
-			c.Child.Status = "active"
-			c.Handoff.Status = "active"
-			c.ClarificationQuestion = ""
-			c.ClarificationAnswer = ""
-			for i := range c.Artifacts {
-				c.Artifacts[i].Status = "superseded"
-			}
-		}
+		return consultationRetried(r, c)
 	default:
 		return ErrInvalid
+	}
+}
+func consultationProductSelected(r *Record, c *Consultation, p ConsultationEventPayload) error {
+	if c.Status != "active" || c.Child != nil && c.Child.Status != "cancelled" && c.Child.Status != "failed" || !slices.Contains([]string{"Printable Poster", "Digital Planner", "Wedding Template", "Sticker / Clipart Pack", "Social Media Template"}, p.Product) {
+		return ErrConflict
+	}
+	if len(c.SelectedOptions) > 0 && c.SelectedOptions[0] != p.Product {
+		rotateParentAttempt(r, c)
+	}
+	c.SelectedOptions = []string{p.Product}
+	c.Parent.Status = "direct_mode"
+	return nil
+}
+func consultationHireProposed(ctx context.Context, tx Tx, d Decision, c *Consultation, p ConsultationEventPayload) error {
+	if c.Status != "active" || c.Child != nil || len(c.SelectedOptions) != 1 {
+		return ErrConflict
+	}
+	if p.MaxHandoffDepth < 0 || p.MaxHandoffDepth > 2 || p.MaxActiveSpecialists < 0 || p.MaxActiveSpecialists > 1 || p.EstimatedBudget < 0 || p.EstimatedBudget > 100 {
+		return ErrInvalid
+	}
+	if c.SelectedOptions[0] != "Printable Poster" {
+		return ErrInvalid
+	}
+	c.Handoff = &SpecialistHandoff{ConsultationID: c.ID, ParentAgentRunID: c.Parent.AgentRunID, FromAgentID: c.Parent.AgentID, ToAgentID: "illustrator_expert", HandoffType: "create", ID: handoffUUID(), Status: "proposed", Reason: "포스터 콘셉트와 제작 명세를 구체화하기 위해 Illustrator Expert의 도움을 받습니다.", ApprovalRequestID: handoffUUID(), EstimatedBudget: 10, EstimatedDurationSeconds: 5, Depth: 1, Package: HandoffPackage{Goal: c.Goal, SelectedChoices: c.SelectedOptions, Constraints: []string{"synthetic data only", "no real model, image generation, upload or external action"}, CompletedWork: []string{"Printable Poster selected"}, RequiredOutput: []string{"poster_concepts", "image_prompts", "print_spec"}, References: []Ref{{Collection: "sources", ID: c.SourceEventID, Revision: 1}}, OpenQuestions: []string{"preferred visual style"}, ExpectedReturnContract: []string{"summary", "artifacts", "decisions", "assumptions", "open_questions", "verification_status", "risks", "source_trace_references", "recommendation_to_parent"}, ScopedPermissions: []string{"read_scoped_evidence", "create_synthetic_text_artifacts"}, MaxBudget: 100, MaxHandoffDepth: 2, PrivacyScope: c.Scope, Authority: "data_only_untrusted"}}
+	if p.EstimatedBudget > 0 {
+		c.Handoff.EstimatedBudget = p.EstimatedBudget
+	}
+	if p.MaxHandoffDepth > 0 {
+		c.Handoff.Package.MaxHandoffDepth = p.MaxHandoffDepth
+	}
+	c.Status = "awaiting_hire_approval"
+	c.Parent.Status = "awaiting_hire_approval"
+	approval := consultationRecord(c.Handoff.ApprovalRequestID, c.Scope, d.PrincipalID)
+	approval.Kind = "synthetic_handoff_approval"
+	approval.Status = "proposed"
+	approval.Target = &Ref{Collection: colHandoffs, ID: c.Handoff.ID, Revision: 1}
+	if err := tx.Insert(ctx, "jobs", approval); err != nil {
+		return err
+	}
+	return nil
+}
+func consultationHireDecided(ctx context.Context, tx Tx, d Decision, r *Record, c *Consultation, eventType string) error {
+	if c.Status != "awaiting_hire_approval" || c.Handoff == nil || c.Handoff.Status != "proposed" || c.Child != nil {
+		return ErrConflict
+	}
+	if c.Handoff.Depth > c.Handoff.Package.MaxHandoffDepth || c.Handoff.EstimatedBudget > c.Handoff.Package.MaxBudget {
+		return ErrDenied
+	}
+	approval, err := tx.Get(ctx, "jobs", c.Scope, c.Handoff.ApprovalRequestID)
+	if err != nil {
+		return err
+	}
+	if approval.Status != "proposed" {
+		return ErrConflict
+	}
+	approval.Revision++
+	approval.ApprovedBy = d.PrincipalID
+	approval.Status = "rejected"
+	if eventType == "hire_rejected" {
+		c.Handoff.Status = "rejected"
+		c.Status = "active"
+		c.Parent.Status = "direct_mode"
+	} else {
+		approval.Status = "approved"
+		c.Handoff.Status = "active"
+		c.Handoff.ApprovedBy = d.PrincipalID
+		c.Status = "awaiting_return"
+		c.Parent.Status = "waiting_for_return"
+		c.Child = &ConsultationAgent{ID: handoffUUID(), AgentID: "illustrator_expert", LangsmithRunID: handoffUUID(), InputEventID: handoffUUID(), OutputEventID: handoffUUID(), AgentRunID: handoffUUID(), ThreadID: handoffUUID(), TraceID: handoffUUID(), Status: "active"}
+		c.Handoff.ChildAgentRunID = c.Child.AgentRunID
+		child := consultationRecord(c.Child.ID, c.Scope, d.PrincipalID)
+		child.TraceID = c.Child.TraceID
+		child.SourceEventID = c.SourceEventID
+		child.Sources = r.Sources
+		child.Consultation = &Consultation{ID: c.Child.ID, Revision: 1, Scope: c.Scope, Status: "active", Goal: c.Goal, SourceEventID: c.SourceEventID, RootConsultationID: c.ID, ParentConsultationID: c.ID, Parent: *c.Child, SelectedOptions: c.SelectedOptions, Artifacts: []ConsultationArtifact{}, Events: []ConsultationEvent{}, Synthetic: true}
+		if err = tx.Insert(ctx, colConsultations, child); err != nil {
+			return err
+		}
+	}
+	if err = tx.Replace(ctx, "jobs", approval, approval.Revision-1); err != nil {
+		return err
+	}
+	return nil
+}
+func consultationClarificationRequested(c *Consultation, p ConsultationEventPayload) error {
+	if c.Child == nil || c.Child.Status != "active" || c.Handoff.Status != "active" || strings.TrimSpace(p.Question) == "" || len(p.Question) > 1000 {
+		return ErrConflict
+	}
+	c.ClarificationQuestion = p.Question
+	c.ClarificationAnswer = ""
+	c.Child.Status = "waiting_for_user"
+	c.Status = "awaiting_specialist_input"
+	c.Handoff.Status = "awaiting_user"
+	return nil
+}
+func consultationClarificationAnswered(c *Consultation, p ConsultationEventPayload) error {
+	if c.Child == nil || c.Child.Status != "waiting_for_user" || strings.TrimSpace(p.Answer) == "" || len(p.Answer) > 1000 {
+		return ErrConflict
+	}
+	c.ClarificationAnswer = p.Answer
+	c.Child.Status = "active"
+	c.Status = "awaiting_return"
+	c.Handoff.Status = "active"
+	return nil
+}
+func consultationArtifactsGenerated(ctx context.Context, tx Tx, d Decision, r *Record, c *Consultation, p ConsultationEventPayload, writeArtifact handoffArtifactWriter) error {
+	if c.Child == nil || c.Child.Status != "active" || c.Handoff.Status != "active" || len(p.Artifacts) != 3 || p.TraceID != c.Child.TraceID {
+		return ErrConflict
+	}
+	if err := handoffTrace(ctx, tx, c.Scope, *c.Child, p.TraceID, c.SourceEventID); err != nil {
+		return err
+	}
+
+	if writeArtifact == nil || d.Role != "service" {
+		return ErrDenied
+	}
+	source, err := tx.Get(ctx, "sources", c.Scope, c.SourceEventID)
+	if err != nil {
+		return err
+	}
+	if !live(source) {
+		return ErrNotFound
+	}
+	seenKinds := map[string]bool{}
+	seenDigests := map[string]bool{}
+	for _, a := range p.Artifacts {
+		if seenKinds[a.Kind] || seenDigests[ContentHash(a.Text)] || !validGeneratedArtifact(a) {
+			return ErrInvalid
+		}
+		seenKinds[a.Kind] = true
+		seenDigests[ContentHash(a.Text)] = true
+		artifact, err := writeArtifact(ctx, tx, c.Scope, Ref{Collection: "sources", ID: source.ID, Revision: source.Revision}, a.Text, d)
+		if err != nil {
+			return err
+		}
+		a.ID = artifact.ID
+		a.SourceEventID = source.ID
+		a.Status = "draft"
+		a.Partial = false
+		a.Text = ""
+		upsertConsultationArtifact(c, a)
+	}
+
+	c.TraceID = p.TraceID
+	r.Relations = append(r.Relations, Ref{Collection: "execution_traces", ID: p.TraceID, Revision: 1})
+	c.Child.Status = "completed"
+	c.Handoff.Status = "awaiting_user"
+	return nil
+}
+func validGeneratedArtifact(a ConsultationArtifact) bool {
+	return slices.Contains([]string{"poster_concepts", "image_prompts", "print_spec"}, a.Kind) && len(a.Title) <= 200 && strings.TrimSpace(a.Title) != "" && a.ID == "" && a.SourceEventID == "" && strings.TrimSpace(a.Text) != "" && len(a.Text) <= 4000
+}
+func upsertConsultationArtifact(c *Consultation, a ConsultationArtifact) {
+	replaced := false
+	for i := range c.Artifacts {
+		if c.Artifacts[i].ID == a.ID {
+			c.Artifacts[i] = a
+			replaced = true
+		}
+	}
+	if !replaced {
+		c.Artifacts = append(c.Artifacts, a)
+	}
+}
+func consultationArtifactReviewed(c *Consultation, eventType, artifactID string) error {
+	if c.Handoff == nil || c.Handoff.Status != "awaiting_user" || c.Child == nil || c.Child.Status != "completed" {
+		return ErrConflict
+	}
+	found := false
+	for i := range c.Artifacts {
+		a := &c.Artifacts[i]
+		if a.ID == artifactID {
+			found = true
+			if eventType == "artifact_selected" && a.Status == "draft" {
+				a.Status = "selected"
+			} else if eventType == "artifact_approved" && a.Status == "selected" {
+				a.Status = "approved"
+			} else {
+				return ErrConflict
+			}
+		}
+	}
+	if !found {
+		return ErrNotFound
+	}
+	return nil
+}
+func consultationHandoffReturned(c *Consultation) error {
+	if c.Handoff == nil || c.Handoff.Status != "awaiting_user" || c.Child == nil || c.Child.Status != "completed" || len(c.Artifacts) == 0 {
+		return ErrConflict
+	}
+	ids := []string{}
+	for _, a := range c.Artifacts {
+		if a.Status == "superseded" {
+			continue
+		}
+		if a.Status != "approved" {
+			return ErrConflict
+		}
+		ids = append(ids, a.ID)
+	}
+	c.Handoff.ReturnPackage = &HandoffReturn{Status: "returned", Summary: "합성 포스터 콘셉트, 이미지 프롬프트, 인쇄 명세를 전달합니다. 실제 이미지나 외부 상품은 생성하지 않았습니다.", Artifacts: ids, Decisions: []string{"user approved synthetic text artifacts"}, Assumptions: []string{"synthetic brief only"}, OpenQuestions: []string{"real asset quality and commercial suitability remain untested"}, VerificationStatus: "user_approved_synthetic_only", Risks: []string{"untrusted specialist result; no real image or market validation"}, SourceTraceReferences: []Ref{{Collection: "sources", ID: c.SourceEventID, Revision: 1}, {Collection: "execution_traces", ID: c.TraceID, Revision: 1}}, Recommendation: "Review before any real production work.", Authority: "data_only_untrusted"}
+	c.Handoff.Status = "returned"
+	c.Status = "integrating"
+	c.Parent.Status = "integrating"
+	return nil
+}
+func consultationDirectCompleted(ctx context.Context, tx Tx, r *Record, c *Consultation, p ConsultationEventPayload) error {
+	if c.Status != "active" || c.Parent.Status != "direct_mode" {
+		return ErrConflict
+	}
+	if err := handoffTrace(ctx, tx, c.Scope, c.Parent, p.TraceID, c.SourceEventID); err != nil {
+		return err
+	}
+	c.Status = "completed"
+	c.Parent.Status = "completed"
+	c.TraceID = p.TraceID
+	r.Relations = append(r.Relations, Ref{Collection: "execution_traces", ID: p.TraceID, Revision: 1})
+	c.Summary = "직접 상담으로 합성 기획을 정리했습니다. 선택: " + strings.Join(c.SelectedOptions, ", ") + ". 실제 모델·이미지·상품은 생성하지 않았으며 결과는 미검증입니다."
+	return nil
+}
+func consultationIntegrated(ctx context.Context, tx Tx, r *Record, c *Consultation, p ConsultationEventPayload) error {
+	if c.Status != "integrating" || c.Handoff == nil || c.Handoff.ReturnPackage == nil {
+		return ErrConflict
+	}
+	if err := handoffTrace(ctx, tx, c.Scope, c.Parent, p.TraceID, c.SourceEventID); err != nil {
+		return err
+	}
+	c.TraceID = p.TraceID
+	r.Relations = append(r.Relations, Ref{Collection: "execution_traces", ID: p.TraceID, Revision: 1})
+	c.Status = "completed"
+	c.Parent.Status = "completed"
+	c.Summary = c.Handoff.ReturnPackage.Summary + " 사용자 승인된 합성 텍스트 결과이며 실제 모델·이미지·상업적 사용 검증은 별도입니다."
+	return nil
+}
+func consultationStopped(c *Consultation, eventType string) error {
+	if c.Status == "completed" || c.Status == "cancelled" || c.Status == "failed" {
+		return ErrConflict
+	}
+	state := "cancelled"
+	if eventType != "cancelled" {
+		state = "failed"
+	}
+	c.Status = state
+	c.Parent.Status = "recovery_available"
+	if c.Handoff != nil {
+		c.Handoff.Status = state
+	}
+	if c.Child != nil {
+		c.Child.Status = state
+	}
+	for i := range c.Artifacts {
+		c.Artifacts[i].Partial = true
+	}
+	return nil
+}
+func consultationDirectContinued(r *Record, c *Consultation) error {
+	if c.Status != "cancelled" && c.Status != "failed" {
+		return ErrConflict
+	}
+	rotateParentAttempt(r, c)
+	c.Status = "active"
+	c.Parent.Status = "direct_mode"
+	return nil
+}
+func consultationRetried(r *Record, c *Consultation) error {
+	if c.Status != "cancelled" && c.Status != "failed" {
+		return ErrConflict
+	}
+	rotateParentAttempt(r, c)
+	if c.Child == nil {
+		c.Status = "active"
+		c.Parent.Status = "direct_mode"
+		c.Handoff = nil
+	} else {
+		// Retry resumes the approved child identity; never creates another run.
+		c.Status = "awaiting_return"
+		c.Parent.Status = "waiting_for_return"
+		c.Child.Status = "active"
+		c.Handoff.Status = "active"
+		c.ClarificationQuestion = ""
+		c.ClarificationAnswer = ""
+		for i := range c.Artifacts {
+			c.Artifacts[i].Status = "superseded"
+		}
 	}
 	return nil
 }

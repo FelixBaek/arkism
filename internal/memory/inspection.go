@@ -68,22 +68,11 @@ func inspectCreateInput(in CreateInput, file bool) (CreateInput, Inspection, err
 	walk = func(v any, redactable bool) (any, error) {
 		switch x := v.(type) {
 		case string:
-			if personalPattern.MatchString(x) {
-				report.PersonalData = true
+			clean, e := inspectString(x, in.OnSecret, redactable, &report)
+			if e != nil {
+				return nil, e
 			}
-			if containsSecret(x) {
-				if in.OnSecret != "redact" || !redactable {
-					return nil, ErrSecretDetected
-				}
-				for _, rule := range secretRules {
-					x = rule.ReplaceAllString(x, "[REDACTED]")
-				}
-				report.Redacted = true
-				if containsSecret(x) {
-					return nil, ErrSecretDetected
-				}
-			}
-			return x, nil
+			return clean, nil
 		case []any:
 			for i, value := range x {
 				clean, e := walk(value, redactable)
@@ -130,14 +119,40 @@ func inspectCreateInput(in CreateInput, file bool) (CreateInput, Inspection, err
 	if report.PersonalData && out.Sensitivity != "restricted" {
 		out.Sensitivity = "private"
 	}
+	if !inspectedCreateLimits(out, file) {
+		return CreateInput{}, report, ErrInvalid
+	}
+	return out, report, nil
+}
+
+// inspectString records personal data in report and redacts secrets when allowed.
+func inspectString(x, onSecret string, redactable bool, report *Inspection) (string, error) {
+	if personalPattern.MatchString(x) {
+		report.PersonalData = true
+	}
+	if containsSecret(x) {
+		if onSecret != "redact" || !redactable {
+			return "", ErrSecretDetected
+		}
+		for _, rule := range secretRules {
+			x = rule.ReplaceAllString(x, "[REDACTED]")
+		}
+		report.Redacted = true
+		if containsSecret(x) {
+			return "", ErrSecretDetected
+		}
+	}
+	return x, nil
+}
+func inspectedCreateLimits(out CreateInput, file bool) bool {
 	// Empty original data does not become meaningful merely by passing a scanner.
 	if !file && strings.TrimSpace(out.Text) == "" || len(out.Text) > 64000 || len(out.Summary) > 8000 {
-		return CreateInput{}, report, ErrInvalid
+		return false
 	}
 	for _, keyword := range out.Keywords {
 		if len(keyword) > 256 {
-			return CreateInput{}, report, ErrInvalid
+			return false
 		}
 	}
-	return out, report, nil
+	return true
 }

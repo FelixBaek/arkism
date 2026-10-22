@@ -32,9 +32,22 @@ func validCapabilityResolution(in *CapabilityResolution) bool {
 	if in == nil || !sourceHashPattern.MatchString(in.ContextHash) || in.Authority != "data_only_untrusted" || in.Status != "resolved" || len(in.VersionPins) < 6 || len(in.VersionPins) > 32 || len(in.SourceReferences) != 1 {
 		return false
 	}
+	if !validCapabilityPins(in.VersionPins) {
+		return false
+	}
+	for _, ref := range in.SourceReferences {
+		if ref.SourceID == "" || ref.Locator != "original" || ref.Span != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// validCapabilityPins requires unique pins covering every capability kind.
+func validCapabilityPins(pins []CapabilityVersionPin) bool {
 	seen := map[string]bool{}
 	kinds := map[string]bool{}
-	for _, pin := range in.VersionPins {
+	for _, pin := range pins {
 		if !capabilityPinKinds[pin.Kind] || pin.ID == "" || pin.Version == "" || len(pin.ID) > 256 || len(pin.Version) > 256 {
 			return false
 		}
@@ -45,15 +58,7 @@ func validCapabilityResolution(in *CapabilityResolution) bool {
 		seen[key] = true
 		kinds[pin.Kind] = true
 	}
-	if len(seen) < 6 || len(kinds) != len(capabilityPinKinds) {
-		return false
-	}
-	for _, ref := range in.SourceReferences {
-		if ref.SourceID == "" || ref.Locator != "original" || ref.Span != nil {
-			return false
-		}
-	}
-	return true
+	return len(seen) >= 6 && len(kinds) == len(capabilityPinKinds)
 }
 
 func capabilityTraceResolution(ctx context.Context, tx Tx, scope Scope, traceID string, expected *CapabilityResolution) error {

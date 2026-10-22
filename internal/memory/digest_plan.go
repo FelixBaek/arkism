@@ -324,26 +324,8 @@ func (s *Service) planTopics(ctx context.Context, plan DigestPlan, members, acti
 	for _, m := range members {
 		byID[m.ID] = m
 	}
-	// Bases that already have an open candidate, and member sets already proposed as new.
-	busy := map[string]bool{}
-	openSets := []map[string]int64{}
-	for _, r := range open {
-		if r.Digest == nil {
-			continue
-		}
-		for _, ref := range r.Digest.Replaces {
-			busy[ref.ID] = true
-		}
-		if len(r.Digest.Replaces) == 0 {
-			openSets = append(openSets, memberIDs(r.Digest.Members))
-		}
-	}
-	views := map[string]DigestView{}
-	for _, r := range active {
-		if r.Digest != nil {
-			views[r.ID] = s.digestView(ctx, r, heat)
-		}
-	}
+	busy, openSets := openDigestClaims(open)
+	views := s.activeDigestViews(ctx, active, heat)
 	plan.Clusters = []DigestCluster{}
 	taken := map[string]bool{}
 	add := func(c DigestCluster) {
@@ -375,19 +357,7 @@ func (s *Service) planTopics(ctx context.Context, plan DigestPlan, members, acti
 		for _, m := range group {
 			ids[m.ID] = m.Revision
 		}
-		base, overlap := "", 0.0
-		for id, v := range views {
-			have := memberIDs(v.Members)
-			common := 0
-			for mid := range have {
-				if _, ok := ids[mid]; ok {
-					common++
-				}
-			}
-			if f := float64(common) / float64(max(1, len(have))); f >= 0.5 && f > overlap {
-				base, overlap = id, f
-			}
-		}
+		base := digestClusterBase(views, ids)
 		c := DigestCluster{Reason: "cluster"}
 		for _, m := range group {
 			c.Members = append(c.Members, digestMemory(m))
@@ -416,6 +386,52 @@ func (s *Service) planTopics(ctx context.Context, plan DigestPlan, members, acti
 		plan.Merge = coldestMerge(active, views, busy, byID)
 	}
 	return plan
+}
+
+// Bases that already have an open candidate, and member sets already proposed as new.
+func openDigestClaims(open []Record) (map[string]bool, []map[string]int64) {
+	busy := map[string]bool{}
+	openSets := []map[string]int64{}
+	for _, r := range open {
+		if r.Digest == nil {
+			continue
+		}
+		for _, ref := range r.Digest.Replaces {
+			busy[ref.ID] = true
+		}
+		if len(r.Digest.Replaces) == 0 {
+			openSets = append(openSets, memberIDs(r.Digest.Members))
+		}
+	}
+	return busy, openSets
+}
+func (s *Service) activeDigestViews(ctx context.Context, active []Record, heat map[string]MemoryUseStat) map[string]DigestView {
+	views := map[string]DigestView{}
+	for _, r := range active {
+		if r.Digest != nil {
+			views[r.ID] = s.digestView(ctx, r, heat)
+		}
+	}
+	return views
+}
+
+// digestClusterBase returns the active digest sharing the largest member
+// fraction, at least half, with ids.
+func digestClusterBase(views map[string]DigestView, ids map[string]int64) string {
+	base, overlap := "", 0.0
+	for id, v := range views {
+		have := memberIDs(v.Members)
+		common := 0
+		for mid := range have {
+			if _, ok := ids[mid]; ok {
+				common++
+			}
+		}
+		if f := float64(common) / float64(max(1, len(have))); f >= 0.5 && f > overlap {
+			base, overlap = id, f
+		}
+	}
+	return base
 }
 
 func sameMembers(refs []Ref, ids map[string]int64) bool {
