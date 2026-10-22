@@ -396,3 +396,50 @@ func TestListMemoriesReadsSourcesOncePerPage(t *testing.T) {
 		t.Fatal("source metadata reads for 71 memories with 71 sources:", counter.reads)
 	}
 }
+
+type lockOrderTx struct {
+	Tx
+	events *[]string
+}
+
+func (x lockOrderTx) SourceMetadata(ctx context.Context, s Scope, ids []string, includeText bool) ([]Record, error) {
+	*x.events = append(*x.events, "metadata")
+	return x.Tx.SourceMetadata(ctx, s, ids, includeText)
+}
+func (x lockOrderTx) LockForRead(ctx context.Context, s Scope, collection string, ids []string) (map[string]Record, error) {
+	*x.events = append(*x.events, "lock "+collection)
+	out := map[string]Record{}
+	for _, id := range ids {
+		r, e := x.Tx.Get(ctx, collection, s, id)
+		if e != nil {
+			return nil, e
+		}
+		out[id] = r
+	}
+	return out, nil
+}
+
+type lockOrderRepo struct {
+	Repository
+	events []string
+}
+
+func (r *lockOrderRepo) Transaction(ctx context.Context, fn func(context.Context, Tx) error) error {
+	return r.Repository.Transaction(ctx, func(ctx context.Context, tx Tx) error { return fn(ctx, lockOrderTx{Tx: tx, events: &r.events}) })
+}
+
+// A read-committed list must check source spans against the versions its share lock holds, so the
+// sources are locked before their metadata is read.
+func TestListMemoriesLocksSourcesBeforeCheckingSpans(t *testing.T) {
+	f := newFixture(t)
+	f.activeMemory("locked spans", "locked")
+	repo := &lockOrderRepo{Repository: f.svc.Repo}
+	f.svc.Repo = repo
+	if p, e := f.svc.ListMemories(testCtx, f.human, MemoryListInput{Scope: scopeA, Limit: 10}); e != nil || len(p.Items) != 1 {
+		t.Fatal(p, e)
+	}
+	want := []string{"lock memories", "lock sources", "metadata"}
+	if !slices.Equal(repo.events, want) {
+		t.Fatal(repo.events)
+	}
+}
