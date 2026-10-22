@@ -87,6 +87,8 @@ async function overview(page) {
     await page.locator("#status-toggle").click();
     const claude = await page.locator('#status-agents [data-agent="claude_code"] .st-badge').innerText();
     assert.ok(!claude.includes("연결됨"), `stale agent after a failed reload: ${claude}`);
+    const failedCard = await page.locator("#status-list").innerText();
+    assert.ok(!/스킬 허브\s*0개/.test(failedCard), `failed load skill hub: ${failedCard}`);
     assert.deepEqual(errors, []);
     await page.close();
 

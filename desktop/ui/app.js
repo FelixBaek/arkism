@@ -401,10 +401,11 @@ export function startApp() {
   function renderStatusCard() {
     const d = state.data;
     const host = (() => { try { return new URL(state.server).host; } catch (_) { return state.server; } })();
+    const skillsUnknown = !!(state.listErrors.skills || state.loadError);
     const items = [
       ["brain", "메모리 DB", dbLabel(), state.ready !== false],
       ["database", "서버", host, true],
-      ["git-merge", "스킬 허브", state.listErrors.skills ? "—" : `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}개`, !state.listErrors.skills],
+      ["git-merge", "스킬 허브", skillsUnknown ? "—" : `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}개`, !skillsUnknown],
       ["lock-simple", "로그인", state.email || "토큰", true]
     ];
     const failedLists = Object.keys(state.listErrors).length;
