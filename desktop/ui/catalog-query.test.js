@@ -62,7 +62,7 @@ test('a changed skill filter keeps the last rows, counts and facets on screen un
  const waiting=c.snapshot('skills');
  assert.equal(waiting.ready,false);assert.equal(waiting.loading,true);assert.equal(waiting.stale,true);
  assert.deepEqual(waiting.items.map(x=>x.id),['old']);assert.equal(waiting.total,1);assert.equal(waiting.facets.kinds.decision,1);
+ const scope=state.scope;state.scope={workspace_id:'other',project_id:'p'};assert.deepEqual(c.snapshot('skills').items,[],'another scope never shows the old rows');state.scope=scope;
  await new Promise(r=>setImmediate(r));releases.forEach(r=>r());await new Promise(r=>setImmediate(r));
  const done=c.snapshot('skills');assert.equal(done.ready,true);assert.equal(done.stale,undefined);assert.deepEqual(done.items,[]);assert.equal(done.total,0);
- state.scope={workspace_id:'other',project_id:'p'};assert.deepEqual(c.snapshot('skills').items,[],'another scope never shows the old rows');
 });
