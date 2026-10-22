@@ -118,6 +118,7 @@ window.ArkismRouting = (ctx) => {
       box.append(svg("line", { class: i ? "grid" : "grid base", x1: L, x2: W, y1: y, y2: y }));
       const t = svg("text", { class: "axis", x: L - 6, y: y + 3, "text-anchor": "end" }); t.textContent = lab; box.append(t);
     });
+    if (!points.length) return box; // no requests in the range yet: axes only
     for (const ln of lines) {
       const pts = points.map((p, i) => [X(i), Y(p[ln.key] ?? 0)]);
       if (ln.area) box.append(svg("path", { class: `area ${ln.cls}`, d: `${pts.map((q, i) => `${i ? "L" : "M"} ${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join(" ")} L ${X(points.length - 1)} ${bot} L ${X(0)} ${bot} Z` }));

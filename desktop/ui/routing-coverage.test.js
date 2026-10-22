@@ -104,6 +104,15 @@ test("each range labels its axis; big, small and empty series pick their own sca
   }
 });
 
+test("an empty series draws the axes without lines", async () => {
+  const v = mk({ replies: { "/v1/routing/overview": () => overview({ series: { points: [] } }) } });
+  v.r.render(); await settle();
+  assert.match(text(v.table), /트래픽/);
+  const charts = v.table.all((n) => n.attrs.class === "rt-chart");
+  assert.equal(charts.length, 2);
+  for (const c of charts) assert.equal(c.all((n) => n.tagName === "PATH" || n.tagName === "CIRCLE").length, 0);
+});
+
 test("auto routing off: every model but the fixed one dims and a callout points to settings", async () => {
   const policy = { auto_routing: false, default_model: "a", auto_failover: false };
   const v = mk({ replies: { "/v1/routing/overview": () => overview({ policy, events: Array(50).fill(events[1]) }) } });
