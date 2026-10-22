@@ -29,3 +29,10 @@ test('every cursor-paged collection loads from the preview',async()=>{
  const paging=createCollectionPaging({state:state(),request,createPager:create});
  for(const name of ['candidates','conflicted','skills','skillTrash'])assert.ok((await paging.read(name)).length>0,name);
 });
+test('the review window query merges candidates and conflicts and counts them as new and confusing',async()=>{
+ const query=body=>request('/v1/memory_candidates/query',{method:'POST',body:JSON.stringify({scope:{},limit:50,...body})});
+ const all=await query({state:'all'}),cand=await query({state:'candidate'}),conf=await query({state:'conflicted'});
+ assert.equal(all.total,cand.total+conf.total);assert.ok(conf.total>0);
+ assert.equal((all.facets.states.new||0)+(all.facets.states.confusing||0),all.total);assert.ok(all.facets.states.confusing>=conf.total);
+ const confusing=await query({state:'all',category:'confusing'});assert.equal(confusing.total,all.facets.states.confusing);
+});

@@ -71,13 +71,22 @@ class H(http.server.SimpleHTTPRequestHandler):
         if s.command == "POST" and s.path.split("?")[0] in QUERY: return s._json(200, s._query(s.path.split("?")[0], data))
         return s._json(200, s._fixture(".post") if s.command == "POST" else {})
     def _query(s, path, data):
-        # The catalog query pages the same list fixtures a GET reads: state picks the file, one page, facets counted from it.
-        try: state = str(json.loads(data or b"{}").get("state") or "")
-        except ValueError: state = ""
-        s.path = QUERY[path](state)
-        items = [r for r in (MANY.get(s.path) or s._fixture())["items"] if STATE.get((path, state), lambda r: True)(r)]
-        count = lambda field: {k: sum(1 for r in items if r.get(field) == k) for k in {r.get(field) for r in items} if k}
-        return {"items": items, "total": len(items), "next_cursor": "", "authority": "data_only_untrusted", "facets": {"kinds": count("kind"), "repositories": {}, "categories": {}, "states": count("status")}}
+        # The catalog query pages the same list fixtures a GET reads, filtered and counted like filterMemoryCatalog; one page.
+        try: body = json.loads(data or b"{}")
+        except ValueError: body = {}
+        state, q = str(body.get("state") or ""), str(body.get("q") or "").lower()
+        rows = []
+        for one in (["candidate", "conflicted"] if path == "/v1/memory_candidates/query" and state == "all" else [state]):
+            s.path = QUERY[path](one)
+            rows += (MANY.get(s.path) or s._fixture())["items"]
+        rows = [r for r in rows if q in (str(r.get("text") or r.get("name") or "") + " " + str(r.get("summary") or r.get("description") or "")).lower() and STATE.get((path, state), lambda r: True)(r)]
+        count = lambda rows, field: {k: sum(1 for r in rows if field(r) == k) for k in {field(r) for r in rows} if k}
+        category = lambda r: "confusing" if r.get("conflict_id") or r.get("status") == "conflicted" or (r.get("classification") or {}).get("dup_hint") else "new"
+        states = count(rows, category) if path != "/v1/skills/query" else count(rows, lambda r: r.get("status"))
+        if path == "/v1/memory_candidates/query" and body.get("category"): rows = [r for r in rows if category(r) == body["category"]]
+        kinds = count(rows, lambda r: r.get("kind"))
+        if body.get("kind"): rows = [r for r in rows if r.get("kind") == body["kind"]]
+        return {"items": rows, "total": len(rows), "next_cursor": "", "authority": "data_only_untrusted", "facets": {"kinds": kinds, "repositories": {}, "categories": {}, "states": states}}
     do_POST = do_PUT = do_PATCH = do_DELETE = _write
 
 QUERY = {"/v1/memories/query": lambda state: "/v1/memories",
