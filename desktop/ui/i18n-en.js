@@ -440,6 +440,7 @@ window.ArkismI18nEN = {
   "나머지": "The rest",
   "펼쳐서 보기": "Expand",
   "접기": "Collapse",
+  "자세히 보기": "Show details",
   "각 줄을 누르면 해당 목록으로 가요. 승인·막기는 실행 전에 무엇이 바뀌는지 보여 줘요.": "Click a row to go to its list. Approve and block show what will change before they run.",
   "미리 보기": "Preview",
   "목록 보기": "View list",

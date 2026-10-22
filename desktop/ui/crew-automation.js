@@ -150,6 +150,7 @@ window.ArkismAutomation = (h) => {
     if (creating) { const s = d.graph.nodes.find((n) => n.id === "ai1"); s.title = ""; s.config.goal = ""; }
     const blank = structuredClone(d); // what a new one looks like before anything is typed
     let handleTouched = !creating;
+    const openSteps = new Set(); // 개요 node list: steps opened to show their full 목표·질문 (closed by default)
     const picked = new Set(); // new automation: steps whose expert was chosen on purpose (until then the picker reads 맡을 전문가 고르기)
     const aiTalk = { open: withAI }; // AI 제안 / AI로 초안 talk (ai-chat.js state), kept while this window is open
     let pop = null, closeAsking = () => {};
@@ -673,6 +674,18 @@ window.ArkismAutomation = (h) => {
         only.title = ok ? "앞 단계는 건너뛰고 이 단계에만 값을 넣어 돌려요" : why;
         upto.title = ok ? "처음부터 이 단계까지 돌려요" : why;
         top.append(only, upto);
+        // Saved automations list each AI step on one line; the step's 목표·질문 opens on click.
+        const folds = !creating && IS_AI(n);
+        if (folds) {
+          const open = openSteps.has(n.id);
+          const more = button("", "ghost small auto-more", open ? "caret-down" : "caret-right", () => { if (open) openSteps.delete(n.id); else openSteps.add(n.id); paint(); });
+          more.setAttribute("aria-expanded", String(open));
+          more.setAttribute("aria-label", open ? "접기" : "자세히 보기");
+          more.title = open ? "접기" : "자세히 보기";
+          top.prepend(more);
+          top.classList.add("folds");
+          top.addEventListener("click", (e) => { if (!e.target.closest("button, select, input, textarea, strong")) more.click(); });
+        }
         row.append(top);
         if (IS_AI(n)) {
           const gk = goalKey(n);
@@ -705,6 +718,7 @@ window.ArkismAutomation = (h) => {
             t.addEventListener("click", edit);
             t.addEventListener("keydown", (e) => { if (e.key === "Enter") edit(); });
             wrap.append(t);
+            wrap.hidden = !openSteps.has(n.id);
           }
           row.append(wrap);
         }
