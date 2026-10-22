@@ -165,6 +165,10 @@ func sessionLinkedUsers(job map[string]any, origin string) (records []any, refs 
 		}
 		messages, excluded, err := autosaveDialogue(map[string]any{"archive_id": archiveID, "sha256": header["sha256"],
 			"start_byte": job["source_start"], "stop_byte": job["source_end"]}, capRequest, capScope())
+		if errors.Is(err, valueErr("work_dialogue_incomplete")) {
+			// The same archive gives the same answer on every retry: park it instead of re-uploading it five times.
+			return nil, nil, sessionWait("session_archive_window_incomplete")
+		}
 		if err != nil {
 			return nil, nil, err
 		}

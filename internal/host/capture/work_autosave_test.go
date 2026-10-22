@@ -213,6 +213,42 @@ func TestAutosaveFailuresNeverSaveOrRebase(t *testing.T) {
 	}
 }
 
+func TestAutosaveSkipsWithheldSecretsOnlyWhenTheServerSaysWhere(t *testing.T) {
+	ref := func(archive string, offset int) any {
+		return map[string]any{"archive_id": archive, "sha256": strings.Repeat("b", 64), "chunk_index": 0, "chunk_offset": offset}
+	}
+	for name, c := range map[string]struct {
+		refs []any
+		ok   bool
+	}{
+		"outside window": {[]any{ref(strings.Repeat("a", 64), 500)}, true},
+		"inside window":  {[]any{ref(strings.Repeat("a", 64), 50)}, true},
+		"no refs":        {nil, false},
+		"count mismatch": {[]any{ref(strings.Repeat("a", 64), 50), ref(strings.Repeat("a", 64), 60)}, false},
+		"other archive":  {[]any{ref(strings.Repeat("c", 64), 50)}, false},
+	} {
+		f := newAutosaveFixture(t)
+		f.job = append(f.job, kv("stop_byte", 100))
+		request := func(path string, body any) (map[string]any, error) {
+			result, err := f.request(path, body)
+			if strings.HasSuffix(path, "/search") {
+				result["secret_records"] = 1
+				if c.refs != nil {
+					result["secret_refs"] = c.refs
+				}
+			}
+			return result, err
+		}
+		_, err := f.process(request, nil)
+		if c.ok != (err == nil) || c.ok != (len(f.saves()) == 1) {
+			t.Fatal(name, err, f.saves())
+		}
+		if !c.ok && !errors.Is(err, valueErr("work_dialogue_incomplete")) {
+			t.Fatal(name, err)
+		}
+	}
+}
+
 func TestAutosaveReturningWriterAppendsToLatestWithoutLosingOtherDecisions(t *testing.T) {
 	f := newAutosaveFixture(t)
 	result, err := f.process(f.newer, nil)

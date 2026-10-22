@@ -85,7 +85,7 @@ func TestSessionArchiveLargeLateSecretAndEnvelope(t *testing.T) {
 			if err != nil || len(out.Items) != 0 || out.Oversized != 0 {
 				t.Fatal("unsafe large message exposed", mode, err)
 			}
-			if (mode == "secret" || mode == "array-secret") && out.Secrets != 1 {
+			if (mode == "secret" || mode == "array-secret") && (out.Secrets != 1 || len(out.SecretRefs) != 1 || out.SecretRefs[0].ArchiveID != id) {
 				t.Fatal("missing secret result")
 			}
 			if mode == "invalid" && out.Invalid != 1 {

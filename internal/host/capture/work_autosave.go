@@ -293,6 +293,29 @@ func autosaveDialogue(job any, request autosaveRequest, scope any) (messages []a
 			eligible[s] = true
 		}
 	}
+	// inWindow: whether a record ref falls inside the job's [start_byte, stop_byte) window.
+	inWindow := func(ref any) (bool, error) {
+		startV, has := objGet(job, "start_byte")
+		if !has {
+			startV = 0
+		}
+		start, ok := host.Int(startV)
+		if !ok || start < 0 {
+			return false, valueErr("work_dialogue_offset_invalid")
+		}
+		stopV := autosaveGet(job, "stop_byte")
+		stop, stopOK := host.Int(stopV)
+		if stopV != nil && (!stopOK || stop < start) {
+			return false, valueErr("work_dialogue_offset_invalid")
+		}
+		ci, ok1 := num(autosaveItem(ref, "chunk_index"))
+		co, ok2 := num(autosaveItem(ref, "chunk_offset"))
+		if !ok1 || !ok2 {
+			return false, fmt.Errorf("%w: chunk position", errType)
+		}
+		position := ci*archiveChunk + co
+		return position >= float64(start) && (stopV == nil || position < float64(stop)), nil
+	}
 	cursors := map[string]bool{}
 	after := any("")
 	size := 0
@@ -306,9 +329,27 @@ func autosaveDialogue(job any, request autosaveRequest, scope any) (messages []a
 		if page["authority"] != "data_only_untrusted" || !ok {
 			return nil, 0, valueErr("work_dialogue_invalid")
 		}
-		for _, k := range []string{"oversized_records", "unsupported_archives", "unsupported_records", "secret_records"} {
+		for _, k := range []string{"oversized_records", "unsupported_archives", "unsupported_records"} {
 			if truthy(page[k]) {
 				return nil, 0, valueErr("work_dialogue_incomplete")
+			}
+		}
+		// The server withholds records that look like secrets. Skipping them is safe (their text never
+		// leaves the server); failing the whole read made one such line anywhere in a session block every
+		// later window of it. Without the refs (an older server) there is no telling where they are.
+		if truthy(page["secret_records"]) {
+			n, _ := host.Int(page["secret_records"])
+			refs, ok := page["secret_refs"].([]any)
+			if !ok || int64(len(refs)) != n {
+				return nil, 0, valueErr("work_dialogue_incomplete")
+			}
+			for _, ref := range refs {
+				if !eq(autosaveGet(ref, "archive_id"), autosaveItem(job, "archive_id")) || !eq(autosaveGet(ref, "sha256"), autosaveItem(job, "sha256")) {
+					return nil, 0, valueErr("work_dialogue_incomplete")
+				}
+				if _, err := inWindow(ref); err != nil {
+					return nil, 0, err
+				}
 			}
 		}
 		if v, has := page["invalid_records"]; has {
@@ -334,26 +375,9 @@ func autosaveDialogue(job any, request autosaveRequest, scope any) (messages []a
 					continue
 				}
 			}
-			startV, has := objGet(job, "start_byte")
-			if !has {
-				startV = 0
-			}
-			start, ok := host.Int(startV)
-			if !ok || start < 0 {
-				return nil, 0, valueErr("work_dialogue_offset_invalid")
-			}
-			stopV := autosaveGet(job, "stop_byte")
-			stop, stopOK := host.Int(stopV)
-			if stopV != nil && (!stopOK || stop < start) {
-				return nil, 0, valueErr("work_dialogue_offset_invalid")
-			}
-			ci, ok1 := num(autosaveItem(ref, "chunk_index"))
-			co, ok2 := num(autosaveItem(ref, "chunk_offset"))
-			if !ok1 || !ok2 {
-				return nil, 0, fmt.Errorf("%w: chunk position", errType)
-			}
-			position := ci*archiveChunk + co
-			if position < float64(start) || (stopV != nil && position >= float64(stop)) {
+			if in, err := inWindow(ref); err != nil {
+				return nil, 0, err
+			} else if !in {
 				continue
 			}
 			var parts []string

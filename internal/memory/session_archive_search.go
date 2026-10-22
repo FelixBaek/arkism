@@ -52,6 +52,7 @@ type ArchiveSearchOutput struct {
 	Oversized          int                  `json:"oversized_records"`
 	Invalid            int                  `json:"invalid_records"`
 	Secrets            int                  `json:"secret_records"`
+	SecretRefs         []ArchiveMessageRef  `json:"secret_refs,omitempty"` // where the withheld JSONL records sit (no text), so a window reader can skip only its own
 	UnsupportedRecords int                  `json:"unsupported_records"`
 	Unsupported        int                  `json:"unsupported_archives"`
 	Authority          string               `json:"authority"`
@@ -505,6 +506,7 @@ func (s *Service) SearchSessionArchiveMessages(ctx context.Context, token string
 					}
 				} else if state == "secret" {
 					out.Secrets++
+					out.SecretRefs = append(out.SecretRefs, start)
 				} else if state == "found" {
 					out.Items = append(out.Items, view)
 				}
@@ -544,6 +546,7 @@ func (s *Service) SearchSessionArchiveMessages(ctx context.Context, token string
 				} else if text != "" {
 					if containsSecret(text) {
 						out.Secrets++
+						out.SecretRefs = append(out.SecretRefs, start)
 					} else if at := strings.Index(text, in.Query); at >= 0 {
 						begin := max(0, at-256)
 						for begin > 0 && !utf8.RuneStart(text[begin]) {

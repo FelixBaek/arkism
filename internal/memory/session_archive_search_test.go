@@ -68,7 +68,7 @@ func testArchiveFullSafeSearch(t *testing.T, repo Repository) {
 	}
 	search.After = page.Next
 	page, err = f.svc.SearchSessionArchiveMessages(testCtx, f.agent, search)
-	if err != nil || len(page.Items) != 1 || page.Items[0].Text != "마지막 한국어단서 답변" || page.Secrets != 1 {
+	if err != nil || len(page.Items) != 1 || page.Items[0].Text != "마지막 한국어단서 답변" || page.Secrets != 1 || len(page.SecretRefs) != 1 {
 		t.Fatalf("unsafe or missing result: %+v %v", page, err)
 	}
 	stored, err := f.svc.Repo.Get(testCtx, colSessionArchives, scopeA, id)
