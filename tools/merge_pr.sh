@@ -5,8 +5,8 @@
 #   tools/merge_pr.sh 231
 #
 # Needs: git commit signing set up (commit.gpgsign), and a main ruleset bypass for the person running it.
-# Refuses unless the PR is open, not a draft, against main, carries human-approved, every check passed, and the branch
-# already sits on the current main. The commits are re-signed onto the same base, the tree is checked to be
+# Refuses unless the PR is open, not a draft, against main, carries human-approved, every required check reported,
+# every check passed, and the branch already sits on the current main. The commits are re-signed onto the same base, the tree is checked to be
 # exactly the one CI tested, the PR branch is moved to them, then main fast-forwards, so GitHub shows it merged.
 set -euo pipefail
 PR="${1:-}"
@@ -25,6 +25,10 @@ field() { local query="$1"; jq -r "$query" <<<"$info"; }
 field '.labels[].name' | grep -qx human-approved || { echo "PR #$PR has no human-approved label" >&2; exit 1; }
 bad="$(field '[.statusCheckRollup[] | select(((.conclusion // .state) | IN("SUCCESS","NEUTRAL","SKIPPED")) | not) | (.name // .context) + "=" + ((.conclusion // .state) // "PENDING")] | join(", ")')"
 [[ "$(field '.statusCheckRollup | length')" -gt 0 && -z "$bad" ]] || { echo "checks not all passed: ${bad:-none reported}" >&2; exit 1; }
+# Pushing main bypasses the ruleset, so a required check that never reported must stop the merge here.
+required="$(gh api "repos/$REPO/rules/branches/main" --jq '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context]')"
+missing="$(jq -r --argjson required "$required" '$required - [.statusCheckRollup[] | .name // .context] | join(", ")' <<<"$info")"
+[[ -z "$missing" ]] || { echo "required checks not reported: $missing" >&2; exit 1; }
 
 head="$(field .headRefOid)" branch="$(field .headRefName)"
 git fetch -q origin main "$branch"
@@ -45,8 +49,8 @@ done
 count="$(git rev-list --count origin/main.."$signed")"
 # Same tree as the one CI passed. Moving the PR branch first lets GitHub mark the PR merged.
 git push -q --force-with-lease="$branch:$head" origin "$signed:refs/heads/$branch"
-if ! git push -q origin "$signed:refs/heads/main"; then
-  # main moved after the fetch: put the PR branch back on the commits CI tested.
+if ! git push -q origin "$signed:refs/heads/main" && [[ "$(git ls-remote origin refs/heads/main | cut -f1)" != "$signed" ]]; then
+  # main moved after the fetch (not a push that landed but reported failure): put the PR branch back on the commits CI tested.
   git push -q --force-with-lease="$branch:$signed" origin "$head:refs/heads/$branch" \
     || { echo "main push failed and the PR branch could not be put back to $head" >&2; exit 1; }
   echo "main moved during the merge; the PR branch is back at ${head:0:7}, run again" >&2; exit 1
