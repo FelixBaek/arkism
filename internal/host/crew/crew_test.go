@@ -1386,6 +1386,12 @@ func TestGLMWithoutWrapperRunsClaudeCodeAgainstZAI(t *testing.T) {
 	if env, _ := childEnv(r, nil, "glm-5.3", nil); env["ZAI_API_KEY"] != "zai-old-key" || env["ZAI_BASE_URL"] != "" {
 		t.Fatal(env["ZAI_API_KEY"], env["ZAI_BASE_URL"])
 	}
+	if err := saveKeys([]map[string]any{{"id": "new", "provider": "zai", "key": "zai-new-key", "base_url": "https://x.invalid/api/paas/v4"}}); err != nil {
+		t.Fatal(err)
+	}
+	if env, _ := childEnv(r, nil, "glm-5.3", nil); env["ZAI_BASE_URL"] != "https://x.invalid/api/paas/v4" {
+		t.Fatal(env["ZAI_BASE_URL"])
+	}
 }
 
 func TestProviderDoRefusesHTTPSDowngrade(t *testing.T) {
@@ -1405,6 +1411,25 @@ func TestProviderDoRefusesHTTPSDowngrade(t *testing.T) {
 	patch(t, &providerClient, client)
 	if _, err := providerDo(http.MethodGet, tls.URL+"/models", nil, map[string]string{"Authorization": bearer + "zai-key"}, time.Second, 1<<10); err == nil || leaked != 0 {
 		t.Fatal(err, leaked)
+	}
+	// https to https is followed, but not forever
+	same := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/hop":
+			http.Redirect(w, r, "/ok", http.StatusFound)
+		case "/loop":
+			http.Redirect(w, r, "/loop", http.StatusFound)
+		}
+	}))
+	defer same.Close()
+	client = same.Client()
+	client.CheckRedirect = providerClient.CheckRedirect
+	patch(t, &providerClient, client)
+	if _, err := providerDo(http.MethodGet, same.URL+"/hop", nil, nil, time.Second, 1<<10); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := providerDo(http.MethodGet, same.URL+"/loop", nil, nil, time.Second, 1<<10); err == nil || !strings.Contains(err.Error(), "10 redirects") {
+		t.Fatal(err)
 	}
 }
 
