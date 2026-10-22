@@ -22,7 +22,7 @@ window.ArkismMemoryBubbles = (() => {
     canvas.tabIndex = 0; canvas.setAttribute("role", "application"); canvas.setAttribute("aria-label", "기억 버블 지도 · 화살표로 고르고 +/−로 확대·축소, 끌어서 옮기기");
     live.setAttribute("aria-live", "polite"); tipEl.setAttribute("aria-hidden", "true");
     const tipT = mk("span", "mm-tip-t"), tipM = mk("span", "mm-tip-m"); tipT.setAttribute("data-no-i18n", ""); tipEl.append(tipT, tipM);
-    const liveT = mk("span", ""), liveM = mk("span", ""); liveT.setAttribute("data-no-i18n", ""); live.append(liveT, " ", liveM); // the memory's own words stay; its kind · uses line is translated
+    const liveT = mk("span", ""), liveG = mk("span", ""), liveS = mk("span", ""), liveM = mk("span", ""); liveT.setAttribute("data-no-i18n", ""); live.append(liveT, " ", liveG, liveS, liveM); // the memory's own words stay; its group (often a built-in name like 분류 대기, as on its label) and kind · uses line are translated
     tabBar.append(pill); cardsEl.setAttribute("aria-hidden", "true"); root.append(canvas, cardsEl, labels, tabBar, tipEl, live);
 
     const reducedMq = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
@@ -38,7 +38,7 @@ window.ArkismMemoryBubbles = (() => {
       const m = new Map();
       for (const p of items) { const g = groupOf(mode, p); let o = m.get(g.key); if (!o) m.set(g.key, o = { key: g.key, name: g.name, ord: g.ord ?? 0, color: g.color || p.color, count: 0, el: null, cx: 0, cy: 0, top: null, rx: 0, ry: 0, rr: 0 }); o.count++; p.g = o; }
       groups = [...m.values()].sort((a, b) => a.ord - b.ord || b.count - a.count);
-      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", String(g.count))); return g.el; }));
+      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", g.count.toLocaleString("en-US"))); return g.el; }));
       pairUp(); layout();
     }
     // group-to-group line counts for the many-dots overview, built when the groups or lines change rather than on every draw
@@ -49,6 +49,7 @@ window.ArkismMemoryBubbles = (() => {
     function layout() {
       if (!W) return;
       const aw = W - PAD.l - PAD.r, ah = H - PAD.t - PAD.b;
+      labels.style.setProperty("--mm-label-max", `${Math.max(0, aw - 12)}px`); // a long project id ellipsizes inside the canvas; wide() adds the 12px back
       // bubble size follows the canvas; shrink when many memories would not fit the free area (area share ~ 40%)
       const base = Math.max(0.8, Math.min(1.6, Math.min(W, H) / 520));
       const dot = (p) => Math.min(9, 2 + Math.sqrt(p.deg || 0) * 1.6), gap = 7; // a dot (bigger with more relations) plus its breathing room
@@ -57,14 +58,17 @@ window.ArkismMemoryBubbles = (() => {
       // each area is a circle whose radius grows with √(its dots' room), so a big group takes a big circle instead of shrinking every dot;
       // the circles fill rows left to right, and the dot scale is the largest at which every row fits the canvas
       const rad = (g, s) => s * Math.sqrt((room.get(g) || 0) / 0.7) + RIM + 14;
-      const rows = (s) => { const out = []; let cur = null; for (const g of groups) { const d = 2 * rad(g, s); if (!cur || cur.w + d > aw) out.push(cur = { gs: [], w: 0, h: 0 }); cur.gs.push(g); cur.w += d; cur.h = Math.max(cur.h, d); } return out; };
-      const fits = (s) => groups.every((g) => 2 * rad(g, s) <= Math.min(aw, ah)) && rows(s).reduce((a, r) => a + r.h, 0) <= ah;
-      let lo = 0, hi = Math.min(base, Math.sqrt(aw * ah * 0.32 / Math.max(1, need)));
-      if (fits(hi)) lo = hi; else for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (fits(m)) lo = m; else hi = m; }
-      scale = Math.max(0.05, lo);
-      const rs = rows(scale), gapY = Math.max(0, ah - rs.reduce((a, r) => a + r.h, 0)) / (rs.length + 1);
+      // an area is never narrower than its name pill, so small areas side by side keep their labels apart (#181)
+      const wide = (g, s) => Math.max(2 * rad(g, s), (g.el?.offsetWidth || 0) + 12);
+      const rows = (s, cols) => { const out = []; let cur = null; for (const g of groups) { const d = 2 * rad(g, s), w = wide(g, s); if (!cur || cur.w + w > aw || cur.gs.length >= cols) out.push(cur = { gs: [], w: 0, h: 0 }); cur.gs.push(g); cur.w += w; cur.h = Math.max(cur.h, d); } return out; };
+      const fits = (s, cols) => groups.every((g) => 2 * rad(g, s) <= Math.min(aw, ah) && wide(g, s) <= aw) && rows(s, cols).reduce((a, r) => a + r.h, 0) <= ah;
+      const best = (cols) => { let lo = 0, hi = Math.min(base, Math.sqrt(aw * ah * 0.32 / Math.max(1, need))); if (fits(hi, cols)) return hi; for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (fits(m, cols)) lo = m; else hi = m; } return lo; };
+      // a grid as wide as the canvas shape (not one long thin row of small areas), unless that would shrink the dots
+      const grid = Math.max(1, Math.ceil(Math.sqrt(groups.length * aw / Math.max(1, ah)))), sg = best(grid), sf = best(Infinity), cols = sg >= sf ? grid : Infinity;
+      scale = Math.max(0.05, Math.max(sg, sf));
+      const rs = rows(scale, cols), gapY = Math.max(0, ah - rs.reduce((a, r) => a + r.h, 0)) / (rs.length + 1);
       let y = PAD.t + gapY;
-      for (const r of rs) { const gapX = Math.max(0, aw - r.w) / (r.gs.length + 1); let x = PAD.l + gapX; for (const g of r.gs) { const d = 2 * rad(g, scale); g.cx = x + d / 2; g.cy = y + r.h / 2; x += d + gapX; } y += r.h + gapY; }
+      for (const r of rs) { const gapX = Math.max(0, aw - r.w) / (r.gs.length + 1); let x = PAD.l + gapX; for (const g of r.gs) { const d = wide(g, scale); g.cx = x + d / 2; g.cy = y + r.h / 2; x += d + gapX; } y += r.h + gapY; }
       for (const p of items) { p.r = dot(p) * scale; p.cr = (dot(p) + gap) * scale; }
       items.sort((a, b) => b.r - a.r);
     }
@@ -128,7 +132,7 @@ window.ArkismMemoryBubbles = (() => {
       panX = PAD.l + aw / 2 - W / 2 - ((x0 + x1) / 2 - W / 2) * zoom; panY = PAD.t + ah / 2 - H / 2 - ((y0 + y1) / 2 - H / 2) * zoom;
       onZoom?.(zoom); draw();
     }
-    function announce(id) { const t = tip(id); if (t) { liveT.textContent = t.text; liveM.textContent = t.meta; } }
+    function announce(id) { const t = tip(id); if (t) { liveT.textContent = t.text; const g = byId.get(id)?.g; liveG.textContent = g?.name || ""; liveS.textContent = g ? " · " : ""; liveM.textContent = t.meta; } } // the group name in full (its label may be ellipsized), alone in its span so i18n matches it
 
     // Compute the final places, then glide once from where the dots are drawn now.
     function run() {
@@ -239,8 +243,8 @@ window.ArkismMemoryBubbles = (() => {
       for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2 / zoom; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 2.5) / zoom, 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
       drawNames(foci, near, bg, text, muted, font);
-      labels.hidden = !!sel; // group names would float over the fan
-      for (const g of groups) { if (!g.rr) continue; const [x, y] = scr(g.rx, g.ry - g.rr); g.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`; }
+      labels.style.visibility = sel ? "hidden" : ""; // group names would float over the fan; still laid out, so layout() can measure them
+      for (const g of groups) { if (!g.rr) continue; const [x, y] = scr(g.cx, g.ry - g.rr); g.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`; } // x at the reserved centre: wide() spaced labels around g.cx, so a lopsided cloud cannot push two together
       placeCards();
       const id = [hover, kb].find((x) => x && x !== sel), p = id && byId.get(id), t = p && tip(id); // the selection has its card
       if (p && t) { const [sx, y] = scr(p.x, p.y - p.r); tipT.textContent = t.text; tipM.textContent = t.meta; const hw = tipEl.offsetWidth / 2 + 6, x = Math.max(hw, Math.min(W - hw, sx)); tipEl.style.transform = `translate(${x}px,${y - 8}px) translate(-50%,-100%)`; tipEl.classList.add("on"); } else tipEl.classList.remove("on");
@@ -318,6 +322,9 @@ window.ArkismMemoryBubbles = (() => {
       if (ptrs.size === 2 && pinch) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (d) { zoomBy(d / pinch, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pinch = d; dragged = true; } return; }
       if (drag) { const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y; if (dragged || Math.hypot(dx, dy) > 4) { dragged = true; panX = drag.px + dx; panY = drag.py + dy; canvas.style.cursor = "grabbing"; draw(); return; } }
       const id = hit(ev); if (id !== hover) { hover = id; if (id) announce(id); canvas.style.cursor = id ? "pointer" : "grab"; draw(); }
+      // labels let the pointer through to the canvas (pan, zoom), so the canvas carries an ellipsized group name's tooltip
+      const cut = !id && !labels.style.visibility && groups.find((g) => { const b = g.el?.children[1]; if (!b || b.scrollWidth <= b.clientWidth) return false; const r = g.el.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom; });
+      canvas.title = cut ? cut.name : "";
     });
     const up = (ev) => { ptrs.delete(ev.pointerId); if (ptrs.size < 2) pinch = 0; drag = null; canvas.style.cursor = hover ? "pointer" : "grab"; };
     canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);

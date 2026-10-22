@@ -216,3 +216,29 @@ func TestArchiveCodexInputTextBlocksJoinLikeHookPrompt(t *testing.T) {
 		t.Fatalf("%q", text)
 	}
 }
+
+// Capture's locator (TestPromptEvidenceJoinsBlocksLikeServer) hashes these same strings.
+func TestArchiveBlocksJoinLikeCapture(t *testing.T) {
+	for content, want := range map[string]string{
+		`[{"type":"text","text":null},{"type":"text","text":"a"}]`:       "\na",
+		`[{"type":"output_text","text":"a"},{"type":"text","text":"b"}]`: "a\nb",
+	} {
+		row := `{"role":"user","content":` + content + `}`
+		if text, _, valid := archiveSafeMessage([]byte(row)); !valid || text != want {
+			t.Fatalf("search %s = %q %v", content, text, valid)
+		}
+		_, open, err := archiveJSONSafeText(archiveJSONSpan{jsonStreamTestSource([]byte(row)), 0, -1, '{'})
+		if err != nil {
+			t.Fatal(err)
+		}
+		reader, err := open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		streamed, err := io.ReadAll(reader)
+		_ = reader.Close()
+		if err != nil || string(streamed) != want {
+			t.Fatalf("stream %s = %q %v", content, streamed, err)
+		}
+	}
+}

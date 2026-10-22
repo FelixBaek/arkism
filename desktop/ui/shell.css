@@ -104,9 +104,21 @@
   .app.keep-detail .panel > .detail .detail-close { display: none; }
 }
 
-/* Smallest window (app minimum 720): app.css turns the sidebar into a top bar, which the v4 rail never supported —
-   keep a slim icon rail instead. Labels stay for screen readers. */
-@media (max-width: 760px) {
+/* Below 1180 the head actions leave too little room for every tab, so tabs own the first line; search and the
+   page's own actions share the second. A clipped tab row hides its last tabs with no visible scrollbar (#179). */
+@media (max-width: 1180px) {
+  .area-bar { flex-wrap: wrap; row-gap: 12px; padding-bottom: 16px; }
+  .area-tabs { flex: 1 0 100%; gap: 4px; flex-wrap: wrap; }
+  .area-tab { padding: 0 12px; }
+  .area-bar .search { width: auto; flex: 1 1 160px; min-width: 120px; }
+  .area-bar .head-actions { flex-wrap: wrap; }
+  .area-bar .search kbd { display: none; }
+}
+
+/* Narrow windows (app minimum 720): app.css turns the sidebar into a top bar at 760, which the v4 rail never
+   supported — keep a slim icon rail instead, already from 1000 so the content keeps its width. Labels stay for
+   screen readers. */
+@media (max-width: 1000px) {
   .app, .app.wide { grid-template-columns: 72px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .sidebar { flex-direction: column; flex-wrap: nowrap; align-items: center; gap: 16px; padding: 24px 12px 16px; border-bottom: 0; }
   .sidebar .brand { flex-direction: column; height: auto; gap: 8px; }
@@ -117,14 +129,9 @@
   .sidebar .nav-item { width: 44px; padding: 0; justify-content: center; }
   .sidebar .nav-item span { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .sidebar .status-card { top: 80px; bottom: auto; right: auto; width: 260px; }
+}
+@media (max-width: 760px) {
   .main { padding: 20px 16px 12px; gap: 16px; }
-  /* Tabs never clip: they own the first line; search and the page's own actions share the second. */
-  .area-bar { flex-wrap: wrap; row-gap: 12px; padding-bottom: 16px; }
-  .area-tabs { flex: 1 0 100%; gap: 4px; }
-  .area-tab { padding: 0 12px; }
-  .area-bar .search { width: auto; flex: 1 1 160px; min-width: 120px; }
-  .area-bar .head-actions { flex-wrap: wrap; }
-  .area-bar .search kbd { display: none; }
   .panel-main { padding: 12px; }
 }
 
@@ -149,4 +156,4 @@ html.popout dialog.popout-root { padding-top: 32px; }
 @media (max-width: 760px) { body:has(> .window-bar:not([hidden])) :is(.main, .sidebar, .unlock) { padding-top: 32px; } }
 /* With the 창 버튼 strip shown, popups sit below it so its — □ ✕ never cover a popup's own head. */
 body:has(> .window-bar:not([hidden])) dialog:not(.popout-root, .page-dialog) { inset-block-start: 32px; max-height: calc(100vh - 48px); }
-body:has(> .window-bar:not([hidden])) .ov-wide-win { height: min(900px, calc(100vh - 48px)); }
+body:has(> .window-bar:not([hidden])) .ov-wide-win:not(.popout-root) { height: min(900px, calc(100vh - 48px)); }

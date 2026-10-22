@@ -86,7 +86,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     }
     function footer(host) {
       const snap = snapshot();
-      host.append(el("p", "ov-wide-foot-note", snap.loading ? "불러오는 중…" : snap.error ? `불러오지 못했어요 (${snap.error}).` : `${snap.items.length} / ${snap.total ?? 0} · 전체에서 검색·정렬`));
+      // an empty list already says 불러오는 중… itself, so the note would repeat it (#182)
+      if (!snap.loading || snap.items.length) host.append(el("p", "ov-wide-foot-note", snap.loading ? "불러오는 중…" : snap.error ? `불러오지 못했어요 (${snap.error}).` : `${num(snap.items.length)} / ${num(snap.total ?? 0)} · 전체에서 검색·정렬`));
       if (snap.cursor || snap.error) { const b = button(snap.error ? "다시 시도" : "더 보기", "small", null, () => load(true)); b.disabled = snap.loading; host.append(b); }
     }
     d.addEventListener("close", () => { ticket++; pages.reset(); });
@@ -260,7 +261,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const head = el("div", "ov-win-head"), t = el("div", "ov-win-title");
     if (back) t.append(button("‹ 작게 보기", "ghost small", null, back));
     t.append(el("i", "ov-dot"), el("h2", "", titleText));
-    if (badgeText) t.append(el("span", "ov-win-badge", badgeText));
+    if (badgeText != null) t.append(el("span", "ov-win-badge", badgeText)); // "" waits for a server total (hidden while empty)
     const r = el("div", "ov-win-step"); if (hint) r.append(el("span", "", hint)); const x = button("✕", "ghost small ov-wide-x", null, () => d.close()); x.setAttribute("aria-label", "닫기"); r.append(x);
     head.append(t, r); d.append(head);
     return d;
@@ -446,7 +447,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // 쓰는 중인 기억 (579:48597)
   // filter "idle" (검증 › 정리할 기억): the same 안 쓰임 rule as the 검증 step, opened in place; ‹ 작게 보기 goes back to 검증
   function wideActive(filter, focusId) {
-    const d = shell("쓰는 중인 기억", `${num(D().memories.length)}개`, "승인된 기억만 불러오기에 쓰여요", () => open(filter === "idle" ? "judge" : "active"));
+    const d = shell("쓰는 중인 기억", state.memoryTotals?.active == null ? "" : `${num(state.memoryTotals.active)}개`, "승인된 기억만 불러오기에 쓰여요", () => open(filter === "idle" ? "judge" : "active"));
     recipe(d, { wide: "active", args: [filter, focusId] });
     let q = "", kindF = filter || "all", sel = focusId || null, sort = "used";
     const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
@@ -519,8 +520,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const remote = pagedWindow(d, "/v1/usage/sessions", () => ({ range: "7d", sort: "recent", q, source: agent === "all" ? "" : agent }), paint, true);
     function paint() {
       chipHost.replaceChildren(chipBar([["all", "전체", items.length], ...agents.map((a) => [a, a, items.filter((x) => x.agent === a).length])], agent, (k) => { agent = k; paint(); }));
-      const shown = remote.snapshot().items;
-      list.replaceChildren(); if (!shown.length) list.append(el("p", "ov-win-empty", "찾은 세션이 없어요."));
+      const { items: shown, loading } = remote.snapshot();
+      list.replaceChildren(); if (!shown.length) list.append(el("p", "ov-win-empty", loading ? "불러오는 중…" : "찾은 세션이 없어요."));
       for (const x of shown) {
         const r = el("div", `ov-wide-row${x.id === sel ? " on" : ""}`), t = el("div", "ov-wide-row-t");
         t.append(el("span", "ov-win-item-title", x.title || x.session_id), el("small", "", [x.agent, x.project, `메시지 ${num(x.messages)}개`].filter(Boolean).join(" · ")));
@@ -657,9 +658,11 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const zb = (txt, label, fn) => { const b = el("button", "ov-map-zbtn", txt); b.type = "button"; b.setAttribute("aria-label", label); b.addEventListener("click", fn); return b; };
     function drawLegend() {
       const items = el("div", "ov-map-lg-items"); for (const t of ["supports", "same_session", "conflicts", "supersedes"]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t])); items.append(i); }
-      if (bubbles.groupLinesOnly()) items.append(el("span", "ov-map-lg-note", "점이 많아 무리 사이 선만 그려요"));
+      // the note takes its own top line, and the zoom buttons wrap as one group, so ⤢ never drops alone (#181)
+      const note = bubbles.groupLinesOnly() ? [el("span", "ov-map-lg-note", "점이 많아 무리 사이 선만 그려요")] : [], zoom = el("span", "ov-map-lg-zoom");
       const tog = el("div", "ov-map-lg-tog"); for (const [v, l] of [[true, "전체 관계"], [false, "선택한 연결"]]) { const on = mode === "all" ? v : v === allEdges, b = el("button", on ? "on" : "", l); b.type = "button"; b.disabled = mode === "all"; b.setAttribute("aria-pressed", String(on)); b.addEventListener("click", () => { allEdges = v; drawMap(); drawLegend(); }); tog.append(b); }
-      legend.replaceChildren(items, el("em", ""), tog, el("em", ""), zb("−", "축소", () => bubbles.zoomBy(0.8)), zoomLab, zb("+", "확대", () => bubbles.zoomBy(1.25)), zb("⤢", "화면에 맞추기", () => bubbles.fitView()));
+      zoom.append(zb("−", "축소", () => bubbles.zoomBy(0.8)), zoomLab, zb("+", "확대", () => bubbles.zoomBy(1.25)), zb("⤢", "화면에 맞추기", () => bubbles.fitView()));
+      legend.replaceChildren(...note, items, el("em", ""), tog, el("em", ""), zoom);
     }
     function paint() {
       drawMap(); // first: it drops a selection the filters now hide
@@ -672,7 +675,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const top = el("div", "ov-map-sidehead"); top.append(el("h4", "", sel ? "기억 상세" : "지도 요약")); if (sel) { const c = el("button", "ov-map-x", "✕"); c.type = "button"; c.setAttribute("aria-label", "닫기"); c.addEventListener("click", () => { sel = lastSel = null; mode = "all"; paint(); }); top.append(c); } right.append(top);
       if (!sel) {
         const f = el("div", "ov-detail-facts");
-        for (const [a, b] of [["전체 기억", num(nodes.length)], ["이어진 선", num(edges.filter((e) => e.type !== "similar").length)]]) { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); } sec("", f);
+        for (const [a, b] of [["전체 기억", `${num(nodes.length)}${("nodes_truncated" in graph ? graph.nodes_truncated : graph.truncated) ? "+" : ""}`], ["이어진 선", num(edges.filter((e) => e.type !== "similar").length)]]) { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); } sec("", f);
         const list = el("div", "ov-detail-list"); for (const [r, [l]] of Object.entries(REACH)) if (groups[r]) list.append(row("", l, "", num(groups[r].length))); sec("칸", list);
         const kinds = {}; nodes.forEach((n) => { kinds[n.kind] = (kinds[n.kind] || 0) + 1; }); const kl = el("div", "ov-detail-list"); Object.entries(kinds).sort((a, b) => b[1] - a[1]).forEach(([k, n]) => kl.append(row("", kind(k), "", num(n)))); sec("종류", kl);
         if (topics.length) { const tl = el("div", "ov-detail-list"); topics.forEach((t) => { const r = row("", t.title || "주제", "", num((t.members || []).filter((m) => byId.has(m.id)).length)); r.classList.add("ov-win-click"); r.tabIndex = 0; r.setAttribute("role", "button"); r.setAttribute("aria-pressed", String(topicF === t.id));
