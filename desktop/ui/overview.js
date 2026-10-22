@@ -14,18 +14,21 @@ window.ArkismOverview = (ctx) => {
   const time = (v) => { const t = new Date(v || 0).getTime(); return Number.isNaN(t) ? 0 : t; };
 
   // ---------------------------------------------------------------- data
-  const S = { sessions: null, total: 0, cursor: "", at: 0, loading: false, failed: false };
+  const S = { sessions: null, total: 0, cursor: "", at: 0, g: -1, loading: false, failed: false };
   let sessionEpoch = 0;
   async function loadSessions() {
-    if (S.loading || Date.now() - S.at < 60000) return;
+    // the minute cache holds within one load; a reload (new generation) reads again, so a failed read is retried (#187)
+    if (S.loading || (S.g === state.connection.generation && Date.now() - S.at < 60000)) return;
     S.loading = true;
     const ticket = ++sessionEpoch, generation = state.connection.generation;
-    try {
-      const doc = await request(`/v1/usage/sessions?${query({ range: "7d", limit: 50 })}`);
-      if (ticket !== sessionEpoch || generation !== state.connection.generation) return;
-      S.sessions = Array.isArray(doc?.items) ? doc.items : []; S.total = doc.total || 0; S.cursor = doc.next_cursor || ""; S.failed = false;
-    } catch { if (ticket !== sessionEpoch || generation !== state.connection.generation) return; S.sessions = S.sessions || []; S.failed = true; }
-    S.at = Date.now(); S.loading = false;
+    let doc = null, failed = false;
+    try { doc = await request(`/v1/usage/sessions?${query({ range: "7d", limit: 50 })}`); } catch { failed = true; }
+    if (ticket !== sessionEpoch) return; // reset() cleared S meanwhile
+    S.loading = false;
+    if (generation !== state.connection.generation) { void loadSessions(); return; } // reloaded meanwhile: read for the new load
+    if (failed) { S.sessions = S.sessions || []; S.failed = true; }
+    else { S.sessions = Array.isArray(doc?.items) ? doc.items : []; S.total = doc?.total || 0; S.cursor = doc?.next_cursor || ""; S.failed = false; }
+    S.at = Date.now(); S.g = generation;
     if (state.view === "overview") render();
     ctx.onSessions?.(); // 연결 상태 card shows the same stages
   }
@@ -331,7 +334,7 @@ window.ArkismOverview = (ctx) => {
   }
 
   return {
-    reset() { sessionEpoch++; Object.assign(S, { sessions:null,total:0,cursor:"",at:0,loading:false }); win?.reset(); },
+    reset() { sessionEpoch++; Object.assign(S, { sessions:null,total:0,cursor:"",at:0,g:-1,loading:false,failed:false }); win?.reset(); },
     stages, loadSessions, openStage, // 연결 상태 card (app.js renderStatusStages)
     views: { overview: { title: "개요", render: renderView, head: () => [button("새로고침", "ghost", "arrows-clockwise", () => { S.at = 0; void loadSessions(); })] } }
   };

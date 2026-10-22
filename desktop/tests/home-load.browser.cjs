@@ -106,6 +106,12 @@ async function overview(page) {
     await overview(page);
     assert.ok((await page.locator(".ov-chip", { hasText: "세션 기록" }).innerText()).includes("—"), "session chip unknown");
     assert.deepEqual(errors, []);
+    await page.close();
+
+    // the memory totals fail but the candidate total loads: the review count still uses it
+    ({ page, errors } = await open(browser, ["/v1/memories/query"]));
+    await page.waitForFunction(() => document.body.innerText.includes("기억 후보 120개 검토"));
+    assert.deepEqual(errors, []);
     console.log("Home load passed: one failed list, server candidate total, unreported agents, stall in days, failed load shows unknown.");
   } finally { await browser.close(); }
 })().catch((error) => { console.error(error); process.exit(1); });

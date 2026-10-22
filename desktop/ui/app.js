@@ -64,7 +64,8 @@ export function startApp() {
     imgCat: "all",
     usage: new Map(),
     usageDone: false,
-    memoryTotals: null, // { active, idle, kinds, candidates } over every memory on the server, not the loaded first page
+    memoryTotals: null, // { active, idle, kinds } over every memory on the server, not the loaded first page
+    candidateTotal: null, // every candidate on the server, read apart from memoryTotals (#188)
     listErrors: {}, // list name -> loadFailure() for a list that failed while the memories loaded (#186)
     loading: true,
     ready: null,
@@ -551,6 +552,7 @@ export function startApp() {
     state.usage = new Map();
     state.usageDone = false;
     state.memoryTotals = null;
+    state.candidateTotal = null;
     state.listErrors = {};
     state.versions = new Map();
     state.versionsDone = false;
@@ -604,8 +606,9 @@ export function startApp() {
     const candidates = state.caps?.actions?.review_list ? appApi.request("/v1/memory_candidates/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: "candidate", limit: 1 }) })
       .then((r) => (Number.isSafeInteger(r?.total) ? r.total : null), () => null) : null;
     const [active, idleRows, candidateTotal] = await Promise.all([read("active"), read("idle"), candidates]);
-    if (g !== state.connection.generation || !active) return;
-    state.memoryTotals = { active: active.total, idle: idleRows?.total ?? null, kinds: active.facets?.kinds || null, candidates: candidateTotal };
+    if (g !== state.connection.generation) return;
+    state.candidateTotal = candidateTotal; // kept even when the memory totals failed
+    if (active) state.memoryTotals = { active: active.total, idle: idleRows?.total ?? null, kinds: active.facets?.kinds || null };
     render(false);
   }
   // Use counts of every memory in one call (GET /v1/memory_usage: 7·30 days and the last use; unused memories are absent).
@@ -1071,7 +1074,7 @@ export function startApp() {
     const ver = (v) => (/^\d/.test(v || "") ? `v${v}` : v || "");
     // the server total while more pages wait, not the first page (#188); once every candidate is loaded the rows are current
     // null while the total is unknown, so the badge waits ("…") instead of showing the first page as the total
-    const reviewTotal = collectionPaging.snapshot("candidates").cursor ? state.memoryTotals?.candidates ?? null : d.candidates.length;
+    const reviewTotal = collectionPaging.snapshot("candidates").cursor ? state.candidateTotal ?? null : d.candidates.length;
     const items = [
       { id: "updates", n: updates.length, icon: "arrows-clockwise", label: "업데이트 가능", title: updates.slice(0, 2).map((u) => `${u.name} ${ver(u.to)}`).join(" · "),
         sub: "원본 저장소에 새 버전이 있어요", action: "업데이트", run: () => updateSkills(updates), list: updates,
