@@ -71,7 +71,7 @@ class H(http.server.SimpleHTTPRequestHandler):
         if s.command == "POST" and s.path.split("?")[0] in QUERY: return s._json(200, s._query(s.path.split("?")[0], data))
         return s._json(200, s._fixture(".post") if s.command == "POST" else {})
     def _query(s, path, data):
-        # The catalog query pages the same list fixtures a GET reads, filtered and counted like filterMemoryCatalog; one page.
+        # The catalog query pages the same list fixtures a GET reads, filtered and counted like filterMemoryCatalog.
         try: body = json.loads(data or b"{}")
         except ValueError: body = {}
         state, q = str(body.get("state") or ""), str(body.get("q") or "").lower()
@@ -86,7 +86,9 @@ class H(http.server.SimpleHTTPRequestHandler):
         if path == "/v1/memory_candidates/query" and body.get("category"): rows = [r for r in rows if category(r) == body["category"]]
         kinds = count(rows, lambda r: r.get("kind"))
         if body.get("kind"): rows = [r for r in rows if r.get("kind") == body["kind"]]
-        return {"items": rows, "total": len(rows), "next_cursor": "", "authority": "data_only_untrusted", "facets": {"kinds": kinds, "repositories": {}, "categories": {}, "states": states}}
+        start, limit = int(body.get("cursor") or 0), int(body.get("limit") or 50)  # the cursor is a plain offset here
+        nxt = str(start + limit) if start + limit < len(rows) else ""
+        return {"items": rows[start:start + limit], "total": len(rows), "next_cursor": nxt, "authority": "data_only_untrusted", "facets": {"kinds": kinds, "repositories": {}, "categories": {}, "states": states}}
     do_POST = do_PUT = do_PATCH = do_DELETE = _write
 
 QUERY = {"/v1/memories/query": lambda state: "/v1/memories",
