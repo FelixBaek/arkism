@@ -94,10 +94,28 @@ fs.mkdirSync(output,{recursive:true});
     assert.equal(await page.locator("#table").getByText("저장",{exact:true}).count()>0,true);
     await page.evaluate(async()=>{ await window.ArkismI18n.setLang("en"); });
     assert.equal(await page.locator("#table").getByText("저장",{exact:true}).count()>0,true,"English changed user text");
+    // #194: crew names, categories and intros are the user's words, even when one matches a dictionary entry.
+    await page.locator('[data-menu="agent"]').click();
+    await page.locator("#area-tabs .area-tab").nth(2).click();await page.locator(".wf-card").first().waitFor();
+    await page.locator("#area-tabs .area-tab").nth(0).click();await page.locator(".ex-card:not(.ex-card-new)").first().waitFor();
+    const agentsFixture=data["v1/crew.json"].items.filter(r=>r.crew.type==="agent");
+    assert.deepEqual(await page.locator(".ex-card:not(.ex-card-new) strong").allInnerTexts(),agentsFixture.map(r=>r.crew.name));
+    assert.deepEqual(await page.locator(".ex-card-cat").allInnerTexts(),agentsFixture.map(r=>r.crew.category));
+    await page.locator(".ex-card",{hasText:"디자이너"}).click();
+    assert.equal(await page.locator("dialog[open] .ex-role").innerText(),"UI 시안 정리 · 디자인 검토");
+    await page.keyboard.press("Escape");await page.locator("dialog[open]").waitFor({state:"detached"});
+    // #193: the time before a meeting title is translated; the title is not, and the rows fit at 900px.
+    await page.locator("#area-tabs .area-tab").nth(3).click();
+    const lastMeeting=page.locator(".cu-team .tm-urow").nth(1).locator("> span").last();
+    await lastMeeting.waitFor();
+    assert.match(await lastMeeting.innerText(),/^\d+ days? ago · 로그인 화면 다크 테마 검토$/);
+    await page.setViewportSize({width:900,height:1000});
+    assert.deepEqual(await page.evaluate(()=>[...document.querySelectorAll(".cu-table .tm-urow")].filter(r=>r.scrollWidth>r.clientWidth).length),0,"usage rows overflow at 900px");
+    await page.setViewportSize({width:1440,height:1000});
     await page.evaluate(async()=>{ await window.ArkismI18n.setLang("ko"); });
     assert.deepEqual(errors,[]);
     fs.writeFileSync(path.join(output,"screens.json"),JSON.stringify(snapshots,null,2));
-    console.log("UI structure: 7 real screens, keyboard opening/Escape, lazy English, Korean round trip and user text passed");
+    console.log("UI structure: 7 real screens, keyboard opening/Escape, lazy English, Korean round trip, user text and crew user data passed");
   } catch(error) {console.error(errors);console.error(await page.evaluate(()=>window.dialogEvents));console.error((await page.locator("body").innerText()).slice(-3500));throw error;}
   finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

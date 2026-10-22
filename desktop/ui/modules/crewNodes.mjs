@@ -186,7 +186,8 @@ export function createCrewNodes(deps) {
       const line = x.type === "team"
         ? [`@${x.handle}`, deps.MODES[x.mode] || "", x.ending?.max_rounds ? `최대 ${x.ending.max_rounds}라운드` : ""]
         : [`@${x.handle}`, x.model || "모델 자동", x.skills?.length ? `스킬 ${x.skills.length}개` : ""];
-      txt.append(deps.el("strong", "", x.name), deps.el("small", "dim", line.filter(Boolean).join(" · ")));
+      const name = deps.el("strong", "", x.name); name.setAttribute("data-no-i18n", "");
+      txt.append(name, deps.el("small", "dim", line.filter(Boolean).join(" · ")));
       if (x.type === "team") txt.append(teamFaces(x));
     } else txt.append(deps.el("strong", "dim", "고르세요"));
     const change = deps.select([["", cur ? "바꾸기" : "고르기"], ...all.map((r) => [r.id, r.crew.name])], "");

@@ -216,9 +216,11 @@ window.ArkismAutomation = (h) => {
         thumb.replaceChildren();
         if (d.cover?.thumb) { const img = el("img"); img.alt = ""; img.src = d.cover.thumb; thumb.append(img); } else thumb.append(el("span", "", (d.name || "NEW").slice(0, 8).toUpperCase() + "."));
         cat.replaceChildren(...h.catChipBody(d.category));
+        name.toggleAttribute("data-no-i18n", !!d.name); // the user's words stay; only the placeholder is UI text
         name.textContent = d.name || "자동화 이름을 적어 주세요";
         name.classList.toggle("empty", !d.name);
         hv.textContent = d.handle ? `$${d.handle}` : "$이름";
+        role.toggleAttribute("data-no-i18n", !!d.role);
         role.textContent = d.role || "무엇을 하는 자동화인가요? 한 줄로 적어요";
         role.classList.toggle("empty", !d.role);
         copyHost.replaceChildren(d.handle ? h.copyButton(`$${d.handle}`) : "");
@@ -1005,7 +1007,8 @@ window.ArkismAutomation = (h) => {
       const who = el("div", "auto-run-who");
       const face = el("span", "auto-face");
       face.append(h.modelMark(rec.crew.model));
-      who.append(face, el("strong", "", rec.crew.name), el("small", "", `${work.length}단계 중 ${doneN}단계 · ${h.RUN_LABEL[cr.status] || ""}`));
+      const runName = el("strong", "", rec.crew.name); runName.setAttribute("data-no-i18n", "");
+      who.append(face, runName, el("small", "", `${work.length}단계 중 ${doneN}단계 · ${h.RUN_LABEL[cr.status] || ""}`));
       wrap.append(who);
       const steps = el("div", "auto-run-steps");
       const mark = { done: "✓", running: "●", waiting: "●", failed: "✕", skipped: "–", pending: "○" };

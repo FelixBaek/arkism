@@ -1438,7 +1438,7 @@ window.ArkismI18nEN = {
   "API 키 추가": "Add API key",
   "이 계정은 사용 한도를 알려 주지 않아요.": "This account doesn't report usage limits.",
   "구독 요금제": "Subscription plan",
-  "API 키": "API keys",
+  "API 키": "API key",
   "키 추가": "Add key",
   "저장된 키가 없어요. 구독 로그인만 쓰면 키가 없어도 돼요.": "No saved keys. You don't need one if you only use subscription login.",
   "서버에 저장하는 중": "Saving to server",

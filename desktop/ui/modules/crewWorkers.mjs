@@ -147,7 +147,7 @@ export function createCrewWorkers(deps) {
     const box = deps.el("div", "wk-flow");
     const head = deps.el("div", "wk-flow-head");
     const mark = deps.el("span", "wk-flow-mark"); mark.append(deps.icon("tree-structure"));
-    head.append(mark, deps.el("strong", "", w ? w.crew.name : "워크플로우 없음 · 지시대로 일해요"));
+    head.append(mark, w ? deps.raw(deps.el("strong", "", w.crew.name)) : deps.el("strong", "", "워크플로우 없음 · 지시대로 일해요"));
     box.append(head);
     if (!w) head.append(deps.button("새 워크플로우 만들기", "small", "plus", () => deps.getAuto().create()));
     if (w) {
@@ -761,8 +761,8 @@ export function createCrewWorkers(deps) {
     const art = deps.el("span", "ex-card-art");
     art.append(faceOf(x));
     b.append(art);
-    if (x.category) { const c = deps.el("small", "ex-card-cat"); c.append(deps.icon(deps.ctx.catIcon(x.category)), deps.el("span", "", x.category)); b.append(c); }
-    b.append(deps.el("strong", "", x.name));
+    if (x.category) { const c = deps.el("small", "ex-card-cat"); c.append(deps.icon(deps.ctx.catIcon(x.category)), deps.raw(deps.el("span", "", x.category))); b.append(c); }
+    b.append(deps.raw(deps.el("strong", "", x.name)));
     b.title = x.enabled === false ? `${x.name} · 꺼짐` : x.name; // 763:57845: an off card is only dimmed
     b.addEventListener("click", () => { workerPick(r.id); openExpertPopup(r); });
     b.ctxItems = () => [{ label: "열기", run: () => b.click() }, { label: "@이름 복사", off: !x.handle, run: () => navigator.clipboard.writeText(`@${x.handle}`).then(() => deps.notice("복사했어요."), () => deps.notice("복사하지 못했어요.")) }];
@@ -813,7 +813,7 @@ export function createCrewWorkers(deps) {
     const b = deps.el(tag, `ex-inline ${cls}`);
     b.tabIndex = 0;
     b.setAttribute("role", "button");
-    const paint = () => { b.textContent = get() || ph; b.classList.toggle("empty", !get()); };
+    const paint = () => { b.toggleAttribute("data-no-i18n", !!get()); b.textContent = get() || ph; b.classList.toggle("empty", !get()); }; // the user's words stay; only the placeholder is UI text
     paint();
     const start = () => {
       const i = deps.input(get(), { maxLength: max, placeholder: ph, cls: `ex-inline-input ${cls}` });
@@ -1255,7 +1255,7 @@ export function createCrewWorkers(deps) {
     const teamRow = deps.el("div", "wk-chips");
     for (const t of teams()) {
       const on = wk.teamsPick.has(t.id);
-      const b = deps.el("button", `wk-chip${on ? " on" : ""}`, t.crew.name);
+      const b = deps.raw(deps.el("button", `wk-chip${on ? " on" : ""}`, t.crew.name));
       b.type = "button";
       b.setAttribute("aria-pressed", String(on));
       b.addEventListener("click", () => { if (on) wk.teamsPick.delete(t.id); else wk.teamsPick.add(t.id); wk.redraw(); });

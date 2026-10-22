@@ -23,7 +23,9 @@ export function createCrewPersonas(deps) {
       head.type = "button";
       head.setAttribute("aria-expanded", String(isOpen));
       const used = r.id === "new" ? 0 : personaUses(r.id).length;
-      head.append(deps.icon("robot", "icon dim"), deps.el("strong", "", r.crew.name || "새 페르소나"), deps.el("span", "cat-rules", r.crew.role || ""),
+      const name = deps.el("strong", "", r.crew.name || "새 페르소나"), role = deps.el("span", "cat-rules", r.crew.role || "");
+      if (r.crew.name) name.setAttribute("data-no-i18n", ""); role.setAttribute("data-no-i18n", "");
+      head.append(deps.icon("robot", "icon dim"), name, role,
         deps.el("span", "tag", used ? `노드 ${used}곳에서 씀` : "안 씀"), deps.icon(isOpen ? "caret-down" : "caret-right"));
       head.addEventListener("click", () => {
         personaOpen = isOpen ? null : r.id;

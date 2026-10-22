@@ -39,8 +39,9 @@
 /* Narrow windows: drop the 평균 column (5th) and let the last column wrap instead of cutting it off. */
 @media (max-width: 1200px) {
   .cu-table .tm-urow > :nth-child(5) { display: none; }
-  .cu-expert .tm-urow { grid-template-columns: minmax(110px, 1.2fr) minmax(80px, 1fr) 48px 64px 72px minmax(80px, 1.2fr); }
-  .cu-team .tm-urow { grid-template-columns: minmax(100px, 1.1fr) minmax(64px, .8fr) 48px 84px 64px minmax(120px, 1.8fr); }
-  .cu-auto .tm-urow { grid-template-columns: minmax(100px, 1.1fr) minmax(64px, .8fr) 48px 64px 72px minmax(120px, 1.8fr); }
+  /* text columns may shrink to 0 (they clip with an ellipsis or wrap), so the row never runs past the card at 900px */
+  .cu-expert .tm-urow { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 48px 64px 72px minmax(0, 1.2fr); }
+  .cu-team .tm-urow { grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) 48px 84px 64px minmax(0, 1.8fr); }
+  .cu-auto .tm-urow { grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) 48px 64px 72px minmax(0, 1.8fr); }
   .cu-table .tm-urow > span:last-child { white-space: normal; overflow-wrap: anywhere; }
 }
