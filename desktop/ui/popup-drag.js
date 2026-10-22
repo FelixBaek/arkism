@@ -10,17 +10,21 @@
 
   // Opens the popup in a separate window at screen point (x, y) and closes it here. Only popups that say how to reopen
   // themselves (data-popout) can go; unsaved edits stop it the same way closing would.
+  const going = new WeakSet(); // a popup whose popout_open is still on its way (a held Alt+Shift+O must not open it twice)
   async function tearOff(dlg, x, y) {
     const recipe = dlg.dataset.popout;
     const session = window.ArkismPopoutSession?.();
-    if (!recipe || !session || !tauri()) return false;
+    if (!recipe || !session || !tauri() || going.has(dlg)) return false;
     if (!dlg.dispatchEvent(new Event("cancel", { cancelable: true }))) return false;
     const r = dlg.getBoundingClientRect();
+    going.add(dlg);
     try {
       await tauri().invoke("popout_open", { payload: JSON.stringify({ recipe: JSON.parse(recipe), session }), title: dlg.dataset.popoutTitle || "", x: Math.round(x), y: Math.round(y), width: Math.round(r.width), height: Math.round(r.height) });
     } catch (err) {
       window.ArkismNotice?.(`새 창으로 열지 못했어요 (${err?.message || err}).`);
       return false;
+    } finally {
+      going.delete(dlg);
     }
     dlg.close();
     return true;
@@ -71,7 +75,7 @@
   // The keyboard's tear-off (Alt+Shift+O, named on the popup as aria-keyshortcuts): the top popup opens in its own
   // window where it sits now. e.code, since Option+Shift+O types "Ø" on a Mac.
   document.addEventListener("keydown", (e) => {
-    if (e.code !== "KeyO" || !e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey) return;
+    if (e.code !== "KeyO" || e.repeat || !e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey) return;
     const dlg = [...document.querySelectorAll("dialog[open]")].pop();
     if (!dlg || dlg.classList.contains("popout-root")) return;
     e.preventDefault();
