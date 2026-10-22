@@ -242,7 +242,7 @@ window.ArkismMemoryBubbles = (() => {
       for (const p of items) if (p.id === hover || p.id === sel || p.id === kb) { ctx.globalAlpha = 1; ctx.strokeStyle = text; ctx.lineWidth = 2 / zoom; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + (p.id === hover ? 1 : 2.5) / zoom, 0, 7); ctx.stroke(); }
       ctx.globalAlpha = 1;
       drawNames(foci, near, bg, text, muted, font);
-      labels.hidden = !!sel; // group names would float over the fan
+      labels.style.visibility = sel ? "hidden" : ""; // group names would float over the fan; still laid out, so layout() can measure them
       for (const g of groups) { if (!g.rr) continue; const [x, y] = scr(g.rx, g.ry - g.rr); g.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%)`; }
       placeCards();
       const id = [hover, kb].find((x) => x && x !== sel), p = id && byId.get(id), t = p && tip(id); // the selection has its card

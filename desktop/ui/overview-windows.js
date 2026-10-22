@@ -447,7 +447,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // 쓰는 중인 기억 (579:48597)
   // filter "idle" (검증 › 정리할 기억): the same 안 쓰임 rule as the 검증 step, opened in place; ‹ 작게 보기 goes back to 검증
   function wideActive(filter, focusId) {
-    const d = shell("쓰는 중인 기억", "", "승인된 기억만 불러오기에 쓰여요", () => open(filter === "idle" ? "judge" : "active"));
+    const d = shell("쓰는 중인 기억", state.memoryTotals?.active == null ? "" : `${num(state.memoryTotals.active)}개`, "승인된 기억만 불러오기에 쓰여요", () => open(filter === "idle" ? "judge" : "active"));
     recipe(d, { wide: "active", args: [filter, focusId] });
     let q = "", kindF = filter || "all", sel = focusId || null, sort = "used";
     const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
@@ -675,7 +675,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const top = el("div", "ov-map-sidehead"); top.append(el("h4", "", sel ? "기억 상세" : "지도 요약")); if (sel) { const c = el("button", "ov-map-x", "✕"); c.type = "button"; c.setAttribute("aria-label", "닫기"); c.addEventListener("click", () => { sel = lastSel = null; mode = "all"; paint(); }); top.append(c); } right.append(top);
       if (!sel) {
         const f = el("div", "ov-detail-facts");
-        for (const [a, b] of [["전체 기억", `${num(nodes.length)}${graph.nodes_truncated || graph.truncated ? "+" : ""}`], ["이어진 선", num(edges.filter((e) => e.type !== "similar").length)]]) { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); } sec("", f);
+        for (const [a, b] of [["전체 기억", `${num(nodes.length)}${("nodes_truncated" in graph ? graph.nodes_truncated : graph.truncated) ? "+" : ""}`], ["이어진 선", num(edges.filter((e) => e.type !== "similar").length)]]) { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); } sec("", f);
         const list = el("div", "ov-detail-list"); for (const [r, [l]] of Object.entries(REACH)) if (groups[r]) list.append(row("", l, "", num(groups[r].length))); sec("칸", list);
         const kinds = {}; nodes.forEach((n) => { kinds[n.kind] = (kinds[n.kind] || 0) + 1; }); const kl = el("div", "ov-detail-list"); Object.entries(kinds).sort((a, b) => b[1] - a[1]).forEach(([k, n]) => kl.append(row("", kind(k), "", num(n)))); sec("종류", kl);
         if (topics.length) { const tl = el("div", "ov-detail-list"); topics.forEach((t) => { const r = row("", t.title || "주제", "", num((t.members || []).filter((m) => byId.has(m.id)).length)); r.classList.add("ov-win-click"); r.tabIndex = 0; r.setAttribute("role", "button"); r.setAttribute("aria-pressed", String(topicF === t.id));
