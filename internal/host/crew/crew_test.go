@@ -1407,3 +1407,17 @@ func TestProviderDoRefusesHTTPSDowngrade(t *testing.T) {
 		t.Fatal(err, leaked)
 	}
 }
+
+func TestKeyTestErrSentences(t *testing.T) {
+	for _, c := range []struct {
+		err  error
+		want string
+	}{
+		{errors.New("dial"), "제공자에 연결하지 못했어요"},
+		{&host.HTTPError{Code: 403, Body: []byte("Cloudflare")}, "Cloudflare"},
+		{&host.HTTPError{Code: 401}, "키가 맞지 않아요"},
+		{&host.HTTPError{Code: 500}, "연결 실패 (500)"},
+	} {
+		mustCrewErr(t, keyTestErr(c.err), c.want)
+	}
+}
