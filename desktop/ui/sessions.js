@@ -10,6 +10,7 @@ window.ArkismSessions = (ctx) => {
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
   const S = { find: null, range: "7d", source: "", q: "", sort: "recent", selecting: false, doc: null, state: "idle", error: "", selected: "", picked: new Set(), busy: false, notice: "", tx: null };
   let epoch = 0, typing = 0, txEpoch = 0;
+  const MISSED = "이 기억이 나온 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요.";
 
   const filters = () => ({ range: S.range, source: S.source, q: S.q, sort: S.sort });
   const collection = ctx.remoteCollection((filters, page) => request(`/v1/usage/sessions?${query({ ...filters, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) })}`));
@@ -253,8 +254,8 @@ window.ArkismSessions = (ctx) => {
     const parts = [];
     if (S.selecting) parts.push(selectionBar());
     if (S.notice && !S.selected) parts.push(el("p", "ss-note", S.notice));
-    // picked before the rows are drawn so the first row shows as selected; a pending find decides on its own
-    if (!S.selected && !S.find && S.doc.items[0]) S.selected = S.doc.items[0].id;
+    // picked before the rows are drawn so the first row shows as selected; a pending or missed find decides on its own
+    if (!S.selected && !S.find && S.notice !== MISSED && S.doc.items[0]) S.selected = S.doc.items[0].id;
     const list = el("div", "v4s-list");
     ctx.virtualList.mount({ container: list, scrollport: table, items: S.doc.items, row, key: JSON.stringify(filters()) });
     if (!S.doc.items.length) list.append(el("div", "empty", "조건에 맞는 세션이 없어요."));
@@ -266,7 +267,7 @@ window.ArkismSessions = (ctx) => {
       const f = S.find; S.find = null; // cleared first: transcript() repaints, which comes back here
       const hit = S.doc.items.find((x) => x.session_id === f.sid);
       if (hit) { S.selected = hit.id; void transcript(hit.id, false, f.quote); }
-      else { S.notice = "이 기억이 나온 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요."; table.prepend(el("p", "ss-note", S.notice)); } // a missing session must not look like the first one
+      else { S.notice = MISSED; table.prepend(el("p", "ss-note", S.notice)); } // a missing session must not look like the first one
     }
     detail();
   }

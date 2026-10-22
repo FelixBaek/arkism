@@ -410,6 +410,11 @@ test("a memory opens its session over the whole range with the quote marked", as
   x.view.render(); await settle();
   assert.match(x.table().textContent, /이 기억이 나온 세션을 찾지 못했어요/);
   assert.equal(x.$("#detail").children.length, 0);
+  // a repaint keeps the notice and still picks no row in its place
+  x.view.render();
+  assert.match(x.table().textContent, /이 기억이 나온 세션을 찾지 못했어요/);
+  assert.equal(x.table().querySelector(".ss-item.selected"), null);
+  assert.equal(x.$("#detail").children.length, 0);
 });
 
 test("open(id) from usage widens the range only when the session is not listed", async (t) => {
