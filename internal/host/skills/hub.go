@@ -528,18 +528,31 @@ func (c *hubClient) resolve(refs []string, trialID, runtime string) ([]map[strin
 		if trialID != "" {
 			return nil, hubErr("trial_unavailable_offline", "")
 		}
-		out := make([]map[string]any, 0, len(refs))
-		for _, ref := range refs {
-			item, err := c.offline(ref)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, item)
-		}
-		return out, nil
+		return c.resolveOffline(refs)
 	} else if err != nil {
 		return nil, err
 	}
+	items, err := resolveItems(res, trialID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		if truthy(item["error"]) && trialID == "" {
+			c.discard(str(item["ref"]))
+		}
+		if !truthy(item["error"]) {
+			if err := c.resolveCheckItem(item, trialID); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, withKeys(item, "resolution_mode", "hub"))
+	}
+	return out, nil
+}
+
+// resolveItems is the response's items; a trial must answer with its one item.
+func resolveItems(res map[string]any, trialID string) ([]map[string]any, error) {
 	rawItems, ok := res["items"].([]any)
 	if !ok {
 		return nil, errors.New("KeyError: items")
@@ -558,39 +571,50 @@ func (c *hubClient) resolve(refs []string, trialID, runtime string) ([]map[strin
 			return nil, hubErr("invalid_trial_response", "")
 		}
 	}
-	out := make([]map[string]any, 0, len(items))
-	for _, item := range items {
-		if truthy(item["error"]) && trialID == "" {
-			c.discard(str(item["ref"]))
+	return items, nil
+}
+
+// resolveOffline serves each ref from the cache.
+func (c *hubClient) resolveOffline(refs []string) ([]map[string]any, error) {
+	out := make([]map[string]any, 0, len(refs))
+	for _, ref := range refs {
+		item, err := c.offline(ref)
+		if err != nil {
+			return nil, err
 		}
-		if !truthy(item["error"]) {
-			instructions, ok := item["instructions"].(string)
-			if !ok {
-				return nil, errors.New("KeyError: instructions")
-			}
-			if digest([]byte(instructions)) != item["content_hash"] {
-				return nil, hubErr("hash_mismatch", str(item["ref"]))
-			}
-			_, hasBundle := item["bundle"]
-			if hasBundle {
-				if _, err := validateBundle(item["bundle"]); err != nil {
-					return nil, hubErr("bundle_hash_mismatch", "")
-				}
-			}
-			if trialID == "" {
-				if err := c.store(str(item["ref"]), item); err != nil {
-					return nil, err
-				}
-				if pinned := pyStr(item["skill_id"]) + "@" + pyStr(item["resolved_version"]); hasBundle && pinned != item["ref"] {
-					if err := c.store(pinned, withKeys(item, "ref", pinned)); err != nil {
-						return nil, err
-					}
-				}
-			}
-		}
-		out = append(out, withKeys(item, "resolution_mode", "hub"))
+		out = append(out, item)
 	}
 	return out, nil
+}
+
+// resolveCheckItem verifies a resolved item's hashes and, outside a trial, caches it
+// (also under its pinned ref when it carries a bundle).
+func (c *hubClient) resolveCheckItem(item map[string]any, trialID string) error {
+	instructions, ok := item["instructions"].(string)
+	if !ok {
+		return errors.New("KeyError: instructions")
+	}
+	if digest([]byte(instructions)) != item["content_hash"] {
+		return hubErr("hash_mismatch", str(item["ref"]))
+	}
+	_, hasBundle := item["bundle"]
+	if hasBundle {
+		if _, err := validateBundle(item["bundle"]); err != nil {
+			return hubErr("bundle_hash_mismatch", "")
+		}
+	}
+	if trialID != "" {
+		return nil
+	}
+	if err := c.store(str(item["ref"]), item); err != nil {
+		return err
+	}
+	if pinned := pyStr(item["skill_id"]) + "@" + pyStr(item["resolved_version"]); hasBundle && pinned != item["ref"] {
+		if err := c.store(pinned, withKeys(item, "ref", pinned)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func items0(items []map[string]any) map[string]any {
@@ -783,33 +807,7 @@ func materialize(item map[string]any, folder, localSource string, extra host.Obj
 		return fail(err)
 	}
 	for _, f := range bundleFiles(bundle) {
-		rel := str(f["path"])
-		if rel == "SKILL.md" {
-			return fail(hubErr("invalid_skill_bundle", rel))
-		}
-		var raw []byte
-		if content, ok := f["content"].(string); ok {
-			raw = []byte(content)
-		} else if localSource != "" {
-			if raw, err = localBytes(localSource, rel, str(f["sha256"])); err != nil {
-				return fail(err)
-			}
-		} else {
-			return fail(hubErr("hash_only_file_unavailable", rel))
-		}
-		target := filepath.Join(work, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(target), 0o777); err != nil {
-			return fail(err)
-		}
-		if err := os.WriteFile(target, raw, 0o666); err != nil {
-			return fail(err)
-		}
-		// shortcut: modes are not pinned; a shebang marks an executable script.
-		mode := os.FileMode(0o644)
-		if bytes.HasPrefix(raw, []byte("#!")) {
-			mode = 0o755
-		}
-		if err := os.Chmod(target, mode); err != nil {
+		if err := materializeFile(work, localSource, f); err != nil {
 			return fail(err)
 		}
 	}
@@ -857,6 +855,38 @@ func materialize(item map[string]any, folder, localSource string, extra host.Obj
 		}
 	}
 	return folder, nil
+}
+
+// materializeFile writes one bundle file under work, its bytes inline or from localSource.
+func materializeFile(work, localSource string, f map[string]any) error {
+	rel := str(f["path"])
+	if rel == "SKILL.md" {
+		return hubErr("invalid_skill_bundle", rel)
+	}
+	var raw []byte
+	if content, ok := f["content"].(string); ok {
+		raw = []byte(content)
+	} else if localSource != "" {
+		var err error
+		if raw, err = localBytes(localSource, rel, str(f["sha256"])); err != nil {
+			return err
+		}
+	} else {
+		return hubErr("hash_only_file_unavailable", rel)
+	}
+	target := filepath.Join(work, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(target), 0o777); err != nil {
+		return err
+	}
+	if err := os.WriteFile(target, raw, 0o666); err != nil {
+		return err
+	}
+	// shortcut: modes are not pinned; a shebang marks an executable script.
+	mode := os.FileMode(0o644)
+	if bytes.HasPrefix(raw, []byte("#!")) {
+		mode = 0o755
+	}
+	return os.Chmod(target, mode)
 }
 
 // exists is Path.exists() or is_symlink().

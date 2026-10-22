@@ -318,63 +318,71 @@ func (g *goIndexer) genDecl(p *packages.Package, path string, d *ast.GenDecl, qu
 	for _, spec := range d.Specs {
 		switch s := spec.(type) {
 		case *ast.TypeSpec:
-			tn, _ := p.TypesInfo.Defs[s.Name].(*types.TypeName)
-			if tn == nil || s.Name.Name == "_" {
-				continue
-			}
-			qname := objQName(tn)
-			doc := s.Doc
-			if doc == nil && len(d.Specs) == 1 {
-				doc = d.Doc
-			}
-			start, end := g.lines(p.Fset, s.Pos(), s.End())
-			id := SymbolID(LangGo, qname)
-			g.addSymbol(Symbol{Path: path, Kind: KindType, Name: tn.Name(), QName: qname, Signature: typeSummary(tn, qual), StartLine: start, EndLine: end, Exported: tn.Exported(), Doc: firstLine(doc)})
-			g.walkTypes(p, path, id, s.Type)
-			if it, ok := s.Type.(*ast.InterfaceType); ok && !tn.IsAlias() {
-				g.interfaceMethods(p, path, tn, it, qual)
-			} else if !tn.IsAlias() {
-				if n, ok := tn.Type().(*types.Named); ok && n.TypeParams().Len() == 0 {
-					if _, isIface := n.Underlying().(*types.Interface); !isIface {
-						g.concrete = append(g.concrete, goType{obj: tn, path: path, line: start})
-					}
-				}
-			}
+			g.typeSpec(p, path, d, s, qual)
 		case *ast.ValueSpec:
-			kind := KindVar
-			if d.Tok == token.CONST {
-				kind = KindConst
-			}
-			var first string
-			for _, name := range s.Names {
-				obj := p.TypesInfo.Defs[name]
-				if obj == nil || name.Name == "_" {
-					continue
-				}
-				qname := objQName(obj)
-				if qname == "" {
-					continue
-				}
-				doc := s.Doc
-				if doc == nil && len(d.Specs) == 1 {
-					doc = d.Doc
-				}
-				start, end := g.lines(p.Fset, s.Pos(), s.End())
-				g.addSymbol(Symbol{Path: path, Kind: kind, Name: obj.Name(), QName: qname, Signature: kind + " " + obj.Name() + " " + types.TypeString(obj.Type(), qual), StartLine: start, EndLine: end, Exported: obj.Exported(), Doc: firstLine(doc)})
-				if first == "" {
-					first = SymbolID(LangGo, qname)
-				}
-			}
-			if first == "" {
-				continue
-			}
-			for _, v := range s.Values {
-				g.walk(p, path, first, v)
-			}
-			if s.Type != nil {
-				g.walkTypes(p, path, first, s.Type)
+			g.valueSpec(p, path, d, s, qual)
+		}
+	}
+}
+
+// specDoc is the doc comment of a spec, or of its declaration when it is the only spec.
+func specDoc(d *ast.GenDecl, doc *ast.CommentGroup) *ast.CommentGroup {
+	if doc == nil && len(d.Specs) == 1 {
+		return d.Doc
+	}
+	return doc
+}
+
+func (g *goIndexer) typeSpec(p *packages.Package, path string, d *ast.GenDecl, s *ast.TypeSpec, qual types.Qualifier) {
+	tn, _ := p.TypesInfo.Defs[s.Name].(*types.TypeName)
+	if tn == nil || s.Name.Name == "_" {
+		return
+	}
+	qname := objQName(tn)
+	start, end := g.lines(p.Fset, s.Pos(), s.End())
+	id := SymbolID(LangGo, qname)
+	g.addSymbol(Symbol{Path: path, Kind: KindType, Name: tn.Name(), QName: qname, Signature: typeSummary(tn, qual), StartLine: start, EndLine: end, Exported: tn.Exported(), Doc: firstLine(specDoc(d, s.Doc))})
+	g.walkTypes(p, path, id, s.Type)
+	if it, ok := s.Type.(*ast.InterfaceType); ok && !tn.IsAlias() {
+		g.interfaceMethods(p, path, tn, it, qual)
+	} else if !tn.IsAlias() {
+		if n, ok := tn.Type().(*types.Named); ok && n.TypeParams().Len() == 0 {
+			if _, isIface := n.Underlying().(*types.Interface); !isIface {
+				g.concrete = append(g.concrete, goType{obj: tn, path: path, line: start})
 			}
 		}
+	}
+}
+
+func (g *goIndexer) valueSpec(p *packages.Package, path string, d *ast.GenDecl, s *ast.ValueSpec, qual types.Qualifier) {
+	kind := KindVar
+	if d.Tok == token.CONST {
+		kind = KindConst
+	}
+	var first string
+	for _, name := range s.Names {
+		obj := p.TypesInfo.Defs[name]
+		if obj == nil || name.Name == "_" {
+			continue
+		}
+		qname := objQName(obj)
+		if qname == "" {
+			continue
+		}
+		start, end := g.lines(p.Fset, s.Pos(), s.End())
+		g.addSymbol(Symbol{Path: path, Kind: kind, Name: obj.Name(), QName: qname, Signature: kind + " " + obj.Name() + " " + types.TypeString(obj.Type(), qual), StartLine: start, EndLine: end, Exported: obj.Exported(), Doc: firstLine(specDoc(d, s.Doc))})
+		if first == "" {
+			first = SymbolID(LangGo, qname)
+		}
+	}
+	if first == "" {
+		return
+	}
+	for _, v := range s.Values {
+		g.walk(p, path, first, v)
+	}
+	if s.Type != nil {
+		g.walkTypes(p, path, first, s.Type)
 	}
 }
 

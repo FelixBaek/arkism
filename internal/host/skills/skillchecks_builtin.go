@@ -323,16 +323,27 @@ func builtinQuality(folder string) (float64, []string) {
 		_, err := os.Stat(p)
 		return err == nil
 	}
+	missingRefs, broken := builtinQualityLinks(body, exists)
+	if missingRefs == 0 {
+		score += 10
+	} else {
+		issues = append(issues, "언급한 파일 "+strconv.Itoa(missingRefs)+"개 없음")
+	}
+	if broken == 0 {
+		score += 10
+	} else {
+		issues = append(issues, "깨진 상대 링크 "+strconv.Itoa(broken)+"개")
+	}
+	return float64(min(score, 100)), issues
+}
+
+// builtinQualityLinks counts mentioned files and relative markdown links that do not exist in the folder.
+func builtinQualityLinks(body string, exists func(string) bool) (int, int) {
 	missingRefs := 0
 	for _, m := range reRefPath.FindAllStringSubmatch(body, -1) {
 		if !exists(m[1]) {
 			missingRefs++
 		}
-	}
-	if missingRefs == 0 {
-		score += 10
-	} else {
-		issues = append(issues, "언급한 파일 "+strconv.Itoa(missingRefs)+"개 없음")
 	}
 	broken := 0
 	for _, m := range reMDLink.FindAllStringSubmatch(body, -1) {
@@ -350,12 +361,7 @@ func builtinQuality(folder string) (float64, []string) {
 			broken++
 		}
 	}
-	if broken == 0 {
-		score += 10
-	} else {
-		issues = append(issues, "깨진 상대 링크 "+strconv.Itoa(broken)+"개")
-	}
-	return float64(min(score, 100)), issues
+	return missingRefs, broken
 }
 
 func builtinGrade(score float64) string {

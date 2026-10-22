@@ -51,12 +51,8 @@ func expire(directory string, execute bool, now float64) (host.Obj, error) {
 	}
 	defer dir.Close()
 	fd := int(dir.Fd())
-	var info unix.Stat_t
-	if err := unix.Fstat(fd, &info); err != nil {
+	if err := checkPrivateDir(fd); err != nil {
 		return nil, err
-	}
-	if info.Mode&07777 != 0o700 || int(info.Uid) != os.Geteuid() {
-		return nil, errors.New("backup_directory_not_private")
 	}
 	names, err := dir.Readdirnames(-1)
 	if err != nil {
@@ -71,12 +67,11 @@ func expire(directory string, execute bool, now float64) (host.Obj, error) {
 	removed, retained, excluded := 0, 0, 0
 	oldest := 0.0
 	for _, name := range names {
-		at, ok := createdAt(name)
-		var entry unix.Stat_t
-		if err := unix.Fstatat(fd, name, &entry, unix.AT_SYMLINK_NOFOLLOW); err != nil {
-			return nil, &os.PathError{Op: "stat", Path: name, Err: err}
+		at, ok, err := bundleTime(fd, name)
+		if err != nil {
+			return nil, err
 		}
-		if !ok || entry.Mode&unix.S_IFMT != unix.S_IFREG || entry.Nlink != 1 || int(entry.Uid) != os.Geteuid() {
+		if !ok {
 			excluded++
 			continue
 		}
@@ -100,13 +95,41 @@ func expire(directory string, execute bool, now float64) (host.Obj, error) {
 			return nil, err
 		}
 	}
-	// An unknown file may be an older copy, so it hides the oldest retained time.
-	var oldestRetained any
-	if oldest > 0 && excluded == 0 {
-		oldestRetained = time.Unix(int64(oldest), 0).UTC().Format(time.RFC3339)
-	}
 	return host.Obj{{Key: "mode", Value: mode}, {Key: "expired", Value: expired}, {Key: "removed", Value: removed},
-		{Key: "retained", Value: retained}, {Key: "excluded", Value: excluded}, {Key: "oldest_retained", Value: oldestRetained}}, nil
+		{Key: "retained", Value: retained}, {Key: "excluded", Value: excluded}, {Key: "oldest_retained", Value: oldestRetained(oldest, excluded)}}, nil
+}
+
+// oldestRetained formats the oldest retained time. An unknown file may be an
+// older copy, so it hides the oldest retained time.
+func oldestRetained(oldest float64, excluded int) any {
+	if oldest > 0 && excluded == 0 {
+		return time.Unix(int64(oldest), 0).UTC().Format(time.RFC3339)
+	}
+	return nil
+}
+
+func checkPrivateDir(fd int) error {
+	var info unix.Stat_t
+	if err := unix.Fstat(fd, &info); err != nil {
+		return err
+	}
+	if info.Mode&07777 != 0o700 || int(info.Uid) != os.Geteuid() {
+		return errors.New("backup_directory_not_private")
+	}
+	return nil
+}
+
+// bundleTime reads name's creation time; ok is false unless it is a single-link private bundle file.
+func bundleTime(fd int, name string) (float64, bool, error) {
+	at, ok := createdAt(name)
+	var entry unix.Stat_t
+	if err := unix.Fstatat(fd, name, &entry, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return 0, false, &os.PathError{Op: "stat", Path: name, Err: err}
+	}
+	if !ok || entry.Mode&unix.S_IFMT != unix.S_IFREG || entry.Nlink != 1 || int(entry.Uid) != os.Geteuid() {
+		return 0, false, nil
+	}
+	return at, true, nil
 }
 
 // notifyPrivacy hands the oldest retained backup time to the memory worker,

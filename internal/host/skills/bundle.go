@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"unicode"
@@ -92,28 +93,67 @@ func validateBundle(v any) (map[string]any, error) {
 			return nil, errors.New("invalid_skill_bundle_file")
 		}
 		previous = f["path"].(string)
-		if keysAre(f, "path", "sha256", "size", "omitted") {
-			// Pinned by hash only; the bytes are never stored or served.
-			size, isInt := pyInt(f["size"])
-			reason, _ := f["omitted"].(string)
-			if !containsStr(omittedReasons, reason) || !isInt || size <= 0 || !isHex64(f["sha256"]) {
-				return nil, errors.New("invalid_skill_bundle_file")
-			}
-			continue
-		}
-		content, isStr := f["content"].(string)
-		if !keysAre(f, "path", "sha256", "content") || !isStr {
-			return nil, errors.New("invalid_skill_bundle_file")
-		}
-		total += len(content)
-		if strings.Contains(content, "\x00") || len(content) > maxFileBytes || total > maxTotalBytes || digest([]byte(content)) != f["sha256"] {
-			return nil, errors.New("invalid_skill_bundle_content")
+		var err error
+		if total, err = validateBundleFile(f, total); err != nil {
+			return nil, err
 		}
 	}
 	if _, isStr := b["sha256"].(string); !isStr || bundleHash(files) != b["sha256"] {
 		return nil, errors.New("skill_bundle_hash_mismatch")
 	}
 	return b, nil
+}
+
+// validateBundleFile checks one file entry; total is the content bytes so far, returned with this file's.
+func validateBundleFile(f map[string]any, total int) (int, error) {
+	if keysAre(f, "path", "sha256", "size", "omitted") {
+		// Pinned by hash only; the bytes are never stored or served.
+		size, isInt := pyInt(f["size"])
+		reason, _ := f["omitted"].(string)
+		if !containsStr(omittedReasons, reason) || !isInt || size <= 0 || !isHex64(f["sha256"]) {
+			return total, errors.New("invalid_skill_bundle_file")
+		}
+		return total, nil
+	}
+	content, isStr := f["content"].(string)
+	if !keysAre(f, "path", "sha256", "content") || !isStr {
+		return total, errors.New("invalid_skill_bundle_file")
+	}
+	total += len(content)
+	if strings.Contains(content, "\x00") || len(content) > maxFileBytes || total > maxTotalBytes || digest([]byte(content)) != f["sha256"] {
+		return total, errors.New("invalid_skill_bundle_content")
+	}
+	return total, nil
+}
+
+// captureBundleRoot is the nearest plugin root (a folder with .claude-plugin) from skillDir up
+// to boundary, otherwise skillDir.
+func captureBundleRoot(skillDir, boundary string) string {
+	for folder := skillDir; ; folder = filepath.Dir(folder) {
+		if folder != boundary && !isUnder(folder, boundary) {
+			break
+		}
+		if isDir(filepath.Join(folder, ".claude-plugin")) {
+			return folder
+		}
+		if folder == filepath.Dir(folder) {
+			break
+		}
+	}
+	return skillDir
+}
+
+// captureBundleStarts is the folders to walk: the skill's, plus the plugin root's shared folders.
+func captureBundleStarts(root, skillDir, skillRel string) []string {
+	starts := []string{skillRel}
+	if root != skillDir {
+		for _, d := range sharedDirs {
+			if !strings.HasPrefix(skillRel, d+"/") && skillRel != d {
+				starts = append(starts, d)
+			}
+		}
+	}
+	return starts
 }
 
 func bundleFiles(b map[string]any) []map[string]any {

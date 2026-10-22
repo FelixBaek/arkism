@@ -100,16 +100,24 @@ func parseSkillSource(raw string) (skillSource, error) {
 	} else if url && len(rest) > 0 {
 		return skillSource{}, bad
 	}
-	if !ghOwnerRx.MatchString(src.owner) || !ghSegRx.MatchString(src.repo) || src.ref != "" && !ghRefRx.MatchString(src.ref) {
+	if !parseSkillSourceValid(src, rest) {
 		return skillSource{}, bad
-	}
-	for _, seg := range append([]string{src.owner, src.repo}, rest...) {
-		if seg == "" || seg == "." || seg == ".." || !ghSegRx.MatchString(seg) {
-			return skillSource{}, bad
-		}
 	}
 	src.path = strings.Join(rest, "/")
 	return src, nil
+}
+
+// parseSkillSourceValid checks the owner, repo, ref and every path segment against the GitHub name rules.
+func parseSkillSourceValid(src skillSource, rest []string) bool {
+	if !ghOwnerRx.MatchString(src.owner) || !ghSegRx.MatchString(src.repo) || src.ref != "" && !ghRefRx.MatchString(src.ref) {
+		return false
+	}
+	for _, seg := range append([]string{src.owner, src.repo}, rest...) {
+		if seg == "" || seg == "." || seg == ".." || !ghSegRx.MatchString(seg) {
+			return false
+		}
+	}
+	return true
 }
 
 func fetchGitHub(url, accept string, maxN int64) ([]byte, error) {

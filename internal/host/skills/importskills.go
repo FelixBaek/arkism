@@ -146,6 +146,24 @@ func importOne(endpoint, token string, payload host.Obj) (map[string]any, error)
 	return map[string]any{"reused": data["reused"], "record_id": record}, nil
 }
 
+// importMainCheck checks the option combination and returns the API token.
+func importMainCheck(p *argParser, offset, limit int, hasLimit, execute bool, endpoint string) (string, bool) {
+	if offset < 0 || hasLimit && (limit < 1 || limit > 500) {
+		return "", p.fail("offset must be nonnegative and limit must be 1..500")
+	}
+	token := os.Getenv("ARKISM_API_TOKEN")
+	if token == "" {
+		token = os.Getenv("MEMORY_API_TOKEN")
+	}
+	if execute && (token == "" || !hasLimit) {
+		return "", p.fail("--execute requires ARKISM_API_TOKEN and an explicit --limit")
+	}
+	if execute && !importURLAllowed(endpoint) {
+		return "", p.fail("HTTPS or loopback HTTP required, without URL credentials")
+	}
+	return token, true
+}
+
 func importMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	p := newArgs("import-skills", stderr)
 	root := p.str("--root", host.SkillsRoot)
@@ -159,20 +177,8 @@ func importMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	hasLimit := p.seen["--limit"]
-	if *offset < 0 || hasLimit && (*limit < 1 || *limit > 500) {
-		p.fail("offset must be nonnegative and limit must be 1..500")
-		return 2
-	}
-	token := os.Getenv("ARKISM_API_TOKEN")
-	if token == "" {
-		token = os.Getenv("MEMORY_API_TOKEN")
-	}
-	if *execute && (token == "" || !hasLimit) {
-		p.fail("--execute requires ARKISM_API_TOKEN and an explicit --limit")
-		return 2
-	}
-	if *execute && !importURLAllowed(*endpoint) {
-		p.fail("HTTPS or loopback HTTP required, without URL credentials")
+	token, ok := importMainCheck(p, *offset, *limit, hasLimit, *execute, *endpoint)
+	if !ok {
 		return 2
 	}
 	exit := func(msg string) int { fmt.Fprintln(stderr, msg); return 1 }

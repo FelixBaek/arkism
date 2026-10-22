@@ -93,27 +93,7 @@ func projectOne(target, name, skillID string, check bool, approved any, mayRemov
 		approved = answers[skillID]
 	}
 	if code, refused := approved.(string); refused {
-		// The hub refused this skill for this token and scope (deleted, quarantined, approval or
-		// access revoked): an unedited projected copy is derived content and must not outlive it.
-		if !exists(dst) {
-			return fmt.Sprintf("%s: 서버 응답 %s — 사본 없음", dst, code), nil
-		}
-		ok, err := managedUnedited(dst)
-		if err != nil {
-			return "", err
-		}
-		switch {
-		case !ok:
-			return fmt.Sprintf("%s: 서버 응답 %s, 직접 수정됐거나 관리 사본이 아님 — 지우지 않음", dst, code), nil
-		case !mayRemove:
-			return fmt.Sprintf("%s: 서버 응답 %s, 모든 스킬이 거절되어 설정 오류로 보고 지우지 않음", dst, code), nil
-		case check:
-			return fmt.Sprintf("%s: 서버 응답 %s — 삭제 예정", dst, code), nil
-		}
-		if err := os.RemoveAll(dst); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("%s: 서버 응답 %s — 배포 사본 삭제", dst, code), nil
+		return projectOneRefused(dst, code, check, mayRemove)
 	}
 	item := asMap(approved)
 	ref := skillID + "@" + pyStr(item["resolved_version"])
@@ -150,6 +130,31 @@ func projectOne(target, name, skillID string, check bool, approved any, mayRemov
 		return "", err
 	}
 	return fmt.Sprintf("%s: 배포 %s", dst, ref), nil
+}
+
+// projectOneRefused removes an unedited projected copy of a skill the hub refused.
+func projectOneRefused(dst, code string, check, mayRemove bool) (string, error) {
+	// The hub refused this skill for this token and scope (deleted, quarantined, approval or
+	// access revoked): an unedited projected copy is derived content and must not outlive it.
+	if !exists(dst) {
+		return fmt.Sprintf("%s: 서버 응답 %s — 사본 없음", dst, code), nil
+	}
+	ok, err := managedUnedited(dst)
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case !ok:
+		return fmt.Sprintf("%s: 서버 응답 %s, 직접 수정됐거나 관리 사본이 아님 — 지우지 않음", dst, code), nil
+	case !mayRemove:
+		return fmt.Sprintf("%s: 서버 응답 %s, 모든 스킬이 거절되어 설정 오류로 보고 지우지 않음", dst, code), nil
+	case check:
+		return fmt.Sprintf("%s: 서버 응답 %s — 삭제 예정", dst, code), nil
+	}
+	if err := os.RemoveAll(dst); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s: 서버 응답 %s — 배포 사본 삭제", dst, code), nil
 }
 
 func projectMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {

@@ -112,30 +112,9 @@ func dump(b *strings.Builder, v any, opt DumpOpts) error {
 	case int64:
 		b.WriteString(strconv.FormatInt(x, 10))
 	case float64:
-		if math.IsNaN(x) || math.IsInf(x, 0) {
-			return fmt.Errorf("json: unsupported float %v", x)
-		}
-		// Python repr: plain digits for 1e-4 <= |x| < 1e16 (3.0, 12345678.5), exponent otherwise (1e-05, 1e+16).
-		if a := math.Abs(x); a == 0 || (a >= 1e-4 && a < 1e16) {
-			s := strconv.FormatFloat(x, 'f', -1, 64)
-			if !strings.ContainsRune(s, '.') {
-				s += ".0"
-			}
-			b.WriteString(s)
-		} else {
-			b.WriteString(strconv.FormatFloat(x, 'g', -1, 64))
-		}
+		return dumpFloat(b, x)
 	case []any:
-		b.WriteByte('[')
-		for i, e := range x {
-			if i > 0 {
-				b.WriteString(item)
-			}
-			if err := dump(b, e, opt); err != nil {
-				return err
-			}
-		}
-		b.WriteByte(']')
+		return dumpList(b, x, item, opt)
 	case []string:
 		b.WriteByte('[')
 		for i, e := range x {
@@ -157,22 +136,7 @@ func dump(b *strings.Builder, v any, opt DumpOpts) error {
 		}
 		return dump(b, o, opt)
 	case Obj:
-		if opt.SortKeys {
-			x = append(Obj(nil), x...)
-			sort.SliceStable(x, func(i, j int) bool { return x[i].Key < x[j].Key })
-		}
-		b.WriteByte('{')
-		for i, kv := range x {
-			if i > 0 {
-				b.WriteString(item)
-			}
-			writeString(b, kv.Key, !opt.NoASCII)
-			b.WriteString(key)
-			if err := dump(b, kv.Value, opt); err != nil {
-				return err
-			}
-		}
-		b.WriteByte('}')
+		return dumpObj(b, x, item, key, opt)
 	default:
 		// Structs and other types: round-trip through encoding/json, then re-encode.
 		raw, err := json.Marshal(x)
@@ -185,6 +149,57 @@ func dump(b *strings.Builder, v any, opt DumpOpts) error {
 		}
 		return dump(b, parsed, opt)
 	}
+	return nil
+}
+
+func dumpFloat(b *strings.Builder, x float64) error {
+	if math.IsNaN(x) || math.IsInf(x, 0) {
+		return fmt.Errorf("json: unsupported float %v", x)
+	}
+	// Python repr: plain digits for 1e-4 <= |x| < 1e16 (3.0, 12345678.5), exponent otherwise (1e-05, 1e+16).
+	if a := math.Abs(x); a == 0 || (a >= 1e-4 && a < 1e16) {
+		s := strconv.FormatFloat(x, 'f', -1, 64)
+		if !strings.ContainsRune(s, '.') {
+			s += ".0"
+		}
+		b.WriteString(s)
+	} else {
+		b.WriteString(strconv.FormatFloat(x, 'g', -1, 64))
+	}
+	return nil
+}
+
+func dumpList(b *strings.Builder, x []any, item string, opt DumpOpts) error {
+	b.WriteByte('[')
+	for i, e := range x {
+		if i > 0 {
+			b.WriteString(item)
+		}
+		if err := dump(b, e, opt); err != nil {
+			return err
+		}
+	}
+	b.WriteByte(']')
+	return nil
+}
+
+func dumpObj(b *strings.Builder, x Obj, item, key string, opt DumpOpts) error {
+	if opt.SortKeys {
+		x = append(Obj(nil), x...)
+		sort.SliceStable(x, func(i, j int) bool { return x[i].Key < x[j].Key })
+	}
+	b.WriteByte('{')
+	for i, kv := range x {
+		if i > 0 {
+			b.WriteString(item)
+		}
+		writeString(b, kv.Key, !opt.NoASCII)
+		b.WriteString(key)
+		if err := dump(b, kv.Value, opt); err != nil {
+			return err
+		}
+	}
+	b.WriteByte('}')
 	return nil
 }
 

@@ -918,71 +918,81 @@ func (m *Manager) mirrorMeetings() {
 	}
 	posted := map[string][]any{}
 	for _, x := range recs {
-		rec := obj(x)
-		mt := body(rec, "crew_meeting", "meeting")
-		d := obj(mt["discord"])
-		id, thread := str(rec["id"]), str(d["thread_id"])
-		b := m.bots[str(d["bot_id"])]
-		if id == "" || thread == "" || b == nil || b.sess == nil {
-			continue
-		}
-		mark := m.st.Meetings[id]
-		if s := int(num(d["last_posted_seq"])); s > mark.Seq {
-			mark.Seq = s
-		}
-		if _, ok := m.st.Threads[thread]; !ok {
-			m.st.Threads[thread] = threadLink{BotID: b.cfg.ID, Meeting: id}
-		}
-		turns := list(mt["turns"])
-		sort.SliceStable(turns, func(i, j int) bool { return num(obj(turns[i])["seq"]) < num(obj(turns[j])["seq"]) })
-		before := mark
-		for _, tx := range turns {
-			t := obj(tx)
-			seq := int(num(t["seq"]))
-			if seq <= mark.Seq {
-				continue
-			}
-			if str(t["kind"]) != "human" { // human notes came from the thread or the app; never echo them
-				if !m.send(b, thread, Out{Content: turnText(t)}) {
-					break
-				}
-			}
-			mark.Seq = seq
-		}
-		status := str(mt["status"])
-		if w := obj(mt["waiting"]); status == "waiting" && str(w["kind"]) == "budget" && str(w["at"]) != mark.Asked {
-			reason := str(w["reason"])
-			if reason == "" {
-				reason = "예산에 닿았어요."
-			}
-			if m.send(b, thread, Out{Content: "회의가 잠시 멈췄어요: " + reason + " 계속할까요?",
-				Buttons: []Button{{ID: "ark:m:" + id + ":y", Label: "계속"}, {ID: "ark:m:" + id + ":n", Label: "멈춤", Danger: true}}}) {
-				mark.Asked = str(w["at"])
-			}
-		}
-		if endedStatus[status] && !mark.Ended {
-			text := "회의가 끝났어요"
-			if r := endedKo[str(mt["ended_reason"])]; r != "" {
-				text += ": " + r
-			}
-			if c := obj(mt["conclusion"]); str(c["summary"]) != "" {
-				text = conclusionText(c) + "\n\n" + text
-			}
-			if m.send(b, thread, Out{Content: text}) {
-				mark.Ended = true
-			}
-		}
-		if mark.Ended {
-			delete(m.st.Meetings, id) // fully posted: never fetched again
-		} else {
-			m.st.Meetings[id] = mark
-		}
-		if mark.Seq != before.Seq {
-			posted[b.cfg.ID] = append(posted[b.cfg.ID], map[string]any{"meeting_id": id, "last_posted_seq": mark.Seq})
-		}
+		m.mirrorMeetingsOne(x, posted)
 	}
 	for id, p := range posted {
 		m.report(m.bots[id], p)
+	}
+}
+
+// mirrorMeetingsOne posts the new turns of one meeting into its thread and records how far it got.
+func (m *Manager) mirrorMeetingsOne(x any, posted map[string][]any) {
+	rec := obj(x)
+	mt := body(rec, "crew_meeting", "meeting")
+	d := obj(mt["discord"])
+	id, thread := str(rec["id"]), str(d["thread_id"])
+	b := m.bots[str(d["bot_id"])]
+	if id == "" || thread == "" || b == nil || b.sess == nil {
+		return
+	}
+	mark := m.st.Meetings[id]
+	if s := int(num(d["last_posted_seq"])); s > mark.Seq {
+		mark.Seq = s
+	}
+	if _, ok := m.st.Threads[thread]; !ok {
+		m.st.Threads[thread] = threadLink{BotID: b.cfg.ID, Meeting: id}
+	}
+	turns := list(mt["turns"])
+	sort.SliceStable(turns, func(i, j int) bool { return num(obj(turns[i])["seq"]) < num(obj(turns[j])["seq"]) })
+	before := mark
+	for _, tx := range turns {
+		t := obj(tx)
+		seq := int(num(t["seq"]))
+		if seq <= mark.Seq {
+			continue
+		}
+		if str(t["kind"]) != "human" { // human notes came from the thread or the app; never echo them
+			if !m.send(b, thread, Out{Content: turnText(t)}) {
+				break
+			}
+		}
+		mark.Seq = seq
+	}
+	m.mirrorMeetingsStatus(b, thread, id, mt, &mark)
+	if mark.Ended {
+		delete(m.st.Meetings, id) // fully posted: never fetched again
+	} else {
+		m.st.Meetings[id] = mark
+	}
+	if mark.Seq != before.Seq {
+		posted[b.cfg.ID] = append(posted[b.cfg.ID], map[string]any{"meeting_id": id, "last_posted_seq": mark.Seq})
+	}
+}
+
+// mirrorMeetingsStatus asks about a budget wait once and posts the meeting's end once.
+func (m *Manager) mirrorMeetingsStatus(b *bot, thread, id string, mt map[string]any, mark *meetingMark) {
+	status := str(mt["status"])
+	if w := obj(mt["waiting"]); status == "waiting" && str(w["kind"]) == "budget" && str(w["at"]) != mark.Asked {
+		reason := str(w["reason"])
+		if reason == "" {
+			reason = "예산에 닿았어요."
+		}
+		if m.send(b, thread, Out{Content: "회의가 잠시 멈췄어요: " + reason + " 계속할까요?",
+			Buttons: []Button{{ID: "ark:m:" + id + ":y", Label: "계속"}, {ID: "ark:m:" + id + ":n", Label: "멈춤", Danger: true}}}) {
+			mark.Asked = str(w["at"])
+		}
+	}
+	if endedStatus[status] && !mark.Ended {
+		text := "회의가 끝났어요"
+		if r := endedKo[str(mt["ended_reason"])]; r != "" {
+			text += ": " + r
+		}
+		if c := obj(mt["conclusion"]); str(c["summary"]) != "" {
+			text = conclusionText(c) + "\n\n" + text
+		}
+		if m.send(b, thread, Out{Content: text}) {
+			mark.Ended = true
+		}
 	}
 }
 
@@ -1024,31 +1034,7 @@ func (m *Manager) followJobs() {
 				done = m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** 이(가) 답하지 못했어요: " + clip(str(a["error"]), 300)})
 			}
 		case "run":
-			rec, err := m.api.Get("/v1/crew/runs/" + j.ID + "?" + scopeQuery())
-			if err != nil {
-				break
-			}
-			r := body(rec, "crew_run")
-			switch st := str(r["status"]); st {
-			case "succeeded":
-				done = m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · 완료\n" + str(r["summary"])})
-			case "failed", "stopped":
-				label := map[string]string{"failed": "실패했어요", "stopped": "멈췄어요"}[st]
-				done = m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · " + label + "\n" + str(r["summary"])})
-			case "waiting":
-				w := obj(r["waiting"])
-				if k := str(w["kind"]); (k == "approval" || k == "budget") && str(w["node_id"]) != j.Asked {
-					q := str(w["question"])
-					if q == "" {
-						q = "승인이 필요해요."
-					}
-					node := str(w["node_id"])
-					if m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · " + q,
-						Buttons: []Button{{ID: "ark:r:" + j.ID + ":" + node + ":y", Label: "계속"}, {ID: "ark:r:" + j.ID + ":" + node + ":n", Label: "멈춤", Danger: true}}}) {
-						j.Asked = node
-					}
-				}
-			}
+			done = m.followJobsRun(b, &j)
 		}
 		if !done {
 			keep = append(keep, j)
@@ -1060,6 +1046,36 @@ func (m *Manager) followJobs() {
 			delete(m.pending, k)
 		}
 	}
+}
+
+// followJobsRun posts a finished run back to its thread, or asks once about an approval or budget wait.
+func (m *Manager) followJobsRun(b *bot, j *job) bool {
+	rec, err := m.api.Get("/v1/crew/runs/" + j.ID + "?" + scopeQuery())
+	if err != nil {
+		return false
+	}
+	r := body(rec, "crew_run")
+	switch st := str(r["status"]); st {
+	case "succeeded":
+		return m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · 완료\n" + str(r["summary"])})
+	case "failed", "stopped":
+		label := map[string]string{"failed": "실패했어요", "stopped": "멈췄어요"}[st]
+		return m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · " + label + "\n" + str(r["summary"])})
+	case "waiting":
+		w := obj(r["waiting"])
+		if k := str(w["kind"]); (k == "approval" || k == "budget") && str(w["node_id"]) != j.Asked {
+			q := str(w["question"])
+			if q == "" {
+				q = "승인이 필요해요."
+			}
+			node := str(w["node_id"])
+			if m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · " + q,
+				Buttons: []Button{{ID: "ark:r:" + j.ID + ":" + node + ":y", Label: "계속"}, {ID: "ark:r:" + j.ID + ":" + node + ":n", Label: "멈춤", Danger: true}}}) {
+				j.Asked = node
+			}
+		}
+	}
+	return false
 }
 
 // send posts text (split at Discord's 2,000-character limit; buttons go on the last part). It reports success.

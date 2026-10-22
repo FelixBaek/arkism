@@ -348,16 +348,7 @@ func ciscoSecurity(dir, folder string) (securityResult, error) {
 	if worstName == "" && len(issues) > 0 {
 		worstName = pyStr(asMap(issues[0])["severity"])
 	}
-	res := securityResult{n: len(issues), top: []string{}}
-	for _, i := range issues {
-		m := asMap(i)
-		if label := findingLabel(map[string]any{"category": m["category"], "pattern": m["rule_id"], "severity": m["severity"]}); label != "" && !containsStr(res.top, label) {
-			res.top = append(res.top, label)
-		}
-		if len(res.top) == 3 {
-			break
-		}
-	}
+	res := securityResult{n: len(issues), top: ciscoSecurityTop(issues)}
 	switch worst, known := severityRank[strings.ToUpper(worstName)]; {
 	case !known || worst > 2:
 		res.risk, res.verdict = 0, "SAFE"
@@ -370,6 +361,21 @@ func ciscoSecurity(dir, folder string) (securityResult, error) {
 		res.risk, res.verdict = 90, "DO_NOT_INSTALL"
 	}
 	return res, nil
+}
+
+// ciscoSecurityTop lists up to three distinct finding labels, worst first.
+func ciscoSecurityTop(issues []any) []string {
+	top := []string{}
+	for _, i := range issues {
+		m := asMap(i)
+		if label := findingLabel(map[string]any{"category": m["category"], "pattern": m["rule_id"], "severity": m["severity"]}); label != "" && !containsStr(top, label) {
+			top = append(top, label)
+		}
+		if len(top) == 3 {
+			break
+		}
+	}
+	return top
 }
 
 func severityOf(i any) int {

@@ -104,44 +104,12 @@ var workAllowed = map[string][]string{
 
 // WorkCall validates a work tool call and sends it; it never invents idempotency keys or retries.
 func WorkCall(name string, arguments map[string]any, request Requester, scope map[string]any) (map[string]any, error) {
-	allowed, ok := workAllowed[name]
-	if !ok {
-		return nil, errors.New("invalid work checkpoint arguments")
+	payload, err := workPayload(name, arguments)
+	if err != nil {
+		return nil, err
 	}
-	payload := map[string]any{}
-	for k, v := range arguments {
-		if !containsStr(allowed, k) {
-			return nil, errors.New("invalid work checkpoint arguments")
-		}
-		payload[k] = v
-	}
-	for _, key := range []string{"id", "event_id", "after"} {
-		value, present := payload[key]
-		if !present || value == nil {
-			continue
-		}
-		s, isStr := value.(string)
-		if !isStr || (!workKey.MatchString(s) && !(key == "after" && s == "")) {
-			return nil, errors.New("invalid checkpoint identifier")
-		}
-	}
-	if name != "list_work" && truthy(payload["id"]) == false {
-		return nil, errors.New("checkpoint id required")
-	}
-	if name == "save_work" {
-		rev, isInt := Int(payload["expected_revision"])
-		_, isPkg := payload["package"].(map[string]any)
-		if !truthy(payload["event_id"]) || !isInt || rev < 0 || !isPkg {
-			return nil, errors.New("event_id, revision and package required")
-		}
-	}
-	if name == "list_work" {
-		if _, set := payload["limit"]; !set {
-			payload["limit"] = 20
-		}
-		if n, isInt := Int(payload["limit"]); !isInt || n < 1 || n > 100 {
-			return nil, errors.New("limit must be between 1 and 100")
-		}
+	if err := checkWorkPayload(name, payload); err != nil {
+		return nil, err
 	}
 	cwdValue, hasCwd := payload["cwd"]
 	delete(payload, "cwd")
@@ -172,6 +140,55 @@ func WorkCall(name string, arguments map[string]any, request Requester, scope ma
 		result["verification"] = verification
 	}
 	return result, nil
+}
+
+// workPayload copies the allowed arguments and checks their identifiers.
+func workPayload(name string, arguments map[string]any) (map[string]any, error) {
+	allowed, ok := workAllowed[name]
+	if !ok {
+		return nil, errors.New("invalid work checkpoint arguments")
+	}
+	payload := map[string]any{}
+	for k, v := range arguments {
+		if !containsStr(allowed, k) {
+			return nil, errors.New("invalid work checkpoint arguments")
+		}
+		payload[k] = v
+	}
+	for _, key := range []string{"id", "event_id", "after"} {
+		value, present := payload[key]
+		if !present || value == nil {
+			continue
+		}
+		s, isStr := value.(string)
+		if !isStr || (!workKey.MatchString(s) && !(key == "after" && s == "")) {
+			return nil, errors.New("invalid checkpoint identifier")
+		}
+	}
+	return payload, nil
+}
+
+// checkWorkPayload enforces the per-tool required fields and the list_work limit default.
+func checkWorkPayload(name string, payload map[string]any) error {
+	if name != "list_work" && truthy(payload["id"]) == false {
+		return errors.New("checkpoint id required")
+	}
+	if name == "save_work" {
+		rev, isInt := Int(payload["expected_revision"])
+		_, isPkg := payload["package"].(map[string]any)
+		if !truthy(payload["event_id"]) || !isInt || rev < 0 || !isPkg {
+			return errors.New("event_id, revision and package required")
+		}
+	}
+	if name == "list_work" {
+		if _, set := payload["limit"]; !set {
+			payload["limit"] = 20
+		}
+		if n, isInt := Int(payload["limit"]); !isInt || n < 1 || n > 100 {
+			return errors.New("limit must be between 1 and 100")
+		}
+	}
+	return nil
 }
 
 // WorkHookContext reads fresh selected work; it never executes checks, inspects saved paths or caches bodies.
@@ -209,27 +226,7 @@ func relatedContext(result map[string]any, request Requester, scope map[string]a
 			{"skipped_refs", skipped}, {"failed_refs", failed}, {"items", items},
 			{"note", "각 조회 시점의 직접 관계 자료입니다. 최대3개 기준·6개 기억이며 전체/원자 스냅샷이 아닙니다. 실행·승인 권한이나 실제 사용 확인이 아닙니다."}}
 	}
-	type refKey struct {
-		c, id string
-		rev   int64
-	}
-	var anchors []map[string]any
-	seen := map[refKey]bool{}
-	for _, raw := range refs {
-		ref, ok := raw.(map[string]any)
-		c, _ := ref["collection"].(string)
-		id, _ := ref["id"].(string)
-		rev, isInt := Int(ref["revision"])
-		if !ok || len(ref) != 3 || !hasKeys(ref, "collection", "id", "revision") ||
-			(c != "sources" && c != "memories" && c != "evaluations") || id == "" || !isInt || rev < 1 {
-			skipped++
-			continue
-		}
-		if k := (refKey{c, id, rev}); !seen[k] {
-			seen[k] = true
-			anchors = append(anchors, ref)
-		}
-	}
+	anchors, skipped := relatedAnchors(refs)
 	keep := []string{"id", "revision", "kind", "status", "text", "sources", "conflict_pending", "supersedes", "superseded_by"}
 	var order []string
 	memories := map[string]Obj{}
@@ -261,14 +258,8 @@ func relatedContext(result map[string]any, request Requester, scope map[string]a
 		state = "partial"
 	}
 	if len(memories) > 0 {
-		current, err := request("/v1/work-checkpoints/get", map[string]any{"scope": scope, "id": result["id"]})
-		if err != nil {
-			state = "work_unverified"
-			return out(nil)
-		}
-		if current["authority"] != "data_only_untrusted" || current["id"] != result["id"] ||
-			!reflect.DeepEqual(current["revision"], result["revision"]) || !reflect.DeepEqual(current["package"], result["package"]) {
-			state = "work_changed"
+		if changed := relatedWorkState(result, request, scope); changed != "" {
+			state = changed
 			return out(nil)
 		}
 	}
@@ -277,6 +268,44 @@ func relatedContext(result map[string]any, request Requester, scope map[string]a
 		items[i] = memories[id]
 	}
 	return out(items)
+}
+
+// relatedAnchors keeps well-formed, distinct source refs and counts the rest as skipped.
+func relatedAnchors(refs []any) (anchors []map[string]any, skipped int) {
+	type refKey struct {
+		c, id string
+		rev   int64
+	}
+	seen := map[refKey]bool{}
+	for _, raw := range refs {
+		ref, ok := raw.(map[string]any)
+		c, _ := ref["collection"].(string)
+		id, _ := ref["id"].(string)
+		rev, isInt := Int(ref["revision"])
+		if !ok || len(ref) != 3 || !hasKeys(ref, "collection", "id", "revision") ||
+			(c != "sources" && c != "memories" && c != "evaluations") || id == "" || !isInt || rev < 1 {
+			skipped++
+			continue
+		}
+		if k := (refKey{c, id, rev}); !seen[k] {
+			seen[k] = true
+			anchors = append(anchors, ref)
+		}
+	}
+	return anchors, skipped
+}
+
+// relatedWorkState rereads the work and names how it moved, or "" when it is unchanged.
+func relatedWorkState(result map[string]any, request Requester, scope map[string]any) string {
+	current, err := request("/v1/work-checkpoints/get", map[string]any{"scope": scope, "id": result["id"]})
+	if err != nil {
+		return "work_unverified"
+	}
+	if current["authority"] != "data_only_untrusted" || current["id"] != result["id"] ||
+		!reflect.DeepEqual(current["revision"], result["revision"]) || !reflect.DeepEqual(current["package"], result["package"]) {
+		return "work_changed"
+	}
+	return ""
 }
 
 func relatedMemories(ref map[string]any, request Requester, scope map[string]any, keep []string) ([]Obj, error) {

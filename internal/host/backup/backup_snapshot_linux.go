@@ -258,14 +258,8 @@ func capture(ctx context.Context, container, blobRoot, output, snapshotRoot stri
 	if err := ready(ctx, readyURL); err != nil {
 		return err
 	}
-	for _, name := range append(append([]string{}, writers...), container) {
-		running, err := docker(ctx, time.Minute, dockerIO{capture: true}, "inspect", "-f", "{{.State.Running}}", name)
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(running) != "true" {
-			return errors.New("backup requires running containers")
-		}
+	if err := requireRunning(ctx, append(append([]string{}, writers...), container)); err != nil {
+		return err
 	}
 	var snapshot snapshotSession
 	stopped := true
@@ -342,6 +336,19 @@ func capture(ctx context.Context, container, blobRoot, output, snapshotRoot stri
 		return err
 	}
 	return chown(output, serviceUID, serviceUID)
+}
+
+func requireRunning(ctx context.Context, names []string) error {
+	for _, name := range names {
+		running, err := docker(ctx, time.Minute, dockerIO{capture: true}, "inspect", "-f", "{{.State.Running}}", name)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(running) != "true" {
+			return errors.New("backup requires running containers")
+		}
+	}
+	return nil
 }
 
 func snapshotMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {

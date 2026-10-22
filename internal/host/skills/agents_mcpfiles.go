@@ -708,36 +708,11 @@ func tomlKeyPath(s string, i int, stop string) ([]string, int, error) {
 		if i >= len(s) {
 			return nil, i, errTOMLLayout
 		}
-		switch s[i] {
-		case '"':
-			j := i + 1
-			for j < len(s) && s[j] != '"' && s[j] != '\n' {
-				if s[j] == '\\' {
-					j++
-				}
-				j++
-			}
-			if j >= len(s) || s[j] != '"' {
-				return nil, i, errTOMLLayout
-			}
-			part, err := strconv.Unquote(s[i : j+1])
-			if err != nil {
-				return nil, i, errTOMLLayout
-			}
-			path, i = append(path, part), j+1
-		case '\'':
-			j := strings.IndexAny(s[i+1:], "'\n")
-			if j < 0 || s[i+1+j] != '\'' {
-				return nil, i, errTOMLLayout
-			}
-			path, i = append(path, s[i+1:i+1+j]), i+2+j
-		default:
-			m := tomlBare.FindString(s[i:])
-			if m == "" {
-				return nil, i, errTOMLLayout
-			}
-			path, i = append(path, m), i+len(m)
+		part, next, err := tomlKeyPart(s, i)
+		if err != nil {
+			return nil, i, err
 		}
+		path, i = append(path, part), next
 		for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
 			i++
 		}
@@ -749,6 +724,39 @@ func tomlKeyPath(s string, i int, stop string) ([]string, int, error) {
 		}
 		i++
 	}
+}
+
+// tomlKeyPart is one key part (quoted, literal or bare) at s[i], and where it ends.
+func tomlKeyPart(s string, i int) (string, int, error) {
+	switch s[i] {
+	case '"':
+		j := i + 1
+		for j < len(s) && s[j] != '"' && s[j] != '\n' {
+			if s[j] == '\\' {
+				j++
+			}
+			j++
+		}
+		if j >= len(s) || s[j] != '"' {
+			return "", i, errTOMLLayout
+		}
+		part, err := strconv.Unquote(s[i : j+1])
+		if err != nil {
+			return "", i, errTOMLLayout
+		}
+		return part, j + 1, nil
+	case '\'':
+		j := strings.IndexAny(s[i+1:], "'\n")
+		if j < 0 || s[i+1+j] != '\'' {
+			return "", i, errTOMLLayout
+		}
+		return s[i+1 : i+1+j], i + 2 + j, nil
+	}
+	m := tomlBare.FindString(s[i:])
+	if m == "" {
+		return "", i, errTOMLLayout
+	}
+	return m, i + len(m), nil
 }
 
 // tomlLineEnd skips trailing blanks and a comment; it must reach a newline.
@@ -773,38 +781,17 @@ func tomlValueEnd(s string, i int) (int, error) {
 	for i < len(s) {
 		switch {
 		case strings.HasPrefix(s[i:], `"""`), strings.HasPrefix(s[i:], `'''`):
-			q := s[i : i+3]
-			j := i + 3
-			for {
-				if j >= len(s) {
-					return j, errTOMLLayout
-				}
-				if q == `"""` && s[j] == '\\' {
-					j += 2
-					continue
-				}
-				if strings.HasPrefix(s[j:], q) {
-					j += 3
-					for k := 0; k < 2 && j < len(s) && s[j] == q[0]; k++ {
-						j++
-					}
-					break
-				}
-				j++
+			j, err := tomlValueEndMultiline(s, i)
+			if err != nil {
+				return j, err
 			}
 			i = j
 		case s[i] == '"' || s[i] == '\'':
-			j := i + 1
-			for j < len(s) && s[j] != s[i] && s[j] != '\n' {
-				if s[i] == '"' && s[j] == '\\' {
-					j++
-				}
-				j++
+			j, err := tomlValueEndString(s, i)
+			if err != nil {
+				return j, err
 			}
-			if j >= len(s) || s[j] != s[i] {
-				return j, errTOMLLayout
-			}
-			i = j + 1
+			i = j
 		case s[i] == '#':
 			for i < len(s) && s[i] != '\n' {
 				i++
@@ -825,6 +812,44 @@ func tomlValueEnd(s string, i int) (int, error) {
 		}
 	}
 	return i, nil
+}
+
+// tomlValueEndMultiline is the end of the multi-line string opening at s[i].
+func tomlValueEndMultiline(s string, i int) (int, error) {
+	q := s[i : i+3]
+	j := i + 3
+	for {
+		if j >= len(s) {
+			return j, errTOMLLayout
+		}
+		if q == `"""` && s[j] == '\\' {
+			j += 2
+			continue
+		}
+		if strings.HasPrefix(s[j:], q) {
+			j += 3
+			for k := 0; k < 2 && j < len(s) && s[j] == q[0]; k++ {
+				j++
+			}
+			return j, nil
+		}
+		j++
+	}
+}
+
+// tomlValueEndString is the end of the one-line string opening at s[i].
+func tomlValueEndString(s string, i int) (int, error) {
+	j := i + 1
+	for j < len(s) && s[j] != s[i] && s[j] != '\n' {
+		if s[i] == '"' && s[j] == '\\' {
+			j++
+		}
+		j++
+	}
+	if j >= len(s) || s[j] != s[i] {
+		return j, errTOMLLayout
+	}
+	return j + 1, nil
 }
 
 var tomlSectionLine = regexp.MustCompile(`(?m)^[ \t]*\[`)
@@ -929,23 +954,7 @@ func tomlParse(text string) (*tomlDoc, error) {
 			if !tomlEnsure(s.def, it.path[2:]) {
 				return nil, errTOMLLayout
 			}
-			end := len(text)
-			for _, next := range items[n+1:] {
-				if next.header {
-					end = next.start
-					break
-				}
-			}
-			// Comments and blank lines right before the next table stay with it.
-			last := it.end
-			for _, k := range items[n+1:] {
-				if k.header {
-					break
-				}
-				last = k.end
-			}
-			end = max(last, min(end, tomlTrimTail(text, last, end)))
-			s.spans = append(s.spans, [2]int{it.start, end})
+			s.spans = append(s.spans, [2]int{it.start, tomlParseSpanEnd(text, items, n)})
 			continue
 		}
 		full := append(append([]string(nil), table...), it.path...)
@@ -979,6 +988,32 @@ func tomlParse(text string) (*tomlDoc, error) {
 			}
 		}
 	}
+	tomlParseStrays(doc, strays)
+	return doc, nil
+}
+
+// tomlParseSpanEnd is where the table headed by items[n] ends.
+func tomlParseSpanEnd(text string, items []tomlItem, n int) int {
+	end := len(text)
+	for _, next := range items[n+1:] {
+		if next.header {
+			end = next.start
+			break
+		}
+	}
+	// Comments and blank lines right before the next table stay with it.
+	last := items[n].end
+	for _, k := range items[n+1:] {
+		if k.header {
+			break
+		}
+		last = k.end
+	}
+	return max(last, min(end, tomlTrimTail(text, last, end)))
+}
+
+// tomlParseStrays makes a server whose tables hold a stray "[" line not editable.
+func tomlParseStrays(doc *tomlDoc, strays []int) {
 	for _, s := range doc.servers {
 		for _, at := range strays {
 			for _, sp := range s.spans {
@@ -988,7 +1023,6 @@ func tomlParse(text string) (*tomlDoc, error) {
 			}
 		}
 	}
-	return doc, nil
 }
 
 // tomlTrimTail is where the comment lines (and blank lines among them) that end [from, to) begin:
@@ -1193,21 +1227,7 @@ func tomlValue(s string, i int) (any, int, error) {
 	case strings.HasPrefix(s[i:], `"""`), strings.HasPrefix(s[i:], `'''`):
 		return nil, i, errTOMLLayout
 	case c == '"':
-		j := i + 1
-		for j < len(s) && s[j] != '"' && s[j] != '\n' {
-			if s[j] == '\\' {
-				j++
-			}
-			j++
-		}
-		if j >= len(s) || s[j] != '"' {
-			return nil, i, errTOMLLayout
-		}
-		var out string
-		if json.Unmarshal([]byte(tomlToJSONEscapes(s[i:j+1])), &out) != nil {
-			return nil, i, errTOMLLayout
-		}
-		return out, j + 1, nil
+		return tomlValueString(s, i)
 	case c == '\'':
 		j := strings.IndexAny(s[i+1:], "'\n")
 		if j < 0 || s[i+1+j] != '\'' {
@@ -1215,63 +1235,95 @@ func tomlValue(s string, i int) (any, int, error) {
 		}
 		return s[i+1 : i+1+j], i + 2 + j, nil
 	case c == '[':
-		out := []any{}
-		i++
-		for {
-			i = tomlSkip(s, i)
-			if i < len(s) && s[i] == ']' {
-				return out, i + 1, nil
-			}
-			v, j, err := tomlValue(s, i)
-			if err != nil {
-				return nil, j, err
-			}
-			out = append(out, v)
-			i = tomlSkip(s, j)
-			if i < len(s) && s[i] == ',' {
-				i++
-				continue
-			}
-			if i < len(s) && s[i] == ']' {
-				return out, i + 1, nil
-			}
-			return nil, i, errTOMLLayout
-		}
+		return tomlValueArray(s, i+1)
 	case c == '{':
-		out := map[string]any{}
-		i++
-		for {
-			for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
-				i++
-			}
-			if i < len(s) && s[i] == '}' {
-				return out, i + 1, nil
-			}
-			path, k, err := tomlKeyPath(s, i, "=")
-			if err != nil {
-				return nil, k, err
-			}
-			v, j, err := tomlValue(s, k)
-			if err != nil {
-				return nil, j, err
-			}
-			if !tomlEnsure(out, path[:len(path)-1]) {
-				return nil, j, errTOMLLayout
-			}
-			tomlSet(out, path, v)
-			for i = j; i < len(s) && (s[i] == ' ' || s[i] == '\t'); i++ {
-				// skip the blanks after the value
-			}
-			if i < len(s) && s[i] == ',' {
-				i++
-				continue
-			}
-			if i < len(s) && s[i] == '}' {
-				return out, i + 1, nil
-			}
-			return nil, i, errTOMLLayout
-		}
+		return tomlValueTable(s, i+1)
 	}
+	return tomlValueWord(s, i)
+}
+
+// tomlValueString reads the basic string opening at s[i].
+func tomlValueString(s string, i int) (any, int, error) {
+	j := i + 1
+	for j < len(s) && s[j] != '"' && s[j] != '\n' {
+		if s[j] == '\\' {
+			j++
+		}
+		j++
+	}
+	if j >= len(s) || s[j] != '"' {
+		return nil, i, errTOMLLayout
+	}
+	var out string
+	if json.Unmarshal([]byte(tomlToJSONEscapes(s[i:j+1])), &out) != nil {
+		return nil, i, errTOMLLayout
+	}
+	return out, j + 1, nil
+}
+
+// tomlValueArray reads an array's items from s[i:], just past its "[".
+func tomlValueArray(s string, i int) (any, int, error) {
+	out := []any{}
+	for {
+		i = tomlSkip(s, i)
+		if i < len(s) && s[i] == ']' {
+			return out, i + 1, nil
+		}
+		v, j, err := tomlValue(s, i)
+		if err != nil {
+			return nil, j, err
+		}
+		out = append(out, v)
+		i = tomlSkip(s, j)
+		if i < len(s) && s[i] == ',' {
+			i++
+			continue
+		}
+		if i < len(s) && s[i] == ']' {
+			return out, i + 1, nil
+		}
+		return nil, i, errTOMLLayout
+	}
+}
+
+// tomlValueTable reads an inline table's keys from s[i:], just past its "{".
+func tomlValueTable(s string, i int) (any, int, error) {
+	out := map[string]any{}
+	for {
+		for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+			i++
+		}
+		if i < len(s) && s[i] == '}' {
+			return out, i + 1, nil
+		}
+		path, k, err := tomlKeyPath(s, i, "=")
+		if err != nil {
+			return nil, k, err
+		}
+		v, j, err := tomlValue(s, k)
+		if err != nil {
+			return nil, j, err
+		}
+		if !tomlEnsure(out, path[:len(path)-1]) {
+			return nil, j, errTOMLLayout
+		}
+		tomlSet(out, path, v)
+		for i = j; i < len(s) && (s[i] == ' ' || s[i] == '\t'); i++ {
+			// skip the blanks after the value
+		}
+		if i < len(s) && s[i] == ',' {
+			i++
+			continue
+		}
+		if i < len(s) && s[i] == '}' {
+			return out, i + 1, nil
+		}
+		return nil, i, errTOMLLayout
+	}
+}
+
+// tomlValueWord reads a bare boolean or number at s[i].
+func tomlValueWord(s string, i int) (any, int, error) {
 	j := i
 	for j < len(s) && strings.IndexByte(",]} \t\r\n#", s[j]) < 0 {
 		j++

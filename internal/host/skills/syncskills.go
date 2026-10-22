@@ -334,6 +334,26 @@ func generateAnalysis(sid, content string, prev host.Obj, old string) (host.Obj,
 	if !ok {
 		return nil, errors.New("analysis_not_object") // caught per skill, not for the whole run
 	}
+	out := generateAnalysisFields(fields)
+	if prev != nil {
+		if out, err = generateAnalysisCarry(out, prev, fields); err != nil {
+			return nil, err
+		}
+	}
+	var missing []string
+	for _, k := range analysisRequired {
+		if !truthy(objGet(out, k)) {
+			missing = append(missing, k)
+		}
+	}
+	if missing != nil {
+		return nil, hubErr("analysis_incomplete", sid+": "+pyListRepr(missing))
+	}
+	return out, nil
+}
+
+// generateAnalysisFields keeps the text, list and boolean keys of the model's answer in their fixed order.
+func generateAnalysisFields(fields map[string]any) host.Obj {
 	out := host.Obj{}
 	for _, k := range analysisText {
 		s := ""
@@ -362,38 +382,32 @@ func generateAnalysis(sid, content string, prev host.Obj, old string) (host.Obj,
 	for _, k := range analysisBool {
 		out = append(out, host.KV{Key: k, Value: truthy(fields[k])})
 	}
-	if prev != nil {
-		for _, k := range reviewedKeys { // 모델이 비워 오면 검토본을 잃지 않는다
-			if !truthy(objGet(out, k)) {
-				carried := []any{}
-				if p := objGet(prev, k); truthy(p) {
-					l, err := pyIter(p)
-					if err != nil {
-						return nil, err
-					}
-					carried = l
-				}
-				out.Set(k, carried)
-			}
-		}
-		summary := ""
-		if truthy(fields["change_summary"]) {
-			summary = pyStrip(pyStr(fields["change_summary"]))
-		}
-		if summary == "" {
-			summary = "변경 요약 없음"
-		}
-		out = append(out, host.KV{Key: "change_summary", Value: summary})
-	}
-	var missing []string
-	for _, k := range analysisRequired {
+	return out
+}
+
+// generateAnalysisCarry keeps reviewed keys the model left empty and adds the change summary.
+func generateAnalysisCarry(out, prev host.Obj, fields map[string]any) (host.Obj, error) {
+	for _, k := range reviewedKeys { // 모델이 비워 오면 검토본을 잃지 않는다
 		if !truthy(objGet(out, k)) {
-			missing = append(missing, k)
+			carried := []any{}
+			if p := objGet(prev, k); truthy(p) {
+				l, err := pyIter(p)
+				if err != nil {
+					return nil, err
+				}
+				carried = l
+			}
+			out.Set(k, carried)
 		}
 	}
-	if missing != nil {
-		return nil, hubErr("analysis_incomplete", sid+": "+pyListRepr(missing))
+	summary := ""
+	if truthy(fields["change_summary"]) {
+		summary = pyStrip(pyStr(fields["change_summary"]))
 	}
+	if summary == "" {
+		summary = "변경 요약 없음"
+	}
+	out = append(out, host.KV{Key: "change_summary", Value: summary})
 	return out, nil
 }
 
@@ -555,30 +569,9 @@ func syncRun(url, tokenFile string, scope map[string]any, limit int, execute boo
 	if err != nil {
 		return nil, err
 	}
-	var roots []skillRoot
-	for _, r := range syncRoots() {
-		// 설정 › 에이전트: skip the folders of an agent the owner took off
-		if !((r.runtime == "codex" || r.runtime == "claude_code") && host.AgentOff(r.runtime)) {
-			roots = append(roots, r)
-		}
-	}
-	rows := map[string]map[string]any{}
-	var order []string
-	for _, row := range discover(roots) {
-		path := str(row["path"])
-		excluded := slices.ContainsFunc(syncExclude, func(x string) bool { return strings.Contains(path, x) })
-		// Copies written by project-skills carry .arkism.json; their source is already scanned.
-		if !truthy(row["has_frontmatter"]) || excluded || exists(filepath.Join(filepath.Dir(path), ".arkism.json")) {
-			continue
-		}
-		sid, err := syncSkillID(row)
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := rows[sid]; !ok {
-			rows[sid] = row
-			order = append(order, sid)
-		}
+	rows, order, err := syncRunDiscover()
+	if err != nil {
+		return nil, err
 	}
 	failed := host.Obj{}
 	for _, sid := range order {
@@ -593,52 +586,17 @@ func syncRun(url, tokenFile string, scope map[string]any, limit int, execute boo
 	}
 	captureFailed := len(failed)
 	ids := sortedKeys(rows)
-	current := map[string]map[string]any{}
-	for start := 0; start < len(ids); start += 32 {
-		var refs []any
-		for _, id := range ids[start:min(start+32, len(ids))] {
-			refs = append(refs, id+"@latest-approved")
-		}
-		res, err := syncPost(url, token, "/v1/skills/resolve", map[string]any{"scope": scope, "refs": refs})
-		if err != nil {
-			return nil, err
-		}
-		for _, raw := range asList(res["items"]) {
-			item := asMap(raw)
-			ref := pyStr(item["ref"])
-			if i := strings.LastIndex(ref, "@"); i >= 0 {
-				ref = ref[:i]
-			}
-			current[ref] = item
-		}
+	current, err := syncRunResolve(url, token, scope, ids)
+	if err != nil {
+		return nil, err
 	}
-	state := map[string]any{}
-	if raw, err := os.ReadFile(syncState); err == nil {
-		v, err := host.Loads(string(raw))
-		if err != nil {
-			return nil, err
-		}
-		state = asMap(v)
+	state, err := syncRunState()
+	if err != nil {
+		return nil, err
 	}
-	var pending, reverted []string
-	for _, i := range ids {
-		item, ok := current[i]
-		if !ok {
-			return nil, keyErr(i)
-		}
-		row := rows[i]
-		fp := fingerprint(str(row["content_hash"]), row["bundle"].(map[string]any))
-		// A deprecated skill stays retired even if its folder is still on disk.
-		if item["error"] == "skill_deprecated" || bundleMatches(item, str(row["content_hash"]), row["bundle"].(map[string]any)) || sameJSON(state[i], fp) {
-			continue
-		}
-		// A runtime that rewrites its bundled skills can flip a folder back to an older hub version;
-		// importing it again is a 409, so report it instead of failing every run.
-		if item["error"] == nil && rowMatchesOldVersion(url, token, scope, i, str(row["content_hash"]), item, row["bundle"].(map[string]any)) {
-			reverted = append(reverted, i)
-			continue
-		}
-		pending = append(pending, i)
+	pending, reverted, err := syncRunPending(url, token, scope, ids, rows, current, state)
+	if err != nil {
+		return nil, err
 	}
 	known, err := knownAnalyses()
 	if err != nil {
@@ -695,6 +653,98 @@ func syncRun(url, tokenFile string, scope map[string]any, limit int, execute boo
 		{Key: "failed", Value: failed}, {Key: "deferred", Value: max(0, len(pending)-limit)}, {Key: "catalog_updated", Value: updated}}, nil
 }
 
+// syncRunState reads the fingerprints of the last run; a missing file is an empty state.
+func syncRunState() (map[string]any, error) {
+	state := map[string]any{}
+	if raw, err := os.ReadFile(syncState); err == nil {
+		v, err := host.Loads(string(raw))
+		if err != nil {
+			return nil, err
+		}
+		state = asMap(v)
+	}
+	return state, nil
+}
+
+// syncRunDiscover lists the skill folders to sync, first folder per skill id wins.
+func syncRunDiscover() (map[string]map[string]any, []string, error) {
+	var roots []skillRoot
+	for _, r := range syncRoots() {
+		// 설정 › 에이전트: skip the folders of an agent the owner took off
+		if !((r.runtime == "codex" || r.runtime == "claude_code") && host.AgentOff(r.runtime)) {
+			roots = append(roots, r)
+		}
+	}
+	rows := map[string]map[string]any{}
+	var order []string
+	for _, row := range discover(roots) {
+		path := str(row["path"])
+		excluded := slices.ContainsFunc(syncExclude, func(x string) bool { return strings.Contains(path, x) })
+		// Copies written by project-skills carry .arkism.json; their source is already scanned.
+		if !truthy(row["has_frontmatter"]) || excluded || exists(filepath.Join(filepath.Dir(path), ".arkism.json")) {
+			continue
+		}
+		sid, err := syncSkillID(row)
+		if err != nil {
+			return nil, nil, err
+		}
+		if _, ok := rows[sid]; !ok {
+			rows[sid] = row
+			order = append(order, sid)
+		}
+	}
+	return rows, order, nil
+}
+
+// syncRunResolve asks the hub for the latest approved version of each skill, 32 at a time.
+func syncRunResolve(url, token string, scope map[string]any, ids []string) (map[string]map[string]any, error) {
+	current := map[string]map[string]any{}
+	for start := 0; start < len(ids); start += 32 {
+		var refs []any
+		for _, id := range ids[start:min(start+32, len(ids))] {
+			refs = append(refs, id+"@latest-approved")
+		}
+		res, err := syncPost(url, token, "/v1/skills/resolve", map[string]any{"scope": scope, "refs": refs})
+		if err != nil {
+			return nil, err
+		}
+		for _, raw := range asList(res["items"]) {
+			item := asMap(raw)
+			ref := pyStr(item["ref"])
+			if i := strings.LastIndex(ref, "@"); i >= 0 {
+				ref = ref[:i]
+			}
+			current[ref] = item
+		}
+	}
+	return current, nil
+}
+
+// syncRunPending splits the skills into those to import and those a runtime reverted to an older hub version.
+func syncRunPending(url, token string, scope map[string]any, ids []string, rows, current map[string]map[string]any, state map[string]any) ([]string, []string, error) {
+	var pending, reverted []string
+	for _, i := range ids {
+		item, ok := current[i]
+		if !ok {
+			return nil, nil, keyErr(i)
+		}
+		row := rows[i]
+		fp := fingerprint(str(row["content_hash"]), row["bundle"].(map[string]any))
+		// A deprecated skill stays retired even if its folder is still on disk.
+		if item["error"] == "skill_deprecated" || bundleMatches(item, str(row["content_hash"]), row["bundle"].(map[string]any)) || sameJSON(state[i], fp) {
+			continue
+		}
+		// A runtime that rewrites its bundled skills can flip a folder back to an older hub version;
+		// importing it again is a 409, so report it instead of failing every run.
+		if item["error"] == nil && rowMatchesOldVersion(url, token, scope, i, str(row["content_hash"]), item, row["bundle"].(map[string]any)) {
+			reverted = append(reverted, i)
+			continue
+		}
+		pending = append(pending, i)
+	}
+	return pending, reverted, nil
+}
+
 func orNilStrings(l []string) []string {
 	if l == nil {
 		return []string{}
@@ -720,67 +770,11 @@ func syncOne(sid string, row, current map[string]any, known map[analysisKey]map[
 		}
 		analysis = basicAnalysis(sid, string(raw), hash)
 	} else {
-		raw, err := os.ReadFile(str(row["path"]))
+		a, err := syncOneGenerate(sid, row, current, reviewed, hash, updated)
 		if err != nil {
 			return nil, nil, 0, err
 		}
-		if !utf8Valid(raw) {
-			return nil, nil, 0, errors.New("UnicodeDecodeError")
-		}
-		var prev host.Obj
-		if p, ok := reviewed.Get(sid); ok {
-			prev = p.(host.Obj)
-		}
-		old := ""
-		if s, ok := current["instructions"].(string); ok {
-			old = s
-		}
-		fields, err := generateAnalysis(sid, string(raw), prev, old)
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		fields = append(fields, host.KV{Key: "skill_id", Value: sid}, host.KV{Key: "content_hash", Value: hash},
-			host.KV{Key: "version", Value: hash[:min(16, len(hash))]}, host.KV{Key: "evaluation_stats", Value: map[string]any{}})
-		change := objGet(fields, "change_summary")
-		fields.Del("change_summary")
-		if prev != nil {
-			for _, k := range []string{"source_path", "content_hash"} {
-				if _, ok := prev.Get(k); !ok {
-					return nil, nil, 0, keyErr(k)
-				}
-			}
-			entry := slices.Clone(fields)
-			if !truthy(objGet(entry, "name")) {
-				entry.Set("name", objGet(prev, "name"))
-			}
-			stats, ok := prev.Get("evaluation_stats")
-			if !ok {
-				stats = map[string]any{}
-			}
-			entry.Set("evaluation_stats", stats)
-			entry.Set("source_path", objGet(prev, "source_path"))
-			sourceFile, ok := prev.Get("source_file")
-			if !ok {
-				sourceFile = "SKILL.md"
-			}
-			entry.Set("source_file", sourceFile)
-			if err := writeReviewed(entry, host.Obj{{Key: "skill_id", Value: sid}, {Key: "from_hash", Value: objGet(prev, "content_hash")},
-				{Key: "content_hash", Value: hash}, {Key: "summary", Value: change}, {Key: "reviewed", Value: false}}); err != nil {
-				return nil, nil, 0, err
-			}
-			*updated = append(*updated, sid)
-		}
-		if err := os.MkdirAll(filepath.Dir(syncCache), 0o777); err != nil {
-			return nil, nil, 0, err
-		}
-		if err := appendLine(syncCache, host.MustDumps(fields, host.DumpOpts{NoASCII: true})); err != nil {
-			return nil, nil, 0, err
-		}
-		generated = 1
-		analysis = map[string]any{}
-		for _, kv := range fields {
-			analysis[kv.Key] = kv.Value
-		}
+		analysis, generated = a, 1
 	}
 	sent := map[string]any{}
 	for k, v := range analysis {
@@ -809,4 +803,70 @@ func syncOne(sid string, row, current map[string]any, known map[analysisKey]map[
 		return nil, nil, generated, keyErr("reused")
 	}
 	return result, fingerprint(hash, payload["bundle"].(map[string]any)), generated, nil
+}
+
+// syncOneGenerate writes a new model analysis to the cache (and the review queue when a reviewed
+// analysis of an older version exists) and returns it.
+func syncOneGenerate(sid string, row, current map[string]any, reviewed host.Obj, hash string, updated *[]any) (map[string]any, error) {
+	raw, err := os.ReadFile(str(row["path"]))
+	if err != nil {
+		return nil, err
+	}
+	if !utf8Valid(raw) {
+		return nil, errors.New("UnicodeDecodeError")
+	}
+	var prev host.Obj
+	if p, ok := reviewed.Get(sid); ok {
+		prev = p.(host.Obj)
+	}
+	old := ""
+	if s, ok := current["instructions"].(string); ok {
+		old = s
+	}
+	fields, err := generateAnalysis(sid, string(raw), prev, old)
+	if err != nil {
+		return nil, err
+	}
+	fields = append(fields, host.KV{Key: "skill_id", Value: sid}, host.KV{Key: "content_hash", Value: hash},
+		host.KV{Key: "version", Value: hash[:min(16, len(hash))]}, host.KV{Key: "evaluation_stats", Value: map[string]any{}})
+	change := objGet(fields, "change_summary")
+	fields.Del("change_summary")
+	if prev != nil {
+		for _, k := range []string{"source_path", "content_hash"} {
+			if _, ok := prev.Get(k); !ok {
+				return nil, keyErr(k)
+			}
+		}
+		entry := slices.Clone(fields)
+		if !truthy(objGet(entry, "name")) {
+			entry.Set("name", objGet(prev, "name"))
+		}
+		stats, ok := prev.Get("evaluation_stats")
+		if !ok {
+			stats = map[string]any{}
+		}
+		entry.Set("evaluation_stats", stats)
+		entry.Set("source_path", objGet(prev, "source_path"))
+		sourceFile, ok := prev.Get("source_file")
+		if !ok {
+			sourceFile = "SKILL.md"
+		}
+		entry.Set("source_file", sourceFile)
+		if err := writeReviewed(entry, host.Obj{{Key: "skill_id", Value: sid}, {Key: "from_hash", Value: objGet(prev, "content_hash")},
+			{Key: "content_hash", Value: hash}, {Key: "summary", Value: change}, {Key: "reviewed", Value: false}}); err != nil {
+			return nil, err
+		}
+		*updated = append(*updated, sid)
+	}
+	if err := os.MkdirAll(filepath.Dir(syncCache), 0o777); err != nil {
+		return nil, err
+	}
+	if err := appendLine(syncCache, host.MustDumps(fields, host.DumpOpts{NoASCII: true})); err != nil {
+		return nil, err
+	}
+	analysis := map[string]any{}
+	for _, kv := range fields {
+		analysis[kv.Key] = kv.Value
+	}
+	return analysis, nil
 }

@@ -36,6 +36,13 @@ var jsKeywords = map[string]bool{
 	"true": true, "false": true, "null": true, "undefined": true,
 }
 
+var memberModifiers = map[string]bool{"static": true, "async": true, "get": true, "set": true,
+	"public": true, "private": true, "protected": true, "readonly": true, "override": true, "abstract": true}
+
+// uses: a name right after these keywords is being declared, not used.
+var declaresNext = map[string]bool{"function": true, "class": true, "const": true, "let": true, "var": true,
+	"interface": true, "type": true, "enum": true, "as": true}
+
 // exprEnd keywords: a '/' after them starts a regular expression.
 var regexAfter = map[string]bool{"return": true, "typeof": true, "case": true, "do": true, "else": true, "in": true, "of": true,
 	"new": true, "delete": true, "void": true, "throw": true, "instanceof": true, "yield": true, "await": true}
@@ -93,127 +100,185 @@ func lexJS(src string) []jsTok {
 		case c == '\n':
 			line++
 			i++
-		case c == ' ' || c == '\t' || c == '\r' || c == '\f' || c == '\v':
+		case isJSSpace(c):
 			i++
-		case c == '/' && i+1 < n && src[i+1] == '/':
-			for i < n && src[i] != '\n' {
-				i++
-			}
-		case c == '/' && i+1 < n && src[i+1] == '*':
-			i += 2
-			for i < n && !(src[i] == '*' && i+1 < n && src[i+1] == '/') {
-				if src[i] == '\n' {
-					line++
-				}
-				i++
-			}
-			i += 2
-		case c == '\'' || c == '"':
-			start, l := i, line
-			i++
-			var b strings.Builder
-			for i < n && src[i] != c && src[i] != '\n' {
-				if src[i] == '\\' && i+1 < n {
-					if src[i+1] == '\n' {
-						line++
-					}
-					b.WriteByte(src[i+1])
-					i += 2
-					continue
-				}
-				b.WriteByte(src[i])
-				i++
-			}
-			if i < n && src[i] == c {
-				i++
-				toks = append(toks, jsTok{'s', b.String(), l})
+		case strings.HasPrefix(src[i:], "//"):
+			if k := strings.IndexByte(src[i:], '\n'); k >= 0 {
+				i += k
 			} else {
-				// unterminated (JSX text such as don't): treat the quote as punctuation
-				i = start + 1
-				toks = append(toks, jsTok{'p', string(c), l})
+				i = n
 			}
+		case strings.HasPrefix(src[i:], "/*"):
+			i, line = skipBlockComment(src, i, line)
+		case c == '\'' || c == '"':
+			var t jsTok
+			t, i, line = lexQuoted(src, i, line)
+			toks = append(toks, t)
 		case c == '`':
 			i++
 			scanTemplate()
 		case c == '/' && prevAllowsRegex():
-			l := i
-			i++
-			class := false
-			for i < n && src[i] != '\n' {
-				if src[i] == '\\' {
-					i += 2
-					continue
-				}
-				if src[i] == '[' {
-					class = true
-				} else if src[i] == ']' {
-					class = false
-				} else if src[i] == '/' && !class {
-					break
-				}
-				i++
-			}
-			if i < n && src[i] == '/' {
-				i++
-				for i < n && isIdentPart(rune(src[i])) {
-					i++
-				}
-				toks = append(toks, jsTok{'r', src[l:i], line})
-			} else {
-				i = l + 1
-				toks = append(toks, jsTok{'p', "/", line})
-			}
-		case c >= '0' && c <= '9' || c == '.' && i+1 < n && src[i+1] >= '0' && src[i+1] <= '9':
+			var t jsTok
+			t, i = lexRegex(src, i, line)
+			toks = append(toks, t)
+		case isNumberStart(src, i):
 			start := i
-			for i < n && (isIdentPart(rune(src[i])) || src[i] == '.') {
-				i++
-			}
+			i = numberEnd(src, i)
 			toks = append(toks, jsTok{'n', src[start:i], line})
 		default:
-			r, size := utf8.DecodeRuneInString(src[i:])
-			if isIdentStart(r) || r == '#' && i+1 < n && isIdentStart(rune(src[i+1])) {
-				start := i
-				i += size
-				for i < n {
-					r2, s2 := utf8.DecodeRuneInString(src[i:])
-					if !isIdentPart(r2) {
-						break
-					}
-					i += s2
-				}
-				toks = append(toks, jsTok{'i', src[start:i], line})
+			if end := identEnd(src, i); end > i {
+				toks = append(toks, jsTok{'i', src[i:end], line})
+				i = end
 				continue
 			}
-			matched := false
-			for _, op := range []string{"=>", "...", "?.", "===", "!==", "==", "!=", "&&", "||", "??"} {
-				if strings.HasPrefix(src[i:], op) && !(op == "?." && i+2 < n && src[i+2] >= '0' && src[i+2] <= '9') {
-					toks = append(toks, jsTok{'p', op, line})
-					i += len(op)
-					matched = true
-					break
-				}
-			}
-			if matched {
+			if op := jsOperator(src, i); op != "" {
+				toks = append(toks, jsTok{'p', op, line})
+				i += len(op)
 				continue
 			}
-			if len(tmpl) > 0 {
-				if c == '{' {
-					tmpl[len(tmpl)-1]++
-				} else if c == '}' {
-					if tmpl[len(tmpl)-1] == 0 {
-						tmpl = tmpl[:len(tmpl)-1]
-						i++
-						scanTemplate()
-						continue
-					}
-					tmpl[len(tmpl)-1]--
-				}
+			if templateBrace(tmpl, c) {
+				tmpl = tmpl[:len(tmpl)-1]
+				i++
+				scanTemplate()
+				continue
 			}
+			_, size := utf8.DecodeRuneInString(src[i:])
 			toks = append(toks, jsTok{'p', src[i : i+size], line})
 			i += size
 		}
 	}
 	return toks
+}
+
+func isJSSpace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\r' || c == '\f' || c == '\v'
+}
+
+// skipBlockComment skips a /* … */ comment at i, counting its lines.
+func skipBlockComment(src string, i, line int) (int, int) {
+	n := len(src)
+	i += 2
+	for i < n && !(src[i] == '*' && i+1 < n && src[i+1] == '/') {
+		if src[i] == '\n' {
+			line++
+		}
+		i++
+	}
+	return i + 2, line
+}
+
+// lexQuoted reads a '…' or "…" string at i.
+func lexQuoted(src string, i, line int) (jsTok, int, int) {
+	n := len(src)
+	c := src[i]
+	start, l := i, line
+	i++
+	var b strings.Builder
+	for i < n && src[i] != c && src[i] != '\n' {
+		if src[i] == '\\' && i+1 < n {
+			if src[i+1] == '\n' {
+				line++
+			}
+			b.WriteByte(src[i+1])
+			i += 2
+			continue
+		}
+		b.WriteByte(src[i])
+		i++
+	}
+	if i < n && src[i] == c {
+		return jsTok{'s', b.String(), l}, i + 1, line
+	}
+	// unterminated (JSX text such as don't): treat the quote as punctuation
+	return jsTok{'p', string(c), l}, start + 1, line
+}
+
+// lexRegex reads a regular expression literal at i, or a lone '/' when it is
+// not closed on the line.
+func lexRegex(src string, i, line int) (jsTok, int) {
+	n := len(src)
+	l := i
+	i++
+	class := false
+	for i < n && src[i] != '\n' {
+		if src[i] == '\\' {
+			i += 2
+			continue
+		}
+		if src[i] == '[' {
+			class = true
+		} else if src[i] == ']' {
+			class = false
+		} else if src[i] == '/' && !class {
+			break
+		}
+		i++
+	}
+	if i < n && src[i] == '/' {
+		i++
+		for i < n && isIdentPart(rune(src[i])) {
+			i++
+		}
+		return jsTok{'r', src[l:i], line}, i
+	}
+	return jsTok{'p', "/", line}, l + 1
+}
+
+func isNumberStart(src string, i int) bool {
+	c := src[i]
+	return c >= '0' && c <= '9' || c == '.' && i+1 < len(src) && src[i+1] >= '0' && src[i+1] <= '9'
+}
+
+func numberEnd(src string, i int) int {
+	for i < len(src) && (isIdentPart(rune(src[i])) || src[i] == '.') {
+		i++
+	}
+	return i
+}
+
+// identEnd returns the end of an identifier (or #private name) at i, or i.
+func identEnd(src string, i int) int {
+	r, size := utf8.DecodeRuneInString(src[i:])
+	if !isIdentStart(r) && !(r == '#' && i+1 < len(src) && isIdentStart(rune(src[i+1]))) {
+		return i
+	}
+	i += size
+	for i < len(src) {
+		r2, s2 := utf8.DecodeRuneInString(src[i:])
+		if !isIdentPart(r2) {
+			break
+		}
+		i += s2
+	}
+	return i
+}
+
+// jsOperator returns the multi-character operator at i, or "".
+func jsOperator(src string, i int) string {
+	for _, op := range []string{"=>", "...", "?.", "===", "!==", "==", "!=", "&&", "||", "??"} {
+		if strings.HasPrefix(src[i:], op) && !(op == "?." && i+2 < len(src) && src[i+2] >= '0' && src[i+2] <= '9') {
+			return op
+		}
+	}
+	return ""
+}
+
+// templateBrace counts braces inside the innermost open ${ … }; it reports
+// whether c closes that expression.
+func templateBrace(tmpl []int, c byte) bool {
+	if len(tmpl) == 0 {
+		return false
+	}
+	top := &tmpl[len(tmpl)-1]
+	switch {
+	case c == '{':
+		*top++
+	case c == '}' && *top == 0:
+		return true
+	case c == '}':
+		*top--
+	}
+	return false
 }
 
 // jsFrame is a function or class body, or the file itself.
@@ -393,29 +458,12 @@ func (f *jsFile) innermost(i int) int {
 // expression body the range ends at the end of the expression.
 func (f *jsFile) funcBody(closeParen int) (int, int, bool) {
 	j := closeParen + 1
-	if f.is(j, ":") { // TS return type: the body is the first '{' or '=>' that is not part of the type
-		depth := 0
-		for j++; j < len(f.toks); j++ {
-			switch {
-			case f.is(j, "(") || f.is(j, "[") || f.is(j, "<"):
-				depth++
-			case f.is(j, ")") || f.is(j, "]") || f.is(j, ">"):
-				depth--
-			case depth == 0 && f.is(j, "=>"):
-				goto body
-			case depth == 0 && f.is(j, "{"):
-				if f.is(j-1, ":") || f.is(j-1, "|") || f.is(j-1, "&") || f.is(j-1, ",") {
-					j = f.match(j) // an object type
-					continue
-				}
-				goto body
-			case f.is(j, ";"):
-				return 0, 0, false
-			}
+	if f.is(j, ":") {
+		var ok bool
+		if j, ok = f.skipReturnType(j); !ok {
+			return 0, 0, false
 		}
-		return 0, 0, false
 	}
-body:
 	if f.is(j, "=>") {
 		j++
 		if f.is(j, "{") {
@@ -427,6 +475,31 @@ body:
 		return j, f.match(j), true
 	}
 	return 0, 0, false
+}
+
+// skipReturnType skips a TS return type starting at the ':' at j: the body is
+// the first '{' or '=>' that is not part of the type.
+func (f *jsFile) skipReturnType(j int) (int, bool) {
+	depth := 0
+	for j++; j < len(f.toks); j++ {
+		switch {
+		case f.is(j, "(") || f.is(j, "[") || f.is(j, "<"):
+			depth++
+		case f.is(j, ")") || f.is(j, "]") || f.is(j, ">"):
+			depth--
+		case depth == 0 && f.is(j, "=>"):
+			return j, true
+		case depth == 0 && f.is(j, "{"):
+			if f.is(j-1, ":") || f.is(j-1, "|") || f.is(j-1, "&") || f.is(j-1, ",") {
+				j = f.match(j) // an object type
+				continue
+			}
+			return j, true
+		case f.is(j, ";"):
+			return 0, false
+		}
+	}
+	return 0, false
 }
 
 // exprEnd is the last token of an expression starting at i: before a ',' or ';'
@@ -488,149 +561,191 @@ func (f *jsFile) declare() {
 			continue
 		}
 		frame := f.innermost(i)
-		fr := f.frames[frame]
-		exported := f.is(i-1, "export") || f.is(i-2, "export") && f.is(i-1, "default") || f.is(i-1, "declare") && f.is(i-2, "export")
+		exported := f.exportedAt(i)
 		switch t.text {
 		case "import":
 			f.declareImport(i)
 		case "export":
-			if f.is(i+1, "{") {
-				end := f.match(i + 1)
-				for j := i + 2; j < end; j++ {
-					if f.tok(j).kind == 'i' && !f.is(j-1, "as") {
-						f.exported[f.tok(j).text] = true
-					}
-				}
-				if f.is(end+1, "from") && f.tok(end+2).kind == 's' {
-					f.importSpec(f.tok(end+2).text, f.tok(end+2).line)
-				}
-			} else if f.is(i+1, "*") {
-				for j := i + 2; j < i+6 && j < len(toks); j++ {
-					if f.is(j, "from") && f.tok(j+1).kind == 's' {
-						f.importSpec(f.tok(j+1).text, f.tok(j+1).line)
-						break
-					}
-				}
-			}
+			f.declareExport(i)
 		case "function":
-			// function name(…) {…}; anonymous function expressions are named by their binding below
-			j := i + 1
-			if f.is(j, "*") {
-				j++
-			}
-			name := f.tok(j)
-			if name.kind != 'i' || jsKeywords[name.text] || !f.is(j+1, "(") && !f.is(j+1, "<") {
-				continue
-			}
-			k := j + 1
-			if f.is(k, "<") {
-				k = f.match(k) + 1
-			}
-			if !f.is(k, "(") {
-				continue
-			}
-			cp := f.match(k)
-			bs, be, ok := f.funcBody(cp)
-			if !ok {
-				continue
-			}
-			if fr.isClass {
-				continue
-			}
-			isExp := exported || f.is(i-1, "async") && (f.is(i-2, "export") || f.is(i-2, "default"))
-			id := f.newSymbol(frame, KindFunc, name.text, "function "+name.text+f.text(k, cp), i, be, isExp)
-			fr.decls[name.text] = id
-			f.addFrame(frame, id, fr.qname+name.text+".", bs, be, "")
-			i = k
+			i = f.declareFunction(i, frame, exported)
 		case "class":
-			name := f.tok(i + 1)
-			if name.kind != 'i' || jsKeywords[name.text] {
-				continue
-			}
-			j := i + 2
-			for j < len(toks) && !f.is(j, "{") && j < i+40 {
-				j++
-			}
-			if !f.is(j, "{") {
-				continue
-			}
-			end := f.match(j)
-			id := f.newSymbol(frame, KindType, name.text, "class "+name.text, i, end, exported)
-			fr.decls[name.text] = id
-			idx := f.addFrame(frame, id, fr.qname+name.text+".", j, end, name.text)
-			if frame == 0 {
-				f.classes[name.text] = idx
-			}
-			f.classMembers(idx, j, end)
-			i = j
+			i = f.declareClass(i, frame, exported)
 		case "interface", "enum":
-			name := f.tok(i + 1)
-			if name.kind != 'i' || jsKeywords[name.text] || f.is(i-1, ".") || !(f.is(i+2, "{") || f.is(i+2, "extends") || f.is(i+2, "<")) {
-				continue
-			}
-			j := i + 2
-			for j < len(toks) && !f.is(j, "{") && j < i+40 {
-				j++
-			}
-			end := j
-			if f.is(j, "{") {
-				end = f.match(j)
-			}
-			id := f.newSymbol(frame, KindType, name.text, t.text+" "+name.text, i, end, exported)
-			fr.decls[name.text] = id
-			i = end
+			i = f.declareTypeBlock(i, frame, exported)
 		case "type":
-			name := f.tok(i + 1)
-			if name.kind != 'i' || jsKeywords[name.text] || !(f.is(i+2, "=") || f.is(i+2, "<")) || fr.isClass {
-				continue
-			}
-			end := f.exprEnd(i + 2)
-			id := f.newSymbol(frame, KindType, name.text, "type "+name.text, i, end, exported)
-			fr.decls[name.text] = id
-			i = end
+			i = f.declareTypeAlias(i, frame, exported)
 		case "const", "let", "var":
-			if fr.isClass {
+			if f.frames[frame].isClass {
 				continue
 			}
 			f.declareBinding(i, frame, exported)
 		default:
-			// a.b.c = function/arrow at statement level
-			if jsKeywords[t.text] || fr.isClass {
-				continue
+			i = f.declareAssignment(i, frame)
+		}
+	}
+}
+
+// exportedAt reports whether the declaration keyword at i follows export,
+// export default or export declare.
+func (f *jsFile) exportedAt(i int) bool {
+	return f.is(i-1, "export") || f.is(i-2, "export") && f.is(i-1, "default") || f.is(i-1, "declare") && f.is(i-2, "export")
+}
+
+// declareExport records export { … } [from 's'] and export * from 's' at i.
+func (f *jsFile) declareExport(i int) {
+	if f.is(i+1, "{") {
+		end := f.match(i + 1)
+		for j := i + 2; j < end; j++ {
+			if f.tok(j).kind == 'i' && !f.is(j-1, "as") {
+				f.exported[f.tok(j).text] = true
 			}
-			j := i
-			chain := []string{t.text}
-			for f.is(j+1, ".") && f.tok(j+2).kind == 'i' {
-				chain = append(chain, f.tok(j+2).text)
-				j += 2
-			}
-			if len(chain) < 2 || !f.is(j+1, "=") {
-				continue
-			}
-			if bs, be, sig, ok := f.funcValue(j + 2); ok {
-				names := chain
-				isExp := false
-				switch names[0] {
-				case "window", "globalThis", "self":
-					names, isExp = names[1:], true
-				case "module":
-					if len(names) > 2 && names[1] == "exports" {
-						names, isExp = names[2:], true
-					}
-				case "exports":
-					names, isExp = names[1:], true
-				}
-				name := names[len(names)-1]
-				qual := strings.Join(names, ".")
-				id := f.newSymbolQ(frame, KindFunc, name, qual, qual+" = "+sig, i, be, isExp)
-				if len(names) == 1 {
-					fr.decls[name] = id
-				}
-				f.addFrame(frame, id, fr.qname+qual+".", bs, be, "")
-				i = j + 1
+		}
+		if f.is(end+1, "from") && f.tok(end+2).kind == 's' {
+			f.importSpec(f.tok(end+2).text, f.tok(end+2).line)
+		}
+	} else if f.is(i+1, "*") {
+		for j := i + 2; j < i+6 && j < len(f.toks); j++ {
+			if f.is(j, "from") && f.tok(j+1).kind == 's' {
+				f.importSpec(f.tok(j+1).text, f.tok(j+1).line)
+				break
 			}
 		}
 	}
+}
+
+// declareFunction handles function name(…) {…} at i and returns the index to
+// continue from; anonymous function expressions are named by their binding.
+func (f *jsFile) declareFunction(i, frame int, exported bool) int {
+	fr := f.frames[frame]
+	j := i + 1
+	if f.is(j, "*") {
+		j++
+	}
+	name := f.tok(j)
+	if name.kind != 'i' || jsKeywords[name.text] || !f.is(j+1, "(") && !f.is(j+1, "<") {
+		return i
+	}
+	k := j + 1
+	if f.is(k, "<") {
+		k = f.match(k) + 1
+	}
+	if !f.is(k, "(") {
+		return i
+	}
+	cp := f.match(k)
+	bs, be, ok := f.funcBody(cp)
+	if !ok {
+		return i
+	}
+	if fr.isClass {
+		return i
+	}
+	isExp := exported || f.is(i-1, "async") && (f.is(i-2, "export") || f.is(i-2, "default"))
+	id := f.newSymbol(frame, KindFunc, name.text, "function "+name.text+f.text(k, cp), i, be, isExp)
+	fr.decls[name.text] = id
+	f.addFrame(frame, id, fr.qname+name.text+".", bs, be, "")
+	return k
+}
+
+// declareClass handles class Name … {…} at i and its methods.
+func (f *jsFile) declareClass(i, frame int, exported bool) int {
+	fr := f.frames[frame]
+	name := f.tok(i + 1)
+	if name.kind != 'i' || jsKeywords[name.text] {
+		return i
+	}
+	j := i + 2
+	for j < len(f.toks) && !f.is(j, "{") && j < i+40 {
+		j++
+	}
+	if !f.is(j, "{") {
+		return i
+	}
+	end := f.match(j)
+	id := f.newSymbol(frame, KindType, name.text, "class "+name.text, i, end, exported)
+	fr.decls[name.text] = id
+	idx := f.addFrame(frame, id, fr.qname+name.text+".", j, end, name.text)
+	if frame == 0 {
+		f.classes[name.text] = idx
+	}
+	f.classMembers(idx, j, end)
+	return j
+}
+
+// declareTypeBlock handles a TS interface or enum at i.
+func (f *jsFile) declareTypeBlock(i, frame int, exported bool) int {
+	fr := f.frames[frame]
+	name := f.tok(i + 1)
+	if name.kind != 'i' || jsKeywords[name.text] || f.is(i-1, ".") || !(f.is(i+2, "{") || f.is(i+2, "extends") || f.is(i+2, "<")) {
+		return i
+	}
+	j := i + 2
+	for j < len(f.toks) && !f.is(j, "{") && j < i+40 {
+		j++
+	}
+	end := j
+	if f.is(j, "{") {
+		end = f.match(j)
+	}
+	id := f.newSymbol(frame, KindType, name.text, f.tok(i).text+" "+name.text, i, end, exported)
+	fr.decls[name.text] = id
+	return end
+}
+
+// declareTypeAlias handles a TS type alias at i.
+func (f *jsFile) declareTypeAlias(i, frame int, exported bool) int {
+	fr := f.frames[frame]
+	name := f.tok(i + 1)
+	if name.kind != 'i' || jsKeywords[name.text] || !(f.is(i+2, "=") || f.is(i+2, "<")) || fr.isClass {
+		return i
+	}
+	end := f.exprEnd(i + 2)
+	id := f.newSymbol(frame, KindType, name.text, "type "+name.text, i, end, exported)
+	fr.decls[name.text] = id
+	return end
+}
+
+// declareAssignment handles a.b.c = function/arrow at statement level.
+func (f *jsFile) declareAssignment(i, frame int) int {
+	fr := f.frames[frame]
+	t := f.tok(i)
+	if jsKeywords[t.text] || fr.isClass {
+		return i
+	}
+	j := i
+	chain := []string{t.text}
+	for f.is(j+1, ".") && f.tok(j+2).kind == 'i' {
+		chain = append(chain, f.tok(j+2).text)
+		j += 2
+	}
+	if len(chain) < 2 || !f.is(j+1, "=") {
+		return i
+	}
+	bs, be, sig, ok := f.funcValue(j + 2)
+	if !ok {
+		return i
+	}
+	names := chain
+	isExp := false
+	switch names[0] {
+	case "window", "globalThis", "self":
+		names, isExp = names[1:], true
+	case "module":
+		if len(names) > 2 && names[1] == "exports" {
+			names, isExp = names[2:], true
+		}
+	case "exports":
+		names, isExp = names[1:], true
+	}
+	name := names[len(names)-1]
+	qual := strings.Join(names, ".")
+	id := f.newSymbolQ(frame, KindFunc, name, qual, qual+" = "+sig, i, be, isExp)
+	if len(names) == 1 {
+		fr.decls[name] = id
+	}
+	f.addFrame(frame, id, fr.qname+qual+".", bs, be, "")
+	return j + 1
 }
 
 // newSymbolQ is newSymbol with a dotted qualified suffix.
@@ -703,25 +818,7 @@ func (f *jsFile) declareBinding(i, frame int, exported bool) {
 	kw := f.tok(i).text
 	name := f.tok(i + 1)
 	if f.is(i+1, "{") || f.is(i+1, "[") {
-		// const { a, b: c } = require('./x')
-		end := f.match(i + 1)
-		if f.is(end+1, "=") && f.is(end+2, "require") && f.is(end+3, "(") && f.tok(end+4).kind == 's' {
-			target := f.importSpec(f.tok(end+4).text, f.tok(end+4).line)
-			if target == "" {
-				return
-			}
-			for j := i + 2; j < end; j++ {
-				if f.tok(j).kind != 'i' {
-					continue
-				}
-				if f.is(j+1, ":") && f.tok(j+2).kind == 'i' {
-					f.named[f.tok(j+2).text] = target + "#" + f.tok(j).text
-					j += 2
-				} else {
-					f.named[f.tok(j).text] = target + "#" + f.tok(j).text
-				}
-			}
-		}
+		f.declareDestructured(i)
 		return
 	}
 	if name.kind != 'i' || jsKeywords[name.text] {
@@ -729,24 +826,11 @@ func (f *jsFile) declareBinding(i, frame int, exported bool) {
 	}
 	j := i + 2
 	if f.is(j, ":") { // TS type annotation
-		depth := 0
-		for ; j < len(f.toks); j++ {
-			if f.is(j, "<") || f.is(j, "(") || f.is(j, "[") || f.is(j, "{") {
-				depth++
-			} else if f.is(j, ">") || f.is(j, ")") || f.is(j, "]") || f.is(j, "}") {
-				depth--
-			} else if depth == 0 && (f.is(j, "=") || f.is(j, ";")) {
-				break
-			}
-		}
+		j = f.skipTypeAnnotation(j)
 	}
 	if !f.is(j, "=") {
 		if frame == 0 {
-			kind := KindVar
-			if kw == "const" {
-				kind = KindConst
-			}
-			fr.decls[name.text] = f.newSymbol(frame, kind, name.text, kw+" "+name.text, i, i+1, exported)
+			fr.decls[name.text] = f.newSymbol(frame, bindingKind(kw), name.text, kw+" "+name.text, i, i+1, exported)
 		}
 		return
 	}
@@ -763,13 +847,54 @@ func (f *jsFile) declareBinding(i, frame int, exported bool) {
 		return
 	}
 	if frame == 0 {
-		kind := KindVar
-		if kw == "const" {
-			kind = KindConst
-		}
 		end := f.exprEnd(j + 1)
-		fr.decls[name.text] = f.newSymbol(frame, kind, name.text, kw+" "+name.text, i, end, exported)
+		fr.decls[name.text] = f.newSymbol(frame, bindingKind(kw), name.text, kw+" "+name.text, i, end, exported)
 	}
+}
+
+func bindingKind(kw string) string {
+	if kw == "const" {
+		return KindConst
+	}
+	return KindVar
+}
+
+// declareDestructured handles const { a, b: c } = require('./x') at i.
+func (f *jsFile) declareDestructured(i int) {
+	end := f.match(i + 1)
+	if !f.is(end+1, "=") || !f.is(end+2, "require") || !f.is(end+3, "(") || f.tok(end+4).kind != 's' {
+		return
+	}
+	target := f.importSpec(f.tok(end+4).text, f.tok(end+4).line)
+	if target == "" {
+		return
+	}
+	for j := i + 2; j < end; j++ {
+		if f.tok(j).kind != 'i' {
+			continue
+		}
+		if f.is(j+1, ":") && f.tok(j+2).kind == 'i' {
+			f.named[f.tok(j+2).text] = target + "#" + f.tok(j).text
+			j += 2
+		} else {
+			f.named[f.tok(j).text] = target + "#" + f.tok(j).text
+		}
+	}
+}
+
+// skipTypeAnnotation returns the '=' or ';' ending the TS type annotation at j.
+func (f *jsFile) skipTypeAnnotation(j int) int {
+	depth := 0
+	for ; j < len(f.toks); j++ {
+		if f.is(j, "<") || f.is(j, "(") || f.is(j, "[") || f.is(j, "{") {
+			depth++
+		} else if f.is(j, ">") || f.is(j, ")") || f.is(j, "]") || f.is(j, "}") {
+			depth--
+		} else if depth == 0 && (f.is(j, "=") || f.is(j, ";")) {
+			break
+		}
+	}
+	return j
 }
 
 func (f *jsFile) declareImport(i int) {
@@ -808,23 +933,28 @@ func (f *jsFile) declareImport(i int) {
 			j += 3
 		case f.is(j, "{"):
 			closeAt := f.match(j)
-			for k := j + 1; k < closeAt; k++ {
-				if f.tok(k).kind != 'i' || f.is(k, "type") {
-					continue
-				}
-				if f.is(k+1, "as") && f.tok(k+2).kind == 'i' {
-					f.named[f.tok(k+2).text] = mod + "#" + f.tok(k).text
-					k += 2
-				} else {
-					f.named[f.tok(k).text] = mod + "#" + f.tok(k).text
-				}
-			}
+			f.importNames(j, closeAt, mod)
 			j = closeAt + 1
 		case t.kind == 'i':
 			f.named[t.text] = mod + "#default"
 			j++
 		default:
 			j++
+		}
+	}
+}
+
+// importNames binds the names of import { a, b as c } between open and closeAt.
+func (f *jsFile) importNames(open, closeAt int, mod string) {
+	for k := open + 1; k < closeAt; k++ {
+		if f.tok(k).kind != 'i' || f.is(k, "type") {
+			continue
+		}
+		if f.is(k+1, "as") && f.tok(k+2).kind == 'i' {
+			f.named[f.tok(k+2).text] = mod + "#" + f.tok(k).text
+			k += 2
+		} else {
+			f.named[f.tok(k).text] = mod + "#" + f.tok(k).text
 		}
 	}
 }
@@ -843,8 +973,7 @@ func (f *jsFile) classMembers(frame, open, closeAt int) {
 		}
 		// skip modifiers
 		k := j
-		for f.tok(k).kind == 'i' && (f.tok(k).text == "static" || f.tok(k).text == "async" || f.tok(k).text == "get" || f.tok(k).text == "set" ||
-			f.tok(k).text == "public" || f.tok(k).text == "private" || f.tok(k).text == "protected" || f.tok(k).text == "readonly" || f.tok(k).text == "override" || f.tok(k).text == "abstract") && f.tok(k+1).kind == 'i' {
+		for f.tok(k).kind == 'i' && memberModifiers[f.tok(k).text] && f.tok(k+1).kind == 'i' {
 			k++
 		}
 		if f.is(k, "*") {
@@ -923,8 +1052,7 @@ func (f *jsFile) uses() {
 		if prev.kind == 'p' && (prev.text == "." || prev.text == "?.") {
 			continue
 		}
-		if prev.kind == 'i' && (prev.text == "function" || prev.text == "class" || prev.text == "const" || prev.text == "let" || prev.text == "var" ||
-			prev.text == "interface" || prev.text == "type" || prev.text == "enum" || prev.text == "as") {
+		if prev.kind == 'i' && declaresNext[prev.text] {
 			continue
 		}
 		frame := f.innermost(i)
@@ -932,31 +1060,9 @@ func (f *jsFile) uses() {
 			continue // a class body's own tokens declare members
 		}
 		from, _ := f.enclosingFunc(frame)
-		call := f.is(i+1, "(") || f.is(i+1, "?.") && f.is(i+2, "(")
 		// member call: this.m(), C.m(), ns.f()
 		if f.is(i+1, ".") && f.tok(i+2).kind == 'i' {
-			member := f.tok(i + 2).text
-			mcall := f.is(i+3, "(") || f.is(i+3, "?.") && f.is(i+4, "(")
-			var target string
-			switch {
-			case t.text == "this":
-				if c := f.enclosingClass(frame); c >= 0 {
-					target = f.frames[c].methods[member]
-				}
-			case f.namespaces[t.text] != "":
-				target = SymbolID(LangJS, f.namespaces[t.text]+"#"+member)
-			default:
-				if c, ok := f.classes[t.text]; ok && f.lookup(frame, t.text) == f.frames[c].sym {
-					target = f.frames[c].methods[member]
-				}
-			}
-			if target != "" {
-				kind := EdgeReferences
-				if mcall {
-					kind = EdgeCalls
-				}
-				f.edge(from, target, kind, f.tok(i+2).line)
-			}
+			f.memberUse(i, frame, from)
 			if t.text == "this" {
 				i += 2
 				continue
@@ -965,20 +1071,54 @@ func (f *jsFile) uses() {
 		if t.text == "this" {
 			continue
 		}
-		// object keys ({ load: x }) and parameters with defaults are not uses
-		if f.is(i+1, ":") && (f.is(i-1, "{") || f.is(i-1, ",")) {
-			continue
+		f.nameUse(i, frame, from)
+	}
+}
+
+// memberUse records this.m, C.m and ns.f at i (the token before the '.').
+func (f *jsFile) memberUse(i, frame int, from string) {
+	t := f.tok(i)
+	member := f.tok(i + 2).text
+	mcall := f.is(i+3, "(") || f.is(i+3, "?.") && f.is(i+4, "(")
+	var target string
+	switch {
+	case t.text == "this":
+		if c := f.enclosingClass(frame); c >= 0 {
+			target = f.frames[c].methods[member]
 		}
-		target := f.lookup(frame, t.text)
-		if target == "" || target == from {
-			continue
+	case f.namespaces[t.text] != "":
+		target = SymbolID(LangJS, f.namespaces[t.text]+"#"+member)
+	default:
+		if c, ok := f.classes[t.text]; ok && f.lookup(frame, t.text) == f.frames[c].sym {
+			target = f.frames[c].methods[member]
 		}
+	}
+	if target != "" {
 		kind := EdgeReferences
-		if call && !f.is(i-1, "new") {
+		if mcall {
 			kind = EdgeCalls
 		}
-		f.edge(from, target, kind, t.line)
+		f.edge(from, target, kind, f.tok(i+2).line)
 	}
+}
+
+// nameUse records a call of or reference to the plain name at i.
+func (f *jsFile) nameUse(i, frame int, from string) {
+	t := f.tok(i)
+	// object keys ({ load: x }) and parameters with defaults are not uses
+	if f.is(i+1, ":") && (f.is(i-1, "{") || f.is(i-1, ",")) {
+		return
+	}
+	target := f.lookup(frame, t.text)
+	if target == "" || target == from {
+		return
+	}
+	kind := EdgeReferences
+	call := f.is(i+1, "(") || f.is(i+1, "?.") && f.is(i+2, "(")
+	if call && !f.is(i-1, "new") {
+		kind = EdgeCalls
+	}
+	f.edge(from, target, kind, t.line)
 }
 
 // jsResolver maps relative specifiers to files of the indexed tree.

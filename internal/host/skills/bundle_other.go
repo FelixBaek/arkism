@@ -104,30 +104,11 @@ func captureBundle(sourcePath, inventoryRoot, expectedHash string) (map[string]a
 		return nil, errors.New("skill_bundle_outside_root")
 	}
 	skillDir := filepath.Dir(source)
-	root := skillDir
-	for folder := skillDir; ; folder = filepath.Dir(folder) {
-		if folder != boundary && !isUnder(folder, boundary) {
-			break
-		}
-		if isDir(filepath.Join(folder, ".claude-plugin")) {
-			root = folder
-			break
-		}
-		if folder == filepath.Dir(folder) {
-			break
-		}
-	}
+	root := captureBundleRoot(skillDir, boundary)
 	skillRel, _ := filepath.Rel(root, skillDir)
 	sourceRel, _ := filepath.Rel(root, source)
 	skillRel, sourceRel = filepath.ToSlash(skillRel), filepath.ToSlash(sourceRel)
-	starts := []string{skillRel}
-	if root != skillDir {
-		for _, d := range sharedDirs {
-			if !strings.HasPrefix(skillRel, d+"/") && skillRel != d {
-				starts = append(starts, d)
-			}
-		}
-	}
+	starts := captureBundleStarts(root, skillDir, skillRel)
 	entries, found := map[string]captureEntry{}, false
 	for _, start := range starts {
 		if start != skillRel {

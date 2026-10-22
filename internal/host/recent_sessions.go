@@ -32,8 +32,7 @@ func RecentSessionsContext(request Requester, scope map[string]any, repository, 
 		sid, _ := pkg["session_id"].(string)
 		id, _ := item["id"].(string)
 		rev, isInt := Int(item["revision"])
-		updated, dateErr := time.Parse(time.RFC3339Nano, strOr(item["updated_at"]))
-		if !ok || !valid || sid == "" || sid == session || seen[sid] || pkg["repository"] != repository || !workKey.MatchString(id) || !isInt || rev < 1 || item["authority"] != "data_only_untrusted" || dateErr != nil || updated.Before(time.Now().Add(-time.Duration(maxDays)*24*time.Hour)) {
+		if !ok || !valid || sid == "" || sid == session || seen[sid] || pkg["repository"] != repository || !workKey.MatchString(id) || !isInt || rev < 1 || item["authority"] != "data_only_untrusted" || !recentSessionFresh(item["updated_at"], maxDays) {
 			return "", errors.New("invalid recent session")
 		}
 		seen[sid] = true
@@ -43,25 +42,36 @@ func RecentSessionsContext(request Requester, scope map[string]any, repository, 
 			out = out[:len(out)-1]
 			break
 		}
-		omitted := []string{}
-		for _, key := range []string{"title", "goal", "status", "decisions", "completed", "next_steps"} {
-			if value, exists := pkg[key]; exists {
-				summary[key] = value
-				if Len(render()) > maxChars {
-					delete(summary, key)
-					omitted = append(omitted, key)
-				}
-			}
-		}
-		if len(omitted) > 0 {
-			summary["omitted_fields"] = omitted
-			if Len(render()) > maxChars {
-				delete(summary, "omitted_fields")
-			}
-		}
+		addRecentSessionFields(summary, pkg, render, maxChars)
 	}
 	if len(out) == 0 {
 		return "", nil
 	}
 	return render(), nil
+}
+
+// recentSessionFresh reports whether updatedAt parses and falls within maxDays.
+func recentSessionFresh(updatedAt any, maxDays int) bool {
+	updated, err := time.Parse(time.RFC3339Nano, strOr(updatedAt))
+	return err == nil && !updated.Before(time.Now().Add(-time.Duration(maxDays)*24*time.Hour))
+}
+
+// addRecentSessionFields adds each whole field that fits the budget and names the rest.
+func addRecentSessionFields(summary, pkg map[string]any, render func() string, maxChars int) {
+	omitted := []string{}
+	for _, key := range []string{"title", "goal", "status", "decisions", "completed", "next_steps"} {
+		if value, exists := pkg[key]; exists {
+			summary[key] = value
+			if Len(render()) > maxChars {
+				delete(summary, key)
+				omitted = append(omitted, key)
+			}
+		}
+	}
+	if len(omitted) > 0 {
+		summary["omitted_fields"] = omitted
+		if Len(render()) > maxChars {
+			delete(summary, "omitted_fields")
+		}
+	}
 }

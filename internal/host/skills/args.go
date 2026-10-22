@@ -44,7 +44,7 @@ func (p *argParser) parse(args []string, minPos, maxPos int) bool {
 			break
 		}
 		if !strings.HasPrefix(a, "--") || a == "-" {
-			if strings.HasPrefix(a, "-") && a != "-" && !isNumber(a) {
+			if argIsOption(a) {
 				return p.fail("unrecognized arguments: %s", a)
 			}
 			p.pos = append(p.pos, a)
@@ -65,24 +65,15 @@ func (p *argParser) parse(args []string, minPos, maxPos int) bool {
 			return p.fail("unrecognized arguments: %s", a)
 		}
 		if !inline {
-			if i+1 >= len(args) || (strings.HasPrefix(args[i+1], "-") && args[i+1] != "-" && !isNumber(args[i+1])) {
+			if i+1 >= len(args) || argIsOption(args[i+1]) {
 				return p.fail("argument %s: expected one argument", name)
 			}
 			i++
 			value = args[i]
 		}
 		p.seen[name] = true
-		switch {
-		case isStr:
-			*p.values[name] = value
-		case isList:
-			*p.lists[name] = append(*p.lists[name], value)
-		default:
-			n, err := strconv.Atoi(strings.TrimSpace(value))
-			if err != nil {
-				return p.fail("argument %s: invalid int value: '%s'", name, value)
-			}
-			*p.ints[name] = n
+		if !p.parseSet(name, value, isStr, isList) {
+			return false
 		}
 	}
 	if len(p.pos) < minPos {
@@ -93,6 +84,26 @@ func (p *argParser) parse(args []string, minPos, maxPos int) bool {
 	}
 	return true
 }
+
+// parseSet stores one option value by its kind.
+func (p *argParser) parseSet(name, value string, isStr, isList bool) bool {
+	switch {
+	case isStr:
+		*p.values[name] = value
+	case isList:
+		*p.lists[name] = append(*p.lists[name], value)
+	default:
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil {
+			return p.fail("argument %s: invalid int value: '%s'", name, value)
+		}
+		*p.ints[name] = n
+	}
+	return true
+}
+
+// argIsOption: a dash word that is not "-" or a negative number.
+func argIsOption(a string) bool { return strings.HasPrefix(a, "-") && a != "-" && !isNumber(a) }
 
 func isNumber(s string) bool { _, err := strconv.ParseFloat(s, 64); return err == nil }
 

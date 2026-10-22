@@ -97,18 +97,7 @@ func checkURL(base string) error {
 	}
 	var hostname, port string
 	if strings.ContainsAny(netloc, "[]") {
-		inner, ok := strings.CutPrefix(netloc, "[")
-		if !ok {
-			return errURL
-		}
-		var after string
-		if hostname, after, ok = strings.Cut(inner, "]"); !ok {
-			return errURL
-		}
-		if port, ok = strings.CutPrefix(after, ":"); !ok && after != "" {
-			return errURL
-		}
-		if ip, err := netip.ParseAddr(hostname); (err != nil || !ip.Is6()) && !ipvFutureRe.MatchString(hostname) {
+		if hostname, port, ok = bracketHost(netloc); !ok {
 			return errURL
 		}
 	} else {
@@ -124,4 +113,23 @@ func checkURL(base string) error {
 		}
 	}
 	return nil
+}
+
+// bracketHost splits a "[IPv6 or IPvFuture]:port" netloc.
+func bracketHost(netloc string) (hostname, port string, ok bool) {
+	inner, ok := strings.CutPrefix(netloc, "[")
+	if !ok {
+		return "", "", false
+	}
+	var after string
+	if hostname, after, ok = strings.Cut(inner, "]"); !ok {
+		return "", "", false
+	}
+	if port, ok = strings.CutPrefix(after, ":"); !ok && after != "" {
+		return "", "", false
+	}
+	if ip, err := netip.ParseAddr(hostname); (err != nil || !ip.Is6()) && !ipvFutureRe.MatchString(hostname) {
+		return "", "", false
+	}
+	return hostname, port, true
 }

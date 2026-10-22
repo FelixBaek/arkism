@@ -181,24 +181,7 @@ func Index(ctx context.Context, opt Options) (Result, error) {
 	if !full {
 		res.Stats.Mode = "incremental"
 	}
-	changed := map[string]bool{}
-	for p, f := range files {
-		if full || opt.Known[p] != f.hash {
-			changed[p] = true
-		}
-		if f.lang == LangGo {
-			res.Stats.GoFiles++
-		} else {
-			res.Stats.JSFiles++
-		}
-	}
-	for p := range opt.Known {
-		if _, ok := files[p]; !ok && opt.inOnly(p) {
-			res.Removed = append(res.Removed, p)
-		}
-	}
-	sort.Strings(res.Removed)
-	res.Stats.Changed, res.Stats.Removed = len(changed), len(res.Removed)
+	changed := diffFiles(files, opt, full, &res)
 
 	out := map[string]FileFacts{}
 
@@ -240,21 +223,7 @@ func Index(ctx context.Context, opt Options) (Result, error) {
 			touch(p)
 		}
 	}
-	mods := make([]string, 0, len(patterns))
-	for m := range patterns {
-		mods = append(mods, m)
-	}
-	sort.Strings(mods)
-	for _, m := range mods {
-		var pats []string
-		for p := range patterns[m] {
-			pats = append(pats, p)
-		}
-		sort.Strings(pats)
-		if err := g.load(ctx, filepath.Join(root, filepath.FromSlash(m)), pats, opt.Tests); err != nil {
-			res.Warnings = append(res.Warnings, "go load "+m+": "+err.Error())
-		}
-	}
+	loadGo(ctx, g, root, patterns, opt.Tests, &res)
 	g.implements()
 	for p, ff := range g.facts {
 		f, ok := files[p]
@@ -270,6 +239,60 @@ func Index(ctx context.Context, opt Options) (Result, error) {
 	}
 
 	// JS/TS: per file.
+	if err := indexChanged(ctx, files, changed, opt.MaxFileBytes, out, &res); err != nil {
+		return Result{}, err
+	}
+	addFiles(&res, out)
+	res.Stats.DurationMS = time.Since(started).Milliseconds()
+	return res, nil
+}
+
+// diffFiles counts files by language, lists removed known files in res and
+// returns the changed paths.
+func diffFiles(files map[string]srcFile, opt Options, full bool, res *Result) map[string]bool {
+	changed := map[string]bool{}
+	for p, f := range files {
+		if full || opt.Known[p] != f.hash {
+			changed[p] = true
+		}
+		if f.lang == LangGo {
+			res.Stats.GoFiles++
+		} else {
+			res.Stats.JSFiles++
+		}
+	}
+	for p := range opt.Known {
+		if _, ok := files[p]; !ok && opt.inOnly(p) {
+			res.Removed = append(res.Removed, p)
+		}
+	}
+	sort.Strings(res.Removed)
+	res.Stats.Changed, res.Stats.Removed = len(changed), len(res.Removed)
+	return changed
+}
+
+// loadGo loads the patterns of each module dir in sorted order.
+func loadGo(ctx context.Context, g *goIndexer, root string, patterns map[string]map[string]bool, tests bool, res *Result) {
+	mods := make([]string, 0, len(patterns))
+	for m := range patterns {
+		mods = append(mods, m)
+	}
+	sort.Strings(mods)
+	for _, m := range mods {
+		var pats []string
+		for p := range patterns[m] {
+			pats = append(pats, p)
+		}
+		sort.Strings(pats)
+		if err := g.load(ctx, filepath.Join(root, filepath.FromSlash(m)), pats, tests); err != nil {
+			res.Warnings = append(res.Warnings, "go load "+m+": "+err.Error())
+		}
+	}
+}
+
+// indexChanged indexes changed JS/TS files and gives changed Go files the
+// loader skipped empty facts.
+func indexChanged(ctx context.Context, files map[string]srcFile, changed map[string]bool, maxBytes int64, out map[string]FileFacts, res *Result) error {
 	jsFiles := map[string]bool{}
 	for p, f := range files {
 		if f.lang == LangJS {
@@ -281,14 +304,14 @@ func Index(ctx context.Context, opt Options) (Result, error) {
 		f := files[p]
 		switch f.lang {
 		case LangJS:
-			if f.size > opt.MaxFileBytes {
+			if f.size > maxBytes {
 				res.Stats.SkippedLarge++
 				out[p] = FileFacts{Path: p, Hash: f.hash, Lang: LangJS, Symbols: []Symbol{}, Edges: []Edge{}}
 				continue
 			}
 			b, err := os.ReadFile(f.abs)
 			if err != nil {
-				return Result{}, err
+				return err
 			}
 			ff := indexJS(p, string(b), resolve)
 			ff.Hash = f.hash
@@ -299,9 +322,14 @@ func Index(ctx context.Context, opt Options) (Result, error) {
 			}
 		}
 		if err := ctx.Err(); err != nil {
-			return Result{}, err
+			return err
 		}
 	}
+	return nil
+}
+
+// addFiles appends out to res in path order and counts its facts.
+func addFiles(res *Result, out map[string]FileFacts) {
 	paths := make([]string, 0, len(out))
 	for p := range out {
 		paths = append(paths, p)
@@ -320,6 +348,4 @@ func Index(ctx context.Context, opt Options) (Result, error) {
 		}
 	}
 	res.Stats.Uploaded = len(res.Files)
-	res.Stats.DurationMS = time.Since(started).Milliseconds()
-	return res, nil
 }

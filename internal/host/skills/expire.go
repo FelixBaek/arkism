@@ -90,30 +90,9 @@ func executeExpiry(endpoint, token string, payload host.Obj, maxBatches int) (ho
 	}
 	seen := map[string]bool{}
 	for batch := 1; batch <= maxBatches; batch++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(endpoint, "/")+"/v1/memory_candidates/expire", strings.NewReader(body))
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("Content-Type", "application/json")
-		res, err := noRedirectClient.Do(req)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		raw, err := io.ReadAll(io.LimitReader(res.Body, 65537))
-		res.Body.Close()
-		cancel()
-		if res.StatusCode != 200 {
-			return nil, errors.New("expiry request failed")
-		}
+		raw, err := executeExpiryPost(endpoint, token, body)
 		if err != nil {
 			return nil, err
-		}
-		if len(raw) > 65536 {
-			return nil, errors.New("oversized response")
 		}
 		v, err := loadsStrict(string(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf"))))
 		if err != nil {
@@ -124,20 +103,58 @@ func executeExpiry(endpoint, token string, payload host.Obj, maxBatches int) (ho
 		if !ok || len(data) != 1 || !isList || len(expired) > limit {
 			return nil, errors.New("invalid response")
 		}
-		for _, r := range expired {
-			ref, ok := r.(map[string]any)
-			id, isStr := ref["id"].(string)
-			if !ok || !keysAre(ref, "collection", "id", "revision") || ref["collection"] != "memory_candidates" ||
-				!isStr || len(id) < 1 || len(id) > 256 || !positiveInt(ref["revision"]) || seen[id] {
-				return nil, errors.New("invalid expired reference")
-			}
-			seen[id] = true
+		if err := executeExpiryRefs(expired, seen); err != nil {
+			return nil, err
 		}
 		if len(expired) < limit {
 			return host.Obj{{Key: "batches", Value: batch}, {Key: "expired", Value: len(seen)}, {Key: "more_possible", Value: false}}, nil
 		}
 	}
 	return host.Obj{{Key: "batches", Value: maxBatches}, {Key: "expired", Value: len(seen)}, {Key: "more_possible", Value: true}}, nil
+}
+
+// executeExpiryPost sends one expiry batch and returns the response body.
+func executeExpiryPost(endpoint, token, body string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(endpoint, "/")+"/v1/memory_candidates/expire", strings.NewReader(body))
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	res, err := noRedirectClient.Do(req)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 65537))
+	res.Body.Close()
+	cancel()
+	if res.StatusCode != 200 {
+		return nil, errors.New("expiry request failed")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > 65536 {
+		return nil, errors.New("oversized response")
+	}
+	return raw, nil
+}
+
+// executeExpiryRefs checks one batch's expired references and adds their ids to seen.
+func executeExpiryRefs(expired []any, seen map[string]bool) error {
+	for _, r := range expired {
+		ref, ok := r.(map[string]any)
+		id, isStr := ref["id"].(string)
+		if !ok || !keysAre(ref, "collection", "id", "revision") || ref["collection"] != "memory_candidates" ||
+			!isStr || len(id) < 1 || len(id) > 256 || !positiveInt(ref["revision"]) || seen[id] {
+			return errors.New("invalid expired reference")
+		}
+		seen[id] = true
+	}
+	return nil
 }
 
 func expireMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {

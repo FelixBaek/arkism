@@ -26,43 +26,9 @@ func recomputeSignals(endpoint, token string, scope host.Obj, maxBatches int) (h
 	var computed, changed int64
 	cursor := ""
 	for batch := 1; batch <= maxBatches; batch++ {
-		payload := host.Obj{{Key: "scope", Value: scope}}
-		if cursor != "" {
-			payload = append(payload, host.KV{Key: "cursor", Value: cursor})
-		}
-		body, err := host.Dumps(payload, host.DumpOpts{})
+		c, d, next, err := recomputeSignalsBatch(endpoint, token, scope, cursor)
 		if err != nil {
 			return nil, err
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(endpoint, "/")+"/v1/memory-signals/recompute", strings.NewReader(body))
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("Content-Type", "application/json")
-		res, err := noRedirectClient.Do(req)
-		if err != nil {
-			cancel()
-			return nil, err
-		}
-		raw, err := io.ReadAll(io.LimitReader(res.Body, 8193))
-		res.Body.Close()
-		cancel()
-		if err != nil || res.StatusCode != 200 || len(raw) > 8192 {
-			return nil, errors.New("recompute request failed")
-		}
-		v, err := loadsStrict(string(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf"))))
-		if err != nil {
-			return nil, err
-		}
-		data, ok := v.(map[string]any)
-		next, isStr := data["next_cursor"].(string)
-		c, cOK := host.Int(data["computed"])
-		d, dOK := host.Int(data["changed"])
-		if !ok || !keysAre(data, "computed", "changed", "next_cursor") || !isStr || len(next) > 2048 || !cOK || !dOK || c < 0 || c > 100 || d < 0 || d > c {
-			return nil, errors.New("invalid response")
 		}
 		computed, changed, cursor = computed+c, changed+d, next
 		if cursor == "" {
@@ -70,6 +36,49 @@ func recomputeSignals(endpoint, token string, scope host.Obj, maxBatches int) (h
 		}
 	}
 	return host.Obj{{Key: "batches", Value: maxBatches}, {Key: "computed", Value: computed}, {Key: "changed", Value: changed}, {Key: "more_possible", Value: true}}, nil
+}
+
+// recomputeSignalsBatch posts one recompute page and validates its counts and next cursor.
+func recomputeSignalsBatch(endpoint, token string, scope host.Obj, cursor string) (int64, int64, string, error) {
+	payload := host.Obj{{Key: "scope", Value: scope}}
+	if cursor != "" {
+		payload = append(payload, host.KV{Key: "cursor", Value: cursor})
+	}
+	body, err := host.Dumps(payload, host.DumpOpts{})
+	if err != nil {
+		return 0, 0, "", err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(endpoint, "/")+"/v1/memory-signals/recompute", strings.NewReader(body))
+	if err != nil {
+		cancel()
+		return 0, 0, "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	res, err := noRedirectClient.Do(req)
+	if err != nil {
+		cancel()
+		return 0, 0, "", err
+	}
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 8193))
+	res.Body.Close()
+	cancel()
+	if err != nil || res.StatusCode != 200 || len(raw) > 8192 {
+		return 0, 0, "", errors.New("recompute request failed")
+	}
+	v, err := loadsStrict(string(bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf"))))
+	if err != nil {
+		return 0, 0, "", err
+	}
+	data, ok := v.(map[string]any)
+	next, isStr := data["next_cursor"].(string)
+	c, cOK := host.Int(data["computed"])
+	d, dOK := host.Int(data["changed"])
+	if !ok || !keysAre(data, "computed", "changed", "next_cursor") || !isStr || len(next) > 2048 || !cOK || !dOK || c < 0 || c > 100 || d < 0 || d > c {
+		return 0, 0, "", errors.New("invalid response")
+	}
+	return c, d, next, nil
 }
 
 func memorySignalsMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {

@@ -348,20 +348,7 @@ func inventory() ([]any, []any, error) {
 	}
 	// Each server's tools (asked once a day) and today's calls from the transcripts. Only servers
 	// switched on for some agent are started to ask for their tools; switched-off ones stay off.
-	live := map[string]any{}
-	for n, d := range defs {
-		_, inClaude := claude[n]
-		cd, inCodex := codex[n]
-		on := inClaude || inCodex && enabledOf(asMap(cd))
-		for _, a := range mcpFileAgents {
-			od, ok := others[a.id][n]
-			on = on || ok && enabledOf(asMap(od))
-		}
-		if on {
-			live[n] = d
-		}
-	}
-	tools, err := serverTools(live, 1, nil)
+	tools, err := serverTools(inventoryLive(defs, claude, codex, others), 1, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -376,6 +363,29 @@ func inventory() ([]any, []any, error) {
 			e.Set("calls", c)
 		}
 	}
+	return servers, inventoryPlugins(), nil
+}
+
+// inventoryLive is the servers switched on for some agent.
+func inventoryLive(defs, claude, codex map[string]any, others map[string]map[string]any) map[string]any {
+	live := map[string]any{}
+	for n, d := range defs {
+		_, inClaude := claude[n]
+		cd, inCodex := codex[n]
+		on := inClaude || inCodex && enabledOf(asMap(cd))
+		for _, a := range mcpFileAgents {
+			od, ok := others[a.id][n]
+			on = on || ok && enabledOf(asMap(od))
+		}
+		if on {
+			live[n] = d
+		}
+	}
+	return live
+}
+
+// inventoryPlugins is Claude Code's plugins as server-list rows.
+func inventoryPlugins() []any {
 	rows := claudePluginRows()
 	sort.SliceStable(rows, func(i, j int) bool { return pyStr(rows[i]["id"]) < pyStr(rows[j]["id"]) })
 	plugins := []any{}
@@ -398,7 +408,7 @@ func inventory() ([]any, []any, error) {
 		}
 		plugins = append(plugins, entry)
 	}
-	return servers, plugins, nil
+	return plugins
 }
 
 // ---------------------------------------------------------------- agents and their folders (설정 › 에이전트)
@@ -851,37 +861,9 @@ func syncAgents() error {
 		return err
 	}
 	doc := orMap(res["agent_tools"])
-	stash, results := loadStash(), []any{}
-	done, failed := 0, 0
-	for _, r := range asList(doc["requests"]) {
-		req := asMap(r)
-		if req["status"] != "pending" {
-			continue
-		}
-		if req["kind"] == "mcp_login" {
-			startLogin(req)
-			continue
-		}
-		for _, k := range []string{"agent", "kind", "name", "enabled", "id"} { // a malformed request stops the sync, as a KeyError did
-			if _, ok := req[k]; !ok {
-				return keyErr(k)
-			}
-		}
-		id := req["id"]
-		if res, ok := applyCatalogRequest(req, stash); ok { // skill_install, mcp_add: results with a detail (skillinstall.go)
-			results = append(results, res)
-			if objGet(res, "status") == "done" {
-				done++
-			} else {
-				failed++
-			}
-		} else if err := applyRequest(req, stash); err != nil {
-			results = append(results, host.Obj{{Key: "id", Value: id}, {Key: "status", Value: "failed"}, {Key: "error", Value: runeCut(err.Error(), 300)}})
-			failed++
-		} else {
-			results = append(results, host.Obj{{Key: "id", Value: id}, {Key: "status", Value: "done"}})
-			done++
-		}
+	results, done, failed, err := syncAgentsApply(doc)
+	if err != nil {
+		return err
 	}
 	servers, plugins, err := inventory()
 	if err != nil {
@@ -928,6 +910,43 @@ func syncAgents() error {
 		host.Metric(map[string]any{"event": "agent_tools_applied", "done": done, "failed": failed})
 	}
 	return nil
+}
+
+// syncAgentsApply applies the pending requests in doc; a malformed one stops the sync.
+func syncAgentsApply(doc map[string]any) ([]any, int, int, error) {
+	stash, results := loadStash(), []any{}
+	done, failed := 0, 0
+	for _, r := range asList(doc["requests"]) {
+		req := asMap(r)
+		if req["status"] != "pending" {
+			continue
+		}
+		if req["kind"] == "mcp_login" {
+			startLogin(req)
+			continue
+		}
+		for _, k := range []string{"agent", "kind", "name", "enabled", "id"} { // a malformed request stops the sync, as a KeyError did
+			if _, ok := req[k]; !ok {
+				return nil, 0, 0, keyErr(k)
+			}
+		}
+		id := req["id"]
+		if res, ok := applyCatalogRequest(req, stash); ok { // skill_install, mcp_add: results with a detail (skillinstall.go)
+			results = append(results, res)
+			if objGet(res, "status") == "done" {
+				done++
+			} else {
+				failed++
+			}
+		} else if err := applyRequest(req, stash); err != nil {
+			results = append(results, host.Obj{{Key: "id", Value: id}, {Key: "status", Value: "failed"}, {Key: "error", Value: runeCut(err.Error(), 300)}})
+			failed++
+		} else {
+			results = append(results, host.Obj{{Key: "id", Value: id}, {Key: "status", Value: "done"}})
+			done++
+		}
+	}
+	return results, done, failed, nil
 }
 
 // ---------------------------------------------------------------- MCP sign-in (mcp_login)

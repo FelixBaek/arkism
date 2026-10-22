@@ -114,28 +114,36 @@ func validateManifest(raw any) (map[string]any, error) {
 	if !ok || len(files) > maxFiles {
 		return nil, errors.New("too many files")
 	}
-	seen := map[string]bool{}
-	for index, raw := range append([]any{m["database"]}, files...) {
-		row, ok := raw.(map[string]any)
-		if !ok || len(row) != 2 {
-			return nil, errors.New("invalid file metadata")
-		}
-		digest, isStr := row["digest"].(string)
-		size, isInt := host.Int(row["bytes"])
-		if !isStr || !digestName.MatchString(digest) || !isInt || size < 1 {
-			return nil, errors.New("invalid file metadata")
-		}
-		if index > 0 {
-			if size > maxFile || seen[digest] {
-				return nil, errors.New("duplicate or oversized file")
-			}
-			seen[digest] = true
-		}
+	if err := validateRows(append([]any{m["database"]}, files...)); err != nil {
+		return nil, err
 	}
 	if len(manifestBytes(m)) > maxManifest {
 		return nil, errors.New("manifest too large")
 	}
 	return m, nil
+}
+
+// validateRows checks the database row, then the blob rows, which must be distinct.
+func validateRows(rows []any) error {
+	seen := map[string]bool{}
+	for index, raw := range rows {
+		row, ok := raw.(map[string]any)
+		if !ok || len(row) != 2 {
+			return errors.New("invalid file metadata")
+		}
+		digest, isStr := row["digest"].(string)
+		size, isInt := host.Int(row["bytes"])
+		if !isStr || !digestName.MatchString(digest) || !isInt || size < 1 {
+			return errors.New("invalid file metadata")
+		}
+		if index > 0 {
+			if size > maxFile || seen[digest] {
+				return errors.New("duplicate or oversized file")
+			}
+			seen[digest] = true
+		}
+	}
+	return nil
 }
 
 // storedEntry starts an uncompressed member. Go adds ZIP64 records only when a
@@ -171,47 +179,14 @@ func create(databaseArchive, blobRoot string, output io.Writer, writersStopped b
 	if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX); err != nil {
 		return err
 	}
-	marker, err := privateFile(root, ".database")
+	parts, err := databaseBinding(root)
 	if err != nil {
 		return err
 	}
-	head, err := io.ReadAll(io.LimitReader(marker, 131))
-	marker.Close()
+	names, err := blobNames(dir)
 	if err != nil {
 		return err
 	}
-	for _, c := range head {
-		if c > 0x7f {
-			return errors.New("invalid database binding")
-		}
-	}
-	parts := strings.Split(string(head), "\n")
-	if len(parts) != 3 || parts[2] != "" || !digestName.MatchString(parts[0]) || !digestName.MatchString(parts[1]) {
-		return errors.New("invalid database binding")
-	}
-	entries, err := dir.ReadDir(-1)
-	if err != nil {
-		return err
-	}
-	var names []string
-	for _, entry := range entries {
-		name := entry.Name()
-		if name == ".lock" || name == ".database" {
-			continue
-		}
-		if !entry.Type().IsRegular() {
-			return errors.New("irregular entry")
-		}
-		if tempName.MatchString(name) {
-			continue
-		}
-		if !digestName.MatchString(name) || len(names) == maxFiles {
-			return errors.New("unknown or excessive entries")
-		}
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	files := []any{}
 	m := map[string]any{"version": int64(1), "source_identity": parts[0], "source_root_id": parts[1]}
 	bundle := zip.NewWriter(output)
 	source, err := privateFile(unix.AT_FDCWD, databaseArchive)
@@ -226,26 +201,9 @@ func create(databaseArchive, blobRoot string, output io.Writer, writersStopped b
 	if err != nil {
 		return err
 	}
-	for _, name := range names {
-		source, err := privateFile(root, name)
-		if err != nil {
-			return err
-		}
-		target, err := storedEntry(bundle, "blobs/"+name)
-		var row map[string]any
-		if err == nil {
-			row, err = copyChecked(source, target, nil, maxFile)
-		}
-		source.Close()
-		if err != nil {
-			return err
-		}
-		if row["digest"] != name || row["bytes"] == int64(0) {
-			return errors.New("blob integrity mismatch")
-		}
-		files = append(files, row)
+	if m["files"], err = bundleBlobs(bundle, root, names); err != nil {
+		return err
 	}
-	m["files"] = files
 	if _, err := validateManifest(m); err != nil {
 		return err
 	}
@@ -257,6 +215,81 @@ func create(databaseArchive, blobRoot string, output io.Writer, writersStopped b
 		return err
 	}
 	return bundle.Close()
+}
+
+// databaseBinding reads the source identity and root id that .database binds the blobs to.
+func databaseBinding(root int) ([]string, error) {
+	marker, err := privateFile(root, ".database")
+	if err != nil {
+		return nil, err
+	}
+	head, err := io.ReadAll(io.LimitReader(marker, 131))
+	marker.Close()
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range head {
+		if c > 0x7f {
+			return nil, errors.New("invalid database binding")
+		}
+	}
+	parts := strings.Split(string(head), "\n")
+	if len(parts) != 3 || parts[2] != "" || !digestName.MatchString(parts[0]) || !digestName.MatchString(parts[1]) {
+		return nil, errors.New("invalid database binding")
+	}
+	return parts, nil
+}
+
+// blobNames lists the sorted blob names, refusing irregular or unknown entries.
+func blobNames(dir *os.File) ([]string, error) {
+	entries, err := dir.ReadDir(-1)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == ".lock" || name == ".database" {
+			continue
+		}
+		if !entry.Type().IsRegular() {
+			return nil, errors.New("irregular entry")
+		}
+		if tempName.MatchString(name) {
+			continue
+		}
+		if !digestName.MatchString(name) || len(names) == maxFiles {
+			return nil, errors.New("unknown or excessive entries")
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// bundleBlobs copies each blob into the bundle and returns their checked rows.
+func bundleBlobs(bundle *zip.Writer, root int, names []string) ([]any, error) {
+	files := []any{}
+	for _, name := range names {
+		source, err := privateFile(root, name)
+		if err != nil {
+			return nil, err
+		}
+		target, err := storedEntry(bundle, "blobs/"+name)
+		var row map[string]any
+		if err == nil {
+			row, err = copyChecked(source, target, nil, maxFile)
+		}
+		source.Close()
+		if err != nil {
+			return nil, err
+		}
+		if row["digest"] != name || row["bytes"] == int64(0) {
+			return nil, errors.New("blob integrity mismatch")
+		}
+		files = append(files, row)
+	}
+	return files, nil
 }
 
 func writePrivate(path string, source io.Reader, expected map[string]any) error {
@@ -302,29 +335,7 @@ func extract(source, output string) error {
 	if err != nil {
 		return err
 	}
-	byName := map[string]*zip.File{}
-	for _, entry := range bundle.File {
-		byName[entry.Name] = entry
-	}
-	if len(bundle.File) > maxFiles+2 || len(byName) != len(bundle.File) {
-		return errors.New("duplicate or excessive entries")
-	}
-	manifest, ok := byName["manifest.json"]
-	if !ok || manifest.UncompressedSize64 > maxManifest || manifest.Method != zip.Store {
-		return errors.New("unsupported manifest")
-	}
-	text, err := readEntry(manifest)
-	if err != nil {
-		return err
-	}
-	if !json.Valid(text) { // Python's json.loads also refuses trailing data.
-		return errors.New("unsupported manifest")
-	}
-	parsed, err := host.Loads(string(text))
-	if err != nil {
-		return err
-	}
-	m, err := validateManifest(parsed)
+	byName, m, err := readManifest(bundle)
 	if err != nil {
 		return err
 	}
@@ -341,24 +352,8 @@ func extract(source, output string) error {
 	for _, e := range expected {
 		want[e.name] = e.metadata
 	}
-	if len(want) != len(byName) {
-		return errors.New("unexpected paths")
-	}
-	for name := range want {
-		if byName[name] == nil {
-			return errors.New("unexpected paths")
-		}
-	}
-	for name, entry := range byName {
-		if entry.Method != zip.Store || entry.Flags&1 != 0 {
-			return errors.New("unsupported entry")
-		}
-		if name != "manifest.json" {
-			size, _ := host.Int(want[name]["bytes"])
-			if entry.UncompressedSize64 != uint64(size) {
-				return errors.New("unsupported entry")
-			}
-		}
+	if err := checkEntries(byName, want); err != nil {
+		return err
 	}
 	if err := os.Mkdir(output, 0o700); err != nil { // Never overwrite or delete an earlier attempt.
 		return err
@@ -367,21 +362,7 @@ func extract(source, output string) error {
 	if err := os.Mkdir(files, 0o700); err != nil {
 		return err
 	}
-	pending, err := os.OpenFile(filepath.Join(files, ".restore-pending"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
-	if err != nil {
-		return err
-	}
-	_, err = pending.Write(manifestBytes(m))
-	if err == nil {
-		err = pending.Chmod(0o600)
-	}
-	if err == nil {
-		err = pending.Sync()
-	}
-	if cerr := pending.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
+	if err := writePending(files, m); err != nil {
 		return err
 	}
 	if err := syncAll(files, output); err != nil {
@@ -403,6 +384,80 @@ func extract(source, output string) error {
 		}
 	}
 	return syncAll(files, output, filepath.Dir(output))
+}
+
+// readManifest indexes the bundle's entries and returns its validated manifest.
+func readManifest(bundle *zip.Reader) (map[string]*zip.File, map[string]any, error) {
+	byName := map[string]*zip.File{}
+	for _, entry := range bundle.File {
+		byName[entry.Name] = entry
+	}
+	if len(bundle.File) > maxFiles+2 || len(byName) != len(bundle.File) {
+		return nil, nil, errors.New("duplicate or excessive entries")
+	}
+	manifest, ok := byName["manifest.json"]
+	if !ok || manifest.UncompressedSize64 > maxManifest || manifest.Method != zip.Store {
+		return nil, nil, errors.New("unsupported manifest")
+	}
+	text, err := readEntry(manifest)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !json.Valid(text) { // Python's json.loads also refuses trailing data.
+		return nil, nil, errors.New("unsupported manifest")
+	}
+	parsed, err := host.Loads(string(text))
+	if err != nil {
+		return nil, nil, err
+	}
+	m, err := validateManifest(parsed)
+	if err != nil {
+		return nil, nil, err
+	}
+	return byName, m, nil
+}
+
+// checkEntries requires exactly the manifest's paths, stored, at their recorded sizes.
+func checkEntries(byName map[string]*zip.File, want map[string]map[string]any) error {
+	if len(want) != len(byName) {
+		return errors.New("unexpected paths")
+	}
+	for name := range want {
+		if byName[name] == nil {
+			return errors.New("unexpected paths")
+		}
+	}
+	for name, entry := range byName {
+		if entry.Method != zip.Store || entry.Flags&1 != 0 {
+			return errors.New("unsupported entry")
+		}
+		if name != "manifest.json" {
+			size, _ := host.Int(want[name]["bytes"])
+			if entry.UncompressedSize64 != uint64(size) {
+				return errors.New("unsupported entry")
+			}
+		}
+	}
+	return nil
+}
+
+// writePending records the manifest as .restore-pending before any file is restored.
+func writePending(files string, m map[string]any) error {
+	pending, err := os.OpenFile(filepath.Join(files, ".restore-pending"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
+	if err != nil {
+		return err
+	}
+	_, err = pending.Write(manifestBytes(m))
+	if err == nil {
+		err = pending.Chmod(0o600)
+	}
+	if err == nil {
+		err = pending.Sync()
+	}
+	if cerr := pending.Close(); err == nil {
+		err = cerr
+	}
+	return err
 }
 
 func syncAll(paths ...string) error {

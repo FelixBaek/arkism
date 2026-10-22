@@ -279,80 +279,109 @@ func translate(v, model any) map[string]any {
 		}
 		instructions = append(instructions, part["text"].(string))
 	}
-	input := []any{}
 	out := map[string]any{"model": model, "instructions": strings.Join(instructions, "\n"), "stream": true, "store": false}
+	out["input"] = translateMessages(body)
+	names := translateTools(body, out)
+	if raw, ok := body["tool_choice"]; ok {
+		translateToolChoice(out, raw, names)
+	}
+	if len(compact(out)) > MaxInput {
+		fail("input_too_large")
+	}
+	return out
+}
+
+func translateMessages(body map[string]any) []any {
+	input := []any{}
 	messages, ok := body["messages"].([]any)
 	if !ok || len(messages) == 0 {
 		fail("invalid_request")
 	}
 	calls, results := map[string]bool{}, map[string]bool{}
 	for _, raw := range messages {
-		current := -1 // index in input of this message's open text message
-		message := checkKeys(raw, "role", "content")
-		role := message["role"]
-		if role != "user" && role != "assistant" {
-			fail("unsupported_request")
+		input = translateMessage(input, raw, calls, results)
+	}
+	return input
+}
+
+func translateMessage(input []any, raw any, calls, results map[string]bool) []any {
+	current := -1 // index in input of this message's open text message
+	message := checkKeys(raw, "role", "content")
+	role := message["role"]
+	if role != "user" && role != "assistant" {
+		fail("unsupported_request")
+	}
+	for _, item := range parts(message["content"]) {
+		block, ok := item.(map[string]any)
+		if !ok {
+			fail("invalid_request")
 		}
-		for _, item := range parts(message["content"]) {
-			block, ok := item.(map[string]any)
-			if !ok {
-				fail("invalid_request")
-			}
-			switch block["type"] {
-			case "tool_use":
-				checkKeys(block, "type", "id", "name", "input", "cache_control")
-				call := str(block["id"], false)
-				args, isObj := block["input"].(map[string]any)
-				if role != "assistant" || calls[call] || !isObj {
-					fail("invalid_request")
-				}
-				calls[call] = true
-				name := str(block["name"], false)
-				input = append(input, map[string]any{"type": "function_call", "call_id": call, "name": name, "arguments": compact(args)})
-			case "tool_result":
-				checkKeys(block, "type", "tool_use_id", "content", "is_error", "cache_control")
-				call := str(block["tool_use_id"], false)
-				if role != "user" || !calls[call] || results[call] {
-					fail("invalid_request")
-				}
-				isError, has := block["is_error"]
-				if _, isBool := isError.(bool); has && !isBool {
-					fail("invalid_request")
-				}
-				results[call] = true
-				var output any
-				if text, isStr := get(block, "content", "").(string); isStr {
-					output = text
-				} else {
-					converted := []any{}
-					for _, p := range parts(block["content"]) {
-						converted = append(converted, translatePart(p, false))
-					}
-					output = converted
-				}
-				if isError == true {
-					marked := []any{map[string]any{"type": "input_text", "text": "[tool_result is_error=true]"}}
-					if text, isStr := output.(string); isStr {
-						output = append(marked, map[string]any{"type": "input_text", "text": text})
-					} else {
-						output = append(marked, output.([]any)...)
-					}
-				}
-				input = append(input, map[string]any{"type": "function_call_output", "call_id": call, "output": output})
-			default:
-				part := translatePart(block, role == "assistant")
-				// Keep adjacent parts together, but never cross message boundaries.
-				if current >= 0 && current == len(input)-1 {
-					last := input[current].(map[string]any)
-					last["content"] = append(last["content"].([]any), part)
-				} else {
-					current = len(input)
-					input = append(input, map[string]any{"type": "message", "role": role, "content": []any{part}})
-				}
+		switch block["type"] {
+		case "tool_use":
+			input = append(input, translateToolUse(block, role, calls))
+		case "tool_result":
+			input = append(input, translateToolResult(block, role, calls, results))
+		default:
+			part := translatePart(block, role == "assistant")
+			// Keep adjacent parts together, but never cross message boundaries.
+			if current >= 0 && current == len(input)-1 {
+				last := input[current].(map[string]any)
+				last["content"] = append(last["content"].([]any), part)
+			} else {
+				current = len(input)
+				input = append(input, map[string]any{"type": "message", "role": role, "content": []any{part}})
 			}
 		}
 	}
-	out["input"] = input
+	return input
+}
+
+func translateToolUse(block map[string]any, role any, calls map[string]bool) map[string]any {
+	checkKeys(block, "type", "id", "name", "input", "cache_control")
+	call := str(block["id"], false)
+	args, isObj := block["input"].(map[string]any)
+	if role != "assistant" || calls[call] || !isObj {
+		fail("invalid_request")
+	}
+	calls[call] = true
+	name := str(block["name"], false)
+	return map[string]any{"type": "function_call", "call_id": call, "name": name, "arguments": compact(args)}
+}
+
+func translateToolResult(block map[string]any, role any, calls, results map[string]bool) map[string]any {
+	checkKeys(block, "type", "tool_use_id", "content", "is_error", "cache_control")
+	call := str(block["tool_use_id"], false)
+	if role != "user" || !calls[call] || results[call] {
+		fail("invalid_request")
+	}
+	isError, has := block["is_error"]
+	if _, isBool := isError.(bool); has && !isBool {
+		fail("invalid_request")
+	}
+	results[call] = true
+	var output any
+	if text, isStr := get(block, "content", "").(string); isStr {
+		output = text
+	} else {
+		converted := []any{}
+		for _, p := range parts(block["content"]) {
+			converted = append(converted, translatePart(p, false))
+		}
+		output = converted
+	}
+	if isError == true {
+		marked := []any{map[string]any{"type": "input_text", "text": "[tool_result is_error=true]"}}
+		if text, isStr := output.(string); isStr {
+			output = append(marked, map[string]any{"type": "input_text", "text": text})
+		} else {
+			output = append(marked, output.([]any)...)
+		}
+	}
+	return map[string]any{"type": "function_call_output", "call_id": call, "output": output}
+}
+
+// translateTools sets out["tools"] and returns the declared tool names.
+func translateTools(body, out map[string]any) map[string]bool {
 	tools, ok := get(body, "tools", []any{}).([]any)
 	if !ok {
 		fail("invalid_request")
@@ -376,39 +405,37 @@ func translate(v, model any) map[string]any {
 	if len(tools) > 0 {
 		out["tools"] = converted
 	}
-	if raw, ok := body["tool_choice"]; ok {
-		choice := checkKeys(raw, "type", "name", "disable_parallel_tool_use")
-		kind := choice["type"]
-		_, named := choice["name"]
-		name, nameStr := choice["name"].(string)
-		switch {
-		case (kind == "auto" || kind == "none" || kind == "any") && !named:
-			out["tool_choice"] = kind
-			if kind == "any" {
-				out["tool_choice"] = "required"
-			}
-		case kind == "tool" && nameStr && names[name]:
-			out["tool_choice"] = map[string]any{"type": "function", "name": name}
-		case kind == "tool" && !nameStr && named && isContainer(choice["name"]):
-			fail("invalid_request") // an unhashable name raised TypeError
-		default:
-			fail("unsupported_request")
+	return names
+}
+
+func translateToolChoice(out map[string]any, raw any, names map[string]bool) {
+	choice := checkKeys(raw, "type", "name", "disable_parallel_tool_use")
+	kind := choice["type"]
+	_, named := choice["name"]
+	name, nameStr := choice["name"].(string)
+	switch {
+	case (kind == "auto" || kind == "none" || kind == "any") && !named:
+		out["tool_choice"] = kind
+		if kind == "any" {
+			out["tool_choice"] = "required"
 		}
-		if (kind == "tool" || kind == "any") && len(names) == 0 {
+	case kind == "tool" && nameStr && names[name]:
+		out["tool_choice"] = map[string]any{"type": "function", "name": name}
+	case kind == "tool" && !nameStr && named && isContainer(choice["name"]):
+		fail("invalid_request") // an unhashable name raised TypeError
+	default:
+		fail("unsupported_request")
+	}
+	if (kind == "tool" || kind == "any") && len(names) == 0 {
+		fail("invalid_request")
+	}
+	if v, ok := choice["disable_parallel_tool_use"]; ok {
+		b, isBool := v.(bool)
+		if !isBool {
 			fail("invalid_request")
 		}
-		if v, ok := choice["disable_parallel_tool_use"]; ok {
-			b, isBool := v.(bool)
-			if !isBool {
-				fail("invalid_request")
-			}
-			out["parallel_tool_calls"] = !b
-		}
+		out["parallel_tool_calls"] = !b
 	}
-	if len(compact(out)) > MaxInput {
-		fail("input_too_large")
-	}
-	return out
 }
 
 func isContainer(v any) bool {
@@ -499,13 +526,18 @@ func (s *sseReader) next() (event map[string]any, done, ok bool) {
 			fail("output_too_large")
 		}
 		if s.eof {
-			if s.text != "" || len(s.lines) > 0 || s.size > 0 || (s.length >= 0 && int64(s.total) != s.length) {
+			if s.truncated() {
 				fail("upstream_truncated")
 			}
 			return nil, false, false
 		}
 		s.read()
 	}
+}
+
+// truncated reports leftover or missing bytes at end of body.
+func (s *sseReader) truncated() bool {
+	return s.text != "" || len(s.lines) > 0 || s.size > 0 || (s.length >= 0 && int64(s.total) != s.length)
 }
 
 func (s *sseReader) read() {
@@ -635,17 +667,7 @@ func content(v any, allowIncomplete bool) []any {
 		// Internal provider reasoning is not an Anthropic thinking/signature block.
 		return []any{}
 	case "function_call":
-		for _, k := range []string{"call_id", "name", "arguments"} {
-			if s, ok := item[k].(string); !ok || s == "" {
-				fail("upstream_protocol")
-			}
-		}
-		v, err := StrictJSON([]byte(item["arguments"].(string)))
-		args, isObj := v.(map[string]any)
-		if err != nil || !isObj {
-			fail("upstream_protocol")
-		}
-		return []any{map[string]any{"type": "tool_use", "id": item["call_id"], "name": item["name"], "input": args}}
+		return toolUse(item)
 	}
 	list, isList := item["content"].([]any)
 	if item["type"] != "message" || item["role"] != "assistant" || !isList {
@@ -668,6 +690,21 @@ func content(v any, allowIncomplete bool) []any {
 		out = append(out, map[string]any{"type": "text", "text": value})
 	}
 	return out
+}
+
+// toolUse converts a finished function_call item into a tool_use block.
+func toolUse(item map[string]any) []any {
+	for _, k := range []string{"call_id", "name", "arguments"} {
+		if s, ok := item[k].(string); !ok || s == "" {
+			fail("upstream_protocol")
+		}
+	}
+	v, err := StrictJSON([]byte(item["arguments"].(string)))
+	args, isObj := v.(map[string]any)
+	if err != nil || !isObj {
+		fail("upstream_protocol")
+	}
+	return []any{map[string]any{"type": "tool_use", "id": item["call_id"], "name": item["name"], "input": args}}
 }
 
 func asMessage(part any) map[string]any {
@@ -896,13 +933,7 @@ func IterMessages(body map[string]any, configDir, executable string, timeout flo
 		ctx, cancel := context.WithDeadline(context.Background(), r.deadline)
 		defer cancel()
 		r.ctx = ctx
-		var model any
-		if body != nil {
-			model = body["model"]
-		}
-		if s, ok := model.(string); ok {
-			model = strings.TrimPrefix(s, "openai/")
-		}
+		model := requestModel(body)
 		request, err := TranslateRequest(body, model)
 		if err != nil {
 			panic(err)
@@ -911,33 +942,9 @@ func IterMessages(body map[string]any, configDir, executable string, timeout flo
 		r.token = token
 		ver := version(executable, min(2*time.Second, r.remaining()))
 		r.remaining()
-		req, err := http.NewRequestWithContext(r.ctx, http.MethodPost, CodexBase+"/backend-api/codex/responses", strings.NewReader(compact(request)))
-		if err != nil {
-			fail("upstream_error")
-		}
-		for k, v := range map[string]string{"Authorization": "Bearer " + token, "chatgpt-account-id": account,
-			"OpenAI-Beta": "responses=experimental", "originator": "codex_cli_rs", "User-Agent": "codex_cli_rs/" + ver,
-			"version": ver, "Content-Type": "application/json", "Accept": "text/event-stream", "Accept-Encoding": "identity"} {
-			req.Header[k] = []string{v} // exact names, as http.client sent them
-		}
-		r.armed = true
-		if resp, err = Client.Do(req); err != nil {
-			resp = nil
-			r.netFail(err)
-		}
+		resp = r.send(request, account, ver)
 		r.remaining()
-		if resp.StatusCode != http.StatusOK {
-			code := map[int]string{401: "upstream_auth", 403: "upstream_forbidden", 429: "upstream_rate_limit"}[resp.StatusCode]
-			wait := -1.0
-			if resp.StatusCode == http.StatusTooManyRequests {
-				wait = retryAfter(resp.Header.Get("Retry-After"))
-			}
-			panic(NewCodexError(code, wait))
-		}
-		ctype, _, _ := strings.Cut(resp.Header.Get("Content-Type"), ";")
-		if strings.ToLower(strings.TrimSpace(ctype)) != "text/event-stream" {
-			fail("upstream_protocol")
-		}
+		checkResponse(resp)
 		r.stream = truthy(body["stream"])
 		r.message = map[string]any{"id": "msg_" + newID(), "type": "message", "role": "assistant", "model": model,
 			"stop_reason": nil, "stop_sequence": nil, "usage": map[string]any{"input_tokens": 0, "output_tokens": 0}}
@@ -962,39 +969,8 @@ func IterMessages(body map[string]any, configDir, executable string, timeout flo
 				sawDone = true
 				continue
 			}
-			kind := event["type"].(string)
-			if kind == "error" || kind == "response.failed" || truthy(event["error"]) {
-				problem := event["error"]
-				if !truthy(problem) {
-					problem = nil
-					if res, isObj := event["response"].(map[string]any); isObj {
-						problem = res["error"]
-					}
-				}
-				if e, isObj := problem.(map[string]any); isObj && (e["code"] == "rate_limit_exceeded" || e["code"] == "usage_limit_reached") {
-					fail("upstream_rate_limit")
-				}
-				fail("upstream_error")
-			}
-			if terminal != "" {
-				fail("upstream_protocol")
-			}
 			var chunks [][]byte
-			switch {
-			case kind == "response.output_item.done":
-				n, isInt := host.Int(event["output_index"])
-				if _, known := r.meta[int(n)]; !isInt || n < 0 || n > math.MaxInt32 || (int(n) > len(r.items) && !known) {
-					fail("upstream_protocol")
-				}
-				chunks = r.finishItem(int(n), event["item"], true)
-			case kind == "response.completed" || kind == "response.incomplete":
-				chunks = r.terminal(event, kind)
-				terminal = kind
-			case !slices.Contains(passEvents, kind):
-				fail("upstream_protocol")
-			case kind != "response.created" && kind != "response.in_progress" && kind != "response.queued":
-				chunks = r.progress(event, kind)
-			}
+			chunks, terminal = r.event(event, terminal)
 			if r.stream && (len(chunks) > 0 || terminal != "") {
 				if !started {
 					start := maps2(r.message, "content", []any{})
@@ -1029,6 +1005,94 @@ func IterMessages(body map[string]any, configDir, executable string, timeout flo
 	}
 }
 
+func requestModel(body map[string]any) any {
+	var model any
+	if body != nil {
+		model = body["model"]
+	}
+	if s, ok := model.(string); ok {
+		model = strings.TrimPrefix(s, "openai/")
+	}
+	return model
+}
+
+// send posts the request; a returned response's body is the caller's to close.
+func (r *codexRun) send(request map[string]any, account, ver string) *http.Response {
+	req, err := http.NewRequestWithContext(r.ctx, http.MethodPost, CodexBase+"/backend-api/codex/responses", strings.NewReader(compact(request)))
+	if err != nil {
+		fail("upstream_error")
+	}
+	for k, v := range map[string]string{"Authorization": "Bearer " + r.token, "chatgpt-account-id": account,
+		"OpenAI-Beta": "responses=experimental", "originator": "codex_cli_rs", "User-Agent": "codex_cli_rs/" + ver,
+		"version": ver, "Content-Type": "application/json", "Accept": "text/event-stream", "Accept-Encoding": "identity"} {
+		req.Header[k] = []string{v} // exact names, as http.client sent them
+	}
+	r.armed = true
+	resp, err := Client.Do(req)
+	if err != nil {
+		r.netFail(err)
+	}
+	return resp
+}
+
+func checkResponse(resp *http.Response) {
+	if resp.StatusCode != http.StatusOK {
+		code := map[int]string{401: "upstream_auth", 403: "upstream_forbidden", 429: "upstream_rate_limit"}[resp.StatusCode]
+		wait := -1.0
+		if resp.StatusCode == http.StatusTooManyRequests {
+			wait = retryAfter(resp.Header.Get("Retry-After"))
+		}
+		panic(NewCodexError(code, wait))
+	}
+	ctype, _, _ := strings.Cut(resp.Header.Get("Content-Type"), ";")
+	if strings.ToLower(strings.TrimSpace(ctype)) != "text/event-stream" {
+		fail("upstream_protocol")
+	}
+}
+
+// event handles one upstream event and returns its chunks and the terminal kind seen so far.
+func (r *codexRun) event(event map[string]any, terminal string) ([][]byte, string) {
+	kind := event["type"].(string)
+	if kind == "error" || kind == "response.failed" || truthy(event["error"]) {
+		failEvent(event)
+	}
+	if terminal != "" {
+		fail("upstream_protocol")
+	}
+	var chunks [][]byte
+	switch {
+	case kind == "response.output_item.done":
+		n, isInt := host.Int(event["output_index"])
+		if _, known := r.meta[int(n)]; !isInt || n < 0 || n > math.MaxInt32 || (int(n) > len(r.items) && !known) {
+			fail("upstream_protocol")
+		}
+		chunks = r.finishItem(int(n), event["item"], true)
+	case kind == "response.completed" || kind == "response.incomplete":
+		chunks = r.terminal(event, kind)
+		terminal = kind
+	case !slices.Contains(passEvents, kind):
+		fail("upstream_protocol")
+	case kind != "response.created" && kind != "response.in_progress" && kind != "response.queued":
+		chunks = r.progress(event, kind)
+	}
+	return chunks, terminal
+}
+
+// failEvent fails with the error an upstream error event reports.
+func failEvent(event map[string]any) {
+	problem := event["error"]
+	if !truthy(problem) {
+		problem = nil
+		if res, isObj := event["response"].(map[string]any); isObj {
+			problem = res["error"]
+		}
+	}
+	if e, isObj := problem.(map[string]any); isObj && (e["code"] == "rate_limit_exceeded" || e["code"] == "usage_limit_reached") {
+		fail("upstream_rate_limit")
+	}
+	fail("upstream_error")
+}
+
 // terminal checks a response.completed / response.incomplete event and fills in the message.
 func (r *codexRun) terminal(event map[string]any, kind string) [][]byte {
 	result, ok := event["response"].(map[string]any)
@@ -1036,18 +1100,7 @@ func (r *codexRun) terminal(event map[string]any, kind string) [][]byte {
 	if !ok || truthy(result["error"]) || result["status"] != strings.TrimPrefix(kind, "response.") {
 		fail("upstream_error")
 	}
-	if incomplete {
-		details, isObj := result["incomplete_details"].(map[string]any)
-		if !isObj || (details["reason"] != "max_output_tokens" && details["reason"] != "content_filter") {
-			fail("upstream_protocol")
-		}
-		r.message["stop_reason"] = "refusal"
-		if details["reason"] == "max_output_tokens" {
-			r.message["stop_reason"] = "max_tokens"
-		}
-	} else if len(r.partial) > 0 || truthy(result["incomplete_details"]) {
-		fail("upstream_protocol")
-	}
+	r.incomplete(result, incomplete)
 	output, ok := get(result, "output", []any{}).([]any)
 	if !ok {
 		fail("upstream_protocol")
@@ -1078,6 +1131,28 @@ func (r *codexRun) terminal(event map[string]any, kind string) [][]byte {
 			fail("upstream_truncated")
 		}
 	}
+	r.message["usage"] = usageCounts(result)
+	return chunks
+}
+
+// incomplete checks incomplete_details and sets the stop reason of an incomplete response.
+func (r *codexRun) incomplete(result map[string]any, incomplete bool) {
+	if incomplete {
+		details, isObj := result["incomplete_details"].(map[string]any)
+		if !isObj || (details["reason"] != "max_output_tokens" && details["reason"] != "content_filter") {
+			fail("upstream_protocol")
+		}
+		r.message["stop_reason"] = "refusal"
+		if details["reason"] == "max_output_tokens" {
+			r.message["stop_reason"] = "max_tokens"
+		}
+	} else if len(r.partial) > 0 || truthy(result["incomplete_details"]) {
+		fail("upstream_protocol")
+	}
+}
+
+// usageCounts validates a terminal response's token usage.
+func usageCounts(result map[string]any) map[string]any {
 	usage, ok := result["usage"].(map[string]any)
 	if !ok {
 		fail("upstream_protocol")
@@ -1103,8 +1178,7 @@ func (r *codexRun) terminal(event map[string]any, kind string) [][]byte {
 			counts["output_tokens_details"] = map[string]any{"reasoning_tokens": n}
 		}
 	}
-	r.message["usage"] = counts
-	return chunks
+	return counts
 }
 
 // progress handles the streaming events before an item finishes.
@@ -1130,43 +1204,9 @@ func (r *codexRun) progress(event map[string]any, kind string) [][]byte {
 		}
 		r.identity(i, item["id"], item["type"])
 	case "response.output_text.delta", "response.refusal.delta":
-		partType := "refusal"
-		if kind == "response.output_text.delta" {
-			partType = "output_text"
-		}
-		state := r.textPart(i, event["content_index"], partType)
-		if state.textDone || state.stopped {
-			fail("upstream_protocol")
-		}
-		state.delta = true
-		state.chunks = append(state.chunks, delta)
-		chunks := r.startPart(state)
-		if r.stream {
-			if safe := r.safeText(state, delta, false); safe != "" || delta == "" {
-				chunks = append(chunks, r.textDelta(state, safe))
-			}
-		}
-		return chunks
+		return r.progressDelta(i, event, kind, delta)
 	case "response.output_text.done", "response.refusal.done", "response.content_part.done":
-		part := event["part"]
-		switch kind {
-		case "response.output_text.done":
-			part = map[string]any{"type": "output_text", "text": event["text"]}
-		case "response.refusal.done":
-			part = map[string]any{"type": "refusal", "refusal": event["refusal"]}
-		}
-		chunks := r.finishPart(i, event["content_index"], part, kind == "response.content_part.done")
-		ci, _ := host.Int(event["content_index"])
-		state := r.parts[[2]int{i, int(ci)}]
-		flag := &state.textDone
-		if kind == "response.content_part.done" {
-			flag = &state.partDone
-		}
-		if *flag {
-			fail("upstream_protocol")
-		}
-		*flag = true
-		return chunks
+		return r.progressDone(i, event, kind)
 	case "response.content_part.added":
 		part := event["part"]
 		content(asMessage(part), false)
@@ -1182,4 +1222,48 @@ func (r *codexRun) progress(event map[string]any, kind string) [][]byte {
 		r.identity(i, nil, "reasoning")
 	}
 	return nil
+}
+
+// progressDelta streams an output_text or refusal delta.
+func (r *codexRun) progressDelta(i int, event map[string]any, kind, delta string) [][]byte {
+	partType := "refusal"
+	if kind == "response.output_text.delta" {
+		partType = "output_text"
+	}
+	state := r.textPart(i, event["content_index"], partType)
+	if state.textDone || state.stopped {
+		fail("upstream_protocol")
+	}
+	state.delta = true
+	state.chunks = append(state.chunks, delta)
+	chunks := r.startPart(state)
+	if r.stream {
+		if safe := r.safeText(state, delta, false); safe != "" || delta == "" {
+			chunks = append(chunks, r.textDelta(state, safe))
+		}
+	}
+	return chunks
+}
+
+// progressDone finishes a text, refusal or content part, each at most once.
+func (r *codexRun) progressDone(i int, event map[string]any, kind string) [][]byte {
+	part := event["part"]
+	switch kind {
+	case "response.output_text.done":
+		part = map[string]any{"type": "output_text", "text": event["text"]}
+	case "response.refusal.done":
+		part = map[string]any{"type": "refusal", "refusal": event["refusal"]}
+	}
+	chunks := r.finishPart(i, event["content_index"], part, kind == "response.content_part.done")
+	ci, _ := host.Int(event["content_index"])
+	state := r.parts[[2]int{i, int(ci)}]
+	flag := &state.textDone
+	if kind == "response.content_part.done" {
+		flag = &state.partDone
+	}
+	if *flag {
+		fail("upstream_protocol")
+	}
+	*flag = true
+	return chunks
 }

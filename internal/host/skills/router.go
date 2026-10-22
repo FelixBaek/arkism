@@ -393,51 +393,7 @@ func readSkillFile(ref, path string) (host.Obj, error) {
 	}
 	item := loaded.item
 	if _, pinned := item["bundle"]; pinned {
-		// Recheck authorization and trial lifetime for every new file delivery.
-		client, err := newRouterClient()
-		if err != nil {
-			return nil, err
-		}
-		trial := ""
-		if item["trial_status"] == "active" && truthy(item["trial_id"]) {
-			trial = pyStr(item["trial_id"])
-		}
-		var items []map[string]any
-		if trial != "" {
-			items, err = client.resolve([]string{pyStr(item["skill_id"]) + "@latest-approved"}, trial, routerRuntime)
-		} else {
-			items, err = client.resolve([]string{pyStr(item["skill_id"]) + "@" + pyStr(item["resolved_version"])}, "", "")
-		}
-		if err != nil {
-			return nil, err
-		}
-		current := items0(items)
-		if current == nil {
-			return nil, errors.New("list index out of range")
-		}
-		if truthy(current["error"]) || !sameJSON(current["version_id"], item["version_id"]) || (trial != "" && current["trial_status"] != "active") {
-			return nil, errors.New("skill_changed_or_unavailable: load_skill again")
-		}
-		bundle, err := validateBundle(current["bundle"])
-		if err != nil {
-			return nil, err
-		}
-		if bundle["sha256"] != asMap(item["bundle"])["sha256"] {
-			return nil, errors.New("skill_bundle_changed: load_skill again")
-		}
-		for _, f := range bundleFiles(bundle) {
-			if f["path"] != path {
-				continue
-			}
-			if _, omitted := f["omitted"]; omitted {
-				return nil, fmt.Errorf("not_stored: %s file is pinned by hash only (%s bytes, sha256 %s)", pyStr(f["omitted"]), pyStr(f["size"]), pyStr(f["sha256"]))
-			}
-			content := f["content"].(string)
-			return host.Obj{{Key: "ref", Value: ref}, {Key: "path", Value: path}, {Key: "size", Value: len(content)},
-				{Key: "content", Value: content}, {Key: "sha256", Value: f["sha256"]}, {Key: "bundle_sha256", Value: bundle["sha256"]},
-				{Key: "resolution_mode", Value: getOr(current, "resolution_mode", "hub")}, {Key: "authority", Value: "data_only_untrusted"}}, nil
-		}
-		return nil, errors.New("not_found: path is not in this version's bundle")
+		return readSkillFilePinned(ref, path, item)
 	}
 	if item["trial_status"] == "active" {
 		return nil, errors.New("unpinned_trial_bundle: import companion files before reading them in a trial")
@@ -466,6 +422,55 @@ func readSkillFile(ref, path string) (host.Obj, error) {
 		{Key: "resolution_mode", Value: "unversioned_local"}, {Key: "authority", Value: "data_only_untrusted"}}, nil
 }
 
+// readSkillFilePinned serves a file of a version-pinned bundle after rechecking the version still resolves.
+func readSkillFilePinned(ref, path string, item map[string]any) (host.Obj, error) {
+	// Recheck authorization and trial lifetime for every new file delivery.
+	client, err := newRouterClient()
+	if err != nil {
+		return nil, err
+	}
+	trial := ""
+	if item["trial_status"] == "active" && truthy(item["trial_id"]) {
+		trial = pyStr(item["trial_id"])
+	}
+	var items []map[string]any
+	if trial != "" {
+		items, err = client.resolve([]string{pyStr(item["skill_id"]) + "@latest-approved"}, trial, routerRuntime)
+	} else {
+		items, err = client.resolve([]string{pyStr(item["skill_id"]) + "@" + pyStr(item["resolved_version"])}, "", "")
+	}
+	if err != nil {
+		return nil, err
+	}
+	current := items0(items)
+	if current == nil {
+		return nil, errors.New("list index out of range")
+	}
+	if truthy(current["error"]) || !sameJSON(current["version_id"], item["version_id"]) || (trial != "" && current["trial_status"] != "active") {
+		return nil, errors.New("skill_changed_or_unavailable: load_skill again")
+	}
+	bundle, err := validateBundle(current["bundle"])
+	if err != nil {
+		return nil, err
+	}
+	if bundle["sha256"] != asMap(item["bundle"])["sha256"] {
+		return nil, errors.New("skill_bundle_changed: load_skill again")
+	}
+	for _, f := range bundleFiles(bundle) {
+		if f["path"] != path {
+			continue
+		}
+		if _, omitted := f["omitted"]; omitted {
+			return nil, fmt.Errorf("not_stored: %s file is pinned by hash only (%s bytes, sha256 %s)", pyStr(f["omitted"]), pyStr(f["size"]), pyStr(f["sha256"]))
+		}
+		content := f["content"].(string)
+		return host.Obj{{Key: "ref", Value: ref}, {Key: "path", Value: path}, {Key: "size", Value: len(content)},
+			{Key: "content", Value: content}, {Key: "sha256", Value: f["sha256"]}, {Key: "bundle_sha256", Value: bundle["sha256"]},
+			{Key: "resolution_mode", Value: getOr(current, "resolution_mode", "hub")}, {Key: "authority", Value: "data_only_untrusted"}}, nil
+	}
+	return nil, errors.New("not_found: path is not in this version's bundle")
+}
+
 func requireKeys(m map[string]any, keys ...string) error {
 	for _, k := range keys {
 		if _, ok := m[k]; !ok {
@@ -484,68 +489,7 @@ func loadSkillResolved(skillID, trialID string) (host.Obj, error) {
 		return nil, errors.New("trial requires latest-approved and a configured runtime")
 	}
 	if !isVersion {
-		ref := skillID
-		if !strings.Contains(skillID, "@") {
-			ref += "@latest-approved"
-		}
-		client, err := newRouterClient()
-		if err != nil {
-			return nil, err
-		}
-		runtime := ""
-		if trialID != "" {
-			runtime = routerRuntime
-		}
-		items, err := client.resolve([]string{ref}, trialID, runtime)
-		if err != nil {
-			return nil, err
-		}
-		item := items0(items)
-		if item == nil {
-			return nil, errors.New("list index out of range")
-		}
-		if truthy(item["error"]) {
-			return nil, errors.New(pyStr(item["error"]))
-		}
-		if err := requireKeys(item, "skill_id", "resolved_version", "name", "content_hash", "validation_status", "instructions"); err != nil {
-			return nil, err
-		}
-		if err := skillFits(item); err != nil {
-			return nil, err
-		}
-		provenance := orMap(item["provenance_summary"])
-		loadedRef := pyStr(item["skill_id"]) + "@" + pyStr(item["resolved_version"])
-		if item["trial_status"] == "active" {
-			loadedRef += "#" + pyStr(item["trial_id"])
-		}
-		var listing any
-		if b, ok := item["bundle"]; ok {
-			bundle, err := validateBundle(b)
-			if err != nil {
-				return nil, err
-			}
-			files, hashOnly := []any{}, []any{}
-			for _, f := range bundleFiles(bundle) {
-				if _, ok := f["content"]; ok {
-					files = append(files, f["path"])
-				}
-				if _, ok := f["omitted"]; ok {
-					hashOnly = append(hashOnly, f["path"])
-				}
-			}
-			listing = host.Obj{{Key: "mode", Value: "version_pinned"}, {Key: "sha256", Value: bundle["sha256"]}, {Key: "files", Value: files},
-				{Key: "hash_only", Value: hashOnly}, {Key: "how_to_use", Value: "read_skill_file(ref, path)로 이 버전에 저장된 파일을 읽으세요. 경로는 이 목록을 기준으로 합니다."}}
-		} else if item["trial_status"] == "active" {
-			listing = host.Obj{{Key: "mode", Value: "unpinned_trial"}, {Key: "files", Value: []any{}}, {Key: "how_to_use", Value: "보조 파일이 고정되지 않아 시험 중 파일 읽기를 사용할 수 없습니다."}}
-		} else if local := localBundle(str(provenance["source_path"])); local != nil {
-			listing = append(local, host.KV{Key: "mode", Value: "unversioned_local"})
-		}
-		loadedSkills[loadedRef] = loadedSkill{item, time.Now().UTC()}
-		return host.Obj{{Key: "id", Value: item["skill_id"]}, {Key: "name", Value: item["name"]}, {Key: "path", Value: getOr(provenance, "source_path", "")},
-			{Key: "ref", Value: loadedRef}, {Key: "version", Value: item["resolved_version"]}, {Key: "content_hash", Value: item["content_hash"]},
-			{Key: "validation_status", Value: item["validation_status"]}, {Key: "requirements", Value: item["requirements"]}, {Key: "provenance", Value: provenance},
-			{Key: "resolution_mode", Value: getOr(item, "resolution_mode", "hub")}, {Key: "trial_id", Value: item["trial_id"]},
-			{Key: "trial_status", Value: item["trial_status"]}, {Key: "bundle", Value: listing}, {Key: "content", Value: item["instructions"]}}, nil
+		return loadSkillResolvedHub(skillID, trialID)
 	}
 	// A raw version ID goes through the same pinned resolve as skill_id@N: same hash/bundle checks,
 	// cache, permissions and usage ref; never a direct source read.
@@ -573,6 +517,72 @@ func loadSkillResolved(skillID, trialID string) (host.Obj, error) {
 		return nil, errors.New("skill_version_mismatch")
 	}
 	return loaded, nil
+}
+
+// loadSkillResolvedHub resolves skill_id or skill_id@N through the hub and records it as loaded.
+func loadSkillResolvedHub(skillID, trialID string) (host.Obj, error) {
+	ref := skillID
+	if !strings.Contains(skillID, "@") {
+		ref += "@latest-approved"
+	}
+	client, err := newRouterClient()
+	if err != nil {
+		return nil, err
+	}
+	runtime := ""
+	if trialID != "" {
+		runtime = routerRuntime
+	}
+	items, err := client.resolve([]string{ref}, trialID, runtime)
+	if err != nil {
+		return nil, err
+	}
+	item := items0(items)
+	if item == nil {
+		return nil, errors.New("list index out of range")
+	}
+	if truthy(item["error"]) {
+		return nil, errors.New(pyStr(item["error"]))
+	}
+	if err := requireKeys(item, "skill_id", "resolved_version", "name", "content_hash", "validation_status", "instructions"); err != nil {
+		return nil, err
+	}
+	if err := skillFits(item); err != nil {
+		return nil, err
+	}
+	provenance := orMap(item["provenance_summary"])
+	loadedRef := pyStr(item["skill_id"]) + "@" + pyStr(item["resolved_version"])
+	if item["trial_status"] == "active" {
+		loadedRef += "#" + pyStr(item["trial_id"])
+	}
+	var listing any
+	if b, ok := item["bundle"]; ok {
+		bundle, err := validateBundle(b)
+		if err != nil {
+			return nil, err
+		}
+		files, hashOnly := []any{}, []any{}
+		for _, f := range bundleFiles(bundle) {
+			if _, ok := f["content"]; ok {
+				files = append(files, f["path"])
+			}
+			if _, ok := f["omitted"]; ok {
+				hashOnly = append(hashOnly, f["path"])
+			}
+		}
+		listing = host.Obj{{Key: "mode", Value: "version_pinned"}, {Key: "sha256", Value: bundle["sha256"]}, {Key: "files", Value: files},
+			{Key: "hash_only", Value: hashOnly}, {Key: "how_to_use", Value: "read_skill_file(ref, path)로 이 버전에 저장된 파일을 읽으세요. 경로는 이 목록을 기준으로 합니다."}}
+	} else if item["trial_status"] == "active" {
+		listing = host.Obj{{Key: "mode", Value: "unpinned_trial"}, {Key: "files", Value: []any{}}, {Key: "how_to_use", Value: "보조 파일이 고정되지 않아 시험 중 파일 읽기를 사용할 수 없습니다."}}
+	} else if local := localBundle(str(provenance["source_path"])); local != nil {
+		listing = append(local, host.KV{Key: "mode", Value: "unversioned_local"})
+	}
+	loadedSkills[loadedRef] = loadedSkill{item, time.Now().UTC()}
+	return host.Obj{{Key: "id", Value: item["skill_id"]}, {Key: "name", Value: item["name"]}, {Key: "path", Value: getOr(provenance, "source_path", "")},
+		{Key: "ref", Value: loadedRef}, {Key: "version", Value: item["resolved_version"]}, {Key: "content_hash", Value: item["content_hash"]},
+		{Key: "validation_status", Value: item["validation_status"]}, {Key: "requirements", Value: item["requirements"]}, {Key: "provenance", Value: provenance},
+		{Key: "resolution_mode", Value: getOr(item, "resolution_mode", "hub")}, {Key: "trial_id", Value: item["trial_id"]},
+		{Key: "trial_status", Value: item["trial_status"]}, {Key: "bundle", Value: listing}, {Key: "content", Value: item["instructions"]}}, nil
 }
 
 func isoMillis(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }
@@ -712,41 +722,76 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 	var degraded []any
 	project := sessionProjectKey()
 	if len(ids) > 0 {
-		for _, i := range ids {
-			m, err := routerRequest("/v1/memories/"+pyQuote(i)+"?"+scopeQueryAll(), nil)
-			if err != nil {
-				return nil, err
-			}
-			if currentRecallMemory(m, time.Now()) && (m["reach"] != "project" || project != "" && m["reach_project"] == project) {
-				found = append(found, m)
-			}
+		if found, err = recallByIDs(ids, project); err != nil {
+			return nil, err
 		}
-	} else {
-		text := "related memory evidence"
-		if isStr && pyStrip(q) != "" {
-			text = runeCut(q, 1000)
-		}
-		modes := []any{"exact", "fts", "vector"}
-		if relatedTo != nil {
-			modes = []any{"relation"}
-		}
-		payload := map[string]any{"scope": host.Scope(), "query": text, "modes": modes, "purpose": "answer", "destination": "internal", "limit": 6, "max_chars": 6000}
-		if project != "" {
-			payload["project_key"] = project
-		}
-		if relatedTo != nil {
-			payload["related_to"] = relatedTo
-		}
-		res, err := routerRequest("/v1/search", payload)
+	} else if found, degraded, err = recallSearch(q, isStr, relatedTo, project); err != nil {
+		return nil, err
+	}
+	memories, err := recallShape(found)
+	if err != nil {
+		return nil, err
+	}
+	out := host.Obj{{Key: "memories", Value: memories}, {Key: "authority", Value: "data_only_untrusted"}, {Key: "note", Value: recallNote}}
+	if len(degraded) > 0 {
+		out = append(out, host.KV{Key: "degraded", Value: degraded})
+	}
+	if len(memories) == 0 && len(ids) == 0 && relatedTo == nil {
+		out = append(out, host.KV{Key: "result", Value: host.NoRelatedMemory})
+	}
+	if relatedTo != nil {
+		out = append(out, host.KV{Key: "related_to", Value: relatedTo},
+			host.KV{Key: "relation_note", Value: "저장된 직접 관계의 활성 기억만 최대6개 반환합니다. 전체 관계 목록이 아니며 없는 관계를 추정하지 않습니다."})
+	}
+	return out, nil
+}
+
+// recallByIDs reads each memory by id and keeps the current ones this project may see.
+func recallByIDs(ids []string, project string) ([]any, error) {
+	var found []any
+	for _, i := range ids {
+		m, err := routerRequest("/v1/memories/"+pyQuote(i)+"?"+scopeQueryAll(), nil)
 		if err != nil {
 			return nil, err
 		}
-		found = asList(getOr(res, "items", []any{}))
-		degraded = asList(getOr(res, "degraded", []any{}))
-		if relatedTo == nil { // relation hits come from one lane, so the fused-score floor does not fit them
-			found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan(modes, res))
+		if currentRecallMemory(m, time.Now()) && (m["reach"] != "project" || project != "" && m["reach_project"] == project) {
+			found = append(found, m)
 		}
 	}
+	return found, nil
+}
+
+// recallSearch runs the memory search for a query or a related_to anchor.
+func recallSearch(q string, isStr bool, relatedTo any, project string) ([]any, []any, error) {
+	text := "related memory evidence"
+	if isStr && pyStrip(q) != "" {
+		text = runeCut(q, 1000)
+	}
+	modes := []any{"exact", "fts", "vector"}
+	if relatedTo != nil {
+		modes = []any{"relation"}
+	}
+	payload := map[string]any{"scope": host.Scope(), "query": text, "modes": modes, "purpose": "answer", "destination": "internal", "limit": 6, "max_chars": 6000}
+	if project != "" {
+		payload["project_key"] = project
+	}
+	if relatedTo != nil {
+		payload["related_to"] = relatedTo
+	}
+	res, err := routerRequest("/v1/search", payload)
+	if err != nil {
+		return nil, nil, err
+	}
+	found := asList(getOr(res, "items", []any{}))
+	degraded := asList(getOr(res, "degraded", []any{}))
+	if relatedTo == nil { // relation hits come from one lane, so the fused-score floor does not fit them
+		found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan(modes, res))
+	}
+	return found, degraded, nil
+}
+
+// recallShape trims recalled memories to the fields an agent needs and flags missing paths.
+func recallShape(found []any) ([]any, error) {
 	memories := []any{}
 	cwd, _ := os.Getwd()
 	for _, raw := range found {
@@ -766,18 +811,7 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 		}
 		memories = append(memories, kept)
 	}
-	out := host.Obj{{Key: "memories", Value: memories}, {Key: "authority", Value: "data_only_untrusted"}, {Key: "note", Value: recallNote}}
-	if len(degraded) > 0 {
-		out = append(out, host.KV{Key: "degraded", Value: degraded})
-	}
-	if len(memories) == 0 && len(ids) == 0 && relatedTo == nil {
-		out = append(out, host.KV{Key: "result", Value: host.NoRelatedMemory})
-	}
-	if relatedTo != nil {
-		out = append(out, host.KV{Key: "related_to", Value: relatedTo},
-			host.KV{Key: "relation_note", Value: "저장된 직접 관계의 활성 기억만 최대6개 반환합니다. 전체 관계 목록이 아니며 없는 관계를 추정하지 않습니다."})
-	}
-	return out, nil
+	return memories, nil
 }
 
 // memoryPathTexts is what a recalled memory may point at a file with: its text, source_ref and source locators.
@@ -999,20 +1033,8 @@ func callTool(name, argsAny any) (host.Obj, error) {
 			}
 			return routerRequest(path, payload)
 		}, host.Scope())
-	case "route_skills":
-		value, err = routeSkills(arg(args, "query", ""))
-	case "enable_tool":
-		value, err = enableTool(argStr(args, "kind", ""), argStr(args, "name", ""))
-	case "load_skill":
-		value, err = loadSkill(argStr(args, "skill_id", ""), argStr(args, "trial_id", ""))
-	case "read_skill_file":
-		value, err = readSkillFile(argStr(args, "ref", ""), argStr(args, "path", ""))
-	case "record_skill_usage":
-		taskType := arg(args, "task_type", nil)
-		if !truthy(taskType) {
-			taskType = "skill_run"
-		}
-		value, err = recordSkillUsage(argStr(args, "ref", ""), argStr(args, "status", ""), pyStr(taskType), argStr(args, "error_code", ""))
+	case "route_skills", "enable_tool", "load_skill", "read_skill_file", "record_skill_usage":
+		value, err = callToolSkills(n, args)
 	case "run_workflow", "decide_workflow":
 		return callWorkflow(n, args)
 	case "list_crew":
@@ -1024,38 +1046,11 @@ func callTool(name, argsAny any) (host.Obj, error) {
 			}
 			value = host.Obj{{Key: "crew", Value: list}, {Key: "authority", Value: "data_only_untrusted"}}
 		}
-	case "search_knowledge":
-		value, err = searchKnowledge(args)
-	case "recall":
-		value, err = recall(arg(args, "query", ""), args["ids"], args["related_to"])
-	case "recall_digest":
-		value, err = recallDigest(arg(args, "query", ""), args["limit"])
-	case "search_session_archives":
-		value, err = searchSessionArchives(arg(args, "query", ""), arg(args, "after", ""), arg(args, "archive_id", ""))
-	case "recall_at":
-		value, err = recallAt(args["as_of"], arg(args, "query", ""), arg(args, "kind", ""), arg(args, "limit", 20), arg(args, "cursor", ""))
-	case "trace_memory_sources":
-		value, err = traceMemorySources(arg(args, "memory_id", ""))
-	case "read_session_message":
-		value, err = routerRequest("/v1/session-archives/message", map[string]any{"scope": host.Scope(), "ref": args["ref"], "text_offset": arg(args, "text_offset", 0)})
-	case "record_memory_usage":
-		value, err = recordMemoryUsage(arg(args, "memory_id", ""), arg(args, "event_id", ""))
-	case "read_wiki":
-		value, err = readWiki(args)
+	case "search_knowledge", "recall", "recall_digest", "search_session_archives", "recall_at", "trace_memory_sources",
+		"read_session_message", "record_memory_usage", "read_wiki":
+		value, err = callToolMemory(n, args)
 	case "remember":
-		var v host.Obj
-		if v, err = remember(arg(args, "text", ""), arg(args, "kind", "decision")); err == nil {
-			out, err := toolText(v)
-			if err != nil {
-				return nil, err
-			}
-			items, _ := v.Get("items")
-			rejected := false
-			for _, i := range asList(items) {
-				rejected = rejected || asMap(i)["status"] == "rejected"
-			}
-			return append(out, host.KV{Key: "isError", Value: !truthy(items) || rejected}), nil
-		}
+		return callToolRemember(args)
 	case "code_search_symbols", "code_callers", "code_callees", "code_impact":
 		value, err = callCodeGraph(n, args)
 	case "refresh_skills", "router_status":
@@ -1070,6 +1065,70 @@ func callTool(name, argsAny any) (host.Obj, error) {
 		return nil, err
 	}
 	return toolText(value)
+}
+
+// callToolSkills dispatches the skill catalog tools.
+func callToolSkills(n string, args map[string]any) (any, error) {
+	switch n {
+	case "route_skills":
+		return routeSkills(arg(args, "query", ""))
+	case "enable_tool":
+		return enableTool(argStr(args, "kind", ""), argStr(args, "name", ""))
+	case "load_skill":
+		return loadSkill(argStr(args, "skill_id", ""), argStr(args, "trial_id", ""))
+	case "read_skill_file":
+		return readSkillFile(argStr(args, "ref", ""), argStr(args, "path", ""))
+	case "record_skill_usage":
+		taskType := arg(args, "task_type", nil)
+		if !truthy(taskType) {
+			taskType = "skill_run"
+		}
+		return recordSkillUsage(argStr(args, "ref", ""), argStr(args, "status", ""), pyStr(taskType), argStr(args, "error_code", ""))
+	}
+	return nil, errors.New("unknown tool")
+}
+
+// callToolMemory dispatches the memory and knowledge read tools.
+func callToolMemory(n string, args map[string]any) (any, error) {
+	switch n {
+	case "search_knowledge":
+		return searchKnowledge(args)
+	case "recall":
+		return recall(arg(args, "query", ""), args["ids"], args["related_to"])
+	case "recall_digest":
+		return recallDigest(arg(args, "query", ""), args["limit"])
+	case "search_session_archives":
+		return searchSessionArchives(arg(args, "query", ""), arg(args, "after", ""), arg(args, "archive_id", ""))
+	case "recall_at":
+		return recallAt(args["as_of"], arg(args, "query", ""), arg(args, "kind", ""), arg(args, "limit", 20), arg(args, "cursor", ""))
+	case "trace_memory_sources":
+		return traceMemorySources(arg(args, "memory_id", ""))
+	case "read_session_message":
+		return routerRequest("/v1/session-archives/message", map[string]any{"scope": host.Scope(), "ref": args["ref"], "text_offset": arg(args, "text_offset", 0)})
+	case "record_memory_usage":
+		return recordMemoryUsage(arg(args, "memory_id", ""), arg(args, "event_id", ""))
+	case "read_wiki":
+		return readWiki(args)
+	}
+	return nil, errors.New("unknown tool")
+}
+
+// callToolRemember submits a memory candidate and marks the answer as an error when it was rejected.
+func callToolRemember(args map[string]any) (host.Obj, error) {
+	v, err := remember(arg(args, "text", ""), arg(args, "kind", "decision"))
+	if err != nil {
+		return nil, err
+	}
+	out, err := toolText(v)
+	if err != nil {
+		return nil, err
+	}
+	items, _ := v.Get("items")
+	rejected := false
+	for _, i := range asList(items) {
+		rejected = rejected || asMap(i)["status"] == "rejected"
+	}
+	return append(out, host.KV{Key: "isError", Value: !truthy(items) || rejected}), nil
 }
 
 func callWorkflow(name string, args map[string]any) (host.Obj, error) {

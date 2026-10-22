@@ -184,54 +184,78 @@ func judge(r Rule, b behavior) (observed, passed bool) {
 	unseen := false // an artifact whose text is elsewhere: a clean result there is no pass
 	switch r.Kind {
 	case "forbidden_text":
-		needle := normalize(r.Text)
-		for _, a := range r.Artifacts {
-			var texts []string
-			switch a {
-			case "commits":
-				texts = b.Commits
-			case "pull_requests":
-				texts = b.PullRequests
-			case "replies":
-				for _, rp := range b.Replies {
-					texts = append(texts, rp.Text)
-				}
-			}
-			for _, s := range texts {
-				observed = true
-				passed = passed && !strings.Contains(normalize(s), needle)
-				unseen = unseen || a == "commits" && !inline(s, commitSegRE, inlineCommitRE) || a == "pull_requests" && !inline(s, prSegRE, inlinePRRE)
-			}
-		}
+		observed, passed, unseen = judgeForbiddenText(r, b)
 	case "language":
-		for _, rp := range b.Replies {
-			if hangul, latin, letters := letterCounts(rp.Text); letters >= 20 { // too short to call a language
-				observed = true
-				englishOnly := hangul == 0 && latin == letters
-				passed = passed && !englishOnly && (hangul == 0 || float64(hangul)/float64(letters) >= r.MinRatio)
-			}
-		}
+		observed, passed = judgeLanguage(r, b)
 	case "max_length":
-		for _, rp := range b.Replies {
-			if !rp.DetailRequested {
-				observed = true
-				passed = passed && rp.Lines <= r.MaxLines
-			}
-		}
+		observed, passed = judgeMaxLength(r, b)
 	case "required_tail":
-		re := regexp.MustCompile(r.Pattern)
-		for _, rp := range b.Replies {
-			if rp.Lines >= r.MinLines {
-				parts := paragraphRE.Split(strings.TrimSpace(rp.Text), -1)
-				observed = true
-				passed = passed && re.MatchString(strings.TrimSpace(parts[len(parts)-1]))
-			}
-		}
+		observed, passed = judgeRequiredTail(r, b)
 	}
 	if unseen && passed {
 		return false, false
 	}
 	return observed, observed && passed
+}
+
+func judgeForbiddenText(r Rule, b behavior) (observed, passed, unseen bool) {
+	passed = true
+	needle := normalize(r.Text)
+	for _, a := range r.Artifacts {
+		var texts []string
+		switch a {
+		case "commits":
+			texts = b.Commits
+		case "pull_requests":
+			texts = b.PullRequests
+		case "replies":
+			for _, rp := range b.Replies {
+				texts = append(texts, rp.Text)
+			}
+		}
+		for _, s := range texts {
+			observed = true
+			passed = passed && !strings.Contains(normalize(s), needle)
+			unseen = unseen || a == "commits" && !inline(s, commitSegRE, inlineCommitRE) || a == "pull_requests" && !inline(s, prSegRE, inlinePRRE)
+		}
+	}
+	return observed, passed, unseen
+}
+
+func judgeLanguage(r Rule, b behavior) (observed, passed bool) {
+	passed = true
+	for _, rp := range b.Replies {
+		if hangul, latin, letters := letterCounts(rp.Text); letters >= 20 { // too short to call a language
+			observed = true
+			englishOnly := hangul == 0 && latin == letters
+			passed = passed && !englishOnly && (hangul == 0 || float64(hangul)/float64(letters) >= r.MinRatio)
+		}
+	}
+	return observed, passed
+}
+
+func judgeMaxLength(r Rule, b behavior) (observed, passed bool) {
+	passed = true
+	for _, rp := range b.Replies {
+		if !rp.DetailRequested {
+			observed = true
+			passed = passed && rp.Lines <= r.MaxLines
+		}
+	}
+	return observed, passed
+}
+
+func judgeRequiredTail(r Rule, b behavior) (observed, passed bool) {
+	passed = true
+	re := regexp.MustCompile(r.Pattern)
+	for _, rp := range b.Replies {
+		if rp.Lines >= r.MinLines {
+			parts := paragraphRE.Split(strings.TrimSpace(rp.Text), -1)
+			observed = true
+			passed = passed && re.MatchString(strings.TrimSpace(parts[len(parts)-1]))
+		}
+	}
+	return observed, passed
 }
 
 // normalize folds case and whitespace so "generated  with claude\ncode" still matches.

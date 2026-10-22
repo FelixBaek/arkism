@@ -255,91 +255,20 @@ func login(cli, dir string) (map[string]any, string, error) {
 	var token string
 	var plan, account any
 	var expiries []time.Time
+	var ok bool
+	var err error
 	switch cli {
 	case "claude":
-		creds, err := Credentials(filepath.Join(dir, ".credentials.json"))
-		if err != nil {
-			return nil, "", err
-		}
-		oauth, ok := creds["claudeAiOauth"].(map[string]any)
-		if !ok {
-			return out, "", nil
-		}
-		tok, ok := Token(oauth["accessToken"])
-		if !ok {
-			// A signed-out or partially refreshed file can still describe its subscription.
-			// Show that hint without claiming a login.
-			if p, ok := label(oauth["subscriptionType"], 40); ok && oauth["subscriptionType"] != oauth["accessToken"] {
-				out["plan"] = p
-			}
-			return out, "", nil
-		}
-		token, secrets[tok] = tok, true
-		plan, account = oauth["subscriptionType"], oauth["accountId"]
-		if v, has := oauth["expiresAt"]; has {
-			millis, ok := number(v, false)
-			if !ok {
-				return out, "", nil
-			}
-			expiry, ok := timestamp(millis / 1000)
-			if !ok {
-				return out, "", nil
-			}
-			expiries = append(expiries, expiry)
-		}
+		token, plan, account, expiries, ok, err = claudeLogin(dir, out, secrets)
 	case "codex":
-		auth, err := Credentials(filepath.Join(dir, "auth.json"))
-		if err != nil {
-			return nil, "", err
-		}
-		if auth["auth_mode"] == "apikey" {
-			return out, "", nil
-		}
-		tokens, ok := auth["tokens"].(map[string]any)
-		tok, ok2 := Token(tokens["access_token"])
-		if !ok || !ok2 {
-			return out, "", nil
-		}
-		token, secrets[tok] = tok, true
-		var claims []map[string]any
-		access := -1
-		if id := tokens["id_token"]; id != nil {
-			claim, err := jwtClaims(id)
-			if err != nil {
-				return nil, "", err
-			}
-			claims, secrets[id.(string)] = append(claims, claim), true
-		}
-		if strings.Contains(token, ".") {
-			claim, err := jwtClaims(token)
-			if err != nil {
-				return nil, "", err
-			}
-			claims, access = append(claims, claim), len(claims)
-		}
-		if a, ok := label(tokens["account_id"], 128); ok {
-			account = a
-		}
-		for i, claim := range claims {
-			if auth, ok := claim[AuthClaim].(map[string]any); ok {
-				if p, ok := label(auth["chatgpt_plan_type"], 40); ok && plan == nil {
-					plan = p
-				}
-				if a, ok := label(auth["chatgpt_account_id"], 128); ok && account == nil {
-					account = a
-				}
-			}
-			// An id_token describes the login. It can be older than a freshly renewed
-			// access token and must not disable that token.
-			if v, has := claim["exp"]; has && i == access {
-				expiry, ok := timestamp(v)
-				if !ok {
-					return out, "", nil
-				}
-				expiries = append(expiries, expiry)
-			}
-		}
+		token, plan, account, expiries, ok, err = codexLogin(dir, secrets)
 	default:
+		return out, "", nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if !ok {
 		return out, "", nil
 	}
 	out["status"] = "connected"
@@ -360,6 +289,97 @@ func login(cli, dir string) (map[string]any, string, error) {
 	return out, token, nil
 }
 
+// claudeLogin reads Claude's credentials; ok=false with a nil error means not logged in.
+func claudeLogin(dir string, out map[string]any, secrets map[string]bool) (token string, plan, account any, expiries []time.Time, ok bool, err error) {
+	creds, err := Credentials(filepath.Join(dir, ".credentials.json"))
+	if err != nil {
+		return "", nil, nil, nil, false, err
+	}
+	oauth, ok := creds["claudeAiOauth"].(map[string]any)
+	if !ok {
+		return "", nil, nil, nil, false, nil
+	}
+	tok, ok := Token(oauth["accessToken"])
+	if !ok {
+		// A signed-out or partially refreshed file can still describe its subscription.
+		// Show that hint without claiming a login.
+		if p, ok := label(oauth["subscriptionType"], 40); ok && oauth["subscriptionType"] != oauth["accessToken"] {
+			out["plan"] = p
+		}
+		return "", nil, nil, nil, false, nil
+	}
+	token, secrets[tok] = tok, true
+	plan, account = oauth["subscriptionType"], oauth["accountId"]
+	if v, has := oauth["expiresAt"]; has {
+		millis, ok := number(v, false)
+		if !ok {
+			return "", nil, nil, nil, false, nil
+		}
+		expiry, ok := timestamp(millis / 1000)
+		if !ok {
+			return "", nil, nil, nil, false, nil
+		}
+		expiries = append(expiries, expiry)
+	}
+	return token, plan, account, expiries, true, nil
+}
+
+// codexLogin reads Codex's credentials; ok=false with a nil error means not logged in.
+func codexLogin(dir string, secrets map[string]bool) (token string, plan, account any, expiries []time.Time, ok bool, err error) {
+	auth, err := Credentials(filepath.Join(dir, "auth.json"))
+	if err != nil {
+		return "", nil, nil, nil, false, err
+	}
+	if auth["auth_mode"] == "apikey" {
+		return "", nil, nil, nil, false, nil
+	}
+	tokens, ok := auth["tokens"].(map[string]any)
+	tok, ok2 := Token(tokens["access_token"])
+	if !ok || !ok2 {
+		return "", nil, nil, nil, false, nil
+	}
+	token, secrets[tok] = tok, true
+	var claims []map[string]any
+	access := -1
+	if id := tokens["id_token"]; id != nil {
+		claim, err := jwtClaims(id)
+		if err != nil {
+			return "", nil, nil, nil, false, err
+		}
+		claims, secrets[id.(string)] = append(claims, claim), true
+	}
+	if strings.Contains(token, ".") {
+		claim, err := jwtClaims(token)
+		if err != nil {
+			return "", nil, nil, nil, false, err
+		}
+		claims, access = append(claims, claim), len(claims)
+	}
+	if a, ok := label(tokens["account_id"], 128); ok {
+		account = a
+	}
+	for i, claim := range claims {
+		if auth, ok := claim[AuthClaim].(map[string]any); ok {
+			if p, ok := label(auth["chatgpt_plan_type"], 40); ok && plan == nil {
+				plan = p
+			}
+			if a, ok := label(auth["chatgpt_account_id"], 128); ok && account == nil {
+				account = a
+			}
+		}
+		// An id_token describes the login. It can be older than a freshly renewed
+		// access token and must not disable that token.
+		if v, has := claim["exp"]; has && i == access {
+			expiry, ok := timestamp(v)
+			if !ok {
+				return "", nil, nil, nil, false, nil
+			}
+			expiries = append(expiries, expiry)
+		}
+	}
+	return token, plan, account, expiries, true, nil
+}
+
 // Identity reads only the credentials in configDir: no CLI, no refresh, no token in the answer.
 func Identity(cli, configDir string) map[string]any {
 	out, _ := Login(cli, configDir)
@@ -375,55 +395,23 @@ func resetAt(text string, t time.Time, span time.Duration) (time.Time, bool) {
 	if text == "" {
 		return time.Time{}, false
 	}
-	_, offset := t.In(time.Local).Zone()
-	zone := time.FixedZone("", offset)
-	if m := zoneRe.FindStringSubmatchIndex(text); m != nil {
-		name := text[m[2]:m[3]]
-		loc, err := time.LoadLocation(name)
-		if err != nil || name == "Local" {
-			return time.Time{}, false
-		}
-		zone, text = loc, strings.TrimSpace(text[:m[0]])
+	zone, text, ok := resetZone(text, t)
+	if !ok {
+		return time.Time{}, false
 	}
 	m := resetRe.FindStringSubmatch(text)
 	if m == nil {
 		return time.Time{}, false
 	}
 	ref := t.In(zone)
-	hour, _ := strconv.Atoi(m[4])
-	minute := 0
-	if m[5] != "" {
-		minute, _ = strconv.Atoi(m[5])
-	}
-	if hour < 1 || hour > 12 || minute >= 60 {
+	hour, minute, ok := resetClock(m)
+	if !ok {
 		return time.Time{}, false
-	}
-	hour %= 12
-	if strings.ToLower(m[6]) == "pm" {
-		hour += 12
 	}
 	var dates []time.Time // naive wall clocks, labelled UTC
 	if m[1] != "" {
-		month := 0
-		for i, name := range months {
-			if name == strings.ToLower(m[1]) {
-				month = i + 1
-			}
-		}
-		if month == 0 {
+		if dates, ok = resetDates(m, ref, hour, minute); !ok {
 			return time.Time{}, false
-		}
-		day, _ := strconv.Atoi(m[2])
-		years := []int{ref.Year() - 1, ref.Year(), ref.Year() + 1}
-		if m[3] != "" {
-			y, _ := strconv.Atoi(m[3])
-			years = []int{y}
-		}
-		for _, y := range years {
-			d := time.Date(y, time.Month(month), day, hour, minute, 0, 0, time.UTC)
-			if y >= 1 && y <= 9999 && d.Year() == y && int(d.Month()) == month && d.Day() == day {
-				dates = append(dates, d)
-			}
 		}
 	} else {
 		base := time.Date(ref.Year(), ref.Month(), ref.Day(), hour, minute, 0, 0, time.UTC)
@@ -438,22 +426,93 @@ func resetAt(text string, t time.Time, span time.Duration) (time.Time, bool) {
 	if len(candidates) == 0 {
 		return time.Time{}, false
 	}
-	var best time.Time
 	if m[3] != "" {
-		for _, c := range candidates { // the earliest future one, else the latest
-			if !c.Before(t) && (best.IsZero() || c.Before(best)) {
+		return datedReset(candidates, t), true
+	}
+	best := nearestReset(candidates, t, span)
+	return best, !best.IsZero()
+}
+
+// resetZone strips a trailing time zone name; without one, t's local offset applies.
+func resetZone(text string, t time.Time) (*time.Location, string, bool) {
+	_, offset := t.In(time.Local).Zone()
+	zone := time.FixedZone("", offset)
+	if m := zoneRe.FindStringSubmatchIndex(text); m != nil {
+		name := text[m[2]:m[3]]
+		loc, err := time.LoadLocation(name)
+		if err != nil || name == "Local" {
+			return nil, "", false
+		}
+		zone, text = loc, strings.TrimSpace(text[:m[0]])
+	}
+	return zone, text, true
+}
+
+// resetClock reads the 12-hour clock as a 24-hour hour and minute.
+func resetClock(m []string) (int, int, bool) {
+	hour, _ := strconv.Atoi(m[4])
+	minute := 0
+	if m[5] != "" {
+		minute, _ = strconv.Atoi(m[5])
+	}
+	if hour < 1 || hour > 12 || minute >= 60 {
+		return 0, 0, false
+	}
+	hour %= 12
+	if strings.ToLower(m[6]) == "pm" {
+		hour += 12
+	}
+	return hour, minute, true
+}
+
+// resetDates lists the valid wall clocks for a month and day, in the given year or around ref's.
+func resetDates(m []string, ref time.Time, hour, minute int) ([]time.Time, bool) {
+	month := 0
+	for i, name := range months {
+		if name == strings.ToLower(m[1]) {
+			month = i + 1
+		}
+	}
+	if month == 0 {
+		return nil, false
+	}
+	day, _ := strconv.Atoi(m[2])
+	years := []int{ref.Year() - 1, ref.Year(), ref.Year() + 1}
+	if m[3] != "" {
+		y, _ := strconv.Atoi(m[3])
+		years = []int{y}
+	}
+	var dates []time.Time
+	for _, y := range years {
+		d := time.Date(y, time.Month(month), day, hour, minute, 0, 0, time.UTC)
+		if y >= 1 && y <= 9999 && d.Year() == y && int(d.Month()) == month && d.Day() == day {
+			dates = append(dates, d)
+		}
+	}
+	return dates, true
+}
+
+// datedReset picks the earliest candidate not before t, else the latest.
+func datedReset(candidates []time.Time, t time.Time) time.Time {
+	var best time.Time
+	for _, c := range candidates {
+		if !c.Before(t) && (best.IsZero() || c.Before(best)) {
+			best = c
+		}
+	}
+	if best.IsZero() {
+		for _, c := range candidates {
+			if c.After(best) {
 				best = c
 			}
 		}
-		if best.IsZero() {
-			for _, c := range candidates {
-				if c.After(best) {
-					best = c
-				}
-			}
-		}
-		return best, true
 	}
+	return best
+}
+
+// nearestReset picks the earliest candidate within the window, else the latest one before t.
+func nearestReset(candidates []time.Time, t time.Time, span time.Duration) time.Time {
+	var best time.Time
 	for _, c := range candidates {
 		if !c.Before(t) && !c.After(t.Add(span+2*time.Hour)) && (best.IsZero() || c.Before(best)) {
 			best = c
@@ -466,7 +525,7 @@ func resetAt(text string, t time.Time, span time.Duration) (time.Time, bool) {
 			}
 		}
 	}
-	return best, !best.IsZero()
+	return best
 }
 
 // wallInstants are the instants whose wall clock in loc reads naive: two for a clock repeated
@@ -583,25 +642,9 @@ func ParseCodexUsage(obj any, t time.Time) map[string]any {
 			if rate[name] == nil {
 				continue
 			}
-			window, ok := rate[name].(map[string]any)
+			quota, ok := codexQuota(rate[name])
 			if !ok {
 				return result(t, "", nil)
-			}
-			used, ok := number(window["used_percent"], false)
-			seconds, _ := number(window["limit_window_seconds"], false)
-			if !ok || used < 0 || used > 100 || (seconds != 18000 && seconds != 604800) {
-				return result(t, "", nil)
-			}
-			quota := map[string]any{"window": "week", "left_pct": int(math.Ceil(100 - used))}
-			if seconds == 18000 {
-				quota["window"] = "5h"
-			}
-			if window["reset_at"] != nil {
-				reset, ok := timestamp(window["reset_at"])
-				if !ok {
-					return result(t, "", nil)
-				}
-				quota["resets_at"] = iso(reset)
 			}
 			for _, previous := range quotas {
 				if previous.(map[string]any)["window"] == quota["window"] {
@@ -629,6 +672,31 @@ func ParseCodexUsage(obj any, t time.Time) map[string]any {
 		}
 	}
 	return out
+}
+
+// codexQuota reads one rate-limit window.
+func codexQuota(v any) (map[string]any, bool) {
+	window, ok := v.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	used, ok := number(window["used_percent"], false)
+	seconds, _ := number(window["limit_window_seconds"], false)
+	if !ok || used < 0 || used > 100 || (seconds != 18000 && seconds != 604800) {
+		return nil, false
+	}
+	quota := map[string]any{"window": "week", "left_pct": int(math.Ceil(100 - used))}
+	if seconds == 18000 {
+		quota["window"] = "5h"
+	}
+	if window["reset_at"] != nil {
+		reset, ok := timestamp(window["reset_at"])
+		if !ok {
+			return nil, false
+		}
+		quota["resets_at"] = iso(reset)
+	}
+	return quota, true
 }
 
 func claudeOutput(configDir, executable string, timeout time.Duration) (string, string, int, error) {

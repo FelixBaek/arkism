@@ -65,6 +65,12 @@ func searchKnowledge(args map[string]any) (host.Obj, error) {
 	if err != nil {
 		return nil, err
 	}
+	out := searchKnowledgeShape(res)
+	return append(out, host.KV{Key: "note", Value: knowledgeToolNote}), nil
+}
+
+// searchKnowledgeShape trims the server answer to the fields an agent quotes and cites.
+func searchKnowledgeShape(res map[string]any) host.Obj {
 	items := []any{}
 	receipt := asMap(res["receipt"])
 	for _, raw := range asList(asMap(receipt["context"])["items"]) {
@@ -93,5 +99,5 @@ func searchKnowledge(args map[string]any) (host.Obj, error) {
 	if truthy(res["bindings_truncated"]) {
 		out = append(out, host.KV{Key: "bindings_truncated", Value: true})
 	}
-	return append(out, host.KV{Key: "note", Value: knowledgeToolNote}), nil
+	return out
 }
