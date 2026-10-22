@@ -677,11 +677,18 @@ window.ArkismAutomation = (h) => {
         // Saved automations list each AI step on one line; the step's 목표·질문 opens on click.
         const folds = !creating && IS_AI(n);
         if (folds) {
-          const open = openSteps.has(n.id);
-          const more = button("", "ghost small auto-more", open ? "caret-down" : "caret-right", () => { if (open) openSteps.delete(n.id); else openSteps.add(n.id); paint(); });
-          more.setAttribute("aria-expanded", String(open));
-          more.setAttribute("aria-label", open ? "접기" : "자세히 보기");
-          more.title = open ? "접기" : "자세히 보기";
+          // toggles in place (no paint) so keyboard focus stays on this caret
+          const more = button("", "ghost small auto-more", "", () => setOpen(!openSteps.has(n.id)));
+          const setOpen = (open) => {
+            if (open) openSteps.add(n.id); else openSteps.delete(n.id);
+            more.replaceChildren(icon(open ? "caret-down" : "caret-right"));
+            more.setAttribute("aria-expanded", String(open));
+            more.setAttribute("aria-label", open ? "접기" : "자세히 보기");
+            more.title = open ? "접기" : "자세히 보기";
+            const wrap = row.querySelector(".auto-goal");
+            if (wrap) wrap.hidden = !open;
+          };
+          setOpen(openSteps.has(n.id));
           top.prepend(more);
           top.classList.add("folds");
           top.addEventListener("click", (e) => { if (!e.target.closest("button, select, input, textarea, strong")) more.click(); });
