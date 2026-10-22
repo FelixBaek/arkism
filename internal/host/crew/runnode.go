@@ -280,55 +280,17 @@ func runNode(spec map[string]any) (res map[string]any, err error) {
 		return nil, crewErr("할 일(task)이 비었어요")
 	}
 	model := selected
-	effortV := spec["effort"]
-	if !truthy(effortV) {
-		effortV = "medium"
+	effort, timeout, err := nodeLimits(spec)
+	if err != nil {
+		return nil, err
 	}
-	effort, _ := effortV.(string)
-	if !in(efforts, effort) {
-		return nil, crewErr("추론 수준은 low·medium·high·max 중 하나여야 해요")
+	row, key, err := nodeCLI(model, spec)
+	if err != nil {
+		return nil, err
 	}
-	seconds := int64(0)
-	if truthy(spec["timeout_s"]) {
-		n, ok := pyIntArg(spec["timeout_s"])
-		if !ok {
-			return nil, crewErr("timeout_s는 초 단위 숫자여야 해요")
-		}
-		seconds = n
-	}
-	if seconds == 0 {
-		seconds = int64(stepTimeout())
-	}
-	timeout := time.Duration(seconds) * time.Second
-	row, ok := cliFor(model)
-	if !ok {
-		shown := model
-		if shown == "" {
-			shown = "(없음)"
-		}
-		return nil, crewErr(fmt.Sprintf("모델 %s을(를) 실행할 CLI를 몰라요 (ARKISM_CREW_ROUTES로 정할 수 있어요)", shown))
-	}
-	// 직접 추가: the key is picked once (연결 시험 names its provider) and used for the whole run
-	var key map[string]any
-	if row.Name == host.CustomCLI.Name {
-		var err error
-		if key, err = customKeyFor(model, nil, sOr(spec["provider"])); err != nil {
-			return nil, err
-		}
-		if key == nil {
-			return nil, crewErr(model + "에 맞는 직접 추가 키가 없어요")
-		}
-	}
-	// ai_once answers one question and never needs to change anything.
-	access := "read"
-	if !truthy(spec["once"]) {
-		access = sOr(spec["access"])
-		if access == "" {
-			access = "write"
-		}
-	}
-	if !in(accessModes, access) {
-		return nil, crewErr("access는 read·write·full 중 하나여야 해요")
+	access, err := nodeAccess(spec)
+	if err != nil {
+		return nil, err
 	}
 	rules, sum, err := workerRules(access, truthy(spec["once"]))
 	rulesSum = sum
@@ -346,41 +308,20 @@ func runNode(spec map[string]any) (res map[string]any, err error) {
 			return nil, err
 		}
 		if info["api"] == "openai" {
-			joined := own
-			if own != "" && skills != "" {
-				joined = own + "\n\n" + skills
-			} else if own == "" {
-				joined = skills
-			}
-			return runChat(key, model, effort, joined, task, timeout, started)
+			return runChat(key, model, effort, chatInstructions(own, skills), task, timeout, started)
 		}
 	}
-	cwd := expandUser(sOr(spec["cwd"]))
-	if access != "read" && cwd == "" {
-		// Without one the step would work in the engine's own folder.
-		return nil, crewErr("파일을 고칠 수 있는 AI 단계는 작업 폴더(cwd)를 정해야 해요")
-	}
-	workdir := cwd
-	if workdir == "" {
-		workdir, _ = os.Getwd()
-	}
-	if !isDir(workdir) {
-		return nil, crewErr("작업 폴더가 없어요")
+	workdir, err := nodeWorkdir(access, spec)
+	if err != nil {
+		return nil, err
 	}
 	env, err := childEnv(row, nil, model, key)
 	if err != nil {
 		return nil, err
 	}
-	var profile map[string]any
-	if (row.Name == "claude" || row.Name == "codex") && !host.APIModeOn(row.Name) {
-		var reason string
-		profile, reason = host.AccountsChoose(row.Name, model, binOf(row), host.Home, host.AgentsState, nil)
-		if reason == "quota_exhausted" {
-			return result(false, "", model, effort, row.Name, started, reason), nil
-		}
-		if profile != nil {
-			env = host.AccountsChildEnvironment(env, profile)
-		}
+	env, profile, reason := accountEnv(row, model, env)
+	if reason == "quota_exhausted" {
+		return result(false, "", model, effort, row.Name, started, reason), nil
 	}
 	if truthy(spec["handoff_isolated"]) {
 		var cleanup func()
@@ -395,6 +336,113 @@ func runNode(spec map[string]any) (res map[string]any, err error) {
 			}
 		}
 	}
+	return spawnNode(spec, row, model, effort, task, own, skills, access, workdir, env, profile, timeout, started)
+}
+
+// nodeLimits reads the step's effort and timeout.
+func nodeLimits(spec map[string]any) (string, time.Duration, error) {
+	effortV := spec["effort"]
+	if !truthy(effortV) {
+		effortV = "medium"
+	}
+	effort, _ := effortV.(string)
+	if !in(efforts, effort) {
+		return "", 0, crewErr("추론 수준은 low·medium·high·max 중 하나여야 해요")
+	}
+	seconds := int64(0)
+	if truthy(spec["timeout_s"]) {
+		n, ok := pyIntArg(spec["timeout_s"])
+		if !ok {
+			return "", 0, crewErr("timeout_s는 초 단위 숫자여야 해요")
+		}
+		seconds = n
+	}
+	if seconds == 0 {
+		seconds = int64(stepTimeout())
+	}
+	return effort, time.Duration(seconds) * time.Second, nil
+}
+
+func nodeCLI(model string, spec map[string]any) (host.CLI, map[string]any, error) {
+	row, ok := cliFor(model)
+	if !ok {
+		shown := model
+		if shown == "" {
+			shown = "(없음)"
+		}
+		return row, nil, crewErr(fmt.Sprintf("모델 %s을(를) 실행할 CLI를 몰라요 (ARKISM_CREW_ROUTES로 정할 수 있어요)", shown))
+	}
+	// 직접 추가: the key is picked once (연결 시험 names its provider) and used for the whole run
+	if row.Name != host.CustomCLI.Name {
+		return row, nil, nil
+	}
+	key, err := customKeyFor(model, nil, sOr(spec["provider"]))
+	if err != nil {
+		return row, nil, err
+	}
+	if key == nil {
+		return row, nil, crewErr(model + "에 맞는 직접 추가 키가 없어요")
+	}
+	return row, key, nil
+}
+
+func nodeAccess(spec map[string]any) (string, error) {
+	// ai_once answers one question and never needs to change anything.
+	access := "read"
+	if !truthy(spec["once"]) {
+		access = sOr(spec["access"])
+		if access == "" {
+			access = "write"
+		}
+	}
+	if !in(accessModes, access) {
+		return "", crewErr("access는 read·write·full 중 하나여야 해요")
+	}
+	return access, nil
+}
+
+func chatInstructions(own, skills string) string {
+	if own != "" && skills != "" {
+		return own + "\n\n" + skills
+	} else if own == "" {
+		return skills
+	}
+	return own
+}
+
+func nodeWorkdir(access string, spec map[string]any) (string, error) {
+	cwd := expandUser(sOr(spec["cwd"]))
+	if access != "read" && cwd == "" {
+		// Without one the step would work in the engine's own folder.
+		return "", crewErr("파일을 고칠 수 있는 AI 단계는 작업 폴더(cwd)를 정해야 해요")
+	}
+	workdir := cwd
+	if workdir == "" {
+		workdir, _ = os.Getwd()
+	}
+	if !isDir(workdir) {
+		return "", crewErr("작업 폴더가 없어요")
+	}
+	return workdir, nil
+}
+
+// accountEnv picks a subscription account for claude and codex outside API mode.
+func accountEnv(row host.CLI, model string, env map[string]string) (map[string]string, map[string]any, string) {
+	if (row.Name != "claude" && row.Name != "codex") || host.APIModeOn(row.Name) {
+		return env, nil, ""
+	}
+	profile, reason := host.AccountsChoose(row.Name, model, binOf(row), host.Home, host.AgentsState, nil)
+	if reason == "quota_exhausted" {
+		return env, profile, reason
+	}
+	if profile != nil {
+		env = host.AccountsChildEnvironment(env, profile)
+	}
+	return env, profile, reason
+}
+
+func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skills, access, workdir string,
+	env map[string]string, profile map[string]any, timeout time.Duration, started time.Time) (map[string]any, error) {
 	outFile := ""
 	if row.Name == "codex" {
 		f, err := os.CreateTemp("", "arkism-crew-*.txt")

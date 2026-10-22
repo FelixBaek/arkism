@@ -172,71 +172,87 @@ func lex(src string) ([]token, error) {
 	rs := []rune(src)
 	for i := 0; i < len(rs); {
 		c := rs[i]
+		var t token
+		var err error
 		switch {
 		case unicode.IsSpace(c):
 			i++
+			continue
 		case c == '(' || c == ')':
-			out = append(out, token{kind: string(c)})
-			i++
+			t, i = token{kind: string(c)}, i+1
 		case c == '"' || c == '\'':
-			j := i + 1
-			var sb strings.Builder
-			for ; j < len(rs) && rs[j] != c; j++ {
-				if rs[j] == '\\' && j+1 < len(rs) {
-					j++
-				}
-				sb.WriteRune(rs[j])
-			}
-			if j >= len(rs) {
-				return nil, fmt.Errorf("unclosed string")
-			}
-			out = append(out, token{kind: "str", text: sb.String()})
-			i = j + 1
+			t, i, err = lexString(rs, i)
 		case unicode.IsDigit(c) || c == '-' && i+1 < len(rs) && unicode.IsDigit(rs[i+1]):
-			j := i + 1
-			for j < len(rs) && (unicode.IsDigit(rs[j]) || rs[j] == '.') {
-				j++
-			}
-			n, err := strconv.ParseFloat(string(rs[i:j]), 64)
-			if err != nil {
-				return nil, fmt.Errorf("bad number %q", string(rs[i:j]))
-			}
-			out = append(out, token{kind: "num", num: n})
-			i = j
+			t, i, err = lexNumber(rs, i)
 		case unicode.IsLetter(c) || c == '_':
-			j := i
-			for j < len(rs) && (unicode.IsLetter(rs[j]) || unicode.IsDigit(rs[j]) || rs[j] == '_' || rs[j] == '.' || rs[j] == '-') {
-				j++
-			}
-			out = append(out, token{kind: "ident", text: string(rs[i:j])})
-			i = j
+			t, i = lexIdent(rs, i)
 		default:
-			two := ""
-			if i+1 < len(rs) {
-				two = string(rs[i : i+2])
-			}
-			switch {
-			case two == "==" || two == "!=" || two == ">=" || two == "<=":
-				out = append(out, token{kind: "op", text: two})
-				i += 2
-			case two == "&&":
-				out = append(out, token{kind: "ident", text: "and"})
-				i += 2
-			case two == "||":
-				out = append(out, token{kind: "ident", text: "or"})
-				i += 2
-			case c == '>' || c == '<':
-				out = append(out, token{kind: "op", text: string(c)})
-				i++
-			case c == '!':
-				out = append(out, token{kind: "ident", text: "not"})
-				i++
-			default:
-				return nil, fmt.Errorf("unexpected %q", string(c))
-			}
+			t, i, err = lexOp(rs, i)
 		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
 	}
 	return append(out, token{kind: "end"}), nil
+}
+
+// lexString reads the quoted string at rs[i]; it returns the token and the index after it.
+func lexString(rs []rune, i int) (token, int, error) {
+	c := rs[i]
+	j := i + 1
+	var sb strings.Builder
+	for ; j < len(rs) && rs[j] != c; j++ {
+		if rs[j] == '\\' && j+1 < len(rs) {
+			j++
+		}
+		sb.WriteRune(rs[j])
+	}
+	if j >= len(rs) {
+		return token{}, j, fmt.Errorf("unclosed string")
+	}
+	return token{kind: "str", text: sb.String()}, j + 1, nil
+}
+
+func lexNumber(rs []rune, i int) (token, int, error) {
+	j := i + 1
+	for j < len(rs) && (unicode.IsDigit(rs[j]) || rs[j] == '.') {
+		j++
+	}
+	n, err := strconv.ParseFloat(string(rs[i:j]), 64)
+	if err != nil {
+		return token{}, j, fmt.Errorf("bad number %q", string(rs[i:j]))
+	}
+	return token{kind: "num", num: n}, j, nil
+}
+
+func lexIdent(rs []rune, i int) (token, int) {
+	j := i
+	for j < len(rs) && (unicode.IsLetter(rs[j]) || unicode.IsDigit(rs[j]) || rs[j] == '_' || rs[j] == '.' || rs[j] == '-') {
+		j++
+	}
+	return token{kind: "ident", text: string(rs[i:j])}, j
+}
+
+func lexOp(rs []rune, i int) (token, int, error) {
+	c := rs[i]
+	two := ""
+	if i+1 < len(rs) {
+		two = string(rs[i : i+2])
+	}
+	switch {
+	case two == "==" || two == "!=" || two == ">=" || two == "<=":
+		return token{kind: "op", text: two}, i + 2, nil
+	case two == "&&":
+		return token{kind: "ident", text: "and"}, i + 2, nil
+	case two == "||":
+		return token{kind: "ident", text: "or"}, i + 2, nil
+	case c == '>' || c == '<':
+		return token{kind: "op", text: string(c)}, i + 1, nil
+	case c == '!':
+		return token{kind: "ident", text: "not"}, i + 1, nil
+	}
+	return token{}, i, fmt.Errorf("unexpected %q", string(c))
 }
 
 type parser struct {

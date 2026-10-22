@@ -178,23 +178,8 @@ func status() (map[string]any, error) {
 		}
 		fields[k] = v
 	}
-	if !keysAre(fields, gatewayProperties...) || fields["Id"] != gatewayUnit {
+	if !validStatusFields(fields) {
 		return nil, unavailable
-	}
-	for _, v := range fields {
-		s := v.(string)
-		if host.Len(s) > 128 || strings.IndexFunc(s, func(r rune) bool { return r < 32 }) >= 0 {
-			return nil, unavailable
-		}
-	}
-	if !digits12.MatchString(fields["MainPID"].(string)) || !digits24.MatchString(fields["ExecMainStartTimestampMonotonic"].(string)) ||
-		!invocation.MatchString(fields["InvocationID"].(string)) {
-		return nil, unavailable
-	}
-	for _, k := range []string{"LoadState", "ActiveState", "SubState"} {
-		if !unitStateRe.MatchString(fields[k].(string)) {
-			return nil, unavailable
-		}
 	}
 	withURL := map[string]any{"url": url}
 	for k, v := range fields {
@@ -204,6 +189,28 @@ func status() (map[string]any, error) {
 	active := fields["LoadState"] == "loaded" && fields["ActiveState"] == "active"
 	return map[string]any{"unit": gatewayUnit, "load": fields["LoadState"], "active": fields["ActiveState"], "sub": fields["SubState"],
 		"revision": digest([]byte(mustCanonical(withURL))), "url": url, "pid": pid, "listening": active && gatewayLive(url, pid)}, nil
+}
+
+func validStatusFields(fields map[string]any) bool {
+	if !keysAre(fields, gatewayProperties...) || fields["Id"] != gatewayUnit {
+		return false
+	}
+	for _, v := range fields {
+		s := v.(string)
+		if host.Len(s) > 128 || strings.IndexFunc(s, func(r rune) bool { return r < 32 }) >= 0 {
+			return false
+		}
+	}
+	if !digits12.MatchString(fields["MainPID"].(string)) || !digits24.MatchString(fields["ExecMainStartTimestampMonotonic"].(string)) ||
+		!invocation.MatchString(fields["InvocationID"].(string)) {
+		return false
+	}
+	for _, k := range []string{"LoadState", "ActiveState", "SubState"} {
+		if !unitStateRe.MatchString(fields[k].(string)) {
+			return false
+		}
+	}
+	return true
 }
 
 // privateDirectory reports whether path exists; it must be our own 0700-style directory, never a link.
@@ -323,32 +330,11 @@ func handleGateway(request any, state string) (map[string]any, error) {
 		}
 		return answer(saved)
 	}
-	// All our changes share one lock; an external systemctl remains outside this lock.
-	if err := os.MkdirAll(state, 0o700); err != nil {
-		return nil, err
-	}
-	if _, err := privateDirectory(state); err != nil {
-		return nil, err
-	}
-	fd, err := syscall.Open(filepath.Join(state, "control.lock"), syscall.O_RDWR|syscall.O_CREAT|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600)
+	lock, err := lockGatewayState(state)
 	if err != nil {
 		return nil, err
 	}
-	lock := os.NewFile(uintptr(fd), "control.lock")
 	defer lock.Close()
-	info, err := lock.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if st, _ := info.Sys().(*syscall.Stat_t); !info.Mode().IsRegular() || st == nil || int(st.Uid) != os.Getuid() || info.Mode().Perm()&0o022 != 0 {
-		return nil, ctlErr("gateway_state_permissions")
-	}
-	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, ctlErr("gateway_control_busy")
-		}
-		return nil, err
-	}
 	saved, err := readReceipt(folder)
 	if err != nil {
 		return nil, err
@@ -369,28 +355,7 @@ func handleGateway(request any, state string) (map[string]any, error) {
 	if before["load"] != "loaded" {
 		return nil, ctlErr("gateway_not_installed")
 	}
-	prepared, err := os.MkdirTemp(state, ".prepare-")
-	if err != nil {
-		return nil, err
-	}
-	err = gatewaySaveJSON(filepath.Join(prepared, "request.json"), r)
-	if err == nil {
-		err = os.Rename(prepared, folder)
-	}
-	if exists(prepared) {
-		_ = os.Remove(filepath.Join(prepared, "request.json"))
-		_ = os.Remove(prepared)
-	}
-	if err != nil {
-		return nil, err
-	}
-	dir, err := os.Open(state)
-	if err != nil {
-		return nil, err
-	}
-	err = dir.Sync()
-	dir.Close()
-	if err != nil {
+	if err := recordGatewayRequest(state, folder, r); err != nil {
 		return nil, err
 	}
 	receipt := map[string]any{"status": "uncertain", "error": "gateway_control_uncertain"}
@@ -404,6 +369,65 @@ func handleGateway(request any, state string) (map[string]any, error) {
 		return nil, err
 	}
 	return answer(withRequest(r, receipt))
+}
+
+// lockGatewayState takes the exclusive control lock under state; closing the file releases it.
+// All our changes share one lock; an external systemctl remains outside this lock.
+func lockGatewayState(state string) (*os.File, error) {
+	if err := os.MkdirAll(state, 0o700); err != nil {
+		return nil, err
+	}
+	if _, err := privateDirectory(state); err != nil {
+		return nil, err
+	}
+	fd, err := syscall.Open(filepath.Join(state, "control.lock"), syscall.O_RDWR|syscall.O_CREAT|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	lock := os.NewFile(uintptr(fd), "control.lock")
+	info, err := lock.Stat()
+	if err != nil {
+		lock.Close()
+		return nil, err
+	}
+	if st, _ := info.Sys().(*syscall.Stat_t); !info.Mode().IsRegular() || st == nil || int(st.Uid) != os.Getuid() || info.Mode().Perm()&0o022 != 0 {
+		lock.Close()
+		return nil, ctlErr("gateway_state_permissions")
+	}
+	if err := syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		lock.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, ctlErr("gateway_control_busy")
+		}
+		return nil, err
+	}
+	return lock, nil
+}
+
+// recordGatewayRequest publishes request.json as folder (atomically, via a renamed temp dir) and syncs state.
+func recordGatewayRequest(state, folder string, r map[string]any) error {
+	prepared, err := os.MkdirTemp(state, ".prepare-")
+	if err != nil {
+		return err
+	}
+	err = gatewaySaveJSON(filepath.Join(prepared, "request.json"), r)
+	if err == nil {
+		err = os.Rename(prepared, folder)
+	}
+	if exists(prepared) {
+		_ = os.Remove(filepath.Join(prepared, "request.json"))
+		_ = os.Remove(prepared)
+	}
+	if err != nil {
+		return err
+	}
+	dir, err := os.Open(state)
+	if err != nil {
+		return err
+	}
+	err = dir.Sync()
+	dir.Close()
+	return err
 }
 
 // ordered writes the answer in the Python key order (authority, gateway fields, receipt).

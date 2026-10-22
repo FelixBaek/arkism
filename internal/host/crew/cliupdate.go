@@ -268,36 +268,7 @@ func installationOf(cli, resolved string) (installation, bool) {
 		if len(root) < 3 || root[len(root)-3] != "node_modules" || root[len(root)-2] != pkg[0] || root[len(root)-1] != pkg[1] {
 			continue
 		}
-		modules := root[:len(root)-2]
-		modulesParent := modules[:len(modules)-1]
-		lib := len(modulesParent) > 1 && modulesParent[len(modulesParent)-1] == "lib"
-		if !lib {
-			npmish := false
-			for _, p := range modules {
-				npmish = npmish || p == ".npm" || p == ".npm-global" || p == ".npm-packages"
-			}
-			if !npmish {
-				return installation{}, false
-			}
-		}
-		f, err := os.Open(filepath.Join(joinParts(root), "package.json"))
-		if err != nil {
-			return installation{}, false
-		}
-		raw, err := io.ReadAll(io.LimitReader(f, outputLimit+1))
-		f.Close()
-		if err != nil || len(raw) > outputLimit {
-			return installation{}, false
-		}
-		var marker map[string]any
-		if json.Unmarshal(raw, &marker) != nil || marker == nil || marker["name"] != cliPackages[cli] {
-			return installation{}, false
-		}
-		prefix := modulesParent
-		if lib && len(modulesParent) > 1 {
-			prefix = modulesParent[:len(modulesParent)-1]
-		}
-		return installation{"npm", filepath.Join(joinParts(prefix), "bin", "npm"), false}, true
+		return npmInstallation(cli, root)
 	}
 	for i := len(parts) - 1; i >= 2; i-- {
 		root := parts[:i]
@@ -315,6 +286,40 @@ func installationOf(cli, resolved string) (installation, bool) {
 		}
 	}
 	return installation{}, false
+}
+
+// npmInstallation checks that root (…/node_modules/<pkg>) is a real npm install of cli.
+func npmInstallation(cli string, root []string) (installation, bool) {
+	modules := root[:len(root)-2]
+	modulesParent := modules[:len(modules)-1]
+	lib := len(modulesParent) > 1 && modulesParent[len(modulesParent)-1] == "lib"
+	if !lib {
+		npmish := false
+		for _, p := range modules {
+			npmish = npmish || p == ".npm" || p == ".npm-global" || p == ".npm-packages"
+		}
+		if !npmish {
+			return installation{}, false
+		}
+	}
+	f, err := os.Open(filepath.Join(joinParts(root), "package.json"))
+	if err != nil {
+		return installation{}, false
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, outputLimit+1))
+	f.Close()
+	if err != nil || len(raw) > outputLimit {
+		return installation{}, false
+	}
+	var marker map[string]any
+	if json.Unmarshal(raw, &marker) != nil || marker == nil || marker["name"] != cliPackages[cli] {
+		return installation{}, false
+	}
+	prefix := modulesParent
+	if lib && len(modulesParent) > 1 {
+		prefix = modulesParent[:len(modulesParent)-1]
+	}
+	return installation{"npm", filepath.Join(joinParts(prefix), "bin", "npm"), false}, true
 }
 
 func cliVersion(executable string) string {

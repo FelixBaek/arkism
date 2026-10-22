@@ -516,38 +516,45 @@ func (x *meetingExec) run(ctx context.Context) error {
 			return err
 		}
 	}
+	reason, done, err := x.discuss(ctx, speakers, moderator)
+	if done || err != nil {
+		return err
+	}
+	return x.conclude(ctx, *scribe, reason)
+}
+
+// discuss runs rounds of turns until the meeting should end and returns why; done is true when it
+// stopped or now waits without concluding.
+func (x *meetingExec) discuss(ctx context.Context, speakers []speaker, moderator *speaker) (reason string, done bool, err error) {
 	end := x.ending()
-	reason := ""
 	for reason == "" {
 		if x.m.Round == 0 || x.roundDone(speakers) {
 			if x.m.Round >= end.MaxRounds {
-				reason = "max_rounds"
-				break
+				return "max_rounds", false, nil
 			}
 			x.m.Round++
 			x.takeNotes()
 		}
 		next, why, err := x.nextSpeaker(ctx, speakers, moderator, end)
 		if err != nil {
-			return err
+			return "", true, err
 		}
 		if why != "" {
-			reason = why
-			break
+			return why, false, nil
 		}
 		if next == nil { // the round is over
 			x.markRoundDone()
 			continue
 		}
 		if done, err := x.stopOrWait(ctx, *next); done || err != nil {
-			return err
+			return "", true, err
 		}
 		if err := x.turn(ctx, *next); err != nil {
-			return err
+			return "", true, err
 		}
 		reason = x.endCheck(end, speakers)
 	}
-	return x.conclude(ctx, *scribe, reason)
+	return reason, false, nil
 }
 
 func (x *meetingExec) has(kind string) bool {

@@ -242,6 +242,64 @@ func ResponsesToChat(body any) (out host.Obj, err error) {
 	jsonText(body, "invalid_request")
 	jsonShape(body, 0)
 	b := keys(body, responsesKeys, "invalid_request")
+	responseFormat := responsesDropped(b)
+
+	// The local default is explicit so the response can report what was sent.
+	out = host.Obj{{Key: "model", Value: str(get(b, "model"), "invalid_request", true)}, {Key: "parallel_tool_calls", Value: true}}
+	for _, key := range []string{"parallel_tool_calls", "temperature", "top_p", "stream"} {
+		if v, ok := b.Get(key); ok {
+			if v == nil {
+				fail("invalid_option")
+			}
+			out.Set(key, v)
+		}
+	}
+	if v, ok := b.Get("max_output_tokens"); ok {
+		if v == nil {
+			fail("invalid_option")
+		}
+		out.Set("max_completion_tokens", v)
+	}
+	if get(b, "stream") == true {
+		out.Set("stream_options", host.Obj{{Key: "include_usage", Value: true}})
+	}
+	if v, ok := b.Get("tools"); ok {
+		out.Set("tools", responsesTools(v))
+	}
+	if choice, ok := b.Get("tool_choice"); ok {
+		out.Set("tool_choice", responsesToolChoice(choice))
+	}
+
+	messages := []any{}
+	if v, ok := b.Get("instructions"); ok {
+		messages = append(messages, host.Obj{{Key: "role", Value: "system"}, {Key: "content", Value: str(v, "invalid_request", false)}})
+	}
+	switch items := get(b, "input").(type) {
+	case string:
+		messages = append(messages, host.Obj{{Key: "role", Value: "user"}, {Key: "content", Value: str(items, "invalid_content", false)}})
+	case []any:
+		for _, item := range items {
+			messages = responsesItem(item, messages)
+		}
+		if len(items) == 0 {
+			fail("invalid_messages")
+		}
+	default:
+		fail("invalid_messages")
+	}
+	out.Set("messages", messages)
+	// The self-check covers the Messages-convertible part; response_format is a Chat-only key
+	// added afterwards, which a Messages target must keep rejecting.
+	toMessages(out)
+	if responseFormat != nil {
+		out.Set("response_format", responseFormat)
+	}
+	return out, nil
+}
+
+// responsesDropped validates the fields that never reach Chat and returns the text format, the
+// one of them that does.
+func responsesDropped(b host.Obj) host.Obj {
 	store, ok := b.Get("store")
 	if !ok {
 		fail("unsupported_field")
@@ -269,15 +327,7 @@ func ResponsesToChat(body any) (out host.Obj, err error) {
 		}
 	}
 	if v, ok := b.Get("metadata"); ok {
-		metadata, ok := v.(host.Obj)
-		if !ok || len(metadata) > 16 {
-			fail("invalid_request")
-		}
-		for _, kv := range metadata {
-			if host.Len(str(kv.Key, "invalid_request", false)) > 64 || host.Len(str(kv.Value, "invalid_request", false)) > 512 {
-				fail("invalid_request")
-			}
-		}
+		responsesMetadata(v)
 	}
 	// Fields with no Chat equivalent are validated and then dropped, never forwarded.
 	if v, ok := b.Get("include"); ok {
@@ -299,141 +349,116 @@ func ResponsesToChat(body any) (out host.Obj, err error) {
 	if v, ok := b.Get("truncation"); ok && str(v, "invalid_request", false) != "disabled" {
 		fail("unsupported_field")
 	}
+	return responseFormat
+}
 
-	// The local default is explicit so the response can report what was sent.
-	out = host.Obj{{Key: "model", Value: str(get(b, "model"), "invalid_request", true)}, {Key: "parallel_tool_calls", Value: true}}
-	for _, key := range []string{"parallel_tool_calls", "temperature", "top_p", "stream"} {
-		if v, ok := b.Get(key); ok {
-			if v == nil {
-				fail("invalid_option")
-			}
-			out.Set(key, v)
+func responsesMetadata(v any) {
+	metadata, ok := v.(host.Obj)
+	if !ok || len(metadata) > 16 {
+		fail("invalid_request")
+	}
+	for _, kv := range metadata {
+		if host.Len(str(kv.Key, "invalid_request", false)) > 64 || host.Len(str(kv.Value, "invalid_request", false)) > 512 {
+			fail("invalid_request")
 		}
 	}
-	if v, ok := b.Get("max_output_tokens"); ok {
-		if v == nil {
-			fail("invalid_option")
-		}
-		out.Set("max_completion_tokens", v)
+}
+
+func responsesTools(v any) []any {
+	list, ok := v.([]any)
+	if !ok {
+		fail("invalid_tools")
 	}
-	if get(b, "stream") == true {
-		out.Set("stream_options", host.Obj{{Key: "include_usage", Value: true}})
-	}
-	if v, ok := b.Get("tools"); ok {
-		list, ok := v.([]any)
+	tools, names := []any{}, map[string]bool{}
+	for _, tool := range list {
+		t, ok := tool.(host.Obj)
 		if !ok {
 			fail("invalid_tools")
 		}
-		tools, names := []any{}, map[string]bool{}
-		for _, tool := range list {
-			t, ok := tool.(host.Obj)
-			if !ok {
+		var flattened []host.Obj
+		switch kind := get(t, "type"); kind {
+		case "function":
+			flattened = []host.Obj{functionTool(t)}
+		case "namespace":
+			flattened = namespaceTools(t)
+		case "web_search":
+			flattened = webSearchTools(t)
+		default:
+			// Other tool types keep the function key rule, then stay unsupported; a missing
+			// or non-string type is a malformed tool.
+			keys(t, functionKeys, "invalid_tools")
+			str(kind, "invalid_tools", true)
+			fail("unsupported_field")
+		}
+		for _, item := range flattened {
+			// Flattened names must stay unique, or the model cannot tell the tools apart.
+			toolName := name(get(get(item, "function"), "name"), "invalid_tools")
+			if names[toolName] {
 				fail("invalid_tools")
 			}
-			var flattened []host.Obj
-			switch kind := get(t, "type"); kind {
-			case "function":
-				flattened = []host.Obj{functionTool(t)}
-			case "namespace":
-				flattened = namespaceTools(t)
-			case "web_search":
-				flattened = webSearchTools(t)
-			default:
-				// Other tool types keep the function key rule, then stay unsupported; a missing
-				// or non-string type is a malformed tool.
-				keys(t, functionKeys, "invalid_tools")
-				str(kind, "invalid_tools", true)
-				fail("unsupported_field")
-			}
-			for _, item := range flattened {
-				// Flattened names must stay unique, or the model cannot tell the tools apart.
-				toolName := name(get(get(item, "function"), "name"), "invalid_tools")
-				if names[toolName] {
-					fail("invalid_tools")
-				}
-				names[toolName] = true
-				tools = append(tools, item)
-			}
-		}
-		out.Set("tools", tools)
-	}
-	if choice, ok := b.Get("tool_choice"); ok {
-		switch c := choice.(type) {
-		case string:
-			if !set("auto", "none", "required")[c] {
-				fail("unsupported_field")
-			}
-			out.Set("tool_choice", c)
-		case host.Obj:
-			keys(c, set("type", "name"), "invalid_tool_choice")
-			if str(get(c, "type"), "invalid_tool_choice", true) != "function" {
-				fail("unsupported_field")
-			}
-			out.Set("tool_choice", host.Obj{{Key: "type", Value: "function"}, {Key: "function", Value: host.Obj{
-				{Key: "name", Value: str(get(c, "name"), "invalid_tool_choice", true)}}}})
-		default:
-			fail("invalid_tool_choice")
+			names[toolName] = true
+			tools = append(tools, item)
 		}
 	}
+	return tools
+}
 
-	messages := []any{}
-	if v, ok := b.Get("instructions"); ok {
-		messages = append(messages, host.Obj{{Key: "role", Value: "system"}, {Key: "content", Value: str(v, "invalid_request", false)}})
-	}
-	switch items := get(b, "input").(type) {
+func responsesToolChoice(choice any) any {
+	switch c := choice.(type) {
 	case string:
-		messages = append(messages, host.Obj{{Key: "role", Value: "user"}, {Key: "content", Value: str(items, "invalid_content", false)}})
-	case []any:
-		for _, item := range items {
-			it, ok := item.(host.Obj)
-			if !ok {
-				fail("invalid_messages")
-			}
-			switch kind := str(getd(it, "type", "message"), "invalid_messages", true); kind {
-			case "message":
-				keys(it, set("type", "role", "content", "id", "status"), "invalid_messages")
-				history(it, false)
-				role := str(get(it, "role"), "invalid_messages", true)
-				if !set("system", "developer", "user", "assistant")[role] {
-					fail("invalid_messages")
-				}
-				messages = append(messages, host.Obj{{Key: "role", Value: role}, {Key: "content", Value: chatContent(get(it, "content"), role)}})
-			case "function_call":
-				keys(it, set("type", "id", "status", "call_id", "name", "arguments"), "invalid_tools")
-				history(it, true)
-				callID := str(get(it, "call_id"), "invalid_tool_sequence", true)
-				callName := str(get(it, "name"), "invalid_tools", true)
-				call := host.Obj{{Key: "type", Value: "function"}, {Key: "id", Value: callID},
-					{Key: "function", Value: host.Obj{{Key: "name", Value: callName},
-						{Key: "arguments", Value: str(get(it, "arguments"), "invalid_tool_arguments", false)}}}}
-				if n := len(messages); n > 0 && has(messages[n-1].(host.Obj), "tool_calls") {
-					last := messages[n-1].(host.Obj)
-					last.Set("tool_calls", append(get(last, "tool_calls").([]any), call))
-				} else {
-					messages = append(messages, host.Obj{{Key: "role", Value: "assistant"}, {Key: "content", Value: nil}, {Key: "tool_calls", Value: []any{call}}})
-				}
-			case "function_call_output":
-				keys(it, set("type", "id", "status", "call_id", "output"), "invalid_tools")
-				history(it, true)
-				callID := str(get(it, "call_id"), "invalid_tool_sequence", true)
-				messages = append(messages, host.Obj{{Key: "role", Value: "tool"}, {Key: "tool_call_id", Value: callID},
-					{Key: "content", Value: chatContent(get(it, "output"), "tool")}})
-			default:
-				fail("unsupported_field")
-			}
+		if !set("auto", "none", "required")[c] {
+			fail("unsupported_field")
 		}
-		if len(items) == 0 {
-			fail("invalid_messages")
+		return c
+	case host.Obj:
+		keys(c, set("type", "name"), "invalid_tool_choice")
+		if str(get(c, "type"), "invalid_tool_choice", true) != "function" {
+			fail("unsupported_field")
 		}
+		return host.Obj{{Key: "type", Value: "function"}, {Key: "function", Value: host.Obj{
+			{Key: "name", Value: str(get(c, "name"), "invalid_tool_choice", true)}}}}
 	default:
+		fail("invalid_tool_choice")
+	}
+	return nil
+}
+
+func responsesItem(item any, messages []any) []any {
+	it, ok := item.(host.Obj)
+	if !ok {
 		fail("invalid_messages")
 	}
-	out.Set("messages", messages)
-	// The self-check covers the Messages-convertible part; response_format is a Chat-only key
-	// added afterwards, which a Messages target must keep rejecting.
-	toMessages(out)
-	if responseFormat != nil {
-		out.Set("response_format", responseFormat)
+	switch kind := str(getd(it, "type", "message"), "invalid_messages", true); kind {
+	case "message":
+		keys(it, set("type", "role", "content", "id", "status"), "invalid_messages")
+		history(it, false)
+		role := str(get(it, "role"), "invalid_messages", true)
+		if !set("system", "developer", "user", "assistant")[role] {
+			fail("invalid_messages")
+		}
+		messages = append(messages, host.Obj{{Key: "role", Value: role}, {Key: "content", Value: chatContent(get(it, "content"), role)}})
+	case "function_call":
+		keys(it, set("type", "id", "status", "call_id", "name", "arguments"), "invalid_tools")
+		history(it, true)
+		callID := str(get(it, "call_id"), "invalid_tool_sequence", true)
+		callName := str(get(it, "name"), "invalid_tools", true)
+		call := host.Obj{{Key: "type", Value: "function"}, {Key: "id", Value: callID},
+			{Key: "function", Value: host.Obj{{Key: "name", Value: callName},
+				{Key: "arguments", Value: str(get(it, "arguments"), "invalid_tool_arguments", false)}}}}
+		if n := len(messages); n > 0 && has(messages[n-1].(host.Obj), "tool_calls") {
+			last := messages[n-1].(host.Obj)
+			last.Set("tool_calls", append(get(last, "tool_calls").([]any), call))
+		} else {
+			messages = append(messages, host.Obj{{Key: "role", Value: "assistant"}, {Key: "content", Value: nil}, {Key: "tool_calls", Value: []any{call}}})
+		}
+	case "function_call_output":
+		keys(it, set("type", "id", "status", "call_id", "output"), "invalid_tools")
+		history(it, true)
+		callID := str(get(it, "call_id"), "invalid_tool_sequence", true)
+		messages = append(messages, host.Obj{{Key: "role", Value: "tool"}, {Key: "tool_call_id", Value: callID},
+			{Key: "content", Value: chatContent(get(it, "output"), "tool")}})
+	default:
+		fail("unsupported_field")
 	}
-	return out, nil
+	return messages
 }

@@ -196,6 +196,31 @@ func num(v any) (float64, bool) {
 	return 0, false
 }
 
+func sameMap(x, y map[string]any) bool {
+	if len(x) != len(y) {
+		return false
+	}
+	for k, v := range x {
+		w, ok := y[k]
+		if !ok || !same(v, w) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameList(x, y []any) bool {
+	if len(x) != len(y) {
+		return false
+	}
+	for i := range x {
+		if !same(x[i], y[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // same is Python ==: numbers compare by value, containers element by element.
 func same(a, b any) bool {
 	if x, ok := num(a); ok {
@@ -205,27 +230,10 @@ func same(a, b any) bool {
 	switch x := a.(type) {
 	case map[string]any:
 		y, ok := b.(map[string]any)
-		if !ok || len(x) != len(y) {
-			return false
-		}
-		for k, v := range x {
-			w, ok := y[k]
-			if !ok || !same(v, w) {
-				return false
-			}
-		}
-		return true
+		return ok && sameMap(x, y)
 	case []any:
 		y, ok := b.([]any)
-		if !ok || len(x) != len(y) {
-			return false
-		}
-		for i := range x {
-			if !same(x[i], y[i]) {
-				return false
-			}
-		}
-		return true
+		return ok && sameList(x, y)
 	case nil:
 		return b == nil
 	case string:

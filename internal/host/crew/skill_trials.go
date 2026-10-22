@@ -75,65 +75,80 @@ func processTrial(manager, evaluator comparisonAPI, managerToken, evaluatorToken
 		if !same(at(item, "outcome"), "success") || truthy(at(item, "independently_verified")) {
 			continue
 		}
-		sourceScope, sourceRef := obj(at(item, "scope")), obj(at(item, "source"))
-		source, err := evaluator.get("sources", sourceScope, mustStr(at(sourceRef, "id")))
-		if err != nil {
-			return nil, err
-		}
-		if !same(at(source, "revision"), at(sourceRef, "revision")) || inactive(source) {
-			return nil, cmpErr("trial_source_changed")
-		}
-		trace, err := evaluator.get("execution_traces", sourceScope, mustStr(at(source, "trace_id")))
-		if err != nil {
-			return nil, err
-		}
-		if inactive(trace) {
-			return nil, cmpErr("trial_trace_changed")
-		}
-		refs := list(getOr(trace, "sources", []any{}))
-		if len(refs) < 1 || len(refs) > 64 {
-			return nil, cmpErr("trial_evidence_unavailable")
-		}
-		evidence, events := []any{}, []any{}
-		for _, ref := range refs {
-			event, err := evaluator.get("sources", sourceScope, mustStr(at(ref, "source_id")))
-			if err != nil {
-				return nil, err
-			}
-			if inactive(event) || !same(getOr(event, "trace_id", nil), at(source, "trace_id")) {
-				return nil, cmpErr("trial_evidence_changed")
-			}
-			payload, err := strictJSON([]byte(mustStr(at(event, "text"))))
-			if err != nil {
-				return nil, err
-			}
-			pointer := map[string]any{"collection": "sources", "id": at(event, "id"), "revision": at(event, "revision")}
-			evidence = append(evidence, pointer)
-			events = append(events, map[string]any{"source": pointer, "payload": payload})
-		}
-		usage, err := strictJSON([]byte(mustStr(at(source, "text"))))
-		if err != nil {
-			return nil, err
-		}
-		result, _, _, _, err := executeAdapter(env, map[string]any{"input": map[string]any{"usage": usage, "events": events}, "skill": ""}, nil)
-		if err != nil {
-			return nil, err
-		}
-		output := obj(result["output"])
-		passed, isBool := output["passed"].(bool)
-		if output == nil || !keysAre(output, "passed") || !isBool {
-			return nil, cmpErr("independent_checker_result_invalid")
-		}
-		if _, err := evaluator.request("/v1/skill-trial-outcomes", map[string]any{
-			"scope": sourceScope, "trial_scope": scope, "trial_id": trialID,
-			"event_id": digest([]byte(mustCanonical([]any{scope, trialID, sourceRef, checkerHash}))), "source": sourceRef,
-			"evidence": evidence, "checker_sha256": checkerHash, "passed": passed,
-		}); err != nil {
+		if err := rateUse(evaluator, env, scope, trialID, checkerHash, item); err != nil {
 			return nil, err
 		}
 	}
 	again, err := manager.request(endpoint, request)
 	return obj(again), err
+}
+
+// rateUse records the pinned checker's rating of one successful use.
+func rateUse(evaluator comparisonAPI, env, scope map[string]any, trialID, checkerHash string, item any) error {
+	sourceScope, sourceRef := obj(at(item, "scope")), obj(at(item, "source"))
+	source, err := evaluator.get("sources", sourceScope, mustStr(at(sourceRef, "id")))
+	if err != nil {
+		return err
+	}
+	if !same(at(source, "revision"), at(sourceRef, "revision")) || inactive(source) {
+		return cmpErr("trial_source_changed")
+	}
+	evidence, events, err := useEvents(evaluator, sourceScope, source)
+	if err != nil {
+		return err
+	}
+	usage, err := strictJSON([]byte(mustStr(at(source, "text"))))
+	if err != nil {
+		return err
+	}
+	result, _, _, _, err := executeAdapter(env, map[string]any{"input": map[string]any{"usage": usage, "events": events}, "skill": ""}, nil)
+	if err != nil {
+		return err
+	}
+	output := obj(result["output"])
+	passed, isBool := output["passed"].(bool)
+	if output == nil || !keysAre(output, "passed") || !isBool {
+		return cmpErr("independent_checker_result_invalid")
+	}
+	_, err = evaluator.request("/v1/skill-trial-outcomes", map[string]any{
+		"scope": sourceScope, "trial_scope": scope, "trial_id": trialID,
+		"event_id": digest([]byte(mustCanonical([]any{scope, trialID, sourceRef, checkerHash}))), "source": sourceRef,
+		"evidence": evidence, "checker_sha256": checkerHash, "passed": passed,
+	})
+	return err
+}
+
+// useEvents reads the events of the trace that recorded source.
+func useEvents(evaluator comparisonAPI, sourceScope map[string]any, source any) (evidence, events []any, err error) {
+	trace, err := evaluator.get("execution_traces", sourceScope, mustStr(at(source, "trace_id")))
+	if err != nil {
+		return nil, nil, err
+	}
+	if inactive(trace) {
+		return nil, nil, cmpErr("trial_trace_changed")
+	}
+	refs := list(getOr(trace, "sources", []any{}))
+	if len(refs) < 1 || len(refs) > 64 {
+		return nil, nil, cmpErr("trial_evidence_unavailable")
+	}
+	evidence, events = []any{}, []any{}
+	for _, ref := range refs {
+		event, err := evaluator.get("sources", sourceScope, mustStr(at(ref, "source_id")))
+		if err != nil {
+			return nil, nil, err
+		}
+		if inactive(event) || !same(getOr(event, "trace_id", nil), at(source, "trace_id")) {
+			return nil, nil, cmpErr("trial_evidence_changed")
+		}
+		payload, err := strictJSON([]byte(mustStr(at(event, "text"))))
+		if err != nil {
+			return nil, nil, err
+		}
+		pointer := map[string]any{"collection": "sources", "id": at(event, "id"), "revision": at(event, "revision")}
+		evidence = append(evidence, pointer)
+		events = append(events, map[string]any{"source": pointer, "payload": payload})
+	}
+	return evidence, events, nil
 }
 
 // compareAndPromote runs the independent fixed comparison after verified real trial outcomes.
@@ -292,44 +307,18 @@ func skillTrialsMain(argv []string, _ io.Reader, stdout, stderr io.Writer) int {
 	}
 	interval := 60
 	if err == nil && a.has("interval") {
-		if n, cerr := strconv.Atoi(a.vals["interval"]); cerr != nil || n < 30 || n > 3600 {
-			err = errors.New("interval must be 30..3600 seconds")
-		} else {
-			interval = n
-		}
+		interval, err = trialInterval(a.vals["interval"])
 	}
 	var trials []any
 	if err == nil {
-		raw, rerr := readJSONArg(a.vals["config"])
-		trials = list(raw)
-		if rerr != nil || len(trials) < 1 || len(trials) > 32 {
-			err = errors.New("config must contain 1..32 trial objects")
-		}
-		for _, t := range trials {
-			m := obj(t)
-			if m == nil {
-				err = errors.New("config must contain 1..32 trial objects")
-				break
-			}
-			if !truthy(m["scope"]) || !truthy(m["skill_id"]) || !truthy(m["trial_id"]) || !truthy(m["environment"]) ||
-				truthy(m["comparison_dataset"]) != truthy(m["comparison_environment"]) {
-				err = errors.New("each trial needs scope, skill_id, trial_id, environment, and both optional comparison paths")
-				break
-			}
-		}
+		trials, err = trialConfig(a.vals["config"])
 	}
 	r := &trialRunner{}
 	if err == nil {
-		r.managerToken, err = readToken(a.vals["manager-token-file"])
-		if err == nil {
-			r.evaluatorToken, err = readToken(a.vals["evaluator-token-file"])
-		}
-		if err != nil {
+		var read bool
+		if read, err = r.readTokens(a); !read {
 			fmt.Fprintln(stderr, "trial_check_failed")
 			return 1
-		}
-		if r.managerToken == "" || r.evaluatorToken == "" || r.managerToken == r.evaluatorToken {
-			err = errors.New("distinct nonempty manager and evaluator credentials required")
 		}
 	}
 	if err != nil {
@@ -339,15 +328,10 @@ func skillTrialsMain(argv []string, _ io.Reader, stdout, stderr io.Writer) int {
 	if a.has("url") {
 		apiURL = a.vals["url"]
 	}
-	manager, err := newEvalAPI(apiURL, r.managerToken)
-	if err == nil {
-		r.evaluator, err = newEvalAPI(apiURL, r.evaluatorToken)
-	}
-	if err != nil {
+	if err := r.connect(apiURL); err != nil {
 		fmt.Fprintln(stderr, "invalid_api_url")
 		return 1
 	}
-	r.manager = manager
 	for {
 		fmt.Fprintln(stdout, mustCanonical(r.once(trials)))
 		if a.flags["once"] {
@@ -355,6 +339,60 @@ func skillTrialsMain(argv []string, _ io.Reader, stdout, stderr io.Writer) int {
 		}
 		time.Sleep(time.Duration(interval) * time.Second)
 	}
+}
+
+func trialInterval(v string) (int, error) {
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 30 || n > 3600 {
+		return 0, errors.New("interval must be 30..3600 seconds")
+	}
+	return n, nil
+}
+
+// readTokens reads both credentials; read is false when a token file could not be read.
+func (r *trialRunner) readTokens(a *args) (read bool, err error) {
+	r.managerToken, err = readToken(a.vals["manager-token-file"])
+	if err == nil {
+		r.evaluatorToken, err = readToken(a.vals["evaluator-token-file"])
+	}
+	if err != nil {
+		return false, err
+	}
+	if r.managerToken == "" || r.evaluatorToken == "" || r.managerToken == r.evaluatorToken {
+		return true, errors.New("distinct nonempty manager and evaluator credentials required")
+	}
+	return true, nil
+}
+
+func (r *trialRunner) connect(apiURL string) error {
+	manager, err := newEvalAPI(apiURL, r.managerToken)
+	if err == nil {
+		r.evaluator, err = newEvalAPI(apiURL, r.evaluatorToken)
+	}
+	if err != nil {
+		return err
+	}
+	r.manager = manager
+	return nil
+}
+
+func trialConfig(path string) (trials []any, err error) {
+	raw, rerr := readJSONArg(path)
+	trials = list(raw)
+	if rerr != nil || len(trials) < 1 || len(trials) > 32 {
+		err = errors.New("config must contain 1..32 trial objects")
+	}
+	for _, t := range trials {
+		m := obj(t)
+		if m == nil {
+			return trials, errors.New("config must contain 1..32 trial objects")
+		}
+		if !truthy(m["scope"]) || !truthy(m["skill_id"]) || !truthy(m["trial_id"]) || !truthy(m["environment"]) ||
+			truthy(m["comparison_dataset"]) != truthy(m["comparison_environment"]) {
+			return trials, errors.New("each trial needs scope, skill_id, trial_id, environment, and both optional comparison paths")
+		}
+	}
+	return trials, err
 }
 
 func init() { host.Register("skill-trials", skillTrialsMain) }

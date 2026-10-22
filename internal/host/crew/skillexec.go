@@ -80,29 +80,42 @@ func loadExecConfig(path string) (*execConfig, error) {
 	profiles, profilesOK := config["profiles"].(map[string]any)
 	if config == nil || !keysAre(config, "scope", "url", "client_url", "token_file", "profiles") ||
 		!(strings.HasPrefix(clientURL, "https://") || strings.HasPrefix(clientURL, "http://")) || !scopeOK || !onlyKeys(scope, execScope...) ||
-		!profilesOK || len(profiles) > 64 {
+		!profilesOK || len(profiles) > 64 || !validExecScope(scope) || !validExecProfiles(profiles) {
 		return nil, requestInvalid()
 	}
+	api, err := execConfigAPI(config)
+	if err != nil {
+		return nil, err
+	}
+	return &execConfig{scope: scope, profiles: profiles, order: memberKeys(raw, "profiles"), clientURL: clientURL, api: api, fingerprint: digest(raw)}, nil
+}
+
+func validExecScope(scope map[string]any) bool {
 	for _, k := range execScope {
 		if _, ok := getOr(scope, k, "").(string); !ok {
-			return nil, requestInvalid()
+			return false
 		}
 	}
-	if !truthy(scope["workspace_id"]) || !truthy(scope["project_id"]) {
-		return nil, requestInvalid()
-	}
+	return truthy(scope["workspace_id"]) && truthy(scope["project_id"])
+}
+
+func validExecProfiles(profiles map[string]any) bool {
 	for id, p := range profiles {
 		profile := obj(p)
 		name, nameOK := profile["name"].(string)
 		if !isKey(id) || !keysAre(profile, "name", "dataset", "environment") || !nameOK || host.Len(name) < 1 || host.Len(name) > 128 {
-			return nil, requestInvalid()
+			return false
 		}
 		for _, k := range []string{"dataset", "environment"} {
 			if s, ok := profile[k].(string); !ok || !filepath.IsAbs(s) {
-				return nil, requestInvalid()
+				return false
 			}
 		}
 	}
+	return true
+}
+
+func execConfigAPI(config map[string]any) (*evalAPI, error) {
 	tokenFile, ok := config["token_file"].(string)
 	if !ok || !filepath.IsAbs(tokenFile) {
 		return nil, requestInvalid()
@@ -118,11 +131,7 @@ func loadExecConfig(path string) (*execConfig, error) {
 	if !ok {
 		return nil, errValue
 	}
-	api, err := newEvalAPI(apiURL, strings.TrimSpace(string(token)))
-	if err != nil {
-		return nil, err
-	}
-	return &execConfig{scope: scope, profiles: profiles, order: memberKeys(raw, "profiles"), clientURL: clientURL, api: api, fingerprint: digest(raw)}, nil
+	return newEvalAPI(apiURL, strings.TrimSpace(string(token)))
 }
 
 func execCandidate(api comparisonAPI, scope map[string]any, target any) (map[string]any, error) {
@@ -246,93 +255,22 @@ func handleExecution(value any, configPath, state string) (out map[string]any, e
 		return nil, err
 	}
 	v := obj(value)
-	vscope, scopeOK := v["scope"].(map[string]any)
-	if v == nil || !onlyKeys(v, "action", "scope", "server", "profile_id", "candidate", "event_id", "job_id") ||
-		!same(v["server"], config.clientURL) || !scopeOK || !onlyKeys(vscope, execScope...) {
+	if !validExecRequest(v, config) {
 		return nil, requestInvalid()
 	}
-	for _, k := range execScope {
-		if !same(getOr(vscope, k, ""), getOr(config.scope, k, "")) {
-			return nil, requestInvalid()
-		}
-	}
-	scope, api := config.scope, config.api
 	action := v["action"]
 	switch action {
 	case "profiles":
-		if !keysAre(v, "action", "scope", "server") {
-			return nil, requestInvalid()
-		}
-		items := []any{}
-		for _, id := range config.order {
-			profile := obj(config.profiles[id])
-			pins, dataset, _, err := material(profile, api.token)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, map[string]any{"id": id, "name": profile["name"], "cases": len(list(dataset["cases"])),
-				"dataset_sha256": pins["dataset_sha256"], "environment_sha256": pins["environment_sha256"]})
-		}
-		return map[string]any{"authority": "data_only_untrusted", "items": items}, nil
+		return execProfiles(v, config)
 	case "history":
-		if !keysAre(v, "action", "scope", "server", "candidate") {
-			return nil, requestInvalid()
-		}
-		if _, err := execCandidate(api, scope, v["candidate"]); err != nil {
-			return nil, err
-		}
-		rows := []map[string]any{}
-		entries, _ := os.ReadDir(state)
-		for _, e := range entries {
-			folder := filepath.Join(state, e.Name())
-			if !hex64.MatchString(e.Name()) || !isDir(folder) {
-				continue
-			}
-			saved, err := readJSONArg(filepath.Join(folder, "request.json"))
-			if err != nil {
-				return nil, err
-			}
-			request := at(saved, "request")
-			if same(at(request, "scope"), scope) && same(at(request, "candidate"), v["candidate"]) && same(at(saved, "config_sha256"), config.fingerprint) {
-				row, err := jobStatus(folder, e.Name())
-				if err != nil {
-					return nil, err
-				}
-				row["created_at"], row["profile_id"], row["event_id"] = at(saved, "created_at"), at(request, "profile_id"), at(request, "event_id")
-				rows = append(rows, row)
-			}
-		}
-		sort.SliceStable(rows, func(i, j int) bool {
-			a, b := mustStr(rows[i]["created_at"]), mustStr(rows[j]["created_at"])
-			if a != b {
-				return a > b
-			}
-			return rows[i]["job_id"].(string) > rows[j]["job_id"].(string)
-		})
-		items := make([]any, len(rows))
-		for i, r := range rows {
-			items[i] = r
-		}
-		return map[string]any{"authority": "data_only_untrusted", "items": items}, nil
+		return execHistory(v, config, state)
 	case "start", "status", "publish":
 	default:
 		return nil, requestInvalid()
 	}
-	var request map[string]any
-	var job string
-	if action == "start" {
-		pid, _ := v["profile_id"].(string)
-		if _, known := config.profiles[pid]; !keysAre(v, "action", "scope", "server", "profile_id", "candidate", "event_id") || !isKey(v["event_id"]) || !known {
-			return nil, requestInvalid()
-		}
-		request = map[string]any{"scope": scope, "profile_id": v["profile_id"], "candidate": v["candidate"], "event_id": v["event_id"]}
-		job = digest([]byte(mustCanonical([]any{scope, v["event_id"]})))
-	} else {
-		id, ok := v["job_id"].(string)
-		if !keysAre(v, "action", "scope", "server", "job_id") || !ok || !hex64.MatchString(id) {
-			return nil, requestInvalid()
-		}
-		job = id
+	request, job, err := execJob(v, action, config)
+	if err != nil {
+		return nil, err
 	}
 	if err := os.MkdirAll(state, 0o700); err != nil {
 		return nil, err
@@ -344,49 +282,11 @@ func handleExecution(value any, configPath, state string) (out map[string]any, e
 	}
 	defer dispatch.Close()
 	if action == "start" && !exists(folder) {
-		row, err := execCandidate(api, scope, request["candidate"])
-		if err != nil {
-			return nil, err
-		}
-		pins, _, _, err := material(obj(config.profiles[request["profile_id"].(string)]), api.token)
-		if err != nil {
-			return nil, err
-		}
-		mismatch := !same(row["status"], "candidate")
-		for k, want := range pins {
-			mismatch = mismatch || !same(getOr(getOr(row, "comparison_plan", map[string]any{}), k, nil), want)
-		}
-		if mismatch {
-			return nil, cmpErr("execution_plan_mismatch")
-		}
-		// Readiness validates current baseline and source before accepting a job.
-		if _, err := prepare(api, map[string]any{"record": row, "comparison_plan_sha256": row["comparison_plan_sha256"]}); err != nil {
-			return nil, err
-		}
-		if err := os.Mkdir(folder, 0o700); err != nil {
-			return nil, err
-		}
-		if err := saveJSON(filepath.Join(folder, "request.json"), map[string]any{"request": request, "config_sha256": config.fingerprint, "created_at": utcNow()}); err != nil {
-			return nil, err
-		}
-		if err := launchJob(configPath, state, job); err != nil {
+		if err := startJob(config, request, configPath, state, job); err != nil {
 			return nil, err
 		}
 	}
-	saved, err := readJSONArg(filepath.Join(folder, "request.json"))
-	if err != nil {
-		return nil, err
-	}
-	if !same(at(saved, "config_sha256"), config.fingerprint) || request != nil && !same(at(saved, "request"), request) {
-		return nil, cmpErr("execution_request_changed")
-	}
-	request = obj(at(saved, "request"))
-	for _, k := range execScope {
-		if !same(getOr(at(request, "scope"), k, ""), getOr(scope, k, "")) {
-			return nil, requestInvalid()
-		}
-	}
-	if _, err := execCandidate(api, scope, at(request, "candidate")); err != nil { // Recheck read access on each status/retry.
+	if err := checkSavedRequest(config, request, folder); err != nil {
 		return nil, err
 	}
 	if action == "publish" {
@@ -401,6 +301,147 @@ func handleExecution(value any, configPath, state string) (out map[string]any, e
 		}
 	}
 	return jobStatus(folder, job)
+}
+
+func validExecRequest(v map[string]any, config *execConfig) bool {
+	vscope, scopeOK := v["scope"].(map[string]any)
+	if v == nil || !onlyKeys(v, "action", "scope", "server", "profile_id", "candidate", "event_id", "job_id") ||
+		!same(v["server"], config.clientURL) || !scopeOK || !onlyKeys(vscope, execScope...) {
+		return false
+	}
+	for _, k := range execScope {
+		if !same(getOr(vscope, k, ""), getOr(config.scope, k, "")) {
+			return false
+		}
+	}
+	return true
+}
+
+func execProfiles(v map[string]any, config *execConfig) (map[string]any, error) {
+	if !keysAre(v, "action", "scope", "server") {
+		return nil, requestInvalid()
+	}
+	items := []any{}
+	for _, id := range config.order {
+		profile := obj(config.profiles[id])
+		pins, dataset, _, err := material(profile, config.api.token)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, map[string]any{"id": id, "name": profile["name"], "cases": len(list(dataset["cases"])),
+			"dataset_sha256": pins["dataset_sha256"], "environment_sha256": pins["environment_sha256"]})
+	}
+	return map[string]any{"authority": "data_only_untrusted", "items": items}, nil
+}
+
+func execHistory(v map[string]any, config *execConfig, state string) (map[string]any, error) {
+	scope := config.scope
+	if !keysAre(v, "action", "scope", "server", "candidate") {
+		return nil, requestInvalid()
+	}
+	if _, err := execCandidate(config.api, scope, v["candidate"]); err != nil {
+		return nil, err
+	}
+	rows := []map[string]any{}
+	entries, _ := os.ReadDir(state)
+	for _, e := range entries {
+		folder := filepath.Join(state, e.Name())
+		if !hex64.MatchString(e.Name()) || !isDir(folder) {
+			continue
+		}
+		saved, err := readJSONArg(filepath.Join(folder, "request.json"))
+		if err != nil {
+			return nil, err
+		}
+		request := at(saved, "request")
+		if same(at(request, "scope"), scope) && same(at(request, "candidate"), v["candidate"]) && same(at(saved, "config_sha256"), config.fingerprint) {
+			row, err := jobStatus(folder, e.Name())
+			if err != nil {
+				return nil, err
+			}
+			row["created_at"], row["profile_id"], row["event_id"] = at(saved, "created_at"), at(request, "profile_id"), at(request, "event_id")
+			rows = append(rows, row)
+		}
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, b := mustStr(rows[i]["created_at"]), mustStr(rows[j]["created_at"])
+		if a != b {
+			return a > b
+		}
+		return rows[i]["job_id"].(string) > rows[j]["job_id"].(string)
+	})
+	items := make([]any, len(rows))
+	for i, r := range rows {
+		items[i] = r
+	}
+	return map[string]any{"authority": "data_only_untrusted", "items": items}, nil
+}
+
+// execJob returns the new request for start (nil otherwise) and the job id.
+func execJob(v map[string]any, action any, config *execConfig) (map[string]any, string, error) {
+	scope := config.scope
+	if action == "start" {
+		pid, _ := v["profile_id"].(string)
+		if _, known := config.profiles[pid]; !keysAre(v, "action", "scope", "server", "profile_id", "candidate", "event_id") || !isKey(v["event_id"]) || !known {
+			return nil, "", requestInvalid()
+		}
+		request := map[string]any{"scope": scope, "profile_id": v["profile_id"], "candidate": v["candidate"], "event_id": v["event_id"]}
+		return request, digest([]byte(mustCanonical([]any{scope, v["event_id"]}))), nil
+	}
+	id, ok := v["job_id"].(string)
+	if !keysAre(v, "action", "scope", "server", "job_id") || !ok || !hex64.MatchString(id) {
+		return nil, "", requestInvalid()
+	}
+	return nil, id, nil
+}
+
+func startJob(config *execConfig, request map[string]any, configPath, state, job string) error {
+	api, folder := config.api, filepath.Join(state, job)
+	row, err := execCandidate(api, config.scope, request["candidate"])
+	if err != nil {
+		return err
+	}
+	pins, _, _, err := material(obj(config.profiles[request["profile_id"].(string)]), api.token)
+	if err != nil {
+		return err
+	}
+	mismatch := !same(row["status"], "candidate")
+	for k, want := range pins {
+		mismatch = mismatch || !same(getOr(getOr(row, "comparison_plan", map[string]any{}), k, nil), want)
+	}
+	if mismatch {
+		return cmpErr("execution_plan_mismatch")
+	}
+	// Readiness validates current baseline and source before accepting a job.
+	if _, err := prepare(api, map[string]any{"record": row, "comparison_plan_sha256": row["comparison_plan_sha256"]}); err != nil {
+		return err
+	}
+	if err := os.Mkdir(folder, 0o700); err != nil {
+		return err
+	}
+	if err := saveJSON(filepath.Join(folder, "request.json"), map[string]any{"request": request, "config_sha256": config.fingerprint, "created_at": utcNow()}); err != nil {
+		return err
+	}
+	return launchJob(configPath, state, job)
+}
+
+func checkSavedRequest(config *execConfig, request map[string]any, folder string) error {
+	scope := config.scope
+	saved, err := readJSONArg(filepath.Join(folder, "request.json"))
+	if err != nil {
+		return err
+	}
+	if !same(at(saved, "config_sha256"), config.fingerprint) || request != nil && !same(at(saved, "request"), request) {
+		return cmpErr("execution_request_changed")
+	}
+	request = obj(at(saved, "request"))
+	for _, k := range execScope {
+		if !same(getOr(at(request, "scope"), k, ""), getOr(scope, k, "")) {
+			return requestInvalid()
+		}
+	}
+	_, err = execCandidate(config.api, scope, at(request, "candidate")) // Recheck read access on each status/retry.
+	return err
 }
 
 func runJob(configPath, state, job string) (err error) {
@@ -516,34 +557,7 @@ func skillExecutionMain(argv []string, stdin io.Reader, stdout, stderr io.Writer
 		}
 	}()
 	if isWorker {
-		if !hex64.MatchString(worker) || lockFD < 0 {
-			return fail(requestInvalid())
-		}
-		var expected, actual syscall.Stat_t
-		if err := syscall.Lstat(filepath.Join(state, worker, "worker.lock"), &expected); err != nil {
-			return fail(err)
-		}
-		if err := syscall.Fstat(lockFD, &actual); err != nil {
-			return fail(err)
-		}
-		if expected.Dev != actual.Dev || expected.Ino != actual.Ino {
-			return fail(requestInvalid())
-		}
-		defer syscall.Close(lockFD)
-		terminated := make(chan os.Signal, 1)
-		signal.Notify(terminated, syscall.SIGTERM)
-		defer signal.Stop(terminated)
-		go func() {
-			<-terminated
-			if pid := activeAdapter.Load(); pid > 0 {
-				killGroup(int(pid), sigKill)
-			}
-			os.Exit(1) // execution_interrupted
-		}()
-		if err := runJob(configPath, state, worker); err != nil {
-			return fail(err)
-		}
-		return 0
+		return runWorker(configPath, state, worker, lockFD, fail)
 	}
 	raw, err := io.ReadAll(io.LimitReader(stdin, execLimit+1))
 	if err != nil {
@@ -565,6 +579,37 @@ func skillExecutionMain(argv []string, stdin io.Reader, stdout, stderr io.Writer
 		return fail(requestInvalid())
 	}
 	fmt.Fprintln(stdout, output)
+	return 0
+}
+
+func runWorker(configPath, state, worker string, lockFD int, fail func(error) int) int {
+	if !hex64.MatchString(worker) || lockFD < 0 {
+		return fail(requestInvalid())
+	}
+	var expected, actual syscall.Stat_t
+	if err := syscall.Lstat(filepath.Join(state, worker, "worker.lock"), &expected); err != nil {
+		return fail(err)
+	}
+	if err := syscall.Fstat(lockFD, &actual); err != nil {
+		return fail(err)
+	}
+	if expected.Dev != actual.Dev || expected.Ino != actual.Ino {
+		return fail(requestInvalid())
+	}
+	defer syscall.Close(lockFD)
+	terminated := make(chan os.Signal, 1)
+	signal.Notify(terminated, syscall.SIGTERM)
+	defer signal.Stop(terminated)
+	go func() {
+		<-terminated
+		if pid := activeAdapter.Load(); pid > 0 {
+			killGroup(int(pid), sigKill)
+		}
+		os.Exit(1) // execution_interrupted
+	}()
+	if err := runJob(configPath, state, worker); err != nil {
+		return fail(err)
+	}
 	return 0
 }
 

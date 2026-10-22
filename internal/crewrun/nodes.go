@@ -97,13 +97,7 @@ func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (re
 		return result{out: out}, err
 	case "code":
 		out, err := e.runCode(ctx, c, input)
-		port := ""
-		if m, ok := out.(map[string]any); ok {
-			if b, ok := m["ok"].(bool); ok {
-				port = map[bool]string{true: "pass", false: "fail"}[b]
-			}
-		}
-		return result{out: out, port: port}, err
+		return result{out: out, port: codePort(out)}, err
 	case "http":
 		out, err := e.runHTTP(ctx, c, input)
 		return result{out: out}, err
@@ -111,38 +105,16 @@ func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (re
 		out, err := e.runGitHub(ctx, c, input)
 		return result{out: out}, err
 	case "approval":
-		q := c["question"]
-		if q == "" {
-			q = n.Title
-		}
-		if q == "" {
-			q = "계속할까요?"
-		}
+		q := cmp.Or(c["question"], n.Title, "계속할까요?")
 		return result{wait: &Waiting{Kind: "approval", Question: clip(render(q, input), 2000)}}, nil
 	case "condition":
-		ok, err := EvalCondition(c["expr"], input)
-		if err != nil {
-			return result{}, failf("bad_expr", "%v", err)
-		}
-		port := "no"
-		if ok {
-			port = "yes"
-		}
-		return result{out: input, port: port}, nil
+		return runCondition(c, input)
 	case "merge":
 		return result{out: input}, nil
 	case "loop":
 		return e.runLoop(ctx, x, n, input)
 	case "wait":
-		d, err := time.ParseDuration(c["duration"])
-		if err != nil || d > 30*24*time.Hour {
-			return result{}, failf("bad_config", "duration must be a Go duration up to 720h")
-		}
-		if d <= 0 {
-			return result{out: input}, nil
-		}
-		at := e.now().UTC().Add(d).Truncate(time.Millisecond)
-		return result{wait: &Waiting{Kind: "wait", ResumeAt: &at}}, nil
+		return e.runWait(c, input)
 	case "notify":
 		out, err := e.notify(ctx, c, input)
 		return result{out: out}, err
@@ -154,6 +126,40 @@ func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (re
 		return result{out: input, end: true, summary: clip(s, 4000)}, nil
 	}
 	return result{}, failf("unknown_node", "node type %q", n.Type)
+}
+
+// codePort routes a code step's {ok: bool} output to pass or fail.
+func codePort(out any) string {
+	if m, ok := out.(map[string]any); ok {
+		if b, ok := m["ok"].(bool); ok {
+			return map[bool]string{true: "pass", false: "fail"}[b]
+		}
+	}
+	return ""
+}
+
+func runCondition(c map[string]string, input any) (result, error) {
+	ok, err := EvalCondition(c["expr"], input)
+	if err != nil {
+		return result{}, failf("bad_expr", "%v", err)
+	}
+	port := "no"
+	if ok {
+		port = "yes"
+	}
+	return result{out: input, port: port}, nil
+}
+
+func (e *Engine) runWait(c map[string]string, input any) (result, error) {
+	d, err := time.ParseDuration(c["duration"])
+	if err != nil || d > 30*24*time.Hour {
+		return result{}, failf("bad_config", "duration must be a Go duration up to 720h")
+	}
+	if d <= 0 {
+		return result{out: input}, nil
+	}
+	at := e.now().UTC().Add(d).Truncate(time.Millisecond)
+	return result{wait: &Waiting{Kind: "wait", ResumeAt: &at}}, nil
 }
 
 // fake: a test run (시험 실행) does not run steps that reach outside: AI,

@@ -77,20 +77,29 @@ func quoteChoices(cs []string) string {
 	return strings.Join(out, ", ")
 }
 
-// parseCrew is argparse for crew: the command name, its options and positionals, or a usage error.
-func parseCrew(argv []string) (string, *args, map[string]float64, error) {
+// crewCommandName joins a group and its subcommand ("keys add") and returns the remaining argv.
+func crewCommandName(argv []string) (string, []string, error) {
 	if len(argv) == 0 {
-		return "", nil, nil, fmt.Errorf("the following arguments are required: cmd")
+		return "", nil, fmt.Errorf("the following arguments are required: cmd")
 	}
 	name, rest := argv[0], argv[1:]
 	if group, ok := crewGroups[name]; ok {
 		if len(rest) == 0 {
-			return "", nil, nil, fmt.Errorf("the following arguments are required: %s_cmd", name)
+			return "", nil, fmt.Errorf("the following arguments are required: %s_cmd", name)
 		}
 		if _, ok := crewCommands[name+" "+rest[0]]; !ok {
-			return "", nil, nil, fmt.Errorf("argument %s_cmd: invalid choice: '%s' (choose from %s)", name, rest[0], group)
+			return "", nil, fmt.Errorf("argument %s_cmd: invalid choice: '%s' (choose from %s)", name, rest[0], group)
 		}
 		name, rest = name+" "+rest[0], rest[1:]
+	}
+	return name, rest, nil
+}
+
+// parseCrew is argparse for crew: the command name, its options and positionals, or a usage error.
+func parseCrew(argv []string) (string, *args, map[string]float64, error) {
+	name, rest, err := crewCommandName(argv)
+	if err != nil {
+		return "", nil, nil, err
 	}
 	spec, ok := crewCommands[name]
 	if !ok {
@@ -210,15 +219,7 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 	readAll := func() string { raw, _ := io.ReadAll(stdin); return string(raw) }
 	switch name {
 	case "handoff":
-		stopOnTerm.Store(true)
-		out, err := runHandoff(stdin, handoffCallerRequest, runNodeFn)
-		if err != nil {
-			return 0, err
-		}
-		fmt.Fprintln(stdout, dumpIndent(out))
-		if out["ok"] != true {
-			return 1, nil
-		}
+		return runHandoffCmd(stdin, stdout)
 	case "resolve":
 		res, err := resolve(a.pos[0], 8*time.Second)
 		if err != nil {
@@ -236,26 +237,7 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 			return 1, nil
 		}
 	case "start", "status", "decide":
-		var view map[string]any
-		var err error
-		switch name {
-		case "start":
-			view, err = startWorkflow(a.pos[0], a.vals["task"], floats["wait"], a.get("cwd", ""), nil)
-		case "status":
-			var rec map[string]any
-			if rec, err = getRun(a.pos[0]); err == nil {
-				view = runView(rec)
-			}
-		default:
-			view, err = decideRun(a.pos[0], a.flags["approve"], a.get("note", ""), floats["wait"])
-		}
-		if err != nil {
-			return 0, err
-		}
-		fmt.Fprintln(stdout, dumpIndent(ordered(view, viewOrder...)))
-		if in([]string{"failed", "stopped"}, pyStr(view["status"])) {
-			return 1, nil
-		}
+		return runWorkflowCmd(name, a, floats, stdout)
 	case "hook-context":
 		text, err := hookContext(readAll(), a.get("caller-model", os.Getenv("ARKISM_CALLER_MODEL")), 3*time.Second, nil, nil)
 		if err != nil {
@@ -275,24 +257,78 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 		}
 		fmt.Fprintln(stdout, dumpIndent(out))
 	case "route":
-		if a.flags["decide-only"] {
-			d, err := decideRoute(a.vals["task"], a.get("group", ""))
-			if err != nil {
-				return 0, err
-			}
-			fmt.Fprintln(stdout, dumpIndent(d))
-			return 0, nil
+		return runRouteCmd(a, stdout)
+	case "providers show", "providers report", "providers watch":
+		return runProvidersCmd(name, a, floats, stdin, stdout)
+	case "accounts add", "accounts remove", "accounts list":
+		return runAccountsCmd(name, a, stdout)
+	case "keys list", "keys add", "keys remove":
+		return runKeysCmd(name, a, floats, stdin, stdout)
+	}
+	return 0, nil
+}
+
+func runHandoffCmd(stdin io.Reader, stdout io.Writer) (int, error) {
+	stopOnTerm.Store(true)
+	out, err := runHandoff(stdin, handoffCallerRequest, runNodeFn)
+	if err != nil {
+		return 0, err
+	}
+	fmt.Fprintln(stdout, dumpIndent(out))
+	if out["ok"] != true {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func runWorkflowCmd(name string, a *args, floats map[string]float64, stdout io.Writer) (int, error) {
+	var view map[string]any
+	var err error
+	switch name {
+	case "start":
+		view, err = startWorkflow(a.pos[0], a.vals["task"], floats["wait"], a.get("cwd", ""), nil)
+	case "status":
+		var rec map[string]any
+		if rec, err = getRun(a.pos[0]); err == nil {
+			view = runView(rec)
 		}
-		stopOnTerm.Store(true)
-		out, err := runRoutedFn(map[string]any{"task": a.vals["task"], "cwd": a.get("cwd", ""), "access": a.get("access", "read"),
-			"effort": a.get("effort", "medium"), "group": a.get("group", ""), "work_id": a.get("work-id", "")}, nil, nil, nil)
+	default:
+		view, err = decideRun(a.pos[0], a.flags["approve"], a.get("note", ""), floats["wait"])
+	}
+	if err != nil {
+		return 0, err
+	}
+	fmt.Fprintln(stdout, dumpIndent(ordered(view, viewOrder...)))
+	if in([]string{"failed", "stopped"}, pyStr(view["status"])) {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func runRouteCmd(a *args, stdout io.Writer) (int, error) {
+	if a.flags["decide-only"] {
+		d, err := decideRoute(a.vals["task"], a.get("group", ""))
 		if err != nil {
 			return 0, err
 		}
-		fmt.Fprintln(stdout, dumpLine(ordered(out, resultOrder...)))
-		if out["ok"] != true {
-			return 1, nil
-		}
+		fmt.Fprintln(stdout, dumpIndent(d))
+		return 0, nil
+	}
+	stopOnTerm.Store(true)
+	out, err := runRoutedFn(map[string]any{"task": a.vals["task"], "cwd": a.get("cwd", ""), "access": a.get("access", "read"),
+		"effort": a.get("effort", "medium"), "group": a.get("group", ""), "work_id": a.get("work-id", "")}, nil, nil, nil)
+	if err != nil {
+		return 0, err
+	}
+	fmt.Fprintln(stdout, dumpLine(ordered(out, resultOrder...)))
+	if out["ok"] != true {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func runProvidersCmd(name string, a *args, floats map[string]float64, stdin io.Reader, stdout io.Writer) (int, error) {
+	switch name {
 	case "providers show":
 		inv, err := inventory("", nil, false)
 		if err != nil {
@@ -316,37 +352,46 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 		if err := desktopProvidersWatch(time.Duration(interval*float64(time.Second)), time.Duration(every*float64(time.Second)), stdin, stdout); err != nil {
 			return 0, err
 		}
-	case "accounts add", "accounts remove", "accounts list":
-		var result any
-		var err error
-		switch name {
-		case "accounts add":
-			result, err = host.AccountsRegister(a.vals["cli"], a.vals["name"], a.vals["config-dir"], host.Home, host.AgentsState)
-		case "accounts remove":
-			if err = host.AccountsUnregister(a.pos[0], host.AgentsState); err == nil {
-				result = host.Obj{{Key: "removed", Value: a.pos[0]}}
-			}
-		default:
-			var inv []any
-			if inv, err = inventory("", nil, false); err == nil {
-				rows := []any{}
-				for _, p := range inv {
-					for _, acc := range list(field(p, "accounts")) {
-						if c := field(acc, "cli"); c == "claude" || c == "codex" {
-							rows = append(rows, acc)
-						}
+	}
+	return 0, nil
+}
+
+func runAccountsCmd(name string, a *args, stdout io.Writer) (int, error) {
+	var result any
+	var err error
+	switch name {
+	case "accounts add":
+		result, err = host.AccountsRegister(a.vals["cli"], a.vals["name"], a.vals["config-dir"], host.Home, host.AgentsState)
+	case "accounts remove":
+		if err = host.AccountsUnregister(a.pos[0], host.AgentsState); err == nil {
+			result = host.Obj{{Key: "removed", Value: a.pos[0]}}
+		}
+	default:
+		var inv []any
+		if inv, err = inventory("", nil, false); err == nil {
+			rows := []any{}
+			for _, p := range inv {
+				for _, acc := range list(field(p, "accounts")) {
+					if c := field(acc, "cli"); c == "claude" || c == "codex" {
+						rows = append(rows, acc)
 					}
 				}
-				result = rows
 			}
+			result = rows
 		}
-		if err != nil {
-			if isCrewErr(err) {
-				return 0, err
-			}
-			return 0, crewErr(err.Error())
+	}
+	if err != nil {
+		if isCrewErr(err) {
+			return 0, err
 		}
-		fmt.Fprintln(stdout, dumpIndent(result))
+		return 0, crewErr(err.Error())
+	}
+	fmt.Fprintln(stdout, dumpIndent(result))
+	return 0, nil
+}
+
+func runKeysCmd(name string, a *args, floats map[string]float64, stdin io.Reader, stdout io.Writer) (int, error) {
+	switch name {
 	case "keys list":
 		keys, err := loadKeys()
 		if err != nil {

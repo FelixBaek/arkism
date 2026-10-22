@@ -2,6 +2,7 @@ package crewrun
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -70,10 +71,7 @@ func (e *Engine) notify(ctx context.Context, c map[string]string, input any) (an
 	if json.Unmarshal(raw, &cfg) != nil {
 		return nil, failf("notify", "notify.json unreadable")
 	}
-	to := c["to"]
-	if to == "" {
-		to = "default"
-	}
+	to := cmp.Or(c["to"], "default")
 	msg := textOf(input)
 	if c["message"] != "" {
 		msg = render(c["message"], input)
@@ -81,15 +79,7 @@ func (e *Engine) notify(ctx context.Context, c map[string]string, input any) (an
 	msg = clip(msg, 4000)
 	switch c["channel"] {
 	case "telegram":
-		d, ok := pickDest(cfg.Telegram, e.NotifyScope, to)
-		if !ok || d.BotToken == "" {
-			return nil, failf("notify", "no telegram destination %q", to)
-		}
-		base := e.TelegramAPI
-		if base == "" {
-			base = "https://api.telegram.org"
-		}
-		err = e.postJSON(ctx, base+"/bot"+d.BotToken+"/sendMessage", map[string]any{"chat_id": d.ChatID, "text": msg})
+		err = e.notifyTelegram(ctx, cfg, to, msg)
 	case "slack":
 		d, ok := pickDest(cfg.Slack, e.NotifyScope, to)
 		if !ok || d.WebhookURL == "" {
@@ -105,6 +95,15 @@ func (e *Engine) notify(ctx context.Context, c map[string]string, input any) (an
 		return nil, err
 	}
 	return map[string]any{"sent": true, "channel": c["channel"], "to": to}, nil
+}
+
+func (e *Engine) notifyTelegram(ctx context.Context, cfg NotifyConfig, to, msg string) error {
+	d, ok := pickDest(cfg.Telegram, e.NotifyScope, to)
+	if !ok || d.BotToken == "" {
+		return failf("notify", "no telegram destination %q", to)
+	}
+	base := cmp.Or(e.TelegramAPI, "https://api.telegram.org")
+	return e.postJSON(ctx, base+"/bot"+d.BotToken+"/sendMessage", map[string]any{"chat_id": d.ChatID, "text": msg})
 }
 
 func (e *Engine) notifyEmail(ctx context.Context, cfg NotifyConfig, c map[string]string, to, msg string) error {

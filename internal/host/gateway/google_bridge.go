@@ -273,16 +273,7 @@ func newGooglePrepared(chat host.Obj, owner string) (*googlePrepared, error) {
 	}
 	tools := get(body, "tools")
 	if truthy(tools) {
-		declarations := []any{}
-		for _, tool := range tools.([]any) {
-			declaration := host.Obj{{Key: "name", Value: get(tool, "name")},
-				{Key: "parametersJsonSchema", Value: clone(get(tool, "input_schema"))}}
-			if description, ok := tool.(host.Obj).Get("description"); ok {
-				declaration.Set("description", description)
-			}
-			declarations = append(declarations, declaration)
-		}
-		native.Set("tools", []any{host.Obj{{Key: "functionDeclarations", Value: declarations}}})
+		native.Set("tools", []any{host.Obj{{Key: "functionDeclarations", Value: bridgeDeclarations(tools.([]any))}}})
 	}
 	if choice := get(body, "tool_choice"); truthy(choice) {
 		kind := get(choice, "type")
@@ -297,66 +288,19 @@ func newGooglePrepared(chat host.Obj, owner string) (*googlePrepared, error) {
 	}
 	contents := []any{}
 	calls := map[any]host.Obj{}
-	mismatch := googleErr("conversation_mismatch", 409, false)
 	for i, key := range bridgeHistoryKeys(owner, context, p.history) {
 		message := p.history[i]
 		blocks := get(message, "content").([]any)
+		var content host.Obj
 		if get(message, "role") == "assistant" {
-			record := bridgeLookup(key)
-			if record == nil || (p.pinned != "" && p.pinned != record.model) {
-				return nil, mismatch
-			}
-			p.pinned = record.model
-			parts := record.parts
-			if len(parts) == 0 {
-				parts = []any{host.Obj{{Key: "text", Value: ""}}}
-			}
-			var native, public []host.Obj
-			for _, part := range parts {
-				if call, ok := asObj(part).Get("functionCall"); ok {
-					native = append(native, asObj(call))
-				}
-			}
-			for _, block := range blocks {
-				if get(block, "type") == "tool_use" {
-					public = append(public, block.(host.Obj))
-				}
-			}
-			if len(native) != len(public) {
-				return nil, mismatch
-			}
-			for j, call := range public {
-				calls[get(call, "id")] = native[j]
-			}
-			contents = append(contents, host.Obj{{Key: "role", Value: "model"}, {Key: "parts", Value: parts}})
-			continue
+			content, err = p.modelContent(key, blocks, calls)
+		} else {
+			content, err = bridgeUserContent(blocks, calls)
 		}
-		parts := []any{}
-		for _, value := range blocks {
-			block := value.(host.Obj)
-			if get(block, "type") != "tool_result" {
-				converted, err := bridgeParts([]any{block})
-				if err != nil {
-					return nil, err
-				}
-				parts = append(parts, converted...)
-				continue
-			}
-			original, ok := calls[get(block, "tool_use_id")]
-			if !ok {
-				return nil, mismatch
-			}
-			result := host.Obj{{Key: "name", Value: get(original, "name")},
-				{Key: "response", Value: host.Obj{{Key: "output", Value: bridgeResultText(block)}}}}
-			if id, ok := original.Get("id"); ok {
-				result.Set("id", id)
-			}
-			parts = append(parts, host.Obj{{Key: "functionResponse", Value: result}})
+		if err != nil {
+			return nil, err
 		}
-		if len(parts) == 0 {
-			parts = []any{host.Obj{{Key: "text", Value: ""}}}
-		}
-		contents = append(contents, host.Obj{{Key: "role", Value: "user"}, {Key: "parts", Value: parts}})
+		contents = append(contents, content)
 	}
 	native.Set("contents", contents)
 	prepared, err := googlePrepare(native, "gemini")
@@ -365,6 +309,81 @@ func newGooglePrepared(chat host.Obj, owner string) (*googlePrepared, error) {
 	}
 	p.native = prepared
 	return p, nil
+}
+
+func bridgeDeclarations(tools []any) []any {
+	declarations := []any{}
+	for _, tool := range tools {
+		declaration := host.Obj{{Key: "name", Value: get(tool, "name")},
+			{Key: "parametersJsonSchema", Value: clone(get(tool, "input_schema"))}}
+		if description, ok := tool.(host.Obj).Get("description"); ok {
+			declaration.Set("description", description)
+		}
+		declarations = append(declarations, declaration)
+	}
+	return declarations
+}
+
+// modelContent restores an assistant turn's recorded native parts, pairing its public tool_use
+// ids with the native calls in calls.
+func (p *googlePrepared) modelContent(key [32]byte, blocks []any, calls map[any]host.Obj) (host.Obj, error) {
+	mismatch := googleErr("conversation_mismatch", 409, false)
+	record := bridgeLookup(key)
+	if record == nil || (p.pinned != "" && p.pinned != record.model) {
+		return nil, mismatch
+	}
+	p.pinned = record.model
+	parts := record.parts
+	if len(parts) == 0 {
+		parts = []any{host.Obj{{Key: "text", Value: ""}}}
+	}
+	var native, public []host.Obj
+	for _, part := range parts {
+		if call, ok := asObj(part).Get("functionCall"); ok {
+			native = append(native, asObj(call))
+		}
+	}
+	for _, block := range blocks {
+		if get(block, "type") == "tool_use" {
+			public = append(public, block.(host.Obj))
+		}
+	}
+	if len(native) != len(public) {
+		return nil, mismatch
+	}
+	for j, call := range public {
+		calls[get(call, "id")] = native[j]
+	}
+	return host.Obj{{Key: "role", Value: "model"}, {Key: "parts", Value: parts}}, nil
+}
+
+func bridgeUserContent(blocks []any, calls map[any]host.Obj) (host.Obj, error) {
+	parts := []any{}
+	for _, value := range blocks {
+		block := value.(host.Obj)
+		if get(block, "type") != "tool_result" {
+			converted, err := bridgeParts([]any{block})
+			if err != nil {
+				return nil, err
+			}
+			parts = append(parts, converted...)
+			continue
+		}
+		original, ok := calls[get(block, "tool_use_id")]
+		if !ok {
+			return nil, googleErr("conversation_mismatch", 409, false)
+		}
+		result := host.Obj{{Key: "name", Value: get(original, "name")},
+			{Key: "response", Value: host.Obj{{Key: "output", Value: bridgeResultText(block)}}}}
+		if id, ok := original.Get("id"); ok {
+			result.Set("id", id)
+		}
+		parts = append(parts, host.Obj{{Key: "functionResponse", Value: result}})
+	}
+	if len(parts) == 0 {
+		parts = []any{host.Obj{{Key: "text", Value: ""}}}
+	}
+	return host.Obj{{Key: "role", Value: "user"}, {Key: "parts", Value: parts}}, nil
 }
 
 // remember is Prepared.remember, called only after native EOF and public response validation,

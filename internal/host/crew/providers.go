@@ -446,51 +446,9 @@ func inventory(home string, keys []map[string]any, refreshUsage bool) ([]any, er
 	}
 	out := []any{}
 	for _, pid := range []string{"anthropic", "openai", "google", "zai", "xai"} { // xai runs through grok
-		accounts := []any{}
-		for _, row := range host.CLIS {
-			if row.Provider != pid {
-				continue
-			}
-			exe := host.Bin(row.BinEnv, row.BinName) // the CLI itself: GLM without its wrapper has no login, only keys
-			if !exists(exe) && !onPath(row.BinName) {
-				continue
-			}
-			isDefault := !host.APIModeOn(row.Name)
-			if row.Name == "claude" || row.Name == "codex" {
-				for _, profile := range host.AccountsProfiles(row.Name, home, host.AgentsState) {
-					detail, err := host.AccountsAccount(profile, exe, host.AgentsState, refreshUsage)
-					if err != nil {
-						return nil, err
-					}
-					detail = withKey(detail, "cli_info", cliInfoFn(row.Name, exe, host.AgentsState, refreshUsage))
-					accounts = append(accounts, withKey(detail, "default", isDefault))
-				}
-				continue
-			}
-			status := "connected"
-			if login, ok := logins[row.Name]; ok && !exists(filepath.Join(home, login)) {
-				status = "missing"
-				// Antigravity on Windows keeps its sign-in outside ~/.gemini (no token file there);
-				// a CLI that has already held conversations here counts as signed in.
-				if row.Name == "agy" && runtime.GOOS == "windows" && exists(filepath.Join(home, ".gemini", "antigravity-cli", "conversations")) {
-					status = "connected"
-				}
-			}
-			account := host.Obj{{Key: "id", Value: row.Name}, {Key: "label", Value: row.Name + " CLI 로그인"},
-				{Key: "cli", Value: row.Name}, {Key: "status", Value: status}, {Key: "default", Value: isDefault}}
-			if row.Name == "gemini" && status == "connected" {
-				q := readGeminiQuota(home, host.AgentsState, time.Now())
-				quotas := make([]any, len(q.Quotas))
-				for i, x := range q.Quotas {
-					quotas[i] = x
-				}
-				account = append(account, host.KV{Key: "usage_status", Value: q.Status}, host.KV{Key: "usage_checked_at", Value: q.CheckedAt},
-					host.KV{Key: "quotas", Value: quotas})
-				if q.Status == "expired" {
-					account.Set("status", "expired")
-				}
-			}
-			accounts = append(accounts, account)
+		accounts, err := providerAccounts(pid, home, refreshUsage)
+		if err != nil {
+			return nil, err
 		}
 		mine := []any{}
 		for _, k := range keys {
@@ -513,24 +471,88 @@ func inventory(home string, keys []map[string]any, refreshUsage bool) ([]any, er
 		if k["provider"] != "custom" {
 			continue
 		}
-		info, err := customInfo(k, false)
+		provider, err := customProvider(k)
 		if err != nil {
 			return nil, err
 		}
-		models := []any{}
-		for _, m := range list(info["models"]) {
-			if s, ok := m.(string); ok && modelID.MatchString(s) && len(models) < 300 {
-				models = append(models, s)
-			}
-		}
-		name := sOr(k["name"])
-		if name == "" {
-			name = "직접 추가"
-		}
-		out = append(out, host.Obj{{Key: "id", Value: host.CustomPID(k)}, {Key: "name", Value: name}, {Key: "kind", Value: "api"},
-			{Key: "custom", Value: true}, {Key: "accounts", Value: []any{}}, {Key: "keys", Value: []any{keyRow(publicKey(k))}}, {Key: "models", Value: models}})
+		out = append(out, provider)
 	}
 	return out, nil
+}
+
+// providerAccounts lists the installed CLIs of provider pid with their sign-ins.
+func providerAccounts(pid, home string, refreshUsage bool) ([]any, error) {
+	accounts := []any{}
+	for _, row := range host.CLIS {
+		if row.Provider != pid {
+			continue
+		}
+		exe := host.Bin(row.BinEnv, row.BinName) // the CLI itself: GLM without its wrapper has no login, only keys
+		if !exists(exe) && !onPath(row.BinName) {
+			continue
+		}
+		isDefault := !host.APIModeOn(row.Name)
+		if row.Name == "claude" || row.Name == "codex" {
+			for _, profile := range host.AccountsProfiles(row.Name, home, host.AgentsState) {
+				detail, err := host.AccountsAccount(profile, exe, host.AgentsState, refreshUsage)
+				if err != nil {
+					return nil, err
+				}
+				detail = withKey(detail, "cli_info", cliInfoFn(row.Name, exe, host.AgentsState, refreshUsage))
+				accounts = append(accounts, withKey(detail, "default", isDefault))
+			}
+			continue
+		}
+		accounts = append(accounts, cliLogin(row, home, isDefault))
+	}
+	return accounts, nil
+}
+
+// cliLogin is the sign-in row of a CLI without account profiles.
+func cliLogin(row host.CLI, home string, isDefault bool) host.Obj {
+	status := "connected"
+	if login, ok := logins[row.Name]; ok && !exists(filepath.Join(home, login)) {
+		status = "missing"
+		// Antigravity on Windows keeps its sign-in outside ~/.gemini (no token file there);
+		// a CLI that has already held conversations here counts as signed in.
+		if row.Name == "agy" && runtime.GOOS == "windows" && exists(filepath.Join(home, ".gemini", "antigravity-cli", "conversations")) {
+			status = "connected"
+		}
+	}
+	account := host.Obj{{Key: "id", Value: row.Name}, {Key: "label", Value: row.Name + " CLI 로그인"},
+		{Key: "cli", Value: row.Name}, {Key: "status", Value: status}, {Key: "default", Value: isDefault}}
+	if row.Name == "gemini" && status == "connected" {
+		q := readGeminiQuota(home, host.AgentsState, time.Now())
+		quotas := make([]any, len(q.Quotas))
+		for i, x := range q.Quotas {
+			quotas[i] = x
+		}
+		account = append(account, host.KV{Key: "usage_status", Value: q.Status}, host.KV{Key: "usage_checked_at", Value: q.CheckedAt},
+			host.KV{Key: "quotas", Value: quotas})
+		if q.Status == "expired" {
+			account.Set("status", "expired")
+		}
+	}
+	return account
+}
+
+func customProvider(k map[string]any) (host.Obj, error) {
+	info, err := customInfo(k, false)
+	if err != nil {
+		return nil, err
+	}
+	models := []any{}
+	for _, m := range list(info["models"]) {
+		if s, ok := m.(string); ok && modelID.MatchString(s) && len(models) < 300 {
+			models = append(models, s)
+		}
+	}
+	name := sOr(k["name"])
+	if name == "" {
+		name = "직접 추가"
+	}
+	return host.Obj{{Key: "id", Value: host.CustomPID(k)}, {Key: "name", Value: name}, {Key: "kind", Value: "api"},
+		{Key: "custom", Value: true}, {Key: "accounts", Value: []any{}}, {Key: "keys", Value: []any{keyRow(publicKey(k))}}, {Key: "models", Value: models}}, nil
 }
 
 // ---------------------------------------------------------------- 연결 시험 and handoff requests

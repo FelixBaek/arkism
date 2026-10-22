@@ -73,53 +73,17 @@ func geminiSchema(input any) host.Obj {
 			}
 			out.Set(key, strings.ToLower(kind))
 		case key == "properties":
-			properties, ok := item.(host.Obj)
-			if !ok {
-				fail("invalid_tools")
-			}
-			converted := host.Obj{}
-			for _, p := range properties {
-				converted.Set(p.Key, geminiSchema(p.Value))
-			}
-			out.Set(key, converted)
+			out.Set(key, geminiSchemaProperties(item))
 		case key == "items":
 			out.Set(key, geminiSchema(item))
 		case key == "anyOf":
-			list, ok := item.([]any)
-			if !ok || len(list) == 0 {
-				fail("invalid_tools")
-			}
-			converted := make([]any, len(list))
-			for i, schema := range list {
-				converted[i] = geminiSchema(schema)
-			}
-			out.Set(key, converted)
+			out.Set(key, geminiSchemaAnyOf(item))
 		case schemaCounts[key]:
-			// Proto int64 fields may arrive as decimal strings; JSON Schema needs numbers.
-			if s, ok := item.(string); ok {
-				if s == "" || len(s) > 19 || strings.Trim(s, "0123456789") != "" {
-					fail("invalid_tools")
-				}
-				n, err := strconv.ParseInt(s, 10, 64)
-				if err != nil {
-					fail("invalid_tools") // shortcut: Python accepts 19-digit values above int64 here
-				}
-				item = n
-			}
-			integer(item, "invalid_tools", 0)
-			out.Set(key, item)
+			out.Set(key, geminiSchemaCount(item))
 		case key == "format" || key == "title" || key == "description" || key == "pattern":
 			out.Set(key, str(item, "invalid_tools", false))
 		case key == "enum" || key == "required" || key == "propertyOrdering":
-			list, ok := item.([]any)
-			if !ok {
-				fail("invalid_tools")
-			}
-			converted := make([]any, len(list))
-			for i, entry := range list {
-				converted[i] = str(entry, "invalid_tools", false)
-			}
-			out.Set(key, converted)
+			out.Set(key, geminiSchemaStrings(item))
 		case key == "minimum" || key == "maximum":
 			if !isNumber(item) {
 				fail("invalid_tools")
@@ -131,6 +95,62 @@ func geminiSchema(input any) host.Obj {
 			out.Set(key, deepcopy(item, "invalid_request"))
 		}
 	}
+	return geminiNullable(value, out)
+}
+
+func geminiSchemaProperties(item any) host.Obj {
+	properties, ok := item.(host.Obj)
+	if !ok {
+		fail("invalid_tools")
+	}
+	converted := host.Obj{}
+	for _, p := range properties {
+		converted.Set(p.Key, geminiSchema(p.Value))
+	}
+	return converted
+}
+
+func geminiSchemaAnyOf(item any) []any {
+	list, ok := item.([]any)
+	if !ok || len(list) == 0 {
+		fail("invalid_tools")
+	}
+	converted := make([]any, len(list))
+	for i, schema := range list {
+		converted[i] = geminiSchema(schema)
+	}
+	return converted
+}
+
+func geminiSchemaCount(item any) any {
+	// Proto int64 fields may arrive as decimal strings; JSON Schema needs numbers.
+	if s, ok := item.(string); ok {
+		if s == "" || len(s) > 19 || strings.Trim(s, "0123456789") != "" {
+			fail("invalid_tools")
+		}
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			fail("invalid_tools") // shortcut: Python accepts 19-digit values above int64 here
+		}
+		item = n
+	}
+	integer(item, "invalid_tools", 0)
+	return item
+}
+
+func geminiSchemaStrings(item any) []any {
+	list, ok := item.([]any)
+	if !ok {
+		fail("invalid_tools")
+	}
+	converted := make([]any, len(list))
+	for i, entry := range list {
+		converted[i] = str(entry, "invalid_tools", false)
+	}
+	return converted
+}
+
+func geminiNullable(value, out host.Obj) host.Obj {
 	if v, ok := value.Get("nullable"); ok {
 		nullable, ok := v.(bool)
 		if !ok {
@@ -162,27 +182,7 @@ func geminiTools(body host.Obj, out *host.Obj) {
 				fail("invalid_tools")
 			}
 			for _, d := range declarations {
-				declaration := wire(d, []string{"name", "description", "parameters", "parametersJsonSchema"}, "invalid_tools")
-				toolName := name(get(declaration, "name"), "invalid_tools")
-				if names[toolName] || has(declaration, "parameters") && has(declaration, "parametersJsonSchema") {
-					fail("invalid_tools")
-				}
-				names[toolName] = true
-				function := host.Obj{{Key: "name", Value: toolName}}
-				if description, ok := declaration.Get("description"); ok {
-					function.Set("description", str(description, "invalid_tools", false))
-				}
-				if parameters, ok := declaration.Get("parameters"); ok {
-					function.Set("parameters", geminiSchema(parameters))
-				} else if schema, ok := declaration.Get("parametersJsonSchema"); ok {
-					if _, ok := schema.(host.Obj); !ok {
-						fail("invalid_tools")
-					}
-					function.Set("parameters", deepcopy(schema, "invalid_request"))
-				} else {
-					function.Set("parameters", host.Obj{{Key: "type", Value: "object"}, {Key: "properties", Value: host.Obj{}}})
-				}
-				tools = append(tools, host.Obj{{Key: "type", Value: "function"}, {Key: "function", Value: function}})
+				tools = append(tools, geminiDeclaration(d, names))
 			}
 		}
 		out.Set("tools", tools)
@@ -206,36 +206,66 @@ func geminiTools(body host.Obj, out *host.Obj) {
 		out.Set("tool_choice", choices[mode])
 	}
 	if v, ok := config.Get("allowedFunctionNames"); ok {
-		list, ok := v.([]any)
-		if !ok || len(list) == 0 {
+		geminiAllowed(v, mode, names, out)
+	}
+}
+
+// geminiDeclaration converts one function declaration to a Chat tool, recording its name.
+func geminiDeclaration(d any, names map[string]bool) host.Obj {
+	declaration := wire(d, []string{"name", "description", "parameters", "parametersJsonSchema"}, "invalid_tools")
+	toolName := name(get(declaration, "name"), "invalid_tools")
+	if names[toolName] || has(declaration, "parameters") && has(declaration, "parametersJsonSchema") {
+		fail("invalid_tools")
+	}
+	names[toolName] = true
+	function := host.Obj{{Key: "name", Value: toolName}}
+	if description, ok := declaration.Get("description"); ok {
+		function.Set("description", str(description, "invalid_tools", false))
+	}
+	if parameters, ok := declaration.Get("parameters"); ok {
+		function.Set("parameters", geminiSchema(parameters))
+	} else if schema, ok := declaration.Get("parametersJsonSchema"); ok {
+		if _, ok := schema.(host.Obj); !ok {
+			fail("invalid_tools")
+		}
+		function.Set("parameters", deepcopy(schema, "invalid_request"))
+	} else {
+		function.Set("parameters", host.Obj{{Key: "type", Value: "object"}, {Key: "properties", Value: host.Obj{}}})
+	}
+	return host.Obj{{Key: "type", Value: "function"}, {Key: "function", Value: function}}
+}
+
+// geminiAllowed narrows tool_choice or the tools in *out to allowedFunctionNames.
+func geminiAllowed(v any, mode string, names map[string]bool, out *host.Obj) {
+	list, ok := v.([]any)
+	if !ok || len(list) == 0 {
+		fail("invalid_tool_choice")
+	}
+	allowed := map[string]bool{}
+	for _, item := range list {
+		allowed[name(item, "invalid_tool_choice")] = true
+	}
+	for chosen := range allowed {
+		if !names[chosen] {
 			fail("invalid_tool_choice")
 		}
-		allowed := map[string]bool{}
-		for _, item := range list {
-			allowed[name(item, "invalid_tool_choice")] = true
-		}
-		for chosen := range allowed {
-			if !names[chosen] {
-				fail("invalid_tool_choice")
+	}
+	if len(allowed) != len(list) {
+		fail("invalid_tool_choice")
+	}
+	if mode != "ANY" {
+		fail("unsupported_field")
+	}
+	if len(list) == 1 {
+		out.Set("tool_choice", host.Obj{{Key: "type", Value: "function"}, {Key: "function", Value: host.Obj{{Key: "name", Value: list[0]}}}})
+	} else {
+		kept := []any{}
+		for _, tool := range get(*out, "tools").([]any) {
+			if allowed[get(get(tool, "function"), "name").(string)] {
+				kept = append(kept, tool)
 			}
 		}
-		if len(allowed) != len(list) {
-			fail("invalid_tool_choice")
-		}
-		if mode != "ANY" {
-			fail("unsupported_field")
-		}
-		if len(list) == 1 {
-			out.Set("tool_choice", host.Obj{{Key: "type", Value: "function"}, {Key: "function", Value: host.Obj{{Key: "name", Value: list[0]}}}})
-		} else {
-			kept := []any{}
-			for _, tool := range get(*out, "tools").([]any) {
-				if allowed[get(get(tool, "function"), "name").(string)] {
-					kept = append(kept, tool)
-				}
-			}
-			out.Set("tools", kept)
-		}
+		out.Set("tools", kept)
 	}
 }
 
@@ -311,158 +341,191 @@ func GeminiToChat(input any, model string, stream bool) (out host.Obj, err error
 		out.Set("stream_options", host.Obj{{Key: "include_usage", Value: true}})
 	}
 	if v, ok := body.Get("generationConfig"); ok {
-		config := wire(v, []string{"temperature", "topP", "maxOutputTokens", "stopSequences", "candidateCount"}, "invalid_option")
-		for _, f := range generationFields {
-			item, ok := config.Get(f.key)
-			if !ok {
-				continue
-			}
-			if item == nil {
-				fail("invalid_option")
-			}
-			if f.key == "stopSequences" {
-				list, ok := item.([]any)
-				if !ok {
-					fail("invalid_option")
-				}
-				stops := make([]any, len(list))
-				for i, s := range list {
-					stops[i] = str(s, "invalid_option", true)
-				}
-				item = stops
-			}
-			out.Set(f.target, item)
-		}
+		geminiGeneration(v, &out)
 	}
 	geminiTools(body, &out)
 	messages := []any{}
 	if system, ok := body.Get("systemInstruction"); ok {
-		s := keys(system, set("role", "parts"), "invalid_content")
-		if role, ok := s.Get("role"); ok {
-			str(role, "invalid_content", false) // Google ignores this role.
-		}
-		parts, ok := get(s, "parts").([]any)
-		if !ok || len(parts) == 0 {
-			fail("invalid_content")
-		}
-		text := []any{}
-		for _, part := range parts {
-			keys(part, set("text"), "invalid_content")
-			text = append(text, host.Obj{{Key: "type", Value: "text"}, {Key: "text", Value: str(get(part, "text"), "invalid_content", false)}})
-		}
-		messages = append(messages, host.Obj{{Key: "role", Value: "system"}, {Key: "content", Value: text}})
+		messages = append(messages, geminiSystem(system))
 	}
 	contents, reserved := geminiContents(get(body, "contents"))
-	pending, seen := map[string]string{}, map[string]bool{}
-	var order []string // pending insertion order, for matching by name
+	calls := geminiCalls{pending: map[string]string{}, seen: map[string]bool{}, reserved: reserved}
 	for contentIndex, c := range contents {
-		if len(pending) > 0 && c.role != "user" {
-			fail("invalid_tool_sequence")
-		}
-		text, calls := []any{}, []any{}
-		for partIndex, p := range c.parts {
-			switch p.kind {
-			case "functionCall":
-				if c.role != "model" {
-					fail("invalid_tool_sequence")
-				}
-				callName := name(get(p.data, "name"), "invalid_tools")
-				args, ok := getd(p.data.(host.Obj), "args", host.Obj{}).(host.Obj)
-				if !ok {
-					fail("invalid_tool_arguments")
-				}
-				arguments := jsonText(args, "invalid_tool_arguments")
-				if len(arguments) > MaxToolArgumentBytes {
-					fail("tool_arguments_too_large")
-				}
-				var identity string
-				if id, ok := p.data.(host.Obj).Get("id"); ok {
-					identity = id.(string)
-				} else {
-					base := fmt.Sprintf("gemini_call_%d_%d", contentIndex, partIndex)
-					identity = base
-					for suffix := 1; reserved[identity] || seen[identity]; suffix++ {
-						identity = fmt.Sprintf("%s_%d", base, suffix)
-					}
-				}
-				if seen[identity] {
-					fail("invalid_tool_sequence")
-				}
-				seen[identity] = true
-				pending[identity] = callName
-				order = append(order, identity)
-				calls = append(calls, host.Obj{{Key: "id", Value: identity}, {Key: "type", Value: "function"},
-					{Key: "function", Value: host.Obj{{Key: "name", Value: callName}, {Key: "arguments", Value: arguments}}}})
-			case "functionResponse":
-				if c.role != "user" || len(text) > 0 {
-					fail("invalid_tool_sequence")
-				}
-				callName := name(get(p.data, "name"), "invalid_tools")
-				identity, _ := get(p.data, "id").(string)
-				if get(p.data, "id") == nil {
-					var matches []string
-					for _, key := range order {
-						if pendingName, ok := pending[key]; ok && pendingName == callName {
-							matches = append(matches, key)
-						}
-					}
-					if len(matches) != 1 {
-						fail("invalid_tool_sequence")
-					}
-					identity = matches[0]
-				}
-				if pendingName, ok := pending[identity]; !ok || pendingName != callName {
-					fail("invalid_tool_sequence")
-				}
-				response, ok := get(p.data, "response").(host.Obj)
-				if !ok {
-					fail("invalid_tool_arguments")
-				}
-				messages = append(messages, host.Obj{{Key: "role", Value: "tool"}, {Key: "tool_call_id", Value: identity},
-					{Key: "content", Value: jsonText(response, "invalid_tool_arguments")}})
-				delete(pending, identity)
-			default:
-				if len(pending) > 0 && c.role == "user" {
-					fail("invalid_tool_sequence")
-				}
-				if len(calls) > 0 {
-					// Chat cannot keep text or image parts after a function call.
-					fail("unsupported_field")
-				}
-				if p.kind == "text" {
-					text = append(text, host.Obj{{Key: "type", Value: "text"}, {Key: "text", Value: str(p.data, "invalid_content", false)}})
-					continue
-				}
-				if c.role != "user" {
-					fail("unsupported_field")
-				}
-				data := wire(p.data, []string{"mimeType", "data"}, "invalid_image")
-				mime := str(get(data, "mimeType"), "invalid_image", true)
-				if !set("image/png", "image/jpeg", "image/gif", "image/webp")[mime] {
-					fail("unsupported_field")
-				}
-				url := "data:" + mime + ";base64," + str(get(data, "data"), "invalid_image", true)
-				image := host.Obj{{Key: "type", Value: "image_url"}, {Key: "image_url", Value: host.Obj{{Key: "url", Value: url}}}}
-				content([]any{image}, true)
-				text = append(text, image)
-			}
-		}
-		if len(text) > 0 || len(calls) > 0 {
-			role := "user"
-			if c.role == "model" {
-				role = "assistant"
-			}
-			item := host.Obj{{Key: "role", Value: role}, {Key: "content", Value: nil}}
-			if len(text) > 0 {
-				item.Set("content", text)
-			}
-			if len(calls) > 0 {
-				item.Set("tool_calls", calls)
-			}
-			messages = append(messages, item)
-		}
+		messages = calls.content(c, contentIndex, messages)
 	}
 	out.Set("messages", messages)
 	toMessages(out)
 	return out, nil
+}
+
+func geminiGeneration(v any, out *host.Obj) {
+	config := wire(v, []string{"temperature", "topP", "maxOutputTokens", "stopSequences", "candidateCount"}, "invalid_option")
+	for _, f := range generationFields {
+		item, ok := config.Get(f.key)
+		if !ok {
+			continue
+		}
+		if item == nil {
+			fail("invalid_option")
+		}
+		if f.key == "stopSequences" {
+			list, ok := item.([]any)
+			if !ok {
+				fail("invalid_option")
+			}
+			stops := make([]any, len(list))
+			for i, s := range list {
+				stops[i] = str(s, "invalid_option", true)
+			}
+			item = stops
+		}
+		out.Set(f.target, item)
+	}
+}
+
+func geminiSystem(system any) host.Obj {
+	s := keys(system, set("role", "parts"), "invalid_content")
+	if role, ok := s.Get("role"); ok {
+		str(role, "invalid_content", false) // Google ignores this role.
+	}
+	parts, ok := get(s, "parts").([]any)
+	if !ok || len(parts) == 0 {
+		fail("invalid_content")
+	}
+	text := []any{}
+	for _, part := range parts {
+		keys(part, set("text"), "invalid_content")
+		text = append(text, host.Obj{{Key: "type", Value: "text"}, {Key: "text", Value: str(get(part, "text"), "invalid_content", false)}})
+	}
+	return host.Obj{{Key: "role", Value: "system"}, {Key: "content", Value: text}}
+}
+
+// geminiCalls tracks function call ids across the contents of one request.
+type geminiCalls struct {
+	pending  map[string]string
+	seen     map[string]bool
+	reserved map[string]bool
+	order    []string // pending insertion order, for matching by name
+}
+
+func (g *geminiCalls) content(c geminiContent, contentIndex int, messages []any) []any {
+	if len(g.pending) > 0 && c.role != "user" {
+		fail("invalid_tool_sequence")
+	}
+	text, calls := []any{}, []any{}
+	for partIndex, p := range c.parts {
+		switch p.kind {
+		case "functionCall":
+			if c.role != "model" {
+				fail("invalid_tool_sequence")
+			}
+			calls = append(calls, g.call(p, contentIndex, partIndex))
+		case "functionResponse":
+			if c.role != "user" || len(text) > 0 {
+				fail("invalid_tool_sequence")
+			}
+			messages = append(messages, g.response(p))
+		default:
+			if len(g.pending) > 0 && c.role == "user" {
+				fail("invalid_tool_sequence")
+			}
+			if len(calls) > 0 {
+				// Chat cannot keep text or image parts after a function call.
+				fail("unsupported_field")
+			}
+			text = append(text, geminiMedia(p, c.role))
+		}
+	}
+	if len(text) > 0 || len(calls) > 0 {
+		role := "user"
+		if c.role == "model" {
+			role = "assistant"
+		}
+		item := host.Obj{{Key: "role", Value: role}, {Key: "content", Value: nil}}
+		if len(text) > 0 {
+			item.Set("content", text)
+		}
+		if len(calls) > 0 {
+			item.Set("tool_calls", calls)
+		}
+		messages = append(messages, item)
+	}
+	return messages
+}
+
+func (g *geminiCalls) call(p geminiPart, contentIndex, partIndex int) host.Obj {
+	callName := name(get(p.data, "name"), "invalid_tools")
+	args, ok := getd(p.data.(host.Obj), "args", host.Obj{}).(host.Obj)
+	if !ok {
+		fail("invalid_tool_arguments")
+	}
+	arguments := jsonText(args, "invalid_tool_arguments")
+	if len(arguments) > MaxToolArgumentBytes {
+		fail("tool_arguments_too_large")
+	}
+	var identity string
+	if id, ok := p.data.(host.Obj).Get("id"); ok {
+		identity = id.(string)
+	} else {
+		base := fmt.Sprintf("gemini_call_%d_%d", contentIndex, partIndex)
+		identity = base
+		for suffix := 1; g.reserved[identity] || g.seen[identity]; suffix++ {
+			identity = fmt.Sprintf("%s_%d", base, suffix)
+		}
+	}
+	if g.seen[identity] {
+		fail("invalid_tool_sequence")
+	}
+	g.seen[identity] = true
+	g.pending[identity] = callName
+	g.order = append(g.order, identity)
+	return host.Obj{{Key: "id", Value: identity}, {Key: "type", Value: "function"},
+		{Key: "function", Value: host.Obj{{Key: "name", Value: callName}, {Key: "arguments", Value: arguments}}}}
+}
+
+func (g *geminiCalls) response(p geminiPart) host.Obj {
+	callName := name(get(p.data, "name"), "invalid_tools")
+	identity, _ := get(p.data, "id").(string)
+	if get(p.data, "id") == nil {
+		var matches []string
+		for _, key := range g.order {
+			if pendingName, ok := g.pending[key]; ok && pendingName == callName {
+				matches = append(matches, key)
+			}
+		}
+		if len(matches) != 1 {
+			fail("invalid_tool_sequence")
+		}
+		identity = matches[0]
+	}
+	if pendingName, ok := g.pending[identity]; !ok || pendingName != callName {
+		fail("invalid_tool_sequence")
+	}
+	response, ok := get(p.data, "response").(host.Obj)
+	if !ok {
+		fail("invalid_tool_arguments")
+	}
+	message := host.Obj{{Key: "role", Value: "tool"}, {Key: "tool_call_id", Value: identity},
+		{Key: "content", Value: jsonText(response, "invalid_tool_arguments")}}
+	delete(g.pending, identity)
+	return message
+}
+
+// geminiMedia converts a text or inlineData part to a Chat content part.
+func geminiMedia(p geminiPart, role string) host.Obj {
+	if p.kind == "text" {
+		return host.Obj{{Key: "type", Value: "text"}, {Key: "text", Value: str(p.data, "invalid_content", false)}}
+	}
+	if role != "user" {
+		fail("unsupported_field")
+	}
+	data := wire(p.data, []string{"mimeType", "data"}, "invalid_image")
+	mime := str(get(data, "mimeType"), "invalid_image", true)
+	if !set("image/png", "image/jpeg", "image/gif", "image/webp")[mime] {
+		fail("unsupported_field")
+	}
+	url := "data:" + mime + ";base64," + str(get(data, "data"), "invalid_image", true)
+	image := host.Obj{{Key: "type", Value: "image_url"}, {Key: "image_url", Value: host.Obj{{Key: "url", Value: url}}}}
+	content([]any{image}, true)
+	return image
 }

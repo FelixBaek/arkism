@@ -258,20 +258,7 @@ func runCodegraphIndex(ctx context.Context, run cgRun) (cgSummary, error) {
 	if dry {
 		return sum, nil
 	}
-	// A full run drops what the server has but the tree no longer does.
-	removed := res.Removed
-	if opt.Known == nil {
-		local := map[string]bool{}
-		for _, f := range res.Files {
-			local[f.Path] = true
-		}
-		for p := range known.Files {
-			if !local[p] && (opt.Only == nil || inPrefixes(p, opt.Only)) {
-				removed = append(removed, p)
-			}
-		}
-		sort.Strings(removed)
-	}
+	removed := cgRemoved(res, known.Files, opt)
 	started := time.Now()
 	rev := known.Revision
 	send := func(b *cgBatch) error {
@@ -332,6 +319,24 @@ func runCodegraphIndex(ctx context.Context, run cgRun) (cgSummary, error) {
 	sum.Unchanged = sum.Batches == 0
 	sum.Server, sum.Revision, sum.UploadMS = &server, server.Revision, time.Since(started).Milliseconds()
 	return sum, nil
+}
+
+// A full run drops what the server has but the tree no longer does.
+func cgRemoved(res codegraph.Result, known map[string]string, opt codegraph.Options) []string {
+	removed := res.Removed
+	if opt.Known == nil {
+		local := map[string]bool{}
+		for _, f := range res.Files {
+			local[f.Path] = true
+		}
+		for p := range known {
+			if !local[p] && (opt.Only == nil || inPrefixes(p, opt.Only)) {
+				removed = append(removed, p)
+			}
+		}
+		sort.Strings(removed)
+	}
+	return removed
 }
 
 func inPrefixes(p string, prefixes []string) bool {

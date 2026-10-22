@@ -66,6 +66,26 @@ func readGeminiQuota(home, state string, now time.Time) geminiQuota {
 	return q
 }
 
+// geminiBucket is one retrieveUserQuota bucket as a quota row; ok is false for a malformed one.
+func geminiBucket(b any) (map[string]any, bool) {
+	m, ok := b.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	model, _ := m["modelId"].(string)
+	fraction, ok := m["remainingFraction"].(float64)
+	if model == "" || !ok || fraction < 0 || fraction > 1 {
+		return nil, false
+	}
+	quota := map[string]any{"window": "day-" + model, "model": model, "left_pct": int(math.Floor(fraction * 100))}
+	if reset, ok := m["resetTime"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, reset); err == nil {
+			quota["resets_at"] = t.UTC().Format(time.RFC3339)
+		}
+	}
+	return quota, true
+}
+
 func fetchGeminiQuota(home string, now time.Time) geminiQuota {
 	q := geminiQuota{Status: "unavailable", Quotas: []map[string]any{}, CheckedAt: now.UTC().Format(time.RFC3339)}
 	raw, err := os.ReadFile(filepath.Join(home, ".gemini", "oauth_creds.json"))
@@ -110,22 +130,9 @@ func fetchGeminiQuota(home string, now time.Time) geminiQuota {
 	}
 	buckets, _ := res["buckets"].([]any)
 	for _, b := range buckets {
-		m, ok := b.(map[string]any)
-		if !ok {
-			continue
+		if quota, ok := geminiBucket(b); ok {
+			q.Quotas = append(q.Quotas, quota)
 		}
-		model, _ := m["modelId"].(string)
-		fraction, ok := m["remainingFraction"].(float64)
-		if model == "" || !ok || fraction < 0 || fraction > 1 {
-			continue
-		}
-		quota := map[string]any{"window": "day-" + model, "model": model, "left_pct": int(math.Floor(fraction * 100))}
-		if reset, ok := m["resetTime"].(string); ok {
-			if t, err := time.Parse(time.RFC3339, reset); err == nil {
-				quota["resets_at"] = t.UTC().Format(time.RFC3339)
-			}
-		}
-		q.Quotas = append(q.Quotas, quota)
 	}
 	// Lowest remaining first, so the card shows what runs out soonest.
 	sort.SliceStable(q.Quotas, func(i, j int) bool { return q.Quotas[i]["left_pct"].(int) < q.Quotas[j]["left_pct"].(int) })

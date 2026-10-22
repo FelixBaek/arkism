@@ -67,26 +67,55 @@ func validateInputs(datasetRaw, environmentRaw []byte, plan map[string]any, toke
 	if dataset == nil || env == nil {
 		return nil, nil, errValue
 	}
+	if err := validateDataset(dataset); err != nil {
+		return nil, nil, err
+	}
+	if err := validateArgv(env); err != nil {
+		return nil, nil, err
+	}
+	if err := validateChildEnv(env, token); err != nil {
+		return nil, nil, err
+	}
+	if err := verifyFiles(env); err != nil {
+		return nil, nil, err
+	}
+	return dataset, env, nil
+}
+
+func validateDataset(dataset map[string]any) error {
 	cases, ok := dataset["cases"].([]any)
 	if !keysAre(dataset, "cases") || !ok || len(cases) < 3 || len(cases) > 64 {
-		return nil, nil, cmpErr("invalid_dataset")
+		return cmpErr("invalid_dataset")
 	}
-	seen, categories, heldOut := map[string]bool{}, map[string]bool{}, false
+	categories, heldOut, err := caseCoverage(cases)
+	if err != nil {
+		return err
+	}
+	if len(categories) != 3 || !categories[`"quality"`] || !categories[`"regression"`] || !categories[`"safety"`] || !heldOut {
+		return cmpErr("missing_evaluation_coverage")
+	}
+	return nil
+}
+
+func caseCoverage(cases []any) (categories map[string]bool, heldOut bool, err error) {
+	seen := map[string]bool{}
+	categories = map[string]bool{}
 	for _, c := range cases {
 		cs := obj(c)
 		id, idOK := cs["id"].(string)
 		held, heldOK := cs["held_out"].(bool)
 		if !keysAre(cs, "id", "category", "input", "expected", "held_out") || !idOK || !caseID.MatchString(id) || seen[id] || !heldOK {
-			return nil, nil, cmpErr("invalid_case")
+			return nil, false, cmpErr("invalid_case")
 		}
 		seen[id] = true
 		category := mustCanonical(cs["category"]) // categories may be any JSON value
 		categories[category] = true
 		heldOut = heldOut || category == `"quality"` && held
 	}
-	if len(categories) != 3 || !categories[`"quality"`] || !categories[`"regression"`] || !categories[`"safety"`] || !heldOut {
-		return nil, nil, cmpErr("missing_evaluation_coverage")
-	}
+	return categories, heldOut, nil
+}
+
+func validateArgv(env map[string]any) error {
 	rest := map[string]any{}
 	for k, v := range env {
 		if k != "companions" {
@@ -95,26 +124,34 @@ func validateInputs(datasetRaw, environmentRaw []byte, plan map[string]any, toke
 	}
 	argv, argvOK := env["argv"].([]any)
 	if !keysAre(rest, "argv", "files", "env", "timeout_ms", "max_output_bytes") || !same(getOr(env, "companions", "skill_dir"), "skill_dir") || !argvOK || len(argv) == 0 {
-		return nil, nil, cmpErr("invalid_environment")
+		return cmpErr("invalid_environment")
 	}
 	for _, x := range argv {
 		if s, ok := x.(string); !ok || s == "" || strings.Contains(s, "\x00") {
-			return nil, nil, cmpErr("invalid_environment")
+			return cmpErr("invalid_environment")
 		}
 	}
 	files, filesOK := env["files"].(map[string]any)
 	argv0 := argv[0].(string)
 	if _, pinned := files[argv0]; !filepath.IsAbs(argv0) || !filesOK || !pinned || len(files) < 1 || len(files) > 64 {
-		return nil, nil, cmpErr("unpinned_executable")
+		return cmpErr("unpinned_executable")
 	}
+	return pinnedArguments(argv, files)
+}
+
+func pinnedArguments(argv []any, files map[string]any) error {
 	for _, x := range argv {
 		arg := x.(string)
 		if st, err := os.Stat(arg); filepath.IsAbs(arg) && err == nil && st.Mode().IsRegular() {
 			if _, pinned := files[arg]; !pinned {
-				return nil, nil, cmpErr("unpinned_argument_file")
+				return cmpErr("unpinned_argument_file")
 			}
 		}
 	}
+	return nil
+}
+
+func validateChildEnv(env map[string]any, token string) error {
 	child, childOK := env["env"].(map[string]any)
 	for k, v := range child {
 		if s, ok := v.(string); !ok || !envKey.MatchString(k) || strings.Contains(s, "\x00") {
@@ -122,20 +159,17 @@ func validateInputs(datasetRaw, environmentRaw []byte, plan map[string]any, toke
 		}
 	}
 	if !childOK {
-		return nil, nil, cmpErr("invalid_child_environment")
+		return cmpErr("invalid_child_environment")
 	}
 	if token != "" && strings.Contains(mustCanonical(env), token) {
-		return nil, nil, cmpErr("evaluator_credential_in_adapter")
+		return cmpErr("evaluator_credential_in_adapter")
 	}
 	timeout, tOK := host.Int(env["timeout_ms"])
 	limit, lOK := host.Int(env["max_output_bytes"])
 	if !tOK || timeout < 1 || timeout > 3600000 || !lOK || limit < 128 || limit > 1048576 {
-		return nil, nil, cmpErr("invalid_execution_limits")
+		return cmpErr("invalid_execution_limits")
 	}
-	if err := verifyFiles(env); err != nil {
-		return nil, nil, err
-	}
-	return dataset, env, nil
+	return nil
 }
 
 func verifyFiles(env map[string]any) error {
@@ -177,25 +211,9 @@ func executeAdapter(env map[string]any, payload map[string]any, files map[string
 	}
 	defer os.RemoveAll(cwd)
 	if files != nil {
-		root := filepath.Join(cwd, "skill")
-		for relative, raw := range files {
-			p := filepath.Join(root, relative)
-			if err = os.MkdirAll(filepath.Dir(p), 0o777); err != nil {
-				return
-			}
-			if err = os.WriteFile(p, raw, 0o666); err != nil {
-				return
-			}
-		}
-		if err = os.MkdirAll(root, 0o777); err != nil {
+		if payload, err = writeSkillDir(cwd, payload, files); err != nil {
 			return
 		}
-		withDir := map[string]any{"skill_dir": root}
-		for k, v := range payload {
-			withDir[k] = v
-		}
-		withDir["skill_dir"] = root
-		payload = withDir
 	}
 	stdout, err := os.CreateTemp("", "arkism-compare-out-")
 	if err != nil {
@@ -277,6 +295,29 @@ func executeAdapter(env map[string]any, payload map[string]any, files map[string
 		return nil, 0, "", "", cmpErr("invalid_adapter_measurement")
 	}
 	return result, elapsed, started, utcNow(), nil
+}
+
+// writeSkillDir writes files under cwd/skill and returns payload with skill_dir set.
+func writeSkillDir(cwd string, payload map[string]any, files map[string][]byte) (map[string]any, error) {
+	root := filepath.Join(cwd, "skill")
+	for relative, raw := range files {
+		p := filepath.Join(root, relative)
+		if err := os.MkdirAll(filepath.Dir(p), 0o777); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(p, raw, 0o666); err != nil {
+			return nil, err
+		}
+	}
+	if err := os.MkdirAll(root, 0o777); err != nil {
+		return nil, err
+	}
+	withDir := map[string]any{"skill_dir": root}
+	for k, v := range payload {
+		withDir[k] = v
+	}
+	withDir["skill_dir"] = root
+	return withDir, nil
 }
 
 // comparisonAPI is the Arkism API as the comparison runner sees it (a fake in tests).
@@ -417,27 +458,7 @@ func prepareTrial(api comparisonAPI, proposal map[string]any, trialID string) (o
 	baseline, baselineID, baselineRevision := "", "", any(0)
 	sensitivity := orDefault(getOr(candidate, "sensitivity", nil), "private")
 	if truthy(at(plan, "baseline_version")) {
-		r, err := api.request("/v1/skills/resolve", map[string]any{"scope": scope, "refs": []any{mustStr(at(candidate, "skill_id")) + "@latest-approved"}})
-		if err != nil {
-			return nil, err
-		}
-		resolved := list(at(r, "items"))[0]
-		if truthy(getOr(resolved, "error", nil)) || !same(getOr(resolved, "version_id", nil), at(plan, "baseline_version")) {
-			return nil, cmpErr("baseline_unavailable")
-		}
-		baseline, baselineID = mustStr(at(resolved, "instructions")), mustStr(at(resolved, "version_id"))
-		record, err := api.get("skill_versions", scope, baselineID)
-		if err != nil {
-			return nil, err
-		}
-		baselineRevision = at(record, "revision")
-		if other := orDefault(getOr(record, "sensitivity", nil), "private"); level(other) > level(sensitivity) {
-			sensitivity = other
-		}
-		if !same(digest([]byte(baseline)), at(resolved, "content_hash")) {
-			return nil, cmpErr("baseline_content_changed")
-		}
-		if bundles["baseline"], err = pinnedBundle(getOr(resolved, "bundle", nil), getOr(record, "skill_bundle_sha256", "")); err != nil {
+		if baseline, baselineID, baselineRevision, sensitivity, err = pinBaseline(api, scope, candidate, plan, sensitivity, bundles); err != nil {
 			return nil, err
 		}
 	}
@@ -455,6 +476,35 @@ func prepareTrial(api comparisonAPI, proposal map[string]any, trialID string) (o
 		out["trial_id"] = trialID
 	}
 	return out, nil
+}
+
+// pinBaseline resolves the plan's baseline version, records its bundle in bundles, and
+// raises sensitivity to the baseline's when it is stricter.
+func pinBaseline(api comparisonAPI, scope, candidate map[string]any, plan, sensitivity any, bundles map[string]any) (baseline, baselineID string, baselineRevision, raised any, err error) {
+	r, err := api.request("/v1/skills/resolve", map[string]any{"scope": scope, "refs": []any{mustStr(at(candidate, "skill_id")) + "@latest-approved"}})
+	if err != nil {
+		return "", "", nil, nil, err
+	}
+	resolved := list(at(r, "items"))[0]
+	if truthy(getOr(resolved, "error", nil)) || !same(getOr(resolved, "version_id", nil), at(plan, "baseline_version")) {
+		return "", "", nil, nil, cmpErr("baseline_unavailable")
+	}
+	baseline, baselineID = mustStr(at(resolved, "instructions")), mustStr(at(resolved, "version_id"))
+	record, err := api.get("skill_versions", scope, baselineID)
+	if err != nil {
+		return "", "", nil, nil, err
+	}
+	baselineRevision = at(record, "revision")
+	if other := orDefault(getOr(record, "sensitivity", nil), "private"); level(other) > level(sensitivity) {
+		sensitivity = other
+	}
+	if !same(digest([]byte(baseline)), at(resolved, "content_hash")) {
+		return "", "", nil, nil, cmpErr("baseline_content_changed")
+	}
+	if bundles["baseline"], err = pinnedBundle(getOr(resolved, "bundle", nil), getOr(record, "skill_bundle_sha256", "")); err != nil {
+		return "", "", nil, nil, err
+	}
+	return baseline, baselineID, baselineRevision, sensitivity, nil
 }
 
 // pinnedBundle is the version's companion bundle, which must be exactly the one its record pins
@@ -513,43 +563,11 @@ func evaluate(prepared, dataset, env map[string]any) (out map[string]any, err er
 		bundles = map[string]any{"baseline": nil, "candidate": nil}
 	}
 	materialize := same(env["companions"], "skill_dir")
-	// Only an adapter that receives every pinned file can vouch for changed companions.
-	coverage := "materialized"
-	if !materialize {
-		coverage = "body_only"
-	} else {
-		for _, v := range []string{"baseline", "candidate"} {
-			if b := bundles[v]; truthy(b) {
-				for _, f := range list(at(b, "files")) {
-					if _, ok := obj(f)["omitted"]; ok {
-						coverage = "partial"
-					}
-				}
-			}
-		}
-	}
+	coverage := companionCoverage(materialize, bundles)
 	skills := obj(at(prepared, "skills"))
-	var rows []any
-	for index, c := range list(at(dataset, "cases")) {
-		variants := []string{"baseline", "candidate"}
-		if index%2 == 1 {
-			variants = []string{"candidate", "baseline"}
-		}
-		for _, variant := range variants {
-			skill := mustStr(at(skills, variant))
-			var files map[string][]byte
-			if materialize {
-				files = skillFolder(skill, at(bundles, variant))
-			}
-			result, duration, started, finished, err := executeAdapter(env, map[string]any{"input": at(c, "input"), "skill": skill}, files)
-			if err != nil {
-				return nil, err
-			}
-			output := mustCanonical(result["output"])
-			rows = append(rows, map[string]any{"case_sha256": digest([]byte(mustCanonical(c))), "category": at(c, "category"), "variant": variant,
-				"passed": output == mustCanonical(at(c, "expected")), "output_sha256": digest([]byte(output)), "cost": result["cost"],
-				"duration_ms": duration, "started_at": started, "finished_at": finished})
-		}
+	rows, err := runCases(dataset, env, skills, bundles, materialize)
+	if err != nil {
+		return nil, err
 	}
 	score := func(variant string) any {
 		passed, total := 0, 0
@@ -567,23 +585,7 @@ func evaluate(prepared, dataset, env map[string]any) (out map[string]any, err er
 		}
 		return pyFloat(float64(passed) / float64(total))
 	}
-	var costs []any
-	var duration int64
-	regression, safety := true, true
-	for _, r := range rows {
-		m := r.(map[string]any)
-		if m["variant"] != "candidate" {
-			continue
-		}
-		costs = append(costs, m["cost"])
-		duration += m["duration_ms"].(int64)
-		if same(m["category"], "regression") && m["passed"] != true {
-			regression = false
-		}
-		if same(m["category"], "safety") && m["passed"] != true {
-			safety = false
-		}
-	}
+	costs, duration, regression, safety := candidateTotals(rows)
 	cost, err := pySum(costs)
 	if err != nil {
 		return nil, err
@@ -620,6 +622,69 @@ func evaluate(prepared, dataset, env map[string]any) (out map[string]any, err er
 	return map[string]any{"format_version": 1, "candidate": at(prepared, "candidate"), "baseline_id": at(prepared, "baseline_id"),
 		"baseline_revision": getOr(prepared, "baseline_revision", 0), "content_sha256": contentSHA, "dataset_sha256": at(plan, "dataset_sha256"),
 		"environment_sha256": at(plan, "environment_sha256"), "comparison_report": report, "passed": passed, "cases": rows}, nil
+}
+
+// Only an adapter that receives every pinned file can vouch for changed companions.
+func companionCoverage(materialize bool, bundles map[string]any) string {
+	if !materialize {
+		return "body_only"
+	}
+	coverage := "materialized"
+	for _, v := range []string{"baseline", "candidate"} {
+		if b := bundles[v]; truthy(b) {
+			for _, f := range list(at(b, "files")) {
+				if _, ok := obj(f)["omitted"]; ok {
+					coverage = "partial"
+				}
+			}
+		}
+	}
+	return coverage
+}
+
+func runCases(dataset, env, skills, bundles map[string]any, materialize bool) ([]any, error) {
+	var rows []any
+	for index, c := range list(at(dataset, "cases")) {
+		variants := []string{"baseline", "candidate"}
+		if index%2 == 1 {
+			variants = []string{"candidate", "baseline"}
+		}
+		for _, variant := range variants {
+			skill := mustStr(at(skills, variant))
+			var files map[string][]byte
+			if materialize {
+				files = skillFolder(skill, at(bundles, variant))
+			}
+			result, duration, started, finished, err := executeAdapter(env, map[string]any{"input": at(c, "input"), "skill": skill}, files)
+			if err != nil {
+				return nil, err
+			}
+			output := mustCanonical(result["output"])
+			rows = append(rows, map[string]any{"case_sha256": digest([]byte(mustCanonical(c))), "category": at(c, "category"), "variant": variant,
+				"passed": output == mustCanonical(at(c, "expected")), "output_sha256": digest([]byte(output)), "cost": result["cost"],
+				"duration_ms": duration, "started_at": started, "finished_at": finished})
+		}
+	}
+	return rows, nil
+}
+
+func candidateTotals(rows []any) (costs []any, duration int64, regression, safety bool) {
+	regression, safety = true, true
+	for _, r := range rows {
+		m := r.(map[string]any)
+		if m["variant"] != "candidate" {
+			continue
+		}
+		costs = append(costs, m["cost"])
+		duration += m["duration_ms"].(int64)
+		if same(m["category"], "regression") && m["passed"] != true {
+			regression = false
+		}
+		if same(m["category"], "safety") && m["passed"] != true {
+			safety = false
+		}
+	}
+	return costs, duration, regression, safety
 }
 
 func publish(api comparisonAPI, prepared, result map[string]any) (any, error) {
@@ -704,17 +769,8 @@ func evaluateMain(argv []string, stdin io.Reader, stdout, stderr io.Writer) (cod
 	if err == nil && len(a.pos) > 0 {
 		err = fmt.Errorf("unrecognized arguments: %s", strings.Join(a.pos, " "))
 	}
-	if err == nil && (!a.has("proposal") || !a.has("token-file")) {
-		err = errors.New("the following arguments are required: --proposal, --token-file")
-	}
 	if err == nil {
-		if a.has("resume-result") {
-			if a.flags["execute"] || a.has("output") || !a.flags["publish"] {
-				err = errors.New("--resume-result requires --publish and excludes --execute/--output")
-			}
-		} else if !a.has("dataset") || !a.has("environment") || a.flags["publish"] && !a.flags["execute"] || a.flags["execute"] && !a.has("output") {
-			err = errors.New("dataset/environment required; execution requires --output; publication requires --execute")
-		}
+		err = checkEvaluateArgs(a)
 	}
 	if err != nil {
 		return usageError(stderr, prog, evaluateUsage, err)
@@ -743,6 +799,20 @@ func evaluateMain(argv []string, stdin io.Reader, stdout, stderr io.Writer) (cod
 	return 0
 }
 
+func checkEvaluateArgs(a *args) error {
+	if !a.has("proposal") || !a.has("token-file") {
+		return errors.New("the following arguments are required: --proposal, --token-file")
+	}
+	if a.has("resume-result") {
+		if a.flags["execute"] || a.has("output") || !a.flags["publish"] {
+			return errors.New("--resume-result requires --publish and excludes --execute/--output")
+		}
+	} else if !a.has("dataset") || !a.has("environment") || a.flags["publish"] && !a.flags["execute"] || a.flags["execute"] && !a.has("output") {
+		return errors.New("dataset/environment required; execution requires --output; publication requires --execute")
+	}
+	return nil
+}
+
 func runEvaluate(a *args, apiURL string) (map[string]any, error) {
 	p, err := readJSONArg(a.vals["proposal"])
 	if err != nil {
@@ -761,27 +831,7 @@ func runEvaluate(a *args, apiURL string) (map[string]any, error) {
 		return nil, err
 	}
 	if path, ok := a.vals["resume-result"]; ok {
-		r, err := readJSONArg(path)
-		if err != nil {
-			return nil, err
-		}
-		result := obj(r)
-		if result == nil || !same(result["format_version"], 1) {
-			return nil, cmpErr("legacy_result_requires_review")
-		}
-		expected := obj(at(proposal, "record"))
-		target := map[string]any{"collection": "skill_versions", "id": at(expected, "id"), "revision": at(expected, "revision")}
-		if !same(at(result, "candidate"), target) || !same(at(at(result, "comparison_report"), "plan_sha256"), at(proposal, "comparison_plan_sha256")) {
-			return nil, cmpErr("resume_target_mismatch")
-		}
-		receipt, err := publish(api, map[string]any{"scope": at(expected, "scope")}, result)
-		if err != nil {
-			return nil, err
-		}
-		if err := saveReceipt(path, receipt); err != nil {
-			return nil, err
-		}
-		return map[string]any{"published": true, "resumed": true, "evaluation": at(receipt, "evaluation")}, nil
+		return resumeEvaluation(api, proposal, path)
 	}
 	prepared, err := prepare(api, proposal)
 	if err != nil {
@@ -806,6 +856,34 @@ func runEvaluate(a *args, apiURL string) (map[string]any, error) {
 	if !a.flags["execute"] {
 		return map[string]any{"ready": true, "cases": len(list(dataset["cases"])), "candidate": prepared["candidate"]}, nil
 	}
+	return executeEvaluation(a, api, proposal, prepared, dataset, env)
+}
+
+func resumeEvaluation(api *evalAPI, proposal map[string]any, path string) (map[string]any, error) {
+	r, err := readJSONArg(path)
+	if err != nil {
+		return nil, err
+	}
+	result := obj(r)
+	if result == nil || !same(result["format_version"], 1) {
+		return nil, cmpErr("legacy_result_requires_review")
+	}
+	expected := obj(at(proposal, "record"))
+	target := map[string]any{"collection": "skill_versions", "id": at(expected, "id"), "revision": at(expected, "revision")}
+	if !same(at(result, "candidate"), target) || !same(at(at(result, "comparison_report"), "plan_sha256"), at(proposal, "comparison_plan_sha256")) {
+		return nil, cmpErr("resume_target_mismatch")
+	}
+	receipt, err := publish(api, map[string]any{"scope": at(expected, "scope")}, result)
+	if err != nil {
+		return nil, err
+	}
+	if err := saveReceipt(path, receipt); err != nil {
+		return nil, err
+	}
+	return map[string]any{"published": true, "resumed": true, "evaluation": at(receipt, "evaluation")}, nil
+}
+
+func executeEvaluation(a *args, api *evalAPI, proposal, prepared, dataset, env map[string]any) (map[string]any, error) {
 	output := a.vals["output"]
 	if exists(output) || exists(output+".receipt") {
 		return nil, cmpErr("output_already_exists")

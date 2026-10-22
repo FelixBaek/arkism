@@ -73,33 +73,59 @@ func processOutcome(evaluator comparisonAPI, evaluatorToken string, observation 
 	if err != nil {
 		return nil, err
 	}
+	events, evidence, snapshots, exposed, err := traceEvents(evaluator, scope, target, traceRef, trace)
+	if err != nil {
+		return nil, err
+	}
+	if !exposed {
+		return map[string]any{"state": "unobserved", "reason": "target_not_delivered"}, nil
+	}
+	observed, passed, err := runChecker(env, dimension, target, memory, events)
+	if err != nil {
+		return nil, err
+	}
+	if !observed {
+		return map[string]any{"state": "unobserved", "reason": "checker_missing_observation"}, nil
+	}
+	// Reject changes during checker execution, including deletion and revocation.
+	if err := unchanged(evaluator, scope, append([][2]map[string]any{{target, memory}, {traceRef, trace}}, snapshots...)); err != nil {
+		return nil, err
+	}
+	operation := digest([]byte(mustCanonical([]any{scope, target, traceRef, evidence, checkerSHA, dimension})))
+	receipt, err := evaluator.request("/v1/memory-outcomes", map[string]any{"scope": scope, "target": target, "trace": traceRef,
+		"evidence": evidence, "checker_sha256": checkerSHA, "event_id": operation, "passed": passed, "dimension": dimension})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"state": "observed", "event_id": operation, "passed": passed, "receipt": receipt}, nil
+}
+
+// traceEvents reads the trace's source events; exposed tells whether any of them delivered target.
+func traceEvents(evaluator comparisonAPI, scope, target, traceRef, trace map[string]any) (events, evidence []any, snapshots [][2]map[string]any, exposed bool, err error) {
 	pointers := list(getOr(trace, "sources", []any{}))
 	if len(pointers) < 1 || len(pointers) > 64 {
-		return nil, cmpErr("outcome_evidence_unavailable")
+		return nil, nil, nil, false, cmpErr("outcome_evidence_unavailable")
 	}
-	var events, evidence []any
-	var snapshots [][2]map[string]any
-	exposed := false
 	for _, pointer := range pointers {
 		r, err := evaluator.get("sources", scope, mustStr(at(pointer, "source_id")))
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, false, err
 		}
 		ref := map[string]any{"collection": "sources", "id": at(r, "id"), "revision": at(r, "revision")}
 		row, err := liveRef(evaluator, scope, ref)
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, false, err
 		}
 		if !same(row["trace_id"], traceRef["id"]) || !truthy(row["source_event_id"]) {
-			return nil, cmpErr("outcome_trace_lineage_invalid")
+			return nil, nil, nil, false, cmpErr("outcome_trace_lineage_invalid")
 		}
 		p, err := strictJSON([]byte(mustStr(at(row, "text"))))
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, false, err
 		}
 		payload := obj(p)
 		if payload == nil {
-			return nil, cmpErr("outcome_event_invalid")
+			return nil, nil, nil, false, cmpErr("outcome_event_invalid")
 		}
 		// Context delivery is necessary attribution, never itself a success.
 		for _, retrieved := range list(payload["retrieved"]) {
@@ -109,40 +135,36 @@ func processOutcome(evaluator comparisonAPI, evaluatorToken string, observation 
 		snapshots = append(snapshots, [2]map[string]any{ref, row})
 		events = append(events, map[string]any{"source": ref, "kind": row["kind"], "payload": payload})
 	}
-	if !exposed {
-		return map[string]any{"state": "unobserved", "reason": "target_not_delivered"}, nil
-	}
+	return events, evidence, snapshots, exposed, nil
+}
+
+func runChecker(env map[string]any, dimension any, target, memory map[string]any, events []any) (observed, passed bool, err error) {
 	result, _, _, _, err := executeAdapter(env, map[string]any{"input": map[string]any{"dimension": dimension, "target": target,
 		"memory": at(memory, "text"), "memory_context": memory["memory_context"], "events": events}, "skill": ""}, nil)
 	if err != nil {
-		return nil, err
+		return false, false, err
 	}
 	output := obj(result["output"])
 	observed, isBool := output["observed"].(bool)
 	passed, passedBool := output["passed"].(bool)
 	if output == nil || !keysAre(output, "observed", "passed") || !isBool || output["passed"] != nil && !passedBool || observed != (output["passed"] != nil) {
-		return nil, cmpErr("independent_checker_result_invalid")
+		return false, false, cmpErr("independent_checker_result_invalid")
 	}
-	if !observed {
-		return map[string]any{"state": "unobserved", "reason": "checker_missing_observation"}, nil
-	}
-	// Reject changes during checker execution, including deletion and revocation.
-	for _, snap := range append([][2]map[string]any{{target, memory}, {traceRef, trace}}, snapshots...) {
+	return observed, passed, nil
+}
+
+// unchanged fails when any {ref, row} snapshot no longer matches the live record.
+func unchanged(evaluator comparisonAPI, scope map[string]any, snapshots [][2]map[string]any) error {
+	for _, snap := range snapshots {
 		now, err := liveRef(evaluator, scope, snap[0])
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !same(now, snap[1]) {
-			return nil, cmpErr("outcome_material_changed")
+			return cmpErr("outcome_material_changed")
 		}
 	}
-	operation := digest([]byte(mustCanonical([]any{scope, target, traceRef, evidence, checkerSHA, dimension})))
-	receipt, err := evaluator.request("/v1/memory-outcomes", map[string]any{"scope": scope, "target": target, "trace": traceRef,
-		"evidence": evidence, "checker_sha256": checkerSHA, "event_id": operation, "passed": passed, "dimension": dimension})
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"state": "observed", "event_id": operation, "passed": passed, "receipt": receipt}, nil
+	return nil
 }
 
 // drainReceipts is a bounded per-run consumer of the receipt spool; a failure keeps only
@@ -163,49 +185,68 @@ func drainReceipts(evaluator comparisonAPI, evaluatorToken, dir string, configur
 		if len(results) == 32 { // finished receipts stay on disk, so bound the work, not the listing
 			break
 		}
-		raw, err := os.ReadFile(path)
+		job, err := readSpoolJob(path)
 		if err != nil {
 			return nil, err
-		}
-		j, err := strictJSON(raw)
-		if err != nil {
-			return nil, err
-		}
-		job := obj(j)
-		if job == nil {
-			return nil, errValue
 		}
 		retryAt, _ := num(job["retry_at"])
 		if state := str(job["state"]); retryAt > now || state == "done" || state == "rejected" || state == "retry_exhausted" {
 			continue
 		}
 		state, err := drainReceipt(evaluator, evaluatorToken, job, configurations, producerToken)
-		var ce *comparisonError
-		switch code := host.HTTPCode(err); {
-		case err == nil:
-		case code == 403 || code == 404 || code == 409 || code == 410:
-			state = "rejected"
-		case errors.As(err, &ce) && (ce.code == "outcome_source_changed" || ce.code == "outcome_material_changed" || ce.code == "crew_trace_excluded"):
-			state = "rejected"
-		default:
-			state = "pending"
-		}
-		attempts, _ := host.Int(job["attempts"])
-		attempts++
-		job["state"], job["attempts"] = state, attempts
-		if state != "done" && state != "rejected" {
-			if attempts >= 8 {
-				job["state"] = "retry_exhausted"
-			} else {
-				job["retry_at"] = pyFloat(now + math.Min(3600, 60*math.Pow(2, float64(attempts-1))))
-			}
-		}
+		attempts := recordAttempt(job, drainState(state, err), now)
 		if err := host.AtomicWrite(path, mustCanonical(job)); err != nil {
 			return nil, err
 		}
 		results = append(results, map[string]any{"receipt_id": strings.TrimSuffix(filepath.Base(path), ".json"), "state": job["state"], "attempts": attempts})
 	}
 	return results, nil
+}
+
+func readSpoolJob(path string) (map[string]any, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	j, err := strictJSON(raw)
+	if err != nil {
+		return nil, err
+	}
+	job := obj(j)
+	if job == nil {
+		return nil, errValue
+	}
+	return job, nil
+}
+
+// drainState is the spool state after one drain attempt that returned state and err.
+func drainState(state string, err error) string {
+	var ce *comparisonError
+	switch code := host.HTTPCode(err); {
+	case err == nil:
+	case code == 403 || code == 404 || code == 409 || code == 410:
+		state = "rejected"
+	case errors.As(err, &ce) && (ce.code == "outcome_source_changed" || ce.code == "outcome_material_changed" || ce.code == "crew_trace_excluded"):
+		state = "rejected"
+	default:
+		state = "pending"
+	}
+	return state
+}
+
+// recordAttempt counts one attempt on job and schedules its retry; it returns the attempt count.
+func recordAttempt(job map[string]any, state string, now float64) int64 {
+	attempts, _ := host.Int(job["attempts"])
+	attempts++
+	job["state"], job["attempts"] = state, attempts
+	if state != "done" && state != "rejected" {
+		if attempts >= 8 {
+			job["state"] = "retry_exhausted"
+		} else {
+			job["retry_at"] = pyFloat(now + math.Min(3600, 60*math.Pow(2, float64(attempts-1))))
+		}
+	}
+	return attempts
 }
 
 // drainReceipt checks every memory the receipt's trace delivered against every configured checker.
@@ -219,18 +260,41 @@ func drainReceipt(evaluator comparisonAPI, evaluatorToken string, job map[string
 	if err != nil {
 		return "", err
 	}
+	targets, err := deliveredMemories(evaluator, scope, traceRef, trace)
+	if err != nil {
+		return "", err
+	}
+	if len(targets) > 32 {
+		return "", cmpErr("outcome_target_limit")
+	}
+	pending := false
+	for _, target := range targets {
+		p, err := observeTarget(evaluator, evaluatorToken, scope, traceRef, target, configurations, producerToken)
+		if err != nil {
+			return "", err
+		}
+		pending = pending || p
+	}
+	if len(configurations) == 0 || len(targets) == 0 || pending {
+		return "awaiting_observation", nil
+	}
+	return "done", nil
+}
+
+// deliveredMemories lists, once each, the memories the trace's own sources retrieved.
+func deliveredMemories(evaluator comparisonAPI, scope, traceRef, trace map[string]any) ([]any, error) {
 	var targets []any
 	for _, ref := range list(getOr(trace, "sources", []any{})) {
 		source, err := evaluator.get("sources", scope, mustStr(at(ref, "source_id")))
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if !same(getOr(source, "trace_id", nil), traceRef["id"]) {
 			continue
 		}
 		payload, err := strictJSON([]byte(mustStr(at(source, "text"))))
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		for _, target := range list(getOr(payload, "retrieved", []any{})) {
 			known := false
@@ -242,34 +306,30 @@ func drainReceipt(evaluator comparisonAPI, evaluatorToken string, job map[string
 			}
 		}
 	}
-	if len(targets) > 32 {
-		return "", cmpErr("outcome_target_limit")
-	}
-	pending := false
-	for _, target := range targets {
-		for _, config := range configurations {
-			environmentRaw, err := os.ReadFile(mustStr(at(config, "environment")))
-			if err != nil {
-				return "", err
-			}
-			observation := map[string]any{"scope": scope, "trace": traceRef, "target": target, "dimension": at(config, "dimension")}
-			result, err := processOutcome(evaluator, evaluatorToken, observation, environmentRaw, mustStr(at(config, "checker_sha256")), producerToken)
-			if err != nil {
-				// A target changed or erased since delivery is skipped; the receipt's other targets still count.
-				_, gone := liveRef(evaluator, scope, obj(target))
-				var ce *comparisonError
-				if code := host.HTTPCode(gone); code == 404 || code == 410 || errors.As(gone, &ce) && ce.code == "outcome_source_changed" {
-					break
-				}
-				return "", err
-			}
-			pending = pending || result["state"] == "unobserved"
+	return targets, nil
+}
+
+// observeTarget runs every configured checker on one target; pending reports an unobserved result.
+func observeTarget(evaluator comparisonAPI, evaluatorToken string, scope, traceRef map[string]any, target any, configurations []any, producerToken string) (pending bool, err error) {
+	for _, config := range configurations {
+		environmentRaw, err := os.ReadFile(mustStr(at(config, "environment")))
+		if err != nil {
+			return false, err
 		}
+		observation := map[string]any{"scope": scope, "trace": traceRef, "target": target, "dimension": at(config, "dimension")}
+		result, err := processOutcome(evaluator, evaluatorToken, observation, environmentRaw, mustStr(at(config, "checker_sha256")), producerToken)
+		if err != nil {
+			// A target changed or erased since delivery is skipped; the receipt's other targets still count.
+			_, gone := liveRef(evaluator, scope, obj(target))
+			var ce *comparisonError
+			if code := host.HTTPCode(gone); code == 404 || code == 410 || errors.As(gone, &ce) && ce.code == "outcome_source_changed" {
+				return pending, nil
+			}
+			return false, err
+		}
+		pending = pending || result["state"] == "unobserved"
 	}
-	if len(configurations) == 0 || len(targets) == 0 || pending {
-		return "awaiting_observation", nil
-	}
-	return "done", nil
+	return pending, nil
 }
 
 const outcomesUsage = "[-h] [--url URL] --evaluator-token-file EVALUATOR_TOKEN_FILE --producer-token-file PRODUCER_TOKEN_FILE --spool SPOOL --config CONFIG"

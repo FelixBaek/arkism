@@ -228,39 +228,44 @@ func content(value any, images bool) []any {
 			keys(part, set("type", "text"), "invalid_content")
 			result = append(result, host.Obj{{Key: "type", Value: "text"}, {Key: "text", Value: str(get(part, "text"), "invalid_content", false)}})
 		case kind == "image_url" && images:
-			keys(part, set("type", "image_url"), "invalid_image")
-			image := keys(get(part, "image_url"), set("url", "detail"), "invalid_image")
-			if detail, ok := image.Get("detail"); ok && detail != "auto" {
-				fail("unsupported_image_detail")
-			}
-			url := str(get(image, "url"), "invalid_image", true)
-			for _, r := range url {
-				if isSpace(r) || r < 32 {
-					fail("invalid_image")
-				}
-			}
-			var source host.Obj
-			if strings.HasPrefix(url, "data:") {
-				header, data, found := strings.Cut(url, ",")
-				if !found || !imageHeaders[header] || !base64Pattern.MatchString(data) {
-					fail("invalid_image")
-				}
-				if decoded, err := base64.StdEncoding.DecodeString(data); err != nil || len(decoded) == 0 {
-					fail("invalid_image")
-				}
-				source = host.Obj{{Key: "type", Value: "base64"}, {Key: "media_type", Value: header[5 : len(header)-7]}, {Key: "data", Value: data}}
-			} else {
-				if !httpURL(url) {
-					fail("invalid_image")
-				}
-				source = host.Obj{{Key: "type", Value: "url"}, {Key: "url", Value: url}}
-			}
-			result = append(result, host.Obj{{Key: "type", Value: "image"}, {Key: "source", Value: source}})
+			result = append(result, imagePart(part))
 		default:
 			fail("unsupported_field")
 		}
 	}
 	return result
+}
+
+// imagePart converts one image_url content part to a Messages image block.
+func imagePart(part any) host.Obj {
+	keys(part, set("type", "image_url"), "invalid_image")
+	image := keys(get(part, "image_url"), set("url", "detail"), "invalid_image")
+	if detail, ok := image.Get("detail"); ok && detail != "auto" {
+		fail("unsupported_image_detail")
+	}
+	url := str(get(image, "url"), "invalid_image", true)
+	for _, r := range url {
+		if isSpace(r) || r < 32 {
+			fail("invalid_image")
+		}
+	}
+	var source host.Obj
+	if strings.HasPrefix(url, "data:") {
+		header, data, found := strings.Cut(url, ",")
+		if !found || !imageHeaders[header] || !base64Pattern.MatchString(data) {
+			fail("invalid_image")
+		}
+		if decoded, err := base64.StdEncoding.DecodeString(data); err != nil || len(decoded) == 0 {
+			fail("invalid_image")
+		}
+		source = host.Obj{{Key: "type", Value: "base64"}, {Key: "media_type", Value: header[5 : len(header)-7]}, {Key: "data", Value: data}}
+	} else {
+		if !httpURL(url) {
+			fail("invalid_image")
+		}
+		source = host.Obj{{Key: "type", Value: "url"}, {Key: "url", Value: url}}
+	}
+	return host.Obj{{Key: "type", Value: "image"}, {Key: "source", Value: source}}
 }
 
 // isSpace is Python's str.isspace for one character.
@@ -302,27 +307,8 @@ func httpURL(url string) bool {
 	}
 	at := strings.LastIndexByte(netloc, '@')
 	hostport := netloc[at+1:]
-	if open {
-		host := hostport
-		if before, bracketed, ok := strings.Cut(hostport, "["); ok {
-			if before != "" {
-				return false
-			}
-			var after string
-			host, after, _ = strings.Cut(bracketed, "]")
-			if after != "" && !strings.HasPrefix(after, ":") {
-				return false
-			}
-		} else {
-			host, _, _ = strings.Cut(hostport, ":")
-		}
-		if strings.HasPrefix(host, "v") {
-			if !ipvFuture.MatchString(host) {
-				return false
-			}
-		} else if addr, err := netip.ParseAddr(host); err != nil || addr.Is4() {
-			return false
-		}
+	if open && !bracketHost(hostport) {
+		return false
 	}
 	for _, r := range netloc {
 		if nfkcSeparators[r] {
@@ -335,6 +321,36 @@ func httpURL(url string) bool {
 			return false
 		}
 	}
+	return hostPort(hostport)
+}
+
+// bracketHost reports whether a netloc with brackets holds a valid IPv6 or IPvFuture literal.
+func bracketHost(hostport string) bool {
+	host := hostport
+	if before, bracketed, ok := strings.Cut(hostport, "["); ok {
+		if before != "" {
+			return false
+		}
+		var after string
+		host, after, _ = strings.Cut(bracketed, "]")
+		if after != "" && !strings.HasPrefix(after, ":") {
+			return false
+		}
+	} else {
+		host, _, _ = strings.Cut(hostport, ":")
+	}
+	if strings.HasPrefix(host, "v") {
+		if !ipvFuture.MatchString(host) {
+			return false
+		}
+	} else if addr, err := netip.ParseAddr(host); err != nil || addr.Is4() {
+		return false
+	}
+	return true
+}
+
+// hostPort reports whether hostport has a hostname and a valid port.
+func hostPort(hostport string) bool {
 	var hostname, port string
 	if _, bracketed, ok := strings.Cut(hostport, "["); ok {
 		var after string
@@ -378,6 +394,18 @@ func toMessages(value any) host.Obj {
 		responseFormat(format)
 	}
 	out := host.Obj{{Key: "model", Value: str(get(body, "model"), "invalid_request", true)}}
+	requestOptions(body, &out)
+	streamOptions(body, &out)
+	stopSequences(body, &out)
+	names := codecTools(body, &out)
+	choice := toolChoice(body, &out, names)
+	parallelToolCalls(body, &out, names, choice)
+	codecMessages(body, &out)
+	return out
+}
+
+// requestOptions validates n and copies the token limit and sampling options.
+func requestOptions(body host.Obj, out *host.Obj) {
 	if n := get(body, "n"); n != nil {
 		if count, ok := host.Int(n); !ok || !isInt(n) || count != 1 {
 			fail("invalid_option")
@@ -406,6 +434,9 @@ func toMessages(value any) host.Obj {
 			out.Set(key, v)
 		}
 	}
+}
+
+func streamOptions(body host.Obj, out *host.Obj) {
 	if v, ok := body.Get("stream"); ok {
 		if _, ok := v.(bool); !ok {
 			fail("invalid_option")
@@ -420,6 +451,9 @@ func toMessages(value any) host.Obj {
 		}
 		// include_usage controls the downstream codec, never the Messages request.
 	}
+}
+
+func stopSequences(body host.Obj, out *host.Obj) {
 	if stop := get(body, "stop"); stop != nil {
 		stops, ok := stop.([]any)
 		if s, isStr := stop.(string); isStr {
@@ -434,7 +468,10 @@ func toMessages(value any) host.Obj {
 		}
 		out.Set("stop_sequences", sequences)
 	}
+}
 
+// codecTools converts the tools and returns their names.
+func codecTools(body host.Obj, out *host.Obj) map[string]bool {
 	names := map[string]bool{}
 	if v, ok := body.Get("tools"); ok {
 		list, ok := v.([]any)
@@ -468,6 +505,10 @@ func toMessages(value any) host.Obj {
 		}
 		out.Set("tools", tools)
 	}
+	return names
+}
+
+func toolChoice(body host.Obj, out *host.Obj, names map[string]bool) any {
 	choice := get(body, "tool_choice")
 	if choice != nil {
 		if s, ok := choice.(string); ok && (s == "auto" || s == "none" || s == "required") {
@@ -491,6 +532,10 @@ func toMessages(value any) host.Obj {
 			fail("invalid_tool_choice")
 		}
 	}
+	return choice
+}
+
+func parallelToolCalls(body host.Obj, out *host.Obj, names map[string]bool, choice any) {
 	if parallel, ok := body.Get("parallel_tool_calls"); ok {
 		p, ok := parallel.(bool)
 		if !ok {
@@ -506,7 +551,9 @@ func toMessages(value any) host.Obj {
 			out.Set("tool_choice", o)
 		}
 	}
+}
 
+func codecMessages(body host.Obj, out *host.Obj) {
 	messages, ok := get(body, "messages").([]any)
 	if !ok || len(messages) == 0 {
 		fail("invalid_messages")
@@ -520,16 +567,7 @@ func toMessages(value any) host.Obj {
 	pending, seen := map[string]bool{}, map[string]bool{}
 	for _, message := range messages {
 		m := keys(message, set("role", "content", "tool_calls", "tool_call_id"), "invalid_messages")
-		role, _ := get(m, "role").(string)
-		if !set("system", "developer", "user", "assistant", "tool")[role] {
-			fail("invalid_messages")
-		}
-		if has(m, "tool_calls") && role != "assistant" || has(m, "tool_call_id") && role != "tool" {
-			fail("invalid_tool_sequence")
-		}
-		if len(pending) > 0 && role != "tool" {
-			fail("invalid_tool_sequence")
-		}
+		role := messageRole(m, pending)
 		if role == "system" || role == "developer" {
 			if len(converted) > 0 {
 				fail("invalid_messages")
@@ -539,39 +577,10 @@ func toMessages(value any) host.Obj {
 		}
 		var blocks []any
 		if role == "tool" {
-			callID := str(get(m, "tool_call_id"), "invalid_tool_sequence", true)
-			if !pending[callID] {
-				fail("invalid_tool_sequence")
-			}
-			delete(pending, callID)
-			blocks = []any{host.Obj{{Key: "type", Value: "tool_result"}, {Key: "tool_use_id", Value: callID},
-				{Key: "content", Value: content(get(m, "content"), false)}}}
+			blocks = toolResult(m, pending)
 			role = "user"
 		} else {
-			calls := get(m, "tool_calls")
-			if get(m, "content") == nil && truthy(calls) {
-				blocks = []any{}
-			} else {
-				blocks = content(get(m, "content"), role == "user")
-			}
-			if calls != nil {
-				list, ok := calls.([]any)
-				if !ok || len(list) == 0 {
-					fail("invalid_tools")
-				}
-				for _, call := range list {
-					keys(call, set("id", "type", "function"), "invalid_tools")
-					function := keys(get(call, "function"), set("name", "arguments"), "invalid_tools")
-					callID := str(get(call, "id"), "invalid_tool_sequence", true)
-					if get(call, "type") != "function" || seen[callID] {
-						fail("invalid_tool_sequence")
-					}
-					seen[callID], pending[callID] = true, true
-					toolName := name(get(function, "name"), "invalid_tools")
-					blocks = append(blocks, host.Obj{{Key: "type", Value: "tool_use"}, {Key: "id", Value: callID},
-						{Key: "name", Value: toolName}, {Key: "input", Value: arguments(get(function, "arguments"))}})
-				}
-			}
+			blocks = turnBlocks(m, role, pending, seen)
 		}
 		if n := len(converted); n > 0 && converted[n-1].role == role {
 			converted[n-1].content = append(converted[n-1].content, blocks...)
@@ -593,7 +602,62 @@ func toMessages(value any) host.Obj {
 	if len(system) > 0 {
 		out.Set("system", system)
 	}
-	return out
+}
+
+// messageRole validates where message m may appear and returns its role.
+func messageRole(m host.Obj, pending map[string]bool) string {
+	role, _ := get(m, "role").(string)
+	if !set("system", "developer", "user", "assistant", "tool")[role] {
+		fail("invalid_messages")
+	}
+	if has(m, "tool_calls") && role != "assistant" || has(m, "tool_call_id") && role != "tool" {
+		fail("invalid_tool_sequence")
+	}
+	if len(pending) > 0 && role != "tool" {
+		fail("invalid_tool_sequence")
+	}
+	return role
+}
+
+// toolResult converts a tool message to a tool_result block.
+func toolResult(m host.Obj, pending map[string]bool) []any {
+	callID := str(get(m, "tool_call_id"), "invalid_tool_sequence", true)
+	if !pending[callID] {
+		fail("invalid_tool_sequence")
+	}
+	delete(pending, callID)
+	return []any{host.Obj{{Key: "type", Value: "tool_result"}, {Key: "tool_use_id", Value: callID},
+		{Key: "content", Value: content(get(m, "content"), false)}}}
+}
+
+// turnBlocks converts a user or assistant message, with any tool calls, to content blocks.
+func turnBlocks(m host.Obj, role string, pending, seen map[string]bool) []any {
+	var blocks []any
+	calls := get(m, "tool_calls")
+	if get(m, "content") == nil && truthy(calls) {
+		blocks = []any{}
+	} else {
+		blocks = content(get(m, "content"), role == "user")
+	}
+	if calls != nil {
+		list, ok := calls.([]any)
+		if !ok || len(list) == 0 {
+			fail("invalid_tools")
+		}
+		for _, call := range list {
+			keys(call, set("id", "type", "function"), "invalid_tools")
+			function := keys(get(call, "function"), set("name", "arguments"), "invalid_tools")
+			callID := str(get(call, "id"), "invalid_tool_sequence", true)
+			if get(call, "type") != "function" || seen[callID] {
+				fail("invalid_tool_sequence")
+			}
+			seen[callID], pending[callID] = true, true
+			toolName := name(get(function, "name"), "invalid_tools")
+			blocks = append(blocks, host.Obj{{Key: "type", Value: "tool_use"}, {Key: "id", Value: callID},
+				{Key: "name", Value: toolName}, {Key: "input", Value: arguments(get(function, "arguments"))}})
+		}
+	}
+	return blocks
 }
 
 func codecUsage(value any) host.Obj {
@@ -836,6 +900,139 @@ func codecStream(chunks iter.Seq2[[]byte, error], model string, includeUsage boo
 		return false
 	}
 
+	startMessage := func(event host.Obj) {
+		if identity != "" {
+			fail("invalid_stream")
+		}
+		message, ok := get(event, "message").(host.Obj)
+		if c, isList := get(message, "content").([]any); !ok || get(message, "type") != "message" ||
+			get(message, "role") != "assistant" || !isList || len(c) != 0 || get(message, "stop_reason") != nil {
+			fail("invalid_stream")
+		}
+		identity = str(get(message, "id"), "invalid_stream", true)
+		usage, _ = clone(get(message, "usage")).(host.Obj)
+		codecUsage(get(message, "usage"))
+		yield(emit(host.Obj{{Key: "role", Value: "assistant"}, {Key: "content", Value: ""}}, nil, nil))
+	}
+	startBlock := func(event host.Obj, index int64) {
+		block, ok := get(event, "content_block").(host.Obj)
+		if index != int64(len(blocks)) || !ok {
+			fail("invalid_stream")
+		}
+		state := &codecBlock{kind: str(get(block, "type"), "invalid_stream", false)}
+		blocks = append(blocks, state)
+		switch state.kind {
+		case "text":
+			if text := str(get(block, "text"), "invalid_stream", false); text != "" {
+				yield(emit(host.Obj{{Key: "content", Value: text}}, nil, nil))
+			}
+		case "tool_use":
+			callID := str(get(block, "id"), "invalid_stream", true)
+			toolName := name(get(block, "name"), "invalid_stream")
+			input, ok := get(block, "input").(host.Obj)
+			if ids[callID] || !ok {
+				fail("invalid_stream")
+			}
+			jsonText(input, "invalid_stream")
+			ids[callID] = true
+			state.toolIndex, state.initial = toolCount, input
+			toolCount++
+			yield(emit(host.Obj{{Key: "tool_calls", Value: []any{host.Obj{{Key: "index", Value: state.toolIndex},
+				{Key: "id", Value: callID}, {Key: "type", Value: "function"},
+				{Key: "function", Value: host.Obj{{Key: "name", Value: toolName}, {Key: "arguments", Value: ""}}}}}}}, nil, nil))
+		case "thinking", "redacted_thinking":
+		default:
+			fail("invalid_stream")
+		}
+	}
+	blockDelta := func(event host.Obj, state *codecBlock) {
+		delta, ok := get(event, "delta").(host.Obj)
+		if !ok {
+			fail("invalid_stream")
+		}
+		deltaType := str(get(delta, "type"), "invalid_stream", false)
+		switch {
+		case state.kind == "text" && deltaType == "text_delta":
+			yield(emit(host.Obj{{Key: "content", Value: str(get(delta, "text"), "invalid_stream", false)}}, nil, nil))
+		case state.kind == "tool_use" && deltaType == "input_json_delta":
+			part := str(get(delta, "partial_json"), "invalid_stream", false)
+			state.size += len(part)
+			if state.size > MaxToolArgumentBytes {
+				fail("tool_arguments_too_large")
+			}
+			if len(state.initial) > 0 {
+				fail("invalid_stream")
+			}
+			if part != "" {
+				state.parts = append(state.parts, part)
+			}
+			yield(emit(toolDelta(state.toolIndex, host.Obj{{Key: "arguments", Value: part}}), nil, nil))
+		case state.kind == "thinking" && (deltaType == "thinking_delta" || deltaType == "signature_delta"):
+		default:
+			fail("invalid_stream")
+		}
+	}
+	blockEvent := func(kind string, event host.Obj) {
+		if deltaStarted {
+			fail("invalid_stream")
+		}
+		index := integer(get(event, "index"), "invalid_stream", 0)
+		if kind == "content_block_start" {
+			startBlock(event, index)
+			return
+		}
+		if index >= int64(len(blocks)) || blocks[index].closed {
+			fail("invalid_stream")
+		}
+		state := blocks[index]
+		if kind == "content_block_stop" {
+			state.closed = true
+			if state.kind == "tool_use" {
+				if len(state.parts) > 0 {
+					arguments(strings.Join(state.parts, ""))
+				} else {
+					yield(emit(toolDelta(state.toolIndex, host.Obj{{Key: "arguments", Value: jsonText(state.initial, "invalid_stream")}}), nil, nil))
+				}
+			}
+			return
+		}
+		blockDelta(event, state)
+	}
+	messageDelta := func(event host.Obj) {
+		if open() {
+			fail("invalid_stream")
+		}
+		deltaStarted = true
+		delta, ok1 := get(event, "delta").(host.Obj)
+		update, ok2 := get(event, "usage").(host.Obj)
+		if !ok1 || !ok2 {
+			fail("invalid_stream")
+		}
+		for _, key := range []string{"input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"} {
+			if v, ok := update.Get(key); ok {
+				value := integer(v, "invalid_usage", 0)
+				previous, _ := host.Int(getd(usage, key, 0))
+				if value < previous {
+					fail("invalid_usage")
+				}
+				usage.Set(key, value)
+			}
+		}
+		if !has(update, "output_tokens") {
+			fail("invalid_usage")
+		}
+		if details, ok := update.Get("output_tokens_details"); ok {
+			usage.Set("output_tokens_details", clone(details))
+		}
+		codecUsage(usage)
+		if stop := get(delta, "stop_reason"); stop != nil {
+			if reason != "" {
+				fail("invalid_stream")
+			}
+			reason = finish(stop)
+		}
+	}
+
 	frames(chunks, func(event host.Obj) {
 		kind := str(get(event, "type"), "invalid_stream", false)
 		if stopped {
@@ -845,18 +1042,7 @@ func codecStream(chunks iter.Seq2[[]byte, error], model string, includeUsage boo
 			return
 		}
 		if kind == "message_start" {
-			if identity != "" {
-				fail("invalid_stream")
-			}
-			message, ok := get(event, "message").(host.Obj)
-			if c, isList := get(message, "content").([]any); !ok || get(message, "type") != "message" ||
-				get(message, "role") != "assistant" || !isList || len(c) != 0 || get(message, "stop_reason") != nil {
-				fail("invalid_stream")
-			}
-			identity = str(get(message, "id"), "invalid_stream", true)
-			usage, _ = clone(get(message, "usage")).(host.Obj)
-			codecUsage(get(message, "usage"))
-			yield(emit(host.Obj{{Key: "role", Value: "assistant"}, {Key: "content", Value: ""}}, nil, nil))
+			startMessage(event)
 			return
 		}
 		if identity == "" {
@@ -864,115 +1050,9 @@ func codecStream(chunks iter.Seq2[[]byte, error], model string, includeUsage boo
 		}
 		switch kind {
 		case "content_block_start", "content_block_delta", "content_block_stop":
-			if deltaStarted {
-				fail("invalid_stream")
-			}
-			index := integer(get(event, "index"), "invalid_stream", 0)
-			if kind == "content_block_start" {
-				block, ok := get(event, "content_block").(host.Obj)
-				if index != int64(len(blocks)) || !ok {
-					fail("invalid_stream")
-				}
-				state := &codecBlock{kind: str(get(block, "type"), "invalid_stream", false)}
-				blocks = append(blocks, state)
-				switch state.kind {
-				case "text":
-					if text := str(get(block, "text"), "invalid_stream", false); text != "" {
-						yield(emit(host.Obj{{Key: "content", Value: text}}, nil, nil))
-					}
-				case "tool_use":
-					callID := str(get(block, "id"), "invalid_stream", true)
-					toolName := name(get(block, "name"), "invalid_stream")
-					input, ok := get(block, "input").(host.Obj)
-					if ids[callID] || !ok {
-						fail("invalid_stream")
-					}
-					jsonText(input, "invalid_stream")
-					ids[callID] = true
-					state.toolIndex, state.initial = toolCount, input
-					toolCount++
-					yield(emit(host.Obj{{Key: "tool_calls", Value: []any{host.Obj{{Key: "index", Value: state.toolIndex},
-						{Key: "id", Value: callID}, {Key: "type", Value: "function"},
-						{Key: "function", Value: host.Obj{{Key: "name", Value: toolName}, {Key: "arguments", Value: ""}}}}}}}, nil, nil))
-				case "thinking", "redacted_thinking":
-				default:
-					fail("invalid_stream")
-				}
-				return
-			}
-			if index >= int64(len(blocks)) || blocks[index].closed {
-				fail("invalid_stream")
-			}
-			state := blocks[index]
-			if kind == "content_block_stop" {
-				state.closed = true
-				if state.kind == "tool_use" {
-					if len(state.parts) > 0 {
-						arguments(strings.Join(state.parts, ""))
-					} else {
-						yield(emit(toolDelta(state.toolIndex, host.Obj{{Key: "arguments", Value: jsonText(state.initial, "invalid_stream")}}), nil, nil))
-					}
-				}
-				return
-			}
-			delta, ok := get(event, "delta").(host.Obj)
-			if !ok {
-				fail("invalid_stream")
-			}
-			deltaType := str(get(delta, "type"), "invalid_stream", false)
-			switch {
-			case state.kind == "text" && deltaType == "text_delta":
-				yield(emit(host.Obj{{Key: "content", Value: str(get(delta, "text"), "invalid_stream", false)}}, nil, nil))
-			case state.kind == "tool_use" && deltaType == "input_json_delta":
-				part := str(get(delta, "partial_json"), "invalid_stream", false)
-				state.size += len(part)
-				if state.size > MaxToolArgumentBytes {
-					fail("tool_arguments_too_large")
-				}
-				if len(state.initial) > 0 {
-					fail("invalid_stream")
-				}
-				if part != "" {
-					state.parts = append(state.parts, part)
-				}
-				yield(emit(toolDelta(state.toolIndex, host.Obj{{Key: "arguments", Value: part}}), nil, nil))
-			case state.kind == "thinking" && (deltaType == "thinking_delta" || deltaType == "signature_delta"):
-			default:
-				fail("invalid_stream")
-			}
+			blockEvent(kind, event)
 		case "message_delta":
-			if open() {
-				fail("invalid_stream")
-			}
-			deltaStarted = true
-			delta, ok1 := get(event, "delta").(host.Obj)
-			update, ok2 := get(event, "usage").(host.Obj)
-			if !ok1 || !ok2 {
-				fail("invalid_stream")
-			}
-			for _, key := range []string{"input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"} {
-				if v, ok := update.Get(key); ok {
-					value := integer(v, "invalid_usage", 0)
-					previous, _ := host.Int(getd(usage, key, 0))
-					if value < previous {
-						fail("invalid_usage")
-					}
-					usage.Set(key, value)
-				}
-			}
-			if !has(update, "output_tokens") {
-				fail("invalid_usage")
-			}
-			if details, ok := update.Get("output_tokens_details"); ok {
-				usage.Set("output_tokens_details", clone(details))
-			}
-			codecUsage(usage)
-			if stop := get(delta, "stop_reason"); stop != nil {
-				if reason != "" {
-					fail("invalid_stream")
-				}
-				reason = finish(stop)
-			}
+			messageDelta(event)
 		case "message_stop":
 			if !deltaStarted || reason == "" || open() {
 				fail("truncated_stream")

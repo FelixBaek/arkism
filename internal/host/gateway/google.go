@@ -409,30 +409,14 @@ func googleFinite(v any) (float64, bool) {
 func googleCredentials(began float64) (*googleAuth, error) {
 	unavailable := googleErr("login_unavailable", 503, false)
 	if host.APIModeOn("gemini") {
-		rows, err := host.LoadKeys()
-		if err != nil {
-			return nil, unavailable
-		}
-		for _, row := range rows {
-			if row["provider"] == "google" {
-				if key, ok := subscription.Token(row["key"]); ok {
-					return &googleAuth{key: key, secrets: []string{key}}, nil
-				}
-			}
-		}
-		return nil, unavailable
+		return googleKeyAuth(unavailable)
 	}
 	home := os.Getenv("GEMINI_CLI_HOME")
 	if home == "" {
 		home = host.Home
 	}
 	folder := filepath.Join(home, ".gemini")
-	var override any
-	if project := os.Getenv("GOOGLE_CLOUD_PROJECT"); project != "" {
-		override = project
-	} else if project := os.Getenv("GOOGLE_CLOUD_PROJECT_ID"); project != "" {
-		override = project
-	}
+	override := googleProjectOverride()
 	login, err := subscription.Credentials(filepath.Join(folder, "oauth_creds.json"))
 	if err != nil {
 		return nil, unavailable
@@ -467,36 +451,80 @@ func googleCredentials(began float64) (*googleAuth, error) {
 	if cached := googleCache; cached != nil && cached.stamp == stamp && cached.expires > googleWall()+60 {
 		return cached, nil
 	}
+	access, secrets, expires, err := googleFreshToken(access, refresh, refreshOK, expiry, began, unavailable)
+	if err != nil {
+		return nil, err
+	}
+	name, err := googleLoadProject(access, override, began)
+	if err != nil {
+		return nil, err
+	}
+	googleCache = &googleAuth{stamp: stamp, expires: min(expires, googleWall()+300), token: access,
+		project: name, secrets: secrets}
+	return googleCache, nil
+}
+
+func googleKeyAuth(unavailable error) (*googleAuth, error) {
+	rows, err := host.LoadKeys()
+	if err != nil {
+		return nil, unavailable
+	}
+	for _, row := range rows {
+		if row["provider"] == "google" {
+			if key, ok := subscription.Token(row["key"]); ok {
+				return &googleAuth{key: key, secrets: []string{key}}, nil
+			}
+		}
+	}
+	return nil, unavailable
+}
+
+func googleProjectOverride() any {
+	if project := os.Getenv("GOOGLE_CLOUD_PROJECT"); project != "" {
+		return project
+	} else if project := os.Getenv("GOOGLE_CLOUD_PROJECT_ID"); project != "" {
+		return project
+	}
+	return nil
+}
+
+// googleFreshToken refreshes access when it expires within a minute, returning the token, every
+// secret to mask and the new expiry in seconds.
+func googleFreshToken(access, refresh string, refreshOK bool, expiry, began float64, unavailable error) (string, []string, float64, error) {
 	secrets := []string{access}
 	if refreshOK && refresh != access {
 		secrets = append(secrets, refresh)
 	}
 	expires := expiry / 1000
-	if expires <= googleWall()+60 {
-		if !refreshOK {
-			return nil, unavailable
-		}
-		id, secret, err := googleOAuthClient()
-		if err != nil {
-			return nil, err
-		}
-		renewed, err := googleJSONPost(googleOAuth, host.Obj{{Key: "client_id", Value: id},
-			{Key: "client_secret", Value: secret}, {Key: "refresh_token", Value: refresh},
-			{Key: "grant_type", Value: "refresh_token"}}, nil, true, began)
-		if err != nil {
-			return nil, err
-		}
-		token, ok := subscription.Token(get(renewed, "access_token"))
-		seconds, finite := googleFinite(get(renewed, "expires_in"))
-		if !ok || !finite || !(60 < seconds && seconds <= 86400) {
-			return nil, unavailable
-		}
-		access = token
-		if !googleContains(secrets, access) {
-			secrets = append(secrets, access)
-		}
-		expires = googleWall() + seconds
+	if expires > googleWall()+60 {
+		return access, secrets, expires, nil
 	}
+	if !refreshOK {
+		return "", nil, 0, unavailable
+	}
+	id, secret, err := googleOAuthClient()
+	if err != nil {
+		return "", nil, 0, err
+	}
+	renewed, err := googleJSONPost(googleOAuth, host.Obj{{Key: "client_id", Value: id},
+		{Key: "client_secret", Value: secret}, {Key: "refresh_token", Value: refresh},
+		{Key: "grant_type", Value: "refresh_token"}}, nil, true, began)
+	if err != nil {
+		return "", nil, 0, err
+	}
+	token, ok := subscription.Token(get(renewed, "access_token"))
+	seconds, finite := googleFinite(get(renewed, "expires_in"))
+	if !ok || !finite || !(60 < seconds && seconds <= 86400) {
+		return "", nil, 0, unavailable
+	}
+	access = token
+	if !googleContains(secrets, access) {
+		secrets = append(secrets, access)
+	}
+	return access, secrets, googleWall() + seconds, nil
+}
+
+func googleLoadProject(access string, override any, began float64) (string, error) {
 	headers := map[string]string{"authorization": "Bearer " + access}
 	payload := host.Obj{{Key: "metadata", Value: host.Obj{{Key: "ideType", Value: "IDE_UNSPECIFIED"},
 		{Key: "platform", Value: "PLATFORM_UNSPECIFIED"}, {Key: "pluginType", Value: "GEMINI"}}}}
@@ -505,7 +533,7 @@ func googleCredentials(began float64) (*googleAuth, error) {
 	}
 	info, err := googleJSONPost(googleAssist+":loadCodeAssist", payload, headers, false, began)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	project := get(info, "cloudaicompanionProject")
 	if !truthy(project) {
@@ -513,11 +541,9 @@ func googleCredentials(began float64) (*googleAuth, error) {
 	}
 	name, ok := project.(string)
 	if _, tier := get(info, "currentTier").(host.Obj); !tier || !ok || !googleProject.MatchString(name) {
-		return nil, googleErr("google_setup_required", 503, false)
+		return "", googleErr("google_setup_required", 503, false)
 	}
-	googleCache = &googleAuth{stamp: stamp, expires: min(expires, googleWall()+300), token: access,
-		project: name, secrets: secrets}
-	return googleCache, nil
+	return name, nil
 }
 
 var googleProject = regexp.MustCompile(`^[a-z][a-z0-9-]{4,61}[a-z0-9]$`)
@@ -635,78 +661,99 @@ func (c *googleCompletion) accept(page host.Obj) (hold bool, err error) {
 	usage, hasUsage := page.Get("usageMetadata")
 	hasUsage = hasUsage && usage != nil
 	if hasUsage {
-		o, ok := usage.(host.Obj)
-		if !ok {
-			fail("invalid_usage")
-		}
-		for _, key := range googleUsageKeys {
-			if value, ok := o.Get(key); ok {
-				if n, ok := host.Int(value); !ok || !isInt(value) || n < 0 {
-					fail("invalid_usage")
-				}
-			}
-		}
-		c.usage = c.usage || has(o, "totalTokenCount")
+		c.acceptUsage(usage)
 	}
 	hold = c.blocked || (hasUsage && !truthy(get(page, "candidates")))
 	candidates, _ := getd(page, "candidates", []any{}).([]any)
 	for _, item := range candidates {
-		candidate, ok := item.(host.Obj)
-		if !ok {
-			fail("invalid_response")
-		}
-		raw := getd(candidate, "index", 0)
-		index, ok := host.Int(raw)
-		if !ok || !isInt(raw) || index < 0 || index >= 16 || c.finished[index] {
-			fail("invalid_response")
-		}
-		c.seen[index] = true
-		content, ok := getd(candidate, "content", host.Obj{}).(host.Obj)
-		if !ok {
-			fail("invalid_response")
-		}
-		parts, ok := getd(content, "parts", []any{}).([]any)
-		if !ok {
-			fail("invalid_response")
-		}
-		for _, item := range parts {
-			part, ok := item.(host.Obj)
-			if !ok {
-				fail("invalid_response")
-			}
-			if text, ok := part.Get("text"); ok {
-				if _, ok := text.(string); !ok {
-					fail("invalid_response")
-				}
-			}
-			if signature, ok := part.Get("thoughtSignature"); ok {
-				if s, ok := signature.(string); !ok || s == "" {
-					fail("invalid_response")
-				}
-			}
-			if value, ok := part.Get("functionCall"); ok {
-				call, ok := value.(host.Obj)
-				if !ok {
-					fail("invalid_response")
-				}
-				if name, ok := get(call, "name").(string); !ok || name == "" {
-					fail("invalid_response")
-				}
-				if _, ok := getd(call, "args", host.Obj{}).(host.Obj); !ok {
-					fail("invalid_response")
-				}
-				hold = true
-			}
-		}
-		if reason, ok := candidate.Get("finishReason"); ok && reason != nil {
-			if s, ok := reason.(string); !ok || s == "" || s == "FINISH_REASON_UNSPECIFIED" {
-				fail("invalid_response")
-			}
-			c.finished[index] = true
+		if c.acceptCandidate(item) {
 			hold = true
 		}
 	}
 	return hold, nil
+}
+
+func (c *googleCompletion) acceptUsage(usage any) {
+	o, ok := usage.(host.Obj)
+	if !ok {
+		fail("invalid_usage")
+	}
+	for _, key := range googleUsageKeys {
+		if value, ok := o.Get(key); ok {
+			if n, ok := host.Int(value); !ok || !isInt(value) || n < 0 {
+				fail("invalid_usage")
+			}
+		}
+	}
+	c.usage = c.usage || has(o, "totalTokenCount")
+}
+
+// acceptCandidate reports whether the candidate holds the stream: a function call or a finish.
+func (c *googleCompletion) acceptCandidate(item any) (hold bool) {
+	candidate, ok := item.(host.Obj)
+	if !ok {
+		fail("invalid_response")
+	}
+	raw := getd(candidate, "index", 0)
+	index, ok := host.Int(raw)
+	if !ok || !isInt(raw) || index < 0 || index >= 16 || c.finished[index] {
+		fail("invalid_response")
+	}
+	c.seen[index] = true
+	content, ok := getd(candidate, "content", host.Obj{}).(host.Obj)
+	if !ok {
+		fail("invalid_response")
+	}
+	parts, ok := getd(content, "parts", []any{}).([]any)
+	if !ok {
+		fail("invalid_response")
+	}
+	for _, item := range parts {
+		if googleAcceptPart(item) {
+			hold = true
+		}
+	}
+	if reason, ok := candidate.Get("finishReason"); ok && reason != nil {
+		if s, ok := reason.(string); !ok || s == "" || s == "FINISH_REASON_UNSPECIFIED" {
+			fail("invalid_response")
+		}
+		c.finished[index] = true
+		hold = true
+	}
+	return hold
+}
+
+// googleAcceptPart validates one response part and reports whether it is a function call.
+func googleAcceptPart(item any) bool {
+	part, ok := item.(host.Obj)
+	if !ok {
+		fail("invalid_response")
+	}
+	if text, ok := part.Get("text"); ok {
+		if _, ok := text.(string); !ok {
+			fail("invalid_response")
+		}
+	}
+	if signature, ok := part.Get("thoughtSignature"); ok {
+		if s, ok := signature.(string); !ok || s == "" {
+			fail("invalid_response")
+		}
+	}
+	value, ok := part.Get("functionCall")
+	if !ok {
+		return false
+	}
+	call, ok := value.(host.Obj)
+	if !ok {
+		fail("invalid_response")
+	}
+	if name, ok := get(call, "name").(string); !ok || name == "" {
+		fail("invalid_response")
+	}
+	if _, ok := getd(call, "args", host.Obj{}).(host.Obj); !ok {
+		fail("invalid_response")
+	}
+	return true
 }
 
 func (c *googleCompletion) finish() error {
@@ -798,35 +845,9 @@ func googleRun(input any, model string, stream, count bool, yield func(host.Obj)
 		return err
 	}
 	wrapped := auth.token != ""
-	method := "generateContent"
-	if count {
-		method = "countTokens"
-	} else if stream {
-		method = "streamGenerateContent"
-	}
-	var headers map[string]string
-	var payload any
-	var target string
-	if wrapped {
-		headers = map[string]string{"authorization": "Bearer " + auth.token}
-		if count {
-			contents, err := googleCountContents(get(body, "contents").([]any))
-			if err != nil {
-				return err
-			}
-			payload = host.Obj{{Key: "request", Value: host.Obj{{Key: "model", Value: "models/" + model},
-				{Key: "contents", Value: contents}}}}
-		} else {
-			payload = host.Obj{{Key: "model", Value: model}, {Key: "project", Value: auth.project},
-				{Key: "user_prompt_id", Value: googleUUID()}, {Key: "request", Value: body}}
-		}
-		target = googleAssist + ":" + method
-	} else {
-		headers, payload = map[string]string{"x-goog-api-key": auth.key}, body
-		target = googleAPI + "/models/" + model + ":" + method
-	}
-	if stream && !count {
-		target += "?alt=sse"
+	target, headers, payload, err := googleRequest(auth, body, model, stream, count)
+	if err != nil {
+		return err
 	}
 	text, err := googleEncoded(payload)
 	if err != nil {
@@ -856,43 +877,90 @@ func googleRun(input any, model string, stream, count bool, yield func(host.Obj)
 	chunks := googleChunks(resp, auth.secrets, began, googleMaxOutput)
 
 	if !stream || count {
-		if googleContentType(resp) != "application/json" {
-			return invalid(Code("invalid_response"))
-		}
-		var raw bytes.Buffer
-		for chunk, err := range chunks {
+		return googleWhole(resp, chunks, wrapped, count, invalid, yield)
+	}
+	return googleStream(resp, chunks, wrapped, invalid, yield)
+}
+
+// googleRequest picks the endpoint, headers and payload for the key or login API.
+func googleRequest(auth *googleAuth, body host.Obj, model string, stream, count bool) (string, map[string]string, any, error) {
+	method := "generateContent"
+	if count {
+		method = "countTokens"
+	} else if stream {
+		method = "streamGenerateContent"
+	}
+	var headers map[string]string
+	var payload any
+	var target string
+	if auth.token != "" {
+		headers = map[string]string{"authorization": "Bearer " + auth.token}
+		if count {
+			contents, err := googleCountContents(get(body, "contents").([]any))
 			if err != nil {
-				return invalid(err)
+				return "", nil, nil, err
 			}
-			raw.Write(chunk)
+			payload = host.Obj{{Key: "request", Value: host.Obj{{Key: "model", Value: "models/" + model},
+				{Key: "contents", Value: contents}}}}
+		} else {
+			payload = host.Obj{{Key: "model", Value: model}, {Key: "project", Value: auth.project},
+				{Key: "user_prompt_id", Value: googleUUID()}, {Key: "request", Value: body}}
 		}
-		value, err := Loads(raw.String(), "invalid_response")
+		target = googleAssist + ":" + method
+	} else {
+		headers, payload = map[string]string{"x-goog-api-key": auth.key}, body
+		target = googleAPI + "/models/" + model + ":" + method
+	}
+	if stream && !count {
+		target += "?alt=sse"
+	}
+	return target, headers, payload, nil
+}
+
+// googleWhole reads one JSON reply: a token count or a complete page.
+func googleWhole(resp *http.Response, chunks iter.Seq2[[]byte, error], wrapped, count bool,
+	invalid func(error) error, yield func(host.Obj) bool) error {
+	if googleContentType(resp) != "application/json" {
+		return invalid(Code("invalid_response"))
+	}
+	var raw bytes.Buffer
+	for chunk, err := range chunks {
 		if err != nil {
 			return invalid(err)
 		}
-		var page host.Obj
-		if count {
-			page, _ = value.(host.Obj)
-			total, ok := host.Int(get(page, "totalTokens"))
-			if page == nil || !ok || !isInt(get(page, "totalTokens")) || total < 0 {
-				return invalid(Code("invalid_usage"))
-			}
-		} else {
-			if page, err = googlePage(value, wrapped); err != nil {
-				return invalid(err)
-			}
-			complete := newGoogleCompletion()
-			if _, err := complete.accept(page); err != nil {
-				return invalid(err)
-			}
-			if err := complete.finish(); err != nil {
-				return invalid(err)
-			}
-		}
-		yield(page)
-		return nil
+		raw.Write(chunk)
 	}
+	value, err := Loads(raw.String(), "invalid_response")
+	if err != nil {
+		return invalid(err)
+	}
+	var page host.Obj
+	if count {
+		page, _ = value.(host.Obj)
+		total, ok := host.Int(get(page, "totalTokens"))
+		if page == nil || !ok || !isInt(get(page, "totalTokens")) || total < 0 {
+			return invalid(Code("invalid_usage"))
+		}
+	} else {
+		if page, err = googlePage(value, wrapped); err != nil {
+			return invalid(err)
+		}
+		complete := newGoogleCompletion()
+		if _, err := complete.accept(page); err != nil {
+			return invalid(err)
+		}
+		if err := complete.finish(); err != nil {
+			return invalid(err)
+		}
+	}
+	yield(page)
+	return nil
+}
 
+// googleStream yields SSE pages, holding them from the first tool or terminal frame until the
+// stream proves complete.
+func googleStream(resp *http.Response, chunks iter.Seq2[[]byte, error], wrapped bool,
+	invalid func(error) error, yield func(host.Obj) bool) error {
 	if googleContentType(resp) != "text/event-stream" {
 		return invalid(Code("invalid_stream"))
 	}

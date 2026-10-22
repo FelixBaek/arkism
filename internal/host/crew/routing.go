@@ -79,13 +79,9 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	if report == nil {
 		report = host.ReportCall
 	}
-	groupV := spec["group"]
-	group := ""
-	if truthy(groupV) {
-		if !validGroup(groupV) {
-			return nil, crewErr("라우팅 그룹 ID를 확인해 주세요")
-		}
-		group = groupV.(string)
+	group, err := routeGroup(spec)
+	if err != nil {
+		return nil, err
 	}
 	d, err := decide(task, group)
 	if err != nil {
@@ -126,28 +122,7 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 			}
 			res = result(false, "", model, "", "", time.Time{}, err.Error())
 		}
-		decision, replaced, classifier := d["decision"], "", int64(0)
-		if i > 0 {
-			decision, replaced = "failover", ids[i-1]
-		} else {
-			classifier, _ = pyIntArg(getOr(d, "classifier_ms", 0))
-			if !truthy(d["classifier_ms"]) {
-				classifier = 0
-			}
-		}
-		code := ""
-		if res["ok"] != true {
-			code = routedErrorCode(sOr(res["error"]))
-		} else {
-			res["usage"] = usageOf(attempt, res)
-		}
-		call := map[string]any{"model": mid, "decision": decision, "replaced": replaced, "ok": res["ok"],
-			"latency_ms": res["duration_ms"], "classifier_ms": classifier, "error": code}
-		if truthy(spec["origin"]) {
-			call["origin"] = spec["origin"]
-			addUsage(call, res)
-		}
-		report(call)
+		report(routedCall(spec, d, ids, i, attempt, res))
 		if res["ok"] == true {
 			break
 		}
@@ -162,6 +137,43 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	}
 	res["routed"] = routed
 	return res, nil
+}
+
+func routeGroup(spec map[string]any) (string, error) {
+	groupV := spec["group"]
+	if !truthy(groupV) {
+		return "", nil
+	}
+	if !validGroup(groupV) {
+		return "", crewErr("라우팅 그룹 ID를 확인해 주세요")
+	}
+	return groupV.(string), nil
+}
+
+// routedCall is the report of attempt i (ids[i]); a successful res also gets its usage.
+func routedCall(spec, d map[string]any, ids []string, i int, attempt, res map[string]any) map[string]any {
+	decision, replaced, classifier := d["decision"], "", int64(0)
+	if i > 0 {
+		decision, replaced = "failover", ids[i-1]
+	} else {
+		classifier, _ = pyIntArg(getOr(d, "classifier_ms", 0))
+		if !truthy(d["classifier_ms"]) {
+			classifier = 0
+		}
+	}
+	code := ""
+	if res["ok"] != true {
+		code = routedErrorCode(sOr(res["error"]))
+	} else {
+		res["usage"] = usageOf(attempt, res)
+	}
+	call := map[string]any{"model": ids[i], "decision": decision, "replaced": replaced, "ok": res["ok"],
+		"latency_ms": res["duration_ms"], "classifier_ms": classifier, "error": code}
+	if truthy(spec["origin"]) {
+		call["origin"] = spec["origin"]
+		addUsage(call, res)
+	}
+	return call
 }
 
 func toAny(ss []string) []any {

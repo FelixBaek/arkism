@@ -78,64 +78,9 @@ func (p *parser) value(depth int) (any, error) {
 	}
 	switch c := p.s[p.i]; {
 	case c == '{':
-		p.i++
-		obj := host.Obj{}
-		p.space()
-		if p.literal("}") {
-			return obj, nil
-		}
-		for {
-			p.space()
-			if p.i >= len(p.s) || p.s[p.i] != '"' {
-				return nil, errSyntax
-			}
-			key, err := p.str()
-			if err != nil {
-				return nil, err
-			}
-			p.space()
-			if !p.literal(":") {
-				return nil, errSyntax
-			}
-			p.space()
-			item, err := p.value(depth + 1)
-			if err != nil {
-				return nil, err
-			}
-			if _, dup := obj.Get(key); dup && p.strict {
-				return nil, errSyntax
-			}
-			obj.Set(key, item)
-			p.space()
-			if p.literal("}") {
-				return obj, nil
-			}
-			if !p.literal(",") {
-				return nil, errSyntax
-			}
-		}
+		return p.object(depth)
 	case c == '[':
-		p.i++
-		list := []any{}
-		p.space()
-		if p.literal("]") {
-			return list, nil
-		}
-		for {
-			p.space()
-			item, err := p.value(depth + 1)
-			if err != nil {
-				return nil, err
-			}
-			list = append(list, item)
-			p.space()
-			if p.literal("]") {
-				return list, nil
-			}
-			if !p.literal(",") {
-				return nil, errSyntax
-			}
-		}
+		return p.array(depth)
 	case c == '"':
 		return p.str()
 	case p.literal("true"):
@@ -155,6 +100,69 @@ func (p *parser) value(depth int) (any, error) {
 	}
 }
 
+func (p *parser) object(depth int) (any, error) {
+	p.i++
+	obj := host.Obj{}
+	p.space()
+	if p.literal("}") {
+		return obj, nil
+	}
+	for {
+		p.space()
+		if p.i >= len(p.s) || p.s[p.i] != '"' {
+			return nil, errSyntax
+		}
+		key, err := p.str()
+		if err != nil {
+			return nil, err
+		}
+		p.space()
+		if !p.literal(":") {
+			return nil, errSyntax
+		}
+		p.space()
+		item, err := p.value(depth + 1)
+		if err != nil {
+			return nil, err
+		}
+		if _, dup := obj.Get(key); dup && p.strict {
+			return nil, errSyntax
+		}
+		obj.Set(key, item)
+		p.space()
+		if p.literal("}") {
+			return obj, nil
+		}
+		if !p.literal(",") {
+			return nil, errSyntax
+		}
+	}
+}
+
+func (p *parser) array(depth int) (any, error) {
+	p.i++
+	list := []any{}
+	p.space()
+	if p.literal("]") {
+		return list, nil
+	}
+	for {
+		p.space()
+		item, err := p.value(depth + 1)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, item)
+		p.space()
+		if p.literal("]") {
+			return list, nil
+		}
+		if !p.literal(",") {
+			return nil, errSyntax
+		}
+	}
+}
+
 func (p *parser) constant(f float64) (any, error) {
 	if p.strict {
 		return nil, errSyntax
@@ -165,41 +173,56 @@ func (p *parser) constant(f float64) (any, error) {
 // number follows Python's scanner: -?(0|[1-9]\d*)(\.\d+)?([eE][-+]?\d+)?
 func (p *parser) number() (any, error) {
 	start := p.i
-	digits := func() int {
-		n := 0
-		for p.i < len(p.s) && p.s[p.i] >= '0' && p.s[p.i] <= '9' {
-			p.i++
-			n++
-		}
-		return n
-	}
 	if p.i < len(p.s) && p.s[p.i] == '-' {
 		p.i++
 	}
 	if p.i < len(p.s) && p.s[p.i] == '0' {
 		p.i++
-	} else if digits() == 0 {
+	} else if p.digits() == 0 {
 		return nil, errSyntax
 	}
-	float := false
-	if p.i+1 < len(p.s) && p.s[p.i] == '.' && p.s[p.i+1] >= '0' && p.s[p.i+1] <= '9' {
-		p.i++
-		digits()
+	float := p.fraction()
+	if p.exponent() {
 		float = true
 	}
-	if p.i < len(p.s) && (p.s[p.i] == 'e' || p.s[p.i] == 'E') {
-		save := p.i
+	return numberValue(p.s[start:p.i], float)
+}
+
+func (p *parser) digits() int {
+	n := 0
+	for p.i < len(p.s) && p.s[p.i] >= '0' && p.s[p.i] <= '9' {
 		p.i++
-		if p.i < len(p.s) && (p.s[p.i] == '+' || p.s[p.i] == '-') {
-			p.i++
-		}
-		if digits() == 0 {
-			p.i = save
-		} else {
-			float = true
-		}
+		n++
 	}
-	text := p.s[start:p.i]
+	return n
+}
+
+func (p *parser) fraction() bool {
+	if p.i+1 < len(p.s) && p.s[p.i] == '.' && p.s[p.i+1] >= '0' && p.s[p.i+1] <= '9' {
+		p.i++
+		p.digits()
+		return true
+	}
+	return false
+}
+
+func (p *parser) exponent() bool {
+	if p.i >= len(p.s) || (p.s[p.i] != 'e' && p.s[p.i] != 'E') {
+		return false
+	}
+	save := p.i
+	p.i++
+	if p.i < len(p.s) && (p.s[p.i] == '+' || p.s[p.i] == '-') {
+		p.i++
+	}
+	if p.digits() == 0 {
+		p.i = save
+		return false
+	}
+	return true
+}
+
+func numberValue(text string, float bool) (any, error) {
 	if !float {
 		if text == "-0" {
 			text = "0"

@@ -221,12 +221,8 @@ func claudePrepare(body host.Obj) (result host.Obj, settings string, err error) 
 	if model, _ := get(body, "model").(string); !claudeModelPattern.MatchString(model) {
 		return nil, "", claudeErr("unsupported_or_invalid_request", 400)
 	}
-	if tools, _ := get(body, "tools").([]any); tools != nil {
-		for _, tool := range tools {
-			if name, _ := get(tool, "name").(string); !claudeToolNamePattern.MatchString(name) {
-				return nil, "", claudeErr("unsupported_or_invalid_request", 400)
-			}
-		}
+	if !claudeToolNames(body) {
+		return nil, "", claudeErr("unsupported_or_invalid_request", 400)
 	}
 	result = clone(body).(host.Obj)
 	result.Set("messages", claudeHistory(get(result, "messages")))
@@ -234,16 +230,8 @@ func claudePrepare(body host.Obj) (result host.Obj, settings string, err error) 
 	if get(messages[len(messages)-1], "role") != "user" {
 		return nil, "", unsupported
 	}
-	for _, message := range messages {
-		blocks := get(message, "content").([]any)
-		for i, block := range blocks {
-			b := block.(host.Obj)
-			b.Del("cache_control")
-			blocks[i] = b // Del shrinks the slice header it was called on
-			if get(b, "type") == "image" && get(get(b, "source"), "type") != "base64" {
-				return nil, "", unsupported
-			}
-		}
+	if !claudeStripBlocks(messages) {
+		return nil, "", unsupported
 	}
 	if get(choice, "type") == "none" {
 		result.Set("tools", []any{})
@@ -255,6 +243,33 @@ func claudePrepare(body host.Obj) (result host.Obj, settings string, err error) 
 		}
 	}
 	return result, claudeMustJSON(view), nil
+}
+
+func claudeToolNames(body host.Obj) bool {
+	if tools, _ := get(body, "tools").([]any); tools != nil {
+		for _, tool := range tools {
+			if name, _ := get(tool, "name").(string); !claudeToolNamePattern.MatchString(name) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// claudeStripBlocks drops cache_control from every block and reports whether every image is base64.
+func claudeStripBlocks(messages []any) bool {
+	for _, message := range messages {
+		blocks := get(message, "content").([]any)
+		for i, block := range blocks {
+			b := block.(host.Obj)
+			b.Del("cache_control")
+			blocks[i] = b // Del shrinks the slice header it was called on
+			if get(b, "type") == "image" && get(get(b, "source"), "type") != "base64" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // claudeProfile selects the host login for model (profile). A variable so tests can fake it.
@@ -639,35 +654,40 @@ func (r *claudeRun) control(frame host.Obj) {
 	case "notifications/initialized", "ping":
 		result = host.Obj{}
 	case "tools/call":
-		params, ok := get(rpc, "params").(host.Obj)
-		if !ok {
-			claudeProtocol()
-		}
-		meta, ok := get(params, "_meta").(host.Obj)
-		if !ok {
-			claudeProtocol()
-		}
-		identity, ok := get(meta, "claudecode/toolUseId").(string)
-		name, _ := get(params, "name").(string)
-		_, waiting := r.pending.Get(identity)
-		_, known := r.tools.Get(name)
-		if _, isObj := get(params, "arguments").(host.Obj); !ok || waiting || !known || !isObj {
-			claudeProtocol()
-		}
-		if early, ok := r.early[identity]; ok {
-			delete(r.early, identity)
-			if !claudeSameArguments(params, early.call) {
-				claudeProtocol()
-			}
-			r.controlReply(frame, early.result)
-		} else {
-			r.pending.Set(identity, frame)
-		}
+		r.controlCall(frame, rpc)
 		return
 	default:
 		claudeProtocol()
 	}
 	r.controlReply(frame, result)
+}
+
+// controlCall answers a tools/call at once if its result arrived early, or parks it until it does.
+func (r *claudeRun) controlCall(frame, rpc host.Obj) {
+	params, ok := get(rpc, "params").(host.Obj)
+	if !ok {
+		claudeProtocol()
+	}
+	meta, ok := get(params, "_meta").(host.Obj)
+	if !ok {
+		claudeProtocol()
+	}
+	identity, ok := get(meta, "claudecode/toolUseId").(string)
+	name, _ := get(params, "name").(string)
+	_, waiting := r.pending.Get(identity)
+	_, known := r.tools.Get(name)
+	if _, isObj := get(params, "arguments").(host.Obj); !ok || waiting || !known || !isObj {
+		claudeProtocol()
+	}
+	if early, ok := r.early[identity]; ok {
+		delete(r.early, identity)
+		if !claudeSameArguments(params, early.call) {
+			claudeProtocol()
+		}
+		r.controlReply(frame, early.result)
+	} else {
+		r.pending.Set(identity, frame)
+	}
 }
 
 func (r *claudeRun) initialize(body host.Obj, cancelled func() bool) {
@@ -762,26 +782,7 @@ func (r *claudeRun) source(cancelled func() bool) iter.Seq2[[]byte, error] {
 		stopped, terminal := false, false
 		var reason any
 		for {
-			if stopped && reason == "tool_use" && len(r.calls) > 0 {
-				if len(r.early) > 0 {
-					claudeProtocol()
-				}
-				for _, kv := range r.pending {
-					c := r.call(kv.Key)
-					if c == nil {
-						claudeProtocol()
-					}
-					params := get(get(get(kv.Value, "request"), "message"), "params").(host.Obj)
-					if !claudeSameArguments(params, c) {
-						claudeProtocol()
-					}
-				}
-				break
-			}
-			if stopped && terminal {
-				if len(r.pending) > 0 || len(r.calls) > 0 || len(r.early) > 0 {
-					claudeProtocol()
-				}
+			if r.finished(stopped, terminal, reason) {
 				break
 			}
 			frame := r.read(cancelled)
@@ -804,68 +805,15 @@ func (r *claudeRun) source(cancelled func() bool) iter.Seq2[[]byte, error] {
 					claudeProtocol()
 				}
 				event = clone(event).(host.Obj)
-				eventType := get(event, "type")
-				part := func(key string) host.Obj {
-					o, ok := getd(event, key, host.Obj{}).(host.Obj)
-					if !ok {
-						claudeProtocol()
-					}
-					return o
-				}
-				switch {
-				case eventType == "content_block_start" && get(part("content_block"), "type") == "tool_use":
-					block := part("content_block")
-					sourceID, ok := get(block, "id").(string)
-					fullName, isStr := get(block, "name").(string)
-					if !ok || r.call(sourceID) != nil || !isStr || !strings.HasPrefix(fullName, claudeMCPPrefix) {
-						claudeProtocol()
-					}
-					name := strings.TrimPrefix(fullName, claudeMCPPrefix)
-					if _, ok := r.tools.Get(name); !ok {
-						claudeProtocol()
-					}
-					public := claudePrefix + r.tag + "_" + strconv.Itoa(r.nextCall)
-					r.nextCall++
-					arguments := ""
-					if input := get(block, "input"); truthy(input) {
-						arguments = claudeMustJSON(input)
-					}
-					r.calls = append(r.calls, &claudeCall{source: sourceID, public: public, name: name,
-						index: get(event, "index"), arguments: arguments})
-					block.Set("id", public)
-					block.Set("name", name)
-				case eventType == "content_block_delta" && get(part("delta"), "type") == "input_json_delta":
-					delta := part("delta")
-					var matching []*claudeCall
-					for _, c := range r.calls {
-						if claudeEqual(c.index, get(event, "index")) {
-							matching = append(matching, c)
-						}
-					}
-					partial, ok := get(delta, "partial_json").(string)
-					if len(matching) != 1 || !ok {
-						claudeProtocol()
-					}
-					matching[0].arguments += partial
-				case eventType == "message_delta":
-					if value := get(part("delta"), "stop_reason"); truthy(value) {
-						reason = value
-					}
-				case eventType == "message_stop":
+				value, stop := r.rewriteEvent(event)
+				if stop {
 					stopped = true
 					continue
 				}
-				kindName, ok := eventType.(string)
-				if !ok {
-					claudeProtocol()
+				if value != nil {
+					reason = value
 				}
-				var fields []host.KV
-				for _, kv := range event {
-					if kv.Key != "type" {
-						fields = append(fields, kv)
-					}
-				}
-				if !yield(messagesSSE(kindName, fields...), nil) {
+				if !yield(claudeEventSSE(event), nil) {
 					return
 				}
 			case "system", "assistant", "user", "rate_limit_event", "tool_progress", "tool_use_summary":
@@ -875,6 +823,108 @@ func (r *claudeRun) source(cancelled func() bool) iter.Seq2[[]byte, error] {
 		}
 		yield(messagesSSE("message_stop"), nil)
 	}
+}
+
+// finished reports whether the turn ended, either stopped for tool calls the CLI is waiting on
+// or terminated by its result frame, after checking every call is accounted for.
+func (r *claudeRun) finished(stopped, terminal bool, reason any) bool {
+	if stopped && reason == "tool_use" && len(r.calls) > 0 {
+		if len(r.early) > 0 {
+			claudeProtocol()
+		}
+		for _, kv := range r.pending {
+			c := r.call(kv.Key)
+			if c == nil {
+				claudeProtocol()
+			}
+			params := get(get(get(kv.Value, "request"), "message"), "params").(host.Obj)
+			if !claudeSameArguments(params, c) {
+				claudeProtocol()
+			}
+		}
+		return true
+	}
+	if stopped && terminal {
+		if len(r.pending) > 0 || len(r.calls) > 0 || len(r.early) > 0 {
+			claudeProtocol()
+		}
+		return true
+	}
+	return false
+}
+
+// rewriteEvent gives MCP tool blocks in event their public id and name in place, and returns
+// the stop_reason it carries and whether it is message_stop.
+func (r *claudeRun) rewriteEvent(event host.Obj) (reason any, stop bool) {
+	eventType := get(event, "type")
+	part := func(key string) host.Obj {
+		o, ok := getd(event, key, host.Obj{}).(host.Obj)
+		if !ok {
+			claudeProtocol()
+		}
+		return o
+	}
+	switch {
+	case eventType == "content_block_start" && get(part("content_block"), "type") == "tool_use":
+		r.startToolUse(event, part("content_block"))
+	case eventType == "content_block_delta" && get(part("delta"), "type") == "input_json_delta":
+		delta := part("delta")
+		var matching []*claudeCall
+		for _, c := range r.calls {
+			if claudeEqual(c.index, get(event, "index")) {
+				matching = append(matching, c)
+			}
+		}
+		partial, ok := get(delta, "partial_json").(string)
+		if len(matching) != 1 || !ok {
+			claudeProtocol()
+		}
+		matching[0].arguments += partial
+	case eventType == "message_delta":
+		if value := get(part("delta"), "stop_reason"); truthy(value) {
+			reason = value
+		}
+	case eventType == "message_stop":
+		stop = true
+	}
+	return reason, stop
+}
+
+func (r *claudeRun) startToolUse(event, block host.Obj) {
+	sourceID, ok := get(block, "id").(string)
+	fullName, isStr := get(block, "name").(string)
+	if !ok || r.call(sourceID) != nil || !isStr || !strings.HasPrefix(fullName, claudeMCPPrefix) {
+		claudeProtocol()
+	}
+	name := strings.TrimPrefix(fullName, claudeMCPPrefix)
+	if _, ok := r.tools.Get(name); !ok {
+		claudeProtocol()
+	}
+	public := claudePrefix + r.tag + "_" + strconv.Itoa(r.nextCall)
+	r.nextCall++
+	arguments := ""
+	if input := get(block, "input"); truthy(input) {
+		arguments = claudeMustJSON(input)
+	}
+	r.calls = append(r.calls, &claudeCall{source: sourceID, public: public, name: name,
+		index: get(event, "index"), arguments: arguments})
+	block.Set("id", public)
+	block.Set("name", name)
+}
+
+func claudeEventSSE(event host.Obj) []byte {
+	eventType := get(event, "type")
+	kindName, ok := eventType.(string)
+	if !ok {
+		claudeProtocol()
+	}
+	var fields []host.KV
+	for _, kv := range event {
+		if kv.Key != "type" {
+			fields = append(fields, kv)
+		}
+	}
+	return messagesSSE(kindName, fields...)
 }
 
 // claudeErrStopped is the emit result when the consumer stopped pulling.
@@ -1149,17 +1199,7 @@ func (b *claudeBridge) acquire(body host.Obj, settings, owner string) (*claudeRu
 		return nil, false, claudeErr("conversation_mismatch", 409)
 	}
 	if len(candidates) == 1 {
-		run := candidates[0]
-		if run.busy || run.isClosed() {
-			return nil, false, claudeErr("conversation_busy", 409)
-		}
-		if err := claudeCatch(func() { run.continuation(body) }); err != nil {
-			return nil, false, err
-		}
-		run.busy = true
-		run.deadline.Store(claudeClock() + int64(claudeDeadline))
-		b.arm(run, claudeDeadline)
-		return run, false, nil
+		return b.resume(candidates[0], body)
 	}
 	if claudeOwnedCalls(messages) {
 		return nil, false, claudeErr("conversation_mismatch", 409)
@@ -1187,6 +1227,19 @@ func (b *claudeBridge) acquire(body host.Obj, settings, owner string) (*claudeRu
 	b.runs = append(b.runs, run)
 	b.arm(run, claudeDeadline)
 	return run, true, nil
+}
+
+func (b *claudeBridge) resume(run *claudeRun, body host.Obj) (*claudeRun, bool, error) {
+	if run.busy || run.isClosed() {
+		return nil, false, claudeErr("conversation_busy", 409)
+	}
+	if err := claudeCatch(func() { run.continuation(body) }); err != nil {
+		return nil, false, err
+	}
+	run.busy = true
+	run.deadline.Store(claudeClock() + int64(claudeDeadline))
+	b.arm(run, claudeDeadline)
+	return run, false, nil
 }
 
 // claudeConsumerPanic wraps a panic from the consumer's loop body on its way out.

@@ -149,10 +149,8 @@ func pyIntArg(v any) (int64, bool) {
 	return 0, false
 }
 
-// fixFinding fixes one review finding on its PR branch and returns a short Korean report.
-// run does every process; claude, when set, runs only the model.
-func fixFinding(spec map[string]any, run, claude runFunc) (bool, string, error) {
-	repo, path := pyStr(spec["repo"]), pyStr(spec["path"])
+func fixFindingArgs(spec map[string]any) (repo, path, text, expected string, number, line int64, err error) {
+	repo, path = pyStr(spec["repo"]), pyStr(spec["path"])
 	if !truthy(spec["repo"]) {
 		repo = ""
 	}
@@ -166,9 +164,8 @@ func fixFinding(spec map[string]any, run, claude runFunc) (bool, string, error) 
 	}
 	line, ok2 := pyIntArg(lineArg)
 	if !ok1 || !ok2 {
-		return false, "", actionErr("PR 번호가 올바르지 않아요")
+		return "", "", "", "", 0, 0, actionErr("PR 번호가 올바르지 않아요")
 	}
-	text := ""
 	if truthy(spec["text"]) {
 		text = pyStr(spec["text"])
 	}
@@ -177,14 +174,23 @@ func fixFinding(spec map[string]any, run, claude runFunc) (bool, string, error) 
 		bad = bad || part == ".."
 	}
 	if !repoRe.MatchString(repo) || bad {
-		return false, "", actionErr("지적 정보가 올바르지 않아요")
+		return "", "", "", "", 0, 0, actionErr("지적 정보가 올바르지 않아요")
 	}
-	expected := ""
 	if truthy(spec["expected_head_sha"]) {
 		expected = pyStr(spec["expected_head_sha"])
 	}
 	if expected != "" && !shaRe.MatchString(expected) {
-		return false, "", actionErr("확인한 커밋 해시가 올바르지 않아요")
+		return "", "", "", "", 0, 0, actionErr("확인한 커밋 해시가 올바르지 않아요")
+	}
+	return repo, path, text, expected, number, line, nil
+}
+
+// fixFinding fixes one review finding on its PR branch and returns a short Korean report.
+// run does every process; claude, when set, runs only the model.
+func fixFinding(spec map[string]any, run, claude runFunc) (bool, string, error) {
+	repo, path, text, expected, number, line, err := fixFindingArgs(spec)
+	if err != nil {
+		return false, "", err
 	}
 	branch, err := prBranch(repo, number, run, expected)
 	if err != nil {

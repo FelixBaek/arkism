@@ -413,23 +413,8 @@ func listModels() []host.Obj {
 		}
 	}
 	for _, g := range fetchPage("/v1/routing/groups", token) {
-		o, ok := g.(host.Obj)
-		id, idOK := get(g, "id").(string)
-		name, present := o.Get("name")
-		_, nameOK := name.(string)
-		members, listOK := get(g, "members").([]any)
-		if !ok || get(g, "enabled") != true || !idOK || !groupID.MatchString(id) || (present && !nameOK) || !listOK {
-			continue
-		}
-		for _, mid := range members {
-			if s, isStr := mid.(string); isStr && supported[s] {
-				label := any(id)
-				if truthy(name) {
-					label = name
-				}
-				keep = append(keep, host.Obj{{Key: "id", Value: id}, {Key: "label", Value: label}})
-				break
-			}
+		if entry := groupEntry(g, supported); entry != nil {
+			keep = append(keep, entry)
 		}
 	}
 	// The built-in group of every model in 모델 설정 (memory.AutoGroupID), unless a saved group took its id.
@@ -438,6 +423,28 @@ func listModels() []host.Obj {
 	}
 	models.at, models.items = time.Now(), keep
 	return keep
+}
+
+// groupEntry is the listing entry of an enabled, valid 라우팅 group with a supported member, else nil.
+func groupEntry(g any, supported map[string]bool) host.Obj {
+	o, ok := g.(host.Obj)
+	id, idOK := get(g, "id").(string)
+	name, present := o.Get("name")
+	_, nameOK := name.(string)
+	members, listOK := get(g, "members").([]any)
+	if !ok || get(g, "enabled") != true || !idOK || !groupID.MatchString(id) || (present && !nameOK) || !listOK {
+		return nil
+	}
+	for _, mid := range members {
+		if s, isStr := mid.(string); isStr && supported[s] {
+			label := any(id)
+			if truthy(name) {
+				label = name
+			}
+			return host.Obj{{Key: "id", Value: id}, {Key: "label", Value: label}}
+		}
+	}
+	return nil
 }
 
 func label(m host.Obj) any {
@@ -948,38 +955,7 @@ func (x *exchange) geminiGet() error {
 	path, query, err := geminiPath(x.target)
 	size, offset := 0, 0
 	if err == nil {
-		for key := range query {
-			if !set("key", "pageSize", "page_size", "pageToken", "page_token")[key] {
-				err = errors.New("invalid_request")
-			}
-		}
-		_, a := query["pageSize"]
-		_, b := query["page_size"]
-		_, c := query["pageToken"]
-		_, d := query["page_token"]
-		if a && b || c && d {
-			err = errors.New("invalid_request")
-		}
-		sizeText, tokenText := "1000", "0"
-		for _, k := range []string{"page_size", "pageSize"} {
-			if v, ok := query[k]; ok {
-				sizeText = v
-			}
-		}
-		for _, k := range []string{"page_token", "pageToken"} {
-			if v, ok := query[k]; ok {
-				tokenText = v
-			}
-		}
-		if !sizeRe.MatchString(sizeText) || !offsetRe.MatchString(tokenText) {
-			err = errors.New("invalid_request")
-		} else {
-			size, _ = strconv.Atoi(sizeText)
-			offset, _ = strconv.Atoi(tokenText)
-			if size < 1 || size > 1000 {
-				err = errors.New("invalid_request")
-			}
-		}
+		size, offset, err = geminiPage(query)
 	}
 	if err != nil {
 		return x.inputError(400, "invalid_request")
@@ -987,16 +963,7 @@ func (x *exchange) geminiGet() error {
 	if path != "/v1beta/models" && !strings.HasPrefix(path, "/v1beta/models/") {
 		return x.inputError(501, "unsupported_resource")
 	}
-	var rows []any
-	for _, m := range routingModels() {
-		id := get(m, "id").(string)
-		methods := []any{"generateContent"}
-		if strings.HasPrefix(id, "google/") {
-			methods = []any{"generateContent", "countTokens"}
-		}
-		rows = append(rows, host.Obj{{Key: "name", Value: "models/" + id}, {Key: "baseModelId", Value: id},
-			{Key: "displayName", Value: label(m)}, {Key: "supportedGenerationMethods", Value: methods}})
-	}
+	rows := geminiRows()
 	if path != "/v1beta/models" {
 		name := strings.TrimPrefix(path, "/v1beta/")
 		for _, row := range rows {
@@ -1015,6 +982,60 @@ func (x *exchange) geminiGet() error {
 		result.Set("nextPageToken", strconv.Itoa(offset+size))
 	}
 	return x.sendBytes(200, mustPy(result))
+}
+
+// geminiPage reads the page size and offset of a Gemini model listing query.
+func geminiPage(query map[string]string) (int, int, error) {
+	var err error
+	size, offset := 0, 0
+	for key := range query {
+		if !set("key", "pageSize", "page_size", "pageToken", "page_token")[key] {
+			err = errors.New("invalid_request")
+		}
+	}
+	_, a := query["pageSize"]
+	_, b := query["page_size"]
+	_, c := query["pageToken"]
+	_, d := query["page_token"]
+	if a && b || c && d {
+		err = errors.New("invalid_request")
+	}
+	sizeText, tokenText := "1000", "0"
+	for _, k := range []string{"page_size", "pageSize"} {
+		if v, ok := query[k]; ok {
+			sizeText = v
+		}
+	}
+	for _, k := range []string{"page_token", "pageToken"} {
+		if v, ok := query[k]; ok {
+			tokenText = v
+		}
+	}
+	if !sizeRe.MatchString(sizeText) || !offsetRe.MatchString(tokenText) {
+		err = errors.New("invalid_request")
+	} else {
+		size, _ = strconv.Atoi(sizeText)
+		offset, _ = strconv.Atoi(tokenText)
+		if size < 1 || size > 1000 {
+			err = errors.New("invalid_request")
+		}
+	}
+	return size, offset, err
+}
+
+// geminiRows is the Gemini model listing of the 라우팅 models.
+func geminiRows() []any {
+	var rows []any
+	for _, m := range routingModels() {
+		id := get(m, "id").(string)
+		methods := []any{"generateContent"}
+		if strings.HasPrefix(id, "google/") {
+			methods = []any{"generateContent", "countTokens"}
+		}
+		rows = append(rows, host.Obj{{Key: "name", Value: "models/" + id}, {Key: "baseModelId", Value: id},
+			{Key: "displayName", Value: label(m)}, {Key: "supportedGenerationMethods", Value: methods}})
+	}
+	return rows
 }
 
 // mentions reports whether any string or key in v contains secret (codex._redact(v) != v).
@@ -1049,22 +1070,8 @@ func (x *exchange) systemone() error {
 	var body host.Obj
 	var payload host.Obj
 	if !listing {
-		raw, err := x.body()
-		var parsed any
-		if err == nil {
-			parsed, err = Loads(string(raw), "invalid_request")
-		}
-		if err == nil {
-			body, err = Keys(parsed, []string{"model", "state", "questions"}, "invalid_request")
-		}
-		if err == nil {
-			model, ok := get(body, "model").(string)
-			questions, isObj := get(body, "questions").(host.Obj)
-			if !ok || !modelID.MatchString(model) || strings.HasPrefix(model, "group/") || !has(body, "state") || !isObj || len(questions) == 0 {
-				err = errors.New("invalid_request")
-			}
-		}
-		if err != nil {
+		var err error
+		if body, err = x.systemoneBody(); err != nil {
 			status := 400
 			if err.Error() == "input_too_large" {
 				status = 413
@@ -1094,6 +1101,32 @@ func (x *exchange) systemone() error {
 		}
 		data, method = strings.NewReader(text), http.MethodPost
 	}
+	return x.systemoneRelay(method, target, data, secret, listing, body)
+}
+
+// systemoneBody reads and checks a structured-answer request body.
+func (x *exchange) systemoneBody() (host.Obj, error) {
+	raw, err := x.body()
+	var parsed any
+	var body host.Obj
+	if err == nil {
+		parsed, err = Loads(string(raw), "invalid_request")
+	}
+	if err == nil {
+		body, err = Keys(parsed, []string{"model", "state", "questions"}, "invalid_request")
+	}
+	if err == nil {
+		model, ok := get(body, "model").(string)
+		questions, isObj := get(body, "questions").(host.Obj)
+		if !ok || !modelID.MatchString(model) || strings.HasPrefix(model, "group/") || !has(body, "state") || !isObj || len(questions) == 0 {
+			err = errors.New("invalid_request")
+		}
+	}
+	return body, err
+}
+
+// systemoneRelay calls the 라우팅 structured-answer route and sends its checked result.
+func (x *exchange) systemoneRelay(method, target string, data io.Reader, secret string, listing bool, body host.Obj) error {
 	invalid := func() error { return x.inputError(502, "upstream_invalid_response") }
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -1135,42 +1168,60 @@ func (x *exchange) systemone() error {
 	}
 	var result host.Obj
 	if listing {
-		rows, ok := get(o, "items").([]any)
-		if !ok {
+		if result, ok = systemoneListing(o); !ok {
 			return invalid()
 		}
-		out := []any{}
-		for _, row := range rows {
-			id, isStr := get(row, "id").(string)
-			if _, isObj := row.(host.Obj); !isObj || !isStr || !modelID.MatchString(id) || strings.HasPrefix(id, "group/") {
-				return invalid()
-			}
-			out = append(out, host.Obj{{Key: "id", Value: id}, {Key: "object", Value: "model"}})
-		}
-		result = host.Obj{{Key: "object", Value: "list"}, {Key: "data", Value: out}}
-		status = 200
 	} else {
-		code, intOK := host.Int(get(o, "status"))
-		result, ok = get(o, "result").(host.Obj)
-		if !intOK || !isInt(get(o, "status")) || (code != 200 && (code < 400 || code > 599)) || !ok {
+		var code int64
+		if result, code, ok = systemoneAnswer(o, body); !ok {
 			return invalid()
 		}
 		if code != 200 {
 			return x.inputError(int(code), "upstream_http_"+strconv.FormatInt(code, 10))
 		}
-		_, modelOK := get(result, "model").(string)
-		answers, answersOK := get(result, "answers").(host.Obj)
-		_, usageOK := get(result, "usage").(host.Obj)
-		if !modelOK || !answersOK || !usageOK || !sameKeys(answers, get(body, "questions").(host.Obj)) {
-			return invalid()
-		}
-		status = 200
 	}
 	text, err := host.Dumps(result, host.DumpOpts{NoASCII: true})
 	if err != nil {
 		return invalid()
 	}
-	return x.sendBytes(status, []byte(text))
+	return x.sendBytes(200, []byte(text))
+}
+
+// systemoneAnswer checks a structured-answer page against its request; false when it is invalid,
+// and the upstream status when that is not 200.
+func systemoneAnswer(o, body host.Obj) (host.Obj, int64, bool) {
+	code, intOK := host.Int(get(o, "status"))
+	result, ok := get(o, "result").(host.Obj)
+	if !intOK || !isInt(get(o, "status")) || (code != 200 && (code < 400 || code > 599)) || !ok {
+		return nil, 0, false
+	}
+	if code != 200 {
+		return nil, code, true
+	}
+	_, modelOK := get(result, "model").(string)
+	answers, answersOK := get(result, "answers").(host.Obj)
+	_, usageOK := get(result, "usage").(host.Obj)
+	if !modelOK || !answersOK || !usageOK || !sameKeys(answers, get(body, "questions").(host.Obj)) {
+		return nil, 0, false
+	}
+	return result, code, true
+}
+
+// systemoneListing is the OpenAI model list of a structured-answer listing page; false when a row is invalid.
+func systemoneListing(o host.Obj) (host.Obj, bool) {
+	rows, ok := get(o, "items").([]any)
+	if !ok {
+		return nil, false
+	}
+	out := []any{}
+	for _, row := range rows {
+		id, isStr := get(row, "id").(string)
+		if _, isObj := row.(host.Obj); !isObj || !isStr || !modelID.MatchString(id) || strings.HasPrefix(id, "group/") {
+			return nil, false
+		}
+		out = append(out, host.Obj{{Key: "id", Value: id}, {Key: "object", Value: "model"}})
+	}
+	return host.Obj{{Key: "object", Value: "list"}, {Key: "data", Value: out}}, true
 }
 
 func sameKeys(a, b host.Obj) bool {
@@ -1278,35 +1329,9 @@ func (x *exchange) doPOST() error {
 	x.chat = path == "/v1/chat/completions" || x.responses || x.geminiAPI
 	x.chatReq, x.responsesReq = host.Obj{}, host.Obj{}
 	if x.geminiAPI {
-		decoded, query, err := geminiPath(x.target)
-		if err != nil {
-			return x.inputError(400, "invalid_request")
+		if done, err := x.geminiEntrance(); done {
+			return err
 		}
-		route := geminiURL.FindStringSubmatch(decoded)
-		if route == nil {
-			return x.inputError(501, "unsupported_method")
-		}
-		model, method := route[1], route[2]
-		alt, ok := query["alt"]
-		if !ok {
-			alt = "json"
-		}
-		want := "json"
-		if method == "streamGenerateContent" {
-			want = "sse"
-		}
-		extra := false
-		for key := range query {
-			extra = extra || (key != "key" && key != "alt")
-		}
-		if !modelID.MatchString(model) || (strings.HasPrefix(model, "group/") && !groupID.MatchString(model)) || extra || alt != want {
-			return x.inputError(400, "invalid_request")
-		}
-		x.geminiCount = method == "countTokens"
-		if x.geminiCount && !strings.HasPrefix(model, "google/") {
-			return x.inputError(501, "unsupported_method")
-		}
-		x.geminiReq = &geminiRoute{model, method == "streamGenerateContent"}
 	}
 	if x.responses && path != "/v1/responses" {
 		return x.inputError(501, "unsupported_field")
@@ -1322,49 +1347,15 @@ func (x *exchange) doPOST() error {
 	if !x.geminiAPI && !entrances[path] {
 		return x.pass(raw)
 	}
-	text := string(raw)
-	if len(raw) == 0 {
-		text = "{}"
+	body, done, err := x.entranceBody(raw)
+	if done {
+		return err
 	}
-	var parsed any
-	if x.responses || x.geminiAPI {
-		parsed, err = Loads(text, "invalid_request")
-	} else {
-		parsed, err = Parse(text)
-	}
-	if err != nil {
-		return x.inputError(400, "invalid_request")
-	}
-	body, ok := parsed.(host.Obj)
-	if !ok {
-		return x.inputError(400, "invalid_request")
-	}
-	if !x.chat && has(body, "response_format") {
-		// The Messages entrance has no Chat-only field: refuse it before any egress instead of
-		// forwarding it verbatim to Anthropic or silently dropping it for a chat target.
-		return x.inputError(400, "unsupported_field")
-	}
-	if x.geminiReq != nil {
-		if done, err := x.geminiBody(&body); done {
-			return err
-		}
-	}
-	if x.responses {
-		converted, err := ResponsesToChat(body)
-		if err != nil {
-			return x.inputError(400, "unsupported_or_invalid_request")
-		}
-		x.responsesReq, body = body, converted
-	}
-	if x.chat {
-		// A Chat-only response_format is validated by the codec and kept out of the converted
-		// body: only a chat target may forward it, decided before any egress.
-		converted, err := CodecToMessages(body)
-		if err != nil {
-			return x.inputError(400, "unsupported_or_invalid_request")
-		}
-		x.chatReq, x.structured, body = body, has(body, "response_format"), converted
-	}
+	return x.routePOST(path, body, raw)
+}
+
+// routePOST serves a parsed entrance request by its model.
+func (x *exchange) routePOST(path string, body host.Obj, raw []byte) error {
 	modelValue := getd(body, "model", "")
 	model, isStr := modelValue.(string)
 	if !isStr {
@@ -1375,46 +1366,142 @@ func (x *exchange) doPOST() error {
 	if path == "/v1/messages" && !x.chat {
 		x.origin = traceOrigin(body, x.r.Header, time.Now())
 	}
-	if strings.HasPrefix(model, "group/") || strings.HasPrefix(model, "anthropic/") {
-		if !modelID.MatchString(model) {
-			return x.inputError(400, "invalid_request")
-		}
-		if !counting && !validMessages(get(body, "messages")) {
-			return x.inputError(400, "invalid_request")
-		}
-		beta := ""
-		if !x.chat {
-			beta = x.r.Header.Get("anthropic-beta")
-		}
-		bad := len(beta) > 1024
-		if beta != "" {
-			for _, part := range strings.Split(beta, ",") {
-				bad = bad || !betaPart.MatchString(strings.TrimSpace(part))
-			}
-		}
-		if bad {
-			return x.inputError(400, "invalid_request")
-		}
+	if (strings.HasPrefix(model, "group/") || strings.HasPrefix(model, "anthropic/")) && !x.validClaudeRequest(body, model, counting) {
+		return x.inputError(400, "invalid_request")
 	}
 	if strings.HasPrefix(model, "group/") {
-		if !groupID.MatchString(model) {
-			return x.sendBytes(anthropicError(400, "invalid_group"))
-		}
-		if counting {
-			probe := host.Obj{{Key: "max_tokens", Value: 1}}
-			for _, kv := range body {
-				probe.Set(kv.Key, kv.Value)
-			}
-			if ok, err := x.googleContinuation(probe); !ok {
-				return err
-			}
-			if x.googleResume != "" {
-				return x.inputError(501, "unsupported_method")
-			}
-			return x.sendBytes(200, mustPy(host.Obj{{Key: "input_tokens", Value: len(raw) / 4}}))
-		}
-		return x.runGroup(body, model)
+		return x.groupPOST(body, model, raw, counting)
 	}
+	return x.modelPOST(body, model, raw, counting)
+}
+
+// geminiEntrance reads the Gemini route and query of the request; done means a response was sent.
+func (x *exchange) geminiEntrance() (bool, error) {
+	decoded, query, err := geminiPath(x.target)
+	if err != nil {
+		return true, x.inputError(400, "invalid_request")
+	}
+	route := geminiURL.FindStringSubmatch(decoded)
+	if route == nil {
+		return true, x.inputError(501, "unsupported_method")
+	}
+	model, method := route[1], route[2]
+	alt, ok := query["alt"]
+	if !ok {
+		alt = "json"
+	}
+	want := "json"
+	if method == "streamGenerateContent" {
+		want = "sse"
+	}
+	extra := false
+	for key := range query {
+		extra = extra || (key != "key" && key != "alt")
+	}
+	if !modelID.MatchString(model) || (strings.HasPrefix(model, "group/") && !groupID.MatchString(model)) || extra || alt != want {
+		return true, x.inputError(400, "invalid_request")
+	}
+	x.geminiCount = method == "countTokens"
+	if x.geminiCount && !strings.HasPrefix(model, "google/") {
+		return true, x.inputError(501, "unsupported_method")
+	}
+	x.geminiReq = &geminiRoute{model, method == "streamGenerateContent"}
+	return false, nil
+}
+
+// entranceBody parses an entrance body and converts it to Messages; done means a response was sent.
+func (x *exchange) entranceBody(raw []byte) (host.Obj, bool, error) {
+	text := string(raw)
+	if len(raw) == 0 {
+		text = "{}"
+	}
+	var parsed any
+	var err error
+	if x.responses || x.geminiAPI {
+		parsed, err = Loads(text, "invalid_request")
+	} else {
+		parsed, err = Parse(text)
+	}
+	if err != nil {
+		return nil, true, x.inputError(400, "invalid_request")
+	}
+	body, ok := parsed.(host.Obj)
+	if !ok {
+		return nil, true, x.inputError(400, "invalid_request")
+	}
+	if !x.chat && has(body, "response_format") {
+		// The Messages entrance has no Chat-only field: refuse it before any egress instead of
+		// forwarding it verbatim to Anthropic or silently dropping it for a chat target.
+		return nil, true, x.inputError(400, "unsupported_field")
+	}
+	if x.geminiReq != nil {
+		if done, err := x.geminiBody(&body); done {
+			return nil, true, err
+		}
+	}
+	if x.responses {
+		converted, err := ResponsesToChat(body)
+		if err != nil {
+			return nil, true, x.inputError(400, "unsupported_or_invalid_request")
+		}
+		x.responsesReq, body = body, converted
+	}
+	if x.chat {
+		// A Chat-only response_format is validated by the codec and kept out of the converted
+		// body: only a chat target may forward it, decided before any egress.
+		converted, err := CodecToMessages(body)
+		if err != nil {
+			return nil, true, x.inputError(400, "unsupported_or_invalid_request")
+		}
+		x.chatReq, x.structured, body = body, has(body, "response_format"), converted
+	}
+	return body, false, nil
+}
+
+// validClaudeRequest checks a group or anthropic/ request's model, messages and anthropic-beta header.
+func (x *exchange) validClaudeRequest(body host.Obj, model string, counting bool) bool {
+	if !modelID.MatchString(model) {
+		return false
+	}
+	if !counting && !validMessages(get(body, "messages")) {
+		return false
+	}
+	beta := ""
+	if !x.chat {
+		beta = x.r.Header.Get("anthropic-beta")
+	}
+	bad := len(beta) > 1024
+	if beta != "" {
+		for _, part := range strings.Split(beta, ",") {
+			bad = bad || !betaPart.MatchString(strings.TrimSpace(part))
+		}
+	}
+	return !bad
+}
+
+// groupPOST serves an entrance request for a group/ model.
+func (x *exchange) groupPOST(body host.Obj, model string, raw []byte, counting bool) error {
+	if !groupID.MatchString(model) {
+		return x.sendBytes(anthropicError(400, "invalid_group"))
+	}
+	if counting {
+		probe := host.Obj{{Key: "max_tokens", Value: 1}}
+		for _, kv := range body {
+			probe.Set(kv.Key, kv.Value)
+		}
+		if ok, err := x.googleContinuation(probe); !ok {
+			return err
+		}
+		if x.googleResume != "" {
+			return x.inputError(501, "unsupported_method")
+		}
+		return x.sendBytes(200, mustPy(host.Obj{{Key: "input_tokens", Value: len(raw) / 4}}))
+	}
+	return x.runGroup(body, model)
+}
+
+// modelPOST serves an entrance request for a single model.
+func (x *exchange) modelPOST(body host.Obj, model string, raw []byte, counting bool) error {
 	w, err := target(model)
 	if err != nil {
 		var crewErr *host.CrewError
@@ -1446,6 +1533,11 @@ func (x *exchange) doPOST() error {
 	if counting && w.kind != "anthropic" { // rough: a custom provider's context bar
 		return x.sendBytes(200, mustPy(host.Obj{{Key: "input_tokens", Value: len(raw) / 4}}))
 	}
+	return x.runModel(body, w, model, counting)
+}
+
+// runModel executes a single-model request, admitted unless it only counts tokens.
+func (x *exchange) runModel(body host.Obj, w *where, model string, counting bool) error {
 	if counting {
 		return x.execute(body, w)
 	}
@@ -1570,70 +1662,9 @@ func (x *exchange) execute(body host.Obj, w *where) error {
 	}
 	switch w.kind {
 	case "anthropic":
-		after := get(body, "model").(string)
-		if _, rest, found := strings.Cut(after, "/"); found {
-			after = rest
-		}
-		name := host.ClaudeModel(after)
-		counting := x.path() == "/v1/messages/count_tokens"
-		if !counting {
-			if resumed := claudeRuns.continuationModel(body, x.owner()); resumed != "" && resumed == name {
-				return x.claude(with(body, "model", name))
-			}
-			if claudeOwnedCalls(get(body, "messages")) {
-				return x.inputError(409, "conversation_mismatch")
-			}
-		}
-		headers, secret, err := claudeHeaders(name)
-		if err != nil {
-			if err.Error() == "claude_subscription_requires_cli" {
-				if counting {
-					return x.inputError(501, "unsupported_method")
-				}
-				return x.claude(with(body, "model", name))
-			}
-			x.attemptErr = "login_unavailable"
-			if x.group != nil {
-				return &targetUnavailable{503, x.attemptErr}
-			}
-			return x.inputError(503, x.attemptErr)
-		}
-		if beta := x.r.Header.Get("anthropic-beta"); !x.chat && beta != "" {
-			headers = with2(headers, "anthropic-beta", beta)
-		}
-		endpoint := "/v1/messages"
-		if counting {
-			endpoint = "/v1/messages/count_tokens"
-		}
-		data, err := pyDumps(with(body, "model", name))
-		if err != nil {
-			return x.inputError(400, "invalid_request")
-		}
-		return x.forward(Anthropic+endpoint, data, headers, secret)
+		return x.executeClaude(body)
 	case "codex":
-		if x.chat && (get(x.chatReq, "max_tokens") != nil || get(x.chatReq, "max_completion_tokens") != nil) {
-			// The Codex backend cannot enforce a requested output-token limit.
-			return x.refuse("unsupported_field")
-		}
-		request := with(body, "model", w.model)
-		if x.chat {
-			if _, err := subscription.TranslateRequest(plain(request), w.model); err != nil {
-				var ce *subscription.CodexError
-				errors.As(err, &ce)
-				if ce != nil && ce.Code == "unsupported_request" {
-					if x.group != nil {
-						return &targetUnavailable{400, "unsupported_field"}
-					}
-					return x.inputError(ce.Status, "unsupported_field")
-				}
-				status := 400
-				if ce != nil {
-					status = ce.Status
-				}
-				return x.inputError(status, "invalid_request")
-			}
-		}
-		return x.codex(request)
+		return x.executeCodex(body, w)
 	}
 	hostChatAPI := w.kind == "chat" && (strings.HasPrefix(get(body, "model").(string), "openai/") || strings.HasPrefix(get(body, "model").(string), "xai/"))
 	if w.kind == "chat" && x.chat {
@@ -1660,6 +1691,77 @@ func (x *exchange) execute(body host.Obj, w *where) error {
 			"anthropic-version": "2023-06-01", "x-api-key": w.key, "authorization": "Bearer " + w.key}, w.key)
 	}
 	return x.chatAPI(w.base, w.key, body, hostChatAPI)
+}
+
+// executeClaude runs a request on an anthropic target: the Claude CLI runner or the Messages API.
+func (x *exchange) executeClaude(body host.Obj) error {
+	after := get(body, "model").(string)
+	if _, rest, found := strings.Cut(after, "/"); found {
+		after = rest
+	}
+	name := host.ClaudeModel(after)
+	counting := x.path() == "/v1/messages/count_tokens"
+	if !counting {
+		if resumed := claudeRuns.continuationModel(body, x.owner()); resumed != "" && resumed == name {
+			return x.claude(with(body, "model", name))
+		}
+		if claudeOwnedCalls(get(body, "messages")) {
+			return x.inputError(409, "conversation_mismatch")
+		}
+	}
+	headers, secret, err := claudeHeaders(name)
+	if err != nil {
+		if err.Error() == "claude_subscription_requires_cli" {
+			if counting {
+				return x.inputError(501, "unsupported_method")
+			}
+			return x.claude(with(body, "model", name))
+		}
+		x.attemptErr = "login_unavailable"
+		if x.group != nil {
+			return &targetUnavailable{503, x.attemptErr}
+		}
+		return x.inputError(503, x.attemptErr)
+	}
+	if beta := x.r.Header.Get("anthropic-beta"); !x.chat && beta != "" {
+		headers = with2(headers, "anthropic-beta", beta)
+	}
+	endpoint := "/v1/messages"
+	if counting {
+		endpoint = "/v1/messages/count_tokens"
+	}
+	data, err := pyDumps(with(body, "model", name))
+	if err != nil {
+		return x.inputError(400, "invalid_request")
+	}
+	return x.forward(Anthropic+endpoint, data, headers, secret)
+}
+
+// executeCodex runs a request on a Codex subscription target.
+func (x *exchange) executeCodex(body host.Obj, w *where) error {
+	if x.chat && (get(x.chatReq, "max_tokens") != nil || get(x.chatReq, "max_completion_tokens") != nil) {
+		// The Codex backend cannot enforce a requested output-token limit.
+		return x.refuse("unsupported_field")
+	}
+	request := with(body, "model", w.model)
+	if x.chat {
+		if _, err := subscription.TranslateRequest(plain(request), w.model); err != nil {
+			var ce *subscription.CodexError
+			errors.As(err, &ce)
+			if ce != nil && ce.Code == "unsupported_request" {
+				if x.group != nil {
+					return &targetUnavailable{400, "unsupported_field"}
+				}
+				return x.inputError(ce.Status, "unsupported_field")
+			}
+			status := 400
+			if ce != nil {
+				status = ce.Status
+			}
+			return x.inputError(status, "invalid_request")
+		}
+	}
+	return x.codex(request)
 }
 
 func with2(h map[string]string, k, v string) map[string]string {
@@ -1732,16 +1834,9 @@ func (x *exchange) runGroup(body host.Obj, group string) error {
 	if task == "" {
 		return x.sendBytes(anthropicError(400, "group_task_missing"))
 	}
-	googleResumed := x.googleResume
-	if x.geminiRaw != nil {
-		var err error
-		if googleResumed, err = googleContinuationModel(x.geminiRaw, x.owner()); err != nil {
-			var ge *GoogleError
-			if errors.As(err, &ge) {
-				return x.inputError(ge.Status, ge.Code)
-			}
-			return err
-		}
+	googleResumed, done, err := x.groupGoogleResume()
+	if done {
+		return err
 	}
 	resumed := claudeRuns.continuationModel(body, x.owner())
 	if resumed == "" && claudeOwnedCalls(messages) {
@@ -1757,6 +1852,34 @@ func (x *exchange) runGroup(body host.Obj, group string) error {
 	if decision == nil || decision["group"] != group {
 		return x.sendBytes(anthropicError(502, "group_decision_mismatch"))
 	}
+	candidates, choice, ms, valid := groupCandidates(decision)
+	if !valid {
+		return x.sendBytes(anthropicError(502, "group_decision_invalid"))
+	}
+	if candidates, ok = pinGroup(candidates, resumed, googleResumed); !ok {
+		return x.inputError(409, "conversation_mismatch")
+	}
+	return x.tryGroup(body, candidates, choice, ms)
+}
+
+// groupGoogleResume is the model a native Gemini history continues; done means a response was sent.
+func (x *exchange) groupGoogleResume() (string, bool, error) {
+	googleResumed := x.googleResume
+	if x.geminiRaw != nil {
+		var err error
+		if googleResumed, err = googleContinuationModel(x.geminiRaw, x.owner()); err != nil {
+			var ge *GoogleError
+			if errors.As(err, &ge) {
+				return "", true, x.inputError(ge.Status, ge.Code)
+			}
+			return "", true, err
+		}
+	}
+	return googleResumed, false, nil
+}
+
+// groupCandidates reads a routing decision: its members in order, its kind and classifier time.
+func groupCandidates(decision map[string]any) ([]string, string, int64, bool) {
 	fallbacks, present := decision["fallbacks"]
 	if !present || fallbacks == nil {
 		fallbacks = []any{}
@@ -1784,9 +1907,11 @@ func (x *exchange) runGroup(body host.Obj, group string) error {
 		}
 		candidates = append(candidates, s)
 	}
-	if !valid {
-		return x.sendBytes(anthropicError(502, "group_decision_invalid"))
-	}
+	return candidates, choice, ms, valid
+}
+
+// pinGroup narrows the candidates to the member a Claude or Google history continues; false when none is.
+func pinGroup(candidates []string, resumed, googleResumed string) ([]string, bool) {
 	if resumed != "" {
 		pinned := ""
 		for _, id := range candidates {
@@ -1796,7 +1921,7 @@ func (x *exchange) runGroup(body host.Obj, group string) error {
 			}
 		}
 		if pinned == "" {
-			return x.inputError(409, "conversation_mismatch")
+			return nil, false
 		}
 		candidates = []string{pinned}
 	}
@@ -1806,11 +1931,22 @@ func (x *exchange) runGroup(body host.Obj, group string) error {
 			found = found || id == googleResumed
 		}
 		if !found {
-			return x.inputError(409, "conversation_mismatch")
+			return nil, false
 		}
 		candidates = []string{googleResumed}
 	}
-	lastStatus, lastError, lastCode := 503, "group_target_unavailable", ""
+	return candidates, true
+}
+
+// groupFailure is the last failure a group request met, sent when no member answers.
+type groupFailure struct {
+	status        int
+	message, code string
+}
+
+// tryGroup runs the candidates in turn until one answers.
+func (x *exchange) tryGroup(body host.Obj, candidates []string, choice string, ms int64) error {
+	last := groupFailure{503, "group_target_unavailable", ""}
 	var limitErr error
 	var limitAfter time.Duration
 	unique := []string{}
@@ -1837,7 +1973,7 @@ func (x *exchange) runGroup(body host.Obj, group string) error {
 				limitAfter = after
 			}
 			limitErr = err
-			lastStatus, lastError, lastCode = http.StatusTooManyRequests, err.Error(), err.Error()
+			last = groupFailure{http.StatusTooManyRequests, err.Error(), err.Error()}
 			continue
 		}
 		limitErr = nil
@@ -1849,60 +1985,9 @@ func (x *exchange) runGroup(body host.Obj, group string) error {
 		i++
 		x.group = map[string]any{"model": mid, "decision": kind, "replaced": previous, "classifier_ms": classifier}
 		x.attemptAt, x.attemptErr, x.status, x.retryAfter = time.Now(), "", 0, 0
-		skipped := false
-		w, err := target(mid)
-		if err != nil {
-			w = nil
-		}
-		if w == nil {
-			x.attemptErr = "unsupported_target"
-			release()
-		} else {
-			model := mid
-			if w.kind == "anthropic" {
-				model = host.ClaudeModel(strings.SplitN(mid, "/", 2)[1])
-			}
-			modelRests.claim(mid, clock())
-			err = x.execute(with(body, "model", model), w)
-			release()
-			var rejectedErr *upstreamRejected
-			var unavailable *targetUnavailable
-			status := x.status
-			if errors.As(err, &rejectedErr) {
-				status = rejectedErr.status
-			}
-			modelRests.settle(mid, status != 0 || !errors.As(err, &unavailable), status, x.attemptErr, x.retryAfter, clock())
-			switch {
-			case err == nil:
-				x.reportAttempt()
-				return nil
-			case errors.As(err, &rejectedErr):
-				x.attemptErr, lastStatus, lastError, lastCode = rejectedErr.code, rejectedErr.status, rejectedErr.code, ""
-			case errors.As(err, &unavailable):
-				x.attemptErr, lastStatus, lastError = unavailable.code, unavailable.status, unavailable.code
-				// A candidate our own checks refused made no call: it is not reported as one, while
-				// its code reaches the client exactly like the single-model path.
-				skipped = noCall[unavailable.code]
-				lastCode = ""
-				if skipped {
-					lastCode = unavailable.code
-				}
-			default:
-				x.attemptErr = "upstream_unreachable"
-				if x.started {
-					x.attemptErr = "upstream_interrupted"
-				}
-				started := x.started
-				var sendErr error
-				if !started {
-					sendErr = x.sendBytes(anthropicError(502, x.attemptErr))
-				}
-				x.reportAttempt()
-				if started {
-					return err // the partial response is dropped, never left looking complete
-				}
-				return sendErr
-			}
+		done, skipped, err := x.groupAttempt(body, mid, release, &last)
+		if done {
+			return err
 		}
 		if !skipped {
 			x.reportAttempt()
@@ -1910,11 +1995,72 @@ func (x *exchange) runGroup(body host.Obj, group string) error {
 		previous = mid
 	}
 	x.group = nil
-	x.publicErr = lastCode
+	x.publicErr = last.code
 	if limitErr != nil { // the last word was a limit: every later member was full too
 		x.w.Header().Set("Retry-After", retrySeconds(limitAfter))
 	}
-	return x.sendBytes(anthropicError(lastStatus, lastError))
+	return x.sendBytes(anthropicError(last.status, last.message))
+}
+
+// groupAttempt runs one admitted member; done means the group request ended with err,
+// skipped that the member made no call.
+func (x *exchange) groupAttempt(body host.Obj, mid string, release func(), last *groupFailure) (bool, bool, error) {
+	w, err := target(mid)
+	if err != nil {
+		w = nil
+	}
+	if w == nil {
+		x.attemptErr = "unsupported_target"
+		release()
+		return false, false, nil
+	}
+	model := mid
+	if w.kind == "anthropic" {
+		model = host.ClaudeModel(strings.SplitN(mid, "/", 2)[1])
+	}
+	modelRests.claim(mid, clock())
+	err = x.execute(with(body, "model", model), w)
+	release()
+	var rejectedErr *upstreamRejected
+	var unavailable *targetUnavailable
+	status := x.status
+	if errors.As(err, &rejectedErr) {
+		status = rejectedErr.status
+	}
+	modelRests.settle(mid, status != 0 || !errors.As(err, &unavailable), status, x.attemptErr, x.retryAfter, clock())
+	switch {
+	case err == nil:
+		x.reportAttempt()
+		return true, false, nil
+	case errors.As(err, &rejectedErr):
+		x.attemptErr, last.status, last.message, last.code = rejectedErr.code, rejectedErr.status, rejectedErr.code, ""
+	case errors.As(err, &unavailable):
+		x.attemptErr, last.status, last.message = unavailable.code, unavailable.status, unavailable.code
+		// A candidate our own checks refused made no call: it is not reported as one, while
+		// its code reaches the client exactly like the single-model path.
+		skipped := noCall[unavailable.code]
+		last.code = ""
+		if skipped {
+			last.code = unavailable.code
+		}
+		return false, skipped, nil
+	default:
+		x.attemptErr = "upstream_unreachable"
+		if x.started {
+			x.attemptErr = "upstream_interrupted"
+		}
+		started := x.started
+		var sendErr error
+		if !started {
+			sendErr = x.sendBytes(anthropicError(502, x.attemptErr))
+		}
+		x.reportAttempt()
+		if started {
+			return true, false, err // the partial response is dropped, never left looking complete
+		}
+		return true, false, sendErr
+	}
+	return false, false, nil
 }
 
 func (x *exchange) reject(status int) error {
@@ -2028,17 +2174,7 @@ func (x *exchange) googleChat(body host.Obj, model string) error {
 		}
 	}
 	if err != nil {
-		var ge *GoogleError
-		if errors.As(err, &ge) {
-			x.attemptErr = ge.Code
-			if x.group != nil && !ge.Started && (retryStatuses[ge.Status] || ge.Code == "login_unavailable" ||
-				ge.Code == "google_setup_required" || ge.Code == "google_capacity") {
-				return &targetUnavailable{ge.Status, ge.Code}
-			}
-			return x.inputError(ge.Status, ge.Code)
-		}
-		x.attemptErr = "upstream_invalid_response"
-		return x.inputError(502, x.attemptErr)
+		return x.googlePageError(err)
 	}
 	rest := func(yield func([]byte, error) bool) {
 		if !yield(first, nil) {
@@ -2068,6 +2204,21 @@ func (x *exchange) googleChat(body host.Obj, model string) error {
 		ctype = "text/event-stream"
 	}
 	return x.send(200, rest, ctype, nil)
+}
+
+// googlePageError answers a native Gemini failure met before the first output.
+func (x *exchange) googlePageError(err error) error {
+	var ge *GoogleError
+	if errors.As(err, &ge) {
+		x.attemptErr = ge.Code
+		if x.group != nil && !ge.Started && (retryStatuses[ge.Status] || ge.Code == "login_unavailable" ||
+			ge.Code == "google_setup_required" || ge.Code == "google_capacity") {
+			return &targetUnavailable{ge.Status, ge.Code}
+		}
+		return x.inputError(ge.Status, ge.Code)
+	}
+	x.attemptErr = "upstream_invalid_response"
+	return x.inputError(502, x.attemptErr)
 }
 
 // google relays native Gemini pages unchanged.

@@ -184,76 +184,13 @@ func nativeStream(chunks iter.Seq2[[]byte, error], model string, includeUsage bo
 		if !ok || !zeroIndex(get(choice, "index")) {
 			fail("invalid_stream")
 		}
-		delta, ok := get(choice, "delta").(host.Obj)
-		if role := get(delta, "role"); !ok || role != nil && role != "assistant" {
-			fail("invalid_stream")
-		}
-		for _, key := range []string{"content", "refusal"} {
-			if v := get(delta, key); v != nil {
-				str(v, "invalid_stream", false)
-			}
-		}
-		tools, ok := getd(delta, "tool_calls", []any{}).([]any)
-		if getd(delta, "tool_calls", nil) == nil {
-			tools, ok = nil, true
-		}
-		if !ok {
-			fail("invalid_stream")
-		}
-		for _, call := range tools {
-			function, ok := get(call, "function").(host.Obj)
-			if !ok {
-				fail("invalid_stream")
-			}
-			index := integer(get(call, "index"), "invalid_stream", 0)
-			if index >= int64(MaxToolCalls) {
-				fail("invalid_stream")
-			}
-			if calls[index] == nil {
-				callID := str(get(call, "id"), "invalid_stream", true)
-				if get(call, "type") != "function" || ids[callID] {
-					fail("invalid_stream")
-				}
-				ids[callID] = true
-				calls[index] = &nativeCall{id: callID, name: name(get(function, "name"), "invalid_stream")}
-			}
-			state := calls[index]
-			if id := get(call, "id"); id != nil && id != state.id ||
-				get(call, "type") != nil && get(call, "type") != "function" ||
-				get(function, "name") != nil && get(function, "name") != state.name {
-				fail("invalid_stream")
-			}
-			part := str(getd(function, "arguments", ""), "invalid_stream", false)
-			state.size += len(part)
-			if state.size > MaxToolArgumentBytes {
-				fail("tool_arguments_too_large")
-			}
-			state.parts = append(state.parts, part)
-		}
-		kept := host.Obj{}
-		for _, key := range []string{"role", "content", "tool_calls", "refusal"} {
-			if v, ok := delta.Get(key); ok {
-				kept.Set(key, v)
-			}
-		}
-		choice.Set("delta", kept)
+		choice.Set("delta", nativeDelta(choice, calls, ids))
 		choices[0] = choice
 		if !includeUsage {
 			body.Del("usage")
 		}
 		if reason := get(choice, "finish_reason"); reason != nil {
-			nativeReason(reason)
-			for i := range int64(len(calls)) {
-				if calls[i] == nil {
-					fail("invalid_stream")
-				}
-			}
-			for i := range int64(len(calls)) {
-				arguments(strings.Join(calls[i].parts, ""))
-			}
-			if reason == "tool_calls" && len(calls) == 0 {
-				fail("invalid_stream")
-			}
+			nativeFinish(reason, calls)
 			terminal = body
 		} else {
 			yield(emit(body))
@@ -270,4 +207,83 @@ func nativeStream(chunks iter.Seq2[[]byte, error], model string, includeUsage bo
 		yield(emit(usage))
 	}
 	yield([]byte("data: [DONE]\n\n"))
+}
+
+// nativeDelta validates one chunk's delta, accumulates its tool calls and returns the
+// fields it keeps.
+func nativeDelta(choice host.Obj, calls map[int64]*nativeCall, ids map[string]bool) host.Obj {
+	delta, ok := get(choice, "delta").(host.Obj)
+	if role := get(delta, "role"); !ok || role != nil && role != "assistant" {
+		fail("invalid_stream")
+	}
+	for _, key := range []string{"content", "refusal"} {
+		if v := get(delta, key); v != nil {
+			str(v, "invalid_stream", false)
+		}
+	}
+	tools, ok := getd(delta, "tool_calls", []any{}).([]any)
+	if getd(delta, "tool_calls", nil) == nil {
+		tools, ok = nil, true
+	}
+	if !ok {
+		fail("invalid_stream")
+	}
+	nativeToolCalls(tools, calls, ids)
+	kept := host.Obj{}
+	for _, key := range []string{"role", "content", "tool_calls", "refusal"} {
+		if v, ok := delta.Get(key); ok {
+			kept.Set(key, v)
+		}
+	}
+	return kept
+}
+
+// nativeToolCalls validates one chunk's tool call deltas and accumulates their arguments.
+func nativeToolCalls(tools []any, calls map[int64]*nativeCall, ids map[string]bool) {
+	for _, call := range tools {
+		function, ok := get(call, "function").(host.Obj)
+		if !ok {
+			fail("invalid_stream")
+		}
+		index := integer(get(call, "index"), "invalid_stream", 0)
+		if index >= int64(MaxToolCalls) {
+			fail("invalid_stream")
+		}
+		if calls[index] == nil {
+			callID := str(get(call, "id"), "invalid_stream", true)
+			if get(call, "type") != "function" || ids[callID] {
+				fail("invalid_stream")
+			}
+			ids[callID] = true
+			calls[index] = &nativeCall{id: callID, name: name(get(function, "name"), "invalid_stream")}
+		}
+		state := calls[index]
+		if id := get(call, "id"); id != nil && id != state.id ||
+			get(call, "type") != nil && get(call, "type") != "function" ||
+			get(function, "name") != nil && get(function, "name") != state.name {
+			fail("invalid_stream")
+		}
+		part := str(getd(function, "arguments", ""), "invalid_stream", false)
+		state.size += len(part)
+		if state.size > MaxToolArgumentBytes {
+			fail("tool_arguments_too_large")
+		}
+		state.parts = append(state.parts, part)
+	}
+}
+
+// nativeFinish validates the tool calls when the finish_reason arrives.
+func nativeFinish(reason any, calls map[int64]*nativeCall) {
+	nativeReason(reason)
+	for i := range int64(len(calls)) {
+		if calls[i] == nil {
+			fail("invalid_stream")
+		}
+	}
+	for i := range int64(len(calls)) {
+		arguments(strings.Join(calls[i].parts, ""))
+	}
+	if reason == "tool_calls" && len(calls) == 0 {
+		fail("invalid_stream")
+	}
 }
