@@ -949,7 +949,7 @@ export function createCrewWorkers(deps) {
     wk.paintAct = () => {
       acts.replaceChildren();
       if (isNew) return;
-      acts.append(estimateNode(), deps.switchEl(wk.draft.enabled !== false, "켜기", (on) => { wk.draft.enabled = on; wk.dirty = true; wk.paintAct(); drawWorkerSave(); })); // 전문가 삭제 sits at the end of 개요
+      acts.append(estimateNode()); // no on/off switch here (user request); 전문가 삭제 sits at the end of 개요
     };
     wk.redraw = () => { const sc = wk.scrollKeep ?? pop.body.scrollTop; wk.scrollKeep = sc; pop.select(wk.tab); pop.body.scrollTop = sc; requestAnimationFrame(() => { pop.body.scrollTop = sc; wk.scrollKeep = null; }); };
     if (isNew) names.replaceChildren(deps.el("h2", ""), deps.el("p", ""));
