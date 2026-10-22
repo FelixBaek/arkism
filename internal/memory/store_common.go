@@ -143,8 +143,10 @@ func sameScope(left, right Scope) bool {
 		left.AgentID == right.AgentID
 }
 
+// Storage enforces the same scope names as the service, so direct callers
+// (memoryd recall-baseline) cannot pass a path-like scope either.
 func checkScope(scope Scope) error {
-	if scope.WorkspaceID == "" || scope.ProjectID == "" {
+	if !validScope(scope) {
 		return ErrInvalid
 	}
 
@@ -303,3 +305,10 @@ type transientTransactionError struct{}
 
 func (transientTransactionError) Error() string { return ErrUnavailable.Error() }
 func (transientTransactionError) Unwrap() error { return ErrUnavailable }
+
+// rlsRefusal marks a row FORCE RLS refused. Every caller still sees ErrUnavailable;
+// only the denial audit path reads it as confirming the denial.
+type rlsRefusal struct{}
+
+func (rlsRefusal) Error() string { return ErrUnavailable.Error() }
+func (rlsRefusal) Unwrap() error { return ErrUnavailable }

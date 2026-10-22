@@ -6278,3 +6278,22 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0} 연결하지 못했어요.": "Couldn't connect {0}.",
   "끝난 {0}번 중 실패 {1}번": "{1} failed of {0} finished"
 });
+// Home and overview load states (#186-#190)
+Object.assign(window.ArkismI18nEN.strings, {
+  "서버 보고를 받지 못했어요": "No report from the server",
+  "서버 보고에 이 에이전트가 없어요": "The server report doesn't include this agent",
+  "이 서버는 에이전트 상태를 보고하지 않아요": "This server doesn't report agent status",
+  "일부 목록을 불러오지 못했어요": "Some lists didn't load",
+  "기억 후보 목록을 불러오지 못했어요": "Couldn't load the memory candidates",
+  "스킬 목록을 불러오지 못했어요": "Couldn't load the skill list",
+  "크루 목록을 불러오지 못했어요": "Couldn't load the crew list",
+  "불러오지 못한 목록": "Lists not loaded",
+  "확인할 일을 불러오지 못했어요": "Couldn't load what to check"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "목록 {0}개를 불러오지 못했어요": "Couldn't load {0} lists",
+  "기억 후보 {0}개 이상 검토": "Review {0}+ memory candidates",
+  "{0}일째 멈춤": "Stopped {0}d",
+  "기억 추출이 {0}일째 멈췄어요": "Memory extraction has been stalled for {0} days",
+  "{0}일 전 확인": "Checked {0} d ago"
+});

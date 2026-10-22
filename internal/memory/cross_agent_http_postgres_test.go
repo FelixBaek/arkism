@@ -138,7 +138,7 @@ func TestCrossAgentHTTPPostgresReuse(t *testing.T) {
 			t.Fatal("source changed")
 		}
 		search(t, b, scopeB, "reuseapproval")
-		call(t, b, "POST", "/v1/search", SearchInput{Scope: scopeFar, Query: "reuseapproval"}, 503, nil)
+		call(t, b, "POST", "/v1/search", SearchInput{Scope: scopeFar, Query: "reuseapproval"}, 403, nil)
 		call(t, "invalid", "POST", "/v1/search", SearchInput{Scope: scopeA, Query: "reuseapproval"}, 403, nil)
 		call(t, owner, "DELETE", "/v1/memories/"+m.ID, ChangeInput{Scope: scopeA, ExpectedRevision: m.Revision}, 202, nil)
 		search(t, b, scopeA, "reuseapproval")
