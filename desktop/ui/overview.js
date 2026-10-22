@@ -14,7 +14,7 @@ window.ArkismOverview = (ctx) => {
   const time = (v) => { const t = new Date(v || 0).getTime(); return Number.isNaN(t) ? 0 : t; };
 
   // ---------------------------------------------------------------- data
-  const S = { sessions: null, total: 0, cursor: "", at: 0, loading: false };
+  const S = { sessions: null, total: 0, cursor: "", at: 0, loading: false, failed: false };
   let sessionEpoch = 0;
   async function loadSessions() {
     if (S.loading || Date.now() - S.at < 60000) return;
@@ -23,8 +23,8 @@ window.ArkismOverview = (ctx) => {
     try {
       const doc = await request(`/v1/usage/sessions?${query({ range: "7d", limit: 50 })}`);
       if (ticket !== sessionEpoch || generation !== state.connection.generation) return;
-      S.sessions = Array.isArray(doc?.items) ? doc.items : []; S.total = doc.total || 0; S.cursor = doc.next_cursor || "";
-    } catch { if (ticket !== sessionEpoch || generation !== state.connection.generation) return; S.sessions = S.sessions || []; }
+      S.sessions = Array.isArray(doc?.items) ? doc.items : []; S.total = doc.total || 0; S.cursor = doc.next_cursor || ""; S.failed = false;
+    } catch { if (ticket !== sessionEpoch || generation !== state.connection.generation) return; S.sessions = S.sessions || []; S.failed = true; }
     S.at = Date.now(); S.loading = false;
     if (state.view === "overview") render();
     ctx.onSessions?.(); // 연결 상태 card shows the same stages
@@ -37,6 +37,13 @@ window.ArkismOverview = (ctx) => {
   }
   const today = (t) => t >= new Date().setHours(0, 0, 0, 0);
   const latest = (times) => Math.max(0, ...times);
+  // What each stage is counted from. A source that did not load leaves the stage unknown, not zero or stalled (#187).
+  const NEEDS = { collect: ["sessions"], extract: ["memories", "candidates", "sessions"], classify: ["candidates"], review: ["candidates"],
+    recall: ["memories"], trace: ["memories"], judge: ["memories"], dream: ["memories"] };
+  const missing = () => state.loadError ? new Set(["memories", "candidates", "sessions"])
+    : new Set([...Object.keys(state.listErrors || {}), ...(S.failed ? ["sessions"] : [])]);
+  const unknownStage = (s) => ({ ...s, unknown: true, tone: "n", health: "o", note: "", big: "—", bigSub: "알 수 없음", small: "", smallSub: "", step: "알 수 없음",
+    row: new Array(24).fill(""), counts: new Array(24).fill(0), tiles: s.tiles.map(([, label]) => ["—", label]), badge: ["알 수 없음", "n"] });
 
   function stages() {
     const d = state.data, now = Date.now();
@@ -72,12 +79,13 @@ window.ArkismOverview = (ctx) => {
 
     const n24 = (arr) => num(slots(arr).reduce((x, y) => x + y, 0));
     const todayCount = (arr) => arr.map((m) => time(m.created_at)).filter(today).length;
-    const BADGE = { collect: [lastSession ? "정상" : "기록 없음", "n"], extract: stalled ? [`${stalledHours}시간째 멈춤`, "r"] : ["정상", "n"],
+    const stallWords = window.ArkismState.stallFor(stalledHours);
+    const BADGE = { collect: [lastSession ? "정상" : "기록 없음", "n"], extract: stalled ? [stallWords.stopped, "r"] : ["정상", "n"],
       classify: [unclassified.length ? `대기 ${unclassified.length}` : "모두 분류됨", "n"], review: [waiting.length ? `${waiting.length}건` : "비어 있음", waiting.length ? "a" : "n"],
       recall: ["정상", "n"], trace: [reported ? "정상" : "보고 없음", "n"], judge: [tidy ? `확인 전 ${tidy}` : "확인 끝", "n"], dream: [nProp ? `제안 ${nProp}` : "제안 없음", "n"] };
     const TILES = {
       collect: [[`${num(sessions.filter(today).length)}건`, "오늘 저장"], [lastSession ? ago(lastSession) : "—", "마지막 저장"], [`${num(S.total)}건`, "최근 7일"]],
-      extract: [[stalled ? `${stalledHours}시간` : `${num(extracted.filter(today).length)}건`, stalled ? "멈춘 시간" : "오늘 추출"], [`${n24(extracted)}건`, "최근 24시간 추출"], [lastExtract ? ago(lastExtract) : "—", "마지막 추출"]],
+      extract: [[stalled ? stallWords.span : `${num(extracted.filter(today).length)}건`, stalled ? "멈춘 시간" : "오늘 추출"], [`${n24(extracted)}건`, "최근 24시간 추출"], [lastExtract ? ago(lastExtract) : "—", "마지막 추출"]],
       classify: [[`${num(unclassified.length)}건`, "대기"], [classified.length ? ago(latest(classified)) : "—", "마지막 처리"], [`${n24(classified)}건`, "최근 24시간 분류"]],
       review: [[`${num(waiting.length)}건`, "대기"], [oldest ? (days ? `${days}일` : ago(oldest)) : "—", "제일 오래된 것"], [`${num(todayCount(waiting))}건`, "오늘 들어온 것"]],
       recall: [[`${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, "최근 7일 불러오기"], [recallTimes.length ? ago(latest(recallTimes)) : "—", "마지막"], [`${num(recalls.filter((u) => u.d7 > 0).length)}개`, "7일 안에 불러온 기억"]],
@@ -91,15 +99,17 @@ window.ArkismOverview = (ctx) => {
     const HEALTH = { collect: age(lastSession), extract: stalled ? "r" : age(lastExtract), classify: !unclassified.length ? "g" : now - oldestUnclassified < 6 * HOUR ? "y" : "o",
       review: !waiting.length ? "g" : now - oldest < 3 * 24 * HOUR ? "y" : "o", recall: age(latest(recallTimes), 7 * 24 * HOUR), trace: age(reported),
       judge: !w ? "o" : tidy ? "y" : "g", dream: nProp ? "y" : "g" };
-    const withItems = (list) => list.map((s) => ({ ...s, tiles: TILES[s.key], badge: BADGE[s.key], health: HEALTH[s.key] }));
+    const gone = missing();
+    const withItems = (list) => list.map((s) => ({ ...s, tiles: TILES[s.key], badge: BADGE[s.key], health: HEALTH[s.key] }))
+      .map((s) => (NEEDS[s.key].some((n) => gone.has(n)) ? unknownStage(s) : s));
     return withItems([
       { key: "collect", group: "save", label: "대화 저장", region: "두정엽", tone: "n", note: ago(lastSession),
         big: `${num(sessions.filter(today).length)}건`, bigSub: "오늘", step: lastSession ? ago(lastSession) : "기록 없음",
         row: row(sessions, "n"), counts: slots(sessions), open: () => go("sessions") },
       { key: "extract", group: "save", label: "분석", region: "전전두엽", tone: stalled ? "r" : "n",
-        big: stalled ? `${stalledHours}시간` : `${num(extracted.filter(today).length)}건`, bigSub: stalled ? "멈춘 시간" : "오늘 추출",
+        big: stalled ? stallWords.span : `${num(extracted.filter(today).length)}건`, bigSub: stalled ? "멈춘 시간" : "오늘 추출",
         small: stalled ? `${num(slots(extracted).reduce((a, b) => a + b, 0))}건` : ago(lastExtract), smallSub: stalled ? "최근 24시간" : "마지막 추출",
-        step: stalled ? `${stalledHours}시간째 멈춤` : lastExtract ? ago(lastExtract) : "기록 없음",
+        step: stalled ? stallWords.stopped : lastExtract ? ago(lastExtract) : "기록 없음",
         row: extractRow, counts: slots(extracted), open: () => go("sessions") },
       { key: "classify", group: "save", label: "분류", region: "측두엽", tone: "n",
         big: `${num(unclassified.length)}건`, bigSub: "대기", small: classified.length ? ago(latest(classified)) : "—", smallSub: "마지막 처리",
@@ -270,15 +280,15 @@ window.ArkismOverview = (ctx) => {
       [...r.cells.children].forEach((cell, k) => { cell.className = s.row[k] ? `ov-c-${s.row[k]}` : ""; });
     }
     const stopped = list.filter((s) => s.tone === "r").length;
-    ui.badge.className = `ov-badge${stopped ? " r" : ""}`; ui.badge.textContent = stopped ? `${stopped}곳 멈춤` : "모두 움직임";
+    ui.badge.className = `ov-badge${stopped ? " r" : ""}`; ui.badge.textContent = stopped ? `${stopped}곳 멈춤` : list.some((s) => s.unknown) ? "알 수 없음" : "모두 움직임";
     const h = new Date().getHours();
     ui.ticks.replaceChildren(...Array.from({ length: 24 }, (_, i) => { const hour = (h - 23 + i + 24) % 24; return el("span", i === 23 ? "now" : "", i === 23 ? "지금" : hour % 6 === 0 ? `${String(hour).padStart(2, "0")}:00` : ""); }));
     const todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
     // every active memory on the server (the map draws them all), not the loaded first page
-    const memN = ctx.memoryCount().replace(/\d+/, (n) => num(n));
+    const memN = state.loadError ? "—" : ctx.memoryCount().replace(/\d+/, (n) => num(n));
     ui.chips.replaceChildren(chip("쓰는 중인 기억", memN, () => openWide("active")),
       chip("세션 기록", `오늘 ${num(todaySessions)}`, () => openWide("sessions")),
-      chip("사용량", `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
+      chip("사용량", by.recall.unknown ? "—" : `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
       chip("기억 지도", `점 ${memN}`, () => openWide("map")));
   }
 
