@@ -101,6 +101,17 @@ jobs:
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
           choco install nsis -y --no-progress
+      - name: TEMP known folder diagnostics
+        shell: powershell
+        run: |
+          $k = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'
+          $key = Get-Item $k
+          foreach ($n in 'Desktop', 'Programs') { "$n raw=" + $key.GetValue($n, $null, 'DoNotExpandEnvironmentNames') + " kind=" + $key.GetValueKind($n) }
+          "parent Desktop=" + [Environment]::GetFolderPath('Desktop') + " Programs=" + [Environment]::GetFolderPath('Programs')
+          $info = New-Object Diagnostics.ProcessStartInfo 'powershell.exe', '-NoProfile -Command "[Environment]::GetFolderPath(''Desktop''); [Environment]::GetFolderPath(''Programs'')"'
+          $info.UseShellExecute = $false; $info.RedirectStandardOutput = $true
+          $info.EnvironmentVariables['USERPROFILE'] = 'D:\diag\profile'; $info.EnvironmentVariables['APPDATA'] = 'D:\diag\profile\AppData\Roaming'
+          $p = [Diagnostics.Process]::Start($info); "child with redirected env: " + $p.StandardOutput.ReadToEnd(); $p.WaitForExit()
       - name: Silent installer launch options (inert payload)
         shell: powershell
         run: |
