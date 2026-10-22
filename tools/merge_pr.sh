@@ -5,7 +5,7 @@
 #   tools/merge_pr.sh 231
 #
 # Needs: git commit signing set up (commit.gpgsign), and a main ruleset bypass for the person running it.
-# Refuses unless the PR is open against main, carries human-approved, every check passed, and the branch
+# Refuses unless the PR is open, not a draft, against main, carries human-approved, every check passed, and the branch
 # already sits on the current main. The commits are re-signed onto the same base, the tree is checked to be
 # exactly the one CI tested, the PR branch is moved to them, then main fast-forwards, so GitHub shows it merged.
 set -euo pipefail
@@ -14,11 +14,14 @@ PR="${1:-}"
 REPO="${ARKISM_REPO:-FelixBaek/arkism}"
 cd "$(dirname "$0")/.."
 [[ "$(git config --get commit.gpgsign)" == true ]] || { echo "commit signing is off (git config commit.gpgsign true)" >&2; exit 1; }
+for url in "$(git remote get-url origin)" "$(git remote get-url --push origin)"; do
+  [[ "$url" =~ [:/]"$REPO"(\.git)?$ ]] || { echo "origin ($url) is not $REPO" >&2; exit 1; }
+done
 
-info="$(gh pr view "$PR" -R "$REPO" --json state,baseRefName,headRefName,headRefOid,isCrossRepository,labels,statusCheckRollup)"
+info="$(gh pr view "$PR" -R "$REPO" --json state,isDraft,baseRefName,headRefName,headRefOid,isCrossRepository,labels,statusCheckRollup)"
 field() { local query="$1"; jq -r "$query" <<<"$info"; }
-[[ "$(field .state)" == OPEN && "$(field .baseRefName)" == main && "$(field .isCrossRepository)" == false ]] \
-  || { echo "PR #$PR is not an open same-repository PR against main" >&2; exit 1; }
+[[ "$(field .state)" == OPEN && "$(field .isDraft)" == false && "$(field .baseRefName)" == main && "$(field .isCrossRepository)" == false ]] \
+  || { echo "PR #$PR is not an open, ready same-repository PR against main" >&2; exit 1; }
 field '.labels[].name' | grep -qx human-approved || { echo "PR #$PR has no human-approved label" >&2; exit 1; }
 bad="$(field '[.statusCheckRollup[] | select(((.conclusion // .state) | IN("SUCCESS","NEUTRAL","SKIPPED")) | not) | (.name // .context) + "=" + ((.conclusion // .state) // "PENDING")] | join(", ")')"
 [[ "$(field '.statusCheckRollup | length')" -gt 0 && -z "$bad" ]] || { echo "checks not all passed: ${bad:-none reported}" >&2; exit 1; }
@@ -42,5 +45,10 @@ done
 count="$(git rev-list --count origin/main.."$signed")"
 # Same tree as the one CI passed. Moving the PR branch first lets GitHub mark the PR merged.
 git push -q --force-with-lease="$branch:$head" origin "$signed:refs/heads/$branch"
-git push -q origin "$signed:refs/heads/main"
+if ! git push -q origin "$signed:refs/heads/main"; then
+  # main moved after the fetch: put the PR branch back on the commits CI tested.
+  git push -q --force-with-lease="$branch:$signed" origin "$head:refs/heads/$branch" \
+    || { echo "main push failed and the PR branch could not be put back to $head" >&2; exit 1; }
+  echo "main moved during the merge; the PR branch is back at ${head:0:7}, run again" >&2; exit 1
+fi
 echo "merged #$PR as $count signed commit(s), main is now ${signed:0:7}"
