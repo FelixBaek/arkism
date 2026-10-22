@@ -586,6 +586,11 @@ function Invoke-ProductRemovalCheck($State, $Request, $Report) {
   $copy = Get-ProductUninstallerCopy $inventory $afterInventory $temp $State.UninstallerHash
   $machine = Get-ProductCopyMachine $copy.Path
   $after = Get-ProductRebootSnapshot $Request
+  # TEMP diagnostics
+  $diagRows = @((Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager').PendingFileRenameOperations)
+  Write-Host "TEMPDIAG before=$($before.EntryCount) after=$($after.EntryCount) root=$($State.Root)"
+  $diagRows | Select-Object -Last 8 | ForEach-Object { Write-Host "TEMPDIAG row=[$_]" }
+  try { $cmp = [Arkism.InstallerChecks.RebootObservation]::CompareWindows($before, $after, $Request); Write-Host "TEMPDIAG owned=$($cmp.NewOwnedDeletes)" } catch { Write-Host "TEMPDIAG compare=$($_.Exception.Message)" }
   $finalEcho = Invoke-JobExactEcho $State.Context $State.Root $copy $machine $Request $before $after $State.Environment $Report
   Assert-ProductRemoved $State $result
   [Arkism.InstallerChecks.PendingEchoVerifier]::AssertUnchanged($finalEcho, (Get-ProductRebootSnapshot $Request))
