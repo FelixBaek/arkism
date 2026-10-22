@@ -97,6 +97,10 @@ func validCaptureInput(in CaptureInput, now time.Time) bool {
 }
 
 func validCaptureClaim(c CaptureClaim) bool {
+	return validCaptureClaimEvidence(c) && validCaptureClaimClassification(c) && validCaptureClaimFields(c)
+}
+
+func validCaptureClaimEvidence(c CaptureClaim) bool {
 	if !validMemoryContext(c.MemoryContext, time.Now().UTC()) || c.MemoryContext != nil && (c.MemoryContext.EvidenceKind == "user_statement" && c.Basis != "explicit_user" || c.MemoryContext.EvidenceKind == "tool_observation" && len(c.SourceRefs) == 0) {
 		return false
 	}
@@ -108,9 +112,15 @@ func validCaptureClaim(c CaptureClaim) bool {
 			return false
 		}
 	}
-	if k := c.classification(); k == nil && (len(c.RiskReasons) > 0 || c.EvidenceSpan != "" || c.DupHint != "") || k != nil && !validClassification(*k) {
-		return false
-	}
+	return true
+}
+
+func validCaptureClaimClassification(c CaptureClaim) bool {
+	k := c.classification()
+	return !(k == nil && (len(c.RiskReasons) > 0 || c.EvidenceSpan != "" || c.DupHint != "") || k != nil && !validClassification(*k))
+}
+
+func validCaptureClaimFields(c CaptureClaim) bool {
 	return strings.TrimSpace(c.Text) != "" && len(c.Text) <= 4000 && validRunLabel(c.Subject, 128) && len(c.Reason) <= 500 &&
 		(c.Repo == "" || validRunLabel(c.Repo, 128)) &&
 		slices.Contains(captureKinds, c.Kind) && slices.Contains(captureBases, c.Basis) &&
@@ -192,14 +202,98 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 }
 
 func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInput, c CaptureClaim) (CaptureItem, error) {
+	if rejected, ok := s.rejectCaptureClaim(ctx, in, c); ok {
+		return rejected, nil
+	}
+	ctx, scope := captureClaimScope(ctx, in, c)
+	c, key, legacyKey := captureClaimKeys(in, c, scope)
+	item := CaptureItem{DedupeKey: key}
+	if _, err := s.authorize(ctx, token, "read:memory_candidates", scope, "", ""); err != nil {
+		return item, err
+	}
+	if err := s.captureArchiveRefs(ctx, token, in, c, scope); err != nil {
+		return item, err
+	}
+	canonicalSources, src, err := s.captureSourceRefs(ctx, token, c, scope)
+	if err != nil {
+		return item, err
+	}
+
+	existing, key, err := s.captureExistingPointer(ctx, c, scope, key, legacyKey)
+	item.DedupeKey = key
+	var stale *Record
+	if err == nil && existing.Kind == "capture_pointer" {
+		if out, done, e := s.captureFromPointer(ctx, token, in, c, scope, existing, item); done {
+			return out, e
+		}
+		// The earlier memory was deleted, rejected or expired, or its candidate never got past the daily
+		// limit (no target): saying it again is a new statement, not a duplicate of nothing.
+		stale = &existing
+	}
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return item, err
+	}
+
+	write := newCaptureWrite(key, scope, stale, c)
+	write.prefixSources = canonicalSources
+	prepared, preparedSource, merged, err := s.capturePreparation(ctx, token, in, c, scope, key, write, stale, canonicalSources, src)
+	if err != nil {
+		return item, err
+	}
+	if merged {
+		item.Status, item.Reason = "merged", "duplicate_source"
+		return item, nil
+	}
+	if prepared.Status == "done" {
+		return s.captureConcurrentDone(ctx, scope, prepared, item)
+	}
+	write.prepared, canonicalSources, src = prepared, prepared.Sources, preparedSource
+
+	tags, suspect := captureTags(in, c)
+	cand, err := s.Create(ctx, token, "memory_candidates", CreateInput{
+		capture:       write,
+		MemoryContext: c.MemoryContext,
+		Scope:         scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags,
+		Sources: canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
+		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block", Classification: c.classification(),
+	})
+	if err != nil {
+		if c.Supersedes != nil || !errors.Is(err, ErrConflict) {
+			return item, err
+		}
+		return s.captureCandidateConflict(ctx, scope, key, item, err)
+	}
+
+	item.CandidateID = cand.ID
+	switch {
+	case c.Supersedes != nil:
+		pointer, e := s.Repo.Get(ctx, "jobs", scope, key)
+		if e != nil {
+			return item, e
+		}
+		return s.finishCaptureCorrection(ctx, token, in, c, scope, pointer, item)
+	case suspect:
+		item.Status, item.Reason = "candidate", "review_required:instruction_like"
+		return item, nil
+	}
+	// Authorship describes evidence, not consent to store the extracted wording.
+	item.Status, item.Reason = "candidate", "review_required"
+	return item, nil
+}
+
+func (s *Service) rejectCaptureClaim(ctx context.Context, in CaptureInput, c CaptureClaim) (CaptureItem, bool) {
 	if !validCaptureClaim(c) {
-		return CaptureItem{Status: "rejected", Reason: "invalid_claim"}, nil
+		return CaptureItem{Status: "rejected", Reason: "invalid_claim"}, true
 	}
 	if containsSecret(structuredText(c)) {
 		// the block itself is audited; nothing of the claim is copied.
 		s.auditDeniedInput(ctx, "capture:secret_detected", in.Scope, "")
-		return CaptureItem{Status: "rejected", Reason: "secret_detected"}, nil
+		return CaptureItem{Status: "rejected", Reason: "secret_detected"}, true
 	}
+	return CaptureItem{}, false
+}
+
+func captureClaimScope(ctx context.Context, in CaptureInput, c CaptureClaim) (context.Context, Scope) {
 	scope := in.Scope
 	// A user's own statement belongs to the user and project, never to the
 	// specialist that happened to hear it; agent results stay agent-scoped.
@@ -212,6 +306,12 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		actor.Scope = scope
 		ctx = bindRequestActor(ctx, actor)
 	}
+	return ctx, scope
+}
+
+// captureClaimKeys stamps the claim's own memory context copy with the event
+// time and returns it with the evidence-bound key and the legacy key.
+func captureClaimKeys(in CaptureInput, c CaptureClaim, scope Scope) (CaptureClaim, string, string) {
 	c.MemoryContext = copyMemoryContext(c.MemoryContext)
 	if c.MemoryContext != nil {
 		at := in.Event.OccurredAt.UTC().Truncate(time.Millisecond)
@@ -221,41 +321,46 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	if c.MemoryContext != nil {
 		key = "capture-" + ContentHash(key+"\n"+memoryContextKey(c.MemoryContext))
 	}
-	legacyKey := key
-	key = captureEvidenceKey(key, c)
-	item := CaptureItem{DedupeKey: key}
-	if _, err := s.authorize(ctx, token, "read:memory_candidates", scope, "", ""); err != nil {
-		return item, err
+	return c, captureEvidenceKey(key, c), key
+}
+
+func (s *Service) captureArchiveRefs(ctx context.Context, token string, in CaptureInput, c CaptureClaim, scope Scope) error {
+	if len(c.ArchiveMessages) == 0 {
+		return nil
 	}
-	if len(c.ArchiveMessages) > 0 {
-		if in.Event.SessionID == "" {
-			return item, ErrInvalid
-		}
-		role := ""
-		if c.Basis == "explicit_user" {
-			role = "user"
-		}
-		_, _, err := s.validateArchiveMessageRefs(ctx, token, scope, c.ArchiveMessages, in.Event.SessionID, role)
-		if err != nil {
-			return item, err
-		}
+	if in.Event.SessionID == "" {
+		return ErrInvalid
 	}
+	role := ""
+	if c.Basis == "explicit_user" {
+		role = "user"
+	}
+	_, _, err := s.validateArchiveMessageRefs(ctx, token, scope, c.ArchiveMessages, in.Event.SessionID, role)
+	return err
+}
+
+func (s *Service) captureSourceRefs(ctx context.Context, token string, c CaptureClaim, scope Scope) ([]SourceRef, Record, error) {
 	var canonicalSources []SourceRef
 	var src Record
 	for _, ref := range c.SourceRefs {
 		r, e := s.Get(ctx, token, "sources", scope, ref.ID)
 		if e != nil {
-			return item, e
+			return nil, Record{}, e
 		}
 		if r.Revision != ref.Revision || !live(r) || r.ContentErased {
-			return item, ErrConflict
+			return nil, Record{}, ErrConflict
 		}
 		if src.ID == "" {
 			src = r
 		}
 		canonicalSources = append(canonicalSources, sourceReference(r, "original"))
 	}
+	return canonicalSources, src, nil
+}
 
+// captureExistingPointer returns the pointer stored under key, or under
+// legacyKey when that older pointer proves the same evidence, with the key used.
+func (s *Service) captureExistingPointer(ctx context.Context, c CaptureClaim, scope Scope, key, legacyKey string) (Record, string, error) {
 	var existing Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		var e error
@@ -285,120 +390,137 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 				}
 				if candidateErr == nil && captureLegacyEvidenceMatches(candidate, c) {
 					existing, e, key = old, nil, legacyKey
-					item.DedupeKey = key
 				}
 			}
 		}
 		return e
 	})
-	var stale *Record
-	if err == nil && existing.Kind == "capture_pointer" {
-		if existing.Target != nil && existing.Status == "correction_pending" && c.Supersedes != nil {
-			item.CandidateID = existing.Target.ID
-			return s.finishCaptureCorrection(ctx, token, in, c, scope, existing, item)
-		}
-		if existing.Target != nil {
-			live, e := s.captureTargetLive(ctx, scope, existing.Target.ID)
-			if e != nil {
-				return item, e
-			}
-			if live {
-				item.Status, item.Reason, item.CandidateID = "merged", "duplicate_claim", existing.Target.ID
-				return item, nil
-			}
-		}
-		// The earlier memory was deleted, rejected or expired, or its candidate never got past the daily
-		// limit (no target): saying it again is a new statement, not a duplicate of nothing.
-		stale = &existing
-	}
-	if err != nil && !errors.Is(err, ErrNotFound) {
-		return item, err
-	}
+	return existing, key, err
+}
 
-	write := newCaptureWrite(key, scope, stale, c)
-	write.prefixSources = canonicalSources
+// captureFromPointer settles a claim an existing pointer already answers;
+// done is false when the pointer is stale and the claim must be captured anew.
+func (s *Service) captureFromPointer(ctx context.Context, token string, in CaptureInput, c CaptureClaim, scope Scope, existing Record, item CaptureItem) (CaptureItem, bool, error) {
+	if existing.Target != nil && existing.Status == "correction_pending" && c.Supersedes != nil {
+		item.CandidateID = existing.Target.ID
+		out, err := s.finishCaptureCorrection(ctx, token, in, c, scope, existing, item)
+		return out, true, err
+	}
+	if existing.Target != nil {
+		live, e := s.captureTargetLive(ctx, scope, existing.Target.ID)
+		if e != nil {
+			return item, true, e
+		}
+		if live {
+			item.Status, item.Reason, item.CandidateID = "merged", "duplicate_claim", existing.Target.ID
+			return item, true, nil
+		}
+	}
+	return item, false, nil
+}
+
+// capturePreparation loads the claim's preparation, storing it first when
+// missing; merged reports that another provenance already holds the source.
+func (s *Service) capturePreparation(ctx context.Context, token string, in CaptureInput, c CaptureClaim, scope Scope, key string, write *captureWrite, stale *Record, canonicalSources []SourceRef, src Record) (Record, Record, bool, error) {
 	prepared, preparedSource, prepareErr := s.loadCapturePreparation(ctx, token, write)
 	if missingPreparation(prepareErr) {
-		if len(c.SourceRefs) == 0 || len(c.ArchiveMessages) > 0 {
-			sourceText := c.Text
-			var sourceGenerator *Generator
-			if c.Repo != "" && c.Kind != "user" {
-				sourceGenerator = in.Generator
-				sourceText += "\n[저장소 맥락 메타데이터 · 사용자 원문 아님]\n" + structuredText(c.Repo)
-			}
-			if c.MemoryContext != nil {
-				sourceGenerator = in.Generator
-				sourceText += "\n[추출된 맥락 · 사용자 원문 아님]\n" + memoryContextKey(c.MemoryContext)
-			}
-			if c.Supersedes != nil {
-				sourceGenerator = in.Generator
-				sourceText += "\n[정정 연결 메타데이터 · 사용자 원문 아님]\n" + structuredText(c.Supersedes) + "\n" + in.Event.ID
-			}
-
-			src, err = s.Create(ctx, token, "sources", CreateInput{
-				capture:         write,
-				ArchiveMessages: c.ArchiveMessages,
-				Scope:           scope, Kind: "message", Text: sourceText, Generator: sourceGenerator, Generated: sourceGenerator != nil, OriginProduct: in.Event.OriginProduct,
-				SourceRef: "capture:" + in.Event.Type + ":" + in.Event.ID, CollectedAt: in.Event.OccurredAt,
-				IdempotencyKey: "cap-" + ContentHash(key + "\n" + in.Event.ID)[:60], OnSecret: "block",
-			})
-			if errors.Is(err, ErrConflict) {
-				// Another event may have committed the source/preparation first.
-				prepared, preparedSource, prepareErr = s.loadCapturePreparation(ctx, token, write)
-				if prepareErr == nil {
-					err = nil
-				} else if !missingPreparation(prepareErr) {
-					return item, prepareErr
-				} else if stale != nil {
-					// Legacy pointers predate preparation records. Reuse only their
-					// verified live evidence, preserving immutable provenance.
-					var originalRef SourceRef
-					src, originalRef, err = s.staleCaptureEvidence(ctx, scope, *stale)
-					if err == nil {
-						canonicalSources = append(canonicalSources, originalRef)
-						err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-							return write.prepare(ctx, tx, canonicalSources, src.ID)
-						})
-					}
-				} else if errors.Is(err, errSourceOtherProvenance) {
-					item.Status, item.Reason = "merged", "duplicate_source"
-					return item, nil
-				} else if errors.Is(err, errSourceDeleted) {
-					return item, errPreparedSourceGone // final not_found: retrying cannot bring the source back
-				}
-			}
-			if err != nil {
-				return item, err
-			}
-		} else {
-			err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-				return write.prepare(ctx, tx, canonicalSources, src.ID)
-			})
-			if err != nil && !errors.Is(err, ErrConflict) {
-				return item, err
-			}
+		merged, err := s.captureEnsurePreparation(ctx, token, in, c, scope, key, write, stale, canonicalSources, src)
+		if err != nil || merged {
+			return Record{}, Record{}, merged, err
 		}
 		prepared, preparedSource, prepareErr = s.loadCapturePreparation(ctx, token, write)
 	}
-	if prepareErr != nil {
-		return item, prepareErr
-	}
-	if prepared.Status == "done" {
-		if prepared.Target == nil || prepared.Target.Collection != "memory_candidates" {
-			return item, ErrConflict
-		}
-		stands, err := s.captureTargetLive(ctx, scope, prepared.Target.ID)
-		if err != nil {
-			return item, err
-		}
-		if !stands {
-			return item, ErrConflict
-		}
-		item.Status, item.Reason, item.CandidateID = "merged", "concurrent_duplicate", prepared.Target.ID
-		return item, nil
-	}
-	write.prepared, canonicalSources, src = prepared, prepared.Sources, preparedSource
+	return prepared, preparedSource, false, prepareErr
+}
 
+// captureEnsurePreparation stores the claim's source evidence and preparation;
+// merged reports that another provenance already holds the same source.
+func (s *Service) captureEnsurePreparation(ctx context.Context, token string, in CaptureInput, c CaptureClaim, scope Scope, key string, write *captureWrite, stale *Record, canonicalSources []SourceRef, src Record) (bool, error) {
+	if len(c.SourceRefs) > 0 && len(c.ArchiveMessages) == 0 {
+		err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+			return write.prepare(ctx, tx, canonicalSources, src.ID)
+		})
+		if err != nil && !errors.Is(err, ErrConflict) {
+			return false, err
+		}
+		return false, nil
+	}
+	sourceText, sourceGenerator := captureSourceText(in, c)
+	_, err := s.Create(ctx, token, "sources", CreateInput{
+		capture:         write,
+		ArchiveMessages: c.ArchiveMessages,
+		Scope:           scope, Kind: "message", Text: sourceText, Generator: sourceGenerator, Generated: sourceGenerator != nil, OriginProduct: in.Event.OriginProduct,
+		SourceRef: "capture:" + in.Event.Type + ":" + in.Event.ID, CollectedAt: in.Event.OccurredAt,
+		IdempotencyKey: "cap-" + ContentHash(key + "\n" + in.Event.ID)[:60], OnSecret: "block",
+	})
+	if errors.Is(err, ErrConflict) {
+		return s.captureSourceConflict(ctx, token, scope, write, stale, canonicalSources, err)
+	}
+	return false, err
+}
+
+// captureSourceText labels every non-user addition to the claim text, and
+// names the generator whenever the source is not purely the user's words.
+func captureSourceText(in CaptureInput, c CaptureClaim) (string, *Generator) {
+	sourceText := c.Text
+	var sourceGenerator *Generator
+	if c.Repo != "" && c.Kind != "user" {
+		sourceGenerator = in.Generator
+		sourceText += "\n[저장소 맥락 메타데이터 · 사용자 원문 아님]\n" + structuredText(c.Repo)
+	}
+	if c.MemoryContext != nil {
+		sourceGenerator = in.Generator
+		sourceText += "\n[추출된 맥락 · 사용자 원문 아님]\n" + memoryContextKey(c.MemoryContext)
+	}
+	if c.Supersedes != nil {
+		sourceGenerator = in.Generator
+		sourceText += "\n[정정 연결 메타데이터 · 사용자 원문 아님]\n" + structuredText(c.Supersedes) + "\n" + in.Event.ID
+	}
+	return sourceText, sourceGenerator
+}
+
+func (s *Service) captureSourceConflict(ctx context.Context, token string, scope Scope, write *captureWrite, stale *Record, canonicalSources []SourceRef, err error) (bool, error) {
+	// Another event may have committed the source/preparation first.
+	_, _, prepareErr := s.loadCapturePreparation(ctx, token, write)
+	if prepareErr == nil {
+		return false, nil
+	} else if !missingPreparation(prepareErr) {
+		return false, prepareErr
+	} else if stale != nil {
+		// Legacy pointers predate preparation records. Reuse only their
+		// verified live evidence, preserving immutable provenance.
+		src, originalRef, err := s.staleCaptureEvidence(ctx, scope, *stale)
+		if err == nil {
+			canonicalSources = append(canonicalSources, originalRef)
+			err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+				return write.prepare(ctx, tx, canonicalSources, src.ID)
+			})
+		}
+		return false, err
+	} else if errors.Is(err, errSourceOtherProvenance) {
+		return true, nil
+	} else if errors.Is(err, errSourceDeleted) {
+		return false, errPreparedSourceGone // final not_found: retrying cannot bring the source back
+	}
+	return false, err
+}
+
+func (s *Service) captureConcurrentDone(ctx context.Context, scope Scope, prepared Record, item CaptureItem) (CaptureItem, error) {
+	if prepared.Target == nil || prepared.Target.Collection != "memory_candidates" {
+		return item, ErrConflict
+	}
+	stands, err := s.captureTargetLive(ctx, scope, prepared.Target.ID)
+	if err != nil {
+		return item, err
+	}
+	if !stands {
+		return item, ErrConflict
+	}
+	item.Status, item.Reason, item.CandidateID = "merged", "concurrent_duplicate", prepared.Target.ID
+	return item, nil
+}
+
+func captureTags(in CaptureInput, c CaptureClaim) ([]string, bool) {
 	tags := []string{"capture", "event:" + in.Event.Type, "basis:" + c.Basis}
 	if c.Supersedes != nil {
 		tags = append(tags, pendingCaptureCorrectionTag)
@@ -420,56 +542,32 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	if suspect {
 		tags = append(tags, "review:instruction_like")
 	}
-	cand, err := s.Create(ctx, token, "memory_candidates", CreateInput{
-		capture:       write,
-		MemoryContext: c.MemoryContext,
-		Scope:         scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags,
-		Sources: canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
-		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block", Classification: c.classification(),
-	})
-	if err != nil {
-		if c.Supersedes != nil || !errors.Is(err, ErrConflict) {
-			return item, err
-		}
-		// A conflict is a concurrent duplicate only if a committed, live
-		// pointer won. Storage/policy failures must leave this event retryable.
-		winner, readErr := s.Repo.Get(ctx, "jobs", scope, key)
-		if errors.Is(readErr, ErrNotFound) {
-			return item, err
-		}
-		if readErr != nil {
-			return item, readErr
-		}
-		if winner.Kind != "capture_pointer" || winner.Status != "done" || winner.Target == nil || winner.Target.Collection != "memory_candidates" {
-			return item, err
-		}
-		stands, readErr := s.captureTargetLive(ctx, scope, winner.Target.ID)
-		if readErr != nil {
-			return item, readErr
-		}
-		if !stands {
-			return item, err
-		}
-		// The losing candidate transaction rolled back. Return the durable
-		// winner rather than the discarded local candidate ID.
-		item.Status, item.Reason, item.CandidateID = "merged", "concurrent_duplicate", winner.Target.ID
-		return item, nil
-	}
+	return tags, suspect
+}
 
-	item.CandidateID = cand.ID
-	switch {
-	case c.Supersedes != nil:
-		pointer, e := s.Repo.Get(ctx, "jobs", scope, key)
-		if e != nil {
-			return item, e
-		}
-		return s.finishCaptureCorrection(ctx, token, in, c, scope, pointer, item)
-	case suspect:
-		item.Status, item.Reason = "candidate", "review_required:instruction_like"
-		return item, nil
+func (s *Service) captureCandidateConflict(ctx context.Context, scope Scope, key string, item CaptureItem, err error) (CaptureItem, error) {
+	// A conflict is a concurrent duplicate only if a committed, live
+	// pointer won. Storage/policy failures must leave this event retryable.
+	winner, readErr := s.Repo.Get(ctx, "jobs", scope, key)
+	if errors.Is(readErr, ErrNotFound) {
+		return item, err
 	}
-	// Authorship describes evidence, not consent to store the extracted wording.
-	item.Status, item.Reason = "candidate", "review_required"
+	if readErr != nil {
+		return item, readErr
+	}
+	if winner.Kind != "capture_pointer" || winner.Status != "done" || winner.Target == nil || winner.Target.Collection != "memory_candidates" {
+		return item, err
+	}
+	stands, readErr := s.captureTargetLive(ctx, scope, winner.Target.ID)
+	if readErr != nil {
+		return item, readErr
+	}
+	if !stands {
+		return item, err
+	}
+	// The losing candidate transaction rolled back. Return the durable
+	// winner rather than the discarded local candidate ID.
+	item.Status, item.Reason, item.CandidateID = "merged", "concurrent_duplicate", winner.Target.ID
 	return item, nil
 }
 

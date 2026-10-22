@@ -124,195 +124,12 @@ func (s *Service) ValidateContext(ctx context.Context, token string, in ContextV
 		out.Integrity = true
 		out.Fingerprint = in.Fingerprint
 	}
-	memories, sources := map[string]Record{}, map[string]Record{}
-	sourceHashes := map[string]string{}
-	// Authorization precedes the transaction: denial auditing must not nest another
-	// transaction under its read locks. The transaction then compares and locks the
-	// exact authorized snapshots before issuing any availability result or seal.
-	for _, ref := range in.Refs {
-		if ctx.Err() != nil {
-			return out, ErrUnavailable
-		}
-		r, e := s.Repo.Get(ctx, colMemories, in.Scope, ref.ID)
-		if errors.Is(e, ErrNotFound) {
-			continue
-		}
-		if e != nil {
-			return out, e
-		}
-		if !contextMemoryCurrent(r, in, ref) {
-			continue
-		}
-		if _, e = s.authorize(ctx, token, "read:memories", in.Scope, r.ID, structuredText(r)); errors.Is(e, ErrDenied) {
-			continue
-		} else if e != nil {
-			return out, e
-		}
-		ok := true
-		for _, ref := range r.Sources {
-			if ref.SourceID == "" || ref.Locator == "" {
-				ok = false
-				break
-			}
-			if _, exists := sources[ref.SourceID]; exists {
-				continue
-			}
-			if len(sources) >= 256 {
-				return out, ErrUnavailable
-			}
-			source, e := s.Repo.Get(ctx, "sources", in.Scope, ref.SourceID)
-			if errors.Is(e, ErrNotFound) {
-				ok = false
-				break
-			}
-			if e != nil {
-				return out, e
-			}
-			if source.Scope != in.Scope || source.ID != ref.SourceID || !live(source) || source.ContentErased || source.Revision < 1 {
-				ok = false
-				break
-			}
-			if _, e = s.authorize(ctx, token, "read:sources", in.Scope, source.ID, structuredText(source)); errors.Is(e, ErrDenied) {
-				ok = false
-				break
-			} else if e != nil {
-				return out, e
-			}
-			sources[source.ID] = source
-			sourceHashes[source.ID] = ContentHash(structuredText(source))
-		}
-		if ok {
-			memories[r.ID] = r
-		}
+	snap, e := s.contextAuthorizedSnapshot(ctx, token, in)
+	if e != nil {
+		return out, e
 	}
-	memoryIDs, sourceIDs := []string{}, []string{}
-	for id := range memories {
-		memoryIDs = append(memoryIDs, id)
-	}
-	for id := range sources {
-		sourceIDs = append(sourceIDs, id)
-	}
-	slices.Sort(memoryIDs)
-	slices.Sort(sourceIDs)
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		lockedMem, lockedSources := map[string]Record{}, map[string]Record{}
-		if locker, ok := tx.(readLocker); ok {
-			var e error
-			if len(memoryIDs) > 0 {
-				lockedMem, e = locker.LockForRead(ctx, in.Scope, colMemories, memoryIDs)
-				if e != nil {
-					return e
-				}
-			}
-			if len(sourceIDs) > 0 {
-				lockedSources, e = locker.LockForRead(ctx, in.Scope, "sources", sourceIDs)
-				if e != nil {
-					return e
-				}
-			}
-		} else {
-			for _, id := range memoryIDs {
-				r, e := tx.Get(ctx, colMemories, in.Scope, id)
-				if errors.Is(e, ErrNotFound) {
-					continue
-				}
-				if e != nil {
-					return e
-				}
-				lockedMem[id] = r
-			}
-			for _, id := range sourceIDs {
-				r, e := tx.Get(ctx, "sources", in.Scope, id)
-				if errors.Is(e, ErrNotFound) {
-					continue
-				}
-				if e != nil {
-					return e
-				}
-				lockedSources[id] = r
-			}
-		}
-		// Hash each unique source once, rather than re-marshalling full originals
-		// for every memory/source edge in a fanout-heavy batch.
-		type dependency struct{ ID, Hash string }
-		type sourceState struct {
-			Hash, TextHash string
-			Runes          int
-		}
-		currentSources := map[string]sourceState{}
-		for _, id := range sourceIDs {
-			if ctx.Err() != nil {
-				return ErrUnavailable
-			}
-			row, exists := lockedSources[id]
-			if !exists || !live(row) || row.ContentErased {
-				continue
-			}
-			hash := ContentHash(structuredText(row))
-			if hash != sourceHashes[id] {
-				continue
-			}
-			currentSources[id] = sourceState{Hash: hash, TextHash: ContentHash(row.Text), Runes: utf8.RuneCountInString(row.Text)}
-		}
-		for i, ref := range in.Refs {
-			if ctx.Err() != nil {
-				return ErrUnavailable
-			}
-			before, ok := memories[ref.ID]
-			if !ok {
-				continue
-			}
-			r, ok := lockedMem[ref.ID]
-			if !ok || structuredText(before) != structuredText(r) || !contextMemoryCurrent(r, in, ref) {
-				continue
-			}
-			deps := []dependency{}
-			ok = true
-			for _, sr := range r.Sources {
-				source, exists := currentSources[sr.SourceID]
-				if !exists || !live(lockedSources[sr.SourceID]) {
-					ok = false
-					break
-				}
-				if sr.Span != nil && validateSourceSpan(sr.Span, source.TextHash, source.Runes) != nil {
-					ok = false
-					break
-				}
-				deps = append(deps, dependency{ID: sr.SourceID, Hash: source.Hash})
-			}
-			if !ok {
-				continue
-			}
-			slices.SortFunc(deps, func(a, b dependency) int {
-				if a.ID < b.ID {
-					return -1
-				}
-				if a.ID > b.ID {
-					return 1
-				}
-				return 0
-			})
-			fingerprint := ContentHash(structuredText(struct {
-				Memory  string
-				Sources []dependency
-			}{ContentHash(structuredText(r)), deps}))
-			if ref.Fingerprint != "" && ref.Fingerprint != fingerprint {
-				continue
-			}
-			if _, hasLocks := tx.(readLocker); !hasLocks {
-				if e := tx.FenceRelationMember(ctx, in.Scope, colMemories, r.ID); e != nil {
-					return e
-				}
-				for _, source := range deps {
-					if e := tx.FenceSource(ctx, in.Scope, source.ID); e != nil {
-						return e
-					}
-				}
-			}
-			out.Items[i].Status = "valid"
-			out.Items[i].Fingerprint = fingerprint
-		}
-		return audit(ctx, tx, in.Scope, actor.PrincipalID, "read:context_validation", "")
+		return validateContextLocked(ctx, tx, in, actor, snap, &out)
 	})
 	if e != nil {
 		return ContextValidationOutput{}, e
@@ -334,4 +151,240 @@ func (s *Service) ValidateContext(ctx context.Context, token string, in ContextV
 		out.Integrity = true
 	}
 	return out, nil
+}
+
+// contextSnapshot holds the authorized memories and sources ValidateContext
+// compares against the locked rows, with their ids in lock order.
+type contextSnapshot struct {
+	memories, sources    map[string]Record
+	sourceHashes         map[string]string
+	memoryIDs, sourceIDs []string
+}
+
+type contextDependency struct{ ID, Hash string }
+
+type contextSourceState struct {
+	Hash, TextHash string
+	Runes          int
+}
+
+func (s *Service) contextAuthorizedSnapshot(ctx context.Context, token string, in ContextValidationInput) (contextSnapshot, error) {
+	snap := contextSnapshot{memories: map[string]Record{}, sources: map[string]Record{}, sourceHashes: map[string]string{}}
+	// Authorization precedes the transaction: denial auditing must not nest another
+	// transaction under its read locks. The transaction then compares and locks the
+	// exact authorized snapshots before issuing any availability result or seal.
+	for _, ref := range in.Refs {
+		if ctx.Err() != nil {
+			return snap, ErrUnavailable
+		}
+		r, e := s.Repo.Get(ctx, colMemories, in.Scope, ref.ID)
+		if errors.Is(e, ErrNotFound) {
+			continue
+		}
+		if e != nil {
+			return snap, e
+		}
+		if !contextMemoryCurrent(r, in, ref) {
+			continue
+		}
+		if _, e = s.authorize(ctx, token, "read:memories", in.Scope, r.ID, structuredText(r)); errors.Is(e, ErrDenied) {
+			continue
+		} else if e != nil {
+			return snap, e
+		}
+		ok, e := s.contextAuthorizedSources(ctx, token, in, r, &snap)
+		if e != nil {
+			return snap, e
+		}
+		if ok {
+			snap.memories[r.ID] = r
+		}
+	}
+	for id := range snap.memories {
+		snap.memoryIDs = append(snap.memoryIDs, id)
+	}
+	for id := range snap.sources {
+		snap.sourceIDs = append(snap.sourceIDs, id)
+	}
+	slices.Sort(snap.memoryIDs)
+	slices.Sort(snap.sourceIDs)
+	return snap, nil
+}
+
+// contextAuthorizedSources records the memory's readable live sources and
+// reports whether all of them are.
+func (s *Service) contextAuthorizedSources(ctx context.Context, token string, in ContextValidationInput, r Record, snap *contextSnapshot) (bool, error) {
+	for _, ref := range r.Sources {
+		if ref.SourceID == "" || ref.Locator == "" {
+			return false, nil
+		}
+		if _, exists := snap.sources[ref.SourceID]; exists {
+			continue
+		}
+		if len(snap.sources) >= 256 {
+			return false, ErrUnavailable
+		}
+		source, e := s.Repo.Get(ctx, "sources", in.Scope, ref.SourceID)
+		if errors.Is(e, ErrNotFound) {
+			return false, nil
+		}
+		if e != nil {
+			return false, e
+		}
+		if source.Scope != in.Scope || source.ID != ref.SourceID || !live(source) || source.ContentErased || source.Revision < 1 {
+			return false, nil
+		}
+		if _, e = s.authorize(ctx, token, "read:sources", in.Scope, source.ID, structuredText(source)); errors.Is(e, ErrDenied) {
+			return false, nil
+		} else if e != nil {
+			return false, e
+		}
+		snap.sources[source.ID] = source
+		snap.sourceHashes[source.ID] = ContentHash(structuredText(source))
+	}
+	return true, nil
+}
+
+func validateContextLocked(ctx context.Context, tx Tx, in ContextValidationInput, actor Decision, snap contextSnapshot, out *ContextValidationOutput) error {
+	lockedMem, lockedSources, e := contextLockSnapshot(ctx, tx, in.Scope, snap)
+	if e != nil {
+		return e
+	}
+	currentSources, e := contextCurrentSources(ctx, snap, lockedSources)
+	if e != nil {
+		return e
+	}
+	for i, ref := range in.Refs {
+		if ctx.Err() != nil {
+			return ErrUnavailable
+		}
+		before, ok := snap.memories[ref.ID]
+		if !ok {
+			continue
+		}
+		r, ok := lockedMem[ref.ID]
+		if !ok || structuredText(before) != structuredText(r) || !contextMemoryCurrent(r, in, ref) {
+			continue
+		}
+		deps, ok := contextDependencies(r, currentSources, lockedSources)
+		if !ok {
+			continue
+		}
+		fingerprint := ContentHash(structuredText(struct {
+			Memory  string
+			Sources []contextDependency
+		}{ContentHash(structuredText(r)), deps}))
+		if ref.Fingerprint != "" && ref.Fingerprint != fingerprint {
+			continue
+		}
+		if e := contextFence(ctx, tx, in.Scope, r.ID, deps); e != nil {
+			return e
+		}
+		out.Items[i].Status = "valid"
+		out.Items[i].Fingerprint = fingerprint
+	}
+	return audit(ctx, tx, in.Scope, actor.PrincipalID, "read:context_validation", "")
+}
+
+func contextLockSnapshot(ctx context.Context, tx Tx, scope Scope, snap contextSnapshot) (map[string]Record, map[string]Record, error) {
+	lockedMem, lockedSources := map[string]Record{}, map[string]Record{}
+	if locker, ok := tx.(readLocker); ok {
+		var e error
+		if len(snap.memoryIDs) > 0 {
+			lockedMem, e = locker.LockForRead(ctx, scope, colMemories, snap.memoryIDs)
+			if e != nil {
+				return nil, nil, e
+			}
+		}
+		if len(snap.sourceIDs) > 0 {
+			lockedSources, e = locker.LockForRead(ctx, scope, "sources", snap.sourceIDs)
+			if e != nil {
+				return nil, nil, e
+			}
+		}
+		return lockedMem, lockedSources, nil
+	}
+	if e := contextGetRows(ctx, tx, scope, colMemories, snap.memoryIDs, lockedMem); e != nil {
+		return nil, nil, e
+	}
+	if e := contextGetRows(ctx, tx, scope, "sources", snap.sourceIDs, lockedSources); e != nil {
+		return nil, nil, e
+	}
+	return lockedMem, lockedSources, nil
+}
+
+func contextGetRows(ctx context.Context, tx Tx, scope Scope, collection string, ids []string, into map[string]Record) error {
+	for _, id := range ids {
+		r, e := tx.Get(ctx, collection, scope, id)
+		if errors.Is(e, ErrNotFound) {
+			continue
+		}
+		if e != nil {
+			return e
+		}
+		into[id] = r
+	}
+	return nil
+}
+
+// contextCurrentSources hashes each unique source once, rather than
+// re-marshalling full originals for every memory/source edge in a fanout-heavy batch.
+func contextCurrentSources(ctx context.Context, snap contextSnapshot, lockedSources map[string]Record) (map[string]contextSourceState, error) {
+	currentSources := map[string]contextSourceState{}
+	for _, id := range snap.sourceIDs {
+		if ctx.Err() != nil {
+			return nil, ErrUnavailable
+		}
+		row, exists := lockedSources[id]
+		if !exists || !live(row) || row.ContentErased {
+			continue
+		}
+		hash := ContentHash(structuredText(row))
+		if hash != snap.sourceHashes[id] {
+			continue
+		}
+		currentSources[id] = contextSourceState{Hash: hash, TextHash: ContentHash(row.Text), Runes: utf8.RuneCountInString(row.Text)}
+	}
+	return currentSources, nil
+}
+
+// contextDependencies returns the memory's current sources sorted by id, or
+// false when any of them changed or its span no longer fits.
+func contextDependencies(r Record, currentSources map[string]contextSourceState, lockedSources map[string]Record) ([]contextDependency, bool) {
+	deps := []contextDependency{}
+	for _, sr := range r.Sources {
+		source, exists := currentSources[sr.SourceID]
+		if !exists || !live(lockedSources[sr.SourceID]) {
+			return nil, false
+		}
+		if sr.Span != nil && validateSourceSpan(sr.Span, source.TextHash, source.Runes) != nil {
+			return nil, false
+		}
+		deps = append(deps, contextDependency{ID: sr.SourceID, Hash: source.Hash})
+	}
+	slices.SortFunc(deps, func(a, b contextDependency) int {
+		if a.ID < b.ID {
+			return -1
+		}
+		if a.ID > b.ID {
+			return 1
+		}
+		return 0
+	})
+	return deps, true
+}
+
+func contextFence(ctx context.Context, tx Tx, scope Scope, memoryID string, deps []contextDependency) error {
+	if _, hasLocks := tx.(readLocker); hasLocks {
+		return nil
+	}
+	if e := tx.FenceRelationMember(ctx, scope, colMemories, memoryID); e != nil {
+		return e
+	}
+	for _, source := range deps {
+		if e := tx.FenceSource(ctx, scope, source.ID); e != nil {
+			return e
+		}
+	}
+	return nil
 }

@@ -175,175 +175,218 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 	case span > 0:
 		from = now.Add(-span)
 	}
-	in := func(t time.Time) bool { return !t.Before(from) }
-	want := func(k string) bool { return kind == "all" || kind == k }
-	out := CrewUsage{ByDay: []UsageDay{}, Workflows: []UsageWorkflow{}, FailingNodes: []UsageFailingNode{}, Agents: []UsageAgent{}, Teams: []UsageTeam{}}
-	days := map[string]*UsageDay{}
-	day := func(t time.Time) *UsageDay {
-		k := t.In(usageZone()).Format("2006-01-02")
-		if days[k] == nil {
-			days[k] = &UsageDay{Date: k}
-		}
-		return days[k]
+	t := &crewUsageTally{
+		from: from, kind: kind, agentID: agentID, teamID: teamID,
+		out:  CrewUsage{ByDay: []UsageDay{}, Workflows: []UsageWorkflow{}, FailingNodes: []UsageFailingNode{}, Agents: []UsageAgent{}, Teams: []UsageTeam{}},
+		days: map[string]*UsageDay{},
+		wf:   map[string]*UsageWorkflow{}, wfOK: map[string]int{}, wfDone: map[string]int{}, failing: map[[2]string]int{},
+		tm: map[string]*UsageTeam{}, tmRounds: map[string]int{}, tmCost: map[string]float64{}, tmConcluded: map[string]int{}, tmEnded: map[string]int{},
+		ag: map[string]*UsageAgent{},
 	}
-	var okN, doneN int
-	var oldest *time.Time
-	waiting := func(at time.Time) {
-		out.KPI.Waiting++
-		if oldest == nil || at.Before(*oldest) {
-			t := at
-			oldest = &t
-		}
+	t.addRuns(u)
+	t.addMeetings(u)
+	t.addCalls(u)
+	return t.finish(), nil
+}
+
+// crewUsageTally accumulates CrewUsage over the runs, meetings and calls of one request.
+type crewUsageTally struct {
+	from                  time.Time
+	kind, agentID, teamID string
+	out                   CrewUsage
+	days                  map[string]*UsageDay
+	okN, doneN            int
+	oldest                *time.Time
+	wf                    map[string]*UsageWorkflow
+	wfOK, wfDone          map[string]int
+	failing               map[[2]string]int
+	tm                    map[string]*UsageTeam
+	tmRounds              map[string]int
+	tmCost                map[string]float64
+	tmConcluded, tmEnded  map[string]int
+	ag                    map[string]*UsageAgent
+}
+
+func (t *crewUsageTally) in(at time.Time) bool { return !at.Before(t.from) }
+
+func (t *crewUsageTally) want(k string) bool { return t.kind == "all" || t.kind == k }
+
+func (t *crewUsageTally) day(at time.Time) *UsageDay {
+	k := at.In(usageZone()).Format("2006-01-02")
+	if t.days[k] == nil {
+		t.days[k] = &UsageDay{Date: k}
 	}
-	// workflow runs
-	wf := map[string]*UsageWorkflow{}
-	wfOK := map[string]int{}
-	wfDone := map[string]int{}
-	failing := map[[2]string]int{}
-	if want("workflow") && agentID == "" && teamID == "" {
-		for _, r := range u.runs {
-			run := r.CrewRun
-			if run == nil || run.Trigger == "test" { // 시험 실행 fakes AI steps: it would skew runs, rates and tokens per run
-				continue
-			}
-			if run.Status == "waiting" {
-				waiting(r.UpdatedAt)
-			}
-			if !in(r.CreatedAt) {
-				continue
-			}
-			out.KPI.Runs++
-			w := wf[run.CrewID]
-			if w == nil {
-				w = &UsageWorkflow{ID: run.CrewID, Name: run.CrewID}
-				if it, ok := u.crew[run.CrewID]; ok {
-					w.Name = it.Crew.Name
-				}
-				wf[run.CrewID] = w
-			}
-			w.Runs++
-			switch run.Status {
-			case "succeeded":
-				okN, doneN = okN+1, doneN+1
-				wfOK[run.CrewID]++
-				wfDone[run.CrewID]++
-				day(r.UpdatedAt).OK++
-				day(r.UpdatedAt).Workflow++
-			case "failed":
-				doneN++
-				wfDone[run.CrewID]++
-				day(r.UpdatedAt).Failed++
-				for id, n := range run.Nodes {
-					if n.Status == "failed" {
-						failing[[2]string{run.CrewID, id}]++
-					}
-				}
-			}
-		}
+	return t.days[k]
+}
+
+func (t *crewUsageTally) waiting(at time.Time) {
+	t.out.KPI.Waiting++
+	if t.oldest == nil || at.Before(*t.oldest) {
+		w := at
+		t.oldest = &w
 	}
-	// meetings
-	tm := map[string]*UsageTeam{}
-	tmRounds, tmCost, tmConcluded, tmEnded := map[string]int{}, map[string]float64{}, map[string]int{}, map[string]int{}
-	if want("team") && agentID == "" {
-		for _, r := range u.meetings {
-			m := r.CrewMeeting
-			if m == nil || teamID != "" && m.TeamID != teamID {
-				continue
+}
+
+// addRuns counts workflow runs.
+func (t *crewUsageTally) addRuns(u crewUsageData) {
+	if !t.want("workflow") || t.agentID != "" || t.teamID != "" {
+		return
+	}
+	for _, r := range u.runs {
+		run := r.CrewRun
+		if run == nil || run.Trigger == "test" { // 시험 실행 fakes AI steps: it would skew runs, rates and tokens per run
+			continue
+		}
+		if run.Status == "waiting" {
+			t.waiting(r.UpdatedAt)
+		}
+		if !t.in(r.CreatedAt) {
+			continue
+		}
+		t.out.KPI.Runs++
+		w := t.wf[run.CrewID]
+		if w == nil {
+			w = &UsageWorkflow{ID: run.CrewID, Name: run.CrewID}
+			if it, ok := u.crew[run.CrewID]; ok {
+				w.Name = it.Crew.Name
 			}
-			if m.Status == "waiting" && m.Waiting != nil {
-				waiting(m.Waiting.At)
-			}
-			if !in(r.CreatedAt) {
-				continue
-			}
-			out.KPI.Runs++
-			t := tm[m.TeamID]
-			if t == nil {
-				t = &UsageTeam{ID: m.TeamID, Name: m.TeamID}
-				if it, ok := u.crew[m.TeamID]; ok {
-					t.Name = it.Crew.Name
-				}
-				tm[m.TeamID] = t
-			}
-			t.Meetings++
-			tmRounds[m.TeamID] += m.Round
-			tmCost[m.TeamID] += m.CostUSD
-			if terminalMeeting(m.Status) {
-				tmEnded[m.TeamID]++
-				doneN++
-				if m.Status == "concluded" {
-					okN++
-					tmConcluded[m.TeamID]++
-					day(r.UpdatedAt).OK++
-					day(r.UpdatedAt).Team++
-				} else if m.Status == "failed" || m.Status == "no_conclusion" {
-					day(r.UpdatedAt).Failed++
-					day(r.UpdatedAt).TeamFailed++
+			t.wf[run.CrewID] = w
+		}
+		w.Runs++
+		switch run.Status {
+		case "succeeded":
+			t.okN, t.doneN = t.okN+1, t.doneN+1
+			t.wfOK[run.CrewID]++
+			t.wfDone[run.CrewID]++
+			t.day(r.UpdatedAt).OK++
+			t.day(r.UpdatedAt).Workflow++
+		case "failed":
+			t.doneN++
+			t.wfDone[run.CrewID]++
+			t.day(r.UpdatedAt).Failed++
+			for id, n := range run.Nodes {
+				if n.Status == "failed" {
+					t.failing[[2]string{run.CrewID, id}]++
 				}
 			}
 		}
 	}
-	// calls: cost for every kind, and the agents table
-	ag := map[string]*UsageAgent{}
+}
+
+// addMeetings counts team meetings.
+func (t *crewUsageTally) addMeetings(u crewUsageData) {
+	if !t.want("team") || t.agentID != "" {
+		return
+	}
+	for _, r := range u.meetings {
+		m := r.CrewMeeting
+		if m == nil || t.teamID != "" && m.TeamID != t.teamID {
+			continue
+		}
+		if m.Status == "waiting" && m.Waiting != nil {
+			t.waiting(m.Waiting.At)
+		}
+		if !t.in(r.CreatedAt) {
+			continue
+		}
+		t.out.KPI.Runs++
+		team := t.tm[m.TeamID]
+		if team == nil {
+			team = &UsageTeam{ID: m.TeamID, Name: m.TeamID}
+			if it, ok := u.crew[m.TeamID]; ok {
+				team.Name = it.Crew.Name
+			}
+			t.tm[m.TeamID] = team
+		}
+		team.Meetings++
+		t.tmRounds[m.TeamID] += m.Round
+		t.tmCost[m.TeamID] += m.CostUSD
+		if terminalMeeting(m.Status) {
+			t.tmEnded[m.TeamID]++
+			t.doneN++
+			if m.Status == "concluded" {
+				t.okN++
+				t.tmConcluded[m.TeamID]++
+				t.day(r.UpdatedAt).OK++
+				t.day(r.UpdatedAt).Team++
+			} else if m.Status == "failed" || m.Status == "no_conclusion" {
+				t.day(r.UpdatedAt).Failed++
+				t.day(r.UpdatedAt).TeamFailed++
+			}
+		}
+	}
+}
+
+// addCalls adds cost for every kind, and fills the agents table.
+func (t *crewUsageTally) addCalls(u crewUsageData) {
 	for id, it := range u.crew {
-		if isAgent(it.Crew) && (agentID == "" || id == agentID) {
+		if isAgent(it.Crew) && (t.agentID == "" || id == t.agentID) {
 			a := &UsageAgent{ID: id, Name: it.Crew.Name}
 			if b := it.Crew.Budget; b != nil && b.MonthlyUSD > 0 {
 				limit := b.MonthlyUSD
 				a.LimitUSD = &limit
 			}
-			ag[id] = a
+			t.ag[id] = a
 		}
 	}
 	for _, r := range u.calls {
 		c := r.RoutingCall
-		if c == nil || !in(r.CreatedAt) {
+		if c == nil || !t.in(r.CreatedAt) {
 			continue
 		}
 		o := c.Origin
 		k := callKind(o)
-		if k == "" || !want(k) && !(kind == "agent" && o.AgentID != "") || agentID != "" && o.AgentID != agentID || teamID != "" && o.TeamID != teamID {
+		if k == "" || !t.want(k) && !(t.kind == "agent" && o.AgentID != "") || t.agentID != "" && o.AgentID != t.agentID || t.teamID != "" && o.TeamID != t.teamID {
 			continue
 		}
-		cost, est := callCost(*c)
-		out.KPI.CostUSD += cost
-		out.KPI.CostEstimated = out.KPI.CostEstimated || est
-		if w := wf[o.WorkflowID]; w != nil && o.WorkflowID != "" {
-			w.CostUSD += cost
-			w.Tokens += c.InputTokens + c.OutputTokens
-		}
-		if k == "agent" {
-			if c.OK {
-				day(r.CreatedAt).Agent++
-			} else {
-				day(r.CreatedAt).AgentFailed++
-			}
-		}
-		if a := ag[o.AgentID]; a != nil {
-			a.Calls++
-			if !c.OK {
-				a.Failed++
-			}
-			if k == "agent" {
-				a.Direct++
-			}
-			a.Tokens += c.InputTokens + c.OutputTokens
-			a.CostUSD += cost
+		t.addCall(r, c, o, k)
+	}
+}
+
+func (t *crewUsageTally) addCall(r Record, c *RoutingCall, o *RoutingOrigin, k string) {
+	cost, est := callCost(*c)
+	t.out.KPI.CostUSD += cost
+	t.out.KPI.CostEstimated = t.out.KPI.CostEstimated || est
+	if w := t.wf[o.WorkflowID]; w != nil && o.WorkflowID != "" {
+		w.CostUSD += cost
+		w.Tokens += c.InputTokens + c.OutputTokens
+	}
+	if k == "agent" {
+		if c.OK {
+			t.day(r.CreatedAt).Agent++
+		} else {
+			t.day(r.CreatedAt).AgentFailed++
 		}
 	}
+	if a := t.ag[o.AgentID]; a != nil {
+		a.Calls++
+		if !c.OK {
+			a.Failed++
+		}
+		if k == "agent" {
+			a.Direct++
+		}
+		a.Tokens += c.InputTokens + c.OutputTokens
+		a.CostUSD += cost
+	}
+}
+
+// finish rounds the totals and orders every table.
+func (t *crewUsageTally) finish() CrewUsage {
+	out := t.out
 	out.KPI.CostUSD = roundUSD(out.KPI.CostUSD)
-	out.KPI.SuccessRate = rate(okN, doneN)
-	out.KPI.OldestWaitingAt = oldest
-	for _, d := range days {
+	out.KPI.SuccessRate = rate(t.okN, t.doneN)
+	out.KPI.OldestWaitingAt = t.oldest
+	for _, d := range t.days {
 		out.ByDay = append(out.ByDay, *d)
 	}
 	sort.Slice(out.ByDay, func(i, j int) bool { return out.ByDay[i].Date < out.ByDay[j].Date })
-	for id, w := range wf {
-		w.SuccessRate, w.CostUSD = rate(wfOK[id], wfDone[id]), roundUSD(w.CostUSD)
+	for id, w := range t.wf {
+		w.SuccessRate, w.CostUSD = rate(t.wfOK[id], t.wfDone[id]), roundUSD(w.CostUSD)
 		out.Workflows = append(out.Workflows, *w)
 	}
 	sort.Slice(out.Workflows, func(i, j int) bool { return out.Workflows[i].Runs > out.Workflows[j].Runs })
-	for k, n := range failing {
+	for k, n := range t.failing {
 		out.FailingNodes = append(out.FailingNodes, UsageFailingNode{WorkflowID: k[0], NodeID: k[1], Failures: n})
 	}
 	sort.Slice(out.FailingNodes, func(i, j int) bool {
@@ -351,8 +394,8 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 		return a.Failures > b.Failures || a.Failures == b.Failures && a.WorkflowID+a.NodeID < b.WorkflowID+b.NodeID
 	})
 	out.FailingNodes = out.FailingNodes[:min(len(out.FailingNodes), 10)]
-	if want("agent") || agentID != "" {
-		for _, a := range ag {
+	if t.want("agent") || t.agentID != "" {
+		for _, a := range t.ag {
 			a.CostUSD = roundUSD(a.CostUSD)
 			if a.LimitUSD != nil {
 				p := math.Round(1000*a.CostUSD / *a.LimitUSD) / 10
@@ -364,14 +407,14 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 			return out.Agents[i].CostUSD > out.Agents[j].CostUSD || out.Agents[i].CostUSD == out.Agents[j].CostUSD && out.Agents[i].Name < out.Agents[j].Name
 		})
 	}
-	for id, t := range tm {
-		t.AvgRounds = math.Round(10*float64(tmRounds[id])/float64(t.Meetings)) / 10
-		t.AvgCostUSD, t.CostUSD = roundUSD(tmCost[id]/float64(t.Meetings)), roundUSD(tmCost[id])
-		t.ConcludedRate = rate(tmConcluded[id], tmEnded[id])
-		out.Teams = append(out.Teams, *t)
+	for id, team := range t.tm {
+		team.AvgRounds = math.Round(10*float64(t.tmRounds[id])/float64(team.Meetings)) / 10
+		team.AvgCostUSD, team.CostUSD = roundUSD(t.tmCost[id]/float64(team.Meetings)), roundUSD(t.tmCost[id])
+		team.ConcludedRate = rate(t.tmConcluded[id], t.tmEnded[id])
+		out.Teams = append(out.Teams, *team)
 	}
 	sort.Slice(out.Teams, func(i, j int) bool { return out.Teams[i].Meetings > out.Teams[j].Meetings })
-	return out, nil
+	return out
 }
 
 type AgentsStatus struct {

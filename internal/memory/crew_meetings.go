@@ -201,14 +201,26 @@ func validMeetingDiscord(d *MeetingDiscord) bool {
 }
 
 func validCrewMeeting(m CrewMeeting) bool {
-	if !slices.Contains(crewMeetingStatuses, m.Status) || !validRunLabel(m.TeamID, 256) || m.TeamRevision < 1 ||
-		strings.TrimSpace(m.Title) == "" || runes(m.Title) > 120 || strings.TrimSpace(m.Topic) == "" || runes(m.Topic) > 20000 ||
-		m.TemplateKey != "" && !crewTemplateKeyRe.MatchString(m.TemplateKey) || !slices.Contains(crewMeetingTriggers, m.Trigger) ||
-		m.Round < 0 || m.Round > 10 || m.MaxRounds < 1 || m.MaxRounds > 10 || m.Speaking != "" && !validRunLabel(m.Speaking, 256) ||
-		len(m.Turns) > crewMeetingTurns || len(m.NotesPending) > crewMeetingNotes || m.TokensUsed < 0 || m.TokenCap < 0 || m.TokenCap > 5_000_000 ||
-		!(m.CostUSD >= 0 && m.CostUSD <= 1e5) || !(m.CostEstimateUSD >= 0 && m.CostEstimateUSD <= 1e5) || !validMeetingDiscord(m.Discord) {
+	if !validCrewMeetingHeader(m) || !validCrewMeetingProgress(m) || !validCrewMeetingContent(m) || !validCrewMeetingState(m) {
 		return false
 	}
+	raw, err := json.Marshal(m)
+	return err == nil && len(raw) <= crewMeetingMaxBytes
+}
+
+func validCrewMeetingHeader(m CrewMeeting) bool {
+	return !(!slices.Contains(crewMeetingStatuses, m.Status) || !validRunLabel(m.TeamID, 256) || m.TeamRevision < 1 ||
+		strings.TrimSpace(m.Title) == "" || runes(m.Title) > 120 || strings.TrimSpace(m.Topic) == "" || runes(m.Topic) > 20000 ||
+		m.TemplateKey != "" && !crewTemplateKeyRe.MatchString(m.TemplateKey) || !slices.Contains(crewMeetingTriggers, m.Trigger))
+}
+
+func validCrewMeetingProgress(m CrewMeeting) bool {
+	return !(m.Round < 0 || m.Round > 10 || m.MaxRounds < 1 || m.MaxRounds > 10 || m.Speaking != "" && !validRunLabel(m.Speaking, 256) ||
+		len(m.Turns) > crewMeetingTurns || len(m.NotesPending) > crewMeetingNotes || m.TokensUsed < 0 || m.TokenCap < 0 || m.TokenCap > 5_000_000 ||
+		!(m.CostUSD >= 0 && m.CostUSD <= 1e5) || !(m.CostEstimateUSD >= 0 && m.CostEstimateUSD <= 1e5) || !validMeetingDiscord(m.Discord))
+}
+
+func validCrewMeetingContent(m CrewMeeting) bool {
 	for i, t := range m.Turns {
 		if !validMeetingTurn(t, i+1) {
 			return false
@@ -219,10 +231,12 @@ func validCrewMeeting(m CrewMeeting) bool {
 			return false
 		}
 	}
-	if c := m.Conclusion; c != nil && (runes(c.Summary) > 4000 || !shortTexts(c.Decisions, 30, 1000) || !shortTexts(c.Todos, 30, 1000) ||
-		!shortTexts(c.OpenQuestions, 30, 1000)) {
-		return false
-	}
+	c := m.Conclusion
+	return !(c != nil && (runes(c.Summary) > 4000 || !shortTexts(c.Decisions, 30, 1000) || !shortTexts(c.Todos, 30, 1000) ||
+		!shortTexts(c.OpenQuestions, 30, 1000)))
+}
+
+func validCrewMeetingState(m CrewMeeting) bool {
 	if terminalMeeting(m.Status) != (m.EndedReason != "") || m.EndedReason != "" && !slices.Contains(crewEndedReasons, m.EndedReason) {
 		return false
 	}
@@ -238,11 +252,8 @@ func validCrewMeeting(m CrewMeeting) bool {
 			}
 		}
 	}
-	if sn := m.TeamSnapshot; sn != nil && (sn.Team.Type != "team" || len(sn.Agents) > 12) {
-		return false
-	}
-	raw, err := json.Marshal(m)
-	return err == nil && len(raw) <= crewMeetingMaxBytes
+	sn := m.TeamSnapshot
+	return !(sn != nil && (sn.Team.Type != "team" || len(sn.Agents) > 12))
 }
 
 // meetingEnding is the team's ending, with the template's overrides laid over it.
@@ -367,8 +378,7 @@ func clipRunes(s string, n int) string {
 
 // ListCrewMeetings returns meetings newest first with counts; brief leaves out texts and snapshots.
 func (s *Service) ListCrewMeetings(ctx context.Context, token string, scope Scope, status, teamID string, limit int, brief bool) (CrewMeetingPage, error) {
-	if !validScope(scope) || status != "" && status != "all" && status != "ended" && !slices.Contains(crewMeetingStatuses, status) ||
-		teamID != "" && !validRunLabel(teamID, 256) || limit < 0 || limit > 200 {
+	if !validCrewMeetingQuery(scope, status, teamID, limit) {
 		return CrewMeetingPage{}, ErrInvalid
 	}
 	if limit == 0 {
@@ -402,6 +412,11 @@ func (s *Service) ListCrewMeetings(ctx context.Context, token string, scope Scop
 		}
 	}
 	return out, nil
+}
+
+func validCrewMeetingQuery(scope Scope, status, teamID string, limit int) bool {
+	return !(!validScope(scope) || status != "" && status != "all" && status != "ended" && !slices.Contains(crewMeetingStatuses, status) ||
+		teamID != "" && !validRunLabel(teamID, 256) || limit < 0 || limit > 200)
 }
 
 func (s *Service) GetCrewMeeting(ctx context.Context, token string, scope Scope, id string) (Record, error) {
@@ -622,32 +637,11 @@ func (s *Service) UpdateCrewMeeting(ctx context.Context, token, id string, in Cr
 			return ErrConflict
 		}
 		next := in.Meeting
-		if next.TeamID != old.TeamID || next.TeamRevision != old.TeamRevision || next.Title != old.Title || next.Topic != old.Topic ||
-			next.TemplateKey != old.TemplateKey || next.Trigger != old.Trigger || next.MaxRounds != old.MaxRounds || next.TokenCap != old.TokenCap ||
-			next.CostEstimateUSD != old.CostEstimateUSD || old.TeamSnapshot != nil && structuredText(next.TeamSnapshot) != structuredText(old.TeamSnapshot) {
-			return ErrInvalid
+		if err := meetingUpdateKeeps(old, next); err != nil {
+			return err
 		}
-		if !sameTurns(old.Turns, next.Turns) || !keepsNotes(old, next) {
-			return ErrInvalid
-		}
-		switch old.Status {
-		case "stopping":
-			// Only closing remains; a stop is never undone by the engine.
-			if next.Status != "stopping" && next.Status != "stopped" && next.Status != "failed" {
-				return ErrConflict
-			}
-		case "waiting":
-			// Only the decision endpoint moves a budget wait on.
-			if next.Status != "waiting" && next.Status != "failed" {
-				return ErrConflict
-			}
-		default:
-			if next.Status == "stopping" || next.Status == "stopped" {
-				return ErrConflict
-			}
-		}
-		if next.Status == "waiting" && old.BudgetApproved != nil {
-			return ErrInvalid // approved over budget: the engine asks no more
+		if err := meetingStatusMove(old, next); err != nil {
+			return err
 		}
 		// What only people and the Discord bot write stays as stored.
 		next.Discord, next.BudgetApproved = old.Discord, old.BudgetApproved
@@ -662,6 +656,43 @@ func (s *Service) UpdateCrewMeeting(ctx context.Context, token, id string, in Cr
 		*m = next
 		return nil
 	})
+}
+
+// meetingUpdateKeeps refuses an engine write that changes what the meeting was
+// asked as, or rewrites its turns or notes.
+func meetingUpdateKeeps(old, next CrewMeeting) error {
+	if next.TeamID != old.TeamID || next.TeamRevision != old.TeamRevision || next.Title != old.Title || next.Topic != old.Topic ||
+		next.TemplateKey != old.TemplateKey || next.Trigger != old.Trigger || next.MaxRounds != old.MaxRounds || next.TokenCap != old.TokenCap ||
+		next.CostEstimateUSD != old.CostEstimateUSD || old.TeamSnapshot != nil && structuredText(next.TeamSnapshot) != structuredText(old.TeamSnapshot) {
+		return ErrInvalid
+	}
+	if !sameTurns(old.Turns, next.Turns) || !keepsNotes(old, next) {
+		return ErrInvalid
+	}
+	return nil
+}
+
+func meetingStatusMove(old, next CrewMeeting) error {
+	switch old.Status {
+	case "stopping":
+		// Only closing remains; a stop is never undone by the engine.
+		if next.Status != "stopping" && next.Status != "stopped" && next.Status != "failed" {
+			return ErrConflict
+		}
+	case "waiting":
+		// Only the decision endpoint moves a budget wait on.
+		if next.Status != "waiting" && next.Status != "failed" {
+			return ErrConflict
+		}
+	default:
+		if next.Status == "stopping" || next.Status == "stopped" {
+			return ErrConflict
+		}
+	}
+	if next.Status == "waiting" && old.BudgetApproved != nil {
+		return ErrInvalid // approved over budget: the engine asks no more
+	}
+	return nil
 }
 
 // UpdateMeetingDiscord records the thread a meeting posts to and how far it

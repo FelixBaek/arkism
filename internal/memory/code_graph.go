@@ -243,8 +243,7 @@ func redactCode(s string, n *int) string {
 // belongs to a file the batch names, every edge starts at a symbol of its own
 // file, and nothing is listed twice. Secret-looking text is redacted.
 func validCodeBatch(in *CodeGraphBatch) (int, error) {
-	if !validScope(in.Scope) || !validCodeRepo(in.Repo) || in.ExpectedRevision < 0 || len(in.Files) > codeBatchFiles || len(in.Remove) > codeBatchFiles ||
-		len(in.Symbols) > codeBatchSymbols || len(in.Edges) > codeBatchEdges || len(in.Files)+len(in.Remove) == 0 {
+	if !validCodeBatchShape(in) {
 		return 0, ErrInvalid
 	}
 	files := map[string]bool{}
@@ -264,10 +263,7 @@ func validCodeBatch(in *CodeGraphBatch) (int, error) {
 	owner := map[string]string{}
 	for i := range in.Symbols {
 		s := &in.Symbols[i]
-		if !codeSymbolID.MatchString(s.ID) || !slices.Contains(codeSymKinds, s.Kind) || !slices.Contains(codeLangs, s.Lang) || !validCodePath(s.Path) ||
-			slices.Contains(in.Remove, s.Path) || !files[s.Path] || s.StartLine < 0 || s.EndLine < s.StartLine || s.EndLine > 10_000_000 ||
-			!validRunLabel(s.Name, 200) || !validRunLabel(s.QName, 1000) || runes(s.Signature) > 400 || runes(s.Doc) > 300 ||
-			!utf8.ValidString(s.Signature) || !utf8.ValidString(s.Doc) {
+		if !validCodeSymbol(s, in.Remove, files) {
 			return 0, ErrInvalid
 		}
 		if _, dup := owner[s.ID]; dup {
@@ -279,8 +275,7 @@ func validCodeBatch(in *CodeGraphBatch) (int, error) {
 	}
 	seen := map[string]bool{}
 	for _, e := range in.Edges {
-		if !codeSymbolID.MatchString(e.From) || !codeSymbolID.MatchString(e.To) || e.From == e.To || !slices.Contains(codeEdgeKinds, e.Kind) ||
-			owner[e.From] != e.Path || e.Line < 0 || e.Line > 10_000_000 {
+		if !validCodeEdge(e, owner) {
 			return 0, ErrInvalid
 		}
 		key := e.From + "|" + e.To + "|" + e.Kind
@@ -290,6 +285,23 @@ func validCodeBatch(in *CodeGraphBatch) (int, error) {
 		seen[key] = true
 	}
 	return redacted, nil
+}
+
+func validCodeBatchShape(in *CodeGraphBatch) bool {
+	return validScope(in.Scope) && validCodeRepo(in.Repo) && in.ExpectedRevision >= 0 && len(in.Files) <= codeBatchFiles && len(in.Remove) <= codeBatchFiles &&
+		len(in.Symbols) <= codeBatchSymbols && len(in.Edges) <= codeBatchEdges && len(in.Files)+len(in.Remove) != 0
+}
+
+func validCodeSymbol(s *CodeSymbol, remove []string, files map[string]bool) bool {
+	return codeSymbolID.MatchString(s.ID) && slices.Contains(codeSymKinds, s.Kind) && slices.Contains(codeLangs, s.Lang) && validCodePath(s.Path) &&
+		!slices.Contains(remove, s.Path) && files[s.Path] && s.StartLine >= 0 && s.EndLine >= s.StartLine && s.EndLine <= 10_000_000 &&
+		validRunLabel(s.Name, 200) && validRunLabel(s.QName, 1000) && runes(s.Signature) <= 400 && runes(s.Doc) <= 300 &&
+		utf8.ValidString(s.Signature) && utf8.ValidString(s.Doc)
+}
+
+func validCodeEdge(e CodeEdge, owner map[string]string) bool {
+	return codeSymbolID.MatchString(e.From) && codeSymbolID.MatchString(e.To) && e.From != e.To && slices.Contains(codeEdgeKinds, e.Kind) &&
+		owner[e.From] == e.Path && e.Line >= 0 && e.Line <= 10_000_000
 }
 
 func (s *Service) codeGraph(ctx context.Context, token, action string, scope Scope) (codeGraphStore, Decision, error) {

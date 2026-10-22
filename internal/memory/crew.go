@@ -325,17 +325,24 @@ func validUSD(v float64) bool { return v >= 0 && v <= 1e5 } // NaN fails both co
 
 // validCrewAgent: a template's fields (category optional) plus the agent's own.
 func validCrewAgent(c Crew) bool {
-	if runes(c.Instructions) > crewAgentInstructions || c.ModelMode != "" && !slices.Contains(crewModelModes, c.ModelMode) ||
-		!optionalModel(c.Model) || c.ModelMode == "auto" && c.Model != "" && c.Model != "auto" ||
-		!optionalModel(c.FallbackModel) || !optionalModel(c.ImageModel) ||
-		c.Effort != "" && !slices.Contains(crewEfforts, c.Effort) || c.RunMode != "" && !slices.Contains(crewRunModes, c.RunMode) ||
-		c.Temperature != nil && !(*c.Temperature >= 0 && *c.Temperature <= 1) || c.MaxOutputTokens < 0 || c.MaxOutputTokens > 200000 ||
-		c.OutputFormat != "" && !slices.Contains(crewOutputFormats, c.OutputFormat) || c.FileEdits != "" && !slices.Contains(crewFileEdits, c.FileEdits) ||
-		c.Workflow != "" && !crewHandleRe.MatchString(c.Workflow) ||
-		c.Budget != nil && (!validUSD(c.Budget.MonthlyUSD) || !validUSD(c.Budget.AskOverUSD)) {
+	if !validCrewAgentModel(c) || !validCrewAgentOutput(c) {
 		return false
 	}
 	return validCrewKitFor(c, crewAgentTargets) && noTeamFields(c)
+}
+
+func validCrewAgentModel(c Crew) bool {
+	return !(runes(c.Instructions) > crewAgentInstructions || c.ModelMode != "" && !slices.Contains(crewModelModes, c.ModelMode) ||
+		!optionalModel(c.Model) || c.ModelMode == "auto" && c.Model != "" && c.Model != "auto" ||
+		!optionalModel(c.FallbackModel) || !optionalModel(c.ImageModel) ||
+		c.Effort != "" && !slices.Contains(crewEfforts, c.Effort) || c.RunMode != "" && !slices.Contains(crewRunModes, c.RunMode))
+}
+
+func validCrewAgentOutput(c Crew) bool {
+	return !(c.Temperature != nil && !(*c.Temperature >= 0 && *c.Temperature <= 1) || c.MaxOutputTokens < 0 || c.MaxOutputTokens > 200000 ||
+		c.OutputFormat != "" && !slices.Contains(crewOutputFormats, c.OutputFormat) || c.FileEdits != "" && !slices.Contains(crewFileEdits, c.FileEdits) ||
+		c.Workflow != "" && !crewHandleRe.MatchString(c.Workflow) ||
+		c.Budget != nil && (!validUSD(c.Budget.MonthlyUSD) || !validUSD(c.Budget.AskOverUSD)))
 }
 
 func validCrewEnding(e *CrewEnding) bool {
@@ -343,12 +350,25 @@ func validCrewEnding(e *CrewEnding) bool {
 }
 
 func validCrewTeam(c Crew) bool {
-	if len(c.Members) == 0 || len(c.Members) > 12 || !slices.Contains(crewMeetingModes, c.Mode) || !validCrewEnding(c.Ending) ||
-		len(c.Context) > 20 || len(c.Templates) > 10 || c.Instructions != "" || c.Model != "" || c.Effort != "" || c.RunMode != "" ||
-		len(c.Skills)+len(c.Tools)+len(c.Agents)+len(c.SkillRules)+len(c.SkillsOff)+len(c.Install)+len(c.Memory)+len(c.Scripts) != 0 ||
-		c.FileName != "" || c.Template != "" || !noAgentFields(c) {
+	if !validCrewTeamShape(c) || !validCrewTeamMembers(c) {
 		return false
 	}
+	for _, r := range c.Context {
+		if !knownCollection(r.Collection) || !validRunLabel(r.ID, 256) || runes(r.Title) > 120 || !slices.Contains(crewContextShares, r.Share) {
+			return false
+		}
+	}
+	return validCrewTeamTemplates(c)
+}
+
+func validCrewTeamShape(c Crew) bool {
+	return !(len(c.Members) == 0 || len(c.Members) > 12 || !slices.Contains(crewMeetingModes, c.Mode) || !validCrewEnding(c.Ending) ||
+		len(c.Context) > 20 || len(c.Templates) > 10 || c.Instructions != "" || c.Model != "" || c.Effort != "" || c.RunMode != "" ||
+		len(c.Skills)+len(c.Tools)+len(c.Agents)+len(c.SkillRules)+len(c.SkillsOff)+len(c.Install)+len(c.Memory)+len(c.Scripts) != 0 ||
+		c.FileName != "" || c.Template != "" || !noAgentFields(c))
+}
+
+func validCrewTeamMembers(c Crew) bool {
 	seen, moderators := map[string]bool{}, 0
 	for _, m := range c.Members {
 		if !validRunLabel(m.AgentID, 256) || seen[m.AgentID] || !slices.Contains(crewMemberRoles, m.Role) || m.Order < 0 || m.Order > 100 ||
@@ -360,14 +380,10 @@ func validCrewTeam(c Crew) bool {
 			moderators++
 		}
 	}
-	if c.Mode == "moderator_picks" && moderators == 0 || moderators > 1 {
-		return false
-	}
-	for _, r := range c.Context {
-		if !knownCollection(r.Collection) || !validRunLabel(r.ID, 256) || runes(r.Title) > 120 || !slices.Contains(crewContextShares, r.Share) {
-			return false
-		}
-	}
+	return !(c.Mode == "moderator_picks" && moderators == 0 || moderators > 1)
+}
+
+func validCrewTeamTemplates(c Crew) bool {
 	keys := map[string]bool{}
 	for _, t := range c.Templates {
 		if !crewTemplateKeyRe.MatchString(t.Key) || keys[t.Key] || strings.TrimSpace(t.Name) == "" || runes(t.Name) > 60 || runes(t.Prompt) > 4000 {
@@ -427,6 +443,30 @@ func validCrew(c Crew) bool {
 		!validCrewGoalNotify(c) || !validCrewPins(c.Pinned) || len(c.Pinned) > 0 && c.Type != "agent" && c.Type != "team" {
 		return false
 	}
+	if !validCrewTypeFields(c) {
+		return false
+	}
+	switch c.Type {
+	case "workflow":
+		return validCrewWorkflow(c)
+	case "template":
+		return validCrewTemplate(c)
+	case "agent":
+		return validCrewAgent(c)
+	case "team":
+		return validCrewTeam(c)
+	default: // persona
+		return validCrewPersona(c)
+	}
+}
+
+func validCrewPersona(c Crew) bool {
+	return strings.TrimSpace(c.Instructions) != "" && c.Model == "" && len(c.Skills)+len(c.Tools)+len(c.Agents) == 0 &&
+		c.Trigger == nil && c.Graph == nil && noAgentFields(c) && noTeamFields(c)
+}
+
+// validCrewTypeFields checks the handle and the workflow/team-only fields each type may carry.
+func validCrewTypeFields(c Crew) bool {
 	switch c.Type {
 	case "workflow", "team":
 		if !crewHandleRe.MatchString(c.Handle) {
@@ -442,22 +482,7 @@ func validCrew(c Crew) bool {
 			return false
 		}
 	}
-	if c.Type != "workflow" && c.Type != "team" && c.Cover != nil || c.Type != "workflow" && (c.Limits != nil || c.Trigger != nil || c.Graph != nil) {
-		return false
-	}
-	switch c.Type {
-	case "workflow":
-		return validCrewWorkflow(c)
-	case "template":
-		return validCrewTemplate(c)
-	case "agent":
-		return validCrewAgent(c)
-	case "team":
-		return validCrewTeam(c)
-	default: // persona
-		return strings.TrimSpace(c.Instructions) != "" && c.Model == "" && len(c.Skills)+len(c.Tools)+len(c.Agents) == 0 &&
-			c.Trigger == nil && c.Graph == nil && noAgentFields(c) && noTeamFields(c)
-	}
+	return !(c.Type != "workflow" && c.Type != "team" && c.Cover != nil || c.Type != "workflow" && (c.Limits != nil || c.Trigger != nil || c.Graph != nil))
 }
 
 // isAgent: a work agent, including a template saved before agents existed.
@@ -591,6 +616,12 @@ func (s *Service) checkCrewRefs(ctx context.Context, scope Scope, c Crew, self s
 			return ErrHandleTaken
 		}
 	}
+	return checkCrewLinks(c, prev, agents, flows, owners)
+}
+
+// checkCrewLinks checks a team's members and an agent's or workflow's
+// ownership link against the other live crew.
+func checkCrewLinks(c Crew, prev *Crew, agents, flows, owners map[string]bool) error {
 	for _, m := range c.Members {
 		if !agents[m.AgentID] {
 			return ErrInvalid

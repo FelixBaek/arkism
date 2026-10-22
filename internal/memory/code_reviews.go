@@ -134,9 +134,7 @@ func validReviewItems(items []ReviewItem) bool {
 }
 
 func validReviewItem(it ReviewItem) bool {
-	if !validRepoName(it.Repo) || it.Number < 1 || runes(it.Title) > 300 || len(it.Branch) > 200 || len(it.Base) > 200 || len(it.HeadSHA) > 64 ||
-		!strings.HasPrefix(it.URL, "https://github.com/") || len(it.URL) > 300 || !slices.Contains(reviewStates, it.State) ||
-		len(it.Quality) > 30 || len(it.PRState) > 20 || runes(it.Model) > 80 || len(it.Findings) > 50 || len(it.Steps) > 8 || it.Commits < 0 {
+	if !validReviewItemFields(it) {
 		return false
 	}
 	for _, f := range it.Findings {
@@ -150,6 +148,12 @@ func validReviewItem(it ReviewItem) bool {
 		}
 	}
 	return true
+}
+
+func validReviewItemFields(it ReviewItem) bool {
+	return validRepoName(it.Repo) && it.Number >= 1 && runes(it.Title) <= 300 && len(it.Branch) <= 200 && len(it.Base) <= 200 && len(it.HeadSHA) <= 64 &&
+		strings.HasPrefix(it.URL, "https://github.com/") && len(it.URL) <= 300 && slices.Contains(reviewStates, it.State) &&
+		len(it.Quality) <= 30 && len(it.PRState) <= 20 && runes(it.Model) <= 80 && len(it.Findings) <= 50 && len(it.Steps) <= 8 && it.Commits >= 0
 }
 
 func (s *Service) CodeReviews(ctx context.Context, token string, scope Scope) (Record, error) {

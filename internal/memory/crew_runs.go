@@ -166,7 +166,7 @@ func validCrewRun(c CrewRun) bool {
 
 // ListCrewRuns returns runs newest first, optionally of one crew item and status.
 func (s *Service) ListCrewRuns(ctx context.Context, token string, scope Scope, crewID, status string, limit int) (CrewRunPage, error) {
-	if !validScope(scope) || crewID != "" && !validRunLabel(crewID, 256) || status != "" && !slices.Contains(crewRunStatuses, status) || limit < 0 || limit > 200 && status == "" || limit > 1000 {
+	if !validCrewRunQuery(scope, crewID, status, limit) {
 		return CrewRunPage{}, ErrInvalid
 	}
 	if limit == 0 {
@@ -198,6 +198,10 @@ func (s *Service) ListCrewRuns(ctx context.Context, token string, scope Scope, c
 		}
 	}
 	return out, nil
+}
+
+func validCrewRunQuery(scope Scope, crewID, status string, limit int) bool {
+	return !(!validScope(scope) || crewID != "" && !validRunLabel(crewID, 256) || status != "" && !slices.Contains(crewRunStatuses, status) || limit < 0 || limit > 200 && status == "" || limit > 1000)
 }
 
 func (s *Service) GetCrewRun(ctx context.Context, token string, scope Scope, id string) (Record, error) {
