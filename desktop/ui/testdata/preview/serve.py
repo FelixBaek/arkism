@@ -26,7 +26,7 @@ def many(n):
         for x in ids[1:]:
             if r.random() < 0.5: edges.append({"from": x, "to": r.choice(ids), "type": r.choice(["supports", "same_session", "same_session", "conflicts", "supersedes"])})
     for _ in range(n // 10): edges.append({"from": r.choice(nodes)["id"], "to": r.choice(nodes)["id"], "type": "supports"})
-    return {"/v1/memory-graph": {"nodes": nodes, "edges": edges, "truncated": False}, "/v1/memories": {"items": mems}, "/v1/digests?topic": topics}
+    return {"/v1/memory-graph": {"nodes": nodes, "edges": edges, "truncated": False}, "/v1/memories": {"items": mems, "next_cursor": "", "authority": "data_only_untrusted"},"/v1/digests?topic": topics}
 MANY = many(int(os.environ["PREVIEW_MANY"])) if os.environ.get("PREVIEW_MANY") else {}
 
 class H(http.server.SimpleHTTPRequestHandler):
@@ -68,7 +68,20 @@ class H(http.server.SimpleHTTPRequestHandler):
             try: kind = str(json.loads(data or b"{}").get("assist", {}).get("kind") or "undefined")
             except ValueError: kind = "undefined"
             return s._json(200, {"id": kind if kind.replace("_", "").isalnum() else "undefined"})
+        if s.command == "POST" and s.path.split("?")[0] in QUERY: return s._json(200, s._query(s.path.split("?")[0], data))
         return s._json(200, s._fixture(".post") if s.command == "POST" else {})
+    def _query(s, path, data):
+        # The catalog query pages the same list fixtures a GET reads: state picks the file, one page, facets counted from it.
+        try: state = str(json.loads(data or b"{}").get("state") or "")
+        except ValueError: state = ""
+        s.path = QUERY[path](state)
+        items = (MANY.get(s.path) or s._fixture())["items"]
+        count = lambda field: {k: sum(1 for r in items if r.get(field) == k) for k in {r.get(field) for r in items} if k}
+        return {"items": items, "total": len(items), "next_cursor": "", "authority": "data_only_untrusted", "facets": {"kinds": count("kind"), "repositories": {}, "categories": {}, "states": count("status")}}
     do_POST = do_PUT = do_PATCH = do_DELETE = _write
+
+QUERY = {"/v1/memories/query": lambda state: "/v1/memories",
+         "/v1/memory_candidates/query": lambda state: "/v1/memory_candidates?status=" + state,
+         "/v1/skills/query": lambda state: "/v1/skills/trash" if state == "trash" else "/v1/skills"}
 
 http.server.ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
