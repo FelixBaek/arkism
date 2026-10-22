@@ -334,8 +334,8 @@ func childEnv(row host.CLI, keys []map[string]any, model string, key map[string]
 			if row.Name == "codex" {
 				env["CODEX_API_KEY"] = str(k["key"])
 			}
-			if truthy(k["base_url"]) {
-				env[row.BaseEnv] = str(k["base_url"])
+			if b := str(k["base_url"]); b != "" && (row.Provider != "zai" || strings.HasPrefix(b, "https://")) { // a wrapper gets no pre-0.1.4 http Z.ai address (#170)
+				env[row.BaseEnv] = b
 			}
 			break
 		}

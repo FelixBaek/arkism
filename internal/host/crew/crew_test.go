@@ -1380,4 +1380,9 @@ func TestGLMWithoutWrapperRunsClaudeCodeAgainstZAI(t *testing.T) {
 	if env, _ := childEnv(r, nil, "glm-5.3", nil); env["ANTHROPIC_BASE_URL"] == zaiAnthropic {
 		t.Fatal("wrapper got the Z.ai address")
 	}
+	// in API mode the wrapper gets the key but not the stored http address (#170)
+	patch(t, &host.APIMode, map[string]bool{"glm": true})
+	if env, _ := childEnv(r, nil, "glm-5.3", nil); env["ZAI_API_KEY"] != "zai-old-key" || env["ZAI_BASE_URL"] != "" {
+		t.Fatal(env["ZAI_API_KEY"], env["ZAI_BASE_URL"])
+	}
 }
