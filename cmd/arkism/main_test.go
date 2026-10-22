@@ -32,7 +32,7 @@ func TestBinaryListsRegisteredCommands(t *testing.T) {
 	if !strings.HasPrefix(usage, "usage: arkism COMMAND [ARGS]\ncommands:\n") {
 		t.Fatal(usage)
 	}
-	for _, name := range []string{"backup", "doctor", "gateway"} {
+	for _, name := range []string{"capture", "doctor", "gateway"} {
 		if !strings.Contains(usage, "\n  "+name+"\n") {
 			t.Errorf("%s missing from usage:\n%s", name, usage)
 		}
