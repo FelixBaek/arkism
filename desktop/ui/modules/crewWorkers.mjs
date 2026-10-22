@@ -188,7 +188,7 @@ export function createCrewWorkers(deps) {
         colOf[n.id] = 3 + i * 2;
         const b = deps.el("div", `ex-flow-node${deps.IS_AI(n.type) ? " ai" : ""}`);
         const kind = deps.IS_AI(n.type) ? "AI" : deps.NODES[n.type]?.label || n.type;
-        b.append(deps.el("small", "kind", lv.length > 1 ? `${kind} · 동시에` : kind), deps.el("strong", "", deps.nodeTitle(n)));
+        b.append(deps.el("small", "kind", lv.length > 1 ? `${kind} · 동시에` : kind), n.title ? deps.raw(deps.el("strong", "", n.title)) : deps.el("strong", "", deps.nodeTitle(n))); // a title the user gave stays; the node kind is UI text
         if (n.config?.model) b.append(deps.el("code", "m", n.config.model));
         col.append(b);
       }
