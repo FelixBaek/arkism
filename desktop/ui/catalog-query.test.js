@@ -53,3 +53,15 @@ test('failed multi-page refresh keeps counts and facets with the published rows'
   assert.equal(snapshot().facets.kinds.decision,2,kind+' published new facets with old rows');
  }
 });
+
+test('a changed filter keeps the last rows, counts and facets on screen until its page arrives',async()=>{
+ const {createCatalogQuery}=await import('./modules/catalogQuery.mjs');const state=identity();let release=null;
+ const c=createCatalogQuery({state,createPager:create,preferences:()=>({kept:[]}),render(){},request:async(_,init)=>{const q=JSON.parse(init.body).q;if(q==='slow')await new Promise(r=>release=r);return {...result(q==='slow'?[]:[{id:'old'}],q==='slow'?0:1),facets:{kinds:{decision:q==='slow'?0:1}}}}});
+ await c.more('memories');state.query='slow';c.ensure('memories');
+ const waiting=c.snapshot('memories');
+ assert.equal(waiting.ready,false);assert.equal(waiting.loading,true);assert.equal(waiting.stale,true);
+ assert.deepEqual(waiting.items.map(x=>x.id),['old']);assert.equal(waiting.total,1);assert.equal(waiting.facets.kinds.decision,1);
+ await new Promise(r=>setImmediate(r));release();await new Promise(r=>setImmediate(r));
+ const done=c.snapshot('memories');assert.equal(done.ready,true);assert.equal(done.stale,undefined);assert.deepEqual(done.items,[]);assert.equal(done.total,0);
+ state.scope={workspace_id:'other',project_id:'p'};assert.deepEqual(c.snapshot('memories').items,[],'another scope never shows the old rows');
+});

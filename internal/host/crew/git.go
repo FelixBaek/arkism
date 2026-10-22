@@ -152,7 +152,7 @@ func sOrDefault(v any, def string) string {
 
 func gitRepos() ([]any, error) {
 	if gitOrg == "" {
-		return nil, errors.New("ARKISM_GIT_ORG is not set")
+		return nil, gitError("git_org_unset") // the SSH command does not read the service's EnvironmentFile; say so instead of git_unavailable
 	}
 	v, err := cached("repos", 300, func() (any, error) {
 		rows, err := ghJSON("repo", "list", gitOrg, "--limit", "100", "--json", "name,description,defaultBranchRef,isArchived,pushedAt,url")

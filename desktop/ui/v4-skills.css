@@ -1,5 +1,5 @@
 /* v4 · NOCTURNE — skills screens. Shared frame lives in shell.css; colours are --nc-* in tokens.css. */
-/* 스킬 (198:802) · 개선하기 (198:4070·4156·4242·4328) · 휴지통·중복 (198:4500) · GitHub에서 설치 (290:18908) */
+/* 스킬 (198:802) · 개선하기 (198:4070·4156·4242·4328) · GitHub에서 설치 (290:18908) */
 
 /* ---------------------------------------------------------------- page head: back link above the title */
 .page-head .page-back { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--nc-muted); font: 400 12px/1.5 var(--sans); cursor: pointer; }
@@ -31,8 +31,6 @@
 .v4s-foot { margin: -8px 0 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
 .v4s-foot .link-btn { color: var(--nc-muted); font: inherit; }
 .v4s-foot .link-btn:hover { color: var(--nc-text); }
-.v4s-link { flex: none; padding: 7px 14px; border-radius: var(--nc-radius-control); font: 500 13px/1.5 var(--sans); color: var(--nc-text); cursor: pointer; }
-.v4s-link:hover { background: var(--nc-subtle); }
 
 /* 확인해 주세요 */
 .v4s-attn { flex: 1 1 100%; display: flex; align-items: center; gap: 16px; padding: 12px 12px 12px 16px; background: var(--nc-amber-bg); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); }
@@ -121,7 +119,6 @@
 .v4s-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); }
 .v4s-card > h3 { margin: 0; font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .v4s-card-lead { margin: -6px 0 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
-.v4s-names { margin: 0; font: 400 12px/1.5 var(--mono); color: var(--nc-muted); }
 /* the review/trial/generate modules inside a step: no fold, form fields in the Nocturne style */
 .v4s-card .improve-part > summary, .v4s-card > details.section > summary { display: none; }
 .v4s-card details.section { gap: 12px; }
@@ -142,15 +139,11 @@
 .v4s-card .btn.small { align-self: flex-start; }
 .v4s-improve > .v4s-actions { justify-content: space-between; }
 
-/* ---------------------------------------------------------------- 휴지통·중복 */
-.v4s-trash { display: flex; flex-direction: column; gap: 20px; }
+/* ---------------------------------------------------------------- segment (지식 탭) */
 .v4s-seg { align-self: flex-start; display: flex; gap: 2px; padding: 3px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
 .v4s-seg button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--nc-muted); font: 400 13px/1.5 var(--sans); cursor: pointer; }
 .v4s-seg button.on { background: var(--nc-raised); border-color: var(--nc-line); color: var(--nc-accent); font-weight: 500; }
 .v4s-seg output { font: 11px var(--mono); color: var(--nc-quiet); }
-.v4s-path { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border: 0; border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); text-align: left; cursor: pointer; }
-.v4s-path .mono { font: 400 11px/1.5 var(--mono); overflow-wrap: anywhere; }
-.v4s-path-tag { flex: none; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
 
 /* ---------------------------------------------------------------- GitHub에서 설치 */
 .v4s-install { display: flex; flex-direction: column; gap: 16px; }
@@ -309,7 +302,7 @@
 .detail:has(.ss-id) .btn { height: auto; padding: 7px 14px; font: 500 13px/1.5 var(--sans); }
 @media (max-width: 1100px) { .v4u-two, .v4u-mix { grid-template-columns: minmax(0, 1fr); } }
 
-/* 이름이 제목, 설명은 작은 둘째 줄 (스킬 목록·휴지통·중복·설치·상세) */
+/* 이름이 제목, 설명은 작은 둘째 줄 (스킬 목록·설치·상세) */
 .v4s-title.v4s-name { font-weight: 500; }
 .v4s-meta .v4s-cat { flex: none; }
 .v4s-meta .v4s-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -359,11 +352,4 @@
 .v4u-skill-row .v4u-num { text-align: right; }
 @media (max-width: 900px) { .v4u-flow-row { grid-template-columns: minmax(0, 120px) minmax(60px, 1fr); } .v4u-flow-recv { grid-column: 1 / -1; } }
 
-/* 스킬 고르기 시험 */
-.v4s-route { display: flex; flex-direction: column; gap: 14px; }
-.v4s-route .v4s-card { display: flex; flex-direction: column; gap: 10px; }
-.v4s-route-ask { width: 100%; box-sizing: border-box; resize: none; padding: 10px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-canvas); color: var(--nc-text); font: 400 calc(14px * var(--fs, 1))/1.5 var(--sans); }
-.v4s-route-ask:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 1px; }
-.v4s-route .v4s-actions { align-items: center; }
-.v4s-route .v4s-foot:empty { display: none; }
 .v4s-why ul { margin: 4px 0 0; padding-left: 18px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }

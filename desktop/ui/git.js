@@ -12,6 +12,7 @@ window.ArkismGit = (ctx) => {
     git_not_mergeable: "지금은 병합할 수 없어요(충돌·초안·닫힘).", git_branch_not_merged: "기본 브랜치에 아직 합쳐지지 않은 브랜치는 지우지 않아요.",
     git_branch_has_open_pr: "열린 PR이 있는 브랜치예요. PR을 먼저 닫거나 병합하세요.", git_default_branch: "기본 브랜치는 지울 수 없어요.",
     git_branch_exists: "같은 이름의 브랜치가 이미 있어요.", git_invalid_branch: "브랜치 이름을 확인하세요.", git_timeout: "시간이 너무 걸려 멈췄어요. 다시 시도하세요.",
+    git_org_unset: "서버에 보여 줄 GitHub 계정이 정해지지 않았어요. SSH로 실행되는 셸에 ARKISM_GIT_ORG(GitHub 사용자·조직 이름)를 넣어 주세요 (예: ~/.bashrc 맨 위에 export).",
   };
   const S = { host: read(HOST_KEY, ""), repos: null, repo: read(REPO_KEY, ""), graph: null, prs: null, runs: null, query: "",
     sel: null, detail: null, diff: null, busy: "", error: "", open: { branches: true, tags: false, prs: true, checks: true }, prGroup: "open", mode: "graph", prQuery: "" };

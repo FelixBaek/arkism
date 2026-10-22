@@ -262,3 +262,12 @@ func TestGitCommandRepliesWithOneJSONLine(t *testing.T) {
 		}
 	}
 }
+
+// Without ARKISM_GIT_ORG the screen must name the missing setting, not a generic failure.
+func TestGitReposWithoutOrgNamesTheSetting(t *testing.T) {
+	patch(t, &gitOrg, "")
+	var out strings.Builder
+	if code := gitMain(nil, strings.NewReader(`{"action":"repos"}`), &out, &out); code == 0 || strings.TrimSpace(out.String()) != `{"error": "git_org_unset"}` {
+		t.Fatalf("%d %s", code, out.String())
+	}
+}

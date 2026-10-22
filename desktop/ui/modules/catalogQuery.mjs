@@ -26,9 +26,11 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
   }
   function snapshot(name) {
     const value = entry(name), serialized = key(name), snap = value.pager.snapshot();
-    if (snap.key !== serialized) return { key: serialized, items: [], cursor: "", ready: false, loading: false, error: "", total: null, facets: {} };
-    const meta = snap.metadata;
-    return { ...snap, total: meta?.total ?? null, facets: meta?.facets || {} };
+    const current = snap.key === serialized ? { ...snap, total: snap.metadata?.total ?? null, facets: snap.metadata?.facets || {} } : { key: serialized, items: [], cursor: "", ready: false, loading: false, error: "", total: null, facets: {} };
+    if (current.ready) value.last = { identity: identity(), shown: current };
+    // While a changed filter loads, keep the last result of the same connection on screen (stale) instead of an empty list.
+    else if (!current.error && value.last?.identity === identity()) return { ...current, items: value.last.shown.items, total: value.last.shown.total, facets: value.last.shown.facets, stale: true };
+    return current;
   }
   const currentName = () => state.view === "skills" ? state.skillTab === "trash" ? "skillTrash" : "skills" : ({ candidate: "candidates", conflicted: "conflicted" }[state.memTab] || "memories");
   const visible = () => state.view === "skills" && !state.skillPage || state.view === "memories" && ["active", "idle", "provenance", "candidate", "conflicted"].includes(state.memTab);
@@ -41,6 +43,7 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
       if (error.message === "revision_conflict") await value.pager.refresh(serialized);
       else throw error;
     }
+    snapshot(name); // remembers this page as the last shown result, even before a render reads it
     if (key(name) === serialized && visible() && currentName() === name) { if (name === "skills" || name === "skillTrash") state.versionsDone = false; render(false); }
   }
   function ensure(name = currentName()) {

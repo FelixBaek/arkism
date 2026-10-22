@@ -142,7 +142,7 @@ export function createSkillViews(deps) {
   }
 
   // v4 · 스킬 (Figma 198:802): 확인할 것 카드 → 검색·상태·정렬 → 분류 → 목록, 오른쪽은 고른 스킬.
-  // state.skillPage opens a page inside the same view: 개선하기 (4 steps), 휴지통·중복, GitHub에서 설치.
+  // state.skillPage opens a page inside the same view: 개선하기 (4 steps), GitHub에서 설치.
   const SKILL_STATES = [["all", "전체"], ["missing", "빠진 곳 있음"], ["unused", "안 씀"], ["caution", "보안 주의"], ["update", "업데이트 있음"], ["plugin", "플러그인 스킬"], ["trash", "휴지통"]];
 
   const IMPROVE_STEPS = [["개선안", "무엇을 고칠까요?", "관련 교훈을 찾아 고를 관측을 선택하고, 평가 과제 파일을 넣어 주세요."],
@@ -153,8 +153,6 @@ export function createSkillViews(deps) {
   let skillPageCache = null;
  // { key, main, side }: a page with forms survives the 10-second refresh
   const skillPageKey = () => JSON.stringify(deps.state.skillPage);
-
-  const liveSkills = () => deps.state.data.skills.filter((sk) => sk.status !== "deprecated" && !deps.trashed().some((x) => x.id === sk.id));
 
   function openSkillPage(page) {
     deps.state.skillPage = page;
@@ -193,6 +191,14 @@ export function createSkillViews(deps) {
     input.addEventListener("input", () => { deps.$("#search").value = input.value; deps.state.query = input.value.trim().toLowerCase(); deps.state.skillLimit = 0; deps.render(false); });
     box.append(deps.icon("magnifying-glass"), input);
     return box;
+  }
+
+  // 분류 chip (전체 · a category) with its count; 도구 › 플러그인·MCP use the same one.
+  function filterChip(label, count, active, onPick) {
+    const c = deps.el("button", `chip${active ? " active" : ""}`); c.type = "button";
+    c.append(label, deps.el("output", "", String(count)));
+    c.addEventListener("click", onPick);
+    return c;
   }
 
   function keepFocus(sel) {
@@ -240,7 +246,7 @@ export function createSkillViews(deps) {
     };
     // The first page failed: one message in the list, no 0개 and no empty-filter text beside it.
     const failed = !!catalogState.error && !skills.length;
-    deps.$("#title-count").textContent = failed ? "" : `${catalogState.total ?? live.length}개`;
+    deps.$("#title-count").textContent = failed || catalogState.total === null && !catalogState.ready ? "" : `${catalogState.total ?? live.length}개`; // no 0개 before the first page
     const restore = keepFocus(".v4s-search");
     // 확인해 주세요: what needs a look, the first kind with any opens with 하나씩 확인하기.
     const parts = [];
@@ -265,18 +271,13 @@ export function createSkillViews(deps) {
     deps.$("#controls").replaceChildren(...parts, bar);
     // 분류 chips: 전체 + the owner's categories (설정 › 카테고리).
     const cats = deps.pages.prefs.categories;
-    const chip = (id, label, count) => {
-      const c = deps.el("button", `chip${deps.state.skillCat === id ? " active" : ""}`); c.type = "button";
-      c.append(label, deps.el("output", "", String(count)));
-      c.addEventListener("click", () => { deps.state.skillCat = id; deps.state.skillLimit = 0; deps.render(false); });
-      return c;
-    };
+    const chip = (id, label, count) => filterChip(label, count, deps.state.skillCat === id, () => { deps.state.skillCat = id; deps.state.skillLimit = 0; deps.render(false); });
     // An older server sends no category facets: 전체 shows the total, the categories no number rather than 0.
     const counts = catalogState.facets.categories, total = counts ? Object.values(counts).reduce((a,b) => a+b,0) : catalogState.total ?? "";
     const none = counts?.[""] || 0;
     deps.$("#chips").replaceChildren(...(cats.length ? [chip("all", "전체", total), ...cats.map((c) => chip(c.id, c.name, counts ? counts[c.id] || 0 : "")), ...(none ? [chip("none", "분류 안 됨", none)] : [])] : []));
     deps.$("#chips").classList.add("v4s-cats");
-    deps.$("#stats").replaceChildren(deps.el("p", "meta memory-page-note", failed ? "" : catalogState.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : catalogState.loading ? "전체 목록에서 찾는 중…" : ""));
+    deps.$("#stats").replaceChildren(deps.el("p", "meta memory-page-note", failed ? "" : catalogState.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : catalogState.loading || catalogState.stale ? "전체 목록에서 찾는 중…" : ""));
     const items = skills;
     const groups = groupSkills(items, true);
     const limit = deps.state.skillLimit || 50;
@@ -298,7 +299,7 @@ export function createSkillViews(deps) {
       restore();
       return;
     }
-    if (!items.length) list.append(deps.el("div", "empty", deps.state.query ? "검색과 맞는 스킬이 없어요." : "조건에 맞는 스킬이 없어요."));
+    if (!items.length && catalogState.ready) list.append(deps.el("div", "empty", deps.state.query ? "검색과 맞는 스킬이 없어요." : "조건에 맞는 스킬이 없어요."));
     const more = collectionFooter({ document, name: collection, total: groups.length, shown: Math.min(limit, groups.length),
       snapshot: () => deps.catalogQuery.snapshot(collection),
       reveal: () => { deps.state.skillLimit = limit + 50; },
@@ -395,16 +396,16 @@ export function createSkillViews(deps) {
     return card;
   }
   const skillTalk = new Map();
- // AI로 쉽게 설명 talks per skill, kept while the app is open
+ // AI 설명 talks per skill, kept while the app is open
   async function skillDetailV4(sk) {
     const cat = deps.pages.categoryOf(sk)?.name || "분류 안 됨";
     const body = deps.detailShell(cat);
     const top = deps.el("div", "v4s-head");
     top.append(deps.raw(deps.el("h2", "v4s-name", sk.name)));
     if (sk.description) top.append(deps.raw(deps.el("p", "v4s-lead", sk.description)));
-    // AI로 쉽게 설명 (ai-chat.js): the same bubble as AI 제안; it only answers, nothing to apply.
-    const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI로 쉽게 설명", title: "AI로 쉽게 설명",
-      sub: "이 스킬을 쉬운 말로 풀어 줘요", greeting: "이 스킬의 무엇이 궁금하세요? 무엇을 하는지, 언제 쓰는지 쉬운 말로 알려 드려요.",
+    // AI 설명 (ai-chat.js): the same bubble as AI 제안; it only answers, nothing to apply.
+    const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI 설명", title: "AI 설명",
+      greeting: "이 스킬의 무엇이 궁금하세요? 무엇을 하는지, 언제 쓰는지 쉬운 말로 알려 드려요.",
       placeholder: "예: 내 작업에서는 언제 쓰면 돼?", quick: ["쉽게 설명해 줘", "언제 쓰면 좋아?", "예시를 들어 줘"],
       ask: async (q, history) => ({ say: await deps.crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n${history.length ? `Conversation so far:\n${history.map((m) => `${m.who === "me" ? "User" : "You"}: ${m.text}`).join("\n")}\n` : ""}\nQuestion: ${q}\n\nAnswer in two or three plain Korean sentences about what this skill does and when to use it.`) }) });
     const c = skillChecks(sk), u = useOf(sk);
@@ -466,7 +467,7 @@ export function createSkillViews(deps) {
   }
 
 
-  // ---------------------------------------------------------------- 스킬 안의 페이지: 개선하기 · 휴지통·중복 · GitHub에서 설치
+  // ---------------------------------------------------------------- 스킬 안의 페이지: 개선하기 · GitHub에서 설치
   function renderSkillPage() {
     const p = deps.state.skillPage;
     ["#controls", "#chips", "#stats"].forEach((q) => deps.$(q).replaceChildren());
@@ -482,10 +483,6 @@ export function createSkillViews(deps) {
       if (fresh) skillPageCache = { key, main: improveMain(sk, p.step) };
     } else if (p.kind === "install") {
       if (fresh) { const side = deps.el("div", "v4s-side"); skillPageCache = { key, side, main: deps.catalog.installPage(side, () => skillPageCache?.key === key && deps.state.view === "skills") }; }
-    } else if (p.kind === "trash") {
-      skillPageCache = { key, main: trashMain(p) };
-    } else if (p.kind === "route") {
-      if (fresh) { const side = deps.el("div", "v4s-side"); skillPageCache = { key, side, main: routeMain(side) }; }
     }
     table.replaceChildren(skillPageCache.main);
   }
@@ -524,19 +521,6 @@ export function createSkillViews(deps) {
   function skillPageDetail() {
     const p = deps.state.skillPage;
     if (p.kind === "install") { const body = deps.detailShell("GitHub에서 설치"); body.append(skillPageCache?.side || ""); return; }
-    if (p.kind === "route") {
-      const picked = deps.catalogQuery.record(deps.state.selected) || deps.state.data.skills.find((x) => `skill:${x.id}` === deps.state.selected);
-      if (picked) return skillDetailV4(picked);
-      const body = deps.detailShell("고르기 시험"); body.append(skillPageCache?.side || ""); return;
-    }
-    if (p.kind === "trash") {
-      const s = [...deps.trashed(), ...deps.state.data.skills].find((x) => `skill:${x.id}` === deps.state.selected);
-      if (s) return skillDetailV4(s);
-      if (p.tab === "copies") return copiesDetail();
-      const body = deps.detailShell("휴지통");
-      body.append(deps.el("h2", "", "휴지통에 있는 스킬은 에이전트가 읽지 않아요"), deps.el("p", "v4s-lead", "되돌리면 바로 다시 받아요. 60일 동안 한 번도 쓰이지 않은 스킬은 ‘안 씀’에서 한꺼번에 옮길 수 있어요."));
-      return;
-    }
     const sk = deps.catalogQuery.record(`skill:${p.id}`) || deps.state.data.skills.find((x) => x.id === p.id);
     const [label, title, text, foot] = IMPROVE_SIDE[p.step];
     const body = deps.detailShell(label);
@@ -544,129 +528,6 @@ export function createSkillViews(deps) {
     const s = skSection("이 스킬");
     if (sk) s.append(skFacts([["이름", sk.name, "mono"], ["버전", sk.version || "", "mono"], ["위치", (sk.source_path || "").replace(/\/SKILL\.md$/, ""), "mono"]]));
     body.append(s, deps.el("p", "meta", foot));
-  }
-
-  // 스킬 고르기 시험: POST /v1/skills/route — the same search + judge an agent's skill_search uses, nothing runs.
-  function routeMain(side) {
-    const wrap = deps.el("div", "v4s-route");
-    const card = deps.el("section", "v4s-card");
-    const ask = deps.el("textarea", "v4s-route-ask"); ask.rows = 3; ask.placeholder = "예: 이 PR 바뀐 부분 리뷰해 줘"; ask.setAttribute("aria-label", "할 일");
-    const agents = skSelect("에이전트", [["", "모든 에이전트"], ...deps.shownAgents().map(([k, n]) => [k, n])], "", () => {});
-    const go = deps.button("어떤 스킬을 고를지 보기", "primary small", null, run);
-    const bar = deps.el("div", "v4s-actions"); bar.append(agents, go);
-    card.append(deps.el("h3", "", "에이전트에게 할 말"), deps.el("p", "v4s-card-lead", "에이전트가 스킬을 찾을 때와 같은 방법으로 후보를 뽑고 점수를 매겨요."), ask, bar);
-    const out = deps.el("div", "v4s-list v4s-route-out"); out.hidden = true;
-    const status = deps.el("p", "v4s-foot"); status.setAttribute("role", "status");
-    wrap.append(card, status, out);
-    const explain = () => side.replaceChildren(deps.el("h2", "", "실제로 실행하지 않아요"),
-      deps.el("p", "v4s-lead", "후보는 설명·‘이럴 때 써요’가 할 일과 얼마나 맞는지로 뽑고, 판정 모델이 맞음 정도를 매겨요. 기대와 다른 스킬이 뽑히면 그 스킬의 설명을 고쳐 주세요."));
-    explain();
-    let busy = false;
-    async function run() {
-      const q = ask.value.trim();
-      if (!q || busy) { if (!q) ask.focus(); return; }
-      busy = go.disabled = true; status.textContent = "고르는 중…"; out.hidden = true;
-      try {
-        const r = await deps.request("/v1/skills/route", { method: "POST", body: JSON.stringify({ scope: deps.state.scope, query: q, limit: 8, ...(agents.value ? { runtime: agents.value } : {}) }) });
-        if (r?.authority !== "data_only_untrusted" || !Array.isArray(r.judgments)) throw new Error("invalid_response");
-        const byVer = new Map(deps.state.data.skills.map((sk) => [sk.version_id, sk]));
-        const list = [...r.judgments].sort((a, b) => (b.id === r.selected_id) - (a.id === r.selected_id) || (b.suitability || 0) - (a.suitability || 0));
-        out.replaceChildren(...list.map((j) => {
-          const sk = byVer.get(j.id);
-          const cell = deps.el("div", "v4s-text");
-          cell.append(deps.raw(deps.el("div", "v4s-title v4s-name", sk?.name || j.id)), deps.raw(deps.el("div", "v4s-meta", [deps.pages.categoryOf(sk || {})?.name, firstSentence(sk?.description)].filter(Boolean).join(" · ") || "목록에 없는 버전")));
-          const badge = j.id === r.selected_id ? skBadge("고름") : j.conflict ? skBadge("충돌", "amber") : j.needs_human_review ? skBadge("확인 필요", "amber") : null;
-          const score = deps.el("span", "v4s-uses", r.provider === "rules" ? "—" : `${Math.round((j.suitability || 0) * 100)}점`);
-          const rr = deps.row(sk ? `skill:${sk.id}` : `route:${j.id}`, "", [cell, ...(badge ? [badge] : []), score], deps.renderDetail);
-          rr.classList.add("v4s-row");
-          return rr;
-        }));
-        if (!list.length) out.append(deps.el("div", "empty", "맞는 스킬이 없어요. 에이전트는 스킬 없이 일해요."));
-        out.hidden = false;
-        const picked = byVer.get(r.selected_id);
-        status.textContent = picked ? `${picked.name}를 골라요 · 후보 ${list.length}개` : list.length ? `후보 ${list.length}개 · 확실한 하나를 고르지 못했어요` : "";
-        side.replaceChildren(deps.el("h2", "", picked ? picked.name : "고른 스킬 없음"),
-          deps.el("p", "v4s-lead", picked ? (picked.description || "") : "판정 모델이 확신하지 못했거나 맞는 후보가 없어요. 에이전트는 후보를 보고 직접 골라요."),
-          skFacts([["판정", r.provider === "rules" ? "규칙 (판정 모델 없음)" : r.provider], ["후보", `${list.length}개`], ["에이전트", agents.value ? deps.agentName(agents.value) : "모두"],
-            ["참고", (r.degraded || []).length ? `판정 모델을 못 써서 규칙으로 골랐어요 (${r.degraded.join(", ")})` : ""]]));
-      } catch (e) {
-        status.textContent = /HTTP 404|not_found/.test(e.message) ? "이 서버는 아직 스킬 고르기 시험을 지원하지 않아요." : `고르지 못했어요 (${e.message}).`;
-        explain();
-      } finally { busy = go.disabled = false; }
-    }
-    ask.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void run(); });
-    return wrap;
-  }
-
-  // 휴지통·중복 (Figma 198:4500)
-  function trashMain(p) {
-    const wrap = deps.el("div", "v4s-trash");
-    const gone = deps.trashed();
-    const idle = deps.state.data.skillUse ? liveSkills().filter(unused) : [];
-    const copies = groupSkills(liveSkills()).filter((g) => g.length > 1);
-    const tab = p.tab || "trash";
-    const tabs = deps.el("div", "v4s-seg"); tabs.setAttribute("role", "tablist");
-    for (const [k, l, n] of [["trash", "휴지통", gone.length], ["unused", "안 씀", idle.length], ["copies", "중복", copies.length]]) {
-      const b = deps.el("button", k === tab ? "on" : "", l); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(k === tab));
-      b.append(deps.el("output", "", String(n)));
-      b.addEventListener("click", () => { deps.state.selected = null; deps.state.skillPage = { kind: "trash", tab: k }; deps.render(); });
-      tabs.append(b);
-    }
-    wrap.append(tabs);
-    const reads = (sk) => deps.shownAgents().filter(([k]) => allowed(sk, k)).length;
-    const line = (sk, action) => {
-      const cell = deps.el("div", "v4s-text");
-      const u = useOf(sk);
-      cell.append(deps.raw(deps.el("div", "v4s-title v4s-name", sk.name)), deps.raw(deps.el("div", "v4s-meta", [firstSentence(sk.description), `최근 60일 ${u?.count || 0}번 사용 · ${reads(sk)}곳에서 읽힘`].filter(Boolean).join(" · "))));
-      const r = deps.row(`skill:${sk.id}`, "", [cell, action], deps.renderDetail);
-      r.classList.add("v4s-row");
-      return r;
-    };
-    const list = deps.el("div", "v4s-list");
-    if (tab === "trash") {
-      list.append(...gone.map((sk) => { const b = deps.el("span", "v4s-link", "되돌리기"); b.addEventListener("click", (e) => { e.stopPropagation(); void restoreSkill(sk); }); return line(sk, b); }));
-      if (!gone.length) list.append(deps.el("div", "empty", "휴지통이 비어 있어요."));
-    } else if (tab === "unused") {
-      list.append(...idle.map((sk) => { const b = deps.el("span", "v4s-link", "휴지통으로"); b.addEventListener("click", (e) => { e.stopPropagation(); deps.confirmBatch([sk], () => deps.trashSkills([sk])); }); return line(sk, b); }));
-      if (!idle.length) list.append(deps.el("div", "empty", deps.state.data.skillUse ? "60일 동안 안 쓴 스킬이 없어요." : "이 서버는 아직 사용 기록을 모으지 않아요."));
-    } else {
-      for (const g of copies) {
-        const cell = deps.el("div", "v4s-text");
-        cell.append(deps.raw(deps.el("div", "v4s-title v4s-name", g[0].name)), deps.raw(deps.el("div", "v4s-meta", [firstSentence(g[0].description), `${g.length}곳에 있어요`].filter(Boolean).join(" · "))));
-        const r = deps.row(`copies:${g[0].name}`, "", [cell, deps.el("span", "v4s-uses", `${g.length}곳`)], deps.renderDetail);
-        r.classList.add("v4s-row");
-        list.append(r);
-      }
-      if (!copies.length) list.append(deps.el("div", "empty", "같은 이름으로 여러 곳에 있는 스킬이 없어요."));
-    }
-    wrap.append(list);
-    if (idle.length && tab !== "copies" && !p.dismissed) {
-      const card = deps.el("section", "v4s-card");
-      card.append(deps.el("h3", "", `안 쓰는 스킬 ${idle.length}개를 휴지통으로 옮길까요?`), deps.el("p", "v4s-card-lead", "60일 동안 한 번도 쓰이지 않았어요. 휴지통에서 언제든 되돌릴 수 있어요."),
-        deps.el("p", "v4s-names mono", idle.slice(0, 6).map((sk) => sk.name).join(" · ") + (idle.length > 6 ? ` 외 ${idle.length - 6}개` : "")));
-      const act = deps.el("div", "v4s-actions");
-      act.append(deps.button(`${idle.length}개 옮기기`, "primary", null, () => deps.trashSkills(idle)), deps.button("취소", "ghost", null, () => { deps.state.skillPage = { ...p, dismissed: true }; deps.render(false); }));
-      card.append(act);
-      wrap.append(card);
-    }
-    return wrap;
-  }
-
-  function copiesDetail() {
-    const name = (deps.state.selected || "").replace(/^copies:/, "");
-    const g = groupSkills(liveSkills()).find((x) => x[0].name === name && x.length > 1);
-    const body = deps.detailShell("중복");
-    if (!g) { body.append(deps.el("p", "v4s-lead", "왼쪽에서 중복된 스킬을 골라요.")); return; }
-    body.append(deps.el("h2", "", `${name}가 ${g.length}곳에 있어요`), deps.el("p", "v4s-lead", "에이전트마다 다른 쪽을 읽을 수 있어요. 한 곳을 원본으로 두고, 다른 쪽은 지우거나 에이전트에서 빼 주세요."));
-    const s = skSection("위치");
-    g.forEach((sk, i) => {
-      const r = deps.el("button", "v4s-path"); r.type = "button";
-      r.append(deps.el("span", "mono", (sk.source_path || "").replace(/\/SKILL\.md$/, "")), i ? deps.el("span", "v4s-path-tag", "사본") : skBadge("원본"));
-      r.title = "누르면 이 사본의 상세를 봐요";
-      r.addEventListener("click", () => { deps.state.selected = `skill:${sk.id}`; deps.renderDetail(); });
-      s.append(r);
-    });
-    body.append(s, skillAgentsSection(g[0]), deps.el("p", "meta", "칩을 누르면 원본을 그 에이전트에 넣거나 빼요. 위치를 누르면 그 사본을 보고 휴지통으로 옮길 수 있어요."));
   }
 
   const firstSentence = (t) => (t || "").split(/(?<=[.다요])\s/)[0];
@@ -739,6 +600,9 @@ export function createSkillViews(deps) {
     get skillDetailV4() { return skillDetailV4; },
     get skillPageDetail() { return skillPageDetail; },
     get skSelect() { return skSelect; },
+    get filterChip() { return filterChip; },
+    get panelSearch() { return panelSearch; },
+    get keepFocus() { return keepFocus; },
     get stage() { return stage; }
   };
 }

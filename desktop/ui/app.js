@@ -59,6 +59,7 @@ export function startApp() {
     promptRun: null, // 프롬프트 실행 page: the prompt id
     designGroup: stored("arkism.designGroup") === "purpose" ? "purpose" : "product",
     toolAgent: "", // MCP·플러그인 filter: "" = every agent, else an agent key
+    toolCat: "all", toolStatus: "all", // MCP·플러그인 분류 chip and 상태 select
     versions: new Map(), // version_id -> skill version record (analysis + inspection), for 품질·보안
     versionsDone: false,
     engine: "all",
@@ -678,10 +679,9 @@ export function startApp() {
   const views = {
     todo: { title: () => todoTitle(), sub: () => todoSub(), count: () => todoCount() },
     memories: { title: () => memoryList.memTitle()[0], sub: () => memoryList.memTitle()[1], count: () => memoryList.memTitle()[2] },
-    skills: { title: () => (state.skillPage?.kind === "improve" ? `${(catalogQuery.record(`skill:${state.skillPage.id}`) || state.data.skills.find((x) => x.id === state.skillPage.id))?.name || "스킬"} 개선하기` : { trash: "휴지통·중복", install: "GitHub에서 스킬 설치", route: "스킬 고르기 시험" }[state.skillPage?.kind] || "스킬"),
-      sub: () => ({ improve: "개선안 만들기 → 기존 버전과 비교 → 검토·승인 → 실제 작업에 시험 적용 순서로 진행해요.", trash: "안 쓰는 스킬은 휴지통으로 옮기고, 여러 곳에 같은 이름으로 있는 스킬을 정리해요.",
-        install: "저장소 주소를 넣으면 안에 있는 스킬을 보여 줘요. 받은 파일은 실행하지 않아요.",
-        route: "할 일을 적으면 에이전트가 어떤 스킬을 꺼내 쓸지 미리 봐요. 실제로 실행하지는 않아요." }[state.skillPage?.kind] || "에이전트가 일할 때 꺼내 쓰는 작업 방법이에요.") },
+    skills: { title: () => (state.skillPage?.kind === "improve" ? `${(catalogQuery.record(`skill:${state.skillPage.id}`) || state.data.skills.find((x) => x.id === state.skillPage.id))?.name || "스킬"} 개선하기` : { install: "GitHub에서 스킬 설치" }[state.skillPage?.kind] || "스킬"),
+      sub: () => ({ improve: "개선안 만들기 → 기존 버전과 비교 → 검토·승인 → 실제 작업에 시험 적용 순서로 진행해요.",
+        install: "저장소 주소를 넣으면 안에 있는 스킬을 보여 줘요. 받은 파일은 실행하지 않아요." }[state.skillPage?.kind] || "에이전트가 일할 때 꺼내 쓰는 작업 방법이에요.") },
     design: { title: "디자인 시스템", sub: () => "앱·메일·웹·문서에 쓰는 색·글꼴·규칙 모음이에요. 하나를 고르면 오른쪽에서 자세히 볼 수 있어요." },
     images: {
       title: () => (state.promptRun ? `프롬프트 실행${(state.data.prompts.find((x) => x.id === state.promptRun)?.image_prompt.engine || "").startsWith("comfyui") ? " · ComfyUI" : ""}` : state.imageTab === "slide" ? "슬라이드 프롬프트" : "이미지 프롬프트"),
@@ -1255,17 +1255,14 @@ export function startApp() {
       box.replaceChildren(button("Arkism 토큰", "ghost", null, () => go("tokens")), button("디자인 시스템 추가", "primary", null, () => designViews.openSystemEditor(null)));
     } else if (state.view === "tools") {
       box.replaceChildren(button("다시 읽기", "ghost", null, toolViews.refreshTools), state.toolTab === "plugin"
-        ? button("플러그인 찾기", "primary", null, () => { $("#search").focus(); notice("이름이나 설명으로 찾아요. 새 플러그인은 Claude Code에서 /plugin 으로 설치해요."); })
+        ? button("플러그인 찾기", "primary", null, () => { $(".v4s-search input")?.focus(); notice("이름이나 설명으로 찾아요. 새 플러그인은 Claude Code에서 /plugin 으로 설치해요."); })
         : button("MCP 서버 추가", "primary", null, toolViews.openAddServer));
     } else if (state.view === "reviews") {
       box.replaceChildren(...reviews.head());
     } else if (state.view === "skills") {
-      const trash = button("휴지통", "ghost", null, () => skillViews.openSkillPage({ kind: "trash", tab: "trash" }));
       const install = button("GitHub에서 설치", "", null, () => skillViews.openSkillPage({ kind: "install" }));
-      const route = button("고르기 시험", "ghost", null, () => skillViews.openSkillPage({ kind: "route" }));
-      route.title = "할 일을 적으면 어떤 스킬이 뽑히는지 미리 봐요";
       refresh.classList.add("ghost");
-      box.replaceChildren(...(state.skillPage ? [] : [refresh, route, trash, install]));
+      box.replaceChildren(...(state.skillPage ? [] : [refresh, install]));
     } else box.replaceChildren(refresh);
   }
   function go(view, tab) {
@@ -1834,6 +1831,9 @@ export function startApp() {
     get request() { return appApi.request; },
     get shownAgents() { return shownAgents; },
     get skSelect() { return skillViews.skSelect; },
+    get filterChip() { return skillViews.filterChip; },
+    get panelSearch() { return skillViews.panelSearch; },
+    get keepFocus() { return skillViews.keepFocus; },
     get state() { return state; },
     get tauri() { return tauri; }
   });

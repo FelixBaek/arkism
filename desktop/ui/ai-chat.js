@@ -117,7 +117,7 @@ window.ArkismAIChat = (() => {
       x.setAttribute("aria-label", "닫기");
       x.append(icon("x"));
       x.addEventListener("click", () => toggle(false));
-      head.append(icon("sparkle"), el("strong", "", title), el("small", "", opts.sub || ""), x);
+      head.append(icon("sparkle"), el("strong", "", title), ...(opts.sub ? [el("small", "", opts.sub)] : []), x);
       const log = el("ol", "ex-chat");
       log.setAttribute("aria-live", "polite");
       if (opts.greeting) log.append(el("li", "ex-chat-ai", opts.greeting));

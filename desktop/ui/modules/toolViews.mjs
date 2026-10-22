@@ -285,6 +285,14 @@ export function createToolViews(deps) {
     return Object.values(entry.agents || {}).includes("on") ? "ok" : "off";
   }
 
+  const TOOL_STATES = [["all", "전체"], ["ok", "정상"], ["login", "로그인 필요"], ["broken", "끊김"], ["off", "꺼짐"]];
+  // 분류: the agent tool sync sends no category, so plugins group by what they hold and MCP servers by how they connect.
+  const holds = (kind) => (e) => (e.contents || []).some((it) => it.kind === kind);
+  const TOOL_CATS = {
+    plugin: [["skill", "스킬 포함", holds("skill")], ["mcp", "MCP 포함", holds("mcp")], ["command", "명령 포함", holds("command")]],
+    mcp: [["local", "이 서버에서 실행", (e) => e.transport === "stdio"], ["remote", "주소로 연결", (e) => e.transport !== "stdio"]],
+  };
+
   function renderTools() {
     const t = deps.state.data.tools;
     const plugin = deps.state.toolTab === "plugin";
@@ -310,9 +318,23 @@ export function createToolViews(deps) {
     const keys = deps.shownAgents().map(([k]) => k);
     if (!keys.includes(deps.state.toolAgent)) deps.state.toolAgent = "";
     const who = deps.state.toolAgent;
-    deps.$("#controls").replaceChildren(deps.skSelect("에이전트", [["", "모든 에이전트"], ...keys.map((k) => [k, `${deps.agentName(k)} ${(plugin ? t.plugins : t.servers).filter((e) => e.agents?.[k] === "on").length}`])], who, (k) => { deps.state.toolAgent = k; deps.state.selected = null; deps.render(); }));
-    if (who && !deps.AGENT_SYNC[who]) deps.$("#chips").replaceChildren(deps.el("p", "cn-note", `${deps.agentName(who)}의 MCP 설정은 아직 읽지 않아요. 켜고 끄기는 Claude Code·Codex만 돼요.`));
-    const list = (plugin ? t.plugins : t.servers).filter((e) => (!who || e.agents?.[who] === "on") && deps.matches(`${e.name} ${e.target || ""} ${e.desc || ""}`));
+    // 검색 · 상태 · 에이전트 and 분류 chips, the same parts as the 스킬 list.
+    const all = plugin ? t.plugins : t.servers;
+    const cats = (plugin ? TOOL_CATS.plugin : TOOL_CATS.mcp).map(([id, label, test]) => [id, label, test, all.filter(test).length]).filter(([, , , c]) => c);
+    if (!cats.some(([id]) => id === deps.state.toolCat)) deps.state.toolCat = "all";
+    const restore = deps.keepFocus(".v4s-search");
+    const states = TOOL_STATES.map(([k, l]) => [k, `상태: ${l}${k === "all" ? "" : ` ${all.filter((e) => toolGroup(e) === k).length}`}`]);
+    const bar = deps.el("div", "v4s-bar");
+    bar.append(deps.panelSearch(plugin ? "플러그인 검색" : "MCP 검색"),
+      deps.skSelect("상태", states, deps.state.toolStatus, (k) => { deps.state.toolStatus = k; deps.state.selected = null; deps.render(); }),
+      deps.skSelect("에이전트", [["", "모든 에이전트"], ...keys.map((k) => [k, `${deps.agentName(k)} ${all.filter((e) => e.agents?.[k] === "on").length}`])], who, (k) => { deps.state.toolAgent = k; deps.state.selected = null; deps.render(); }));
+    deps.$("#controls").replaceChildren(bar);
+    const pickCat = (id) => () => { deps.state.toolCat = id; deps.state.selected = null; deps.render(); };
+    deps.$("#chips").classList.add("v4s-cats");
+    deps.$("#chips").replaceChildren(...(cats.length ? [deps.filterChip("전체", all.length, deps.state.toolCat === "all", pickCat("all")), ...cats.map(([id, label, , c]) => deps.filterChip(label, c, deps.state.toolCat === id, pickCat(id)))] : []));
+    if (who && !deps.AGENT_SYNC[who]) deps.$("#chips").append(deps.el("p", "cn-note", `${deps.agentName(who)}의 MCP 설정은 아직 읽지 않아요. 켜고 끄기는 Claude Code·Codex만 돼요.`));
+    const inCat = cats.find(([id]) => id === deps.state.toolCat)?.[2] || (() => true);
+    const list = all.filter((e) => (!who || e.agents?.[who] === "on") && (deps.state.toolStatus === "all" || toolGroup(e) === deps.state.toolStatus) && inCat(e) && deps.matches(`${e.name} ${e.target || ""} ${e.desc || ""}`));
     if (!deps.state.selected && list.length) deps.state.selected = `tool:${(list.find((e) => toolState(e)[1] === "warn") || list[0]).name}`;
     table.className = "cn-list";
     table.replaceChildren(...list.map((e) => {
@@ -338,6 +360,7 @@ export function createToolViews(deps) {
       return cnRow(`tool:${e.name}`, parts, deps.renderDetail);
     }));
     if (!list.length) table.append(deps.el("div", "empty", "여기에 표시할 항목이 없어요."));
+    restore();
   }
 
   function toolsSummary() {
