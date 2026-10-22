@@ -18,7 +18,8 @@ concurrency:
 jobs:
   coverage:
     runs-on: ${{ vars.ARKISM_USE_HOSTED_RUNNERS != 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
-    timeout-minutes: 15
+    # Up to 20 of these minutes can be a wait for a host-wide Go test slot (tools/ci_go_test.py).
+    timeout-minutes: 30
     # Postgres store tests skip without POSTGRES_TEST_DSN; tools/ci_postgres.sh gives them a disposable pgvector DB.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

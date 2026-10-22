@@ -6,6 +6,10 @@ take most of the CI time. Every Postgres test gets its own database, so the same
 binary can run disjoint `-test.run` groups side by side. All other packages run as one plain
 `go test` at the same time.
 
+The self-hosted runners share one 10-CPU quota, which fits two such runs. A burst of PRs would
+start many at once, throttle the quota and push every wall-clock budget in the tests past its
+limit, so a run first takes one of SLOTS host-wide slots and later runs wait for a free one.
+
   tools/ci_go_test.py --race --integration   # checks.yml
   tools/ci_go_test.py --coverage              # coverage.yml, writes go-coverage.out
 """
@@ -14,9 +18,11 @@ import argparse
 import concurrent.futures
 import os
 import re
+import socket
 import subprocess
 import sys
 import tempfile
+import time
 
 HEAVY = ["./internal/memory", "./internal/host/crew"]
 COVERAGE_FILE = "go-coverage.out"
@@ -31,6 +37,31 @@ RERUNNABLE = {
     "TestPostgresAutomaticWorkWriterExactRetryAndConflict",  # waits up to 30s for hook processes
     "TestCLIRunBoundedOutputTimeoutAndFailures",  # 4s budget per case
 }
+# A bound loopback port is the slot: shared by every runner on the host (no shared files there),
+# and the kernel frees it when this process exits, even when a cancelled job kills it.
+SLOTS = [29170, 29171]
+SLOT_WAIT = 20 * 60  # leaves the tests 10 of the go job's 30 minutes
+
+
+def take_slot(ports=SLOTS, wait=SLOT_WAIT, poll=5):
+    start = time.monotonic()
+    first = True
+    while True:
+        for port in ports:
+            s = socket.socket()
+            try:
+                s.bind(("127.0.0.1", port))
+                return s
+            except OSError:
+                s.close()
+        waited = time.monotonic() - start
+        if waited >= wait:
+            print(f"::warning::no free Go test slot after {waited:.0f}s; running anyway", flush=True)
+            return None
+        if first:
+            print("waiting for a free Go test slot", flush=True)
+            first = False
+        time.sleep(poll)
 
 
 def run(cmd, cwd=None, env=None):
@@ -57,6 +88,7 @@ def main():
     tags = ["-tags=integration"] if opts.integration else []
     goflags = (["-race"] if opts.race else []) + tags
     jobs = max(1, opts.jobs)
+    slot = take_slot()  # held until exit, reruns included
     with tempfile.TemporaryDirectory(prefix="ci-go-test-") as tmp, \
             concurrent.futures.ThreadPoolExecutor(jobs + 1) as pool:
         rest = start_rest(goflags, tags, opts.coverage, tmp, pool)
