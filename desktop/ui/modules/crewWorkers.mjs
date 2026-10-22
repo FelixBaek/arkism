@@ -200,10 +200,12 @@ export function createCrewWorkers(deps) {
     let row = 2;
     for (const e of (w.crew.graph?.edges || []).filter(deps.isBack)) {
       const a = colOf[e.to], b = colOf[e.from];
-      const label = `↺ ${deps.nodeTitle(byId2[e.from] || { id: e.from })}${e.port ? ` · ${e.port}` : ""} → ${deps.nodeTitle(byId2[e.to] || { id: e.to })} · 최대 ${e.max}번`;
-      if (!a || !b || a > b) { at(deps.el("small", "ex-flow-back-t", label), 1, row++, lvls.length * 2 + 3); continue; }
+      // titles the user gave stay as written; the node kinds, the port and the limit are UI text
+      const step = (n) => (n.title ? deps.raw(deps.el("span", "", n.title)) : deps.el("span", "", deps.nodeTitle(n)));
+      const label = () => { const s = deps.el("small", "ex-flow-back-t", "↺ "); s.append(step(byId2[e.from] || { id: e.from }), ...(e.port ? [" · ", deps.el("span", "", e.port)] : []), " → ", step(byId2[e.to] || { id: e.to }), " · ", deps.el("span", "", `최대 ${e.max}번`)); return s; };
+      if (!a || !b || a > b) { at(label(), 1, row++, lvls.length * 2 + 3); continue; }
       at(deps.el("div", "ex-flow-back"), a, row++, b - a + 1);
-      at(deps.el("small", "ex-flow-back-t", label), a, row++, lvls.length * 2 + 3 - a + 1);
+      at(label(), a, row++, lvls.length * 2 + 3 - a + 1);
     }
     const wrap = deps.el("div", "ex-flow-wrap");
     wrap.append(g);
@@ -1264,7 +1266,8 @@ export function createCrewWorkers(deps) {
       teamRow.append(b);
     }
     for (const t of wk.newTeams || []) {
-      const b = deps.el("button", "wk-chip on", `${t.name} · 새 팀`);
+      const b = deps.el("button", "wk-chip on");
+      b.append(deps.raw(deps.el("span", "", t.name)), " · ", deps.el("span", "", "새 팀"));
       b.type = "button";
       b.setAttribute("aria-pressed", "true");
       b.setAttribute("aria-label", `${t.name} 새 팀 빼기`);
