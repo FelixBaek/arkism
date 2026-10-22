@@ -66,7 +66,8 @@ func TestSearchBudgetUsageAndFailures(t *testing.T) {
 	if e != nil || len(full.Items) != 1 || full.ContextData == "" {
 		t.Fatal(full, e)
 	}
-	in.BudgetTokens = full.TokensUsed - 1
+	// Margin: score and timestamp digits shift by a token or two between searches.
+	in.BudgetTokens = full.TokensUsed - 20
 	out, e := f.svc.Search(testCtx, f.human, in)
 	if e != nil || len(out.Items) != 0 || out.TokensUsed > in.BudgetTokens {
 		t.Fatal(out, e)
