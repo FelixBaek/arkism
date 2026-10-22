@@ -33,7 +33,7 @@ func TestBinaryListsRegisteredCommands(t *testing.T) {
 		t.Fatal(usage)
 	}
 	for _, name := range []string{"backup", "doctor", "gateway"} {
-		if !strings.Contains(usage, "  "+name) {
+		if !strings.Contains(usage, "\n  "+name+"\n") {
 			t.Errorf("%s missing from usage:\n%s", name, usage)
 		}
 	}

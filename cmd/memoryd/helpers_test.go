@@ -120,8 +120,13 @@ func TestAuthorizerWithoutPostgresNeedsStandalone(t *testing.T) {
 	}
 	t.Setenv("MEMORY_LOCAL_OWNER_TOKEN_SHA256", "")
 	t.Setenv("MEMORY_LOCAL_WORKER_TOKEN_SHA256", "")
-	if auth, err := configuredAuthorizer(nil, "true"); auth == nil && err == nil {
-		t.Fatal("standalone authorizer returned nothing")
+	if _, err := configuredAuthorizer(nil, "true"); !errors.Is(err, memory.ErrInvalid) {
+		t.Fatal("standalone authorizer without token hashes", err)
+	}
+	t.Setenv("MEMORY_LOCAL_OWNER_TOKEN_SHA256", strings.Repeat("a", 64))
+	t.Setenv("MEMORY_LOCAL_WORKER_TOKEN_SHA256", strings.Repeat("b", 64))
+	if auth, err := configuredAuthorizer(nil, "true"); auth == nil || err != nil {
+		t.Fatal("standalone authorizer", auth, err)
 	}
 }
 

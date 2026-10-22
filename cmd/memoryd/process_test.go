@@ -205,7 +205,11 @@ func newTestDB(t *testing.T, initialize bool) testDB {
 		}
 		_ = admin.Close(context.Background())
 	})
-	u.Path = "/" + name[0]
+	// A dbname or database query key would override the path and miss the new database.
+	query := u.Query()
+	query.Del("dbname")
+	query.Del("database")
+	u.Path, u.RawQuery = "/"+name[0], query.Encode()
 	db := testDB{url: u.String()}
 	if !initialize {
 		return db

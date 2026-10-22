@@ -1,14 +1,41 @@
 package main
 
 import (
+	"net"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
+// fakeDatabase accepts and drops every connection, counting them, so a test can
+// tell whether memoryd reached its database.
+func fakeDatabase(t *testing.T) (*net.TCPAddr, *atomic.Int32) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	dials := new(atomic.Int32)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			dials.Add(1) // before Close, so the count is in place when memoryd sees the failure
+			_ = c.Close()
+		}
+	}()
+	return ln.Addr().(*net.TCPAddr), dials
+}
+
 // Every refused configuration exits 1 before memoryd touches a database.
 func TestDaemonRefusesInvalidConfigurationBeforeConnecting(t *testing.T) {
-	unreachable := "postgres://arkism@127.0.0.1:1/arkism_none?sslmode=disable&connect_timeout=2"
+	addr, dials := fakeDatabase(t)
+	unreachable := "postgres://arkism@" + addr.String() + "/arkism_none?sslmode=disable&connect_timeout=2"
 	base := func(kv ...string) map[string]string {
 		env := map[string]string{"MEMORY_DATABASE_URL": unreachable}
 		for i := 0; i+1 < len(kv); i += 2 {
@@ -49,22 +76,30 @@ func TestDaemonRefusesInvalidConfigurationBeforeConnecting(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			before := dials.Load()
 			if _, code := runDaemon(t, c.env, c.args...); code != 1 {
 				t.Fatalf("exit %d, want 1", code)
+			}
+			if connected := dials.Load() != before; connected != (c.name == "unreachable database") {
+				t.Fatalf("database connection attempted: %v", connected)
 			}
 		})
 	}
 }
 
 // A synthetic handoff passes every gate with only loopback services and no
-// provider secrets; it then stops at the unreachable database.
+// provider secrets; it then stops at the database, which drops the connection.
 func TestDaemonSyntheticHandoffAcceptsLoopbackOnly(t *testing.T) {
+	addr, dials := fakeDatabase(t)
 	env := map[string]string{"MEMORY_SYNTHETIC_HANDOFF": "1", "MEMORY_EMBEDDER": "none",
-		"MEMORY_DATABASE_URL": "host=127.0.0.1,localhost port=1 dbname=arkism_none connect_timeout=2"}
+		"MEMORY_DATABASE_URL": "host=127.0.0.1,localhost port=" + strconv.Itoa(addr.Port) + " dbname=arkism_none connect_timeout=2"}
 	d := newDaemon(env)
 	err := d.cmd.Run()
 	if exitCode(err) != 1 || !strings.Contains(d.stderr.String(), "memoryd stopped") {
 		t.Fatal("synthetic run", exitCode(err), d.stderr.String())
+	}
+	if dials.Load() == 0 {
+		t.Fatal("synthetic handoff never reached the database")
 	}
 }
 
