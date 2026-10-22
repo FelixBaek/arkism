@@ -271,6 +271,9 @@ func TestScopeNamesAreNotPaths(t *testing.T) {
 			t.Fatalf("scope name %q accepted", name)
 		}
 	}
+	if checkScope(Scope{WorkspaceID: "../x", ProjectID: "p"}) == nil {
+		t.Fatal("storage accepted a path-like scope")
+	}
 	if !validScope(Scope{WorkspaceID: "101-internal", ProjectID: "my.project_1"}) {
 		t.Fatal("plain scope name rejected")
 	}
