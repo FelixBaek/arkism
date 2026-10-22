@@ -73,9 +73,9 @@
   }, true);
 
   // The keyboard's tear-off (Alt+Shift+O, named on the popup as aria-keyshortcuts): the top popup opens in its own
-  // window where it sits now. e.code, since Option+Shift+O types "Ø" on a Mac.
+  // window where it sits now. e.code, since Option+Shift+O types "Ø" on a Mac; e.key for layouts with O elsewhere (Dvorak).
   document.addEventListener("keydown", (e) => {
-    if (e.code !== "KeyO" || e.repeat || !e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey) return;
+    if ((e.code !== "KeyO" && e.key?.toLowerCase() !== "o") || e.repeat || !e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey) return;
     const dlg = [...document.querySelectorAll("dialog[open]")].pop();
     if (!dlg || dlg.classList.contains("popout-root")) return;
     e.preventDefault();
