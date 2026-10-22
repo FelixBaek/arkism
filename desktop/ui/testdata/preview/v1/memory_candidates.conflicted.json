@@ -76,5 +76,7 @@
    "created_by_type": "agent",
    "conflict_id": "r4"
   }
- ]
+ ],
+ "next_cursor": "",
+ "authority": "data_only_untrusted"
 }

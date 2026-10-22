@@ -10,6 +10,7 @@ import "./window-controls.js";
 import "./field-need.js";
 import "./i18n.js";
 import "./preference-transfer.js";
+import "./agent-memory-import.js";
 import "./pages.js";
 import "./assist.js";
 import "./pins.js";
