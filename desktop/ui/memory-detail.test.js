@@ -194,8 +194,13 @@ test("a new candidate is approved, rejected with a reason, or fixed", async () =
   all(h.shell).find(node => node.id === "reject-reason").value = " 틀림 ";
   reject.onClick();
   assert.deepEqual(h.decisions, [["reject", "틀림"]]);
-  find(h.shell, "그대로 저장").onClick();
-  assert.deepEqual(h.decisions.at(-1), ["approve", ""]);
+  assert.equal(find(h.shell, "그대로 저장").disabled, true);
+  const fresh = await setup({caps: {review_decide: true}});
+  await fresh.ctx.candidateDetail(candidate);
+  const approve = find(fresh.shell, "그대로 저장");
+  assert.notEqual(approve.disabled, true);
+  approve.onClick();
+  assert.deepEqual(fresh.decisions, [["approve", ""]]);
   await find(h.shell, "고쳐서 저장").onClick();
   await settle();
   const [route, body] = h.calls.at(-1);
