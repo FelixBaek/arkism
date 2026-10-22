@@ -200,7 +200,8 @@ export function createCrewNodes(deps) {
     for (const r of all.filter((r) => r !== cur).slice(0, 4)) {
       const b = deps.el("button", "chip node-chip");
       b.type = "button";
-      b.append(r.crew.type === "team" ? teamMark(r) : deps.avatarMark(r.crew), r.crew.name);
+      const name = deps.el("span", "", r.crew.name); name.setAttribute("data-no-i18n", "");
+      b.append(r.crew.type === "team" ? teamMark(r) : deps.avatarMark(r.crew), name);
       b.addEventListener("click", () => onPick(r));
       chips.append(b);
     }
