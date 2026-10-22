@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // A nested policy denial must survive the aborted business transaction.
@@ -243,5 +245,33 @@ func exerciseAuditRequest(t *testing.T, repo Repository) {
 		if !found {
 			t.Fatal("allow request ID missing")
 		}
+	}
+}
+
+// rlsRefusingRepo refuses every write the way FORCE RLS refuses a denial row
+// in a scope the caller cannot write.
+type rlsRefusingRepo struct{ *fakeRepo }
+
+func (rlsRefusingRepo) Transaction(context.Context, func(context.Context, Tx) error) error {
+	return pgErr(&pgconn.PgError{Code: "42501"})
+}
+
+func TestAuditRLSRefusedDenialStaysDenied(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Repo = rlsRefusingRepo{newFakeRepo()}
+	f.svc.Auth = policyDecision(Decision{PrincipalID: "human-a", Role: "human", ContentSafe: true, DecisionID: "deny-1"}, new(Authorization))
+	if _, err := f.svc.authorize(testCtx, f.human, "read:memories", scopeA, "", ""); !errors.Is(err, ErrDenied) {
+		t.Fatalf("authorize = %v, want ErrDenied", err)
+	}
+}
+
+func TestScopeNamesAreNotPaths(t *testing.T) {
+	for _, name := range []string{"..", ".", "../x", `a\b`, "a\x00b"} {
+		if validScope(Scope{WorkspaceID: name, ProjectID: "p"}) || validScope(Scope{WorkspaceID: "w", ProjectID: name}) {
+			t.Fatalf("scope name %q accepted", name)
+		}
+	}
+	if !validScope(Scope{WorkspaceID: "101-internal", ProjectID: "my.project_1"}) {
+		t.Fatal("plain scope name rejected")
 	}
 }
