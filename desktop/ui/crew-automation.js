@@ -297,7 +297,7 @@ window.ArkismAutomation = (h) => {
       const save = button(creating ? "자동화 만들기" : "저장", "primary", null, doSave);
       const cancel = button("취소", "ghost", null, (e) => { if (creating) closeAsking(e); else { reset(); } });
       bar.append(save, cancel);
-      if (creating) bar.append(button("템플릿·설정으로 만들기", "ghost", null, () => { pop.dialog.close(); h.openSettingsNew(); }));
+      if (creating) bar.append(button("템플릿·설정으로 만들기", "ghost", null, (e) => closeAsking(e, () => h.openSettingsNew())));
       bar.append(el("span", "auto-bar-note"), ai.dock); // AI 제안 at the right end; its purple list stays on top of the body
       body.append(bar);
       updateBar();
@@ -1127,12 +1127,13 @@ window.ArkismAutomation = (h) => {
     ];
     pop = popup.open({ title: d.name, sub: "", tabs, initial: startTab, cls: `v4-auto${creating ? " v4-auto-new" : ""}`, popout: creating ? null : { event: "arkism:open-automation", detail: { id: rec.id } }, onClose: () => { stopLive(); document.querySelector(".auto-menu")?.remove(); state.selected = null; h.afterClose(); } });
     // closing with unsaved changes asks first (Esc and 닫기); saving closes with dialog.close(), which skips this
-    const guard = (e) => {
+    // then: what to open once it is closed (템플릿·설정으로 만들기)
+    const guard = (e, then) => {
       if (!(creating ? !same(d, blank) : dirty())) return;
       e?.preventDefault(); e?.stopImmediatePropagation();
-      void ask(creating ? "아직 만들지 않았어요. 버리고 닫을까요?" : "저장하지 않은 변경이 있어요. 버리고 닫을까요?").then((yes) => { if (yes) leaveSilently(); });
+      void ask(creating ? "아직 만들지 않았어요. 버리고 닫을까요?" : "저장하지 않은 변경이 있어요. 버리고 닫을까요?").then((yes) => { if (yes) { leaveSilently(); then?.(); } });
     };
-    closeAsking = (e) => { guard(e); if (!e?.defaultPrevented) leaveSilently(); };
+    closeAsking = (e, then) => { guard(e, then); if (!e?.defaultPrevented) { leaveSilently(); then?.(); } };
     pop.dialog.addEventListener("cancel", guard);
     pop.dialog.addEventListener("click", (e) => { if (e.target.closest(".crew-popup-close")) guard(e); }, true);
     head(pop.dialog);

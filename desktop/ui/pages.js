@@ -1039,19 +1039,7 @@ window.ArkismPages = (ctx) => {
     g.append(search);
     // 쓰던 에이전트의 기억 파일(CLAUDE.md·Claude 메모리·AGENTS.md·GEMINI.md)을 검토 대기로 가져온다.
     g.append(line("에이전트 기억 가져오기", "CLAUDE.md·AGENTS.md·GEMINI.md의 규칙을 검토 대기로 가져와요",
-      button("가져오기", "", null, guard(async () => {
-        let plan;
-        try { plan = await tauri.invoke("import_agent_memories", { dryRun: true }); } catch (e) { notice("기억 파일을 읽지 못했어요."); return; }
-        const n = plan.statements || 0;
-        if (!n) { notice("새로 가져올 기억이 없어요."); return; }
-        if (!await ask(`기억 ${n}개를 파일 ${plan.files || 0}개에서 찾았어요. 검토 대기로 가져올까요?`)) return;
-        notice("가져오는 중이에요.");
-        try {
-          const r = await tauri.invoke("import_agent_memories", { dryRun: false });
-          const added = r.candidates ?? r.sent ?? 0;
-          notice(r.failed ? `검토 대기에 ${added}개를 올렸어요. ${r.failed}개는 실패했어요.` : `검토 대기에 ${added}개를 올렸어요.`);
-        } catch (_) { notice("가져오지 못했어요. 잠시 뒤 다시 시도해 주세요."); }
-      }))));
+      button("가져오기", "", null, guard(() => window.ArkismAgentMemoryImport.run({ invoke: (cmd, args) => tauri.invoke(cmd, args), ask, notice })))));
     g.append(line("지금 백업", "문서 › Arkism Backups · 하루 한 번 자동 (최근 7개)", button("지금 백업", "primary", null, guard(async () => {
       notice("백업하는 중이에요.");
       try { const b = await tauri.invoke("local_backup"); notice(`백업했어요 · ${size(b.bytes)}`); await refresh(); } catch (e) { notice(errorText(e)); }

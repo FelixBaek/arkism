@@ -1,4 +1,4 @@
-// Popups: drag the head to move one; drop it outside the app to open it in its own window;
+// Popups: drag the head to move one; drop it outside the app (or press Alt+Shift+O) to open it in its own window;
 // a click outside a popup closes it the way Esc does, so a popup that guards unsaved edits still asks first.
 (() => {
   const HEAD = ".dialog-head, .crew-popup-head, .ov-win-head, .ov-detail-head, .ov-recall-head, .git-dialog-head, .keys-head";
@@ -10,17 +10,21 @@
 
   // Opens the popup in a separate window at screen point (x, y) and closes it here. Only popups that say how to reopen
   // themselves (data-popout) can go; unsaved edits stop it the same way closing would.
+  const going = new WeakSet(); // a popup whose popout_open is still on its way (a held Alt+Shift+O must not open it twice)
   async function tearOff(dlg, x, y) {
     const recipe = dlg.dataset.popout;
     const session = window.ArkismPopoutSession?.();
-    if (!recipe || !session || !tauri()) return false;
+    if (!recipe || !session || !tauri() || going.has(dlg)) return false;
     if (!dlg.dispatchEvent(new Event("cancel", { cancelable: true }))) return false;
     const r = dlg.getBoundingClientRect();
+    going.add(dlg);
     try {
       await tauri().invoke("popout_open", { payload: JSON.stringify({ recipe: JSON.parse(recipe), session }), title: dlg.dataset.popoutTitle || "", x: Math.round(x), y: Math.round(y), width: Math.round(r.width), height: Math.round(r.height) });
     } catch (err) {
       window.ArkismNotice?.(`새 창으로 열지 못했어요 (${err?.message || err}).`);
       return false;
+    } finally {
+      going.delete(dlg);
     }
     dlg.close();
     return true;
@@ -67,6 +71,20 @@
     pressedOutside = null;
     if (dlg && e.target === dlg && outside(dlg, e) && !dlg.classList.contains("popout-root")) dismiss(dlg);
   }, true);
+
+  // The keyboard's tear-off (Alt+Shift+O, named on the popup as aria-keyshortcuts): the top popup opens in its own
+  // window where it sits now. e.code, since Option+Shift+O types "Ø" on a Mac; e.key for layouts with O elsewhere (Dvorak).
+  document.addEventListener("keydown", (e) => {
+    if ((e.code !== "KeyO" && e.key?.toLowerCase() !== "o") || e.repeat || !e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey) return;
+    const dlg = [...document.querySelectorAll("dialog[open]")].pop();
+    if (!dlg || dlg.classList.contains("popout-root")) return;
+    e.preventDefault();
+    const say = (t) => window.ArkismNotice?.(t);
+    if (!dlg.dataset.popout) return say(dlg.querySelector(".crew-popup-head") ? "저장한 뒤에 앱 밖 새 창으로 옮길 수 있어요." : "이 창은 새 창으로 열 수 없어요.");
+    if (!tauri()) return say("새 창은 데스크톱 앱에서 열 수 있어요.");
+    const r = dlg.getBoundingClientRect();
+    void tearOff(dlg, window.screenX + r.left, window.screenY + r.top);
+  });
 
   // A reopened popup starts centered again.
   document.addEventListener("close", (ev) => { if (ev.target instanceof HTMLDialogElement) ev.target.style.translate = ""; }, true);

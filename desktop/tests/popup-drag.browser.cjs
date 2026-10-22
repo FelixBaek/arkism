@@ -32,6 +32,23 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     const sent = await page.evaluate(() => window.opened[0]);
     assert.equal(JSON.parse(sent.payload).recipe.detail.key, "extract");
     assert.equal(await page.evaluate(() => document.querySelector("dialog").open), false, "torn-off popup closes here");
+    // keyboard path (#200): Alt+Shift+O tears off the top popup; without the desktop app it says why instead of nothing
+    await page.evaluate(() => { window.notices = []; window.ArkismNotice = (t) => window.notices.push(t); document.querySelector("dialog").showModal(); document.querySelector("dialog button").focus(); });
+    // a slow popout_open: pressing again before it answers must not open a second window
+    await page.evaluate(() => { const invoke = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = (cmd, args) => new Promise((ok) => setTimeout(() => ok(invoke(cmd, args)), 200)); });
+    await page.keyboard.press("Alt+Shift+O");
+    await page.keyboard.press("Alt+Shift+O");
+    await page.waitForFunction(() => window.opened.length === 2);
+    await page.waitForTimeout(300);
+    assert.equal(await page.evaluate(() => window.opened.length), 2, "one tear-off per popup while popout_open is pending");
+    assert.equal(await page.evaluate(() => document.querySelector("dialog").open), false, "Alt+Shift+O closes it here too");
+    // Dvorak: O sits on the S key, so e.code is "KeyS" while e.key is "O"
+    await page.evaluate(() => { document.querySelector("dialog").showModal(); document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "O", altKey: true, shiftKey: true, bubbles: true })); });
+    await page.waitForFunction(() => window.opened.length === 3);
+    await page.evaluate(() => { delete window.__TAURI__; document.querySelector("dialog").showModal(); });
+    await page.keyboard.press("Alt+Shift+O");
+    assert.deepEqual(await page.evaluate(() => window.notices), ["새 창은 데스크톱 앱에서 열 수 있어요."]);
+    assert.equal(await page.evaluate(() => document.querySelector("dialog").open), true);
     assert.deepEqual(errors, []);
     console.log("popup drag browser check passed");
   } finally { await browser.close(); }
