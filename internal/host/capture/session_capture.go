@@ -163,7 +163,7 @@ func sessionLinkedUsers(job map[string]any, origin string) (records []any, refs 
 		if header["state"] != "active" || !eq(header["sha256"], autosaveItem(snapshot, "sha256")) {
 			return nil, nil, sessionWait("session_archive_snapshot_changed")
 		}
-		messages, err := sessionWindowDialogue(job, archiveID, header["sha256"])
+		messages, err := sessionWindowDialogue(job, archiveID, header["sha256"], capRequest, capScope())
 		if err != nil {
 			return nil, nil, err
 		}
@@ -682,9 +682,9 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 
 // sessionWindowDialogue reads the job's archive window. A read that cannot be completed gives the same answer
 // on every retry, so it parks the job instead of re-uploading the archive five times.
-func sessionWindowDialogue(job map[string]any, archiveID, sha256 any) ([]any, error) {
+func sessionWindowDialogue(job map[string]any, archiveID, sha256 any, request autosaveRequest, scope any) ([]any, error) {
 	messages, excluded, err := autosaveDialogue(map[string]any{"archive_id": archiveID, "sha256": sha256,
-		"start_byte": job["source_start"], "stop_byte": job["source_end"]}, capRequest, capScope())
+		"start_byte": job["source_start"], "stop_byte": job["source_end"]}, request, scope)
 	if errors.Is(err, valueErr("work_dialogue_incomplete")) || err == nil && excluded > 0 {
 		return nil, sessionWait("session_archive_window_incomplete")
 	}

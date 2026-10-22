@@ -249,6 +249,37 @@ func TestAutosaveSkipsWithheldSecretsOnlyWhenTheServerSaysWhere(t *testing.T) {
 	}
 }
 
+func TestSessionWindowDialogueParksReadsThatCannotComplete(t *testing.T) {
+	job := map[string]any{"source_start": 0, "source_end": 100}
+	for name, mutate := range map[string]func(map[string]any){
+		"secret without refs": func(r map[string]any) { r["secret_records"] = 1 },
+		"excluded records":    func(map[string]any) {}, // the fixture reports invalid_records: 3
+	} {
+		f := newAutosaveFixture(t)
+		request := func(path string, body any) (map[string]any, error) {
+			result, err := f.request(path, body)
+			if strings.HasSuffix(path, "/search") {
+				mutate(result)
+			}
+			return result, err
+		}
+		_, err := sessionWindowDialogue(job, strings.Repeat("a", 64), strings.Repeat("b", 64), request, f.scope)
+		if !errors.Is(err, errSessionPending) || errorCode(err) != "session_archive_window_incomplete" {
+			t.Fatal(name, err)
+		}
+	}
+	f := newAutosaveFixture(t)
+	complete := func(path string, body any) (map[string]any, error) {
+		result, err := f.request(path, body)
+		delete(result, "invalid_records")
+		return result, err
+	}
+	messages, err := sessionWindowDialogue(job, strings.Repeat("a", 64), strings.Repeat("b", 64), complete, f.scope)
+	if err != nil || len(messages) != 2 {
+		t.Fatal(messages, err)
+	}
+}
+
 func TestAutosaveReturningWriterAppendsToLatestWithoutLosingOtherDecisions(t *testing.T) {
 	f := newAutosaveFixture(t)
 	result, err := f.process(f.newer, nil)
