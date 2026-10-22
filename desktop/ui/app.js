@@ -64,7 +64,8 @@ export function startApp() {
     imgCat: "all",
     usage: new Map(),
     usageDone: false,
-    memoryTotals: null, // { active, idle, kinds } over every memory on the server, not the loaded first page
+    memoryTotals: null, // { active, idle, kinds, candidates } over every memory on the server, not the loaded first page
+    listErrors: {}, // list name -> loadFailure() for a list that failed while the memories loaded (#186)
     loading: true,
     ready: null,
     pending: new Map() // "skillId|agent" -> "allow" | "block", until 적용
@@ -382,11 +383,12 @@ export function startApp() {
   // did the host report lately, and does any of its MCP servers wait for a sign-in.
   function agentHealth(key) {
     const t = state.data.tools;
-    if (!t?.collected_at) return ["", "확인 중", "서버 보고를 기다리는 중"];
+    if (!t?.collected_at) return state.loading ? ["", "확인 중", "서버 보고를 기다리는 중"] : ["", "알 수 없음", "서버 보고를 받지 못했어요"];
     const age = Math.round((Date.now() - new Date(t.collected_at).getTime()) / 60000);
     if (age > 15) return ["bad", "끊김", `서버 보고가 ${age}분째 없어요`];
     const info = (t.agents || []).find((a) => a.id === key);
-    if (!info) return ["", "확인 중", "서버가 이 에이전트를 아직 보고하지 않았어요"];
+    // the report is in, so an agent it leaves out is not still being checked (#189)
+    if (!info) return t.agents ? ["bad", "연결 안 됨", "서버 보고에 이 에이전트가 없어요"] : ["", "알 수 없음", "이 서버는 에이전트 상태를 보고하지 않아요"];
     if (!info.found) return ["bad", "설치 안 됨", "서버에 설치돼 있지 않아요"];
     if (!info.enabled) return ["bad", "꺼짐", "Arkism이 읽지 않아요 (설정 › 에이전트)"];
     const login = (t.servers || []).filter((x) => x.agents?.[key] === "on" && x.login?.[key] === "needed").map((x) => x.name);
@@ -479,7 +481,7 @@ export function startApp() {
     const stopped = list.filter((s) => s.health === "r").length;
     const badge = $("#status-stages-badge");
     badge.className = `st-badge${stopped ? " bad" : ""}`;
-    badge.textContent = stopped ? `${stopped}곳 멈춤` : "모두 움직임";
+    badge.textContent = stopped ? `${stopped}곳 멈춤` : list.some((s) => s.unknown) ? "알 수 없음" : "모두 움직임";
   }
   // 취소·닫기 buttons close their dialog by submitting it with value "cancel": skip the form check,
   // so an empty required field (새 팀·새 자동화의 이름 …) never stops a dialog from closing.
@@ -549,6 +551,7 @@ export function startApp() {
     state.usage = new Map();
     state.usageDone = false;
     state.memoryTotals = null;
+    state.listErrors = {};
     state.versions = new Map();
     state.versionsDone = false;
     render();
@@ -558,16 +561,18 @@ export function startApp() {
       const reviewsReq = reviews.load();
       const trashReq = loadTrash();
       const usageReq = appApi.request(`/v1/skills/usage?${appApi.query({ days: 60 })}`).then((r) => new Map((r.items || []).map((u) => [u.skill_id, u])), () => null);
+      // Each list fails on its own and keeps its empty rows; only the memory list fails the whole load.
+      const listErrors = {}, settle = (name, req, empty) => req.catch((e) => { listErrors[name] = loadFailure(e); return empty; });
       const [memories, candidates, conflicted, maintenance, skills, prompts, designSystems, tools, crewItems, providers, skillUse, reviewItems, skillTrash] = await Promise.all([
         memoryPaging.memoryPages.load(memoryPaging.memoryKey()),
-        canReview ? collectionPaging.read("candidates") : [],
+        canReview ? settle("candidates", collectionPaging.read("candidates"), []) : [],
         canReview ? collectionPaging.read("conflicted").catch(() => []) : [],
         canReview ? loadMaintenance() : [],
-        collectionPaging.read("skills", true),
+        settle("skills", collectionPaging.read("skills", true), []),
         appApi.request(`/v1/prompts?${appApi.query()}`).then((r) => r.items || [], () => []),
         appApi.request(`/v1/design_systems?${appApi.query()}`).then((r) => r.items || [], () => null),
         toolViews.loadTools(),
-        crew.load(),
+        settle("crew", crew.load(), []),
         models.load(), usageReq, reviewsReq, trashReq
       ]);
       if (g !== state.connection.generation) return;
@@ -576,7 +581,9 @@ export function startApp() {
       void memoryPaging.hydrateMaintenance(g);
       state.loading = false;
       state.loadError = "";
-      setStatus("ready", "기억 저장소·검색 정상");
+      state.listErrors = listErrors;
+      if (Object.keys(listErrors).length) setStatus("warn", "일부 목록을 불러오지 못했어요");
+      else setStatus("ready", "기억 저장소·검색 정상");
       render();
       renderStatusCard();
       void loadUsage(g);
@@ -586,7 +593,7 @@ export function startApp() {
       state.loadError = loadFailure(e); // { code, reached, title, text }
       setStatus("error", "연결 확인 필요");
       render();
-      stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: state.loadError.reached ? state.loadError.text : "연결을 확인하고 다시 시도해 주세요." });
+      stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: state.loadError.reached && state.view !== "todo" ? state.loadError.text : "연결을 확인하고 다시 시도해 주세요." }); // Home's card already says the reason
     }
   }
   // Server-wide totals (POST /v1/memories/query, one row each): every active memory and the idle ones, with kinds.
@@ -594,9 +601,11 @@ export function startApp() {
   async function loadMemoryTotals(g) {
     const read = (s) => appApi.request("/v1/memories/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: s, limit: 1, kept_ids: keptMemories(), collect_unused: pages.prefs.collectUnused !== false }) })
       .then((r) => (Number.isSafeInteger(r?.total) ? r : null), () => null);
-    const [active, idleRows] = await Promise.all([read("active"), read("idle")]);
+    const candidates = state.caps?.actions?.review_list ? appApi.request("/v1/memory_candidates/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: "candidate", limit: 1 }) })
+      .then((r) => (Number.isSafeInteger(r?.total) ? r.total : null), () => null) : null;
+    const [active, idleRows, candidateTotal] = await Promise.all([read("active"), read("idle"), candidates]);
     if (g !== state.connection.generation || !active) return;
-    state.memoryTotals = { active: active.total, idle: idleRows?.total ?? null, kinds: active.facets?.kinds || null };
+    state.memoryTotals = { active: active.total, idle: idleRows?.total ?? null, kinds: active.facets?.kinds || null, candidates: candidateTotal };
     render(false);
   }
   // Use counts of every memory in one call (GET /v1/memory_usage: 7·30 days and the last use; unused memories are absent).
@@ -1032,8 +1041,18 @@ export function startApp() {
   }
   // 먼저 확인 holds three rows; 기억 처리 멈춤 is a fourth row on top while it lasts (Figma 523:35767).
   const firstCount = (items) => (items[0]?.id === "stalled" ? 4 : 3);
+  // The Home row for lists that failed while the memories loaded; each failed list is named once (#186).
+  const LIST_FAILED = { candidates: "기억 후보 목록을 불러오지 못했어요", skills: "스킬 목록을 불러오지 못했어요", crew: "크루 목록을 불러오지 못했어요" };
+  function failedListsItem() {
+    const failed = Object.keys(state.listErrors);
+    if (!failed.length) return null;
+    return { id: "lists", n: failed.length, icon: "warning-circle", label: "불러오지 못한 목록", warn: true,
+      title: failed.length === 1 ? LIST_FAILED[failed[0]] : `목록 ${failed.length}개를 불러오지 못했어요`, sub: state.listErrors[failed[0]].text || "연결을 확인하고 다시 시도해 주세요.",
+      action: "다시 불러오기", run: () => loadAll(), preview: failed.map((name) => LIST_FAILED[name]) };
+  }
   function todoItems() {
     const d = state.data;
+    if (state.loadError) return []; // nothing loaded: Home shows the error instead of zeros and a false stall (#187)
     const suspect = d.candidates.filter((c) => (c.tags || []).includes("review:instruction_like"));
     const blocked = [];
     for (const sk of d.skills) {
@@ -1050,6 +1069,8 @@ export function startApp() {
     const tidy = maintenanceShown(), tp = tidy[0];
     const updates = d.tools?.skill_updates || [];
     const ver = (v) => (/^\d/.test(v || "") ? `v${v}` : v || "");
+    // the server total while more pages wait, not the first page (#188); once every candidate is loaded the rows are current
+    const reviewTotal = collectionPaging.snapshot("candidates").cursor ? state.memoryTotals?.candidates ?? d.candidates.length : d.candidates.length;
     const items = [
       { id: "updates", n: updates.length, icon: "arrows-clockwise", label: "업데이트 가능", title: updates.slice(0, 2).map((u) => `${u.name} ${ver(u.to)}`).join(" · "),
         sub: "원본 저장소에 새 버전이 있어요", action: "업데이트", run: () => updateSkills(updates), list: updates,
@@ -1063,7 +1084,7 @@ export function startApp() {
         sub: "하나로 합치면 관리가 쉬워요", action: "비교하기", detail: (body, i) => similarDetail(body, pairs[i] || pair), preview: pairs.map((x) => `${x.a.name} ↔ ${x.b.name} ${Math.round(x.score * 100)}%`) },
       { id: "unused", n: unusedSkills.length, icon: "clock-counter-clockwise", label: "안 쓰는 스킬", title: `60일 동안 안 쓴 스킬 ${unusedSkills.length}개`,
         sub: "휴지통으로 옮기면 에이전트가 더 읽지 않아요", action: "휴지통으로", run: () => confirmBatch(unusedSkills, () => trashSkills(unusedSkills)), preview: unusedSkills.slice(0, 5).map((sk) => sk.name) },
-      { id: "review", n: d.candidates.length, icon: "tray", label: "기억 검토", title: `기억 후보 ${d.candidates.length}개 검토`,
+      { id: "review", n: reviewTotal, icon: "tray", label: "기억 검토", title: `기억 후보 ${reviewTotal}개 검토`,
         sub: suspect.length ? `지시처럼 보이는 문장 ${suspect.length}개가 있어요` : "자동으로 저장하지 않은 후보예요", warn: suspect.length > 0,
         action: "한 번에 검토", detail: (body) => reviewBatchDetail(body), preview: d.candidates.slice(0, 5).map((c) => c.text) },
       { id: "conflicted", n: d.conflicted.length, icon: "warning-circle", label: "부딪히는 기억", title: `부딪히는 기억 ${d.conflicted.length}개`,
@@ -1079,9 +1100,11 @@ export function startApp() {
       { id: "fresh", n: fresh.length, icon: "sparkle", label: "새 기억", title: `최근 3일 새 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
         action: "훑어보기", go: ["memories", "active"], preview: fresh.slice(0, 5).map((m) => m.text) }
     ];
-    const ORDER = ["stalled", "suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh"];
+    const ORDER = ["lists", "stalled", "suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh"];
     const stalled = homeChecks.stalledItem(state.connection.generation);
     if (stalled) items.push(stalled);
+    const lists = failedListsItem();
+    if (lists) items.push(lists);
     return items.filter((t) => t.n === null || t.n > 0).sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   }
   function updateCounts() {
@@ -1536,7 +1559,7 @@ export function startApp() {
     const body = detailShell("오늘 요약");
     const items = todoItems(), now = items.slice(0, firstCount(items)), rest = items.slice(firstCount(items));
     const head = el("div", "home-sum-head");
-    head.append(el("h2", "", now.length ? `확인할 일 ${now.length}개가 먼저 기다려요` : "지금은 확인할 일이 없어요"),
+    head.append(el("h2", "", state.loadError ? "확인할 일을 불러오지 못했어요" : now.length ? `확인할 일 ${now.length}개가 먼저 기다려요` : "지금은 확인할 일이 없어요"),
       el("p", "meta", rest.length ? `나머지 ${todoTotal(rest)}개는 메뉴별로 모아 두었어요.` : "새 일이 생기면 여기에 모여요."));
     const agents = shownAgents();
     const nums = el("div", "home-nums");

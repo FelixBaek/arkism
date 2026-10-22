@@ -8,7 +8,7 @@ window.ArkismMessenger = (ctx) => {
   const S = { loaded: false, loading: false, bots: [], err: "", draft: {}, changing: {}, busy: false, dests: [], nerr: "" };
   const body = (extra) => JSON.stringify({ scope: state.scope, ...extra });
   const unwrap = (r) => (r?.discord_bot ? { ...r.discord_bot, id: r.id, revision: r.revision } : r);
-  const ago = (iso) => { if (!iso) return ""; const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 1 ? "방금 확인" : m < 60 ? `${m}분 전 확인` : `${Math.round(m / 60)}시간 전 확인`; };
+  const ago = (iso) => { if (!iso) return ""; const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 1 ? "방금 확인" : m < 60 ? `${m}분 전 확인` : m < 2880 ? `${Math.round(m / 60)}시간 전 확인` : `${Math.floor(m / 1440)}일 전 확인`; }; // days past 48 hours (#190)
   const STATE = { connected: ["연결됨", "on"], connecting: ["연결 중", ""], waiting_token: ["연결 중", ""], needs_permission: ["권한 필요", "warn"], offline: ["꺼짐", ""], token_invalid: ["토큰 오류", "warn"] };
   const ERR = { secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요.", invalid_request: "토큰 형식을 확인해 주세요.", revision_conflict: "다른 곳에서 먼저 고쳤어요. 다시 불러올게요." };
   const errText = (e) => ERR[e.message] || `처리하지 못했어요 (${e.message}).`;
