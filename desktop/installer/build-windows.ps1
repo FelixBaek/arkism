@@ -51,7 +51,9 @@ Pop-Location
 Copy-Item (Join-Path $repo 'tools\roles.sql') (Join-Path $stage 'runtime')
 & (Join-Path $PSScriptRoot 'prepare-runtime.ps1') -Cache $cache -Stage $stage
 
-$env:TAURI_CONFIG = @{ version = $Version; build = @{ frontendDist = (Join-Path $desktop 'ui-dist') } } | ConvertTo-Json -Depth 3 -Compress
+# Relative to src-tauri, as build-windows.sh passes it: Tauri reads an absolute "D:\..." path as a d: URL
+# and embeds no screens at all (0.1.5 opened on "asset not found: index.html").
+$env:TAURI_CONFIG = @{ version = $Version; build = @{ frontendDist = '../ui-dist' } } | ConvertTo-Json -Depth 3 -Compress
 # Keep the build machine's paths (user name, folders) out of the binary's panic locations.
 $env:RUSTFLAGS = "--remap-path-prefix=$($env:USERPROFILE)=~ --remap-path-prefix=$repo=build"
 Push-Location (Join-Path $desktop 'src-tauri')
@@ -59,6 +61,11 @@ Invoke-Checked { cargo build --release --locked } 'cargo build'
 Invoke-Checked { cargo test --release --locked } 'cargo test'
 Pop-Location
 Copy-Item (Join-Path $desktop 'src-tauri\target\release\arkism-desktop.exe') (Join-Path $stage 'Arkism.exe') -Force
+# The embedded asset table names each screen file in plain text; without them the window is empty.
+$appText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes((Join-Path $stage 'Arkism.exe')))
+foreach ($asset in '/assets/entry.js', '/look.js') {
+  if (-not $appText.Contains($asset)) { throw "Arkism.exe does not embed $asset" }
+}
 
 $signing = $env:WINDOWS_CERTIFICATE -and $env:WINDOWS_CERTIFICATE_PASSWORD
 $pfx = Join-Path $tmp 'arkism-signing.pfx'
