@@ -38,7 +38,7 @@ window.ArkismMemoryBubbles = (() => {
       const m = new Map();
       for (const p of items) { const g = groupOf(mode, p); let o = m.get(g.key); if (!o) m.set(g.key, o = { key: g.key, name: g.name, ord: g.ord ?? 0, color: g.color || p.color, count: 0, el: null, cx: 0, cy: 0, top: null, rx: 0, ry: 0, rr: 0 }); o.count++; p.g = o; }
       groups = [...m.values()].sort((a, b) => a.ord - b.ord || b.count - a.count);
-      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); g.el.title = g.name; const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", g.count.toLocaleString("en-US"))); return g.el; }));
+      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", g.count.toLocaleString("en-US"))); return g.el; }));
       pairUp(); layout();
     }
     // group-to-group line counts for the many-dots overview, built when the groups or lines change rather than on every draw
@@ -322,6 +322,9 @@ window.ArkismMemoryBubbles = (() => {
       if (ptrs.size === 2 && pinch) { const [a, b] = [...ptrs.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]); if (d) { zoomBy(d / pinch, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2); pinch = d; dragged = true; } return; }
       if (drag) { const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y; if (dragged || Math.hypot(dx, dy) > 4) { dragged = true; panX = drag.px + dx; panY = drag.py + dy; canvas.style.cursor = "grabbing"; draw(); return; } }
       const id = hit(ev); if (id !== hover) { hover = id; if (id) announce(id); canvas.style.cursor = id ? "pointer" : "grab"; draw(); }
+      // labels let the pointer through to the canvas (pan, zoom), so the canvas carries an ellipsized group name's tooltip
+      const cut = !id && !labels.style.visibility && groups.find((g) => { const b = g.el?.children[1]; if (!b || b.scrollWidth <= b.clientWidth) return false; const r = g.el.getBoundingClientRect(); return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom; });
+      canvas.title = cut ? cut.name : "";
     });
     const up = (ev) => { ptrs.delete(ev.pointerId); if (ptrs.size < 2) pinch = 0; drag = null; canvas.style.cursor = hover ? "pointer" : "grab"; };
     canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
