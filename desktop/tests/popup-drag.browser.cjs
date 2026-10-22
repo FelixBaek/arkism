@@ -42,6 +42,9 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     await page.waitForTimeout(300);
     assert.equal(await page.evaluate(() => window.opened.length), 2, "one tear-off per popup while popout_open is pending");
     assert.equal(await page.evaluate(() => document.querySelector("dialog").open), false, "Alt+Shift+O closes it here too");
+    // Dvorak: O sits on the S key, so e.code is "KeyS" while e.key is "O"
+    await page.evaluate(() => { document.querySelector("dialog").showModal(); document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "O", altKey: true, shiftKey: true, bubbles: true })); });
+    await page.waitForFunction(() => window.opened.length === 3);
     await page.evaluate(() => { delete window.__TAURI__; document.querySelector("dialog").showModal(); });
     await page.keyboard.press("Alt+Shift+O");
     assert.deepEqual(await page.evaluate(() => window.notices), ["새 창은 데스크톱 앱에서 열 수 있어요."]);
