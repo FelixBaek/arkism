@@ -22,7 +22,7 @@ window.ArkismMemoryBubbles = (() => {
     canvas.tabIndex = 0; canvas.setAttribute("role", "application"); canvas.setAttribute("aria-label", "기억 버블 지도 · 화살표로 고르고 +/−로 확대·축소, 끌어서 옮기기");
     live.setAttribute("aria-live", "polite"); tipEl.setAttribute("aria-hidden", "true");
     const tipT = mk("span", "mm-tip-t"), tipM = mk("span", "mm-tip-m"); tipT.setAttribute("data-no-i18n", ""); tipEl.append(tipT, tipM);
-    const liveT = mk("span", ""), liveG = mk("span", ""), liveM = mk("span", ""); liveT.setAttribute("data-no-i18n", ""); liveG.setAttribute("data-no-i18n", ""); live.append(liveT, " ", liveG, liveM); // the memory's own words and its group name stay; its kind · uses line is translated
+    const liveT = mk("span", ""), liveG = mk("span", ""), liveS = mk("span", ""), liveM = mk("span", ""); liveT.setAttribute("data-no-i18n", ""); live.append(liveT, " ", liveG, liveS, liveM); // the memory's own words stay; its group (often a built-in name like 분류 대기, as on its label) and kind · uses line are translated
     tabBar.append(pill); cardsEl.setAttribute("aria-hidden", "true"); root.append(canvas, cardsEl, labels, tabBar, tipEl, live);
 
     const reducedMq = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
@@ -132,7 +132,7 @@ window.ArkismMemoryBubbles = (() => {
       panX = PAD.l + aw / 2 - W / 2 - ((x0 + x1) / 2 - W / 2) * zoom; panY = PAD.t + ah / 2 - H / 2 - ((y0 + y1) / 2 - H / 2) * zoom;
       onZoom?.(zoom); draw();
     }
-    function announce(id) { const t = tip(id); if (t) { liveT.textContent = t.text; liveG.textContent = byId.get(id)?.g ? `${byId.get(id).g.name} · ` : ""; liveM.textContent = t.meta; } } // the group name in full: its label may be ellipsized
+    function announce(id) { const t = tip(id); if (t) { liveT.textContent = t.text; const g = byId.get(id)?.g; liveG.textContent = g?.name || ""; liveS.textContent = g ? " · " : ""; liveM.textContent = t.meta; } } // the group name in full (its label may be ellipsized), alone in its span so i18n matches it
 
     // Compute the final places, then glide once from where the dots are drawn now.
     function run() {
