@@ -45,8 +45,8 @@ test("English translates text, attributes, the title and messages, but not user 
   assert.equal(I.lang(), "ko");
   assert.equal(document.documentElement.lang, "ko");
   want = "en";
-  window.dispatchEvent(new dom.Event("arkism-look"));
-  assert.notEqual(await I.setLang("en"), false);
+  window.dispatchEvent(new dom.Event("arkism-look")); // the event alone switches, once the dictionary loads
+  for (let i = 0; i < 50 && I.lang() !== "en"; i++) await flush();
   assert.equal(I.lang(), "en");
   assert.equal(I.locale(), "en-US");
   assert.equal(document.documentElement.lang, "en");

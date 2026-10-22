@@ -744,7 +744,7 @@ test("home: a manual connection walks the start steps; SSH errors explain themse
   assert.match(text(t), /서버 my-server가 찾은 에이전트/);
   // every switch but one off, then the last one refuses
   const flip = async () => { const on = [...app.$$("#table .switch")].filter((s) => s.getAttribute("aria-checked") === "true"); on[0].click(); await app.settle(); return on.length; };
-  while (await flip() > 1) { /* turn them off one by one */ }
+  for (let i = 0; i < 20 && await flip() > 1; i++) { /* turn them off one by one; bounded so a stuck switch fails below */ }
   assert.match(text(app.document.body), /에이전트가 하나는 켜져 있어야 해요/);
   for (const s of app.$$("#table .switch")) if (s.getAttribute("aria-checked") === "false") { s.click(); await app.settle(); }
   // 다음 → 3단계; 이전 goes back; the three buttons there
