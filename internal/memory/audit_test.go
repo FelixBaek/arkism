@@ -253,7 +253,7 @@ func exerciseAuditRequest(t *testing.T, repo Repository) {
 type rlsRefusingRepo struct{ *fakeRepo }
 
 func (rlsRefusingRepo) Transaction(context.Context, func(context.Context, Tx) error) error {
-	return pgErr(&pgconn.PgError{Code: "42501"})
+	return pgErr(&pgconn.PgError{Code: "42501", Message: "new row violates row-level security policy"})
 }
 
 func TestAuditRLSRefusedDenialStaysDenied(t *testing.T) {
