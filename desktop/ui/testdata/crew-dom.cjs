@@ -547,7 +547,7 @@ function install() {
   });
   const clip = { text: "", fail: false, writeText(t) { if (clip.fail) return Promise.reject(new Error("denied")); clip.text = t; return Promise.resolve(); } };
   Object.defineProperty(g, "navigator", { value: { clipboard: clip, language: "ko-KR", userAgent: "node", platform: "Linux" }, configurable: true, writable: true });
-  g.Image = class { constructor() { this.width = 2000; this.height = 1000; } set src(v) { this._src = v; const ok = !String(v).includes("bad"); realSetTimeout(() => (ok ? this.onload?.() : this.onerror?.()), 0); } get src() { return this._src; } };
+  g.Image = class { constructor() { this.width = 2000; this.height = 1000; } set src(v) { this._src = v; const ok = !String(v).includes("bad"); setImmediate(() => (ok ? this.onload?.() : this.onerror?.())); } get src() { return this._src; } };
   g.URL.createObjectURL = (f) => `blob:${f?.name || "file"}`;
   g.URL.revokeObjectURL = () => {};
   errors.length = 0;

@@ -138,10 +138,8 @@ test("meetings: polling while live and failed loads", async () => {
   h.routes.unshift(["GET", /^\/v1\/crew\/meetings/, () => new Error("HTTP 404")]);
   for (const t of document.querySelectorAll(".tm-seg-tab")) { t.click(); await h.settle(); }
   assert.match(table().textContent, /지원하지 않아요/);
-  h.routes[0] = ["GET", /^\/v1\/crew\/meetings/, () => new Error("boom")];
-  const h2 = await bootTeams("meetings", { meetings: [] });
-  h2.routes.unshift(["GET", /^\/v1\/crew\/meetings/, () => new Error("boom")]);
-  assert.match(table().textContent, /아직|진행 중/);
+  await bootTeams("meetings", { meetings: [], routes: [["GET", /^\/v1\/crew\/meetings/, () => new Error("boom")]] });
+  assert.match(table().textContent, /회의를 불러오지 못했어요 \(boom\)/);
   assert.deepEqual(clean(), []);
 });
 
@@ -180,7 +178,6 @@ test("usage: KPIs, chart, tables, filters and retrying failures", async () => {
   await h.settle();
   assert.match(table().textContent, /성공률/);
   for (const col of document.querySelectorAll(".tm-col")) { dom.fire(col, "mouseenter"); dom.fire(col, "mouseleave"); }
-  const retry = dom.byText(table(), "button, a", /실패한 곳부터 다시/);
   h.data.runs.push({ id: "runf", revision: 1, created_at: iso(-5), updated_at: iso(-4), crew_run: { crew_id: "wf1", status: "failed", input: "{}", nodes: { code: { status: "failed", error: "exit 1" }, ai1: { status: "done", output: "x" } }, loops: { "code>ai1:fail": 1 } } });
   h.render(); await h.settle();
   await sweep(h, document.body, 2);
@@ -188,7 +185,6 @@ test("usage: KPIs, chart, tables, filters and retrying failures", async () => {
     const t = [...document.querySelectorAll("#controls .tm-seg-tab")].find((b) => b.textContent === { today: "오늘", "7d": "7일", "90d": "90일", all: "전체" }[k]);
     t?.click(); await h.settle();
   }
-  assert.ok(retry !== undefined);
   h.routes.unshift(["GET", /^\/v1\/crew\/usage/, () => new Error("HTTP 501")]);
   await h.click(document, "새로고침");
   assert.match(table().textContent, /지원하지 않아요/);

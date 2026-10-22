@@ -48,10 +48,10 @@ test("a port click links two nodes and Escape cancels a pending link", async () 
   assert.equal(document.querySelector(".g-link-hint"), null);
   at(node("start").querySelector(".g-port.out"), "pointerdown"); at(window, "pointerup"); await h.settle();
   node("start").click(); // same node: ignored
-  const before = h.crew.pages.graph && document.querySelectorAll(".g-edge-hit").length;
-  const target = [...document.querySelectorAll(".g-node")].find((b) => !["start", "schedule", "webhook"].includes(b.classList[1]) && b.dataset.id !== "start");
+  const before = document.querySelectorAll(".g-edge-hit").length;
+  const target = node("once"); // start links only to ai1, so this edge is new
   target.click(); await h.settle();
-  assert.ok(document.querySelectorAll(".g-edge-hit").length >= before);
+  assert.equal(document.querySelectorAll(".g-edge-hit").length, before + 1);
   // drag a port onto another node: the drop target comes from elementFromPoint
   const src = node("ai1").querySelector(".g-port.out");
   at(src, "pointerdown");
@@ -83,10 +83,12 @@ test("dragging nodes, panning and wheel zoom move the canvas", async () => {
   assert.notEqual(node("ai1").style.left, x0);
   const stage = document.querySelector(".g-stage");
   const canvas = stage.querySelector(".g-canvas");
+  const pan = () => canvas.style.transform.match(/translate\((-?[\d.]+)px, (-?[\d.]+)px\)/).slice(1).map(Number);
+  const [px, py] = pan();
   at(stage, "pointerdown", { button: 1 });
   at(window, "pointermove", { clientX: 80, clientY: 70 });
   at(window, "pointerup", { clientX: 90, clientY: 75 });
-  assert.match(canvas.style.transform, /translate\(60px, 45px\)|translate\(/);
+  assert.deepEqual(pan(), [px + 60, py + 45]);
   // space held turns a left drag into a pan, and the click after it is swallowed
   dom.key(document, " ", { code: "Space" });
   at(stage, "pointerdown", { button: 0 });

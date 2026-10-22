@@ -35,7 +35,8 @@ test("new automation window", async () => {
 test("cover picker: search, more, pick, clear, upload and errors", async () => {
   const h = await boot();
   const calls = [];
-  let reply = (url) => ({ items: [{ id: "p1", url: "u1", thumb: "t1", author: "가", alt: "우주" }, { id: "p2", url: "u2", thumb: "t2", author: "나" }], total_pages: 3 });
+  let reply = (url) => (/page=2/.test(url) ? { items: [{ id: "p4", url: "u4", thumb: "t4", author: "라" }, { id: "p5", url: "u5", thumb: "t5", author: "마" }], total_pages: 3 }
+    : { items: [{ id: "p1", url: "u1", thumb: "t1", author: "가", alt: "우주" }, { id: "p2", url: "u2", thumb: "t2", author: "나" }], total_pages: 3 });
   const request = async (url, opts) => { calls.push(url); const r = reply(url, opts); if (r instanceof Error) throw r; return r; };
   const notices = [];
   const picker = window.ArkismCoverPicker({ el: (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x) n.textContent = x; return n; }, icon: () => document.createElement("i"),
@@ -52,7 +53,7 @@ test("cover picker: search, more, pick, clear, upload and errors", async () => {
   const more = h.btn(d, "더 보기");
   assert.equal(more.hidden, false);
   more.click(); await h.settle();
-  assert.equal(d.querySelectorAll(".tp-cover-ph").length, 4);
+  assert.deepEqual([...d.querySelectorAll(".tp-cover-ph img")].map((i) => i.src), ["t1", "t2", "t4", "t5"]);
   // typed search with no hits, an empty one, then a stale answer
   const q = d.querySelector("input[type=search]");
   reply = () => ({ items: [] });

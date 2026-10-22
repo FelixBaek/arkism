@@ -98,7 +98,7 @@ function defaultRoutes(h) {
     ["POST", /^\/v1\/discord\/bots/, () => ({ ...h.data.discord.bots[0] })],
     ["DELETE", /^\/v1\/discord\/bots\//, () => ({ ok: true })],
     ["GET", /^\/v1\/notify/, () => ({ destinations: [{ kind: "slack", name: "team" }, { kind: "telegram", name: "me" }] })],
-    ["POST", /^\/v1\/crew\/([^/?]+)$/, (m, url, body) => { const r = h.data.crew.find((x) => x.id === decodeURIComponent(m[1])) || { id: decodeURIComponent(m[1]), revision: 0 }; return { id: r.id, revision: (r.revision || 0) + 1, crew: body.crew || r.crew }; }],
+    ["POST", /^\/v1\/crew\/(?!meetings$)([^/?]+)$/, (m, url, body) => { const r = h.data.crew.find((x) => x.id === decodeURIComponent(m[1])) || { id: decodeURIComponent(m[1]), revision: 0 }; return { id: r.id, revision: (r.revision || 0) + 1, crew: body.crew || r.crew }; }],
     ["POST", /^\/v1\/crew$/, (m, url, body) => ({ id: `new-${h.calls.length}`, revision: 1, crew: body.crew })],
     ["DELETE", /^\/v1\/crew\//, () => ({ ok: true })],
     ["GET", /^\/v1\/crew\/meetings\/([^/?]+)/, () => clone(h.data.meetings[0])],
@@ -255,7 +255,7 @@ async function boot(opts = {}) {
     request: h.request, query: a.query, notice: a.notice, detailShell: a.detailShell, section: a.section, facts: a.facts, callout: a.callout, copyButton: a.copyButton, markSelected: a.markSelected,
     openDetail: () => {}, agentLogo: a.agentLogo, ago: a.ago, models: a.models, allowed: () => true, skillCategory: (sk) => sk.category || "", skillCategories: () => [{ name: "코드", icon: "code" }],
     toolServers: () => h.state.data.tools.servers };
-  const { createCrew } = await import(path.join(UI, "crew.js"));
+  const { createCrew } = await import(require("url").pathToFileURL(path.join(UI, "crew.js")).href);
   h.crew = createCrew(ctx);
   if (opts.teams !== false) {
     loadScript("team.js");
