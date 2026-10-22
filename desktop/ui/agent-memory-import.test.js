@@ -9,3 +9,11 @@ test('a null import reply shows the retry error instead of throwing',async()=>{
 test('a normal import reports the added and failed counts',async()=>{
  assert.deepEqual(await drive([{statements:3,files:2},{candidates:2,failed:1}]),['가져오는 중이에요.','검토 대기에 2개를 올렸어요. 1개는 실패했어요.']);
 });
+test('nothing to import or a declined confirm stops before the real import',async()=>{
+ assert.deepEqual(await drive([{statements:0}]),['새로 가져올 기억이 없어요.']);
+ const calls=[];await run({invoke:async(...a)=>{calls.push(a);return {statements:1,files:1};},ask:async()=>false,notice:()=>{}});assert.equal(calls.length,1);
+});
+test('in the browser the flow is published on window for pages.js',()=>{
+ const file=require.resolve('./agent-memory-import.js');delete require.cache[file];global.window={};
+ try{require(file);assert.equal(typeof window.ArkismAgentMemoryImport.run,'function');}finally{delete global.window;delete require.cache[file];}
+});
