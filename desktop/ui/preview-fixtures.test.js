@@ -18,6 +18,12 @@ test('every catalog query list loads from the preview',async()=>{
  for(const name of ['memories','candidates','conflicted','skills','skillTrash']){await catalog.more(name);const snap=catalog.snapshot(name);assert.ok(snap.items.length>0,name);assert.equal(snap.total,snap.items.length,name);}
  assert.ok(catalog.snapshot('conflicted').items.every(row=>row.status==='conflicted'));
 });
+test('the idle memory query keeps the server rule, not the whole active list',async()=>{
+ const body=state=>({method:'POST',body:JSON.stringify({scope:{},state,limit:50})});
+ const active=await request('/v1/memories/query',body('active')),idle=await request('/v1/memories/query',body('idle'));
+ assert.ok(idle.items.length>0&&idle.items.length<active.items.length);assert.equal(idle.total,idle.items.length);
+ assert.ok(idle.items.every(row=>!['user','procedural'].includes(row.kind)));
+});
 test('every cursor-paged collection loads from the preview',async()=>{
  const {createCollectionPaging}=await import('./modules/collectionPaging.mjs');
  const paging=createCollectionPaging({state:state(),request,createPager:create});
