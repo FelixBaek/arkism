@@ -88,7 +88,23 @@ type MemoryGraphSessionHit struct {
 }
 
 func normalizeMemoryGraphQuery(in MemoryGraphQuery) (MemoryGraphQuery, error) {
-	all, maxNodes := in.Mode == MemoryGraphModeAll, memoryGraphMaxNodes
+	all := in.Mode == MemoryGraphModeAll
+	in, maxNodes := defaultMemoryGraphQuery(in, all)
+	center := in.Mode == "" && validRunLabel(in.MemoryID, 256) && !containsSecret(in.MemoryID) && in.Depth >= 1 && in.Depth <= 2
+	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || !center && !(all && in.MemoryID == "" && in.Depth == 0) ||
+		in.Limit < 1 || in.Limit > maxNodes || !validProjectKey(in.ProjectKey) || len(slices.Compact(slices.Clone(in.Reaches))) != len(in.Reaches) {
+		return in, ErrInvalid
+	}
+	for _, r := range in.Reaches {
+		if !slices.Contains(memoryGraphReaches, r) {
+			return in, ErrInvalid
+		}
+	}
+	return in, nil
+}
+
+func defaultMemoryGraphQuery(in MemoryGraphQuery, all bool) (MemoryGraphQuery, int) {
+	maxNodes := memoryGraphMaxNodes
 	if all {
 		maxNodes = memoryGraphMapNodes
 		if in.Limit == 0 {
@@ -107,17 +123,7 @@ func normalizeMemoryGraphQuery(in MemoryGraphQuery) (MemoryGraphQuery, error) {
 	in.Reaches = slices.Clone(in.Reaches)
 	slices.Sort(in.Reaches)
 	in.ProjectKey = strings.ToLower(strings.TrimSpace(in.ProjectKey))
-	center := in.Mode == "" && validRunLabel(in.MemoryID, 256) && !containsSecret(in.MemoryID) && in.Depth >= 1 && in.Depth <= 2
-	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || !center && !(all && in.MemoryID == "" && in.Depth == 0) ||
-		in.Limit < 1 || in.Limit > maxNodes || !validProjectKey(in.ProjectKey) || len(slices.Compact(slices.Clone(in.Reaches))) != len(in.Reaches) {
-		return in, ErrInvalid
-	}
-	for _, r := range in.Reaches {
-		if !slices.Contains(memoryGraphReaches, r) {
-			return in, ErrInvalid
-		}
-	}
-	return in, nil
+	return in, maxNodes
 }
 
 // memoryGraphVisible is the node rule both repositories apply (Postgres: memoryGraphWhere).
@@ -443,12 +449,9 @@ func (b *memoryGraphBuild) similarLines(ctx context.Context, frontier []string) 
 		if e != nil {
 			return nil, e
 		}
-		need, asked := []MemoryGraphEdge{}, idSet(asking)
-		for _, p := range pairs {
-			if !asked[p.From] || p.From == p.To || p.Distance < 0 || p.Distance > 1-memoryGraphSimilarMin {
-				return nil, ErrUnavailable
-			}
-			need = append(need, MemoryGraphEdge{From: p.From, To: p.To})
+		need, e := similarNeed(pairs, asking)
+		if e != nil {
+			return nil, e
 		}
 		if e = b.load(ctx, need); e != nil {
 			return nil, e
@@ -483,6 +486,18 @@ func (b *memoryGraphBuild) similarLines(ctx context.Context, frontier []string) 
 		out = append(out, lines[id]...)
 	}
 	return out, nil
+}
+
+// similarNeed checks a repository's similar pairs and returns the line ends to load.
+func similarNeed(pairs []MemoryGraphSimilarPair, asking []string) ([]MemoryGraphEdge, error) {
+	need, asked := []MemoryGraphEdge{}, idSet(asking)
+	for _, p := range pairs {
+		if !asked[p.From] || p.From == p.To || p.Distance < 0 || p.Distance > 1-memoryGraphSimilarMin {
+			return nil, ErrUnavailable
+		}
+		need = append(need, MemoryGraphEdge{From: p.From, To: p.To})
+	}
+	return need, nil
 }
 
 // load reads line ends not seen yet through the node filter; filtered ones stay absent.

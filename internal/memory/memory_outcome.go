@@ -34,7 +34,7 @@ func memoryOutcomeRoutes(mux routeRegistrar, s *Service) {
 	})
 }
 func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in MemoryOutcomeInput) (Ref, error) {
-	if !validScope(in.Scope) || in.Target.Collection != "memories" || in.Trace.Collection != "execution_traces" || !validWorkCheckpointRef(in.Target) || !validWorkCheckpointRef(in.Trace) || !workCheckpointIDPattern.MatchString(in.EventID) || !sourceHashPattern.MatchString(in.CheckerSHA256) || len(in.Evidence) < 1 || len(in.Evidence) > 64 || (in.Dimension != "personal_compliance" && in.Dimension != "work_task") {
+	if !validMemoryOutcomeInput(in) {
 		return Ref{}, ErrInvalid
 	}
 	actor, e := s.authorize(ctx, token, "write:evaluations", in.Scope, "", "")
@@ -87,63 +87,16 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 		if trace.CreatedBy == actor.PrincipalID {
 			return ErrDenied
 		}
-		completed := false
-		for _, ref := range trace.Relations {
-			if ref.Collection == "agent_runs" {
-				run, e := tx.Get(ctx, "agent_runs", in.Scope, ref.ID)
-				if e != nil {
-					return e
-				}
-				if run.Run != nil && run.Run.TaskType == "crew_run" {
-					return ErrDenied // OI-25: crew runner traces never judge memories
-				}
-				if run.Revision == ref.Revision && live(run) && !run.ContentErased && !run.PrivacyQuarantined && run.Run != nil && run.Run.FinishedAt != nil && terminalOutcome(run.Run.Outcome) {
-					completed = true
-				}
-			}
+		completed, e := memoryOutcomeTraceCompleted(ctx, tx, in.Scope, trace)
+		if e != nil {
+			return e
 		}
 		if !completed {
 			return ErrConflict
 		}
-		allowed := map[string]bool{}
-		for _, ref := range trace.Sources {
-			allowed[ref.SourceID] = true
-		}
-		seen := map[string]bool{}
-		sources := []SourceRef{}
-		relations := []Ref{in.Target, in.Trace}
-		exposed := false
-		for _, ref := range in.Evidence {
-			if seen[ref.ID] || !allowed[ref.ID] {
-				return ErrInvalid
-			}
-			seen[ref.ID] = true
-			source, e := read(ref)
-			if e != nil {
-				return e
-			}
-			if source.TraceID != trace.ID || source.SourceEventID == "" || source.CreatedBy == actor.PrincipalID {
-				return ErrConflict
-			}
-			var payload struct {
-				Retrieved     []Ref `json:"retrieved"`
-				MemoryContext *struct {
-					Items []Ref `json:"items"`
-				} `json:"memory_context"`
-			}
-			if json.Unmarshal([]byte(source.Text), &payload) != nil {
-				return ErrInvalid
-			}
-			for _, r := range payload.Retrieved {
-				if r == in.Target {
-					exposed = true
-				}
-			}
-			sources = append(sources, sourceReference(source, "memory-outcome"))
-			relations = append(relations, ref)
-		}
-		if !exposed {
-			return ErrDenied
+		sources, relations, e := memoryOutcomeEvidence(in, trace, actor.PrincipalID, read)
+		if e != nil {
+			return e
 		}
 		old, e := tx.Get(ctx, "evaluations", in.Scope, id)
 		if e == nil {
@@ -173,4 +126,68 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 		return Ref{}, e
 	}
 	return result, nil
+}
+func validMemoryOutcomeInput(in MemoryOutcomeInput) bool {
+	return validScope(in.Scope) && in.Target.Collection == "memories" && in.Trace.Collection == "execution_traces" && validWorkCheckpointRef(in.Target) && validWorkCheckpointRef(in.Trace) && workCheckpointIDPattern.MatchString(in.EventID) && sourceHashPattern.MatchString(in.CheckerSHA256) && len(in.Evidence) >= 1 && len(in.Evidence) <= 64 && (in.Dimension == "personal_compliance" || in.Dimension == "work_task")
+}
+func memoryOutcomeTraceCompleted(ctx context.Context, tx Tx, scope Scope, trace Record) (bool, error) {
+	completed := false
+	for _, ref := range trace.Relations {
+		if ref.Collection == "agent_runs" {
+			run, e := tx.Get(ctx, "agent_runs", scope, ref.ID)
+			if e != nil {
+				return false, e
+			}
+			if run.Run != nil && run.Run.TaskType == "crew_run" {
+				return false, ErrDenied // OI-25: crew runner traces never judge memories
+			}
+			if run.Revision == ref.Revision && live(run) && !run.ContentErased && !run.PrivacyQuarantined && run.Run != nil && run.Run.FinishedAt != nil && terminalOutcome(run.Run.Outcome) {
+				completed = true
+			}
+		}
+	}
+	return completed, nil
+}
+func memoryOutcomeEvidence(in MemoryOutcomeInput, trace Record, actor string, read func(Ref) (Record, error)) ([]SourceRef, []Ref, error) {
+	allowed := map[string]bool{}
+	for _, ref := range trace.Sources {
+		allowed[ref.SourceID] = true
+	}
+	seen := map[string]bool{}
+	sources := []SourceRef{}
+	relations := []Ref{in.Target, in.Trace}
+	exposed := false
+	for _, ref := range in.Evidence {
+		if seen[ref.ID] || !allowed[ref.ID] {
+			return nil, nil, ErrInvalid
+		}
+		seen[ref.ID] = true
+		source, e := read(ref)
+		if e != nil {
+			return nil, nil, e
+		}
+		if source.TraceID != trace.ID || source.SourceEventID == "" || source.CreatedBy == actor {
+			return nil, nil, ErrConflict
+		}
+		var payload struct {
+			Retrieved     []Ref `json:"retrieved"`
+			MemoryContext *struct {
+				Items []Ref `json:"items"`
+			} `json:"memory_context"`
+		}
+		if json.Unmarshal([]byte(source.Text), &payload) != nil {
+			return nil, nil, ErrInvalid
+		}
+		for _, r := range payload.Retrieved {
+			if r == in.Target {
+				exposed = true
+			}
+		}
+		sources = append(sources, sourceReference(source, "memory-outcome"))
+		relations = append(relations, ref)
+	}
+	if !exposed {
+		return nil, nil, ErrDenied
+	}
+	return sources, relations, nil
 }

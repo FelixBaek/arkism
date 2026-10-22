@@ -40,28 +40,15 @@ type agentRunTraceStore interface {
 }
 
 func (s *Service) Learn(ctx context.Context, token string, in LearningInput) (LearningResult, error) {
-	if !validScope(in.Scope) || in.Run.Collection != "agent_runs" || in.Evaluation.Collection != "evaluations" ||
-		!validRunLabel(in.Run.ID, 256) || !validRunLabel(in.Evaluation.ID, 256) || in.Run.Revision < 1 || in.Evaluation.Revision < 1 ||
-		!validRunLabel(in.TaskType, 128) || !validLearningText(in.Lesson, 64000, true) || !validLearningText(in.VerificationMethod, 2000, true) ||
-		!validLearningText(in.FailureReason, 2000, false) || containsSecret(structuredText(in.Scope)) {
+	if !validLearningInput(in) {
 		return LearningResult{}, ErrInvalid
 	}
 	if s.Repo == nil {
 		return LearningResult{}, ErrUnavailable
 	}
 
-	actor, err := s.authorize(ctx, token, "read:agent_runs", in.Scope, in.Run.ID, "")
+	actor, ctx, err := s.authorizeLearning(ctx, token, in)
 	if err != nil {
-		return LearningResult{}, err
-	}
-	if actor.Role != "agent" && actor.Role != "service" && actor.Role != "pipeline" {
-		return LearningResult{}, ErrDenied
-	}
-	ctx = bindRequestActor(ctx, actor)
-	if _, err = s.authorize(ctx, token, "read:evaluations", in.Scope, in.Evaluation.ID, ""); err != nil {
-		return LearningResult{}, err
-	}
-	if _, err = s.authorize(ctx, token, "read:memory_candidates", in.Scope, "", ""); err != nil {
 		return LearningResult{}, err
 	}
 
@@ -73,29 +60,13 @@ func (s *Service) Learn(ctx context.Context, token string, in LearningInput) (Le
 	if err != nil {
 		return LearningResult{}, err
 	}
-	traceID := run.ID
-	if traces, ok := s.Repo.(agentRunTraceStore); ok {
-		traceID, err = traces.TraceForAgentRun(ctx, in.Scope, run.ID)
-		if errors.Is(err, ErrNotFound) {
-			// Legacy runs predate canonical execution traces; their validated
-			// source event remains the evidence until they are re-ingested.
-			traceID, err = "", nil
-		}
-		if err != nil {
-			return LearningResult{}, err
-		}
+	traceID, err := s.learningTraceID(ctx, in.Scope, run.ID)
+	if err != nil {
+		return LearningResult{}, err
 	}
 	sourceEventID := sources[0].SourceID
-	reflectionRelations := []Ref{in.Run, in.Evaluation}
-	if traceID != "" && traceID != run.ID {
-		reflectionRelations = append(reflectionRelations, Ref{Collection: "execution_traces", ID: traceID, Revision: 1})
-	}
-	reflection := Reflection{TaskType: in.TaskType, Outcome: run.Run.Outcome, FailureReason: in.FailureReason, Lesson: in.Lesson, VerificationMethod: in.VerificationMethod, RunID: run.ID, EvaluationID: evaluation.ID}
-	if evaluation.Evaluation.Score != nil {
-		reflection.EvaluationScore = *evaluation.Evaluation.Score / *evaluation.Evaluation.ScoreMax
-	} else if *evaluation.Evaluation.Passed {
-		reflection.EvaluationScore = 1
-	}
+	reflectionRelations := learningRelations(in, traceID, run.ID)
+	reflection := learningReflection(in, run, evaluation)
 	generator := &Generator{Model: "arkism-local", PromptVersion: "experience-v1", PipelineVersion: "experience-v1"}
 	reflectionID := ID()
 	reflectionRef := Ref{Collection: colReflections, ID: reflectionID, Revision: 1}
@@ -144,32 +115,9 @@ func (s *Service) Learn(ctx context.Context, token string, in LearningInput) (Le
 		return LearningResult{}, err
 	}
 
-	rows, err := s.Repo.ListCandidates(ctx, ReviewInput{Scope: in.Scope, Status: "candidate", Kind: "lesson", Limit: 100})
+	prior, err := s.priorLearningCandidates(ctx, token, in, lessonInput)
 	if err != nil {
 		return LearningResult{}, err
-	}
-	if len(rows) > 100 {
-		return LearningResult{}, ErrUnavailable
-	}
-	prior := make([]learningCandidate, 0, len(rows))
-	for _, row := range rows {
-		if _, err = s.authorize(ctx, token, "read:memory_candidates", in.Scope, row.ID, ""); err != nil {
-			return LearningResult{}, err
-		}
-		if row.Scope != in.Scope || row.Kind != "lesson" || row.Status != "candidate" || row.Summary != lessonInput.Summary || row.Text != lessonInput.Text || !slices.Contains(row.Tags, learningTag(in.TaskType)) {
-			continue
-		}
-		runRef, evalRef, ok := learningRelationRefs(row.Relations)
-		if !ok {
-			continue
-		}
-		if _, err = s.authorize(ctx, token, "read:agent_runs", in.Scope, runRef.ID, ""); err != nil {
-			return LearningResult{}, err
-		}
-		if _, err = s.authorize(ctx, token, "read:evaluations", in.Scope, evalRef.ID, ""); err != nil {
-			return LearningResult{}, err
-		}
-		prior = append(prior, learningCandidate{row: row, run: runRef, evaluation: evalRef})
 	}
 
 	reflection = *reflectionInput.Reflection
@@ -246,12 +194,100 @@ func (s *Service) Learn(ctx context.Context, token string, in LearningInput) (Le
 	return out, nil
 }
 
+func learningRelations(in LearningInput, traceID, runID string) []Ref {
+	relations := []Ref{in.Run, in.Evaluation}
+	if traceID != "" && traceID != runID {
+		relations = append(relations, Ref{Collection: "execution_traces", ID: traceID, Revision: 1})
+	}
+	return relations
+}
+
+func learningReflection(in LearningInput, run, evaluation Record) Reflection {
+	reflection := Reflection{TaskType: in.TaskType, Outcome: run.Run.Outcome, FailureReason: in.FailureReason, Lesson: in.Lesson, VerificationMethod: in.VerificationMethod, RunID: run.ID, EvaluationID: evaluation.ID}
+	if evaluation.Evaluation.Score != nil {
+		reflection.EvaluationScore = *evaluation.Evaluation.Score / *evaluation.Evaluation.ScoreMax
+	} else if *evaluation.Evaluation.Passed {
+		reflection.EvaluationScore = 1
+	}
+	return reflection
+}
+
+func validLearningInput(in LearningInput) bool {
+	return validScope(in.Scope) && in.Run.Collection == "agent_runs" && in.Evaluation.Collection == "evaluations" &&
+		validRunLabel(in.Run.ID, 256) && validRunLabel(in.Evaluation.ID, 256) && in.Run.Revision >= 1 && in.Evaluation.Revision >= 1 &&
+		validRunLabel(in.TaskType, 128) && validLearningText(in.Lesson, 64000, true) && validLearningText(in.VerificationMethod, 2000, true) &&
+		validLearningText(in.FailureReason, 2000, false) && !containsSecret(structuredText(in.Scope))
+}
+
+func (s *Service) authorizeLearning(ctx context.Context, token string, in LearningInput) (Decision, context.Context, error) {
+	actor, err := s.authorize(ctx, token, "read:agent_runs", in.Scope, in.Run.ID, "")
+	if err != nil {
+		return actor, ctx, err
+	}
+	if actor.Role != "agent" && actor.Role != "service" && actor.Role != "pipeline" {
+		return actor, ctx, ErrDenied
+	}
+	ctx = bindRequestActor(ctx, actor)
+	if _, err = s.authorize(ctx, token, "read:evaluations", in.Scope, in.Evaluation.ID, ""); err != nil {
+		return actor, ctx, err
+	}
+	if _, err = s.authorize(ctx, token, "read:memory_candidates", in.Scope, "", ""); err != nil {
+		return actor, ctx, err
+	}
+	return actor, ctx, nil
+}
+
+func (s *Service) learningTraceID(ctx context.Context, scope Scope, runID string) (string, error) {
+	traces, ok := s.Repo.(agentRunTraceStore)
+	if !ok {
+		return runID, nil
+	}
+	traceID, err := traces.TraceForAgentRun(ctx, scope, runID)
+	if errors.Is(err, ErrNotFound) {
+		// Legacy runs predate canonical execution traces; their validated
+		// source event remains the evidence until they are re-ingested.
+		traceID, err = "", nil
+	}
+	return traceID, err
+}
+
+func (s *Service) priorLearningCandidates(ctx context.Context, token string, in LearningInput, lessonInput CreateInput) ([]learningCandidate, error) {
+	rows, err := s.Repo.ListCandidates(ctx, ReviewInput{Scope: in.Scope, Status: "candidate", Kind: "lesson", Limit: 100})
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) > 100 {
+		return nil, ErrUnavailable
+	}
+	prior := make([]learningCandidate, 0, len(rows))
+	for _, row := range rows {
+		if _, err = s.authorize(ctx, token, "read:memory_candidates", in.Scope, row.ID, ""); err != nil {
+			return nil, err
+		}
+		if row.Scope != in.Scope || row.Kind != "lesson" || row.Status != "candidate" || row.Summary != lessonInput.Summary || row.Text != lessonInput.Text || !slices.Contains(row.Tags, learningTag(in.TaskType)) {
+			continue
+		}
+		runRef, evalRef, ok := learningRelationRefs(row.Relations)
+		if !ok {
+			continue
+		}
+		if _, err = s.authorize(ctx, token, "read:agent_runs", in.Scope, runRef.ID, ""); err != nil {
+			return nil, err
+		}
+		if _, err = s.authorize(ctx, token, "read:evaluations", in.Scope, evalRef.ID, ""); err != nil {
+			return nil, err
+		}
+		prior = append(prior, learningCandidate{row: row, run: runRef, evaluation: evalRef})
+	}
+	return prior, nil
+}
+
 func learningEvidence(ctx context.Context, tx Tx, runRef, evaluationRef Ref, scope Scope) (Record, Record, error) {
 	run, err := tx.Get(ctx, "agent_runs", scope, runRef.ID)
 	if err != nil {
 		return Record{}, Record{}, err
 	}
-	if run.Scope != scope || run.Revision != runRef.Revision || !live(run) || run.Run == nil || run.Run.FinishedAt == nil || !terminalOutcome(run.Run.Outcome) || !validRun(run.Run, run.Scope, time.Now()) {
+	if !validLearningRun(run, runRef, scope) {
 		return Record{}, Record{}, ErrConflict
 	}
 	if err = checkSources(ctx, tx, run); err != nil {
@@ -261,13 +297,21 @@ func learningEvidence(ctx context.Context, tx Tx, runRef, evaluationRef Ref, sco
 	if err != nil {
 		return Record{}, Record{}, err
 	}
-	if evaluation.Scope != scope || evaluation.Revision != evaluationRef.Revision || !live(evaluation) || evaluation.Target == nil || *evaluation.Target != runRef || evaluation.Evaluation == nil || !validEvaluation(evaluation.Evaluation) || evaluation.Evaluation.EvalType == "model_self" || !evaluationRole(evaluation.Evaluation.EvalType, evaluation.CreatedByType) || evaluation.Evaluation.Passed == nil || evaluation.CreatedBy == run.CreatedBy {
+	if !validLearningEvaluation(evaluation, evaluationRef, runRef, run, scope) {
 		return Record{}, Record{}, ErrDenied
 	}
 	if err = checkEvaluationEvidence(ctx, tx, evaluation); err != nil {
 		return Record{}, Record{}, err
 	}
 	return run, evaluation, nil
+}
+
+func validLearningRun(run Record, runRef Ref, scope Scope) bool {
+	return run.Scope == scope && run.Revision == runRef.Revision && live(run) && run.Run != nil && run.Run.FinishedAt != nil && terminalOutcome(run.Run.Outcome) && validRun(run.Run, run.Scope, time.Now())
+}
+
+func validLearningEvaluation(evaluation Record, evaluationRef, runRef Ref, run Record, scope Scope) bool {
+	return evaluation.Scope == scope && evaluation.Revision == evaluationRef.Revision && live(evaluation) && evaluation.Target != nil && *evaluation.Target == runRef && evaluation.Evaluation != nil && validEvaluation(evaluation.Evaluation) && evaluation.Evaluation.EvalType != "model_self" && evaluationRole(evaluation.Evaluation.EvalType, evaluation.CreatedByType) && evaluation.Evaluation.Passed != nil && evaluation.CreatedBy != run.CreatedBy
 }
 
 func learningSources(ctx context.Context, tx Tx, run, evaluation Record) ([]SourceRef, string, error) {
@@ -330,7 +374,7 @@ func validLearningCandidate(ctx context.Context, tx Tx, candidate learningCandid
 		return false, err
 	}
 	now := time.Now()
-	if row.Revision != candidate.row.Revision || row.Status != "candidate" || row.EffectiveAt != nil && row.EffectiveAt.After(now) || row.ExpiresAt != nil && !row.ExpiresAt.After(now) || row.Kind != "lesson" || row.Text != lesson || row.Summary != lesson || !slices.Contains(row.Tags, learningTag(taskType)) {
+	if !currentLearningCandidate(row, candidate, taskType, lesson, now) {
 		return false, nil
 	}
 	runRef, evaluationRef, ok := learningRelationRefs(row.Relations)
@@ -338,35 +382,35 @@ func validLearningCandidate(ctx context.Context, tx Tx, candidate learningCandid
 		return false, nil
 	}
 	if err = checkSources(ctx, tx, row); err != nil {
-		if errors.Is(err, ErrUnavailable) {
-			return false, err
-		}
-		return false, nil
+		return learningCandidateErr(err)
 	}
 	if err = checkRelations(ctx, tx, row); err != nil {
-		if errors.Is(err, ErrUnavailable) {
-			return false, err
-		}
-		return false, nil
+		return learningCandidateErr(err)
 	}
 	run, evaluation, err := learningEvidence(ctx, tx, runRef, evaluationRef, scope)
 	if err != nil {
-		if errors.Is(err, ErrUnavailable) {
-			return false, err
-		}
-		return false, nil
+		return learningCandidateErr(err)
 	}
 	sources, sensitivity, err := learningSources(ctx, tx, run, evaluation)
 	if err != nil {
-		if errors.Is(err, ErrUnavailable) {
-			return false, err
-		}
-		return false, nil
+		return learningCandidateErr(err)
 	}
 	if row.Sensitivity != sensitivity || structuredText(row.Sources) != structuredText(sources) {
 		return false, nil
 	}
 	return true, nil
+}
+
+func currentLearningCandidate(row Record, candidate learningCandidate, taskType, lesson string, now time.Time) bool {
+	return row.Revision == candidate.row.Revision && row.Status == "candidate" && (row.EffectiveAt == nil || !row.EffectiveAt.After(now)) && (row.ExpiresAt == nil || row.ExpiresAt.After(now)) && row.Kind == "lesson" && row.Text == lesson && row.Summary == lesson && slices.Contains(row.Tags, learningTag(taskType))
+}
+
+// Only an unavailable store fails learning; other errors just disqualify the candidate.
+func learningCandidateErr(err error) (bool, error) {
+	if errors.Is(err, ErrUnavailable) {
+		return false, err
+	}
+	return false, nil
 }
 
 func learningTag(taskType string) string { return "learning:" + ContentHash(taskType) }

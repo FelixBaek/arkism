@@ -214,7 +214,7 @@ func (s *Service) BuildMergePool(ctx context.Context, token string, in MergePool
 	if in.K == 0 {
 		in.K = mergePoolK
 	}
-	if !validScope(in.Scope) || in.Limit < 1 || in.Limit > mergePoolLimitMax || in.K < 1 || in.K > mergePoolKMax {
+	if !validMergePoolInput(in) {
 		return out, ErrInvalid
 	}
 	d, err := s.mergeHuman(ctx, token, reviewAction, in.Scope, "")
@@ -251,11 +251,7 @@ func (s *Service) BuildMergePool(ctx context.Context, token string, in MergePool
 		if err != nil {
 			return out, err
 		}
-		for _, why := range degraded {
-			if !slices.Contains(out.Degraded, why) {
-				out.Degraded = append(out.Degraded, why)
-			}
-		}
+		out.Degraded = appendMissing(out.Degraded, degraded)
 		item := MergePoolItem{Ref: Ref{Collection: "memory_candidates", ID: r.ID, Revision: r.Revision}, Kind: r.Kind, Text: clipText(r.Text, mergePoolTextRunes), UpdatedAt: r.UpdatedAt}
 		for _, m := range similar {
 			item.Similar = append(item.Similar, m.ID)
@@ -286,13 +282,23 @@ func (s *Service) BuildMergePool(ctx context.Context, token string, in MergePool
 	return out, nil
 }
 
+func validMergePoolInput(in MergePoolInput) bool {
+	return validScope(in.Scope) && in.Limit >= 1 && in.Limit <= mergePoolLimitMax && in.K >= 1 && in.K <= mergePoolKMax
+}
+
+func appendMissing(list, values []string) []string {
+	for _, v := range values {
+		if !slices.Contains(list, v) {
+			list = append(list, v)
+		}
+	}
+	return list
+}
+
 // similarMemories is search's lanes over approved memories for one candidate's
 // text, rechecked against the records and read with the caller's context permission.
 func (s *Service) similarMemories(ctx context.Context, token string, d Decision, scope Scope, cand Record, k int) ([]Record, []string, error) {
 	query := clipText(strings.TrimSpace(cand.Text), 1000)
-	var vec []float64
-	space := ""
-	degraded := []string{}
 	sd, err := s.authorize(ctx, token, "search:"+colMemories, scope, "", query)
 	if err != nil {
 		return nil, nil, err
@@ -300,24 +306,9 @@ func (s *Service) similarMemories(ctx context.Context, token string, d Decision,
 	if sd.PrincipalID != d.PrincipalID {
 		return nil, nil, ErrDenied
 	}
-	if sd.ExternalTransfer && sd.ContentSafe && s.Embedder != nil && safeTransfer(query) {
-		reserved, err := s.beginProviderCall(ctx, scope, "embedding_query", embeddingProvider(s.Embedder), s.Embedder.Space())
-		if err != nil {
-			return nil, nil, err
-		}
-		batch, err := embedMeasured(ctx, s.Embedder, []string{query}, "query")
-		if err != nil {
-			_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
-			degraded = append(degraded, "memory_vector_unavailable")
-		} else if err = s.finishProviderCall(ctx, reserved, batch.Usage, true); err != nil {
-			return nil, nil, err
-		} else if len(batch.Items) == 1 && len(batch.Items[0].Vector) == VectorDimension {
-			vec, space = batch.Items[0].Vector, s.Embedder.Space()
-		} else {
-			degraded = append(degraded, "memory_vector_unavailable")
-		}
-	} else {
-		degraded = append(degraded, "memory_vector_disabled")
+	vec, space, degraded, err := s.mergeQueryVector(ctx, sd, scope, query)
+	if err != nil {
+		return nil, nil, err
 	}
 	lists, err := s.Repo.SearchCollection(ctx, colMemories, SearchInput{Scope: scope, Query: query, Limit: k * 3}, vec, space)
 	if err != nil {
@@ -357,6 +348,31 @@ func (s *Service) similarMemories(ctx context.Context, token string, d Decision,
 		out = append(out, records[h.ID])
 	}
 	return out, degraded, nil
+}
+
+// mergeQueryVector embeds the query when transfer is allowed; a failed
+// embedding degrades to the word and text lanes.
+func (s *Service) mergeQueryVector(ctx context.Context, sd Decision, scope Scope, query string) ([]float64, string, []string, error) {
+	degraded := []string{}
+	if !(sd.ExternalTransfer && sd.ContentSafe && s.Embedder != nil && safeTransfer(query)) {
+		return nil, "", append(degraded, "memory_vector_disabled"), nil
+	}
+	reserved, err := s.beginProviderCall(ctx, scope, "embedding_query", embeddingProvider(s.Embedder), s.Embedder.Space())
+	if err != nil {
+		return nil, "", nil, err
+	}
+	batch, err := embedMeasured(ctx, s.Embedder, []string{query}, "query")
+	if err != nil {
+		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
+		return nil, "", append(degraded, "memory_vector_unavailable"), nil
+	}
+	if err = s.finishProviderCall(ctx, reserved, batch.Usage, true); err != nil {
+		return nil, "", nil, err
+	}
+	if len(batch.Items) == 1 && len(batch.Items[0].Vector) == VectorDimension {
+		return batch.Items[0].Vector, s.Embedder.Space(), degraded, nil
+	}
+	return nil, "", append(degraded, "memory_vector_unavailable"), nil
 }
 
 // checkVerdict is the pure check of one answer against the pool: the
@@ -598,7 +614,7 @@ func (s *Service) GetMergeProposal(ctx context.Context, token, id string, scope 
 // A record changed since the proposal makes it stale (409).
 func (s *Service) DecideMergeProposal(ctx context.Context, token, id string, in MergeDecision) (Record, error) {
 	status, ok := mergeDecisions[in.Decision]
-	if !ok || !validScope(in.Scope) || !validRunLabel(id, 256) || in.ExpectedRevision < 1 || in.Decision == "dismiss" && in.Content != "" {
+	if !ok || !validMergeDecision(id, in) {
 		return Record{}, ErrInvalid
 	}
 	d, err := s.mergeHuman(ctx, token, "write:"+colMergeProposals, in.Scope, id)
@@ -609,7 +625,7 @@ func (s *Service) DecideMergeProposal(ctx context.Context, token, id string, in 
 	if err != nil {
 		return Record{}, err
 	}
-	if seen.Revision != in.ExpectedRevision || seen.Status != mergeOpen || seen.Merge == nil || seen.Merge.Proposal == nil {
+	if !openMergeProposal(seen, in.ExpectedRevision) {
 		return Record{}, ErrConflict
 	}
 	p := *seen.Merge.Proposal
@@ -626,33 +642,15 @@ func (s *Service) DecideMergeProposal(ctx context.Context, token, id string, in 
 		return Record{}, ErrConflict
 	}
 	if p.Action == "merge" {
-		// Before approving anything: every target as proposed, and the same
-		// permission the conflict path asks for on both memories of each pair.
-		for _, t := range p.Targets {
-			m, err := s.Repo.Get(ctx, colMemories, in.Scope, t.ID)
-			if errors.Is(err, ErrNotFound) {
-				return stale()
-			}
-			if err != nil {
-				return Record{}, err
-			}
-			if m.Revision != t.Revision || !poolMemory(ctx, s.Repo, m) {
-				return stale()
-			}
-			if _, err := s.conflictPrincipal(ctx, token, ConflictInput{Scope: in.Scope, Memories: []Ref{t, {Collection: colMemories, ID: p.Candidate.ID}},
-				Action: "mark", Hold: "both", Reason: "기억 병합 제안 " + seen.ID}); err != nil {
-				return Record{}, err
-			}
+		changed, err := s.mergeTargetsChanged(ctx, token, in.Scope, seen.ID, p)
+		if changed {
+			return stale()
+		}
+		if err != nil {
+			return Record{}, err
 		}
 	}
-	review := CandidateReviewInput{Scope: in.Scope, ExpectedRevision: p.Candidate.Revision, Action: "approve"}
-	switch {
-	case p.Action == "skip":
-		review.Action, review.Reason = "reject", "기억 병합 제안 "+seen.ID+": 이미 있는 기억과 같음"
-	case in.Content != "":
-		review.Action, review.Content = "edit_approve", in.Content
-	}
-	mem, err := s.ReviewCandidate(ctx, token, p.Candidate.ID, review)
+	mem, err := s.ReviewCandidate(ctx, token, p.Candidate.ID, mergeReview(in, p, seen.ID))
 	if errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound) {
 		return stale()
 	}
@@ -691,6 +689,48 @@ func (s *Service) DecideMergeProposal(ctx context.Context, token, id string, in 
 		return stale()
 	}
 	return out, err
+}
+
+func validMergeDecision(id string, in MergeDecision) bool {
+	return validScope(in.Scope) && validRunLabel(id, 256) && in.ExpectedRevision >= 1 && (in.Decision != "dismiss" || in.Content == "")
+}
+
+func openMergeProposal(seen Record, expected int64) bool {
+	return seen.Revision == expected && seen.Status == mergeOpen && seen.Merge != nil && seen.Merge.Proposal != nil
+}
+
+// mergeTargetsChanged checks, before approving anything, every target as
+// proposed, and the same permission the conflict path asks for on both
+// memories of each pair. changed means the proposal is stale.
+func (s *Service) mergeTargetsChanged(ctx context.Context, token string, scope Scope, proposalID string, p MergeProposal) (bool, error) {
+	for _, t := range p.Targets {
+		m, err := s.Repo.Get(ctx, colMemories, scope, t.ID)
+		if errors.Is(err, ErrNotFound) {
+			return true, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if m.Revision != t.Revision || !poolMemory(ctx, s.Repo, m) {
+			return true, nil
+		}
+		if _, err := s.conflictPrincipal(ctx, token, ConflictInput{Scope: scope, Memories: []Ref{t, {Collection: colMemories, ID: p.Candidate.ID}},
+			Action: "mark", Hold: "both", Reason: "기억 병합 제안 " + proposalID}); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
+}
+
+func mergeReview(in MergeDecision, p MergeProposal, proposalID string) CandidateReviewInput {
+	review := CandidateReviewInput{Scope: in.Scope, ExpectedRevision: p.Candidate.Revision, Action: "approve"}
+	switch {
+	case p.Action == "skip":
+		review.Action, review.Reason = "reject", "기억 병합 제안 "+proposalID+": 이미 있는 기억과 같음"
+	case in.Content != "":
+		review.Action, review.Content = "edit_approve", in.Content
+	}
+	return review
 }
 
 func (s *Service) closeMerge(ctx context.Context, scope Scope, seen Record, status, decision, principal string, memory *Ref) (Record, error) {

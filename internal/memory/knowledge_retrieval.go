@@ -176,38 +176,12 @@ func knowledgeBindingRecords(ctx context.Context, tx Tx, scope Scope, id, profil
 	if err != nil {
 		return b, Record{}, Record{}, "", err
 	}
-	if b.Knowledge == nil || b.Scope != scope || b.Knowledge.SpecialistProfileID != profile || b.Knowledge.SpecialistProfileVersionID != version || b.Knowledge.SkillID != skill {
-		return b, Record{}, Record{}, "", ErrDenied
+	if reason, err := knowledgeBindingState(ctx, tx, scope, b, profile, version, skill); reason != "" || err != nil {
+		return b, Record{}, Record{}, reason, err
 	}
-	if err = knowledgeSourceFence(ctx, tx, b); err != nil {
-		return b, Record{}, Record{}, "", err
-	}
-	k := b.Knowledge
-	if b.Status != "active" || k.LifecycleStatus != "active_synthetic" {
-		return b, Record{}, Record{}, "binding_inactive", nil
-	}
-	now := time.Now().UTC()
-	if k.ValidFrom != nil && now.Before(*k.ValidFrom) || k.ValidTo != nil && !now.Before(*k.ValidTo) {
-		return b, Record{}, Record{}, "binding_expired", nil
-	}
-	if !slices.Contains([]string{"synthetic_retrieval", "cite_required"}, k.AccessMode) {
-		return b, Record{}, Record{}, "access_mode_disabled", nil
-	}
-	h, err := tx.Get(ctx, "knowledge_sources", scope, k.KnowledgeSourceID)
-	if err != nil {
-		return b, h, Record{}, "", err
-	}
-	if h.Knowledge == nil || h.Scope != scope || h.SourceEventID != b.SourceEventID {
-		return b, h, Record{}, "", ErrDenied
-	}
-	if err = knowledgeSourceFence(ctx, tx, h); err != nil {
-		return b, h, Record{}, "", err
-	}
-	if !live(h) || h.Knowledge.LifecycleStatus != "active" {
-		return b, h, Record{}, "source_inactive", nil
-	}
-	if knowledgeTrustRank(k.TrustRequirement) < 0 || knowledgeTrustRank(h.Knowledge.TrustLevel) < max(2, knowledgeTrustRank(k.TrustRequirement)) {
-		return b, h, Record{}, "trust_requirement", nil
+	h, reason, err := knowledgeBindingSource(ctx, tx, scope, b)
+	if reason != "" || err != nil {
+		return b, h, Record{}, reason, err
 	}
 	doc, err := tx.Get(ctx, "knowledge_documents", scope, h.Knowledge.DocumentID)
 	if err != nil {
@@ -225,6 +199,46 @@ func knowledgeBindingRecords(ctx context.Context, tx Tx, scope Scope, id, profil
 		}
 	}
 	return b, h, doc, "", nil
+}
+func knowledgeBindingState(ctx context.Context, tx Tx, scope Scope, b Record, profile, version, skill string) (string, error) {
+	if b.Knowledge == nil || b.Scope != scope || b.Knowledge.SpecialistProfileID != profile || b.Knowledge.SpecialistProfileVersionID != version || b.Knowledge.SkillID != skill {
+		return "", ErrDenied
+	}
+	if err := knowledgeSourceFence(ctx, tx, b); err != nil {
+		return "", err
+	}
+	k := b.Knowledge
+	if b.Status != "active" || k.LifecycleStatus != "active_synthetic" {
+		return "binding_inactive", nil
+	}
+	now := time.Now().UTC()
+	if k.ValidFrom != nil && now.Before(*k.ValidFrom) || k.ValidTo != nil && !now.Before(*k.ValidTo) {
+		return "binding_expired", nil
+	}
+	if !slices.Contains([]string{"synthetic_retrieval", "cite_required"}, k.AccessMode) {
+		return "access_mode_disabled", nil
+	}
+	return "", nil
+}
+func knowledgeBindingSource(ctx context.Context, tx Tx, scope Scope, b Record) (Record, string, error) {
+	k := b.Knowledge
+	h, err := tx.Get(ctx, "knowledge_sources", scope, k.KnowledgeSourceID)
+	if err != nil {
+		return h, "", err
+	}
+	if h.Knowledge == nil || h.Scope != scope || h.SourceEventID != b.SourceEventID {
+		return h, "", ErrDenied
+	}
+	if err = knowledgeSourceFence(ctx, tx, h); err != nil {
+		return h, "", err
+	}
+	if !live(h) || h.Knowledge.LifecycleStatus != "active" {
+		return h, "source_inactive", nil
+	}
+	if knowledgeTrustRank(k.TrustRequirement) < 0 || knowledgeTrustRank(h.Knowledge.TrustLevel) < max(2, knowledgeTrustRank(k.TrustRequirement)) {
+		return h, "trust_requirement", nil
+	}
+	return h, "", nil
 }
 func knowledgePin(b, h, doc Record) KnowledgePin {
 	return KnowledgePin{BindingID: b.ID, BindingRevision: b.Revision, KnowledgeSourceID: h.ID, SourceRevision: h.Revision, SourceVersion: h.Knowledge.SourceVersion, DocumentID: doc.ID, DocumentRevision: doc.Revision, ParserVersion: doc.Knowledge.ParserVersion, ChunkerVersion: doc.Knowledge.ChunkerVersion}
@@ -266,7 +280,7 @@ func (s *Service) RetrieveKnowledge(ctx context.Context, token string, in Knowle
 	if in.Mode == "" {
 		in.Mode = knowledgeModeDeterministic
 	}
-	if len(in.BindingIDs) == 0 || len(in.BindingIDs) > 8 || strings.TrimSpace(in.Query) == "" || len(in.Query) > 2048 || containsSecret(in.Query) || in.MaxTokens < 256 || in.MaxTokens > 8192 || in.Limit < 1 || in.Limit > 8 || !validKnowledgeMode(in.Mode) || in.Fallback != "" && !validKnowledgeFallback(in.Fallback) {
+	if !validKnowledgeRetrieve(in) {
 		return KnowledgeReceipt{}, ErrInvalid
 	}
 	decision, err := s.knowledgeAuthorization(ctx, token, "retrieve:knowledge", in.Scope, "")
@@ -328,38 +342,8 @@ func (s *Service) RetrieveKnowledge(ctx context.Context, token string, in Knowle
 				continue
 			}
 			log.Pins = append(log.Pins, knowledgePin(b, h, doc))
-			// shortcut: bounded sequential fixture scan; the vector lane ranks
-			// only what this scan already authorized.
-			for _, documentID := range h.Knowledge.DocumentIDs {
-				old, e := tx.Get(ctx, "knowledge_documents", in.Scope, documentID)
-				if e != nil {
-					return e
-				}
-				if old.Knowledge == nil {
-					return ErrConflict
-				}
-				for _, chunkID := range old.Knowledge.ChunkIDs {
-					if len(log.CandidateChunkIDs) >= knowledgeCandidateLimit {
-						return ErrInvalid
-					}
-					log.CandidateChunkIDs = append(log.CandidateChunkIDs, chunkID)
-					if documentID != doc.ID {
-						log.Exclusions = append(log.Exclusions, KnowledgeExclusion{ID: chunkID, Reason: "superseded_version"})
-						continue
-					}
-					chunk, e := tx.Get(ctx, "knowledge_chunks", in.Scope, chunkID)
-					if e != nil {
-						return e
-					}
-					// One document is chunked by exactly one chunker version.
-					if chunk.Knowledge == nil || !live(chunk) || chunk.ContentErased || chunk.Knowledge.DocumentID != doc.ID || chunk.Knowledge.SourceVersion != h.Knowledge.SourceVersion || chunk.Knowledge.ChunkerVersion != doc.Knowledge.ChunkerVersion || chunk.SourceEventID != h.SourceEventID || ContentHash(chunk.Text) != chunk.ContentHash {
-						return ErrConflict
-					}
-					eligible = append(eligible, knowledgeCandidate{b: b, h: h, doc: doc, chunk: chunk, embedded: embedding != nil && knowledgeChunkEmbedded(chunk, embedding.Space)})
-					if !slices.Contains(eligibleIDs, chunk.ID) {
-						eligibleIDs = append(eligibleIDs, chunk.ID)
-					}
-				}
+			if eligible, eligibleIDs, e = knowledgeBindingCandidates(ctx, tx, in.Scope, log, b, h, doc, embedding, eligible, eligibleIDs); e != nil {
+				return e
 			}
 		}
 		// The full-text lane ranks only the chunks the filters above allowed.
@@ -368,20 +352,7 @@ func (s *Service) RetrieveKnowledge(ctx context.Context, token string, in Knowle
 		if e != nil {
 			return e
 		}
-		matched := map[string]KnowledgeTextRank{}
-		for _, rank := range textRanks {
-			matched[rank.ID] = rank
-		}
-		candidates := []knowledgeCandidate{}
-		for _, item := range eligible {
-			rank := matched[item.chunk.ID]
-			if reason := knowledgeCandidateExclusion(mode, rank.Matched, item.embedded); reason != "" {
-				log.Exclusions = append(log.Exclusions, KnowledgeExclusion{ID: item.chunk.ID, Reason: reason})
-				continue
-			}
-			item.overlap, item.textScore = rank.Matched, rank.Score
-			candidates = append(candidates, item)
-		}
+		candidates := knowledgeMatchedCandidates(log, mode, eligible, textRanks)
 		ordered, semanticRanked, e := knowledgeRank(ctx, tx, in.Scope, mode, candidates, embedding)
 		if e != nil {
 			return e
@@ -394,45 +365,12 @@ func (s *Service) RetrieveKnowledge(ctx context.Context, token string, in Knowle
 			semanticLaneEmpty = true
 			return fmt.Errorf("fusion semantic lane ranked no candidates with retrieval_fallback=strict: %w", ErrSemanticLaneDown)
 		}
-		selected := map[string]bool{}
-		for _, item := range ordered {
-			reason := ""
-			if selected[item.chunk.ID] {
-				reason = "duplicate_chunk"
-			} else if len(c.Items) >= in.Limit {
-				reason = "result_limit"
-			}
-			if reason != "" {
-				log.Exclusions = append(log.Exclusions, KnowledgeExclusion{ID: item.chunk.ID, Reason: reason})
-				continue
-			}
-			evidence := knowledgeEvidence(item.b, item.h, item.doc, item.chunk)
-			knowledgeRankEvidence(&evidence, mode, item, len(c.Items)+1)
-			c.Items = append(c.Items, evidence)
-			if len([]rune(structuredText(c))) > in.MaxTokens {
-				c.Items = c.Items[:len(c.Items)-1]
-				log.Exclusions = append(log.Exclusions, KnowledgeExclusion{ID: item.chunk.ID, Reason: "context_budget"})
-				continue
-			}
-			if e := tx.FenceSearchRead(ctx, in.Scope, "knowledge_chunks", item.chunk.ID, item.chunk.Revision); e != nil {
-				return e
-			}
-			selected[item.chunk.ID] = true
-			log.Selected = append(log.Selected, knowledgeSelection(mode, item, len(c.Items)))
+		if e := knowledgeSelectEvidence(ctx, tx, in, mode, ordered, &c, log); e != nil {
+			return e
 		}
 		sort.Slice(sources, func(i, j int) bool { return sources[i].SourceID < sources[j].SourceID })
 		log.ContextHash = knowledgeContextHash(c, log)
-		record := consultationRecord("retrieval-"+ID(), in.Scope, decision.PrincipalID)
-		record.Kind = "synthetic_knowledge_retrieval"
-		record.OriginProduct = "synthetic-knowledge"
-		record.KnowledgeRetrieval = log
-		record.Sources = sources
-		if len(sources) > 0 {
-			record.SourceEventID = sources[0].SourceID
-		}
-		for _, pin := range log.Pins {
-			record.Relations = append(record.Relations, Ref{Collection: "knowledge_bindings", ID: pin.BindingID, Revision: pin.BindingRevision}, Ref{Collection: "knowledge_documents", ID: pin.DocumentID, Revision: pin.DocumentRevision})
-		}
+		record := knowledgeRetrievalRecord(in.Scope, decision.PrincipalID, log, sources)
 		if e := tx.Insert(ctx, colRetrievalLogs, record); e != nil {
 			return e
 		}
@@ -446,6 +384,110 @@ func (s *Service) RetrieveKnowledge(ctx context.Context, token string, in Knowle
 		return KnowledgeReceipt{}, errors.Join(err, s.recordKnowledgeRetrievalFailure(ctx, in.Scope, decision.PrincipalID, "semantic_lane_empty"))
 	}
 	return result, err
+}
+func validKnowledgeRetrieve(in KnowledgeRetrieveInput) bool {
+	return len(in.BindingIDs) != 0 && len(in.BindingIDs) <= 8 && strings.TrimSpace(in.Query) != "" && len(in.Query) <= 2048 && !containsSecret(in.Query) && in.MaxTokens >= 256 && in.MaxTokens <= 8192 && in.Limit >= 1 && in.Limit <= 8 && validKnowledgeMode(in.Mode) && (in.Fallback == "" || validKnowledgeFallback(in.Fallback))
+}
+
+// shortcut: bounded sequential fixture scan; the vector lane ranks
+// only what this scan already authorized.
+func knowledgeBindingCandidates(ctx context.Context, tx Tx, scope Scope, log *KnowledgeRetrievalLog, b, h, doc Record, embedding *Embedding, eligible []knowledgeCandidate, eligibleIDs []string) ([]knowledgeCandidate, []string, error) {
+	for _, documentID := range h.Knowledge.DocumentIDs {
+		old, e := tx.Get(ctx, "knowledge_documents", scope, documentID)
+		if e != nil {
+			return eligible, eligibleIDs, e
+		}
+		if old.Knowledge == nil {
+			return eligible, eligibleIDs, ErrConflict
+		}
+		for _, chunkID := range old.Knowledge.ChunkIDs {
+			if len(log.CandidateChunkIDs) >= knowledgeCandidateLimit {
+				return eligible, eligibleIDs, ErrInvalid
+			}
+			log.CandidateChunkIDs = append(log.CandidateChunkIDs, chunkID)
+			if documentID != doc.ID {
+				log.Exclusions = append(log.Exclusions, KnowledgeExclusion{ID: chunkID, Reason: "superseded_version"})
+				continue
+			}
+			chunk, e := tx.Get(ctx, "knowledge_chunks", scope, chunkID)
+			if e != nil {
+				return eligible, eligibleIDs, e
+			}
+			if !validKnowledgeChunk(chunk, h, doc) {
+				return eligible, eligibleIDs, ErrConflict
+			}
+			eligible = append(eligible, knowledgeCandidate{b: b, h: h, doc: doc, chunk: chunk, embedded: embedding != nil && knowledgeChunkEmbedded(chunk, embedding.Space)})
+			if !slices.Contains(eligibleIDs, chunk.ID) {
+				eligibleIDs = append(eligibleIDs, chunk.ID)
+			}
+		}
+	}
+	return eligible, eligibleIDs, nil
+}
+
+// One document is chunked by exactly one chunker version.
+func validKnowledgeChunk(chunk, h, doc Record) bool {
+	return chunk.Knowledge != nil && live(chunk) && !chunk.ContentErased && chunk.Knowledge.DocumentID == doc.ID && chunk.Knowledge.SourceVersion == h.Knowledge.SourceVersion && chunk.Knowledge.ChunkerVersion == doc.Knowledge.ChunkerVersion && chunk.SourceEventID == h.SourceEventID && ContentHash(chunk.Text) == chunk.ContentHash
+}
+func knowledgeMatchedCandidates(log *KnowledgeRetrievalLog, mode string, eligible []knowledgeCandidate, textRanks []KnowledgeTextRank) []knowledgeCandidate {
+	matched := map[string]KnowledgeTextRank{}
+	for _, rank := range textRanks {
+		matched[rank.ID] = rank
+	}
+	candidates := []knowledgeCandidate{}
+	for _, item := range eligible {
+		rank := matched[item.chunk.ID]
+		if reason := knowledgeCandidateExclusion(mode, rank.Matched, item.embedded); reason != "" {
+			log.Exclusions = append(log.Exclusions, KnowledgeExclusion{ID: item.chunk.ID, Reason: reason})
+			continue
+		}
+		item.overlap, item.textScore = rank.Matched, rank.Score
+		candidates = append(candidates, item)
+	}
+	return candidates
+}
+func knowledgeSelectEvidence(ctx context.Context, tx Tx, in KnowledgeRetrieveInput, mode string, ordered []knowledgeCandidate, c *KnowledgeContext, log *KnowledgeRetrievalLog) error {
+	selected := map[string]bool{}
+	for _, item := range ordered {
+		reason := ""
+		if selected[item.chunk.ID] {
+			reason = "duplicate_chunk"
+		} else if len(c.Items) >= in.Limit {
+			reason = "result_limit"
+		}
+		if reason != "" {
+			log.Exclusions = append(log.Exclusions, KnowledgeExclusion{ID: item.chunk.ID, Reason: reason})
+			continue
+		}
+		evidence := knowledgeEvidence(item.b, item.h, item.doc, item.chunk)
+		knowledgeRankEvidence(&evidence, mode, item, len(c.Items)+1)
+		c.Items = append(c.Items, evidence)
+		if len([]rune(structuredText(*c))) > in.MaxTokens {
+			c.Items = c.Items[:len(c.Items)-1]
+			log.Exclusions = append(log.Exclusions, KnowledgeExclusion{ID: item.chunk.ID, Reason: "context_budget"})
+			continue
+		}
+		if e := tx.FenceSearchRead(ctx, in.Scope, "knowledge_chunks", item.chunk.ID, item.chunk.Revision); e != nil {
+			return e
+		}
+		selected[item.chunk.ID] = true
+		log.Selected = append(log.Selected, knowledgeSelection(mode, item, len(c.Items)))
+	}
+	return nil
+}
+func knowledgeRetrievalRecord(scope Scope, principal string, log *KnowledgeRetrievalLog, sources []SourceRef) Record {
+	record := consultationRecord("retrieval-"+ID(), scope, principal)
+	record.Kind = "synthetic_knowledge_retrieval"
+	record.OriginProduct = "synthetic-knowledge"
+	record.KnowledgeRetrieval = log
+	record.Sources = sources
+	if len(sources) > 0 {
+		record.SourceEventID = sources[0].SourceID
+	}
+	for _, pin := range log.Pins {
+		record.Relations = append(record.Relations, Ref{Collection: "knowledge_bindings", ID: pin.BindingID, Revision: pin.BindingRevision}, Ref{Collection: "knowledge_documents", ID: pin.DocumentID, Revision: pin.DocumentRevision})
+	}
+	return record
 }
 
 // recordKnowledgeRetrievalFailure writes the typed strict-failure marker to
@@ -478,7 +520,7 @@ func (s *Service) RevalidateKnowledge(ctx context.Context, token string, in Know
 		if !live(r) || r.ContentErased || log == nil {
 			return ErrNotFound
 		}
-		if log.ContextHash != in.ContextHash || log.ProfileID != in.ProfileID || log.ProfileVersion != in.ProfileVersion || log.SkillID != in.SkillID || log.SkillVersion != in.SkillVersion {
+		if !knowledgeLogMatches(log, in) {
 			return ErrConflict
 		}
 		for _, ref := range r.Sources {
@@ -508,7 +550,7 @@ func (s *Service) RevalidateKnowledge(ctx context.Context, token string, in Know
 			if e != nil {
 				return e
 			}
-			if chunk.Knowledge == nil || !live(chunk) || chunk.ContentErased || chunk.Revision != selection.ChunkRevision || chunk.ContentHash != selection.ContentHash || ContentHash(chunk.Text) != selection.ContentHash || chunk.Knowledge.DocumentID != records.doc.ID || chunk.SourceEventID != records.h.SourceEventID {
+			if !validSelectedKnowledgeChunk(chunk, selection, records.h, records.doc) {
 				return ErrConflict
 			}
 			if e = tx.FenceSearchRead(ctx, in.Scope, "knowledge_chunks", chunk.ID, chunk.Revision); e != nil {
@@ -528,6 +570,12 @@ func (s *Service) RevalidateKnowledge(ctx context.Context, token string, in Know
 		return nil
 	})
 	return out, err
+}
+func knowledgeLogMatches(log *KnowledgeRetrievalLog, in KnowledgeRevalidateInput) bool {
+	return log.ContextHash == in.ContextHash && log.ProfileID == in.ProfileID && log.ProfileVersion == in.ProfileVersion && log.SkillID == in.SkillID && log.SkillVersion == in.SkillVersion
+}
+func validSelectedKnowledgeChunk(chunk Record, selection KnowledgeSelection, h, doc Record) bool {
+	return chunk.Knowledge != nil && live(chunk) && !chunk.ContentErased && chunk.Revision == selection.ChunkRevision && chunk.ContentHash == selection.ContentHash && ContentHash(chunk.Text) == selection.ContentHash && chunk.Knowledge.DocumentID == doc.ID && chunk.SourceEventID == h.SourceEventID
 }
 func (s *Service) GetKnowledgeRetrievalLog(ctx context.Context, token, id string, scope Scope) (Record, error) {
 	if !s.SyntheticHandoff {

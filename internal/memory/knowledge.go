@@ -143,42 +143,21 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 	}
 	ext := strings.ToLower(path.Ext(in.Filename))
 	mime := map[string]string{".txt": "text/plain", ".md": "text/markdown", ".json": "application/json"}[ext]
-	if !validRunLabel(in.SourceKey, 128) || !validRunLabel(in.Filename, 200) || strings.ContainsAny(in.Filename, "/\\") || path.Base(in.Filename) != in.Filename || mime == "" || in.MIMEType != mime || len(in.Content) == 0 || len(in.Content) > 64<<10 || !utf8.ValidString(in.Content) || strings.ContainsRune(in.Content, 0) || in.ExpectedRevision < 0 {
+	if !validKnowledgeIngest(in, mime) {
 		return out, ErrInvalid
 	}
 	if containsSecret(in.Content) || containsSecret(in.Filename) || containsSecret(in.SourceKey) {
 		return out, ErrSecretDetected
 	}
-	for _, action := range []string{"write:sources", "write:artifacts", "write:" + colKnowledgeDocuments, "write:" + colKnowledgeChunks} {
-		a, err := s.authorize(ctx, token, action, in.Scope, "", in.Content)
-		if err != nil {
-			return out, err
-		}
-		if a.PrincipalID != d.PrincipalID || a.Role != "human" || !a.ContentSafe {
-			return out, ErrDenied
-		}
+	if e = s.authorizeKnowledgeIngest(ctx, token, in, d); e != nil {
+		return out, e
 	}
 	hash := ContentHash(in.Content)
 	id := "knowledge-" + ContentHash(structuredText(in.Scope)+in.SourceKey)
 	anchorID := "knowledge-source-" + ContentHash(id)
 	version := ContentHash(in.MIMEType + ":" + hash + ":" + knowledgeParserVersion + ":" + knowledgeChunkerVersion)
 	documentID := "knowledge-document-" + ContentHash(id+version)
-	normalized := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(in.Content, "\r\n", "\n"), "\r", "\n"))
-	failed := false
-	if ext == ".json" {
-		var v any
-		decoder := json.NewDecoder(strings.NewReader(in.Content))
-		decoder.UseNumber()
-		if !json.Valid([]byte(in.Content)) || decoder.Decode(&v) != nil {
-			failed = true
-		} else {
-			b, _ := json.Marshal(v)
-			normalized = string(b)
-		}
-	}
-	if normalized == "" {
-		failed = true
-	}
+	normalized, failed := normalizeKnowledgeContent(in.Content, ext)
 	e = s.withHandoffArtifactWriter(ctx, func(write handoffArtifactWriter) error {
 		return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 			old, err := tx.Get(ctx, colKnowledgeSources, in.Scope, id)
@@ -186,58 +165,11 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 			if err != nil && !errors.Is(err, ErrNotFound) {
 				return err
 			}
-			if exists {
-				if err = knowledgeLive(ctx, tx, old); err != nil {
-					return err
-				}
-				if old.Knowledge.SourceVersion == version {
-					for _, ref := range old.Sources {
-						if err = tx.FenceSource(ctx, in.Scope, ref.SourceID); err != nil {
-							return err
-						}
-					}
-					doc, err := tx.Get(ctx, colKnowledgeDocuments, in.Scope, documentID)
-					if err != nil {
-						return err
-					}
-					out = KnowledgeIngestResult{Source: old, Document: doc, Chunks: []Record{}, Duplicate: true}
-					for _, cid := range doc.Knowledge.ChunkIDs {
-						c, err := tx.Get(ctx, colKnowledgeChunks, in.Scope, cid)
-						if err != nil {
-							return err
-						}
-						out.Chunks = append(out.Chunks, c)
-					}
-					return nil
-				}
-				if in.ExpectedRevision != old.Revision {
-					return ErrConflict
-				}
+			if done, err := knowledgeIngestExisting(ctx, tx, in, old, exists, version, documentID, &out); done || err != nil {
+				return err
 			}
-			if !exists && in.ExpectedRevision != 0 {
-				return ErrConflict
-			}
-			anchor, err := tx.Get(ctx, "sources", in.Scope, anchorID)
-			if !exists {
-				if err == nil {
-					return ErrConflict
-				}
-				if !errors.Is(err, ErrNotFound) {
-					return err
-				}
-				anchor = knowledgeRecord(anchorID, in.Scope, d.PrincipalID, "document", nil)
-				anchor.Knowledge = nil
-				anchor.Text, anchor.SourceRef = "Knowledge file anchor", "knowledge/"+id
-				if in.Synthetic {
-					anchor.Text, anchor.SourceRef = "Synthetic knowledge file anchor", "synthetic/knowledge/"+id
-				}
-				anchor.ContentHash = ContentHash(anchor.Text)
-				anchor.CollectedAt = &anchor.CreatedAt
-				anchor.Sources = []SourceRef{{SourceID: anchor.ID, Locator: "original"}}
-				if err = tx.Insert(ctx, "sources", anchor); err != nil {
-					return err
-				}
-			} else if err != nil {
+			anchor, err := knowledgeIngestAnchor(ctx, tx, in, exists, anchorID, id, d.PrincipalID)
+			if err != nil {
 				return err
 			}
 			if !live(anchor) {
@@ -265,27 +197,13 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 					doc.Knowledge.ExtractionStatus = "failed"
 					doc.Knowledge.ErrorCode = "extraction_failed"
 				} else {
-					for index, piece := range knowledgeChunkText(normalized, ext) {
-						text := piece.Text
-						cid := "knowledge-chunk-" + ContentHash(documentID+":"+structuredText(index)+":"+text)
-						c := knowledgeRecord(cid, in.Scope, d.PrincipalID, "knowledge_chunk", refs)
-						c.Text = text
-						c.ContentHash = ContentHash(text)
-						c.Relations = []Ref{{Collection: colKnowledgeDocuments, ID: documentID, Revision: 1}}
-						c.Knowledge = &KnowledgeRecord{KnowledgeSourceID: id, DocumentID: documentID, SourceVersion: version, ChunkIndex: index, SectionPath: piece.SectionPath, TokenEstimate: (len([]rune(text)) + 3) / 4, ChunkerVersion: knowledgeChunkerVersion, IndexRef: knowledgeFTSAdapter + ":" + c.ContentHash}
-						chunks = append(chunks, c)
-						doc.Knowledge.ChunkIDs = append(doc.Knowledge.ChunkIDs, cid)
-					}
+					chunks = knowledgeChunks(&doc, in.Scope, d.PrincipalID, refs, normalized, ext)
 				}
 			} else if err != nil {
 				return err
 			} else {
-				for _, cid := range doc.Knowledge.ChunkIDs {
-					c, err := tx.Get(ctx, colKnowledgeChunks, in.Scope, cid)
-					if err != nil {
-						return err
-					}
-					chunks = append(chunks, c)
+				if chunks, err = knowledgeChunkRecords(ctx, tx, in.Scope, doc.Knowledge.ChunkIDs, chunks); err != nil {
+					return err
 				}
 				out = KnowledgeIngestResult{Source: old, Document: doc, Chunks: chunks, Duplicate: true}
 				return nil
@@ -299,27 +217,12 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 				head.Status = "failed"
 				head.Knowledge.LifecycleStatus = "failed"
 			}
-			if exists {
-				head.CreatedAt = old.CreatedAt
-				head.CreatedBy = old.CreatedBy
-				head.CreatedByType = old.CreatedByType
-				head.Revision = old.Revision + 1
-				if err = tx.Replace(ctx, colKnowledgeSources, head, old.Revision); err != nil {
-					return err
-				}
-			} else {
-				if err = tx.Insert(ctx, colKnowledgeSources, head); err != nil {
-					return err
-				}
-			}
-			doc.Relations = []Ref{{Collection: colKnowledgeSources, ID: head.ID, Revision: head.Revision}}
-			if err = tx.Insert(ctx, colKnowledgeDocuments, doc); err != nil {
+			if err = writeKnowledgeHead(ctx, tx, &head, old, exists); err != nil {
 				return err
 			}
-			for _, chunk := range chunks {
-				if err = tx.Insert(ctx, colKnowledgeChunks, chunk); err != nil {
-					return err
-				}
+			doc.Relations = []Ref{{Collection: colKnowledgeSources, ID: head.ID, Revision: head.Revision}}
+			if err = insertKnowledgeDocument(ctx, tx, doc, chunks); err != nil {
+				return err
 			}
 			out = KnowledgeIngestResult{Source: head, Document: doc, Chunks: chunks}
 			action := "knowledge:ingested"
@@ -330,6 +233,143 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 		})
 	})
 	return out, e
+}
+func validKnowledgeIngest(in KnowledgeIngestInput, mime string) bool {
+	return validRunLabel(in.SourceKey, 128) && validRunLabel(in.Filename, 200) && !strings.ContainsAny(in.Filename, "/\\") && path.Base(in.Filename) == in.Filename && mime != "" && in.MIMEType == mime && len(in.Content) != 0 && len(in.Content) <= 64<<10 && utf8.ValidString(in.Content) && !strings.ContainsRune(in.Content, 0) && in.ExpectedRevision >= 0
+}
+func (s *Service) authorizeKnowledgeIngest(ctx context.Context, token string, in KnowledgeIngestInput, d Decision) error {
+	for _, action := range []string{"write:sources", "write:artifacts", "write:" + colKnowledgeDocuments, "write:" + colKnowledgeChunks} {
+		a, err := s.authorize(ctx, token, action, in.Scope, "", in.Content)
+		if err != nil {
+			return err
+		}
+		if a.PrincipalID != d.PrincipalID || a.Role != "human" || !a.ContentSafe {
+			return ErrDenied
+		}
+	}
+	return nil
+}
+func normalizeKnowledgeContent(content, ext string) (string, bool) {
+	normalized := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(content, "\r\n", "\n"), "\r", "\n"))
+	failed := false
+	if ext == ".json" {
+		var v any
+		decoder := json.NewDecoder(strings.NewReader(content))
+		decoder.UseNumber()
+		if !json.Valid([]byte(content)) || decoder.Decode(&v) != nil {
+			failed = true
+		} else {
+			b, _ := json.Marshal(v)
+			normalized = string(b)
+		}
+	}
+	if normalized == "" {
+		failed = true
+	}
+	return normalized, failed
+}
+
+// knowledgeIngestExisting reports done when the existing source already holds this version.
+func knowledgeIngestExisting(ctx context.Context, tx Tx, in KnowledgeIngestInput, old Record, exists bool, version, documentID string, out *KnowledgeIngestResult) (bool, error) {
+	if !exists {
+		if in.ExpectedRevision != 0 {
+			return false, ErrConflict
+		}
+		return false, nil
+	}
+	if err := knowledgeLive(ctx, tx, old); err != nil {
+		return false, err
+	}
+	if old.Knowledge.SourceVersion == version {
+		return true, knowledgeSameVersion(ctx, tx, in.Scope, old, documentID, out)
+	}
+	if in.ExpectedRevision != old.Revision {
+		return false, ErrConflict
+	}
+	return false, nil
+}
+func knowledgeSameVersion(ctx context.Context, tx Tx, scope Scope, old Record, documentID string, out *KnowledgeIngestResult) error {
+	for _, ref := range old.Sources {
+		if err := tx.FenceSource(ctx, scope, ref.SourceID); err != nil {
+			return err
+		}
+	}
+	doc, err := tx.Get(ctx, colKnowledgeDocuments, scope, documentID)
+	if err != nil {
+		return err
+	}
+	*out = KnowledgeIngestResult{Source: old, Document: doc, Chunks: []Record{}, Duplicate: true}
+	out.Chunks, err = knowledgeChunkRecords(ctx, tx, scope, doc.Knowledge.ChunkIDs, out.Chunks)
+	return err
+}
+func knowledgeChunkRecords(ctx context.Context, tx Tx, scope Scope, ids []string, chunks []Record) ([]Record, error) {
+	for _, cid := range ids {
+		c, err := tx.Get(ctx, colKnowledgeChunks, scope, cid)
+		if err != nil {
+			return chunks, err
+		}
+		chunks = append(chunks, c)
+	}
+	return chunks, nil
+}
+func knowledgeIngestAnchor(ctx context.Context, tx Tx, in KnowledgeIngestInput, exists bool, anchorID, id, actor string) (Record, error) {
+	anchor, err := tx.Get(ctx, "sources", in.Scope, anchorID)
+	if exists {
+		return anchor, err
+	}
+	if err == nil {
+		return anchor, ErrConflict
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return anchor, err
+	}
+	anchor = knowledgeRecord(anchorID, in.Scope, actor, "document", nil)
+	anchor.Knowledge = nil
+	anchor.Text, anchor.SourceRef = "Knowledge file anchor", "knowledge/"+id
+	if in.Synthetic {
+		anchor.Text, anchor.SourceRef = "Synthetic knowledge file anchor", "synthetic/knowledge/"+id
+	}
+	anchor.ContentHash = ContentHash(anchor.Text)
+	anchor.CollectedAt = &anchor.CreatedAt
+	anchor.Sources = []SourceRef{{SourceID: anchor.ID, Locator: "original"}}
+	return anchor, tx.Insert(ctx, "sources", anchor)
+}
+func knowledgeChunks(doc *Record, scope Scope, actor string, refs []SourceRef, normalized, ext string) []Record {
+	chunks := []Record{}
+	documentID, id, version := doc.ID, doc.Knowledge.KnowledgeSourceID, doc.Knowledge.SourceVersion
+	for index, piece := range knowledgeChunkText(normalized, ext) {
+		text := piece.Text
+		cid := "knowledge-chunk-" + ContentHash(documentID+":"+structuredText(index)+":"+text)
+		c := knowledgeRecord(cid, scope, actor, "knowledge_chunk", refs)
+		c.Text = text
+		c.ContentHash = ContentHash(text)
+		c.Relations = []Ref{{Collection: colKnowledgeDocuments, ID: documentID, Revision: 1}}
+		c.Knowledge = &KnowledgeRecord{KnowledgeSourceID: id, DocumentID: documentID, SourceVersion: version, ChunkIndex: index, SectionPath: piece.SectionPath, TokenEstimate: (len([]rune(text)) + 3) / 4, ChunkerVersion: knowledgeChunkerVersion, IndexRef: knowledgeFTSAdapter + ":" + c.ContentHash}
+		chunks = append(chunks, c)
+		doc.Knowledge.ChunkIDs = append(doc.Knowledge.ChunkIDs, cid)
+	}
+	return chunks
+}
+func insertKnowledgeDocument(ctx context.Context, tx Tx, doc Record, chunks []Record) error {
+	if err := tx.Insert(ctx, colKnowledgeDocuments, doc); err != nil {
+		return err
+	}
+	for _, chunk := range chunks {
+		if err := tx.Insert(ctx, colKnowledgeChunks, chunk); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func writeKnowledgeHead(ctx context.Context, tx Tx, head *Record, old Record, exists bool) error {
+	if !exists {
+		return tx.Insert(ctx, colKnowledgeSources, *head)
+	}
+	head.CreatedAt = old.CreatedAt
+	head.CreatedBy = old.CreatedBy
+	head.CreatedByType = old.CreatedByType
+	head.Revision = old.Revision + 1
+	return tx.Replace(ctx, colKnowledgeSources, *head, old.Revision)
 }
 func (s *Service) GetKnowledgeSource(ctx context.Context, token, id string, scope Scope) (Record, error) {
 	_, e := s.knowledgeAuthorization(ctx, token, "read:"+colKnowledgeSources, scope, id)

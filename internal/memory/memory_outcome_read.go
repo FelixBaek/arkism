@@ -95,25 +95,37 @@ func normalizeMemoryOutcomeQuery(in MemoryOutcomeQuery, page bool) (MemoryOutcom
 	ids := slices.Clone(in.MemoryIDs)
 	slices.Sort(ids)
 	ids = slices.Compact(ids)
-	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || len(ids) == 0 || len(ids) != len(in.MemoryIDs) || len(ids) > memoryOutcomeBatchLimit || page && (len(ids) != 1 || in.Limit < 1 || in.Limit > 100) || !page && (in.Limit != 0 || in.Cursor != "") ||
-		in.Dimension != "" && in.Dimension != "personal_compliance" && in.Dimension != "work_task" || in.From != nil && in.To != nil && !in.From.Before(*in.To) {
+	if !validMemoryOutcomeIDs(in, ids, page) || !validMemoryOutcomeFilters(in) {
 		return in, nil, ErrInvalid
-	}
-	for _, id := range ids {
-		if !validRunLabel(id, 256) || containsSecret(id) {
-			return in, nil, ErrInvalid
-		}
 	}
 	in.MemoryIDs = ids
 	if in.Cursor == "" {
 		return in, nil, nil
 	}
+	c, e := decodeMemoryOutcomeCursor(in)
+	return in, c, e
+}
+func validMemoryOutcomeIDs(in MemoryOutcomeQuery, ids []string, page bool) bool {
+	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || len(ids) == 0 || len(ids) != len(in.MemoryIDs) || len(ids) > memoryOutcomeBatchLimit || page && (len(ids) != 1 || in.Limit < 1 || in.Limit > 100) || !page && (in.Limit != 0 || in.Cursor != "") {
+		return false
+	}
+	for _, id := range ids {
+		if !validRunLabel(id, 256) || containsSecret(id) {
+			return false
+		}
+	}
+	return true
+}
+func validMemoryOutcomeFilters(in MemoryOutcomeQuery) bool {
+	return (in.Dimension == "" || in.Dimension == "personal_compliance" || in.Dimension == "work_task") && (in.From == nil || in.To == nil || in.From.Before(*in.To))
+}
+func decodeMemoryOutcomeCursor(in MemoryOutcomeQuery) (*memoryOutcomeCursor, error) {
 	raw, e := base64.RawURLEncoding.Strict().DecodeString(in.Cursor)
 	var c memoryOutcomeCursor
 	if len(in.Cursor) > 2048 || e != nil || json.Unmarshal(raw, &c) != nil || c.Binding != memoryOutcomeBinding(in) || !validRunLabel(c.ID, 256) || c.At.IsZero() || structuredText(c) != string(raw) {
-		return in, nil, ErrInvalid
+		return nil, ErrInvalid
 	}
-	return in, &c, nil
+	return &c, nil
 }
 
 func outcomeDimension(r Record) string {
@@ -282,14 +294,7 @@ func (s *Service) ListMemoryOutcomes(ctx context.Context, token string, in Memor
 		if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
 			return MemoryOutcomePage{}, ErrDenied
 		}
-		entry := MemoryOutcomeEntry{Evaluation: Ref{Collection: "evaluations", ID: r.ID, Revision: r.Revision}, Memory: *r.Target, Dimension: outcomeDimension(r), Passed: r.Passed, JudgedAt: r.CreatedAt.UTC()}
-		for _, rel := range r.Relations {
-			if rel.Collection == "execution_traces" {
-				rel := rel
-				entry.Trace = &rel
-				break
-			}
-		}
+		entry := MemoryOutcomeEntry{Evaluation: Ref{Collection: "evaluations", ID: r.ID, Revision: r.Revision}, Memory: *r.Target, Dimension: outcomeDimension(r), Passed: r.Passed, JudgedAt: r.CreatedAt.UTC(), Trace: outcomeTrace(r)}
 		out.Items = append(out.Items, entry)
 	}
 	sums, e := s.memoryOutcomeSummaries(ctx, in, map[string]bool{id: true})
@@ -303,6 +308,15 @@ func (s *Service) ListMemoryOutcomes(ctx context.Context, token string, in Memor
 		return MemoryOutcomePage{}, e
 	}
 	return out, nil
+}
+func outcomeTrace(r Record) *Ref {
+	for _, rel := range r.Relations {
+		if rel.Collection == "execution_traces" {
+			rel := rel
+			return &rel
+		}
+	}
+	return nil
 }
 
 // SummarizeMemoryOutcomes returns per-memory totals for up to 100 ids. A memory

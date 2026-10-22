@@ -43,26 +43,36 @@ func normalizeMemoryList(in MemoryListInput) (MemoryListInput, string, error) {
 	if in.Limit == 0 {
 		in.Limit = 20
 	}
-	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || in.Limit < 1 || in.Limit > 100 || len(in.Query) > 256 || !utf8.ValidString(in.Query) || strings.IndexFunc(in.Query, unicode.IsControl) >= 0 || containsSecret(in.Query) || in.Query != "" && strings.TrimSpace(in.Query) == "" || in.Kind != "" && !validCreateKind("memory_candidates", in.Kind) || in.Status != "" && !slices.Contains([]string{"active", "superseded", "conflicted", "rejected", "expired"}, in.Status) || !in.IncludeInactive && in.Status != "" && in.Status != "active" || in.ProjectKey != nil && !validProjectKey(*in.ProjectKey) {
+	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || in.Limit < 1 || in.Limit > 100 || !validMemoryListQuery(in.Query) || !validMemoryListFilters(in) {
 		return in, "", ErrInvalid
 	}
 	in.Query = strings.TrimSpace(in.Query)
 	if in.Cursor == "" {
 		return in, "", nil
 	}
+	id, e := decodeMemoryListCursor(in)
+	return in, id, e
+}
+func validMemoryListQuery(q string) bool {
+	return len(q) <= 256 && utf8.ValidString(q) && strings.IndexFunc(q, unicode.IsControl) < 0 && !containsSecret(q) && (q == "" || strings.TrimSpace(q) != "")
+}
+func validMemoryListFilters(in MemoryListInput) bool {
+	return (in.Kind == "" || validCreateKind("memory_candidates", in.Kind)) && (in.Status == "" || slices.Contains([]string{"active", "superseded", "conflicted", "rejected", "expired"}, in.Status)) && (in.IncludeInactive || in.Status == "" || in.Status == "active") && (in.ProjectKey == nil || validProjectKey(*in.ProjectKey))
+}
+func decodeMemoryListCursor(in MemoryListInput) (string, error) {
 	if len(in.Cursor) > 2048 {
-		return in, "", ErrInvalid
+		return "", ErrInvalid
 	}
 	raw, e := base64.RawURLEncoding.Strict().DecodeString(in.Cursor)
 	var c memoryCursor
 	if e != nil || json.Unmarshal(raw, &c) != nil || c.Binding != memoryListBinding(in) || !validRunLabel(c.ID, 256) || containsSecret(c.ID) {
-		return in, "", ErrInvalid
+		return "", ErrInvalid
 	}
 	// Accept only our canonical two-field representation (no unknown or duplicate fields).
 	if structuredText(c) != string(raw) {
-		return in, "", ErrInvalid
+		return "", ErrInvalid
 	}
-	return in, c.ID, nil
+	return c.ID, nil
 }
 func memoryListCursor(in MemoryListInput, id string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(structuredText(memoryCursor{id, memoryListBinding(in)})))
@@ -154,25 +164,8 @@ func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListI
 			return MemoryPage{}, ErrUnavailable
 		}
 		_, after, _ := normalizeMemoryList(scan)
-		for _, r := range batch {
-			if !memoryListMatches(r, in) || r.Revision < 1 || !validRunLabel(r.ID, 256) || containsSecret(r.ID) || r.ID <= after {
-				return MemoryPage{}, ErrUnavailable
-			}
-			after = r.ID
-			d, e := read(r.ID, structuredText(r))
-			if errors.Is(e, ErrDenied) {
-				continue
-			}
-			if e != nil {
-				return MemoryPage{}, e
-			}
-			if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
-				return MemoryPage{}, ErrDenied
-			}
-			rows = append(rows, r)
-			if len(rows) == in.Limit+1 {
-				break
-			}
+		if rows, e = readableMemoryBatch(in, actor, read, batch, after, rows); e != nil {
+			return MemoryPage{}, e
 		}
 		if len(batch) < in.Limit+1 || len(rows) == in.Limit+1 {
 			break
@@ -220,6 +213,31 @@ func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListI
 		out.Items = append(out.Items, r)
 	}
 	return out, nil
+}
+
+// readableMemoryBatch appends the batch rows the caller may read, up to one past the page limit.
+func readableMemoryBatch(in MemoryListInput, actor Decision, read func(id, content string) (Decision, error), batch []Record, after string, rows []Record) ([]Record, error) {
+	for _, r := range batch {
+		if !memoryListMatches(r, in) || r.Revision < 1 || !validRunLabel(r.ID, 256) || containsSecret(r.ID) || r.ID <= after {
+			return rows, ErrUnavailable
+		}
+		after = r.ID
+		d, e := read(r.ID, structuredText(r))
+		if errors.Is(e, ErrDenied) {
+			continue
+		}
+		if e != nil {
+			return rows, e
+		}
+		if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
+			return rows, ErrDenied
+		}
+		rows = append(rows, r)
+		if len(rows) == in.Limit+1 {
+			break
+		}
+	}
+	return rows, nil
 }
 
 // readTransaction uses the repository's lighter read transaction when it has one (#173).

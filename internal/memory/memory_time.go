@@ -159,32 +159,8 @@ func (s *Service) MemoriesAt(ctx context.Context, token string, in MemoryAtInput
 			return MemoryAtPage{}, ErrUnavailable
 		}
 		_, after, _ := normalizeMemoryList(scan)
-		for _, r := range batch {
-			if !memoryListMatches(r, scan) || r.ID <= after || r.Revision < 1 || !validRunLabel(r.ID, 256) || containsSecret(r.ID) {
-				return MemoryAtPage{}, ErrUnavailable
-			}
-			after = r.ID
-			if !historySearchable(r) {
-				continue
-			}
-			d, e := s.authorize(ctx, token, "read:memories", in.Scope, r.ID, structuredText(r))
-			if errors.Is(e, ErrDenied) {
-				continue
-			}
-			if e != nil {
-				return MemoryAtPage{}, e
-			}
-			if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
-				return MemoryAtPage{}, ErrDenied
-			}
-			state, unknown := memoryAt(r, in.AsOf)
-			if state == nil && unknown == "" {
-				continue
-			}
-			rows = append(rows, r)
-			if len(rows) == in.Limit+1 {
-				break
-			}
+		if rows, e = s.memoryAtBatch(ctx, token, in, scan, actor, batch, after, rows); e != nil {
+			return MemoryAtPage{}, e
 		}
 		if len(batch) < in.Limit+1 || len(rows) == in.Limit+1 {
 			break
@@ -234,4 +210,36 @@ func (s *Service) MemoriesAt(ctx context.Context, token string, in MemoryAtInput
 		out.Items = append(out.Items, MemoryAtHit{ID: r.ID, Text: r.Text, Summary: r.Summary, Kind: r.Kind, ObservedAt: state.ObservedAt, HistoricalRevision: state.Revision, CurrentRevision: r.Revision, EffectiveAt: state.EffectiveAt, ExpiresAt: state.ExpiresAt})
 	}
 	return out, nil
+}
+
+// memoryAtBatch appends the batch rows readable as of in.AsOf, up to one past the page limit.
+func (s *Service) memoryAtBatch(ctx context.Context, token string, in MemoryAtInput, scan MemoryListInput, actor Decision, batch []Record, after string, rows []Record) ([]Record, error) {
+	for _, r := range batch {
+		if !memoryListMatches(r, scan) || r.ID <= after || r.Revision < 1 || !validRunLabel(r.ID, 256) || containsSecret(r.ID) {
+			return rows, ErrUnavailable
+		}
+		after = r.ID
+		if !historySearchable(r) {
+			continue
+		}
+		d, e := s.authorize(ctx, token, "read:memories", in.Scope, r.ID, structuredText(r))
+		if errors.Is(e, ErrDenied) {
+			continue
+		}
+		if e != nil {
+			return rows, e
+		}
+		if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
+			return rows, ErrDenied
+		}
+		state, unknown := memoryAt(r, in.AsOf)
+		if state == nil && unknown == "" {
+			continue
+		}
+		rows = append(rows, r)
+		if len(rows) == in.Limit+1 {
+			break
+		}
+	}
+	return rows, nil
 }

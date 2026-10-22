@@ -101,7 +101,7 @@ func (s *Service) PutKnowledgeRelation(ctx context.Context, token string, in Kno
 // nodes cannot become a bridge into otherwise accessible parts of the graph.
 func (s *Service) ExpandKnowledgeGraph(ctx context.Context, token string, in KnowledgeGraphInput) (KnowledgeGraphResult, error) {
 	out := KnowledgeGraphResult{Items: []KnowledgeRelation{}, Authority: AuthorityDataOnly}
-	if !validScope(in.Scope) || !validGraphEntity(in.Start) || in.MaxDepth < 0 || in.MaxDepth > 3 || in.Limit < 0 || in.Limit > 50 {
+	if !validKnowledgeGraphInput(in) {
 		return out, ErrInvalid
 	}
 	if in.MaxDepth == 0 {
@@ -179,17 +179,14 @@ func (s *Service) ExpandKnowledgeGraph(ctx context.Context, token string, in Kno
 			}
 			inspected += len(edges)
 			for _, edge := range edges {
-				if edge.Scope != in.Scope || edge.Source != node || !validGraphEntity(edge.Target) || edge.Evidence.Collection != colMemories {
+				if !knowledgeEdgeCandidate(edge, in.Scope, node) {
 					continue
 				}
-				r, e := s.Get(ctx, token, colMemories, in.Scope, edge.Evidence.ID)
+				ok, e := s.readableKnowledgeEvidence(ctx, token, in.Scope, edge)
 				if e != nil {
-					if errors.Is(e, ErrDenied) || errors.Is(e, ErrNotFound) || errors.Is(e, ErrConflict) {
-						continue
-					}
 					return KnowledgeGraphResult{}, e
 				}
-				if !validKnowledgeEvidence(r, edge.Evidence, in.Scope) {
+				if !ok {
 					continue
 				}
 				if len(out.Items) == in.Limit {
@@ -206,4 +203,22 @@ func (s *Service) ExpandKnowledgeGraph(ctx context.Context, token string, in Kno
 		frontier = next
 	}
 	return finish()
+}
+func validKnowledgeGraphInput(in KnowledgeGraphInput) bool {
+	return validScope(in.Scope) && validGraphEntity(in.Start) && in.MaxDepth >= 0 && in.MaxDepth <= 3 && in.Limit >= 0 && in.Limit <= 50
+}
+func knowledgeEdgeCandidate(edge KnowledgeRelation, scope Scope, node GraphEntity) bool {
+	return edge.Scope == scope && edge.Source == node && validGraphEntity(edge.Target) && edge.Evidence.Collection == colMemories
+}
+
+// readableKnowledgeEvidence skips evidence the caller cannot read instead of failing the expansion.
+func (s *Service) readableKnowledgeEvidence(ctx context.Context, token string, scope Scope, edge KnowledgeRelation) (bool, error) {
+	r, e := s.Get(ctx, token, colMemories, scope, edge.Evidence.ID)
+	if e != nil {
+		if errors.Is(e, ErrDenied) || errors.Is(e, ErrNotFound) || errors.Is(e, ErrConflict) {
+			return false, nil
+		}
+		return false, e
+	}
+	return validKnowledgeEvidence(r, edge.Evidence, scope), nil
 }

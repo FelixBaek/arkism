@@ -54,51 +54,9 @@ func (s *Service) MemoryLineage(ctx context.Context, token string, scope Scope, 
 			out.Links = append(out.Links, LineageLink{Relation: "supersedes", Reference: ref})
 		}
 		for i := range out.Links {
-			link := &out.Links[i]
-			ref := link.Reference
-			col := "memories"
-			if link.Relation == "proposal" {
-				col = "memory_candidates"
+			if e = s.resolveLineageLink(ctx, tx, token, scope, d, &out.Links[i]); e != nil {
+				return e
 			}
-			if ref.Collection != col || ref.ID == "" || len(ref.ID) > 256 || ref.Revision < 1 {
-				return ErrInvalid
-			}
-			if containsSecret(ref.ID) {
-				return ErrSecretDetected
-			}
-			who, err := s.authorize(ctx, token, "read:"+col, scope, ref.ID, "")
-			if errors.Is(err, ErrDenied) {
-				link.State = "hidden"
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			if who.PrincipalID != d.PrincipalID || who.Role != d.Role {
-				return ErrDenied
-			}
-			target, err := tx.Get(ctx, col, scope, ref.ID)
-			if errors.Is(err, ErrNotFound) {
-				link.State = "unavailable"
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			if target.Revision != ref.Revision {
-				link.State = "changed"
-				continue
-			}
-			err = checkSources(ctx, tx, target)
-			if errors.Is(err, ErrDenied) || errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {
-				link.State = "invalid_sources"
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			link.State = "available"
-			link.Record = &target
 		}
 		return audit(ctx, tx, scope, d.PrincipalID, "read:memory_lineage", id)
 	})
@@ -106,4 +64,52 @@ func (s *Service) MemoryLineage(ctx context.Context, token string, scope Scope, 
 		return MemoryLineage{}, e
 	}
 	return out, nil
+}
+
+func (s *Service) resolveLineageLink(ctx context.Context, tx Tx, token string, scope Scope, d Decision, link *LineageLink) error {
+	ref := link.Reference
+	col := "memories"
+	if link.Relation == "proposal" {
+		col = "memory_candidates"
+	}
+	if ref.Collection != col || ref.ID == "" || len(ref.ID) > 256 || ref.Revision < 1 {
+		return ErrInvalid
+	}
+	if containsSecret(ref.ID) {
+		return ErrSecretDetected
+	}
+	who, err := s.authorize(ctx, token, "read:"+col, scope, ref.ID, "")
+	if errors.Is(err, ErrDenied) {
+		link.State = "hidden"
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if who.PrincipalID != d.PrincipalID || who.Role != d.Role {
+		return ErrDenied
+	}
+	target, err := tx.Get(ctx, col, scope, ref.ID)
+	if errors.Is(err, ErrNotFound) {
+		link.State = "unavailable"
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if target.Revision != ref.Revision {
+		link.State = "changed"
+		return nil
+	}
+	err = checkSources(ctx, tx, target)
+	if errors.Is(err, ErrDenied) || errors.Is(err, ErrInvalid) || errors.Is(err, ErrConflict) {
+		link.State = "invalid_sources"
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	link.State = "available"
+	link.Record = &target
+	return nil
 }
