@@ -28,8 +28,9 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
     const value = entry(name), serialized = key(name), snap = value.pager.snapshot();
     const current = snap.key === serialized ? { ...snap, total: snap.metadata?.total ?? null, facets: snap.metadata?.facets || {} } : { key: serialized, items: [], cursor: "", ready: false, loading: false, error: "", total: null, facets: {} };
     if (current.ready) value.last = { identity: identity(), shown: current };
-    // While a changed filter loads, keep the last result of the same connection on screen (stale) instead of an empty list.
-    else if (!current.error && value.last?.identity === identity()) return { ...current, items: value.last.shown.items, total: value.last.shown.total, facets: value.last.shown.facets, stale: true };
+    // While a changed skill filter loads, keep the last result of the same connection on screen (stale) instead of an empty list.
+    // Memory views render items without checking stale, and one entry serves the active/idle/provenance tabs, so they never reuse it.
+    else if (["skills", "skillTrash"].includes(name) && !current.error && value.last?.identity === identity()) return { ...current, items: value.last.shown.items, total: value.last.shown.total, facets: value.last.shown.facets, stale: true };
     return current;
   }
   const currentName = () => state.view === "skills" ? state.skillTab === "trash" ? "skillTrash" : "skills" : ({ candidate: "candidates", conflicted: "conflicted" }[state.memTab] || "memories");
