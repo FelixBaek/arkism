@@ -6,7 +6,7 @@ PREVIEW_MANY=300 swaps in a made-up big map: every topic gets that many memories
 A GET for /v1/memories reads v1/memories.json; a missing file answers {"items": []}. Writes answer {} so buttons don't break.
 All names, projects and texts in the data are made up.
 """
-import http.server, json, os, sys
+import http.server, json, os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 UI = os.path.dirname(os.path.dirname(HERE))
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8790
@@ -84,11 +84,21 @@ class H(http.server.SimpleHTTPRequestHandler):
         category = lambda r: "confusing" if r.get("conflict_id") or r.get("status") == "conflicted" or (r.get("classification") or {}).get("dup_hint") else "new"
         states = count(rows, category) if path != "/v1/skills/query" else count(rows, lambda r: r.get("status"))
         if path == "/v1/memory_candidates/query" and body.get("category"): rows = [r for r in rows if category(r) == body["category"]]
+        groups = {}
+        if path == "/v1/skills/query":  # catalogSkillCategory / skillCatalogMatches: the first user rule that matches names the group
+            def group(r):
+                for c in body.get("categories") or []:
+                    for kind, pat in c.get("rules") or []:
+                        if pat.strip() and SKILL_RULE.get(kind, SKILL_RULE[""])(re.escape(pat.strip()).replace(r"\*", ".*"), r): return c.get("id") or ""
+                return ""
+            for r in rows: groups[group(r)] = groups.get(group(r), 0) + 1  # "" is the uncategorized count, as the server sends it
+            want = body.get("category") or ""
+            if want not in ("", "all"): rows = [r for r in rows if group(r) == ("" if want == "none" else want)]
         kinds = count(rows, lambda r: r.get("kind"))
         if body.get("kind"): rows = [r for r in rows if r.get("kind") == body["kind"]]
         start, limit = int(body.get("cursor") or 0), int(body.get("limit") or 50)  # the cursor is a plain offset here
         nxt = str(start + limit) if start + limit < len(rows) else ""
-        return {"items": rows[start:start + limit], "total": len(rows), "next_cursor": nxt, "authority": "data_only_untrusted", "facets": {"kinds": kinds, "repositories": {}, "categories": {}, "states": states}}
+        return {"items": rows[start:start + limit], "total": len(rows), "next_cursor": nxt, "authority": "data_only_untrusted", "facets": {"kinds": kinds, "repositories": {}, "categories": groups, "states": states}}
     do_POST = do_PUT = do_PATCH = do_DELETE = _write
 
 QUERY = {"/v1/memories/query": lambda state: "/v1/memories",
@@ -98,5 +108,7 @@ QUERY = {"/v1/memories/query": lambda state: "/v1/memories",
 # shortcut: idle ignores the 7-day age and agent-reported use, since the preview has no memory_usage data; port them if a fixture needs them.
 STATE = {("/v1/memories/query", "idle"): lambda r: r.get("kind") not in ("user", "procedural"),
          ("/v1/memories/query", "provenance"): lambda r: not (r.get("review") or {}).get("receipt_id") or r["review"].get("actor_role") != "human" or r["review"].get("channel") != "explicit_review_api" or r["review"].get("by") != r.get("approved_by") or r["review"].get("action") not in ("approve", "edit_approve")}
+SKILL_RULE = {"name": lambda rx, r: re.fullmatch(rx, r.get("name") or "", re.I), "path": lambda rx, r: re.search(rx, (r.get("id") or "") + " " + (r.get("source_path") or ""), re.I),
+              "": lambda rx, r: re.search(rx, r.get("description") or "", re.I)}
 
 http.server.ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
