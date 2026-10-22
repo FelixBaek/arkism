@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -353,5 +354,45 @@ func TestPostgresMemoryListChangedDuringPolicy(t *testing.T) {
 	after, e := f.svc.Repo.Get(testCtx, colMemories, scopeA, r.ID)
 	if e != nil || after.MemoryReferenceFence != r.MemoryReferenceFence {
 		t.Fatal("list read rewrote the memory row", e)
+	}
+}
+
+type sourceReadCountRepo struct {
+	Repository
+	reads int
+}
+type sourceReadCountTx struct {
+	Tx
+	r *sourceReadCountRepo
+}
+
+func (r *sourceReadCountRepo) Transaction(ctx context.Context, fn func(context.Context, Tx) error) error {
+	return r.Repository.Transaction(ctx, func(ctx context.Context, tx Tx) error { return fn(ctx, sourceReadCountTx{Tx: tx, r: r}) })
+}
+func (x sourceReadCountTx) SourceMetadata(ctx context.Context, s Scope, ids []string, includeText bool) ([]Record, error) {
+	x.r.reads++
+	return x.Tx.SourceMetadata(ctx, s, ids, includeText)
+}
+
+// #174: one page checks its memories' sources in one read per 64 sources, not one per memory.
+func TestListMemoriesReadsSourcesOncePerPage(t *testing.T) {
+	f := newFixture(t)
+	base := f.activeMemory("batched sources", "batched")
+	for i := 0; i < 70; i++ {
+		r := base
+		r.ID = ID()
+		r.Sources = refs(f.create(f.human, "sources", sourceInput(CreateInput{Scope: scopeA, Text: "source " + strconv.Itoa(i)})))
+		if e := f.svc.Repo.Insert(testCtx, colMemories, r); e != nil {
+			t.Fatal(e)
+		}
+	}
+	counter := &sourceReadCountRepo{Repository: f.svc.Repo}
+	f.svc.Repo = counter
+	p, e := f.svc.ListMemories(testCtx, f.human, MemoryListInput{Scope: scopeA, Limit: 100})
+	if e != nil || len(p.Items) != 71 {
+		t.Fatal(len(p.Items), e)
+	}
+	if counter.reads != 2 {
+		t.Fatal("source metadata reads for 71 memories with 71 sources:", counter.reads)
 	}
 }

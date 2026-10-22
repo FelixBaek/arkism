@@ -34,6 +34,10 @@ func (s *Service) QuerySkillCatalog(ctx context.Context, token string, in Catalo
 	if err != nil {
 		return out, err
 	}
+	binding := catalogBinding(in, "skills", actor.PrincipalID+"/"+actor.Role)
+	if _, err = decodeCatalogCursor(in, binding); err != nil {
+		return out, err
+	}
 	rows, err := s.catalogSkillRows(ctx, token, in)
 	if err != nil {
 		return out, err
@@ -74,7 +78,7 @@ func (s *Service) QuerySkillCatalog(ctx context.Context, token string, in Catalo
 		items = append(items, entry.Item)
 	}
 	out.Total = len(items)
-	out.Items, out.NextCursor, err = catalogWindow(items, in, catalogBinding(in, "skills", actor.PrincipalID+"/"+actor.Role))
+	out.Items, out.NextCursor, err = catalogWindow(items, in, binding)
 	return out, err
 }
 func catalogSkillCategory(item SkillListItem, categories []CatalogCategory) string {

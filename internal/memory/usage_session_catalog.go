@@ -35,6 +35,12 @@ func (s *Service) UsageSessionListPage(ctx context.Context, token string, scope 
 	if err != nil {
 		return nil, err
 	}
+	q = strings.ToLower(q)
+	query := CatalogQueryInput{Scope: scope, Query: q, Model: agent, Sort: order, State: rangeKey, Limit: limit, Cursor: cursor}
+	binding := catalogBinding(query, "sessions", actor.PrincipalID+"/"+actor.Role)
+	if _, err = decodeCatalogCursor(query, binding); err != nil {
+		return nil, err
+	}
 	rows, err := s.usageRows(ctx, scope)
 	if err != nil {
 		return nil, err
@@ -44,7 +50,6 @@ func (s *Service) UsageSessionListPage(ctx context.Context, token string, scope 
 		y, m, d := time.Now().In(usageZone()).AddDate(0, 0, 1-days).Date()
 		since = time.Date(y, m, d, 0, 0, 0, 0, usageZone())
 	}
-	q = strings.ToLower(q)
 	items := []map[string]any{}
 	total := 0
 	for _, r := range rows {
@@ -57,8 +62,7 @@ func (s *Service) UsageSessionListPage(ctx context.Context, token string, scope 
 		items = append(items, usageCatalogItem(r))
 	}
 	sort.SliceStable(items, func(i, j int) bool { return usageCatalogLess(items[i], items[j], order) })
-	query := CatalogQueryInput{Scope: scope, Query: q, Model: agent, Sort: order, State: rangeKey, Limit: limit, Cursor: cursor}
-	selected, next, err := catalogWindow(items, query, catalogBinding(query, "sessions", actor.PrincipalID+"/"+actor.Role))
+	selected, next, err := catalogWindow(items, query, binding)
 	if err != nil {
 		return nil, err
 	}

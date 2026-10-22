@@ -333,6 +333,13 @@ func (p *Postgres) SessionArchiveTransaction(ctx context.Context, fn func(contex
 	return p.transactionWithIsolation(ctx, pgx.ReadCommitted, fn)
 }
 
+// ReadTransaction runs a list read that share-locks the rows it returns and appends an audit row.
+// The share locks already hold off writers until commit; serializable only added retry-exhausting
+// conflicts between parallel reads and their audit inserts (#173).
+func (p *Postgres) ReadTransaction(ctx context.Context, fn func(context.Context, Tx) error) error {
+	return p.transactionWithIsolation(ctx, pgx.ReadCommitted, fn)
+}
+
 func (p *Postgres) transactionWithIsolation(ctx context.Context, isolation pgx.TxIsoLevel, fn func(context.Context, Tx) error) error {
 	if fn == nil {
 		return ErrInvalid
@@ -492,10 +499,10 @@ func (p *Postgres) writePayload(ctx context.Context, c string, r Record) error {
 	return nil
 }
 
-// LockForRead share-locks rows a read is about to return, in one statement. Inside the read's
-// serializable transaction it blocks concurrent writers until commit and fails with a conflict when
-// a row changed after the snapshot, which is what per-row fence writes gave list reads, without
-// rewriting each row and its search indexes.
+// LockForRead share-locks rows a read is about to return, in one statement. It blocks concurrent
+// writers until the read commits and returns each row's latest version, so the caller's comparison
+// with what it listed fails with a conflict when a row changed, which is what per-row fence writes
+// gave list reads, without rewriting each row and its search indexes.
 func (p *Postgres) LockForRead(ctx context.Context, s Scope, collection string, ids []string) (map[string]Record, error) {
 	if p.tx == nil || checkScope(s) != nil || !knownCollection(collection) || len(ids) == 0 || len(ids) > 500 {
 		return nil, ErrInvalid

@@ -241,6 +241,11 @@ func sourceMetadata(ctx context.Context, tx Tx, scope Scope, refs []SourceRef) (
 	if len(refs) == 0 || len(refs) > 64 {
 		return nil, ErrInvalid
 	}
+	return sourceMetadataBatch(ctx, tx, scope, refs)
+}
+
+// sourceMetadataBatch is sourceMetadata for the refs of many records, read 64 sources at a time.
+func sourceMetadataBatch(ctx context.Context, tx Tx, scope Scope, refs []SourceRef) ([]Record, error) {
 	ids := []string{}
 	wanted := map[string]bool{}
 	spans := map[string][]SourceSpan{}
@@ -259,22 +264,9 @@ func sourceMetadata(ctx context.Context, tx Tx, scope Scope, refs []SourceRef) (
 			ids = append(ids, ref.SourceID)
 		}
 	}
-	var rows []Record
-	for _, includeText := range []bool{false, true} {
-		var group []string
-		for _, id := range ids {
-			if (len(spans[id]) > 0) == includeText {
-				group = append(group, id)
-			}
-		}
-		if len(group) == 0 {
-			continue
-		}
-		batch, e := tx.SourceMetadata(ctx, scope, group, includeText)
-		if e != nil {
-			return nil, e
-		}
-		rows = append(rows, batch...)
+	rows, e := readSourceGroups(ctx, tx, scope, ids, spans)
+	if e != nil {
+		return nil, e
 	}
 	if len(rows) != len(ids) {
 		return nil, ErrDenied
@@ -293,6 +285,27 @@ func sourceMetadata(ctx context.Context, tx Tx, scope Scope, refs []SourceRef) (
 		}
 		rows[i] = Record{TrustLevel: r.TrustLevel, ID: r.ID, Scope: r.Scope, Status: r.Status, ExpiresAt: r.ExpiresAt, Sensitivity: r.Sensitivity}
 		delete(wanted, r.ID)
+	}
+	return rows, nil
+}
+
+// readSourceGroups reads text only for sources with spans to check, 64 sources per read.
+func readSourceGroups(ctx context.Context, tx Tx, scope Scope, ids []string, spans map[string][]SourceSpan) ([]Record, error) {
+	var rows []Record
+	for _, includeText := range []bool{false, true} {
+		var group []string
+		for _, id := range ids {
+			if (len(spans[id]) > 0) == includeText {
+				group = append(group, id)
+			}
+		}
+		for start := 0; start < len(group); start += 64 {
+			batch, e := tx.SourceMetadata(ctx, scope, group[start:min(start+64, len(group))], includeText)
+			if e != nil {
+				return nil, e
+			}
+			rows = append(rows, batch...)
+		}
 	}
 	return rows, nil
 }

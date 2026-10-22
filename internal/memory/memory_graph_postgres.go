@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // pgReach reads a memory's reach with memoryReach's default for rows written before ST-824.
@@ -105,33 +107,51 @@ func (p *Postgres) MemoryGraphSimilar(ctx context.Context, in MemoryGraphQuery, 
 	if err != nil || len(ids) == 0 || len(ids) > memoryGraphMapNodes || maxDistance < 0 || maxDistance > 1 || limit < 1 || limit > memoryGraphMaxNodes {
 		return nil, ErrInvalid
 	}
+	query, params := memoryGraphSimilarQuery(in, ids, maxDistance, limit)
+	var out []MemoryGraphSimilarPair
+	err = p.transactionWithIsolation(ctx, pgx.ReadCommitted, func(ctx context.Context, tx Tx) error {
+		q := tx.(*Postgres).q()
+		if _, e := q.Exec(ctx, memoryGraphSimilarSettings); e != nil {
+			return pgErr(e)
+		}
+		rows, e := q.Query(ctx, query, params...)
+		if e != nil {
+			return pgErr(e)
+		}
+		defer rows.Close()
+		out = []MemoryGraphSimilarPair{}
+		for rows.Next() {
+			var pair MemoryGraphSimilarPair
+			if e = rows.Scan(&pair.From, &pair.To, &pair.Distance); e != nil {
+				return ErrUnavailable
+			}
+			out = append(out, pair)
+		}
+		return pgErr(rows.Err())
+	})
+	return out, err
+}
+
+// The filters (jsonb visibility, reach) make the planner expect one row, so it sorts a full scan per
+// asking memory (16 s for 200 at 2,000 memories). Sorting off leaves the ordered index scan (0.4 s);
+// the iterative scan keeps reading the index until LIMIT rows pass those filters.
+const memoryGraphSimilarSettings = `SET LOCAL hnsw.iterative_scan = relaxed_order; SET LOCAL enable_sort = off`
+
+// memoryGraphSimilarQuery asks the memory_records_memory_graph_vector index (migration 0004) for each
+// asking memory's nearest neighbours instead of comparing every pair (#175: 12.8 s at 5,202 memories).
+// The halfvec distance is approximate to about 1e-3; the map only draws lines from it.
+func memoryGraphSimilarQuery(in MemoryGraphQuery, ids []string, maxDistance float64, limit int) (string, []any) {
 	w, args := memoryGraphWhere(in, "m.", 6)
 	params := append([]any{in.Scope.WorkspaceID, in.Scope.ProjectID, in.Scope.UserID, in.Scope.AgentID, colMemories}, args...)
 	params = append(params, ids, maxDistance, limit, VectorDimension)
-	// Both sides are MATERIALIZED once and their vectors detoasted (the text round trip is exact):
-	// a lateral over memory_records re-read every doc and out-of-line vector per asking row (#166: 2.4 s per 100 at 2000 memories).
-	rows, err := p.q().Query(ctx, `WITH asking AS MATERIALIZED (
-SELECT c.id, (c.embedding::text)::vector AS embedding, c.embedding_space, `+pgReach("c.")+` AS reach, COALESCE(c.doc->>'reach_project','') AS rp FROM memory_records c
+	return `WITH asking AS MATERIALIZED (
+SELECT c.id, c.embedding::halfvec(1024) AS hv, c.embedding_space, ` + pgReach("c.") + ` AS reach, COALESCE(c.doc->>'reach_project','') AS rp FROM memory_records c
 WHERE c.collection=$5 AND c.workspace_id=$1 AND c.project_id=$2 AND c.user_id=$3 AND c.agent_id=$4 AND c.id=ANY($8::text[]) AND c.embedding IS NOT NULL AND c.embedding_dimension=$11
-), cand AS MATERIALIZED (
-SELECT m.id, (m.embedding::text)::vector AS embedding, m.embedding_space, `+pgReach("m.")+` AS reach, COALESCE(m.doc->>'reach_project','') AS rp FROM memory_records m
-WHERE m.collection=$5 AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4 AND m.embedding IS NOT NULL AND m.embedding_dimension=$11 AND `+w+`
 )
 SELECT c.id, n.id, n.d FROM asking c CROSS JOIN LATERAL (
-SELECT m.id, m.embedding <=> c.embedding AS d FROM cand m WHERE m.id<>c.id AND m.embedding_space=c.embedding_space AND m.reach=c.reach AND m.rp=c.rp
-AND (m.embedding <=> c.embedding) <= $9 ORDER BY 2, 1 LIMIT $10) n
-ORDER BY c.id, n.d, n.id`, params...)
-	if err != nil {
-		return nil, pgErr(err)
-	}
-	defer rows.Close()
-	out := []MemoryGraphSimilarPair{}
-	for rows.Next() {
-		var pair MemoryGraphSimilarPair
-		if err = rows.Scan(&pair.From, &pair.To, &pair.Distance); err != nil {
-			return nil, ErrUnavailable
-		}
-		out = append(out, pair)
-	}
-	return out, pgErr(rows.Err())
+SELECT m.id, m.embedding::halfvec(1024) <=> c.hv AS d FROM memory_records m
+WHERE m.collection='memories' AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4 AND m.embedding IS NOT NULL AND m.embedding_dimension=$11 AND ` + w + `
+AND m.id<>c.id AND m.embedding_space=c.embedding_space AND ` + pgReach("m.") + `=c.reach AND COALESCE(m.doc->>'reach_project','')=c.rp
+ORDER BY m.embedding::halfvec(1024) <=> c.hv LIMIT $10) n
+WHERE n.d <= $9 ORDER BY c.id, n.d, n.id`, params
 }

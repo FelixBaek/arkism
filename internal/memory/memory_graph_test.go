@@ -578,3 +578,47 @@ func TestPostgresMemoryGraph(t *testing.T) {
 	checkGraph(t, &Service{Repo: p, Auth: auth, Embedder: emb}, "tok")
 	checkGraphMap(t, &Service{Repo: p, Auth: auth, Embedder: emb}, "tok")
 }
+
+// #175: similar lines ask the graph vector index for nearest neighbours instead of comparing all pairs.
+func TestPostgresMemoryGraphSimilarUsesVectorIndex(t *testing.T) {
+	p := isolatedPostgres(t)
+	// With rows the planner's own choice is a sorted full scan per asking memory.
+	for i := 0; i < 300; i++ {
+		r := Record{ID: fmt.Sprintf("m-%03d", i), Scope: scopeA, Kind: "lesson", Status: "active", Revision: 1, Text: "rule", ApprovedBy: "r",
+			Embedding: &Embedding{Space: "fake:embed:v1:1024d", Dimension: VectorDimension, Vector: graphVector(float64(i) / 50)}}
+		if e := p.Insert(testCtx, colMemories, r); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if _, e := p.pool.Exec(testCtx, "ANALYZE"); e != nil {
+		t.Fatal(e)
+	}
+	in, err := normalizeMemoryGraphQuery(MemoryGraphQuery{Scope: scopeA, Mode: MemoryGraphModeAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, params := memoryGraphSimilarQuery(in, []string{"m-000", "m-001"}, 1-memoryGraphSimilarMin, 2*memoryGraphPerNode)
+	plan := ""
+	err = p.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
+		q := tx.(*Postgres).q()
+		if _, e := q.Exec(ctx, memoryGraphSimilarSettings); e != nil {
+			return e
+		}
+		rows, e := q.Query(ctx, "EXPLAIN "+query, params...)
+		if e != nil {
+			return e
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var line string
+			if e = rows.Scan(&line); e != nil {
+				return e
+			}
+			plan += line + "\n"
+		}
+		return rows.Err()
+	})
+	if err != nil || !strings.Contains(plan, "memory_records_memory_graph_vector") {
+		t.Fatal(err, plan)
+	}
+}
