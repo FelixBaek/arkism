@@ -677,9 +677,17 @@ namespace Arkism.InstallerChecks
 
     public static class PendingEchoVerifier
     {
-        public static OpaquePendingRows Capture(RebootSnapshot before, RebootSnapshot after)
+        public static OpaquePendingRows Capture(RebootSnapshot before, RebootSnapshot after) { return Capture(before, after, null); }
+
+        // The shipped uninstaller may also queue its NSIS plugin directory when Windows still
+        // holds it at exit. That third row is accepted only as a delete whose literal text
+        // names the owned temp folder; it is never echoed, and it is not proof of ownership.
+        public static OpaquePendingRows Capture(RebootSnapshot before, RebootSnapshot after, string pluginTemp)
         {
-            CheckDelta(before, after, 2);
+            int count = pluginTemp != null && after != null && before != null && after.EntryCount - before.EntryCount == 3 ? 3 : 2;
+            CheckDelta(before, after, count);
+            if (count == 3 && !LiteralUnder(after.Pairs[before.EntryCount + 2][0], pluginTemp))
+                throw new JobApiException("job_echo_extra_not_owned_temp");
             return new OpaquePendingRows(new List<string[]> {
                 (string[])after.Pairs[before.EntryCount].Clone(), (string[])after.Pairs[before.EntryCount + 1].Clone() });
         }
@@ -689,6 +697,16 @@ namespace Arkism.InstallerChecks
             if (original == null || index < 0 || index >= original.Count) throw new JobApiException("job_echo_index_invalid");
             CheckDelta(before, after, 1);
             if (!SamePair(original.Rows[index], after.Pairs[before.EntryCount])) throw new JobApiException("job_echo_pair_mismatch");
+        }
+
+        private static bool LiteralUnder(string row, string root)
+        {
+            foreach (string prefix in new string[] { @"*1\??\", @"*2\??\", @"\??\" })
+                if (row.StartsWith(prefix, StringComparison.Ordinal)) { row = row.Substring(prefix.Length); break; }
+            string owned = root.TrimEnd('\\') + "\\";
+            return row.Length > owned.Length && row.StartsWith(owned, StringComparison.OrdinalIgnoreCase) &&
+                row.IndexOf('\\', owned.Length) < 0 && row.IndexOfAny(new char[] { '/', '\0', ':' }, owned.Length) < 0 &&
+                row.Substring(owned.Length) != "." && row.Substring(owned.Length) != "..";
         }
 
         private static bool SamePair(string[] left, string[] right) { return left[0] == right[0] && left[1] == right[1]; }

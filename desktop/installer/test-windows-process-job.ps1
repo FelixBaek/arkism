@@ -343,6 +343,18 @@ public static class JobCoreTests
             Check(rows.Count == 2, "row capture failed");
             Reject(delegate { RebootObservation.Compare(Snapshot(old), first, @"D:\owned\temp"); }, "path_unknown");
         });
+        Test("echo accepts only one extra owned-temp plugin delete", delegate {
+            string old = "C:\\old\0\0", dir = "*1\\??\\D:\\owned\\temp\\~nsu1.tmp\0\0", file = "*1\\??\\D:\\owned\\temp\\~nsu1.tmp\\Un.exe\0\0";
+            var first = Snapshot(old + dir + file + "*1\\??\\D:\\owned\\temp\\nsr6B7B.tmp\0\0");
+            var rows = PendingEchoVerifier.Capture(Snapshot(old), first, @"D:\owned\temp");
+            Check(rows.Count == 2, "plugin row was echoed");
+            Check(PendingEchoVerifier.Capture(Snapshot(old), Snapshot(old + dir + file), @"D:\owned\temp").Count == 2, "two rows refused");
+            Reject(delegate { PendingEchoVerifier.Capture(Snapshot(old), first); }, "delta_unsupported");
+            foreach (string extra in new string[] { "*1\\??\\D:\\other\\nsr1.tmp\0\0", "*1\\??\\D:\\owned\\temp\\a\\b\0\0", "*1\\??\\D:\\owned\\temp\\..\0\0", "*1\\??\\D:\\owned\\temp\\\0\0" })
+                Reject(delegate { PendingEchoVerifier.Capture(Snapshot(old), Snapshot(old + dir + file + extra), @"D:\owned\temp"); }, "extra_not_owned_temp");
+            Reject(delegate { PendingEchoVerifier.Capture(Snapshot(old), Snapshot(old + dir + file + "*1\\??\\D:\\owned\\temp\\nsr1.tmp\0x\0\0"), @"D:\owned\temp"); }, "not_delete");
+            Reject(delegate { PendingEchoVerifier.Capture(Snapshot(old), Snapshot(old + dir + file + dir + file), @"D:\owned\temp"); }, "delta_unsupported");
+        });
         Test("echo refuses dedup extra rows and nonempty destinations", delegate {
             string dir = "opaque-dir\0\0", file = "opaque-file\0\0";
             var first = Snapshot(dir + file); var rows = PendingEchoVerifier.Capture(RebootObservation.Parse(false, 0, null), first);

@@ -586,14 +586,14 @@ function Invoke-ProductRemovalCheck($State, $Request, $Report) {
   $copy = Get-ProductUninstallerCopy $inventory $afterInventory $temp $State.UninstallerHash
   $machine = Get-ProductCopyMachine $copy.Path
   $after = Get-ProductRebootSnapshot $Request
-  $finalEcho = Invoke-JobExactEcho $State.Context $State.Root $copy $machine $Request $before $after $State.Environment $Report
+  $finalEcho = Invoke-JobExactEcho $State.Context $State.Root $copy $machine $Request $before $after $State.Environment $Report $temp
   Assert-ProductRemoved $State $result
   [Arkism.InstallerChecks.PendingEchoVerifier]::AssertUnchanged($finalEcho, (Get-ProductRebootSnapshot $Request))
   $Report.job_empty = $result.EmptyConfirmed; $Report.root_exit_code = $result.RootExitCode
   $Report.product_postconditions = $true; $Report.closed_synthetic_data_preserved = $true
   $Report.helper_required_effects_observed = $true; $Report.helper_exit_code_observed = $false
   $Report.copy_sha256 = $copy.Sha256; $Report.same_run_exact_api_pair_correspondence = $true
-  $Report.new_product_rows = 2; $Report.new_api_echo_rows = 2
+  $Report.new_product_rows = $after.EntryCount - $before.EntryCount; $Report.new_api_echo_rows = 2
   $Report.pending_final_entries = $finalEcho.EntryCount; $Report.existing_opaque_rows_preserved = $true
 }
 
