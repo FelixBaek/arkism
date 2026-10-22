@@ -389,3 +389,18 @@ func TestPromptEvidenceCodexMultiBlockPromptFromHookToArchiveCheck(t *testing.T)
 		}
 	}
 }
+
+// The locator joins content blocks exactly as the server archive text does (memory
+// TestArchiveBlocksJoinLikeCapture): a non-string text block still counts, and so does output_text.
+func TestPromptEvidenceJoinsBlocksLikeServer(t *testing.T) {
+	context := host.Obj{{Key: "archive_id", Value: "a1"}}
+	for content, server := range map[string]string{
+		`[{"type":"text","text":null},{"type":"text","text":"a"}]`:       "\na",
+		`[{"type":"output_text","text":"a"},{"type":"text","text":"b"}]`: "a\nb",
+	} {
+		raw := []byte(`{"type":"user","message":{"role":"user","content":` + content + "}}\n")
+		if evidencePromptHint(context, raw, 0, "message", "user", sha256Hex([]byte(server))) == nil {
+			t.Fatalf("%s did not match server text %q", content, server)
+		}
+	}
+}
