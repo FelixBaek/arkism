@@ -55,33 +55,42 @@ func (s *Service) resolveReviewConflict(ctx context.Context, tx Tx, candidate Re
 	if old.ContentErased || old.PrivacyQuarantined || !s.memoryReviewerAllowed(actor, in.Scope, old.Kind) {
 		return Record{}, nil, ErrDenied
 	}
-	resolution := "keep_both"
-	if in.Action == "reject" {
-		if candidateIndex == 0 {
-			resolution = "keep_second"
-		} else {
-			resolution = "keep_first"
-		}
-	}
+	resolution := reviewConflictResolution(in.Action, candidateIndex)
 	resolved, err := applyConflictAs(ctx, tx, ConflictInput{Scope: in.Scope, Memories: rel.Relations, Action: "resolve", Reason: c.Reason, ConflictID: c.ID, ExpectedRevision: c.ExpectedRevision, Resolution: resolution}, actor.PrincipalID, actor.Role, -1)
 	if err != nil {
 		return Record{}, nil, err
 	}
-	var next Record
-	var replaced *Record
-	for _, row := range resolved.Memories {
-		if row.ID == candidate.ID {
-			next = row
-		}
-		if row.ID == old.ID && c.Resolution == "replace_old" {
-			clone := row
-			replaced = &clone
-		}
-	}
+	next, replaced := resolvedReviewRows(resolved, candidate.ID, old.ID, c.Resolution == "replace_old")
 	if next.ID == "" {
 		return Record{}, nil, ErrConflict
 	}
 	return next, replaced, nil
+}
+
+// reviewConflictResolution keeps the other side when the candidate is rejected.
+func reviewConflictResolution(action string, candidateIndex int) string {
+	if action != "reject" {
+		return "keep_both"
+	}
+	if candidateIndex == 0 {
+		return "keep_second"
+	}
+	return "keep_first"
+}
+
+func resolvedReviewRows(resolved ConflictOutput, candidateID, oldID string, replace bool) (Record, *Record) {
+	var next Record
+	var replaced *Record
+	for _, row := range resolved.Memories {
+		if row.ID == candidateID {
+			next = row
+		}
+		if row.ID == oldID && replace {
+			clone := row
+			replaced = &clone
+		}
+	}
+	return next, replaced
 }
 
 func finishReviewReplacement(ctx context.Context, tx Tx, old, next *Record, in CandidateReviewInput, actor Decision) (Record, error) {

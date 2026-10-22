@@ -63,50 +63,12 @@ func (s *Service) CandidateEvidence(ctx context.Context, token, id string, scope
 		// A source can reference an entire conversation window. Only count a
 		// turn when this candidate's verified literal citation occurs in it.
 		// Merely being a user turn in the same window is not another mention.
-		citation := ""
-		if ref.Span != nil && validateSourceSpan(ref.Span, ContentHash(source.Text), utf8.RuneCountInString(source.Text)) == nil {
-			citation = strings.TrimSpace(string([]rune(source.Text)[ref.Span.Start:ref.Span.End]))
-		}
+		citation := sourceCitation(ref, source)
 		if utf8.RuneCountInString(citation) < 5 {
 			out.Complete = false
 			continue
 		}
-		for _, message := range source.ArchiveMessages {
-			if checked >= 64 || ctx.Err() != nil {
-				out.Complete = false
-				break
-			}
-			checked++
-			view, err := s.ReadSessionArchiveMessage(ctx, token, ArchiveMessageInput{Scope: scope, Ref: message})
-			if err != nil {
-				out.Complete = false
-				continue
-			}
-			if view.Role != "user" || !strings.Contains(view.Text, citation) {
-				out.Complete = false
-				continue
-			}
-			header, err := s.Repo.Get(ctx, colSessionArchives, scope, message.ArchiveID)
-			if err != nil || !live(header) || header.SessionArchive == nil {
-				out.Complete = false
-				continue
-			}
-			a := header.SessionArchive
-			// Reconstructed multi-part messages need a canonical parent identity;
-			// do not turn projection parts into multiple supposed user requests.
-			if a.Format == "reconstructed_zcode" || a.SessionID == "" {
-				out.Complete = false
-				continue
-			}
-			identity := view.Ref.SQLiteStep + "/" + view.Ref.RecordKey
-			if identity == "/" {
-				identity = strconv.Itoa(view.Ref.Chunk) + "/" + strconv.Itoa(view.Ref.Offset)
-			}
-			key = ContentHash(structuredText(scope) + "/utterance/" + a.Origin + "/" + a.SessionID + "/" + identity)
-			if !slices.Contains(out.UserMentionKeys, key) {
-				out.UserMentionKeys = append(out.UserMentionKeys, key)
-			}
-		}
+		s.addUserMentions(ctx, token, scope, source.ArchiveMessages, citation, &out, &checked)
 	}
 	if len(out.SourceKeys) == 0 {
 		out.Complete = false
@@ -121,6 +83,59 @@ func (s *Service) CandidateEvidence(ctx context.Context, token, id string, scope
 		return CandidateEvidenceSummary{}, ErrConflict
 	}
 	return out, nil
+}
+
+// addUserMentions checks at most 64 messages across all sources.
+func (s *Service) addUserMentions(ctx context.Context, token string, scope Scope, messages []ArchiveMessageRef, citation string, out *CandidateEvidenceSummary, checked *int) {
+	for _, message := range messages {
+		if *checked >= 64 || ctx.Err() != nil {
+			out.Complete = false
+			break
+		}
+		*checked++
+		key, ok := s.userMentionKey(ctx, token, scope, message, citation)
+		if !ok {
+			out.Complete = false
+			continue
+		}
+		if !slices.Contains(out.UserMentionKeys, key) {
+			out.UserMentionKeys = append(out.UserMentionKeys, key)
+		}
+	}
+}
+
+func sourceCitation(ref SourceRef, source Record) string {
+	if ref.Span != nil && validateSourceSpan(ref.Span, ContentHash(source.Text), utf8.RuneCountInString(source.Text)) == nil {
+		return strings.TrimSpace(string([]rune(source.Text)[ref.Span.Start:ref.Span.End]))
+	}
+	return ""
+}
+
+// userMentionKey returns the user turn's key when the message is a verified
+// user turn containing the citation.
+func (s *Service) userMentionKey(ctx context.Context, token string, scope Scope, message ArchiveMessageRef, citation string) (string, bool) {
+	view, err := s.ReadSessionArchiveMessage(ctx, token, ArchiveMessageInput{Scope: scope, Ref: message})
+	if err != nil {
+		return "", false
+	}
+	if view.Role != "user" || !strings.Contains(view.Text, citation) {
+		return "", false
+	}
+	header, err := s.Repo.Get(ctx, colSessionArchives, scope, message.ArchiveID)
+	if err != nil || !live(header) || header.SessionArchive == nil {
+		return "", false
+	}
+	a := header.SessionArchive
+	// Reconstructed multi-part messages need a canonical parent identity;
+	// do not turn projection parts into multiple supposed user requests.
+	if a.Format == "reconstructed_zcode" || a.SessionID == "" {
+		return "", false
+	}
+	identity := view.Ref.SQLiteStep + "/" + view.Ref.RecordKey
+	if identity == "/" {
+		identity = strconv.Itoa(view.Ref.Chunk) + "/" + strconv.Itoa(view.Ref.Offset)
+	}
+	return ContentHash(structuredText(scope) + "/utterance/" + a.Origin + "/" + a.SessionID + "/" + identity), true
 }
 
 func candidateEvidenceRoutes(mux routeRegistrar, s *Service) {

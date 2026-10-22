@@ -72,21 +72,8 @@ func (s *Service) HoldCandidateConflict(ctx context.Context, token, id string, i
 			}
 		}
 		if replay {
-			if receipt.Kind != "candidate_conflict_hold_receipt" || receipt.Status != JobStatusDone || receipt.RequestHash != hash || receipt.Target == nil || len(receipt.Relations) != 2 {
-				return ErrConflict
-			}
-			rel, err := tx.Get(ctx, "memory_relations", in.Scope, receipt.Target.ID)
-			if err != nil {
-				return err
-			}
-			if rel.Revision != receipt.Target.Revision || !live(rel) || rel.ContentErased || candidate.Status != "conflicted" || memory.Status != "active" || candidate.ConflictID != rel.ID || memory.ConflictID != rel.ID || candidate.Revision != receipt.Relations[0].Revision || memory.Revision != receipt.Relations[1].Revision {
-				return ErrConflict
-			}
-			if err = checkSources(ctx, tx, rel); err != nil {
-				return err
-			}
-			out = CandidateConflictHoldOutput{Candidate: receipt.Relations[0], Memory: receipt.Relations[1], Conflict: *receipt.Target}
-			return nil
+			out, err = replayConflictHold(ctx, tx, in.Scope, receipt, hash, candidate, memory)
+			return err
 		}
 		if candidate.Revision != in.ExpectedRevision || memory.Revision != in.Memory.Revision {
 			return ErrConflict
@@ -95,14 +82,7 @@ func (s *Service) HoldCandidateConflict(ctx context.Context, token, id string, i
 		if err != nil {
 			return err
 		}
-		out = CandidateConflictHoldOutput{Conflict: Ref{Collection: "memory_relations", ID: held.Relation.ID, Revision: held.Relation.Revision}}
-		for _, r := range held.Memories {
-			if r.ID == id {
-				out.Candidate = Ref{Collection: "memory_candidates", ID: id, Revision: r.Revision}
-			} else {
-				out.Memory = Ref{Collection: colMemories, ID: r.ID, Revision: r.Revision}
-			}
-		}
+		out = heldConflictOutput(held, id)
 		now := time.Now().UTC()
 		return tx.Insert(ctx, colJobs, Record{ID: receiptID, Scope: in.Scope, Kind: "candidate_conflict_hold_receipt", Status: JobStatusDone, Revision: 1, RequestHash: hash, Target: &out.Conflict, Relations: []Ref{out.Candidate, out.Memory}, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now})
 	})
@@ -110,6 +90,36 @@ func (s *Service) HoldCandidateConflict(ctx context.Context, token, id string, i
 		return CandidateConflictHoldOutput{}, e
 	}
 	return out, nil
+}
+
+// replayConflictHold answers a repeated operation from its receipt while the hold still stands.
+func replayConflictHold(ctx context.Context, tx Tx, scope Scope, receipt Record, hash string, candidate, memory Record) (CandidateConflictHoldOutput, error) {
+	if receipt.Kind != "candidate_conflict_hold_receipt" || receipt.Status != JobStatusDone || receipt.RequestHash != hash || receipt.Target == nil || len(receipt.Relations) != 2 {
+		return CandidateConflictHoldOutput{}, ErrConflict
+	}
+	rel, err := tx.Get(ctx, "memory_relations", scope, receipt.Target.ID)
+	if err != nil {
+		return CandidateConflictHoldOutput{}, err
+	}
+	if rel.Revision != receipt.Target.Revision || !live(rel) || rel.ContentErased || candidate.Status != "conflicted" || memory.Status != "active" || candidate.ConflictID != rel.ID || memory.ConflictID != rel.ID || candidate.Revision != receipt.Relations[0].Revision || memory.Revision != receipt.Relations[1].Revision {
+		return CandidateConflictHoldOutput{}, ErrConflict
+	}
+	if err = checkSources(ctx, tx, rel); err != nil {
+		return CandidateConflictHoldOutput{}, err
+	}
+	return CandidateConflictHoldOutput{Candidate: receipt.Relations[0], Memory: receipt.Relations[1], Conflict: *receipt.Target}, nil
+}
+
+func heldConflictOutput(held ConflictOutput, id string) CandidateConflictHoldOutput {
+	out := CandidateConflictHoldOutput{Conflict: Ref{Collection: "memory_relations", ID: held.Relation.ID, Revision: held.Relation.Revision}}
+	for _, r := range held.Memories {
+		if r.ID == id {
+			out.Candidate = Ref{Collection: "memory_candidates", ID: id, Revision: r.Revision}
+		} else {
+			out.Memory = Ref{Collection: colMemories, ID: r.ID, Revision: r.Revision}
+		}
+	}
+	return out
 }
 
 func (s *Service) finishCaptureCorrection(ctx context.Context, token string, in CaptureInput, claim CaptureClaim, scope Scope, pointer Record, item CaptureItem) (CaptureItem, error) {

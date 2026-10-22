@@ -79,21 +79,8 @@ func (s *Service) ListSourceArtifacts(ctx context.Context, token, sourceID strin
 	if len(rows) > in.Limit+1 {
 		return SourceArtifacts{}, ErrUnavailable
 	}
-	// shortcut: at most 102 sequential policy calls; batch only with equivalent per-file decisions.
-	for _, r := range rows {
-		if !validArtifactRecord(r) || r.Scope != in.Scope || r.Target.ID != sourceID || r.Sensitivity != src.Sensitivity {
-			return SourceArtifacts{}, ErrUnavailable
-		}
-		if r.Target.Revision != src.Revision {
-			return SourceArtifacts{}, ErrConflict
-		}
-		d, e := s.authorize(ctx, token, "read:artifacts", in.Scope, r.ID, "")
-		if e != nil {
-			return SourceArtifacts{}, e
-		}
-		if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
-			return SourceArtifacts{}, ErrDenied
-		}
+	if e = s.authorizeSourceArtifacts(ctx, token, in.Scope, sourceID, src, actor, rows); e != nil {
+		return SourceArtifacts{}, e
 	}
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		current, e := tx.Get(ctx, "sources", in.Scope, sourceID)
@@ -135,4 +122,24 @@ func (s *Service) ListSourceArtifacts(ctx context.Context, token, sourceID strin
 		out.Items = append(out.Items, FileArtifactResult{ID: r.ID, FileArtifactSpec: FileArtifactSpec{Kind: r.Kind, MIME: r.Artifact.MIME, Digest: r.Artifact.Digest}, Bytes: r.Artifact.Bytes})
 	}
 	return out, nil
+}
+
+// shortcut: at most 102 sequential policy calls; batch only with equivalent per-file decisions.
+func (s *Service) authorizeSourceArtifacts(ctx context.Context, token string, scope Scope, sourceID string, src Record, actor Decision, rows []Record) error {
+	for _, r := range rows {
+		if !validArtifactRecord(r) || r.Scope != scope || r.Target.ID != sourceID || r.Sensitivity != src.Sensitivity {
+			return ErrUnavailable
+		}
+		if r.Target.Revision != src.Revision {
+			return ErrConflict
+		}
+		d, e := s.authorize(ctx, token, "read:artifacts", scope, r.ID, "")
+		if e != nil {
+			return e
+		}
+		if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
+			return ErrDenied
+		}
+	}
+	return nil
 }

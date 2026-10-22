@@ -59,15 +59,26 @@ func (s blobStore) locked(ctx context.Context, fn func(*lockedBlobs) error) erro
 		return err
 	}
 	defer lock.Close()
-	// shortcut: one flock serializes all file/metadata mutations on this host;
-	// use per-digest locks only if measured contention requires it.
+	if err = flockBlobs(ctx, lock); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	return fn(&lockedBlobs{root: root, ctx: ctx, maxBytes: limit})
+}
+
+// shortcut: one flock serializes all file/metadata mutations on this host;
+// use per-digest locks only if measured contention requires it.
+func flockBlobs(ctx context.Context, lock *os.File) error {
 	for {
-		if err = ctx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if err == nil {
-			break
+			return nil
 		}
 		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EINTR) {
 			return err
@@ -78,11 +89,6 @@ func (s blobStore) locked(ctx context.Context, fn func(*lockedBlobs) error) erro
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
-	if err = ctx.Err(); err != nil {
-		return err
-	}
-	return fn(&lockedBlobs{root: root, ctx: ctx, maxBytes: limit})
 }
 
 // os.Root may resolve in-root symlinks itself even with O_NOFOLLOW. Check

@@ -35,23 +35,9 @@ func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in Cand
 	if in.ExpectedRevision < 1 || id == "" || len(id) > 256 || in.OperationID != "" && !idempotencyPattern.MatchString(in.OperationID) {
 		return Record{}, ErrInvalid
 	}
-	status := "approved"
-	switch in.Action {
-	case "approve":
-		if in.Content != "" || in.Reason != "" {
-			return Record{}, ErrInvalid
-		}
-	case "edit_approve":
-		if strings.TrimSpace(in.Content) == "" || len(in.Content) > 64000 || in.Reason != "" {
-			return Record{}, ErrInvalid
-		}
-	case "reject":
-		status = "rejected"
-		if strings.TrimSpace(in.Reason) == "" || len(in.Reason) > 2000 || in.Content != "" {
-			return Record{}, ErrInvalid
-		}
-	default:
-		return Record{}, ErrInvalid
+	status, e := candidateReviewStatus(in)
+	if e != nil {
+		return Record{}, e
 	}
 	if in.Conflict != nil && !validCandidateReviewConflict(id, in) {
 		return Record{}, ErrInvalid
@@ -64,6 +50,27 @@ func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in Cand
 		return Record{}, e
 	}
 	return r, nil
+}
+
+func candidateReviewStatus(in CandidateReviewInput) (string, error) {
+	switch in.Action {
+	case "approve":
+		if in.Content != "" || in.Reason != "" {
+			return "", ErrInvalid
+		}
+	case "edit_approve":
+		if strings.TrimSpace(in.Content) == "" || len(in.Content) > 64000 || in.Reason != "" {
+			return "", ErrInvalid
+		}
+	case "reject":
+		if strings.TrimSpace(in.Reason) == "" || len(in.Reason) > 2000 || in.Content != "" {
+			return "", ErrInvalid
+		}
+		return "rejected", nil
+	default:
+		return "", ErrInvalid
+	}
+	return "approved", nil
 }
 
 type CandidateReviewBatchItem struct {

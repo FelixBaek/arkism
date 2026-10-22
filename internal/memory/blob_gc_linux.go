@@ -103,19 +103,8 @@ func (s *Service) CollectBlobGarbage(ctx context.Context, token string) (BlobGCR
 					}
 					continue
 				}
-				limit := int64(0)
-				suffix, upload := strings.CutPrefix(name, ".upload-")
-				if upload {
-					limit = b.maxBytes + 1
-				} else {
-					var binding bool
-					suffix, binding = strings.CutPrefix(name, ".binding-")
-					if binding {
-						limit = 130
-					}
-				}
-				raw, decodeErr := hex.DecodeString(suffix)
-				if limit == 0 || decodeErr != nil || len(raw) != 16 || hex.EncodeToString(raw) != suffix {
+				limit := temporaryBlobLimit(name, b.maxBytes)
+				if limit == 0 {
 					return ErrUnavailable
 				}
 				if e = checkFile(name, limit); e != nil {
@@ -136,29 +125,53 @@ func (s *Service) CollectBlobGarbage(ctx context.Context, token string) (BlobGCR
 				break
 			}
 		}
-		// A crash after unlink can leave no directory entry but a pending DB row.
-		after := ""
-		for {
-			if e = ctx.Err(); e != nil {
-				return e
-			}
-			ids, e := s.Repo.BlobGCBatch(ctx, after)
-			if e != nil {
-				return e
-			}
-			if len(ids) == 0 {
-				return nil
-			}
-			for _, id := range ids {
-				if !sourceHashPattern.MatchString(id) || id <= after {
-					return ErrUnavailable
-				}
-				if e = collect(id); e != nil {
-					return e
-				}
-				after = id
-			}
-		}
+		return collectPendingBlobs(ctx, s.Repo, collect)
 	})
 	return result, err
+}
+
+// temporaryBlobLimit is the size bound of an upload or binding probe name, or 0 for any other name.
+func temporaryBlobLimit(name string, maxBytes int64) int64 {
+	limit := int64(0)
+	suffix, upload := strings.CutPrefix(name, ".upload-")
+	if upload {
+		limit = maxBytes + 1
+	} else {
+		var binding bool
+		suffix, binding = strings.CutPrefix(name, ".binding-")
+		if binding {
+			limit = 130
+		}
+	}
+	raw, decodeErr := hex.DecodeString(suffix)
+	if limit == 0 || decodeErr != nil || len(raw) != 16 || hex.EncodeToString(raw) != suffix {
+		return 0
+	}
+	return limit
+}
+
+// A crash after unlink can leave no directory entry but a pending DB row.
+func collectPendingBlobs(ctx context.Context, repo Repository, collect func(string) error) error {
+	after := ""
+	for {
+		if e := ctx.Err(); e != nil {
+			return e
+		}
+		ids, e := repo.BlobGCBatch(ctx, after)
+		if e != nil {
+			return e
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		for _, id := range ids {
+			if !sourceHashPattern.MatchString(id) || id <= after {
+				return ErrUnavailable
+			}
+			if e = collect(id); e != nil {
+				return e
+			}
+			after = id
+		}
+	}
 }

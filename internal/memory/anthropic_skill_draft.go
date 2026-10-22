@@ -67,28 +67,16 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 		clone.SkillID, clone.Version, clone.ContentHash, clone.SourcePath, clone.SourceFile = "", "", "", "", ""
 		in.BaselineAnalysis = &clone
 	}
-	for _, ref := range lessonRefs {
-		row, err := a.Service.Get(ctx, token, ref.Collection, scope, ref.ID)
-		if err != nil {
-			return zero, usage, err
-		}
-		if row.Revision != ref.Revision {
-			return zero, usage, ErrConflict
-		}
-		if _, err = a.Service.authorizeTransfer(ctx, token, "transfer:model_input", scope, row.ID, row.Sensitivity, "external:anthropic", recordContent(row), row.Sources); err != nil {
-			return zero, usage, err
-		}
+	if err := a.authorizeLessonTransfer(ctx, token, scope, lessonRefs); err != nil {
+		return zero, usage, err
 	}
 	data := structuredText(map[string]any{"authority": "data_only_untrusted", "data": in})
 	if _, e := a.Service.authorizeArchiveModelContent(ctx, token, scope, "", "private", data); e != nil {
 		return zero, usage, e
 	}
-	endpoint := a.Endpoint
-	if endpoint == "" {
-		endpoint = "https://api.anthropic.com/v1"
-	}
-	if validateEndpoint(endpoint) != nil {
-		return zero, usage, ErrUnavailable
+	endpoint, e := a.draftEndpoint()
+	if e != nil {
+		return zero, usage, e
 	}
 	client := providerClient(a.Client, 120*time.Second)
 	sent := false
@@ -117,19 +105,7 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 	if e != nil {
 		return zero, usage, e
 	}
-	var discovered struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if json.Unmarshal(models, &discovered) != nil {
-		return zero, usage, ErrUnavailable
-	}
-	found := false
-	for _, m := range discovered.Data {
-		found = found || m.ID == a.Generator().Model
-	}
-	if !found {
+	if !draftModelListed(models, a.Generator().Model) {
 		return zero, usage, ErrUnavailable
 	}
 	payload := map[string]any{"model": a.Generator().Model, "max_tokens": 16384, "thinking": map[string]string{"type": "adaptive"}, "output_config": map[string]any{"effort": "high", "format": map[string]any{"type": "json_schema", "schema": draftSchema(reflect.TypeOf(skillDraftShape(in)))}}, "system": skillDraftSystemPrompt(in), "messages": []map[string]string{{"role": "user", "content": data}}}
@@ -165,6 +141,66 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 	if e != nil {
 		return release(e)
 	}
+	got, stop, text, ok := parseDraftResponse(raw, a.Generator().Model)
+	if !ok {
+		return release(ErrUnavailable)
+	}
+	usage = got
+	if _, e = a.Service.SettleModelBudget(ctx, token, ModelBudgetSettleInput{Scope: a.BudgetScope, ReservationID: reserved.ReservationID, Status: "completed", InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens}); e != nil {
+		return zero, usage, e
+	}
+	if stop != "end_turn" {
+		return zero, usage, ErrUnavailable
+	}
+	out, e := decodeSkillDraft(in, text)
+	return out, usage, e
+}
+
+func (a *AnthropicSkillDrafter) authorizeLessonTransfer(ctx context.Context, token string, scope Scope, lessonRefs []Ref) error {
+	for _, ref := range lessonRefs {
+		row, err := a.Service.Get(ctx, token, ref.Collection, scope, ref.ID)
+		if err != nil {
+			return err
+		}
+		if row.Revision != ref.Revision {
+			return ErrConflict
+		}
+		if _, err = a.Service.authorizeTransfer(ctx, token, "transfer:model_input", scope, row.ID, row.Sensitivity, "external:anthropic", recordContent(row), row.Sources); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *AnthropicSkillDrafter) draftEndpoint() (string, error) {
+	endpoint := a.Endpoint
+	if endpoint == "" {
+		endpoint = "https://api.anthropic.com/v1"
+	}
+	if validateEndpoint(endpoint) != nil {
+		return "", ErrUnavailable
+	}
+	return endpoint, nil
+}
+
+func draftModelListed(models []byte, model string) bool {
+	var discovered struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(models, &discovered) != nil {
+		return false
+	}
+	found := false
+	for _, m := range discovered.Data {
+		found = found || m.ID == model
+	}
+	return found
+}
+
+// parseDraftResponse returns the billed usage, the stop reason and the joined text blocks.
+func parseDraftResponse(raw []byte, model string) (ProviderUsage, string, string, bool) {
 	var response struct {
 		Model   string `json:"model"`
 		Stop    string `json:"stop_reason"`
@@ -179,22 +215,15 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 			CacheWrite int64  `json:"cache_creation_input_tokens"`
 		} `json:"usage"`
 	}
-	if json.Unmarshal(raw, &response) != nil || response.Model != a.Generator().Model || response.Usage.Input == nil || response.Usage.Output == nil || *response.Usage.Input < 0 || *response.Usage.Output < 0 || response.Usage.CacheRead != 0 || response.Usage.CacheWrite != 0 {
-		return release(ErrUnavailable)
+	if json.Unmarshal(raw, &response) != nil || response.Model != model || response.Usage.Input == nil || response.Usage.Output == nil || *response.Usage.Input < 0 || *response.Usage.Output < 0 || response.Usage.CacheRead != 0 || response.Usage.CacheWrite != 0 {
+		return ProviderUsage{}, "", "", false
 	}
-	usage = ProviderUsage{Provider: "skill_llm", Model: a.Generator().Model, Requests: 1, InputTokens: *response.Usage.Input, OutputTokens: *response.Usage.Output, TotalTokens: *response.Usage.Input + *response.Usage.Output}
-	if _, e = a.Service.SettleModelBudget(ctx, token, ModelBudgetSettleInput{Scope: a.BudgetScope, ReservationID: reserved.ReservationID, Status: "completed", InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens}); e != nil {
-		return zero, usage, e
-	}
-	if response.Stop != "end_turn" {
-		return zero, usage, ErrUnavailable
-	}
+	usage := ProviderUsage{Provider: "skill_llm", Model: model, Requests: 1, InputTokens: *response.Usage.Input, OutputTokens: *response.Usage.Output, TotalTokens: *response.Usage.Input + *response.Usage.Output}
 	text := ""
 	for _, block := range response.Content {
 		if block.Type == "text" {
 			text += block.Text
 		}
 	}
-	out, e := decodeSkillDraft(in, text)
-	return out, usage, e
+	return usage, response.Stop, text, true
 }

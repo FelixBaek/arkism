@@ -276,22 +276,33 @@ func validSkillChecks(checks []SkillCheck) bool {
 		return false
 	}
 	for _, c := range checks {
-		if !slices.Contains(agentToolAgents, c.Agent) || !validRunLabel(c.Name, 128) || c.Path == "" || len(c.Path) > 512 || len(c.Error) > 200 || c.Findings < 0 || len(c.TopFindings) > 3 || c.ScannedAt.IsZero() {
+		if !validSkillCheck(c) {
 			return false
-		}
-		if c.QualityScore != nil && (*c.QualityScore < 0 || *c.QualityScore > 100) || c.QualityGrade != "" && !slices.Contains(skillGrades, c.QualityGrade) {
-			return false
-		}
-		if c.RiskScore != nil && (*c.RiskScore < 0 || *c.RiskScore > 100) || c.Verdict != "" && !slices.Contains(skillVerdicts, c.Verdict) {
-			return false
-		}
-		for _, f := range c.TopFindings {
-			if f == "" || len(f) > 160 {
-				return false
-			}
 		}
 	}
 	return true
+}
+
+func validSkillCheck(c SkillCheck) bool {
+	if !slices.Contains(agentToolAgents, c.Agent) || !validRunLabel(c.Name, 128) || c.Path == "" || len(c.Path) > 512 || len(c.Error) > 200 || c.Findings < 0 || len(c.TopFindings) > 3 || c.ScannedAt.IsZero() {
+		return false
+	}
+	if !validSkillCheckScores(c) {
+		return false
+	}
+	for _, f := range c.TopFindings {
+		if f == "" || len(f) > 160 {
+			return false
+		}
+	}
+	return true
+}
+
+func validSkillCheckScores(c SkillCheck) bool {
+	if c.QualityScore != nil && (*c.QualityScore < 0 || *c.QualityScore > 100) || c.QualityGrade != "" && !slices.Contains(skillGrades, c.QualityGrade) {
+		return false
+	}
+	return !(c.RiskScore != nil && (*c.RiskScore < 0 || *c.RiskScore > 100) || c.Verdict != "" && !slices.Contains(skillVerdicts, c.Verdict))
 }
 
 func validAgentToolEntries(entries []AgentToolEntry, plugin bool) bool {
@@ -492,52 +503,8 @@ func validSkillSource(s string) bool {
 
 // RequestAgentTool queues the owner's switch; the host tool applies it.
 func (s *Service) RequestAgentTool(ctx context.Context, token string, in AgentToolSwitch) (Record, error) {
-	if in.Kind != "skill_install" && (len(in.Targets) > 0 || in.Update) {
-		return Record{}, ErrInvalid
-	}
-	switch in.Kind {
-	case "mcp", "plugin", "plugin_remove", "mcp_login":
-		if !slices.Contains(agentToolAgents, in.Agent) || !validRunLabel(in.Name, 128) || in.SkillsDir != "" || in.ChatsDir != "" || len(in.Command) > 0 || in.URL != "" {
-			return Record{}, ErrInvalid
-		}
-	case "agent": // add (enabled) or remove an agent; Name is its display name
-		if !agentIDRe.MatchString(in.Agent) || strings.TrimSpace(in.Name) == "" || runes(in.Name) > 40 ||
-			!validAgentDir(in.SkillsDir, in.Enabled) || !validAgentDir(in.ChatsDir, false) {
-			return Record{}, ErrInvalid
-		}
-	case "mcp_add": // a new MCP server for one agent: a program to run, or an https address; no keys or headers
-		if !slices.Contains(agentToolAgents, in.Agent) || !validRunLabel(in.Name, 128) || (len(in.Command) == 0) == (in.URL == "") || len(in.Command) > 32 ||
-			in.URL != "" && (!strings.HasPrefix(in.URL, "https://") || len(in.URL) > 400) {
-			return Record{}, ErrInvalid
-		}
-		for _, a := range in.Command {
-			if a == "" || len(a) > 400 || strings.IndexFunc(a, func(r rune) bool { return r < 0x20 }) >= 0 {
-				return Record{}, ErrInvalid
-			}
-		}
-		if err := noSecrets(in); err != nil {
-			return Record{}, err
-		}
-	case "skill_update", "skill_check": // update: pull one skill repository forward (git pull --ff-only); check: ask its upstream again now. Name is the repository folder
-		if in.Agent != "shared" || !validAgentDir(in.Name, true) || in.SkillsDir != "" || in.ChatsDir != "" || len(in.Command) > 0 || in.URL != "" {
-			return Record{}, ErrInvalid
-		}
-	case "skill_install": // a skill from GitHub: Name is owner/repo[/path][@ref]; not enabled = preview only, enabled = install into Targets
-		if in.Agent != "shared" || !validSkillSource(in.Name) || in.SkillsDir != "" || in.ChatsDir != "" || len(in.Command) > 0 || in.URL != "" ||
-			in.Enabled != (len(in.Targets) > 0) || len(in.Targets) > len(skillInstallTargets) {
-			return Record{}, ErrInvalid
-		}
-		for i, t := range in.Targets {
-			if !slices.Contains(skillInstallTargets, t) || slices.Contains(in.Targets[:i], t) {
-				return Record{}, ErrInvalid
-			}
-		}
-	case "shared": // add (enabled) or remove a folder several agents read; Name is the folder
-		if in.Agent != "shared" || !validAgentDir(in.Name, true) || in.SkillsDir != "" || in.ChatsDir != "" {
-			return Record{}, ErrInvalid
-		}
-	default:
-		return Record{}, ErrInvalid
+	if err := validAgentToolSwitch(in); err != nil {
+		return Record{}, err
 	}
 	if !validScope(in.Scope) {
 		return Record{}, ErrInvalid
@@ -565,6 +532,74 @@ func (s *Service) RequestAgentTool(ctx context.Context, token string, in AgentTo
 	})
 }
 
+func validAgentToolSwitch(in AgentToolSwitch) error {
+	if in.Kind != "skill_install" && (len(in.Targets) > 0 || in.Update) {
+		return ErrInvalid
+	}
+	switch in.Kind {
+	case "mcp", "plugin", "plugin_remove", "mcp_login":
+		if !slices.Contains(agentToolAgents, in.Agent) || !validRunLabel(in.Name, 128) || switchHasExtras(in) {
+			return ErrInvalid
+		}
+	case "agent": // add (enabled) or remove an agent; Name is its display name
+		return validAgentSwitch(in)
+	case "mcp_add": // a new MCP server for one agent: a program to run, or an https address; no keys or headers
+		return validMCPAddSwitch(in)
+	case "skill_update", "skill_check": // update: pull one skill repository forward (git pull --ff-only); check: ask its upstream again now. Name is the repository folder
+		if in.Agent != "shared" || !validAgentDir(in.Name, true) || switchHasExtras(in) {
+			return ErrInvalid
+		}
+	case "skill_install": // a skill from GitHub: Name is owner/repo[/path][@ref]; not enabled = preview only, enabled = install into Targets
+		return validSkillInstallSwitch(in)
+	case "shared": // add (enabled) or remove a folder several agents read; Name is the folder
+		if in.Agent != "shared" || !validAgentDir(in.Name, true) || in.SkillsDir != "" || in.ChatsDir != "" {
+			return ErrInvalid
+		}
+	default:
+		return ErrInvalid
+	}
+	return nil
+}
+
+func validAgentSwitch(in AgentToolSwitch) error {
+	if !agentIDRe.MatchString(in.Agent) || strings.TrimSpace(in.Name) == "" || runes(in.Name) > 40 ||
+		!validAgentDir(in.SkillsDir, in.Enabled) || !validAgentDir(in.ChatsDir, false) {
+		return ErrInvalid
+	}
+	return nil
+}
+
+// switchHasExtras reports fields only agent, mcp_add and skill_install switches carry.
+func switchHasExtras(in AgentToolSwitch) bool {
+	return in.SkillsDir != "" || in.ChatsDir != "" || len(in.Command) > 0 || in.URL != ""
+}
+
+func validMCPAddSwitch(in AgentToolSwitch) error {
+	if !slices.Contains(agentToolAgents, in.Agent) || !validRunLabel(in.Name, 128) || (len(in.Command) == 0) == (in.URL == "") || len(in.Command) > 32 ||
+		in.URL != "" && (!strings.HasPrefix(in.URL, "https://") || len(in.URL) > 400) {
+		return ErrInvalid
+	}
+	for _, a := range in.Command {
+		if a == "" || len(a) > 400 || strings.IndexFunc(a, func(r rune) bool { return r < 0x20 }) >= 0 {
+			return ErrInvalid
+		}
+	}
+	return noSecrets(in)
+}
+
+func validSkillInstallSwitch(in AgentToolSwitch) error {
+	if in.Agent != "shared" || !validSkillSource(in.Name) || switchHasExtras(in) ||
+		in.Enabled != (len(in.Targets) > 0) || len(in.Targets) > len(skillInstallTargets) {
+		return ErrInvalid
+	}
+	for i, t := range in.Targets {
+		if !slices.Contains(skillInstallTargets, t) || slices.Contains(in.Targets[:i], t) {
+			return ErrInvalid
+		}
+	}
+	return nil
+}
+
 func validAgentToolsReport(in AgentToolsReport) bool {
 	if !validScope(in.Scope) || !validAgentToolEntries(in.Servers, false) || !validAgentToolEntries(in.Plugins, true) || len(in.Results) > agentToolRequestsKept || len(in.SkillCheckTools) > 120 {
 		return false
@@ -575,17 +610,26 @@ func validAgentToolsReport(in AgentToolsReport) bool {
 	if !validMemoryUse(in.MemoryUse) || !validMemoryUse(in.MemoryUse30) {
 		return false
 	}
-	if in.SharedDirs != nil {
-		if len(*in.SharedDirs) > 8 {
+	return validSharedDirs(in.SharedDirs) && validAgentToolResults(in.Results)
+}
+
+func validSharedDirs(dirs *[]string) bool {
+	if dirs == nil {
+		return true
+	}
+	if len(*dirs) > 8 {
+		return false
+	}
+	for _, d := range *dirs {
+		if !validAgentDir(d, true) {
 			return false
 		}
-		for _, d := range *in.SharedDirs {
-			if !validAgentDir(d, true) {
-				return false
-			}
-		}
 	}
-	for _, res := range in.Results {
+	return true
+}
+
+func validAgentToolResults(results []AgentToolResult) bool {
+	for _, res := range results {
 		if res.ID == "" || res.Status != "done" && res.Status != "failed" || len(res.Error) > 500 || len(res.Detail) > 8000 {
 			return false
 		}

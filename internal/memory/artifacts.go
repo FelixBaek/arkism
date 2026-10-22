@@ -51,7 +51,7 @@ func validArtifactActor(actor Decision, scope Scope) bool {
 }
 
 func attachArtifactMetadata(ctx context.Context, tx Tx, scope Scope, source Ref, kind string, data artifactMetadata, actor Decision) (Record, error) {
-	if !validScope(scope) || containsSecret(structuredText(scope)) || containsSecret(source.ID) || source.Collection != "sources" || !validRunLabel(source.ID, 256) || source.Revision < 1 || !validArtifact(kind, data) {
+	if !validArtifactAttach(scope, source, kind, data) {
 		return Record{}, ErrInvalid
 	}
 	if !validArtifactActor(actor, scope) {
@@ -68,13 +68,8 @@ func attachArtifactMetadata(ctx context.Context, tx Tx, scope Scope, source Ref,
 		return Record{}, err
 	}
 	id := artifactID(scope, source.ID, data.Digest)
-	previous, err := tx.Get(ctx, colArtifacts, scope, id)
-	duplicate := err == nil
-	if duplicate {
-		if !validArtifactRecord(previous) || *previous.Artifact != data || previous.Kind != kind || *previous.Target != source {
-			return Record{}, ErrConflict
-		}
-	} else if !errors.Is(err, ErrNotFound) {
+	previous, duplicate, err := attachedArtifact(ctx, tx, scope, id, source, kind, data)
+	if err != nil {
 		return Record{}, err
 	}
 	blob, err := tx.Get(ctx, colBlobs, blobScope(), data.Digest)
@@ -87,33 +82,13 @@ func attachArtifactMetadata(ctx context.Context, tx Tx, scope Scope, source Ref,
 		return Record{}, err
 	}
 	if duplicate {
-		if fresh || blob.Kind != "blob" || blob.Status != statusActive || blob.Blob == nil || blob.Blob.Bytes != data.Bytes || blob.Blob.References < 1 || blob.Blob.References != count {
+		if fresh || !countedBlob(blob, data, count, 1) {
 			return Record{}, ErrUnavailable
 		}
 		return previous, audit(ctx, tx, scope, actor.PrincipalID, "artifact:duplicate", id)
 	}
 	now := time.Now().UTC()
-	if fresh {
-		if count != 0 {
-			return Record{}, ErrUnavailable
-		}
-		blob = Record{ID: data.Digest, Scope: blobScope(), Kind: "blob", Status: statusActive, Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: "memoryd", CreatedByType: "service", Blob: &blobMetadata{Bytes: data.Bytes, References: 1}}
-		err = tx.Insert(ctx, colBlobs, blob)
-	} else {
-		if blob.Kind != "blob" || blob.Status != statusActive || blob.Blob == nil || blob.Blob.Bytes != data.Bytes || blob.Blob.References < 0 || blob.Blob.References != count {
-			return Record{}, ErrUnavailable
-		}
-		meta := *blob.Blob
-		meta.References++
-		if meta.References <= 0 {
-			return Record{}, ErrUnavailable
-		}
-		blob.Blob = &meta
-		blob.Revision++
-		blob.UpdatedAt = now
-		err = tx.Replace(ctx, colBlobs, blob, blob.Revision-1)
-	}
-	if err != nil {
+	if err = referenceArtifactBlob(ctx, tx, blob, fresh, data, count, now); err != nil {
 		return Record{}, err
 	}
 	result := Record{ArtifactGeneration: ContentHash(ID()), ID: id, Scope: scope, Kind: kind, Status: statusActive, Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, Sensitivity: current.Sensitivity, Generator: current.Generator, OriginProduct: current.OriginProduct, SourceRef: current.SourceRef, CollectedAt: current.CollectedAt, Sources: []SourceRef{{SourceID: current.ID, Locator: "original"}}, Target: &source, Artifact: &data}
@@ -124,6 +99,52 @@ func attachArtifactMetadata(ctx context.Context, tx Tx, scope Scope, source Ref,
 		return Record{}, err
 	}
 	return tx.Get(ctx, colArtifacts, scope, id)
+}
+
+// attachedArtifact returns the same artifact already attached, if any.
+func attachedArtifact(ctx context.Context, tx Tx, scope Scope, id string, source Ref, kind string, data artifactMetadata) (Record, bool, error) {
+	previous, err := tx.Get(ctx, colArtifacts, scope, id)
+	if err == nil {
+		if !validArtifactRecord(previous) || *previous.Artifact != data || previous.Kind != kind || *previous.Target != source {
+			return Record{}, false, ErrConflict
+		}
+		return previous, true, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return Record{}, false, err
+	}
+	return Record{}, false, nil
+}
+
+func validArtifactAttach(scope Scope, source Ref, kind string, data artifactMetadata) bool {
+	return validScope(scope) && !containsSecret(structuredText(scope)) && !containsSecret(source.ID) && source.Collection == "sources" && validRunLabel(source.ID, 256) && source.Revision >= 1 && validArtifact(kind, data)
+}
+
+// countedBlob checks a blob row against the artifact and the counted references.
+func countedBlob(blob Record, data artifactMetadata, count int64, least int64) bool {
+	return blob.Kind == "blob" && blob.Status == statusActive && blob.Blob != nil && blob.Blob.Bytes == data.Bytes && blob.Blob.References >= least && blob.Blob.References == count
+}
+
+// referenceArtifactBlob inserts a fresh blob row or adds one reference to the existing one.
+func referenceArtifactBlob(ctx context.Context, tx Tx, blob Record, fresh bool, data artifactMetadata, count int64, now time.Time) error {
+	if fresh {
+		if count != 0 {
+			return ErrUnavailable
+		}
+		blob = Record{ID: data.Digest, Scope: blobScope(), Kind: "blob", Status: statusActive, Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: "memoryd", CreatedByType: "service", Blob: &blobMetadata{Bytes: data.Bytes, References: 1}}
+		return tx.Insert(ctx, colBlobs, blob)
+	}
+	if !countedBlob(blob, data, count, 0) {
+		return ErrUnavailable
+	}
+	meta := *blob.Blob
+	meta.References++
+	if meta.References <= 0 {
+		return ErrUnavailable
+	}
+	blob.Blob = &meta
+	blob.Revision++
+	blob.UpdatedAt = now
+	return tx.Replace(ctx, colBlobs, blob, blob.Revision-1)
 }
 
 func detachArtifactMetadata(ctx context.Context, tx Tx, expected Record, actor string) error {

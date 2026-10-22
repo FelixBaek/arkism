@@ -41,6 +41,13 @@ func inspectArtifactText(content []byte, mime string) (Inspection, error) {
 	if !isJSON {
 		return report, nil
 	}
+	if err := inspectJSONTokens(content, check); err != nil {
+		return Inspection{}, err
+	}
+	return report, nil
+}
+
+func inspectJSONTokens(content []byte, check func(string) error) error {
 	// Tokenize instead of unmarshalling a map: duplicate keys must not hide an
 	// earlier secret. Decoded strings expose JSON unicode/escape sequences.
 	d := json.NewDecoder(bytes.NewReader(content))
@@ -53,10 +60,10 @@ func inspectArtifactText(content []byte, mime string) (Inspection, error) {
 	for {
 		token, err := d.Token()
 		if err == io.EOF {
-			return report, nil // json.Valid already requires exactly one document.
+			return nil // json.Valid already requires exactly one document.
 		}
 		if err != nil {
-			return Inspection{}, ErrInvalid
+			return ErrInvalid
 		}
 		if delim, ok := token.(json.Delim); ok && (delim == '}' || delim == ']') {
 			stack = stack[:len(stack)-1]
@@ -64,7 +71,7 @@ func inspectArtifactText(content []byte, mime string) (Inspection, error) {
 		}
 		if s, ok := token.(string); ok {
 			if err := check(s); err != nil {
-				return Inspection{}, err
+				return err
 			}
 		}
 		if len(stack) > 0 && stack[len(stack)-1].object {
@@ -79,7 +86,7 @@ func inspectArtifactText(content []byte, mime string) (Inspection, error) {
 					value = string(delim)
 				}
 				if err := check(f.key + ":" + value); err != nil {
-					return Inspection{}, err
+					return err
 				}
 			}
 			f.nextKey = !f.nextKey

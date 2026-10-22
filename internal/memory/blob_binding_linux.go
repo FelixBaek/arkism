@@ -55,16 +55,9 @@ func (b *lockedBlobs) bind(identity string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		data, err := io.ReadAll(io.LimitReader(marker, 131))
-		marker.Close()
-		if err != nil {
+		if rootID, err = readBindingMarker(marker, identity); err != nil {
 			return "", err
 		}
-		parts := strings.Split(string(data), "\n")
-		if len(parts) != 3 || parts[0] != identity || !sourceHashPattern.MatchString(parts[1]) || parts[2] != "" {
-			return "", ErrUnavailable
-		}
-		rootID = parts[1]
 	}
 	directory, err := b.root.Open(".")
 	if err != nil {
@@ -72,42 +65,8 @@ func (b *lockedBlobs) bind(identity string) (string, error) {
 	}
 	defer directory.Close()
 	if fresh {
-		entries, e := directory.ReadDir(3)
-		if e != nil && !errors.Is(e, io.EOF) {
-			return "", e
-		}
-		// A first-bind crash can leave one private temporary marker, never file data.
-		if len(entries) > 2 {
-			return "", ErrUnavailable
-		}
-		var stale string
-		for _, entry := range entries {
-			if entry.Name() == ".lock" {
-				continue
-			}
-			suffix, ok := strings.CutPrefix(entry.Name(), ".binding-")
-			raw, e := hex.DecodeString(suffix)
-			if !ok || e != nil || len(raw) != 16 || hex.EncodeToString(raw) != suffix {
-				return "", ErrUnavailable
-			}
-			stale = entry.Name()
-		}
-		if stale != "" {
-			file, e := openPrivateBlob(b.root, stale, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
-			if e != nil {
-				return "", e
-			}
-			info, statErr := file.Stat()
-			file.Close()
-			if statErr != nil {
-				return "", statErr
-			}
-			if info.Size() > 130 {
-				return "", ErrUnavailable
-			}
-			if e = b.root.Remove(stale); e != nil {
-				return "", e
-			}
+		if err = b.removeStaleBinding(directory); err != nil {
+			return "", err
 		}
 	}
 
@@ -115,6 +74,59 @@ func (b *lockedBlobs) bind(identity string) (string, error) {
 		return "", err
 	}
 	return rootID, nil
+}
+
+// readBindingMarker returns the root ID a marker binds to identity.
+func readBindingMarker(marker *os.File, identity string) (string, error) {
+	data, err := io.ReadAll(io.LimitReader(marker, 131))
+	marker.Close()
+	if err != nil {
+		return "", err
+	}
+	parts := strings.Split(string(data), "\n")
+	if len(parts) != 3 || parts[0] != identity || !sourceHashPattern.MatchString(parts[1]) || parts[2] != "" {
+		return "", ErrUnavailable
+	}
+	return parts[1], nil
+}
+
+func (b *lockedBlobs) removeStaleBinding(directory *os.File) error {
+	entries, e := directory.ReadDir(3)
+	if e != nil && !errors.Is(e, io.EOF) {
+		return e
+	}
+	// A first-bind crash can leave one private temporary marker, never file data.
+	if len(entries) > 2 {
+		return ErrUnavailable
+	}
+	var stale string
+	for _, entry := range entries {
+		if entry.Name() == ".lock" {
+			continue
+		}
+		suffix, ok := strings.CutPrefix(entry.Name(), ".binding-")
+		raw, e := hex.DecodeString(suffix)
+		if !ok || e != nil || len(raw) != 16 || hex.EncodeToString(raw) != suffix {
+			return ErrUnavailable
+		}
+		stale = entry.Name()
+	}
+	if stale == "" {
+		return nil
+	}
+	file, e := openPrivateBlob(b.root, stale, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if e != nil {
+		return e
+	}
+	info, statErr := file.Stat()
+	file.Close()
+	if statErr != nil {
+		return statErr
+	}
+	if info.Size() > 130 {
+		return ErrUnavailable
+	}
+	return b.root.Remove(stale)
 }
 
 func (b *lockedBlobs) publishBinding(identity, rootID string, fresh bool) error {
