@@ -38,7 +38,7 @@ window.ArkismMemoryBubbles = (() => {
       const m = new Map();
       for (const p of items) { const g = groupOf(mode, p); let o = m.get(g.key); if (!o) m.set(g.key, o = { key: g.key, name: g.name, ord: g.ord ?? 0, color: g.color || p.color, count: 0, el: null, cx: 0, cy: 0, top: null, rx: 0, ry: 0, rr: 0 }); o.count++; p.g = o; }
       groups = [...m.values()].sort((a, b) => a.ord - b.ord || b.count - a.count);
-      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", String(g.count))); return g.el; }));
+      labels.replaceChildren(...groups.map((g) => { g.el = mk("div", "mm-label"); const dot = mk("i", ""); dot.style.background = g.color; g.el.append(dot, mk("b", "", g.name), mk("em", "", g.count.toLocaleString("en-US"))); return g.el; }));
       pairUp(); layout();
     }
     // group-to-group line counts for the many-dots overview, built when the groups or lines change rather than on every draw
@@ -57,14 +57,17 @@ window.ArkismMemoryBubbles = (() => {
       // each area is a circle whose radius grows with √(its dots' room), so a big group takes a big circle instead of shrinking every dot;
       // the circles fill rows left to right, and the dot scale is the largest at which every row fits the canvas
       const rad = (g, s) => s * Math.sqrt((room.get(g) || 0) / 0.7) + RIM + 14;
-      const rows = (s) => { const out = []; let cur = null; for (const g of groups) { const d = 2 * rad(g, s); if (!cur || cur.w + d > aw) out.push(cur = { gs: [], w: 0, h: 0 }); cur.gs.push(g); cur.w += d; cur.h = Math.max(cur.h, d); } return out; };
-      const fits = (s) => groups.every((g) => 2 * rad(g, s) <= Math.min(aw, ah)) && rows(s).reduce((a, r) => a + r.h, 0) <= ah;
-      let lo = 0, hi = Math.min(base, Math.sqrt(aw * ah * 0.32 / Math.max(1, need)));
-      if (fits(hi)) lo = hi; else for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (fits(m)) lo = m; else hi = m; }
-      scale = Math.max(0.05, lo);
-      const rs = rows(scale), gapY = Math.max(0, ah - rs.reduce((a, r) => a + r.h, 0)) / (rs.length + 1);
+      // an area is never narrower than its name pill, so small areas side by side keep their labels apart (#181)
+      const wide = (g, s) => Math.max(2 * rad(g, s), (g.el?.offsetWidth || 0) + 12);
+      const rows = (s, cols) => { const out = []; let cur = null; for (const g of groups) { const d = 2 * rad(g, s), w = wide(g, s); if (!cur || cur.w + w > aw || cur.gs.length >= cols) out.push(cur = { gs: [], w: 0, h: 0 }); cur.gs.push(g); cur.w += w; cur.h = Math.max(cur.h, d); } return out; };
+      const fits = (s, cols) => groups.every((g) => 2 * rad(g, s) <= Math.min(aw, ah) && wide(g, s) <= aw) && rows(s, cols).reduce((a, r) => a + r.h, 0) <= ah;
+      const best = (cols) => { let lo = 0, hi = Math.min(base, Math.sqrt(aw * ah * 0.32 / Math.max(1, need))); if (fits(hi, cols)) return hi; for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (fits(m, cols)) lo = m; else hi = m; } return lo; };
+      // a grid as wide as the canvas shape (not one long thin row of small areas), unless that would shrink the dots
+      const grid = Math.max(1, Math.ceil(Math.sqrt(groups.length * aw / Math.max(1, ah)))), sg = best(grid), sf = best(Infinity), cols = sg >= sf ? grid : Infinity;
+      scale = Math.max(0.05, Math.max(sg, sf));
+      const rs = rows(scale, cols), gapY = Math.max(0, ah - rs.reduce((a, r) => a + r.h, 0)) / (rs.length + 1);
       let y = PAD.t + gapY;
-      for (const r of rs) { const gapX = Math.max(0, aw - r.w) / (r.gs.length + 1); let x = PAD.l + gapX; for (const g of r.gs) { const d = 2 * rad(g, scale); g.cx = x + d / 2; g.cy = y + r.h / 2; x += d + gapX; } y += r.h + gapY; }
+      for (const r of rs) { const gapX = Math.max(0, aw - r.w) / (r.gs.length + 1); let x = PAD.l + gapX; for (const g of r.gs) { const d = wide(g, scale); g.cx = x + d / 2; g.cy = y + r.h / 2; x += d + gapX; } y += r.h + gapY; }
       for (const p of items) { p.r = dot(p) * scale; p.cr = (dot(p) + gap) * scale; }
       items.sort((a, b) => b.r - a.r);
     }
