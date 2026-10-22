@@ -25,6 +25,7 @@ export function startApp() {
   const tauri = window.ArkismSSH(window.__TAURI__?.core);
   const store = (key, value) => { try { value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch (_) { /* storage off: ask again next time */ } };
   const stored = (key) => { try { return localStorage.getItem(key); } catch (_) { return null; } };
+  const emptyData = () => ({ memories: [], candidates: [], conflicted: [], maintenance: [], skills: [], prompts: [], designSystems: [], tools: null, crew: [] });
   const state = createAppState({
     // Build-time defaults come from the desktop shell (app_defaults); a plain browser keeps these.
     defaults: { server: "http://127.0.0.1:8091", ssh_host: "localhost", updates: false, local: false },
@@ -47,7 +48,7 @@ export function startApp() {
     sort: "recent",
     query: "",
     selected: null,
-    data: { memories: [], candidates: [], conflicted: [], maintenance: [], skills: [], prompts: [], designSystems: [], tools: null, crew: [] },
+    data: emptyData(),
     crewTab: "all",
     crewCat: "all",
     toolTab: "mcp",
@@ -403,9 +404,11 @@ export function startApp() {
     const items = [
       ["brain", "메모리 DB", dbLabel(), state.ready !== false],
       ["database", "서버", host, true],
-      ["git-merge", "스킬 허브", `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}개`, true],
+      ["git-merge", "스킬 허브", state.listErrors.skills ? "—" : `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}개`, !state.listErrors.skills],
       ["lock-simple", "로그인", state.email || "토큰", true]
     ];
+    const failedLists = Object.keys(state.listErrors).length;
+    if (failedLists) items.push(["database", "불러오지 못한 목록", `${failedLists}개`, false]); // #186
     // 설정 › 에이전트에서 끈 에이전트는 타일과 목록에서 뺀다.
     syncExtraAgents();
     const tiles = [...document.querySelectorAll("#status-agents [data-agent]")];
@@ -593,6 +596,7 @@ export function startApp() {
       if (g !== state.connection.generation) return;
       state.loading = false;
       state.loadError = loadFailure(e); // { code, reached, title, text }
+      state.data = emptyData(); // the last good load's agents and skills are not the current state (#187)
       setStatus("error", "연결 확인 필요");
       render();
       stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: state.loadError.reached && state.view !== "todo" ? state.loadError.text : "연결을 확인하고 다시 시도해 주세요." }); // Home's card already says the reason
