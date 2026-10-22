@@ -153,7 +153,8 @@ func pgErr(err error) error {
 		if e.Code == "23505" {
 			return ErrConflict
 		}
-		if e.Code == "AK403" { // classifier_write_guard
+		// AK403 is classifier_write_guard; 42501 is a row-level security refusal.
+		if e.Code == "AK403" || e.Code == "42501" {
 			return ErrDenied
 		}
 		if e.Code == "40001" || e.Code == "40P01" {
