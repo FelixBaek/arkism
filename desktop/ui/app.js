@@ -1110,7 +1110,7 @@ export function startApp() {
   }
   function updateCounts() {
     const d = state.data;
-    const todo = todoItems().filter((t) => t.n);
+    const todo = todoItems().filter((t) => t.n !== 0); // a row whose count is still unknown (null) counts too
     const c = $("#count-todo");
     c.textContent = state.loading ? "" : String(todo.length);
     c.className = todo.some((t) => t.warn) ? "warn" : "";
@@ -1483,7 +1483,7 @@ export function startApp() {
   // 메뉴별 확인할 것: what is left after 먼저 확인, one row per menu; the row opens that menu.
   function menuRows(rest) {
     const list = el("div", "todo-list home-menus");
-    const of = (m) => TODO_MENUS.filter(([menu]) => menu === m).map(([menu, name, ids, target]) => [menu, name, rest.filter((t) => ids.includes(t.id) && t.n), target]);
+    const of = (m) => TODO_MENUS.filter(([menu]) => menu === m).map(([menu, name, ids, target]) => [menu, name, rest.filter((t) => ids.includes(t.id) && t.n !== 0), target]);
     const rows = of("MEMORY");
     digests.menuRows(rows); // 병합 제안 · 모아보기 (digests.js)
     rows.push(homeChecks.knowledgeRow(state.connection.generation), ...of("TOOLS"), ...home.menuExtras(state.connection.generation), homeChecks.repoRow(state.connection.generation)); // 지식 · 스킬 (TOOLS) · 워크플로우 · 라우팅 · 저장소
@@ -1498,11 +1498,11 @@ export function startApp() {
     let any = false;
     for (const [menu, name, parts, target] of rows) {
       const n = todoTotal(parts);
-      if (!n) continue;
+      if (!parts.some((t) => t.n === null || t.n > 0)) continue; // an unknown count keeps its row
       any = true;
       const item = el("div", "todo-item");
       const text = parts.map((t) => (t.id ? `${TODO_SHORT[t.id] || t.label} ${t.n ?? "…"}` : t.label)).join(" · ");
-      item.append(el("span", "home-menu", menu), el("span", "label", name), raw(el("span", "sub", tr(text))), el("output", "home-badge warn", String(n)), el("span", "home-chev", "›"));
+      item.append(el("span", "home-menu", menu), el("span", "label", name), raw(el("span", "sub", tr(text))), el("output", "home-badge warn", n ? String(n) : "…"), el("span", "home-chev", "›"));
       item.addEventListener("click", () => go(...target));
       list.append(item);
     }
