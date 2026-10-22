@@ -290,7 +290,7 @@ func zaiEnv(env map[string]string, model string, keys []map[string]any) (map[str
 	for _, k := range keys {
 		if k["provider"] == "zai" && truthy(k["key"]) {
 			base := sOr(k["base_url"])
-			if !strings.Contains(base, "/anthropic") {
+			if !strings.HasPrefix(base, "https://") || !strings.Contains(base, "/anthropic") { // a pre-0.1.4 http address is not used (#170)
 				base = zaiAnthropic
 			}
 			return customEnv(env, model, map[string]any{"key": k["key"], "base_url": base})
@@ -405,7 +405,25 @@ var modelID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}$`)
 var testKeyFn = testKey
 
 // testKey lists the models a key can see by asking the provider's /models.
+// keyTestErr turns a failed /models call into the sentence the key dialog shows.
+func keyTestErr(err error) error {
+	var he *host.HTTPError
+	if !errors.As(err, &he) {
+		return crewErr("제공자에 연결하지 못했어요")
+	}
+	if he.Code == 403 && strings.Contains(strings.ToLower(string(he.Body)), "cloudflare") {
+		return crewErr("제공자 방화벽(Cloudflare)이 막았어요 (403)")
+	}
+	if he.Code == 401 || he.Code == 403 {
+		return crewErr("키가 맞지 않아요")
+	}
+	return crewErr("연결 실패 (" + strconv.Itoa(he.Code) + ")")
+}
+
 func testKey(provider, key, baseURL string, timeout time.Duration) ([]string, error) {
+	if err := checkBaseURL(provider, baseURL); err != nil { // the key must not reach an address addKey would refuse (#169)
+		return nil, err
+	}
 	base := baseURL
 	if base == "" {
 		base = host.ModelsURL[provider]
@@ -425,17 +443,7 @@ func testKey(provider, key, baseURL string, timeout time.Duration) ([]string, er
 	}
 	raw, err := providerDo(http.MethodGet, base+"/models", nil, headers, timeout, 2<<20)
 	if err != nil {
-		var he *host.HTTPError
-		if errors.As(err, &he) {
-			if he.Code == 403 && strings.Contains(strings.ToLower(string(he.Body)), "cloudflare") {
-				return nil, crewErr("제공자 방화벽(Cloudflare)이 막았어요 (403)")
-			}
-			if he.Code == 401 || he.Code == 403 {
-				return nil, crewErr("키가 맞지 않아요")
-			}
-			return nil, crewErr("연결 실패 (" + strconv.Itoa(he.Code) + ")")
-		}
-		return nil, crewErr("제공자에 연결하지 못했어요")
+		return nil, keyTestErr(err)
 	}
 	if len(raw) == 0 {
 		raw = []byte("{}")

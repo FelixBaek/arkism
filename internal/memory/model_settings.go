@@ -278,6 +278,12 @@ func validProviderBaseURL(u string) bool {
 	return u == "" || len(u) <= 200 && (strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "http://")) && strings.IndexFunc(u, unicode.IsSpace) < 0
 }
 
+// validNewKeyBaseURL also refuses a plain-http Z.ai address on new keys (#171); stored keys keep
+// validProviderBaseURL so an old record does not invalidate the settings, and the host ignores it.
+func validNewKeyBaseURL(provider, u string) bool {
+	return validProviderBaseURL(u) && (provider != "zai" || u == "" || strings.HasPrefix(u, "https://"))
+}
+
 func validProviderModels(models []string) bool {
 	if len(models) > 300 {
 		return false
@@ -491,7 +497,7 @@ func (s *Service) SwitchProviderModel(ctx context.Context, token string, in Prov
 // (or, with TestOnly, only tries it) on the host. The record keeps the last four.
 func (s *Service) AddProviderKey(ctx context.Context, token string, in ProviderKeyInput) (Record, error) {
 	in.Key = strings.TrimSpace(in.Key)
-	if !validScope(in.Scope) || !providerIDRe.MatchString(in.Provider) || !validProviderKey(in.Key) || !validProviderBaseURL(in.BaseURL) ||
+	if !validScope(in.Scope) || !providerIDRe.MatchString(in.Provider) || !validProviderKey(in.Key) || !validNewKeyBaseURL(in.Provider, in.BaseURL) ||
 		!in.TestOnly && !validRunLabel(in.Name, 60) || in.TestOnly && in.Name != "" && !validRunLabel(in.Name, 60) ||
 		in.MonthlyBudgetUSD != nil && (*in.MonthlyBudgetUSD < 0 || *in.MonthlyBudgetUSD > 1e6) {
 		return Record{}, ErrInvalid

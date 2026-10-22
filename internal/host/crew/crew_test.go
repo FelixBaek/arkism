@@ -1306,6 +1306,16 @@ func TestProviderCallsNameThisRunnerNotGo(t *testing.T) {
 	}
 }
 
+func TestKeyTestRefusesPlainHTTPZAI(t *testing.T) {
+	called := 0
+	fakeProvider(t, `{"data": []}`, func(*http.Request, []byte) { called++ })
+	_, err := testKey("zai", "zai-test-key", "http://example.invalid/api/paas/v4", time.Second)
+	mustCrewErr(t, err, "https://")
+	if called != 0 {
+		t.Fatal("the key was sent over http")
+	}
+}
+
 // ---------------------------------------------------------------- command line
 
 func TestCrewArgumentsFollowArgparse(t *testing.T) {
@@ -1346,6 +1356,13 @@ func TestGLMWithoutWrapperRunsClaudeCodeAgainstZAI(t *testing.T) {
 	}
 	eq(t, []string{env["ANTHROPIC_BASE_URL"], env["ANTHROPIC_AUTH_TOKEN"], env["ANTHROPIC_MODEL"]},
 		[]string{zaiAnthropic, "zai-test-key", "glm-5.3"})
+	// a key saved before v0.1.4 with an http address still runs, but against the https default
+	if err := saveKeys([]map[string]any{{"id": "old", "provider": "zai", "key": "zai-old-key", "base_url": "http://x.invalid/api/anthropic"}}); err != nil {
+		t.Fatal(err)
+	}
+	if env, _ = childEnv(r, nil, "glm-5.3", nil); env["ANTHROPIC_BASE_URL"] != zaiAnthropic {
+		t.Fatal(env["ANTHROPIC_BASE_URL"])
+	}
 	if filepath.Base(binOf(r)) == "claude-glm" {
 		t.Fatal(binOf(r))
 	}
