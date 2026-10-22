@@ -1070,7 +1070,8 @@ export function startApp() {
     const updates = d.tools?.skill_updates || [];
     const ver = (v) => (/^\d/.test(v || "") ? `v${v}` : v || "");
     // the server total while more pages wait, not the first page (#188); once every candidate is loaded the rows are current
-    const reviewTotal = collectionPaging.snapshot("candidates").cursor ? state.memoryTotals?.candidates ?? d.candidates.length : d.candidates.length;
+    // null while the total is unknown, so the badge waits ("…") instead of showing the first page as the total
+    const reviewTotal = collectionPaging.snapshot("candidates").cursor ? state.memoryTotals?.candidates ?? null : d.candidates.length;
     const items = [
       { id: "updates", n: updates.length, icon: "arrows-clockwise", label: "업데이트 가능", title: updates.slice(0, 2).map((u) => `${u.name} ${ver(u.to)}`).join(" · "),
         sub: "원본 저장소에 새 버전이 있어요", action: "업데이트", run: () => updateSkills(updates), list: updates,
@@ -1084,7 +1085,7 @@ export function startApp() {
         sub: "하나로 합치면 관리가 쉬워요", action: "비교하기", detail: (body, i) => similarDetail(body, pairs[i] || pair), preview: pairs.map((x) => `${x.a.name} ↔ ${x.b.name} ${Math.round(x.score * 100)}%`) },
       { id: "unused", n: unusedSkills.length, icon: "clock-counter-clockwise", label: "안 쓰는 스킬", title: `60일 동안 안 쓴 스킬 ${unusedSkills.length}개`,
         sub: "휴지통으로 옮기면 에이전트가 더 읽지 않아요", action: "휴지통으로", run: () => confirmBatch(unusedSkills, () => trashSkills(unusedSkills)), preview: unusedSkills.slice(0, 5).map((sk) => sk.name) },
-      { id: "review", n: reviewTotal, icon: "tray", label: "기억 검토", title: `기억 후보 ${reviewTotal}개 검토`,
+      { id: "review", n: reviewTotal, icon: "tray", label: "기억 검토", title: reviewTotal === null ? `기억 후보 ${d.candidates.length}개 이상 검토` : `기억 후보 ${reviewTotal}개 검토`,
         sub: suspect.length ? `지시처럼 보이는 문장 ${suspect.length}개가 있어요` : "자동으로 저장하지 않은 후보예요", warn: suspect.length > 0,
         action: "한 번에 검토", detail: (body) => reviewBatchDetail(body), preview: d.candidates.slice(0, 5).map((c) => c.text) },
       { id: "conflicted", n: d.conflicted.length, icon: "warning-circle", label: "부딪히는 기억", title: `부딪히는 기억 ${d.conflicted.length}개`,
@@ -1399,7 +1400,7 @@ export function startApp() {
     const items = todoItems();
     const wrap = $("#table");
     if (page.kind === "start") { wrap.replaceChildren(home.startMain()); return; }
-    const lost = page.kind === "home" ? home.lostCard() : null;
+    const lost = page.kind === "home" || page.kind === "all" ? home.lostCard() : null; // 전체 항목 too: a failed load is not "nothing to do"
     if (lost && !items.length) { wrap.replaceChildren(lost); return; }
     if (!items.length) { wrap.replaceChildren(homeEmpty()); return; }
     if (page.kind === "all") { wrap.replaceChildren(todoTable(items)); return; }
@@ -1560,12 +1561,13 @@ export function startApp() {
     const items = todoItems(), now = items.slice(0, firstCount(items)), rest = items.slice(firstCount(items));
     const head = el("div", "home-sum-head");
     head.append(el("h2", "", state.loadError ? "확인할 일을 불러오지 못했어요" : now.length ? `확인할 일 ${now.length}개가 먼저 기다려요` : "지금은 확인할 일이 없어요"),
-      el("p", "meta", rest.length ? `나머지 ${todoTotal(rest)}개는 메뉴별로 모아 두었어요.` : "새 일이 생기면 여기에 모여요."));
+      el("p", "meta", state.loadError ? "" : rest.length ? `나머지 ${todoTotal(rest)}개는 메뉴별로 모아 두었어요.` : "새 일이 생기면 여기에 모여요."));
     const agents = shownAgents();
     const nums = el("div", "home-nums");
     for (const [label, value, warn] of [["먼저 확인", now.length, true], ["메뉴별 확인할 것", todoTotal(rest)], ["함께 일하는 에이전트", agents.length]]) {
       const r = el("div", "");
-      r.append(el("span", "", label), el("output", warn && value ? "warn" : "", String(value)));
+      const known = !state.loadError || label === "함께 일하는 에이전트"; // the to-do counts have nothing to count after a failed load
+      r.append(el("span", "", label), el("output", known && warn && value ? "warn" : "", known ? String(value) : "—"));
       nums.append(r);
     }
     const team = el("section", "section home-agents");

@@ -23,7 +23,7 @@ async function open(browser, fail) {
       if (command === "local_start") return { server: "http://127.0.0.1:8091", token: "inert-fixture" };
       if (command !== "api") return null;
       const url = new URL(args.path, "https://fixture.invalid"), p = url.pathname, list = (items, next = "") => ({ items, next_cursor: next, authority: "data_only_untrusted" });
-      if (p === fail) return { status: 500, body: JSON.stringify({ code: "internal" }) };
+      if (fail.includes(p)) return { status: 500, body: JSON.stringify({ code: "internal" }) };
       let body = list([]);
       if (p === "/v1/capabilities") body = { role: "human", actions: { review_list: true, review_decide: true } };
       if (p === "/v1/providers") body = { providers: [] };
@@ -54,7 +54,7 @@ async function overview(page) {
   const browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
   try {
     // #186: the skill list fails, the memories still load and Home names only the failed list.
-    let { page, errors } = await open(browser, "/v1/skills");
+    let { page, errors } = await open(browser, ["/v1/skills", "/v1/memory_usage"]);
     await page.waitForFunction(() => document.body.innerText.includes("기억 후보"));
     let home = await text(page);
     assert.ok(!home.includes("서버에 문제가 생겼어요"), "a failed skill list is not a whole load error");
@@ -72,21 +72,38 @@ async function overview(page) {
     const stalled = await overview(page);
     await shot(page, "partial-overview");
     assert.ok(stalled.includes("15일째 멈춤") && !stalled.includes("360시간"), "overview stall in days");
+    // the use counts did not load: 불러오기 is unknown, not "0회"
+    assert.ok(!stalled.includes("0회") && (await page.locator(".ov-chip", { hasText: "사용량" }).innerText()).includes("—"), "recall unknown without usage");
     assert.deepEqual(errors, []);
     await page.close();
 
     // #187: the memory list fails; nothing claims a stall, zeros or a healthy pipeline, and the error reads once.
-    ({ page, errors } = await open(browser, "/v1/memories"));
+    ({ page, errors } = await open(browser, ["/v1/memories"]));
     await page.waitForFunction(() => document.body.innerText.includes("서버에 문제가 생겼어요"));
     await page.waitForTimeout(500); // the session list lands after the load
     home = await text(page);
     assert.ok(!home.includes("멈췄어요") && !home.includes("검토할 기억 0개") && !home.includes("지금은 확인할 일이 없어요"), "no stall, zero count or all-clear after a failed load");
     await shot(page, "failed-home");
     assert.equal(times(home, "서버가 요청을 처리하지 못했어요"), 1, "the error sentence shows once");
+    const summary = await page.locator(".home-nums").innerText();
+    assert.ok(!/먼저 확인\s*0/.test(summary) && !home.includes("새 일이 생기면 여기에 모여요"), `summary counts unknown: ${summary}`);
+    await page.getByRole("button", { name: "전체 항목 보기" }).click();
+    await page.waitForTimeout(200);
+    assert.ok(!(await page.locator("#table").innerText()).includes("확인할 일이 없어요"), "전체 항목 keeps the error");
     const unknown = await overview(page);
     await shot(page, "failed-overview");
     assert.ok(!unknown.includes("멈춤") && !unknown.includes("모두 분류됨") && !unknown.includes("모두 움직임"), "overview does not look healthy or stalled");
     assert.ok(unknown.includes("알 수 없음"), "overview says unknown");
+    assert.deepEqual(errors, []);
+    await page.close();
+
+    // the candidate total and the sessions fail: the first page is not passed off as the total, the session chip waits
+    ({ page, errors } = await open(browser, ["/v1/memory_candidates/query", "/v1/usage/sessions"]));
+    await page.waitForFunction(() => document.body.innerText.includes("기억 후보"));
+    await page.waitForTimeout(500);
+    assert.ok((await text(page)).includes("기억 후보 50개 이상 검토"), "unknown total reads as at least the loaded page");
+    await overview(page);
+    assert.ok((await page.locator(".ov-chip", { hasText: "세션 기록" }).innerText()).includes("—"), "session chip unknown");
     assert.deepEqual(errors, []);
     console.log("Home load passed: one failed list, server candidate total, unreported agents, stall in days, failed load shows unknown.");
   } finally { await browser.close(); }

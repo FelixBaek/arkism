@@ -39,9 +39,9 @@ window.ArkismOverview = (ctx) => {
   const latest = (times) => Math.max(0, ...times);
   // What each stage is counted from. A source that did not load leaves the stage unknown, not zero or stalled (#187).
   const NEEDS = { collect: ["sessions"], extract: ["memories", "candidates", "sessions"], classify: ["candidates"], review: ["candidates"],
-    recall: ["memories"], trace: ["memories"], judge: ["memories"], dream: ["memories"] };
+    recall: ["memories", "usage"], trace: ["memories"], judge: ["memories"], dream: ["memories"] };
   const missing = () => state.loadError ? new Set(["memories", "candidates", "sessions"])
-    : new Set([...Object.keys(state.listErrors || {}), ...(S.failed ? ["sessions"] : [])]);
+    : new Set([...Object.keys(state.listErrors || {}), ...(S.failed ? ["sessions"] : []), ...(state.usageDone ? [] : ["usage"])]);
   const unknownStage = (s) => ({ ...s, unknown: true, tone: "n", health: "o", note: "", big: "—", bigSub: "알 수 없음", small: "", smallSub: "", step: "알 수 없음",
     row: new Array(24).fill(""), counts: new Array(24).fill(0), tiles: s.tiles.map(([, label]) => ["—", label]), badge: ["알 수 없음", "n"] });
 
@@ -287,7 +287,7 @@ window.ArkismOverview = (ctx) => {
     // every active memory on the server (the map draws them all), not the loaded first page
     const memN = state.loadError ? "—" : ctx.memoryCount().replace(/\d+/, (n) => num(n));
     ui.chips.replaceChildren(chip("쓰는 중인 기억", memN, () => openWide("active")),
-      chip("세션 기록", `오늘 ${num(todaySessions)}`, () => openWide("sessions")),
+      chip("세션 기록", S.failed || state.loadError ? "—" : `오늘 ${num(todaySessions)}`, () => openWide("sessions")),
       chip("사용량", by.recall.unknown ? "—" : `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
       chip("기억 지도", `점 ${memN}`, () => openWide("map")));
   }

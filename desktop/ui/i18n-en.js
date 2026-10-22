@@ -6292,6 +6292,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "목록 {0}개를 불러오지 못했어요": "Couldn't load {0} lists",
+  "기억 후보 {0}개 이상 검토": "Review {0}+ memory candidates",
   "{0}일째 멈춤": "Stopped {0}d",
   "기억 추출이 {0}일째 멈췄어요": "Memory extraction has been stalled for {0} days",
   "{0}일 전 확인": "Checked {0} d ago"
