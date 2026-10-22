@@ -134,10 +134,11 @@ func (p *Postgres) MemoryGraphSimilar(ctx context.Context, in MemoryGraphQuery, 
 
 // The filters (jsonb visibility, reach) make the planner expect one row, so it sorts a full scan per
 // asking memory (16 s for 200 at 2,000 memories). Sorting off leaves the ordered index scan (0.4 s);
-// the iterative scan keeps reading the index until LIMIT rows pass those filters. The index spans
+// the iterative scan keeps reading the index until LIMIT rows pass those filters, in strict distance
+// order so a farther row cannot take a nearer one's LIMIT slot. The index spans
 // every scope, so the scan cap is raised from 20,000: other scopes' nearby vectors must not use it up.
 // shortcut: a scope beyond 200,000 closer memories of other scopes can still lose lines; give each scope its own index then.
-const memoryGraphSimilarSettings = `SET LOCAL hnsw.iterative_scan = relaxed_order; SET LOCAL hnsw.ef_search = 100; SET LOCAL hnsw.max_scan_tuples = 200000; SET LOCAL enable_sort = off`
+const memoryGraphSimilarSettings = `SET LOCAL hnsw.iterative_scan = strict_order; SET LOCAL hnsw.ef_search = 100; SET LOCAL hnsw.max_scan_tuples = 200000; SET LOCAL enable_sort = off`
 
 // memoryGraphSimilarQuery asks the memory_records_memory_graph_vector index (migration 0004) for each
 // asking memory's nearest neighbours instead of comparing every pair (#175: 12.8 s at 5,202 memories).
