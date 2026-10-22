@@ -143,6 +143,7 @@ export function createCrewWorkers(deps) {
     const s = pick([["", "없음 · 지시대로"], ...deps.allWorkflows().filter((w) => deps.ownerOf(w) ? deps.ownerOf(w).id === wk.id : !deps.triggered(w.crew)).map((w) => [w.crew.handle, w.crew.name])], (d.workflow || "").replace(/^\$/, ""),
       (v) => { d.workflow = v; touchWorker(); }, "일하는 순서");
     s.classList.add("ex-flow-pick");
+    for (const o of s.options) if (o.value) o.setAttribute("data-no-i18n", ""); // saved names stay as written; the empty first option is UI text
     const w = deps.allWorkflows().find((x) => x.crew.handle === (d.workflow || "").replace(/^\$/, ""));
     const box = deps.el("div", "wk-flow");
     const head = deps.el("div", "wk-flow-head");
@@ -763,7 +764,8 @@ export function createCrewWorkers(deps) {
     b.append(art);
     if (x.category) { const c = deps.el("small", "ex-card-cat"); c.append(deps.icon(deps.ctx.catIcon(x.category)), deps.raw(deps.el("span", "", x.category))); b.append(c); }
     b.append(deps.raw(deps.el("strong", "", x.name)));
-    b.title = x.enabled === false ? `${x.name} · 꺼짐` : x.name; // 763:57845: an off card is only dimmed
+    deps.raw(b); // the card holds only the expert's own words, so its title is kept too; the off note is translated here
+    b.title = x.enabled === false ? `${x.name} · ${deps.tr("꺼짐")}` : x.name; // 763:57845: an off card is only dimmed
     b.addEventListener("click", () => { workerPick(r.id); openExpertPopup(r); });
     b.ctxItems = () => [{ label: "열기", run: () => b.click() }, { label: "@이름 복사", off: !x.handle, run: () => navigator.clipboard.writeText(`@${x.handle}`).then(() => deps.notice("복사했어요."), () => deps.notice("복사하지 못했어요.")) }];
     return b;

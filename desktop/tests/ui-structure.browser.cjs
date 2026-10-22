@@ -104,7 +104,11 @@ fs.mkdirSync(output,{recursive:true});
     const agentsFixture=data["v1/crew.json"].items.filter(r=>r.crew.type==="agent");
     assert.deepEqual(await page.locator(".ex-card:not(.ex-card-new) strong").allInnerTexts(),agentsFixture.map(r=>r.crew.name));
     assert.deepEqual(await page.locator(".ex-card-cat").allInnerTexts(),agentsFixture.map(r=>r.crew.category));
+    assert.equal(await page.locator(".ex-card",{hasText:"코드리뷰어"}).getAttribute("title"),"코드리뷰어");
     await page.locator(".ex-card",{hasText:"디자이너"}).click();
+    const flowNames=new Set(data["v1/crew.json"].items.map(r=>r.crew.name));
+    const flowOptions=await page.locator("dialog[open] .ex-flow-pick option").allInnerTexts();
+    assert.ok(flowOptions.length>1&&flowOptions.slice(1).every(n=>flowNames.has(n)),"workflow options translated: "+flowOptions);
     assert.equal(await page.locator("dialog[open] .ex-role").innerText(),"UI 시안 정리 · 디자인 검토");
     await page.keyboard.press("Escape");await page.locator("dialog[open]").waitFor({state:"detached"});
     // #193: the time before a meeting title is translated; the title is not, and the rows fit at 900px.

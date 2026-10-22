@@ -191,6 +191,7 @@ export function createCrewNodes(deps) {
       if (x.type === "team") txt.append(teamFaces(x));
     } else txt.append(deps.el("strong", "dim", "고르세요"));
     const change = deps.select([["", cur ? "바꾸기" : "고르기"], ...all.map((r) => [r.id, r.crew.name])], "");
+    for (const o of change.options) if (o.value) o.setAttribute("data-no-i18n", ""); // saved names stay as written; the empty first option is UI text
     change.className = "node-pick-change";
     change.setAttribute("aria-label", `${label} 바꾸기`);
     change.addEventListener("change", () => { const r = deps.byId(change.value); if (r) onPick(r); });
@@ -350,6 +351,7 @@ export function createCrewNodes(deps) {
         lead.append(a ? deps.avatarMark(a.crew) : deps.icon("robot"));
         const pick = deps.select([["", "전문가 고르기"], ...deps.agents().map((x) => [x.id, x.crew.role ? `${x.crew.name} · ${x.crew.role}` : x.crew.name])], w.expert || "");
         pick.setAttribute("aria-label", "워커 전문가");
+        for (const o of pick.options) if (o.value) o.setAttribute("data-no-i18n", ""); // saved names stay as written; the empty first option is UI text
         pick.addEventListener("change", () => { workers[i] = pick.value ? { expert: pick.value } : { name: "", model: "" }; saveWorkers(); deps.redraw(); });
         r.classList.add("expert");
         r.append(lead, pick, del);
