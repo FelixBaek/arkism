@@ -49,10 +49,15 @@ done
 count="$(git rev-list --count origin/main.."$signed")"
 # Same tree as the one CI passed. Moving the PR branch first lets GitHub mark the PR merged.
 git push -q --force-with-lease="$branch:$head" origin "$signed:refs/heads/$branch"
-if ! git push -q origin "$signed:refs/heads/main" && [[ "$(git ls-remote origin refs/heads/main | cut -f1)" != "$signed" ]]; then
-  # main moved after the fetch (not a push that landed but reported failure): put the PR branch back on the commits CI tested.
-  git push -q --force-with-lease="$branch:$signed" origin "$head:refs/heads/$branch" \
-    || { echo "main push failed and the PR branch could not be put back to $head" >&2; exit 1; }
-  echo "main moved during the merge; the PR branch is back at ${head:0:7}, run again" >&2; exit 1
+if ! git push -q origin "$signed:refs/heads/main"; then
+  # An unreadable main may hide a push that landed, so leave the PR branch alone rather than split it from main.
+  main="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)" \
+    || { echo "main push failed and main could not be read; check main and the PR branch (now ${signed:0:7}) by hand" >&2; exit 1; }
+  if [[ "$main" != "$signed" ]]; then
+    # main moved after the fetch (not a push that landed but reported failure): put the PR branch back on the commits CI tested.
+    git push -q --force-with-lease="$branch:$signed" origin "$head:refs/heads/$branch" \
+      || { echo "main push failed and the PR branch could not be put back to $head" >&2; exit 1; }
+    echo "main moved during the merge; the PR branch is back at ${head:0:7}, run again" >&2; exit 1
+  fi
 fi
 echo "merged #$PR as $count signed commit(s), main is now ${signed:0:7}"
