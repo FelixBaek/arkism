@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -126,7 +127,12 @@ func ContentHash(text string) string {
 	return hex.EncodeToString(h[:])
 }
 func validScope(s Scope) bool {
-	return s.WorkspaceID != "" && s.ProjectID != "" && len(s.WorkspaceID) < 256 && len(s.ProjectID) < 256 && len(s.UserID) < 256 && len(s.AgentID) < 256
+	return scopeName(s.WorkspaceID) && scopeName(s.ProjectID) && len(s.UserID) < 256 && len(s.AgentID) < 256
+}
+
+// Workspace and project names are plain labels, never path segments.
+func scopeName(v string) bool {
+	return v != "" && len(v) < 256 && v != "." && v != ".." && !strings.ContainsAny(v, "/\\") && strings.IndexFunc(v, unicode.IsControl) < 0
 }
 func knownCollection(c string) bool {
 	// Session archive and work checkpoint collections are private: only their
@@ -195,14 +201,14 @@ func (s *Service) authorizeAt(ctx context.Context, token, action string, scope S
 	}
 	if !d.Allowed || d.PrincipalID == "" || d.Scope != scope {
 		if !d.Allowed && verifiedDenial(request, d) {
-			if err := s.auditPolicyDenial(ctx, request, d); err != nil {
+			if err := s.auditPolicyDenial(ctx, request, d); denialAuditFailed(err) {
 				return Decision{}, ErrUnavailable
 			}
 		} else if !d.Allowed {
 			// The provider answered deny but the answer failed verification
 			// (mismatched context or malformed fields); keep the fact of the
 			// denial while storing none of the unverified answer fields.
-			if err := s.auditDenial(ctx, auditClassPolicyInvalid, request, boundAuditRequestID(ctx), "", d.PrincipalID, d.Role, ""); err != nil {
+			if err := s.auditDenial(ctx, auditClassPolicyInvalid, request, boundAuditRequestID(ctx), "", d.PrincipalID, d.Role, ""); denialAuditFailed(err) {
 				return Decision{}, ErrUnavailable
 			}
 		}
@@ -213,6 +219,13 @@ func (s *Service) authorizeAt(ctx context.Context, token, action string, scope S
 		return Decision{}, ErrDenied
 	}
 	return d, nil
+}
+
+// Row-level security refuses a denial row in a scope the caller cannot write;
+// that refusal confirms the denial, so only other storage failures become 503.
+func denialAuditFailed(err error) bool {
+	var refused rlsRefusal
+	return err != nil && !errors.As(err, &refused)
 }
 
 func sameRequestActor(ctx context.Context, d Decision) bool {

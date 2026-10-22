@@ -35,7 +35,13 @@ window.ArkismState = (() => {
     return panel({ title: over.title || k.title, text: over.text || k.text, note: over.note || (over.slow ? k.slow : k.note),
       actions: (k.actions || []).filter(([, key]) => on[key]).map(([label, key, cls]) => [label, on[key], cls]) });
   }
-  return { panel, of };
+  // A stall's length in words: hours up to 48, then whole days (#190).
+  const stallFor = (hours) => {
+    if (hours < 48) return { span: `${hours}시간`, stopped: `${hours}시간째 멈춤`, sentence: `기억 추출이 ${hours}시간째 멈췄어요` };
+    const days = Math.floor(hours / 24);
+    return { span: `${days}일`, stopped: `${days}일째 멈춤`, sentence: `기억 추출이 ${days}일째 멈췄어요` };
+  };
+  return { panel, of, stallFor };
 })();
 
 window.ArkismHomeChecks = (ctx) => {
@@ -67,15 +73,17 @@ window.ArkismHomeChecks = (ctx) => {
   function stalledItem(generation) {
     timer ||= setInterval(() => { if (live() && S.g >= 0) load(S.g, true); }, 60000); // forced: a tick just short of 60s after the last fetch must not skip a whole minute
     load(generation);
-    if (!S.sessions) return null;
+    // a list that did not load cannot prove a stall (#187)
+    if (!S.sessions || state.loadError || state.listErrors?.candidates) return null;
     const d = state.data;
     let lastExtract = 0;
     for (const list of [d.candidates, d.conflicted, d.memories]) for (const m of list) lastExtract = Math.max(lastExtract, time(m.created_at));
     const r = stall(S.sessions, lastExtract);
     if (!r.stalled) return null;
-    return { id: "stalled", n: 1, icon: "warning-circle", label: "기억 처리 멈춤", title: `기억 추출이 ${r.hours}시간째 멈췄어요`, warn: true,
+    const words = window.ArkismState.stallFor(r.hours);
+    return { id: "stalled", n: 1, icon: "warning-circle", label: "기억 처리 멈춤", title: words.sentence, warn: true,
       sub: `${r.lastExtract ? `마지막 추출 ${ago(r.lastExtract)}` : "추출 기록 없음"} · 멈춘 뒤 끝난 대화 ${r.pending}건`, action: "처리 흐름 보기",
-      go: ["overview"], preview: [`${r.hours}시간째 멈춤`] };
+      go: ["overview"], preview: [words.stopped] };
   }
 
   // ---- 지식 (위키 · 자료)

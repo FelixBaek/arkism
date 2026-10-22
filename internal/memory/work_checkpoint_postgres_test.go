@@ -184,15 +184,16 @@ func TestPostgresWorkCheckpointPermissionsScopeAndRefs(t *testing.T) {
 	if err != nil || decision.Allowed || !verifiedDenial(request, decision) {
 		t.Fatalf("foreign authorization = %+v %v", decision, err)
 	}
-	// Existing fail-closed policy: the restricted caller cannot persist the
-	// required denial audit in a foreign scope, so the service reports unavailable.
-	if err := f.svc.auditPolicyDenial(boundContext(claude), request, decision); err == nil {
-		t.Fatal("foreign audit unexpectedly writable")
+	// The restricted caller cannot persist the denial audit in a foreign scope;
+	// RLS refusing that row confirms the denial, so the service reports denied (#196).
+	var refused rlsRefusal
+	if err := f.svc.auditPolicyDenial(boundContext(claude), request, decision); !errors.As(err, &refused) {
+		t.Fatalf("foreign audit = %v, want an RLS refusal", err)
 	}
-	if view, err := f.svc.GetWorkCheckpoint(boundContext(claude), claude, WorkCheckpointGetInput{Scope: foreign, ID: "wp-refs"}); !errors.Is(err, ErrUnavailable) || view.ID != "" {
+	if view, err := f.svc.GetWorkCheckpoint(boundContext(claude), claude, WorkCheckpointGetInput{Scope: foreign, ID: "wp-refs"}); !errors.Is(err, ErrDenied) || view.ID != "" {
 		t.Fatalf("foreign get = %+v %v", view, err)
 	}
-	if page, err := f.svc.ListWorkCheckpoints(boundContext(claude), claude, WorkCheckpointListInput{Scope: foreign}); !errors.Is(err, ErrUnavailable) || len(page.Items) != 0 {
+	if page, err := f.svc.ListWorkCheckpoints(boundContext(claude), claude, WorkCheckpointListInput{Scope: foreign}); !errors.Is(err, ErrDenied) || len(page.Items) != 0 {
 		t.Fatalf("foreign list = %+v %v", page, err)
 	}
 	if rows, err := app.WorkCheckpointRows(boundContext(claude), foreign, "", 100); err != nil || len(rows) != 0 {

@@ -28,6 +28,7 @@
     // any other modal makes the strip inert (a click would only hit its backdrop), so it is hidden until it closes
     bar.classList.toggle("under-modal", !!top && host === document.body);
   };
-  new MutationObserver(place).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+  // class too: a popout window marks its popup popout-root (full window) only after it opened (#184)
+  new MutationObserver((rs) => { if (rs.some((r) => r.target.tagName === "DIALOG")) place(); }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open", "class"] });
   addEventListener("resize", place);
 })();
