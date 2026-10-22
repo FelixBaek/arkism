@@ -56,12 +56,13 @@ test("the evaluation panel reads the current revision, shows a retry and ignores
   assert.deepEqual(calls[0], ["/v1/evaluations/summary", { scope: { project_id: "p" }, target: { collection: "memories", id: "m", revision: 2 } }]);
   assert.match(panel.textContent, /관측에서 통과/);
   assert.match(panel.textContent, /독립된 관측1건/);
+  const good = answer;
   answer = new Error("403");
   dom.buttons(panel, "평가 다시 조회")[0].click(); await dom.flush();
   assert.match(panel.textContent, /확인하지 못했어요/);
   assert.equal(dom.buttons(panel, "평가 다시 조회").length, 1);
   // a panel closed before the answer stays as it was, for both outcomes
-  for (const late of [answer, { ...answer }]) {
+  for (const late of [answer, good]) {
     answer = late;
     const c2 = host();
     const p2 = window.ArkismMemoryEvaluation.mount({ container: c2, record: { id: "m", revision: 2 }, scope: {}, request, el: h.el, section, facts, button: h.button });

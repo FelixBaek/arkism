@@ -186,8 +186,11 @@ test("visible sync stays idle when blocked or ineligible and queues one rerun wh
 
 test("filtered result refresh skips a busy result pager and a changed filter", async () => {
   const { createVisibleSync } = await import("./modules/visibleSync.mjs");
-  const busy = syncFixture({ memoryPaging: { memoryResults: { snapshot: () => ({ loading: true }), refresh: () => assert.fail("busy") } } });
+  let busyRefreshes = 0;
+  const busy = syncFixture({ memoryPaging: { memoryResults: { snapshot: () => ({ loading: true }), refresh: async () => { busyRefreshes++; } } } });
   await createVisibleSync(busy.deps)();
+  assert.equal(busyRefreshes, 0);
+  assert.deepEqual(busy.calls.filter(([k, v]) => k === "render" && v === false), []);
   let key = "a";
   const moved = syncFixture({ memoryPaging: { memoryKey: () => key, memoryResults: { snapshot: () => ({}), refresh: async () => { key = "b"; throw Error("x"); } } } });
   await createVisibleSync(moved.deps)();

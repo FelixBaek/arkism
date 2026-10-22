@@ -18,9 +18,12 @@ class ClassList {
 }
 
 function parseSelector(sel) {
-  // compound parts separated by descendant/child spaces; only descendant semantics are honored
-  return sel.trim().split(/\s*>\s*|\s+/).filter(Boolean).map((part) => {
-    const out = { tag: "", id: "", classes: [], attrs: [], not: [] };
+  // compound parts separated by descendant spaces or ">"; child marks a part joined to the previous one by ">"
+  let child = false;
+  return sel.trim().split(/\s*(>)\s*|\s+/).filter(Boolean).flatMap((part) => {
+    if (part === ">") { child = true; return []; }
+    const out = { tag: "", id: "", classes: [], attrs: [], not: [], child };
+    child = false;
     const re = /(:not\(([^)]*)\))|(#[\w-]+)|(\.[\w-]+)|(\[([\w-]+)(?:([*^$~]?=)"?([^"\]]*)"?)?\])|(:[\w-]+(?:\([^)]*\))?)|([\w*-]+)/g;
     let m;
     while ((m = re.exec(part))) {
@@ -31,11 +34,11 @@ function parseSelector(sel) {
       else if (m[9]) out.attrs.push({ pseudo: m[9] });
       else if (m[10] && m[10] !== "*") out.tag = m[10].toLowerCase();
     }
-    return out;
+    return [out];
   });
 }
 
-function matchesPart(node, p) {
+function matchesPart(node, p, scope) {
   if (!(node instanceof Element)) return false;
   if (p.tag && node.tagName.toLowerCase() !== p.tag) return false;
   if (p.id && node.id !== p.id) return false;
@@ -47,6 +50,7 @@ function matchesPart(node, p) {
       if (a.pseudo === ":focus" && node.ownerDocument.activeElement !== node) return false;
       if (a.pseudo === ":first-child" && node.parentNode?.children[0] !== node) return false;
       if (a.pseudo === ":last-child" && node.parentNode?.children.at(-1) !== node) return false;
+      if (a.pseudo === ":scope" && node !== scope) return false;
       continue;
     }
     const v = node.getAttribute(a.name);
@@ -61,13 +65,18 @@ function matchesPart(node, p) {
   return true;
 }
 
-function matches(node, selector) {
+function matchesFrom(node, parts, i, scope) {
+  if (!matchesPart(node, parts[i], scope)) return false;
+  if (i === 0) return true;
+  if (parts[i].child) return matchesFrom(node.parentNode, parts, i - 1, scope);
+  for (let cur = node.parentNode; cur; cur = cur.parentNode) if (matchesFrom(cur, parts, i - 1, scope)) return true;
+  return false;
+}
+
+function matches(node, selector, scope = node) {
   return selector.split(",").some((one) => {
     const parts = parseSelector(one);
-    if (!matchesPart(node, parts.at(-1))) return false;
-    let i = parts.length - 2, cur = node.parentNode;
-    while (i >= 0 && cur) { if (matchesPart(cur, parts[i])) i--; cur = cur.parentNode; }
-    return i < 0;
+    return matchesFrom(node, parts, parts.length - 1, scope);
   });
 }
 
@@ -208,7 +217,7 @@ class Element extends Node {
   closest(s) { for (let n = this; n instanceof Element; n = n.parentNode) if (n.matches(s)) return n; return null; }
   querySelectorAll(s) {
     const out = [];
-    const walk = (n) => { for (const c of n.children) { if (matches(c, s)) out.push(c); walk(c); } };
+    const walk = (n) => { for (const c of n.children) { if (matches(c, s, this)) out.push(c); walk(c); } };
     walk(this);
     return out;
   }

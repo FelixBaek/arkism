@@ -65,7 +65,7 @@ test("the list loads once, selects the first session and shows its usage", async
   assert.equal(x.s.count(), "2");
   assert.equal(x.table().querySelectorAll(".ss-item").length, 2);
   assert.match(x.table().textContent, /세션 2개/);
-  assert.ok(x.table().querySelector(".ss-item.selected[data-id=\"a\"]") || x.detail().textContent.includes("세션 a"));
+  assert.ok(x.table().querySelector(".ss-item.selected[data-id=\"a\"]"), "first row is highlighted");
   const d = x.detail().textContent;
   assert.match(d, /A:claude_code · pc/);
   assert.match(d, /입력 10 · 출력 20/);
