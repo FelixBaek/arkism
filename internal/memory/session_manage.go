@@ -260,8 +260,7 @@ func (s *Service) SessionTranscript(ctx context.Context, token string, in Sessio
 	if in.Limit == 0 {
 		in.Limit = 30
 	}
-	if !validScope(in.Scope) || !sourceHashPattern.MatchString(in.ID) || in.ArchiveID != "" && !sourceHashPattern.MatchString(in.ArchiveID) ||
-		in.After != "" && in.ArchiveID == "" || len(in.After) > 2048 || in.Limit < 1 || in.Limit > 50 {
+	if !validSessionTranscriptInput(in) {
 		return SessionTranscriptOutput{}, ErrInvalid
 	}
 	row, err := s.usageSessionRecord(ctx, token, in.Scope, in.ID)
@@ -300,6 +299,14 @@ func (s *Service) SessionTranscript(ctx context.Context, token string, in Sessio
 		return SessionTranscriptOutput{}, err
 	}
 	return out, nil
+}
+
+func validSessionTranscriptInput(in SessionTranscriptInput) bool {
+	if !validScope(in.Scope) || !sourceHashPattern.MatchString(in.ID) || in.ArchiveID != "" && !sourceHashPattern.MatchString(in.ArchiveID) ||
+		in.After != "" && in.ArchiveID == "" || len(in.After) > 2048 || in.Limit < 1 || in.Limit > 50 {
+		return false
+	}
+	return true
 }
 
 type sessionExportSession struct {
@@ -365,35 +372,10 @@ func (s *Service) ExportSessions(ctx context.Context, token string, in SessionEx
 			if err != nil {
 				return SessionExportOutput{}, err
 			}
-			t := &sessionExportTranscript{State: "none", Messages: []SessionTranscriptMessage{}}
 			e.Archives = s.transcriptArchives(headers)
-			for _, a := range e.Archives {
-				if t.State == "none" {
-					t.State = sessionArchiveStateExpired
-				}
-				if a.State != sessionArchiveStateActive || !a.Supported {
-					continue
-				}
-				t.State = sessionArchiveStateActive
-				after := ""
-				for pages := 0; ; pages++ {
-					if budget <= 0 || pages >= sessionTranscriptMaxPages {
-						t.Truncated = true
-						break
-					}
-					items, next, err := s.transcriptPage(ctx, token, in.Scope, a.ID, after, 50, &t.Hidden)
-					if err != nil {
-						return SessionExportOutput{}, err
-					}
-					for _, m := range items {
-						budget -= len(m.Text)
-					}
-					t.Messages = append(t.Messages, items...)
-					if next == "" {
-						break
-					}
-					after = next
-				}
+			t, err := s.exportSessionTranscript(ctx, token, in.Scope, e.Archives, &budget)
+			if err != nil {
+				return SessionExportOutput{}, err
 			}
 			out.Messages += len(t.Messages)
 			out.Truncated = out.Truncated || t.Truncated
@@ -413,6 +395,39 @@ func (s *Service) ExportSessions(ctx context.Context, token string, in SessionEx
 	}
 	out.Filename, out.ContentType, out.Content = "arkism-sessions-"+stamp+".md", "text/markdown", sessionsMarkdown(sessions)
 	return out, nil
+}
+
+func (s *Service) exportSessionTranscript(ctx context.Context, token string, scope Scope, archives []SessionTranscriptArchive, budget *int) (*sessionExportTranscript, error) {
+	t := &sessionExportTranscript{State: "none", Messages: []SessionTranscriptMessage{}}
+	for _, a := range archives {
+		if t.State == "none" {
+			t.State = sessionArchiveStateExpired
+		}
+		if a.State != sessionArchiveStateActive || !a.Supported {
+			continue
+		}
+		t.State = sessionArchiveStateActive
+		after := ""
+		for pages := 0; ; pages++ {
+			if *budget <= 0 || pages >= sessionTranscriptMaxPages {
+				t.Truncated = true
+				break
+			}
+			items, next, err := s.transcriptPage(ctx, token, scope, a.ID, after, 50, &t.Hidden)
+			if err != nil {
+				return nil, err
+			}
+			for _, m := range items {
+				*budget -= len(m.Text)
+			}
+			t.Messages = append(t.Messages, items...)
+			if next == "" {
+				break
+			}
+			after = next
+		}
+	}
+	return t, nil
 }
 
 func sessionsMarkdown(sessions []sessionExportSession) string {
@@ -519,14 +534,8 @@ func (s *Service) DeleteSessions(ctx context.Context, token string, in SessionDe
 		if err != nil {
 			return SessionDeleteOutput{}, err
 		}
-		for _, h := range headers {
-			who, err := s.authorize(ctx, token, "delete:"+colSessionArchives, in.Scope, h.ID, "")
-			if err != nil {
-				return SessionDeleteOutput{}, err
-			}
-			if who.PrincipalID != actor.PrincipalID || who.Role != actor.Role {
-				return SessionDeleteOutput{}, ErrDenied
-			}
+		if err := s.authorizeSessionArchiveDeletes(ctx, token, in.Scope, headers, actor); err != nil {
+			return SessionDeleteOutput{}, err
 		}
 		targets = append(targets, target{row, headers})
 	}
@@ -570,6 +579,19 @@ func (s *Service) DeleteSessions(ctx context.Context, token string, in SessionDe
 		out.Deleted = append(out.Deleted, t.row.ID)
 	}
 	return out, nil
+}
+
+func (s *Service) authorizeSessionArchiveDeletes(ctx context.Context, token string, scope Scope, headers []Record, actor Decision) error {
+	for _, h := range headers {
+		who, err := s.authorize(ctx, token, "delete:"+colSessionArchives, scope, h.ID, "")
+		if err != nil {
+			return err
+		}
+		if who.PrincipalID != actor.PrincipalID || who.Role != actor.Role {
+			return ErrDenied
+		}
+	}
+	return nil
 }
 
 // eraseSessionArchive deletes one header's chunk ciphertexts and leaves an

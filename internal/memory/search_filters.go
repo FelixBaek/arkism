@@ -47,63 +47,78 @@ func normalizeSearchCriteria(in SearchCriteria) (SearchCriteria, error) {
 	}
 	f := *in.Filters
 	in.Filters = &f
-	if len(f.Statuses) > 5 {
+	if !normalizeFilterLabels(&f) || !normalizeFilterIdentities(&f) || !normalizeFilterTimes(&f) {
 		return in, ErrInvalid
+	}
+	if len(f.Statuses) == 0 && len(f.Tags) == 0 && len(f.CreatedBy) == 0 && len(f.GeneratorModels) == 0 && len(f.FileDigests) == 0 && f.CreatedFrom == nil && f.CreatedTo == nil && f.UpdatedFrom == nil && f.UpdatedTo == nil {
+		in.Filters = nil
+	}
+	return in, nil
+}
+
+func normalizeFilterLabels(f *SearchFilters) bool {
+	if len(f.Statuses) > 5 {
+		return false
 	}
 	for i, status := range f.Statuses {
 		if !slices.Contains(memorySearchStatuses, status) || slices.Contains(f.Statuses[:i], status) {
-			return in, ErrInvalid
+			return false
 		}
 	}
 	f.Statuses = slices.Clone(f.Statuses)
 	if !validTags(f.Tags) {
-		return in, ErrInvalid
+		return false
 	}
 	for _, tag := range f.Tags {
 		if containsSecret(tag) {
-			return in, ErrInvalid
+			return false
 		}
 	}
 	f.Tags = slices.Clone(f.Tags)
+	return true
+}
+
+func normalizeFilterIdentities(f *SearchFilters) bool {
 	for _, values := range [][]string{f.CreatedBy, f.GeneratorModels} {
 		if len(values) > 16 {
-			return in, ErrInvalid
+			return false
 		}
 		for j, value := range values {
 			if !validRunLabel(value, 256) || containsSecret(value) || slices.Contains(values[:j], value) {
-				return in, ErrInvalid
+				return false
 			}
 		}
 	}
 	if len(f.FileDigests) > 16 {
-		return in, ErrInvalid
+		return false
 	}
 	for i, digest := range f.FileDigests {
 		if !sourceHashPattern.MatchString(digest) || slices.Contains(f.FileDigests[:i], digest) {
-			return in, ErrInvalid
+			return false
 		}
 	}
 	f.CreatedBy = slices.Clone(f.CreatedBy)
 	f.GeneratorModels = slices.Clone(f.GeneratorModels)
 	f.FileDigests = slices.Clone(f.FileDigests)
+	return true
+}
+
+func normalizeFilterTimes(f *SearchFilters) bool {
 	for _, field := range []**time.Time{&f.CreatedFrom, &f.CreatedTo, &f.UpdatedFrom, &f.UpdatedTo} {
 		if *field != nil {
 			at := (**field).UTC().Truncate(time.Millisecond)
 			if at.IsZero() || at.Year() < 1 || at.Year() > 9999 {
-				return in, ErrInvalid
+				return false
 			}
 			*field = &at
 		}
 	}
 	for _, pair := range [][2]*time.Time{{f.CreatedFrom, f.CreatedTo}, {f.UpdatedFrom, f.UpdatedTo}} {
 		if pair[0] != nil && pair[1] != nil && !pair[0].Before(*pair[1]) {
-			return in, ErrInvalid
+			return false
 		}
 	}
-	if len(f.Statuses) == 0 && len(f.Tags) == 0 && len(f.CreatedBy) == 0 && len(f.GeneratorModels) == 0 && len(f.FileDigests) == 0 && f.CreatedFrom == nil && f.CreatedTo == nil && f.UpdatedFrom == nil && f.UpdatedTo == nil {
-		in.Filters = nil
-	}
-	return in, nil
+	return true
 }
 func generatorModel(r Record) string {
 	if r.Generator == nil {

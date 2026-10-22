@@ -22,7 +22,7 @@ type GenerateSkillInput struct {
 
 func (s *Service) GenerateSkill(ctx context.Context, token string, in GenerateSkillInput) (ImportSkillResult, error) {
 	var out ImportSkillResult
-	if !validScope(in.Scope) || !workCheckpointIDPattern.MatchString(in.EventID) || !validRunLabel(in.SkillID, 256) || len(in.Path) > 4096 || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || !strings.HasSuffix(in.Path, "SKILL.md") || in.ComparisonPlan == nil || !validComparisonPlan(in.ComparisonPlan) || len(in.Lessons) < improvementMinRuns || len(in.Lessons) > 16 || !safeTransfer(structuredText(in)) {
+	if invalidGenerateSkillInput(in) {
 		return out, ErrInvalid
 	}
 	in.Lessons = slices.Clone(in.Lessons)
@@ -49,7 +49,7 @@ func (s *Service) GenerateSkill(ctx context.Context, token string, in GenerateSk
 	requestHash := ContentHash(structuredText(in))
 	receiptID := "skill-generation-" + ContentHash(structuredText(in.Scope)+"\n"+actor.PrincipalID+"\n"+actor.Role+"\n"+in.EventID)
 	if receipt, e := s.Repo.Get(ctx, colJobs, in.Scope, receiptID); e == nil {
-		if receipt.Kind != skillGenerationReceiptKind || receipt.Status != JobStatusDone || receipt.ContentErased || receipt.PrivacyQuarantined || receipt.RequestHash != requestHash || receipt.CreatedBy != actor.PrincipalID || receipt.CreatedByType != actor.Role || receipt.Target == nil || receipt.Target.Collection != colSkillVersions {
+		if skillGenerationReceiptConflicts(receipt, requestHash, actor) {
 			return out, ErrConflict
 		}
 		return s.reuseSkillGeneration(ctx, token, in, receipt)
@@ -75,66 +75,16 @@ func (s *Service) GenerateSkill(ctx context.Context, token string, in GenerateSk
 	if !validGenerator(&generation) {
 		return out, ErrUnavailable
 	}
-	var draft SkillDraft
-	_, durable := s.Drafter.(*AnthropicSkillDrafter)
 	preparedHash := ContentHash(requestHash + "\n" + snapshot + "\n" + structuredText(generation))
-	recovered := false
-	if durable {
-		draft, recovered, err = s.readPreparedDraft(ctx, token, in, actor, preparedHash)
-		if err != nil {
-			return out, err
-		}
-	}
-	if !recovered {
-		reserved, err := s.beginProviderCall(ctx, in.Scope, "skill_draft", "skill_llm", generation.Model)
-		if err != nil {
-			return out, err
-		}
-		var usage ProviderUsage
-		var draftErr error
-		if direct, ok := s.Drafter.(interface {
-			DraftAuthorized(context.Context, string, Scope, string, []Ref, SkillDraftInput) (SkillDraft, ProviderUsage, error)
-		}); ok {
-			draft, usage, draftErr = direct.DraftAuthorized(ctx, token, in.Scope, in.EventID, in.Lessons, material)
-		} else {
-			draft, usage, draftErr = s.Drafter.Draft(ctx, material)
-		}
-		if !validProviderUsage(usage) || usage.Requests != 1 || usage.TotalTokens == 0 || usage.InputTokens > usage.TotalTokens || usage.OutputTokens > usage.TotalTokens-usage.InputTokens || usage.Provider != "skill_llm" || usage.Model != generation.Model {
-			usage = ProviderUsage{Provider: "skill_llm", Model: generation.Model, Requests: 1}
-			if draftErr == nil {
-				draftErr = ErrUnavailable
-			}
-		}
-		if err = s.finishProviderCall(ctx, reserved, usage, draftErr == nil); err != nil {
-			return out, err
-		}
-		if draftErr != nil {
-			return out, draftErr
-		}
-		if durable {
-			if err = normalizeSkillDraft(material, &draft); err != nil {
-				return out, err
-			}
-			if err = s.savePreparedDraft(ctx, token, in, actor, preparedHash, generation, draft); err != nil {
-				return out, err
-			}
-		}
+	draft, err := s.draftSkill(ctx, token, in, actor, material, generation, preparedHash)
+	if err != nil {
+		return out, err
 	}
 	// An adapter does not confer authority. Recheck mutable evidence and policy
 	// after the paid call; the importer repeats the evidence checks in its tx.
-	current, err := s.skillGenerationMaterial(ctx, token, in)
+	current, err := s.recheckSkillGenerationMaterial(ctx, token, in, snapshot)
 	if err != nil {
 		return out, err
-	}
-	if structuredText(current) != snapshot {
-		return out, ErrConflict
-	}
-	allowed, err = s.authorize(ctx, token, "analyze:skills", in.Scope, in.SkillID, snapshot)
-	if err != nil {
-		return out, err
-	}
-	if !allowed.ExternalTransfer || !allowed.ContentSafe {
-		return out, ErrDenied
 	}
 	if err = normalizeSkillDraft(current, &draft); err != nil {
 		return out, err
@@ -142,29 +92,113 @@ func (s *Service) GenerateSkill(ctx context.Context, token string, in GenerateSk
 	now := time.Now().UTC()
 	receipt := Record{ID: receiptID, Scope: in.Scope, Kind: skillGenerationReceiptKind, Status: JobStatusDone, Revision: 1, RequestHash: requestHash, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
 	proposal := ProposeSkillInput{Skill: ImportSkillInput{Scope: in.Scope, SkillID: in.SkillID, Path: in.Path, Content: draft.Content, Analysis: &draft.Analysis, ComparisonPlan: in.ComparisonPlan}, Lessons: in.Lessons, Generator: &generation, receipt: &receipt}
-	if in.ComparisonPlan.BaselineVersion != "" {
-		baseline, e := s.Repo.Get(ctx, colSkillVersions, in.Scope, in.ComparisonPlan.BaselineVersion)
-		if e != nil {
-			return out, e
-		}
-		if structuredText(baseline.Analysis) != structuredText(current.BaselineAnalysis) {
-			return out, ErrConflict
-		}
-		proposal.generatedBaseline = &Ref{Collection: colSkillVersions, ID: baseline.ID, Revision: baseline.Revision}
-		// The model rewrites SKILL.md only; the candidate keeps the baseline's exact companion files.
-		if len(baseline.Sources) == 0 {
-			return out, ErrConflict
-		}
-		source, e := s.Repo.Get(ctx, "sources", in.Scope, baseline.Sources[0].SourceID)
-		if e != nil {
-			return out, e
-		}
-		if (source.SkillBundle == nil) != (baseline.SkillBundleSHA256 == "") || source.SkillBundle != nil && (source.SkillBundle.SHA256 != baseline.SkillBundleSHA256 || !validSkillBundle(source.SkillBundle)) {
-			return out, ErrConflict
-		}
-		proposal.Skill.Bundle = source.SkillBundle
+	if err = s.attachGeneratedBaseline(ctx, in, current, &proposal); err != nil {
+		return out, err
 	}
 	return s.ProposeSkill(ctx, token, proposal)
+}
+
+func invalidGenerateSkillInput(in GenerateSkillInput) bool {
+	return !validScope(in.Scope) || !workCheckpointIDPattern.MatchString(in.EventID) || !validRunLabel(in.SkillID, 256) || len(in.Path) > 4096 || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || !strings.HasSuffix(in.Path, "SKILL.md") || in.ComparisonPlan == nil || !validComparisonPlan(in.ComparisonPlan) || len(in.Lessons) < improvementMinRuns || len(in.Lessons) > 16 || !safeTransfer(structuredText(in))
+}
+
+func skillGenerationReceiptConflicts(receipt Record, requestHash string, actor Decision) bool {
+	return receipt.Kind != skillGenerationReceiptKind || receipt.Status != JobStatusDone || receipt.ContentErased || receipt.PrivacyQuarantined || receipt.RequestHash != requestHash || receipt.CreatedBy != actor.PrincipalID || receipt.CreatedByType != actor.Role || receipt.Target == nil || receipt.Target.Collection != colSkillVersions
+}
+
+// draftSkill recovers a durable prepared draft or makes one metered provider call.
+func (s *Service) draftSkill(ctx context.Context, token string, in GenerateSkillInput, actor Decision, material SkillDraftInput, generation Generator, preparedHash string) (SkillDraft, error) {
+	_, durable := s.Drafter.(*AnthropicSkillDrafter)
+	if durable {
+		draft, recovered, err := s.readPreparedDraft(ctx, token, in, actor, preparedHash)
+		if err != nil || recovered {
+			return draft, err
+		}
+	}
+	reserved, err := s.beginProviderCall(ctx, in.Scope, "skill_draft", "skill_llm", generation.Model)
+	if err != nil {
+		return SkillDraft{}, err
+	}
+	var draft SkillDraft
+	var usage ProviderUsage
+	var draftErr error
+	if direct, ok := s.Drafter.(interface {
+		DraftAuthorized(context.Context, string, Scope, string, []Ref, SkillDraftInput) (SkillDraft, ProviderUsage, error)
+	}); ok {
+		draft, usage, draftErr = direct.DraftAuthorized(ctx, token, in.Scope, in.EventID, in.Lessons, material)
+	} else {
+		draft, usage, draftErr = s.Drafter.Draft(ctx, material)
+	}
+	if invalidSkillDraftUsage(usage, generation.Model) {
+		usage = ProviderUsage{Provider: "skill_llm", Model: generation.Model, Requests: 1}
+		if draftErr == nil {
+			draftErr = ErrUnavailable
+		}
+	}
+	if err = s.finishProviderCall(ctx, reserved, usage, draftErr == nil); err != nil {
+		return draft, err
+	}
+	if draftErr != nil {
+		return draft, draftErr
+	}
+	if durable {
+		if err = normalizeSkillDraft(material, &draft); err != nil {
+			return draft, err
+		}
+		if err = s.savePreparedDraft(ctx, token, in, actor, preparedHash, generation, draft); err != nil {
+			return draft, err
+		}
+	}
+	return draft, nil
+}
+
+func invalidSkillDraftUsage(usage ProviderUsage, model string) bool {
+	return !validProviderUsage(usage) || usage.Requests != 1 || usage.TotalTokens == 0 || usage.InputTokens > usage.TotalTokens || usage.OutputTokens > usage.TotalTokens-usage.InputTokens || usage.Provider != "skill_llm" || usage.Model != model
+}
+
+func (s *Service) recheckSkillGenerationMaterial(ctx context.Context, token string, in GenerateSkillInput, snapshot string) (SkillDraftInput, error) {
+	current, err := s.skillGenerationMaterial(ctx, token, in)
+	if err != nil {
+		return current, err
+	}
+	if structuredText(current) != snapshot {
+		return current, ErrConflict
+	}
+	allowed, err := s.authorize(ctx, token, "analyze:skills", in.Scope, in.SkillID, snapshot)
+	if err != nil {
+		return current, err
+	}
+	if !allowed.ExternalTransfer || !allowed.ContentSafe {
+		return current, ErrDenied
+	}
+	return current, nil
+}
+
+func (s *Service) attachGeneratedBaseline(ctx context.Context, in GenerateSkillInput, current SkillDraftInput, proposal *ProposeSkillInput) error {
+	if in.ComparisonPlan.BaselineVersion == "" {
+		return nil
+	}
+	baseline, e := s.Repo.Get(ctx, colSkillVersions, in.Scope, in.ComparisonPlan.BaselineVersion)
+	if e != nil {
+		return e
+	}
+	if structuredText(baseline.Analysis) != structuredText(current.BaselineAnalysis) {
+		return ErrConflict
+	}
+	proposal.generatedBaseline = &Ref{Collection: colSkillVersions, ID: baseline.ID, Revision: baseline.Revision}
+	// The model rewrites SKILL.md only; the candidate keeps the baseline's exact companion files.
+	if len(baseline.Sources) == 0 {
+		return ErrConflict
+	}
+	source, e := s.Repo.Get(ctx, "sources", in.Scope, baseline.Sources[0].SourceID)
+	if e != nil {
+		return e
+	}
+	if (source.SkillBundle == nil) != (baseline.SkillBundleSHA256 == "") || source.SkillBundle != nil && (source.SkillBundle.SHA256 != baseline.SkillBundleSHA256 || !validSkillBundle(source.SkillBundle)) {
+		return ErrConflict
+	}
+	proposal.Skill.Bundle = source.SkillBundle
+	return nil
 }
 
 // Authorize metadata references individually before they can supply model data
@@ -228,31 +262,38 @@ func (s *Service) skillGenerationMaterial(ctx context.Context, token string, in 
 	if parent.ActiveVersion == "" {
 		return out, nil
 	}
-	if err = s.generationReadRefs(ctx, token, in.Scope, []Ref{{Collection: colSkillVersions, ID: parent.ActiveVersion}}, nil); err != nil {
-		return out, err
-	}
-	baseline, err := s.Repo.Get(ctx, colSkillVersions, in.Scope, parent.ActiveVersion)
+	out.BaselineContent, out.BaselineAnalysis, err = s.skillGenerationBaseline(ctx, token, in, parent.ActiveVersion)
 	if err != nil {
 		return out, err
 	}
+	return out, nil
+}
+
+func (s *Service) skillGenerationBaseline(ctx context.Context, token string, in GenerateSkillInput, activeVersion string) (string, *SkillAnalysis, error) {
+	if err := s.generationReadRefs(ctx, token, in.Scope, []Ref{{Collection: colSkillVersions, ID: activeVersion}}, nil); err != nil {
+		return "", nil, err
+	}
+	baseline, err := s.Repo.Get(ctx, colSkillVersions, in.Scope, activeVersion)
+	if err != nil {
+		return "", nil, err
+	}
 	if err = s.generationReadRefs(ctx, token, in.Scope, baseline.Relations, baseline.Sources); err != nil {
-		return out, err
+		return "", nil, err
 	}
 	if err = checkActiveSkill(ctx, s.Repo, baseline); err != nil {
-		return out, err
+		return "", nil, err
 	}
 	if baseline.SkillID != in.SkillID || !validAnalysis(baseline.Analysis) || len(baseline.Sources) == 0 {
-		return out, ErrConflict
+		return "", nil, ErrConflict
 	}
 	source, err := s.Repo.Get(ctx, "sources", in.Scope, baseline.Sources[0].SourceID)
 	if err != nil {
-		return out, err
+		return "", nil, err
 	}
 	if !live(source) || source.ContentErased || ContentHash(source.Text) != baseline.Analysis.ContentHash || source.ContentHash != baseline.Analysis.ContentHash {
-		return out, ErrConflict
+		return "", nil, ErrConflict
 	}
-	out.BaselineContent, out.BaselineAnalysis = source.Text, baseline.Analysis
-	return out, nil
+	return source.Text, baseline.Analysis, nil
 }
 
 func (s *Service) reuseSkillGeneration(ctx context.Context, token string, in GenerateSkillInput, receipt Record) (ImportSkillResult, error) {
@@ -264,7 +305,7 @@ func (s *Service) reuseSkillGeneration(ctx context.Context, token string, in Gen
 	if err != nil {
 		return out, err
 	}
-	if version.Scope != in.Scope || version.SkillID != in.SkillID || version.Kind != proposedSkillKind || version.CreatedBy != receipt.CreatedBy || version.CreatedByType != receipt.CreatedByType || version.ContentErased || version.PrivacyQuarantined || version.Revision < receipt.Target.Revision || version.Analysis == nil || comparisonPlanHash(version.ComparisonPlan) != comparisonPlanHash(in.ComparisonPlan) || !slices.Contains([]string{"candidate", "approved", "active"}, version.Status) {
+	if reusedSkillVersionConflicts(version, receipt, in) {
 		return out, ErrConflict
 	}
 	if err = s.generationReadRefs(ctx, token, in.Scope, version.Relations, version.Sources); err != nil {
@@ -305,6 +346,10 @@ func (s *Service) reuseSkillGeneration(ctx context.Context, token string, in Gen
 		return out, err
 	}
 	return ImportSkillResult{Skill: parent, Record: version, Reused: true, Version: slices.Index(skillHistory(parent), version.ID) + 1, ComparisonPlanSHA256: comparisonPlanHash(version.ComparisonPlan)}, nil
+}
+
+func reusedSkillVersionConflicts(version, receipt Record, in GenerateSkillInput) bool {
+	return version.Scope != in.Scope || version.SkillID != in.SkillID || version.Kind != proposedSkillKind || version.CreatedBy != receipt.CreatedBy || version.CreatedByType != receipt.CreatedByType || version.ContentErased || version.PrivacyQuarantined || version.Revision < receipt.Target.Revision || version.Analysis == nil || comparisonPlanHash(version.ComparisonPlan) != comparisonPlanHash(in.ComparisonPlan) || !slices.Contains([]string{"candidate", "approved", "active"}, version.Status)
 }
 
 func saveSkillGenerationReceipt(ctx context.Context, tx Tx, proposal *ProposeSkillInput, version Record) error {

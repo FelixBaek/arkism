@@ -108,24 +108,8 @@ func (s *Service) RoutingGroups(ctx context.Context, token string, scope Scope) 
 }
 
 func (s *Service) SetRoutingGroups(ctx context.Context, token string, in RoutingGroupsInput) (RoutingGroupsPage, error) {
-	if !validScope(in.Scope) || in.ExpectedRevision < 0 || in.Groups == nil || len(in.Groups) > 64 {
+	if !validScope(in.Scope) || in.ExpectedRevision < 0 || in.Groups == nil || len(in.Groups) > 64 || !validRoutingGroups(in.Groups) {
 		return RoutingGroupsPage{}, ErrInvalid
-	}
-	ids := map[string]bool{}
-	for _, g := range in.Groups {
-		if !routingGroupIDRe.MatchString(g.ID) || ids[g.ID] || !utf8.ValidString(g.Name) ||
-			strings.TrimSpace(g.Name) == "" || utf8.RuneCountInString(g.Name) > 100 || containsSecret(g.Name) ||
-			g.Discovered || (g.Strategy != "smart" && g.Strategy != "ordered") || len(g.Members) < 1 || len(g.Members) > 40 {
-			return RoutingGroupsPage{}, ErrInvalid
-		}
-		ids[g.ID] = true
-		members := map[string]bool{}
-		for _, id := range g.Members {
-			if strings.HasPrefix(id, "group/") || !validRoutingModelID(id) || containsSecret(id) || members[id] {
-				return RoutingGroupsPage{}, ErrInvalid
-			}
-			members[id] = true
-		}
 	}
 	var out RoutingGroupsPage
 	r, err := s.updateRouting(ctx, token, in.Scope, in.ExpectedRevision, func(doc *Routing, now time.Time, tx Tx) error {
@@ -154,6 +138,26 @@ func (s *Service) SetRoutingGroups(ctx context.Context, token string, in Routing
 	}
 	out.Revision = r.Revision
 	return out, nil
+}
+
+func validRoutingGroups(groups []RoutingGroup) bool {
+	ids := map[string]bool{}
+	for _, g := range groups {
+		if !routingGroupIDRe.MatchString(g.ID) || ids[g.ID] || !utf8.ValidString(g.Name) ||
+			strings.TrimSpace(g.Name) == "" || utf8.RuneCountInString(g.Name) > 100 || containsSecret(g.Name) ||
+			g.Discovered || (g.Strategy != "smart" && g.Strategy != "ordered") || len(g.Members) < 1 || len(g.Members) > 40 {
+			return false
+		}
+		ids[g.ID] = true
+		members := map[string]bool{}
+		for _, id := range g.Members {
+			if strings.HasPrefix(id, "group/") || !validRoutingModelID(id) || containsSecret(id) || members[id] {
+				return false
+			}
+			members[id] = true
+		}
+	}
+	return true
 }
 
 // Preserve member order before the existing provider/exclude/quota filters.

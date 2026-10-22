@@ -85,21 +85,35 @@ func validUsageSession(u UsageSession) bool {
 		return false
 	}
 	for day, models := range u.Days {
-		if !usageDayRe.MatchString(day) || len(models) > 50 {
+		if !validUsageDay(day, models) {
 			return false
-		}
-		for m, t := range models {
-			if !usageNameRe.MatchString(m) || t.Input < 0 || t.Output < 0 || t.CacheRead < 0 || t.CacheWrite < 0 || t.Requests < 0 ||
-				t.CostUSD != nil && (math.IsNaN(*t.CostUSD) || *t.CostUSD < 0 || *t.CostUSD > 1e6) {
-				return false
-			}
 		}
 	}
 	for _, m := range []map[string]int{u.Tools, u.Skills} {
-		for k, n := range m {
-			if len(k) == 0 || len(k) > 200 || n < 0 {
-				return false
-			}
+		if !validUsageCounts(m) {
+			return false
+		}
+	}
+	return true
+}
+
+func validUsageCounts(m map[string]int) bool {
+	for k, n := range m {
+		if len(k) == 0 || len(k) > 200 || n < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func validUsageDay(day string, models map[string]UsageTokens) bool {
+	if !usageDayRe.MatchString(day) || len(models) > 50 {
+		return false
+	}
+	for m, t := range models {
+		if !usageNameRe.MatchString(m) || t.Input < 0 || t.Output < 0 || t.CacheRead < 0 || t.CacheWrite < 0 || t.Requests < 0 ||
+			t.CostUSD != nil && (math.IsNaN(*t.CostUSD) || *t.CostUSD < 0 || *t.CostUSD > 1e6) {
+			return false
 		}
 	}
 	return true
@@ -263,12 +277,6 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 	sessions := []usageRow{}
 	var active int64
 	activeDays := map[string]bool{}
-	get := func(m map[string]*usageAcc, k string) *usageAcc {
-		if m[k] == nil {
-			m[k] = &usageAcc{}
-		}
-		return m[k]
-	}
 	for _, r := range rows {
 		u := r.UsageSession
 		if u == nil {
@@ -280,95 +288,33 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 		}
 		row := usageRow{ID: r.ID, Title: u.Title, Agent: u.Agent, Device: u.Device, Project: u.Project, Messages: u.Messages,
 			Active: u.ActiveSeconds, Started: u.StartedAt, Ended: u.EndedAt}
-		var sum UsageTokens
-		models := map[string]bool{}
-		for day, perModel := range u.Days {
-			if day < from {
-				continue
-			}
-			for m, t := range perModel {
-				if t.total()+t.CacheRead+t.CacheWrite == 0 && t.Requests == 0 {
-					continue
-				}
-				sum.add(t)
-				models[m] = true
-				get(byDay, day).put(r.ID, t)
-				get(byModel, m).put(r.ID, t)
-			}
-		}
+		sum, models := usageSessionTokens(r.ID, u, from, byDay, byModel)
 		inRange := from == "" || u.EndedAt.In(seoul).Format("2006-01-02") >= from
 		if !inRange && sum.total()+sum.CacheRead+sum.CacheWrite == 0 {
 			continue
 		}
 		row.Tokens, row.Input, row.Output, row.Cached = sum.total(), sum.Input, sum.Output, sum.CacheRead+sum.CacheWrite
 		row.CostUSD, row.Priced = cost(sum.CostUSD), sum.CostUSD != nil
-		for m := range models {
-			row.Models = append(row.Models, m)
-		}
-		slices.Sort(row.Models)
+		row.Models = usageSortedModels(models)
 		sessions = append(sessions, row)
 		all.put(r.ID, sum)
 		project := u.Project
 		if project == "" {
 			project = "(없음)"
 		}
-		get(byProject, project).put(r.ID, sum)
-		get(byAgent, u.Agent).put(r.ID, sum)
+		usageAccOf(byProject, project).put(r.ID, sum)
+		usageAccOf(byAgent, u.Agent).put(r.ID, sum)
 		active += u.ActiveSeconds
-		for d := u.StartedAt.In(seoul); !d.After(u.EndedAt.In(seoul).Add(24 * time.Hour)); d = d.AddDate(0, 0, 1) {
-			if k := d.Format("2006-01-02"); k >= from && k <= u.EndedAt.In(seoul).Format("2006-01-02") {
-				activeDays[k] = true
-			}
-		}
+		usageMarkActiveDays(activeDays, u, seoul, from)
 		dayMsgs[u.EndedAt.In(seoul).Format("2006-01-02")] += u.Messages
-		for i, n := range u.Hours {
-			if i < 168 {
-				hours[i] += n
-			}
-		}
-		for k, n := range u.Tools {
-			v := tools[k]
-			tools[k] = [2]int{v[0] + n, v[1] + 1}
-		}
-		for k, n := range u.Skills {
-			v := skills[k]
-			skills[k] = [2]int{v[0] + n, v[1] + 1}
-		}
-		switch m := u.Messages; {
-		case m <= 5:
-			shape[0]++
-		case m <= 15:
-			shape[1]++
-		case m <= 30:
-			shape[2]++
-		case m <= 60:
-			shape[3]++
-		case m <= 120:
-			shape[4]++
-		default:
-			shape[5]++
-		}
+		usageAddHours(hours, u.Hours)
+		usageAddCounts(tools, u.Tools)
+		usageAddCounts(skills, u.Skills)
+		shape[usageShapeBucket(u.Messages)]++
 	}
 
 	// by day: every day of the range, empty ones included
-	series := []map[string]any{}
-	first := from
-	if first == "" {
-		for k := range byDay {
-			if first == "" || k < first {
-				first = k
-			}
-		}
-	}
-	if first != "" {
-		start, _ := time.ParseInLocation("2006-01-02", first, seoul)
-		for d := start; d.Format("2006-01-02") <= now.Format("2006-01-02"); d = d.AddDate(0, 0, 1) {
-			k := d.Format("2006-01-02")
-			a := get(byDay, k)
-			series = append(series, map[string]any{"date": k, "tokens": a.total(), "output": a.Output, "cost_usd": cost(a.CostUSD),
-				"sessions": len(a.sessions), "messages": dayMsgs[k]})
-		}
-	}
+	series := usageDaySeries(byDay, dayMsgs, from, now, seoul)
 
 	tokensOf := make([]int64, 0, len(sessions))
 	for _, r := range sessions {
@@ -381,11 +327,7 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 		}
 		return tokensOf[int(math.Ceil(q*float64(len(tokensOf))))-1]
 	}
-	hitBase := all.Input + all.CacheRead + all.CacheWrite
-	hit := 0.0
-	if hitBase > 0 {
-		hit = math.Round(1000*float64(all.CacheRead)/float64(hitBase)) / 10
-	}
+	hit := usageCacheHit(all.UsageTokens)
 	top := slices.Clone(sessions)
 	sort.SliceStable(top, func(i, j int) bool { return top[i].Tokens > top[j].Tokens })
 	latest := slices.Clone(sessions)
@@ -418,6 +360,115 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 	}
 	out["requests"] = req
 	return out, nil
+}
+
+func usageAccOf(m map[string]*usageAcc, k string) *usageAcc {
+	if m[k] == nil {
+		m[k] = &usageAcc{}
+	}
+	return m[k]
+}
+
+// usageSessionTokens sums one session's tokens from the range start on and
+// adds them to the per-day and per-model totals.
+func usageSessionTokens(id string, u *UsageSession, from string, byDay, byModel map[string]*usageAcc) (UsageTokens, map[string]bool) {
+	var sum UsageTokens
+	models := map[string]bool{}
+	for day, perModel := range u.Days {
+		if day < from {
+			continue
+		}
+		for m, t := range perModel {
+			if t.total()+t.CacheRead+t.CacheWrite == 0 && t.Requests == 0 {
+				continue
+			}
+			sum.add(t)
+			models[m] = true
+			usageAccOf(byDay, day).put(id, t)
+			usageAccOf(byModel, m).put(id, t)
+		}
+	}
+	return sum, models
+}
+
+func usageMarkActiveDays(activeDays map[string]bool, u *UsageSession, seoul *time.Location, from string) {
+	for d := u.StartedAt.In(seoul); !d.After(u.EndedAt.In(seoul).Add(24 * time.Hour)); d = d.AddDate(0, 0, 1) {
+		if k := d.Format("2006-01-02"); k >= from && k <= u.EndedAt.In(seoul).Format("2006-01-02") {
+			activeDays[k] = true
+		}
+	}
+}
+
+func usageSortedModels(models map[string]bool) []string {
+	var out []string
+	for m := range models {
+		out = append(out, m)
+	}
+	slices.Sort(out)
+	return out
+}
+
+func usageAddHours(hours, add []int) {
+	for i, n := range add {
+		if i < 168 {
+			hours[i] += n
+		}
+	}
+}
+
+func usageCacheHit(all UsageTokens) float64 {
+	hitBase := all.Input + all.CacheRead + all.CacheWrite
+	hit := 0.0
+	if hitBase > 0 {
+		hit = math.Round(1000*float64(all.CacheRead)/float64(hitBase)) / 10
+	}
+	return hit
+}
+
+func usageAddCounts(into map[string][2]int, counts map[string]int) {
+	for k, n := range counts {
+		v := into[k]
+		into[k] = [2]int{v[0] + n, v[1] + 1}
+	}
+}
+
+func usageShapeBucket(messages int) int {
+	switch m := messages; {
+	case m <= 5:
+		return 0
+	case m <= 15:
+		return 1
+	case m <= 30:
+		return 2
+	case m <= 60:
+		return 3
+	case m <= 120:
+		return 4
+	default:
+		return 5
+	}
+}
+
+func usageDaySeries(byDay map[string]*usageAcc, dayMsgs map[string]int, from string, now time.Time, seoul *time.Location) []map[string]any {
+	series := []map[string]any{}
+	first := from
+	if first == "" {
+		for k := range byDay {
+			if first == "" || k < first {
+				first = k
+			}
+		}
+	}
+	if first != "" {
+		start, _ := time.ParseInLocation("2006-01-02", first, seoul)
+		for d := start; d.Format("2006-01-02") <= now.Format("2006-01-02"); d = d.AddDate(0, 0, 1) {
+			k := d.Format("2006-01-02")
+			a := usageAccOf(byDay, k)
+			series = append(series, map[string]any{"date": k, "tokens": a.total(), "output": a.Output, "cost_usd": cost(a.CostUSD),
+				"sessions": len(a.sessions), "messages": dayMsgs[k]})
+		}
+	}
+	return series
 }
 
 // UsageSessionList is 세션 메뉴: newest first, optionally one agent and a literal title/project/id match.

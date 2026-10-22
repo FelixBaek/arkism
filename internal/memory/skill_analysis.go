@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -33,9 +34,42 @@ type AnalysisResult struct {
 func analysisID(in AnalyzeSkillInput) string {
 	return "skill-" + ContentHash(structuredText(in.Scope)+"\n"+in.SkillID+"\n"+ContentHash(in.Content))
 }
+func invalidAnalyzeSkillInput(in AnalyzeSkillInput) bool {
+	return !validScope(in.Scope) || in.SkillID == "" || len(in.SkillID) > 256 || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || in.Path == "" || len(in.Path) > 4096 || in.Content == "" || !safeTransfer(structuredText(in))
+}
+
+func (s *Service) measureSkillAnalysis(ctx context.Context, in AnalyzeSkillInput, model string) (SkillAnalysis, error) {
+	reserved, err := s.beginProviderCall(ctx, in.Scope, "skill_analysis", "skill_llm", model)
+	if err != nil {
+		return SkillAnalysis{}, err
+	}
+	analysis, usage, err := analyzeMeasured(ctx, s.Analyzer, in.Content)
+	if err != nil {
+		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: "skill_llm", Model: model, Requests: 1}, false)
+		return SkillAnalysis{}, err
+	}
+	if err = s.finishProviderCall(ctx, reserved, usage, true); err != nil {
+		return SkillAnalysis{}, err
+	}
+	analysis.SkillID = in.SkillID
+	analysis.ContentHash = ContentHash(in.Content)
+	analysis.Version = in.Version
+	if analysis.Version == "" {
+		analysis.Version = analysis.ContentHash[:16]
+	}
+	analysis.SourcePath = in.Path
+	analysis.SourceFile = "SKILL.md"
+	// Statistics come from evaluations, never a language-model guess.
+	analysis.EvaluationStats = map[string]float64{"runs": 0, "passed": 0, "failed": 0}
+	if !validAnalysis(&analysis) {
+		return SkillAnalysis{}, ErrInvalid
+	}
+	return analysis, nil
+}
+
 func (s *Service) AnalyzeSkill(ctx context.Context, token string, in AnalyzeSkillInput) (AnalysisResult, error) {
 	var out AnalysisResult
-	if !validScope(in.Scope) || in.SkillID == "" || len(in.SkillID) > 256 || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || in.Path == "" || len(in.Path) > 4096 || in.Content == "" || !safeTransfer(structuredText(in)) {
+	if invalidAnalyzeSkillInput(in) {
 		return out, ErrInvalid
 	}
 	d, err := s.authorize(ctx, token, "analyze:skills", in.Scope, in.SkillID, structuredText(in))
@@ -73,33 +107,12 @@ func (s *Service) AnalyzeSkill(ctx context.Context, token string, in AnalyzeSkil
 	if !validGenerator(&generation) {
 		return out, ErrUnavailable
 	}
-	if d.Role != "human" && d.Role != "agent" && d.Role != "service" && d.Role != "pipeline" {
+	if !slices.Contains([]string{"human", "agent", "service", "pipeline"}, d.Role) {
 		return out, ErrDenied
 	}
-	reserved, err := s.beginProviderCall(ctx, in.Scope, "skill_analysis", "skill_llm", generation.Model)
+	analysis, err := s.measureSkillAnalysis(ctx, in, generation.Model)
 	if err != nil {
 		return out, err
-	}
-	analysis, usage, err := analyzeMeasured(ctx, s.Analyzer, in.Content)
-	if err != nil {
-		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: "skill_llm", Model: generation.Model, Requests: 1}, false)
-		return out, err
-	}
-	if err = s.finishProviderCall(ctx, reserved, usage, true); err != nil {
-		return out, err
-	}
-	analysis.SkillID = in.SkillID
-	analysis.ContentHash = ContentHash(in.Content)
-	analysis.Version = in.Version
-	if analysis.Version == "" {
-		analysis.Version = analysis.ContentHash[:16]
-	}
-	analysis.SourcePath = in.Path
-	analysis.SourceFile = "SKILL.md"
-	// Statistics come from evaluations, never a language-model guess.
-	analysis.EvaluationStats = map[string]float64{"runs": 0, "passed": 0, "failed": 0}
-	if !validAnalysis(&analysis) {
-		return out, ErrInvalid
 	}
 	writer, err := s.authorize(ctx, token, "write:skill_versions", in.Scope, id, structuredText(analysis))
 	if err != nil {

@@ -36,38 +36,15 @@ func (s *Service) Supersede(ctx context.Context, token, id string, in SupersedeI
 			return out, ErrInvalid
 		}
 	} else {
-		if in.ReplacementExpectedRevision != 0 || len(in.Sources) < 1 || len(in.Sources) > 64 {
-			return out, ErrInvalid
-		}
-		for _, ref := range in.Sources {
-			if ref.Span == nil {
-				return out, ErrInvalid
-			}
-		}
 		var e error
-		clean, inspection, e = inspectCreate(CreateInput{Tags: in.Tags, Scope: in.Scope, Text: in.NewContent, Sources: in.Sources, Sensitivity: in.Sensitivity})
+		clean, inspection, e = inspectSupersedeContent(in)
 		if e != nil {
 			return out, e
 		}
 	}
-	if containsSecret(structuredText(in)) || containsSecret(id) {
-		return out, ErrSecretDetected
-	}
-	actor, e := s.authorize(ctx, token, "transition:memories", in.Scope, id, structuredText(in))
+	actor, e := s.authorizeSupersede(ctx, token, id, in, existing)
 	if e != nil {
 		return out, e
-	}
-	if actor.Role != "human" || !actor.ContentSafe {
-		return out, ErrDenied
-	}
-	if existing {
-		d, e := s.authorize(ctx, token, "transition:memories", in.Scope, in.ReplacementMemoryID, "")
-		if e != nil {
-			return out, e
-		}
-		if d.Role != "human" || d.PrincipalID != actor.PrincipalID {
-			return out, ErrDenied
-		}
 	}
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		out = SupersedeOutput{}
@@ -81,30 +58,12 @@ func (s *Service) Supersede(ctx context.Context, token, id string, in SupersedeI
 		now := time.Now().UTC().Truncate(time.Millisecond)
 		var next Record
 		if existing {
-			next, e = tx.Get(ctx, "memories", in.Scope, in.ReplacementMemoryID)
-			if e != nil {
-				return e
-			}
-			if next.ConflictID != "" || next.Revision != in.ReplacementExpectedRevision || !live(next) || !verifiedMemory(next) {
-				return ErrConflict
-			}
-			for _, ref := range next.Relations {
-				if ref.Collection == "memories" && ref.ID == old.ID {
-					return ErrConflict
-				}
-			}
-			if e = checkRelations(ctx, tx, next); e != nil {
-				return e
-			}
-			next.Revision++
+			next, e = loadSupersedeReplacement(ctx, tx, in, old)
 		} else {
-			if !validCreateKind("memory_candidates", old.Kind) {
-				return ErrInvalid
-			}
-			next = Record{Tags: clean.Tags, ID: ID(), Scope: in.Scope, Kind: old.Kind, Status: "active", VerificationStatus: VerificationVerified, Revision: 1, Text: clean.Text, Sources: clean.Sources, SourceEventID: clean.SourceEventID, TraceID: clean.TraceID, Sensitivity: clean.Sensitivity, Inspection: &inspection, CreatedAt: now, UpdatedAt: now, EffectiveAt: &now, CreatedBy: actor.PrincipalID, CreatedByType: "human", ApprovedBy: actor.PrincipalID, TrustLevel: "user_verified", Trust: 1, ContentHash: ContentHash(clean.Text)}
-			if next.SourceEventID == "" && len(next.Sources) > 0 {
-				next.SourceEventID = next.Sources[0].SourceID
-			}
+			next, e = newSupersedeMemory(in, old, clean, inspection, actor, now)
+		}
+		if e != nil {
+			return e
 		}
 		if e = checkSources(ctx, tx, next); e != nil {
 			return e
@@ -147,6 +106,72 @@ func (s *Service) Supersede(ctx context.Context, token, id string, in SupersedeI
 		return SupersedeOutput{}, e
 	}
 	return out, nil
+}
+
+func inspectSupersedeContent(in SupersedeInput) (CreateInput, Inspection, error) {
+	if in.ReplacementExpectedRevision != 0 || len(in.Sources) < 1 || len(in.Sources) > 64 {
+		return CreateInput{}, Inspection{}, ErrInvalid
+	}
+	for _, ref := range in.Sources {
+		if ref.Span == nil {
+			return CreateInput{}, Inspection{}, ErrInvalid
+		}
+	}
+	return inspectCreate(CreateInput{Tags: in.Tags, Scope: in.Scope, Text: in.NewContent, Sources: in.Sources, Sensitivity: in.Sensitivity})
+}
+
+func (s *Service) authorizeSupersede(ctx context.Context, token, id string, in SupersedeInput, existing bool) (Decision, error) {
+	if containsSecret(structuredText(in)) || containsSecret(id) {
+		return Decision{}, ErrSecretDetected
+	}
+	actor, e := s.authorize(ctx, token, "transition:memories", in.Scope, id, structuredText(in))
+	if e != nil {
+		return Decision{}, e
+	}
+	if actor.Role != "human" || !actor.ContentSafe {
+		return Decision{}, ErrDenied
+	}
+	if existing {
+		d, e := s.authorize(ctx, token, "transition:memories", in.Scope, in.ReplacementMemoryID, "")
+		if e != nil {
+			return Decision{}, e
+		}
+		if d.Role != "human" || d.PrincipalID != actor.PrincipalID {
+			return Decision{}, ErrDenied
+		}
+	}
+	return actor, nil
+}
+
+func loadSupersedeReplacement(ctx context.Context, tx Tx, in SupersedeInput, old Record) (Record, error) {
+	next, e := tx.Get(ctx, "memories", in.Scope, in.ReplacementMemoryID)
+	if e != nil {
+		return Record{}, e
+	}
+	if next.ConflictID != "" || next.Revision != in.ReplacementExpectedRevision || !live(next) || !verifiedMemory(next) {
+		return Record{}, ErrConflict
+	}
+	for _, ref := range next.Relations {
+		if ref.Collection == "memories" && ref.ID == old.ID {
+			return Record{}, ErrConflict
+		}
+	}
+	if e = checkRelations(ctx, tx, next); e != nil {
+		return Record{}, e
+	}
+	next.Revision++
+	return next, nil
+}
+
+func newSupersedeMemory(in SupersedeInput, old Record, clean CreateInput, inspection Inspection, actor Decision, now time.Time) (Record, error) {
+	if !validCreateKind("memory_candidates", old.Kind) {
+		return Record{}, ErrInvalid
+	}
+	next := Record{Tags: clean.Tags, ID: ID(), Scope: in.Scope, Kind: old.Kind, Status: "active", VerificationStatus: VerificationVerified, Revision: 1, Text: clean.Text, Sources: clean.Sources, SourceEventID: clean.SourceEventID, TraceID: clean.TraceID, Sensitivity: clean.Sensitivity, Inspection: &inspection, CreatedAt: now, UpdatedAt: now, EffectiveAt: &now, CreatedBy: actor.PrincipalID, CreatedByType: "human", ApprovedBy: actor.PrincipalID, TrustLevel: "user_verified", Trust: 1, ContentHash: ContentHash(clean.Text)}
+	if next.SourceEventID == "" && len(next.Sources) > 0 {
+		next.SourceEventID = next.Sources[0].SourceID
+	}
+	return next, nil
 }
 
 // Both callers set final states/revisions before constructing historical links.

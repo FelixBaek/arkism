@@ -65,6 +65,22 @@ func directlyDerived(r Record, sourceID string) bool {
 	}
 	return false
 }
+func (s *Service) authorizeDerivedRows(ctx context.Context, token, sourceID string, in DerivedListInput, actor Decision, rows []Record) error {
+	// shortcut: up to 102 sequential policy calls; batch only with equivalent per-record decisions.
+	for _, r := range rows {
+		if r.Scope != in.Scope || !validRunLabel(r.ID, 256) || r.Revision < 1 || r.ContentErased || !directlyDerived(r, sourceID) {
+			return ErrUnavailable
+		}
+		d, e := s.authorize(ctx, token, "read:"+in.Collection, in.Scope, r.ID, structuredText(r))
+		if e != nil {
+			return e
+		}
+		if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
+			return ErrDenied
+		}
+	}
+	return nil
+}
 func (s *Service) ListSourceDerived(ctx context.Context, token, sourceID string, in DerivedListInput) (SourceDerived, error) {
 	in, e := normalizeDerivedList(in)
 	if e != nil {
@@ -94,18 +110,8 @@ func (s *Service) ListSourceDerived(ctx context.Context, token, sourceID string,
 	if len(rows) > in.Limit+1 {
 		return SourceDerived{}, ErrUnavailable
 	}
-	// shortcut: up to 102 sequential policy calls; batch only with equivalent per-record decisions.
-	for _, r := range rows {
-		if r.Scope != in.Scope || !validRunLabel(r.ID, 256) || r.Revision < 1 || r.ContentErased || !directlyDerived(r, sourceID) {
-			return SourceDerived{}, ErrUnavailable
-		}
-		d, e := s.authorize(ctx, token, "read:"+in.Collection, in.Scope, r.ID, structuredText(r))
-		if e != nil {
-			return SourceDerived{}, e
-		}
-		if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
-			return SourceDerived{}, ErrDenied
-		}
+	if e = s.authorizeDerivedRows(ctx, token, sourceID, in, actor, rows); e != nil {
+		return SourceDerived{}, e
 	}
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		source, e := tx.Get(ctx, "sources", in.Scope, sourceID)

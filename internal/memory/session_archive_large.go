@@ -261,30 +261,7 @@ func (o *archiveTextObserver) Read(dst []byte) (int, error) {
 		o.invalid = !utf8.RuneStart(data[o.start-base])
 	}
 	if !o.found && !o.direct {
-		// Include enough of the old block to recognize a match crossing the edge.
-		edge := append(append([]byte(nil), o.tail...), data[:min(len(data), len(o.query))]...)
-		match := bytes.Index(edge, o.query)
-		if match >= 0 {
-			match = base - len(o.tail) + match
-		} else if at := bytes.Index(data, o.query); at >= 0 {
-			match = base + at
-		}
-		if match >= 0 {
-			o.found = true
-			o.start = max(0, match-256)
-			for o.start > 0 {
-				var c byte
-				if o.start < base {
-					c = o.tail[o.start-(base-len(o.tail))]
-				} else {
-					c = data[o.start-base]
-				}
-				if utf8.RuneStart(c) {
-					break
-				}
-				o.start--
-			}
-		}
+		o.findQuery(data, base)
 	}
 	if o.found && len(o.output) < o.limit {
 		if len(o.output) == 0 && o.start < base {
@@ -309,6 +286,32 @@ func (o *archiveTextObserver) Read(dst []byte) (int, error) {
 		}
 	}
 	return n, err
+}
+func (o *archiveTextObserver) findQuery(data []byte, base int) {
+	// Include enough of the old block to recognize a match crossing the edge.
+	edge := append(append([]byte(nil), o.tail...), data[:min(len(data), len(o.query))]...)
+	match := bytes.Index(edge, o.query)
+	if match >= 0 {
+		match = base - len(o.tail) + match
+	} else if at := bytes.Index(data, o.query); at >= 0 {
+		match = base + at
+	}
+	if match >= 0 {
+		o.found = true
+		o.start = max(0, match-256)
+		for o.start > 0 {
+			var c byte
+			if o.start < base {
+				c = o.tail[o.start-(base-len(o.tail))]
+			} else {
+				c = data[o.start-base]
+			}
+			if utf8.RuneStart(c) {
+				break
+			}
+			o.start--
+		}
+	}
 }
 
 func (s *Service) archiveLargeMessage(ctx context.Context, h Record, ref ArchiveMessageRef, query string, offset int, direct bool) (ArchiveMessageView, *archiveLargeRecord, string, error) {

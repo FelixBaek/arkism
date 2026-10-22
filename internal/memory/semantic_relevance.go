@@ -12,9 +12,7 @@ type VectorMatch struct {
 }
 
 func verifiedSemanticMatch(r Record, query []float64, space string, limit float64) *VectorMatch {
-	if limit <= 0 || limit >= 2 || math.IsNaN(limit) || space == "" || len(query) != VectorDimension ||
-		r.Embedding == nil || r.Embedding.Space != space || r.Embedding.Dimension != VectorDimension ||
-		len(r.Embedding.Vector) != VectorDimension || r.Embedding.ContentHash != ContentHash(recordContent(r)) {
+	if !semanticComparable(r, query, space, limit) {
 		return nil
 	}
 	var dot, queryNorm, documentNorm float64
@@ -44,4 +42,12 @@ func verifiedSemanticMatch(r Record, query []float64, space string, limit float6
 		return nil
 	}
 	return &VectorMatch{Space: space, Distance: distance, MaxDistance: limit}
+}
+
+// semanticComparable reports whether the stored embedding is a current
+// same-space vector that can be compared with query under limit.
+func semanticComparable(r Record, query []float64, space string, limit float64) bool {
+	return !(limit <= 0 || limit >= 2 || math.IsNaN(limit) || space == "" || len(query) != VectorDimension ||
+		r.Embedding == nil || r.Embedding.Space != space || r.Embedding.Dimension != VectorDimension ||
+		len(r.Embedding.Vector) != VectorDimension || r.Embedding.ContentHash != ContentHash(recordContent(r)))
 }

@@ -34,17 +34,7 @@ func skillTrialTerminal(ctx context.Context, tx Tx, trial Record) (string, error
 		}
 	}
 	if parent.ActiveVersion == trial.SkillTrial.Candidate.ID {
-		candidate, err := tx.Get(ctx, colSkillVersions, trial.Scope, parent.ActiveVersion)
-		if err != nil {
-			return "", err
-		}
-		if candidate.SkillID != trial.SkillID || candidate.Revision != trial.SkillTrial.Candidate.Revision+1 {
-			return "", ErrConflict
-		}
-		if err = checkActiveSkill(ctx, tx, candidate); err != nil {
-			return "", err
-		}
-		if err = checkSources(ctx, tx, parent); err != nil {
+		if err = checkPromotedSkillTrial(ctx, tx, trial, parent); err != nil {
 			return "", err
 		}
 		return "promoted", nil
@@ -53,4 +43,18 @@ func skillTrialTerminal(ctx context.Context, tx Tx, trial Record) (string, error
 		return "expired", nil
 	}
 	return "", nil
+}
+
+func checkPromotedSkillTrial(ctx context.Context, tx Tx, trial, parent Record) error {
+	candidate, err := tx.Get(ctx, colSkillVersions, trial.Scope, parent.ActiveVersion)
+	if err != nil {
+		return err
+	}
+	if candidate.SkillID != trial.SkillID || candidate.Revision != trial.SkillTrial.Candidate.Revision+1 {
+		return ErrConflict
+	}
+	if err = checkActiveSkill(ctx, tx, candidate); err != nil {
+		return err
+	}
+	return checkSources(ctx, tx, parent)
 }

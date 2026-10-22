@@ -55,21 +55,9 @@ func (s *Service) ReadSkillTrialStatus(ctx context.Context, token, id string, in
 		}
 		out.Trial = Ref{Collection: colSkillTrials, ID: id, Revision: trial.Revision}
 		out.Candidate = Ref{Collection: colSkillVersions, ID: candidate.ID, Revision: candidate.Revision}
-		state, err := skillTrialTerminal(ctx, tx, trial)
+		state, err := skillTrialStatusState(ctx, tx, in, trial)
 		if err != nil {
 			return err
-		}
-		if state == "" {
-			state = "active"
-			if _, err := skillTrialCandidate(ctx, tx, in.Scope, in.SkillID, trial.SkillTrial); err != nil {
-				if !errors.Is(err, ErrConflict) && !errors.Is(err, ErrNotFound) {
-					return err
-				}
-				state = "invalidated"
-			}
-		}
-		if state == "stopped" && trial.VerificationStatus == "regression_observed" {
-			state = "stopped_regression"
 		}
 		out.State = state
 		job, err := tx.Get(ctx, colJobs, in.Scope, skillTrialCheckID(in.Scope, id))
@@ -79,13 +67,35 @@ func (s *Service) ReadSkillTrialStatus(ctx context.Context, token, id string, in
 		if err != nil {
 			return err
 		}
-		if job.ContentErased || job.PrivacyQuarantined || job.Kind != skillTrialCheckKind || job.SkillID != in.SkillID || job.Target == nil || job.Target.Collection != colSkillTrials || job.Target.ID != id {
+		if !validSkillTrialStatusJob(job, in.SkillID, id) {
 			return ErrConflict
 		}
 		out.Scheduler = &SkillTrialSchedulerStatus{Status: job.Status, Attempts: job.Attempts, NextCheck: job.RunAt, UpdatedAt: job.UpdatedAt}
 		return nil
 	})
 	return out, err
+}
+func skillTrialStatusState(ctx context.Context, tx Tx, in SkillTrialReadInput, trial Record) (string, error) {
+	state, err := skillTrialTerminal(ctx, tx, trial)
+	if err != nil {
+		return "", err
+	}
+	if state == "" {
+		state = "active"
+		if _, err := skillTrialCandidate(ctx, tx, in.Scope, in.SkillID, trial.SkillTrial); err != nil {
+			if !errors.Is(err, ErrConflict) && !errors.Is(err, ErrNotFound) {
+				return "", err
+			}
+			state = "invalidated"
+		}
+	}
+	if state == "stopped" && trial.VerificationStatus == "regression_observed" {
+		state = "stopped_regression"
+	}
+	return state, nil
+}
+func validSkillTrialStatusJob(job Record, skillID, id string) bool {
+	return !(job.ContentErased || job.PrivacyQuarantined || job.Kind != skillTrialCheckKind || job.SkillID != skillID || job.Target == nil || job.Target.Collection != colSkillTrials || job.Target.ID != id)
 }
 func skillTrialStatusRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/skill-trials/{id}/status", func(w http.ResponseWriter, r *http.Request) {

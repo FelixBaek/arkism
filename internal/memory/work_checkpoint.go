@@ -203,39 +203,8 @@ func validateWorkCheckpointPackage(in WorkCheckpointPackage) (WorkCheckpointPack
 	default:
 		return WorkCheckpointPackage{}, ErrInvalid
 	}
-	for _, s := range []string{p.Branch, p.Head, p.SessionID} {
-		if s != "" && !validWorkCheckpointString(s, workCheckpointMaxString) {
-			return WorkCheckpointPackage{}, ErrInvalid
-		}
-	}
-	for _, list := range [][]string{p.Decisions, p.Completed, p.NextSteps, p.Constraints} {
-		if len(list) > workCheckpointMaxArray {
-			return WorkCheckpointPackage{}, ErrInvalid
-		}
-		for _, s := range list {
-			if !validWorkCheckpointString(s, workCheckpointMaxString) {
-				return WorkCheckpointPackage{}, ErrInvalid
-			}
-		}
-	}
-	if len(p.Files) > workCheckpointMaxArray || len(p.Checks) > workCheckpointMaxArray || len(p.SourceRefs) > workCheckpointMaxArray {
+	if !validWorkCheckpointNotes(p) || !validWorkCheckpointEvidence(p) {
 		return WorkCheckpointPackage{}, ErrInvalid
-	}
-	for _, f := range p.Files {
-		if !validWorkCheckpointString(f.Path, workCheckpointMaxString) || !sourceHashPattern.MatchString(f.SHA256) {
-			return WorkCheckpointPackage{}, ErrInvalid
-		}
-	}
-	for _, c := range p.Checks {
-		if !validWorkCheckpointString(c.Command, workCheckpointMaxString) || !validWorkCheckpointOutcome(c.Outcome) ||
-			c.Summary != "" && !validWorkCheckpointString(c.Summary, workCheckpointMaxString) {
-			return WorkCheckpointPackage{}, ErrInvalid
-		}
-	}
-	for _, ref := range p.SourceRefs {
-		if !validWorkCheckpointRef(ref) {
-			return WorkCheckpointPackage{}, ErrInvalid
-		}
 	}
 	if encoded, err := json.Marshal(p); err != nil || len(encoded) > workCheckpointMaxJSON {
 		return WorkCheckpointPackage{}, ErrInvalid
@@ -244,6 +213,50 @@ func validateWorkCheckpointPackage(in WorkCheckpointPackage) (WorkCheckpointPack
 		return WorkCheckpointPackage{}, ErrSecretDetected
 	}
 	return p, nil
+}
+
+// validWorkCheckpointNotes checks the optional strings and the string lists.
+func validWorkCheckpointNotes(p WorkCheckpointPackage) bool {
+	for _, s := range []string{p.Branch, p.Head, p.SessionID} {
+		if s != "" && !validWorkCheckpointString(s, workCheckpointMaxString) {
+			return false
+		}
+	}
+	for _, list := range [][]string{p.Decisions, p.Completed, p.NextSteps, p.Constraints} {
+		if len(list) > workCheckpointMaxArray {
+			return false
+		}
+		for _, s := range list {
+			if !validWorkCheckpointString(s, workCheckpointMaxString) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// validWorkCheckpointEvidence checks files, checks and source references.
+func validWorkCheckpointEvidence(p WorkCheckpointPackage) bool {
+	if len(p.Files) > workCheckpointMaxArray || len(p.Checks) > workCheckpointMaxArray || len(p.SourceRefs) > workCheckpointMaxArray {
+		return false
+	}
+	for _, f := range p.Files {
+		if !validWorkCheckpointString(f.Path, workCheckpointMaxString) || !sourceHashPattern.MatchString(f.SHA256) {
+			return false
+		}
+	}
+	for _, c := range p.Checks {
+		if !validWorkCheckpointString(c.Command, workCheckpointMaxString) || !validWorkCheckpointOutcome(c.Outcome) ||
+			c.Summary != "" && !validWorkCheckpointString(c.Summary, workCheckpointMaxString) {
+			return false
+		}
+	}
+	for _, ref := range p.SourceRefs {
+		if !validWorkCheckpointRef(ref) {
+			return false
+		}
+	}
+	return true
 }
 
 func isWorkCheckpoint(r Record) bool {
@@ -350,25 +363,11 @@ func (s *Service) SaveWorkCheckpoint(ctx context.Context, token string, in WorkC
 	var archiveHeaders []Record
 	var archiveRefs []ArchiveMessageRef
 	if !replayOnly {
-		archiveHeaders, archiveRefs, err = s.validateArchiveMessageRefs(ctx, token, in.Scope, in.ArchiveMessages, "", "")
+		archiveHeaders, archiveRefs, err = s.workCheckpointArchives(ctx, token, in, d)
 		if err != nil {
 			return WorkCheckpointSaveOutput{}, err
 		}
-		for i, ref := range archiveRefs {
-			if ref.SHA256 != in.ArchiveMessages[i].SHA256 {
-				return WorkCheckpointSaveOutput{}, ErrConflict
-			}
-		}
-		for _, h := range archiveHeaders {
-			who, err := s.authorize(ctx, token, "read:"+colSessionArchives, in.Scope, h.ID, "")
-			if err != nil {
-				return WorkCheckpointSaveOutput{}, err
-			}
-			if who.PrincipalID != d.PrincipalID || who.Role != d.Role {
-				return WorkCheckpointSaveOutput{}, ErrDenied
-			}
-		}
-	} else if prior.PrivacyQuarantined || prior.ContentErased || !isWorkCheckpointReceipt(prior) || prior.CreatedBy != d.PrincipalID || prior.WorkCheckpoint.RequestHash != requestHash {
+	} else if !workCheckpointReceiptMatches(prior, d.PrincipalID, requestHash) {
 		return WorkCheckpointSaveOutput{}, ErrConflict
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
@@ -383,8 +382,7 @@ func (s *Service) SaveWorkCheckpoint(ctx context.Context, token string, in WorkC
 		case err == nil:
 			// Same event replay: only an identical payload returns the revision
 			// recorded then; anything else is a conflicting request.
-			if previous.PrivacyQuarantined || previous.ContentErased || !isWorkCheckpointReceipt(previous) || previous.CreatedBy != d.PrincipalID ||
-				previous.WorkCheckpoint.ReceiptTargetID != in.ID || previous.WorkCheckpoint.RequestHash != requestHash {
+			if !workCheckpointReceiptMatches(previous, d.PrincipalID, requestHash) || previous.WorkCheckpoint.ReceiptTargetID != in.ID {
 				return ErrConflict
 			}
 			out = WorkCheckpointSaveOutput{ID: in.ID, Revision: previous.WorkCheckpoint.ReceiptRevision, Authority: AuthorityDataOnly}
@@ -396,30 +394,9 @@ func (s *Service) SaveWorkCheckpoint(ctx context.Context, token string, in WorkC
 			return ErrConflict
 		}
 		current, err := tx.Get(ctx, colWorkCheckpoints, in.Scope, in.ID)
-		var record Record
-		created := false
-		switch {
-		case errors.Is(err, ErrNotFound):
-			if in.ExpectedRevision != 0 {
-				return ErrConflict
-			}
-			record = Record{ID: in.ID, Scope: in.Scope, Kind: kindWorkCheckpoint, Status: statusActive, Revision: 1,
-				CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
-				WorkCheckpoint: &WorkCheckpoint{Package: &pkg}}
-			created = true
-		case err != nil:
+		record, created, err := nextWorkCheckpointRecord(current, err, in, &pkg, now, d)
+		if err != nil {
 			return err
-		default:
-			if !isWorkCheckpoint(current) || !live(current) || current.ContentErased {
-				return ErrConflict
-			}
-			if current.Revision != in.ExpectedRevision {
-				return ErrConflict
-			}
-			record = current
-			record.Revision = current.Revision + 1
-			record.UpdatedAt = now
-			record.WorkCheckpoint = &WorkCheckpoint{Package: &pkg}
 		}
 		if err := s.fenceSourceArchives(ctx, tx, archiveHeaders); err != nil {
 			return err
@@ -465,6 +442,63 @@ func (s *Service) SaveWorkCheckpoint(ctx context.Context, token string, in WorkC
 		return WorkCheckpointSaveOutput{}, e
 	}
 	return out, nil
+}
+
+// workCheckpointArchives validates the cited archive messages and that the
+// caller may read every archive they come from.
+func (s *Service) workCheckpointArchives(ctx context.Context, token string, in WorkCheckpointSaveInput, d Decision) ([]Record, []ArchiveMessageRef, error) {
+	archiveHeaders, archiveRefs, err := s.validateArchiveMessageRefs(ctx, token, in.Scope, in.ArchiveMessages, "", "")
+	if err != nil {
+		return nil, nil, err
+	}
+	for i, ref := range archiveRefs {
+		if ref.SHA256 != in.ArchiveMessages[i].SHA256 {
+			return nil, nil, ErrConflict
+		}
+	}
+	for _, h := range archiveHeaders {
+		who, err := s.authorize(ctx, token, "read:"+colSessionArchives, in.Scope, h.ID, "")
+		if err != nil {
+			return nil, nil, err
+		}
+		if who.PrincipalID != d.PrincipalID || who.Role != d.Role {
+			return nil, nil, ErrDenied
+		}
+	}
+	return archiveHeaders, archiveRefs, nil
+}
+
+// workCheckpointReceiptMatches reports whether r is a usable receipt recorded
+// by principal for the same request.
+func workCheckpointReceiptMatches(r Record, principal, requestHash string) bool {
+	return !r.PrivacyQuarantined && !r.ContentErased && isWorkCheckpointReceipt(r) && r.CreatedBy == principal && r.WorkCheckpoint.RequestHash == requestHash
+}
+
+// nextWorkCheckpointRecord builds the record to store from the current row
+// (or its absence), enforcing the expected revision.
+func nextWorkCheckpointRecord(current Record, err error, in WorkCheckpointSaveInput, pkg *WorkCheckpointPackage, now time.Time, d Decision) (Record, bool, error) {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		if in.ExpectedRevision != 0 {
+			return Record{}, false, ErrConflict
+		}
+		return Record{ID: in.ID, Scope: in.Scope, Kind: kindWorkCheckpoint, Status: statusActive, Revision: 1,
+			CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
+			WorkCheckpoint: &WorkCheckpoint{Package: pkg}}, true, nil
+	case err != nil:
+		return Record{}, false, err
+	}
+	if !isWorkCheckpoint(current) || !live(current) || current.ContentErased {
+		return Record{}, false, ErrConflict
+	}
+	if current.Revision != in.ExpectedRevision {
+		return Record{}, false, ErrConflict
+	}
+	record := current
+	record.Revision = current.Revision + 1
+	record.UpdatedAt = now
+	record.WorkCheckpoint = &WorkCheckpoint{Package: pkg}
+	return record, false, nil
 }
 
 // GetWorkCheckpoint returns the package as untrusted data and audits the read
@@ -543,23 +577,7 @@ func (s *Service) ListWorkCheckpoints(ctx context.Context, token string, in Work
 	}
 	out := WorkCheckpointListOutput{Items: []WorkCheckpointListItem{}, Authority: AuthorityDataOnly}
 	for _, r := range rows {
-		if !sameScope(r.Scope, in.Scope) {
-			return WorkCheckpointListOutput{}, ErrUnavailable
-		}
-		if !isWorkCheckpoint(r) {
-			return WorkCheckpointListOutput{}, ErrConflict
-		}
-		row, e := s.authorize(ctx, token, "read:"+colWorkCheckpoints, in.Scope, r.ID, "")
-		if e != nil {
-			return WorkCheckpointListOutput{}, e
-		}
-		if row.PrincipalID != d.PrincipalID || row.Role != d.Role {
-			return WorkCheckpointListOutput{}, ErrDenied
-		}
-		if !live(r) || r.ContentErased {
-			return WorkCheckpointListOutput{}, ErrConflict
-		}
-		if e := s.authorizeWorkCheckpointSourceRefs(ctx, token, in.Scope, r.WorkCheckpoint.Package.SourceRefs, d); e != nil {
+		if e := s.checkWorkCheckpointListRow(ctx, token, in.Scope, d, r); e != nil {
 			return WorkCheckpointListOutput{}, e
 		}
 		out.Items = append(out.Items, workCheckpointListItem(r))
@@ -591,6 +609,27 @@ func (s *Service) ListWorkCheckpoints(ctx context.Context, token string, in Work
 		out.Next = out.Items[len(out.Items)-1].ID
 	}
 	return out, nil
+}
+
+// checkWorkCheckpointListRow re-authorizes one listed row for the bound actor.
+func (s *Service) checkWorkCheckpointListRow(ctx context.Context, token string, scope Scope, d Decision, r Record) error {
+	if !sameScope(r.Scope, scope) {
+		return ErrUnavailable
+	}
+	if !isWorkCheckpoint(r) {
+		return ErrConflict
+	}
+	row, e := s.authorize(ctx, token, "read:"+colWorkCheckpoints, scope, r.ID, "")
+	if e != nil {
+		return e
+	}
+	if row.PrincipalID != d.PrincipalID || row.Role != d.Role {
+		return ErrDenied
+	}
+	if !live(r) || r.ContentErased {
+		return ErrConflict
+	}
+	return s.authorizeWorkCheckpointSourceRefs(ctx, token, scope, r.WorkCheckpoint.Package.SourceRefs, d)
 }
 
 var _ WorkCheckpointStore = (*Postgres)(nil)

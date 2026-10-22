@@ -603,13 +603,8 @@ func subscriptionExhausted(p *Providers, provider, model string, now time.Time) 
 // else (or when Clef cannot answer) the fixed model, else the first in order.
 func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecideInput) (RoutingDecision, error) {
 	in.Task = strings.TrimSpace(in.Task)
-	if !validScope(in.Scope) || in.Task == "" || len(in.Task) > 20000 || len(in.Exclude) > 40 || len(in.Providers) > 40 {
+	if !validRoutingDecideInput(in) {
 		return RoutingDecision{}, ErrInvalid
-	}
-	for _, p := range in.Providers {
-		if !providerIDRe.MatchString(p) {
-			return RoutingDecision{}, ErrInvalid
-		}
 	}
 	d, err := s.authorize(ctx, token, "route:models", in.Scope, routingID(in.Scope), in.Task)
 	if err != nil {
@@ -625,24 +620,74 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 	}
 	var group *RoutingGroup
 	if in.Group != "" {
-		groups := routingGroupsView(p, doc, 0).Items
-		i := slices.IndexFunc(groups, func(g RoutingGroup) bool { return g.ID == in.Group })
-		switch {
-		case i >= 0:
-			group = &groups[i]
-		case in.Group == AutoGroupID:
-			auto := RoutingGroup{ID: AutoGroupID, Name: "자동", Enabled: true, Strategy: "smart"}
-			for _, m := range routingModels(p, doc, 0) {
-				auto.Members = append(auto.Members, m.ID)
-			}
-			group = &auto
-		default:
-			return RoutingDecision{}, ErrNotFound
-		}
-		if !group.Enabled {
-			return RoutingDecision{}, ErrUnavailable
+		if group, err = routeGroup(p, doc, in.Group); err != nil {
+			return RoutingDecision{}, err
 		}
 	}
+	models := routeCandidates(p, doc, group, in)
+	if len(models) == 0 {
+		return RoutingDecision{}, ErrUnavailable
+	}
+	byID := func(id string) int { return slices.IndexFunc(models, func(m routingModel) bool { return m.ID == id }) }
+	pick, how, ms := byID(doc.DefaultModel), "fixed", int64(0)
+	if group != nil {
+		pick = 0
+	}
+	if doc.AutoRouting && (group == nil || group.Strategy == "smart") {
+		how = "default"
+		if s.ModelPicker != nil && len(models) > 1 && d.ExternalTransfer && d.ContentSafe {
+			pick, how, ms = s.clefRoute(ctx, in, group, models, byID, pick, how)
+		}
+	}
+	if pick < 0 {
+		pick = 0
+	}
+	chosen := models[pick]
+	out := RoutingDecision{Group: in.Group, ID: chosen.ID, Model: chosen.Model, Provider: strings.SplitN(chosen.ID, "/", 2)[0], Family: chosen.Family,
+		Decision: how, ClassifierMS: ms, Fallbacks: []string{}, Authority: AuthorityDataOnly}
+	if doc.AutoFailover {
+		out.Fallbacks = routeFallbacks(doc, group, models, chosen.ID, byID, out.Fallbacks)
+	}
+	return out, nil
+}
+
+func validRoutingDecideInput(in RoutingDecideInput) bool {
+	if !validScope(in.Scope) || in.Task == "" || len(in.Task) > 20000 || len(in.Exclude) > 40 || len(in.Providers) > 40 {
+		return false
+	}
+	for _, p := range in.Providers {
+		if !providerIDRe.MatchString(p) {
+			return false
+		}
+	}
+	return true
+}
+
+// routeGroup resolves the requested group, including the implicit auto group
+// over every routing model.
+func routeGroup(p *Providers, doc Routing, id string) (*RoutingGroup, error) {
+	var group *RoutingGroup
+	groups := routingGroupsView(p, doc, 0).Items
+	i := slices.IndexFunc(groups, func(g RoutingGroup) bool { return g.ID == id })
+	switch {
+	case i >= 0:
+		group = &groups[i]
+	case id == AutoGroupID:
+		auto := RoutingGroup{ID: AutoGroupID, Name: "자동", Enabled: true, Strategy: "smart"}
+		for _, m := range routingModels(p, doc, 0) {
+			auto.Members = append(auto.Members, m.ID)
+		}
+		group = &auto
+	default:
+		return nil, ErrNotFound
+	}
+	if !group.Enabled {
+		return nil, ErrUnavailable
+	}
+	return group, nil
+}
+
+func routeCandidates(p *Providers, doc Routing, group *RoutingGroup, in RoutingDecideInput) []routingModel {
 	candidates := routingModels(p, doc, 0)
 	if group != nil {
 		candidates = routingGroupModels(candidates, *group)
@@ -656,53 +701,41 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 			models = append(models, m)
 		}
 	}
-	if len(models) == 0 {
-		return RoutingDecision{}, ErrUnavailable
+	return models
+}
+
+// clefRoute asks Clef to pick among models, keeping pick and how when it
+// cannot answer.
+func (s *Service) clefRoute(ctx context.Context, in RoutingDecideInput, group *RoutingGroup, models []routingModel, byID func(string) int, pick int, how string) (int, string, int64) {
+	options := make([]ModelOption, len(models))
+	for i, m := range models {
+		options[i] = ModelOption{ID: m.ID, Name: m.Name, When: m.When}
 	}
-	byID := func(id string) int { return slices.IndexFunc(models, func(m routingModel) bool { return m.ID == id }) }
-	pick, how, ms := byID(doc.DefaultModel), "fixed", int64(0)
+	started := time.Now()
+	if choice, ok := s.pickModel(ctx, in.Scope, in.Task, options); ok && (group == nil || byID(choice) >= 0) {
+		pick, how = byID(choice), "clef"
+	}
+	return pick, how, time.Since(started).Milliseconds()
+}
+
+func routeFallbacks(doc Routing, group *RoutingGroup, models []routingModel, chosenID string, byID func(string) int, fallbacks []string) []string {
+	order := slices.Clone(doc.Failover.Order)
 	if group != nil {
-		pick = 0
+		order = nil
 	}
-	if doc.AutoRouting && (group == nil || group.Strategy == "smart") {
-		how = "default"
-		if s.ModelPicker != nil && len(models) > 1 && d.ExternalTransfer && d.ContentSafe {
-			options := make([]ModelOption, len(models))
-			for i, m := range models {
-				options[i] = ModelOption{ID: m.ID, Name: m.Name, When: m.When}
-			}
-			started := time.Now()
-			if choice, ok := s.pickModel(ctx, in.Scope, in.Task, options); ok && (group == nil || byID(choice) >= 0) {
-				pick, how = byID(choice), "clef"
-			}
-			ms = time.Since(started).Milliseconds()
+	order = append(order, func() []string {
+		ids := []string{}
+		for _, m := range models {
+			ids = append(ids, m.ID)
+		}
+		return ids
+	}()...)
+	for _, id := range order {
+		if len(fallbacks) < routingFallbacks && id != chosenID && byID(id) >= 0 && !slices.Contains(fallbacks, id) {
+			fallbacks = append(fallbacks, id)
 		}
 	}
-	if pick < 0 {
-		pick = 0
-	}
-	chosen := models[pick]
-	out := RoutingDecision{Group: in.Group, ID: chosen.ID, Model: chosen.Model, Provider: strings.SplitN(chosen.ID, "/", 2)[0], Family: chosen.Family,
-		Decision: how, ClassifierMS: ms, Fallbacks: []string{}, Authority: AuthorityDataOnly}
-	if doc.AutoFailover {
-		order := slices.Clone(doc.Failover.Order)
-		if group != nil {
-			order = nil
-		}
-		order = append(order, func() []string {
-			ids := []string{}
-			for _, m := range models {
-				ids = append(ids, m.ID)
-			}
-			return ids
-		}()...)
-		for _, id := range order {
-			if len(out.Fallbacks) < routingFallbacks && id != chosen.ID && byID(id) >= 0 && !slices.Contains(out.Fallbacks, id) {
-				out.Fallbacks = append(out.Fallbacks, id)
-			}
-		}
-	}
-	return out, nil
+	return fallbacks
 }
 
 // pickerIdentity names the provider and model a routing decision is billed under (Clef when unknown).
@@ -741,10 +774,7 @@ type RoutingCallInput struct {
 
 func (s *Service) RecordRoutingCall(ctx context.Context, token string, in RoutingCallInput) (Record, error) {
 	c := in.Call
-	if !validScope(in.Scope) || !validRoutingModelID(c.Model) || c.Replaced != "" && !validRoutingModelID(c.Replaced) || !slices.Contains(routingDecisions, c.Decision) ||
-		c.LatencyMS < 0 || c.LatencyMS > 864e5 || c.ClassifierMS < 0 || c.ClassifierMS > 6e5 || c.InputTokens < 0 || c.OutputTokens < 0 ||
-		c.CostUSD != nil && (math.IsNaN(*c.CostUSD) || *c.CostUSD < 0 || *c.CostUSD > 1e4) || !routingErrorRe.MatchString(c.Error) ||
-		c.InputTokens > 1e8 || c.OutputTokens > 1e8 || !validRoutingOrigin(c.Origin) {
+	if !validScope(in.Scope) || invalidRoutingCall(c) {
 		return Record{}, ErrInvalid
 	}
 	d, err := s.authorize(ctx, token, "write:"+colRoutingCalls, in.Scope, "", "")
@@ -764,6 +794,13 @@ func (s *Service) RecordRoutingCall(ctx context.Context, token string, in Routin
 	r := Record{ID: ID(), Scope: in.Scope, Kind: colRoutingCalls, Status: statusActive, Revision: 1, Text: c.Model, RoutingCall: &c,
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
 	return r, s.Repo.Insert(ctx, colRoutingCalls, r)
+}
+
+func invalidRoutingCall(c RoutingCall) bool {
+	return !validRoutingModelID(c.Model) || c.Replaced != "" && !validRoutingModelID(c.Replaced) || !slices.Contains(routingDecisions, c.Decision) ||
+		c.LatencyMS < 0 || c.LatencyMS > 864e5 || c.ClassifierMS < 0 || c.ClassifierMS > 6e5 || c.InputTokens < 0 || c.OutputTokens < 0 ||
+		c.CostUSD != nil && (math.IsNaN(*c.CostUSD) || *c.CostUSD < 0 || *c.CostUSD > 1e4) || !routingErrorRe.MatchString(c.Error) ||
+		c.InputTokens > 1e8 || c.OutputTokens > 1e8 || !validRoutingOrigin(c.Origin)
 }
 
 // ------------------------------------------------------------------ overview
@@ -844,48 +881,10 @@ func (s *Service) RoutingOverview(ctx context.Context, token string, scope Scope
 	now := time.Now().UTC()
 	from, prevFrom := now.Add(-rg.span), now.Add(-2*rg.span)
 	steps := int(rg.span / rg.step)
-	buckets := make([]callStats, steps)
-	var all, prev, lastMin callStats
-	var classifier callStats
-	perModel, perFamily, clefByFamily := map[string]*callStats{}, map[string]int{}, map[string]int{}
-	events := []RoutingEvent{}
-	oldest := now
-	for _, r := range rows {
-		c := r.RoutingCall
-		if c == nil || systemCall(c) {
-			continue
-		}
-		oldest = r.CreatedAt
-		if r.CreatedAt.Before(from) {
-			if !r.CreatedAt.Before(prevFrom) {
-				prev.add(*c)
-			}
-			continue
-		}
-		all.add(*c)
-		if now.Sub(r.CreatedAt) <= 5*time.Minute {
-			lastMin.add(*c)
-		}
-		if i := int(r.CreatedAt.Sub(from) / rg.step); i >= 0 && i < steps {
-			buckets[i].add(*c)
-		}
-		if perModel[c.Model] == nil {
-			perModel[c.Model] = &callStats{}
-		}
-		perModel[c.Model].add(*c)
-		perFamily[c.Family]++
-		if c.Decision == "clef" {
-			clefByFamily[c.Family]++
-			classifier.lat = append(classifier.lat, c.ClassifierMS)
-		}
-		if c.Decision == "failover" && c.Replaced != "" {
-			events = append(events, RoutingEvent{At: r.CreatedAt, Kind: "incident", Title: c.Replaced + " 실패 → " + c.Model + "로 넘김"})
-		} else if !c.OK {
-			events = append(events, RoutingEvent{At: r.CreatedAt, Kind: "incident", Title: c.Model + " 실패", Detail: c.Error})
-		}
-	}
+	t := tallyRoutingCalls(rows, now, from, prevFrom, rg.step, steps)
+	all, prev, events := t.all, t.prev, t.events
 	// The previous window is only comparable when the read reached back far enough.
-	prevOK := len(rows) < routingCallsRead || !oldest.After(prevFrom)
+	prevOK := len(rows) < routingCallsRead || !t.oldest.After(prevFrom)
 	for _, e := range doc.Events {
 		if !e.At.Before(from) {
 			events = append(events, e)
@@ -896,21 +895,107 @@ func (s *Service) RoutingOverview(ctx context.Context, token string, scope Scope
 		events = events[:50]
 	}
 
+	points, incident := routingSeries(t.buckets, events, from, rg.step, rg.per)
+	models := routingModelRows(routingModels(p, doc, rev), t.perModel, doc)
+	families := routingFamilyRows(t.perFamily, t.clefByFamily, all.n)
+
+	p50Delta, successDelta := routingDeltas(all, prev, prevOK)
+	classifierName := ""
+	if s.ModelPicker != nil {
+		_, classifierName = pickerIdentity(s.ModelPicker)
+	}
+	out := map[string]any{
+		"kpi": map[string]any{"requests": all.n, "requests_now_per_min": math.Round(10*float64(t.lastMin.n)/5) / 10,
+			"requests_delta_pct": delta(float64(all.n), float64(prev.n), prevOK), "p50_ms": all.pct(0.5), "p50_delta_ms": p50Delta,
+			"p95_ms": all.pct(0.95), "success_rate": all.success(), "success_rate_delta_pp": successDelta, "failures": all.fails,
+			"cost_usd": all.cost, "cost_delta_pct": delta(all.cost, prev.cost, prevOK), "budget_usd": nil},
+		"series":    map[string]any{"points": points},
+		"families":  families,
+		"models":    models,
+		"events":    events,
+		"policy":    policyView(doc, rev, classifierName, t.classifier.pct(0.5), lastClefDecision(rows)),
+		"authority": AuthorityDataOnly,
+		"gateway":   gatewayView(rows, from), // 본대화·부속 호출 and turns (routing_gateway_view.go)
+	}
+	if incident != nil {
+		out["series"].(map[string]any)["incident"] = incident
+	}
+	if all.n > 0 && len(rows) == routingCallsRead && t.oldest.After(from) {
+		out["families_note"] = "최근 1000건만 셌어요."
+	}
+	return out, nil
+}
+
+// routingTally holds the routing calls counted for one overview window.
+type routingTally struct {
+	buckets                 []callStats
+	all, prev, lastMin      callStats
+	classifier              callStats
+	perModel                map[string]*callStats
+	perFamily, clefByFamily map[string]int
+	events                  []RoutingEvent
+	oldest                  time.Time
+}
+
+func tallyRoutingCalls(rows []Record, now, from, prevFrom time.Time, step time.Duration, steps int) routingTally {
+	t := routingTally{buckets: make([]callStats, steps), perModel: map[string]*callStats{}, perFamily: map[string]int{}, clefByFamily: map[string]int{},
+		events: []RoutingEvent{}, oldest: now}
+	for _, r := range rows {
+		c := r.RoutingCall
+		if c == nil || systemCall(c) {
+			continue
+		}
+		t.oldest = r.CreatedAt
+		if r.CreatedAt.Before(from) {
+			if !r.CreatedAt.Before(prevFrom) {
+				t.prev.add(*c)
+			}
+			continue
+		}
+		t.all.add(*c)
+		if now.Sub(r.CreatedAt) <= 5*time.Minute {
+			t.lastMin.add(*c)
+		}
+		if i := int(r.CreatedAt.Sub(from) / step); i >= 0 && i < steps {
+			t.buckets[i].add(*c)
+		}
+		if t.perModel[c.Model] == nil {
+			t.perModel[c.Model] = &callStats{}
+		}
+		t.perModel[c.Model].add(*c)
+		t.perFamily[c.Family]++
+		if c.Decision == "clef" {
+			t.clefByFamily[c.Family]++
+			t.classifier.lat = append(t.classifier.lat, c.ClassifierMS)
+		}
+		if c.Decision == "failover" && c.Replaced != "" {
+			t.events = append(t.events, RoutingEvent{At: r.CreatedAt, Kind: "incident", Title: c.Replaced + " 실패 → " + c.Model + "로 넘김"})
+		} else if !c.OK {
+			t.events = append(t.events, RoutingEvent{At: r.CreatedAt, Kind: "incident", Title: c.Model + " 실패", Detail: c.Error})
+		}
+	}
+	return t
+}
+
+func routingSeries(buckets []callStats, events []RoutingEvent, from time.Time, step time.Duration, per float64) ([]map[string]any, map[string]any) {
+	steps := len(buckets)
 	points := make([]map[string]any, steps)
 	var incident map[string]any
 	for i, b := range buckets {
-		points[i] = map[string]any{"t": from.Add(time.Duration(i) * rg.step), "traffic": math.Round(10*float64(b.n)/rg.per) / 10,
+		points[i] = map[string]any{"t": from.Add(time.Duration(i) * step), "traffic": math.Round(10*float64(b.n)/per) / 10,
 			"p50": b.pct(0.5), "p95": b.pct(0.95), "success_rate": b.success(), "cost": b.cost}
 	}
 	for _, e := range events {
 		if e.Kind == "incident" {
-			incident = map[string]any{"index": min(steps-1, int(e.At.Sub(from)/rg.step)), "label": e.Title}
+			incident = map[string]any{"index": min(steps-1, int(e.At.Sub(from)/step)), "label": e.Title}
 			break
 		}
 	}
+	return points, incident
+}
 
+func routingModelRows(listed []routingModel, perModel map[string]*callStats, doc Routing) []map[string]any {
 	models := []map[string]any{}
-	listed := routingModels(p, doc, rev)
 	ids := []string{}
 	for _, m := range listed {
 		ids = append(ids, m.ID)
@@ -938,16 +1023,23 @@ func (s *Service) RoutingOverview(ctx context.Context, token string, scope Scope
 		models = append(models, map[string]any{"id": id, "name": name, "family": modelFamily(pid, name), "requests": st.n, "p50_ms": st.pct(0.5),
 			"p95_ms": st.pct(0.95), "success_rate": st.success(), "cost_usd": st.cost, "status": status})
 	}
+	return models
+}
+
+func routingFamilyRows(perFamily, clefByFamily map[string]int, total int) []map[string]any {
 	families := []map[string]any{}
 	for f, n := range perFamily {
 		note := ""
 		if clefByFamily[f] > 0 {
 			note = "Clef가 보낸 일 " + strconv.Itoa(clefByFamily[f]) + "건"
 		}
-		families = append(families, map[string]any{"family": f, "requests": n, "share": math.Round(1000*float64(n)/float64(all.n)) / 10, "note": note})
+		families = append(families, map[string]any{"family": f, "requests": n, "share": math.Round(1000*float64(n)/float64(total)) / 10, "note": note})
 	}
 	sort.Slice(families, func(i, j int) bool { return families[i]["requests"].(int) > families[j]["requests"].(int) })
+	return families
+}
 
+func routingDeltas(all, prev callStats, prevOK bool) (any, any) {
 	p50, _ := all.pct(0.5).(int64)
 	prevP50, _ := prev.pct(0.5).(int64)
 	var p50Delta any
@@ -960,37 +1052,16 @@ func (s *Service) RoutingOverview(ctx context.Context, token string, scope Scope
 			successDelta = math.Round(10*(a-b)) / 10
 		}
 	}
-	classifierName := ""
-	if s.ModelPicker != nil {
-		_, classifierName = pickerIdentity(s.ModelPicker)
-	}
-	lastDecision := ""
+	return p50Delta, successDelta
+}
+
+func lastClefDecision(rows []Record) string {
 	for _, r := range rows { // newest first
 		if c := r.RoutingCall; c != nil && !systemCall(c) && c.Decision == "clef" {
-			lastDecision = "Clef → " + c.Family
-			break
+			return "Clef → " + c.Family
 		}
 	}
-	out := map[string]any{
-		"kpi": map[string]any{"requests": all.n, "requests_now_per_min": math.Round(10*float64(lastMin.n)/5) / 10,
-			"requests_delta_pct": delta(float64(all.n), float64(prev.n), prevOK), "p50_ms": all.pct(0.5), "p50_delta_ms": p50Delta,
-			"p95_ms": all.pct(0.95), "success_rate": all.success(), "success_rate_delta_pp": successDelta, "failures": all.fails,
-			"cost_usd": all.cost, "cost_delta_pct": delta(all.cost, prev.cost, prevOK), "budget_usd": nil},
-		"series":    map[string]any{"points": points},
-		"families":  families,
-		"models":    models,
-		"events":    events,
-		"policy":    policyView(doc, rev, classifierName, classifier.pct(0.5), lastDecision),
-		"authority": AuthorityDataOnly,
-		"gateway":   gatewayView(rows, from), // 본대화·부속 호출 and turns (routing_gateway_view.go)
-	}
-	if incident != nil {
-		out["series"].(map[string]any)["incident"] = incident
-	}
-	if all.n > 0 && len(rows) == routingCallsRead && oldest.After(from) {
-		out["families_note"] = "최근 1000건만 셌어요."
-	}
-	return out, nil
+	return ""
 }
 
 // ------------------------------------------------------------------ HTTP

@@ -97,41 +97,14 @@ func (s *Service) RecentMemoryUsage(ctx context.Context, token string, scope Sco
 	}
 	out := UsagePage{Items: []UsageEntry{}, Authority: AuthorityDataOnly, MeasurementBasis: "server_return", ActualUseStatus: "not_measured"}
 	for _, r := range rows {
-		if r.Scope != scope || r.Kind != "context_usage" || r.Status != "done" || r.Usage == nil {
-			return UsagePage{}, ErrUnavailable
-		}
-		d, e := s.authorize(ctx, token, "read:usage", scope, r.ID, "")
-		if e != nil {
+		if e := s.checkMemoryUsageRow(ctx, token, scope, who, r); e != nil {
 			return UsagePage{}, e
 		}
-		if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
-			return UsagePage{}, ErrDenied
-		}
-		if r.Usage.Run != nil {
-			if r.Usage.Run.Collection != "agent_runs" || r.Usage.Run.Revision < 1 {
-				return UsagePage{}, ErrUnavailable
-			}
-			d, e = s.authorize(ctx, token, "read:agent_runs", scope, r.Usage.Run.ID, "")
-			if e != nil {
-				return UsagePage{}, e
-			}
-			if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
-				return UsagePage{}, ErrDenied
-			}
-		}
-		found := false
-		for _, item := range r.Usage.Items {
-			if item.Memory.Collection == "memories" && item.Memory.ID == id {
-				if found || item.Memory.Revision < 1 || item.Rank < 1 || item.Rank > 50 {
-					return UsagePage{}, ErrUnavailable
-				}
-				out.Items = append(out.Items, UsageEntry{ContextID: r.ID, CreatedAt: r.CreatedAt, RequestedBy: r.CreatedBy, Memory: item.Memory, Rank: item.Rank, Score: item.Score, Lanes: item.Lanes, Run: r.Usage.Run})
-				found = true
-			}
-		}
-		if !found {
+		entry, ok := memoryUsageEntry(r, id)
+		if !ok {
 			return UsagePage{}, ErrUnavailable
 		}
+		out.Items = append(out.Items, entry)
 	}
 	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		return audit(ctx, tx, scope, who.PrincipalID, "read:memory_usage", id)
@@ -139,6 +112,49 @@ func (s *Service) RecentMemoryUsage(ctx context.Context, token string, scope Sco
 		return UsagePage{}, e
 	}
 	return out, nil
+}
+
+// checkMemoryUsageRow checks one receipt and that the caller may read it and its run.
+func (s *Service) checkMemoryUsageRow(ctx context.Context, token string, scope Scope, who Decision, r Record) error {
+	if r.Scope != scope || r.Kind != "context_usage" || r.Status != "done" || r.Usage == nil {
+		return ErrUnavailable
+	}
+	d, e := s.authorize(ctx, token, "read:usage", scope, r.ID, "")
+	if e != nil {
+		return e
+	}
+	if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
+		return ErrDenied
+	}
+	if r.Usage.Run != nil {
+		if r.Usage.Run.Collection != "agent_runs" || r.Usage.Run.Revision < 1 {
+			return ErrUnavailable
+		}
+		d, e = s.authorize(ctx, token, "read:agent_runs", scope, r.Usage.Run.ID, "")
+		if e != nil {
+			return e
+		}
+		if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
+			return ErrDenied
+		}
+	}
+	return nil
+}
+
+// memoryUsageEntry is the one item of a receipt that names memory id.
+func memoryUsageEntry(r Record, id string) (UsageEntry, bool) {
+	var entry UsageEntry
+	found := false
+	for _, item := range r.Usage.Items {
+		if item.Memory.Collection == "memories" && item.Memory.ID == id {
+			if found || item.Memory.Revision < 1 || item.Rank < 1 || item.Rank > 50 {
+				return UsageEntry{}, false
+			}
+			entry = UsageEntry{ContextID: r.ID, CreatedAt: r.CreatedAt, RequestedBy: r.CreatedBy, Memory: item.Memory, Rank: item.Rank, Score: item.Score, Lanes: item.Lanes, Run: r.Usage.Run}
+			found = true
+		}
+	}
+	return entry, found
 }
 
 // MemoryUsageCount is one memory's use in a recent window: Recent counts uses in the shorter window.
@@ -295,22 +311,13 @@ func (s *Service) RecentRecalls(ctx context.Context, token string, scope Scope, 
 		}
 		entry := RecallEntry{ContextID: r.ID, CreatedAt: r.CreatedAt, RequestedBy: r.CreatedBy, Purpose: r.Usage.Purpose, ProjectKey: r.Usage.ProjectKey, Items: []MemoryUse{}}
 		for _, it := range r.Usage.Items {
-			if it.Memory.Collection != colMemories || !validRunLabel(it.Memory.ID, 256) || containsSecret(it.Memory.ID) {
-				continue
+			ok, e := s.recallItemVisible(ctx, token, scope, who, perRow, it)
+			if e != nil {
+				return RecallPage{}, e
 			}
-			if perRow {
-				d, e := s.authorize(ctx, token, "read:memories", scope, it.Memory.ID, "")
-				if errors.Is(e, ErrDenied) {
-					continue
-				}
-				if e != nil {
-					return RecallPage{}, e
-				}
-				if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
-					return RecallPage{}, ErrDenied
-				}
+			if ok {
+				entry.Items = append(entry.Items, it)
 			}
-			entry.Items = append(entry.Items, it)
 		}
 		out.Items = append(out.Items, entry)
 	}
@@ -320,4 +327,25 @@ func (s *Service) RecentRecalls(ctx context.Context, token string, scope Scope, 
 		return RecallPage{}, e
 	}
 	return out, nil
+}
+
+// recallItemVisible reports whether a returned memory may be listed; a memory the
+// caller may not read is left out, not an error.
+func (s *Service) recallItemVisible(ctx context.Context, token string, scope Scope, who Decision, perRow bool, it MemoryUse) (bool, error) {
+	if it.Memory.Collection != colMemories || !validRunLabel(it.Memory.ID, 256) || containsSecret(it.Memory.ID) {
+		return false, nil
+	}
+	if perRow {
+		d, e := s.authorize(ctx, token, "read:memories", scope, it.Memory.ID, "")
+		if errors.Is(e, ErrDenied) {
+			return false, nil
+		}
+		if e != nil {
+			return false, e
+		}
+		if d.PrincipalID != who.PrincipalID || d.Role != who.Role {
+			return false, ErrDenied
+		}
+	}
+	return true, nil
 }

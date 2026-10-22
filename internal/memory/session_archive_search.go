@@ -89,25 +89,34 @@ func decodeArchiveCursor(in ArchiveSearchInput) (archiveSearchCursor, error) {
 	c = archiveSearchCursor{}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&c) != nil || c.QueryHash != ContentHash(in.Query) || c.ArchiveID != in.ArchiveID || c.After != "" && !sourceHashPattern.MatchString(c.After) {
-		return c, ErrInvalid
-	}
-	if c.Skip && c.Ref.Chunk == 0 && c.Ref.Offset == 0 {
-		return c, ErrInvalid
-	}
-	if c.Ref.MessageSHA256 != "" || c.Ref.RecordKey != "" {
-		return c, ErrInvalid
-	}
-	if c.Ref.ArchiveID != "" && !validArchiveMessageRef(c.Ref) {
-		return c, ErrInvalid
-	}
-	if c.Ref.ArchiveID == "" && (c.Skip || c.Ref.Offset != 0 || c.Ref.Chunk != 0 || c.Ref.SHA256 != "" || c.Ref.SQLiteStep != "") {
-		return c, ErrInvalid
-	}
-	if in.ArchiveID != "" && ((c.Ref.ArchiveID != "" && c.Ref.ArchiveID != in.ArchiveID) || (c.After != "" && c.After != in.ArchiveID)) {
+	if decoder.Decode(&c) != nil || !validArchiveCursor(c, in) {
 		return c, ErrInvalid
 	}
 	return c, nil
+}
+func validArchiveCursor(c archiveSearchCursor, in ArchiveSearchInput) bool {
+	if c.QueryHash != ContentHash(in.Query) || c.ArchiveID != in.ArchiveID || c.After != "" && !sourceHashPattern.MatchString(c.After) {
+		return false
+	}
+	if c.Skip && c.Ref.Chunk == 0 && c.Ref.Offset == 0 {
+		return false
+	}
+	if c.Ref.MessageSHA256 != "" || c.Ref.RecordKey != "" {
+		return false
+	}
+	return validArchiveCursorRef(c, in.ArchiveID)
+}
+func validArchiveCursorRef(c archiveSearchCursor, archiveID string) bool {
+	if c.Ref.ArchiveID != "" && !validArchiveMessageRef(c.Ref) {
+		return false
+	}
+	if c.Ref.ArchiveID == "" && (c.Skip || c.Ref.Offset != 0 || c.Ref.Chunk != 0 || c.Ref.SHA256 != "" || c.Ref.SQLiteStep != "") {
+		return false
+	}
+	if archiveID != "" && ((c.Ref.ArchiveID != "" && c.Ref.ArchiveID != archiveID) || (c.After != "" && c.After != archiveID)) {
+		return false
+	}
+	return true
 }
 func validArchiveMessageRef(ref ArchiveMessageRef) bool {
 	if !validSQLiteStep(ref.SQLiteStep) {
@@ -249,11 +258,7 @@ func archiveSafeMessage(raw []byte) (text, role string, valid bool) {
 	if !utf8.Valid(raw) || json.Unmarshal(raw, &row) != nil {
 		return "", "", false
 	}
-	str := func(m map[string]json.RawMessage, key string) string {
-		var v string
-		_ = json.Unmarshal(m[key], &v)
-		return v
-	}
+	str := archiveRawString
 	ignored := func(m map[string]json.RawMessage) bool {
 		return hiddenArchiveEnvelope(str(m, "channel"), str(m, "type"))
 	}
@@ -299,10 +304,18 @@ func archiveSafeMessage(raw []byte) (text, role string, valid bool) {
 	if ignored(row) {
 		return "", "", true
 	}
-	content := row["content"]
+	return archiveSafeContent(row["content"], role)
+}
+func archiveRawString(m map[string]json.RawMessage, key string) string {
+	var v string
+	_ = json.Unmarshal(m[key], &v)
+	return v
+}
+func archiveSafeContent(content json.RawMessage, role string) (string, string, bool) {
 	if len(content) == 0 {
 		return "", "", true
 	}
+	var text string
 	if json.Unmarshal(content, &text) == nil {
 		return text, role, true
 	}
@@ -313,10 +326,10 @@ func archiveSafeMessage(raw []byte) (text, role string, valid bool) {
 	var b strings.Builder
 	prev := ""
 	for _, block := range blocks {
-		kind := str(block, "type")
+		kind := archiveRawString(block, "type")
 		if host.ArchiveTextBlock(kind) {
 			b.WriteString(host.ArchiveBlockSeparator(prev, kind))
-			b.WriteString(str(block, "text"))
+			b.WriteString(archiveRawString(block, "text"))
 			prev = kind
 		}
 	}
@@ -609,8 +622,13 @@ func (s *Service) ReadSessionArchiveMessage(ctx context.Context, token string, i
 	if in.Ref.SQLiteStep != "" {
 		return empty, ErrInvalid
 	}
+	return s.readArchiveLineMessage(ctx, token, h, in, actor)
+}
+func (s *Service) readArchiveLineMessage(ctx context.Context, token string, h Record, in ArchiveMessageInput, actor Decision) (ArchiveMessageView, error) {
+	empty := ArchiveMessageView{}
 	currentRef := in.Ref
 	var raw []byte
+	var err error
 	if in.Ref.RecordKey != "" && h.SessionArchive.Format != "reconstructed_zcode" {
 		return empty, ErrInvalid
 	}
@@ -632,28 +650,36 @@ func (s *Service) ReadSessionArchiveMessage(ctx context.Context, token string, i
 			return empty, err
 		}
 		if !complete || oversized {
-			view, _, state, largeErr := s.archiveLargeMessage(ctx, h, currentRef, "", in.TextOffset, true)
-			if largeErr != nil {
-				if errors.Is(largeErr, errArchiveZcodeMetadata) || errors.Is(largeErr, io.EOF) || errors.Is(largeErr, io.ErrUnexpectedEOF) {
-					largeErr = ErrInvalid
-				}
-				return empty, largeErr
-			}
-			if state == "secret" {
-				return empty, ErrDenied
-			}
-			if state == "unmatched" {
-				return empty, ErrInvalid
-			}
-			if state != "found" {
-				return empty, ErrNotFound
-			}
-			if err = s.fenceArchiveSearch(ctx, token, []Record{h}, actor); err != nil {
-				return empty, err
-			}
-			return view, nil
+			return s.readArchiveLargeMessage(ctx, token, h, currentRef, in.TextOffset, actor)
 		}
 	}
+	return s.readArchiveRawMessage(ctx, token, h, in, currentRef, raw, actor)
+}
+func (s *Service) readArchiveLargeMessage(ctx context.Context, token string, h Record, ref ArchiveMessageRef, textOffset int, actor Decision) (ArchiveMessageView, error) {
+	empty := ArchiveMessageView{}
+	view, _, state, largeErr := s.archiveLargeMessage(ctx, h, ref, "", textOffset, true)
+	if largeErr != nil {
+		if errors.Is(largeErr, errArchiveZcodeMetadata) || errors.Is(largeErr, io.EOF) || errors.Is(largeErr, io.ErrUnexpectedEOF) {
+			largeErr = ErrInvalid
+		}
+		return empty, largeErr
+	}
+	if state == "secret" {
+		return empty, ErrDenied
+	}
+	if state == "unmatched" {
+		return empty, ErrInvalid
+	}
+	if state != "found" {
+		return empty, ErrNotFound
+	}
+	if err := s.fenceArchiveSearch(ctx, token, []Record{h}, actor); err != nil {
+		return empty, err
+	}
+	return view, nil
+}
+func (s *Service) readArchiveRawMessage(ctx context.Context, token string, h Record, in ArchiveMessageInput, currentRef ArchiveMessageRef, raw []byte, actor Decision) (ArchiveMessageView, error) {
+	empty := ArchiveMessageView{}
 	key := archiveRecordKey(h.SessionArchive.Format, raw)
 	if in.Ref.RecordKey != "" && in.Ref.RecordKey != key {
 		return empty, ErrConflict
@@ -678,7 +704,7 @@ func (s *Service) ReadSessionArchiveMessage(ctx context.Context, token string, i
 	if in.TextOffset >= len(text) || !utf8.RuneStart(text[in.TextOffset]) {
 		return empty, ErrInvalid
 	}
-	if err = s.fenceArchiveSearch(ctx, token, []Record{h}, actor); err != nil {
+	if err := s.fenceArchiveSearch(ctx, token, []Record{h}, actor); err != nil {
 		return empty, err
 	}
 	currentRef.RecordKey = key

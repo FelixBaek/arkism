@@ -111,66 +111,11 @@ func storeWrite(b *bytes.Buffer, v reflect.Value) error {
 		}
 		return storeWrite(b, v.Elem())
 	case reflect.Struct:
-		b.WriteByte('{')
-		for i, f := range storeFields(v.Type()) {
-			fv := v.Field(f.index)
-			if f.omitEmpty && storeEmpty(fv) {
-				continue
-			}
-			if b.Bytes()[b.Len()-1] != '{' {
-				b.WriteByte(',')
-			}
-			_ = i
-			name, _ := json.Marshal(f.name)
-			b.Write(name)
-			b.WriteByte(':')
-			if err := storeWrite(b, fv); err != nil {
-				return err
-			}
-		}
-		b.WriteByte('}')
+		return storeWriteStruct(b, v)
 	case reflect.Map:
-		if v.IsNil() {
-			b.WriteString("null")
-			return nil
-		}
-		if v.Type().Key().Kind() != reflect.String {
-			return fmt.Errorf("store codec: map key %s: %w", v.Type().Key(), ErrInvalid)
-		}
-		b.WriteByte('{')
-		iter := v.MapRange()
-		first := true
-		for iter.Next() {
-			if !first {
-				b.WriteByte(',')
-			}
-			first = false
-			name, _ := json.Marshal(iter.Key().String())
-			b.Write(name)
-			b.WriteByte(':')
-			if err := storeWrite(b, iter.Value()); err != nil {
-				return err
-			}
-		}
-		b.WriteByte('}')
+		return storeWriteMap(b, v)
 	case reflect.Slice, reflect.Array:
-		if v.Kind() == reflect.Slice && v.IsNil() {
-			b.WriteString("null")
-			return nil
-		}
-		if v.Type().Elem().Kind() == reflect.Uint8 {
-			return fmt.Errorf("store codec: binary fields are not stored: %w", ErrInvalid)
-		}
-		b.WriteByte('[')
-		for i := 0; i < v.Len(); i++ {
-			if i > 0 {
-				b.WriteByte(',')
-			}
-			if err := storeWrite(b, v.Index(i)); err != nil {
-				return err
-			}
-		}
-		b.WriteByte(']')
+		return storeWriteSlice(b, v)
 	case reflect.String:
 		s, _ := json.Marshal(v.String())
 		b.Write(s)
@@ -238,45 +183,11 @@ func storeAssign(v reflect.Value, raw any) error {
 		}
 		v.Set(n)
 	case reflect.Struct:
-		m, ok := raw.(map[string]any)
-		if !ok {
-			return ErrUnavailable
-		}
-		for _, f := range storeFields(v.Type()) {
-			value, present := m[f.name]
-			if !present {
-				continue
-			}
-			if err := storeAssign(v.Field(f.index), value); err != nil {
-				return err
-			}
-		}
+		return storeAssignStruct(v, raw)
 	case reflect.Map:
-		m, ok := raw.(map[string]any)
-		if !ok {
-			return ErrUnavailable
-		}
-		out := reflect.MakeMapWithSize(v.Type(), len(m))
-		for key, value := range m {
-			elem := reflect.New(v.Type().Elem()).Elem()
-			if err := storeAssign(elem, value); err != nil {
-				return err
-			}
-			out.SetMapIndex(reflect.ValueOf(key).Convert(v.Type().Key()), elem)
-		}
-		v.Set(out)
+		return storeAssignMap(v, raw)
 	case reflect.Slice:
-		list, ok := raw.([]any)
-		if !ok {
-			return ErrUnavailable
-		}
-		out := reflect.MakeSlice(v.Type(), len(list), len(list))
-		for i, value := range list {
-			if err := storeAssign(out.Index(i), value); err != nil {
-				return err
-			}
-		}
-		v.Set(out)
+		return storeAssignSlice(v, raw)
 	case reflect.String:
 		s, ok := raw.(string)
 		if !ok {
@@ -290,19 +201,7 @@ func storeAssign(v reflect.Value, raw any) error {
 		}
 		v.SetBool(b)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		n, err := storeNumber(raw)
-		if err != nil {
-			return err
-		}
-		i, err := n.Int64()
-		if err != nil {
-			f, ferr := n.Float64()
-			if ferr != nil || f != math.Trunc(f) {
-				return ErrUnavailable
-			}
-			i = int64(f)
-		}
-		v.SetInt(i)
+		return storeAssignInt(v, raw)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		n, err := storeNumber(raw)
 		if err != nil {
@@ -314,28 +213,169 @@ func storeAssign(v reflect.Value, raw any) error {
 		}
 		v.SetUint(u)
 	case reflect.Float32, reflect.Float64:
-		if m, ok := raw.(map[string]any); ok {
-			if s, ok := m["$numberDouble"].(string); ok {
-				f, err := strconv.ParseFloat(strings.Replace(s, "Infinity", "Inf", 1), 64)
-				if err != nil {
-					return ErrUnavailable
-				}
-				v.SetFloat(f)
-				return nil
-			}
-		}
-		n, err := storeNumber(raw)
-		if err != nil {
-			return err
-		}
-		f, err := n.Float64()
-		if err != nil {
-			return ErrUnavailable
-		}
-		v.SetFloat(f)
+		return storeAssignFloat(v, raw)
 	default:
 		return ErrUnavailable
 	}
+	return nil
+}
+
+func storeWriteStruct(b *bytes.Buffer, v reflect.Value) error {
+	b.WriteByte('{')
+	for i, f := range storeFields(v.Type()) {
+		fv := v.Field(f.index)
+		if f.omitEmpty && storeEmpty(fv) {
+			continue
+		}
+		if b.Bytes()[b.Len()-1] != '{' {
+			b.WriteByte(',')
+		}
+		_ = i
+		name, _ := json.Marshal(f.name)
+		b.Write(name)
+		b.WriteByte(':')
+		if err := storeWrite(b, fv); err != nil {
+			return err
+		}
+	}
+	b.WriteByte('}')
+	return nil
+}
+
+func storeWriteMap(b *bytes.Buffer, v reflect.Value) error {
+	if v.IsNil() {
+		b.WriteString("null")
+		return nil
+	}
+	if v.Type().Key().Kind() != reflect.String {
+		return fmt.Errorf("store codec: map key %s: %w", v.Type().Key(), ErrInvalid)
+	}
+	b.WriteByte('{')
+	iter := v.MapRange()
+	first := true
+	for iter.Next() {
+		if !first {
+			b.WriteByte(',')
+		}
+		first = false
+		name, _ := json.Marshal(iter.Key().String())
+		b.Write(name)
+		b.WriteByte(':')
+		if err := storeWrite(b, iter.Value()); err != nil {
+			return err
+		}
+	}
+	b.WriteByte('}')
+	return nil
+}
+
+func storeWriteSlice(b *bytes.Buffer, v reflect.Value) error {
+	if v.Kind() == reflect.Slice && v.IsNil() {
+		b.WriteString("null")
+		return nil
+	}
+	if v.Type().Elem().Kind() == reflect.Uint8 {
+		return fmt.Errorf("store codec: binary fields are not stored: %w", ErrInvalid)
+	}
+	b.WriteByte('[')
+	for i := 0; i < v.Len(); i++ {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		if err := storeWrite(b, v.Index(i)); err != nil {
+			return err
+		}
+	}
+	b.WriteByte(']')
+	return nil
+}
+
+func storeAssignStruct(v reflect.Value, raw any) error {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return ErrUnavailable
+	}
+	for _, f := range storeFields(v.Type()) {
+		value, present := m[f.name]
+		if !present {
+			continue
+		}
+		if err := storeAssign(v.Field(f.index), value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func storeAssignMap(v reflect.Value, raw any) error {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return ErrUnavailable
+	}
+	out := reflect.MakeMapWithSize(v.Type(), len(m))
+	for key, value := range m {
+		elem := reflect.New(v.Type().Elem()).Elem()
+		if err := storeAssign(elem, value); err != nil {
+			return err
+		}
+		out.SetMapIndex(reflect.ValueOf(key).Convert(v.Type().Key()), elem)
+	}
+	v.Set(out)
+	return nil
+}
+
+func storeAssignSlice(v reflect.Value, raw any) error {
+	list, ok := raw.([]any)
+	if !ok {
+		return ErrUnavailable
+	}
+	out := reflect.MakeSlice(v.Type(), len(list), len(list))
+	for i, value := range list {
+		if err := storeAssign(out.Index(i), value); err != nil {
+			return err
+		}
+	}
+	v.Set(out)
+	return nil
+}
+
+func storeAssignInt(v reflect.Value, raw any) error {
+	n, err := storeNumber(raw)
+	if err != nil {
+		return err
+	}
+	i, err := n.Int64()
+	if err != nil {
+		f, ferr := n.Float64()
+		if ferr != nil || f != math.Trunc(f) {
+			return ErrUnavailable
+		}
+		i = int64(f)
+	}
+	v.SetInt(i)
+	return nil
+}
+
+func storeAssignFloat(v reflect.Value, raw any) error {
+	if m, ok := raw.(map[string]any); ok {
+		if s, ok := m["$numberDouble"].(string); ok {
+			f, err := strconv.ParseFloat(strings.Replace(s, "Infinity", "Inf", 1), 64)
+			if err != nil {
+				return ErrUnavailable
+			}
+			v.SetFloat(f)
+			return nil
+		}
+	}
+	n, err := storeNumber(raw)
+	if err != nil {
+		return err
+	}
+	f, err := n.Float64()
+	if err != nil {
+		return ErrUnavailable
+	}
+	v.SetFloat(f)
 	return nil
 }
 

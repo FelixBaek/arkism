@@ -98,18 +98,9 @@ func (s *Service) createSource(ctx context.Context, token string, in CreateInput
 			if in.IdempotencyKey != "" {
 				receipt, e := tx.Get(ctx, "jobs", in.Scope, receiptID)
 				if e == nil {
-					if receipt.Kind != "source_receipt" || receipt.RequestHash != requestHash || receipt.Target == nil {
-						return ErrConflict
-					}
-					saved, e := tx.Get(ctx, "sources", in.Scope, receipt.Target.ID)
-					if errors.Is(e, ErrNotFound) {
-						return ErrConflict
-					}
+					saved, e := replayedSource(ctx, tx, in.Scope, receipt, requestHash)
 					if e != nil {
 						return e
-					}
-					if !live(saved) || saved.Revision != receipt.Target.Revision {
-						return ErrConflict
 					}
 					saved.Duplicate = receipt.Duplicate
 					result = saved
@@ -125,42 +116,14 @@ func (s *Service) createSource(ctx context.Context, token string, in CreateInput
 			}
 			pointer, e := tx.Get(ctx, "jobs", in.Scope, digestID)
 			if e == nil {
-				if pointer.Kind != "source_digest" || pointer.Target == nil {
-					return ErrConflict
-				}
-				saved, e := tx.Get(ctx, "sources", in.Scope, pointer.Target.ID)
-				if errors.Is(e, ErrNotFound) {
-					return errSourceDeleted
-				}
+				saved, e := digestSource(ctx, tx, in.Scope, pointer, proposed)
 				if e != nil {
 					return e
-				}
-				if !live(saved) || saved.ContentErased {
-					return errSourceDeleted
-				}
-				if saved.Revision != pointer.Target.Revision || saved.ContentHash != proposed.ContentHash {
-					return ErrConflict
-				}
-				if sourceTrustLevel(saved.TrustLevel) != sourceTrustLevel(proposed.TrustLevel) || saved.Sensitivity != proposed.Sensitivity || saved.Kind != proposed.Kind || saved.OriginProduct != proposed.OriginProduct || saved.SourceRef != proposed.SourceRef || !sameSourceArchiveMessages(saved.ArchiveMessages, proposed.ArchiveMessages) || structuredText(saved.Generator) != structuredText(proposed.Generator) || structuredText(saved.ExpiresAt) != structuredText(proposed.ExpiresAt) || structuredText(saved.Relations) != structuredText(proposed.Relations) {
-					return errSourceOtherProvenance
 				}
 				saved.Duplicate = true
 				result = saved
 			} else if errors.Is(e, ErrNotFound) {
-				if e = checkRelations(ctx, tx, proposed); e != nil {
-					return e
-				}
-				if e = tx.Insert(ctx, "sources", proposed); e != nil {
-					return e
-				}
-				// Return the stored representation (stored timestamps and normalized keywords),
-				// so a later retry can return precisely the same JSON without copying bodies.
-				result, e = tx.Get(ctx, "sources", in.Scope, proposed.ID)
-				if e != nil {
-					return e
-				}
-				pointer = Record{ID: digestID, Scope: in.Scope, Kind: "source_digest", Status: "done", Revision: 1, ContentHash: proposed.ContentHash, Target: &Ref{Collection: "sources", ID: result.ID, Revision: result.Revision}, CreatedAt: proposed.CreatedAt, UpdatedAt: proposed.CreatedAt, CreatedBy: actor}
-				if e = tx.Insert(ctx, "jobs", pointer); e != nil {
+				if result, e = insertDigestSource(ctx, tx, in.Scope, proposed, digestID, actor); e != nil {
 					return e
 				}
 			} else {
@@ -223,6 +186,66 @@ func (s *Service) createSource(ctx context.Context, token string, in CreateInput
 		if err != nil {
 			return Record{}, err
 		}
+	}
+	return result, nil
+}
+
+func replayedSource(ctx context.Context, tx Tx, scope Scope, receipt Record, requestHash string) (Record, error) {
+	if receipt.Kind != "source_receipt" || receipt.RequestHash != requestHash || receipt.Target == nil {
+		return Record{}, ErrConflict
+	}
+	saved, e := tx.Get(ctx, "sources", scope, receipt.Target.ID)
+	if errors.Is(e, ErrNotFound) {
+		return Record{}, ErrConflict
+	}
+	if e != nil {
+		return Record{}, e
+	}
+	if !live(saved) || saved.Revision != receipt.Target.Revision {
+		return Record{}, ErrConflict
+	}
+	return saved, nil
+}
+
+func digestSource(ctx context.Context, tx Tx, scope Scope, pointer, proposed Record) (Record, error) {
+	if pointer.Kind != "source_digest" || pointer.Target == nil {
+		return Record{}, ErrConflict
+	}
+	saved, e := tx.Get(ctx, "sources", scope, pointer.Target.ID)
+	if errors.Is(e, ErrNotFound) {
+		return Record{}, errSourceDeleted
+	}
+	if e != nil {
+		return Record{}, e
+	}
+	if !live(saved) || saved.ContentErased {
+		return Record{}, errSourceDeleted
+	}
+	if saved.Revision != pointer.Target.Revision || saved.ContentHash != proposed.ContentHash {
+		return Record{}, ErrConflict
+	}
+	if sourceTrustLevel(saved.TrustLevel) != sourceTrustLevel(proposed.TrustLevel) || saved.Sensitivity != proposed.Sensitivity || saved.Kind != proposed.Kind || saved.OriginProduct != proposed.OriginProduct || saved.SourceRef != proposed.SourceRef || !sameSourceArchiveMessages(saved.ArchiveMessages, proposed.ArchiveMessages) || structuredText(saved.Generator) != structuredText(proposed.Generator) || structuredText(saved.ExpiresAt) != structuredText(proposed.ExpiresAt) || structuredText(saved.Relations) != structuredText(proposed.Relations) {
+		return Record{}, errSourceOtherProvenance
+	}
+	return saved, nil
+}
+
+func insertDigestSource(ctx context.Context, tx Tx, scope Scope, proposed Record, digestID, actor string) (Record, error) {
+	if e := checkRelations(ctx, tx, proposed); e != nil {
+		return Record{}, e
+	}
+	if e := tx.Insert(ctx, "sources", proposed); e != nil {
+		return Record{}, e
+	}
+	// Return the stored representation (stored timestamps and normalized keywords),
+	// so a later retry can return precisely the same JSON without copying bodies.
+	result, e := tx.Get(ctx, "sources", scope, proposed.ID)
+	if e != nil {
+		return Record{}, e
+	}
+	pointer := Record{ID: digestID, Scope: scope, Kind: "source_digest", Status: "done", Revision: 1, ContentHash: proposed.ContentHash, Target: &Ref{Collection: "sources", ID: result.ID, Revision: result.Revision}, CreatedAt: proposed.CreatedAt, UpdatedAt: proposed.CreatedAt, CreatedBy: actor}
+	if e = tx.Insert(ctx, "jobs", pointer); e != nil {
+		return Record{}, e
 	}
 	return result, nil
 }

@@ -532,27 +532,9 @@ func (s *Service) buildWiki(ctx context.Context, token string, d Decision, claim
 	if src.Knowledge.SourceVersion != job.SourceVersion || src.Status != "draft" && src.Status != "active" {
 		return nil, ErrConflict // a newer version gets its own job
 	}
-	doc, err := s.Repo.Get(ctx, colKnowledgeDocuments, scope, src.Knowledge.DocumentID)
+	source, err := s.wikiSourceText(ctx, scope, src)
 	if err != nil {
 		return nil, err
-	}
-	var text strings.Builder
-	for _, cid := range doc.Knowledge.ChunkIDs {
-		c, err := s.Repo.Get(ctx, colKnowledgeChunks, scope, cid)
-		if err != nil {
-			return nil, err
-		}
-		text.WriteString(c.Text)
-	}
-	source := text.String()
-	if strings.TrimSpace(source) == "" {
-		return nil, ErrInvalid
-	}
-	if utf8.RuneCountInString(source) > wikiMaxSourceRunes {
-		return nil, errWikiBudget
-	}
-	if containsSecret(source) {
-		return nil, ErrSecretDetected
 	}
 	// The source leaves the server for the model: an explicit transfer decision.
 	t, err := s.authorizeAt(ctx, token, "generate:"+colWikiPages, scope, job.KnowledgeSourceID, source, "external:wiki-llm")
@@ -566,12 +548,6 @@ func (s *Service) buildWiki(ctx context.Context, token string, d Decision, claim
 	if err != nil {
 		return nil, err
 	}
-	pages := map[string]Record{}
-	for _, r := range existing {
-		if p := wikiPageOf(r); p != nil {
-			pages[p.Slug] = r
-		}
-	}
 	w := &wikiWrite{sourceRefs: src.Sources, generator: gen, result: WikiJobResult{Created: []string{}, Updated: []string{}, Unchanged: []string{}, SkippedLocked: []string{}, Rejected: []wikiRejection{}}}
 
 	// Step 1: analyse.
@@ -584,17 +560,77 @@ func (s *Service) buildWiki(ctx context.Context, token string, d Decision, claim
 	if !ok {
 		return nil, ErrUnavailable
 	}
-	if len([]rune(plan.Summary)) > 500 {
-		plan.Summary = string([]rune(plan.Summary)[:500])
+	w.result.Summary = wikiPlanSummary(plan.Summary)
+	planned, current := wikiPlanPages(w, plan.Pages, wikiPagesBySlug(existing), strings.ToLower(source))
+	if len(planned) == 0 {
+		return w, nil
 	}
-	if !containsSecret(plan.Summary) {
-		w.result.Summary = plan.Summary
+
+	// Step 2: write.
+	system, user = wikiWritePrompt(planned, current, source)
+	answer, err = s.wikiCall(ctx, scope, job, "wiki_write", system, user)
+	if err != nil {
+		return nil, err
 	}
-	lowered := strings.ToLower(source)
+	blocks, rejected := parseWikiFiles(answer)
+	w.result.Rejected = append(w.result.Rejected, rejected...)
+	s.acceptWikiBlocks(ctx, token, scope, w, planned, blocks)
+	return w, nil
+}
+
+func (s *Service) wikiSourceText(ctx context.Context, scope Scope, src Record) (string, error) {
+	doc, err := s.Repo.Get(ctx, colKnowledgeDocuments, scope, src.Knowledge.DocumentID)
+	if err != nil {
+		return "", err
+	}
+	var text strings.Builder
+	for _, cid := range doc.Knowledge.ChunkIDs {
+		c, err := s.Repo.Get(ctx, colKnowledgeChunks, scope, cid)
+		if err != nil {
+			return "", err
+		}
+		text.WriteString(c.Text)
+	}
+	source := text.String()
+	if strings.TrimSpace(source) == "" {
+		return "", ErrInvalid
+	}
+	if utf8.RuneCountInString(source) > wikiMaxSourceRunes {
+		return "", errWikiBudget
+	}
+	if containsSecret(source) {
+		return "", ErrSecretDetected
+	}
+	return source, nil
+}
+
+func wikiPagesBySlug(existing []Record) map[string]Record {
+	pages := map[string]Record{}
+	for _, r := range existing {
+		if p := wikiPageOf(r); p != nil {
+			pages[p.Slug] = r
+		}
+	}
+	return pages
+}
+
+func wikiPlanSummary(summary string) string {
+	if len([]rune(summary)) > 500 {
+		summary = string([]rune(summary)[:500])
+	}
+	if containsSecret(summary) {
+		return ""
+	}
+	return summary
+}
+
+// wikiPlanPages keeps the plan items the write step may cover and the current
+// text of each existing page among them.
+func wikiPlanPages(w *wikiWrite, items []wikiPlanItem, pages map[string]Record, lowered string) ([]wikiPlanItem, map[string]string) {
 	var planned []wikiPlanItem
 	seen := map[string]bool{}
 	current := map[string]string{}
-	for _, item := range plan.Pages {
+	for _, item := range items {
 		item.Title = strings.TrimSpace(item.Title)
 		slug := wikiSlug(item.Title)
 		switch {
@@ -630,18 +666,10 @@ func (s *Service) buildWiki(ctx context.Context, token string, d Decision, claim
 		}
 		planned = append(planned, item)
 	}
-	if len(planned) == 0 {
-		return w, nil
-	}
+	return planned, current
+}
 
-	// Step 2: write.
-	system, user = wikiWritePrompt(planned, current, source)
-	answer, err = s.wikiCall(ctx, scope, job, "wiki_write", system, user)
-	if err != nil {
-		return nil, err
-	}
-	blocks, rejected := parseWikiFiles(answer)
-	w.result.Rejected = append(w.result.Rejected, rejected...)
+func (s *Service) acceptWikiBlocks(ctx context.Context, token string, scope Scope, w *wikiWrite, planned []wikiPlanItem, blocks []wikiBlock) {
 	allowed := map[string]wikiPlanItem{}
 	for _, item := range planned {
 		allowed[wikiSlug(item.Title)] = item
@@ -668,7 +696,6 @@ func (s *Service) buildWiki(ctx context.Context, token string, d Decision, claim
 		b.Title = item.Title
 		w.blocks = append(w.blocks, b)
 	}
-	return w, nil
 }
 
 // writeWikiDrafts is the last boundary: in the write transaction, with the
@@ -710,12 +737,7 @@ func (s *Service) writeWikiDrafts(ctx context.Context, tx Tx, d Decision, claime
 			res.Rejected = append(res.Rejected, wikiRejection{Path: wikiClip(b.Path), Reason: "type_mismatch"})
 			continue
 		}
-		base, title := "", wikiTitle(p)
-		if p.Draft != nil {
-			base = p.Draft.Text
-		} else if p.Reviewed != nil {
-			base = p.Reviewed.Text
-		}
+		base, title := wikiBaseText(p), wikiTitle(p)
 		merged, mode, changed := wikiMerge(base, b.Body, b.Mode, b.Section)
 		newSource := !slices.Contains(p.SourceIDs, job.KnowledgeSourceID)
 		if !changed && !newSource {
@@ -728,13 +750,7 @@ func (s *Service) writeWikiDrafts(ctx context.Context, tx Tx, d Decision, claime
 		}
 		if newSource {
 			p.SourceIDs = append(append([]string{}, p.SourceIDs...), job.KnowledgeSourceID)
-			refs := append([]SourceRef{}, r.Sources...)
-			for _, ref := range w.sourceRefs {
-				if !slices.ContainsFunc(refs, func(x SourceRef) bool { return x.SourceID == ref.SourceID }) {
-					refs = append(refs, ref)
-				}
-			}
-			r.Sources = refs
+			r.Sources = wikiMergeSourceRefs(r.Sources, w.sourceRefs)
 		}
 		if changed {
 			p.Draft = &WikiBody{Title: title, Text: merged, Links: wikiLinks(merged, p.Slug), By: "model:" + w.generator.Model, At: now}
@@ -800,4 +816,23 @@ func (c *ChatWikiLLM) Complete(ctx context.Context, system, user string, maxToke
 		return "", ProviderUsage{}, ErrUnavailable
 	}
 	return response.Choices[0].Message.Content, usage, nil
+}
+
+func wikiBaseText(p WikiPage) string {
+	if p.Draft != nil {
+		return p.Draft.Text
+	} else if p.Reviewed != nil {
+		return p.Reviewed.Text
+	}
+	return ""
+}
+
+func wikiMergeSourceRefs(have, add []SourceRef) []SourceRef {
+	refs := append([]SourceRef{}, have...)
+	for _, ref := range add {
+		if !slices.ContainsFunc(refs, func(x SourceRef) bool { return x.SourceID == ref.SourceID }) {
+			refs = append(refs, ref)
+		}
+	}
+	return refs
 }

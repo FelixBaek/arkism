@@ -91,15 +91,26 @@ func checkReflection(ctx context.Context, tx Tx, r Record) error {
 	if e != nil || !live(evaluation) || !independentEvaluation(evaluation) || evaluation.Target == nil || evaluation.Target.Collection != "agent_runs" || evaluation.Target.ID != run.ID || evaluation.Target.Revision != run.Revision || evaluation.CreatedBy == run.CreatedBy || checkEvaluationEvidence(ctx, tx, evaluation) != nil {
 		return ErrDenied
 	}
-	if (x.SkillID == "") != (x.SkillVersion == "") {
+	if !reflectionSkillOK(ctx, tx, r.Scope, x) || !reflectionCites(r, run, evaluation) {
 		return ErrDenied
 	}
+	return nil
+}
+func reflectionSkillOK(ctx context.Context, tx Tx, scope Scope, x *Reflection) bool {
+	if (x.SkillID == "") != (x.SkillVersion == "") {
+		return false
+	}
 	if x.SkillVersion != "" {
-		version, err := tx.Get(ctx, colSkillVersions, r.Scope, x.SkillVersion)
+		version, err := tx.Get(ctx, colSkillVersions, scope, x.SkillVersion)
 		if err != nil || version.SkillID != x.SkillID || !live(version) || checkSources(ctx, tx, version) != nil {
-			return ErrDenied
+			return false
 		}
 	}
+	return true
+}
+
+// reflectionCites reports whether r relates the exact run and evaluation revisions.
+func reflectionCites(r, run, evaluation Record) bool {
 	hasRun, hasEvaluation := false, false
 	for _, ref := range r.Relations {
 		if ref.Collection == "agent_runs" && ref.ID == run.ID && ref.Revision == run.Revision {
@@ -109,10 +120,7 @@ func checkReflection(ctx context.Context, tx Tx, r Record) error {
 			hasEvaluation = true
 		}
 	}
-	if !hasRun || !hasEvaluation {
-		return ErrDenied
-	}
-	return nil
+	return hasRun && hasEvaluation
 }
 func validAnalysis(a *SkillAnalysis) bool {
 	if a == nil || a.SkillID == "" || a.Version == "" || len(a.ContentHash) != 64 || strings.TrimSpace(a.Name) == "" || a.Description == "" || a.Problem == "" || len(a.UseWhen) == 0 || a.InputFormat == "" || a.OutputFormat == "" || len(a.SuccessCriteria) == 0 || len(a.Verification) == 0 || a.SourceFile != "SKILL.md" || a.SourcePath == "" {

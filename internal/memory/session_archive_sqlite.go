@@ -20,55 +20,15 @@ func validSQLiteStep(s string) bool {
 	return err == nil && n >= 0 && strconv.FormatInt(n, 10) == s
 }
 func sqliteArchiveSchema(db *sqlite.Conn, session string) error {
-	stmt, _, err := db.Prepare("SELECT name,type,sql FROM sqlite_schema WHERE name IN ('steps','trajectory_meta') ORDER BY name")
-	if err != nil {
-		return errArchiveSQLiteUnsupported
+	if err := sqliteArchiveTables(db); err != nil {
+		return err
 	}
-	tables := 0
-	for stmt.Step() {
-		if stmt.ColumnText(1) != "table" || !strings.HasPrefix(strings.ToLower(strings.TrimSpace(stmt.ColumnText(2))), "create table ") {
-			stmt.Close()
-			return errArchiveSQLiteUnsupported
-		}
-		tables++
-	}
-	err = stmt.Err()
-	stmt.Close()
-	if err != nil || tables != 2 {
-		return errArchiveSQLiteUnsupported
-	}
-	stmt, _, err = db.Prepare("PRAGMA table_xinfo(steps)")
-	if err != nil {
-		return errArchiveSQLiteUnsupported
-	}
-	required := map[string]bool{"idx": false, "step_type": false, "status": false, "step_format": false, "step_payload": false}
-	primary := 0
-	for stmt.Step() {
-		name := stmt.ColumnText(1)
-		if stmt.ColumnInt(5) > 0 {
-			primary++
-		}
-		if _, ok := required[name]; ok {
-			if stmt.ColumnInt(6) != 0 || name == "idx" && (strings.ToUpper(stmt.ColumnText(2)) != "INTEGER" || stmt.ColumnInt(5) != 1) {
-				stmt.Close()
-				return errArchiveSQLiteUnsupported
-			}
-			required[name] = true
-		}
-	}
-	err = stmt.Err()
-	stmt.Close()
-	if err != nil || primary != 1 {
-		return errArchiveSQLiteUnsupported
-	}
-	for _, found := range required {
-		if !found {
-			return errArchiveSQLiteUnsupported
-		}
+	if err := sqliteArchiveStepColumns(db); err != nil {
+		return err
 	}
 	// Incremental BLOB reads use the internal rowid. INTEGER PRIMARY KEY DESC
 	// and WITHOUT ROWID have a separate pk index: idx is not a rowid alias.
-	stmt, _, err = db.Prepare("PRAGMA index_list(steps)")
+	stmt, _, err := db.Prepare("PRAGMA index_list(steps)")
 	if err != nil {
 		return errArchiveSQLiteUnsupported
 	}
@@ -114,6 +74,58 @@ func sqliteArchiveSchema(db *sqlite.Conn, session string) error {
 		}
 		return sqlite.AUTH_DENY
 	})
+}
+func sqliteArchiveTables(db *sqlite.Conn) error {
+	stmt, _, err := db.Prepare("SELECT name,type,sql FROM sqlite_schema WHERE name IN ('steps','trajectory_meta') ORDER BY name")
+	if err != nil {
+		return errArchiveSQLiteUnsupported
+	}
+	tables := 0
+	for stmt.Step() {
+		if stmt.ColumnText(1) != "table" || !strings.HasPrefix(strings.ToLower(strings.TrimSpace(stmt.ColumnText(2))), "create table ") {
+			stmt.Close()
+			return errArchiveSQLiteUnsupported
+		}
+		tables++
+	}
+	err = stmt.Err()
+	stmt.Close()
+	if err != nil || tables != 2 {
+		return errArchiveSQLiteUnsupported
+	}
+	return nil
+}
+func sqliteArchiveStepColumns(db *sqlite.Conn) error {
+	stmt, _, err := db.Prepare("PRAGMA table_xinfo(steps)")
+	if err != nil {
+		return errArchiveSQLiteUnsupported
+	}
+	required := map[string]bool{"idx": false, "step_type": false, "status": false, "step_format": false, "step_payload": false}
+	primary := 0
+	for stmt.Step() {
+		name := stmt.ColumnText(1)
+		if stmt.ColumnInt(5) > 0 {
+			primary++
+		}
+		if _, ok := required[name]; ok {
+			if stmt.ColumnInt(6) != 0 || name == "idx" && (strings.ToUpper(stmt.ColumnText(2)) != "INTEGER" || stmt.ColumnInt(5) != 1) {
+				stmt.Close()
+				return errArchiveSQLiteUnsupported
+			}
+			required[name] = true
+		}
+	}
+	err = stmt.Err()
+	stmt.Close()
+	if err != nil || primary != 1 {
+		return errArchiveSQLiteUnsupported
+	}
+	for _, found := range required {
+		if !found {
+			return errArchiveSQLiteUnsupported
+		}
+	}
+	return nil
 }
 
 const sqliteArchiveRows = `SELECT idx,step_type,status,step_format,CASE WHEN typeof(step_payload)='blob' THEN length(step_payload) ELSE -1 END,
@@ -161,48 +173,8 @@ func (s *Service) searchArchiveSQLite(ctx context.Context, h Record, in ArchiveS
 		return ErrInvalid
 	}
 	for stmt.Step() {
-		idx, kind, status, format, size := stmt.ColumnInt64(0), stmt.ColumnInt64(1), stmt.ColumnInt64(2), stmt.ColumnInt64(3), stmt.ColumnInt64(4)
-		if stmt.ColumnType(0) != sqlite.INTEGER || stmt.ColumnType(1) != sqlite.INTEGER || stmt.ColumnType(2) != sqlite.INTEGER || stmt.ColumnType(3) != sqlite.INTEGER || idx < 0 {
-			return ErrInvalid
-		}
-		cursor.Ref.SQLiteStep = strconv.FormatInt(idx, 10)
-		if format != 0 {
-			out.UnsupportedRecords++
-		} else if stmt.ColumnText(6) != "blob" {
-			out.Invalid++
-		} else if size > archiveRecordLimit {
-			view, state, readErr := archiveSQLiteLargeMessage(ctx, db, reader, cursor.Ref, idx, kind, status, format, size, in.Query, 0, false)
-			if readErr != nil {
-				if errors.Is(readErr, ErrInvalid) || errors.Is(readErr, io.EOF) || errors.Is(readErr, io.ErrUnexpectedEOF) {
-					out.Invalid++
-				} else {
-					return readErr
-				}
-			} else if state == "secret" {
-				out.Secrets++
-			} else if state == "found" {
-				out.Items = append(out.Items, view)
-			}
-		} else if stmt.ColumnType(5) != sqlite.BLOB {
-			out.Invalid++
-		} else {
-			payload := stmt.ColumnRawBlob(5)
-			text, role, valid := archiveAntigravityText(kind, status, format, payload)
-			if !valid {
-				out.Invalid++
-			} else if text != "" {
-				if containsSecret(text) {
-					out.Secrets++
-				} else if at := strings.Index(text, in.Query); at >= 0 {
-					begin := max(0, at-256)
-					for begin > 0 && !utf8.RuneStart(text[begin]) {
-						begin--
-					}
-					ref := cursor.Ref
-					ref.MessageSHA256 = archiveSQLiteMessageHash(idx, kind, status, format, role, payload)
-					out.Items = append(out.Items, archiveTextView(ref, role, text, begin, 4096, len(payload)))
-				}
-			}
+		if rowErr := archiveSQLiteSearchRow(ctx, db, reader, stmt, in.Query, cursor, out); rowErr != nil {
+			return rowErr
 		}
 		if len(out.Items) >= in.Limit || *budget < archiveRecordLimit+(2<<20) {
 			return nil
@@ -217,6 +189,56 @@ func (s *Service) searchArchiveSQLite(ctx context.Context, h Record, in ArchiveS
 	cursor.After = h.ID
 	cursor.Ref = ArchiveMessageRef{}
 	cursor.Skip = false
+	return nil
+}
+func archiveSQLiteSearchRow(ctx context.Context, db *sqlite.Conn, reader *archiveSQLiteReader, stmt *sqlite.Stmt, query string, cursor *archiveSearchCursor, out *ArchiveSearchOutput) error {
+	idx, kind, status, format, size := stmt.ColumnInt64(0), stmt.ColumnInt64(1), stmt.ColumnInt64(2), stmt.ColumnInt64(3), stmt.ColumnInt64(4)
+	if stmt.ColumnType(0) != sqlite.INTEGER || stmt.ColumnType(1) != sqlite.INTEGER || stmt.ColumnType(2) != sqlite.INTEGER || stmt.ColumnType(3) != sqlite.INTEGER || idx < 0 {
+		return ErrInvalid
+	}
+	cursor.Ref.SQLiteStep = strconv.FormatInt(idx, 10)
+	if format != 0 {
+		out.UnsupportedRecords++
+	} else if stmt.ColumnText(6) != "blob" {
+		out.Invalid++
+	} else if size > archiveRecordLimit {
+		return archiveSQLiteSearchLarge(ctx, db, reader, cursor.Ref, idx, kind, status, format, size, query, out)
+	} else if stmt.ColumnType(5) != sqlite.BLOB {
+		out.Invalid++
+	} else {
+		payload := stmt.ColumnRawBlob(5)
+		text, role, valid := archiveAntigravityText(kind, status, format, payload)
+		if !valid {
+			out.Invalid++
+		} else if text != "" {
+			if containsSecret(text) {
+				out.Secrets++
+			} else if at := strings.Index(text, query); at >= 0 {
+				begin := max(0, at-256)
+				for begin > 0 && !utf8.RuneStart(text[begin]) {
+					begin--
+				}
+				ref := cursor.Ref
+				ref.MessageSHA256 = archiveSQLiteMessageHash(idx, kind, status, format, role, payload)
+				out.Items = append(out.Items, archiveTextView(ref, role, text, begin, 4096, len(payload)))
+			}
+		}
+	}
+	return nil
+}
+func archiveSQLiteSearchLarge(ctx context.Context, db *sqlite.Conn, reader *archiveSQLiteReader, ref ArchiveMessageRef, idx, kind, status, format, size int64, query string, out *ArchiveSearchOutput) error {
+	view, state, readErr := archiveSQLiteLargeMessage(ctx, db, reader, ref, idx, kind, status, format, size, query, 0, false)
+	if readErr != nil {
+		if errors.Is(readErr, ErrInvalid) || errors.Is(readErr, io.EOF) || errors.Is(readErr, io.ErrUnexpectedEOF) {
+			out.Invalid++
+		} else {
+			return readErr
+		}
+	} else if state == "secret" {
+		out.Secrets++
+	} else if state == "found" {
+		out.Items = append(out.Items, view)
+	}
 	return nil
 }
 func (s *Service) readArchiveSQLite(ctx context.Context, token string, h Record, in ArchiveMessageInput, actor Decision) (ArchiveMessageView, error) {
@@ -259,32 +281,39 @@ func (s *Service) readArchiveSQLite(ctx context.Context, token string, h Record,
 		return empty, ErrInvalid
 	}
 	if size := stmt.ColumnInt64(4); size > archiveRecordLimit {
-		view, state, err := archiveSQLiteLargeMessage(ctx, db, reader, in.Ref, idx, kind, status, format, size, "", in.TextOffset, true)
-		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				err = ErrInvalid
-			}
-			return empty, err
-		}
-		switch state {
-		case "secret":
-			return empty, ErrDenied
-		case "unmatched":
-			return empty, ErrInvalid
-		case "found":
-		default:
-			return empty, ErrNotFound
-		}
-		if err = s.fenceArchiveSearch(ctx, token, []Record{h}, actor); err != nil {
-			return empty, err
-		}
-		view.Ref.SHA256 = h.SessionArchive.SHA256
-		return view, nil
+		return s.readArchiveSQLiteLarge(ctx, token, h, in, actor, db, reader, idx, kind, status, format, size)
 	}
 	if stmt.ColumnType(5) != sqlite.BLOB {
 		return empty, ErrInvalid
 	}
-	payload := stmt.ColumnRawBlob(5)
+	return s.readArchiveSQLitePayload(ctx, token, h, in, actor, stmt.ColumnRawBlob(5), idx, kind, status, format)
+}
+func (s *Service) readArchiveSQLiteLarge(ctx context.Context, token string, h Record, in ArchiveMessageInput, actor Decision, db *sqlite.Conn, reader *archiveSQLiteReader, idx, kind, status, format, size int64) (ArchiveMessageView, error) {
+	empty := ArchiveMessageView{}
+	view, state, err := archiveSQLiteLargeMessage(ctx, db, reader, in.Ref, idx, kind, status, format, size, "", in.TextOffset, true)
+	if err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			err = ErrInvalid
+		}
+		return empty, err
+	}
+	switch state {
+	case "secret":
+		return empty, ErrDenied
+	case "unmatched":
+		return empty, ErrInvalid
+	case "found":
+	default:
+		return empty, ErrNotFound
+	}
+	if err = s.fenceArchiveSearch(ctx, token, []Record{h}, actor); err != nil {
+		return empty, err
+	}
+	view.Ref.SHA256 = h.SessionArchive.SHA256
+	return view, nil
+}
+func (s *Service) readArchiveSQLitePayload(ctx context.Context, token string, h Record, in ArchiveMessageInput, actor Decision, payload []byte, idx, kind, status, format int64) (ArchiveMessageView, error) {
+	empty := ArchiveMessageView{}
 	text, role, valid := archiveAntigravityText(kind, status, format, payload)
 	if !valid || text == "" {
 		return empty, ErrNotFound
@@ -299,7 +328,7 @@ func (s *Service) readArchiveSQLite(ctx context.Context, token string, h Record,
 	if in.TextOffset >= len(text) || !utf8.RuneStart(text[in.TextOffset]) {
 		return empty, ErrInvalid
 	}
-	if err = s.fenceArchiveSearch(ctx, token, []Record{h}, actor); err != nil {
+	if err := s.fenceArchiveSearch(ctx, token, []Record{h}, actor); err != nil {
 		return empty, err
 	}
 	ref := in.Ref

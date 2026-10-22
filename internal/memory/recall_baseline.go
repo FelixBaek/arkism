@@ -245,6 +245,17 @@ func (p *Postgres) baselineSearch(ctx context.Context, scope Scope, q BaselineQu
 		lists[i] = clean
 	}
 	fused := FuseScored(lists, baselineLimit)
+	distances, err := p.baselineDistances(ctx, scope, fused, vec, space)
+	if err != nil {
+		return baselineResult{}, err
+	}
+	out := baselineHits(q, fused, distances)
+	out.vectorDisabled = vectorDisabled
+	return out, nil
+}
+
+// baselineDistances reads the stored vector distance of each fused hit.
+func (p *Postgres) baselineDistances(ctx context.Context, scope Scope, fused []ScoredHit, vec []float64, space string) (map[string]float64, error) {
 	distances := map[string]float64{}
 	if len(vec) > 0 && len(fused) > 0 {
 		ids := make([]string, len(fused))
@@ -254,7 +265,7 @@ func (p *Postgres) baselineSearch(ctx context.Context, scope Scope, q BaselineQu
 		rows, err := p.q().Query(ctx, `SELECT id, embedding <=> $6::vector FROM memory_records WHERE collection='memories' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND id=ANY($5) AND embedding IS NOT NULL AND doc->'embedding'->>'space'=$7`,
 			scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, ids, vectorSQL(vec), space)
 		if err != nil {
-			return baselineResult{}, pgErr(err)
+			return nil, pgErr(err)
 		}
 		for rows.Next() {
 			var id string
@@ -265,12 +276,10 @@ func (p *Postgres) baselineSearch(ctx context.Context, scope Scope, q BaselineQu
 		}
 		rows.Close()
 		if rows.Err() != nil {
-			return baselineResult{}, pgErr(rows.Err())
+			return nil, pgErr(rows.Err())
 		}
 	}
-	out := baselineHits(q, fused, distances)
-	out.vectorDisabled = vectorDisabled
-	return out, nil
+	return distances, nil
 }
 
 // baselineHits labels the fused hits and keeps only what Service.Search would return

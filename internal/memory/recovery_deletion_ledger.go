@@ -48,10 +48,8 @@ func recoveryPrivacyRequests(ctx context.Context, tx Tx, scope Scope, check ledg
 		if row.Scope != scope || row.Kind != privacyDeletionKind || row.Revision < 1 || pd == nil || seen[row.ID] {
 			return nil, ErrUnavailable
 		}
-		request := PrivacyDeletionRequest{Scope: scope, TargetType: pd.TargetType, TargetIDs: slices.Clone(pd.TargetIDs), IdempotencyKey: pd.IdempotencyKey, Reason: pd.Reason, RetentionPolicyRef: pd.RetentionPolicyRef}
-		_, knownState := privacyStateTransitions[pd.State]
-		knownState = knownState || pd.State == privacyCompleted || pd.State == privacyCancelled || pd.State == privacyFailed
-		if validatePrivacyRequest(&request) != nil || row.ID != privacyJobID(scope, pd.RequesterID, pd.IdempotencyKey) || !slices.Contains([]string{"human", "service"}, pd.RequesterType) || pd.RequesterID == "" || !knownState || !slices.Contains([]string{privacyHoldNone, privacyHoldHeld, privacyHoldReleased}, pd.LegalHoldStatus) || pd.RequestedAt.IsZero() || pd.RequestedAt.After(time.Now()) {
+		request, ok := recoveryPrivacyRequest(scope, row.ID, pd)
+		if !ok {
 			return nil, ErrUnavailable
 		}
 		if err = check("read:privacy_deletion", row.ID); err != nil {
@@ -61,4 +59,16 @@ func recoveryPrivacyRequests(ctx context.Context, tx Tx, scope Scope, check ledg
 		out = append(out, RecoveryPrivacyRequest{ID: row.ID, Revision: row.Revision, TargetType: pd.TargetType, TargetIDs: request.TargetIDs, State: pd.State, LegalHoldStatus: pd.LegalHoldStatus, RequestedAt: pd.RequestedAt})
 	}
 	return out, nil
+}
+
+// recoveryPrivacyRequest rebuilds and validates the request a privacy row
+// recorded; false means the row cannot be trusted as evidence.
+func recoveryPrivacyRequest(scope Scope, id string, pd *PrivacyDeletion) (PrivacyDeletionRequest, bool) {
+	request := PrivacyDeletionRequest{Scope: scope, TargetType: pd.TargetType, TargetIDs: slices.Clone(pd.TargetIDs), IdempotencyKey: pd.IdempotencyKey, Reason: pd.Reason, RetentionPolicyRef: pd.RetentionPolicyRef}
+	_, knownState := privacyStateTransitions[pd.State]
+	knownState = knownState || pd.State == privacyCompleted || pd.State == privacyCancelled || pd.State == privacyFailed
+	if validatePrivacyRequest(&request) != nil || id != privacyJobID(scope, pd.RequesterID, pd.IdempotencyKey) || !slices.Contains([]string{"human", "service"}, pd.RequesterType) || pd.RequesterID == "" || !knownState || !slices.Contains([]string{privacyHoldNone, privacyHoldHeld, privacyHoldReleased}, pd.LegalHoldStatus) || pd.RequestedAt.IsZero() || pd.RequestedAt.After(time.Now()) {
+		return request, false
+	}
+	return request, true
 }

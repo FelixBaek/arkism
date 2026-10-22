@@ -147,14 +147,7 @@ func (s *Service) wikiSearch(ctx context.Context, token string, in WikiSearchInp
 	if err != nil {
 		return out, err
 	}
-	adjacent := map[string][]string{}
-	for _, l := range links {
-		if pages[l.FromID] == nil || pages[l.ToID] == nil {
-			continue
-		}
-		adjacent[l.FromID] = append(adjacent[l.FromID], l.ToID)
-		adjacent[l.ToID] = append(adjacent[l.ToID], l.FromID)
-	}
+	adjacent := wikiAdjacency(pages, links)
 	scores := map[string]float64{}
 	hops := map[string]int{}
 	via := map[string]string{}
@@ -217,6 +210,19 @@ func (s *Service) wikiSearch(ctx context.Context, token string, in WikiSearchInp
 		out.Items = append(out.Items, hit)
 	}
 	return out, nil
+}
+
+// wikiAdjacency lists each servable page's linked neighbours, both directions.
+func wikiAdjacency(pages map[string]*Record, links []WikiLink) map[string][]string {
+	adjacent := map[string][]string{}
+	for _, l := range links {
+		if pages[l.FromID] == nil || pages[l.ToID] == nil {
+			continue
+		}
+		adjacent[l.FromID] = append(adjacent[l.FromID], l.ToID)
+		adjacent[l.ToID] = append(adjacent[l.ToID], l.FromID)
+	}
+	return adjacent
 }
 
 func sortedWikiIDs(scores map[string]float64) []string {

@@ -87,7 +87,7 @@ func skillLessons(ctx context.Context, tx Tx, scope Scope, lessons []Ref) (skill
 		if err != nil {
 			return out, err
 		}
-		if row.Scope != scope || row.Revision != ref.Revision || row.PrivacyQuarantined || row.ContentErased || row.ConflictID != "" {
+		if conflictedLessonRow(row, ref, scope) {
 			return out, ErrConflict
 		}
 		run, evaluation, ok := learningRelationRefs(row.Relations)
@@ -95,25 +95,9 @@ func skillLessons(ctx context.Context, tx Tx, scope Scope, lessons []Ref) (skill
 			return out, ErrInvalid
 		}
 		runs[run.ID] = true
-		var reflection *Record
-		for _, rel := range row.Relations {
-			if rel.Collection != colReflections {
-				continue
-			}
-			if reflection != nil {
-				return out, ErrInvalid
-			}
-			r, e := tx.Get(ctx, rel.Collection, scope, rel.ID)
-			if e != nil {
-				return out, e
-			}
-			if r.Reflection == nil || r.Scope != scope || r.Revision != rel.Revision || !live(r) || r.Reflection.RunID != run.ID || r.Reflection.EvaluationID != evaluation.ID || r.Reflection.Lesson != row.Text {
-				return out, ErrConflict
-			}
-			reflection = &r
-		}
-		if reflection == nil {
-			return out, ErrInvalid
+		reflection, err := lessonReflection(ctx, tx, scope, row, run, evaluation)
+		if err != nil {
+			return out, err
 		}
 		if taskType == "" {
 			taskType, text = reflection.Reflection.TaskType, row.Text
@@ -128,32 +112,65 @@ func skillLessons(ctx context.Context, tx Tx, scope Scope, lessons []Ref) (skill
 		if !valid {
 			return out, ErrConflict
 		}
-		for _, rel := range append([]Ref{ref}, row.Relations...) {
-			if !slices.Contains(out.Relations, rel) {
-				out.Relations = append(out.Relations, rel)
-			}
-		}
-		for _, src := range row.Sources {
-			exists := false
-			for _, old := range out.Sources {
-				if structuredText(old) == structuredText(src) {
-					exists = true
-					break
-				}
-			}
-			if !exists {
-				out.Sources = append(out.Sources, src)
-			}
-		}
-		if row.Sensitivity == "restricted" || out.Sensitivity != "restricted" && row.Sensitivity == "private" {
-			out.Sensitivity = row.Sensitivity
-		}
+		mergeLessonEvidence(&out, ref, row)
 	}
 	// Reserve one source for the proposed SKILL.md itself.
 	if len(out.Sources) > 63 {
 		return out, ErrInvalid
 	}
 	return out, nil
+}
+
+func conflictedLessonRow(row Record, ref Ref, scope Scope) bool {
+	return row.Scope != scope || row.Revision != ref.Revision || row.PrivacyQuarantined || row.ContentErased || row.ConflictID != ""
+}
+
+// lessonReflection returns the lesson's one reflection, bound to its run and evaluation.
+func lessonReflection(ctx context.Context, tx Tx, scope Scope, row Record, run, evaluation Ref) (*Record, error) {
+	var reflection *Record
+	for _, rel := range row.Relations {
+		if rel.Collection != colReflections {
+			continue
+		}
+		if reflection != nil {
+			return nil, ErrInvalid
+		}
+		r, e := tx.Get(ctx, rel.Collection, scope, rel.ID)
+		if e != nil {
+			return nil, e
+		}
+		if r.Reflection == nil || r.Scope != scope || r.Revision != rel.Revision || !live(r) || r.Reflection.RunID != run.ID || r.Reflection.EvaluationID != evaluation.ID || r.Reflection.Lesson != row.Text {
+			return nil, ErrConflict
+		}
+		reflection = &r
+	}
+	if reflection == nil {
+		return nil, ErrInvalid
+	}
+	return reflection, nil
+}
+
+func mergeLessonEvidence(out *skillLessonEvidence, ref Ref, row Record) {
+	for _, rel := range append([]Ref{ref}, row.Relations...) {
+		if !slices.Contains(out.Relations, rel) {
+			out.Relations = append(out.Relations, rel)
+		}
+	}
+	for _, src := range row.Sources {
+		exists := false
+		for _, old := range out.Sources {
+			if structuredText(old) == structuredText(src) {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			out.Sources = append(out.Sources, src)
+		}
+	}
+	if row.Sensitivity == "restricted" || out.Sensitivity != "restricted" && row.Sensitivity == "private" {
+		out.Sensitivity = row.Sensitivity
+	}
 }
 
 func proposedLessons(r Record) []Ref {

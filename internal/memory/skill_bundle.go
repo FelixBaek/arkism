@@ -60,17 +60,11 @@ func validSkillBundle(b *SkillBundle) bool {
 	}
 	total, previous := 0, ""
 	for _, f := range b.Files {
-		if !utf8.ValidString(f.Path) || len(f.Path) > 512 || f.Path <= previous || path.IsAbs(f.Path) || path.Clean(f.Path) != f.Path || strings.ContainsAny(f.Path, "\\:") || strings.IndexFunc(f.Path, unicode.IsControl) >= 0 {
+		if !validSkillBundlePath(f.Path, previous) {
 			return false
 		}
-		for _, part := range strings.Split(f.Path, "/") {
-			p := strings.ToLower(part)
-			if strings.HasPrefix(p, ".") || p == "node_modules" || p == "__pycache__" || strings.HasSuffix(p, ".key") || strings.HasSuffix(p, ".pem") || strings.HasSuffix(p, ".token") {
-				return false
-			}
-		}
 		if f.Omitted != "" {
-			if (f.Omitted != "binary" && f.Omitted != "too_large" && f.Omitted != "limit" && f.Omitted != "secret") || f.Content != "" || f.Size <= 0 || !crewHashRe.MatchString(f.SHA256) {
+			if !validOmittedSkillBundleFile(f) {
 				return false
 			}
 			previous = f.Path
@@ -86,4 +80,21 @@ func validSkillBundle(b *SkillBundle) bool {
 		previous = f.Path
 	}
 	return true
+}
+
+func validSkillBundlePath(name, previous string) bool {
+	if !utf8.ValidString(name) || len(name) > 512 || name <= previous || path.IsAbs(name) || path.Clean(name) != name || strings.ContainsAny(name, "\\:") || strings.IndexFunc(name, unicode.IsControl) >= 0 {
+		return false
+	}
+	for _, part := range strings.Split(name, "/") {
+		p := strings.ToLower(part)
+		if strings.HasPrefix(p, ".") || p == "node_modules" || p == "__pycache__" || strings.HasSuffix(p, ".key") || strings.HasSuffix(p, ".pem") || strings.HasSuffix(p, ".token") {
+			return false
+		}
+	}
+	return true
+}
+
+func validOmittedSkillBundleFile(f SkillBundleFile) bool {
+	return (f.Omitted == "binary" || f.Omitted == "too_large" || f.Omitted == "limit" || f.Omitted == "secret") && f.Content == "" && f.Size > 0 && crewHashRe.MatchString(f.SHA256)
 }

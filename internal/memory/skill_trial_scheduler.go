@@ -88,17 +88,8 @@ func (s *Service) ClaimSkillTrialCheck(ctx context.Context, token, id string, in
 			return e
 		}
 		now := time.Now().UTC()
-		if job.Kind != skillTrialCheckKind || job.Target == nil || job.Target.ID != id || job.SkillID != in.SkillID || job.ContentErased || job.PrivacyQuarantined {
-			return ErrConflict
-		}
-		if job.Status == JobStatusDone || job.Status == JobStatusFailed || (job.RunAt != nil && job.RunAt.After(now)) || job.Status == JobStatusRunning && job.LeaseUntil.After(now) {
-			return ErrNotFound
-		}
-		if job.Status != JobStatusPending && job.Status != JobStatusRetry && job.Status != JobStatusRunning {
-			return ErrConflict
-		}
-		if job.Attempts >= 8 {
-			return ErrUnavailable
+		if e = claimableSkillTrialCheck(job, in.SkillID, id, now); e != nil {
+			return e
 		}
 		lease, e := newLeaseToken()
 		if e != nil {
@@ -144,20 +135,9 @@ func (s *Service) FinishSkillTrialCheck(ctx context.Context, token, id string, i
 		if job.Kind != skillTrialCheckKind || job.SkillID != in.SkillID || job.Status != JobStatusRunning || job.Revision != in.ExpectedRevision || job.LeaseToken != in.LeaseToken || !job.LeaseUntil.After(now) {
 			return ErrConflict
 		}
-		trial, e := tx.Get(ctx, colSkillTrials, in.Scope, id)
-		terminal := errors.Is(e, ErrNotFound)
-		if e != nil && !terminal {
+		terminal, e := skillTrialCheckTerminal(ctx, tx, in.Scope, id, now)
+		if e != nil {
 			return e
-		}
-		if !terminal {
-			terminal = trial.SkillTrial == nil || trial.ContentErased || trial.PrivacyQuarantined || trial.Status != "active" || !trial.SkillTrial.EndsAt.After(now)
-		}
-		if !terminal {
-			state, err := skillTrialTerminal(ctx, tx, trial)
-			if err != nil {
-				return err
-			}
-			terminal = state == "rolled_back" || state == "expired"
 		}
 		prev := job.Revision
 		job.Revision++
@@ -184,4 +164,37 @@ func (s *Service) FinishSkillTrialCheck(ctx context.Context, token, id string, i
 		}
 		return audit(ctx, tx, in.Scope, actor.PrincipalID, "finish:skill_trial_check", job.ID)
 	})
+}
+func claimableSkillTrialCheck(job Record, skillID, id string, now time.Time) error {
+	if job.Kind != skillTrialCheckKind || job.Target == nil || job.Target.ID != id || job.SkillID != skillID || job.ContentErased || job.PrivacyQuarantined {
+		return ErrConflict
+	}
+	if job.Status == JobStatusDone || job.Status == JobStatusFailed || (job.RunAt != nil && job.RunAt.After(now)) || job.Status == JobStatusRunning && job.LeaseUntil.After(now) {
+		return ErrNotFound
+	}
+	if job.Status != JobStatusPending && job.Status != JobStatusRetry && job.Status != JobStatusRunning {
+		return ErrConflict
+	}
+	if job.Attempts >= 8 {
+		return ErrUnavailable
+	}
+	return nil
+}
+func skillTrialCheckTerminal(ctx context.Context, tx Tx, scope Scope, id string, now time.Time) (bool, error) {
+	trial, e := tx.Get(ctx, colSkillTrials, scope, id)
+	terminal := errors.Is(e, ErrNotFound)
+	if e != nil && !terminal {
+		return false, e
+	}
+	if !terminal {
+		terminal = trial.SkillTrial == nil || trial.ContentErased || trial.PrivacyQuarantined || trial.Status != "active" || !trial.SkillTrial.EndsAt.After(now)
+	}
+	if !terminal {
+		state, err := skillTrialTerminal(ctx, tx, trial)
+		if err != nil {
+			return false, err
+		}
+		terminal = state == "rolled_back" || state == "expired"
+	}
+	return terminal, nil
 }

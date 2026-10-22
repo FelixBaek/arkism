@@ -568,101 +568,17 @@ func (s *Service) removeWikiSource(ctx context.Context, token, sourceID string, 
 	anchor := "knowledge-source-" + ContentHash(sourceID)
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		out = WikiCleanupResult{Deleted: []string{}, Detached: []string{}, Unlinked: []string{}, JobsEnded: []string{}}
-		deleted := map[string]string{} // slug -> page id
-		for _, seen := range pages {
-			if p := wikiPageOf(seen); p == nil || !slices.Contains(p.SourceIDs, sourceID) {
-				continue
-			}
-			r, err := s.getWikiPage(ctx, tx, in.Scope, seen.ID)
-			if err != nil {
-				return err
-			}
-			p := *r.Wiki.Page
-			p.SourceIDs = slices.DeleteFunc(append([]string{}, p.SourceIDs...), func(x string) bool { return x == sourceID })
-			r.Sources = slices.DeleteFunc(append([]SourceRef{}, r.Sources...), func(x SourceRef) bool { return x.SourceID == anchor })
-			if len(p.SourceIDs) == 0 && !p.Locked {
-				old := p.Reviewed
-				p.ReviewState, p.Draft, p.Reviewed, p.StaleSources = "deleted", nil, nil, nil
-				r.Status, r.Text, r.Summary, r.ContentErased = "deleted", "", "", true
-				r.Wiki = &WikiRecord{Page: &p}
-				if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
-					return err
-				}
-				if err = syncWikiLinks(ctx, tx, in.Scope, r, old, d.PrincipalID); err != nil {
-					return err
-				}
-				deleted[p.Slug] = r.ID
-				out.Deleted = append(out.Deleted, r.ID)
-				continue
-			}
-			if !slices.Contains(p.StaleSources, sourceID) {
-				p.StaleSources = append(append([]string{}, p.StaleSources...), sourceID)
-			}
-			r.Wiki = &WikiRecord{Page: &p}
-			if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
-				return err
-			}
-			out.Detached = append(out.Detached, r.ID)
+		deleted, err := s.detachWikiSource(ctx, tx, in.Scope, d, pages, sourceID, anchor, &out)
+		if err != nil {
+			return err
 		}
 		if len(deleted) > 0 {
-			for _, seen := range pages {
-				if _, gone := deleted[wikiSlugOf(seen)]; gone || wikiPageOf(seen) == nil {
-					continue
-				}
-				r, err := s.getWikiPage(ctx, tx, in.Scope, seen.ID)
-				if err != nil {
-					return err
-				}
-				p := *r.Wiki.Page
-				changed := false
-				for slug, to := range deleted {
-					linked := p.Reviewed != nil && slices.Contains(p.Reviewed.Links, slug) || p.Draft != nil && slices.Contains(p.Draft.Links, slug)
-					if !linked {
-						continue
-					}
-					// The row goes even from a locked page; its text stays as the person wrote it.
-					if err = deleteWikiLink(ctx, tx, in.Scope, r.ID, to); err != nil {
-						return err
-					}
-					if p.Locked {
-						continue
-					}
-					p.Reviewed = unlinkBody(p.Reviewed, slug, p.Slug)
-					p.Draft = unlinkBody(p.Draft, slug, p.Slug)
-					changed = true
-				}
-				if !changed {
-					continue
-				}
-				if p.Reviewed != nil {
-					r.Text = p.Reviewed.Text
-				}
-				r.Wiki = &WikiRecord{Page: &p}
-				if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
-					return err
-				}
-				out.Unlinked = append(out.Unlinked, r.ID)
+			if err := s.unlinkDeletedWikiPages(ctx, tx, in.Scope, pages, deleted, &out); err != nil {
+				return err
 			}
 		}
-		for _, seen := range jobs {
-			if seen.Kind != wikiJobKind || seen.Wiki == nil || seen.Wiki.Job == nil || seen.Wiki.Job.KnowledgeSourceID != sourceID || seen.Status == JobStatusDone || seen.Status == JobStatusFailed {
-				continue
-			}
-			j, err := tx.Get(ctx, "jobs", in.Scope, seen.ID)
-			if err != nil {
-				return err
-			}
-			job := *j.Wiki.Job
-			job.Error = "source_removed"
-			j.Wiki = &WikiRecord{Job: &job}
-			j.Status, j.LeaseToken, j.LeaseUntil = JobStatusFailed, "", time.Time{}
-			prev := j.Revision
-			j.Revision++
-			j.UpdatedAt = time.Now().UTC()
-			if err = tx.Replace(ctx, "jobs", j, prev); err != nil {
-				return err
-			}
-			out.JobsEnded = append(out.JobsEnded, j.ID)
+		if err := endWikiSourceJobs(ctx, tx, in.Scope, jobs, sourceID, &out); err != nil {
+			return err
 		}
 		if dryRun {
 			return errWikiDryRun
@@ -673,6 +589,116 @@ func (s *Service) removeWikiSource(ctx context.Context, token, sourceID string, 
 		out.DryRun, err = true, nil
 	}
 	return out, err
+}
+
+// detachWikiSource drops sourceID from every page built from it and deletes
+// the unlocked pages it leaves with no source; it returns slug -> deleted page id.
+func (s *Service) detachWikiSource(ctx context.Context, tx Tx, scope Scope, d Decision, pages []Record, sourceID, anchor string, out *WikiCleanupResult) (map[string]string, error) {
+	deleted := map[string]string{} // slug -> page id
+	for _, seen := range pages {
+		if p := wikiPageOf(seen); p == nil || !slices.Contains(p.SourceIDs, sourceID) {
+			continue
+		}
+		r, err := s.getWikiPage(ctx, tx, scope, seen.ID)
+		if err != nil {
+			return nil, err
+		}
+		p := *r.Wiki.Page
+		p.SourceIDs = slices.DeleteFunc(append([]string{}, p.SourceIDs...), func(x string) bool { return x == sourceID })
+		r.Sources = slices.DeleteFunc(append([]SourceRef{}, r.Sources...), func(x SourceRef) bool { return x.SourceID == anchor })
+		if len(p.SourceIDs) == 0 && !p.Locked {
+			old := p.Reviewed
+			p.ReviewState, p.Draft, p.Reviewed, p.StaleSources = "deleted", nil, nil, nil
+			r.Status, r.Text, r.Summary, r.ContentErased = "deleted", "", "", true
+			r.Wiki = &WikiRecord{Page: &p}
+			if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
+				return nil, err
+			}
+			if err = syncWikiLinks(ctx, tx, scope, r, old, d.PrincipalID); err != nil {
+				return nil, err
+			}
+			deleted[p.Slug] = r.ID
+			out.Deleted = append(out.Deleted, r.ID)
+			continue
+		}
+		if !slices.Contains(p.StaleSources, sourceID) {
+			p.StaleSources = append(append([]string{}, p.StaleSources...), sourceID)
+		}
+		r.Wiki = &WikiRecord{Page: &p}
+		if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
+			return nil, err
+		}
+		out.Detached = append(out.Detached, r.ID)
+	}
+	return deleted, nil
+}
+
+// unlinkDeletedWikiPages removes links to the deleted pages from the pages that remain.
+func (s *Service) unlinkDeletedWikiPages(ctx context.Context, tx Tx, scope Scope, pages []Record, deleted map[string]string, out *WikiCleanupResult) error {
+	for _, seen := range pages {
+		if _, gone := deleted[wikiSlugOf(seen)]; gone || wikiPageOf(seen) == nil {
+			continue
+		}
+		r, err := s.getWikiPage(ctx, tx, scope, seen.ID)
+		if err != nil {
+			return err
+		}
+		p := *r.Wiki.Page
+		changed := false
+		for slug, to := range deleted {
+			linked := p.Reviewed != nil && slices.Contains(p.Reviewed.Links, slug) || p.Draft != nil && slices.Contains(p.Draft.Links, slug)
+			if !linked {
+				continue
+			}
+			// The row goes even from a locked page; its text stays as the person wrote it.
+			if err = deleteWikiLink(ctx, tx, scope, r.ID, to); err != nil {
+				return err
+			}
+			if p.Locked {
+				continue
+			}
+			p.Reviewed = unlinkBody(p.Reviewed, slug, p.Slug)
+			p.Draft = unlinkBody(p.Draft, slug, p.Slug)
+			changed = true
+		}
+		if !changed {
+			continue
+		}
+		if p.Reviewed != nil {
+			r.Text = p.Reviewed.Text
+		}
+		r.Wiki = &WikiRecord{Page: &p}
+		if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
+			return err
+		}
+		out.Unlinked = append(out.Unlinked, r.ID)
+	}
+	return nil
+}
+
+// endWikiSourceJobs fails the open wiki jobs for sourceID.
+func endWikiSourceJobs(ctx context.Context, tx Tx, scope Scope, jobs []Record, sourceID string, out *WikiCleanupResult) error {
+	for _, seen := range jobs {
+		if seen.Kind != wikiJobKind || seen.Wiki == nil || seen.Wiki.Job == nil || seen.Wiki.Job.KnowledgeSourceID != sourceID || seen.Status == JobStatusDone || seen.Status == JobStatusFailed {
+			continue
+		}
+		j, err := tx.Get(ctx, "jobs", scope, seen.ID)
+		if err != nil {
+			return err
+		}
+		job := *j.Wiki.Job
+		job.Error = "source_removed"
+		j.Wiki = &WikiRecord{Job: &job}
+		j.Status, j.LeaseToken, j.LeaseUntil = JobStatusFailed, "", time.Time{}
+		prev := j.Revision
+		j.Revision++
+		j.UpdatedAt = time.Now().UTC()
+		if err = tx.Replace(ctx, "jobs", j, prev); err != nil {
+			return err
+		}
+		out.JobsEnded = append(out.JobsEnded, j.ID)
+	}
+	return nil
 }
 
 func wikiSlugOf(r Record) string {

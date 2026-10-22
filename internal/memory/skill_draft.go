@@ -39,22 +39,29 @@ func (a *ChatSkillDrafter) Generator() Generator {
 	return Generator{Model: a.Config.Model, PromptVersion: "skill-draft-v3", PipelineVersion: "arkism-skill-draft-v1"}
 }
 
-func (a *ChatSkillDrafter) Draft(ctx context.Context, in SkillDraftInput) (SkillDraft, ProviderUsage, error) {
-	var zero SkillDraft
+func invalidSkillDraftInput(in SkillDraftInput) bool {
 	if !validRunLabel(in.SkillID, 256) || !strings.HasSuffix(in.Path, "SKILL.md") || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || len(in.Path) > 4096 || len(in.Lessons) < improvementMinRuns || len(in.Lessons) > 16 || !safeTransfer(structuredText(in)) {
-		return zero, ProviderUsage{}, ErrInvalid
+		return true
 	}
 	if in.BaselineAnalysis == nil {
 		if in.BaselineContent != "" {
-			return zero, ProviderUsage{}, ErrInvalid
+			return true
 		}
 	} else if !validAnalysis(in.BaselineAnalysis) || in.BaselineAnalysis.SkillID != in.SkillID || in.BaselineContent == "" || in.BaselineAnalysis.ContentHash != ContentHash(in.BaselineContent) {
-		return zero, ProviderUsage{}, ErrInvalid
+		return true
 	}
 	for _, lesson := range in.Lessons {
 		if strings.TrimSpace(lesson.TaskType) == "" || strings.TrimSpace(lesson.Lesson) == "" || strings.TrimSpace(lesson.VerificationMethod) == "" {
-			return zero, ProviderUsage{}, ErrInvalid
+			return true
 		}
+	}
+	return false
+}
+
+func (a *ChatSkillDrafter) Draft(ctx context.Context, in SkillDraftInput) (SkillDraft, ProviderUsage, error) {
+	var zero SkillDraft
+	if invalidSkillDraftInput(in) {
+		return zero, ProviderUsage{}, ErrInvalid
 	}
 	g := a.Generator()
 	if !validGenerator(&g) || a.Config.APIKey == "" || strings.HasPrefix(strings.ToLower(a.Config.Model), "jev") || validateEndpoint(a.Config.Endpoint) != nil {
@@ -162,21 +169,8 @@ func completeDraftResponseJSON(raw, bodyKey string) bool {
 	if json.Unmarshal([]byte(raw), &root) != nil || len(root) != 2 || root[bodyKey] == nil || root["analysis"] == nil || strings.TrimSpace(string(root[bodyKey])) == "null" {
 		return false
 	}
-	if bodyKey == "edits" {
-		var edits []map[string]json.RawMessage
-		if json.Unmarshal(root[bodyKey], &edits) != nil || len(edits) == 0 || len(edits) > maxSkillDraftEdits {
-			return false
-		}
-		for _, edit := range edits {
-			if len(edit) != 3 {
-				return false
-			}
-			for _, key := range []string{"old_text", "new_text", "lesson_index"} {
-				if edit[key] == nil || strings.TrimSpace(string(edit[key])) == "null" {
-					return false
-				}
-			}
-		}
+	if bodyKey == "edits" && !completeDraftEditsJSON(root[bodyKey]) {
+		return false
 	}
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(root["analysis"], &fields) != nil {
@@ -190,6 +184,24 @@ func completeDraftResponseJSON(raw, bodyKey string) bool {
 		value, ok := fields[key]
 		if !ok || string(value) == "null" && string(expected) != "null" {
 			return false
+		}
+	}
+	return true
+}
+
+func completeDraftEditsJSON(raw json.RawMessage) bool {
+	var edits []map[string]json.RawMessage
+	if json.Unmarshal(raw, &edits) != nil || len(edits) == 0 || len(edits) > maxSkillDraftEdits {
+		return false
+	}
+	for _, edit := range edits {
+		if len(edit) != 3 {
+			return false
+		}
+		for _, key := range []string{"old_text", "new_text", "lesson_index"} {
+			if edit[key] == nil || strings.TrimSpace(string(edit[key])) == "null" {
+				return false
+			}
 		}
 	}
 	return true

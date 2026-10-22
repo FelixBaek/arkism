@@ -472,28 +472,8 @@ func (s *Service) CommitSessionArchive(ctx context.Context, token string, in Ses
 		header, err := tx.Get(ctx, colSessionArchives, in.Scope, in.ID)
 		switch {
 		case errors.Is(err, ErrNotFound):
-			manifest, verr := s.verifySessionArchiveChunks(ctx, tx, in.Scope, in.ID, in.Chunks, in.SHA256)
-			if verr != nil {
-				return verr
-			}
-			expires := observed.Add(SessionArchiveTTL)
-			created := Record{
-				ID: in.ID, Scope: in.Scope, Kind: kindSessionArchive, Status: statusActive, Revision: 1,
-				Text: in.Text, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
-				ExpiresAt: &expires,
-				SessionArchive: &SessionArchiveData{
-					SessionID: in.SessionID, Device: in.Device, Origin: in.Origin, Format: in.Format,
-					ObservedAt: observed, Chunks: manifest, SHA256: in.SHA256,
-				},
-			}
-			if err := tx.Insert(ctx, colSessionArchives, created); err != nil {
-				return err
-			}
-			if err := audit(ctx, tx, in.Scope, d.PrincipalID, "create:"+colSessionArchives, in.ID); err != nil {
-				return err
-			}
-			out = sessionArchiveCommitOutput(created, sessionArchiveStateActive)
-			return nil
+			out, err = s.createSessionArchive(ctx, tx, in, d, now, observed)
+			return err
 		case err != nil:
 			return err
 		}
@@ -549,24 +529,8 @@ func (s *Service) CommitSessionArchive(ctx context.Context, token string, in Ses
 		}
 		// Chunks the new manifest no longer references lose their ciphertext.
 		// Other headers are unaffected: the header ID is part of every chunk ID.
-		kept := make(map[string]bool, len(manifest))
-		for _, c := range manifest {
-			kept[c] = true
-		}
-		for _, c := range uniqueArchiveChunks(old.Chunks) {
-			if kept[c] {
-				continue
-			}
-			chunk, err := tx.Get(ctx, colSessionArchiveChunks, in.Scope, c)
-			if err != nil {
-				return err
-			}
-			if !isSessionArchiveChunkFor(chunk, in.ID) {
-				return ErrConflict
-			}
-			if err := tx.Delete(ctx, colSessionArchiveChunks, in.Scope, c, chunk.Revision); err != nil {
-				return err
-			}
+		if err := deleteSessionArchiveChunks(ctx, tx, in.Scope, in.ID, staleArchiveChunks(old.Chunks, manifest)); err != nil {
+			return err
 		}
 		if err := audit(ctx, tx, in.Scope, d.PrincipalID, colSessionArchives+":append", in.ID); err != nil {
 			return err
@@ -578,6 +542,61 @@ func (s *Service) CommitSessionArchive(ctx context.Context, token string, in Ses
 		return SessionArchiveCommitOutput{}, e
 	}
 	return out, nil
+}
+
+func (s *Service) createSessionArchive(ctx context.Context, tx Tx, in SessionArchiveCommitInput, d Decision, now, observed time.Time) (SessionArchiveCommitOutput, error) {
+	manifest, verr := s.verifySessionArchiveChunks(ctx, tx, in.Scope, in.ID, in.Chunks, in.SHA256)
+	if verr != nil {
+		return SessionArchiveCommitOutput{}, verr
+	}
+	expires := observed.Add(SessionArchiveTTL)
+	created := Record{
+		ID: in.ID, Scope: in.Scope, Kind: kindSessionArchive, Status: statusActive, Revision: 1,
+		Text: in.Text, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
+		ExpiresAt: &expires,
+		SessionArchive: &SessionArchiveData{
+			SessionID: in.SessionID, Device: in.Device, Origin: in.Origin, Format: in.Format,
+			ObservedAt: observed, Chunks: manifest, SHA256: in.SHA256,
+		},
+	}
+	if err := tx.Insert(ctx, colSessionArchives, created); err != nil {
+		return SessionArchiveCommitOutput{}, err
+	}
+	if err := audit(ctx, tx, in.Scope, d.PrincipalID, "create:"+colSessionArchives, in.ID); err != nil {
+		return SessionArchiveCommitOutput{}, err
+	}
+	return sessionArchiveCommitOutput(created, sessionArchiveStateActive), nil
+}
+
+func staleArchiveChunks(old, manifest []string) []string {
+	kept := make(map[string]bool, len(manifest))
+	for _, c := range manifest {
+		kept[c] = true
+	}
+	var stale []string
+	for _, c := range uniqueArchiveChunks(old) {
+		if !kept[c] {
+			stale = append(stale, c)
+		}
+	}
+	return stale
+}
+
+// deleteSessionArchiveChunks drops the ciphertext of chunks owned by headerID.
+func deleteSessionArchiveChunks(ctx context.Context, tx Tx, scope Scope, headerID string, chunks []string) error {
+	for _, c := range chunks {
+		chunk, err := tx.Get(ctx, colSessionArchiveChunks, scope, c)
+		if err != nil {
+			return err
+		}
+		if !isSessionArchiveChunkFor(chunk, headerID) {
+			return ErrConflict
+		}
+		if err := tx.Delete(ctx, colSessionArchiveChunks, scope, c, chunk.Revision); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func sessionArchiveCommitOutput(r Record, state string) SessionArchiveCommitOutput {
@@ -636,14 +655,17 @@ func (s *Service) ListSessionArchives(ctx context.Context, token string, in Sess
 			break
 		}
 	}
-	if len(rows) > in.Limit {
-		if n := len(out.Items); n > 0 {
-			out.Next = out.Items[n-1].ID
-		} else {
-			out.Next = rows[len(rows)-1].ID
-		}
-	}
+	out.Next = sessionArchiveListNext(rows, out.Items, in.Limit)
 	return out, nil
+}
+func sessionArchiveListNext(rows []Record, items []SessionArchiveView, limit int) string {
+	if len(rows) <= limit {
+		return ""
+	}
+	if n := len(items); n > 0 {
+		return items[n-1].ID
+	}
+	return rows[len(rows)-1].ID
 }
 
 // ReadSessionArchiveChunk decrypts one manifest chunk for a human or service
@@ -807,14 +829,8 @@ func (s *Service) SessionArchiveUsed(ctx context.Context, token string, in Sessi
 		if err := tx.Replace(ctx, colSessionArchives, current, current.Revision); err != nil {
 			return err
 		}
-		for _, check := range []struct{ action, id string }{{"use:" + colSessionArchives, in.ID}, {"read:" + colMemories, in.MemoryID}} {
-			who, err := s.authorize(ctx, token, check.action, in.Scope, check.id, "")
-			if err != nil {
-				return err
-			}
-			if who.PrincipalID != d.PrincipalID || who.Role != d.Role {
-				return ErrDenied
-			}
+		if err := s.recheckSessionArchiveUse(ctx, token, in, d); err != nil {
+			return err
 		}
 		// Locks/policy calls may have waited across an expiry boundary. The
 		// outer request timestamp must never resurrect an expired original.
@@ -865,6 +881,19 @@ func (s *Service) SessionArchiveUsed(ctx context.Context, token string, in Sessi
 		return SessionArchiveUsedOutput{}, e
 	}
 	return out, nil
+}
+
+func (s *Service) recheckSessionArchiveUse(ctx context.Context, token string, in SessionArchiveUsedInput, d Decision) error {
+	for _, check := range []struct{ action, id string }{{"use:" + colSessionArchives, in.ID}, {"read:" + colMemories, in.MemoryID}} {
+		who, err := s.authorize(ctx, token, check.action, in.Scope, check.id, "")
+		if err != nil {
+			return err
+		}
+		if who.PrincipalID != d.PrincipalID || who.Role != d.Role {
+			return ErrDenied
+		}
+	}
+	return nil
 }
 
 // ExpireSessionArchives expires due headers: manifest chunk ciphertexts are
@@ -923,17 +952,8 @@ func (s *Service) ExpireSessionArchives(ctx context.Context, token string, in Se
 			if r.Revision != row.Revision || !sessionArchiveDueForExpiry(r, now) {
 				return ErrConflict
 			}
-			for _, chunkID := range uniqueArchiveChunks(r.SessionArchive.Chunks) {
-				chunk, err := tx.Get(ctx, colSessionArchiveChunks, in.Scope, chunkID)
-				if err != nil {
-					return err
-				}
-				if !isSessionArchiveChunkFor(chunk, r.ID) {
-					return ErrConflict
-				}
-				if err := tx.Delete(ctx, colSessionArchiveChunks, in.Scope, chunkID, chunk.Revision); err != nil {
-					return err
-				}
+			if err := deleteSessionArchiveChunks(ctx, tx, in.Scope, r.ID, uniqueArchiveChunks(r.SessionArchive.Chunks)); err != nil {
+				return err
 			}
 			previous := r.Revision
 			r.Revision++
@@ -956,6 +976,9 @@ func (s *Service) ExpireSessionArchives(ctx context.Context, token string, in Se
 	if e != nil {
 		return SessionArchiveExpireOutput{}, e
 	}
+	return s.expireSessionArchiveOrphans(ctx, token, store, in, actor, now, out)
+}
+func (s *Service) expireSessionArchiveOrphans(ctx context.Context, token string, store SessionArchiveStore, in SessionArchiveExpireInput, actor Decision, now time.Time, out SessionArchiveExpireOutput) (SessionArchiveExpireOutput, error) {
 	orphans, e := store.SessionArchiveOrphanRows(ctx, in.Scope, now, in.Limit)
 	if e != nil {
 		return out, e

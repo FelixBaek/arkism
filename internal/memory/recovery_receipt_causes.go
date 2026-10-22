@@ -90,38 +90,37 @@ func recoveryReceiptCauses(ctx context.Context, p *Postgres, scope Scope, ledger
 		}
 		return RecoveryReceiptCause{Target: target, OriginType: "legacy_delete", Basis: "human_delete", RootTarget: &root}
 	}
-	for _, target := range ledger.Targets {
-		if ctx.Err() != nil {
-			return out, ErrUnavailable
+	// fromImpact attributes a work deletion without a parent chain to the one
+	// earlier request whose impact covered it.
+	fromImpact := func(target DeletionTarget, row Record) RecoveryReceiptCause {
+		matches := []string{}
+		for id := range coverage[target] {
+			r := requestByID[id]
+			if !row.CreatedAt.IsZero() && !r.PrivacyDeletion.RequestedAt.After(row.CreatedAt) {
+				matches = append(matches, r.ID)
+			}
 		}
-		row, ok := receipts[target]
-		if !ok || row.Scope != scope {
-			return out, ErrUnavailable
+		if len(matches) == 1 {
+			return fromRequest(target, target, matches[0], "request_impact")
 		}
+		if len(matches) > 1 {
+			return unresolved(target, "ambiguous_request")
+		}
+		return unresolved(target, "missing_parent")
+	}
+	causeOf := func(target DeletionTarget, row Record) (RecoveryReceiptCause, error) {
 		cause := unresolved(target, "missing_parent")
 		switch row.Kind {
 		case workDeletionKind:
 			if row.ErasureParentID != "" {
 				cause = fromRequest(target, target, row.ErasureParentID, "parent_chain")
 			} else {
-				matches := []string{}
-				for id := range coverage[target] {
-					r := requestByID[id]
-					if !row.CreatedAt.IsZero() && !r.PrivacyDeletion.RequestedAt.After(row.CreatedAt) {
-						matches = append(matches, r.ID)
-					}
-				}
-				if len(matches) == 1 {
-					cause = fromRequest(target, target, matches[0], "request_impact")
-				}
-				if len(matches) > 1 {
-					cause = unresolved(target, "ambiguous_request")
-				}
+				cause = fromImpact(target, row)
 			}
 		case "source_deletion":
 			parent, e := p.Get(ctx, colJobs, scope, sourceMemoryErasureID(scope, target.ID))
 			if e != nil && !errors.Is(e, ErrNotFound) {
-				return out, e
+				return cause, e
 			}
 			if row.ErasureParentID != "" {
 				cause = fromRequest(target, target, row.ErasureParentID, "parent_chain")
@@ -133,7 +132,7 @@ func recoveryReceiptCauses(ctx context.Context, p *Postgres, scope Scope, ledger
 			}
 		default:
 			if !validSourceErasureJob(row) {
-				return out, ErrUnavailable
+				return cause, ErrUnavailable
 			}
 			if row.ErasureParentID == "" {
 				if row.CreatedByType == "human" {
@@ -143,12 +142,26 @@ func recoveryReceiptCauses(ctx context.Context, p *Postgres, scope Scope, ledger
 			} else {
 				parent, e := p.Get(ctx, colJobs, scope, row.ErasureParentID)
 				if e != nil && !errors.Is(e, ErrNotFound) {
-					return out, e
+					return cause, e
 				}
 				if e == nil {
 					cause = fromSourceJob(target, parent)
 				}
 			}
+		}
+		return cause, nil
+	}
+	for _, target := range ledger.Targets {
+		if ctx.Err() != nil {
+			return out, ErrUnavailable
+		}
+		row, ok := receipts[target]
+		if !ok || row.Scope != scope {
+			return out, ErrUnavailable
+		}
+		cause, err := causeOf(target, row)
+		if err != nil {
+			return out, err
 		}
 		out.Items = append(out.Items, cause)
 	}

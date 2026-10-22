@@ -173,56 +173,13 @@ func searchCollection(purpose string) (string, bool) {
 
 // Keep the search actor inside the service for multi-step consumers.
 func (s *Service) searchWithActor(ctx context.Context, token string, in SearchInput) (ContextBundle, Decision, error) {
-	if !validSearchRelation(in) {
-		return ContextBundle{}, Decision{}, ErrInvalid
-	}
-	if in.RelatedTo != nil {
-		ref := *in.RelatedTo
-		in.RelatedTo = &ref
-	}
-	if in.IncludeInactive && (in.Purpose != "" && in.Purpose != "answer" || in.Destination != "" && in.Destination != "internal") {
-		return ContextBundle{}, Decision{}, ErrInvalid
-	}
-	if !validSearchModes(in.Modes) {
-		return ContextBundle{}, Decision{}, ErrInvalid
-	}
-	criteria, err := normalizeSearchCriteria(in.SearchCriteria)
+	searchContent, err := prepareSearchInput(&in)
 	if err != nil {
 		return ContextBundle{}, Decision{}, err
 	}
-	criteria.history = in.IncludeInactive
-	in.SearchCriteria = criteria
-	if !in.IncludeInactive && in.Filters != nil {
-		for _, status := range in.Filters.Statuses {
-			if status != "active" {
-				return ContextBundle{}, Decision{}, ErrInvalid
-			}
-		}
-	}
-	searchContent := in.Query
-	if in.RelatedTo != nil || in.IncludeInactive || len(in.Kinds) > 0 || in.Filters != nil {
-		searchContent = structuredText(struct {
-			Query           string `json:"query"`
-			RelatedTo       *Ref   `json:"related_to,omitempty"`
-			IncludeInactive bool   `json:"include_inactive,omitempty"`
-			SearchCriteria
-		}{in.Query, in.RelatedTo, in.IncludeInactive, criteria})
-	}
 	out := ContextBundle{Authority: "data_only_untrusted", Items: []Hit{}}
-	if in.BudgetTokens < 0 || in.BudgetTokens > 64000 || (in.BudgetTokens == 0) != (in.TokenEncoding == "") || in.TokenEncoding != "" && in.TokenEncoding != "cl100k_base" && in.TokenEncoding != "o200k_base" {
+	if !boundSearchInput(&in) {
 		return out, Decision{}, ErrInvalid
-	}
-	if in.Destination != "" && in.Destination != "internal" && !destinationPattern.MatchString(in.Destination) {
-		return out, Decision{}, ErrInvalid
-	}
-	if strings.TrimSpace(in.Query) == "" || !utf8.ValidString(in.Query) || utf8.RuneCountInString(in.Query) > 1000 || in.Limit < 0 || in.Limit > 50 || in.MaxChars < 0 || in.MaxChars > 64000 {
-		return out, Decision{}, ErrInvalid
-	}
-	if in.Limit == 0 {
-		in.Limit = 8
-	}
-	if in.MaxChars == 0 {
-		in.MaxChars = 12000
 	}
 	collection, ok := searchCollection(in.Purpose)
 	if !ok {
@@ -239,69 +196,19 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 			return ContextBundle{}, Decision{}, e
 		}
 	}
-	var run *Ref
-	if in.RunID != "" {
-		if len(in.RunID) > 256 || strings.TrimSpace(in.RunID) != in.RunID || containsSecret(in.RunID) {
-			return ContextBundle{}, Decision{}, ErrInvalid
-		}
-		rd, err := s.authorize(ctx, token, "read:agent_runs", in.Scope, in.RunID, "")
-		if err != nil {
-			return ContextBundle{}, Decision{}, err
-		}
-		if rd.PrincipalID != d.PrincipalID || rd.Role != d.Role {
-			return ContextBundle{}, Decision{}, ErrDenied
-		}
-		row, err := s.Repo.Get(ctx, "agent_runs", in.Scope, in.RunID)
-		if err != nil {
-			return ContextBundle{}, Decision{}, err
-		}
-		if !live(row) {
-			return ContextBundle{}, Decision{}, ErrConflict
-		}
-		if err = checkSources(ctx, s.Repo, row); err != nil {
-			return ContextBundle{}, Decision{}, err
-		}
-		run = &Ref{Collection: "agent_runs", ID: row.ID, Revision: row.Revision}
+	run, err := s.searchRun(ctx, token, in, d)
+	if err != nil {
+		return ContextBundle{}, Decision{}, err
 	}
-	var lists [][]Hit
-	var memoryErr error
-	var degraded []string
-	var queryVector []float64
-	var querySpace string
-	func() {
-		var vec []float64
-		space := ""
-		if searchModeEnabled(in.Modes, "vector") {
-			if d.ExternalTransfer && d.ContentSafe && s.Embedder != nil && safeTransfer(searchContent) {
-				reserved, e := s.beginProviderCall(ctx, in.Scope, "embedding_query", embeddingProvider(s.Embedder), s.Embedder.Space())
-				if e != nil {
-					memoryErr = e
-					return
-				}
-				batch, e := embedMeasured(ctx, s.Embedder, []string{in.Query}, "query")
-				if e != nil {
-					_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
-					degraded = append(degraded, "memory_vector_unavailable")
-				} else if e = s.finishProviderCall(ctx, reserved, batch.Usage, true); e != nil {
-					memoryErr = e
-					return
-				} else if len(batch.Items) != 1 {
-					degraded = append(degraded, "memory_vector_unavailable")
-				} else {
-					vec = batch.Items[0].Vector
-					space = s.Embedder.Space()
-				}
-			} else {
-				degraded = append(degraded, "memory_vector_disabled")
-			}
-		}
-		retrieval := in
-		if in.retrievalQuery != "" {
-			retrieval.Query = in.retrievalQuery
-		}
-		lists, memoryErr = s.Repo.SearchCollection(ctx, collection, retrieval, vec, space)
-		queryVector, querySpace = vec, space
-	}()
+	queryVector, querySpace, degraded, memoryErr := s.searchQueryVector(ctx, in, d, searchContent)
+	if memoryErr != nil {
+		return out, Decision{}, ErrUnavailable
+	}
+	retrieval := in
+	if in.retrievalQuery != "" {
+		retrieval.Query = in.retrievalQuery
+	}
+	lists, memoryErr := s.Repo.SearchCollection(ctx, collection, retrieval, queryVector, querySpace)
 	if memoryErr != nil {
 		return out, Decision{}, ErrUnavailable
 	}
@@ -318,77 +225,8 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	// Recheck source liveness and scope after every search lane; search indexes
 	// are not authorization authorities.
 	historyRecords := map[string]Record{}
-	for i, list := range lists {
-		clean := []Hit{}
-		for _, h := range list {
-			if h.Scope != in.Scope || !in.IncludeInactive && h.Status != "active" || len(h.Sources) == 0 {
-				continue
-			}
-			if h.Collection != collection {
-				continue
-			}
-			r, e := s.Repo.Get(ctx, h.Collection, in.Scope, h.ID)
-			if e == nil && i == relationLane && !relationMatches(in.RelatedTo.Collection, anchor, r) {
-				continue
-			}
-			if e != nil || (!in.IncludeInactive && !live(r)) || (in.IncludeInactive && !historySearchable(r)) || !criteria.matchesRecord(r) || (h.Collection == colMemories && (r.ApprovedBy == "" || run != nil && !verifiedMemory(r))) || (!strings.HasPrefix(in.Destination, "external:") && checkSources(ctx, s.Repo, r) != nil) {
-				continue
-			}
-			if h.Collection == colReflections && checkReflection(ctx, s.Repo, r) != nil {
-				continue
-			}
-			if h.Collection == "skill_versions" {
-				if checkActiveSkill(ctx, s.Repo, r) != nil || r.Analysis == nil {
-					continue
-				}
-			}
-			why, distanceLimit := h.Reasons, h.vectorDistanceLimit
-			h = HitFromRecord(h.Collection, r)
-			if in.IncludeInactive && !live(r) {
-				historyRecords[h.ID] = r
-			}
-			h.Reasons = why
-			if h.Collection == colReflections {
-				h.Reasons = append(h.Reasons, "reflection_search")
-			}
-			if !criteria.matchesHit(h) {
-				continue
-			}
-			var allowed Decision
-			if _, historical := historyRecords[h.ID]; historical {
-				allowed, e = s.authorize(ctx, token, "read:memories", in.Scope, h.ID, structuredText(historyRecords[h.ID]))
-				if e != nil {
-					if !errors.Is(e, ErrDenied) {
-						return ContextBundle{}, Decision{}, e
-					}
-					continue
-				}
-			} else if strings.HasPrefix(in.Destination, "external:") {
-				allowed, e = s.authorizeTransfer(ctx, token, "context:read", in.Scope, h.ID, h.Sensitivity, in.Destination, structuredText(h), h.Sources)
-				if e != nil {
-					if !slices.Contains(out.Degraded, "external_content_filtered") {
-						out.Degraded = append(out.Degraded, "external_content_filtered")
-					}
-					continue
-				}
-			} else {
-				allowed, e = s.authorize(ctx, token, "context:read", in.Scope, h.ID, structuredText(h))
-				if e != nil {
-					if !slices.Contains(out.Degraded, "context_content_filtered") {
-						out.Degraded = append(out.Degraded, "context_content_filtered")
-					}
-					continue
-				}
-			}
-			if allowed.PrincipalID != d.PrincipalID || allowed.Role != d.Role {
-				return ContextBundle{}, Decision{}, ErrDenied
-			}
-			if slices.Contains(why, reasonVector) {
-				h.VectorMatch = verifiedSemanticMatch(r, queryVector, querySpace, distanceLimit)
-			}
-			clean = append(clean, h)
-		}
-		lists[i] = clean
+	if e = s.cleanSearchLanes(ctx, token, in, d, collection, anchor, run, relationLane, queryVector, querySpace, historyRecords, &out, lists); e != nil {
+		return ContextBundle{}, Decision{}, e
 	}
 	scored := fuseRecallHits(lists, collection, in.IncludeInactive, in.Limit)
 	out.Items = make([]Hit, len(scored))
@@ -400,7 +238,294 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	for _, h := range out.Items {
 		snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] = searchHitHash(h)
 	}
-	left := in.MaxChars
+	boundSearchHits(&out, in.MaxChars, historyRecords)
+	if in.BudgetTokens > 0 {
+		if e = packContext(ctx, &out, in.BudgetTokens, in.TokenEncoding); e != nil {
+			return ContextBundle{}, Decision{}, e
+		}
+	}
+	out.ContextID = ID()
+	usage := searchUsage(run, in, out.Items)
+	releaseCommit, err := s.searchCommits.acquire(ctx, in.Scope)
+	if err != nil {
+		return ContextBundle{}, Decision{}, ErrUnavailable
+	}
+	defer releaseCommit()
+	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		checked := searchReadTx{Tx: tx}
+		if in.RelatedTo != nil {
+			if err := verifySearchAnchor(ctx, tx, checked, in, anchor); err != nil {
+				return err
+			}
+		}
+		if err := verifySearchHistory(ctx, tx, checked, in, out.History, historyRecords, snapshots); err != nil {
+			return err
+		}
+		if err := verifySearchItems(ctx, checked, in, run, out.Items, snapshots); err != nil {
+			return err
+		}
+		if run != nil {
+			if err := verifySearchRun(ctx, checked, in.Scope, run); err != nil {
+				return err
+			}
+		}
+		if err := insertUsageReceipt(ctx, tx, in.Scope, out.ContextID, d.PrincipalID, usage); err != nil {
+			return err
+		}
+		return audit(ctx, tx, in.Scope, d.PrincipalID, "search", ContentHash(in.Query))
+	}); e != nil {
+		return ContextBundle{}, Decision{}, e
+	}
+	return out, d, nil
+}
+
+// prepareSearchInput validates the relation, history and criteria inputs,
+// stores the normalized criteria in in, and returns the text to authorize.
+func prepareSearchInput(in *SearchInput) (string, error) {
+	if !validSearchRelation(*in) {
+		return "", ErrInvalid
+	}
+	if in.RelatedTo != nil {
+		ref := *in.RelatedTo
+		in.RelatedTo = &ref
+	}
+	if in.IncludeInactive && (in.Purpose != "" && in.Purpose != "answer" || in.Destination != "" && in.Destination != "internal") {
+		return "", ErrInvalid
+	}
+	if !validSearchModes(in.Modes) {
+		return "", ErrInvalid
+	}
+	criteria, err := normalizeSearchCriteria(in.SearchCriteria)
+	if err != nil {
+		return "", err
+	}
+	criteria.history = in.IncludeInactive
+	in.SearchCriteria = criteria
+	if !in.IncludeInactive && in.Filters != nil {
+		for _, status := range in.Filters.Statuses {
+			if status != "active" {
+				return "", ErrInvalid
+			}
+		}
+	}
+	searchContent := in.Query
+	if in.RelatedTo != nil || in.IncludeInactive || len(in.Kinds) > 0 || in.Filters != nil {
+		searchContent = structuredText(struct {
+			Query           string `json:"query"`
+			RelatedTo       *Ref   `json:"related_to,omitempty"`
+			IncludeInactive bool   `json:"include_inactive,omitempty"`
+			SearchCriteria
+		}{in.Query, in.RelatedTo, in.IncludeInactive, criteria})
+	}
+	return searchContent, nil
+}
+
+// boundSearchInput validates the budget, destination and size bounds and
+// fills in the default limit and character budget.
+func boundSearchInput(in *SearchInput) bool {
+	if in.BudgetTokens < 0 || in.BudgetTokens > 64000 || (in.BudgetTokens == 0) != (in.TokenEncoding == "") || in.TokenEncoding != "" && in.TokenEncoding != "cl100k_base" && in.TokenEncoding != "o200k_base" {
+		return false
+	}
+	if in.Destination != "" && in.Destination != "internal" && !destinationPattern.MatchString(in.Destination) {
+		return false
+	}
+	if strings.TrimSpace(in.Query) == "" || !utf8.ValidString(in.Query) || utf8.RuneCountInString(in.Query) > 1000 || in.Limit < 0 || in.Limit > 50 || in.MaxChars < 0 || in.MaxChars > 64000 {
+		return false
+	}
+	if in.Limit == 0 {
+		in.Limit = 8
+	}
+	if in.MaxChars == 0 {
+		in.MaxChars = 12000
+	}
+	return true
+}
+
+func searchUsage(run *Ref, in SearchInput, items []Hit) *ContextUsage {
+	usage := pinnedUsage(run, in.Purpose, in.pinned)
+	usage.ProjectKey = in.ProjectKey
+	for i, h := range items {
+		if h.Collection == colMemories && h.Origin == "memory" && !usedRef(usage, h.ID) {
+			usage.Items = append(usage.Items, MemoryUse{Memory: Ref{Collection: colMemories, ID: h.ID, Revision: h.Revision}, Rank: len(in.pinned) + i + 1, Score: h.Score, Lanes: h.Lanes})
+		}
+	}
+	return usage
+}
+
+func (s *Service) cleanSearchLanes(ctx context.Context, token string, in SearchInput, d Decision, collection string, anchor Record, run *Ref, relationLane int, queryVector []float64, querySpace string, historyRecords map[string]Record, out *ContextBundle, lists [][]Hit) error {
+	for i, list := range lists {
+		clean := []Hit{}
+		for _, h := range list {
+			h, ok, e := s.cleanSearchHit(ctx, token, in, d, collection, anchor, run, i == relationLane, queryVector, querySpace, historyRecords, out, h)
+			if e != nil {
+				return e
+			}
+			if ok {
+				clean = append(clean, h)
+			}
+		}
+		lists[i] = clean
+	}
+	return nil
+}
+
+// searchRun resolves the optional run the search is recorded against.
+func (s *Service) searchRun(ctx context.Context, token string, in SearchInput, d Decision) (*Ref, error) {
+	if in.RunID == "" {
+		return nil, nil
+	}
+	if len(in.RunID) > 256 || strings.TrimSpace(in.RunID) != in.RunID || containsSecret(in.RunID) {
+		return nil, ErrInvalid
+	}
+	rd, err := s.authorize(ctx, token, "read:agent_runs", in.Scope, in.RunID, "")
+	if err != nil {
+		return nil, err
+	}
+	if rd.PrincipalID != d.PrincipalID || rd.Role != d.Role {
+		return nil, ErrDenied
+	}
+	row, err := s.Repo.Get(ctx, "agent_runs", in.Scope, in.RunID)
+	if err != nil {
+		return nil, err
+	}
+	if !live(row) {
+		return nil, ErrConflict
+	}
+	if err = checkSources(ctx, s.Repo, row); err != nil {
+		return nil, err
+	}
+	return &Ref{Collection: "agent_runs", ID: row.ID, Revision: row.Revision}, nil
+}
+
+// searchQueryVector embeds the query for the vector lane. A provider failure
+// only degrades the lane; a usage-ledger failure is returned.
+func (s *Service) searchQueryVector(ctx context.Context, in SearchInput, d Decision, searchContent string) ([]float64, string, []string, error) {
+	var degraded []string
+	if !searchModeEnabled(in.Modes, "vector") {
+		return nil, "", degraded, nil
+	}
+	if !(d.ExternalTransfer && d.ContentSafe && s.Embedder != nil && safeTransfer(searchContent)) {
+		return nil, "", append(degraded, "memory_vector_disabled"), nil
+	}
+	reserved, e := s.beginProviderCall(ctx, in.Scope, "embedding_query", embeddingProvider(s.Embedder), s.Embedder.Space())
+	if e != nil {
+		return nil, "", degraded, e
+	}
+	batch, e := embedMeasured(ctx, s.Embedder, []string{in.Query}, "query")
+	if e != nil {
+		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
+		return nil, "", append(degraded, "memory_vector_unavailable"), nil
+	}
+	if e = s.finishProviderCall(ctx, reserved, batch.Usage, true); e != nil {
+		return nil, "", degraded, e
+	}
+	if len(batch.Items) != 1 {
+		return nil, "", append(degraded, "memory_vector_unavailable"), nil
+	}
+	return batch.Items[0].Vector, s.Embedder.Space(), degraded, nil
+}
+
+// cleanSearchHit rereads one lane hit and reports whether it stays in the
+// lane. Historical records are remembered in historyRecords.
+func (s *Service) cleanSearchHit(ctx context.Context, token string, in SearchInput, d Decision, collection string, anchor Record, run *Ref, relationLane bool, queryVector []float64, querySpace string, historyRecords map[string]Record, out *ContextBundle, h Hit) (Hit, bool, error) {
+	r, ok := s.searchHitRecord(ctx, in, collection, anchor, run, relationLane, h)
+	if !ok {
+		return h, false, nil
+	}
+	why, distanceLimit := h.Reasons, h.vectorDistanceLimit
+	h = HitFromRecord(h.Collection, r)
+	if in.IncludeInactive && !live(r) {
+		historyRecords[h.ID] = r
+	}
+	h.Reasons = why
+	if h.Collection == colReflections {
+		h.Reasons = append(h.Reasons, "reflection_search")
+	}
+	if !in.SearchCriteria.matchesHit(h) {
+		return h, false, nil
+	}
+	history, historical := historyRecords[h.ID]
+	allowed, ok, e := s.authorizeSearchHit(ctx, token, in, h, history, historical, out)
+	if e != nil || !ok {
+		return h, false, e
+	}
+	if allowed.PrincipalID != d.PrincipalID || allowed.Role != d.Role {
+		return h, false, ErrDenied
+	}
+	if slices.Contains(why, reasonVector) {
+		h.VectorMatch = verifiedSemanticMatch(r, queryVector, querySpace, distanceLimit)
+	}
+	return h, true, nil
+}
+
+// searchHitRecord reads the record behind a lane hit and reports whether it
+// is still eligible for this search.
+func (s *Service) searchHitRecord(ctx context.Context, in SearchInput, collection string, anchor Record, run *Ref, relationLane bool, h Hit) (Record, bool) {
+	if h.Scope != in.Scope || !in.IncludeInactive && h.Status != "active" || len(h.Sources) == 0 {
+		return Record{}, false
+	}
+	if h.Collection != collection {
+		return Record{}, false
+	}
+	r, e := s.Repo.Get(ctx, h.Collection, in.Scope, h.ID)
+	if e == nil && relationLane && !relationMatches(in.RelatedTo.Collection, anchor, r) {
+		return Record{}, false
+	}
+	if e != nil || s.searchRecordFiltered(ctx, in, run, h.Collection, r) {
+		return Record{}, false
+	}
+	if h.Collection == colReflections && checkReflection(ctx, s.Repo, r) != nil {
+		return Record{}, false
+	}
+	if h.Collection == "skill_versions" {
+		if checkActiveSkill(ctx, s.Repo, r) != nil || r.Analysis == nil {
+			return Record{}, false
+		}
+	}
+	return r, true
+}
+
+func (s *Service) searchRecordFiltered(ctx context.Context, in SearchInput, run *Ref, col string, r Record) bool {
+	return (!in.IncludeInactive && !live(r)) || (in.IncludeInactive && !historySearchable(r)) || !in.SearchCriteria.matchesRecord(r) || (col == colMemories && (r.ApprovedBy == "" || run != nil && !verifiedMemory(r))) || (!strings.HasPrefix(in.Destination, "external:") && checkSources(ctx, s.Repo, r) != nil)
+}
+
+// authorizeSearchHit authorizes reading one hit. A filtered hit returns false
+// without an error and records its degradation on out.
+func (s *Service) authorizeSearchHit(ctx context.Context, token string, in SearchInput, h Hit, history Record, historical bool, out *ContextBundle) (Decision, bool, error) {
+	if historical {
+		allowed, e := s.authorize(ctx, token, "read:memories", in.Scope, h.ID, structuredText(history))
+		if e != nil {
+			if !errors.Is(e, ErrDenied) {
+				return Decision{}, false, e
+			}
+			return Decision{}, false, nil
+		}
+		return allowed, true, nil
+	}
+	if strings.HasPrefix(in.Destination, "external:") {
+		allowed, e := s.authorizeTransfer(ctx, token, "context:read", in.Scope, h.ID, h.Sensitivity, in.Destination, structuredText(h), h.Sources)
+		if e != nil {
+			if !slices.Contains(out.Degraded, "external_content_filtered") {
+				out.Degraded = append(out.Degraded, "external_content_filtered")
+			}
+			return Decision{}, false, nil
+		}
+		return allowed, true, nil
+	}
+	allowed, e := s.authorize(ctx, token, "context:read", in.Scope, h.ID, structuredText(h))
+	if e != nil {
+		if !slices.Contains(out.Degraded, "context_content_filtered") {
+			out.Degraded = append(out.Degraded, "context_content_filtered")
+		}
+		return Decision{}, false, nil
+	}
+	return allowed, true, nil
+}
+
+// boundSearchHits truncates hit text to the character budget and moves
+// historical hits into out.History.
+func boundSearchHits(out *ContextBundle, maxChars int, historyRecords map[string]Record) {
+	left := maxChars
 	bounded := []Hit{}
 	for _, h := range out.Items {
 		if left == 0 {
@@ -426,117 +551,103 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		}
 	}
 	out.Items = bounded
-	if in.BudgetTokens > 0 {
-		if e = packContext(ctx, &out, in.BudgetTokens, in.TokenEncoding); e != nil {
-			return ContextBundle{}, Decision{}, e
-		}
-	}
-	out.ContextID = ID()
-	usage := pinnedUsage(run, in.Purpose, in.pinned)
-	usage.ProjectKey = in.ProjectKey
-	for i, h := range out.Items {
-		if h.Collection == colMemories && h.Origin == "memory" && !usedRef(usage, h.ID) {
-			usage.Items = append(usage.Items, MemoryUse{Memory: Ref{Collection: colMemories, ID: h.ID, Revision: h.Revision}, Rank: len(in.pinned) + i + 1, Score: h.Score, Lanes: h.Lanes})
-		}
-	}
-	releaseCommit, err := s.searchCommits.acquire(ctx, in.Scope)
+}
+
+func verifySearchAnchor(ctx context.Context, tx Tx, checked searchReadTx, in SearchInput, anchor Record) error {
+	ref := in.RelatedTo
+	r, err := tx.Get(ctx, ref.Collection, in.Scope, ref.ID)
 	if err != nil {
-		return ContextBundle{}, Decision{}, ErrUnavailable
+		return err
 	}
-	defer releaseCommit()
-	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		checked := searchReadTx{Tx: tx}
-		if in.RelatedTo != nil {
-			ref := in.RelatedTo
-			r, err := tx.Get(ctx, ref.Collection, in.Scope, ref.ID)
-			if err != nil {
-				return err
-			}
-			if structuredText(r) != structuredText(anchor) {
-				return ErrConflict
-			}
-			switch ref.Collection {
-			case "sources":
-				err = tx.FenceSource(ctx, in.Scope, ref.ID)
-			case colMemories:
-				err = tx.FenceRelationMember(ctx, in.Scope, colMemories, ref.ID)
-			default:
-				err = tx.FenceSearchRead(ctx, in.Scope, ref.Collection, ref.ID, ref.Revision)
-			}
-			if err != nil {
-				return err
-			}
-			if err = checkRelationAnchor(ctx, checked, ref.Collection, r); err != nil {
-				return err
-			}
-		}
-		for _, h := range out.History {
-			r, err := tx.Get(ctx, colMemories, in.Scope, h.ID)
-			if err != nil {
-				return err
-			}
-			if !historySearchable(r) || live(r) || !criteria.matchesRecord(r) || structuredText(r) != structuredText(historyRecords[h.ID]) || searchHitHash(HitFromRecord(colMemories, r)) != snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] {
-				return ErrConflict
-			}
-			if err = tx.FenceRelationMember(ctx, in.Scope, colMemories, r.ID); err != nil {
-				return err
-			}
-			if err = checkSources(ctx, checked, r); err != nil {
-				return err
-			}
-		}
-		for _, h := range out.Items {
-			r, err := checked.Get(ctx, h.Collection, in.Scope, h.ID)
-			if err != nil {
-				return err
-			}
-			if r.ContentErased || !live(r) || !criteria.matchesRecord(r) || r.Revision != h.Revision || h.Collection == colMemories && (r.ApprovedBy == "" || run != nil && !verifiedMemory(r)) || searchHitHash(HitFromRecord(h.Collection, r)) != snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] {
-				return ErrConflict
-			}
-			if h.Collection == colMemories && run != nil {
-				if err = memoryProvenance(ctx, checked, r); err != nil {
-					return err
-				}
-			}
-			if strings.HasPrefix(in.Destination, "external:") {
-				err = checkTransferSources(ctx, checked, r.Scope, r.Sensitivity, r.Sources)
-			} else {
-				err = checkSources(ctx, checked, r)
-			}
-			if err != nil {
-				return err
-			}
-			if h.Collection == colSkillVersions {
-				if err = checkActiveSkill(ctx, checked, r); err != nil {
-					return err
-				}
-			}
-			if h.Collection == colReflections {
-				if err = checkReflection(ctx, checked, r); err != nil {
-					return err
-				}
-			}
-		}
-		if run != nil {
-			row, err := checked.Get(ctx, "agent_runs", in.Scope, run.ID)
-			if err != nil {
-				return err
-			}
-			if row.Revision != run.Revision || !live(row) {
-				return ErrConflict
-			}
-			if err = checkSources(ctx, checked, row); err != nil {
-				return err
-			}
-		}
-		if err := insertUsageReceipt(ctx, tx, in.Scope, out.ContextID, d.PrincipalID, usage); err != nil {
+	if structuredText(r) != structuredText(anchor) {
+		return ErrConflict
+	}
+	switch ref.Collection {
+	case "sources":
+		err = tx.FenceSource(ctx, in.Scope, ref.ID)
+	case colMemories:
+		err = tx.FenceRelationMember(ctx, in.Scope, colMemories, ref.ID)
+	default:
+		err = tx.FenceSearchRead(ctx, in.Scope, ref.Collection, ref.ID, ref.Revision)
+	}
+	if err != nil {
+		return err
+	}
+	return checkRelationAnchor(ctx, checked, ref.Collection, r)
+}
+
+func verifySearchHistory(ctx context.Context, tx Tx, checked searchReadTx, in SearchInput, history []HistoricalHit, historyRecords map[string]Record, snapshots map[Ref]string) error {
+	for _, h := range history {
+		r, err := tx.Get(ctx, colMemories, in.Scope, h.ID)
+		if err != nil {
 			return err
 		}
-		return audit(ctx, tx, in.Scope, d.PrincipalID, "search", ContentHash(in.Query))
-	}); e != nil {
-		return ContextBundle{}, Decision{}, e
+		if !historySearchable(r) || live(r) || !in.SearchCriteria.matchesRecord(r) || structuredText(r) != structuredText(historyRecords[h.ID]) || searchHitHash(HitFromRecord(colMemories, r)) != snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] {
+			return ErrConflict
+		}
+		if err = tx.FenceRelationMember(ctx, in.Scope, colMemories, r.ID); err != nil {
+			return err
+		}
+		if err = checkSources(ctx, checked, r); err != nil {
+			return err
+		}
 	}
-	return out, d, nil
+	return nil
+}
+
+func verifySearchItems(ctx context.Context, checked searchReadTx, in SearchInput, run *Ref, items []Hit, snapshots map[Ref]string) error {
+	for _, h := range items {
+		r, err := checked.Get(ctx, h.Collection, in.Scope, h.ID)
+		if err != nil {
+			return err
+		}
+		if r.ContentErased || !live(r) || !in.SearchCriteria.matchesRecord(r) || r.Revision != h.Revision || h.Collection == colMemories && (r.ApprovedBy == "" || run != nil && !verifiedMemory(r)) || searchHitHash(HitFromRecord(h.Collection, r)) != snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] {
+			return ErrConflict
+		}
+		if err = verifySearchItemSources(ctx, checked, in, run, h.Collection, r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func verifySearchItemSources(ctx context.Context, checked searchReadTx, in SearchInput, run *Ref, col string, r Record) error {
+	var err error
+	if col == colMemories && run != nil {
+		if err = memoryProvenance(ctx, checked, r); err != nil {
+			return err
+		}
+	}
+	if strings.HasPrefix(in.Destination, "external:") {
+		err = checkTransferSources(ctx, checked, r.Scope, r.Sensitivity, r.Sources)
+	} else {
+		err = checkSources(ctx, checked, r)
+	}
+	if err != nil {
+		return err
+	}
+	if col == colSkillVersions {
+		if err = checkActiveSkill(ctx, checked, r); err != nil {
+			return err
+		}
+	}
+	if col == colReflections {
+		if err = checkReflection(ctx, checked, r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func verifySearchRun(ctx context.Context, checked searchReadTx, scope Scope, run *Ref) error {
+	row, err := checked.Get(ctx, "agent_runs", scope, run.ID)
+	if err != nil {
+		return err
+	}
+	if row.Revision != run.Revision || !live(row) {
+		return ErrConflict
+	}
+	return checkSources(ctx, checked, row)
 }
 
 func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result error) {
@@ -555,14 +666,7 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 	// Give both queues one opportunity per worker iteration. Canonical privacy
 	// phases must not wait for an embedding backlog to empty; a blocked privacy
 	// phase must likewise not prevent its derived-erasure jobs from running.
-	privacyErr := error(ErrNotFound)
-	if privacy, ok := s.Repo.(privacyStore); ok {
-		next, nextErr := privacy.NextPrivacyAdvance(ctx, time.Now().UTC())
-		privacyErr = nextErr
-		if nextErr == nil {
-			_, privacyErr = s.AdvancePrivacyDeletion(ctx, workerToken, next.ID, PrivacyRevisionInput{Scope: next.Scope, ExpectedRevision: next.Revision})
-		}
-	}
+	privacyErr := s.advancePrivacyOnce(ctx, workerToken)
 	job, e := s.Repo.ClaimJob(ctx, time.Now().UTC(), 2*time.Minute)
 	if errors.Is(e, ErrNotFound) {
 		return privacyErr // nil when the privacy phase made progress
@@ -590,7 +694,7 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 	if job.Attempts > maxJobAttempts {
 		return ErrUnavailable
 	}
-	if job.Kind == sourceMemoryErasureKind || job.Kind == sourceRecordErasureKind || job.Kind == sourceSkillErasureKind || job.Kind == sourceRelationErasureKind || job.Kind == sourceMemoryDependentsErasureKind || isMemoryErasureKind(job.Kind) {
+	if sourceErasureJob(job.Kind) {
 		e := s.eraseSourceMemories(ctx, workerToken, job)
 		handled = e == nil
 		return e
@@ -598,66 +702,66 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 	if job.Kind != "embedding" {
 		return ErrInvalid
 	}
+	success, e = s.embedJob(ctx, workerToken, &job)
+	return e
+}
+
+// advancePrivacyOnce advances the next due privacy deletion, if any. It
+// returns ErrNotFound when no privacy store or phase is waiting.
+func (s *Service) advancePrivacyOnce(ctx context.Context, workerToken string) error {
+	privacyErr := error(ErrNotFound)
+	if privacy, ok := s.Repo.(privacyStore); ok {
+		next, nextErr := privacy.NextPrivacyAdvance(ctx, time.Now().UTC())
+		privacyErr = nextErr
+		if nextErr == nil {
+			_, privacyErr = s.AdvancePrivacyDeletion(ctx, workerToken, next.ID, PrivacyRevisionInput{Scope: next.Scope, ExpectedRevision: next.Revision})
+		}
+	}
+	return privacyErr
+}
+
+func sourceErasureJob(kind string) bool {
+	return kind == sourceMemoryErasureKind || kind == sourceRecordErasureKind || kind == sourceSkillErasureKind || kind == sourceRelationErasureKind || kind == sourceMemoryDependentsErasureKind || isMemoryErasureKind(kind)
+}
+
+// embedJob runs one embedding job. The bool reports whether the attempt
+// counts as finished; a successful write also advances job.Revision.
+func (s *Service) embedJob(ctx context.Context, workerToken string, job *Record) (bool, error) {
 	if job.Target == nil || (job.Target.Collection != "memories" && job.Target.Collection != "skill_versions" && job.Target.Collection != colReflections) {
-		success = true
-		return ErrInvalid
+		return true, ErrInvalid
 	}
 	r, e := s.Repo.Get(ctx, job.Target.Collection, job.Scope, job.Target.ID)
 	if e == ErrNotFound {
-		success = true
-		return nil
+		return true, nil
 	}
 	if e != nil {
-		return e
+		return false, e
 	}
 	if !embeddingEligible(job.Target.Collection, r) || r.Revision != job.Target.Revision {
-		success = true
-		return nil
+		return true, nil
 	}
 	if e = checkSources(ctx, s.Repo, r); e != nil {
-		success = true
-		return e
+		return true, e
 	}
 	if job.Target.Collection == colSkillVersions {
 		if e = checkActiveSkill(ctx, s.Repo, r); e != nil {
-			return e
+			return false, e
 		}
 	}
 	if job.Target.Collection == colReflections && checkReflection(ctx, s.Repo, r) != nil {
-		return ErrDenied
+		return false, ErrDenied
 	}
 	content := recordContent(r)
 	if r.Sensitivity == "restricted" || !safeTransfer(content) {
-		success = true // never embeddable; retrying only piles up failed jobs
-		return ErrDenied
+		return true, ErrDenied // never embeddable; retrying only piles up failed jobs
 	}
-	if s.Embedder != nil && r.Embedding != nil && r.Embedding.Space == s.Embedder.Space() && r.Embedding.Dimension == VectorDimension && len(r.Embedding.Vector) == VectorDimension && r.Embedding.ContentHash == ContentHash(content) {
-		success = true
-		return nil
+	if embeddingCurrent(s.Embedder, r, content) {
+		return true, nil
 	}
-	if _, e = s.authorizeTransfer(ctx, workerToken, "embed:document", r.Scope, r.ID, r.Sensitivity, "external:embedding", content, r.Sources); e != nil {
-		return e
-	}
-	if s.Embedder == nil {
-		return ErrDenied
-	}
-	reserved, e := s.beginProviderCall(ctx, r.Scope, "embedding_document", embeddingProvider(s.Embedder), s.Embedder.Space())
+	embedded, e := s.embedDocument(ctx, workerToken, r, content)
 	if e != nil {
-		return e
+		return false, e
 	}
-	batch, e := embedMeasured(ctx, s.Embedder, []string{content}, "document")
-	if e != nil {
-		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
-		return e
-	}
-	if e = s.finishProviderCall(ctx, reserved, batch.Usage, true); e != nil {
-		return e
-	}
-	embedded := batch.Items
-	if len(embedded) != 1 || len(embedded[0].Vector) != 1024 || embedded[0].Space != s.Embedder.Space() {
-		return ErrInvalid
-	}
-	embedded[0].ContentHash = ContentHash(content)
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		lease, e := tx.Get(ctx, "jobs", job.Scope, job.ID)
 		if e != nil {
@@ -691,14 +795,47 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 		if job.Target.Collection == colReflections && checkReflection(ctx, tx, current) != nil {
 			return ErrDenied
 		}
-		current.Embedding = &embedded[0]
+		current.Embedding = &embedded
 		return tx.Replace(ctx, job.Target.Collection, current, current.Revision)
 	})
-	success = e == nil
+	success := e == nil
 	if success {
 		job.Revision++
 	}
-	return e
+	return success, e
+}
+
+func embeddingCurrent(embedder Embedder, r Record, content string) bool {
+	return embedder != nil && r.Embedding != nil && r.Embedding.Space == embedder.Space() && r.Embedding.Dimension == VectorDimension && len(r.Embedding.Vector) == VectorDimension && r.Embedding.ContentHash == ContentHash(content)
+}
+
+// embedDocument authorizes the transfer and embeds content through the
+// metered provider call.
+func (s *Service) embedDocument(ctx context.Context, workerToken string, r Record, content string) (Embedding, error) {
+	if _, e := s.authorizeTransfer(ctx, workerToken, "embed:document", r.Scope, r.ID, r.Sensitivity, "external:embedding", content, r.Sources); e != nil {
+		return Embedding{}, e
+	}
+	if s.Embedder == nil {
+		return Embedding{}, ErrDenied
+	}
+	reserved, e := s.beginProviderCall(ctx, r.Scope, "embedding_document", embeddingProvider(s.Embedder), s.Embedder.Space())
+	if e != nil {
+		return Embedding{}, e
+	}
+	batch, e := embedMeasured(ctx, s.Embedder, []string{content}, "document")
+	if e != nil {
+		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
+		return Embedding{}, e
+	}
+	if e = s.finishProviderCall(ctx, reserved, batch.Usage, true); e != nil {
+		return Embedding{}, e
+	}
+	embedded := batch.Items
+	if len(embedded) != 1 || len(embedded[0].Vector) != 1024 || embedded[0].Space != s.Embedder.Space() {
+		return Embedding{}, ErrInvalid
+	}
+	embedded[0].ContentHash = ContentHash(content)
+	return embedded[0], nil
 }
 
 // Approved future memories may be embedded in advance; readers enforce the start

@@ -64,7 +64,7 @@ func skillTrialCandidate(ctx context.Context, tx Tx, scope Scope, skillID string
 	if err != nil {
 		return Record{}, err
 	}
-	if candidate.Revision != trial.Candidate.Revision || candidate.SkillID != skillID || candidate.Status != "approved" || candidate.ApprovedBy == "" || candidate.Analysis == nil || candidate.ComparisonPlan == nil || candidate.ContentErased || candidate.PrivacyQuarantined || candidate.EffectiveAt != nil && candidate.EffectiveAt.After(time.Now()) || candidate.BaseVersion != trial.BaselineVersion || candidate.ExpiresAt != nil && !candidate.ExpiresAt.After(time.Now()) || !slices.Contains(skillHistory(parent), candidate.ID) {
+	if ineligibleTrialCandidate(candidate, parent, trial, skillID) {
 		return Record{}, ErrConflict
 	}
 	if effectiveCompatibility(candidate, parent)[trial.Runtime] == "unsupported" {
@@ -81,6 +81,11 @@ func skillTrialCandidate(ctx context.Context, tx Tx, scope Scope, skillID string
 	}
 	return candidate, nil
 }
+
+func ineligibleTrialCandidate(candidate, parent Record, trial *SkillTrial, skillID string) bool {
+	return candidate.Revision != trial.Candidate.Revision || candidate.SkillID != skillID || candidate.Status != "approved" || candidate.ApprovedBy == "" || candidate.Analysis == nil || candidate.ComparisonPlan == nil || candidate.ContentErased || candidate.PrivacyQuarantined || candidate.EffectiveAt != nil && candidate.EffectiveAt.After(time.Now()) || candidate.BaseVersion != trial.BaselineVersion || candidate.ExpiresAt != nil && !candidate.ExpiresAt.After(time.Now()) || !slices.Contains(skillHistory(parent), candidate.ID)
+}
+
 func trialDomainError(err error) bool {
 	return errors.Is(err, ErrConflict) || errors.Is(err, ErrDenied) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvalid)
 }

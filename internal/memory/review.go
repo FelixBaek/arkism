@@ -64,42 +64,56 @@ func normalizeReview(in ReviewInput) (ReviewInput, *reviewCursor, error) {
 	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || !slices.Contains([]string{"candidate", "approved", "conflicted", "rejected", "expired"}, in.Status) || in.Limit < 1 || in.Limit > 100 || in.Kind != "" && !validCreateKind("memory_candidates", in.Kind) || len(in.Proposer) > 256 || strings.IndexFunc(in.Proposer, unicode.IsControl) >= 0 || containsSecret(in.Proposer) {
 		return in, nil, ErrInvalid
 	}
-	for _, field := range []**time.Time{&in.CreatedFrom, &in.CreatedTo} {
-		if *field != nil {
-			normalized := (**field).UTC().Truncate(time.Millisecond)
-			if normalized.IsZero() {
-				return in, nil, ErrInvalid
-			}
-			*field = &normalized
-		}
-	}
-	if in.CreatedFrom != nil && in.CreatedTo != nil && !in.CreatedFrom.Before(*in.CreatedTo) {
+	if !normalizeReviewTimes(&in) {
 		return in, nil, ErrInvalid
 	}
 	if in.Cursor == "" {
 		return in, nil, nil
 	}
+	after, e := decodeReviewCursor(in)
+	if e != nil {
+		return in, nil, e
+	}
+	return in, after, nil
+}
+
+func normalizeReviewTimes(in *ReviewInput) bool {
+	for _, field := range []**time.Time{&in.CreatedFrom, &in.CreatedTo} {
+		if *field != nil {
+			normalized := (**field).UTC().Truncate(time.Millisecond)
+			if normalized.IsZero() {
+				return false
+			}
+			*field = &normalized
+		}
+	}
+	return !(in.CreatedFrom != nil && in.CreatedTo != nil && !in.CreatedFrom.Before(*in.CreatedTo))
+}
+
+// decodeReviewCursor decodes in.Cursor and checks that it was issued for the
+// same review query.
+func decodeReviewCursor(in ReviewInput) (*reviewCursor, error) {
 	if len(in.Cursor) > 2048 || strings.IndexFunc(in.Cursor, unicode.IsSpace) >= 0 {
-		return in, nil, ErrInvalid
+		return nil, ErrInvalid
 	}
 	data, e := base64.RawURLEncoding.Strict().DecodeString(in.Cursor)
 	if e != nil {
-		return in, nil, ErrInvalid
+		return nil, ErrInvalid
 	}
 	var after reviewCursor
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&after) != nil {
-		return in, nil, ErrInvalid
+		return nil, ErrInvalid
 	}
 	var extra any
 	if decoder.Decode(&extra) != io.EOF {
-		return in, nil, ErrInvalid
+		return nil, ErrInvalid
 	}
 	if after.Binding != reviewBinding(in) || math.IsNaN(after.Trust) || math.IsInf(after.Trust, 0) || after.Trust < 0 || after.Trust > 1 || after.Evidence < 0 || after.Evidence > 64 || after.CreatedAt.IsZero() || after.ID == "" || len(after.ID) > 256 || strings.IndexFunc(after.ID, unicode.IsControl) >= 0 || containsSecret(after.ID) {
-		return in, nil, ErrInvalid
+		return nil, ErrInvalid
 	}
-	return in, &after, nil
+	return &after, nil
 }
 func (s *Service) ListCandidates(ctx context.Context, token string, in ReviewInput) (ReviewPage, error) {
 	out := ReviewPage{Items: []Record{}, Authority: "data_only_untrusted"}

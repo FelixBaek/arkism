@@ -266,9 +266,141 @@ func (s *Service) ImportSkill(ctx context.Context, token string, in ImportSkillI
 	return s.importSkill(ctx, token, in, nil)
 }
 
+func invalidImportSkillInput(in ImportSkillInput) bool {
+	return !validSkillBundle(in.Bundle) || !validComparisonPlan(in.ComparisonPlan) || !validScope(in.Scope) || !validRunLabel(in.SkillID, 256) || in.Path == "" || len(in.Path) > 4096 || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || !strings.HasSuffix(in.Path, "SKILL.md") || strings.TrimSpace(in.Content) == "" || len(in.Content) > 64000 || in.Analysis == nil || !validSkillOrigin(in.Origin) || !validSkillCompatibility(in.Compatibility)
+}
+
+// Snapshot caller-owned slices; secrets are withheld (hash only), never redacted in place.
+func snapshotSkillBundle(bundle *SkillBundle, inspection *Inspection, sensitivity *string) (*SkillBundle, error) {
+	clone := *bundle
+	clone.Files = slices.Clone(bundle.Files)
+	for i, file := range clone.Files {
+		// A companion whose text trips the secret scan is pinned by hash only: its bytes are
+		// never stored or served, and the bundle hash (paths + file hashes) is unchanged.
+		text := file.Path + "\n" + file.Content
+		if containsSecret(text) {
+			if file.Omitted != "" || file.Content == "" || containsSecret(file.Path) {
+				return &clone, ErrSecretDetected
+			}
+			clone.Files[i] = SkillBundleFile{Path: file.Path, SHA256: file.SHA256, Size: int64(len(file.Content)), Omitted: "secret"}
+			continue
+		}
+		if personalPattern.MatchString(text) {
+			inspection.PersonalData = true
+			if *sensitivity != "restricted" {
+				*sensitivity = "private"
+			}
+		}
+	}
+	return &clone, nil
+}
+
+func (s *Service) authorizeSkillImport(ctx context.Context, token string, in ImportSkillInput, proposal *ProposeSkillInput) (Decision, error) {
+	decision, err := s.authorize(ctx, token, "write:sources", in.Scope, in.SkillID, "")
+	if err != nil {
+		return decision, err
+	}
+	if proposal == nil && decision.Role != roleHuman || proposal != nil && !slices.Contains([]string{roleHuman, "agent", "service", "pipeline"}, decision.Role) {
+		return decision, ErrDenied
+	}
+	for _, action := range []string{"write:skill_versions", "write:skills"} {
+		allowed, e := s.authorize(ctx, token, action, in.Scope, in.SkillID, "")
+		if e != nil {
+			return decision, e
+		}
+		if allowed.PrincipalID != decision.PrincipalID || allowed.Role != decision.Role {
+			return decision, ErrDenied
+		}
+	}
+	return decision, nil
+}
+
+func (s *Service) authorizeSkillProposal(ctx context.Context, token string, in ImportSkillInput, proposal *ProposeSkillInput, decision Decision) (skillLessonEvidence, error) {
+	var evidence skillLessonEvidence
+	// Authorize before reading any lesson; then authorize every transitive record.
+	read := func(ref Ref) error {
+		d, e := s.authorize(ctx, token, "read:"+ref.Collection, in.Scope, ref.ID, "")
+		if e != nil {
+			return e
+		}
+		if d.PrincipalID != decision.PrincipalID || d.Role != decision.Role {
+			return ErrDenied
+		}
+		return nil
+	}
+	for _, ref := range []Ref{{Collection: colSkills, ID: in.SkillID}, {Collection: colSkillVersions, ID: in.ComparisonPlan.BaselineVersion}} {
+		if err := read(ref); err != nil {
+			return evidence, err
+		}
+	}
+	for _, ref := range proposal.Lessons {
+		if err := read(ref); err != nil {
+			return evidence, err
+		}
+	}
+	evidence, err := proposalEvidence(ctx, s.Repo, in.Scope, proposal)
+	if err != nil {
+		return evidence, err
+	}
+	for _, ref := range evidence.Relations {
+		if err = read(ref); err != nil {
+			return evidence, err
+		}
+	}
+	for _, ref := range evidence.Sources {
+		if err = read(Ref{Collection: "sources", ID: ref.SourceID}); err != nil {
+			return evidence, err
+		}
+	}
+	for _, action := range []string{"write:sources", "write:skill_versions", "write:skills"} {
+		d, e := s.authorize(ctx, token, action, in.Scope, in.SkillID, structuredText(proposal))
+		if e != nil {
+			return evidence, e
+		}
+		if d.PrincipalID != decision.PrincipalID || d.Role != decision.Role || !d.ContentSafe {
+			return evidence, ErrDenied
+		}
+	}
+	return evidence, nil
+}
+
+func skillImportVersionID(in ImportSkillInput, contentHash string, proposal *ProposeSkillInput, evidence skillLessonEvidence, decision Decision) string {
+	versionID := "skill-" + ContentHash(structuredText(in.Scope)+"\n"+in.SkillID+"\n"+contentHash)
+	if in.Bundle != nil {
+		versionID = "skill-" + ContentHash(versionID+"\n"+in.Bundle.SHA256)
+	}
+	if in.ComparisonPlan != nil {
+		versionID = "skill-" + ContentHash(versionID+"\n"+structuredText(in.ComparisonPlan))
+	}
+	if proposal != nil {
+		versionID = "skill-" + ContentHash(versionID+"\n"+structuredText(proposal)+"\n"+decision.PrincipalID+"\n"+decision.Role)
+		if evidence.Basis != nil {
+			versionID = "skill-" + ContentHash(versionID+"\n"+structuredText(evidence.Basis))
+		}
+	}
+	return versionID
+}
+
+func applyProposalEvidence(source, version *Record, skillID string, proposal *ProposeSkillInput, evidence skillLessonEvidence, cleanSensitivity string) {
+	source.SkillBasis, version.SkillBasis = evidence.Basis, evidence.Basis
+	if evidence.Basis != nil {
+		source.SkillID = skillID
+	}
+	source.TrustLevel, source.Generator, source.Sensitivity = "agent_proposed", proposal.Generator, evidence.Sensitivity
+	version.Kind, version.Generator, version.Sensitivity = proposedSkillKind, proposal.Generator, evidence.Sensitivity
+	if cleanSensitivity == "private" && evidence.Sensitivity != "restricted" {
+		source.Sensitivity, version.Sensitivity = "private", "private"
+	}
+	version.Sources = append(version.Sources, evidence.Sources...)
+	version.Relations = evidence.Relations
+	source.Kind = proposedSkillSourceKind
+	source.Relations = evidence.Relations
+	source.Sources = append(source.Sources, evidence.Sources...)
+}
+
 func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillInput, proposal *ProposeSkillInput) (ImportSkillResult, error) {
 	var out ImportSkillResult
-	if !validSkillBundle(in.Bundle) || !validComparisonPlan(in.ComparisonPlan) || !validScope(in.Scope) || !validRunLabel(in.SkillID, 256) || in.Path == "" || len(in.Path) > 4096 || strings.TrimSpace(in.Path) != in.Path || strings.IndexFunc(in.Path, unicode.IsControl) >= 0 || !strings.HasSuffix(in.Path, "SKILL.md") || strings.TrimSpace(in.Content) == "" || len(in.Content) > 64000 || in.Analysis == nil || !validSkillOrigin(in.Origin) || !validSkillCompatibility(in.Compatibility) {
+	if invalidImportSkillInput(in) {
 		return out, ErrInvalid
 	}
 	if in.ComparisonPlan != nil {
@@ -285,45 +417,14 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 	}
 	in.Content = clean.Text
 	if in.Bundle != nil {
-		// Snapshot caller-owned slices; secrets are withheld (hash only), never redacted in place.
-		clone := *in.Bundle
-		clone.Files = slices.Clone(in.Bundle.Files)
-		in.Bundle = &clone
-		for i, file := range clone.Files {
-			// A companion whose text trips the secret scan is pinned by hash only: its bytes are
-			// never stored or served, and the bundle hash (paths + file hashes) is unchanged.
-			text := file.Path + "\n" + file.Content
-			if containsSecret(text) {
-				if file.Omitted != "" || file.Content == "" || containsSecret(file.Path) {
-					return out, ErrSecretDetected
-				}
-				clone.Files[i] = SkillBundleFile{Path: file.Path, SHA256: file.SHA256, Size: int64(len(file.Content)), Omitted: "secret"}
-				continue
-			}
-			if personalPattern.MatchString(text) {
-				inspection.PersonalData = true
-				if clean.Sensitivity != "restricted" {
-					clean.Sensitivity = "private"
-				}
-			}
+		if in.Bundle, err = snapshotSkillBundle(in.Bundle, &inspection, &clean.Sensitivity); err != nil {
+			return out, err
 		}
 	}
 
-	decision, err := s.authorize(ctx, token, "write:sources", in.Scope, in.SkillID, "")
+	decision, err := s.authorizeSkillImport(ctx, token, in, proposal)
 	if err != nil {
 		return out, err
-	}
-	if proposal == nil && decision.Role != roleHuman || proposal != nil && !slices.Contains([]string{roleHuman, "agent", "service", "pipeline"}, decision.Role) {
-		return out, ErrDenied
-	}
-	for _, action := range []string{"write:skill_versions", "write:skills"} {
-		allowed, e := s.authorize(ctx, token, action, in.Scope, in.SkillID, "")
-		if e != nil {
-			return out, e
-		}
-		if allowed.PrincipalID != decision.PrincipalID || allowed.Role != decision.Role {
-			return out, ErrDenied
-		}
 	}
 	ctx = bindRequestActor(ctx, decision)
 	var evidence skillLessonEvidence
@@ -331,65 +432,12 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 		clone := *proposal
 		clone.Skill = in
 		proposal = &clone
-		// Authorize before reading any lesson; then authorize every transitive record.
-		read := func(ref Ref) error {
-			d, e := s.authorize(ctx, token, "read:"+ref.Collection, in.Scope, ref.ID, "")
-			if e != nil {
-				return e
-			}
-			if d.PrincipalID != decision.PrincipalID || d.Role != decision.Role {
-				return ErrDenied
-			}
-			return nil
-		}
-		for _, ref := range []Ref{{Collection: colSkills, ID: in.SkillID}, {Collection: colSkillVersions, ID: in.ComparisonPlan.BaselineVersion}} {
-			if err = read(ref); err != nil {
-				return out, err
-			}
-		}
-		for _, ref := range proposal.Lessons {
-			if err = read(ref); err != nil {
-				return out, err
-			}
-		}
-		evidence, err = proposalEvidence(ctx, s.Repo, in.Scope, proposal)
-		if err != nil {
+		if evidence, err = s.authorizeSkillProposal(ctx, token, in, proposal, decision); err != nil {
 			return out, err
-		}
-		for _, ref := range evidence.Relations {
-			if err = read(ref); err != nil {
-				return out, err
-			}
-		}
-		for _, ref := range evidence.Sources {
-			if err = read(Ref{Collection: "sources", ID: ref.SourceID}); err != nil {
-				return out, err
-			}
-		}
-		for _, action := range []string{"write:sources", "write:skill_versions", "write:skills"} {
-			d, e := s.authorize(ctx, token, action, in.Scope, in.SkillID, structuredText(proposal))
-			if e != nil {
-				return out, e
-			}
-			if d.PrincipalID != decision.PrincipalID || d.Role != decision.Role || !d.ContentSafe {
-				return out, ErrDenied
-			}
 		}
 	}
 	contentHash := ContentHash(in.Content)
-	versionID := "skill-" + ContentHash(structuredText(in.Scope)+"\n"+in.SkillID+"\n"+contentHash)
-	if in.Bundle != nil {
-		versionID = "skill-" + ContentHash(versionID+"\n"+in.Bundle.SHA256)
-	}
-	if in.ComparisonPlan != nil {
-		versionID = "skill-" + ContentHash(versionID+"\n"+structuredText(in.ComparisonPlan))
-	}
-	if proposal != nil {
-		versionID = "skill-" + ContentHash(versionID+"\n"+structuredText(proposal)+"\n"+decision.PrincipalID+"\n"+decision.Role)
-		if evidence.Basis != nil {
-			versionID = "skill-" + ContentHash(versionID+"\n"+structuredText(evidence.Basis))
-		}
-	}
+	versionID := skillImportVersionID(in, contentHash, proposal, evidence, decision)
 	sourceID := "source-" + versionID
 	analysis := *in.Analysis
 	analysis.SkillID, analysis.Version, analysis.ContentHash = in.SkillID, contentHash[:16], contentHash
@@ -407,63 +455,20 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 		version.SkillBundleSHA256 = in.Bundle.SHA256
 	}
 	if proposal != nil {
-		source.SkillBasis, version.SkillBasis = evidence.Basis, evidence.Basis
-		if evidence.Basis != nil {
-			source.SkillID = in.SkillID
-		}
-		source.TrustLevel, source.Generator, source.Sensitivity = "agent_proposed", proposal.Generator, evidence.Sensitivity
-		version.Kind, version.Generator, version.Sensitivity = proposedSkillKind, proposal.Generator, evidence.Sensitivity
-		if clean.Sensitivity == "private" && evidence.Sensitivity != "restricted" {
-			source.Sensitivity, version.Sensitivity = "private", "private"
-		}
-		version.Sources = append(version.Sources, evidence.Sources...)
-		version.Relations = evidence.Relations
-		source.Kind = proposedSkillSourceKind
-		source.Relations = evidence.Relations
-		source.Sources = append(source.Sources, evidence.Sources...)
+		applyProposalEvidence(&source, &version, in.SkillID, proposal, evidence, clean.Sensitivity)
 	}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		if proposal != nil {
-			for _, ref := range proposal.Lessons {
-				if e := tx.FenceRelationMember(ctx, in.Scope, ref.Collection, ref.ID); e != nil {
-					return e
-				}
-			}
-			current, e := proposalEvidence(ctx, tx, in.Scope, proposal)
-			if e != nil {
+			if e := checkProposalEvidence(ctx, tx, in.Scope, proposal, evidence); e != nil {
 				return e
-			}
-			if structuredText(current) != structuredText(evidence) {
-				return ErrConflict
 			}
 		}
 		if existing, e := tx.Get(ctx, colSkillVersions, in.Scope, versionID); e == nil {
-			if existing.Analysis == nil || existing.Analysis.ContentHash != contentHash || (proposal == nil || existing.Status != "approved") && existing.Status != "candidate" && checkActiveSkill(ctx, tx, existing) != nil {
-				return ErrConflict
-			}
-			if proposal != nil {
-				if existing.Status == "approved" {
-					if e = validation(ctx, tx, existing, existing.ValidationID, false); e != nil {
-						return e
-					}
-				}
-				if e = checkSources(ctx, tx, existing); e != nil {
-					return e
-				}
-				if e = checkRelations(ctx, tx, existing); e != nil {
-					return e
-				}
-			}
-			if existing.Status == statusActive {
-				if e = enqueueImportedSkill(ctx, tx, existing); e != nil {
-					return e
-				}
-			}
-			parent, e := tx.Get(ctx, colSkills, in.Scope, in.SkillID)
+			reused, e := reusedImportedSkill(ctx, tx, in, proposal, existing, contentHash)
 			if e != nil {
 				return e
 			}
-			out = ImportSkillResult{ComparisonPlanSHA256: comparisonPlanHash(existing.ComparisonPlan), Skill: parent, Record: existing, Reused: true, Version: slices.Index(skillHistory(parent), existing.ID) + 1}
+			out = reused
 			return saveSkillGenerationReceipt(ctx, tx, proposal, existing)
 		} else if !errors.Is(e, ErrNotFound) {
 			return e
@@ -471,54 +476,9 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 		if e := tx.Insert(ctx, "sources", source); e != nil {
 			return e
 		}
-		parent, e := tx.Get(ctx, colSkills, in.Scope, in.SkillID)
-		if in.ComparisonPlan != nil {
-			if e != nil && !errors.Is(e, ErrNotFound) {
-				return e
-			}
-			if parent.ActiveVersion != in.ComparisonPlan.BaselineVersion {
-				return ErrConflict
-			}
-			if parent.ActiveVersion != "" {
-				baseline, err := tx.Get(ctx, colSkillVersions, in.Scope, parent.ActiveVersion)
-				if err != nil {
-					return err
-				}
-				if err = checkActiveSkill(ctx, tx, baseline); err != nil {
-					return err
-				}
-			}
-			version.Status, version.ApprovedBy, version.BaseVersion = "candidate", "", parent.ActiveVersion
-		}
-		if errors.Is(e, ErrNotFound) {
-			parent = Record{ID: in.SkillID, Scope: in.Scope, Kind: "skill", Status: statusActive, Revision: 1, ActiveVersion: versionID, VersionHistory: []string{versionID}, Sources: source.Sources, CreatedAt: now, UpdatedAt: now, CreatedBy: decision.PrincipalID, CreatedByType: decision.Role}
-			if in.ComparisonPlan != nil {
-				parent.ActiveVersion = ""
-			}
-			if e = insertSourceRecord(ctx, tx, colSkills, parent); e != nil {
-				return e
-			}
-		} else if e != nil {
+		parent, e := upsertImportedSkillParent(ctx, tx, in, &version, source, decision, now)
+		if e != nil {
 			return e
-		} else if in.ComparisonPlan != nil || parent.ActiveVersion != "" && parent.ActiveVersion != versionID {
-			// Changed content never overwrites: it becomes the next immutable
-			// version as a candidate based on the active one. Approval and
-			// apply stay the existing human + independent-evaluation path.
-			version.Status, version.ApprovedBy, version.BaseVersion = "candidate", "", parent.ActiveVersion
-			previous := parent.Revision
-			parent.VersionHistory, parent.UpdatedAt, parent.Revision = append(skillHistory(parent), versionID), now, previous+1
-			if e = tx.Replace(ctx, colSkills, parent, previous); e != nil {
-				return e
-			}
-		} else {
-			previous := parent.Revision
-			parent.ActiveVersion, parent.Sources, parent.UpdatedAt, parent.Revision = versionID, source.Sources, now, previous+1
-			if !slices.Contains(parent.VersionHistory, versionID) {
-				parent.VersionHistory = append(parent.VersionHistory, versionID)
-			}
-			if e = tx.Replace(ctx, colSkills, parent, previous); e != nil {
-				return e
-			}
 		}
 		if e = insertSourceRecord(ctx, tx, colSkillVersions, version); e != nil {
 			return e
@@ -539,4 +499,108 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 		return saveSkillGenerationReceipt(ctx, tx, proposal, version)
 	})
 	return out, err
+}
+
+func checkProposalEvidence(ctx context.Context, tx Tx, scope Scope, proposal *ProposeSkillInput, evidence skillLessonEvidence) error {
+	for _, ref := range proposal.Lessons {
+		if e := tx.FenceRelationMember(ctx, scope, ref.Collection, ref.ID); e != nil {
+			return e
+		}
+	}
+	current, e := proposalEvidence(ctx, tx, scope, proposal)
+	if e != nil {
+		return e
+	}
+	if structuredText(current) != structuredText(evidence) {
+		return ErrConflict
+	}
+	return nil
+}
+
+func reusedImportedSkill(ctx context.Context, tx Tx, in ImportSkillInput, proposal *ProposeSkillInput, existing Record, contentHash string) (ImportSkillResult, error) {
+	if existing.Analysis == nil || existing.Analysis.ContentHash != contentHash || (proposal == nil || existing.Status != "approved") && existing.Status != "candidate" && checkActiveSkill(ctx, tx, existing) != nil {
+		return ImportSkillResult{}, ErrConflict
+	}
+	if proposal != nil {
+		if existing.Status == "approved" {
+			if e := validation(ctx, tx, existing, existing.ValidationID, false); e != nil {
+				return ImportSkillResult{}, e
+			}
+		}
+		if e := checkSources(ctx, tx, existing); e != nil {
+			return ImportSkillResult{}, e
+		}
+		if e := checkRelations(ctx, tx, existing); e != nil {
+			return ImportSkillResult{}, e
+		}
+	}
+	if existing.Status == statusActive {
+		if e := enqueueImportedSkill(ctx, tx, existing); e != nil {
+			return ImportSkillResult{}, e
+		}
+	}
+	parent, e := tx.Get(ctx, colSkills, in.Scope, in.SkillID)
+	if e != nil {
+		return ImportSkillResult{}, e
+	}
+	return ImportSkillResult{ComparisonPlanSHA256: comparisonPlanHash(existing.ComparisonPlan), Skill: parent, Record: existing, Reused: true, Version: slices.Index(skillHistory(parent), existing.ID) + 1}, nil
+}
+
+func checkImportBaseline(ctx context.Context, tx Tx, scope Scope, activeVersion string) error {
+	if activeVersion == "" {
+		return nil
+	}
+	baseline, err := tx.Get(ctx, colSkillVersions, scope, activeVersion)
+	if err != nil {
+		return err
+	}
+	return checkActiveSkill(ctx, tx, baseline)
+}
+
+func upsertImportedSkillParent(ctx context.Context, tx Tx, in ImportSkillInput, version *Record, source Record, decision Decision, now time.Time) (Record, error) {
+	versionID := version.ID
+	parent, e := tx.Get(ctx, colSkills, in.Scope, in.SkillID)
+	if in.ComparisonPlan != nil {
+		if e != nil && !errors.Is(e, ErrNotFound) {
+			return parent, e
+		}
+		if parent.ActiveVersion != in.ComparisonPlan.BaselineVersion {
+			return parent, ErrConflict
+		}
+		if err := checkImportBaseline(ctx, tx, in.Scope, parent.ActiveVersion); err != nil {
+			return parent, err
+		}
+		version.Status, version.ApprovedBy, version.BaseVersion = "candidate", "", parent.ActiveVersion
+	}
+	if errors.Is(e, ErrNotFound) {
+		parent = Record{ID: in.SkillID, Scope: in.Scope, Kind: "skill", Status: statusActive, Revision: 1, ActiveVersion: versionID, VersionHistory: []string{versionID}, Sources: source.Sources, CreatedAt: now, UpdatedAt: now, CreatedBy: decision.PrincipalID, CreatedByType: decision.Role}
+		if in.ComparisonPlan != nil {
+			parent.ActiveVersion = ""
+		}
+		if e = insertSourceRecord(ctx, tx, colSkills, parent); e != nil {
+			return parent, e
+		}
+	} else if e != nil {
+		return parent, e
+	} else if in.ComparisonPlan != nil || parent.ActiveVersion != "" && parent.ActiveVersion != versionID {
+		// Changed content never overwrites: it becomes the next immutable
+		// version as a candidate based on the active one. Approval and
+		// apply stay the existing human + independent-evaluation path.
+		version.Status, version.ApprovedBy, version.BaseVersion = "candidate", "", parent.ActiveVersion
+		previous := parent.Revision
+		parent.VersionHistory, parent.UpdatedAt, parent.Revision = append(skillHistory(parent), versionID), now, previous+1
+		if e = tx.Replace(ctx, colSkills, parent, previous); e != nil {
+			return parent, e
+		}
+	} else {
+		previous := parent.Revision
+		parent.ActiveVersion, parent.Sources, parent.UpdatedAt, parent.Revision = versionID, source.Sources, now, previous+1
+		if !slices.Contains(parent.VersionHistory, versionID) {
+			parent.VersionHistory = append(parent.VersionHistory, versionID)
+		}
+		if e = tx.Replace(ctx, colSkills, parent, previous); e != nil {
+			return parent, e
+		}
+	}
+	return parent, nil
 }

@@ -113,27 +113,9 @@ func (s *Service) archiveLargeZcodeText(ctx context.Context, h Record, rec *arch
 	if messageID == "" {
 		return "", "", nil, ErrInvalid
 	}
-	part, err := archiveZcodeData(record)
-	if err != nil {
+	part, shown, err := archiveZcodeTextPart(record)
+	if err != nil || !shown {
 		return "", "", nil, err
-	}
-	hidden, err = archiveZcodeHidden(part)
-	if err != nil {
-		return "", "", nil, err
-	}
-	kind, err := archiveZcodeString(part["type"])
-	if err != nil {
-		return "", "", nil, err
-	}
-	synthetic := part["synthetic"].kind
-	if synthetic != 0 && synthetic != 'n' && synthetic != 't' && synthetic != 'f' {
-		return "", "", nil, ErrInvalid
-	}
-	if hidden || kind != "text" || synthetic == 't' {
-		return "", "", nil, nil
-	}
-	if part["text"].kind != 0 && part["text"].kind != 'n' && part["text"].kind != '"' {
-		return "", "", nil, ErrInvalid
 	}
 	role, used, err := s.archiveZcodeRoleHash(ctx, h, messageID)
 	rec.scanned += used
@@ -153,6 +135,33 @@ func (s *Service) archiveLargeZcodeText(ctx context.Context, h Record, rec *arch
 		}
 		return io.NopCloser(r), nil
 	}, nil
+}
+
+// shown is false for a hidden, synthetic or non-text part.
+func archiveZcodeTextPart(record map[string]archiveJSONSpan) (map[string]archiveJSONSpan, bool, error) {
+	part, err := archiveZcodeData(record)
+	if err != nil {
+		return nil, false, err
+	}
+	hidden, err := archiveZcodeHidden(part)
+	if err != nil {
+		return nil, false, err
+	}
+	kind, err := archiveZcodeString(part["type"])
+	if err != nil {
+		return nil, false, err
+	}
+	synthetic := part["synthetic"].kind
+	if synthetic != 0 && synthetic != 'n' && synthetic != 't' && synthetic != 'f' {
+		return nil, false, ErrInvalid
+	}
+	if hidden || kind != "text" || synthetic == 't' {
+		return nil, false, nil
+	}
+	if part["text"].kind != 0 && part["text"].kind != 'n' && part["text"].kind != '"' {
+		return nil, false, ErrInvalid
+	}
+	return part, true, nil
 }
 
 func archiveLargeZcodeRoleEntry(rec *archiveLargeRecord) (string, string, string, error) {

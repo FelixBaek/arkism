@@ -34,7 +34,7 @@ func (s *Service) RecentWorkCheckpoints(ctx context.Context, token string, in Re
 	if in.MaxAgeDays == 0 {
 		in.MaxAgeDays = 7
 	}
-	if !validScope(in.Scope) || !validWorkCheckpointString(in.Repository, 2048) || !validWorkCheckpointString(in.SessionID, 256) || in.Limit < 1 || in.Limit > 10 || in.MaxAgeDays < 1 || in.MaxAgeDays > 30 {
+	if !validRecentWorkInput(in) {
 		return out, ErrInvalid
 	}
 	d, err := s.authorize(ctx, token, "read:"+colWorkCheckpoints, in.Scope, "", "")
@@ -51,13 +51,8 @@ func (s *Service) RecentWorkCheckpoints(ctx context.Context, token string, in Re
 	if err != nil {
 		return out, err
 	}
-	if len(rows) > recentWorkCandidateLimit {
+	if len(rows) > recentWorkCandidateLimit || !recentWorkRowsMatch(rows, in.Scope) {
 		return RecentWorkOutput{}, ErrConflict
-	}
-	for _, row := range rows {
-		if !sameScope(row.Scope, in.Scope) || !isWorkCheckpoint(row) {
-			return RecentWorkOutput{}, ErrConflict
-		}
 	}
 	seen := map[string]bool{}
 	for _, row := range rows {
@@ -66,21 +61,10 @@ func (s *Service) RecentWorkCheckpoints(ctx context.Context, token string, in Re
 		}
 		view, err := s.GetWorkCheckpoint(ctx, token, WorkCheckpointGetInput{Scope: in.Scope, ID: row.ID})
 		if err != nil {
-			if errors.Is(err, ErrConflict) {
-				// A stale evidence reference is ineligible; a changed checkpoint itself
-				// is an integrity race and must not be mixed into this response.
-				current, readErr := s.Repo.Get(ctx, colWorkCheckpoints, in.Scope, row.ID)
-				if readErr != nil && !errors.Is(readErr, ErrNotFound) && !errors.Is(readErr, ErrDenied) {
-					return RecentWorkOutput{}, readErr
-				}
-				if readErr == nil && (!sameScope(current.Scope, in.Scope) || current.ID != row.ID || current.Revision != row.Revision) {
-					return RecentWorkOutput{}, ErrConflict
-				}
+			if err := s.recentWorkReadError(ctx, in.Scope, row, err); err != nil {
+				return RecentWorkOutput{}, err
 			}
-			if errors.Is(err, ErrDenied) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrConflict) {
-				continue
-			}
-			return RecentWorkOutput{}, err
+			continue
 		}
 		pkg := view.Package
 		// Fail closed if a row changed after selection; do not emit mixed revisions.
@@ -94,6 +78,39 @@ func (s *Service) RecentWorkCheckpoints(ctx context.Context, token string, in Re
 		out.Items = append(out.Items, view)
 	}
 	return out, nil
+}
+
+func recentWorkRowsMatch(rows []Record, scope Scope) bool {
+	for _, row := range rows {
+		if !sameScope(row.Scope, scope) || !isWorkCheckpoint(row) {
+			return false
+		}
+	}
+	return true
+}
+
+func validRecentWorkInput(in RecentWorkInput) bool {
+	return validScope(in.Scope) && validWorkCheckpointString(in.Repository, 2048) && validWorkCheckpointString(in.SessionID, 256) && in.Limit >= 1 && in.Limit <= 10 && in.MaxAgeDays >= 1 && in.MaxAgeDays <= 30
+}
+
+// recentWorkReadError returns nil when a candidate is only ineligible and
+// should be skipped.
+func (s *Service) recentWorkReadError(ctx context.Context, scope Scope, row Record, err error) error {
+	if errors.Is(err, ErrConflict) {
+		// A stale evidence reference is ineligible; a changed checkpoint itself
+		// is an integrity race and must not be mixed into this response.
+		current, readErr := s.Repo.Get(ctx, colWorkCheckpoints, scope, row.ID)
+		if readErr != nil && !errors.Is(readErr, ErrNotFound) && !errors.Is(readErr, ErrDenied) {
+			return readErr
+		}
+		if readErr == nil && (!sameScope(current.Scope, scope) || current.ID != row.ID || current.Revision != row.Revision) {
+			return ErrConflict
+		}
+	}
+	if errors.Is(err, ErrDenied) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrConflict) {
+		return nil
+	}
+	return err
 }
 
 func (p *Postgres) RecentWorkRows(ctx context.Context, scope Scope, repository, session string, since time.Time, limit int) ([]Record, error) {

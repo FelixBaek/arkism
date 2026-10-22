@@ -88,9 +88,7 @@ AND t.tgfoid=to_regprocedure('arkism.check_recovery_write_gate()')`, recoveryWri
 // ManageRecoveryWrites is an offline administrator operation, never an API
 // permission. Resuming writes is independent of the restoration publication gate.
 func (p *Postgres) ManageRecoveryWrites(ctx context.Context, action, expectedIdentity, expectedGeneration string) (RecoveryWriteGateStatus, error) {
-	if p == nil || p.pool == nil || p.tx != nil || !sourceHashPattern.MatchString(expectedIdentity) ||
-		(action != "status" && action != "pause" && action != "resume") ||
-		(action == "status" && expectedGeneration != "") || (action != "status" && !sourceHashPattern.MatchString(expectedGeneration)) {
+	if p == nil || p.pool == nil || p.tx != nil || !sourceHashPattern.MatchString(expectedIdentity) || !validRecoveryWriteAction(action, expectedGeneration) {
 		return RecoveryWriteGateStatus{}, ErrInvalid
 	}
 	tx, err := p.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
@@ -121,26 +119,42 @@ func (p *Postgres) ManageRecoveryWrites(ctx context.Context, action, expectedIde
 		return RecoveryWriteGateStatus{}, ErrConflict
 	}
 	if action != "status" {
-		state := "paused"
-		if action == "resume" {
-			state = "open"
-		}
-		if status.Gate.State != state {
-			status.Gate, err = newRecoveryWriteGate(state)
-			if err != nil {
-				return RecoveryWriteGateStatus{}, err
-			}
-			data, err := json.Marshal(status.Gate)
-			if err != nil {
-				return RecoveryWriteGateStatus{}, ErrUnavailable
-			}
-			if _, err = tx.Exec(ctx, `UPDATE memory_storage_metadata SET value=$1 WHERE key='recovery_write_gate'`, data); err != nil {
-				return RecoveryWriteGateStatus{}, pgErr(err)
-			}
+		if err = setRecoveryWriteGate(ctx, tx, action, &status); err != nil {
+			return RecoveryWriteGateStatus{}, err
 		}
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return RecoveryWriteGateStatus{}, pgErr(err)
 	}
 	return status, nil
+}
+
+func validRecoveryWriteAction(action, expectedGeneration string) bool {
+	return !((action != "status" && action != "pause" && action != "resume") ||
+		(action == "status" && expectedGeneration != "") || (action != "status" && !sourceHashPattern.MatchString(expectedGeneration)))
+}
+
+// setRecoveryWriteGate replaces the gate with a fresh generation when a pause
+// or resume changes its state.
+func setRecoveryWriteGate(ctx context.Context, tx pgx.Tx, action string, status *RecoveryWriteGateStatus) error {
+	state := "paused"
+	if action == "resume" {
+		state = "open"
+	}
+	if status.Gate.State == state {
+		return nil
+	}
+	var err error
+	status.Gate, err = newRecoveryWriteGate(state)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(status.Gate)
+	if err != nil {
+		return ErrUnavailable
+	}
+	if _, err = tx.Exec(ctx, `UPDATE memory_storage_metadata SET value=$1 WHERE key='recovery_write_gate'`, data); err != nil {
+		return pgErr(err)
+	}
+	return nil
 }

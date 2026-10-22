@@ -102,54 +102,8 @@ func (p *archiveJSONParser) nextStringRune() (rune, bool, error) {
 		return 0, false, ErrInvalid
 	}
 	if c == '\\' {
-		c, err = p.byte()
-		if err != nil {
-			return 0, false, err
-		}
-		switch c {
-		case '"', '\\', '/':
-			return rune(c), false, nil
-		case 'b':
-			return '\b', false, nil
-		case 'f':
-			return '\f', false, nil
-		case 'n':
-			return '\n', false, nil
-		case 'r':
-			return '\r', false, nil
-		case 't':
-			return '\t', false, nil
-		case 'u':
-			var raw [4]byte
-			for i := range raw {
-				raw[i], err = p.byte()
-				if err != nil {
-					return 0, false, err
-				}
-			}
-			value, ok := hexRune(raw[:])
-			if !ok {
-				return 0, false, ErrInvalid
-			}
-			if value >= 0xd800 && value <= 0xdbff {
-				next, _ := p.r.Peek(6)
-				if len(next) == 6 && next[0] == '\\' && next[1] == 'u' {
-					low, ok := hexRune(next[2:])
-					if ok && low >= 0xdc00 && low <= 0xdfff {
-						_, _ = p.r.Discard(6)
-						p.offset += 6
-						return utf16.DecodeRune(value, low), false, nil
-					}
-				}
-				return utf8.RuneError, false, nil
-			}
-			if value >= 0xdc00 && value <= 0xdfff {
-				return utf8.RuneError, false, nil
-			}
-			return value, false, nil
-		default:
-			return 0, false, ErrInvalid
-		}
+		value, err := p.escapedRune()
+		return value, false, err
 	}
 	if c < utf8.RuneSelf {
 		return rune(c), false, nil
@@ -168,6 +122,64 @@ func (p *archiveJSONParser) nextStringRune() (rune, bool, error) {
 	}
 	return value, false, nil
 }
+
+// escapedRune starts after the backslash.
+func (p *archiveJSONParser) escapedRune() (rune, error) {
+	c, err := p.byte()
+	if err != nil {
+		return 0, err
+	}
+	switch c {
+	case '"', '\\', '/':
+		return rune(c), nil
+	case 'b':
+		return '\b', nil
+	case 'f':
+		return '\f', nil
+	case 'n':
+		return '\n', nil
+	case 'r':
+		return '\r', nil
+	case 't':
+		return '\t', nil
+	case 'u':
+		return p.unicodeEscape()
+	default:
+		return 0, ErrInvalid
+	}
+}
+
+// unicodeEscape starts after \u.
+func (p *archiveJSONParser) unicodeEscape() (rune, error) {
+	var raw [4]byte
+	var err error
+	for i := range raw {
+		raw[i], err = p.byte()
+		if err != nil {
+			return 0, err
+		}
+	}
+	value, ok := hexRune(raw[:])
+	if !ok {
+		return 0, ErrInvalid
+	}
+	if value >= 0xd800 && value <= 0xdbff {
+		next, _ := p.r.Peek(6)
+		if len(next) == 6 && next[0] == '\\' && next[1] == 'u' {
+			low, ok := hexRune(next[2:])
+			if ok && low >= 0xdc00 && low <= 0xdfff {
+				_, _ = p.r.Discard(6)
+				p.offset += 6
+				return utf16.DecodeRune(value, low), nil
+			}
+		}
+		return utf8.RuneError, nil
+	}
+	if value >= 0xdc00 && value <= 0xdfff {
+		return utf8.RuneError, nil
+	}
+	return value, nil
+}
 func (p *archiveJSONParser) string(limit int) (string, error) {
 	if err := p.expect('"'); err != nil {
 		return "", err
@@ -176,28 +188,13 @@ func (p *archiveJSONParser) string(limit int) (string, error) {
 	large := false
 	for {
 		if limit == 0 || large {
-			if _, err := p.r.Peek(1); err != nil {
+			skipped, err := p.skipStringRun()
+			if err != nil {
 				return "", err
 			}
-			available, _ := p.r.Peek(p.r.Buffered())
-			n := 0
-			for n < len(available) && available[n] != '"' && available[n] != '\\' && available[n] >= 0x20 {
-				n++
-			}
-			if n > 0 {
-				valid := n
-				for valid > 0 && !utf8.Valid(available[:valid]) && n-valid < 3 {
-					valid--
-				}
-				if !utf8.Valid(available[:valid]) {
-					return "", ErrInvalid
-				}
-				if valid > 0 {
-					_, _ = p.r.Discard(valid)
-					p.offset += int64(valid)
-					large = true
-					continue
-				}
+			if skipped {
+				large = true
+				continue
 			}
 		}
 		r, done, err := p.nextStringRune()
@@ -218,6 +215,33 @@ func (p *archiveJSONParser) string(limit int) (string, error) {
 		return "\x00oversized", nil
 	}
 	return out.String(), nil
+}
+
+// skipStringRun discards buffered plain string bytes without retaining them.
+func (p *archiveJSONParser) skipStringRun() (bool, error) {
+	if _, err := p.r.Peek(1); err != nil {
+		return false, err
+	}
+	available, _ := p.r.Peek(p.r.Buffered())
+	n := 0
+	for n < len(available) && available[n] != '"' && available[n] != '\\' && available[n] >= 0x20 {
+		n++
+	}
+	if n > 0 {
+		valid := n
+		for valid > 0 && !utf8.Valid(available[:valid]) && n-valid < 3 {
+			valid--
+		}
+		if !utf8.Valid(available[:valid]) {
+			return false, ErrInvalid
+		}
+		if valid > 0 {
+			_, _ = p.r.Discard(valid)
+			p.offset += int64(valid)
+			return true, nil
+		}
+	}
+	return false, nil
 }
 func (p *archiveJSONParser) number() error {
 	consumeDigits := func() int {
@@ -300,47 +324,7 @@ func (p *archiveJSONParser) value(depth int) error {
 		_, err = p.string(0)
 		return err
 	case '{', '[':
-		_, _ = p.byte()
-		end := byte(']')
-		if c == '{' {
-			end = '}'
-		}
-		if err = p.space(); err != nil {
-			return err
-		}
-		next, _ := p.peek()
-		if next == end {
-			return p.expect(end)
-		}
-		for {
-			if c == '{' {
-				if _, err = p.string(0); err != nil {
-					return err
-				}
-				if err = p.space(); err != nil {
-					return err
-				}
-				if err = p.expect(':'); err != nil {
-					return err
-				}
-			}
-			if err = p.value(depth + 1); err != nil {
-				return err
-			}
-			if err = p.space(); err != nil {
-				return err
-			}
-			next, _ = p.peek()
-			if next == end {
-				return p.expect(end)
-			}
-			if err = p.expect(','); err != nil {
-				return err
-			}
-			if err = p.space(); err != nil {
-				return err
-			}
-		}
+		return p.container(c, depth)
 	case 't', 'f', 'n':
 		word := map[byte]string{'t': "true", 'f': "false", 'n': "null"}[c]
 		for i := range word {
@@ -351,6 +335,51 @@ func (p *archiveJSONParser) value(depth int) error {
 		return nil
 	default:
 		return p.number()
+	}
+}
+
+// container starts at the opening '{' or '['.
+func (p *archiveJSONParser) container(c byte, depth int) error {
+	_, _ = p.byte()
+	end := byte(']')
+	if c == '{' {
+		end = '}'
+	}
+	if err := p.space(); err != nil {
+		return err
+	}
+	next, _ := p.peek()
+	if next == end {
+		return p.expect(end)
+	}
+	for {
+		if c == '{' {
+			if _, err := p.string(0); err != nil {
+				return err
+			}
+			if err := p.space(); err != nil {
+				return err
+			}
+			if err := p.expect(':'); err != nil {
+				return err
+			}
+		}
+		if err := p.value(depth + 1); err != nil {
+			return err
+		}
+		if err := p.space(); err != nil {
+			return err
+		}
+		next, _ = p.peek()
+		if next == end {
+			return p.expect(end)
+		}
+		if err := p.expect(','); err != nil {
+			return err
+		}
+		if err := p.space(); err != nil {
+			return err
+		}
 	}
 }
 
@@ -526,35 +555,9 @@ func archiveJSONSafeText(root archiveJSONSpan) (string, func() (io.ReadCloser, e
 	if err != nil || hidden {
 		return "", nil, err
 	}
-	table, err := archiveJSONSmall(row["table"])
-	if err != nil {
+	row, err = archiveJSONTableRow(row)
+	if err != nil || row == nil {
 		return "", nil, err
-	}
-	if table != "" {
-		if table != "messages" && table != "message" {
-			return "", nil, nil
-		}
-		if row["record"].kind != '{' {
-			return "", nil, ErrInvalid
-		}
-		row, err = archiveJSONFields(row["record"])
-		if err != nil {
-			return "", nil, err
-		}
-		hidden, err = archiveJSONHidden(row)
-		if err != nil || hidden {
-			return "", nil, err
-		}
-		if data, exists := row["data"]; exists {
-			if data.kind != '"' {
-				return "", nil, ErrInvalid
-			}
-			src := archiveJSONEmbedded(data)
-			row, err = archiveJSONFields(archiveJSONSpan{src, 0, -1, '{'})
-			if err != nil {
-				return "", nil, err
-			}
-		}
 	}
 	hidden, err = archiveJSONHidden(row)
 	if err != nil || hidden {
@@ -613,6 +616,40 @@ func archiveJSONSafeText(root archiveJSONSpan) (string, func() (io.ReadCloser, e
 		}()
 		return &archiveJSONTextPipe{reader, done}, nil
 	}, nil
+}
+
+// archiveJSONTableRow unwraps a table record. A nil row with a nil error means
+// the record is hidden or not a message.
+func archiveJSONTableRow(row map[string]archiveJSONSpan) (map[string]archiveJSONSpan, error) {
+	table, err := archiveJSONSmall(row["table"])
+	if err != nil {
+		return nil, err
+	}
+	if table == "" {
+		return row, nil
+	}
+	if table != "messages" && table != "message" {
+		return nil, nil
+	}
+	if row["record"].kind != '{' {
+		return nil, ErrInvalid
+	}
+	row, err = archiveJSONFields(row["record"])
+	if err != nil {
+		return nil, err
+	}
+	hidden, err := archiveJSONHidden(row)
+	if err != nil || hidden {
+		return nil, err
+	}
+	if data, exists := row["data"]; exists {
+		if data.kind != '"' {
+			return nil, ErrInvalid
+		}
+		src := archiveJSONEmbedded(data)
+		return archiveJSONFields(archiveJSONSpan{src, 0, -1, '{'})
+	}
+	return row, nil
 }
 func archiveJSONArrayText(p *archiveJSONParser, src *archiveJSONSource, w io.Writer) error {
 	if err := p.space(); err != nil {

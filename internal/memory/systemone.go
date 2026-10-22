@@ -157,48 +157,53 @@ func systemOneRequest(raw []byte) (map[string]any, map[string]any, error) {
 		return nil, nil, ErrInvalid
 	}
 	for _, value := range questions {
-		q, ok := systemOneFields(value, []string{"type"}, []string{"instructions", "criteria"})
-		if !ok || q["instructions"] != nil && !systemOneStructured(q["instructions"]) {
-			return nil, nil, ErrInvalid
-		}
-		switch q["type"] {
-		case "choice":
-			criteria, ok := q["criteria"].(map[string]any)
-			if !ok || len(criteria) < 1 || len(criteria) > 255 {
-				return nil, nil, ErrInvalid
-			}
-			for _, description := range criteria {
-				if description != nil && !systemOneStructured(description) {
-					return nil, nil, ErrInvalid
-				}
-			}
-		case "score":
-			criteria, ok := q["criteria"].([]any)
-			if !ok || len(criteria) < 2 || len(criteria) > 10 {
-				return nil, nil, ErrInvalid
-			}
-			for _, description := range criteria {
-				if !systemOneStructured(description) {
-					return nil, nil, ErrInvalid
-				}
-			}
-		case "noul":
-			if criteria, exists := q["criteria"]; exists && criteria != nil {
-				obj, ok := systemOneFields(criteria, nil, []string{"true", "false"})
-				if !ok {
-					return nil, nil, ErrInvalid
-				}
-				for _, description := range obj {
-					if description != nil && !systemOneStructured(description) {
-						return nil, nil, ErrInvalid
-					}
-				}
-			}
-		default:
+		if !systemOneQuestion(value) {
 			return nil, nil, ErrInvalid
 		}
 	}
 	return root, questions, nil
+}
+
+func systemOneQuestion(value any) bool {
+	q, ok := systemOneFields(value, []string{"type"}, []string{"instructions", "criteria"})
+	if !ok || q["instructions"] != nil && !systemOneStructured(q["instructions"]) {
+		return false
+	}
+	switch q["type"] {
+	case "choice":
+		criteria, ok := q["criteria"].(map[string]any)
+		if !ok || len(criteria) < 1 || len(criteria) > 255 {
+			return false
+		}
+		return systemOneDescriptions(criteria)
+	case "score":
+		criteria, ok := q["criteria"].([]any)
+		if !ok || len(criteria) < 2 || len(criteria) > 10 {
+			return false
+		}
+		for _, description := range criteria {
+			if !systemOneStructured(description) {
+				return false
+			}
+		}
+	case "noul":
+		if criteria, exists := q["criteria"]; exists && criteria != nil {
+			obj, ok := systemOneFields(criteria, nil, []string{"true", "false"})
+			return ok && systemOneDescriptions(obj)
+		}
+	default:
+		return false
+	}
+	return true
+}
+
+func systemOneDescriptions(obj map[string]any) bool {
+	for _, description := range obj {
+		if description != nil && !systemOneStructured(description) {
+			return false
+		}
+	}
+	return true
 }
 
 func systemOneNumber(value any) (float64, bool) {
@@ -245,14 +250,10 @@ func systemOneResponse(raw []byte, j *JevJudge, questions map[string]any) (json.
 		return nil, ProviderUsage{}, ErrUnavailable
 	}
 	if j.Envelope {
-		wrapped, ok := value.(map[string]any)
-		if !ok || wrapped["success"] != true {
+		var ok bool
+		if value, ok = systemOneEnvelope(value); !ok {
 			return nil, ProviderUsage{}, ErrUnavailable
 		}
-		if errors, exists := wrapped["errors"]; exists && structuredText(errors) != "[]" {
-			return nil, ProviderUsage{}, ErrUnavailable
-		}
-		value = wrapped["result"]
 	}
 	root, ok := systemOneFields(value, []string{"model", "answers", "usage"}, nil)
 	if !ok {
@@ -268,114 +269,154 @@ func systemOneResponse(raw []byte, j *JevJudge, questions map[string]any) (json.
 	}
 	for id, value := range answers {
 		q, exists := questions[id].(map[string]any)
-		if !exists {
+		if !exists || !systemOneAnswer(q, value) {
 			return nil, ProviderUsage{}, ErrUnavailable
-		}
-		required := []string{"type", "noul"}
-		if q["type"] == "choice" {
-			required = []string{"type", "choice", "confidence", "probabilities"}
-		} else if q["type"] == "score" {
-			required = []string{"type", "score", "confidence", "probabilities", "legend"}
-		}
-		a, ok := systemOneFields(value, required, nil)
-		if !ok || a["type"] != q["type"] {
-			return nil, ProviderUsage{}, ErrUnavailable
-		}
-		if q["type"] == "noul" {
-			n, ok := systemOneNumber(a["noul"])
-			if !ok || !probability(n) {
-				return nil, ProviderUsage{}, ErrUnavailable
-			}
-			continue
-		}
-		confidence, ok := systemOneNumber(a["confidence"])
-		if !ok || !probability(confidence) {
-			return nil, ProviderUsage{}, ErrUnavailable
-		}
-		keys := []string{}
-		if q["type"] == "choice" {
-			criteria := q["criteria"].(map[string]any)
-			choice, ok := a["choice"].(string)
-			if _, exists := criteria[choice]; !ok || !exists {
-				return nil, ProviderUsage{}, ErrUnavailable
-			}
-			for key := range criteria {
-				keys = append(keys, key)
-			}
-		} else {
-			criteria := q["criteria"].([]any)
-			score, ok := systemOneNumber(a["score"])
-			legend, legendOK := a["legend"].(map[string]any)
-			if !ok || score < 0 || score > float64(len(criteria)-1) || !legendOK || len(legend) != len(criteria) {
-				return nil, ProviderUsage{}, ErrUnavailable
-			}
-			for i, description := range criteria {
-				key := strconv.Itoa(i)
-				if structuredText(legend[key]) != structuredText(description) {
-					return nil, ProviderUsage{}, ErrUnavailable
-				}
-				keys = append(keys, key)
-			}
-		}
-		p, ok := a["probabilities"].(map[string]any)
-		if !ok {
-			return nil, ProviderUsage{}, ErrUnavailable
-		}
-		probabilities := map[string]float64{}
-		for key, value := range p {
-			n, ok := systemOneNumber(value)
-			if !ok {
-				return nil, ProviderUsage{}, ErrUnavailable
-			}
-			probabilities[key] = n
-		}
-		sum := 0.0
-		for _, n := range probabilities {
-			sum += n
-		}
-		if !distribution(probabilities, keys) || sum <= 0 {
-			return nil, ProviderUsage{}, ErrUnavailable
-		}
-		if q["type"] == "choice" {
-			selected := probabilities[a["choice"].(string)]
-			for _, p := range probabilities {
-				if selected+1e-9 < p {
-					return nil, ProviderUsage{}, ErrUnavailable
-				}
-			}
-		} else {
-			weighted := 0.0
-			for i, key := range keys {
-				weighted += float64(i) * probabilities[key]
-			}
-			score, _ := systemOneNumber(a["score"])
-			// Allow the same two-decimal rounding as distribution(), plus score rounding.
-			tolerance := 0.005 * float64(1+len(keys)*(len(keys)-1)/2)
-			if math.Abs(score-weighted) > tolerance+1e-9 {
-				return nil, ProviderUsage{}, ErrUnavailable
-			}
 		}
 	}
-	u, ok := systemOneFields(root["usage"], []string{"input_tokens"}, []string{"output_tokens"})
+	input, output, ok := systemOneUsage(root["usage"])
 	if !ok {
 		return nil, ProviderUsage{}, ErrUnavailable
+	}
+	provider, configured := systemOneIdentity(j)
+	return json.RawMessage(structuredText(root)), ProviderUsage{Provider: provider, Model: configured, Requests: 1, InputTokens: input, OutputTokens: output, TotalTokens: input + output}, nil
+}
+
+func systemOneEnvelope(value any) (any, bool) {
+	wrapped, ok := value.(map[string]any)
+	if !ok || wrapped["success"] != true {
+		return nil, false
+	}
+	if errors, exists := wrapped["errors"]; exists && structuredText(errors) != "[]" {
+		return nil, false
+	}
+	return wrapped["result"], true
+}
+
+func systemOneAnswer(q map[string]any, value any) bool {
+	required := []string{"type", "noul"}
+	if q["type"] == "choice" {
+		required = []string{"type", "choice", "confidence", "probabilities"}
+	} else if q["type"] == "score" {
+		required = []string{"type", "score", "confidence", "probabilities", "legend"}
+	}
+	a, ok := systemOneFields(value, required, nil)
+	if !ok || a["type"] != q["type"] {
+		return false
+	}
+	if q["type"] == "noul" {
+		n, ok := systemOneNumber(a["noul"])
+		return ok && probability(n)
+	}
+	confidence, ok := systemOneNumber(a["confidence"])
+	if !ok || !probability(confidence) {
+		return false
+	}
+	var keys []string
+	if q["type"] == "choice" {
+		keys, ok = systemOneChoiceKeys(q, a)
+	} else {
+		keys, ok = systemOneScoreKeys(q, a)
+	}
+	if !ok {
+		return false
+	}
+	probabilities, ok := systemOneProbabilities(a, keys)
+	if !ok {
+		return false
+	}
+	if q["type"] == "choice" {
+		selected := probabilities[a["choice"].(string)]
+		for _, p := range probabilities {
+			if selected+1e-9 < p {
+				return false
+			}
+		}
+		return true
+	}
+	weighted := 0.0
+	for i, key := range keys {
+		weighted += float64(i) * probabilities[key]
+	}
+	score, _ := systemOneNumber(a["score"])
+	// Allow the same two-decimal rounding as distribution(), plus score rounding.
+	tolerance := 0.005 * float64(1+len(keys)*(len(keys)-1)/2)
+	return !(math.Abs(score-weighted) > tolerance+1e-9)
+}
+
+func systemOneChoiceKeys(q, a map[string]any) ([]string, bool) {
+	criteria := q["criteria"].(map[string]any)
+	choice, ok := a["choice"].(string)
+	if _, exists := criteria[choice]; !ok || !exists {
+		return nil, false
+	}
+	keys := []string{}
+	for key := range criteria {
+		keys = append(keys, key)
+	}
+	return keys, true
+}
+
+func systemOneScoreKeys(q, a map[string]any) ([]string, bool) {
+	criteria := q["criteria"].([]any)
+	score, ok := systemOneNumber(a["score"])
+	legend, legendOK := a["legend"].(map[string]any)
+	if !ok || score < 0 || score > float64(len(criteria)-1) || !legendOK || len(legend) != len(criteria) {
+		return nil, false
+	}
+	keys := []string{}
+	for i, description := range criteria {
+		key := strconv.Itoa(i)
+		if structuredText(legend[key]) != structuredText(description) {
+			return nil, false
+		}
+		keys = append(keys, key)
+	}
+	return keys, true
+}
+
+func systemOneProbabilities(a map[string]any, keys []string) (map[string]float64, bool) {
+	p, ok := a["probabilities"].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	probabilities := map[string]float64{}
+	for key, value := range p {
+		n, ok := systemOneNumber(value)
+		if !ok {
+			return nil, false
+		}
+		probabilities[key] = n
+	}
+	sum := 0.0
+	for _, n := range probabilities {
+		sum += n
+	}
+	if !distribution(probabilities, keys) || sum <= 0 {
+		return nil, false
+	}
+	return probabilities, true
+}
+
+func systemOneUsage(value any) (int64, int64, bool) {
+	u, ok := systemOneFields(value, []string{"input_tokens"}, []string{"output_tokens"})
+	if !ok {
+		return 0, 0, false
 	}
 	input, ok := systemOneTokens(u["input_tokens"])
 	if !ok {
-		return nil, ProviderUsage{}, ErrUnavailable
+		return 0, 0, false
 	}
 	output := int64(0)
 	if value, exists := u["output_tokens"]; exists {
 		output, ok = systemOneTokens(value)
 		if !ok {
-			return nil, ProviderUsage{}, ErrUnavailable
+			return 0, 0, false
 		}
 	}
 	if input > math.MaxInt64-output {
-		return nil, ProviderUsage{}, ErrUnavailable
+		return 0, 0, false
 	}
-	provider, configured := systemOneIdentity(j)
-	return json.RawMessage(structuredText(root)), ProviderUsage{Provider: provider, Model: configured, Requests: 1, InputTokens: input, OutputTokens: output, TotalTokens: input + output}, nil
+	return input, output, true
 }
 
 func (s *Service) EvaluateSystemOne(ctx context.Context, token string, in SystemOneInput) (SystemOneResult, error) {
@@ -386,14 +427,7 @@ func (s *Service) EvaluateSystemOne(ctx context.Context, token string, in System
 	if err != nil {
 		return SystemOneResult{}, err
 	}
-	var judge *JevJudge
-	for _, j := range s.systemOneJudges() {
-		provider, model := systemOneIdentity(j)
-		if payload["model"] == provider+"/"+model {
-			judge = j
-			break
-		}
-	}
+	judge := s.systemOneJudge(payload["model"])
 	if judge == nil {
 		return SystemOneResult{}, ErrUnavailable
 	}
@@ -418,15 +452,9 @@ func (s *Service) EvaluateSystemOne(ctx context.Context, token string, in System
 	if _, err := s.authorizeAt(ctx, token, "write:"+colRoutingCalls, in.Scope, "", "", "internal"); err != nil {
 		return SystemOneResult{}, err
 	}
-	endpoint := judge.Endpoint
-	if endpoint == "" {
-		if provider != "typesafe" {
-			return SystemOneResult{}, ErrUnavailable
-		}
-		endpoint = "https://api.typesafe.ai/v1/systemone"
-	}
-	if validateEndpoint(endpoint) != nil {
-		return SystemOneResult{}, ErrInvalid
+	endpoint, err := systemOneEndpoint(judge, provider)
+	if err != nil {
+		return SystemOneResult{}, err
 	}
 	op, cancel := context.WithTimeout(ctx, jevTimeout)
 	defer cancel()
@@ -437,20 +465,7 @@ func (s *Service) EvaluateSystemOne(ctx context.Context, token string, in System
 	started := time.Now()
 	body, status, callErr := postJSON(op, providerClient(nil, jevTimeout), endpoint, judge.APIKey, payload, systemOneRequestMax, systemOneResponseMax)
 	latency := time.Since(started).Milliseconds()
-	usage := ProviderUsage{Provider: provider, Model: model, Requests: 1}
-	out := SystemOneResult{Status: status, Authority: AuthorityDataOnly}
-	reason := "provider_unavailable"
-	if status != 0 && status != http.StatusOK {
-		reason = "upstream_http_" + strconv.Itoa(status)
-		out.Result = json.RawMessage(structuredText(map[string]any{"error": map[string]string{"type": "api_error", "message": reason}}))
-		callErr = nil
-	} else if callErr == nil {
-		out.Result, usage, callErr = systemOneResponse(body, judge, questions)
-		if callErr != nil {
-			usage = ProviderUsage{Provider: provider, Model: model, Requests: 1}
-			reason = "invalid_provider_response"
-		}
-	}
+	out, usage, reason, callErr := systemOneOutcome(body, status, callErr, judge, questions)
 	success := callErr == nil && status == http.StatusOK
 	if success {
 		reason = ""
@@ -469,6 +484,49 @@ func (s *Service) EvaluateSystemOne(ctx context.Context, token string, in System
 		return SystemOneResult{}, ErrUnavailable
 	}
 	return out, nil
+}
+
+func (s *Service) systemOneJudge(model any) *JevJudge {
+	for _, j := range s.systemOneJudges() {
+		provider, name := systemOneIdentity(j)
+		if model == provider+"/"+name {
+			return j
+		}
+	}
+	return nil
+}
+
+func systemOneEndpoint(judge *JevJudge, provider string) (string, error) {
+	endpoint := judge.Endpoint
+	if endpoint == "" {
+		if provider != "typesafe" {
+			return "", ErrUnavailable
+		}
+		endpoint = "https://api.typesafe.ai/v1/systemone"
+	}
+	if validateEndpoint(endpoint) != nil {
+		return "", ErrInvalid
+	}
+	return endpoint, nil
+}
+
+func systemOneOutcome(body []byte, status int, callErr error, judge *JevJudge, questions map[string]any) (SystemOneResult, ProviderUsage, string, error) {
+	provider, model := systemOneIdentity(judge)
+	usage := ProviderUsage{Provider: provider, Model: model, Requests: 1}
+	out := SystemOneResult{Status: status, Authority: AuthorityDataOnly}
+	reason := "provider_unavailable"
+	if status != 0 && status != http.StatusOK {
+		reason = "upstream_http_" + strconv.Itoa(status)
+		out.Result = json.RawMessage(structuredText(map[string]any{"error": map[string]string{"type": "api_error", "message": reason}}))
+		callErr = nil
+	} else if callErr == nil {
+		out.Result, usage, callErr = systemOneResponse(body, judge, questions)
+		if callErr != nil {
+			usage = ProviderUsage{Provider: provider, Model: model, Requests: 1}
+			reason = "invalid_provider_response"
+		}
+	}
+	return out, usage, reason, callErr
 }
 
 func systemOneRoutes(mux routeRegistrar, s *Service) {

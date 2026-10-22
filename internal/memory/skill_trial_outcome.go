@@ -26,7 +26,7 @@ func (v *SkillTrialOutcomeInput) UnmarshalJSON(data []byte) error {
 // The independently configured checker publishes measured results, never
 // approval. Same operation retries reuse the exact source-bound evaluation.
 func (s *Service) RecordSkillTrialOutcome(ctx context.Context, token string, in SkillTrialOutcomeInput) (Ref, error) {
-	if !validScope(in.Scope) || !validScope(in.TrialScope) || in.Scope.WorkspaceID != in.TrialScope.WorkspaceID || in.Scope.ProjectID != in.TrialScope.ProjectID || in.Scope.UserID != in.TrialScope.UserID || !workCheckpointIDPattern.MatchString(in.EventID) || !validRunLabel(in.TrialID, 128) || in.Source.Collection != "sources" || in.Source.Revision < 1 || !validRunLabel(in.Source.ID, 256) || !sourceHashPattern.MatchString(in.CheckerSHA256) || len(in.Evidence) == 0 || len(in.Evidence) > 64 {
+	if invalidSkillTrialOutcomeInput(in) {
 		return Ref{}, ErrInvalid
 	}
 	actor, e := s.authorize(ctx, token, "write:evaluations", in.Scope, "", "")
@@ -76,17 +76,7 @@ func (s *Service) RecordSkillTrialOutcome(ctx context.Context, token string, in 
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		old, e := tx.Get(ctx, "evaluations", in.Scope, id)
 		if e == nil {
-			if old.RequestHash != hash || !live(old) || old.ContentErased || old.PrivacyQuarantined {
-				return ErrConflict
-			}
-			source, e := tx.Get(ctx, "sources", in.Scope, in.Source.ID)
-			if e != nil {
-				return e
-			}
-			if source.Revision != in.Source.Revision || !live(source) || source.ContentErased || source.PrivacyQuarantined {
-				return ErrConflict
-			}
-			return checkEvaluationEvidence(ctx, tx, old)
+			return checkSkillTrialOutcomeReplay(ctx, tx, in, old, hash)
 		}
 		if !errors.Is(e, ErrNotFound) {
 			return e
@@ -105,43 +95,13 @@ func (s *Service) RecordSkillTrialOutcome(ctx context.Context, token string, in 
 		if candidate.CreatedBy == actor.PrincipalID {
 			return ErrDenied
 		}
-		source, e := tx.Get(ctx, "sources", in.Scope, in.Source.ID)
+		expectedTraceID, e := skillTrialOutcomeTrace(ctx, tx, in, current, candidate, actor.PrincipalID)
 		if e != nil {
 			return e
 		}
-		if source.Revision != in.Source.Revision || !live(source) || source.ContentErased || source.PrivacyQuarantined || source.CreatedBy == actor.PrincipalID || source.TraceID == "" {
-			return ErrConflict
-		}
-		var usage SkillUsage
-		if json.Unmarshal([]byte(source.Text), &usage) != nil || usage.TrialID != current.ID || usage.SkillID != candidate.SkillID || usage.VersionID != candidate.ID || usage.Runtime != current.SkillTrial.Runtime || usage.ContentHash != candidate.Analysis.ContentHash || usage.OfflineCache || usage.StartedAt.Before(current.CreatedAt) || !usage.StartedAt.Before(current.SkillTrial.EndsAt) || usage.CompletedAt.Before(usage.StartedAt) || usage.CompletedAt.After(time.Now()) {
-			return ErrConflict
-		}
-		if in.Passed && (usage.Status != "success" || usage.ToolFailures != 0 || usage.RuntimeErrors != 0) {
-			return ErrDenied
-		}
-		expectedTraceID := source.TraceID
-		trace, e := tx.Get(ctx, "execution_traces", in.Scope, expectedTraceID)
+		sources, e := skillTrialOutcomeSources(ctx, tx, in, expectedTraceID)
 		if e != nil {
 			return e
-		}
-		if !live(trace) || trace.ContentErased || trace.PrivacyQuarantined {
-			return ErrConflict
-		}
-		sources := []SourceRef{}
-		seen := map[string]bool{}
-		for _, ref := range append(append([]Ref{}, in.Evidence...), in.Source) {
-			if seen[ref.ID] {
-				continue
-			}
-			seen[ref.ID] = true
-			source, e := tx.Get(ctx, "sources", in.Scope, ref.ID)
-			if e != nil {
-				return e
-			}
-			if source.Revision != ref.Revision || !live(source) || source.ContentErased || source.PrivacyQuarantined || source.TraceID != expectedTraceID {
-				return ErrConflict
-			}
-			sources = append(sources, sourceReference(source, "trial-check"))
 		}
 		now := time.Now().UTC()
 		passed := in.Passed
@@ -158,4 +118,77 @@ func (s *Service) RecordSkillTrialOutcome(ctx context.Context, token string, in 
 		return Ref{}, e
 	}
 	return result, nil
+}
+
+func invalidSkillTrialOutcomeInput(in SkillTrialOutcomeInput) bool {
+	return !validScope(in.Scope) || !validScope(in.TrialScope) || in.Scope.WorkspaceID != in.TrialScope.WorkspaceID || in.Scope.ProjectID != in.TrialScope.ProjectID || in.Scope.UserID != in.TrialScope.UserID || !workCheckpointIDPattern.MatchString(in.EventID) || !validRunLabel(in.TrialID, 128) || in.Source.Collection != "sources" || in.Source.Revision < 1 || !validRunLabel(in.Source.ID, 256) || !sourceHashPattern.MatchString(in.CheckerSHA256) || len(in.Evidence) == 0 || len(in.Evidence) > 64
+}
+
+func checkSkillTrialOutcomeReplay(ctx context.Context, tx Tx, in SkillTrialOutcomeInput, old Record, hash string) error {
+	if old.RequestHash != hash || !live(old) || old.ContentErased || old.PrivacyQuarantined {
+		return ErrConflict
+	}
+	source, e := tx.Get(ctx, "sources", in.Scope, in.Source.ID)
+	if e != nil {
+		return e
+	}
+	if source.Revision != in.Source.Revision || !live(source) || source.ContentErased || source.PrivacyQuarantined {
+		return ErrConflict
+	}
+	return checkEvaluationEvidence(ctx, tx, old)
+}
+
+// skillTrialOutcomeTrace checks the outcome source against the trial and
+// returns the execution trace every evidence source must share.
+func skillTrialOutcomeTrace(ctx context.Context, tx Tx, in SkillTrialOutcomeInput, current, candidate Record, principalID string) (string, error) {
+	source, e := tx.Get(ctx, "sources", in.Scope, in.Source.ID)
+	if e != nil {
+		return "", e
+	}
+	if source.Revision != in.Source.Revision || !live(source) || source.ContentErased || source.PrivacyQuarantined || source.CreatedBy == principalID || source.TraceID == "" {
+		return "", ErrConflict
+	}
+	if e = checkSkillTrialUsage(in, source, current, candidate); e != nil {
+		return "", e
+	}
+	expectedTraceID := source.TraceID
+	trace, e := tx.Get(ctx, "execution_traces", in.Scope, expectedTraceID)
+	if e != nil {
+		return "", e
+	}
+	if !live(trace) || trace.ContentErased || trace.PrivacyQuarantined {
+		return "", ErrConflict
+	}
+	return expectedTraceID, nil
+}
+
+func checkSkillTrialUsage(in SkillTrialOutcomeInput, source, current, candidate Record) error {
+	var usage SkillUsage
+	if json.Unmarshal([]byte(source.Text), &usage) != nil || usage.TrialID != current.ID || usage.SkillID != candidate.SkillID || usage.VersionID != candidate.ID || usage.Runtime != current.SkillTrial.Runtime || usage.ContentHash != candidate.Analysis.ContentHash || usage.OfflineCache || usage.StartedAt.Before(current.CreatedAt) || !usage.StartedAt.Before(current.SkillTrial.EndsAt) || usage.CompletedAt.Before(usage.StartedAt) || usage.CompletedAt.After(time.Now()) {
+		return ErrConflict
+	}
+	if in.Passed && (usage.Status != "success" || usage.ToolFailures != 0 || usage.RuntimeErrors != 0) {
+		return ErrDenied
+	}
+	return nil
+}
+
+func skillTrialOutcomeSources(ctx context.Context, tx Tx, in SkillTrialOutcomeInput, expectedTraceID string) ([]SourceRef, error) {
+	sources := []SourceRef{}
+	seen := map[string]bool{}
+	for _, ref := range append(append([]Ref{}, in.Evidence...), in.Source) {
+		if seen[ref.ID] {
+			continue
+		}
+		seen[ref.ID] = true
+		source, e := tx.Get(ctx, "sources", in.Scope, ref.ID)
+		if e != nil {
+			return nil, e
+		}
+		if source.Revision != ref.Revision || !live(source) || source.ContentErased || source.PrivacyQuarantined || source.TraceID != expectedTraceID {
+			return nil, ErrConflict
+		}
+		sources = append(sources, sourceReference(source, "trial-check"))
+	}
+	return sources, nil
 }

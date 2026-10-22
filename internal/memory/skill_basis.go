@@ -27,55 +27,71 @@ func checkSkillBasis(ctx context.Context, tx Tx, r Record) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		ref := basis.Version
-		if len(seen) >= 64 || ref.Collection != colSkillVersions || !validRunLabel(ref.ID, 256) || ref.Revision < 1 || !sourceHashPattern.MatchString(basis.ContentSHA256) || seen[ref.ID] {
-			return ErrConflict
-		}
-		seen[ref.ID] = true
-		baseline, err := tx.Get(ctx, colSkillVersions, r.Scope, ref.ID)
+		baseline, err := checkSkillBasisLink(ctx, tx, r, basis, seen)
 		if err != nil {
 			return err
-		}
-		if baseline.Scope != r.Scope || baseline.SkillID != r.SkillID || baseline.Revision < ref.Revision || baseline.ContentErased || baseline.ConflictID != "" || baseline.Status != "active" && baseline.Status != "superseded" || !validAnalysis(baseline.Analysis) || baseline.Analysis.ContentHash != basis.ContentSHA256 {
-			return ErrConflict
-		}
-		// Superseded only means a newer version is selected; it does not revoke
-		// the evidence. All temporal and privacy constraints still apply.
-		visible := baseline
-		visible.Status = "active"
-		if !live(visible) {
-			return ErrConflict
-		}
-		if err = checkSources(ctx, tx, baseline); err != nil {
-			return err
-		}
-		if err = checkDirectRelations(ctx, tx, baseline); err != nil {
-			return err
-		}
-		if basis.Validation == nil {
-			if baseline.ComparisonPlan != nil || baseline.Kind != importedSkillBaselineKind || baseline.CreatedByType != roleHuman || baseline.ApprovedBy == "" {
-				return ErrDenied
-			}
-		} else {
-			v := *basis.Validation
-			if v.Collection != "evaluations" || v.ID == "" || v.ID != baseline.ValidationID || v.Revision < 1 {
-				return ErrConflict
-			}
-			evaluation, e := tx.Get(ctx, v.Collection, r.Scope, v.ID)
-			if e != nil {
-				return e
-			}
-			if evaluation.Revision != v.Revision {
-				return ErrConflict
-			}
-			if e = validation(ctx, tx, baseline, v.ID, false); e != nil {
-				return e
-			}
-		}
-		if baseline.SkillBasis != nil && (baseline.Kind != proposedSkillKind || baseline.ComparisonPlan == nil || baseline.ComparisonPlan.BaselineVersion != baseline.SkillBasis.Version.ID) {
-			return ErrConflict
 		}
 		basis = baseline.SkillBasis
 	}
 	return nil
+}
+
+func checkSkillBasisLink(ctx context.Context, tx Tx, r Record, basis *SkillBasis, seen map[string]bool) (Record, error) {
+	ref := basis.Version
+	if len(seen) >= 64 || ref.Collection != colSkillVersions || !validRunLabel(ref.ID, 256) || ref.Revision < 1 || !sourceHashPattern.MatchString(basis.ContentSHA256) || seen[ref.ID] {
+		return Record{}, ErrConflict
+	}
+	seen[ref.ID] = true
+	baseline, err := tx.Get(ctx, colSkillVersions, r.Scope, ref.ID)
+	if err != nil {
+		return Record{}, err
+	}
+	if invalidSkillBasisBaseline(baseline, r, ref, basis) {
+		return Record{}, ErrConflict
+	}
+	// Superseded only means a newer version is selected; it does not revoke
+	// the evidence. All temporal and privacy constraints still apply.
+	visible := baseline
+	visible.Status = "active"
+	if !live(visible) {
+		return Record{}, ErrConflict
+	}
+	if err = checkSources(ctx, tx, baseline); err != nil {
+		return Record{}, err
+	}
+	if err = checkDirectRelations(ctx, tx, baseline); err != nil {
+		return Record{}, err
+	}
+	if err = checkSkillBasisValidation(ctx, tx, r, basis, baseline); err != nil {
+		return Record{}, err
+	}
+	if baseline.SkillBasis != nil && (baseline.Kind != proposedSkillKind || baseline.ComparisonPlan == nil || baseline.ComparisonPlan.BaselineVersion != baseline.SkillBasis.Version.ID) {
+		return Record{}, ErrConflict
+	}
+	return baseline, nil
+}
+
+func invalidSkillBasisBaseline(baseline, r Record, ref Ref, basis *SkillBasis) bool {
+	return baseline.Scope != r.Scope || baseline.SkillID != r.SkillID || baseline.Revision < ref.Revision || baseline.ContentErased || baseline.ConflictID != "" || baseline.Status != "active" && baseline.Status != "superseded" || !validAnalysis(baseline.Analysis) || baseline.Analysis.ContentHash != basis.ContentSHA256
+}
+
+func checkSkillBasisValidation(ctx context.Context, tx Tx, r Record, basis *SkillBasis, baseline Record) error {
+	if basis.Validation == nil {
+		if baseline.ComparisonPlan != nil || baseline.Kind != importedSkillBaselineKind || baseline.CreatedByType != roleHuman || baseline.ApprovedBy == "" {
+			return ErrDenied
+		}
+		return nil
+	}
+	v := *basis.Validation
+	if v.Collection != "evaluations" || v.ID == "" || v.ID != baseline.ValidationID || v.Revision < 1 {
+		return ErrConflict
+	}
+	evaluation, e := tx.Get(ctx, v.Collection, r.Scope, v.ID)
+	if e != nil {
+		return e
+	}
+	if evaluation.Revision != v.Revision {
+		return ErrConflict
+	}
+	return validation(ctx, tx, baseline, v.ID, false)
 }

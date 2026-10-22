@@ -63,36 +63,49 @@ func normalizeSourceList(in SourceListInput) (SourceListInput, *sourceCursor, er
 	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || in.Limit < 1 || in.Limit > 100 || in.Kind != "" && !validCreateKind("sources", in.Kind) || in.OriginProduct != "" && (!originProductPattern.MatchString(in.OriginProduct) || containsSecret(in.OriginProduct)) {
 		return in, nil, ErrInvalid
 	}
+	if e := normalizeSourceListTimes(&in); e != nil {
+		return in, nil, e
+	}
+	if in.Cursor == "" {
+		return in, nil, nil
+	}
+	after, e := decodeSourceCursor(in)
+	if e != nil {
+		return in, nil, e
+	}
+	return in, after, nil
+}
+func normalizeSourceListTimes(in *SourceListInput) error {
 	for _, field := range []**time.Time{&in.CollectedFrom, &in.CollectedTo} {
 		if *field != nil {
 			at := (**field).UTC().Truncate(time.Millisecond)
 			if at.IsZero() || at.Year() < 1 || at.Year() > 9999 {
-				return in, nil, ErrInvalid
+				return ErrInvalid
 			}
 			*field = &at
 		}
 	}
 	if in.CollectedFrom != nil && in.CollectedTo != nil && !in.CollectedFrom.Before(*in.CollectedTo) {
-		return in, nil, ErrInvalid
+		return ErrInvalid
 	}
-	if in.Cursor == "" {
-		return in, nil, nil
-	}
+	return nil
+}
+func decodeSourceCursor(in SourceListInput) (*sourceCursor, error) {
 	if len(in.Cursor) > 2048 || strings.IndexFunc(in.Cursor, unicode.IsSpace) >= 0 {
-		return in, nil, ErrInvalid
+		return nil, ErrInvalid
 	}
 	data, e := base64.RawURLEncoding.Strict().DecodeString(in.Cursor)
 	if e != nil {
-		return in, nil, ErrInvalid
+		return nil, ErrInvalid
 	}
 	var after sourceCursor
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
 	var extra any
 	if dec.Decode(&after) != nil || dec.Decode(&extra) != io.EOF || after.Binding != sourceListBinding(in) || after.ID == "" || len(after.ID) > 256 || strings.IndexFunc(after.ID, unicode.IsControl) >= 0 || containsSecret(after.ID) || after.CollectedAt.IsZero() || !after.CollectedAt.Equal(after.CollectedAt.Truncate(time.Millisecond)) {
-		return in, nil, ErrInvalid
+		return nil, ErrInvalid
 	}
-	return in, &after, nil
+	return &after, nil
 }
 func encodeSourceCursor(in SourceListInput, r Record) (string, error) {
 	data, e := json.Marshal(sourceCursor{r.CollectedAt.UTC(), r.ID, sourceListBinding(in)})
@@ -118,48 +131,9 @@ func (s *Service) ListSources(ctx context.Context, token string, in SourceListIn
 	if s.Repo == nil {
 		return SourcePage{}, ErrUnavailable
 	}
-	var rows []Record
-	scan := in
-	read := s.itemAuthorizer(ctx, token, "read:sources", in.Scope)
-	for {
-		if ctx.Err() != nil {
-			return SourcePage{}, ErrUnavailable
-		}
-		batch, err := s.Repo.ListSources(ctx, scan)
-		if err != nil {
-			return SourcePage{}, err
-		}
-		if len(batch) > in.Limit+1 {
-			return SourcePage{}, ErrUnavailable
-		}
-		for _, r := range batch {
-			if r.Scope != in.Scope || r.CollectedAt == nil || r.CollectedAt.IsZero() || !live(r) {
-				return SourcePage{}, ErrConflict
-			}
-			d, err := read(r.ID, structuredText(sourceListItem(r)))
-			// Search must not expose denied body matches through a 403-vs-200 oracle.
-			if in.Query != "" && errors.Is(err, ErrDenied) {
-				continue
-			}
-			if err != nil {
-				return SourcePage{}, err
-			}
-			if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
-				return SourcePage{}, ErrDenied
-			}
-			rows = append(rows, r)
-			if len(rows) == in.Limit+1 {
-				break
-			}
-		}
-		if in.Query == "" || len(rows) == in.Limit+1 || len(batch) < in.Limit+1 {
-			break
-		}
-		// shortcut: scan matching batches until the authorized page is full; the request deadline bounds policy/scan cost.
-		scan.Cursor, err = encodeSourceCursor(in, batch[len(batch)-1])
-		if err != nil {
-			return SourcePage{}, ErrUnavailable
-		}
+	rows, e := s.scanSourceList(ctx, token, in, actor)
+	if e != nil {
+		return SourcePage{}, e
 	}
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		for _, r := range rows {
@@ -193,6 +167,53 @@ func (s *Service) ListSources(ctx context.Context, token string, in SourceListIn
 		out.Items = append(out.Items, sourceListItem(r))
 	}
 	return out, nil
+}
+
+func (s *Service) scanSourceList(ctx context.Context, token string, in SourceListInput, actor Decision) ([]Record, error) {
+	var rows []Record
+	scan := in
+	read := s.itemAuthorizer(ctx, token, "read:sources", in.Scope)
+	for {
+		if ctx.Err() != nil {
+			return nil, ErrUnavailable
+		}
+		batch, err := s.Repo.ListSources(ctx, scan)
+		if err != nil {
+			return nil, err
+		}
+		if len(batch) > in.Limit+1 {
+			return nil, ErrUnavailable
+		}
+		for _, r := range batch {
+			if r.Scope != in.Scope || r.CollectedAt == nil || r.CollectedAt.IsZero() || !live(r) {
+				return nil, ErrConflict
+			}
+			d, err := read(r.ID, structuredText(sourceListItem(r)))
+			// Search must not expose denied body matches through a 403-vs-200 oracle.
+			if in.Query != "" && errors.Is(err, ErrDenied) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
+				return nil, ErrDenied
+			}
+			rows = append(rows, r)
+			if len(rows) == in.Limit+1 {
+				break
+			}
+		}
+		if in.Query == "" || len(rows) == in.Limit+1 || len(batch) < in.Limit+1 {
+			break
+		}
+		// shortcut: scan matching batches until the authorized page is full; the request deadline bounds policy/scan cost.
+		scan.Cursor, err = encodeSourceCursor(in, batch[len(batch)-1])
+		if err != nil {
+			return nil, ErrUnavailable
+		}
+	}
+	return rows, nil
 }
 
 // shortcut: literal substring may scan source bodies; add a source index after measuring real-volume latency.

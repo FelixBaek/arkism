@@ -155,7 +155,7 @@ func parseWikiFiles(out string) ([]wikiBlock, []wikiRejection) {
 // checkWikiBlock is layers 1 and 2: whitelist the claimed path, then recompute
 // the identity from the block's own type and title and require they agree.
 func checkWikiBlock(path, mode, section, raw string) (wikiBlock, string) {
-	if path == "" || strings.Contains(path, "..") || strings.HasPrefix(path, "/") || strings.ContainsAny(path, "\\%\x00") || path != strings.TrimSpace(path) {
+	if !wikiPathSafe(path) {
 		return wikiBlock{}, "path_outside_wiki"
 	}
 	m := wikiPathPattern.FindStringSubmatch(path)
@@ -175,18 +175,9 @@ func checkWikiBlock(path, mode, section, raw string) (wikiBlock, string) {
 	if !ok {
 		return wikiBlock{}, "missing_header"
 	}
-	fields := map[string]string{}
-	for _, l := range strings.Split(strings.TrimSpace(head), "\n") {
-		k, v, ok := strings.Cut(l, ":")
-		k = strings.TrimSpace(k)
-		if !ok || k != "title" && k != "type" {
-			// id, scope, locked, status, sources ... are server-owned.
-			return wikiBlock{}, "forbidden_field"
-		}
-		if _, dup := fields[k]; dup {
-			return wikiBlock{}, "forbidden_field"
-		}
-		fields[k] = strings.TrimSpace(v)
+	fields, ok := wikiHeaderFields(head)
+	if !ok {
+		return wikiBlock{}, "forbidden_field"
 	}
 	title, typ := fields["title"], fields["type"]
 	if !validWikiTitle(title) || !slices.Contains(wikiTypes, typ) {
@@ -197,13 +188,39 @@ func checkWikiBlock(path, mode, section, raw string) (wikiBlock, string) {
 		return wikiBlock{}, "path_identity_mismatch"
 	}
 	body = strings.TrimSpace(body)
-	if body == "" || len(body) > wikiMaxBodyBytes || !utf8.ValidString(body) || strings.ContainsRune(body, 0) || strings.Contains(body, "<<<") {
+	if !wikiBodyValid(body) {
 		return wikiBlock{}, "bad_body"
 	}
 	if containsSecret(body) || containsSecret(title) {
 		return wikiBlock{}, "secret_detected"
 	}
 	return wikiBlock{Path: path, Mode: mode, Section: section, Type: typ, Title: title, Slug: slug, Body: body}, ""
+}
+
+func wikiPathSafe(path string) bool {
+	return !(path == "" || strings.Contains(path, "..") || strings.HasPrefix(path, "/") || strings.ContainsAny(path, "\\%\x00") || path != strings.TrimSpace(path))
+}
+
+// wikiHeaderFields parses the block header; only title and type, each once, are allowed.
+func wikiHeaderFields(head string) (map[string]string, bool) {
+	fields := map[string]string{}
+	for _, l := range strings.Split(strings.TrimSpace(head), "\n") {
+		k, v, ok := strings.Cut(l, ":")
+		k = strings.TrimSpace(k)
+		if !ok || k != "title" && k != "type" {
+			// id, scope, locked, status, sources ... are server-owned.
+			return nil, false
+		}
+		if _, dup := fields[k]; dup {
+			return nil, false
+		}
+		fields[k] = strings.TrimSpace(v)
+	}
+	return fields, true
+}
+
+func wikiBodyValid(body string) bool {
+	return !(body == "" || len(body) > wikiMaxBodyBytes || !utf8.ValidString(body) || strings.ContainsRune(body, 0) || strings.Contains(body, "<<<"))
 }
 
 // wikiLinks returns the distinct target slugs of [[links]] in text, minus self.

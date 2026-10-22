@@ -38,32 +38,11 @@ func (p *Postgres) SkillRegressionSourceIDs(ctx context.Context, scope Scope, ve
 // baseline validation. Failure to restore leaves the bad version non-live.
 func (s *Service) MonitorSkillTrial(ctx context.Context, token, id string, in SkillTrialReadInput) (SkillTrialRecovery, error) {
 	out := SkillTrialRecovery{Evidence: []SkillTrialObservation{}}
-	if !validScope(in.Scope) || !validRunLabel(id, 128) || !validRunLabel(in.SkillID, 256) {
-		return out, ErrInvalid
-	}
-	actor, e := s.authorize(ctx, token, "rollback:skills", in.Scope, in.SkillID, "")
-	if e != nil {
-		return out, e
-	}
-	policy, e := s.authorizeSkillAutomation(ctx, token, actor, in.Scope, in.SkillID, "")
+	actor, policy, trial, e := s.authorizeSkillTrialMonitor(ctx, token, id, in)
 	if e != nil {
 		return out, e
 	}
 	ctx = bindRequestActor(ctx, actor)
-	if e = s.authorizeTrialEvidence(ctx, token, actor, ChangeInput{Scope: in.Scope}, policy); e != nil {
-		return out, e
-	}
-	trial, e := s.Repo.Get(ctx, colSkillTrials, in.Scope, id)
-	if e != nil {
-		return out, e
-	}
-	if trial.SkillTrial == nil || trial.SkillID != in.SkillID || trial.ContentErased || trial.PrivacyQuarantined {
-		return out, ErrNotFound
-	}
-	policy, e = s.authorizeSkillAutomation(ctx, token, actor, in.Scope, in.SkillID, trial.SkillTrial.Runtime)
-	if e != nil {
-		return out, e
-	}
 	var terminal string
 	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		var err error
@@ -88,94 +67,14 @@ func (s *Service) MonitorSkillTrial(ctx context.Context, token, id string, in Sk
 		out.State = "expired"
 		return out, nil
 	}
-	type observed struct {
-		scope  Scope
-		source Record
-		evals  []Record
-	}
-	records := []observed{}
+	var records []observedSkillTrialSource
 	if pending {
-		if json.Unmarshal([]byte(trial.Text), &out.Evidence) != nil || len(out.Evidence) == 0 {
-			return out, ErrConflict
-		}
-		for _, item := range out.Evidence {
-			if !slices.Contains(skillTrialEvidenceScopes(in.Scope, policy), item.Scope) {
-				return out, ErrDenied
-			}
-			bound := actor
-			bound.Scope = item.Scope
-			scoped := bindRequestActor(ctx, bound)
-			if _, e = s.authorize(scoped, token, "read:sources", item.Scope, item.Source.ID, ""); e != nil {
-				return out, e
-			}
-			source, err := s.Repo.Get(scoped, "sources", item.Scope, item.Source.ID)
-			if err != nil {
-				return out, err
-			}
-			if source.Revision != item.Source.Revision {
-				return out, ErrConflict
-			}
-			if _, e = s.authorize(scoped, token, "read:execution_traces", item.Scope, source.TraceID, ""); e != nil {
-				return out, e
-			}
-			record := observed{scope: item.Scope, source: source}
-			if item.Evaluation != nil {
-				if _, e = s.authorize(scoped, token, "read:evaluations", item.Scope, item.Evaluation.ID, ""); e != nil {
-					return out, e
-				}
-				v, err := s.Repo.Get(scoped, "evaluations", item.Scope, item.Evaluation.ID)
-				if err != nil {
-					return out, err
-				}
-				if v.Revision != item.Evaluation.Revision {
-					return out, ErrConflict
-				}
-				record.evals = []Record{v}
-			}
-			records = append(records, record)
-		}
+		records, e = s.pendingSkillTrialSources(ctx, token, actor, in.Scope, policy, trial.Text, &out.Evidence)
+	} else {
+		records, e = s.regressionSkillTrialSources(ctx, token, actor, in.Scope, policy, candidate)
 	}
-	if !pending {
-		reader, ok := s.Repo.(interface {
-			SkillRegressionSourceIDs(context.Context, Scope, string, time.Time) ([]string, error)
-		})
-		if !ok {
-			return out, ErrUnavailable
-		}
-		for _, scope := range skillTrialEvidenceScopes(in.Scope, policy) {
-			bound := actor
-			bound.Scope = scope
-			scoped := bindRequestActor(ctx, bound)
-			ids, err := reader.SkillRegressionSourceIDs(scoped, scope, candidate.ID, candidate.UpdatedAt)
-			if err != nil {
-				return out, err
-			}
-			for _, sourceID := range ids {
-				if _, err = s.authorize(scoped, token, "read:sources", scope, sourceID, ""); err != nil {
-					return out, err
-				}
-				src, err := s.Repo.Get(scoped, "sources", scope, sourceID)
-				if err != nil {
-					return out, err
-				}
-				if _, err = s.authorize(scoped, token, "read:execution_traces", scope, src.TraceID, ""); err != nil {
-					return out, err
-				}
-				evals, err := s.Repo.EvaluationsFor(scoped, scope, Ref{Collection: "sources", ID: src.ID, Revision: src.Revision})
-				if err != nil {
-					return out, err
-				}
-				if len(evals) > evaluationSummaryLimit {
-					return out, ErrUnavailable
-				}
-				for _, v := range evals {
-					if _, err = s.authorize(scoped, token, "read:evaluations", scope, v.ID, ""); err != nil {
-						return out, err
-					}
-				}
-				records = append(records, observed{scope, src, evals})
-			}
-		}
+	if e != nil {
+		return out, e
 	}
 	var parentRevision int64
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
@@ -192,33 +91,8 @@ func (s *Service) MonitorSkillTrial(ctx context.Context, token, id string, in Sk
 		}
 		parentRevision = parent.Revision
 		if pending {
-			for _, old := range records {
-				src, err := tx.Get(ctx, "sources", old.scope, old.source.ID)
-				if err != nil {
-					return err
-				}
-				if src.Revision != old.source.Revision || !live(src) || src.ContentErased {
-					return ErrConflict
-				}
-				tr, err := tx.Get(ctx, "execution_traces", old.scope, src.TraceID)
-				if err != nil {
-					return err
-				}
-				if !live(tr) || tr.ContentErased {
-					return ErrConflict
-				}
-				for _, oldEval := range old.evals {
-					v, err := tx.Get(ctx, "evaluations", old.scope, oldEval.ID)
-					if err != nil {
-						return err
-					}
-					if v.Revision != oldEval.Revision || !live(v) {
-						return ErrConflict
-					}
-					if err = checkEvaluationEvidence(ctx, tx, v); err != nil {
-						return err
-					}
-				}
+			if err = recheckPendingSkillTrialEvidence(ctx, tx, records); err != nil {
+				return err
 			}
 			out.State = "recovery_unavailable"
 			return nil
@@ -230,44 +104,9 @@ func (s *Service) MonitorSkillTrial(ctx context.Context, token, id string, in Sk
 			return err
 		}
 		for _, old := range records {
-			source, err := tx.Get(ctx, "sources", old.scope, old.source.ID)
+			item, failed, err := regressionObservation(ctx, tx, old, current, trial, in.SkillID)
 			if err != nil {
 				return err
-			}
-			if source.Revision != old.source.Revision || !live(source) || source.ContentErased {
-				return ErrConflict
-			}
-			trace, err := tx.Get(ctx, "execution_traces", old.scope, source.TraceID)
-			if err != nil {
-				return err
-			}
-			if !live(trace) || trace.ContentErased {
-				return ErrConflict
-			}
-			var usage SkillUsage
-			if json.Unmarshal([]byte(source.Text), &usage) != nil || usage.VersionID != current.ID || usage.SkillID != in.SkillID || current.Analysis == nil || usage.ContentHash != current.Analysis.ContentHash || usage.OfflineCache || usage.StartedAt.Before(current.UpdatedAt) || usage.CompletedAt.Before(usage.StartedAt) || usage.CompletedAt.After(time.Now()) {
-				return ErrConflict
-			}
-			failed := usage.Status == "failure" || usage.Status == "validation_failed" || usage.ToolFailures > 0 || usage.RuntimeErrors > 0
-			item := SkillTrialObservation{Scope: old.scope, Source: Ref{Collection: "sources", ID: source.ID, Revision: source.Revision}, Outcome: "failure"}
-			for _, oldEval := range old.evals {
-				v, err := tx.Get(ctx, "evaluations", old.scope, oldEval.ID)
-				if err != nil {
-					return err
-				}
-				if v.Revision != oldEval.Revision {
-					return ErrConflict
-				}
-				if !live(v) || v.Evaluation == nil || !validEvaluation(v.Evaluation) || !evaluationRole(v.Evaluation.EvalType, v.CreatedByType) || v.Evaluation.EvalType == "model_self" || v.Evaluation.Passed == nil || *v.Evaluation.Passed || v.Target == nil || *v.Target != item.Source || v.CreatedBy == source.CreatedBy || v.CreatedBy == current.CreatedBy || v.CreatedBy == trial.CreatedBy {
-					continue
-				}
-				if err = checkEvaluationEvidence(ctx, tx, v); err != nil {
-					return err
-				}
-				failed = true
-				ref := Ref{Collection: "evaluations", ID: v.ID, Revision: v.Revision}
-				item.Evaluation = &ref
-				item.IndependentlyVerified = true
 			}
 			if failed {
 				out.Evidence = append(out.Evidence, item)
@@ -277,26 +116,7 @@ func (s *Service) MonitorSkillTrial(ctx context.Context, token, id string, in Sk
 			out.State = "monitoring"
 			return nil
 		}
-		prev := current.Revision
-		current.Revision++
-		current.Status = "rejected"
-		current.RequestHash = marker
-		current.UpdatedAt = time.Now().UTC()
-		if err = tx.Replace(ctx, colSkillVersions, current, prev); err != nil {
-			return err
-		}
-		tr, err := tx.Get(ctx, colSkillTrials, in.Scope, id)
-		if err != nil {
-			return err
-		}
-		if tr.Revision != trial.Revision {
-			return ErrConflict
-		}
-		previous := tr.Revision
-		tr.Revision++
-		tr.Text = structuredText(out.Evidence)
-		tr.UpdatedAt = time.Now().UTC()
-		if err = tx.Replace(ctx, colSkillTrials, tr, previous); err != nil {
+		if current, err = rejectRegressedSkillVersion(ctx, tx, current, trial, in.Scope, id, marker, out.Evidence); err != nil {
 			return err
 		}
 		out.Candidate.Revision = current.Revision
@@ -316,4 +136,232 @@ func (s *Service) MonitorSkillTrial(ctx context.Context, token, id string, in Sk
 		out.State = "rolled_back"
 	}
 	return out, nil
+}
+
+func (s *Service) authorizeSkillTrialMonitor(ctx context.Context, token, id string, in SkillTrialReadInput) (Decision, SkillAutomationPolicy, Record, error) {
+	if !validScope(in.Scope) || !validRunLabel(id, 128) || !validRunLabel(in.SkillID, 256) {
+		return Decision{}, SkillAutomationPolicy{}, Record{}, ErrInvalid
+	}
+	actor, e := s.authorize(ctx, token, "rollback:skills", in.Scope, in.SkillID, "")
+	if e != nil {
+		return actor, SkillAutomationPolicy{}, Record{}, e
+	}
+	policy, e := s.authorizeSkillAutomation(ctx, token, actor, in.Scope, in.SkillID, "")
+	if e != nil {
+		return actor, policy, Record{}, e
+	}
+	ctx = bindRequestActor(ctx, actor)
+	if e = s.authorizeTrialEvidence(ctx, token, actor, ChangeInput{Scope: in.Scope}, policy); e != nil {
+		return actor, policy, Record{}, e
+	}
+	trial, e := s.Repo.Get(ctx, colSkillTrials, in.Scope, id)
+	if e != nil {
+		return actor, policy, trial, e
+	}
+	if trial.SkillTrial == nil || trial.SkillID != in.SkillID || trial.ContentErased || trial.PrivacyQuarantined {
+		return actor, policy, trial, ErrNotFound
+	}
+	policy, e = s.authorizeSkillAutomation(ctx, token, actor, in.Scope, in.SkillID, trial.SkillTrial.Runtime)
+	return actor, policy, trial, e
+}
+
+// pendingSkillTrialSources reloads the evidence a previous rejection saved on the trial.
+func (s *Service) pendingSkillTrialSources(ctx context.Context, token string, actor Decision, trialScope Scope, policy SkillAutomationPolicy, text string, evidence *[]SkillTrialObservation) ([]observedSkillTrialSource, error) {
+	records := []observedSkillTrialSource{}
+	if json.Unmarshal([]byte(text), evidence) != nil || len(*evidence) == 0 {
+		return records, ErrConflict
+	}
+	for _, item := range *evidence {
+		if !slices.Contains(skillTrialEvidenceScopes(trialScope, policy), item.Scope) {
+			return records, ErrDenied
+		}
+		bound := actor
+		bound.Scope = item.Scope
+		scoped := bindRequestActor(ctx, bound)
+		if _, e := s.authorize(scoped, token, "read:sources", item.Scope, item.Source.ID, ""); e != nil {
+			return records, e
+		}
+		source, err := s.Repo.Get(scoped, "sources", item.Scope, item.Source.ID)
+		if err != nil {
+			return records, err
+		}
+		if source.Revision != item.Source.Revision {
+			return records, ErrConflict
+		}
+		if _, e := s.authorize(scoped, token, "read:execution_traces", item.Scope, source.TraceID, ""); e != nil {
+			return records, e
+		}
+		record := observedSkillTrialSource{scope: item.Scope, source: source}
+		if item.Evaluation != nil {
+			if _, e := s.authorize(scoped, token, "read:evaluations", item.Scope, item.Evaluation.ID, ""); e != nil {
+				return records, e
+			}
+			v, err := s.Repo.Get(scoped, "evaluations", item.Scope, item.Evaluation.ID)
+			if err != nil {
+				return records, err
+			}
+			if v.Revision != item.Evaluation.Revision {
+				return records, ErrConflict
+			}
+			record.evaluations = []Record{v}
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
+func (s *Service) regressionSkillTrialSources(ctx context.Context, token string, actor Decision, trialScope Scope, policy SkillAutomationPolicy, candidate Record) ([]observedSkillTrialSource, error) {
+	records := []observedSkillTrialSource{}
+	reader, ok := s.Repo.(interface {
+		SkillRegressionSourceIDs(context.Context, Scope, string, time.Time) ([]string, error)
+	})
+	if !ok {
+		return records, ErrUnavailable
+	}
+	for _, scope := range skillTrialEvidenceScopes(trialScope, policy) {
+		bound := actor
+		bound.Scope = scope
+		scoped := bindRequestActor(ctx, bound)
+		ids, err := reader.SkillRegressionSourceIDs(scoped, scope, candidate.ID, candidate.UpdatedAt)
+		if err != nil {
+			return records, err
+		}
+		for _, sourceID := range ids {
+			if _, err = s.authorize(scoped, token, "read:sources", scope, sourceID, ""); err != nil {
+				return records, err
+			}
+			src, err := s.Repo.Get(scoped, "sources", scope, sourceID)
+			if err != nil {
+				return records, err
+			}
+			if _, err = s.authorize(scoped, token, "read:execution_traces", scope, src.TraceID, ""); err != nil {
+				return records, err
+			}
+			evals, err := s.Repo.EvaluationsFor(scoped, scope, Ref{Collection: "sources", ID: src.ID, Revision: src.Revision})
+			if err != nil {
+				return records, err
+			}
+			if len(evals) > evaluationSummaryLimit {
+				return records, ErrUnavailable
+			}
+			for _, v := range evals {
+				if _, err = s.authorize(scoped, token, "read:evaluations", scope, v.ID, ""); err != nil {
+					return records, err
+				}
+			}
+			records = append(records, observedSkillTrialSource{scope, src, evals})
+		}
+	}
+	return records, nil
+}
+
+func recheckPendingSkillTrialEvidence(ctx context.Context, tx Tx, records []observedSkillTrialSource) error {
+	for _, old := range records {
+		src, err := tx.Get(ctx, "sources", old.scope, old.source.ID)
+		if err != nil {
+			return err
+		}
+		if src.Revision != old.source.Revision || !live(src) || src.ContentErased {
+			return ErrConflict
+		}
+		tr, err := tx.Get(ctx, "execution_traces", old.scope, src.TraceID)
+		if err != nil {
+			return err
+		}
+		if !live(tr) || tr.ContentErased {
+			return ErrConflict
+		}
+		for _, oldEval := range old.evaluations {
+			v, err := tx.Get(ctx, "evaluations", old.scope, oldEval.ID)
+			if err != nil {
+				return err
+			}
+			if v.Revision != oldEval.Revision || !live(v) {
+				return ErrConflict
+			}
+			if err = checkEvaluationEvidence(ctx, tx, v); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func regressionObservation(ctx context.Context, tx Tx, old observedSkillTrialSource, current, trial Record, skillID string) (SkillTrialObservation, bool, error) {
+	var item SkillTrialObservation
+	source, err := tx.Get(ctx, "sources", old.scope, old.source.ID)
+	if err != nil {
+		return item, false, err
+	}
+	if source.Revision != old.source.Revision || !live(source) || source.ContentErased {
+		return item, false, ErrConflict
+	}
+	trace, err := tx.Get(ctx, "execution_traces", old.scope, source.TraceID)
+	if err != nil {
+		return item, false, err
+	}
+	if !live(trace) || trace.ContentErased {
+		return item, false, ErrConflict
+	}
+	var usage SkillUsage
+	if invalidRegressionUsage(source.Text, &usage, current, skillID) {
+		return item, false, ErrConflict
+	}
+	failed := usage.Status == "failure" || usage.Status == "validation_failed" || usage.ToolFailures > 0 || usage.RuntimeErrors > 0
+	item = SkillTrialObservation{Scope: old.scope, Source: Ref{Collection: "sources", ID: source.ID, Revision: source.Revision}, Outcome: "failure"}
+	for _, oldEval := range old.evaluations {
+		v, err := tx.Get(ctx, "evaluations", old.scope, oldEval.ID)
+		if err != nil {
+			return item, false, err
+		}
+		if v.Revision != oldEval.Revision {
+			return item, false, ErrConflict
+		}
+		if ignoredRegressionEvaluation(v, item.Source, source, current, trial) {
+			continue
+		}
+		if err = checkEvaluationEvidence(ctx, tx, v); err != nil {
+			return item, false, err
+		}
+		failed = true
+		ref := Ref{Collection: "evaluations", ID: v.ID, Revision: v.Revision}
+		item.Evaluation = &ref
+		item.IndependentlyVerified = true
+	}
+	return item, failed, nil
+}
+
+func invalidRegressionUsage(text string, usage *SkillUsage, current Record, skillID string) bool {
+	return json.Unmarshal([]byte(text), usage) != nil || usage.VersionID != current.ID || usage.SkillID != skillID || current.Analysis == nil || usage.ContentHash != current.Analysis.ContentHash || usage.OfflineCache || usage.StartedAt.Before(current.UpdatedAt) || usage.CompletedAt.Before(usage.StartedAt) || usage.CompletedAt.After(time.Now())
+}
+
+// ignoredRegressionEvaluation keeps only independent failing evaluations of this source.
+func ignoredRegressionEvaluation(v Record, target Ref, source, current, trial Record) bool {
+	return !live(v) || v.Evaluation == nil || !validEvaluation(v.Evaluation) || !evaluationRole(v.Evaluation.EvalType, v.CreatedByType) || v.Evaluation.EvalType == "model_self" || v.Evaluation.Passed == nil || *v.Evaluation.Passed || v.Target == nil || *v.Target != target || v.CreatedBy == source.CreatedBy || v.CreatedBy == current.CreatedBy || v.CreatedBy == trial.CreatedBy
+}
+
+func rejectRegressedSkillVersion(ctx context.Context, tx Tx, current, trial Record, scope Scope, id, marker string, evidence []SkillTrialObservation) (Record, error) {
+	prev := current.Revision
+	current.Revision++
+	current.Status = "rejected"
+	current.RequestHash = marker
+	current.UpdatedAt = time.Now().UTC()
+	if err := tx.Replace(ctx, colSkillVersions, current, prev); err != nil {
+		return current, err
+	}
+	tr, err := tx.Get(ctx, colSkillTrials, scope, id)
+	if err != nil {
+		return current, err
+	}
+	if tr.Revision != trial.Revision {
+		return current, ErrConflict
+	}
+	previous := tr.Revision
+	tr.Revision++
+	tr.Text = structuredText(evidence)
+	tr.UpdatedAt = time.Now().UTC()
+	if err = tx.Replace(ctx, colSkillTrials, tr, previous); err != nil {
+		return current, err
+	}
+	return current, nil
 }

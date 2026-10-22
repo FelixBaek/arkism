@@ -105,35 +105,10 @@ func (s *Service) traceRecordSources(ctx context.Context, token string, scope Sc
 			}
 			state, seen := states[ref.SourceID]
 			if !seen {
-				sd, err := s.authorize(ctx, token, "read:sources", scope, ref.SourceID, "")
-				if errors.Is(err, ErrDenied) {
-					state = "hidden"
-				} else if err != nil {
+				var err error
+				state, err = s.traceSourceState(ctx, tx, token, scope, ref.SourceID, d, rows, deleted)
+				if err != nil {
 					return err
-				} else if sd.PrincipalID != d.PrincipalID || sd.Role != d.Role {
-					return ErrDenied
-				} else {
-					source, err := tx.Get(ctx, "sources", scope, ref.SourceID)
-					if errors.Is(err, ErrNotFound) {
-						state = "unavailable"
-						at, proofErr := sourceDeletion(ctx, tx, scope, ref.SourceID)
-						if proofErr == nil {
-							if at.IsZero() || at.After(time.Now()) {
-								return ErrUnavailable
-							}
-							state = "deleted"
-							deleted[ref.SourceID] = at
-						} else if !errors.Is(proofErr, ErrNotFound) {
-							return proofErr
-						}
-					} else if err != nil {
-						return err
-					} else if !live(source) {
-						state = "inactive"
-					} else {
-						state = "available"
-						rows[ref.SourceID] = source
-					}
 				}
 				states[ref.SourceID] = state
 			}
@@ -143,33 +118,7 @@ func (s *Service) traceRecordSources(ctx context.Context, token string, scope Sc
 				item.DeletedAt = &at
 			}
 			if state == "available" {
-				source := rows[ref.SourceID]
-				err := validateSourceSpan(ref.Span, ContentHash(source.Text), utf8.RuneCountInString(source.Text))
-				if ref.Locator == "" {
-					err = ErrInvalid
-				}
-				if errors.Is(err, ErrConflict) {
-					item.State = "changed"
-				} else if err != nil {
-					item.State = "invalid"
-				} else {
-					item.ArchiveMessages = append([]ArchiveMessageRef(nil), source.ArchiveMessages...)
-					refCopy := ref
-					item.Reference = &refCopy
-					item.Source = &Ref{Collection: "sources", ID: source.ID, Revision: source.Revision}
-					item.OriginProduct, item.SourceRef, item.CollectedAt = source.OriginProduct, source.SourceRef, source.CollectedAt
-					if source.Kind == "note" && source.SourceEventID != "" && source.TraceID != "" {
-						var provenance struct {
-							OriginAgentID string `json:"origin_agent_id"`
-						}
-						if json.Unmarshal([]byte(source.Text), &provenance) == nil && validRunLabel(provenance.OriginAgentID, 256) {
-							item.OriginAgentID = provenance.OriginAgentID
-						}
-					}
-					if ref.Span != nil {
-						item.Excerpt = string([]rune(source.Text)[ref.Span.Start:ref.Span.End])
-					}
-				}
+				fillAvailableSourceTrace(&item, ref, rows[ref.SourceID])
 			}
 			out.Sources = append(out.Sources, item)
 		}
@@ -183,4 +132,68 @@ func (s *Service) traceRecordSources(ctx context.Context, token string, scope Sc
 		return MemorySources{}, e
 	}
 	return out, nil
+}
+
+func (s *Service) traceSourceState(ctx context.Context, tx Tx, token string, scope Scope, sourceID string, d Decision, rows map[string]Record, deleted map[string]time.Time) (string, error) {
+	var state string
+	sd, err := s.authorize(ctx, token, "read:sources", scope, sourceID, "")
+	if errors.Is(err, ErrDenied) {
+		state = "hidden"
+	} else if err != nil {
+		return "", err
+	} else if sd.PrincipalID != d.PrincipalID || sd.Role != d.Role {
+		return "", ErrDenied
+	} else {
+		source, err := tx.Get(ctx, "sources", scope, sourceID)
+		if errors.Is(err, ErrNotFound) {
+			state = "unavailable"
+			at, proofErr := sourceDeletion(ctx, tx, scope, sourceID)
+			if proofErr == nil {
+				if at.IsZero() || at.After(time.Now()) {
+					return "", ErrUnavailable
+				}
+				state = "deleted"
+				deleted[sourceID] = at
+			} else if !errors.Is(proofErr, ErrNotFound) {
+				return "", proofErr
+			}
+		} else if err != nil {
+			return "", err
+		} else if !live(source) {
+			state = "inactive"
+		} else {
+			state = "available"
+			rows[sourceID] = source
+		}
+	}
+	return state, nil
+}
+
+func fillAvailableSourceTrace(item *SourceTrace, ref SourceRef, source Record) {
+	err := validateSourceSpan(ref.Span, ContentHash(source.Text), utf8.RuneCountInString(source.Text))
+	if ref.Locator == "" {
+		err = ErrInvalid
+	}
+	if errors.Is(err, ErrConflict) {
+		item.State = "changed"
+	} else if err != nil {
+		item.State = "invalid"
+	} else {
+		item.ArchiveMessages = append([]ArchiveMessageRef(nil), source.ArchiveMessages...)
+		refCopy := ref
+		item.Reference = &refCopy
+		item.Source = &Ref{Collection: "sources", ID: source.ID, Revision: source.Revision}
+		item.OriginProduct, item.SourceRef, item.CollectedAt = source.OriginProduct, source.SourceRef, source.CollectedAt
+		if source.Kind == "note" && source.SourceEventID != "" && source.TraceID != "" {
+			var provenance struct {
+				OriginAgentID string `json:"origin_agent_id"`
+			}
+			if json.Unmarshal([]byte(source.Text), &provenance) == nil && validRunLabel(provenance.OriginAgentID, 256) {
+				item.OriginAgentID = provenance.OriginAgentID
+			}
+		}
+		if ref.Span != nil {
+			item.Excerpt = string([]rune(source.Text)[ref.Span.Start:ref.Span.End])
+		}
+	}
 }

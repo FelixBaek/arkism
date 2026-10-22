@@ -371,16 +371,20 @@ func memoryProvenance(ctx context.Context, tx Tx, r Record) error {
 	if !live(trace) || trace.Scope != r.Scope {
 		return ErrDenied
 	}
-	sharedSource := false
-	for _, candidateSource := range r.Sources {
-		for _, traceSource := range trace.Sources {
-			sharedSource = sharedSource || candidateSource.SourceID == traceSource.SourceID
-		}
-	}
-	if !sharedSource {
+	if !sharesSource(r.Sources, trace.Sources) {
 		return ErrDenied
 	}
 	return nil
+}
+
+func sharesSource(a, b []SourceRef) bool {
+	shared := false
+	for _, x := range a {
+		for _, y := range b {
+			shared = shared || x.SourceID == y.SourceID
+		}
+	}
+	return shared
 }
 
 func effectiveSourceEventID(r Record) string {
@@ -414,17 +418,8 @@ func checkRelations(ctx context.Context, tx Tx, r Record) error {
 
 func checkDirectRelations(ctx context.Context, tx Tx, r Record) error {
 	if r.Kind == proposedSkillKind {
-		if r.ComparisonPlan == nil || !validComparisonPlan(r.ComparisonPlan) || !validGenerator(r.Generator) {
-			return ErrInvalid
-		}
-		evidence, e := skillLessons(ctx, tx, r.Scope, proposedLessons(r))
-		if e != nil {
+		if e := checkProposedSkillLessons(ctx, tx, r); e != nil {
 			return e
-		}
-		for _, ref := range evidence.Relations {
-			if !slices.Contains(r.Relations, ref) {
-				return ErrConflict
-			}
 		}
 	}
 	for _, ref := range r.Relations {
@@ -445,6 +440,21 @@ func checkDirectRelations(ctx context.Context, tx Tx, r Record) error {
 			if e = checkSources(ctx, tx, v); e != nil {
 				return e
 			}
+		}
+	}
+	return nil
+}
+func checkProposedSkillLessons(ctx context.Context, tx Tx, r Record) error {
+	if r.ComparisonPlan == nil || !validComparisonPlan(r.ComparisonPlan) || !validGenerator(r.Generator) {
+		return ErrInvalid
+	}
+	evidence, e := skillLessons(ctx, tx, r.Scope, proposedLessons(r))
+	if e != nil {
+		return e
+	}
+	for _, ref := range evidence.Relations {
+		if !slices.Contains(r.Relations, ref) {
+			return ErrConflict
 		}
 	}
 	return nil
@@ -476,135 +486,25 @@ func (s *Service) Create(ctx context.Context, token, col string, in CreateInput)
 }
 
 func (s *Service) create(ctx context.Context, token, col string, in CreateInput, file *textArtifact) (Record, error) {
-	if len(in.ArchiveMessages) > 0 && col != "sources" {
-		return Record{}, ErrInvalid
-	}
-	if in.TrustLevel != "" && (col != "sources" || in.TrustLevel != "external_untrusted" && in.TrustLevel != "user_authored") {
-		return Record{}, ErrInvalid
-	}
-	if in.Confidence != nil {
-		confidence := *in.Confidence
-		if col != "memory_candidates" || math.IsNaN(confidence) || math.IsInf(confidence, 0) || confidence < 0 || confidence > 1 {
-			return Record{}, ErrInvalid
-		}
-		in.Confidence = &confidence
-	}
-	if col == "sources" && !validScope(in.Scope) {
-		return Record{}, ErrInvalid
-	}
-	if in.IdempotencyKey != "" && (col != "sources" || !idempotencyPattern.MatchString(in.IdempotencyKey)) {
-		return Record{}, ErrInvalid
-	}
-	if !validMemoryContext(in.MemoryContext, time.Now().UTC()) || in.MemoryContext != nil && col != "memory_candidates" {
-		return Record{}, ErrInvalid
-	}
-	allowed := map[string]bool{"sources": true, "memory_candidates": true, "agent_runs": true, "tool_calls": true, "evaluations": true, "reflections": true, "memory_relations": true}
-	if !validTags(in.Tags) || len(in.Tags) > 0 && col != "memory_candidates" || !allowed[col] || (file != nil && col != "sources") || (in.Evaluation != nil && col != "evaluations") || (in.Run != nil && col != "agent_runs") || (in.ToolCall != nil && col != "tool_calls") || (in.Reflection != nil && col != colReflections) || (in.SourceEventID != "" || in.TraceID != "") && col != "memory_candidates" && col != colReflections || in.SourceEventID != "" && !validRunLabel(in.SourceEventID, 256) || in.TraceID != "" && !validRunLabel(in.TraceID, 256) || (file == nil && strings.TrimSpace(in.Text) == "") || len(in.Text) > 64000 || len(in.Summary) > 8000 || len(in.Sources) > 64 || len(in.Relations) > 64 || len(in.Keywords) > 128 || len(in.SkillID) > 256 || len(in.BaseVersion) > 256 {
-		return Record{}, ErrInvalid
-	}
-	for _, k := range in.Keywords {
-		if len(k) > 256 {
-			return Record{}, ErrInvalid
-		}
+	if err := checkCreateRequest(col, &in, file); err != nil {
+		return Record{}, err
 	}
 	if containsSecret(structuredText(in.Scope)) {
 		return Record{}, ErrSecretDetected
 	}
-	clean, inspection, inspectionErr := inspectCreateInput(in, file != nil)
-	if file != nil {
-		fileInspection, err := inspectArtifactText(file.content, file.metadata.Data.MIME)
-		if err != nil && (inspectionErr == nil || err == ErrSecretDetected) {
-			inspectionErr = err
-		}
-		inspection.PersonalData = inspection.PersonalData || fileInspection.PersonalData
-		if inspection.PersonalData && clean.Sensitivity != "restricted" {
-			clean.Sensitivity = "private"
-		}
-	}
-	if inspectionErr != nil {
-		if inspectionErr != ErrSecretDetected {
-			return Record{}, inspectionErr
-		}
-		// Never send rejected content to policy or record its value/hash in audit.
-		d, err := s.authorize(ctx, token, "write:"+col, in.Scope, "", "")
-		if err != nil {
-			return Record{}, err
-		}
-		err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-			return audit(ctx, tx, in.Scope, d.PrincipalID, "inspection:blocked:"+inspectionVersion, "")
-		})
-		if err != nil {
-			return Record{}, err
-		}
-		return Record{}, ErrSecretDetected
+	clean, inspection, err := s.inspectCreateRequest(ctx, token, col, in, file)
+	if err != nil {
+		return Record{}, err
 	}
 	clean.capture = in.capture
 	in = clean
-	// Policy inspects the sanitized complete payload, including secondary fields.
-	raw, _ := json.Marshal(in)
-	if file != nil {
-		raw, _ = json.Marshal(struct {
-			Source   CreateInput        `json:"source"`
-			Artifact FileArtifactResult `json:"artifact"`
-			Content  string             `json:"file_content"`
-		}{in, file.descriptor(), string(file.content)})
-	}
-	d, e := s.authorize(ctx, token, "write:"+col, in.Scope, "", string(raw))
+	d, e := s.authorizeCreate(ctx, token, col, in, file)
 	if e != nil {
 		return Record{}, e
 	}
-	if file != nil {
-		if !d.ContentSafe || !validArtifactActor(d, in.Scope) {
-			return Record{}, ErrDenied
-		}
-		artifactDecision, err := s.authorize(ctx, token, "write:artifacts", in.Scope, "", string(raw))
-		if err != nil {
-			return Record{}, err
-		}
-		if !artifactDecision.ContentSafe || artifactDecision.PrincipalID != d.PrincipalID || artifactDecision.Role != d.Role {
-			return Record{}, ErrDenied
-		}
-	}
-	if (in.Generated || in.Generator != nil || requiresGenerator(d.Role, col)) && !validGenerator(in.Generator) {
-		return Record{}, ErrInvalid
-	}
-	if d.Role != "human" && d.Role != "agent" && d.Role != "service" && d.Role != "pipeline" {
-		return Record{}, ErrDenied
-	}
-	if in.TrustLevel == "user_authored" && (d.Role != "human" || in.Generated || in.Generator != nil) {
-		return Record{}, ErrDenied
-	}
-	if !validCreateKind(col, in.Kind) {
-		return Record{}, ErrInvalid
-	}
 	now := time.Now().UTC()
-	if col == "memory_candidates" {
-		effective := now.Truncate(time.Millisecond)
-		if in.EffectiveAt != nil {
-			effective = in.EffectiveAt.UTC().Truncate(time.Millisecond)
-			if !storableTime(effective) {
-				return Record{}, ErrInvalid
-			}
-		}
-		in.EffectiveAt = &effective
-		if in.ExpiresAt != nil {
-			expires := in.ExpiresAt.UTC().Truncate(time.Millisecond)
-			if !expires.After(effective) || !storableTime(expires) {
-				return Record{}, ErrInvalid
-			}
-			in.ExpiresAt = &expires
-		}
-	} else if in.EffectiveAt != nil {
-		return Record{}, ErrInvalid
-	}
-	if col == "sources" {
-		if !validSourceOrigin(in.OriginProduct, in.SourceRef, in.CollectedAt, now) {
-			return Record{}, ErrInvalid
-		}
-		normalized := in.CollectedAt.UTC().Truncate(time.Millisecond)
-		in.CollectedAt = &normalized
-	} else if in.OriginProduct != "" || in.SourceRef != "" || in.CollectedAt != nil {
-		return Record{}, ErrInvalid
+	if e = normalizeCreateTimes(col, &in, now); e != nil {
+		return Record{}, e
 	}
 	r := Record{MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
 	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
@@ -614,18 +514,8 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 		sg := suggestReach(r)
 		r.ReachSuggestion = &sg
 	}
-	if col == "memory_candidates" {
-		r.Status = "candidate"
-		if in.Classification != nil {
-			c := *in.Classification
-			if !validClassification(c) {
-				return Record{}, ErrInvalid
-			}
-			c.By, c.At = d.PrincipalID, &now
-			r.Classification = &c
-		}
-	} else if in.Classification != nil {
-		return Record{}, ErrInvalid
+	if e = classifyCreatedCandidate(col, &r, in, d, now); e != nil {
+		return Record{}, e
 	}
 	if col == "sources" {
 		r.TrustLevel = sourceTrustLevel(in.TrustLevel)
@@ -635,90 +525,8 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 		}
 		return s.createSource(ctx, token, in, r, d, nil)
 	}
-	if col == "memory_candidates" {
-		if r.SourceEventID == "" && len(r.Sources) > 0 {
-			r.SourceEventID = r.Sources[0].SourceID
-		}
-		r.VerificationStatus = VerificationCandidate
-		r.NormalizedKey = candidateNormalizedKey(r)
-		for _, ref := range r.Sources {
-			if ref.Span == nil {
-				return Record{}, ErrInvalid
-			}
-		}
-	}
-	if col == "reflections" && r.Reflection == nil {
-		return Record{}, ErrInvalid
-	}
-	if col == "reflections" && r.Reflection != nil {
-		x := *r.Reflection
-		x.SecretChecked = false
-		if x.Outcome != "success" && x.Outcome != "partial" && x.Outcome != "failed" {
-			return Record{}, ErrInvalid
-		}
-		if x.TaskType == "" || x.Lesson == "" || x.VerificationMethod == "" || !safeTransfer(structuredText(x)) {
-			return Record{}, ErrInvalid
-		}
-		if x.Verified && d.Role != "human" && d.Role != "service" {
-			return Record{}, ErrDenied
-		}
-		x.SecretChecked = d.ContentSafe && d.ExternalTransfer
-		r.Reflection = &x
-		// Ignore raw conversation/tool copies: only structured summary is stored.
-		r.Text = structuredText(x)
-		r.Summary = x.Lesson
-		r.Keywords = []string{x.TaskType, x.Outcome, x.SkillID}
-	}
-	if col == "reflections" && len(r.Relations) == 0 {
-		return Record{}, ErrInvalid
-	}
-	if col == "agent_runs" {
-		if !validRun(r.Run, r.Scope, now) {
-			return Record{}, ErrInvalid
-		}
-		details := *r.Run
-		details.StartedAt = details.StartedAt.UTC().Truncate(time.Millisecond)
-		if details.FinishedAt != nil {
-			finished := details.FinishedAt.UTC().Truncate(time.Millisecond)
-			details.FinishedAt = &finished
-		}
-		r.Run = &details
-	}
-	if col == "tool_calls" {
-		if !validToolCall(r.ToolCall, r.Target, now) {
-			return Record{}, ErrInvalid
-		}
-		details := *r.ToolCall
-		details.StartedAt = details.StartedAt.UTC().Truncate(time.Millisecond)
-		details.FinishedAt = details.FinishedAt.UTC().Truncate(time.Millisecond)
-		r.ToolCall = &details
-		parent, err := s.authorize(ctx, token, "read:agent_runs", r.Scope, r.Target.ID, "")
-		if err != nil {
-			return Record{}, err
-		}
-		if parent.PrincipalID != d.PrincipalID || parent.Role != d.Role {
-			return Record{}, ErrDenied
-		}
-	}
-	if col == "evaluations" {
-		if r.Target == nil || !knownCollection(r.Target.Collection) || r.Target.Collection == "jobs" || r.Target.Collection == "audit_events" || !validRunLabel(r.Target.ID, 256) || r.Target.Revision < 1 || !validEvaluation(r.Evaluation) {
-			return Record{}, ErrInvalid
-		}
-		if !evaluationRole(r.Evaluation.EvalType, d.Role) {
-			return Record{}, ErrDenied
-		}
-		passed := r.Evaluation.Passed != nil && *r.Evaluation.Passed
-		if in.Passed && !passed {
-			return Record{}, ErrInvalid
-		}
-		r.Passed = passed
-		parent, err := s.authorize(ctx, token, "read:"+r.Target.Collection, r.Scope, r.Target.ID, "")
-		if err != nil {
-			return Record{}, err
-		}
-		if parent.PrincipalID != d.PrincipalID || parent.Role != d.Role {
-			return Record{}, ErrDenied
-		}
+	if e = s.prepareCreateRecord(ctx, token, col, &r, in, d, now); e != nil {
+		return Record{}, e
 	}
 	contextHeaders, contextErr := s.validateMemoryContextEvidence(ctx, token, r.Scope, r.Sources, r.MemoryContext)
 	if contextErr != nil {
@@ -740,99 +548,422 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 		if e := checkRelations(ctx, tx, r); e != nil {
 			return e
 		}
-		if col == "memory_candidates" || col == colReflections && (r.SourceEventID != "" || r.TraceID != "") {
-			if e := memoryProvenance(ctx, tx, r); e != nil {
-				return e
-			}
-		}
-		if col == "tool_calls" {
-			run, err := tx.Get(ctx, "agent_runs", r.Scope, r.Target.ID)
-			if err != nil {
-				return err
-			}
-			if run.Revision != r.Target.Revision || !live(run) {
-				return ErrConflict
-			}
-			if run.Run != nil && (!validRun(run.Run, run.Scope, now) || r.ToolCall.StartedAt.Before(run.Run.StartedAt) || run.Run.FinishedAt != nil && r.ToolCall.FinishedAt.After(*run.Run.FinishedAt)) {
-				return ErrInvalid
-			}
-			if err = checkSources(ctx, tx, run); err != nil {
-				return err
-			}
-			if err = tx.FenceRunCall(ctx, r.Scope, run.ID, run.Revision); err != nil {
-				return err
-			}
-		}
-		if col == "evaluations" {
-			if !knownCollection(r.Target.Collection) || r.Target.Collection == "jobs" || r.Target.Collection == "audit_events" {
-				return ErrInvalid
-			}
-			v, e := tx.Get(ctx, r.Target.Collection, r.Scope, r.Target.ID)
-			if e != nil {
-				return e
-			}
-			if v.Revision != r.Target.Revision {
-				return ErrConflict
-			}
-			if (r.Evaluation.EvalType == "model_self") != (v.CreatedBy == d.PrincipalID) {
-				return ErrDenied
-			}
-			if r.Target.Collection == colMemories && r.Evaluation.EvalType == "automated_check" && v.ApprovedBy == d.PrincipalID {
-				return ErrDenied
-			}
-			if e = checkSources(ctx, tx, v); e != nil {
-				return e
-			}
-			if r.Target.Collection == "agent_runs" && v.Run != nil && (!validRun(v.Run, v.Scope, now) || !terminalOutcome(v.Run.Outcome)) {
-				return ErrConflict
-			}
-		}
-		if col == "reflections" && r.Reflection != nil && r.Reflection.Verified {
-			if e := checkReflection(ctx, tx, r); e != nil {
-				return e
-			}
-			if e := enqueue(ctx, tx, col, r); e != nil {
-				return e
-			}
-		}
-		if col == "memory_candidates" && (requiresGenerator(d.Role, col) || in.Generated || in.Generator != nil) {
-			if e := reserveCandidate(ctx, tx, r.Scope, now, s.CandidateDailyLimit); e != nil {
-				return e
-			}
-		}
-		var insertErr error
-		if col != "sources" {
-			insertErr = insertSourceRecord(ctx, tx, col, r)
-		} else {
-			insertErr = tx.Insert(ctx, col, r)
-		}
-		if e := insertErr; e != nil {
+		if e := s.checkCreateTx(ctx, tx, col, in, r, d, now); e != nil {
 			return e
 		}
-		if in.capture != nil {
-			if col != "memory_candidates" {
-				return ErrInvalid
-			}
-			if err := in.capture.complete(ctx, tx, r); err != nil {
-				return err
-			}
-		}
-		if col == "evaluations" {
-			if e := recordMemoryEvaluation(ctx, tx, r); e != nil {
-				return e
-			}
-		}
-		if inspection.Redacted || inspection.PersonalData {
-			if err := audit(ctx, tx, r.Scope, d.PrincipalID, "inspection:processed:"+inspectionVersion, r.ID); err != nil {
-				return err
-			}
-		}
-		return audit(ctx, tx, r.Scope, d.PrincipalID, "create:"+col, r.ID)
+		return writeCreateTx(ctx, tx, col, in, r, d, inspection)
 	})
 	if e != nil {
 		return Record{}, e
 	}
 	return r, nil
+}
+
+func checkCreateRequest(col string, in *CreateInput, file *textArtifact) error {
+	if len(in.ArchiveMessages) > 0 && col != "sources" {
+		return ErrInvalid
+	}
+	if in.TrustLevel != "" && (col != "sources" || in.TrustLevel != "external_untrusted" && in.TrustLevel != "user_authored") {
+		return ErrInvalid
+	}
+	if err := normalizeCreateConfidence(col, in); err != nil {
+		return err
+	}
+	if col == "sources" && !validScope(in.Scope) {
+		return ErrInvalid
+	}
+	if in.IdempotencyKey != "" && (col != "sources" || !idempotencyPattern.MatchString(in.IdempotencyKey)) {
+		return ErrInvalid
+	}
+	if !validMemoryContext(in.MemoryContext, time.Now().UTC()) || in.MemoryContext != nil && col != "memory_candidates" {
+		return ErrInvalid
+	}
+	if !validTags(in.Tags) || createFieldsMisplaced(col, *in, file) || createLabelsInvalid(col, *in) || createFieldsOversized(*in, file) {
+		return ErrInvalid
+	}
+	return nil
+}
+
+func normalizeCreateConfidence(col string, in *CreateInput) error {
+	if in.Confidence != nil {
+		confidence := *in.Confidence
+		if col != "memory_candidates" || math.IsNaN(confidence) || math.IsInf(confidence, 0) || confidence < 0 || confidence > 1 {
+			return ErrInvalid
+		}
+		in.Confidence = &confidence
+	}
+	return nil
+}
+
+func createFieldsMisplaced(col string, in CreateInput, file *textArtifact) bool {
+	allowed := map[string]bool{"sources": true, "memory_candidates": true, "agent_runs": true, "tool_calls": true, "evaluations": true, "reflections": true, "memory_relations": true}
+	return len(in.Tags) > 0 && col != "memory_candidates" || !allowed[col] || (file != nil && col != "sources") || (in.Evaluation != nil && col != "evaluations") || (in.Run != nil && col != "agent_runs") || (in.ToolCall != nil && col != "tool_calls") || (in.Reflection != nil && col != colReflections)
+}
+
+func createLabelsInvalid(col string, in CreateInput) bool {
+	return (in.SourceEventID != "" || in.TraceID != "") && col != "memory_candidates" && col != colReflections || in.SourceEventID != "" && !validRunLabel(in.SourceEventID, 256) || in.TraceID != "" && !validRunLabel(in.TraceID, 256)
+}
+
+func createFieldsOversized(in CreateInput, file *textArtifact) bool {
+	if (file == nil && strings.TrimSpace(in.Text) == "") || len(in.Text) > 64000 || len(in.Summary) > 8000 || len(in.Sources) > 64 || len(in.Relations) > 64 || len(in.Keywords) > 128 || len(in.SkillID) > 256 || len(in.BaseVersion) > 256 {
+		return true
+	}
+	for _, k := range in.Keywords {
+		if len(k) > 256 {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) inspectCreateRequest(ctx context.Context, token, col string, in CreateInput, file *textArtifact) (CreateInput, Inspection, error) {
+	clean, inspection, inspectionErr := inspectCreateInput(in, file != nil)
+	if file != nil {
+		fileInspection, err := inspectArtifactText(file.content, file.metadata.Data.MIME)
+		if err != nil && (inspectionErr == nil || err == ErrSecretDetected) {
+			inspectionErr = err
+		}
+		inspection.PersonalData = inspection.PersonalData || fileInspection.PersonalData
+		if inspection.PersonalData && clean.Sensitivity != "restricted" {
+			clean.Sensitivity = "private"
+		}
+	}
+	if inspectionErr != nil {
+		if inspectionErr != ErrSecretDetected {
+			return CreateInput{}, Inspection{}, inspectionErr
+		}
+		// Never send rejected content to policy or record its value/hash in audit.
+		d, err := s.authorize(ctx, token, "write:"+col, in.Scope, "", "")
+		if err != nil {
+			return CreateInput{}, Inspection{}, err
+		}
+		err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+			return audit(ctx, tx, in.Scope, d.PrincipalID, "inspection:blocked:"+inspectionVersion, "")
+		})
+		if err != nil {
+			return CreateInput{}, Inspection{}, err
+		}
+		return CreateInput{}, Inspection{}, ErrSecretDetected
+	}
+	return clean, inspection, nil
+}
+
+func (s *Service) authorizeCreate(ctx context.Context, token, col string, in CreateInput, file *textArtifact) (Decision, error) {
+	// Policy inspects the sanitized complete payload, including secondary fields.
+	raw, _ := json.Marshal(in)
+	if file != nil {
+		raw, _ = json.Marshal(struct {
+			Source   CreateInput        `json:"source"`
+			Artifact FileArtifactResult `json:"artifact"`
+			Content  string             `json:"file_content"`
+		}{in, file.descriptor(), string(file.content)})
+	}
+	d, e := s.authorize(ctx, token, "write:"+col, in.Scope, "", string(raw))
+	if e != nil {
+		return Decision{}, e
+	}
+	if file != nil {
+		if e = s.authorizeArtifactCreate(ctx, token, in.Scope, string(raw), d); e != nil {
+			return Decision{}, e
+		}
+	}
+	if (in.Generated || in.Generator != nil || requiresGenerator(d.Role, col)) && !validGenerator(in.Generator) {
+		return Decision{}, ErrInvalid
+	}
+	if d.Role != "human" && d.Role != "agent" && d.Role != "service" && d.Role != "pipeline" {
+		return Decision{}, ErrDenied
+	}
+	if in.TrustLevel == "user_authored" && (d.Role != "human" || in.Generated || in.Generator != nil) {
+		return Decision{}, ErrDenied
+	}
+	if !validCreateKind(col, in.Kind) {
+		return Decision{}, ErrInvalid
+	}
+	return d, nil
+}
+
+func (s *Service) authorizeArtifactCreate(ctx context.Context, token string, scope Scope, raw string, d Decision) error {
+	if !d.ContentSafe || !validArtifactActor(d, scope) {
+		return ErrDenied
+	}
+	artifactDecision, err := s.authorize(ctx, token, "write:artifacts", scope, "", raw)
+	if err != nil {
+		return err
+	}
+	if !artifactDecision.ContentSafe || artifactDecision.PrincipalID != d.PrincipalID || artifactDecision.Role != d.Role {
+		return ErrDenied
+	}
+	return nil
+}
+
+func normalizeCreateTimes(col string, in *CreateInput, now time.Time) error {
+	if col == "memory_candidates" {
+		effective := now.Truncate(time.Millisecond)
+		if in.EffectiveAt != nil {
+			effective = in.EffectiveAt.UTC().Truncate(time.Millisecond)
+			if !storableTime(effective) {
+				return ErrInvalid
+			}
+		}
+		in.EffectiveAt = &effective
+		if in.ExpiresAt != nil {
+			expires := in.ExpiresAt.UTC().Truncate(time.Millisecond)
+			if !expires.After(effective) || !storableTime(expires) {
+				return ErrInvalid
+			}
+			in.ExpiresAt = &expires
+		}
+	} else if in.EffectiveAt != nil {
+		return ErrInvalid
+	}
+	if col == "sources" {
+		if !validSourceOrigin(in.OriginProduct, in.SourceRef, in.CollectedAt, now) {
+			return ErrInvalid
+		}
+		normalized := in.CollectedAt.UTC().Truncate(time.Millisecond)
+		in.CollectedAt = &normalized
+	} else if in.OriginProduct != "" || in.SourceRef != "" || in.CollectedAt != nil {
+		return ErrInvalid
+	}
+	return nil
+}
+
+func classifyCreatedCandidate(col string, r *Record, in CreateInput, d Decision, now time.Time) error {
+	if col == "memory_candidates" {
+		r.Status = "candidate"
+		if in.Classification != nil {
+			c := *in.Classification
+			if !validClassification(c) {
+				return ErrInvalid
+			}
+			c.By, c.At = d.PrincipalID, &now
+			r.Classification = &c
+		}
+	} else if in.Classification != nil {
+		return ErrInvalid
+	}
+	return nil
+}
+
+func (s *Service) prepareCreateRecord(ctx context.Context, token, col string, r *Record, in CreateInput, d Decision, now time.Time) error {
+	if col == "memory_candidates" {
+		if r.SourceEventID == "" && len(r.Sources) > 0 {
+			r.SourceEventID = r.Sources[0].SourceID
+		}
+		r.VerificationStatus = VerificationCandidate
+		r.NormalizedKey = candidateNormalizedKey(*r)
+		for _, ref := range r.Sources {
+			if ref.Span == nil {
+				return ErrInvalid
+			}
+		}
+	}
+	if col == "reflections" && r.Reflection == nil {
+		return ErrInvalid
+	}
+	if col == "reflections" && r.Reflection != nil {
+		if err := prepareReflection(r, d); err != nil {
+			return err
+		}
+	}
+	if col == "reflections" && len(r.Relations) == 0 {
+		return ErrInvalid
+	}
+	if col == "agent_runs" {
+		if err := prepareAgentRun(r, now); err != nil {
+			return err
+		}
+	}
+	if col == "tool_calls" {
+		if err := s.prepareToolCall(ctx, token, r, d, now); err != nil {
+			return err
+		}
+	}
+	if col == "evaluations" {
+		return s.prepareEvaluation(ctx, token, r, in, d)
+	}
+	return nil
+}
+
+func prepareReflection(r *Record, d Decision) error {
+	x := *r.Reflection
+	x.SecretChecked = false
+	if x.Outcome != "success" && x.Outcome != "partial" && x.Outcome != "failed" {
+		return ErrInvalid
+	}
+	if x.TaskType == "" || x.Lesson == "" || x.VerificationMethod == "" || !safeTransfer(structuredText(x)) {
+		return ErrInvalid
+	}
+	if x.Verified && d.Role != "human" && d.Role != "service" {
+		return ErrDenied
+	}
+	x.SecretChecked = d.ContentSafe && d.ExternalTransfer
+	r.Reflection = &x
+	// Ignore raw conversation/tool copies: only structured summary is stored.
+	r.Text = structuredText(x)
+	r.Summary = x.Lesson
+	r.Keywords = []string{x.TaskType, x.Outcome, x.SkillID}
+	return nil
+}
+
+func prepareAgentRun(r *Record, now time.Time) error {
+	if !validRun(r.Run, r.Scope, now) {
+		return ErrInvalid
+	}
+	details := *r.Run
+	details.StartedAt = details.StartedAt.UTC().Truncate(time.Millisecond)
+	if details.FinishedAt != nil {
+		finished := details.FinishedAt.UTC().Truncate(time.Millisecond)
+		details.FinishedAt = &finished
+	}
+	r.Run = &details
+	return nil
+}
+
+func (s *Service) prepareToolCall(ctx context.Context, token string, r *Record, d Decision, now time.Time) error {
+	if !validToolCall(r.ToolCall, r.Target, now) {
+		return ErrInvalid
+	}
+	details := *r.ToolCall
+	details.StartedAt = details.StartedAt.UTC().Truncate(time.Millisecond)
+	details.FinishedAt = details.FinishedAt.UTC().Truncate(time.Millisecond)
+	r.ToolCall = &details
+	parent, err := s.authorize(ctx, token, "read:agent_runs", r.Scope, r.Target.ID, "")
+	if err != nil {
+		return err
+	}
+	if parent.PrincipalID != d.PrincipalID || parent.Role != d.Role {
+		return ErrDenied
+	}
+	return nil
+}
+
+func (s *Service) prepareEvaluation(ctx context.Context, token string, r *Record, in CreateInput, d Decision) error {
+	if r.Target == nil || !knownCollection(r.Target.Collection) || r.Target.Collection == "jobs" || r.Target.Collection == "audit_events" || !validRunLabel(r.Target.ID, 256) || r.Target.Revision < 1 || !validEvaluation(r.Evaluation) {
+		return ErrInvalid
+	}
+	if !evaluationRole(r.Evaluation.EvalType, d.Role) {
+		return ErrDenied
+	}
+	passed := r.Evaluation.Passed != nil && *r.Evaluation.Passed
+	if in.Passed && !passed {
+		return ErrInvalid
+	}
+	r.Passed = passed
+	parent, err := s.authorize(ctx, token, "read:"+r.Target.Collection, r.Scope, r.Target.ID, "")
+	if err != nil {
+		return err
+	}
+	if parent.PrincipalID != d.PrincipalID || parent.Role != d.Role {
+		return ErrDenied
+	}
+	return nil
+}
+
+func (s *Service) checkCreateTx(ctx context.Context, tx Tx, col string, in CreateInput, r Record, d Decision, now time.Time) error {
+	if col == "memory_candidates" || col == colReflections && (r.SourceEventID != "" || r.TraceID != "") {
+		if e := memoryProvenance(ctx, tx, r); e != nil {
+			return e
+		}
+	}
+	if col == "tool_calls" {
+		if err := checkToolCallRun(ctx, tx, r, now); err != nil {
+			return err
+		}
+	}
+	if col == "evaluations" {
+		if e := checkEvaluationTarget(ctx, tx, r, d, now); e != nil {
+			return e
+		}
+	}
+	if col == "reflections" && r.Reflection != nil && r.Reflection.Verified {
+		if e := checkReflection(ctx, tx, r); e != nil {
+			return e
+		}
+		if e := enqueue(ctx, tx, col, r); e != nil {
+			return e
+		}
+	}
+	if col == "memory_candidates" && (requiresGenerator(d.Role, col) || in.Generated || in.Generator != nil) {
+		if e := reserveCandidate(ctx, tx, r.Scope, now, s.CandidateDailyLimit); e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+func checkToolCallRun(ctx context.Context, tx Tx, r Record, now time.Time) error {
+	run, err := tx.Get(ctx, "agent_runs", r.Scope, r.Target.ID)
+	if err != nil {
+		return err
+	}
+	if run.Revision != r.Target.Revision || !live(run) {
+		return ErrConflict
+	}
+	if run.Run != nil && (!validRun(run.Run, run.Scope, now) || r.ToolCall.StartedAt.Before(run.Run.StartedAt) || run.Run.FinishedAt != nil && r.ToolCall.FinishedAt.After(*run.Run.FinishedAt)) {
+		return ErrInvalid
+	}
+	if err = checkSources(ctx, tx, run); err != nil {
+		return err
+	}
+	return tx.FenceRunCall(ctx, r.Scope, run.ID, run.Revision)
+}
+
+func checkEvaluationTarget(ctx context.Context, tx Tx, r Record, d Decision, now time.Time) error {
+	if !knownCollection(r.Target.Collection) || r.Target.Collection == "jobs" || r.Target.Collection == "audit_events" {
+		return ErrInvalid
+	}
+	v, e := tx.Get(ctx, r.Target.Collection, r.Scope, r.Target.ID)
+	if e != nil {
+		return e
+	}
+	if v.Revision != r.Target.Revision {
+		return ErrConflict
+	}
+	if (r.Evaluation.EvalType == "model_self") != (v.CreatedBy == d.PrincipalID) {
+		return ErrDenied
+	}
+	if r.Target.Collection == colMemories && r.Evaluation.EvalType == "automated_check" && v.ApprovedBy == d.PrincipalID {
+		return ErrDenied
+	}
+	if e = checkSources(ctx, tx, v); e != nil {
+		return e
+	}
+	if r.Target.Collection == "agent_runs" && v.Run != nil && (!validRun(v.Run, v.Scope, now) || !terminalOutcome(v.Run.Outcome)) {
+		return ErrConflict
+	}
+	return nil
+}
+
+func writeCreateTx(ctx context.Context, tx Tx, col string, in CreateInput, r Record, d Decision, inspection Inspection) error {
+	var insertErr error
+	if col != "sources" {
+		insertErr = insertSourceRecord(ctx, tx, col, r)
+	} else {
+		insertErr = tx.Insert(ctx, col, r)
+	}
+	if e := insertErr; e != nil {
+		return e
+	}
+	if in.capture != nil {
+		if col != "memory_candidates" {
+			return ErrInvalid
+		}
+		if err := in.capture.complete(ctx, tx, r); err != nil {
+			return err
+		}
+	}
+	if col == "evaluations" {
+		if e := recordMemoryEvaluation(ctx, tx, r); e != nil {
+			return e
+		}
+	}
+	if inspection.Redacted || inspection.PersonalData {
+		if err := audit(ctx, tx, r.Scope, d.PrincipalID, "inspection:processed:"+inspectionVersion, r.ID); err != nil {
+			return err
+		}
+	}
+	return audit(ctx, tx, r.Scope, d.PrincipalID, "create:"+col, r.ID)
 }
 func (s *Service) Get(ctx context.Context, token, col string, scope Scope, id string) (Record, error) {
 	if col == colProviderUsage {
@@ -853,33 +984,8 @@ func (s *Service) Get(ctx context.Context, token, col string, scope Scope, id st
 	if r.PrivacyQuarantined {
 		return Record{}, ErrNotFound
 	}
-	if col == "memory_relations" && r.ContentErased {
-		r, e = conflictControlRecord(r)
-		if e != nil {
-			return Record{}, e
-		}
-	} else if col != "sources" && col != "audit_events" {
-		if e = checkSources(ctx, s.Repo, r); e != nil {
-			return Record{}, e
-		}
-	}
-	if col == colSkillVersions && r.Kind == proposedSkillKind {
-		if e = checkRelations(ctx, s.Repo, r); e != nil {
-			return Record{}, e
-		}
-	}
-	if col == "sources" && r.Kind == "skill_draft_prepared" {
-		if e = checkPreparedDraftEvidence(ctx, s.Repo, r); e != nil {
-			return Record{}, e
-		}
-	}
-	if col == "sources" && r.Kind == proposedSkillSourceKind {
-		if e = checkSkillBasis(ctx, s.Repo, r); e != nil {
-			return Record{}, e
-		}
-		if _, e = skillLessons(ctx, s.Repo, scope, proposedLessons(r)); e != nil {
-			return Record{}, e
-		}
+	if r, e = s.checkReadRecord(ctx, col, scope, r); e != nil {
+		return Record{}, e
 	}
 	if col == colMemories || col == colSkillVersions {
 		r.ContentHash = ContentHash(recordContent(r))
@@ -908,6 +1014,38 @@ func (s *Service) Get(ctx context.Context, token, col string, scope Scope, id st
 		return audit(ctx, tx, scope, d.PrincipalID, "read:"+col, id)
 	}); e != nil {
 		return Record{}, e
+	}
+	return r, nil
+}
+func (s *Service) checkReadRecord(ctx context.Context, col string, scope Scope, r Record) (Record, error) {
+	var e error
+	if col == "memory_relations" && r.ContentErased {
+		r, e = conflictControlRecord(r)
+		if e != nil {
+			return Record{}, e
+		}
+	} else if col != "sources" && col != "audit_events" {
+		if e = checkSources(ctx, s.Repo, r); e != nil {
+			return Record{}, e
+		}
+	}
+	if col == colSkillVersions && r.Kind == proposedSkillKind {
+		if e = checkRelations(ctx, s.Repo, r); e != nil {
+			return Record{}, e
+		}
+	}
+	if col == "sources" && r.Kind == "skill_draft_prepared" {
+		if e = checkPreparedDraftEvidence(ctx, s.Repo, r); e != nil {
+			return Record{}, e
+		}
+	}
+	if col == "sources" && r.Kind == proposedSkillSourceKind {
+		if e = checkSkillBasis(ctx, s.Repo, r); e != nil {
+			return Record{}, e
+		}
+		if _, e = skillLessons(ctx, s.Repo, scope, proposedLessons(r)); e != nil {
+			return Record{}, e
+		}
 	}
 	return r, nil
 }
@@ -966,26 +1104,13 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 			return Record{}, ErrDenied
 		}
 	} else if d.Role != roleHuman {
-		if col != colSkillVersions || (in.Status != "approved" && in.Status != "rejected") {
-			return Record{}, ErrDenied
-		}
-		candidate, err := s.Repo.Get(ctx, colSkillVersions, in.Scope, id)
-		if err != nil {
-			return Record{}, err
-		}
-		if _, err = s.authorizeSkillAutomation(ctx, token, d, in.Scope, candidate.SkillID, ""); err != nil {
-			return Record{}, err
+		if e = s.authorizeAutomatedTransition(ctx, token, col, id, in, d); e != nil {
+			return Record{}, e
 		}
 		ctx = bindRequestActor(ctx, d)
 	}
-	if review != nil && review.Conflict != nil {
-		other, err := s.authorize(ctx, token, "transition:memories", in.Scope, review.Conflict.Memory.ID, content)
-		if err != nil {
-			return Record{}, err
-		}
-		if other.PrincipalID != d.PrincipalID || other.Role != d.Role || !other.ContentSafe {
-			return Record{}, ErrDenied
-		}
+	if e = s.authorizeReviewConflict(ctx, token, in.Scope, review, content, d); e != nil {
+		return Record{}, e
 	}
 	if col == "skill_versions" && in.Status == "active" {
 		return Record{}, ErrInvalid
@@ -1037,132 +1162,18 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 			expectedRevision = r.Revision
 			resolvedRejection = review.Action == "reject"
 		}
-		if col == colMemories || col == "memory_candidates" {
-			normalizeMemoryProvenance(&r)
-		}
-		if r.ConflictID != "" || r.Revision != expectedRevision {
-			return ErrConflict
-		}
-		if review != nil && !resolvedRejection && r.Status != "candidate" && r.Status != "conflicted" {
-			return ErrConflict
-		}
-		if review != nil && in.Status == "approved" && r.ExpiresAt != nil && !r.ExpiresAt.After(time.Now()) {
-			return ErrConflict
-		}
-		if (col == "memory_candidates" && !resolvedRejection && r.Status != "candidate" && !(review != nil && r.Status == "conflicted")) || (col == "skill_versions" && r.Status != "candidate" && r.Status != "approved") {
-			return ErrInvalid
-		}
-		if !resolvedRejection && !validTransition(r.Status, in.Status) && !(review != nil && r.Status == "conflicted") {
-			return ErrInvalid
-		}
-		if review == nil || in.Status != "rejected" {
-			if e = checkSources(ctx, tx, r); e != nil {
-				return e
-			}
-			if e = checkRelations(ctx, tx, r); e != nil {
-				return e
-			}
-		}
-		if col == "memory_candidates" && in.Status == "active" {
-			return ErrInvalid
-		}
-		if col == "skill_versions" && in.Status == "approved" {
-			if e = validation(ctx, tx, r, in.ValidationID, true); e != nil {
-				return e
-			}
-			r.ValidationID = in.ValidationID
-		}
-		r.Status = in.Status
-		r.Revision++
-		r.UpdatedAt = time.Now().UTC()
-		if review != nil {
-			r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
-			if d.Role == roleHuman {
-				r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
-				if r.Classification != nil {
-					r.Review.AIRisk = r.Classification.Risk
-				}
-			}
-			if personalPattern.MatchString(review.Content + " " + review.Reason) {
-				if r.Sensitivity != "restricted" {
-					r.Sensitivity = "private"
-				}
-				report := Inspection{RulesVersion: inspectionVersion}
-				if r.Inspection != nil {
-					report = *r.Inspection
-				}
-				report.PersonalData = true
-				r.Inspection = &report
-			}
-		}
-		if in.Status == "approved" {
-			r.ApprovedBy = d.PrincipalID
-			if col == "memory_candidates" {
-				r.VerificationStatus = VerificationVerified
-			}
-		}
-		if col == "memory_candidates" && in.Status == "approved" {
-			if e = memoryProvenance(ctx, tx, r); e != nil {
-				return e
-			}
-		}
-		if e = tx.Replace(ctx, col, r, expectedRevision); e != nil {
+		if e = checkTransition(ctx, tx, col, in, &r, review, resolvedRejection, expectedRevision); e != nil {
 			return e
 		}
-		if col == "memory_candidates" && r.Status == "approved" {
-			memory := r
-			if d.Role == roleHuman {
-				memory.TrustLevel = "user_verified"
-			}
-			memory.Proposal = &Ref{Collection: "memory_candidates", ID: r.ID, Revision: r.Revision}
-			if review != nil {
-				memory.Status = "active"
-				if d.Role == roleHuman {
-					memory.Trust = 1
-				}
-				memory.Embedding = nil
-				if review.Action == "edit_approve" {
-					memory.Text = review.Content
-					memory.Summary = ""
-					memory.Keywords = nil
-					memory.KeywordsLower = nil
-					sg := suggestReach(memory) // The suggestion follows the edited text.
-					memory.ReachSuggestion = &sg
-				}
-				memory.ContentHash = ContentHash(memory.Text)
-			}
-			var replacementRelation Record
-			if replaced != nil {
-				replacementRelation, e = finishReviewReplacement(ctx, tx, replaced, &memory, *review, d)
-				if e != nil {
-					return e
-				}
-			}
-			if e = insertSourceRecord(ctx, tx, "memories", memory); e != nil {
-				return e
-			}
-			if replacementRelation.ID != "" {
-				if e = insertSourceRecord(ctx, tx, "memory_relations", replacementRelation); e != nil {
-					return e
-				}
-			}
-			if review != nil {
-				if e = enqueue(ctx, tx, "memories", memory); e != nil {
-					return e
-				}
-				if e = enqueueMemoryEvaluation(ctx, tx, memory); e != nil {
-					return e
-				}
-				result = memory
-			}
+		if e = applyTransition(ctx, tx, col, in, &r, review, d); e != nil {
+			return e
 		}
-		if col == "memories" && r.Status == "active" {
-			if e = enqueue(ctx, tx, col, r); e != nil {
-				return e
-			}
-			if e = enqueueMemoryEvaluation(ctx, tx, r); e != nil {
-				return e
-			}
+		promoted, e := writeTransition(ctx, tx, col, r, expectedRevision, review, replaced, d)
+		if e != nil {
+			return e
+		}
+		if promoted != nil {
+			result = *promoted
 		}
 		if result.ID == "" {
 			result = r
@@ -1180,6 +1191,194 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		return Record{}, e
 	}
 	return result, nil
+}
+
+func (s *Service) authorizeAutomatedTransition(ctx context.Context, token, col, id string, in ChangeInput, d Decision) error {
+	if col != colSkillVersions || (in.Status != "approved" && in.Status != "rejected") {
+		return ErrDenied
+	}
+	candidate, err := s.Repo.Get(ctx, colSkillVersions, in.Scope, id)
+	if err != nil {
+		return err
+	}
+	_, err = s.authorizeSkillAutomation(ctx, token, d, in.Scope, candidate.SkillID, "")
+	return err
+}
+
+func (s *Service) authorizeReviewConflict(ctx context.Context, token string, scope Scope, review *CandidateReviewInput, content string, d Decision) error {
+	if review == nil || review.Conflict == nil {
+		return nil
+	}
+	other, err := s.authorize(ctx, token, "transition:memories", scope, review.Conflict.Memory.ID, content)
+	if err != nil {
+		return err
+	}
+	if other.PrincipalID != d.PrincipalID || other.Role != d.Role || !other.ContentSafe {
+		return ErrDenied
+	}
+	return nil
+}
+
+func checkTransition(ctx context.Context, tx Tx, col string, in ChangeInput, r *Record, review *CandidateReviewInput, resolvedRejection bool, expectedRevision int64) error {
+	if col == colMemories || col == "memory_candidates" {
+		normalizeMemoryProvenance(r)
+	}
+	if transitionConflict(in, *r, review, resolvedRejection, expectedRevision) {
+		return ErrConflict
+	}
+	if transitionInvalid(col, in, *r, review, resolvedRejection) {
+		return ErrInvalid
+	}
+	if review == nil || in.Status != "rejected" {
+		if e := checkSources(ctx, tx, *r); e != nil {
+			return e
+		}
+		if e := checkRelations(ctx, tx, *r); e != nil {
+			return e
+		}
+	}
+	if col == "memory_candidates" && in.Status == "active" {
+		return ErrInvalid
+	}
+	if col == "skill_versions" && in.Status == "approved" {
+		if e := validation(ctx, tx, *r, in.ValidationID, true); e != nil {
+			return e
+		}
+		r.ValidationID = in.ValidationID
+	}
+	return nil
+}
+
+func transitionConflict(in ChangeInput, r Record, review *CandidateReviewInput, resolvedRejection bool, expectedRevision int64) bool {
+	if r.ConflictID != "" || r.Revision != expectedRevision {
+		return true
+	}
+	if review != nil && !resolvedRejection && r.Status != "candidate" && r.Status != "conflicted" {
+		return true
+	}
+	return review != nil && in.Status == "approved" && r.ExpiresAt != nil && !r.ExpiresAt.After(time.Now())
+}
+
+func transitionInvalid(col string, in ChangeInput, r Record, review *CandidateReviewInput, resolvedRejection bool) bool {
+	if (col == "memory_candidates" && !resolvedRejection && r.Status != "candidate" && !(review != nil && r.Status == "conflicted")) || (col == "skill_versions" && r.Status != "candidate" && r.Status != "approved") {
+		return true
+	}
+	return !resolvedRejection && !validTransition(r.Status, in.Status) && !(review != nil && r.Status == "conflicted")
+}
+
+func applyTransition(ctx context.Context, tx Tx, col string, in ChangeInput, r *Record, review *CandidateReviewInput, d Decision) error {
+	r.Status = in.Status
+	r.Revision++
+	r.UpdatedAt = time.Now().UTC()
+	if review != nil {
+		applyReviewDecision(r, *review, d)
+	}
+	if in.Status == "approved" {
+		r.ApprovedBy = d.PrincipalID
+		if col == "memory_candidates" {
+			r.VerificationStatus = VerificationVerified
+		}
+	}
+	if col == "memory_candidates" && in.Status == "approved" {
+		return memoryProvenance(ctx, tx, *r)
+	}
+	return nil
+}
+
+func applyReviewDecision(r *Record, review CandidateReviewInput, d Decision) {
+	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
+	if d.Role == roleHuman {
+		r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
+		if r.Classification != nil {
+			r.Review.AIRisk = r.Classification.Risk
+		}
+	}
+	if personalPattern.MatchString(review.Content + " " + review.Reason) {
+		if r.Sensitivity != "restricted" {
+			r.Sensitivity = "private"
+		}
+		report := Inspection{RulesVersion: inspectionVersion}
+		if r.Inspection != nil {
+			report = *r.Inspection
+		}
+		report.PersonalData = true
+		r.Inspection = &report
+	}
+}
+
+// writeTransition returns the promoted memory only when a review produced it.
+func writeTransition(ctx context.Context, tx Tx, col string, r Record, expectedRevision int64, review *CandidateReviewInput, replaced *Record, d Decision) (*Record, error) {
+	if e := tx.Replace(ctx, col, r, expectedRevision); e != nil {
+		return nil, e
+	}
+	var promoted *Record
+	if col == "memory_candidates" && r.Status == "approved" {
+		memory, e := promoteApprovedCandidate(ctx, tx, r, review, replaced, d)
+		if e != nil {
+			return nil, e
+		}
+		if review != nil {
+			promoted = &memory
+		}
+	}
+	if col == "memories" && r.Status == "active" {
+		if e := enqueue(ctx, tx, col, r); e != nil {
+			return nil, e
+		}
+		if e := enqueueMemoryEvaluation(ctx, tx, r); e != nil {
+			return nil, e
+		}
+	}
+	return promoted, nil
+}
+
+func promoteApprovedCandidate(ctx context.Context, tx Tx, r Record, review *CandidateReviewInput, replaced *Record, d Decision) (Record, error) {
+	memory := r
+	if d.Role == roleHuman {
+		memory.TrustLevel = "user_verified"
+	}
+	memory.Proposal = &Ref{Collection: "memory_candidates", ID: r.ID, Revision: r.Revision}
+	if review != nil {
+		memory.Status = "active"
+		if d.Role == roleHuman {
+			memory.Trust = 1
+		}
+		memory.Embedding = nil
+		if review.Action == "edit_approve" {
+			memory.Text = review.Content
+			memory.Summary = ""
+			memory.Keywords = nil
+			memory.KeywordsLower = nil
+			sg := suggestReach(memory) // The suggestion follows the edited text.
+			memory.ReachSuggestion = &sg
+		}
+		memory.ContentHash = ContentHash(memory.Text)
+	}
+	var e error
+	var replacementRelation Record
+	if replaced != nil {
+		replacementRelation, e = finishReviewReplacement(ctx, tx, replaced, &memory, *review, d)
+		if e != nil {
+			return Record{}, e
+		}
+	}
+	if e = insertSourceRecord(ctx, tx, "memories", memory); e != nil {
+		return Record{}, e
+	}
+	if replacementRelation.ID != "" {
+		if e = insertSourceRecord(ctx, tx, "memory_relations", replacementRelation); e != nil {
+			return Record{}, e
+		}
+	}
+	if review != nil {
+		if e = enqueue(ctx, tx, "memories", memory); e != nil {
+			return Record{}, e
+		}
+		if e = enqueueMemoryEvaluation(ctx, tx, memory); e != nil {
+			return Record{}, e
+		}
+	}
+	return memory, nil
 }
 func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInput, rollback bool) (Record, error) {
 	action := "apply"
@@ -1241,26 +1440,8 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 			return ErrConflict
 		}
 		if in.VersionID != "" {
-			if !live(skill) {
-				return ErrConflict
-			}
-			if e = checkSources(ctx, tx, skill); e != nil {
-				return e
-			}
-			r, e := tx.Get(ctx, "skill_versions", in.Scope, in.VersionID)
+			r, e := checkSkillVersion(ctx, tx, in, id, skill, target, rollback)
 			if e != nil {
-				return e
-			}
-			if r.Revision != target.Revision || r.SkillID != id || r.ApprovedBy == "" || (r.ExpiresAt != nil && !r.ExpiresAt.After(time.Now())) {
-				return ErrConflict
-			}
-			if (!rollback && (r.Status != "approved" || r.BaseVersion != skill.ActiveVersion)) || (rollback && r.Status != "superseded") {
-				return ErrConflict
-			}
-			if e = checkSources(ctx, tx, r); e != nil {
-				return e
-			}
-			if e = checkRelations(ctx, tx, r); e != nil {
 				return e
 			}
 			if e = validation(ctx, tx, r, vid, vid != target.ValidationID); e != nil {
@@ -1314,6 +1495,33 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 		return audit(ctx, tx, in.Scope, d.PrincipalID, action+":skills", id)
 	})
 	return result, e
+}
+
+// checkSkillVersion loads the version being applied and checks it against the skill header.
+func checkSkillVersion(ctx context.Context, tx Tx, in ChangeInput, id string, skill, target Record, rollback bool) (Record, error) {
+	if !live(skill) {
+		return Record{}, ErrConflict
+	}
+	if e := checkSources(ctx, tx, skill); e != nil {
+		return Record{}, e
+	}
+	r, e := tx.Get(ctx, "skill_versions", in.Scope, in.VersionID)
+	if e != nil {
+		return Record{}, e
+	}
+	if r.Revision != target.Revision || r.SkillID != id || r.ApprovedBy == "" || (r.ExpiresAt != nil && !r.ExpiresAt.After(time.Now())) {
+		return Record{}, ErrConflict
+	}
+	if (!rollback && (r.Status != "approved" || r.BaseVersion != skill.ActiveVersion)) || (rollback && r.Status != "superseded") {
+		return Record{}, ErrConflict
+	}
+	if e = checkSources(ctx, tx, r); e != nil {
+		return Record{}, e
+	}
+	if e = checkRelations(ctx, tx, r); e != nil {
+		return Record{}, e
+	}
+	return r, nil
 }
 func (s *Service) Delete(ctx context.Context, token, col, id string, in ChangeInput) error {
 	if col == colProviderUsage {

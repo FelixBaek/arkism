@@ -39,15 +39,9 @@ func (s *Service) validateArchiveMessageRefs(ctx context.Context, token string, 
 		if role != "" && view.Role != role {
 			return nil, nil, ErrInvalid
 		}
-		h, err := s.Repo.Get(ctx, colSessionArchives, scope, ref.ArchiveID)
+		h, err := s.activeArchiveHeader(ctx, scope, ref.ArchiveID, view.Ref.SHA256, session)
 		if err != nil {
 			return nil, nil, err
-		}
-		if !isSessionArchiveHeader(h) || h.Scope != scope || h.SessionArchive.SHA256 != view.Ref.SHA256 || sessionArchiveStateOf(h, s.sessionArchiveNow()) != sessionArchiveStateActive {
-			return nil, nil, ErrConflict
-		}
-		if session != "" && h.SessionArchive.SessionID != session {
-			return nil, nil, ErrInvalid
 		}
 		if earlier, exists := headers[h.ID]; exists && earlier.SessionArchive.SHA256 != h.SessionArchive.SHA256 {
 			return nil, nil, ErrConflict
@@ -61,6 +55,19 @@ func (s *Service) validateArchiveMessageRefs(ctx context.Context, token string, 
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, normalized, nil
+}
+func (s *Service) activeArchiveHeader(ctx context.Context, scope Scope, archiveID, sha256, session string) (Record, error) {
+	h, err := s.Repo.Get(ctx, colSessionArchives, scope, archiveID)
+	if err != nil {
+		return Record{}, err
+	}
+	if !isSessionArchiveHeader(h) || h.Scope != scope || h.SessionArchive.SHA256 != sha256 || sessionArchiveStateOf(h, s.sessionArchiveNow()) != sessionArchiveStateActive {
+		return Record{}, ErrConflict
+	}
+	if session != "" && h.SessionArchive.SessionID != session {
+		return Record{}, ErrInvalid
+	}
+	return h, nil
 }
 func (s *Service) fenceSourceArchives(ctx context.Context, tx Tx, headers []Record) error {
 	for _, h := range headers {

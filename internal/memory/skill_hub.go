@@ -244,7 +244,7 @@ func (t skillResolveReadTx) SourceMetadata(ctx context.Context, scope Scope, ids
 // version_not_found, no_approved_version, skill_deprecated, skill_unavailable.
 func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResolveInput) (SkillResolveResult, error) {
 	out := SkillResolveResult{Authority: "data_only_untrusted", Items: []ResolvedSkill{}}
-	if (in.TrialID != "" && (!validRunLabel(in.TrialID, 128) || !trialRuntime(in.Runtime) || len(in.Refs) != 1)) || (in.TrialID == "" && in.Runtime != "") || !validScope(in.Scope) || len(in.Refs) == 0 || len(in.Refs) > skillResolveRefMax {
+	if invalidSkillResolveInput(in) {
 		return out, ErrInvalid
 	}
 	actor, err := s.authorize(ctx, token, "read:skill_versions", in.Scope, "", "")
@@ -343,6 +343,10 @@ func (s *Service) ResolveSkills(ctx context.Context, token string, in SkillResol
 	return out, err
 }
 
+func invalidSkillResolveInput(in SkillResolveInput) bool {
+	return (in.TrialID != "" && (!validRunLabel(in.TrialID, 128) || !trialRuntime(in.Runtime) || len(in.Refs) != 1)) || (in.TrialID == "" && in.Runtime != "") || !validScope(in.Scope) || len(in.Refs) == 0 || len(in.Refs) > skillResolveRefMax
+}
+
 func resolveSkillRef(ctx context.Context, tx Tx, scope Scope, ref string) (ResolvedSkill, error) {
 	item := ResolvedSkill{Ref: ref}
 	id, number, ok := parseSkillRef(ref)
@@ -359,24 +363,11 @@ func resolveSkillRef(ctx context.Context, tx Tx, scope Scope, ref string) (Resol
 	}
 	history := skillHistory(parent)
 	deprecated := !live(parent)
-	versionID := ""
 	latest := number == 0
-	if latest {
-		if deprecated {
-			item.Error = "skill_deprecated"
-			return item, nil
-		}
-		if parent.ActiveVersion == "" {
-			item.Error = "no_approved_version"
-			return item, nil
-		}
-		versionID = parent.ActiveVersion
-		number = slices.Index(history, versionID) + 1
-	} else if number > len(history) {
-		item.Error = "version_not_found"
+	versionID, number, code := skillRefVersion(parent, history, number, deprecated)
+	if code != "" {
+		item.Error = code
 		return item, nil
-	} else {
-		versionID = history[number-1]
 	}
 	version, err := tx.Get(ctx, colSkillVersions, scope, versionID)
 	if errors.Is(err, ErrNotFound) {
@@ -387,29 +378,25 @@ func resolveSkillRef(ctx context.Context, tx Tx, scope Scope, ref string) (Resol
 	}
 	// Exact pins resolve superseded and candidate versions for replay; the
 	// runtime decides from validation_status whether to run them.
-	if version.PrivacyQuarantined || version.ContentErased || version.Analysis == nil || version.SkillID != id || !slices.Contains([]string{"candidate", "approved", "active", "superseded"}, version.Status) {
-		item.Error = "skill_unavailable"
-		return item, nil
-	}
-	if len(version.Sources) == 0 || version.Kind != proposedSkillKind && len(version.Sources) != 1 {
+	if unavailableSkillVersion(version, id) {
 		item.Error = "skill_unavailable"
 		return item, nil
 	}
 	source, err := tx.Get(ctx, "sources", scope, version.Sources[0].SourceID)
-	if err != nil || !live(source) || source.ContentErased || source.ContentHash != version.Analysis.ContentHash {
+	if err != nil || staleSkillSource(source, version) {
 		if err != nil && !errors.Is(err, ErrNotFound) {
 			return item, err
 		}
 		item.Error = "skill_unavailable"
 		return item, nil
 	}
-	if !validSkillBundle(source.SkillBundle) || (source.SkillBundle == nil && version.SkillBundleSHA256 != "") || (source.SkillBundle != nil && source.SkillBundle.SHA256 != version.SkillBundleSHA256) {
+	if mismatchedSkillBundle(source, version) {
 		item.Error = "skill_unavailable"
 		return item, nil
 	}
 	if version.Kind == proposedSkillKind {
 		if err = checkRelations(ctx, tx, version); err != nil {
-			if !errors.Is(err, ErrConflict) && !errors.Is(err, ErrDenied) && !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrInvalid) {
+			if !trialDomainError(err) {
 				return item, err
 			}
 			item.Error = "skill_unavailable"
@@ -420,7 +407,7 @@ func resolveSkillRef(ctx context.Context, tx Tx, scope Scope, ref string) (Resol
 		if err = checkActiveSkill(ctx, tx, version); err != nil {
 			// A failed statement aborts the transaction; only domain refusals
 			// become a per-ref answer, store errors fail (and retry) the batch.
-			if !errors.Is(err, ErrConflict) && !errors.Is(err, ErrDenied) && !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrInvalid) {
+			if !trialDomainError(err) {
 				return item, err
 			}
 			item.Error = "skill_unavailable"
@@ -437,6 +424,36 @@ func resolveSkillRef(ctx context.Context, tx Tx, scope Scope, ref string) (Resol
 	item.ValidationStatus, item.LatestApproved, item.Deprecated = version.Status, version.ID == parent.ActiveVersion, deprecated
 	item.Provenance = &SkillProvenanceSummary{SourceID: source.ID, SourcePath: source.SourceRef, ContentHash: source.ContentHash, ImportedBy: source.CreatedBy, ImportedAt: source.CreatedAt, Origin: version.SkillOrigin}
 	return item, nil
+}
+
+// skillRefVersion picks the version a ref names, or returns its per-ref error code.
+func skillRefVersion(parent Record, history []string, number int, deprecated bool) (string, int, string) {
+	if number == 0 {
+		if deprecated {
+			return "", number, "skill_deprecated"
+		}
+		if parent.ActiveVersion == "" {
+			return "", number, "no_approved_version"
+		}
+		return parent.ActiveVersion, slices.Index(history, parent.ActiveVersion) + 1, ""
+	}
+	if number > len(history) {
+		return "", number, "version_not_found"
+	}
+	return history[number-1], number, ""
+}
+
+func unavailableSkillVersion(version Record, id string) bool {
+	return version.PrivacyQuarantined || version.ContentErased || version.Analysis == nil || version.SkillID != id || !slices.Contains([]string{"candidate", "approved", "active", "superseded"}, version.Status) ||
+		len(version.Sources) == 0 || version.Kind != proposedSkillKind && len(version.Sources) != 1
+}
+
+func staleSkillSource(source, version Record) bool {
+	return !live(source) || source.ContentErased || source.ContentHash != version.Analysis.ContentHash
+}
+
+func mismatchedSkillBundle(source, version Record) bool {
+	return !validSkillBundle(source.SkillBundle) || (source.SkillBundle == nil && version.SkillBundleSHA256 != "") || (source.SkillBundle != nil && source.SkillBundle.SHA256 != version.SkillBundleSHA256)
 }
 
 func nonNil(v []string) []string {
@@ -480,12 +497,7 @@ func checkSkillUsageEvents(ctx context.Context, tx Tx, scope Scope, events []Tra
 			continue
 		}
 		var u SkillUsage
-		decoder := json.NewDecoder(bytes.NewReader(event.Payload))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&u) != nil || !validRunLabel(u.SkillID, 256) || u.Version < 1 || !validRunLabel(u.VersionID, 256) || len(u.ContentHash) != 64 ||
-			!validRunLabel(u.Runtime, 64) || u.ProfileID != "" && !validRunLabel(u.ProfileID, 256) || !slices.Contains(skillUsageStatuses, u.Status) ||
-			u.StartedAt.IsZero() || u.CompletedAt.Before(u.StartedAt) || u.RetryCount < 0 || u.ToolFailures < 0 || u.RuntimeErrors < 0 ||
-			u.ErrorCode != "" && (u.Status == "success" || !skillUsageErrorCode.MatchString(u.ErrorCode)) {
+		if invalidSkillUsagePayload(event.Payload, &u) {
 			return ErrInvalid
 		}
 		// Runs are recorded under an agent; skills usually live in the same
@@ -517,15 +529,31 @@ func checkSkillUsageEvents(ctx context.Context, tx Tx, scope Scope, events []Tra
 			return ErrConflict
 		}
 		if u.TrialID != "" {
-			trial, e := tx.Get(ctx, colSkillTrials, skillScope, u.TrialID)
-			if e != nil {
-				return usageLookupError(e)
-			}
-			bound := trial.SkillTrial
-			if bound == nil || trial.ContentErased || trial.PrivacyQuarantined || trial.SkillID != u.SkillID || bound.Candidate.ID != u.VersionID || bound.Runtime != u.Runtime || u.OfflineCache || u.StartedAt.Before(trial.CreatedAt) || !u.StartedAt.Before(bound.EndsAt) || bound.StoppedAt != nil && !u.StartedAt.Before(*bound.StoppedAt) {
-				return ErrConflict
+			if err = checkSkillUsageTrial(ctx, tx, skillScope, u); err != nil {
+				return err
 			}
 		}
+	}
+	return nil
+}
+
+func invalidSkillUsagePayload(payload []byte, u *SkillUsage) bool {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(u) != nil || !validRunLabel(u.SkillID, 256) || u.Version < 1 || !validRunLabel(u.VersionID, 256) || len(u.ContentHash) != 64 ||
+		!validRunLabel(u.Runtime, 64) || u.ProfileID != "" && !validRunLabel(u.ProfileID, 256) || !slices.Contains(skillUsageStatuses, u.Status) ||
+		u.StartedAt.IsZero() || u.CompletedAt.Before(u.StartedAt) || u.RetryCount < 0 || u.ToolFailures < 0 || u.RuntimeErrors < 0 ||
+		u.ErrorCode != "" && (u.Status == "success" || !skillUsageErrorCode.MatchString(u.ErrorCode))
+}
+
+func checkSkillUsageTrial(ctx context.Context, tx Tx, skillScope Scope, u SkillUsage) error {
+	trial, e := tx.Get(ctx, colSkillTrials, skillScope, u.TrialID)
+	if e != nil {
+		return usageLookupError(e)
+	}
+	bound := trial.SkillTrial
+	if bound == nil || trial.ContentErased || trial.PrivacyQuarantined || trial.SkillID != u.SkillID || bound.Candidate.ID != u.VersionID || bound.Runtime != u.Runtime || u.OfflineCache || u.StartedAt.Before(trial.CreatedAt) || !u.StartedAt.Before(bound.EndsAt) || bound.StoppedAt != nil && !u.StartedAt.Before(*bound.StoppedAt) {
+		return ErrConflict
 	}
 	return nil
 }
