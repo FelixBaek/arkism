@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/FelixBaek/arkism/internal/host"
 )
 
 // A span refers to the original stream, including when that stream is a JSON
@@ -639,8 +641,8 @@ func archiveJSONArrayText(p *archiveJSONParser, src *archiveJSONSource, w io.Wri
 			if err != nil {
 				return err
 			}
-			if typ == "text" || typ == "input_text" || typ == "output_text" {
-				if sep := archiveBlockSeparator(prev, typ); sep != "" {
+			if host.ArchiveTextBlock(typ) {
+				if sep := host.ArchiveBlockSeparator(prev, typ); sep != "" {
 					if _, err = io.WriteString(w, sep); err != nil {
 						return err
 					}
