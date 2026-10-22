@@ -1165,7 +1165,7 @@ export function startApp() {
     const bare = !state.loading && (typeof v.bare === "function" ? v.bare() : !!v.bare); // the rail and tabs already name the screen
     $(".main > .page-head").style.display = bare ? "none" : "";
     $(".main > .page-head .page-back")?.remove(); // a screen that has a ← link draws it again
-    $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); $(".page-head .mp-assist")?.remove(); // TOOLS screens add them again via headExtras()
+    $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); // TOOLS screens add them again via headExtras()
     $("#app").classList.toggle("v4-connect", ["tools", "git", "reviews"].includes(state.view));
     const table = $("#table");
     if (state.loading) {

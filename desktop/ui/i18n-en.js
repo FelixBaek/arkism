@@ -2436,6 +2436,7 @@ window.ArkismI18nEN = {
   "켠 모델만 라우팅과 AI 도구에서 골라 쓸 수 있어요.": "Only models you turn on can be picked in routing and AI tools.",
   "모델 이름": "Model name",
   "AI 도구 기본 모델": "Default model for AI tools",
+  "AI 도구": "AI tools",
   "사용량 보기": "See usage",
   "한도 안내": "About limits",
   "한도를 알려 주지 않는 계정은 안내만 보여 줘요. 계정을 추가하면 로그인 방법을 안내해요.": "Accounts that don't report limits only show guidance. Add an account to see how to sign in.",

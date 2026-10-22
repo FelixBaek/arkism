@@ -12,7 +12,19 @@
   let uid = 0;
 
   function optionsOf(ctl) {
-    if (ctl.tagName === "SELECT") return [...ctl.options].filter((o) => !o.hidden).map((o) => ({ value: o.value, label: o.label || o.textContent, disabled: o.disabled, on: o.selected }));
+    if (ctl.tagName === "SELECT") {
+      // <optgroup> draws the same header row as data-group (its data-icon: the provider's logo); data-hint/data-tag as below.
+      const rows = [];
+      let og = null;
+      for (const o of ctl.options) {
+        if (o.hidden) continue;
+        const g = o.parentElement.tagName === "OPTGROUP" ? o.parentElement : null;
+        if (g && g !== og) rows.push({ head: g.label, icon: g.dataset.icon || g.label, disabled: true });
+        og = g;
+        rows.push({ value: o.value, label: o.label || o.textContent, hint: o.dataset.hint || "", tag: o.dataset.tag || "", disabled: o.disabled, on: o.selected });
+      }
+      return rows;
+    }
     const dl = document.getElementById(ctl.dataset.comboList || "");
     const q = ctl.dataset.comboTyped === "1" ? ctl.value.trim().toLowerCase() : "";
     const tab = open?.ctl === ctl ? open.tab : "";

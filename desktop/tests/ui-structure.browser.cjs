@@ -41,6 +41,7 @@ fs.mkdirSync(output,{recursive:true});
         if(cmd==="app_defaults")return {local:true,updates:false};
         if(cmd==="local_start")return {server:"http://127.0.0.1:8091",token:"inert-browser-fixture"};
         if(cmd==="capture_settings")return {paused:false,exclude:[],instructions:""};
+        if(cmd==="model_roles")return {embedder:"auto",judge:"fixed",cloudflare_account:"",cloudflare_token_saved:false}; // 설정 › 에이전트 › 스킬·MCP·플러그인
         if(cmd!=="api")return null;
         const url=new URL(args.path,"https://fixture.invalid"),base=url.pathname.replace(/^\//,""),q=url.searchParams,status=q.get("status"),kind=q.get("kind");
         if(base.endsWith("/query")) {
@@ -82,6 +83,13 @@ fs.mkdirSync(output,{recursive:true});
     await page.keyboard.press("Escape");
     await page.locator("dialog[open]").waitFor({state:"detached"});
     await page.locator("#settings-button").click();
+    // #218: 설정 › 에이전트 opens with the AI 도구 기본 모델 picker, its list grouped by provider like the workflow model list.
+    await page.getByRole("tab",{name:"에이전트",exact:true}).click();
+    const assist=page.locator(".v4-set-agents > .pg-group").first().getByRole("combobox",{name:"AI 도구 기본 모델"});
+    await assist.click();await page.locator(".combo-pop .combo-head").first().waitFor();
+    assert.equal(await page.locator(".combo-pop .combo-head .brand-mark").count()>0,true,"provider heads lost their logo");
+    assert.equal(await page.locator(".combo-pop .combo-opt small").first().innerText()>"",true,"model rows lost their provider");
+    await capture("settings-agents");await page.keyboard.press("Escape");
     await page.getByRole("tab",{name:"모양",exact:true}).click();await capture("settings");
     // English loads only on demand; original user content survives both language changes.
     await page.getByRole("tab",{name:"English",exact:true}).click();
@@ -139,7 +147,7 @@ fs.mkdirSync(output,{recursive:true});
     }
     assert.deepEqual(errors,[]);
     fs.writeFileSync(path.join(output,"screens.json"),JSON.stringify(snapshots,null,2));
-    console.log("UI structure: 7 real screens, keyboard opening/Escape, lazy English, Korean round trip, user text and crew user data passed");
+    console.log("UI structure: 8 real screens, keyboard opening/Escape, lazy English, Korean round trip, user text and crew user data passed");
   } catch(error) {console.error(errors);console.error(await page.evaluate(()=>window.dialogEvents));console.error((await page.locator("body").innerText()).slice(-3500));throw error;}
   finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

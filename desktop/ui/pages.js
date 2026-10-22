@@ -289,7 +289,13 @@ window.ArkismPages = (ctx) => {
     }));
     sbox.append(addDir);
     shared.append(sbox);
+    // AI 도구 기본 모델 first: the one choice here that changes how every agent's AI assist answers. Servers without 모델 설정 have nothing to pick.
     const out = [g, shared, agentKitCard()];
+    if (state.data.providers !== null) {
+      const ai = group("AI 도구");
+      ai.append(line("AI 도구 기본 모델", "프롬프트 칸 채우기, 글 다듬기, 분류에 쓰는 모델이에요.", models.assistPicker()));
+      out.unshift(ai);
+    }
     const found = host.filter((a) => a.found && !agentWanted(a));
     if (found.length) {
       const f = el("button", "found-bar");

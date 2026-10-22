@@ -393,6 +393,3 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .mp-cli .btn { height: auto; padding: 5px 12px; font-size: calc(12px * var(--fs, 1)); }
 .mp-cli-err { flex-basis: 100%; color: var(--nc-amber); }
 .v4-roles .pg-actions { display: flex; gap: 8px; }
-/* 모델 설정: the AI 도구 기본 모델 picker sits where the repeated title was */
-.page-head .mp-assist { display: flex; align-items: center; gap: 10px; font-size: calc(13px * var(--fs, 1)); color: var(--text-2); }
-.page-head .mp-assist select { min-width: 240px; height: 34px; }
