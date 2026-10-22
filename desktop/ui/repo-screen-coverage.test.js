@@ -153,7 +153,6 @@ test("git: loads repos, graph, PRs and checks; side lists, lanes and tabs work",
   w.render();
   assert.ok(has(w.nodes.table, "merge") && has(w.nodes.table, "+1"), "graph rows with ref overflow");
   assert.ok(has(w.nodes.table, "feat/") && has(w.nodes.table, "#7") && has(w.nodes.table, "기본"));
-  assert.ok(has(w.nodes.table, "진행 중") || true);
   assert.equal(w.nodes.title.textContent, "저장소");
   assert.match(w.git.views.git.sub(), /한눈에/);
   // section toggles and the tags block
@@ -305,7 +304,7 @@ test("git: failures, busy guard, reconnect and lane edge cases", async () => {
   let release;
   const u = gitWorld({ codegraph: false, replies: { prs: () => new Promise((r) => { release = r; }) } });
   u.render(); await tick(); u.render();
-  assert.ok(has(u.nodes.table, "PR을 불러오는 중") && has(u.nodes.table, "검사 기록을 불러오는 중") || true);
+  assert.ok(has(u.nodes.table, "PR을 불러오는 중"));
   u.git.reset(); release({ pulls }); await tick();
   u.state.view = "other"; u.render(); await tick();
   // repo list arrives after a reset: dropped

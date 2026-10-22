@@ -231,7 +231,7 @@ export function createImageViews(deps) {
       async comfyOpen() {
         const url = await comfyUrl("ComfyUI 주소를 넣어 주세요.");
         if (!url) return;
-        if (ip.script) { try { await navigator.clipboard.writeText(ip.script.split("{prompt}").join(filled())); deps.notice("워크플로를 복사했어요. ComfyUI 화면에 붙여 넣으면 열려요."); } catch (_) { /* clipboard blocked */ } }
+        if (ip.script) { try { await navigator.clipboard.writeText(ip.script.split("{prompt}").join(JSON.stringify(filled()).slice(1, -1))); deps.notice("워크플로를 복사했어요. ComfyUI 화면에 붙여 넣으면 열려요."); } catch (_) { /* clipboard blocked */ } }
         window.open(url, "_blank");
       },
       download() {

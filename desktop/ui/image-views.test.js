@@ -213,7 +213,7 @@ test("ComfyUI prompts ask for the address once, send the escaped prompt and open
   assert.match(s.notices.at(-1), /\(net\)/);
   await btn("ComfyUI에서 열기").click(); await flush();
   assert.deepEqual(s.opened, ["http://comfy:8188"]);
-  assert.equal(s.copied.at(-1), '{"text":"say "hi""}');
+  assert.equal(s.copied.at(-1), '{"text":"say \\"hi\\""}');
   // No address given: nothing happens.
   const n = await views({ prompts: [p], clipboard: false });
   n.setText("");
