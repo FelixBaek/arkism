@@ -1265,12 +1265,15 @@ export function createCrewWorkers(deps) {
       b.addEventListener("click", () => { if (on) wk.teamsPick.delete(t.id); else wk.teamsPick.add(t.id); wk.redraw(); });
       teamRow.append(b);
     }
-    for (const t of wk.newTeams || []) {
+    for (const [i, t] of (wk.newTeams || []).entries()) {
       const b = deps.el("button", "wk-chip on");
-      b.append(deps.raw(deps.el("span", "", t.name)), " · ", deps.el("span", "", "새 팀"));
+      // the name is read from its own untranslated span, the action from a hidden translatable one
+      const name = deps.raw(deps.el("span", "", t.name)), act = deps.el("span", "", "새 팀 빼기");
+      name.id = `wk-nt-name-${i}`; act.id = `wk-nt-act-${i}`; act.hidden = true;
+      b.append(name, " · ", deps.el("span", "", "새 팀"), act);
       b.type = "button";
       b.setAttribute("aria-pressed", "true");
-      b.setAttribute("aria-label", `${t.name} 새 팀 빼기`);
+      b.setAttribute("aria-labelledby", `${act.id} ${name.id}`);
       b.addEventListener("click", () => { wk.newTeams = wk.newTeams.filter((x) => x !== t); wk.redraw(); });
       teamRow.append(b);
     }
