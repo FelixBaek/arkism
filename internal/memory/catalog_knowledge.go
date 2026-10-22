@@ -28,6 +28,10 @@ func (s *Service) QueryKnowledgeCatalog(ctx context.Context, token string, in Ca
 	if _, err := s.knowledgeAuthorization(ctx, token, "read:"+colKnowledgeSources, in.Scope, ""); err != nil {
 		return out, err
 	}
+	binding := catalogBinding(in, "knowledge", actor.PrincipalID+"/"+actor.Role)
+	if _, err = decodeCatalogCursor(in, binding); err != nil {
+		return out, err
+	}
 	rows, err := collectCatalogRecords(ctx, s.Repo, in.Scope, colKnowledgeSources)
 	if err != nil {
 		return out, err
@@ -64,7 +68,7 @@ func (s *Service) QueryKnowledgeCatalog(ctx context.Context, token string, in Ca
 	}
 	sort.SliceStable(items, func(i, j int) bool { return knowledgeCatalogLess(items[i], items[j], in.Sort) })
 	out.Total = len(items)
-	out.Items, out.NextCursor, err = catalogWindow(items, in, catalogBinding(in, "knowledge", actor.PrincipalID+"/"+actor.Role))
+	out.Items, out.NextCursor, err = catalogWindow(items, in, binding)
 	return out, err
 }
 func knowledgeCatalogState(item KnowledgeSourceSummary) string {

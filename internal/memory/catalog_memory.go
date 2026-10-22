@@ -22,6 +22,10 @@ func (s *Service) QueryMemoryCatalog(ctx context.Context, token string, in Catal
 	if err != nil {
 		return out, err
 	}
+	binding := catalogBinding(in, domain, actor.PrincipalID+"/"+actor.Role)
+	if _, err = decodeCatalogCursor(in, binding); err != nil {
+		return out, err
+	}
 	rows, err := s.memoryCatalogRows(ctx, token, in, candidates)
 	if err != nil {
 		return out, err
@@ -33,7 +37,7 @@ func (s *Service) QueryMemoryCatalog(ctx context.Context, token string, in Catal
 	items := filterMemoryCatalog(rows, in, candidates, usage, tools, &out.Facets)
 	sort.SliceStable(items, func(i, j int) bool { return memoryCatalogLess(items[i], items[j], in.Sort, usage) })
 	out.Total = len(items)
-	out.Items, out.NextCursor, err = catalogWindow(items, in, catalogBinding(in, domain, actor.PrincipalID+"/"+actor.Role))
+	out.Items, out.NextCursor, err = catalogWindow(items, in, binding)
 	return out, err
 }
 func (s *Service) memoryCatalogRows(ctx context.Context, token string, in CatalogQueryInput, candidates bool) ([]Record, error) {

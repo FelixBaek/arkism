@@ -28,6 +28,9 @@ var schemaMemoryContextSearchSQL string
 //go:embed migrations/0003_principal_token_lifecycle.sql
 var schemaPrincipalTokenLifecycleSQL string
 
+//go:embed migrations/0004_memory_graph_vector_index.sql
+var schemaMemoryGraphVectorIndexSQL string
+
 type schemaMigration struct {
 	version int
 	name    string
@@ -35,7 +38,7 @@ type schemaMigration struct {
 }
 
 func schemaMigrations() []schemaMigration {
-	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}}
+	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}}
 }
 
 func (m schemaMigration) checksum() string {

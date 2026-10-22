@@ -179,11 +179,10 @@ func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListI
 		}
 		scan.Cursor = memoryListCursor(in, batch[len(batch)-1].ID)
 	}
-	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	e = s.readTransaction(ctx, func(ctx context.Context, tx Tx) error {
 		if locker, ok := tx.(readLocker); ok && len(rows) > 0 {
 			return listReadLocked(ctx, tx, locker, in, rows, actor.PrincipalID)
 		}
-		sources := map[string]bool{}
 		for _, r := range rows {
 			current, e := tx.Get(ctx, colMemories, in.Scope, r.ID)
 			if e != nil {
@@ -192,22 +191,14 @@ func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListI
 			if !memoryListMatches(current, in) || current.Revision != r.Revision || structuredText(current) != structuredText(r) {
 				return ErrConflict
 			}
-			metadata, e := sourceMetadata(ctx, tx, in.Scope, current.Sources)
-			if e != nil {
-				return e
-			}
-			for _, ref := range metadata {
-				sources[ref.ID] = true
-			}
 			if e = tx.FenceRelationMember(ctx, in.Scope, colMemories, r.ID); e != nil {
 				return e
 			}
 		}
-		ids := make([]string, 0, len(sources))
-		for id := range sources {
-			ids = append(ids, id)
+		ids, e := listSourceIDs(ctx, tx, in.Scope, rows)
+		if e != nil {
+			return e
 		}
-		slices.Sort(ids)
 		for _, id := range ids {
 			if e := tx.FenceSource(ctx, in.Scope, id); e != nil {
 				return e
@@ -231,6 +222,41 @@ func (s *Service) ListMemories(ctx context.Context, token string, in MemoryListI
 	return out, nil
 }
 
+// readTransaction uses the repository's lighter read transaction when it has one (#173).
+func (s *Service) readTransaction(ctx context.Context, fn func(context.Context, Tx) error) error {
+	if r, ok := s.Repo.(interface {
+		ReadTransaction(context.Context, func(context.Context, Tx) error) error
+	}); ok {
+		return r.ReadTransaction(ctx, fn)
+	}
+	return s.Repo.Transaction(ctx, fn)
+}
+
+// listSourceIDs checks every listed memory's sources with one metadata read per 64 sources
+// instead of one per memory (#174). Rows are unchanged since the caller compared them.
+func listSourceIDs(ctx context.Context, tx Tx, scope Scope, rows []Record) ([]string, error) {
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	refs := []SourceRef{}
+	for _, r := range rows {
+		if len(r.Sources) == 0 || len(r.Sources) > 64 {
+			return nil, ErrInvalid
+		}
+		refs = append(refs, r.Sources...)
+	}
+	metadata, e := sourceMetadataBatch(ctx, tx, scope, refs)
+	if e != nil {
+		return nil, e
+	}
+	ids := make([]string, 0, len(metadata))
+	for _, ref := range metadata {
+		ids = append(ids, ref.ID)
+	}
+	slices.Sort(ids)
+	return ids, nil
+}
+
 type readLocker interface {
 	LockForRead(context.Context, Scope, string, []string) (map[string]Record, error)
 }
@@ -246,26 +272,17 @@ func listReadLocked(ctx context.Context, tx Tx, locker readLocker, in MemoryList
 	if e != nil {
 		return e
 	}
-	sources := map[string]bool{}
 	for _, r := range rows {
 		c, ok := current[r.ID]
 		if !ok || !memoryListMatches(c, in) || c.Revision != r.Revision || structuredText(c) != structuredText(r) {
 			return ErrConflict
 		}
-		metadata, e := sourceMetadata(ctx, tx, in.Scope, c.Sources)
-		if e != nil {
-			return e
-		}
-		for _, ref := range metadata {
-			sources[ref.ID] = true
-		}
 	}
-	if len(sources) > 0 {
-		sourceIDs := make([]string, 0, len(sources))
-		for id := range sources {
-			sourceIDs = append(sourceIDs, id)
-		}
-		slices.Sort(sourceIDs)
+	sourceIDs, e := listSourceIDs(ctx, tx, in.Scope, rows)
+	if e != nil {
+		return e
+	}
+	if len(sourceIDs) > 0 {
 		locked := map[string]Record{}
 		for start := 0; start < len(sourceIDs); start += 500 {
 			part, e := locker.LockForRead(ctx, in.Scope, "sources", sourceIDs[start:min(start+500, len(sourceIDs))])

@@ -3,7 +3,7 @@
 // the page CSP forbids style attributes, so the svg is styled through .style and classes only.
 let arkTriangleSeq = 0;
 window.mountArkismTriangle = (el, opts = {}) => {
-  const o = { width: 178, duration: 12, lineWeight: 1.5, layers: 28, twist: 62, glints: 3, ...opts };
+  const o = { width: 178, duration: 12, lineWeight: 1.5, layers: 28, twist: 62, glints: 3, fps: 12, ...opts };
   const OUTER = [[91.105, 11.71], [143.3, 105.76], [38.91, 105.76]];
   const OC = [(OUTER[0][0] + OUTER[1][0] + OUTER[2][0]) / 3, (OUTER[0][1] + OUTER[1][1] + OUTER[2][1]) / 3];
   const STEPS = 40, LEN = 0.14, NS = "http://www.w3.org/2000/svg";
@@ -44,9 +44,13 @@ window.mountArkismTriangle = (el, opts = {}) => {
     glints.forEach((pair, i) => pair.forEach((g) => g.setAttribute("stroke-dashoffset", -(head + i / o.glints - LEN))));
   };
 
-  let raf = 0;
-  const t0 = performance.now();
-  const tick = (now) => { if (!document.hidden) render((((now - t0) / 1000) % o.duration) / o.duration); raf = requestAnimationFrame(tick); };
+  // A 12 s drift needs no 60 fps: about 12 renders a second (#177: every frame was ~4,000 svg writes a second).
+  let raf = 0, last = -Infinity;
+  const t0 = performance.now(), frame = 1000 / o.fps;
+  const tick = (now) => {
+    if (!document.hidden && now - last >= frame) { last = now; render((((now - t0) / 1000) % o.duration) / o.duration); }
+    raf = requestAnimationFrame(tick);
+  };
   // follow the reduced-motion setting live, not just at mount
   const still = window.matchMedia?.("(prefers-reduced-motion: reduce)");
   const sync = () => { cancelAnimationFrame(raf); raf = 0; if (still?.matches) render(0); else raf = requestAnimationFrame(tick); };

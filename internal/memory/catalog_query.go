@@ -141,7 +141,25 @@ func catalogBinding(in CatalogQueryInput, domain, principal string) string {
 	in.Limit = 0
 	return ContentHash(structuredText([]any{domain, principal, in}))
 }
+
+// decodeCatalogCursor rejects a malformed or foreign cursor; callers run it before reading rows
+// so a bad cursor costs no scan (#176). catalogWindow then checks it against the snapshot.
+func decodeCatalogCursor(in CatalogQueryInput, binding string) (catalogCursor, error) {
+	var cursor catalogCursor
+	if in.Cursor == "" {
+		return cursor, nil
+	}
+	data, err := base64.RawURLEncoding.Strict().DecodeString(in.Cursor)
+	if err != nil || json.Unmarshal(data, &cursor) != nil || structuredText(cursor) != string(data) || cursor.Binding != binding || cursor.Offset < 0 {
+		return cursor, ErrInvalid
+	}
+	return cursor, nil
+}
 func catalogWindow[T any](items []T, in CatalogQueryInput, binding string) ([]T, string, error) {
+	cursor, err := decodeCatalogCursor(in, binding)
+	if err != nil {
+		return nil, "", err
+	}
 	hash := sha256.New()
 	if err := json.NewEncoder(hash).Encode(items); err != nil {
 		return nil, "", ErrUnavailable
@@ -149,11 +167,6 @@ func catalogWindow[T any](items []T, in CatalogQueryInput, binding string) ([]T,
 	digest := hex.EncodeToString(hash.Sum(nil))
 	offset := 0
 	if in.Cursor != "" {
-		data, err := base64.RawURLEncoding.Strict().DecodeString(in.Cursor)
-		var cursor catalogCursor
-		if err != nil || json.Unmarshal(data, &cursor) != nil || structuredText(cursor) != string(data) || cursor.Binding != binding || cursor.Offset < 0 {
-			return nil, "", ErrInvalid
-		}
 		if cursor.Snapshot != digest || cursor.Offset > len(items) {
 			return nil, "", ErrConflict
 		}

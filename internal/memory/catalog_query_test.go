@@ -234,3 +234,25 @@ func TestCatalogSkillsGlobalNameCategoryAndModelFilters(t *testing.T) {
 		t.Fatal(page, e)
 	}
 }
+
+type listCountRepo struct {
+	Repository
+	lists int
+}
+
+func (r *listCountRepo) ListMemories(ctx context.Context, in MemoryListInput) ([]Record, error) {
+	r.lists++
+	return r.Repository.ListMemories(ctx, in)
+}
+
+// #176: a malformed cursor is refused before any memory is read.
+func TestCatalogBadCursorRefusedBeforeScan(t *testing.T) {
+	f := newFixture(t)
+	f.activeMemory("cursor scan", "cursor")
+	counter := &listCountRepo{Repository: f.svc.Repo}
+	f.svc.Repo = counter
+	_, e := f.svc.QueryMemoryCatalog(testCtx, f.human, CatalogQueryInput{Scope: scopeA, Cursor: strings.Repeat("A", 1500)}, false)
+	if !errors.Is(e, ErrInvalid) || counter.lists != 0 {
+		t.Fatal(e, "memory list reads:", counter.lists)
+	}
+}
