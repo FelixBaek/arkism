@@ -1123,7 +1123,7 @@ export function startApp() {
     c.textContent = state.loading ? "" : String(todo.length);
     c.className = todo.some((t) => t.warn) ? "warn" : "";
     $("#count-memories").textContent = state.loading ? "" : memoryPaging.memoryCount();
-    $("#count-skills").textContent = state.loading ? "" : `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}`;
+    $("#count-skills").textContent = state.loading ? "" : state.listErrors.skills || state.loadError ? "—" : `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}`;
     const promptsOf = (kind) => d.prompts.filter((p) => p.image_prompt.kind === kind).length;
     $("#count-image").textContent = state.loading ? "" : String(promptsOf("image"));
     $("#count-slide").textContent = state.loading ? "" : String(promptsOf("slide"));

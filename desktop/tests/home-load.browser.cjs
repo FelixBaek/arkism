@@ -77,6 +77,7 @@ async function overview(page) {
     // the status card lists the failed list instead of a healthy 0-skill hub
     await page.locator("#status-toggle").click();
     const card = await page.locator("#status-list").innerText();
+    assert.equal(await page.locator("#count-skills").innerText(), "—", "sidebar skill count unknown");
     assert.ok(card.includes("불러오지 못한 목록") && !/스킬 허브\s*0개/.test(card), `status card: ${card}`);
     // a reload that fails drops the last good load's agents instead of showing them as current
     await page.evaluate(() => { window.__fail = ["/v1/memories"]; });
