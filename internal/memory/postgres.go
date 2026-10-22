@@ -153,8 +153,11 @@ func pgErr(err error) error {
 		if e.Code == "23505" {
 			return ErrConflict
 		}
-		// AK403 is classifier_write_guard; 42501 is a row-level security refusal.
-		if e.Code == "AK403" || e.Code == "42501" {
+		if e.Code == "AK403" { // classifier_write_guard
+			return ErrDenied
+		}
+		// 42501 also covers a missing GRANT, an outage that must stay 503; only an RLS refusal is a denial.
+		if e.Code == "42501" && strings.Contains(e.Message, "row-level security") {
 			return ErrDenied
 		}
 		if e.Code == "40001" || e.Code == "40P01" {
