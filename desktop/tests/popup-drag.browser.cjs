@@ -32,6 +32,15 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     const sent = await page.evaluate(() => window.opened[0]);
     assert.equal(JSON.parse(sent.payload).recipe.detail.key, "extract");
     assert.equal(await page.evaluate(() => document.querySelector("dialog").open), false, "torn-off popup closes here");
+    // keyboard path (#200): Alt+Shift+O tears off the top popup; without the desktop app it says why instead of nothing
+    await page.evaluate(() => { window.notices = []; window.ArkismNotice = (t) => window.notices.push(t); document.querySelector("dialog").showModal(); document.querySelector("dialog button").focus(); });
+    await page.keyboard.press("Alt+Shift+O");
+    await page.waitForFunction(() => window.opened.length === 2);
+    assert.equal(await page.evaluate(() => document.querySelector("dialog").open), false, "Alt+Shift+O closes it here too");
+    await page.evaluate(() => { delete window.__TAURI__; document.querySelector("dialog").showModal(); });
+    await page.keyboard.press("Alt+Shift+O");
+    assert.deepEqual(await page.evaluate(() => window.notices), ["새 창은 데스크톱 앱에서 열 수 있어요."]);
+    assert.equal(await page.evaluate(() => document.querySelector("dialog").open), true);
     assert.deepEqual(errors, []);
     console.log("popup drag browser check passed");
   } finally { await browser.close(); }

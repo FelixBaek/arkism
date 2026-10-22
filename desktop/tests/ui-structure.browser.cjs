@@ -95,6 +95,23 @@ fs.mkdirSync(output,{recursive:true});
     await page.evaluate(async()=>{ await window.ArkismI18n.setLang("en"); });
     assert.equal(await page.locator("#table").getByText("저장",{exact:true}).count()>0,true,"English changed user text");
     await page.evaluate(async()=>{ await window.ArkismI18n.setLang("ko"); });
+    if (!process.env.ARKISM_UI_BASELINE) { // #199: 템플릿·설정으로 만들기 asks before it drops a new automation's typing
+      await page.locator('[data-menu="agent"]').click();
+      await page.getByRole("tab",{name:/자동화/}).click();
+      await page.getByRole("button",{name:"+ 새 워크플로우",exact:true}).click();
+      const pop=page.locator("dialog.v4-auto-new[open]"), confirm=page.locator("dialog.cn-confirm[open]"), other=pop.getByRole("button",{name:"템플릿·설정으로 만들기",exact:true});
+      await pop.getByRole("textbox",{name:"하려는 일"}).fill("매일 아침 뉴스 요약");
+      await other.click();
+      await confirm.getByText("아직 만들지 않았어요. 버리고 닫을까요?").waitFor();
+      await confirm.getByRole("button",{name:"취소",exact:true}).click();
+      await confirm.waitFor({state:"detached"});
+      assert.equal(await pop.count(),1,"취소 keeps the new automation");
+      await other.click();
+      await confirm.getByRole("button",{name:"확인",exact:true}).click();
+      await pop.waitFor({state:"detached"});
+      await page.locator("dialog[open]:not(.cn-confirm)").waitFor(); // the template/settings window
+      await page.keyboard.press("Escape");
+    }
     assert.deepEqual(errors,[]);
     fs.writeFileSync(path.join(output,"screens.json"),JSON.stringify(snapshots,null,2));
     console.log("UI structure: 7 real screens, keyboard opening/Escape, lazy English, Korean round trip and user text passed");
