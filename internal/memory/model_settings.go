@@ -302,57 +302,81 @@ func validProviders(list []Provider) bool {
 	}
 	seen := map[string]bool{}
 	for _, p := range list {
-		if !providerIDRe.MatchString(p.ID) || seen[p.ID] || !validRunLabel(p.Name, 60) || !slices.Contains(providerKinds, p.Kind) ||
-			len(p.Accounts) > 20 || len(p.Keys) > 20 || !validProviderModels(p.Models) {
+		if seen[p.ID] || !validProvider(p) {
 			return false
 		}
 		seen[p.ID] = true
-		accounts := map[string]bool{}
-		for _, a := range p.Accounts {
-			if !validRunLabel(a.ID, 64) || accounts[a.ID] || !validRunLabel(a.Label, 120) || len(a.CLI) > 40 || !slices.Contains(providerAccountStates, a.Status) ||
-				a.Plan != "" && (!validRunLabel(a.Plan, 240) || runes(a.Plan) > 60) ||
-				a.UsageStatus != "" && !slices.Contains([]string{"ok", "unavailable", "expired"}, a.UsageStatus) {
-				return false
-			}
-			accounts[a.ID] = true
-			if info := a.CLIInfo; info != nil {
-				if info.Version != "" && !validProviderCLIVersion(info.Version) || info.Latest != "" && !validProviderCLIVersion(info.Latest) ||
-					info.Via != "" && !slices.Contains(providerCLIVias, info.Via) ||
-					info.Update && (info.Version == "" || info.Latest == "" || info.Via == "") {
-					return false
-				}
-			}
-			if a.UsageCheckedAt != nil {
-				_, offset := a.UsageCheckedAt.Zone()
-				if a.UsageCheckedAt.IsZero() || a.UsageCheckedAt.Year() < 1 || a.UsageCheckedAt.Year() > 9999 || offset != 0 {
-					return false
-				}
-			}
-			if a.Credits != nil && a.Credits.Balance != nil {
-				balance := *a.Credits.Balance
-				if balance < 0 || math.IsNaN(balance) || math.IsInf(balance, 0) {
-					return false
-				}
-			}
-			qs := a.Quotas
-			if a.Quota != nil {
-				qs = append([]ProviderQuota{*a.Quota}, qs...)
-			}
-			if len(a.Quotas) > 12 {
-				return false
-			}
-			for _, q := range qs {
-				if !validRunLabel(q.Window, 20) || q.Model != "" && (!validRunLabel(q.Model, 40) || !providerModelRe.MatchString(q.Model)) ||
-					q.LeftPct != nil && (*q.LeftPct < 0 || *q.LeftPct > 100) {
-					return false
-				}
-			}
+	}
+	return true
+}
+
+func validProvider(p Provider) bool {
+	if !providerIDRe.MatchString(p.ID) || !validRunLabel(p.Name, 60) || !slices.Contains(providerKinds, p.Kind) ||
+		len(p.Accounts) > 20 || len(p.Keys) > 20 || !validProviderModels(p.Models) {
+		return false
+	}
+	accounts := map[string]bool{}
+	for _, a := range p.Accounts {
+		if accounts[a.ID] || !validProviderAccount(a) {
+			return false
 		}
-		for _, k := range p.Keys {
-			if !validRunLabel(k.ID, 64) || !validRunLabel(k.Name, 60) || len(k.Last4) > 4 || !validProviderBaseURL(k.BaseURL) ||
-				k.MonthlyBudgetUSD != nil && (*k.MonthlyBudgetUSD < 0 || *k.MonthlyBudgetUSD > 1e6) {
-				return false
-			}
+		accounts[a.ID] = true
+	}
+	for _, k := range p.Keys {
+		if !validRunLabel(k.ID, 64) || !validRunLabel(k.Name, 60) || len(k.Last4) > 4 || !validProviderBaseURL(k.BaseURL) ||
+			k.MonthlyBudgetUSD != nil && (*k.MonthlyBudgetUSD < 0 || *k.MonthlyBudgetUSD > 1e6) {
+			return false
+		}
+	}
+	return true
+}
+
+func validProviderAccount(a ProviderAccount) bool {
+	if !validRunLabel(a.ID, 64) || !validRunLabel(a.Label, 120) || len(a.CLI) > 40 || !slices.Contains(providerAccountStates, a.Status) ||
+		a.Plan != "" && (!validRunLabel(a.Plan, 240) || runes(a.Plan) > 60) ||
+		a.UsageStatus != "" && !slices.Contains([]string{"ok", "unavailable", "expired"}, a.UsageStatus) {
+		return false
+	}
+	if info := a.CLIInfo; info != nil && !validProviderCLIInfo(info) {
+		return false
+	}
+	return validProviderAccountUsage(a) && validProviderQuotas(a)
+}
+
+func validProviderAccountUsage(a ProviderAccount) bool {
+	if a.UsageCheckedAt != nil {
+		_, offset := a.UsageCheckedAt.Zone()
+		if a.UsageCheckedAt.IsZero() || a.UsageCheckedAt.Year() < 1 || a.UsageCheckedAt.Year() > 9999 || offset != 0 {
+			return false
+		}
+	}
+	if a.Credits != nil && a.Credits.Balance != nil {
+		balance := *a.Credits.Balance
+		if balance < 0 || math.IsNaN(balance) || math.IsInf(balance, 0) {
+			return false
+		}
+	}
+	return true
+}
+
+func validProviderCLIInfo(info *ProviderCLIInfo) bool {
+	return !(info.Version != "" && !validProviderCLIVersion(info.Version) || info.Latest != "" && !validProviderCLIVersion(info.Latest) ||
+		info.Via != "" && !slices.Contains(providerCLIVias, info.Via) ||
+		info.Update && (info.Version == "" || info.Latest == "" || info.Via == ""))
+}
+
+func validProviderQuotas(a ProviderAccount) bool {
+	qs := a.Quotas
+	if a.Quota != nil {
+		qs = append([]ProviderQuota{*a.Quota}, qs...)
+	}
+	if len(a.Quotas) > 12 {
+		return false
+	}
+	for _, q := range qs {
+		if !validRunLabel(q.Window, 20) || q.Model != "" && (!validRunLabel(q.Model, 40) || !providerModelRe.MatchString(q.Model)) ||
+			q.LeftPct != nil && (*q.LeftPct < 0 || *q.LeftPct > 100) {
+			return false
 		}
 	}
 	return true
@@ -574,19 +598,7 @@ func (s *Service) UpdateProviderCLI(ctx context.Context, token string, in Provid
 				return ErrConflict
 			}
 		}
-		matched := false
-		for _, provider := range p.Providers {
-			if provider.ID != in.Provider {
-				continue
-			}
-			for _, a := range provider.Accounts {
-				if a.CLI == in.CLI && a.CLIInfo != nil && a.CLIInfo.Update &&
-					a.CLIInfo.Version == in.ExpectedVersion && a.CLIInfo.Via == in.ExpectedVia {
-					matched = true
-				}
-			}
-		}
-		if !matched {
+		if !providerCLIUpdateMatches(p, in) {
 			return ErrConflict
 		}
 		p.Requests = append(p.Requests, ProviderRequest{ID: in.RequestID, Kind: "cli_update", Provider: in.Provider,
@@ -594,6 +606,23 @@ func (s *Service) UpdateProviderCLI(ctx context.Context, token string, in Provid
 			Status: "pending", RequestedBy: d.PrincipalID, RequestedAt: now})
 		return nil
 	}, "update:provider_cli", d.PrincipalID)
+}
+
+// providerCLIUpdateMatches reports whether a reported installation offers this update.
+func providerCLIUpdateMatches(p *Providers, in ProviderCLIUpdate) bool {
+	matched := false
+	for _, provider := range p.Providers {
+		if provider.ID != in.Provider {
+			continue
+		}
+		for _, a := range provider.Accounts {
+			if a.CLI == in.CLI && a.CLIInfo != nil && a.CLIInfo.Update &&
+				a.CLIInfo.Version == in.ExpectedVersion && a.CLIInfo.Via == in.ExpectedVia {
+				matched = true
+			}
+		}
+	}
+	return matched
 }
 
 func validProviderLabel(in ProviderLabel) bool {

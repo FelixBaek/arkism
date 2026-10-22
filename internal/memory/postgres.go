@@ -286,7 +286,11 @@ func sameProvenance(a, b Record) bool {
 	if !reflect.DeepEqual(a.SkillBasis, b.SkillBasis) || a.SkillBasis != nil && a.SkillID != b.SkillID {
 		return false
 	}
-	return ((a.Kind != proposedSkillKind && a.Kind != proposedSkillSourceKind) || a.Kind == b.Kind && reflect.DeepEqual(a.Relations, b.Relations)) && reflect.DeepEqual(a.ComparisonPlan, b.ComparisonPlan) && reflect.DeepEqual(a.ArchiveMessages, b.ArchiveMessages) && a.ErasureParentID == b.ErasureParentID && reflect.DeepEqual(a.Proposal, b.Proposal) && a.CreatedBy == b.CreatedBy && a.CreatedByType == b.CreatedByType && a.CreatedAt.Equal(b.CreatedAt) && reflect.DeepEqual(a.Sources, b.Sources) && reflect.DeepEqual(a.Generator, b.Generator) && a.OriginProduct == b.OriginProduct && a.SourceRef == b.SourceRef && effectiveSourceEventID(a) == effectiveSourceEventID(b) && a.TraceID == b.TraceID && reflect.DeepEqual(a.CollectedAt, b.CollectedAt)
+	return ((a.Kind != proposedSkillKind && a.Kind != proposedSkillSourceKind) || a.Kind == b.Kind && reflect.DeepEqual(a.Relations, b.Relations)) && reflect.DeepEqual(a.ComparisonPlan, b.ComparisonPlan) && reflect.DeepEqual(a.ArchiveMessages, b.ArchiveMessages) && a.ErasureParentID == b.ErasureParentID && reflect.DeepEqual(a.Proposal, b.Proposal) && sameOrigin(a, b)
+}
+
+func sameOrigin(a, b Record) bool {
+	return a.CreatedBy == b.CreatedBy && a.CreatedByType == b.CreatedByType && a.CreatedAt.Equal(b.CreatedAt) && reflect.DeepEqual(a.Sources, b.Sources) && reflect.DeepEqual(a.Generator, b.Generator) && a.OriginProduct == b.OriginProduct && a.SourceRef == b.SourceRef && effectiveSourceEventID(a) == effectiveSourceEventID(b) && a.TraceID == b.TraceID && reflect.DeepEqual(a.CollectedAt, b.CollectedAt)
 }
 func (p *Postgres) casMiss(ctx context.Context, c string, s Scope, id string) error {
 	_, e := p.Get(ctx, c, s, id)
@@ -432,6 +436,17 @@ func (p *Postgres) fence(ctx context.Context, s Scope, c, id string, rev int64, 
 	if e != nil {
 		return mapFence(e)
 	}
+	if e = checkFenceMode(r, c, rev, mode); e != nil {
+		return e
+	}
+	r.MemoryReferenceFence++
+	if mode == "run" {
+		r.RunCallFence++
+	}
+	return p.writePayload(ctx, c, r)
+}
+
+func checkFenceMode(r Record, c string, rev int64, mode string) error {
 	if mode == "search" && (r.Status != "active" || !live(r)) {
 		return ErrConflict
 	}
@@ -450,11 +465,7 @@ func (p *Postgres) fence(ctx context.Context, s Scope, c, id string, rev int64, 
 	if mode == "relation" && c != "memories" && c != "memory_candidates" {
 		return ErrInvalid
 	}
-	r.MemoryReferenceFence++
-	if mode == "run" {
-		r.RunCallFence++
-	}
-	return p.writePayload(ctx, c, r)
+	return nil
 }
 func mapFence(e error) error {
 	if errors.Is(e, ErrNotFound) {

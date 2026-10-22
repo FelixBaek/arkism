@@ -171,18 +171,9 @@ func (o *OllamaEmbedder) EmbedMeasured(ctx context.Context, texts []string, purp
 		if len(raw) != VectorDimension {
 			return EmbeddingBatch{}, fmt.Errorf("ollama embeddings: expected dimension %d, got %d: %w", VectorDimension, len(raw), ErrUnavailable)
 		}
-		vector := make([]float64, len(raw))
-		nonzero := false
-		for j, value := range raw {
-			// encoding/json would turn a null component into zero.
-			if value == nil || math.IsNaN(*value) || math.IsInf(*value, 0) {
-				return EmbeddingBatch{}, fmt.Errorf("ollama embeddings: non-finite value: %w", ErrUnavailable)
-			}
-			vector[j] = *value
-			nonzero = nonzero || *value != 0
-		}
-		if !nonzero {
-			return EmbeddingBatch{}, fmt.Errorf("ollama embeddings: zero vector: %w", ErrUnavailable)
+		vector, err := decodeOllamaVector(raw)
+		if err != nil {
+			return EmbeddingBatch{}, err
 		}
 		sum := sha256.Sum256([]byte(texts[i]))
 		out[i] = Embedding{
@@ -193,6 +184,23 @@ func (o *OllamaEmbedder) EmbedMeasured(ctx context.Context, texts []string, purp
 	}
 	usage := ProviderUsage{Provider: ollamaProviderName, Model: o.model, Requests: 1, InputTokens: decoded.PromptEvalCount, TotalTokens: decoded.PromptEvalCount}
 	return EmbeddingBatch{Items: out, Usage: usage}, nil
+}
+
+func decodeOllamaVector(raw []*float64) ([]float64, error) {
+	vector := make([]float64, len(raw))
+	nonzero := false
+	for j, value := range raw {
+		// encoding/json would turn a null component into zero.
+		if value == nil || math.IsNaN(*value) || math.IsInf(*value, 0) {
+			return nil, fmt.Errorf("ollama embeddings: non-finite value: %w", ErrUnavailable)
+		}
+		vector[j] = *value
+		nonzero = nonzero || *value != 0
+	}
+	if !nonzero {
+		return nil, fmt.Errorf("ollama embeddings: zero vector: %w", ErrUnavailable)
+	}
+	return vector, nil
 }
 
 var _ MeteredEmbedder = (*OllamaEmbedder)(nil)

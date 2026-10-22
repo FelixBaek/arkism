@@ -323,6 +323,11 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 	if err != nil {
 		return nil, err
 	}
+	return p.pgLaneHits(rows, parents, collection, criteria, now, lane, space, limit), nil
+}
+
+// pgLaneHits keeps the live candidates that match, up to limit.
+func (p *Postgres) pgLaneHits(rows []Record, parents map[string]Record, collection string, criteria SearchCriteria, now time.Time, lane, space string, limit int) []Hit {
 	hits := []Hit{}
 	for _, r := range rows {
 		var parent *Record
@@ -341,14 +346,14 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 			break
 		}
 	}
-	return hits, nil
+	return hits
 }
 
 // SearchRelatedMemories uses the anchor's immutable references as a store-side
 // filter, then repeats relationMatches after decoding. The second check keeps
 // malformed JSON and stale relation snapshots out of the result.
 func (p *Postgres) SearchRelatedMemories(ctx context.Context, in SearchInput, anchor Record) ([]Hit, error) {
-	if checkScope(in.Scope) != nil || !validSearchRelation(in) || in.RelatedTo == nil || anchor.Scope != in.Scope || anchor.ID != in.RelatedTo.ID || anchor.Revision != in.RelatedTo.Revision || in.Limit < 1 || in.Limit > 50 {
+	if !validRelatedMemorySearch(in, anchor) {
 		return nil, ErrInvalid
 	}
 	criteria, err := normalizeSearchCriteria(in.SearchCriteria)
@@ -392,6 +397,10 @@ func (p *Postgres) SearchRelatedMemories(ctx context.Context, in SearchInput, an
 		out = append(out, searchHit(r, colMemories, "relation"))
 	}
 	return out, nil
+}
+
+func validRelatedMemorySearch(in SearchInput, anchor Record) bool {
+	return !(checkScope(in.Scope) != nil || !validSearchRelation(in) || in.RelatedTo == nil || anchor.Scope != in.Scope || anchor.ID != in.RelatedTo.ID || anchor.Revision != in.RelatedTo.Revision || in.Limit < 1 || in.Limit > 50)
 }
 
 // RankVectors ranks an explicit ID allowlist that scope, binding, lifecycle and

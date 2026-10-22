@@ -222,18 +222,25 @@ func validatePrivacyRequest(in *PrivacyDeletionRequest) error {
 	if in.TargetType == "subject" && (in.Scope.UserID == "" || len(in.TargetIDs) != 1 || in.TargetIDs[0] != in.Scope.UserID) {
 		return ErrInvalid
 	}
-	seen := map[string]bool{}
-	for _, id := range in.TargetIDs {
-		if !validRunLabel(id, 256) || containsSecret(id) || seen[id] {
-			return ErrInvalid
-		}
-		seen[id] = true
+	if !validPrivacyTargetIDs(in.TargetIDs) {
+		return ErrInvalid
 	}
 	slices.Sort(in.TargetIDs)
 	if in.LegalHoldStatus == "" {
 		in.LegalHoldStatus = privacyHoldNone
 	}
 	return nil
+}
+
+func validPrivacyTargetIDs(ids []string) bool {
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if !validRunLabel(id, 256) || containsSecret(id) || seen[id] {
+			return false
+		}
+		seen[id] = true
+	}
+	return true
 }
 
 func privacyLabel(value string, limit int) bool {
@@ -247,45 +254,9 @@ func (s *Service) RequestPrivacyDeletion(ctx context.Context, token string, in P
 		}
 		return PrivacyDeletionStatus{}, ErrUnavailable
 	}
-	action := "delete:sources"
-	if in.TargetType == "work_checkpoint" {
-		action = "delete:work_checkpoints"
-	}
-	who, err := s.authorize(ctx, token, action, in.Scope, "", "")
+	who, err := s.authorizePrivacyRequest(ctx, token, in)
 	if err != nil {
 		return PrivacyDeletionStatus{}, err
-	}
-	if who.Role != "human" {
-		if in.TargetType == "work_checkpoint" {
-			return PrivacyDeletionStatus{}, ErrDenied
-		}
-		who, err = s.authorize(ctx, token, "retention:delete:sources", in.Scope, "", "")
-		if err != nil || who.Role != "service" {
-			return PrivacyDeletionStatus{}, ErrDenied
-		}
-	}
-	if in.TargetType == "work_checkpoint" {
-		for _, id := range in.TargetIDs {
-			perTarget, targetErr := s.authorize(ctx, token, action, in.Scope, id, "")
-			if targetErr != nil {
-				return PrivacyDeletionStatus{}, targetErr
-			}
-			if perTarget.Role != "human" || perTarget.PrincipalID != who.PrincipalID {
-				return PrivacyDeletionStatus{}, ErrDenied
-			}
-		}
-	}
-	if in.TargetType == "subject" && in.Scope.UserID != who.PrincipalID {
-		admin, adminErr := s.authorize(ctx, token, "delete:subjects", in.Scope, in.Scope.UserID, "")
-		if adminErr != nil || admin.Role != "human" || admin.PrincipalID != who.PrincipalID {
-			return PrivacyDeletionStatus{}, ErrDenied
-		}
-	}
-	if in.RetentionPolicyRef == retentionSynthetic {
-		local, localErr := s.authorize(ctx, token, "retention:synthetic_disposable", in.Scope, "", "")
-		if localErr != nil || local.PrincipalID != who.PrincipalID || local.Role != who.Role {
-			return PrivacyDeletionStatus{}, ErrDenied
-		}
 	}
 	if _, ok := s.Repo.(privacyStore); !ok {
 		return PrivacyDeletionStatus{}, ErrUnavailable
@@ -316,48 +287,15 @@ func (s *Service) RequestPrivacyDeletion(ctx context.Context, token string, in P
 			return err
 		}
 		if in.ExpectedRevision != 0 {
-			if len(in.TargetIDs) != 1 || in.TargetType == "subject" {
-				return ErrInvalid
-			}
-			matched := false
-			collection := "sources"
-			if in.TargetType == "trace" {
-				collection = "execution_traces"
-			}
-			if in.TargetType == "work_checkpoint" {
-				collection = colWorkCheckpoints
-			}
-			for _, ref := range impact.Records {
-				if ref.Collection == collection && ref.ID == in.TargetIDs[0] {
-					matched = ref.Revision == in.ExpectedRevision
-				}
-			}
-			if !matched {
-				return ErrConflict
+			if err := checkPrivacyExpectedRevision(in, impact); err != nil {
+				return err
 			}
 		}
 		if err := privacyTx.QuarantinePrivacyImpact(ctx, in.Scope, impact); err != nil {
 			return err
 		}
-		for _, ref := range impact.Records {
-			if ref.Collection == colJobs || ref.Collection == "audit_events" {
-				continue
-			}
-			record, getErr := tx.Get(ctx, ref.Collection, in.Scope, ref.ID)
-			if getErr != nil {
-				return getErr
-			}
-			if record.Revision != ref.Revision {
-				return ErrConflict
-			}
-			if !record.PrivacyQuarantined {
-				record.PrivacyQuarantined = true
-				record.Revision++
-				record.UpdatedAt = now
-				if err := tx.Replace(ctx, ref.Collection, record, ref.Revision); err != nil {
-					return err
-				}
-			}
+		if err := quarantinePrivacyRecords(ctx, tx, in.Scope, impact, now); err != nil {
+			return err
 		}
 		authorized := now
 		pd := &PrivacyDeletion{State: privacyQuarantined, RequesterType: who.Role, RequesterID: who.PrincipalID, TargetType: in.TargetType, TargetIDs: slices.Clone(in.TargetIDs), Reason: in.Reason, LegalHoldStatus: privacyHoldNone, RetentionPolicyRef: in.RetentionPolicyRef, RequestedAt: now, AuthorizedAt: &authorized, IdempotencyKey: in.IdempotencyKey, CorrelationID: auditRequestID(ctx), PurgeReportRef: "jobs/" + id + "#privacy_deletion.report", RequestHash: hash, Impact: impact, Report: PrivacyPurgeReport{LiveAccessRemoved: true, BackupExpiryPending: in.RetentionPolicyRef != retentionSynthetic}}
@@ -371,6 +309,106 @@ func (s *Service) RequestPrivacyDeletion(ctx context.Context, token string, in P
 		return PrivacyDeletionStatus{}, err
 	}
 	return privacyStatus(saved)
+}
+
+func (s *Service) authorizePrivacyRequest(ctx context.Context, token string, in PrivacyDeletionRequest) (Decision, error) {
+	action := "delete:sources"
+	if in.TargetType == "work_checkpoint" {
+		action = "delete:work_checkpoints"
+	}
+	who, err := s.authorize(ctx, token, action, in.Scope, "", "")
+	if err != nil {
+		return Decision{}, err
+	}
+	if who.Role != "human" {
+		if in.TargetType == "work_checkpoint" {
+			return Decision{}, ErrDenied
+		}
+		who, err = s.authorize(ctx, token, "retention:delete:sources", in.Scope, "", "")
+		if err != nil || who.Role != "service" {
+			return Decision{}, ErrDenied
+		}
+	}
+	if in.TargetType == "work_checkpoint" {
+		if err := s.authorizePrivacyTargets(ctx, token, action, in, who); err != nil {
+			return Decision{}, err
+		}
+	}
+	if in.TargetType == "subject" && in.Scope.UserID != who.PrincipalID {
+		admin, adminErr := s.authorize(ctx, token, "delete:subjects", in.Scope, in.Scope.UserID, "")
+		if adminErr != nil || admin.Role != "human" || admin.PrincipalID != who.PrincipalID {
+			return Decision{}, ErrDenied
+		}
+	}
+	if in.RetentionPolicyRef == retentionSynthetic {
+		local, localErr := s.authorize(ctx, token, "retention:synthetic_disposable", in.Scope, "", "")
+		if localErr != nil || local.PrincipalID != who.PrincipalID || local.Role != who.Role {
+			return Decision{}, ErrDenied
+		}
+	}
+	return who, nil
+}
+
+// authorizePrivacyTargets requires the same human to own every work checkpoint.
+func (s *Service) authorizePrivacyTargets(ctx context.Context, token, action string, in PrivacyDeletionRequest, who Decision) error {
+	for _, id := range in.TargetIDs {
+		perTarget, targetErr := s.authorize(ctx, token, action, in.Scope, id, "")
+		if targetErr != nil {
+			return targetErr
+		}
+		if perTarget.Role != "human" || perTarget.PrincipalID != who.PrincipalID {
+			return ErrDenied
+		}
+	}
+	return nil
+}
+
+func checkPrivacyExpectedRevision(in PrivacyDeletionRequest, impact PrivacyImpact) error {
+	if len(in.TargetIDs) != 1 || in.TargetType == "subject" {
+		return ErrInvalid
+	}
+	matched := false
+	collection := "sources"
+	if in.TargetType == "trace" {
+		collection = "execution_traces"
+	}
+	if in.TargetType == "work_checkpoint" {
+		collection = colWorkCheckpoints
+	}
+	for _, ref := range impact.Records {
+		if ref.Collection == collection && ref.ID == in.TargetIDs[0] {
+			matched = ref.Revision == in.ExpectedRevision
+		}
+	}
+	if !matched {
+		return ErrConflict
+	}
+	return nil
+}
+
+// quarantinePrivacyRecords marks every impacted record, at its discovered revision.
+func quarantinePrivacyRecords(ctx context.Context, tx Tx, scope Scope, impact PrivacyImpact, now time.Time) error {
+	for _, ref := range impact.Records {
+		if ref.Collection == colJobs || ref.Collection == "audit_events" {
+			continue
+		}
+		record, getErr := tx.Get(ctx, ref.Collection, scope, ref.ID)
+		if getErr != nil {
+			return getErr
+		}
+		if record.Revision != ref.Revision {
+			return ErrConflict
+		}
+		if !record.PrivacyQuarantined {
+			record.PrivacyQuarantined = true
+			record.Revision++
+			record.UpdatedAt = now
+			if err := tx.Replace(ctx, ref.Collection, record, ref.Revision); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Service) GetPrivacyDeletion(ctx context.Context, token, id string, scope Scope) (PrivacyDeletionStatus, error) {
@@ -491,7 +529,7 @@ func (s *Service) RecordPrivacyRuntimeReceipt(ctx context.Context, token, id str
 		if len(incoming.Errors) != 0 || !incoming.Verified && !incoming.Held {
 			incoming, _ = failedRuntimeReceipt(incoming)
 		}
-		if r.Kind == privacyDeletionKind && r.PrivacyDeletion != nil && r.PrivacyDeletion.RuntimeReceipt != nil && r.Revision >= in.ExpectedRevision+1 && r.LeaseToken == "" && r.PrivacyDeletion.RuntimeLeaseRev == in.ExpectedRevision && r.PrivacyDeletion.RuntimeLeaseHash == ContentHash(in.LeaseToken) && structuredText(*r.PrivacyDeletion.RuntimeReceipt) == structuredText(incoming) {
+		if privacyReceiptReplayed(r, in, incoming) {
 			saved = r
 			return nil
 		}
@@ -504,27 +542,8 @@ func (s *Service) RecordPrivacyRuntimeReceipt(ctx context.Context, token, id str
 		previous := r.Revision
 		r.PrivacyDeletion.RuntimeLeaseHash = ContentHash(in.LeaseToken)
 		r.PrivacyDeletion.RuntimeLeaseRev = in.ExpectedRevision
-		if len(in.Receipt.Errors) != 0 || !in.Receipt.Verified && !in.Receipt.Held {
-			receipt, code := failedRuntimeReceipt(in.Receipt)
-			r.PrivacyDeletion.RuntimeReceipt = &receipt
-			r.PrivacyDeletion.ErrorSummary = code
-			if r.Attempts >= maxJobAttempts {
-				r.PrivacyDeletion.State, r.Status = privacyFailed, JobStatusFailed
-			} else {
-				r.PrivacyDeletion.State, r.Status = privacyPartial, JobStatusRetry
-				next := time.Now().UTC().Add(retryDelay(r.Attempts))
-				r.RunAt = &next
-			}
-		} else if !validRuntimeReceipt(r.PrivacyDeletion, in.Receipt) {
-			return ErrInvalid
-		} else if in.Receipt.Held {
-			r.PrivacyDeletion.RuntimeReceipt = &in.Receipt
-			r.PrivacyDeletion.State, r.Status = privacyHeld, JobStatusDone
-		} else {
-			r.PrivacyDeletion.RuntimeReceipt = &in.Receipt
-			r.PrivacyDeletion.ErrorSummary = ""
-			r.PrivacyDeletion.Report.RuntimePurged = true
-			r.PrivacyDeletion.State, r.Status = privacyPurgingDerived, JobStatusPending
+		if err := applyPrivacyRuntimeReceipt(&r, &in); err != nil {
+			return err
 		}
 		r.LeaseToken, r.LeaseUntil = "", time.Time{}
 		r.Revision++
@@ -542,6 +561,38 @@ func (s *Service) RecordPrivacyRuntimeReceipt(ctx context.Context, token, id str
 		return PrivacyDeletionStatus{}, err
 	}
 	return privacyStatus(saved)
+}
+
+// privacyReceiptReplayed reports whether this exact receipt was already recorded
+// under the same lease.
+func privacyReceiptReplayed(r Record, in PrivacyRuntimeReceiptInput, incoming PrivacyRuntimeReceipt) bool {
+	return r.Kind == privacyDeletionKind && r.PrivacyDeletion != nil && r.PrivacyDeletion.RuntimeReceipt != nil && r.Revision >= in.ExpectedRevision+1 && r.LeaseToken == "" && r.PrivacyDeletion.RuntimeLeaseRev == in.ExpectedRevision && r.PrivacyDeletion.RuntimeLeaseHash == ContentHash(in.LeaseToken) && structuredText(*r.PrivacyDeletion.RuntimeReceipt) == structuredText(incoming)
+}
+
+func applyPrivacyRuntimeReceipt(r *Record, in *PrivacyRuntimeReceiptInput) error {
+	if len(in.Receipt.Errors) != 0 || !in.Receipt.Verified && !in.Receipt.Held {
+		receipt, code := failedRuntimeReceipt(in.Receipt)
+		r.PrivacyDeletion.RuntimeReceipt = &receipt
+		r.PrivacyDeletion.ErrorSummary = code
+		if r.Attempts >= maxJobAttempts {
+			r.PrivacyDeletion.State, r.Status = privacyFailed, JobStatusFailed
+		} else {
+			r.PrivacyDeletion.State, r.Status = privacyPartial, JobStatusRetry
+			next := time.Now().UTC().Add(retryDelay(r.Attempts))
+			r.RunAt = &next
+		}
+	} else if !validRuntimeReceipt(r.PrivacyDeletion, in.Receipt) {
+		return ErrInvalid
+	} else if in.Receipt.Held {
+		r.PrivacyDeletion.RuntimeReceipt = &in.Receipt
+		r.PrivacyDeletion.State, r.Status = privacyHeld, JobStatusDone
+	} else {
+		r.PrivacyDeletion.RuntimeReceipt = &in.Receipt
+		r.PrivacyDeletion.ErrorSummary = ""
+		r.PrivacyDeletion.Report.RuntimePurged = true
+		r.PrivacyDeletion.State, r.Status = privacyPurgingDerived, JobStatusPending
+	}
+	return nil
 }
 
 func (s *Service) AdvancePrivacyDeletion(ctx context.Context, token, id string, in PrivacyRevisionInput) (PrivacyDeletionStatus, error) {
@@ -568,79 +619,13 @@ func (s *Service) AdvancePrivacyDeletion(ctx context.Context, token, id string, 
 		previous := r.Revision
 		switch pd.State {
 		case privacyPurgingDerived:
-			if pd.RuntimeReceipt == nil || !validRuntimeReceipt(pd, *pd.RuntimeReceipt) {
-				return ErrConflict
-			}
-			for _, sourceID := range pd.Impact.SourceEventIDs {
-				source, sourceErr := tx.Get(ctx, "sources", in.Scope, sourceID)
-				if errors.Is(sourceErr, ErrNotFound) {
-					continue
-				}
-				if sourceErr != nil || !source.PrivacyQuarantined {
-					if sourceErr != nil {
-						return sourceErr
-					}
-					return ErrConflict
-				}
-				if err := tx.Delete(ctx, "sources", in.Scope, sourceID, source.Revision); err != nil {
-					return err
-				}
-				now := time.Now().UTC().Truncate(time.Millisecond)
-				receipt := Record{ErasureParentID: r.ID, ID: sourceDeletionID(in.Scope, sourceID), Scope: in.Scope, Kind: "source_deletion", Status: JobStatusDone, Revision: 1, CreatedAt: now, UpdatedAt: now, Target: &Ref{Collection: "sources", ID: sourceID, Revision: source.Revision}}
-				// Check first: on Postgres a duplicate-key insert aborts the whole transaction.
-				if err := insertIfAbsent(ctx, tx, colJobs, receipt); err != nil {
-					return err
-				}
-				if _, err := tx.Get(ctx, colJobs, in.Scope, sourceMemoryErasureID(in.Scope, sourceID)); errors.Is(err, ErrNotFound) {
-					if err = enqueueSourceMemoryErasureAs(ctx, tx, in.Scope, sourceID, source.Revision, who.PrincipalID, who.Role, r.ID); err != nil {
-						return err
-					}
-				} else if err != nil {
-					return err
-				}
-			}
-			if err := eraseWorkPrivacyImpact(ctx, tx, in.Scope, pd.Impact, r.ID); err != nil {
+			if err := purgePrivacyDerived(ctx, tx, in.Scope, r, who); err != nil {
 				return err
 			}
 			pd.State, r.Status, r.RunAt = privacyVerifying, JobStatusPending, nil
 		case privacyVerifying:
-			privacyTx, ok := tx.(privacyStore)
-			if !ok {
-				return ErrUnavailable
-			}
-			report, verifyErr := privacyTx.VerifyPrivacyPurge(ctx, in.Scope, pd.Impact)
-			if verifyErr != nil {
-				if errors.Is(verifyErr, ErrConflict) {
-					next := time.Now().UTC().Add(2 * time.Second)
-					r.Status, r.RunAt = JobStatusRetry, &next
-					break
-				}
-				pd.ErrorSummary = "canonical_verification_failed"
-				if r.Attempts >= maxJobAttempts {
-					pd.State, r.Status = privacyFailed, JobStatusFailed
-				} else {
-					pd.State, r.Status = privacyPartial, JobStatusRetry
-					next := time.Now().UTC().Add(retryDelay(r.Attempts))
-					r.RunAt = &next
-				}
-				break
-			}
-			pd.ErrorSummary = ""
-			r.Status, r.RunAt = JobStatusPending, nil
-			report.RuntimePurged = pd.Report.RuntimePurged
-			report.BackupOldestRetainedAt = pd.Report.BackupOldestRetainedAt
-			report.BackupExpiryPending = pd.RetentionPolicyRef != retentionSynthetic && report.BackupOldestRetainedAt == nil
-			pd.Report = report
-			if !report.LiveAccessRemoved || !report.RuntimePurged || !report.DerivedPurged || !report.ArtifactsPurged {
-				// A re-purge must wait again: backups taken before it can still hold what it removes.
-				pd.State = privacyPartial
-				pd.Report.BackupOldestRetainedAt = nil
-				pd.Report.BackupExpiryPending = pd.RetentionPolicyRef != retentionSynthetic
-			} else if report.BackupExpiryPending {
-				pd.State, r.Status = privacyWaiting, JobStatusWaiting
-			} else {
-				now := time.Now().UTC().Truncate(time.Millisecond)
-				pd.State, pd.CompletedAt, r.Status = privacyCompleted, &now, JobStatusDone
+			if err := verifyPrivacyDeletion(ctx, tx, in.Scope, &r); err != nil {
+				return err
 			}
 		case privacyWaiting:
 			// UpdatedAt is when verification parked the job; a backup taken
@@ -670,6 +655,93 @@ func (s *Service) AdvancePrivacyDeletion(ctx context.Context, token, id string, 
 		return PrivacyDeletionStatus{}, err
 	}
 	return privacyStatus(saved)
+}
+
+// purgePrivacyDerived deletes the quarantined sources and queues their derived erasure.
+func purgePrivacyDerived(ctx context.Context, tx Tx, scope Scope, r Record, who Decision) error {
+	pd := r.PrivacyDeletion
+	if pd.RuntimeReceipt == nil || !validRuntimeReceipt(pd, *pd.RuntimeReceipt) {
+		return ErrConflict
+	}
+	for _, sourceID := range pd.Impact.SourceEventIDs {
+		if err := purgePrivacySource(ctx, tx, scope, sourceID, r.ID, who); err != nil {
+			return err
+		}
+	}
+	return eraseWorkPrivacyImpact(ctx, tx, scope, pd.Impact, r.ID)
+}
+
+func purgePrivacySource(ctx context.Context, tx Tx, scope Scope, sourceID, parentID string, who Decision) error {
+	source, sourceErr := tx.Get(ctx, "sources", scope, sourceID)
+	if errors.Is(sourceErr, ErrNotFound) {
+		return nil
+	}
+	if sourceErr != nil || !source.PrivacyQuarantined {
+		if sourceErr != nil {
+			return sourceErr
+		}
+		return ErrConflict
+	}
+	if err := tx.Delete(ctx, "sources", scope, sourceID, source.Revision); err != nil {
+		return err
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	receipt := Record{ErasureParentID: parentID, ID: sourceDeletionID(scope, sourceID), Scope: scope, Kind: "source_deletion", Status: JobStatusDone, Revision: 1, CreatedAt: now, UpdatedAt: now, Target: &Ref{Collection: "sources", ID: sourceID, Revision: source.Revision}}
+	// Check first: on Postgres a duplicate-key insert aborts the whole transaction.
+	if err := insertIfAbsent(ctx, tx, colJobs, receipt); err != nil {
+		return err
+	}
+	if _, err := tx.Get(ctx, colJobs, scope, sourceMemoryErasureID(scope, sourceID)); errors.Is(err, ErrNotFound) {
+		if err = enqueueSourceMemoryErasureAs(ctx, tx, scope, sourceID, source.Revision, who.PrincipalID, who.Role, parentID); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyPrivacyDeletion(ctx context.Context, tx Tx, scope Scope, r *Record) error {
+	pd := r.PrivacyDeletion
+	privacyTx, ok := tx.(privacyStore)
+	if !ok {
+		return ErrUnavailable
+	}
+	report, verifyErr := privacyTx.VerifyPrivacyPurge(ctx, scope, pd.Impact)
+	if verifyErr != nil {
+		if errors.Is(verifyErr, ErrConflict) {
+			next := time.Now().UTC().Add(2 * time.Second)
+			r.Status, r.RunAt = JobStatusRetry, &next
+			return nil
+		}
+		pd.ErrorSummary = "canonical_verification_failed"
+		if r.Attempts >= maxJobAttempts {
+			pd.State, r.Status = privacyFailed, JobStatusFailed
+		} else {
+			pd.State, r.Status = privacyPartial, JobStatusRetry
+			next := time.Now().UTC().Add(retryDelay(r.Attempts))
+			r.RunAt = &next
+		}
+		return nil
+	}
+	pd.ErrorSummary = ""
+	r.Status, r.RunAt = JobStatusPending, nil
+	report.RuntimePurged = pd.Report.RuntimePurged
+	report.BackupOldestRetainedAt = pd.Report.BackupOldestRetainedAt
+	report.BackupExpiryPending = pd.RetentionPolicyRef != retentionSynthetic && report.BackupOldestRetainedAt == nil
+	pd.Report = report
+	if !report.LiveAccessRemoved || !report.RuntimePurged || !report.DerivedPurged || !report.ArtifactsPurged {
+		// A re-purge must wait again: backups taken before it can still hold what it removes.
+		pd.State = privacyPartial
+		pd.Report.BackupOldestRetainedAt = nil
+		pd.Report.BackupExpiryPending = pd.RetentionPolicyRef != retentionSynthetic
+	} else if report.BackupExpiryPending {
+		pd.State, r.Status = privacyWaiting, JobStatusWaiting
+	} else {
+		now := time.Now().UTC().Truncate(time.Millisecond)
+		pd.State, pd.CompletedAt, r.Status = privacyCompleted, &now, JobStatusDone
+	}
+	return nil
 }
 
 // ExpirePrivacyBackups sends every waiting deletion that finished before the

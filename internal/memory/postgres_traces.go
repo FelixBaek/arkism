@@ -28,21 +28,9 @@ func (p *Postgres) storeCompletedTrace(ctx context.Context, prepared preparedTra
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return TraceIngestResult{}, pgErr(err)
 	}
-	lineageRefs := make(map[string]SourceRef, len(prepared.lineageSourceIDs))
-	if len(prepared.lineageSourceIDs) > 0 {
-		rows, metadataErr := p.SourceMetadata(ctx, in.Scope, prepared.lineageSourceIDs, true)
-		if metadataErr != nil {
-			return TraceIngestResult{}, metadataErr
-		}
-		if len(rows) != len(prepared.lineageSourceIDs) {
-			return TraceIngestResult{}, ErrConflict
-		}
-		for _, row := range rows {
-			if row.Scope != in.Scope || !live(row) {
-				return TraceIngestResult{}, ErrConflict
-			}
-			lineageRefs[row.ID] = sourceReference(row, "memory_context")
-		}
+	lineageRefs, err := p.traceLineageRefs(ctx, prepared)
+	if err != nil {
+		return TraceIngestResult{}, err
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	inspection, _ := json.Marshal(traceInspections(prepared.events))
@@ -54,28 +42,11 @@ VALUES($1,$2,$3,$4,$5,$6,$7,NULLIF($8,''),'completed',$9,$10,$11,$12,$13,$14,$15
 	}
 	sources := make([]SourceRef, 0, len(prepared.events))
 	for _, event := range prepared.events {
-		payloadHash := ContentHash(string(event.Payload))
-		inspectionJSON, _ := json.Marshal(event.Inspection)
-		if _, err = p.q().Exec(ctx, `INSERT INTO source_events(id,trace_id,organization_id,project_id,user_id,agent_id,kind,occurred_at,payload,payload_raw,sensitivity,inspection,request_hash,created_at)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, event.ID, in.TraceID, in.Scope.WorkspaceID, in.Scope.ProjectID, in.Scope.UserID, in.Scope.AgentID, event.Kind, event.OccurredAt, string(event.Payload), []byte(event.Payload), event.Sensitivity, string(inspectionJSON), payloadHash, now); err != nil {
-			return TraceIngestResult{}, pgErr(err)
-		}
-		collected := event.OccurredAt
-		source := Record{ID: event.ID, Scope: in.Scope, Kind: traceSourceKind(event.Kind), Status: "active", Revision: 1, Text: string(event.Payload),
-			OriginProduct: "langgraph", SourceRef: fmt.Sprintf("execution-trace/%s/event/%s", in.TraceID, event.ID), CollectedAt: &collected,
-			CreatedAt: now, UpdatedAt: now, CreatedBy: prepared.actor.PrincipalID, CreatedByType: prepared.actor.Role, TrustLevel: "external_untrusted", Trust: .5,
-			SourceEventID: event.ID, TraceID: in.TraceID, Sensitivity: event.Sensitivity, Inspection: &event.Inspection, RequestHash: payloadHash}
-		source.Sources = []SourceRef{sourceReference(source, "original")}
-		for _, id := range prepared.lineageByEvent[event.ID] {
-			source.Sources = append(source.Sources, lineageRefs[id])
-		}
-		if err = p.Insert(ctx, "sources", source); err != nil {
+		ref, err := p.storeTraceEvent(ctx, prepared, event, lineageRefs, now)
+		if err != nil {
 			return TraceIngestResult{}, err
 		}
-		sources = append(sources, source.Sources[0])
-		if err = p.insertGraphEntity(ctx, in.Scope, "source_event", event.ID); err != nil {
-			return TraceIngestResult{}, err
-		}
+		sources = append(sources, ref)
 	}
 	for _, id := range prepared.lineageSourceIDs {
 		sources = append(sources, lineageRefs[id])
@@ -94,30 +65,8 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, event.ID, in.TraceID, i
 	if err = p.Insert(ctx, "agent_runs", run); err != nil {
 		return TraceIngestResult{}, err
 	}
-	for _, relation := range [][5]string{{"langgraph_thread", in.ThreadID, "agent_run", run.ID, "started"}, {"agent_run", run.ID, "trace", in.TraceID, "recorded_by"}} {
-		if err = p.insertGraphRelation(ctx, in.Scope, relation[0], relation[1], relation[2], relation[3], relation[4]); err != nil {
-			return TraceIngestResult{}, err
-		}
-	}
-	if in.LangSmithRunID != "" {
-		if err = p.insertGraphRelation(ctx, in.Scope, "trace", in.TraceID, "langsmith_run", in.LangSmithRunID, "observed_as"); err != nil {
-			return TraceIngestResult{}, err
-		}
-	}
-	for _, event := range prepared.events {
-		if err = p.insertGraphRelation(ctx, in.Scope, "trace", in.TraceID, "source_event", event.ID, "contains"); err != nil {
-			return TraceIngestResult{}, err
-		}
-		for _, sourceID := range prepared.lineageByEvent[event.ID] {
-			if err = p.insertGraphRelation(ctx, in.Scope, "source_event", event.ID, "source_event", sourceID, "context_uses"); err != nil {
-				return TraceIngestResult{}, err
-			}
-		}
-	}
-	for _, sourceID := range prepared.lineageSourceIDs {
-		if err = p.insertGraphRelation(ctx, in.Scope, "trace", in.TraceID, "source_event", sourceID, "context_uses"); err != nil {
-			return TraceIngestResult{}, err
-		}
+	if err = p.storeTraceRelations(ctx, prepared, run.ID); err != nil {
+		return TraceIngestResult{}, err
 	}
 	if err = p.recordTacitSequence(ctx, in, prepared.events); err != nil {
 		return TraceIngestResult{}, err
@@ -126,6 +75,86 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, event.ID, in.TraceID, i
 		return TraceIngestResult{}, err
 	}
 	return out, nil
+}
+
+// traceLineageRefs resolves the live memory sources the trace's context used.
+func (p *Postgres) traceLineageRefs(ctx context.Context, prepared preparedTrace) (map[string]SourceRef, error) {
+	in := prepared.input
+	lineageRefs := make(map[string]SourceRef, len(prepared.lineageSourceIDs))
+	if len(prepared.lineageSourceIDs) > 0 {
+		rows, metadataErr := p.SourceMetadata(ctx, in.Scope, prepared.lineageSourceIDs, true)
+		if metadataErr != nil {
+			return nil, metadataErr
+		}
+		if len(rows) != len(prepared.lineageSourceIDs) {
+			return nil, ErrConflict
+		}
+		for _, row := range rows {
+			if row.Scope != in.Scope || !live(row) {
+				return nil, ErrConflict
+			}
+			lineageRefs[row.ID] = sourceReference(row, "memory_context")
+		}
+	}
+	return lineageRefs, nil
+}
+
+// storeTraceEvent stores one event and its source record, returning the
+// source's original reference.
+func (p *Postgres) storeTraceEvent(ctx context.Context, prepared preparedTrace, event inspectedTraceEvent, lineageRefs map[string]SourceRef, now time.Time) (SourceRef, error) {
+	in := prepared.input
+	payloadHash := ContentHash(string(event.Payload))
+	inspectionJSON, _ := json.Marshal(event.Inspection)
+	if _, err := p.q().Exec(ctx, `INSERT INTO source_events(id,trace_id,organization_id,project_id,user_id,agent_id,kind,occurred_at,payload,payload_raw,sensitivity,inspection,request_hash,created_at)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, event.ID, in.TraceID, in.Scope.WorkspaceID, in.Scope.ProjectID, in.Scope.UserID, in.Scope.AgentID, event.Kind, event.OccurredAt, string(event.Payload), []byte(event.Payload), event.Sensitivity, string(inspectionJSON), payloadHash, now); err != nil {
+		return SourceRef{}, pgErr(err)
+	}
+	collected := event.OccurredAt
+	source := Record{ID: event.ID, Scope: in.Scope, Kind: traceSourceKind(event.Kind), Status: "active", Revision: 1, Text: string(event.Payload),
+		OriginProduct: "langgraph", SourceRef: fmt.Sprintf("execution-trace/%s/event/%s", in.TraceID, event.ID), CollectedAt: &collected,
+		CreatedAt: now, UpdatedAt: now, CreatedBy: prepared.actor.PrincipalID, CreatedByType: prepared.actor.Role, TrustLevel: "external_untrusted", Trust: .5,
+		SourceEventID: event.ID, TraceID: in.TraceID, Sensitivity: event.Sensitivity, Inspection: &event.Inspection, RequestHash: payloadHash}
+	source.Sources = []SourceRef{sourceReference(source, "original")}
+	for _, id := range prepared.lineageByEvent[event.ID] {
+		source.Sources = append(source.Sources, lineageRefs[id])
+	}
+	if err := p.Insert(ctx, "sources", source); err != nil {
+		return SourceRef{}, err
+	}
+	if err := p.insertGraphEntity(ctx, in.Scope, "source_event", event.ID); err != nil {
+		return SourceRef{}, err
+	}
+	return source.Sources[0], nil
+}
+
+func (p *Postgres) storeTraceRelations(ctx context.Context, prepared preparedTrace, runID string) error {
+	in := prepared.input
+	for _, relation := range [][5]string{{"langgraph_thread", in.ThreadID, "agent_run", runID, "started"}, {"agent_run", runID, "trace", in.TraceID, "recorded_by"}} {
+		if err := p.insertGraphRelation(ctx, in.Scope, relation[0], relation[1], relation[2], relation[3], relation[4]); err != nil {
+			return err
+		}
+	}
+	if in.LangSmithRunID != "" {
+		if err := p.insertGraphRelation(ctx, in.Scope, "trace", in.TraceID, "langsmith_run", in.LangSmithRunID, "observed_as"); err != nil {
+			return err
+		}
+	}
+	for _, event := range prepared.events {
+		if err := p.insertGraphRelation(ctx, in.Scope, "trace", in.TraceID, "source_event", event.ID, "contains"); err != nil {
+			return err
+		}
+		for _, sourceID := range prepared.lineageByEvent[event.ID] {
+			if err := p.insertGraphRelation(ctx, in.Scope, "source_event", event.ID, "source_event", sourceID, "context_uses"); err != nil {
+				return err
+			}
+		}
+	}
+	for _, sourceID := range prepared.lineageSourceIDs {
+		if err := p.insertGraphRelation(ctx, in.Scope, "trace", in.TraceID, "source_event", sourceID, "context_uses"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *Postgres) completeTracePresent(ctx context.Context, out TraceIngestResult) error {
@@ -201,26 +230,38 @@ func (p *Postgres) CanonicalEvidence(ctx context.Context, scope Scope, sourceEve
 		return err
 	}
 	if traceID != "" {
-		var status string
-		var erased, quarantined bool
-		err := p.q().QueryRow(ctx, `SELECT status,content_erased,privacy_quarantined FROM execution_traces WHERE id=$1 AND organization_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5`, traceID, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID).Scan(&status, &erased, &quarantined)
-		if errors.Is(err, pgx.ErrNoRows) || err == nil && (status != "completed" || erased || quarantined) {
-			return ErrConflict
-		}
-		if err != nil {
-			return pgErr(err)
+		if err := p.canonicalTrace(ctx, scope, traceID); err != nil {
+			return err
 		}
 	}
 	if sourceEventID != "" {
-		var eventTrace string
-		var erased, quarantined bool
-		err := p.q().QueryRow(ctx, `SELECT trace_id,content_erased,privacy_quarantined FROM source_events WHERE id=$1 AND organization_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5`, sourceEventID, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID).Scan(&eventTrace, &erased, &quarantined)
-		if errors.Is(err, pgx.ErrNoRows) || err == nil && (erased || quarantined || traceID != "" && eventTrace != traceID) {
-			return ErrConflict
-		}
-		if err != nil {
-			return pgErr(err)
-		}
+		return p.canonicalSourceEvent(ctx, scope, sourceEventID, traceID)
+	}
+	return nil
+}
+
+func (p *Postgres) canonicalTrace(ctx context.Context, scope Scope, traceID string) error {
+	var status string
+	var erased, quarantined bool
+	err := p.q().QueryRow(ctx, `SELECT status,content_erased,privacy_quarantined FROM execution_traces WHERE id=$1 AND organization_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5`, traceID, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID).Scan(&status, &erased, &quarantined)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && (status != "completed" || erased || quarantined) {
+		return ErrConflict
+	}
+	if err != nil {
+		return pgErr(err)
+	}
+	return nil
+}
+
+func (p *Postgres) canonicalSourceEvent(ctx context.Context, scope Scope, sourceEventID, traceID string) error {
+	var eventTrace string
+	var erased, quarantined bool
+	err := p.q().QueryRow(ctx, `SELECT trace_id,content_erased,privacy_quarantined FROM source_events WHERE id=$1 AND organization_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5`, sourceEventID, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID).Scan(&eventTrace, &erased, &quarantined)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && (erased || quarantined || traceID != "" && eventTrace != traceID) {
+		return ErrConflict
+	}
+	if err != nil {
+		return pgErr(err)
 	}
 	return nil
 }

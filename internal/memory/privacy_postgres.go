@@ -18,184 +18,18 @@ func (p *Postgres) DiscoverPrivacyImpact(ctx context.Context, scope Scope, targe
 	}
 	sources, traces := map[string]bool{}, map[string]bool{}
 	handoffRuns, handoffThreads := map[string]bool{}, map[string]bool{}
-	switch targetType {
-	case "source_event":
-		for _, id := range targetIDs {
-			r, err := p.row(ctx, "sources", scope, id, false)
-			if err != nil {
-				return PrivacyImpact{}, err
-			}
-			sources[id] = true
-			if r.TraceID != "" {
-				traces[r.TraceID] = true
-			}
-		}
-	case "trace":
-		for _, id := range targetIDs {
-			if _, err := p.row(ctx, "execution_traces", scope, id, false); err != nil {
-				return PrivacyImpact{}, err
-			}
-			traces[id] = true
-		}
-	case "subject":
-		if scope.UserID == "" || len(targetIDs) != 1 || targetIDs[0] != scope.UserID {
-			return PrivacyImpact{}, ErrInvalid
-		}
-		rows, err := p.q().Query(ctx, `SELECT id FROM memory_records WHERE collection='sources' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 ORDER BY id LIMIT $5`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, limit+1)
-		if err != nil {
-			return PrivacyImpact{}, pgErr(err)
-		}
-		for rows.Next() {
-			var id string
-			if rows.Scan(&id) != nil {
-				rows.Close()
-				return PrivacyImpact{}, ErrUnavailable
-			}
-			sources[id] = true
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return PrivacyImpact{}, pgErr(err)
-		}
+	if err := p.seedPrivacyImpact(ctx, scope, targetType, targetIDs, limit, sources, traces); err != nil {
+		return PrivacyImpact{}, err
 	}
 
 	// Follow only typed provenance edges. source_kind is the contaminated
 	// dependent and target_kind is its evidence dependency.
 	changed := true
 	for rounds := 0; changed && rounds < 64; rounds++ {
-
-		changed = false
-		// A consultation is one minimal evidence package: deleting a child trace
-		// must also quarantine its parent anchor and every approved runtime reader.
-		rows, err := p.q().Query(ctx, `SELECT payload FROM memory_records WHERE collection='consultations' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND (
-        doc->>'source_event_id'=ANY($5) OR doc->>'trace_id'=ANY($6) OR doc->'consultation'->'child'->>'trace_id'=ANY($6) OR doc->'consultation'->'parent'->>'trace_id'=ANY($6)) ORDER BY id LIMIT $7`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sortedSet(sources), sortedSet(traces), limit+1)
+		var err error
+		changed, err = p.privacyImpactRound(ctx, scope, limit, sources, traces, handoffRuns, handoffThreads)
 		if err != nil {
-			return PrivacyImpact{}, pgErr(err)
-		}
-		count := 0
-		for rows.Next() {
-			var raw []byte
-			if rows.Scan(&raw) != nil {
-				rows.Close()
-				return PrivacyImpact{}, ErrUnavailable
-			}
-			r, e := pgDecode(raw)
-			if e != nil {
-				rows.Close()
-				return PrivacyImpact{}, e
-			}
-			count++
-			if r.SourceEventID != "" && !sources[r.SourceEventID] {
-				sources[r.SourceEventID] = true
-				changed = true
-			}
-			if r.Consultation != nil {
-				agents := []ConsultationAgent{r.Consultation.Parent}
-				if r.Consultation.Child != nil {
-					agents = append(agents, *r.Consultation.Child)
-				}
-				for _, agent := range agents {
-					if agent.AgentRunID != "" {
-						handoffRuns[agent.AgentRunID] = true
-					}
-					if agent.ThreadID != "" {
-						handoffThreads[agent.ThreadID] = true
-					}
-				}
-			}
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return PrivacyImpact{}, pgErr(err)
-		}
-		if count > limit {
-			return PrivacyImpact{}, ErrUnavailable
-		}
-		sourceIDs := sortedSet(sources)
-		if len(sourceIDs) > 0 {
-			rows, err := p.q().Query(ctx, `SELECT source_kind,source_id FROM relations WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND target_kind='source_event' AND target_id=ANY($5) AND relation_kind='context_uses' ORDER BY source_kind,source_id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sourceIDs, limit+1)
-			if err != nil {
-				return PrivacyImpact{}, pgErr(err)
-			}
-			count := 0
-			for rows.Next() {
-				var kind, id string
-				if rows.Scan(&kind, &id) != nil {
-					rows.Close()
-					return PrivacyImpact{}, ErrUnavailable
-				}
-				count++
-				switch kind {
-				case "source_event":
-					if !sources[id] {
-						sources[id], changed = true, true
-					}
-				case "trace":
-					if !traces[id] {
-						traces[id], changed = true, true
-					}
-				}
-			}
-			err = rows.Err()
-			rows.Close()
-			if err != nil {
-				return PrivacyImpact{}, pgErr(err)
-			}
-			if count > limit {
-				return PrivacyImpact{}, ErrUnavailable
-			}
-		}
-		if len(sources) > 0 {
-			rows, err := p.q().Query(ctx, `SELECT DISTINCT trace_id FROM source_events WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND id=ANY($5)`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sortedSet(sources))
-			if err != nil {
-				return PrivacyImpact{}, pgErr(err)
-			}
-			for rows.Next() {
-				var id string
-				if rows.Scan(&id) != nil {
-					rows.Close()
-					return PrivacyImpact{}, ErrUnavailable
-				}
-				if id != "" && !traces[id] {
-					traces[id], changed = true, true
-				}
-			}
-			err = rows.Err()
-			rows.Close()
-			if err != nil {
-				return PrivacyImpact{}, pgErr(err)
-			}
-		}
-		if len(traces) > 0 {
-			rows, err := p.q().Query(ctx, `SELECT id FROM source_events WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND trace_id=ANY($5) ORDER BY id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sortedSet(traces), limit+1)
-			if err != nil {
-				return PrivacyImpact{}, pgErr(err)
-			}
-			count := 0
-			for rows.Next() {
-				var id string
-				if rows.Scan(&id) != nil {
-					rows.Close()
-					return PrivacyImpact{}, ErrUnavailable
-				}
-				count++
-				if !sources[id] {
-					sources[id], changed = true, true
-				}
-			}
-			err = rows.Err()
-			rows.Close()
-			if err != nil {
-				return PrivacyImpact{}, pgErr(err)
-			}
-			if count > limit {
-				return PrivacyImpact{}, ErrUnavailable
-			}
-		}
-		if len(sources)+len(traces) > limit {
-			return PrivacyImpact{}, ErrUnavailable
+			return PrivacyImpact{}, err
 		}
 	}
 	if changed {
@@ -214,30 +48,274 @@ func (p *Postgres) DiscoverPrivacyImpact(ctx context.Context, scope Scope, targe
 
 	impact := PrivacyImpact{SourceEventIDs: sortedSet(sources), TraceIDs: sortedSet(traces), ExpectedRunIDs: sortedSet(handoffRuns), ThreadIDs: sortedSet(handoffThreads)}
 	if len(impact.TraceIDs) > 0 {
-		rows, err := p.q().Query(ctx, `SELECT id,thread_id,agent_run_id FROM execution_traces WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND id=ANY($5) ORDER BY id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, impact.TraceIDs, limit+1)
-		if err != nil {
-			return PrivacyImpact{}, pgErr(err)
+		if err := p.privacyImpactTraceOwners(ctx, scope, targetType, limit, traces, handoffRuns, handoffThreads, &impact); err != nil {
+			return PrivacyImpact{}, err
 		}
-		found, threads, runs := map[string]bool{}, handoffThreads, handoffRuns
-		for rows.Next() {
-			var id, thread, run string
-			if rows.Scan(&id, &thread, &run) != nil {
-				rows.Close()
-				return PrivacyImpact{}, ErrUnavailable
+	}
+	if err := p.privacyImpactRecords(ctx, scope, limit, &impact); err != nil {
+		return PrivacyImpact{}, err
+	}
+	if len(impact.Records) > limit {
+		return PrivacyImpact{}, ErrUnavailable
+	}
+	if err := p.discoverWorkPrivacyImpact(ctx, scope, targetType == "subject", &impact, limit); err != nil {
+		return PrivacyImpact{}, err
+	}
+	return impact, nil
+}
+
+// seedPrivacyImpact loads the requested targets into the starting sets.
+func (p *Postgres) seedPrivacyImpact(ctx context.Context, scope Scope, targetType string, targetIDs []string, limit int, sources, traces map[string]bool) error {
+	switch targetType {
+	case "source_event":
+		for _, id := range targetIDs {
+			r, err := p.row(ctx, "sources", scope, id, false)
+			if err != nil {
+				return err
 			}
-			found[id], threads[thread], runs[run] = true, true, true
+			sources[id] = true
+			if r.TraceID != "" {
+				traces[r.TraceID] = true
+			}
+		}
+	case "trace":
+		for _, id := range targetIDs {
+			if _, err := p.row(ctx, "execution_traces", scope, id, false); err != nil {
+				return err
+			}
+			traces[id] = true
+		}
+	case "subject":
+		if scope.UserID == "" || len(targetIDs) != 1 || targetIDs[0] != scope.UserID {
+			return ErrInvalid
+		}
+		rows, err := p.q().Query(ctx, `SELECT id FROM memory_records WHERE collection='sources' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 ORDER BY id LIMIT $5`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, limit+1)
+		if err != nil {
+			return pgErr(err)
+		}
+		for rows.Next() {
+			var id string
+			if rows.Scan(&id) != nil {
+				rows.Close()
+				return ErrUnavailable
+			}
+			sources[id] = true
 		}
 		err = rows.Err()
 		rows.Close()
 		if err != nil {
-			return PrivacyImpact{}, pgErr(err)
+			return pgErr(err)
 		}
-		if targetType == "trace" && len(found) != len(traces) {
-			return PrivacyImpact{}, ErrConflict
-		}
-		impact.ThreadIDs, impact.ExpectedRunIDs = sortedSet(threads), sortedSet(runs)
 	}
+	return nil
+}
 
+// privacyImpactRound is one fixed-point round; it reports whether any set grew.
+func (p *Postgres) privacyImpactRound(ctx context.Context, scope Scope, limit int, sources, traces, handoffRuns, handoffThreads map[string]bool) (bool, error) {
+	// A consultation is one minimal evidence package: deleting a child trace
+	// must also quarantine its parent anchor and every approved runtime reader.
+	changed, err := p.privacyImpactConsultations(ctx, scope, limit, sources, traces, handoffRuns, handoffThreads)
+	if err != nil {
+		return false, err
+	}
+	sourceIDs := sortedSet(sources)
+	if len(sourceIDs) > 0 {
+		grew, err := p.privacyImpactRelations(ctx, scope, limit, sourceIDs, sources, traces)
+		if err != nil {
+			return false, err
+		}
+		changed = changed || grew
+	}
+	if len(sources) > 0 {
+		grew, err := p.privacyImpactSourceTraces(ctx, scope, sources, traces)
+		if err != nil {
+			return false, err
+		}
+		changed = changed || grew
+	}
+	if len(traces) > 0 {
+		grew, err := p.privacyImpactTraceSources(ctx, scope, limit, sources, traces)
+		if err != nil {
+			return false, err
+		}
+		changed = changed || grew
+	}
+	if len(sources)+len(traces) > limit {
+		return false, ErrUnavailable
+	}
+	return changed, nil
+}
+
+func (p *Postgres) privacyImpactConsultations(ctx context.Context, scope Scope, limit int, sources, traces, handoffRuns, handoffThreads map[string]bool) (bool, error) {
+	changed := false
+	rows, err := p.q().Query(ctx, `SELECT payload FROM memory_records WHERE collection='consultations' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND (
+        doc->>'source_event_id'=ANY($5) OR doc->>'trace_id'=ANY($6) OR doc->'consultation'->'child'->>'trace_id'=ANY($6) OR doc->'consultation'->'parent'->>'trace_id'=ANY($6)) ORDER BY id LIMIT $7`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sortedSet(sources), sortedSet(traces), limit+1)
+	if err != nil {
+		return false, pgErr(err)
+	}
+	count := 0
+	for rows.Next() {
+		var raw []byte
+		if rows.Scan(&raw) != nil {
+			rows.Close()
+			return false, ErrUnavailable
+		}
+		r, e := pgDecode(raw)
+		if e != nil {
+			rows.Close()
+			return false, e
+		}
+		count++
+		if r.SourceEventID != "" && !sources[r.SourceEventID] {
+			sources[r.SourceEventID] = true
+			changed = true
+		}
+		if r.Consultation != nil {
+			addConsultationHandoffs(r.Consultation, handoffRuns, handoffThreads)
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return false, pgErr(err)
+	}
+	if count > limit {
+		return false, ErrUnavailable
+	}
+	return changed, nil
+}
+
+func addConsultationHandoffs(c *Consultation, handoffRuns, handoffThreads map[string]bool) {
+	agents := []ConsultationAgent{c.Parent}
+	if c.Child != nil {
+		agents = append(agents, *c.Child)
+	}
+	for _, agent := range agents {
+		if agent.AgentRunID != "" {
+			handoffRuns[agent.AgentRunID] = true
+		}
+		if agent.ThreadID != "" {
+			handoffThreads[agent.ThreadID] = true
+		}
+	}
+}
+
+func (p *Postgres) privacyImpactRelations(ctx context.Context, scope Scope, limit int, sourceIDs []string, sources, traces map[string]bool) (bool, error) {
+	changed := false
+	rows, err := p.q().Query(ctx, `SELECT source_kind,source_id FROM relations WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND target_kind='source_event' AND target_id=ANY($5) AND relation_kind='context_uses' ORDER BY source_kind,source_id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sourceIDs, limit+1)
+	if err != nil {
+		return false, pgErr(err)
+	}
+	count := 0
+	for rows.Next() {
+		var kind, id string
+		if rows.Scan(&kind, &id) != nil {
+			rows.Close()
+			return false, ErrUnavailable
+		}
+		count++
+		switch kind {
+		case "source_event":
+			if !sources[id] {
+				sources[id], changed = true, true
+			}
+		case "trace":
+			if !traces[id] {
+				traces[id], changed = true, true
+			}
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return false, pgErr(err)
+	}
+	if count > limit {
+		return false, ErrUnavailable
+	}
+	return changed, nil
+}
+
+func (p *Postgres) privacyImpactSourceTraces(ctx context.Context, scope Scope, sources, traces map[string]bool) (bool, error) {
+	changed := false
+	rows, err := p.q().Query(ctx, `SELECT DISTINCT trace_id FROM source_events WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND id=ANY($5)`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sortedSet(sources))
+	if err != nil {
+		return false, pgErr(err)
+	}
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) != nil {
+			rows.Close()
+			return false, ErrUnavailable
+		}
+		if id != "" && !traces[id] {
+			traces[id], changed = true, true
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return false, pgErr(err)
+	}
+	return changed, nil
+}
+
+func (p *Postgres) privacyImpactTraceSources(ctx context.Context, scope Scope, limit int, sources, traces map[string]bool) (bool, error) {
+	changed := false
+	rows, err := p.q().Query(ctx, `SELECT id FROM source_events WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND trace_id=ANY($5) ORDER BY id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, sortedSet(traces), limit+1)
+	if err != nil {
+		return false, pgErr(err)
+	}
+	count := 0
+	for rows.Next() {
+		var id string
+		if rows.Scan(&id) != nil {
+			rows.Close()
+			return false, ErrUnavailable
+		}
+		count++
+		if !sources[id] {
+			sources[id], changed = true, true
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return false, pgErr(err)
+	}
+	if count > limit {
+		return false, ErrUnavailable
+	}
+	return changed, nil
+}
+
+func (p *Postgres) privacyImpactTraceOwners(ctx context.Context, scope Scope, targetType string, limit int, traces, handoffRuns, handoffThreads map[string]bool, impact *PrivacyImpact) error {
+	rows, err := p.q().Query(ctx, `SELECT id,thread_id,agent_run_id FROM execution_traces WHERE organization_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4 AND id=ANY($5) ORDER BY id LIMIT $6`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, impact.TraceIDs, limit+1)
+	if err != nil {
+		return pgErr(err)
+	}
+	found, threads, runs := map[string]bool{}, handoffThreads, handoffRuns
+	for rows.Next() {
+		var id, thread, run string
+		if rows.Scan(&id, &thread, &run) != nil {
+			rows.Close()
+			return ErrUnavailable
+		}
+		found[id], threads[thread], runs[run] = true, true, true
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return pgErr(err)
+	}
+	if targetType == "trace" && len(found) != len(traces) {
+		return ErrConflict
+	}
+	impact.ThreadIDs, impact.ExpectedRunIDs = sortedSet(threads), sortedSet(runs)
+	return nil
+}
+
+func (p *Postgres) privacyImpactRecords(ctx context.Context, scope Scope, limit int, impact *PrivacyImpact) error {
 	rows, err := p.q().Query(ctx, `SELECT collection,payload FROM memory_records
 WHERE workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4
   AND collection NOT IN ('jobs','audit_events','provider_usage','blobs') AND (
@@ -247,34 +325,28 @@ WHERE workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4
     EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(doc->'relations')='array' THEN doc->'relations' ELSE '[]'::jsonb END) x WHERE (x->>'collection'='execution_traces' AND x->>'id'=ANY($6)) OR (x->>'collection'='sources' AND x->>'id'=ANY($5)))
   ) ORDER BY collection,id LIMIT $8`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, impact.SourceEventIDs, impact.TraceIDs, impact.ExpectedRunIDs, limit+1)
 	if err != nil {
-		return PrivacyImpact{}, pgErr(err)
+		return pgErr(err)
 	}
 	for rows.Next() {
 		var collection string
 		var payload []byte
 		if rows.Scan(&collection, &payload) != nil {
 			rows.Close()
-			return PrivacyImpact{}, ErrUnavailable
+			return ErrUnavailable
 		}
 		r, decodeErr := pgDecode(payload)
 		if decodeErr != nil {
 			rows.Close()
-			return PrivacyImpact{}, decodeErr
+			return decodeErr
 		}
 		impact.Records = append(impact.Records, Ref{Collection: collection, ID: r.ID, Revision: r.Revision})
 	}
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return PrivacyImpact{}, pgErr(err)
+		return pgErr(err)
 	}
-	if len(impact.Records) > limit {
-		return PrivacyImpact{}, ErrUnavailable
-	}
-	if err := p.discoverWorkPrivacyImpact(ctx, scope, targetType == "subject", &impact, limit); err != nil {
-		return PrivacyImpact{}, err
-	}
-	return impact, nil
+	return nil
 }
 
 func sortedSet(set map[string]bool) []string {
@@ -467,33 +539,8 @@ func (p *Postgres) VerifyPrivacyPurge(ctx context.Context, scope Scope, impact P
 		return report, err
 	}
 	for _, id := range impact.SourceEventIDs {
-		if _, err := p.row(ctx, "sources", scope, id, false); err == nil {
-			return report, ErrConflict
-		} else if !errors.Is(err, ErrNotFound) {
+		if err := p.verifySourcePurged(ctx, scope, id); err != nil {
 			return report, err
-		}
-		job, err := p.row(ctx, colJobs, scope, sourceMemoryErasureID(scope, id), false)
-		if err == nil && job.Status == JobStatusFailed {
-			return report, ErrUnavailable
-		}
-		if err != nil || job.Status != JobStatusDone {
-			if err != nil && !errors.Is(err, ErrNotFound) {
-				return report, err
-			}
-			return report, ErrConflict
-		}
-		if job.SourceMemoryErasure == nil || len(job.SourceMemoryErasure.PendingArtifacts) != 0 {
-			return report, ErrConflict
-		}
-		children, childErr := dependentErasureStatus(ctx, p, job)
-		if childErr != nil {
-			return report, childErr
-		}
-		if children.Statuses[JobStatusFailed] != 0 {
-			return report, ErrUnavailable
-		}
-		if !children.Complete {
-			return report, ErrConflict
 		}
 	}
 	var remaining int
@@ -524,6 +571,39 @@ func (p *Postgres) VerifyPrivacyPurge(ctx context.Context, scope Scope, impact P
 		return report, ErrConflict
 	}
 	return report, nil
+}
+
+// verifySourcePurged checks that one source event is gone and its erasure job finished.
+func (p *Postgres) verifySourcePurged(ctx context.Context, scope Scope, id string) error {
+	if _, err := p.row(ctx, "sources", scope, id, false); err == nil {
+		return ErrConflict
+	} else if !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	job, err := p.row(ctx, colJobs, scope, sourceMemoryErasureID(scope, id), false)
+	if err == nil && job.Status == JobStatusFailed {
+		return ErrUnavailable
+	}
+	if err != nil || job.Status != JobStatusDone {
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		return ErrConflict
+	}
+	if job.SourceMemoryErasure == nil || len(job.SourceMemoryErasure.PendingArtifacts) != 0 {
+		return ErrConflict
+	}
+	children, childErr := dependentErasureStatus(ctx, p, job)
+	if childErr != nil {
+		return childErr
+	}
+	if children.Statuses[JobStatusFailed] != 0 {
+		return ErrUnavailable
+	}
+	if !children.Complete {
+		return ErrConflict
+	}
+	return nil
 }
 
 // PrivacyRuntimeScopes is every scope with a deletion waiting for its runtime step.

@@ -314,34 +314,11 @@ func (s *Service) SettleModelBudget(ctx context.Context, token string, in ModelB
 		if row.Status == "unknown" && in.Status == "not_sent" {
 			return ErrConflict
 		}
-		rateIn, rateOut, ok := modelBudgetRates(state.Model, state.Role)
-		if !ok {
-			return ErrUnavailable
-		}
-		totalInput := in.InputTokens + in.CacheReadInputTokens + in.CacheCreationInputTokens + in.CacheCreation1hInputTokens
-		if totalInput > state.MaxInput || in.OutputTokens > state.MaxOutput {
-			return ErrInvalid
-		}
-		cacheReadRate := rateIn / 20
-		if state.Model == "claude-haiku-5-5" {
-			cacheReadRate = rateIn / 10
-		}
-		actual := in.InputTokens*rateIn + in.OutputTokens*rateOut + in.CacheReadInputTokens*cacheReadRate + in.CacheCreationInputTokens*rateIn*5/4 + in.CacheCreation1hInputTokens*rateIn*2
-		if actual > state.Amount {
-			return ErrInvalid
-		}
-		monthly, err := budgetCounter(ctx, tx, in.Scope, state.Month)
+		totalInput, actual, err := modelBudgetActualCost(in, state)
 		if err != nil {
 			return err
 		}
-		daily, err := budgetCounter(ctx, tx, in.Scope, state.Day)
-		if err != nil {
-			return err
-		}
-		if err = updateBudgetCounter(ctx, tx, monthly, actual-state.Amount, -state.Amount, state.Priority); err != nil {
-			return err
-		}
-		if err = updateBudgetCounter(ctx, tx, daily, actual-state.Amount, -state.Amount, state.Priority); err != nil {
+		if err = settleBudgetCounters(ctx, tx, in.Scope, state, actual); err != nil {
 			return err
 		}
 		cost := Record{ID: row.ID, Scope: row.Scope, Kind: providerUsageKind, Status: JobStatusDone, Revision: 1, CreatedAt: row.CreatedAt, UpdatedAt: time.Now().UTC().Truncate(time.Millisecond), CreatedBy: d.PrincipalID, CreatedByType: d.Role, Cost: &ProviderCost{Operation: state.Role, Provider: "anthropic", Model: state.Model, Requests: 1, InputTokens: totalInput, OutputTokens: in.OutputTokens, TotalTokens: totalInput + in.OutputTokens, EstimatedCostPicoUSD: actual, PricingAvailable: true, PricingRevision: "anthropic-2026-10-14"}}
@@ -367,6 +344,43 @@ func (s *Service) SettleModelBudget(ctx context.Context, token string, in ModelB
 		return ModelBudgetReservation{}, e
 	}
 	return out, nil
+}
+
+// modelBudgetActualCost prices the settled usage, within the reserved limits.
+func modelBudgetActualCost(in ModelBudgetSettleInput, state ModelBudgetState) (int64, int64, error) {
+	rateIn, rateOut, ok := modelBudgetRates(state.Model, state.Role)
+	if !ok {
+		return 0, 0, ErrUnavailable
+	}
+	totalInput := in.InputTokens + in.CacheReadInputTokens + in.CacheCreationInputTokens + in.CacheCreation1hInputTokens
+	if totalInput > state.MaxInput || in.OutputTokens > state.MaxOutput {
+		return 0, 0, ErrInvalid
+	}
+	cacheReadRate := rateIn / 20
+	if state.Model == "claude-haiku-5-5" {
+		cacheReadRate = rateIn / 10
+	}
+	actual := in.InputTokens*rateIn + in.OutputTokens*rateOut + in.CacheReadInputTokens*cacheReadRate + in.CacheCreationInputTokens*rateIn*5/4 + in.CacheCreation1hInputTokens*rateIn*2
+	if actual > state.Amount {
+		return 0, 0, ErrInvalid
+	}
+	return totalInput, actual, nil
+}
+
+// settleBudgetCounters moves the reservation into actual spend on both counters.
+func settleBudgetCounters(ctx context.Context, tx Tx, scope Scope, state ModelBudgetState, actual int64) error {
+	monthly, err := budgetCounter(ctx, tx, scope, state.Month)
+	if err != nil {
+		return err
+	}
+	daily, err := budgetCounter(ctx, tx, scope, state.Day)
+	if err != nil {
+		return err
+	}
+	if err = updateBudgetCounter(ctx, tx, monthly, actual-state.Amount, -state.Amount, state.Priority); err != nil {
+		return err
+	}
+	return updateBudgetCounter(ctx, tx, daily, actual-state.Amount, -state.Amount, state.Priority)
 }
 
 func (s *Service) ModelBudgetStatus(ctx context.Context, token string, scope Scope) (ModelBudgetStatus, error) {

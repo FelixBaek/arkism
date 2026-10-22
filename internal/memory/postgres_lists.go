@@ -470,11 +470,7 @@ func (p *Postgres) MemoryErasureBatch(ctx context.Context, s Scope, id string, p
 			return nil, e
 		}
 		if len(rows) > 0 {
-			out := make([]Ref, 0, len(rows))
-			for _, r := range rows {
-				out = append(out, Ref{Collection: "evaluations", ID: r.ID, Revision: r.Revision})
-			}
-			return out, nil
+			return memoryErasureRefs("evaluations", rows), nil
 		}
 	}
 	parts := make([]string, len(cols))
@@ -491,11 +487,7 @@ func (p *Postgres) MemoryErasureBatch(ctx context.Context, s Scope, id string, p
 				return nil, e
 			}
 			if len(rows) > 0 {
-				out := make([]Ref, 0, len(rows))
-				for _, r := range rows {
-					out = append(out, Ref{Collection: col, ID: r.ID, Revision: r.Revision})
-				}
-				return out, nil
+				return memoryErasureRefs(col, rows), nil
 			}
 		}
 	}
@@ -507,11 +499,15 @@ func (p *Postgres) MemoryErasureBatch(ctx context.Context, s Scope, id string, p
 	if e != nil {
 		return nil, e
 	}
+	return memoryErasureRefs("memory_relations", rows), nil
+}
+
+func memoryErasureRefs(col string, rows []Record) []Ref {
 	out := make([]Ref, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, Ref{Collection: "memory_relations", ID: r.ID, Revision: r.Revision})
+		out = append(out, Ref{Collection: col, ID: r.ID, Revision: r.Revision})
 	}
-	return out, nil
+	return out
 }
 
 func (p *Postgres) ValidateBlobRestore(ctx context.Context, files map[string]int64) error {

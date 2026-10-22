@@ -22,10 +22,7 @@ type ModelArchiveTransferOutput struct {
 }
 
 func (s *Service) AuthorizeModelArchiveTransfer(ctx context.Context, token string, in ModelArchiveTransferInput) (ModelArchiveTransferOutput, error) {
-	if !validScope(in.Scope) || len(in.Refs)+len(in.SourceRefs) < 1 || len(in.Refs)+len(in.SourceRefs) > 8 || in.Destination != "external:anthropic" || strings.TrimSpace(in.Content) == "" || len(in.Content) > 100000 {
-		return ModelArchiveTransferOutput{}, ErrInvalid
-	}
-	if in.Work != nil && (in.Work.Collection != colWorkCheckpoints || in.Work.Revision < 1 || !workCheckpointIDPattern.MatchString(in.Work.ID)) {
+	if !validModelArchiveTransferInput(in) {
 		return ModelArchiveTransferOutput{}, ErrInvalid
 	}
 	// No API key, prompt body or excerpt is logged or stored in the receipt.
@@ -48,26 +45,13 @@ func (s *Service) AuthorizeModelArchiveTransfer(ctx context.Context, token strin
 		}
 	}
 
-	var work WorkCheckpointView
 	if in.Work != nil {
-		work, e = s.GetWorkCheckpoint(ctx, token, WorkCheckpointGetInput{Scope: in.Scope, ID: in.Work.ID})
-		if e != nil {
-			return ModelArchiveTransferOutput{}, e
+		refs, more, err := s.archiveTransferWork(ctx, token, in)
+		if err != nil {
+			return ModelArchiveTransferOutput{}, err
 		}
-		if work.Revision != in.Work.Revision {
-			return ModelArchiveTransferOutput{}, ErrConflict
-		}
-		// The previous summary's complete provenance also participates, never just
-		// today's new messages. Existing read fences verify exact source revisions.
-		evidence = append(evidence, work.Package.SourceRefs...)
-		for start := 0; start < len(work.ArchiveMessages); start += 8 {
-			end := min(start+8, len(work.ArchiveMessages))
-			more, _, err := s.validateArchiveMessageRefs(ctx, token, in.Scope, work.ArchiveMessages[start:end], "", "")
-			if err != nil {
-				return ModelArchiveTransferOutput{}, err
-			}
-			headers = append(headers, more...)
-		}
+		evidence = append(evidence, refs...)
+		headers = append(headers, more...)
 	}
 	// Follow canonical source provenance as well as direct work archive refs.
 	// A still-present derived source cannot revive a removed raw archive.
@@ -76,43 +60,12 @@ func (s *Service) AuthorizeModelArchiveTransfer(ctx context.Context, token strin
 		if len(evidence) > 128 {
 			return ModelArchiveTransferOutput{}, ErrInvalid
 		}
-		ref := evidence[at]
-		r, err := s.Get(ctx, token, ref.Collection, in.Scope, ref.ID)
+		more, parents, err := s.archiveTransferEvidence(ctx, token, in, evidence[at], seenSources)
 		if err != nil {
 			return ModelArchiveTransferOutput{}, err
 		}
-		if r.Revision != ref.Revision || !live(r) || r.ContentErased {
-			return ModelArchiveTransferOutput{}, ErrConflict
-		}
-		if ref.Collection == "sources" {
-			_, err = s.authorizeArchiveModelContent(ctx, token, in.Scope, r.ID, r.Sensitivity, recordContent(r))
-		} else {
-			_, err = s.authorizeTransfer(ctx, token, "transfer:model_input", in.Scope, r.ID, r.Sensitivity, in.Destination, recordContent(r), r.Sources)
-		}
-		if err != nil {
-			return ModelArchiveTransferOutput{}, err
-		}
-		for start := 0; start < len(r.ArchiveMessages); start += 8 {
-			more, _, err := s.validateArchiveMessageRefs(ctx, token, in.Scope, r.ArchiveMessages[start:min(start+8, len(r.ArchiveMessages))], "", "")
-			if err != nil {
-				return ModelArchiveTransferOutput{}, err
-			}
-			headers = append(headers, more...)
-		}
-		if ref.Collection == "sources" {
-			seenSources[r.ID] = true
-		}
-		for _, src := range r.Sources {
-			if seenSources[src.SourceID] {
-				continue
-			}
-			seenSources[src.SourceID] = true
-			parent, err := s.Get(ctx, token, "sources", in.Scope, src.SourceID)
-			if err != nil {
-				return ModelArchiveTransferOutput{}, err
-			}
-			evidence = append(evidence, Ref{Collection: "sources", ID: parent.ID, Revision: parent.Revision})
-		}
+		headers = append(headers, more...)
+		evidence = append(evidence, parents...)
 	}
 
 	for _, h := range headers {
@@ -149,6 +102,82 @@ func (s *Service) AuthorizeModelArchiveTransfer(ctx context.Context, token strin
 	}
 	return ModelArchiveTransferOutput{Authorized: true, ContentHash: ContentHash(in.Content)}, nil
 }
+
+func validModelArchiveTransferInput(in ModelArchiveTransferInput) bool {
+	if !validScope(in.Scope) || len(in.Refs)+len(in.SourceRefs) < 1 || len(in.Refs)+len(in.SourceRefs) > 8 || in.Destination != "external:anthropic" || strings.TrimSpace(in.Content) == "" || len(in.Content) > 100000 {
+		return false
+	}
+	return in.Work == nil || in.Work.Collection == colWorkCheckpoints && in.Work.Revision >= 1 && workCheckpointIDPattern.MatchString(in.Work.ID)
+}
+
+// archiveTransferWork returns the work checkpoint's source provenance and the
+// headers of its archive messages.
+func (s *Service) archiveTransferWork(ctx context.Context, token string, in ModelArchiveTransferInput) ([]Ref, []Record, error) {
+	work, e := s.GetWorkCheckpoint(ctx, token, WorkCheckpointGetInput{Scope: in.Scope, ID: in.Work.ID})
+	if e != nil {
+		return nil, nil, e
+	}
+	if work.Revision != in.Work.Revision {
+		return nil, nil, ErrConflict
+	}
+	// The previous summary's complete provenance also participates, never just
+	// today's new messages. Existing read fences verify exact source revisions.
+	var headers []Record
+	for start := 0; start < len(work.ArchiveMessages); start += 8 {
+		end := min(start+8, len(work.ArchiveMessages))
+		more, _, err := s.validateArchiveMessageRefs(ctx, token, in.Scope, work.ArchiveMessages[start:end], "", "")
+		if err != nil {
+			return nil, nil, err
+		}
+		headers = append(headers, more...)
+	}
+	return work.Package.SourceRefs, headers, nil
+}
+
+// archiveTransferEvidence authorizes one evidence record and returns its
+// archive headers and the not yet seen parent sources to follow.
+func (s *Service) archiveTransferEvidence(ctx context.Context, token string, in ModelArchiveTransferInput, ref Ref, seenSources map[string]bool) ([]Record, []Ref, error) {
+	r, err := s.Get(ctx, token, ref.Collection, in.Scope, ref.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if r.Revision != ref.Revision || !live(r) || r.ContentErased {
+		return nil, nil, ErrConflict
+	}
+	if ref.Collection == "sources" {
+		_, err = s.authorizeArchiveModelContent(ctx, token, in.Scope, r.ID, r.Sensitivity, recordContent(r))
+	} else {
+		_, err = s.authorizeTransfer(ctx, token, "transfer:model_input", in.Scope, r.ID, r.Sensitivity, in.Destination, recordContent(r), r.Sources)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	var headers []Record
+	for start := 0; start < len(r.ArchiveMessages); start += 8 {
+		more, _, err := s.validateArchiveMessageRefs(ctx, token, in.Scope, r.ArchiveMessages[start:min(start+8, len(r.ArchiveMessages))], "", "")
+		if err != nil {
+			return nil, nil, err
+		}
+		headers = append(headers, more...)
+	}
+	if ref.Collection == "sources" {
+		seenSources[r.ID] = true
+	}
+	var parents []Ref
+	for _, src := range r.Sources {
+		if seenSources[src.SourceID] {
+			continue
+		}
+		seenSources[src.SourceID] = true
+		parent, err := s.Get(ctx, token, "sources", in.Scope, src.SourceID)
+		if err != nil {
+			return nil, nil, err
+		}
+		parents = append(parents, Ref{Collection: "sources", ID: parent.ID, Revision: parent.Revision})
+	}
+	return headers, parents, nil
+}
+
 func modelTransferRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/session-archives/authorize-transfer", func(w http.ResponseWriter, r *http.Request) {
 		var in ModelArchiveTransferInput
