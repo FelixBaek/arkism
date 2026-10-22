@@ -1505,7 +1505,7 @@ export function startApp() {
       any = true;
       const item = el("div", "todo-item");
       const text = parts.map((t) => (t.id ? `${TODO_SHORT[t.id] || t.label} ${t.n ?? "…"}` : t.label)).join(" · ");
-      item.append(el("span", "home-menu", menu), el("span", "label", name), raw(el("span", "sub", tr(text))), el("output", "home-badge warn", n ? String(n) : "…"), el("span", "home-chev", "›"));
+      item.append(el("span", "home-menu", menu), el("span", "label", name), raw(el("span", "sub", tr(text))), el("output", "home-badge warn", parts.some((t) => t.n === null) ? (n ? `${n}+` : "…") : String(n)), el("span", "home-chev", "›"));
       item.addEventListener("click", () => go(...target));
       list.append(item);
     }
