@@ -75,7 +75,7 @@ class H(http.server.SimpleHTTPRequestHandler):
         try: state = str(json.loads(data or b"{}").get("state") or "")
         except ValueError: state = ""
         s.path = QUERY[path](state)
-        items = (MANY.get(s.path) or s._fixture())["items"]
+        items = [r for r in (MANY.get(s.path) or s._fixture())["items"] if STATE.get((path, state), lambda r: True)(r)]
         count = lambda field: {k: sum(1 for r in items if r.get(field) == k) for k in {r.get(field) for r in items} if k}
         return {"items": items, "total": len(items), "next_cursor": "", "authority": "data_only_untrusted", "facets": {"kinds": count("kind"), "repositories": {}, "categories": {}, "states": count("status")}}
     do_POST = do_PUT = do_PATCH = do_DELETE = _write
@@ -83,5 +83,9 @@ class H(http.server.SimpleHTTPRequestHandler):
 QUERY = {"/v1/memories/query": lambda state: "/v1/memories",
          "/v1/memory_candidates/query": lambda state: "/v1/memory_candidates?status=" + state,
          "/v1/skills/query": lambda state: "/v1/skills/trash" if state == "trash" else "/v1/skills"}
+# The server's memory states, cut down to what the fixtures carry (internal/memory/catalog_memory.go memoryCatalogState).
+# shortcut: idle ignores the 7-day age and agent-reported use, since the preview has no memory_usage data; port them if a fixture needs them.
+STATE = {("/v1/memories/query", "idle"): lambda r: r.get("kind") not in ("user", "procedural"),
+         ("/v1/memories/query", "provenance"): lambda r: not (r.get("review") or {}).get("receipt_id") or r["review"].get("actor_role") != "human" or r["review"].get("channel") != "explicit_review_api" or r["review"].get("by") != r.get("approved_by") or r["review"].get("action") not in ("approve", "edit_approve")}
 
 http.server.ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
