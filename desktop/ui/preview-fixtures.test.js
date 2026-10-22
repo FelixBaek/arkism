@@ -43,3 +43,11 @@ test('the query pages by limit and cursor and keeps the whole total',async()=>{
  while(next){const more=await page(next);ids.push(...more.items);assert.ok(more.items.length<=4);next=more.next_cursor;}
  assert.equal(new Set(ids.map(row=>row.id)).size,first.total);
 });
+test('the skill query narrows by the user category rules',async()=>{
+ const categories=[{id:'writing',rules:[['name','writing-*']]},{id:'code',rules:[['path','code-review']]}];
+ const query=category=>request('/v1/skills/query',{method:'POST',body:JSON.stringify({scope:{},state:'all',limit:50,categories,category})});
+ const all=await query(''),writing=await query('writing'),none=await query('none');
+ assert.ok(writing.total>0&&writing.items.every(row=>/^writing-/i.test(row.name)));
+ assert.equal(all.facets.categories.writing,writing.total);assert.equal(all.facets.categories[''],none.total);
+ assert.ok(none.items.every(row=>!/^writing-/i.test(row.name)&&!/code-review/.test(row.id+' '+row.source_path)));
+});
