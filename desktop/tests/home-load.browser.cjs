@@ -23,7 +23,7 @@ async function open(browser, fail) {
       if (command === "local_start") return { server: "http://127.0.0.1:8091", token: "inert-fixture" };
       if (command !== "api") return null;
       const url = new URL(args.path, "https://fixture.invalid"), p = url.pathname, list = (items, next = "") => ({ items, next_cursor: next, authority: "data_only_untrusted" });
-      if (fail.includes(p)) return { status: 500, body: JSON.stringify({ code: "internal" }) };
+      if ((window.__fail || fail).includes(p)) return { status: 500, body: JSON.stringify({ code: "internal" }) };
       let body = list([]);
       if (p === "/v1/capabilities") body = { role: "human", actions: { review_list: true, review_decide: true } };
       if (p === "/v1/providers") body = { providers: [] };
@@ -74,6 +74,19 @@ async function overview(page) {
     assert.ok(stalled.includes("15일째 멈춤") && !stalled.includes("360시간"), "overview stall in days");
     // the use counts did not load: 불러오기 is unknown, not "0회"
     assert.ok(!stalled.includes("0회") && (await page.locator(".ov-chip", { hasText: "사용량" }).innerText()).includes("—"), "recall unknown without usage");
+    // the status card lists the failed list instead of a healthy 0-skill hub
+    await page.locator("#status-toggle").click();
+    const card = await page.locator("#status-list").innerText();
+    assert.ok(card.includes("불러오지 못한 목록") && !/스킬 허브\s*0개/.test(card), `status card: ${card}`);
+    // a reload that fails drops the last good load's agents instead of showing them as current
+    await page.evaluate(() => { window.__fail = ["/v1/memories"]; });
+    await page.locator("#status-toggle").click();
+    await page.locator('.nav-item[data-menu="home"]').click();
+    await page.getByRole("button", { name: "다시 불러오기" }).first().click();
+    await page.waitForFunction(() => document.body.innerText.includes("서버에 문제가 생겼어요"));
+    await page.locator("#status-toggle").click();
+    const claude = await page.locator('#status-agents [data-agent="claude_code"] .st-badge').innerText();
+    assert.ok(!claude.includes("연결됨"), `stale agent after a failed reload: ${claude}`);
     assert.deepEqual(errors, []);
     await page.close();
 
