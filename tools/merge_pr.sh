@@ -16,7 +16,7 @@ cd "$(dirname "$0")/.."
 [[ "$(git config --get commit.gpgsign)" == true ]] || { echo "commit signing is off (git config commit.gpgsign true)" >&2; exit 1; }
 
 info="$(gh pr view "$PR" -R "$REPO" --json state,baseRefName,headRefName,headRefOid,isCrossRepository,labels,statusCheckRollup)"
-field() { jq -r "$1" <<<"$info"; }
+field() { local query="$1"; jq -r "$query" <<<"$info"; }
 [[ "$(field .state)" == OPEN && "$(field .baseRefName)" == main && "$(field .isCrossRepository)" == false ]] \
   || { echo "PR #$PR is not an open same-repository PR against main" >&2; exit 1; }
 field '.labels[].name' | grep -qx human-approved || { echo "PR #$PR has no human-approved label" >&2; exit 1; }
