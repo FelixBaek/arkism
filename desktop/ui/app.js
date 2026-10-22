@@ -1213,7 +1213,7 @@ export function startApp() {
   }
   // Title line extras (Figma v4): "← 저장소" above the title, the count after it, buttons at the right of the title row.
   function headExtras({ count = "", back = null, aside = [] } = {}) {
-    $("#title-count").textContent = count;
+    $("#title-count").textContent = $("#title").classList.contains("sr-only") ? "" : count; // same rule as render(): a hidden title takes its count along (#183)
     const head = $(".page-head");
     head.querySelector(".head-back")?.remove();
     head.querySelector(".head-aside")?.remove();

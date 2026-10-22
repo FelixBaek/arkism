@@ -229,6 +229,7 @@ window.ArkismOverview = (ctx) => {
   // Scale the 1157 × 930 stage to the free area of the window (width and height) so the whole overview fits without scrolling;
   // the footer under the panel is subtracted too. MIN_SCALE only guards against a nonsense size in a tiny window.
   const MIN_SCALE = 0.4, MAX_SCALE = 1.7;
+  const MAP_NODES = 5000; // memoryGraphMapNodes (internal/memory/memory_graph.go): the most dots the 기억 지도 draws
   function fit() {
     const host = root?.closest(".main");
     if (!host || !root.isConnected) return;
@@ -292,7 +293,7 @@ window.ArkismOverview = (ctx) => {
     ui.chips.replaceChildren(chip("쓰는 중인 기억", memN, () => openWide("active")),
       chip("세션 기록", S.failed || state.loadError ? "—" : `오늘 ${num(todaySessions)}`, () => openWide("sessions")),
       chip("사용량", by.recall.unknown ? "—" : `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
-      chip("기억 지도", `점 ${memN}`, () => openWide("map")));
+      chip("기억 지도", `점 ${state.loadError ? "—" : ctx.memoryCount().replace(/\d+/, (n) => num(Math.min(+n, MAP_NODES)))}`, () => openWide("map"))); // the map draws at most MAP_NODES (#181)
   }
 
   // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone or hidden.
