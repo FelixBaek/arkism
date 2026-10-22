@@ -278,15 +278,21 @@ function Invoke-InstalledSmokeProcess([string]$FilePath, [string]$Arguments, $En
   $info = New-Object Diagnostics.ProcessStartInfo
   $info.FileName = $FilePath; $info.Arguments = $Arguments; $info.UseShellExecute = $false
   $info.CreateNoWindow = $true; $info.WorkingDirectory = [IO.Path]::GetDirectoryName($FilePath)
+  $info.RedirectStandardError = $true
   $info.EnvironmentVariables.Clear()
   foreach ($name in $Environment.Keys) { $info.EnvironmentVariables[$name] = $Environment[$name] }
   $process = [Diagnostics.Process]::Start($info)
   try {
+    $stderr = $process.StandardError.ReadToEndAsync()
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
       $process.Kill(); [void]$process.WaitForExit(10000)
       throw "smoke_process_timeout: $Phase"
     }
-    if ($process.ExitCode -ne 0) { throw "smoke_process_failed: $Phase exit=$($process.ExitCode)" }
+    if ($process.ExitCode -ne 0) {
+      # A child that inherited the pipe may keep it open; never wait on it long.
+      $detail = if ($stderr.Wait(5000)) { $stderr.Result.Trim() } else { '' }
+      throw "smoke_process_failed: $Phase exit=$($process.ExitCode) $detail"
+    }
     return [pscustomobject]@{ Phase = $Phase; ExitCode = $process.ExitCode }
   } finally { $process.Dispose() }
 }

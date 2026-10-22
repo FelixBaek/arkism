@@ -201,9 +201,10 @@ function Invoke-JobEchoLeaf($Context, [string]$Root, $Copy, $Leaf, $Environment,
   # The fixed leaf has no child/process-launch path; its retained Process exit is the boundary.
 }
 
-function Invoke-JobExactEcho($Context, [string]$Root, $Copy, [int]$Machine, $Request, $Before, $After, $Environment, $Report) {
+function Invoke-JobExactEcho($Context, [string]$Root, $Copy, [int]$Machine, $Request, $Before, $After, $Environment, $Report, [string]$PluginTemp = $null) {
   $Report.nsis_observed_delta = $After.EntryCount - $Before.EntryCount
-  $rows = [Arkism.InstallerChecks.PendingEchoVerifier]::Capture($Before, $After)
+  $rows = if ($PluginTemp) { [Arkism.InstallerChecks.PendingEchoVerifier]::Capture($Before, $After, $PluginTemp) }
+    else { [Arkism.InstallerChecks.PendingEchoVerifier]::Capture($Before, $After) }
   $Report.echo_phase = 'compile'
   $leaf = New-JobEchoExecutable $Context $Root $Copy $Machine
   $Report.echo_image_sha256 = $leaf.Sha256; $Report.echo_pointer_bytes = $leaf.PointerBytes
