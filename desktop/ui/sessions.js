@@ -20,7 +20,7 @@ window.ArkismSessions = (ctx) => {
     if (quiet && S.state !== "ready") return;
     const ticket = ++epoch, selectedFilters = filters();
     moreBusy = more; moreError = "";
-    if (!quiet && !more) { S.state = "loading"; S.error = ""; S.doc = null; }
+    if (!quiet && !more) { S.state = "loading"; S.error = ""; S.doc = null; if (S.notice === MISSED) S.notice = ""; } // a new list is not the one the find missed in
     paint();
     try {
       const doc = await collection.load(selectedFilters, more);
