@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/FelixBaek/arkism/internal/host"
 )
 
 const archiveSearchBudget = 16 << 20
@@ -311,8 +313,8 @@ func archiveSafeMessage(raw []byte) (text, role string, valid bool) {
 	prev := ""
 	for _, block := range blocks {
 		kind := str(block, "type")
-		if kind == "text" || kind == "input_text" || kind == "output_text" {
-			b.WriteString(archiveBlockSeparator(prev, kind))
+		if host.ArchiveTextBlock(kind) {
+			b.WriteString(host.ArchiveBlockSeparator(prev, kind))
 			b.WriteString(str(block, "text"))
 			prev = kind
 		}
@@ -320,15 +322,6 @@ func archiveSafeMessage(raw []byte) (text, role string, valid bool) {
 	return b.String(), role, true
 }
 
-// archiveBlockSeparator goes between two text blocks of one message. Codex splits one typed
-// prompt into input_text blocks around images and hands its hook their plain concatenation,
-// so those join with nothing; every other pair keeps the newline. The first block has none.
-func archiveBlockSeparator(prev, kind string) string {
-	if prev == "" || prev == "input_text" && kind == "input_text" {
-		return ""
-	}
-	return "\n"
-}
 func archiveSupported(format string) bool {
 	return format == "sqlite_snapshot" || format == "jsonl" || format == "reconstructed_agentsview" || format == "reconstructed_zcode"
 }
