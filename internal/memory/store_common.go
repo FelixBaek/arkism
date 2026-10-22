@@ -143,8 +143,10 @@ func sameScope(left, right Scope) bool {
 		left.AgentID == right.AgentID
 }
 
+// Storage enforces the same scope names as the service, so direct callers
+// (memoryd recall-baseline) cannot pass a path-like scope either.
 func checkScope(scope Scope) error {
-	if scope.WorkspaceID == "" || scope.ProjectID == "" {
+	if !validScope(scope) {
 		return ErrInvalid
 	}
 
