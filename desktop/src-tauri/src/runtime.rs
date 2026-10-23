@@ -713,7 +713,7 @@ impl Runtime {
     }
 
     pub fn data_dir(&self) -> PathBuf {
-        self.data.read().unwrap_or_else(|e| e.into_inner()).clone()
+        self.data.read().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
     }
 
     /// Keeps `agents.json` at `path` instead of beside the data (the app's default data folder).
@@ -735,7 +735,7 @@ impl Runtime {
         if !idle {
             return Err("local_location_running".into());
         }
-        *self.data.write().unwrap_or_else(|e| e.into_inner()) = path;
+        *self.data.write().unwrap_or_else(std::sync::PoisonError::into_inner) = path;
         Ok(())
     }
 
