@@ -95,15 +95,19 @@ test("전체 항목 보기 shows every to-do in one table and each row opens its
 });
 
 test("the to-do action buttons run, open their page or go to the menu", async () => {
+  let clicked = 0;
   for (let i = 0; i < 12; i++) {
     await home();
     const b = app.$$(".todo-item button")[i];
     if (!b) break;
     await app.click(b, 200);
+    clicked++;
     closeDialogs();
     await app.settle(100);
   }
+  assert.ok(clicked > 0, "no to-do action button on Home");
   await home();
+  assert.ok(app.$(".todo-item"), "Home lost its to-do list after the actions");
 });
 
 test("업데이트 가능 lists the versions and asks before pulling the repositories", async () => {
@@ -204,12 +208,13 @@ test("안 쓰는 스킬 shows the targets first and moves them to the trash", as
 });
 
 test("기억 정리 제안 opens a proposal and sends its choice", async () => {
-  await home();
-  const m = byText(".todo-item", /정리/);
-  if (!m) return;
-  await app.click(m, 200);
-  const b = rows("#detail .actions button").find((x) => !/취소/.test(t(x)));
-  if (b) await app.click(b, 1000);
+  await openAll(/정리 제안/);
+  assert.match(t(app.$("#detail")), /남길 기억[\s\S]*이력으로 넘길 기억/);
+  const sent = [];
+  hook = (a) => { if (a.method === "POST") sent.push(a.path); return null; };
+  await press(/둘 다 두기/, 1000);
+  hook = () => null;
+  assert.ok(sent.some((p) => /^\/v1\/maintenance_proposals\/[^/]+\/decide$/.test(p)), sent.join(","));
   await home();
 });
 
