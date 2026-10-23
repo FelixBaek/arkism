@@ -1,0 +1,7 @@
+# Advisories with no fixed version that Arkism cannot remove on its own.
+# Each entry expires so it is re-checked; drop it once upstream ships a fix.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+ignoreUntil = 2027-01-24
+reason = "golang.org/x/crypto/openpgp is unmaintained; Arkism does not import openpgp (x/crypto is indirect only)."
