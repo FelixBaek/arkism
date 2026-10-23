@@ -235,3 +235,51 @@ func TestLargeBlocksAreOmittedWholeWithRetrievalNotice(t *testing.T) {
 		}
 	}
 }
+
+func TestRelatedAnchorsKeepsDistinctWellFormedRefs(t *testing.T) {
+	ok := map[string]any{"collection": "memories", "id": "m1", "revision": int64(2)}
+	anchors, skipped := relatedAnchors([]any{
+		ok,
+		map[string]any{"collection": "memories", "id": "m1", "revision": int64(2)}, // duplicate
+		map[string]any{"collection": "sources", "id": "s1", "revision": int64(1)},
+		map[string]any{"collection": "skills", "id": "x", "revision": int64(1)},                // unknown collection
+		map[string]any{"collection": "memories", "id": "", "revision": int64(1)},               // no id
+		map[string]any{"collection": "memories", "id": "m2", "revision": int64(0)},             // revision below 1
+		map[string]any{"collection": "memories", "id": "m3", "revision": "1"},                  // revision not an integer
+		map[string]any{"collection": "memories", "id": "m4", "revision": int64(1), "extra": 1}, // extra key
+		"not a ref",
+	})
+	if len(anchors) != 2 || !reflect.DeepEqual(anchors[0], ok) || anchors[1]["id"] != "s1" || skipped != 6 {
+		t.Fatal(anchors, skipped)
+	}
+}
+
+func TestRelatedWorkStateNamesHowTheWorkMoved(t *testing.T) {
+	result := map[string]any{"id": "w", "revision": int64(3), "package": map[string]any{"goal": "g"}}
+	current := func(over map[string]any) Requester {
+		return func(path string, payload map[string]any) (map[string]any, error) {
+			if path != "/v1/work-checkpoints/get" || payload["id"] != "w" {
+				t.Fatal(path, payload)
+			}
+			out := map[string]any{"authority": "data_only_untrusted", "id": "w", "revision": int64(3), "package": map[string]any{"goal": "g"}}
+			for k, v := range over {
+				out[k] = v
+			}
+			return out, nil
+		}
+	}
+	for want, request := range map[string]Requester{
+		"":                current(nil),
+		"work_changed":    current(map[string]any{"revision": int64(4)}),
+		"work_unverified": func(string, map[string]any) (map[string]any, error) { return nil, errors.New("down") },
+	} {
+		if got := relatedWorkState(result, request, map[string]any{}); got != want {
+			t.Fatal(want, got)
+		}
+	}
+	for _, over := range []map[string]any{{"authority": "x"}, {"id": "other"}, {"package": map[string]any{"goal": "h"}}} {
+		if got := relatedWorkState(result, current(over), map[string]any{}); got != "work_changed" {
+			t.Fatal(over, got)
+		}
+	}
+}

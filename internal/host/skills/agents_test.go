@@ -181,3 +181,44 @@ func TestErrorTextNeverCarriesTheRedirect(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestSyncAgentsApplyCountsResultsAndStopsOnAMalformedRequest(t *testing.T) {
+	calls := fakeAgentRun(t)
+	home := t.TempDir()
+	h, st, cs, xs := agentsHome, agentsState, claudeServers, codexServers
+	agentsHome, agentsState = home, filepath.Join(home, "state")
+	claudeServers = func() map[string]any { return map[string]any{"github": map[string]any{}} }
+	codexServers = func() map[string]any { return map[string]any{} }
+	t.Cleanup(func() { agentsHome, agentsState, claudeServers, codexServers = h, st, cs, xs })
+	doc := map[string]any{"requests": []any{
+		map[string]any{"status": "done", "id": "old"},
+		map[string]any{"status": "pending", "id": "1", "agent": "cursor", "kind": "agent", "name": "Cursor", "enabled": true, "skills_dir": "~/.cursor/skills"},
+		map[string]any{"status": "pending", "id": "2", "agent": "codex", "kind": "plugin", "name": "p", "enabled": true},
+		map[string]any{"status": "pending", "id": "3", "agent": "claude_code", "kind": "mcp_add", "name": "wake", "enabled": true, "command": []any{"wake-mcp"}},
+		map[string]any{"status": "pending", "id": "4", "agent": "claude_code", "kind": "mcp_add", "name": "github", "enabled": true, "url": "https://x"},
+	}}
+	results, done, failed, err := syncAgentsApply(doc)
+	if err != nil || done != 2 || failed != 2 || len(results) != 4 {
+		t.Fatal(results, done, failed, err)
+	}
+	status := map[string]any{}
+	for _, r := range results {
+		status[str(objGet(r.(host.Obj), "id"))] = objGet(r.(host.Obj), "status")
+	}
+	if status["1"] != "done" || status["2"] != "failed" || status["3"] != "done" || status["4"] != "failed" || len(*calls) != 1 {
+		t.Fatal(status, *calls)
+	}
+	if _, _, _, err := syncAgentsApply(map[string]any{"requests": []any{map[string]any{"status": "pending", "kind": "agent"}}}); err == nil || err.Error() != "'agent'" {
+		t.Fatal(err)
+	}
+}
+
+func TestInventoryLiveKeepsServersSwitchedOnForSomeAgent(t *testing.T) {
+	defs := map[string]any{"claude": map[string]any{}, "codex-on": map[string]any{}, "codex-off": map[string]any{}, "gemini-on": map[string]any{}, "nobody": map[string]any{}}
+	codex := map[string]any{"codex-on": map[string]any{}, "codex-off": map[string]any{"_enabled": false}}
+	others := map[string]map[string]any{"gemini": {"gemini-on": map[string]any{}, "codex-off": map[string]any{"_enabled": false}}}
+	live := inventoryLive(defs, map[string]any{"claude": map[string]any{}}, codex, others)
+	if strings.Join(sortedKeys(live), ",") != "claude,codex-on,gemini-on" {
+		t.Fatal(sortedKeys(live))
+	}
+}

@@ -313,3 +313,73 @@ func TestOversizedFileIsSkippedWithoutLoading(t *testing.T) {
 		t.Fatalf("hash %s want %s symbols %d", res.Files[0].Hash, want, len(res.Files[0].Symbols))
 	}
 }
+
+func TestIndexJSExportListsGeneratorsGenericsAndTypeBlocks(t *testing.T) {
+	src := `function* gen() { yield 1 }
+function pick<T>(x: T): T { return x }
+function () {}
+class Box extends Base<T> { open() { return pick(1) } }
+class
+interface Shape { area(): number }
+enum Color { Red }
+export { gen as items, pick } from './lib'
+export * from './more'
+export async function load() { return gen() }
+`
+	resolve := func(_, spec string) string { return "web/" + strings.TrimPrefix(spec, "./") + ".ts" }
+	facts := indexJS("web/mod.ts", src, resolve)
+	syms := map[string]Symbol{}
+	for _, s := range facts.Symbols {
+		syms[s.QName] = s
+	}
+	for _, c := range []struct {
+		qname, kind string
+		exported    bool
+	}{
+		{"web/mod.ts#gen", KindFunc, true}, // exported under another name
+		{"web/mod.ts#pick", KindFunc, true},
+		{"web/mod.ts#Box", KindType, false},
+		{"web/mod.ts#Shape", KindType, false},
+		{"web/mod.ts#Color", KindType, false},
+		{"web/mod.ts#load", KindFunc, true},
+	} {
+		s, ok := syms[c.qname]
+		if !ok || s.Kind != c.kind || s.Exported != c.exported {
+			t.Fatalf("%s: %+v (%v)", c.qname, s, ok)
+		}
+	}
+	imports := map[string]bool{}
+	for _, e := range facts.Edges {
+		if e.Kind == EdgeImports {
+			imports[e.To] = true
+		}
+	}
+	if !imports[SymbolID(LangJS, "web/lib.ts")] || !imports[SymbolID(LangJS, "web/more.ts")] {
+		t.Fatal(facts.Edges)
+	}
+}
+
+func TestIndexJSMemberAssignmentsCommentsAndEscapedStrings(t *testing.T) {
+	src := `/* a block
+comment over two lines */
+const s = 'it\'s "fine"\
+';
+window.boot = function () { return 1 };
+module.exports.start = () => boot();
+exports.stop = function () {}
+App.view.render = function () {}
+`
+	facts := indexJS("web/glob.js", src, func(string, string) string { return "" })
+	syms := map[string]Symbol{}
+	for _, s := range facts.Symbols {
+		syms[s.QName] = s
+	}
+	for qname, exported := range map[string]bool{"web/glob.js#boot": true, "web/glob.js#start": true, "web/glob.js#stop": true, "web/glob.js#App.view.render": false} {
+		if s, ok := syms[qname]; !ok || s.Kind != KindFunc || s.Exported != exported {
+			t.Fatalf("%s: %+v (%v) in %v", qname, s, ok, syms)
+		}
+	}
+	if s := syms["web/glob.js#boot"]; s.StartLine != 5 {
+		t.Fatalf("lines after the comment and the continued string: %+v", s)
+	}
+}
