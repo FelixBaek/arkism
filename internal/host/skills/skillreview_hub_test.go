@@ -20,6 +20,9 @@ type reviewHub struct {
 	items map[string]map[string]any // resolve answers by ref
 	calls []string                  // "METHOD path token"
 	posts map[string][]map[string]any
+	// availability last stored by POST .../availability
+	status string
+	compat any
 }
 
 const ownerTok, workerTok = "owner-t", "worker-t"
@@ -61,8 +64,8 @@ func (h *reviewHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			reply(map[string]any{"id": id, "active_version": "h1"})
 			return
 		}
-		reply(map[string]any{"id": id, "revision": 7, "status": "active", "active_version": "v1",
-			"version_history": []any{"v1", "v2", "v3"}, "skill_compatibility": map[string]any{"codex": "unsupported"}})
+		reply(map[string]any{"id": id, "revision": 7, "status": h.status, "active_version": "v1",
+			"version_history": []any{"v1", "v2", "v3"}, "skill_compatibility": h.compat})
 	case strings.HasPrefix(p, "/v1/skill_versions/") && r.Method == "GET":
 		id := strings.TrimPrefix(p, "/v1/skill_versions/")
 		status := "candidate"
@@ -76,8 +79,15 @@ func (h *reviewHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(p, "/transition"):
 		reply(map[string]any{"id": strings.TrimSuffix(strings.TrimPrefix(p, "/v1/skill_versions/"), "/transition")})
 	case strings.HasSuffix(p, "/availability"):
+		h.status, h.compat = body["status"], body["compatibility"]
 		reply(map[string]any{"id": "demo", "status": body["status"], "skill_compatibility": body["compatibility"]})
 	case strings.HasSuffix(p, "/apply"), strings.HasSuffix(p, "/rollback"):
+		// The applied version becomes what latest-approved resolves to.
+		skill := strings.TrimPrefix(p[:strings.LastIndex(p, "/")], "/v1/skills/")
+		version, _ := body["version_id"].(string)
+		if item, ok := h.items[skill+"@"+strings.TrimPrefix(version, "v")]; ok {
+			h.items[skill+"@latest-approved"] = item
+		}
 		reply(map[string]any{"ok": true})
 	default:
 		http.NotFound(w, r)
@@ -105,7 +115,7 @@ func newReviewHub(t *testing.T) (*reviewHub, string) {
 	owner, worker := filepath.Join(dir, "owner.token"), filepath.Join(dir, "worker.token")
 	os.WriteFile(owner, []byte(ownerTok+"\n"), 0o600)
 	os.WriteFile(worker, []byte(workerTok), 0o600)
-	h := &reviewHub{posts: map[string][]map[string]any{}, items: map[string]map[string]any{
+	h := &reviewHub{posts: map[string][]map[string]any{}, status: "active", compat: map[string]any{"codex": "unsupported"}, items: map[string]map[string]any{
 		"demo@2":               {"skill_id": "demo", "version_id": "v2", "resolved_version": 2, "instructions": reviewSkillMD + "new\n", "validation_status": "candidate"},
 		"demo@1":               {"skill_id": "demo", "version_id": "v1", "resolved_version": 1, "instructions": reviewSkillMD, "validation_status": "superseded"},
 		"demo@latest-approved": {"skill_id": "demo", "version_id": "v1", "resolved_version": 1, "instructions": reviewSkillMD},
@@ -153,7 +163,7 @@ func TestReviewApproveRunsBehaviorEvalThenApplies(t *testing.T) {
 		return "answer", nil
 	}
 	code, out, errOut := runReview("approve", "demo@2", "--evals", evals)
-	if code != 0 || !strings.Contains(out, "approved and active: demo@1") {
+	if code != 0 || !strings.Contains(out, "approved and active: demo@2") {
 		t.Fatal(code, out, errOut)
 	}
 	if !strings.Contains(judged, "- mentions demo") {
@@ -245,7 +255,7 @@ func TestReviewRejectRollbackAvailabilityDiff(t *testing.T) {
 		t.Fatal(code, out, errOut)
 	}
 	code, out, _ = runReview("availability", "demo")
-	if code != 0 || !strings.Contains(out, "demo: active") || !strings.Contains(out, "codex") {
+	if code != 0 || !strings.Contains(out, "demo: deprecated") || !strings.Contains(out, "claude_code") {
 		t.Fatal("availability without changes must keep status and compatibility:", out)
 	}
 	if code, out, _ := runReview("diff", "demo@2"); code != 0 || !strings.Contains(out, "+new") {

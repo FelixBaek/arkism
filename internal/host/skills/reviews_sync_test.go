@@ -67,6 +67,10 @@ type reviewsArkism struct {
 func (a *reviewsArkism) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if r.URL.Path != "/v1/code_reviews" {
+		http.NotFound(w, r)
+		return
+	}
 	if r.Method == "POST" {
 		raw, _ := io.ReadAll(r.Body)
 		var body map[string]any
@@ -131,11 +135,14 @@ func TestReviewsSyncReportsAndThrottles(t *testing.T) {
 	if len(results) != len(want) {
 		t.Fatalf("results = %v", results)
 	}
+	seen := map[string]bool{}
 	for _, r := range results {
 		m := r.(map[string]any)
-		if want[m["id"].(string)] != m["status"] {
+		id := m["id"].(string)
+		if want[id] != m["status"] || seen[id] {
 			t.Errorf("result %v", m)
 		}
+		seen[id] = true
 	}
 	items := post["items"].([]any)
 	if len(items) != 1 || items[0].(map[string]any)["pr_state"] != "merged" || items[0].(map[string]any)["state"] != "done" {
@@ -145,7 +152,7 @@ func TestReviewsSyncReportsAndThrottles(t *testing.T) {
 		t.Fatalf("repos = %v", repos)
 	}
 	raw, err := os.ReadFile(reviewSettings)
-	if err != nil || !strings.Contains(string(raw), `"provider": "claude"`) || strings.Index(string(raw), "o/a") > strings.Index(string(raw), "o/z") {
+	if err != nil || !strings.Contains(string(raw), `"provider": "claude"`) || !strings.Contains(string(raw), "o/a") || strings.Index(string(raw), "o/a") > strings.Index(string(raw), "o/z") {
 		t.Fatalf("settings file = %s, %v", raw, err)
 	}
 

@@ -271,8 +271,9 @@ func TestAgentsInventoryCommandAndUsage(t *testing.T) {
 	if code := agentsMain([]string{"inventory"}, nil, &out, &errb); code != 0 || !strings.Contains(out.String(), `"needy"`) || !strings.Contains(out.String(), `"fmt@mk"`) {
 		t.Fatal(code, out.String(), errb.String())
 	}
-	out.Reset()
 	for _, args := range [][]string{nil, {"login", "L1", "gemini", "x"}, {"login", "L1"}} {
+		out.Reset()
+		errb.Reset()
 		if code := agentsMain(args, nil, &out, &errb); code != 2 || !strings.Contains(out.String(), "inventory") {
 			t.Errorf("%v exit %d", args, code)
 		}

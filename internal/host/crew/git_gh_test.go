@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -15,8 +16,11 @@ import (
 func TestPRListMergesOpenAndClosedAndMarksTheViewer(t *testing.T) {
 	newGitFixture(t)
 	var asked [][]string
+	var mu sync.Mutex // gitPRs asks for open and closed PRs concurrently
 	patch(t, &ghJSON, func(args ...string) (any, error) {
+		mu.Lock()
 		asked = append(asked, args)
+		mu.Unlock()
 		if slices.Contains(args, "open") {
 			return []any{
 				map[string]any{"number": 2, "title": "mine", "state": "OPEN", "author": map[string]any{"login": "owner"}, "updatedAt": "2026-10-02",
