@@ -107,3 +107,9 @@ test("memory tidy refs without an id are skipped, not fetched or cached", async 
   assert.deepEqual(h.routes.map(r => r.split("?")[0]), ["/v1/memories/r"]);
   assert.equal(h.paging.maintenanceRecords.has(undefined), false);
 });
+
+test("memory tidy hydration with no proposals loaded fetches nothing", async () => {
+  const h = await setup({data: {memories: []}});
+  await h.paging.hydrateMaintenance(1);
+  assert.deepEqual(h.routes, []);
+});
