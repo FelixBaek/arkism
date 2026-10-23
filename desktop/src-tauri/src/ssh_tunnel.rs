@@ -82,6 +82,7 @@ fn askpass_answer<'a>(prompt: &str, password: &'a str) -> Option<&'a str> {
 /// Turns a pinned, non-batch ssh command into a password login answered by `askpass`.
 pub(crate) fn password_login(command: &mut std::process::Command, password: &Password) {
     // One try per login, so a wrong password does not count three times against the server.
+    // No proxy: a jump host's ssh would run the same askpass, and a ProxyCommand inherits the env.
     command.args([
         "-o",
         "PreferredAuthentications=password,keyboard-interactive",
@@ -89,6 +90,10 @@ pub(crate) fn password_login(command: &mut std::process::Command, password: &Pas
         "PubkeyAuthentication=no",
         "-o",
         "NumberOfPasswordPrompts=1",
+        "-o",
+        "ProxyJump=none",
+        "-o",
+        "ProxyCommand=none",
     ]);
     if let Ok(exe) = std::env::current_exe() {
         command.env("SSH_ASKPASS", exe);
@@ -542,6 +547,17 @@ fn watch(generation: u64, gate: Arc<Gate>) {
         if t.child.stop().is_err() {
             continue;
         }
+        // A rejected saved password would fail again every 3 s and trip the server's lockout;
+        // stop here and leave it to 다시 연결.
+        if t.target.password.is_some() {
+            if let Ok(Ok(bytes)) = t.errors.recv_timeout(Duration::from_secs(1)) {
+                if ssh_error(&t.target, None, &String::from_utf8_lossy(&bytes))
+                    == "ssh_password_rejected"
+                {
+                    return;
+                }
+            }
+        }
         if let Ok((child, errors)) = spawn_forward(&t.target, &t.forward, &t.store, &t.pin) {
             t.child = child;
             t.errors = errors;
@@ -804,7 +820,9 @@ mod tests {
         assert!(!a.contains("BatchMode") && !a.contains("s3cret"), "{a}");
         assert!(
             a.contains("PreferredAuthentications=password,keyboard-interactive")
-                && a.contains("NumberOfPasswordPrompts=1"),
+                && a.contains("NumberOfPasswordPrompts=1")
+                && a.contains("ProxyJump=none")
+                && a.contains("ProxyCommand=none"),
             "{a}"
         );
         assert_eq!(env(&cmd, "SSH_ASKPASS_REQUIRE").as_deref(), Some("force"));

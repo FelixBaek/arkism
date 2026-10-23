@@ -6318,7 +6318,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "서버의 Git·스킬 화면은 이 연결로 돼요. 에이전트의 기억 수집은 SSH 키가 있어야 서버로 가요.": "The server's Git and Skills screens use this connection. Agents' memory capture reaches the server only with an SSH key.",
   "SSH 키 또는 ssh-agent로 로그인해요": "Signs in with an SSH key or ssh-agent",
   "저장된 비밀번호가 없어요. 비밀번호를 넣고 연결하세요.": "No saved password. Enter the password and connect.",
-  "SSH 키 또는 비밀번호로 접속해요. 비밀번호는 이 PC의 키체인에 저장해 다시 묻지 않고, 연결 끊기를 누르면 지워요.": "Signs in with an SSH key or a password. The password is kept in this PC's keychain so you aren't asked again; Disconnect removes it.",
+  "SSH 키 또는 비밀번호로 접속해요. 비밀번호는 이 PC의 키체인에 저장해 다시 묻지 않고, 연결 끊기를 누르면 지금 연결된 서버의 비밀번호를 지워요.": "Signs in with an SSH key or a password. The password is kept in this PC's keychain so you aren't asked again; Disconnect removes the one for the current server.",
   "이 PC의 터미널에서 아래 명령으로 같은 비밀번호로 접속되는지 먼저 확인하세요.": "First check that this command logs in with the same password in a terminal on this PC.",
   "서버에서 따로 켜거나 포트를 열 것은 없어요. SSH 키나 비밀번호로 접속되면 돼요.": "Nothing to start or open on the server. SSH login with a key or a password is enough."
 ,
