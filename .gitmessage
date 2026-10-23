@@ -1,0 +1,19 @@
+# type(scope): summary   (feat, fix, refactor, docs, test, ci, chore)
+
+Why: 
+Task: none
+Verified: 
+Limits: 
+
+---
+
+제목: 
+이유: 
+검증: 
+한계: 
+
+# Required: Why, Verified, 제목, 이유, 검증. Task and Research are required
+# when a study-facing screen changes ("none" is fine).
+# A file path named under Verified/검증 must exist in this commit; follow it with a space.
+# Never call a check passed that was not run. Check with:
+#   python3 tools/check_work_record.py

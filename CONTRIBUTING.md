@@ -15,6 +15,9 @@
    cargo test --locked --manifest-path desktop/src-tauri/Cargo.toml
    ```
 
+   Commit messages follow [`.gitmessage`](.gitmessage); CI checks the PR's commits.
+   Use it with `git config commit.template .gitmessage`.
+
 4. Keep pull requests focused. The merge gate is the **Checks** workflow and the SonarCloud
    quality gate; the coverage workflow also enforces package floors and Codecov
    enforces changed Go/UI coverage. The actual required-check configuration is
@@ -35,6 +38,9 @@ Contributions are licensed under the [MIT License](LICENSE).
    node --test desktop/ui/*.test.js
    cargo test --locked --manifest-path desktop/src-tauri/Cargo.toml
    ```
+
+   커밋 메시지는 [`.gitmessage`](.gitmessage) 형식을 따르고, CI가 PR 커밋을 검사합니다.
+   `git config commit.template .gitmessage`로 쓰면 됩니다.
 
 4. PR은 한 가지 목적만 담아 주세요. 병합 조건은 **Checks** 워크플로와 SonarCloud 품질 게이트이고,
    커버리지 워크플로는 패키지 하한을, Codecov는 바뀐 Go/UI 코드의 커버리지를 검사합니다.
