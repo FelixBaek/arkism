@@ -1,159 +1,133 @@
 # Arkism
 
+[![English](https://img.shields.io/badge/lang-English-blue)](README.md) [![한국어](https://img.shields.io/badge/lang-%ED%95%9C%EA%B5%AD%EC%96%B4-red)](README.ko.md)
+
+[![Release](https://img.shields.io/github/v/release/FelixBaek/arkism)](https://github.com/FelixBaek/arkism/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/FelixBaek/arkism)](https://github.com/FelixBaek/arkism/blob/main/LICENSE)
+
+![Arkism — one shared memory for your AI tools](images/en/arkism.png)
+
+**Memory, passed on.** Arkism is an open-source app that lets AI coding agents share memories and skills.
+
+Carry context between Claude Code, Codex and Gemini CLI without repeating the same explanations. Arkism collects what is worth keeping from your conversations and hands over memories that fit the current job. Manage memory, tools, model selection and team workflows in one place.
+
+> Arkism is still in testing and development. The product overview below and the [future roadmap](ROADMAP.md) describe different stages of the work.
+
+## Keep the context as your work moves on
+
+![Focused recall, skills on demand and model routing shared across tools](images/en/shared-foundation.png)
+
+- **Shared memory.** Keep decisions, preferences and solutions with their sources.
+- **You decide what stays.** AI-generated notes are candidates. Agents use them after a person approves them.
+- **Shared skills.** Manage working methods with versions and history, and load them when needed.
+- **Connected work.** Configure tasks and teams through model routing and Arkism's own workflow engine.
+
+Start on your own PC, without an Arkism account or Docker. Memory extraction uses your chosen model and agent login. Your model provider's terms and charges still apply.
+
+## How memory carries on
+
+![Gather, check and approve, then find and hand over. Signals feed review proposals; the full dreaming loop is in development.](images/en/memory-flow.png)
+
+### 1. Gather
+
+![Filter private content from conversations, then create memory candidates with sources](images/en/capture.png)
+
+Turn decisions, preferences and solutions from connected agents' conversations into candidates. Keep a link to the source text, and filter private markers and excluded folders first on supported capture paths.
+
+### 2. Check and approve
+
+![Compare the source with the note, then approve, edit or reject it yourself](images/en/review-approval.png)
+
+Even candidates quoting your own words wait for review. Check the source and meaning, then approve, edit or reject the note. AI analysis does not replace your approval.
+
+### 3. Find and hand over
+
+![Merge search results and pass relevant memories within a size limit](images/en/retrieval.png)
+
+Find approved memories that fit the current task, merge their rankings and pass them within a size limit. Searching by meaning needs embeddings; keyword search works without them.
+
+### 4. Look back at use
+
+![Keep records of memory delivery separate from evaluations of the result](images/en/outcomes.png)
+
+Keep delivery records separate from task outcome signals. Delivering a memory does not establish that the model used it or that it caused a good result.
+
+### 5. Tend memory — dreaming
+
+![The planned dreaming loop: use, review, suggest, human approval, apply and reuse](images/en/dreaming.png)
+
+**The full improvement loop is in development.** Build on duplicate and conflict proposals and outcome signals: review the reason and scope of a change, apply what a person approves, then check it in later work. Proposals, approvals, applied changes and confirmed benefits are tracked separately.
+
+The [roadmap](ROADMAP.md) describes the order of improvements and the conditions for accepting them.
+
+## From memory to work
+
+| Area | What you can do |
+|---|---|
+| **MEMORY** | Review candidates; search, edit, merge and delete memories; view and export sessions; check usage. |
+| **CREW** | Configure agents and teams, hold team meetings, and manage canvas workflows and automations. |
+| **ROUTER** | Register model providers and accounts, set routing rules and fallback order, and inspect call records. |
+| **TOOLS** | Manage skill versions and check records, connect MCP servers and plugins per agent, and manage knowledge sources. |
+
+Workflows run on Arkism's own Go engine. Team meetings and task execution are managed as separate flows.
+
+## Get started
+
+1. Download the latest installer from [Releases](https://github.com/FelixBaek/arkism/releases/latest). Windows installers are currently available.
+2. Open the app in **built-in mode**. The server and database run on your PC.
+3. Connect your agents and work as usual. Agent settings changed during connection are backed up first.
+4. Review candidates in **MEMORY** and approve only what you want agents to use later.
+
+Current Windows installers do not have Authenticode publisher signing, so SmartScreen may warn. App update verification signatures are separate. See the [security guide](https://github.com/FelixBaek/arkism/blob/main/guide/security-operations.md) for installation and update checks.
+
+To share one Arkism across several PCs, use [server mode](https://github.com/FelixBaek/arkism/blob/main/guide/server.md). Configure the server database and SSH connection separately.
+
+## Where your data lives and how it is used
+
+![Start on your PC and control capture exclusions and your data](images/en/local-first.png)
+
+**Built-in mode stores data on your PC.** This includes memories, skills, session records and usage. Archived session transcripts are encrypted. Server mode uses the database on the server you configure.
+
+Creating a memory candidate sends relevant parts of a conversation to your chosen model provider. Model routing and connected external tools may also communicate with their respective providers.
+
+- Pause capture or exclude folders. You can also exclude a folder with `.arkism-ignore`.
+- Content marked with `<private>…</private>` is excluded before extraction or model transfer on supported capture paths. Sessions containing the marker are also excluded from raw transcript archiving.
+- Delete memories and sessions, export sessions, and back up or restore data. Capture exclusions and deletion of previously stored data are separate controls.
+
+See the [capture privacy guide](https://github.com/FelixBaek/arkism/blob/main/guide/capture-privacy.md) for scope and limits, and the [backup guide](https://github.com/FelixBaek/arkism/blob/main/guide/backup-restore.md) for recovery.
+
+## Development and checks
+
 [![Checks](https://github.com/FelixBaek/arkism/actions/workflows/checks.yml/badge.svg)](https://github.com/FelixBaek/arkism/actions/workflows/checks.yml)
 [![CodeQL](https://github.com/FelixBaek/arkism/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/FelixBaek/arkism/security/code-scanning)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/FelixBaek/arkism/badge)](https://scorecard.dev/viewer/?uri=github.com/FelixBaek/arkism)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=FelixBaek_arkism&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=FelixBaek_arkism)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=FelixBaek_arkism&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=FelixBaek_arkism)
-[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=FelixBaek_arkism&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=FelixBaek_arkism)
 [![Coverage](https://codecov.io/gh/FelixBaek/arkism/graph/badge.svg)](https://app.codecov.io/gh/FelixBaek/arkism)
 [![AI Code Assurance](https://sonarcloud.io/api/project_badges/ai_code_assurance?project=FelixBaek_arkism)](https://sonarcloud.io/summary/new_code?id=FelixBaek_arkism)
-[![Secrets: gitleaks](https://img.shields.io/badge/secrets-gitleaks-blue)](https://github.com/FelixBaek/arkism/actions/workflows/checks.yml)
 [![Dependabot](https://img.shields.io/badge/dependabot-enabled-brightgreen?logo=dependabot)](https://github.com/FelixBaek/arkism/security/dependabot)
 [![Secret scanning](https://img.shields.io/badge/secret%20scanning-push%20protection-brightgreen?logo=github)](https://github.com/FelixBaek/arkism/security)
 
-[한국어](README.ko.md)
-
-> **Note:** Arkism is still in testing and development, so it has many limitations.
-
-Arkism gives your AI coding agents one shared memory.
-
-Claude Code, Codex, Gemini CLI and other agents each forget what you told them yesterday, and each keeps its own skills. Arkism sits next to them. It collects what is worth remembering from your sessions, lets you review it, and hands the right memories and skills back to every agent. A desktop app shows all of it in one place, together with usage, model routing and multi-agent workflows.
-
-**Who it is for:** people who use more than one AI coding agent every day and want them to share context, skills and limits, without sending their data to another cloud service.
-
-- Runs on your PC by default. No account, no Docker, no API key.
-- A memory extracted by an AI is not used until a person approves it. Even a quoted user statement waits for review.
-- Open source (MIT). Go server, Tauri desktop app.
-
-## Screenshots
-
-| HOME | MEMORY |
+| Automated checks | Coverage of the checks |
 |---|---|
-| ![Home screen](guide/images/home.png) | ![Memory screen](guide/images/memory.png) |
-| **CREW** | **ROUTER** |
-| ![Agent screen](guide/images/agent.png) | ![Router screen](guide/images/router.png) |
+| **Server and data** | Go tests and concurrency checks, PostgreSQL integration tests, OpenAPI structure and actual response validation, and offline evaluation regression tests. |
+| **Windows and desktop** | Windows paths, installation recovery and uninstall boundaries; Rust/Tauri tests; UI and keyboard regression checks in Windows Chromium. |
+| **Security and code quality** | CodeQL, gitleaks, govulncheck and SonarCloud analysis. |
+| **Test coverage** | Codecov tracks Go, UI and Windows installation code coverage and checks requirements for changed code. |
 
-The screenshots use made-up sample data and show the Korean interface; some predate the current menu names. Switch to English in **Settings › 모양 (Appearance)**.
+Routine browser regression checks are separate from production builds and screen comparisons. Production builds and screen comparisons require a manual option; installer generation and release publishing also have separate conditions. See [GitHub Actions](https://github.com/FelixBaek/arkism/actions) for recent runs.
 
-## Install
+Product improvements begin with reproducible comparisons. Compare new methods with existing ones under the same conditions, recording failures, retries, unknown outcomes and total costs alongside successes. Passing automated checks and demonstrating value in real work require separate evidence.
 
-Only Windows installers are distributed. Releases from 0.1.3 on ship signed updates; see [update security](guide/security-operations.md) for how they are checked.
+See the [development guide](https://github.com/FelixBaek/arkism/blob/main/guide/development.md) for the environment and commands, [CONTRIBUTING](https://github.com/FelixBaek/arkism/blob/main/CONTRIBUTING.md) for how to contribute, and [SECURITY](https://github.com/FelixBaek/arkism/blob/main/SECURITY.md) for reporting vulnerabilities.
 
-Download the Windows installer from [Releases](../../releases/latest).
+## Where we are heading
 
-| System | File |
-|---|---|
-| Windows 10/11 | `Arkism-X.Y.Z-setup.exe` |
+**Build a basis for comparison, strengthen memory and recovery, then expand where the evidence supports it.** The plan covers memory quality, understandable correction states, team execution, model selection and tool compatibility.
 
-Published Windows builds do not yet have Authenticode publisher signing, so SmartScreen may warn. Verify the release source before installing; update signatures and Windows publisher certificates are separate (see the security guide above).
+[Explore the illustrated roadmap →](ROADMAP.md)
 
-## Quick start
-
-1. Install and open Arkism. It starts in **built-in mode**: the app runs its own small database and Arkism server on this PC, listening on `127.0.0.1` only.
-2. The app finds the agents on this PC (Claude Code, Codex, ZCode, Gemini CLI, Grok, Claude desktop) and connects them through hooks and MCP. Before it changes an agent's settings, it saves a copy in `~/.config/arkism/backups`.
-3. Use your agents as usual. Memories, skills, sessions and usage show up in the app.
-4. Review new memories in **MEMORY › 기억 (Memories)**. Approve the ones you want your agents to use.
-
-Want several PCs to share one Arkism? See [Server mode](#server-mode-optional).
-
-## Features
-
-| Menu | What you can do |
-|---|---|
-| **HOME** | Search memories, skills, workflows and prompts at once, and see what needs your attention in each menu. |
-| **MEMORY** | Overview, memories, sessions and usage. Search, review, edit, merge and delete memories. Read and export past agent sessions. |
-| **CREW** | Set up experts (work agents) and teams, run team meetings, build automations that run on a schedule or webhook, and track the cost of runs. |
-| **ROUTER** | See which model handled which task, set routing rules and fallbacks, and add model providers and accounts. |
-| **TOOLS** | Browse skills with their versions and test results, turn plugins and MCP servers on or off per agent, add knowledge sources, and browse Git repositories and pull requests. |
-| **Settings** | Connection (built-in or server), messengers (Discord, Telegram, Slack), models per role, appearance (Korean or English, light or dark), capture, backups and data deletion. |
-
-## How it works
-
-**Memory.** While you work, Arkism watches the conversation through the agent's hooks. When something looks worth keeping (a decision, a preference, a fix that worked), it asks a small model to write it down as a *memory candidate*. The model runs through your own agent login (Claude by default). Candidates wait for a person to approve or reject them. Quoting something you said does not approve the model’s wording. Automated capture cannot approve on your behalf; you decide what to keep in the app. A reviewed memory keeps a link to the session it came from. When you start a new session, Arkism adds the few memories that fit the current task to the agent's context, within a fixed size budget.
-
-**Skills.** Skills are `SKILL.md` folders, the format Claude Code and other agents already use. Arkism keeps one shared copy of each skill, with versions and history, and installs it for every connected agent. Agents can also look up skills on demand through the Arkism MCP server. Arkism records which skills were used and how they did, and can suggest new skills from repeated work.
-
-**Routing.** You list the models you can use (subscriptions or API keys) in **ROUTER › 모델 설정 (Model settings)**. For each task, the router picks a model from your rules. If a model fails or hits its limit, the call moves to the next one in your fallback order. Routing records only which model ran, how long it took and whether it worked; it does not store prompts or answers.
-
-**Search.** Built-in mode searches by keywords. If [Ollama](https://ollama.com) runs on the same PC with an embedding model (`ollama pull qwen3-embedding:0.6b`), Arkism also searches by meaning. You can change this in **Settings › 역할별 모델 (Models per role)**.
-
-## Privacy
-
-**What is stored**
-
-- Memories and memory candidates, with a pointer to the session they came from.
-- Skills and their versions.
-- Session records: agent, model, token counts, tools and skills used.
-- Archived session transcripts, encrypted with a key that is created on your PC. They are used to show where a memory came from.
-- Routing and usage counts. No prompts or answers.
-
-**Where it is stored**
-
-In built-in mode everything stays on your PC, in the app's data folder:
-
-| System | Folder |
-|---|---|
-| Windows | `%LOCALAPPDATA%\dev.arkism.desktop\runtime` |
-
-Capture settings and agent setting backups are in `~/.config/arkism`. In server mode the data is in the server's Postgres database.
-
-**What leaves your PC.** To write a memory candidate, Arkism sends the relevant part of a conversation to the model you chose for extraction, using your own agent login. That is the same provider your agent already talks to. Nothing is sent to the Arkism authors.
-
-**Keeping things out**
-
-- Wrap words in `<private>…</private>`. They are removed from user, assistant and tool text before extraction or model transfer. Nested spans stay private until the outer span closes; an unfinished span hides the rest of that message.
-- **Settings › 일반 (General) › 수집 (Capture)**: pause capture, or list folders Arkism must ignore.
-- Put an empty `.arkism-ignore` file in a folder to keep Arkism out of it and everything below it.
-
-Raw session archives keep the original bytes, so a session containing a private marker is skipped as a whole. Archive upload also checks the source folder and recorded project folders, including when it retries. Invalid or unreadable capture settings pause capture; an archive that cannot be inspected waits instead of being uploaded. These settings apply to new capture. Use the deletion controls below to remove data already saved.
-
-See [capture privacy boundaries](guide/capture-privacy.md) for supported formats and inspection limits.
-
-**Delete, export, back up**
-
-- Delete a memory or a session in the app. Deleting a source also removes every memory made from it.
-- Export sessions as Markdown or JSON from **MEMORY › 세션 (Sessions)**.
-- **Settings › 고급 › 데이터 (Data) › 지금 백업 (Back up now)** saves a full backup to `Documents/Arkism Backups`. The app also makes one backup a day and keeps the last seven. The same screen restores a backup or erases all data.
-- Uninstalling disconnects the agents (the Windows uninstaller, or `arkism uninstall-arkism` elsewhere). Your data folder stays until you erase it.
-
-## Server mode (optional)
-
-Run Arkism on one machine and connect every PC to it. Good for a home server or a small team.
-
-1. On the server, install Postgres 17 with pgvector and start the API and the worker: [guide/server.md](guide/server.md#install-by-hand).
-2. Install the `arkism` tool on the server and save the owner token where it can read it. Details: [guide/server.md](guide/server.md#connect-the-desktop-app-over-ssh).
-3. In the app, open **Settings › 연결 (Connection)** and type the server's SSH address, for example `me@my-server`. Nothing else is needed. The app logs in with your normal SSH keys, reads the connection details from the server, and forwards the API over that SSH connection.
-
-Configuration, systemd and backups: [guide/server.md](guide/server.md) and [guide/backup-restore.md](guide/backup-restore.md).
-- Use Supabase Cloud instead of running Postgres yourself: [guide/server.md](guide/server.md#use-supabase-cloud-as-the-database).
-
-## Discord bot
-
-`arkism discord` connects Discord bots you add in **Settings › 메신저 (Messengers)**. A post in a connected channel can start a team meeting, a workflow or one agent answer.
-
-Short version:
-
-1. Create an application at <https://discord.com/developers/applications>, open **Bot**, press **Reset Token** and paste the token into Arkism.
-2. On the **Bot** page, turn on **Message Content Intent**.
-3. Invite the bot with `arkism discord invite APPLICATION_ID`. The link asks only for the permissions the bot needs. Do not give it Administrator.
-
-Full setup: [guide/discord.md](guide/discord.md).
-
-## Development
-
-You need Go (version in `go.mod`) with a C compiler, Node.js 22 and Python 3. Rust (stable) is needed only for the desktop app.
-
-```bash
-go vet ./...
-go test -race ./...
-node --test desktop/ui/*.test.js
-cd desktop/src-tauri && cargo test  # desktop app
-```
-
-Security boundaries, signed updates and long-running service operations: [guide/security-operations.md](guide/security-operations.md).
-
-Repository layout, Postgres integration tests and desktop builds: [guide/development.md](guide/development.md).
+![Memory carries across tools and conversations, with you in charge](images/en/memory-continues.png)
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/FelixBaek/arkism/blob/main/LICENSE)
