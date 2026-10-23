@@ -400,7 +400,7 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   await settings("connect");
   await mode("SSH로 연결");
   await press("SSH 테스트", app.$("#table"));
-  assert.match(text(app.$(".mode-out")), /Host|주소/);
+  assert.match(text(app.$(".mode-out")), /호스트를 넣어 주세요/);
   await mode("이 PC");
   await press("저장하고 다시 연결");
   assert.match(text(app.$(".mode-out")), /이미 이 PC의 Arkism/);
@@ -414,8 +414,11 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   app.fake.ssh_connect = { server: app.origin, token: "preview", workspace_id: "default", project_id: "default", ssh_host: "me@server" };
   await press("저장하고 다시 연결");
   await app.settle(200);
+  assert.equal(app.storage.getItem("arkism.mode"), "remote");
+  // connected to the server: 설정 › 연결 opens on the SSH card, with 연결 끊기 beside 저장하고 다시 연결
   await settings("connect");
-  assert.match(text(app.$("#detail")), /방식SSH/);
+  assert.match(text(app.$(".mode-card.active")), /^SSH로 연결/);
+  assert.ok(find("연결 끊기", app.$("#table")));
   await settings("roles");
   assert.match(text(app.$("#table")), /서버가 정한 모델/);
   await settings("agents");
@@ -424,9 +427,9 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   await settings("connect");
   await mode("이 PC");
   const reloads = app.window._reloaded || 0;
-  await press("저장하고 다시 연결"); // back to the built-in Arkism: forgets the server mode and reloads
+  await press("저장하고 다시 연결"); // back to the built-in Arkism: remembers this PC as the choice and reloads
   assert.ok(app.window._reloaded > reloads);
-  assert.equal(app.storage.getItem("arkism.mode"), null);
+  assert.equal(app.storage.getItem("arkism.mode"), "local");
   await settings("connect");
   await press("연결 끊기");
   await settings("connect");

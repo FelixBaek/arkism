@@ -389,7 +389,11 @@ test("a failed load shows the retry notice, and 다시 시도 loads again", asyn
   hook = () => null;
   assert.equal(app.$("#notice").hidden, false);
   const retry = byText("#notice button", /다시/);
-  if (retry) await app.click(retry, 2000);
+  assert.ok(retry, "no retry button");
+  const loads = () => app.apiCalls.filter(([m, path]) => m === "GET" && /^\/v1\/(memories|skills|capabilities)(\?|$)/.test(path)).length;
+  const before = loads();
+  await app.click(retry, 2000);
+  assert.ok(loads() > before, "다시 시도 reads the lists again");
   await app.settle(1000);
   await home();
 });

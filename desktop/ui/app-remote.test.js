@@ -50,12 +50,12 @@ test("연결 끊기 goes back to the address form, filled with the saved server"
 test("SSH 테스트 checks the fields first, then asks the server", async () => {
   const test1 = async () => { await app.click("#ssh-test", 300); return t(app.$("#ssh-test-result")); };
   fill("");
-  assert.match(await test1(), /Host를 넣어 주세요/);
+  assert.match(await test1(), /호스트를 넣어 주세요/);
   assert.ok(app.$("#ssh-test-result").classList.contains("warn"));
   fill("my-server", "99999");
-  assert.match(await test1(), /Port는 1~65535/);
+  assert.match(await test1(), /포트는 1~65535/);
   fill("my-server", "abc");
-  assert.match(await test1(), /Port는/);
+  assert.match(await test1(), /포트는/);
   fill("my-server", "2222");
   assert.match(await test1(), /확인했어요 \(my-server\)/);
   assert.equal(app.$("#ssh-test-result").classList.contains("warn"), false);
@@ -82,7 +82,7 @@ test("연결하기 shows why a connection failed and keeps the form", async () =
   }
   fill("");
   await submit(200);
-  assert.match(t(app.$("#unlock-error")), /Host를 넣어 주세요/);
+  assert.match(t(app.$("#unlock-error")), /호스트를 넣어 주세요/);
 });
 
 test("a server that logs in but does not answer keeps the old connection", async () => {
@@ -129,8 +129,17 @@ test("sshFields and sshLabel describe a saved connection", () => {
   assert.equal(pages.sshLabel({ host: "me@srv" }), "me@srv");
   assert.equal(pages.sshLabel(null), "");
   const f = pages.sshFields({ host: "srv", port: 2200, key: "~/.ssh/k", bin: "/opt/arkism" });
-  assert.deepEqual(f.read(), { host: "srv", user: null, port: 2200, key: "~/.ssh/k", bin: "/opt/arkism" });
+  assert.deepEqual(f.read(), { host: "srv", user: null, port: 2200, key: "~/.ssh/k", bin: "/opt/arkism", auth: "key", password: null });
   f.focus();
+  // a connection saved with password auth reads back the typed password and starts on that field
+  const p = pages.sshFields({ host: "srv", auth: "password" });
+  app.document.body.append(p.node);
+  const pass = p.node.querySelector('input[type="password"]');
+  pass.value = "pw";
+  assert.deepEqual(p.read(), { host: "srv", user: null, port: null, key: null, bin: null, auth: "password", password: "pw" });
+  p.focus();
+  assert.equal(app.document.activeElement, pass);
+  p.node.remove();
 });
 
 test("서버에 연결하기 and 이 PC에서 쓰기 switch between the server and the built-in Arkism", async () => {
@@ -163,8 +172,7 @@ test("서버에 연결하기 and 이 PC에서 쓰기 switch between the server a
   pages.useLocal();
   pages.disconnect();
   assert.equal(app.window._reloaded, r + 3);
-  pages.useServer();
-  assert.ok(locked());
+  assert.ok(locked()); // 연결 끊기 with a built-in Arkism reloads instead of locking; the address form is still up
   // in local mode 다시 연결 starts the built-in Arkism again
   app.fake.local_start = { server: app.origin, token: "preview" };
   pages.state.mode = "local";

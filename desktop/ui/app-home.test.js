@@ -480,10 +480,14 @@ test("overview: the screen's chips, steps and cards open windows; motion follows
   // the nerve firing runs on its interval while shown, stops when hidden or on reduced motion
   await app.settle(1100);
   app.document.hidden = true; app.document.dispatchEvent(new app.window.Event("visibilitychange")); await app.settle(600);
+  const firing = () => table.querySelectorAll(".ov-n-fire.on").length;
+  assert.equal(firing(), 0, "hidden: no path fires");
   app.document.hidden = false; app.document.dispatchEvent(new app.window.Event("visibilitychange")); await app.settle(600);
+  assert.ok(firing() > 0, "shown again: the paths fire");
   app.media.change("(prefers-reduced-motion: reduce)", true); await app.settle(600);
-  assert.equal(table.querySelectorAll(".on").length >= 0, true);
+  assert.equal(firing(), 0, "reduced motion: the firing stops and stays off");
   app.media.change("(prefers-reduced-motion: reduce)", false); await app.settle(600);
+  assert.ok(firing() > 0, "motion back: the firing resumes");
   // the head's 새로고침 reads the sessions again
   const refresh = btn("새로고침"); if (refresh) { refresh.click(); await app.settle(50); }
   assert.match(text(table), /기억 처리/);
@@ -534,7 +538,10 @@ test("home search: the popover finds memories, skills, crew, tools and settings 
   app.dom.type(s, "설정"); await app.settle(300);
   const setting = [...gs().querySelectorAll(".gs-row")].find((r) => /설정/.test(text(r.querySelector("small"))));
   setting.click(); await app.settle(50);
-  assert.ok(app.$("#app").classList.length >= 0);
+  // the first settings tab (일반) opens: 설정 and 일반 are the picked menu and tab, and its 수집 group is on screen
+  const picked = [...app.$$("[aria-selected=true], [aria-current]")].map(text);
+  assert.ok(picked.includes("설정") && picked.includes("일반"), picked.join(" | "));
+  assert.match(text(app.$("#table")), /수집 켜기/);
   // 기억 목록에서 걸러 보기 › moves the query to the memory list
   await home();
   app.dom.type(s, "orbit"); await app.settle(300);
@@ -720,7 +727,7 @@ test("home: a manual connection walks the start steps; SSH errors explain themse
   let pane = app.$("#ssh-error-side");
   assert.ok(pane && !pane.hidden);
   assert.match(text(pane), /연결하지 못했어요/);
-  assert.match(text(app.$("#unlock-error")), /Host를 넣어 주세요/);
+  assert.match(text(app.$("#unlock-error")), /호스트를 넣어 주세요/);
   const [host, user, port, key] = app.$("#ssh-form").querySelectorAll("input");
   host.value = "my-server"; user.value = "me"; port.value = "2222"; key.value = "~/.ssh/id_ed25519";
   // a refused login names the kind and shows the ssh command to try
