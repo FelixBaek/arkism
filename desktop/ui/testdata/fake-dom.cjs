@@ -202,7 +202,7 @@ class Element extends Node {
   get tabIndex() { return Number(this.attrs.get("tabindex") ?? -1); }
   set tabIndex(v) { this.attrs.set("tabindex", String(v)); }
   get innerHTML() { return this.textContent; }
-  set innerHTML(v) { this.textContent = String(v).replace(/<[^>]*>/g, ""); }
+  set innerHTML(v) { this.textContent = String(v).replace(/<[^>]*>/g, "").replace(/</g, ""); }
   get innerText() { return this.textContent; }
   set innerText(v) { this.textContent = v; }
   get options() { return this.querySelectorAll("option"); }
