@@ -102,12 +102,20 @@ fn local_location(app: tauri::AppHandle, rt: tauri::State<Arc<runtime::Runtime>>
 fn local_location_set(app: tauri::AppHandle, rt: tauri::State<Arc<runtime::Runtime>>, path: Option<String>) -> Result<Location, String> {
     let app_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
     let default = app_dir.join("runtime");
-    let chosen = path.as_deref().map(storage_location::check).transpose()?;
+    // The default folder holds app files (agents.json, the autostart marker) even without data.
+    let chosen = path.as_deref().filter(|p| std::path::Path::new(p.trim()) != default).map(storage_location::check).transpose()?;
+    let previous = storage_location::read(&app_dir);
     storage_location::write(&app_dir, &default, chosen.as_deref())?;
-    let target = chosen.unwrap_or(default);
+    let target = chosen.unwrap_or_else(|| default.clone());
     if target != rt.data_dir() {
-        // Running: keeps the folder it started with; `next` shows the change.
-        let _ = rt.move_data_dir(target);
+        match rt.move_data_dir(target) {
+            // Running: keeps the folder it started with; `next` shows the change.
+            Err(e) if e != "local_location_running" => {
+                let _ = storage_location::write(&app_dir, &default, previous.as_deref());
+                return Err(e);
+            }
+            _ => {}
+        }
     }
     location(&app, &rt)
 }

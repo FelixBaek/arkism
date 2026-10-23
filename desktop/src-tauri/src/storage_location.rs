@@ -25,14 +25,16 @@ pub fn write(app_dir: &Path, default: &Path, chosen: Option<&Path>) -> Result<()
         Some(path) => {
             fs::create_dir_all(app_dir).map_err(|e| format!("local_location_save: {e}"))?;
             let text = serde_json::json!({ "data": path }).to_string();
-            fs::write(app_dir.join(POINTER), text).map_err(|e| format!("local_location_save: {e}"))
+            // Replaced whole: a write cut short must not leave a broken pointer that reads as the default.
+            crate::runtime::write_private(&app_dir.join(POINTER), text.as_bytes()).map_err(|e| format!("local_location_save: {e}"))
         }
     }
 }
 
-/// True when `dir` already holds a built-in Arkism (its settings or its database).
+/// True when `dir` already holds a built-in Arkism. Its settings (`runtime.json`) are written before
+/// its database, so a `pg` folder alone is someone else's (and a start would reset it).
 pub fn has_data(dir: &Path) -> bool {
-    dir.join("runtime.json").is_file() || dir.join("pg").is_dir()
+    dir.join("runtime.json").is_file()
 }
 
 /// A usable data folder: an absolute path to an empty folder (made if missing) or an existing
@@ -53,8 +55,10 @@ pub fn check(path: &str) -> Result<PathBuf, String> {
     } else {
         fs::create_dir_all(&path).map_err(|e| format!("local_location_unwritable: {e}"))?;
     }
-    let probe = path.join(".arkism-write-check");
-    fs::write(&probe, b"ok").map_err(|e| format!("local_location_unwritable: {e}"))?;
+    // A new file under a fresh name: never writes through a file or link someone left there.
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    let probe = path.join(format!(".arkism-write-check-{}-{nanos}", std::process::id()));
+    fs::OpenOptions::new().write(true).create_new(true).open(&probe).map_err(|e| format!("local_location_unwritable: {e}"))?;
     let _ = fs::remove_file(&probe);
     Ok(path)
 }
@@ -97,9 +101,11 @@ mod tests {
         fs::create_dir_all(&other).unwrap();
         fs::write(other.join("notes.txt"), "x").unwrap();
         assert_eq!(check(other.to_str().unwrap()).unwrap_err(), "local_location_not_empty");
+        fs::create_dir_all(other.join("pg")).unwrap();
+        assert_eq!(check(other.to_str().unwrap()).unwrap_err(), "local_location_not_empty", "a pg folder alone is not Arkism's");
         fs::write(other.join("runtime.json"), "{}").unwrap();
         assert!(check(other.to_str().unwrap()).is_ok());
         assert_eq!(check(other.join("notes.txt").to_str().unwrap()).unwrap_err(), "local_location_not_folder");
-        assert!(!other.join(".arkism-write-check").exists());
+        assert_eq!(fs::read_dir(&other).unwrap().count(), 3, "the write check leaves nothing behind");
     }
 }

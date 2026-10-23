@@ -2213,7 +2213,9 @@ export function startApp() {
     const defaults = tauri ? await tauri.invoke("app_defaults").catch(() => null) : null;
     if (defaults) Object.assign(state.defaults, defaults);
     // 처음 실행이면(고른 적 없음) 이 PC / SSH를 고르게 한다. 연결 끊기도 고른 것을 지워 이 화면으로 돌아온다.
-    const picked = stored("arkism.mode");
+    let picked = stored("arkism.mode");
+    // 예전 판은 이 PC를 쓸 때 아무것도 저장하지 않았다: 기본 폴더에 데이터가 있으면 이미 이 PC를 고른 것.
+    if (state.defaults.local && picked === null && tauri && (await tauri.invoke("local_location").catch(() => null))?.default_has_data) { picked = "local"; store("arkism.mode", picked); }
     if (state.defaults.local && picked === "local") return appConnection.startLocal();
     state.mode = state.defaults.local && picked !== "remote" ? "choose" : "remote";
     appConnection.lock();

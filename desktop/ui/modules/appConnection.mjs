@@ -249,7 +249,8 @@ export function createAppConnection(deps) {
   // 연결 끊기: 서버 연결을 닫고 주소 입력으로 돌아간다. 다음 시작 때 자동으로 다시 붙지 않는다.
   function disconnect() {
     deps.tauri?.invoke("ssh_disconnect").catch(() => {});
-    deps.store("arkism.mode", null);
+    // "choose", not cleared: no choice at all reads as an older install that used this PC.
+    deps.store("arkism.mode", deps.state.defaults.local ? "choose" : null);
     if (deps.state.defaults.local) { location.reload(); return; }
     lock();
   }
@@ -268,7 +269,14 @@ export function createAppConnection(deps) {
 
   deps.$("#remote-link").addEventListener("click", useServer);
 
-  deps.$("#local-link").addEventListener("click", useLocal);
+  // 처음 실행에서 SSH를 골랐다가 돌아오면 선택 화면의 '이 PC'로: 저장 위치를 건너뛰지 않는다.
+  let fromChoice = false;
+  deps.$("#local-link").addEventListener("click", () => {
+    if (!fromChoice) { useLocal(); return; }
+    deps.state.mode = "choose";
+    unlockMode();
+    chooseLocal();
+  });
 
   // 저장 위치 줄 (처음 실행과 설정 › 연결의 '이 PC' 카드 아래): 왼쪽 제목·설명, 오른쪽 기본값/사용자 지정과 경로.
   // 고른 폴더는 앱이 검사해 runtime-location.json에 남기고, 내장 Arkism이 아직 안 돌면 바로 쓴다.
@@ -293,10 +301,13 @@ export function createAppConnection(deps) {
     const note = deps.el("p", "storage-note", "기본 위치에 있던 데이터는 그대로 남아요.");
     const err = deps.el("p", "form-error");
     err.setAttribute("role", "alert");
-    let loc = null, custom = false;
+    // touched: the person already picked or typed, so the late answer must not undo it.
+    let loc = null, custom = false, touched = false;
+    input.addEventListener("input", () => { touched = true; });
     const draw = () => {
       path.textContent = loc?.default || "…";
       const seg = deps.segment([["default", "기본값"], ["custom", "사용자 지정"]], custom ? "custom" : "default", (k) => {
+        touched = true;
         custom = k === "custom";
         err.textContent = "";
         draw();
@@ -308,9 +319,10 @@ export function createAppConnection(deps) {
     row.append(text, right);
     const ready = deps.tauri.invoke("local_location").then((l) => {
       loc = l;
-      custom = l.next !== l.default;
-      if (custom) input.value = l.next;
+      if (!touched) { custom = l.next !== l.default; if (custom) input.value = l.next; }
+      const typing = document.activeElement === input;
       draw();
+      if (typing) input.focus();
       return l;
     }, () => { err.textContent = "저장 위치를 읽지 못했어요."; return null; });
     const wanted = () => (custom ? input.value.trim() : null);
@@ -322,6 +334,7 @@ export function createAppConnection(deps) {
       changed: () => !!loc && (wanted() ?? loc.default) !== loc.next,
       // 고른 것을 저장한다. 실패하면 줄 안에 이유를 보여 주고 null.
       async save() {
+        await ready;
         err.textContent = "";
         if (custom && !wanted()) { err.textContent = "폴더 경로를 넣어 주세요."; input.focus(); return null; }
         try {
@@ -364,7 +377,7 @@ export function createAppConnection(deps) {
 
   deps.$("#choose-local").addEventListener("click", chooseLocal);
 
-  deps.$("#choose-ssh").addEventListener("click", () => { deps.state.mode = "remote"; unlockMode(); unlockSSH().focus(); });
+  deps.$("#choose-ssh").addEventListener("click", () => { fromChoice = true; deps.state.mode = "remote"; unlockMode(); unlockSSH().focus(); });
 
   deps.$("#unlock-form").addEventListener("submit", (e) => {
     e.preventDefault();
