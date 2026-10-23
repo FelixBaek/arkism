@@ -15,8 +15,8 @@ const session = (id, over = {}) => ({
 });
 const page = (items, extra = {}) => ({ authority: "data_only_untrusted", items, next_cursor: "", total: items.length, ...extra });
 
-async function setup(t, { agents = ["claude_code"], list = () => page([session("a"), session("b")]) } = {}) {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+async function setup(t, { agents = ["claude_code"], list = () => page([session("a"), session("b")]), now } = {}) {
+  t.mock.timers.enable(now ? { apis: ["setTimeout", "Date"], now } : { apis: ["setTimeout"] });
   const { document, window } = dom.install();
   const h = dom.helpers(document);
   for (const id of ["table", "stats", "title-count", "controls", "chips", "detail"]) { const d = h.el("div"); d.id = id; document.body.append(d); }
@@ -186,8 +186,10 @@ test("more pages, a failed more and its retry", async (t) => {
 });
 
 test("rows open by click or Enter/space, and a repaint off-screen is skipped", async (t) => {
-  const old = new Date(Date.now() - 30 * 24 * HOUR).toISOString();
-  const x = await setup(t, { list: () => page([
+  // pin the clock to local noon: an hour-old session reads "어제" between 00:00 and 01:00
+  const noon = new Date(); noon.setHours(12, 0, 0, 0);
+  const old = new Date(noon.getTime() - 30 * 24 * HOUR).toISOString();
+  const x = await setup(t, { now: noon, list: () => page([
     session("a"), session("b", { title: "", ended_at: new Date(Date.now() - 24 * HOUR).toISOString(), started_at: new Date(Date.now() - 25 * HOUR).toISOString(), device: "", project: "", tools: [], skills: [] }),
     session("c", { ended_at: new Date(Date.now() - 3 * 24 * HOUR).toISOString(), started_at: new Date(Date.now() - 3 * 24 * HOUR).toISOString(), priced: false }),
     session("d", { ended_at: old, started_at: old })
