@@ -130,6 +130,11 @@ func isolateAgents(t *testing.T) (*agentsArkism, string, *[][]string) {
 	if err := writeState(toolsCache, cache); err != nil {
 		t.Fatal(err)
 	}
+	// One call to the local server today, so the inventory carries a call count.
+	now := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	os.MkdirAll(filepath.Join(claudeProjects, "p"), 0o700)
+	os.WriteFile(filepath.Join(claudeProjects, "p", "s.jsonl"), []byte(`{"timestamp": "`+now+`", "message": {"content": [{"type": "tool_use", "id": "t1", "name": "mcp__local__search"}]}}`+"\n"+
+		`{"timestamp": "`+now+`", "message": {"content": [{"type": "tool_result", "tool_use_id": "t1", "is_error": false}]}}`+"\n"), 0o600)
 	return a, home, calls
 }
 
@@ -198,7 +203,9 @@ func TestAgentsSyncAppliesRequestsAndReports(t *testing.T) {
 	for _, s := range rep["servers"].([]any) {
 		servers[s.(map[string]any)["name"].(string)] = s.(map[string]any)
 	}
-	// Tool lists are not asserted: inventory() sets them on a copy of each row (see #266).
+	if tools := asList(servers["local"]["tools"]); len(tools) != 1 || asMap(tools[0])["name"] != "search" || orMap(servers["local"]["calls"])["today"] != float64(1) {
+		t.Errorf("local tools/calls missing: %v", servers["local"])
+	}
 	if servers["local"]["target"] != "npx @scope/pkg" || strings.Contains(fmtJSON(servers), "secret") {
 		t.Errorf("local = %v", servers["local"])
 	}
@@ -268,7 +275,8 @@ func TestAgentsSyncKeepsReportingWhenMemoryUseFails(t *testing.T) {
 func TestAgentsInventoryCommandAndUsage(t *testing.T) {
 	isolateAgents(t)
 	var out, errb bytes.Buffer
-	if code := agentsMain([]string{"inventory"}, nil, &out, &errb); code != 0 || !strings.Contains(out.String(), `"needy"`) || !strings.Contains(out.String(), `"fmt@mk"`) {
+	if code := agentsMain([]string{"inventory"}, nil, &out, &errb); code != 0 || !strings.Contains(out.String(), `"needy"`) || !strings.Contains(out.String(), `"fmt@mk"`) ||
+		!strings.Contains(out.String(), `"tools"`) || !strings.Contains(out.String(), `"calls"`) {
 		t.Fatal(code, out.String(), errb.String())
 	}
 	for _, args := range [][]string{nil, {"login", "L1", "gemini", "x"}, {"login", "L1"}} {

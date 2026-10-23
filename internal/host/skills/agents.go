@@ -353,7 +353,7 @@ func inventory() ([]any, []any, error) {
 		return nil, nil, err
 	}
 	calls := toolCalls(time.Time{})
-	for _, s := range servers {
+	for i, s := range servers {
 		e := s.(host.Obj)
 		name := str(objGet(e, "name"))
 		if t := objGet(tools, name); truthy(t) {
@@ -362,6 +362,7 @@ func inventory() ([]any, []any, error) {
 		if c := objGet(calls, normServer(name)); truthy(c) {
 			e.Set("calls", c)
 		}
+		servers[i] = e // Set may grow e past the row stored in servers
 	}
 	return servers, inventoryPlugins(), nil
 }
