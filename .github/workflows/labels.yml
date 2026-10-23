@@ -1,0 +1,35 @@
+name: Labels
+
+# Adds the type label that matches a `type(scope): summary` title. Only adds, so labels set by hand stay.
+# pull_request_target gives fork PRs a token that can label; nothing from the PR is checked out or run.
+on:
+  pull_request_target:
+    types: [opened, edited, reopened]
+  issues:
+    types: [opened, edited, reopened]
+
+permissions: {}
+
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Add the type label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          TITLE: ${{ github.event.pull_request.title || github.event.issue.title }}
+        run: |
+          type="$(printf '%s' "$TITLE" | sed -nE 's/^([a-z]+)(\([^)]*\))?!?: .*/\1/p')"
+          case "$type" in
+            feat) label=feature ;; fix) label=bug ;;
+            test|refactor|perf|docs|chore|ci|security|release) label="$type" ;;
+            *) echo "no type label for: $TITLE"; exit 0 ;;
+          esac
+          gh api -X POST "repos/$REPO/issues/$NUMBER/labels" -f "labels[]=$label" --silent
+          echo "added $label"
