@@ -384,16 +384,17 @@ test("a skill's detail shows the PC links, checks and repository, and asks the s
 
 test("a failed load shows the retry notice, and 다시 시도 loads again", async () => {
   await home();
-  hook = (a) => (a.method === "GET" && /^\/v1\/(memories|skills|capabilities)(\?|$)/.test(a.path) ? json(503, { error: "unavailable" }) : null);
+  hook = (a) => (a.method === "GET" && /^\/v1\/(memories|skills)(\?|$)/.test(a.path) ? json(503, { error: "unavailable" }) : null);
   await app.click(byText("#head-actions button", /다시 불러오기/), 1500);
   hook = () => null;
   assert.equal(app.$("#notice").hidden, false);
   const retry = byText("#notice button", /다시/);
   assert.ok(retry, "no retry button");
-  const loads = () => app.apiCalls.filter(([m, path]) => m === "GET" && /^\/v1\/(memories|skills|capabilities)(\?|$)/.test(path)).length;
-  const before = loads();
+  const loads = (name) => app.apiCalls.filter(([m, path]) => m === "GET" && (path === `/v1/${name}` || path.startsWith(`/v1/${name}?`))).length;
+  const before = { memories: loads("memories"), skills: loads("skills") };
   await app.click(retry, 2000);
-  assert.ok(loads() > before, "다시 시도 reads the lists again");
+  assert.ok(loads("memories") > before.memories, "다시 시도 reads memories again");
+  assert.ok(loads("skills") > before.skills, "다시 시도 reads skills again");
   await app.settle(1000);
   await home();
 });

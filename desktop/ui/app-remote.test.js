@@ -170,9 +170,10 @@ test("서버에 연결하기 and 이 PC에서 쓰기 switch between the server a
   await app.click("#local-link", 100);
   assert.equal(app.window._reloaded, r + 1);
   pages.useLocal();
+  app.$("#unlock").hidden = true; // hide the address form so a lock() from 연결 끊기 would show
   pages.disconnect();
   assert.equal(app.window._reloaded, r + 3);
-  assert.ok(locked()); // 연결 끊기 with a built-in Arkism reloads instead of locking; the address form is still up
+  assert.equal(locked(), false); // 연결 끊기 with a built-in Arkism reloads instead of locking
   // in local mode 다시 연결 starts the built-in Arkism again
   app.fake.local_start = { server: app.origin, token: "preview" };
   pages.state.mode = "local";

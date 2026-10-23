@@ -58,13 +58,14 @@ async function boot(opts = {}) {
           const r = await realFetch(a.base + a.path, { method: a.method, body: a.body == null ? undefined : (typeof a.body === "string" ? a.body : JSON.stringify(a.body)) });
           return { status: r.status, body: await r.text() };
         }
-        if (Object.hasOwn(fake, cmd)) { const v = fake[cmd]; if (v instanceof Error) throw v.message; return typeof v === "function" ? v(a) : structuredClone(v); }
+        if (Object.hasOwn(fake, cmd)) { const v = fake[cmd]; if (v instanceof Error) throw v.message; return typeof v === "function" ? await v(a) : structuredClone(v); }
         throw new Error("preview: " + cmd);
       } finally { inflight--; }
     };
     env.window.__TAURI__ = { core: { invoke } };
     if (opts.winbar) env.window.__TAURI__.window = { getCurrentWindow: () => opts.winbar };
     // Settles the app: runs due fake timers (up to ms ahead) and waits for every outstanding shell/API call.
+    // Gives up quietly after the rounds: some tests hold a call open on purpose (a slow server, a pending dialog) and assert on the screen meanwhile.
     async function settle(ms = 0, rounds = 400) {
       for (let i = 0; i < rounds; i++) {
         await env.timers.tick(i === 0 ? ms : 0);

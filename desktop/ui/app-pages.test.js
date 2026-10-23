@@ -419,18 +419,18 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   await settings("connect");
   assert.match(text(app.$(".mode-card.active")), /^SSH로 연결/);
   assert.ok(find("연결 끊기", app.$("#table")));
+  await press("연결 끊기");
+  await settings("connect");
   await settings("roles");
   assert.match(text(app.$("#table")), /서버가 정한 모델/);
   await settings("agents");
   await settings("advanced");
   assert.doesNotMatch(text(app.$("#table")), /지금 백업/);
   await settings("connect");
+  // last step: the reload does not restart the app in the DOM stand-in, so nothing runs after it
   await mode("이 PC");
   const reloads = app.window._reloaded || 0;
   await press("저장하고 다시 연결"); // back to the built-in Arkism: remembers this PC as the choice and reloads
   assert.ok(app.window._reloaded > reloads);
   assert.equal(app.storage.getItem("arkism.mode"), "local");
-  await settings("connect");
-  await press("연결 끊기");
-  await settings("connect");
 });
