@@ -251,6 +251,7 @@ func TestWinDrainWorkReportsShape(t *testing.T) {
 // An SSH host ssh could read as an option fails the MCP relay before anything runs.
 func TestWinMCPRejectsInvalidSSHHost(t *testing.T) {
 	winFixture(t)
+	t.Setenv("ARKISM_SSH_HOST", "") // winMain os.Setenv's it; restore on cleanup
 	var errOut strings.Builder
 	if code := winMain([]string{"mcp", "codex", "--ssh-host", "-oProxyCommand=x"}, strings.NewReader(""), io.Discard, &errOut); code != 1 ||
 		!strings.Contains(errOut.String(), "invalid SSH host") {
