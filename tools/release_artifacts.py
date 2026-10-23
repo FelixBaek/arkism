@@ -172,10 +172,11 @@ def verify(directory, version, feed, channel):
     required = {installer, installer + ".sha256", installer + SIG, installer + ".sig",
                 manifest, manifest + SIG, TAURI_MANIFEST, TAURI_MANIFEST + SIG,
                 sbom, sbom + SIG}
-    # Provenance, when present, is checked by `gh attestation verify` in CI and
+    # Provenance (a Sigstore bundle; the .intoto.jsonl name is what OpenSSF
+    # Scorecard recognizes), when present, is checked by `gh attestation verify` in CI and
     # is signed into SHA256SUMS too. Never accept arbitrary extra release assets.
-    if (directory / "provenance.sigstore.json").exists():
-        required.add("provenance.sigstore.json")
+    if (directory / "provenance.intoto.jsonl").exists():
+        required.add("provenance.intoto.jsonl")
     with tempfile.TemporaryDirectory(prefix="arkism-verify-key-") as tmp:
         public = Path(tmp) / "public.key"
         public.write_bytes(public_key())

@@ -1,0 +1,28 @@
+# Advisories with no fixed version that Arkism cannot remove on its own.
+# osv-scanner reads the config next to each lockfile; this one covers Cargo.lock.
+# Each entry expires so it is re-checked; drop it once upstream ships a fix.
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+ignoreUntil = 2027-01-24
+reason = "glib 0.18 is Linux-only (gtk via tauri tray-icon); releases ship for Windows only. Waits on tauri moving to gtk-rs 0.20."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+ignoreUntil = 2027-01-24
+reason = "proc-macro-error is unmaintained, build-time only, pulled by glib-macros 0.18 (Linux-only gtk via tauri)."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0370"
+ignoreUntil = 2027-01-24
+reason = "zvariant is unmaintained, no fix; Linux-only D-Bus via tauri-plugin-single-instance."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0371"
+ignoreUntil = 2027-01-24
+reason = "zbus_names is unmaintained, no fix; Linux-only D-Bus via tauri-plugin-single-instance."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0372"
+ignoreUntil = 2027-01-24
+reason = "zvariant_derive is unmaintained, no fix; Linux-only D-Bus via tauri-plugin-single-instance."

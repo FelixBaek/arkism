@@ -78,7 +78,7 @@ update check is disabled.
 The Windows build job creates an `actions/attest-build-provenance` attestation
 for the final installer and SBOM. The signing job verifies both digests against
 the repository, the exact source commit, the expected release workflow and a
-GitHub-hosted runner before signing. The public `provenance.sigstore.json`
+GitHub-hosted runner before signing. The public `provenance.intoto.jsonl`
 bundle permits independent verification; this does not assert a SLSA level or
 bit-for-bit reproducibility.
 
@@ -97,7 +97,7 @@ export ARKISM_UPDATE_PUBLIC_KEY="$(base64 < /trusted/update.pub | tr -d '\n')"
 python3 tools/release_artifacts.py verify --directory /path/to/downloaded-assets \
   --version X.Y.Z --feed https://github.com/FelixBaek/arkism/releases/latest/download
 gh attestation verify /path/to/downloaded-assets/Arkism-X.Y.Z-setup.exe \
-  --bundle /path/to/downloaded-assets/provenance.sigstore.json \
+  --bundle /path/to/downloaded-assets/provenance.intoto.jsonl \
   --repo FelixBaek/arkism \
   --signer-workflow FelixBaek/arkism/.github/workflows/release.yml \
   --source-digest FULL_RELEASE_COMMIT_SHA --deny-self-hosted-runners

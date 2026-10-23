@@ -165,7 +165,7 @@ jobs:
         shell: pwsh
         env:
           BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
-        run: Copy-Item -LiteralPath $env:BUNDLE -Destination desktop/dist/provenance.sigstore.json
+        run: Copy-Item -LiteralPath $env:BUNDLE -Destination desktop/dist/provenance.intoto.jsonl
       - name: Collect installer check evidence
         if: always()
         shell: pwsh
@@ -202,7 +202,7 @@ jobs:
           path: |
             desktop/dist/Arkism-*-setup.exe*
             desktop/dist/Arkism-*-windows.sbom.spdx.json
-            desktop/dist/provenance.sigstore.json
+            desktop/dist/provenance.intoto.jsonl
           if-no-files-found: error
 
   release:
@@ -238,7 +238,7 @@ jobs:
         run: |
           set -euo pipefail
           for file in "dist/Arkism-${VERSION#v}-setup.exe" "dist/Arkism-${VERSION#v}-windows.sbom.spdx.json"; do
-            gh attestation verify "$file" --bundle dist/provenance.sigstore.json \
+            gh attestation verify "$file" --bundle dist/provenance.intoto.jsonl \
               --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
               --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
           done
