@@ -27,8 +27,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: checks-${{ github.ref }}
-  # Supersede outdated PR runs; finish every main run.
+  group: checks-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  # Supersede outdated PR runs; finish every main run. A PR run handled after its merge
+  # reports github.ref as main, so the event and PR number keep it out of the main group.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

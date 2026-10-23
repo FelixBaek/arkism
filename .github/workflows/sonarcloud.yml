@@ -14,7 +14,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: sonarcloud-${{ github.ref }}
+  group: sonarcloud-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
