@@ -34,7 +34,8 @@ jobs:
       - name: Read app version
         id: version
         run: |
-          version=$(jq -er '.version | select(type == "string" and length > 0)' desktop/src-tauri/tauri.conf.json)
+          # Python 3 is a listed runner prerequisite; jq is not.
+          version=$(python3 -c 'import json, sys; v = json.load(open(sys.argv[1])).get("version"); assert isinstance(v, str) and v; print(v)' desktop/src-tauri/tauri.conf.json)
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
         env:
