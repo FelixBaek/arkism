@@ -71,6 +71,11 @@ variable `ARKISM_USE_HOSTED_RUNNERS=true` to route Linux jobs to hosted Ubuntu
 when the self-hosted runner is unavailable. This is an explicit operational
 fallback; a queued self-hosted job cannot switch runners midway through a run.
 
+SonarCloud follows the same rule. Default-setup CodeQL is a repository setting,
+not a workflow: it runs on the `arkism-self` label, and the variable does not
+move it. To send it back to hosted runners, set the default setup's runner type
+to `standard` in the code scanning settings.
+
 For a replacement self-hosted runner, install Git, the Go version from `go.mod`,
 a C compiler for `-race`, Python 3, Node 22, Rust stable, PostgreSQL with pgvector,
 and the WebKit/GTK development packages named in `checks.yml`. Run it under a
