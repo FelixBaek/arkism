@@ -40,17 +40,8 @@ func receiverDecode(raw []byte) (map[string]any, error) {
 			return nil, invalid
 		}
 	}
-	version, vok := host.Int(event["version"])
-	id, idOK := event["event_id"].(string)
-	seq, seqOK := host.Int(event["sequence"])
-	origin, _ := event["origin"].(string)
-	sid, sidOK := event["session_id"].(string)
-	action, _ := event["action"].(string)
-	_, isBool := event["created_at"].(bool)
-	created, cok := num(event["created_at"])
-	if !vok || version != 1 || !idOK || !receiverEventID.MatchString(id) || !seqOK || seq <= 0 ||
-		(origin != "claude_code" && origin != "codex" && origin != "zcode") || !sidOK || sid == "" ||
-		(action != "bind" && action != "stop" && action != "suspend") || isBool || !cok {
+	origin, sid, action, created, ok := receiverHeader(event)
+	if !ok {
 		return nil, invalid
 	}
 	if origin != "zcode" && len(raw) > 16*1024 {
@@ -64,30 +55,57 @@ func receiverDecode(raw []byte) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if action == "suspend" {
-		if event["work_id"] != "" || event["boundary"] != nil {
-			return nil, invalid
-		}
-	} else {
-		if w, ok := event["work_id"].(string); !ok || !outboxKey.MatchString(w) {
-			return nil, invalid
-		}
-		if err := boundaryValidate(event["boundary"]); err != nil {
-			return nil, err
-		}
-		marker := event["boundary"].(map[string]any)
-		if marker["origin"] != origin || marker["session_id"] != sid {
-			return nil, invalid
-		}
-		mk, err := boundaryFolder(marker["cwd"])
-		if err != nil {
-			return nil, err
-		}
-		if mk != folderKey {
-			return nil, invalid
-		}
+	if err := receiverWork(event, origin, sid, action, folderKey, invalid); err != nil {
+		return nil, err
 	}
 	return event, nil
+}
+
+// receiverHeader reads and validates the scalar fields of a decoded event.
+func receiverHeader(event map[string]any) (origin, sid, action string, created float64, ok bool) {
+	version, vok := host.Int(event["version"])
+	id, idOK := event["event_id"].(string)
+	seq, seqOK := host.Int(event["sequence"])
+	origin, _ = event["origin"].(string)
+	sid, sidOK := event["session_id"].(string)
+	action, _ = event["action"].(string)
+	_, isBool := event["created_at"].(bool)
+	created, cok := num(event["created_at"])
+	if !vok || version != 1 || !idOK || !receiverEventID.MatchString(id) || !seqOK || seq <= 0 ||
+		(origin != "claude_code" && origin != "codex" && origin != "zcode") || !sidOK || sid == "" ||
+		(action != "bind" && action != "stop" && action != "suspend") || isBool || !cok {
+		return "", "", "", 0, false
+	}
+	return origin, sid, action, created, true
+}
+
+// receiverWork validates an event's work id and boundary: none for a suspend, else a
+// boundary of the same origin, session and folder.
+func receiverWork(event map[string]any, origin, sid, action, folderKey string, invalid error) error {
+	if action == "suspend" {
+		if event["work_id"] != "" || event["boundary"] != nil {
+			return invalid
+		}
+		return nil
+	}
+	if w, ok := event["work_id"].(string); !ok || !outboxKey.MatchString(w) {
+		return invalid
+	}
+	if err := boundaryValidate(event["boundary"]); err != nil {
+		return err
+	}
+	marker := event["boundary"].(map[string]any)
+	if marker["origin"] != origin || marker["session_id"] != sid {
+		return invalid
+	}
+	mk, err := boundaryFolder(marker["cwd"])
+	if err != nil {
+		return err
+	}
+	if mk != folderKey {
+		return invalid
+	}
+	return nil
 }
 
 // receiverCreated is e['created_at'] of a stored row (an event or a receipt).
@@ -154,15 +172,9 @@ func receiverReceive(raw []byte) (reply host.Obj, err error) {
 		}
 		var revision any
 		if event["action"] != "suspend" {
-			work, err := capPost("/v1/work-checkpoints/get", host.Obj{{Key: "scope", Value: scope}, {Key: "id", Value: event["work_id"]}}, 3*time.Second)
-			if err != nil {
+			if revision, err = receiverRevision(scope, event); err != nil {
 				return err
 			}
-			rev, ok := host.Int(work["revision"])
-			if work["id"] != event["work_id"] || !ok || rev < 1 || work["authority"] != "data_only_untrusted" {
-				return valueErr("work_pc_work_invalid")
-			}
-			revision = work["revision"]
 		}
 		now := timeNow()
 		events := state["events"].([]any)
@@ -176,17 +188,8 @@ func receiverReceive(raw []byte) (reply host.Obj, err error) {
 		}
 		receipts := receiverLive(state["receipts"].([]any), false, now)
 		state["receipts"] = receipts
-		for _, r := range receipts {
-			receipt := r.(map[string]any)
-			if eq(receipt["event_id"], event["event_id"]) || eq(receipt["sequence"], event["sequence"]) {
-				for _, k := range []string{"event_id", "sequence", "sha256"} {
-					want, _ := reply.Get(k)
-					if !eq(receipt[k], want) {
-						return valueErr("work_pc_event_conflict")
-					}
-				}
-				return nil
-			}
+		if replayed, err := receiverReplayed(receipts, event, reply); replayed || err != nil {
+			return err
 		}
 		high, ok := host.Int(state["high_sequence"])
 		seq, _ := host.Int(event["sequence"])
@@ -216,6 +219,37 @@ func receiverReceive(raw []byte) (reply host.Obj, err error) {
 		return nil, err
 	}
 	return reply, nil
+}
+
+// receiverRevision is the current revision of the event's work checkpoint.
+func receiverRevision(scope map[string]any, event map[string]any) (any, error) {
+	work, err := capPost("/v1/work-checkpoints/get", host.Obj{{Key: "scope", Value: scope}, {Key: "id", Value: event["work_id"]}}, 3*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	rev, ok := host.Int(work["revision"])
+	if work["id"] != event["work_id"] || !ok || rev < 1 || work["authority"] != "data_only_untrusted" {
+		return nil, valueErr("work_pc_work_invalid")
+	}
+	return work["revision"], nil
+}
+
+// receiverReplayed reports whether receipts already hold this event, which must then
+// match reply exactly.
+func receiverReplayed(receipts []any, event map[string]any, reply host.Obj) (bool, error) {
+	for _, r := range receipts {
+		receipt := r.(map[string]any)
+		if eq(receipt["event_id"], event["event_id"]) || eq(receipt["sequence"], event["sequence"]) {
+			for _, k := range []string{"event_id", "sequence", "sha256"} {
+				want, _ := reply.Get(k)
+				if !eq(receipt[k], want) {
+					return true, valueErr("work_pc_event_conflict")
+				}
+			}
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 var receiverCode = regexp.MustCompile(`^work_[a-z_]+$`)

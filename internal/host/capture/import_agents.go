@@ -227,14 +227,7 @@ func importManaged(level int, title string) bool {
 // A Claude auto-memory file is one memory, so its body stays whole when it fits.
 func importSplit(src importSource, text string, skip map[string]int) []importStatement {
 	text = strings.ReplaceAll(strings.TrimPrefix(text, "\ufeff"), "\r\n", "\n")
-	kind, name := src.kind, ""
-	if fm, body, ok := importFrontmatter(text); ok {
-		text = body
-		name = strings.TrimSpace(fm["name"])
-		if k, ok := importKinds[strings.ToLower(strings.TrimSpace(fm["type"]))]; ok {
-			kind = k
-		}
-	}
+	text, kind, name := importMeta(src, text)
 	var (
 		chunks  []string // finished statements, heading context already prefixed
 		heading string
@@ -307,7 +300,7 @@ func importSplit(src importSource, text string, skip map[string]int) []importSta
 			continue
 		}
 		table = false
-		if trim == "" || importRule.MatchString(line) || strings.HasPrefix(trim, "<!--") {
+		if importBreak(line, trim) {
 			flush()
 			if src.auto && trim == "" {
 				whole = append(whole, "")
@@ -325,7 +318,29 @@ func importSplit(src importSource, text string, skip map[string]int) []importSta
 		cur = append(cur, trim)
 	}
 	flush() // an unclosed fence hides the rest of the file, as a renderer would
+	return importStatements(src, kind, name, chunks, whole)
+}
 
+// importMeta strips the frontmatter and returns the body with the kind and name it declares.
+func importMeta(src importSource, text string) (string, string, string) {
+	kind, name := src.kind, ""
+	if fm, body, ok := importFrontmatter(text); ok {
+		text = body
+		name = strings.TrimSpace(fm["name"])
+		if k, ok := importKinds[strings.ToLower(strings.TrimSpace(fm["type"]))]; ok {
+			kind = k
+		}
+	}
+	return text, kind, name
+}
+
+// importBreak is a line that ends a paragraph and is no statement: blank, a rule or an HTML comment.
+func importBreak(line, trim string) bool {
+	return trim == "" || importRule.MatchString(line) || strings.HasPrefix(trim, "<!--")
+}
+
+// importStatements turns the split chunks into statements; an auto-memory body that fits stays one.
+func importStatements(src importSource, kind, name string, chunks, whole []string) []importStatement {
 	if src.auto {
 		body := strings.TrimSpace(strings.Join(whole, "\n"))
 		if body != "" && utf8.RuneCountInString(body) <= importMaxChars && importClean(body, map[string]int{}) != "" {

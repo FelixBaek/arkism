@@ -79,146 +79,15 @@ func processorProcess(path string, entry map[string]any, binding any) (err error
 	switch ev("action") {
 	case "suspend":
 	case "bind":
-		if ev("origin") == "zcode" {
-			err := pcZcodeSnapshot(pcZcodeRoot, ev("session_id").(string), func(snapshot string, _ float64, _ []any) error {
-				_, _, err := pcZcodeVerify(snapshot, ev("boundary"))
-				return err
-			})
-			if err != nil {
-				return err
-			}
-		} else {
-			root, err := processorSourceRoot(event)
-			if err != nil {
-				return err
-			}
-			if _, err := boundaryVerify(root, ev("boundary")); err != nil {
-				return err
-			}
+		if err := processorBind(event, ev, pcZcodeRoot); err != nil {
+			return err
 		}
 		updated = map[string]any{"id": ev("work_id"), "revision": autosaveItem(entry, "work_revision"), "boundary": ev("boundary")}
 	default:
-		if !truthy(binding) || !eq(autosaveItem(binding, "id"), ev("work_id")) {
-			return valueErr("work_pc_binding_missing")
-		}
-		start, end := autosaveItem(binding, "boundary"), ev("boundary")
-		for _, k := range []string{"origin", "session_id", "logical"} {
-			if !eq(autosaveItem(start, k), autosaveItem(end, k)) {
-				return valueErr("work_pc_boundary_changed")
-			}
-		}
-		a, err := boundaryFolder(autosaveItem(start, "cwd"))
+		updated, err = processorDialogue(path, entry, binding, event, ev, scope, pcZcodeRoot)
 		if err != nil {
 			return err
 		}
-		b, err := boundaryFolder(autosaveItem(end, "cwd"))
-		if err != nil {
-			return err
-		}
-		if a != b {
-			return valueErr("work_pc_boundary_changed")
-		}
-		if ev("origin") != "zcode" {
-			so, _ := num(autosaveItem(start, "offset"))
-			eo, _ := num(autosaveItem(end, "offset"))
-			if eo < so {
-				return valueErr("work_pc_boundary_changed")
-			}
-		}
-		var job host.Obj
-		if j, has := entry["job"]; has && truthy(j) {
-			job, _ = evidenceDict(j)
-		}
-		persist := func() error {
-			return outboxLocked(filepath.Dir(path), func(string) (err error) {
-				defer recovered(&err)
-				state, err := processorCurrent(path, entry, scope)
-				if err != nil {
-					return err
-				}
-				state["events"].([]any)[0].(map[string]any)["job"] = job
-				return processorSave(path, state)
-			})
-		}
-		sid := ev("session_id").(string)
-		client := evidenceClient{capPost, scope}
-		if job == nil || !autosaveHas(job, "prepared") && !autosaveHas(job, "receipt") {
-			if ev("origin") == "zcode" {
-				err := pcZcodeSnapshot(pcZcodeRoot, sid, func(snapshot string, observed float64, revision []any) error {
-					keys, err := pcZcodeEligible(snapshot, start, end)
-					if err != nil {
-						return err
-					}
-					collector := newCollector(client, nil, true)
-					if err := collector.upload(snapshot, "pc", "zcode", sid, "db-session", observed, "reconstructed_zcode", revision); err != nil {
-						return err
-					}
-					aid := archiveIdentity("pc", "zcode", sid, "db-session")
-					stored, has := collector.state.Get(aid)
-					if collector.counts.n["committed"] == 0 || !has || !truthy(stored) {
-						return valueErr("work_pc_sync_pending")
-					}
-					job = host.Obj{kv("scope", scope), kv("id", autosaveItem(binding, "id")), kv("event_id", ev("event_id")),
-						kv("expected_revision", autosaveItem(binding, "revision")), kv("archive_id", aid),
-						kv("sha256", autosaveItem(stored, "sha256")), kv("eligible_record_keys", keys)}
-					return nil
-				})
-				if err != nil {
-					return err
-				}
-			} else {
-				root, err := processorSourceRoot(event)
-				if err != nil {
-					return err
-				}
-				if _, err := boundaryVerify(root, start); err != nil {
-					return err
-				}
-				source, err := boundaryVerify(root, end)
-				if err != nil {
-					return err
-				}
-				logical := autosaveItem(end, "logical").(string)
-				collector := newCollector(client, nil, true)
-				if err := collector.file(source, "pc", ev("origin").(string), logical, sid, -1); err != nil {
-					return err
-				}
-				aid := archiveIdentity("pc", ev("origin").(string), sid, logical)
-				stored, has := collector.state.Get(aid)
-				if collector.counts.n["committed"] == 0 || !has || !truthy(stored) {
-					return valueErr("work_pc_sync_pending")
-				}
-				if _, err := boundaryVerify(root, start); err != nil {
-					return err
-				}
-				if _, err := boundaryVerify(root, end); err != nil {
-					return err
-				}
-				size, _ := num(autosaveItem(stored, "signature").([]any)[1])
-				got, err := boundaryPrefix(source, int64(size))
-				if err != nil {
-					return err
-				}
-				if got != autosaveItem(stored, "sha256") {
-					return valueErr("work_pc_source_changed")
-				}
-				job = host.Obj{kv("scope", scope), kv("id", autosaveItem(binding, "id")), kv("event_id", ev("event_id")),
-					kv("expected_revision", autosaveItem(binding, "revision")), kv("archive_id", aid),
-					kv("sha256", autosaveItem(stored, "sha256")), kv("start_byte", autosaveItem(start, "offset")),
-					kv("stop_byte", autosaveItem(end, "offset"))}
-			}
-			if err := persist(); err != nil {
-				return err
-			}
-		}
-		request := func(endpoint string, body any) (map[string]any, error) {
-			return capPost(endpoint, body, 60*time.Second)
-		}
-		result, err := autosaveProcess(&job, request, scope, autosaveExtract, persist)
-		if err != nil {
-			return err
-		}
-		updated = map[string]any{"id": autosaveItem(binding, "id"), "revision": autosaveItem(result, "revision"), "boundary": end}
 	}
 	return outboxLocked(filepath.Dir(path), func(string) (err error) {
 		defer recovered(&err)
@@ -230,6 +99,172 @@ func processorProcess(path string, entry map[string]any, binding any) (err error
 		state["events"] = state["events"].([]any)[1:]
 		return processorSave(path, state)
 	})
+}
+
+// processorBind verifies the boundary a bind event starts the work at.
+func processorBind(event any, ev func(string) any, pcZcodeRoot string) error {
+	if ev("origin") == "zcode" {
+		return pcZcodeSnapshot(pcZcodeRoot, ev("session_id").(string), func(snapshot string, _ float64, _ []any) error {
+			_, _, err := pcZcodeVerify(snapshot, ev("boundary"))
+			return err
+		})
+	}
+	root, err := processorSourceRoot(event)
+	if err != nil {
+		return err
+	}
+	_, err = boundaryVerify(root, ev("boundary"))
+	return err
+}
+
+// processorDialogue saves the dialogue between the binding's boundary and the event's
+// and returns the updated binding.
+func processorDialogue(path string, entry map[string]any, binding, event any, ev func(string) any, scope map[string]any, pcZcodeRoot string) (any, error) {
+	if !truthy(binding) || !eq(autosaveItem(binding, "id"), ev("work_id")) {
+		return nil, valueErr("work_pc_binding_missing")
+	}
+	start, end := autosaveItem(binding, "boundary"), ev("boundary")
+	if err := processorCheckBoundary(ev, start, end); err != nil {
+		return nil, err
+	}
+	var job host.Obj
+	if j, has := entry["job"]; has && truthy(j) {
+		job, _ = evidenceDict(j)
+	}
+	persist := func() error {
+		return outboxLocked(filepath.Dir(path), func(string) (err error) {
+			defer recovered(&err)
+			state, err := processorCurrent(path, entry, scope)
+			if err != nil {
+				return err
+			}
+			state["events"].([]any)[0].(map[string]any)["job"] = job
+			return processorSave(path, state)
+		})
+	}
+	sid := ev("session_id").(string)
+	client := evidenceClient{capPost, scope}
+	if job == nil || !autosaveHas(job, "prepared") && !autosaveHas(job, "receipt") {
+		var err error
+		if ev("origin") == "zcode" {
+			job, err = processorZcodeJob(pcZcodeRoot, sid, start, end, client, scope, binding, ev)
+		} else {
+			job, err = processorFileJob(event, sid, start, end, client, scope, binding, ev)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if err := persist(); err != nil {
+			return nil, err
+		}
+	}
+	request := func(endpoint string, body any) (map[string]any, error) {
+		return capPost(endpoint, body, 60*time.Second)
+	}
+	result, err := autosaveProcess(&job, request, scope, autosaveExtract, persist)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": autosaveItem(binding, "id"), "revision": autosaveItem(result, "revision"), "boundary": end}, nil
+}
+
+// processorCheckBoundary requires the event's boundary to continue the binding's.
+func processorCheckBoundary(ev func(string) any, start, end any) error {
+	for _, k := range []string{"origin", "session_id", "logical"} {
+		if !eq(autosaveItem(start, k), autosaveItem(end, k)) {
+			return valueErr("work_pc_boundary_changed")
+		}
+	}
+	a, err := boundaryFolder(autosaveItem(start, "cwd"))
+	if err != nil {
+		return err
+	}
+	b, err := boundaryFolder(autosaveItem(end, "cwd"))
+	if err != nil {
+		return err
+	}
+	if a != b {
+		return valueErr("work_pc_boundary_changed")
+	}
+	if ev("origin") != "zcode" {
+		so, _ := num(autosaveItem(start, "offset"))
+		eo, _ := num(autosaveItem(end, "offset"))
+		if eo < so {
+			return valueErr("work_pc_boundary_changed")
+		}
+	}
+	return nil
+}
+
+// processorZcodeJob uploads the Zcode session snapshot and returns its save job.
+func processorZcodeJob(pcZcodeRoot, sid string, start, end any, client evidenceClient, scope map[string]any, binding any, ev func(string) any) (host.Obj, error) {
+	var job host.Obj
+	err := pcZcodeSnapshot(pcZcodeRoot, sid, func(snapshot string, observed float64, revision []any) error {
+		keys, err := pcZcodeEligible(snapshot, start, end)
+		if err != nil {
+			return err
+		}
+		collector := newCollector(client, nil, true)
+		if err := collector.upload(snapshot, "pc", "zcode", sid, "db-session", observed, "reconstructed_zcode", revision); err != nil {
+			return err
+		}
+		aid := archiveIdentity("pc", "zcode", sid, "db-session")
+		stored, has := collector.state.Get(aid)
+		if collector.counts.n["committed"] == 0 || !has || !truthy(stored) {
+			return valueErr("work_pc_sync_pending")
+		}
+		job = host.Obj{kv("scope", scope), kv("id", autosaveItem(binding, "id")), kv("event_id", ev("event_id")),
+			kv("expected_revision", autosaveItem(binding, "revision")), kv("archive_id", aid),
+			kv("sha256", autosaveItem(stored, "sha256")), kv("eligible_record_keys", keys)}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return job, nil
+}
+
+// processorFileJob uploads the JSONL source between start and end and returns its save job.
+func processorFileJob(event any, sid string, start, end any, client evidenceClient, scope map[string]any, binding any, ev func(string) any) (host.Obj, error) {
+	root, err := processorSourceRoot(event)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := boundaryVerify(root, start); err != nil {
+		return nil, err
+	}
+	source, err := boundaryVerify(root, end)
+	if err != nil {
+		return nil, err
+	}
+	logical := autosaveItem(end, "logical").(string)
+	collector := newCollector(client, nil, true)
+	if err := collector.file(source, "pc", ev("origin").(string), logical, sid, -1); err != nil {
+		return nil, err
+	}
+	aid := archiveIdentity("pc", ev("origin").(string), sid, logical)
+	stored, has := collector.state.Get(aid)
+	if collector.counts.n["committed"] == 0 || !has || !truthy(stored) {
+		return nil, valueErr("work_pc_sync_pending")
+	}
+	if _, err := boundaryVerify(root, start); err != nil {
+		return nil, err
+	}
+	if _, err := boundaryVerify(root, end); err != nil {
+		return nil, err
+	}
+	size, _ := num(autosaveItem(stored, "signature").([]any)[1])
+	got, err := boundaryPrefix(source, int64(size))
+	if err != nil {
+		return nil, err
+	}
+	if got != autosaveItem(stored, "sha256") {
+		return nil, valueErr("work_pc_source_changed")
+	}
+	return host.Obj{kv("scope", scope), kv("id", autosaveItem(binding, "id")), kv("event_id", ev("event_id")),
+		kv("expected_revision", autosaveItem(binding, "revision")), kv("archive_id", aid),
+		kv("sha256", autosaveItem(stored, "sha256")), kv("start_byte", autosaveItem(start, "offset")),
+		kv("stop_byte", autosaveItem(end, "offset"))}, nil
 }
 
 // processorAdvanceControl drops a failed head when a later bind or suspend replaces it.
@@ -268,6 +303,37 @@ func processorLive(list []any, now float64, at func(any) any) []any {
 	return out
 }
 
+// processorExpire drops expired events, receipts and cancelled events from state, saving
+// it when any changed, and returns the live events.
+func processorExpire(path string, state map[string]any, now float64) ([]any, error) {
+	eventAt := func(e any) any { return autosaveItem(autosaveItem(e, "event"), "created_at") }
+	events := autosaveItem(state, "events").([]any)
+	receiptsAll := autosaveItem(state, "receipts").([]any)
+	live := processorLive(events, now, eventAt)
+	receipts := processorLive(receiptsAll, now, func(r any) any { return autosaveItem(r, "created_at") })
+	oldCancelled, has := state["cancelled"]
+	if !has {
+		oldCancelled = []any{}
+	}
+	cancelled := processorLive(oldCancelled.([]any), now, eventAt)
+	if len(cancelled) != len(oldCancelled.([]any)) {
+		state["cancelled"] = cancelled
+		if err := processorSave(path, state); err != nil {
+			return nil, err
+		}
+	}
+	if len(live) != len(events) || len(receipts) != len(receiptsAll) {
+		if len(live) != len(events) {
+			state["binding"] = nil
+		}
+		state["events"], state["receipts"] = live, receipts
+		if err := processorSave(path, state); err != nil {
+			return nil, err
+		}
+	}
+	return live, nil
+}
+
 // processorDrain processes each PC event file's queue in order (up to 20 events per file).
 // Failures are recorded as metrics; only a failure to record one is returned.
 func processorDrain(allOrigins bool) error {
@@ -296,30 +362,9 @@ func processorDrain(allOrigins bool) error {
 					return nil
 				}
 				now := timeNow()
-				eventAt := func(e any) any { return autosaveItem(autosaveItem(e, "event"), "created_at") }
-				events := autosaveItem(state, "events").([]any)
-				receiptsAll := autosaveItem(state, "receipts").([]any)
-				live := processorLive(events, now, eventAt)
-				receipts := processorLive(receiptsAll, now, func(r any) any { return autosaveItem(r, "created_at") })
-				oldCancelled, has := state["cancelled"]
-				if !has {
-					oldCancelled = []any{}
-				}
-				cancelled := processorLive(oldCancelled.([]any), now, eventAt)
-				if len(cancelled) != len(oldCancelled.([]any)) {
-					state["cancelled"] = cancelled
-					if err := processorSave(path, state); err != nil {
-						return err
-					}
-				}
-				if len(live) != len(events) || len(receipts) != len(receiptsAll) {
-					if len(live) != len(events) {
-						state["binding"] = nil
-					}
-					state["events"], state["receipts"] = live, receipts
-					if err := processorSave(path, state); err != nil {
-						return err
-					}
+				live, err := processorExpire(path, state, now)
+				if err != nil {
+					return err
 				}
 				if len(live) == 0 {
 					stop = true

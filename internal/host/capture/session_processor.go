@@ -154,22 +154,28 @@ func validateSessionSchema(value any, schema map[string]any) error {
 			}
 		}
 	case "array":
-		if minimum, has := schema["minItems"]; has {
-			if n, ok := host.Int(minimum); !ok || int64(len(value.([]any))) < n {
-				return sessionWait("schema_array_min_items")
-			}
-		}
-		if len(value.([]any)) > 100 {
-			return sessionWait("schema_array_limit")
-		}
-		for _, item := range value.([]any) {
-			if err := validateSessionSchema(item, schema["items"].(map[string]any)); err != nil {
-				return err
-			}
-		}
+		return validateSessionArray(value, schema)
 	case "string":
 		if host.Len(value.(string)) > 8192 {
 			return sessionWait("schema_string_limit")
+		}
+	}
+	return nil
+}
+
+// validateSessionArray checks an array's item bounds, then every item against the item schema.
+func validateSessionArray(value any, schema map[string]any) error {
+	if minimum, has := schema["minItems"]; has {
+		if n, ok := host.Int(minimum); !ok || int64(len(value.([]any))) < n {
+			return sessionWait("schema_array_min_items")
+		}
+	}
+	if len(value.([]any)) > 100 {
+		return sessionWait("schema_array_limit")
+	}
+	for _, item := range value.([]any) {
+		if err := validateSessionSchema(item, schema["items"].(map[string]any)); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -385,18 +391,7 @@ func validateSessionOutput(output, request map[string]any) (err error) {
 		return nil
 	}
 	state := output["session_state"].(map[string]any)
-	hasTool := false
-	for _, r := range request["records"].([]any) {
-		hasTool = hasTool || autosaveGet(r, "role") == "tool"
-	}
-	if !hasTool {
-		// Dialogue-only batches cannot observe a test run: store a claimed result as unknown, never as passed/failed.
-		for _, c := range state["checks"].([]any) {
-			if m, ok := c.(map[string]any); ok && (m["outcome"] == "passed" || m["outcome"] == "failed") {
-				m["outcome"] = "unknown"
-			}
-		}
-	}
+	sessionUnobservedChecks(state, request)
 	if err := refsValid(state["source_refs"].([]any), false, "", "session_state"); err != nil {
 		return err
 	}
@@ -409,6 +404,27 @@ func validateSessionOutput(output, request map[string]any) (err error) {
 			return err
 		}
 	}
+	return validateSessionCandidates(output, request, records, refsValid)
+}
+
+// sessionUnobservedChecks marks claimed test results unknown when the batch holds no tool record.
+func sessionUnobservedChecks(state, request map[string]any) {
+	hasTool := false
+	for _, r := range request["records"].([]any) {
+		hasTool = hasTool || autosaveGet(r, "role") == "tool"
+	}
+	if !hasTool {
+		// Dialogue-only batches cannot observe a test run: store a claimed result as unknown, never as passed/failed.
+		for _, c := range state["checks"].([]any) {
+			if m, ok := c.(map[string]any); ok && (m["outcome"] == "passed" || m["outcome"] == "failed") {
+				m["outcome"] = "unknown"
+			}
+		}
+	}
+}
+
+// validateSessionCandidates checks each memory candidate's domains, fresh evidence and cited context.
+func validateSessionCandidates(output, request, records map[string]any, refsValid func(refs []any, freshRequired bool, kind, field string) error) error {
 	for _, c := range output["memory_candidates"].([]any) {
 		domains, seen := autosaveGet(c, "domains").([]any), map[any]bool{}
 		for _, d := range domains {
@@ -630,31 +646,8 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 	if len(records) == 0 || start >= end || expectedRevision < 0 {
 		return nil, sessionWait("empty_or_invalid_range")
 	}
-	if privatePayload([]any{scope, sessionID}) {
-		return nil, sessionWait("session_private_identity")
-	}
-	if privateCheckpointIdentity(previousState) {
-		return nil, sessionWait("session_private_identity")
-	}
-	for _, evidence := range anyList(priorEvidence) {
-		if privateIdentityFields(evidence, evidenceIdentityKeys) {
-			return nil, sessionWait("session_private_identity")
-		}
-	}
-	seen := map[string]bool{}
-	for _, r := range records {
-		if privatePayload([]any{autosaveGet(r, "source_id"), autosaveGet(r, "split_of"), autosaveGet(r, "revision"), autosaveGet(r, "role")}) {
-			return nil, sessionWait("session_private_identity")
-		}
-		seen[str(autosaveGet(r, "source_id"))] = true
-		role := autosaveGet(r, "role")
-		revision, isInt := host.Int(autosaveGet(r, "revision"))
-		if role != "user" && role != "assistant" && role != "tool" || !isInt || revision < 1 {
-			return nil, sessionWait("source_provenance_invalid")
-		}
-	}
-	if len(seen) != len(records) {
-		return nil, sessionWait("duplicate_source")
+	if err := sessionCheckIdentity(scope, sessionID, records, previousState, priorEvidence); err != nil {
+		return nil, err
 	}
 	if priorEvidence == nil {
 		priorEvidence = []any{}
@@ -666,23 +659,13 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 		return nil, err
 	}
 	previousState = maskCheckpointState(previousState)
-	maskedPrior := maskSensitive(priorEvidence)
-	for i, evidence := range anyList(maskedPrior) {
-		preserveIdentityFields(evidence, anyList(priorEvidence)[i], evidenceIdentityKeys)
-	}
-	priorEvidence = maskedPrior
+	priorEvidence = sessionMaskPrior(priorEvidence)
 	request := map[string]any{"scope": scope, "session_id": sessionID, "records": records, "start": start, "end": end,
 		"expected_revision": expectedRevision, "previous_state": previousState, "prior_evidence": priorEvidence,
 		"schema_version": sessionSchemaVersion, "prompt_version": sessionPromptVersion}
 	op := sessionOperationID(scope, sessionID, start, end, expectedRevision, records)
 	gate := sessionQualityGate()
-	gateOK := gate["schema_version"] == sessionSchemaVersion && gate["prompt_version"] == sessionPromptVersion && validatedCategory != ""
-	if gateOK {
-		gateOK = false
-		for _, c := range anyList(gate["passed_categories"]) {
-			gateOK = gateOK || c == validatedCategory
-		}
-	}
+	gateOK := sessionGateOK(gate, validatedCategory)
 	content := dumps(map[string]any{"authority": "data_only_untrusted", "data": request})
 	if privatePayload(request) {
 		return nil, sessionWait("session_private_content")
@@ -743,6 +726,58 @@ func sessionPrepare(scope any, sessionID string, records []any, start, end, expe
 		metadata["quality_repair_reason"] = repairReason
 	}
 	return map[string]any{"operation_id": op, "output": output, "metadata": metadata, "start": start, "end": end, "expected_revision": expectedRevision}, nil
+}
+
+// sessionCheckIdentity fails closed on private identifiers, invalid provenance or a repeated source.
+func sessionCheckIdentity(scope any, sessionID string, records []any, previousState, priorEvidence any) error {
+	if privatePayload([]any{scope, sessionID}) {
+		return sessionWait("session_private_identity")
+	}
+	if privateCheckpointIdentity(previousState) {
+		return sessionWait("session_private_identity")
+	}
+	for _, evidence := range anyList(priorEvidence) {
+		if privateIdentityFields(evidence, evidenceIdentityKeys) {
+			return sessionWait("session_private_identity")
+		}
+	}
+	seen := map[string]bool{}
+	for _, r := range records {
+		if privatePayload([]any{autosaveGet(r, "source_id"), autosaveGet(r, "split_of"), autosaveGet(r, "revision"), autosaveGet(r, "role")}) {
+			return sessionWait("session_private_identity")
+		}
+		seen[str(autosaveGet(r, "source_id"))] = true
+		role := autosaveGet(r, "role")
+		revision, isInt := host.Int(autosaveGet(r, "revision"))
+		if role != "user" && role != "assistant" && role != "tool" || !isInt || revision < 1 {
+			return sessionWait("source_provenance_invalid")
+		}
+	}
+	if len(seen) != len(records) {
+		return sessionWait("duplicate_source")
+	}
+	return nil
+}
+
+// sessionMaskPrior masks prior evidence while keeping its identity fields intact.
+func sessionMaskPrior(priorEvidence any) any {
+	maskedPrior := maskSensitive(priorEvidence)
+	for i, evidence := range anyList(maskedPrior) {
+		preserveIdentityFields(evidence, anyList(priorEvidence)[i], evidenceIdentityKeys)
+	}
+	return maskedPrior
+}
+
+// sessionGateOK reports whether the quality gate passed this exact schema, prompt and category.
+func sessionGateOK(gate map[string]any, validatedCategory string) bool {
+	gateOK := gate["schema_version"] == sessionSchemaVersion && gate["prompt_version"] == sessionPromptVersion && validatedCategory != ""
+	if gateOK {
+		gateOK = false
+		for _, c := range anyList(gate["passed_categories"]) {
+			gateOK = gateOK || c == validatedCategory
+		}
+	}
+	return gateOK
 }
 
 var sha256Hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)

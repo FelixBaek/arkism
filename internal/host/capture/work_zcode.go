@@ -91,6 +91,13 @@ func wzcodeRecords(v any) map[string]any {
 	return map[string]any{}
 }
 
+// wzcodePart is one part row of a Zcode snapshot window.
+type wzcodePart struct {
+	key    string
+	record map[string]any
+	data   host.Obj
+}
+
 // wzcodeWindow hashes every message and part of session sid in snapshot (records, in
 // file order) and returns the keys of new real-user and completed-assistant text parts
 // not in previous. History that changed since previous is an error.
@@ -115,41 +122,17 @@ func wzcodeWindow(snapshot, sid string, cwd any, previous any, allowPending, por
 	if !has {
 		session = map[string]any{}
 	}
-	directory := autosaveGet(session, "directory")
-	var same bool
-	if portableCwd {
-		a, err := boundaryFolder(directory)
-		if err != nil {
-			return nil, nil, err
-		}
-		b, err := boundaryFolder(cwd)
-		if err != nil {
-			return nil, nil, err
-		}
-		same = a == b
-	} else if dir, ok := directory.(string); ok {
-		a, err := filepath.EvalSymlinks(absPath(dir))
-		if err != nil {
-			return nil, nil, err
-		}
-		b, err := filepath.EvalSymlinks(absPath(cwd.(string)))
-		if err != nil {
-			return nil, nil, err
-		}
-		same = a == b
+	same, err := wzcodeSameFolder(autosaveGet(session, "directory"), cwd, portableCwd)
+	if err != nil {
+		return nil, nil, err
 	}
 	if autosaveGet(session, "id") != sid || truthy(autosaveGet(session, "parent_id")) || !same {
 		return nil, nil, valueErr("work_zcode_session_invalid")
 	}
-	type part struct {
-		key    string
-		record map[string]any
-		data   host.Obj
-	}
 	index := map[string]string{}
 	compatible := map[string]map[string]bool{}
 	messages := map[string]host.Obj{}
-	var parts []part
+	var parts []wzcodePart
 	records = host.Obj{}
 	for {
 		raw, rerr := r.ReadBytes('\n')
@@ -159,76 +142,133 @@ func wzcodeWindow(snapshot, sid string, cwd any, previous any, allowPending, por
 			}
 			break
 		}
-		v, err := loadsBytes(raw)
+		part, err := wzcodeRow(raw, sid, index, compatible, messages, &records)
 		if err != nil {
 			return nil, nil, err
 		}
-		row := pyNorm(v).(map[string]any)
-		table := autosaveGet(row, "table")
-		if table != "message" && table != "part" {
-			continue
-		}
-		recordV, has := row["record"]
-		if !has {
-			recordV = map[string]any{}
-		}
-		record := recordV.(map[string]any)
-		id, ok := record["id"].(string)
-		if !ok || id == "" {
-			return nil, nil, valueErr("work_zcode_record_invalid")
-		}
-		key := wzcodeDigest([]any{table, id})
-		if _, dup := index[key]; dup {
-			return nil, nil, valueErr("work_zcode_record_duplicate")
-		}
-		index[key] = wzcodeDigest(row)
-		records = append(records, host.KV{Key: key, Value: index[key]})
-		if len(index) > wzcodeLimit {
-			return nil, nil, valueErr("work_zcode_too_large")
-		}
-		parsed, err := loadsOrdered([]byte(autosaveItem(record, "data").(string)))
-		if err != nil {
-			return nil, nil, err
-		}
-		data, isObj := pyNorm(parsed).(host.Obj)
-		if !isObj {
-			panic("record data is not a dict")
-		}
-		compatible[key] = wzcodeBeforeFinalAnchor(row, data)
-		if table == "message" {
-			if record["session_id"] != sid {
-				return nil, nil, valueErr("work_zcode_session_invalid")
-			}
-			messages[id] = data
-		} else {
-			if s, has := record["session_id"]; has && s != sid {
-				return nil, nil, valueErr("work_zcode_session_invalid")
-			}
-			parts = append(parts, part{key, record, data})
+		if part != nil {
+			parts = append(parts, *part)
 		}
 		if rerr != nil {
 			break
 		}
 	}
 	prev := wzcodeRecords(previous)
+	if err := wzcodeCheckHistory(prev, index, compatible, messages, allowPending); err != nil {
+		return nil, nil, err
+	}
+	eligible, err = wzcodeEligible(parts, messages, prev)
+	if err != nil {
+		return nil, nil, err
+	}
+	return records, eligible, nil
+}
+
+// wzcodeSameFolder reports whether the snapshot's session directory is the cwd.
+func wzcodeSameFolder(directory, cwd any, portableCwd bool) (bool, error) {
+	var same bool
+	if portableCwd {
+		a, err := boundaryFolder(directory)
+		if err != nil {
+			return false, err
+		}
+		b, err := boundaryFolder(cwd)
+		if err != nil {
+			return false, err
+		}
+		same = a == b
+	} else if dir, ok := directory.(string); ok {
+		a, err := filepath.EvalSymlinks(absPath(dir))
+		if err != nil {
+			return false, err
+		}
+		b, err := filepath.EvalSymlinks(absPath(cwd.(string)))
+		if err != nil {
+			return false, err
+		}
+		same = a == b
+	}
+	return same, nil
+}
+
+// wzcodeRow hashes one snapshot line into index and records, and returns its part
+// (nil for a message or another table).
+func wzcodeRow(raw []byte, sid string, index map[string]string, compatible map[string]map[string]bool, messages map[string]host.Obj, records *host.Obj) (*wzcodePart, error) {
+	v, err := loadsBytes(raw)
+	if err != nil {
+		return nil, err
+	}
+	row := pyNorm(v).(map[string]any)
+	table := autosaveGet(row, "table")
+	if table != "message" && table != "part" {
+		return nil, nil
+	}
+	recordV, has := row["record"]
+	if !has {
+		recordV = map[string]any{}
+	}
+	record := recordV.(map[string]any)
+	id, ok := record["id"].(string)
+	if !ok || id == "" {
+		return nil, valueErr("work_zcode_record_invalid")
+	}
+	key := wzcodeDigest([]any{table, id})
+	if _, dup := index[key]; dup {
+		return nil, valueErr("work_zcode_record_duplicate")
+	}
+	index[key] = wzcodeDigest(row)
+	*records = append(*records, host.KV{Key: key, Value: index[key]})
+	if len(index) > wzcodeLimit {
+		return nil, valueErr("work_zcode_too_large")
+	}
+	parsed, err := loadsOrdered([]byte(autosaveItem(record, "data").(string)))
+	if err != nil {
+		return nil, err
+	}
+	data, isObj := pyNorm(parsed).(host.Obj)
+	if !isObj {
+		panic("record data is not a dict")
+	}
+	compatible[key] = wzcodeBeforeFinalAnchor(row, data)
+	if table == "message" {
+		if record["session_id"] != sid {
+			return nil, valueErr("work_zcode_session_invalid")
+		}
+		messages[id] = data
+		return nil, nil
+	}
+	if s, has := record["session_id"]; has && s != sid {
+		return nil, valueErr("work_zcode_session_invalid")
+	}
+	return &wzcodePart{key, record, data}, nil
+}
+
+// wzcodeCheckHistory rejects history that changed since prev and, unless allowPending,
+// an assistant message that is not completed yet.
+func wzcodeCheckHistory(prev map[string]any, index map[string]string, compatible map[string]map[string]bool, messages map[string]host.Obj, allowPending bool) error {
 	for key, value := range prev {
 		if got, has := index[key]; (!has || got != value) && !compatible[key][sstr(value)] {
-			return nil, nil, valueErr("work_zcode_history_changed")
+			return valueErr("work_zcode_history_changed")
 		}
 	}
 	if !allowPending {
 		for _, m := range messages {
 			if autosaveGet(m, "role") == "assistant" && !wzcodeCompleted(m) {
-				return nil, nil, valueErr("work_zcode_pending")
+				return valueErr("work_zcode_pending")
 			}
 		}
 	}
-	eligible = []string{}
+	return nil
+}
+
+// wzcodeEligible returns the keys of new real-user and completed-assistant text parts.
+func wzcodeEligible(parts []wzcodePart, messages map[string]host.Obj, prev map[string]any) ([]string, error) {
+	eligible := []string{}
 	for _, p := range parts {
 		mid, _ := p.record["message_id"].(string)
 		message, found := messages[mid]
 		if !found {
-			return nil, nil, valueErr("work_zcode_message_missing")
+			return nil, valueErr("work_zcode_message_missing")
 		}
 		if _, old := prev[p.key]; old || autosaveGet(p.data, "type") != "text" || truthy(autosaveGet(p.data, "synthetic")) {
 			continue
@@ -240,5 +280,5 @@ func wzcodeWindow(snapshot, sid string, cwd any, previous any, allowPending, por
 			eligible = append(eligible, wzcodePartKey(p.record["id"].(string)))
 		}
 	}
-	return records, eligible, nil
+	return eligible, nil
 }

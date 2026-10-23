@@ -137,26 +137,7 @@ func logsCaptureFrom(root, pattern string, read func(string) (string, string, []
 			continue
 		}
 		seen := state.Seen[path]
-		var users []any
-		var ids []string
-		for i, m := range msgs {
-			if m.typ != "user" || slices.Contains(seen, m.id) {
-				continue
-			}
-			// Only answered messages: the turn is over, as at a Stop hook.
-			answered := slices.ContainsFunc(msgs[i+1:], func(x logsMessage) bool { return x.typ != "user" })
-			at, perr := time.Parse(time.RFC3339Nano, m.at)
-			if !answered || perr == nil && at.Before(since) {
-				if answered {
-					ids = append(ids, m.id) // older than the first run: remembered, not captured
-				}
-				continue
-			}
-			ids = append(ids, m.id)
-			if text := clean(m.text); text != "" {
-				users = append(users, map[string]any{"at": or(m.at, host.NowISO()), "text": head(text, 4000)})
-			}
-		}
+		users, ids := logsNewUsers(msgs, seen, since)
 		if len(users) > 0 {
 			turns := int64(len(seen) + len(ids))
 			job := map[string]any{"type": "turn_completed", "session_id": sid, "cwd": cwd, "users": users, "turns": turns,
@@ -181,6 +162,30 @@ func logsCaptureFrom(root, pattern string, read func(string) (string, string, []
 	}
 	raw, _ := json.Marshal(state)
 	return queued, atomicWrite(statePath, string(raw))
+}
+
+// logsNewUsers gives the answered user messages not yet seen, and the ids to remember: those
+// captured, and the answered ones older than since.
+func logsNewUsers(msgs []logsMessage, seen []string, since time.Time) (users []any, ids []string) {
+	for i, m := range msgs {
+		if m.typ != "user" || slices.Contains(seen, m.id) {
+			continue
+		}
+		// Only answered messages: the turn is over, as at a Stop hook.
+		answered := slices.ContainsFunc(msgs[i+1:], func(x logsMessage) bool { return x.typ != "user" })
+		at, perr := time.Parse(time.RFC3339Nano, m.at)
+		if !answered || perr == nil && at.Before(since) {
+			if answered {
+				ids = append(ids, m.id) // older than the first run: remembered, not captured
+			}
+			continue
+		}
+		ids = append(ids, m.id)
+		if text := clean(m.text); text != "" {
+			users = append(users, map[string]any{"at": or(m.at, host.NowISO()), "text": head(text, 4000)})
+		}
+	}
+	return users, ids
 }
 
 // logsMain is `arkism capture logs`: Gemini CLI's chats under ~/.gemini/tmp, or with

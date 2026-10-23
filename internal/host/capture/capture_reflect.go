@@ -305,37 +305,43 @@ func readZcode(sid string, start int64) (readResult, error) {
 		}); err != nil {
 			return res, err
 		}
-		sem, _ := or(data["semantics"], map[string]any{}).(map[string]any)
-		if data["role"] == "user" && sem["origin"] == "real_user" {
-			for _, p := range parts {
-				if p["type"] == "text" && !truthy(p["synthetic"]) {
-					t, _ := or(p["text"], "").(string)
-					if t = clean(t); t != "" {
-						res.lines = append(res.lines, "사용자: "+head(t, 2000))
-						res.users++
-					}
-				}
-			}
-		} else if data["role"] == "assistant" {
-			var texts []string
-			for _, p := range parts {
-				if p["type"] == "text" {
-					texts = append(texts, str(or(p["text"], "")))
-				}
-			}
-			if text := pyStrip(strings.Join(texts, " ")); text != "" {
-				res.lines = append(res.lines, "AI: "+head(text, 1500))
-			}
-			for _, p := range parts {
-				st, _ := or(p["state"], map[string]any{}).(map[string]any)
-				if p["type"] == "tool" && st["status"] == "error" {
-					res.lines = append(res.lines, "도구 실패: "+head(pyStrip(str(or(st["error"], ""))), 300))
-				}
-			}
-		}
+		zcodeLines(&res, data, parts)
 		res.end = m.seq + 1
 	}
 	return res, nil
+}
+
+// zcodeLines adds one ZCode message's dialogue lines to res: what the person typed, the
+// assistant's text, and its failed tool calls.
+func zcodeLines(res *readResult, data map[string]any, parts []map[string]any) {
+	sem, _ := or(data["semantics"], map[string]any{}).(map[string]any)
+	if data["role"] == "user" && sem["origin"] == "real_user" {
+		for _, p := range parts {
+			if p["type"] == "text" && !truthy(p["synthetic"]) {
+				t, _ := or(p["text"], "").(string)
+				if t = clean(t); t != "" {
+					res.lines = append(res.lines, "사용자: "+head(t, 2000))
+					res.users++
+				}
+			}
+		}
+	} else if data["role"] == "assistant" {
+		var texts []string
+		for _, p := range parts {
+			if p["type"] == "text" {
+				texts = append(texts, str(or(p["text"], "")))
+			}
+		}
+		if text := pyStrip(strings.Join(texts, " ")); text != "" {
+			res.lines = append(res.lines, "AI: "+head(text, 1500))
+		}
+		for _, p := range parts {
+			st, _ := or(p["state"], map[string]any{}).(map[string]any)
+			if p["type"] == "tool" && st["status"] == "error" {
+				res.lines = append(res.lines, "도구 실패: "+head(pyStrip(str(or(st["error"], ""))), 300))
+			}
+		}
+	}
 }
 
 // chat is one conversation reflect can read: key in reflect.json, which agent, session id, how
@@ -432,12 +438,7 @@ type checkedLesson struct {
 // dropped; an unknown or mismatched target makes the lesson new.
 func reflectionClaims(raw []any, lines []string, active, waiting []map[string]any) ([]checkedLesson, error) {
 	log := norm(strings.Join(lines, "\n"))
-	var users []string
-	for _, l := range lines {
-		if strings.HasPrefix(l, "사용자: ") {
-			users = append(users, norm(l))
-		}
-	}
+	users := personLines(lines)
 	activeIDs := map[any]bool{}
 	for _, r := range active {
 		activeIDs[hashable(r["id"])] = true
@@ -478,15 +479,31 @@ func reflectionClaims(raw []any, lines []string, active, waiting []map[string]an
 		if action == "replace" && target["revision"] != nil { // a suggestion: the old lesson stays in use until a person replaces it
 			claim = append(claim, host.KV{Key: "supersedes", Value: host.Obj{{Key: "collection", Value: "memories"}, {Key: "id", Value: target["id"]}, {Key: "revision", Value: target["revision"]}}})
 		}
-		fromUser := false
-		for _, u := range users {
-			if strings.Contains(u, quote) {
-				fromUser = true
-			}
-		}
-		out = append(out, checkedLesson{claim, action, target, fromUser})
+		out = append(out, checkedLesson{claim, action, target, quotedByUser(users, quote)})
 	}
 	return out, nil
+}
+
+// personLines are the person's lines of the log, normalized.
+func personLines(lines []string) []string {
+	var users []string
+	for _, l := range lines {
+		if strings.HasPrefix(l, "사용자: ") {
+			users = append(users, norm(l))
+		}
+	}
+	return users
+}
+
+// quotedByUser says the quote comes from something the person said.
+func quotedByUser(users []string, quote string) bool {
+	fromUser := false
+	for _, u := range users {
+		if strings.Contains(u, quote) {
+			fromUser = true
+		}
+	}
+	return fromUser
 }
 
 func candidatePath(cid any) string {
@@ -756,16 +773,8 @@ func reflectRun(dryRun bool, stdout io.Writer) error {
 		return err
 	}
 	defer lock.Close()
-	state := host.Obj{}
-	if raw, err := os.ReadFile(stateFile); err == nil {
-		v, err := loadsOrdered(raw)
-		if err != nil {
-			return err
-		}
-		if o, isObj := v.(host.Obj); isObj {
-			state = o
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
+	state, err := loadReflectState(stateFile)
+	if err != nil {
 		return err
 	}
 	active, err := lessons("active")
@@ -776,19 +785,7 @@ func reflectRun(dryRun bool, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	var known []string
-	for _, g := range []struct {
-		tag  string
-		rows []map[string]any
-	}{{"A", active}, {"C", waiting}} {
-		for _, r := range g.rows {
-			known = append(known, fmt.Sprintf("%s %s: %s", g.tag, str(r["id"]), str(or(r["text"], ""))))
-			if _, has := r["text"]; !has {
-				known[len(known)-1] = fmt.Sprintf("%s %s: ", g.tag, str(r["id"]))
-			}
-		}
-	}
-	existing := existingLessons{active, waiting, or(strings.Join(known, "\n"), "(none)").(string)}
+	existing := existingLessons{active, waiting, knownLessons(active, waiting)}
 	all, err := chats()
 	if err != nil {
 		return err
@@ -831,6 +828,40 @@ func reflectRun(dryRun bool, stdout io.Writer) error {
 		return err
 	}
 	return classifyWaiting(stdout)
+}
+
+// loadReflectState reads reflect.json: how far each chat was reflected on (empty when absent).
+func loadReflectState(stateFile string) (host.Obj, error) {
+	state := host.Obj{}
+	if raw, err := os.ReadFile(stateFile); err == nil {
+		v, err := loadsOrdered(raw)
+		if err != nil {
+			return nil, err
+		}
+		if o, isObj := v.(host.Obj); isObj {
+			state = o
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	return state, nil
+}
+
+// knownLessons lists the active (A) and waiting (C) lessons for the reflection prompt.
+func knownLessons(active, waiting []map[string]any) string {
+	var known []string
+	for _, g := range []struct {
+		tag  string
+		rows []map[string]any
+	}{{"A", active}, {"C", waiting}} {
+		for _, r := range g.rows {
+			known = append(known, fmt.Sprintf("%s %s: %s", g.tag, str(r["id"]), str(or(r["text"], ""))))
+			if _, has := r["text"]; !has {
+				known[len(known)-1] = fmt.Sprintf("%s %s: ", g.tag, str(r["id"]))
+			}
+		}
+	}
+	return or(strings.Join(known, "\n"), "(none)").(string)
 }
 
 // classifyWaiting gives waiting candidates the AI advice the review screen shows; the next run retries a failure.

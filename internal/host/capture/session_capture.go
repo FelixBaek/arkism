@@ -221,23 +221,7 @@ func sessionChildPath(name any) (string, error) {
 // caller holds drain.lock.
 func sessionCoalesce(job map[string]any, persist func() error) error {
 	if children, has := job["session_batch_children"]; has && children != nil {
-		for _, name := range anyList(children) {
-			path, err := sessionChildPath(name)
-			if err != nil {
-				return err
-			}
-			if exists(path) {
-				child, err := readJob(path)
-				if err != nil {
-					return err
-				}
-				child["session_batch_parent"] = job["event_id"]
-				if err := atomicWrite(path, dumps(child)); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
+		return sessionMarkChildren(job, children)
 	}
 	// Prompt locators each name a separate archive message; only a shared transcript context merges.
 	if truthy(job["session_prepared"]) || !truthy(job["archive_context"]) || truthy(job["archive_locator"]) {
@@ -255,9 +239,7 @@ func sessionCoalesce(job map[string]any, persist func() error) error {
 		if err != nil {
 			continue
 		}
-		if eq(child["event_id"], job["event_id"]) || child["session_id"] != job["session_id"] || !eq(child["archive_context"], job["archive_context"]) ||
-			truthy(child["archive_locator"]) || truthy(child["captured"]) || truthy(child["prepared_capture"]) || truthy(child["session_prepared"]) ||
-			truthy(child["session_batch_parent"]) || child["session_batch_children"] != nil {
+		if !sessionCoalescible(job, child) {
 			continue
 		}
 		users := anyList(job["users"])
@@ -287,6 +269,34 @@ func sessionCoalesce(job map[string]any, persist func() error) error {
 		}
 	}
 	return nil
+}
+
+// sessionMarkChildren points each already chosen child batch that still exists at job.
+func sessionMarkChildren(job map[string]any, children any) error {
+	for _, name := range anyList(children) {
+		path, err := sessionChildPath(name)
+		if err != nil {
+			return err
+		}
+		if exists(path) {
+			child, err := readJob(path)
+			if err != nil {
+				return err
+			}
+			child["session_batch_parent"] = job["event_id"]
+			if err := atomicWrite(path, dumps(child)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// sessionCoalescible reports whether child is another pending batch of job's session and transcript.
+func sessionCoalescible(job, child map[string]any) bool {
+	return !(eq(child["event_id"], job["event_id"]) || child["session_id"] != job["session_id"] || !eq(child["archive_context"], job["archive_context"]) ||
+		truthy(child["archive_locator"]) || truthy(child["captured"]) || truthy(child["prepared_capture"]) || truthy(child["session_prepared"]) ||
+		truthy(child["session_batch_parent"]) || child["session_batch_children"] != nil)
 }
 
 func sessionFinishChildren(job map[string]any) error {
@@ -387,20 +397,8 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 		return sessionWait("session_private_prepared")
 	}
 	scope := capScope()
-	if privatePayload([]any{scope, job["session_id"]}) {
-		return sessionWait("session_private_identity")
-	}
-	if v, has := job["session_scope"]; has && v != nil && !eq(v, scope) {
-		return sessionWait("session_scope_changed")
-	}
-	if truthy(job["session_batch_parent"]) {
-		return sessionWait("session_batch_parent_pending")
-	}
-	if truthy(job["session_processor_complete"]) {
-		return sessionFinishChildren(job)
-	}
-	if len(anyList(job["users"])) == 0 && !truthy(job["execution_receipt"]) && !truthy(job["archive_context"]) {
-		return nil
+	if held, err := sessionHeld(job, scope); held {
+		return err
 	}
 	userText := func() string {
 		var texts []string
@@ -418,44 +416,17 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 		}
 		return fallback
 	}
-	event := ""
-	if t := job["type"]; t == "session_end" || t == "session_ended" || t == "task_finished" {
-		event = "task_finished"
-	}
-	event = explicit(event)
-	now := timeNow()
-	queued, ok := archiveTimestamp(job["queued_at"])
-	if !ok || queued == 0 {
-		queued = now
-	}
-	latest := queued
-	for _, u := range anyList(job["users"]) {
-		if at, ok := archiveTimestamp(autosaveGet(u, "at")); ok && at != 0 {
-			latest = max(latest, at)
-		}
-	}
-	pendingRecords := anyList(job["users"])
-	if len(pendingRecords) == 0 {
-		pendingRecords = []any{map[string]any{"text": "canonical trace pending"}}
-	}
-	if !truthy(job["session_prepared"]) && !sessionDue(pendingRecords, event, max(0, now-latest), max(0, now-queued)) {
+	event := explicit(sessionEndEvent(job["type"]))
+	if !sessionBatchReady(job, event) {
 		return sessionWait("session_batch_wait")
 	}
 	if err := sessionCoalesce(job, persist); err != nil {
 		return err
 	}
 	event = explicit(event)
-	read := sessionLinked
-	if truthy(job["execution_receipt"]) {
-		read = func(job map[string]any, _ string) ([]any, map[string][]any, error) { return sessionCanonical(job) }
-	}
-	records, refs, err := read(job, origin)
+	chunks, refs, canonical, err := sessionWindows(job, origin)
 	if err != nil {
 		return err
-	}
-	canonical := map[string]any{}
-	for _, ref := range anyList(autosaveGet(or(job["execution_receipt"], map[string]any{}), "source_events")) {
-		canonical[str(autosaveGet(ref, "id"))] = ref
 	}
 	chunkSources := func(chunk []any) []any {
 		out := []any{}
@@ -465,32 +436,6 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 			}
 		}
 		return out
-	}
-	// Mask before splitting, so a cut never halves an address or number past the filter.
-	records, err = maskSessionRecords(records)
-	if err != nil {
-		return err
-	}
-	groups, err := chunkRecords(records, 32000)
-	if err != nil {
-		return err
-	}
-	for _, group := range groups {
-		for _, row := range group {
-			if split := autosaveGet(row, "split_of"); split != nil {
-				id, whole := str(autosaveGet(row, "source_id")), str(split)
-				refs[id] = refs[whole]
-				if ref, has := canonical[whole]; has {
-					canonical[id] = ref
-				}
-			}
-		}
-	}
-	var chunks [][]any
-	for _, group := range groups {
-		for i := 0; i < len(group); i += 8 {
-			chunks = append(chunks, group[i:min(i+8, len(group))])
-		}
 	}
 	cursor, _ := host.Int(or(job["session_cursor"], 0))
 	checkpointID := "session-" + sdigest([]any{scope, origin, job["session_id"]})
@@ -508,56 +453,20 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 		}
 		prepared, _ := job["session_prepared"].(map[string]any)
 		if prepared == nil {
-			current, err := sessionCurrentCheckpoint(checkpointID)
+			current, previous, delivered, err := sessionResumeWindow(checkpointID, chunk, refs, canonical, &repository, checkPolicy)
 			if err != nil {
 				return err
 			}
-			var previous any
-			if current != nil {
-				previous = current["package"]
-				if privateCheckpointIdentity(previous) {
-					return sessionWait("session_private_identity")
-				}
-				repository = str(or(evidenceField(previous, "repository"), ""))
-				if err := checkPolicy(); err != nil {
+			if delivered { // the checkpoint follows the capture ACK: this source window was delivered
+				job["session_cursor"] = index + 1
+				if err := persist(); err != nil {
 					return err
 				}
-				known, knownSources := map[string]bool{}, map[string]bool{}
-				for _, ref := range anyList(current["archive_messages"]) {
-					known[sdigest(ref)] = true
-				}
-				for _, ref := range anyList(autosaveGet(or(current["package"], map[string]any{}), "source_refs")) {
-					knownSources[sdigest(ref)] = true
-				}
-				delivered := true
-				for _, row := range chunk {
-					// A later part shares its record's refs with the window just saved, so refs cannot prove it delivered.
-					if whole := autosaveGet(row, "split_of"); whole != nil && autosaveGet(row, "source_id") != str(whole)+"-p1" {
-						delivered = false
-					}
-					if ref, has := canonical[str(autosaveGet(row, "source_id"))]; has {
-						delivered = delivered && knownSources[sdigest(ref)]
-						continue
-					}
-					for _, ref := range refs[str(autosaveGet(row, "source_id"))] {
-						delivered = delivered && known[sdigest(ref)]
-					}
-				}
-				if delivered { // the checkpoint follows the capture ACK: this source window was delivered
-					job["session_cursor"] = index + 1
-					if err := persist(); err != nil {
-						return err
-					}
-					continue
-				}
+				continue
 			}
-			var chunkRefs []any
-			for _, row := range chunk {
-				chunkRefs = append(chunkRefs, refs[str(autosaveGet(row, "source_id"))]...)
-			}
-			transferRefs := dedupeRefs(chunkRefs)
-			if len(transferRefs) > 8 {
-				return sessionWait("session_transfer_evidence_limit")
+			transferRefs, err := sessionTransferRefs(chunk, refs)
+			if err != nil {
+				return err
 			}
 			authorize := func(content string) error {
 				payload := map[string]any{"scope": scope, "refs": transferRefs, "source_refs": chunkSources(chunk), "destination": "external:anthropic", "content": content}
@@ -573,99 +482,25 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 				}
 				return nil
 			}
-			expected := int64(0)
-			if current != nil {
-				expected, _ = host.Int(current["revision"])
-			}
-			// Automatic Haiku qualification stays conservative: an explicit correction is the only category identified here.
-			category := ""
-			if event == "explicit_correction" {
-				category = "korean_correction"
-			}
-			if prepared, err = sessionPrepare(scope, sid, chunk, chunkStart, end, expected, previous, nil, category, authorize, str(or(job["cwd"], "")), str(or(job["repository"], "")), repository); err != nil {
-				if sessionQualityDefects.MatchString(errorCode(err)) && privateCapturePolicy("capture_policy_wait", str(or(job["cwd"], "")), str(or(job["repository"], "")), repository) == nil {
-					job["session_validation"] = sessionValidationDiagnostic(errorCode(err), chunkStart, end, 0)
-					if saveErr := persist(); saveErr != nil {
-						return saveErr
-					}
-					metric(kv("event", "session_validation_withheld"), kv("reason", job["session_validation"].(map[string]any)["reason"]))
-				}
-				return err
+			expected, _ := host.Int(current["revision"]) // no checkpoint yet reads as revision 0
+			if prepared, err = sessionPrepare(scope, sid, chunk, chunkStart, end, expected, previous, nil, sessionCategory(event), authorize, str(or(job["cwd"], "")), str(or(job["repository"], "")), repository); err != nil {
+				return sessionWithhold(job, err, chunkStart, end, repository, persist)
 			}
 			job["session_validation"] = sessionValidationDiagnostic("", chunkStart, end, len(anyList(prepared["output"].(map[string]any)["memory_candidates"])))
 			pkg := sessionCheckpointPackage(prepared, sid, origin, str(or(job["cwd"], job["repository"], "")))
 			pkg["source_refs"] = dedupeRefs(append(chunkSources(chunk), anyList(autosaveGet(or(previous, map[string]any{}), "source_refs"))...))
 			// Only this window's refs: the server takes at most 8, all from the current archive snapshot,
 			// so a previous window's refs (older snapshot) would make every later save a 409.
-			archiveRefs := transferRefs
-			claims, err := sessionClaims(prepared["output"].(map[string]any)["memory_candidates"].([]any), refs, canonical)
-			if err != nil {
+			if err := sessionCheckpointRequest(prepared, pkg, refs, canonical, scope, checkpointID, expected, transferRefs); err != nil {
 				return err
-			}
-			if err := validateCheckpointPackage(pkg); err != nil {
-				return err
-			}
-			prepared["claims"] = claims
-			prepared["checkpoint_request"] = map[string]any{"scope": scope, "id": checkpointID, "event_id": prepared["operation_id"],
-				"expected_revision": expected, "package": pkg, "archive_messages": archiveRefs}
-			if privatePayload(prepared) {
-				return sessionWait("session_private_prepared")
 			}
 			job["session_prepared"] = prepared
 			if err := persist(); err != nil {
 				return err
 			}
 		}
-		request := prepared["checkpoint_request"].(map[string]any)
-		if privatePayload(prepared) {
-			return sessionWait("session_private_prepared")
-		}
-		if !eq(request["scope"], scope) {
-			return sessionWait("session_scope_changed")
-		}
-		if !truthy(prepared["capture_ack"]) {
-			if claims := anyList(prepared["claims"]); len(claims) > 0 {
-				eventType := "turn_completed"
-				switch event {
-				case "explicit_correction":
-					eventType = "user_corrected_fact"
-				case "explicit_remember_request":
-					eventType = "explicit_remember"
-				}
-				occurred := or(job["occurred_at"], job["queued_at"])
-				if users := anyList(job["users"]); len(users) > 0 {
-					occurred = autosaveGet(users[len(users)-1], "at")
-				}
-				if err := checkPolicy(); err != nil {
-					return err
-				}
-				items, err := sendCapture(eventType, str(prepared["operation_id"]), sid, occurred, claims, origin, 0, host.Obj{
-					{Key: "model", Value: autosaveGet(prepared["metadata"], "model_id")}, {Key: "prompt_version", Value: sessionPromptVersion},
-					{Key: "pipeline_version", Value: "session-processor-v1"}})
-				if err != nil {
-					return err
-				}
-				acknowledged := len(items) == len(claims)
-				for _, item := range items {
-					acknowledged = acknowledged && autosaveGet(item, "status") != "rejected"
-				}
-				if !acknowledged {
-					return sessionWait("session_capture_not_acknowledged")
-				}
-			}
-			prepared["capture_ack"] = true
-			if err := persist(); err != nil {
-				return err
-			}
-		}
-		receipt, err := post("/v1/work-checkpoints/save", request)
-		if err != nil {
+		if err := sessionDeliver(job, prepared, scope, event, sid, origin, checkpointID, checkPolicy, persist, post); err != nil {
 			return err
-		}
-		revision, _ := host.Int(receipt["revision"])
-		expected, _ := host.Int(request["expected_revision"])
-		if receipt["id"] != checkpointID || revision != expected+1 {
-			return sessionWait("session_checkpoint_not_acknowledged")
 		}
 		job["session_cursor"] = index + 1
 		delete(job, "session_prepared")
@@ -673,6 +508,11 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 			return err
 		}
 	}
+	return sessionComplete(job, persist)
+}
+
+// sessionComplete marks job processed and then removes its merged child batches.
+func sessionComplete(job map[string]any, persist func() error) error {
 	job["session_processor_complete"], job["captured"] = true, true
 	if err := persist(); err != nil {
 		return err
@@ -689,4 +529,254 @@ func sessionWindowDialogue(job map[string]any, archiveID, sha256 any, request au
 		return nil, sessionWait("session_archive_window_incomplete")
 	}
 	return messages, err
+}
+
+// sessionHeld reports whether job must stop before any processing, with the error to return.
+func sessionHeld(job map[string]any, scope any) (bool, error) {
+	if privatePayload([]any{scope, job["session_id"]}) {
+		return true, sessionWait("session_private_identity")
+	}
+	if v, has := job["session_scope"]; has && v != nil && !eq(v, scope) {
+		return true, sessionWait("session_scope_changed")
+	}
+	if truthy(job["session_batch_parent"]) {
+		return true, sessionWait("session_batch_parent_pending")
+	}
+	if truthy(job["session_processor_complete"]) {
+		return true, sessionFinishChildren(job)
+	}
+	if len(anyList(job["users"])) == 0 && !truthy(job["execution_receipt"]) && !truthy(job["archive_context"]) {
+		return true, nil
+	}
+	return false, nil
+}
+
+// sessionEndEvent names the event of a job type that ends the task.
+func sessionEndEvent(t any) string {
+	if t == "session_end" || t == "session_ended" || t == "task_finished" {
+		return "task_finished"
+	}
+	return ""
+}
+
+// sessionCategory is the Haiku qualification category of event. Automatic qualification stays
+// conservative: an explicit correction is the only category identified here.
+func sessionCategory(event string) string {
+	if event == "explicit_correction" {
+		return "korean_correction"
+	}
+	return ""
+}
+
+// sessionBatchReady reports whether a prepared or due batch may be processed now.
+func sessionBatchReady(job map[string]any, event string) bool {
+	now := timeNow()
+	queued, ok := archiveTimestamp(job["queued_at"])
+	if !ok || queued == 0 {
+		queued = now
+	}
+	latest := queued
+	for _, u := range anyList(job["users"]) {
+		if at, ok := archiveTimestamp(autosaveGet(u, "at")); ok && at != 0 {
+			latest = max(latest, at)
+		}
+	}
+	pendingRecords := anyList(job["users"])
+	if len(pendingRecords) == 0 {
+		pendingRecords = []any{map[string]any{"text": "canonical trace pending"}}
+	}
+	return truthy(job["session_prepared"]) || sessionDue(pendingRecords, event, max(0, now-latest), max(0, now-queued))
+}
+
+// sessionWindows reads the job's records with their archive refs and canonical trace sources, and
+// cuts the masked records into chunks of at most 8.
+func sessionWindows(job map[string]any, origin string) (chunks [][]any, refs map[string][]any, canonical map[string]any, err error) {
+	read := sessionLinked
+	if truthy(job["execution_receipt"]) {
+		read = func(job map[string]any, _ string) ([]any, map[string][]any, error) { return sessionCanonical(job) }
+	}
+	records, refs, err := read(job, origin)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	canonical = map[string]any{}
+	for _, ref := range anyList(autosaveGet(or(job["execution_receipt"], map[string]any{}), "source_events")) {
+		canonical[str(autosaveGet(ref, "id"))] = ref
+	}
+	// Mask before splitting, so a cut never halves an address or number past the filter.
+	records, err = maskSessionRecords(records)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	groups, err := chunkRecords(records, 32000)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, group := range groups {
+		for _, row := range group {
+			if split := autosaveGet(row, "split_of"); split != nil {
+				id, whole := str(autosaveGet(row, "source_id")), str(split)
+				refs[id] = refs[whole]
+				if ref, has := canonical[whole]; has {
+					canonical[id] = ref
+				}
+			}
+		}
+	}
+	for _, group := range groups {
+		for i := 0; i < len(group); i += 8 {
+			chunks = append(chunks, group[i:min(i+8, len(group))])
+		}
+	}
+	return chunks, refs, canonical, nil
+}
+
+// sessionResumeWindow reads the current checkpoint and its package, and reports whether it already
+// holds every source of chunk; the package's repository joins the policy check.
+func sessionResumeWindow(checkpointID string, chunk []any, refs map[string][]any, canonical map[string]any, repository *string,
+	checkPolicy func() error) (current map[string]any, previous any, delivered bool, err error) {
+	current, err = sessionCurrentCheckpoint(checkpointID)
+	if err != nil || current == nil {
+		return nil, nil, false, err
+	}
+	previous = current["package"]
+	if privateCheckpointIdentity(previous) {
+		return nil, nil, false, sessionWait("session_private_identity")
+	}
+	*repository = str(or(evidenceField(previous, "repository"), ""))
+	if err := checkPolicy(); err != nil {
+		return nil, nil, false, err
+	}
+	known, knownSources := map[string]bool{}, map[string]bool{}
+	for _, ref := range anyList(current["archive_messages"]) {
+		known[sdigest(ref)] = true
+	}
+	for _, ref := range anyList(autosaveGet(or(current["package"], map[string]any{}), "source_refs")) {
+		knownSources[sdigest(ref)] = true
+	}
+	delivered = true
+	for _, row := range chunk {
+		// A later part shares its record's refs with the window just saved, so refs cannot prove it delivered.
+		if whole := autosaveGet(row, "split_of"); whole != nil && autosaveGet(row, "source_id") != str(whole)+"-p1" {
+			delivered = false
+		}
+		if ref, has := canonical[str(autosaveGet(row, "source_id"))]; has {
+			delivered = delivered && knownSources[sdigest(ref)]
+			continue
+		}
+		for _, ref := range refs[str(autosaveGet(row, "source_id"))] {
+			delivered = delivered && known[sdigest(ref)]
+		}
+	}
+	return current, previous, delivered, nil
+}
+
+// sessionTransferRefs is the deduplicated archive refs of chunk, at most 8.
+func sessionTransferRefs(chunk []any, refs map[string][]any) ([]any, error) {
+	var chunkRefs []any
+	for _, row := range chunk {
+		chunkRefs = append(chunkRefs, refs[str(autosaveGet(row, "source_id"))]...)
+	}
+	transferRefs := dedupeRefs(chunkRefs)
+	if len(transferRefs) > 8 {
+		return nil, sessionWait("session_transfer_evidence_limit")
+	}
+	return transferRefs, nil
+}
+
+// sessionWithhold records a quality defect of a failed prepare on job and returns err.
+func sessionWithhold(job map[string]any, err error, chunkStart, end int64, repository string, persist func() error) error {
+	if sessionQualityDefects.MatchString(errorCode(err)) && privateCapturePolicy("capture_policy_wait", str(or(job["cwd"], "")), str(or(job["repository"], "")), repository) == nil {
+		job["session_validation"] = sessionValidationDiagnostic(errorCode(err), chunkStart, end, 0)
+		if saveErr := persist(); saveErr != nil {
+			return saveErr
+		}
+		metric(kv("event", "session_validation_withheld"), kv("reason", job["session_validation"].(map[string]any)["reason"]))
+	}
+	return err
+}
+
+// sessionCheckpointRequest binds a prepared window's claims and checkpoint request to prepared.
+func sessionCheckpointRequest(prepared, pkg map[string]any, refs map[string][]any, canonical map[string]any, scope any, checkpointID string, expected int64, archiveRefs []any) error {
+	claims, err := sessionClaims(prepared["output"].(map[string]any)["memory_candidates"].([]any), refs, canonical)
+	if err != nil {
+		return err
+	}
+	if err := validateCheckpointPackage(pkg); err != nil {
+		return err
+	}
+	prepared["claims"] = claims
+	prepared["checkpoint_request"] = map[string]any{"scope": scope, "id": checkpointID, "event_id": prepared["operation_id"],
+		"expected_revision": expected, "package": pkg, "archive_messages": archiveRefs}
+	if privatePayload(prepared) {
+		return sessionWait("session_private_prepared")
+	}
+	return nil
+}
+
+// sessionDeliver sends a prepared window's claims to capture once, then saves its checkpoint.
+func sessionDeliver(job, prepared map[string]any, scope any, event, sid, origin, checkpointID string,
+	checkPolicy, persist func() error, post func(path string, body any) (map[string]any, error)) error {
+	request := prepared["checkpoint_request"].(map[string]any)
+	if privatePayload(prepared) {
+		return sessionWait("session_private_prepared")
+	}
+	if !eq(request["scope"], scope) {
+		return sessionWait("session_scope_changed")
+	}
+	if !truthy(prepared["capture_ack"]) {
+		if err := sessionCaptureClaims(job, prepared, event, sid, origin, checkPolicy); err != nil {
+			return err
+		}
+		prepared["capture_ack"] = true
+		if err := persist(); err != nil {
+			return err
+		}
+	}
+	receipt, err := post("/v1/work-checkpoints/save", request)
+	if err != nil {
+		return err
+	}
+	revision, _ := host.Int(receipt["revision"])
+	expected, _ := host.Int(request["expected_revision"])
+	if receipt["id"] != checkpointID || revision != expected+1 {
+		return sessionWait("session_checkpoint_not_acknowledged")
+	}
+	return nil
+}
+
+// sessionCaptureClaims sends the prepared claims, if any, and requires every one acknowledged.
+func sessionCaptureClaims(job, prepared map[string]any, event, sid, origin string, checkPolicy func() error) error {
+	claims := anyList(prepared["claims"])
+	if len(claims) == 0 {
+		return nil
+	}
+	eventType := "turn_completed"
+	switch event {
+	case "explicit_correction":
+		eventType = "user_corrected_fact"
+	case "explicit_remember_request":
+		eventType = "explicit_remember"
+	}
+	occurred := or(job["occurred_at"], job["queued_at"])
+	if users := anyList(job["users"]); len(users) > 0 {
+		occurred = autosaveGet(users[len(users)-1], "at")
+	}
+	if err := checkPolicy(); err != nil {
+		return err
+	}
+	items, err := sendCapture(eventType, str(prepared["operation_id"]), sid, occurred, claims, origin, 0, host.Obj{
+		{Key: "model", Value: autosaveGet(prepared["metadata"], "model_id")}, {Key: "prompt_version", Value: sessionPromptVersion},
+		{Key: "pipeline_version", Value: "session-processor-v1"}})
+	if err != nil {
+		return err
+	}
+	acknowledged := len(items) == len(claims)
+	for _, item := range items {
+		acknowledged = acknowledged && autosaveGet(item, "status") != "rejected"
+	}
+	if !acknowledged {
+		return sessionWait("session_capture_not_acknowledged")
+	}
+	return nil
 }

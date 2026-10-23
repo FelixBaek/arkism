@@ -460,6 +460,18 @@ func validateStableSnapshot(b *host.StableBlock, deadline time.Time) error {
 	if b.Fingerprint != "" && fingerprint != b.Fingerprint {
 		return runtimeErr("session_context_integrity_changed")
 	}
+	if err := validateStableRows(b, rows); err != nil {
+		return err
+	}
+	for i, r := range rows {
+		b.Refs[i].Fingerprint = strField(r["fingerprint"])
+	}
+	b.Fingerprint = fingerprint
+	return nil
+}
+
+// validateStableRows checks that each answered row is the exact, valid revision the block refers to.
+func validateStableRows(b *host.StableBlock, rows []map[string]any) error {
 	for i, r := range rows {
 		ref := b.Refs[i]
 		rev, _ := host.Int(r["revision"])
@@ -468,10 +480,6 @@ func validateStableSnapshot(b *host.StableBlock, deadline time.Time) error {
 			return runtimeErr("session_context_unavailable")
 		}
 	}
-	for i, r := range rows {
-		b.Refs[i].Fingerprint = strField(r["fingerprint"])
-	}
-	b.Fingerprint = fingerprint
 	return nil
 }
 func validateStableReplay(sid string, b host.StableBlock) error {

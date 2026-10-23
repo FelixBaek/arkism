@@ -544,22 +544,30 @@ func winHook(origin string, data []byte, stderr io.Writer) ([]byte, error) {
 		// The exporter uses a nonblocking OS lock; the hook never waits on DB work.
 		winSpawnExport()
 	}
+	if err := winHookRetry(origin, queuedWork, stderr); err != nil {
+		return nil, err
+	}
+	return output, nil
+}
+
+// winHookRetry spends a hook's spare request on a queued work event or else one older prompt.
+func winHookRetry(origin, queuedWork string, stderr io.Writer) error {
 	// Keep at most two SSH requests per hook; work retries take the second slot.
 	if len(winWorkFiles(queuedWork)) > 0 {
 		if _, err := outboxDrain(queuedWork, func(raw []byte) (any, error) { return winSendWorkEvent(origin, raw) }, 1); err != nil {
 			fmt.Fprintln(stderr, "Arkism: 작업 인계 신호를 보관했습니다. 다음 훅에서 재전송합니다.")
 		}
-		return output, nil
+		return nil
 	}
 	// Retry one older prompt when no work signal is waiting.
 	if _, err := winCleanPrompts(origin); err != nil {
-		return nil, err
+		return err
 	}
 	old, _ := filepath.Glob(filepath.Join(globEscape(winSpool(origin)), "*.json"))
 	if len(old) > 0 && !isSymlink(old[0]) {
 		winSendPrompt(origin, old[0])
 	}
-	return output, nil
+	return nil
 }
 
 const winUsage = "usage: arkism windows [-h] [--ssh-host SSH_HOST] {hook,mcp,drain-work} {codex,claude_code,zcode,gemini,grok,deepseek}\n"
@@ -624,20 +632,30 @@ func winMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return 0
 	case "mcp":
-		argv, _ := winSSHCommand(origin, "mcp")
-		cmd := exec.Command(argv[0], argv[1:]...)
-		cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
-		err := cmd.Run()
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
-			return exit.ExitCode()
-		}
-		if err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-		return 0
+		return winMCPMain(origin, stdin, stdout, stderr)
 	}
+	return winHookMain(origin, stdin, stdout, stderr)
+}
+
+// winMCPMain relays the MCP stdio session over SSH and returns its exit code.
+func winMCPMain(origin string, stdin io.Reader, stdout, stderr io.Writer) int {
+	argv, _ := winSSHCommand(origin, "mcp")
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
+	err := cmd.Run()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return exit.ExitCode()
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
+}
+
+// winHookMain relays the hook event on stdin; it never fails the app's hook.
+func winHookMain(origin string, stdin io.Reader, stdout, stderr io.Writer) int {
 	data, err := io.ReadAll(stdin)
 	var out []byte
 	if err == nil {

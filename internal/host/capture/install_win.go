@@ -343,36 +343,11 @@ func instKeyPath(s string, i int, stop string) ([]string, int, error) {
 		if i >= len(s) {
 			return nil, i, errInstTOML
 		}
-		switch s[i] {
-		case '"':
-			j := i + 1
-			for j < len(s) && s[j] != '"' && s[j] != '\n' {
-				if s[j] == '\\' {
-					j++
-				}
-				j++
-			}
-			if j >= len(s) || s[j] != '"' {
-				return nil, i, errInstTOML
-			}
-			part, err := strconv.Unquote(s[i : j+1])
-			if err != nil {
-				return nil, i, errInstTOML
-			}
-			path, i = append(path, part), j+1
-		case '\'':
-			j := strings.IndexAny(s[i+1:], "'\n")
-			if j < 0 || s[i+1+j] != '\'' {
-				return nil, i, errInstTOML
-			}
-			path, i = append(path, s[i+1:i+1+j]), i+2+j
-		default:
-			m := instBare.FindString(s[i:])
-			if m == "" {
-				return nil, i, errInstTOML
-			}
-			path, i = append(path, m), i+len(m)
+		part, next, err := instKeyPart(s, i)
+		if err != nil {
+			return nil, i, err
 		}
+		path, i = append(path, part), next
 		for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
 			i++
 		}
@@ -383,6 +358,40 @@ func instKeyPath(s string, i int, stop string) ([]string, int, error) {
 			return nil, i, errInstTOML
 		}
 		i++
+	}
+}
+
+// instKeyPart parses one basic-quoted, literal-quoted or bare key part at s[i:].
+func instKeyPart(s string, i int) (string, int, error) {
+	switch s[i] {
+	case '"':
+		j := i + 1
+		for j < len(s) && s[j] != '"' && s[j] != '\n' {
+			if s[j] == '\\' {
+				j++
+			}
+			j++
+		}
+		if j >= len(s) || s[j] != '"' {
+			return "", i, errInstTOML
+		}
+		part, err := strconv.Unquote(s[i : j+1])
+		if err != nil {
+			return "", i, errInstTOML
+		}
+		return part, j + 1, nil
+	case '\'':
+		j := strings.IndexAny(s[i+1:], "'\n")
+		if j < 0 || s[i+1+j] != '\'' {
+			return "", i, errInstTOML
+		}
+		return s[i+1 : i+1+j], i + 2 + j, nil
+	default:
+		m := instBare.FindString(s[i:])
+		if m == "" {
+			return "", i, errInstTOML
+		}
+		return m, i + len(m), nil
 	}
 }
 
@@ -408,38 +417,17 @@ func instValueEnd(s string, i int) (int, error) {
 	for i < len(s) {
 		switch {
 		case strings.HasPrefix(s[i:], `"""`), strings.HasPrefix(s[i:], `'''`):
-			q := s[i : i+3]
-			j := i + 3
-			for {
-				if j >= len(s) {
-					return j, errInstTOML
-				}
-				if q == `"""` && s[j] == '\\' {
-					j += 2
-					continue
-				}
-				if strings.HasPrefix(s[j:], q) {
-					j += 3
-					for k := 0; k < 2 && j < len(s) && s[j] == q[0]; k++ {
-						j++
-					}
-					break
-				}
-				j++
+			j, err := instMultilineEnd(s, i)
+			if err != nil {
+				return j, err
 			}
 			i = j
 		case s[i] == '"' || s[i] == '\'':
-			j := i + 1
-			for j < len(s) && s[j] != s[i] && s[j] != '\n' {
-				if s[i] == '"' && s[j] == '\\' {
-					j++
-				}
-				j++
+			j, err := instQuotedEnd(s, i)
+			if err != nil {
+				return j, err
 			}
-			if j >= len(s) || s[j] != s[i] {
-				return j, errInstTOML
-			}
-			i = j + 1
+			i = j
 		case s[i] == '#':
 			for i < len(s) && s[i] != '\n' {
 				i++
@@ -460,6 +448,44 @@ func instValueEnd(s string, i int) (int, error) {
 		}
 	}
 	return i, nil
+}
+
+// instMultilineEnd returns the index just past the multi-line string opening at s[i:].
+func instMultilineEnd(s string, i int) (int, error) {
+	q := s[i : i+3]
+	j := i + 3
+	for {
+		if j >= len(s) {
+			return j, errInstTOML
+		}
+		if q == `"""` && s[j] == '\\' {
+			j += 2
+			continue
+		}
+		if strings.HasPrefix(s[j:], q) {
+			j += 3
+			for k := 0; k < 2 && j < len(s) && s[j] == q[0]; k++ {
+				j++
+			}
+			return j, nil
+		}
+		j++
+	}
+}
+
+// instQuotedEnd returns the index just past the one-line string opening at s[i:].
+func instQuotedEnd(s string, i int) (int, error) {
+	j := i + 1
+	for j < len(s) && s[j] != s[i] && s[j] != '\n' {
+		if s[i] == '"' && s[j] == '\\' {
+			j++
+		}
+		j++
+	}
+	if j >= len(s) || s[j] != s[i] {
+		return j, errInstTOML
+	}
+	return j + 1, nil
 }
 
 var instSectionLine = regexp.MustCompile(`(?m)^[ \t]*\[`)
@@ -515,6 +541,16 @@ func instTOMLItems(text string) (items []instTOMLItem, strays []int, err error) 
 	return items, strays, nil
 }
 
+// instSectionEnd is where the next table header starts, or end when none follows.
+func instSectionEnd(items []instTOMLItem, end int) int {
+	for _, next := range items {
+		if next.header {
+			return next.start
+		}
+	}
+	return end
+}
+
 // instServers checks where mcp_servers entries are defined and returns, for each
 // server name, the byte span of its [mcp_servers.<name>] section and whether any
 // deeper [mcp_servers.<name>.*] table exists.
@@ -541,14 +577,7 @@ func instServers(text string) (map[string][2]int, map[string]bool, error) {
 				if _, dup := sections[it.path[1]]; dup {
 					return nil, nil, errInstTOML
 				}
-				end := len(text)
-				for _, next := range items[n+1:] {
-					if next.header {
-						end = next.start
-						break
-					}
-				}
-				sections[it.path[1]] = [2]int{it.start, end}
+				sections[it.path[1]] = [2]int{it.start, instSectionEnd(items[n+1:], len(text))}
 			}
 			continue
 		}
@@ -797,57 +826,30 @@ func instFiles(s *instSaver, folder, client string) error {
 // instInstall writes the clients' hook and MCP settings; it returns the printed summary.
 func instInstall(userRoot, roaming, local string, deepseekOnly bool) (summary host.Obj, err error) {
 	defer recovered(&err)
-	if userRoot == "" {
-		userRoot = host.Home
-	}
-	if roaming == "" {
-		if roaming = instRoaming(userRoot); roaming == "" {
-			return nil, fmt.Errorf("%w: APPDATA", errKey)
-		}
-	}
-	if local == "" && runtime.GOOS == "windows" {
-		if local = os.Getenv("LOCALAPPDATA"); local == "" {
-			return nil, fmt.Errorf("%w: LOCALAPPDATA", errKey)
-		}
-	}
-	folder := filepath.Join(userRoot, ".config", "arkism")
-	now := time.Now().UTC()
-	backup := filepath.Join(folder, "backups", now.Format("20060102T150405")+fmt.Sprintf("%06dZ", now.Nanosecond()/1000))
-	if err := os.MkdirAll(filepath.Dir(backup), 0o777); err != nil {
+	if userRoot, roaming, local, err = instRoots(userRoot, roaming, local); err != nil {
 		return nil, err
 	}
-	if err := os.Mkdir(backup, 0o777); err != nil {
+	folder := filepath.Join(userRoot, ".config", "arkism")
+	backup, err := instBackupDir(folder)
+	if err != nil {
 		return nil, err
 	}
 	s := &instSaver{backup: backup, manifest: host.Obj{}}
 	client := filepath.Join(folder, instClient)
 	config := filepath.Join(userRoot, instCodex, "config.toml")
-	before, err := instReadOr(config, "")
-	if err != nil {
-		return nil, err
-	}
-	configText, err := instCodexConfig(before, client, "codex")
+	configText, err := instTOMLConfig(config, client, "codex")
 	if err != nil {
 		return nil, err
 	}
 	// Gemini CLI and Grok get the skill hub only where they are installed; both are read before anything is written.
 	gemini, grok := filepath.Join(userRoot, instGemini, "settings.json"), filepath.Join(userRoot, ".grok", "config.toml")
-	var geminiData host.Obj
-	if fi, err := os.Stat(filepath.Dir(gemini)); err == nil && fi.IsDir() {
-		if geminiData, err = instJSON(gemini); err != nil {
-			return nil, err
-		}
+	geminiData, err := instReadGemini(gemini)
+	if err != nil {
+		return nil, err
 	}
-	grokText, hasGrok := "", false
-	if fi, err := os.Stat(filepath.Dir(grok)); err == nil && fi.IsDir() {
-		text, err := instReadOr(grok, "")
-		if err != nil {
-			return nil, err
-		}
-		if grokText, err = instCodexConfig(text, client, "grok"); err != nil {
-			return nil, err
-		}
-		hasGrok = true
+	grokText, hasGrok, err := instReadGrok(grok, client)
+	if err != nil {
+		return nil, err
 	}
 	done := func() host.Obj {
 		files := make([]any, len(s.manifest))
@@ -867,112 +869,20 @@ func instInstall(userRoot, roaming, local string, deepseekOnly bool) (summary ho
 		return done(), nil
 	}
 
-	codexHook := `"` + client + `" windows hook codex`
-	if runtime.GOOS == "windows" {
-		// Codex runs hooks through cmd.exe, which mangles a quoted program followed by arguments.
-		cmd := filepath.Join(folder, "hook-codex.cmd")
-		if err := s.text(cmd, "@echo off\n"+codexHook+"\n"); err != nil {
-			return nil, err
-		}
-		codexHook = `cmd.exe /d /c "` + cmd + `"`
-	}
-	hooksPath := filepath.Join(userRoot, instCodex, "hooks.json")
-	data, err := instJSON(hooksPath)
-	if err != nil {
+	if err := instCodexHooks(s, userRoot, folder, client, config, configText); err != nil {
 		return nil, err
 	}
-	hooks := instChild(data, "hooks")
-	// Honcho's old Stop writer must also stop sending to the retired service.
-	instRemoveHoncho(hooks)
-	for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"} {
-		instMergeHooks(&hooks, event, host.Obj{{Key: "type", Value: "command"}, {Key: "command", Value: codexHook},
-			{Key: "timeout", Value: 45}, {Key: "statusMessage", Value: "Arkism"}})
-	}
-	data.Set("hooks", hooks)
-	if err := s.json(hooksPath, data); err != nil {
+	if err := instClaudeHooks(s, userRoot, client); err != nil {
 		return nil, err
 	}
-	if err := s.text(config, configText); err != nil {
+	if err := instClaudeServers(s, userRoot, roaming, local, client); err != nil {
 		return nil, err
 	}
-
-	settings := filepath.Join(userRoot, ".claude", "settings.json")
-	if data, err = instJSON(settings); err != nil {
+	if err := instZcode(s, userRoot, client); err != nil {
 		return nil, err
 	}
-	hooks = instChild(data, "hooks")
-	instRemoveHoncho(hooks)
-	for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"} {
-		command := `"` + filepath.ToSlash(client) + `" windows hook claude_code`
-		instMergeHooks(&hooks, event, host.Obj{{Key: "type", Value: "command"}, {Key: "command", Value: command}, {Key: "timeout", Value: 45}})
-	}
-	data.Set("hooks", hooks)
-	if data, err = instGatewayEnv(data, userRoot); err != nil { // the gateway's local token, when settings use it
+	if err := instGeminiServer(s, gemini, geminiData, client); err != nil {
 		return nil, err
-	}
-	if err := s.json(settings, data); err != nil {
-		return nil, err
-	}
-	mcp := func(origin string) host.Obj {
-		return host.Obj{{Key: "command", Value: client}, {Key: "args", Value: []any{"windows", "mcp", origin}}}
-	}
-	setServer := func(path, key, name string, entry host.Obj) error {
-		data, err := instJSON(path)
-		if err != nil {
-			return err
-		}
-		servers := instChild(data, key)
-		servers.Set(name, entry)
-		data.Set(key, servers)
-		return s.json(path, data)
-	}
-	claude := filepath.Join(userRoot, ".claude.json")
-	if err := setServer(claude, "mcpServers", "skill-router", mcp("claude_code")); err != nil {
-		return nil, err
-	}
-	desktops := []string{filepath.Join(roaming, "Claude", "claude_desktop_config.json")}
-	if local != "" {
-		found, _ := filepath.Glob(filepath.Join(globEscape(filepath.Join(local, "Packages")), "Claude*", "LocalCache", "Roaming", "Claude", "claude_desktop_config.json"))
-		desktops = append(desktops, found...)
-	}
-	for _, path := range desktops {
-		if runtime.GOOS != "windows" && !isDir(filepath.Dir(path)) {
-			continue // Claude desktop is not installed here
-		}
-		if err := setServer(path, "mcpServers", "arkism", mcp("claude_code")); err != nil {
-			return nil, err
-		}
-	}
-
-	zcode := filepath.Join(userRoot, ".zcode", "cli", "config.json")
-	if data, err = instJSON(zcode); err != nil {
-		return nil, err
-	}
-	mcpObj := instChild(data, "mcp")
-	servers := instChild(mcpObj, "servers")
-	servers.Set("arkism", host.Obj{{Key: "type", Value: "stdio"}, {Key: "command", Value: client}, {Key: "args", Value: []any{"windows", "mcp", "zcode"}}})
-	mcpObj.Set("servers", servers)
-	data.Set("mcp", mcpObj)
-	hooks = instChild(data, "hooks")
-	hooks.Set("enabled", true)
-	events := instChild(hooks, "events")
-	instMergeHooks(&events, "SessionEnd", nil)
-	for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop"} {
-		instMergeHooks(&events, event, host.Obj{{Key: "type", Value: "process"}, {Key: "command", Value: client},
-			{Key: "args", Value: []any{"windows", "hook", "zcode"}}, {Key: "enabled", Value: true}, {Key: "timeoutMs", Value: 45000}, {Key: "statusMessage", Value: "Arkism"}})
-	}
-	hooks.Set("events", events)
-	data.Set("hooks", hooks)
-	if err := s.json(zcode, data); err != nil {
-		return nil, err
-	}
-	if geminiData != nil { // replaces a retired local skill-router entry of the same name
-		servers := instChild(geminiData, "mcpServers")
-		servers.Set("skill-router", mcp("gemini"))
-		geminiData.Set("mcpServers", servers)
-		if err := s.json(gemini, geminiData); err != nil {
-			return nil, err
-		}
 	}
 	if hasGrok { // config.toml wins over the Claude entry Grok would otherwise borrow (as claude_code)
 		if err := s.text(grok, grokText); err != nil {
@@ -993,6 +903,195 @@ func instInstall(userRoot, roaming, local string, deepseekOnly bool) (summary ho
 		summary.Set("skipped", skipped)
 	}
 	return summary, nil
+}
+
+// instRoots fills in the default home, roaming and local folders.
+func instRoots(userRoot, roaming, local string) (string, string, string, error) {
+	if userRoot == "" {
+		userRoot = host.Home
+	}
+	if roaming == "" {
+		if roaming = instRoaming(userRoot); roaming == "" {
+			return "", "", "", fmt.Errorf("%w: APPDATA", errKey)
+		}
+	}
+	if local == "" && runtime.GOOS == "windows" {
+		if local = os.Getenv("LOCALAPPDATA"); local == "" {
+			return "", "", "", fmt.Errorf("%w: LOCALAPPDATA", errKey)
+		}
+	}
+	return userRoot, roaming, local, nil
+}
+
+// instBackupDir creates this run's timestamped backup folder.
+func instBackupDir(folder string) (string, error) {
+	now := time.Now().UTC()
+	backup := filepath.Join(folder, "backups", now.Format("20060102T150405")+fmt.Sprintf("%06dZ", now.Nanosecond()/1000))
+	if err := os.MkdirAll(filepath.Dir(backup), 0o777); err != nil {
+		return "", err
+	}
+	if err := os.Mkdir(backup, 0o777); err != nil {
+		return "", err
+	}
+	return backup, nil
+}
+
+// instTOMLConfig reads a TOML config (empty when missing) and returns it with the skill-router stanza set.
+func instTOMLConfig(path, client, origin string) (string, error) {
+	text, err := instReadOr(path, "")
+	if err != nil {
+		return "", err
+	}
+	return instCodexConfig(text, client, origin)
+}
+
+// instReadGemini reads Gemini CLI's settings; it returns nil when Gemini CLI is not installed.
+func instReadGemini(gemini string) (host.Obj, error) {
+	var geminiData host.Obj
+	if fi, err := os.Stat(filepath.Dir(gemini)); err == nil && fi.IsDir() {
+		if geminiData, err = instJSON(gemini); err != nil {
+			return nil, err
+		}
+	}
+	return geminiData, nil
+}
+
+// instReadGrok returns Grok's edited config.toml and whether Grok is installed.
+func instReadGrok(grok, client string) (string, bool, error) {
+	if fi, err := os.Stat(filepath.Dir(grok)); err == nil && fi.IsDir() {
+		grokText, err := instTOMLConfig(grok, client, "grok")
+		if err != nil {
+			return "", false, err
+		}
+		return grokText, true, nil
+	}
+	return "", false, nil
+}
+
+// instCodexHooks writes Codex's hooks.json, then its config.toml.
+func instCodexHooks(s *instSaver, userRoot, folder, client, config, configText string) error {
+	codexHook := `"` + client + `" windows hook codex`
+	if runtime.GOOS == "windows" {
+		// Codex runs hooks through cmd.exe, which mangles a quoted program followed by arguments.
+		cmd := filepath.Join(folder, "hook-codex.cmd")
+		if err := s.text(cmd, "@echo off\n"+codexHook+"\n"); err != nil {
+			return err
+		}
+		codexHook = `cmd.exe /d /c "` + cmd + `"`
+	}
+	hooksPath := filepath.Join(userRoot, instCodex, "hooks.json")
+	data, err := instJSON(hooksPath)
+	if err != nil {
+		return err
+	}
+	hooks := instChild(data, "hooks")
+	// Honcho's old Stop writer must also stop sending to the retired service.
+	instRemoveHoncho(hooks)
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"} {
+		instMergeHooks(&hooks, event, host.Obj{{Key: "type", Value: "command"}, {Key: "command", Value: codexHook},
+			{Key: "timeout", Value: 45}, {Key: "statusMessage", Value: "Arkism"}})
+	}
+	data.Set("hooks", hooks)
+	if err := s.json(hooksPath, data); err != nil {
+		return err
+	}
+	return s.text(config, configText)
+}
+
+// instClaudeHooks writes Claude Code's hooks into ~/.claude/settings.json.
+func instClaudeHooks(s *instSaver, userRoot, client string) error {
+	settings := filepath.Join(userRoot, ".claude", "settings.json")
+	data, err := instJSON(settings)
+	if err != nil {
+		return err
+	}
+	hooks := instChild(data, "hooks")
+	instRemoveHoncho(hooks)
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"} {
+		command := `"` + filepath.ToSlash(client) + `" windows hook claude_code`
+		instMergeHooks(&hooks, event, host.Obj{{Key: "type", Value: "command"}, {Key: "command", Value: command}, {Key: "timeout", Value: 45}})
+	}
+	data.Set("hooks", hooks)
+	if data, err = instGatewayEnv(data, userRoot); err != nil { // the gateway's local token, when settings use it
+		return err
+	}
+	return s.json(settings, data)
+}
+
+// instMCP is the stdio MCP server entry for one client origin.
+func instMCP(client, origin string) host.Obj {
+	return host.Obj{{Key: "command", Value: client}, {Key: "args", Value: []any{"windows", "mcp", origin}}}
+}
+
+// instSetServer sets one MCP server entry under key in a JSON config.
+func instSetServer(s *instSaver, path, key, name string, entry host.Obj) error {
+	data, err := instJSON(path)
+	if err != nil {
+		return err
+	}
+	servers := instChild(data, key)
+	servers.Set(name, entry)
+	data.Set(key, servers)
+	return s.json(path, data)
+}
+
+// instClaudeServers sets the MCP server for Claude Code and every Claude desktop config.
+func instClaudeServers(s *instSaver, userRoot, roaming, local, client string) error {
+	claude := filepath.Join(userRoot, ".claude.json")
+	if err := instSetServer(s, claude, "mcpServers", "skill-router", instMCP(client, "claude_code")); err != nil {
+		return err
+	}
+	desktops := []string{filepath.Join(roaming, "Claude", "claude_desktop_config.json")}
+	if local != "" {
+		found, _ := filepath.Glob(filepath.Join(globEscape(filepath.Join(local, "Packages")), "Claude*", "LocalCache", "Roaming", "Claude", "claude_desktop_config.json"))
+		desktops = append(desktops, found...)
+	}
+	for _, path := range desktops {
+		if runtime.GOOS != "windows" && !isDir(filepath.Dir(path)) {
+			continue // Claude desktop is not installed here
+		}
+		if err := instSetServer(s, path, "mcpServers", "arkism", instMCP(client, "claude_code")); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// instZcode writes Z Code's MCP server and hooks.
+func instZcode(s *instSaver, userRoot, client string) error {
+	zcode := filepath.Join(userRoot, ".zcode", "cli", "config.json")
+	data, err := instJSON(zcode)
+	if err != nil {
+		return err
+	}
+	mcpObj := instChild(data, "mcp")
+	servers := instChild(mcpObj, "servers")
+	servers.Set("arkism", host.Obj{{Key: "type", Value: "stdio"}, {Key: "command", Value: client}, {Key: "args", Value: []any{"windows", "mcp", "zcode"}}})
+	mcpObj.Set("servers", servers)
+	data.Set("mcp", mcpObj)
+	hooks := instChild(data, "hooks")
+	hooks.Set("enabled", true)
+	events := instChild(hooks, "events")
+	instMergeHooks(&events, "SessionEnd", nil)
+	for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop"} {
+		instMergeHooks(&events, event, host.Obj{{Key: "type", Value: "process"}, {Key: "command", Value: client},
+			{Key: "args", Value: []any{"windows", "hook", "zcode"}}, {Key: "enabled", Value: true}, {Key: "timeoutMs", Value: 45000}, {Key: "statusMessage", Value: "Arkism"}})
+	}
+	hooks.Set("events", events)
+	data.Set("hooks", hooks)
+	return s.json(zcode, data)
+}
+
+// instGeminiServer sets Gemini CLI's MCP server when its settings were read.
+func instGeminiServer(s *instSaver, gemini string, geminiData host.Obj, client string) error {
+	if geminiData == nil {
+		return nil
+	}
+	// Replaces a retired local skill-router entry of the same name.
+	servers := instChild(geminiData, "mcpServers")
+	servers.Set("skill-router", instMCP(client, "gemini"))
+	geminiData.Set("mcpServers", servers)
+	return s.json(gemini, geminiData)
 }
 
 // instRoaming is where Claude desktop keeps its settings folder: %APPDATA% on Windows,

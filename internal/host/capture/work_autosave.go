@@ -201,16 +201,8 @@ func autosaveCompare(job any, request autosaveRequest, scope any, createdAt any)
 	if err != nil {
 		return nil, err
 	}
-	for _, k := range []string{"scope", "id", "event_id"} {
-		if !eq(autosaveGet(prepared, k), autosaveItem(job, k)) {
-			return nil, valueErr("work_prepared_changed")
-		}
-	}
-	if !eq(autosaveGet(prepared, "expected_revision"), revision) {
-		return nil, valueErr("work_prepared_changed")
-	}
-	if _, isDict := evidenceDict(autosaveGet(prepared, "package")); !autosaveRefsValid(job, autosaveGet(prepared, "archive_messages")) || !isDict {
-		return nil, valueErr("work_prepared_evidence_invalid")
+	if err := autosavePreparedMatches(job, prepared, revision); err != nil {
+		return nil, err
 	}
 	first, err := autosaveHeader(job, request, scope)
 	if err != nil {
@@ -263,6 +255,22 @@ func autosaveCompare(job any, request autosaveRequest, scope any, createdAt any)
 	return host.Obj{{Key: "event_id", Value: autosaveItem(job, "event_id")}, {Key: "work_id", Value: autosaveItem(job, "id")},
 		{Key: "expected_revision", Value: revision}, {Key: "current_revision", Value: current["revision"]},
 		{Key: "changes", Value: changes}, {Key: "authority", Value: "data_only_untrusted"}}, nil
+}
+
+// autosavePreparedMatches checks that prepared still belongs to job's save event at revision.
+func autosavePreparedMatches(job, prepared any, revision int64) error {
+	for _, k := range []string{"scope", "id", "event_id"} {
+		if !eq(autosaveGet(prepared, k), autosaveItem(job, k)) {
+			return valueErr("work_prepared_changed")
+		}
+	}
+	if !eq(autosaveGet(prepared, "expected_revision"), revision) {
+		return valueErr("work_prepared_changed")
+	}
+	if _, isDict := evidenceDict(autosaveGet(prepared, "package")); !autosaveRefsValid(job, autosaveGet(prepared, "archive_messages")) || !isDict {
+		return valueErr("work_prepared_evidence_invalid")
+	}
+	return nil
 }
 
 // autosaveDialogue reads the archive's user and assistant messages in the job's byte
@@ -451,26 +459,10 @@ func autosaveApplyClaims(pkg any, messages []any, claims any) (out any, err erro
 	}
 	goals := 0
 	for _, claim := range list {
-		c, isDict := evidenceDict(claim)
-		if !isDict || len(c) != 3 || !evidenceKeys(c, "field", "message_index", "quote") {
-			return nil, valueErr("work_claim_invalid")
+		field, role, text, err := autosaveClaim(claim, messages)
+		if err != nil {
+			return nil, err
 		}
-		field, _ := autosaveGet(c, "field").(string)
-		index, isInt := host.Int(autosaveGet(c, "message_index"))
-		quote, isStr := autosaveGet(c, "quote").(string)
-		known := false
-		for _, f := range autosaveFields {
-			known = known || f == field
-		}
-		if !known || !isInt || index < 0 || index >= int64(len(messages)) || !isStr || strings.TrimSpace(quote) == "" {
-			return nil, valueErr("work_claim_invalid")
-		}
-		message := messages[index]
-		role := autosaveItem(message, "role")
-		if !strings.Contains(autosaveItem(message, "text").(string), quote) || ((field == "goal" || field == "constraints") && role != "user") {
-			return nil, valueErr("work_claim_unproved")
-		}
-		text := strings.Join(strings.Fields(quote), " ")
 		if field == "goal" {
 			goals++
 			if goals > 1 {
@@ -504,6 +496,31 @@ func autosaveApplyClaims(pkg any, messages []any, claims any) (out any, err erro
 		}
 	}
 	return result, nil
+}
+
+// autosaveClaim checks one claim against its quoted message and returns its field, the message
+// role and the whitespace-normalized quote.
+func autosaveClaim(claim any, messages []any) (field string, role any, text string, err error) {
+	c, isDict := evidenceDict(claim)
+	if !isDict || len(c) != 3 || !evidenceKeys(c, "field", "message_index", "quote") {
+		return "", nil, "", valueErr("work_claim_invalid")
+	}
+	field, _ = autosaveGet(c, "field").(string)
+	index, isInt := host.Int(autosaveGet(c, "message_index"))
+	quote, isStr := autosaveGet(c, "quote").(string)
+	known := false
+	for _, f := range autosaveFields {
+		known = known || f == field
+	}
+	if !known || !isInt || index < 0 || index >= int64(len(messages)) || !isStr || strings.TrimSpace(quote) == "" {
+		return "", nil, "", valueErr("work_claim_invalid")
+	}
+	message := messages[index]
+	role = autosaveItem(message, "role")
+	if !strings.Contains(autosaveItem(message, "text").(string), quote) || ((field == "goal" || field == "constraints") && role != "user") {
+		return "", nil, "", valueErr("work_claim_unproved")
+	}
+	return field, role, strings.Join(strings.Fields(quote), " "), nil
 }
 
 func containsJSON(list []any, v any) bool {
@@ -555,111 +572,15 @@ func autosaveProcess(job *host.Obj, request autosaveRequest, scope any, extract 
 	if r := autosaveGet(*job, "receipt"); truthy(r) {
 		return r, nil
 	}
-	at := func(k string) any { return autosaveItem(*job, k) }
 	fresh := !autosaveHas(*job, "prepared")
 	if fresh {
-		source, err := autosaveHeader(*job, request, scope)
-		if err != nil {
-			return nil, err
+		if done, err := autosavePrepare(job, request, scope, extract, checkPolicy, persist, &repository); err != nil || done != nil {
+			return done, err
 		}
-		current, err := request("/v1/work-checkpoints/get", host.Obj{{Key: "scope", Value: scope}, {Key: "id", Value: at("id")}})
-		if err != nil {
-			return nil, err
-		}
-		revision, ok := host.Int(current["revision"])
-		expected, _ := host.Int(at("expected_revision"))
-		_, isDict := evidenceDict(current["package"])
-		if current["id"] != at("id") || !ok || revision < expected || current["authority"] != "data_only_untrusted" || !isDict {
-			return nil, valueErr("work_revision_changed")
-		}
-		stale := revision != expected
-		if stale && autosaveGet(current["package"], "status") != "in_progress" {
-			return nil, valueErr("work_revision_changed")
-		}
-		repository = str(or(autosaveGet(current["package"], "repository"), ""))
-		if privateCheckpointIdentity(current["package"]) {
-			return nil, sessionWait("work_private_identity")
-		}
-		if err := checkPolicy(); err != nil {
-			return nil, err
-		}
-		messages, excluded, err := autosaveDialogue(*job, request, scope)
-		if err != nil {
-			return nil, err
-		}
-		current["package"] = privateData(current["package"])
-		messages, _ = privateData(messages).([]any)
-		if privatePayload(current["package"]) || privatePayload(messages) {
-			return nil, sessionWait("work_private_content")
-		}
-		claims, err := extract(current["package"], messages)
-		if err != nil {
-			return nil, err
-		}
-		if err := checkPolicy(); err != nil {
-			return nil, err
-		}
-		if privatePayload(claims) {
-			return nil, sessionWait("work_private_output")
-		}
-		pkg, err := autosaveApplyClaims(current["package"], messages, claims)
-		if err != nil {
-			return nil, err
-		}
-		if stale && !eq(autosaveGet(pkg, "goal"), autosaveGet(current["package"], "goal")) {
-			return nil, valueErr("work_revision_changed")
-		}
-		if eq(pkg, current["package"]) {
-			job.Set("receipt", host.Obj{{Key: "id", Value: at("id")}, {Key: "revision", Value: current["revision"]},
-				{Key: "status", Value: "no_change"}, {Key: "excluded_records", Value: excluded}})
-			if err := persist(); err != nil {
-				return nil, err
-			}
-			return at("receipt"), nil
-		}
-		switch p := pkg.(type) {
-		case map[string]any:
-			p["origin"], p["session_id"] = source["origin"], source["session_id"]
-		case host.Obj:
-			p.Set("origin", source["origin"])
-			p.Set("session_id", source["session_id"])
-			pkg = p
-		}
-		refs := []any{}
-		for _, claim := range claims.([]any) {
-			index, _ := host.Int(autosaveItem(claim, "message_index"))
-			ref := autosaveItem(messages[index], "ref")
-			if !containsJSON(refs, ref) {
-				refs = append(refs, ref)
-			}
-		}
-		if len(refs) > 8 {
-			return nil, valueErr("work_evidence_too_large")
-		}
-		if privatePayload(pkg) {
-			return nil, sessionWait("work_private_content")
-		}
-		job.Set("prepared_base_revision", current["revision"])
-		job.Set("prepared", host.Obj{{Key: "archive_messages", Value: refs}, {Key: "scope", Value: scope}, {Key: "id", Value: at("id")},
-			{Key: "event_id", Value: at("event_id")}, {Key: "expected_revision", Value: current["revision"]}, {Key: "package", Value: pkg}})
-		job.Set("excluded_records", excluded)
 	}
-	revision, err := autosaveSaveRevision(*job)
+	prepared, revision, err := autosaveSaveRequest(*job, scope)
 	if err != nil {
 		return nil, err
-	}
-	prepared := at("prepared")
-	if privatePayload(prepared) {
-		return nil, sessionWait("work_private_prepared")
-	}
-	for _, kv := range []host.KV{{Key: "scope", Value: scope}, {Key: "id", Value: at("id")}, {Key: "event_id", Value: at("event_id")},
-		{Key: "expected_revision", Value: revision}} {
-		if !eq(autosaveGet(prepared, kv.Key), kv.Value) {
-			return nil, valueErr("work_prepared_changed")
-		}
-	}
-	if !autosaveRefsValid(*job, autosaveGet(prepared, "archive_messages")) {
-		return nil, valueErr("work_prepared_evidence_invalid")
 	}
 	if err := persist(); err != nil {
 		return nil, err
@@ -669,15 +590,10 @@ func autosaveProcess(job *host.Obj, request autosaveRequest, scope any, extract 
 			return nil, err
 		}
 	}
-	result, err := request("/v1/work-checkpoints/save", prepared)
+	r, err := autosaveSave(*job, request, prepared, revision)
 	if err != nil {
 		return nil, err
 	}
-	if n, ok := host.Int(result["revision"]); result["id"] != at("id") || !ok || n != revision+1 || result["authority"] != "data_only_untrusted" {
-		return nil, valueErr("work_save_receipt_invalid")
-	}
-	r, _ := evidenceDict(result)
-	r.Set("status", "saved")
 	excluded, has := job.Get("excluded_records")
 	if !has {
 		excluded = 0
@@ -688,6 +604,160 @@ func autosaveProcess(job *host.Obj, request autosaveRequest, scope any, extract 
 	if err := persist(); err != nil {
 		return nil, err
 	}
+	return r, nil
+}
+
+// autosavePrepare extracts the dialogue's claims onto the current checkpoint and stores the
+// prepared save on job. An unchanged package instead records and returns a no_change receipt.
+func autosavePrepare(job *host.Obj, request autosaveRequest, scope any, extract autosaveExtractor, checkPolicy, persist func() error,
+	repository *string) (receipt any, err error) {
+	at := func(k string) any { return autosaveItem(*job, k) }
+	source, err := autosaveHeader(*job, request, scope)
+	if err != nil {
+		return nil, err
+	}
+	current, stale, err := autosaveCurrent(*job, request, scope)
+	if err != nil {
+		return nil, err
+	}
+	*repository = str(or(autosaveGet(current["package"], "repository"), ""))
+	if privateCheckpointIdentity(current["package"]) {
+		return nil, sessionWait("work_private_identity")
+	}
+	if err := checkPolicy(); err != nil {
+		return nil, err
+	}
+	messages, excluded, err := autosaveDialogue(*job, request, scope)
+	if err != nil {
+		return nil, err
+	}
+	current["package"] = privateData(current["package"])
+	messages, _ = privateData(messages).([]any)
+	if privatePayload(current["package"]) || privatePayload(messages) {
+		return nil, sessionWait("work_private_content")
+	}
+	claims, err := extract(current["package"], messages)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkPolicy(); err != nil {
+		return nil, err
+	}
+	if privatePayload(claims) {
+		return nil, sessionWait("work_private_output")
+	}
+	pkg, err := autosaveApplyClaims(current["package"], messages, claims)
+	if err != nil {
+		return nil, err
+	}
+	if stale && !eq(autosaveGet(pkg, "goal"), autosaveGet(current["package"], "goal")) {
+		return nil, valueErr("work_revision_changed")
+	}
+	if eq(pkg, current["package"]) {
+		job.Set("receipt", host.Obj{{Key: "id", Value: at("id")}, {Key: "revision", Value: current["revision"]},
+			{Key: "status", Value: "no_change"}, {Key: "excluded_records", Value: excluded}})
+		if err := persist(); err != nil {
+			return nil, err
+		}
+		return at("receipt"), nil
+	}
+	pkg = autosaveStamp(pkg, source)
+	refs, err := autosaveEvidenceRefs(claims, messages)
+	if err != nil {
+		return nil, err
+	}
+	if privatePayload(pkg) {
+		return nil, sessionWait("work_private_content")
+	}
+	job.Set("prepared_base_revision", current["revision"])
+	job.Set("prepared", host.Obj{{Key: "archive_messages", Value: refs}, {Key: "scope", Value: scope}, {Key: "id", Value: at("id")},
+		{Key: "event_id", Value: at("event_id")}, {Key: "expected_revision", Value: current["revision"]}, {Key: "package", Value: pkg}})
+	job.Set("excluded_records", excluded)
+	return nil, nil
+}
+
+// autosaveCurrent reads the job's checkpoint; stale means it moved past the expected revision.
+func autosaveCurrent(job host.Obj, request autosaveRequest, scope any) (current map[string]any, stale bool, err error) {
+	current, err = request("/v1/work-checkpoints/get", host.Obj{{Key: "scope", Value: scope}, {Key: "id", Value: autosaveItem(job, "id")}})
+	if err != nil {
+		return nil, false, err
+	}
+	revision, ok := host.Int(current["revision"])
+	expected, _ := host.Int(autosaveItem(job, "expected_revision"))
+	_, isDict := evidenceDict(current["package"])
+	if current["id"] != autosaveItem(job, "id") || !ok || revision < expected || current["authority"] != "data_only_untrusted" || !isDict {
+		return nil, false, valueErr("work_revision_changed")
+	}
+	stale = revision != expected
+	if stale && autosaveGet(current["package"], "status") != "in_progress" {
+		return nil, false, valueErr("work_revision_changed")
+	}
+	return current, stale, nil
+}
+
+// autosaveStamp sets the archive source's origin and session on pkg.
+func autosaveStamp(pkg any, source map[string]any) any {
+	switch p := pkg.(type) {
+	case map[string]any:
+		p["origin"], p["session_id"] = source["origin"], source["session_id"]
+	case host.Obj:
+		p.Set("origin", source["origin"])
+		p.Set("session_id", source["session_id"])
+		pkg = p
+	}
+	return pkg
+}
+
+// autosaveEvidenceRefs is the distinct archive refs of the claims' messages, at most 8.
+func autosaveEvidenceRefs(claims any, messages []any) ([]any, error) {
+	refs := []any{}
+	for _, claim := range claims.([]any) {
+		index, _ := host.Int(autosaveItem(claim, "message_index"))
+		ref := autosaveItem(messages[index], "ref")
+		if !containsJSON(refs, ref) {
+			refs = append(refs, ref)
+		}
+	}
+	if len(refs) > 8 {
+		return nil, valueErr("work_evidence_too_large")
+	}
+	return refs, nil
+}
+
+// autosaveSaveRequest returns the job's prepared save once it still matches the job's event and
+// save revision.
+func autosaveSaveRequest(job host.Obj, scope any) (prepared any, revision int64, err error) {
+	revision, err = autosaveSaveRevision(job)
+	if err != nil {
+		return nil, 0, err
+	}
+	prepared = autosaveItem(job, "prepared")
+	if privatePayload(prepared) {
+		return nil, 0, sessionWait("work_private_prepared")
+	}
+	for _, kv := range []host.KV{{Key: "scope", Value: scope}, {Key: "id", Value: autosaveItem(job, "id")}, {Key: "event_id", Value: autosaveItem(job, "event_id")},
+		{Key: "expected_revision", Value: revision}} {
+		if !eq(autosaveGet(prepared, kv.Key), kv.Value) {
+			return nil, 0, valueErr("work_prepared_changed")
+		}
+	}
+	if !autosaveRefsValid(job, autosaveGet(prepared, "archive_messages")) {
+		return nil, 0, valueErr("work_prepared_evidence_invalid")
+	}
+	return prepared, revision, nil
+}
+
+// autosaveSave posts prepared and turns the server's receipt for the next revision into a saved one.
+func autosaveSave(job host.Obj, request autosaveRequest, prepared any, revision int64) (host.Obj, error) {
+	result, err := request("/v1/work-checkpoints/save", prepared)
+	if err != nil {
+		return nil, err
+	}
+	if n, ok := host.Int(result["revision"]); result["id"] != autosaveItem(job, "id") || !ok || n != revision+1 || result["authority"] != "data_only_untrusted" {
+		return nil, valueErr("work_save_receipt_invalid")
+	}
+	r, _ := evidenceDict(result)
+	r.Set("status", "saved")
 	return r, nil
 }
 
@@ -792,24 +862,7 @@ func autosaveRun(values map[string]string, revision int) (result any, err error)
 		return nil, err
 	}
 	defer lock.Close()
-	olds, _ := filepath.Glob(filepath.Join(globEscape(root), "*.json"))
-	for _, old := range olds {
-		fi, err := os.Stat(old)
-		if !autosaveHash.MatchString(strings.TrimSuffix(filepath.Base(old), ".json")) || err != nil || !fi.Mode().IsRegular() ||
-			isSymlink(old) || fi.Size() > 1048576 {
-			continue
-		}
-		raw, err := os.ReadFile(old)
-		if err != nil {
-			continue
-		}
-		if v, err := loadObj(raw); err == nil {
-			created, ok := num(v["created_at"])
-			if _, isBool := v["created_at"].(bool); ok && !isBool && 0 < created && created <= timeNow()-autosaveTTL {
-				os.Remove(old)
-			}
-		}
-	}
+	autosaveSweep(root)
 	path := filepath.Join(root, autosaveOutboxKey(scope, values["id"], values["event_id"])+".json")
 	if isSymlink(path) {
 		return nil, valueErr("work_outbox_invalid")
@@ -842,6 +895,28 @@ func autosaveRun(values map[string]string, revision int) (result any, err error)
 	}
 	request := func(p string, body any) (map[string]any, error) { return capPost(p, body, 60*time.Second) }
 	return autosaveProcess(&job, request, scope, autosaveExtract, persist)
+}
+
+// autosaveSweep removes outbox files older than autosaveTTL, skipping anything unreadable.
+func autosaveSweep(root string) {
+	olds, _ := filepath.Glob(filepath.Join(globEscape(root), "*.json"))
+	for _, old := range olds {
+		fi, err := os.Stat(old)
+		if !autosaveHash.MatchString(strings.TrimSuffix(filepath.Base(old), ".json")) || err != nil || !fi.Mode().IsRegular() ||
+			isSymlink(old) || fi.Size() > 1048576 {
+			continue
+		}
+		raw, err := os.ReadFile(old)
+		if err != nil {
+			continue
+		}
+		if v, err := loadObj(raw); err == nil {
+			created, ok := num(v["created_at"])
+			if _, isBool := v["created_at"].(bool); ok && !isBool && 0 < created && created <= timeNow()-autosaveTTL {
+				os.Remove(old)
+			}
+		}
+	}
 }
 
 func init() { host.Register("work-autosave", autosaveMain) }

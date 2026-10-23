@@ -157,25 +157,9 @@ func retentionDecide(client archivePoster, items any, now time.Time) (host.Obj, 
 			return nil, err
 		}
 		if err == nil {
-			rev, revOK := host.Int(view["revision"])
-			state, _ := view["state"].(string)
-			if view == nil || view["id"] != aid || view["device"] != "pc" || view["origin"] != "zcode" || view["session_id"] != sid ||
-				view["format"] != "reconstructed_zcode" || !revOK || rev < 1 || (state != "active" && state != "expired") {
-				return nil, invalid
-			}
-			expires, aware, err := retentionAware(view["expires_at"])
+			state, err := retentionViewState(view, aid, sid, row["sha256"], now, invalid)
 			if err != nil {
 				return nil, err
-			}
-			if !aware || state == "expired" && expires > float64(now.UnixNano())/1e9 {
-				return nil, invalid
-			}
-			sha, ok := view["sha256"].(string)
-			if !ok || !retentionHash.MatchString(sha) {
-				return nil, invalid
-			}
-			if sha != row["sha256"] {
-				state = "changed"
 			}
 			decision.Set("state", state)
 			decision.Set("expires_at", view["expires_at"])
@@ -184,6 +168,32 @@ func retentionDecide(client archivePoster, items any, now time.Time) (host.Obj, 
 		result = append(result, decision)
 	}
 	return host.Obj{{Key: "version", Value: 1}, {Key: "items", Value: result}}, nil
+}
+
+// retentionViewState validates the server's view of one archived copy and returns its
+// state, "changed" when the copy no longer matches the local sha256.
+func retentionViewState(view map[string]any, aid, sid string, want any, now time.Time, invalid error) (string, error) {
+	rev, revOK := host.Int(view["revision"])
+	state, _ := view["state"].(string)
+	if view == nil || view["id"] != aid || view["device"] != "pc" || view["origin"] != "zcode" || view["session_id"] != sid ||
+		view["format"] != "reconstructed_zcode" || !revOK || rev < 1 || (state != "active" && state != "expired") {
+		return "", invalid
+	}
+	expires, aware, err := retentionAware(view["expires_at"])
+	if err != nil {
+		return "", err
+	}
+	if !aware || state == "expired" && expires > float64(now.UnixNano())/1e9 {
+		return "", invalid
+	}
+	sha, ok := view["sha256"].(string)
+	if !ok || !retentionHash.MatchString(sha) {
+		return "", invalid
+	}
+	if sha != want {
+		state = "changed"
+	}
+	return state, nil
 }
 
 // retentionRemoteStates asks the server, over the owner SSH path, for each copy's state.
@@ -217,35 +227,44 @@ func retentionRemoteStates(items []any) ([]string, error) {
 	states := []string{}
 	for i, r := range list {
 		request, _ := retentionRow(items[i])
-		resp, ok := r.(map[string]any)
-		if !ok || len(resp) != 5 {
-			return nil, invalid
-		}
-		for _, k := range []string{"id", "sha256", "state", "expires_at", "revision"} {
-			if _, has := resp[k]; !has {
-				return nil, invalid
-			}
-		}
-		state, _ := resp["state"].(string)
-		rev, revOK := host.Int(resp["revision"])
-		if resp["id"] != retentionArchiveID(request["session_id"].(string)) || resp["sha256"] != request["sha256"] || !retentionStates[state] || !revOK {
-			return nil, invalid
-		}
-		if state != "unknown" {
-			if _, isStr := resp["expires_at"].(string); rev < 1 || !isStr {
-				return nil, invalid
-			}
-			_, aware, err := retentionAware(resp["expires_at"])
-			if err != nil {
-				return nil, err
-			}
-			if !aware {
-				return nil, invalid
-			}
+		state, err := retentionRemoteState(request, r, invalid)
+		if err != nil {
+			return nil, err
 		}
 		states = append(states, state)
 	}
 	return states, nil
+}
+
+// retentionRemoteState validates the server's answer r for one request row and returns its state.
+func retentionRemoteState(request map[string]any, r any, invalid error) (string, error) {
+	resp, ok := r.(map[string]any)
+	if !ok || len(resp) != 5 {
+		return "", invalid
+	}
+	for _, k := range []string{"id", "sha256", "state", "expires_at", "revision"} {
+		if _, has := resp[k]; !has {
+			return "", invalid
+		}
+	}
+	state, _ := resp["state"].(string)
+	rev, revOK := host.Int(resp["revision"])
+	if resp["id"] != retentionArchiveID(request["session_id"].(string)) || resp["sha256"] != request["sha256"] || !retentionStates[state] || !revOK {
+		return "", invalid
+	}
+	if state != "unknown" {
+		if _, isStr := resp["expires_at"].(string); rev < 1 || !isStr {
+			return "", invalid
+		}
+		_, aware, err := retentionAware(resp["expires_at"])
+		if err != nil {
+			return "", err
+		}
+		if !aware {
+			return "", invalid
+		}
+	}
+	return state, nil
 }
 
 func retentionMain(_ []string, stdin io.Reader, stdout, stderr io.Writer) int {

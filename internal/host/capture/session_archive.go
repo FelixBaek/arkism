@@ -209,6 +209,28 @@ func eachJSONLine(path string, fn func(line []byte) bool) error {
 	}
 }
 
+// tableRecord is the inner record of a messages table row, decoding its JSON data
+// string when present; ok is false when that data is not a JSON object.
+func tableRecord(record map[string]any) (map[string]any, bool) {
+	inner := obj(record["record"])
+	if data, has := inner["data"]; has {
+		s, isStr := data.(string)
+		if !isStr {
+			return nil, false
+		}
+		v, err := loads([]byte(s))
+		if err != nil {
+			return nil, false
+		}
+		m, isMap := v.(map[string]any)
+		if !isMap {
+			return nil, false
+		}
+		inner = m
+	}
+	return inner, true
+}
+
 // textOf is the user/assistant text of one transcript record; tool, system and thinking
 // objects are never walked.
 func textOf(record map[string]any) string {
@@ -216,21 +238,9 @@ func textOf(record map[string]any) string {
 		return ""
 	}
 	if t := record["table"]; t == "messages" || t == "message" {
-		inner := obj(record["record"])
-		if data, has := inner["data"]; has {
-			s, isStr := data.(string)
-			if !isStr {
-				return ""
-			}
-			v, err := loads([]byte(s))
-			if err != nil {
-				return ""
-			}
-			m, isMap := v.(map[string]any)
-			if !isMap {
-				return ""
-			}
-			inner = m
+		inner, ok := tableRecord(record)
+		if !ok {
+			return ""
 		}
 		record = inner
 	}
@@ -259,6 +269,11 @@ func textOf(record map[string]any) string {
 	if !has {
 		return ""
 	}
+	return contentText(content)
+}
+
+// contentText is a message's content: a plain string, or its text parts joined by newlines.
+func contentText(content any) string {
 	if s, isStr := content.(string); isStr {
 		return s
 	}
@@ -531,13 +546,8 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 	if err != nil {
 		return err
 	}
-	if observed < 0 {
-		observed = float64(before[2].(int64)) / 1e9
-		if origin == "codex" && format == "jsonl" {
-			if observed, err = codexObservedAt(path, observed); err != nil {
-				return err
-			}
-		}
+	if observed, err = archiveObservedAt(path, origin, format, before, observed); err != nil {
+		return err
 	}
 	aid := archiveIdentity(device, origin, sid, logical)
 	cacheKey := statKey
@@ -552,20 +562,12 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 		c.counts.inc("older_than_7d")
 		return nil
 	}
-	if prev, ok := c.state.Get(aid); ok {
-		if sig, has := objGet(prev, "signature"); has && eq(sig, cacheKey) {
-			c.counts.inc("unchanged")
-			return nil
-		}
+	if c.unchanged(aid, cacheKey) {
+		c.counts.inc("unchanged")
+		return nil
 	}
 	if !c.execute {
-		if err := inspectPrivateArchiveFile(path, format); err != nil {
-			return err
-		}
-		if err := policy.inspect(path, format); err != nil {
-			return err
-		}
-		if err := policy.check(); err != nil {
+		if err := planArchiveFile(policy, path, format); err != nil {
 			return err
 		}
 		c.counts.inc("planned")
@@ -587,6 +589,81 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 		return err
 	}
 	defer f.Close()
+	chunks, sum, err := c.uploadChunks(policy, aid, f)
+	if err != nil {
+		return err
+	}
+	if len(chunks) == 0 {
+		c.counts.inc("empty")
+		return nil
+	}
+	text, err := archiveText(snapshot, format)
+	if err != nil {
+		return err
+	}
+	after, err := archiveSignature(path)
+	if err != nil {
+		return err
+	}
+	if !eq(after, before) {
+		c.counts.inc("changed_during_read")
+		return nil
+	}
+	payload := map[string]any{"id": aid, "session_id": sid, "device": device, "origin": origin, "format": format,
+		"observed_at": archiveISO(observed), "sha256": sum, "chunks": chunks, "text": text}
+	reply, err := c.commit(policy, payload)
+	if err != nil {
+		return err
+	}
+	c.state.Set(aid, host.Obj{{Key: "signature", Value: cacheKey}, {Key: "sha256", Value: sum}, {Key: "id", Value: aid},
+		{Key: "chunks", Value: chunks}, {Key: "observed_at", Value: archiveISO(observed)}, {Key: "state", Value: reply["state"]}})
+	c.counts.inc("committed")
+	return nil
+}
+
+// archiveObservedAt is the given observed time, or with observed < 0 the file's
+// modification time (Codex JSONL: the time its records give).
+func archiveObservedAt(path, origin, format string, before []any, observed float64) (float64, error) {
+	if observed < 0 {
+		observed = float64(before[2].(int64)) / 1e9
+		if origin == "codex" && format == "jsonl" {
+			return codexObservedAt(path, observed)
+		}
+	}
+	return observed, nil
+}
+
+// archiveText is the searchable projection of a transcript snapshot; SQLite snapshots have none.
+func archiveText(snapshot, format string) (string, error) {
+	if format == "sqlite_snapshot" {
+		return "", nil
+	}
+	return projection(snapshot)
+}
+
+// unchanged reports whether aid was last uploaded with this cache key.
+func (c *collector) unchanged(aid string, cacheKey any) bool {
+	if prev, ok := c.state.Get(aid); ok {
+		if sig, has := objGet(prev, "signature"); has && eq(sig, cacheKey) {
+			return true
+		}
+	}
+	return false
+}
+
+// planArchiveFile runs the dry-run checks on the live file instead of a snapshot.
+func planArchiveFile(policy *archivePolicy, path, format string) error {
+	if err := inspectPrivateArchiveFile(path, format); err != nil {
+		return err
+	}
+	if err := policy.inspect(path, format); err != nil {
+		return err
+	}
+	return policy.check()
+}
+
+// uploadChunks posts f in archiveChunk parts; it returns their ids and the whole file's sha256.
+func (c *collector) uploadChunks(policy *archivePolicy, aid string, f io.Reader) ([]any, string, error) {
 	full := sha256.New()
 	chunks := []any{}
 	buf := make([]byte, archiveChunk)
@@ -598,60 +675,41 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 			chunk, err := c.archivePost(policy, "chunks", map[string]any{"parent_id": aid, "sha256": sha256Hex(part),
 				"data": base64.StdEncoding.EncodeToString(part)})
 			if err != nil {
-				return err
+				return nil, "", err
 			}
 			id, has := chunk["id"]
 			if !has {
-				return fmt.Errorf("%w: 'id'", errKey)
+				return nil, "", fmt.Errorf("%w: 'id'", errKey)
 			}
 			chunks = append(chunks, id)
 			if len(chunks) > 2048 {
-				return valueErr("too_large")
+				return nil, "", valueErr("too_large")
 			}
 		}
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			break
 		}
 		if err != nil {
-			return err
+			return nil, "", err
 		}
 	}
-	if len(chunks) == 0 {
-		c.counts.inc("empty")
-		return nil
-	}
-	text := ""
-	if format != "sqlite_snapshot" {
-		if text, err = projection(snapshot); err != nil {
-			return err
-		}
-	}
-	after, err := archiveSignature(path)
-	if err != nil {
-		return err
-	}
-	if !eq(after, before) {
-		c.counts.inc("changed_during_read")
-		return nil
-	}
-	sum := hex.EncodeToString(full.Sum(nil))
-	payload := map[string]any{"id": aid, "session_id": sid, "device": device, "origin": origin, "format": format,
-		"observed_at": archiveISO(observed), "sha256": sum, "chunks": chunks, "text": text}
+	return chunks, hex.EncodeToString(full.Sum(nil)), nil
+}
+
+// commit posts the commit payload, retrying once without text when the API flags a secret in it.
+func (c *collector) commit(policy *archivePolicy, payload map[string]any) (map[string]any, error) {
 	reply, err := c.archivePost(policy, "commit", payload)
 	if err != nil {
 		var api *APIError
 		if !errors.As(err, &api) || !strings.Contains(api.Code, "secret") {
-			return err
+			return nil, err
 		}
 		payload["text"] = ""
 		if reply, err = c.archivePost(policy, "commit", payload); err != nil {
-			return err
+			return nil, err
 		}
 	}
-	c.state.Set(aid, host.Obj{{Key: "signature", Value: cacheKey}, {Key: "sha256", Value: sum}, {Key: "id", Value: aid},
-		{Key: "chunks", Value: chunks}, {Key: "observed_at", Value: archiveISO(observed)}, {Key: "state", Value: reply["state"]}})
-	c.counts.inc("committed")
-	return nil
+	return reply, nil
 }
 
 func objGet(v any, key string) (any, bool) {
@@ -1023,6 +1081,11 @@ func sessionArchiveMain(args []string, _ io.Reader, stdout, stderr io.Writer) in
 		fmt.Fprint(stderr, usage+"arkism session-archive: error: the following arguments are required: command\n")
 		return 2
 	}
+	return runSessionArchive(usage, command, database, execute, stdout, stderr)
+}
+
+// runSessionArchive runs one parsed session-archive command under the collector lock.
+func runSessionArchive(usage, command, database string, execute bool, stdout, stderr io.Writer) int {
 	dir := filepath.Dir(archiveState)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		fmt.Fprintln(stderr, err)

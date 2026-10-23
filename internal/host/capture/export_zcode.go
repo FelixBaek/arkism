@@ -60,22 +60,9 @@ func exportRun(database, outbox string, execute bool, now float64, retention exp
 	if !resolved(database) || !resolved(outbox) {
 		return nil, valueErr("zcode_export_path_alias")
 	}
-	var sessions []string
-	if !isFile(database) {
-		counts.inc("missing_database")
-	} else {
-		db, err := openRO(database)
-		if err != nil {
-			return nil, err
-		}
-		err = eachRow(db, "SELECT id FROM session WHERE time_updated>? ORDER BY id", []any{(now - exportTTL) * 1000}, func(_ []string, vals []any) error {
-			sessions = append(sessions, str(vals[0]))
-			return nil
-		})
-		db.Close()
-		if err != nil {
-			return nil, err
-		}
+	sessions, err := exportRecent(database, now, counts)
+	if err != nil {
+		return nil, err
 	}
 	if execute {
 		if err := os.MkdirAll(outbox, 0o777); err != nil {
@@ -163,23 +150,50 @@ func exportRun(database, outbox string, execute bool, now float64, retention exp
 				counts.inc("retention_" + decisions[i])
 				continue
 			}
-			now, err := exportCopyInfo(c.path, 0, false)
-			switch {
-			case err != nil:
-				counts.inc("cleanup_failed")
-			case now == nil || *now != *c.info:
-				counts.inc("changed_before_cleanup")
-			default:
-				counts.inc("expired_copies")
-				if execute {
-					if err := os.Remove(c.path); err != nil {
-						counts.inc("cleanup_failed")
-					}
-				}
-			}
+			exportExpire(c.path, c.info, execute, counts)
 		}
 	}
 	return counts.obj(), nil
+}
+
+// exportRecent lists the sessions updated within the export window; none when the database is missing.
+func exportRecent(database string, now float64, counts *counter) ([]string, error) {
+	var sessions []string
+	if !isFile(database) {
+		counts.inc("missing_database")
+	} else {
+		db, err := openRO(database)
+		if err != nil {
+			return nil, err
+		}
+		err = eachRow(db, "SELECT id FROM session WHERE time_updated>? ORDER BY id", []any{(now - exportTTL) * 1000}, func(_ []string, vals []any) error {
+			sessions = append(sessions, str(vals[0]))
+			return nil
+		})
+		db.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return sessions, nil
+}
+
+// exportExpire removes a copy the server expired, unless it changed since it was listed.
+func exportExpire(path string, info *exportInfo, execute bool, counts *counter) {
+	now, err := exportCopyInfo(path, 0, false)
+	switch {
+	case err != nil:
+		counts.inc("cleanup_failed")
+	case now == nil || *now != *info:
+		counts.inc("changed_before_cleanup")
+	default:
+		counts.inc("expired_copies")
+		if execute {
+			if err := os.Remove(path); err != nil {
+				counts.inc("cleanup_failed")
+			}
+		}
+	}
 }
 
 // exportSame is filecmp.cmp(a, b, shallow=False); unreadable files differ.
@@ -277,24 +291,11 @@ func exportCopyInfo(path string, olderThan float64, check bool) (info *exportInf
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) > 8<<20 || len(raw) == 0 || raw[len(raw)-1] != '\n' {
-		return nil, nil
-	}
-	head, err := loadObjBytes(raw)
+	sid, observed, ok, err := exportHead(path, raw)
 	if err != nil {
 		return nil, err
 	}
-	sessionV, has := head["session"]
-	if !has {
-		sessionV = map[string]any{}
-	}
-	session, ok := sessionV.(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("%w: session", errType)
-	}
-	sid, isStr := session["id"].(string)
-	observed, ok := sessionTimestamp(session["time_updated"])
-	if !isStr || !ok || filepath.Base(path) != sha256Hex([]byte(sid))+".jsonl" {
 		return nil, nil
 	}
 	if check && observed > olderThan {
@@ -317,6 +318,32 @@ func exportCopyInfo(path string, olderThan float64, check bool) (info *exportInf
 		return nil, valueErr("copy_changed")
 	}
 	return &exportInfo{sid, observed, hex.EncodeToString(h.Sum(nil)), mark(before)}, nil
+}
+
+// exportHead reads the session id and time from a copy's first line; ok is false when the line
+// is cut, empty or unterminated, or the session does not match the copy's file name.
+func exportHead(path string, raw []byte) (sid string, observed float64, ok bool, err error) {
+	if len(raw) > 8<<20 || len(raw) == 0 || raw[len(raw)-1] != '\n' {
+		return "", 0, false, nil
+	}
+	head, err := loadObjBytes(raw)
+	if err != nil {
+		return "", 0, false, err
+	}
+	sessionV, has := head["session"]
+	if !has {
+		sessionV = map[string]any{}
+	}
+	session, isMap := sessionV.(map[string]any)
+	if !isMap {
+		return "", 0, false, fmt.Errorf("%w: session", errType)
+	}
+	sid, isStr := session["id"].(string)
+	observed, ok = sessionTimestamp(session["time_updated"])
+	if !isStr || !ok || filepath.Base(path) != sha256Hex([]byte(sid))+".jsonl" {
+		return "", 0, false, nil
+	}
+	return sid, observed, true, nil
 }
 
 // exportOutbox is the configured PC session outbox: the environment, then

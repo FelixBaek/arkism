@@ -132,19 +132,7 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 				}
 			}
 		case d["type"] == "response_item" && payload != nil: // Codex rollout
-			switch payload["type"] {
-			case "message":
-				text := codexText(payload["content"])
-				if payload["role"] == "assistant" {
-					reply(at, text)
-				} else if payload["role"] == "user" && !strings.HasPrefix(strings.TrimSpace(text), "<") && !strings.HasPrefix(strings.TrimSpace(text), "#") {
-					user(text) // skip injected environment and AGENTS.md blocks
-				}
-			case "custom_tool_call":
-				command(str(payload["input"]))
-			case "function_call":
-				command(str(payload["arguments"]))
-			}
+			behaviorCodex(payload, at, user, reply, command)
 		}
 		return nil
 	})
@@ -173,6 +161,23 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 		return nil
 	}
 	return out
+}
+
+// behaviorCodex routes one Codex rollout response item to the user, reply or command recorder.
+func behaviorCodex(payload map[string]any, at string, user func(string), reply func(at, text string), command func(string)) {
+	switch payload["type"] {
+	case "message":
+		text := codexText(payload["content"])
+		if payload["role"] == "assistant" {
+			reply(at, text)
+		} else if payload["role"] == "user" && !strings.HasPrefix(strings.TrimSpace(text), "<") && !strings.HasPrefix(strings.TrimSpace(text), "#") {
+			user(text) // skip injected environment and AGENTS.md blocks
+		}
+	case "custom_tool_call":
+		command(str(payload["input"]))
+	case "function_call":
+		command(str(payload["arguments"]))
+	}
 }
 
 // headTail keeps both ends of s within n runes: footers and closing summaries are what checkers judge.

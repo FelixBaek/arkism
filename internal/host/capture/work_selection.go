@@ -184,6 +184,11 @@ func selectionMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	if values["--cwd"] == nil {
 		return fail("the following arguments are required: --cwd")
 	}
+	return selectionRun(action, values, stdout)
+}
+
+// selectionRun runs one parsed work-selection action and prints its JSON result.
+func selectionRun(action string, values map[string]*string, stdout io.Writer) int {
 	cwd := *values["--cwd"]
 	var workID any
 	if values["--id"] != nil {

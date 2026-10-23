@@ -78,37 +78,18 @@ func handoffContext(hook map[string]any, origin string) (value host.Obj, err err
 		if err != nil {
 			return nil, err
 		}
-		value = host.Obj{{Key: "path", Value: absPath(capZcodeDB)}, {Key: "device", Value: "server"}, {Key: "origin", Value: "zcode"},
-			{Key: "logical", Value: "db-session"}, {Key: "session_id", Value: s}, {Key: "cwd", Value: resolvedCwd},
-			{Key: "archive_id", Value: archiveIdentity("server", "zcode", s, "db-session")}}
-		err := zcodeSnapshot(absPath(capZcodeDB), s, func(snapshot string, _ float64, _ any) error {
-			_, _, err := wzcodeWindow(snapshot, s, value[5].Value, nil, true, false)
-			return err
-		})
-		if err != nil {
-			return nil, err
-		}
-		return value, nil
+		return handoffZcodeContext(s, resolvedCwd)
 	}
 	root := capProjects
 	if origin == "codex" {
 		root = capCodexSessions
 	}
 	if p, _ := path.(string); p == "" && origin == "codex" {
-		var matches []string
-		for _, candidate := range globAll(root, "*.jsonl") {
-			if found := evidenceFileContext(candidate, root, s, "server", true, "codex"); found != nil {
-				fp, _ := found.Get("path")
-				matches = append(matches, fp.(string))
-				if len(matches) > 1 {
-					return nil, nil
-				}
-			}
-		}
-		if len(matches) != 1 {
+		found, ok := handoffCodexPath(root, s)
+		if !ok {
 			return nil, nil
 		}
-		path = matches[0]
+		path = found
 	}
 	p, _ := path.(string)
 	if p == "" {
@@ -128,6 +109,39 @@ func handoffContext(hook map[string]any, origin string) (value host.Obj, err err
 		value.Set("cwd", resolvedCwd)
 	}
 	return value, nil
+}
+
+// handoffZcodeContext is the Zcode session's context once its snapshot window reads.
+func handoffZcodeContext(s, resolvedCwd string) (host.Obj, error) {
+	value := host.Obj{{Key: "path", Value: absPath(capZcodeDB)}, {Key: "device", Value: "server"}, {Key: "origin", Value: "zcode"},
+		{Key: "logical", Value: "db-session"}, {Key: "session_id", Value: s}, {Key: "cwd", Value: resolvedCwd},
+		{Key: "archive_id", Value: archiveIdentity("server", "zcode", s, "db-session")}}
+	err := zcodeSnapshot(absPath(capZcodeDB), s, func(snapshot string, _ float64, _ any) error {
+		_, _, err := wzcodeWindow(snapshot, s, value[5].Value, nil, true, false)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+// handoffCodexPath finds the one Codex transcript of session s under root.
+func handoffCodexPath(root, s string) (string, bool) {
+	var matches []string
+	for _, candidate := range globAll(root, "*.jsonl") {
+		if found := evidenceFileContext(candidate, root, s, "server", true, "codex"); found != nil {
+			fp, _ := found.Get("path")
+			matches = append(matches, fp.(string))
+			if len(matches) > 1 {
+				return "", false
+			}
+		}
+	}
+	if len(matches) != 1 {
+		return "", false
+	}
+	return matches[0], true
 }
 
 // handoffCodexMeta accepts only an interactive Codex session started in cwd.
@@ -459,6 +473,41 @@ func handoffChecked(root, key string, job host.Obj) (host.Obj, error) {
 	return binding, nil
 }
 
+// handoffFileArchive archives the transcript file from the binding's offset and records
+// its end on job.
+func handoffFileArchive(job *host.Obj, binding host.Obj, client evidenceClient, at func(string) any, vpath, sid string) error {
+	got, err := handoffPrefix(vpath, handoffInt(autosaveItem(binding, "offset")))
+	if err != nil {
+		return err
+	}
+	if got != autosaveItem(binding, "prefix_sha256") {
+		return valueErr("work_transcript_changed")
+	}
+	collector := newCollector(client, nil, true)
+	if err := collector.file(vpath, at("device").(string), at("origin").(string), at("logical").(string), sid, -1); err != nil {
+		return err
+	}
+	saved, has := collector.state.Get(at("archive_id").(string))
+	if collector.counts.n["committed"] == 0 || !has || !truthy(saved) {
+		return valueErr("work_transcript_pending")
+	}
+	end := handoffInt(autosaveItem(saved, "signature").([]any)[1])
+	endHash, err := handoffPrefix(vpath, end)
+	if err != nil {
+		return err
+	}
+	startHash, err := handoffPrefix(vpath, handoffInt(autosaveItem(binding, "offset")))
+	if err != nil {
+		return err
+	}
+	if endHash != autosaveItem(saved, "sha256") || startHash != autosaveItem(binding, "prefix_sha256") {
+		return valueErr("work_transcript_changed")
+	}
+	job.Set("sha256", autosaveItem(saved, "sha256"))
+	job.Set("end_byte", end)
+	return nil
+}
+
 // handoffProcess archives the session up to now and saves it into the bound work.
 func handoffProcess(root, key string, job *host.Obj) (err error) {
 	defer recovered(&err)
@@ -524,36 +573,8 @@ func handoffProcess(root, key string, job *host.Obj) (err error) {
 			if err != nil {
 				return err
 			}
-		} else {
-			got, err := handoffPrefix(vpath, handoffInt(autosaveItem(binding, "offset")))
-			if err != nil {
-				return err
-			}
-			if got != autosaveItem(binding, "prefix_sha256") {
-				return valueErr("work_transcript_changed")
-			}
-			collector := newCollector(client, nil, true)
-			if err := collector.file(vpath, at("device").(string), at("origin").(string), at("logical").(string), sid, -1); err != nil {
-				return err
-			}
-			saved, has := collector.state.Get(at("archive_id").(string))
-			if collector.counts.n["committed"] == 0 || !has || !truthy(saved) {
-				return valueErr("work_transcript_pending")
-			}
-			end := handoffInt(autosaveItem(saved, "signature").([]any)[1])
-			endHash, err := handoffPrefix(vpath, end)
-			if err != nil {
-				return err
-			}
-			startHash, err := handoffPrefix(vpath, handoffInt(autosaveItem(binding, "offset")))
-			if err != nil {
-				return err
-			}
-			if endHash != autosaveItem(saved, "sha256") || startHash != autosaveItem(binding, "prefix_sha256") {
-				return valueErr("work_transcript_changed")
-			}
-			job.Set("sha256", autosaveItem(saved, "sha256"))
-			job.Set("end_byte", end)
+		} else if err := handoffFileArchive(job, binding, client, at, vpath, sid); err != nil {
+			return err
 		}
 		if err := persist(); err != nil {
 			return err

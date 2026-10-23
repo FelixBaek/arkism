@@ -495,9 +495,15 @@ func publishClaimReceipt(path string, raw []byte, policy func() error) (result e
 	if err := claimReceiptDirectoryCurrent(dir, dirInfo); err != nil {
 		return err
 	}
+	return linkClaimReceipt(file.Name(), path, raw)
+}
+
+// linkClaimReceipt publishes the verified temporary at path; an existing receipt counts only
+// when it holds the same bytes.
+func linkClaimReceipt(temp, path string, raw []byte) error {
 	// Same-directory hard-link publication is atomic and never replaces a foreign
 	// destination. Unsupported filesystems fail closed rather than overwrite it.
-	if err := os.Link(file.Name(), path); err != nil {
+	if err := os.Link(temp, path); err != nil {
 		current, statErr := os.Lstat(path)
 		if statErr != nil {
 			return runtimeErr("claim_context_receipt_write_failed")

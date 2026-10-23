@@ -1019,92 +1019,7 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 		defer recovered(&err)
 		switch {
 		case name == "SessionStart" || name == "UserPromptSubmit":
-			if name == "UserPromptSubmit" && capOnPrompt {
-				skipped, err := promptCapture(data)
-				if err != nil {
-					return err
-				}
-				accepted = true
-				if skipped {
-					return nil // expired/internal deliveries must not recall or renew memories
-				}
-			}
-			sid := str(or(data["session_id"], ""))
-			if err := func() (err error) { defer recovered(&err); return sessionStore().LinkAgent(sid) }(); err != nil {
-				metric(kv("event", "hook_error"), kv("hook", "session_link"), kv("error", pyType(err)))
-			}
-			crew := ""
-			if name == "UserPromptSubmit" {
-				crew = crewContext(data, 3*time.Second)
-			}
-			work := workContext(data)
-			var part host.Part
-			var revs *promptDelivery
-			var stableDelivery *stableOutput
-			var err error
-			if name == "SessionStart" {
-				if src := data["source"]; src == "compact" || src == "clear" {
-					// per-turn recall shown before is gone from the context
-					if err := sessionStore().ResetDelivered(sid); err != nil {
-						metric(kv("event", "hook_error"), kv("hook", "recall_reset"), kv("error", pyType(err)))
-					}
-				}
-				// Session-fixed text only: byte-identical for the whole session (prompt cache).
-				// Held until markStableShown so a concurrent start reuses this exact block.
-				// Failing to get it drops only the stable block; work and recent context still go out.
-				var lock io.Closer
-				if sid != "" {
-					lock, err = stableHookLock(sid)
-				}
-				if err == nil {
-					if lock != nil {
-						defer lock.Close()
-					}
-					part, err = func() (p host.Part, err error) {
-						defer recovered(&err)
-						p, stableDelivery, err = stableBlock(sid, str(or(data["cwd"], "")))
-						return p, err
-					}()
-				}
-			} else {
-				prompt, isStr := or(data["prompt"], "").(string)
-				if !isStr {
-					err = fmt.Errorf("%w: expected string", errType)
-				} else {
-					part, err = func() (p host.Part, err error) {
-						defer recovered(&err)
-						p, revs, err = promptParts(prompt, sid, str(or(data["cwd"], "")))
-						return p, err
-					}()
-				}
-			}
-			if err != nil { // recall failed: the crew and work context still go in
-				if crew == "" && work == "" && name != "SessionStart" {
-					return err
-				}
-				metric(kv("event", "hook_error"), kv("hook", name), kv("error", pyType(err)))
-				part = host.Part{}
-			}
-			ctx, err := host.AssembleParts(part, host.Part{Full: work}, host.Part{Full: crew, Meta: host.CrewMeta(crew)}, host.ContextMaxChars)
-			if err != nil {
-				return err
-			}
-			if name == "SessionStart" {
-				if recent := recentSessionContext(data, host.ContextMaxChars-host.Len(ctx)-2); recent != "" {
-					if ctx != "" {
-						ctx += "\n\n"
-					}
-					ctx += recent
-				}
-			}
-			if ctx != "" {
-				if _, err := fmt.Fprintln(stdout, host.MustDumps(host.Obj{{Key: "hookSpecificOutput", Value: host.Obj{
-					{Key: "hookEventName", Value: name}, {Key: "additionalContext", Value: ctx}}}}, host.DumpOpts{NoASCII: true})); err != nil {
-					return err
-				}
-			}
-			markShown(sid, ctx, revs, str(or(data["cwd"], "")))
-			markStableShown(sid, ctx, stableDelivery, str(or(data["cwd"], "")))
+			return hookInject(data, name, stdout, &accepted)
 		case capOnPrompt:
 		case name == "Stop":
 			return sessionCapture(data, "turn_completed")
@@ -1116,6 +1031,116 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 	if err != nil { // never break the agent session; the failure is counted
 		metric(kv("event", "hook_error"), kv("hook", name), kv("error", pyType(err)))
 	}
+	hookFinish(data, name, stdout, accepted)
+	return 0
+}
+
+// hookInject answers SessionStart and UserPromptSubmit with recall, work and crew context.
+func hookInject(data map[string]any, name any, stdout io.Writer, accepted *bool) error {
+	if name == "UserPromptSubmit" && capOnPrompt {
+		skipped, err := promptCapture(data)
+		if err != nil {
+			return err
+		}
+		*accepted = true
+		if skipped {
+			return nil // expired/internal deliveries must not recall or renew memories
+		}
+	}
+	sid := str(or(data["session_id"], ""))
+	if err := func() (err error) { defer recovered(&err); return sessionStore().LinkAgent(sid) }(); err != nil {
+		metric(kv("event", "hook_error"), kv("hook", "session_link"), kv("error", pyType(err)))
+	}
+	crew := ""
+	if name == "UserPromptSubmit" {
+		crew = crewContext(data, 3*time.Second)
+	}
+	work := workContext(data)
+	var part host.Part
+	var revs *promptDelivery
+	var stableDelivery *stableOutput
+	var err error
+	if name == "SessionStart" {
+		var lock io.Closer
+		part, stableDelivery, lock, err = hookStablePart(data, sid)
+		if lock != nil {
+			defer lock.Close()
+		}
+	} else {
+		part, revs, err = hookPromptPart(data, sid)
+	}
+	if err != nil { // recall failed: the crew and work context still go in
+		if crew == "" && work == "" && name != "SessionStart" {
+			return err
+		}
+		metric(kv("event", "hook_error"), kv("hook", name), kv("error", pyType(err)))
+		part = host.Part{}
+	}
+	ctx, err := host.AssembleParts(part, host.Part{Full: work}, host.Part{Full: crew, Meta: host.CrewMeta(crew)}, host.ContextMaxChars)
+	if err != nil {
+		return err
+	}
+	if name == "SessionStart" {
+		if recent := recentSessionContext(data, host.ContextMaxChars-host.Len(ctx)-2); recent != "" {
+			if ctx != "" {
+				ctx += "\n\n"
+			}
+			ctx += recent
+		}
+	}
+	if ctx != "" {
+		if _, err := fmt.Fprintln(stdout, host.MustDumps(host.Obj{{Key: "hookSpecificOutput", Value: host.Obj{
+			{Key: "hookEventName", Value: name}, {Key: "additionalContext", Value: ctx}}}}, host.DumpOpts{NoASCII: true})); err != nil {
+			return err
+		}
+	}
+	markShown(sid, ctx, revs, str(or(data["cwd"], "")))
+	markStableShown(sid, ctx, stableDelivery, str(or(data["cwd"], "")))
+	return nil
+}
+
+// hookStablePart is SessionStart's recall: the session-fixed block, with the lock that must be
+// held until markStableShown (nil when none was taken).
+func hookStablePart(data map[string]any, sid string) (part host.Part, stableDelivery *stableOutput, lock io.Closer, err error) {
+	if src := data["source"]; src == "compact" || src == "clear" {
+		// per-turn recall shown before is gone from the context
+		if err := sessionStore().ResetDelivered(sid); err != nil {
+			metric(kv("event", "hook_error"), kv("hook", "recall_reset"), kv("error", pyType(err)))
+		}
+	}
+	// Session-fixed text only: byte-identical for the whole session (prompt cache).
+	// Held until markStableShown so a concurrent start reuses this exact block.
+	// Failing to get it drops only the stable block; work and recent context still go out.
+	if sid != "" {
+		lock, err = stableHookLock(sid)
+	}
+	if err != nil {
+		return host.Part{}, nil, nil, err
+	}
+	part, err = func() (p host.Part, err error) {
+		defer recovered(&err)
+		p, stableDelivery, err = stableBlock(sid, str(or(data["cwd"], "")))
+		return p, err
+	}()
+	return part, stableDelivery, lock, err
+}
+
+// hookPromptPart is UserPromptSubmit's recall for the typed prompt.
+func hookPromptPart(data map[string]any, sid string) (part host.Part, revs *promptDelivery, err error) {
+	prompt, isStr := or(data["prompt"], "").(string)
+	if !isStr {
+		return host.Part{}, nil, fmt.Errorf("%w: expected string", errType)
+	}
+	part, err = func() (p host.Part, err error) {
+		defer recovered(&err)
+		p, revs, err = promptParts(prompt, sid, str(or(data["cwd"], "")))
+		return p, err
+	}()
+	return part, revs, err
+}
+
+// hookFinish queues work at a turn's end, wakes the drain, and gives remote relays their receipt.
+func hookFinish(data map[string]any, name any, stdout io.Writer, accepted bool) {
 	if name == "Stop" || name == "SessionEnd" {
 		if err := func() (err error) { defer recovered(&err); return hoQueue(data) }(); err != nil {
 			metric(kv("event", "hook_error"), kv("hook", "work_queue"), kv("error", pyType(err)))
@@ -1129,5 +1154,4 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 	if os.Getenv("ARKISM_CAPTURE_ACK") == "1" && name == "UserPromptSubmit" {
 		fmt.Fprintln(stdout, host.MustDumps(host.Obj{{Key: "arkismDelivery", Value: host.Obj{{Key: "accepted", Value: accepted}}}}, host.DumpOpts{}))
 	}
-	return 0
 }

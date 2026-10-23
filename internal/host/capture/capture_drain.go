@@ -357,16 +357,9 @@ func process(job map[string]any, persist func() error) (err error) {
 	if err != nil {
 		return err
 	}
-	allInternal := len(users) > 0
-	for _, u := range users {
-		um, err := asDict(u)
-		if err != nil {
-			return err
-		}
-		if !internalCodexPrompt(origin, um["text"]) {
-			allInternal = false
-			break
-		}
+	allInternal, err := allCodexInternal(origin, users)
+	if err != nil {
+		return err
 	}
 	if allInternal {
 		metric(kv("event", "capture_skipped"), kv("reason", "codex_ambient_prompt"))
@@ -375,217 +368,299 @@ func process(job map[string]any, persist func() error) (err error) {
 	if sessionProcessorOn() {
 		return sessionProcess(job, persist, origin)
 	}
-	// Old spool files may predate redaction. Sanitize before cue matching,
-	// searching or extraction, and never use hashes derived from private text.
-	if privatePayload(users) {
-		users, _ = privateData(users).([]any)
-		if privatePayload(users) {
-			return sessionWait("capture_private_content")
-		}
-		for _, user := range users {
-			if row, ok := user.(map[string]any); ok {
-				delete(row, "archive_hint")
-				delete(row, "archive_ref")
-				delete(row, "archive_refs")
-			}
-		}
-		job["users"] = users
-		delete(job, "archive_locator")
-		if persist != nil {
-			if err := persist(); err != nil {
-				return err
-			}
-		}
+	if users, err = sanitizeLegacyUsers(job, users, persist); err != nil {
+		return err
 	}
 	started := monotonic()
 	sid := job["session_id"].(string) // KeyError/TypeError surface through recovered
+	cued := cuedUsers(users)
+	checkpoint := persist
+	if checkpoint == nil {
+		checkpoint = func() error { return nil }
+	}
+	if len(cued) > 0 && !truthy(job["captured"]) {
+		if err := captureCued(job, cued, sid, origin, started, checkPolicy, checkpoint); err != nil {
+			return err
+		}
+	}
+	if len(cued) == 0 && len(users) > 0 {
+		metric(kv("event", job["type"]), kv("session", head(sid, 12)), kv("status", "skipped_no_cue"), kv("turns", len(users)))
+	}
+	return nil
+}
+
+// allCodexInternal reports whether every queued turn is a Codex ambient prompt (false for no turns).
+func allCodexInternal(origin string, users []any) (bool, error) {
+	allInternal := len(users) > 0
+	for _, u := range users {
+		um, err := asDict(u)
+		if err != nil {
+			return false, err
+		}
+		if !internalCodexPrompt(origin, um["text"]) {
+			allInternal = false
+			break
+		}
+	}
+	return allInternal, nil
+}
+
+// sanitizeLegacyUsers redacts the turns of an old spool file that may predate redaction.
+// Sanitize before cue matching, searching or extraction, and never use hashes derived from private text.
+func sanitizeLegacyUsers(job map[string]any, users []any, persist func() error) ([]any, error) {
+	if !privatePayload(users) {
+		return users, nil
+	}
+	users, _ = privateData(users).([]any)
+	if privatePayload(users) {
+		return nil, sessionWait("capture_private_content")
+	}
+	for _, user := range users {
+		if row, ok := user.(map[string]any); ok {
+			delete(row, "archive_hint")
+			delete(row, "archive_ref")
+			delete(row, "archive_refs")
+		}
+	}
+	job["users"] = users
+	delete(job, "archive_locator")
+	if persist != nil {
+		if err := persist(); err != nil {
+			return nil, err
+		}
+	}
+	return users, nil
+}
+
+// cuedUsers is the turns whose text carries a memory cue; a malformed turn panics into recovered.
+func cuedUsers(users []any) []any {
 	var cued []any
 	for _, u := range users {
 		if cueRE.MatchString(u.(map[string]any)["text"].(string)) {
 			cued = append(cued, u)
 		}
 	}
-	checkpoint := persist
-	if checkpoint == nil {
-		checkpoint = func() error { return nil }
-	}
-	if len(cued) > 0 && !truthy(job["captured"]) {
-		prepared, _ := job["prepared_capture"].(map[string]any)
-		if job["prepared_capture"] == nil {
-			context, sourceUsers, root := job["archive_context"], cued, capProjects
-			if locator, _ := job["archive_locator"].(map[string]any); truthy(job["archive_locator"]) {
-				if len(cued) != 1 || locator["session_id"] != sid || locator["origin"] != origin || locator["device"] != client() {
-					return runtimeErr("archive_locator_invalid")
-				}
-				if locator["origin"] == "zcode" {
-					source := capZcodeDB
-					if locator["device"] == "pc" {
-						source = filepath.Join(archivePC, "zcode-sessions")
-					}
-					if sourceUsers, err = evPrepareZcode(locator, cued, source); err != nil {
-						return err
-					}
-				} else {
-					var hint any
-					if context, hint, root, err = evLocatePrompt(locator); err != nil {
-						return err
-					}
-					first := map[string]any{}
-					for k, v := range cued[0].(map[string]any) {
-						first[k] = v
-					}
-					first["archive_hint"] = hint
-					sourceUsers = []any{first}
-				}
-			}
-			linked, err := evPrepareUsers(context, sourceUsers, root)
-			if err != nil {
-				return err
-			}
-			texts := make([]string, len(cued))
-			for i, u := range cued {
-				texts[i] = u.(map[string]any)["text"].(string)
-			}
-			userText := strings.Join(texts, "\n")
-			eventType := "turn_completed"
-			if rememberRE.MatchString(userText) {
-				eventType = "explicit_remember"
-			} else if correctionRE.MatchString(userText) {
-				eventType = "user_corrected_fact"
-			}
-			if err := checkPolicy(); err != nil {
-				return err
-			}
-			found, _, err := search(head(userText, 2000), host.ProjectKey(str(or(job["cwd"], ""))), 5, 60)
-			if err != nil {
-				return err
-			}
-			related := make([]map[string]any, len(found))
-			lines := make([]string, len(found))
-			for i, r := range found {
-				if related[i], err = asDict(r); err != nil {
-					return err
-				}
-				lines[i] = fmt.Sprintf("%s: %s", str(related[i]["id"]), redactPrivate(str(or(related[i]["text"], ""))))
-				if _, has := related[i]["text"]; !has {
-					lines[i] = fmt.Sprintf("%s: ", str(related[i]["id"]))
-				}
-			}
-			existing := strings.Join(lines, "\n")
-			if existing == "" {
-				existing = "(none)"
-			}
-			out, err := privateModel(redactPrivate(withGuidance(extractPrompt)), fmt.Sprintf("TODAY: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", messageDay(cued), existing, userText),
-				capModel, 120*time.Second, claimsSchema, "claims", str(or(job["cwd"], "")))
-			if err != nil {
-				return err
-			}
-			raw, err := asList(out)
-			if err != nil {
-				return err
-			}
-			claims, contextReceipt, err := buildClaimsWithReceipt(raw, userText, related, linked)
-			if err != nil {
-				return err
-			}
-			if repo := repoKey(str(or(job["cwd"], ""))); repo != "" && repoTagsOn() {
-				for _, c := range claims {
-					if m, ok := c.(map[string]any); ok && m["kind"] != "user" {
-						m["repo"] = repo
-					}
-				}
-			}
-			prepared = map[string]any{"event_type": eventType, "occurred_at": cued[len(cued)-1].(map[string]any)["at"], "claims": claims, "generator": extractionGenerator(strings.ReplaceAll(origin, "_", "-") + "-hook-v1")}
-			if contextReceipt != nil {
-				prepared["context_rejections"], err = bindClaimContextReceipt(contextReceipt, job["event_id"], cued)
-				if err != nil {
-					return err
-				}
-			}
-			if privatePayload(prepared) {
-				return sessionWait("capture_private_prepared")
-			}
-			job["prepared_capture"] = prepared
-			if err := checkpoint(); err != nil { // persist the exact request before at-least-once delivery
-				return err
-			}
-		}
-		if err := retainClaimContextReceipt(job, prepared, cued); err != nil {
+	return cued
+}
+
+// captureCued prepares the cued turns' claims once, then delivers them at least once.
+func captureCued(job map[string]any, cued []any, sid, origin string, started float64, checkPolicy, checkpoint func() error) error {
+	prepared, _ := job["prepared_capture"].(map[string]any)
+	if job["prepared_capture"] == nil {
+		var err error
+		if prepared, err = prepareCapture(job, cued, sid, origin, checkPolicy, checkpoint); err != nil {
 			return err
 		}
-		claims := prepared["claims"].([]any)
-		eventType := prepared["event_type"].(string)
-		if len(claims) > 0 {
-			if err := checkPolicy(); err != nil {
-				return err
-			}
-			gen, err := preparedClaimGenerator(prepared, strings.ReplaceAll(origin, "_", "-")+"-hook-v1")
-			if err != nil {
-				return err
-			}
-			items, err := sendCapture(eventType, job["event_id"].(string), sid, prepared["occurred_at"], claims, origin, started, gen)
-			if err != nil {
-				return err
-			}
-			if len(items) != len(claims) {
-				return runtimeErr("capture_response_invalid")
-			}
-			previous, hasPrev := job["capture_items"]
-			if !hasPrev {
-				blank := make([]any, len(claims))
-				for i := range blank {
-					blank[i] = map[string]any{}
-				}
-				previous = blank
-			}
-			prev, isList := previous.([]any)
-			if !isList || len(prev) != len(claims) {
-				return runtimeErr("capture_receipt_invalid")
-			}
-			for _, p := range prev {
-				if _, ok := p.(map[string]any); !ok {
-					return runtimeErr("capture_receipt_invalid")
-				}
-			}
-			merged := make([]any, len(items))
-			retry := false
-			for i, v := range items {
-				item, old := v.(map[string]any), prev[i].(map[string]any)
-				if item["status"] == "merged" && truthy(old["candidate_id"]) {
-					item = old
-				}
-				merged[i] = item
-				if item["status"] == "rejected" && retryableReasons[hashable(item["reason"])] {
-					retry = true
-				}
-			}
-			job["capture_items"] = merged
-			if err := checkpoint(); err != nil {
-				return err
-			}
-			if retry {
-				return runtimeErr("capture_retryable")
-			}
-			job["captured"] = true
-			if err := checkpoint(); err != nil {
-				return err
-			}
-		} else {
-			status := "no_claims"
-			if prepared["context_rejections"] != nil {
-				status = "context_withheld"
-			}
-			metric(kv("event", eventType), kv("session", head(sid, 12)), kv("status", status))
-			if status == "context_withheld" {
-				return runtimeErr("capture_context_all_withheld")
-			}
+	}
+	if err := retainClaimContextReceipt(job, prepared, cued); err != nil {
+		return err
+	}
+	claims := prepared["claims"].([]any)
+	eventType := prepared["event_type"].(string)
+	if len(claims) > 0 {
+		if err := checkPolicy(); err != nil {
+			return err
+		}
+		gen, err := preparedClaimGenerator(prepared, strings.ReplaceAll(origin, "_", "-")+"-hook-v1")
+		if err != nil {
+			return err
+		}
+		items, err := sendCapture(eventType, job["event_id"].(string), sid, prepared["occurred_at"], claims, origin, started, gen)
+		if err != nil {
+			return err
+		}
+		if len(items) != len(claims) {
+			return runtimeErr("capture_response_invalid")
+		}
+		merged, retry, err := mergeCaptureItems(job, items, claims)
+		if err != nil {
+			return err
+		}
+		job["capture_items"] = merged
+		if err := checkpoint(); err != nil {
+			return err
+		}
+		if retry {
+			return runtimeErr("capture_retryable")
 		}
 		job["captured"] = true
+		if err := checkpoint(); err != nil {
+			return err
+		}
+	} else {
+		status := "no_claims"
+		if prepared["context_rejections"] != nil {
+			status = "context_withheld"
+		}
+		metric(kv("event", eventType), kv("session", head(sid, 12)), kv("status", status))
+		if status == "context_withheld" {
+			return runtimeErr("capture_context_all_withheld")
+		}
 	}
-	if len(cued) == 0 && len(users) > 0 {
-		metric(kv("event", job["type"]), kv("session", head(sid, 12)), kv("status", "skipped_no_cue"), kv("turns", len(users)))
-	}
+	job["captured"] = true
 	return nil
+}
+
+// prepareCapture extracts the cued turns' claims and checkpoints the exact request before delivery.
+func prepareCapture(job map[string]any, cued []any, sid, origin string, checkPolicy, checkpoint func() error) (map[string]any, error) {
+	linked, err := linkedUsers(job, cued, sid, origin)
+	if err != nil {
+		return nil, err
+	}
+	texts := make([]string, len(cued))
+	for i, u := range cued {
+		texts[i] = u.(map[string]any)["text"].(string)
+	}
+	userText := strings.Join(texts, "\n")
+	eventType := captureEventType(userText)
+	if err := checkPolicy(); err != nil {
+		return nil, err
+	}
+	found, _, err := search(head(userText, 2000), host.ProjectKey(str(or(job["cwd"], ""))), 5, 60)
+	if err != nil {
+		return nil, err
+	}
+	related, existing, err := relatedMemories(found)
+	if err != nil {
+		return nil, err
+	}
+	out, err := privateModel(redactPrivate(withGuidance(extractPrompt)), fmt.Sprintf("TODAY: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", messageDay(cued), existing, userText),
+		capModel, 120*time.Second, claimsSchema, "claims", str(or(job["cwd"], "")))
+	if err != nil {
+		return nil, err
+	}
+	raw, err := asList(out)
+	if err != nil {
+		return nil, err
+	}
+	claims, contextReceipt, err := buildClaimsWithReceipt(raw, userText, related, linked)
+	if err != nil {
+		return nil, err
+	}
+	tagClaimRepo(job, claims)
+	prepared := map[string]any{"event_type": eventType, "occurred_at": cued[len(cued)-1].(map[string]any)["at"], "claims": claims, "generator": extractionGenerator(strings.ReplaceAll(origin, "_", "-") + "-hook-v1")}
+	if contextReceipt != nil {
+		prepared["context_rejections"], err = bindClaimContextReceipt(contextReceipt, job["event_id"], cued)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if privatePayload(prepared) {
+		return nil, sessionWait("capture_private_prepared")
+	}
+	job["prepared_capture"] = prepared
+	if err := checkpoint(); err != nil { // persist the exact request before at-least-once delivery
+		return nil, err
+	}
+	return prepared, nil
+}
+
+// linkedUsers links the cued turns to their archive records, through the job's archive locator when it has one.
+func linkedUsers(job map[string]any, cued []any, sid, origin string) ([]any, error) {
+	var err error
+	context, sourceUsers, root := job["archive_context"], cued, capProjects
+	if locator, _ := job["archive_locator"].(map[string]any); truthy(job["archive_locator"]) {
+		if len(cued) != 1 || locator["session_id"] != sid || locator["origin"] != origin || locator["device"] != client() {
+			return nil, runtimeErr("archive_locator_invalid")
+		}
+		if locator["origin"] == "zcode" {
+			source := capZcodeDB
+			if locator["device"] == "pc" {
+				source = filepath.Join(archivePC, "zcode-sessions")
+			}
+			if sourceUsers, err = evPrepareZcode(locator, cued, source); err != nil {
+				return nil, err
+			}
+		} else {
+			var hint any
+			if context, hint, root, err = evLocatePrompt(locator); err != nil {
+				return nil, err
+			}
+			first := map[string]any{}
+			for k, v := range cued[0].(map[string]any) {
+				first[k] = v
+			}
+			first["archive_hint"] = hint
+			sourceUsers = []any{first}
+		}
+	}
+	return evPrepareUsers(context, sourceUsers, root)
+}
+
+// captureEventType names the capture event the user's own words call for.
+func captureEventType(userText string) string {
+	if rememberRE.MatchString(userText) {
+		return "explicit_remember"
+	} else if correctionRE.MatchString(userText) {
+		return "user_corrected_fact"
+	}
+	return "turn_completed"
+}
+
+// relatedMemories reads the search hits and renders them as the prompt's EXISTING MEMORIES.
+func relatedMemories(found []any) ([]map[string]any, string, error) {
+	related := make([]map[string]any, len(found))
+	lines := make([]string, len(found))
+	for i, r := range found {
+		var err error
+		if related[i], err = asDict(r); err != nil {
+			return nil, "", err
+		}
+		lines[i] = fmt.Sprintf("%s: %s", str(related[i]["id"]), redactPrivate(str(or(related[i]["text"], ""))))
+		if _, has := related[i]["text"]; !has {
+			lines[i] = fmt.Sprintf("%s: ", str(related[i]["id"]))
+		}
+	}
+	existing := strings.Join(lines, "\n")
+	if existing == "" {
+		existing = "(none)"
+	}
+	return related, existing, nil
+}
+
+// tagClaimRepo tags every non-user claim with the job's repository when repo tags are on.
+func tagClaimRepo(job map[string]any, claims []any) {
+	if repo := repoKey(str(or(job["cwd"], ""))); repo != "" && repoTagsOn() {
+		for _, c := range claims {
+			if m, ok := c.(map[string]any); ok && m["kind"] != "user" {
+				m["repo"] = repo
+			}
+		}
+	}
+}
+
+// mergeCaptureItems keeps a merged item's earlier candidate receipt and reports whether any rejection is retryable.
+func mergeCaptureItems(job map[string]any, items, claims []any) ([]any, bool, error) {
+	previous, hasPrev := job["capture_items"]
+	if !hasPrev {
+		blank := make([]any, len(claims))
+		for i := range blank {
+			blank[i] = map[string]any{}
+		}
+		previous = blank
+	}
+	prev, isList := previous.([]any)
+	if !isList || len(prev) != len(claims) {
+		return nil, false, runtimeErr("capture_receipt_invalid")
+	}
+	for _, p := range prev {
+		if _, ok := p.(map[string]any); !ok {
+			return nil, false, runtimeErr("capture_receipt_invalid")
+		}
+	}
+	merged := make([]any, len(items))
+	retry := false
+	for i, v := range items {
+		item, old := v.(map[string]any), prev[i].(map[string]any)
+		if item["status"] == "merged" && truthy(old["candidate_id"]) {
+			item = old
+		}
+		merged[i] = item
+		if item["status"] == "rejected" && retryableReasons[hashable(item["reason"])] {
+			retry = true
+		}
+	}
+	return merged, retry, nil
 }
 
 // archiveTimestamp is session_archive.timestamp: epoch seconds (milliseconds scaled down) or an
@@ -647,7 +722,22 @@ func drain(allWorkOrigins bool) error {
 		}
 		return os.Rename(path, filepath.Join(failedDir(), filepath.Base(path)))
 	}
-	parkedEvents := map[string]bool{} // batch parents already in the failed spool
+	parkedEvents := parkedBatchEvents() // batch parents already in the failed spool
+	for _, path := range paths {
+		if err := drainJob(path, park, parkedEvents); err != nil {
+			return err
+		}
+	}
+	sessionTraces()
+	if err := hoDrain(allWorkOrigins); err != nil {
+		return err
+	}
+	return pcDrain(allWorkOrigins)
+}
+
+// parkedBatchEvents is the event ids of the jobs already in the failed spool (none without the session processor).
+func parkedBatchEvents() map[string]bool {
+	parkedEvents := map[string]bool{}
 	if failed, _ := filepath.Glob(filepath.Join(globEscape(failedDir()), "*.json")); sessionProcessorOn() {
 		for _, f := range failed {
 			if job, err := readJob(f); err == nil {
@@ -657,144 +747,171 @@ func drain(allWorkOrigins bool) error {
 			}
 		}
 	}
-	for _, path := range paths {
-		if isSymlink(path) || !exists(path) { // gone: parked earlier in this pass with its batch parent
-			continue
-		}
-		job, err := readJob(path)
-		parent, _ := job["session_batch_parent"].(string) // a non-string parent never matches a parked event
-		if err == nil && parent != "" && parkedEvents[parent] {
-			// The parent holds this child's turns and was parked: follow it so the redrive keeps them together.
-			if err := park(path); err != nil {
-				return err
-			}
-			metric(kv("event", "session_processor_parked"), kv("session", head(str(job["session_id"]), 12)), kv("error", "session_batch_parent_parked"))
-			continue
-		}
-		if err != nil { // torn or vanished file: park it instead of blocking every later job
-			if exists(path) {
-				if err := park(path); err != nil {
-					return err
-				}
-			}
-			metric(kv("event", "writeback_failure"), kv("error", "unreadable_spool"))
-			continue
-		}
-		save := func() error { return atomicWrite(path, dumps(job)) }
-		err = func() error {
-			retryAfter, has := job["archive_retry_after"]
-			if !has {
-				retryAfter = 0
-			}
-			after, isNum := num(retryAfter)
-			if _, isBool := retryAfter.(bool); !isNum && !isBool {
-				return runtimeErr("archive_retry_invalid")
-			}
-			if after > timeNow() {
-				return errSkip
-			}
-			if err := processJob(job, save); err != nil {
-				return err
-			}
-			return os.Remove(path)
-		}()
-		if err == nil || err == errSkip {
-			continue
-		}
-		code := errorCode(err)
-		sid := head(str(job["session_id"]), 12)
-		if capturePolicyPending(err) || privateCapturePolicy("capture_policy_wait", str(or(job["cwd"], "")), privateCheckpointRepository(job["session_prepared"], true)) != nil {
-			// Pausing must preserve the last durable request and retry budget;
-			// resuming retries it immediately without a synthetic failure/backoff.
-			metric(kv("event", "capture_policy_pending"), kv("session", sid), kv("error", code))
-			continue
-		}
-		if sessionProcessorOn() && errors.Is(err, errSessionPending) && code == "session_archive_private_skipped" {
-			// The user marked the transcript private, so it never reaches the archive: drop the batch, never retry.
-			for _, name := range anyList(job["session_batch_children"]) {
-				if child, err := sessionChildPath(name); err == nil {
-					if err := os.Remove(child); err != nil && !os.IsNotExist(err) {
-						return err
-					}
-				}
-			}
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return err
-			}
-			metric(kv("event", "session_processor_dropped"), kv("session", sid), kv("error", code))
-			continue
-		}
-		if sessionProcessorOn() && errors.Is(err, errSessionPending) && (sessionModelDefect(code) || sessionInputDefect(code)) {
-			// Re-running the same window repeats the model call and the same defect every minute: park the batch
-			// (parent and merged children) instead of blocking every later turn of the session.
-			job["last_error"] = code
-			if err := save(); err != nil {
-				return err
-			}
-			for _, name := range anyList(job["session_batch_children"]) {
-				if child, err := sessionChildPath(name); err == nil && exists(child) {
-					if err := park(child); err != nil {
-						return err
-					}
-				}
-			}
-			if err := park(path); err != nil {
-				return err
-			}
-			parkedEvents[str(job["event_id"])] = true
-			metric(kv("event", "session_processor_parked"), kv("session", sid), kv("error", code))
-			continue
-		}
-		// Only a real wait is free; any other pending code spends an attempt so it parks instead of re-calling the model forever.
-		waiting := code == "429" || code == "session_batch_wait" || code == "session_model_budget_wait" || code == "session_batch_parent_pending"
-		if sessionProcessorOn() && waiting {
-			wait := 60.0
-			if code == "429" {
-				wait = 3600
-			}
-			job["archive_retry_after"] = timeNow() + wait
-			job["last_error"] = code
-			if err := save(); err != nil {
-				return err
-			}
-			metric(kv("event", "session_processor_pending"), kv("session", sid), kv("error", code))
-			continue
-		}
-		if code == "archive_prompt_pending" {
-			if queued, ok := archiveTimestamp(job["queued_at"]); ok && queued != 0 && queued+archiveTTL > timeNow() {
-				job["archive_retry_after"] = timeNow() + 60
-				job["last_error"] = code
-				if err := save(); err != nil {
-					return err
-				}
-				metric(kv("event", "archive_wait"), kv("session", sid))
-				continue
-			}
-			code = "archive_prompt_expired"
-		}
-		attempts, _ := num(or(job["attempts"], 0))
-		job["attempts"] = int(attempts) + 1
-		job["last_error"] = code
-		if sessionProcessorOn() && errors.Is(err, errSessionPending) {
-			job["archive_retry_after"] = timeNow() + 60
-		}
-		metric(kv("event", "writeback_failure"), kv("session", sid), kv("error", code), kv("attempts", job["attempts"]))
-		if int(attempts)+1 >= capMaxAttempts {
-			if err := park(path); err != nil {
-				return err
-			}
-			if err := atomicWrite(filepath.Join(failedDir(), filepath.Base(path)), dumps(job)); err != nil {
-				return err
-			}
-		} else if err := save(); err != nil {
+	return parkedEvents
+}
+
+// drainJob runs one spool file through processJob and settles its failure; nil moves on to the next file.
+func drainJob(path string, park func(string) error, parkedEvents map[string]bool) error {
+	if isSymlink(path) || !exists(path) { // gone: parked earlier in this pass with its batch parent
+		return nil
+	}
+	job, err := readJob(path)
+	parent, _ := job["session_batch_parent"].(string) // a non-string parent never matches a parked event
+	if err == nil && parent != "" && parkedEvents[parent] {
+		// The parent holds this child's turns and was parked: follow it so the redrive keeps them together.
+		if err := park(path); err != nil {
 			return err
 		}
+		metric(kv("event", "session_processor_parked"), kv("session", head(str(job["session_id"]), 12)), kv("error", "session_batch_parent_parked"))
+		return nil
 	}
-	sessionTraces()
-	if err := hoDrain(allWorkOrigins); err != nil {
+	if err != nil { // torn or vanished file: park it instead of blocking every later job
+		if exists(path) {
+			if err := park(path); err != nil {
+				return err
+			}
+		}
+		metric(kv("event", "writeback_failure"), kv("error", "unreadable_spool"))
+		return nil
+	}
+	save := func() error { return atomicWrite(path, dumps(job)) }
+	err = func() error {
+		retryAfter, has := job["archive_retry_after"]
+		if !has {
+			retryAfter = 0
+		}
+		after, isNum := num(retryAfter)
+		if _, isBool := retryAfter.(bool); !isNum && !isBool {
+			return runtimeErr("archive_retry_invalid")
+		}
+		if after > timeNow() {
+			return errSkip
+		}
+		if err := processJob(job, save); err != nil {
+			return err
+		}
+		return os.Remove(path)
+	}()
+	if err == nil || err == errSkip {
+		return nil
+	}
+	return settleJobFailure(job, path, err, park, save, parkedEvents)
+}
+
+// settleJobFailure pauses, drops, parks or retries a job whose step failed; nil moves on to the next file.
+func settleJobFailure(job map[string]any, path string, err error, park func(string) error, save func() error, parkedEvents map[string]bool) error {
+	code := errorCode(err)
+	sid := head(str(job["session_id"]), 12)
+	if capturePolicyPending(err) || privateCapturePolicy("capture_policy_wait", str(or(job["cwd"], "")), privateCheckpointRepository(job["session_prepared"], true)) != nil {
+		// Pausing must preserve the last durable request and retry budget;
+		// resuming retries it immediately without a synthetic failure/backoff.
+		metric(kv("event", "capture_policy_pending"), kv("session", sid), kv("error", code))
+		return nil
+	}
+	if sessionProcessorOn() && errors.Is(err, errSessionPending) && code == "session_archive_private_skipped" {
+		// The user marked the transcript private, so it never reaches the archive: drop the batch, never retry.
+		if err := dropBatch(job, path); err != nil {
+			return err
+		}
+		metric(kv("event", "session_processor_dropped"), kv("session", sid), kv("error", code))
+		return nil
+	}
+	if sessionProcessorOn() && errors.Is(err, errSessionPending) && (sessionModelDefect(code) || sessionInputDefect(code)) {
+		// Re-running the same window repeats the model call and the same defect every minute: park the batch
+		// (parent and merged children) instead of blocking every later turn of the session.
+		if err := parkBatch(job, path, code, park, save); err != nil {
+			return err
+		}
+		parkedEvents[str(job["event_id"])] = true
+		metric(kv("event", "session_processor_parked"), kv("session", sid), kv("error", code))
+		return nil
+	}
+	return retryJob(job, path, err, code, sid, park, save)
+}
+
+// dropBatch removes a batch parent and its merged children from the spool.
+func dropBatch(job map[string]any, path string) error {
+	for _, name := range anyList(job["session_batch_children"]) {
+		if child, err := sessionChildPath(name); err == nil {
+			if err := os.Remove(child); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return pcDrain(allWorkOrigins)
+	return nil
+}
+
+// parkBatch records the defect, then moves the batch's merged children and the parent to the failed spool.
+func parkBatch(job map[string]any, path, code string, park func(string) error, save func() error) error {
+	job["last_error"] = code
+	if err := save(); err != nil {
+		return err
+	}
+	for _, name := range anyList(job["session_batch_children"]) {
+		if child, err := sessionChildPath(name); err == nil && exists(child) {
+			if err := park(child); err != nil {
+				return err
+			}
+		}
+	}
+	return park(path)
+}
+
+// retryJob schedules a job that is only waiting, else spends one of its attempts.
+func retryJob(job map[string]any, path string, err error, code, sid string, park func(string) error, save func() error) error {
+	// Only a real wait is free; any other pending code spends an attempt so it parks instead of re-calling the model forever.
+	waiting := code == "429" || code == "session_batch_wait" || code == "session_model_budget_wait" || code == "session_batch_parent_pending"
+	if sessionProcessorOn() && waiting {
+		wait := 60.0
+		if code == "429" {
+			wait = 3600
+		}
+		job["archive_retry_after"] = timeNow() + wait
+		job["last_error"] = code
+		if err := save(); err != nil {
+			return err
+		}
+		metric(kv("event", "session_processor_pending"), kv("session", sid), kv("error", code))
+		return nil
+	}
+	if code == "archive_prompt_pending" {
+		if queued, ok := archiveTimestamp(job["queued_at"]); ok && queued != 0 && queued+archiveTTL > timeNow() {
+			job["archive_retry_after"] = timeNow() + 60
+			job["last_error"] = code
+			if err := save(); err != nil {
+				return err
+			}
+			metric(kv("event", "archive_wait"), kv("session", sid))
+			return nil
+		}
+		code = "archive_prompt_expired"
+	}
+	return spendAttempt(job, path, err, code, sid, park, save)
+}
+
+// spendAttempt counts a failed attempt and parks the job once it has used them all.
+func spendAttempt(job map[string]any, path string, err error, code, sid string, park func(string) error, save func() error) error {
+	attempts, _ := num(or(job["attempts"], 0))
+	job["attempts"] = int(attempts) + 1
+	job["last_error"] = code
+	if sessionProcessorOn() && errors.Is(err, errSessionPending) {
+		job["archive_retry_after"] = timeNow() + 60
+	}
+	metric(kv("event", "writeback_failure"), kv("session", sid), kv("error", code), kv("attempts", job["attempts"]))
+	if int(attempts)+1 >= capMaxAttempts {
+		if err := park(path); err != nil {
+			return err
+		}
+		if err := atomicWrite(filepath.Join(failedDir(), filepath.Base(path)), dumps(job)); err != nil {
+			return err
+		}
+	} else if err := save(); err != nil {
+		return err
+	}
+	return nil
 }
 
 var errSkip = errors.New("skip")

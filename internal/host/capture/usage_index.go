@@ -394,23 +394,7 @@ func (p *usageParser) claude(path string) error {
 		}
 		m := obj(d["message"])
 		if t == "user" {
-			human := false
-			switch c := m["content"].(type) {
-			case string:
-				human = true
-			case []any:
-				human = true
-				for _, b := range c {
-					if bm, ok := b.(map[string]any); ok && bm["type"] == "tool_result" {
-						human = false
-					}
-				}
-			}
-			if human && !truthy(d["isMeta"]) && !truthy(d["isSidechain"]) {
-				s.message(when)
-			} else {
-				s.stamp(when)
-			}
+			usageClaudeUser(s, d, m, when)
 			return
 		}
 		blocks, _ := m["content"].([]any)
@@ -445,6 +429,28 @@ func (p *usageParser) claude(path string) error {
 		}
 		s.stamp(when)
 	})
+}
+
+// usageClaudeUser counts a human Claude prompt as a message; tool results and meta or
+// sidechain lines only stamp the session.
+func usageClaudeUser(s *usageSession, d, m map[string]any, when *int64) {
+	human := false
+	switch c := m["content"].(type) {
+	case string:
+		human = true
+	case []any:
+		human = true
+		for _, b := range c {
+			if bm, ok := b.(map[string]any); ok && bm["type"] == "tool_result" {
+				human = false
+			}
+		}
+	}
+	if human && !truthy(d["isMeta"]) && !truthy(d["isSidechain"]) {
+		s.message(when)
+	} else {
+		s.stamp(when)
+	}
 }
 
 func (p *usageParser) codex(path string) error {
@@ -710,9 +716,9 @@ type usageRow struct {
 	row host.Obj
 }
 
-// usageCollect re-reads only files whose size or mtime changed and merges every file's
-// cached result; cache is updated in place.
-func usageCollect(state host.Obj, onlyChanged bool, cache map[string]*usageFile) (rows, changed []usageRow) {
+// usageLive parses every usage file whose size or mtime changed since cache and
+// returns all readable files by path.
+func usageLive(cache map[string]*usageFile) map[string]*usageFile {
 	live := map[string]*usageFile{}
 	for _, r := range usageRoots() {
 		if !exists(r.root) || strings.HasSuffix(r.glob, ".db") || r.glob == "summary.json" {
@@ -744,6 +750,13 @@ func usageCollect(state host.Obj, onlyChanged bool, cache map[string]*usageFile)
 			live[path] = hit
 		}
 	}
+	return live
+}
+
+// usageCollect re-reads only files whose size or mtime changed and merges every file's
+// cached result; cache is updated in place.
+func usageCollect(state host.Obj, onlyChanged bool, cache map[string]*usageFile) (rows, changed []usageRow) {
+	live := usageLive(cache)
 	clear(cache)
 	keys := make([]string, 0, len(live))
 	for k, v := range live {
@@ -849,6 +862,53 @@ func usageWrite(path, tmp string, data []byte) error {
 	return os.Rename(tmp, path)
 }
 
+// usageReadState reads the sent-row digests; a missing state file is empty.
+func usageReadState() (host.Obj, error) {
+	state := host.Obj{}
+	if raw, err := os.ReadFile(usageState); err == nil {
+		v, err := loadsOrdered(raw)
+		if err != nil {
+			return nil, err
+		}
+		if o, ok := v.(host.Obj); ok {
+			state = o
+		}
+	}
+	return state, nil
+}
+
+// usageSend posts changed rows in batches of 100, records each sent row's digest in
+// state, and notes the last failure on out.
+func usageSend(state *host.Obj, changed []usageRow, out *host.Obj) (nsent, nfailed int) {
+	v, ok := state.Get("sent")
+	sent, isObj := v.(host.Obj)
+	if !ok || !isObj {
+		sent = host.Obj{}
+	}
+	for i := 0; i < len(changed); i += 100 {
+		batch := changed[i:min(i+100, len(changed))]
+		items := make([]any, len(batch))
+		for j, r := range batch {
+			items[j] = r.row
+		}
+		if err := usagePostRows(items); err != nil {
+			nfailed += len(batch)
+			var code any = "unavailable"
+			if c := host.HTTPCode(err); c != 0 {
+				code = c
+			}
+			out.Set("error", code)
+			continue
+		}
+		for _, r := range batch {
+			sent.Set(r.key, usageDigest(r.row))
+		}
+		nsent += len(batch)
+	}
+	state.Set("sent", sent)
+	return nsent, nfailed
+}
+
 func usageMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	execute, all := false, false
 	var unknown []string
@@ -880,16 +940,10 @@ func usageMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	defer lock.Close()
-	state := host.Obj{}
-	if raw, err := os.ReadFile(usageState); err == nil {
-		v, err := loadsOrdered(raw)
-		if err != nil {
-			fmt.Fprintln(stderr, "JSONDecodeError:", err)
-			return 1
-		}
-		if o, ok := v.(host.Obj); ok {
-			state = o
-		}
+	state, err := usageReadState()
+	if err != nil {
+		fmt.Fprintln(stderr, "JSONDecodeError:", err)
+		return 1
 	}
 	// A JSON cache beside the state (the Python tool kept a pickle, files.pickle).
 	cachePath := filepath.Join(dir, "files.json")
@@ -909,32 +963,7 @@ func usageMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	out := host.Obj{{Key: "sessions", Value: len(rows)}, {Key: "changed", Value: len(changed)}, {Key: "sent", Value: 0}, {Key: "failed", Value: 0}}
 	nsent, nfailed := 0, 0
 	if execute {
-		v, ok := state.Get("sent")
-		sent, isObj := v.(host.Obj)
-		if !ok || !isObj {
-			sent = host.Obj{}
-		}
-		for i := 0; i < len(changed); i += 100 {
-			batch := changed[i:min(i+100, len(changed))]
-			items := make([]any, len(batch))
-			for j, r := range batch {
-				items[j] = r.row
-			}
-			if err := usagePostRows(items); err != nil {
-				nfailed += len(batch)
-				var code any = "unavailable"
-				if c := host.HTTPCode(err); c != 0 {
-					code = c
-				}
-				out.Set("error", code)
-				continue
-			}
-			for _, r := range batch {
-				sent.Set(r.key, usageDigest(r.row))
-			}
-			nsent += len(batch)
-		}
-		state.Set("sent", sent)
+		nsent, nfailed = usageSend(&state, changed, &out)
 		if err := usageWrite(usageState, strings.TrimSuffix(usageState, filepath.Ext(usageState))+".tmp", []byte(host.MustDumps(state, host.DumpOpts{}))); err != nil {
 			fmt.Fprintln(stderr, pyType(err)+":", err)
 			return 1

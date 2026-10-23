@@ -223,13 +223,8 @@ func evidencePrepareUsers(context any, users []any, root string, post evidencePo
 		return nil
 	}
 	resolve := func(hint any) (any, error) {
-		h, ok := evidenceDict(hint)
-		idx, idxOK := host.Int(evidenceField(hint, "chunk_index"))
-		off, offOK := host.Int(evidenceField(hint, "chunk_offset"))
-		sum, _ := evidenceField(hint, "message_sha256").(string)
-		if !ok || !eq(evidenceField(hint, "archive_id"), at("archive_id")) || !evidenceHash.MatchString(sum) ||
-			!idxOK || idx < 0 || idx >= 2048 || !offOK || off < 0 || off >= archiveChunk || len(h) != 4 ||
-			!evidenceKeys(h, "archive_id", "message_sha256", "chunk_index", "chunk_offset") {
+		h, ok := evidenceUserHint(hint, context)
+		if !ok {
 			return nil, runtimeErr("archive_hint_invalid")
 		}
 		for attempt := 0; attempt < 2; attempt++ {
@@ -314,6 +309,21 @@ func evidencePrepareUsers(context any, users []any, root string, post evidencePo
 		out = append(out, value)
 	}
 	return out, nil
+}
+
+// evidenceUserHint returns hint as a dict when it is a well-formed row hint for the
+// context's archive.
+func evidenceUserHint(hint, context any) (host.Obj, bool) {
+	h, ok := evidenceDict(hint)
+	idx, idxOK := host.Int(evidenceField(hint, "chunk_index"))
+	off, offOK := host.Int(evidenceField(hint, "chunk_offset"))
+	sum, _ := evidenceField(hint, "message_sha256").(string)
+	if !ok || !eq(evidenceField(hint, "archive_id"), autosaveItem(context, "archive_id")) || !evidenceHash.MatchString(sum) ||
+		!idxOK || idx < 0 || idx >= 2048 || !offOK || off < 0 || off >= archiveChunk || len(h) != 4 ||
+		!evidenceKeys(h, "archive_id", "message_sha256", "chunk_index", "chunk_offset") {
+		return nil, false
+	}
+	return h, true
 }
 
 // evidenceField is v.get(key) that tolerates a non-dict (checked by the caller).
@@ -454,27 +464,12 @@ func evidenceLocatePrompt(locator any) (context, hint host.Obj, root string, err
 	if root, err = evidenceLocatorRoot(l); err != nil {
 		return nil, nil, "", err
 	}
-	var contexts []host.Obj
 	sid, _ := l.Get("session_id")
 	device, _ := l.Get("device")
 	origin, _ := l.Get("origin")
-	for _, path := range globAll(root, "*.jsonl") {
-		// Claude Code names a transcript <session>.jsonl and Codex rollout-<time>-<session>.jsonl,
-		// so only files named for the session can hold it; skip reading the rest (a PC has hundreds).
-		if s, ok := sid.(string); ok && !strings.Contains(filepath.Base(path), s) {
-			continue
-		}
-		if c := evidenceFileContext(path, root, sid, device, true, origin); c != nil {
-			contexts = append(contexts, c)
-			if len(contexts) > 1 {
-				return nil, nil, "", runtimeErr("archive_prompt_ambiguous")
-			}
-		}
+	if context, err = evidencePromptContext(root, sid, device, origin); err != nil {
+		return nil, nil, "", err
 	}
-	if len(contexts) == 0 {
-		return nil, nil, "", runtimeErr("archive_prompt_pending")
-	}
-	context = contexts[0]
 	pathV, _ := context.Get("path")
 	path := pathV.(string)
 	marked, err := privateMarked(path)
@@ -537,6 +532,29 @@ func evidenceLocatePrompt(locator any) (context, hint host.Obj, root string, err
 	return context, matches[0], root, nil
 }
 
+// evidencePromptContext returns the file context of the one transcript under root that
+// belongs to the session.
+func evidencePromptContext(root string, sid, device, origin any) (host.Obj, error) {
+	var contexts []host.Obj
+	for _, path := range globAll(root, "*.jsonl") {
+		// Claude Code names a transcript <session>.jsonl and Codex rollout-<time>-<session>.jsonl,
+		// so only files named for the session can hold it; skip reading the rest (a PC has hundreds).
+		if s, ok := sid.(string); ok && !strings.Contains(filepath.Base(path), s) {
+			continue
+		}
+		if c := evidenceFileContext(path, root, sid, device, true, origin); c != nil {
+			contexts = append(contexts, c)
+			if len(contexts) > 1 {
+				return nil, runtimeErr("archive_prompt_ambiguous")
+			}
+		}
+	}
+	if len(contexts) == 0 {
+		return nil, runtimeErr("archive_prompt_pending")
+	}
+	return contexts[0], nil
+}
+
 // evidencePromptHint is one locate_prompt line; malformed rows are skipped.
 func evidencePromptHint(context host.Obj, raw []byte, offset int64, key, kind string, want any) (hint host.Obj) {
 	defer func() {
@@ -582,46 +600,27 @@ func evidencePromptHint(context host.Obj, raw []byte, offset int64, key, kind st
 	return evidenceRowHint(context, raw, offset, message, "")
 }
 
+// evidenceZcodePart is one visible text part of a Zcode message, with its row hint.
+type evidenceZcodePart struct {
+	sequence int64
+	text     string
+	hint     host.Obj
+}
+
 // evidenceZcodeHints selects real-user parts from exactly the snapshot that will be uploaded.
 func evidenceZcodeHints(path string, locator host.Obj) (out []any, err error) {
 	defer recovered(&err)
-	info, err := os.Stat(path)
-	if err != nil {
+	if err := evidenceZcodeReadable(path); err != nil {
 		return nil, err
-	}
-	if !info.Mode().IsRegular() || info.Size() > archiveMaxBytes {
-		return nil, runtimeErr("archive_snapshot_too_large")
-	}
-	marked, err := privateMarked(path)
-	if err != nil {
-		return nil, sessionWait("archive_inspection_unavailable")
-	}
-	if marked {
-		return nil, sessionWait("session_archive_private_skipped")
 	}
 	device, _ := locator.Get("device")
 	sid, _ := locator.Get("session_id")
 	want, _ := locator.Get("prompt_sha256")
 	aid := archiveIdentity(device.(string), "zcode", sid.(string), "db-session")
-	type part struct {
-		sequence int64
-		text     string
-		hint     host.Obj
-	}
 	messages := map[string]bool{}
 	seen := map[string]bool{}
-	parts := map[string][]part{}
+	parts := map[string][]evidenceZcodePart{}
 	var order []string
-	visible := func(v any) bool {
-		channel, has := objGet(v, "channel")
-		if _, ok := v.(map[string]any); !ok {
-			panic("not a dict")
-		}
-		if !has {
-			channel = ""
-		}
-		return (channel == "" || channel == "final") && autosaveGet(v, "type") != "session_meta"
-	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -652,53 +651,164 @@ func evidenceZcodeHints(path string, locator host.Obj) (out []any, err error) {
 		}
 		switch autosaveGet(v, "table") {
 		case "message":
-			mid := canon(autosaveItem(record, "id"))
-			if seen[mid] {
-				return nil, runtimeErr("archive_prompt_ambiguous")
-			}
-			seen[mid] = true
-			data, err := loads([]byte(autosaveItem(record, "data").(string)))
-			if err != nil {
+			if err := evidenceZcodeMessage(v, record, seen, messages); err != nil {
 				return nil, err
 			}
-			semantics, has := objGet(data, "semantics")
-			if !has {
-				semantics = map[string]any{}
-			}
-			messages[mid] = visible(v) && visible(record) && visible(data) && autosaveGet(data, "role") == "user" &&
-				autosaveGet(semantics, "origin") == "real_user"
 		case "part":
-			data, err := loads([]byte(autosaveItem(record, "data").(string)))
+			mid, p, ok, err := evidenceZcodeTextPart(v, record, raw, start, aid)
 			if err != nil {
 				return nil, err
 			}
-			text, isStr := autosaveGet(data, "text").(string)
-			if !visible(v) || !visible(record) || !visible(data) || truthy(autosaveGet(data, "synthetic")) ||
-				autosaveGet(data, "type") != "text" || !isStr {
-				continue
-			}
-			hint := evidenceRowHint(host.Obj{{Key: "archive_id", Value: aid}}, raw, start, map[string]any{"role": "user"}, "reconstructed_zcode")
-			if hint == nil {
-				continue
-			}
-			if id, ok := autosaveGet(record, "id").(string); ok && id != "" {
-				hint.Set("record_key", sha256Hex([]byte("arkism-zcode-part-v1\n"+id)))
-			}
-			seq, has := objGet(record, "sequence")
-			if !has {
-				seq = start
-			}
-			n, ok := host.Int(seq)
 			if !ok {
-				return nil, runtimeErr("archive_prompt_order_invalid")
+				continue
 			}
-			mid := canon(autosaveItem(record, "message_id"))
 			if _, known := parts[mid]; !known {
 				order = append(order, mid)
 			}
-			parts[mid] = append(parts[mid], part{n, text, hint})
+			parts[mid] = append(parts[mid], p)
 		}
 	}
+	return evidenceZcodeSelect(order, messages, parts, want)
+}
+
+// evidenceSnapshotSHA hashes a snapshot of at most archiveMaxBytes.
+func evidenceSnapshotSHA(snapshot string) (string, error) {
+	f, err := os.Open(snapshot)
+	if err != nil {
+		return "", err
+	}
+	hasher := sha256.New()
+	n, err := io.Copy(hasher, io.LimitReader(f, archiveMaxBytes+1))
+	f.Close()
+	if err != nil {
+		return "", err
+	}
+	if n > archiveMaxBytes {
+		return "", runtimeErr("archive_snapshot_too_large")
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// evidenceZcodeUpload uploads the snapshot and returns the archive header it committed.
+func evidenceZcodeUpload(client evidenceClient, snapshot, device, sid string, observed float64, revision any, source string, aid any) (map[string]any, error) {
+	c := newCollector(client, nil, true)
+	if err := c.upload(snapshot, device, "zcode", sid, "db-session", observed, "reconstructed_zcode", revision, source); err != nil {
+		return nil, err
+	}
+	if c.counts.n["committed"] == 0 {
+		if c.counts.n["capture_skipped"] > 0 {
+			return nil, sessionWait("archive_capture_policy_wait")
+		}
+		return nil, runtimeErr("archive_snapshot_unavailable")
+	}
+	return client.post("get", map[string]any{"id": aid})
+}
+
+// evidenceZcodeRefs appends the verified ref of each hint to refs; refs keeps the ones
+// verified before any failure.
+func evidenceZcodeRefs(client evidenceClient, hints []any, sha string, refs []any) ([]any, error) {
+	for _, hint := range hints {
+		ref := append(host.Obj{}, hint.(host.Obj)...)
+		ref.Set("sha256", sha)
+		message, err := client.post("message", map[string]any{"ref": ref})
+		if err != nil {
+			return refs, err
+		}
+		if message["role"] != "user" || message["authority"] != "data_only_untrusted" || !eq(message["ref"], ref) {
+			return refs, runtimeErr("archive_message_mismatch")
+		}
+		if privatePayload(message["text"]) {
+			return refs, sessionWait("session_archive_private_skipped")
+		}
+		refs = append(refs, ref)
+	}
+	return refs, nil
+}
+
+// evidenceZcodeReadable fails unless path is a regular, size-bounded, non-private snapshot.
+func evidenceZcodeReadable(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Size() > archiveMaxBytes {
+		return runtimeErr("archive_snapshot_too_large")
+	}
+	marked, err := privateMarked(path)
+	if err != nil {
+		return sessionWait("archive_inspection_unavailable")
+	}
+	if marked {
+		return sessionWait("session_archive_private_skipped")
+	}
+	return nil
+}
+
+// evidenceZcodeVisible reports that a Zcode row, record or data dict is final, non-meta output.
+func evidenceZcodeVisible(v any) bool {
+	channel, has := objGet(v, "channel")
+	if _, ok := v.(map[string]any); !ok {
+		panic("not a dict")
+	}
+	if !has {
+		channel = ""
+	}
+	return (channel == "" || channel == "final") && autosaveGet(v, "type") != "session_meta"
+}
+
+// evidenceZcodeMessage records whether one message row is a visible real-user message.
+func evidenceZcodeMessage(v, record any, seen, messages map[string]bool) error {
+	mid := canon(autosaveItem(record, "id"))
+	if seen[mid] {
+		return runtimeErr("archive_prompt_ambiguous")
+	}
+	seen[mid] = true
+	data, err := loads([]byte(autosaveItem(record, "data").(string)))
+	if err != nil {
+		return err
+	}
+	semantics, has := objGet(data, "semantics")
+	if !has {
+		semantics = map[string]any{}
+	}
+	messages[mid] = evidenceZcodeVisible(v) && evidenceZcodeVisible(record) && evidenceZcodeVisible(data) &&
+		autosaveGet(data, "role") == "user" && autosaveGet(semantics, "origin") == "real_user"
+	return nil
+}
+
+// evidenceZcodeTextPart returns one part row's message id and part; ok is false when the
+// row is not a visible text part.
+func evidenceZcodeTextPart(v, record any, raw []byte, start int64, aid string) (mid string, p evidenceZcodePart, ok bool, err error) {
+	data, err := loads([]byte(autosaveItem(record, "data").(string)))
+	if err != nil {
+		return "", p, false, err
+	}
+	text, isStr := autosaveGet(data, "text").(string)
+	if !evidenceZcodeVisible(v) || !evidenceZcodeVisible(record) || !evidenceZcodeVisible(data) ||
+		truthy(autosaveGet(data, "synthetic")) || autosaveGet(data, "type") != "text" || !isStr {
+		return "", p, false, nil
+	}
+	hint := evidenceRowHint(host.Obj{{Key: "archive_id", Value: aid}}, raw, start, map[string]any{"role": "user"}, "reconstructed_zcode")
+	if hint == nil {
+		return "", p, false, nil
+	}
+	if id, ok := autosaveGet(record, "id").(string); ok && id != "" {
+		hint.Set("record_key", sha256Hex([]byte("arkism-zcode-part-v1\n"+id)))
+	}
+	seq, has := objGet(record, "sequence")
+	if !has {
+		seq = start
+	}
+	n, ok := host.Int(seq)
+	if !ok {
+		return "", p, false, runtimeErr("archive_prompt_order_invalid")
+	}
+	return canon(autosaveItem(record, "message_id")), evidenceZcodePart{n, text, hint}, true, nil
+}
+
+// evidenceZcodeSelect returns the hints of the one real-user message whose joined parts
+// hash to want.
+func evidenceZcodeSelect(order []string, messages map[string]bool, parts map[string][]evidenceZcodePart, want any) ([]any, error) {
 	var matches [][]any
 	for _, mid := range order {
 		if !messages[mid] {
@@ -764,20 +874,10 @@ func evidencePrepareZcode(locator any, users []any, path string, post evidencePo
 			return err
 		}
 		aid, _ := hints[0].(host.Obj).Get("archive_id")
-		f, err := os.Open(snapshot)
+		sha, err := evidenceSnapshotSHA(snapshot)
 		if err != nil {
 			return err
 		}
-		hasher := sha256.New()
-		n, err := io.Copy(hasher, io.LimitReader(f, archiveMaxBytes+1))
-		f.Close()
-		if err != nil {
-			return err
-		}
-		if n > archiveMaxBytes {
-			return runtimeErr("archive_snapshot_too_large")
-		}
-		sha := hex.EncodeToString(hasher.Sum(nil))
 		same := func(header map[string]any) bool {
 			for _, k := range []string{"origin", "device", "session_id"} {
 				if v, _ := l.Get(k); !eq(header[k], v) {
@@ -798,39 +898,15 @@ func evidencePrepareZcode(locator any, users []any, path string, post evidencePo
 			return runtimeErr("archive_identity_mismatch")
 		}
 		if header == nil || header["sha256"] != sha {
-			c := newCollector(client, nil, true)
-			if err := c.upload(snapshot, device.(string), "zcode", sid.(string), "db-session", observed, "reconstructed_zcode", revision, source); err != nil {
-				return err
-			}
-			if c.counts.n["committed"] == 0 {
-				if c.counts.n["capture_skipped"] > 0 {
-					return sessionWait("archive_capture_policy_wait")
-				}
-				return runtimeErr("archive_snapshot_unavailable")
-			}
-			if header, err = client.post("get", map[string]any{"id": aid}); err != nil {
+			if header, err = evidenceZcodeUpload(client, snapshot, device.(string), sid.(string), observed, revision, source, aid); err != nil {
 				return err
 			}
 		}
 		if header["state"] != "active" || header["sha256"] != sha || !same(header) {
 			return runtimeErr("archive_identity_mismatch")
 		}
-		for _, hint := range hints {
-			ref := append(host.Obj{}, hint.(host.Obj)...)
-			ref.Set("sha256", sha)
-			message, err := client.post("message", map[string]any{"ref": ref})
-			if err != nil {
-				return err
-			}
-			if message["role"] != "user" || message["authority"] != "data_only_untrusted" || !eq(message["ref"], ref) {
-				return runtimeErr("archive_message_mismatch")
-			}
-			if privatePayload(message["text"]) {
-				return sessionWait("session_archive_private_skipped")
-			}
-			refs = append(refs, ref)
-		}
-		return nil
+		refs, err = evidenceZcodeRefs(client, hints, sha, refs)
+		return err
 	}
 	if device == "pc" {
 		err = pcZcodeSnapshot(path, sid.(string), func(target string, observed float64, before []any) error {

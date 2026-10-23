@@ -73,7 +73,7 @@ func ledgerDeliveries(sid string, items []host.MemoryDelivery, cwd ...string) {
 	if outcomeSpool() == "" || sid == "" {
 		return
 	}
-	scope, refs, deliveries := sharedScope(), []any{}, []any{}
+	scope := sharedScope()
 	if len(cwd) > 1 || privatePayload([]any{capOrigin, sid, scope, items, hookTranscript, cwd}) {
 		return
 	}
@@ -95,21 +95,7 @@ func ledgerDeliveries(sid string, items []host.MemoryDelivery, cwd ...string) {
 	} else if err := tracePolicySource(policy, hookTranscript, nil); err != nil {
 		return // Unknown historical callers retain their full inspection fallback.
 	}
-	for _, item := range items {
-		ok := item.Collection == "memories" && item.ID != "" && item.Revision >= 1
-		for _, key := range scopeKeys {
-			ok = ok && item.Scope[key] == scope[key]
-		}
-		if !ok {
-			continue
-		}
-		form := item.Form
-		if form != "full" && form != "meta" {
-			form = "unknown"
-		}
-		refs = append(refs, map[string]any{"collection": "memories", "id": item.ID, "revision": item.Revision})
-		deliveries = append(deliveries, map[string]any{"collection": "memories", "id": item.ID, "revision": item.Revision, "form": form})
-	}
+	refs, deliveries := ledgerRefs(items, scope)
 	if len(refs) == 0 {
 		return
 	}
@@ -139,6 +125,27 @@ func ledgerDeliveries(sid string, items []host.MemoryDelivery, cwd ...string) {
 	if err != nil {
 		metric(kv("event", "hook_error"), kv("hook", "session_recall_ledger"), kv("error", pyType(err)))
 	}
+}
+
+// ledgerRefs keeps the shared-scope memory deliveries as refs and their delivered forms.
+func ledgerRefs(items []host.MemoryDelivery, scope map[string]string) ([]any, []any) {
+	refs, deliveries := []any{}, []any{}
+	for _, item := range items {
+		ok := item.Collection == "memories" && item.ID != "" && item.Revision >= 1
+		for _, key := range scopeKeys {
+			ok = ok && item.Scope[key] == scope[key]
+		}
+		if !ok {
+			continue
+		}
+		form := item.Form
+		if form != "full" && form != "meta" {
+			form = "unknown"
+		}
+		refs = append(refs, map[string]any{"collection": "memories", "id": item.ID, "revision": item.Revision})
+		deliveries = append(deliveries, map[string]any{"collection": "memories", "id": item.ID, "revision": item.Revision, "form": form})
+	}
+	return refs, deliveries
 }
 
 // sessionTraces claims every idle ledger, then records each claimed one. A ledger the server refuses
@@ -208,11 +215,8 @@ func recordSession(path, spool string) (int, error) {
 	lines.Buffer(nil, 1<<20)
 	inspected := map[string]bool{}
 	for lines.Scan() {
-		row, err := loadsMap(lines.Text())
-		if err != nil || origin != "" && (row["origin"] != origin || row["session"] != sid) {
-			return 0, errLedgerInvalid
-		}
-		if err := tracePolicyRow(policy, row, inspected); err != nil {
+		row, err := ledgerRow(lines.Text(), origin, sid, policy, inspected)
+		if err != nil {
 			return 0, err
 		}
 		origin, sid = str(row["origin"]), str(row["session"])
@@ -224,48 +228,13 @@ func recordSession(path, spool string) (int, error) {
 		if t, ok := row["transcript"].(string); ok && t != "" {
 			transcript = t
 		}
-		if saved, ok := row["scope"].(map[string]any); ok {
-			for _, key := range scopeKeys {
-				if strField(saved[key]) != scope[key] {
-					return 0, runtimeErr("session_ledger_scope_changed")
-				}
-			}
-		}
-		rowForms := map[string][]string{}
-		for _, raw := range anyList(row["deliveries"]) {
-			d, ok := raw.(map[string]any)
-			if !ok {
-				continue
-			}
-			form := strField(d["form"])
-			if form != "full" && form != "meta" && form != "unknown" {
-				continue
-			}
-			key := sdigest(map[string]any{"collection": d["collection"], "id": d["id"], "revision": d["revision"]})
-			rowForms[key] = append(rowForms[key], form)
-			hasDeliveryMetadata = true
-		}
-		for _, r := range anyList(row["refs"]) {
-			key := sdigest(r)
-			fs := rowForms[key]
-			if len(fs) == 0 {
-				fs = []string{"unknown"}
-			}
-			for _, form := range fs {
-				if !slices.Contains(forms[key], form) {
-					forms[key] = append(forms[key], form)
-				}
-			}
-			if k := sdigest(r); !seen[k] {
-				seen[k] = true
-				refs = append(refs, r)
-			}
+		if refs, hasDeliveryMetadata, err = scanLedgerRow(row, scope, forms, seen, refs, hasDeliveryMetadata); err != nil {
+			return 0, err
 		}
 	}
 	if lines.Err() != nil || origin == "" || sid == "" || len(refs) == 0 {
 		return 0, errLedgerInvalid
 	}
-	var behavior map[string]any
 	snapshot, cleanup, err := traceBehaviorSnapshot(transcript)
 	if err != nil {
 		return 0, err
@@ -276,12 +245,77 @@ func recordSession(path, spool string) (int, error) {
 			return 0, err
 		}
 	}
+	behavior := ledgerBehavior(snapshot, first, last)
+	return postLedgerTraces(policy, spool, scope, origin, sid, first, last, refs, forms, hasDeliveryMetadata, behavior)
+}
+
+// ledgerRow parses one ledger line of the same session and checks it against the trace policy.
+func ledgerRow(text, origin, sid string, policy *archivePolicy, inspected map[string]bool) (map[string]any, error) {
+	row, err := loadsMap(text)
+	if err != nil || origin != "" && (row["origin"] != origin || row["session"] != sid) {
+		return nil, errLedgerInvalid
+	}
+	if err := tracePolicyRow(policy, row, inspected); err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+// scanLedgerRow adds a row's new refs and their delivery forms; a row whose saved scope differs is refused.
+func scanLedgerRow(row map[string]any, scope map[string]string, forms map[string][]string, seen map[string]bool, refs []any, hasDeliveryMetadata bool) ([]any, bool, error) {
+	if saved, ok := row["scope"].(map[string]any); ok {
+		for _, key := range scopeKeys {
+			if strField(saved[key]) != scope[key] {
+				return nil, false, runtimeErr("session_ledger_scope_changed")
+			}
+		}
+	}
+	rowForms := map[string][]string{}
+	for _, raw := range anyList(row["deliveries"]) {
+		d, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		form := strField(d["form"])
+		if form != "full" && form != "meta" && form != "unknown" {
+			continue
+		}
+		key := sdigest(map[string]any{"collection": d["collection"], "id": d["id"], "revision": d["revision"]})
+		rowForms[key] = append(rowForms[key], form)
+		hasDeliveryMetadata = true
+	}
+	for _, r := range anyList(row["refs"]) {
+		key := sdigest(r)
+		fs := rowForms[key]
+		if len(fs) == 0 {
+			fs = []string{"unknown"}
+		}
+		for _, form := range fs {
+			if !slices.Contains(forms[key], form) {
+				forms[key] = append(forms[key], form)
+			}
+		}
+		if k := sdigest(r); !seen[k] {
+			seen[k] = true
+			refs = append(refs, r)
+		}
+	}
+	return refs, hasDeliveryMetadata, nil
+}
+
+// ledgerBehavior is the session's behavior over the ledger's window, nil when either end is unreadable.
+func ledgerBehavior(snapshot, first, last string) map[string]any {
 	if t, err := time.Parse(time.RFC3339Nano, first); err == nil {
 		// The prompt line is written around its recall, so the window opens a minute early.
 		if t2, err := time.Parse(time.RFC3339Nano, last); err == nil {
-			behavior = sessionBehavior(snapshot, t.Add(-time.Minute).Format(time.RFC3339Nano), t2.Add(time.Duration(sessionIdle)*time.Second).Format(time.RFC3339Nano))
+			return sessionBehavior(snapshot, t.Add(-time.Minute).Format(time.RFC3339Nano), t2.Add(time.Duration(sessionIdle)*time.Second).Format(time.RFC3339Nano))
 		}
 	}
+	return nil
+}
+
+// postLedgerTraces posts one trace per sessionTraceRefs refs and reports how many were recorded.
+func postLedgerTraces(policy *archivePolicy, spool string, scope map[string]string, origin, sid, first, last string, refs []any, forms map[string][]string, hasDeliveryMetadata bool, behavior map[string]any) (int, error) {
 	for i := 0; i < len(refs); i += sessionTraceRefs {
 		if err := evidencePolicyCheck(policy); err != nil {
 			return i / sessionTraceRefs, err
@@ -290,25 +324,9 @@ func recordSession(path, spool string) (int, error) {
 		payload := map[string]any{"retrieved": chunk}
 		identity := []any{origin, sid, first, last, chunk}
 		if hasDeliveryMetadata {
-			var deliveries []any
-			known := 0
-			for _, raw := range chunk {
-				r, ok := raw.(map[string]any)
-				if !ok {
-					return 0, errLedgerInvalid
-				}
-				for _, form := range forms[sdigest(raw)] {
-					deliveries = append(deliveries, map[string]any{"collection": r["collection"], "id": r["id"], "revision": r["revision"], "form": form})
-				}
-				if fs := forms[sdigest(raw)]; slices.Contains(fs, "full") || slices.Contains(fs, "meta") {
-					known++
-				}
-			}
-			payload["deliveries"] = deliveries
-			if known == len(chunk) {
-				payload["observation"] = "context_delivery"
-			} else if known > 0 {
-				payload["observation"] = "context_delivery_mixed"
+			deliveries, err := chunkDeliveries(chunk, forms, payload)
+			if err != nil {
+				return 0, err
 			}
 			identity = append(identity, deliveries)
 		}
@@ -322,37 +340,68 @@ func recordSession(path, spool string) (int, error) {
 		if behavior != nil {
 			body["events"] = append(context.([]any), map[string]any{"id": "session-behavior-" + id, "kind": "behavior", "occurred_at": last, "payload": behavior})
 		}
-		if privatePayload(body) {
-			return i / sessionTraceRefs, errLedgerInvalid
-		}
-		stored, err := capPost("/v1/execution_traces/completed", body, 30*time.Second)
-		if code := host.HTTPCode(err); behavior != nil && code >= 400 && code < 500 && code != 429 {
-			// A refused behavior event (e.g. a secret in a command) must not cost the delivery record.
-			metric(kv("event", "session_behavior_refused"), kv("error", errorCode(err)))
-			body["events"] = context
-			if err := evidencePolicyCheck(policy); err != nil {
-				return i / sessionTraceRefs, err
-			}
-			stored, err = capPost("/v1/execution_traces/completed", body, 30*time.Second)
-		}
-		if err != nil {
-			return i / sessionTraceRefs, err
-		}
-		trace, _ := stored["trace"].(map[string]any)
-		rev, _ := host.Int(trace["revision"])
-		if trace["collection"] != "execution_traces" || str(trace["id"]) == "" || rev < 1 {
-			return i / sessionTraceRefs, runtimeErr("trace_receipt_invalid")
-		}
-		if privateIdentityFields(trace, evidenceIdentityKeys) {
-			return i / sessionTraceRefs, sessionWait("session_private_identity")
-		}
-		if err := evidencePolicyCheck(policy); err != nil {
-			return i / sessionTraceRefs, err
-		}
-		if err := crewrun.EnqueueReceipt(spool, crewrun.TraceReceipt{Scope: scope,
-			Trace: crewrun.Ref{Collection: "execution_traces", ID: str(trace["id"]), Revision: int64(rev)}}); err != nil {
+		if err := postSessionTrace(policy, spool, scope, body, context, behavior != nil); err != nil {
 			return i / sessionTraceRefs, err
 		}
 	}
 	return (len(refs) + sessionTraceRefs - 1) / sessionTraceRefs, nil
+}
+
+// chunkDeliveries lists a chunk's delivery forms into payload, with the observation they support.
+func chunkDeliveries(chunk []any, forms map[string][]string, payload map[string]any) ([]any, error) {
+	var deliveries []any
+	known := 0
+	for _, raw := range chunk {
+		r, ok := raw.(map[string]any)
+		if !ok {
+			return nil, errLedgerInvalid
+		}
+		for _, form := range forms[sdigest(raw)] {
+			deliveries = append(deliveries, map[string]any{"collection": r["collection"], "id": r["id"], "revision": r["revision"], "form": form})
+		}
+		if fs := forms[sdigest(raw)]; slices.Contains(fs, "full") || slices.Contains(fs, "meta") {
+			known++
+		}
+	}
+	payload["deliveries"] = deliveries
+	if known == len(chunk) {
+		payload["observation"] = "context_delivery"
+	} else if known > 0 {
+		payload["observation"] = "context_delivery_mixed"
+	}
+	return deliveries, nil
+}
+
+// postSessionTrace posts one trace, retrying without its behavior event when the server refuses that,
+// and spools the stored trace's receipt.
+func postSessionTrace(policy *archivePolicy, spool string, scope map[string]string, body map[string]any, context any, withBehavior bool) error {
+	if privatePayload(body) {
+		return errLedgerInvalid
+	}
+	stored, err := capPost("/v1/execution_traces/completed", body, 30*time.Second)
+	if code := host.HTTPCode(err); withBehavior && code >= 400 && code < 500 && code != 429 {
+		// A refused behavior event (e.g. a secret in a command) must not cost the delivery record.
+		metric(kv("event", "session_behavior_refused"), kv("error", errorCode(err)))
+		body["events"] = context
+		if err := evidencePolicyCheck(policy); err != nil {
+			return err
+		}
+		stored, err = capPost("/v1/execution_traces/completed", body, 30*time.Second)
+	}
+	if err != nil {
+		return err
+	}
+	trace, _ := stored["trace"].(map[string]any)
+	rev, _ := host.Int(trace["revision"])
+	if trace["collection"] != "execution_traces" || str(trace["id"]) == "" || rev < 1 {
+		return runtimeErr("trace_receipt_invalid")
+	}
+	if privateIdentityFields(trace, evidenceIdentityKeys) {
+		return sessionWait("session_private_identity")
+	}
+	if err := evidencePolicyCheck(policy); err != nil {
+		return err
+	}
+	return crewrun.EnqueueReceipt(spool, crewrun.TraceReceipt{Scope: scope,
+		Trace: crewrun.Ref{Collection: "execution_traces", ID: str(trace["id"]), Revision: int64(rev)}})
 }

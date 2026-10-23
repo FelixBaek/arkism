@@ -82,28 +82,8 @@ func outboxPrepareLocked(folder, origin string, sid, cwd, workID any, action str
 	if err != nil {
 		return nil, err
 	}
-	if action == "suspend" {
-		if truthy(workID) || marker != nil {
-			return nil, invalid
-		}
-	} else {
-		if w, ok := workID.(string); !ok || !outboxKey.MatchString(w) {
-			return nil, invalid
-		}
-		if err := boundaryValidate(marker); err != nil {
-			return nil, err
-		}
-		m := marker.(map[string]any)
-		if m["origin"] != origin || !eq(m["session_id"], sid) {
-			return nil, invalid
-		}
-		mk, err := boundaryFolder(m["cwd"])
-		if err != nil {
-			return nil, err
-		}
-		if mk != folderKey {
-			return nil, invalid
-		}
+	if err := outboxValidateWork(origin, sid, workID, action, marker, folderKey, invalid); err != nil {
+		return nil, err
 	}
 	state := filepath.Join(folder, "sequence.json")
 	if isSymlink(state) {
@@ -133,6 +113,35 @@ func outboxPrepareLocked(folder, origin string, sid, cwd, workID any, action str
 	return map[string]any{"version": int64(1), "event_id": "pc-work-" + outboxUUID(), "sequence": sequence,
 		"origin": origin, "session_id": sid, "cwd": cwd, "work_id": workID, "action": action,
 		"created_at": timeNow(), "boundary": marker}, nil
+}
+
+// outboxValidateWork validates an event's work id and boundary: none for a suspend,
+// else a boundary of the same origin, session and folder.
+func outboxValidateWork(origin string, sid, workID any, action string, marker any, folderKey string, invalid error) error {
+	if action == "suspend" {
+		if truthy(workID) || marker != nil {
+			return invalid
+		}
+		return nil
+	}
+	if w, ok := workID.(string); !ok || !outboxKey.MatchString(w) {
+		return invalid
+	}
+	if err := boundaryValidate(marker); err != nil {
+		return err
+	}
+	m := marker.(map[string]any)
+	if m["origin"] != origin || !eq(m["session_id"], sid) {
+		return invalid
+	}
+	mk, err := boundaryFolder(m["cwd"])
+	if err != nil {
+		return err
+	}
+	if mk != folderKey {
+		return invalid
+	}
+	return nil
 }
 
 // outboxRaw is json.dumps(event, ensure_ascii=False, sort_keys=True).

@@ -240,20 +240,25 @@ func arkStatus(sid string) (string, error) {
 		for _, id := range u.ids {
 			total[id] = true
 		}
-		if len(u.ids) > 0 {
-			shown := u.ids
-			if len(shown) > 20 {
-				shown = shown[:20]
-			}
-			b.WriteString("    " + strings.Join(shown, ", "))
-			if len(u.ids) > len(shown) {
-				fmt.Fprintf(&b, " 외 %d개", len(u.ids)-len(shown))
-			}
-			b.WriteString("\n")
-		}
+		arkStatusIDs(&b, u.ids)
 	}
 	fmt.Fprintf(&b, "  합계: 서로 다른 기억 %d개, 넣은 글자 %d자", len(total), chars)
 	return b.String(), nil
+}
+
+// arkStatusIDs writes up to 20 of a hook's ids on one line, then how many were left out.
+func arkStatusIDs(b *strings.Builder, ids []string) {
+	if len(ids) > 0 {
+		shown := ids
+		if len(shown) > 20 {
+			shown = shown[:20]
+		}
+		b.WriteString("    " + strings.Join(shown, ", "))
+		if len(ids) > len(shown) {
+			fmt.Fprintf(b, " 외 %d개", len(ids)-len(shown))
+		}
+		b.WriteString("\n")
+	}
 }
 
 // arkSync starts the skill and agent sync in the background; it never waits on them.

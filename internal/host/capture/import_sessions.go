@@ -301,6 +301,46 @@ func siRun(opt siOptions, stdout io.Writer) (host.Obj, error) {
 	if err != nil {
 		return nil, err
 	}
+	plan := siPlan(all, ledger, opt, counts)
+	sort.SliceStable(plan, func(i, j int) bool { return plan[i].meta.ended.Before(plan[j].meta.ended) })
+	counts["to_read"] = len(plan)
+	sessions := []any{}
+	if !opt.run && !opt.extract {
+		sessions = siDryRun(plan, counts)
+		return siSummary(opt, counts, sessions), nil
+	}
+	for _, p := range plan {
+		if counts["extracted"] >= opt.limit {
+			counts["left_for_next_run"]++
+			continue
+		}
+		counts["extracted"]++
+		outcome, err := siSession(p, opt.run, &ledger)
+		if err != nil {
+			counts["failed"]++
+			metric(kv("event", "import_failure"), kv("origin", p.c.origin), kv("session", p.id), kv("error", errorCode(err)))
+			if opt.run {
+				e := ledger.Sessions[p.id]
+				e.Origin, e.Status, e.Attempts, e.Error, e.At = p.c.origin, "failed", e.Attempts+1, errorCode(err), host.NowISO()
+				ledger.Sessions[p.id] = e
+				if err := ledger.save(); err != nil {
+					return nil, err
+				}
+			}
+			continue
+		}
+		for _, k := range []string{"candidates", "stored", "merged", "rejected"} {
+			n, _ := outcome.Get(k)
+			v, _ := host.Int(n)
+			counts[k] += int(v)
+		}
+		sessions = append(sessions, outcome)
+	}
+	return siSummary(opt, counts, sessions), nil
+}
+
+// siPlan picks the sessions to read: finished, after since, not yet imported, with a real conversation.
+func siPlan(all []chat, ledger siLedger, opt siOptions, counts map[string]int) []siPlanned {
 	var plan []siPlanned
 	for _, c := range all {
 		counts["found"]++
@@ -346,61 +386,34 @@ func siRun(opt siOptions, stdout io.Writer) (host.Obj, error) {
 		}
 		plan = append(plan, p)
 	}
-	sort.SliceStable(plan, func(i, j int) bool { return plan[i].meta.ended.Before(plan[j].meta.ended) })
-	counts["to_read"] = len(plan)
+	return plan
+}
+
+// siDryRun lists the planned sessions and counts the ones the server already has.
+func siDryRun(plan []siPlanned, counts map[string]int) []any {
 	sessions := []any{}
-	if !opt.run && !opt.extract {
-		// Ask the server which of these it already has (a ledger lost with a reinstall).
-		for i := 0; i < len(plan); i += 16 {
-			batch := []any{}
-			for _, p := range plan[i:min(i+16, len(plan))] {
-				batch = append(batch, siBody(p, nil))
-			}
-			res, err := siPost(true, "import", batch)
-			if err != nil {
-				counts["server_unchecked"] = len(plan) - i
-				break
-			}
-			for _, s := range dicts(listOf(res["sessions"])) {
-				if s["status"] == "already_imported" {
-					counts["already_on_server"]++
-				}
+	// Ask the server which of these it already has (a ledger lost with a reinstall).
+	for i := 0; i < len(plan); i += 16 {
+		batch := []any{}
+		for _, p := range plan[i:min(i+16, len(plan))] {
+			batch = append(batch, siBody(p, nil))
+		}
+		res, err := siPost(true, "import", batch)
+		if err != nil {
+			counts["server_unchecked"] = len(plan) - i
+			break
+		}
+		for _, s := range dicts(listOf(res["sessions"])) {
+			if s["status"] == "already_imported" {
+				counts["already_on_server"]++
 			}
 		}
-		for _, p := range plan {
-			sessions = append(sessions, host.Obj{{Key: "id", Value: p.id}, {Key: "origin", Value: p.c.origin},
-				{Key: "ended_at", Value: p.meta.ended.Format(time.RFC3339)}, {Key: "messages", Value: len(p.lines)}, {Key: "truncated", Value: p.truncated}})
-		}
-		return siSummary(opt, counts, sessions), nil
 	}
 	for _, p := range plan {
-		if counts["extracted"] >= opt.limit {
-			counts["left_for_next_run"]++
-			continue
-		}
-		counts["extracted"]++
-		outcome, err := siSession(p, opt.run, &ledger)
-		if err != nil {
-			counts["failed"]++
-			metric(kv("event", "import_failure"), kv("origin", p.c.origin), kv("session", p.id), kv("error", errorCode(err)))
-			if opt.run {
-				e := ledger.Sessions[p.id]
-				e.Origin, e.Status, e.Attempts, e.Error, e.At = p.c.origin, "failed", e.Attempts+1, errorCode(err), host.NowISO()
-				ledger.Sessions[p.id] = e
-				if err := ledger.save(); err != nil {
-					return nil, err
-				}
-			}
-			continue
-		}
-		for _, k := range []string{"candidates", "stored", "merged", "rejected"} {
-			n, _ := outcome.Get(k)
-			v, _ := host.Int(n)
-			counts[k] += int(v)
-		}
-		sessions = append(sessions, outcome)
+		sessions = append(sessions, host.Obj{{Key: "id", Value: p.id}, {Key: "origin", Value: p.c.origin},
+			{Key: "ended_at", Value: p.meta.ended.Format(time.RFC3339)}, {Key: "messages", Value: len(p.lines)}, {Key: "truncated", Value: p.truncated}})
 	}
-	return siSummary(opt, counts, sessions), nil
+	return sessions
 }
 
 func siSummary(opt siOptions, counts map[string]int, sessions []any) host.Obj {

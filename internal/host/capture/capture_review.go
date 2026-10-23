@@ -257,21 +257,9 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 			return err
 		}
 	}
-	var waiting []map[string]any
-	for _, status := range []string{"candidate", "conflicted"} {
-		res, err := revGet(fmt.Sprintf("/v1/memory_candidates?%s&status=%s&limit=100", scopeQuery(false), status), 8*time.Second)
-		if err != nil {
-			return err
-		}
-		for _, c := range dicts(listOf(res["items"])) {
-			if privateIdentityFields(c, []string{"id", "revision", "conflict_id"}) {
-				metric(kv("event", "ai_review_skipped"), kv("reason", "private_identity"))
-				continue
-			}
-			if !reviewed(c) && !pending[str(c["id"])] {
-				waiting = append(waiting, c)
-			}
-		}
+	waiting, err := reviewWaiting(pending)
+	if err != nil {
+		return err
 	}
 	var todo []map[string]any
 	var ruled []map[string]any
@@ -289,100 +277,137 @@ func aiReview(dryRun bool, stdout io.Writer) error {
 		}
 	}
 	for i := 0; i < len(todo); i += reviewBatch {
-		chunk := todo[i:min(i+reviewBatch, len(todo))]
-		batch := map[any]map[string]any{} // {c["id"]: c}: a later duplicate id wins
-		var prompt []string
-		for _, c := range chunk {
-			batch[hashable(c["id"])] = c
-		}
-		seen := map[any]bool{}
-		for _, c := range chunk {
-			id := hashable(c["id"])
-			if seen[id] {
-				continue
-			}
-			seen[id] = true
-			c = batch[id]
-			var old map[string]any
-			if truthy(c["conflict_id"]) {
-				var err error
-				old, err = conflictOld(c)
-				if err != nil {
-					if !networkish(err) && pyType(err) != "KeyError" {
-						return err
-					}
-					continue // cannot show the old side: leave it for the next run
-				}
-				if privatePayload(old["id"]) {
-					continue
-				}
-				if !slices.Contains(reviewKinds, old["kind"]) { // its text never reaches the model
-					ruled := []map[string]any{classifyRequest(c, "high", []any{"기존 기억과 모순"}, str(old["id"]))}
-					if err := classifyBatch(ruled, "rule", dryRun, stdout); err != nil {
-						return err
-					}
-					continue
-				}
-			}
-			query := redactPrivateValue(str(or(c["text"], "")))
-			if privatePayload(query) {
-				return sessionWait("review_private_content")
-			}
-			found, err := reviewSearch(query)
-			if err != nil {
-				return err
-			}
-			var related []map[string]any
-			for _, r := range found {
-				rm, err := asDict(r)
-				if err != nil {
-					return err
-				}
-				if !privatePayload(rm["id"]) && !eq(rm["id"], c["id"]) {
-					related = append(related, rm)
-				}
-			}
-			prompt = append(prompt, redactPrivate(reviewItem(c, related, old)))
-		}
-		if len(prompt) == 0 {
-			continue
-		}
-		out, err := privateModel(reviewSystem, strings.Join(prompt, "\n\n"), reviewModel, 300*time.Second, reviewSchema, "decisions")
-		if err != nil {
-			if t := pyType(err); t != "RuntimeError" && t != "TimeoutExpired" && t != "ValueError" && t != "JSONDecodeError" {
-				return err
-			}
-			metric(kv("event", "ai_review_failure"), kv("error", head(err.Error(), 80)))
-			continue
-		}
-		decisions, err := asList(out)
-		if err != nil {
-			return err
-		}
-		var requests []map[string]any
-		for _, v := range decisions {
-			d, err := asDict(v)
-			if err != nil {
-				return err
-			}
-			c := batch[hashable(d["id"])]
-			if c == nil {
-				continue
-			}
-			k := riskFields(d, basisTag(c), "")
-			risk, _ := k.Get("risk")
-			reasons, _ := k.Get("risk_reasons")
-			dup, _ := k.Get("dup_hint")
-			list, _ := reasons.([]any)
-			dupID, _ := dup.(string)
-			requests = append(requests, withJudgement(classifyRequest(c, risk.(string), list, dupID), d))
-			delete(batch, hashable(d["id"])) // a repeated id in the answer is classified once
-		}
-		if err := classifyBatch(requests, reviewModel, dryRun, stdout); err != nil {
+		if err := reviewChunk(todo[i:min(i+reviewBatch, len(todo))], dryRun, stdout); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// reviewWaiting lists the candidates and conflicts no review has classified or queued yet.
+func reviewWaiting(pending map[string]bool) ([]map[string]any, error) {
+	var waiting []map[string]any
+	for _, status := range []string{"candidate", "conflicted"} {
+		res, err := revGet(fmt.Sprintf("/v1/memory_candidates?%s&status=%s&limit=100", scopeQuery(false), status), 8*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range dicts(listOf(res["items"])) {
+			if privateIdentityFields(c, []string{"id", "revision", "conflict_id"}) {
+				metric(kv("event", "ai_review_skipped"), kv("reason", "private_identity"))
+				continue
+			}
+			if !reviewed(c) && !pending[str(c["id"])] {
+				waiting = append(waiting, c)
+			}
+		}
+	}
+	return waiting, nil
+}
+
+// reviewChunk sends one batch of candidates to the model and classifies what it answers.
+func reviewChunk(chunk []map[string]any, dryRun bool, stdout io.Writer) error {
+	batch := map[any]map[string]any{} // {c["id"]: c}: a later duplicate id wins
+	var prompt []string
+	for _, c := range chunk {
+		batch[hashable(c["id"])] = c
+	}
+	seen := map[any]bool{}
+	for _, c := range chunk {
+		id := hashable(c["id"])
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		item, ok, err := reviewPromptItem(batch[id], dryRun, stdout)
+		if err != nil {
+			return err
+		}
+		if ok {
+			prompt = append(prompt, item)
+		}
+	}
+	if len(prompt) == 0 {
+		return nil
+	}
+	out, err := privateModel(reviewSystem, strings.Join(prompt, "\n\n"), reviewModel, 300*time.Second, reviewSchema, "decisions")
+	if err != nil {
+		if t := pyType(err); t != "RuntimeError" && t != "TimeoutExpired" && t != "ValueError" && t != "JSONDecodeError" {
+			return err
+		}
+		metric(kv("event", "ai_review_failure"), kv("error", head(err.Error(), 80)))
+		return nil
+	}
+	return reviewDecisions(out, batch, dryRun, stdout)
+}
+
+// reviewPromptItem renders one candidate for the model prompt; ok is false when it is left out
+// (classified by rule, or skipped for the next run).
+func reviewPromptItem(c map[string]any, dryRun bool, stdout io.Writer) (item string, ok bool, err error) {
+	var old map[string]any
+	if truthy(c["conflict_id"]) {
+		old, err = conflictOld(c)
+		if err != nil {
+			if !networkish(err) && pyType(err) != "KeyError" {
+				return "", false, err
+			}
+			return "", false, nil // cannot show the old side: leave it for the next run
+		}
+		if privatePayload(old["id"]) {
+			return "", false, nil
+		}
+		if !slices.Contains(reviewKinds, old["kind"]) { // its text never reaches the model
+			ruled := []map[string]any{classifyRequest(c, "high", []any{"기존 기억과 모순"}, str(old["id"]))}
+			return "", false, classifyBatch(ruled, "rule", dryRun, stdout)
+		}
+	}
+	query := redactPrivateValue(str(or(c["text"], "")))
+	if privatePayload(query) {
+		return "", false, sessionWait("review_private_content")
+	}
+	found, err := reviewSearch(query)
+	if err != nil {
+		return "", false, err
+	}
+	var related []map[string]any
+	for _, r := range found {
+		rm, err := asDict(r)
+		if err != nil {
+			return "", false, err
+		}
+		if !privatePayload(rm["id"]) && !eq(rm["id"], c["id"]) {
+			related = append(related, rm)
+		}
+	}
+	return redactPrivate(reviewItem(c, related, old)), true, nil
+}
+
+// reviewDecisions classifies the candidates the model answered for, each id once.
+func reviewDecisions(out any, batch map[any]map[string]any, dryRun bool, stdout io.Writer) error {
+	decisions, err := asList(out)
+	if err != nil {
+		return err
+	}
+	var requests []map[string]any
+	for _, v := range decisions {
+		d, err := asDict(v)
+		if err != nil {
+			return err
+		}
+		c := batch[hashable(d["id"])]
+		if c == nil {
+			continue
+		}
+		k := riskFields(d, basisTag(c), "")
+		risk, _ := k.Get("risk")
+		reasons, _ := k.Get("risk_reasons")
+		dup, _ := k.Get("dup_hint")
+		list, _ := reasons.([]any)
+		dupID, _ := dup.(string)
+		requests = append(requests, withJudgement(classifyRequest(c, risk.(string), list, dupID), d))
+		delete(batch, hashable(d["id"])) // a repeated id in the answer is classified once
+	}
+	return classifyBatch(requests, reviewModel, dryRun, stdout)
 }
 
 func conflictOld(c map[string]any) (old map[string]any, err error) {
@@ -417,6 +442,24 @@ func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) > 0 {
 		cmd = args[0]
 	}
+	// Only the automated paths (timers, hook-spawned drain) run as the harness service; the hook only
+	// spools, and commands a person types (review, stats, ...) keep that person's credential.
+	if sessionProcessorOn() && cmd != "hook" {
+		if err := sessionTokenFile(cmd == "drain" || cmd == "reflect" || cmd == "logs"); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+	}
+	code, err := captureCommand(cmd, args, stdin, stdout, stderr)
+	if err != nil { // Python ended with a traceback
+		fmt.Fprintf(stderr, "%s: %v\n", pyType(err), err)
+		return 1
+	}
+	return code
+}
+
+// captureCommand runs one capture subcommand; a non-nil error is the traceback captureMain prints.
+func captureCommand(cmd string, args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
 	has := func(flag string) bool {
 		for _, a := range args {
 			if a == flag {
@@ -426,17 +469,9 @@ func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return false
 	}
 	var err error
-	// Only the automated paths (timers, hook-spawned drain) run as the harness service; the hook only
-	// spools, and commands a person types (review, stats, ...) keep that person's credential.
-	if sessionProcessorOn() && cmd != "hook" {
-		if err := sessionTokenFile(cmd == "drain" || cmd == "reflect" || cmd == "logs"); err != nil {
-			fmt.Fprintln(stderr, err)
-			return 1
-		}
-	}
 	switch {
 	case cmd == "hook":
-		return hookMain(stdin, stdout)
+		return hookMain(stdin, stdout), nil
 	case cmd == "drain":
 		err = drain(has("--all-work-origins"))
 	case cmd == "logs":
@@ -444,16 +479,12 @@ func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case cmd == "reflect" && sessionProcessorOn():
 		// The same raw source ranges belong to the session processor, never double-extract.
 		if !has("--dry-run") {
-			if err = drain(false); err == nil {
-				if err = trialReview(); err == nil {
-					err = classifyWaiting(stdout)
-				}
-			}
+			err = reflectProcessor(stdout)
 		}
 	case cmd == "reflect":
 		if why := LLMBudgetReason(reflectModel); why != "" {
 			fmt.Fprintln(stdout, why)
-			return 0
+			return 0, nil
 		}
 		err = reflectRun(has("--dry-run"), stdout)
 	case cmd == "backfill" && len(args) == 2:
@@ -469,16 +500,23 @@ func captureMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case cmd == "import-agents":
 		err = importAgentsMain(args[1:], stdout)
 	case cmd == "outcomes" && Outcomes != nil:
-		return Outcomes(args[1:], stdin, stdout, stderr)
+		return Outcomes(args[1:], stdin, stdout, stderr), nil
 	default:
 		fmt.Fprint(stdout, captureDoc+"\n")
-		return 2
+		return 2, nil
 	}
-	if err != nil { // Python ended with a traceback
-		fmt.Fprintf(stderr, "%s: %v\n", pyType(err), err)
-		return 1
+	return 0, err
+}
+
+// reflectProcessor is reflect under the session processor: drain, trial review, then classify what waits.
+func reflectProcessor(stdout io.Writer) error {
+	if err := drain(false); err != nil {
+		return err
 	}
-	return 0
+	if err := trialReview(); err != nil {
+		return err
+	}
+	return classifyWaiting(stdout)
 }
 
 func init() {
