@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/url"
 	"os"
@@ -153,14 +154,19 @@ func serveUntilSIGTERM(t *testing.T, env map[string]string, probe func(stderr st
 	}
 }
 
+// freeAddress picks below 32768, outside the default ephemeral ranges (Linux
+// 32768+, macOS and Windows 49152+): a parallel test's port-0 listener or
+// outgoing connection cannot take the port before the daemon binds it.
 func freeAddress(t *testing.T) string {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	for range 100 {
+		if ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", 20000+rand.IntN(12768))); err == nil {
+			_ = ln.Close()
+			return ln.Addr().String()
+		}
 	}
-	defer ln.Close()
-	return ln.Addr().String()
+	t.Fatal("no free loopback port")
+	return ""
 }
 
 func listening(address string) func(string) bool {
