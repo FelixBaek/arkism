@@ -194,7 +194,7 @@ class Element extends Node {
   get innerText() { return this.textContent; }
   set innerText(v) { this.textContent = v; }
   get innerHTML() { return this.textContent; }
-  set innerHTML(v) { this.textContent = String(v).replace(/<[^>]*>/g, ""); }
+  set innerHTML(v) { this.textContent = String(v).replace(/<[^>]*>/g, "").replace(/</g, ""); }
   get offsetWidth() { return 100; }
   get offsetHeight() { return 30; }
   get offsetLeft() { return 10; }
