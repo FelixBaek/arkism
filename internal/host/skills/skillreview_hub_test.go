@@ -20,8 +20,9 @@ type reviewHub struct {
 	items map[string]map[string]any // resolve answers by ref
 	calls []string                  // "METHOD path token"
 	posts map[string][]map[string]any
+
 	// availability last stored by POST .../availability
-	status string
+	status any
 	compat any
 }
 
