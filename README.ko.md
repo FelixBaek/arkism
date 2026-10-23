@@ -13,7 +13,9 @@ Claude Code, Codex, Gemini CLI를 오갈 때 같은 설명을 반복하지 않�
 
 > 현재 테스트·개발 중입니다. 아래의 제품 소개와 [앞으로의 로드맵](ROADMAP.ko.md)을 구분해 읽어 주세요.
 
-## 내 작업은 바뀌어도, 맥락은 이어지도록
+---
+
+## 1. 내 작업은 바뀌어도, 맥락은 이어지도록
 
 ![필요한 기억·스킬·모델 선택을 여러 도구가 함께 쓰는 기반](images/shared-foundation.png)
 
@@ -24,35 +26,37 @@ Claude Code, Codex, Gemini CLI를 오갈 때 같은 설명을 반복하지 않�
 
 기본은 내 PC에서 시작합니다. Arkism 계정이나 Docker 없이 사용할 수 있으며, 기억 추출에는 내가 선택한 모델과 에이전트 로그인을 사용합니다. 모델 공급자에 따른 이용 조건과 비용은 따로 적용됩니다.
 
-## 기억이 이어지는 방식
+---
+
+## 2. 기억이 이어지는 방식
 
 ![모으기 → 사람의 확인과 승인 → 찾기와 전달. 쓰임 신호는 정리 제안으로 돌아오며, 드리밍 전체 순환은 개발 중입니다.](images/memory-flow.png)
 
-### 1. 모으기
+### 2.1 모으기
 
 ![대화에서 비공개 내용을 걸러낸 뒤 출처가 붙은 기억 후보로 정리](images/capture.png)
 
 연결된 에이전트의 대화에서 결정, 선호, 해결 방법을 후보로 정리합니다. 근거가 된 원문을 연결하고, 지원되는 수집 경로에서 비공개 표시와 제외 폴더를 먼저 걸러냅니다.
 
-### 2. 확인하고 승인하기
+### 2.2 확인하고 승인하기
 
 ![원문과 정리한 내용을 확인하고 사람이 승인·수정·거절](images/review-approval.png)
 
 내 발언을 인용한 후보도 검토를 기다립니다. 출처와 뜻을 확인한 뒤 사람이 승인하거나 고치거나 거절합니다. AI의 분석이 사용자의 승인을 대신하지 않습니다.
 
-### 3. 찾아 건네기
+### 2.3 찾아 건네기
 
 ![여러 검색 결과를 합쳐 관련 있는 기억을 정해진 분량 안에서 전달](images/retrieval.png)
 
 현재 작업과 관련된 승인된 기억을 찾고, 순위를 합쳐 정해진 분량 안에서 전달합니다. 뜻으로 찾으려면 임베딩 설정이 필요하며, 설정하지 않은 경우 키워드 검색을 사용할 수 있습니다.
 
-### 4. 쓰임 돌아보기
+### 2.4 쓰임 돌아보기
 
 ![기억 전달 기록과 그 뒤의 결과 평가를 서로 다른 근거로 보관](images/outcomes.png)
 
 기억을 건넨 기록과 작업 결과 신호를 구분합니다. 건넸다는 사실만으로 모델이 실제로 사용했거나 좋은 결과의 원인이 됐다고 단정하지 않습니다.
 
-### 5. 가꾸기 — 드리밍
+### 2.5 가꾸기 — 드리밍
 
 ![쓰기·돌아보기·제안·사람 승인·반영과 다시 쓰기로 이어지는 드리밍 계획](images/dreaming.png)
 
@@ -60,7 +64,9 @@ Claude Code, Codex, Gemini CLI를 오갈 때 같은 설명을 반복하지 않�
 
 구체적인 보강 순서와 완료 기준은 [로드맵](ROADMAP.ko.md)에 담았습니다.
 
-## 기억에서 작업까지
+---
+
+## 3. 기억에서 작업까지
 
 | 영역 | 할 수 있는 일 |
 |---|---|
@@ -71,7 +77,9 @@ Claude Code, Codex, Gemini CLI를 오갈 때 같은 설명을 반복하지 않�
 
 워크플로는 Go로 만든 Arkism 자체 엔진에서 실행됩니다. 팀 회의와 실제 작업 실행은 서로 다른 흐름으로 관리합니다.
 
-## 시작하기
+---
+
+## 4. 시작하기
 
 1. [Releases](https://github.com/FelixBaek/arkism/releases/latest)에서 공개된 설치 파일을 받습니다. 현재 공개 저장소 안내 기준으로 Windows 설치 파일을 배포합니다.
 2. 앱을 열고 **내장 모드**로 시작합니다. 서버와 데이터베이스가 내 PC에서 실행됩니다.
@@ -82,7 +90,9 @@ Claude Code, Codex, Gemini CLI를 오갈 때 같은 설명을 반복하지 않�
 
 여러 PC에서 하나의 Arkism을 쓰려면 [서버 모드](https://github.com/FelixBaek/arkism/blob/main/guide/server.md)를 사용할 수 있습니다. 서버의 데이터베이스와 SSH 연결을 별도로 설정합니다.
 
-## 내 데이터의 위치와 사용
+---
+
+## 5. 내 데이터의 위치와 사용
 
 ![내 PC에서 시작하고 수집 제외와 데이터 관리를 직접 결정](images/local-first.png)
 
@@ -96,7 +106,9 @@ Claude Code, Codex, Gemini CLI를 오갈 때 같은 설명을 반복하지 않�
 
 적용 범위와 제한은 [수집·개인정보 안내](https://github.com/FelixBaek/arkism/blob/main/guide/capture-privacy.md), 복구 방법은 [백업 안내](https://github.com/FelixBaek/arkism/blob/main/guide/backup-restore.md)에 있습니다.
 
-## 개발과 검증
+---
+
+## 6. 개발과 검증
 
 [![Checks](https://github.com/FelixBaek/arkism/actions/workflows/checks.yml/badge.svg)](https://github.com/FelixBaek/arkism/actions/workflows/checks.yml)
 [![CodeQL](https://github.com/FelixBaek/arkism/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/FelixBaek/arkism/security/code-scanning)
@@ -120,13 +132,17 @@ Claude Code, Codex, Gemini CLI를 오갈 때 같은 설명을 반복하지 않�
 
 개발 환경과 실행 명령은 [개발 안내](https://github.com/FelixBaek/arkism/blob/main/guide/development.md), 기여 방법은 [CONTRIBUTING](https://github.com/FelixBaek/arkism/blob/main/CONTRIBUTING.md), 취약점 신고는 [SECURITY](https://github.com/FelixBaek/arkism/blob/main/SECURITY.md)에 있습니다.
 
-## 앞으로의 방향
+---
+
+## 7. 앞으로의 방향
 
 **먼저 비교할 바탕을 만들고, 기억과 복구를 다듬은 뒤, 근거가 있는 확장을 진행합니다.** 기억 품질, 사람이 이해할 수 있는 정정 상태, 팀 실행, 모델 선택, 도구 호환성을 함께 살핍니다.
 
 [이미지와 설명으로 보는 로드맵 →](ROADMAP.ko.md)
 
 ![도구와 대화를 넘어 기억은 이어지고 결정은 사용자가 합니다](images/memory-continues.png)
+
+---
 
 ## 라이선스
 

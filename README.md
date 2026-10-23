@@ -13,7 +13,9 @@ Carry context between Claude Code, Codex and Gemini CLI without repeating the sa
 
 > Arkism is still in testing and development. The product overview below and the [future roadmap](ROADMAP.md) describe different stages of the work.
 
-## Keep the context as your work moves on
+---
+
+## 1. Keep the context as your work moves on
 
 ![Focused recall, skills on demand and model routing shared across tools](images/en/shared-foundation.png)
 
@@ -24,35 +26,37 @@ Carry context between Claude Code, Codex and Gemini CLI without repeating the sa
 
 Start on your own PC, without an Arkism account or Docker. Memory extraction uses your chosen model and agent login. Your model provider's terms and charges still apply.
 
-## How memory carries on
+---
+
+## 2. How memory carries on
 
 ![Gather, check and approve, then find and hand over. Signals feed review proposals; the full dreaming loop is in development.](images/en/memory-flow.png)
 
-### 1. Gather
+### 2.1 Gather
 
 ![Filter private content from conversations, then create memory candidates with sources](images/en/capture.png)
 
 Turn decisions, preferences and solutions from connected agents' conversations into candidates. Keep a link to the source text, and filter private markers and excluded folders first on supported capture paths.
 
-### 2. Check and approve
+### 2.2 Check and approve
 
 ![Compare the source with the note, then approve, edit or reject it yourself](images/en/review-approval.png)
 
 Even candidates quoting your own words wait for review. Check the source and meaning, then approve, edit or reject the note. AI analysis does not replace your approval.
 
-### 3. Find and hand over
+### 2.3 Find and hand over
 
 ![Merge search results and pass relevant memories within a size limit](images/en/retrieval.png)
 
 Find approved memories that fit the current task, merge their rankings and pass them within a size limit. Searching by meaning needs embeddings; keyword search works without them.
 
-### 4. Look back at use
+### 2.4 Look back at use
 
 ![Keep records of memory delivery separate from evaluations of the result](images/en/outcomes.png)
 
 Keep delivery records separate from task outcome signals. Delivering a memory does not establish that the model used it or that it caused a good result.
 
-### 5. Tend memory — dreaming
+### 2.5 Tend memory — dreaming
 
 ![The planned dreaming loop: use, review, suggest, human approval, apply and reuse](images/en/dreaming.png)
 
@@ -60,7 +64,9 @@ Keep delivery records separate from task outcome signals. Delivering a memory do
 
 The [roadmap](ROADMAP.md) describes the order of improvements and the conditions for accepting them.
 
-## From memory to work
+---
+
+## 3. From memory to work
 
 | Area | What you can do |
 |---|---|
@@ -71,7 +77,9 @@ The [roadmap](ROADMAP.md) describes the order of improvements and the conditions
 
 Workflows run on Arkism's own Go engine. Team meetings and task execution are managed as separate flows.
 
-## Get started
+---
+
+## 4. Get started
 
 1. Download the latest installer from [Releases](https://github.com/FelixBaek/arkism/releases/latest). Windows installers are currently available.
 2. Open the app in **built-in mode**. The server and database run on your PC.
@@ -82,7 +90,9 @@ Current Windows installers do not have Authenticode publisher signing, so SmartS
 
 To share one Arkism across several PCs, use [server mode](https://github.com/FelixBaek/arkism/blob/main/guide/server.md). Configure the server database and SSH connection separately.
 
-## Where your data lives and how it is used
+---
+
+## 5. Where your data lives and how it is used
 
 ![Start on your PC and control capture exclusions and your data](images/en/local-first.png)
 
@@ -96,7 +106,9 @@ Creating a memory candidate sends relevant parts of a conversation to your chose
 
 See the [capture privacy guide](https://github.com/FelixBaek/arkism/blob/main/guide/capture-privacy.md) for scope and limits, and the [backup guide](https://github.com/FelixBaek/arkism/blob/main/guide/backup-restore.md) for recovery.
 
-## Development and checks
+---
+
+## 6. Development and checks
 
 [![Checks](https://github.com/FelixBaek/arkism/actions/workflows/checks.yml/badge.svg)](https://github.com/FelixBaek/arkism/actions/workflows/checks.yml)
 [![CodeQL](https://github.com/FelixBaek/arkism/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/FelixBaek/arkism/security/code-scanning)
@@ -120,13 +132,17 @@ Product improvements begin with reproducible comparisons. Compare new methods wi
 
 See the [development guide](https://github.com/FelixBaek/arkism/blob/main/guide/development.md) for the environment and commands, [CONTRIBUTING](https://github.com/FelixBaek/arkism/blob/main/CONTRIBUTING.md) for how to contribute, and [SECURITY](https://github.com/FelixBaek/arkism/blob/main/SECURITY.md) for reporting vulnerabilities.
 
-## Where we are heading
+---
+
+## 7. Where we are heading
 
 **Build a basis for comparison, strengthen memory and recovery, then expand where the evidence supports it.** The plan covers memory quality, understandable correction states, team execution, model selection and tool compatibility.
 
 [Explore the illustrated roadmap →](ROADMAP.md)
 
 ![Memory carries across tools and conversations, with you in charge](images/en/memory-continues.png)
+
+---
 
 ## License
 

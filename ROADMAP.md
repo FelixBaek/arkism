@@ -11,6 +11,8 @@ See the [project overview](README.md) for the full picture.
 This document sets out the direction for development and research. Stages express dependencies, not promised release dates.
 Feature availability, implementation checks, and benefits in actual use are assessed separately. Planned work is not marked as complete.
 
+---
+
 ## At a glance
 
 | Order | Area | What to verify |
@@ -29,6 +31,8 @@ Feature availability, implementation checks, and benefits in actual use are asse
 API response validation, offline evaluation checks, and coverage tracking.
 Product builds, visual comparisons, and release checks have separate execution conditions; some builds run manually.
 Ordinary CI passing does not establish that all these checks ran or that the roadmap is complete.
+
+---
 
 ## 1. Reproducible evaluation that preserves failures
 
@@ -49,6 +53,8 @@ Another person can inspect the status of every planned item and the checks that 
 
 **Unverified:** Completing the evaluation foundation does not establish the superiority of advanced policies or readiness for release.
 
+---
+
 ## 2. Memory connected from source to final input
 
 ![Memory candidates, human review, retrieval, and inclusion in the final input](images/en/roadmap-memory.png)
@@ -67,6 +73,8 @@ Another person can inspect the status of every planned item and the checks that 
 Preserve access boundaries and current revisions while tracing through to later results.
 
 **Unverified:** Delivery alone does not establish that a model used a memory or that the answer improved.
+
+---
 
 ## 3. Corrections that survive recovery
 
@@ -87,6 +95,8 @@ Unavailable and unverified states must not be converted into success.
 
 **Unverified:** Loading a restored file does not by itself verify that corrections survived.
 
+---
+
 ## 4. Dreaming — turning experience into the next improvement
 
 ![Propose from experience and outcomes, approve changes, and check them in later work](images/en/roadmap-dreaming.png)
@@ -105,6 +115,8 @@ Unavailable and unverified states must not be converted into success.
 The complete improvement cycle is still being built.
 
 **Unverified:** This does not establish unsupervised self-improvement or continuous quality gains.
+
+---
 
 ## 5. Teams and workflows that can pause and resume
 
@@ -125,6 +137,8 @@ The complete improvement cycle is still being built.
 
 **Conditional extension:** Compare adaptive team and workflow selection only after fixed execution and recovery are reliable.
 
+---
+
 ## 6. Context at selection and the full cost of a result
 
 ![Model selection through all attempts to final quality, time, and cost](images/en/roadmap-routing.png)
@@ -143,6 +157,8 @@ The complete improvement cycle is still being built.
 **Completion criteria:** Explain the choice and the resources required for its result. Unknown costs are not zero, and cheap failures are not savings.
 
 **Conditional extension:** Consider bounded adaptation only when useful behavior is demonstrated. Low average cost does not establish a hard spending cap.
+
+---
 
 ## 7. Skills, MCP, and plugins usable under current conditions
 
@@ -163,6 +179,8 @@ Recommendations and skill requirements must not grant new execution permissions.
 
 **Conditional extension:** Introduce selective revalidation where an actual compatibility gap is established.
 
+---
+
 ## 8. Helping users understand the actual state
 
 **Current:** Explanations reflect the distinction between saving, delivery, and actual use.
@@ -179,6 +197,8 @@ Recommendations and skill requirements must not grant new execution permissions.
 Comparisons with actual users begin after state ground truth, measurement methods, and necessary research procedures are ready.
 
 **Unverified:** User benefits have not already been established by this plan.
+
+---
 
 ## 9. Delivery order and adoption criteria
 
