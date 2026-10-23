@@ -334,7 +334,8 @@ export function createAppConnection(deps) {
       changed: () => !!loc && (wanted() ?? loc.default) !== loc.next,
       // 고른 것을 저장한다. 실패하면 줄 안에 이유를 보여 주고 null.
       async save() {
-        await ready;
+        // Lookup failed: saving now would reset a remembered folder to the default.
+        if (!await ready) return null;
         err.textContent = "";
         if (custom && !wanted()) { err.textContent = "폴더 경로를 넣어 주세요."; input.focus(); return null; }
         try {
