@@ -248,6 +248,16 @@ func TestWinDrainWorkReportsShape(t *testing.T) {
 	}
 }
 
+// An SSH host ssh could read as an option fails the MCP relay before anything runs.
+func TestWinMCPRejectsInvalidSSHHost(t *testing.T) {
+	winFixture(t)
+	var errOut strings.Builder
+	if code := winMain([]string{"mcp", "codex", "--ssh-host", "-oProxyCommand=x"}, strings.NewReader(""), io.Discard, &errOut); code != 1 ||
+		!strings.Contains(errOut.String(), "invalid SSH host") {
+		t.Fatal(code, errOut.String())
+	}
+}
+
 // With the app's built-in Arkism running, agents talk to it in this program instead of over SSH;
 // a connection file that points elsewhere or has no approved SSH identity fails closed.
 func TestWinLocalConnectionRunsHereInsteadOfSSH(t *testing.T) {

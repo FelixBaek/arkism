@@ -639,10 +639,14 @@ func winMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 // winMCPMain relays the MCP stdio session over SSH and returns its exit code.
 func winMCPMain(origin string, stdin io.Reader, stdout, stderr io.Writer) int {
-	argv, _ := winSSHCommand(origin, "mcp")
+	argv, err := winSSHCommand(origin, "mcp")
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
 		return exit.ExitCode()
