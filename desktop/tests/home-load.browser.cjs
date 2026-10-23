@@ -15,7 +15,7 @@ async function open(browser, fail) {
     try { await route.fulfill({ body: fs.readFileSync(file), contentType: { ".html": "text/html", ".mjs": "application/javascript", ".js": "application/javascript", ".css": "text/css", ".svg": "image/svg+xml" }[path.extname(file)] || "application/octet-stream" }); }
     catch { await route.fulfill({ status: 404, body: "" }); }
   });
-  await page.addInitScript((fail) => {
+  await page.addInitScript((fail) => { localStorage.setItem("arkism.mode","local");
     const DAY = 86400000, at = (ms) => new Date(Date.now() - ms).toISOString(), old = at(20 * DAY);
     const row = (id, status) => ({ id, text: id, kind: "user", status, revision: 1, created_at: old, updated_at: old, tags: [], sources: [], skill_compatibility: {} });
     window.__TAURI__ = { event: { listen: async () => () => {} }, core: { async invoke(command, args) {

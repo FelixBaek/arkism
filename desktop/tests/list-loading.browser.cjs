@@ -18,7 +18,7 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
       try { await route.fulfill({ body: fs.readFileSync(file), contentType: { ".html": "text/html", ".mjs": "application/javascript", ".js": "application/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".woff2": "font/woff2" }[path.extname(file)] || "application/octet-stream" }); }
       catch { await route.fulfill({ status: 404, body: "" }); }
     });
-    await page.addInitScript(() => {
+    await page.addInitScript(() => { localStorage.setItem("arkism.mode","local");
       window.listCalls = []; window.versionCalls = []; window.failCollection = ""; window.holdCollection = "";
       // Deterministic user-driven requests; the refresh scheduler is tested separately.
       const interval = window.setInterval;

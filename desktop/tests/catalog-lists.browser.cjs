@@ -31,7 +31,7 @@ fs.mkdirSync(output,{recursive:true});
       try { await route.fulfill({body:fs.readFileSync(file),contentType:{".mjs":"application/javascript",".js":"application/javascript",".html":"text/html",".css":"text/css",".svg":"image/svg+xml",".woff2":"font/woff2"}[path.extname(file)]||"application/octet-stream"}); }
       catch { await route.fulfill({status:404,body:""}); }
     });
-    await page.addInitScript(({data}) => {
+    await page.addInitScript(({data}) => { localStorage.setItem("arkism.mode","local");
       window.dialogEvents=[];
       for(const name of ["showModal","close"]){const original=HTMLDialogElement.prototype[name];HTMLDialogElement.prototype[name]=function(...args){window.dialogEvents.push([name,this.className]);return original.apply(this,args)}}
       const NativeDate=Date;

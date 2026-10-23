@@ -12,7 +12,7 @@ const ui=path.resolve(process.env.ARKISM_UI_DIRECTORY||path.resolve(__dirname,'.
    if(!file.startsWith(ui+path.sep)){await route.abort();return;}
    try{const type={'.html':'text/html','.js':'application/javascript','.mjs':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.woff2':'font/woff2'}[path.extname(file)]||'application/octet-stream';await route.fulfill({body:fs.readFileSync(file),contentType:type});}catch{await route.fulfill({status:404,body:''});}
   });
-  await page.addInitScript(()=>{
+  await page.addInitScript(()=>{localStorage.setItem("arkism.mode","local");
    window.memoryCalls=[];window.failNextPage=false;window.removed=new Set();
    window.__TAURI__={event:{listen:async()=>()=>{}},core:{async invoke(command,args){
     if(command==='app_defaults'){return {local:true,updates:false};}if(command==='local_start'){return {server:'http://127.0.0.1:8091',token:'inert-browser-fixture'};}
