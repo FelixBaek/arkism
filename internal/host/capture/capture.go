@@ -429,7 +429,9 @@ func enqueue(job map[string]any) error {
 	if err := os.MkdirAll(spoolDir(), 0o700); err != nil {
 		return err
 	}
-	name := fmt.Sprintf("%d-%s-%s.json", time.Now().UnixNano(), head(str(j["session_id"]), 40), str(j["type"]))
+	// The random part keeps two jobs of one session apart when the clock does not advance
+	// between them (Windows wall-clock steps are coarse); the time prefix keeps drain order.
+	name := fmt.Sprintf("%d-%s-%s-%s.json", time.Now().UnixNano(), handoffUUID()[:8], head(str(j["session_id"]), 40), str(j["type"]))
 	return atomicWrite(filepath.Join(spoolDir(), name), dumps(j))
 }
 
