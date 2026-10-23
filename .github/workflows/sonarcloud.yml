@@ -41,6 +41,8 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
+          # The server runners keep HOME read-only, so the scanner cache goes to the job temp dir.
+          SONAR_USER_HOME: ${{ runner.temp }}/sonar
         with:
           args: >
             -Dsonar.organization=felixbaek
