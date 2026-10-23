@@ -194,7 +194,7 @@ class Element extends Node {
   get innerText() { return this.textContent; }
   set innerText(v) { this.textContent = v; }
   get innerHTML() { return this.textContent; }
-  set innerHTML(v) { this.textContent = String(v).replace(/<[^>]*>/g, "").replace(/</g, ""); }
+  set innerHTML(v) { let out = "", tag = false; for (const ch of String(v)) { if (ch === "<") tag = true; else if (tag) tag = ch !== ">"; else out += ch; } this.textContent = out; } // markup is dropped, never parsed
   get offsetWidth() { return 100; }
   get offsetHeight() { return 30; }
   get offsetLeft() { return 10; }
