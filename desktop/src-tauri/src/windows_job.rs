@@ -784,7 +784,8 @@ mod native {
 
         // Both ends start noninheritable: a process spawned concurrently elsewhere (std::process
         // inherits every inheritable handle) must never receive the parent's stdin write end,
-        // or the child waits for an EOF that never comes. Only child ends are marked below.
+        // or the child waits for an EOF that never comes. Child ends are marked only around
+        // CreateProcess in create().
         fn pipe(&mut self) -> Result<(Handle, Handle), Cause> {
             let sa = SECURITY_ATTRIBUTES {
                 nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
@@ -808,23 +809,16 @@ mod native {
             Ok((read, write))
         }
 
-        fn child_end(raw: Handle) -> Result<Handle, Cause> {
-            checked_bool(unsafe { SetHandleInformation(raw, 1, 1) }, "child_inherit")?;
-            Ok(raw)
-        }
-
         fn child_handles(&mut self) -> Result<[usize; 3], Cause> {
             let (child_in, parent_in) = self.pipe()?;
             self.stdin = Some(self.parent_file(parent_in)?);
-            let child_in = Self::child_end(child_in)?;
             let (parent_out, child_out) = self.pipe()?;
             self.stdout = Some(self.parent_file(parent_out)?);
-            let child_out = Self::child_end(child_out)?;
             let child_err = match &self.stderr {
                 Stderr::Capture => {
                     let (parent_err, child_err) = self.pipe()?;
                     self.captured_stderr = Some(self.parent_file(parent_err)?);
-                    Self::child_end(child_err)?
+                    child_err
                 }
                 Stderr::File(file) => {
                     let mut child_err = null_mut();
@@ -837,7 +831,7 @@ mod native {
                                 process,
                                 &mut child_err,
                                 0,
-                                1,
+                                0,
                                 2,
                             )
                         },
@@ -881,6 +875,20 @@ mod native {
                 | CREATE_UNICODE_ENVIRONMENT
                 | EXTENDED_STARTUPINFO_PRESENT
                 | CREATE_NO_WINDOW;
+            // Child ends are inheritable only across this call, so a process spawned
+            // concurrently elsewhere cannot hold a stdout/stderr write end open.
+            let inherit = |flags: u32| {
+                handles.iter().try_for_each(|&h| {
+                    checked_bool(
+                        unsafe { SetHandleInformation(h as Handle, 1, flags) },
+                        "child_inherit",
+                    )
+                })
+            };
+            if let Err(cause) = inherit(1) {
+                let _ = inherit(0);
+                return Err(cause);
+            }
             // No BREAKAWAY flag; only the explicit three standard handles inherit.
             let result = unsafe {
                 CreateProcessW(
@@ -896,6 +904,7 @@ mod native {
                     &mut process,
                 )
             };
+            let _ = inherit(0);
             let mut errors = if result == 0 {
                 vec![last("create_process")]
             } else {
