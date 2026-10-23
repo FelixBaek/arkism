@@ -100,7 +100,12 @@ test("the to-do action buttons run, open their page or go to the menu", async ()
     await home();
     const b = app.$$(".todo-item button")[i];
     if (!b) break;
+    const id = b.parentNode.dataset.id, before = app.apiCalls.length;
     await app.click(b, 200);
+    // each action asks first, reloads, opens its own page or leaves Home for its menu
+    const did = app.$$("dialog[open]").length > 0 || app.apiCalls.slice(before).some(([m, p]) => m === "GET" && p.startsWith("/v1/memories"))
+      || app.$(".todo-item.selected")?.dataset.id === id || !app.$(".home-first");
+    assert.ok(did, `${t(b)} did nothing`);
     clicked++;
     closeDialogs();
     await app.settle(100);
@@ -211,10 +216,12 @@ test("기억 정리 제안 opens a proposal and sends its choice", async () => {
   await openAll(/정리 제안/);
   assert.match(t(app.$("#detail")), /남길 기억[\s\S]*이력으로 넘길 기억/);
   const sent = [];
-  hook = (a) => { if (a.method === "POST") sent.push(a.path); return null; };
+  hook = (a) => { if (a.method === "POST") sent.push([a.path, a.body]); return null; };
   await press(/둘 다 두기/, 1000);
   hook = () => null;
-  assert.ok(sent.some((p) => /^\/v1\/maintenance_proposals\/[^/]+\/decide$/.test(p)), sent.join(","));
+  const decide = sent.find(([p]) => /^\/v1\/maintenance_proposals\/[^/]+\/decide$/.test(p));
+  assert.ok(decide, sent.map(([p]) => p).join(","));
+  assert.equal(JSON.parse(decide[1]).decision, "dismiss");
   await home();
 });
 
