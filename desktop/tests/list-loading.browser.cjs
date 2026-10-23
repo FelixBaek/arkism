@@ -147,7 +147,7 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
         if (!counts || Number(counts[1]) <= Number(counts[2])) return;
         await next("skills");
       }
-      throw Error("Local display limit did not advance");
+      throw new Error("Local display limit did not advance");
     }
     // A late page may redraw controls, but cannot take focus/caret from typing.
     await revealAll(); await page.evaluate(() => { window.holdCollection = "skills"; window.releaseCollection = null; });

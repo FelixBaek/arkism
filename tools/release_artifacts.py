@@ -44,7 +44,7 @@ def public_key():
         if len(lines) != 2 or not lines[0].startswith("untrusted comment:") or len(raw) != 42 or raw[:2] != b"Ed":
             raise ValueError()
         return data
-    except (KeyError, ValueError, UnicodeError, IndexError) as exc:
+    except (KeyError, ValueError, IndexError) as exc:
         raise ReleaseError("a pinned Tauri-encoded minisign public key is required") from exc
 
 
@@ -127,7 +127,7 @@ def sign(directory, version, feed, channel, key):
         (directory / (installer + ".sig")).write_text(wrapped + "\n", encoding="ascii")
         checksum = digest(directory / installer)
         (directory / (installer + ".sha256")).write_text(f"{checksum}  {installer}\n", encoding="ascii")
-        document = dict(version=version, file=installer, sha256=checksum, channel=channel, signature=wrapped)
+        document = {"version": version, "file": installer, "sha256": checksum, "channel": channel, "signature": wrapped}
         (directory / manifest).write_text(json.dumps(document, separators=(",", ":")) + "\n", encoding="utf-8")
         # The same installer and .sig work with tauri-plugin-updater. Its static
         # manifest has a different layout, provided explicitly for migration.
@@ -185,7 +185,7 @@ def verify(directory, version, feed, channel):
             verify_signature(directory / name, directory / (name + SIG), public, version)
         document = json.loads((directory / manifest).read_bytes())
         signature = base64.b64encode((directory / (installer + SIG)).read_bytes()).decode("ascii")
-        if document != dict(version=version, file=installer, sha256=sums[installer], channel=channel, signature=signature):
+        if document != {"version": version, "file": installer, "sha256": sums[installer], "channel": channel, "signature": signature}:
             raise ReleaseError("signed manifest does not describe the release")
         if (directory / (installer + ".sig")).read_text(encoding="ascii").strip() != signature:
             raise ReleaseError("Tauri signature wrapper mismatch")

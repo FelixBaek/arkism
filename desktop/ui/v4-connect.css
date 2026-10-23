@@ -300,6 +300,7 @@ dialog.git-dialog .git-field.toggle input { appearance: none; position: relative
 dialog.git-dialog .git-field.toggle input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--nc-quiet); transition: left .15s; }
 dialog.git-dialog .git-field.toggle input:checked { background: var(--nc-action); }
 dialog.git-dialog .git-field.toggle input:checked::after { left: 19px; background: var(--nc-on-accent); }
+@media (prefers-reduced-motion: reduce) { dialog.git-dialog .git-field.toggle input::after { transition: none; } }
 .git-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 dialog.git-dialog.confirm .git-dialog-actions { justify-content: flex-start; }
 dialog.git-dialog .btn, dialog.cn-confirm .btn { min-height: 34px; padding: 7px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }

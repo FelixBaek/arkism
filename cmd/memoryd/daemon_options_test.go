@@ -47,11 +47,11 @@ func TestDaemonLocalAndRecoveryLoopback(t *testing.T) {
 		}
 	}
 	for _, address := range []string{"0.0.0.0:8091", ":8091", "remote:8091", "127.0.0.1"} {
-		if e := validateDaemonRuntimeOptions(daemonOptions{Listen: address, Recovery: true}, ""); e == nil {
+		if validateDaemonRuntimeOptions(daemonOptions{Listen: address, Recovery: true}, "") == nil {
 			t.Fatal(address)
 		}
 	}
-	if e := validateDaemonRuntimeOptions(daemonOptions{Listen: "127.0.0.1:8091"}, "yes"); e == nil {
+	if validateDaemonRuntimeOptions(daemonOptions{Listen: "127.0.0.1:8091"}, "yes") == nil {
 		t.Fatal("ambiguous standalone flag")
 	}
 }

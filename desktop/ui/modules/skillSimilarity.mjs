@@ -41,7 +41,7 @@ export function createSkillSimilarity({ notify, pause = () => new Promise(resolv
   let epoch = 0, key = "", items = [], busy = false;
   async function finish(iterator, top, ticket) {
     let began = performance.now();
-    for (const _ of iterator) {
+    while (!iterator.next().done) {
       if (ticket !== epoch) return;
       if (performance.now() - began >= 6) { await pause(); began = performance.now(); }
     }
@@ -54,7 +54,7 @@ export function createSkillSimilarity({ notify, pause = () => new Promise(resolv
     key = next; const ticket = ++epoch, top = [], iterator = compare(live, new Set(dismissed), top);
     items = []; busy = live.length > 150;
     if (busy) void finish(iterator, top, ticket);
-    else { for (const _ of iterator) { /* small catalogs retain synchronous rendering */ } items = top; }
+    else { while (!iterator.next().done) { /* small catalogs retain synchronous rendering */ } items = top; }
     return items;
   }
   return { read, get busy() { return busy; }, reset() { epoch++; key = ""; items = []; busy = false; } };

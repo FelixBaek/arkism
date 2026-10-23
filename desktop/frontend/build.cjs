@@ -6,8 +6,8 @@ const dest = path.resolve(process.env.ARKISM_UI_OUTPUT || path.join(desktop, "ui
 const marker = ".arkism-frontend-output";
 
 async function build() {
-  if (esbuild.version !== "0.28.2") throw Error("Use the pinned esbuild 0.28.2");
-  if (fs.existsSync(dest) && !fs.existsSync(path.join(dest, marker))) throw Error("Refusing to replace an unowned output directory: " + dest);
+  if (esbuild.version !== "0.28.2") throw new Error("Use the pinned esbuild 0.28.2");
+  if (fs.existsSync(dest) && !fs.existsSync(path.join(dest, marker))) throw new Error("Refusing to replace an unowned output directory: " + dest);
   const stage = fs.mkdtempSync(path.join(os.tmpdir(), "arkism-frontend-"));
   try {
     fs.writeFileSync(path.join(stage, marker), "arkism-frontend-v1\n");

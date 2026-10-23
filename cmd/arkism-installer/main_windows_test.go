@@ -92,7 +92,7 @@ func cliBundle(t *testing.T, c command) {
 			t.Fatal(err)
 		}
 	}
-	if code := c.run([]string{"pack", "0.2.0", source, filepath.Join(c.home, "payload.json")}); code != 0 {
+	if c.run([]string{"pack", "0.2.0", source, filepath.Join(c.home, "payload.json")}) != 0 {
 		t.Fatal("CLI pack failed")
 	}
 }
@@ -106,7 +106,7 @@ func TestInstallerCLIVersionMustMatchEmbeddedManifest(t *testing.T) {
 func TestInstallerCLIValidBundleDispatchesAndVerifyRejectsTamper(t *testing.T) {
 	c, _, _, calls := cliFixture(t)
 	cliBundle(t, c)
-	if code := c.run([]string{"verify"}); code != 0 {
+	if c.run([]string{"verify"}) != 0 {
 		t.Fatal("verification failed")
 	}
 	if code := c.run([]string{"install", "0.2.0", `C:\owned`}); code != 0 || *calls != 1 {
@@ -115,7 +115,7 @@ func TestInstallerCLIValidBundleDispatchesAndVerifyRejectsTamper(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(c.home, "payload", "uninstall.exe"), []byte("tampered"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if code := c.run([]string{"verify"}); code != 1 {
+	if c.run([]string{"verify"}) != 1 {
 		t.Fatal("ignored tampered uninstaller")
 	}
 }

@@ -340,7 +340,7 @@ func systemOneAnswer(q map[string]any, value any) bool {
 	score, _ := systemOneNumber(a["score"])
 	// Allow the same two-decimal rounding as distribution(), plus score rounding.
 	tolerance := 0.005 * float64(1+len(keys)*(len(keys)-1)/2)
-	return !(math.Abs(score-weighted) > tolerance+1e-9)
+	return math.Abs(score-weighted) <= tolerance+1e-9
 }
 
 func systemOneChoiceKeys(q, a map[string]any) ([]string, bool) {

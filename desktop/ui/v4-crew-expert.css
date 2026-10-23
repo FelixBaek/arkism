@@ -270,6 +270,7 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-plus-chip, .ex-use .wk-add { color: var(--nc-muted); }
 .ex-tools .wk-chip .icon-btn { width: 0; overflow: hidden; transition: width .12s; }
 .ex-tools .wk-chip:hover .icon-btn, .ex-tools .wk-chip:focus-within .icon-btn { width: 18px; }
+@media (prefers-reduced-motion: reduce) { .ex-tools .wk-chip .icon-btn { transition: none; } }
 .ex-use-hint, .ex-pin-sum { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 /* AI로 고치기 · AI로 초안 만들기 (938:62634 · 310:19277) */
 /* 쓸 수 있는 것 › 칩 상세 (929:61931): near the top, over the popup */

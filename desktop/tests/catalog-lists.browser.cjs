@@ -20,7 +20,7 @@ fs.mkdirSync(output,{recursive:true});
   const browser = await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{})});
   const page = await browser.newPage({locale:"ko-KR",reducedMotion:"reduce",viewport:{width:1440,height:1000}});
   page.setDefaultTimeout(10000);
-  const errors=[], requests=[], snapshots={};
+  const errors=[], requests=[];
   page.on("pageerror", e => errors.push(e.message));page.on("request", r => requests.push(r.url()));
   try {
     await page.route("**/*",async route => {

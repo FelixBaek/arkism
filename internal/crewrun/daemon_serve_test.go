@@ -126,7 +126,7 @@ func TestStartRequestedDrivesOnlyUntouchedHumanRuns(t *testing.T) {
 	if err := e.LoadCrew(ctx); err != nil {
 		t.Fatal(err)
 	}
-	mk := func(by string, nodeStatus string) string {
+	mk := func(by, nodeStatus string) string {
 		r, err := e.StartRun(ctx, "w", "manual", nil)
 		if err != nil {
 			t.Fatal(err)
