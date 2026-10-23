@@ -185,7 +185,10 @@ test("list: no usage yet, no categories, empty, search empty, failed first page 
   s.v.renderSkills();
   assert.match(s.doc.querySelector("#table").textContent, /안 씀/);
   assert.deepEqual(s.doc.querySelectorAll("#chips .chip").map((c) => c.textContent), ["전체", "개발"]);
+  // The empty text waits for a loaded page, so a filter change does not flash it.
   s.snap.items = []; s.v.renderSkills();
+  assert.doesNotMatch(s.doc.querySelector("#table").textContent, /조건에 맞는 스킬이 없어요/);
+  s.snap.ready = true; s.v.renderSkills();
   assert.match(s.doc.querySelector("#table").textContent, /조건에 맞는 스킬이 없어요/);
   s.state.query = "x"; s.v.renderSkills();
   assert.match(s.doc.querySelector("#table").textContent, /검색과 맞는 스킬이 없어요/);
@@ -382,133 +385,18 @@ test("improve pages walk the four steps and their side text", async () => {
   s.v.skillPageDetail();
   s.v.renderSkills();
   assert.equal(s.state.skillPage, null);
-  s.v.openSkillPage({ kind: "trash" });
+  s.v.openSkillPage({ kind: "install" });
   assert.equal(s.state.selected, null);
 });
 
-test("install and route pages: the route test lists judged skills and explains failures", async () => {
-  const skills = [SK("a", { version_id: "va", description: "리뷰한다. 더.", category: "개발" }), SK("b", { version_id: "vb" })];
-  let answer;
-  const s = await views({ skills, handler: (path, body) => { s.sent = body; if (answer instanceof Error) throw answer; return answer; } });
+test("install page: the catalog install form in the list, its guide in the side", async () => {
+  const s = await views({ skills: [SK("a")] });
   s.state.skillPage = { kind: "install" };
   s.v.renderSkills();
   assert.ok(s.doc.querySelector("#table .install"));
   assert.equal(s.doc.querySelector("#table .install").alive(), true);
   s.v.skillPageDetail();
   assert.match(s.doc.querySelector(".detail").textContent, /설치 안내/);
-  s.state.skillPage = { kind: "route" };
-  s.v.renderSkills();
-  s.v.skillPageDetail();
-  const page = s.doc.querySelector("#table .v4s-route");
-  const ask = page.querySelector("textarea");
-  const go = btn(page, "어떤 스킬을 고를지 보기");
-  let focused = false; ask.focus = () => { focused = true; };
-  await go.click();
-  assert.equal(focused, true);
-  assert.equal(s.calls.length, 0);
-  ask.value = "PR 리뷰해 줘";
-  answer = { authority: "data_only_untrusted", provider: "judge", selected_id: "va", degraded: ["timeout"],
-    judgments: [{ id: "vb", suitability: 0.5, conflict: true }, { id: "va", suitability: 0.9 }, { id: "vx", needs_human_review: true }, { id: "vy" }] };
-  const agents = page.querySelector("select");
-  agents.value = "codex";
-  await go.click(); await flush();
-  assert.equal(s.sent.runtime, "codex");
-  const out = page.querySelector(".v4s-route-out");
-  assert.equal(out.hidden, false);
-  assert.deepEqual(out.querySelectorAll(".v4s-row").map((r) => r.querySelector(".v4s-name").textContent), ["a", "b", "vx", "vy"]);
-  assert.match(out.textContent, /고름/);
-  assert.match(out.textContent, /충돌/);
-  assert.match(out.textContent, /확인 필요/);
-  assert.match(out.textContent, /90점/);
-  assert.match(out.textContent, /목록에 없는 버전/);
-  assert.match(page.textContent, /a를 골라요 · 후보 4개/);
-  assert.match(s.doc.body.textContent, /판정 모델을 못 써서 규칙으로 골랐어요 \(timeout\)/);
-  // Picking a listed skill shows its detail in the side.
-  out.querySelectorAll(".v4s-row")[0].click();
-  s.v.skillPageDetail();
-  await flush();
-  // Ctrl+Enter runs too; rules provider with no pick; empty list.
-  agents.value = "";
-  answer = { authority: "data_only_untrusted", provider: "rules", judgments: [{ id: "vb" }] };
-  await ask.fire("keydown", { key: "Enter", ctrlKey: true }); await flush();
-  assert.equal(s.sent.runtime, undefined);
-  assert.match(page.textContent, /후보 1개 · 확실한 하나를 고르지 못했어요/);
-  assert.match(out.textContent, /—/);
-  await ask.fire("keydown", { key: "Enter" });
-  answer = { authority: "data_only_untrusted", judgments: [] };
-  await go.click(); await flush();
-  assert.match(out.textContent, /맞는 스킬이 없어요/);
-  for (const [a, re] of [[{ authority: "x" }, /고르지 못했어요 \(invalid_response\)/], [new Error("HTTP 404"), /아직 스킬 고르기 시험을 지원하지 않아요/]]) {
-    answer = a;
-    await go.click(); await flush();
-    assert.match(page.querySelector("p.v4s-foot").textContent, re);
-  }
-  s.state.selected = "route:none";
-  s.v.skillPageDetail();
-  assert.match(s.doc.querySelectorAll(".detail").at(-1).heading, /고르기 시험/);
 });
 
-test("trash page: trash, unused and copies tabs, the bulk card and the copies detail", async () => {
-  const skills = [SK("a", { description: "안 씀." }), SK("b"), SK("dup", { id: "d1", source_path: "/u/.claude/skills/dup/SKILL.md" }), SK("dup", { id: "d2", source_path: "/u/codex/dup/SKILL.md" }),
-    ...Array.from({ length: 6 }, (_, i) => SK(`x${i}`))];
-  const s = await views({ skills });
-  s.state.trash = [SK("t", { status: "deprecated" })];
-  s.state.data.skillUse = new Map([["b", { count: 3 }], ["d1", { count: 1 }], ["d2", { count: 1 }]]);
-  s.state.skillPage = { kind: "trash" };
-  s.v.renderSkills();
-  const table = s.doc.querySelector("#table");
-  const tabs = table.querySelectorAll(".v4s-seg button");
-  assert.deepEqual(tabs.map((t) => t.textContent), ["휴지통1", "안 씀7", "중복1"]);
-  assert.match(table.textContent, /안 쓰는 스킬 7개를 휴지통으로 옮길까요/);
-  assert.match(table.textContent, / 외 1개/);
-  table.querySelector(".v4s-link").click();
-  await flush();
-  assert.match(s.notices.at(-1), /t를 되돌렸어요/);
-  btn(table, "7개 옮기기").click();
-  assert.deepEqual(s.log.at(-1)[0], "trash");
-  btn(table.querySelector(".v4s-card"), "취소").click();
-  assert.equal(s.state.skillPage.dismissed, true);
-  s.v.renderSkills();
-  assert.equal(s.doc.querySelector("#table .v4s-card"), null);
-  // A trashed skill selected shows its detail; nothing selected shows the trash note.
-  s.state.selected = "skill:t";
-  s.v.skillPageDetail();
-  s.state.selected = null;
-  s.v.skillPageDetail();
-  assert.match(s.doc.querySelectorAll(".detail").at(-1).textContent, /휴지통에 있는 스킬은 에이전트가 읽지 않아요/);
-  tabs[1].click();
-  assert.deepEqual(s.state.skillPage, { kind: "trash", tab: "unused" });
-  s.v.renderSkills();
-  const unusedRows = s.doc.querySelectorAll("#table .v4s-row");
-  assert.equal(unusedRows.length, 7);
-  unusedRows[0].querySelector(".v4s-link").click();
-  assert.deepEqual(s.log.at(-1), ["trash", ["a"]]);
-  s.state.skillPage = { kind: "trash", tab: "copies" };
-  s.v.renderSkills();
-  const copyRow = s.doc.querySelector("#table .v4s-row");
-  assert.match(copyRow.textContent, /2곳에 있어요/);
-  copyRow.click();
-  s.v.skillPageDetail();
-  const cd = s.doc.querySelectorAll(".detail").at(-1);
-  assert.match(cd.textContent, /dup가 2곳에 있어요/);
-  assert.match(cd.textContent, /원본/);
-  cd.querySelectorAll(".v4s-path")[1].click();
-  assert.equal(s.state.selected, "skill:d2");
-  s.state.selected = "copies:nothing";
-  s.v.skillPageDetail();
-  assert.match(s.doc.querySelectorAll(".detail").at(-1).textContent, /왼쪽에서 중복된 스킬을 골라요/);
-  s.state.selected = null;
-  s.v.skillPageDetail();
-  // Empty tabs, and a server that keeps no usage.
-  const e = await views({ skills: [SK("only")] });
-  e.state.data.skillUse = null;
-  for (const tab of ["trash", "unused", "copies"]) { e.state.skillPage = { kind: "trash", tab }; e.v.renderSkills(); }
-  assert.match(e.doc.querySelector("#table").textContent, /같은 이름으로 여러 곳에 있는 스킬이 없어요/);
-  e.state.skillPage = { kind: "trash", tab: "unused" }; e.v.renderSkills();
-  assert.match(e.doc.querySelector("#table").textContent, /사용 기록을 모으지 않아요/);
-  e.state.skillPage = { kind: "trash", tab: "trash" }; e.v.renderSkills();
-  assert.match(e.doc.querySelector("#table").textContent, /휴지통이 비어 있어요/);
-  e.state.data.skillUse = new Map([["only", { count: 1 }]]);
-  e.state.skillPage = { kind: "trash", tab: "unused" }; e.v.renderSkills();
-  assert.match(e.doc.querySelector("#table").textContent, /60일 동안 안 쓴 스킬이 없어요/);
-});
+// The 고르기 시험 (route) and 휴지통·중복 (trash) pages were removed from the skill view in e3f633a (#224); the list's 휴지통 tab is covered above.

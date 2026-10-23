@@ -48,7 +48,7 @@ function setup({ handler, data = tools(), tauri = null } = {}) {
   const h = house(doc);
   for (const id of ["controls", "chips", "stats", "table"]) doc.body.append(Object.assign(h.el("div"), { id }));
   const calls = [], notices = [], log = [], watched = [];
-  const state = { token: "t", toolTab: "mcp", toolAgent: "", selected: null, scope: { project_id: "p" }, server: "local", data: { tools: data, skills: [], crew: [] } };
+  const state = { token: "t", toolTab: "mcp", toolAgent: "", toolCat: "all", toolStatus: "all", selected: null, scope: { project_id: "p" }, server: "local", data: { tools: data, skills: [], crew: [] } };
   const deps = {
     ...h, state, AGENTS, generation: 1, tauri,
     AGENT_SYNC: { claude_code: "x", codex: "y" },
@@ -58,8 +58,11 @@ function setup({ handler, data = tools(), tauri = null } = {}) {
     renderStatusCard: () => log.push("status"), render: (x) => log.push(["render", x]), renderDetail: () => log.push("detail"), openDetail: () => log.push("open"),
     notice: (t) => notices.push(t),
     headExtras: (x) => log.push(["head", x]),
+    keepFocus: (sel) => { log.push(["keep", sel]); return () => log.push("restored"); },
     shownAgents: () => AGENTS.slice(0, 3),
-    skSelect: (label, opts, cur, on) => { const s = h.el("select", "sk"); s.opts = opts; s.pick = on; return s; },
+    skSelect: (label, opts, cur, on) => { const s = h.el("select", "sk"); s.label = label; s.opts = opts; s.pick = on; return s; },
+    panelSearch: (ph) => { const w = h.el("div", "v4s-search"), i = h.el("input"); i.placeholder = ph; w.append(i); return w; },
+    filterChip: (label, count, active, on) => { const b = h.el("button", active ? "chip on" : "chip", `${label} ${count}`); b.addEventListener("click", on); return b; },
     matches: () => true,
     detailShell: (t) => { const b = h.el("div", "detail"); b.heading = t; doc.body.append(b); return b; },
     ago: () => "방금", copyButton: (t, label) => { const b = h.el("button", "copy", label || "복사"); b.copyText = t; return b; },
@@ -154,7 +157,7 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   assert.match(dialogs(s).at(-1).textContent, /Codex · remote-broken/);
   dialogs(s).at(-1).close();
   // Agent filter: an agent the host does not read gets a note; an unknown one resets.
-  const sel = s.doc.querySelector("#controls select");
+  const sel = s.doc.querySelectorAll("#controls select").find((x) => x.label === "에이전트");
   assert.deepEqual(sel.opts.map((o) => o[1]), ["모든 에이전트", "Claude Code 3", "Codex 2", "Gemini 0"]);
   sel.pick("gemini");
   assert.equal(s.state.toolAgent, "gemini");

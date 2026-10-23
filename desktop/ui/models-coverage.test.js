@@ -10,8 +10,6 @@ const immediate = setImmediate;
 globalThis.setTimeout = (fn, ms = 0) => { clock += ms; immediate(fn); return 0; };
 Date.now = () => clock;
 globalThis.requestAnimationFrame = (fn) => fn();
-const titleLine = dom.el("div", "title-line");
-document.querySelector = (s) => (s.includes("title-line") ? titleLine : null);
 require("./models.js");
 
 const at = "2026-10-02T10:00:00Z";
@@ -74,7 +72,7 @@ function mk({ mode = "server", fail = {}, outcome = "done" } = {}) {
     render: () => draw(),
   };
   const kit = { head() {}, side: (...x) => nodes.side.replaceChildren(...x), sideSec: (t, ...kids) => { const s = dom.el("section"); s.append(dom.el("h4", "", t), ...kids); return s; } };
-  const draw = () => { titleLine.replaceChildren(); nodes.main.replaceChildren(...v.m.tab(kit)); };
+  const draw = () => nodes.main.replaceChildren(...v.m.tab(kit));
   v.m = window.ArkismModels(ctx);
   v.draw = draw; v.ctx = ctx;
   return v;
@@ -96,7 +94,12 @@ test("the tab lists providers, accounts, quotas, CLI versions, keys and models",
   assert.match(t, /GPT 5/); assert.match(t, /직접 추가/); assert.match(t, /시험 중/); assert.match(t, /1\.2초/); assert.match(t, /3개 중 2개 켜짐/);
   const side = text(v.nodes.side);
   assert.match(side, /••••abcd  ·  \$30\/월/); assert.match(side, /x\/v1 · 방금/); assert.match(side, /서버에 저장하는 중/); assert.match(side, /저장 실패: 알 수 없음/); assert.match(side, /다시 넣어 주세요/);
-  assert.match(text(titleLine), /AI 도구 기본 모델/);
+  // AI 도구 기본 모델 moved from this title row to the top of 설정 › 에이전트 (pages.js, 29ace25); the tab only hands out the picker.
+  assert.doesNotMatch(t, /AI 도구 기본 모델/);
+  const pick = v.m.assistPicker();
+  assert.equal(pick.getAttribute("aria-label"), "AI 도구 기본 모델");
+  assert.deepEqual([...pick.options].map((o) => o.value), ["", "anthropic|opus", "openai|gpt-5", "openai|hand", "xai|grok", "custom-abc|m1"]);
+  assert.equal(pick.value, "openai|gpt-5");
   assert.deepEqual(v.m.enabledModels(), ["opus", "gpt-5", "hand", "grok", "m1"]);
   assert.deepEqual(v.m.enabledByProvider().map((p) => p.id), ["anthropic", "openai", "xai", "custom-abc"]);
   // every chip draws its provider
@@ -255,14 +258,16 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
 test("AI 도구 기본 모델 saves the provider and model, falls back to the server default, and keeps an old pick", async () => {
   const v = mk();
   await v.m.load(); v.draw();
-  const sel = () => label(titleLine, "AI 도구 기본 모델");
+  // 설정 › 에이전트 mounts the picker (pages.js); a fresh one stands in for each redraw there.
+  const host = dom.el("div"), mount = () => host.replaceChildren(v.m.assistPicker());
+  const sel = () => label(host, "AI 도구 기본 모델");
   for (const [value, re] of [["anthropic|opus", /Anthropic의 opus로/], ["", /서버 기본 모델로/], ["nobody|zz", /이제 zz로/]]) {
-    sel().value = value; sel().fire("change"); await settle();
+    mount(); sel().value = value; sel().fire("change"); await settle();
     assert.match(v.notes.at(-1), re);
   }
-  v.fail["/v1/providers/assist_model"] = "odd"; sel().value = ""; sel().fire("change"); await settle();
+  mount(); v.fail["/v1/providers/assist_model"] = "odd"; sel().value = ""; sel().fire("change"); await settle();
   assert.equal(sel().value, "openai|gpt-5");
-  v.server.assist_model = "gone"; v.server.assist_provider = ""; v.draw();
+  v.server.assist_model = "gone"; v.server.assist_provider = ""; mount();
   assert.ok(sel().options.some((o) => o.value === "|gone"));
 });
 
