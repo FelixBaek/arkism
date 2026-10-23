@@ -429,3 +429,24 @@ func TestHandoffKeyMatchesPythonGolden(t *testing.T) {
 		t.Fatal(handoffKeyFor(get("context")))
 	}
 }
+
+func TestHandoffFileArchiveStopsWhenTheBoundPrefixNoLongerMatches(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	binding := host.Obj{}
+	binding.Set("offset", 3)
+	binding.Set("prefix_sha256", "stale")
+	at := func(string) any { t.Fatal("collector reached"); return nil }
+	job := host.Obj{}
+	if err := handoffFileArchive(&job, binding, evidenceClient{}, at, path, "sid"); err == nil || !strings.Contains(err.Error(), "work_transcript_changed") {
+		t.Fatal(err)
+	}
+	if err := handoffFileArchive(&job, binding, evidenceClient{}, at, path+".gone", "sid"); !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if len(job) != 0 {
+		t.Fatal(job)
+	}
+}

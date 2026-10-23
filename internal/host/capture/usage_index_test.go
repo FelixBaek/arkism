@@ -253,3 +253,63 @@ func TestUsageMainPlansAndWritesTheJSONCache(t *testing.T) {
 		t.Fatal(code, errb.String())
 	}
 }
+
+func TestUsageSendBatchesRowsAndKeepsDigestsOnlyForSentBatches(t *testing.T) {
+	old := usagePostRows
+	defer func() { usagePostRows = old }()
+	var sizes []int
+	usagePostRows = func(items []any) error {
+		sizes = append(sizes, len(items))
+		if len(sizes) == 1 {
+			return &host.HTTPError{Code: 503}
+		}
+		return nil
+	}
+	rows := make([]usageRow, 150)
+	for i := range rows {
+		rows[i] = usageRow{key: "k" + string(rune('a'+i%26)) + strings.Repeat("x", i/26), row: host.Obj{}}
+		rows[i].row.Set("n", i)
+	}
+	state, out := host.Obj{}, host.Obj{}
+	nsent, nfailed := usageSend(&state, rows, &out)
+	if nsent != 50 || nfailed != 100 || len(sizes) != 2 || sizes[0] != 100 || sizes[1] != 50 {
+		t.Fatal(nsent, nfailed, sizes)
+	}
+	if code, _ := out.Get("error"); code != 503 {
+		t.Fatal(code)
+	}
+	v, _ := state.Get("sent")
+	sent := v.(host.Obj)
+	if _, ok := sent.Get(rows[0].key); ok {
+		t.Fatal("failed batch recorded as sent")
+	}
+	if got, _ := sent.Get(rows[149].key); got != usageDigest(rows[149].row) {
+		t.Fatal(got)
+	}
+
+	usagePostRows = func([]any) error { return io.EOF }
+	out = host.Obj{}
+	if _, nfailed := usageSend(&state, rows[:1], &out); nfailed != 1 {
+		t.Fatal(nfailed)
+	}
+	if code, _ := out.Get("error"); code != "unavailable" {
+		t.Fatal(code)
+	}
+}
+
+func TestUsageReadStateRejectsBrokenJSONAndTreatsMissingAsEmpty(t *testing.T) {
+	d := t.TempDir()
+	old := usageState
+	defer func() { usageState = old }()
+	usageState = filepath.Join(d, "missing.json")
+	if state, err := usageReadState(); err != nil || len(state) != 0 {
+		t.Fatal(state, err)
+	}
+	usageState = filepath.Join(d, "broken.json")
+	if err := os.WriteFile(usageState, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := usageReadState(); err == nil {
+		t.Fatal("broken state accepted")
+	}
+}
