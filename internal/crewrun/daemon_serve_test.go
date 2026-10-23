@@ -81,9 +81,11 @@ func TestServeRefusesAndShutsDown(t *testing.T) {
 		t.Fatalf("second daemon on the same lock = %v", err)
 	}
 	unlock()
-	if _, err := acquireCrewLock(filepath.Join(t.TempDir(), "file")); err != nil {
+	release, err := acquireCrewLock(filepath.Join(t.TempDir(), "file"))
+	if err != nil {
 		t.Fatal(err)
 	}
+	release()
 	blocker := filepath.Join(t.TempDir(), "f")
 	_ = os.WriteFile(blocker, nil, 0o600)
 	if _, err := acquireCrewLock(filepath.Join(blocker, "x", "lock")); err == nil {

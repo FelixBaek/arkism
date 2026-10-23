@@ -61,6 +61,7 @@ func TestCrewMainListResolveStatusAndDecide(t *testing.T) {
 }
 
 func TestCrewMainSurfacesAPIFailures(t *testing.T) {
+	keyFiles(t)
 	patch(t, &apiGet, func(string, time.Duration) (map[string]any, error) { return nil, &host.HTTPError{Code: 500} })
 	if code, _, errOut := runCrewMain([]string{"list"}, ""); code == 0 || errOut == "" {
 		t.Fatalf("list failure = %d %q", code, errOut)
