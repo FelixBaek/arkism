@@ -56,7 +56,7 @@ export function createMemoryPaging(deps) {
   }
 
   async function hydrateMaintenance(g) {
-    const refs = (deps.state.data.maintenance || []).flatMap(p => [p.maintenance?.keep, p.maintenance?.retire, p.maintenance?.memory]).filter(Boolean);
+    const refs = (deps.state.data.maintenance || []).flatMap(p => [p.maintenance?.keep, p.maintenance?.retire, p.maintenance?.memory]).filter(ref => ref?.id);
     const cached = new Map(deps.state.data.memories.map(m => [m.id, m]));
     const queue = [...new Map(refs.filter(ref => !cached.has(ref.id) || (ref.revision != null && cached.get(ref.id).revision !== ref.revision)).map(ref => [ref.id, ref])).values()];
     await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {

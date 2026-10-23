@@ -99,3 +99,11 @@ test("fetching more keeps the old page on failure and retries after an error", a
   await h.paging.fetchMoreMemories();
   assert.deepEqual(h.deps.state.data.memories, ["c"]);
 });
+
+test("memory tidy refs without an id are skipped, not fetched or cached", async () => {
+  const h = await setup({data: {memories: [], maintenance: [{maintenance: {keep: {}, retire: {id: "r", revision: 1}}}]}},
+    () => ({revision: 1}));
+  await h.paging.hydrateMaintenance(1);
+  assert.deepEqual(h.routes.map(r => r.split("?")[0]), ["/v1/memories/r"]);
+  assert.equal(h.paging.maintenanceRecords.has(undefined), false);
+});
