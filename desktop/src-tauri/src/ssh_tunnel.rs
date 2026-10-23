@@ -74,9 +74,9 @@ pub fn askpass() -> Option<i32> {
 }
 
 /// Only password prompts get the password; a yes/no question (an unknown or changed host) gets no.
-fn askpass_answer<'a>(prompt: &str, password: &'a str) -> Option<&'a str> {
+fn askpass_answer<'a>(prompt: &str, answer: &'a str) -> Option<&'a str> {
     let p = prompt.to_ascii_lowercase();
-    (!p.contains("yes/no") && !p.contains("passphrase")).then_some(password)
+    (!p.contains("yes/no") && !p.contains("passphrase")).then_some(answer)
 }
 
 /// Turns a pinned, non-batch ssh command into a password login answered by `askpass`.
