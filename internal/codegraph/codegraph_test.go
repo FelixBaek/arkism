@@ -322,7 +322,9 @@ class Box extends Base<T> { open() { return pick(1) } }
 class
 interface Shape { area(): number }
 enum Color { Red }
-export { gen as items, pick } from './lib'
+function shadow() {}
+export { gen as items, pick }
+export { shadow } from './lib'
 export * from './more'
 export async function load() { return gen() }
 `
@@ -341,6 +343,7 @@ export async function load() { return gen() }
 		{"web/mod.ts#Box", KindType, false},
 		{"web/mod.ts#Shape", KindType, false},
 		{"web/mod.ts#Color", KindType, false},
+		{"web/mod.ts#shadow", KindFunc, false}, // re-exported from ./lib, not this file
 		{"web/mod.ts#load", KindFunc, true},
 	} {
 		s, ok := syms[c.qname]

@@ -596,13 +596,15 @@ func (f *jsFile) exportedAt(i int) bool {
 func (f *jsFile) declareExport(i int) {
 	if f.is(i+1, "{") {
 		end := f.match(i + 1)
+		if f.is(end+1, "from") && f.tok(end+2).kind == 's' {
+			// a re-export names the other module's bindings, not local ones
+			f.importSpec(f.tok(end+2).text, f.tok(end+2).line)
+			return
+		}
 		for j := i + 2; j < end; j++ {
 			if f.tok(j).kind == 'i' && !f.is(j-1, "as") {
 				f.exported[f.tok(j).text] = true
 			}
-		}
-		if f.is(end+1, "from") && f.tok(end+2).kind == 's' {
-			f.importSpec(f.tok(end+2).text, f.tok(end+2).line)
 		}
 	} else if f.is(i+1, "*") {
 		for j := i + 2; j < i+6 && j < len(f.toks); j++ {
