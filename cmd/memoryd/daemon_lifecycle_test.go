@@ -184,8 +184,13 @@ func TestDaemonServesHTTPUntilSIGTERM(t *testing.T) {
 		t.Fatal("HTTP server stop", code)
 	}
 	address = freeAddress(t)
+	// Both picks are random and released, so they can collide.
+	pprofAddress := freeAddress(t)
+	for pprofAddress == address {
+		pprofAddress = freeAddress(t)
+	}
 	env = db.env("TYPESAFE_API_KEY", "j", "MEMORY_UNSPLASH_ACCESS_KEY", "u", "MEMORY_DIAGNOSTICS_TOKEN", strings.Repeat("d", 32))
-	if code := serveUntilSIGTERM(t, env, healthy(address), "-listen", address, "-pprof", freeAddress(t)); code != 0 {
+	if code := serveUntilSIGTERM(t, env, healthy(address), "-listen", address, "-pprof", pprofAddress); code != 0 {
 		t.Fatal("HTTP server with diagnostics stop", code)
 	}
 	address = freeAddress(t)
