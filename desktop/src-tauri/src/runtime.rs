@@ -731,7 +731,9 @@ impl Runtime {
             && self.children.lock().map(|c| c.is_empty()).unwrap_or(false)
             && self.gateway.lock().map(|g| g.is_none()).unwrap_or(false)
             && self.watcher.lock().map(|w| w.is_none()).unwrap_or(false)
-            && !self.pgdata().join("postmaster.pid").exists();
+            && !self.pgdata().join("postmaster.pid").exists()
+            // A Postgres already running in the target (another app build or user) would be reused, then stopped.
+            && !path.join("pg").join("postmaster.pid").exists();
         if !idle {
             return Err("local_location_running".into());
         }
@@ -2849,6 +2851,10 @@ mod tests {
     fn data_moves_only_while_idle_and_agents_file_stays_put() {
         let dir = std::env::temp_dir().join(format!("arkism-move-test-{}", secret().unwrap()));
         let rt = Runtime::new(None, dir.join("default")).isolated().agents_file(dir.join("default").join("agents.json"));
+        fs::create_dir_all(dir.join("busy").join("pg")).unwrap();
+        fs::write(dir.join("busy").join("pg").join("postmaster.pid"), b"1").unwrap();
+        assert_eq!(rt.move_data_dir(dir.join("busy")).unwrap_err(), "local_location_running", "a target with a running Postgres waits");
+        assert_eq!(rt.data_dir(), dir.join("default"));
         rt.move_data_dir(dir.join("chosen")).unwrap();
         assert_eq!(rt.data_dir(), dir.join("chosen"));
         rt.write_agent_connection(None, None, None).unwrap();

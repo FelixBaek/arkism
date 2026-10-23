@@ -766,6 +766,9 @@ window.ArkismPages = (ctx) => {
     const storage = tauri && state.defaults.local ? storageRow() : null;
     const save = button("저장하고 다시 연결", "primary", null, async () => {
       if (pick === "local") {
+        // changed() reads false until the lookup ends, so a folder typed meanwhile would be dropped.
+        // A failed lookup already shows its error in the storage row.
+        if (storage && !(await storage.ready)) return;
         if (state.mode !== "local") {
           if (storage?.changed() && !(await storage.save())) return;
           useLocal();
