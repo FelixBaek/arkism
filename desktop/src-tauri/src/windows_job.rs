@@ -782,11 +782,14 @@ mod native {
             Ok(unsafe { File::from_raw_handle(raw) })
         }
 
+        // Both ends start noninheritable: a process spawned concurrently elsewhere (std::process
+        // inherits every inheritable handle) must never receive the parent's stdin write end,
+        // or the child waits for an EOF that never comes. Only child ends are marked below.
         fn pipe(&mut self) -> Result<(Handle, Handle), Cause> {
             let sa = SECURITY_ATTRIBUTES {
                 nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
                 lpSecurityDescriptor: null_mut(),
-                bInheritHandle: 1,
+                bInheritHandle: 0,
             };
             let mut read = null_mut();
             let mut write = null_mut();
@@ -805,16 +808,23 @@ mod native {
             Ok((read, write))
         }
 
+        fn child_end(raw: Handle) -> Result<Handle, Cause> {
+            checked_bool(unsafe { SetHandleInformation(raw, 1, 1) }, "child_inherit")?;
+            Ok(raw)
+        }
+
         fn child_handles(&mut self) -> Result<[usize; 3], Cause> {
             let (child_in, parent_in) = self.pipe()?;
             self.stdin = Some(self.parent_file(parent_in)?);
+            let child_in = Self::child_end(child_in)?;
             let (parent_out, child_out) = self.pipe()?;
             self.stdout = Some(self.parent_file(parent_out)?);
+            let child_out = Self::child_end(child_out)?;
             let child_err = match &self.stderr {
                 Stderr::Capture => {
                     let (parent_err, child_err) = self.pipe()?;
                     self.captured_stderr = Some(self.parent_file(parent_err)?);
-                    child_err
+                    Self::child_end(child_err)?
                 }
                 Stderr::File(file) => {
                     let mut child_err = null_mut();
