@@ -46,5 +46,5 @@ window.ArkismLook = (() => {
     e.preventDefault();
   });
   apply();
-  return { get: () => ({ ...look, lang: look.lang || systemLang() }), set, ZOOM_STEP };
+  return { get: () => ({ ...look, lang: look.lang || systemLang() }), set, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX };
 })();

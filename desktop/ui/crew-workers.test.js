@@ -282,6 +282,7 @@ test("persona settings tab", async () => {
   h.render(); await h.settle();
   assert.ok(document.querySelector("#table").children.length);
   await sweep(h, document.querySelector("#table"), 3);
+  await sweep(h, document.querySelector("#detail"), 3);
   for (const d of h.dialogs()) await sweep(h, d);
   assert.deepEqual(clean(), []);
 });
@@ -289,10 +290,10 @@ test("persona settings tab", async () => {
 test("a new persona finished by AI and saved", async () => {
   const h = await boot({ view: "settings" });
   h.render(); await h.settle();
-  h.btn(document.querySelector("#table"), "새 페르소나").click(); await h.settle();
+  h.btn(document.querySelector("#head-actions"), "새 페르소나").click(); await h.settle();
   const chat = () => h.chats.filter((c) => c.label === "AI로 마무리").at(-1);
   await assert.rejects(chat().ask("마무리"), /먼저 써 주세요/);
-  const body = document.querySelector("#table .cat-body");
+  const body = document.querySelector("#detail .cat-body");
   const [name] = body.querySelectorAll("input");
   dom.type(name, "검토자");
   h.assistReply = () => ({ status: "done", output: JSON.stringify({ name: "꼼꼼한 검토자", role: "보안 위주", instructions: "1. 너는 검토자다." }) });

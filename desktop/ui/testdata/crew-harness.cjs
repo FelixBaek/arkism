@@ -237,8 +237,10 @@ async function boot(opts = {}) {
     const v = h.state.view;
     document.querySelectorAll(".page-back, .page-head .head-back, .page-head .head-aside").forEach((n) => n.remove());
     if (v === "settings") {
-      const group = (t, sub) => { const g = a.el("section", "pg-group"); g.append(a.el("h3", "", t), a.el("p", "", sub)); return g; };
-      document.querySelector("#table").replaceChildren(...h.crew.settingsTab({ group }));
+      const sideParts = [], headParts = [];
+      document.querySelector("#table").replaceChildren(...h.crew.settingsTab({ side: (...n) => sideParts.push(...n), head: (...n) => headParts.push(...n) }));
+      document.querySelector("#detail").replaceChildren(...sideParts);
+      document.querySelector("#head-actions").replaceChildren(...headParts);
       return;
     }
     const page = h.crew.pages[v];

@@ -285,7 +285,7 @@ window.ArkismPages = (ctx) => {
     const dirIn = el("input");
     dirIn.placeholder = "~/team/skills";
     dirIn.className = "mono";
-    addDir.append(dirIn, button("폴더 추가", "ghost small", "plus", () => {
+    addDir.append(dirIn, button("폴더 추가", "small", "plus", () => {
       const d = dirIn.value.trim();
       if (!/^(~\/|\/)/.test(d) || d.includes("..")) { notice("~/ 나 / 로 시작하는 폴더를 써 주세요."); return; }
       void agentRequest({ agent: "shared", kind: "shared", name: d, enabled: true }, "공용 폴더를 넣었어요. 1분 안에 반영돼요.");
@@ -521,7 +521,7 @@ window.ArkismPages = (ctx) => {
       r.append(kind, val, del);
       box.append(r);
     });
-    box.append(button("조건 추가", "ghost", "plus", () => { cat.rules.push(["name", ""]); render(false); }));
+    box.append(button("조건 추가", "", "plus", () => { cat.rules.push(["name", ""]); render(false); }));
     const now = el("div", "match");
     now.append(icon("check"), "지금 맞는 스킬:");
     if (!mine.length) now.append(el("span", "pg-hint", "없어요"));
@@ -529,7 +529,7 @@ window.ArkismPages = (ctx) => {
     if (mine.length > 12) now.append(el("span", "pg-hint", `외 ${mine.length - 12}개`));
     box.append(now);
     const foot = el("div", "cat-foot");
-    const up = button("위로", "ghost", null, () => { if (i) { [draft[i - 1], draft[i]] = [draft[i], draft[i - 1]]; render(false); } });
+    const up = button("위로", "", null, () => { if (i) { [draft[i - 1], draft[i]] = [draft[i], draft[i - 1]]; render(false); } });
     up.disabled = i === 0;
     foot.append(up, button("카테고리 지우기", "ghost danger", "trash", () => { draft.splice(i, 1); open = null; render(false); }));
     box.append(foot);
@@ -565,8 +565,12 @@ window.ArkismPages = (ctx) => {
     const cur = look.get();
     const pick = (patch) => { look.set(patch); render(false); };
     const card = el("section", "pg-group v4-rows");
-    const langs = segment([["ko", "한국어"], ["en", "English"]], cur.lang, (k) => pick({ lang: k }));
+    const LANGS = [["ko", "한국어"], ["en", "English"]];
+    const langs = el("select", "v4-select");
+    langs.setAttribute("aria-label", "화면 언어");
     langs.setAttribute("data-no-i18n", ""); // 언어 이름은 늘 그 언어로 보여 준다
+    for (const [k, label] of LANGS) { const o = el("option", "", label); o.value = k; o.selected = k === cur.lang; langs.append(o); }
+    langs.addEventListener("change", () => pick({ lang: langs.value }));
     const zoom = el("div", "zoom-control");
     zoom.append(button("", "", "minus", () => pick({ zoom: cur.zoom - look.ZOOM_STEP })),
       el("output", "", `${Math.round(cur.zoom * 100)}%`),
@@ -576,11 +580,16 @@ window.ArkismPages = (ctx) => {
     card.append(line("화면 언어", "", langs),
       line("테마", "‘시스템’은 Windows 설정을 따라요.", segment(THEMES, cur.theme, (k) => pick({ theme: k }))),
       line("글자 크기", "글자만 키우거나 줄여요", segment(FONTS, cur.font, (k) => pick({ font: k }))),
-      line("화면 배율", "화면 전체를 확대·축소해요", zoom));
+      line("화면 배율", `화면 전체를 확대·축소해요 · ${Math.round(look.ZOOM_MIN * 100)}~${Math.round(look.ZOOM_MAX * 100)}%`, zoom));
     const keys = el("div", "v4-table");
     const th = el("div", "v4-tr th two"); th.append(el("span", "", "단축키"), el("span", "", "동작")); keys.append(th);
     for (const [k, v] of [["Ctrl +", "확대"], ["Ctrl −", "축소"], ["Ctrl 0", "기본값으로"]]) { const r = el("div", "v4-tr two"); r.append(el("span", "mono", k), el("span", "", v)); keys.append(r); }
-    toSide(sideSec("화면 배율 단축키", keys));
+    // Figma 198:6048: what is picked now, then the zoom shortcuts.
+    const named = (list, k) => list.find(([id]) => id === k)?.[1] || k;
+    const langNow = el("b", "", named(LANGS, cur.lang));
+    langNow.setAttribute("data-no-i18n", "");
+    toSide(sideSec("", kvRow("언어", langNow), kvRow("테마", named(THEMES, cur.theme)), kvRow("글자 크기", named(FONTS, cur.font)), kvRow("화면 배율", `${Math.round(cur.zoom * 100)}%`)),
+      sideSec("", el("h3", "v4-side-title", "화면 배율 단축키"), keys));
     return [card];
   }
   // 설정 › 역할별 모델 (Figma 302:18838, 내장 모드): 의미 검색 임베딩·판정·기억 추출·반성을 어떤 모델이 맡을지.
@@ -589,7 +598,7 @@ window.ArkismPages = (ctx) => {
     const link = el("button", "link-btn v4-link", "라우팅 모델은 ROUTER › 모델 설정 ›");
     link.type = "button";
     link.addEventListener("click", toRouterModels);
-    const summary = sideSec("지금 쓰는 모델");
+    const summary = sideSec("", el("h3", "v4-side-title", "지금 쓰는 모델"));
     const local = tauri && state.mode === "local";
     toSide(summary, ...(local ? [sideNote("서버에 연결하면 서버 설정을 따라요.")] : []), link);
     if (!local) {
@@ -690,7 +699,7 @@ window.ArkismPages = (ctx) => {
       const actions = el("div", "pg-actions");
       body.replaceChildren(card, actions);
       // 기본값으로 (Figma 302:18838): fills the form with the app defaults; the judge (라우팅 설정) stays. 저장 applies it.
-      const reset = button("기본값으로", "ghost", null, () => {
+      const reset = button("기본값으로", "", null, () => {
         cur = { ...cur, embedder: "auto", embed_model: "qwen3-embedding:0.6b", extract_model: "haiku", reflect_model: "sonnet" };
         draw(); notice("기본값으로 채웠어요. 저장해야 적용돼요.");
       });
@@ -698,7 +707,7 @@ window.ArkismPages = (ctx) => {
         next.embed_model = embedModel.value.trim() || "qwen3-embedding:0.6b";
         if (await saveRoles(cur, next)) load();
       })), reset);
-      summary.replaceChildren(el("h3", "", "지금 쓰는 모델"),
+      summary.replaceChildren(el("h3", "v4-side-title", "지금 쓰는 모델"),
         kvRow("임베딩", saved.embedder === "none" ? "끄기" : `${saved.embed_model || "qwen3-embedding:0.6b"} · ${nameOf(EMBED, saved.embedder)}`),
         kvRow("판정", JUDGE_NAME[saved.judge] || "고정 규칙"), kvRow("기억 추출", `Claude ${nameOf(MODELS, saved.extract_model)}`), kvRow("반성·검토", `Claude ${nameOf(MODELS, saved.reflect_model)}`));
     }
@@ -1051,24 +1060,26 @@ window.ArkismPages = (ctx) => {
       search.querySelector("small").textContent = on
         ? "뜻과 키워드로 함께 찾아요."
         : "키워드로 찾아요. Ollama를 설치하고 'ollama pull qwen3-embedding:0.6b'를 실행한 뒤 앱을 다시 열면 의미 검색이 켜져요.";
-      search.lastChild.replaceWith(el("span", on ? "pill on" : "pill", on ? "의미 검색" : "키워드 검색"));
+      search.lastChild.replaceWith(el("output", "", on ? "의미 + 키워드" : "키워드만"));
     }, () => {});
     g.append(search);
     // 쓰던 에이전트의 기억 파일(CLAUDE.md·Claude 메모리·AGENTS.md·GEMINI.md)을 검토 대기로 가져온다.
     g.append(line("에이전트 기억 가져오기", "CLAUDE.md·AGENTS.md·GEMINI.md의 규칙을 검토 대기로 가져와요",
       button("가져오기", "", null, guard(() => window.ArkismAgentMemoryImport.run({ invoke: (cmd, args) => tauri.invoke(cmd, args), ask, notice })))));
-    g.append(line("지금 백업", "문서 › Arkism Backups · 하루 한 번 자동 (최근 7개)", button("지금 백업", "primary", null, guard(async () => {
+    g.append(line("지금 백업", "문서 › Arkism Backups · 하루 한 번 자동 (최근 7개)", button("백업", "", null, guard(async () => {
       notice("백업하는 중이에요.");
       try { const b = await tauri.invoke("local_backup"); notice(`백업했어요 · ${size(b.bytes)}`); await refresh(); } catch (e) { notice(errorText(e)); }
     }))), list, el("div", "pg-actions"));
     g.lastChild.append(button("백업 폴더 열기", "", null, () => tauri.invoke("open_backups").catch(() => notice("폴더를 열지 못했어요."))));
     const danger = group("모든 데이터 지우기", "이 PC의 기억·세션·스킬 기록·설정을 모두 지워요. 백업 폴더와 에이전트 파일은 남아요. 되돌릴 수 없어요.");
-    danger.append(line("처음 상태로 되돌리기", "지운 뒤 빈 Arkism으로 다시 시작해요.", button("모든 데이터 지우기", "danger", null, guard(async () => {
+    // Figma 198:6392: the hint says it all; one outlined button below it.
+    danger.append(el("div", "pg-actions"));
+    danger.lastChild.append(button("처음 상태로 되돌리기", "v4-danger-line", null, guard(async () => {
       if (!await ask("이 PC의 Arkism 데이터를 모두 지울까요?\n\n백업하지 않은 기억은 되찾을 수 없어요.")) return;
       if (!await ask("정말 지울까요? 이 작업은 되돌릴 수 없어요.")) return;
       try { await tauri.invoke("local_erase"); notice("모두 지웠어요. 빈 Arkism으로 다시 시작해요."); } catch (e) { notice(errorText(e)); }
       await startLocal();
-    }))));
+    })));
     void refresh();
     return [g, danger];
   }
@@ -1083,12 +1094,11 @@ window.ArkismPages = (ctx) => {
     sideParts = []; headParts = [];
     const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote };
     const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), roles: tabRoles, appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => routing.tab(kit),
-      workflow: () => crew.settingsTab({ group }), categories: tabCategories, advanced: tabAdvanced, info: tabInfo }[tab]();
-    if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고쳐요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
+      workflow: () => crew.settingsTab({ side: toSide, head: toHead }), categories: tabCategories, advanced: tabAdvanced, info: tabInfo }[tab]();
     const content = el("div", `pg-content v4-set v4-set-${tab}`);
     content.append(...body);
     $("#table").replaceChildren(content);
-    const side = el("div", "detail-body v4-side");
+    const side = el("div", `detail-body v4-side v4-side-${tab}`);
     side.append(...sideParts);
     $("#detail").replaceChildren(side);
     $("#head-actions").replaceChildren(...headParts);

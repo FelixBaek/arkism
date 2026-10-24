@@ -11,44 +11,48 @@ export function createCrewPersonas(deps) {
  // the AI talk per open draft (ai-chat.js state), gone with the draft
   const personaUses = (id) => deps.workflows().filter((r) => (r.crew.graph?.nodes || []).some((n) => n.config?.persona === id));
 
-  function personaTab({ group }) {
-    const g = group("페르소나", "AI 노드의 ‘페르소나’에서 골라 써요. 지시는 그 노드가 일할 때 역할·말투로 들어가요.");
-    const list = deps.el("div", "pg-card");
+  // Figma 198:6134: the list on the left; the open persona's editor in the right column, 새 페르소나 at the top.
+  function personaTab({ side, head }) {
+    const list = deps.el("div", "pg-card v4-persona-list");
     const rows = [...deps.personas(), ...(personaOpen === "new" ? [{ id: "new", crew: personaDraft }] : [])];
     if (!rows.length) list.append(deps.el("p", "pg-hint", "아직 저장한 페르소나가 없어요."));
     for (const r of rows) {
       const isOpen = personaOpen === r.id;
-      const row = deps.el("div", "cat");
-      const head = deps.el("button", "cat-head");
-      head.type = "button";
-      head.setAttribute("aria-expanded", String(isOpen));
+      const row = deps.el("button", `v4-persona-row${isOpen ? " selected" : ""}`);
+      row.type = "button";
+      row.setAttribute("aria-pressed", String(isOpen));
       const used = r.id === "new" ? 0 : personaUses(r.id).length;
-      const name = deps.el("strong", "", r.crew.name || "새 페르소나"), role = deps.el("span", "cat-rules", r.crew.role || "");
-      if (r.crew.name) name.setAttribute("data-no-i18n", ""); role.setAttribute("data-no-i18n", "");
-      head.append(deps.icon("robot", "icon dim"), name, role,
-        deps.el("span", "tag", used ? `노드 ${used}곳에서 씀` : "안 씀"), deps.icon(isOpen ? "caret-down" : "caret-right"));
-      head.addEventListener("click", () => {
+      const title = r.crew.name || "새 페르소나";
+      const text = deps.el("span", "v4-persona-text");
+      const name = deps.el("strong", "", title), role = deps.el("small", "", r.crew.role || "");
+      if (r.crew.name) name.setAttribute("data-no-i18n", "");
+      role.setAttribute("data-no-i18n", "");
+      text.append(name, role);
+      const mark = deps.el("span", "v4-persona-mark", [...title.trim()][0] || "?");
+      mark.setAttribute("aria-hidden", "true");
+      row.append(mark, text, deps.el("span", `tag${used ? "" : " dim"}`, used ? `노드 ${used}곳에서 씀` : "안 씀"), deps.icon("caret-right", "icon dim"));
+      row.addEventListener("click", () => {
         personaOpen = isOpen ? null : r.id;
         personaDraft = isOpen ? null : structuredClone(r.crew);
         deps.render(false);
       });
-      row.append(head);
-      if (isOpen) row.append(personaEditor(r.id === "new" ? null : r));
       list.append(row);
+      if (isOpen) side?.(personaEditor(r.id === "new" ? null : r));
     }
-    const add = deps.button("새 페르소나", "dashed", "plus", () => {
+    if (!personaOpen) side?.(deps.el("p", "v4-side-note", "목록을 누르면 펼쳐서 고쳐요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
+    const add = deps.button("새 페르소나", "", "plus", () => {
       personaOpen = "new";
       personaDraft = { type: "persona", name: "", role: "", instructions: "" };
       deps.render(false);
     });
     add.disabled = personaOpen === "new";
-    g.append(list, add);
-    return [g];
+    head?.(add);
+    return [list, deps.el("p", "v4-persona-hint", "목록을 누르면 오른쪽에서 고쳐요.")];
   }
 
   function personaEditor(rec) {
     const d = personaDraft;
-    const box = deps.el("div", "cat-body");
+    const box = deps.el("div", "cat-body v4-persona-edit");
     const name = deps.input(d.name, { maxLength: 60, placeholder: "꼼꼼한 검토자" });
     const role = deps.input(d.role, { maxLength: 200, placeholder: "PR을 보안·데이터 손실 위주로 봐요" });
     const text = deps.input(d.instructions, { tag: "textarea", rows: 8, maxLength: 20000, placeholder: "너는 ○○다. …한다." });
@@ -78,7 +82,10 @@ export function createCrewPersonas(deps) {
       } });
     const textAI = window.ArkismAIChat.field(text, { state: talk.text, title: "지시 다듬기", preset: "You edit the instructions of a persona for AI agents (who it is, tone, must-dos, must-nots). Write short, clear Korean, as a numbered list. No keys or tokens.",
       context: () => JSON.stringify({ name: d.name, role: d.role }) });
-    box.append(ai, deps.field("이름", name), deps.field("한 줄 설명", role, "목록과 노드 선택에서 보여요"), deps.field("지시", textAI, "역할·말투·꼭 지킬 것을 써요. 키나 토큰은 넣지 마세요."));
+    const heading = deps.el("h3", "v4-side-title", rec ? `${rec.crew.name} 고치기` : "새 페르소나");
+    if (rec) heading.setAttribute("data-no-i18n", "");
+    box.append(heading, ai, deps.field("이름", name, "최대 60자"), deps.field("한 줄 설명", role, "목록과 노드 선택에서 보여요 · 최대 200자"),
+      deps.field("지시", textAI, "역할·말투·꼭 지킬 것을 써요. 키나 토큰은 넣지 마세요. · 최대 20,000자"));
     const bar = deps.el("div", "crew-actions");
     const ok = deps.button("저장", "primary", null, async () => {
       if (!d.name.trim()) { window.ArkismNeed(name, "이름을 적어 주세요."); return; }
@@ -91,8 +98,9 @@ export function createCrewPersonas(deps) {
         await deps.reload();
       } catch (e) { deps.notice(deps.errorText(e)); ok.disabled = false; }
     });
-    bar.append(ok, deps.button("취소", "ghost", null, () => { personaOpen = personaDraft = null; deps.render(false); }));
-    if (rec) {
+    bar.append(ok, ai.dock, deps.button("취소", "ghost", null, () => { personaOpen = personaDraft = null; deps.render(false); }));
+    const users = rec ? personaUses(rec.id) : [];
+    if (rec && !users.length) {
       bar.append(deps.button("지우기", "ghost danger", "trash", async () => {
         const users = personaUses(rec.id);
         // A node pointing at a deleted persona would lose its instructions silently.
@@ -106,8 +114,9 @@ export function createCrewPersonas(deps) {
         } catch (e) { deps.notice(deps.errorText(e)); }
       }));
     }
-    bar.append(ai.dock); // AI로 마무리 at the right end of 저장·취소; its purple list stays above the fields
     box.append(bar);
+    // A node pointing at a deleted persona would lose its instructions silently, so a persona in use has no 지우기.
+    if (users.length) box.append(deps.el("p", "v4-callout", `사용 중인 페르소나는 지울 수 없어요. ${[...new Set(users.map((u) => u.crew.name))].join(", ")}의 노드 ${users.length}곳에서 쓰고 있어요.`));
     return box;
   }
 
