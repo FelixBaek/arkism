@@ -59,7 +59,7 @@ export function createCrewEditor(deps) {
       }
       const sent = snap(), at = session;
       const saved = await deps.save(ed.rec, crew);
-      if (at !== session) { await deps.reload(); return true; }
+      if (at !== session) { await deps.reload(); return false; } // saved, but the editor it was for is gone: callers (실행) must not go on
       if (snap() === sent) {
         ed.trigger = undefined;
         ed.dirty = false;
