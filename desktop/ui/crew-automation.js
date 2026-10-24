@@ -375,7 +375,7 @@ window.ArkismAutomation = (h) => {
         const i = h.input(d.goal?.[k] || "", { tag: "textarea", rows: 1, maxLength: 300, placeholder: hint, cls: "auto-goal-input" });
         i.setAttribute("aria-label", label);
         i.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) e.preventDefault(); }); // still one line: it only wraps to show long text
-        i.addEventListener("input", () => { const v = i.value.trim(); if (v) (d.goal ||= {})[k] = v; else if (d.goal) { delete d.goal[k]; if (!Object.keys(d.goal).length) delete d.goal; } touch(); });
+        i.addEventListener("input", () => { if (/[\r\n]/.test(i.value)) i.value = i.value.replace(/\s*[\r\n]+\s*/g, " "); const v = i.value.trim(); if (v) (d.goal ||= {})[k] = v; else if (d.goal) { delete d.goal[k]; if (!Object.keys(d.goal).length) delete d.goal; } touch(); });
         const f = window.ArkismAIChat.field(i, { state: goalRowTalk[k], oneLine: true, title: `${label} 다듬기`, preset: `You write the "${k}" line of an automation's goal (${GOAL_HINT[k]}). Korean, one short line, at most 300 characters.`,
           context: () => JSON.stringify({ workflow: d.name || "", role: d.role || "", goal: d.goal || {}, steps: flat(d.graph).filter((n) => !["start", "end"].includes(n.type)).map((n) => n.title || h.nodeTitle(n)) }) });
         return valueRow(label, f);

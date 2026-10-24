@@ -211,7 +211,7 @@ window.ArkismAIChat = (() => {
     const note = el("div", "ex-ai-note");
     note.setAttribute("role", "status");
     // After a fill the box shows what changed in place (added / removed); a click goes back to editing the new text.
-    const diff = el("div", "ex-ai-diff");
+    const diff = raw(el("div", "ex-ai-diff")); // the user's own words: not run through the translator
     diff.tabIndex = 0;
     diff.title = tr("눌러서 고치기");
     const edit = () => { if (st.note) st.note.diff = false; show(); inp.focus(); };
@@ -251,7 +251,7 @@ window.ArkismAIChat = (() => {
         if (!v || v === cur) st.note = { text: tr("더 고칠 곳이 없어요.") };
         else { write(v); st.note = { text: "", undo: cur, diff: true }; }
       } catch (e) { st.note = { text: e?.message || tr("AI가 답하지 못했어요."), err: true }; }
-      finally { st.busy = false; show(); }
+      finally { st.busy = false; show(); if (st.note?.diff) note.querySelector("button")?.focus(); } // the box is hidden while the diff shows: keep focus on 저장
     }
     star.addEventListener("click", () => void run());
     function show() {

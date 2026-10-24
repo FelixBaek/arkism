@@ -19,3 +19,8 @@ test("a line rewritten from scratch shows as old line then new line", () => {
   const d = window.ArkismTextDiff("앞 줄\n선택 상태를 장식으로만 구분하지 않아요.", "앞 줄\n배포 직전에는 꼭 나한테 물어봐.");
   assert.deepEqual(d, [["=", "앞 줄\n"], ["-", "선택 상태를 장식으로만 구분하지 않아요."], ["+", "배포 직전에는 꼭 나한테 물어봐."]]);
 });
+
+test("a change too big to compare word by word shows the whole old text then the whole new text", () => {
+  const a = "가 ".repeat(3000), b = "나 ".repeat(3000);
+  assert.deepEqual(window.ArkismTextDiff(a, b), [["-", a], ["+", b]]);
+});
