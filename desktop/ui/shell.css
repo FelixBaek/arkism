@@ -60,6 +60,9 @@
 .page-head .head-actions .btn { height: 36px; padding: 0 14px; }
 
 .main > .page-head { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 0; flex: none; }
+/* a head left with only buttons (the tab already names the screen) puts them at the right end of the tab row, not on an empty row of its own */
+.main { position: relative; }
+.main > .page-head:is(.bare, :has(#title.sr-only)):not(:has(> :not(.title-line, .home-back, .home-all))) { position: absolute; top: var(--nc-page-pad); right: var(--nc-page-pad); height: 40px; justify-content: center; }
 .title-line { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .main > .page-head h1 { font: 500 calc(22px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .title-count { font: 400 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
