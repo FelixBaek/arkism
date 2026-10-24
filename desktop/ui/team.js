@@ -254,7 +254,6 @@ window.ArkismTeams = (ctx) => {
     top.append(faces);
     const title = raw(el("strong", /[A-Za-z]/.test(x.name || "") ? "tm-title-en" : "", x.name)); // English names read as the big uppercase title: DESIGN REVIEW.
     c.append(top, title);
-    const credit = coverCredit(cv); if (credit) c.append(credit);
     // hover plate: category + @handle slide up from the bottom edge
     const plate = el("span", "tm-card2-plate");
     plate.append(raw(el("span", "tm-card2-cat", x.category || "")), raw(el("b", "", x.handle ? `@${x.handle}` : "")));
