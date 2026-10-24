@@ -44,9 +44,10 @@ var errReviewerCredential = errors.New("reviewer_credential_required")
 // user and episodic text stays out, and a conflict with one is called by rule.
 var reviewKinds = []any{"lesson", "decision", "procedural"}
 
-// reviewSearch finds related memories of reviewKinds only; tests replace it.
+// reviewSearch finds related memories of reviewKinds only, under the reviewer's credential like the rest of
+// the review (the harness holds no search grant); tests replace it.
 var reviewSearch = func(text string) ([]any, error) {
-	res, err := capPost("/v1/search", map[string]any{"scope": capScope(), "query": head(text, 1000), "modes": []any{"exact", "fts", "vector"},
+	res, err := revPost("/v1/search", map[string]any{"scope": capScope(), "query": head(text, 1000), "modes": []any{"exact", "fts", "vector"},
 		"kinds": reviewKinds, "purpose": "answer", "destination": "internal", "limit": 4, "max_chars": 3000}, 30*time.Second)
 	if err != nil {
 		return nil, err
