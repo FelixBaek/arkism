@@ -16,6 +16,9 @@ test("every expert card opens a window whose tabs all work", async () => {
     h.closeAll(); card.click(); await h.settle();
     const d = h.top();
     assert.ok(d, "expert window opens");
+    // a saved expert can open as its own window (popup-drag.js); a new one has no id to reopen there yet
+    if (card.matches(".ex-card-new")) assert.equal(d.dataset.popout, undefined);
+    else { assert.equal(JSON.parse(d.dataset.popout).event, "arkism:open-expert"); assert.ok(d.dataset.popoutTitle); }
     for (const tab of [...d.querySelectorAll(".crew-popup-tab")]) { tab.click(); await h.settle(); await sweep(h, d); }
   }
   assert.deepEqual(clean(), []);

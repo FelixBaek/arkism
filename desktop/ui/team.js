@@ -354,7 +354,7 @@ window.ArkismTeams = (ctx) => {
     pop.estBox = el("div", "tm-est-box");
     const tabs = [["overview", "개요"], ["test", "테스트"], ["history", "기록"]].map(([key, label]) => ({ key, label, render: (box) => { pop.tab = key; paintTab(pop, box); } }));
     const actions = [pop.estBox];
-    pop.h = popup.open({ title: "", sub: "", tabs, initial: "overview", actions, cls: rec ? "tm-pop" : "tm-pop is-new", popout: rec ? { event: "arkism:open-team", detail: { id } } : null, onClose: () => { clearTimeout(pop.estTimer); clearTimeout(pop.testTimer); S.pop = null; } });
+    pop.h = popup.open({ title: "", sub: "", tabs, initial: "overview", actions, cls: rec ? "tm-pop" : "tm-pop is-new", popout: rec ? { event: "arkism:open-team", detail: { id }, title: rec.crew.name || "" } : null, onClose: () => { clearTimeout(pop.estTimer); clearTimeout(pop.testTimer); S.pop = null; } });
     const dlg = pop.h.dialog;
     // 961:60688: the tabs sit at the head's right under the estimate, as pills
     const side = dlg.querySelector(".crew-popup-actions"), top = el("div", "tm-pop-side-top");
