@@ -209,9 +209,12 @@ window.ArkismPages = (ctx) => {
   // A switch shows what the owner asked for at once; the server applies it within a minute ("적용 대기" until then).
   const agentWanted = (a) => { const q = pendingAgent(a.id); return q ? !!q.enabled : !!a.enabled; };
   function tabAgents() {
-    const g = group("읽어 올 에이전트");
+    const g = group("스킬·대화를 가져올 에이전트", "켜 둔 에이전트의 스킬 폴더와 대화 기록을 읽어 와요.");
     g.classList.add("v4-plain");
-    toHead(button("에이전트 추가", "primary", null, () => openAddAgent()));
+    // 에이전트 추가 sits at the right end of this heading, next to the list it adds to (the only entry point).
+    const gh = el("div", "pg-group-head"), h = g.firstChild;
+    h.replaceWith(gh);
+    gh.append(h, button("에이전트 추가", "primary", null, () => openAddAgent()));
     toSide(sideSec("직접 추가한 에이전트", el("p", "", "서버가 스킬과 대화를 읽어요. 폴더는 에이전트 추가에서 정해요.")),
     sideSec("스킬·MCP 관리", el("p", "", "에이전트가 쓸 스킬과 MCP는 각 화면에서 정해요."),
       actionsRow(button("스킬", "", null, () => go("skills")), button("MCP", "", null, () => go("tools")))));
