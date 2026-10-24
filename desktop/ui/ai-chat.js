@@ -151,7 +151,13 @@ window.ArkismAIChat = (() => {
       if ((opts.quick || []).length) pop.append(quick);
       pop.append(row);
       pop.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); toggle(false); } });
-      requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; if (!wait && pop.isConnected) ask.focus({ preventScroll: true }); });
+      requestAnimationFrame(() => {
+        // Keep the bubble on screen: docked it opens upward, so it may reach the top edge; below a button, the bottom edge.
+        // The chat list (flex: 1, min-height: 0 in CSS) scrolls inside; the head, chips and input row stay in view.
+        if (pop.isConnected) { const r = pop.getBoundingClientRect(); pop.style.maxHeight = `${Math.max(160, Math.floor((docked() ? r.bottom : innerHeight - r.top) - 8))}px`; }
+        log.scrollTop = log.scrollHeight;
+        if (!wait && pop.isConnected) ask.focus({ preventScroll: true });
+      });
       return pop;
     }
     function propRow(p) {

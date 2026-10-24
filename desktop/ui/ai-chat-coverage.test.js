@@ -7,6 +7,7 @@ const doc = createDocument();
 globalThis.window = globalThis;
 globalThis.document = doc;
 globalThis.requestAnimationFrame = (fn) => setImmediate(fn);
+globalThis.innerHeight = 800;
 Element.prototype.select = function () {};
 require("./text-diff.js");
 require("./ai-chat.js");
@@ -131,6 +132,28 @@ test("docked button, a newer copy of the box, scroll to the list", async () => {
   assert.equal(scrolled, 1);
   assert.equal(second.hidden, false);
   assert.equal(st.props[0].applied, false);
+});
+
+test("bubble: capped to the room above when docked, below otherwise, so the first message never leaves the screen", async () => {
+  const rect = Element.prototype.getBoundingClientRect, h = globalThis.innerHeight;
+  Element.prototype.getBoundingClientRect = () => ({ top: 100, bottom: 300, left: 0, right: 100, width: 100, height: 200 });
+  globalThis.innerHeight = 400;
+  try {
+    const below = AI.button({ state: {}, ask: async () => ({}) });
+    mountIn(below);
+    await flush();
+    below.querySelector(".ex-ai-btn").click(); await flush();
+    assert.equal(below.querySelector(".ex-ai-pop").style.maxHeight, "292px"); // 400 − top 100 − 8
+    const up = AI.button({ state: {}, ask: async () => ({}) });
+    mountIn(up);
+    const bar = doc.createElement("div"); doc.body.append(bar); bar.append(up.dock);
+    await flush();
+    up.dock.querySelector(".ex-ai-btn").click(); await flush();
+    assert.equal(up.dock.querySelector(".ex-ai-pop").style.maxHeight, "292px"); // bottom 300 − 8
+    globalThis.innerHeight = 50; // no room: a floor keeps the input usable
+    below.querySelector(".ex-ai-btn").click(); below.querySelector(".ex-ai-btn").click(); await flush();
+    assert.equal(below.querySelector(".ex-ai-pop").style.maxHeight, "160px");
+  } finally { Element.prototype.getBoundingClientRect = rect; globalThis.innerHeight = h; }
 });
 
 test("field: fills, polishes, trims one-line answers, undoes and reports failures", async () => {

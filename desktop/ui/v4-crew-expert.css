@@ -92,7 +92,8 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-ai-pop-head > .icon { width: 14px; height: 14px; color: var(--nc-ai); }
 .ex-ai-pop-head strong { font: 500 calc(14px * var(--fs, 1))/1.4 var(--sans); color: var(--text-1); }
 .ex-ai-pop-head small { flex: 1; min-width: 0; color: var(--text-3); font-size: calc(12px * var(--fs, 1)); }
-.ex-ai-pop .ex-chat { max-height: 260px; overflow: auto; padding: 2px; }
+.ex-ai-pop .ex-chat { flex: 1 1 auto; min-height: 0; max-height: 260px; overflow: auto; padding: 2px; }
+.ex-ai-pop > :not(.ex-chat) { flex: none; } /* ai-chat.js caps the bubble to the viewport; only the chat list shrinks */
 .ex-ai-pop .ex-chat-ai { border-color: color-mix(in srgb, var(--nc-ai) 40%, transparent); background: var(--nc-ai-bg); }
 .ex-ai-quick { display: flex; flex-wrap: wrap; gap: 6px; }
 .ex-ai-chip { height: 26px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; color: var(--text-2); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
