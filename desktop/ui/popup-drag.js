@@ -28,7 +28,10 @@
     } finally {
       going.delete(dlg);
     }
-    if (!label) return false;
+    if (!label) {
+      if (spareOnly) window.ArkismPopoutSpare?.(); // no spare was ready (e.g. it failed to load and closed): rebuild one if gone
+      return false;
+    }
     dlg.close();
     window.ArkismPopoutSpare?.(); // the spare became this window: get the next one ready
     return true;
