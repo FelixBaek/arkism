@@ -164,7 +164,7 @@ export function createCrewEditor(deps) {
     const order = ["전문가", "AI", "저장한 페르소나", "시작", "처리", "흐름", "알림·끝", "그 밖의 연동"];
     for (const [type, n] of Object.entries(deps.NODES)) if (!n.hidden) out.push({ group: n.group, type, title: n.label, sub: n.sub, preset: {} });
     for (const a of deps.items().filter((r) => r.crew.type === "agent")) out.push({ group: "전문가", type: "expert", title: a.crew.name, sub: a.crew.model || "모델 자동", expert: a, preset: { title: a.crew.name, config: { expert: a.id } } });
-    for (const p of deps.personas()) out.push({ group: "저장한 페르소나", type: "ai", title: p.crew.name, sub: "AI 에이전트로 넣어요", persona: true, preset: { title: p.crew.name, config: { persona: p.id } } });
+    for (const p of deps.personas()) out.push({ group: "저장한 페르소나", type: "ai", title: p.crew.name, sub: "AI 에이전트로 넣어요", persona: p, preset: { title: p.crew.name, config: { persona: p.id } } });
     return out.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
   }
 
@@ -207,7 +207,8 @@ export function createCrewEditor(deps) {
       const b = deps.el("button", "g-preset");
       b.type = "button";
       const lead = deps.el("span", "g-icon");
-      lead.append(it.expert ? deps.avatarMark(it.expert.crew) : deps.icon(it.persona ? "users-three" : deps.NODES[it.type].icon));
+      const who = it.expert || it.persona;
+      lead.append(who ? deps.avatarMark(who.crew) : deps.icon(deps.NODES[it.type].icon));
       const t = deps.el("div", "");
       t.append(deps.el("strong", "", it.title), deps.el("small", it.expert ? "dim mono" : "dim", it.sub));
       b.append(lead, t, deps.icon("plus", "icon dim"));
@@ -394,12 +395,17 @@ export function createCrewEditor(deps) {
   }
 
   // 노드를 누르면 오른쪽 패널에 기본 설정이 열리고, 자세히는 노드 설정 팝업을 열어요.
+  // An expert or a saved persona shows its face; every other node the icon of its kind.
+  const nodeMark = (n) => {
+    const who = deps.byId(n.type === "expert" ? n.config?.expert : n.config?.persona);
+    return who ? deps.avatarMark(who.crew) : deps.icon(deps.NODES[n.type]?.icon || "stack");
+  };
+
   function nodePanel(box, n) {
     box.classList.add("node");
     const head = deps.el("div", "g-right-head");
     const lead = deps.el("span", "g-icon");
-    const ex = n.type === "expert" ? deps.byId(n.config?.expert) : null;
-    lead.append(ex ? deps.avatarMark(ex.crew) : deps.icon(deps.NODES[n.type]?.icon || "stack"));
+    lead.append(nodeMark(n));
     const t = deps.el("div", "");
     t.append(deps.el("strong", "g-node-name", deps.nodeTitle(n)), deps.el("small", "dim", deps.nodeLine(n)));
     const close = closeX("노드 설정 닫기", () => selectOnCanvas(null));
@@ -465,8 +471,7 @@ export function createCrewEditor(deps) {
       box.dataset.kind = deps.KIND_OF(n.type);
       const head = deps.el("div", "g-node-head");
       const lead = deps.el("span", "g-icon");
-      const expertRec = n.type === "expert" ? deps.byId(n.config?.expert) : null;
-      lead.append(expertRec ? deps.avatarMark(expertRec.crew) : deps.icon(deps.NODES[n.type]?.icon || "stack"));
+      lead.append(nodeMark(n));
       const t = deps.el("div", "");
       // 테스트 실행 (859:59212–63707): a finished node shows the first line of its result in its subtitle.
       const sub = ed.test && st ? (st.status === "done" && deps.readable(st.output || "").split("\n")[0].slice(0, 28)) || deps.stepState(n, st).split(" · ")[0]

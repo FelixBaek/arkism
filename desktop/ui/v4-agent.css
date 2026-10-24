@@ -187,8 +187,10 @@
 .g-menu .g-tabs { display: none; }
 .g-presets { gap: 0; }
 .g-presets h4 { margin: 8px 8px 2px; color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.45 var(--sans); }
-.g-preset { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 6px 8px; border-radius: 6px; color: var(--nc-text); }
-.g-preset > .g-icon { display: none; }
+.g-preset { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 6px 8px; border-radius: 6px; color: var(--nc-text); }
+.g-preset > .g-icon { width: 20px; height: 20px; border-radius: 5px; overflow: hidden; }
+.g-preset > .g-icon .icon { width: 12px; height: 12px; }
+.g-preset > .g-icon .wf-mark { width: 20px; height: 20px; }
 .g-preset:hover { background: var(--nc-raised); }
 .g-preset strong { font: 400 calc(13px * var(--fs, 1))/1.45 var(--sans); }
 .g-preset small { font: 400 calc(11px * var(--fs, 1))/1.45 var(--sans); color: var(--nc-quiet); }

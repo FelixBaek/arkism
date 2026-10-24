@@ -107,6 +107,24 @@ test("dragging nodes, panning and wheel zoom move the canvas", async () => {
   assert.deepEqual(clean(), []);
 });
 
+test("node picker rows and canvas cards lead with a kind icon or the persona's face", async () => {
+  const h = await openGraph();
+  for (const b of document.querySelectorAll(".g-node")) assert.ok(b.querySelector(".g-node-head > .g-icon > *"), `${b.dataset.id} has a mark`);
+  assert.equal(node("start").querySelector(".g-icon svg").dataset.icon, "play");
+  await h.click(document.querySelector(".g-tools"), "노드 추가");
+  const rows = [...document.querySelectorAll(".g-menu .g-preset")];
+  assert.ok(rows.length > 3);
+  for (const r of rows) assert.ok(r.querySelector(".g-icon > *"), `${r.textContent} has a mark`);
+  const persona = rows.find((r) => r.textContent.includes("꼼꼼이"));
+  assert.ok(persona.querySelector(".g-icon .wf-mark"), "a saved persona shows its face, not a generic icon");
+  const before = new Set([...document.querySelectorAll(".g-node")].map((b) => b.dataset.id));
+  persona.click(); await h.settle();
+  document.querySelector("dialog.node-dialog")?.close(); await h.settle();
+  const added = [...document.querySelectorAll(".g-node")].find((b) => !before.has(b.dataset.id));
+  assert.ok(added.querySelector(".g-icon .wf-mark"), "the persona's node card shows its face too");
+  assert.deepEqual(clean(), []);
+});
+
 test("the wheel scrolls the node picker and zooms only on the canvas", async () => {
   const h = await openGraph();
   await h.click(document.querySelector(".g-tools"), "노드 추가");

@@ -111,7 +111,7 @@ export function createCrewNodes(deps) {
     const draw = () => {
       card.replaceChildren();
       nodeBody(card, n);
-      const ex = n.type === "expert" ? deps.byId(n.config?.expert) : null;
+      const ex = deps.byId(n.type === "expert" ? n.config?.expert : n.config?.persona);
       lead.replaceChildren(ex ? deps.avatarMark(ex.crew) : n.type === "team" ? teamMark(deps.byId(n.config?.team)) : deps.icon(deps.NODES[n.type]?.icon || "stack"));
       lead.classList.toggle("plain", !ex && n.type !== "team");
       h.textContent = deps.nodeTitle(n);
