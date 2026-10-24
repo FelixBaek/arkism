@@ -358,12 +358,16 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   d = await openWindow({ wide: "sessions" }); await app.settle(50);
   await press("새로고침", win(), 50);
   // 대화 원문 opens in this window, a page at a time, and 대화 닫기 folds it
-  const offTx = route("POST", "/v1/usage/sessions/transcript", (a) => ok(JSON.parse(a.body || "{}").after
+  let flaky = true;
+  const offTx = route("POST", "/v1/usage/sessions/transcript", (a) => JSON.parse(a.body || "{}").after && flaky ? (flaky = false, fail(500, "boom")) : ok(JSON.parse(a.body || "{}").after
     ? { authority: "data_only_untrusted", state: "active", items: [{ role: "assistant", text: "두 번째 쪽" }] }
     : { authority: "data_only_untrusted", state: "active", archive_id: "a1", next_cursor: "c1", hidden: { secret_records: 1 }, items: [{ role: "user", text: "원문 첫 줄" }] }));
   await press("대화 원문 보기", win(), 50);
   assert.ok(win(), "the window stays open");
   assert.match(text(win()), /원문 첫 줄/); assert.match(text(win()), /숨긴 메시지 1개/);
+  // a failed second page keeps its cursor, so 메시지 더 보기 can try again
+  await press("메시지 더 보기", win(), 50);
+  assert.match(text(win()), /대화를 불러오지 못했어요/);
   await press("메시지 더 보기", win(), 50);
   assert.match(text(win()), /원문 첫 줄[\s\S]*두 번째 쪽/);
   await press("대화 닫기", win(), 50);
