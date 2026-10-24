@@ -21,6 +21,8 @@
     d.documentElement.classList.add("popout");
     d.head.replaceChildren(...[...document.querySelectorAll('link[rel="stylesheet"], style')].map((n) => inline(d, n) || Object.assign(n.cloneNode(true), n.href ? { href: n.href } : {})));
     d.body.className = document.body.className;
+    // the icon sprite (<symbol id="i-…"> in index.html): a <use href="#i-…"> only finds symbols in its own document
+    for (const svg of new Set([...document.querySelectorAll("svg symbol")].map((s) => s.closest("svg")))) d.body.prepend(svg.cloneNode(true));
   }
   // A stylesheet this window already read goes over as text: a <link> fetched again in the fresh blank window can be
   // dropped while that window is still being set up, which left a popup unstyled in Chrome.
