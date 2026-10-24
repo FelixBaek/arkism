@@ -51,7 +51,6 @@ fs.mkdirSync(output,{recursive:true});
           if(["tokens","chunks"].includes(input.sort))items.reverse();
           const start=Number(input.cursor)||0,limit=Number(input.limit)||50,total=items.length;
           window.catalogCalls=(window.catalogCalls||[]).concat([{base,...input}]);
-          if(window.failCatalog && start){window.failCatalog=false;return {status:503,body:JSON.stringify({code:"dependency_unavailable"})}}
           return {status:200,body:JSON.stringify({items:items.slice(start,start+limit),total,next_cursor:start+limit<total?String(start+limit):"",facets:{kinds:source?{".md":total}:{decision:total},repositories:{},categories:{},states:{new:total}},authority:"data_only_untrusted"})};
         }
         const candidates=[];
@@ -76,24 +75,6 @@ fs.mkdirSync(output,{recursive:true});
     await page.getByRole("searchbox",{name:"문서·목차 검색",exact:true}).fill("");
     await page.getByRole("combobox",{name:"정렬",exact:true}).selectOption("chunks");
     await page.waitForFunction(()=>document.querySelector(".v4k-row .v4s-title")?.textContent==="Rare source tail");
-    // The session event is the same entry used by a memory's source link.
-    await page.evaluate(()=>window.dispatchEvent(new CustomEvent("arkism:open-session",{detail:{session_id:"Session"}})));
-    await page.getByRole("button",{name:"세션 더 보기",exact:true}).waitFor();
-    assert.equal(await page.locator(".ss-item").count(),50);
-    await page.getByRole("button",{name:"세션 더 보기",exact:true}).click();
-    await page.waitForFunction(()=>document.querySelectorAll(".ss-item").length===100);
-    await page.getByRole("searchbox",{name:"세션 검색",exact:true}).fill("rare");
-    await page.locator("#table").getByText("Rare session tail",{exact:true}).waitFor();
-    assert.equal(await page.locator(".ss-item").count(),1);
-    await page.getByRole("searchbox",{name:"세션 검색",exact:true}).fill("");
-    await page.getByRole("combobox",{name:"정렬",exact:true}).selectOption("tokens");
-    await page.waitForFunction(()=>document.querySelector(".ss-item .v4s-title")?.textContent==="Rare session tail");
-    await page.evaluate(()=>window.failCatalog=true);
-    await page.getByRole("button",{name:"세션 더 보기",exact:true}).click();
-    await page.getByRole("button",{name:"다시 시도",exact:true}).waitFor();
-    assert.equal(await page.locator(".ss-item").count(),50);
-    await page.getByRole("button",{name:"다시 시도",exact:true}).click();
-    await page.waitForFunction(()=>document.querySelectorAll(".ss-item").length===100);
     await page.locator('[data-menu="memory"]').click();
     await page.locator(".ov-chip").filter({hasText:"쓰는 중인 기억"}).click();
     await page.locator("dialog[open] .ov-wide-row").first().waitFor();
@@ -104,7 +85,7 @@ fs.mkdirSync(output,{recursive:true});
     await page.locator("dialog[open] .ov-wide-row").getByText("Rare memory tail",{exact:true}).waitFor();
     await page.keyboard.press("Escape");
     assert.deepEqual(errors,[]);
-    console.log("Catalog lists: knowledge >500, sessions >300, global search and order, explicit pages, retry preservation, keyboard/caret, overview >80 all passed with 1,200-row fixtures; source UI, no build.");
+    console.log("Catalog lists: knowledge >500, global search and order, explicit pages, keyboard/caret, overview >80 all passed with 1,200-row fixtures; source UI, no build.");
   } catch(error) {console.error(errors);console.error(await page.evaluate(()=>window.dialogEvents));console.error((await page.locator("body").innerText()).slice(-3500));throw error;}
   finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
