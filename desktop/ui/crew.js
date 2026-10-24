@@ -1182,7 +1182,8 @@ export const createCrew = (ctx) => {
   document.addEventListener("keydown", (e) => {
     if (state.view !== "graph" || crewEditor.ed.run || crewEditor.nodeDlg || typing() || document.querySelector("dialog[open]")) return;
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-    const k = e.key.toLowerCase();
+    // A non-Latin layout (두벌식: ㅋ) types another letter on the Z key: fall back to the physical key there.
+    const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : (e.code || "").replace(/^Key/, "").toLowerCase();
     if (k === "z") { e.preventDefault(); if (e.shiftKey) crewEditor.redo(); else crewEditor.undo(); }
     else if (k === "y" && e.ctrlKey && !e.shiftKey) { e.preventDefault(); crewEditor.redo(); }
   });
