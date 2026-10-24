@@ -67,6 +67,9 @@ test("teams page with cards, Discord badges and the team window tabs", async () 
     await h.settle();
     const d = h.top();
     assert.ok(d, "team window opens");
+    // a saved team can open as its own window (popup-drag.js), titled with its name like the expert and automation windows
+    assert.equal(JSON.parse(d.dataset.popout).event, "arkism:open-team");
+    assert.equal(d.dataset.popoutTitle, h.data.crew.find((r) => r.id === id).crew.name);
     for (const tab of [...d.querySelectorAll(".crew-popup-tab")]) { tab.click(); await h.settle(); await sweep(h, d, 2); }
     for (const x of h.dialogs()) await sweep(h, x, 1);
   }
