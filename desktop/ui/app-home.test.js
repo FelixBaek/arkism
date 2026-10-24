@@ -48,6 +48,10 @@ test("overview: stage windows step through every stage and their lists", async (
   // ‹ › walk the stages in order and wrap around
   await press("다음 단계", d); assert.match(text(win()), /2 \/ 8 단계/);
   await press("이전 단계", win()); await press("이전 단계", win()); assert.match(text(win()), /8 \/ 8 단계/);
+  // 승인 is its own group after 드리밍, in the top bar and the 기억 처리 grid; 승인 대기 is the last step
+  assert.deepEqual([...app.document.querySelectorAll(".ov-group-head span")].map(text), ["저장", "사용", "드리밍", "승인"]);
+  assert.deepEqual([...app.document.querySelectorAll(".ov-grid-sec")].map(text), ["저장", "사용", "드리밍", "승인"]);
+  d = await openWindow({ key: "review" }); assert.match(text(d), /8 \/ 8 단계/);
   // no 다음 단계 card inside a stage window: ‹ › already step through the stages
   d = await openWindow({ key: "review" });
   assert.equal(d.querySelector(".ov-win-next"), null);
