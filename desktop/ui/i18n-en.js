@@ -2970,6 +2970,7 @@ window.ArkismI18nEN = {
   "이력으로 넘길 기억": "Memory moved to history",
   "세션 지우기": "Delete session",
   "세션을 내보냈어요.": "Session exported.",
+  "내보내는 중…": "Exporting…",
   "내보냈어요. 너무 길어 일부 대화는 잘렸어요.": "Exported. Some of the conversation was cut because it was too long.",
   "Markdown으로 내보내기": "Export as Markdown",
   "(지워졌거나 아직 못 읽은 기억)": "(memory deleted or not loaded yet)",

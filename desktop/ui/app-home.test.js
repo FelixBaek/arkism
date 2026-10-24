@@ -440,6 +440,13 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   offExp(); offExp = route("POST", "/v1/usage/sessions/export", () => fail(500, "boom"));
   await press("JSON", d, 50);
   assert.match(text(d), /내보내지 못했어요/); assert.ok(!btn("JSON", d).disabled);
+  // a repaint while the export runs (대화 원문 보기) keeps it busy, and its failure still shows
+  offExp(); let answer; offExp = route("POST", "/v1/usage/sessions/export", () => new Promise((r) => { answer = r; }));
+  btn("Markdown으로 내보내기", d).click(); await app.settle(0, 20);
+  btn("대화 원문 보기", d).click(); await app.settle(0, 20);
+  assert.ok(btn("JSON", d).disabled && btn("Markdown으로 내보내기", d).disabled); assert.match(text(d), /내보내는 중/);
+  answer(fail(500, "late")); await app.settle(30);
+  assert.match(text(d), /내보내지 못했어요/); assert.ok(!btn("JSON", d).disabled);
   offExp(); [URL.createObjectURL, URL.revokeObjectURL] = real;
   // 세션 지우기: denied, failed, then done
   let offDel = route("POST", "/v1/usage/sessions/delete", () => fail(403, "access_denied"));
