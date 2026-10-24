@@ -205,7 +205,11 @@ func TestCaptureAIReviewKeepsUserMemoryTextFromTheModel(t *testing.T) {
 func TestCaptureReviewSearchAsksOnlyReviewKinds(t *testing.T) {
 	capFake(t)
 	var kinds any
-	capPost = func(path string, body any, _ time.Duration) (map[string]any, error) {
+	capPost = func(string, any, time.Duration) (map[string]any, error) {
+		t.Fatal("the review searches under the reviewer's credential, not the harness's")
+		return nil, nil
+	}
+	revPost = func(path string, body any, _ time.Duration) (map[string]any, error) {
 		kinds = field(body, "kinds")
 		return map[string]any{"items": []any{}}, nil
 	}
