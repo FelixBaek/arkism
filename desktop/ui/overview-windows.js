@@ -541,7 +541,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     // 대화 원문 opens here, 30 messages a page, over the same API as the 세션 page
     let tx = null;
     async function loadTx(id, more) {
-      const prev = more && tx?.id === id ? tx : null, mine = tx = { id, items: prev ? prev.items : [], hidden: prev?.hidden || 0, archive: "", next: "", state: "", loading: true, error: "" }; paint();
+      const prev = more && tx?.id === id ? tx : null, mine = tx = { id, items: prev ? prev.items : [], hidden: prev?.hidden || 0, archive: prev?.archive || "", next: prev?.next || "", state: prev?.state || "", loading: true, error: "" }; paint();
       try {
         const r = await request("/v1/usage/sessions/transcript", { method: "POST", body: JSON.stringify({ scope: state.scope, id, limit: 30, ...(prev?.next ? { archive_id: prev.archive, after: prev.next } : {}) }) });
         if (tx !== mine) return;
