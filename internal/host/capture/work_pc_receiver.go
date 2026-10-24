@@ -222,7 +222,7 @@ func receiverReceive(raw []byte) (reply host.Obj, err error) {
 }
 
 // receiverRevision is the current revision of the event's work checkpoint.
-func receiverRevision(scope map[string]any, event map[string]any) (any, error) {
+func receiverRevision(scope, event map[string]any) (any, error) {
 	work, err := capPost("/v1/work-checkpoints/get", host.Obj{{Key: "scope", Value: scope}, {Key: "id", Value: event["work_id"]}}, 3*time.Second)
 	if err != nil {
 		return nil, err
