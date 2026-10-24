@@ -692,7 +692,7 @@ export function startApp() {
       title: () => (state.promptRun ? `프롬프트 실행${(state.data.prompts.find((x) => x.id === state.promptRun)?.image_prompt.engine || "").startsWith("comfyui") ? " · ComfyUI" : ""}` : state.imageTab === "slide" ? "슬라이드 프롬프트" : "이미지 프롬프트"),
       sub: () => (state.promptRun ? "변수 값을 채우고 바로 만들거나, ComfyUI 워크플로우로 보내요." : state.imageTab === "slide" ? "발표·보고용 슬라이드 프롬프트와 만드는 스크립트를 모아 둬요. 카드를 고르면 오른쪽에서 고치고 바로 만들 수 있어요." : "자주 쓰는 이미지 프롬프트를 예시 이미지와 함께 모아 둬요. 모델과 카테고리로 골라 보세요.")
     },
-    tools: { title: () => (state.toolTab === "plugin" ? "플러그인" : "MCP 서버"), sub: () => (state.toolTab === "plugin" ? "플러그인은 스킬 + MCP + 명령을 한 번에 설치하는 묶음이에요." : "에이전트가 쓰는 외부 도구 서버예요. 플러그인은 스킬·MCP를 묶어서 한 번에 설치해요.") }
+    tools: { title: () => (state.toolTab === "plugin" ? "플러그인" : "MCP"), sub: () => (state.toolTab === "plugin" ? "플러그인은 스킬 + MCP + 명령을 한 번에 설치하는 묶음이에요." : "에이전트가 쓰는 외부 도구 서버예요. 플러그인은 스킬·MCP를 묶어서 한 번에 설치해요.") }
   };
   // Everything worth a look, most urgent first; the first three become "지금 할 일".
   // ---------------------------------------------------------------- 할 일: 새 스킬 제안 · 비슷한 스킬 · 안 쓰는 스킬

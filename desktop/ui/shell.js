@@ -31,8 +31,8 @@ window.ArkismShell = (ctx) => {
     ] },
     connect: { label: "TOOLS", tabs: [
       ["skills", "스킬", () => go("skills"), () => state.view === "skills", count("skills")],
-      ["plugin", "플러그인", () => { state.toolTab = "plugin"; go("tools"); }, () => state.view === "tools" && state.toolTab === "plugin"],
-      ["mcp", "MCP", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin"],
+      ["plugin", "플러그인", () => { state.toolTab = "plugin"; go("tools"); }, () => state.view === "tools" && state.toolTab === "plugin", () => String(state.data.tools?.plugins.length ?? "")],
+      ["mcp", "MCP", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin", () => String(state.data.tools?.servers.length ?? "")],
       ["knowledge", "지식", () => go("knowledge"), () => state.view === "knowledge"], // adopt-knowledge (knowledge.js)
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },
@@ -80,7 +80,7 @@ window.ArkismShell = (ctx) => {
       t.setAttribute("role", "tab");
       t.setAttribute("aria-selected", String(active()));
       t.append(window.ArkismI18n.bindMessage(el("span"), "navigation." + key + "." + id));
-      const num = n?.();
+      const num = active() && n?.(); // the count sits only on the open tab, never as a line under the tabs
       if (num) t.append(el("output", "", num));
       t.addEventListener("click", () => { state.menu = key; open(); });
       return t;

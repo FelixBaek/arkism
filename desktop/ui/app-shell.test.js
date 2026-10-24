@@ -24,6 +24,10 @@ test("every menu and area tab draws", async () => {
     for (let i = 0; i < tabs.length; i++) {
       const t = app.$$("#area-tabs .area-tab")[i];
       if (t) await app.click(t, 50);
+      // the tab names the screen: no repeated title or "15개" line under it, and a count only on the open tab
+      const name = app.$("#area-tabs").dataset.active;
+      assert.ok(!app.$$("#area-tabs .area-tab:not(.active) output").length, `${name}: a closed tab shows a count`);
+      if (app.$("#title").textContent === name) assert.equal(app.$("#title-count").textContent, "", `${name}: count line under the tabs`);
     }
   }
   assert.deepEqual(errors, []);
