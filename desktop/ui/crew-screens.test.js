@@ -222,6 +222,22 @@ test("an edit made while a save is pending stays unsaved", async () => {
   assert.deepEqual(clean(), []);
 });
 
+test("a save that returns after leaving the editor does not reopen it", async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const h = await openGraph("wf1", { routes: [["POST", /^\/v1\/crew\/wf1$/, async (m, url, body) => { await gate; return { id: "wf1", revision: 9, crew: body.crew }; }]] });
+  node("ai1").click(); await h.settle();
+  dom.key(document, "Delete"); await h.settle();
+  document.querySelector(".page-head .g-save").click(); await h.settle();
+  h.answer = true;
+  await h.click(document.querySelector(".page-head"), /돌아가기/);
+  assert.equal(h.state.view, "crew");
+  release(); await h.settle();
+  assert.equal(h.state.view, "crew", "the late save leaves the user where they went");
+  assert.ok(!h.notices.some((n) => /저장했어요/.test(n)));
+  assert.deepEqual(clean(), []);
+});
+
 test("inline card edits change cron, model and text values", async () => {
   const h = await boot();
   h.data.crew[0].crew.graph.nodes.push({ id: "sch", type: "schedule", title: "", x: 0, y: 300, config: { cron: "0 9 * * 1-5" } });
