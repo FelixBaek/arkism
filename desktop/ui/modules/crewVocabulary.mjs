@@ -40,16 +40,15 @@ export function createCrewVocabulary(deps) {
     wait: { label: "기다리기", sub: "정한 시간 뒤 이어서", icon: "clock-counter-clockwise", group: "흐름" },
     subflow: { label: "하위 워크플로우", sub: "다른 워크플로우를 노드로", icon: "tree-structure", group: "흐름" },
     notify: { label: "알림 보내기", sub: "텔레그램·슬랙·메일", icon: "paper-plane", group: "알림·끝" },
-    end: { label: "보고하고 끝", sub: "부른 자리에 결과 돌려주기", icon: "flag", group: "알림·끝" },
-    n8n: { label: "n8n으로 보내기", sub: "위 노드로 안 되는 연동", icon: "plug", group: "그 밖의 연동" }
+    end: { label: "보고하고 끝", sub: "부른 자리에 결과 돌려주기", icon: "flag", group: "알림·끝" }
   };
 
   const IS_AI = (t) => t === "ai" || t === "ai_once" || t === "expert";
 
-  const HUMAN_KIND = { 시작: "흐름 노드", 처리: "처리 노드", 흐름: "흐름 노드", "알림·끝": "알림·연동 노드", "그 밖의 연동": "알림·연동 노드", 전문가: "전문가 노드", AI: "AI 노드" };
+  const HUMAN_KIND = { 시작: "흐름 노드", 처리: "처리 노드", 흐름: "흐름 노드", "알림·끝": "알림·연동 노드", 전문가: "전문가 노드", AI: "AI 노드" };
 
   // Port colour of a node card: AI yellow · HTTP blue · 사람 확인 green · the rest grey (Figma 198:2350).
-  const KIND_OF = (t) => (IS_AI(t) || t === "team" ? "ai" : t === "http" || t === "n8n" ? "http" : t === "approval" ? "human" : "plain");
+  const KIND_OF = (t) => (IS_AI(t) || t === "team" ? "ai" : t === "http" ? "http" : t === "approval" ? "human" : "plain");
 
   const MODES = { round_robin: "정해진 순서대로", moderator_picks: "사회자가 고름" };
 
@@ -70,7 +69,6 @@ export function createCrewVocabulary(deps) {
     subflow: [["workflow", "부를 워크플로우", "workflow"], ["task", "넘길 일", "area", "", "{{input}}에 앞 결과가 들어가요"]],
     notify: [["channel", "보내는 곳", "radio", [["telegram", "텔레그램"], ["slack", "슬랙"], ["email", "메일"]]], ["to", "받는 곳 이름", "text", "", "서버 notify.json에 적은 이름"], ["message", "보낼 말", "area"]],
     end: [["message", "보고 형식", "text", "요약 + 링크", "부른 대화나 화면에 이 형식으로 돌려줘요."]],
-    n8n: [["url", "n8n 웹훅 주소", "text", "https://automation.example.com/webhook/…"], ["mode", "결과 받기", "radio", [["sync", "바로 응답 (짧은 일)"], ["async", "끝나면 알려줌 (오래 걸리는 일)"]]], ["timeout", "기다릴 최대 시간", "text", "30m", "오래 걸리는 일은 n8n이 끝나면 결과를 보내 줘요."]],
     expert: [], team: []
   };
 
