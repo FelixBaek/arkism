@@ -13,13 +13,13 @@
 
   function optionsOf(ctl) {
     if (ctl.tagName === "SELECT") {
-      // <optgroup> draws the same header row as data-group (its data-icon: the provider's logo); data-hint/data-tag as below.
+      // <optgroup> draws the same header row as data-group (its .logo element, else data-icon: the provider's logo); data-hint/data-tag as below.
       const rows = [];
       let og = null;
       for (const o of ctl.options) {
         if (o.hidden) continue;
         const g = o.parentElement.tagName === "OPTGROUP" ? o.parentElement : null;
-        if (g && g !== og) rows.push({ head: g.label, icon: g.dataset.icon || g.label, disabled: true });
+        if (g && g !== og) rows.push({ head: g.label, icon: g.dataset.icon || g.label, logo: g.logo, disabled: true });
         og = g;
         rows.push({ value: o.value, label: o.label || o.textContent, hint: o.dataset.hint || "", tag: o.dataset.tag || "", disabled: o.disabled, on: o.selected });
       }
@@ -74,7 +74,7 @@
     const rows = open.items.map((o, i) => {
       if (o.head) {
         const h = document.createElement("div"); h.className = "combo-head"; h.setAttribute("role", "presentation");
-        const m = window.ArkismBrand?.mark(o.icon); // data-group-icon: the provider's logo before its name
+        const m = o.logo ? o.logo.cloneNode(true) : window.ArkismBrand?.mark(o.icon); // the provider's logo before its name
         const t = document.createElement("span"); t.textContent = o.head; // one flex item, so the gap never splits the name
         h.append(...(m ? [m] : []), t);
         return h;

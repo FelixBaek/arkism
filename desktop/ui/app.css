@@ -1007,8 +1007,9 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .combo-opt.off { opacity: .45; cursor: default; }
 .combo-head { padding: 8px 10px 4px; color: var(--nc-quiet); font: 600 calc(11px * var(--fs, 1))/1.3 var(--sans); letter-spacing: .02em; }
 .combo-opt + .combo-head { margin-top: 4px; border-top: 1px solid var(--nc-line); }
-.combo-head:has(.brand-mark) { display: flex; align-items: center; gap: 6px; }
+.combo-head:has(.brand-mark, .agent-tile) { display: flex; align-items: center; gap: 6px; }
 .combo-head .brand-mark { width: 14px; height: 14px; }
+.combo-head .agent-tile { width: 16px; height: 16px; background: none; }
 /* An option with a logo or a right-end tag: logo · name (hint under it) · tag */
 .combo-opt:has(> .brand-mark, > .combo-tag) { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 8px; align-items: center; }
 .combo-opt:has(> .combo-tag):not(:has(> .brand-mark)) { grid-template-columns: minmax(0, 1fr) auto; }

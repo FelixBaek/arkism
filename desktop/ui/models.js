@@ -417,7 +417,7 @@ window.ArkismModels = (ctx) => {
   }
   // AI 도구 기본 모델 (설정 › 에이전트): which model fills prompt fields, polishes text and classifies. Empty = the runner's default.
   // Grouped by provider and saved with it: several providers offer the same model name. Value = "provider|model" (model names have no |).
-  // combo.js draws the optgroups like the workflow model list: the provider's logo and name, then each model with its provider and input kind.
+  // combo.js draws the optgroups like the workflow model list: the provider's logo (the same one as its 모델 설정 chip) and name, then each model with its provider and input kind.
   function assistPicker() {
     const d = doc();
     const sel = el("select", "mp-assist");
@@ -427,7 +427,7 @@ window.ArkismModels = (ctx) => {
     const groups = enabledByProvider();
     const tr = (x) => (window.ArkismI18n ? window.ArkismI18n.translate(x) : x);
     for (const p of groups) {
-      const g = el("optgroup"); g.label = p.name; g.dataset.icon = p.id;
+      const g = el("optgroup"); g.label = p.name; g.logo = logo(p.id, p.name);
       for (const m of p.models) {
         const o = Object.assign(el("option", "", m), { value: `${p.id}|${m}` });
         o.dataset.hint = p.name;
