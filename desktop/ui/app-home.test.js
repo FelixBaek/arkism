@@ -357,8 +357,22 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   if (cand) { cand.click(); await app.settle(50); assert.match(text(win()), /승인 대기/); }
   d = await openWindow({ wide: "sessions" }); await app.settle(50);
   await press("새로고침", win(), 50);
+  // 대화 원문 opens in this window, a page at a time, and 대화 닫기 folds it
+  const offTx = route("POST", "/v1/usage/sessions/transcript", (a) => ok(JSON.parse(a.body || "{}").after
+    ? { authority: "data_only_untrusted", state: "active", items: [{ role: "assistant", text: "두 번째 쪽" }] }
+    : { authority: "data_only_untrusted", state: "active", archive_id: "a1", next_cursor: "c1", hidden: { secret_records: 1 }, items: [{ role: "user", text: "원문 첫 줄" }] }));
   await press("대화 원문 보기", win(), 50);
-  assert.equal(win(), null);
+  assert.ok(win(), "the window stays open");
+  assert.match(text(win()), /원문 첫 줄/); assert.match(text(win()), /숨긴 메시지 1개/);
+  await press("메시지 더 보기", win(), 50);
+  assert.match(text(win()), /원문 첫 줄[\s\S]*두 번째 쪽/);
+  await press("대화 닫기", win(), 50);
+  assert.doesNotMatch(text(win()), /원문 첫 줄/);
+  offTx();
+  const offTx404 = route("POST", "/v1/usage/sessions/transcript", () => fail(404, "not_found"));
+  await press("대화 원문 보기", win(), 50);
+  assert.match(text(win()), /아직 대화 보기를 지원하지 않아요/);
+  offTx404();
   // a failed page offers 다시 시도
   off();
   const offBad = route("GET", "/v1/usage/sessions", () => fail(500, "boom"));

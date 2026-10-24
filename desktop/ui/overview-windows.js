@@ -538,6 +538,29 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const search = el("input", "ov-wide-search"); search.placeholder = "세션 찾기"; search.setAttribute("aria-label", "세션 찾기");
     const bar = el("div", "ov-wide-bar"); bar.append(search, chipHost, button("새로고침", "ghost small", null, async () => { await env.reloadSessions(); wideSessions(); }));
     const agents = [...new Set(items.map((x) => x.agent).filter(Boolean))];
+    // 대화 원문 opens here, 30 messages a page, over the same API as the 세션 page
+    let tx = null;
+    async function loadTx(id, more) {
+      const prev = more && tx?.id === id ? tx : null, mine = tx = { id, items: prev ? prev.items : [], hidden: prev?.hidden || 0, archive: "", next: "", state: "", loading: true, error: "" }; paint();
+      try {
+        const r = await request("/v1/usage/sessions/transcript", { method: "POST", body: JSON.stringify({ scope: state.scope, id, limit: 30, ...(prev?.next ? { archive_id: prev.archive, after: prev.next } : {}) }) });
+        if (tx !== mine) return;
+        if (r?.authority !== "data_only_untrusted" || !Array.isArray(r.items)) throw new Error("invalid_response");
+        Object.assign(mine, { items: [...mine.items, ...r.items], hidden: mine.hidden + (r.hidden?.secret_records || 0), archive: r.archive_id || "", next: r.next_cursor || "", state: r.state });
+      } catch (e) { if (tx !== mine) return; mine.error = /HTTP 404|not_found/.test(e?.message || "") && !mine.items.length ? "이 서버는 아직 대화 보기를 지원하지 않아요." : `대화를 불러오지 못했어요 (${e.message}).`; }
+      mine.loading = false; if (d.isConnected) paint();
+    }
+    function txSection() {
+      const ts = el("div", "ov-detail-sec"); ts.append(el("small", "", "대화 원문"));
+      const note = tx.error || (tx.loading ? "불러오는 중…" : { none: "이 세션은 보관된 대화가 없어요. 대화 원문은 수집된 뒤 7일 동안만 보관돼요.", expired: "보관된 대화가 만료됐거나 지워졌어요.", unsupported: "이 형식의 대화는 아직 볼 수 없어요." }[tx.state] || (tx.items.length ? "" : "보여 줄 대화가 없어요."));
+      const msgs = el("div", "ss-msgs");
+      for (const m of tx.items) { const b = el("div", `ss-msg ${m.role === "user" ? "user" : "assistant"}`), p = el("p", "", m.text); p.dataset.noI18n = ""; b.append(el("b", "", m.role === "user" ? "사용자" : "에이전트"), p); if (m.truncated) b.append(el("small", "ss-note", "길어서 앞부분만 보여요.")); msgs.append(b); }
+      if (tx.items.length) ts.append(msgs);
+      if (tx.hidden) ts.append(el("p", "ss-note", `비밀값이 들어 있어 숨긴 메시지 ${tx.hidden}개`));
+      if (note) ts.append(el("p", "ov-win-empty", note));
+      if (tx.next && !tx.loading) ts.append(button("메시지 더 보기", "ghost small", null, () => loadTx(tx.id, true)));
+      return ts;
+    }
     const remote = pagedWindow(d, "/v1/usage/sessions", () => ({ range: "7d", sort: "recent", q, source: agent === "all" ? "" : agent }), paint, true);
     function paint() {
       chipHost.replaceChildren(chipBar([["all", "전체", items.length], ...agents.map((a) => [a, a, items.filter((x) => x.agent === a).length])], agent, (k) => { agent = k; paint(); }));
@@ -565,12 +588,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (!ss.cands.length && !ss.approved.length) cs.append(el("p", "ov-win-empty", "이 세션에서 나온 후보가 없어요."));
       detail.append(cs);
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
-      act.append(button("대화 원문 보기", "primary small", null, () => { dlg.close(); go("sessions"); }),
+      act.append(tx?.id === cur.id ? button("대화 닫기", "small", null, () => { tx = null; paint(); }) : button("대화 원문 보기", "primary small", null, () => loadTx(cur.id)),
         button("세션 지우기", "small", null, () => askConfirm("이 세션을 지울까요?", "세션과 보관된 대화가 지워지고 되돌릴 수 없어요. 에이전트의 원래 파일은 그대로 남고, 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.", async () => {
           try { await request("/v1/usage/sessions/delete", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: [cur.id] }) }); sel = null; await env.reloadSessions(); wideSessions(); }
           catch (e) { st.textContent = /access_denied/.test(e?.message || "") ? "지울 권한이 없어요." : `지우지 못했어요: ${e.message}`; }
         })));
-      detail.append(st, act);
+      detail.append(st, act); if (tx?.id === cur.id) detail.append(txSection());
     }
     search.addEventListener("input", () => { q = search.value.trim(); paint(); });
     twoPane(d, bar, list, detail); d.lastChild.querySelector(".ov-wide-left").append(el("div", "ov-wide-foot-note", `최근 7일 ${num(items.length)}건`)); paint();
