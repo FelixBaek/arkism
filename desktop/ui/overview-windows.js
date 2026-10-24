@@ -23,8 +23,25 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const D = () => state.data;
   const tr = (x) => window.ArkismI18n?.translate(x) || x;
   const usage = (id) => state.usage?.get(id);
-  const memOf = (id) => D().memories.find((m) => m.id === id) || ctx.maintenanceRecords?.get(id); // proposals point past the loaded first page too
-  const memText = (id) => memOf(id)?.text || "(지워졌거나 아직 못 읽은 기억)";
+  // read: memories outside the loaded first page (most-used ones are often older), fetched once each; false = gone or unreadable
+  const read = new Map();
+  let redraw = null, batch = [];
+  const memOf = (id) => D().memories.find((m) => m.id === id) || ctx.maintenanceRecords?.get(id) || read.get(id) || undefined; // proposals point past the loaded first page too
+  function readMemory(id) {
+    const g = state.connection.generation, keep = (v) => { if (g === state.connection.generation) read.set(id, v); };
+    read.set(id, null);
+    batch.push(request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => keep(r?.text && (r.status ?? "active") === "active" ? r : false), () => keep(false)));
+    if (batch.length > 1) return;
+    queueMicrotask(() => { // one redraw per drawing pass, after every name it asked for has come back
+      const wait = batch, d = dlg, again = redraw; batch = [];
+      Promise.allSettled(wait).then(() => { if (d?.isConnected && dlg === d && redraw === again) again?.(); });
+    });
+  }
+  const memText = (id) => {
+    const m = memOf(id); if (m) return m.text;
+    if (id && !read.has(id)) readMemory(id);
+    return read.get(id) === null ? "불러오는 중…" : "(지워졌거나 아직 못 읽은 기억)";
+  };
   const tag = (m, p) => (m.tags || []).find((t) => t.startsWith(p))?.slice(p.length) || "";
   const clip = (t, n = 80) => (t.length > n ? `${t.slice(0, n)}…` : t);
   const waitFor = (v) => { const d = Math.floor((Date.now() - time(v)) / (24 * HOUR)); return d >= 1 ? `${d}일 대기` : ago(v).replace(/ 전$/, " 대기"); }; // ago() turns old ones into a date
@@ -47,7 +64,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     dlg?.close();
     const d = el("dialog", `crew-dialog ov-win ${cls || ""}`), rail = document.querySelector(".sidebar"), shut = () => d.close();
     d.addEventListener("close", () => { d.remove(); rail?.removeEventListener("click", shut); if (dlg === d) dlg = null; });
-    document.body.append(d); dlg = d;
+    document.body.append(d); dlg = d; redraw = null;
     if (!beside) { d.showModal(); return d; }
     d.show(); rail?.addEventListener("click", shut);
     d.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !ev.defaultPrevented) { ev.preventDefault(); d.close(); } });
@@ -195,6 +212,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const spec = SPEC[key];
     const d = modal(`ov-stage-win ov-t-${s.badge?.[1] || "n"} ov-win-${key}${expanded ? " ov-win-expanded" : ""}`); // 모두 보기: the window becomes the list
     recipe(d, { key, expanded });
+    redraw = () => open(key, expanded);
     const nav = (n) => () => open(list[(i + n + list.length) % list.length].key);
     const head = el("div", "ov-win-head"), title = el("div", "ov-win-title");
     title.append(el("span", "ov-win-crumb", "기억 처리"), el("span", "ov-win-crumb", "›"), el("i", "ov-dot"), el("h2", "", LABEL[key] || s.label));
@@ -562,6 +580,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const known = (v) => (state.usageDone ? v : "—"); // an unread /v1/memory_usage is not 0 recalls (A2)
     const d = usageWin = shell("사용량", known(`7일 ${num(recalls.reduce((a, [, u]) => a + (u.d7 || 0), 0))}회`), "어떤 기억이 어디에 쓰였는지 보여요", () => open("recall"));
     recipe(d, { wide: "usage", args: [] });
+    redraw = wideUsage;
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
     const tiles = el("div", "ov-win-tiles ov-win-tiles-4"); const rate = w?.injections ? Math.round((w.used / w.injections) * 100) : null;
     for (const [v, l] of [[known(`${num(recalls.reduce((a, [, u]) => a + (u.d7 || 0), 0))}회`), "7일 불러온 횟수"], [rate === null ? "—" : `${rate}%`, "실제로 쓰임"], [`${num(items.length)}건`, "7일 세션"], [known(`${num(recalls.filter(([, u]) => u.d7 > 0).length)}개`), "불러온 기억"]]) { const t = el("div", "ov-win-tile"); t.append(el("strong", "", v), el("span", "", l)); tiles.append(t); }
@@ -709,5 +728,5 @@ window.ArkismOverviewWindows = (ctx, env) => {
     left.append(bar, canvas); canvas.append(legend, empty); paint();
   }
 
-  return { open, wide, reset() { dlg?.close(); }, usageChanged() { if (usageWin && usageWin === dlg) wideUsage(); } };
+  return { open, wide, reset() { dlg?.close(); read.clear(); }, usageChanged() { if (usageWin && usageWin === dlg) wideUsage(); } };
 };

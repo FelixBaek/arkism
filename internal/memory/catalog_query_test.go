@@ -256,3 +256,31 @@ func TestCatalogBadCursorRefusedBeforeScan(t *testing.T) {
 		t.Fatal(e, "memory list reads:", counter.lists)
 	}
 }
+
+// slowUsageRepo stands in for a usage query that runs until the request deadline.
+type slowUsageRepo struct{ *fakeRepo }
+
+func (r slowUsageRepo) MemoryUsageWindow(ctx context.Context, _ Scope, _, _ time.Time) ([]MemoryUsageCount, error) {
+	<-ctx.Done()
+	return nil, ErrUnavailable
+}
+
+func TestCatalogUsedSortDoesNotWaitForUsageCounts(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Embedder = nil
+	f.activeMemory("first", "fixture")
+	f.activeMemory("second", "fixture")
+	f.svc.Repo = slowUsageRepo{f.repo}
+	budget := catalogUsageBudget
+	catalogUsageBudget = 20 * time.Millisecond
+	t.Cleanup(func() { catalogUsageBudget = budget })
+	page, e := f.svc.QueryMemoryCatalog(testCtx, f.human, CatalogQueryInput{Scope: scopeA, Sort: "used"}, false)
+	if e != nil || page.Total != 2 || len(page.Items) != 2 {
+		t.Fatal("used sort should list without usage counts:", page.Total, e)
+	}
+	short, cancel := context.WithTimeout(testCtx, 50*time.Millisecond)
+	defer cancel()
+	if _, e = f.svc.QueryMemoryCatalog(short, f.human, CatalogQueryInput{Scope: scopeA, State: "idle"}, false); e == nil {
+		t.Fatal("idle needs usage counts and must not guess without them")
+	}
+}

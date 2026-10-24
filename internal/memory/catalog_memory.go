@@ -119,7 +119,7 @@ func (s *Service) memoryCatalogMetadata(ctx context.Context, token string, in Ca
 	usage := map[string]int{}
 	var tools *AgentTools
 	if in.Sort == "used" || in.State == "idle" {
-		page, e := s.MemoryUsageSummary(ctx, token, in.Scope)
+		page, e := s.catalogUsage(ctx, token, in)
 		if e != nil {
 			return nil, nil, e
 		}
@@ -174,4 +174,23 @@ func memoryCatalogCategory(row Record) string {
 		return "confusing"
 	}
 	return "new"
+}
+
+// catalogUsageBudget bounds how long usage counts may hold up a list that only sorts by them.
+var catalogUsageBudget = 3 * time.Second
+
+// catalogUsage reads usage counts for the catalog. "idle" decides membership by usage, so it must fail
+// with them; "used" only orders rows, so a slow or refused summary falls back to newest first instead of
+// leaving the whole list loading until the request deadline (#298: memory_usage ran into the 30 s limit).
+func (s *Service) catalogUsage(ctx context.Context, token string, in CatalogQueryInput) (UsageSummaryPage, error) {
+	if in.State == "idle" {
+		return s.MemoryUsageSummary(ctx, token, in.Scope)
+	}
+	short, cancel := context.WithTimeout(ctx, catalogUsageBudget)
+	defer cancel()
+	page, e := s.MemoryUsageSummary(short, token, in.Scope)
+	if e != nil && ctx.Err() == nil && !catalogActorChanged(ctx) {
+		return UsageSummaryPage{}, nil
+	}
+	return page, e
 }
