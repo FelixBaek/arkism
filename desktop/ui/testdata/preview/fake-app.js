@@ -5,6 +5,9 @@ if (!window.__TAURI__) {
   try { if (!localStorage.getItem("arkism.look")) localStorage.setItem("arkism.look", JSON.stringify({ theme: "dark", lang: "ko" })); } catch {}
   const home = "C:\\Users\\you\\AppData\\Local\\dev.arkism.desktop\\runtime";
   window.__arkismLocation = { path: home, next: home, default: home, default_has_data: false };
+  // 새 창으로 needs the app's own window (popout.rs); a browser popup would open unstyled, so the preview keeps popups inside.
+  const open = window.open.bind(window);
+  window.open = (url, ...rest) => (String(url).startsWith("about:blank#popout-") ? null : open(url, ...rest));
   window.__TAURI__ = { core: { invoke: async (cmd, a = {}) => {
     if (cmd === "app_defaults") return { local: true };
     if (cmd === "local_start") { window.__arkismStarted = true; return { server: origin, token: "preview" }; }

@@ -377,6 +377,8 @@ export function startApp() {
     $("#status-dot").className = `dot ${mode}`;
     $("#status-dot").dataset.mode = mode;
     $("#status-text").textContent = text;
+    // all well: the rows below already show it in colour, so the summary line only speaks up for a problem
+    $("#status-text").parentElement.hidden = mode === "ready";
   }
   function dbLabel() {
     if (state.ready === null) return "확인 중";
@@ -445,7 +447,6 @@ export function startApp() {
     badge.classList.remove("ok", "warn", "bad"); badge.classList.add(level);
     $("#status-badge").textContent = issues ? `주의 ${issues}` : "자세히";
     const card = $("#status-card");
-    card.querySelector(".status-summary").dataset.issues = issues ? `주의 ${issues}` : "";
     $("#status-list").replaceChildren(...items.map(([ic, label, value, ok]) => {
       const li = el("li", ok ? "" : "warn");
       li.append(icon(ic), el("span", "", label), raw(el("output", "", value)), el("i", `dot ${ok ? "ready" : "error"}`));
