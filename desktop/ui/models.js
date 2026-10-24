@@ -19,7 +19,15 @@ window.ArkismModels = (ctx) => {
     ["zai", "Z.ai", "sym:a-zcode", "https://z.ai/manage-apikey/apikey-list"]
   ];
   const known = (id) => KNOWN.find(([k]) => k === id);
-  const logo = (id, name) => (known(id) ? agentLogo(known(id)[2], name) : (() => { const t = el("span", "agent-tile mono-logo"); t.append(icon(id === "xai" ? "x" : "stack")); return t; })());
+  // Every suffix of a key's base URL host (api.deepseek.com → deepseek.com), for a brand mark of a hand-added provider.
+  const hosts = (u) => { try { const h = new URL(u).hostname.split("."); return h.map((_, i) => h.slice(i).join(".")); } catch { return []; } };
+  // The provider's LobeHub mark (brand.js) by id, name or key base URL; else the KNOWN logo; else the generic stack.
+  const logo = (p, name = p.name) => {
+    const m = [p.id, p.name, ...(p.keys || []).flatMap((k) => hosts(k.base_url))].map((n) => window.ArkismBrand?.mark(n)).find(Boolean);
+    if (m) { const t = el("span", "agent-tile"); t.title = name; t.append(m); return t; }
+    if (known(p.id)) return agentLogo(known(p.id)[2], name);
+    const t = el("span", "agent-tile mono-logo"); t.append(icon(p.id === "xai" ? "x" : "stack")); return t;
+  };
   let selected = "openai";
   const filters = {}; // 모델 찾기 text per provider
   let typing = null; // the provider whose filter had focus before a redraw
@@ -49,7 +57,7 @@ window.ArkismModels = (ctx) => {
   // Models workflow AI nodes may pick: every listed model that is on.
   const enabledModels = () => providers().flatMap((p) => modelsOf(p).filter((m) => enabled(p.id, m)));
   // The same, per provider ({name, models}), for pickers that show where a model comes from.
-  const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
+  const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, keys: p.keys, models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
 
   const ERR = {
     access_denied: "이 계정은 모델 설정을 바꿀 수 없어요.",
@@ -248,7 +256,7 @@ window.ArkismModels = (ctx) => {
   function accountBlock(p, a, first) {
     const box = el("div", "mp-account");
     const head = el("div", "mp-account-head");
-    head.append(logo(p.id, a.label), el("strong", "", CLI_NAMES[a.cli] || a.label), statusTag(a.status));
+    head.append(logo(p, a.label), el("strong", "", CLI_NAMES[a.cli] || a.label), statusTag(a.status));
     box.append(head);
     // 이름: the owner's own name for this account (empty = the default name).
     const nameRow = el("div", "mp-name-row");
@@ -415,7 +423,7 @@ window.ArkismModels = (ctx) => {
     const groups = enabledByProvider();
     const tr = (x) => (window.ArkismI18n ? window.ArkismI18n.translate(x) : x);
     for (const p of groups) {
-      const g = el("optgroup"); g.label = p.name; g.logo = logo(p.id, p.name);
+      const g = el("optgroup"); g.label = p.name; g.logo = logo(p);
       for (const m of p.models) {
         const o = Object.assign(el("option", "", m), { value: `${p.id}|${m}` });
         o.dataset.hint = p.name;
@@ -463,7 +471,7 @@ window.ArkismModels = (ctx) => {
       const warn = (p.accounts || []).some((a) => a.status !== "connected");
       const ready = (p.accounts || []).some((a) => a.status === "connected") || (p.keys || []).length;
       const kindText = warn ? "확인" : !ready ? "대기" : p.kind === "subscription" ? "구독" : "API";
-      b.append(logo(p.id, p.name), el("span", "", p.name), el("small", warn ? "warn" : "", kindText));
+      b.append(logo(p), el("span", "", p.name), el("small", warn ? "warn" : "", kindText));
       b.addEventListener("click", () => { selected = p.id; render(false); });
       chips.append(b);
     }
@@ -482,7 +490,7 @@ window.ArkismModels = (ctx) => {
     form.method = "dialog";
     const head = el("div", "dialog-head");
     const ht = el("div", "mp-head");
-    ht.append(logo(p.id, p.name), el("h2", "", `${p.name} API 키 추가`));
+    ht.append(logo(p), el("h2", "", `${p.name} API 키 추가`));
     const close = el("button", "icon-btn plain");
     close.value = "cancel";
     close.setAttribute("aria-label", "닫기");

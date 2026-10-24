@@ -18,3 +18,12 @@ test("auto and empty have no kind", () => {
   assert.equal(kind("auto"), "");
   assert.equal(kind(""), "");
 });
+
+test("provider names and base URL hosts find their LobeHub mark; unknown ones find none", () => {
+  const document = { createElement: (tag) => ({ tag, style: { setProperty(k, v) { this[k] = v; } }, setAttribute() {} }) };
+  const w = {};
+  vm.runInNewContext(fs.readFileSync(require("node:path").join(__dirname, "brand.js"), "utf8"), { window: w, document, String });
+  const file = (n) => { const m = w.ArkismBrand.mark(n); return m && (m.src || m.style["--brand"]); };
+  for (const [n, f] of [["NousPortal", "nousresearch"], ["opencode", "opencode"], ["QWEN", "qwen-color"], ["Deepseek", "deepseek-color"], ["deepseek.com", "deepseek-color"], ["Z.ai", "zai"]]) assert.match(file(n), new RegExp(`img/brand/${f}\\.svg`), n);
+  assert.equal(w.ArkismBrand.mark("custom-abc"), null);
+});
