@@ -2,13 +2,17 @@
 
 ## Metrics with visible limits
 
-Go, Rust and JavaScript `S3776` cognitive-complexity findings are no longer
-suppressed by language-wide exceptions. Sonar coverage remains excluded because
+Rust and JavaScript `S3776` cognitive-complexity findings are no longer
+suppressed by language-wide exceptions. Go `S3776` stays suppressed by the
+`gocx` exception until a confirming analysis shows the existing Go debt is no
+longer new code. Sonar coverage remains excluded because
 coverage has its own explicit gate; a zero-smell result must not be presented
 as proof of low complexity or complete testing. Live Sonar results require a
 new analysis and are not established by changing this configuration. Review the
 new-code definition in SonarCloud itself; the app version label in the workflow
-does not configure that definition or make a fixed date advance automatically.
+does not configure that definition. With `Previous version`, a changed
+`sonar.projectVersion` starts a new period; a fixed date or other definition
+needs its own SonarCloud setting change.
 
 `go run ./tools/complexity --report /tmp/go-complexity.json` reports cyclomatic
 complexity for production Go declarations and closures. It is **not** Sonar's
