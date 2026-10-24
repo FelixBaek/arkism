@@ -152,6 +152,12 @@ test("undo and redo step through canvas edits; Ctrl+Z inside a field stays with 
   assert.equal(undoB().getAttribute("aria-label"), "되돌리기 (Ctrl+Z)");
   assert.ok(undoB().disabled && redoB().disabled, "nothing to undo on open");
   const n0 = document.querySelectorAll(".g-node").length;
+  const saveB = () => document.querySelector(".page-head .g-save");
+  // a node window cancelled on a clean workflow leaves it clean
+  node("once").click(); await h.settle();
+  await h.click(document.querySelector(".g-right"), "자세히");
+  await h.click(document.querySelector("dialog.node-dialog"), "취소");
+  assert.ok(saveB().disabled, "cancelling marks nothing unsaved");
   node("ai1").click(); await h.settle();
   dom.key(document, "Delete"); await h.settle();
   assert.equal(document.querySelectorAll(".g-node").length, n0 - 1);
@@ -159,11 +165,18 @@ test("undo and redo step through canvas edits; Ctrl+Z inside a field stays with 
   undoB().click(); await h.settle();
   assert.ok(node("ai1"), "undo brings the node back");
   assert.ok(undoB().disabled && !redoB().disabled);
+  assert.ok(saveB().disabled, "back at the saved state there is nothing to save");
   dom.key(document, "Z", { ctrlKey: true, shiftKey: true }); await h.settle();
   assert.equal(node("ai1"), null, "redo removes it again");
   dom.key(document, "z", { metaKey: true }); await h.settle();
   assert.ok(node("ai1"));
   dom.key(document, "y", { ctrlKey: true }); await h.settle();
+  assert.equal(node("ai1"), null);
+  assert.ok(!saveB().disabled);
+  // 두벌식: the Z key types ㅋ, so the physical key decides
+  dom.key(document, "ㅋ", { ctrlKey: true, code: "KeyZ" }); await h.settle();
+  assert.ok(node("ai1"));
+  dom.key(document, "ㅛ", { ctrlKey: true, code: "KeyY" }); await h.settle();
   assert.equal(node("ai1"), null);
   // focus inside a text field: Ctrl+Z is the field's own undo, the graph stays
   const field = document.createElement("input");
@@ -183,6 +196,10 @@ test("undo and redo step through canvas edits; Ctrl+Z inside a field stays with 
   assert.ok(node("ai1"), "the step before the window is the next undo");
   assert.ok(undoB().disabled);
   assert.doesNotMatch(document.querySelector(".g-canvas").textContent, /취소될 이름/);
+  // a save starts the history over: older steps cannot reach back past it
+  dom.key(document, "y", { ctrlKey: true }); await h.settle();
+  saveB().click(); await h.settle();
+  assert.ok(saveB().disabled && undoB().disabled && redoB().disabled);
   assert.deepEqual(clean(), []);
 });
 

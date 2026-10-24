@@ -15,7 +15,7 @@ export function createCrewEditor(deps) {
     Object.assign(ed, { sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false,
       graphMode: !!opts.graphMode, review: !!opts.review, linking: null, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, reviewAI: null, run: opts.run || null, test: null, trigger: undefined, runList: false });
     if (opts.select && ed.graph.nodes.some((n) => n.id === opts.select)) ed.sel = opts.select;
-    Object.assign(hist, { past: [], future: [], base: snap(), at: 0 });
+    Object.assign(hist, { past: [], future: [], base: snap(), saved: snap(), at: 0 });
     // The newest run of this workflow: each selected node's bottom row shows how that node did there.
     ed.last = null;
     if (!ed.run) deps.request(`/v1/crew/runs?${deps.query({ crew_id: rec.id, limit: 1 })}`).then((r) => {
@@ -57,7 +57,9 @@ export function createCrewEditor(deps) {
       const saved = await deps.save(ed.rec, crew);
       ed.trigger = undefined;
       ed.dirty = false;
-      hist.base = snap();
+      // Older steps hold trigger drafts relative to the trigger just saved, so undo starts over from here.
+      const now = snap();
+      Object.assign(hist, { past: [], future: [], base: now, saved: now, at: 0 });
       await deps.reload();
       ed.rec = deps.byId(saved.id) || saved;
       deps.state.view = "graph";
@@ -76,6 +78,9 @@ export function createCrewEditor(deps) {
     const save = document.querySelector(".page-head .g-save"), run = document.querySelector(".page-head .g-trial");
     if (save) save.disabled = false;
     if (run) { run.disabled = true; run.title = "저장한 뒤에 실행할 수 있어요"; }
+    historyButtons();
+  };
+  const historyButtons = () => {
     const undoB = document.querySelector(".g-tools .g-undo"), redoB = document.querySelector(".g-tools .g-redo");
     if (undoB) undoB.disabled = !hist.past.length;
     if (redoB) redoB.disabled = !hist.future.length;
@@ -83,7 +88,7 @@ export function createCrewEditor(deps) {
 
   // Undo history: every canvas edit ends in touch(), so it snapshots the draft there.
   // base is the state after the last recorded edit; edits within 500ms of the previous one (typing, a drag) join its step.
-  const hist = { past: [], future: [], base: "", at: 0 };
+  const hist = { past: [], future: [], base: "", saved: "", at: 0 };
   const snap = () => JSON.stringify({ graph: ed.graph, trigger: ed.trigger ?? null });
 
   // Edits keep the AI suggestions: applying one must not wipe the others (each re-checks with canApply).
@@ -107,11 +112,12 @@ export function createCrewEditor(deps) {
     if (ed.sel && !ed.graph.nodes.some((n) => n.id === ed.sel)) ed.sel = null;
     if (ed.selEdge !== null && !ed.graph.edges[ed.selEdge]) ed.selEdge = null;
     ed.linking = null;
-    markDirty();
+    // Stepping back to what was saved leaves nothing to save.
+    if (hist.base === hist.saved) { ed.dirty = false; historyButtons(); } else markDirty();
     deps.render(false);
   }
   // A cancelled node window puts the draft back as it was, so its edits leave the history too.
-  const keepHistory = () => { const h = { past: [...hist.past], future: [...hist.future], base: hist.base }; return () => { Object.assign(hist, h, { at: 0 }); markDirty(); }; };
+  const keepHistory = () => { const h = { past: [...hist.past], future: [...hist.future], base: hist.base }; return () => { Object.assign(hist, h, { at: 0 }); historyButtons(); }; };
   const undo = () => step(hist.past, hist.future);
   const redo = () => step(hist.future, hist.past);
 
@@ -397,7 +403,7 @@ export function createCrewEditor(deps) {
   // 노드를 누르면 오른쪽 패널에 기본 설정이 열리고, 자세히는 노드 설정 팝업을 열어요.
   // An expert or a saved persona shows its face; every other node the icon of its kind.
   const nodeMark = (n) => {
-    const who = deps.byId(n.type === "expert" ? n.config?.expert : n.config?.persona);
+    const who = deps.byId(n.type === "expert" ? n.config?.expert : n.type === "ai" ? n.config?.persona : null);
     return who ? deps.avatarMark(who.crew) : deps.icon(deps.NODES[n.type]?.icon || "stack");
   };
 
