@@ -268,8 +268,12 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   const shown = srv.notes.length; btn().click(); await settle(400);
   assert.equal(srv.notes.length, shown + 1, "the waiting refresh is followed");
   assert.match(srv.notes.at(-1), /서버 실행기가 아직/);
-  srv.outcome = "failed"; btn().click(); await settle();
+  // The stand-in settles on every read: keep it pending through the lookup, then let the first poll see it fail.
+  btn().click(); await flush(); srv.outcome = "failed"; await settle();
   assert.equal(srv.notes.at(-1), "모델 목록을 새로 받지 못했어요: 알 수 없음", "the waiting refresh's outcome is shown");
+  // A conflict with nothing pending (full list, write clash) does not follow an old finished refresh.
+  const settled = srv.notes.length; btn().click(); await settle();
+  assert.deepEqual(srv.notes.slice(settled), ["새로고침을 넣지 못했어요. 잠시 뒤 다시 눌러 주세요."]);
   assert.ok(srv.notes.length > before);
 });
 

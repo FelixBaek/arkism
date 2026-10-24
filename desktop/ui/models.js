@@ -195,10 +195,12 @@ window.ArkismModels = (ctx) => {
       if (state.mode === "local") await window.__TAURI__?.core?.invoke("providers_refresh").catch(() => notice("한도와 모델 목록을 새로 받지 못했어요. 마지막 결과를 보여 줘요."));
       else {
         const rec = await request("/v1/providers/models_refresh", { method: "POST", body: JSON.stringify({ scope: state.scope }) }).catch((e) => e.message === "revision_conflict" ? null : Promise.reject(e));
-        // A conflict means one already waits, the newest models_refresh (it may settle before this read): follow it instead.
-        const id = rec?.providers ? last(rec).id : (await load())?.requests?.findLast((x) => x.kind === "models_refresh")?.id;
+        // A conflict usually means one already waits: follow it. It is also sent for a full request list or a write clash,
+        // when nothing was queued, so only a still-pending refresh is followed; an older finished one would mislead.
+        const id = rec?.providers ? last(rec).id : (await load())?.requests?.findLast((x) => x.kind === "models_refresh" && x.status === "pending")?.id;
+        if (!id) notice("새로고침을 넣지 못했어요. 잠시 뒤 다시 눌러 주세요.");
         const q = id ? await waitFor(id, 60000) : null;
-        if (q?.status === "failed") notice(`모델 목록을 새로 받지 못했어요: ${q.error || "알 수 없음"}`);
+        if (q?.status === "failed" || q?.status === "expired") notice(`모델 목록을 새로 받지 못했어요: ${q.error || "알 수 없음"}`);
         else if (id && !q) notice("서버 실행기가 아직 답하지 않았어요. 잠시 뒤 다시 눌러 주세요.");
       }
       await load();
