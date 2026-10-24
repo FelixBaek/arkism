@@ -1437,10 +1437,11 @@ export function startApp() {
     if (page.kind === "start") { wrap.replaceChildren(home.startMain()); return; }
     const lost = page.kind === "home" || page.kind === "all" ? home.lostCard() : null; // 전체 항목 too: a failed load is not "nothing to do"
     if (lost && !items.length) { wrap.replaceChildren(lost); return; }
-    if (!items.length) { wrap.replaceChildren(homeEmpty()); return; }
+    if (!items.length && page.kind !== "home") { wrap.replaceChildren(homeEmpty()); return; }
     if (page.kind === "all") { wrap.replaceChildren(todoTable(items)); return; }
     const now = items.slice(0, firstCount(items)), rest = items.slice(firstCount(items));
-    const parts = [...(lost ? [lost] : []), homeHead("먼저 확인", el("output", "", String(now.length))), firstList(now)];
+    // Nothing to check first: the empty card takes the list's place, 메뉴별 · 이번 주 stay (Figma 372:27905).
+    const parts = [...(lost ? [lost] : []), homeHead("먼저 확인", el("output", "", String(now.length))), now.length ? firstList(now) : homeEmpty()];
     if (!state.selected) {
       const menus = menuRows(rest);
       if (menus) parts.push(homeHead("메뉴별 확인할 것", null, "누르면 그 메뉴로 가요"), menus);
@@ -1599,14 +1600,14 @@ export function startApp() {
       el("p", "meta", state.loadError ? "" : rest.length ? `나머지 ${todoTotal(rest)}개는 메뉴별로 모아 두었어요.` : "새 일이 생기면 여기에 모여요."));
     const agents = shownAgents();
     const nums = el("div", "home-nums");
-    for (const [label, value, warn] of [["먼저 확인", now.length, true], ["메뉴별 확인할 것", todoTotal(rest)], ["함께 일하는 에이전트", agents.length]]) {
+    for (const [label, value, warn] of [["먼저 확인", now.length, true], ["메뉴별 확인할 것", todoTotal(rest)], ["함께 일하는 전문가", agents.length]]) {
       const r = el("div", "");
-      const known = !state.loadError || label === "함께 일하는 에이전트"; // the to-do counts have nothing to count after a failed load
+      const known = !state.loadError || label === "함께 일하는 전문가"; // the to-do counts have nothing to count after a failed load
       r.append(el("span", "", label), el("output", known && warn && value ? "warn" : "", known ? String(value) : "—"));
       nums.append(r);
     }
     const team = el("section", "section home-agents");
-    team.append(el("h3", "", "함께 일하는 에이전트"));
+    team.append(el("h3", "", "함께 일하는 전문가"));
     const blockedBy = new Map();
     for (const sk of state.data.skills) for (const [k] of agents) if (sk.skill_compatibility?.[k] === "unsupported") blockedBy.set(k, [...(blockedBy.get(k) || []), sk.name]);
     for (const [k, name, spec] of agents) {

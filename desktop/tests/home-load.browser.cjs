@@ -3,7 +3,7 @@ const fs = require("node:fs"), path = require("node:path"), assert = require("no
 const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__dirname, "../frontend/node_modules/playwright-core"));
 const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirname, "../ui"));
 
-async function open(browser, fail) {
+async function open(browser, fail, clear = false) {
   const page = await browser.newPage({ locale: "ko-KR", viewport: { width: 1440, height: 1000 } });
   page.setDefaultTimeout(12000);
   const errors = []; page.on("pageerror", error => errors.push(error.message));
@@ -15,7 +15,7 @@ async function open(browser, fail) {
     try { await route.fulfill({ body: fs.readFileSync(file), contentType: { ".html": "text/html", ".mjs": "application/javascript", ".js": "application/javascript", ".css": "text/css", ".svg": "image/svg+xml" }[path.extname(file)] || "application/octet-stream" }); }
     catch { await route.fulfill({ status: 404, body: "" }); }
   });
-  await page.addInitScript((fail) => { localStorage.setItem("arkism.mode","local");
+  await page.addInitScript(([fail, clear]) => { localStorage.setItem("arkism.mode","local");
     const DAY = 86400000, at = (ms) => new Date(Date.now() - ms).toISOString(), old = at(20 * DAY);
     const row = (id, status) => ({ id, text: id, kind: "user", status, revision: 1, created_at: old, updated_at: old, tags: [], sources: [], skill_compatibility: {} });
     window.__TAURI__ = { event: { listen: async () => () => {} }, core: { async invoke(command, args) {
@@ -28,6 +28,7 @@ async function open(browser, fail) {
       if (p === "/v1/capabilities") body = { role: "human", actions: { review_list: true, review_decide: true } };
       if (p === "/v1/providers") body = { providers: [] };
       if (p === "/v1/memories") body = list(["m1", "m2", "m3"].map((id) => row(id, "active")));
+      if (clear && ["/v1/memory_candidates", "/v1/memory_candidates/query", "/v1/usage/sessions"].includes(p)) return { status: 200, body: JSON.stringify(list([])) }; // nothing to check
       if (p === "/v1/memory_candidates" && url.searchParams.get("status") === "candidate") body = list(Array.from({ length: 50 }, (_, i) => row(`c${i}`, "candidate")), "50");
       if (p === "/v1/memories/query") body = { items: [], total: 3, next_cursor: "", facets: { kinds: { user: 3 } } };
       if (p === "/v1/memory_candidates/query") body = { items: [], total: 120, next_cursor: "", facets: {} };
@@ -36,7 +37,7 @@ async function open(browser, fail) {
       if (p === "/v1/usage/sessions") body = { items: [{ id: "s1", ended_at: at(15 * DAY) }, { id: "s2", ended_at: at(3600000) }], total: 2, next_cursor: "" };
       return { status: 200, body: JSON.stringify(body) };
     } } };
-  }, fail);
+  }, [fail, clear]);
   await page.goto("https://arkism.fixture/");
   await page.waitForFunction(() => document.querySelector("#app")?.inert === false && !document.querySelector("#status-dot")?.className.includes("loading"));
   return { page, errors };
@@ -128,6 +129,16 @@ async function overview(page) {
     ({ page, errors } = await open(browser, ["/v1/memories/query"]));
     await page.waitForFunction(() => document.body.innerText.includes("기억 후보 120개 검토"));
     assert.deepEqual(errors, []);
+    // Figma 372:27905: nothing to check first. The empty card sits under 먼저 확인 0, 이번 주 and the summary stay.
+    ({ page, errors } = await open(browser, [], true));
+    await page.locator(".todo-wrap > .st-panel").waitFor();
+    await page.waitForTimeout(300);
+    home = await text(page);
+    assert.ok(home.includes("지금은 확인할 일이 없어요") && /먼저 확인\s*0/.test(await page.locator(".todo-wrap").innerText()), "empty card under 먼저 확인 0");
+    assert.ok(home.includes("함께 일하는 전문가") && home.includes("바로가기"), "the summary column stays");
+    await shot(page, "clear-home");
+    assert.deepEqual(errors, []);
+    await page.close();
     console.log("Home load passed: one failed list, server candidate total, unreported agents, stall in days, failed load shows unknown.");
   } finally { await browser.close(); }
 })().catch((error) => { console.error(error); process.exit(1); });

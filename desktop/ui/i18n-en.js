@@ -2116,7 +2116,7 @@ window.ArkismI18nEN = {
   "다음 할 일": "Next step",
   "오늘 요약": "Today's summary",
   "새 일이 생기면 여기에 모여요.": "New work gathers here.",
-  "함께 일하는 에이전트": "Agents you work with",
+  "함께 일하는 전문가": "Agents you work with",
   "바로가기": "Shortcuts",
   "스킬 보기": "See skills",
   "라우팅 현황": "Routing status",

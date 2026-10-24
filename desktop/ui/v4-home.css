@@ -13,7 +13,7 @@
 /* 맨 위 그림 (오늘의 아틀리에) — only on 홈 itself */
 .app.home-mode:not(.home-sub) .home-hero { display: flex; gap: 30px; padding: 28px; flex: none; overflow: hidden; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); }
 .app.home-mode:not(.home-sub) .home-hero-line { display: block; height: 1px; background: var(--nc-line); flex: none; }
-.home-hero-words { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.home-hero-words { flex: 0 1 620px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
 .home-hero-kicker, .home-hero-cap { margin: 0; font: 400 11px/18px var(--mono); color: var(--nc-accent); }
 .home-hero-title { margin: 0; display: flex; flex-direction: column; font: 400 64px/68px "Cormorant Garamond", "Noto Serif KR", Georgia, serif; color: var(--nc-text); white-space: nowrap; }
 .home-hero-art { width: 430px; flex: none; display: flex; flex-direction: column; }
@@ -28,7 +28,12 @@
 .app.home-mode .main > .page-head > :not(.home-all) { grid-column: 1; }
 .app.home-mode.home-sub .home-back { display: block; justify-self: start; border: 0; background: none; padding: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .home-back:hover { color: var(--nc-text); }
-.app.home-mode:not(.home-sub) .home-all { display: inline-flex; grid-column: 2; grid-row: 1 / span 3; align-self: end; height: auto; padding: 7px 14px; line-height: 1.5; }
+.app.home-mode:not(.home-sub) .main > .page-head { align-items: center; }
+.app.home-mode:not(.home-sub) .home-all { display: inline-flex; grid-column: 2; grid-row: 1; height: auto; padding: 7px 14px; line-height: 20px; }
+/* 머리줄 → 패널 is 16px in Figma (작업 내용 gap 16), not the page's 24 */
+.app.home-mode .main > .page-head + .panel { margin-top: -8px; }
+/* 홈 itself: the right column is 340 wide (198:200 Detail); the pages under it keep 366 */
+.app.home-mode:not(.home-sub) { --nc-detail-w: 340px; }
 
 /* ---------------------------------------------------------------- 홈 lists */
 .app.home-mode .todo-wrap { padding: 0; gap: 10px; overflow: visible; }
@@ -73,7 +78,7 @@
 .home-note { margin: 10px 0 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 
 /* 이번 주 */
-.home-week { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.home-week { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 12px; }
 .home-stat { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px 16px; border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-surface); text-align: left; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 .home-stat:hover { background: var(--nc-raised); }
 .home-stat strong { font: 400 22px/1.5 var(--mono); color: var(--nc-text); }
@@ -87,7 +92,10 @@
 .home-table .label { font: 400 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .home-table .sub { flex: 1; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 
-/* 빈 홈 */
+/* 빈 홈 (372:27905): the card under 먼저 확인 */
+.app.home-mode .todo-wrap > .st-panel { padding: 20px; }
+.app.home-mode .todo-wrap > .st-panel .st-actions { padding-top: 4px; }
+.app.home-mode .todo-wrap > .st-panel .btn { height: 40px; padding: 0 16px; }
 
 /* ---------------------------------------------------------------- 홈 detail (right column) */
 .app.home-mode .detail-bar { padding: 24px 20px 0; border-bottom: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
