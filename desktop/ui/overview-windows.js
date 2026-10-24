@@ -159,7 +159,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const rows = {
       collect: () => sessions.slice(0, cap).map((x) => row("", [x.agent, x.project].filter(Boolean).join(" · ") || x.title || "세션", `메시지 ${num(x.messages)}개 · ${ago(x.ended_at || x.started_at)}`, "", [button("열기", "small", null, () => openSession(`:${x.session_id}`, ""))])),
       extract: () => [...waiting(), ...D().memories].sort((a, b) => time(b.created_at) - time(a.created_at)).slice(0, cap).map((m) => row(kind(m.kind), clip(m.text), `${tag(m, "event_id:") ? "대화 저장 · " : ""}${ago(m.created_at)}`, "")),
-      classify: () => waiting().filter((m) => !m.classification).slice(0, cap).map((m) => row(kind(m.kind), clip(m.text), ago(m.created_at), "", [button("승인 대기에서 보기", "small", null, () => wide("review", m.id))])),
+      classify: () => byKind(waiting().filter((m) => !m.classification).slice(0, cap)),
       review: () => waiting().slice(0, cap).map((m) => reviewRow(m, box)),
       recall: () => [...(state.usage?.entries() || [])].filter(([, u]) => u.last).sort((a, b) => time(b[1].last) - time(a[1].last)).slice(0, cap).map(([id, u]) => row("", clip(memText(id)), ago(u.last), `7일 ${num(u.d7 || 0)}회`)),
       trace: () => (w?.items || []).slice().sort((a, b) => b.used - a.used || b.injected - a.injected).slice(0, cap).map((u) => row("", clip(memText(u.id)), `넣음 ${num(u.injected)}번`, `쓰임 ${num(u.used)}번`)),
@@ -173,6 +173,16 @@ window.ArkismOverviewWindows = (ctx, env) => {
     };
     return (rows[key]?.() || out);
   }
+  // 분류: the candidates under one header per kind, in the KIND order, each header with its count
+  function byKind(list) {
+    const groups = new Map(Object.keys(KIND).map((k) => [k, []]));
+    for (const m of list) { if (!groups.has(m.kind)) groups.set(m.kind, []); groups.get(m.kind).push(m); }
+    return [...groups].filter(([, ms]) => ms.length).flatMap(([k, ms]) => {
+      const h = el("div", "ov-win-group"); h.append(tagEl(kind(k)), el("small", "", `${num(ms.length)}건`));
+      return [h, ...ms.map((m) => row("", clip(m.text), ago(m.created_at), ""))];
+    });
+  }
+  const itemCount = (rows) => rows.filter((r) => !r.classList.contains("ov-win-group")).length;
   function reviewRow(c, box) {
     // the same tags and reason line as the wide window's row, so both show one candidate alike
     const dupText = c.classification?.dup_hint && D().memories.find((m) => m.id === c.classification.dup_hint)?.text;
@@ -243,7 +253,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const ul = el("div", "ov-win-list");
     const listHead = el("div", "ov-win-list-title", LIST_TITLE[key]);
     if (expanded) listHead.append(button("접기 ⌃", "ghost small", null, () => open(key, false)));
-    else if (total && total > rows.length) listHead.append(button(`${num(total)}건 모두 보기 ›`, "ghost small", null, () => open(key, true)));
+    else if (total && total > itemCount(rows)) listHead.append(button(`${num(total)}건 모두 보기 ›`, "ghost small", null, () => open(key, true)));
     if (key !== "recall" || rows.length) body.append(listHead); // 불러오기: 영수증 상자가 빈 목록을 대신해요
     if (!rows.length && key !== "recall") ul.append(el("p", "ov-win-empty", "지금 보여 줄 항목이 없어요."));
     ul.append(...rows); body.append(ul);
@@ -251,10 +261,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (expanded) {
       ul.classList.add("ov-win-list-scroll");
       const left = el("span", "ov-wide-foot-note"), say = (n) => { left.textContent = n < total ? `${num(total)}건 중 ${num(n)}건 · 창 안에서 내리면 더 나와요` : `${num(total)}건 모두 보는 중`; };
-      let cap = rows.length; say(cap);
+      let cap = itemCount(rows); say(cap);
       ul.addEventListener("scroll", () => { // 60 more each time the list reaches its end
         if (cap >= total || ul.scrollTop + ul.clientHeight < ul.scrollHeight - 40) return;
-        cap += 60; const more = stageRows(key, body, cap); ul.replaceChildren(...more); say(more.length); if (more.length < cap) cap = total;
+        cap += 60; const more = stageRows(key, body, cap), n = itemCount(more); ul.replaceChildren(...more); say(n); if (n < cap) cap = total;
       });
       foot.append(left);
     }

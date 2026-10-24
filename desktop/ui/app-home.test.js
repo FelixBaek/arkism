@@ -69,6 +69,19 @@ test("overview: stage windows step through every stage and their lists", async (
   assert.equal(win(), null);
 });
 
+test("overview: 분류 groups its waiting candidates by kind inside the window", async () => {
+  const d = await openWindow({ key: "classify" });
+  const list = d.querySelector(".ov-win-list"), heads = [...list.querySelectorAll(".ov-win-group")];
+  assert.ok(heads.length > 1, "more than one kind header");
+  for (const h of heads) { // each header counts the rows up to the next header
+    let n = 0; for (let x = h.nextSibling; x && !x.classList.contains("ov-win-group"); x = x.nextSibling) n++;
+    assert.equal(text(h.querySelector("small")), `${n}건`, text(h));
+  }
+  assert.equal(new Set(heads.map((h) => text(h.querySelector(".ov-win-tag")))).size, heads.length, "one header per kind");
+  assert.equal(btn("승인 대기에서 보기", d), undefined, "no jump to the approval window per row");
+  await closeAll();
+});
+
 test("overview: 모두 보기 expands a stage, scrolling loads more, 접기 folds it", async () => {
   let d = await openWindow({ key: "extract" });
   const all = btn(btn("24건 모두 보기 ›", d) ? "24건 모두 보기 ›" : [...d.querySelectorAll("button")].map(text).find((t) => /모두 보기/.test(t)), d);
