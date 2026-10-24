@@ -119,8 +119,8 @@ func managementHTTPResponses(t *testing.T) []apiContractCase {
 	contractHostAndSessions(c)
 	contractWikiAndKnowledge(c)
 	contractCatalogQueries(c)
-	if len(c.seen) != 65 {
-		t.Fatalf("management contract coverage: %d/65", len(c.seen))
+	if len(c.seen) != 66 {
+		t.Fatalf("management contract coverage: %d/66", len(c.seen))
 	}
 	t.Logf("all %d management operations exercised successfully and anonymously", len(c.seen))
 	return c.cases
@@ -190,6 +190,7 @@ func contractHostAndSessions(c *contractHTTP) {
 	c.call("POST /v1/memories/{id}/expiry", m.ID, MemoryExpiryInput{Scope: scopeA, ExpectedRevision: m.Revision}, nil)
 	c.call("POST /v1/providers/labels", "", ProviderLabel{Scope: scopeA, Provider: "openai", Kind: "account", ID: "codex", Label: "Fixture account"}, nil)
 	c.call("POST /v1/providers/test", "", ProviderModelTest{Scope: scopeA, Provider: "openai", Model: "fixture-model"}, nil)
+	c.call("POST /v1/providers/models_refresh", "", ProviderModelsRefresh{Scope: scopeA}, nil)
 	id := sessionManageUsage(c.t, c.f, time.Now().UTC(), "contract-session")
 	c.call("POST /v1/usage/sessions/transcript", "", SessionTranscriptInput{Scope: scopeA, ID: id}, nil)
 	c.call("POST /v1/usage/sessions/export", "", SessionExportInput{Scope: scopeA, IDs: []string{id}, Format: "json"}, nil)
