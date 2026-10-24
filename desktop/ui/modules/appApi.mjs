@@ -21,7 +21,6 @@ export function createAppApi(deps) {
   const identity = () => JSON.stringify([deps.state.server, deps.state.token, deps.state.scope, deps.state.connection?.generation]);
   async function request(path, options = {}) {
     const session = identity();
-    if ((options.method || "GET") !== "GET") deps.onWrite?.(); // a separate window tells the main one to reload only after a change
     let status, text;
     if (deps.tauri) {
       const r = await deps.tauri.invoke("api", { base: deps.trimSlash(deps.state.server), token: deps.state.token, method: options.method || "GET", path, body: options.body ?? null })

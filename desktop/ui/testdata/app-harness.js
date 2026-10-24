@@ -21,7 +21,7 @@ async function startPreview() {
 }
 
 // opts: remote (server connection instead of the built-in Arkism), stored (localStorage), invoke (extra command answers),
-// winbar (a desktop window for window-controls.js), popout (payload for a separate popup window), lang.
+// winbar (a desktop window for window-controls.js), lang.
 async function boot(opts = {}) {
   const preview = opts.preview || await startPreview();
   try {
@@ -43,8 +43,7 @@ async function boot(opts = {}) {
       autostart_get: true, capture_settings: { paused: false, exclude: ["~/private"], instructions: "" }, search_mode: "ollama:qwen3-embedding:0.6b",
       local_backups: { backups: [] }, gateway_token_status: { state: "set", updated_ms: Date.UTC(2026, 9, 13, 3), from_env: false },
       update_check: { current: "0.1.1", latest: "0.1.2", newer: true },
-      popout_take: opts.popout ? { popout: true, payload: opts.popout } : { popout: false },
-      popout_open: (a) => a.spareOnly ? null : "popout-1", popout_close: null, popout_prepare: null, popout_ready: null, // like popout.rs with no spare ready
+      popout_destroy: null,
       ...(opts.invoke || {})
     };
     const invoke = async (cmd, a = {}) => {
