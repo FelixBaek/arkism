@@ -44,7 +44,7 @@ async function boot(opts = {}) {
       local_backups: { backups: [] }, gateway_token_status: { state: "set", updated_ms: Date.UTC(2026, 9, 13, 3), from_env: false },
       update_check: { current: "0.1.1", latest: "0.1.2", newer: true },
       popout_take: opts.popout ? { popout: true, payload: opts.popout } : { popout: false },
-      popout_open: "popout-1", popout_close: null,
+      popout_open: (a) => a.spareOnly ? null : "popout-1", popout_close: null, popout_prepare: null, popout_ready: null, // like popout.rs with no spare ready
       ...(opts.invoke || {})
     };
     const invoke = async (cmd, a = {}) => {

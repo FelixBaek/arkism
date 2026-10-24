@@ -11,24 +11,41 @@
   // Opens the popup in a separate window at screen point (x, y) and closes it here. Only popups that say how to reopen
   // themselves (data-popout) can go; unsaved edits stop it the same way closing would.
   const going = new WeakSet(); // a popup whose popout_open is still on its way (a held Alt+Shift+O must not open it twice)
-  async function tearOff(dlg, x, y) {
+  // spareOnly: only when the hidden, already-loaded window is ready (opening a popup); otherwise it stays in the app.
+  async function tearOff(dlg, x, y, spareOnly = false) {
     const recipe = dlg.dataset.popout;
     const session = window.ArkismPopoutSession?.();
     if (!recipe || !session || !tauri() || going.has(dlg)) return false;
-    if (!dlg.dispatchEvent(new Event("cancel", { cancelable: true }))) return false;
+    if (!spareOnly && !dlg.dispatchEvent(new Event("cancel", { cancelable: true }))) return false;
     const r = dlg.getBoundingClientRect();
     going.add(dlg);
+    let label;
     try {
-      await tauri().invoke("popout_open", { payload: JSON.stringify({ recipe: JSON.parse(recipe), session }), title: dlg.dataset.popoutTitle || "", x: Math.round(x), y: Math.round(y), width: Math.round(r.width), height: Math.round(r.height) });
+      label = await tauri().invoke("popout_open", { payload: JSON.stringify({ recipe: JSON.parse(recipe), session }), title: dlg.dataset.popoutTitle || "", x: Math.round(x), y: Math.round(y), width: Math.round(r.width), height: Math.round(r.height), spareOnly });
     } catch (err) {
-      window.ArkismNotice?.(`새 창으로 열지 못했어요 (${err?.message || err}).`);
+      if (!spareOnly) window.ArkismNotice?.(`새 창으로 열지 못했어요 (${err?.message || err}).`);
       return false;
     } finally {
       going.delete(dlg);
     }
+    if (!label) return false;
     dlg.close();
+    window.ArkismPopoutSpare?.(); // the spare became this window: get the next one ready
     return true;
   }
+
+  // 처음부터 창으로: a popup that can live in its own window opens there at once, where it would have appeared here.
+  // Hidden here meanwhile so it does not flash; with no spare ready (still loading) it simply stays in the app.
+  const opened = (dlg) => {
+    if (!(dlg instanceof HTMLDialogElement) || !dlg.open || !dlg.dataset.popout || dlg.classList.contains("popping") || document.documentElement.classList.contains("popout")) return;
+    dlg.classList.add("popping");
+    requestAnimationFrame(() => {
+      const r = dlg.getBoundingClientRect();
+      void tearOff(dlg, window.screenX + r.left, window.screenY + r.top, true).then((gone) => { if (!gone) dlg.classList.remove("popping"); });
+    });
+  };
+  new MutationObserver((list) => { for (const m of list) opened(m.target); })
+    .observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open", "data-popout"] });
 
   document.addEventListener("pointerdown", (ev) => {
     if (ev.button !== 0) return;
