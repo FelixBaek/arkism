@@ -1041,10 +1041,11 @@ input:is(:not([type]), [type="text"], [type="email"], [type="url"], [type="passw
 /* Popups move by their head (popup-drag.js). */
 dialog[open] :is(.dialog-head, .crew-popup-head, .ov-win-head, .ov-detail-head, .ov-recall-head, .git-dialog-head, .keys-head) { cursor: grab; }
 dialog.dragging, dialog.dragging * { cursor: grabbing !important; user-select: none; }
-/* 새 창으로: a separate window shows only its popup, filling the window. */
-html.popout #app, html.popout #unlock { visibility: hidden; }
-html.popout dialog { visibility: visible; }
-html.popout dialog.popout-root { inset: 0; margin: 0; width: 100vw; max-width: none; height: 100vh; max-height: none; border: 0; border-radius: 0; translate: none !important; }
+/* 새 창으로: a popup moved into its own window (popup-drag.js) fills it; it is no longer modal there, so it is placed
+   by hand, and a popup opened over it inside that window is centered the way a modal would be. */
+dialog.popping, dialog.popping::backdrop { visibility: hidden; }
+html.popout dialog[open]:not(.popout-root) { position: fixed; inset: 0; margin: auto; z-index: 10; }
+html.popout dialog.popout-root { position: fixed; inset: 0; margin: 0; width: 100vw; max-width: none; height: 100vh; max-height: none; border: 0; border-radius: 0; translate: none !important; }
 html.popout dialog.popout-root::backdrop { background: var(--nc-canvas); }
 dialog.tear-off { opacity: .6; }
 html.popout dialog.popout-root[open] { display: flex; flex-direction: column; }

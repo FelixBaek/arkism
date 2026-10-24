@@ -2184,32 +2184,9 @@ export function startApp() {
   Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, catMenu, catChipBody, button, go, render, request: appApi.request, query: appApi.query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
   Object.assign(views, crew.views, crew.pages, reviews.views);
   window.ArkismNotice = notice;
-  // 새 창으로 (popup-drag.js): what a separate window needs to reach the same Arkism as this one.
-  window.ArkismPopoutSession = () => state.token ? { mode: state.mode, server: state.server, token: state.token, scope: state.scope } : null;
-  // A separate window shows just one popup: take over this window's connection, open the popup, close with it.
-  async function startPopout(payload) {
-    const quit = () => void tauri.invoke("popout_close").catch(() => window.close());
-    let job;
-    try { job = JSON.parse(payload); } catch (_) { job = null; }
-    if (!job?.session?.token || !job.recipe?.event?.startsWith("arkism:open-")) return quit(); // e.g. reloaded: nothing to show
-    document.documentElement.classList.add("popout");
-    Object.assign(state, { mode: job.session.mode, server: job.session.server, token: job.session.token, scope: { ...defaults, ...job.session.scope } });
-    try { await appConnection.open(); } catch (err) { notice(`이 창을 열지 못했어요 (${err?.message || err}).`); return; }
-    window.dispatchEvent(new CustomEvent(job.recipe.event, { detail: job.recipe.detail || {} }));
-    let root = null;
-    for (let i = 0; i < 40 && !root; i++) { await new Promise((r) => setTimeout(r, 100)); root = document.querySelector("dialog[open]"); }
-    if (!root) return quit();
-    const saved = () => store("arkism.popout-saved", String(Date.now()));
-    addEventListener("pagehide", saved); // the window's own ✕
-    // A popup that swaps itself for another (기억 처리 ‹ › · 넓게 보기) hands the window on; the last one closing closes it.
-    const adopt = (d) => { d.classList.add("popout-root"); d.addEventListener("close", () => { const next = document.querySelector("dialog[open]"); if (next) adopt(next); else { saved(); quit(); } }); };
-    adopt(root);
-  }
   // A separate window saved or closed: show its changes here too.
   window.addEventListener("storage", (e) => { if (e.key === "arkism.popout-saved" && state.token && !document.documentElement.classList.contains("popout")) void loadAll(); });
   void (async () => {
-    const pop = tauri ? await tauri.invoke("popout_take").catch(() => null) : null;
-    if (pop?.popout) return startPopout(pop.payload);
     const defaults = tauri ? await tauri.invoke("app_defaults").catch(() => null) : null;
     if (defaults) Object.assign(state.defaults, defaults);
     // 처음 실행이면(고른 적 없음) 이 PC / SSH를 고르게 한다. 연결 끊기도 고른 것을 지워 이 화면으로 돌아온다.

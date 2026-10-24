@@ -1,75 +1,82 @@
-// 팝업을 창 밖으로: a popup dragged out of the main window opens in its own window that shows only that popup.
-// The main window hands over how to reopen it plus its connection (server, token, scope); the new window takes it once.
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
-
-use tauri::{AppHandle, State, WebviewUrl, WebviewWindowBuilder, Window};
+// 팝업을 창 밖으로: the main window opens an empty window with window.open and moves the popup's own DOM into it
+// (the way Obsidian and Electron preference panes do), so the popup keeps its state and needs no loading.
+// This side only builds that window: on the opener's own browser environment, so the main window can reach into it.
+use tauri::webview::{NewWindowFeatures, NewWindowResponse};
+use tauri::{AppHandle, Emitter, Manager, Runtime, Url, WebviewUrl, WebviewWindowBuilder, Window};
 
 const PREFIX: &str = "popout-";
-const MAX_PAYLOAD: usize = 64 * 1024;
-
-static NEXT: AtomicU32 = AtomicU32::new(1);
-
-#[derive(Default)]
-pub struct Popouts(Mutex<HashMap<String, String>>);
 
 pub fn is_popout(label: &str) -> bool {
     label.starts_with(PREFIX)
 }
 
-/// Opens a window for one popup at (x, y) in screen pixels; `payload` is the UI's own JSON, kept here until the window takes it.
-/// Async: building a window inside a sync command deadlocks on Windows (WebView2).
+/// The window a request from the main window's window.open("about:blank#popout-N|title") gets; anything else
+/// (a link opened with window.open) keeps the default.
+pub fn on_new_window<R: Runtime>(app: &AppHandle<R>, url: Url, features: NewWindowFeatures) -> NewWindowResponse<R> {
+    let Some((label, title)) = popout_request(&url) else { return NewWindowResponse::Allow };
+    if app.get_webview_window(&label).is_some() {
+        return NewWindowResponse::Deny;
+    }
+    let built = WebviewWindowBuilder::new(app, &label, WebviewUrl::External("about:blank".parse().expect("about:blank")))
+        .window_features(features)
+        .title(if title.is_empty() { "Arkism".to_string() } else { format!("{title} · Arkism") })
+        .min_inner_size(360.0, 320.0)
+        .focused(true)
+        .build();
+    match built {
+        Ok(window) => NewWindowResponse::Create { window },
+        Err(_) => NewWindowResponse::Deny,
+    }
+}
+
+/// "about:blank#popout-7|기억 처리" → ("popout-7", "기억 처리"); the label must be popout- and digits.
+fn popout_request(url: &Url) -> Option<(String, String)> {
+    if url.scheme() != "about" || url.path() != "blank" {
+        return None;
+    }
+    let frag = url.fragment()?;
+    let (label, title) = frag.split_once('|').unwrap_or((frag, ""));
+    let n = label.strip_prefix(PREFIX)?;
+    if n.is_empty() || n.len() > 9 || !n.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let title = percent_decode(title);
+    Some((label.to_string(), title.chars().filter(|c| !c.is_control()).take(80).collect()))
+}
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The OS ✕ on a popout window: ask the main window, which closes the popup the way Esc does (so unsaved edits ask first).
+pub fn close_requested<R: Runtime>(window: &Window<R>) {
+    let _ = window.app_handle().emit_to("main", "popout-close", window.label());
+}
+
+/// From the main window: its popup closed, so the window goes.
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
-pub async fn popout_open(app: AppHandle, window: Window, store: State<'_, Popouts>, payload: String, title: String, x: f64, y: f64, width: f64, height: f64) -> Result<String, String> {
-    if window.label() != "main" {
+pub fn popout_destroy(app: AppHandle, window: Window, label: String) -> Result<(), String> {
+    if window.label() != "main" || !is_popout(&label) {
         return Err("popout_from_main_only".into());
     }
-    if payload.len() > MAX_PAYLOAD {
-        return Err("popout_payload_too_large".into());
+    match app.get_webview_window(&label) {
+        Some(w) => w.destroy().map_err(|e| e.to_string()),
+        None => Ok(()),
     }
-    let label = format!("{PREFIX}{}", NEXT.fetch_add(1, Ordering::Relaxed));
-    store.0.lock().map_err(|e| e.to_string())?.insert(label.clone(), payload);
-    let title: String = title.chars().filter(|c| !c.is_control()).take(80).collect();
-    let built = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
-        .title(if title.is_empty() { "Arkism".to_string() } else { format!("{title} · Arkism") })
-        .inner_size(clamp(width, 360.0, 2400.0), clamp(height, 320.0, 1800.0))
-        .min_inner_size(360.0, 320.0)
-        .decorations(false) // the app draws its own drag strip and ✕ (window-controls.js)
-        .shadow(true)
-        .position(clamp(x, -10000.0, 10000.0), clamp(y, -10000.0, 10000.0))
-        .build();
-    if let Err(e) = built {
-        if let Ok(mut m) = store.0.lock() {
-            m.remove(&label);
-        }
-        return Err(e.to_string());
-    }
-    Ok(label)
-}
-
-/// What this window should show: {"popout": false} for the main window, else the payload (null once taken, e.g. after a reload).
-#[tauri::command]
-pub fn popout_take(window: Window, store: State<'_, Popouts>) -> serde_json::Value {
-    if !is_popout(window.label()) {
-        return serde_json::json!({ "popout": false });
-    }
-    let payload = store.0.lock().ok().and_then(|mut m| m.remove(window.label()));
-    serde_json::json!({ "popout": true, "payload": payload })
-}
-
-/// Closes the calling popout window (its popup was closed).
-#[tauri::command]
-pub fn popout_close(window: Window) -> Result<(), String> {
-    if !is_popout(window.label()) {
-        return Err("not_a_popout".into());
-    }
-    window.destroy().map_err(|e| e.to_string())
-}
-
-fn clamp(v: f64, lo: f64, hi: f64) -> f64 {
-    if v.is_finite() { v.clamp(lo, hi) } else { lo }
 }
 
 #[cfg(test)]
@@ -77,10 +84,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn popout_labels_and_clamp() {
-        assert!(is_popout("popout-3"));
-        assert!(!is_popout("main"));
-        assert_eq!(clamp(f64::NAN, 360.0, 2400.0), 360.0);
-        assert_eq!(clamp(5000.0, 360.0, 2400.0), 2400.0);
+    fn popout_requests() {
+        let u = |s: &str| Url::parse(s).unwrap();
+        assert_eq!(popout_request(&u("about:blank#popout-3|%EA%B8%B0%EC%96%B5")), Some(("popout-3".into(), "기억".into())));
+        assert_eq!(popout_request(&u("about:blank#popout-12")), Some(("popout-12".into(), String::new())));
+        assert_eq!(popout_request(&u("about:blank#main")), None);
+        assert_eq!(popout_request(&u("about:blank#popout-x")), None);
+        assert_eq!(popout_request(&u("https://github.com/#popout-1")), None);
+        assert_eq!(popout_request(&u("about:blank")), None);
+        assert!(is_popout("popout-3") && !is_popout("main"));
     }
 }

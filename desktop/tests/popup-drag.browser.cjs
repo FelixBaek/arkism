@@ -1,4 +1,4 @@
-// popup-drag.js in an isolated page: a popup keeps moving after a sideways drag, dropping it outside opens a separate window.
+// popup-drag.js in an isolated page: a popup keeps moving after a sideways drag, dropping it outside moves it into a window.open child window.
 const fs = require("node:fs"), path = require("node:path"), assert = require("node:assert/strict");
 const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__dirname, "../frontend/node_modules/playwright-core"));
 (async () => {
@@ -8,11 +8,6 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     const errors = []; page.on("pageerror", error => errors.push(error.message));
     await page.route("**/*", route => route.abort());
     await page.setContent('<!doctype html><style>dialog{width:500px;height:300px;padding:0;border:0}.ov-win-head{display:flex;height:50px;margin:0}h2{margin:0}</style><dialog data-popout=\'{"event":"arkism:open-overview-window","detail":{"key":"extract"}}\'><div class="ov-win-head"><h2>분석</h2><span style="flex:1"></span><button>닫기</button></div></dialog>');
-    await page.evaluate(() => {
-      window.opened = [];
-      window.__TAURI__ = { core: { invoke: async (cmd, args) => { if (cmd === "popout_open") { window.opened.push(args); } return "popout-1"; } } };
-      window.ArkismPopoutSession = () => ({ token: "t" });
-    });
     await page.addScriptTag({ content: fs.readFileSync(path.resolve(__dirname, "../ui/popup-drag.js"), "utf8") });
     await page.evaluate(() => document.querySelector("dialog").showModal());
     const box = () => page.evaluate(() => { const r = document.querySelector("dialog").getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y)]; });
@@ -27,28 +22,49 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     await drag([x0 + 60, 20], 30, 30);
     assert.deepEqual(await box(), [x0 - 10, 30], "a drag after one stopped at the top must still move");
     assert.equal(await page.locator(".popout-btn").count(), 0, "no 새 창으로 button");
+    // dropped outside the app: the same popup moves into a window.open child (one JS world, so nothing reloads)
+    await page.evaluate(() => {
+      window.calls = [];
+      window.__TAURI__ = { core: { invoke: async (cmd, args) => { window.calls.push([cmd, args]); return null; } } };
+    });
+    const popup = page.waitForEvent("popup");
     await page.mouse.move(x0 + 300, 50); await page.mouse.down(); await page.mouse.move(x0 + 300, 10, { steps: 3 }); await page.mouse.move(x0 + 300, -5); await page.mouse.up();
-    await page.waitForFunction(() => window.opened.length === 1);
-    const sent = await page.evaluate(() => window.opened[0]);
-    assert.equal(JSON.parse(sent.payload).recipe.detail.key, "extract");
-    assert.equal(await page.evaluate(() => document.querySelector("dialog").open), false, "torn-off popup closes here");
-    // keyboard path (#200): Alt+Shift+O tears off the top popup; without the desktop app it says why instead of nothing
-    await page.evaluate(() => { window.notices = []; window.ArkismNotice = (t) => window.notices.push(t); document.querySelector("dialog").showModal(); document.querySelector("dialog button").focus(); });
-    // a slow popout_open: pressing again before it answers must not open a second window
-    await page.evaluate(() => { const invoke = window.__TAURI__.core.invoke; window.__TAURI__.core.invoke = (cmd, args) => new Promise((ok) => setTimeout(() => ok(invoke(cmd, args)), 200)); });
+    const child = await popup;
+    assert.equal(await page.locator("dialog").count(), 0, "the popup left this page");
+    assert.equal(await child.evaluate(() => document.querySelector("dialog.popout-root")?.open), true);
+    assert.equal(await child.evaluate(() => document.documentElement.classList.contains("popout") && !!document.querySelector("style")), true, "the child gets the app's styles");
+    assert.equal(await child.evaluate(() => document.querySelector("h2").textContent), "분석");
+    // closing its popup there closes the window through the app (popout_destroy)
+    await child.evaluate(() => document.querySelector("dialog").close());
+    await page.waitForFunction(() => window.calls.some(([cmd]) => cmd === "popout_destroy"));
+    assert.match(await page.evaluate(() => window.calls.find(([cmd]) => cmd === "popout_destroy")[1].label), /^popout-\d+$/);
+    // 처음부터 창으로: a popup that can live alone opens in its own window at once
+    const second = page.waitForEvent("popup");
+    await page.evaluate(() => { const d = document.createElement("dialog"); d.dataset.popout = "1"; d.innerHTML = "<p>둘째</p>"; document.body.append(d); d.showModal(); });
+    const child2 = await second;
+    assert.equal(await child2.evaluate(() => document.querySelector("dialog p").textContent), "둘째");
+    assert.equal(await page.locator("dialog").count(), 0);
+    await child2.evaluate(() => document.querySelector("dialog").close()); // else the next popup follows the window in focus
+    await page.waitForFunction(() => window.calls.filter(([cmd]) => cmd === "popout_destroy").length === 2);
+    // keyboard path (#200): without the desktop app it says why instead of nothing
+    await page.evaluate(() => {
+      window.notices = []; window.ArkismNotice = (t) => window.notices.push(t); delete window.__TAURI__;
+      const d = document.createElement("dialog"); d.dataset.popout = "1"; d.innerHTML = "<button>닫기</button>"; document.body.append(d); d.showModal(); d.querySelector("button").focus();
+    });
     await page.keyboard.press("Alt+Shift+O");
-    await page.keyboard.press("Alt+Shift+O");
-    await page.waitForFunction(() => window.opened.length === 2);
-    await page.waitForTimeout(300);
-    assert.equal(await page.evaluate(() => window.opened.length), 2, "one tear-off per popup while popout_open is pending");
-    assert.equal(await page.evaluate(() => document.querySelector("dialog").open), false, "Alt+Shift+O closes it here too");
     // Dvorak: O sits on the S key, so e.code is "KeyS" while e.key is "O"
-    await page.evaluate(() => { document.querySelector("dialog").showModal(); document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "O", altKey: true, shiftKey: true, bubbles: true })); });
-    await page.waitForFunction(() => window.opened.length === 3);
-    await page.evaluate(() => { delete window.__TAURI__; document.querySelector("dialog").showModal(); });
-    await page.keyboard.press("Alt+Shift+O");
-    assert.deepEqual(await page.evaluate(() => window.notices), ["새 창은 데스크톱 앱에서 열 수 있어요."]);
+    await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "O", altKey: true, shiftKey: true, bubbles: true })));
+    assert.deepEqual(await page.evaluate(() => window.notices), ["새 창은 데스크톱 앱에서 열 수 있어요.", "새 창은 데스크톱 앱에서 열 수 있어요."]);
     assert.equal(await page.evaluate(() => document.querySelector("dialog").open), true);
+    // a window whose page never gets ready: the popup stays here and that empty window is closed
+    await page.evaluate(() => {
+      window.calls = [];
+      window.__TAURI__ = { core: { invoke: async (cmd, args) => { window.calls.push([cmd, args]); return null; } } };
+      window.open = () => ({ closed: false, get document() { throw new Error("not ready"); }, close() { this.closed = true; } });
+    });
+    await page.keyboard.press("Alt+Shift+O");
+    await page.waitForFunction(() => window.calls.some(([cmd]) => cmd === "popout_destroy"), null, { timeout: 10000 });
+    assert.equal(await page.evaluate(() => document.querySelector("dialog").open), true, "the popup is still shown here");
     assert.deepEqual(errors, []);
     console.log("popup drag browser check passed");
   } finally { await browser.close(); }

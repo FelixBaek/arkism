@@ -11,9 +11,10 @@ const env = dom.install({ html: `
   <div id="window-bar" hidden><button data-win="min"></button><button data-win="max"></button><button data-win="close"></button></div>
   <main id="page"></main>`, stored: { "arkism.look": JSON.stringify({ theme: "light", font: "lg", zoom: 1 }) } });
 const { window, document, timers, clipboard, selection, media } = env;
-const invokes = [];
+const invokes = [], tauriEvents = {};
 window.__TAURI__ = {
-  core: { invoke: async (cmd, a) => { invokes.push([cmd, a]); if (window.failInvoke) throw new Error("denied"); return "popout-1"; } },
+  core: { invoke: async (cmd, a) => { invokes.push([cmd, a]); if (window.failInvoke) throw new Error("denied"); return null; } },
+  event: { listen: async (name, fn) => { tauriEvents[name] = fn; } },
   window: { getCurrentWindow: () => ({
     isMaximized: async () => maximized,
     onResized: async (fn) => { resized = fn; },
@@ -314,13 +315,28 @@ test("ArkismNeed marks a field by element or label, says why, and clears on the 
 });
 const $$count = (s) => document.querySelectorAll(s).length;
 
-test("a popup drags by its head, stays on screen, tears off outside the app and closes on an outside click", async () => {
+// window.open's child window: its own document, as WebView2 gives the opener (popout.rs)
+const opened = [];
+window.screenX = 10; window.screenY = 20;
+window.open = (url, name, features) => {
+  opened.push([url, name, features]);
+  if (window.failOpen) return null;
+  const d = new dom.Document(); d._focus = false;
+  return { document: d, closed: false, on: {}, addEventListener(t, f) { (this.on[t] ||= []).push(f); }, close() { this.closed = true; } };
+};
+
+test("a popup drags by its head, stays on screen, moves into its own window outside the app and closes on an outside click", async () => {
   add(`<dialog id="pd" data-popout='{"event":"arkism:open-x"}' data-popout-title="창"><div class="dialog-head"><span id="hd">제목</span><button id="hb">x</button></div></dialog>
        <dialog id="np"><div class="crew-popup-head" id="ch">새 전문가</div></dialog><dialog id="plain"><div class="dialog-head" id="ph">p</div></dialog>`);
   const pd = $("#pd"), hd = $("#hd");
   window.innerWidth = 1280; window.innerHeight = 800;
   pd._rect = { left: 100, top: 100, width: 400, height: 300 };
+  window.failOpen = true; // opening: no window to go to, so it stays here
   pd.showModal();
+  await flush(); await timers.tick(20);
+  assert.equal(pd.ownerDocument, document);
+  assert.equal(pd.classList.contains("popping"), false);
+  assert.equal(notices.at(-1), "안내만", "opening quietly falls back to the app");
   fire(hd, "pointerdown", { button: 2 });
   fire($("#hb"), "pointerdown", { button: 0 }); // a button in the head is not a grip
   assert.equal(pd.classList.contains("dragging"), false);
@@ -337,43 +353,44 @@ test("a popup drags by its head, stays on screen, tears off outside the app and 
   fire(head, "pointermove", { clientX: -5, clientY: 110 });
   $("#window-bar").hidden = false;
   assert.ok(pd.classList.contains("tear-off"));
-  window.ArkismPopoutSession = () => ({ token: "t" });
+  // a window that cannot open puts the popup back
   fire(head, "pointerup", { clientX: -5, clientY: 110, screenX: 20, screenY: 30 });
-  await flush();
-  assert.equal(invokes.at(-1)[0], "popout_open");
-  assert.deepEqual(JSON.parse(invokes.at(-1)[1].payload), { recipe: { event: "arkism:open-x" }, session: { token: "t" } });
-  assert.equal(invokes.at(-1)[1].title, "창");
-  assert.equal(pd.open, false);
-  assert.equal(pd.style.translate, ""); // closing re-centers
-  // a failing popout_open says so and puts the popup back
-  pd.showModal();
-  window.failInvoke = true;
-  fire(hd, "pointerdown", { button: 0, clientX: 150, clientY: 110 });
-  fire(head, "pointerup", { clientX: 2000, clientY: 110 });
-  await flush();
-  assert.match(notices.at(-1), /새 창으로 열지 못했어요/);
-  assert.equal(pd.open, true);
-  window.failInvoke = false;
-  // a guard that stops cancel keeps it
+  assert.equal(pd.style.translate, "-80px 0px");
+  assert.equal(pd.ownerDocument, document);
+  window.failOpen = false;
+  // dropped outside: the popup itself moves into a new window there
+  fire(hd, "pointerdown", { button: 0, clientX: 150, clientY: 110, pointerId: 1 });
+  fire(head, "pointerup", { clientX: -5, clientY: 110, screenX: 20, screenY: 30 });
+  const [url, label, features] = opened.at(-1);
+  assert.match(url, new RegExp(`^about:blank#${label}\\|%EC%B0%BD$`));
+  assert.match(label, /^popout-\d+$/);
+  assert.match(features, /left=-30,top=20,width=400,height=300/);
+  const kd = pd.ownerDocument;
+  assert.notEqual(kd, document);
+  assert.ok(kd.body.contains(pd) && pd.open && pd.classList.contains("popout-root"));
+  assert.ok(kd.documentElement.classList.contains("popout"), "dressed like this window, marked popout");
+  assert.equal(kd.title, "창 · Arkism");
+  // the popup closing closes its window
+  pd.close();
+  await timers.tick(1); await flush();
+  assert.deepEqual(invokes.at(-1), ["popout_destroy", { label }]);
+  // the window's own ✕ asks the popup first: a guard that stops cancel keeps it
+  page.append(document.adoptNode(pd)); pd.classList.remove("popout-root");
+  key(document.body, "o", { code: "KeyO", altKey: true, shiftKey: true }); // nothing open
+  pd.showModal(); await flush(); await timers.tick(20); // opens straight in a window
+  assert.notEqual(pd.ownerDocument, document);
+  const second = opened.at(-1)[1];
   const stop = (e) => e.preventDefault();
   pd.addEventListener("cancel", stop);
-  fire(hd, "pointerdown", { button: 0, clientX: 150, clientY: 110 });
-  fire(head, "pointercancel", { clientX: 2000, clientY: 110 });
-  fire(hd, "pointerdown", { button: 0, clientX: 150, clientY: 110 });
-  fire(head, "pointerup", { clientX: 2000, clientY: 110 });
-  await flush();
-  assert.equal(pd.open, true);
-  key(document.body, "o", { code: "KeyO", altKey: true, shiftKey: true });
-  await flush();
+  await tauriEvents["popout-close"]({ payload: second });
   assert.equal(pd.open, true);
   pd.removeEventListener("cancel", stop);
-  // Alt+Shift+O opens the top popup where it sits
-  key(document.body, "O", { code: "KeyO", altKey: true, shiftKey: true });
-  await flush();
+  await tauriEvents["popout-close"]({ payload: second });
   assert.equal(pd.open, false);
-  key(document.body, "o", { code: "KeyO", altKey: true, shiftKey: true }); // nothing open
-  key(document.body, "o", { code: "KeyO", altKey: true, shiftKey: true, repeat: true });
-  key(document.body, "p", { code: "KeyP", altKey: true, shiftKey: true });
+  await timers.tick(1); await flush();
+  assert.deepEqual(invokes.at(-1), ["popout_destroy", { label: second }]);
+  await tauriEvents["popout-close"]({ payload: "popout-404" }); // a window with no popup just goes
+  assert.deepEqual(invokes.at(-1), ["popout_destroy", { label: "popout-404" }]);
   // an unsaved crew popup and a popup that cannot go
   $("#np").showModal();
   key(document.body, "o", { code: "KeyO", altKey: true, shiftKey: true });
@@ -389,23 +406,68 @@ test("a popup drags by its head, stays on screen, tears off outside the app and 
   key(document.body, "o", { code: "KeyO", altKey: true, shiftKey: true });
   fire($("#ph"), "pointerdown", { button: 0 });
   $("#plain").classList.remove("popout-root");
-  $("#plain").close();
-  pd.showModal();
+  // Alt+Shift+O moves the top popup where it sits
+  $("#plain").setAttribute("data-popout", "{}"); await flush();
+  $("#plain")._rect = { left: 40, top: 50, width: 400, height: 300 };
+  const plain = $("#plain");
+  key(document.body, "O", { code: "KeyO", altKey: true, shiftKey: true });
+  assert.notEqual(plain.ownerDocument, document);
+  assert.match(opened.at(-1)[2], /left=50,top=70/);
+  plain.close(); await timers.tick(1); await flush();
+  plain.removeAttribute("data-popout"); page.append(document.adoptNode(plain)); plain.classList.remove("popout-root");
+  // no desktop app: it says so
   const core = window.__TAURI__.core;
   delete window.__TAURI__.core;
+  plain.setAttribute("data-popout", "{}"); plain.showModal(); await flush(); await timers.tick(20);
   key(document.body, "o", { code: "KeyO", altKey: true, shiftKey: true });
   assert.equal(notices.at(-1), "새 창은 데스크톱 앱에서 열 수 있어요.");
+  plain.close(); plain.removeAttribute("data-popout");
   window.__TAURI__.core = core;
   // outside click: press and release both on the backdrop
+  page.append(document.adoptNode(pd)); pd.classList.remove("popout-root");
+  window.failOpen = true; pd.showModal(); await flush(); await timers.tick(20); window.failOpen = false;
   pd._rect = { left: 100, top: 100, width: 400, height: 300 };
   fire(pd, "pointerdown", { clientX: 50, clientY: 50 });
   fire(pd, "click", { clientX: 50, clientY: 50 });
   assert.equal(pd.open, false);
-  pd.showModal();
+  window.failOpen = true; pd.showModal(); await flush(); await timers.tick(20); window.failOpen = false;
   fire(pd, "pointerdown", { clientX: 150, clientY: 150 }); // inside
   fire(pd, "click", { clientX: 150, clientY: 150 });
   assert.equal(pd.open, true);
   pd.close();
+});
+
+test("in a popout window: Esc closes its popup, the next popup it opens stays there, and code-opened menus follow", async () => {
+  add(`<dialog id="w1" data-popout='{}' data-popout-title=""><div class="dialog-head">a</div></dialog>`);
+  const w1 = $("#w1");
+  w1.showModal(); await flush(); await timers.tick(20);
+  const kd = w1.ownerDocument, label = opened.at(-1)[1];
+  assert.notEqual(kd, document);
+  assert.equal(kd.title, "Arkism");
+  kd._focus = true; // the user is in that window now
+  // a confirm it asks for and a menu it puts on the page open there, not in the app
+  const ask = document.createElement("dialog"); document.body.append(ask); ask.showModal(); await flush();
+  assert.equal(ask.ownerDocument, kd);
+  assert.equal(ask.classList.contains("popout-root"), false);
+  const menu = document.createElement("div"); menu.className = "auto-menu"; document.body.append(menu); await flush();
+  assert.equal(menu.ownerDocument, kd);
+  const plainDiv = document.createElement("div"); document.body.append(plainDiv); await flush();
+  assert.equal(plainDiv.ownerDocument, document, "only floating things move");
+  plainDiv.remove();
+  // closing the confirm keeps the window: its popup is still open there
+  ask.close(); menu.remove();
+  await timers.tick(1); await flush();
+  assert.notDeepEqual(invokes.at(-1), ["popout_destroy", { label }]);
+  // a popup that swaps itself for the next keeps the window
+  w1.close();
+  const next = document.createElement("dialog"); next.dataset.popout = "{}"; document.body.append(next); next.showModal(); await flush();
+  assert.equal(next.ownerDocument, kd);
+  assert.ok(next.classList.contains("popout-root"), "the next popup fills the window");
+  await timers.tick(1); await flush();
+  assert.notDeepEqual(invokes.at(-1), ["popout_destroy", { label }]);
+  kd._focus = false;
+  next.close(); await timers.tick(1); await flush();
+  assert.deepEqual(invokes.at(-1), ["popout_destroy", { label }]);
 });
 
 test("window buttons minimize, maximize, close (asking a popout popup first) and move into a top modal", async () => {

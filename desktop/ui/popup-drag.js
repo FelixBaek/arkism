@@ -8,27 +8,102 @@
   // Esc's path: a "cancel" a guard can stop, then close.
   const dismiss = (dlg) => { if (dlg.dispatchEvent(new Event("cancel", { cancelable: true }))) dlg.close(); };
 
-  // Opens the popup in a separate window at screen point (x, y) and closes it here. Only popups that say how to reopen
-  // themselves (data-popout) can go; unsaved edits stop it the same way closing would.
-  const going = new WeakSet(); // a popup whose popout_open is still on its way (a held Alt+Shift+O must not open it twice)
-  async function tearOff(dlg, x, y) {
-    const recipe = dlg.dataset.popout;
-    const session = window.ArkismPopoutSession?.();
-    if (!recipe || !session || !tauri() || going.has(dlg)) return false;
-    if (!dlg.dispatchEvent(new Event("cancel", { cancelable: true }))) return false;
-    const r = dlg.getBoundingClientRect();
-    going.add(dlg);
-    try {
-      await tauri().invoke("popout_open", { payload: JSON.stringify({ recipe: JSON.parse(recipe), session }), title: dlg.dataset.popoutTitle || "", x: Math.round(x), y: Math.round(y), width: Math.round(r.width), height: Math.round(r.height) });
-    } catch (err) {
-      window.ArkismNotice?.(`새 창으로 열지 못했어요 (${err?.message || err}).`);
-      return false;
-    } finally {
-      going.delete(dlg);
+  // 새 창으로: the popup itself moves into a separate OS window opened with window.open (popout.rs builds it on this
+  // window's browser environment), the way Obsidian pops out a pane. Its state, listeners and data stay as they are,
+  // so nothing reloads. Only popups that can live alone (data-popout) go.
+  const kids = new Map(); // popout window label → { w, root }
+  let seq = Date.now() % 1e8;
+  const docOf = (w) => { try { return w.closed ? null : w.document; } catch { return null; } };
+  // A child's document as this one's: same stylesheets, theme and font attributes, marked popout (app.css).
+  function dress(d) {
+    const html = document.documentElement;
+    for (const { name, value } of html.attributes) d.documentElement.setAttribute(name, value);
+    d.documentElement.classList.add("popout");
+    d.head.replaceChildren(...[...document.querySelectorAll('link[rel="stylesheet"], style')].map((n) => { const c = n.cloneNode(true); if (n.href) c.setAttribute("href", n.href); return c; }));
+    d.body.className = document.body.className;
+  }
+  function place(kid, dlg) {
+    const d = docOf(kid.w);
+    if (!d || dlg.ownerDocument === d && d.body.contains(dlg)) return;
+    if (!d.documentElement.classList.contains("popout")) dress(d);
+    d.body.append(d.adoptNode ? d.adoptNode(dlg) : dlg);
+    if (dlg.tagName !== "DIALOG") return; // a menu or list that code put on the page
+    if (!dlg.open) dlg.setAttribute("open", "");
+    if (!kid.root?.isConnected || kid.root.ownerDocument !== d || !kid.root.open) { kid.root = dlg; dlg.classList.add("popout-root"); watch(kid, dlg); }
+    dlg.classList.remove("popping");
+    dlg.style.translate = "";
+  }
+  // The child's last popup closed (✕, 저장, Esc): its window goes. A popup that swaps itself for the next one
+  // (기억 처리 ‹ ›) opens that one in the same tick, so look after it.
+  const owner = new WeakMap(); // dialog → the window it is the root of now
+  function watch(kid, dlg) {
+    const known = owner.has(dlg);
+    owner.set(dlg, kid);
+    if (known) return;
+    dlg.addEventListener("close", () => setTimeout(() => {
+      const kid = owner.get(dlg), label = kid.label;
+      if (kids.get(label) !== kid) return;
+      const d = docOf(kid.w);
+      if (d?.querySelector("dialog[open]")) return;
+      kids.delete(label);
+      void tauri()?.invoke("popout_destroy", { label }).catch(() => kid.w.close());
+    }));
+  }
+  function tearOff(dlg, x, y, quiet) {
+    if (!dlg.dataset.popout || !tauri() || dlg.classList.contains("popout-root")) return false;
+    const r = dlg.getBoundingClientRect(), label = `popout-${++seq}`;
+    const title = encodeURIComponent(dlg.dataset.popoutTitle || "");
+    const w = window.open(`about:blank#${label}|${title}`, label, `popup,left=${Math.round(x)},top=${Math.round(y)},width=${Math.round(r.width)},height=${Math.round(r.height)}`);
+    if (!w) { if (!quiet) window.ArkismNotice?.("새 창으로 열지 못했어요."); return false; }
+    const kid = { w, root: null, label };
+    kids.set(label, kid);
+    place(kid, dlg);
+    // The window may swap its first blank page for a fresh one while it is being built: move the popup again if so.
+    let n = 0;
+    const again = setInterval(() => {
+      // a window whose page never got ready leaves the popup here: show it again and close that empty window
+      if (++n > 60 || kids.get(label) !== kid || !(kid.root || dlg).open) {
+        if (!kid.root) {
+          dlg.classList.remove("popping");
+          if (kids.get(label) === kid) { kids.delete(label); void tauri()?.invoke("popout_destroy", { label }).catch(() => w.close()); }
+        }
+        return clearInterval(again);
+      }
+      if (docOf(w)) place(kid, kid.root || dlg);
+    }, 50);
+    const d = docOf(w);
+    if (d) {
+      d.title = dlg.dataset.popoutTitle ? `${dlg.dataset.popoutTitle} · Arkism` : "Arkism";
+      // Esc closes the top popup there the way it does here (a moved dialog is no longer modal, so no cancel of its own)
+      w.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { const top = [...docOf(w).querySelectorAll("dialog[open]")].pop(); if (top) { e.preventDefault(); dismiss(top); } } });
     }
-    dlg.close();
     return true;
   }
+  // The OS ✕ on a popout window (popout.rs): close its popup the way Esc does, so unsaved edits still ask first.
+  void window.__TAURI__?.event?.listen?.("popout-close", (e) => {
+    const kid = kids.get(e.payload), d = kid && docOf(kid.w);
+    const top = d && [...d.querySelectorAll("dialog[open]")].pop();
+    if (top) dismiss(top); else void tauri()?.invoke("popout_destroy", { label: e.payload });
+  });
+  // The window the user is in: a popup or menu that code opens from there (a confirm, the next stage) goes there too.
+  const FLOAT = (n) => n.tagName === "DIALOG" || n.hasAttribute("popover") || /^(menu|listbox|tooltip)$/.test(n.getAttribute("role") || "") || /menu/.test(n.className || "");
+  const focusedKid = () => [...kids.values()].find((k) => docOf(k.w)?.hasFocus());
+
+  // 처음부터 창으로: a popup that can live alone opens in its own window at once, where it would have appeared here.
+  new MutationObserver((list) => {
+    for (const m of list) {
+      const n = m.type === "attributes" ? m.target : null;
+      const kid = focusedKid();
+      if (kid) {
+        for (const a of m.addedNodes || []) if (a.nodeType === 1 && a.parentNode === document.body && FLOAT(a)) place(kid, a);
+        if (n instanceof HTMLDialogElement && n.open && n.ownerDocument === document) place(kid, n);
+        continue;
+      }
+      if (!(n instanceof HTMLDialogElement) || !n.open || !n.dataset.popout || n.classList.contains("popping") || n.ownerDocument !== document) continue;
+      n.classList.add("popping");
+      requestAnimationFrame(() => { const r = n.getBoundingClientRect(); if (n.ownerDocument === document && !tearOff(n, window.screenX + r.left, window.screenY + r.top, true)) n.classList.remove("popping"); }); // no window: it just opens here
+    }
+  }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open", "data-popout"] });
 
   document.addEventListener("pointerdown", (ev) => {
     if (ev.button !== 0) return;
@@ -53,7 +128,7 @@
       dlg.classList.remove("dragging", "tear-off");
       // A new, unsaved expert/team/automation has no id to reopen in another window yet: say so instead of doing nothing.
       if (e.type === "pointerup" && out(e) && !dlg.dataset.popout && tauri() && dlg.querySelector(".crew-popup-head")) window.ArkismNotice?.("저장한 뒤에 앱 밖 새 창으로 옮길 수 있어요.");
-      if (e.type === "pointerup" && out(e)) void tearOff(dlg, e.screenX - (sx - r.left), e.screenY - (sy - r.top)).then((gone) => { if (!gone) dlg.style.translate = `${x0}px ${y0}px`; });
+      if (e.type === "pointerup" && out(e) && !tearOff(dlg, e.screenX - (sx - r.left), e.screenY - (sy - r.top))) dlg.style.translate = `${x0}px ${y0}px`;
     };
     dlg.classList.add("dragging");
     head.addEventListener("pointermove", move);
@@ -83,7 +158,7 @@
     if (!dlg.dataset.popout) return say(dlg.querySelector(".crew-popup-head") ? "저장한 뒤에 앱 밖 새 창으로 옮길 수 있어요." : "이 창은 새 창으로 열 수 없어요.");
     if (!tauri()) return say("새 창은 데스크톱 앱에서 열 수 있어요.");
     const r = dlg.getBoundingClientRect();
-    void tearOff(dlg, window.screenX + r.left, window.screenY + r.top);
+    tearOff(dlg, window.screenX + r.left, window.screenY + r.top);
   });
 
   // A reopened popup starts centered again.

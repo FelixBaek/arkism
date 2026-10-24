@@ -153,7 +153,6 @@
 .win-close:hover, .win-close:active { background: #c42b1c; color: #fff; } /* Windows' own close red, both themes */
 .win-btn .win-restore, .win-btn.on .win-max { display: none; }
 .win-btn.on .win-restore { display: block; }
-html.popout dialog.popout-root { padding-top: 32px; }
 @media (max-width: 760px) { body:has(> .window-bar:not([hidden])) :is(.main, .sidebar, .unlock) { padding-top: 32px; } }
 /* With the 창 버튼 strip shown, popups sit below it so its — □ ✕ never cover a popup's own head. */
 body:has(> .window-bar:not([hidden])) dialog:not(.popout-root, .page-dialog) { inset-block-start: 32px; max-height: calc(100vh - 48px); }
