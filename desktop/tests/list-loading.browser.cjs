@@ -134,12 +134,18 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
     await page.getByRole("searchbox", { name: "스킬 검색", exact: true }).fill("not-loaded");
     await next("skills");
     await page.getByRole("searchbox", { name: "스킬 검색", exact: true }).fill("");
-    await page.getByRole("combobox", { name: "상태", exact: true }).selectOption("trash");
+    // 상태 lives in the 필터 bubble now: open it, pick the chip, close it again.
+    async function pickState(label) {
+      await page.locator(".v4s-filter-btn").first().click();
+      await page.getByRole("dialog", { name: "필터" }).locator("section", { has: page.locator("h4", { hasText: /^상태$/ }) }).getByRole("button", { name: new RegExp(`^${label}`) }).click();
+      await page.keyboard.press("Escape");
+    }
+    await pickState("휴지통");
     await page.locator('[data-collection="skillTrash"]').waitFor();
     await next("skillTrash");
     await page.waitForFunction(() => [...document.querySelectorAll(".v4s-name")].some(n => n.textContent === "skillTrash-00099"));
     assert.equal(await page.evaluate(() => window.listCalls.filter(c => c.name === "skillTrash" && c.start).length), 1);
-    await page.getByRole("combobox", { name: "상태", exact: true }).selectOption("all");
+    await pickState("전체");
     async function revealAll() {
       for (let i = 0; i < 30; i++) {
         const status = await page.locator('[data-collection="skills"] [role="status"]').innerText();

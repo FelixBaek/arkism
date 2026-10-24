@@ -7,7 +7,7 @@ function stepDotClass(s) {
 }
 window.ArkismReviews = (ctx) => {
   "use strict";
-  const { state, $, el, button, render, request, query, notice, detailShell, markSelected, openDetail, ago, assist, go, headExtras, confirmPop } = ctx;
+  const { state, $, el, button, render, request, query, notice, detailShell, markSelected, openDetail, ago, assist, headExtras, confirmPop } = ctx;
 
   const doc = () => state.data.reviews || null;
   const items = () => doc()?.items || [];
