@@ -155,7 +155,7 @@ structure schema is vendored under `api/schema`; routine checks need no schema
 network access. In a disposable validation environment:
 
 ```bash
-python -m pip install -r tools/requirements-api-contract.txt
+python -m pip install --require-hashes -r tools/requirements-api-contract.txt
 python tools/check_openapi.py
 python -m unittest discover -s tools -p test_check_openapi.py
 ```
