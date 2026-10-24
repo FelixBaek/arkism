@@ -28,9 +28,10 @@ func (f *fakeRepo) ListCatalogRecords(ctx context.Context, scope Scope, col, aft
 	}
 	return out, nil
 }
-func TestCatalogMemoryGlobalQueryPrivacyAndCursor(t *testing.T) {
-	f := newFixture(t)
-	f.svc.Embedder = nil
+
+// seedCatalogMemories stores catalog-000..149 in repo:fixture and catalog-150, the only "Rare NEEDLE", in repo:far.
+func seedCatalogMemories(t *testing.T, f *fixture) {
+	t.Helper()
 	seed := f.activeMemory("seed", "fixture")
 	for i := 0; i < 151; i++ {
 		r := seed
@@ -46,6 +47,11 @@ func TestCatalogMemoryGlobalQueryPrivacyAndCursor(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
+}
+func TestCatalogMemoryGlobalQueryPrivacyAndCursor(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Embedder = nil
+	seedCatalogMemories(t, f)
 	in := CatalogQueryInput{Scope: scopeA, Query: "needle", Repository: "far", Sort: "old", Limit: 10}
 	page, e := f.svc.QueryMemoryCatalog(testCtx, f.human, in, false)
 	if e != nil || page.Total != 1 || page.Items[0].ID != "catalog-150" {

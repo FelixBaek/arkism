@@ -37,7 +37,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (batch.length > 1) return;
     queueMicrotask(() => { // one redraw per drawing pass, after every name it asked for has come back
       const wait = batch; batch = [];
-      Promise.allSettled(wait).then(() => { if (dlg?.isConnected) redraw?.(); }); // whichever window is open now: a redraw while waiting asks for no new reads
+      void Promise.allSettled(wait).then(() => { if (dlg?.isConnected) redraw?.(); }); // whichever window is open now: a redraw while waiting asks for no new reads
     });
   }
   const memText = (id) => {
