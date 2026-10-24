@@ -302,6 +302,8 @@ export function createToolViews(deps) {
       deps.headExtras();
       deps.$("#stats").replaceChildren();
       table.replaceChildren(deps.el("div", "empty", "MCP 목록을 불러오지 못했어요. 서버의 arkism-agents.timer가 돌고 있는지 확인해 주세요."));
+      const bar = deps.el("div", "v4s-bar"); bar.append(...deps.barActions(refreshTools)); // 새로고침 · 설치 stay so the list can be retried
+      deps.$("#controls").replaceChildren(bar);
       return;
     }
     deps.headExtras({ count: `${(plugin ? t.plugins : t.servers).length}개` }); // 플러그인 · MCP are area tabs already
@@ -328,7 +330,7 @@ export function createToolViews(deps) {
     bar.append(deps.panelSearch(plugin ? "플러그인 검색" : "MCP 검색"), deps.filterMenu(plugin ? "plugin" : "mcp", [
       { title: "카테고리", set: deps.state.toolCat !== "all", chips: cats.length ? [["전체", all.length, deps.state.toolCat === "all", pick("toolCat", "all")], ...cats.map(([id, label, , c]) => [label, c, deps.state.toolCat === id, pick("toolCat", id)])] : [] },
       { title: "상태", set: deps.state.toolStatus !== "all", chips: TOOL_STATES.map(([k, l]) => [l, k === "all" ? "" : all.filter((e) => toolGroup(e) === k).length, deps.state.toolStatus === k, pick("toolStatus", k)]) },
-      { title: "에이전트", set: !!who, chips: [["모든 에이전트", "", !who, pick("toolAgent", "")], ...keys.map((k) => [deps.agentName(k), all.filter((e) => e.agents?.[k] === "on").length, who === k, pick("toolAgent", k)])] }]),
+      { title: "에이전트", set: !!who, zero: true, chips: [["모든 에이전트", "", !who, pick("toolAgent", "")], ...keys.map((k) => [deps.agentName(k), all.filter((e) => e.agents?.[k] === "on").length, who === k, pick("toolAgent", k)])] }]),
     ...deps.barActions(refreshTools));
     deps.$("#controls").replaceChildren(bar);
     if (who && !deps.AGENT_SYNC[who]) deps.$("#chips").append(deps.el("p", "cn-note", `${deps.agentName(who)}의 MCP 설정은 아직 읽지 않아요. 켜고 끄기는 Claude Code·Codex만 돼요.`));

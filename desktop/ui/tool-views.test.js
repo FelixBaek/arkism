@@ -162,6 +162,7 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   assert.deepEqual(menu.groups.map((g) => g.title), ["카테고리", "상태", "에이전트"]);
   assert.deepEqual(menu.groups[2].chips.map((c) => `${c[0]} ${c[1]}`.trim()), ["모든 에이전트", "Claude Code 3", "Codex 2", "Gemini 0"]);
   assert.equal(menu.groups[1].chips.find((c) => c[2])[0], "전체");
+  assert.equal(menu.groups[2].zero, true); // one chip per agent, Gemini 0 included
   assert.deepEqual(s.doc.querySelectorAll("#controls .btn").map((b) => b.textContent), ["새로고침", "설치"]);
   menu.groups[2].chips[3][3]();
   assert.equal(s.state.toolAgent, "gemini");
@@ -183,6 +184,7 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   // No report from the host.
   s.state.data.tools = null; s.v.renderTools();
   assert.match(s.doc.querySelector("#table").textContent, /MCP 목록을 불러오지 못했어요/);
+  assert.deepEqual(s.doc.querySelectorAll("#controls .btn").map((b) => b.textContent), ["새로고침", "설치"]);
   s.state.data.tools = tools();
   // Never collected: treated as stale.
   s.state.data.tools.collected_at = ""; s.state.toolTab = "mcp"; s.v.renderTools();
