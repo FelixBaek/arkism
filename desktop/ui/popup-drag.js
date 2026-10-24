@@ -28,6 +28,8 @@
     let css;
     try { css = n.tagName === "LINK" && [...n.sheet.cssRules].map((r) => r.cssText).join("\n"); } catch { return null; } // not loaded yet, or another origin
     if (!css) return null;
+    // a url() in the text was relative to the sheet's own address (fonts/…): pin it there, the child page has another
+    css = css.replace(/url\(\s*(["'])(.*?)\1\s*\)/g, (_, q, u) => `url(${q}${new URL(u, n.href).href}${q})`);
     const s = d.createElement("style");
     if (n.media) s.media = n.media;
     s.textContent = css;

@@ -398,3 +398,13 @@ test("a failed load shows the retry notice, and 다시 시도 loads again", asyn
   await app.settle(1000);
   await home();
 });
+
+test("a bare screen hides its title but keeps the title row when it carries buttons", async () => {
+  deps.ArkismHome.go("teams"); await app.settle(1000);
+  const head = app.$(".main > .page-head");
+  assert.ok(head.classList.contains("bare"));
+  assert.notEqual(head.style.display, "none");
+  assert.ok(byText("#head-actions button", /회의 보기/), "회의 보기 stays reachable");
+  await home();
+  assert.equal(head.classList.contains("bare"), false);
+});
