@@ -422,14 +422,16 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const advice = el("div", "ov-verdict"); advice.hidden = true;
     const picks = Object.entries(CONFLICT_PICK).map(([choice, label]) => { const b = button(label, "small", null, async () => {
       act.querySelectorAll("button").forEach((x) => (x.disabled = true));
-      await ctx.resolveConflict(c, choice); // it reports success or failure itself and reloads the memories
-      done();
+      // it reports success or failure itself and reloads the memories; on a failure the notice stays and the buttons come back
+      if (await ctx.resolveConflict(c, choice)) done();
+      else act.querySelectorAll("button").forEach((x) => (x.disabled = false));
     }); b.dataset.choice = choice; return b; });
     const ai = button("AI 제안", "small", null, async () => {
+      if (!old) { st.textContent = "기존 기억을 불러온 뒤에 AI 제안을 받을 수 있어요."; return; }
       const kit = window.ArkismAIChat?.kit; if (!kit) { st.textContent = "AI 도움을 쓸 수 없어요."; return; }
       ai.disabled = true; st.textContent = "";
       try {
-        const prompt = `Two memories an AI agent is given conflict. Decide which the person should keep.\nExisting memory: ${old?.text || "(unknown)"}\nNew candidate: ${c.text}\nAnswer with ONE JSON object: {"pick": "new" | "both" | "keep_old", "reason": "one short Korean sentence"}.`;
+        const prompt = `Two memories an AI agent is given conflict. Decide which the person should keep.\nExisting memory: ${old.text}\nNew candidate: ${c.text}\nAnswer with ONE JSON object: {"pick": "new" | "both" | "keep_old", "reason": "one short Korean sentence"}.`;
         const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory conflict. Reply with the JSON object only." } } });
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output || ""); if (!CONFLICT_PICK[j?.pick]) throw new Error(tr("AI가 고르지 못했어요."));
@@ -654,7 +656,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const remote = pagedWindow(d, "/v1/usage/sessions", () => ({ range: focus ? "all" : "7d", sort: "recent", q, source: agent === "all" ? "" : agent }), paint, true);
     // the archived dialogue (POST /v1/usage/sessions/transcript: user·assistant text only, secrets and <private> never shown), 30 messages a page
     async function readTalk(id, mark = "", more = false) {
-      const t = talk = more && talk?.id === id ? { ...talk, loading: true } : { id, mark, items: [], next: "", archive: "", state: "", hidden: 0, pages: 0, loading: true, error: "" };
+      const t = talk = more && talk?.id === id ? { ...talk, loading: true, error: "" } : { id, mark, items: [], next: "", archive: "", state: "", hidden: 0, pages: 0, loading: true, error: "" };
       paint();
       try {
         const r = await request("/v1/usage/sessions/transcript", { method: "POST", body: JSON.stringify({ scope: state.scope, id, limit: 30, ...(t.next ? { archive_id: t.archive, after: t.next } : {}) }) });

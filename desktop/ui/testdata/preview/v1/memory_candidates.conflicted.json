@@ -14,7 +14,7 @@
    "created_at": "2026-10-13T12:06:34.299802Z",
    "updated_at": "2026-10-13T12:06:34.299802Z",
    "tags": [
-    "event_id:codex:session_01JX8K2M2QWERTY"
+    "event_id:claude_code:session_01JX8K2M2QWERTY"
    ],
    "created_by_type": "agent",
    "conflict_id": "r1"

@@ -5107,7 +5107,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "위에서부터 순서대로 말해요 · 끌어서 순서를 바꿔요": "Speaks in order from the top · drag to reorder", "최근 30일 회의": "Meetings in last 30 days",
   "무엇을 고칠까요? 예: 접근성 검토자를 넣고 라운드를 3번으로 줄여 줘": "What should change? e.g. add an accessibility reviewer and cut rounds to 3",
   "어떤 팀이 필요해요? 예: 시안을 여러 관점에서 보고 고칠 목록을 만드는 팀": "What team do you need? e.g. a team that reviews a design from several angles and lists fixes",
-  "초안 만들기": "Draft it", "무엇을 할지 적어 주세요.": "Describe what to do.", "AI 도움을 쓸 수 없어요.": "AI help is unavailable.", "만드는 중…": "Working…",
+  "초안 만들기": "Draft it", "무엇을 할지 적어 주세요.": "Describe what to do.", "AI 도움을 쓸 수 없어요.": "AI help is unavailable.", "기존 기억을 불러온 뒤에 AI 제안을 받을 수 있어요.": "AI advice is available once the existing memory loads.", "만드는 중…": "Working…",
   "AI의 답을 읽지 못했어요. 다시 해 보세요.": "Could not read the AI's answer. Try again.", "고쳤어요. 저장하면 반영돼요.": "Edited. Save to apply.",
   "초안을 만들었어요. 다듬어서 만들어 주세요.": "Draft ready. Polish it, then create.", "AI가 답하지 못했어요.": "The AI did not answer.",
   "자주 여는 회의의 주제 틀": "Topic templates for frequent meetings", "+ 추가": "+ Add", "팀 자료": "Team materials",
