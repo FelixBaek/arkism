@@ -24,6 +24,7 @@ function setup({ skills = [], snapshot = {}, handler, wide = true } = {}) {
   const deps = {
     ...h, state, generation: 1, TRASH_KEY: "trash",
     shownAgents: () => AGENTS,
+    segment: (tabs, cur, pick) => { const w = h.el("div", "segment"); for (const [k, l, n] of tabs) { const b = h.el("button", `tab${k === cur ? " active" : ""}`, n === undefined ? l : `${l}${n}`); b.addEventListener("click", () => pick(k)); w.append(b); } return w; },
     loadAll: () => log.push("loadAll"), barActions: (reload) => [h.button("새로고침", "", null, reload), h.button("설치")],
     store: (k, v) => log.push(["store", k, v]), render: (x) => log.push(["render", x]), renderDetail: () => log.push("detail"),
     catalogQuery: { record: (id) => records().find((x) => `skill:${x.id}` === id) || null, ensure: (c) => log.push(["ensure", c]), snapshot: () => snap, more: async (c) => { log.push(["more", c]); if (snap.moreFails) throw new Error("x"); }, refreshVisible: async () => log.push("refresh") },
@@ -139,8 +140,25 @@ test("list: attention card, filters, sort, copies, categories and the footer", a
   btn(group("정렬"), "이름 순").click();
   assert.equal(s.state.skillSort, "name");
   assert.equal(s.state.skillDir, 0);
-  btn(group("에이전트"), "Codex 쓰는 스킬").click();
+  // 에이전트: one chip per agent with its logo, counting the skills it can use; no toggle until one is picked.
+  assert.deepEqual(group("에이전트").querySelectorAll(".chip").map((c) => c.textContent), ["모든 에이전트", "Claude Code4", "Codex3", "Gemini4"]);
+  assert.equal(group("에이전트").querySelectorAll(".chip img").length, 3);
+  assert.equal(group("에이전트").querySelector(".segment"), null);
+  btn(group("에이전트"), "Codex").click();
   assert.equal(s.state.skillModel, "codex");
+  s.v.renderSkills(); pop = s.doc.querySelector(".v4s-pop");
+  const seg = group("에이전트").querySelector(".segment");
+  assert.deepEqual(seg.querySelectorAll(".tab").map((b) => b.textContent), ["쓰는 스킬", "못 쓰는 스킬1"]);
+  btn(seg, "못 쓰는 스킬").click();
+  assert.equal(s.state.skillModel, "!codex");
+  s.v.renderSkills(); pop = s.doc.querySelector(".v4s-pop");
+  assert.match(group("에이전트").querySelector(".chip.active").textContent, /Codex/); // the agent stays picked
+  btn(group("에이전트").querySelector(".segment"), "쓰는 스킬").click();
+  assert.equal(s.state.skillModel, "codex");
+  btn(group("에이전트"), "Claude Code").click();
+  s.v.renderSkills(); pop = s.doc.querySelector(".v4s-pop");
+  assert.equal(group("에이전트").querySelector(".segment"), null); // Claude Code can use every skill: nothing to toggle
+  s.state.skillModel = "codex";
   btn(group("카테고리"), "개발").click();
   assert.equal(s.state.skillCat, "dev");
   // A re-render keeps the bubble open and counts what is set; the picked sort flips on a second pick.

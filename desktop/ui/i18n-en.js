@@ -3680,8 +3680,6 @@ window.ArkismI18nEN = {
   "/ {0}개{1}": "/ {0}{1}",
   "개 · MCP {0} · 플러그인 {1}": "items · MCP {0} · plugins {1}",
   "{0}의 MCP 설정은 아직 읽지 않아요. 켜고 끄기는 Claude Code·Codex만 돼요.": "{0}'s MCP settings aren't read yet. Only Claude Code and Codex can be toggled.",
-  "{0} 쓰는 스킬": "Skills {0} uses",
-  "{0} 못 쓰는 스킬": "Skills {0} can't use",
   "{0}가 못 쓰는 스킬이 없어요.": "{0} can use every skill.",
   "스킬 {0}개를 못 써요": "{0} skills unavailable",
   "복사하지 못했어요 ({0}).": "Couldn't copy ({0}).",

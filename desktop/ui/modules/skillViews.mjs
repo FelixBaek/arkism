@@ -223,6 +223,7 @@ export function createSkillViews(deps) {
         const sec = deps.el("section", "v4s-pop-group");
         const row = deps.el("div", "v4s-pop-chips"); row.append(...chips);
         sec.append(deps.el("h4", "", g.title), row);
+        if (g.extra) sec.append(g.extra);
         box.append(sec);
       }
       return box;
@@ -305,8 +306,17 @@ export function createSkillViews(deps) {
     }
     const modelKeys = deps.shownAgents().map(([k]) => k);
     if (deps.state.skillModel && !modelKeys.includes(deps.state.skillModel.replace("!", ""))) deps.state.skillModel = "";
+    // 에이전트: one chip per agent (logo + name, count = skills it can use); a picked agent gets a 쓰는/못 쓰는 toggle.
     const pickModel = (k) => () => { deps.state.skillModel = k; deps.render(false); };
-    const models = [["모든 에이전트", "", deps.state.skillModel === "", pickModel("")], ...modelKeys.flatMap((k) => [[`${deps.agentName(k)} 쓰는 스킬`, live.filter((sk) => allowed(sk, k)).length, deps.state.skillModel === k, pickModel(k)], [`${deps.agentName(k)} 못 쓰는 스킬`, live.filter((sk) => !allowed(sk, k)).length, deps.state.skillModel === `!${k}`, pickModel(`!${k}`)]])];
+    const agentOf = deps.state.skillModel.replace("!", "");
+    const agentLabel = (k) => { const [, name, logo] = deps.shownAgents().find(([a]) => a === k); const l = deps.el("span", "v4s-pop-agent"); l.append(deps.agentLogo(logo, name), name); return l; };
+    const models = [["모든 에이전트", "", !agentOf, pickModel("")], ...modelKeys.map((k) => [agentLabel(k), live.filter((sk) => allowed(sk, k)).length, agentOf === k, pickModel(k)])];
+    let modelToggle = null;
+    const cannot = agentOf ? live.filter((sk) => !allowed(sk, agentOf)).length : 0;
+    if (agentOf && (cannot || deps.state.skillModel.startsWith("!"))) {
+      modelToggle = deps.segment([["use", "쓰는 스킬"], ["not", "못 쓰는 스킬", cannot]], deps.state.skillModel.startsWith("!") ? "not" : "use", (v) => pickModel(v === "not" ? `!${agentOf}` : agentOf)());
+      modelToggle.classList.add("v4u-seg", "v4s-pop-toggle");
+    }
     // 분류: 전체 + the owner's categories (설정 › 카테고리). An older server sends no category facets: no number rather than 0.
     const cats = deps.pages.prefs.categories;
     const pickCat = (id) => () => { deps.state.skillCat = id; deps.state.skillLimit = 0; deps.render(false); };
@@ -319,7 +329,7 @@ export function createSkillViews(deps) {
     bar.append(panelSearch("스킬 검색"), filterMenu("skills", [
       { title: "카테고리", set: deps.state.skillCat !== "all", chips: catChips },
       { title: "상태", set: deps.state.skillTab !== "all", chips: SKILL_STATES.map(([k, l]) => [l, k === "all" ? "" : n[k] ?? "…", deps.state.skillTab === k, () => deps.go("skills", k)]) },
-      { title: "에이전트", set: !!deps.state.skillModel, chips: models },
+      { title: "에이전트", set: !!deps.state.skillModel, chips: models, extra: modelToggle },
       { title: "정렬", chips: sorts }]), ...deps.barActions(deps.loadAll));
     deps.$("#controls").replaceChildren(...parts, bar);
     deps.$("#chips").replaceChildren();
