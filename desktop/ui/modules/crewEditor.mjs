@@ -73,6 +73,7 @@ export function createCrewEditor(deps) {
         markDirty();
       }
       await deps.reload();
+      if (at !== session) return false; // left or reopened while the list reloaded
       ed.rec = deps.byId(saved.id) || saved;
       deps.state.view = "graph";
       deps.render();
