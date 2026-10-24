@@ -117,6 +117,24 @@ test("a select opens the app's list, picks with the pointer and the keyboard, an
   assert.equal(pop._popover, false);
 });
 
+test("a select's optgroup heads draw the group's own logo element, else its data-icon mark", () => {
+  window.ArkismBrand = { mark: (name) => { const m = document.createElement("i"); m.className = "mark-" + name; return m; } };
+  const s = document.createElement("select");
+  for (const [label, logo] of [["Z.ai", "tile-zai"], ["Ollama", ""]]) {
+    const g = document.createElement("optgroup"); g.label = label;
+    if (logo) { g.logo = document.createElement("span"); g.logo.className = logo; } else g.dataset.icon = "ollama";
+    const o = document.createElement("option"); o.value = label; o.textContent = label; g.append(o); s.append(g);
+  }
+  page.append(s);
+  fire(s, "pointerdown", { button: 0 });
+  const pop = $(".combo-pop");
+  assert.deepEqual([...pop.querySelectorAll(".combo-head")].map((h) => h.textContent), ["Z.ai", "Ollama"]);
+  assert.ok(pop.querySelector(".combo-head .tile-zai") && pop.querySelector(".combo-head .mark-ollama"));
+  assert.ok(s.querySelector("optgroup").logo.parentNode == null); // a copy is drawn; the select keeps its own
+  fire(s, "pointerdown", { button: 0 });
+  s.remove();
+});
+
 test("a list input filters as typed, shows tabs, groups, tags, keys and an empty note", async () => {
   window.ArkismBrand = { mark: (name) => { const m = document.createElement("i"); m.className = "mark-" + name; return m; } };
   add(`<input id="m" list="models" data-combo-empty="없음"><datalist id="models" data-tabs="전체">

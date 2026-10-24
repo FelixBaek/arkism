@@ -102,6 +102,9 @@ test("the tab lists providers, accounts, quotas, CLI versions, keys and models",
   assert.equal(pick.value, "openai|gpt-5");
   assert.deepEqual(v.m.enabledModels(), ["opus", "gpt-5", "hand", "grok", "m1"]);
   assert.deepEqual(v.m.enabledByProvider().map((p) => p.id), ["anthropic", "openai", "xai", "custom-abc"]);
+  // each provider heading carries its 모델 설정 chip logo: the brand tile, or the stack fallback for xAI and custom ones
+  const heads = pick.children.filter((c) => c.tagName === "OPTGROUP");
+  assert.deepEqual(heads.map((g) => g.logo.className), ["agent-tile", "agent-tile", "agent-tile mono-logo", "agent-tile mono-logo"]);
   // every chip draws its provider
   for (const name of ["Anthropic", "Google", "Z.ai", "xAI", "Custom"]) { click(v.nodes.main, name); assert.match(text(v.nodes.main), /계정/); }
   assert.match(text(v.nodes.main), /직접 추가한 제공자는 키로만 연결해요/);
