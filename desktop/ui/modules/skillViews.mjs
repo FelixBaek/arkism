@@ -195,7 +195,8 @@ export function createSkillViews(deps) {
   }
 
   // 필터 ⌄ (Figma 말풍선): grouped pill chips in a bubble under the button. A pick re-renders the list and the bubble
-  // stays open for the same key; an outside click or Esc closes it. groups: [{ title, set, chips: [[label, count, active, onPick]] }].
+  // stays open for the same key; an outside click or Esc closes it. groups: [{ title, set, zero, chips: [[label, count, active, onPick]] }].
+  // zero keeps 0-count chips (에이전트: one chip per agent, so 못 쓰는 스킬 stays reachable).
   let filterOpen = "";
   function closeFilter() {
     filterOpen = "";
@@ -218,7 +219,7 @@ export function createSkillViews(deps) {
     const pop = () => {
       const box = deps.el("div", "v4s-pop"); box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "필터");
       for (const g of groups) {
-        const chips = g.chips.filter(([, count, active]) => active || count !== 0).map(([label, count, active, onPick]) => filterChip(label, count, active, onPick));
+        const chips = g.chips.filter(([, count, active]) => g.zero || active || count !== 0).map(([label, count, active, onPick]) => filterChip(label, count, active, onPick));
         if (!chips.length) continue;
         const sec = deps.el("section", "v4s-pop-group");
         const row = deps.el("div", "v4s-pop-chips"); row.append(...chips);
@@ -330,7 +331,7 @@ export function createSkillViews(deps) {
     bar.append(panelSearch("스킬 검색"), filterMenu("skills", [
       { title: "카테고리", set: deps.state.skillCat !== "all", chips: catChips },
       { title: "상태", set: deps.state.skillTab !== "all", chips: SKILL_STATES.map(([k, l]) => [l, k === "all" || k === "trash" && !n.trash ? "" : n[k] ?? "…", deps.state.skillTab === k, () => deps.go("skills", k)]) },
-      { title: "에이전트", set: !!deps.state.skillModel, chips: models, extra: modelToggle },
+      { title: "에이전트", set: !!deps.state.skillModel, zero: true, chips: models, extra: modelToggle },
       { title: "정렬", chips: sorts }]), ...deps.barActions(deps.loadAll));
     deps.$("#controls").replaceChildren(...parts, bar);
     deps.$("#chips").replaceChildren();
