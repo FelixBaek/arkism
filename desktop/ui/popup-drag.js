@@ -19,8 +19,19 @@
     const html = document.documentElement;
     for (const { name, value } of html.attributes) d.documentElement.setAttribute(name, value);
     d.documentElement.classList.add("popout");
-    d.head.replaceChildren(...[...document.querySelectorAll('link[rel="stylesheet"], style')].map((n) => { const c = n.cloneNode(true); if (n.href) c.setAttribute("href", n.href); return c; }));
+    d.head.replaceChildren(...[...document.querySelectorAll('link[rel="stylesheet"], style')].map((n) => inline(d, n) || Object.assign(n.cloneNode(true), n.href ? { href: n.href } : {})));
     d.body.className = document.body.className;
+  }
+  // A stylesheet this window already read goes over as text: a <link> fetched again in the fresh blank window can be
+  // dropped while that window is still being set up, which left a popup unstyled in Chrome.
+  function inline(d, n) {
+    let css;
+    try { css = n.tagName === "LINK" && [...n.sheet.cssRules].map((r) => r.cssText).join("\n"); } catch { return null; } // not loaded yet, or another origin
+    if (!css) return null;
+    const s = d.createElement("style");
+    if (n.media) s.media = n.media;
+    s.textContent = css;
+    return s;
   }
   function place(kid, dlg) {
     const d = docOf(kid.w);

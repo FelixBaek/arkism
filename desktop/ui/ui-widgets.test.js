@@ -377,6 +377,9 @@ test("a popup drags by its head, stays on screen, moves into its own window outs
   assert.equal(pd.ownerDocument, document);
   window.failOpen = false;
   // dropped outside: the popup itself moves into a new window there
+  const css = document.createElement("link"); css.setAttribute("rel", "stylesheet"); css.sheet = { cssRules: [{ cssText: ".x { color: red; }" }] };
+  const late = document.createElement("link"); late.setAttribute("rel", "stylesheet"); late.setAttribute("href", "late.css"); // still loading: no sheet yet
+  document.head.append(css, late);
   fire(hd, "pointerdown", { button: 0, clientX: 150, clientY: 110, pointerId: 1 });
   fire(head, "pointerup", { clientX: -5, clientY: 110, screenX: 20, screenY: 30 });
   const [url, label, features] = opened.at(-1);
@@ -387,6 +390,9 @@ test("a popup drags by its head, stays on screen, moves into its own window outs
   assert.notEqual(kd, document);
   assert.ok(kd.body.contains(pd) && pd.open && pd.classList.contains("popout-root"));
   assert.ok(kd.documentElement.classList.contains("popout"), "dressed like this window, marked popout");
+  assert.equal(kd.head.querySelector("style")?.textContent, ".x { color: red; }", "a stylesheet already read goes over as text, not fetched again");
+  assert.ok(kd.head.querySelector('link[href$="late.css"]'), "one still loading is linked as before");
+  css.remove(); late.remove();
   assert.equal(kd.title, "창 · Arkism");
   // the popup closing closes its window
   pd.close();
