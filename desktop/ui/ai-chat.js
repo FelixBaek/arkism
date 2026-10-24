@@ -201,7 +201,7 @@ window.ArkismAIChat = (() => {
 
   api.button = (opts = {}) => mount(opts);
   // field(): the sparkle fills this one field at once — improves what is written, or writes it from the context when empty.
-  // No chat. The result goes in like typing (Ctrl+Z works, the screen's input listener marks it unsaved); 되돌리기 in the note too.
+  // No chat. The result goes in like typing (Ctrl+Z works, the screen's input listener marks it unsaved); 저장 / 취소 in the note too.
   function field(inp, opts) {
     const st = opts.state || {};
     st.input = inp; // a redraw hands in a new field; the result goes into the one on screen
@@ -255,7 +255,7 @@ window.ArkismAIChat = (() => {
         const max = st.input?.maxLength > 0 ? st.input.maxLength : 20000;
         v = v.slice(0, max);
         if (!v || v === cur) st.note = { text: tr("더 고칠 곳이 없어요.") };
-        else { write(v); st.note = { text: tr("AI가 고쳤어요 · 초록은 더한 곳, 빨강은 뺀 곳 · 저장하면 반영돼요"), undo: cur, diff: true }; }
+        else { write(v); st.note = { text: "", undo: cur, diff: true }; }
       } catch (e) { st.note = { text: e?.message || tr("AI가 답하지 못했어요."), err: true }; }
       finally { st.busy = false; show(); }
     }
@@ -276,9 +276,9 @@ window.ArkismAIChat = (() => {
       note.className = `ex-ai-note${n?.err ? " err" : ""}`;
       note.hidden = !n;
       if (!n) return;
-      note.append(el("span", "", n.text));
-      if (n.diff) note.append(btn("고치기", "ghost small", edit));
-      if (n.undo !== undefined) note.append(btn("되돌리기", "ghost small", () => { write(n.undo); st.note = null; show(); }));
+      if (n.text) note.append(el("span", "", n.text));
+      // 저장 keeps the AI text (the screen's own save still sends it); 취소 puts the old text back
+      if (n.undo !== undefined) note.append(btn("저장", "small", () => { st.note = null; show(); }), btn("취소", "ghost small", () => { write(n.undo); st.note = null; show(); }));
     }
     st.show = show; // this copy is the one going on screen (as mount() sets st.paint)
     show();
