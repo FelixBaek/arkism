@@ -107,6 +107,26 @@ test("dragging nodes, panning and wheel zoom move the canvas", async () => {
   assert.deepEqual(clean(), []);
 });
 
+test("the wheel scrolls the node picker and zooms only on the canvas", async () => {
+  const h = await openGraph();
+  await h.click(document.querySelector(".g-tools"), "노드 추가");
+  const stage = document.querySelector(".g-stage");
+  const zoom = () => stage.querySelector(".g-tools output").textContent;
+  const z0 = zoom();
+  const row = document.querySelector(".g-menu .g-preset");
+  const ev = dom.fire(row, "wheel", { deltaY: -200, deltaX: 0, clientX: 50, clientY: 50 });
+  assert.equal(zoom(), z0, "a wheel over the picker leaves the zoom alone");
+  if (ev && "defaultPrevented" in ev) assert.equal(ev.defaultPrevented, false, "the picker list keeps its native scroll");
+  // a middle-drag inside the picker does not pan the canvas either
+  const canvas = stage.querySelector(".g-canvas");
+  const t0 = canvas.style.transform;
+  at(row, "pointerdown", { button: 1 }); at(window, "pointermove", { clientX: 120, clientY: 120 }); at(window, "pointerup", { clientX: 120, clientY: 120 });
+  assert.equal(canvas.style.transform, t0);
+  dom.fire(stage, "wheel", { deltaY: -200, deltaX: 0, clientX: 50, clientY: 50 });
+  assert.notEqual(zoom(), z0, "a wheel on the canvas still zooms");
+  assert.deepEqual(clean(), []);
+});
+
 test("undo and redo step through canvas edits; Ctrl+Z inside a field stays with the field", async () => {
   const h = await openGraph();
   const tools = () => document.querySelector(".g-tools");
