@@ -442,7 +442,6 @@ window.ArkismModels = (ctx) => {
   function tab(k) {
     kit = k;
     const add = button("공급자 추가", "primary", null, () => openKeyDialog({ id: "custom", name: "직접 추가한 제공자", custom: true }));
-    kit.head(button("사용량 보기", "ghost", null, () => go("usage")), add);
     if (state.data.providers === null) {
       const g = el("section", "mp-card");
       g.append(el("p", "pg-hint", "이 서버는 아직 모델 설정을 지원하지 않아요. 서버를 새 버전으로 바꾸면 보여요."));
@@ -467,7 +466,11 @@ window.ArkismModels = (ctx) => {
       b.addEventListener("click", () => { selected = p.id; render(false); });
       chips.append(b);
     }
-    out.push(chips);
+    // 사용량 보기 · 공급자 추가 sit at the right end of the chip row, next to what they add to
+    const bar = el("div", "mp-chipbar"), acts = el("div", "mp-chip-actions");
+    acts.append(button("사용량 보기", "ghost", null, () => go("usage")), add);
+    bar.append(chips, acts);
+    out.push(bar);
     const p = list.find((x) => x.id === selected);
     out.push(accountsCard(p), modelsCard(p));
     kit.side(keysSection(p),

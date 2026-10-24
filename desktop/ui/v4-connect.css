@@ -26,7 +26,7 @@
 .app.v4-connect .panel .btn:disabled { opacity: .5; cursor: default; }
 .app.v4-connect .panel .btn.cn-link, .app.v4-connect .panel .btn.ghost { min-height: 0; padding: 7px 0; border: 0; background: none; color: var(--nc-muted); }
 .app.v4-connect .panel .btn.cn-link:hover { color: var(--nc-text); background: none; }
-.app.v4-connect .area-bar .head-actions .btn.ghost { color: var(--nc-muted); border-color: transparent; background: none; }
+.app.v4-connect .page-head .head-actions .btn.ghost { color: var(--nc-muted); border-color: transparent; background: none; }
 
 /* ---------------------------------------------------------------- panel: hide the old detail bar, keep its body */
 @media (min-width: 1181px) { .app.v4-connect .panel > .detail .detail-bar { display: none; } } /* narrow: the drawer keeps its 닫기 */
