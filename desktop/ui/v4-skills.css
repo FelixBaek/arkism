@@ -70,6 +70,9 @@
 }
 .v4s-pop-group h4 { margin: 0 0 8px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .v4s-pop-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.v4s-pop-agent { display: inline-flex; align-items: center; gap: 6px; }
+.v4s-pop-agent img, .v4s-pop-agent svg { width: 14px; height: 14px; }
+.v4s-pop-toggle { display: inline-flex; margin-top: 8px; }
 .v4s-pop .chip { height: auto; padding: 5px 12px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 .v4s-pop .chip:hover { color: var(--nc-text); border-color: var(--nc-quiet); }
 .v4s-pop .chip.active { background: none; border-color: var(--nc-accent); color: var(--nc-accent); font-weight: 500; }

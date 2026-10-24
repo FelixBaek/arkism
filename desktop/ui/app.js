@@ -1725,6 +1725,7 @@ export function startApp() {
   const skillViews = createSkillViews({
     get $() { return $; },
     get barActions() { return barActions; },
+    get segment() { return segment; },
     get loadAll() { return loadAll; },
     get agentLogo() { return agentLogo; },
     get agentName() { return agentName; },
