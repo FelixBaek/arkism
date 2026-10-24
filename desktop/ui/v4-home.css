@@ -223,19 +223,20 @@
 /* ---------------------------------------------------------------- 시작: SSH 연결 (Figma 09 · 시작 198:6564) — drawn like a page beside the rail */
 .unlock { left: var(--nc-rail-w); display: block; place-items: normal; padding: var(--nc-page-pad); overflow: auto; background: var(--nc-canvas); }
 .unlock[hidden] { display: none; }
-.unlock .unlock-card { width: auto; max-height: none; overflow: visible; display: flex; flex-direction: column; gap: 24px; padding: 32px 0 0; border: 0; border-top: 1px solid var(--nc-line); border-radius: 0; background: none; }
+.unlock .unlock-card { width: auto; max-height: none; overflow: visible; display: flex; flex-direction: column; gap: 16px; padding: 24px 0 0; border: 0; border-top: 1px solid var(--nc-line); border-radius: 0; background: none; }
 .unlock-head { display: flex; flex-direction: column; gap: 4px; }
 .unlock .unlock-card h1 { font: 500 calc(22px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.unlock .unlock-card .unlock-head p:empty { display: none; }
 .unlock .unlock-card .unlock-head p { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .unlock-panel { display: flex; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); }
 .unlock-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; padding: 24px; }
-.unlock-box { align-self: stretch; display: flex; flex-direction: column; gap: 12px; padding: 20px 18px; border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-surface); }
-.unlock-side { width: var(--nc-detail-w); flex: none; display: flex; flex-direction: column; gap: 14px; padding: 24px 20px; border-left: 1px solid var(--nc-line); }
+.unlock-box { align-self: stretch; display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
+.unlock-side { width: var(--nc-detail-w); flex: none; display: flex; flex-direction: column; gap: 18px; padding: 24px 20px 20px; border-left: 1px solid var(--nc-line); }
 .unlock-side[hidden] { display: none; }
-.unlock-side h2 { margin: 0 0 4px; font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
-.unlock-side ol { margin: 0; padding: 0; list-style: none; counter-reset: step; display: flex; flex-direction: column; gap: 14px; }
-.unlock-side li { counter-increment: step; display: flex; align-items: center; gap: 10px; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
-.unlock-side li::before { content: counter(step); display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; border: 1px solid var(--nc-line); border-radius: 50%; font: 400 11px/1 var(--mono); color: var(--nc-muted); }
+.unlock-side h2 { margin: 0; font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.unlock-side ol { margin: 0; padding: 0; list-style: none; counter-reset: step; display: flex; flex-direction: column; gap: 18px; }
+.unlock-side li { counter-increment: step; display: flex; align-items: center; gap: 10px; font: 400 calc(13px * var(--fs, 1))/20px var(--sans); color: var(--nc-text); }
+.unlock-side li::before { content: counter(step); box-sizing: border-box; display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none; border: 1px solid var(--nc-line); border-radius: 50%; font: 400 11px/1 var(--mono); color: var(--nc-muted); }
 .unlock .unlock-card .unlock-side p { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .unlock .unlock-card .unlock-side p.quiet { color: var(--nc-quiet); }
 /* SSH form, shared by the connect screen and 설정 › 연결: one row per field — title and a line of help on the left, the input on the right */
@@ -251,7 +252,7 @@
 .ssh-auth .segment .tab { padding: 5px 12px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 .ssh-auth .segment .tab.active { background: var(--nc-raised); color: var(--nc-text); font-weight: 600; box-shadow: 0 0 0 1px var(--nc-line); }
 @media (max-width: 760px) { .ssh-rows .ssh-row { grid-template-columns: 1fr; gap: 6px; } }
-.unlock .unlock-actions { justify-content: flex-start; }
+.unlock .unlock-actions { justify-content: flex-start; gap: 6px; }
 .unlock .unlock-actions .btn { height: auto; min-width: 0; padding: 7px 14px; line-height: 1.5; }
 .unlock .unlock-actions:not(#ssh-actions):not(:has(:not([hidden]))) { display: none; }
 .unlock .unlock-card #ssh-test-result:empty, .unlock .unlock-card #unlock-error:empty { display: none; }
@@ -333,19 +334,20 @@
 /* ---------------------------------------------------------------- 시작 2·3단계 (198:6650 에이전트 선택, 198:6736 연결 확인) */
 .app.home-start .home-back, .app.home-start .home-all { display: none !important; }
 .start-wrap { display: flex; flex-direction: column; gap: 16px; }
-.start-steps { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-surface); }
+.start-steps { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
 .start-step { display: flex; align-items: center; gap: 8px; flex: none; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .start-step i { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--nc-line); border-radius: 50%; font: 400 11px/1 var(--mono); font-style: normal; color: var(--nc-muted); }
-.start-step.done i { border-color: transparent; color: var(--nc-accent); }
-.start-step.on { color: var(--nc-text); }
-.start-step.on i { border-color: var(--nc-action); background: var(--nc-action); color: var(--nc-on-accent); }
+.start-step.done i { border-color: transparent; background: var(--nc-raised); color: var(--nc-accent); }
+.start-step.on { font-weight: 500; color: var(--nc-text); }
+.start-step.on i { font-weight: 500; border-color: var(--nc-action); background: var(--nc-action); color: var(--nc-on-accent); }
 .start-line { flex: 1; height: 1px; background: var(--nc-line); }
-.start-card { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-surface); }
-.start-card-head { display: flex; flex-direction: column; gap: 2px; padding: 16px 18px; border-bottom: 1px solid var(--nc-line); }
+.start-card { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
+.start-card-head { display: flex; flex-direction: column; gap: 2px; padding: 16px 18px 12px; border-bottom: 1px solid var(--nc-line); }
 .start-card-head strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .start-card-head small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
-.start-agent, .start-row, .start-ok { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--nc-line); }
-.start-ok { border-bottom: 0; }
+.start-agent, .start-row, .start-ok { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--nc-line); }
+.start-agent { gap: 14px; }
+.start-ok { padding: 14px 18px; border-bottom: 0; }
 .start-card > :last-child { border-bottom: 0; }
 .start-agent .agent-tile { width: 22px; height: 22px; border: 0; background: none; }
 .start-agent .agent-tile img, .start-agent .agent-tile svg { width: 22px; height: 22px; }
@@ -355,17 +357,23 @@
 .start-agent-text small.mono { font: 400 12px/1.5 var(--mono); }
 .start-agent .switch[aria-checked="true"] { background: var(--nc-action); border-color: var(--nc-action); }
 .start-agent .switch[aria-checked="true"] i { background: var(--nc-on-accent); }
-.start-more { padding: 14px 18px; text-align: left; }
+.start-more { padding: 12px 18px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); text-align: left; }
 .start-check { display: inline-grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--nc-raised); font-style: normal; color: var(--nc-accent); }
 .start-badge { flex: none; padding: 2px 8px; border-radius: 6px; background: var(--nc-raised); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .start-badge.ok { background: var(--nc-amber-bg); color: var(--nc-accent); }
 .start-badge.warn { background: var(--nc-amber-bg); color: var(--nc-amber); }
 .start-row .btn, .start-wrap > .actions .btn { height: auto; padding: 7px 14px; line-height: 1.5; }
-.start-wrap > .actions { display: flex; gap: 8px; justify-content: flex-start; }
-.start-kv { display: flex; flex-direction: column; border-top: 1px solid var(--nc-line); }
-.start-kv div { display: flex; gap: 12px; padding: 10px 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
-.start-kv div > span:first-child { width: 92px; flex: none; }
-.start-kv .mono { font: 400 13px/1.5 var(--mono); color: var(--nc-text); overflow-wrap: anywhere; }
+.start-wrap > .actions { display: flex; gap: 6px; justify-content: flex-start; }
+.start-kv { display: flex; flex-direction: column; gap: 18px; }
+.start-kv div { display: flex; gap: 12px; font: 400 calc(13px * var(--fs, 1))/20px var(--sans); color: var(--nc-quiet); }
+.start-kv div > span:first-child { width: 80px; flex: none; }
+.start-rule { width: 100%; height: 1px; margin: 0; border: 0; background: var(--nc-line); }
+/* 시작 2·3단계 (198:6650, 198:6736): title → panel 16px, the detail column steps by 18px */
+.app.home-mode .main:has(.start-wrap) > .page-head { margin-bottom: -8px; }
+.app.home-mode .panel:has(.start-wrap) .detail-body { padding-top: 18px; gap: 18px; }
+.app.home-mode .panel:has(.start-wrap) .detail h2 { font-size: calc(15px * var(--fs, 1)); }
+.app.home-mode .panel:has(.start-wrap) .detail-body > p:not(.meta) { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.start-kv .mono { font: 400 13px/20px var(--mono); color: var(--nc-text); overflow-wrap: anywhere; }
 .start-card.start-ok { flex-direction: row; }
 .start-kv span:not(.mono):not(:first-child) { color: var(--nc-text); }
 @media (min-width: 1181px) { .unlock:has(#ssh-error-side:not([hidden])) #unlock-error { display: none; } }

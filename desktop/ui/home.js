@@ -426,7 +426,8 @@ window.ArkismHome = function (ctx) {
     }
     const ok = el("div", "start-card start-ok");
     const okText = el("span", "start-agent-text");
-    const who = el("small", "mono", ctx.sshLabel(state.ssh) || state.server);
+    const where = ctx.sshLabel(state.ssh && { ...state.ssh, port: null }) || state.server; // user@host: the port sits in the right column
+    const who = el("small", "mono", where);
     who.setAttribute("data-no-i18n", "");
     okText.append(el("strong", "", "SSH로 연결됐어요"), who);
     ok.append(el("i", "start-check", "✓"), okText, el("output", "start-badge ok", "연결됨"));
@@ -444,7 +445,7 @@ window.ArkismHome = function (ctx) {
       return s;
     };
     const ready = state.ready === null ? ["", "확인 중"] : state.ready ? ["ok", "응답 확인"] : ["warn", "응답 없음"];
-    line("서버", ctx.sshLabel(state.ssh) || state.server, [el("output", `start-badge ${ready[0]}`, ready[1])]).classList.add("mono");
+    line("서버", where, [el("output", `start-badge ${ready[0]}`, ready[1])]).classList.add("mono");
     line("에이전트", "최근에 보고된 연결 상태를 확인해요.", [button("연결 상태 보기", "small", null, () => { const t = $("#status-toggle"); if ($("#status-card").hidden) t.click(); })]);
     line("모델", "사용할 계정과 모델을 골라 연결을 시험해요.", [button("모델 연결 시험", "small", null, () => { state.start = 0; ctx.openSettings("models"); })]);
     const act = el("div", "actions");
@@ -462,7 +463,7 @@ window.ArkismHome = function (ctx) {
     if (state.start === 2) {
       const agents = startAgents();
       body.append(el("h2", "", "고르는 기준"), el("p", "", "표시 선택은 이 PC에만 적용돼요. 서버가 스킬과 대화를 모으는 설정은 바뀌지 않아요."),
-        el("p", "meta", "서버 수집 설정과 직접 추가는 설정 › 에이전트에서 바꿔요."), kv([["서버", host()], ["켠 에이전트", `${agents.length}개 중 ${agents.filter((a) => isOn(a.id)).length}개`, true]]));
+        el("p", "meta", "서버 수집 설정과 직접 추가는 설정 › 에이전트에서 바꿔요."), el("hr", "start-rule"), kv([["서버", host()], ["켠 에이전트", `${agents.length}개 중 ${agents.filter((a) => isOn(a.id)).length}개`, true]]));
       return;
     }
     const f = state.ssh || {};

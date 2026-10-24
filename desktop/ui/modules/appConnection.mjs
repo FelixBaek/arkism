@@ -248,7 +248,7 @@ export function createAppConnection(deps) {
     deps.$("#local-link").hidden = builtIn || choose || !deps.state.defaults.local;
     deps.$("#unlock-intro").textContent = choose ? "처음 한 번만 고르면 돼요. 나중에 설정 › 연결에서 바꿀 수 있어요." : builtIn
       ? (deps.state.localError ? `이 PC의 Arkism을 켜지 못했어요 (${deps.state.localError}). 다시 시도하거나 서버에 연결할 수 있어요.` : "이 PC의 Arkism을 준비하고 있어요…")
-      : "SSH로 접속하듯 서버 주소만 넣으면 돼요. 토큰이나 로그인은 필요 없어요.";
+      : ""; // 09 · 시작 (198:6564): the SSH screen has no line under its title
   }
 
   // 기본은 이 PC의 내장 Arkism(로그인 없음). 서버 연결은 사용자가 고를 때만 쓴다.
