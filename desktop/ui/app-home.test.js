@@ -313,6 +313,11 @@ test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject
   await press("AI 제안", d.querySelector(".ov-detail-actions"), 30);
   assert.match(text(d), /AI 제안을 받지 못했어요/);
   app.window.ArkismAIChat.kit = kit;
+  // a failed choice keeps the panel and its buttons usable
+  const offConflict = route("POST", "/v1/memory_candidates/k1/review", () => fail(500, "boom"));
+  await press("기존 것 유지", d.querySelector(".ov-detail-actions"), 80);
+  offConflict(); d = win();
+  assert.ok(btn("기존 것 유지", d) && !btn("기존 것 유지", d).disabled && !btn("새 내용으로 바꾸기", d).disabled, "the choices are usable again");
   await press("기존 것 유지", d.querySelector(".ov-detail-actions"), 80);
   assert.ok(app.apiCalls.some(([m, p, b]) => m === "POST" && p === "/v1/memory_candidates/k1/review" && /keep_old/.test(String(b))), "the conflict goes through resolveConflict");
   await closeAll();
@@ -424,6 +429,18 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   d.querySelectorAll(".ov-wide-row")[1].click(); await app.settle();
   d.querySelectorAll(".ov-wide-row")[0].click(); await app.settle();
   assert.match(text(d), /이 세션의 흐름/);
+  // 내보내기: one session as Markdown or JSON, a failure says so and the button works again
+  const made = [], real = [URL.createObjectURL, URL.revokeObjectURL];
+  URL.createObjectURL = (b) => { made.push(b); return "blob:t"; }; URL.revokeObjectURL = () => {};
+  let offExp = route("POST", "/v1/usage/sessions/export", (a) => ok({ content: "# s", filename: JSON.parse(a.body).format === "json" ? "s.json" : "s.md" }));
+  await press("Markdown으로 내보내기", d, 50);
+  const exp = app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/export").pop();
+  assert.equal(JSON.parse(exp[2]).ids.length, 1); assert.equal(JSON.parse(exp[2]).format, "markdown");
+  assert.equal(made.length, 1); assert.match(text(d), /세션을 내보냈어요/);
+  offExp(); offExp = route("POST", "/v1/usage/sessions/export", () => fail(500, "boom"));
+  await press("JSON", d, 50);
+  assert.match(text(d), /내보내지 못했어요/); assert.ok(!btn("JSON", d).disabled);
+  offExp(); [URL.createObjectURL, URL.revokeObjectURL] = real;
   // 세션 지우기: denied, failed, then done
   let offDel = route("POST", "/v1/usage/sessions/delete", () => fail(403, "access_denied"));
   await press("세션 지우기", d); await press("지우기", app.$("dialog.ov-ask[open]"), 50);
