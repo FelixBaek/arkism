@@ -1042,6 +1042,7 @@ input:is(:not([type]), [type="text"], [type="email"], [type="url"], [type="passw
 dialog[open] :is(.dialog-head, .crew-popup-head, .ov-win-head, .ov-detail-head, .ov-recall-head, .git-dialog-head, .keys-head) { cursor: grab; }
 dialog.dragging, dialog.dragging * { cursor: grabbing !important; user-select: none; }
 /* 새 창으로: a separate window shows only its popup, filling the window. */
+dialog.popping, dialog.popping::backdrop { visibility: hidden; } /* opening in its own window (popup-drag.js) */
 html.popout #app, html.popout #unlock { visibility: hidden; }
 html.popout dialog { visibility: visible; }
 html.popout dialog.popout-root { inset: 0; margin: 0; width: 100vw; max-width: none; height: 100vh; max-height: none; border: 0; border-radius: 0; translate: none !important; }

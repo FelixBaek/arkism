@@ -13,7 +13,7 @@ const env = dom.install({ html: `
 const { window, document, timers, clipboard, selection, media } = env;
 const invokes = [];
 window.__TAURI__ = {
-  core: { invoke: async (cmd, a) => { invokes.push([cmd, a]); if (window.failInvoke) throw new Error("denied"); return "popout-1"; } },
+  core: { invoke: async (cmd, a) => { invokes.push([cmd, a]); if (window.failInvoke) throw new Error("denied"); return a?.spareOnly && !window.spareReady ? null : "popout-1"; } },
   window: { getCurrentWindow: () => ({
     isMaximized: async () => maximized,
     onResized: async (fn) => { resized = fn; },
@@ -406,6 +406,28 @@ test("a popup drags by its head, stays on screen, tears off outside the app and 
   fire(pd, "click", { clientX: 150, clientY: 150 });
   assert.equal(pd.open, true);
   pd.close();
+});
+
+test("with a loaded spare window, a popup that can go opens in its own window at once; without one it stays", async () => {
+  add(`<dialog id="sp" data-popout='{"event":"arkism:open-x"}'><div class="dialog-head">s</div></dialog>`);
+  const sp = $("#sp");
+  window.ArkismPopoutSession = () => ({ token: "t" });
+  let rebuilt = 0;
+  window.ArkismPopoutSpare = () => { rebuilt++; };
+  sp.showModal();
+  await flush(); await timers.tick(20); await flush();
+  assert.equal(invokes.at(-1)[1].spareOnly, true);
+  assert.equal(sp.open, true, "no spare yet: it stays in the app");
+  assert.equal(sp.classList.contains("popping"), false);
+  sp.close();
+  window.spareReady = true;
+  sp.showModal();
+  await flush();
+  assert.ok(sp.classList.contains("popping"), "hidden here while its window opens");
+  await timers.tick(20); await flush();
+  assert.equal(sp.open, false);
+  assert.equal(rebuilt, 1, "the next spare is prepared");
+  window.spareReady = false;
 });
 
 test("window buttons minimize, maximize, close (asking a popout popup first) and move into a top modal", async () => {

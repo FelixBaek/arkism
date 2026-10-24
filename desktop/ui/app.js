@@ -279,8 +279,10 @@ export function startApp() {
     get readJSON() { return readJSON; },
     get state() { return state; },
     get tauri() { return tauri; },
-    get trimSlash() { return trimSlash; }
+    get trimSlash() { return trimSlash; },
+    onWrite: () => { popoutWrote = true; }
   });
+  let popoutWrote = false;
 
   const memoryPaging = createMemoryPaging({
     get $() { return $; },
@@ -2187,24 +2189,45 @@ export function startApp() {
   // 새 창으로 (popup-drag.js): what a separate window needs to reach the same Arkism as this one.
   window.ArkismPopoutSession = () => state.token ? { mode: state.mode, server: state.server, token: state.token, scope: state.scope } : null;
   // A separate window shows just one popup: take over this window's connection, open the popup, close with it.
+  // A spare (payload {spare, session}) connects and loads while hidden, then waits for its popup (popout.rs).
   async function startPopout(payload) {
     const quit = () => void tauri.invoke("popout_close").catch(() => window.close());
     let job;
     try { job = JSON.parse(payload); } catch (_) { job = null; }
-    if (!job?.session?.token || !job.recipe?.event?.startsWith("arkism:open-")) return quit(); // e.g. reloaded: nothing to show
+    if (!job?.session?.token || !(job.spare || job.recipe?.event?.startsWith("arkism:open-"))) return quit(); // e.g. reloaded: nothing to show
     document.documentElement.classList.add("popout");
     Object.assign(state, { mode: job.session.mode, server: job.session.server, token: job.session.token, scope: { ...defaults, ...job.session.scope } });
-    try { await appConnection.open(); } catch (err) { notice(`이 창을 열지 못했어요 (${err?.message || err}).`); return; }
+    if (job.spare) {
+      const fill = new Promise((resolve) => void window.__TAURI__.event.listen("popout-fill", (e) => resolve(e.payload)));
+      try { await appConnection.open(); } catch (_) { return quit(); } // main builds another spare next time
+      await tauri.invoke("popout_ready", { drawn: false });
+      try { job = JSON.parse(await fill); } catch (_) { return quit(); }
+      if (!job?.recipe?.event?.startsWith("arkism:open-")) return quit();
+    } else {
+      try { await appConnection.open(); } catch (err) { notice(`이 창을 열지 못했어요 (${err?.message || err}).`); return; }
+    }
     window.dispatchEvent(new CustomEvent(job.recipe.event, { detail: job.recipe.detail || {} }));
     let root = null;
-    for (let i = 0; i < 40 && !root; i++) { await new Promise((r) => setTimeout(r, 100)); root = document.querySelector("dialog[open]"); }
+    for (let i = 0; i < 100 && !root; i++) { await new Promise((r) => setTimeout(r, i < 20 ? 10 : 100)); root = document.querySelector("dialog[open]"); }
     if (!root) return quit();
-    const saved = () => store("arkism.popout-saved", String(Date.now()));
+    const saved = () => { if (popoutWrote) store("arkism.popout-saved", String(Date.now())); };
     addEventListener("pagehide", saved); // the window's own ✕
     // A popup that swaps itself for another (기억 처리 ‹ › · 넓게 보기) hands the window on; the last one closing closes it.
     const adopt = (d) => { d.classList.add("popout-root"); d.addEventListener("close", () => { const next = document.querySelector("dialog[open]"); if (next) adopt(next); else { saved(); quit(); } }); };
     adopt(root);
+    requestAnimationFrame(() => void tauri.invoke("popout_ready", { drawn: true }).catch(() => {}));
   }
+  // The hidden spare follows this window's connection: built after connecting, rebuilt after one is used, dropped on sign-out.
+  let spareFor = null;
+  window.ArkismPopoutSpare = () => {
+    if (!tauri || document.documentElement.classList.contains("popout")) return;
+    const s = window.ArkismPopoutSession();
+    const key = s && JSON.stringify(s);
+    spareFor = key;
+    void tauri.invoke("popout_prepare", { session: key }).catch(() => { spareFor = null; });
+  };
+  const SPARE_IDLE = 1500;
+  setInterval(() => { const s = window.ArkismPopoutSession(); if ((s && JSON.stringify(s)) !== spareFor) window.ArkismPopoutSpare(); }, SPARE_IDLE);
   // A separate window saved or closed: show its changes here too.
   window.addEventListener("storage", (e) => { if (e.key === "arkism.popout-saved" && state.token && !document.documentElement.classList.contains("popout")) void loadAll(); });
   void (async () => {
