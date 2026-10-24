@@ -717,7 +717,21 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (!ss.cands.length && !ss.approved.length) cs.append(el("p", "ov-win-empty", "이 세션에서 나온 후보가 없어요."));
       detail.append(cs);
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
-      act.append(talk?.id === cur.id ? button("대화 닫기", "small", null, () => { talk = null; paint(); }) : button("대화 원문 보기", "primary small", null, () => readTalk(cur.id)),
+      const exportAs = async (format, b) => {
+        if (b.disabled) return;
+        b.disabled = true; st.textContent = "";
+        let url = "";
+        try {
+          const r = await request("/v1/usage/sessions/export", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: [cur.id], format, transcript: true }) });
+          if (typeof r?.content !== "string") throw new Error("invalid_response");
+          url = URL.createObjectURL(new Blob([r.content], { type: r.content_type || "text/plain" }));
+          const link = el("a"); link.href = url; link.download = r.filename || (format === "json" ? "arkism-session.json" : "arkism-session.md"); link.click();
+          st.textContent = r.truncated ? "내보냈어요. 너무 길어 일부 대화는 잘렸어요." : "세션을 내보냈어요.";
+        } catch (e) { st.textContent = `내보내지 못했어요 (${e.message}).`; }
+        finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); b.disabled = false; }
+      };
+      const md = button("Markdown으로 내보내기", "small", null, () => exportAs("markdown", md)), js = button("JSON", "small", null, () => exportAs("json", js));
+      act.append(talk?.id === cur.id ? button("대화 닫기", "small", null, () => { talk = null; paint(); }) : button("대화 원문 보기", "primary small", null, () => readTalk(cur.id)), md, js,
         button("세션 지우기", "small", null, () => askConfirm("이 세션을 지울까요?", "세션과 보관된 대화가 지워지고 되돌릴 수 없어요. 에이전트의 원래 파일은 그대로 남고, 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.", async () => {
           try { await request("/v1/usage/sessions/delete", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: [cur.id] }) }); sel = null; await env.reloadSessions(); wideSessions(); }
           catch (e) { st.textContent = /access_denied/.test(e?.message || "") ? "지울 권한이 없어요." : `지우지 못했어요: ${e.message}`; }

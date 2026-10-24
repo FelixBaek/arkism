@@ -2967,6 +2967,9 @@ window.ArkismI18nEN = {
   "남길 기억": "Memory to keep",
   "이력으로 넘길 기억": "Memory moved to history",
   "세션 지우기": "Delete session",
+  "세션을 내보냈어요.": "Session exported.",
+  "내보냈어요. 너무 길어 일부 대화는 잘렸어요.": "Exported. Some of the conversation was cut because it was too long.",
+  "Markdown으로 내보내기": "Export as Markdown",
   "(지워졌거나 아직 못 읽은 기억)": "(memory deleted or not loaded yet)",
   "디스코드에서 채널 정하기 →": "Pick a channel in Discord →",
   "회의 진행을 디스코드 스레드에도 올리기": "Also post the meeting to a Discord thread",
@@ -3501,6 +3504,7 @@ window.ArkismI18nEN = {
  "patterns": {
   "AI 제안 · {0}": "AI suggestion · {0}",
   "AI 제안을 받지 못했어요: {0}": "Could not get an AI suggestion: {0}",
+  "내보내지 못했어요 ({0}).": "Couldn't export ({0}).",
   "· {0}개": "· {0}",
   "{0}개는 이름을 바꾸지 못했어요. 다시 해 주세요.": "{0} couldn't be renamed. Try again.",
   "웹훅 ····{0}": "Webhook \u00b7\u00b7\u00b7\u00b7{0}",
