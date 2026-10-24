@@ -2892,7 +2892,7 @@ window.ArkismI18nEN = {
   "모두 보기 →": "See all →",
   "기억이 답변에 얼마나 쓰였는지는 PC의 Arkism 수집기가 보고하면 여기에 보여요.": "How much memories were used in answers shows up here once the Arkism collector on your PC reports it.",
   "arkism 앱": "arkism app",
-  "Clef 자동 선택": "Clef picks",
+  "자동 선택": "Auto pick",
   "0.2 · 정확": "0.2 · precise",
   "1.0 · 자유": "1.0 · free",
   "자유 텍스트": "Free text",

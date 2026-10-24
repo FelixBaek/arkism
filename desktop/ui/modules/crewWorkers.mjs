@@ -14,7 +14,7 @@ export function createCrewWorkers(deps) {
 
   const DEPTH = [["low", "빠르게"], ["medium", "보통"], ["high", "깊게"]];
 
-  const MODEL_MODES = [["auto", "Clef 자동 선택"], ["fixed", "모델 고정"]];
+  const MODEL_MODES = [["auto", "자동 선택"], ["fixed", "모델 고정"]];
 
   const FORMATS = [["text", "자유 텍스트"], ["markdown", "마크다운"], ["json", "JSON"]];
 
