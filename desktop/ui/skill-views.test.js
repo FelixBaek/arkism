@@ -140,7 +140,7 @@ test("list: attention card, filters, sort, copies, categories and the footer", a
   assert.match(rows[0].textContent, /보안 주의/);
   assert.match(rows[0].textContent, /5번/);
   assert.match(rows[3].textContent, /업데이트 있음/);
-  assert.equal(s.state.selected, "skill:alpha");
+  assert.equal(s.state.selected, null); // nothing opens until a row is clicked (the detail is a popup)
   const copy = btn(rows[1], "같은 이름 2개");
   copy.click();
   assert.ok(s.state.openCopies.has("beta"));

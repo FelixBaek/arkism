@@ -128,7 +128,7 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   assert.match(s.notices[0], /최근 5분 동안/);
   const tiles = s.doc.querySelectorAll("#stats .cn-tile strong").map((x) => x.textContent);
   assert.deepEqual(tiles, ["1", "1", "2", "2"]);
-  assert.equal(s.state.selected, "tool:github");
+  assert.equal(s.state.selected, null); // nothing opens until a row is clicked (the detail is a popup)
   const rows = s.doc.querySelectorAll("#table .cn-row");
   assert.equal(rows.length, 6);
   assert.match(rows[0].textContent, /깃허브 · 도구 7개/);
@@ -172,14 +172,12 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   assert.equal(prow.length, 2);
   assert.match(prow[0].textContent, /v1\.2/);
   assert.match(prow[0].textContent, /스킬 1 · MCP 1 · hook 1/);
-  assert.equal(s.state.selected, "tool:quiet");
+  assert.equal(s.state.selected, null);
   assert.equal(s.doc.querySelector("#stats").children.length, 0);
   // No report from the host.
   s.state.data.tools = null; s.v.renderTools();
   assert.match(s.doc.querySelector("#table").textContent, /MCP 목록을 불러오지 못했어요/);
-  s.v.toolsSummary();
-  s.state.data.tools = tools(); s.v.toolsSummary();
-  assert.match(s.doc.querySelectorAll(".detail")[1].textContent, /마지막 확인 방금/);
+  s.state.data.tools = tools();
   // Never collected: treated as stale.
   s.state.data.tools.collected_at = ""; s.state.toolTab = "mcp"; s.v.renderTools();
   assert.match(s.notices.at(-1), /최근 5분/);

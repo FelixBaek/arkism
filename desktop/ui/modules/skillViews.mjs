@@ -281,7 +281,6 @@ export function createSkillViews(deps) {
     const items = skills;
     const groups = groupSkills(items, true);
     const limit = deps.state.skillLimit || 50;
-    if (!deps.state.selected && groups[0] && window.matchMedia("(min-width: 1100px)").matches) deps.state.selected = `skill:${groups[0][0].id}`;
     const list = deps.el("div", "v4s-list");
     const rows = groups.slice(0, limit).flatMap(copies => {
       const open = deps.state.openCopies.has(copies[0].name);
