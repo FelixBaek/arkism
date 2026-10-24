@@ -15,6 +15,7 @@ export function createCrewEditor(deps) {
     Object.assign(ed, { sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false,
       graphMode: !!opts.graphMode, review: !!opts.review, linking: null, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, reviewAI: null, run: opts.run || null, test: null, trigger: undefined, runList: false });
     if (opts.select && ed.graph.nodes.some((n) => n.id === opts.select)) ed.sel = opts.select;
+    Object.assign(hist, { past: [], future: [], base: snap(), at: 0 });
     // The newest run of this workflow: each selected node's bottom row shows how that node did there.
     ed.last = null;
     if (!ed.run) deps.request(`/v1/crew/runs?${deps.query({ crew_id: rec.id, limit: 1 })}`).then((r) => {
@@ -56,6 +57,7 @@ export function createCrewEditor(deps) {
       const saved = await deps.save(ed.rec, crew);
       ed.trigger = undefined;
       ed.dirty = false;
+      hist.base = snap();
       await deps.reload();
       ed.rec = deps.byId(saved.id) || saved;
       deps.state.view = "graph";
@@ -69,13 +71,49 @@ export function createCrewEditor(deps) {
     }
   }
 
-  // Edits keep the AI suggestions: applying one must not wipe the others (each re-checks with canApply).
-  const touch = () => {
+  const markDirty = () => {
     ed.dirty = true;
     const save = document.querySelector(".page-head .g-save"), run = document.querySelector(".page-head .g-trial");
     if (save) save.disabled = false;
     if (run) { run.disabled = true; run.title = "저장한 뒤에 실행할 수 있어요"; }
+    const undoB = document.querySelector(".g-tools .g-undo"), redoB = document.querySelector(".g-tools .g-redo");
+    if (undoB) undoB.disabled = !hist.past.length;
+    if (redoB) redoB.disabled = !hist.future.length;
   };
+
+  // Undo history: every canvas edit ends in touch(), so it snapshots the draft there.
+  // base is the state after the last recorded edit; edits within 500ms of the previous one (typing, a drag) join its step.
+  const hist = { past: [], future: [], base: "", at: 0 };
+  const snap = () => JSON.stringify({ graph: ed.graph, trigger: ed.trigger ?? null });
+
+  // Edits keep the AI suggestions: applying one must not wipe the others (each re-checks with canApply).
+  const touch = () => {
+    const now = snap(), t = Date.now();
+    if (now !== hist.base) {
+      if (t - hist.at > 500) { hist.past.push(hist.base); if (hist.past.length > 100) hist.past.shift(); }
+      Object.assign(hist, { base: now, at: t, future: [] });
+    }
+    markDirty();
+  };
+
+  function step(from, to) {
+    if (!from.length || ed.run || !ed.graph) return;
+    to.push(snap());
+    hist.base = from.pop();
+    hist.at = 0;
+    const s = JSON.parse(hist.base);
+    ed.graph = s.graph;
+    ed.trigger = s.trigger ?? undefined;
+    if (ed.sel && !ed.graph.nodes.some((n) => n.id === ed.sel)) ed.sel = null;
+    if (ed.selEdge !== null && !ed.graph.edges[ed.selEdge]) ed.selEdge = null;
+    ed.linking = null;
+    markDirty();
+    deps.render(false);
+  }
+  // A cancelled node window puts the draft back as it was, so its edits leave the history too.
+  const keepHistory = () => { const h = { past: [...hist.past], future: [...hist.future], base: hist.base }; return () => { Object.assign(hist, h, { at: 0 }); markDirty(); }; };
+  const undo = () => step(hist.past, hist.future);
+  const redo = () => step(hist.future, hist.past);
 
   function uid(type) {
     let i = 1;
@@ -561,7 +599,10 @@ export function createCrewEditor(deps) {
       deps.render(false);
     };
     if (!ed.run) tools.append(deps.button("노드 추가", "ghost", "plus", (ev) => { ev.stopPropagation(); ed.menu = !ed.menu; deps.render(false); }));
-    if (!ed.run) tools.append(deps.el("i", "g-sep"));
+    if (!ed.run) {
+      const hb = (cls, ic, label, fn, off) => { const b = deps.button("", `ghost small ${cls}`, ic, fn); b.setAttribute("aria-label", label); b.title = label; b.disabled = off; return b; };
+      tools.append(deps.el("i", "g-sep"), hb("g-undo", "caret-left", "되돌리기 (Ctrl+Z)", undo, !hist.past.length), hb("g-redo", "caret-right", "다시 하기 (Ctrl+Shift+Z)", redo, !hist.future.length), deps.el("i", "g-sep"));
+    }
     tools.append(deps.button("−", "ghost small", null, () => z(-0.1)), zoomOut, deps.button("+", "ghost small", null, () => z(0.1)), deps.el("i", "g-sep"), deps.button("맞추기", "ghost small", null, fit));
     stage.append(tools);
     if (!ed.menu) {
@@ -879,12 +920,14 @@ export function createCrewEditor(deps) {
     get confirmBox() { return confirmBox; },
     get deselect() { return deselect; },
     get ed() { return ed; },
+    get keepHistory() { return keepHistory; },
     get leaveGraph() { return leaveGraph; },
     get linkTo() { return linkTo; },
     get nodeDlg() { return nodeDlg; },
     set nodeDlg(value) { nodeDlg = value; },
     get nodePanel() { return nodePanel; },
     get openGraph() { return openGraph; },
+    get redo() { return redo; },
     get redraw() { return redraw; },
     set redraw(value) { redraw = value; },
     get removeNode() { return removeNode; },
@@ -893,6 +936,7 @@ export function createCrewEditor(deps) {
     get syncCard() { return syncCard; },
     get touch() { return touch; },
     get trigDraft() { return trigDraft; },
+    get undo() { return undo; },
     get uid() { return uid; }
   };
 }

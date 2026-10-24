@@ -82,6 +82,7 @@ export function createCrewNodes(deps) {
     deps.nodeDlg?.remove();
     const editorGraph = deps.ed.graph, editorRecord = deps.ed.rec;
     let keep = false;
+    const restoreHistory = deps.keepHistory();
     const dlg = (deps.nodeDlg = deps.el("dialog", `crew-dialog wf-dialog node-dialog${deps.IS_AI(n.type) || n.type === "team" ? " wide" : ""}`));
     const head = deps.el("div", "dialog-head");
     const lead = deps.el("span", "g-icon");
@@ -123,7 +124,7 @@ export function createCrewNodes(deps) {
       dlg.remove();
       if (deps.nodeDlg === dlg) { deps.nodeDlg = null; deps.redraw = () => deps.render(false); }
       if (deps.ed.graph !== editorGraph || deps.ed.rec !== editorRecord) return;
-      if (!keep) { deps.ed.graph.nodes = before.graph.nodes; deps.ed.graph.edges = before.graph.edges; deps.ed.dirty = before.dirty; deps.ed.trigger = before.trigger; }
+      if (!keep) { deps.ed.graph.nodes = before.graph.nodes; deps.ed.graph.edges = before.graph.edges; deps.ed.dirty = before.dirty; deps.ed.trigger = before.trigger; restoreHistory(); }
       if (!deps.ed.graph.nodes.some((x) => x.id === deps.ed.sel)) deps.ed.sel = null; // the panel stays on this node
       deps.render(false);
     });
