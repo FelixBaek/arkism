@@ -439,26 +439,6 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   if (cand) { cand.click(); await app.settle(50); assert.match(text(win()), /승인 대기/); }
   d = await openWindow({ wide: "sessions" }); await app.settle(50);
   await press("새로고침", win(), 50);
-  // 대화 원문 opens in this window, a page at a time, and 대화 닫기 folds it
-  let flaky = true;
-  const offTx = route("POST", "/v1/usage/sessions/transcript", (a) => JSON.parse(a.body || "{}").after && flaky ? (flaky = false, fail(500, "boom")) : ok(JSON.parse(a.body || "{}").after
-    ? { authority: "data_only_untrusted", state: "active", items: [{ role: "assistant", text: "두 번째 쪽" }] }
-    : { authority: "data_only_untrusted", state: "active", archive_id: "a1", next_cursor: "c1", hidden: { secret_records: 1 }, items: [{ role: "user", text: "원문 첫 줄" }] }));
-  await press("대화 원문 보기", win(), 50);
-  assert.ok(win(), "the window stays open");
-  assert.match(text(win()), /원문 첫 줄/); assert.match(text(win()), /숨긴 메시지 1개/);
-  // a failed second page keeps its cursor, so 메시지 더 보기 can try again
-  await press("메시지 더 보기", win(), 50);
-  assert.match(text(win()), /대화를 불러오지 못했어요/);
-  await press("메시지 더 보기", win(), 50);
-  assert.match(text(win()), /원문 첫 줄[\s\S]*두 번째 쪽/);
-  await press("대화 닫기", win(), 50);
-  assert.doesNotMatch(text(win()), /원문 첫 줄/);
-  offTx();
-  const offTx404 = route("POST", "/v1/usage/sessions/transcript", () => fail(404, "not_found"));
-  await press("대화 원문 보기", win(), 50);
-  assert.match(text(win()), /아직 대화 보기를 지원하지 않아요/);
-  offTx404();
   // 대화 원문 보기 reads the dialogue into the window itself; 대화 닫기 folds it
   await press("대화 원문 보기", win(), 50);
   assert.match(text(win()), /리뷰 일정 좀 같이 잡아 줘/);
@@ -480,7 +460,9 @@ test("overview: 세션 기록 opened on one session underlines the quote, pages 
   const rows = [{ id: "w1", agent: "codex", session_id: "sid-a", title: "다른 세션", started_at: ago(3), messages: 4 }, { id: "w2", agent: "codex", session_id: "sid-b", title: "찾는 세션", started_at: ago(30), messages: 4 }];
   const off = route("GET", "/v1/usage/sessions", (a) => ok({ authority: "data_only_untrusted", items: /q=sid-b/.test(a.path) && /range=all/.test(a.path) ? rows : [], next_cursor: "", total: 2 }));
   const page = (items, next) => ok({ authority: "data_only_untrusted", state: "active", items, next_cursor: next, archive_id: "a1" });
-  const offTalk = route("POST", "/v1/usage/sessions/transcript", (a) => /"after":"c1"/.test(a.body) ? page([{ role: "assistant", text: "그 말에 맞춰 둘게요." }], "c2") : page([{ role: "user", text: "앞으로 커밋은 영어로 써 줘." }], "c1"));
+  let flaky = true; // the third page fails once: its cursor stays, so 메시지 더 보기 can try again
+  const offTalk = route("POST", "/v1/usage/sessions/transcript", (a) => /"after":"c2"/.test(a.body) ? (flaky ? (flaky = false, fail(500, "boom")) : page([{ role: "user", text: "세 번째 쪽" }], ""))
+    : /"after":"c1"/.test(a.body) ? page([{ role: "assistant", text: "그 말에 맞춰 둘게요." }], "c2") : page([{ role: "user", text: "앞으로 커밋은 영어로 써 줘." }], "c1"));
   // the quote sits on the second page: the window reads on until it finds it, underlined
   let d = await openWindow({ wide: "sessions", args: ["sid-b", "그 말에 맞춰"] }); await app.settle(80); d = win();
   assert.match(text(d.querySelector(".ov-wide-row.on")), /찾는 세션/, "the asked-for session is picked, not the first row");
@@ -488,6 +470,9 @@ test("overview: 세션 기록 opened on one session underlines the quote, pages 
   assert.equal(d.querySelectorAll(".ss-msg").length, 2);
   await press("메시지 더 보기", d, 50);
   assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/usage/sessions/transcript" && /"after":"c2"/.test(String(b))));
+  assert.match(text(win()), /대화를 불러오지 못했어요/);
+  await press("메시지 더 보기", win(), 50);
+  assert.match(text(win()), /그 말에 맞춰 둘게요[\s\S]*세 번째 쪽/);
   // a dialogue that cannot be read says so
   offTalk(); const offBad = route("POST", "/v1/usage/sessions/transcript", () => fail(500, "boom"));
   d.querySelectorAll(".ov-wide-row")[0].click(); await app.settle();
