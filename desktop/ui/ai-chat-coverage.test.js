@@ -222,6 +222,8 @@ test("field: fills, polishes, trims one-line answers, undoes and reports failure
   // 되돌리기 puts the old text back
   replies.push({ status: "done", output: JSON.stringify({ value: "다른 것" }) });
   await s2.click(); await flush();
+  assert.equal(fi.querySelector(".ex-ai-diff del").textContent, "첫 줄입니");
+  assert.equal(fi.querySelector(".ex-ai-diff ins").textContent, "다른 것");
   byText(fi, "되돌리기").click();
   assert.equal(inp.value, "첫 줄입니");
   // undo with no field on screen does nothing; a newer copy takes over show()
@@ -237,7 +239,17 @@ test("field: fills, polishes, trims one-line answers, undoes and reports failure
   replies.push({ status: "done", output: JSON.stringify({ value: "넷" }) });
   s2.click(); await flush();
   assert.equal(inp2.value, "넷");
-  assert.ok(fi2.textContent.includes("AI가 채웠어요"));
+  assert.ok(fi2.textContent.includes("AI가 고쳤어요"));
+  // the box shows what changed in place (added / removed); 고치기 goes back to the field
+  const box = fi2.querySelector(".ex-ai-diff");
+  assert.equal(box.hidden, false);
+  assert.equal(inp2.style.display, "none");
+  assert.equal(box.querySelector("del"), null, "the new copy started empty: all of it is added");
+  assert.equal(box.querySelector("ins").textContent, "넷");
+  byText(fi2, "고치기").click();
+  assert.equal(box.hidden, true);
+  assert.equal(inp2.style.display, "");
+  assert.ok(fi2.textContent.includes("되돌리기"), "undo stays after going back to edit");
   // field() with default opts and an input outside the page
   const loose = AI.field(doc.createElement("input"));
   assert.ok(loose.classList.contains("ex-ai-field"));
