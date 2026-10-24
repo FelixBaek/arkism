@@ -142,7 +142,7 @@ window.ArkismAutomation = (h) => {
   }
 
   // ------------------------------------------------------------------ the window
-  function open(rec, startTab = "overview", withAI = false) {
+  function open(rec, startTab = "overview") {
     const creating = !rec;
     const base = creating ? { type: "workflow", name: "", handle: "", role: "", category: "", model: "", enabled: false, graph: h.defaultGraph("simple", {}) } : structuredClone(rec.crew);
     base.graph?.nodes?.forEach((n) => { n.config ||= {}; }); // so a just-opened popup does not count as edited
@@ -152,7 +152,7 @@ window.ArkismAutomation = (h) => {
     let handleTouched = !creating;
     const openSteps = new Set(); // 개요 node list: steps opened to show their full 목표·질문 (closed by default)
     const picked = new Set(); // new automation: steps whose expert was chosen on purpose (until then the picker reads 맡을 전문가 고르기)
-    const aiTalk = { open: withAI }; // AI 제안 / AI로 초안 talk (ai-chat.js state), kept while this window is open
+    const aiTalk = { open: false }; // AI 제안 / AI로 초안 talk (ai-chat.js state), kept while this window is open
     let pop = null, closeAsking = () => {};
     let bar = null;
     let paintHead = () => {};
@@ -1164,5 +1164,5 @@ window.ArkismAutomation = (h) => {
     return pop;
   }
 
-  return { open: (rec, tab) => open(rec, tab), create: (ai) => open(null, "overview", !!ai), diffLines, whenToCron };
+  return { open: (rec, tab) => open(rec, tab), create: () => open(null), diffLines, whenToCron };
 };
