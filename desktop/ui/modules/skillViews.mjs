@@ -326,9 +326,10 @@ export function createSkillViews(deps) {
     // 정렬: the picked one shows its direction; picking it again flips it.
     const sorts = SKILL_SORTS.map(([k, l]) => [k === deps.state.skillSort ? `${l} ${skillDir() > 0 ? "↑" : "↓"}` : l, "", k === deps.state.skillSort, () => pickSkillSort(k)]);
     const bar = deps.el("div", "v4s-bar");
+    // 휴지통 is its own list (skillTrash), so 0 here only means none loaded yet: keep the chip, without a number.
     bar.append(panelSearch("스킬 검색"), filterMenu("skills", [
       { title: "카테고리", set: deps.state.skillCat !== "all", chips: catChips },
-      { title: "상태", set: deps.state.skillTab !== "all", chips: SKILL_STATES.map(([k, l]) => [l, k === "all" ? "" : n[k] ?? "…", deps.state.skillTab === k, () => deps.go("skills", k)]) },
+      { title: "상태", set: deps.state.skillTab !== "all", chips: SKILL_STATES.map(([k, l]) => [l, k === "all" || k === "trash" && !n.trash ? "" : n[k] ?? "…", deps.state.skillTab === k, () => deps.go("skills", k)]) },
       { title: "에이전트", set: !!deps.state.skillModel, chips: models, extra: modelToggle },
       { title: "정렬", chips: sorts }]), ...deps.barActions(deps.loadAll));
     deps.$("#controls").replaceChildren(...parts, bar);

@@ -70,7 +70,7 @@
       return task;
     }
     return { ...core, async invoke(command, args = {}) {
-      if (!["ssh_connect", "ssh_test", "skill_execution"].includes(command)) return core.invoke(command, args);
+      if (!["ssh_connect", "ssh_test", "git_op", "skill_execution"].includes(command)) return core.invoke(command, args);
       await ensure(args, false);
       try { return await core.invoke(command, args); }
       catch (error) {
