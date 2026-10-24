@@ -344,7 +344,7 @@ window.open = (url, name, features) => {
 };
 
 test("a popup drags by its head, stays on screen, moves into its own window outside the app and closes on an outside click", async () => {
-  add(`<dialog id="pd" data-popout='{"event":"arkism:open-x"}' data-popout-title="창"><div class="dialog-head"><span id="hd">제목</span><button id="hb">x</button></div></dialog>
+  add(`<dialog id="pd" data-popout='{"event":"arkism:open-x"}' data-popout-title="창"><div class="dialog-head"><span id="hd">제목</span><button id="hb">x</button></div><svg><use id="pu" href="#i-x"></use></svg></dialog>
        <dialog id="np"><div class="crew-popup-head" id="ch">새 전문가</div></dialog><dialog id="plain"><div class="dialog-head" id="ph">p</div></dialog>`);
   const pd = $("#pd"), hd = $("#hd");
   window.innerWidth = 1280; window.innerHeight = 800;
@@ -394,7 +394,7 @@ test("a popup drags by its head, stays on screen, moves into its own window outs
   assert.ok(kd.documentElement.classList.contains("popout"), "dressed like this window, marked popout");
   assert.equal(kd.head.querySelector("style")?.textContent, '.x { color: red; }\n@font-face { src: url("http://tauri.localhost/fonts/a.woff2"); }', "a stylesheet already read goes over as text, its url()s pinned to the sheet's address");
   assert.ok(kd.head.querySelector('link[href$="late.css"]'), "one still loading is linked as before");
-  assert.ok(kd.body.querySelector("svg symbol#i-x"), "the icon sprite goes over too, so <use href=\"#i-…\"> icons draw there");
+  assert.ok(kd.body.querySelector(`svg symbol${pd.querySelector("#pu").getAttribute("href")}`), "the icon sprite goes over too, so <use href=\"#i-…\"> icons draw there");
   css.remove(); late.remove(); sprite.remove();
   assert.equal(kd.title, "창 · Arkism");
   // the popup closing closes its window
