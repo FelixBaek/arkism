@@ -6080,5 +6080,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "최근 기억에서 반복한 요청을 찾아 스킬 초안을 홈의 할 일에 올려요.": "Finds repeated requests in recent memories and puts skill drafts in Home's to-do list.",
   "실행할 프로그램이나 https 주소로 추가해요. 자주 쓰는 서버를 골라 채울 수도 있어요.": "Add one by a program to run or an https address. You can also pick a common server to fill it in.",
   "Claude Code에서 설치": "Install in Claude Code",
-  "새 플러그인은 Claude Code에서 /plugin 으로 설치해요.": "Install new plugins in Claude Code with /plugin."
+  "새 플러그인은 Claude Code에서 /plugin 으로 설치해요.": "Install new plugins in Claude Code with /plugin.",
+  "24시간 전": "24h ago", "18시간 전": "18h ago", "12시간 전": "12h ago", "6시간 전": "6h ago"
 });

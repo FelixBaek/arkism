@@ -279,7 +279,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   function open(key, expanded = false) {
     const list = env.stages(), i = list.findIndex((x) => x.key === key), s = i >= 0 ? list[i] : activeStage();
     const spec = SPEC[key];
-    const d = modal(`ov-stage-win ov-t-${s.badge?.[1] || "n"} ov-win-${key}${expanded ? " ov-win-expanded" : ""}`); // 모두 보기: the window becomes the list
+    const d = modal(`ov-stage-win ov-t-${s.badge?.[1] || "n"} ov-h-${s.health || "g"} ov-win-${key}${expanded ? " ov-win-expanded" : ""}`); // 모두 보기: the window becomes the list
     recipe(d, { key, expanded });
     redraw = () => open(key, expanded);
     const nav = (n) => () => open(list[(i + n + list.length) % list.length].key);
@@ -288,9 +288,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (s.badge?.[0]) title.append(el("span", "ov-win-badge", s.badge[0]));
     const step = el("div", "ov-win-step");
     if (i >= 0) { const p = button("‹", "ghost small", null, nav(-1)), n = button("›", "ghost small", null, nav(1)); p.setAttribute("aria-label", "이전 단계"); n.setAttribute("aria-label", "다음 단계"); step.append(p, el("span", "", `${i + 1} / ${list.length} 단계`), n); }
-    step.append(button("닫기", "ghost small", null, () => d.close())); head.append(title, step);
+    const x = button("✕", "ghost small ov-wide-x", null, () => d.close()); x.setAttribute("aria-label", "닫기"); step.append(x); head.append(title, step);
     const body = el("div", "dialog-body ov-win-body"), tiles = el("div", "ov-win-tiles");
-    for (const [v, l] of s.tiles) { const t = el("div", "ov-win-tile"); t.append(el("strong", "", v), el("span", "", l)); tiles.append(t); }
+    s.tiles.forEach(([v, l], k) => { const t = el("div", `ov-win-tile${k ? "" : " lead"}`); t.append(el("strong", "", v), el("span", "", l)); tiles.append(t); }); // the first figure takes the stage's health color (Figma 573:40303)
     const how = el("div", "ov-win-how"), cells = el("div", "ov-win-cells");
     how.append(el("p", "", ""), cells); how.firstChild.append(el("span", "", "이 단계는 "), el("strong", "", spec[0]));
     for (const [l, v] of [["받는 곳", spec[1]], ["언제", spec[2]], ["누가", spec[3]]]) { const c = el("div", "ov-win-cell"); c.append(el("small", "", l), el("strong", "", v)); cells.append(c); }
@@ -299,7 +299,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const chart = el("div", "ov-win-chart"), max = Math.max(1, ...s.counts), bars = el("div", "ov-win-bars");
       chart.append(el("div", "ov-win-chart-title", "최근 24시간"));
       s.counts.forEach((n, k) => { const b = el("i", n ? (s.row?.[k] === "r" ? "r" : s.row?.[k] === "a" ? "a" : "") : "none"); b.style.height = `${6 + (n / max) * 54}px`; b.title = `${n}`; bars.append(b); });
-      chart.append(bars, el("div", "ov-win-axis", "24시간 전 ··· 지금")); body.append(chart);
+      const axis = el("div", "ov-win-axis"); axis.append(...["24시간 전", "18시간 전", "12시간 전", "6시간 전", "지금"].map((t) => el("span", "", t)));
+      chart.append(bars, axis); body.append(chart);
     }
     if (key === "extract" && s.badge?.[1] === "r") body.append(note("r", `${s.badge[0]}이에요`, "세션은 계속 들어오는데 새 후보가 만들어지지 않았어요. 서버의 분석 로그인·연결을 확인해 주세요."));
     if (key === "judge") body.append(note("a", "AI가 “실제로 쓰였는지” 판정했어요", "판정이 맞는지 확인하고, 틀림이 쌓이면 그 기억을 다시 봐요."));
@@ -308,8 +309,6 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const rows = stageRows(key, body, expanded), total = expandTotal(key);
     const ul = el("div", "ov-win-list");
     const listHead = el("div", "ov-win-list-title", LIST_TITLE[key]);
-    if (expanded) listHead.append(button("접기 ⌃", "ghost small", null, () => open(key, false)));
-    else if (total && total > itemCount(rows)) listHead.append(button(`${num(total)}건 모두 보기 ›`, "ghost small", null, () => open(key, true)));
     if (key !== "recall" || rows.length) body.append(listHead); // 불러오기: 영수증 상자가 빈 목록을 대신해요
     if (!rows.length && key !== "recall") ul.append(el("p", "ov-win-empty", "지금 보여 줄 항목이 없어요."));
     ul.append(...rows); body.append(ul);
@@ -322,9 +321,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
         if (cap >= total || ul.scrollTop + ul.clientHeight < ul.scrollHeight - 40) return;
         cap += 60; const more = stageRows(key, body, cap), n = itemCount(more); ul.replaceChildren(...more); say(n); if (n < cap) cap = total;
       });
-      foot.append(left);
-    }
+      foot.append(left, button("접기 ⌃", "ghost small", null, () => open(key, false)));
+    } else if (total && total > itemCount(rows)) foot.append(button(`${num(total)}건 모두 보기 ›`, "ghost small", null, () => open(key, true)));
     if (FULL[key]) foot.append(button(FULL[key][0], "ghost small", null, FULL[key][1]));
+    if (!foot.childNodes.length) foot.hidden = true;
     d.append(head, body, foot);
   }
   // Figma 펼침 580:63994 분석 · 580:66175 분류 · 580:68368 불러오기 · 580:70537 검증 · 580:72743 드리밍; other stages open a wide window instead
@@ -354,7 +354,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const chipBar = (items, cur, set) => { const bar = el("div", "ov-wide-chips"); for (const [k, l, n] of items) { const b = el("button", `ov-wide-chip${k === cur ? " on" : ""}`); b.type = "button"; b.append(document.createTextNode(l), ...(n == null ? [] : [el("small", "", ` ${num(n)}`)])); b.addEventListener("click", () => set(k)); bar.append(b); } requestAnimationFrame(() => bar.querySelector(".on")?.scrollIntoView({ block: "nearest", inline: "nearest" })); return bar; }; // the picked chip stays in view when the row scrolls
   function twoPane(d, bar, listBox, detail) {
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right");
-    left.append(bar, listBox); right.append(detail); body.append(left, right); d.append(body);
+    left.append(listBox); right.append(detail); body.append(left, right); bar.classList.add("ov-wide-top"); d.append(bar, body); // 579:48597: the bar runs above both panes
   }
 
   function wide(kindKey, ...args) {

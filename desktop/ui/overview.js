@@ -277,7 +277,7 @@ window.ArkismOverview = (ctx) => {
       c.big.firstChild.textContent = s.big; c.big.lastChild.textContent = s.bigSub;
       c.small.hidden = !s.small; c.small.firstChild.textContent = s.small || ""; c.small.lastChild.textContent = s.smallSub || "";
       const last7 = s.counts.slice(-7), max = Math.max(1, ...last7);
-      [...c.chart.children].forEach((bar, k) => { bar.style.height = `${8 + (last7[k] / max) * 24}px`; bar.classList.toggle("now", k === 6); bar.classList.toggle("none", !last7[k]); });
+      [...c.chart.children].forEach((bar, k) => { bar.style.height = `${last7[k] ? 8 + (last7[k] / max) * 24 : 2}px`; bar.classList.toggle("now", k === 6); bar.classList.toggle("none", !last7[k]); });
       const l = ui.links[s.key]; l.node.className = `ov-node ov-t-${s.tone} ov-h-${s.health}${s.tone === "r" ? " alert" : ""}`; l.line.setAttribute("class", `ov-link ov-t-${s.tone}`); l.pt.className = `ov-particle ov-t-${s.tone}`;
       const r = ui.rows[s.key]; r.name.textContent = s.label; r.name.className = `ov-grid-name${s.tone === "r" ? " r" : ""}`;
       [...r.cells.children].forEach((cell, k) => { cell.className = s.row[k] ? `ov-c-${s.row[k]}` : ""; });
