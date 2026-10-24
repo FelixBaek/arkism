@@ -1136,7 +1136,6 @@ export function startApp() {
     $("#count-crew").textContent = state.loading ? "" : String(crew.count());
     $("#count-routing").textContent = state.loading ? "" : String(routing.count());
     $("#count-usage").textContent = state.loading ? "" : String(usage.count());
-    $("#count-sessions").textContent = state.loading ? "" : String(sessions.count());
     const t = d.tools;
     const toolCount = $("#count-tools");
     toolCount.textContent = state.loading || !t ? "" : String(t.servers.length + t.plugins.length);
@@ -2132,7 +2131,6 @@ export function startApp() {
     get request() { return appApi.request; },
     get routing() { return routing; },
     get segment() { return segment; },
-    get sessions() { return sessions; },
     get setStatus() { return setStatus; },
     get state() { return state; },
     get store() { return store; },
@@ -2173,13 +2171,12 @@ export function startApp() {
   const models = window.ArkismModels({ state, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, ago });
   const routing = window.ArkismRouting({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, segment, go, render, request: appApi.request, query: appApi.query, notice, detailShell, agentLogo, ago });
   const usage = window.ArkismUsage({ state, $, el, button, segment, render, request: appApi.request, query: appApi.query, agentLogo, AGENTS, ago, go, detailShell,
-    openSession: (id) => sessions.open(id), openSettings: (tab) => { state.settingsTab = tab; go("settings"); },
+    openSession: (sid) => window.dispatchEvent(new CustomEvent("arkism:open-overview-window", { detail: { wide: "sessions", args: sid ? [sid] : [] } })), openSettings: (tab) => { state.settingsTab = tab; go("settings"); },
     memory: () => ({ use: memUse(), memories: state.data.memories, kindLabel, often: overlapReview, openIdle: () => { state.menu = "memory"; go("memories", "idle"); },
       openMemory: (id) => { state.menu = "memory"; go("memories", "active"); state.selected = id; renderDetail(); } }),
     skillAgents: (name) => { const by = {}; for (const sk of state.data.skills.filter((x) => x.name === name)) for (const [k, n] of Object.entries(state.data.skillUse?.get(sk.id)?.by_runtime || {})) by[k] = (by[k] || 0) + n; return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k]) => k); } });
   const gallery = window.ArkismGalleryDelete({ state, $, el, button, icon, raw, render, request: appApi.request, query: appApi.query, notice, confirmPop: toolViews.confirmPop, shortDate });
   const remoteCollection = read => createRemoteCollection({ state, read, createPager: window.ArkismMemoryPages.create });
-  const sessions = window.ArkismSessions({ remoteCollection, virtualList, state, $, el, button, icon, segment, render, request: appApi.request, query: appApi.query, agentLogo, AGENTS, ago, detailShell, usage, go });
   const crew = createCrew({ state, $, el, icon, catIcon, catMenu, catChipBody, button, segment, go, render, request: appApi.request, query: appApi.query, notice, detailShell, section, facts, callout, copyButton: imageViews.copyButton, markSelected, openDetail, agentLogo, ago, models,
     allowed: skillViews.allowed, skillCategory: (sk) => pages.categoryOf(sk)?.name || "", skillCategories: () => pages.prefs.categories.map((c) => ({ name: c.name, icon: c.icon })),
     toolServers: () => state.data.tools?.servers || [] });
@@ -2214,7 +2211,7 @@ export function startApp() {
   const privacy = window.ArkismPrivacy({ state, el, button, request: appApi.request, query: appApi.query, notice, section, afterChange: async () => { await memoryList.reloadMemories(); renderDetail(); } });
   const knowledge = window.ArkismKnowledge({ remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
   const overview = window.ArkismOverview({ remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, memoryCount: () => memoryPaging.memoryCount(), onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
-  Object.assign(pages.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
+  Object.assign(pages.views, routing.views, usage.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel: appConnection.sshLabel, sshErrorText: appConnection.sshErrorText, useLocal: appConnection.useLocal, lock: appConnection.lock, reconnect: appConnection.reconnect });

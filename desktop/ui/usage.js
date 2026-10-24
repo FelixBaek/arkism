@@ -128,7 +128,7 @@ window.ArkismUsage = (ctx) => {
     return row;
   }
   function link(text, onClick) { const b = el("button", "v4u-link", text); b.type = "button"; b.addEventListener("click", onClick); return b; }
-  const toSessions = () => link("세션 목록 보기 ›", () => ctx.go?.("sessions"));
+  const toSessions = () => link("세션 목록 보기 ›", () => ctx.openSession?.());
   function facts(rows) { const dl = el("dl", "v4u-facts"); for (const [k, v] of rows) if (v) dl.append(el("dt", "", k), el("dd", "", v)); return dl; }
   function sideSection(title, aside, ...kids) { const s = el("section", "v4u-sec"); const h = el("div", "v4u-sec-head"); h.append(el("h3", "", title)); if (aside) h.append(el("span", "", aside)); s.append(h, ...kids); return s; }
   const toolServer = (name) => (/^mcp__([^_]+(?:_[^_]+)*?)__/.exec(name) || [])[1] || "";
@@ -299,7 +299,7 @@ window.ArkismUsage = (ctx) => {
     const b = busiest(d.hours);
     const skillUses = d.skills.reduce((a, s) => a + s.count, 0);
     const heat = card("세션 시간대 (서울)", b < 0 ? "" : `${num(k.sessions)} 세션 · ${dur(k.active_seconds)} 활동 · 가장 바쁜 때: ${DAYS[Math.floor(b / 24)]}요일 ${b % 24}시`, heatmap(d.hours),
-      el("p", "v4u-hint", "에이전트 세션이 열린 시간대예요. 세션 하나하나는 MEMORY › 세션에서 볼 수 있어요."));
+      el("p", "v4u-hint", "에이전트 세션이 열린 시간대예요. 세션 하나하나는 MEMORY › 개요 › 세션 기록에서 볼 수 있어요."));
     const skillCard = card("많이 쓴 스킬", `· ${d.skills.length}`, skillRows(d.skills));
     const toolCard = card("많이 쓴 도구", `· ${d.tools.length}`, bars(d.tools.slice(0, 8), (s) => s.count, (s) => toolName(s.name), (s) => toolServer(s.name) || `${s.sessions}세션`, (s) => `${num(s.count)}회`));
     if (!w) {
@@ -446,15 +446,15 @@ window.ArkismUsage = (ctx) => {
       ["밤", `20~2시 · ${share((hr) => hr >= 20 || hr < 2)}`], ["주말", weekday ? `평일의 ${Math.round((weekend / weekday) * 100)}%` : ""]])), toSessions()];
   }
 
-  // ------------------------------------------------------------------ 세션 상세 (198:6822): one session's numbers, the dialogue stays in MEMORY › 세션
+  // ------------------------------------------------------------------ 세션 상세 (198:6822): one session's numbers, the dialogue opens in the 세션 기록 window
   function sessionPage(r) {
     const kp = kpiRow([["토큰", num(r.tokens), `입력 ${num(r.input)} · 출력 ${num(r.output)}`], ["비용", usd(r.cost_usd, r.priced), r.priced ? "공시 단가로 계산" : "단가 없음"],
       ["캐시", `${num(r.cached)} 읽기`, ""], ["메시지", num(r.messages), dur(r.active_seconds)]]);
     const used = card("쓴 것", "", facts([["모델", (r.models || []).join(", ") || "—"], ["프로젝트", r.project || "—"], ["장치", r.device || ""], ["에이전트", agentName(r.agent)]]));
-    return [kp, used, el("p", "v4u-hint", "이 화면은 사용량만 보여 줘요. 대화 내용은 MEMORY › 세션에서 볼 수 있어요.")];
+    return [kp, used, el("p", "v4u-hint", "이 화면은 사용량만 보여 줘요. 대화 내용은 MEMORY › 개요 › 세션 기록에서 볼 수 있어요.")];
   }
   function sessionSide(r) {
-    const open = link("대화 내용 보기 (MEMORY › 세션) ›", () => ctx.openSession?.(r.id));
+    const open = link("대화 내용 보기 (세션 기록) ›", () => ctx.openSession?.(r.session_id || r.id));
     const act = el("div", "v4u-actions");
     act.append(button("모델 관리", "", null, () => ctx.openSettings?.("models")), button("도구 관리", "", null, () => ctx.go?.("tools")), button("스킬 관리", "", null, () => ctx.go?.("skills")));
     return [sideSection("이 세션 더 보기", "", open), sideSection("관리", "", act)];
@@ -520,7 +520,7 @@ window.ArkismUsage = (ctx) => {
     connect: "에이전트가 쓴 도구가 얼마나 불렸는지 봐요.",
     overview: "Arkism 라우터가 보낸 요청이 어느 모델로 갔고 토큰·비용이 얼마인지 봐요.",
     requests: "라우터를 거친 요청의 토큰·비용을 봐요. 모델별 성능은 라우팅 현황에서 봐요.",
-    sessions: "세션을 프로젝트·모델·스킬별로 모아 봐요. 세션 하나하나는 MEMORY › 세션에서 봐요.",
+    sessions: "세션을 프로젝트·모델·스킬별로 모아 봐요. 세션 하나하나는 MEMORY › 개요 › 세션 기록에서 봐요.",
     hours: "언제 많이 일하는지 요일·시간별로 봐요."
   };
   const sub = () => {

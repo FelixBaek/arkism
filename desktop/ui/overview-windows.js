@@ -1,5 +1,6 @@
 // MEMORY › 개요 windows (Figma 573:40303 … 573:50266 stage windows, 580:* wide windows, 592/764 improvements).
 // open(key): the stage window drawn over the overview; wide(kind): the large window (review · active · sessions · usage · map).
+// 세션 기록 is only this window now (the separate 세션 screen is gone): its detail reads the archived dialogue itself.
 // Everything shown comes from data the app already loaded or a documented read API; a field the server does not have is left out.
 window.ArkismOverviewWindows = (ctx, env) => {
   "use strict";
@@ -19,7 +20,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (k) { t.classList.add("ov-tag-k"); t.style.setProperty("--tag", KIND_COLOR[k]); } else if (!cls && DREAM_TAGS.has(text)) t.classList.add("ov-tag-p");
     return t;
   }
-  const openSession = (ev, quote) => { const [, sid] = ev.split(":"); dlg?.close(); window.dispatchEvent(new CustomEvent("arkism:open-session", { detail: { session_id: sid, quote } })); };
+  const openSession = (ev, quote) => wide("sessions", ev.split(":")[1], quote); // the 세션 기록 window, that session's dialogue open
   const D = () => state.data;
   const tr = (x) => window.ArkismI18n?.translate(x) || x;
   const usage = (id) => state.usage?.get(id);
@@ -541,39 +542,51 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const step = approved.length ? 4 : cands.some((m) => m.classification) ? 3 : cands.length ? 2 : 1;
     return { cands, approved, step, ...(cands.length || approved.length ? { tone: "ok", label: "분석 끝" } : fresh ? { tone: "wait", label: "분석 대기" } : { tone: "none", label: "후보 없음" }) };
   }
-  // 세션 기록 (580:51861)
-  function wideSessions() {
+  // 세션 기록 (580:51861). focus: a session_id (or row id) to open with its dialogue, searched over every day; quote: words to underline in it
+  function wideSessions(focus = "", quote = "") {
     const items = env.sessions(), today = items.filter((x) => time(x.ended_at || x.started_at) >= new Date().setHours(0, 0, 0, 0)).length;
     const d = shell("세션 기록", `${num(items.length)}건${today ? ` · 오늘 ${num(today)}` : ""}`, "저장된 대화예요. 원문은 여기서만 열려요", () => open("collect"));
-    recipe(d, { wide: "sessions", args: [] });
-    let q = "", agent = "all", sel = items[0]?.id; const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
-    const search = el("input", "ov-wide-search"); search.placeholder = "세션 찾기"; search.setAttribute("aria-label", "세션 찾기");
+    recipe(d, { wide: "sessions", args: [focus, quote] });
+    let q = focus, agent = "all", sel = focus ? null : items[0]?.id, talk = null; const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
+    const search = el("input", "ov-wide-search"); search.placeholder = "세션 찾기"; search.setAttribute("aria-label", "세션 찾기"); search.value = q;
     const bar = el("div", "ov-wide-bar"); bar.append(search, chipHost, button("새로고침", "ghost small", null, async () => { await env.reloadSessions(); wideSessions(); }));
     const agents = [...new Set(items.map((x) => x.agent).filter(Boolean))];
-    // 대화 원문 opens here, 30 messages a page, over the same API as the 세션 page
-    let tx = null;
-    async function loadTx(id, more) {
-      const prev = more && tx?.id === id ? tx : null, mine = tx = { id, items: prev ? prev.items : [], hidden: prev?.hidden || 0, archive: prev?.archive || "", next: prev?.next || "", state: prev?.state || "", loading: true, error: "" }; paint();
+    const remote = pagedWindow(d, "/v1/usage/sessions", () => ({ range: focus ? "all" : "7d", sort: "recent", q, source: agent === "all" ? "" : agent }), paint, true);
+    // the archived dialogue (POST /v1/usage/sessions/transcript: user·assistant text only, secrets and <private> never shown), 30 messages a page
+    async function readTalk(id, mark = "", more = false) {
+      const t = talk = more && talk?.id === id ? { ...talk, loading: true } : { id, mark, items: [], next: "", archive: "", state: "", hidden: 0, pages: 0, loading: true, error: "" };
+      paint();
       try {
-        const r = await request("/v1/usage/sessions/transcript", { method: "POST", body: JSON.stringify({ scope: state.scope, id, limit: 30, ...(prev?.next ? { archive_id: prev.archive, after: prev.next } : {}) }) });
-        if (tx !== mine) return;
+        const r = await request("/v1/usage/sessions/transcript", { method: "POST", body: JSON.stringify({ scope: state.scope, id, limit: 30, ...(t.next ? { archive_id: t.archive, after: t.next } : {}) }) });
+        if (talk !== t) return;
         if (r?.authority !== "data_only_untrusted" || !Array.isArray(r.items)) throw new Error("invalid_response");
-        Object.assign(mine, { items: [...mine.items, ...r.items], hidden: mine.hidden + (r.hidden?.secret_records || 0), archive: r.archive_id || "", next: r.next_cursor || "", state: r.state });
-      } catch (e) { if (tx !== mine) return; mine.error = /HTTP 404|not_found/.test(e?.message || "") && !mine.items.length ? "이 서버는 아직 대화 보기를 지원하지 않아요." : `대화를 불러오지 못했어요 (${e.message}).`; }
-      mine.loading = false; if (d.isConnected) paint();
+        Object.assign(t, { state: r.state, archive: r.archive_id || "", next: r.next_cursor || "", items: [...t.items, ...r.items], hidden: t.hidden + (r.hidden?.secret_records || 0), pages: t.pages + 1, loading: false });
+        // shortcut: looks at most 10 pages (300 messages) for the quoted words; add a server-side search if sessions get longer
+        if (t.mark && t.next && t.pages < 10 && !t.items.some((x) => x.text.includes(t.mark))) { void readTalk(id, t.mark, true); return; }
+      } catch (e) {
+        if (talk !== t) return;
+        t.loading = false; t.error = /HTTP 404|not_found/.test(e?.message || "") && !t.items.length ? "이 서버는 아직 대화 보기를 지원하지 않아요." : `대화를 불러오지 못했어요 (${e.message}).`;
+      }
+      if (d.isConnected) paint();
     }
-    function txSection() {
-      const ts = el("div", "ov-detail-sec"); ts.append(el("small", "", "대화 원문"));
-      const note = tx.error || (tx.loading ? "불러오는 중…" : { none: "이 세션은 보관된 대화가 없어요. 대화 원문은 수집된 뒤 7일 동안만 보관돼요.", expired: "보관된 대화가 만료됐거나 지워졌어요.", unsupported: "이 형식의 대화는 아직 볼 수 없어요." }[tx.state] || (tx.items.length ? "" : "보여 줄 대화가 없어요."));
-      const msgs = el("div", "ss-msgs");
-      for (const m of tx.items) { const b = el("div", `ss-msg ${m.role === "user" ? "user" : "assistant"}`), p = el("p", "", m.text); p.dataset.noI18n = ""; b.append(el("b", "", m.role === "user" ? "사용자" : "에이전트"), p); if (m.truncated) b.append(el("small", "ss-note", "길어서 앞부분만 보여요.")); msgs.append(b); }
-      if (tx.items.length) ts.append(msgs);
-      if (tx.hidden) ts.append(el("p", "ss-note", `비밀값이 들어 있어 숨긴 메시지 ${tx.hidden}개`));
-      if (note) ts.append(el("p", "ov-win-empty", note));
-      if (tx.next && !tx.loading) ts.append(button("메시지 더 보기", "ghost small", null, () => loadTx(tx.id, true)));
-      return ts;
+    function talkBox(id) {
+      const box = el("div", "ov-detail-sec"), msgs = el("div", "ss-msgs"), say = (t) => box.append(el("p", "ov-win-empty", t)); box.append(el("small", "", "대화"));
+      for (const m of talk.items) {
+        const b = el("div", `ss-msg ${m.role === "user" ? "user" : "assistant"}`), p = el("p", "", m.text); p.dataset.noI18n = "";
+        const at = talk.mark ? m.text.indexOf(talk.mark) : -1;
+        if (at >= 0) { // from a memory: underline the words it came from, and bring them into view once
+          const hit = el("mark", "ss-hit", talk.mark); hit.dataset.noI18n = ""; p.replaceChildren(m.text.slice(0, at), hit, m.text.slice(at + talk.mark.length));
+          if (!talk.scrolled) { talk.scrolled = true; requestAnimationFrame(() => hit.scrollIntoView({ block: "center" })); }
+        }
+        b.append(el("b", "", m.role === "user" ? "사용자" : "에이전트"), p); if (m.truncated) b.append(el("small", "ss-note", "길어서 앞부분만 보여요.")); msgs.append(b);
+      }
+      if (talk.items.length) box.append(msgs);
+      if (talk.error) say(talk.error);
+      else if (!talk.loading && !talk.items.length) say({ none: "이 세션은 보관된 대화가 없어요. 대화 원문은 수집된 뒤 7일 동안만 보관돼요.", expired: "보관된 대화가 만료됐거나 지워졌어요.", unsupported: "이 형식의 대화는 아직 볼 수 없어요." }[talk.state] || "보여 줄 대화가 없어요.");
+      if (talk.hidden) box.append(el("p", "ss-note", `비밀값이 들어 있어 숨긴 메시지 ${talk.hidden}개`));
+      if (talk.loading) say("불러오는 중…"); else if (talk.next) box.append(button("메시지 더 보기", "small", null, () => readTalk(id, talk.mark, true)));
+      return box;
     }
-    const remote = pagedWindow(d, "/v1/usage/sessions", () => ({ range: "7d", sort: "recent", q, source: agent === "all" ? "" : agent }), paint, true);
     function paint() {
       chipHost.replaceChildren(chipBar([["all", "전체", items.length], ...agents.map((a) => [a, a, items.filter((x) => x.agent === a).length])], agent, (k) => { agent = k; paint(); }));
       const { items: shown, loading } = remote.snapshot();
@@ -585,7 +598,13 @@ window.ArkismOverviewWindows = (ctx, env) => {
         r.append(t, rr); r.addEventListener("click", () => { sel = x.id; paint(); }); list.append(r);
       }
       remote.footer(list);
-      const cur = shown.find((x) => x.id === sel) || shown[0]; sel = cur?.id; list.querySelectorAll(".ov-wide-row").forEach((rw, k) => rw.classList.toggle("on", shown[k]?.id === sel));
+      if (focus && !sel) { // the asked-for session, once the search answered; a missing one must not look like the first row
+        const hit = !loading && shown.find((x) => x.session_id === focus || x.id === focus);
+        if (hit) { sel = hit.id; void readTalk(hit.id, quote.trim()); return; } // readTalk paints again with it picked
+        if (!loading) list.prepend(el("p", "ov-win-empty", "이 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요."));
+        detail.replaceChildren(); return;
+      }
+      const cur = shown.find((x) => x.id === sel) || shown[0]; sel = cur?.id; if (talk && talk.id !== sel) talk = null; list.querySelectorAll(".ov-wide-row").forEach((rw, k) => rw.classList.toggle("on", shown[k]?.id === sel));
       detail.replaceChildren(); if (!cur) return;
       const h = el("div", "ov-detail-head"); h.append(el("span", "ov-win-tag", cur.agent || "세션"), el("small", "", `${cur.project || ""} · ${new Date(cur.started_at).toLocaleString(loc(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}`));
       detail.append(h, el("h3", "", cur.title || cur.session_id));
@@ -600,15 +619,15 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (!ss.cands.length && !ss.approved.length) cs.append(el("p", "ov-win-empty", "이 세션에서 나온 후보가 없어요."));
       detail.append(cs);
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
-      act.append(tx?.id === cur.id ? button("대화 닫기", "small", null, () => { tx = null; paint(); }) : button("대화 원문 보기", "primary small", null, () => loadTx(cur.id)),
+      act.append(talk?.id === cur.id ? button("대화 닫기", "small", null, () => { talk = null; paint(); }) : button("대화 원문 보기", "primary small", null, () => readTalk(cur.id)),
         button("세션 지우기", "small", null, () => askConfirm("이 세션을 지울까요?", "세션과 보관된 대화가 지워지고 되돌릴 수 없어요. 에이전트의 원래 파일은 그대로 남고, 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.", async () => {
           try { await request("/v1/usage/sessions/delete", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: [cur.id] }) }); sel = null; await env.reloadSessions(); wideSessions(); }
           catch (e) { st.textContent = /access_denied/.test(e?.message || "") ? "지울 권한이 없어요." : `지우지 못했어요: ${e.message}`; }
         })));
-      detail.append(st, act); if (tx?.id === cur.id) detail.append(txSection());
+      detail.append(st, act, ...(talk?.id === cur.id ? [talkBox(cur.id)] : []));
     }
     search.addEventListener("input", () => { q = search.value.trim(); paint(); });
-    twoPane(d, bar, list, detail); d.lastChild.querySelector(".ov-wide-left").append(el("div", "ov-wide-foot-note", `최근 7일 ${num(items.length)}건`)); paint();
+    twoPane(d, bar, list, detail); d.lastChild.querySelector(".ov-wide-left").append(el("div", "ov-wide-foot-note", focus ? "모든 기간에서 찾았어요" : `최근 7일 ${num(items.length)}건`)); paint();
   }
 
   // 사용량 (580:54204)

@@ -195,14 +195,7 @@ div.install-way { border-style: dashed; }
 .v4s-pc { display: inline-flex; align-items: center; gap: 6px; font: 400 12px/1.5 var(--sans); color: var(--nc-muted); }
 
 /* ---------------------------------------------------------------- 세션 (198:888) */
-.ss-item { cursor: pointer; }
-.ss-item input[type="checkbox"] { flex: none; width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: var(--nc-action); }
-.ss-cost { flex: none; font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-muted); white-space: nowrap; }
-.ss-pick { flex: none; padding: 0 8px; color: var(--nc-text); font: 500 13px/1.5 var(--sans); white-space: nowrap; }
-.ss-pick.on { color: var(--nc-accent); }
-.ss-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
-.ss-bar small { flex: 1; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
-.ss-bar .btn, .v4u-actions .btn, .v4u-wrap .btn { height: auto; padding: 7px 14px; font: 500 13px/1.5 var(--sans); }
+.v4u-actions .btn, .v4u-wrap .btn { height: auto; padding: 7px 14px; font: 500 13px/1.5 var(--sans); }
 .ss-note { margin: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
 .skills-mode .chips.v4s-cats .chip .agent-tile, .chips.v4s-cats .chip .agent-tile { width: 16px; height: 16px; border: 0; background: none; }
 .chips.v4s-cats .chip .agent-tile img, .chips.v4s-cats .chip .agent-tile svg { width: 14px; height: 14px; }
@@ -217,9 +210,6 @@ div.install-way { border-style: dashed; }
 .ss-msg b { display: block; margin-bottom: 4px; font: 400 11px/1.5 var(--sans); color: var(--nc-quiet); }
 .ss-hit { background: none; color: inherit; text-decoration: underline 2px var(--nc-accent); text-underline-offset: 3px; }
 .ss-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 13px/1.5 var(--sans); color: var(--nc-text); }
-.ss-tools summary { cursor: pointer; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
-.ss-tools ul { margin: 6px 0 0; padding-left: 18px; font: 400 12px/1.5 var(--sans); color: var(--nc-muted); }
-.ss-id { margin: 0; font: 400 11px/1.5 var(--mono); color: var(--nc-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v4s-sec .us-empty { margin: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
 .v4s-sec .btn { align-self: flex-start; }
 .panel .detail .v4s-actions .btn.danger { color: var(--nc-muted); }
@@ -332,10 +322,6 @@ div.install-way { border-style: dashed; }
 .detail:has(.v4u-sec) .detail-body { padding: 8px 20px 20px; gap: 22px; }
 .detail:has(.v4u-sec) .btn { align-self: flex-start; height: auto; padding: 7px 14px; font: 500 13px/1.5 var(--sans); }
 /* the sessions screen shares the skills look for its detail */
-.detail:has(.ss-id) .detail-bar { padding: 24px 20px 0; border-bottom: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
-.detail:has(.ss-id) .detail-body { padding: 8px 20px 20px; gap: 22px; }
-.detail:has(.ss-id) h2 { font: 500 16px/1.5 var(--sans); color: var(--nc-text); }
-.detail:has(.ss-id) .btn { height: auto; padding: 7px 14px; font: 500 13px/1.5 var(--sans); }
 @media (max-width: 1100px) { .v4u-two, .v4u-mix { grid-template-columns: minmax(0, 1fr); } }
 
 /* 이름이 제목, 설명은 작은 둘째 줄 (스킬 목록·설치·상세) */
