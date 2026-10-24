@@ -48,12 +48,10 @@ test("overview: stage windows step through every stage and their lists", async (
   // ‹ › walk the stages in order and wrap around
   await press("다음 단계", d); assert.match(text(win()), /2 \/ 8 단계/);
   await press("이전 단계", win()); await press("이전 단계", win()); assert.match(text(win()), /8 \/ 8 단계/);
-  // the 다음 단계 cell opens the next stage; review's next is the active window
+  // no 다음 단계 card inside a stage window: ‹ › already step through the stages
   d = await openWindow({ key: "review" });
-  win().querySelector(".ov-win-next").click(); await app.settle();
-  assert.match(text(win()), /쓰는 중인 기억/);
-  win().querySelector(".ov-win-next").click(); await app.settle(50);
-  assert.match(text(win()), /불러오기/);
+  assert.equal(d.querySelector(".ov-win-next"), null);
+  assert.ok(!/다음 단계/.test(text(d.querySelector(".ov-win-cells"))));
   // every stage draws its own list and footer button
   for (const key of ["extract", "classify", "trace", "judge", "dream", "active"]) {
     d = await openWindow({ key });

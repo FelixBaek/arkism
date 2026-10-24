@@ -138,15 +138,15 @@ window.ArkismOverviewWindows = (ctx, env) => {
 
   // ------------------------------------------------------------ stage window
   const SPEC = {
-    collect: ["에이전트 대화를 세션 단위로 모아 저장해요", "Claude Code · Codex · BULTUK 등", "대화가 끝날 때마다", "자동 (수집 훅)", "extract"],
-    extract: ["저장된 대화에서 교훈·결정 후보를 뽑아요", "대화 저장", "대화가 끝난 뒤", "AI (서버 Claude)", "classify"],
-    classify: ["후보에 위험도와 중복 힌트를 붙여요", "분석", "후보가 생기면 바로", "AI (분류만, 승인 안 함)", "review"],
-    review: ["사람이 승인해야 쓰는 기억이 돼요", "분류 · 드리밍", "언제든", "사람만", "active"],
-    recall: ["질문과 관련 있는 기억을 찾아 답에 넣어요", "쓰는 중인 기억", "에이전트가 질문할 때마다", "자동 (검색)", "trace"],
-    trace: ["어떤 기억이 어느 세션에 들어갔는지 남겨요", "불러오기", "불러올 때마다", "자동", "judge"],
-    judge: ["넣은 기억이 실제 답에 쓰였는지 판정해요", "사용 기록", "세션이 끝난 뒤", "AI 판정 + 사람 확인", "dream"],
-    dream: ["겹치거나 낡은 기억을 찾아 정리를 제안해요", "쓰는 중인 기억 · 검증 결과", "주기적으로", "AI 제안 → 사람 승인", "review"],
-    active: ["승인된 기억이에요. 불러오기가 여기서 찾아요", "승인 대기", "승인되면 바로 추가", "사람이 승인한 것만", "recall"]
+    collect: ["에이전트 대화를 세션 단위로 모아 저장해요", "Claude Code · Codex · BULTUK 등", "대화가 끝날 때마다", "자동 (수집 훅)"],
+    extract: ["저장된 대화에서 교훈·결정 후보를 뽑아요", "대화 저장", "대화가 끝난 뒤", "AI (서버 Claude)"],
+    classify: ["후보에 위험도와 중복 힌트를 붙여요", "분석", "후보가 생기면 바로", "AI (분류만, 승인 안 함)"],
+    review: ["사람이 승인해야 쓰는 기억이 돼요", "분류 · 드리밍", "언제든", "사람만"],
+    recall: ["질문과 관련 있는 기억을 찾아 답에 넣어요", "쓰는 중인 기억", "에이전트가 질문할 때마다", "자동 (검색)"],
+    trace: ["어떤 기억이 어느 세션에 들어갔는지 남겨요", "불러오기", "불러올 때마다", "자동"],
+    judge: ["넣은 기억이 실제 답에 쓰였는지 판정해요", "사용 기록", "세션이 끝난 뒤", "AI 판정 + 사람 확인"],
+    dream: ["겹치거나 낡은 기억을 찾아 정리를 제안해요", "쓰는 중인 기억 · 검증 결과", "주기적으로", "AI 제안 → 사람 승인"],
+    active: ["승인된 기억이에요. 불러오기가 여기서 찾아요", "승인 대기", "승인되면 바로 추가", "사람이 승인한 것만"]
   };
   const LABEL = { active: "쓰는 중인 기억" };
   const LIST_TITLE = { collect: "최근 저장된 대화", extract: "최근 추출된 후보·기억", classify: "분류 기다리는 후보", review: "승인 기다리는 후보", recall: "최근 불러온 기억 (질문 내용은 저장하지 않아요)",
@@ -228,8 +228,6 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const how = el("div", "ov-win-how"), cells = el("div", "ov-win-cells");
     how.append(el("p", "", ""), cells); how.firstChild.append(el("span", "", "이 단계는 "), el("strong", "", spec[0]));
     for (const [l, v] of [["받는 곳", spec[1]], ["언제", spec[2]], ["누가", spec[3]]]) { const c = el("div", "ov-win-cell"); c.append(el("small", "", l), el("strong", "", v)); cells.append(c); }
-    const nx = el("button", "ov-win-cell ov-win-next"); nx.type = "button"; nx.append(el("small", "", "다음 단계"), el("strong", "", `${LABEL[spec[4]] || list.find((x) => x.key === spec[4])?.label} ›`));
-    nx.addEventListener("click", () => (spec[4] === "active" ? open("active") : open(spec[4]))); cells.append(nx);
     body.append(tiles, how);
     if (s.counts) {
       const chart = el("div", "ov-win-chart"), max = Math.max(1, ...s.counts), bars = el("div", "ov-win-bars");
