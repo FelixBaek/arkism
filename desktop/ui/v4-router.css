@@ -146,6 +146,9 @@ button.v4-tr:hover { background: var(--nc-raised); }
 
 /* ================================================================ 모델 설정 (198:544) */
 .mp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mp-chipbar { display: flex; align-items: flex-start; gap: 12px; }
+.mp-chipbar > .mp-chips { flex: 1; min-width: 0; }
+.mp-chip-actions { display: flex; flex-shrink: 0; gap: 8px; }
 .mp-chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--sans); cursor: pointer; }
 .mp-chip:hover { background: var(--nc-raised); }
 .mp-chip.active { background: var(--nc-raised); border-color: transparent; color: var(--nc-accent); font-weight: 500; }
@@ -204,10 +207,10 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .key-dialog .dialog-foot .grow { order: -1; }
 
 /* ================================================================ 라우팅 현황 (198:372) */
-.area-bar .head-actions .rt-range { padding: 4px; gap: 2px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
-.area-bar .head-actions .rt-range .tab { height: 32px; padding: 0 14px; border-radius: 6px; }
-.area-bar .head-actions .rt-range .tab.active { background: var(--nc-canvas); border: 1px solid var(--nc-line); }
-.area-bar .head-actions .icon-btn { width: 40px; height: 40px; border-color: var(--nc-line); }
+.page-head .head-actions .rt-range { padding: 4px; gap: 2px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); }
+.page-head .head-actions .rt-range .tab { height: 32px; padding: 0 14px; border-radius: 6px; }
+.page-head .head-actions .rt-range .tab.active { background: var(--nc-canvas); border: 1px solid var(--nc-line); }
+.page-head .head-actions .icon-btn { width: 40px; height: 40px; border-color: var(--nc-line); }
 .rt-wrap { gap: 16px; padding-bottom: 0; }
 .rt-main { gap: 16px; }
 .rt-kpis { gap: 12px; }
