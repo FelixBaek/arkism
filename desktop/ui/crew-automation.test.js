@@ -159,6 +159,10 @@ test("a new automation drafted by AI, given steps and created", async () => {
   exact(d, "+ 단계 추가").click(); await h.settle();
   exact(d, "+ 단계 추가").click(); await h.settle();
   for (const f of h.fields) if (/textarea/i.test(f.input.tagName)) dom.type(f.input, "할 일");
+  // a goal line stays one line even when pasted text carries line breaks
+  const goal = h.fields.map((f) => f.input).find((i) => /auto-goal-input/.test(i.className || ""));
+  dom.type(goal, "첫 줄\n  둘째 줄");
+  assert.equal(goal.value, "첫 줄 둘째 줄");
   h.routes.unshift(["POST", /^\/v1\/crew$/, () => new Error("만들기 실패")]);
   make().click(); await h.settle();
   h.routes.shift();

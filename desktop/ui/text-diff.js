@@ -2,8 +2,10 @@
 // Lines first; a changed line that keeps at least half of its shorter side's words shows word by word, otherwise whole old line → new line.
 window.ArkismTextDiff = (() => {
   "use strict";
-  // LCS over two token lists. shortcut: plain table; texts are capped at 4000 chars, so at worst a few million cells.
+  // LCS over two token lists, as a plain table. Past BUDGET cells it gives up: all of A removed, all of B added.
+  const BUDGET = 4e6;
   function lcs(A, B) {
+    if (A.length * B.length > BUDGET) return [...A.map((t) => ["-", t]), ...B.map((t) => ["+", t])];
     const L = Array.from({ length: A.length + 1 }, () => new Uint16Array(B.length + 1));
     for (let i = A.length - 1; i >= 0; i--) for (let j = B.length - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
     const out = [];
