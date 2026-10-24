@@ -373,3 +373,5 @@
 .ov-filter-pop[hidden] { display: none; }
 .ov-filter-pop::before { content: ""; position: absolute; top: -6px; left: 18px; width: 10px; height: 10px; background: inherit; border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
 .ov-filter-label { font-size: 12px; color: var(--text-2); }
+.ov-win-proposal { display: flex; flex-direction: column; gap: 8px; }
+.ov-win-proposal-panel { display: flex; flex-direction: column; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; } .ov-win-proposal-panel[hidden] { display: none; }

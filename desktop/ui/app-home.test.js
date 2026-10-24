@@ -52,11 +52,11 @@ test("overview: stage windows step through every stage and their lists", async (
   d = await openWindow({ key: "review" });
   assert.equal(d.querySelector(".ov-win-next"), null);
   assert.ok(!/다음 단계/.test(text(d.querySelector(".ov-win-cells"))));
-  // every stage draws its own list and footer button
+  // every stage draws its own list; only a stage whose list a wide window shows whole keeps a footer button
   for (const key of ["extract", "classify", "trace", "judge", "dream", "active"]) {
     d = await openWindow({ key });
     assert.ok(d.querySelector(".ov-win-list"), key);
-    assert.ok(d.querySelector(".ov-win-foot button"), `${key} footer`);
+    assert.equal(!!d.querySelector(".ov-win-foot button"), ["extract", "active"].includes(key), `${key} footer`);
   }
   // collect's 열기 opens that session's dialogue in the 세션 기록 window (there is no separate 세션 screen)
   d = await openWindow({ key: "collect" });
@@ -79,6 +79,30 @@ test("overview: 분류 groups its waiting candidates by kind inside the window",
   }
   assert.equal(new Set(heads.map((h) => text(h.querySelector(".ov-win-tag")))).size, heads.length, "one header per kind");
   assert.equal(btn("승인 대기에서 보기", d), undefined, "no jump to the approval window per row");
+  assert.ok(![...d.querySelectorAll("button")].some((b) => /모두 보기|승인 대기 열기/.test(text(b))), "every candidate shows, nothing to jump to");
+  // each candidate is approved or discarded right here, with the same review call as 승인 대기
+  const item = list.querySelector(".ov-win-item");
+  await press("승인", item, 50);
+  assert.ok(app.apiCalls.some(([m, p, b]) => m === "POST" && /\/v1\/memory_candidates\/.+\/review$/.test(p) && /"approve"/.test(String(b))));
+  await press("버리기", win().querySelector(".ov-win-list .ov-win-item"));
+  assert.ok(app.$("dialog.ov-ask[open]"), "버리기 still asks for a reason");
+  app.$("dialog.ov-ask[open]").close();
+  await closeAll();
+});
+
+test("overview: 드리밍 decides each proposal in its own row, with the 승인 대기 choices", async () => {
+  let d = await openWindow({ key: "dream" });
+  assert.equal(d.querySelector(".ov-win-foot button"), null, "no jump to 승인 대기");
+  const wrap = d.querySelector(".ov-win-proposal"); assert.ok(wrap, "a proposal row");
+  const panel = wrap.querySelector(".ov-win-proposal-panel"); assert.ok(panel.hidden);
+  await press("결정하기 ⌄", wrap); assert.ok(!panel.hidden);
+  assert.ok(btn("반대로 남기기", panel) || btn("괜찮아요", panel), "the same choices as 승인 대기");
+  await press("접기 ⌃", wrap); assert.ok(panel.hidden);
+  await press("결정하기 ⌄", wrap);
+  const pick = btn("둘 다 두기", panel) ? "둘 다 두기" : "괜찮아요";
+  await press(pick, panel, 80);
+  assert.ok(app.apiCalls.some(([m, p, b]) => m === "POST" && /\/v1\/maintenance_proposals\/.+\/decide$/.test(p) && /"dismiss"/.test(String(b))));
+  assert.match(text(win()), /드리밍/, "it stays in the 드리밍 window");
   await closeAll();
 });
 
@@ -153,8 +177,7 @@ test("overview: 불러오기 shows receipts, an empty history and a failed read"
   d = await openWindow({ key: "recall" }); await app.settle(50);
   assert.match(text(d), /불러오기 기록을 읽지 못했어요/);
   off();
-  await press("사용량 보기 ›", d, 50);
-  assert.match(text(win()), /사용량/);
+  assert.equal(d.querySelector(".ov-win-foot button"), null, "no jump to 사용량 from here");
   await closeAll();
 });
 
@@ -336,12 +359,16 @@ test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", 
   d = await openWindow({ wide: "active" }); await app.settle(50);
   await press("고치기", win().querySelector(".ov-detail-actions"), 50);
   assert.equal(win(), null, "고치기 leaves the window for the memory");
-  // judge's 정리하러 가기 opens the idle filter on one memory; ‹ 작게 보기 goes back to 검증
+  // judge fixes or deletes an unused memory in its own row (the same confirm and DELETE as here)
   d = await openWindow({ key: "judge" });
-  await press("정리하러 가기", d, 50);
-  assert.match(text(win()), /쓰는 중인 기억/);
-  await press("‹ 작게 보기", win());
-  assert.match(text(win()), /검증/);
+  assert.equal(btn("정리하러 가기", d), undefined);
+  const deletes = app.apiCalls.filter(([m]) => m === "DELETE").length;
+  await press("지우기", d.querySelector(".ov-win-list .ov-win-item"));
+  await press("지우기", app.$("dialog.ov-ask[open]"), 80);
+  assert.ok(app.apiCalls.filter(([m]) => m === "DELETE").length > deletes, "지우기 asks, then deletes");
+  d = await openWindow({ key: "judge" });
+  await press("고치기", d.querySelector(".ov-win-list .ov-win-item"), 50);
+  assert.equal(win(), null, "고치기 opens the memory editor");
   await closeAll();
 });
 
