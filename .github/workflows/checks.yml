@@ -123,7 +123,7 @@ jobs:
           python-version: "3.13"
       - name: Install pinned API contract validator
         run: |
-          python3 -m pip install --disable-pip-version-check --only-binary=:all: --target "$RUNNER_TEMP/api-contract-validator" -r tools/requirements-api-contract.txt
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --target "$RUNNER_TEMP/api-contract-validator" -r tools/requirements-api-contract.txt
           echo "PYTHONPATH=$RUNNER_TEMP/api-contract-validator" >> "$GITHUB_ENV"
       - name: Offline OpenAPI structure and reference validation
         run: python3 tools/check_openapi.py
@@ -160,7 +160,7 @@ jobs:
       - name: Windows API schema and real response contracts
         shell: powershell
         run: |
-          python -m pip install --disable-pip-version-check --only-binary=:all: --target "$env:RUNNER_TEMP/api-contract-validator" -r tools/requirements-api-contract.txt
+          python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --target "$env:RUNNER_TEMP/api-contract-validator" -r tools/requirements-api-contract.txt
           $env:PYTHONPATH = "$env:RUNNER_TEMP/api-contract-validator"
           if ($LASTEXITCODE -ne 0) { throw 'API validator installation failed' }
           $env:ARKISM_OPENAPI_CASES = Join-Path $env:RUNNER_TEMP ('arkism-api-cases-' + [guid]::NewGuid().ToString('N') + '.json')
