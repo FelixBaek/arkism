@@ -42,7 +42,7 @@ pub async fn popout_open(app: AppHandle, window: Window, store: State<'_, Popout
     // A loaded spare takes the popup: placed now, shown by the spare itself once the popup is drawn (popout_ready).
     let ready = {
         let mut slot = spare.0.lock().map_err(|e| e.to_string())?;
-        if slot.as_ref().is_some_and(|s| s.2) { slot.take().map(|s| s.0) } else { None } // not take_if: rust-version is 1.77
+        if slot.as_ref().is_some_and(|s| s.2 && spare_fits(&s.1, &payload)) { slot.take().map(|s| s.0) } else { None } // not take_if: rust-version is 1.77
     };
     if let Some(w) = ready.and_then(|l| app.get_webview_window(&l)) {
         let _ = w.set_title(&title);
@@ -146,6 +146,13 @@ pub fn popout_close(window: Window) -> Result<(), String> {
     window.destroy().map_err(|e| e.to_string())
 }
 
+/// Whether a spare built with `session` can take `payload`: it keeps the token and scope it connected with,
+/// so a popup opened after the main window's session changed (before popout_prepare replaces the spare) must not use it.
+fn spare_fits(session: &str, payload: &str) -> bool {
+    let want = serde_json::from_str::<serde_json::Value>(payload).ok().and_then(|p| p.get("session").cloned());
+    want.is_some() && serde_json::from_str::<serde_json::Value>(session).ok() == want
+}
+
 fn clamp(v: f64, lo: f64, hi: f64) -> f64 {
     if v.is_finite() { v.clamp(lo, hi) } else { lo }
 }
@@ -160,5 +167,15 @@ mod tests {
         assert!(!is_popout("main"));
         assert_eq!(clamp(f64::NAN, 360.0, 2400.0), 360.0);
         assert_eq!(clamp(5000.0, 360.0, 2400.0), 2400.0);
+    }
+
+    #[test]
+    fn spare_takes_only_its_own_session() {
+        let session = r#"{"mode":"remote","server":"s","token":"a","scope":{"workspace":"w"}}"#;
+        assert!(spare_fits(session, &format!(r#"{{"recipe":{{"event":"arkism:open-x"}},"session":{session}}}"#)));
+        assert!(!spare_fits(session, r#"{"recipe":{},"session":{"mode":"remote","server":"s","token":"b","scope":{"workspace":"w"}}}"#));
+        assert!(!spare_fits(session, r#"{"recipe":{},"session":{"mode":"remote","server":"s","token":"a","scope":{"workspace":"v"}}}"#));
+        assert!(!spare_fits(session, r#"{"recipe":{}}"#));
+        assert!(!spare_fits(session, "not json"));
     }
 }
