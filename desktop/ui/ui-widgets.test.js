@@ -412,6 +412,7 @@ test("with a loaded spare window, a popup that can go opens in its own window at
   add(`<dialog id="sp" data-popout='{"event":"arkism:open-x"}'><div class="dialog-head">s</div></dialog>`);
   const sp = $("#sp");
   window.ArkismPopoutSession = () => ({ token: "t" });
+  await timers.tick(20); await flush(); // let the last test's popups finish their own spare check first
   let rebuilt = 0;
   window.ArkismPopoutSpare = () => { rebuilt++; };
   sp.showModal();
@@ -419,6 +420,7 @@ test("with a loaded spare window, a popup that can go opens in its own window at
   assert.equal(invokes.at(-1)[1].spareOnly, true);
   assert.equal(sp.open, true, "no spare yet: it stays in the app");
   assert.equal(sp.classList.contains("popping"), false);
+  assert.equal(rebuilt, 1, "no spare was ready: one is asked for");
   sp.close();
   window.spareReady = true;
   sp.showModal();
@@ -426,7 +428,7 @@ test("with a loaded spare window, a popup that can go opens in its own window at
   assert.ok(sp.classList.contains("popping"), "hidden here while its window opens");
   await timers.tick(20); await flush();
   assert.equal(sp.open, false);
-  assert.equal(rebuilt, 1, "the next spare is prepared");
+  assert.equal(rebuilt, 2, "the next spare is prepared");
   window.spareReady = false;
 });
 

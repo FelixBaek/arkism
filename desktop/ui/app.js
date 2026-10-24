@@ -2203,7 +2203,7 @@ export function startApp() {
     Object.assign(state, { mode: job.session.mode, server: job.session.server, token: job.session.token, scope: { ...defaults, ...job.session.scope } });
     if (job.spare) {
       const fill = new Promise((resolve) => void window.__TAURI__.event.listen("popout-fill", (e) => resolve(e.payload)));
-      try { await appConnection.open(); } catch (_) { return quit(); } // main builds another spare next time
+      try { await appConnection.open(); } catch (_) { return quit(); } // main builds another when a popup finds no spare ready
       await tauri.invoke("popout_ready", { drawn: false });
       try { job = JSON.parse(await fill); } catch (_) { return quit(); }
       if (!job?.recipe?.event?.startsWith("arkism:open-")) return quit();

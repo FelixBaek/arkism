@@ -40,7 +40,10 @@ pub async fn popout_open(app: AppHandle, window: Window, store: State<'_, Popout
     let (x, y) = (clamp(x, -10000.0, 10000.0), clamp(y, -10000.0, 10000.0));
     let (width, height) = (clamp(width, 360.0, 2400.0), clamp(height, 320.0, 1800.0));
     // A loaded spare takes the popup: placed now, shown by the spare itself once the popup is drawn (popout_ready).
-    let ready = spare.0.lock().map_err(|e| e.to_string())?.take_if(|s| s.2).map(|s| s.0);
+    let ready = {
+        let mut slot = spare.0.lock().map_err(|e| e.to_string())?;
+        if slot.as_ref().is_some_and(|s| s.2) { slot.take().map(|s| s.0) } else { None } // not take_if: rust-version is 1.77
+    };
     if let Some(w) = ready.and_then(|l| app.get_webview_window(&l)) {
         let _ = w.set_title(&title);
         let _ = w.set_size(LogicalSize::new(width, height));
@@ -107,8 +110,9 @@ pub async fn popout_prepare(app: AppHandle, window: Window, store: State<'_, Pop
 }
 
 /// From a popout window: as the spare, "loaded, ready for a popup"; once it holds a popup, "drawn, show me".
+/// Async: popout_prepare holds the Spare lock while building a window on the main thread, so waiting for it there deadlocks.
 #[tauri::command]
-pub fn popout_ready(window: Window, spare: State<'_, Spare>, drawn: bool) -> Result<(), String> {
+pub async fn popout_ready(window: Window, spare: State<'_, Spare>, drawn: bool) -> Result<(), String> {
     if !is_popout(window.label()) {
         return Err("not_a_popout".into());
     }
