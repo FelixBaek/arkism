@@ -1044,7 +1044,7 @@ window.ArkismTeams = (ctx) => {
     if (!playing) requestAnimationFrame(stop);
     const play = () => svg.unpauseAnimations?.();
     host.addEventListener("pointerenter", play); host.addEventListener("focus", play);
-    host.addEventListener("pointerleave", () => { if (document.activeElement !== host) { stop(); playKey = ""; } });
+    host.addEventListener("pointerleave", () => { if (host.ownerDocument.activeElement !== host) { stop(); playKey = ""; } });
     host.addEventListener("blur", () => { if (!host.matches(":hover")) { stop(); playKey = ""; } });
   }
   function modeCard(d, changed, title, sub, bare) {
