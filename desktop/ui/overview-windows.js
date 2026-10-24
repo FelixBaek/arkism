@@ -25,16 +25,19 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const usage = (id) => state.usage?.get(id);
   // read: memories outside the loaded first page (most-used ones are often older), fetched once each; false = gone or unreadable
   const read = new Map();
-  let redraw = null, batch = [];
-  const memOf = (id) => D().memories.find((m) => m.id === id) || ctx.maintenanceRecords?.get(id) || read.get(id) || undefined; // proposals point past the loaded first page too
+  let redraw = null, batch = [], readGen = state.connection.generation;
+  const memOf = (id) => {
+    if (readGen !== state.connection.generation) { read.clear(); readGen = state.connection.generation; } // names from another server or scope, and reads it dropped, start over
+    return D().memories.find((m) => m.id === id) || ctx.maintenanceRecords?.get(id) || read.get(id) || undefined; // proposals point past the loaded first page too
+  };
   function readMemory(id) {
     const g = state.connection.generation, keep = (v) => { if (g === state.connection.generation) read.set(id, v); };
     read.set(id, null);
     batch.push(request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => keep(r?.text && (r.status ?? "active") === "active" ? r : false), () => keep(false)));
     if (batch.length > 1) return;
     queueMicrotask(() => { // one redraw per drawing pass, after every name it asked for has come back
-      const wait = batch, d = dlg, again = redraw; batch = [];
-      Promise.allSettled(wait).then(() => { if (d?.isConnected && dlg === d && redraw === again) again?.(); });
+      const wait = batch; batch = [];
+      Promise.allSettled(wait).then(() => { if (dlg?.isConnected) redraw?.(); }); // whichever window is open now: a redraw while waiting asks for no new reads
     });
   }
   const memText = (id) => {

@@ -28,3 +28,19 @@ test("사용 기록 names a used memory that is outside the loaded first page (A
   assert.equal(calls.length, 2);
   win.reset();
 });
+
+test("a window drawn again while names load still shows them, and a new connection reads them again", async () => {
+  let answer;
+  const { win, calls, state } = windows([], { days: 7, items: [{ id: "older", used: 9, injected: 9 }] },
+    () => new Promise((resolve) => { answer = () => resolve({ id: "older", text: "Older rule", status: "active" }); }));
+  win.open("trace");
+  win.open("trace"); // drawn again before the read lands
+  assert.equal(calls.length, 1);
+  answer(); await dom.flush(); await dom.flush();
+  assert.deepEqual(titles(), ["Older rule"]);
+  state.connection.generation++;
+  win.open("trace");
+  assert.deepEqual(titles(), ["불러오는 중…"]);
+  assert.equal(calls.length, 2);
+  win.reset();
+});
