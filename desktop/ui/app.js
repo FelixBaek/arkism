@@ -66,6 +66,7 @@ export function startApp() {
     imgCat: "all",
     usage: new Map(),
     usageDone: false,
+    usageFailed: false, // GET /v1/memory_usage failed: screens show — instead of 0 (A2)
     memoryTotals: null, // { active, idle, kinds } over every memory on the server, not the loaded first page
     candidateTotal: null, // every candidate on the server, read apart from memoryTotals (#188)
     listErrors: {}, // list name -> loadFailure() for a list that failed while the memories loaded (#186)
@@ -556,6 +557,7 @@ export function startApp() {
     memoryPaging.memoryPages.reset(); memoryPaging.memoryResults.reset(); memoryPaging.maintenanceRecords.clear(); memoryPaging.legacyMemorySearch.clear();
     state.usage = new Map();
     state.usageDone = false;
+    state.usageFailed = false;
     state.memoryTotals = null;
     state.candidateTotal = null;
     state.listErrors = {};
@@ -624,7 +626,7 @@ export function startApp() {
     void loadMemoryTotals(g);
     const items = await appApi.request(`/v1/memory_usage?${appApi.query()}`).then((r) => r.items || [], () => null);
     if (g !== state.connection.generation) return;
-    if (!items) return; // older server or no read:usage: 쓰임 stays "…" instead of calling every memory one by one
+    if (!items) { state.usageFailed = true; render(false); return; } // older server, no read:usage or a timeout: 쓰임 stays "…" instead of calling every memory one by one
     state.usage = new Map(items.map((u) => [u.id, u]));
     state.usageDone = true;
     window.ArkismPerf?.note("load.usage", performance.now() - t0, items.length);

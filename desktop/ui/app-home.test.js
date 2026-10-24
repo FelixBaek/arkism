@@ -382,6 +382,28 @@ test("overview: 사용량 window draws the counts and its two buttons", async ()
   assert.equal(win(), null);
 });
 
+// A2: /v1/memory_usage timing out (503) left every recall count at 0 beside a 7-day preview of 2,090 injections.
+test("overview: 사용량 window shows — and says why when the use counts did not load", async () => {
+  let asked = 0;
+  // reloads every list and waits until the use counts were asked for (they load after the rest)
+  const reload = async () => { const n = asked; app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); for (let i = 0; i < 100 && asked === n; i++) await app.settle(100); await app.settle(100); };
+  let off = route("GET", "/v1/memory_usage", () => { asked++; return fail(503, "unavailable"); });
+  await reload();
+  let d = await openWindow({ wide: "usage" }); await app.settle(30); d = win();
+  const tiles = [...d.querySelectorAll(".ov-win-tile")].map(text);
+  assert.ok(tiles.some((x) => /^—\s*7일 불러온 횟수/.test(x)), tiles.join(" | "));
+  assert.ok(tiles.some((x) => /^—\s*불러온 기억/.test(x)), tiles.join(" | "));
+  assert.doesNotMatch(text(d), /0회/);
+  assert.match(text(d), /서버가 불러오기 집계를 주지 못했어요/);
+  off(); off = route("GET", "/v1/memory_usage", () => { asked++; return ok({ items: [{ id: "m1", d7: 4, d30: 9, last: ago(2) }] }); });
+  await reload();
+  d = await openWindow({ wide: "usage" }); await app.settle(30); d = win();
+  assert.match(text(d), /4회\s*7일 불러온 횟수/);
+  assert.doesNotMatch(text(d), /집계를 주지 못했어요/);
+  off();
+  await closeAll();
+});
+
 test("overview: 기억 지도 picks a memory, follows its links and filters", async () => {
   const graph = {
     nodes_truncated: true, edges_truncated: true,
@@ -703,7 +725,7 @@ test("home: menu rows count crew runs, routing and knowledge; a stalled pipeline
 
 test("home: a prompt turns up in search once the gallery menu shows", async () => {
   const off = route("GET", "/v1/prompts", () => ok({ items: [{ id: "pp1", title: "썸네일 슬라이드", prompt: "표지", kind: "slide", image_prompt: { kind: "slide", title: "썸네일 슬라이드", prompt: "표지 {제목}", engine: "gpt" } }] }));
-  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(300);
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(1500);
   const gallery = app.$('.nav-item[data-menu="gallery"]');
   gallery.hidden = false;
   await home();

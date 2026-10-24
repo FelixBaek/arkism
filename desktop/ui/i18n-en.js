@@ -5395,6 +5395,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "다음 단계": "Next stage",
   "24시간 전 ··· 지금": "24 hours ago ··· now",
   "지금 보여 줄 항목이 없어요.": "Nothing to show right now.",
+  "서버가 불러오기 집계를 주지 못했어요. 잠시 뒤 다시 열어 보세요.": "The server did not return the recall counts. Open this again in a moment.",
   "전체 화면으로": "Open full screen"
 });
 Object.assign(window.ArkismI18nEN.patterns, {"{0} / {1} 단계": "Stage {0} / {1}"});
