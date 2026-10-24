@@ -219,6 +219,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/providers/labels":                       {action: "write:providers", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/providers/models":                       {action: "write:providers", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/providers/test":                         {action: "write:providers", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
+	"POST /v1/providers/models_refresh":               {action: "write:providers", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/routing/calls":                          {action: "write:routing_calls", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/routing/decide":                         {action: "route:models", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/routing/groups":                         {action: "write:routing", scope: routeJSON, limit: 256 << 10},

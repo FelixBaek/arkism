@@ -550,6 +550,17 @@
     },
     {
       "method": "post",
+      "path": "/v1/providers/models_refresh",
+      "request": "ProviderModelsRefresh",
+      "response": "Record",
+      "summary": "Providers: models refresh",
+      "description": "Human only. Returns the providers record envelope. Queues one host request to reread every provider's model list past its cache; a pending one is a conflict.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "post",
       "path": "/v1/usage/sessions/delete",
       "request": "SessionDeleteInput",
       "response": "SessionDeleteOutput",

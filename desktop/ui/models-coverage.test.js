@@ -210,9 +210,10 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   assert.match(main().all((x) => x.textContent === "새로고침")[0].title, /이 PC에서 방금 확인/);
   window.__TAURI__ = { core: { invoke: async () => { throw new Error("x"); } } };
   click(main(), "새로고침"); await settle();
-  assert.match(v.notes.at(-1), /한도를 새로 확인하지 못했어요/);
+  assert.match(v.notes.at(-1), /한도와 모델 목록을 새로 받지 못했어요/);
   window.__TAURI__ = { core: { invoke: async () => ({}) } };
-  click(main(), "다시 불러오기"); await settle();
+  assert.ok(main().all((x) => x.tagName === "BUTTON" && x.textContent === "새로고침").length >= 2, "the 모델 card's button says 새로고침 too");
+  click(main(), "새로고침"); await settle();
   delete window.__TAURI__;
   click(main(), "새로고침"); await settle();
   // CLI update: done, failed, conflict, other error, a reply without providers
@@ -253,6 +254,18 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   assert.equal(plain.nodes.main.all((x) => x.textContent === "새로고침")[0].title, "지금 확인");
   const srv = mk(); await srv.m.load(); srv.draw();
   assert.match(srv.nodes.main.all((x) => x.textContent === "새로고침")[0].title, /서버에서 방금 확인/);
+  // On a server 새로고침 queues models_refresh for the runner and waits for its answer.
+  const btn = () => srv.nodes.main.all((x) => x.tagName === "BUTTON" && x.textContent === "새로고침")[0];
+  srv.outcome = "done"; btn().click(); await settle();
+  assert.equal(srv.calls.filter(([p]) => p === "/v1/providers/models_refresh").length, 1);
+  const before = srv.notes.length;
+  srv.outcome = "failed"; btn().click(); await settle();
+  assert.equal(srv.notes.at(-1), "모델 목록을 새로 받지 못했어요: 알 수 없음");
+  srv.outcome = "stay"; btn().click(); await settle(400);
+  assert.match(srv.notes.at(-1), /서버 실행기가 아직 답하지 않았어요/);
+  srv.fail["/v1/providers/models_refresh"] = "revision_conflict"; btn().click(); await settle();
+  assert.match(srv.notes.at(-1), /서버 실행기가 아직/, "one already waiting is not an error");
+  assert.ok(srv.notes.length > before);
 });
 
 test("AI 도구 기본 모델 saves the provider and model, falls back to the server default, and keeps an old pick", async () => {

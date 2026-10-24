@@ -693,6 +693,32 @@ func TestProviderModelTestGoesToTheRunnerWithoutAKey(t *testing.T) {
 	}
 }
 
+func TestProviderModelsRefreshQueuesOneRequestAtATime(t *testing.T) {
+	f := newFixture(t)
+	runner := f.runner()
+	in := ProviderModelsRefresh{Scope: scopeA}
+	if _, err := f.svc.RefreshProviderModels(testCtx, f.agent, in); !errors.Is(err, ErrDenied) {
+		t.Fatal("an agent asked for a refresh", err)
+	}
+	r, err := f.svc.RefreshProviderModels(testCtx, f.human, in)
+	if err != nil || len(r.Providers.Requests) != 1 || r.Providers.Requests[0].Kind != "models_refresh" {
+		t.Fatal("refresh request", r.Providers, err)
+	}
+	if _, err := f.svc.RefreshProviderModels(testCtx, f.human, in); !errors.Is(err, ErrConflict) {
+		t.Fatal("a second refresh while one waits", err)
+	}
+	page, err := f.svc.ProviderHandoff(testCtx, runner, scopeA)
+	if err != nil || len(page.Items) != 1 {
+		t.Fatal("handoff", page, err)
+	}
+	if _, err := f.svc.ReportProviders(testCtx, runner, ProvidersReport{Scope: scopeA, Results: []ProviderResult{{ID: page.Items[0].Request.ID, Status: "done"}}}); err != nil {
+		t.Fatal("report", err)
+	}
+	if _, err := f.svc.RefreshProviderModels(testCtx, f.human, in); err != nil {
+		t.Fatal("a refresh after the last one finished", err)
+	}
+}
+
 func TestProviderLabelsSetAndClear(t *testing.T) {
 	f := newFixture(t)
 	in := ProviderLabel{Scope: scopeA, Provider: "openai", Kind: "account", ID: "codex", Label: "회사 Codex"}

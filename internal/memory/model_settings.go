@@ -33,7 +33,7 @@ const (
 
 var providerKinds = []string{"subscription", "api"}
 var providerAccountStates = []string{"connected", "expired", "missing"}
-var providerRequestKinds = []string{"key_add", "key_test", "key_remove", "model_test", "cli_update"}
+var providerRequestKinds = []string{"key_add", "key_test", "key_remove", "model_test", "cli_update", "models_refresh"}
 var providerIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
 var providerModelRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}$`)
 var providerCLIVersionRe = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$`)
@@ -200,6 +200,11 @@ type ProviderModelTest struct {
 	Scope    Scope  `json:"scope"`
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
+}
+
+// ProviderModelsRefresh asks the runner to reread every provider's model list now (모델 새로고침).
+type ProviderModelsRefresh struct {
+	Scope Scope `json:"scope"`
 }
 
 type ProviderCLIUpdate struct {
@@ -570,6 +575,27 @@ func (s *Service) TestProviderModel(ctx context.Context, token string, in Provid
 	}, "", d.PrincipalID)
 }
 
+// RefreshProviderModels queues one model-list reread on the host; a pending one is not doubled.
+func (s *Service) RefreshProviderModels(ctx context.Context, token string, in ProviderModelsRefresh) (Record, error) {
+	if !validScope(in.Scope) {
+		return Record{}, ErrInvalid
+	}
+	d, err := s.humanProviders(ctx, token, in.Scope)
+	if err != nil {
+		return Record{}, err
+	}
+	return s.updateProviders(ctx, in.Scope, func(p *Providers, now time.Time) error {
+		for _, q := range p.Requests {
+			if q.Kind == "models_refresh" && q.Status == "pending" && !providerRequestExpired(q, now) {
+				return ErrConflict
+			}
+		}
+		p.Requests = append(p.Requests, ProviderRequest{ID: ID(), Kind: "models_refresh", Provider: "all",
+			Status: "pending", RequestedBy: d.PrincipalID, RequestedAt: now})
+		return nil
+	}, "", d.PrincipalID)
+}
+
 // UpdateProviderCLI queues a host-only update of the reported installation.
 func (s *Service) UpdateProviderCLI(ctx context.Context, token string, in ProviderCLIUpdate) (Record, error) {
 	if !validScope(in.Scope) || !(in.Provider == "anthropic" && in.CLI == "claude" || in.Provider == "openai" && in.CLI == "codex") ||
@@ -715,7 +741,7 @@ func (s *Service) ProviderHandoff(ctx context.Context, token string, scope Scope
 		if q.Kind == "cli_update" && providerRequestExpired(q, now) {
 			continue
 		}
-		if q.Kind == "key_remove" || q.Kind == "model_test" || q.Kind == "cli_update" {
+		if q.Kind == "key_remove" || q.Kind == "model_test" || q.Kind == "cli_update" || q.Kind == "models_refresh" {
 			page.Items = append(page.Items, ProviderHandoff{Request: q})
 			continue
 		}
@@ -813,6 +839,14 @@ func providersRoutes(mux routeRegistrar, s *Service) {
 			return
 		}
 		out, e := s.TestProviderModel(r.Context(), bearer(r), in)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("POST /v1/providers/models_refresh", func(w http.ResponseWriter, r *http.Request) {
+		var in ProviderModelsRefresh
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.RefreshProviderModels(r.Context(), bearer(r), in)
 		respond(w, out, e)
 	})
 	mux.HandleFunc("POST /v1/providers/cli_update", func(w http.ResponseWriter, r *http.Request) {
