@@ -186,13 +186,21 @@ window.ArkismModels = (ctx) => {
   }
   // 새로 고침: 도는 동안 아이콘을 돌리고 다시 누르지 못하게 한다.
   // 내장 Arkism이면 버튼이 한도를 그 자리에서 새로 확인하고, 서버면 서버가 1분마다 올린 최신 보고를 다시 읽는다.
+  // 새로고침: every provider's model list and the limits, read again past their caches. On this PC the host does it
+  // now; on a server the runner gets a models_refresh request and the list comes back with its next report.
   async function reload(b) {
     b.disabled = true;
     b.classList.add("busy");
     try {
-      if (state.mode === "local" && window.__TAURI__?.core) await window.__TAURI__.core.invoke("providers_refresh").catch(() => notice("한도를 새로 확인하지 못했어요. 마지막 결과를 보여 줘요."));
+      if (state.mode === "local") await window.__TAURI__?.core?.invoke("providers_refresh").catch(() => notice("한도와 모델 목록을 새로 받지 못했어요. 마지막 결과를 보여 줘요."));
+      else {
+        const rec = await request("/v1/providers/models_refresh", { method: "POST", body: JSON.stringify({ scope: state.scope }) }).catch((e) => e.message === "revision_conflict" ? null : Promise.reject(e)); // one already waits
+        const q = rec?.providers ? await waitFor(last(rec).id, 60000) : null;
+        if (q?.status === "failed") notice(`모델 목록을 새로 받지 못했어요: ${q.error || "알 수 없음"}`);
+        else if (rec?.providers && !q) notice("서버 실행기가 아직 답하지 않았어요. 잠시 뒤 다시 눌러 주세요.");
+      }
       await load();
-    } finally { render(false); }
+    } catch (e) { notice(errText(e)); } finally { render(false); }
   }
   // Figma 198:544 (모델 설정): provider chips on top, then a 계정 card and a 모델 card; 기본 모델 · API 키 · 한도 안내 on the right.
   async function renameTo(kind, pid, id, name) {
@@ -354,7 +362,7 @@ window.ArkismModels = (ctx) => {
     f.addEventListener("focus", () => { typing = p.id; });
     f.addEventListener("blur", (ev) => { if (ev.relatedTarget) typing = null; });
     if (typing === p.id) requestAnimationFrame(() => { if (!document.activeElement || document.activeElement === document.body) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } });
-    const re = button("다시 불러오기", "ghost", null, () => reload(re));
+    const re = button("새로고침", "ghost", null, () => reload(re));
     tools.append(f, re, button("모델 추가", "", null, () => { addRow.hidden = !addRow.hidden; mi.focus(); }));
     c.append(tools, addRow);
     const ml = el("div", "mp-models");

@@ -78,7 +78,7 @@ func providersReport(fresh bool) (int, error) {
 		if fresh {
 			_ = os.Remove(stateFile("gemini-quota.json"))
 			host.AccountsForce()
-			if _, err := inventory("", nil, true); err != nil {
+			if err := refreshModels(); err != nil {
 				return 0, err
 			}
 			host.AccountsWait()

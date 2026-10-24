@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
@@ -114,6 +115,17 @@ func codexModels() []string {
 	return out
 }
 
+// freshModels is set while the 새로고침 button rereads every provider's model list past its cache.
+var freshModels atomic.Bool
+
+// refreshModels asks every provider for its current models now; the lists land in the caches the next report reads.
+func refreshModels() error {
+	freshModels.Store(true)
+	defer freshModels.Store(false)
+	_, err := inventory("", nil, true)
+	return err
+}
+
 func cachedModels(path string) ([]string, bool) {
 	cache, _, ok := readJSONObject(path)
 	if !ok {
@@ -122,7 +134,51 @@ func cachedModels(path string) ([]string, bool) {
 	at, _ := num(getOr(cache, "at", 0))
 	models := stringList(cache["models"])
 	_, has := cache["models"]
-	return models, has && nowFloat()-at < 86400
+	return models, has && nowFloat()-at < 86400 && !freshModels.Load()
+}
+
+var claudeID = regexp.MustCompile(`^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$`)
+
+// anthropicModels is what Anthropic's /models offers the signed-in Claude Code subscription, asked once a day:
+// the newest model of each family, named as routing writes them (claude-opus-5-5 → "opus 5.5").
+func anthropicModels() []string {
+	path := stateFile("anthropic-models.json")
+	cached, fresh := cachedModels(path)
+	if fresh {
+		return cached
+	}
+	creds, _, ok := readJSONObject(filepath.Join(host.Home, logins["claude"]))
+	token := pyStr(getOr(obj(creds["claudeAiOauth"]), "accessToken", ""))
+	if !ok || token == "" {
+		return cached
+	}
+	raw, err := providerDo(http.MethodGet, host.ModelsURL["anthropic"]+"/models?limit=100", nil, map[string]string{"Authorization": bearer + token,
+		"anthropic-version": "2023-06-01", "anthropic-beta": "oauth-2025-04-20", "Accept": jsonType}, 10*time.Second, 8<<20)
+	if err != nil {
+		return cached
+	}
+	v, err := host.Loads(string(raw))
+	if err != nil {
+		return cached
+	}
+	models, seen := []string{}, map[string]bool{}
+	for _, m := range list(obj(v)["data"]) { // newest first
+		g := claudeID.FindStringSubmatch(pyStr(getOr(obj(m), "id", "")))
+		if g == nil || seen[g[1]] {
+			continue
+		}
+		seen[g[1]] = true
+		name := g[1] + " " + g[2]
+		if g[3] != "" {
+			name += "." + g[3]
+		}
+		models = append(models, name)
+	}
+	if len(models) > 0 {
+		saveModels(path, models)
+		return models
+	}
+	return cached
 }
 
 func saveModels(path string, models []string) {
@@ -266,6 +322,8 @@ func modelsFor(provider string) []string {
 		}
 	} else {
 		switch provider {
+		case "anthropic":
+			found = anthropicModels()
 		case "openai":
 			found = codexModels()
 		case "xai":
@@ -537,7 +595,7 @@ func cliLogin(row host.CLI, home string, isDefault bool) host.Obj {
 }
 
 func customProvider(k map[string]any) (host.Obj, error) {
-	info, err := customInfo(k, false)
+	info, err := customInfo(k, freshModels.Load())
 	if err != nil {
 		return nil, err
 	}
@@ -658,6 +716,10 @@ func carryOut(item map[string]any, testKeys keysTester, testModels modelTester) 
 		var note string
 		if note, err = testModels(strField(q, "model"), strField(q, "provider")); err == nil {
 			res["note"] = note
+		}
+	case "models_refresh":
+		if refreshModels() != nil {
+			err = crewErr("모델 목록을 새로 받지 못했어요.")
 		}
 	case "cli_update":
 		row, ok := host.CLIByName(strField(q, "cli"))

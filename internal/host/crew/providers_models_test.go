@@ -227,3 +227,37 @@ func TestProvidersWatchReportsFailuresAndStops(t *testing.T) {
 		t.Fatalf("stderr = %q", errb.String())
 	}
 }
+
+func TestAnthropicModelsListsTheNewestOfEachFamilyAndRefreshSkipsTheCache(t *testing.T) {
+	path := stateFile("anthropic-models.json")
+	os.Remove(path)
+	t.Cleanup(func() { os.Remove(path) })
+	var auth, beta string
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		auth, beta = r.Header.Get("Authorization"), r.Header.Get("anthropic-beta")
+		w.Write([]byte(`{"data":[{"id":"claude-haiku-5-5"},{"id":"claude-opus-5-5"},{"id":"claude-fable-5-1"},{"id":"claude-opus-5"},{"id":"claude-haiku-4-5-20251001"},{"id":"other"}]}`))
+	}))
+	defer srv.Close()
+	patch(t, &host.ModelsURL, map[string]string{"anthropic": srv.URL})
+	os.Remove(filepath.Join(host.Home, logins["claude"]))
+	if got := anthropicModels(); got != nil || hits != 0 {
+		t.Fatal("no sign-in must not ask", got)
+	}
+	writeHome(t, logins["claude"], `{"claudeAiOauth":{"accessToken":"tok"}}`)
+	eq(t, anthropicModels(), []string{"haiku 5.5", "opus 5.5", "fable 5.1"})
+	if auth != "Bearer tok" || beta != "oauth-2025-04-20" {
+		t.Fatalf("auth = %q, beta = %q", auth, beta)
+	}
+	anthropicModels()
+	if hits != 1 {
+		t.Fatal("a fresh cache must not ask again", hits)
+	}
+	freshModels.Store(true)
+	defer freshModels.Store(false)
+	anthropicModels()
+	if hits != 2 {
+		t.Fatal("새로고침 must ask past the cache", hits)
+	}
+}
