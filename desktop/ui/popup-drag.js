@@ -1,7 +1,7 @@
 // Popups: drag the head to move one; drop it outside the app (or press Alt+Shift+O) to open it in its own window;
 // a click outside a popup closes it the way Esc does, so a popup that guards unsaved edits still asks first.
 (() => {
-  const HEAD = ".dialog-head, .crew-popup-head, .ov-win-head, .ov-detail-head, .ov-recall-head, .git-dialog-head, .keys-head";
+  const HEAD = ".dialog-head, .crew-popup-head, .ov-win-head, .ov-detail-head, .ov-recall-head, .keys-head";
   const SKIP = "button, a, input, select, textarea, label, summary, [contenteditable], [role=tab], [role=button], [draggable=true]";
   const tauri = () => window.__TAURI__?.core;
 

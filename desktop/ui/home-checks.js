@@ -1,7 +1,6 @@
 // 홈 확인 줄 · 공통 상태 화면 (Figma 385:30743 · 523:35767 · 198:3554).
 // - stalledItem: 기억 처리 멈춤 경고. 판정은 overview.js stages()의 stalled 와 같은 식(대화는 계속 끝나는데 6시간 넘게 새 후보가 없음).
 // - knowledgeRow: 메뉴별 확인할 것의 "지식" 줄 (위키 초안 · 출처 바뀜 · 검토 대기 자료).
-// - repoRow: 저장소 줄. 코드 그래프 색인 커밋·시각만 본다(HEAD와 비교하는 git 호출은 저장소 화면에서만).
 // - ArkismState: 빈 화면 · 오류 · 권한 공통 부품 (panel · of).
 window.ArkismState = (() => {
   "use strict";
@@ -103,20 +102,5 @@ window.ArkismHomeChecks = (ctx) => {
     const parts = [{ label: `위키 초안 ${drafts}`, n: drafts }, { label: `출처 바뀜 ${stale}`, n: stale }, { label: `검토 대기 자료 ${wait}`, n: wait }].filter((p) => p.n);
     return ["TOOLS", "지식", parts, ["knowledge"]];
   }
-
-  // ---- 저장소 (코드 그래프 색인)
-  // shortcut: an index older than a day stands in for "new commits since the index"; the exact count needs the Git screen's graph call.
-  let R = { g: -1, repos: null };
-  function repoRow(generation) {
-    if (R.g !== generation) {
-      R = { g: generation, repos: null };
-      const g = generation;
-      request(`/v1/code_graph/repos?${query()}`).then((r) => (Array.isArray(r?.repos) ? r.repos : null), () => null)
-        .then((repos) => { if (R.g !== g) return; R.repos = repos; if (live()) render(false); });
-    }
-    const at = (r) => r.indexed_at || r.updated_at;
-    const old = (R.repos || []).filter((r) => time(at(r)) && Date.now() - time(at(r)) > 24 * HOUR);
-    return ["TOOLS", "저장소", old.map((r) => ({ label: `${r.repo.split("/").pop()} 색인 ${ago(at(r))}`, n: 1 })), ["git"]];
-  }
-  return { stalledItem, knowledgeRow, repoRow };
+  return { stalledItem, knowledgeRow };
 };

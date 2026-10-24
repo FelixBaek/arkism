@@ -74,7 +74,7 @@ window.ArkismReviews = (ctx) => {
 
   function renderView() {
     ["#controls", "#chips"].forEach((s) => $(s).replaceChildren());
-    headExtras({ back: ["저장소", () => go("git")], aside: [button("새로고침", "ghost", null, reload), button("리뷰 설정", "", null, openSettings)] });
+    headExtras({ aside: [button("새로고침", "ghost", null, reload), button("리뷰 설정", "", null, openSettings)] });
     const d = doc();
     const table = $("#table");
     table.className = "rv-wrap";

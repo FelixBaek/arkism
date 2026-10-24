@@ -100,9 +100,9 @@ test("the list shows week tiles, running and finished PRs, and opens one", async
   assert.equal(t.api.count(), 3);
   assert.deepEqual(t.api.head(), []);
 
-  // header: back to git, refresh, settings
+  // header: refresh, settings (no ← link: the 저장소 screen it went back to is gone)
   const head = t.heads.at(-1);
-  head.back[1](); assert.deepEqual(t.gone, ["git"]);
+  assert.equal(head.back, undefined);
   head.aside[0].click(); await dom.flush(); assert.equal(t.calls.at(-1).path, "/v1/code_reviews?");
   head.aside[1].click(); assert.ok($("dialog.rv-settings")); $("dialog.rv-settings").close();
 
