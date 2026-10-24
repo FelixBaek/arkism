@@ -929,6 +929,7 @@ window.ArkismI18nEN = {
   "알림·끝": "Notify & end",
   "보고하고 끝": "Report and end",
   "부른 자리에 결과 돌려주기": "Return the result to the caller",
+  "위 노드로 안 되는 연동": "Integrations the nodes above can't do",
   "예": "Yes",
   "아니오": "No",
   "거절": "Reject",
@@ -961,6 +962,10 @@ window.ArkismI18nEN = {
   "보낼 말": "Message",
   "보고 형식": "Report format",
   "요약 + 링크": "Summary + link",
+  "결과 받기": "Getting results",
+  "바로 응답 (짧은 일)": "Respond immediately (short tasks)",
+  "끝나면 알려줌 (오래 걸리는 일)": "Notify when done (long tasks)",
+  "기다릴 최대 시간": "Max wait time",
   "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요. 키는 설정 › 모델 설정에 넣어 주세요.": "Not saved because a value looks like a key or token. Put keys in Settings › Model settings.",
   "빈 칸이나 형식을 확인해 주세요. $이름은 띄어쓰기 없이 글자·숫자·_·-만 써요. 앞으로 가는 선이 원을 이루면 저장되지 않아요(되돌아가는 선은 횟수를 정해요).": "Check for empty fields or formatting. $name may only use letters, numbers, _ and -, with no spaces. It won't save if forward lines form a cycle (loop-back lines set a repeat count).",
   "같은 $이름이 이미 있어요. 다른 이름을 써 주세요.": "That $name already exists. Please use a different name.",
@@ -1103,6 +1108,8 @@ window.ArkismI18nEN = {
   "목록": "List",
   "보내기": "Send",
   "결과": "Result",
+  "끝나면 알려줌": "Notify when done",
+  "바로 응답": "Respond immediately",
   "형식": "Format",
   "받는 것": "Receives",
   "부를 때 쓴 문장": "The sentence used to call it",
@@ -4998,6 +5005,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "삭제 요청을 접수했어요. 정리와 백업 처리 상태는 삭제 처리 내역에서 확인해 주세요.": "Deletion requested. Check cleanup and backup status in deletion history.",
   "페르소나·모델이 정해진 채로 들어가요": "Comes in with its persona and model set",
   "여럿이 회의해 결론을 내요": "Several members meet and reach a conclusion",
+  "n8n으로 보내기": "Send to n8n",
+  "그 밖의 연동": "Other integrations",
   "흐름 노드": "Flow nodes",
   "처리 노드": "Processing nodes",
   "알림·연동 노드": "Notification and integration nodes",
@@ -5016,6 +5025,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "받는 곳 이름": "Recipient name",
   "서버 notify.json에 적은 이름": "A name listed in the server's notify.json",
   "부른 대화나 화면에 이 형식으로 돌려줘요.": "Returned to the calling chat or screen in this format.",
+  "n8n 웹훅 주소": "n8n webhook URL",
+  "오래 걸리는 일은 n8n이 끝나면 결과를 보내 줘요.": "For long jobs, n8n sends the result when it finishes.",
   "모델 자동": "Model: auto",
   "전문가 · 협업": "Expert · collaboration",
   "팀 · 회의": "Team · meeting",
@@ -5026,6 +5037,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "회의 주제 ({{input}}에 앞 결과가 들어가요)": "Meeting topic ({{input}} receives the previous result)",
   "시작 조건": "Start condition",
   "시작 조건은 워크플로우 설정에서 바꿔요.": "Change the start condition in the workflow settings.",
+  "기다리기를 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요.": "If you choose to wait, the run pauses until n8n returns the result to callback_url. The server needs a public address.",
   "고른 전문가의 모델·지시가 기본값이에요. 아래에서 이 단계만 다르게 정할 수 있어요": "The chosen expert's model and instructions are the defaults. You can override them for this step below."
 });
 
@@ -5576,6 +5588,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
  "합치지 못했어요: {0}": "Could not merge: {0}"
 });
 Object.assign(window.ArkismI18nEN.strings, {
+  "끝나면 알려줌을 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요.": "With notify-when-done, the run waits until n8n posts the result to callback_url. The server needs a public address.",
   "팀 노드": "Team node",
   "누가 맡나": "Who does it",
   "노드 종류": "Node type",

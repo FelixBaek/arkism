@@ -16,6 +16,7 @@ export function createCrewNodes(deps) {
     const title = deps.input(n.title, { maxLength: 80 });
     title.addEventListener("input", () => { n.title = title.value; deps.touch(); deps.syncCard(n); });
     box.append(deps.field("이름", title));
+    let pair = null; // n8n: 결과 받기 and 기다릴 최대 시간 share a row (1033:69906)
     const starts = ["start", "schedule", "webhook"].includes(n.type);
     if (starts) triggerFields(box, n);
     // 반복 (목록 위치 · 동시에 도는 개수) and 하위 워크플로우 (부를 워크플로우 · 넘길 일) sit side by side (1033:67xxx)
@@ -25,7 +26,7 @@ export function createCrewNodes(deps) {
       let i;
       if (kind === "radio") {
         const f = group(label, deps.segment(opt, n.config[key] ?? opt[0][0], (v) => { n.config[key] = v; deps.touch(); deps.redraw(); }), hint);
-        box.append(f);
+        if (n.type === "n8n") { pair = deps.el("div", "scope-fields"); pair.append(f); box.append(pair); } else box.append(f);
         continue;
       }
       if (kind === "select") i = deps.select(opt, n.config[key] ?? opt[0][0]);
@@ -39,12 +40,14 @@ export function createCrewNodes(deps) {
         if (key === "workflow") { const w = deps.byHandle(i.value); if (w && (!n.title || n.title === deps.NODES.subflow.label)) n.title = w.crew.name; deps.redraw(); } else deps.syncCard(n);
       });
       const fi = ["question", "message", "task"].includes(key) ? deps.aiField(i, n, key, label) : i;
+      if (pair) { pair.append(deps.field(label, fi)); if (hint) box.append(deps.el("p", "meta", hint)); pair = null; continue; }
       (row || box).append(deps.field(label, fi, hint));
     }
     sends(box, n);
     if (n.type === "code") box.append(deps.el("p", "meta", "출력이 {\"ok\": true/false, …}면 통과·실패 갈래로 나뉘어요. 처음 한 번은 빌드에 1~2초, 30초 안에 끝나야 해요. 토큰은 들지 않아요."));
     if (n.type === "approval") box.append(deps.el("p", "meta", "배포·게시처럼 되돌릴 수 없는 단계 바로 앞에 두세요. 답이 올 때까지 멈춰요."));
     if (n.type === "subflow") box.append(deps.el("div", "wf-attn small", "자기 자신을 부를 수 없어요. 최대 세 겹까지 연결해요."));
+    if (n.type === "n8n") box.append(deps.el("p", "meta", "끝나면 알려줌을 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요."));
     if (deps.WORK(n) && !deps.ownerOf(deps.ed.rec)) box.append(onlyRun(n));
   }
 
