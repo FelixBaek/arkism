@@ -376,3 +376,4 @@
 .ov-win-proposal { display: flex; flex-direction: column; gap: 8px; }
 .ov-win-proposal-panel { display: flex; flex-direction: column; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; } .ov-win-proposal-panel[hidden] { display: none; }
 .ov-filter-pop .ov-wide-chip { white-space: nowrap; }
+.ov-context { display: flex; flex-direction: column; gap: 8px; min-width: 0; }

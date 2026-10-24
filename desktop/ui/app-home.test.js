@@ -296,11 +296,37 @@ test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject
   assert.match(text(win()), /처리하지 못했어요/);
   offRej();
   await press("그대로 승인", win(), 60);
-  // a conflicted candidate sends the person to the full screen
-  d = await reviewOf("출시일은");
-  assert.match(text(d), /충돌/);
-  await press("전체 화면으로", d, 50);
-  assert.equal(win(), null);
+  // a conflicted candidate is resolved here: the existing memory beside it, where each came from, and the 기억 screen's choices
+  d = await reviewOf("출시일은"); await app.settle(50); d = win();
+  assert.match(text(d), /충돌하는 두 기억/);
+  assert.match(text(d), /출시일은 2026년 10월 15일이다/, "the existing memory in full");
+  assert.equal(btn("전체 화면으로", d), undefined, "no jump to the full screen");
+  assert.ok(d.querySelector(".ov-context .ss-msg"), "the source conversation lines");
+  // AI 제안 lights one choice and says why; nothing runs until the person clicks
+  const kit = app.window.ArkismAIChat.kit, reviews = () => app.apiCalls.filter(([, p]) => p === "/v1/memory_candidates/k1/review").length, before = reviews();
+  app.window.ArkismAIChat.kit = { assist: async () => ({ status: "done", output: '{"pick":"keep_old","reason":"기존 날짜가 공지와 같아요."}' }), assistError: () => "x", parseJSON: JSON.parse };
+  await press("AI 제안", d.querySelector(".ov-detail-actions"), 30);
+  assert.ok(btn("기존 것 유지", d).classList.contains("primary") && !btn("새 내용으로 바꾸기", d).classList.contains("primary"));
+  assert.match(text(d), /기존 날짜가 공지와 같아요/);
+  assert.equal(reviews(), before, "advice only");
+  app.window.ArkismAIChat.kit = { assist: async () => ({ status: "done", output: '{"pick":"maybe"}' }), assistError: () => "x", parseJSON: JSON.parse };
+  await press("AI 제안", d.querySelector(".ov-detail-actions"), 30);
+  assert.match(text(d), /AI 제안을 받지 못했어요/);
+  app.window.ArkismAIChat.kit = kit;
+  await press("기존 것 유지", d.querySelector(".ov-detail-actions"), 80);
+  assert.ok(app.apiCalls.some(([m, p, b]) => m === "POST" && p === "/v1/memory_candidates/k1/review" && /keep_old/.test(String(b))), "the conflict goes through resolveConflict");
+  await closeAll();
+});
+
+test("overview: a candidate's 원문 근거 shows the lines around the quote, and 세션 보기 opens that spot", async () => {
+  let d = await reviewOf("Alex는 주로 오전에"); await app.settle(50); d = win();
+  const box = d.querySelector(".ov-context"); assert.ok(box, "context block");
+  assert.match(text(box), /나는 보통 오전에 코드 리뷰해/);
+  assert.equal(text(box.querySelector(".ss-msg mark.ss-hit")), "나는 보통 오전에 코드 리뷰해", "the quoted words are underlined in the conversation");
+  assert.ok(box.querySelectorAll(".ss-msg").length <= 5, "only the lines around it");
+  await press("세션 보기 ›", box, 80);
+  assert.match(text(win()), /세션 기록/);
+  assert.equal(win().querySelector(".ov-wide-search").value, "session_01JX8K2M1QWERTY");
   await closeAll();
 });
 

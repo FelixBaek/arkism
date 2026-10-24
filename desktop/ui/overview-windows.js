@@ -115,6 +115,53 @@ window.ArkismOverviewWindows = (ctx, env) => {
     return { snapshot, footer };
   }
 
+  // ------------------------------------------------------------ where a memory came from: its quote and the lines around it
+  // one message of an archived dialogue; mark: words to underline (returns the line and the underline, if any)
+  function msgLine(m, mark) {
+    const b = el("div", `ss-msg ${m.role === "user" ? "user" : "assistant"}`), p = el("p", "", m.text); p.dataset.noI18n = "";
+    const at = mark ? m.text.indexOf(mark) : -1; let hit = null;
+    if (at >= 0) { hit = el("mark", "ss-hit", mark); hit.dataset.noI18n = ""; p.replaceChildren(m.text.slice(0, at), hit, m.text.slice(at + mark.length)); }
+    b.append(el("b", "", m.role === "user" ? "사용자" : "에이전트"), p); if (m.truncated) b.append(el("small", "ss-note", "길어서 앞부분만 보여요."));
+    return [b, hit];
+  }
+  // the source session's dialogue, read the way 세션 기록 reads it (row id from the session list, then the transcript pages), once per session and quote
+  const talks = new Map();
+  function sourceTalk(sid, mark) {
+    const key = `${state.connection.generation}|${sid}|${mark}`;
+    if (!talks.has(key)) talks.set(key, (async () => {
+      const own = (x) => x.session_id === sid || x.id === sid;
+      const ses = env.sessions().find(own) || (await request(`/v1/usage/sessions?${query({ range: "all", sort: "recent", q: sid, limit: 20 })}`))?.items?.find(own);
+      if (!ses) return { items: [], state: "missing" };
+      let items = [], next = "", archive = "", st = "";
+      // shortcut: looks at most 10 pages (300 messages) for the quoted words, as 세션 기록 does
+      for (let page = 0; page < 10; page++) {
+        const r = await request("/v1/usage/sessions/transcript", { method: "POST", body: JSON.stringify({ scope: state.scope, id: ses.id, limit: 30, ...(next ? { archive_id: archive, after: next } : {}) }) });
+        if (r?.authority !== "data_only_untrusted" || !Array.isArray(r.items)) throw new Error("invalid_response");
+        items = [...items, ...r.items]; st = r.state; archive = r.archive_id || ""; next = r.next_cursor || "";
+        if (!next || !mark || items.some((x) => x.text.includes(mark))) break;
+      }
+      return { items, state: st };
+    })().catch((e) => { talks.delete(key); throw e; }));
+    return talks.get(key);
+  }
+  // the quote, then two messages before and after it in the source session, with 세션 보기 › opening the dialogue at that spot
+  function contextBox(item, quote = "") {
+    const ev = tag(item, "event_id:"); if (!ev && !quote) return null;
+    const box = el("div", "ov-context");
+    if (quote) box.append(el("blockquote", "ov-detail-quote", `“${clip(quote, 240)}”`));
+    if (!ev) return box;
+    const [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid), from = el("div", "ov-detail-from"), msgs = el("div", "ss-msgs");
+    from.append(el("span", "", ses ? `${agent} · ${ses.title || ses.project || ""}` : agent), button("세션 보기 ›", "ghost small", null, () => openSession(ev, quote)));
+    msgs.append(el("p", "ov-win-empty", "대화를 불러오는 중…")); box.append(from, msgs);
+    const mark = quote.trim();
+    sourceTalk(sid, mark).then(({ items, state: st }) => {
+      if (!items.length) { msgs.replaceChildren(el("p", "ov-win-empty", st === "missing" ? "이 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요." : { none: "이 세션은 보관된 대화가 없어요. 대화 원문은 수집된 뒤 7일 동안만 보관돼요.", expired: "보관된 대화가 만료됐거나 지워졌어요.", unsupported: "이 형식의 대화는 아직 볼 수 없어요." }[st] || "보여 줄 대화가 없어요.")); return; }
+      const at = mark ? items.findIndex((x) => x.text.includes(mark)) : -1, from2 = at >= 0 ? Math.max(0, at - 2) : 0;
+      msgs.replaceChildren(...items.slice(from2, at >= 0 ? at + 3 : 4).map((m) => msgLine(m, mark)[0]));
+    }, (e) => msgs.replaceChildren(el("p", "ov-win-empty", /HTTP 404|not_found/.test(e?.message || "") ? "이 서버는 아직 대화 보기를 지원하지 않아요." : `대화를 불러오지 못했어요 (${e.message}).`)));
+    return box;
+  }
+
   // ------------------------------------------------------------ in-place review (the same API the 기억 screen calls)
   const reviewing = new Set();
   async function decide(c, action, extra = {}, quiet = false) { // quiet: the caller reloads once after a batch
@@ -354,6 +401,45 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // a proposal whose memory is gone or changed since is hidden, as on the 기억 screen: deciding it would only go stale
   const dreamItems = () => (D().maintenance || []).filter((p) => { const t = p.maintenance || {}; return t.memory ? known(t.memory) : known(t.keep) && known(t.retire); }).map((p) => { const t = p.maintenance || {};
     return { dream: p, id: p.id, created_at: p.created_at, text: memText(t.memory?.id || t.keep?.id), label: t.memory ? "고치기" : DREAM_LABEL[t.type] || "정리" }; });
+  // 충돌: the existing memory beside the new candidate, resolved here with the 기억 screen's resolveConflict (its notices and guards);
+  // AI 제안 only lights one button and says why, the person still clicks
+  const CONFLICT_PICK = { new: "새 내용으로 바꾸기", both: "둘 다 남기기", keep_old: "기존 것 유지" };
+  function conflictPanel(c, into, act, st, sec, done) { // done: after a choice, once resolveConflict has reloaded
+    const cmp = el("div", "ov-detail-list"), oldCard = el("div", "ov-cmp diff-del"), newCard = el("div", "ov-cmp diff-add"), oldFrom = el("div", "ov-detail-sec");
+    oldCard.append(el("small", "", "기존 기억"), el("span", "", "불러오는 중…"));
+    const agentOf = (m) => tag(m, "event_id:").split(":")[0];
+    newCard.append(el("small", "", ["새 후보", ago(c.created_at), agentOf(c)].filter(Boolean).join(" · ")), el("span", "", c.text));
+    cmp.append(oldCard, newCard); sec(into, "충돌하는 두 기억", cmp, oldFrom);
+    let old = null;
+    request(`/v1/memory_relations/${encodeURIComponent(c.conflict_id)}?${query()}`)
+      .then((rel) => { const id = rel?.relations?.find((r) => r.collection === "memories")?.id; return memOf(id) || request(`/v1/memories/${encodeURIComponent(id)}?${query()}`); })
+      .then((m) => {
+        old = m; const u = usage(m.id), n = u ? u.d30 || u.d7 || 0 : 0;
+        oldCard.replaceChildren(el("small", "", ["기존 기억", `${new Date(m.created_at).toLocaleDateString(loc(), { month: "numeric", day: "numeric" })} 저장`, agentOf(m), n ? `${num(n)}번 쓰임` : "아직 안 쓰임"].filter(Boolean).join(" · ")), el("span", "", m.text));
+        const box = contextBox(m); if (box) oldFrom.append(el("small", "", "기존 기억은 어디서 왔나요"), box);
+      }, () => oldCard.replaceChildren(el("small", "", "기존 기억"), el("span", "", "기존 기억을 불러오지 못했어요.")));
+    if (!state.caps?.actions?.review_decide) return; // the same guard as the 기억 screen: no buttons without the right to decide
+    const advice = el("div", "ov-verdict"); advice.hidden = true;
+    const picks = Object.entries(CONFLICT_PICK).map(([choice, label]) => { const b = button(label, "small", null, async () => {
+      act.querySelectorAll("button").forEach((x) => (x.disabled = true));
+      await ctx.resolveConflict(c, choice); // it reports success or failure itself and reloads the memories
+      done();
+    }); b.dataset.choice = choice; return b; });
+    const ai = button("AI 제안", "small", null, async () => {
+      const kit = window.ArkismAIChat?.kit; if (!kit) { st.textContent = "AI 도움을 쓸 수 없어요."; return; }
+      ai.disabled = true; st.textContent = "";
+      try {
+        const prompt = `Two memories an AI agent is given conflict. Decide which the person should keep.\nExisting memory: ${old?.text || "(unknown)"}\nNew candidate: ${c.text}\nAnswer with ONE JSON object: {"pick": "new" | "both" | "keep_old", "reason": "one short Korean sentence"}.`;
+        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory conflict. Reply with the JSON object only." } } });
+        if (a.status !== "done") throw new Error(kit.assistError(a));
+        const j = kit.parseJSON(a.output || ""); if (!CONFLICT_PICK[j?.pick]) throw new Error(tr("AI가 고르지 못했어요."));
+        for (const b of picks) b.classList.toggle("primary", b.dataset.choice === j.pick);
+        advice.replaceChildren(el("strong", "", `AI 제안 · ${tr(CONFLICT_PICK[j.pick])}`), ...(j.reason ? [el("p", "", String(j.reason).slice(0, 200))] : [])); advice.hidden = false;
+      } catch (e) { st.textContent = `AI 제안을 받지 못했어요: ${e.message}`; }
+      finally { ai.disabled = false; }
+    });
+    into.append(advice); act.append(...picks, ai);
+  }
   function wideReview(focusId, startKind) {
     const all = waiting(), dreams = dreamItems(), d = shell("승인 대기", `${num(all.length + dreams.length)}건`, "AI는 분류만 해요. 승인은 사람이 해요.", () => { open("review"); });
     recipe(d, { wide: "review", args: [focusId, startKind] });
@@ -454,7 +540,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       }
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions"); let editing = null;
       const go1 = async (action, extra) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true)); const r = await decide(c, action, extra); if (r?.error) { st.textContent = r.error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); } else { sel = null; wideReview(); } };
-      if (c.conflict_id || c.status === "conflicted") { sec(decide1, "충돌", el("p", "", "기존 기억과 충돌하는 후보예요. 어느 쪽을 남길지는 전체 화면에서 골라요.")); act.append(button("전체 화면으로", "primary small", null, () => { dlg.close(); go("memories", "conflicted"); })); }
+      if (c.conflict_id || c.status === "conflicted") conflictPanel(c, decide1, act, st, sec, () => { sel = null; wideReview(); });
       else {
         const pick = v?.action === "fix" ? "fix" : v?.action === "merge" && mp ? "merge" : "approve"; // the AI's pick only takes the accent; nothing runs on its own
         const mk = (key, label, fn) => button(label, `small${pick === key ? " primary" : ""}`, null, fn);
@@ -477,13 +563,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (conf && (c.summary || k?.risk_reasons?.length)) { const why = el("p", "ov-detail-why"); why.append(tagEl("헷갈림", "ov-tag-r"), el("span", "", c.summary || k.risk_reasons.join(" · "))); sec(basisG, "AI가 본 이유", why); }
       else if (c.summary) sec(basisG, "요약", el("p", "", c.summary));
       if (!conf && k?.risk_reasons?.length) sec(basisG, `AI 분류 · 위험도 ${k.risk}`, el("p", "", k.risk_reasons.join(" · ")));
-      if (k?.evidence_span) { const q2 = el("blockquote", "ov-detail-quote", `“${clip(k.evidence_span, 240)}”`); const basis = tag(c, "basis:"); sec(basisG, ["원문 근거", basis === "explicit_user" ? "사용자 말" : basis === "inferred" ? "AI가 짐작" : "", new Date(c.created_at).toLocaleDateString(loc(), { month: "numeric", day: "numeric" })].filter(Boolean).join(" · "), q2); }
+      if (k?.evidence_span) { const basis = tag(c, "basis:"); sec(basisG, ["원문 근거", basis === "explicit_user" ? "사용자 말" : basis === "inferred" ? "AI가 짐작" : "", new Date(c.created_at).toLocaleDateString(loc(), { month: "numeric", day: "numeric" })].filter(Boolean).join(" · "), contextBox(c, k.evidence_span)); }
       if (basisG.children.length > 1) detail.append(basisG);
-      const ev = tag(c, "event_id:");
-      if (ev) {
-        const [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid), b = el("div", "ov-detail-from");
-        b.append(el("span", "", ses ? `${agent} · ${ses.title || ses.project || ""}` : agent), button("세션 보기 ›", "ghost small", null, () => openSession(ev, k?.evidence_span || ""))); sec(metaG, "어디서 왔나요", b);
-      }
+      if (!k?.evidence_span && tag(c, "event_id:")) sec(metaG, "어디서 왔나요", contextBox(c));
       const f = el("div", "ov-detail-facts"), fact = (a2, b2) => { const p = el("p", ""); p.append(el("span", "", a2), el("strong", "", b2)); f.append(p); };
       // approve takes no reach: an empty one becomes personal for a user memory, general otherwise (the suggestion stays advice)
       const reachOnApprove = c.reach || (c.kind === "user" ? "personal" : "general");
@@ -590,13 +672,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
     function talkBox(id) {
       const box = el("div", "ov-detail-sec"), msgs = el("div", "ss-msgs"), say = (t) => box.append(el("p", "ov-win-empty", t)); box.append(el("small", "", "대화"));
       for (const m of talk.items) {
-        const b = el("div", `ss-msg ${m.role === "user" ? "user" : "assistant"}`), p = el("p", "", m.text); p.dataset.noI18n = "";
-        const at = talk.mark ? m.text.indexOf(talk.mark) : -1;
-        if (at >= 0) { // from a memory: underline the words it came from, and bring them into view once
-          const hit = el("mark", "ss-hit", talk.mark); hit.dataset.noI18n = ""; p.replaceChildren(m.text.slice(0, at), hit, m.text.slice(at + talk.mark.length));
-          if (!talk.scrolled) { talk.scrolled = true; requestAnimationFrame(() => hit.scrollIntoView({ block: "center" })); }
-        }
-        b.append(el("b", "", m.role === "user" ? "사용자" : "에이전트"), p); if (m.truncated) b.append(el("small", "ss-note", "길어서 앞부분만 보여요.")); msgs.append(b);
+        const [b, hit] = msgLine(m, talk.mark);
+        if (hit && !talk.scrolled) { talk.scrolled = true; requestAnimationFrame(() => hit.scrollIntoView({ block: "center" })); } // from a memory: bring the underlined words into view once
+        msgs.append(b);
       }
       if (talk.items.length) box.append(msgs);
       if (talk.error) say(talk.error);
