@@ -401,6 +401,15 @@ test("overview: 사용량 window shows — and says why when the use counts did 
   assert.match(text(d), /4회\s*7일 불러온 횟수/);
   assert.doesNotMatch(text(d), /집계를 주지 못했어요/);
   off();
+  // opened while the counts are still on the way: it says so, then shows the failure without reopening
+  let release; off = route("GET", "/v1/memory_usage", () => { asked++; return new Promise((r) => { release = r; }); });
+  await closeAll(); await reload();
+  d = await openWindow({ wide: "usage" });
+  assert.match(text(d), /불러오는 중…/);
+  assert.doesNotMatch(text(d), /지금 보여 줄 항목이 없어요/);
+  release(fail(503, "unavailable")); await app.settle(50);
+  assert.match(text(win()), /서버가 불러오기 집계를 주지 못했어요/);
+  off();
   await closeAll();
 });
 

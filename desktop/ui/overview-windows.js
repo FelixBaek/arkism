@@ -556,10 +556,11 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
 
   // 사용량 (580:54204)
+  let usageWin = null; // redrawn when GET /v1/memory_usage settles while it is open (usageChanged)
   function wideUsage() {
     const items = env.sessions(), w = D().tools?.memory_use, recalls = [...(state.usage?.entries() || [])];
     const known = (v) => (state.usageDone ? v : "—"); // an unread /v1/memory_usage is not 0 recalls (A2)
-    const d = shell("사용량", known(`7일 ${num(recalls.reduce((a, [, u]) => a + (u.d7 || 0), 0))}회`), "어떤 기억이 어디에 쓰였는지 보여요", () => open("recall"));
+    const d = usageWin = shell("사용량", known(`7일 ${num(recalls.reduce((a, [, u]) => a + (u.d7 || 0), 0))}회`), "어떤 기억이 어디에 쓰였는지 보여요", () => open("recall"));
     recipe(d, { wide: "usage", args: [] });
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
     const tiles = el("div", "ov-win-tiles ov-win-tiles-4"); const rate = w?.injections ? Math.round((w.used / w.injections) * 100) : null;
@@ -569,7 +570,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const chart = el("div", "ov-win-chart"), bars = el("div", "ov-win-bars"), max = Math.max(1, ...hours); chart.append(el("div", "ov-win-chart-title", "시간대별 세션 (최근 24시간)"));
     hours.forEach((n) => { const b = el("i", n ? "" : "none"); b.style.height = `${6 + (n / max) * 54}px`; b.title = `${n}`; bars.append(b); }); chart.append(bars, el("div", "ov-win-axis", "24시간 전 ··· 지금"));
     left.append(tiles, chart, el("div", "ov-win-list-title", "최근 사용 기록"));
-    const ul = el("div", "ov-win-list"); ul.append(...recalls.filter(([, u]) => u.last).sort((a, b) => time(b[1].last) - time(a[1].last)).slice(0, 30).map(([id, u]) => row("", clip(memText(id)), ago(u.last), `7일 ${num(u.d7 || 0)}회`))); if (!ul.children.length) ul.append(el("p", "ov-win-empty", state.usageFailed ? "서버가 불러오기 집계를 주지 못했어요. 잠시 뒤 다시 열어 보세요." : "지금 보여 줄 항목이 없어요.")); left.append(ul);
+    const ul = el("div", "ov-win-list"); ul.append(...recalls.filter(([, u]) => u.last).sort((a, b) => time(b[1].last) - time(a[1].last)).slice(0, 30).map(([id, u]) => row("", clip(memText(id)), ago(u.last), `7일 ${num(u.d7 || 0)}회`))); if (!ul.children.length) ul.append(el("p", "ov-win-empty", state.usageFailed ? "서버가 불러오기 집계를 주지 못했어요. 잠시 뒤 다시 열어 보세요." : state.usageDone ? "지금 보여 줄 항목이 없어요." : "불러오는 중…")); left.append(ul);
     const sec = (title, ...nodes) => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", title), ...nodes); right.append(s); };
     right.append(el("h3", "", "한눈에"));
     { const f = el("div", "ov-detail-facts"); for (const [a, b] of [["불러온 횟수", known(`${num(recalls.reduce((n, [, u]) => n + (u.d30 || 0), 0))}회`)], ["불러온 기억", known(`${num(recalls.filter(([, u]) => u.d30 > 0).length)}개`)]]) { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); } sec("최근 30일", f); }
@@ -708,5 +709,5 @@ window.ArkismOverviewWindows = (ctx, env) => {
     left.append(bar, canvas); canvas.append(legend, empty); paint();
   }
 
-  return { open, wide, reset() { dlg?.close(); } };
+  return { open, wide, reset() { dlg?.close(); }, usageChanged() { if (usageWin && usageWin === dlg) wideUsage(); } };
 };

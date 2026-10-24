@@ -626,11 +626,13 @@ export function startApp() {
     void loadMemoryTotals(g);
     const items = await appApi.request(`/v1/memory_usage?${appApi.query()}`).then((r) => r.items || [], () => null);
     if (g !== state.connection.generation) return;
-    if (!items) { state.usageFailed = true; render(false); return; } // older server, no read:usage or a timeout: 쓰임 stays "…" instead of calling every memory one by one
+    if (!items) { state.usageFailed = true; render(false); overview.usageChanged(); return; } // older server, no read:usage or a timeout: 쓰임 stays "…" instead of calling every memory one by one
     state.usage = new Map(items.map((u) => [u.id, u]));
     state.usageDone = true;
+    state.usageFailed = false; // a visibleSync retry on the same connection recovered
     window.ArkismPerf?.note("load.usage", performance.now() - t0, items.length);
     render(false);
+    overview.usageChanged();
   }
 
   // shortcut: one version call per skill (6 at a time) for 품질·보안; add both to the skill list API if this gets slow.
