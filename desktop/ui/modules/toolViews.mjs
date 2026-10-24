@@ -335,7 +335,6 @@ export function createToolViews(deps) {
     if (who && !deps.AGENT_SYNC[who]) deps.$("#chips").append(deps.el("p", "cn-note", `${deps.agentName(who)}의 MCP 설정은 아직 읽지 않아요. 켜고 끄기는 Claude Code·Codex만 돼요.`));
     const inCat = cats.find(([id]) => id === deps.state.toolCat)?.[2] || (() => true);
     const list = all.filter((e) => (!who || e.agents?.[who] === "on") && (deps.state.toolStatus === "all" || toolGroup(e) === deps.state.toolStatus) && inCat(e) && deps.matches(`${e.name} ${e.target || ""} ${e.desc || ""}`));
-    if (!deps.state.selected && list.length) deps.state.selected = `tool:${(list.find((e) => toolState(e)[1] === "warn") || list[0]).name}`;
     table.className = "cn-list";
     table.replaceChildren(...list.map((e) => {
       const [label, cls] = toolState(e);
@@ -361,15 +360,6 @@ export function createToolViews(deps) {
     }));
     if (!list.length) table.append(deps.el("div", "empty", "여기에 표시할 항목이 없어요."));
     restore();
-  }
-
-  function toolsSummary() {
-    const t = deps.state.data.tools;
-    const body = deps.detailShell("MCP·플러그인");
-    const d = deps.el("div", "cn-detail");
-    d.append(deps.el("p", "cn-kind", "MCP·플러그인"), deps.el("h2", "cn-title", "도구 서버와 플러그인"), deps.el("p", "cn-desc", "서버의 Claude Code·Codex 설정을 1분마다 읽어 보여 줘요. 항목을 고르면 에이전트별로 켜고 끌 수 있어요."));
-    if (t?.collected_at) d.append(deps.el("p", "cn-desc", `마지막 확인 ${deps.ago(t.collected_at)}`));
-    body.append(d);
   }
 
   // A styled yes/no box (Figma 확인 팝업 253:18954) in place of the browser's await ask().
@@ -827,7 +817,6 @@ export function createToolViews(deps) {
     get refreshTools() { return refreshTools; },
     get renderTools() { return renderTools; },
     get toolDetail() { return toolDetail; },
-    get toolEntries() { return toolEntries; },
-    get toolsSummary() { return toolsSummary; }
+    get toolEntries() { return toolEntries; }
   };
 }

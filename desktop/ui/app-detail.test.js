@@ -362,23 +362,42 @@ test("helpers: stat, ago, originOf and opening an intelligence record", async ()
   await home();
 });
 
-test("a skill's detail shows the PC links, checks and repository, and asks the server to check again", async () => {
+test("a skill's detail opens in a popup with the PC links, checks and repository, and asks the server to check again", async () => {
   deps.ArkismHome.go("skills"); await app.settle(1000);
+  assert.ok(app.$("#app").classList.contains("wide")); // the list takes the full width
+  assert.equal(app.$("dialog.item-pop[open]"), null); // nothing opens until a row is clicked
   for (const name of [/code-review/, /writing-style/, /commit-and-push/]) {
     const r = byText(".v4s-row", name);
     if (!r) continue;
     await app.click(r, 500);
-    const check = byText("#detail button", /업데이트 확인/);
+    assert.ok(app.$("dialog.item-pop[open] .v4s-name"), "the skill opens in the popup");
+    const check = byText("dialog.item-pop button", /업데이트 확인/);
     if (check) {
       await app.click(check, 500);
-      assert.match(t(app.$("#notice")), /확인을 요청했어요/);
+      assert.match(t(app.$("dialog.item-pop .dlg-notice")), /확인을 요청했어요/); // an open popup shows the notice inside
       hook = (a) => (a.path === "/v1/agent_tools/requests" ? json(500, { error: "x" }) : null);
-      const again = byText("#detail button", /업데이트 확인/);
-      if (again && !again.disabled) { await app.click(again, 500); assert.match(t(app.$("#notice")), /요청하지 못했어요/); }
+      const again = byText("dialog.item-pop button", /업데이트 확인/);
+      if (again && !again.disabled) { await app.click(again, 500); assert.match(t(app.$("dialog.item-pop .dlg-notice")), /요청하지 못했어요/); }
       hook = () => null;
     }
   }
-  assert.ok(app.$(".pc-link"));
+  assert.ok(app.$("dialog.item-pop .pc-link"));
+  assert.equal(app.$$("dialog.item-pop").length, 1); // later rows reuse the one popup
+  app.$("dialog.item-pop").close(); await app.settle(100);
+  assert.equal(app.$(".v4s-row.selected"), null); // closing it drops the selection
+  await home();
+});
+
+test("TOOLS › MCP lists full width and opens a server in the popup; leaving the screen closes it", async () => {
+  deps.ArkismHome.go("tools"); await app.settle(1000);
+  assert.ok(app.$("#app").classList.contains("wide"));
+  assert.equal(app.$("dialog.item-pop[open]"), null);
+  app.$("#app").classList.remove("detail-open"); // an earlier screen may have left its drawer open
+  await app.click(app.$("#table .cn-row"), 300);
+  assert.ok(app.$("dialog.item-pop[open] .cn-detail .cn-title"));
+  assert.equal(app.$("#app").classList.contains("detail-open"), false); // no drawer behind the popup
+  deps.ArkismHome.go("memories", "active"); await app.settle(300);
+  assert.equal(app.$("dialog.item-pop"), null);
   await home();
 });
 

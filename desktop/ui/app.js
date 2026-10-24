@@ -1183,7 +1183,8 @@ export function startApp() {
     if (state.view === "skills" && !state.versionsDone) void loadVersions(state.connection.generation);
     const scroll = table.scrollTop;
     const page = pages.views[state.view] || crew.pages[state.view];
-    $("#app").classList.toggle("wide", !!page && !page.keepDetail);
+    $("#app").classList.toggle("wide", (!!page && !page.keepDetail) || popupDetail()); // TOOLS lists take the full width; an item opens in a popup
+    if (!popupDetail()) itemPop?.dialog.close();
     $("#app").classList.toggle("keep-detail", !!page && !!page.keepDetail); // narrow windows: this detail sits under the list, not in a drawer
     $("#app").classList.toggle("graph-mode", state.view === "graph");
     $("#app").classList.toggle("git-mode", state.view === "git");
@@ -1847,7 +1848,19 @@ export function startApp() {
   });
 
   // ---------------------------------------------------------------- detail
+  // TOOLS › 스킬·플러그인·MCP open an item in the crew popup frame (crew-popup.js) instead of the right panel.
+  // The skill pages (GitHub에서 설치, 개선 단계) keep the right panel: it explains the page, not an item.
+  const popupDetail = () => state.view === "tools" || (state.view === "skills" && !state.skillPage);
+  let itemPop = null;
   function detailShell(label) {
+    if (popupDetail()) {
+      if (itemPop) itemPop.setTitle(label);
+      else itemPop = window.ArkismCrewPopup({ el, button }).open({ title: label, tabs: [{ key: "detail", label, render: () => {} }], cls: "item-pop",
+        onClose: () => { itemPop = null; if (popupDetail() && state.selected) { state.selected = null; markSelected(); } } });
+      const body = el("div", "detail-body");
+      itemPop.body.replaceChildren(body);
+      return body;
+    }
     const d = $("#detail");
     const bar = el("div", "detail-bar");
     const close = el("button", "icon-btn plain detail-close"); close.type = "button"; close.setAttribute("aria-label", "닫기"); close.append(icon("x"));
@@ -1903,12 +1916,12 @@ export function startApp() {
     }
     if (state.view === "tools") {
       const t = toolViews.toolEntries().find((x) => `tool:${x.name}` === id);
-      return t ? toolViews.toolDetail(t) : toolViews.toolsSummary();
+      return t ? toolViews.toolDetail(t) : itemPop?.dialog.close();
     }
     if (state.view === "skills") {
       if (state.skillPage) return skillViews.skillPageDetail();
       const s = catalogQuery.record(id) || [...trashed(), ...state.data.skills].find((x) => `skill:${x.id}` === id);
-      return s ? skillViews.skillDetailV4(s) : summaryDetail();
+      return s ? skillViews.skillDetailV4(s) : itemPop?.dialog.close();
     }
     if (state.view === "memories" && id === "batch") return reviewBatchDetail(detailShell("한 번에 처리"));
     if (state.view === "memories" && id) {
@@ -2058,8 +2071,9 @@ export function startApp() {
   // 스킬이 든 저장소: 원본 주소, 지금 커밋, 새 버전이 있는지, 서버가 마지막으로 확인한 때 (서버가 6시간마다 git fetch)
   const repoOf = (sk) => (state.data.tools?.skill_repos || []).filter((r) => (sk.source_path || "").includes(`${r.repo.replace(/^~/, "")}/`))
     .sort((x, y) => y.repo.length - x.repo.length)[0] || null;
-  function openDetail() { $("#app").classList.add("detail-open"); }
+  function openDetail() { if (!popupDetail()) $("#app").classList.add("detail-open"); } // a popup item needs no drawer
   function closeDetail() {
+    itemPop?.dialog.close();
     $("#app").classList.remove("detail-open"); state.selected = null;
     if (state.view === "todo") { render(); return; } // home's title and body change with the selection too
     const panel = state.view === "memories" && { traits, reflections, relations, past: memoryTime, originals, digests, merge: digests }[state.memTab];

@@ -435,3 +435,15 @@ dialog.apply-pop .apply-paste input { min-height: 40px; padding: 8px 12px; borde
 dialog.apply-pop .dialog-foot { padding: 12px 24px 20px; border-top: 0; }
 /* round 3: AI가 고쳐서 올리기 above the findings */
 .app.v4-connect .rv-fix-all { align-self: flex-start; width: auto; margin-bottom: 4px; }
+
+/* ---------------------------------------------------------------- TOOLS item popup (app.js detailShell → crew-popup.js): the old right panel's body */
+.item-pop { width: min(640px, calc(100vw - 32px)); }
+.item-pop .crew-popup-tabs { display: none; }
+.item-pop .crew-popup-who h2 { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.item-pop .crew-popup-body { padding: 0; overflow: auto; }
+.item-pop .detail-body { overflow: visible; padding: 0 24px 24px; gap: 22px; }
+.item-pop .cn-detail { padding: 0; }
+.item-pop .detail-body h2 { margin: 0; font: 500 calc(16px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
+.item-pop .btn { height: auto; min-height: 34px; padding: 7px 14px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+dialog.item-pop .btn.cn-link, dialog.item-pop .btn.ghost { min-height: 0; padding: 7px 0; border: 0; background: none; color: var(--nc-muted); }
+.item-pop:has(.cn-detail) .crew-popup-who h2 { display: none; } /* MCP·플러그인 say their kind in the body (as the old panel hid its bar) */
