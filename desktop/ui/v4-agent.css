@@ -48,9 +48,9 @@
 .wf-select option { background: var(--nc-surface); color: var(--nc-text); }
 
 .table-wrap > .wf-main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; background: none; border: 0; }
-.wf-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
-.crew-card.wf-card { position: relative; isolation: isolate; overflow: hidden; width: 239px; min-height: 190px; display: flex; flex-direction: column; gap: 10px; padding: 16px;
-  border-radius: 10px; border: 1px solid var(--nc-line); background: var(--nc-surface); color: var(--nc-text); text-align: left; }
+.wf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(254px, 1fr)); gap: 12px; } /* the same grid and card size as 팀 (.tm-grid2) */
+.crew-card.wf-card { position: relative; isolation: isolate; overflow: hidden; min-height: 226px; display: flex; flex-direction: column; gap: 10px; padding: 16px;
+  border-radius: 12px; border: 1px solid var(--nc-line); background: var(--nc-surface); color: var(--nc-text); text-align: left; }
 .crew-card.wf-card:hover { border-color: var(--nc-quiet); }
 .crew-card.wf-card.selected { background: var(--nc-raised); border-color: var(--nc-line); }
 .crew-card.wf-card.selected .wf-chip { background: var(--nc-surface); }
@@ -65,10 +65,10 @@
 .wf-card .wf-card-meta { color: var(--nc-quiet); }
 .wf-card .wf-card-when { color: var(--nc-muted); }
 .wf-card .wf-card-when.on { color: var(--nc-amber); }
-.crew-card.new.wf-card { align-items: center; justify-content: center; gap: 8px; text-align: center; border: 1px dashed var(--nc-line); background: none; color: var(--nc-text); }
+.crew-card.new.wf-card { align-items: center; justify-content: center; gap: 8px; text-align: center; border: 1px dashed var(--nc-line); border-radius: 20px; background: none; color: var(--nc-text); }
 .crew-card.new.wf-card .icon { width: 20px; height: 20px; color: var(--nc-text); }
 .crew-card.new.wf-card strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); }
-.crew-card.new.wf-card small { width: 191px; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
+.crew-card.new.wf-card small { max-width: 190px; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 
 .wf-sec-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .wf-sec-head strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
