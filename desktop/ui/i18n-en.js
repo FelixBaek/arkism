@@ -1431,6 +1431,7 @@ window.ArkismI18nEN = {
   "이름 고치기": "Rename",
   "한도와 모델 목록을 새로 받지 못했어요. 마지막 결과를 보여 줘요.": "Couldn't refresh the limits and model lists. Showing the last result.",
   "서버 실행기가 아직 답하지 않았어요. 잠시 뒤 다시 눌러 주세요.": "The server runner has not answered yet. Try again in a moment.",
+  "새로고침을 넣지 못했어요. 잠시 뒤 다시 눌러 주세요.": "Could not queue the refresh. Try again in a moment.",
   "이 PC에서": "on this PC",
   "서버에서": "on the server",
   "지금 확인": "Check now",
