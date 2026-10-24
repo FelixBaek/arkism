@@ -5223,7 +5223,6 @@ Object.assign(window.ArkismI18nEN.strings, {
  "정리할 기억 전체 보기 ›": "View all memories to clean up ›",
  "정리 제안 전체 보기 ›": "View all cleanup proposals ›",
  "대화 저장 ·": "Conversation saved ·",
- "승인 대기에서 보기": "View in approval queue",
  "정리하러 가기": "Go clean up",
  "후보를 버릴까요?": "Discard this candidate?",
  "이 단계는": "This stage",
