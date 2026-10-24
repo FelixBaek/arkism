@@ -21,8 +21,11 @@ test("vocabulary names the CLI for each model family and the colour of each node
     antigravity: "Gemini CLI", "glm-4": "claude-glm", "deepseek-v4": "claude-ds", "grok-4": "Grok CLI", "": "호스트 CLI", qwen: "호스트 CLI" };
   for (const [m, cli] of Object.entries(cases)) assert.equal(voc.cliOf(m), cli, m);
   assert.equal(voc.cliOf(undefined), "호스트 CLI");
-  assert.deepEqual(["ai", "team", "http", "approval", "code"].map(voc.KIND_OF), ["ai", "ai", "http", "human", "plain"]);
+  assert.deepEqual(["ai", "team", "http", "n8n", "approval", "code"].map(voc.KIND_OF), ["ai", "ai", "http", "http", "human", "plain"]);
   assert.ok(voc.IS_AI("expert") && voc.IS_AI("ai_once") && !voc.IS_AI("code"));
+  // n8n is gone from the 노드 추가 picker, but a saved n8n step still opens with its fields.
+  assert.equal(voc.NODES.n8n.hidden, true);
+  assert.deepEqual(voc.FIELDS.n8n.map(([k]) => k), ["url", "mode", "timeout"]);
   assert.equal(voc.TABS.length, 3);
   assert.equal(voc.EFFORTS[0][0], "low");
   assert.equal(voc.MODES.round_robin, "정해진 순서대로");

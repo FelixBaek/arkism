@@ -123,7 +123,7 @@ export function createCrewEditor(deps) {
 
   function presetItems() {
     const out = [];
-    const order = ["전문가", "AI", "저장한 페르소나", "시작", "처리", "흐름", "알림·끝"];
+    const order = ["전문가", "AI", "저장한 페르소나", "시작", "처리", "흐름", "알림·끝", "그 밖의 연동"];
     for (const [type, n] of Object.entries(deps.NODES)) if (!n.hidden) out.push({ group: n.group, type, title: n.label, sub: n.sub, preset: {} });
     for (const a of deps.items().filter((r) => r.crew.type === "agent")) out.push({ group: "전문가", type: "expert", title: a.crew.name, sub: a.crew.model || "모델 자동", expert: a, preset: { title: a.crew.name, config: { expert: a.id } } });
     for (const p of deps.personas()) out.push({ group: "저장한 페르소나", type: "ai", title: p.crew.name, sub: "AI 에이전트로 넣어요", persona: true, preset: { title: p.crew.name, config: { persona: p.id } } });
@@ -193,6 +193,7 @@ export function createCrewEditor(deps) {
       return [["모델", c.model || a?.crew.model || x?.model || "자동"], ["목표", c.goal && c.goal !== "{{input}}" ? c.goal : "앞 단계 결과로 일해요"]];
     }
     if (n.type === "team") return [["팀", deps.byId(c.team)?.crew.name || "고르지 않았어요"], ["주제", c.topic && c.topic !== "{{input}}" ? c.topic : "앞 단계 결과"]];
+    if (n.type === "n8n") return [["주소", (c.url || "").replace(/^https?:\/\//, "") || "—"]];
     if (n.type === "ai_once") return [["모델", deps.modelOf(n, x)], ["질문", c.prompt && c.prompt !== "{{input}}" ? c.prompt : "앞 단계 결과를 그대로 물어요"]];
     if (n.type === "subflow") return [["부르는 것", c.workflow ? `$${c.workflow.replace(/^\$/, "")}` : "고르지 않았어요"]];
     if (n.type === "code") return [["코드", `${c.lang === "sh" ? "셸" : "Go"} · ${(c.code || "").split("\n").length}줄 · 토큰 0`]];
