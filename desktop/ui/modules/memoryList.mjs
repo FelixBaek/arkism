@@ -286,13 +286,15 @@ export function createMemoryList(deps) {
   // One review action per item at a time: a second click on the same item would only meet the first one's new revision.
   const reviewing = new Set();
 
+  // true once the work went through; false when it failed (already said) or was already running
   async function reviewOnce(id, work) {
-    if (reviewing.has(id)) return;
+    if (reviewing.has(id)) return false;
     reviewing.add(id);
-    try { await work(); } catch (e) {
+    try { await work(); return true; } catch (e) {
       if (e.message === "revision_conflict") deps.stateNotice("changed", {}, { text: "이미 처리됐거나 다른 곳에서 바뀌었어요. 새로 불러왔어요." });
       else deps.notice(`처리하지 못했어요: ${e.message}`);
       await reloadMemories().catch(() => {});
+      return false;
     } finally { reviewing.delete(id); }
   }
 

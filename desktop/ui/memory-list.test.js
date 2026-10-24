@@ -255,7 +255,8 @@ test("decide reviews once per item with an operation id and reports conflicts", 
   assert.match(env.notices.at(-1), /이미 처리됐거나/);
   env.deps.reply = () => { throw new Error("boom"); };
   env.deps.collectionPaging.read = async () => { throw new Error("reload failed"); };
-  await api.reviewOnce("z", async () => { throw new Error("boom"); });
+  assert.equal(await api.reviewOnce("z", async () => { throw new Error("boom"); }), false, "a failure says so to the caller");
+  assert.equal(await api.reviewOnce("z", async () => {}), true);
   assert.equal(env.notices.at(-1), "처리하지 못했어요: boom");
 });
 
