@@ -94,7 +94,7 @@ class H(http.server.SimpleHTTPRequestHandler):
             for r in rows: groups[group(r)] = groups.get(group(r), 0) + 1  # "" is the uncategorized count, as the server sends it
             want = body.get("category") or ""
             if want not in ("", "all"): rows = [r for r in rows if group(r) == ("" if want == "none" else want)]
-        kinds = count(rows, lambda r: r.get("kind"))
+        kinds = count(rows, lambda r: r.get("format") if path == "/v1/knowledge/sources/query" else r.get("kind"))  # 지식 groups sources by file format
         if body.get("kind"): rows = [r for r in rows if r.get("kind") == body["kind"]]
         start, limit = int(body.get("cursor") or 0), int(body.get("limit") or 50)  # the cursor is a plain offset here
         nxt = str(start + limit) if start + limit < len(rows) else ""
@@ -103,7 +103,8 @@ class H(http.server.SimpleHTTPRequestHandler):
 
 QUERY = {"/v1/memories/query": lambda state: "/v1/memories",
          "/v1/memory_candidates/query": lambda state: "/v1/memory_candidates?status=" + state,
-         "/v1/skills/query": lambda state: "/v1/skills/trash" if state == "trash" else "/v1/skills"}
+         "/v1/skills/query": lambda state: "/v1/skills/trash" if state == "trash" else "/v1/skills",
+         "/v1/knowledge/sources/query": lambda state: "/v1/knowledge/sources"}  # 지식 › 자료 (knowledge.js); filters are not applied here
 # The server's memory states, cut down to what the fixtures carry (internal/memory/catalog_memory.go memoryCatalogState).
 # shortcut: idle ignores the 7-day age and agent-reported use, since the preview has no memory_usage data; port them if a fixture needs them.
 STATE = {("/v1/memories/query", "idle"): lambda r: r.get("kind") not in ("user", "procedural"),

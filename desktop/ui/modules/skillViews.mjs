@@ -260,7 +260,7 @@ export function createSkillViews(deps) {
     const meta = deps.el("div", "v4s-meta");
     const cat = deps.pages.categoryOf(sk)?.name;
     if (cat) meta.append(deps.el("span", "v4s-cat", cat));
-    if (sk.description) meta.append(deps.raw(deps.el("span", "v4s-desc", firstSentence(sk.description))));
+    if (sk.description) meta.append(deps.raw(deps.el("span", "v4s-desc", firstSentence(sk.description).replace(/\.$/, "")))); // Figma 198:802 rows: no closing period
     if (!i && copies.length > 1) {
       const c = deps.el("button", `copy-chip${open ? " open" : ""}`, `같은 이름 ${copies.length}개`); c.type = "button";
       c.title = open ? "접기" : "경로가 다른 같은 이름 스킬을 펼쳐요";

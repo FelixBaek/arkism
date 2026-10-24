@@ -18,6 +18,7 @@
 .v4s-title { font: 400 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .v4s-title.mono { font: 400 calc(14px * var(--fs, 1))/1.5 var(--mono); }
 .v4s-meta { display: flex; align-items: center; gap: 8px; min-width: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v4s-meta .v4s-cat:has(+ .v4s-desc)::after { content: " ·"; } /* Figma 198:802: "글쓰기·문서 · 내 말투로…" */
 .v4s-meta .mono { font: 400 calc(11px * var(--fs, 1))/1.5 var(--mono); }
 .v4s-meta .copy-path { overflow: hidden; text-overflow: ellipsis; }
 .v4s-meta .copy-chip { margin-left: 0; font-size: 11px; color: var(--nc-muted); border-color: var(--nc-line); }

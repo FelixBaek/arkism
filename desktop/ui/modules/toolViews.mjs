@@ -277,6 +277,7 @@ export function createToolViews(deps) {
   }
 
   const BADGE = { ok: "", warn: "warn", off: "off" };
+  const firstSentence = (t) => String(t).split(/(?<=[.다요])\s/)[0].replace(/\.$/, ""); // Figma rows: one sentence, no closing period
 
   // Which summary tile a server counts under (Figma: 정상 · 로그인 필요 · 끊김 · 꺼짐).
   function toolGroup(entry) {
@@ -341,22 +342,23 @@ export function createToolViews(deps) {
       const [label, cls] = toolState(e);
       const ic = deps.el("span", "cn-row-icon"); ic.append(deps.icon(plugin ? "puzzle-piece" : e.name === "arkism" ? "brain" : "plug"));
       const tools = (e.tools || []).length;
-      const users = toolUsers(e).length;
+      const users = toolUsers(e).map((r) => r.crew.name || `$${r.crew.handle}`); // Figma 198:974: "릴리스 매니저 외 1"
       const parts = [ic];
       if (plugin) {
         const counts = {};
         (e.contents || []).forEach((it) => { const k = ITEM_KIND[it.kind] || it.kind; counts[k] = (counts[k] || 0) + 1; });
         const title = [deps.raw(deps.el("span", "", e.name))];
         if (e.version) title.push(deps.el("span", "cn-ver", `v${e.version}`));
-        parts.push(cnRowBody(title, Object.entries(counts).map(([k, c]) => `${k} ${c}`).join(" · ") || "", e.desc ? deps.raw(deps.el("span", "", e.desc)) : null));
+        parts.push(cnRowBody(title, Object.entries(counts).map(([k, c]) => `${k} ${c}`).join(" · ") || "", e.desc ? deps.raw(deps.el("span", "", firstSentence(e.desc))) : null)); // the popup shows the whole text
       } else {
-        parts.push(cnRowBody(deps.raw(deps.el("span", "mono", e.name)), [e.desc, tools ? `도구 ${tools}개` : "", users ? `워크플로우 ${users}개` : ""].filter(Boolean).join(" · ")));
+        parts.push(cnRowBody(deps.raw(deps.el("span", "mono", e.name)), [e.desc, tools ? `도구 ${tools}개` : "", users.length ? users[0] + (users.length > 1 ? ` 외 ${users.length - 1}` : "") : ""].filter(Boolean).join(" · ")));
       }
       parts.push(toolLogos(e));
       const loginFor = deps.AGENTS.map(([k]) => k).find((k) => needsLogin(e, k));
       if (loginFor) parts.push(cnMini("로그인", () => toolAgentPopup(e, toolKind(e), loginFor, true)));
       else if (!plugin && e.note && reconnectAgents(e).length) parts.push(cnMini("다시 연결", () => reconnectTool(e)));
-      parts.push(cnBadge(label, BADGE[cls]));
+      // Figma 198:1060 · 198:974: a plugin row shows no "정상" badge, and the row says only "로그인 필요" (the 로그인 button picks the agent).
+      if (!(plugin && cls === "ok")) parts.push(cnBadge(loginFor && !requestsFor(e).some((q) => q.status === "pending") ? "로그인 필요" : label, BADGE[cls]));
       return cnRow(`tool:${e.name}`, parts, deps.renderDetail);
     }));
     if (!list.length) table.append(deps.el("div", "empty", "여기에 표시할 항목이 없어요."));

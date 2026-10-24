@@ -133,7 +133,7 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   assert.equal(rows.length, 6);
   assert.match(rows[0].textContent, /깃허브 · 도구 7개/);
   assert.match(rows[0].textContent, /적용 대기/);
-  assert.match(rows[1].textContent, /Codex 로그인 필요/);
+  assert.match(rows[1].textContent, /로그인 필요/); // Figma 198:1060: the row badge drops the agent name
   assert.match(rows[3].textContent, /다시 연결/);
   assert.match(rows[5].textContent, /꺼짐/);
   assert.equal(rows[5].querySelector(".cn-quiet").textContent, "에이전트 없음");

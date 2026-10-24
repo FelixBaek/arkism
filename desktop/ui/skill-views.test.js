@@ -170,7 +170,7 @@ test("list: attention card, filters, sort, copies, categories and the footer", a
   assert.equal(s.state.skillDir, -1);
   const rows = s.doc.querySelectorAll("#table .v4s-row");
   assert.equal(rows.length, 4);
-  assert.match(rows[0].textContent, /개발첫 문장이다\./);
+  assert.match(rows[0].textContent, /개발첫 문장이다(?!\.)/); // Figma 198:802: no closing period
   assert.match(rows[0].textContent, /보안 주의/);
   assert.match(rows[0].textContent, /5번/);
   assert.match(rows[3].textContent, /업데이트 있음/);

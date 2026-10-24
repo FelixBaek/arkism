@@ -3894,6 +3894,7 @@ window.ArkismI18nEN = {
   "분류하지 못했어요 ({0}).": "Couldn't categorize ({0}).",
   "분류 안 된 스킬 {0}개 · 규칙을 바꾸면 위 숫자가 바로 바뀌어요": "{0} uncategorized skills · changing rules updates the counts above immediately",
   "외 {0}개": "and {0} more",
+  "외 {0}": "and {0} more",
   "{0}로 로그인됨": "Signed in as {0}",
   "기억 정리 설정을 가져왔어요. 유지하기로 한 기억 {0}개를 더했어요. 화면을 다시 불러와요.": "Memory cleanup settings imported. Added {0} memories marked to keep. Reloading the window.",
   "스킬 제안 초안 {0}개를 가져왔어요. 할 일에서 볼 수 있어요.": "Imported {0} skill suggestion drafts. You can see them in To-do.",
