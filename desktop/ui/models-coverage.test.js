@@ -65,7 +65,7 @@ function mk({ mode = "server", fail = {}, outcome = "done" } = {}) {
         for (const q of server.requests) if (q.id?.startsWith("q") && q.status === "pending" && v.outcome !== "stay") { q.status = v.outcome; q.models = ["m-a", "m-b"]; q.error = v.outcome === "failed" ? "" : undefined; }
         return { providers: server };
       }
-      server.requests.push({ id: `q${++n}`, kind: body.cli ? "cli_update" : "x", cli: body.cli, provider: body.provider, model: body.model, status: "pending", key_id: "key_ABCDEF1234567890" });
+      server.requests.push({ id: `q${++n}`, kind: body.cli ? "cli_update" : path === "/v1/providers/models_refresh" ? "models_refresh" : "x", cli: body.cli, provider: body.provider, model: body.model, status: "pending", key_id: "key_ABCDEF1234567890" });
       if (path === "/v1/providers/cli_update" && v.noProviders) return {};
       return { providers: server };
     },
@@ -263,8 +263,13 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   assert.equal(srv.notes.at(-1), "모델 목록을 새로 받지 못했어요: 알 수 없음");
   srv.outcome = "stay"; btn().click(); await settle(400);
   assert.match(srv.notes.at(-1), /서버 실행기가 아직 답하지 않았어요/);
-  srv.fail["/v1/providers/models_refresh"] = "revision_conflict"; btn().click(); await settle();
-  assert.match(srv.notes.at(-1), /서버 실행기가 아직/, "one already waiting is not an error");
+  // One already waiting is not an error: the button follows that request instead.
+  srv.fail["/v1/providers/models_refresh"] = "revision_conflict";
+  const shown = srv.notes.length; btn().click(); await settle(400);
+  assert.equal(srv.notes.length, shown + 1, "the waiting refresh is followed");
+  assert.match(srv.notes.at(-1), /서버 실행기가 아직/);
+  srv.outcome = "failed"; btn().click(); await settle();
+  assert.equal(srv.notes.at(-1), "모델 목록을 새로 받지 못했어요: 알 수 없음", "the waiting refresh's outcome is shown");
   assert.ok(srv.notes.length > before);
 });
 
