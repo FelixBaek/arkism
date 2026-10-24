@@ -280,6 +280,19 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   assert.ok(srv.notes.length > before);
 });
 
+test("chips and AI 도구 headings show the LobeHub mark by id, name or key base URL, else the generic logo", async () => {
+  window.ArkismBrand = { kindLabel: () => "", mark: (n) => (/^(anthropic|xai|deepseek)/.test(String(n).toLowerCase()) ? dom.el("i", `mark-${n}`) : null) };
+  try {
+    const v = mk();
+    v.server.providers.find((p) => p.id === "custom-abc").keys[0].base_url = "https://api.deepseek.com/v1";
+    await v.m.load(); v.draw();
+    const marks = (root) => root.all((x) => /^mark-/.test(x.className)).map((x) => x.className);
+    assert.deepEqual(marks(v.nodes.main), ["mark-anthropic", "mark-xai", "mark-deepseek.com"]); // OpenAI and Google: no mark here, their KNOWN logo
+    const heads = v.m.assistPicker().children.filter((c) => c.tagName === "OPTGROUP");
+    assert.deepEqual(heads.map((g) => g.logo.children[0]?.className || g.logo.className), ["mark-anthropic", "agent-tile", "mark-xai", "mark-deepseek.com"]);
+  } finally { delete window.ArkismBrand; }
+});
+
 test("AI 도구 기본 모델 saves the provider and model, falls back to the server default, and keeps an old pick", async () => {
   const v = mk();
   await v.m.load(); v.draw();

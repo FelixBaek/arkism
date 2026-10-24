@@ -18,6 +18,7 @@
     [/^openrouter/, "openrouter", false],
     [/^(meta|llama)/, "meta-color", true],
     [/^(nous|hermes)/, "nousresearch", false],
+    [/^opencode/, "opencode", false],
     [/^(discord|디스코드)/, "discord-color", true],
     [/^(telegram|텔레그램)/, "telegram-color", true],
     [/^(slack|슬랙)/, "slack-logo", false]
