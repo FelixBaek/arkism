@@ -26,7 +26,9 @@
 .g-in { display: flex; align-items: center; gap: 6px; }
 .g-in .g-port.in { position: static; flex: none; }
 .g-in small { font: 400 calc(10px * var(--fs, 1))/1.45 var(--sans); }
-.g-node .g-icon .wf-mark { width: 28px; height: 28px; }
+.g-node .g-icon { width: 24px; height: 24px; border-radius: 6px; overflow: hidden; }
+.g-node .g-icon .icon { width: 14px; height: 14px; }
+.g-node .g-icon .wf-mark { width: 24px; height: 24px; }
 .g-node-foot { display: none; align-items: center; justify-content: space-between; gap: 8px; padding-top: 6px; border-top: 1px solid var(--nc-line); }
 .g-node:hover .g-node-foot, .g-node.selected .g-node-foot { display: flex; }
 .g-node-foot small { font: 400 calc(10.5px * var(--fs, 1))/1.45 var(--sans); }
