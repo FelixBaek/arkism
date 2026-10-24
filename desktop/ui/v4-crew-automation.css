@@ -1,7 +1,7 @@
 /* 크루 › 자동화: 카드 목록 (198:286) · 상세 팝업 (993:60224) · 새로 만들기 (1044:65953) */
 /* ---- list: category chips · search · 실행 방식 · new */
-.auto-bar-top { flex-wrap: wrap; gap: 8px; padding-bottom: 4px; }
-.auto-cats { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.auto-bar-top { flex-wrap: wrap; gap: 8px; }
+.auto-cats { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .auto-cat-chip { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--nc-line); background: none; color: var(--nc-muted); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
 .auto-cat-chip small { color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); }
 .auto-cat-chip:hover { border-color: var(--nc-quiet); }
@@ -229,3 +229,9 @@
 .auto-sched-say { width: 100%; }
 .auto-num { width: calc(44px * var(--fs, 1)); height: 30px; padding: 0 6px; box-sizing: border-box; text-align: center; font-size: calc(14px * var(--fs, 1)); font-variant-numeric: tabular-nums; field-sizing: fixed; }
 .auto-sched-next { font-size: calc(12px * var(--fs, 1)); }
+/* 198:286: the panel hugs the cards, pads 20 and keeps 16px between the bar and the cards; cards are a fixed 254px; a card
+   without a photo keeps its name at the bottom like the photo cards */
+.app:has(#table.wf-main) .panel { flex: none; overflow: visible; }
+.panel-main:has(> .table-wrap > #table.wf-main) { padding: 20px; gap: 16px; }
+.wf-grid { grid-template-columns: repeat(auto-fill, 254px); }
+.crew-card.wf-card:not(.new) .crew-cover-title { margin-top: auto; }

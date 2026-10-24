@@ -45,3 +45,5 @@
   .cu-auto .tm-urow { grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) 48px 64px 72px minmax(0, 1.8fr); }
   .cu-table .tm-urow > span:last-child { white-space: normal; overflow-wrap: anywhere; }
 }
+/* 325:37545: the panel hugs the usage cards, the page scrolls instead of the panel */
+.app:has(#table.tm-usage) .panel { flex: none; overflow: visible; }

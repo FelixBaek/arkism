@@ -347,6 +347,10 @@ button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor
 /* ✕: the corner, same gap from the top and right edges (pulled out of the head's 28/32px padding) */
 .v4-auto .crew-popup-close, .tm-pop .crew-popup-close, .ex-pop .crew-popup-close { flex: none; width: 28px; height: 28px; margin: -13px -17px 0 4px; }
 .ex-pop .crew-popup-close { margin: -9px -9px 0 4px; } /* expert head pads 24px, not 28/32 */
+/* 868:61909 · 961:60688 · 993:60224: the popup is #161616 (between canvas and surface) with a 16px corner; ✕ sits on a faint 29×33 tile */
+.crew-dialog.crew-popup { border-radius: var(--radius-2xl); background: color-mix(in srgb, var(--nc-surface) 71%, var(--nc-canvas)); }
+.crew-dialog:is(.v4-auto, .tm-pop, .ex-pop) .btn.crew-popup-close { width: 29px; height: 33px; background: color-mix(in srgb, var(--nc-text) 6%, transparent); }
+.crew-dialog:is(.v4-auto, .tm-pop, .ex-pop) .btn.crew-popup-close:hover { background: var(--bg-muted); color: var(--text-1); }
 .crew-popup-head.scrolled { box-shadow: 0 1px 0 var(--nc-line, var(--border)), 0 12px 16px -12px rgba(0, 0, 0, .5); z-index: 2; }
 
 /* 카테고리 칩·메뉴 (app.js catMenu): the icon before the name, one menu for the expert, team and automation popups */

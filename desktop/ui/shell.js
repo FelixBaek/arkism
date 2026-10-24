@@ -20,7 +20,7 @@ window.ArkismShell = (ctx) => {
     agent: { label: "CREW", tabs: [
       ["workers", "전문가", () => { state.workerNew = false; go("workers"); }, () => state.view === "workers"],
       ["teams", "팀", () => go("teams"), () => ["teams", "teamNew", "meetings"].includes(state.view)],
-      ["crew", "자동화", () => go("crew"), () => ["crew", "graph"].includes(state.view), count("crew")],
+      ["crew", "자동화", () => go("crew"), () => ["crew", "graph"].includes(state.view)], // 208:17763: CREW tabs carry no count
       // 디스코드 tab hidden: bots live in 설정 › 메신저 (Figma 1012:60790); the view code stays in team.js.
       ["crew-usage", "사용량", () => go("crewUsage"), () => state.view === "crewUsage"]
     ] },

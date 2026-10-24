@@ -71,9 +71,9 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-new .ex-face .none { background: #f7efe7; }
 .ex-art.plus { color: #8c8881; font: 300 30px/1 var(--sans); }
 .ex-new h2.dim { color: var(--nc-muted); }
-.ex-body { display: flex; flex-direction: column; gap: 14px; }
+.ex-body { display: flex; flex-direction: column; gap: 12px; }
 .ex-metrics { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.ex-metric { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; }
+.ex-metric { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; }
 .ex-metric .ex-bars { position: absolute; right: 14px; top: 50%; margin: 0; transform: translateY(-50%); }
 .ex-metric + .ex-metric { border-left: 1px solid var(--border); }
 .ex-metric strong { font-size: calc(20px * var(--fs, 1)); font-weight: 500; }
@@ -362,3 +362,7 @@ dialog.ex-skill-dlg { margin-top: 18vh; }
 .ex-uchip-x svg { width: 9px; height: 9px; }
 .ex-uchip-x:hover { color: var(--nc-text); border-color: var(--nc-text); }
 .ex-uchip-wrap:hover .ex-uchip-x, .ex-uchip-x:focus-visible { opacity: 1; }
+/* 868:61909: the cards inside the popup are #181818 on the #161616 window, padded 16/18/18 */
+.ex-pop .wk-card { padding: 16px 18px 18px; background: var(--nc-surface); }
+/* 208:17763: the panel pads 15/20/20, chips and 새 전문가 share one 36px row (chips centred), 16px down to the cards */
+.panel-main:has(> .table-wrap > .ex-main) { padding: 15px 20px 20px; gap: 16px; }

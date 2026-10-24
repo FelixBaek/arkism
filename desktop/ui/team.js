@@ -274,12 +274,14 @@ window.ArkismTeams = (ctx) => {
     const chips = el("div", "tm-chips");
     for (const [key, label] of [["", "모든 카테고리"], ...cats.map((c) => [c, c])]) {
       const n = key ? list.filter((r) => r.crew.category === key).length : list.length;
-      const c = el("button", `tm-chip${S.cat === key ? " active" : ""}`); c.type = "button";
+      const c = el("button", `tm-chip${(S.cat || "") === key ? " active" : ""}`); c.type = "button";
       c.append(icon(catIcon(key)), key ? raw(el("span", "", label)) : el("span", "", label), el("output", "", String(n)));
       c.addEventListener("click", () => { S.cat = key; render(false); });
       chips.append(c);
     }
-    bar.append(chips, button("+ 새 팀", "primary", null, () => openPopup(null)));
+    const acts = el("div", "tm-cats-acts"); // 208:18425 keeps the panel right under the tabs: 회의 보기 sits beside + 새 팀 (like 팀 보기 beside 새 회의, 208:19103)
+    acts.append(button("회의 보기", "ghost", null, () => go("meetings")), button("+ 새 팀", "primary", null, () => openPopup(null)));
+    bar.append(chips, acts);
     const grid = el("div", "tm-grid2");
     for (const r of list.filter((x) => !S.cat || x.crew.category === S.cat)) grid.append(teamCard(r));
     const add = el("button", "tm-card2 tm-card2-new"); add.type = "button";
@@ -2074,7 +2076,7 @@ window.ArkismTeams = (ctx) => {
   // ---------------------------------------------------------------- pages (registered like crew.js pages)
   const pages = {
     teams: { title: "팀", count: () => `${teams().length}개`, sub: () => "전문가 여럿이 정한 순서대로 말하며 하나의 결과를 만들어요. 연결된 채널에 글을 쓰면 회의가 시작돼요.",
-      bare: true, head: () => [button("회의 보기", "ghost", null, () => go("meetings"))], render: renderTeams },
+      bare: true, head: () => [], render: renderTeams },
     teamNew: { title: "새 팀", sub: () => "", keepDetail: true, head: () => [], render: () => { setTimeout(() => { go("teams"); setTimeout(() => openPopup(null)); }); $("#table").replaceChildren(); } },
     meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [], render: renderMeetings }, // 팀 보기 sits beside 새 회의 (208:19103)
     discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord },
