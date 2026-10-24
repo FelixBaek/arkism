@@ -1168,7 +1168,8 @@ export function startApp() {
     $("#title").classList.toggle("sr-only", $("#title").textContent === $("#area-tabs").dataset.active); // the tab already names it; screen readers keep the heading
     $("#title-count").textContent = typeof v.count === "function" && !state.loading && !$("#title").classList.contains("sr-only") ? v.count() : ""; // a hidden title takes its count along; the tab badge shows it
     const bare = !state.loading && (typeof v.bare === "function" ? v.bare() : !!v.bare); // the rail and tabs already name the screen
-    $(".main > .page-head").style.display = bare ? "none" : "";
+    $(".main > .page-head").classList.toggle("bare", bare);
+    $(".main > .page-head").style.display = bare ? "none" : ""; // shown again below if the screen puts buttons in it
     $(".main > .page-head .page-back")?.remove(); // a screen that has a ← link draws it again
     $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); // TOOLS screens add them again via headExtras()
     $("#app").classList.toggle("v4-connect", ["tools", "git", "reviews"].includes(state.view));
@@ -1194,6 +1195,8 @@ export function startApp() {
     $("#app").classList.toggle("overview-mode", state.view === "overview");
     table.className = { todo: "todo-wrap", images: "card-grid", crew: "card-grid crew-grid", settings: "page-wrap", design: "page-wrap", tokens: "page-wrap", graph: "page-wrap" }[state.view] || "table";
     renderHeadActions();
+    // a bare screen drops its title row, but keeps the row while it carries buttons (팀 › 회의 보기, 사용량 › 새로고침)
+    $(".main > .page-head").style.display = bare && !$("#head-actions").childElementCount ? "none" : "";
     skillViews.renderChangeBar();
     if (page) {
       ["#chips", "#stats", "#controls"].forEach((q) => $(q).replaceChildren()); // a page that wants controls draws them in render()
