@@ -318,20 +318,19 @@ export function createToolViews(deps) {
     const keys = deps.shownAgents().map(([k]) => k);
     if (!keys.includes(deps.state.toolAgent)) deps.state.toolAgent = "";
     const who = deps.state.toolAgent;
-    // 검색 · 상태 · 에이전트 and 분류 chips, the same parts as the 스킬 list.
+    // 검색 · 필터 (분류 · 상태 · 에이전트) · 새로고침 · 설치 in one row, the same parts as the 스킬 list.
     const all = plugin ? t.plugins : t.servers;
     const cats = (plugin ? TOOL_CATS.plugin : TOOL_CATS.mcp).map(([id, label, test]) => [id, label, test, all.filter(test).length]).filter(([, , , c]) => c);
     if (!cats.some(([id]) => id === deps.state.toolCat)) deps.state.toolCat = "all";
     const restore = deps.keepFocus(".v4s-search");
-    const states = TOOL_STATES.map(([k, l]) => [k, `상태: ${l}${k === "all" ? "" : ` ${all.filter((e) => toolGroup(e) === k).length}`}`]);
+    const pick = (field, v) => () => { deps.state[field] = v; deps.state.selected = null; deps.render(); };
     const bar = deps.el("div", "v4s-bar");
-    bar.append(deps.panelSearch(plugin ? "플러그인 검색" : "MCP 검색"),
-      deps.skSelect("상태", states, deps.state.toolStatus, (k) => { deps.state.toolStatus = k; deps.state.selected = null; deps.render(); }),
-      deps.skSelect("에이전트", [["", "모든 에이전트"], ...keys.map((k) => [k, `${deps.agentName(k)} ${all.filter((e) => e.agents?.[k] === "on").length}`])], who, (k) => { deps.state.toolAgent = k; deps.state.selected = null; deps.render(); }));
+    bar.append(deps.panelSearch(plugin ? "플러그인 검색" : "MCP 검색"), deps.filterMenu(plugin ? "plugin" : "mcp", [
+      { title: "카테고리", set: deps.state.toolCat !== "all", chips: cats.length ? [["전체", all.length, deps.state.toolCat === "all", pick("toolCat", "all")], ...cats.map(([id, label, , c]) => [label, c, deps.state.toolCat === id, pick("toolCat", id)])] : [] },
+      { title: "상태", set: deps.state.toolStatus !== "all", chips: TOOL_STATES.map(([k, l]) => [l, k === "all" ? "" : all.filter((e) => toolGroup(e) === k).length, deps.state.toolStatus === k, pick("toolStatus", k)]) },
+      { title: "에이전트", set: !!who, chips: [["모든 에이전트", "", !who, pick("toolAgent", "")], ...keys.map((k) => [deps.agentName(k), all.filter((e) => e.agents?.[k] === "on").length, who === k, pick("toolAgent", k)])] }]),
+    ...deps.barActions(refreshTools));
     deps.$("#controls").replaceChildren(bar);
-    const pickCat = (id) => () => { deps.state.toolCat = id; deps.state.selected = null; deps.render(); };
-    deps.$("#chips").classList.add("v4s-cats");
-    deps.$("#chips").replaceChildren(...(cats.length ? [deps.filterChip("전체", all.length, deps.state.toolCat === "all", pickCat("all")), ...cats.map(([id, label, , c]) => deps.filterChip(label, c, deps.state.toolCat === id, pickCat(id)))] : []));
     if (who && !deps.AGENT_SYNC[who]) deps.$("#chips").append(deps.el("p", "cn-note", `${deps.agentName(who)}의 MCP 설정은 아직 읽지 않아요. 켜고 끄기는 Claude Code·Codex만 돼요.`));
     const inCat = cats.find(([id]) => id === deps.state.toolCat)?.[2] || (() => true);
     const list = all.filter((e) => (!who || e.agents?.[who] === "on") && (deps.state.toolStatus === "all" || toolGroup(e) === deps.state.toolStatus) && inCat(e) && deps.matches(`${e.name} ${e.target || ""} ${e.desc || ""}`));

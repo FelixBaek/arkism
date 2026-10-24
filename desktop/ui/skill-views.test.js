@@ -24,6 +24,7 @@ function setup({ skills = [], snapshot = {}, handler, wide = true } = {}) {
   const deps = {
     ...h, state, generation: 1, TRASH_KEY: "trash",
     shownAgents: () => AGENTS,
+    loadAll: () => log.push("loadAll"), barActions: (reload) => [h.button("새로고침", "", null, reload), h.button("설치")],
     store: (k, v) => log.push(["store", k, v]), render: (x) => log.push(["render", x]), renderDetail: () => log.push("detail"),
     catalogQuery: { record: (id) => records().find((x) => `skill:${x.id}` === id) || null, ensure: (c) => log.push(["ensure", c]), snapshot: () => snap, more: async (c) => { log.push(["more", c]); if (snap.moreFails) throw new Error("x"); }, refreshVisible: async () => log.push("refresh") },
     trashed: () => state.trash || [],
@@ -118,22 +119,37 @@ test("list: attention card, filters, sort, copies, categories and the footer", a
   assert.match(attn.textContent, /보안 주의 1 · 업데이트 1/);
   btn(attn, "하나씩 확인하기").click();
   assert.deepEqual(s.log.at(-1), ["go", "skills", "caution"]);
-  const [state, sort, model] = s.doc.querySelectorAll("#controls select");
-  assert.match(state.options.map((o) => o.textContent).join("|"), /빠진 곳 있음 1\|상태: 안 씀 2\|상태: 보안 주의 1\|상태: 업데이트 있음 1\|상태: 플러그인 스킬 1\|상태: 휴지통 1/);
-  state.value = "trash"; await state.fire("change");
+  // 필터 ⌄: one button opens grouped chips; counts stay, 0 is hidden; the picked chip is marked active.
+  assert.equal(s.doc.querySelectorAll("#controls select").length, 0);
+  assert.equal(s.doc.querySelectorAll("#chips .chip").length, 0);
+  const bar = s.doc.querySelector("#controls .v4s-bar");
+  assert.deepEqual(bar.querySelectorAll(".btn").map((b) => b.textContent), ["새로고침", "설치"]);
+  btn(bar, "새로고침").click();
+  assert.equal(s.log.at(-1), "loadAll");
+  const open = () => { const b = s.doc.querySelector(".v4s-filter-btn"); if (b.getAttribute("aria-expanded") !== "true") b.click(); return s.doc.querySelector(".v4s-pop"); };
+  let pop = open();
+  const group = (title) => pop.querySelectorAll(".v4s-pop-group").find((g) => g.querySelector("h4").textContent === title);
+  assert.deepEqual(pop.querySelectorAll("h4").map((x) => x.textContent), ["카테고리", "상태", "에이전트", "정렬"]);
+  assert.deepEqual(group("카테고리").querySelectorAll(".chip").map((c) => c.textContent), ["전체3", "개발2", "분류 안 됨1"]);
+  assert.deepEqual(group("상태").querySelectorAll(".chip").map((c) => c.textContent), ["전체", "빠진 곳 있음1", "안 씀2", "보안 주의1", "업데이트 있음1", "플러그인 스킬1", "휴지통1"]);
+  assert.equal(group("상태").querySelector(".chip.active").textContent, "전체");
+  btn(group("상태"), "휴지통").click();
   assert.deepEqual(s.log.at(-1), ["go", "skills", "trash"]);
-  sort.value = "name"; await sort.fire("change");
+  assert.equal(group("정렬").querySelector(".chip.active").textContent, "많이 쓴 순 ↓");
+  btn(group("정렬"), "이름 순").click();
   assert.equal(s.state.skillSort, "name");
   assert.equal(s.state.skillDir, 0);
-  model.value = "codex"; await model.fire("change");
+  btn(group("에이전트"), "Codex 쓰는 스킬").click();
   assert.equal(s.state.skillModel, "codex");
-  const dir = s.doc.querySelector("#controls .v4s-dir");
-  dir.click();
-  assert.equal(s.state.skillDir, -1);
-  const chips = s.doc.querySelectorAll("#chips .chip");
-  assert.deepEqual(chips.map((c) => c.textContent), ["전체3", "개발2", "운영0", "분류 안 됨1"]);
-  chips[1].click();
+  btn(group("카테고리"), "개발").click();
   assert.equal(s.state.skillCat, "dev");
+  // A re-render keeps the bubble open and counts what is set; the picked sort flips on a second pick.
+  s.v.renderSkills();
+  pop = s.doc.querySelector(".v4s-pop");
+  assert.ok(pop);
+  assert.match(s.doc.querySelector(".v4s-filter-btn").textContent, /필터2/);
+  btn(group("정렬"), "이름 순").click();
+  assert.equal(s.state.skillDir, -1);
   const rows = s.doc.querySelectorAll("#table .v4s-row");
   assert.equal(rows.length, 4);
   assert.match(rows[0].textContent, /개발첫 문장이다\./);
@@ -175,7 +191,9 @@ test("list: no usage yet, no categories, empty, search empty, failed first page 
   const s = await views({ skills: [SK("a")], wide: false });
   s.state.data.skillUse = null; s.state.versionsDone = false;
   s.v.renderSkills();
-  assert.match(s.doc.querySelector("#controls").textContent, /안 씀 …/);
+  s.doc.querySelector(".v4s-filter-btn").click();
+  assert.match(s.doc.querySelector(".v4s-pop").textContent, /안 씀…/);
+  assert.doesNotMatch(s.doc.querySelector(".v4s-pop").textContent, /카테고리/); // no categories: no empty group
   assert.match(s.doc.querySelector("#table").textContent, /…/);
   assert.equal(s.state.selected, null);
   assert.equal(s.doc.querySelector("#chips").children.length, 0);
@@ -184,7 +202,7 @@ test("list: no usage yet, no categories, empty, search empty, failed first page 
   s.snap.total = undefined;
   s.v.renderSkills();
   assert.match(s.doc.querySelector("#table").textContent, /안 씀/);
-  assert.deepEqual(s.doc.querySelectorAll("#chips .chip").map((c) => c.textContent), ["전체", "개발"]);
+  assert.deepEqual(s.doc.querySelectorAll(".v4s-pop .v4s-pop-group")[0].querySelectorAll(".chip").map((c) => c.textContent), ["전체", "개발"]); // older server: no number rather than 0
   // The empty text waits for a loaded page, so a filter change does not flash it.
   s.snap.items = []; s.v.renderSkills();
   assert.doesNotMatch(s.doc.querySelector("#table").textContent, /조건에 맞는 스킬이 없어요/);

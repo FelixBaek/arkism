@@ -1261,17 +1261,39 @@ export function startApp() {
       box.replaceChildren(state.promptRun ? button("이 프롬프트로 만들기", "primary", null, (e) => imageViews.runPrompt(e.currentTarget)) : button("프롬프트 추가", "primary", null, () => imageViews.openPromptEditor(null)));
     } else if (state.view === "design") {
       box.replaceChildren(button("Arkism 토큰", "ghost", null, () => go("tokens")), button("디자인 시스템 추가", "primary", null, () => designViews.openSystemEditor(null)));
-    } else if (state.view === "tools") {
-      box.replaceChildren(button("다시 읽기", "ghost", null, toolViews.refreshTools), state.toolTab === "plugin"
-        ? button("플러그인 찾기", "primary", null, () => { $(".v4s-search input")?.focus(); notice("이름이나 설명으로 찾아요. 새 플러그인은 Claude Code에서 /plugin 으로 설치해요."); })
-        : button("MCP 서버 추가", "primary", null, toolViews.openAddServer));
+    } else if (state.view === "tools" || state.view === "skills") {
+      box.replaceChildren(); // 새로고침 · 설치 sit in the list's own toolbar (barActions)
     } else if (state.view === "reviews") {
       box.replaceChildren(...reviews.head());
-    } else if (state.view === "skills") {
-      const install = button("GitHub에서 설치", "", null, () => skillViews.openSkillPage({ kind: "install" }));
-      refresh.classList.add("ghost");
-      box.replaceChildren(...(state.skillPage ? [] : [refresh, install]));
     } else box.replaceChildren(refresh);
+  }
+  // The end of the 스킬 · 플러그인 · MCP toolbar: reload, and 설치 — the one way in to every install flow.
+  function barActions(reload) {
+    return [button("새로고침", "", "arrows-clockwise", reload), button("설치", "", "plus", openInstall)];
+  }
+  // 설치: every way the app can add a skill, an MCP server or a plugin; the current tab's kind comes first.
+  function openInstall() {
+    const groups = [
+      ["skills", "스킬", [["GitHub에서 가져오기", "저장소 주소를 넣으면 스킬을 미리 보고 고른 곳에 설치해요.", () => { if (state.view !== "skills") go("skills"); skillViews.openSkillPage({ kind: "install" }); }],
+        ["AI에게 새 스킬 제안 받기", "최근 기억에서 반복한 요청을 찾아 스킬 초안을 홈의 할 일에 올려요.", analyze]]],
+      ["mcp", "MCP 서버", [["MCP 서버 추가", "실행할 프로그램이나 https 주소로 추가해요. 자주 쓰는 서버를 골라 채울 수도 있어요.", toolViews.openAddServer]]],
+      ["plugin", "플러그인", [["Claude Code에서 설치", "새 플러그인은 Claude Code에서 /plugin 으로 설치해요.", null]]]];
+    const first = state.view === "skills" ? "skills" : state.toolTab === "plugin" ? "plugin" : "mcp";
+    groups.sort((a, b) => (b[0] === first) - (a[0] === first));
+    const pop = window.ArkismCrewPopup({ el, button }).open({ title: "설치", tabs: [{ key: "pick", label: "설치", render: () => {} }], cls: "install-pop" });
+    const list = el("div", "install-list");
+    for (const [, title, ways] of groups) {
+      const sec = el("section", "install-group");
+      sec.append(el("h3", "", title));
+      for (const [label, text, run] of ways) {
+        const row = el(run ? "button" : "div", "install-way");
+        if (run) { row.type = "button"; row.addEventListener("click", () => { pop.dialog.close(); run(); }); }
+        row.append(el("strong", "", label), el("span", "", text));
+        sec.append(row);
+      }
+      list.append(sec);
+    }
+    pop.body.replaceChildren(list);
   }
   function go(view, tab) {
     state.view = view;
@@ -1702,6 +1724,8 @@ export function startApp() {
 
   const skillViews = createSkillViews({
     get $() { return $; },
+    get barActions() { return barActions; },
+    get loadAll() { return loadAll; },
     get agentLogo() { return agentLogo; },
     get agentName() { return agentName; },
     get agentNote() { return agentNote; },
@@ -1838,8 +1862,8 @@ export function startApp() {
     get renderStatusCard() { return renderStatusCard; },
     get request() { return appApi.request; },
     get shownAgents() { return shownAgents; },
-    get skSelect() { return skillViews.skSelect; },
-    get filterChip() { return skillViews.filterChip; },
+    get filterMenu() { return skillViews.filterMenu; },
+    get barActions() { return barActions; },
     get panelSearch() { return skillViews.panelSearch; },
     get keepFocus() { return skillViews.keepFocus; },
     get state() { return state; },
