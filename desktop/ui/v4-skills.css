@@ -50,8 +50,41 @@
 .v4s-search input::placeholder { color: var(--nc-quiet); }
 .v4s-search:focus-within { border-color: var(--nc-quiet); }
 .v4s-select { flex: none; height: 38px; max-width: 180px; padding: 0 28px 0 12px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
-.v4s-dir { flex: none; width: 30px; height: 38px; margin-left: -6px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-muted); font: 13px var(--mono); }
-.v4s-dir:hover { color: var(--nc-text); }
+.v4s-bar > .btn { flex: none; height: 38px; padding: 0 14px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+/* 필터 ⌄ and its speech-bubble popover (grouped pill chips; the picked one is accent text and border, no bar) */
+.v4s-filter { position: relative; flex: none; }
+.controls:has(.v4s-filter) { overflow: visible; } /* the toolbar wraps; a narrow window must not clip the bubble */
+.v4s-filter-btn { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.v4s-filter-btn:hover, .v4s-filter-btn[aria-expanded="true"] { color: var(--nc-text); border-color: var(--nc-quiet); }
+.v4s-filter-btn.on { color: var(--nc-accent); }
+.v4s-filter-btn output { font: 11px/1.5 var(--mono); }
+.v4s-filter-btn .icon { width: 12px; height: 12px; }
+.v4s-pop { position: absolute; top: calc(100% + 10px); right: 0; z-index: 30; width: min(480px, calc(100vw - 48px)); max-height: max(240px, calc(100vh - 400px)); overflow: auto; /* shortcut: room under a toolbar near the top; a toolbar lower down needs a top-layer popover */ display: flex; flex-direction: column; gap: 16px; padding: 16px; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: 12px; box-shadow: var(--shadow-popover); }
+.v4s-filter::after { content: ""; position: absolute; top: calc(100% + 5px); right: 28px; z-index: 31; width: 10px; height: 10px; background: var(--nc-surface); border-left: 1px solid var(--nc-line); border-top: 1px solid var(--nc-line); transform: rotate(45deg); display: none; }
+.v4s-filter:has(.v4s-pop)::after { display: block; }
+@media (max-width: 760px) { /* narrow: the bubble spans the toolbar instead of hanging off the button */
+  .v4s-bar { position: relative; }
+  .v4s-filter { position: static; }
+  .v4s-pop { left: 0; right: 0; width: auto; }
+  .v4s-filter:has(.v4s-pop)::after { display: none; }
+}
+.v4s-pop-group h4 { margin: 0 0 8px; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.v4s-pop-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.v4s-pop .chip { height: auto; padding: 5px 12px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.v4s-pop .chip:hover { color: var(--nc-text); border-color: var(--nc-quiet); }
+.v4s-pop .chip.active { background: none; border-color: var(--nc-accent); color: var(--nc-accent); font-weight: 500; }
+.v4s-pop .chip output { font: 11px/1.5 var(--mono); color: inherit; opacity: .7; }
+/* 설치: one chooser for every install flow */
+.install-pop { width: min(480px, calc(100vw - 32px)); }
+.install-pop .crew-popup-tabs { display: none; }
+.install-list { display: flex; flex-direction: column; gap: 18px; }
+.install-group { display: flex; flex-direction: column; gap: 6px; }
+.install-group h3 { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.install-way { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px 12px; text-align: left; background: none; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); color: var(--nc-text); }
+button.install-way:hover { border-color: var(--nc-quiet); background: var(--nc-raised); }
+.install-way strong { font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.install-way span { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+div.install-way { border-style: dashed; }
 
 /* 분류 chips */
 .skills-mode .chips.v4s-cats { gap: 4px; }

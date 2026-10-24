@@ -60,9 +60,9 @@ function setup({ handler, data = tools(), tauri = null } = {}) {
     headExtras: (x) => log.push(["head", x]),
     keepFocus: (sel) => { log.push(["keep", sel]); return () => log.push("restored"); },
     shownAgents: () => AGENTS.slice(0, 3),
-    skSelect: (label, opts, cur, on) => { const s = h.el("select", "sk"); s.label = label; s.opts = opts; s.pick = on; return s; },
     panelSearch: (ph) => { const w = h.el("div", "v4s-search"), i = h.el("input"); i.placeholder = ph; w.append(i); return w; },
-    filterChip: (label, count, active, on) => { const b = h.el("button", active ? "chip on" : "chip", `${label} ${count}`); b.addEventListener("click", on); return b; },
+    filterMenu: (key, groups) => Object.assign(h.el("div", "v4s-filter"), { key, groups }),
+    barActions: (reload) => [h.button("새로고침", "", null, reload), h.button("설치")],
     matches: () => true,
     detailShell: (t) => { const b = h.el("div", "detail"); b.heading = t; doc.body.append(b); return b; },
     ago: () => "방금", copyButton: (t, label) => { const b = h.el("button", "copy", label || "복사"); b.copyText = t; return b; },
@@ -157,11 +157,16 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   assert.match(dialogs(s).at(-1).textContent, /Codex · remote-broken/);
   dialogs(s).at(-1).close();
   // Agent filter: an agent the host does not read gets a note; an unknown one resets.
-  const sel = s.doc.querySelectorAll("#controls select").find((x) => x.label === "에이전트");
-  assert.deepEqual(sel.opts.map((o) => o[1]), ["모든 에이전트", "Claude Code 3", "Codex 2", "Gemini 0"]);
-  sel.pick("gemini");
+  const menu = s.doc.querySelector("#controls .v4s-filter");
+  assert.equal(menu.key, "mcp");
+  assert.deepEqual(menu.groups.map((g) => g.title), ["카테고리", "상태", "에이전트"]);
+  assert.deepEqual(menu.groups[2].chips.map((c) => `${c[0]} ${c[1]}`.trim()), ["모든 에이전트", "Claude Code 3", "Codex 2", "Gemini 0"]);
+  assert.equal(menu.groups[1].chips.find((c) => c[2])[0], "전체");
+  assert.deepEqual(s.doc.querySelectorAll("#controls .btn").map((b) => b.textContent), ["새로고침", "설치"]);
+  menu.groups[2].chips[3][3]();
   assert.equal(s.state.toolAgent, "gemini");
   s.v.renderTools();
+  assert.equal(s.doc.querySelector("#controls .v4s-filter").groups[2].set, true);
   assert.match(s.doc.querySelector("#chips").textContent, /Gemini의 MCP 설정은 아직 읽지 않아요/);
   assert.match(s.doc.querySelector("#table").textContent, /여기에 표시할 항목이 없어요/);
   s.state.toolAgent = "hermes"; s.v.renderTools();
@@ -170,6 +175,7 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   s.state.toolTab = "plugin"; s.state.selected = null; s.v.renderTools();
   const prow = s.doc.querySelectorAll("#table .cn-row");
   assert.equal(prow.length, 2);
+  assert.equal(s.doc.querySelector("#controls .v4s-filter").key, "plugin");
   assert.match(prow[0].textContent, /v1\.2/);
   assert.match(prow[0].textContent, /스킬 1 · MCP 1 · hook 1/);
   assert.equal(s.state.selected, null);

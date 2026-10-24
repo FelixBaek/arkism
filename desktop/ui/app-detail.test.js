@@ -401,6 +401,38 @@ test("TOOLS › MCP lists full width and opens a server in the popup; leaving th
   await home();
 });
 
+test("스킬 필터 bubble stays open across a pick and closes on Esc or an outside click", async () => {
+  deps.ArkismHome.go("skills"); await app.settle(1000);
+  const open = () => app.click(app.$("#controls .v4s-filter-btn"), 100);
+  await open();
+  assert.ok(app.$(".v4s-pop"));
+  await app.click([...app.document.querySelectorAll(".v4s-pop .chip")].find((c) => /이름 순/.test(c.textContent)), 300);
+  assert.ok(app.$(".v4s-pop"), "a pick re-renders with the bubble still open");
+  assert.ok([...app.document.querySelectorAll(".v4s-pop .chip.active")].some((c) => /이름 순 ↑/.test(c.textContent)));
+  key("Escape"); await app.settle(50);
+  assert.equal(app.$(".v4s-pop"), null);
+  await open();
+  app.$("#table").dispatchEvent(new app.window.Event("pointerdown", { bubbles: true })); await app.settle(50);
+  assert.equal(app.$(".v4s-pop"), null);
+  await home();
+});
+
+test("설치 in the TOOLS toolbar lists every install flow, the tab's kind first, and runs the picked one", async () => {
+  deps.ArkismHome.go("tools"); await app.settle(1000);
+  assert.equal(app.$("#head-actions").children.length, 0); // 새로고침 · 설치 moved into the list toolbar
+  await app.click(byText("#controls .v4s-bar .btn", /설치/), 200);
+  const pop = app.$("dialog.install-pop[open]");
+  assert.deepEqual([...pop.querySelectorAll(".install-group h3")].map((h) => h.textContent), ["MCP 서버", "스킬", "플러그인"]);
+  assert.equal(pop.querySelectorAll("button.install-way").length, 3); // the plugin way is a note: it installs in Claude Code
+  await app.click([...pop.querySelectorAll("button.install-way")].find((b) => /MCP 서버 추가/.test(b.textContent)), 200);
+  assert.equal(app.$("dialog.install-pop"), null);
+  const add = [...app.document.querySelectorAll("dialog[open]")].at(-1);
+  assert.match(add.textContent, /MCP 서버 추가/);
+  add.close();
+  await app.settle(100);
+  await home();
+});
+
 test("a failed load shows the retry notice, and 다시 시도 loads again", async () => {
   await home();
   hook = (a) => (a.method === "GET" && /^\/v1\/(memories|skills)(\?|$)/.test(a.path) ? json(503, { error: "unavailable" }) : null);

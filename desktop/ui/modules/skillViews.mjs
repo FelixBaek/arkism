@@ -177,14 +177,6 @@ export function createSkillViews(deps) {
     return box;
   }
 
-  function skSelect(label, options, current, onPick) {
-    const s = deps.el("select", "v4s-select");
-    s.setAttribute("aria-label", label);
-    for (const [k, l] of options) { const o = deps.el("option", "", l); o.value = k; o.selected = k === current; s.append(o); }
-    s.addEventListener("change", () => onPick(s.value));
-    return s;
-  }
-
   function panelSearch(placeholder) {
     const box = deps.el("label", "v4s-search");
     const input = deps.el("input"); input.type = "search"; input.placeholder = placeholder; input.value = deps.$("#search").value; input.setAttribute("aria-label", placeholder);
@@ -196,9 +188,61 @@ export function createSkillViews(deps) {
   // 분류 chip (전체 · a category) with its count; 도구 › 플러그인·MCP use the same one.
   function filterChip(label, count, active, onPick) {
     const c = deps.el("button", `chip${active ? " active" : ""}`); c.type = "button";
-    c.append(label, deps.el("output", "", String(count)));
+    c.append(label);
+    if (count !== "") c.append(deps.el("output", "", String(count)));
     c.addEventListener("click", onPick);
     return c;
+  }
+
+  // 필터 ⌄ (Figma 말풍선): grouped pill chips in a bubble under the button. A pick re-renders the list and the bubble
+  // stays open for the same key; an outside click or Esc closes it. groups: [{ title, set, chips: [[label, count, active, onPick]] }].
+  let filterOpen = "";
+  function closeFilter() {
+    filterOpen = "";
+    document.querySelectorAll(".v4s-filter").forEach((w) => { w.querySelector(".v4s-pop")?.remove(); w.querySelector(".v4s-filter-btn").setAttribute("aria-expanded", "false"); });
+  }
+  let filterWired = false;
+  function filterMenu(key, groups) {
+    if (!filterWired) {
+      filterWired = true;
+      document.addEventListener("pointerdown", (e) => { if (filterOpen && !e.target.closest?.(".v4s-filter")) closeFilter(); }, true);
+      document.addEventListener("keydown", (e) => { if (filterOpen && e.key === "Escape") { closeFilter(); document.querySelector(".v4s-filter > button")?.focus(); } });
+    }
+    const wrap = deps.el("div", "v4s-filter");
+    const n = groups.filter((g) => g.set).length;
+    const btn = deps.el("button", `v4s-filter-btn${n ? " on" : ""}`, "필터"); btn.type = "button";
+    btn.setAttribute("aria-haspopup", "dialog");
+    if (n) btn.append(deps.el("output", "", String(n)));
+    btn.append(deps.icon("caret-down"));
+    const focused = [...document.querySelectorAll(".v4s-pop .chip")].indexOf(document.activeElement);
+    const pop = () => {
+      const box = deps.el("div", "v4s-pop"); box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "필터");
+      for (const g of groups) {
+        const chips = g.chips.filter(([, count, active]) => active || count !== 0).map(([label, count, active, onPick]) => filterChip(label, count, active, onPick));
+        if (!chips.length) continue;
+        const sec = deps.el("section", "v4s-pop-group");
+        const row = deps.el("div", "v4s-pop-chips"); row.append(...chips);
+        sec.append(deps.el("h4", "", g.title), row);
+        box.append(sec);
+      }
+      return box;
+    };
+    const open = filterOpen === key;
+    btn.setAttribute("aria-expanded", String(open));
+    wrap.append(btn);
+    if (open) {
+      const box = pop();
+      wrap.append(box);
+      if (focused >= 0) queueMicrotask(() => box.querySelectorAll(".chip")[focused]?.focus({ preventScroll: true }));
+    }
+    btn.addEventListener("click", () => {
+      if (filterOpen === key) { closeFilter(); return; }
+      closeFilter();
+      filterOpen = key;
+      btn.setAttribute("aria-expanded", "true");
+      wrap.append(pop());
+    });
+    return wrap;
   }
 
   function keepFocus(sel) {
@@ -259,25 +303,28 @@ export function createSkillViews(deps) {
       card.append(text, deps.button("하나씩 확인하기", "primary", null, () => deps.go("skills", todo[0][0])));
       parts.push(card);
     }
-    const bar = deps.el("div", "v4s-bar");
-    const states = SKILL_STATES.map(([k, l]) => [k, `상태: ${l}${k === "all" ? "" : ` ${n[k] ?? "…"}`}`]);
     const modelKeys = deps.shownAgents().map(([k]) => k);
     if (deps.state.skillModel && !modelKeys.includes(deps.state.skillModel.replace("!", ""))) deps.state.skillModel = "";
-    const models = [["", "모든 에이전트"], ...modelKeys.flatMap((k) => [[k, `${deps.agentName(k)} 쓰는 스킬 ${live.filter((sk) => allowed(sk, k)).length}`], [`!${k}`, `${deps.agentName(k)} 못 쓰는 스킬 ${live.filter((sk) => !allowed(sk, k)).length}`]])];
-    const dir = deps.el("button", "v4s-dir", skillDir() > 0 ? "↑" : "↓"); dir.type = "button"; dir.title = "정렬 방향 바꾸기"; dir.setAttribute("aria-label", dir.title);
-    dir.addEventListener("click", () => pickSkillSort(deps.state.skillSort));
-    bar.append(panelSearch("스킬 검색"), skSelect("상태", states, deps.state.skillTab, (k) => deps.go("skills", k)), skSelect("정렬", SKILL_SORTS, deps.state.skillSort, pickSkillSort), dir,
-      skSelect("에이전트", models, deps.state.skillModel, (k) => { deps.state.skillModel = k; deps.render(false); }));
-    deps.$("#controls").replaceChildren(...parts, bar);
-    // 분류 chips: 전체 + the owner's categories (설정 › 카테고리).
+    const pickModel = (k) => () => { deps.state.skillModel = k; deps.render(false); };
+    const models = [["모든 에이전트", "", deps.state.skillModel === "", pickModel("")], ...modelKeys.flatMap((k) => [[`${deps.agentName(k)} 쓰는 스킬`, live.filter((sk) => allowed(sk, k)).length, deps.state.skillModel === k, pickModel(k)], [`${deps.agentName(k)} 못 쓰는 스킬`, live.filter((sk) => !allowed(sk, k)).length, deps.state.skillModel === `!${k}`, pickModel(`!${k}`)]])];
+    // 분류: 전체 + the owner's categories (설정 › 카테고리). An older server sends no category facets: no number rather than 0.
     const cats = deps.pages.prefs.categories;
-    const chip = (id, label, count) => filterChip(label, count, deps.state.skillCat === id, () => { deps.state.skillCat = id; deps.state.skillLimit = 0; deps.render(false); });
-    // An older server sends no category facets: 전체 shows the total, the categories no number rather than 0.
+    const pickCat = (id) => () => { deps.state.skillCat = id; deps.state.skillLimit = 0; deps.render(false); };
     const counts = catalogState.facets.categories, total = counts ? Object.values(counts).reduce((a,b) => a+b,0) : catalogState.total ?? "";
     const none = counts?.[""] || 0;
-    deps.$("#chips").replaceChildren(...(cats.length ? [chip("all", "전체", total), ...cats.map((c) => chip(c.id, c.name, counts ? counts[c.id] || 0 : "")), ...(none ? [chip("none", "분류 안 됨", none)] : [])] : []));
-    deps.$("#chips").classList.add("v4s-cats");
-    deps.$("#stats").replaceChildren(deps.el("p", "meta memory-page-note", failed ? "" : catalogState.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : catalogState.loading || catalogState.stale ? "전체 목록에서 찾는 중…" : ""));
+    const catChips = cats.length ? [["전체", total, deps.state.skillCat === "all", pickCat("all")], ...cats.map((c) => [c.name, counts ? counts[c.id] || 0 : "", deps.state.skillCat === c.id, pickCat(c.id)]), ...(none ? [["분류 안 됨", none, deps.state.skillCat === "none", pickCat("none")]] : [])] : [];
+    // 정렬: the picked one shows its direction; picking it again flips it.
+    const sorts = SKILL_SORTS.map(([k, l]) => [k === deps.state.skillSort ? `${l} ${skillDir() > 0 ? "↑" : "↓"}` : l, "", k === deps.state.skillSort, () => pickSkillSort(k)]);
+    const bar = deps.el("div", "v4s-bar");
+    bar.append(panelSearch("스킬 검색"), filterMenu("skills", [
+      { title: "카테고리", set: deps.state.skillCat !== "all", chips: catChips },
+      { title: "상태", set: deps.state.skillTab !== "all", chips: SKILL_STATES.map(([k, l]) => [l, k === "all" ? "" : n[k] ?? "…", deps.state.skillTab === k, () => deps.go("skills", k)]) },
+      { title: "에이전트", set: !!deps.state.skillModel, chips: models },
+      { title: "정렬", chips: sorts }]), ...deps.barActions(deps.loadAll));
+    deps.$("#controls").replaceChildren(...parts, bar);
+    deps.$("#chips").replaceChildren();
+    const statNote = failed ? "" : catalogState.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : catalogState.loading || catalogState.stale ? "전체 목록에서 찾는 중…" : "";
+    deps.$("#stats").replaceChildren(...(statNote ? [deps.el("p", "meta memory-page-note", statNote)] : [])); // empty: no gap under the toolbar
     const items = skills;
     const groups = groupSkills(items, true);
     const limit = deps.state.skillLimit || 50;
@@ -598,8 +645,8 @@ export function createSkillViews(deps) {
     get skillChecks() { return skillChecks; },
     get skillDetailV4() { return skillDetailV4; },
     get skillPageDetail() { return skillPageDetail; },
-    get skSelect() { return skSelect; },
     get filterChip() { return filterChip; },
+    get filterMenu() { return filterMenu; },
     get panelSearch() { return panelSearch; },
     get keepFocus() { return keepFocus; },
     get stage() { return stage; }
