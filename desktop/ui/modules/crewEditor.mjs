@@ -54,12 +54,20 @@ export function createCrewEditor(deps) {
         // A newly set schedule or webhook starts on; one that was already there keeps its on/off.
         if (tr.kind) { crew.trigger = tr.kind === "schedule" ? { kind: "schedule", cron: tr.cron.trim() } : { kind: "webhook", label: tr.label.trim() }; crew.enabled = ed.rec.crew.trigger ? !!ed.rec.crew.enabled : true; } else { delete crew.trigger; crew.enabled = false; }
       }
+      const sent = snap();
       const saved = await deps.save(ed.rec, crew);
-      ed.trigger = undefined;
-      ed.dirty = false;
-      // Older steps hold trigger drafts relative to the trigger just saved, so undo starts over from here.
-      const now = snap();
-      Object.assign(hist, { past: [], future: [], base: now, saved: now, at: 0 });
+      if (snap() === sent) {
+        ed.trigger = undefined;
+        ed.dirty = false;
+        // Older steps hold trigger drafts relative to the trigger just saved, so undo starts over from here.
+        const now = snap();
+        Object.assign(hist, { past: [], future: [], base: now, saved: now, at: 0 });
+      } else {
+        const now = snap();
+        // Edits made while the save was pending are not saved yet; undo can still step back to what was.
+        Object.assign(hist, { past: [sent], future: [], base: now, saved: sent, at: 0 });
+        markDirty();
+      }
       await deps.reload();
       ed.rec = deps.byId(saved.id) || saved;
       deps.state.view = "graph";

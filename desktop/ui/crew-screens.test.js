@@ -203,6 +203,25 @@ test("undo and redo step through canvas edits; Ctrl+Z inside a field stays with 
   assert.deepEqual(clean(), []);
 });
 
+test("an edit made while a save is pending stays unsaved", async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const h = await openGraph("wf1", { routes: [["POST", /^\/v1\/crew\/wf1$/, async (m, url, body) => { await gate; return { id: "wf1", revision: 9, crew: body.crew }; }]] });
+  const saveB = () => document.querySelector(".page-head .g-save");
+  node("ai1").click(); await h.settle();
+  dom.key(document, "Delete"); await h.settle();
+  saveB().click(); await h.settle();
+  node("once").click(); await h.settle();
+  dom.key(document, "Delete"); await h.settle();
+  release(); await h.settle();
+  assert.equal(node("once"), null);
+  assert.ok(!saveB().disabled, "the edit after the request went out still needs saving");
+  dom.key(document, "z", { ctrlKey: true }); await h.settle();
+  assert.ok(node("once") && !node("ai1"), "undo steps back to what was saved");
+  assert.ok(saveB().disabled, "back at the saved state there is nothing to save");
+  assert.deepEqual(clean(), []);
+});
+
 test("inline card edits change cron, model and text values", async () => {
   const h = await boot();
   h.data.crew[0].crew.graph.nodes.push({ id: "sch", type: "schedule", title: "", x: 0, y: 300, config: { cron: "0 9 * * 1-5" } });
