@@ -37,6 +37,7 @@ fs.mkdirSync(output,{recursive:true});
       const NativeDate=Date;
       window.Date=class extends NativeDate {constructor(...args){super(...(args.length?args:["2026-10-21T12:00:00Z"]))}static now(){return new NativeDate("2026-10-21T12:00:00Z").getTime()}};
       localStorage.setItem("arkism.look",JSON.stringify({theme:"dark",lang:"ko"}));
+      window.open=()=>null; // popups stay on this page to be checked (popup-drag.browser.cjs covers 새 창)
       window.__TAURI__={event:{listen:async()=>()=>{}},core:{async invoke(cmd,args={}){
         if(cmd==="app_defaults")return {local:true,updates:false};
         if(cmd==="local_start")return {server:"http://127.0.0.1:8091",token:"inert-browser-fixture"};

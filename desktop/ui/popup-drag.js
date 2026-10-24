@@ -49,12 +49,12 @@
       void tauri()?.invoke("popout_destroy", { label }).catch(() => kid.w.close());
     }));
   }
-  function tearOff(dlg, x, y) {
+  function tearOff(dlg, x, y, quiet) {
     if (!dlg.dataset.popout || !tauri() || dlg.classList.contains("popout-root")) return false;
     const r = dlg.getBoundingClientRect(), label = `popout-${++seq}`;
     const title = encodeURIComponent(dlg.dataset.popoutTitle || "");
     const w = window.open(`about:blank#${label}|${title}`, label, `popup,left=${Math.round(x)},top=${Math.round(y)},width=${Math.round(r.width)},height=${Math.round(r.height)}`);
-    if (!w) { window.ArkismNotice?.("새 창으로 열지 못했어요."); return false; }
+    if (!w) { if (!quiet) window.ArkismNotice?.("새 창으로 열지 못했어요."); return false; }
     const kid = { w, root: null, label };
     kids.set(label, kid);
     place(kid, dlg);
@@ -101,7 +101,7 @@
       }
       if (!(n instanceof HTMLDialogElement) || !n.open || !n.dataset.popout || n.classList.contains("popping") || n.ownerDocument !== document) continue;
       n.classList.add("popping");
-      requestAnimationFrame(() => { const r = n.getBoundingClientRect(); if (n.ownerDocument === document && !tearOff(n, window.screenX + r.left, window.screenY + r.top)) n.classList.remove("popping"); });
+      requestAnimationFrame(() => { const r = n.getBoundingClientRect(); if (n.ownerDocument === document && !tearOff(n, window.screenX + r.left, window.screenY + r.top, true)) n.classList.remove("popping"); }); // no window: it just opens here
     }
   }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["open", "data-popout"] });
 

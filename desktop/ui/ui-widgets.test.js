@@ -336,7 +336,7 @@ test("a popup drags by its head, stays on screen, moves into its own window outs
   await flush(); await timers.tick(20);
   assert.equal(pd.ownerDocument, document);
   assert.equal(pd.classList.contains("popping"), false);
-  assert.match(notices.at(-1), /새 창으로 열지 못했어요/);
+  assert.equal(notices.at(-1), "안내만", "opening quietly falls back to the app");
   fire(hd, "pointerdown", { button: 2 });
   fire($("#hb"), "pointerdown", { button: 0 }); // a button in the head is not a grip
   assert.equal(pd.classList.contains("dragging"), false);
