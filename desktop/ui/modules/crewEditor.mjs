@@ -540,9 +540,11 @@ export function createCrewEditor(deps) {
       if (ed.sel || ed.selEdge !== null) selectOnCanvas(null);
     });
     // 화면 이동: 휠 클릭(가운데 버튼)으로 끌거나 스페이스를 누른 채 끌어요 (Figma와 같아요).
+    // Panels laid over the canvas (node picker, toolbar, legend) keep their own wheel and drag: the list must scroll, not zoom.
+    const onCanvas = (t) => t === stage || canvas.contains(t);
     // Capture phase, so a node under the pointer does not start its own drag.
     stage.addEventListener("pointerdown", (ev) => {
-      if (!(ev.button === 1 || (ev.button === 0 && deps.spaceDown))) return;
+      if (!onCanvas(ev.target) || !(ev.button === 1 || (ev.button === 0 && deps.spaceDown))) return;
       ev.preventDefault();
       ev.stopPropagation();
       const sx = ev.clientX, sy = ev.clientY, px = ed.panX, py = ed.panY;
@@ -569,11 +571,12 @@ export function createCrewEditor(deps) {
     }, true);
     // A middle click would otherwise show the browser's auto-scroll or open a link.
     // and a space-drag would select text or start a native drag that cancels the pointer.
-    stage.addEventListener("mousedown", (ev) => { if (ev.button === 1 || (ev.button === 0 && deps.spaceDown)) ev.preventDefault(); }, true);
+    stage.addEventListener("mousedown", (ev) => { if (onCanvas(ev.target) && (ev.button === 1 || (ev.button === 0 && deps.spaceDown))) ev.preventDefault(); }, true);
     stage.addEventListener("auxclick", (ev) => { if (ev.button === 1) ev.preventDefault(); });
     stage.classList.toggle("space", deps.spaceDown);
     stage.addEventListener("wheel", (ev) => {
       // 휠 = 마우스 자리를 기준으로 확대·축소; 가로 휠(트랙패드)·Shift+휠은 화면 이동.
+      if (!onCanvas(ev.target)) return;
       ev.preventDefault();
       if (ev.shiftKey || Math.abs(ev.deltaX) > Math.abs(ev.deltaY)) { ed.panX -= ev.deltaX || ev.deltaY; ed.panY -= ev.shiftKey ? 0 : ev.deltaY; }
       else {
