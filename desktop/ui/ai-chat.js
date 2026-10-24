@@ -210,7 +210,14 @@ window.ArkismAIChat = (() => {
     star.append(icon("sparkle"));
     const note = el("div", "ex-ai-note");
     note.setAttribute("role", "status");
-    root.append(inp, star, note);
+    // After a fill the box shows what changed in place (added / removed); a click goes back to editing the new text.
+    const diff = el("div", "ex-ai-diff");
+    diff.tabIndex = 0;
+    diff.title = tr("눌러서 고치기");
+    const edit = () => { if (st.note) st.note.diff = false; show(); inp.focus(); };
+    diff.addEventListener("click", edit);
+    diff.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); edit(); } });
+    root.append(inp, diff, star, note);
     inp.addEventListener("input", (e) => { if (e.isTrusted && !st.writing && st.note) { st.note = null; show(); } }); // the user typed on: the old note (and its undo) is stale
     const write = (v) => {
       const i = st.input;
@@ -238,11 +245,11 @@ window.ArkismAIChat = (() => {
         const j = kit.parseJSON(a.output || "");
         if (!j || typeof j.value !== "string") throw new Error(tr("AI의 답을 읽지 못했어요. 다시 해 보세요."));
         let v = j.value.trim();
-        if (st.input?.tagName === "INPUT") v = v.split("\n").map((x) => x.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim()).find(Boolean) || ""; // one line for a one-line box
+        if (st.input?.tagName === "INPUT" || opts.oneLine) v = v.split("\n").map((x) => x.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").trim()).find(Boolean) || ""; // one line for a one-line box
         const max = st.input?.maxLength > 0 ? st.input.maxLength : 20000;
         v = v.slice(0, max);
         if (!v || v === cur) st.note = { text: tr("더 고칠 곳이 없어요.") };
-        else { write(v); st.note = { text: tr("AI가 채웠어요 · 저장하면 반영돼요"), undo: cur }; }
+        else { write(v); st.note = { text: tr("AI가 고쳤어요 · 초록은 더한 곳, 빨강은 뺀 곳 · 저장하면 반영돼요"), undo: cur, diff: true }; }
       } catch (e) { st.note = { text: e?.message || tr("AI가 답하지 못했어요."), err: true }; }
       finally { st.busy = false; show(); }
     }
@@ -255,11 +262,16 @@ window.ArkismAIChat = (() => {
       star.setAttribute("aria-busy", String(!!st.busy));
       star.title = tr(st.busy ? "AI가 쓰는 중이에요…" : "AI로 채우기");
       const n = st.note;
+      const viewing = !!n?.diff && !st.busy;
+      inp.style.display = viewing ? "none" : "";
+      diff.hidden = !viewing;
+      diff.replaceChildren(...(viewing ? window.ArkismTextDiff(n.undo, inp.value).map(([op, t]) => op === "=" ? document.createTextNode(t) : el(op === "-" ? "del" : "ins", "", t)) : []));
       note.replaceChildren();
       note.className = `ex-ai-note${n?.err ? " err" : ""}`;
       note.hidden = !n;
       if (!n) return;
       note.append(el("span", "", n.text));
+      if (n.diff) note.append(btn("고치기", "ghost small", edit));
       if (n.undo !== undefined) note.append(btn("되돌리기", "ghost small", () => { write(n.undo); st.note = null; show(); }));
     }
     st.show = show; // this copy is the one going on screen (as mount() sets st.paint)
