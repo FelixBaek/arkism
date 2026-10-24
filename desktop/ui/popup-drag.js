@@ -60,7 +60,11 @@
     place(kid, dlg);
     // The window may swap its first blank page for a fresh one while it is being built: move the popup again if so.
     let n = 0;
-    const again = setInterval(() => { if (++n > 60 || !docOf(w) || kids.get(label) !== kid || !kid.root?.open) return clearInterval(again); place(kid, kid.root || dlg); }, 50);
+    const again = setInterval(() => {
+      // a window whose page never got ready leaves the popup here: show it again instead of keeping it hidden
+      if (++n > 60 || kids.get(label) !== kid || !(kid.root || dlg).open) { if (!kid.root) dlg.classList.remove("popping"); return clearInterval(again); }
+      if (docOf(w)) place(kid, kid.root || dlg);
+    }, 50);
     const d = docOf(w);
     if (d) {
       d.title = dlg.dataset.popoutTitle ? `${dlg.dataset.popoutTitle} · Arkism` : "Arkism";

@@ -464,10 +464,11 @@ window.ArkismAutomation = (h) => {
       const s = section("clock-counter-clockwise", "언제 실행", add);
       s.querySelector(".auto-sec-head").classList.add("auto-chiprow");
       function triggerMenu() {
-        const old = document.querySelector(".auto-menu");
+        const doc = s.ownerDocument; // the popup may live in its own window (popup-drag.js)
+        const old = doc.querySelector(".auto-menu");
         if (old) { old.remove(); return; }
         const m = el("div", "auto-menu right");
-        const close = () => { m.remove(); document.removeEventListener("click", away, true); };
+        const close = () => { m.remove(); doc.removeEventListener("click", away, true); };
         const away = (e) => { if (!m.contains(e.target) && e.target !== add) close(); };
         const item = (label, sub, fn, cls = "") => { const b = el("button", cls); b.type = "button"; b.append(el("span", "", label), el("small", "", sub)); b.addEventListener("click", () => { close(); fn(); }); m.append(b); };
         const name = (k) => (k === "schedule" ? "일정" : "웹훅");
@@ -480,7 +481,7 @@ window.ArkismAutomation = (h) => {
         item("웹훅", on("webhook") ? "켜져 있어요" : "주소로 요청이 오면 시작", () => turn("webhook", "schedule"), on("webhook") ? "on" : "");
         item("이벤트", "GitHub·메일·폴더 · 준비 중", () => notice("이벤트로 시작하기는 아직 준비 중이에요. 웹훅으로 받을 수 있어요."), "soon");
         s.querySelector(".auto-sec-head").append(m);
-        setTimeout(() => document.addEventListener("click", away, true));
+        setTimeout(() => doc.addEventListener("click", away, true));
       }
       const list = el("div", "auto-box");
       const trig = () => d.trigger?.kind;
@@ -712,12 +713,13 @@ window.ArkismAutomation = (h) => {
               const edit2 = el("div", "auto-goal-edit");
               edit2.append(goalAI(n, ta));
               let done = false;
+              const doc = t.ownerDocument;
               const away = (e) => { if (!edit2.contains(e.target)) end(true); };
-              const end = (c) => { if (done) return; done = true; document.removeEventListener("pointerdown", away, true); if (c) { n.config[gk] = ta.value; touch(); } edit2.replaceWith(t); paintG(); };
+              const end = (c) => { if (done) return; done = true; doc.removeEventListener("pointerdown", away, true); if (c) { n.config[gk] = ta.value; touch(); } edit2.replaceWith(t); paintG(); };
               // leaving the box ends the edit; the AI bubble and the variable chips are inside it, and a bubble
               // redraw drops focus to the page without the person leaving (so no plain blur here)
               edit2.addEventListener("focusout", (e) => { if (e.relatedTarget && !edit2.contains(e.relatedTarget)) end(true); });
-              document.addEventListener("pointerdown", away, true);
+              doc.addEventListener("pointerdown", away, true);
               ta.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); end(false); } });
               t.replaceWith(edit2);
               ta.focus();
@@ -1146,7 +1148,7 @@ window.ArkismAutomation = (h) => {
       { key: "test", label: "테스트", render: (b) => { b.className = "dialog-body crew-popup-body"; testTab(b); } },
       { key: "history", label: "기록", render: (b) => { b.className = "dialog-body crew-popup-body"; historyTab(b); } }
     ];
-    pop = popup.open({ title: d.name, sub: "", tabs, initial: startTab, cls: `v4-auto${creating ? " v4-auto-new" : ""}`, popout: creating ? null : { event: "arkism:open-automation", detail: { id: rec.id } }, onClose: () => { stopLive(); document.querySelector(".auto-menu")?.remove(); state.selected = null; h.afterClose(); } });
+    pop = popup.open({ title: d.name, sub: "", tabs, initial: startTab, cls: `v4-auto${creating ? " v4-auto-new" : ""}`, popout: creating ? null : { event: "arkism:open-automation", detail: { id: rec.id } }, onClose: () => { stopLive(); pop.dialog.querySelector(".auto-menu")?.remove(); state.selected = null; h.afterClose(); } });
     // closing with unsaved changes asks first (Esc and 닫기); saving closes with dialog.close(), which skips this
     // then: what to open once it is closed (템플릿·설정으로 만들기)
     const guard = (e, then) => {
