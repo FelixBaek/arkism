@@ -50,7 +50,6 @@ async function boot(opts = {}) {
       calls.push([cmd, a]);
       inflight++;
       try {
-        if (cmd === "git_op") { const r = await realFetch(origin + "/v1/git/" + a.request.action); return { authority: "data_only_untrusted", ...(await r.json()) }; }
         if (cmd === "api") {
           apiCalls.push([a.method, a.path, a.body]);
           if (env.window.apiOverride) { const o = await env.window.apiOverride(a); if (o) return o; }

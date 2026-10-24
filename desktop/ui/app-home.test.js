@@ -719,7 +719,6 @@ test("home: menu rows count crew runs, routing and knowledge; a stalled pipeline
     route("GET", "/v1/routing/overview", () => ok({ kpi: { cost_usd: 12, budget_usd: 40 }, models: [{ name: "Sol", status: "slow" }, { name: "Astra", status: "watch" }, { name: "Jev", status: "ok" }] })),
     route("GET", "/v1/wiki/pages", () => ok({ items: [{ review_state: "draft" }, { review_state: "approved", stale_sources: ["a"] }, { review_state: "deleted" }] })),
     route("GET", "/v1/knowledge/sources", () => ok({ items: [{ lifecycle_status: "draft" }, { lifecycle_status: "ready", trust_level: "reviewed" }, { lifecycle_status: "failed" }] })),
-    route("GET", "/v1/code_graph/repos", () => ok({ repos: [{ repo: "acme/arkism", indexed_at: ago(50) }, { repo: "acme/new", indexed_at: ago(1) }] })),
     route("GET", "/v1/usage/sessions", () => ok({ authority: "data_only_untrusted", items: [{ id: "u1", ended_at: ago(70) }, { id: "u2", ended_at: ago(1) }], next_cursor: "" }))
   ];
   await home();
@@ -736,14 +735,13 @@ test("home: menu rows count crew runs, routing and knowledge; a stalled pipeline
   assert.match(body, /검토 대기 자료 1/);
   assert.match(body, /처리 흐름 보기/);
   assert.match(body, /기억 추출이 \d+일째 멈췄어요/);
-  assert.match(body, /arkism 색인/);
   // the minute timer reads the sessions again while the home is shown
   const before = app.apiCalls.filter(([, p]) => p.startsWith("/v1/usage/sessions")).length;
   await app.settle(61000);
   assert.ok(app.apiCalls.filter(([, p]) => p.startsWith("/v1/usage/sessions")).length > before);
   offs.forEach((off) => off());
   // a routing overview without kpi and failing reads hide those rows
-  const offs2 = [route("GET", "/v1/routing/overview", () => ok({})), route("GET", "/v1/crew/runs", () => fail(500, "boom")), route("GET", "/v1/wiki/pages", () => fail(500, "boom")), route("GET", "/v1/code_graph/repos", () => fail(500, "boom"))];
+  const offs2 = [route("GET", "/v1/routing/overview", () => ok({})), route("GET", "/v1/crew/runs", () => fail(500, "boom")), route("GET", "/v1/wiki/pages", () => fail(500, "boom"))];
   app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(100);
   await home(); await app.settle(100);
   assert.ok(!/이번 달 예산/.test(text(app.$("#table"))));

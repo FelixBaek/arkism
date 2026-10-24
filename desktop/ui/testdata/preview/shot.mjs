@@ -1,5 +1,5 @@
 // node shot.mjs <url> <out.png> [menu] [tabIndex] [theme]
-// UILANG=en: English UI. REMOTE=1 opens it as a server connection (Git screen: git_op answers from v1/git/<action>.json).
+// UILANG=en: English UI. REMOTE=1 opens it as a server connection.
 // playwright-core comes from any local checkout that has it installed (PLAYWRIGHT_FROM, default the current folder). — opens the preview, logs in with the proxy token, clicks a menu/tab, screenshots.
 import { createRequire } from "module";
 const require = createRequire((process.env.PLAYWRIGHT_FROM || process.cwd()) + "/");
@@ -18,7 +18,6 @@ await p.addInitScript(([origin, theme, remote, gw, lang, winbar]) => { // GWTOKE
   window.__TAURI__ = { core: { invoke: async (cmd, a = {}) => {
     if (cmd === "app_defaults") return { local: !remote };
     if (cmd === "ssh_connect") return { server: origin, token: "preview", workspace_id: "default", project_id: "default", ssh_host: "my-server" };
-    if (cmd === "git_op") { const r = await fetch(origin + "/v1/git/" + a.request.action); return { authority: "data_only_untrusted", ...(await r.json()) }; }
     if (cmd === "local_start") return { server: origin, token: "preview" };
     // settings pages (router worker): sample answers so 역할별 모델·고급 draw like the design mockups
     const fake = { model_roles: { embedder: "auto", embed_model: "qwen3-embedding:0.6b", judge: "fixed", extract_model: "haiku", reflect_model: "sonnet", cloudflare_account: "", cloudflare_token_saved: false },

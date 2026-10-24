@@ -25,8 +25,6 @@ import "./team-cover.js";
 import "./team.js";
 import "./models.js";
 import "./reviews.js";
-import "./codegraph.js";
-import "./git.js";
 import "./routing-turns.js";
 import "./routing.js";
 import "./model-budget.js";

@@ -1172,7 +1172,7 @@ export function startApp() {
     $(".main > .page-head").style.display = bare ? "none" : ""; // shown again below if the screen puts buttons in it
     $(".main > .page-head .page-back")?.remove(); // a screen that has a ← link draws it again
     $(".page-head .head-back")?.remove(); $(".page-head .head-aside")?.remove(); // TOOLS screens add them again via headExtras()
-    $("#app").classList.toggle("v4-connect", ["tools", "git", "reviews"].includes(state.view));
+    $("#app").classList.toggle("v4-connect", ["tools", "reviews"].includes(state.view));
     const table = $("#table");
     if (state.loading) {
       ["#controls", "#chips", "#stats"].forEach((s) => $(s).replaceChildren());
@@ -1187,7 +1187,6 @@ export function startApp() {
     if (!popupDetail()) itemPop?.dialog.close();
     $("#app").classList.toggle("keep-detail", !!page && !!page.keepDetail); // narrow windows: this detail sits under the list, not in a drawer
     $("#app").classList.toggle("graph-mode", state.view === "graph");
-    $("#app").classList.toggle("git-mode", state.view === "git");
     $("#app").classList.toggle("memory-mode", state.view === "memories");
     $("#app").classList.toggle("knowledge-mode", state.view === "knowledge");
     $("#app").classList.toggle("skills-mode", state.view === "skills");
@@ -1220,7 +1219,7 @@ export function startApp() {
   function appendLoadedNote(table) {
     if (similarity.busy) table.append(el("p", "meta memory-page-note", "비슷한 스킬을 확인하고 있어요."));
   }
-  // Title line extras (Figma v4): "← 저장소" above the title, the count after it, buttons at the right of the title row.
+  // Title line extras (Figma v4): a "← back" link above the title, the count after it, buttons at the right of the title row.
   function headExtras({ count = "", back = null, aside = [] } = {}) {
     $("#title-count").textContent = $("#title").classList.contains("sr-only") ? "" : count; // same rule as render(): a hidden title takes its count along (#183)
     const head = $(".page-head");
@@ -1500,7 +1499,7 @@ export function startApp() {
     const of = (m) => TODO_MENUS.filter(([menu]) => menu === m).map(([menu, name, ids, target]) => [menu, name, rest.filter((t) => ids.includes(t.id) && t.n !== 0), target]);
     const rows = of("MEMORY");
     digests.menuRows(rows); // 병합 제안 · 모아보기 (digests.js)
-    rows.push(homeChecks.knowledgeRow(state.connection.generation), ...of("TOOLS"), ...home.menuExtras(state.connection.generation), homeChecks.repoRow(state.connection.generation)); // 지식 · 스킬 (TOOLS) · 워크플로우 · 라우팅 · 저장소
+    rows.push(homeChecks.knowledgeRow(state.connection.generation), ...of("TOOLS"), ...home.menuExtras(state.connection.generation)); // 지식 · 스킬 (TOOLS) · 워크플로우 · 라우팅
     const tools = state.data.tools;
     if (tools) {
       const login = tools.servers.filter((s) => Object.values(s.login || {}).includes("needed"));
@@ -2094,7 +2093,6 @@ export function startApp() {
     get el() { return el; },
     get generation() { return state.connection.generation; },
     set generation(value) { state.connection.generation = value; },
-    get git() { return git; },
     get go() { return go; },
     get home() { return home; },
     get loadAll() { return loadAll; },
@@ -2139,7 +2137,7 @@ export function startApp() {
 
   // j/k walk the list in the panel: every row, card or chip there that opens something (data-id, or a button that
   // marks itself picked). Tabs, filter chips and form controls are not list items.
-  const LIST_ITEM = ":is(.row, .cn-row, .todo-item, .crew-card, .prompt-card, .ds-card, .git-row, .rt-mcard, .mp-chip, .wk-row, .wf-row, .tm-team, .tm-meet-row, .tm-urow, button.v4-tr, .cat-head, [data-id])";
+  const LIST_ITEM = ":is(.row, .cn-row, .todo-item, .crew-card, .prompt-card, .ds-card, .rt-mcard, .mp-chip, .wk-row, .wf-row, .tm-team, .tm-meet-row, .tm-urow, button.v4-tr, .cat-head, [data-id])";
   const NOT_ITEM = ".tab, .area-tab, .chip, .segment, [role=tab], input, select, textarea, label, dialog *";
   function listItems() {
     const root = document.querySelector(".home-first") && state.view === "todo" ? document.querySelector(".home-first") : $(".panel-main");
@@ -2189,12 +2187,9 @@ export function startApp() {
   const inject = window.ArkismInject({ state, el, button, request: appApi.request, query: appApi.query, section, facts });
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request: appApi.request, detailShell, openDetail, ago });
   const privacy = window.ArkismPrivacy({ state, el, button, request: appApi.request, query: appApi.query, notice, section, afterChange: async () => { await memoryList.reloadMemories(); renderDetail(); } });
-  const codegraph = window.ArkismCodeGraph ? window.ArkismCodeGraph({ state, el, raw, button, request: appApi.request, query: appApi.query, notice, ago }) : null; // TOOLS › 저장소 › 코드 그래프 (codegraph.js)
-  const git = window.ArkismGit({ state, $, el, button, icon, tauri, ago, notice, go, headExtras, codegraph,
-    openReview: (key) => { go("reviews"); state.selected = key; markSelected(); reviews.detail(); openDetail(); } });
   const knowledge = window.ArkismKnowledge({ remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
   const overview = window.ArkismOverview({ remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, memoryCount: () => memoryPaging.memoryCount(), onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
-  Object.assign(pages.views, git.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
+  Object.assign(pages.views, routing.views, usage.views, sessions.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel: appConnection.sshLabel, sshErrorText: appConnection.sshErrorText, useLocal: appConnection.useLocal, lock: appConnection.lock, reconnect: appConnection.reconnect });
