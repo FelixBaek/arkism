@@ -41,7 +41,7 @@
 .ex-pop .crew-popup-tab:hover { background: var(--nc-raised); }
 .ex-pop .crew-popup-tab.on { background: var(--nc-raised); color: var(--nc-accent); }
 .ex-pop .crew-popup-tab:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 1px; }
-.ex-pop .crew-popup-body { padding: 4px 28px 24px; max-height: calc(100vh - 240px); }
+.ex-pop .crew-popup-body { padding: 4px 28px 24px; }
 .ex-pop.ex-new .crew-popup-head { grid-template-areas: "who side"; }
 .ex-face { flex: none; width: 110px; height: 110px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--bg-muted); }
 .ex-face .ex-art, .ex-face .ex-art img { width: 100%; height: 100%; display: block; }

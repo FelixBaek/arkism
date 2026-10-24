@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node build.cjs",
     "check": "node check.cjs",
-    "test:browser": "node ../tests/memory-pages.browser.cjs && node ../tests/ui-structure.browser.cjs && node ../tests/list-loading.browser.cjs && node ../tests/virtual-list.browser.cjs && node ../tests/catalog-lists.browser.cjs && node ../tests/popup-drag.browser.cjs && node ../tests/home-load.browser.cjs"
+    "test:browser": "node ../tests/memory-pages.browser.cjs && node ../tests/ui-structure.browser.cjs && node ../tests/list-loading.browser.cjs && node ../tests/virtual-list.browser.cjs && node ../tests/catalog-lists.browser.cjs && node ../tests/popup-drag.browser.cjs && node ../tests/crew-popup-fit.browser.cjs && node ../tests/home-load.browser.cjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

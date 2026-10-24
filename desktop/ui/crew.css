@@ -329,6 +329,9 @@ button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor
 
 /* 크루 상세 팝업 틀 (crew-popup.js) */
 .crew-popup { width: min(880px, calc(100vw - 32px)); padding: 0; }
+/* head and tabs keep their size; the body takes what is left of the window (dialog max-height) and scrolls, so the 저장 bar stays inside */
+.crew-popup[open] { display: flex; flex-direction: column; }
+.crew-popup-head, .crew-popup-tabs { flex: none; }
 .crew-popup-head { display: flex; align-items: flex-start; gap: 12px; padding: 20px 20px 14px 24px; background: var(--cover, none) center / cover; position: relative; }
 .crew-popup-head.has-cover { min-height: 140px; align-items: flex-end; }
 .crew-popup-head.has-cover::before { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent, var(--bg-window)); }
@@ -340,7 +343,7 @@ button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor
 .crew-popup-tabs { display: flex; justify-content: flex-end; gap: 4px; padding: 0 24px; border-bottom: 1px solid var(--border); }
 .crew-popup-tab { background: none; border: 0; padding: 10px 12px; color: var(--text-2); cursor: pointer; font: inherit; }
 .crew-popup-tab.on { color: var(--accent); }
-.crew-popup-body { padding: 18px 24px 24px; max-height: calc(100vh - 260px); }
+.crew-popup-body { flex: 1 1 auto; min-height: 0; padding: 18px 24px 24px; }
 /* ✕: the corner, same gap from the top and right edges (pulled out of the head's 28/32px padding) */
 .v4-auto .crew-popup-close, .tm-pop .crew-popup-close, .ex-pop .crew-popup-close { flex: none; width: 28px; height: 28px; margin: -13px -17px 0 4px; }
 .ex-pop .crew-popup-close { margin: -9px -9px 0 4px; } /* expert head pads 24px, not 28/32 */
