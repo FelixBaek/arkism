@@ -501,7 +501,15 @@ class Document extends Node {
   elementFromPoint() { return this._pointElement || this.body; }
   elementsFromPoint() { return [this.elementFromPoint()]; }
   execCommand(...args) { this.execCommands.push(args); return true; }
-  hasFocus() { return true; }
+  hasFocus() { return this._focus !== false; }
+  adoptNode(n) {
+    n.remove?.();
+    const from = n.ownerDocument;
+    if (from && from !== this) from._topLayer = from._topLayer.filter((d) => d !== n);
+    const walk = (x) => { x.ownerDocument = this; for (const c of x.childNodes || []) walk(c); };
+    walk(n);
+    return n;
+  }
   _mutated(rec) { for (const o of this._observers) o._note(rec); }
 }
 class Range {
