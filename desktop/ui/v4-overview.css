@@ -170,10 +170,9 @@
 .ov-win-badge:empty { display: none; }
 .ov-win-how { background: var(--bg-muted); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
 .ov-win-how > p { margin: 0; } .ov-win-how strong { font-weight: 600; }
-.ov-win-cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ov-win-cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .ov-win-cell { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); text-align: left; color: inherit; font: inherit; }
 .ov-win-cell small { color: var(--text-2); font-size: 11px; } .ov-win-cell strong { font-size: 12.5px; }
-button.ov-win-next { cursor: pointer; } button.ov-win-next strong { color: var(--accent, var(--text-1)); }
 .ov-win-bars i.r { background: #ff5160; opacity: .85; } .ov-win-bars i.a { background: #f5b955; opacity: .85; }
 .ov-win-note { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); font-size: 12.5px; }
 .ov-win-note span { color: var(--text-2); }
