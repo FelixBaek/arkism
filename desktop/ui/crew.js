@@ -1054,6 +1054,7 @@ export const createCrew = (ctx) => {
     get input() { return input; },
     get IS_AI() { return crewVocabulary.IS_AI; },
     get isBack() { return crewModel.isBack; },
+    get keepHistory() { return crewEditor.keepHistory; },
     get kv() { return kv; },
     get linkTo() { return crewEditor.linkTo; },
     get modelInput() { return modelInput; },
@@ -1181,6 +1182,14 @@ export const createCrew = (ctx) => {
   document.addEventListener("keyup", (e) => { if (e.code === "Space") setSpace(false); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && crewEditor.ed.linking && state.view === "graph") { crewEditor.ed.linking = null; render(false); } });
   window.addEventListener("blur", () => setSpace(false));
+  // Ctrl/Cmd+Z undoes a canvas edit, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes it; inside a field the text's own undo wins.
+  document.addEventListener("keydown", (e) => {
+    if (state.view !== "graph" || crewEditor.ed.run || crewEditor.nodeDlg || typing() || document.querySelector("dialog[open]")) return;
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === "z") { e.preventDefault(); if (e.shiftKey) crewEditor.redo(); else crewEditor.undo(); }
+    else if (k === "y" && e.ctrlKey && !e.shiftKey) { e.preventDefault(); crewEditor.redo(); }
+  });
   document.addEventListener("keydown", (e) => {
     if (state.view !== "graph" || crewEditor.ed.run || (!crewEditor.ed.sel && crewEditor.ed.selEdge === null)) return;
     if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;

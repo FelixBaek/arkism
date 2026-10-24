@@ -1118,6 +1118,8 @@ window.ArkismI18nEN = {
   "끌어서 다음 노드에 이어요": "Drag to connect to the next node",
   "노드 추가": "Add node",
   "맞추기": "Fit",
+  "되돌리기 (Ctrl+Z)": "Undo (Ctrl+Z)",
+  "다시 하기 (Ctrl+Shift+Z)": "Redo (Ctrl+Shift+Z)",
   "눌러서 선 설정": "Click to configure line",
   "시작 노드에는 선을 이을 수 없어요.": "Lines can't connect into the start node.",
   "되돌아가는 선이에요. 최대 2번까지 다시 돌아요. 선을 눌러 횟수와 갈래 이름을 바꿀 수 있어요.": "This is a loop-back line. It repeats up to 2 times. Click the line to change the count and branch name.",

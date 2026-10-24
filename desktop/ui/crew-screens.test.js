@@ -107,6 +107,47 @@ test("dragging nodes, panning and wheel zoom move the canvas", async () => {
   assert.deepEqual(clean(), []);
 });
 
+test("undo and redo step through canvas edits; Ctrl+Z inside a field stays with the field", async () => {
+  const h = await openGraph();
+  const tools = () => document.querySelector(".g-tools");
+  const undoB = () => tools().querySelector(".g-undo"), redoB = () => tools().querySelector(".g-redo");
+  assert.equal(undoB().getAttribute("aria-label"), "되돌리기 (Ctrl+Z)");
+  assert.ok(undoB().disabled && redoB().disabled, "nothing to undo on open");
+  const n0 = document.querySelectorAll(".g-node").length;
+  node("ai1").click(); await h.settle();
+  dom.key(document, "Delete"); await h.settle();
+  assert.equal(document.querySelectorAll(".g-node").length, n0 - 1);
+  assert.ok(!undoB().disabled && redoB().disabled);
+  undoB().click(); await h.settle();
+  assert.ok(node("ai1"), "undo brings the node back");
+  assert.ok(undoB().disabled && !redoB().disabled);
+  dom.key(document, "Z", { ctrlKey: true, shiftKey: true }); await h.settle();
+  assert.equal(node("ai1"), null, "redo removes it again");
+  dom.key(document, "z", { metaKey: true }); await h.settle();
+  assert.ok(node("ai1"));
+  dom.key(document, "y", { ctrlKey: true }); await h.settle();
+  assert.equal(node("ai1"), null);
+  // focus inside a text field: Ctrl+Z is the field's own undo, the graph stays
+  const field = document.createElement("input");
+  document.body.append(field); field.focus();
+  dom.key(field, "z", { ctrlKey: true }); await h.settle();
+  assert.equal(node("ai1"), null);
+  field.remove();
+  // edits in a node window that is cancelled leave no undo step behind
+  node("once").click(); await h.settle();
+  await h.click(document.querySelector(".g-right"), "자세히");
+  const dlg = document.querySelector("dialog.node-dialog");
+  const name = dlg.querySelector("input");
+  name.value = "취소될 이름"; dom.fire(name, "input"); await h.settle();
+  await h.click(dlg, "취소");
+  assert.equal(document.querySelector("dialog.node-dialog"), null);
+  undoB().click(); await h.settle();
+  assert.ok(node("ai1"), "the step before the window is the next undo");
+  assert.ok(undoB().disabled);
+  assert.doesNotMatch(document.querySelector(".g-canvas").textContent, /취소될 이름/);
+  assert.deepEqual(clean(), []);
+});
+
 test("inline card edits change cron, model and text values", async () => {
   const h = await boot();
   h.data.crew[0].crew.graph.nodes.push({ id: "sch", type: "schedule", title: "", x: 0, y: 300, config: { cron: "0 9 * * 1-5" } });
