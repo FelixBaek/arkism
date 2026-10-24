@@ -161,13 +161,20 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
   app.dom.type(search, "Orbit"); await app.settle(30);
   assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/memory_candidates/query" && /Orbit/.test(String(b))));
   app.dom.type(search, ""); await app.settle(30);
-  // the chips: 새로 저장, 헷갈림, 정리 제안, then a kind
+  // the chips: 새로 저장, 헷갈림, 정리 제안; a state with nothing in it has no chip
   for (const label of ["새로 저장", "헷갈림", "정리 제안", "전체"]) {
     const chip = [...d.querySelectorAll(".ov-wide-chip")].find((c) => text(c).startsWith(label)); assert.ok(chip, label);
     chip.click(); await app.settle(30);
   }
-  [...d.querySelectorAll(".ov-wide-chip")].find((c) => text(c).startsWith("교훈"))?.click(); await app.settle(30);
-  [...d.querySelectorAll(".ov-wide-chip")].find((c) => text(c).startsWith("모든 종류"))?.click(); await app.settle(30);
+  assert.ok([...d.querySelectorAll(".ov-wide-chip")].every((c) => !/^\D+ 0$/.test(text(c))), "no chip counts 0");
+  // the kind is a dropdown beside the sort order, not a second chip row
+  assert.ok(![...d.querySelectorAll(".ov-wide-chip")].some((c) => text(c).startsWith("모든 종류")));
+  const typeSel = d.querySelector('select[aria-label="종류"]');
+  assert.ok(typeSel && !typeSel.hidden && typeSel.previousSibling === sorter, "the kind dropdown sits next to the sort");
+  const kindOpt = typeSel.options.find((o) => o.value); assert.ok(kindOpt, "a kind to pick");
+  typeSel.value = kindOpt.value; app.dom.fire(typeSel, "change"); await app.settle(30);
+  assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/memory_candidates/query" && String(b).includes(`"kind":"${kindOpt.value}"`)));
+  typeSel.value = ""; app.dom.fire(typeSel, "change"); await app.settle(30);
   // rows pick the detail; a checkbox counts toward the batch button
   const rows = [...d.querySelectorAll(".ov-wide-row:not(.ov-wide-row-dream)")];
   assert.ok(rows.length > 2);

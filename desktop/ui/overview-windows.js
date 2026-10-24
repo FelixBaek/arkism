@@ -332,7 +332,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     // 정렬 (764:61615): oldest first by default, so nothing waits forever
     const ORDERS = [["old", "오래된 순"], ["new", "최신 순"], ["risk", "위험도 높은 순"]];
     const sorter = sortSelect(ORDERS, order, (k) => { order = k; paint(); });
-    const bar = filterBar([search, batch], sorter, chipHost);
+    const typeSel = el("select", "ov-wide-sort"); typeSel.setAttribute("aria-label", "종류"); typeSel.addEventListener("change", () => { typeF = typeSel.value; paint(); });
+    const bar = filterBar([typeSel, search, batch], sorter, chipHost);
     const RISK_RANK = { high: 0, medium: 1, low: 2 }, rank = (c) => c.dream ? 2 : RISK_RANK[c.classification?.risk] ?? (confusing(c, merges) ? 1 : 3); // no AI risk yet: 헷갈림 counts as medium
     const byOrder = (a, b) => order === "new" ? time(b.created_at) - time(a.created_at)
       : order === "risk" ? rank(a) - rank(b) || time(a.created_at) - time(b.created_at)
@@ -341,9 +342,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const filtered = () => [...(kindF === "dream" ? [] : remote.snapshot().items), ...((kindF === "all" && !typeF) || kindF === "dream" ? dreamItems().filter(c => !q || c.text.toLowerCase().includes(q.toLowerCase())).sort(byOrder) : [])];
     const drawChips = () => { const snap = remote.snapshot(), counts = snap.facets.states || {}, sum = Object.values(counts).reduce((a, b) => a + b, 0);
       const every = (Object.keys(counts).length ? sum : snap.total ?? 0) + dreamItems().length; // 전체 = what the title counts: every waiting item and the proposals
-      chipHost.replaceChildren(chipBar([["all", "전체", every], ["new", "새로 저장", counts.new || 0], ["confusing", "헷갈림", counts.confusing || 0], ...((n) => n ? [["dream", "정리 제안", n]] : [])(dreamItems().length)], kindF, (k) => { kindF = k; if (k === "dream") typeF = ""; paint(); }));
+      // a state with nothing in it is not offered, unless it is the one picked
+      chipHost.replaceChildren(chipBar([["all", "전체", every], ["new", "새로 저장", counts.new || 0], ["confusing", "헷갈림", counts.confusing || 0], ["dream", "정리 제안", dreamItems().length]].filter(([k, , n]) => k === "all" || n || k === kindF), kindF, (k) => { kindF = k; if (k === "dream") typeF = ""; paint(); }));
+      // 종류: a dropdown beside the sort order, not a second chip row
       const kinds = Object.entries(snap.facets.kinds || {});
-      if (kindF !== "dream" && kinds.length > 1) chipHost.append(chipBar([["", "모든 종류", null], ...kinds.map(([k, n]) => [k, kind(k), n])], typeF, (k) => { typeF = k; paint(); }));
+      typeSel.replaceChildren(...[["", "모든 종류"], ...kinds.map(([k, n]) => [k, `${kind(k)} · ${num(n)}개`])].map(([k, l]) => { const o = el("option", "", l); o.value = k; o.selected = k === typeF; return o; }));
+      typeSel.hidden = kindF === "dream" || (kinds.length < 2 && !typeF);
       if (!snap.loading) badge.textContent = `${num(every)}건`; }; // the title counts every waiting item, not only the loaded page
     const badge = d.querySelector(".ov-win-badge");
     function paint() {
