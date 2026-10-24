@@ -13,7 +13,7 @@
 .brand-mark { grid-column: 1 / -1; width: 21px; height: 19px; flex: none; }
 .brand-word { font: 400 40px/42px "Aleo", "Cormorant Garamond", "Noto Serif KR", Georgia, serif; color: var(--nc-text); letter-spacing: 0; }
 /* Search, status and help sit as icons at the right end of the settings row. */
-.rail-tools { position: absolute; right: 16px; bottom: 28px; z-index: 1; display: flex; gap: 2px; }
+.rail-tools { position: absolute; right: 20px; bottom: 26px; z-index: 1; display: flex; gap: 2px; }
 .rail-tool { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; padding: 0; color: var(--nc-quiet); }
 .rail-tool:hover, .rail-tool[aria-expanded="true"] { background: var(--nc-raised); color: var(--nc-text); }
 .rail-tool .icon { width: 16px; height: 16px; }
@@ -30,7 +30,7 @@
 .sidebar .nav-ic { stroke-width: 1.125; }
 .ln { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .rail-space { flex: 1; min-height: 0; }
-.rail-art { width: 178px; height: 118px; opacity: .85; flex: none; }
+.rail-art { width: 178px; height: 118px; opacity: .65; flex: none; }
 .rail-art .ark-triangle { display: block; overflow: visible; }
 .rail-art .ark-line { stroke: rgb(236,235,230); }
 .rail-art .ark-accent { stroke: rgb(242,209,75); }
@@ -41,6 +41,7 @@
   :root:not([data-theme="dark"]) .rail-art .ark-accent { stroke: rgb(125,98,0); }
 }
 .sidebar .rail-settings { height: 40px; padding-left: 12px; color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); }
+.sidebar .rail-settings .ln { width: 14px; height: 14px; margin: 2px; } /* 198:110: a 14px gear in an 18px slot */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* connection details: a small card under the logo */
@@ -83,14 +84,26 @@
 .btn:hover { background: var(--nc-raised); }
 .btn.primary { background: var(--nc-action); border-color: var(--nc-action); color: var(--nc-on-accent); }
 .btn.ghost { background: none; border-color: transparent; color: var(--nc-muted); }
+.btn.ghost:hover { background: var(--nc-subtle); color: var(--nc-text); } /* v4/Button/Quiet hover */
+.btn.danger { background: var(--nc-danger-bg); border-color: var(--nc-danger-bg); color: var(--nc-danger); } /* v4/Button/Danger */
+.btn.danger:hover { background: var(--nc-danger-bg); border-color: var(--nc-danger); }
 .table { background: var(--nc-surface); border-color: var(--nc-line); border-radius: var(--nc-radius-control); }
 .row.selected { background: var(--nc-raised); }
 .chip.active { background: var(--nc-raised); color: var(--nc-accent); border-color: transparent; }
 .segment { background: none; gap: 4px; padding: 0; }
-.tab { border-radius: 999px; padding: 6px 12px; font-size: calc(13px * var(--fs, 1)); color: var(--nc-muted); }
-.tab.active { background: var(--nc-raised); color: var(--nc-accent); }
+/* v4/Tab (491:32543): 32px, radius 6; selected = surface + hairline, accent label */
+.tab { height: 32px; border: 1px solid transparent; border-radius: 6px; padding: 0 12px; font-size: calc(13px * var(--fs, 1)); color: var(--nc-muted); }
+.tab:not(.active):hover { background: var(--nc-subtle); }
+.tab.active { background: var(--nc-surface); border-color: var(--nc-line); color: var(--nc-accent); font-weight: 500; }
 .tab output { font: 11px var(--mono); color: var(--nc-quiet); }
 .notice { background: var(--nc-amber-bg); border-color: var(--nc-line); }
+/* v4/Toggle (491:32653): off = subtle track + hairline, muted knob */
+.switch { border-color: var(--nc-line); background: var(--nc-subtle); }
+.switch i { background: var(--nc-muted); }
+.switch[aria-checked="true"] { background: var(--nc-action); border-color: var(--nc-action); }
+.switch[aria-checked="true"] i { background: var(--nc-on-accent); }
+/* 연결 끊김 (198:3296): home's lost card already says the load failed, so the generic notice stays out */
+.panel-main:has(.home-lost) > .notice.st-notice { display: none; }
 
 /* Narrow windows: the detail leaves the panel and slides in as a drawer (app.css), so it needs its own background
    and the rail width stays the v4 one. */

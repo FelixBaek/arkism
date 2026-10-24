@@ -128,6 +128,7 @@
   --nc-line: #363636; --nc-text: #f0efeb; --nc-muted: #b8b7b2; --nc-quiet: #92918c; --nc-art: #8b8b86;
   --nc-accent: #f2d14b; --nc-action: #f2d14b; --nc-on-accent: #171717;
   --nc-amber: #e3b279; --nc-amber-bg: #3a2e20;
+  --nc-strong: #626262; --nc-danger: #eaa99a; --nc-danger-bg: #3e2925; /* v3 / Nocturne strong · danger · dangerBg */
   --nc-ai: #b7a4ff; --nc-ai-bg: #211d2e; /* AI가 낸 것(제안·말풍선)만 표시하는 보라 */
   --nc-diff-del-bg: #3d2020; --nc-diff-del-fg: #ffb3ab; --nc-diff-add-bg: #1c3523; --nc-diff-add-fg: #9be0a8; /* diff: 뺀 줄 빨강·넣은 줄 초록(GitHub 방식) */
   --nc-radius-panel: 12px; --nc-radius-control: 8px; --nc-radius-quote: 6px;
@@ -137,6 +138,7 @@
   --nc-canvas: #f5f5f3; --nc-rail: #eaeae8; --nc-surface: #fbfbfa; --nc-raised: #ffffff; --nc-subtle: #e6e6e4;
   --nc-line: #d3d3d0; --nc-text: #232323; --nc-muted: #5c5c59; --nc-quiet: #656562; --nc-art: #757570;
   --nc-accent: #7d6200; --nc-amber: #835c2c; --nc-amber-bg: #f1e7d5;
+  --nc-strong: #8c8c89; --nc-danger: #963e34; --nc-danger-bg: #f5e2dc;
   --nc-ai: #5b47d6; --nc-ai-bg: #f0edfc;
   --nc-diff-del-bg: #ffebe9; --nc-diff-del-fg: #a40e26; --nc-diff-add-bg: #dafbe1; --nc-diff-add-fg: #116329;
 }
@@ -145,6 +147,7 @@
     --nc-canvas: #f5f5f3; --nc-rail: #eaeae8; --nc-surface: #fbfbfa; --nc-raised: #ffffff; --nc-subtle: #e6e6e4;
     --nc-line: #d3d3d0; --nc-text: #232323; --nc-muted: #5c5c59; --nc-quiet: #656562; --nc-art: #757570;
     --nc-accent: #7d6200; --nc-amber: #835c2c; --nc-amber-bg: #f1e7d5;
+    --nc-strong: #8c8c89; --nc-danger: #963e34; --nc-danger-bg: #f5e2dc;
     --nc-ai: #5b47d6; --nc-ai-bg: #f0edfc;
     --nc-diff-del-bg: #ffebe9; --nc-diff-del-fg: #a40e26; --nc-diff-add-bg: #dafbe1; --nc-diff-add-fg: #116329;
   }

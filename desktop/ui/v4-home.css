@@ -305,9 +305,9 @@
 .keys-dialog .actions .btn { height: auto; padding: 7px 14px; line-height: 1.5; }
 
 /* ---------------------------------------------------------------- 서버 연결 끊김 (198:3296) */
-.home-lost { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 10px; background: var(--nc-amber-bg); }
+.home-lost { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-amber-bg); }
 .home-lost p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
-.home-lost .actions { display: flex; align-items: center; gap: 8px; }
+.home-lost .actions { display: flex; align-items: center; gap: 6px; }
 .home-lost .btn { height: auto; padding: 7px 14px; line-height: 1.5; }
 .home-lost .link-btn { margin-left: 8px; color: var(--nc-muted); }
 .home-reasons ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
@@ -372,7 +372,7 @@
 
 /* ---------------------------------------------------------------- 통합 검색 창 (설정 줄 검색 아이콘 · Ctrl K) */
 .palette { width: min(720px, calc(100vw - 32px)); max-height: min(640px, calc(100vh - 64px)); margin: 10vh auto auto; padding: 0; display: none; flex-direction: column;
-  border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); background: var(--nc-surface); color: var(--nc-text); box-shadow: 0 24px 64px rgb(0 0 0 / .45); }
+  border: 1px solid var(--nc-line); border-radius: 14px; background: var(--nc-surface); color: var(--nc-text); box-shadow: 0 24px 64px rgb(0 0 0 / .45); } /* 1180:1537 is r14 */
 .palette[open] { display: flex; }
 .palette::backdrop { background: rgb(0 0 0 / .5); }
 .pal-head { display: flex; align-items: center; gap: 12px; padding: 20px 20px 12px 24px; }

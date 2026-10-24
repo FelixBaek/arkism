@@ -1,9 +1,10 @@
 /* 공통 빈 화면 · 오류 · 권한 (Figma 198:3554) + 홈 기억 처리 멈춤 줄 (523:35767) */
-.st-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px 20px; border: 1px solid var(--nc-line, var(--border)); border-radius: 10px; background: var(--nc-surface, var(--bg-muted)); }
+.st-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px; border: 1px solid var(--nc-line, var(--border)); border-radius: 10px; background: var(--nc-surface, var(--bg-muted)); }
 .st-panel strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans, inherit); color: var(--nc-text, var(--text-1)); }
 .st-panel p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans, inherit); color: var(--nc-muted, var(--text-2)); }
-.st-panel .st-note { align-self: stretch; padding: 8px 12px; border-radius: 6px; background: var(--nc-amber-bg, var(--warn-tint)); color: var(--nc-text, var(--text-1)); }
+.st-panel .st-note { align-self: stretch; padding: 10px 12px; border: 1px solid var(--nc-line, var(--border)); border-radius: 8px; background: var(--nc-amber-bg, var(--warn-tint)); color: var(--nc-text, var(--text-1)); }
 .st-actions { display: flex; gap: 8px; align-items: center; }
+.st-actions .btn { height: auto; padding: 7px 14px; line-height: 1.5; } /* 198:3554 actions are the 36px size */
 .notice.st-notice { align-items: flex-start; background: var(--nc-surface, var(--bg-muted)); border-color: var(--nc-line, var(--border)); }
 .notice.st-notice .st-panel { flex: 1; padding: 0; border: 0; background: none; }
 .todo-item.stalled { background: var(--status-danger-tint); }
