@@ -1,6 +1,7 @@
 // Owns canvas state and graph editing. Dependencies are explicit live ports, never a global scope.
 export function createCrewEditor(deps) {
-
+  // Bumped on every open and leave, so a save that returns after the user left (or reopened) leaves the editor alone.
+  let session = 0;
 
   // ---------------------------------------------------------------- editor (03a · 03c · 03d) and run view (03b)
   const ed = { rec: null, graph: null, sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", tab: "AI", menu: false,
@@ -8,6 +9,7 @@ export function createCrewEditor(deps) {
 
   function openGraph(rec, opts = {}) {
     if (!rec) return;
+    session++;
     deps.stopPolling();
     ed.rec = rec;
     ed.graph = structuredClone(rec.crew.graph || deps.defaultGraph("blank", rec.crew));
@@ -32,6 +34,7 @@ export function createCrewEditor(deps) {
 
   async function leaveGraph() {
     if (ed.dirty && !await ask("저장하지 않은 변경이 있어요. 나갈까요?")) return;
+    session++;
     deps.stopPolling();
     const rec = ed.rec;
     ed.rec = null;
@@ -54,8 +57,9 @@ export function createCrewEditor(deps) {
         // A newly set schedule or webhook starts on; one that was already there keeps its on/off.
         if (tr.kind) { crew.trigger = tr.kind === "schedule" ? { kind: "schedule", cron: tr.cron.trim() } : { kind: "webhook", label: tr.label.trim() }; crew.enabled = ed.rec.crew.trigger ? !!ed.rec.crew.enabled : true; } else { delete crew.trigger; crew.enabled = false; }
       }
-      const sent = snap();
+      const sent = snap(), at = session;
       const saved = await deps.save(ed.rec, crew);
+      if (at !== session) { await deps.reload(); return true; }
       if (snap() === sent) {
         ed.trigger = undefined;
         ed.dirty = false;
