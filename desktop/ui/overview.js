@@ -117,9 +117,6 @@ window.ArkismOverview = (ctx) => {
       { key: "classify", group: "save", label: "분류", region: "측두엽", tone: "n",
         big: `${num(unclassified.length)}건`, bigSub: "대기", small: classified.length ? ago(latest(classified)) : "—", smallSub: "마지막 처리",
         step: unclassified.length ? `대기 ${num(unclassified.length)}` : "모두 분류됨", row: classRow, counts: slots(classified), open: () => go("memories", "candidate") },
-      { key: "review", group: "save", label: "승인 대기", region: "안와전두엽", tone: waiting.length ? "a" : "n",
-        big: `${num(waiting.length)}건`, bigSub: "대기 중", small: oldest ? (days ? `${days}일` : ago(oldest)) : "—", smallSub: "제일 오래된 것",
-        step: `${num(waiting.length)}건`, row: waitRow, counts: slots(waiting.map((m) => time(m.created_at))), open: () => go("memories", "candidate") },
       { key: "recall", group: "use", label: "불러오기", region: "운동 피질", tone: "n",
         big: `${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, bigSub: "최근 7일", small: recallTimes.length ? ago(latest(recallTimes)) : "—", smallSub: "마지막",
         step: recallTimes.length ? ago(latest(recallTimes)) : "기록 없음", row: row(recallTimes, "n"), counts: slots(recallTimes), open: () => go("usage") },
@@ -131,7 +128,10 @@ window.ArkismOverview = (ctx) => {
         step: tidy ? `대기 ${num(tidy)}` : "확인 끝", row: new Array(24).fill(""), counts: new Array(24).fill(0), open: () => go("memories", "idle") },
       { key: "dream", group: "dream", label: "드리밍", region: "뇌간", tone: "n",
         big: `${num(nProp)}건`, bigSub: "정리 제안", small: nProp ? ago(latest(proposals)) : "—", smallSub: "마지막 제안",
-        step: nProp ? `제안 ${num(nProp)}` : "제안 없음", row: row(proposals, "n"), counts: slots(proposals), open: () => go("memories", "merge") }
+        step: nProp ? `제안 ${num(nProp)}` : "제안 없음", row: row(proposals, "n"), counts: slots(proposals), open: () => go("memories", "merge") },
+      { key: "review", group: "approve", label: "승인 대기", region: "안와전두엽", tone: waiting.length ? "a" : "n",
+        big: `${num(waiting.length)}건`, bigSub: "대기 중", small: oldest ? (days ? `${days}일` : ago(oldest)) : "—", smallSub: "제일 오래된 것",
+        step: `${num(waiting.length)}건`, row: waitRow, counts: slots(waiting.map((m) => time(m.created_at))), open: () => go("memories", "candidate") }
     ]);
   }
 
@@ -155,9 +155,9 @@ window.ArkismOverview = (ctx) => {
     root.append(stage);
     ui = { stage, steps: {}, cards: {}, nodes: {}, links: {}, rows: {} };
 
-    // top stepper: 저장 ─ 사용 ─ 드리밍
+    // top stepper: 저장 ─ 사용 ─ 드리밍 ─ 승인 (the human step both 분류 and 드리밍 feed, 2026-10-25)
     const top = el("div", "ov-steps");
-    for (const [g, label] of [["save", "저장"], ["use", "사용"], ["dream", "드리밍"]]) {
+    for (const [g, label] of [["save", "저장"], ["use", "사용"], ["dream", "드리밍"], ["approve", "승인"]]) {
       const grp = el("div", `ov-group ov-group-${g}`), head = el("div", "ov-group-head"); head.append(el("span", "", label), el("i"));
       const line = el("div", "ov-group-line"); grp.append(head, line); top.append(grp); ui.steps[g] = line;
     }
@@ -214,7 +214,7 @@ window.ArkismOverview = (ctx) => {
     const grid = el("div", "ov-grid"), gh = el("div", "ov-grid-head");
     ui.badge = el("span", "ov-badge"); gh.append(el("i", "ov-dot"), el("strong", "", "기억 처리"), ui.badge);
     const body = el("div", "ov-grid-body");
-    for (const [, label, keys] of [["save", "저장", ["collect", "extract", "classify", "review"]], ["use", "사용", ["recall", "trace", "judge"]], ["dream", "드리밍", ["dream"]]]) {
+    for (const [, label, keys] of [["save", "저장", ["collect", "extract", "classify"]], ["use", "사용", ["recall", "trace", "judge"]], ["dream", "드리밍", ["dream"]], ["approve", "승인", ["review"]]]) {
       body.append(el("div", "ov-grid-sec", label));
       for (const k of keys) { const r = el("div", "ov-grid-row"), name = el("span", "ov-grid-name"), cells = el("div", "ov-cells"); for (let c = 0; c < 24; c++) cells.append(el("i")); r.append(name, cells); body.append(r); ui.rows[k] = { name, cells }; }
     }
@@ -260,7 +260,7 @@ window.ArkismOverview = (ctx) => {
   const healthDot = (dot, h) => { dot.setAttribute("aria-label", HEALTH_WORD[h]); dot.title = HEALTH_WORD[h]; };
   function paint() {
     const list = stages(), by = Object.fromEntries(list.map((s) => [s.key, s]));
-    for (const g of ["save", "use", "dream"]) {
+    for (const g of ["save", "use", "dream", "approve"]) {
       const line = ui.steps[g]; line.replaceChildren();
       list.filter((s) => s.group === g).forEach((s, i) => {
         if (i) line.append(el("span", `ov-step-join${s.tone === "r" || list.filter((x) => x.group === g)[i - 1].tone === "r" ? " r" : ""}`));

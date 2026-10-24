@@ -468,7 +468,7 @@ export function startApp() {
   function renderStatusStages(card) {
     void overview.loadSessions(); // cached for a minute; calls renderStatusCard again when it lands
     const list = overview.stages();
-    $("#status-stages").replaceChildren(...[["save", "저장"], ["use", "사용"], ["dream", "드리밍"]].map(([g, label]) => {
+    $("#status-stages").replaceChildren(...[["save", "저장"], ["use", "사용"], ["dream", "드리밍"], ["approve", "승인"]].map(([g, label]) => {
       const sec = el("div", "st-stage-group");
       sec.append(el("span", "st-stage-sec", label));
       const ul = el("ul", "status-list");
