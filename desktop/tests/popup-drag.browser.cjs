@@ -56,6 +56,15 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "O", altKey: true, shiftKey: true, bubbles: true })));
     assert.deepEqual(await page.evaluate(() => window.notices), ["새 창은 데스크톱 앱에서 열 수 있어요.", "새 창은 데스크톱 앱에서 열 수 있어요."]);
     assert.equal(await page.evaluate(() => document.querySelector("dialog").open), true);
+    // a window whose page never gets ready: the popup stays here and that empty window is closed
+    await page.evaluate(() => {
+      window.calls = [];
+      window.__TAURI__ = { core: { invoke: async (cmd, args) => { window.calls.push([cmd, args]); return null; } } };
+      window.open = () => ({ closed: false, get document() { throw new Error("not ready"); }, close() { this.closed = true; } });
+    });
+    await page.keyboard.press("Alt+Shift+O");
+    await page.waitForFunction(() => window.calls.some(([cmd]) => cmd === "popout_destroy"), null, { timeout: 10000 });
+    assert.equal(await page.evaluate(() => document.querySelector("dialog").open), true, "the popup is still shown here");
     assert.deepEqual(errors, []);
     console.log("popup drag browser check passed");
   } finally { await browser.close(); }
