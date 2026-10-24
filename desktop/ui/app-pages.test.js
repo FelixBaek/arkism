@@ -128,6 +128,13 @@ test("일반: start at login, capture switch, excluded folders and the memo", as
 test("에이전트: switches, removal, shared folders and the add dialog", async () => {
   await settings("agents");
   assert.match(text(app.$("#table")), /적용 대기/);
+  // one 에이전트 추가, at the right end of the 스킬·대화를 가져올 에이전트 heading row, with the hint under it
+  const adds = app.$$("button").filter((b) => text(b) === "에이전트 추가");
+  assert.equal(adds.length, 1);
+  const head = adds[0].parentNode;
+  assert.equal(head.className, "pg-group-head");
+  assert.equal(text(head.querySelector("h2")), "스킬·대화를 가져올 에이전트");
+  assert.equal(text(head.nextSibling), "켜 둔 에이전트의 스킬 폴더와 대화 기록을 읽어 와요.");
   for (const name of ["Codex", "Gemini CLI", "ZCode", "Grok", "Cursor", "OpenCode"]) { const b = find(`${name} 켜기`); if (b) { b.click(); await app.settle(); } }
   await press("Claude Code 켜기");
   assert.match(notice(), /하나는 켜져 있어야/);

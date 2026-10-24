@@ -472,7 +472,8 @@ textarea.code { font: 12px/1.5 var(--mono); }
 }
 
 /* 07 설정 › 에이전트 · 08 에이전트 추가 */
-.pg-group-head h2 { display: flex; align-items: center; justify-content: space-between; }
+.pg-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pg-group-head > h2 { margin: 0; font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .agent-path .icon { width: 12px; height: 12px; flex: none; }
 .agent-actions { display: flex; align-items: center; gap: 6px; }
 .mono-tile { display: inline-grid; place-items: center; font: 600 calc(11px * var(--fs, 1)) var(--mono); color: var(--text-2); background: var(--bg-muted); }
