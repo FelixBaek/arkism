@@ -15,7 +15,7 @@ export function createAppConnection(deps) {
     deps.crew.reset();
     deps.routing.reset();
     deps.usage.reset();
-    deps.sessions.reset(); deps.knowledge.reset(); deps.overview.reset();
+    deps.knowledge.reset(); deps.overview.reset();
     deps.generation++;
     deps.state.token = "";
     deps.state.caps = null;

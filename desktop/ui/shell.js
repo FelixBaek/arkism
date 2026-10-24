@@ -14,7 +14,6 @@ window.ArkismShell = (ctx) => {
     memory: { label: "MEMORY", tabs: [
       ["overview", "개요", () => go("overview"), () => state.view === "overview"],
       ["memories", "기억", () => go("memories", "active"), () => state.view === "memories", count("memories")],
-      ["sessions", "세션", () => go("sessions"), () => state.view === "sessions", count("sessions")],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },
     agent: { label: "CREW", tabs: [

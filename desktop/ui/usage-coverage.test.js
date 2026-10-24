@@ -184,11 +184,12 @@ test("세션 tab sorts heavy sessions, opens one, and goes back", async () => {
   click(v.table, "비용");
   click(v.table, "활동");
   click(v.nodes["#detail"], "세션 목록 보기 ›");
+  assert.ok(v.went.includes("session:undefined") && !v.went.includes("sessions"), "the list opens the 세션 기록 window, not a screen");
   v.table.all((n) => n.classList.contains("v4u-session"))[0].click();
   assert.match(v.u.views.usage.title(), /고친 일|\(제목 없음\)/);
   assert.match(v.u.views.usage.sub(), /Claude Code/);
   assert.match(text(v.table), /쓴 것/);
-  for (const t of ["대화 내용 보기 (MEMORY › 세션) ›", "모델 관리", "도구 관리", "스킬 관리"]) click(v.nodes["#detail"], t);
+  for (const t of ["대화 내용 보기 (세션 기록) ›", "모델 관리", "도구 관리", "스킬 관리"]) click(v.nodes["#detail"], t);
   assert.ok(v.went.includes("session:s1") || v.went.includes("session:s2"));
   click(v.nodes[".main > .page-head"], "← 사용량 · 세션");
   assert.equal(v.u.views.usage.title(), "사용량");

@@ -58,13 +58,13 @@ test("overview: stage windows step through every stage and their lists", async (
     assert.ok(d.querySelector(".ov-win-list"), key);
     assert.ok(d.querySelector(".ov-win-foot button"), `${key} footer`);
   }
-  // collect's 열기 hands the session to the sessions screen
+  // collect's 열기 opens that session's dialogue in the 세션 기록 window (there is no separate 세션 screen)
   d = await openWindow({ key: "collect" });
-  let opened = null; const seen = (e) => { opened = e.detail; };
-  app.window.addEventListener("arkism:open-session", seen);
-  await press("열기", d);
-  app.window.removeEventListener("arkism:open-session", seen);
-  assert.ok(opened?.session_id, "열기 opens a session");
+  const talks = app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/transcript").length;
+  await press("열기", d, 80);
+  assert.match(text(win()), /세션 기록/);
+  assert.ok(app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/transcript").length > talks, "열기 reads the dialogue");
+  assert.ok(win().querySelector(".ss-msg"), "the dialogue shows in the window");
   await press("닫기", await openWindow({ key: "trace" }));
   assert.equal(win(), null);
 });
@@ -226,13 +226,11 @@ test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject
   again.click(); await app.settle(30);
   assert.match(text(win()), /다시 보는 중이에요/);
   offRe();
-  // 세션 보기 hands the source session over
-  let opened = null; const seen = (e) => { opened = e.detail; };
-  app.window.addEventListener("arkism:open-session", seen);
+  // 세션 보기 opens the source session in the 세션 기록 window
   await reviewOf("Alex는 주로");
-  await press("세션 보기 ›", win());
-  app.window.removeEventListener("arkism:open-session", seen);
-  assert.ok(opened);
+  await press("세션 보기 ›", win(), 50);
+  assert.match(text(win().querySelector(".ov-win-title")), /세션 기록/);
+  assert.ok(win().querySelector(".ov-wide-search").value, "searched for that session");
   // c6: fix verdict opens the editor; 취소 restores, 고친 내용으로 승인 saves
   d = await reviewOf("코드 수정 후");
   assert.match(text(d), /고쳐서 저장 추천/);
@@ -395,6 +393,11 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   await press("대화 원문 보기", win(), 50);
   assert.match(text(win()), /아직 대화 보기를 지원하지 않아요/);
   offTx404();
+  // 대화 원문 보기 reads the dialogue into the window itself; 대화 닫기 folds it
+  await press("대화 원문 보기", win(), 50);
+  assert.match(text(win()), /리뷰 일정 좀 같이 잡아 줘/);
+  await press("대화 닫기", win());
+  assert.equal(win().querySelector(".ss-msg"), null);
   // a failed page offers 다시 시도
   off();
   const offBad = route("GET", "/v1/usage/sessions", () => fail(500, "boom"));
@@ -405,6 +408,31 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   await press("‹ 작게 보기", win());
   assert.match(text(win()), /대화 저장/);
   await closeAll();
+});
+
+test("overview: 세션 기록 opened on one session underlines the quote, pages the dialogue and says when it is missing", async () => {
+  const rows = [{ id: "w1", agent: "codex", session_id: "sid-a", title: "다른 세션", started_at: ago(3), messages: 4 }, { id: "w2", agent: "codex", session_id: "sid-b", title: "찾는 세션", started_at: ago(30), messages: 4 }];
+  const off = route("GET", "/v1/usage/sessions", (a) => ok({ authority: "data_only_untrusted", items: /q=sid-b/.test(a.path) && /range=all/.test(a.path) ? rows : [], next_cursor: "", total: 2 }));
+  const page = (items, next) => ok({ authority: "data_only_untrusted", state: "active", items, next_cursor: next, archive_id: "a1" });
+  const offTalk = route("POST", "/v1/usage/sessions/transcript", (a) => /"after":"c1"/.test(a.body) ? page([{ role: "assistant", text: "그 말에 맞춰 둘게요." }], "c2") : page([{ role: "user", text: "앞으로 커밋은 영어로 써 줘." }], "c1"));
+  // the quote sits on the second page: the window reads on until it finds it, underlined
+  let d = await openWindow({ wide: "sessions", args: ["sid-b", "그 말에 맞춰"] }); await app.settle(80); d = win();
+  assert.match(text(d.querySelector(".ov-wide-row.on")), /찾는 세션/, "the asked-for session is picked, not the first row");
+  assert.equal(text(d.querySelector("mark.ss-hit")), "그 말에 맞춰");
+  assert.equal(d.querySelectorAll(".ss-msg").length, 2);
+  await press("메시지 더 보기", d, 50);
+  assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/usage/sessions/transcript" && /"after":"c2"/.test(String(b))));
+  // a dialogue that cannot be read says so
+  offTalk(); const offBad = route("POST", "/v1/usage/sessions/transcript", () => fail(500, "boom"));
+  d.querySelectorAll(".ov-wide-row")[0].click(); await app.settle();
+  await press("대화 원문 보기", win(), 50);
+  assert.match(text(win()), /대화를 불러오지 못했어요/);
+  offBad();
+  // a session the search does not find is named missing, and no other row is picked for it
+  d = await openWindow({ wide: "sessions", args: ["sid-gone"] }); await app.settle(80); d = win();
+  assert.match(text(d), /이 세션을 찾지 못했어요/);
+  assert.equal(d.querySelector(".ov-wide-detail").children.length, 0);
+  off(); await closeAll();
 });
 
 test("overview: 사용량 window draws the counts and its two buttons", async () => {
@@ -507,8 +535,8 @@ test("overview: 기억 지도 picks a memory, follows its links and filters", as
   app.dom.key(canvas, "ArrowDown"); app.dom.key(canvas, "Enter"); await app.settle(30);
   app.dom.key(canvas, "Escape"); await app.settle();
   app.dom.key(canvas, "ArrowLeft"); app.dom.key(canvas, "Enter"); await app.settle(30);
-  const src = btn("원문 대화 보기 ›", d); if (src) { src.click(); await app.settle(); }
-  d = win() || await openWindow({ wide: "map" }); await app.settle(50); d = win();
+  const src = btn("원문 대화 보기 ›", d); if (src) { src.click(); await app.settle(); assert.match(text(win().querySelector(".ov-win-title")), /세션 기록/); }
+  d = await openWindow({ wide: "map" }); await app.settle(50); d = win();
   app.dom.key(d.querySelector("canvas"), "ArrowRight"); app.dom.key(d.querySelector("canvas"), "Enter"); await app.settle(30);
   await press("기억 수정", d, 50);
   assert.equal(win(), null);
