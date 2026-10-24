@@ -435,7 +435,7 @@ func (s *Service) updateProviders(ctx context.Context, scope Scope, change func(
 			p.Extra = append([]string{}, p.Extra...)
 		}
 		for i, q := range p.Requests {
-			if q.Kind == "cli_update" && providerRequestExpired(q, now) {
+			if (q.Kind == "cli_update" || q.Kind == "models_refresh") && providerRequestExpired(q, now) {
 				p.Requests[i].Status = "expired"
 			}
 		}
@@ -738,7 +738,8 @@ func (s *Service) ProviderHandoff(ctx context.Context, token string, scope Scope
 		if q.Status != "pending" {
 			continue
 		}
-		if q.Kind == "cli_update" && providerRequestExpired(q, now) {
+		// An expired refresh may already have a newer one queued; handing off both rereads twice.
+		if (q.Kind == "cli_update" || q.Kind == "models_refresh") && providerRequestExpired(q, now) {
 			continue
 		}
 		if q.Kind == "key_remove" || q.Kind == "model_test" || q.Kind == "cli_update" || q.Kind == "models_refresh" {

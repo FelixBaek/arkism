@@ -714,8 +714,23 @@ func TestProviderModelsRefreshQueuesOneRequestAtATime(t *testing.T) {
 	if _, err := f.svc.ReportProviders(testCtx, runner, ProvidersReport{Scope: scopeA, Results: []ProviderResult{{ID: page.Items[0].Request.ID, Status: "done"}}}); err != nil {
 		t.Fatal("report", err)
 	}
-	if _, err := f.svc.RefreshProviderModels(testCtx, f.human, in); err != nil {
+	r, err = f.svc.RefreshProviderModels(testCtx, f.human, in)
+	if err != nil {
 		t.Fatal("a refresh after the last one finished", err)
+	}
+	// A refresh the runner never picked up expires: a new one may be queued and only it is handed off.
+	stored := f.repo.store[colProviders][recKey(scopeA, r.ID)]
+	stored.Providers.Requests[1].RequestedAt = time.Now().Add(-providerKeyTTL - time.Minute)
+	f.repo.store[colProviders][recKey(scopeA, r.ID)] = stored
+	if page, _ = f.svc.ProviderHandoff(testCtx, runner, scopeA); len(page.Items) != 0 {
+		t.Fatal("an expired refresh was handed off", page)
+	}
+	r, err = f.svc.RefreshProviderModels(testCtx, f.human, in)
+	if err != nil || r.Providers.Requests[1].Status != "expired" {
+		t.Fatal("expired refresh blocked a new one", r.Providers, err)
+	}
+	if page, _ = f.svc.ProviderHandoff(testCtx, runner, scopeA); len(page.Items) != 1 || page.Items[0].Request.ID != r.Providers.Requests[2].ID {
+		t.Fatal("handoff after expiry", page)
 	}
 }
 
