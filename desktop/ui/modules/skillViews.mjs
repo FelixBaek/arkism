@@ -292,7 +292,7 @@ export function createSkillViews(deps) {
     };
     // The first page failed: one message in the list, no 0개 and no empty-filter text beside it.
     const failed = !!catalogState.error && !skills.length;
-    deps.$("#title-count").textContent = failed || catalogState.total === null && !catalogState.ready ? "" : `${catalogState.total ?? live.length}개`; // no 0개 before the first page
+    deps.$("#title-count").textContent = deps.$("#title")?.classList.contains("sr-only") || failed || catalogState.total === null && !catalogState.ready ? "" : `${catalogState.total ?? live.length}개`; // no 0개 before the first page
     const restore = keepFocus(".v4s-search");
     // 확인해 주세요: what needs a look, the first kind with any opens with 하나씩 확인하기.
     const parts = [];
