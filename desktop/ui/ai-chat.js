@@ -257,7 +257,7 @@ window.ArkismAIChat = (() => {
         if (!v || v === cur) st.note = { text: tr("더 고칠 곳이 없어요.") };
         else { write(v); st.note = { text: "", undo: cur, diff: true }; }
       } catch (e) { st.note = { text: e?.message || tr("AI가 답하지 못했어요."), err: true }; }
-      finally { st.busy = false; show(); if (st.note?.diff) note.querySelector("button")?.focus(); } // the box is hidden while the diff shows: keep focus on 저장
+      finally { st.busy = false; show(); if (st.note?.diff) st.input?.closest(".ex-ai-field")?.querySelector(".ex-ai-note button")?.focus(); } // the box is hidden while the diff shows: keep focus on 저장 of the copy on screen (a redraw may have replaced this one)
     }
     star.addEventListener("click", () => void run());
     function show() {
