@@ -2,6 +2,13 @@
 // edit freely. strings: exact Korean → English. patterns: Korean with {0}… placeholders → English.
 window.ArkismI18nEN = {
  "strings": {
+  "대화를 불러오는 중…": "Loading the conversation…",
+  "둘 다 남기기": "Keep both",
+  "기존 것 유지": "Keep the existing one",
+  "충돌하는 두 기억": "The two conflicting memories",
+  "아직 안 쓰임": "Not used yet",
+  "기존 기억은 어디서 왔나요": "Where the existing memory came from",
+  "AI가 고르지 못했어요.": "The AI could not pick one.",
   "이 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요.": "Could not find this session. It may have been deleted or passed its retention period.",
   "필터 ⌄": "Filter ⌄",
   "필터 1 ⌄": "Filter 1 ⌄",
@@ -3492,6 +3499,8 @@ window.ArkismI18nEN = {
   "연결된 기억": "Linked memories"
  },
  "patterns": {
+  "AI 제안 · {0}": "AI suggestion · {0}",
+  "AI 제안을 받지 못했어요: {0}": "Could not get an AI suggestion: {0}",
   "· {0}개": "· {0}",
   "{0}개는 이름을 바꾸지 못했어요. 다시 해 주세요.": "{0} couldn't be renamed. Try again.",
   "웹훅 ····{0}": "Webhook \u00b7\u00b7\u00b7\u00b7{0}",
@@ -5134,7 +5143,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "24시간 전 ··· 지금": "24 hours ago ··· now",
   "지금 보여 줄 항목이 없어요.": "Nothing to show right now.",
   "서버가 불러오기 집계를 주지 못했어요. 잠시 뒤 다시 열어 보세요.": "The server did not return the recall counts. Open this again in a moment.",
-  "전체 화면으로": "Open full screen"
 });
 Object.assign(window.ArkismI18nEN.patterns, {"{0} / {1} 단계": "Stage {0} / {1}"});
 
@@ -5211,7 +5219,6 @@ Object.assign(window.ArkismI18nEN.strings, {
  "AI 칸 제안 · 정하는 건 사람이에요": "AI scope suggestion; a person decides",
  "세션 보기 ›": "View session ›",
  "승인하면": "If approved",
- "기존 기억과 충돌하는 후보예요. 어느 쪽을 남길지는 전체 화면에서 골라요.": "This candidate conflicts with an existing memory. Choose which to keep on the full screen.",
  "따로 승인": "Approve alone",
  "고쳐서 승인": "Edit and approve",
  "승인된 기억만 불러오기에 쓰여요": "Only approved memories are used for recall",
