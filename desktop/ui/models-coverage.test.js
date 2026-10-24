@@ -215,8 +215,8 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   click(main(), "새로고침"); await settle();
   assert.match(v.notes.at(-1), /한도와 모델 목록을 새로 받지 못했어요/);
   window.__TAURI__ = { core: { invoke: async () => ({}) } };
-  assert.ok(main().all((x) => x.tagName === "BUTTON" && x.textContent === "새로고침").length >= 2, "the 모델 card's button says 새로고침 too");
-  click(main(), "새로고침"); await settle();
+  // Figma 198:544: the 모델 card's button says 다시 불러오기 and does the same refresh
+  click(main(), "다시 불러오기"); await settle();
   delete window.__TAURI__;
   click(main(), "새로고침"); await settle();
   // CLI update: done, failed, conflict, other error, a reply without providers

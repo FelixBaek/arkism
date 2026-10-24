@@ -68,7 +68,7 @@ test("라우팅 현황 draws KPIs, charts, models, families, gateway turns and e
   const v = mk();
   v.r.render(); await settle();
   const t = text(v.table);
-  assert.match(t, /요청 수/); assert.match(t, /모델 계열별 분배/); assert.match(t, /Claude Code 호출/); assert.match(t, /갈래 작업 1/); assert.match(t, /weird 2/);
+  assert.match(t, /요청/); assert.match(t, /모델 계열별 분배/); assert.match(t, /Claude Code 호출/); assert.match(t, /갈래 작업 1/); assert.match(t, /weird 2/);
   assert.equal(v.r.count(), 2);
   assert.match(v.r.views.routing.sub(), /실시간/);
   // a turn opens and closes
@@ -83,12 +83,12 @@ test("라우팅 현황 draws KPIs, charts, models, families, gateway turns and e
   assert.match(text(v.nodes["#detail"]), /30일로 넓혀 보기/);
   click(v.nodes["#detail"], "30일로 넓혀 보기"); await settle();
   click(v.nodes["#detail"], "접기");
-  click(v.nodes["#detail"], "복구"); click(v.nodes["#detail"], "정책 변경");
+  click(v.nodes["#detail"], "복구"); click(v.nodes["#detail"], "정책");
   click(v.nodes["#detail"], "라우팅 설정");
   assert.equal(v.state.settingsTab, "routing"); assert.deepEqual(v.went, ["settings"]);
-  // head: refresh and range segment
-  const [again, seg] = v.r.views.routing.head();
-  again.click(); await settle();
+  // head: the range segment only (Figma 198:372 has no refresh button; the screen reloads itself)
+  const [seg] = v.r.views.routing.head();
+  assert.equal(v.r.views.routing.head().length, 1);
   click(seg, "24시간"); click(seg, "1시간"); await settle();
   v.r.leave(); v.r.leave(); v.r.reset();
 });
@@ -98,7 +98,7 @@ test("each range labels its axis; big, small and empty series pick their own sca
   for (const [range, points] of shapes) {
     const v = mk({ replies: { "/v1/routing/overview": () => overview({ series: { points }, kpi: { requests: 1, success_rate: 100, success_rate_delta_pp: 0, requests_delta_pct: -1, cost_delta_pct: 5 }, families: undefined, models: undefined, gateway: null, events: undefined, policy: undefined }) } });
     v.r.render(); await settle();
-    click(v.r.views.routing.head()[1], { "1h": "1시간", "7d": "7일", "30d": "30일", "24h": "24시간" }[range]); await settle();
+    click(v.r.views.routing.head()[0], { "1h": "1시간", "7d": "7일", "30d": "30일", "24h": "24시간" }[range]); await settle();
     assert.match(text(v.table), /트래픽/);
     assert.match(text(v.nodes["#detail"]), /해당하는 이벤트가 없어요/);
   }

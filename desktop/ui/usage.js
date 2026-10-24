@@ -234,12 +234,17 @@ window.ArkismUsage = (ctx) => {
     const items = r.items;
     const order = [...new Set(r.models.map((m) => m.name).concat(items.map((it) => it.model)))];
     const tone = (m) => `s${Math.min(3, order.indexOf(m))}`;
+    // Figma 198:1490: each model family keeps its own hue; unknown models fall back to the amber steps above.
+    const hue = (m) => { const x = String(m).toLowerCase();
+      return /haiku/.test(x) ? "#f2c2a0" : /opus/.test(x) ? "#c76e52" : /claude|sonnet/.test(x) ? "#e8956b" : /gpt|codex/.test(x) ? (/mini|nano/.test(x) ? "#4fa383" : "#7fd1b0")
+        : /glm/.test(x) ? "#6fb2e8" : /qwen/.test(x) ? "#a594f9" : /opencode/.test(x) ? "#c9c7c0" : /gemini/.test(x) ? "#f2d14b" : ""; };
+    const paint = (node, m) => { const c = hue(m); if (c) node.style.background = c; return node; };
     if (S.flowModel && !order.includes(S.flowModel)) S.flowModel = "";
     const basis = r.count > items.length ? `최근 ${items.length}건 기준 (전체 ${num(r.count)}건)` : `${num(items.length)}건`;
     const chips = el("div", "v4u-chips");
     for (const [id, label] of [["", "전체 모델"], ...order.map((m) => [m, modelLabel(m)])]) {
       const c = el("button", `v4u-chip${S.flowModel === id ? " on" : ""}`); c.type = "button";
-      if (id) c.append(el("i", `v4u-dot ${tone(id)}`));
+      if (id) c.append(paint(el("i", `v4u-dot ${tone(id)}`), id));
       c.append(raw(el("span", "", id ? label : tr(label))));
       c.addEventListener("click", () => { S.flowModel = id; render(false); });
       chips.append(c);
@@ -271,12 +276,12 @@ window.ArkismUsage = (ctx) => {
       const bar = el("div", "v4u-flow-bar"); bar.style.width = `${(list.length / max) * 100}%`;
       const per = {}; list.forEach((it) => { per[it.model] = (per[it.model] || 0) + 1; });
       const got = Object.entries(per).sort((a, b) => b[1] - a[1]);
-      for (const [m, n] of got) { const seg = el("i", `${tone(m)}${S.flowModel && S.flowModel !== m ? " dim" : ""}`); seg.style.flex = String(n); seg.title = `${modelLabel(m)} · ${n}건`; bar.append(seg); }
+      for (const [m, n] of got) { const seg = paint(el("i", `${tone(m)}${S.flowModel && S.flowModel !== m ? " dim" : ""}`), m); seg.style.flex = String(n); seg.title = `${modelLabel(m)} · ${n}건`; bar.append(seg); }
       const wrap = el("div", "v4u-flow-track"); wrap.append(bar);
       const recv = el("div", "v4u-flow-recv");
       for (const [m, n] of got.slice(0, 3)) {
         if (S.flowModel && S.flowModel !== m) continue;
-        const x = el("span", ""); x.append(el("i", `v4u-dot ${tone(m)}`), raw(el("b", "", modelLabel(m))), el("small", "", ` ${pct(n, list.length)} · ${n}`)); recv.append(x);
+        const x = el("span", ""); x.append(paint(el("i", `v4u-dot ${tone(m)}`), m), raw(el("b", "", modelLabel(m))), el("small", "", ` ${pct(n, list.length)} · ${n}`)); recv.append(x);
       }
       if (!recv.childNodes.length) recv.append(el("small", "", "—"));
       row.append(name, wrap, recv);
@@ -467,7 +472,7 @@ window.ArkismUsage = (ctx) => {
   }
   function renderView() {
     const table = $("#table");
-    table.className = "v4u-wrap";
+    table.className = menu() === "router" ? "v4u-wrap v4u-router" : "v4u-wrap";
     $("#stats").replaceChildren();
     $("#chips").replaceChildren();
     if (S.session) {
@@ -481,7 +486,7 @@ window.ArkismUsage = (ctx) => {
       return;
     }
     if (!tabs().some(([k]) => k === S.tab)) S.tab = "overview";
-    const controls = el("div", "v4u-controls");
+    const controls = el("div", `v4u-controls${menu() === "router" ? " router" : ""}`);
     const tabSeg = segment(tabs(), S.tab, (k) => { S.tab = k; render(); }); tabSeg.classList.add("v4u-box");
     const rangeSeg = segment(RANGES, S.range, (k) => { if (S.range !== k) { S.range = k; void load(); } }); rangeSeg.classList.add("v4u-box");
     controls.append(tabSeg, el("span", "v4u-gap"), rangeSeg);

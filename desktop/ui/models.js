@@ -325,13 +325,16 @@ window.ArkismModels = (ctx) => {
     const s = kit.sideSec("API 키");
     const pendingKeys = (doc().requests || []).filter((x) => x.provider === p.id && x.kind === "key_add" && x.status !== "done").slice(-3);
     if (!(p.keys || []).length && !pendingKeys.length) s.append(el("p", "", p.kind === "subscription" ? "저장된 키가 없어요. 구독 로그인만 쓰면 키가 없어도 돼요." : "저장된 키가 없어요."));
-    for (const k of p.keys || []) {
+    // Figma: one key → 키 추가 · 키 제거 under it; several keys keep a trash button on each row
+    const keys = p.keys || [];
+    let single = null;
+    for (const k of keys) {
       const r = el("div", "mp-key");
       r.append(el("span", "mp-key-name", k.name), el("span", "mono", [`••••${k.last4}`, k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/월` : ""].filter(Boolean).join("  ·  ")));
-      const del = button("", "icon-btn plain", "trash", () => removeKey(p.id, k));
+      const del = keys.length === 1 ? button("키 제거", "ghost", null, () => removeKey(p.id, k)) : button("", "icon-btn plain", "trash", () => removeKey(p.id, k));
       del.title = "키 제거";
       del.setAttribute("aria-label", `${k.name} 키 지우기`);
-      r.append(del);
+      if (keys.length === 1) single = del; else r.append(del);
       const meta = [k.base_url ? k.base_url.replace(/^https?:\/\//, "") : "", k.created_at ? ago(k.created_at) : ""].filter(Boolean).join(" · ");
       s.append(r);
       if (meta) s.append(el("small", "mp-key-meta", meta));
@@ -342,7 +345,9 @@ window.ArkismModels = (ctx) => {
       r.append(el("span", "mp-key-name", `${q.name} ••••${q.last4}`), el("span", `tag ${q.status === "pending" ? "" : "warn"}`, q.status === "pending" ? "대기" : "실패"));
       s.append(r, el("small", "mp-key-meta", msg));
     }
-    if (!p.custom) s.append(actionsRow(button("키 추가", "", null, () => openKeyDialog(p))));
+    if (!p.custom) s.append(actionsRow(button("키 추가", "", null, () => openKeyDialog(p)), ...(single ? [single] : [])));
+    else if (single) s.append(actionsRow(single));
+    if (keys.some((k) => k.monthly_budget_usd != null)) s.append(el("p", "mp-key-note", "월 예산은 사용량 화면의 비용 기준으로 계산해요."));
     return s;
   }
   function modelsCard(p) {
@@ -374,7 +379,7 @@ window.ArkismModels = (ctx) => {
     f.addEventListener("focus", () => { typing = p.id; });
     f.addEventListener("blur", (ev) => { if (ev.relatedTarget) typing = null; });
     if (typing === p.id) requestAnimationFrame(() => { if (!document.activeElement || document.activeElement === document.body) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } });
-    const re = button("새로고침", "ghost", null, () => reload(re));
+    const re = button("다시 불러오기", "ghost", null, () => reload(re));
     tools.append(f, re, button("모델 추가", "", null, () => { addRow.hidden = !addRow.hidden; mi.focus(); }));
     c.append(tools, addRow);
     const ml = el("div", "mp-models");
@@ -486,14 +491,16 @@ window.ArkismModels = (ctx) => {
       b.addEventListener("click", () => { selected = p.id; render(false); });
       chips.append(b);
     }
-    // 사용량 보기 · 공급자 추가 sit at the right end of the chip row, next to what they add to
-    const bar = el("div", "mp-chipbar"), acts = el("div", "mp-chip-actions");
-    acts.append(button("사용량 보기", "ghost", null, () => go("usage")), add);
-    bar.append(chips, acts);
+    // Figma: 사용량 보기 · 공급자 추가 sit in the page head, the chips get the whole row
+    kit.head(button("사용량 보기", "ghost", null, () => go("usage")), add);
+    const bar = el("div", "mp-chipbar");
+    bar.append(chips);
     out.push(bar);
     const p = list.find((x) => x.id === selected);
     out.push(accountsCard(p), modelsCard(p));
-    kit.side(keysSection(p),
+    const assist = el("div", "v4-kv mp-assist-row");
+    assist.append(el("span", "", "모델"), assistPicker());
+    kit.side(kit.sideSec("AI 도구 기본 모델", assist), keysSection(p),
       kit.sideSec("한도 안내", el("p", "", "한도를 알려 주지 않는 계정은 안내만 보여 줘요. 계정을 추가하면 로그인 방법을 안내해요.")));
     return out;
   }

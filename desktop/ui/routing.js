@@ -7,8 +7,8 @@ window.ArkismRouting = (ctx) => {
 
   const RANGES = [["1h", "1시간"], ["24h", "24시간"], ["7d", "7일"], ["30d", "30일"]];
   const FAMILY_LOGO = { CLAUDE: "img:claude.svg", GPT: "sym:a-codex", GLM: "sym:a-zcode", GEMINI: "sym:a-gemini", XAI: "sym:i-x" };
-  const STATUS = { ok: ["ok", "정상"], watch: ["warn", "모니터링"], slow: ["warn", "느림"], key: ["warn", "키 만료 임박"], fixed: ["on", "고정 중"], idle: ["off", "대기"], off: ["off", "사용 안 함"] };
-  const EVENT_KINDS = [["all", "전체"], ["incident", "장애"], ["policy", "정책 변경"], ["recovery", "복구"]];
+  const STATUS = { ok: ["ok", "정상"], watch: ["warn", "지켜보는 중"], slow: ["warn", "느림"], key: ["warn", "키 만료 임박"], fixed: ["on", "고정 중"], idle: ["off", "대기"], off: ["off", "사용 안 함"] };
+  const EVENT_KINDS = [["all", "전체"], ["incident", "장애"], ["policy", "정책"], ["recovery", "복구"]];
   const EVENT_ICON = { incident: "warning-circle", policy: "sliders-horizontal", recovery: "check-circle" };
   const SVGNS = "http://www.w3.org/2000/svg";
 
@@ -83,7 +83,7 @@ window.ArkismRouting = (ctx) => {
     return d;
   }
   function spark(values, kind) {
-    const W = 160, H = 46, box = svg("svg", { class: `rt-spark ${kind}`, viewBox: `0 0 ${W} ${H + 8}`, "aria-hidden": "true" });
+    const W = 160, H = 29, box = svg("svg", { class: `rt-spark ${kind}`, viewBox: `0 0 ${W} ${H + 8}`, "aria-hidden": "true" });
     if (!values || values.length < 2) return box;
     const mn = Math.min(...values), mx = Math.max(...values);
     const pts = values.map((v, i) => [(i * (W - 10)) / (values.length - 1), 6 + (H - 8) - ((v - mn) / (mx - mn || 1)) * (H - 8)]);
@@ -110,7 +110,7 @@ window.ArkismRouting = (ctx) => {
     return `${d.getMonth() + 1}/${d.getDate()}`;
   }
   function lineChart(points, lines, yMax, yLabels, range, mark) {
-    const W = 383, H = 150, L = 34, bot = H - 20, ph = bot - 6;
+    const W = 383, H = 220, L = 32, bot = H - 22, ph = bot - 8; // Figma 차트 347×200
     const box = svg("svg", { class: "rt-chart", viewBox: `0 0 ${W} ${H}`, role: "img" });
     const X = (i) => L + (i * (W - L)) / Math.max(1, points.length - 1), Y = (v) => bot - (Math.min(v, yMax) / yMax) * ph;
     yLabels.forEach((lab, i) => {
@@ -174,7 +174,8 @@ window.ArkismRouting = (ctx) => {
     legend.append(el("i", "lg-main"), "p50", el("i", "lg-dim"), "p95");
     const wrap = el("div", "rt-main");
     const charts = el("div", "rt-grid2");
-    charts.append(chartCard("트래픽", `평균 ${mean >= 100 ? num(Math.round(mean)) : mean.toFixed(1)}${perLabel} · 최고 ${num(Math.round(mx))}${perLabel}`, unitLabel, traffic), chartCard("지연시간", "", "응답까지 걸린 시간(초)", latency, legend));
+    const tLegend = el("span", "rt-legend"); tLegend.append(el("i", "lg-main"), "요청");
+    charts.append(chartCard("트래픽", "", `${unitLabel} · 평균 ${mean >= 100 ? num(Math.round(mean)) : mean.toFixed(1)}${perLabel} · 최고 ${num(Math.round(mx))}${perLabel}`, traffic, tLegend), chartCard("지연시간", "", "응답까지 걸린 시간(초)", latency, legend));
     wrap.append(charts);
     wrap.append(modelsTable(d), distribution(d));
     const gw = turns?.card(d.gateway); // Claude Code 본대화·부속 호출 (routing-turns.js)
@@ -203,9 +204,9 @@ window.ArkismRouting = (ctx) => {
     const manual = d.policy && d.policy.auto_routing === false;
     head.append(el("strong", "", "모델별 현황"), el("span", "", `${(d.models || []).length}개 모델 · ${RANGES.find(([k]) => k === S.range)[1]}`));
     c.append(head);
-    const cols = "minmax(0,1fr) 76px 112px 64px 64px 96px";
+    const cols = "minmax(0,1fr) 70px 120px 70px 70px 90px"; // Figma 열 이름: left-aligned columns
     const th = el("div", "rt-row th"); th.style.gridTemplateColumns = cols;
-    ["모델", "요청 수", "지연 p50 / p95", "성공률", "비용", "상태"].forEach((t, i) => th.append(el("span", i && i < 5 ? "r" : "", t)));
+    ["모델", "요청", "지연 p50 / p95", "성공률", "비용", "상태"].forEach((t) => th.append(el("span", "", t)));
     c.append(th);
     for (const m of d.models || []) {
       const fixed = manual && m.id === d.policy.default_model;
@@ -214,7 +215,7 @@ window.ArkismRouting = (ctx) => {
       const name = el("span", "rt-model"); const t = el("span", "rt-model-text"); t.append(el("b", "", m.name), el("small", "", m.provider || m.family));
       name.append(agentTile(m.family), t);
       const slow = m.status === "slow" || m.status === "watch";
-      const cells = [el("span", "r m", num(m.requests)), el("span", `r m${slow ? " warn" : ""}`, `${sec1(m.p50_ms)}s / ${sec1(m.p95_ms)}s`), el("span", `r m${m.status === "watch" ? " warn" : ""}`, pct1(m.success_rate)), el("span", "r m", usd(m.cost_usd))];
+      const cells = [el("span", "m", num(m.requests)), el("span", `m${slow ? " warn" : ""}`, `${sec1(m.p50_ms)}s / ${sec1(m.p95_ms)}s`), el("span", `m${m.status === "watch" ? " warn" : ""}`, pct1(m.success_rate)), el("span", "m cost", usd(m.cost_usd))];
       const metrics = el("span", `rt-metrics${slow ? " warn" : ""}`, `${num(m.requests)}건 · ${sec1(m.p50_ms)}s / ${sec1(m.p95_ms)}s · ${pct1(m.success_rate)} · ${usd(m.cost_usd)}`);
       row.append(name, ...cells, badge(kind), metrics);
       c.append(row);
@@ -345,7 +346,7 @@ window.ArkismRouting = (ctx) => {
     // 이벤트 전체 보기 (Figma 198:372): the overview holds this range's newest 50; 30일 reaches back furthest.
     const more = el("div", "rt-events-more");
     if (all.length > EVENTS_SHOWN) {
-      const b = el("button", "link-btn v4-link", S.eventsAll ? "접기" : `이벤트 전체 보기 (${all.length}건)`); b.type = "button";
+      const b = el("button", "btn rt-events-all", S.eventsAll ? "접기" : `이벤트 전체 보기 (${all.length}건)`); b.type = "button";
       b.addEventListener("click", () => { S.eventsAll = !S.eventsAll; paint(); });
       more.append(b);
     }
@@ -680,10 +681,9 @@ window.ArkismRouting = (ctx) => {
     views: { routing: { title: "라우팅 현황", render: renderView, keepDetail: true,
       sub: () => (S.state === "ready" && S.at ? `실시간 · 10초마다 갱신 · 마지막 ${S.at.toLocaleTimeString(globalThis.ArkismI18n?.locale() || "ko-KR", { hour12: false })}` : "Clef가 요청을 나누고, 막히면 다음 모델로 넘겨요"),
       head: () => {
-        const again = button("", "icon-btn", "arrows-clockwise", load); again.title = "새로고침"; again.setAttribute("aria-label", "새로고침");
         const seg = segment(RANGES.map(([k, l]) => [k, l]), S.range, (k) => { if (S.range !== k) { S.range = k; void load(); } });
         seg.classList.add("rt-range");
-        return [again, seg];
+        return [seg]; // no refresh button (Figma 198:372): the screen reloads itself
       } } }
   };
 };

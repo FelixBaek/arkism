@@ -148,7 +148,6 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .mp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .mp-chipbar { display: flex; align-items: flex-start; gap: 12px; }
 .mp-chipbar > .mp-chips { flex: 1; min-width: 0; }
-.mp-chip-actions { display: flex; flex-shrink: 0; gap: 8px; }
 .mp-chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--sans); cursor: pointer; }
 .mp-chip:hover { background: var(--nc-raised); }
 .mp-chip.active { background: var(--nc-raised); border-color: transparent; color: var(--nc-accent); font-weight: 500; }
@@ -190,6 +189,10 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .mp-key-name { width: 72px; flex: none; color: var(--nc-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mp-key .mono { flex: 1; min-width: 0; font: 13px var(--mono); color: var(--nc-text); }
 .mp-key-meta { margin: -6px 0 0 84px; color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); }
+.v4-side-sec > .mp-key-note { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+/* Figma 04 · 모델 설정: the right column's sections stack without dividers */
+.v4-side:has(.mp-assist-row) .v4-side-sec + .v4-side-sec { padding-top: 12px; border-top: 0; }
+.mp-assist-row .mp-assist { min-width: 0; flex: 1; }
 
 /* API 키 추가 (Figma 198:3210): a wide two-part window */
 .key-dialog { width: min(720px, calc(100vw - 32px)); }
@@ -224,7 +227,7 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .rt-delta { white-space: nowrap; padding: 2px 7px; border-radius: 6px; font: 400 calc(11px * var(--fs, 1)) var(--mono); background: var(--nc-raised); color: var(--nc-muted); }
 .rt-delta.ok, .rt-delta.warn { background: var(--nc-raised); color: var(--nc-muted); }
 .rt-delta.bad { background: var(--nc-amber-bg); color: var(--nc-amber); }
-.rt-spark { position: static; width: 100%; height: 46px; --c: var(--nc-accent); }
+.rt-spark { position: static; width: 100%; height: 34px; --c: var(--nc-accent); }
 .rt-spark.bad, .rt-spark.warn { --c: var(--nc-accent); }
 .rt-spark .area { opacity: .16; }
 .rt-spark .mark { display: none; }
@@ -253,6 +256,7 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .rt-card.table .rt-row { padding: 10px 16px; border-color: var(--nc-line); }
 .rt-card.table .rt-row .m { font: 12px var(--mono); color: var(--nc-text); }
 .rt-card.table .rt-row .warn { color: var(--nc-amber); }
+.rt-card.table .rt-row .m.cost { color: var(--nc-muted); }
 .rt-card.table .rt-row > .rt-status { justify-self: start; padding: 2px 8px; border: 1px solid var(--nc-line); border-radius: 999px; font: 500 calc(11px * var(--fs, 1)) var(--sans); color: var(--nc-text); }
 .rt-card.table .rt-row > .rt-status i { display: none; }
 .rt-card.table .rt-row > .rt-status.warn { border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-amber); }
@@ -334,6 +338,9 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .rt-events-more { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 4px 12px 0; }
 .rt-events-more small { color: var(--nc-quiet); font-size: calc(11px * var(--fs, 1)); }
 .rt-events-more .v4-link { color: var(--nc-text); }
+.rt-events-more { padding: 4px 0 0; }
+.rt-events-more .rt-events-all { width: 100%; height: 40px; justify-content: center; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: none; color: var(--nc-text); font: 500 calc(13px * var(--fs, 1)) var(--sans); }
+.rt-events-more .rt-events-all:hover { background: var(--nc-raised); }
 .rt-groups .rt-h3 { margin: 0; font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .rt-group-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .rt-group-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 6px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: inherit; text-align: left; cursor: pointer; }
@@ -368,7 +375,7 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-side .rt-group-detail .rt-detail-top > div { flex: 1; min-width: 0; }
 .v4-side .rt-group-detail .rt-detail-top small.mono { font: calc(11px * var(--fs, 1)) var(--mono); }
 .v4-side .rt-group-detail .rt-sec input, .rt-add-member { width: 100%; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); padding: 7px 10px; font: inherit; }
-.rt-add-member { margin-top: 8px; border-style: dashed; background: transparent; text-align: center; }
+.rt-add-member { margin-top: 8px; border-style: solid; background: transparent; text-align: center; text-align-last: center; color: var(--nc-text); }
 .rt-group-members { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
 .rt-member { display: grid; grid-template-columns: 16px 16px minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; padding: 9px 10px; }
 .rt-member + .rt-member { border-top: 1px solid var(--nc-line); }
@@ -388,3 +395,13 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .mp-cli .btn { height: auto; padding: 5px 12px; font-size: calc(12px * var(--fs, 1)); }
 .mp-cli-err { flex-basis: 100%; color: var(--nc-amber); }
 .v4-roles .pg-actions { display: flex; gap: 8px; }
+
+/* Figma 04 · 사용량 (198:1490): ROUTER usage only — range segment beside the tabs, value-first KPIs, taller day chart */
+.v4u-controls.router { gap: 8px; }
+.v4u-controls.router .v4u-gap { display: none; }
+.v4u-router .v4u-kpi strong { order: -1; font: 400 calc(22px * var(--fs, 1))/1.4 var(--mono); }
+.v4u-router .v4u-kpi small { font-family: var(--mono); }
+.v4u-router .v4u-kpi.amber { background: var(--nc-surface); }
+.v4u-router .v4u-cols { height: 190px; }
+/* a model with its own family hue (usage.js hue()) drops the amber step fade; .dim still fades */
+.v4u-router .v4u-dot[style*="background"], .v4u-router .v4u-flow-bar i[style*="background"]:not(.dim) { opacity: 1; }
