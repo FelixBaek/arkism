@@ -3,6 +3,8 @@
 window.ArkismI18nEN = {
  "strings": {
   "이 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요.": "Could not find this session. It may have been deleted or passed its retention period.",
+  "필터 ⌄": "Filter ⌄",
+  "필터 1 ⌄": "Filter 1 ⌄",
   "모든 기간에서 찾았어요": "Searched across all dates",
   "+ 채널 연결": "+ Connect channel",
   "글이 올라오면 답해요": "Answers every post",
@@ -1340,7 +1342,6 @@ window.ArkismI18nEN = {
   "구독 로그인은 서버에서 한 번 해 두면 돼요. 로그인하면 1분 안에 여기 보여요.": "Subscription login only needs to be done once on the server. After you log in, it shows up here within a minute.",
   "여러 계정을 번갈아 쓰려면 계정마다 따로 로그인한 홈 폴더를 쓰세요. API로 쓰려면 '키 넣기'를 눌러요.": "To rotate between multiple accounts, use a separately logged-in home folder for each. To use the API, press 'Add key'.",
   "키 넣기": "Add key",
-  "모든 종류": "All kinds",
   "고친 내용으로 승인": "Approve with edits",
   "기억 다듬기": "Polish memory",
   "지우기를 요청했어요. 서버에서 지우면 목록에서 빠져요.": "Deletion requested. It leaves the list once the server deletes it.",
@@ -3630,7 +3631,6 @@ window.ArkismI18nEN = {
   "최근 3일 새 기억 {0}개": "{0} new memories in the last 3 days",
   "어댑터가 필요한 스킬 {0}개": "{0} skills need an adapter",
   "{0} 분석 ·": "Analyzed {0} ·",
-  "모든 종류 {0}": "All types {0}",
   "공용 {0}": "Shared {0}",
   "번 · 최근 {0}일 · 대화 {1}개": "times · last {0} days · {1} conversations",
   "/ {0}개": "/ {0}",

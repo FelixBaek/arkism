@@ -368,3 +368,8 @@
 @media (prefers-reduced-motion: reduce) { .ov-map-spin { animation-duration: 3s; } }
 .ov-map-sk { height: 18px; border-radius: 6px; border: 0; }
 .ov-map-sk:nth-child(3) { width: 70%; } .ov-map-sk:nth-child(5) { width: 55%; }
+.ov-filter { position: relative; flex: none; } .ov-filter > button.on { color: var(--accent, var(--text-1)); border-color: currentColor; }
+.ov-filter-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; width: 280px; display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-surface); box-shadow: var(--shadow-popover); }
+.ov-filter-pop[hidden] { display: none; }
+.ov-filter-pop::before { content: ""; position: absolute; top: -6px; left: 18px; width: 10px; height: 10px; background: inherit; border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg); }
+.ov-filter-label { font-size: 12px; color: var(--text-2); }

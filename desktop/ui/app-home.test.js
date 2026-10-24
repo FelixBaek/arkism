@@ -178,14 +178,23 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
     chip.click(); await app.settle(30);
   }
   assert.ok([...d.querySelectorAll(".ov-wide-chip")].every((c) => !/^\D+ 0$/.test(text(c))), "no chip counts 0");
-  // the kind is a dropdown beside the sort order, not a second chip row
+  // the kind lives in the 필터 bubble beside the sort order, not a second chip row
   assert.ok(![...d.querySelectorAll(".ov-wide-chip")].some((c) => text(c).startsWith("모든 종류")));
-  const typeSel = d.querySelector('select[aria-label="종류"]');
-  assert.ok(typeSel && !typeSel.hidden && typeSel.previousSibling === sorter, "the kind dropdown sits next to the sort");
-  const kindOpt = typeSel.options.find((o) => o.value); assert.ok(kindOpt, "a kind to pick");
-  typeSel.value = kindOpt.value; app.dom.fire(typeSel, "change"); await app.settle(30);
-  assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/memory_candidates/query" && String(b).includes(`"kind":"${kindOpt.value}"`)));
-  typeSel.value = ""; app.dom.fire(typeSel, "change"); await app.settle(30);
+  const filt = btn("필터 ⌄", d), pop = d.querySelector(".ov-filter-pop");
+  assert.ok(filt && pop.hidden && d.querySelector(".ov-filter").previousSibling === sorter, "the 필터 button sits next to the sort, closed");
+  filt.click(); assert.ok(!pop.hidden); assert.match(text(pop), /종류/);
+  d.click(); assert.ok(pop.hidden, "a click outside closes it");
+  filt.click(); app.dom.fire(d, "keydown", { key: "Escape" }); assert.ok(pop.hidden && d.open, "Esc closes the bubble, not the window");
+  filt.click();
+  const kindChip = pop.querySelector(".ov-wide-chip"); assert.ok(kindChip, "a kind to pick");
+  assert.ok([...pop.querySelectorAll(".ov-wide-chip")].every((c) => !/ 0$/.test(text(c))), "no kind counts 0");
+  const kindName = text(kindChip).replace(/ [\d,]+$/, "");
+  kindChip.click(); await app.settle(30);
+  assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/memory_candidates/query" && /"kind":"[a-z_]+"/.test(String(b))));
+  assert.ok(btn("필터 1 ⌄", win()), "the button counts the active filter");
+  assert.ok(!win().querySelector(".ov-filter-pop").hidden, "the bubble stays open while picking");
+  [...win().querySelectorAll(".ov-filter-pop .ov-wide-chip")].find((c) => text(c).startsWith(kindName)).click(); await app.settle(30);
+  assert.ok(btn("필터 ⌄", win()), "picking it again clears it");
   // rows pick the detail; a checkbox counts toward the batch button
   const rows = [...d.querySelectorAll(".ov-wide-row:not(.ov-wide-row-dream)")];
   assert.ok(rows.length > 2);

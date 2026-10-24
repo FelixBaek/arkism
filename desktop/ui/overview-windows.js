@@ -341,8 +341,13 @@ window.ArkismOverviewWindows = (ctx, env) => {
     // 정렬 (764:61615): oldest first by default, so nothing waits forever
     const ORDERS = [["old", "오래된 순"], ["new", "최신 순"], ["risk", "위험도 높은 순"]];
     const sorter = sortSelect(ORDERS, order, (k) => { order = k; paint(); });
-    const typeSel = el("select", "ov-wide-sort"); typeSel.setAttribute("aria-label", "종류"); typeSel.addEventListener("change", () => { typeF = typeSel.value; paint(); });
-    const bar = filterBar([typeSel, search, batch], sorter, chipHost);
+    // 필터: the kinds sit in a small bubble under this button, not a second chip row; it closes on a click outside or Esc
+    const filt = el("div", "ov-filter"), pop = el("div", "ov-filter-pop"), filtBtn = button("필터 ⌄", "ghost small", null, (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; filtBtn.setAttribute("aria-expanded", String(!pop.hidden)); });
+    pop.hidden = true; filtBtn.setAttribute("aria-expanded", "false"); filt.append(filtBtn, pop);
+    const shut = () => { if (pop.hidden) return false; pop.hidden = true; filtBtn.setAttribute("aria-expanded", "false"); return true; };
+    pop.addEventListener("click", (e) => e.stopPropagation()); d.addEventListener("click", shut);
+    d.addEventListener("keydown", (e) => { if (e.key === "Escape" && shut()) { e.preventDefault(); filtBtn.focus(); } });
+    const bar = filterBar([filt, search, batch], sorter, chipHost);
     const RISK_RANK = { high: 0, medium: 1, low: 2 }, rank = (c) => c.dream ? 2 : RISK_RANK[c.classification?.risk] ?? (confusing(c, merges) ? 1 : 3); // no AI risk yet: 헷갈림 counts as medium
     const byOrder = (a, b) => order === "new" ? time(b.created_at) - time(a.created_at)
       : order === "risk" ? rank(a) - rank(b) || time(a.created_at) - time(b.created_at)
@@ -353,10 +358,11 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const every = (Object.keys(counts).length ? sum : snap.total ?? 0) + dreamItems().length; // 전체 = what the title counts: every waiting item and the proposals
       // a state with nothing in it is not offered, unless it is the one picked
       chipHost.replaceChildren(chipBar([["all", "전체", every], ["new", "새로 저장", counts.new || 0], ["confusing", "헷갈림", counts.confusing || 0], ["dream", "정리 제안", dreamItems().length]].filter(([k, , n]) => k === "all" || n || k === kindF), kindF, (k) => { kindF = k; if (k === "dream") typeF = ""; paint(); }));
-      // 종류: a dropdown beside the sort order, not a second chip row
-      const kinds = Object.entries(snap.facets.kinds || {});
-      typeSel.replaceChildren(...[["", "모든 종류"], ...kinds.map(([k, n]) => [k, `${kind(k)} · ${num(n)}개`])].map(([k, l]) => { const o = el("option", "", l); o.value = k; o.selected = k === typeF; return o; }));
-      typeSel.hidden = kindF === "dream" || (kinds.length < 2 && !typeF);
+      // 종류 in the 필터 bubble: a kind with nothing in it is not offered; the picked one again clears it
+      const kinds = Object.entries(snap.facets.kinds || {}).filter(([k, n]) => n || k === typeF);
+      pop.replaceChildren(el("small", "ov-filter-label", "종류"), chipBar(kinds.map(([k, n]) => [k, kind(k), n]), typeF, (k) => { typeF = k === typeF ? "" : k; paint(); }));
+      filtBtn.textContent = typeF ? "필터 1 ⌄" : "필터 ⌄"; filtBtn.classList.toggle("on", !!typeF);
+      filt.hidden = kindF === "dream" || (kinds.length < 2 && !typeF);
       if (!snap.loading) badge.textContent = `${num(every)}건`; }; // the title counts every waiting item, not only the loaded page
     const badge = d.querySelector(".ov-win-badge");
     function paint() {
