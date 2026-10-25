@@ -1273,7 +1273,13 @@ func handleMessage(w io.Writer, line string) {
 	}
 	if raw, ok := result.(rawJSON); ok {
 		if id, has := message["id"]; has {
-			_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":`+host.MustDumps(id, host.DumpOpts{Compact: true, NoASCII: true})+`,"result":`+string(raw)+"}\n")
+			enc := json.NewEncoder(w)
+			enc.SetEscapeHTML(false)
+			_ = enc.Encode(struct { // a closed stdout means the client left; the read loop ends on EOF
+				JSONRPC string          `json:"jsonrpc"`
+				ID      json.RawMessage `json:"id"`
+				Result  json.RawMessage `json:"result"`
+			}{"2.0", json.RawMessage(host.MustDumps(id, host.DumpOpts{Compact: true, NoASCII: true})), json.RawMessage(raw)})
 		}
 		return
 	}
