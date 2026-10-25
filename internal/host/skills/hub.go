@@ -974,7 +974,7 @@ func cliClient() (*hubClient, error) {
 	} else if m, ok := v.(map[string]any); ok {
 		scope = m
 	}
-	return newHubClient(host.Env("ARKISM_URL", "http://127.0.0.1:8091"), host.Env("ARKISM_API_TOKEN", ""), scope,
+	return newHubClient(host.Env("ARKISM_URL", host.DefaultURL), host.Env("ARKISM_API_TOKEN", ""), scope,
 		host.Env("ARKISM_SKILL_CACHE", filepath.Join(host.Home, ".cache/arkism-skills")), 5*time.Second)
 }
 

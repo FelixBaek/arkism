@@ -534,7 +534,7 @@ func failureCode(err error) any {
 
 func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	p := newArgs("sync-skills", stderr)
-	url := p.str("--url", host.Env("ARKISM_URL", "http://127.0.0.1:8091"))
+	url := p.str("--url", host.Env("ARKISM_URL", host.DefaultURL))
 	tokenFile := p.str("--token-file", host.Env("ARKISM_TOKEN_FILE", "/srv/arkism/config/owner.token"))
 	workspace := p.str("--workspace", "default")
 	project := p.str("--project", "default")

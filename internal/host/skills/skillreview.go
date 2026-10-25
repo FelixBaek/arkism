@@ -55,7 +55,7 @@ Tokens: ARKISM_TOKEN_FILE (owner, human) and ARKISM_WORKER_TOKEN_FILE
 func init() { host.Register("skill-review", reviewMain) }
 
 var (
-	reviewURL    = strings.TrimRight(host.Env("ARKISM_URL", "http://127.0.0.1:8091"), "/")
+	reviewURL    = strings.TrimRight(host.Env("ARKISM_URL", host.DefaultURL), "/")
 	reviewOwner  = host.Env("ARKISM_TOKEN_FILE", "/srv/arkism/config/owner.token")
 	reviewWorker = host.Env("ARKISM_WORKER_TOKEN_FILE", "/srv/arkism/config/worker.token")
 	evalModel    = host.Env("SKILL_EVAL_MODEL", host.HarnessCLIModel("evaluator", "sonnet"))

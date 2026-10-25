@@ -777,7 +777,7 @@ func evaluateMain(argv []string, stdin io.Reader, stdout, stderr io.Writer) (cod
 	}
 	apiURL := a.vals["url"]
 	if !a.has("url") {
-		apiURL = "http://127.0.0.1:8091"
+		apiURL = host.DefaultURL
 	}
 	defer func() {
 		if recover() != nil {

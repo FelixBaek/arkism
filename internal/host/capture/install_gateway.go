@@ -22,7 +22,7 @@ func instGatewayLocal(base string) bool {
 	if err != nil || u.Scheme != "http" {
 		return false
 	}
-	_, port, err := net.SplitHostPort(host.Env("ARKISM_GATEWAY_LISTEN", "127.0.0.1:8099"))
+	_, port, err := net.SplitHostPort(host.Env("ARKISM_GATEWAY_LISTEN", host.DefaultGatewayListen))
 	if err != nil {
 		return false
 	}

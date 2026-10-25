@@ -162,7 +162,7 @@ func expireMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	workspace, project := p.str("--workspace-id", ""), p.str("--project-id", "")
 	user, agent := p.str("--user-id", ""), p.str("--agent-id", "")
 	days, batchSize, maxBatches := p.int("--retention-days", 0), p.int("--batch-size", 50), p.int("--max-batches", 1)
-	endpoint := p.str("--url", "http://127.0.0.1:8091")
+	endpoint := p.str("--url", host.DefaultURL)
 	execute := p.flag("--execute")
 	if !p.parse(args, 0, 0) || !p.need("--workspace-id", "--project-id", "--retention-days") {
 		return 2

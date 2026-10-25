@@ -32,7 +32,7 @@ func envOr(k, def string) string {
 
 // FromEnv builds the engine like `arkism capture` does its client:
 //
-//	ARKISM_URL (http://127.0.0.1:8091), ARKISM_TOKEN_FILE (/srv/arkism/config/crew.token),
+//	ARKISM_URL (host.DefaultURL), ARKISM_TOKEN_FILE (/srv/arkism/config/crew.token),
 //	ARKISM_WORKSPACE, ARKISM_PROJECT, ARKISM_USER, ARKISM_AGENT (scope),
 //	ARKISM_CREW_LISTEN (127.0.0.1:8095), ARKISM_CREW_PUBLIC_URL (http://LISTEN),
 //	ARKISM_CREW_RUNNER ("/srv/arkism/bin/arkism crew"), ARKISM_CREW_SANDBOX,
@@ -51,7 +51,7 @@ func FromEnv() Config {
 		}
 	}
 	client := &Client{
-		BaseURL:   envOr("ARKISM_URL", "http://127.0.0.1:8091"),
+		BaseURL:   envOr("ARKISM_URL", host.DefaultURL),
 		TokenFile: envOr("ARKISM_TOKEN_FILE", "/srv/arkism/config/crew.token"),
 		Scope: Scope{WorkspaceID: envOr("ARKISM_WORKSPACE", "default"),
 			ProjectID: envOr("ARKISM_PROJECT", "default"), UserID: envOr("ARKISM_USER", "management:owner"),
