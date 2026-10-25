@@ -295,10 +295,28 @@ async fn ssh_connect(rt: tauri::State<'_, Arc<runtime::Runtime>>, form: SshForm)
     tauri::async_runtime::spawn_blocking(move || {
         let _activity = rt.activity()?;
         let target = ssh_tunnel::target_from_form(&form.into())?;
-        let c = ssh_tunnel::connect(target, rt.gate(), ssh_identity::Store::new(&rt.data_dir()))?;
-        // Stop the built-in Arkism's agents file pointing at this PC; capture follows the server.
-        rt.agents_use_server(&c.ssh_host, c.ssh_port, c.ssh_key.as_deref(), &c.pin)?;
-        Ok(c)
+        // The old tunnel and the agents stay as they are until the app opened this server (`ssh_connect_done`).
+        ssh_tunnel::connect(target, rt.gate(), ssh_identity::Store::new(&rt.data_dir()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// After `ssh_connect`: `ok` when the app opened the new server, which the agents then follow;
+/// otherwise the previous tunnel comes back so the connection the app returns to still works.
+#[tauri::command]
+async fn ssh_connect_done(rt: tauri::State<'_, Arc<runtime::Runtime>>, ok: bool) -> Result<(), String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || {
+        let _activity = rt.activity()?;
+        if ok {
+            if let Some((target, pin)) = ssh_tunnel::current() {
+                // Stop the built-in Arkism's agents file pointing at this PC; capture follows the server.
+                let key = target.key.map(|k| k.display().to_string());
+                rt.agents_use_server(&target.host, target.port, key.as_deref(), &pin)?;
+            }
+        }
+        ssh_tunnel::finish(ok, rt.gate())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -479,7 +497,9 @@ fn allowed(method: &str, path: &str) -> bool {
     let one_id = |prefix: &str| path.strip_prefix(prefix).is_some_and(|id| !id.is_empty() && !id.contains('/') && !id.contains('?'));
     let delete = method == "DELETE"
         && (path.starts_with("/v1/memories/") || one_id("/v1/crew/") || one_id("/v1/prompts/") || one_id("/v1/design_systems/"));
-    api && !path.contains("..") && (method == "GET" || method == "POST" || delete)
+    // `..` (or %2e%2e) only matters in the path: a search query may contain it.
+    let route = path.split(['?', '#']).next().unwrap_or("").to_ascii_lowercase().replace("%2e", ".");
+    api && !route.contains("..") && (method == "GET" || method == "POST" || delete)
 }
 
 fn valid_base(base: &str) -> bool {
@@ -990,7 +1010,7 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy])
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {
@@ -1110,6 +1130,8 @@ mod tests {
         assert!(!allowed("DELETE", "/v1/crew_runs/x"));
         assert!(!allowed("GET", "/metrics"));
         assert!(!allowed("GET", "/v1/../metrics"));
+        assert!(!allowed("GET", "/v1/%2E%2e/metrics") && !allowed("GET", "/v1/.%2e/metrics"));
+        assert!(allowed("GET", "/v1/sessions/search?q=a..b") && allowed("GET", "/v1/sessions?q=..#x"));
         assert!(valid_base("http://arkism.example.internal:8092"));
         assert!(valid_base(DEFAULT_SERVER));
         assert!(!valid_base("file:///etc"));

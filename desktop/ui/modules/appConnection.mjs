@@ -169,7 +169,10 @@ export function createAppConnection(deps) {
       // 서버의 Git·스킬 실행도 활성 연결의 포트·개인 키와 승인한 서버 키를 함께 쓴다.
       deps.state.defaults.ssh_host = r.ssh_host;
       await open();
+      await deps.tauri.invoke("ssh_connect_done", { ok: true });
     } catch (err) {
+      // 앱 쪽에서 새 터널을 닫고 이전 터널을 되살린다. 그래야 돌아간 연결이 실제로 동작한다.
+      await deps.tauri.invoke("ssh_connect_done", { ok: false }).catch(() => {});
       Object.assign(deps.state, { mode: before.mode, server: before.server, token: before.token, scope: before.scope });
       deps.state.defaults.ssh_host = before.sshHost;
       throw new Error("연결은 됐지만 서버의 Arkism을 열지 못했어요. 서버에서 Arkism이 켜져 있는지 확인하세요.", { cause: err });
