@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/host/subscription"
 )
 
 // The fake Claude CLI is this test binary re-run with CLAUDE_FAKE_CLI=1. It speaks just
@@ -586,6 +587,15 @@ func TestClaudeProfileErrorsAreFixed(t *testing.T) {
 	if ce, ok := err.(*ClaudeError); !ok || ce.Code != "login_unavailable" || ce.Status != 503 {
 		t.Fatal(err)
 	}
+	// Choose's reason is returned as is, not replaced by a recovered default.
+	login := subscription.Profiles("claude", host.Home, host.AgentsState)[0]
+	if err := subscription.RecordLimit(login, host.AgentsState, "claude-test", 3600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = claudeProfile("claude-test")
+	if ce, ok := err.(*ClaudeError); !ok || ce.Code != "quota_exhausted" || ce.Status != 503 {
+		t.Fatal(err)
+	}
 }
 
 func TestClaudeConsumerPanicOrGoexitReleasesRun(t *testing.T) {
@@ -744,12 +754,12 @@ func TestClaudeArgvGolden(t *testing.T) {
 			t.Fatalf("%s:\n%q\n%q", c.Name, got, c.Args)
 		}
 		// The launched process sees the same command line, its own folder and the system prompt.
-		run, err := claudeNewRun(&h.bridge.mu, "owner", settings, body, h.selected, "/x/claude")
+		_, err = claudeNewRun(&h.bridge.mu, "owner", settings, body, h.selected, "/x/claude")
 		if err == nil || err.(*ClaudeError).Code != "cli_unavailable" {
 			t.Fatalf("a missing CLI started: %v", err)
 		}
 		exe, _ := os.Executable()
-		run, err = claudeNewRun(&h.bridge.mu, "owner", settings, body, h.selected, exe)
+		run, err := claudeNewRun(&h.bridge.mu, "owner", settings, body, h.selected, exe)
 		if err != nil {
 			t.Fatal(err)
 		}
