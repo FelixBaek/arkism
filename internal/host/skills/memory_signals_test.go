@@ -38,3 +38,9 @@ func TestMemorySignalsPagesUntilDoneAndPrintsCountsOnly(t *testing.T) {
 		t.Fatal("impossible counts accepted:", code, errOut)
 	}
 }
+
+func TestMemorySignalsRejectsOversizedScope(t *testing.T) {
+	if code, _, errOut := runCLI(t, memorySignalsMain, "--workspace-id", strings.Repeat("w", 256), "--project-id", "p"); code != 2 || errOut != "invalid scope\n" {
+		t.Fatal("oversized scope accepted:", code, errOut)
+	}
+}

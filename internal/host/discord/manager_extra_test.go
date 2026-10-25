@@ -115,3 +115,18 @@ func TestMainSubcommands(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSaveLogsUnwritableState(t *testing.T) {
+	h := setup(t)
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stateFile = filepath.Join(blocker, "state.json") // its parent is a file, so MkdirAll fails
+	var log bytes.Buffer
+	h.m.log = &log
+	h.m.save()
+	if !strings.Contains(log.String(), "state not saved") {
+		t.Fatalf("save failure not logged: %q", log.String())
+	}
+}

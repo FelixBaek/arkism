@@ -244,3 +244,9 @@ func TestChecksReportSendsOnlyServerFields(t *testing.T) {
 		t.Fatal(checks)
 	}
 }
+
+func TestChecksMainPrintsUsageForUnknownCommand(t *testing.T) {
+	if code, out, _ := runCLI(t, checksMain, "bogus"); code != 2 || out != checksUsage+"\n" {
+		t.Fatal("unknown command:", code, out)
+	}
+}
