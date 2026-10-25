@@ -426,6 +426,15 @@ var (
 	assistRelease = map[string]func(){}
 )
 
+func releaseAssistSlot(id string) {
+	assistMu.Lock()
+	release := assistRelease[id]
+	assistMu.Unlock()
+	if release != nil {
+		release()
+	}
+}
+
 var assistOrder = []string{"status", "output", "model", "error", "trace"}
 
 func assistJob(rec map[string]any, answer func(map[string]any) (map[string]any, error)) {
@@ -586,12 +595,7 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 		spec["backend"] = b
 		spec["run"] = assistRun(rec, item)
 		id := sOr(rec["id"])
-		assistMu.Lock()
-		release := assistRelease[id]
-		assistMu.Unlock()
-		if release != nil {
-			release() // the step only waits on the runner (up to hours): its slot goes to the next local job
-		}
+		releaseAssistSlot(id) // the step only waits on the runner (up to hours): its slot goes to the next local job
 		spec["on_accept"] = func(trace map[string]any) {
 			body := host.Obj{{Key: "scope", Value: scope()}, {Key: "status", Value: "running"}, {Key: "trace", Value: traceBody(trace)}}
 			if _, err := runnerCall("/v1/crew/assists/"+pyQuote(id, "/")+"/result", body, 30*time.Second); err != nil {
