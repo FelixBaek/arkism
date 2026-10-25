@@ -13,6 +13,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent};
 
 mod agent_link;
+mod agent_backends;
 mod gateway_token;
 mod general;
 mod lifecycle;
@@ -397,6 +398,11 @@ fn run_agent_setup(rt: &runtime::Runtime, command: &'static str) -> Result<Strin
 #[tauri::command]
 fn gateway_token_status() -> Result<gateway_token::Status, String> {
     gateway_token::status()
+}
+
+#[tauri::command]
+fn agent_backends() -> Result<Vec<agent_backends::Backend>, String> {
+    agent_backends::list()
 }
 
 /// 다시 만들기: a new token, then install-arkism puts it in the agents' settings (Claude Code headers).
@@ -978,7 +984,7 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, popout::popout_destroy])
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {
