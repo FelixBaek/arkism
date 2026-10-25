@@ -529,6 +529,22 @@ func (x *runExec) inputFor(id string) any {
 	return m
 }
 
+// startLocked marks a batch running and returns each node's input.
+func (x *runExec) startLocked(batch []string) map[string]any {
+	inputs := map[string]any{}
+	for _, id := range batch {
+		inputs[id] = x.inputFor(id)
+		s := x.state(id)
+		s.Status, s.Error = "running", ""
+		if b := x.e.stepBackend(x.nodes[id]); b != "" {
+			s.Backend = map[string]any{"backend": b, "state": "starting"} // the host runner's trace replaces it at the end
+		}
+		s.Runs++
+		x.stamp(s)
+	}
+	return inputs
+}
+
 func (x *runExec) loop(ctx context.Context) error {
 	for {
 		if err := ctx.Err(); err != nil {
@@ -584,17 +600,7 @@ func (x *runExec) loop(ctx context.Context) error {
 		if !slices.ContainsFunc(x.order, func(id string) bool { s := x.state(id); return s.Status == "done" || s.Runs > 0 }) {
 			x.progress("start", "시작했어요")
 		}
-		inputs := map[string]any{}
-		for _, id := range batch {
-			inputs[id] = x.inputFor(id)
-			s := x.state(id)
-			s.Status, s.Error = "running", ""
-			if b := x.e.stepBackend(x.nodes[id]); b != "" {
-				s.Backend = map[string]any{"backend": b, "state": "starting"} // the host runner's trace replaces it at the end
-			}
-			s.Runs++
-			x.stamp(s)
-		}
+		inputs := x.startLocked(batch)
 		err := x.saveLocked(ctx, "")
 		x.mu.Unlock()
 		if err != nil {
