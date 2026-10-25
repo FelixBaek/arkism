@@ -34,7 +34,7 @@ const (
 
 var (
 	prodWriters = []string{"arkism-prod-api-1", "arkism-prod-worker-1"}
-	prodReady   = "http://127.0.0.1:8091/readyz"
+	prodReady   = host.DefaultURL + "/readyz"
 	snapshotID  = regexp.MustCompile(`^[0-9A-Fa-f]+-[0-9A-Fa-f]+-[0-9]+$`)
 )
 

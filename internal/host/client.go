@@ -16,10 +16,17 @@ import (
 	"time"
 )
 
+// Default local addresses of the API and the model gateway; ARKISM_URL, ARKISM_GATEWAY_LISTEN and --listen/--url override them.
+const (
+	DefaultListen        = "127.0.0.1:8091"
+	DefaultURL           = "http://" + DefaultListen
+	DefaultGatewayListen = "127.0.0.1:8099"
+)
+
 // Settings shared by every tool that talks to the Arkism API.
 var (
 	Home      = homeDir()
-	BaseURL   = strings.TrimRight(Env("ARKISM_URL", "http://127.0.0.1:8091"), "/")
+	BaseURL   = strings.TrimRight(Env("ARKISM_URL", DefaultURL), "/")
 	TokenFile = Env("ARKISM_TOKEN_FILE", "/srv/arkism/config/owner.token")
 	// CaptureState is the capture client's state dir (spool, metrics).
 	CaptureState = Env("ARKISM_CAPTURE_STATE", filepath.Join(Home, ".local/state/arkism-capture"))

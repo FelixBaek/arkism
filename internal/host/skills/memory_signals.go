@@ -86,7 +86,7 @@ func memorySignalsMain(args []string, stdin io.Reader, stdout, stderr io.Writer)
 	workspace, project := p.str("--workspace-id", ""), p.str("--project-id", "")
 	user, agent := p.str("--user-id", ""), p.str("--agent-id", "")
 	maxBatches := p.int("--max-batches", 100)
-	endpoint := p.str("--url", "http://127.0.0.1:8091")
+	endpoint := p.str("--url", host.DefaultURL)
 	execute := p.flag("--execute")
 	if !p.parse(args, 0, 0) || !p.need("--workspace-id", "--project-id") {
 		return 2

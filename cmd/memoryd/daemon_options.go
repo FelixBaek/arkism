@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/FelixBaek/arkism/internal/host"
 	"github.com/FelixBaek/arkism/internal/memory"
 )
 
@@ -60,7 +61,7 @@ func daemonFlags() daemonOptions {
 	flag.StringVar(&cfg.BaselineScope, "recall-baseline-scope", "default/default/management:owner/", "workspace/project/user/agent measured by -recall-baseline")
 	flag.StringVar(&cfg.LogLevel, "log-level", envLogLevel(), "debug|info|warn|error")
 	flag.StringVar(&cfg.Pprof, "pprof", "", "optional loopback diagnostics listener; MEMORY_DIAGNOSTICS_TOKEN required")
-	flag.StringVar(&cfg.Listen, "listen", "127.0.0.1:8091", "HTTP listen address")
+	flag.StringVar(&cfg.Listen, "listen", host.DefaultListen, "HTTP listen address")
 	flag.Parse()
 	return cfg
 }

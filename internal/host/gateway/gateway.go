@@ -55,7 +55,7 @@ func init() { host.Register("gateway", runGateway) }
 
 // Settings (environment, like the Python module constants).
 var (
-	Listen = host.Env("ARKISM_GATEWAY_LISTEN", "127.0.0.1:8099")
+	Listen = host.Env("ARKISM_GATEWAY_LISTEN", host.DefaultGatewayListen)
 	// Anthropic is where bare Claude requests pass through.
 	Anthropic = host.Env("ARKISM_GATEWAY_ANTHROPIC", "https://api.anthropic.com")
 	ZAIURL    = host.Env("ARKISM_GATEWAY_ZAI", "https://api.z.ai/api/anthropic")

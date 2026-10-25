@@ -170,7 +170,7 @@ func importMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	catalogPath := p.str("--catalog", filepath.Join(host.DataDir, "skill-catalog.jsonl"))
 	execute := p.flag("--execute")
 	limit, offset := p.int("--limit", 0), p.int("--offset", 0)
-	endpoint := p.str("--url", "http://127.0.0.1:8091")
+	endpoint := p.str("--url", host.DefaultURL)
 	workspace, project := p.str("--workspace", "default"), p.str("--project", "default")
 	user, agent := p.str("--user", "management:owner"), p.str("--agent", "")
 	if !p.parse(args, 0, 0) {

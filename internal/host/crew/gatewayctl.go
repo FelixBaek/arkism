@@ -106,7 +106,7 @@ func runSystemctl(arguments ...string) (int, []byte, error) {
 var listenAddress = regexp.MustCompile(`^127\.0\.0\.1:[0-9]{1,5}$`)
 
 func endpoint() (string, error) {
-	address := host.Env("ARKISM_GATEWAY_LISTEN", "127.0.0.1:8099")
+	address := host.Env("ARKISM_GATEWAY_LISTEN", host.DefaultGatewayListen)
 	if !listenAddress.MatchString(address) {
 		return "", ctlErr("gateway_invalid_address")
 	}

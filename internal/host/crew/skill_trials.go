@@ -324,7 +324,7 @@ func skillTrialsMain(argv []string, _ io.Reader, stdout, stderr io.Writer) int {
 	if err != nil {
 		return usageError(stderr, prog, skillTrialsUsage, err)
 	}
-	apiURL := "http://127.0.0.1:8091"
+	apiURL := host.DefaultURL
 	if a.has("url") {
 		apiURL = a.vals["url"]
 	}
