@@ -240,14 +240,17 @@ const agentToolRequestsKept = 50
 
 var agentIDRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,39}$`)
 
-// validAgentDir accepts a home-relative or absolute folder without "..".
+// validAgentDir accepts a home-relative or absolute (POSIX or Windows) folder without "..".
 func validAgentDir(d string, required bool) bool {
 	if d == "" {
 		return !required
 	}
-	return len(d) <= 200 && (strings.HasPrefix(d, "~/") || strings.HasPrefix(d, "/")) && !strings.Contains(d, "..") &&
+	return len(d) <= 200 && (strings.HasPrefix(d, "~/") || strings.HasPrefix(d, "/") || winDirRe.MatchString(d)) && !strings.Contains(d, "..") &&
 		strings.IndexFunc(d, func(r rune) bool { return r < 0x20 }) < 0
 }
+
+// winDirRe: a Windows host's C:\ or C:/ folder, or a \\server\share one (desktop pages.js agentDirOk accepts the same).
+var winDirRe = regexp.MustCompile(`^([A-Za-z]:[\\/]|\\\\[^\\])`)
 
 func validAgentInfos(list []AgentInfo) bool {
 	if len(list) > 40 {
