@@ -2,6 +2,17 @@
 export function createCrewRunView(deps) {
 
 
+  // A step on an agent runner connection (Figma 1314:81577): nodes.<id>.backend holds names and ids only (ST-840).
+  const RUNNER_STATE = { starting: "보내는 중", accepted: "받음", running: "실행 중", waiting_approval: "승인 대기", succeeded: "끝남", failed: "실패", cancel_requested: "취소 요청함", cancelled: "취소됨", unknown: "알 수 없음" };
+  const NOT_APPLIED = { model: "고른 모델", instructions: "지시", tool_restriction: "도구 제한", memory: "기억" };
+  function runnerLine(st) {
+    const b = st.backend;
+    if (!b?.backend) return "";
+    const memory = (b.context || []).filter((c) => String(c).startsWith("memory:")).length;
+    return [`외부 실행기 ${b.backend} · ${RUNNER_STATE[b.state] || b.state || ""}`, b.task_id && `작업 ${b.task_id}`, b.model && `모델 ${b.model}`,
+      b.not_applied?.length && `못 쓴 것: ${b.not_applied.map((k) => NOT_APPLIED[k] || k).join(", ")}`, memory && `기억 ${memory}개 보냄`, b.usage !== "reported" && "비용 모름"].filter(Boolean).join(" · ");
+  }
+
   // ---------------------------------------------------------------- run view (03b)
   let pollEpoch = 0;
   const sessionKey = () => JSON.stringify([deps.state.server, deps.state.scope, deps.state.token, deps.state.connection?.generation]);
@@ -100,7 +111,7 @@ export function createCrewRunView(deps) {
       const st = cr.nodes[n.id];
       const r = deps.el("div", `wf-run-step st-${st.status}`);
       r.append(deps.el("span", "", `${deps.nodeTitle(n)}${st.runs > 1 ? ` (${st.runs}회째)` : ""}`), deps.el("small", STEP_CLS[st.status] || "", stepState(n, st)));
-      r.title = st.error || "";
+      r.title = [st.error, runnerLine(st)].filter(Boolean).join("\n");
       list.append(r);
     }
     box.append(list);
@@ -212,6 +223,7 @@ export function createCrewRunView(deps) {
       else if (again && st.status === "running") name.append(deps.el("small", "", "같은 설정으로 다시 실행하고 있어요."));
       else if (again && st.status === "pending" && i) name.append(deps.el("small", "", `${deps.nodeTitle(all[i - 1])}가 끝나면 이어서 실행해요.`));
       else if (st.status === "pending") name.append(deps.el("small", "", "앞 단계가 끝나면 실행해요."));
+      if (runnerLine(st)) name.append(deps.el("small", "", runnerLine(st)));
       if (st.status === "done" && ["succeeded", "failed", "stopped"].includes(cr.status)) name.append(deps.button("여기부터 다시", "ghost", null, () => retryRun(n.id)));
       row.append(name, deps.el("span", `wf-badge small ${{ failed: "fail", waiting: "wait", running: "live", pending: "line", skipped: "line" }[st.status] || ""}`, st.status === "pending" ? "실행 전" : stepState(n, st).split(" · ")[0]), deps.el("span", "mono", nodeDur(st) || "—"));
       table.append(row);

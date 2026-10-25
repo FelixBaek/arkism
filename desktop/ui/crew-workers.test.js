@@ -310,3 +310,32 @@ test("a new persona finished by AI and saved", async () => {
   assert.ok(h.notices.includes("페르소나를 저장했어요."), h.notices.join(" / "));
   assert.deepEqual(clean(), []);
 });
+
+test("실행하는 곳: this PC's runner connections, their state, and only the name saved", async () => {
+  window.__TAURI__ = { core: { invoke: async (cmd) => (cmd === "agent_backends" ? [
+    { name: "myrunner", status: "ok", checked_at: "2026-10-26T01:42:00Z", capabilities: { cancel: true, tool_restriction: true }, own_model: true },
+    { name: "down", status: "failed: timeout", capabilities: {} }] : null) } };
+  try {
+    const h = await boot({ view: "workers" });
+    const d = await openExpert(h, "리뷰어");
+    const row = (k) => [...d.querySelectorAll(".ex-run-row")].find((r) => r.querySelector(".k")?.textContent === k);
+    assert.ok(row("실행하는 곳"));
+    assert.equal(row("연결 상태").hidden, true, "Arkism's own path needs no connection state");
+    const pick = (label) => [...row("실행하는 곳").querySelectorAll("button")].find((b) => b.textContent === label);
+    assert.ok(pick("Arkism") && pick("myrunner") && pick("down"));
+    pick("myrunner").click(); await h.settle();
+    const badges = () => [...row("연결 상태").querySelectorAll(".wf-badge")].map((b) => b.textContent);
+    assert.deepEqual(badges(), ["실행 가능", "모델 선택 안 됨", "사용량 확인 안 됨"]);
+    pick("down").click(); await h.settle();
+    assert.deepEqual(badges(), ["연결 실패"]);
+    pick("myrunner").click(); await h.settle();
+    h.btn(d, "저장").click(); await h.settle();
+    const saved = h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/ag1$/.test(c.url)).at(-1);
+    assert.equal(saved.body.crew.backend, "myrunner");
+    assert.ok(!JSON.stringify(saved.body).includes("checked_at"), "only the connection name goes to the server");
+    pick("Arkism").click(); await h.settle();
+    h.btn(d, "저장").click(); await h.settle();
+    assert.equal(h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/ag1$/.test(c.url)).at(-1).body.crew.backend, undefined);
+  } finally { delete window.__TAURI__; }
+  assert.deepEqual(clean(), []);
+});

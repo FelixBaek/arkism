@@ -247,6 +247,36 @@ export function createCrewWorkers(deps) {
   // A segment whose saved value is not one of the presets keeps it as an extra choice.
   const presetSeg = (opts, cur, onPick) => deps.segment(opts.some(([k]) => k === cur) ? opts : [...opts, [cur, cur]], cur, onPick);
 
+  // 실행하는 곳 (1314:15710, states 1314:81780): Arkism's own path or one of this PC's agent runner connections
+  // (`arkism crew backends`, read through agent_backends: names and checks, never the token). Only the name is saved.
+  const RUNNER_LIMITS = [["model_choice", "모델 선택 안 됨"], ["cancel", "취소 안 됨"], ["tool_restriction", "도구 제한 안 됨"], ["usage", "사용량 확인 안 됨"]];
+  function runnerState(b, any) {
+    if (!b) return [["line", any ? "이 PC에 없는 연결" : "연결 없음"]];
+    if (!b.status) return [["line", "확인 전"]];
+    if (b.status !== "ok") return [["fail", "연결 실패"]];
+    return [["live", "실행 가능"], ...RUNNER_LIMITS.filter(([k]) => !b.capabilities?.[k]).map(([k, label]) => [k === "usage" ? "line" : "wait", label])];
+  }
+  function runnerRows(d) {
+    const pick = exRow("실행하는 곳"), state = exRow("연결 상태"), hint = exRow("");
+    hint.replaceChildren(deps.el("small", "dim", "외부 실행기에는 읽기 작업만 보내요. 모델은 실행기 것을 쓰고, 비용은 실행기가 알려 줄 때만 보여요. 연결은 터미널에서 arkism crew backends add로 만들어요."));
+    const draw = (list) => {
+      const cur = String(d.backend || "local");
+      const names = list.map((b) => b.name);
+      const opts = [["local", "Arkism"], ...names.map((n) => [n, n])];
+      if (cur !== "local" && !names.includes(cur)) opts.push([cur, cur]);
+      pick.replaceChildren(deps.el("span", "k", "실행하는 곳"), deps.segment(opts, cur, (k) => { if (k === "local") delete d.backend; else d.backend = k; touchWorker(); draw(list); }));
+      const b = list.find((x) => x.name === cur);
+      const when = b?.checked_at ? new Date(b.checked_at) : null;
+      state.replaceChildren(deps.el("span", "k", "연결 상태"), ...runnerState(b, cur !== "local").map(([cls, label]) => deps.el("span", `wf-badge small ${cls}`, label)),
+        ...(when && !isNaN(when) ? [deps.el("small", "", `${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}에 확인 · 이 PC의 연결`)] : []));
+      state.hidden = cur === "local";
+      hint.hidden = cur === "local" && !names.length;
+    };
+    draw([]);
+    window.__TAURI__?.core?.invoke("agent_backends").then((list) => draw(Array.isArray(list) ? list : []), () => draw([]));
+    return [pick, state, hint];
+  }
+
   // 실행 (868:61909): the title above one box of rows — 방식 · 창의성 · 답변 길이 · 출력 형식 · 파일 고치기 · 부르는 곳 · 이미지.
   function runCard(d) {
     const temp = String(d.temperature ?? "0.7");
@@ -256,7 +286,7 @@ export function createCrewWorkers(deps) {
     const needsImage = () => window.ArkismBrand?.kind(d.model) !== "vision";
     const c = deps.el("section", "ex-run");
     const rows = deps.el("div", "ex-run-box");
-    rows.append(
+    rows.append(...runnerRows(d),
       exRow("방식", deps.segment(MODEL_MODES, d.model_mode || "fixed", (k) => { d.model_mode = k; touchWorker(); })),
       exRow("창의성", presetSeg([["0.2", "낮음"], ["0.7", "보통"], ["1", "높음"]], temp, (k) => { d.temperature = Number(k); touchWorker(); })),
       exRow("답변 길이", presetSeg([["0", "자동"], ["1024", "짧게"], ["4096", "길게"]], len, (k) => { d.max_output_tokens = Number(k); touchWorker(); }), deps.el("small", "dim", "토큰 수 상한이에요")),

@@ -655,3 +655,17 @@ test("a trial run from the editor asks for the task and shows the result badge",
   await sweep(h, document.body, 1);
   assert.deepEqual(clean(), []);
 });
+
+test("a step on an agent runner shows the runner, its state and what it could not apply", async () => {
+  const h = await boot();
+  h.data.runs.unshift({ id: "runb", revision: 1, created_at: new Date().toISOString(), crew_run: { crew_id: "wf1", status: "failed", input: "{}", summary: "",
+    nodes: { start: { status: "done" }, ai1: { status: "failed", error: "backend_rejected", backend: { backend: "myrunner", task_id: "t-9", state: "failed", not_applied: ["model"], context: ["instructions", "memory:m1"], usage: "unknown", fallback: false } } } } });
+  h.render(); await h.settle();
+  window.dispatchEvent(new CustomEvent("arkism:open-automation", { detail: { id: "wf1", tab: "history" } }));
+  await h.settle();
+  h.top().querySelector(".auto-runline").click(); await h.settle();
+  assert.match(document.querySelector(".wf-run-step.st-failed").title, /외부 실행기 myrunner · 실패/);
+  h.btn(document.querySelector(".page-head"), "목록").click(); await h.settle();
+  assert.match(document.querySelector("#table").textContent, /외부 실행기 myrunner · 실패 · 작업 t-9 · 못 쓴 것: 고른 모델 · 기억 1개 보냄 · 비용 모름/);
+  assert.deepEqual(clean(), []);
+});

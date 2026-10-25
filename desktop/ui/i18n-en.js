@@ -6159,3 +6159,31 @@ Object.assign(window.ArkismI18nEN.strings, {
   "일마다 쓸 모델과, 스킬을 요약·찾기·판정·검사하는 방법을 정해요.": "Choose the model for each job, and how skills are summarized, found, judged and checked."
 });
 Object.assign(window.ArkismI18nEN.patterns, { "승인을 기다리는 기억이 {0}개 있어요.": "{0} memories are waiting for approval.", "단축키를 {0}로 바꿨어요.": "Shortcut changed to {0}." });
+// ST-840 agent runner connections: 실행하는 곳 in the expert window and a step's runner line in the run view.
+Object.assign(window.ArkismI18nEN.strings, {
+  "실행하는 곳": "Runs on",
+  "실행 가능": "Ready",
+  "연결 실패": "Connection failed",
+  "확인 전": "Not checked",
+  "연결 없음": "No connection",
+  "이 PC에 없는 연결": "Not on this PC",
+  "모델 선택 안 됨": "No model choice",
+  "취소 안 됨": "No cancel",
+  "도구 제한 안 됨": "No tool restriction",
+  "사용량 확인 안 됨": "No usage report",
+  "외부 실행기에는 읽기 작업만 보내요. 모델은 실행기 것을 쓰고, 비용은 실행기가 알려 줄 때만 보여요. 연결은 터미널에서 arkism crew backends add로 만들어요.": "Only read-only work goes to an agent runner. It uses its own model, and cost shows only when the runner reports it. Add a connection in a terminal with arkism crew backends add.",
+  "보내는 중": "Sending",
+  "받음": "Accepted",
+  "취소 요청함": "Cancel requested",
+  "고른 모델": "chosen model",
+  "도구 제한": "tool restriction",
+  "비용 모름": "cost unknown"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "외부 실행기 {0} · {1}": "Agent runner {0} · {1}",
+  "작업 {0}": "Task {0}",
+  "모델 {0}": "Model {0}",
+  "못 쓴 것: {0}": "Not applied: {0}",
+  "기억 {0}개 보냄": "{0} memories sent",
+  "{0}:{1}에 확인 · 이 PC의 연결": "Checked at {0}:{1} · this PC's connection"
+});

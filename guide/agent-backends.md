@@ -135,7 +135,7 @@ arkism crew backends check ref
 
 - Only the generic HTTP contract above. No OpenClaw or Hermes adapter (see below).
 - Not supported, and never asked of a runner (`session: none`, `approval: none` in every request): approval relay (a `waiting_approval` task is cancelled, then fails), progress events, attachments, session reuse. Each needs work across the server, the app and Discord (approvals bound to the run, target and content; a session key per user, expert, channel and thread) and is follow-up work.
-- The settings screen does not show connections yet; use the CLI.
+- The app shows this PC's connections on an expert (크루 › 전문가 › 실행하는 곳: pick one, see the last check and what the runner cannot do) and each step's trace in the run record. Adding, checking or removing a connection is CLI only.
 - If the host that started a request loses its state folder, nobody asks about that task again; the request reads as failed after 24 hours.
 
 ## 7. OpenClaw and Hermes
