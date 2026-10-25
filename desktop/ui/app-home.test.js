@@ -436,7 +436,7 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   await press("Markdown으로 내보내기", d, 50);
   const exp = app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/export").pop();
   assert.equal(JSON.parse(exp[2]).ids.length, 1); assert.equal(JSON.parse(exp[2]).format, "markdown");
-  assert.equal(made.length, 1); assert.match(text(d), /세션을 내보냈어요/);
+  assert.equal(made.length, 1); assert.match(text(d), /세션 다운로드를 시작했어요/);
   offExp(); offExp = route("POST", "/v1/usage/sessions/export", () => fail(500, "boom"));
   await press("JSON", d, 50);
   assert.match(text(d), /내보내지 못했어요/); assert.ok(!btn("JSON", d).disabled);

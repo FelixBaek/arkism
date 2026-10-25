@@ -239,7 +239,7 @@ export function createImageViews(deps) {
         a.href = URL.createObjectURL(new Blob([ip.script], { type: "text/plain" }));
         a.download = ip.script_name || (ip.kind === "slide" ? "make_slide.py" : "workflow.json");
         a.click();
-        URL.revokeObjectURL(a.href);
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000); // revoked at once, the download can lose its file before it starts
       }
     };
   }

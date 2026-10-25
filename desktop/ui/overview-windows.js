@@ -730,7 +730,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
           if (typeof r?.content !== "string") throw new Error("invalid_response");
           url = URL.createObjectURL(new Blob([r.content], { type: r.content_type || "text/plain" }));
           const link = el("a"); link.href = url; link.download = r.filename || (format === "json" ? "arkism-session.json" : "arkism-session.md"); link.click();
-          xp.note = r.truncated ? "내보냈어요. 너무 길어 일부 대화는 잘렸어요." : "세션을 내보냈어요.";
+          xp.note = r.truncated ? "다운로드를 시작했어요. 너무 길어 일부 대화는 잘렸어요." : "세션 다운로드를 시작했어요."; // a link click cannot tell whether the save went through
         } catch (e) { xp.note = `내보내지 못했어요 (${e.message}).`; }
         finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); xp.busy = false; if (d.isConnected) paint(); }
       };

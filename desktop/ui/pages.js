@@ -1014,7 +1014,7 @@ window.ArkismPages = (ctx) => {
         const text = window.ArkismPreferenceTransfer.export((key) => localStorage.getItem(key));
         url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
         const link = el("a"); link.href = url; link.download = "arkism-preferences.json"; link.click();
-        notice("설정 파일을 저장했어요. 다른 PC의 설정 › 고급에서 가져오세요.");
+        notice("설정 파일 다운로드를 시작했어요. 저장되면 다른 PC의 설정 › 고급에서 가져오세요."); // a link click cannot tell whether the save went through
       } catch (_) { notice("설정 파일을 만들지 못했어요. 기존 설정은 그대로예요."); }
       finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); }
     }), button("PC 설정 가져오기", "", null, async () => {
