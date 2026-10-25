@@ -10,7 +10,7 @@ export function createCrewRunView(deps) {
     if (!b?.backend) return "";
     const memory = (b.context || []).filter((c) => String(c).startsWith("memory:")).length;
     return [`외부 실행기 ${b.backend} · ${RUNNER_STATE[b.state] || b.state || ""}`, b.task_id && `작업 ${b.task_id}`, b.model && `모델 ${b.model}`,
-      b.not_applied?.length && `못 쓴 것: ${b.not_applied.map((k) => NOT_APPLIED[k] || k).join(", ")}`, memory && `기억 ${memory}개 보냄`, b.usage !== "reported" && "비용 모름"].filter(Boolean).join(" · ");
+      b.not_applied?.length && `못 쓴 것: ${b.not_applied.map((k) => NOT_APPLIED[k] || k).join(" / ")}`, memory && `기억 ${memory}개 보냄`, b.usage !== "reported" && "비용 모름"].filter(Boolean).join(" · ");
   }
 
   // ---------------------------------------------------------------- run view (03b)

@@ -221,6 +221,9 @@ func runBackend(spec map[string]any) (map[string]any, error) {
 	case st.entry == nil && run["resume"] == "1":
 		return st.end("unknown", "", "재시작 뒤 이 작업을 확인할 수 없어요: 다시 돌리지 않았어요"), nil
 	}
+	if out := st.attachMemory(); out != nil {
+		return out, nil
+	}
 	if st.entry == nil {
 		st.entry = &taskEntry{Key: st.key, Backend: st.b.Name, State: "starting", Started: nowZ()}
 	}
@@ -294,10 +297,6 @@ func (st *backendStep) request(spec map[string]any, task, access string, timeout
 	for _, id := range skillIDs {
 		context = append(context, "skill:"+clipRunes(id, 100))
 	}
-	memory := st.memory(task)
-	for _, m := range memory {
-		context = append(context, "memory:"+sOr(m["id"]))
-	}
 	run := obj(spec["run"])
 	st.key = sOr(run["key"])
 	if st.key == "" {
@@ -317,9 +316,6 @@ func (st *backendStep) request(spec map[string]any, task, access string, timeout
 		"limits":  map[string]any{"timeout_s": int(timeout.Seconds())},
 		"result":  map[string]any{"format": format, "max_chars": backendResultChars},
 		"session": "none", "approval": "none"}
-	if len(memory) > 0 {
-		st.body["memory"] = map[string]any{"authority": "data_only_untrusted", "items": memory}
-	}
 	usage := "unknown"
 	if caps["usage"] {
 		usage = "reported"
@@ -330,8 +326,29 @@ func (st *backendStep) request(spec map[string]any, task, access string, timeout
 }
 
 // backendSearch recalls for an external destination; the server applies its search, approval, scope and transfer policy.
-var backendSearch = func(query, destination string) ([]any, error) {
-	return host.SearchTo(query, 5, 20*time.Second, destination)
+var backendSearch = func(query, destination string, timeout time.Duration) ([]any, error) {
+	return host.SearchTo(query, 5, timeout, destination)
+}
+
+// attachMemory adds the approved memory to a fresh start only (a followed task already took its own), within the
+// step's time. When that time ran out nothing is sent and the step ends (unknown if an earlier start went unanswered).
+func (st *backendStep) attachMemory() map[string]any {
+	mem := st.memory(sOr(st.body["task"]))
+	if len(mem) > 0 {
+		st.body["memory"] = map[string]any{"authority": "data_only_untrusted", "items": mem}
+	}
+	for _, m := range mem {
+		st.trace["context"] = append(st.trace["context"].([]string), "memory:"+sOr(m["id"]))
+	}
+	st.trace["not_applied"] = st.notApplied
+	if backendNow().Before(st.deadline) {
+		return nil
+	}
+	state := "failed"
+	if st.entry != nil {
+		state = "unknown"
+	}
+	return st.end(state, "timeout", "시간이 다 돼서 작업을 보내지 않았어요")
 }
 
 // memory is the approved memory a connection may take along with the task: only when the owner turned it on and the
@@ -344,7 +361,12 @@ func (st *backendStep) memory(task string) []map[string]any {
 		st.notApplied = append(st.notApplied, "memory")
 		return nil
 	}
-	hits, err := backendSearch(task, "external:backend."+st.b.Name)
+	wait := min(20*time.Second, time.Until(st.deadline))
+	if wait <= 0 {
+		st.notApplied = append(st.notApplied, "memory")
+		return nil
+	}
+	hits, err := backendSearch(task, "external:backend."+st.b.Name, wait)
 	if err != nil {
 		st.notApplied = append(st.notApplied, "memory")
 		return nil
