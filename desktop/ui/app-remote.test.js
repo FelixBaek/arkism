@@ -91,6 +91,8 @@ test("a server that logs in but does not answer keeps the old connection", async
   await submit(3000);
   assert.match(t(app.$("#unlock-error")), /Arkism을 열지 못했어요/);
   assert.equal(pages.state.token, "");
+  // the app brings the previous tunnel back instead of keeping the new one
+  assert.deepEqual(app.calls.filter(([c]) => c === "ssh_connect_done").at(-1)[1], { ok: false });
 });
 
 test("연결하기 connects, saves the server and starts the first-run steps", async () => {
@@ -101,6 +103,7 @@ test("연결하기 connects, saves the server and starts the first-run steps", a
   for (let i = 0; i < 30 && JSON.parse(app.window.localStorage.getItem("arkism.ssh")).port !== 22; i++) await app.settle(500); // open() waits for every list
   assert.equal(JSON.parse(app.window.localStorage.getItem("arkism.ssh")).port, 22);
   assert.equal(app.window.localStorage.getItem("arkism.mode"), "remote");
+  assert.deepEqual(app.calls.filter(([c]) => c === "ssh_connect_done").at(-1)[1], { ok: true });
   assert.equal(pages.state.start, 2);
   pages.state.start = 0;
 });

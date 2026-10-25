@@ -95,7 +95,9 @@ fn claude(text: &str, url: Option<&str>, links: &mut serde_json::Value) -> Resul
         Some(url) => {
             let prev = obj.get("model").cloned().unwrap_or(serde_json::Value::Null);
             if prev.as_str() != Some(MODEL) {
-                links["claude_code"] = serde_json::json!({ "model": prev });
+                // The user's own base URL too (null: there was none), put back on unlink.
+                let base = obj.get("env").and_then(|e| e.get("ANTHROPIC_BASE_URL")).cloned().unwrap_or(serde_json::Value::Null);
+                links["claude_code"] = serde_json::json!({ "model": prev, "base_url": base });
             }
             let env = obj.entry("env").or_insert_with(|| serde_json::json!({}));
             env.as_object_mut().ok_or("agent_settings_unreadable")?.insert("ANTHROPIC_BASE_URL".into(), url.into());
@@ -104,7 +106,11 @@ fn claude(text: &str, url: Option<&str>, links: &mut serde_json::Value) -> Resul
         None => {
             if let Some(env) = obj.get_mut("env").and_then(|e| e.as_object_mut()) {
                 if env.get("ANTHROPIC_BASE_URL").and_then(|u| u.as_str()).is_some_and(|u| u.starts_with("http://127.0.0.1:")) {
-                    env.remove("ANTHROPIC_BASE_URL");
+                    // Records saved before base_url was kept have none: the URL is just removed, as before.
+                    match links["claude_code"]["base_url"].as_str() {
+                        Some(prev) => env.insert("ANTHROPIC_BASE_URL".into(), prev.into()),
+                        None => env.remove("ANTHROPIC_BASE_URL"),
+                    };
                 }
                 if env.is_empty() {
                     obj.remove("env");
@@ -218,6 +224,20 @@ mod tests {
         let mut fresh = serde_json::json!({});
         let off: serde_json::Value = serde_json::from_str(&claude(&claude("", Some("http://127.0.0.1:1"), &mut fresh).unwrap(), None, &mut fresh).unwrap()).unwrap();
         assert_eq!(off, serde_json::json!({}));
+    }
+
+    #[test]
+    fn claude_unlink_restores_the_users_base_url() {
+        let mut links = serde_json::json!({});
+        let before = r#"{"model":"opus","env":{"ANTHROPIC_BASE_URL":"https://proxy.example"}}"#;
+        let on = claude(before, Some("http://127.0.0.1:8099"), &mut links).unwrap();
+        let on2 = claude(&on, Some("http://127.0.0.1:8100"), &mut links).unwrap();
+        let off: serde_json::Value = serde_json::from_str(&claude(&on2, None, &mut links).unwrap()).unwrap();
+        assert_eq!(off, serde_json::from_str::<serde_json::Value>(before).unwrap());
+        // A record saved before base_url was kept: the gateway URL is removed, the model comes back.
+        let mut old = serde_json::json!({ "claude_code": { "model": "opus" } });
+        let off: serde_json::Value = serde_json::from_str(&claude(&on, None, &mut old).unwrap()).unwrap();
+        assert_eq!(off, serde_json::json!({ "model": "opus" }));
     }
 
     #[test]

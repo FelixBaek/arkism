@@ -35,7 +35,7 @@ async function boot(opts = {}) {
     const fake = {
       app_defaults: { local: !opts.remote },
       ssh_connect: { server: origin, token: "preview", workspace_id: "default", project_id: "default", ssh_host: "my-server" },
-      ssh_test: { host: "my-server" }, ssh_keys: ["~/.ssh/id_ed25519"], ssh_disconnect: null,
+      ssh_test: { host: "my-server" }, ssh_keys: ["~/.ssh/id_ed25519"], ssh_disconnect: null, ssh_connect_done: null,
       local_start: { server: origin, token: "preview" },
       // the 저장 위치 row (storageRow) reads where the built-in Arkism keeps its data; the default folder, unchanged
       local_location: { path: "/home/me/.local/share/arkism/runtime", next: "/home/me/.local/share/arkism/runtime", default: "/home/me/.local/share/arkism/runtime", default_has_data: false },

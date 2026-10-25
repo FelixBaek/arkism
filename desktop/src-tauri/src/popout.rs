@@ -11,9 +11,9 @@ pub fn is_popout(label: &str) -> bool {
 }
 
 /// The window a request from the main window's window.open("about:blank#popout-N|title") gets; anything else
-/// (a link opened with window.open) keeps the default.
+/// (a target=_blank link, window.open of a page) goes to the OS browser.
 pub fn on_new_window<R: Runtime>(app: &AppHandle<R>, url: Url, features: NewWindowFeatures) -> NewWindowResponse<R> {
-    let Some((label, title)) = popout_request(&url) else { return NewWindowResponse::Allow };
+    let Some((label, title)) = popout_request(&url) else { return open_external(&url) };
     if app.get_webview_window(&label).is_some() {
         return NewWindowResponse::Deny;
     }
@@ -22,11 +22,26 @@ pub fn on_new_window<R: Runtime>(app: &AppHandle<R>, url: Url, features: NewWind
         .title(if title.is_empty() { "Arkism".to_string() } else { format!("{title} · Arkism") })
         .min_inner_size(360.0, 320.0)
         .focused(true)
+        // HTML5 drag (reordering rows) needs the native file-drop handler off, as on the main window.
+        .disable_drag_drop_handler()
+        .on_new_window(|url, _| open_external(&url))
         .build();
     match built {
         Ok(window) => NewWindowResponse::Create { window },
         Err(_) => NewWindowResponse::Deny,
     }
+}
+
+/// http(s) links open in the default browser, never in an app window; other schemes are refused.
+fn open_external<R: Runtime>(url: &Url) -> NewWindowResponse<R> {
+    if is_web(url) {
+        let _ = crate::open_browser(url.as_str());
+    }
+    NewWindowResponse::Deny
+}
+
+fn is_web(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https")
 }
 
 /// "about:blank#popout-7|기억 처리" → ("popout-7", "기억 처리"); the label must be popout- and digits.
@@ -93,5 +108,7 @@ mod tests {
         assert_eq!(popout_request(&u("https://github.com/#popout-1")), None);
         assert_eq!(popout_request(&u("about:blank")), None);
         assert!(is_popout("popout-3") && !is_popout("main"));
+        assert!(is_web(&u("https://github.com/x")) && is_web(&u("http://127.0.0.1:1/")));
+        assert!(!is_web(&u("file:///C:/x")) && !is_web(&u("javascript:alert(1)")) && !is_web(&u("about:blank")));
     }
 }

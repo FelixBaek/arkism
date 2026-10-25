@@ -348,8 +348,6 @@ pub struct Connected {
     pub ssh_host: String,
     pub ssh_port: Option<u16>,
     pub ssh_key: Option<String>,
-    #[serde(skip_serializing)]
-    pub pin: Pin,
 }
 
 /// Turns ssh's exit and message into one code the UI explains.
@@ -455,6 +453,8 @@ struct Tunnel {
 }
 
 static TUNNEL: Mutex<Option<Tunnel>> = Mutex::new(None);
+/// The tunnel `connect` replaced, kept running until the app has opened the new server (`finish`).
+static PREVIOUS: Mutex<Option<Tunnel>> = Mutex::new(None);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Side operations use the same explicit port and identity as the active tunnel.
@@ -584,6 +584,42 @@ fn stop_inner() -> Result<(), String> {
         tunnel.child.stop()?;
     }
     *guard = None;
+    let mut previous = PREVIOUS.lock().map_err(|_| "ssh_process_failed")?;
+    if let Some(tunnel) = previous.as_mut() {
+        tunnel.child.stop()?;
+    }
+    *previous = None;
+    Ok(())
+}
+
+/// The active tunnel's login and approved host key, for pointing the agents at it.
+pub fn current() -> Option<(Target, Pin)> {
+    TUNNEL.lock().ok()?.as_ref().map(|t| (t.target.clone(), t.pin.clone()))
+}
+
+/// After `connect`, once the app tried the new server: `ok` stops the replaced tunnel; otherwise the
+/// new tunnel stops and the replaced one (same local port) is active again.
+pub fn finish(ok: bool, gate: Arc<Gate>) -> Result<(), String> {
+    let _activity = gate.activity()?;
+    let mut guard = TUNNEL.lock().map_err(|_| "ssh_process_failed")?;
+    let mut previous = PREVIOUS.lock().map_err(|_| "ssh_process_failed")?;
+    if ok {
+        if let Some(mut old) = previous.take() {
+            old.child.stop()?;
+        }
+        return Ok(());
+    }
+    if let Some(mut new) = guard.take() {
+        new.child.stop()?;
+    }
+    *guard = previous.take();
+    let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    let restored = guard.is_some();
+    drop(previous);
+    drop(guard);
+    if restored {
+        watch(generation, gate);
+    }
     Ok(())
 }
 
@@ -597,9 +633,13 @@ pub fn connect(target: Target, gate: Arc<Gate>, store: Store) -> Result<Connecte
     let (mut child, errors) = spawn_forward(&target, &forward, &store, &pin)?;
     wait_ready(&target, &mut child, &errors, local)?;
     let mut guard = TUNNEL.lock().map_err(|_| "ssh_process_failed")?;
-    if let Some(previous) = guard.as_mut() {
-        previous.child.stop()?;
+    let mut previous = PREVIOUS.lock().map_err(|_| "ssh_process_failed")?;
+    // Keep the working tunnel until `finish`; a tunnel that was never confirmed is just stopped.
+    match guard.take() {
+        Some(mut unconfirmed) if previous.is_some() => unconfirmed.child.stop()?,
+        working => *previous = working,
     }
+    drop(previous);
     let generation = GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
     *guard = Some(Tunnel {
         child,
@@ -607,7 +647,7 @@ pub fn connect(target: Target, gate: Arc<Gate>, store: Store) -> Result<Connecte
         target: target.clone(),
         forward,
         store,
-        pin: pin.clone(),
+        pin,
     });
     drop(guard);
     remember(&target);
@@ -628,7 +668,6 @@ pub fn connect(target: Target, gate: Arc<Gate>, store: Store) -> Result<Connecte
         ssh_key: target.key.map(|k| k.display().to_string()),
         ssh_host: target.host,
         ssh_port: target.port,
-        pin,
     })
 }
 
