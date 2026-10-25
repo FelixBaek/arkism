@@ -25,7 +25,7 @@ Options:
 
 Other commands: `arkism crew backends list`, `arkism crew backends remove myrunner`.
 
-Address rules (always on): `https` only; no user name, password, query or fragment in the URL; metadata servers, link-local, multicast and unspecified addresses are refused; every connect re-checks the resolved IP; redirects are never followed; no proxy.
+Address rules (always on): `https` only (plain `http` only on loopback with `--local`); no user name, password, query or fragment in the URL; metadata servers, link-local, multicast and unspecified addresses are refused; every connect re-checks the resolved IP; redirects are never followed; no proxy.
 
 ## 2. Use it for an expert or a step
 
@@ -69,7 +69,7 @@ A capability that is missing is false. Arkism reads `model_choice`, `instruction
  "session": "none", "approval": "none"}
 ```
 
-Reply with the task's state, synchronously or not:
+Reply within 30 seconds with the task's state: `accepted` or `running` for a task that takes longer (Arkism then asks `GET /v1/tasks/{task_id}`), or the final state when it is already done. A start left unanswered after 30 seconds is **unknown**:
 
 ```json
 {"task_id": "t-123", "status": "succeeded", "result": {"text": "…"}, "model": "runner-model",

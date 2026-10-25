@@ -422,6 +422,8 @@ var (
 	assistBusy = map[string]bool{}
 	// assistDone keeps answers whose report failed: the next round reports them again instead of running the work twice.
 	assistDone = map[string]host.Obj{}
+	// assistRelease frees a running assist's pool slot (submit), for one that only waits on an agent-runner connection.
+	assistRelease = map[string]func(){}
 )
 
 var assistOrder = []string{"status", "output", "model", "error", "trace"}
@@ -434,6 +436,7 @@ func assistJob(rec map[string]any, answer func(map[string]any) (map[string]any, 
 	defer func() {
 		assistMu.Lock()
 		delete(assistBusy, id)
+		delete(assistRelease, id)
 		assistMu.Unlock()
 	}()
 	assistMu.Lock()
@@ -492,7 +495,12 @@ func assistsRound() (int, error) {
 		if busy {
 			continue
 		}
-		if submit(func() { assistJob(rec, nil) }) {
+		if submit(func(release func()) {
+			assistMu.Lock()
+			assistRelease[id] = release
+			assistMu.Unlock()
+			assistJob(rec, nil)
+		}) {
 			started++
 		} else {
 			assistMu.Lock()
@@ -578,6 +586,12 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 		spec["backend"] = b
 		spec["run"] = assistRun(rec, item)
 		id := sOr(rec["id"])
+		assistMu.Lock()
+		release := assistRelease[id]
+		assistMu.Unlock()
+		if release != nil {
+			release() // the step only waits on the runner (up to hours): its slot goes to the next local job
+		}
 		spec["on_accept"] = func(trace map[string]any) {
 			body := host.Obj{{Key: "scope", Value: scope()}, {Key: "status", Value: "running"}, {Key: "trace", Value: traceBody(trace)}}
 			if _, err := runnerCall("/v1/crew/assists/"+pyQuote(id, "/")+"/result", body, 30*time.Second); err != nil {

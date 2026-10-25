@@ -27,6 +27,7 @@ type fakeRunner struct {
 	auth     []string
 	statuses int
 	cancels  int
+	capsDown int // the next capability calls answer 503
 }
 
 func reply(w http.ResponseWriter, code int, v any) {
@@ -46,6 +47,9 @@ func newFakeRunner(t *testing.T, caps ...string) *fakeRunner {
 		defer f.mu.Unlock()
 		f.auth = append(f.auth, r.Header.Get("Authorization"))
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/capabilities" && f.capsDown > 0:
+			f.capsDown--
+			reply(w, 503, map[string]any{})
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/capabilities":
 			reply(w, 200, map[string]any{"protocol": backendProtocol, "capabilities": f.caps})
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/tasks":
@@ -423,13 +427,21 @@ func TestBackendRestartAsksAboutTheSameTask(t *testing.T) {
 		reply(w, 200, map[string]any{"task_id": id, "status": "succeeded", "result": map[string]any{"text": "이어 받음"}})
 	}
 	addFake(t, f, "mine", false, false)
+	if _, err := checkBackend("mine"); err != nil {
+		t.Fatal(err)
+	}
 	e := &taskEntry{Key: "k/resume", Backend: "mine", TaskID: "t-8", State: "running", Started: nowZ()}
 	if err := e.save(); err != nil {
 		t.Fatal(err)
 	}
-	out, _ := runNode(stepSpec("mine", "k/resume"))
-	if out["ok"] != true || out["output"] != "이어 받음" {
-		t.Fatal(out)
+	f.capsDown = 1 // a runner briefly down on resume: the known task is still asked about, on the last checked capabilities
+	out, err := runNode(stepSpec("mine", "k/resume"))
+	if err != nil || out["ok"] != true || out["output"] != "이어 받음" {
+		t.Fatal(out, err)
+	}
+	f.capsDown = 1 // nothing started yet: still refused before sending
+	if _, err := runNode(stepSpec("mine", "k/fresh")); err == nil || len(f.starts) != 0 {
+		t.Fatal("a step with no task must not start while the capabilities cannot be read", err)
 	}
 	// No ledger, but the server's record knows the task (another host restarted): asked about, not started.
 	spec := stepSpec("mine", "k/server")
@@ -500,12 +512,20 @@ func TestTryAgentOnBackend(t *testing.T) {
 		return map[string]any{}, nil
 	})
 	rec := map[string]any{"id": "assist-1", "crew_assist": map[string]any{"kind": "try", "status": "pending"}}
+	released := 0
+	assistMu.Lock()
+	assistRelease["assist-1"] = func() { released++ }
+	assistMu.Unlock()
+	t.Cleanup(func() { assistMu.Lock(); delete(assistRelease, "assist-1"); assistMu.Unlock() })
 	res, err := tryAgent(rec, map[string]any{"expert": "@writer", "prompt": "써 줘"}, func(s map[string]any) (map[string]any, error) { return runNode(s) })
 	if err != nil || res["status"] != "done" || res["output"] != "외부 답" {
 		t.Fatal(res, err)
 	}
 	if len(posts) != 1 || posts[0]["status"] != "running" || obj(posts[0]["trace"])["task_id"] != "t-10" {
 		t.Fatal("the accepted report:", posts)
+	}
+	if released != 1 {
+		t.Fatal("a connection step must hand its pool slot on:", released)
 	}
 	if len(f.starts) != 1 || f.keys[0] != "assist/assist-1" {
 		t.Fatal("no fallback model or second start:", f.keys)

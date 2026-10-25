@@ -756,16 +756,19 @@ var (
 	testsDone = map[string]map[string]any{}
 )
 
-func submit(job func()) bool {
+// submit runs job in the pool; job may call release to hand its slot on early (once), when it only waits on someone else.
+func submit(job func(release func())) bool {
+	var once sync.Once
+	release := func() { once.Do(func() { <-poolSlots }) }
 	return desktopcontrol.Submit(desktopcontrol.Default, desktopcontrol.Pool, func(work func()) {
 		poolJobs.Add(1)
 		go func() {
 			defer poolJobs.Done()
 			poolSlots <- struct{}{}
-			defer func() { <-poolSlots }()
+			defer release()
 			work()
 		}()
-	}, job)
+	}, func() { job(release) })
 }
 
 // errName is the Python exception name a failure is reported under (never its message).
@@ -824,7 +827,7 @@ func queueModelTest(item map[string]any) {
 	busy := testsBusy[qid]
 	testsBusy[qid] = true
 	poolMu.Unlock()
-	if busy || submit(func() { modelTestJob(item) }) {
+	if busy || submit(func(func()) { modelTestJob(item) }) {
 		return
 	}
 	poolMu.Lock()

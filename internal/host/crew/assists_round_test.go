@@ -124,6 +124,17 @@ func TestAssistsRoundSkipsBusyAndAnswersTheRest(t *testing.T) {
 	if body := posted["/v1/crew/assists/new-1/result"]; !strings.Contains(body, `"failed"`) || !strings.Contains(body, "스킬 이름이나 내용이 올바르지 않아요") {
 		t.Fatal(posted)
 	}
+	// A slot handed on early is freed once: a second release and the pool's own take nothing more.
+	if !submit(func(release func()) { release(); release() }) {
+		t.Fatal("the pool refused the job")
+	}
+	poolJobs.Wait()
+	assistMu.Lock()
+	left := len(assistRelease)
+	assistMu.Unlock()
+	if len(poolSlots) != 0 || left != 0 {
+		t.Fatal("slots or releases left behind:", len(poolSlots), left)
+	}
 	patch(t, &runnerCall, func(string, any, time.Duration) (map[string]any, error) { return nil, os.ErrDeadlineExceeded })
 	if n, err := assistsRound(); n != 0 || err == nil {
 		t.Fatal(n, err)
