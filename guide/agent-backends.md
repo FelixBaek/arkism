@@ -102,7 +102,9 @@ Memory is not sent: the runner gets the expert's instructions and skill text onl
 - Each step keeps a small ledger (`backend-tasks/` in the host state, `0600`): the Arkism key, the runner's task id and the state, never the task text or the answer. It is written **before** the start call.
 - After a restart, a step with a task id is asked about again; a step whose start went unanswered is not resent (unless the runner dedupes); one with neither is marked unknown. Nothing is run on another runner.
 - `@name` calls: when a runner accepts, the request becomes `running` with the trace (`backend`, `task_id`, `state`, models, `not_applied`, `context`, `usage`, `fallback: false`). Discord posts "외부 실행기가 받았어요" once and the answer later. A running request with no report for 24 hours reads as failed.
-- Discord: an answer split into parts resumes from the part that failed; a thread Discord reports gone (`403`/`404`) ends the job, and the answer stays in Arkism.
+- Workflow runs: each step on a connection keeps the same trace on its node in the run record (`nodes.<id>.backend`), done or failed. A step that starts shows `state: starting` until the host runner's trace replaces it.
+- Discord: an answer split into parts resumes from the part that failed; a thread Discord reports gone (`403`/`404`) ends the job, and the answer stays in Arkism. A workflow run with a step running on a connection posts "외부 실행기에서 도는 단계가 있어요" once and waits as long as an `@name` call.
+- Several host runners: a new request is taken only by a host that has the connection; a running one only by the host that started it (its ledger). Another host never fails it or runs it again. A request no host takes expires after 10 minutes.
 - Cost: reported usage is stored as reported (`estimated: false`). A runner without `usage` leaves cost **unknown** (no number), never 0. Arkism's own price estimate is not applied.
 - Answers are untrusted data, like any model output: they never change the step's access, approvals or connection.
 
@@ -111,5 +113,4 @@ Memory is not sent: the runner gets the expert's instructions and skill text onl
 - Only the generic HTTP contract above. OpenClaw and Hermes adapters are not implemented.
 - No streaming events, attachments, session reuse or approval relay.
 - The settings screen does not show connections yet; use the CLI.
-- A workflow step's trace stays in the host ledger and the step's error text; the run record does not keep it.
-- A Discord follow-up for a workflow run still stops after 2 hours.
+- If the host that started a request loses its state folder, nobody asks about that task again; the request reads as failed after 24 hours.

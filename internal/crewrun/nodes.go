@@ -368,6 +368,40 @@ type aiAnswer struct {
 	Error  string   `json:"error"`
 	Usage  *aiUsage `json:"usage,omitempty"`
 	Rules  string   `json:"rules,omitempty"` // short sha256 of the shared record rules the runner added
+	// Backend is the agent-runner trace when the step ran on a connection, failed or not.
+	Backend map[string]any `json:"backend,omitempty"`
+}
+
+var traceLabel = regexp.MustCompile(`^[A-Za-z0-9._:@/ -]{1,128}$`)
+
+// runTrace keeps what the run record may hold of a host runner's trace: the server's trace fields, names and ids only.
+// A value that is not a short label is dropped rather than failing the run's save.
+func runTrace(t map[string]any) map[string]any {
+	if t == nil {
+		return nil
+	}
+	out := map[string]any{"fallback": false}
+	for _, k := range []string{"backend", "task_id", "state", "requested_model", "model", "usage"} {
+		if v, ok := t[k].(string); ok && traceLabel.MatchString(v) {
+			out[k] = v
+		}
+	}
+	for _, k := range []string{"not_applied", "context"} {
+		l, _ := t[k].([]any)
+		var keep []string
+		for _, v := range l {
+			if s, ok := v.(string); ok && traceLabel.MatchString(s) && len(keep) < 16 {
+				keep = append(keep, s)
+			}
+		}
+		if keep != nil {
+			out[k] = keep
+		}
+	}
+	if out["backend"] == nil {
+		return nil
+	}
+	return out
 }
 
 // callAI runs one AI step, again up to retries times when it fails. The
@@ -389,7 +423,11 @@ func (e *Engine) callAI(ctx context.Context, s aiSpec, limit time.Duration, retr
 			}
 		case !res.OK:
 			err = failf("ai_failed", "%s", clip(res.Error, 300))
+			if res.Backend != nil {
+				return aiAnswer{Backend: runTrace(res.Backend)}, err // one external task: never tried again
+			}
 		default:
+			res.Backend = runTrace(res.Backend)
 			return res, nil
 		}
 	}
@@ -507,14 +545,14 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 	s.Task += routeAsk(ports)
 	res, err := e.callAI(ctx, s, limit, retries)
 	if err != nil {
-		return result{}, err
+		return result{trace: res.Backend}, err
 	}
 	text, port := routePick(res.Output, ports, def)
 	out := map[string]any{"output": text, "model": res.Model, "effort": res.Effort, "cli": res.CLI, "duration_ms": res.Ms}
 	if res.Rules != "" {
 		out["rules"] = res.Rules
 	}
-	return result{out: out, port: port, tokens: res.tokens()}, nil
+	return result{out: out, port: port, tokens: res.tokens(), trace: res.Backend}, nil
 }
 
 type collabWorker struct {

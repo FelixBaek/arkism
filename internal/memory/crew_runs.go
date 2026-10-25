@@ -40,6 +40,8 @@ type CrewRunNode struct {
 	Runs int `json:"runs,omitempty" bson:"runs,omitempty"`
 	// Tokens is the AI token use (input + output) of the node's last finish.
 	Tokens int64 `json:"tokens,omitempty" bson:"tokens,omitempty"`
+	// Backend: the step ran on an agent-runner connection (ST-840); names and ids only.
+	Backend *CrewAssistTrace `json:"backend,omitempty" bson:"backend,omitempty"`
 }
 
 type CrewRunWaiting struct {
@@ -117,7 +119,7 @@ func terminalCrewRun(status string) bool {
 
 func validCrewRunNode(n CrewRunNode) bool {
 	return slices.Contains(crewNodeStatuses, n.Status) && len(n.Port) <= 20 && runes(n.Output) <= 20000 && runes(n.Error) <= 500 &&
-		n.Runs >= 0 && n.Runs <= 10000 && n.Tokens >= 0
+		n.Runs >= 0 && n.Runs <= 10000 && n.Tokens >= 0 && validCrewAssistTrace(n.Backend)
 }
 
 func validCrewRunLoops(loops map[string]int) bool {

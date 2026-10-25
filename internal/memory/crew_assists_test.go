@@ -193,3 +193,17 @@ func TestCrewAgentBackendField(t *testing.T) {
 		t.Fatal("a persona took a backend")
 	}
 }
+
+// A workflow step's node keeps the external runner's trace under the same rules as an @call's: names and ids only.
+func TestCrewRunNodeBackendTrace(t *testing.T) {
+	n := CrewRunNode{Status: "done", Backend: &CrewAssistTrace{Backend: "lab-runner", TaskID: "t-1", State: "succeeded", NotApplied: []string{"cwd"}, Usage: "unknown"}}
+	if !validCrewRunNode(n) {
+		t.Fatal("a node with a trace refused")
+	}
+	for _, bad := range []CrewAssistTrace{{Backend: ""}, {Backend: "x", State: "done"}, {Backend: "x", Model: "a\nb"}, {Backend: "x", Usage: "12"}} {
+		n.Backend = &bad
+		if validCrewRunNode(n) {
+			t.Fatalf("bad trace accepted %+v", bad)
+		}
+	}
+}

@@ -534,3 +534,46 @@ func TestTryAgentOnBackend(t *testing.T) {
 		t.Fatal(run)
 	}
 }
+
+// Several host runners see the same assists. One without the connection, or one that did not start a running assist,
+// leaves it alone: it neither fails it nor runs it again (here or on its own CLIs).
+func TestAssistOnAnotherHostIsLeftAlone(t *testing.T) {
+	backendEnv(t)
+	var posts []string
+	patch(t, &runnerCall, func(path string, body any, _ time.Duration) (map[string]any, error) {
+		if strings.HasPrefix(path, "/v1/crew/resolve") {
+			return map[string]any{"item": map[string]any{"id": "e1", "crew": map[string]any{"type": "agent", "role": "작가", "backend": "mine"}}}, nil
+		}
+		posts = append(posts, path)
+		return map[string]any{}, nil
+	})
+	ran := 0
+	runner := func(map[string]any) (map[string]any, error) {
+		ran++
+		return map[string]any{"ok": true, "output": "x"}, nil
+	}
+	pending := map[string]any{"id": "assist-2", "crew_assist": map[string]any{"kind": "try", "status": "pending", "expert": "@writer"}}
+	if _, err := tryAgent(pending, map[string]any{"expert": "@writer", "prompt": "써 줘"}, runner); !errors.Is(err, errNotMine) {
+		t.Fatal("a host without the connection took it:", err)
+	}
+	f := newFakeRunner(t, "status")
+	addFake(t, f, "mine", false, true)
+	// running, with the expert moved back to local since: still the runner's task, and not this host's
+	running := map[string]any{"id": "assist-3", "crew_assist": map[string]any{"kind": "try", "status": "running", "trace": map[string]any{"backend": "mine", "task_id": "t-1"}}}
+	patch(t, &runnerCall, func(path string, _ any, _ time.Duration) (map[string]any, error) {
+		if strings.HasPrefix(path, "/v1/crew/resolve") {
+			return map[string]any{"item": map[string]any{"id": "e1", "crew": map[string]any{"type": "agent", "role": "작가"}}}, nil
+		}
+		posts = append(posts, path)
+		return map[string]any{}, nil
+	})
+	if _, err := tryAgent(running, map[string]any{"expert": "@writer", "prompt": "써 줘"}, runner); !errors.Is(err, errNotMine) {
+		t.Fatal("a host that did not start it took a running assist:", err)
+	}
+	assistJob(running, func(r map[string]any) (map[string]any, error) {
+		return tryAgent(r, map[string]any{"expert": "@writer", "prompt": "써 줘"}, runner)
+	})
+	if ran != 0 || len(posts) != 0 || len(f.starts) != 0 {
+		t.Fatal("left alone:", ran, posts, len(f.starts))
+	}
+}

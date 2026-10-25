@@ -457,8 +457,8 @@ func (st *backendStep) apply(r backendReply, first bool) map[string]any {
 	}
 	st.entry.TaskID = r.TaskID
 	st.trace["task_id"] = r.TaskID
-	if r.Model != "" {
-		st.trace["model"] = clipRunes(r.Model, 80)
+	if backendLabel.MatchString(r.Model) {
+		st.trace["model"] = r.Model // anything else reads as "the runner did not say"; the trace keeps names only
 	}
 	if out := st.ended(r); out != nil {
 		return out
