@@ -260,7 +260,14 @@ func stringList(v any) []string {
 // rules (short sha256 of the shared record rules) when a step that may change files got them.
 // A *host.CrewError is for what the caller must fix (no task, an unknown effort or access, a write step without cwd,
 // no CLI for the model, no working folder).
-func runNode(spec map[string]any) (res map[string]any, err error) {
+func runNode(spec map[string]any) (map[string]any, error) {
+	if b := strings.TrimSpace(sOr(spec["backend"])); b != "" && b != "local" {
+		return runBackend(spec) // a step on an agent-runner connection (backends.go); never the local CLIs
+	}
+	return runLocalNode(spec)
+}
+
+func runLocalNode(spec map[string]any) (res map[string]any, err error) {
 	rulesSum := ""
 	defer func() { // the run record names which shared rules the step got
 		if res != nil && rulesSum != "" {

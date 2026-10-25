@@ -648,7 +648,7 @@ export function createCrewWorkers(deps) {
   function workerOut(d) {
     const out = { type: "agent", name: (d.name || "").trim(), handle: (d.handle || "").trim().replace(/^@/, ""), role: (d.role || "").trim(), instructions: d.instructions || "",
       model_mode: d.model_mode || "fixed", enabled: d.enabled !== false };
-    for (const k of ["category", "model", "fallback_model", "image_model", "effort", "output_format", "file_name", "file_edits", "template"]) if (String(d[k] || "").trim()) out[k] = String(d[k]).trim();
+    for (const k of ["category", "model", "fallback_model", "image_model", "effort", "output_format", "file_name", "file_edits", "template", "backend"]) if (String(d[k] || "").trim()) out[k] = String(d[k]).trim();
     for (const k of ["skills", "tools", "agents", "install"]) if (d[k]?.length) out[k] = d[k];
     if (String(d.workflow || "").trim()) out.workflow = String(d.workflow).trim().replace(/^\$/, "");
     if (d.memory && Object.keys(d.memory).length) out.memory = d.memory;

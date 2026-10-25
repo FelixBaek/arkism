@@ -326,6 +326,9 @@ func (x *runExec) settleInterrupted(ctx context.Context) error {
 		changed = true
 		if x.nodes[id].Config["access"] == "read" {
 			st.Status, st.StartedAt = "pending", nil
+			if x.e.stepBackend(x.nodes[id]) != "" && st.Runs > 0 {
+				st.Runs-- // the resumed start asks the runner about the same task (same key) instead of starting another
+			}
 			continue
 		}
 		st.Status, st.Error = "failed", "interrupted: the engine stopped while this step ran; not repeated"

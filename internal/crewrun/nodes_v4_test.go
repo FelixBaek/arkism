@@ -121,3 +121,53 @@ func TestN8NSyncAndAsync(t *testing.T) {
 		t.Fatal("async needs a public url")
 	}
 }
+
+func TestExpertNodeOnBackendCarriesStepKey(t *testing.T) {
+	ex := CrewItem{ID: "ex1", Revision: 1, Crew: Crew{Type: "agent", Name: "리서처", Backend: "mine"}}
+	g := &Graph{Nodes: []Node{node("start", "start"), node("a", "expert", "expert", "ex1", "access", "read", "goal", "조사"),
+		node("b", "expert", "expert", "ex1", "backend", "local", "goal", "로컬"), node("end", "end")},
+		Edges: []Edge{edge("start", "a"), edge("a", "b"), edge("b", "end")}}
+	e := testEngine(t, newFakeStore(ex, wf("w", g)))
+	log := fakeAI(t, e)
+	r := runOnce(t, e, "w", nil)
+	got := specs(t, log)
+	if r.State.Status != "succeeded" || len(got) != 2 {
+		t.Fatal(r.State.Status, statuses(r), len(got))
+	}
+	run := got[0].Run
+	if got[0].Backend != "mine" || run["kind"] != "workflow" || run["step_id"] != "a" || run["expert_id"] != "ex1" || run["key"] != r.ID+"/a/1" {
+		t.Fatalf("backend step %+v", got[0])
+	}
+	if got[1].Backend != "" || got[1].Run != nil {
+		t.Fatalf("a step set to local runs on Arkism's own path %+v", got[1])
+	}
+	// One step is one external task: collab and retries are refused, not run as several tasks under one key.
+	g.Nodes[1] = node("a", "expert", "expert", "ex1", "access", "read", "retries", "2")
+	if r = runOnce(t, e, "w", nil); r.State.Status != "failed" || !strings.HasPrefix(r.State.Nodes["a"].Error, "bad_config") {
+		t.Fatal("retries on a backend", r.State.Nodes["a"].Error)
+	}
+}
+
+// A read step on a connection, interrupted by a restart, starts again under the same key: the host runner then asks the
+// external runner about the task it already started instead of starting a second one.
+func TestInterruptedBackendStepKeepsItsKey(t *testing.T) {
+	ex := CrewItem{ID: "ex1", Revision: 1, Crew: Crew{Type: "agent", Name: "리서처", Backend: "mine"}}
+	g := &Graph{Nodes: []Node{node("start", "start"), node("a", "expert", "expert", "ex1", "access", "read", "goal", "조사")},
+		Edges: []Edge{edge("start", "a")}}
+	fs := newFakeStore(ex, wf("w", g))
+	ctx := context.Background()
+	r, _ := fs.CreateRun(ctx, RunState{CrewID: "w", CrewRevision: 1, Trigger: "manual", Status: "running",
+		Nodes: map[string]*NodeState{"start": {Status: "done", Output: "{}"}, "a": {Status: "running", Runs: 1}}})
+	e := testEngine(t, fs)
+	log := fakeAI(t, e)
+	_ = e.LoadCrew(ctx)
+	if err := e.ResumeRunning(ctx); err != nil {
+		t.Fatal(err)
+	}
+	e.Wait()
+	got, _ := fs.GetRun(ctx, r.ID)
+	s := specs(t, log)
+	if got.State.Status != "succeeded" || len(s) != 1 || s[0].Run["key"] != r.ID+"/a/1" {
+		t.Fatal(got.State.Status, statuses(got), s)
+	}
+}

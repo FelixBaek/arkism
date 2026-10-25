@@ -2,6 +2,7 @@ package discord
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -178,6 +179,7 @@ type fakeSession struct {
 	threads   int
 	responses []string
 	commands  []string
+	failSend  int // when > 0, the send after this many sent messages fails once
 }
 
 func newFakeSession() *fakeSession {
@@ -224,6 +226,10 @@ func (s *fakeSession) Channel(id string) (Channel, error) {
 func (s *fakeSession) Send(ch string, o Out) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.failSend > 0 && len(s.sent) == s.failSend {
+		s.failSend = 0
+		return "", errors.New("discord unavailable")
+	}
 	s.sent = append(s.sent, sent{ch, o})
 	return "m" + strconv.Itoa(len(s.sent)), nil
 }
@@ -690,5 +696,37 @@ func TestBotTargetServesChannelsWithoutAction(t *testing.T) {
 	ms := h.f.find("POST", "/v1/crew/meetings")
 	if len(ms) != 1 || ms[0].Body["meeting"].(map[string]any)["team_id"] != "tm1" {
 		t.Fatalf("bot target not used: %v", ms)
+	}
+}
+
+func TestAtNameOnExternalRunnerAcceptedThenAnswered(t *testing.T) {
+	h := setup(t)
+	h.m.Tick()
+	h.post("u1", "c2", "@리서처 오래 걸리는 조사")
+	h.f.mu.Lock()
+	h.f.assists["as1"]["crew_assist"] = map[string]any{"status": "running", "trace": map[string]any{"backend": "mine", "task_id": "t-1", "state": "accepted"}}
+	h.f.mu.Unlock()
+	h.m.Tick()
+	h.m.Tick()
+	if got := h.sess.sentTo("t1"); len(got) != 1 || !strings.Contains(got[0], "외부 실행기가 받았어요") {
+		t.Fatalf("accepted once: %q", got)
+	}
+	h.now = h.now.Add(5 * time.Hour) // past the 2h a plain job waits; an accepted one keeps waiting
+	long := strings.Repeat("가", 1900) + "\n" + strings.Repeat("나", 1000)
+	h.f.mu.Lock()
+	h.f.assists["as1"]["crew_assist"] = map[string]any{"status": "done", "output": long}
+	h.f.mu.Unlock()
+	h.sess.mu.Lock()
+	h.sess.failSend = len(h.sess.sent) + 1 // the second part fails once
+	h.sess.mu.Unlock()
+	h.m.Tick()
+	h.m.Tick()
+	got := h.sess.sentTo("t1")
+	if len(got) != 3 || got[1]+got[2] != "**리서처** · 답변 (읽기 전용)\n"+long {
+		t.Fatalf("answer parts, each once: %d", len(got))
+	}
+	h.m.Tick()
+	if len(h.sess.sentTo("t1")) != 3 {
+		t.Fatal("answer sent again")
 	}
 }

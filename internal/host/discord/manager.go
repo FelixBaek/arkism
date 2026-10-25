@@ -25,6 +25,8 @@ var (
 	checkEvery = 5 * time.Minute
 	crewTTL    = time.Minute
 	jobTTL     = 2 * time.Hour
+	// acceptedTTL: an external runner accepted the assist; the server gives its answer a day from the last report.
+	acceptedTTL = 26 * time.Hour
 )
 
 var stateFile = host.Env("ARKISM_DISCORD_STATE", filepath.Join(host.AgentsState, "discord-state.json"))
@@ -94,6 +96,15 @@ type job struct {
 	Who       string    `json:"who,omitempty"` // agent or workflow name for the header
 	Asked     string    `json:"asked,omitempty"`
 	Since     time.Time `json:"since"`
+	Accepted  bool      `json:"accepted,omitempty"` // an external runner took it; the thread was told once
+	Sent      int       `json:"sent,omitempty"`     // answer parts already posted, so a retry sends only the rest
+}
+
+func (j job) ttl() time.Duration {
+	if j.Accepted {
+		return acceptedTTL
+	}
+	return jobTTL
 }
 
 type persisted struct {
@@ -1019,8 +1030,8 @@ func (m *Manager) followJobs() {
 		if b == nil {
 			continue
 		}
-		if b.sess == nil || m.now().Sub(j.Since) > jobTTL {
-			if m.now().Sub(j.Since) <= jobTTL {
+		if b.sess == nil || m.now().Sub(j.Since) > j.ttl() {
+			if m.now().Sub(j.Since) <= j.ttl() {
 				keep = append(keep, j)
 			}
 			continue
@@ -1034,10 +1045,14 @@ func (m *Manager) followJobs() {
 			}
 			a := body(rec, "crew_assist")
 			switch str(a["status"]) {
+			case "running":
+				if !j.Accepted && m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · 외부 실행기가 받았어요. 끝나면 여기에 답을 올릴게요."}) {
+					j.Accepted = true
+				}
 			case "done":
-				done = m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · 답변 (읽기 전용)\n" + str(a["output"])})
+				done = m.sendRest(b, &j, Out{Content: "**" + j.Who + "** · 답변 (읽기 전용)\n" + str(a["output"])})
 			case "failed":
-				done = m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** 이(가) 답하지 못했어요: " + clip(str(a["error"]), 300)})
+				done = m.sendRest(b, &j, Out{Content: "**" + j.Who + "** 이(가) 답하지 못했어요: " + clip(str(a["error"]), 300)})
 			}
 		case "run":
 			done = m.followJobsRun(b, &j)
@@ -1063,10 +1078,10 @@ func (m *Manager) followJobsRun(b *bot, j *job) bool {
 	r := body(rec, "crew_run")
 	switch st := str(r["status"]); st {
 	case "succeeded":
-		return m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · 완료\n" + str(r["summary"])})
+		return m.sendRest(b, j, Out{Content: "**" + j.Who + "** · 완료\n" + str(r["summary"])})
 	case "failed", "stopped":
 		label := map[string]string{"failed": "실패했어요", "stopped": "멈췄어요"}[st]
-		return m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · " + label + "\n" + str(r["summary"])})
+		return m.sendRest(b, j, Out{Content: "**" + j.Who + "** · " + label + "\n" + str(r["summary"])})
 	case "waiting":
 		w := obj(r["waiting"])
 		if k := str(w["kind"]); (k == "approval" || k == "budget") && str(w["node_id"]) != j.Asked {
@@ -1086,21 +1101,43 @@ func (m *Manager) followJobsRun(b *bot, j *job) bool {
 
 // send posts text (split at Discord's 2,000-character limit; buttons go on the last part). It reports success.
 func (m *Manager) send(b *bot, channelID string, out Out) bool {
+	ok, _ := m.sendParts(b, channelID, out, nil)
+	return ok
+}
+
+// sendRest posts a job's answer from the part the last try stopped at. A thread Discord says is gone or closed to the
+// bot (403, 404) ends the job: the answer stays in Arkism and is not sent again.
+func (m *Manager) sendRest(b *bot, j *job, out Out) bool {
+	ok, gone := m.sendParts(b, j.ChannelID, out, &j.Sent)
+	if gone {
+		m.logf("bot %s: %s %s: 스레드에 보낼 수 없어 답은 Arkism에만 남겼어요", b.cfg.ID, j.Kind, j.ID)
+	}
+	return ok || gone
+}
+
+func (m *Manager) sendParts(b *bot, channelID string, out Out, sent *int) (ok, gone bool) {
 	if b.sess == nil || channelID == "" {
-		return false
+		return false, false
 	}
 	parts := split(out.Content, 1900)
 	for i, p := range parts {
+		if sent != nil && i < *sent {
+			continue
+		}
 		o := Out{Content: p}
 		if i == len(parts)-1 {
 			o.Buttons = out.Buttons
 		}
 		if _, err := b.sess.Send(channelID, o); err != nil {
 			m.logf("bot %s: send: %s", b.cfg.ID, err)
-			return false
+			code := restCode(err)
+			return false, code == 403 || code == 404
+		}
+		if sent != nil {
+			*sent = i + 1
 		}
 	}
-	return true
+	return true, false
 }
 
 // ---- text helpers ----

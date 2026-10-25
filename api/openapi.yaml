@@ -43914,6 +43914,9 @@
           },
           "discord_mirror": {
             "type": "boolean"
+          },
+          "backend": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -44590,6 +44593,9 @@
           },
           "error": {
             "type": "string"
+          },
+          "trace": {
+            "$ref": "#/components/schemas/WireResponseCrewAssistTrace"
           }
         },
         "additionalProperties": false,
@@ -50654,6 +50660,56 @@
         "x-go-type": "memory.StaleMark",
         "x-go-source": "internal/memory/stale_cascade.go",
         "description": "StaleMark says a record was written from a memory a person has since replaced."
+      },
+      "WireResponseCrewAssistTrace": {
+        "type": "object",
+        "properties": {
+          "backend": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "requested_model": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string",
+            "description": "the model the runner reported; empty when it did not say"
+          },
+          "not_applied": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "context": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "what was sent, by name: instructions, skill:<id>"
+          },
+          "usage": {
+            "type": "string",
+            "description": "reported | unknown"
+          },
+          "fallback": {
+            "type": "boolean",
+            "description": "always false: an external task is never re-run elsewhere"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "backend",
+          "fallback"
+        ],
+        "x-go-type": "memory.CrewAssistTrace",
+        "x-go-source": "internal/memory/crew_assists.go",
+        "description": "CrewAssistTrace says which external runner did a try and what it did and did not apply; ids and names only."
       }
     },
     "headers": {

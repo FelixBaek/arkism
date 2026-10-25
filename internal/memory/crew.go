@@ -60,6 +60,9 @@ var crewNodeTypes = []string{"start", "schedule", "webhook", "ai", "ai_once", "c
 var crewHandleRe = regexp.MustCompile(`^[\p{L}\p{N}_-]{1,40}$`)
 var crewModelRe = regexp.MustCompile(`^[a-zA-Z0-9._ -]{1,80}$`)
 
+// crewBackendRe is a connection name (host crew backends.go backendName).
+var crewBackendRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
+
 type CrewAvatar struct {
 	Art string `json:"art"`
 	Bg  string `json:"bg"`
@@ -195,15 +198,18 @@ type Crew struct {
 	Goal    *CrewGoal    `json:"goal,omitempty"`   // 목표 (crew_goal.go)
 	Notify  *CrewNotify  `json:"notify,omitempty"` // 진행 알림 (crew_goal.go)
 	// agent
-	ModelMode       string      `json:"model_mode,omitempty"` // fixed | auto (Clef picks)
-	FallbackModel   string      `json:"fallback_model,omitempty"`
-	ImageModel      string      `json:"image_model,omitempty"`
-	Temperature     *float64    `json:"temperature,omitempty"`
-	MaxOutputTokens int         `json:"max_output_tokens,omitempty"`
-	OutputFormat    string      `json:"output_format,omitempty"`
-	FileEdits       string      `json:"file_edits,omitempty"`
-	Workflow        string      `json:"workflow,omitempty"` // handle of the workflow ($) this agent runs as its way of working
-	Budget          *CrewBudget `json:"budget,omitempty"`
+	ModelMode       string   `json:"model_mode,omitempty"` // fixed | auto (Clef picks)
+	FallbackModel   string   `json:"fallback_model,omitempty"`
+	ImageModel      string   `json:"image_model,omitempty"`
+	Temperature     *float64 `json:"temperature,omitempty"`
+	MaxOutputTokens int      `json:"max_output_tokens,omitempty"`
+	OutputFormat    string   `json:"output_format,omitempty"`
+	FileEdits       string   `json:"file_edits,omitempty"`
+	Workflow        string   `json:"workflow,omitempty"` // handle of the workflow ($) this agent runs as its way of working
+	// Backend names the host runner's agent-runner connection that does this agent's work (arkism crew backends);
+	// empty is Arkism's own path. Only the name is stored here: the address and key stay on the host.
+	Backend string      `json:"backend,omitempty"`
+	Budget  *CrewBudget `json:"budget,omitempty"`
 	// agent and team: records always read first (crew_pins.go)
 	Pinned []CrewPin `json:"pinned,omitempty"`
 	// team
@@ -312,7 +318,7 @@ func validCrewTemplate(c Crew) bool {
 
 func noAgentFields(c Crew) bool {
 	return c.ModelMode == "" && c.FallbackModel == "" && c.ImageModel == "" && c.Temperature == nil && c.MaxOutputTokens == 0 &&
-		c.OutputFormat == "" && c.FileEdits == "" && c.Workflow == "" && c.Budget == nil
+		c.OutputFormat == "" && c.FileEdits == "" && c.Workflow == "" && c.Budget == nil && c.Backend == ""
 }
 
 func noTeamFields(c Crew) bool {
@@ -341,7 +347,7 @@ func validCrewAgentModel(c Crew) bool {
 func validCrewAgentOutput(c Crew) bool {
 	return !(c.Temperature != nil && !(*c.Temperature >= 0 && *c.Temperature <= 1) || c.MaxOutputTokens < 0 || c.MaxOutputTokens > 200000 ||
 		c.OutputFormat != "" && !slices.Contains(crewOutputFormats, c.OutputFormat) || c.FileEdits != "" && !slices.Contains(crewFileEdits, c.FileEdits) ||
-		c.Workflow != "" && !crewHandleRe.MatchString(c.Workflow) ||
+		c.Workflow != "" && !crewHandleRe.MatchString(c.Workflow) || c.Backend != "" && !crewBackendRe.MatchString(c.Backend) ||
 		c.Budget != nil && (!validUSD(c.Budget.MonthlyUSD) || !validUSD(c.Budget.AskOverUSD)))
 }
 
