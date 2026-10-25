@@ -11,22 +11,54 @@ source changes only; they do not claim that a signed installer is available.
 - Start a session with at most 10 memory lines: this repository's rules first, then
   memories close to the first question or the task contract, and one line counting
   the rest (`ARKISM_SESSION_INDEX_LINES`, `ARKISM_SESSION_INDEX_CHARS`).
-- Name every memory-map point, keep line and label size steady when zoomed,
-  show loading and error states, and read memories past the first page.
-- Hide the window buttons while a popup is open; fix expert creation and
-  opening, false "unsaved changes" prompts in teams and automations, and report
-  a taken $name/@name as such (API `409 handle_taken`).
-- Pick the AI tools default model per provider; run GLM models in Claude Code
-  against Z.ai without a wrapper; skip Codex composer-suggestion prompts.
-- Show review editing, kind filters, full lists and dreaming proposals beyond
-  the first loaded page in the memory windows.
-- Add per-release compression, hook latency and token evaluation metrics.
 - Fail a routed group call over to its fallback on a 5xx (529 included) or a
   timeout before any response, and return the pick's own error when none answers.
 - Delete audit events past `MEMORY_AUDIT_RETENTION_DAYS` (30 by default) once
   a day; let `session-archive` name the file it cannot inspect and skip it
   instead of failing; prove migration files and numbers agree; back the
   database up right before an update and cap the backup count.
+
+## [0.1.5](https://github.com/FelixBaek/arkism/releases/tag/v0.1.5) — 2026-10-23
+
+- Refuse plain-http Z.ai base addresses, drop inherited http addresses and
+  refuse https-to-http redirects (#168).
+- Lighten memory list reads, load sources in batches and index the memory map
+  in exact distance order per scope; parallel list reads no longer return 503
+  (#172, #173, #175).
+- Keep tabs, the English overview, map labels, window badges and popout windows
+  whole at mid widths (#178).
+- Show failed or partial Home and overview loads as such; unknown counts stay
+  unknown and Home shows the full review total (#185).
+- Keep user-written crew names, step titles and filter chips in English mode
+  (#191).
+- Answer 403 instead of 503 for a scope the token cannot use; the server and
+  capture join archive text the same way (#195).
+- Ask before "템플릿·설정으로 만들기" drops unsaved changes; tear popups off
+  with Alt+Shift+O as well as by dragging (#198).
+- Restore the preview server fixtures and check for an empty memory import
+  reply (#201); run at most two heavy Go test jobs at once in CI (#212).
+- Build, sign and attest releases on GitHub Actions with build provenance
+  (#214); the app checks GitHub Releases for updates from this version.
+
+## [0.1.4](https://github.com/FelixBaek/arkism/releases/tag/v0.1.4) — 2026-10-22
+
+- Name every memory-map point, size areas by their dots, keep line and label
+  size steady when zoomed, show loading and error states, and read memories
+  past the first page.
+- Hide the window buttons while a popup is open; keep popups draggable and let
+  stage windows tear off.
+- Fix expert creation and opening, false "unsaved changes" prompts in teams and
+  automations, and report a taken $name/@name as such (API `409 handle_taken`).
+- Pick the AI tools default model per provider; show where the Z.ai API key
+  goes; run GLM models in Claude Code against Z.ai without a wrapper.
+- Skip Codex composer-suggestion prompts and join Codex multi-block prompts
+  like the hook prompt.
+- Show review editing, kind filters, full lists, server totals and dreaming
+  proposals beyond the first loaded page in the memory windows; show error
+  codes as sentences.
+- Run one policy check per request and lighter graph and usage SQL; let a new
+  install supersede a stale committed journal.
+- Add per-release compression, hook latency and token evaluation metrics.
 
 ## [0.1.3](https://github.com/FelixBaek/arkism/releases/tag/v0.1.3) — 2026-10-22
 
