@@ -425,7 +425,7 @@ window.ArkismTeams = (ctx) => {
     const tag = inline(pop, () => d.handle || (pop.id ? "" : handleFrom(d.name)), (v) => { pop.handleTouched = true; d.handle = v.replace(/^@/, ""); warn.hidden = !takenHandle(pop); }, { max: 32, placeholder: "팀이름", cls: "tm-plain-tag" });
     tag.setAttribute("aria-label", "@이름");
     const copy = el("button", "icon-btn plain tm-copy"); copy.type = "button"; copy.title = "@이름 복사"; copy.setAttribute("aria-label", "@이름 복사"); copy.append(icon("copy"));
-    copy.addEventListener("click", () => { navigator.clipboard?.writeText(`@${d.handle || handleFrom(d.name)}`).then(() => notice("복사했어요."), () => {}); });
+    copy.addEventListener("click", () => { copy.ownerDocument.defaultView.navigator.clipboard.writeText(`@${d.handle || handleFrom(d.name)}`).then(() => notice("복사했어요."), () => notice("복사하지 못했어요.")); }); // its own window: a popout has the focus
     at.append(tag, copy);
     line.append(name, at);
     const warn = el("small", "tm-warn", "이미 쓰는 이름이에요"); warn.hidden = !takenHandle(pop);
