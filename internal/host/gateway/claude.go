@@ -275,15 +275,7 @@ func claudeStripBlocks(messages []any) bool {
 // claudeProfile selects the host login for model (profile). A variable so tests can fake it.
 var claudeProfile = func(model string) (profile map[string]any, executable string, err error) {
 	executable = host.Bin("ARKISM_CLAUDE_BIN", "claude")
-	var reason string
-	func() {
-		defer func() {
-			if recover() != nil {
-				profile, reason = nil, "login_unavailable"
-			}
-		}()
-		profile, reason = subscription.Choose("claude", model, executable, host.Home, host.AgentsState, nil)
-	}()
+	profile, reason := subscription.Choose("claude", model, executable, host.Home, host.AgentsState, nil)
 	if profile == nil {
 		return nil, "", claudeErr(reason, 503)
 	}
