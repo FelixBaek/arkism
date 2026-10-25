@@ -5271,7 +5271,7 @@
           }}}
     },
     "/v1/crew/assists/by-request/{request_id}": {
-      "get": {"summary": "Recover own AI-help receipt by client request ID", "description": "Human principals with read:crew only. Looks up exactly the authenticated creator and full scope; returns pending, done, failed or expired records even when absent from the pending queue. Unknown key is 404, not proof that a POST was never accepted. No retry POST is implied.", "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}], "responses": {"200": {"description": "Original record and result"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"},
+      "get": {"summary": "Recover own AI-help receipt by client request ID", "description": "Human principals with read:crew only. Looks up exactly the authenticated creator and full scope; returns pending, running, done, failed or expired records even when absent from the pending queue. Unknown key is 404, not proof that a POST was never accepted. No retry POST is implied.", "parameters": [{"name": "request_id", "in": "path", "required": true, "schema": {"type": "string", "pattern": "^[0-9a-f]{32}$"}}], "responses": {"200": {"description": "Original record and result"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -5295,7 +5295,7 @@
           }}}
     },
     "/v1/crew/assists/{id}": {
-      "get": {"summary": "One AI-help request and its answer (read:crew)", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Record with crew_assist{status pending|done|failed, output, model, error}"}, "404": {"description": "not_found"},
+      "get": {"summary": "One AI-help request and its answer (read:crew)", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Record with crew_assist{status pending|running|done|failed, output, model, error}"}, "404": {"description": "not_found"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {

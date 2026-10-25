@@ -766,9 +766,9 @@ func (x *meetingExec) modelOf(sp speaker) string {
 
 // call runs one read-only, one-shot model call as sp, on its fallback model when the first fails.
 func (x *meetingExec) call(ctx context.Context, sp speaker, role, task string) (aiAnswer, error) {
-	if sp.agent.Backend != "" {
+	if b := backendName(sp.agent.Backend); b != "" {
 		// shortcut: meetings run members on Arkism's own path only; refuse rather than drop the expert's choice
-		return aiAnswer{}, failf("bad_config", "%s은(는) 외부 연결(%s)로 일해서 아직 팀 회의에 낄 수 없어요", sp.name(), sp.agent.Backend)
+		return aiAnswer{}, failf("bad_config", "%s은(는) 외부 연결(%s)로 일해서 아직 팀 회의에 낄 수 없어요", sp.name(), b)
 	}
 	focus := ""
 	if sp.member.Focus != "" {

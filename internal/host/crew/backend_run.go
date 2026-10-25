@@ -259,6 +259,12 @@ func prepareBackend(spec map[string]any) (*backendStep, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), backendStartMax)
 	defer cancel()
 	caps, err := fetchCaps(ctx, b)
+	var he *backendHTTPError
+	run := obj(spec["run"])
+	if known := readEntry(sOr(run["key"])); err != nil && errors.As(err, &he) && b.Caps != nil &&
+		(sOr(run["task_id"]) != "" || known != nil && known.TaskID != "") {
+		caps, err = b.Caps, nil // a task already runs there: a brief outage must not drop its answer (follow keeps asking)
+	}
 	if err != nil {
 		return nil, crewErr("외부 연결 " + name + "을(를) 확인하지 못해 보내지 않았어요: " + err.Error())
 	}
