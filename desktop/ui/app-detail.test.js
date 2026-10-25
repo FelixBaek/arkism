@@ -52,7 +52,7 @@ const home = async () => { closeDialogs(); await app.click('.nav-item[data-menu=
 const rows = (s) => [...app.$$(s)];
 const byText = (s, re) => rows(s).find((n) => re.test(t(n)));
 const key = (k, init = {}, target = app.document) => target.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init }));
-const waitNotice = async (re) => { for (let i = 0; i < 60 && !re.test(t(app.$("#notice"))); i++) await app.settle(1000); };
+const waitNotice = async (re, sel = "#notice") => { for (let i = 0; i < 60 && !re.test(t(app.$(sel))); i++) await app.settle(1000); };
 const openTodo = async (re) => { await home(); const r = byText(".todo-item", re); if (!r) return openAll(re); await app.click(r, 200); return r; };
 // 전체 항목 보기 lists every kind, also the ones folded into a menu row on Home.
 const openAll = async (re) => { await home(); await app.click("#home-all", 100); const r = byText(".home-table .todo-item", re); assert.ok(r, `no to-do ${re}`); await app.click(r, 200); return r; };
@@ -192,7 +192,7 @@ test("비슷한 스킬: 합쳐서 미리 보기 drafts one SKILL.md, the other g
     }
     hook = (a) => (a.path.startsWith("/v1/crew/assists/") ? json(200, { crew_assist: { status: "failed", error: "x" } }) : null);
     await drafted();
-    for (let i = 0; i < 20 && !/AI가 답하지 못했어요/.test(t(app.$("#detail"))); i++) await app.settle(300); // a slow CI runner polls the assist later
+    await waitNotice(/AI가 답하지 못했어요/, "#detail");
     hook = () => null;
     assert.match(t(app.$("#detail")), /AI가 답하지 못했어요/);
   }
