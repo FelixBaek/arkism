@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -89,7 +90,7 @@ func backendEnv(t *testing.T) {
 
 func addFake(t *testing.T, f *fakeRunner, name string, isolated, ownModel bool) {
 	t.Helper()
-	if _, err := addBackend(name, f.URL, "conn-secret-123", true, isolated, ownModel); err != nil {
+	if _, err := addBackend(name, f.URL, "conn-secret-123", true, isolated, ownModel, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -150,7 +151,7 @@ func TestBackendRedirectAndNonLocalRefused(t *testing.T) {
 	target := newFakeRunner(t, "status")
 	jump := httptest.NewServer(http.RedirectHandler(target.URL+"/v1/capabilities", http.StatusFound))
 	t.Cleanup(jump.Close)
-	if _, err := addBackend("jump", jump.URL, "", true, false, false); err != nil {
+	if _, err := addBackend("jump", jump.URL, "", true, false, false, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := checkBackend("jump"); err == nil {
@@ -182,7 +183,7 @@ func TestBackendTokenNeverShown(t *testing.T) {
 		t.Fatal("backends.json mode", st, err)
 	}
 	t.Setenv("ARKISM_CAPTURE_CHILD", "1")
-	if _, err := addBackend("other", f.URL, "", true, false, false); err == nil {
+	if _, err := addBackend("other", f.URL, "", true, false, false, false); err == nil {
 		t.Fatal("an agent Arkism started must not add a connection")
 	}
 	if _, err := useBackend("mine", "@writer"); err == nil {
@@ -575,5 +576,51 @@ func TestAssistOnAnotherHostIsLeftAlone(t *testing.T) {
 	})
 	if ran != 0 || len(posts) != 0 || len(f.starts) != 0 {
 		t.Fatal("left alone:", ran, posts, len(f.starts))
+	}
+}
+
+// Memory goes along only when the owner turned it on and the runner keeps it apart (capability memory). It comes from
+// the server's search for that external destination (its approval, scope and transfer policy), memories only, as data;
+// the trace names what went. Nothing goes when the search fails, and the step still runs.
+func TestBackendMemoryOnlyWhenAllowed(t *testing.T) {
+	backendEnv(t)
+	var dests []string
+	hits := []any{map[string]any{"id": "m1", "collection": "memories", "text": "회의는 화요일", "authority": "data_only_untrusted"},
+		map[string]any{"id": "s1", "collection": "skill_versions", "text": "스킬 본문"},
+		map[string]any{"id": "bad id\n", "collection": "memories", "text": "x"}}
+	var searchErr error
+	patch(t, &backendSearch, func(_, dest string) ([]any, error) { dests = append(dests, dest); return hits, searchErr })
+	run := func(name string, memory bool, caps ...string) (map[string]any, map[string]any) {
+		f := newFakeRunner(t, append([]string{"tool_restriction"}, caps...)...)
+		f.start = func(w http.ResponseWriter, _ map[string]any) {
+			reply(w, 200, map[string]any{"task_id": "t-1", "status": "succeeded", "result": map[string]any{"text": "답"}})
+		}
+		if _, err := addBackend(name, f.URL, "", true, false, false, memory); err != nil {
+			t.Fatal(err)
+		}
+		out, err := runNode(stepSpec(name, "assist/"+name))
+		if err != nil || out["ok"] != true {
+			t.Fatal(out, err)
+		}
+		return f.starts[0], trace(out)
+	}
+	if body, _ := run("off", false, "memory"); body["memory"] != nil || len(dests) != 0 {
+		t.Fatal("memory sent without the owner's flag", body["memory"], dests)
+	}
+	if body, tr := run("nocap", true); body["memory"] != nil || len(dests) != 0 || !strings.Contains(fmt.Sprint(tr["not_applied"]), "memory") {
+		t.Fatal("memory sent to a runner that cannot keep it apart", body["memory"], tr)
+	}
+	body, tr := run("mine", true, "memory")
+	m := obj(body["memory"])
+	items, _ := m["items"].([]any)
+	if dests[0] != "external:backend.mine" || m["authority"] != "data_only_untrusted" || len(items) != 1 || obj(items[0])["id"] != "m1" {
+		t.Fatal("memory:", dests, m)
+	}
+	if !strings.Contains(fmt.Sprint(tr["context"]), "memory:m1") || strings.Contains(fmt.Sprint(body["task"]), "회의는") {
+		t.Fatal("trace names it, the task does not carry it", tr, body["task"])
+	}
+	searchErr = errors.New("search down")
+	if body, tr := run("down", true, "memory"); body["memory"] != nil || !strings.Contains(fmt.Sprint(tr["not_applied"]), "memory") {
+		t.Fatal("a failed search sends nothing", body["memory"], tr)
 	}
 }

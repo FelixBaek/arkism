@@ -22,6 +22,7 @@ Options:
 | `--local` | Allow a loopback or private address (`127.0.0.1`, `10.x`, `192.168.x`, `100.64/10`). Plain `http` is allowed only on loopback. |
 | `--isolated` | You state that the runner works in its own sandbox. A read-only step may then go to a runner that cannot restrict tools itself. |
 | `--own-model` | Accept that a runner without model choice uses its own model. The step records `model` as not applied. |
+| `--memory` | Let approved memory go along with the task (see "Memory" below). Off by default. |
 
 Other commands: `arkism crew backends list`, `arkism crew backends remove myrunner`.
 
@@ -52,7 +53,7 @@ All calls carry `Authorization: Bearer <connection token>`. Replies are JSON, at
                   "instructions": true, "model_choice": false, "usage": true}}
 ```
 
-A capability that is missing is false. Arkism reads `model_choice`, `instructions`, `status`, `cancel`, `idempotency`, `tool_restriction`, `usage`; it lists `approval`, `events`, `session_reuse`, `attachments`, `structured_result` but does not use them yet.
+A capability that is missing is false. Arkism reads `model_choice`, `instructions`, `status`, `cancel`, `idempotency`, `tool_restriction`, `usage`, `memory`; it lists `approval`, `events`, `session_reuse`, `attachments`, `structured_result` but does not use them yet.
 
 ### `POST /v1/tasks` (header `Idempotency-Key: <run.key>`)
 
@@ -82,7 +83,17 @@ Reply within 30 seconds with the task's state: `accepted` or `running` for a tas
 
 Same reply shape. Cancel takes `{"reason": "arkism"}`.
 
-Memory is not sent: the runner gets the expert's instructions and skill text only. The trace says what was sent (`context`) and what was not applied (`not_applied`).
+The trace says what was sent (`context`) and what was not applied (`not_applied`).
+
+### Memory
+
+Memory goes along only when **both** hold: the connection was added with `--memory`, and the runner reports `memory: true` (it keeps the section apart from instructions). Then Arkism asks its own search for the task with destination `external:backend.<name>`, so every hit passes the server's approval, scope and transfer policy (restricted or unsafe content never leaves). Only approved memories go, at most 5, each at most 1,200 characters:
+
+```json
+"memory": {"authority": "data_only_untrusted", "items": [{"id": "m1", "text": "…"}]}
+```
+
+The runner must treat it as data, never as instructions. The trace lists each id as `memory:<id>`. When the flag is on but the runner lacks the capability, or the search fails, nothing is sent and `memory` shows under `not_applied`; the step still runs. Arkism never stores a runner's answer as memory.
 
 ## 4. What Arkism does with the answers
 

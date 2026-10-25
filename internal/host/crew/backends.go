@@ -38,7 +38,7 @@ var backendName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 
 // backendCaps are the capabilities Arkism reads; a runner that does not say one does not have it.
 var backendCaps = []string{"model_choice", "instructions", "status", "cancel", "idempotency", "tool_restriction", "usage",
-	"approval", "events", "session_reuse", "attachments", "structured_result"}
+	"approval", "events", "session_reuse", "attachments", "structured_result", "memory"}
 
 // backend is one connection. Local allows a loopback or private address (and plain http on loopback only);
 // Isolated is the owner's word that the runner works in its own sandbox, which lets a read-only task run on a runner
@@ -51,6 +51,7 @@ type backend struct {
 	Local     bool            `json:"local,omitempty"`
 	Isolated  bool            `json:"isolated,omitempty"`
 	OwnModel  bool            `json:"own_model,omitempty"`
+	Memory    bool            `json:"memory,omitempty"` // the owner lets approved memory that passes the transfer policy go along
 	Caps      map[string]bool `json:"capabilities,omitempty"` // from the last check
 	CheckedAt string          `json:"checked_at,omitempty"`
 	Status    string          `json:"status,omitempty"` // ok | failed: <reason>
@@ -254,7 +255,7 @@ func backendClient(local bool) *http.Client {
 // insideArkismRun: a CLI Arkism started (ARKISM_CAPTURE_CHILD) must not change where Arkism sends work.
 func insideArkismRun() bool { return os.Getenv("ARKISM_CAPTURE_CHILD") == "1" }
 
-func addBackend(name, rawURL, token string, local, isolated, ownModel bool) (*backend, error) {
+func addBackend(name, rawURL, token string, local, isolated, ownModel, memory bool) (*backend, error) {
 	if insideArkismRun() {
 		return nil, crewErr("Arkism이 실행한 에이전트 안에서는 연결을 바꿀 수 없어요")
 	}
@@ -276,7 +277,7 @@ func addBackend(name, rawURL, token string, local, isolated, ownModel bool) (*ba
 	if all[name] != nil {
 		return nil, crewErr("같은 이름의 연결이 이미 있어요: 지우고 다시 만들어 주세요")
 	}
-	b := &backend{Name: name, URL: u.String(), Local: local, Isolated: isolated, OwnModel: ownModel, CreatedAt: nowZ()}
+	b := &backend{Name: name, URL: u.String(), Local: local, Isolated: isolated, OwnModel: ownModel, Memory: memory, CreatedAt: nowZ()}
 	if token != "" {
 		if ref, err := secretPut(backendService, name, token); err == nil {
 			b.SecretRef = ref
@@ -361,7 +362,7 @@ func fetchCaps(ctx context.Context, b *backend) (map[string]bool, error) {
 func runBackendsCmd(name string, a *args, stdinLine string) (any, error) {
 	switch name {
 	case "backends add":
-		b, err := addBackend(a.vals["name"], a.vals["url"], stdinLine, a.flags["local"], a.flags["isolated"], a.flags["own-model"])
+		b, err := addBackend(a.vals["name"], a.vals["url"], stdinLine, a.flags["local"], a.flags["isolated"], a.flags["own-model"], a.flags["memory"])
 		if err != nil {
 			return nil, err
 		}

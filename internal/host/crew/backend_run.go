@@ -7,6 +7,7 @@ package crew
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -294,6 +295,10 @@ func (st *backendStep) request(spec map[string]any, task, access string, timeout
 	for _, id := range skillIDs {
 		context = append(context, "skill:"+clipRunes(id, 100))
 	}
+	memory := st.memory(task)
+	for _, m := range memory {
+		context = append(context, "memory:"+sOr(m["id"]))
+	}
 	run := obj(spec["run"])
 	st.key = sOr(run["key"])
 	if st.key == "" {
@@ -313,6 +318,9 @@ func (st *backendStep) request(spec map[string]any, task, access string, timeout
 		"limits":  map[string]any{"timeout_s": int(timeout.Seconds())},
 		"result":  map[string]any{"format": format, "max_chars": backendResultChars},
 		"session": "none", "approval": "none"}
+	if len(memory) > 0 {
+		st.body["memory"] = map[string]any{"authority": "data_only_untrusted", "items": memory}
+	}
 	usage := "unknown"
 	if caps["usage"] {
 		usage = "reported"
@@ -320,6 +328,38 @@ func (st *backendStep) request(spec map[string]any, task, access string, timeout
 	st.trace = map[string]any{"backend": name, "state": "starting", "requested_model": st.requested, "not_applied": st.notApplied,
 		"context": context, "usage": usage, "fallback": false}
 	return nil
+}
+
+// backendSearch recalls for an external destination; the server applies its search, approval, scope and transfer policy.
+var backendSearch = func(query, destination string) ([]any, error) {
+	return host.SearchTo(query, 5, 20*time.Second, destination)
+}
+
+// memory is the approved memory a connection may take along with the task: only when the owner turned it on and the
+// runner keeps it apart from instructions (capability memory). It never fails the step: nothing goes when unsure.
+func (st *backendStep) memory(task string) []map[string]any {
+	if !st.b.Memory {
+		return nil
+	}
+	if !st.caps["memory"] {
+		st.notApplied = append(st.notApplied, "memory")
+		return nil
+	}
+	hits, err := backendSearch(task, "external:backend."+st.b.Name)
+	if err != nil {
+		st.notApplied = append(st.notApplied, "memory")
+		return nil
+	}
+	var out []map[string]any
+	for _, h := range hits {
+		m := obj(h)
+		id, text := sOr(m["id"]), strings.TrimSpace(cmp.Or(sOr(m["text"]), sOr(m["summary"])))
+		if m["collection"] != "memories" || !backendLabel.MatchString(id) || text == "" || len(out) == 5 {
+			continue // memories only (not skills or reflections), and only ids the trace can name
+		}
+		out = append(out, map[string]any{"id": id, "text": clipRunes(text, 1200)})
+	}
+	return out
 }
 
 // policy refuses what the runner cannot honour before anything is sent; settings it may skip are listed.
