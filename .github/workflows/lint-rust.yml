@@ -1,0 +1,59 @@
+name: Lint Rust
+
+# Clippy for the Tauri shell with warnings as errors. It runs on Windows, the only
+# shipped target, the same way the rust job in checks.yml does.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-rust-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  clippy:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        id: rust
+        with:
+          toolchain: 1.98.1
+          components: clippy
+      - name: Restore Rust build cache
+        id: rust-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
+        with:
+          path: |
+            target
+            !target/**/incremental/**
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+          key: windows-${{ runner.arch }}-tauri-clippy-v1-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('desktop/src-tauri/Cargo.lock', 'desktop/src-tauri/Cargo.toml') }}
+          restore-keys: windows-${{ runner.arch }}-tauri-clippy-v1-${{ steps.rust.outputs.cachekey }}-
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --manifest-path desktop/src-tauri/Cargo.toml -- -D warnings
+      - name: Save Rust build cache
+        if: ${{ !cancelled() && steps.rust-cache.outputs.cache-hit != 'true' && steps.rust-cache.outputs.cache-primary-key != '' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        continue-on-error: true
+        with:
+          path: |
+            target
+            !target/**/incremental/**
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
