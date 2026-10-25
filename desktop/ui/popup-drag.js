@@ -17,25 +17,31 @@
   // A child's document as this one's: same stylesheets, theme and font attributes, marked popout (app.css).
   function dress(d) {
     const html = document.documentElement;
-    for (const { name, value } of html.attributes) d.documentElement.setAttribute(name, value);
+    for (const { name, value } of html.attributes) if (name !== "style") d.documentElement.setAttribute(name, value);
+    d.documentElement.style.cssText = html.style.cssText; // a style attribute is blocked by the CSP (look.js sets --fs and zoom here); CSSOM is not
     d.documentElement.classList.add("popout");
-    d.head.replaceChildren(...[...document.querySelectorAll('link[rel="stylesheet"], style')].map((n) => inline(d, n) || Object.assign(n.cloneNode(true), n.href ? { href: n.href } : {})));
+    const sheets = [];
+    d.head.replaceChildren(...[...document.querySelectorAll('link[rel="stylesheet"], style')].flatMap((n) => {
+      const css = textOf(n);
+      if (css == null) return [Object.assign(n.cloneNode(true), n.href ? { href: n.href } : {})];
+      // the app's CSP (style-src 'self') blocks a <style> element; a constructed sheet is not inline markup, so it applies
+      const Sheet = d.defaultView?.CSSStyleSheet;
+      if (Sheet && "adoptedStyleSheets" in d) { const s = new Sheet({ media: n.media || "" }); s.replaceSync(css); sheets.push(s); return []; }
+      const s = d.createElement("style"); if (n.media) s.media = n.media; s.textContent = css; return [s];
+    }));
+    if (sheets.length) d.adoptedStyleSheets = sheets;
     d.body.className = document.body.className;
     // the icon sprite (<symbol id="i-…"> in index.html): a <use href="#i-…"> only finds symbols in its own document
     for (const svg of new Set([...document.querySelectorAll("svg symbol")].map((s) => s.closest("svg")))) d.body.prepend(svg.cloneNode(true));
   }
   // A stylesheet this window already read goes over as text: a <link> fetched again in the fresh blank window can be
   // dropped while that window is still being set up, which left a popup unstyled in Chrome.
-  function inline(d, n) {
+  function textOf(n) {
     let css;
     try { css = n.tagName === "LINK" && [...n.sheet.cssRules].map((r) => r.cssText).join("\n"); } catch { return null; } // not loaded yet, or another origin
     if (!css) return null;
     // a url() in the text was relative to the sheet's own address (fonts/…): pin it there, the child page has another
-    css = css.replace(/url\(\s*(["'])(.*?)\1\s*\)/g, (_, q, u) => `url(${q}${new URL(u, n.href).href}${q})`);
-    const s = d.createElement("style");
-    if (n.media) s.media = n.media;
-    s.textContent = css;
-    return s;
+    return css.replace(/url\(\s*(["'])(.*?)\1\s*\)/g, (_, q, u) => `url(${q}${new URL(u, n.href).href}${q})`);
   }
   function place(kid, dlg) {
     const d = docOf(kid.w);

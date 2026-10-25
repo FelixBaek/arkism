@@ -32,7 +32,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     const child = await popup;
     assert.equal(await page.locator("dialog").count(), 0, "the popup left this page");
     assert.equal(await child.evaluate(() => document.querySelector("dialog.popout-root")?.open), true);
-    assert.equal(await child.evaluate(() => document.documentElement.classList.contains("popout") && !!document.querySelector("style")), true, "the child gets the app's styles");
+    assert.equal(await child.evaluate(() => document.documentElement.classList.contains("popout") && (document.adoptedStyleSheets.length > 0 || !!document.querySelector("style"))), true, "the child gets the app's styles");
     assert.equal(await child.evaluate(() => document.querySelector("h2").textContent), "분석");
     // closing its popup there closes the window through the app (popout_destroy)
     await child.evaluate(() => document.querySelector("dialog").close());
@@ -46,6 +46,26 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     assert.equal(await page.locator("dialog").count(), 0);
     await child2.evaluate(() => document.querySelector("dialog").close()); // else the next popup follows the window in focus
     await page.waitForFunction(() => window.calls.filter(([cmd]) => cmd === "popout_destroy").length === 2);
+    // under the app's own CSP (tauri.conf.json): the child window must still get the styles, the font scale and the zoom
+    const csp = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../src-tauri/tauri.conf.json"), "utf8")).app.security.csp;
+    const app = await browser.newPage({ viewport: { width: 1000, height: 800 } });
+    app.on("pageerror", error => errors.push(error.message));
+    const blocked = []; app.on("console", m => { if (/Content Security Policy/.test(m.text())) blocked.push(m.text().slice(0, 120)); });
+    const files = {
+      "/": ['text/html', '<!doctype html><link rel="stylesheet" href="/a.css"><body><script src="/popup-drag.js"></script><script src="/start.js"></script>'],
+      "/a.css": ["text/css", "dialog{width:500px;height:300px;padding:0;border:0;background:rgb(1, 2, 3)}h2{font-size:calc(10px * var(--fs, 1))}"],
+      "/popup-drag.js": ["text/javascript", fs.readFileSync(path.resolve(__dirname, "../ui/popup-drag.js"), "utf8")],
+      "/start.js": ["text/javascript", 'document.documentElement.style.setProperty("--fs", "2"); document.documentElement.style.zoom = "1.25"; window.__TAURI__ = { core: { invoke: async () => null } }; addEventListener("load", () => { const d = document.createElement("dialog"); d.dataset.popout = "1"; d.append(Object.assign(document.createElement("h2"), { textContent: "창" })); document.body.append(d); });']
+    };
+    await app.route("http://app.test/**", route => { const [type, body] = files[new URL(route.request().url()).pathname] || ["text/plain", ""]; route.fulfill({ status: 200, contentType: type, body, headers: { "content-security-policy": csp } }); });
+    await app.goto("http://app.test/");
+    const third = app.waitForEvent("popup");
+    await app.evaluate(() => document.querySelector("dialog").showModal());
+    const child3 = await third;
+    await child3.waitForFunction(() => document.querySelector("dialog.popout-root"));
+    assert.deepEqual(await child3.evaluate(() => { const d = document.querySelector("dialog"), h = d.querySelector("h2"); return [getComputedStyle(d).backgroundColor, getComputedStyle(d).width, getComputedStyle(h).fontSize, document.documentElement.style.zoom]; }), ["rgb(1, 2, 3)", "500px", "20px", "1.25"], "styles, --fs and zoom apply in the child under the CSP");
+    assert.deepEqual(blocked, [], "nothing blocked by the CSP");
+    await app.close();
     // keyboard path (#200): without the desktop app it says why instead of nothing
     await page.evaluate(() => {
       window.notices = []; window.ArkismNotice = (t) => window.notices.push(t); delete window.__TAURI__;
