@@ -350,7 +350,7 @@ func TestPostgresRecoveryWriteGateCLI(t *testing.T) {
 	if err = json.Unmarshal(output, &status); err != nil || status != paused {
 		t.Fatal("CLI status changed gate", err)
 	}
-	if output, err = invoke("--recovery-write-gate=resume", "--expected-storage-identity="+paused.StorageIdentity, "--expected-write-generation="+paused.Gate.Generation); err != nil {
+	if _, err = invoke("--recovery-write-gate=resume", "--expected-storage-identity="+paused.StorageIdentity, "--expected-write-generation="+paused.Gate.Generation); err != nil {
 		t.Fatal("CLI resume", err)
 	}
 	if gateStatus(t, p).Gate.State != "open" {

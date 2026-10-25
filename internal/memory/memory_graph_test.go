@@ -125,7 +125,6 @@ func graphVector(a float64) []float64 {
 }
 
 type graphWorld struct {
-	f   *fixture
 	put func(id, text, reach, project string, angle float64, tags ...string) Record
 	rel func(id, kind, role, from, to string)
 }

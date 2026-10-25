@@ -25,7 +25,7 @@ func checkGatewayContinuation(t *testing.T, native bool) {
 	swap(t, &claudeRuns, h.bridge)
 	f.auth = authError("claude_subscription_requires_cli")
 	anthropic := func(string) *where { return &where{kind: "anthropic"} }
-	routed := f.route(anthropic)
+	f.route(anthropic)
 	f.setDecision("anthropic/claude-test")
 	post := func(body host.Obj, model, caller string) (int, host.Obj) {
 		t.Helper()
@@ -59,7 +59,7 @@ func checkGatewayContinuation(t *testing.T, native bool) {
 	}
 	next := claudeFollow(claudeRequest(t), first)
 
-	routed = f.route(anthropic)
+	f.route(anthropic)
 	resetDecisions()
 	for _, c := range [][2]string{{"group/other", "synthetic-caller"}, {"group/test", "other-caller"},
 		{"anthropic/claude-test", "synthetic-caller"}} {
@@ -71,7 +71,7 @@ func checkGatewayContinuation(t *testing.T, native bool) {
 		t.Fatal("a mismatched continuation was routed")
 	}
 
-	routed = f.route(anthropic)
+	routed := f.route(anthropic)
 	f.setDecision("custom-other/other", "anthropic/claude-test")
 	f.auth = func(string) (map[string]string, string, error) {
 		t.Error("a waiting CLI must not switch to API authentication")

@@ -1,0 +1,32 @@
+name: Lint Go
+
+# golangci-lint with the small linter set in .golangci.yml (errcheck, govet, staticcheck,
+# ineffassign, unused). Same runner choice as checks.yml: outside code stays on GitHub-hosted runners.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-go-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  golangci-lint:
+    runs-on: ${{ vars.ARKISM_USE_HOSTED_RUNNERS != 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && fromJSON('["self-hosted","arkism-self"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: ${{ runner.environment == 'github-hosted' }}
+      - name: golangci-lint (pinned module version, built with the go.mod toolchain)
+        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run ./...

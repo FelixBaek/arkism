@@ -1,0 +1,29 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+  settings:
+    staticcheck:
+      # Correctness (SA) and simplification (S1) checks; naming style (ST) and editor quick fixes (QF) are not gated.
+      checks: ["all", "-ST*", "-QF*"]
+    errcheck:
+      exclude-functions:
+        # Reaping a detached or already killed child; callers that need the exit status check it.
+        - (*os/exec.Cmd).Wait
+        # The process may already have exited; the following Wait reaps it either way.
+        - (*os.Process).Kill
+  exclusions:
+    presets:
+      # Close, Flush, os.Remove(All), fmt print helpers and os.(Un)Setenv. Files whose
+      # written data matters check Close themselves (errors.Join or an explicit check).
+      - std-error-handling
+    rules:
+      # Test helpers fail the test through their assertions instead.
+      - path: _test\.go
+        linters: [errcheck]

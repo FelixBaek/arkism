@@ -54,8 +54,6 @@ var (
 	now = time.Now
 )
 
-var errInvalid = errors.New("invalid value")
-
 func iso(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05Z") }
 
 func result(t time.Time, status string, quotas []any) map[string]any {

@@ -109,10 +109,7 @@ func parseCrew(argv []string) (string, *args, map[string]float64, error) {
 	if err != nil {
 		return "", nil, nil, err
 	}
-	missing := []string{}
-	for _, p := range spec.positional[min(len(a.pos), len(spec.positional)):] {
-		missing = append(missing, p)
-	}
+	missing := append([]string{}, spec.positional[min(len(a.pos), len(spec.positional)):]...)
 	for _, r := range spec.required {
 		if !a.has(r) {
 			missing = append(missing, "--"+r)

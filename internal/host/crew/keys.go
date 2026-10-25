@@ -612,7 +612,7 @@ func customKeyFor(model string, keys []map[string]any, provider string) (map[str
 			return nil, err
 		}
 		for _, m := range list(info["models"]) {
-			if strings.ToLower(pyStr(m)) == strings.ToLower(name) {
+			if strings.EqualFold(pyStr(m), name) {
 				return k, nil
 			}
 		}
