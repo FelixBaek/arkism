@@ -64,7 +64,6 @@
 .main > .page-head { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 0; flex: none; }
 /* a head left with only buttons (the tab already names the screen) puts them at the right end of the tab row, not on an empty row of its own.
    Wide windows only: below 1180 the tabs fill and wrap the whole first line, so the buttons would cover the last tabs. */
-.main { position: relative; }
 @media (min-width: 1181px) {
   .main > .page-head:is(.bare, :has(#title.sr-only)):not(:has(> :not(.title-line, .home-back, .home-all))) { position: absolute; top: var(--nc-page-pad); right: var(--nc-page-pad); height: 40px; justify-content: center; }
 }
