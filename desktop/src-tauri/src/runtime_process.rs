@@ -18,9 +18,11 @@ pub(crate) struct Output {
 }
 
 pub(crate) enum Process {
+    #[cfg_attr(windows, allow(dead_code))] // only non-Windows builds spawn plain children
     Plain(Child),
     #[cfg(windows)]
-    Owned(Native),
+    // Boxed: the native owner is large and failures carry a Process back to the caller.
+    Owned(Box<Native>),
     #[cfg(test)]
     Injected(Box<dyn ProcessBoundary>),
 }
@@ -459,25 +461,26 @@ impl StopEvidence for Native {
 }
 
 #[cfg(windows)]
-fn native_spec(command: &Command, stderr: jobs::Stderr) -> jobs::LaunchSpec {
-    jobs::LaunchSpec {
+fn native_spec(command: &Command, stderr: jobs::Stderr) -> Result<jobs::LaunchSpec, Failure> {
+    let directory = command.get_current_dir().ok_or_else(|| Failure {
+        error: "runtime_launch_directory_missing".into(),
+        process: None,
+    })?;
+    Ok(jobs::LaunchSpec {
         executable: command.get_program().into(),
         arguments: command.get_args().map(ToOwned::to_owned).collect(),
         environment: command
             .get_envs()
             .filter_map(|(k, v)| v.map(|v| (k.to_owned(), v.to_owned())))
             .collect(),
-        directory: command
-            .get_current_dir()
-            .expect("captured launch directory")
-            .into(),
+        directory: directory.into(),
         stderr,
-    }
+    })
 }
 
 #[cfg(windows)]
 fn native_spawn(command: &Command, stderr: jobs::Stderr) -> Result<Native, Failure> {
-    match jobs::JobChild::spawn(native_spec(command, stderr)) {
+    match jobs::JobChild::spawn(native_spec(command, stderr)?) {
         Ok(job) => Ok(Native {
             job,
             session: None,
@@ -494,12 +497,12 @@ fn native_spawn(command: &Command, stderr: jobs::Stderr) -> Result<Native, Failu
                 .is_some_and(|child| child.status().empty_confirmed);
             let error = cleanup.to_string();
             let process = unclosed_owner(failure.child, empty, cleanup_failed).map(|job| {
-                Process::Owned(Native {
+                Process::Owned(Box::new(Native {
                     job,
                     session: None,
                     drain_error: Arc::new(AtomicBool::new(false)),
                     held_io: Vec::new(),
-                })
+                }))
             });
             Err(Failure { error, process })
         }
@@ -524,18 +527,19 @@ pub(crate) fn spawn(
     let connected = (|| -> Result<(), String> {
         if let Some((role, generation, nonce)) = bootstrap {
             match control::for_job(&mut child.job, role, generation, nonce) {
-                Ok(session) => child.session = Some(session),
+                Ok(session) => {
+                    // Kept in the child before ready() so a failed handshake still owns the session.
+                    child
+                        .session
+                        .insert(session)
+                        .ready(Duration::from_secs(5))
+                        .map_err(role_error)?;
+                }
                 Err(failure) => {
                     child.session = failure.session;
                     return Err(role_error(failure.error));
                 }
             }
-            child
-                .session
-                .as_mut()
-                .expect("connected session")
-                .ready(Duration::from_secs(5))
-                .map_err(role_error)?;
         } else {
             drop(child.job.take_stdin());
             let (stdout, destination) = take_log_pipe(
@@ -558,10 +562,10 @@ pub(crate) fn spawn(
         Ok(())
     })();
     match connected {
-        Ok(()) => Ok(Process::Owned(child)),
+        Ok(()) => Ok(Process::Owned(Box::new(child))),
         Err(error) => Err(Failure {
             error,
-            process: Some(Process::Owned(child)),
+            process: Some(Process::Owned(Box::new(child))),
         }),
     }
 }
@@ -631,7 +635,7 @@ struct NativeCollect<'a> {
 #[cfg(windows)]
 impl Collect for NativeCollect<'_> {
     fn read(&mut self, stderr: bool, buffer: &mut [u8]) -> Result<Read, String> {
-        control::try_read_pipe(if stderr { &mut self.err } else { &mut self.out }, buffer)
+        control::try_read_pipe(if stderr { self.err } else { self.out }, buffer)
             .map(|r| match r {
                 control::ReadStep::Pending => Read::Pending,
                 control::ReadStep::Data(n) => Read::Data(n),
@@ -691,7 +695,7 @@ pub(crate) fn output(command: &mut Command) -> Result<Output, Failure> {
             child.held_io.extend(err);
             Err(Failure {
                 error,
-                process: Some(Process::Owned(child)),
+                process: Some(Process::Owned(Box::new(child))),
             })
         }
     }
@@ -840,7 +844,7 @@ mod tests {
         let mut io = Io::new();
         io.out.push_back(Step::Pending);
         io.err.push_back(Step::Pending);
-        io.states.extend(std::iter::repeat((Some(0), 1)).take(8));
+        io.states.extend(std::iter::repeat_n((Some(0), 1), 8));
         assert_eq!(
             collect(&mut io, Duration::from_millis(30), 1)
                 .err()

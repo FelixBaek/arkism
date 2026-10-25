@@ -6,6 +6,7 @@
 mod windows_process;
 
 #[path = "../src/update_installer.rs"]
+#[allow(dead_code)] // the app module; this test drives only the installer path
 mod update_installer;
 
 use sha2::{Digest, Sha256};

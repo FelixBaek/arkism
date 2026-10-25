@@ -72,6 +72,7 @@ impl Drop for Lease {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn update(gate: &Arc<Gate>, action: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
     let mut lease = gate.lease()?;
     action()?;
@@ -246,6 +247,7 @@ fn handoff_core<B: Backend, O>(backend: &mut B, on_mutating: impl FnOnce(), laun
     }
 }
 
+#[cfg(test)]
 fn ordinary_launch(result: Result<(), String>) -> Launch<std::convert::Infallible> {
     match result {
         Ok(()) => Launch::Started,
@@ -254,6 +256,7 @@ fn ordinary_launch(result: Result<(), String>) -> Launch<std::convert::Infallibl
 }
 
 /// The ordinary Result boundary cannot produce an unresolved child owner.
+#[cfg(test)]
 pub(crate) fn handoff<B: Backend>(backend: &mut B, launch: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
     match handoff_core(backend, || {}, || ordinary_launch(launch())) {
         Handoff::Started => Ok(()),
@@ -278,6 +281,7 @@ pub(crate) fn coordinated_owned<B: Backend, O>(gate: &Arc<Gate>, backend: &mut B
 }
 
 /// One production boundary owns both the mutation lease and recovery safety decision.
+#[cfg(test)]
 pub(crate) fn coordinated<B: Backend>(gate: &Arc<Gate>, backend: &mut B, launch: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
     match coordinated_owned(gate, backend, || ordinary_launch(launch())) {
         OwnedHandoff::Started => Ok(()),
@@ -341,7 +345,7 @@ mod tests {
             assert_ne!(self.panic_on, Some("stop"), "inert stop panic");
             self.record("stop", role);
             let failed = self.stop_failure.filter(|(r, _)| *r == role);
-            let confirmed = failed.map_or(true, |(_, confirmed)| confirmed);
+            let confirmed = failed.is_none_or(|(_, confirmed)| confirmed);
             if confirmed { self.running.remove(&role); }
             Stopped { confirmed, error: failed.map(|_| "stop_fault".into()) }
         }

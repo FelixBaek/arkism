@@ -443,9 +443,11 @@ fn remote_endpoint(api: &str) -> Result<(String, u16), String> {
     Ok((h.to_string(), port))
 }
 
+type Errors = Receiver<Result<Vec<u8>, String>>;
+
 struct Tunnel {
     child: Process,
-    errors: Receiver<Result<Vec<u8>, String>>,
+    errors: Errors,
     target: Target,
     store: Store,
     pin: Pin,
@@ -473,7 +475,7 @@ fn spawn_forward(
     forward: &str,
     store: &Store,
     pin: &Pin,
-) -> Result<(Process, Receiver<Result<Vec<u8>, String>>), String> {
+) -> Result<(Process, Errors), String> {
     let mut command = store.command(target, pin)?;
     command
         .args(["-N", "-o", "ExitOnForwardFailure=yes", "-L", forward])
@@ -488,7 +490,7 @@ fn spawn_forward(
 fn wait_ready(
     target: &Target,
     child: &mut Process,
-    errors: &Receiver<Result<Vec<u8>, String>>,
+    errors: &Errors,
     local: u16,
 ) -> Result<(), String> {
     let deadline = Instant::now() + Duration::from_secs(20);

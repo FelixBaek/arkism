@@ -65,7 +65,7 @@ impl PeerKey {
         if wire.len() < 12 || wire.len() > 16384 {
             return Err("ssh_host_key_probe_failed".into());
         }
-        let length = u32::from_be_bytes(wire[..4].try_into().unwrap()) as usize;
+        let length = u32::from_be_bytes(wire[..4].try_into().expect("length checked above")) as usize;
         if length > 128 || wire.get(4..4 + length) != Some(kind.as_bytes()) {
             return Err("ssh_host_key_probe_failed".into());
         }

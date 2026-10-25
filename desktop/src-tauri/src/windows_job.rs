@@ -383,11 +383,11 @@ fn quote_argument(value: &[u16]) -> Result<Vec<u16>, Cause> {
         } else {
             slashes
         };
-        quoted.extend(std::iter::repeat(u16::from(b'\\')).take(count));
+        quoted.extend(std::iter::repeat_n(u16::from(b'\\'), count));
         quoted.push(unit);
         slashes = 0;
     }
-    quoted.extend(std::iter::repeat(u16::from(b'\\')).take(slashes * 2));
+    quoted.extend(std::iter::repeat_n(u16::from(b'\\'), slashes * 2));
     quoted.push(u16::from(b'"'));
     Ok(quoted)
 }
@@ -1179,6 +1179,7 @@ mod native {
     }
 
     impl JobChild {
+        #[allow(clippy::result_large_err)] // the failure hands the live child back for cleanup
         pub fn spawn(spec: LaunchSpec) -> Result<Self, SpawnFailure> {
             let api = NativeApi::new(spec).map_err(|cause| SpawnFailure {
                 error: JobError::one(cause),
@@ -1260,7 +1261,7 @@ mod native {
 }
 
 #[cfg(windows)]
-pub use native::{JobChild, LaunchSpec, SpawnFailure, Stderr};
+pub use native::{JobChild, LaunchSpec, Stderr};
 
 #[cfg(test)]
 mod tests {
