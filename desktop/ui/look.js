@@ -23,12 +23,15 @@ window.ArkismLook = (() => {
     };
   }
   let look = read();
+  // This page and every popout window (popup-drag.js) open now. CSSOM only: the CSP blocks a style attribute or element.
   function apply() {
-    const root = document.documentElement;
-    if (look.theme === "system") root.removeAttribute("data-theme");
-    else root.setAttribute("data-theme", look.theme);
-    root.style.setProperty("--fs", String(FONTS[look.font]));
-    root.style.zoom = String(look.zoom);
+    for (const d of [document, ...window.ArkismPopout?.docs() || []]) {
+      const root = d.documentElement;
+      if (look.theme === "system") root.removeAttribute("data-theme");
+      else root.setAttribute("data-theme", look.theme);
+      root.style.setProperty("--fs", String(FONTS[look.font]));
+      root.style.zoom = String(look.zoom);
+    }
   }
   function set(patch) {
     look = { ...look, ...patch };
@@ -38,14 +41,16 @@ window.ArkismLook = (() => {
     window.dispatchEvent(new CustomEvent("arkism-look"));
   }
   // Ctrl + / Ctrl − / Ctrl 0: 어느 화면에서든 배율을 바꾼다.
-  document.addEventListener("keydown", (e) => {
+  const zoomKeys = (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     if (e.key === "=" || e.key === "+") set({ zoom: look.zoom + ZOOM_STEP });
     else if (e.key === "-") set({ zoom: look.zoom - ZOOM_STEP });
     else if (e.key === "0") set({ zoom: 1 });
     else return;
     e.preventDefault();
-  });
+  };
+  document.addEventListener("keydown", zoomKeys);
+  window.addEventListener("arkism-popout", (e) => e.detail.addEventListener("keydown", zoomKeys)); // a popout window dresses as this one, so only the keys
   apply();
   return { get: () => ({ ...look, lang: look.lang || systemLang() }), set, ZOOM_STEP };
 })();

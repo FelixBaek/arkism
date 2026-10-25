@@ -106,7 +106,7 @@ window.ArkismCoverPicker = ({ el, icon, request, query, state, notice }) => {
     dlg.showModal();
     // 985:60681 · 967:60615: the window hangs 8px under the card photo, its left edge on the photo's
     if (anchor) {
-      const r = anchor.getBoundingClientRect(), w = dlg.offsetWidth;
+      const r = anchor.getBoundingClientRect(), w = dlg.offsetWidth, { innerWidth, innerHeight } = anchor.ownerDocument.defaultView; // the window it opens in (popup-drag.js moves it to the anchor's popout)
       const top = Math.max(16, Math.min(r.bottom + 8, innerHeight - 410)); // ~400px tall once photos load
       dlg.classList.add("anchored");
       dlg.style.left = `${Math.max(16, Math.min(r.left, innerWidth - w - 16))}px`;

@@ -15,7 +15,7 @@
   let seq = Date.now() % 1e8;
   const docOf = (w) => { try { return w.closed ? null : w.document; } catch { return null; } };
   // A child's document as this one's: same stylesheets, theme and font attributes, marked popout (app.css).
-  function dress(d) {
+  function dress(d, kid) {
     const html = document.documentElement;
     for (const { name, value } of html.attributes) if (name !== "style") d.documentElement.setAttribute(name, value);
     d.documentElement.style.cssText = html.style.cssText; // a style attribute is blocked by the CSP (look.js sets --fs and zoom here); CSSOM is not
@@ -31,6 +31,11 @@
     d.body.className = document.body.className;
     // the icon sprite (<symbol id="i-…"> in index.html): a <use href="#i-…"> only finds symbols in its own document
     for (const svg of new Set([...document.querySelectorAll("svg symbol")].map((s) => s.closest("svg")))) d.body.prepend(svg.cloneNode(true));
+    d.title = kid.title ? `${kid.title} · Arkism` : "Arkism";
+    // Esc closes the top popup there the way it does here (the root is no longer modal, so no cancel of its own).
+    // On the document, set again whenever the window swaps in a fresh page (a listener on the old one would be gone).
+    d.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { const top = [...d.querySelectorAll("dialog[open]")].pop(); if (top) { e.preventDefault(); dismiss(top); } } });
+    window.dispatchEvent(new CustomEvent("arkism-popout", { detail: d })); // other scripts set up their listeners there (ArkismPopout below)
   }
   // A stylesheet this window already read goes over as text: a <link> fetched again in the fresh blank window can be
   // dropped while that window is still being set up, which left a popup unstyled in Chrome.
@@ -44,13 +49,18 @@
   function place(kid, dlg) {
     const d = docOf(kid.w);
     if (!d || dlg.ownerDocument === d && d.body.contains(dlg)) return;
-    if (!d.documentElement.classList.contains("popout")) dress(d);
+    if (!d.documentElement.classList.contains("popout")) dress(d, kid);
+    const from = dlg.ownerDocument, had = dlg.contains(from.activeElement) ? from.activeElement : null, modal = dlg.matches(":modal");
     d.body.append(d.adoptNode ? d.adoptNode(dlg) : dlg);
-    if (dlg.tagName !== "DIALOG") return; // a menu or list that code put on the page
+    if (dlg.tagName !== "DIALOG") return had?.focus(); // a menu or list that code put on the page
+    const root = !kid.root?.isConnected || kid.root.ownerDocument !== d || !kid.root.open;
+    // a confirm over the popup was modal here and the move dropped that: modal there too, so the popup under it waits
+    if (modal && !root) { dlg.removeAttribute("open"); dlg.showModal(); }
     if (!dlg.open) dlg.setAttribute("open", "");
-    if (!kid.root?.isConnected || kid.root.ownerDocument !== d || !kid.root.open) { kid.root = dlg; dlg.classList.add("popout-root"); watch(kid, dlg); }
+    if (root) { kid.root = dlg; dlg.classList.add("popout-root"); watch(kid, dlg); }
     dlg.classList.remove("popping");
     dlg.style.translate = "";
+    had?.focus(); // the move (and showModal) took the focus away
   }
   // The child's last popup closed (✕, 저장, Esc): its window goes. A popup that swaps itself for the next one
   // (기억 처리 ‹ ›) opens that one in the same tick, so look after it.
@@ -74,7 +84,7 @@
     const title = encodeURIComponent(dlg.dataset.popoutTitle || "");
     const w = window.open(`about:blank#${label}|${title}`, label, `popup,left=${Math.round(x)},top=${Math.round(y)},width=${Math.round(r.width)},height=${Math.round(r.height)}`);
     if (!w) { if (!quiet) window.ArkismNotice?.("새 창으로 열지 못했어요."); return false; }
-    const kid = { w, root: null, label };
+    const kid = { w, root: null, label, title: dlg.dataset.popoutTitle };
     kids.set(label, kid);
     place(kid, dlg);
     // The window may swap its first blank page for a fresh one while it is being built: move the popup again if so.
@@ -90,12 +100,6 @@
       }
       if (docOf(w)) place(kid, kid.root || dlg);
     }, 50);
-    const d = docOf(w);
-    if (d) {
-      d.title = dlg.dataset.popoutTitle ? `${dlg.dataset.popoutTitle} · Arkism` : "Arkism";
-      // Esc closes the top popup there the way it does here (a moved dialog is no longer modal, so no cancel of its own)
-      w.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { const top = [...docOf(w).querySelectorAll("dialog[open]")].pop(); if (top) { e.preventDefault(); dismiss(top); } } });
-    }
     return true;
   }
   // The OS ✕ on a popout window (popout.rs): close its popup the way Esc does, so unsaved edits still ask first.
@@ -107,6 +111,12 @@
   // The window the user is in: a popup or menu that code opens from there (a confirm, the next stage) goes there too.
   const FLOAT = (n) => n.tagName === "DIALOG" || n.hasAttribute("popover") || /^(menu|listbox|tooltip)$/.test(n.getAttribute("role") || "") || /menu/.test(n.className || "");
   const focusedKid = () => [...kids.values()].find((k) => docOf(k.w)?.hasFocus());
+  // For other scripts: the popout documents open now, and the one the user is in (else this one). A new one comes as
+  // an "arkism-popout" event on this window (detail: its document), so a listener set on `document` goes there too.
+  window.ArkismPopout = {
+    docs: () => [...kids.values()].map((k) => docOf(k.w)).filter((d) => d?.documentElement.classList.contains("popout")),
+    current: () => docOf(focusedKid()?.w) || document
+  };
 
   // 처음부터 창으로: a popup that can live alone opens in its own window at once, where it would have appeared here.
   new MutationObserver((list) => {

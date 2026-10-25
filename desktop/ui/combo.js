@@ -25,7 +25,7 @@
       }
       return rows;
     }
-    const dl = document.getElementById(ctl.dataset.comboList || "");
+    const dl = ctl.ownerDocument.getElementById(ctl.dataset.comboList || ""); // its own page: a popout window's too
     const q = ctl.dataset.comboTyped === "1" ? ctl.value.trim().toLowerCase() : "";
     const tab = open?.ctl === ctl ? open.tab : "";
     // data-group on options: a header row before each run of the same group (the options come in group order).
@@ -42,12 +42,12 @@
   }
   // data-tabs on the datalist ("all" tab's label): tabs over the list, one per distinct option data-tab, in order.
   function tabsOf(ctl) {
-    const dl = ctl.tagName === "SELECT" ? null : document.getElementById(ctl.dataset.comboList || "");
+    const dl = ctl.tagName === "SELECT" ? null : ctl.ownerDocument.getElementById(ctl.dataset.comboList || "");
     if (!dl?.dataset.tabs) return null;
     return [["", dl.dataset.tabs], ...[...new Set([...dl.options].map((o) => o.dataset.tab).filter(Boolean))].map((t) => [t, t])];
   }
   function place() {
-    const r = open.ctl.getBoundingClientRect();
+    const r = open.ctl.getBoundingClientRect(), { innerWidth, innerHeight } = open.ctl.ownerDocument.defaultView; // the window it is in
     const below = innerHeight - r.bottom - 8, above = r.top - 8;
     const up = below < 180 && above > below;
     pop.style.minWidth = `${Math.round(r.width)}px`;
@@ -111,7 +111,7 @@
     pop.id ||= `combo-pop-${++uid}`;
     ctl.setAttribute("aria-controls", pop.id);
     // Inside the open modal window, or the page under it is inert and a wheel over the list scrolls (and closes) the window.
-    const host = ctl.closest("dialog[open]") || document.body;
+    const host = ctl.closest("dialog[open]") || ctl.ownerDocument.body;
     if (pop.parentNode !== host) host.append(pop);
     if (pop.matches(":popover-open")) pop.hidePopover(); // re-show so it sits above a window opened since
     pop.showPopover();
@@ -135,43 +135,49 @@
     ctl.dispatchEvent(new Event("input", { bubbles: true }));
     ctl.dispatchEvent(new Event("change", { bubbles: true }));
   }
-  const isSelect = (t) => t instanceof HTMLSelectElement && !t.multiple && t.size <= 1 && !t.disabled;
+  // tag names, not instanceof: a node first touched in a popout window gets that window's classes
+  const isSelect = (t) => t?.tagName === "SELECT" && !t.multiple && t.size <= 1 && !t.disabled;
   // An <input list> loses the attribute so the browser's own autocomplete never opens; the id moves to data-combo-list.
   function adopt(t) {
-    if (!(t instanceof HTMLInputElement)) return false;
+    if (t?.tagName !== "INPUT") return false;
     if (t.hasAttribute("list")) { t.dataset.comboList = t.getAttribute("list"); t.removeAttribute("list"); t.setAttribute("role", "combobox"); t.setAttribute("aria-autocomplete", "list"); t.setAttribute("aria-expanded", "false"); }
     return !!t.dataset.comboList && !t.disabled && !t.readOnly;
   }
-  document.addEventListener("pointerdown", (e) => {
-    const t = e.target;
-    if (open && !pop.contains(t) && t !== open.ctl) hide();
-    if (isSelect(t) && e.button === 0) { e.preventDefault(); t.focus(); if (open?.ctl === t) hide(); else show(t); return; }
-    if (adopt(t)) { t.dataset.comboTyped = "0"; show(t); }
-  }, true);
-  document.addEventListener("focusin", (e) => { adopt(e.target); }, true);
-  document.addEventListener("input", (e) => {
-    const t = e.target;
-    if (t instanceof HTMLInputElement && t.dataset.comboList && e.isTrusted) { t.dataset.comboTyped = "1"; delete t.dataset.comboKey; show(t); }
-  }, true);
-  document.addEventListener("keydown", (e) => {
-    const t = e.target;
-    if (!open || open.ctl !== t) {
-      // Space/Enter/Alt+↓/F4 on a closed select, or ↓ in a list input, opens our list instead of the browser's.
-      const opens = (isSelect(t) && (e.key === " " || e.key === "Enter" || e.key === "F4" || (e.altKey && e.key === "ArrowDown"))) || (adopt(t) && e.key === "ArrowDown");
-      if (opens) { e.preventDefault(); show(t); }
-      return;
-    }
-    const n = open.items.length;
-    const step = (d) => { if (!n) return; let i = open.at; for (let k = 0; k < n; k++) { i = (i + d + n) % n; if (!open.items[i].disabled) break; } open.at = i; paint(); };
-    if (e.key === "ArrowDown") { e.preventDefault(); step(1); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); step(-1); }
-    else if (e.key === "Enter" && open.at >= 0) { e.preventDefault(); pick(open.items[open.at]); }
-    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); hide(); } // Esc closes the list, not the window under it
-    else if (e.key === "Tab") hide();
-  }, true);
-  document.addEventListener("focusout", (e) => { if (open?.ctl === e.target) setTimeout(() => { if (open && document.activeElement !== open.ctl) hide(); }, 0); }, true);
-  addEventListener("resize", hide);
+  // On this page and on each popout window's (popup-drag.js), whose popups keep their selects and list inputs.
+  const wire = (d) => {
+    d.addEventListener("pointerdown", (e) => {
+      const t = e.target;
+      if (open && !pop.contains(t) && t !== open.ctl) hide();
+      if (isSelect(t) && e.button === 0) { e.preventDefault(); t.focus(); if (open?.ctl === t) hide(); else show(t); return; }
+      if (adopt(t)) { t.dataset.comboTyped = "0"; show(t); }
+    }, true);
+    d.addEventListener("focusin", (e) => { adopt(e.target); }, true);
+    d.addEventListener("input", (e) => {
+      const t = e.target;
+      if (t?.tagName === "INPUT" && t.dataset.comboList && e.isTrusted) { t.dataset.comboTyped = "1"; delete t.dataset.comboKey; show(t); }
+    }, true);
+    d.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (!open || open.ctl !== t) {
+        // Space/Enter/Alt+↓/F4 on a closed select, or ↓ in a list input, opens our list instead of the browser's.
+        const opens = (isSelect(t) && (e.key === " " || e.key === "Enter" || e.key === "F4" || (e.altKey && e.key === "ArrowDown"))) || (adopt(t) && e.key === "ArrowDown");
+        if (opens) { e.preventDefault(); show(t); }
+        return;
+      }
+      const n = open.items.length;
+      const step = (d) => { if (!n) return; let i = open.at; for (let k = 0; k < n; k++) { i = (i + d + n) % n; if (!open.items[i].disabled) break; } open.at = i; paint(); };
+      if (e.key === "ArrowDown") { e.preventDefault(); step(1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+      else if (e.key === "Enter" && open.at >= 0) { e.preventDefault(); pick(open.items[open.at]); }
+      else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); hide(); } // Esc closes the list, not the window under it
+      else if (e.key === "Tab") hide();
+    }, true);
+    d.addEventListener("focusout", (e) => { if (open?.ctl === e.target) setTimeout(() => { if (open && open.ctl.ownerDocument.activeElement !== open.ctl) hide(); }, 0); }, true);
+    d.defaultView.addEventListener("resize", hide);
+    d.addEventListener("scroll", (e) => { if (open && !pop.contains(e.target)) hide(); }, true);
+    d.addEventListener("close", hide, true); // a window closing takes its list with it
+  };
+  wire(document);
+  addEventListener("arkism-popout", (e) => wire(e.detail));
   window.ArkismCombo = { open: (ctl) => { if (adopt(ctl)) { ctl.dataset.comboTyped = "0"; show(ctl); } } }; // a button that opens a list input's list
-  document.addEventListener("scroll", (e) => { if (open && !pop.contains(e.target)) hide(); }, true);
-  document.addEventListener("close", hide, true); // a window closing takes its list with it
 })();

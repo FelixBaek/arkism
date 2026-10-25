@@ -524,6 +524,7 @@ function install() {
   const g = globalThis;
   const doc = new Document();
   g.document = doc;
+  doc.defaultView = g;
   doc._init();
   const timers = fakeTimers();
   const win = g;
