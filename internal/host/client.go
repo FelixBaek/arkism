@@ -231,12 +231,17 @@ func DoJSON(client *http.Client, req *http.Request) (map[string]any, error) {
 // Search recalls memories for query; on an embedder outage it keeps lexical recall
 // within the same time budget instead of returning nothing.
 func Search(query string, limit int, timeout time.Duration) ([]any, error) {
+	return SearchTo(query, limit, timeout, "internal")
+}
+
+// SearchTo is Search for a destination: "external:<name>" makes the server pass every hit through its transfer policy.
+func SearchTo(query string, limit int, timeout time.Duration, destination string) ([]any, error) {
 	deadline := time.Now().Add(timeout)
 	if r := []rune(query); len(r) > 1000 { // the server rejects queries over 1000 runes
 		query = string(r[:1000])
 	}
 	body := map[string]any{"scope": Scope(), "query": query, "modes": []any{"exact", "fts", "vector"}, "purpose": "answer",
-		"destination": "internal", "limit": limit, "max_chars": 6000}
+		"destination": destination, "limit": limit, "max_chars": 6000}
 	res, err := Post("/v1/search", body, timeout)
 	if err != nil {
 		if HTTPCode(err) != 503 || time.Until(deadline) <= 0 {
