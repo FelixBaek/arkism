@@ -83,10 +83,9 @@ test("cover picker: search, more, pick, clear, upload and errors", async () => {
   dom.fire(d, "click"); await h.settle();
   assert.equal(d.open, false);
   // an own photo: shrunk until it fits, one that never fits, one that is not an image, and no file
-  const real = { Image: globalThis.Image, create: URL.createObjectURL, revoke: URL.revokeObjectURL, make: document.createElement };
+  const real = { bitmap: globalThis.createImageBitmap, make: document.createElement };
   let size = [200000, 100], bad = false;
-  globalThis.Image = class { constructor() { this.width = 2000; this.height = 1000; } set src(v) { queueMicrotask(() => (bad ? this.onerror() : this.onload())); } };
-  URL.createObjectURL = () => "blob:x"; URL.revokeObjectURL = () => {};
+  globalThis.createImageBitmap = async () => { if (bad) throw new Error("x"); return { width: 2000, height: 1000, close() {} }; }; // the real decode under the CSP: tests/team-cover.browser.cjs
   document.createElement = function (t) { if (t !== "canvas") return real.make.call(this, t); return { getContext: () => ({ drawImage() {} }), toDataURL: () => "d".repeat(size.length > 1 ? size.shift() : size[0]) }; };
   try {
     for (const [s, b] of [[[200000, 100], false], [[200000], false], [[1], true]]) {
@@ -104,7 +103,7 @@ test("cover picker: search, more, pick, clear, upload and errors", async () => {
     dom.fire(d.querySelector("input[type=file]"), "change"); await h.settle();
     d.close();
   } finally {
-    globalThis.Image = real.Image; URL.createObjectURL = real.create; URL.revokeObjectURL = real.revoke; document.createElement = real.make;
+    globalThis.createImageBitmap = real.bitmap; document.createElement = real.make;
   }
   assert.ok(picks.some((p) => p?.id === "mine"));
   assert.equal(notices.length, 2);

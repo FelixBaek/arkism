@@ -11,26 +11,21 @@ window.ArkismCoverPicker = ({ el, icon, request, query, state, notice }) => {
   const src = (c) => c?.thumb || c?.url || "";
 
   // Shrinks an image file to a JPEG data URL that fits the server limit.
-  function shrink(file) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        let w = Math.min(1000, img.width);
-        for (let attempt = 0; attempt < 6; attempt++) {
-          const c = document.createElement("canvas");
-          c.width = w; c.height = Math.max(1, Math.round((img.height * w) / img.width));
-          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-          const data = c.toDataURL("image/jpeg", 0.75);
-          if (data.length <= MAX_DATA) return resolve(data);
-          w = Math.round(w * 0.8);
-        }
-        reject(new Error("too_big"));
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("not_image")); };
-      img.src = url;
-    });
+  // createImageBitmap, not <img> on a blob: URL: the app CSP's img-src has no blob:, so that load always failed.
+  async function shrink(file) {
+    const img = await createImageBitmap(file).catch(() => { throw new Error("not_image"); });
+    try {
+      let w = Math.min(1000, img.width);
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const c = document.createElement("canvas");
+        c.width = w; c.height = Math.max(1, Math.round((img.height * w) / img.width));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        const data = c.toDataURL("image/jpeg", 0.75);
+        if (data.length <= MAX_DATA) return data;
+        w = Math.round(w * 0.8);
+      }
+      throw new Error("too_big");
+    } finally { img.close?.(); }
   }
 
   function open({ current, onPick, anchor }) {
