@@ -951,7 +951,7 @@ func recordMemoryUsage(memoryID, eventID any) (host.Obj, error) {
 
 func routerToolNames() map[string]bool {
 	var all []struct{ Name string }
-	json.Unmarshal(routerToolsJSON, &all)
+	_ = json.Unmarshal(routerToolsJSON, &all) // embedded; routerTools reports a bad file
 	names := map[string]bool{}
 	for _, t := range all {
 		names[t.Name] = true
@@ -968,7 +968,7 @@ func routerTools() ([]json.RawMessage, error) {
 	var out []json.RawMessage
 	for _, raw := range all {
 		var t struct{ Name string }
-		json.Unmarshal(raw, &t)
+		_ = json.Unmarshal(raw, &t) // raw came from the parse above
 		if !(receiveOnly && t.Name == "record_skill_usage") {
 			out = append(out, raw)
 		}
@@ -1207,7 +1207,7 @@ func respond(w io.Writer, message map[string]any, result any, failure error) {
 	if err != nil {
 		text = host.MustDumps(host.Obj{{Key: "jsonrpc", Value: "2.0"}, {Key: "id", Value: id}, {Key: "error", Value: host.Obj{{Key: "code", Value: -32000}, {Key: "message", Value: err.Error()}}}}, host.DumpOpts{Compact: true, NoASCII: true})
 	}
-	io.WriteString(w, text+"\n")
+	_, _ = io.WriteString(w, text+"\n") // a closed stdout means the client left; the read loop ends on EOF
 }
 
 // rawJSON is pre-encoded JSON that Dumps cannot reproduce from maps (key order matters to clients).
@@ -1273,7 +1273,7 @@ func handleMessage(w io.Writer, line string) {
 	}
 	if raw, ok := result.(rawJSON); ok {
 		if id, has := message["id"]; has {
-			io.WriteString(w, `{"jsonrpc":"2.0","id":`+host.MustDumps(id, host.DumpOpts{Compact: true, NoASCII: true})+`,"result":`+string(raw)+"}\n")
+			_, _ = io.WriteString(w, `{"jsonrpc":"2.0","id":`+host.MustDumps(id, host.DumpOpts{Compact: true, NoASCII: true})+`,"result":`+string(raw)+"}\n")
 		}
 		return
 	}

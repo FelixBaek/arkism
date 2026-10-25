@@ -637,7 +637,7 @@ func reviewMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 	}
 	if slices.Contains(rest, "-h") || slices.Contains(rest, "--help") {
-		io.WriteString(stdout, reviewUsage)
+		_, _ = io.WriteString(stdout, reviewUsage)
 		return 0
 	}
 	p := newArgs("skill-review", stderr)

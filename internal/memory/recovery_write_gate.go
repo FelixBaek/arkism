@@ -95,7 +95,7 @@ func (p *Postgres) ManageRecoveryWrites(ctx context.Context, action, expectedIde
 	if err != nil {
 		return RecoveryWriteGateStatus{}, pgErr(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }() // a no-op after Commit
 	var privileged bool
 	if err = tx.QueryRow(ctx, `SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname=current_user`).Scan(&privileged); err != nil {
 		return RecoveryWriteGateStatus{}, pgErr(err)

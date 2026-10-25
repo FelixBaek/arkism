@@ -3,6 +3,7 @@ package capture
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -68,13 +69,12 @@ func contractLog(fields ...host.KV) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 	row := host.Obj{{Key: "ts", Value: host.NowISO()}}
 	for _, kv := range fields {
 		row.Set(kv.Key, kv.Value)
 	}
 	_, err = f.WriteString(host.MustDumps(row, host.DumpOpts{NoASCII: true}) + "\n")
-	return err
+	return errors.Join(err, f.Close())
 }
 
 // contractRepoRoot is the git top level of cwd, or "" outside a repo.

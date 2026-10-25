@@ -262,7 +262,7 @@ func archiveSQLiteBackup(db *sqlite.Conn, target string) error {
 	if err := db.Exec("BEGIN"); err != nil {
 		return err
 	}
-	defer db.Exec("ROLLBACK")
+	defer func() { _ = db.Exec("ROLLBACK") }() // read-only snapshot: nothing to commit
 	pageSize, err := archiveSQLiteScalar(db, "PRAGMA page_size")
 	if err != nil || pageSize <= 0 || pageSize > 65536 {
 		return valueErr("archive_sqlite_inspection_failed")

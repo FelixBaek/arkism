@@ -180,9 +180,9 @@ func expireMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return executeExpiry(*endpoint, os.Getenv("MEMORY_API_TOKEN"), payload, *maxBatches)
 	}()
 	if err != nil {
-		io.WriteString(stderr, "Expiry failed; earlier batches may have committed. Inputs, credentials and response bodies suppressed.\n")
+		_, _ = io.WriteString(stderr, "Expiry failed; earlier batches may have committed. Inputs, credentials and response bodies suppressed.\n")
 		return 2
 	}
-	io.WriteString(stdout, host.MustDumps(result, host.DumpOpts{})+"\n")
+	_, _ = io.WriteString(stdout, host.MustDumps(result, host.DumpOpts{})+"\n")
 	return 0
 }

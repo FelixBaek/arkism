@@ -490,7 +490,7 @@ func refresh(profile map[string]any, executable, state, key string) {
 	}
 	usage = maps.Clone(usage)
 	usage["last_probe_at"] = cached["last_probe_at"]
-	host.WriteJSONFile(path, map[string]any{"credential_stamp": renewed, "account": after, "usage": usage})
+	_ = host.WriteJSONFile(path, map[string]any{"credential_stamp": renewed, "account": after, "usage": usage})
 }
 
 func recentProbe(usage map[string]any) bool {

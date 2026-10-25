@@ -144,7 +144,7 @@ func exfilLine(l string, m []int) bool {
 // builtinFiles lists the folder's regular files (no links, no .git), at most builtinMaxFiles, in path order.
 func builtinFiles(folder string) []string {
 	var rels []string
-	filepath.WalkDir(folder, func(p string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(folder, func(p string, d fs.DirEntry, err error) error { // the callback never fails
 		if err != nil {
 			return nil
 		}

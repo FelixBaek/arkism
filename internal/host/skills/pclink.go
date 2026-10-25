@@ -78,8 +78,8 @@ func pcMark(origin string, isError bool, now float64) {
 	}
 	// Two routers marking the same origin at once must not overwrite each other's temp file.
 	tmp := filepath.Join(pcLinkDir, origin+"."+strconv.Itoa(os.Getpid())+".tmp")
-	if os.WriteFile(tmp, []byte(host.MustDumps(old, host.DumpOpts{})), 0o666) == nil {
-		os.Rename(tmp, path)
+	if os.WriteFile(tmp, []byte(host.MustDumps(old, host.DumpOpts{})), 0o666) == nil && os.Rename(tmp, path) != nil {
+		_ = os.Remove(tmp) // the marker is best effort; never leave the temp file behind
 	}
 }
 
@@ -91,7 +91,9 @@ func pcMetrics(folder string) (last, ok, bad float64) {
 	}
 	defer f.Close()
 	end, _ := f.Seek(0, io.SeekEnd)
-	f.Seek(max(end-pcTailBytes, 0), io.SeekStart)
+	if _, err := f.Seek(max(end-pcTailBytes, 0), io.SeekStart); err != nil {
+		return
+	}
 	raw, err := io.ReadAll(f)
 	if err != nil {
 		return

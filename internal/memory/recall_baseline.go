@@ -134,7 +134,7 @@ func (p *Postgres) RecallBaseline(ctx context.Context, scope Scope, queries []Ba
 	if err != nil {
 		return BaselineReport{}, pgErr(err)
 	}
-	defer tx.Rollback(ctx) // read only: nothing to commit
+	defer func() { _ = tx.Rollback(ctx) }() // read only: nothing to commit
 	hash, bound := p.effectiveTokenHash(ctx)
 	if bound {
 		if _, err = tx.Exec(ctx, `SELECT set_config('arkism.token_hash',$1,true)`, hash); err != nil {

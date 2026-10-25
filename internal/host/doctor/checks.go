@@ -102,7 +102,7 @@ func (e *env) checkConnection() []Check {
 		out = append(out, Check{ID: "app.readyz", Status: Fail, Message: "내장 Arkism이 응답하지 않음(2초)",
 			Fix: "Arkism 앱이 켜져 있는지 확인하고 다시 시작하세요"})
 	default:
-		io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
 		resp.Body.Close()
 		if resp.StatusCode/100 == 2 {
 			out = append(out, Check{ID: "app.readyz", Status: OK, Message: "내장 Arkism 준비됨(readyz)"})

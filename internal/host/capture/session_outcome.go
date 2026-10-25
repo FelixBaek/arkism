@@ -111,7 +111,6 @@ func ledgerDeliveries(sid string, items []host.MemoryDelivery, cwd ...string) {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
 		row := map[string]any{"ts": host.NowISO(), "origin": capOrigin, "session": sid, "refs": refs, "scope": scope, "deliveries": deliveries}
 		if hookTranscript != "" {
 			row["transcript"] = hookTranscript
@@ -120,7 +119,7 @@ func ledgerDeliveries(sid string, items []host.MemoryDelivery, cwd ...string) {
 			row["cwd"] = explicitCWD
 		}
 		_, err = f.WriteString(dumps(row) + "\n")
-		return err
+		return errors.Join(err, f.Close())
 	}()
 	if err != nil {
 		metric(kv("event", "hook_error"), kv("hook", "session_recall_ledger"), kv("error", pyType(err)))
@@ -167,7 +166,7 @@ func sessionTraces() {
 				continue
 			}
 			// A later recall of the same session starts a new ledger, so a claim never loses one.
-			os.Rename(path, strings.TrimSuffix(path, ".jsonl")+"-"+strconv.FormatInt(time.Now().UnixNano(), 10)+".claimed")
+			_ = os.Rename(path, strings.TrimSuffix(path, ".jsonl")+"-"+strconv.FormatInt(time.Now().UnixNano(), 10)+".claimed")
 		}
 	}
 	claimed, _ := filepath.Glob(filepath.Join(globEscape(dir), "*.claimed"))

@@ -159,7 +159,7 @@ func projectOneRefused(dst, code string, check, mayRemove bool) (string, error) 
 
 func projectMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if slices.Contains(args, "-h") || slices.Contains(args, "--help") {
-		io.WriteString(stdout, projectUsage)
+		_, _ = io.WriteString(stdout, projectUsage)
 		return 0
 	}
 	p := newArgs("project-skills", stderr)

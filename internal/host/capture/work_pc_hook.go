@@ -44,7 +44,7 @@ func pcHookMarker(origin string, event map[string]any) (map[string]any, error) {
 		logical = rel
 	} else {
 		var matches []string
-		filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error { // the callback never fails
 			if err != nil || p == root {
 				return nil
 			}

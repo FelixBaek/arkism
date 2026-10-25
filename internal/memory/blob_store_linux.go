@@ -62,7 +62,7 @@ func (s blobStore) locked(ctx context.Context, fn func(*lockedBlobs) error) erro
 	if err = flockBlobs(ctx, lock); err != nil {
 		return err
 	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	defer func() { _ = syscall.Flock(int(lock.Fd()), syscall.LOCK_UN) }() // closing the file also releases it
 	if err = ctx.Err(); err != nil {
 		return err
 	}

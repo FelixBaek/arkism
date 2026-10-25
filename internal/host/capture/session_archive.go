@@ -807,7 +807,7 @@ func globAll(root, pattern string) []string {
 	var out []string
 	// The trailing separator makes WalkDir resolve a symlinked root.
 	start := strings.TrimRight(root, string(filepath.Separator)) + string(filepath.Separator)
-	filepath.WalkDir(start, func(p string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(start, func(p string, d fs.DirEntry, err error) error { // the callback never fails
 		if err != nil || p == start {
 			return nil
 		}
@@ -1003,7 +1003,7 @@ func writeAgentsViewLimit(db *sqlite.Conn, session host.Obj, id any, target stri
 	if err := db.Exec("BEGIN"); err != nil {
 		return err
 	}
-	defer db.Exec("ROLLBACK")
+	defer func() { _ = db.Exec("ROLLBACK") }() // read-only snapshot: nothing to commit
 	f, err := os.Create(target)
 	if err != nil {
 		return err
@@ -1043,7 +1043,9 @@ func saveArchiveState(state host.Obj) error {
 		f.Close()
 		return err
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
 	return os.Rename(f.Name(), archiveState)
 }
 

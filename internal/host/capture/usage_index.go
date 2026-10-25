@@ -702,7 +702,7 @@ func usageParse(origin, device, path string) (*usageFile, error) {
 func usageCodexTitles() map[string]string {
 	titles := map[string]string{}
 	if exists(usageCodexIndex) {
-		usageLines(usageCodexIndex, func(d map[string]any) {
+		_ = usageLines(usageCodexIndex, func(d map[string]any) {
 			if id, ok := d["id"].(string); ok && id != "" && truthy(d["thread_name"]) {
 				titles[id] = str(d["thread_name"])
 			}
