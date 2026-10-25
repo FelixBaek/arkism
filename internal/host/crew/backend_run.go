@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -405,7 +404,7 @@ func (st *backendStep) start() map[string]any {
 	}
 	for try := 0; try < tries; try++ {
 		ctx, cancel := context.WithTimeout(context.Background(), min(backendStartMax, time.Until(st.deadline)))
-		code, err = backendCall(ctx, st.b, http.MethodPost, "/v1/tasks", st.body, st.key, &reply)
+		code, err = taskStart(ctx, st.b, st.body, st.key, &reply)
 		cancel()
 		var he *backendHTTPError
 		if err == nil || !errors.As(err, &he) || he.Code != 0 && he.Code < 500 || backendNow().After(st.deadline) {
@@ -468,7 +467,7 @@ func (st *backendStep) follow() map[string]any {
 		}
 		var reply backendReply
 		rctx, cancel := context.WithTimeout(ctx, backendStartMax)
-		code, err := backendCall(rctx, st.b, http.MethodGet, "/v1/tasks/"+url.PathEscape(st.entry.TaskID), nil, "", &reply)
+		code, err := taskStatus(rctx, st.b, st.entry.TaskID, &reply)
 		cancel()
 		if code == 404 {
 			return st.end("unknown", "", "러너가 이 작업을 모른다고 해요: 다시 돌리지 않았어요")
@@ -568,7 +567,7 @@ func (st *backendStep) cancel(why string) map[string]any {
 	var reply backendReply
 	ctx, cancel := context.WithTimeout(context.Background(), backendStartMax)
 	defer cancel()
-	_, err := backendCall(ctx, st.b, http.MethodPost, "/v1/tasks/"+url.PathEscape(st.entry.TaskID)+"/cancel", map[string]any{"reason": "arkism"}, "", &reply)
+	err := taskCancel(ctx, st.b, st.entry.TaskID, &reply)
 	if err == nil && reply.Status == "cancelled" {
 		return st.end("cancelled", "timeout", why+": 러너가 취소를 확인했어요")
 	}

@@ -22,6 +22,7 @@ Options:
 | `--local` | Allow a loopback or private address (`127.0.0.1`, `10.x`, `192.168.x`, `100.64/10`). Plain `http` is allowed only on loopback. |
 | `--isolated` | You state that the runner works in its own sandbox. A read-only step may then go to a runner that cannot restrict tools itself. |
 | `--own-model` | Accept that a runner without model choice uses its own model. The step records `model` as not applied. |
+| `--kind hermes` | Talk to a Hermes Agent API server (section 7) instead of `arkism.backend.v1`. |
 | `--memory` | Let approved memory go along with the task (see "Memory" below). Off by default. |
 
 Other commands: `arkism crew backends list`, `arkism crew backends remove myrunner`.
@@ -133,16 +134,36 @@ arkism crew backends check ref
 
 ## 6. Limits
 
-- Only the generic HTTP contract above. No OpenClaw or Hermes adapter (see below).
+- The generic HTTP contract above and Hermes Agent's Runs API (section 7). No OpenClaw adapter.
 - Not supported, and never asked of a runner (`session: none`, `approval: none` in every request): approval relay (a `waiting_approval` task is cancelled, then fails), progress events, attachments, session reuse. Each needs work across the server, the app and Discord (approvals bound to the run, target and content; a session key per user, expert, channel and thread) and is follow-up work.
 - The app shows this PC's connections on an expert (크루 › 전문가 › 실행하는 곳: pick one, see the last check and what the runner cannot do) and each step's trace in the run record. Adding, checking or removing a connection is CLI only.
 - If the host that started a request loses its state folder, nobody asks about that task again; the request reads as failed after 24 hours.
 
-## 7. OpenClaw and Hermes
+## 7. Hermes Agent (`--kind hermes`)
 
-Neither is installed on the machine this was built on, so no adapter was written. Their public docs (checked 2026-10-26) describe OpenAI-compatible HTTP endpoints, not this contract:
+A Hermes Agent API server can be a connection without a bridge. Arkism speaks its Runs API instead of the contract above:
 
-- OpenClaw: the Gateway's `/v1/chat/completions` and `/v1/responses` (off by default; `gateway.http.endpoints`), bearer auth from `gateway.auth`, the agent picked by `model: "openclaw/<agentId>"`, sessions by `x-openclaw-session-key`. <https://docs.openclaw.ai/gateway/openai-http-api>
-- Hermes Agent: `hermes gateway` serves `http://127.0.0.1:8642/v1` with `API_SERVER_KEY`, running its full toolset before answering. <https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server>
+```bash
+printf '%s\n' "$HERMES_API_SERVER_KEY" | arkism crew backends add --name hermes --kind hermes --url http://127.0.0.1:8642 --local --isolated
+arkism crew backends check hermes
+```
 
-What an adapter still needs, and why it is not here: an installed version to test against; whether a call can be read-only (both run their own tools, so today only `--isolated` would allow it); a task id with status and cancel, or else every lost answer is unknown and nothing can be followed after a restart; idempotency; and how they report usage.
+Checked against the source of Hermes Agent v0.22.0+159.gc5fc095 (commit `c5fc0958`); file and line references are in `internal/host/crew/backend_hermes.go`. Only a fake server with the same replies was tested. No real Hermes run was made, so this is not a claim that a live install works.
+
+| arkism.backend.v1 | Hermes |
+|---|---|
+| `GET /v1/capabilities` | the same path; `features.run_status`, `run_stop`, `runs_idempotency` (durable) |
+| `POST /v1/tasks` | `POST /v1/runs` `{input, instructions, model}` with the same `Idempotency-Key` (kept 24 h; a lost answer replays the same run) |
+| `GET /v1/tasks/{id}` | `GET /v1/runs/{id}`: `queued`→accepted, `running`, `waiting_for_approval`→waiting_approval, `stopping`→cancel_requested, `completed`→succeeded, `failed`, `cancelled`, `interrupted`→failed; anything else is unknown |
+| `POST …/cancel` | `POST /v1/runs/{id}/stop` (answers `stopping`, so the step ends `cancel_requested`) |
+
+What it cannot do, so Arkism treats it as such:
+
+- **Tool restriction:** Hermes runs the tools its own `api_server` toolsets allow. A read step goes only to a connection made with `--isolated` (you state the Hermes host is sandboxed); the trace lists `tool_restriction` under `not_applied`.
+- **Cost:** usage has token counters only (a missing counter reads as 0), so cost stays unknown.
+- **Memory:** there is no separate data section, so no memory is sent even with `--memory`.
+- **Approvals:** a run that waits for approval is stopped; Arkism never approves.
+- **Model:** the requested model is sent; Hermes may still switch to a configured fallback provider. The trace keeps the model that actually served the run (`runtime.model`) next to the requested one.
+- Skill documents go into `instructions` with the expert's instructions; each request starts a new Hermes session.
+
+OpenClaw: not installed anywhere this was built, so there is no adapter. Its Gateway serves OpenAI-compatible `/v1/chat/completions` and `/v1/responses` (<https://docs.openclaw.ai/gateway/openai-http-api>). An adapter needs a task id with status and cancel, idempotency and a read-only mode, checked against an installed version.

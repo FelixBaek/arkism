@@ -66,7 +66,7 @@ var crewCommands = map[string]crewCommand{
 	"providers report": {bools: []string{"fresh"}},
 	"providers watch":  {valued: []string{"interval", "report-every"}, floats: []string{"interval", "report-every"}},
 	"backends list":    {},
-	"backends add":     {valued: []string{"name", "url"}, bools: []string{"local", "isolated", "own-model", "memory"}, required: []string{"name", "url"}},
+	"backends add":     {valued: []string{"name", "url", "kind"}, bools: []string{"local", "isolated", "own-model", "memory"}, required: []string{"name", "url"}},
 	"backends check":   {positional: []string{"name"}},
 	"backends remove":  {positional: []string{"name"}},
 	"backends use":     {valued: []string{"expert"}, positional: []string{"name"}, required: []string{"expert"}},

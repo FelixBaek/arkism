@@ -7,6 +7,7 @@ package crew
 // an expert names one by its name (crew.backend), so one connection serves many experts.
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -46,6 +47,7 @@ var backendCaps = []string{"model_choice", "instructions", "status", "cancel", "
 type backend struct {
 	Name      string          `json:"name"`
 	URL       string          `json:"url"`
+	Kind      string          `json:"kind,omitempty"`  // "" arkism.backend.v1, hermes: Hermes Agent Runs API (backend_hermes.go)
 	Token     string          `json:"token,omitempty"` // only when no credential store answers (file 0600)
 	SecretRef string          `json:"secret_ref,omitempty"`
 	Local     bool            `json:"local,omitempty"`
@@ -134,7 +136,7 @@ func (b *backend) public() map[string]any {
 	case b.Token != "":
 		storage = keystore.StorageFile
 	}
-	return map[string]any{"name": b.Name, "url": b.URL, "token": storage, "local": b.Local, "isolated": b.Isolated, "own_model": b.OwnModel,
+	return map[string]any{"name": b.Name, "url": b.URL, "kind": cmp.Or(b.Kind, backendProtocol), "token": storage, "local": b.Local, "isolated": b.Isolated, "own_model": b.OwnModel,
 		"capabilities": b.Caps, "checked_at": b.CheckedAt, "status": b.Status, "limits": b.limits()}
 }
 
@@ -255,12 +257,15 @@ func backendClient(local bool) *http.Client {
 // insideArkismRun: a CLI Arkism started (ARKISM_CAPTURE_CHILD) must not change where Arkism sends work.
 func insideArkismRun() bool { return os.Getenv("ARKISM_CAPTURE_CHILD") == "1" }
 
-func addBackend(name, rawURL, token string, local, isolated, ownModel, memory bool) (*backend, error) {
+func addBackend(name, rawURL, kind, token string, local, isolated, ownModel, memory bool) (*backend, error) {
 	if insideArkismRun() {
 		return nil, crewErr("Arkism이 실행한 에이전트 안에서는 연결을 바꿀 수 없어요")
 	}
 	if !backendName.MatchString(name) || name == "local" {
 		return nil, crewErr("연결 이름은 영어 소문자·숫자·-로 1~40자예요 (local은 Arkism 기본 실행이라 못 써요)")
+	}
+	if kind != "" && kind != backendKindHermes {
+		return nil, crewErr("연결 종류(--kind)는 hermes만 있어요 (비우면 arkism.backend.v1)")
 	}
 	u, err := checkBackendURL(rawURL, local)
 	if err != nil {
@@ -277,7 +282,7 @@ func addBackend(name, rawURL, token string, local, isolated, ownModel, memory bo
 	if all[name] != nil {
 		return nil, crewErr("같은 이름의 연결이 이미 있어요: 지우고 다시 만들어 주세요")
 	}
-	b := &backend{Name: name, URL: u.String(), Local: local, Isolated: isolated, OwnModel: ownModel, Memory: memory, CreatedAt: nowZ()}
+	b := &backend{Name: name, URL: u.String(), Kind: kind, Local: local, Isolated: isolated, OwnModel: ownModel, Memory: memory, CreatedAt: nowZ()}
 	if token != "" {
 		if ref, err := secretPut(backendService, name, token); err == nil {
 			b.SecretRef = ref
@@ -342,6 +347,9 @@ func checkBackend(name string) (*backend, error) {
 
 // fetchCaps is GET {url}/v1/capabilities; a runner that does not speak arkism.backend.v1 fails the check.
 func fetchCaps(ctx context.Context, b *backend) (map[string]bool, error) {
+	if b.Kind == backendKindHermes {
+		return hermesCaps(ctx, b)
+	}
 	var page struct {
 		Protocol     string          `json:"protocol"`
 		Capabilities map[string]bool `json:"capabilities"`
@@ -362,7 +370,7 @@ func fetchCaps(ctx context.Context, b *backend) (map[string]bool, error) {
 func runBackendsCmd(name string, a *args, stdinLine string) (any, error) {
 	switch name {
 	case "backends add":
-		b, err := addBackend(a.vals["name"], a.vals["url"], stdinLine, a.flags["local"], a.flags["isolated"], a.flags["own-model"], a.flags["memory"])
+		b, err := addBackend(a.vals["name"], a.vals["url"], a.vals["kind"], stdinLine, a.flags["local"], a.flags["isolated"], a.flags["own-model"], a.flags["memory"])
 		if err != nil {
 			return nil, err
 		}

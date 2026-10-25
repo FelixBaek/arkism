@@ -90,7 +90,7 @@ func backendEnv(t *testing.T) {
 
 func addFake(t *testing.T, f *fakeRunner, name string, isolated, ownModel bool) {
 	t.Helper()
-	if _, err := addBackend(name, f.URL, "conn-secret-123", true, isolated, ownModel, false); err != nil {
+	if _, err := addBackend(name, f.URL, "", "conn-secret-123", true, isolated, ownModel, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -151,7 +151,7 @@ func TestBackendRedirectAndNonLocalRefused(t *testing.T) {
 	target := newFakeRunner(t, "status")
 	jump := httptest.NewServer(http.RedirectHandler(target.URL+"/v1/capabilities", http.StatusFound))
 	t.Cleanup(jump.Close)
-	if _, err := addBackend("jump", jump.URL, "", true, false, false, false); err != nil {
+	if _, err := addBackend("jump", jump.URL, "", "", true, false, false, false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := checkBackend("jump"); err == nil {
@@ -183,7 +183,7 @@ func TestBackendTokenNeverShown(t *testing.T) {
 		t.Fatal("backends.json mode", st, err)
 	}
 	t.Setenv("ARKISM_CAPTURE_CHILD", "1")
-	if _, err := addBackend("other", f.URL, "", true, false, false, false); err == nil {
+	if _, err := addBackend("other", f.URL, "", "", true, false, false, false); err == nil {
 		t.Fatal("an agent Arkism started must not add a connection")
 	}
 	if _, err := useBackend("mine", "@writer"); err == nil {
@@ -595,7 +595,7 @@ func TestBackendMemoryOnlyWhenAllowed(t *testing.T) {
 		f.start = func(w http.ResponseWriter, _ map[string]any) {
 			reply(w, 200, map[string]any{"task_id": "t-1", "status": "succeeded", "result": map[string]any{"text": "답"}})
 		}
-		if _, err := addBackend(name, f.URL, "", true, false, false, memory); err != nil {
+		if _, err := addBackend(name, f.URL, "", "", true, false, false, memory); err != nil {
 			t.Fatal(err)
 		}
 		out, err := runNode(stepSpec(name, "assist/"+name))
