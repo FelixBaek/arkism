@@ -143,7 +143,8 @@ func (e *Engine) PollWaiting(ctx context.Context) error {
 	return e.StartRequested(ctx)
 }
 
-// StartRequested drives runs a person created (the desktop, $handle calls)
+// StartRequested drives runs a person or a harness created (the desktop, $handle
+// calls from Claude Code, Codex and the DeepSeek harness on an agent token)
 // that nothing has touched yet: every node pending, or done/skipped when the
 // run restarts from where a failed one stopped. Runs another engine process
 // created are never taken.
@@ -154,7 +155,7 @@ func (e *Engine) StartRequested(ctx context.Context) error {
 	}
 	var todo []string
 	for _, r := range runs {
-		if r.CreatedByType == "human" && untouched(r) {
+		if (r.CreatedByType == "human" || r.CreatedByType == "agent") && untouched(r) {
 			todo = append(todo, r.ID)
 		}
 	}
