@@ -210,7 +210,7 @@
     if (start.nodeType !== 1 && start.nodeType !== 9 && start.nodeType !== 11) return;
     if (start.nodeType === 1) fn(start);
     if (start.nodeType === 1 && start.matches(SKIP)) return;
-    const w = document.createTreeWalker(start, 5 /* ELEMENT | TEXT */, {
+    const w = (start.ownerDocument || start).createTreeWalker(start, 5 /* ELEMENT | TEXT */, {
       // 건너뛸 요소는 자기 속성만 다루고 안쪽 글자는 그대로 둔다.
       acceptNode: (n) => (n.nodeType === 1 && n.matches(SKIP) ? (fn(n), 2 /* REJECT */) : 1)
     });
@@ -274,14 +274,24 @@
     if (lang === "en") {
       walk(document.documentElement, apply);
       if (HANGUL.test(document.title)) { titleOrig = document.title; document.title = translate(document.title); }
-      observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+      observer.observe(document.documentElement, OBSERVE);
     } else {
       observer.disconnect();
       walk(document.documentElement, restore);
       if (titleOrig) { document.title = titleOrig; titleOrig = null; }
     }
+    for (const d of root.ArkismPopout?.docs() || []) popout(d, lang === "en" ? apply : restore);
     updateMessages();
   }
+  // A popout window (popup-drag.js) is its own document: translate it the same way and watch it while English is on.
+  // Its <title> is a text node in the walk. A closed window's document takes its registration with it.
+  const OBSERVE = { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS };
+  function popout(d, fn) {
+    d.documentElement.lang = lang;
+    walk(d.documentElement, fn);
+    if (fn === apply) observer.observe(d.documentElement, OBSERVE);
+  }
+  root.addEventListener("arkism-popout", (e) => { if (lang === "en") popout(e.detail, apply); });
 
   // 대화 상자 문구
   for (const name of ["confirm", "alert", "prompt"]) {

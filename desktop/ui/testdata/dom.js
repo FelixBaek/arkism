@@ -502,6 +502,7 @@ class Document extends Node {
   elementsFromPoint() { return [this.elementFromPoint()]; }
   execCommand(...args) { this.execCommands.push(args); return true; }
   hasFocus() { return this._focus !== false; }
+  getSelection() { return globalThis.getSelection(); }
   adoptNode(n) {
     n.remove?.();
     const from = n.ownerDocument;
@@ -649,6 +650,7 @@ function install(opts = {}) {
     URL, URLSearchParams, Blob: globalThis.Blob, File: globalThis.File, FormData: globalThis.FormData, AbortController, TextEncoder, TextDecoder, structuredClone, queueMicrotask,
     fetch: opts.fetch || (async () => { throw new Error("no network in tests"); })
   });
+  doc.defaultView = win;
   win.window = win; win.self = win; win.top = win; win.parent = win; win.globalThis = win;
   const names = ["window", "self", "document", "localStorage", "sessionStorage", "innerWidth", "innerHeight", "navigator", "location", "history", "getSelection", "matchMedia", "getComputedStyle", "CSS",
     "Event", "CustomEvent", "KeyboardEvent", "MouseEvent", "PointerEvent", "FocusEvent", "InputEvent", "WheelEvent", "Node", "Element", "HTMLElement", "HTMLInputElement", "HTMLTextAreaElement", "HTMLSelectElement", "HTMLButtonElement", "HTMLDialogElement", "SVGElement", "Text", "DocumentFragment", "Document",

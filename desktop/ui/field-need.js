@@ -6,7 +6,8 @@ window.ArkismNeed = (() => {
   const tr = (x) => window.ArkismI18n?.translate(x) || x;
   const FIELD = "input, select, textarea, [contenteditable], [role=button]";
   function find(label) {
-    const root = [...document.querySelectorAll("dialog[open]")].pop() || document;
+    const doc = window.ArkismPopout?.current() || document; // the window that asked: a popout's popup too
+    const root = [...doc.querySelectorAll("dialog[open]")].pop() || doc;
     const want = tr(label);
     for (const l of root.querySelectorAll("label, .field > span, .field > b, .field-label, small, .auto-key")) {
       if (l.textContent.trim() !== want) continue;

@@ -340,7 +340,7 @@ window.open = (url, name, features) => {
   opened.push([url, name, features]);
   if (window.failOpen) return null;
   const d = new dom.Document(); d._focus = false;
-  return { document: d, closed: false, on: {}, addEventListener(t, f) { (this.on[t] ||= []).push(f); }, close() { this.closed = true; } };
+  return (d.defaultView = { document: d, closed: false, innerWidth: 600, innerHeight: 400, on: {}, addEventListener(t, f) { (this.on[t] ||= []).push(f); }, close() { this.closed = true; } });
 };
 
 test("a popup drags by its head, stays on screen, moves into its own window outside the app and closes on an outside click", async () => {
@@ -466,17 +466,55 @@ test("a popup drags by its head, stays on screen, moves into its own window outs
 });
 
 test("in a popout window: Esc closes its popup, the next popup it opens stays there, and code-opened menus follow", async () => {
-  add(`<dialog id="w1" data-popout='{}' data-popout-title=""><div class="dialog-head">a</div></dialog>`);
+  add(`<dialog id="w1" data-popout='{}' data-popout-title=""><div class="dialog-head">a</div>
+    <div class="field"><span>이름</span><input id="kn"></div><select id="ks"><option>가</option><option>나</option></select></dialog>`);
   const w1 = $("#w1");
+  const dressed = [];
+  window.addEventListener("arkism-popout", (e) => dressed.push(e.detail));
   w1.showModal(); await flush(); await timers.tick(20);
   const kd = w1.ownerDocument, label = opened.at(-1)[1];
   assert.notEqual(kd, document);
+  assert.deepEqual(dressed, [kd], "other scripts hear of the new popout document");
   assert.equal(kd.title, "Arkism");
+  assert.equal(window.ArkismPopout.current(), document, "the app, while that window has no focus");
   kd._focus = true; // the user is in that window now
-  // a confirm it asks for and a menu it puts on the page open there, not in the app
-  const ask = document.createElement("dialog"); document.body.append(ask); ask.showModal(); await flush();
+  assert.deepEqual(window.ArkismPopout.docs(), [kd]);
+  assert.equal(window.ArkismPopout.current(), kd);
+  // its select opens the app's list there, and the right-click menu opens there, kept inside that window
+  const ks = kd.querySelector("#ks"), kn = kd.querySelector("#kn");
+  fire(ks, "pointerdown", { button: 0 });
+  assert.equal(kd.querySelector(".combo-pop")?._popover, true);
+  key(ks, "Escape");
+  assert.equal(kd.querySelector(".combo-pop")._popover, false);
+  fire(kn, "contextmenu", { clientX: 700, clientY: 10 });
+  const ctx = kd.querySelector(".ctx-menu");
+  assert.ok(ctx);
+  assert.equal(ctx.style.left, "1192px", "kept inside that window's 600px, not the app's 1280px");
+  key(ctx, "Escape");
+  assert.equal(kd.querySelector(".ctx-menu"), null);
+  // a field it asks for is marked there
+  window.ArkismNeed("이름", "이름을 넣어 주세요.");
+  assert.ok(kn.classList.contains("field-need"));
+  assert.equal(kd.activeElement, kn);
+  // look changes and the zoom keys reach that window too
+  window.ArkismLook.set({ theme: "dark", font: "sm" });
+  assert.equal(kd.documentElement.getAttribute("data-theme"), "dark");
+  assert.equal(kd.documentElement.style.getPropertyValue("--fs"), "1");
+  key(kn, "=", { ctrlKey: true });
+  assert.equal(kd.documentElement.style.zoom, "1.1");
+  window.ArkismLook.set({ theme: "light", font: "lg", zoom: 1 });
+  // a confirm it asks for and a menu it puts on the page open there, not in the app; the confirm stays modal, focus kept
+  const ask = document.createElement("dialog"); dom.parseHTML(document, `<button>취소</button><button id="ok">확인</button>`, ask); document.body.append(ask); ask.showModal();
+  ask.querySelector("#ok").focus(); await flush();
   assert.equal(ask.ownerDocument, kd);
   assert.equal(ask.classList.contains("popout-root"), false);
+  assert.ok(ask.matches(":modal") && kd._topLayer.includes(ask), "modal in that window, so the popup under it waits");
+  assert.equal(kd.activeElement, ask.querySelector("#ok"));
+  // Esc there closes the top popup (the confirm), the way it does here
+  key(ask.querySelector("#ok"), "Escape");
+  assert.equal(ask.open, false);
+  assert.equal(w1.open, true);
+  ask.showModal(); await flush();
   const menu = document.createElement("div"); menu.className = "auto-menu"; document.body.append(menu); await flush();
   assert.equal(menu.ownerDocument, kd);
   const plainDiv = document.createElement("div"); document.body.append(plainDiv); await flush();

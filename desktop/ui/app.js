@@ -171,12 +171,13 @@ export function startApp() {
   function catChipBody(c) { return [icon(c ? catIcon(c) : "tag"), raw(el("span", "", c || tr("카테고리"))), icon("caret-down")]; }
   // Category menu for the crew popups (expert · team · automation): pick one, clear it, or make a new one with a name and an icon.
   function catMenu(anchor, { list, current, onPick }) {
-    document.querySelector(".cat-menu")?.remove();
+    const doc = anchor.ownerDocument; // a popout window's, when the popup is there
+    doc.querySelector(".cat-menu")?.remove();
     if (current && !list.includes(current)) list = [...list, current];
     const m = el("div", "cat-menu");
     m.setAttribute("role", "dialog");
     m.setAttribute("aria-label", "카테고리");
-    const close = (refocus) => { m.remove(); document.removeEventListener("pointerdown", away, true); if (refocus && anchor.isConnected) anchor.focus(); };
+    const close = (refocus) => { m.remove(); doc.removeEventListener("pointerdown", away, true); if (refocus && anchor.isConnected) anchor.focus(); };
     const away = (e) => { if (!m.contains(e.target) && !anchor.contains(e.target)) close(); };
     const pickNow = (v) => { close(true); onPick(v); };
     const item = (label, ic, on, fn, mine = true) => {
@@ -256,16 +257,16 @@ export function startApp() {
     m.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); close(true); } });
     // Fixed under the chip, inside its dialog (the top layer), kept on screen.
     function place() {
-      const r = anchor.getBoundingClientRect(), w = m.offsetWidth, hgt = m.offsetHeight;
+      const r = anchor.getBoundingClientRect(), w = m.offsetWidth, hgt = m.offsetHeight, { innerWidth, innerHeight } = doc.defaultView;
       const left = Math.max(8, Math.min(r.left, innerWidth - w - 8)), top = r.bottom + 4 + hgt > innerHeight - 8 ? Math.max(8, r.top - 4 - hgt) : r.bottom + 4;
       m.style.left = `${left}px`; m.style.top = `${top}px`;
       // a dragged dialog (translate) holds its fixed children: move by what the menu actually landed off
       const got = m.getBoundingClientRect();
       m.style.left = `${2 * left - got.left}px`; m.style.top = `${2 * top - got.top}px`;
     }
-    (anchor.closest("dialog") || document.body).append(m);
+    (anchor.closest("dialog") || doc.body).append(m);
     place();
-    document.addEventListener("pointerdown", away, true);
+    doc.addEventListener("pointerdown", away, true);
     (m.querySelector(".cat-menu-item.on") || m.querySelector(".cat-menu-item"))?.focus();
   }
   function button(label, cls, iconName, onClick) {
@@ -491,30 +492,36 @@ export function startApp() {
     badge.className = `st-badge${stopped ? " bad" : ""}`;
     badge.textContent = stopped ? `${stopped}곳 멈춤` : list.some((s) => s.unknown) ? "알 수 없음" : "모두 움직임";
   }
-  // 취소·닫기 buttons close their dialog by submitting it with value "cancel": skip the form check,
-  // so an empty required field (새 팀·새 자동화의 이름 …) never stops a dialog from closing.
-  document.addEventListener("click", (e) => {
-    const b = e.target.closest?.('dialog button[value="cancel"]');
-    if (b) b.formNoValidate = true;
-  }, true);
-  // Enter in a dialog's field means its main button (저장·만들기 …), never the ✕ that comes first in the form.
-  // Korean input confirms a syllable with Enter too, so that Enter is left alone; so is a field that handles its own
-  // Enter (사진 찾기 …): this listens after it and skips an Enter it already took (preventDefault).
-  document.addEventListener("keydown", (e) => {
-    const t = e.target;
-    if (e.key !== "Enter" || e.defaultPrevented || e.isComposing || !(t instanceof HTMLInputElement) || ["button", "submit", "checkbox", "radio", "file"].includes(t.type)) return;
-    const form = t.closest("dialog form");
-    if (!form) return;
-    e.preventDefault();
-    const submits = [...form.querySelectorAll("button")].filter((b) => b.type === "submit" && b.value !== "cancel" && !b.disabled);
-    const main = submits.find((b) => b.classList.contains("primary")) || submits.at(-1);
-    if (main) form.requestSubmit(main);
-  });
+  // Dialog keys, on this page and on each popout window's (popup-drag.js), where its popups keep them.
+  const dialogKeys = (d) => {
+    // 취소·닫기 buttons close their dialog by submitting it with value "cancel": skip the form check,
+    // so an empty required field (새 팀·새 자동화의 이름 …) never stops a dialog from closing.
+    d.addEventListener("click", (e) => {
+      const b = e.target.closest?.('dialog button[value="cancel"]');
+      if (b) b.formNoValidate = true;
+    }, true);
+    // Enter in a dialog's field means its main button (저장·만들기 …), never the ✕ that comes first in the form.
+    // Korean input confirms a syllable with Enter too, so that Enter is left alone; so is a field that handles its own
+    // Enter (사진 찾기 …): this listens after it and skips an Enter it already took (preventDefault).
+    d.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (e.key !== "Enter" || e.defaultPrevented || e.isComposing || t?.tagName !== "INPUT" || ["button", "submit", "checkbox", "radio", "file"].includes(t.type)) return;
+      const form = t.closest("dialog form");
+      if (!form) return;
+      e.preventDefault();
+      const submits = [...form.querySelectorAll("button")].filter((b) => b.type === "submit" && b.value !== "cancel" && !b.disabled);
+      const main = submits.find((b) => b.classList.contains("primary")) || submits.at(-1);
+      if (main) form.requestSubmit(main);
+    });
+  };
+  dialogKeys(document);
+  addEventListener("arkism-popout", (e) => dialogKeys(e.detail));
   // 알림 줄: 문구 하나와 닫기(×). 다른 화면으로 가도 지워진다.
   function notice(text) {
     // An open window (dialog) covers the page, so its messages show inside that window instead.
-    const top = [...document.querySelectorAll("dialog[open]")].pop();
-    document.querySelectorAll(".dlg-notice").forEach((x) => { if (x.parentElement !== top) x.remove(); });
+    const doc = window.ArkismPopout?.current() || document; // the window the user is in: a popout's popup too
+    const top = [...doc.querySelectorAll("dialog[open]")].pop();
+    for (const d of [document, ...window.ArkismPopout?.docs() || []]) d.querySelectorAll(".dlg-notice").forEach((x) => { if (x.parentElement !== top) x.remove(); });
     let n = $("#notice");
     if (top) {
       n.hidden = true;

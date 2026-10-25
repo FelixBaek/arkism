@@ -112,7 +112,7 @@ function makeEvent(type, init = {}) {
 }
 
 function createDocument() {
-  const doc = { activeElement: null, hidden: false };
+  const doc = { activeElement: null, hidden: false, defaultView: globalThis };
   doc.documentElement = new Element("html", doc);
   doc.body = new Element("body", doc);
   doc.documentElement.append(doc.body);

@@ -98,7 +98,17 @@ test("English translates text, attributes, the title and messages, but not user 
   assert.equal(p.textContent, "Save");
   assert.equal(btn.getAttribute("title"), "Close");
   assert.equal(await I.setLang("en"), true); // already English
+  // a popout window (popup-drag.js) opened in English: translated at once, and new text there as it appears
+  const kp = popout.body.appendChild(popout.createElement("p")); kp.textContent = "저장";
+  window.ArkismPopout = { docs: () => [popout] };
+  window.dispatchEvent(new dom.CustomEvent("arkism-popout", { detail: popout }));
+  assert.equal(kp.textContent, "Save");
+  assert.equal(popout.documentElement.lang, "en");
+  const kn = popout.createElement("span"); kn.textContent = "닫기"; popout.body.append(kn);
+  await flush();
+  assert.equal(kn.textContent, "Close");
 });
+const popout = new dom.Document();
 
 test("back to Korean restores what was written, keeping text the screen changed since", async () => {
   const kept = document.body.lastChild;
@@ -113,6 +123,8 @@ test("back to Korean restores what was written, keeping text the screen changed 
   assert.equal(document.title, "설정");
   assert.equal($("[data-i18n-id]").textContent, "저장");
   assert.equal(kept.data, "Changed by the screen");
+  assert.equal(popout.querySelector("p").textContent, "저장", "the popout window turns back too");
+  assert.equal(popout.documentElement.lang, "ko");
   const late = document.createElement("p");
   late.textContent = "설정";
   document.body.append(late);

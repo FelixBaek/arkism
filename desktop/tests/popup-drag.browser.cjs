@@ -52,10 +52,12 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     app.on("pageerror", error => errors.push(error.message));
     const blocked = []; app.context().on("console", m => { if (/Content Security Policy/.test(m.text())) blocked.push(m.text().slice(0, 120)); }); // the child window too, not just this page
     const files = {
-      "/": ['text/html', '<!doctype html><link rel="stylesheet" href="/a.css"><body><script src="/popup-drag.js"></script><script src="/start.js"></script>'],
+      "/": ['text/html', '<!doctype html><link rel="stylesheet" href="/a.css"><body><script src="/combo.js"></script><script src="/popup-drag.js"></script><script src="/context-menu.js"></script><script src="/start.js"></script>'],
+      "/combo.js": ["text/javascript; charset=utf-8", fs.readFileSync(path.resolve(__dirname, "../ui/combo.js"), "utf8")],
+      "/context-menu.js": ["text/javascript; charset=utf-8", fs.readFileSync(path.resolve(__dirname, "../ui/context-menu.js"), "utf8")],
       "/a.css": ["text/css", "dialog{width:500px;height:300px;padding:0;border:0;background:rgb(1, 2, 3)}h2{font-size:calc(10px * var(--fs, 1))}"],
       "/popup-drag.js": ["text/javascript", fs.readFileSync(path.resolve(__dirname, "../ui/popup-drag.js"), "utf8")],
-      "/start.js": ["text/javascript", 'document.documentElement.style.setProperty("--fs", "2"); document.documentElement.style.zoom = "1.25"; window.__TAURI__ = { core: { invoke: async () => null } }; addEventListener("load", () => { const d = document.createElement("dialog"); d.dataset.popout = "1"; d.append(Object.assign(document.createElement("h2"), { textContent: "창" })); document.body.append(d); });']
+      "/start.js": ["text/javascript; charset=utf-8", 'document.documentElement.style.setProperty("--fs", "2"); document.documentElement.style.zoom = "1.25"; window.__TAURI__ = { core: { invoke: async () => null } }; addEventListener("load", () => { const d = document.createElement("dialog"); d.dataset.popout = "1"; d.append(Object.assign(document.createElement("h2"), { textContent: "창" })); d.insertAdjacentHTML("beforeend", "<select><option>가</option><option>나</option></select><input>"); document.body.append(d); });']
     };
     await app.route("http://app.test/**", route => { const [type, body] = files[new URL(route.request().url()).pathname] || ["text/plain", ""]; route.fulfill({ status: 200, contentType: type, body, headers: { "content-security-policy": csp } }); });
     await app.goto("http://app.test/");
@@ -64,6 +66,26 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     const child3 = await third;
     await child3.waitForFunction(() => document.querySelector("dialog.popout-root"));
     assert.deepEqual(await child3.evaluate(() => { const d = document.querySelector("dialog"), h = d.querySelector("h2"); return [getComputedStyle(d).backgroundColor, getComputedStyle(d).width, getComputedStyle(h).fontSize, document.documentElement.style.zoom]; }), ["rgb(1, 2, 3)", "500px", "20px", "1.25"], "styles, --fs and zoom apply in the child under the CSP");
+    // in that real child window: its select opens the app's list there, and right-click opens the app's menu there
+    await child3.bringToFront();
+    await child3.click("select");
+    assert.equal(await child3.evaluate(() => document.querySelector(".combo-pop")?.matches(":popover-open")), true, "the select's list opens in the popout");
+    assert.equal(await child3.evaluate(() => document.querySelector(".combo-pop").textContent), "가나");
+    await child3.keyboard.press("Escape");
+    assert.equal(await child3.evaluate(() => document.querySelector(".combo-pop").matches(":popover-open")), false);
+    assert.equal(await child3.evaluate(() => document.querySelector("dialog.popout-root").open), true, "Esc closed only the list");
+    await child3.click("input", { button: "right" });
+    assert.equal(await child3.evaluate(() => [...document.querySelectorAll(".ctx-menu button")].map((b) => b.textContent).join(",")), "잘라내기,복사,붙여넣기,모두 선택");
+    await child3.keyboard.press("Escape");
+    assert.equal(await child3.evaluate(() => document.querySelector(".ctx-menu")), null);
+    // a confirm the app opens from there moves over and stays modal, so the popup under it waits; its focus is kept
+    assert.equal(await child3.evaluate(() => document.hasFocus()), true);
+    await app.evaluate(() => { const d = document.createElement("dialog"); d.className = "confirm"; d.innerHTML = "<button>취소</button><button id=ok>확인</button>"; document.body.append(d); d.showModal(); d.querySelector("#ok").focus(); });
+    await child3.waitForFunction(() => document.querySelector("dialog.confirm"));
+    assert.deepEqual(await child3.evaluate(() => { const c = document.querySelector("dialog.confirm"); return [c.matches(":modal"), document.activeElement?.id]; }), [true, "ok"]);
+    await child3.keyboard.press("Escape"); // Esc there closes the confirm, not the popup under it
+    assert.equal(await child3.evaluate(() => document.querySelector("dialog.confirm").open), false);
+    assert.equal(await child3.evaluate(() => document.querySelector("dialog.popout-root").open), true);
     assert.deepEqual(blocked, [], "nothing blocked by the CSP");
     await app.close();
     // keyboard path (#200): without the desktop app it says why instead of nothing

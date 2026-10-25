@@ -166,7 +166,7 @@ window.ArkismAIChat = (() => {
       requestAnimationFrame(() => {
         // Keep the bubble on screen: docked it opens upward, so it may reach the top edge; below a button, the bottom edge.
         // The chat list (flex: 1, min-height: 0 in CSS) scrolls inside; the head, chips and input row stay in view.
-        if (pop.isConnected) { const r = pop.getBoundingClientRect(); pop.style.maxHeight = `${Math.max(160, Math.floor((docked() ? r.bottom : innerHeight - r.top) - 8))}px`; }
+        if (pop.isConnected) { const r = pop.getBoundingClientRect(); pop.style.maxHeight = `${Math.max(160, Math.floor((docked() ? r.bottom : pop.ownerDocument.defaultView.innerHeight - r.top) - 8))}px`; }
         log.scrollTop = log.scrollHeight;
         if (!wait && pop.isConnected) ask.focus({ preventScroll: true });
       });
@@ -245,7 +245,7 @@ window.ArkismAIChat = (() => {
         i.focus({ preventScroll: true });
         i.select();
         // insertText keeps the browser's undo stack (Ctrl+Z) and fires input itself; plain assignment is the fallback
-        const typed = document.activeElement === i && document.execCommand?.("insertText", false, v); // NOSONAR: only insertText keeps native undo; only into this field
+        const typed = i.ownerDocument.activeElement === i && i.ownerDocument.execCommand?.("insertText", false, v); // NOSONAR: only insertText keeps native undo; only into this field
         if (!typed || i.value !== v) { i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); }
       } finally { st.writing = false; }
     };
