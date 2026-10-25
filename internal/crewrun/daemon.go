@@ -147,7 +147,8 @@ func (e *Engine) PollWaiting(ctx context.Context) error {
 // calls from Claude Code, Codex and the DeepSeek harness on an agent token)
 // that nothing has touched yet: every node pending, or done/skipped when the
 // run restarts from where a failed one stopped. Runs another engine process
-// created are never taken.
+// created are never taken; an expert's workflow run (trigger "agent") is, even
+// when the assist runner started it on a service token.
 func (e *Engine) StartRequested(ctx context.Context) error {
 	runs, err := e.Store.ListRuns(ctx, "running", maxListedRuns)
 	if err != nil {
@@ -155,7 +156,8 @@ func (e *Engine) StartRequested(ctx context.Context) error {
 	}
 	var todo []string
 	for _, r := range runs {
-		if (r.CreatedByType == "human" || r.CreatedByType == "agent") && untouched(r) {
+		requested := r.CreatedByType == "human" || r.CreatedByType == "agent" || r.State.Trigger == "agent"
+		if requested && untouched(r) {
 			todo = append(todo, r.ID)
 		}
 	}
