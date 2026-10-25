@@ -49,6 +49,20 @@ func TestCrewTemplateAndPersona(t *testing.T) {
 	}
 }
 
+// A harness (agent token) may call an @expert (try) and nothing else.
+func TestHarnessMayOnlyAskAnExpert(t *testing.T) {
+	f, _ := crewRunFixture(t)
+	f.auth.actors["tok-harness"] = actor("harness-1", "agent", true, "read", "write")
+	fill := CrewAssistInput{Scope: scopeA, Assist: CrewAssist{Kind: "fill", Persona: "p", Prompt: "문서 고치는 전문가"}}
+	if _, err := f.svc.CreateCrewAssist(testCtx, "tok-harness", fill); !errors.Is(err, ErrDenied) {
+		t.Fatal("a harness asked for fill", err)
+	}
+	try := CrewAssistInput{Scope: scopeA, Assist: CrewAssist{Kind: "try", Expert: "@리뷰어", Prompt: "봐 줘"}}
+	if r, err := f.svc.CreateCrewAssist(testCtx, "tok-harness", try); err != nil || r.CreatedByType != "agent" {
+		t.Fatal("a harness could not call an expert", r, err)
+	}
+}
+
 func TestCrewAssistLifecycle(t *testing.T) {
 	f, _ := crewRunFixture(t)
 	in := CrewAssistInput{Scope: scopeA, Assist: CrewAssist{Kind: "fill", Persona: "너는 전문가 설계자다.", Prompt: "문서 고치는 전문가"}}

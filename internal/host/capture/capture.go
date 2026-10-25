@@ -902,8 +902,8 @@ func promptCapture(hook map[string]any) (skipped bool, err error) {
 	return false, enqueue(job)
 }
 
-// "$" then a letter: the prompt may call a crew expert or team ($릴리스매니저, $백엔드팀).
-var crewCallRE = regexp.MustCompile(`\$[\p{L}\p{Nl}\p{No}]`)
+// "$" or "@" then a letter: the prompt may call a workflow ($리서치) or an expert or team (@리뷰어, @백엔드팀).
+var crewCallRE = regexp.MustCompile(`[$@][\p{L}\p{Nl}\p{No}]`)
 
 // callerModel is the model this session runs: the hook's `model` (a string or {id}), else ARKISM_CALLER_MODEL.
 func callerModel(hook map[string]any) string {
@@ -914,7 +914,7 @@ func callerModel(hook map[string]any) string {
 	return pyStrip(str(or(m, os.Getenv("ARKISM_CALLER_MODEL"))))
 }
 
-// crewContext is who the prompt's $handles are and how to call them; never fails.
+// crewContext is who the prompt's $handles and @handles are and how to call them; never fails.
 func crewContext(hook map[string]any, timeout time.Duration) string {
 	prompt, _ := or(hook["prompt"], "").(string)
 	prompt = clean(prompt)

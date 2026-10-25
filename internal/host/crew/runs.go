@@ -29,9 +29,13 @@ var handleKey = regexp.MustCompile(`^[\p{L}\p{N}_-]{1,40}$`)
 
 // resolve is {item, members, leader_models} for $handle, or nil when no live workflow has it.
 func resolve(handle string, timeout time.Duration) (map[string]any, error) {
-	key := strings.ReplaceAll(strings.TrimLeft(strings.TrimSpace(handle), "$"), " ", "")
+	h := strings.TrimSpace(handle)
+	key := strings.ReplaceAll(strings.TrimLeft(strings.TrimPrefix(h, "@"), "$"), " ", "")
 	if !handleKey.MatchString(key) {
 		return nil, nil
+	}
+	if strings.HasPrefix(h, "@") {
+		key = "@" + key // an expert or a team, not a workflow
 	}
 	res, err := apiGet("/v1/crew/resolve?"+scopeQuery("handle", key), timeout)
 	if code := host.HTTPCode(err); code == 400 || code == 404 {
@@ -42,7 +46,8 @@ func resolve(handle string, timeout time.Duration) (map[string]any, error) {
 
 func resolveDefault(handle string) (map[string]any, error) { return resolve(handle, 8*time.Second) }
 
-// listCrew is the workflows that can be called by $handle.
+// listCrew is the workflows that can be called by $handle (handle bare) and the experts and teams called by
+// @handle (handle with the "@").
 func listCrew(timeout time.Duration) ([]map[string]any, error) {
 	page, err := apiGet("/v1/crew?"+scopeQuery(), timeout)
 	if err != nil {
@@ -61,6 +66,13 @@ func listCrew(timeout time.Duration) ([]map[string]any, error) {
 			out = append(out, map[string]any{"handle": c["handle"], "type": "workflow", "name": getOr(c, "name", ""),
 				"role": getOr(c, "role", ""), "category": getOr(c, "category", ""), "trigger": getOr(obj(c["trigger"]), "kind", ""),
 				"enabled": truthy(c["enabled"]), "steps": len(list(obj(c["graph"])["nodes"]))})
+		}
+	}
+	for _, r := range list(getOr(page, "items", []any{})) {
+		c := obj(obj(r)["crew"])
+		if (c["type"] == "agent" || c["type"] == "team") && truthy(c["handle"]) {
+			out = append(out, map[string]any{"handle": "@" + pyStr(c["handle"]), "type": c["type"], "name": getOr(c, "name", ""),
+				"role": getOr(c, "role", ""), "category": getOr(c, "category", ""), "trigger": "", "enabled": true, "steps": 0})
 		}
 	}
 	return out, nil
@@ -135,7 +147,11 @@ func waitRun(runID string, wait float64, rec map[string]any) (map[string]any, er
 }
 
 // startWorkflow starts the workflow $handle with input {"request": task} (and "cwd" when given) and waits up to wait seconds.
+// An @handle calls an expert (one answer from its own model) or a team (a meeting) the same way.
 func startWorkflow(handle, task string, wait float64, cwd string, resolver func(string) (map[string]any, error)) (map[string]any, error) {
+	if strings.HasPrefix(strings.TrimSpace(handle), "@") {
+		return callAt(handle, task, wait, cwd, resolver)
+	}
 	return startWorkflowAs("call", handle, task, wait, cwd, resolver)
 }
 
