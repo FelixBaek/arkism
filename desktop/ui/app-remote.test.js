@@ -127,6 +127,20 @@ test("지금 다시 연결 uses the same connection, and a failure is a notice",
   b.remove();
 });
 
+test("a confirm that fails keeps the opened server, and connects do not overlap", async () => {
+  const n = app.calls.length;
+  app.fake.ssh_connect_done = ({ ok }) => { if (ok) throw "agents_write_failed"; return null; };
+  await home.reconnect();
+  assert.deepEqual(app.calls.slice(n).filter(([c]) => c === "ssh_connect_done").map(([, a]) => a), [{ ok: true }]);
+  assert.match(t(app.$("#notice")), /마무리하지 못했어요 \(agents_write_failed\)/);
+  assert.equal(pages.state.token, "preview");
+  app.fake.ssh_connect_done = null;
+  const first = pages.sshConnect({ ...pages.state.ssh, password: null });
+  await assert.rejects(pages.sshConnect({ ...pages.state.ssh, password: null }), /이미 연결하는 중/);
+  await first;
+  await pages.sshConnect({ ...pages.state.ssh, password: null });
+});
+
 test("sshFields and sshLabel describe a saved connection", () => {
   assert.equal(pages.sshLabel({ host: "srv", user: "me", port: 2200 }), "me@srv:2200");
   assert.equal(pages.sshLabel({ host: "me@srv" }), "me@srv");

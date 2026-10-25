@@ -5,7 +5,8 @@
   let menu = null;
   const close = () => { menu?.remove(); menu = null; };
   const notice = (t) => window.ArkismNotice?.(t);
-  const copy = (t) => navigator.clipboard.writeText(t).then(() => notice("복사했어요."), () => notice("복사하지 못했어요."));
+  // the clipboard of the window the menu opened in: a popout's own document has the focus
+  const copy = (t, w) => w.navigator.clipboard.writeText(t).then(() => notice("복사했어요."), () => notice("복사하지 못했어요."));
 
   function show(x, y, items, from) {
     close();
@@ -44,7 +45,7 @@
     return [
       { label: "잘라내기", off: !picked || ro, run: () => { back(); doc.execCommand("cut"); } },
       { label: "복사", off: !picked, run: () => { back(); doc.execCommand("copy"); } },
-      { label: "붙여넣기", off: ro, run: () => navigator.clipboard.readText().then((t) => { back(); doc.execCommand("insertText", false, t); }, () => notice("Ctrl+V로 붙여넣어 주세요.")) },
+      { label: "붙여넣기", off: ro, run: () => doc.defaultView.navigator.clipboard.readText().then((t) => { back(); doc.execCommand("insertText", false, t); }, () => notice("Ctrl+V로 붙여넣어 주세요.")) },
       { label: "모두 선택", run: () => { f.focus(); if (box) f.select(); else doc.execCommand("selectAll"); } },
     ];
   }
@@ -63,9 +64,9 @@
       let host = t; while (host && !host.ctxItems) host = host.parentElement;
       const link = t.closest("a[href]");
       const items = field ? fieldItems(field)
-        : sel.trim() ? [{ label: "복사", run: () => copy(sel) }]
+        : sel.trim() ? [{ label: "복사", run: () => copy(sel, d.defaultView) }]
         : host ? host.ctxItems()
-        : link && /^https?:/.test(link.href) ? [{ label: "링크 복사", run: () => copy(link.href) }]
+        : link && /^https?:/.test(link.href) ? [{ label: "링크 복사", run: () => copy(link.href, d.defaultView) }]
         : [];
       if (items.length) show(x, y, items, t);
     });

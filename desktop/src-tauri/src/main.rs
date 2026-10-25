@@ -309,6 +309,8 @@ async fn ssh_connect_done(rt: tauri::State<'_, Arc<runtime::Runtime>>, ok: bool)
     let rt = Arc::clone(&rt);
     tauri::async_runtime::spawn_blocking(move || {
         let _activity = rt.activity()?;
+        // The tunnel is settled first, so an agents-file error cannot leave the replaced tunnel waiting.
+        let done = ssh_tunnel::finish(ok, rt.gate());
         if ok {
             if let Some((target, pin)) = ssh_tunnel::current() {
                 // Stop the built-in Arkism's agents file pointing at this PC; capture follows the server.
@@ -316,7 +318,7 @@ async fn ssh_connect_done(rt: tauri::State<'_, Arc<runtime::Runtime>>, ok: bool)
                 rt.agents_use_server(&target.host, target.port, key.as_deref(), &pin)?;
             }
         }
-        ssh_tunnel::finish(ok, rt.gate())
+        done
     })
     .await
     .map_err(|e| e.to_string())?

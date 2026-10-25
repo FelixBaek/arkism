@@ -94,9 +94,11 @@ fn claude(text: &str, url: Option<&str>, links: &mut serde_json::Value) -> Resul
     match url {
         Some(url) => {
             let prev = obj.get("model").cloned().unwrap_or(serde_json::Value::Null);
-            if prev.as_str() != Some(MODEL) {
+            let base = obj.get("env").and_then(|e| e.get("ANTHROPIC_BASE_URL")).cloned().unwrap_or(serde_json::Value::Null);
+            // Already linked (as `status` sees it): keep the first record. A user's own group/auto is still recorded.
+            let linked = prev.as_str() == Some(MODEL) && base.as_str().is_some_and(|u| u.starts_with("http://127.0.0.1:"));
+            if !linked {
                 // The user's own base URL too (null: there was none), put back on unlink.
-                let base = obj.get("env").and_then(|e| e.get("ANTHROPIC_BASE_URL")).cloned().unwrap_or(serde_json::Value::Null);
                 links["claude_code"] = serde_json::json!({ "model": prev, "base_url": base });
             }
             let env = obj.entry("env").or_insert_with(|| serde_json::json!({}));
@@ -238,6 +240,12 @@ mod tests {
         let mut old = serde_json::json!({ "claude_code": { "model": "opus" } });
         let off: serde_json::Value = serde_json::from_str(&claude(&on, None, &mut old).unwrap()).unwrap();
         assert_eq!(off, serde_json::json!({ "model": "opus" }));
+        // The user's own group/auto with their own URL is recorded too.
+        let mut own = serde_json::json!({});
+        let before = r#"{"model":"group/auto","env":{"ANTHROPIC_BASE_URL":"https://proxy.example"}}"#;
+        let on = claude(before, Some("http://127.0.0.1:8099"), &mut own).unwrap();
+        let off: serde_json::Value = serde_json::from_str(&claude(&on, None, &mut own).unwrap()).unwrap();
+        assert_eq!(off, serde_json::from_str::<serde_json::Value>(before).unwrap());
     }
 
     #[test]
