@@ -336,6 +336,10 @@ type aiSpec struct {
 	Skills       []string `json:"skills,omitempty"` // hub skill ids the runner puts into the instructions
 	// Origin tags the runner's routing call (meetings: kind, meeting_id, team_id, agent_id, trigger).
 	Origin map[string]string `json:"origin,omitempty"`
+	// Backend sends the step to that agent-runner connection instead of a local CLI; Run then names the step
+	// (kind, id, key, workflow_id, step_id, expert_id). key stays the same when an interrupted step is resumed.
+	Backend string            `json:"backend,omitempty"`
+	Run     map[string]string `json:"run,omitempty"`
 }
 
 // aiUsage is run-node's estimated token use of one call.
@@ -487,6 +491,15 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 	ports, def := x.ports(n.ID), ""
 	if len(x.out[n.ID]) > 0 {
 		def = x.out[n.ID][0].Port
+	}
+	if b := backendName(c["backend"]); b != "" {
+		if c["collab"] == "on" || retries > 0 {
+			// one step is one external task: workers or retries would start more of them under one key
+			return result{}, failf("bad_config", "외부 연결(%s)로 도는 단계는 함께 일하기·다시 시도를 쓸 수 없어요", b)
+		}
+		s.Backend = b
+		s.Run = map[string]string{"kind": "workflow", "id": x.run.ID, "key": fmt.Sprintf("%s/%s/%d", x.run.ID, n.ID, x.state(n.ID).Runs),
+			"workflow_id": x.item.ID, "step_id": n.ID, "expert_id": c["expert"]}
 	}
 	if !s.Once && c["collab"] == "on" {
 		return e.runCollab(ctx, c, s, limit, retries, ports, def)

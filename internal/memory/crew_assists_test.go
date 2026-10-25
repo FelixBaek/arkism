@@ -78,7 +78,7 @@ func TestCrewAssistLifecycle(t *testing.T) {
 	if err != nil || r.CrewAssist.Status != "pending" {
 		t.Fatal("create", r, err)
 	}
-	page, err := f.svc.PendingCrewAssists(testCtx, tokEngine, scopeA)
+	page, err := f.svc.PendingCrewAssists(testCtx, tokEngine, scopeA, false)
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != r.ID {
 		t.Fatal("queue", page.Items, err)
 	}
@@ -92,7 +92,7 @@ func TestCrewAssistLifecycle(t *testing.T) {
 	if _, err = f.svc.FinishCrewAssist(testCtx, tokEngine, r.ID, CrewAssistResult{Scope: scopeA, Status: "failed"}); !errors.Is(err, ErrConflict) {
 		t.Fatal("answered twice", err)
 	}
-	if page, _ = f.svc.PendingCrewAssists(testCtx, tokEngine, scopeA); len(page.Items) != 0 {
+	if page, _ = f.svc.PendingCrewAssists(testCtx, tokEngine, scopeA, false); len(page.Items) != 0 {
 		t.Fatal("answered request still queued")
 	}
 	got, err := f.svc.GetCrewAssist(testCtx, f.human, scopeA, r.ID)
@@ -127,5 +127,69 @@ func TestCrewInstallEnvelopeBoundary(t *testing.T) {
 	}
 	if validCrewAssist(CrewAssist{Kind: "install_skill", Prompt: strings.Repeat("x", 120513)}) || validCrewAssist(CrewAssist{Kind: "draft", Prompt: strings.Repeat("x", 20001)}) {
 		t.Fatal("input bound bypassed")
+	}
+}
+
+// An external runner's accepted try is reported running (with its trace), stays in the runner's queue only when asked,
+// outlives the ten-minute TTL, and still takes exactly one answer.
+func TestCrewAssistRunningByExternalRunner(t *testing.T) {
+	f, _ := crewRunFixture(t)
+	r, err := f.svc.CreateCrewAssist(testCtx, f.human, CrewAssistInput{Scope: scopeA, Assist: CrewAssist{Kind: "try", Expert: "@리서치", Prompt: "조사해 줘",
+		Trace: &CrewAssistTrace{Backend: "forged"}}})
+	if err != nil || r.CrewAssist.Trace != nil {
+		t.Fatal("a caller set the trace", r.CrewAssist, err)
+	}
+	trace := &CrewAssistTrace{Backend: "lab", TaskID: "t-1", State: "accepted", RequestedModel: "sonnet 5.5", NotApplied: []string{"model"}, Usage: "unknown"}
+	if _, err = f.svc.FinishCrewAssist(testCtx, tokEngine, r.ID, CrewAssistResult{Scope: scopeA, Status: "running"}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("running without a trace", err)
+	}
+	if _, err = f.svc.FinishCrewAssist(testCtx, tokEngine, r.ID, CrewAssistResult{Scope: scopeA, Status: "running", Trace: &CrewAssistTrace{Backend: "lab", State: "bogus"}}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("unknown trace state", err)
+	}
+	run, err := f.svc.FinishCrewAssist(testCtx, tokEngine, r.ID, CrewAssistResult{Scope: scopeA, Status: "running", Trace: trace})
+	if err != nil || run.CrewAssist.Status != "running" || run.CrewAssist.Trace.TaskID != "t-1" {
+		t.Fatal("accepted", run.CrewAssist, err)
+	}
+	if page, _ := f.svc.PendingCrewAssists(testCtx, tokEngine, scopeA, false); len(page.Items) != 0 {
+		t.Fatal("an old runner would see a running assist and run it again")
+	}
+	if page, _ := f.svc.PendingCrewAssists(testCtx, tokEngine, scopeA, true); len(page.Items) != 1 {
+		t.Fatal("a restarted runner cannot find the accepted assist")
+	}
+	run.CreatedAt = time.Now().Add(-time.Hour)
+	if expireAssist(run, time.Now()).CrewAssist.Status != "running" {
+		t.Fatal("an accepted task expired after the pending TTL")
+	}
+	run.UpdatedAt = time.Now().Add(-crewAssistRunningTTL - time.Minute)
+	if expireAssist(run, time.Now()).CrewAssist.Status != "failed" {
+		t.Fatal("a silent runner keeps the assist running for ever")
+	}
+	done, err := f.svc.FinishCrewAssist(testCtx, tokEngine, r.ID, CrewAssistResult{Scope: scopeA, Status: "done", Output: "결과", Trace: &CrewAssistTrace{Backend: "lab", TaskID: "t-1", State: "succeeded"}})
+	if err != nil || done.CrewAssist.Status != "done" || done.CrewAssist.Trace.State != "succeeded" {
+		t.Fatal("answer", done.CrewAssist, err)
+	}
+	if _, err = f.svc.FinishCrewAssist(testCtx, tokEngine, r.ID, CrewAssistResult{Scope: scopeA, Status: "running", Trace: trace}); !errors.Is(err, ErrConflict) {
+		t.Fatal("a late progress report reopened an answered assist", err)
+	}
+	// Only try assists run on an external runner.
+	fill, _ := f.svc.CreateCrewAssist(testCtx, f.human, CrewAssistInput{Scope: scopeA, Assist: CrewAssist{Kind: "fill", Persona: "p", Prompt: "x"}})
+	if _, err = f.svc.FinishCrewAssist(testCtx, tokEngine, fill.ID, CrewAssistResult{Scope: scopeA, Status: "running", Trace: trace}); !errors.Is(err, ErrConflict) {
+		t.Fatal("a fill assist went running", err)
+	}
+}
+
+func TestCrewAgentBackendField(t *testing.T) {
+	a := Crew{Type: "agent", Name: "리서치", Handle: "리서치", Instructions: "조사한다", Model: "sonnet 5.5", Backend: "lab-runner"}
+	if !validCrew(a) {
+		t.Fatal("agent with a backend refused")
+	}
+	for _, bad := range []string{"Lab", "lab runner", "-x", "https://x", strings.Repeat("a", 41)} {
+		if a.Backend = bad; validCrew(a) {
+			t.Fatal("bad backend name accepted", bad)
+		}
+	}
+	p := Crew{Type: "persona", Name: "p", Instructions: "x", Backend: "lab"}
+	if validCrew(p) {
+		t.Fatal("a persona took a backend")
 	}
 }

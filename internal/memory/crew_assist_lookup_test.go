@@ -47,7 +47,7 @@ func TestCrewAssistRequestLookup(t *testing.T) {
 			t.Fatal("lookup state", state, got, e)
 		}
 	}
-	if page, e := f.svc.PendingCrewAssists(testCtx, tokEngine, scopeA); e != nil || len(page.Items) != 0 {
+	if page, e := f.svc.PendingCrewAssists(testCtx, tokEngine, scopeA, false); e != nil || len(page.Items) != 0 {
 		t.Fatal("completed/expired still queued", e)
 	}
 	if _, e := f.svc.GetCrewAssistByRequest(testCtx, f.human2, scopeA, key); !errors.Is(e, ErrNotFound) {

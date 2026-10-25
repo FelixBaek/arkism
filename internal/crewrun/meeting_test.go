@@ -574,3 +574,21 @@ func TestRunBudgetWaitResumesOnDecision(t *testing.T) {
 		}
 	}
 }
+
+func TestMeetingRefusesAMemberOnAnExternalRunner(t *testing.T) {
+	items := baseItems(teamItem("round_robin", &TeamEnding{MaxRounds: 1}, threeMembers()...))
+	items[1].Crew.Backend = "mine" // 작성자 works on an agent-runner connection
+	rig := newMeetingRig(t, items...)
+	rig.add("m", Meeting{MaxRounds: 1})
+	m := rig.drive(t, "m")
+	for _, s := range rig.ai.specs {
+		if strings.Contains(s.Instructions, "작성자의 지시") {
+			t.Fatal("the member on a connection was run on Arkism's path", s)
+		}
+	}
+	for _, turn := range m.Turns {
+		if turn.Kind == "turn" && turn.AgentID == "w" && (turn.OK || !strings.Contains(turn.Error, "외부 연결")) {
+			t.Fatalf("the member's turn should say why it was skipped: %+v", turn)
+		}
+	}
+}

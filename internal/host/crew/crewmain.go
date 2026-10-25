@@ -34,7 +34,7 @@ func init() {
 
 const crewProg = "arkism crew"
 
-const crewUsage = "{resolve,run-node,handoff,start,status,decide,hook-context,list,route,keys,accounts,providers} ..."
+const crewUsage = "{resolve,run-node,handoff,start,status,decide,hook-context,list,route,keys,accounts,providers,backends} ..."
 
 // crewCommand is one parsed subcommand: its options and the positionals it needs.
 type crewCommand struct {
@@ -65,9 +65,14 @@ var crewCommands = map[string]crewCommand{
 	"providers show":   {},
 	"providers report": {bools: []string{"fresh"}},
 	"providers watch":  {valued: []string{"interval", "report-every"}, floats: []string{"interval", "report-every"}},
+	"backends list":    {},
+	"backends add":     {valued: []string{"name", "url"}, bools: []string{"local", "isolated", "own-model"}, required: []string{"name", "url"}},
+	"backends check":   {positional: []string{"name"}},
+	"backends remove":  {positional: []string{"name"}},
+	"backends use":     {valued: []string{"expert"}, positional: []string{"name"}, required: []string{"expert"}},
 }
 
-var crewGroups = map[string]string{"keys": "{list,add,remove}", "accounts": "{list,add,remove}", "providers": "{show,report,watch}"}
+var crewGroups = map[string]string{"keys": "{list,add,remove}", "accounts": "{list,add,remove}", "providers": "{show,report,watch}", "backends": "{list,add,check,remove,use}"}
 
 func quoteChoices(cs []string) string {
 	out := make([]string, len(cs))
@@ -182,6 +187,9 @@ func runNodeCLI(raw string) map[string]any {
 		}
 		return out
 	}
+	if out["backend"] != nil {
+		return out // an external runner's usage is what it reported or unknown, never Arkism's estimate
+	}
 	if out["ok"] == true {
 		out["usage"] = usageOf(spec, out)
 	}
@@ -257,11 +265,14 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 		return runRouteCmd(a, stdout)
 	case "providers show", "providers report", "providers watch":
 		return runProvidersCmd(name, a, floats, stdin, stdout)
-	case "accounts add", "accounts remove", "accounts list":
-		return runAccountsCmd(name, a, stdout)
+	case "accounts add", "accounts remove", "accounts list", "backends list", "backends add", "backends check", "backends remove", "backends use":
+		if strings.HasPrefix(name, "accounts ") {
+			return runAccountsCmd(name, a, stdout)
+		}
+		return runBackendsCLI(name, a, stdin, stdout)
 	case "keys list", "keys add", "keys remove":
 		return runKeysCmd(name, a, floats, stdin, stdout)
-	}
+}
 	return 0, nil
 }
 
@@ -350,6 +361,19 @@ func runProvidersCmd(name string, a *args, floats map[string]float64, stdin io.R
 			return 0, err
 		}
 	}
+	return 0, nil
+}
+
+func runBackendsCLI(name string, a *args, stdin io.Reader, stdout io.Writer) (int, error) {
+	line := ""
+	if name == "backends add" { // the token comes on stdin, never as an argument
+		line, _ = bufio.NewReader(stdin).ReadString('\n')
+	}
+	out, err := runBackendsCmd(name, a, strings.TrimSpace(line))
+	if err != nil {
+		return 0, err
+	}
+	fmt.Fprintln(stdout, dumpIndent(out))
 	return 0, nil
 }
 

@@ -15,9 +15,11 @@ import (
 // a fill persona or the expert itself, and posts the answer back. Arkism
 // makes no model call of its own.
 const (
-	colCrewAssists   = "crew_assists"
-	crewAssistTTL    = 10 * time.Minute
-	crewAssistPrompt = 20000
+	colCrewAssists = "crew_assists"
+	crewAssistTTL  = 10 * time.Minute
+	// An assist an external agent runner accepted (status running) waits this long after its last report.
+	crewAssistRunningTTL = 24 * time.Hour
+	crewAssistPrompt     = 20000
 )
 
 // Kinds: fill (a whole definition from a description), polish (rewrite one
@@ -27,7 +29,10 @@ const (
 // suggest proposes new skills from recent memories; install_skill has the runner write a SKILL.md
 // (prompt is {"name","content","agents"} JSON, no model call) into the agents' skill folders.
 var crewAssistKinds = []string{"fill", "polish", "recommend", "classify", "try", "explain", "draft", "suggest", "install_skill", "fix", "comfy", "review", "build", "title", "json"}
-var crewAssistStates = []string{"pending", "done", "failed"}
+var crewAssistStates = []string{"pending", "running", "done", "failed"}
+
+// crewTraceStates are an external runner's task states as the host runner reports them (backends.go).
+var crewTraceStates = []string{"", "starting", "accepted", "running", "waiting_approval", "succeeded", "failed", "cancel_requested", "cancelled", "unknown"}
 
 type CrewAssist struct {
 	Kind    string `json:"kind"`
@@ -39,6 +44,36 @@ type CrewAssist struct {
 	Output  string `json:"output,omitempty"`
 	Model   string `json:"model,omitempty"`
 	Error   string `json:"error,omitempty"`
+	// Trace: set by the host runner when an external agent runner did the work (try with an expert's backend).
+	Trace *CrewAssistTrace `json:"trace,omitempty"`
+}
+
+// CrewAssistTrace says which external runner did a try and what it did and did not apply; ids and names only.
+type CrewAssistTrace struct {
+	Backend        string   `json:"backend"`
+	TaskID         string   `json:"task_id,omitempty"`
+	State          string   `json:"state,omitempty"`
+	RequestedModel string   `json:"requested_model,omitempty"`
+	Model          string   `json:"model,omitempty"` // the model the runner reported; empty when it did not say
+	NotApplied     []string `json:"not_applied,omitempty"`
+	Context        []string `json:"context,omitempty"` // what was sent, by name: instructions, skill:<id>
+	Usage          string   `json:"usage,omitempty"`   // reported | unknown
+	Fallback       bool     `json:"fallback"`          // always false: an external task is never re-run elsewhere
+}
+
+var crewTraceLabel = regexp.MustCompile(`^[A-Za-z0-9._:@/ -]{1,128}$`)
+
+func validCrewAssistTrace(t *CrewAssistTrace) bool {
+	if t == nil {
+		return true
+	}
+	ok := crewTraceLabel.MatchString(t.Backend) && (t.TaskID == "" || crewTraceLabel.MatchString(t.TaskID)) && slices.Contains(crewTraceStates, t.State) &&
+		(t.RequestedModel == "" || crewTraceLabel.MatchString(t.RequestedModel)) && (t.Model == "" || crewTraceLabel.MatchString(t.Model)) &&
+		(t.Usage == "" || t.Usage == "reported" || t.Usage == "unknown") && len(t.NotApplied) <= 16 && len(t.Context) <= 32
+	for _, x := range append(slices.Clone(t.NotApplied), t.Context...) {
+		ok = ok && crewTraceLabel.MatchString(x)
+	}
+	return ok
 }
 
 var crewAssistRequestID = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -59,6 +94,8 @@ type CrewAssistResult struct {
 	Output string `json:"output,omitempty"`
 	Model  string `json:"model,omitempty"`
 	Error  string `json:"error,omitempty"`
+	// Trace and status running: an external runner accepted the work and the answer comes later.
+	Trace *CrewAssistTrace `json:"trace,omitempty"`
 }
 
 func validCrewAssist(a CrewAssist) bool {
@@ -71,11 +108,15 @@ func validCrewAssist(a CrewAssist) bool {
 }
 
 // expired reads a request nobody answered within the TTL as failed, so the
-// screen stops waiting when the runner is off.
+// screen stops waiting when the runner is off. An accepted (running) one waits a day from its last report.
 func expireAssist(r Record, now time.Time) Record {
 	if a := r.CrewAssist; a != nil && a.Status == "pending" && now.Sub(r.CreatedAt) > crewAssistTTL {
 		c := *a
 		c.Status, c.Error = "failed", "expired: 서버의 모델 설정 실행기(arkism-providers)가 받지 않았어요"
+		r.CrewAssist = &c
+	} else if a != nil && a.Status == "running" && now.Sub(r.UpdatedAt) > crewAssistRunningTTL {
+		c := *a
+		c.Status, c.Error = "failed", "expired: 외부 실행기의 결과를 하루 동안 받지 못했어요 (작업은 그쪽에서 계속됐을 수 있어요)"
 		r.CrewAssist = &c
 	}
 	return r
@@ -83,7 +124,7 @@ func expireAssist(r Record, now time.Time) Record {
 
 func (s *Service) CreateCrewAssist(ctx context.Context, token string, in CrewAssistInput) (Record, error) {
 	// Model on create asks for that model (the runner falls back when it cannot run it); the runner reports the one that answered.
-	in.Assist.Status, in.Assist.Output, in.Assist.Error = "pending", "", ""
+	in.Assist.Status, in.Assist.Output, in.Assist.Error, in.Assist.Trace = "pending", "", "", nil
 	if !validScope(in.Scope) || in.RequestID != "" && !crewAssistRequestID.MatchString(in.RequestID) || !validCrewAssist(in.Assist) || in.Assist.Model != "" && !crewModelRe.MatchString(in.Assist.Model) {
 		return Record{}, ErrInvalid
 	}
@@ -154,8 +195,9 @@ func (s *Service) GetCrewAssistByRequest(ctx context.Context, token string, scop
 	return expireAssist(r, time.Now()), nil
 }
 
-// PendingCrewAssists is the runner's queue, oldest first.
-func (s *Service) PendingCrewAssists(ctx context.Context, token string, scope Scope) (CrewRunPage, error) {
+// PendingCrewAssists is the runner's queue, oldest first; withRunning adds the ones an external runner accepted,
+// so a restarted host runner asks that runner again instead of starting the work twice.
+func (s *Service) PendingCrewAssists(ctx context.Context, token string, scope Scope, withRunning bool) (CrewRunPage, error) {
 	if !validScope(scope) {
 		return CrewRunPage{}, ErrInvalid
 	}
@@ -169,17 +211,19 @@ func (s *Service) PendingCrewAssists(ctx context.Context, token string, scope Sc
 	now := time.Now()
 	out := CrewRunPage{Items: []Record{}}
 	for i := len(rows) - 1; i >= 0; i-- {
-		if r := expireAssist(rows[i], now); r.CrewAssist != nil && r.CrewAssist.Status == "pending" {
+		if r := expireAssist(rows[i], now); r.CrewAssist != nil && (r.CrewAssist.Status == "pending" || withRunning && r.CrewAssist.Status == "running") {
 			out.Items = append(out.Items, r)
 		}
 	}
 	return out, nil
 }
 
-// FinishCrewAssist records the runner's answer once.
+// FinishCrewAssist records the runner's answer once. Status running (with a trace) is a progress report an external
+// runner's accepted work may send any number of times before the answer.
 func (s *Service) FinishCrewAssist(ctx context.Context, token, id string, in CrewAssistResult) (Record, error) {
 	if !validScope(in.Scope) || !validRunLabel(id, 256) || in.Status == "pending" || !slices.Contains(crewAssistStates, in.Status) ||
-		runes(in.Output) > 20000 || runes(in.Error) > 500 || in.Model != "" && !crewModelRe.MatchString(in.Model) {
+		runes(in.Output) > 20000 || runes(in.Error) > 500 || in.Model != "" && !crewModelRe.MatchString(in.Model) ||
+		!validCrewAssistTrace(in.Trace) || in.Status == "running" && (in.Trace == nil || in.Output != "") {
 		return Record{}, ErrInvalid
 	}
 	if err := noSecrets(in); err != nil {
@@ -201,11 +245,14 @@ func (s *Service) FinishCrewAssist(ctx context.Context, token, id string, in Cre
 		if r.CrewAssist == nil {
 			return ErrNotFound
 		}
-		if expireAssist(r, time.Now()).CrewAssist.Status != "pending" {
+		if st := expireAssist(r, time.Now()).CrewAssist.Status; st != "pending" && st != "running" || r.CrewAssist.Kind != "try" && in.Status == "running" {
 			return ErrConflict
 		}
 		a := *r.CrewAssist
 		a.Status, a.Output, a.Model, a.Error = in.Status, in.Output, in.Model, in.Error
+		if in.Trace != nil {
+			a.Trace = in.Trace
+		}
 		prev := r.Revision
 		r.CrewAssist, r.Revision, r.UpdatedAt = &a, r.Revision+1, time.Now().UTC().Truncate(time.Millisecond)
 		if err := tx.Replace(ctx, colCrewAssists, r, prev); err != nil {
@@ -227,7 +274,7 @@ func crewAssistRoutes(mux routeRegistrar, s *Service) {
 		respond(w, out, e)
 	})
 	mux.HandleFunc("GET /v1/crew/assists", func(w http.ResponseWriter, r *http.Request) {
-		out, e := s.PendingCrewAssists(r.Context(), bearer(r), scopeQuery(r))
+		out, e := s.PendingCrewAssists(r.Context(), bearer(r), scopeQuery(r), r.URL.Query().Get("include") == "running")
 		respond(w, out, e)
 	})
 	mux.HandleFunc("GET /v1/crew/assists/by-request/{request_id}", func(w http.ResponseWriter, r *http.Request) {

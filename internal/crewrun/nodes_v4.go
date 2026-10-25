@@ -32,6 +32,23 @@ import (
 	"time"
 )
 
+// backendName is a step's agent-runner connection: "" (and "local") is Arkism's own path.
+func backendName(v string) string {
+	if v = strings.TrimSpace(v); v == "local" {
+		return ""
+	}
+	return v
+}
+
+// stepBackend is the connection a node would run on (its own, else its expert's).
+func (e *Engine) stepBackend(n Node) string {
+	if b := strings.TrimSpace(n.Config["backend"]); b != "" || n.Type != "expert" {
+		return backendName(b)
+	}
+	it, _ := e.item(strings.TrimSpace(n.Config["expert"]))
+	return backendName(it.Crew.Backend)
+}
+
 func (e *Engine) runExpert(ctx context.Context, x *runExec, n Node, input any) (result, error) {
 	c := maps.Clone(n.Config)
 	if c == nil {
@@ -44,6 +61,7 @@ func (e *Engine) runExpert(ctx context.Context, x *runExec, n Node, input any) (
 	c["model"] = cmp.Or(c["model"], it.Crew.Model)
 	c["effort"] = cmp.Or(c["effort"], it.Crew.Effort)
 	c["instructions"] = joinText(it.Crew.Instructions, c["instructions"])
+	c["backend"] = cmp.Or(c["backend"], it.Crew.Backend) // the step's own choice wins; "local" picks Arkism's path
 	delete(c, "persona")
 	n.Config = c
 	return e.runAI(ctx, x, n, input)

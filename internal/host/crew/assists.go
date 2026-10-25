@@ -301,6 +301,9 @@ func assistResult(out map[string]any) map[string]any {
 		status = "done"
 	}
 	res := map[string]any{"status": status, "output": clipRunes(sOr(out["output"]), 20000)}
+	if t, ok := out["backend"].(map[string]any); ok {
+		res["trace"] = traceBody(t)
+	}
 	if m := sOr(out["model"]); m != "" && serverModelID.MatchString(m) {
 		res["model"] = m
 	}
@@ -421,7 +424,7 @@ var (
 	assistDone = map[string]host.Obj{}
 )
 
-var assistOrder = []string{"status", "output", "model", "error"}
+var assistOrder = []string{"status", "output", "model", "error", "trace"}
 
 func assistJob(rec map[string]any, answer func(map[string]any) (map[string]any, error)) {
 	if answer == nil {
@@ -474,7 +477,7 @@ func assistJob(rec map[string]any, answer func(map[string]any) (map[string]any, 
 
 // assistsRound starts every waiting assist this runner is not already working on.
 func assistsRound() (int, error) {
-	page, err := runnerCall("/v1/crew/assists?"+scopeQuery(), nil, 15*time.Second)
+	page, err := runnerCall("/v1/crew/assists?"+scopeQuery("include", "running"), nil, 15*time.Second)
 	if err != nil {
 		return 0, err
 	}
@@ -570,6 +573,26 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 	}
 	spec := map[string]any{"model": model, "effort": effort, "instructions": instructions, "task": sOr(a["prompt"]), "once": true,
 		"access": "read", "origin": map[string]any{"kind": "assist", "agent_id": sOr(item["id"]), "trigger": trigger}}
+	if b := strings.TrimSpace(sOr(c["backend"])); b != "" && b != "local" {
+		// An agent-runner connection: never a fallback model or another runner (a task may already run there).
+		spec["backend"] = b
+		spec["run"] = assistRun(rec, item)
+		id := sOr(rec["id"])
+		spec["on_accept"] = func(trace map[string]any) {
+			body := host.Obj{{Key: "scope", Value: scope()}, {Key: "status", Value: "running"}, {Key: "trace", Value: traceBody(trace)}}
+			if _, err := runnerCall("/v1/crew/assists/"+pyQuote(id, "/")+"/result", body, 30*time.Second); err != nil {
+				fmt.Fprintf(os.Stderr, "AI 도움 접수 알림 실패: %s\n", errName(err))
+			}
+		}
+		out, err := runAgentSpec(spec, runner)
+		if err != nil {
+			if isCrewErr(err) {
+				return failedResult(err.Error()), nil
+			}
+			return nil, err
+		}
+		return assistResult(out), nil
+	}
 	out, err := runAgentSpec(spec, runner)
 	if (err != nil || out["ok"] != true) && truthy(c["fallback_model"]) {
 		out, err = runAgentSpec(withKey(spec, "model", sOr(c["fallback_model"])), runner)
@@ -613,6 +636,9 @@ func runAgentSpec(spec map[string]any, runner runFn) (map[string]any, error) {
 		}
 		return nil, err
 	}
+	if out["backend"] != nil {
+		return out, nil // an external runner's usage is what it reported or unknown, never Arkism's estimate
+	}
 	if out["ok"] == true && out["usage"] == nil {
 		out["usage"] = usageOf(spec, out)
 	}
@@ -620,4 +646,27 @@ func runAgentSpec(spec map[string]any, runner runFn) (map[string]any, error) {
 		reportFixed(spec, out)
 	}
 	return out, nil
+}
+
+// assistRun names the assist a connection's task belongs to; a record already running was accepted before a restart,
+// so its task is asked about again (the server's trace keeps its id) instead of started anew.
+func assistRun(rec, item map[string]any) map[string]any {
+	id := sOr(rec["id"])
+	run := map[string]any{"kind": "assist", "id": id, "key": "assist/" + id, "expert_id": sOr(item["id"])}
+	if a := obj(rec["crew_assist"]); a["status"] == "running" {
+		run["resume"] = "1"
+		run["task_id"] = sOr(obj(a["trace"])["task_id"])
+	}
+	return run
+}
+
+// traceBody is the trace in the server's shape (CrewAssistTrace); counters the host keeps for itself stay out.
+func traceBody(t map[string]any) host.Obj {
+	out := host.Obj{}
+	for _, k := range []string{"backend", "task_id", "state", "requested_model", "model", "not_applied", "context", "usage", "fallback"} {
+		if v, ok := t[k]; ok && v != nil && v != "" {
+			out = append(out, host.KV{Key: k, Value: v})
+		}
+	}
+	return out
 }

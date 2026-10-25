@@ -70,6 +70,7 @@ type Crew struct {
 	FallbackModel   string            `json:"fallback_model,omitempty"`
 	MaxOutputTokens int               `json:"max_output_tokens,omitempty"`
 	OutputFormat    string            `json:"output_format,omitempty"`
+	Backend         string            `json:"backend,omitempty"` // the host runner's agent-runner connection (expert)
 	Budget          *AgentBudget      `json:"budget,omitempty"`
 	Members         []TeamMember      `json:"members,omitempty"`
 	Mode            string            `json:"mode,omitempty"`
