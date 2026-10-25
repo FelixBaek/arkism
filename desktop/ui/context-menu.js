@@ -6,7 +6,7 @@
   const close = () => { menu?.remove(); menu = null; };
   const notice = (t) => window.ArkismNotice?.(t);
   // the clipboard of the window the menu opened in: a popout's own document has the focus; a missing API rejects too
-  const copy = (t, w) => new Promise((ok) => ok(w.navigator.clipboard.writeText(t))).then(() => notice("복사했어요."), () => notice("복사하지 못했어요."));
+  const copy = (t, w) => Promise.resolve().then(() => w.navigator.clipboard.writeText(t)).then(() => notice("복사했어요."), () => notice("복사하지 못했어요."));
 
   function show(x, y, items, from) {
     close();

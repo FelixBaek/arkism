@@ -20,7 +20,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
       const c = document.createElement("canvas"); c.width = 1500; c.height = 750;
       const g = c.getContext("2d"); g.fillStyle = "#3a6"; g.fillRect(0, 0, 1500, 750); g.fillStyle = "#e33"; g.fillRect(100, 100, 600, 300);
       const file = new File([await new Promise(r => c.toBlob(r, "image/png"))], "a.png", { type: "image/png" });
-      const el = (tag, cls = "", text = "") => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+      const el = (tag, cls = "", text = "") => { const n = document.createElement(tag); if (cls) { n.className = cls; } if (text) { n.textContent = text; } return n; };
       const notices = [];
       const picker = window.ArkismCoverPicker({ el, icon: () => el("i"), request: async () => ({ items: [], total_pages: 1 }), query: (o) => new URLSearchParams(o).toString(), state: { scope: "s" }, notice: (t) => notices.push(t) });
       const out = new Promise(r => picker.open({ current: null, onPick: r }));
