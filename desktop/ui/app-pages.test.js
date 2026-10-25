@@ -385,7 +385,7 @@ test("고급: ComfyUI address, settings transfer, doctor, backups and erase", as
 
   blobs = [];
   await press("PC 설정 내보내기", side());
-  assert.match(notice(), /설정 파일을 저장/);
+  assert.match(notice(), /설정 파일 다운로드를 시작했어요/);
   nextFile = file(await blobs[0].text());
   const reloads = app.window._reloaded || 0;
   await press("PC 설정 가져오기", side()); await app.settle(700);
