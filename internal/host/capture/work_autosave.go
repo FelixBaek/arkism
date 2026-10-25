@@ -136,11 +136,6 @@ func autosaveHeader(job any, request autosaveRequest, scope any) (map[string]any
 	return value, nil
 }
 
-// autosavePendingVersion hashes a pending status and value.
-func autosavePendingVersion(status, value any) string {
-	return sha256Hex([]byte(host.MustDumps(pyNorm([]any{status, value}), host.DumpOpts{SortKeys: true, NoASCII: true, Compact: true})))
-}
-
 func autosaveSaveRevision(job any) (int64, error) {
 	expected, _ := host.Int(autosaveItem(job, "expected_revision"))
 	revision := any(nil)

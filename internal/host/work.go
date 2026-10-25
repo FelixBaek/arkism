@@ -170,7 +170,7 @@ func workPayload(name string, arguments map[string]any) (map[string]any, error) 
 
 // checkWorkPayload enforces the per-tool required fields and the list_work limit default.
 func checkWorkPayload(name string, payload map[string]any) error {
-	if name != "list_work" && truthy(payload["id"]) == false {
+	if name != "list_work" && !truthy(payload["id"]) {
 		return errors.New("checkpoint id required")
 	}
 	if name == "save_work" {

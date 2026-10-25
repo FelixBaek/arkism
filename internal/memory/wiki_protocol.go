@@ -272,7 +272,6 @@ func wikiMerge(old, add, mode, section string) (string, string, bool) {
 		if utf8.RuneCountInString(old) <= wikiRewriteMaxRunes {
 			return add, mode, add != old
 		}
-		mode = "append"
 	case "replace-section":
 		lines := strings.Split(old, "\n")
 		start, stop := -1, len(lines)

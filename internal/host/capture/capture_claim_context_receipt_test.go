@@ -791,11 +791,11 @@ func TestCaptureContextReceiptPartialCleanupRechecksInputs(t *testing.T) {
 	for _, kind := range []string{"reference_bytes", "partial_bytes", "partial_identity", "directory_identity", "late_policy"} {
 		t.Run(kind, func(t *testing.T) {
 			capFake(t)
-			_, partial, content, _ := claimReceiptReferenceFixture(t, "nonprefix")
+			_, partial, _, _ := claimReceiptReferenceFixture(t, "nonprefix")
 			_, _, _, full := contextReceiptFixture(t)
 			// Turn the foreign fixture into a real expired prefix, then mutate
 			// only after both scan passes have selected this complete reference.
-			content = full[:len(full)/2]
+			content := full[:len(full)/2]
 			if err := os.WriteFile(partial, content, 0o600); err != nil {
 				t.Fatal(err)
 			}

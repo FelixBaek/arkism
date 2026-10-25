@@ -64,36 +64,6 @@ func (s *Service) memoryReviewerAllowed(d Decision, scope Scope, kind string) bo
 	return false
 }
 
-func checkAutomaticMemoryReview(ctx context.Context, tx Tx, r Record, review CandidateReviewInput) error {
-	if review.Action == "reject" {
-		return nil
-	}
-	if slices.Contains(r.Tags, pendingCaptureCorrectionTag) && review.Conflict == nil {
-		return ErrDenied
-	}
-	if r.Kind == "episodic" {
-		return ErrDenied
-	}
-	if slices.Contains(r.Tags, "review:instruction_like") || instructionLike.MatchString(r.Text+" "+review.Content) {
-		if !slices.Contains(r.Tags, "basis:explicit_user") {
-			return ErrDenied
-		}
-		sources, err := sourceMetadata(ctx, tx, r.Scope, r.Sources)
-		if err != nil {
-			return err
-		}
-		if len(sources) == 0 {
-			return ErrDenied
-		}
-		for _, source := range sources {
-			if source.TrustLevel != "user_authored" {
-				return ErrDenied
-			}
-		}
-	}
-	return nil
-}
-
 func reviewOperationID(in CandidateReviewInput, principal string) string {
 	return "mr_" + ContentHash(structuredText(in.Scope)+"\n"+principal+"\n"+in.OperationID)
 }

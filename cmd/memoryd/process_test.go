@@ -169,16 +169,6 @@ func freeAddress(t *testing.T) string {
 	return ""
 }
 
-func listening(address string) func(string) bool {
-	return func(string) bool {
-		c, err := net.DialTimeout("tcp", address, 100*time.Millisecond)
-		if err == nil {
-			_ = c.Close()
-		}
-		return err == nil
-	}
-}
-
 type testDB struct {
 	url   string
 	token string // a service principal with every permission in default/default

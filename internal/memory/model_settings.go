@@ -33,7 +33,6 @@ const (
 
 var providerKinds = []string{"subscription", "api"}
 var providerAccountStates = []string{"connected", "expired", "missing"}
-var providerRequestKinds = []string{"key_add", "key_test", "key_remove", "model_test", "cli_update", "models_refresh"}
 var providerIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
 var providerModelRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}$`)
 var providerCLIVersionRe = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$`)

@@ -358,8 +358,6 @@ func eachLine(path string, offset int64, fn func(raw []byte, start int64) error)
 	}
 }
 
-type userTurn = map[string]any
-
 // readNew returns user-typed texts, the last assistant text and the entrypoint after offset.
 func readNew(transcript string, offset int64, archiveContext any) ([]any, string, int64, string, error) {
 	users := []any{}

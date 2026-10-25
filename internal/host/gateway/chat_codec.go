@@ -326,7 +326,7 @@ func httpURL(url string) bool {
 
 // bracketHost reports whether a netloc with brackets holds a valid IPv6 or IPvFuture literal.
 func bracketHost(hostport string) bool {
-	host := hostport
+	var host string
 	if before, bracketed, ok := strings.Cut(hostport, "["); ok {
 		if before != "" {
 			return false
