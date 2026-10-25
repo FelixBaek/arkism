@@ -34,3 +34,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 0
+  - package-ecosystem: npm
+    directory: /desktop/frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      npm-minor:
+        applies-to: security-updates
+        update-types: [minor, patch]
