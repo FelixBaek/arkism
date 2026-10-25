@@ -453,6 +453,9 @@ func assistJob(rec map[string]any, answer func(map[string]any) (map[string]any, 
 	assistMu.Unlock()
 	if body == nil {
 		res, err := answer(rec)
+		if errors.Is(err, errNotMine) {
+			return
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "AI 도움 응답 실패: %s\n", errName(err))
 			return
@@ -590,8 +593,15 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 	}
 	spec := map[string]any{"model": model, "effort": effort, "instructions": instructions, "task": sOr(a["prompt"]), "once": true,
 		"access": "read", "origin": map[string]any{"kind": "assist", "agent_id": sOr(item["id"]), "trigger": trigger}}
-	if b := strings.TrimSpace(sOr(c["backend"])); b != "" && b != "local" {
+	b := strings.TrimSpace(sOr(c["backend"]))
+	if st := obj(rec["crew_assist"]); st["status"] == "running" {
+		b = sOr(obj(st["trace"])["backend"]) // the runner that took it, even if the expert was moved since
+	}
+	if b != "" && b != "local" {
 		// An agent-runner connection: never a fallback model or another runner (a task may already run there).
+		if !ownsAssist(rec, b) {
+			return nil, errNotMine
+		}
 		spec["backend"] = b
 		spec["run"] = assistRun(rec, item)
 		id := sOr(rec["id"])
@@ -676,6 +686,19 @@ func assistRun(rec, item map[string]any) map[string]any {
 		run["task_id"] = sOr(obj(a["trace"])["task_id"])
 	}
 	return run
+}
+
+// errNotMine: another host runner's assist; this one leaves it alone.
+var errNotMine = errors.New("not this host's assist")
+
+// ownsAssist says whether this host runner should act on an assist for connection b. A running one belongs to the host
+// that started it (its ledger); a new one to any host with that connection. Another host never fails or re-runs it.
+func ownsAssist(rec map[string]any, b string) bool {
+	if obj(rec["crew_assist"])["status"] == "running" {
+		return readEntry("assist/"+sOr(rec["id"])) != nil
+	}
+	all, err := loadBackends()
+	return err == nil && all[b] != nil
 }
 
 // traceBody is the trace in the server's shape (CrewAssistTrace); counters the host keeps for itself stay out.

@@ -589,6 +589,9 @@ func (x *runExec) loop(ctx context.Context) error {
 			inputs[id] = x.inputFor(id)
 			s := x.state(id)
 			s.Status, s.Error = "running", ""
+			if b := x.e.stepBackend(x.nodes[id]); b != "" {
+				s.Backend = map[string]any{"backend": b, "state": "starting"} // the host runner's trace replaces it at the end
+			}
 			s.Runs++
 			x.stamp(s)
 		}
@@ -708,6 +711,7 @@ type result struct {
 	summary string
 	also    map[string]any // other nodes finished by this one (loop body)
 	tokens  int64          // AI tokens the node used
+	trace   map[string]any // agent-runner trace of a step on a connection
 }
 
 type nodeError struct{ code, msg string }
@@ -728,6 +732,9 @@ func (x *runExec) runNode(ctx context.Context, id string, input any) error {
 	// A sibling read node may have ended the run meanwhile; this node's own
 	// outcome is still recorded, but it changes the run no further.
 	open := !terminal(x.run.State.Status)
+	if res.trace != nil {
+		st.Backend = res.trace
+	}
 	switch {
 	case err != nil:
 		st.Status, st.Error = "failed", clip(errText(err), 500)

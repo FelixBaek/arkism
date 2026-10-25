@@ -44484,6 +44484,9 @@
           },
           "tokens": {
             "type": "integer"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/WireResponseCrewAssistTrace"
           }
         },
         "additionalProperties": false,

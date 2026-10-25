@@ -730,3 +730,29 @@ func TestAtNameOnExternalRunnerAcceptedThenAnswered(t *testing.T) {
 		t.Fatal("answer sent again")
 	}
 }
+
+// A workflow run whose step is on an external runner tells the thread once and waits as long as an @call does.
+func TestWorkflowRunOnExternalRunnerWaitsLong(t *testing.T) {
+	h := setup(t)
+	h.f.bots[0]["bot"].(map[string]any)["discord_bot"].(map[string]any)["channels"] = []any{
+		map[string]any{"channel_id": "c1", "auto_start": true, "action": map[string]any{"kind": "workflow", "id": "wf1"}}}
+	h.m.Tick()
+	h.post("u1", "c1", "이번 주 정리")
+	h.f.mu.Lock()
+	h.f.runs["run1"]["crew_run"] = map[string]any{"status": "running", "nodes": map[string]any{
+		"a": map[string]any{"status": "running", "backend": map[string]any{"backend": "mine", "state": "starting"}}}}
+	h.f.mu.Unlock()
+	h.m.Tick()
+	h.m.Tick()
+	if got := h.sess.sentTo("t1"); len(got) != 2 || !strings.Contains(got[1], "외부 실행기에서 도는 단계") {
+		t.Fatalf("told once: %q", got)
+	}
+	h.now = h.now.Add(5 * time.Hour)
+	h.f.mu.Lock()
+	h.f.runs["run1"]["crew_run"] = map[string]any{"status": "succeeded", "summary": "끝"}
+	h.f.mu.Unlock()
+	h.m.Tick()
+	if got := h.sess.sentTo("t1"); len(got) != 3 || got[2] != "**요약** · 완료\n끝" {
+		t.Fatalf("result after 5h: %q", got)
+	}
+}

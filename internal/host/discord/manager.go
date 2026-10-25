@@ -1077,6 +1077,10 @@ func (m *Manager) followJobsRun(b *bot, j *job) bool {
 	}
 	r := body(rec, "crew_run")
 	switch st := str(r["status"]); st {
+	case "running":
+		if !j.Accepted && onRunner(r) && m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · 외부 실행기에서 도는 단계가 있어요. 끝나면 여기에 결과를 올릴게요."}) {
+			j.Accepted = true // the step may run for hours; wait as long as for an @call
+		}
 	case "succeeded":
 		return m.sendRest(b, j, Out{Content: "**" + j.Who + "** · 완료\n" + str(r["summary"])})
 	case "failed", "stopped":
@@ -1094,6 +1098,16 @@ func (m *Manager) followJobsRun(b *bot, j *job) bool {
 				Buttons: []Button{{ID: "ark:r:" + j.ID + ":" + node + ":y", Label: "계속"}, {ID: "ark:r:" + j.ID + ":" + node + ":n", Label: "멈춤", Danger: true}}}) {
 				j.Asked = node
 			}
+		}
+	}
+	return false
+}
+
+// onRunner says whether a running step of the run is on an agent-runner connection.
+func onRunner(r map[string]any) bool {
+	for _, n := range obj(r["nodes"]) {
+		if nd := obj(n); str(nd["status"]) == "running" && nd["backend"] != nil {
+			return true
 		}
 	}
 	return false

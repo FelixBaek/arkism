@@ -94,6 +94,8 @@ type NodeState struct {
 	Error      string     `json:"error,omitempty"`
 	Runs       int        `json:"runs,omitempty"`   // starts of this node in the run
 	Tokens     int64      `json:"tokens,omitempty"` // AI tokens (input + output) of its last finish
+	// Backend is the agent-runner trace of a step sent to a connection (names and ids only, never text).
+	Backend map[string]any `json:"backend,omitempty"`
 }
 
 type Waiting struct {

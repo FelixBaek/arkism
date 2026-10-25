@@ -272,7 +272,7 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 		return runBackendsCLI(name, a, stdin, stdout)
 	case "keys list", "keys add", "keys remove":
 		return runKeysCmd(name, a, floats, stdin, stdout)
-}
+	}
 	return 0, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -145,6 +146,32 @@ func TestExpertNodeOnBackendCarriesStepKey(t *testing.T) {
 	g.Nodes[1] = node("a", "expert", "expert", "ex1", "access", "read", "retries", "2")
 	if r = runOnce(t, e, "w", nil); r.State.Status != "failed" || !strings.HasPrefix(r.State.Nodes["a"].Error, "bad_config") {
 		t.Fatal("retries on a backend", r.State.Nodes["a"].Error)
+	}
+}
+
+// The run record keeps each backend step's trace (names and ids only), done or failed, and a step's start marks it so
+// Discord can tell a long external step from a stuck run.
+func TestBackendStepTraceOnRunRecord(t *testing.T) {
+	ex := CrewItem{ID: "ex1", Revision: 1, Crew: Crew{Type: "agent", Name: "리서처", Backend: "mine"}}
+	g := &Graph{Nodes: []Node{node("start", "start"), node("a", "expert", "expert", "ex1", "access", "read", "goal", "조사"), node("end", "end")},
+		Edges: []Edge{edge("start", "a"), edge("a", "end")}}
+	e := testEngine(t, newFakeStore(ex, wf("w", g)))
+	fakeAI(t, e)
+	r := runOnce(t, e, "w", nil)
+	tr := r.State.Nodes["a"].Backend
+	if r.State.Status != "succeeded" || tr["backend"] != "mine" || tr["task_id"] != "t-1" || tr["state"] != "succeeded" || tr["fallback"] != false {
+		t.Fatal(r.State.Status, tr)
+	}
+	if _, ok := tr["model"]; ok || tr["status_failures"] != nil || fmt.Sprint(tr["not_applied"]) != "[cwd]" {
+		t.Fatalf("only server trace fields with label values are kept: %v", tr)
+	}
+	g.Nodes[1] = node("a", "expert", "expert", "ex1", "access", "read", "goal", "FAIL")
+	r = runOnce(t, e, "w", nil)
+	if tr = r.State.Nodes["a"].Backend; r.State.Status != "failed" || tr["state"] != "failed" || tr["task_id"] != "t-1" {
+		t.Fatal("a failed external step keeps its trace", r.State.Status, tr)
+	}
+	if r.State.Nodes["start"].Backend != nil {
+		t.Fatal("a local step has no trace")
 	}
 }
 

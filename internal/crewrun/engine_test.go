@@ -841,6 +841,17 @@ func fakeRunner() {
 		_ = f.Close()
 	}
 	out := fmt.Sprintf("%s|%s|%v|%s", s.Model, s.Effort, s.Once, s.Task)
+	if s.Backend != "" { // the host runner's trace; the bad model label and extra key must not reach the run record
+		trace := map[string]any{"backend": s.Backend, "task_id": "t-1", "state": "succeeded", "model": "bad model (v2)", "status_failures": 2,
+			"not_applied": []string{"cwd"}, "context": []string{"instructions"}, "usage": "unknown", "fallback": false}
+		if strings.Contains(s.Task, "FAIL") {
+			trace["state"] = "failed"
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": false, "error": "backend_failed: 거절", "backend": trace})
+			return
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "output": out, "cli": "backend:" + s.Backend, "backend": trace})
+		return
+	}
 	switch {
 	case strings.Contains(s.Task, "FAIL"):
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": false, "error": "모델 CLI가 없어요"})
