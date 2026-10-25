@@ -30,8 +30,7 @@ func handles(prompt string, limit int) []string {
 	runes := []rune(prompt)
 	out := []string{}
 	for i := 0; i < len(runes); i++ {
-		sigil := runes[i] == '$' || runes[i] == '@'
-		if !sigil || (i > 0 && (isWord(runes[i-1]) || runes[i-1] == '$' || runes[i-1] == '@' || runes[i-1] == '.' || runes[i-1] == '/')) {
+		if !sigilStart(runes, i) {
 			continue
 		}
 		j := i + 1
@@ -44,7 +43,7 @@ func handles(prompt string, limit int) []string {
 		}
 		h := string(runes[i+1 : j])
 		if runes[i] == '@' {
-			if j < len(runes) && (runes[j] == '/' || runes[j] == '.' && j+1 < len(runes) && isWord(runes[j+1])) {
+			if fileMention(runes, j) {
 				i = j - 1
 				continue // @src/x.ts, @README.md: a file mention
 			}
@@ -59,6 +58,19 @@ func handles(prompt string, limit int) []string {
 		out = out[:limit]
 	}
 	return out
+}
+
+// sigilStart is whether runes[i] is a "$" or "@" not glued to a word, another sigil, a "." or a "/" before it.
+func sigilStart(runes []rune, i int) bool {
+	if runes[i] != '$' && runes[i] != '@' {
+		return false
+	}
+	return i == 0 || !(isWord(runes[i-1]) || strings.ContainsRune("$@./", runes[i-1]))
+}
+
+// fileMention is whether the @handle ending at j goes on as a path ("/") or a file extension (".md").
+func fileMention(runes []rune, j int) bool {
+	return j < len(runes) && (runes[j] == '/' || runes[j] == '.' && j+1 < len(runes) && isWord(runes[j+1]))
 }
 
 func fold(s string) string {
