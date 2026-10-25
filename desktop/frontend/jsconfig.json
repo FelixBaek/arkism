@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "checkJs": false,
+    "allowJs": true,
+    "noEmit": true,
+    "target": "es2023",
+    "module": "nodenext",
+    "lib": [
+      "es2023",
+      "dom",
+      "dom.iterable"
+    ],
+    "types": [],
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": [
+    "../ui/*.js",
+    "../ui/*.mjs",
+    "../ui/modules/*.mjs",
+    "ui-globals.d.ts"
+  ],
+  "exclude": [
+    "../ui/*.test.js",
+    "../ui/i18n-extract.js"
+  ]
+}

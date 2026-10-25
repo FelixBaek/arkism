@@ -1,3 +1,4 @@
+// @ts-check
 window.ArkismSkillExecution = ({ state, el, button, tauri }) => {
  const pending = new Map();
  const trimSlashes = (text) => { let end = text.length; while (end > 0 && text[end - 1] === "/") end--; return text.slice(0, end); };

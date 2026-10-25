@@ -183,7 +183,7 @@ test("trial status panel reads every state and scheduler shape", async () => {
     ctx.doc.body.append(panel); await flush();
     return text(panel);
   };
-  assert.match(await run(() => statusReply({ scheduler: { status: "retry", attempts: 2, next_check: future } })), /현재 시도   2회.*다음 확인/);
+  assert.match(await run(() => statusReply({ scheduler: { status: "retry", attempts: 2, next_check: future } })), /현재 시도 {3}2회.*다음 확인/);
   assert.match(await run(() => statusReply({ state: "promoted", scheduler: { status: "done", attempts: 0 } })), /기본 버전으로 적용됨.*확인 작업 종료/);
   assert.match(await run(() => statusReply()), /등록되어 있지 않아요/);
   assert.match(await run(() => statusReply({ scheduler: { status: "x", attempts: 0 } })), /확인하지 못했어요/);

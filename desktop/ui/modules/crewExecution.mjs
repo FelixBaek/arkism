@@ -1,3 +1,4 @@
+// @ts-check
 // Owns run commands. Dependencies are explicit live ports, never a global scope.
 export function createCrewExecution(deps) {
 

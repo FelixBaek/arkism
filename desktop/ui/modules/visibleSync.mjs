@@ -1,3 +1,4 @@
+// @ts-check
 // Read planning, publication and scheduling have separate responsibilities. A
 // timer refreshes only the pages already opened, and never overwrites newer data.
 export function createVisibleSync(deps) {

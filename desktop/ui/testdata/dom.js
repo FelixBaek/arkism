@@ -543,7 +543,7 @@ class MutationObserver {
 function parseHTML(doc, html, into) {
   const stack = [into];
   const top = () => stack.at(-1);
-  const re = /<!--[\s\S]*?-->|<!doctype[^>]*>|<\/([\w-]+)\s*>|<([\w-]+)((?:\s+[^\s"'>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*)\s*(\/?)>|([^<]+)/gi;
+  const re = /<!--[\s\S]*?-->|<!doctype[^>]*>|<\/([\w-]+)\s*>|<([\w-]+)((?:\s+[^\s"'>/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*)\s*(\/?)>|([^<]+)/gi;
   let m;
   while ((m = re.exec(html))) {
     if (m[0].startsWith("<!")) continue;
@@ -552,7 +552,7 @@ function parseHTML(doc, html, into) {
     const name = m[2];
     const svg = name.toLowerCase() === "svg" || top().namespaceURI === "http://www.w3.org/2000/svg";
     const el = svg ? doc.createElementNS("http://www.w3.org/2000/svg", name) : doc.createElement(name);
-    for (const a of m[3].matchAll(/([^\s"'>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g)) el._attrs.set(a[1], decode(a[2] ?? a[3] ?? a[4] ?? ""));
+    for (const a of m[3].matchAll(/([^\s"'>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g)) el._attrs.set(a[1], decode(a[2] ?? a[3] ?? a[4] ?? ""));
     if (el._attrs.has("style")) el.style._load(el._attrs.get("style"));
     top().appendChild(el);
     if (RAW.has(el.localName)) { const end = html.indexOf(`</${el.localName}`, re.lastIndex); if (end > re.lastIndex) el.appendChild(doc.createTextNode(html.slice(re.lastIndex, end))); re.lastIndex = html.indexOf(">", end) + 1; continue; }

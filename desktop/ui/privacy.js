@@ -1,3 +1,4 @@
+// @ts-check
 // 개인정보 지우기와 기억 만료일. app.js passes the shared helpers in once.
 // Erasure goes through the server's privacy deletion saga (POST /v1/privacy/deletions,
 // target_type "source_event"): the source records and everything derived from them

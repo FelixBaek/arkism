@@ -1,3 +1,4 @@
+// @ts-check
 // 설정 › 연결 › 모델 중계기 (Figma 380:28051 설정됨, 380:28336 없음). The desktop host reports whether this PC
 // has a usable gateway token (gateway_token_status: set | missing | invalid, never the value) and makes a new
 // one (gateway_token_regenerate: writes it, then install-arkism puts it in the agents' settings).
@@ -31,7 +32,7 @@ window.ArkismGatewayToken = (ctx) => {
         notice(r.agents_updated ? "새 토큰을 만들고 에이전트 설정에 넣었어요. 중계기를 다시 켜면 예전 토큰은 막혀요."
           : "새 토큰을 만들었어요. 에이전트 설정에는 못 넣었어요 — 진단에서 고치기를 눌러 주세요.");
         draw(r.status);
-      } catch (e) { notice("토큰을 만들지 못했어요."); }
+      } catch (_) { notice("토큰을 만들지 못했어요."); }
       busy = false;
     }
     function draw(st) {

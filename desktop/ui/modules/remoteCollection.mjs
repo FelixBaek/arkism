@@ -1,3 +1,4 @@
+// @ts-check
 // Shared cursor transport for management screens. Identity and filters are part
 // of the key, so an old connection can never publish into a new scope.
 export function createRemoteCollection({ state, read, createPager }) {

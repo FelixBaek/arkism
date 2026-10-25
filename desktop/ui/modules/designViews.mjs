@@ -1,3 +1,4 @@
+// @ts-check
 // Owns design library. Dependencies are explicit live ports, never a global scope.
 export function createDesignViews(deps) {
 

@@ -1,3 +1,4 @@
+// @ts-check
 // Owns persona settings. Dependencies are explicit live ports, never a global scope.
 export function createCrewPersonas(deps) {
 

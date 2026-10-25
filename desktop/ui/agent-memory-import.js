@@ -1,3 +1,4 @@
+// @ts-check
 // Settings › Advanced › 에이전트 기억 가져오기: a dry run, a confirm, then the real import. A missing reply is a failure, not a crash.
 (function (root) {
   "use strict";

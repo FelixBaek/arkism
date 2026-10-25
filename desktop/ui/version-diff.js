@@ -1,3 +1,4 @@
+// @ts-check
 // 버전 기록 › 바뀐 점 보기: two saved crew definitions as a diff — "- old" in red, "+ new" in green, one block per changed field.
 // Long text (instructions, goals) is diffed line by line so only the lines that changed show up.
 (() => {

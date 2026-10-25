@@ -1,3 +1,4 @@
+// @ts-check
 /** @typedef {{workspace_id:string, project_id:string, user_id?:string, agent_id?:string}} Scope */
 /** @typedef {{id:string, revision:number, status:string, kind:string, text:string, summary?:string, scope?:Scope}} Record */
 /** @typedef {{items:Record[], next_cursor:string, authority:'data_only_untrusted'}} MemoryPage */

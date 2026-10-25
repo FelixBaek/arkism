@@ -173,7 +173,7 @@ test("review due dates must lie ahead and can be saved or cleared", async () => 
   assert.equal(body.review_due_at.slice(0, 4), "2999");
   assert.equal(h.notices.at(-1), "재검토 예정일을 변경했어요.");
   await find(h.shell, "예정일 해제").onClick();
-  [route, body] = h.calls.at(-1);
+  [, body] = h.calls.at(-1);
   assert.equal(body.review_due_at, null);
   h.ctx.request = async () => { throw new Error("stale"); };
   await find(h.shell, "예정일 해제").onClick();

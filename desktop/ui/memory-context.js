@@ -1,3 +1,4 @@
+// @ts-check
 /* Canonical evidence metadata: labels describe usage, never access rights. */
 (function () {
   "use strict";

@@ -1,3 +1,4 @@
+// @ts-check
 // Group presentation is separate from review writes. Collapsed groups create no
 // child rows; expanded groups show at most 50 candidates, all individually reachable.
 export function candidateGroup(group, { el, button, row, request, query }) {

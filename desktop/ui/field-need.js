@@ -1,3 +1,4 @@
+// @ts-check
 // 저장·만들기가 막히면 어디를 채워야 하는지 그 칸에서 보여 준다: red line, a short shake, the reason under it, and the cursor there.
 // window.ArkismNeed(target, message) — target is the field (input, select, textarea, or an inline text that opens one on click),
 // or a field label ("이름") looked up in the open popup. Returns false so callers can `return need(...)`.

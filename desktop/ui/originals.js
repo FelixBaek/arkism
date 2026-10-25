@@ -1,3 +1,4 @@
+// @ts-check
 window.ArkismOriginals = (ctx) => {
   "use strict";
   const { state, $, el, icon, button, request, detailShell, openDetail, ago } = ctx;

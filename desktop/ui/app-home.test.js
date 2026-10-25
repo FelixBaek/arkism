@@ -40,9 +40,9 @@ async function reviewOf(start) {
 }
 
 test("overview: stage windows step through every stage and their lists", async () => {
-  let d = await openWindow({ key: "collect" });
+  await openWindow({ key: "collect" });
   await app.settle(100);
-  d = await openWindow({ key: "collect" });
+  let d = await openWindow({ key: "collect" });
   assert.match(text(d), /대화 저장/);
   assert.match(text(d), /codex · arkism/, "the session list fills once /v1/usage/sessions answered");
   // ‹ › walk the stages in order and wrap around
@@ -188,9 +188,9 @@ test("overview: 불러오기 shows receipts, an empty history and a failed read"
 test("overview: 승인 대기 window searches, sorts, filters, batch-approves and decides", async () => {
   const merge = { id: "mpx", revision: 3, merge: { proposal: { action: "merge", candidate: { id: "c3" }, targets: [{ id: "m1" }] } } };
   const offMerge = route("GET", "/v1/merge_proposals", () => ok({ items: [merge, { id: "skip", merge: { proposal: { action: "keep" } } }] }));
-  let d = await openWindow({ wide: "review" });
+  await openWindow({ wide: "review" });
   await app.settle(50);
-  d = win();
+  let d = win();
   assert.match(text(d), /승인 대기/);
   // sort and search go to the server query
   const sorter = d.querySelector("select.ov-wide-sort");
@@ -297,7 +297,7 @@ test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject
   offRej();
   await press("그대로 승인", win(), 60);
   // a conflicted candidate is resolved here: the existing memory beside it, where each came from, and the 기억 screen's choices
-  d = await reviewOf("출시일은"); await app.settle(50); d = win();
+  await reviewOf("출시일은"); await app.settle(50); d = win();
   assert.match(text(d), /충돌하는 두 기억/);
   assert.match(text(d), /출시일은 2026년 10월 15일이다/, "the existing memory in full");
   assert.equal(btn("전체 화면으로", d), undefined, "no jump to the full screen");
@@ -324,7 +324,7 @@ test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject
 });
 
 test("overview: a candidate's 원문 근거 shows the lines around the quote, and 세션 보기 opens that spot", async () => {
-  let d = await reviewOf("Alex는 주로 오전에"); await app.settle(50); d = win();
+  await reviewOf("Alex는 주로 오전에"); await app.settle(50); let d = win();
   const box = d.querySelector(".ov-context"); assert.ok(box, "context block");
   assert.match(text(box), /나는 보통 오전에 코드 리뷰해/);
   assert.equal(text(box.querySelector(".ss-msg mark.ss-hit")), "나는 보통 오전에 코드 리뷰해", "the quoted words are underlined in the conversation");
@@ -350,14 +350,14 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   await press("둘 다 두기", d, 60);
   assert.ok(app.apiCalls.some(([, p]) => /\/v1\/maintenance_proposals\/.+\/decide/.test(p)));
   // the signal proposal (rule often broken) has its own two choices
-  d = win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
+  win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
   const sig = [...d.querySelectorAll(".ov-wide-row-dream")].find((r) => /통과율/.test(text(r)));
   assert.ok(sig, "signal proposal row");
   sig.click(); await app.settle();
   assert.match(text(win()), /자주 어겨요/);
   await press("괜찮아요", win(), 60);
   // the search box filters proposals too
-  d = win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
+  win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
   app.dom.type(d.querySelector(".ov-wide-search"), "없는말"); await app.settle(30);
   assert.match(text(win()), /지금 보여 줄 후보가 없어요/);
   await press("‹ 작게 보기", win(), 30);
@@ -366,7 +366,7 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
 });
 
 test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", async () => {
-  let d = await openWindow({ wide: "active" }); await app.settle(50); d = win();
+  await openWindow({ wide: "active" }); await app.settle(50); let d = win();
   assert.match(text(d), /쓰는 중인 기억/);
   const sorter = d.querySelector("select.ov-wide-sort");
   for (const v of ["new", "old", "used"]) { sorter.value = v; app.dom.fire(sorter, "change"); await app.settle(20); }
@@ -388,10 +388,10 @@ test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", 
   await press("지우기", app.$("dialog.ov-ask[open]"), 80);
   assert.ok(app.apiCalls.some(([m, p]) => m === "DELETE" && p.startsWith("/v1/memories/")));
   // 세션 보기 on a memory with a source, 고치기 opens it in the memory list
-  d = win() || await openWindow({ wide: "active" }); await app.settle(30); d = win();
+  win() || await openWindow({ wide: "active" }); await app.settle(30); d = win();
   const withSource = [...d.querySelectorAll(".ov-wide-row")].find((r) => { r.click(); return btn("세션 보기 ›", win()); });
   if (withSource) await press("세션 보기 ›", win());
-  d = await openWindow({ wide: "active" }); await app.settle(50);
+  await openWindow({ wide: "active" }); await app.settle(50);
   await press("고치기", win().querySelector(".ov-detail-actions"), 50);
   assert.equal(win(), null, "고치기 leaves the window for the memory");
   // judge fixes or deletes an unused memory in its own row (the same confirm and DELETE as here)
@@ -417,7 +417,7 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   const page = (items, next = "") => ok({ authority: "data_only_untrusted", items, next_cursor: next, total: 4 });
   const off = route("GET", "/v1/usage/sessions", (a) => /cursor=p2/.test(a.path) ? page([{ id: "w4", agent: "codex", session_id: "s4", started_at: ago(5), messages: 2 }]) : page(rows, /sort=recent/.test(a.path) ? "p2" : ""));
   await press("새로고침", app.document, 50).catch(() => {});
-  let d = await openWindow({ wide: "sessions" }); await app.settle(50); d = win();
+  await openWindow({ wide: "sessions" }); await app.settle(50); let d = win();
   assert.match(text(d), /후보 있는 세션/);
   assert.match(text(d), /분석 대기/);
   assert.match(text(d), /후보 없음/);
@@ -461,7 +461,7 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   // a waiting candidate links to 승인 대기; 새로고침 reads the list again
   const cand = win().querySelector(".ov-detail-cand.link");
   if (cand) { cand.click(); await app.settle(50); assert.match(text(win()), /승인 대기/); }
-  d = await openWindow({ wide: "sessions" }); await app.settle(50);
+  await openWindow({ wide: "sessions" }); await app.settle(50);
   await press("새로고침", win(), 50);
   // 대화 원문 보기 reads the dialogue into the window itself; 대화 닫기 folds it
   await press("대화 원문 보기", win(), 50);
@@ -471,7 +471,7 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   // a failed page offers 다시 시도
   off();
   const offBad = route("GET", "/v1/usage/sessions", () => fail(500, "boom"));
-  d = await openWindow({ wide: "sessions" }); await app.settle(50);
+  await openWindow({ wide: "sessions" }); await app.settle(50);
   assert.match(text(win()), /불러오지 못했어요/);
   offBad();
   await press("다시 시도", win(), 50);
@@ -488,7 +488,7 @@ test("overview: 세션 기록 opened on one session underlines the quote, pages 
   const offTalk = route("POST", "/v1/usage/sessions/transcript", (a) => /"after":"c2"/.test(a.body) ? (flaky ? (flaky = false, fail(500, "boom")) : page([{ role: "user", text: "세 번째 쪽" }], ""))
     : /"after":"c1"/.test(a.body) ? page([{ role: "assistant", text: "그 말에 맞춰 둘게요." }], "c2") : page([{ role: "user", text: "앞으로 커밋은 영어로 써 줘." }], "c1"));
   // the quote sits on the second page: the window reads on until it finds it, underlined
-  let d = await openWindow({ wide: "sessions", args: ["sid-b", "그 말에 맞춰"] }); await app.settle(80); d = win();
+  await openWindow({ wide: "sessions", args: ["sid-b", "그 말에 맞춰"] }); await app.settle(80); let d = win();
   assert.match(text(d.querySelector(".ov-wide-row.on")), /찾는 세션/, "the asked-for session is picked, not the first row");
   assert.equal(text(d.querySelector("mark.ss-hit")), "그 말에 맞춰");
   assert.equal(d.querySelectorAll(".ss-msg").length, 2);
@@ -504,14 +504,14 @@ test("overview: 세션 기록 opened on one session underlines the quote, pages 
   assert.match(text(win()), /대화를 불러오지 못했어요/);
   offBad();
   // a session the search does not find is named missing, and no other row is picked for it
-  d = await openWindow({ wide: "sessions", args: ["sid-gone"] }); await app.settle(80); d = win();
+  await openWindow({ wide: "sessions", args: ["sid-gone"] }); await app.settle(80); d = win();
   assert.match(text(d), /이 세션을 찾지 못했어요/);
   assert.equal(d.querySelector(".ov-wide-detail").children.length, 0);
   off(); await closeAll();
 });
 
 test("overview: 사용량 window draws the counts and its two buttons", async () => {
-  let d = await openWindow({ wide: "usage" }); await app.settle(30); d = win();
+  await openWindow({ wide: "usage" }); await app.settle(30); let d = win();
   assert.match(text(d), /최근 사용 기록/);
   assert.match(text(d), /많이 쓰인 기억/);
   await press("검증 보기", d);
@@ -528,7 +528,7 @@ test("overview: 사용량 window shows — and says why when the use counts did 
   const reload = async () => { const n = asked; app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); for (let i = 0; i < 100 && asked === n; i++) await app.settle(100); await app.settle(100); };
   let off = route("GET", "/v1/memory_usage", () => { asked++; return fail(503, "unavailable"); });
   await reload();
-  let d = await openWindow({ wide: "usage" }); await app.settle(30); d = win();
+  await openWindow({ wide: "usage" }); await app.settle(30); let d = win();
   const tiles = [...d.querySelectorAll(".ov-win-tile")].map(text);
   assert.ok(tiles.some((x) => /^—\s*7일 불러온 횟수/.test(x)), tiles.join(" | "));
   assert.ok(tiles.some((x) => /^—\s*불러온 기억/.test(x)), tiles.join(" | "));
@@ -536,7 +536,7 @@ test("overview: 사용량 window shows — and says why when the use counts did 
   assert.match(text(d), /서버가 불러오기 집계를 주지 못했어요/);
   off(); off = route("GET", "/v1/memory_usage", () => { asked++; return ok({ items: [{ id: "m1", d7: 4, d30: 9, last: ago(2) }] }); });
   await reload();
-  d = await openWindow({ wide: "usage" }); await app.settle(30); d = win();
+  await openWindow({ wide: "usage" }); await app.settle(30); d = win();
   assert.match(text(d), /4회\s*7일 불러온 횟수/);
   assert.doesNotMatch(text(d), /집계를 주지 못했어요/);
   off();

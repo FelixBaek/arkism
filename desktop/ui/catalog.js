@@ -1,3 +1,4 @@
+// @ts-check
 "use strict";
 // Catalog: install a skill from GitHub (agent_tools request kind skill_install, applied by the host)
 // and one-click MCP server presets for the "MCP 서버 추가" dialog.

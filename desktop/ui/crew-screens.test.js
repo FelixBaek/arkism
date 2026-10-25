@@ -325,7 +325,6 @@ test("settings dialog saves, validates and reports a failed save", async () => {
   await h.click(document.querySelector("#detail"), "설정");
   let d = h.top();
   assert.ok(d);
-  const kind = d.querySelector("select");
   const cron = [...d.querySelectorAll("input")].find((i) => /\*/.test(i.value));
   if (cron) { dom.type(cron, "never"); }
   const ok = h.btn(d, "저장");

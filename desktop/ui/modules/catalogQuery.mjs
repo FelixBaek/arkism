@@ -1,3 +1,4 @@
+// @ts-check
 // Server-wide management filtering and ordering. The client retains only opened
 // result pages; query/scope changes discard late replies and old cursors.
 const paths = { memories: "/v1/memories/query", candidates: "/v1/memory_candidates/query", conflicted: "/v1/memory_candidates/query", skills: "/v1/skills/query", skillTrash: "/v1/skills/query" };

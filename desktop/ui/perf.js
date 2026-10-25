@@ -1,3 +1,4 @@
+// @ts-check
 // Background timing of the whole app: loading, refreshing and drawing each screen, the workflow canvas, and every
 // "long task" (the browser busy for 50ms or more, which the user feels as a stall). Each sample is kept in this browser
 // only, the last 500 per kind, and shows in 설정 → 고급 → 속도 기록 (or ArkismPerf.summary() in the console).

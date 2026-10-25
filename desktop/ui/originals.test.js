@@ -151,7 +151,7 @@ test("answers that arrive after the view or owner changed are dropped", async ()
 
 test("archive messages and the reader stop when the detail is no longer live", async () => {
   const pending = [];
-  const t = setup((path, body) => {
+  const t = setup((path) => {
     if (path === "list") return { authority: A, items: [archive] };
     return new Promise((resolve, reject) => pending.push({ resolve, reject, path }));
   });
@@ -221,7 +221,7 @@ test("a memory's sources show their origin and open each linked message", async 
     {}
   ] });
   assert.match(host.textContent, /Claude · /);
-  assert.match(host.textContent, /원래 실행 에이전트   agent-7/);
+  assert.match(host.textContent, /원래 실행 에이전트 {3}agent-7/);
   assert.match(host.textContent, /other · 시각 없음/);
   assert.match(host.textContent, /출처 · 시각 없음/);
   assert.match(host.textContent, /원문이 삭제됐어요/);

@@ -1,3 +1,4 @@
+// @ts-check
 // MEMORY › 기억 › 모아보기 "주제 요약 · 나에 대한 요약" (Figma 382:29313 · 382:29983) and
 // 확인해 주세요 "병합 제안" (383:29822), plus their HOME rows (385:30743).
 //   /v1/digests?kind=topic|user&status=…   요약은 승인된 기억으로만 만든다. AI가 쓴 새 버전은 늘 후보이고, 사람이 승인해야 쓰인다.

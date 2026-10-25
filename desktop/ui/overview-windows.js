@@ -207,8 +207,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const rows = {
       collect: () => sessions.slice(0, cap).map((x) => row("", [x.agent, x.project].filter(Boolean).join(" · ") || x.title || "세션", `메시지 ${num(x.messages)}개 · ${ago(x.ended_at || x.started_at)}`, "", [button("열기", "small", null, () => openSession(`:${x.session_id}`, ""))])),
       extract: () => [...waiting(), ...D().memories].sort((a, b) => time(b.created_at) - time(a.created_at)).slice(0, cap).map((m) => row(kind(m.kind), clip(m.text), `${tag(m, "event_id:") ? "대화 저장 · " : ""}${ago(m.created_at)}`, "")),
-      classify: () => byKind(waiting().filter((m) => !m.classification), box),
-      review: () => waiting().slice(0, cap).map((m) => reviewRow(m, box)),
+      classify: () => byKind(waiting().filter((m) => !m.classification)),
+      review: () => waiting().slice(0, cap).map((m) => reviewRow(m)),
       recall: () => [...(state.usage?.entries() || [])].filter(([, u]) => u.last).sort((a, b) => time(b[1].last) - time(a[1].last)).slice(0, cap).map(([id, u]) => row("", clip(memText(id)), ago(u.last), `7일 ${num(u.d7 || 0)}회`)),
       trace: () => (w?.items || []).slice().sort((a, b) => b.used - a.used || b.injected - a.injected).slice(0, cap).map((u) => row("", clip(memText(u.id)), `넣음 ${num(u.injected)}번`, u.estimated ? `쓰임 ${num(u.used)}번 · 추정 ${num(u.estimated)}번` : `쓰임 ${num(u.used)}번`)),
       judge: () => D().memories.map((m) => [m, w?.items?.find((x) => x.id === m.id)]).filter(([, u]) => idle(u)).slice(0, cap).map(([m, u]) => {
@@ -230,16 +230,16 @@ window.ArkismOverviewWindows = (ctx, env) => {
     return (rows[key]?.() || out);
   }
   // 분류: the candidates under one header per kind, in the KIND order, each header with its count
-  function byKind(list, box) {
+  function byKind(list) {
     const groups = new Map(Object.keys(KIND).map((k) => [k, []]));
     for (const m of list) { if (!groups.has(m.kind)) groups.set(m.kind, []); groups.get(m.kind).push(m); }
     return [...groups].filter(([, ms]) => ms.length).flatMap(([k, ms]) => {
       const h = el("div", "ov-win-group"); h.append(tagEl(kind(k)), el("small", "", `${num(ms.length)}건`));
-      return [h, ...ms.map((m) => reviewRow(m, box))];
+      return [h, ...ms.map((m) => reviewRow(m))];
     });
   }
   const itemCount = (rows) => rows.filter((r) => !r.classList.contains("ov-win-group")).length;
-  function reviewRow(c, box) {
+  function reviewRow(c) {
     // the same tags and reason line as the wide window's row, so both show one candidate alike
     const dupText = c.classification?.dup_hint && D().memories.find((m) => m.id === c.classification.dup_hint)?.text;
     const r = row(kind(c.kind), clip(c.text), [dupText ? `“${clip(dupText, 24)}”와 같은 뜻` : c.conflict_id ? "충돌 중" : c.classification?.risk_reasons?.[0] || "", ago(c.created_at)].filter(Boolean).join(" · "), "");
@@ -526,7 +526,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
         const again = button("", "small ghost icon-btn ov-verdict-again", null, async () => {
           again.disabled = true;
           try { const r = await request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/reclassify`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: c.revision }) }); Object.assign(c, r || {}); if (c.classification) c.classification.by = ""; detailFor(c); }
-          catch (e) { again.disabled = false; again.title = tr("다시 보게 하지 못했어요. 한 번 더 눌러 보세요."); }
+          catch (_) { again.disabled = false; again.title = tr("다시 보게 하지 못했어요. 한 번 더 눌러 보세요."); }
         });
         again.append(icon("sparkle")); again.title = tr("AI에게 다시 보게 하기"); again.setAttribute("aria-label", again.title);
         // AI 의미 검사 (592:51366) belongs to this judgement: marks only, a person decides; the note indented under its item

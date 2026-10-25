@@ -1,3 +1,4 @@
+// @ts-check
 // Explicit module dependency entry. The browser source entry and esbuild use the same graph.
 import "./ask.js";
 import "./ssh-trust.js";

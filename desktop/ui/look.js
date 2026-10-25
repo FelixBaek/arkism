@@ -1,3 +1,4 @@
+// @ts-check
 // 설정 › 모양: 화면 언어·테마·글자 크기·화면 배율. 이 PC에만 저장하고, 앱이 뜨자마자 적용한다.
 // 테마 색은 tokens.css의 :root[data-theme] 블록이 정한다. "시스템"은 속성을 지워 Windows 설정을 따른다.
 window.ArkismLook = (() => {

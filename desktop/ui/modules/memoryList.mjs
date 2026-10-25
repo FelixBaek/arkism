@@ -1,3 +1,4 @@
+// @ts-check
 import { candidateGroup } from "./candidateGroups.mjs";
 import { collectionFooter } from "./collectionPaging.mjs";
 // Owns memory lists, filters and actions. Dependencies are explicit live ports, never a global scope.

@@ -1,3 +1,4 @@
+// @ts-check
 // English UI dictionary for i18n.js. Generated from the Korean strings in desktop/ui (see i18n-extract.js);
 // edit freely. strings: exact Korean → English. patterns: Korean with {0}… placeholders → English.
 window.ArkismI18nEN = {

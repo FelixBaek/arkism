@@ -1,3 +1,4 @@
+// @ts-check
 // Bounded cursor transport; rendering stays in the existing memory screen.
 (function (root) {
   "use strict";

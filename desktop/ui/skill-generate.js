@@ -1,3 +1,4 @@
+// @ts-check
 "use strict";
 window.ArkismSkillGenerate = ({ state, el, button, request, query, reload }) => {
   // Persist the request before sending; tokens and lesson/file contents never enter the journal.

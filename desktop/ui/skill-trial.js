@@ -1,3 +1,4 @@
+// @ts-check
 "use strict";
 window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
   const running = new Map();

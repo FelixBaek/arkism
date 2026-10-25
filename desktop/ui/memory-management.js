@@ -1,3 +1,4 @@
+// @ts-check
 /* Review presentation never changes a proposal, its trust, or its approval. */
 (function (root) {
   "use strict";

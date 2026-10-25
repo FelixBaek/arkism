@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Ownership boundary during migration of the existing screen factories.
  * Connection identity belongs to the app; memory/skills/crew own their filters.

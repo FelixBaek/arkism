@@ -1,5 +1,6 @@
+// @ts-check
 // Owns cron parsing and display. Dependencies are explicit live ports, never a global scope.
-export function createCrewSchedule(deps) {
+export function createCrewSchedule(_deps) {
 
 
   // ---------------------------------------------------------------- cron (5 fields, same rules as the run engine)

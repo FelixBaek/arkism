@@ -1,3 +1,4 @@
+// @ts-check
 // Connection settings are read defensively; credentials never enter localStorage.
 export function readSSH(value) {
   if (!value) return null;
