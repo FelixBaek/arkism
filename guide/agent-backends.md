@@ -119,9 +119,30 @@ The runner must treat it as data, never as instructions. The trace lists each id
 - Cost: reported usage is stored as reported (`estimated: false`). A runner without `usage` leaves cost **unknown** (no number), never 0. Arkism's own price estimate is not applied.
 - Answers are untrusted data, like any model output: they never change the step's access, approvals or connection.
 
-## 5. Limits
+## 5. Trying it on localhost
 
-- Only the generic HTTP contract above. OpenClaw and Hermes adapters are not implemented.
-- No streaming events, attachments, session reuse or approval relay.
+`tools/backendref` is a **local reference runner**: it implements this contract and runs no model or tool (its answer is an echo of the task). It is for trying the host runner's side, not evidence that any product's runner works.
+
+```bash
+go run ./tools/backendref -addr 127.0.0.1:18790 -token "$REF_TOKEN" -delay 2s
+printf '%s\n' "$REF_TOKEN" | arkism crew backends add --name ref --url http://127.0.0.1:18790 --local
+arkism crew backends check ref
+```
+
+`-caps` picks the capabilities it reports (default `status,cancel,idempotency,tool_restriction,instructions,memory`); `-delay 0` answers synchronously.
+
+## 6. Limits
+
+- Only the generic HTTP contract above. No OpenClaw or Hermes adapter (see below).
+- Not supported, and never asked of a runner (`session: none`, `approval: none` in every request): approval relay (a `waiting_approval` task is cancelled, then fails), progress events, attachments, session reuse. Each needs work across the server, the app and Discord (approvals bound to the run, target and content; a session key per user, expert, channel and thread) and is follow-up work.
 - The settings screen does not show connections yet; use the CLI.
 - If the host that started a request loses its state folder, nobody asks about that task again; the request reads as failed after 24 hours.
+
+## 7. OpenClaw and Hermes
+
+Neither is installed on the machine this was built on, so no adapter was written. Their public docs (checked 2026-10-26) describe OpenAI-compatible HTTP endpoints, not this contract:
+
+- OpenClaw: the Gateway's `/v1/chat/completions` and `/v1/responses` (off by default; `gateway.http.endpoints`), bearer auth from `gateway.auth`, the agent picked by `model: "openclaw/<agentId>"`, sessions by `x-openclaw-session-key`. <https://docs.openclaw.ai/gateway/openai-http-api>
+- Hermes Agent: `hermes gateway` serves `http://127.0.0.1:8642/v1` with `API_SERVER_KEY`, running its full toolset before answering. <https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server>
+
+What an adapter still needs, and why it is not here: an installed version to test against; whether a call can be read-only (both run their own tools, so today only `--isolated` would allow it); a task id with status and cancel, or else every lost answer is unknown and nothing can be followed after a restart; idempotency; and how they report usage.
