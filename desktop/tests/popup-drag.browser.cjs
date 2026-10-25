@@ -50,7 +50,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     const csp = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../src-tauri/tauri.conf.json"), "utf8")).app.security.csp;
     const app = await browser.newPage({ viewport: { width: 1000, height: 800 } });
     app.on("pageerror", error => errors.push(error.message));
-    const blocked = []; app.on("console", m => { if (/Content Security Policy/.test(m.text())) blocked.push(m.text().slice(0, 120)); });
+    const blocked = []; app.context().on("console", m => { if (/Content Security Policy/.test(m.text())) blocked.push(m.text().slice(0, 120)); }); // the child window too, not just this page
     const files = {
       "/": ['text/html', '<!doctype html><link rel="stylesheet" href="/a.css"><body><script src="/popup-drag.js"></script><script src="/start.js"></script>'],
       "/a.css": ["text/css", "dialog{width:500px;height:300px;padding:0;border:0;background:rgb(1, 2, 3)}h2{font-size:calc(10px * var(--fs, 1))}"],

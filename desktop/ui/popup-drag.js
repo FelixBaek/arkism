@@ -20,16 +20,14 @@
     for (const { name, value } of html.attributes) if (name !== "style") d.documentElement.setAttribute(name, value);
     d.documentElement.style.cssText = html.style.cssText; // a style attribute is blocked by the CSP (look.js sets --fs and zoom here); CSSOM is not
     d.documentElement.classList.add("popout");
-    const sheets = [];
-    d.head.replaceChildren(...[...document.querySelectorAll('link[rel="stylesheet"], style')].flatMap((n) => {
-      const css = textOf(n);
-      if (css == null) return [Object.assign(n.cloneNode(true), n.href ? { href: n.href } : {})];
-      // the app's CSP (style-src 'self') blocks a <style> element; a constructed sheet is not inline markup, so it applies
-      const Sheet = d.defaultView?.CSSStyleSheet;
-      if (Sheet && "adoptedStyleSheets" in d) { const s = new Sheet({ media: n.media || "" }); s.replaceSync(css); sheets.push(s); return []; }
-      const s = d.createElement("style"); if (n.media) s.media = n.media; s.textContent = css; return [s];
-    }));
-    if (sheets.length) d.adoptedStyleSheets = sheets;
+    // the app's CSP (style-src 'self') blocks a <style> element; a constructed sheet is not inline markup, so it applies.
+    // Only when every sheet could be read: mixing adopted sheets with cloned ones would change their cascade order.
+    const nodes = [...document.querySelectorAll('link[rel="stylesheet"], style')], texts = nodes.map(textOf);
+    const Sheet = d.defaultView?.CSSStyleSheet;
+    if (Sheet && "adoptedStyleSheets" in d && texts.every((css) => css != null)) {
+      d.head.replaceChildren();
+      d.adoptedStyleSheets = texts.map((css, i) => { const s = new Sheet({ media: nodes[i].media || "" }); s.replaceSync(css); return s; });
+    } else d.head.replaceChildren(...nodes.map((n) => Object.assign(n.cloneNode(true), n.href ? { href: n.href } : {})));
     d.body.className = document.body.className;
     // the icon sprite (<symbol id="i-…"> in index.html): a <use href="#i-…"> only finds symbols in its own document
     for (const svg of new Set([...document.querySelectorAll("svg symbol")].map((s) => s.closest("svg")))) d.body.prepend(svg.cloneNode(true));
@@ -38,10 +36,10 @@
   // dropped while that window is still being set up, which left a popup unstyled in Chrome.
   function textOf(n) {
     let css;
-    try { css = n.tagName === "LINK" && [...n.sheet.cssRules].map((r) => r.cssText).join("\n"); } catch { return null; } // not loaded yet, or another origin
-    if (!css) return null;
+    try { css = n.tagName === "STYLE" ? n.textContent : [...n.sheet.cssRules].map((r) => r.cssText).join("\n"); } catch { return null; } // not loaded yet, or another origin
+    if (css == null || n.tagName === "LINK" && !css) return null;
     // a url() in the text was relative to the sheet's own address (fonts/…): pin it there, the child page has another
-    return css.replace(/url\(\s*(["'])(.*?)\1\s*\)/g, (_, q, u) => `url(${q}${new URL(u, n.href).href}${q})`);
+    return css.replace(/url\(\s*(["'])(.*?)\1\s*\)/g, (_, q, u) => `url(${q}${new URL(u, n.href || document.baseURI).href}${q})`);
   }
   function place(kid, dlg) {
     const d = docOf(kid.w);

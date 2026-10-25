@@ -392,8 +392,9 @@ test("a popup drags by its head, stays on screen, moves into its own window outs
   assert.notEqual(kd, document);
   assert.ok(kd.body.contains(pd) && pd.open && pd.classList.contains("popout-root"));
   assert.ok(kd.documentElement.classList.contains("popout"), "dressed like this window, marked popout");
-  assert.equal(kd.head.querySelector("style")?.textContent, '.x { color: red; }\n@font-face { src: url("http://tauri.localhost/fonts/a.woff2"); }', "a stylesheet already read goes over as text, its url()s pinned to the sheet's address");
-  assert.ok(kd.head.querySelector('link[href$="late.css"]'), "one still loading is linked as before");
+  // one sheet still loading: every sheet is linked in its own order (constructed sheets would come after them all); the browser test covers the constructed path
+  assert.deepEqual([...kd.head.querySelectorAll("link")].map((l) => l.href.split("/").pop()), ["app.css", "late.css"]);
+  assert.equal(kd.head.querySelector("style"), null);
   assert.ok(kd.body.querySelector(`svg symbol${pd.querySelector("#pu").getAttribute("href")}`), "the icon sprite goes over too, so <use href=\"#i-…\"> icons draw there");
   css.remove(); late.remove(); sprite.remove();
   assert.equal(kd.title, "창 · Arkism");
