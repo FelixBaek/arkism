@@ -799,7 +799,7 @@ export function createCrewWorkers(deps) {
     deps.raw(b); // the card holds only the expert's own words, so its title is kept too; the off note is translated here
     b.title = x.enabled === false ? `${x.name} · ${deps.tr("꺼짐")}` : x.name; // 763:57845: an off card is only dimmed
     b.addEventListener("click", () => { workerPick(r.id); openExpertPopup(r); });
-    b.ctxItems = () => [{ label: "열기", run: () => b.click() }, { label: "@이름 복사", off: !x.handle, run: () => new Promise((ok) => ok(b.ownerDocument.defaultView.navigator.clipboard.writeText(`@${x.handle}`))).then(() => deps.notice("복사했어요."), () => deps.notice("복사하지 못했어요.")) }];
+    b.ctxItems = () => [{ label: "열기", run: () => b.click() }, { label: "@이름 복사", off: !x.handle, run: () => Promise.resolve().then(() => b.ownerDocument.defaultView.navigator.clipboard.writeText(`@${x.handle}`)).then(() => deps.notice("복사했어요."), () => deps.notice("복사하지 못했어요.")) }];
     return b;
   }
 
@@ -952,7 +952,7 @@ export function createCrewWorkers(deps) {
       copy.type = "button";
       copy.setAttribute("aria-label", "@이름 복사");
       copy.append(deps.icon("copy"));
-      copy.addEventListener("click", () => { new Promise((ok) => ok(copy.ownerDocument.defaultView.navigator.clipboard.writeText(`@${d.handle}`))).then(() => deps.notice("복사했어요."), () => deps.notice("복사하지 못했어요.")); }); // its own window: a popout has the focus; a missing API rejects too
+      copy.addEventListener("click", () => { Promise.resolve().then(() => copy.ownerDocument.defaultView.navigator.clipboard.writeText(`@${d.handle}`)).then(() => deps.notice("복사했어요."), () => deps.notice("복사하지 못했어요.")); }); // its own window: a popout has the focus; a missing API rejects too
       return copy;
     };
     wk.paintHead = () => {
