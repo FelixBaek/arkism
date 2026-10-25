@@ -147,8 +147,16 @@ export function createAppConnection(deps) {
     }
   }
 
-  // 연결에 실패하면 지금 쓰던 연결을 그대로 둔다.
+  // 연결은 한 번에 하나: 겹치면 앱의 이전·새 터널과 확정 신호가 서로 엇갈린다.
+  let connecting = false;
   async function sshConnect(form) {
+    if (connecting) throw new Error("이미 연결하는 중이에요.");
+    connecting = true;
+    try { await connectOnce(form); } finally { connecting = false; }
+  }
+
+  // 연결에 실패하면 지금 쓰던 연결을 그대로 둔다.
+  async function connectOnce(form) {
     const bad = sshFormError(form);
     if (bad) throw new Error(bad);
     if (!deps.tauri) throw new Error("서버 연결은 Arkism 앱에서만 돼요.");
@@ -169,7 +177,6 @@ export function createAppConnection(deps) {
       // 서버의 Git·스킬 실행도 활성 연결의 포트·개인 키와 승인한 서버 키를 함께 쓴다.
       deps.state.defaults.ssh_host = r.ssh_host;
       await open();
-      await deps.tauri.invoke("ssh_connect_done", { ok: true });
     } catch (err) {
       // 앱 쪽에서 새 터널을 닫고 이전 터널을 되살린다. 그래야 돌아간 연결이 실제로 동작한다.
       await deps.tauri.invoke("ssh_connect_done", { ok: false }).catch(() => {});
@@ -177,6 +184,8 @@ export function createAppConnection(deps) {
       deps.state.defaults.ssh_host = before.sshHost;
       throw new Error("연결은 됐지만 서버의 Arkism을 열지 못했어요. 서버에서 Arkism이 켜져 있는지 확인하세요.", { cause: err });
     }
+    // 서버는 이미 열렸으니 확정이 실패해도 되돌리지 않는다(에이전트 설정만 못 바꾼 것).
+    await deps.tauri.invoke("ssh_connect_done", { ok: true }).catch((err) => deps.notice(`연결했지만 마무리하지 못했어요 (${String(err?.message || err)}).`));
     sshPassword = form.password || "";
     deps.state.ssh = { ...form, password: null };
     deps.store("arkism.ssh", JSON.stringify(deps.state.ssh));
