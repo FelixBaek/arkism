@@ -273,3 +273,19 @@ func TestSkillCheckRequestIsAcceptedLikeAnUpdateRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentFoldersAcceptWindowsPaths(t *testing.T) {
+	for _, d := range []string{"~/team/skills", "/srv/skills", `C:\Users\me\skills`, "D:/team/skills", `\\nas\team`} {
+		if err := validAgentToolSwitch(AgentToolSwitch{Agent: "shared", Kind: "shared", Name: d, Enabled: true}); err != nil {
+			t.Errorf("shared %q: %v", d, err)
+		}
+		if err := validAgentToolSwitch(AgentToolSwitch{Agent: "my-tool", Kind: "agent", Name: "My Tool", Enabled: true, SkillsDir: d, ChatsDir: d}); err != nil {
+			t.Errorf("agent %q: %v", d, err)
+		}
+	}
+	for _, d := range []string{"relative", "C:x", `C:\a\..\b`, "C:/a/../b", `\\\x`, "../x", "~/a\nb"} {
+		if err := validAgentToolSwitch(AgentToolSwitch{Agent: "shared", Kind: "shared", Name: d, Enabled: true}); !errors.Is(err, ErrInvalid) {
+			t.Errorf("shared %q must be refused, got %v", d, err)
+		}
+	}
+}

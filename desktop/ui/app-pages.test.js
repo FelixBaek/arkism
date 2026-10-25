@@ -207,10 +207,10 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   assert.match(notice(), /Orbit를 뺐어요/);
   await press("~/team/skills 빼기");
   assert.match(notice(), /공용 폴더를 뺐어요/);
-  const dir = app.$('input[placeholder="~/team/skills"]');
-  dir.value = "../x"; await press("폴더 추가");
-  assert.match(notice(), /~\/ 나 \/ 로 시작/);
-  dir.value = "~/more"; await press("폴더 추가");
+  const dir = app.$('input[placeholder="~/team/skills"]'); // a refused folder keeps the page as it is
+  for (const bad of ["../x", "C:\\a\\..\\b", "C:x", "relative"]) { dir.value = bad; await press("폴더 추가"); assert.match(notice(), /~\/, \/ 또는 C:\\ 로 시작/, bad); }
+  for (const ok of ["C:\\Users\\me\\skills", "D:/team/skills", "\\\\nas\\team"]) { app.$('input[placeholder="~/team/skills"]').value = ok; await press("폴더 추가"); assert.match(notice(), /공용 폴더를 넣었어요/, ok); } // a sent add redraws the page, so find the box again
+  app.$('input[placeholder="~/team/skills"]').value = "~/more"; await press("폴더 추가");
   assert.match(notice(), /공용 폴더를 넣었어요/);
   postFails = true;
   await press("~/team/skills 빼기");

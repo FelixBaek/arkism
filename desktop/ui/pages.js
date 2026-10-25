@@ -5,6 +5,8 @@ window.ArkismPages = (ctx) => {
 
   // ---------------------------------------------------------------- saved choices (this PC only)
   const PREFS_KEY = "arkism.prefs";
+  // An agent folder: ~/, /, a Windows drive (C:\ or C:/) or a \\server\share path, never with "..". The server checks the same (validAgentDir).
+  const agentDirOk = (d) => /^(~\/|\/|[A-Za-z]:[\\/]|\\\\[^\\])/.test(d) && !d.includes("..");
   const DEFAULT_CATEGORIES = [
     { id: "code", name: "개발·코드", icon: "code", rules: [["path", "engineering"], ["name", "*review*"], ["name", "tdd"]] },
     { id: "writing", name: "글쓰기·블로그", icon: "file-text", rules: [["path", "blog/"], ["name", "writing-*"]] },
@@ -375,7 +377,7 @@ window.ArkismPages = (ctx) => {
     dirIn.className = "mono";
     addDir.append(dirIn, button("폴더 추가", "ghost small", "plus", () => {
       const d = dirIn.value.trim();
-      if (!/^(~\/|\/)/.test(d) || d.includes("..")) { notice("~/ 나 / 로 시작하는 폴더를 써 주세요."); return; }
+      if (!agentDirOk(d)) { notice("~/, / 또는 C:\\ 로 시작하는 폴더를 써 주세요."); return; }
       void agentRequest({ agent: "shared", kind: "shared", name: d, enabled: true }, "공용 폴더를 넣었어요. 1분 안에 반영돼요.");
     }));
     sbox.append(addDir);
@@ -532,7 +534,7 @@ window.ArkismPages = (ctx) => {
         const slug = manual.toLowerCase().replace(/[^a-z0-9]+/g, "-"); // runs collapse to one dash, so no "--" remains
         const id = slug.replace(/^-|-$/g, "").replace(/^([^a-z])/, "a$1").slice(0, 40);
         const dir = skillsDir.value.trim();
-        if (!id || !/^(~\/|\/)/.test(dir) || dir.includes("..")) { e.preventDefault(); notice("영문 이름과 ~/ 로 시작하는 스킬 폴더를 써 주세요."); return; }
+        if (!id || !agentDirOk(dir)) { e.preventDefault(); notice("영문 이름과 ~/ 나 C:\\ 로 시작하는 스킬 폴더를 써 주세요."); return; }
         void agentRequest({ agent: id, kind: "agent", name: manual, enabled: true, skills_dir: dir, chats_dir: chatsDir.value.trim() || undefined }, `${manual}를 추가했어요. 1분 안에 반영돼요.`);
       } else if (sel) {
         const a = choices.find((x) => x.id === sel);
