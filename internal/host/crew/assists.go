@@ -593,36 +593,16 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 	}
 	spec := map[string]any{"model": model, "effort": effort, "instructions": instructions, "task": sOr(a["prompt"]), "once": true,
 		"access": "read", "origin": map[string]any{"kind": "assist", "agent_id": sOr(item["id"]), "trigger": trigger}}
-	b := strings.TrimSpace(sOr(c["backend"]))
-	if st := obj(rec["crew_assist"]); st["status"] == "running" {
-		b = sOr(obj(st["trace"])["backend"]) // the runner that took it, even if the expert was moved since
-	}
-	if b != "" && b != "local" {
+	b := assistBackend(rec, c)
+	if b != "" {
 		// An agent-runner connection: never a fallback model or another runner (a task may already run there).
 		if !ownsAssist(rec, b) {
 			return nil, errNotMine
 		}
-		spec["backend"] = b
-		spec["run"] = assistRun(rec, item)
-		id := sOr(rec["id"])
-		releaseAssistSlot(id) // the step only waits on the runner (up to hours): its slot goes to the next local job
-		spec["on_accept"] = func(trace map[string]any) {
-			body := host.Obj{{Key: "scope", Value: scope()}, {Key: "status", Value: "running"}, {Key: "trace", Value: traceBody(trace)}}
-			if _, err := runnerCall("/v1/crew/assists/"+pyQuote(id, "/")+"/result", body, 30*time.Second); err != nil {
-				fmt.Fprintf(os.Stderr, "AI 도움 접수 알림 실패: %s\n", errName(err))
-			}
-		}
-		out, err := runAgentSpec(spec, runner)
-		if err != nil {
-			if isCrewErr(err) {
-				return failedResult(err.Error()), nil
-			}
-			return nil, err
-		}
-		return assistResult(out), nil
+		onBackend(spec, rec, item, b)
 	}
 	out, err := runAgentSpec(spec, runner)
-	if (err != nil || out["ok"] != true) && truthy(c["fallback_model"]) {
+	if b == "" && (err != nil || out["ok"] != true) && truthy(c["fallback_model"]) {
 		out, err = runAgentSpec(withKey(spec, "model", sOr(c["fallback_model"])), runner)
 	}
 	if err != nil {
@@ -632,6 +612,33 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 		return nil, err
 	}
 	return assistResult(out), nil
+}
+
+// assistBackend is the agent-runner connection an assist runs on ("" for Arkism's own path): the one that took a
+// running assist, even if the expert was moved since, else the expert's.
+func assistBackend(rec, c map[string]any) string {
+	b := strings.TrimSpace(sOr(c["backend"]))
+	if st := obj(rec["crew_assist"]); st["status"] == "running" {
+		b = sOr(obj(st["trace"])["backend"])
+	}
+	if b == "local" {
+		return ""
+	}
+	return b
+}
+
+// onBackend points an assist's call at connection b: its run key, a freed pool slot and the "accepted" report.
+func onBackend(spec, rec, item map[string]any, b string) {
+	spec["backend"] = b
+	spec["run"] = assistRun(rec, item)
+	id := sOr(rec["id"])
+	releaseAssistSlot(id) // the step only waits on the runner (up to hours): its slot goes to the next local job
+	spec["on_accept"] = func(trace map[string]any) {
+		body := host.Obj{{Key: "scope", Value: scope()}, {Key: "status", Value: "running"}, {Key: "trace", Value: traceBody(trace)}}
+		if _, err := runnerCall("/v1/crew/assists/"+pyQuote(id, "/")+"/result", body, 30*time.Second); err != nil {
+			fmt.Fprintf(os.Stderr, "AI 도움 접수 알림 실패: %s\n", errName(err))
+		}
+	}
 }
 
 // agentWorkflow runs the workflow an agent works by ($handle) with the caller's prompt, and reports it like an answer.

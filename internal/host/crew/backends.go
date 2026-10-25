@@ -51,7 +51,7 @@ type backend struct {
 	Local     bool            `json:"local,omitempty"`
 	Isolated  bool            `json:"isolated,omitempty"`
 	OwnModel  bool            `json:"own_model,omitempty"`
-	Memory    bool            `json:"memory,omitempty"` // the owner lets approved memory that passes the transfer policy go along
+	Memory    bool            `json:"memory,omitempty"`       // the owner lets approved memory that passes the transfer policy go along
 	Caps      map[string]bool `json:"capabilities,omitempty"` // from the last check
 	CheckedAt string          `json:"checked_at,omitempty"`
 	Status    string          `json:"status,omitempty"` // ok | failed: <reason>
