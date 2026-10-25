@@ -8,6 +8,7 @@ use std::fmt;
 use std::io::{self, Read};
 #[cfg(windows)]
 use std::path::Path;
+#[cfg(test)]
 use std::time::Duration;
 
 pub const MAX_BYTES: u64 = 512 * 1024 * 1024;
@@ -178,6 +179,8 @@ impl<T> Retained<T> {
     }
 }
 
+// Production only retains the owner; the evidence fields are read by tests.
+#[cfg_attr(not(test), allow(dead_code))]
 pub struct PendingInstaller {
     #[cfg(windows)]
     _state: Option<Retained<windows::PendingState>>,
@@ -186,6 +189,7 @@ pub struct PendingInstaller {
     resume: Option<u32>,
     may_have_run: bool,
 }
+#[cfg(test)]
 impl PendingInstaller {
     pub fn primary_error(&self) -> &Error {
         &self.error
@@ -304,10 +308,12 @@ pub struct Installer {
 /// that handoff as a failed launch. The child owns inherited protection handles.
 pub struct Launched {
     #[cfg(windows)]
+    #[cfg_attr(not(test), allow(dead_code))] // held so the child handle stays open
     process: windows::Process,
 }
 
 impl Launched {
+    #[cfg(test)]
     pub fn wait(&mut self, timeout: Duration) -> Result<Option<u32>, Error> {
         #[cfg(windows)]
         {
@@ -943,7 +949,7 @@ mod windows {
         match path.components().next() {
             Some(Component::Prefix(prefix)) => {
                 matches!(prefix.kind(), Prefix::Disk(_) | Prefix::VerbatimDisk(_))
-                    || matches!(prefix.kind(), Prefix::Verbatim(value) if value.to_str().map_or(false, |v| v.starts_with("Volume{") && v.ends_with('}')))
+                    || matches!(prefix.kind(), Prefix::Verbatim(value) if value.to_str().is_some_and(|v| v.starts_with("Volume{") && v.ends_with('}')))
             }
             _ => false,
         }
@@ -1015,11 +1021,7 @@ mod windows {
                 return Err(Error::fixed("attribute_size"));
             }
             let mut list = Self {
-                buffer: vec![
-                    0;
-                    (size + std::mem::size_of::<usize>() - 1)
-                        / std::mem::size_of::<usize>()
-                ],
+                buffer: vec![0; size.div_ceil(std::mem::size_of::<usize>())],
                 initialized: false,
             };
             if unsafe { InitializeProcThreadAttributeList(list.pointer(), 1, 0, &mut size) } == 0 {
@@ -1090,15 +1092,14 @@ mod windows {
                 slashes += 1;
                 continue;
             }
-            out.extend(std::iter::repeat(92).take(if value == 34 {
-                slashes * 2 + 1
-            } else {
-                slashes
-            }));
+            out.extend(std::iter::repeat_n(
+                92,
+                if value == 34 { slashes * 2 + 1 } else { slashes },
+            ));
             out.push(value);
             slashes = 0;
         }
-        out.extend(std::iter::repeat(92).take(slashes * 2));
+        out.extend(std::iter::repeat_n(92, slashes * 2));
         out.push(34);
         Ok(())
     }
@@ -1334,13 +1335,15 @@ mod windows {
     }
 
     #[cfg(test)]
+    type Hook = Box<dyn FnOnce(&Path)>;
+    #[cfg(test)]
     pub(super) struct Interleaved {
         pub storage: Staging,
-        hook: Option<Box<dyn FnOnce(&Path)>>,
+        hook: Option<Hook>,
     }
     #[cfg(test)]
     impl Interleaved {
-        pub fn new(root: &Path, hook: Box<dyn FnOnce(&Path)>) -> Result<Self, Error> {
+        pub fn new(root: &Path, hook: Hook) -> Result<Self, Error> {
             Ok(Self {
                 storage: Staging::create(root)?,
                 hook: Some(hook),
@@ -1774,7 +1777,7 @@ mod windows {
                     environment_supplied: block.is_some(),
                     environment_double_nul: block
                         .as_ref()
-                        .map_or(true, |value| value.ends_with(&[0, 0])),
+                        .is_none_or(|value| value.ends_with(&[0, 0])),
                     argument_count: arguments.len(),
                     handle_count: handles.len(),
                     guard_count: inherited_handles.len(),
@@ -1847,8 +1850,7 @@ mod windows {
             if information(&file, false)? != self.identity {
                 return Err(Error::fixed("file_identity_changed"));
             }
-            self.locked = Some(file);
-            let canonical = final_path(self.locked.as_ref().unwrap())?;
+            let canonical = final_path(self.locked.insert(file))?;
             self.holds.extend(hold_directories(
                 canonical
                     .parent()
@@ -2596,7 +2598,7 @@ mod tests {
         assert_eq!(
             Error::io(
                 "read_locked",
-                io::Error::new(io::ErrorKind::Other, "private path")
+                io::Error::other("private path")
             )
             .to_string(),
             "update_installer:read_locked"
@@ -2643,6 +2645,7 @@ mod tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::drop_non_drop)] // these tests drop a Retained on purpose to prove it is a no-op
 mod bound_core_tests {
     use super::{
         exact_native_name, suspended_core, CoreDisposition, Error, Retained, SuspendedControl,

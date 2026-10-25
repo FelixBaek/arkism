@@ -162,7 +162,7 @@ mod windows {
             return Err(invalid());
         }
         let mut buffer =
-            vec![0usize; (needed as usize + size_of::<usize>() - 1) / size_of::<usize>()];
+            vec![0usize; (needed as usize).div_ceil(size_of::<usize>())];
         checked(unsafe {
             GetTokenInformation(
                 token.as_raw_handle(),

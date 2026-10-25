@@ -19,12 +19,17 @@ mod general;
 mod lifecycle;
 #[cfg(windows)]
 mod windows_process;
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only paths; other builds compile them for the unit tests
 mod windows_job;
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only paths; other builds compile them for the unit tests
 mod desktop_control;
+#[cfg_attr(not(windows), allow(dead_code))] // Windows-only paths; other builds compile them for the unit tests
 mod runtime_process;
 mod runtime;
 #[cfg(any(windows, test))]
 mod app_autostart;
+// Windows-only paths, and shared with tests/windows_update_installer_identity.rs where each test crate uses part of it.
+#[cfg_attr(any(test, not(windows)), allow(dead_code))]
 mod update_installer;
 mod update_manifest;
 #[cfg(windows)]
@@ -137,9 +142,11 @@ async fn local_start(rt: tauri::State<'_, Arc<runtime::Runtime>>) -> Result<runt
     static WORK: OnceLock<()> = OnceLock::new();
     WORK.get_or_init(|| {
         std::thread::spawn(move || {
-            for tick in 0u64.. {
+            let mut tick = 0u64;
+            loop {
                 rt.background_work(tick);
                 std::thread::sleep(Duration::from_secs(60));
+                tick = tick.wrapping_add(1);
             }
         });
     });
@@ -517,6 +524,7 @@ async fn api_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, 
     .map_err(|e| e.to_string())?
 }
 
+#[cfg(test)]
 fn pct_encode(s: &str) -> String {
     s.bytes()
         .map(|b| match b {
@@ -925,11 +933,9 @@ fn main() {
             let autostart_marker = default.join("autostart-default");
             #[cfg(windows)]
             let _ = app_autostart::migrate_owned();
-            if !autostart_marker.exists() {
-                if write_autostart(app.handle(), true).is_ok() {
-                    let _ = std::fs::create_dir_all(&default);
-                    let _ = std::fs::write(&autostart_marker, "on");
-                }
+            if !autostart_marker.exists() && write_autostart(app.handle(), true).is_ok() {
+                let _ = std::fs::create_dir_all(&default);
+                let _ = std::fs::write(&autostart_marker, "on");
             }
             let version = app.package_info().version.to_string();
             if std::fs::read_to_string(rt.data_dir().join("agents-connected")).ok().as_deref() != Some(version.as_str()) {
@@ -1237,7 +1243,7 @@ mod tests {
     impl Read for FailedUpdateReader {
         fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
             let error = std::io::Error::new(self.kind, self.message);
-            Err(if self.wrapped { std::io::Error::new(std::io::ErrorKind::Other, error) } else { error })
+            Err(if self.wrapped { std::io::Error::other(error) } else { error })
         }
     }
 

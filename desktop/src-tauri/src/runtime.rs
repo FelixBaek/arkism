@@ -412,12 +412,14 @@ fn control_role(role: Role) -> Option<crate::desktop_control::Role> {
     }
 }
 
+#[cfg(test)]
 trait ChildControl {
     fn kill_checked(&mut self) -> Result<(), String>;
     fn wait_checked(&mut self) -> Result<(), String>;
     fn stopped(&mut self) -> Result<bool, String>;
 }
 
+#[cfg(test)]
 impl ChildControl for ManagedChild {
     fn kill_checked(&mut self) -> Result<(), String> { self.kill().map_err(|_| "update_runtime_kill_failed".into()) }
     fn stopped(&mut self) -> Result<bool, String> { self.try_wait().map(|s| s.is_some()).map_err(|_| "update_runtime_wait_failed".into()) }
@@ -431,6 +433,7 @@ impl ChildControl for ManagedChild {
     }
 }
 
+#[cfg(test)]
 fn stop_child(child: &mut impl ChildControl) -> Stopped {
     let primary = child.kill_checked().and_then(|_| child.wait_checked()).err();
     match child.stopped() {
@@ -529,6 +532,13 @@ impl Backend for UpdateRuntime<'_> {
     }
 }
 
+#[cfg(test)]
+type ProcessFactory = Box<dyn Fn(Role,&LaunchSpec,&Command)->Result<Process,runtime_process::Failure> + Send>;
+#[cfg(test)]
+type EndpointBoundary = Box<dyn Fn(Role,&LaunchSpec,bool)->Result<bool,String> + Send>;
+#[cfg(test)]
+type CommandBoundary = Box<dyn Fn(&mut Command)->Result<runtime_process::Output,runtime_process::Failure> + Send>;
+
 pub struct Runtime {
     programs: Option<PathBuf>,
     /// Changes only before anything runs (the first start's 저장 위치), see `move_data_dir`.
@@ -548,13 +558,13 @@ pub struct Runtime {
     #[cfg(windows)]
     generation: AtomicU64,
     #[cfg(test)]
-    process_factory: Mutex<Option<Box<dyn Fn(Role,&LaunchSpec,&Command)->Result<Process,runtime_process::Failure> + Send>>>,
+    process_factory: Mutex<Option<ProcessFactory>>,
     #[cfg(test)]
     postgres_boundary: Mutex<Option<Box<dyn PostgresBoundary>>>,
     #[cfg(test)]
-    endpoint_boundary: Mutex<Option<Box<dyn Fn(Role,&LaunchSpec,bool)->Result<bool,String> + Send>>>,
+    endpoint_boundary: Mutex<Option<EndpointBoundary>>,
     #[cfg(test)]
-    command_boundary: Mutex<Option<Box<dyn Fn(&mut Command)->Result<runtime_process::Output,runtime_process::Failure> + Send>>>,
+    command_boundary: Mutex<Option<CommandBoundary>>,
     /// Start, backup, restore and erase take turns.
     busy: Mutex<()>,
     /// The user's home: the agents' capture queues are under `.config/arkism`.
@@ -678,6 +688,7 @@ impl Runtime {
     }
 
     /// Reserve installer storage before the mutation lease, exclusive turn and role slots.
+    #[cfg(test)]
     pub(crate) fn update_handoff(&self, launch: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
         let slot = self.installer_slot()?;
         if slot.is_some() { return Err("update_installer_unverified".into()); }
@@ -791,7 +802,7 @@ impl Runtime {
     pub fn ensure_gateway(&self) -> Result<String, String> {
         let _activity = self.activity()?;
         let mut gateway = self.gateway.lock().map_err(|_| "local_busy".to_string())?;
-        let alive = slot_alive(&mut gateway).map_err(|e| { self.gate.block(); e })?;
+        let alive = slot_alive(&mut gateway).inspect_err(|_| self.gate.block())?;
         let mut secrets = self.secrets()?;
         if alive && secrets.gateway_port != 0 {
             return Ok(gateway_url(secrets.gateway_port));
@@ -810,7 +821,7 @@ impl Runtime {
         // A gateway that exits at once (bad config, port taken) is not reported as running.
         *gateway = Some(child);
         std::thread::sleep(std::time::Duration::from_millis(300));
-        if !slot_alive(&mut gateway).map_err(|e| { self.gate.block(); e })? {
+        if !slot_alive(&mut gateway).inspect_err(|_| self.gate.block())? {
             return Err("gateway_start_failed".into());
         }
         if secrets.gateway_port != old_port {
@@ -953,9 +964,9 @@ impl Runtime {
         if self.host_command(&[]).is_none() {
             return;
         }
-        let command = |args: &[&str]| self.host_command(args).expect("checked above");
+        // Local data can be erased while this loop runs, so each command is looked up again.
         let run = |args: &[&str], extra: &[(&str, PathBuf)]| {
-            let mut cmd = command(args);
+            let Some(mut cmd) = self.host_command(args) else { return };
             for (k, v) in extra {
                 cmd.env(k, v);
             }
@@ -969,7 +980,7 @@ impl Runtime {
                 Err(_) => { self.gate.block(); return; }
             };
             if !alive {
-                let mut cmd = command(&["crew", "providers", "watch"]);
+                let Some(mut cmd) = self.host_command(&["crew", "providers", "watch"]) else { return };
                 quiet(&mut cmd);
                 match self.spawn_child(Role::Watcher, &mut cmd, None, None) {
                     Ok(child) => *watcher = Some(child),
@@ -1157,7 +1168,7 @@ impl Runtime {
     fn stop_server(&self) {
         for slot in [&self.watcher,&self.gateway] {
             if let Ok(mut slot) = slot.lock() {
-                let stopped = slot.as_mut().map_or(true,normal_child_stop);
+                let stopped = slot.as_mut().is_none_or(normal_child_stop);
                 if stopped { *slot = None; } else { self.gate.block(); }
             }
         }
@@ -1556,7 +1567,7 @@ impl Runtime {
         const KEEP: usize = 7;
         let dir = Self::backup_dir()?;
         let newest = Self::backups()?.into_iter().next();
-        let stale = newest.map_or(true, |b| b.created < utc_stamp(std::time::SystemTime::now() - Duration::from_secs(86_400)));
+        let stale = newest.is_none_or(|b| b.created < utc_stamp(std::time::SystemTime::now() - Duration::from_secs(86_400)));
         if only_when_stale && !stale {
             return Ok(());
         }

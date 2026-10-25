@@ -86,16 +86,16 @@ impl Binding {
     }
 
     /// Pass these to the full explicit child environment; never print this Vec.
+    #[cfg(test)]
     pub fn bootstrap_environment(&self) -> Vec<(String, String)> {
         environment(self.role, self.generation, &self.nonce)
     }
 
-    pub fn role(&self) -> Role {
-        self.role
-    }
+    #[cfg(test)]
     pub fn generation(&self) -> u64 {
         self.generation
     }
+    #[cfg(test)]
     pub fn native_pid(&self) -> u32 {
         self.native_pid
     }
@@ -437,12 +437,14 @@ impl<T: Transport> Session<T> {
         self.state
     }
     /// Historical evidence only; never use this as the current role permission.
+    #[cfg(test)]
     pub fn last_verified_state(&self) -> State {
         self.last_verified
     }
     pub fn pending(&self) -> Option<Pending> {
         self.pending
     }
+    #[cfg(test)]
     pub fn binding(&self) -> &Binding {
         &self.binding
     }
@@ -833,6 +835,7 @@ mod windows {
     /// Take each native parent endpoint once, before any other reader/writer.
     /// Failure retains a partially configured transport; it never stops the Job.
     /// Native availability and child behavior still require hosted Windows tests.
+    #[allow(clippy::result_large_err)] // the failure hands the live session back for cleanup
     pub fn for_job(
         job: &mut JobChild,
         role: Role,
@@ -893,7 +896,7 @@ mod windows {
 }
 
 #[cfg(windows)]
-pub use windows::{for_job, try_read_pipe, ConnectFailure, Pipes};
+pub use windows::{for_job, try_read_pipe, Pipes};
 
 #[cfg(test)]
 mod tests {
