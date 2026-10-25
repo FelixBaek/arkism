@@ -83,3 +83,7 @@ test("a one-letter unit stays with the last piece", () => {
 test("one API key is singular", () => {
   assert.equal(translate("API 키"), "API key"); // #192: the key dialog labels a single key
 });
+
+test("each runner setting that was not applied is translated", () => {
+  assert.equal(translate("외부 실행기 r · 실패 · 못 쓴 것: 고른 모델 / 도구 제한 · 비용 모름"), "Agent runner r · Failed · Not applied: chosen model / tool restriction · cost unknown");
+});

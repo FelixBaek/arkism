@@ -47,7 +47,8 @@ func main() {
 		}
 	}
 	log.Printf("backendref (local reference runner, not a product) on http://%s", *addr)
-	log.Fatal(http.ListenAndServe(*addr, r))
+	srv := &http.Server{Addr: *addr, Handler: r, ReadTimeout: 10 * time.Second}
+	log.Fatal(srv.ListenAndServe())
 }
 
 func (r *runner) ServeHTTP(w http.ResponseWriter, q *http.Request) {
@@ -55,20 +56,22 @@ func (r *runner) ServeHTTP(w http.ResponseWriter, q *http.Request) {
 		reply(w, 401, map[string]any{"error": map[string]any{"code": "auth", "message": "bad token"}})
 		return
 	}
+	if q.Method == http.MethodPost && q.URL.Path == "/v1/tasks" {
+		r.start(w, q) // it reads the body before taking the lock, so a slow sender does not hold up the others
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	switch path := q.URL.Path; {
 	case q.Method == http.MethodGet && path == "/v1/capabilities":
 		reply(w, 200, map[string]any{"protocol": "arkism.backend.v1", "capabilities": r.caps})
-	case q.Method == http.MethodPost && path == "/v1/tasks":
-		r.start(w, q)
 	case q.Method == http.MethodPost && strings.HasSuffix(path, "/cancel"):
 		t := r.tasks[strings.TrimSuffix(strings.TrimPrefix(path, "/v1/tasks/"), "/cancel")]
 		if t == nil || !r.caps["cancel"] {
 			http.NotFound(w, q)
 			return
 		}
-		if t.Status != "succeeded" {
+		if r.view(t)["status"] != "succeeded" { // a task past its delay has already succeeded
 			t.Status = "cancelled"
 		}
 		reply(w, 200, r.view(t))
@@ -101,6 +104,8 @@ func (r *runner) start(w http.ResponseWriter, q *http.Request) {
 		reply(w, 400, map[string]any{"error": map[string]any{"code": "bad_request", "message": "need arkism.backend.v1 and read access"}})
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	key := q.Header.Get("Idempotency-Key")
 	if id, ok := r.byKey[key]; ok && key != "" && r.caps["idempotency"] {
 		reply(w, 200, r.view(r.tasks[id])) // the same key is the same task, never a second one

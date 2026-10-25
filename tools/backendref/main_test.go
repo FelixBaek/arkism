@@ -27,7 +27,7 @@ func call(t *testing.T, srv *httptest.Server, method, path, key, body string) ma
 }
 
 func TestReferenceRunner(t *testing.T) {
-	r := &runner{token: "tk", delay: 50 * time.Millisecond, caps: map[string]bool{"status": true, "idempotency": true}, tasks: map[string]*task{}, byKey: map[string]string{}}
+	r := &runner{token: "tk", delay: 50 * time.Millisecond, caps: map[string]bool{"status": true, "cancel": true, "idempotency": true}, tasks: map[string]*task{}, byKey: map[string]string{}}
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 	body := `{"protocol":"arkism.backend.v1","task":"hi","access":{"mode":"read"},"memory":{"items":[{"id":"m1"}]}}`
@@ -37,6 +37,9 @@ func TestReferenceRunner(t *testing.T) {
 		t.Fatal("same key, same task:", a, b)
 	}
 	time.Sleep(60 * time.Millisecond)
+	if c := call(t, srv, "POST", "/v1/tasks/"+a["task_id"].(string)+"/cancel", "", ""); c["status"] != "succeeded" {
+		t.Fatal("a task past its delay was cancelled instead of succeeding:", c)
+	}
 	s := call(t, srv, "GET", "/v1/tasks/"+a["task_id"].(string), "", "")
 	if s["status"] != "succeeded" || !strings.Contains(s["result"].(map[string]any)["text"].(string), "1 memory items") {
 		t.Fatal(s)

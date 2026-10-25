@@ -589,7 +589,7 @@ func TestBackendMemoryOnlyWhenAllowed(t *testing.T) {
 		map[string]any{"id": "s1", "collection": "skill_versions", "text": "스킬 본문"},
 		map[string]any{"id": "bad id\n", "collection": "memories", "text": "x"}}
 	var searchErr error
-	patch(t, &backendSearch, func(_, dest string) ([]any, error) { dests = append(dests, dest); return hits, searchErr })
+	patch(t, &backendSearch, func(_, dest string, _ time.Duration) ([]any, error) { dests = append(dests, dest); return hits, searchErr })
 	run := func(name string, memory bool, caps ...string) (map[string]any, map[string]any) {
 		f := newFakeRunner(t, append([]string{"tool_restriction"}, caps...)...)
 		f.start = func(w http.ResponseWriter, _ map[string]any) {
@@ -618,6 +618,21 @@ func TestBackendMemoryOnlyWhenAllowed(t *testing.T) {
 	}
 	if !strings.Contains(fmt.Sprint(tr["context"]), "memory:m1") || strings.Contains(fmt.Sprint(body["task"]), "회의는") {
 		t.Fatal("trace names it, the task does not carry it", tr, body["task"])
+	}
+	// Following a task already started sends nothing, so it neither searches again nor rewrites what the trace says went.
+	f := newFakeRunner(t, "tool_restriction", "memory", "status")
+	f.status = func(w http.ResponseWriter, id string) {
+		reply(w, 200, map[string]any{"task_id": id, "status": "succeeded", "result": map[string]any{"text": "답"}})
+	}
+	if _, err := addBackend("follow", f.URL, "", "", true, false, false, true); err != nil {
+		t.Fatal(err)
+	}
+	spec := stepSpec("follow", "assist/follow")
+	obj(spec["run"])["task_id"] = "t-9"
+	searches := len(dests)
+	if out, err := runNode(spec); err != nil || out["ok"] != true || len(dests) != searches || len(f.starts) != 0 ||
+		strings.Contains(fmt.Sprint(trace(out)["not_applied"]), "memory") {
+		t.Fatal("a followed task searched memory again", out, err, dests)
 	}
 	searchErr = errors.New("search down")
 	if body, tr := run("down", true, "memory"); body["memory"] != nil || !strings.Contains(fmt.Sprint(tr["not_applied"]), "memory") {
