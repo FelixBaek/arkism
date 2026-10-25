@@ -564,9 +564,9 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 	if a["lang"] == "en" {
 		instructions += englishReader
 	}
-	trigger := "manual"
-	if rec["created_by_type"] == "service" {
-		trigger = "discord"
+	trigger := map[any]string{"service": "discord", "agent": "call"}[rec["created_by_type"]]
+	if trigger == "" {
+		trigger = "manual"
 	}
 	spec := map[string]any{"model": model, "effort": effort, "instructions": instructions, "task": sOr(a["prompt"]), "once": true,
 		"access": "read", "origin": map[string]any{"kind": "assist", "agent_id": sOr(item["id"]), "trigger": trigger}}

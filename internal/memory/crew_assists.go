@@ -94,8 +94,9 @@ func (s *Service) CreateCrewAssist(ctx context.Context, token string, in CrewAss
 	if err != nil {
 		return Record{}, err
 	}
-	// The Discord host (service token) asks agents one read-only question (try); every other kind is a person's.
-	if d.Role != roleHuman && !(d.Role == roleService && in.Assist.Kind == "try") {
+	// The Discord host (service token) and a harness calling @expert (agent token) ask agents one read-only question
+	// (try); every other kind is a person's.
+	if d.Role != roleHuman && !((d.Role == roleService || d.Role == roleAgent) && in.Assist.Kind == "try") {
 		return Record{}, ErrDenied
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
