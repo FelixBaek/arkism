@@ -257,6 +257,15 @@ test("the right-click menu offers field, selection, link and own items, and clos
   await flush();
   assert.equal(notices.at(-1), "복사하지 못했어요.");
   clipboard.fail = false;
+  // a webview without the clipboard API still says the copy failed
+  const writeText = clipboard.writeText;
+  delete clipboard.writeText;
+  notices.push("");
+  fire($("#l"), "contextmenu", { clientX: 1, clientY: 1 });
+  menu().querySelector("button").click();
+  await flush();
+  assert.equal(notices.at(-1), "복사하지 못했어요.");
+  clipboard.writeText = writeText;
   fire($("#m"), "contextmenu", { clientX: 1, clientY: 1 });
   assert.equal(menu(), null);
   let ran = 0;
