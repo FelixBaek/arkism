@@ -192,6 +192,7 @@ test("비슷한 스킬: 합쳐서 미리 보기 drafts one SKILL.md, the other g
     }
     hook = (a) => (a.path.startsWith("/v1/crew/assists/") ? json(200, { crew_assist: { status: "failed", error: "x" } }) : null);
     await drafted();
+    for (let i = 0; i < 20 && !/AI가 답하지 못했어요/.test(t(app.$("#detail"))); i++) await app.settle(300); // a slow CI runner polls the assist later
     hook = () => null;
     assert.match(t(app.$("#detail")), /AI가 답하지 못했어요/);
   }
