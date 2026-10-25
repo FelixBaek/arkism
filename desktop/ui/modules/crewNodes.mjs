@@ -1,3 +1,4 @@
+// @ts-check
 // Owns node dialogs and inspectors. Dependencies are explicit live ports, never a global scope.
 export function createCrewNodes(deps) {
 

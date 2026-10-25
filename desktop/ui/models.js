@@ -1,3 +1,4 @@
+// @ts-check
 // 설정 › 에이전트's provider parts. Providers, logged-in CLI accounts, quota, stored keys (last four
 // only) and which models workflow AI nodes may use. Keys go to the server through Arkism's one-time handoff:
 // the host runner (`arkism crew` providers watch) stores or tests them; nothing here keeps a key.

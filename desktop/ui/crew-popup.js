@@ -1,3 +1,4 @@
+// @ts-check
 // 크루 상세 팝업 틀 (Figma 868:61909 전문가 · 961:60688 팀 · 993:60224 자동화): one window shape for all three.
 // Head (cover photo or avatar, name, one line, actions) → tabs (편집 · 테스트 · 기록 …) → the picked tab's body.
 // Each tab's render(box) fills its own body; switching tabs keeps the window and only redraws the body.

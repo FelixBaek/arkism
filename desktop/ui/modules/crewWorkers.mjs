@@ -1235,7 +1235,7 @@ export function createCrewWorkers(deps) {
           return row;
         }
         const run = x.crew_run || {};
-        let said = "";
+        let said;
         try { said = JSON.parse(run.input || "{}").request || ""; } catch { said = run.input || ""; }
         const ok = run.status === "succeeded", live = run.status === "running";
         row.append(deps.el("b", live ? "run" : ok ? "ok" : "warn", live ? "" : ok ? "✓" : "!"), deps.el("time", "", stamp(x.created_at)), deps.el("i", "tm-hist-src", CALL_FROM[run.trigger] || run.trigger || "직접"),

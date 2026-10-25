@@ -1,3 +1,4 @@
+// @ts-check
 // Server reservations are exposure, not the provider's final invoice.
 window.ArkismModelBudget = (() => {
   const fields = ["monthly_limit_pico_usd", "general_limit_pico_usd", "daily_soft_target_pico_usd", "monthly_committed_pico_usd", "general_committed_pico_usd", "daily_committed_pico_usd", "outstanding_pico_usd"];

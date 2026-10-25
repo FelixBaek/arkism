@@ -1,3 +1,4 @@
+// @ts-check
 // ROUTER › 라우팅 현황: Claude Code calls through the :8099 gateway (overview `gateway`, see
 // internal/memory/routing_gateway_view.go). 본대화 and 부속 호출 (Claude Code's own side calls: titles,
 // summaries, compaction …) are counted apart, and the latest agent turns list each call of the turn.

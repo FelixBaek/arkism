@@ -1,3 +1,4 @@
+// @ts-check
 // Owns memory cursors and refresh. Dependencies are explicit live ports, never a global scope.
 export function createMemoryPaging(deps) {
 

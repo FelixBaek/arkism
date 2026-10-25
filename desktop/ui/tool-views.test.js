@@ -87,7 +87,7 @@ const btn = (root, label) => root.querySelectorAll("button").find((b) => b.textC
 const dialogs = (s) => s.doc.body.children.filter((x) => x.tagName === "DIALOG");
 
 test("loadTools fills defaults, reports a missing host as null, and the minute tick respects context", async () => {
-  const s = await views({ handler: (path) => { if (s.fail) throw new Error("down"); return s.answer; } });
+  const s = await views({ handler: () => { if (s.fail) throw new Error("down"); return s.answer; } });
   s.answer = { agent_tools: { servers: [{ name: "a" }] } };
   const t = await s.v.loadTools();
   assert.deepEqual(t.plugins, []);
@@ -426,7 +426,7 @@ test("sign-in in a plain browser takes the pasted address; closing the popup or 
   const realNow = Date.now;
   let now = realNow();
   Date.now = () => (now += 30000);
-  s.deps.request = async (path, opt) => (path === "/v1/agent_tools/requests" ? { agent_tools: { requests: [{ id: "L9", kind: "mcp_login", agent: "codex", name: "cloudflare" }] } } : { agent_tools: { requests: [] } });
+  s.deps.request = async (path) => (path === "/v1/agent_tools/requests" ? { agent_tools: { requests: [{ id: "L9", kind: "mcp_login", agent: "codex", name: "cloudflare" }] } } : { agent_tools: { requests: [] } });
   btn(d, "Codex 로그인").click();
   const p3 = dialogs(s).at(-1);
   try { await until(() => /서버가 답하지 않아요/.test(p3.textContent)); } finally { Date.now = realNow; }

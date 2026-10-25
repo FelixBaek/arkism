@@ -1,3 +1,4 @@
+// @ts-check
 window.ArkismSkillReview = ({ state, el, button, request, query, reload, execution, trial }) => (sk, mode) => {
   "use strict";
   // mode "" shows everything; the 개선하기 steps show one part each: "compare" (비교 실행), "review" (평가·승인), "trial" (시험 적용).

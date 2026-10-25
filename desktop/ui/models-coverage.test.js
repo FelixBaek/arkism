@@ -96,7 +96,7 @@ test("the tab lists providers, accounts, quotas, CLI versions, keys and models",
   assert.match(t, /Gemini CLI를 한 번 실행하면/); assert.match(t, /zz 로그인을 다시/); assert.match(t, /CLI 로그인을 다시/);
   assert.match(t, /GPT 5/); assert.match(t, /직접 추가/); assert.match(t, /시험 중/); assert.match(t, /1\.2초/); assert.match(t, /3개 중 2개 켜짐/);
   const side = text(v.nodes.side);
-  assert.match(side, /••••abcd  ·  \$30\/월/); assert.match(side, /x\/v1 · 방금/); assert.match(side, /서버에 저장하는 중/); assert.match(side, /저장 실패: 알 수 없음/); assert.match(side, /다시 넣어 주세요/);
+  assert.match(side, /••••abcd {2}· {2}\$30\/월/); assert.match(side, /x\/v1 · 방금/); assert.match(side, /서버에 저장하는 중/); assert.match(side, /저장 실패: 알 수 없음/); assert.match(side, /다시 넣어 주세요/);
   // AI 도구 기본 모델 moved from this title row to the top of 설정 › 에이전트 (pages.js, 29ace25); the tab only hands out the picker.
   assert.doesNotMatch(t, /AI 도구 기본 모델/);
   const pick = v.m.assistPicker();
@@ -317,7 +317,7 @@ test("key dialog: peek, test, pick found models and save", async () => {
   await v.m.load(); v.draw();
   click(v.nodes.side, "키 추가");
   let d = dialog();
-  const key = d.all((x) => x.placeholder === "키를 붙여 넣어요")[0], base = d.all((x) => x.placeholder === "https://…/v1")[0], budget = d.all((x) => x.placeholder === "$30")[0];
+  const key = d.all((x) => x.placeholder === "키를 붙여 넣어요")[0], budget = d.all((x) => x.placeholder === "$30")[0];
   const err = () => d.all((x) => x.classList.contains("form-error"))[0].textContent;
   click(d, "보기"); assert.equal(key.type, "text"); click(d, "숨기기"); assert.equal(key.type, "password");
   click(d, "연결 테스트"); assert.equal(err(), "키를 먼저 넣어 주세요.");

@@ -1,5 +1,6 @@
+// @ts-check
 // Owns node vocabulary and configuration fields. Dependencies are explicit live ports, never a global scope.
-export function createCrewVocabulary(deps) {
+export function createCrewVocabulary(_deps) {
  // 항상 넣는 자료 (pins.js)
 
   // ---------------------------------------------------------------- vocabulary (mirrors internal/memory/crew.go)

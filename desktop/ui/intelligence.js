@@ -1,3 +1,4 @@
+// @ts-check
 window.ArkismIntelligence = (ctx, tab) => {
   "use strict";
   tab ||= "reflections";

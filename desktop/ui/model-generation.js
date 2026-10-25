@@ -1,3 +1,4 @@
+// @ts-check
 /* Show persisted generation provenance, never infer the deployed model policy. */
 (function () {
   "use strict";

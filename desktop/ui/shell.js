@@ -70,7 +70,7 @@ window.ArkismShell = (ctx) => {
     // MEMORY draws no tabs: the overview's own links open 기억·세션·사용량, and the rail goes back to 개요.
     const tabs = key === "memory" ? [] : MENUS[key].tabs;
     box.dataset.active = tabs.find((t) => t[3]())?.[1] || ""; // app.js hides a page title that only repeats this tab
-    box.replaceChildren(...tabs.map(([id, label, open, active, n]) => {
+    box.replaceChildren(...tabs.map(([id, , open, active, n]) => {
       const t = el("button", `area-tab${active() ? " active" : ""}`);
       t.type = "button";
       t.dataset.tab = id;

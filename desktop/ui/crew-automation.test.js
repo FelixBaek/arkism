@@ -132,7 +132,7 @@ test("automation AI proposals: steps, goal and trigger, and the errors", async (
   r = await chat().ask("일정");
   for (const p of r.props.filter(Boolean)) { p.apply(); await h.settle(); }
   h.assistReply = () => buildReply({ trigger: { kind: "schedule", cron: "0 7 * * *" } });
-  r = await chat().ask("같은 일정");
+  await chat().ask("같은 일정");
   h.assistReply = () => buildReply({ trigger: { kind: "odd" } });
   await chat().ask("이상한 일정");
   h.assistReply = () => ({ status: "failed" });

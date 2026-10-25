@@ -219,7 +219,7 @@ test("rerun notes follow the last request for that PR", () => {
 
 test("다시 검사 and GitHub buttons ask the server and open the PR", async () => {
   let fail = false;
-  const t = setup((path) => { if (fail) throw new Error("down"); return { code_reviews: docWith({ reruns: [{ repo: "o/arkism", number: 2, status: "pending" }] }) }; });
+  const t = setup(() => { if (fail) throw new Error("down"); return { code_reviews: docWith({ reruns: [{ repo: "o/arkism", number: 2, status: "pending" }] }) }; });
   t.state.data.reviews = docWith();
   t.state.selected = "review:o/arkism#2";
   t.api.detail();

@@ -1,3 +1,4 @@
+// @ts-check
 "use strict";
 window.ArkismSkillTrialStatus = ({ state, el, button, request }) => (skillID, trialID, candidateID) => {
   const panel=el("section","skill-trial-status"), body=el("div");

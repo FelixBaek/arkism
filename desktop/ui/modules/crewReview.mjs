@@ -1,3 +1,4 @@
+// @ts-check
 // Owns AI review and freshness checks. Dependencies are explicit live ports, never a global scope.
 export function createCrewReview(deps) {
 

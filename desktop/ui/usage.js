@@ -1,3 +1,4 @@
+// @ts-check
 // 사용량 (magpie Usage: 개요·요청·세션·시간대), GET /v1/usage/summary. The host collector
 // reports count-only rows per agent session; 요청 are routed calls.
 // One view serves every menu's 사용량 tab (Figma v4: 198:1490 · 5446 · 1576 · 5532 · 325:35181 · 37545 · 34690);

@@ -1,3 +1,4 @@
+// @ts-check
 // 카드 사진 고르기 (Figma 985:61011 · 967:61079): a floating window over the team popup.
 // Unsplash through the server (/v1/unsplash/search; the key stays there), the person's own photo, or none.
 // A pick closes the window at once. Covers are {id, url, thumb, author, author_url}; an own photo is {id: "mine", url: data URL, author: "내 사진"}.

@@ -106,7 +106,7 @@ test("erasing one memory asks twice, erases its sources and keeps a receipt id",
 
 test("a memory without sources is deleted directly and errors are explained", async () => {
   let fail = null;
-  const t = setup((path, opts) => { if (fail) throw new Error(fail); return {}; });
+  const t = setup(() => { if (fail) throw new Error(fail); return {}; });
   const m = { id: "m2", revision: 1, status: "candidate", text: "x" };
   const [danger] = t.api.memorySections(m);
   answers = [true, true];
@@ -133,7 +133,7 @@ test("source erasure is split into the server's 64-id batches", async () => {
 
 test("deletion history reads each stored receipt and never treats a failed read as done", async () => {
   store.clear();
-  const t = setup((path, _, state) => {
+  const t = setup((path) => {
     if (path.startsWith("/v1/privacy/deletions/bad")) throw new Error("x");
     return { privacy_deletion: { state: "completed", report: { live_access_removed: true, backup_expiry_pending: true } } };
   });

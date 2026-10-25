@@ -59,7 +59,7 @@ window.ArkismHome = function (ctx) {
     timer = setTimeout(async () => {
       const t = ++ticket;
       const body = { scope: state.scope, query: q, modes: ["exact", "fts", "vector"], purpose: "answer", destination: "internal", limit: MAX_EACH };
-      let items = [];
+      let items;
       try { items = (await request("/v1/search", { method: "POST", body: JSON.stringify(body) }))?.items || []; } catch (_) {
         try { items = (await request("/v1/search", { method: "POST", body: JSON.stringify({ ...body, modes: ["exact", "fts"] }) }))?.items || []; } catch (_) { items = []; }
       }

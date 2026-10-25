@@ -1,3 +1,4 @@
+// @ts-check
 // Async page completion can redraw controls while someone types. Keep the
 // current input/selection; a completed request must not move focus to its footer.
 export function retainListFocus(document) {

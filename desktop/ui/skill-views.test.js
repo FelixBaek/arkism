@@ -36,7 +36,7 @@ function setup({ skills = [], snapshot = {}, handler, wide = true } = {}) {
     virtualList: { mount: ({ container, items, row }) => { container.append(...items.map(row)); log.push(["mount", items.length]); } },
     setSkillStatus: async (sk, st) => { if (state.restoreFails) throw new Error("locked"); log.push(["status", sk.id, st]); },
     writeKey: (k, v) => { keys[k] = v; }, readKey: (k, d) => keys[k] ?? d,
-    collectionPaging: { read: async (c, r) => { if (state.readFails) throw new Error("r"); return state.data.skills; } },
+    collectionPaging: { read: async () => { if (state.readFails) throw new Error("r"); return state.data.skills; } },
     loadTrash: async () => [],
     notice: (t) => notices.push(t),
     detailShell: (t) => { const b = h.el("div", "detail"); b.heading = t; doc.body.append(b); return b; },
@@ -246,7 +246,7 @@ test("list: no usage yet, no categories, empty, search empty, failed first page 
 
 test("staged agent changes: chips, change bar, apply per skill, revert and failures", async () => {
   const skills = [SK("a", { skill_compatibility: { codex: "unsupported" } }), SK("b")];
-  const s = await views({ skills, handler: (path, body) => {
+  const s = await views({ skills, handler: (path) => {
     if (path.startsWith("/v1/skills/a?") || path.startsWith("/v1/skills/b?")) { if (s.state.applyFails) throw new Error("conflict"); return { revision: 4, status: "active", skill_compatibility: { gemini: "supported" } }; }
     return {};
   } });

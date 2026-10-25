@@ -108,7 +108,7 @@ export function startApp() {
     return tile;
   }
   const shownAgents = () => pages.shownAgents();
-  const agentName = (key) => (AGENTS.find(([k]) => k === key) || [, key])[1];
+  const agentName = (key) => (AGENTS.find(([k]) => k === key) || [key, key])[1];
   // Agents the server reports beyond the skill router's runtimes (ones the owner added by hand). They read only their own
   // skill folder, so the sidebar shows that folder's count and opens 설정 › 에이전트, and the status card shows their connection.
   const extraAgents = () => (state.data.tools?.agents || []).filter((a) => pages.agentWanted(a) && !AGENTS.some(([k]) => k === a.id));
@@ -1677,6 +1677,7 @@ export function startApp() {
     get hydrateMaintenance() { return memoryPaging.hydrateMaintenance; },
     get loadMemoryTotals() { return loadMemoryTotals; },
     get icon() { return icon; },
+    // eslint-disable-next-line no-func-assign -- live port: another module may swap this function
     set icon(value) { icon = value; },
     get idle() { return idle; },
     get inject() { return inject; },
@@ -1744,6 +1745,7 @@ export function startApp() {
     set generation(value) { state.connection.generation = value; },
     get go() { return go; },
     get icon() { return icon; },
+    // eslint-disable-next-line no-func-assign -- live port: another module may swap this function
     set icon(value) { icon = value; },
     get collectionPaging() { return collectionPaging; },
     get catalogQuery() { return catalogQuery; },
@@ -1787,6 +1789,7 @@ export function startApp() {
     get fillList() { return designViews.fillList; },
     get gallery() { return gallery; },
     get icon() { return icon; },
+    // eslint-disable-next-line no-func-assign -- live port: another module may swap this function
     set icon(value) { icon = value; },
     get markSelected() { return markSelected; },
     get matches() { return matches; },
@@ -1852,6 +1855,7 @@ export function startApp() {
     set generation(value) { state.connection.generation = value; },
     get headExtras() { return headExtras; },
     get icon() { return icon; },
+    // eslint-disable-next-line no-func-assign -- live port: another module may swap this function
     set icon(value) { icon = value; },
     get matches() { return matches; },
     get notice() { return notice; },

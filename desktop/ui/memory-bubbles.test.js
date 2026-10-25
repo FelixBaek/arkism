@@ -45,7 +45,7 @@ function make({ n = 6, tabs = [["reach", "칸별"], ["kind", "종류별"]], card
 const ptr = (canvas, type, x, y, id = 1, extra = {}) => dom.fire(canvas, type, { pointerId: id, clientX: x, clientY: y, button: 0, ...extra });
 const key = (canvas, k) => { const e = new dom.Event("keydown", { key: k, cancelable: true }); canvas.dispatchEvent(e); return e.defaultPrevented; };
 // screen place of a dot: the tooltip follows the hovered dot, so find a dot by sweeping the canvas instead of reading internals
-function findDot(canvas, b) {
+function findDot(canvas) {
   for (let y = 0; y < 600; y += 3) for (let x = 0; x < 800; x += 3) {
     ptr(canvas, "pointermove", x, y, 9);
     if (canvas.style.cursor === "pointer") return [x, y];
@@ -145,7 +145,7 @@ test("zoom keys, wheel, pinch and fit keep the zoom in range and report it", () 
 test("drag pans without clicking; hover shows the tooltip; click and keys pick dots", () => {
   const { b, items, canvas, resize, log } = make({ n: 5 });
   b.setItems(items); b.setEdges([{ from: "m0", to: "m1", t: "supports" }]); resize();
-  const at = findDot(canvas, b);
+  const at = findDot(canvas);
   assert.ok(at, "a dot under the pointer");
   assert.ok(b.el.querySelector(".mm-tip").classList.contains("on"));
   assert.ok(b.el.querySelector(".mm-tip-t").textContent.startsWith("기억 이름"));

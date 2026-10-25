@@ -266,6 +266,7 @@ export function createCrewRunView(deps) {
     get rerunOf() { return rerunOf; },
     get runFromEditor() { return runFromEditor; },
     get runList() { return runList; },
+    // eslint-disable-next-line no-func-assign -- live port: another module may swap this function
     set runList(value) { runList = value; },
     get runPanel() { return runPanel; },
     get stepState() { return stepState; },

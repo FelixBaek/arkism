@@ -1,3 +1,4 @@
+// @ts-check
 // Preserve the existing Dice/Jaccard rule and stable top-20 order. Large loaded
 // catalogs yield between chunks; only 20 results are retained, even if all match.
 function features(skill) {

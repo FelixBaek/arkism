@@ -1,3 +1,4 @@
+// @ts-check
 // Owns graph traversal and validation. Dependencies are explicit live ports, never a global scope.
 export function createCrewModel(deps) {
 

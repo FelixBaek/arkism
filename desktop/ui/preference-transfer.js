@@ -17,7 +17,7 @@ window.ArkismPreferenceTransfer = {
     const name = v => typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,63}$/.test(v);
     const text = (v, max) => { if (typeof v !== "string" || v.length > max) throw new Error("invalid_draft"); return v; };
     if (!saved || !Array.isArray(saved.items) || saved.items.length > 3 || !Array.isArray(saved.dismissed) || saved.dismissed.length > 5000 || saved.dismissed.some(v => !name(v))) throw new Error("invalid_suggestions");
-    if (!Array.isArray(similar) || similar.length > 5000 || similar.some(v => typeof v !== "string" || !v || v.length > 513 || /[\x00-\x1f\x7f-\x9f]/.test(v))) throw new Error("invalid_similar");
+    if (!Array.isArray(similar) || similar.length > 5000 || similar.some(v => typeof v !== "string" || !v || v.length > 513 || /\p{Cc}/u.test(v))) throw new Error("invalid_similar");
     const items = saved.items.map(item => {
       if (!item || !name(item.name) || typeof item.skill_md !== "string" || !item.skill_md.trim()) throw new Error("invalid_draft");
       if (item.examples !== undefined && (!Array.isArray(item.examples) || item.examples.some(v => typeof v !== "string"))) throw new Error("invalid_examples");
@@ -36,7 +36,7 @@ window.ArkismPreferenceTransfer = {
     if (Object.values(scope).some(v => typeof v !== "string")) throw new Error("invalid_scope");
     const prefs = JSON.parse(read("arkism.prefs") || "{}");
     const kept = JSON.parse(read("arkism.keptMemories") || "[]");
-    if (!Array.isArray(kept) || kept.length > 5000 || kept.some(id => typeof id !== "string" || !id || id === "." || id === ".." || id.length > 256 || /[\x00-\x1f\x7f-\x9f]/.test(id))) throw new Error("invalid_kept");
+    if (!Array.isArray(kept) || kept.length > 5000 || kept.some(id => typeof id !== "string" || !id || id === "." || id === ".." || id.length > 256 || /\p{Cc}/u.test(id))) throw new Error("invalid_kept");
     const text = JSON.stringify({ product: "arkism-memory-preferences", version: 1, source: "legacy-unscoped", server: identity.server,
       principal: identity.principal_id, scope, values: { collect: prefs.collectUnused !== false, kept: [...new Set(kept)] } }, null, 2);
     if (new TextEncoder().encode(text).length > 262144) throw new Error("file_too_large");
@@ -46,7 +46,7 @@ window.ArkismPreferenceTransfer = {
   import(text, read, write) {
     const data = JSON.parse(text);
     if (!data || data.product !== "arkism-preferences" || data.version !== 1 || !data.values || typeof data.values !== "object") throw new Error("not_preferences");
-    const v = data.values, out = {}, short = (x, max = 256) => typeof x === "string" && x.length <= max && !/[\x00-\x1f\x7f-\x9f]/.test(x);
+    const v = data.values, out = {}, short = (x, max = 256) => typeof x === "string" && x.length <= max && !/\p{Cc}/u.test(x);
     if (v.look !== undefined) {
       const fonts = ["sm", "md", "lg", "xl"], zoom = Number(v.look?.zoom);
       if (!["system", "dark", "light"].includes(v.look?.theme) || !fonts.includes(v.look?.font) || !(zoom >= 0.7 && zoom <= 1.6)) throw new Error("invalid_look");
@@ -91,7 +91,7 @@ window.ArkismPreferenceTransfer = {
     const data = JSON.parse(text);
     this.checkOwner(data, "arkism-memory-preferences", identity);
     const { collect, kept } = data.values;
-    if (typeof collect !== "boolean" || !Array.isArray(kept) || kept.length > 5000 || kept.some(id => typeof id !== "string" || !id || id.length > 256 || /[\x00-\x1f\x7f-\x9f]/.test(id))) throw new Error("invalid_memory_values");
+    if (typeof collect !== "boolean" || !Array.isArray(kept) || kept.length > 5000 || kept.some(id => typeof id !== "string" || !id || id.length > 256 || /\p{Cc}/u.test(id))) throw new Error("invalid_memory_values");
     const prefs = JSON.parse(read("arkism.prefs") || "{}");
     const current = JSON.parse(read("arkism.keptMemories") || "[]");
     prefs.collectUnused = collect;
@@ -107,7 +107,7 @@ window.ArkismPreferenceTransfer = {
     const str = (x, max) => typeof x === "string" && x.length <= max;
     if (!Array.isArray(items) || items.length > 3 || items.some(i => !i || !name(i.name) || !str(i.title, 2000) || !str(i.why, 10000) || !str(i.skill_md, 20000) || !i.skill_md.trim() || !str(i.examples, 20000))) throw new Error("invalid_drafts");
     if (!Array.isArray(dismissed) || dismissed.length > 5000 || dismissed.some(x => !name(x))) throw new Error("invalid_dismissed");
-    if (!Array.isArray(similarDismissed) || similarDismissed.length > 5000 || similarDismissed.some(x => !str(x, 513) || !x || /[\x00-\x1f\x7f-\x9f]/.test(x))) throw new Error("invalid_similar");
+    if (!Array.isArray(similarDismissed) || similarDismissed.length > 5000 || similarDismissed.some(x => !str(x, 513) || !x || /\p{Cc}/u.test(x))) throw new Error("invalid_similar");
     write("arkism.skillSuggest", JSON.stringify({ items: items.map(i => ({ name: i.name, title: i.title, why: i.why, skill_md: i.skill_md, examples: i.examples.split("\n").filter(Boolean) })), dismissed: [...new Set(dismissed)] }));
     const current = JSON.parse(read("arkism.similarDismissed") || "[]");
     write("arkism.similarDismissed", JSON.stringify([...new Set([...(Array.isArray(current) ? current : []), ...similarDismissed])].slice(0, 5000)));

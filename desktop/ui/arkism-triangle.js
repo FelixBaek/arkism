@@ -1,3 +1,4 @@
+// @ts-check
 // Rail art: the arkism triangle spiralling inward with glints running along its edge (ArkismTriangle.jsx, framework-free).
 // Colors come from CSS (.ark-line / .ark-accent in shell.css) so the light/dark theme switch needs no remount;
 // the page CSP forbids style attributes, so the svg is styled through .style and classes only.

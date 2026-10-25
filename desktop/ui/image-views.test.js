@@ -138,9 +138,8 @@ test("detail: thumbnails swap, variables fill, script copy and download, run han
   await copy.click();
   assert.deepEqual(s.copied, ["a {fruit} on {table}"]);
   assert.equal(copy.lastChild.textContent, "복사됨");
-  let clicked = 0;
   const realCreate = s.doc.createElement;
-  s.doc.createElement = (t) => { const n = realCreate(t); if (t === "a") n.click = () => { clicked++; s.downloads.push(n.download); }; return n; };
+  s.doc.createElement = (t) => { const n = realCreate(t); if (t === "a") n.click = () => { s.downloads.push(n.download); }; return n; };
   btn("스크립트 내려받기").click();
   assert.deepEqual(s.downloads, ["run.py"]);
   const run = btn("스크립트 실행");
@@ -316,8 +315,7 @@ test("duplicate and archive from the detail, with their failures", async () => {
 });
 
 test("editor: pills, images up to four, paste, save and save errors", async () => {
-  let bitmaps = 0;
-  globalThis.createImageBitmap = async (f) => { if (f.name === "bad") throw new Error("decode"); bitmaps++; return { width: 4000, height: 2000, close() {} }; };
+  globalThis.createImageBitmap = async (f) => { if (f.name === "bad") throw new Error("decode"); return { width: 4000, height: 2000, close() {} }; };
   const p = P("a", { title: "Old", tags: ["x", "y"], images: ["i1"], experts: ["$e"], count: 3 });
   const s = await views({ prompts: [p], requests: { "/v1/prompts": { id: "n", image_prompt: { kind: "slide" } }, "/v1/prompts?q=1": {}, "/v1/prompts/a": { id: "a", image_prompt: { kind: "image" } } } });
   s.v.openPromptEditor(null);

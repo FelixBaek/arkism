@@ -920,7 +920,7 @@ window.ArkismTeams = (ctx) => {
     const list = pop.versions || []; pop.histOpen = pop.histOpen || new Set();
     const s1 = sec("clock-counter-clockwise", "버전 기록", "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.");
     const box = el("div", "tm-hist");
-    list.forEach((h, i) => {
+    list.forEach((h) => {
       const cur = h.v === pop.rec.revision;
       const r = el("div", "tm-hist-row");
       const at = new Date(h.at);

@@ -2,7 +2,7 @@
 // shot.mjs installs its own richer stand-in first; then this does nothing.
 if (!window.__TAURI__) {
   const origin = location.origin;
-  try { if (!localStorage.getItem("arkism.look")) localStorage.setItem("arkism.look", JSON.stringify({ theme: "dark", lang: "ko" })); } catch {}
+  try { if (!localStorage.getItem("arkism.look")) localStorage.setItem("arkism.look", JSON.stringify({ theme: "dark", lang: "ko" })); } catch { /* storage blocked: keep the default look */ }
   const home = "C:\\Users\\you\\AppData\\Local\\dev.arkism.desktop\\runtime";
   window.__arkismLocation = { path: home, next: home, default: home, default_has_data: false };
   window.__TAURI__ = { core: { invoke: async (cmd, a = {}) => {

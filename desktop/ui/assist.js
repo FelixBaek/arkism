@@ -1,3 +1,4 @@
+// @ts-check
 // AI 도움 (fill·polish·suggest·draft·install_skill·explain·comfy·fix): the desktop asks Arkism, the host runner
 // answers with a fill persona. Saved personas (crew type persona) double as the personas workflow AI nodes load.
 // The first JSON object or array in a model's answer: from the first { or [ to the last } or ].

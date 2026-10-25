@@ -1,3 +1,4 @@
+// @ts-check
 // scheduling is not evidence that a memory helped.
 window.ArkismMemoryEvaluation = (() => {
   const operations = new Map();

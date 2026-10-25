@@ -1,3 +1,4 @@
+// @ts-check
 // What an AI proposal changes: [["=", same], ["-", removed], ["+", added]].
 // Lines first; a changed line that keeps at least half of its shorter side's words shows word by word, otherwise whole old line → new line.
 window.ArkismTextDiff = (() => {

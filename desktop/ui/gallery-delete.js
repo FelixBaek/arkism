@@ -1,3 +1,4 @@
+// @ts-check
 // GALLERY 삭제·보관함 (adopt/gallery-delete): prompts (이미지·슬라이드) and design systems.
 // 삭제 = DELETE /v1/{prompts|design_systems}/{id} {scope, expected_revision} — gone for good, only after a confirm.
 // 보관함 = GET /v1/{col}/archived lists what 보관함에서 빼기 hid; 되살리기 = POST /v1/{col}/{id}/restore.
