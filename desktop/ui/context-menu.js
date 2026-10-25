@@ -45,7 +45,7 @@
     return [
       { label: "잘라내기", off: !picked || ro, run: () => { back(); doc.execCommand("cut"); } },
       { label: "복사", off: !picked, run: () => { back(); doc.execCommand("copy"); } },
-      { label: "붙여넣기", off: ro, run: () => doc.defaultView.navigator.clipboard.readText().then((t) => { back(); doc.execCommand("insertText", false, t); }, () => notice("Ctrl+V로 붙여넣어 주세요.")) },
+      { label: "붙여넣기", off: ro, run: () => Promise.resolve().then(() => doc.defaultView.navigator.clipboard.readText()).then((t) => { back(); doc.execCommand("insertText", false, t); }, () => notice("Ctrl+V로 붙여넣어 주세요.")) },
       { label: "모두 선택", run: () => { f.focus(); if (box) f.select(); else doc.execCommand("selectAll"); } },
     ];
   }

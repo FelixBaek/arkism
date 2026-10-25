@@ -227,6 +227,15 @@ test("the right-click menu offers field, selection, link and own items, and clos
   await flush();
   assert.equal(notices.at(-1), "Ctrl+V로 붙여넣어 주세요.");
   clipboard.fail = false;
+  // a webview without the clipboard API still says to paste by key
+  const readText = clipboard.readText;
+  delete clipboard.readText;
+  notices.push("");
+  fire(f, "contextmenu", { clientX: 5, clientY: 5 });
+  menu().querySelectorAll("button")[2].click();
+  await flush();
+  assert.equal(notices.at(-1), "Ctrl+V로 붙여넣어 주세요.");
+  clipboard.readText = readText;
   fire($("#ro"), "contextmenu", { clientX: 5, clientY: 5 });
   assert.deepEqual(items(), ["잘라내기×", "복사×", "붙여넣기×", "모두 선택"]);
   // contenteditable: the selection is a range
