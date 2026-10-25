@@ -60,12 +60,16 @@ func handles(prompt string, limit int) []string {
 	return out
 }
 
-// sigilStart is whether runes[i] is a "$" or "@" not glued to a word, another sigil, a "." or a "/" before it.
+// sigilStart is whether runes[i] is a "$" or "@" not glued to a word, another sigil, a "." or a "/" before it;
+// an "@" after a sentence's period ("검토해줘.@리뷰어") still starts, while "obj.$x" and "/.@x" do not.
 func sigilStart(runes []rune, i int) bool {
 	if runes[i] != '$' && runes[i] != '@' {
 		return false
 	}
-	return i == 0 || !(isWord(runes[i-1]) || strings.ContainsRune("$@./", runes[i-1]))
+	if i > 0 && runes[i-1] == '.' {
+		return runes[i] == '@' && i > 1 && isWord(runes[i-2])
+	}
+	return i == 0 || !(isWord(runes[i-1]) || strings.ContainsRune("$@/", runes[i-1]))
 }
 
 // fileMention is whether the @handle ending at j goes on as a path ("/") or a file extension (".md").

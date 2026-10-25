@@ -127,7 +127,11 @@ func TestStartRequestedDrivesOnlyUntouchedHumanAndHarnessRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	mk := func(by, nodeStatus string) string {
-		r, err := e.StartRun(ctx, "w", "manual", nil)
+		trigger := "manual"
+		if by == "service/agent" { // an expert's workflow the assist runner starts on a service token
+			by, trigger = "service", "agent"
+		}
+		r, err := e.StartRun(ctx, "w", trigger, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -142,13 +146,14 @@ func TestStartRequestedDrivesOnlyUntouchedHumanAndHarnessRuns(t *testing.T) {
 		return r.ID
 	}
 	human, harness, engine, busy := mk("human", "pending"), mk("agent", "pending"), mk("service", "pending"), mk("human", "running")
+	expert := mk("service/agent", "pending")
 	if err := e.PollWaiting(ctx); err != nil {
 		t.Fatal(err)
 	}
 	e.Wait()
 	get := func(id string) string { r, _ := fs.GetRun(ctx, id); return r.State.Status }
-	if get(human) != "succeeded" || get(harness) != "succeeded" || get(engine) != "running" || get(busy) != "running" {
-		t.Fatalf("human=%s harness=%s engine=%s busy=%s", get(human), get(harness), get(engine), get(busy))
+	if get(human) != "succeeded" || get(harness) != "succeeded" || get(expert) != "succeeded" || get(engine) != "running" || get(busy) != "running" {
+		t.Fatalf("human=%s harness=%s expert=%s engine=%s busy=%s", get(human), get(harness), get(expert), get(engine), get(busy))
 	}
 	// ResumeRunning takes every running run, whoever made it.
 	if err := e.ResumeRunning(ctx); err != nil {

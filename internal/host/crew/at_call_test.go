@@ -17,6 +17,7 @@ func atFixture(typ, handle string, extra map[string]any) map[string]any {
 func TestAtHandlesKeepTheirSigilAndSkipMailAndFiles(t *testing.T) {
 	eq(t, handles("@리뷰어 봐 줘, $리서치 도, me@x.com, @src/a.ts, @README.md, @백엔드팀에게.", 5),
 		[]string{"@리뷰어", "리서치", "@백엔드팀에게"})
+	eq(t, handles("검토해줘.@리뷰어 this.$refs ~/.@cache", 5), []string{"@리뷰어"})
 	eq(t, matchKnown([]string{"@백엔드팀에게", "리서치", "@리서치"}, []string{"리서치", "@백엔드팀"}), []string{"@백엔드팀", "리서치"})
 }
 
