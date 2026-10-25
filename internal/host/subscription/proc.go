@@ -99,7 +99,7 @@ func runBounded(cmd *exec.Cmd, group, captureErr bool, limit int, timeout time.D
 		return nil, nil, 0, errTimeout
 	}
 	if group {
-		killGroup(cmd.Process.Pid) // descendants left behind
+		_ = killGroup(cmd.Process.Pid) // descendants left behind
 	}
 	var errOut []byte
 	if captureErr {

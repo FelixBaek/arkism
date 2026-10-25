@@ -796,10 +796,10 @@ func materialize(item map[string]any, folder, localSource string, extra host.Obj
 	}
 	old := ""
 	fail := func(err error) (string, error) {
-		os.RemoveAll(work)
+		_ = os.RemoveAll(work)
 		// The previous copy must stay readable at its runtime path when the swap fails.
 		if old != "" && exists(old) && !exists(folder) {
-			os.Rename(old, folder)
+			err = errors.Join(err, os.Rename(old, folder))
 		}
 		return "", err
 	}

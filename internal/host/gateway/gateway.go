@@ -2401,7 +2401,7 @@ func (x *exchange) codex(body host.Obj) error {
 			}
 			last = e
 			if e.Code == "upstream_rate_limit" {
-				recordLimit(profile, host.AgentsState, model, e.RetryAfter)
+				_ = recordLimit(profile, host.AgentsState, model, e.RetryAfter) // best effort, like crew
 				x.retryAfter = time.Duration(max(e.RetryAfter, 0) * float64(time.Second))
 			}
 			// A rejected request produced no output. Try the next already signed-in account
@@ -2445,7 +2445,7 @@ func (x *exchange) codex(body host.Obj) error {
 						return
 					}
 					if e.Code == "upstream_rate_limit" {
-						recordLimit(current, host.AgentsState, model, e.RetryAfter)
+						_ = recordLimit(current, host.AgentsState, model, e.RetryAfter)
 					}
 					x.attemptErr = e.Code
 					if streaming {

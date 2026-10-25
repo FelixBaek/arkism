@@ -557,7 +557,7 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			kitFailed = kitFailed || strings.HasPrefix(str(objGet(r.(host.Obj), "state")), "failed")
 		}
 	}
-	io.WriteString(stdout, host.MustDumps(summary, host.DumpOpts{NoASCII: true})+"\n")
+	_, _ = io.WriteString(stdout, host.MustDumps(summary, host.DumpOpts{NoASCII: true})+"\n")
 	if failed, _ := summary.Get("failed"); len(failed.(host.Obj)) > 0 || kitFailed {
 		return 1
 	}

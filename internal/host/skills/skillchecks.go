@@ -613,7 +613,8 @@ func scanChecks(stderr io.Writer) int {
 	}
 	doc := host.Obj{{Key: "tools", Value: scannerVersions()}, {Key: "checks", Value: checks}}
 	tmp := strings.TrimSuffix(checksCache, filepath.Ext(checksCache)) + ".tmp"
-	if err := os.WriteFile(tmp, []byte(host.MustDumps(doc, host.DumpOpts{NoASCII: true})), 0o600); err == nil {
+	err = os.WriteFile(tmp, []byte(host.MustDumps(doc, host.DumpOpts{NoASCII: true})), 0o600)
+	if err == nil {
 		if err = os.Chmod(tmp, 0o600); err == nil {
 			err = os.Rename(tmp, checksCache)
 		}
@@ -660,7 +661,7 @@ func checksMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "show":
 		printJSON(stdout, loadChecks(), 1)
 	default:
-		io.WriteString(stdout, checksUsage+"\n")
+		_, _ = io.WriteString(stdout, checksUsage+"\n")
 		return 2
 	}
 	return 0

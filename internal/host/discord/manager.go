@@ -160,8 +160,12 @@ func (m *Manager) load() {
 
 func (m *Manager) save() {
 	raw, _ := json.Marshal(m.st)
-	if err := os.MkdirAll(filepath.Dir(stateFile), 0o700); err == nil {
-		_ = host.AtomicWrite(stateFile, string(raw))
+	err := os.MkdirAll(filepath.Dir(stateFile), 0o700)
+	if err == nil {
+		err = host.AtomicWrite(stateFile, string(raw))
+	}
+	if err != nil {
+		m.logf("state not saved: %s", errText(err))
 	}
 }
 
@@ -291,7 +295,7 @@ func (m *Manager) syncBots() error {
 		if tok := strings.TrimSpace(str(item["token"])); tok != "" && tok != b.token {
 			storage, err := saveToken(cfg.ID, tok)
 			if err != nil {
-				m.logf("bot %s: token not stored: %s", cfg.ID, err)
+				m.logf("bot %s: token (%s): %s", cfg.ID, storage, err)
 			} else {
 				m.logf("bot %s: new token stored (%s)", cfg.ID, storage)
 			}
@@ -311,7 +315,9 @@ func (m *Manager) syncBots() error {
 			if b.sess != nil {
 				_ = b.sess.Close()
 			}
-			dropToken(id)
+			if err := dropToken(id); err != nil {
+				m.logf("bot %s: token not removed: %s", id, err)
+			}
 			delete(m.bots, id)
 			m.logf("bot %s: removed", id)
 		}

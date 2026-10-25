@@ -43,7 +43,7 @@ var (
 	// Test seams: the GitHub download, the skill listing started after an install, the clock.
 	githubFetch    = fetchGitHub
 	startSkillSync = func() {
-		startDetached([]string{host.Executable(), "sync-skills", "--execute", "--limit", "5000"})
+		_ = startDetached([]string{host.Executable(), "sync-skills", "--execute", "--limit", "5000"})
 	}
 	installNow = func() time.Time { return time.Now().UTC() }
 
@@ -427,8 +427,8 @@ func writeSkill(sk foundSkill, files map[string]repoFile, src skillSource, commi
 			return err
 		}
 		if err := os.Rename(tmp, dest); err != nil {
-			os.Rename(old, dest)
-			return err
+			// The previous copy waits at old when putting it back fails too.
+			return errors.Join(err, os.Rename(old, dest))
 		}
 		return os.RemoveAll(old)
 	}

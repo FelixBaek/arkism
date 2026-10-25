@@ -117,7 +117,9 @@ func main() {
 	if observed {
 		out["passed"] = passed
 	}
-	json.NewEncoder(os.Stdout).Encode(map[string]any{"output": out, "cost": 0})
+	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"output": out, "cost": 0}); err != nil {
+		os.Exit(1)
+	}
 }
 
 func validate(t Table) error {

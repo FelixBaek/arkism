@@ -2,6 +2,8 @@ package discord
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -23,7 +25,10 @@ func ref(botID string) string { return "keyring:" + KeyringService + "/" + botID
 // saveToken stores a bot token: the OS keyring when one answers, else the 0600 file. It never logs the token.
 func saveToken(botID, token string) (storage string, err error) {
 	if _, err := keystore.PutIn(KeyringService, botID, token); err == nil {
-		_ = fileToken(botID, "", true) // a stale file copy must not outlive a rotated token
+		// A stale file copy must not outlive a rotated token.
+		if err := fileToken(botID, "", true); err != nil {
+			return keystore.StorageKeyring, fmt.Errorf("stored in the keyring, but the old file copy stays: %w", err)
+		}
 		return keystore.StorageKeyring, nil
 	}
 	return keystore.StorageFile, fileToken(botID, token, false)
@@ -43,11 +48,12 @@ func loadToken(botID string) string {
 }
 
 // dropToken removes a bot's token everywhere (bot archived).
-func dropToken(botID string) {
+func dropToken(botID string) error {
+	var err error
 	if keystore.Available() {
-		_ = keystore.Delete(ref(botID))
+		err = keystore.Delete(ref(botID))
 	}
-	_ = fileToken(botID, "", true)
+	return errors.Join(err, fileToken(botID, "", true))
 }
 
 func readFile() map[string]string {

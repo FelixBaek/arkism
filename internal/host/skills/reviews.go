@@ -383,7 +383,7 @@ func collectReviews() ([]any, []any, error) {
 	for _, name := range names {
 		got, row, err := collectRepo(name)
 		if err != nil {
-			host.Metric(map[string]any{"event": "code_reviews_repo_failed", "repo": name, "error": runeCut(err.Error(), 120)})
+			_ = host.Metric(map[string]any{"event": "code_reviews_repo_failed", "repo": name, "error": runeCut(err.Error(), 120)})
 			continue
 		}
 		items = append(items, got...)
@@ -428,7 +428,7 @@ func applySettings(settings map[string]any) bool {
 		}
 	}
 	if err != nil {
-		host.Metric(map[string]any{"event": "code_review_settings_failed", "error": failureCode(err)})
+		_ = host.Metric(map[string]any{"event": "code_review_settings_failed", "error": failureCode(err)})
 		return false
 	}
 	return true
@@ -543,7 +543,7 @@ func reviewsMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		printJSON(stdout, host.Obj{{Key: "repos", Value: rows}, {Key: "items", Value: items[:min(len(items), 5)]}}, 1)
 	default:
-		io.WriteString(stdout, reviewsUsage+"\n")
+		_, _ = io.WriteString(stdout, reviewsUsage+"\n")
 		return 2
 	}
 	return 0

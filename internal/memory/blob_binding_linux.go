@@ -141,7 +141,7 @@ func (b *lockedBlobs) publishBinding(identity, rootID string, fresh bool) error 
 	if err != nil {
 		return err
 	}
-	defer b.root.Remove(name)
+	defer func() { _ = b.root.Remove(name) }() // gone once renamed
 	_, err = probe.WriteString(identity + "\n" + rootID + "\n")
 	if err == nil {
 		err = probe.Sync()

@@ -565,7 +565,7 @@ func winHookRetry(origin, queuedWork string, stderr io.Writer) error {
 	}
 	old, _ := filepath.Glob(filepath.Join(globEscape(winSpool(origin)), "*.json"))
 	if len(old) > 0 && !isSymlink(old[0]) {
-		winSendPrompt(origin, old[0])
+		_, _ = winSendPrompt(origin, old[0]) // a failed send stays in the spool for the next pass
 	}
 	return nil
 }

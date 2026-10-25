@@ -79,7 +79,7 @@ func (p *Postgres) exportRecoverySnapshot(ctx context.Context, restored bool, ge
 	if err != nil {
 		return nil, pgErr(err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }() // a no-op after Commit
 	if err = disableSnapshotRowSecurity(ctx, tx); err != nil {
 		return nil, err
 	}

@@ -285,7 +285,7 @@ var claudeNeedsLogin = func(name string, d map[string]any) bool {
 	needed := strings.Contains(out, "Needs authentication")
 	cache[name] = []any{nowFloat(), needed}
 	if os.MkdirAll(agentsState, 0o700) == nil {
-		os.WriteFile(cacheFile, []byte(host.MustDumps(cache, host.DumpOpts{})), 0o666)
+		_ = os.WriteFile(cacheFile, []byte(host.MustDumps(cache, host.DumpOpts{})), 0o666) // a cache
 	}
 	return needed
 }
@@ -881,7 +881,7 @@ func syncAgents() error {
 	body := host.Obj{{Key: "scope", Value: host.Scope()}, {Key: "servers", Value: servers}, {Key: "plugins", Value: plugins}, {Key: "results", Value: results},
 		{Key: "agents", Value: agents}, {Key: "shared_dirs", Value: stringsAny(reg.shared[:min(len(reg.shared), 8)])}}
 	if use, use30, err := memoryUse(nowFloat()); err != nil { // stats are extra: never block the tool switches
-		host.Metric(map[string]any{"event": "memory_use_failed", "error": pyErrName(err)})
+		_ = host.Metric(map[string]any{"event": "memory_use_failed", "error": pyErrName(err)})
 	} else {
 		body.Set("memory_use", use)
 		body.Set("memory_use_30", use30)
@@ -911,10 +911,10 @@ func syncAgents() error {
 		return err
 	}
 	if _, err := syncReviews(false); err != nil { // a GitHub outage must not stop the tool switches
-		host.Metric(map[string]any{"event": "code_reviews_failed", "error": pyErrName(err)})
+		_ = host.Metric(map[string]any{"event": "code_reviews_failed", "error": pyErrName(err)})
 	}
 	if len(results) > 0 {
-		host.Metric(map[string]any{"event": "agent_tools_applied", "done": done, "failed": failed})
+		_ = host.Metric(map[string]any{"event": "agent_tools_applied", "done": done, "failed": failed})
 	}
 	return nil
 }
@@ -993,7 +993,7 @@ func startLogin(req map[string]any) {
 		}
 		argv = append(unit, argv...)
 	}
-	startDetached(argv)
+	_ = startDetached(argv)
 }
 
 func postLoginStep(reqID string, body host.Obj) error {
@@ -1036,7 +1036,7 @@ func (t *terminal) running() bool { _, ended := t.poll(); return !ended }
 
 func (t *terminal) read(wait time.Duration) {
 	buf := make([]byte, 65536)
-	t.master.SetReadDeadline(time.Now().Add(wait))
+	_ = t.master.SetReadDeadline(time.Now().Add(wait)) // the master is opened O_NONBLOCK, so deadlines apply
 	n, err := t.master.Read(buf)
 	if n > 0 {
 		t.text += ansiRx.ReplaceAllString(decodeReplace(buf[:n]), "")
@@ -1045,7 +1045,7 @@ func (t *terminal) read(wait time.Duration) {
 	}
 }
 
-func (t *terminal) write(line string) { t.master.Write([]byte(line + "\r")) }
+func (t *terminal) write(line string) { _, _ = t.master.Write([]byte(line + "\r")) } // a closed terminal shows up in read
 
 // lastLine is the CLI's last words for an error, without any address: the echoed redirect carries the one-time code.
 func lastLine(text string) string {
@@ -1134,7 +1134,7 @@ func replay(redirect *url.URL, callback string) {
 	if err != nil {
 		return // the CLI may only take the pasted address; finishLogin pastes it
 	}
-	io.Copy(io.Discard, res.Body)
+	_, _ = io.Copy(io.Discard, res.Body)
 	res.Body.Close()
 }
 
@@ -1193,7 +1193,7 @@ func agentsLogin(reqID, agent, name string) error {
 	}
 	f.Close()
 	if err := runLogin(reqID, agent, name); err != nil {
-		loginStep(reqID, host.Obj{{Key: "status", Value: "failed"}, {Key: "error", Value: runeCut(err.Error(), 300)}}) // the request times out on its own
+		_ = loginStep(reqID, host.Obj{{Key: "status", Value: "failed"}, {Key: "error", Value: runeCut(err.Error(), 300)}}) // the request times out on its own
 	}
 	os.Remove(marker)
 	os.Remove(filepath.Join(agentsState, "claude-auth.json")) // re-check sign-ins now, not in ten minutes
@@ -1217,7 +1217,7 @@ func agentsMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			printJSON(stdout, host.Obj{{Key: "servers", Value: servers}, {Key: "plugins", Value: plugins}}, 1)
 		}
 	default:
-		io.WriteString(stdout, agentsUsage+"\n")
+		_, _ = io.WriteString(stdout, agentsUsage+"\n")
 		return 2
 	}
 	if err != nil {

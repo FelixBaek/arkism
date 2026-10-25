@@ -194,9 +194,12 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 	if !transient {
 		// A transient failure leaves no receipt, so the client's retry runs again.
 		now := time.Now().UTC().Truncate(time.Millisecond)
-		_ = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		// Without the receipt a retry runs the capture again; the result already stands.
+		if err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 			return tx.Insert(ctx, "jobs", Record{ID: receipt, Scope: in.Scope, Kind: "capture_receipt", Status: "done", Revision: 1, CreatedAt: now, UpdatedAt: now})
-		})
+		}); err != nil {
+			slog.Warn("memory capture receipt not stored", "workspace", in.Scope.WorkspaceID, "error", err)
+		}
 	}
 	return out, nil
 }

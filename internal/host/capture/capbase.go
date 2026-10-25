@@ -56,7 +56,7 @@ var (
 		for _, kv := range fields {
 			row.Set(kv.Key, kv.Value)
 		}
-		f.WriteString(host.MustDumps(row, host.DumpOpts{NoASCII: true}) + "\n")
+		_, _ = f.WriteString(host.MustDumps(row, host.DumpOpts{NoASCII: true}) + "\n") // metrics are best effort
 	}
 	// spawnDrain starts `arkism capture drain` in the background, detached from the hook.
 	spawnDrain = func() {

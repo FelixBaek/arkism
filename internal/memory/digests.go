@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -459,9 +460,11 @@ func (s *Service) ProposeDigest(ctx context.Context, token string, in DigestProp
 	s.recordModelCall(ctx, in.Scope, "digest_"+in.Kind, in.Usage)
 	if containsSecret(in.Title) || containsSecret(in.Body) || in.Generator != nil && containsSecret(structuredText(in.Generator)) {
 		// Never store or audit the rejected text.
-		_ = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 			return audit(ctx, tx, in.Scope, d.PrincipalID, "inspection:blocked:"+inspectionVersion, "")
-		})
+		}); err != nil {
+			slog.Warn("digest secret block not audited", "workspace", in.Scope.WorkspaceID, "error", err)
+		}
 		return DigestView{}, ErrSecretDetected
 	}
 	for _, m := range in.Members {

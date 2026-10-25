@@ -94,20 +94,20 @@ func memorySignalsMain(args []string, stdin io.Reader, stdout, stderr io.Writer)
 	scope := host.Obj{}
 	for _, kv := range [][2]string{{"workspace_id", *workspace}, {"project_id", *project}, {"user_id", *user}, {"agent_id", *agent}} {
 		if len(kv[1]) >= 256 {
-			io.WriteString(stderr, "invalid scope\n")
+			_, _ = io.WriteString(stderr, "invalid scope\n")
 			return 2
 		}
 		scope = append(scope, host.KV{Key: kv[0], Value: kv[1]})
 	}
 	if !*execute {
-		io.WriteString(stdout, host.MustDumps(host.Obj{{Key: "dry_run", Value: true}, {Key: "max_batches", Value: *maxBatches}}, host.DumpOpts{})+"\n")
+		_, _ = io.WriteString(stdout, host.MustDumps(host.Obj{{Key: "dry_run", Value: true}, {Key: "max_batches", Value: *maxBatches}}, host.DumpOpts{})+"\n")
 		return 0
 	}
 	result, err := recomputeSignals(*endpoint, os.Getenv("MEMORY_API_TOKEN"), scope, *maxBatches)
 	if err != nil {
-		io.WriteString(stderr, "Signal recompute failed; earlier batches may have committed. Inputs, credentials and response bodies suppressed.\n")
+		_, _ = io.WriteString(stderr, "Signal recompute failed; earlier batches may have committed. Inputs, credentials and response bodies suppressed.\n")
 		return 2
 	}
-	io.WriteString(stdout, host.MustDumps(result, host.DumpOpts{})+"\n")
+	_, _ = io.WriteString(stdout, host.MustDumps(result, host.DumpOpts{})+"\n")
 	return 0
 }

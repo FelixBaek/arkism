@@ -733,7 +733,7 @@ func handoffDrain(allOrigins bool) error {
 			job.Set("retry_after", timeNow()+60)
 			job.Set("last_error", code)
 			// A newer hook or worker owns the path when the event changed; never overwrite it.
-			handoffLocked(func(string) (err error) {
+			_ = handoffLocked(func(string) (err error) { // the failure is already recorded above
 				defer recovered(&err)
 				current, err := handoffLoad(path)
 				if err == nil && eq(autosaveGet(current, "event_id"), autosaveItem(job, "event_id")) {

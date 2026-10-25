@@ -194,7 +194,7 @@ func writeZcodeSnapshotLimit(path, sid, target string, maxBytes int64) (host.Obj
 	if err := db.Exec("BEGIN"); err != nil {
 		return nil, err
 	}
-	defer db.Exec("ROLLBACK")
+	defer func() { _ = db.Exec("ROLLBACK") }() // read-only snapshot: nothing to commit
 	var session host.Obj
 	err = eachRow(db, "SELECT * FROM session WHERE id=?", []any{sid}, func(cols []string, vals []any) error {
 		if session == nil {
