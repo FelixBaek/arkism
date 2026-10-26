@@ -104,15 +104,17 @@ test("일반: start at login, capture switch, excluded folders and the memo", as
   assert.match(notice(), /수집을 멈췄어요/);
   await press("수집");
   const input = app.$('[aria-label="뺄 폴더 경로"]');
-  await press("폴더 빼기"); // empty: nothing happens
+  await press("제외 폴더 추가"); // empty: nothing happens
   input.value = "~/private";
-  await press("폴더 빼기");
+  await press("제외 폴더 추가");
   assert.match(notice(), /이미 뺀 폴더/);
   input.value = "C:\\work";
   app.dom.key(input, "Enter"); await app.settle();
   assert.match(notice(), /수집하지 않아요/);
-  await press("빼기 취소");
+  await press("삭제");
   assert.match(notice(), /다시 수집해요/);
+  assert.match(text(app.$("#table")), /대화 원문 보관.*7일/);
+  assert.ok(app.$(".ex-ai-field textarea"), "the memo has the AI sparkle");
   app.dom.type(app.$('[aria-label="기억할 것에 대한 메모"]'), "고객 이름은 빼"); await app.settle();
   assert.match(notice(), /메모를 저장했어요/);
   delete app.fake.set_capture_settings;
@@ -125,15 +127,49 @@ test("일반: start at login, capture switch, excluded folders and the memo", as
   app.fake.autostart_get = true; app.fake.capture_settings = { paused: true, exclude: [] };
 });
 
+test("일반: keep running, the open shortcut, language and the alerts", async () => {
+  await settings("general");
+  await press("창을 닫아도 계속 실행");
+  assert.match(notice(), /창을 닫으면 Arkism이 끝나요/);
+  assert.deepEqual(cmd("general_set").at(-1)[1], { keepRunning: false, shortcut: "Ctrl+Shift+Space" });
+  assert.match(text(app.$(".pg-shortcut")), /Ctrl \+ Shift \+ Space/);
+  await press("바꾸기");
+  assert.match(text(app.$(".pg-shortcut")), /키를 누르세요/);
+  app.dom.key(app.document, "k", { code: "KeyK" }); // no modifier: still waiting
+  app.dom.key(app.document, "k", { code: "KeyK", ctrlKey: true, altKey: true }); await app.settle();
+  assert.equal(cmd("general_set").at(-1)[1].shortcut, "Ctrl+Alt+KeyK");
+  assert.match(notice(), /Ctrl \+ Alt \+ K로 바꿨어요/);
+  app.fake.general_set = new Error("shortcut_taken");
+  await press("바꾸기");
+  app.dom.key(app.document, "Backspace"); await app.settle();
+  assert.match(notice(), /다른 앱이 이미 쓰는 키/);
+  app.fake.general_set = (a) => ({ keep_running: a.keepRunning, shortcut: a.shortcut, shortcut_error: "" });
+  await press("바꾸기");
+  app.dom.key(app.document, "Escape"); await app.settle();
+  assert.match(text(app.$(".pg-shortcut")), /Ctrl \+ Alt \+ K/);
+  // 화면 언어 lives in 일반 now, not in 모양
+  assert.ok(find("English"));
+  await settings("appearance");
+  assert.doesNotMatch(text(app.$("#table")), /화면 언어/);
+  await settings("general");
+  const before = app.window.ArkismAlerts.get().done;
+  await press("작업 완료 알림");
+  assert.equal(app.window.ArkismAlerts.get().done, !before);
+  await press("작업 완료 알림");
+});
+
 test("에이전트: switches, removal, shared folders and the add dialog", async () => {
   await settings("agents");
   assert.match(text(app.$("#table")), /적용 대기/);
-  // one 에이전트 추가, the last row of the agent list (Figma 1300:5254); 역할별 모델 is a card on this page, not a tab
+  // one 에이전트 추가, the last row of the agent list (Figma 1300:5254); 역할별 모델 has its own tab now
   const adds = app.$$("button").filter((b) => text(b) === "에이전트 추가");
   assert.equal(adds.length, 1);
   assert.equal(adds[0].className, "ag-add-agent");
-  assert.ok(!app.$$("#area-tabs button").some((b) => text(b) === "역할별 모델"));
-  assert.match(text(app.$(".ag-roles")), /라우팅 판정.*기억 추출.*반성·검토.*임베딩/);
+  assert.equal(app.$(".ag-roles"), null);
+  assert.ok(app.$$("#area-tabs button").some((b) => text(b) === "역할별 모델"));
+  await settings("roles");
+  assert.match(text(app.$(".ag-roles")), /라우팅 판정.*스킬 요약.*스킬 후보 찾기.*스킬 판정.*스킬 보안 검사.*기억 추출.*반성·검토.*임베딩/);
+  await settings("agents");
   // the first row is chosen: its detail (계정, Arkism 연결) is in the right column
   assert.ok(app.$(".ag-row.on"));
   assert.match(text(app.$(".ag-link")), /Arkism 연결/);
@@ -191,8 +227,8 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   assert.equal(app.$("dialog.add-agent"), null);
 });
 
-test("에이전트 › 판정 모델과 폴더 위치는 빠진 값을 알려 주고 저장한다", async () => {
-  await settings("agents");
+test("역할별 모델 › 판정 모델과 폴더 위치는 빠진 값을 알려 주고 저장한다", async () => {
+  await settings("roles");
   app.fake.set_model_roles = null;
   const kit = () => app.$(".v4-kit-body");
   const roles = () => app.$(".v4-roles-body");
@@ -228,9 +264,39 @@ test("에이전트 › 판정 모델과 폴더 위치는 빠진 값을 알려 �
   app.fake.set_model_roles = null;
   const saved = app.fake.model_roles;
   app.fake.model_roles = new Error("x");
-  await settings("info"); await settings("agents");
+  await settings("info"); await settings("roles");
   assert.match(text(app.$(".ag-roles")), /모델 설정을 읽지 못했어요/);
   app.fake.model_roles = saved;
+});
+
+test("역할별 모델 › 스킬 요약·후보 찾기·판정·보안 검사를 고르고 저장한다", async () => {
+  await settings("info"); await settings("roles"); // a fresh 역할별 모델 card
+  app.fake.set_model_roles = null;
+  const roles = () => app.$(".v4-roles-body");
+  const save = () => press("저장", app.$(".v4-kit-body"));
+  const choose = async (label, value) => { const sel = roles().querySelector(`[aria-label="${label}"]`); sel.value = value; app.dom.fire(sel, "change"); await app.settle(); };
+  for (const t of ["스킬 요약", "스킬 후보 찾기", "스킬 판정", "스킬 보안 검사"]) assert.match(text(roles()), new RegExp(t));
+  await choose("라우팅 판정 모델", "fixed");
+  // 스킬 판정 alone on Clef asks for the Clef fields under itself.
+  await choose("스킬 판정 모델", "clef");
+  assert.ok(roles().querySelector('[aria-label="Cloudflare 계정 ID"]'));
+  await save();
+  assert.match(notice(), /Cloudflare 계정 ID와 토큰/);
+  await choose("스킬 판정 모델", "same");
+  assert.equal(roles().querySelector('[aria-label="Cloudflare 계정 ID"]'), null);
+  await choose("스킬 요약 모델", "chat");
+  await save();
+  assert.match(notice(), /요약하려면 주소와 모델 이름/);
+  roles().querySelector('[aria-label="요약 모델 주소"]').value = "http://127.0.0.1:11434/v1";
+  roles().querySelector('[aria-label="요약 모델"]').value = "qwen3:4b";
+  await choose("스킬 후보 수", "4");
+  const cisco = roles().querySelector('[aria-label="Cisco Skill Scanner"]');
+  cisco.click(); await app.settle();
+  assert.equal(cisco.getAttribute("aria-checked"), "false");
+  await save();
+  await until(/^저장했어요/);
+  const r = cmd("set_model_roles").at(-1)[1].roles;
+  assert.deepEqual([r.summary, r.summary_model, r.skill_candidates, r.skill_judge, r.scanners], ["chat", "qwen3:4b", 4, "same", ["spector", "evaluator"]]);
 });
 
 test("카테고리 › AI로 전부 다시 분류 proposes and applies before 저장", async () => {
@@ -413,7 +479,7 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   assert.ok(find("연결 끊기", app.$("#table")));
   await press("연결 끊기");
   await settings("connect");
-  await settings("agents");
+  await settings("roles");
   assert.match(text(app.$(".ag-roles")), /서버가 정함/);
   await settings("advanced");
   assert.doesNotMatch(text(app.$("#table")), /지금 백업/);

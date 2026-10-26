@@ -51,6 +51,8 @@ type Service struct {
 	Analyzer               SkillAnalyzer
 	Drafter                SkillDrafter
 	Router                 SkillJudge
+	// SkillCandidates is how many skills the search hands the judge (1–8); 0 means 8.
+	SkillCandidates int
 	// ModelPicker picks a model for 라우팅 (Clef-flash); nil sends every task to the fixed or first model.
 	ModelPicker   ModelPicker
 	searchCommits searchCommitGate

@@ -6119,3 +6119,38 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "다른 {0} 계정 추가": "Add another {0} account",
   "{0} 자세히": "{0} details"
 });
+// 설정 › 일반 (시작과 종료·언어와 단축키·알림), 수집 카드, 모델 라우터 카드, 데스크톱 알림 (alerts.js)
+Object.assign(window.ArkismI18nEN.strings, {
+  "검토할 기억이 생겼어요": "New memories to review", "Arkism 연결이 끊겼어요": "Arkism lost its connection", "연결을 확인해 주세요.": "Check the connection.",
+  "작업이 끝났어요": "A job finished", "작업이 실패했어요": "A job failed",
+  "에이전트가 모델 중계기를 쓸 때 필요한 토큰이에요. 다시 만들면 예전 토큰은 막혀요.": "Agents need this token to use the model gateway. Making a new one blocks the old token.",
+  "모델 라우터": "Model router", "라우터 토큰": "Router token",
+  "다른 앱이 이미 쓰는 키예요. 다른 조합을 골라 주세요.": "Another app already uses this key. Pick another combination.", "이 조합은 단축키로 쓸 수 없어요.": "This combination can't be a shortcut.",
+  "설정을 바꾸지 못했어요.": "Couldn't change the setting.", "시작과 종료": "Start and quit", "창을 닫아도 계속 실행": "Keep running after closing the window",
+  "트레이에 남아 수집을 계속해요. 완전히 끝내려면 트레이에서 종료해요.": "Stays in the tray and keeps capturing. Quit from the tray to stop it completely.",
+  "Arkism 열기 단축키": "Shortcut to open Arkism", "어디서든 이 키를 누르면 Arkism 창이 앞으로 와요": "Press this key anywhere to bring the Arkism window forward",
+  "창을 닫아도 트레이에서 계속 실행해요.": "Arkism keeps running in the tray after the window closes.", "창을 닫으면 Arkism이 끝나요. 끝나 있는 동안은 수집도 멈춰요.": "Closing the window quits Arkism. Capture stops while it's closed.",
+  "단축키를 껐어요.": "Shortcut turned off.", "다른 앱이 이 키를 쓰고 있어 지금은 동작하지 않아요.": "Another app is using this key, so it doesn't work right now.", "키를 누르세요…": "Press a key…",
+  "언어와 단축키": "Language and shortcuts", "알림": "Notifications", "검토할 기억 알림": "Memories to review",
+  "승인이 필요한 기억이 생기면 알려줘요.": "Tells you when a memory needs your approval.", "작업 완료 알림": "Finished jobs", "크루 작업이 끝나면 알려줘요.": "Tells you when a crew job finishes.",
+  "연결·수집 오류 알림": "Connection and capture errors", "연결이 끊기거나 대화를 저장하지 못하면 알려줘요.": "Tells you when the connection drops or a conversation can't be saved.",
+  "알림 소리": "Notification sound", "데스크톱 알림이 올 때 소리를 내요.": "Plays a sound with desktop notifications.",
+  "대화 원문 보관": "Conversation originals", "원문은 7일 뒤 지워져요. 기억에 쓰인 원문은 쓸 때마다 7일 늘어나요.": "Originals are deleted after 7 days. Each time a memory uses one, it's kept 7 more days.",
+  "제외 폴더 추가": "Exclude folder", "메모 정리": "Tidy the memo",
+  "라우팅 판정과 같게": "Same as routing judge", "스킬 설명 그대로": "Skill's own description",
+  "위험한 명령·비밀값 유출을 찾아요.": "Finds dangerous commands and secret leaks.", "SKILL.md 품질을 0–100점으로 매겨요.": "Scores SKILL.md quality from 0 to 100.",
+  "알려진 위험 패턴을 심각도로 나눠요.": "Sorts known risky patterns by severity.", "요청마다 맞는 모델을 골라요.": "Picks the right model for each request.",
+  "스킬 판정": "Skill judge", "후보 중 지금 요청에 맞는 스킬·MCP·플러그인을 골라요.": "Picks the skill, MCP server or plugin that fits the request from the candidates.",
+  "스킬 판정 모델": "Skill judge model", "요약 모델 주소": "Summary model URL", "요약 모델": "Summary model", "요약 모델 API 키": "Summary model API key",
+  "4개": "4", "6개": "6", "8개": "8", "스킬 보안 검사": "Skill security check",
+  "기본 검사는 늘 돌아요. 이 PC에 설치된 엔진 중 함께 돌릴 것을 고르세요.": "The built-in check always runs. Pick which installed engines run with it.",
+  "스킬 요약": "Skill summary", "새 스킬이 들어오면 무엇을 언제 쓰는지 정리해요. ‘스킬 설명 그대로’는 SKILL.md 설명만 써요.": "Summarizes what each new skill does and when to use it. 'Skill's own description' uses only the SKILL.md description.",
+  "스킬 요약 모델": "Skill summary model", "스킬 후보 찾기": "Skill candidate search",
+  "요약을 뜻(임베딩 설정)이나 낱말로 찾아 판정에 넘길 후보 수예요.": "How many candidates the search (by meaning with embeddings, or by words) hands to the judge.",
+  "스킬 후보 수": "Skill candidates", "내 모델로 요약하려면 주소와 모델 이름이 필요해요.": "To summarize with your own model, enter its URL and model name.",
+  "새 스킬이 들어오면 무엇을 언제 쓰는지 정리해요.": "Summarizes what each new skill does and when to use it.",
+  "요약을 뜻이나 낱말로 찾아 판정에 넘겨요.": "Searches the summaries by meaning or words and hands them to the judge.",
+  "새 스킬을 검사 엔진으로 확인해요.": "Checks new skills with the scan engines.",
+  "일마다 쓸 모델과, 스킬을 요약·찾기·판정·검사하는 방법을 정해요.": "Choose the model for each job, and how skills are summarized, found, judged and checked."
+});
+Object.assign(window.ArkismI18nEN.patterns, { "승인을 기다리는 기억이 {0}개 있어요.": "{0} memories are waiting for approval.", "단축키를 {0}로 바꿨어요.": "Shortcut changed to {0}." });

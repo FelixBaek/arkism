@@ -146,16 +146,39 @@ func configureDaemonRouting(svc *memory.Service) {
 
 	// Skill routing: Cloudflare Clef-flash when its account and token are set, with Jev as the spare; else Jev alone.
 	var jev memory.MeteredSkillJudge
+	var jevPicker memory.ModelPicker
 	if key := os.Getenv("TYPESAFE_API_KEY"); key != "" {
-		jev = &memory.JevJudge{APIKey: key}
+		j := &memory.JevJudge{APIKey: key}
+		jev, jevPicker = j, j
 	}
+	var clef *memory.JevJudge
 	if account, token := os.Getenv("CLOUDFLARE_ACCOUNT_ID"), os.Getenv("CLOUDFLARE_AI_TOKEN"); account != "" && token != "" {
-		clef := memory.NewClefJudge(account, token)
-		svc.Router = &memory.FallbackJudge{Primary: clef, Secondary: jev}
-		svc.ModelPicker = clef // 라우팅: Clef picks the model; without it tasks go to the fixed or first model
-	} else if jev != nil {
-		svc.Router = jev
-		svc.ModelPicker = jev.(*memory.JevJudge)
+		clef = memory.NewClefJudge(account, token)
+	}
+	// 설정 › 역할별 모델 can pick the skill judge and the model judge apart: ARKISM_SKILL_JUDGE and
+	// ARKISM_MODEL_JUDGE are fixed (rules / the fixed model), clef or jev; unset keeps the pairing above.
+	pickJudge := func(env string) (memory.SkillJudge, memory.ModelPicker) {
+		switch os.Getenv(env) {
+		case "fixed":
+			return nil, nil
+		case "jev":
+			if jev == nil {
+				return nil, nil
+			}
+			return jev, jevPicker
+		}
+		if clef != nil {
+			return &memory.FallbackJudge{Primary: clef, Secondary: jev}, clef // 라우팅: Clef picks the model
+		}
+		if jev != nil {
+			return jev, jevPicker
+		}
+		return nil, nil
+	}
+	svc.Router, _ = pickJudge("ARKISM_SKILL_JUDGE")
+	_, svc.ModelPicker = pickJudge("ARKISM_MODEL_JUDGE")
+	if n, err := strconv.Atoi(os.Getenv("ARKISM_SKILL_CANDIDATES")); err == nil && n >= 1 && n <= 8 {
+		svc.SkillCandidates = n
 	}
 	// 라우팅 with the user's own chat model (Ollama, OpenAI, OpenRouter…): replaces Clef or Jev for picking models.
 	if endpoint, model := os.Getenv("ARKISM_ROUTING_PICKER_URL"), os.Getenv("ARKISM_ROUTING_PICKER_MODEL"); endpoint != "" && model != "" {

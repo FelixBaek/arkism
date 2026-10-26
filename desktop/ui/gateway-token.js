@@ -8,7 +8,7 @@ window.ArkismGatewayToken = (ctx) => {
   let later = false; // 나중에: the 확인해 주세요 card stays hidden until the app restarts
   const when = (ms) => new Intl.DateTimeFormat(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" }).format(new Date(ms));
   const TEXT = {
-    set: ["설정됨", "", "Claude Code·Codex가 모델 중계기를 쓸 때 필요한 토큰이에요. 다시 만들면 예전 토큰은 막혀요."],
+    set: ["설정됨", "", "에이전트가 모델 중계기를 쓸 때 필요한 토큰이에요. 다시 만들면 예전 토큰은 막혀요."],
     missing: ["없음", "warn", "토큰이 없어 모델 중계기를 쓸 수 없어요. 다시 만들면 에이전트 설정에 바로 넣어요."],
     invalid: ["확인 필요", "warn", "토큰 파일이 깨졌거나 다른 사용자도 읽을 수 있게 열려 있어요. 다시 만들면 고쳐져요."]
   };
@@ -19,7 +19,7 @@ window.ArkismGatewayToken = (ctx) => {
     alert.hidden = true;
     const line = el("div", "gw-line");
     const note = el("p", "v4-side-note gw-note");
-    const sec = sideSec("모델 중계기", line, note);
+    const sec = sideSec("모델 라우터", line, note);
     sec.classList.add("gw-sec");
     let busy = false;
     async function regenerate(st) {
@@ -35,12 +35,12 @@ window.ArkismGatewayToken = (ctx) => {
       busy = false;
     }
     function draw(st) {
-      if (!st) { line.replaceChildren(el("span", "gw-label", "중계기 토큰"), el("span", "gw-when", "확인하지 못했어요")); note.textContent = ""; return; }
+      if (!st) { line.replaceChildren(el("span", "gw-label", "라우터 토큰"), el("span", "gw-when", "확인하지 못했어요")); note.textContent = ""; return; }
       const [label, cls, text] = TEXT[st.state] || TEXT.invalid;
       const remake = el("button", "gw-remake", "다시 만들기");
       remake.type = "button";
       remake.addEventListener("click", () => regenerate(st));
-      line.replaceChildren(el("span", "gw-label", "중계기 토큰"), el("span", `gw-chip${cls ? ` ${cls}` : ""}`, label));
+      line.replaceChildren(el("span", "gw-label", "라우터 토큰"), el("span", `gw-chip${cls ? ` ${cls}` : ""}`, label));
       if (st.state === "set" && st.updated_ms) line.append(el("span", "gw-when", when(st.updated_ms)));
       line.append(remake);
       note.replaceChildren(el("span", "", text));
@@ -54,7 +54,7 @@ window.ArkismGatewayToken = (ctx) => {
         alert.replaceChildren(el("p", "", st.state === "missing" ? "중계기 토큰이 없어요. Claude Code·Codex 요청이 라우팅되지 않아요." : "중계기 토큰 파일에 문제가 있어요. Claude Code·Codex 요청이 라우팅되지 않아요."), acts);
       }
     }
-    line.append(el("span", "gw-label", "중계기 토큰"), el("span", "gw-when", "확인하는 중…"));
+    line.append(el("span", "gw-label", "라우터 토큰"), el("span", "gw-when", "확인하는 중…"));
     tauri.invoke("gateway_token_status").then(draw, () => draw(null));
     return [alert, sec];
   }
