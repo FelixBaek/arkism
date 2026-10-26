@@ -244,7 +244,7 @@ test("라우팅 그룹: pick, edit, reorder, add, remove, keep a discovered grou
   input().value = "테스트 써 줘"; input().fire("input");
   input().fire("keydown", { key: "a" });
   input().fire("keydown", { key: "Enter" }); await settle();
-  assert.match(text(main()), /판정 모델이 골랐어요 · 0\.2초/); assert.match(text(main()), /분류 담당없음/); assert.match(text(main()), /판정 모델이 없어서 모든 요청이 고정 모델로/); assert.match(text(main()), /C → q/);
+  assert.match(text(main()), /판정 모델이 골랐어요 · 0\.2초/); assert.match(text(main()), /분류 담당없음/); assert.match(text(main()), /판정 모델이 없어서 그룹 밖 요청은 순서상 첫 모델로/); assert.match(text(main()), /C → q/);
   for (const reply of [{ id: "a", decision: "default" }, { id: "a", decision: "odd", fallbacks: [] }, {}, new Error("HTTP 503"), new Error("weird")]) {
     v.R["/v1/routing/decide"] = () => reply;
     click(main(), "어디로 가나 보기"); await settle();

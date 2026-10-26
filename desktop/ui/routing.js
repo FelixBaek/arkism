@@ -184,7 +184,7 @@ window.ArkismRouting = (ctx) => {
   function distribution(d) {
     const c = el("div", "rt-card wide");
     const head = el("div", "rt-card-head");
-    head.append(el("strong", "", "모델 계열별 분배"), el("span", "", `판정 모델이 나눈 결과 · ${RANGES.find(([k]) => k === S.range)[1]}`));
+    head.append(el("strong", "", "모델 계열별 분배"), el("span", "", `실제로 간 요청 · ${RANGES.find(([k]) => k === S.range)[1]}`));
     const list = el("div", "rt-dist");
     const rows = [...(d.families || [])].sort((a, b) => b.requests - a.requests), top = Math.max(...rows.map((r) => r.share), 1);
     for (const r of rows) {
@@ -264,7 +264,7 @@ window.ArkismRouting = (ctx) => {
   function policyLine(d) {
     const p = d.policy || {};
     const c = el("section", "rt-policy-line");
-    const auto = p.auto_routing === false ? `꺼짐 · ${modelName(d.models, p.default_model) || "고정 모델"}로 고정` : (!p.classifier ? "켜짐 · 판정 모델 없음, 고정 모델로" : p.classifier_ms != null ? `켜짐 · ${p.classifier} 보통 ${sec1(p.classifier_ms)}초` : `켜짐 · ${p.classifier}`);
+    const auto = p.auto_routing === false ? `꺼짐 · ${modelName(d.models, p.default_model) || "고정 모델"}로 고정` : (!p.classifier ? (p.default_model ? "켜짐 · 판정 모델 없음, 고정 모델로" : "켜짐 · 판정 모델 없음, 첫 모델로") : p.classifier_ms != null ? `켜짐 · ${p.classifier} 보통 ${sec1(p.classifier_ms)}초` : `켜짐 · ${p.classifier}`);
     const order = (p.failover?.order || []).map((id) => modelName(d.models, id) || id);
     const fail = p.auto_failover === false ? "꺼짐" : `켜짐${order.length ? ` · ${order.join(" → ")}` : " · 라우팅 순서대로"}`;
     const go2 = button("라우팅 설정", "", null, openSettings);
@@ -288,7 +288,7 @@ window.ArkismRouting = (ctx) => {
     const head = (title, sw) => { const h = el("div", "rt-ctl-head"); h.append(el("h3", "", title), sw); return h; };
     const a = el("section", "rt-set-card");
     a.append(head("자동 라우팅", switchEl(p.auto_routing !== false, "자동 라우팅", (v) => savePolicySettings({ auto_routing: v }))),
-      el("p", "rt-set-hint", p.auto_routing === false ? "꺼져 있어요. 모든 요청이 고정 모델로 가요." : !p.classifier ? "판정 모델이 없어서 모든 요청이 고정 모델로 가요. 판정 모델은 설정 › 에이전트에서 골라요." : "판정 모델이 요청 내용과 모델마다 적은 설명을 보고 알맞은 모델로 보내요."));
+      el("p", "rt-set-hint", p.auto_routing === false ? "꺼져 있어요. 모든 요청이 고정 모델로 가요." : !p.classifier ? (p.default_model ? "판정 모델이 없어서 그룹 밖 요청은 고정 모델로, 그룹 요청은 그룹의 1번 모델로 가요. 판정 모델은 설정 › 에이전트에서 골라요." : "판정 모델이 없어서 그룹 밖 요청은 순서상 첫 모델로, 그룹 요청은 그룹의 1번 모델로 가요. 판정 모델은 설정 › 에이전트에서 골라요.") : "판정 모델이 요청 내용과 모델마다 적은 설명을 보고 알맞은 모델로 보내요."));
     if (p.auto_routing === false) { const n = el("div", "rt-amber"); n.append(el("p", "", "모델 계열별 분배가 멈췄어요. 켜면 바로 다시 나눠요.")); a.append(n); }
     const g0 = el("div", "rt-fields");
     g0.append(pick("고정 모델 (꺼 두거나 판정 모델이 답하지 못할 때)", p.default_model, (v) => savePolicySettings({ default_model: v }), "순서상 첫 모델"));
@@ -460,7 +460,7 @@ window.ArkismRouting = (ctx) => {
   // asking for the model "group/…". The server knows two strategies: smart (Clef picks by intent) and ordered.
   const STRATEGIES = [["smart", "의도별"], ["ordered", "순서대로"]];
   const STRATEGY_TEXT = {
-    smart: "의도별: 자동 라우팅이 켜져 있으면 판정 모델이 요청 내용과 모델 설명을 보고 그룹 안에서 골라요. 꺼져 있으면 1번 모델로 가요.",
+    smart: "의도별: 자동 라우팅이 켜져 있고 판정 모델이 있으면 판정 모델이 요청 내용과 모델 설명을 보고 그룹 안에서 골라요. 아니면 1번 모델로 가요.",
     ordered: "순서대로: 늘 1번 모델로 보내고, 실패하면 다음 모델로 넘겨요."
   };
   const groupsNow = () => S.groupDraft || S.groups?.items || [];
@@ -514,7 +514,7 @@ window.ArkismRouting = (ctx) => {
     if (o?.error) box.append(el("p", "rt-trial-out bad", o.error));
     else if (o) {
       const name = (id) => items.find((m) => m.id === id)?.name || id;
-      const how = { clef: `판정 모델이 골랐어요${o.classifier_ms ? ` · ${sec1(o.classifier_ms)}초` : ""}`, default: "판정 모델이 답하지 않아 첫 모델로", fixed: "고정 모델로" }[o.decision] || o.decision;
+      const how = { clef: `판정 모델이 골랐어요${o.classifier_ms ? ` · ${sec1(o.classifier_ms)}초` : ""}`, default: "판정 모델이 고르지 않았어요", fixed: "고정 모델로" }[o.decision] || o.decision;
       const p = el("div", "rt-trial-out");
       p.append(kv("보낼 모델", name(o.id)), kv("고른 방법", how), kv("실패하면", (o.fallbacks || []).length ? [...o.fallbacks.map(name)].join(" → ") : "넘길 모델 없음"));
       box.append(p);
