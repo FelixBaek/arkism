@@ -18,15 +18,52 @@ function load(stored = {}) {
     query: () => "",
     request: async (p) => {
       if (p === "/readyz") { if (!server.up) throw new Error("down"); return {}; }
-      if (p.startsWith("/v1/memory_candidates")) return { total: server.candidates };
+      if (p.startsWith("/v1/memory_candidates")) { if (server.countFails) throw new Error("drop"); return { total: server.candidates }; }
       return { items: server.runs };
     },
     tauri: { invoke: async (_cmd, args) => { sent.push(args.title); } },
     away: () => true
   };
   const tick = async () => { now += 30001; await sandbox.window.ArkismAlerts.check(deps); };
-  return { alerts: sandbox.window.ArkismAlerts, server, sent, tick };
+  return { alerts: sandbox.window.ArkismAlerts, server, sent, tick, state: deps.state };
 }
+
+test("a failed count read keeps the last review count instead of the window's stale one", async () => {
+  const { server, sent, tick, state } = load();
+  state.candidateTotal = 3;
+  server.candidates = 5;
+  await tick(); // baseline 5
+  server.countFails = true;
+  await tick();
+  server.countFails = false;
+  await tick();
+  assert.deepEqual(sent, []);
+});
+
+test("another server, token or scope starts a new baseline", async () => {
+  const { server, sent, tick, state } = load();
+  server.candidates = 1;
+  await tick(); // baseline
+  state.token = "other";
+  server.candidates = 4;
+  server.runs = [{ id: "theirs", crew_run: { status: "succeeded", crew_id: "c" } }];
+  await tick();
+  assert.deepEqual(sent, []);
+  server.candidates = 5;
+  await tick();
+  assert.deepEqual(sent, ["검토할 기억이 생겼어요"]);
+});
+
+test("runs that finished while 작업 완료 알림 was off are not sent when it is turned back on", async () => {
+  const { alerts, server, sent, tick } = load();
+  await tick(); // baseline with an empty run list
+  alerts.set({ done: false });
+  server.runs = [{ id: "while-off", crew_run: { status: "succeeded", crew_id: "c" } }];
+  await tick();
+  alerts.set({ done: true });
+  await tick();
+  assert.deepEqual(sent, []);
+});
 
 test("review and connection alerts read the server while the window is hidden", async () => {
   const { server, sent, tick } = load();

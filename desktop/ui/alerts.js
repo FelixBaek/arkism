@@ -9,7 +9,7 @@ window.ArkismAlerts = (() => {
   try { prefs = { ...DEF, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { /* defaults */ }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) { /* per-viewer convenience only */ } };
   const tr = (s) => (window.ArkismI18n ? window.ArkismI18n.translate(s) : s);
-  let seen = null; // { review, error (null = unknown), runs: Set of finished run ids, runsReady }
+  let seen = null; // { owner, review, error (null = unknown), runs: Set of finished run ids, runsReady }
   let readAt = 0;
   let busy = false;
 
@@ -17,6 +17,8 @@ window.ArkismAlerts = (() => {
     if (!tauri || busy || !state.token || Date.now() - readAt < 30000) return;
     busy = true;
     readAt = Date.now();
+    const owner = JSON.stringify([state.server, state.token, state.scope]);
+    if (seen && seen.owner !== owner) seen = null; // another server, token or scope: its first read is a new baseline
     try {
       // The window's own lists stop refreshing while it is hidden (visibleSync), so the review count and the
       // connection are read here. Runs are read only while 작업 완료 알림 is on.
@@ -26,9 +28,10 @@ window.ArkismAlerts = (() => {
         request("/readyz").then(() => false, (e) => (e?.code === "api_context_changed" ? null : true)),
         prefs.done ? request(`/v1/crew/runs?${query({ limit: 20 })}`).then((r) => r.items || [], () => null) : null
       ]);
-      const review = counted ?? state.candidateTotal ?? state.data?.candidates?.length ?? null; // an older server has no count query
+      // An older server has no count query; a failed count read stays null so seen.review is kept.
+      const review = state.caps?.actions?.review_list ? counted : (state.candidateTotal ?? state.data?.candidates?.length ?? null);
       const finished = (runs || []).filter((x) => ["succeeded", "failed"].includes(x.crew_run?.status));
-      if (!seen) { seen = { review, error, runs: new Set(finished.map((x) => x.id)), runsReady: !!runs }; return; }
+      if (!seen) { seen = { owner, review, error, runs: new Set(finished.map((x) => x.id)), runsReady: !!runs }; return; }
       const out = [];
       if (prefs.review && review != null && seen.review != null && review > seen.review) out.push([tr("검토할 기억이 생겼어요"), tr(`승인을 기다리는 기억이 ${review}개 있어요.`)]);
       if (prefs.error && error && seen.error === false) out.push([tr("Arkism 연결이 끊겼어요"), state.loadError?.text || tr("연결을 확인해 주세요.")]);
@@ -48,5 +51,9 @@ window.ArkismAlerts = (() => {
       for (const [title, body] of out.slice(0, 3)) await tauri.invoke("notify", { title, body, sound: !!prefs.sound }).catch(() => {});
     } finally { busy = false; }
   }
-  return { check, get: () => ({ ...prefs }), set: (patch) => { prefs = { ...prefs, ...patch }; save(); } };
+  return { check, get: () => ({ ...prefs }), set: (patch) => {
+    prefs = { ...prefs, ...patch };
+    save();
+    if (patch.done === false && seen) seen.runsReady = false; // runs are not read while off, so the next list is a baseline again
+  } };
 })();
