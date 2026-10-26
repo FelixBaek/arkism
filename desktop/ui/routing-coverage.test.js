@@ -149,7 +149,7 @@ test("errors: unsupported, failed with retry, invalid reply; quiet refresh skips
   v.ctx.canRefresh = () => false; await v.r.refresh();
   v.ctx.canRefresh = undefined; v.R["/v1/routing/overview"] = () => new Error("x"); await v.r.refresh();
   v.state.view = "home"; await v.r.load();
-  assert.match(v.r.views.routing.sub(), /Clef가 요청을 나누고/);
+  assert.match(v.r.views.routing.sub(), /판정 모델이 요청을 나누고/);
   const routes = window.ArkismRoutingTurns({ el: dom.el });
   assert.equal(routes.card(null), null);
   assert.equal(routes.card({ main: {}, side: {} }), null);
@@ -244,7 +244,7 @@ test("라우팅 그룹: pick, edit, reorder, add, remove, keep a discovered grou
   input().value = "테스트 써 줘"; input().fire("input");
   input().fire("keydown", { key: "a" });
   input().fire("keydown", { key: "Enter" }); await settle();
-  assert.match(text(main()), /Clef가 골랐어요 · 0\.2초/); assert.match(text(main()), /C → q/);
+  assert.match(text(main()), /판정 모델이 골랐어요 · 0\.2초/); assert.match(text(main()), /분류 담당없음/); assert.match(text(main()), /판정 모델이 없어서 모든 요청이 고정 모델로/); assert.match(text(main()), /C → q/);
   for (const reply of [{ id: "a", decision: "default" }, { id: "a", decision: "odd", fallbacks: [] }, {}, new Error("HTTP 503"), new Error("weird")]) {
     v.R["/v1/routing/decide"] = () => reply;
     click(main(), "어디로 가나 보기"); await settle();
