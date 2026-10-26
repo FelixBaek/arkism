@@ -30,19 +30,23 @@ window.ArkismRouting = (ctx) => {
     if (quiet && S.state !== "ready") return;
     const ticket = ++epoch;
     if (!quiet) { S.state = "loading"; S.error = ""; paint(); }
+    // The skill decision log fills its card when it lands; a server without it (or a failed read) only hides that card.
+    const skills = request(`/v1/routing/skills?${query({})}`).then((r) => (Array.isArray(r?.items) ? r.items : undefined), () => undefined);
     try {
-      // A server without the skill decision log (or a failed read) only hides that card.
-      const [doc, skills] = await Promise.all([request(`/v1/routing/overview?${query({ range: S.range })}`), request(`/v1/routing/skills?${query({})}`).catch(() => null)]);
-      if (doc && Array.isArray(skills?.items)) doc.skill_routes = skills.items;
+      const doc = await request(`/v1/routing/overview?${query({ range: S.range })}`);
       if (ticket !== epoch || (quiet && ctx.canRefresh?.() === false)) return;
       if (doc?.authority !== "data_only_untrusted" || !doc.kpi) throw new Error("invalid_response");
-      if (quiet && JSON.stringify(S.doc) === JSON.stringify(doc)) return;
-      S.doc = doc; S.state = "ready"; S.at = new Date();
+      doc.skill_routes = S.doc?.skill_routes; // keep the card until the new list lands
+      if (!quiet || JSON.stringify(S.doc) !== JSON.stringify(doc)) { S.doc = doc; S.state = "ready"; S.at = new Date(); paint(); }
     } catch (e) {
       if (ticket !== epoch || quiet) return;
       S.doc = null; S.state = unsupported(e) ? "unsupported" : "error"; S.error = e.message;
+      paint();
+      return;
     }
-    paint();
+    const items = await skills;
+    if (ticket !== epoch || !S.doc || JSON.stringify(S.doc.skill_routes) === JSON.stringify(items)) return;
+    S.doc.skill_routes = items; paint();
   }
   const paint = () => { if (state.view === "routing") render(false); };
 

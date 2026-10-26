@@ -46,7 +46,9 @@ func newSkillRoute(out RouteResult, candidates []SkillCandidate, runtime string)
 // recordSkillRoute keeps the decision for ROUTER; a failed write never fails the route.
 func (s *Service) recordSkillRoute(ctx context.Context, scope Scope, actor Decision, sr SkillRoute) {
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	_ = s.Repo.Insert(context.WithoutCancel(ctx), colSkillRoutes, Record{ID: ID(), Scope: scope, Kind: colSkillRoutes, Status: statusActive, Revision: 1,
+	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), jevTimeout)
+	defer cancel()
+	_ = s.Repo.Insert(recordCtx, colSkillRoutes, Record{ID: ID(), Scope: scope, Kind: colSkillRoutes, Status: statusActive, Revision: 1,
 		Text: sr.Selected, SkillRoute: &sr, CreatedAt: now, UpdatedAt: now, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role})
 }
 

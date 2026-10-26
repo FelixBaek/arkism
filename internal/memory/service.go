@@ -977,8 +977,9 @@ func (s *Service) Get(ctx context.Context, token, col string, scope Scope, id st
 	if col == colProviderUsage {
 		return Record{}, ErrInvalid
 	}
-	// Digests are served only by /v1/digests, which withholds a body whose basis is gone.
-	if !knownCollection(col) || col == "jobs" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || col == colTopicDigests || col == colUserDigests || isWikiCollection(col) {
+	// Digests are served only by /v1/digests, which withholds a body whose basis is gone;
+	// skill decisions only by /v1/routing/skills, under read:routing.
+	if !knownCollection(col) || col == "jobs" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || col == colTopicDigests || col == colUserDigests || isWikiCollection(col) || col == colSkillRoutes {
 		return Record{}, ErrInvalid
 	}
 	d, e := s.authorize(ctx, token, "read:"+col, scope, id, "")
