@@ -39840,6 +39840,9 @@
           "last_confirmed_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "skill_route": {
+            "$ref": "#/components/schemas/WireResponseSkillRoute"
           }
         },
         "additionalProperties": false,
@@ -48963,12 +48966,17 @@
                 "type": "null"
               }
             ]
+          },
+          "failures": {
+            "type": "integer",
+            "description": "status failure or validation_failed"
           }
         },
         "additionalProperties": false,
         "required": [
           "skill_id",
           "count",
+          "failures",
           "last_used_at",
           "by_runtime"
         ],
@@ -50737,6 +50745,46 @@
         "x-go-type": "memory.CrewAssistTrace",
         "x-go-source": "internal/memory/crew_assists.go",
         "description": "CrewAssistTrace says which external runner did a try and what it did and did not apply; ids and names only."
+      },
+      "WireResponseSkillRoute": {
+        "type": "object",
+        "properties": {
+          "selected": {
+            "type": "string"
+          },
+          "selected_name": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "description": "a judge picked it; false for rules and jev_uncertain"
+          },
+          "provider": {
+            "type": "string",
+            "description": "rules, or the judge model (clef-flash, jev-…)"
+          },
+          "degraded": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "candidates": {
+            "type": "integer"
+          },
+          "runtime": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "confirmed",
+          "provider",
+          "candidates"
+        ],
+        "x-go-type": "memory.SkillRoute",
+        "x-go-source": "internal/memory/skill_route_log.go",
+        "description": "SkillRoute is one route_skills decision as the router made it: skill ids,\nnames and the judge, never the query."
       }
     },
     "headers": {
