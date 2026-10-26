@@ -310,6 +310,12 @@ func TestJevRoundedAndUnsureAnswersAreKept(t *testing.T) {
 	if e != nil || routed.SelectedID != "" || routed.Provider != "jev" || len(routed.Judgments) != 1 || !slices.Equal(routed.Degraded, []string{"jev_uncertain"}) {
 		t.Fatalf("unsure selection must keep judgments and withhold the pick: %+v %v", routed, e)
 	}
+	// ROUTER sees the judge's unconfirmed best guess (SkillRoute has no query field).
+	logged, e := f.svc.SkillRoutes(testCtx, f.human, scopeA)
+	if e != nil || len(logged) != 1 || logged[0].Selected != v.ID || logged[0].Confirmed || logged[0].Provider != "jev" ||
+		!slices.Equal(logged[0].Degraded, []string{"jev_uncertain"}) || logged[0].SelectedName != "index helper" || logged[0].Candidates != 1 || logged[0].At.IsZero() {
+		t.Fatalf("skill decision not kept: %+v %v", logged, e)
+	}
 }
 
 func TestRoutingUncertainDecisionDoesNotSelect(t *testing.T) {

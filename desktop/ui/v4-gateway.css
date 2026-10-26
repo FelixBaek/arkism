@@ -41,3 +41,8 @@
 .rtg-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nc-text); }
 .rtg-call.bad .rtg-ok { color: var(--nc-amber); }
 .rtg-num { text-align: right; font-family: var(--mono); }
+
+/* ROUTER › 라우팅 현황 › 스킬 판정 */
+.rtg-skills { padding: 4px 12px; border: 1px solid var(--nc-line); border-radius: 8px; }
+.rtg-skill { grid-template-columns: 44px minmax(0, 1fr) minmax(0, 120px) 52px 72px; }
+.rtg-skill .rtg-ok { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

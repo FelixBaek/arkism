@@ -26,7 +26,7 @@ var (
 	ErrCandidateQuota   = errors.New("candidate_daily_limit")
 )
 
-var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links"}
+var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links"}
 
 const (
 	VerificationCandidate = "candidate"
@@ -218,6 +218,7 @@ type Record struct {
 	DiscordSettings    *DiscordSettings     `json:"discord_settings,omitempty" bson:"discord_settings,omitempty"`
 	Routing            *Routing             `json:"routing,omitempty" bson:"routing,omitempty"`
 	RoutingCall        *RoutingCall         `json:"routing_call,omitempty" bson:"routing_call,omitempty"`
+	SkillRoute         *SkillRoute          `json:"skill_route,omitempty" bson:"skill_route,omitempty"`
 	UsageSession       *UsageSession        `json:"usage_session,omitempty" bson:"usage_session,omitempty"`
 	CodeReviews        *CodeReviews         `json:"code_reviews,omitempty" bson:"code_reviews,omitempty"`
 	DesignSystem       *DesignSystem        `json:"design_system,omitempty" bson:"design_system,omitempty"`

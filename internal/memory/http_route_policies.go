@@ -78,6 +78,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"GET /v1/routing/groups":                          {action: "read:routing", scope: routeQuery},
 	"GET /v1/routing/models":                          {action: "read:routing", scope: routeQuery},
 	"GET /v1/routing/overview":                        {action: "read:routing", scope: routeQuery},
+	"GET /v1/routing/skills":                          {action: "read:routing", scope: routeQuery},
 	"GET /v1/routing/systemone":                       {action: "route:models", scope: routeQuery},
 	"GET /v1/session-archives/storage-audit":          {action: "read:session_archives", scope: routeQuery},
 	"GET /v1/skills":                                  {action: "read:skills", scope: routeQuery},

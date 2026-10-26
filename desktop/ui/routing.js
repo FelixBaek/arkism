@@ -31,7 +31,9 @@ window.ArkismRouting = (ctx) => {
     const ticket = ++epoch;
     if (!quiet) { S.state = "loading"; S.error = ""; paint(); }
     try {
-      const doc = await request(`/v1/routing/overview?${query({ range: S.range })}`);
+      // A server without the skill decision log (or a failed read) only hides that card.
+      const [doc, skills] = await Promise.all([request(`/v1/routing/overview?${query({ range: S.range })}`), request(`/v1/routing/skills?${query({})}`).catch(() => null)]);
+      if (doc && Array.isArray(skills?.items)) doc.skill_routes = skills.items;
       if (ticket !== epoch || (quiet && ctx.canRefresh?.() === false)) return;
       if (doc?.authority !== "data_only_untrusted" || !doc.kpi) throw new Error("invalid_response");
       if (quiet && JSON.stringify(S.doc) === JSON.stringify(doc)) return;
@@ -179,6 +181,8 @@ window.ArkismRouting = (ctx) => {
     wrap.append(modelsTable(d), distribution(d));
     const gw = turns?.card(d.gateway); // Claude Code 본대화·부속 호출 (routing-turns.js)
     if (gw) wrap.append(gw);
+    const sk = turns?.skillCard(d.skill_routes); // route_skills 판정 (routing-turns.js)
+    if (sk) wrap.append(sk);
     return wrap;
   }
   function distribution(d) {

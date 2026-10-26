@@ -41,6 +41,11 @@ function mk({ replies = {}, mode = "local" } = {}) {
   const notes = [], calls = [], went = [];
   const R = {
     "/v1/routing/overview": () => overview(), "/v1/routing/models": () => modelsDoc(), "/v1/routing/groups": () => groupsDoc(),
+    "/v1/routing/skills": () => ({ items: [
+      { at, selected: "skill-a", selected_name: "PDF 읽기", confirmed: true, provider: "clef-flash", candidates: 3 },
+      { at, selected: "skill-b", confirmed: false, provider: "jev-1.13.0", degraded: ["jev_uncertain"], candidates: 2 },
+      { at, selected: "skill-c", selected_name: "검색", confirmed: false, provider: "rules", degraded: ["jev_unavailable"], candidates: 1 },
+      { at, confirmed: false, provider: "rules", degraded: ["odd"], candidates: 0 }] }),
     "/v1/routing/policy": () => ({}), "/v1/routing/decide": () => ({ id: "a", decision: "clef", classifier_ms: 200, fallbacks: ["c", "q"] }), ...replies,
   };
   const ctx = {
@@ -70,6 +75,9 @@ test("라우팅 현황 draws KPIs, charts, models, families, gateway turns and e
   const t = text(v.table);
   assert.match(t, /요청 수/); assert.match(t, /모델 계열별 분배/); assert.match(t, /Claude Code 호출/); assert.match(t, /갈래 작업 1/); assert.match(t, /weird 2/);
   assert.equal(v.r.count(), 2);
+  // 스킬 판정: the judge, the pick and why it fell back
+  assert.match(t, /스킬 판정/); assert.match(t, /PDF 읽기/); assert.match(t, /Clef/); assert.match(t, /skill-b/); assert.match(t, /확신 낮음/);
+  assert.match(t, /판정 모델 없음/); assert.match(t, /규칙 2/); assert.match(t, /고른 스킬 없음/); assert.match(t, /odd/);
   assert.match(v.r.views.routing.sub(), /실시간/);
   // a turn opens and closes
   const head = v.table.all((n) => n.classList.contains("rtg-turn-head"))[0];
@@ -318,5 +326,14 @@ test("라우팅 설정 without groups, with a bad reply, an old server, an error
     const first = stale.r.loadSettings(), second = stale.r.loadSettings();
     releases[1](); await second;
     releases[0](); await first;
+  }
+});
+
+test("스킬 판정 card hides when the server has no decision log or nothing was decided", async () => {
+  for (const reply of [() => new Error("HTTP 404"), () => ({ items: [] })]) {
+    const v = mk({ replies: { "/v1/routing/skills": reply } });
+    v.r.render(); await settle();
+    assert.match(text(v.table), /요청 수/);
+    assert.doesNotMatch(text(v.table), /스킬 판정/);
   }
 });
