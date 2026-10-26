@@ -211,16 +211,18 @@ window.ArkismPages = (ctx) => {
     const before = shown.textContent;
     shown.textContent = tr("키를 누르세요…");
     btn.disabled = true;
-    const stop = () => { document.removeEventListener("keydown", onKey, true); btn.disabled = false; };
+    const stop = () => { document.removeEventListener("keydown", onKey, true); document.removeEventListener("pointerdown", cancel, true); btn.disabled = false; };
+    const cancel = () => { stop(); shown.textContent = before; };
     function onKey(e) {
       e.preventDefault(); e.stopPropagation();
-      if (e.key === "Escape") { stop(); shown.textContent = before; return; }
+      if (e.key === "Escape") { cancel(); return; }
       if (e.key === "Backspace" && !e.ctrlKey && !e.altKey && !e.shiftKey) { stop(); done(""); return; }
       if (["Control", "Shift", "Alt", "Meta"].includes(e.key) || !(e.ctrlKey || e.altKey || e.metaKey)) return; // a modifier besides Shift is needed
       stop();
       done([e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Super", e.code].filter(Boolean).join("+"));
     }
     document.addEventListener("keydown", onKey, true);
+    document.addEventListener("pointerdown", cancel, true); // a click elsewhere cancels, so keys are not swallowed app-wide
   }
   // 언어와 단축키: 화면 언어 moved here from 설정 › 모양 (look.js saves it).
   function langGroup() {
