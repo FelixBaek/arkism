@@ -43,7 +43,7 @@ window.ArkismShell = (ctx) => {
     ] },
     // 설정 tabs (Figma 07 · 설정): one area tab per settings page. 라우팅·모델 설정 live under ROUTER.
     settings: { label: "설정", tabs: [
-      ["general", "일반"], ["connect", "연결"], ["messenger", "메신저"], ["roles", "역할별 모델"], ["appearance", "모양"], ["agents", "에이전트"],
+      ["general", "일반"], ["connect", "연결"], ["messenger", "메신저"], ["appearance", "모양"], ["agents", "에이전트"],
       ["workflow", "페르소나"], ["categories", "카테고리"], ["advanced", "고급"], ["info", "정보"]
     ].map(([k, label]) => [k, label, () => settings(k), () => state.view === "settings" && state.settingsTab === k]) }
   };
@@ -69,9 +69,7 @@ window.ArkismShell = (ctx) => {
     });
     const box = $("#area-tabs");
     // MEMORY draws no tabs: the overview's own links open 기억·세션·사용량, and the rail goes back to 개요.
-    // 역할별 모델 has nothing to set while a server decides the models (pages.js), so only this PC shows it.
-    const local = window.__TAURI__ && state.mode === "local";
-    const tabs = key === "memory" ? [] : MENUS[key].tabs.filter(([id]) => key !== "settings" || id !== "roles" || local);
+    const tabs = key === "memory" ? [] : MENUS[key].tabs;
     box.dataset.active = tabs.find((t) => t[3]())?.[1] || ""; // app.js hides a page title that only repeats this tab
     box.replaceChildren(...tabs.map(([id, label, open, active, n]) => {
       const t = el("button", `area-tab${active() ? " active" : ""}`);

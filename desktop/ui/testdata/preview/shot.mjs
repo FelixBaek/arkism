@@ -12,6 +12,7 @@ p.on("pageerror", (e) => errs.push(String(e)));
 p.on("console", (m) => { if (m.type() === "error") errs.push(m.text()); });
 await p.addInitScript(([origin, theme, remote, gw, lang, winbar]) => { // GWTOKEN=missing|invalid: 설정 › 연결's gateway token state
   localStorage.setItem("arkism.server", origin); localStorage.setItem("arkism.token", "preview"); 
+  if (!remote && !localStorage.getItem("arkism.mode")) localStorage.setItem("arkism.mode", "local");
   if (remote) { localStorage.setItem("arkism.mode", "remote"); localStorage.setItem("arkism.ssh", JSON.stringify({ host: "my-server", user: "me" })); }
   localStorage.setItem("arkism.look", JSON.stringify({ theme: theme || "dark", lang: lang || "ko" }));
   // Stand-in for the desktop app: the built-in Arkism is the read-only preview server.

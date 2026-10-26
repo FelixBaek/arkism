@@ -345,8 +345,9 @@ window.ArkismModels = (ctx) => {
     if (!p.custom) s.append(actionsRow(button("키 추가", "", null, () => openKeyDialog(p))));
     return s;
   }
-  function modelsCard(p) {
-    const c = card("모델", "켠 모델만 라우팅과 AI 도구에서 골라 쓸 수 있어요.");
+  // compact (설정 › 에이전트 detail): no title, no 모델 추가 — the list comes from the account, not typed in.
+  function modelsCard(p, compact) {
+    const c = compact ? el("section", "mp-card ag-models") : card("모델", "켠 모델만 라우팅과 AI 도구에서 골라 쓸 수 있어요.");
     const addRow = el("div", "model-add");
     addRow.hidden = true;
     const mi = el("input");
@@ -374,8 +375,9 @@ window.ArkismModels = (ctx) => {
     f.addEventListener("focus", () => { typing = p.id; });
     f.addEventListener("blur", (ev) => { if (ev.relatedTarget) typing = null; });
     if (typing === p.id) requestAnimationFrame(() => { if (!document.activeElement || document.activeElement === document.body) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } });
-    const re = button("새로고침", "ghost", null, () => reload(re));
-    tools.append(f, re, button("모델 추가", "", null, () => { addRow.hidden = !addRow.hidden; mi.focus(); }));
+    const re = button(compact ? "목록 새로고침" : "새로고침", compact ? "" : "ghost", null, () => reload(re));
+    tools.append(f, re);
+    if (!compact) tools.append(button("모델 추가", "", null, () => { addRow.hidden = !addRow.hidden; mi.focus(); }));
     c.append(tools, addRow);
     const ml = el("div", "mp-models");
     f.addEventListener("input", () => { filters[p.id] = f.value; ml.querySelectorAll(".mp-model-row").forEach((r) => { r.hidden = !!q() && !r.dataset.model.toLowerCase().includes(q()); }); });
@@ -420,7 +422,118 @@ window.ArkismModels = (ctx) => {
       ml.append(r);
     }
     c.append(ml);
-    if (all.length) c.append(el("small", "mp-count", `${all.length}개 중 ${onCount}개 켜짐`));
+    if (all.length && !compact) c.append(el("small", "mp-count", `${all.length}개 중 ${onCount}개 켜짐`));
+    return c;
+  }
+  // ---------------------------------------------------------------- 설정 › 에이전트 (Figma 1300:5254)
+  // Which provider and CLI an agent runs on, so its row and detail read the same report as 모델 설정.
+  const AGENT_SOURCE = { claude_code: ["anthropic", "claude"], codex: ["openai", "codex"], gemini: ["google", "gemini"], zcode: ["zai", "glm"], grok: ["xai", "grok"] };
+  const PLAN_NAMES = { max: "MAX", pro: "PRO", plus: "PLUS", team: "TEAM", free: "FREE", enterprise: "ENTERPRISE", supergrok: "SUPER GROK" };
+  const planName = (plan) => (plan ? PLAN_NAMES[String(plan).toLowerCase().replace(/[\s_-]/g, "")] || String(plan).toUpperCase() : "");
+  // An agent's report: its provider, its CLI's accounts (the default first) and whether a key is stored.
+  function agentSource(agentId) {
+    const [pid, cli] = AGENT_SOURCE[agentId] || [];
+    if (!pid || state.data.providers == null) return null;
+    const p = providers().find((x) => x.id === pid);
+    if (!p) return null;
+    const accounts = (p.accounts || []).filter((a) => !a.cli || a.cli === cli).sort((a, b) => Number(!!b.default) - Number(!!a.default));
+    const main = accounts.find((a) => a.status === "connected") || accounts[0] || null;
+    return { p, cli, accounts, main, info: accounts.find((a) => a.cli_info?.version)?.cli_info || null, keys: p.keys || [] };
+  }
+  // The row's CLI version and, when a newer one exists, a button that installs it (the same request as 모델 설정).
+  function cliBadge(src) {
+    const a = src.accounts.find((x) => x.cli_info?.version);
+    if (!a) return [];
+    const info = a.cli_info;
+    const out = [el("span", "ag-cli", `CLI ${info.version}`)];
+    const pending = (doc().requests || []).some((q) => q.kind === "cli_update" && q.cli === a.cli && q.status === "pending");
+    if (pending) out.push(el("span", "ag-update busy", "업데이트 중…"));
+    else if (info.update && info.latest) {
+      const can = UPDATABLE[src.p.id] === a.cli && info.via;
+      const b = el("button", "ag-update", `↓ ${info.latest}`);
+      b.type = "button";
+      b.title = can ? `${CLI_NAMES[a.cli] || a.cli}를 ${info.latest}로 업데이트` : `새 버전 ${info.latest}: 이 설치 방식은 직접 업데이트해 주세요`;
+      b.disabled = !can;
+      b.addEventListener("click", (e) => { e.stopPropagation(); void updateCLI(src.p, a, b); });
+      out.push(b);
+    }
+    return out;
+  }
+  const quotaMini = (q) => {
+    const used = q.left_pct == null ? null : 100 - q.left_pct;
+    const w = el("span", "ag-quota");
+    const bar = el("i");
+    const fill = el("b");
+    fill.style.width = `${used ?? 0}%`;
+    bar.append(fill);
+    w.append(el("small", "", windowName(q.window).replace(" 한도", "").replace("주간", "7일")), bar, el("small", "", used == null ? "—" : `${used}%`));
+    return w;
+  };
+  // 계정: every login of this agent's CLI. 사용 중 = the default one, 다음 차례 = another signed-in one, 안 씀 = signed out.
+  function agentAccounts(src, title) {
+    const c = el("section", "ag-card");
+    const live = src.accounts.filter((a) => a.status === "connected").length;
+    const head = el("div", "ag-card-head");
+    head.append(el("strong", "", "계정"), el("small", "", src.accounts.length ? `${src.accounts.length}개 중 ${live}개 사용` : ""));
+    c.append(head);
+    const list = el("div", "ag-accounts");
+    for (const a of src.accounts) {
+      const on = a.status === "connected";
+      const row = el("div", `ag-account${on ? "" : " off"}`);
+      const mark = el("span", `ag-check${on ? " on" : ""}`);
+      if (on) mark.append(icon("check"));
+      const name = el("div", "ag-account-name");
+      const top = el("div", "ag-account-top");
+      top.append(el("strong", "", labelOf("account", src.p.id, a.id) || a.label || CLI_NAMES[a.cli] || a.id));
+      if (a.plan) top.append(el("span", "ag-plan", planName(a.plan)));
+      name.append(top);
+      const windows = a.quotas?.length ? a.quotas : a.quota ? [a.quota] : [];
+      if (on && windows.length) { const qs = el("div", "ag-quotas"); windows.slice(0, 2).forEach((q) => qs.append(quotaMini(q))); name.append(qs); }
+      else if (!on) name.append(el("small", "ag-account-warn", a.status === "expired" ? "다시 로그인해 주세요" : "로그인 필요"));
+      const inUse = on && a === src.main; // the default login, else the first signed-in one
+      let pillText = "안 씀";
+      if (on) pillText = inUse ? "사용 중" : "다음 차례";
+      const re = button("", "icon-btn plain", "arrows-clockwise", () => reload(re));
+      re.title = "한도 새로 확인";
+      re.setAttribute("aria-label", `${a.label || a.id} 한도 새로 확인`);
+      row.append(mark, name, el("span", `ag-pill${inUse ? " live" : ""}`, pillText), re);
+      list.append(row);
+    }
+    if (!src.accounts.length) list.append(el("p", "ag-empty", "로그인한 계정이 없어요."));
+    const add = el("button", "ag-add-line");
+    add.type = "button";
+    add.append(icon("plus"), el("span", "", `다른 ${title} 계정 추가`));
+    add.addEventListener("click", () => openAccountHelp(src.p));
+    list.append(add);
+    c.append(list);
+    return c;
+  }
+  // API 행의 상세: 저장된 키(끝 네 자리만)와 키 추가.
+  function agentKeys(src) {
+    const c = el("section", "ag-card");
+    const head = el("div", "ag-card-head");
+    head.append(el("strong", "", "API 키"), el("small", "", src.keys.length ? `${src.keys.length}개` : ""));
+    c.append(head);
+    const list = el("div", "ag-accounts");
+    for (const k of src.keys) {
+      const row = el("div", "ag-account");
+      const mark = el("span", "ag-check on");
+      mark.append(icon("check"));
+      const name = el("div", "ag-account-name");
+      const top = el("div", "ag-account-top");
+      top.append(el("strong", "", k.name), el("span", "ag-plan", "API"));
+      name.append(top, el("small", "mono", [`••••${k.last4}`, k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/월` : ""].filter(Boolean).join(" · ")));
+      const del = button("", "icon-btn plain", "trash", () => removeKey(src.p.id, k));
+      del.setAttribute("aria-label", `${k.name} 키 지우기`);
+      row.append(mark, name, del);
+      list.append(row);
+    }
+    const add = el("button", "ag-add-line");
+    add.type = "button";
+    add.append(icon("plus"), el("span", "", "키 추가"));
+    add.addEventListener("click", () => openKeyDialog(src.p));
+    list.append(add);
+    c.append(list);
     return c;
   }
   // AI 도구 기본 모델 (설정 › 에이전트): which model fills prompt fields, polishes text and classifies. Empty = the runner's default.
@@ -651,5 +764,5 @@ window.ArkismModels = (ctx) => {
     (p.custom ? base : key).focus();
   }
 
-  return { load, tab, enabledModels, enabledByProvider, assistPicker, openKeyDialog };
+  return { load, tab, enabledModels, enabledByProvider, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
 };

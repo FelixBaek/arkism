@@ -128,21 +128,24 @@ test("일반: start at login, capture switch, excluded folders and the memo", as
 test("에이전트: switches, removal, shared folders and the add dialog", async () => {
   await settings("agents");
   assert.match(text(app.$("#table")), /적용 대기/);
-  // one 에이전트 추가, at the right end of the 스킬·대화를 가져올 에이전트 heading row, with the hint under it
+  // one 에이전트 추가, the last row of the agent list (Figma 1300:5254); 역할별 모델 is a card on this page, not a tab
   const adds = app.$$("button").filter((b) => text(b) === "에이전트 추가");
   assert.equal(adds.length, 1);
-  const head = adds[0].parentNode;
-  assert.equal(head.className, "pg-group-head");
-  assert.equal(text(head.querySelector("h2")), "스킬·대화를 가져올 에이전트");
-  assert.equal(text(head.nextSibling), "켜 둔 에이전트의 스킬 폴더와 대화 기록을 읽어 와요.");
+  assert.equal(adds[0].className, "ag-add-agent");
+  assert.ok(!app.$$("#area-tabs button").some((b) => text(b) === "역할별 모델"));
+  assert.match(text(app.$(".ag-roles")), /라우팅 판정.*기억 추출.*반성·검토.*임베딩/);
+  // the first row is chosen: its detail (계정, Arkism 연결) is in the right column
+  assert.ok(app.$(".ag-row.on"));
+  assert.match(text(app.$(".ag-link")), /Arkism 연결/);
   for (const name of ["Codex", "Gemini CLI", "ZCode", "Grok", "Cursor", "OpenCode"]) { const b = find(`${name} 켜기`); if (b) { b.click(); await app.settle(); } }
   await press("Claude Code 켜기");
   assert.match(notice(), /하나는 켜져 있어야/);
   await press("Codex 켜기");
   await press("Orbit 켜기");
   assert.match(notice(), /Orbit를 껐어요/);
-  answers.push(false); await press("Orbit 빼기");
-  await press("Orbit 빼기");
+  app.$$(".ag-row-main").find((b) => text(b).startsWith("Orbit")).click(); await app.settle();
+  answers.push(false); await press("에이전트 제거");
+  await press("에이전트 제거");
   assert.match(notice(), /Orbit를 뺐어요/);
   await press("~/team/skills 빼기");
   assert.match(notice(), /공용 폴더를 뺐어요/);
@@ -192,18 +195,21 @@ test("에이전트 › 판정 모델과 폴더 위치는 빠진 값을 알려 �
   await settings("agents");
   app.fake.set_model_roles = null;
   const kit = () => app.$(".v4-kit-body");
+  const roles = () => app.$(".v4-roles-body");
   const save = () => press("저장", kit());
-  await press("Clef", kit()); await save();
+  const choose = async (label, value) => { const sel = roles().querySelector(`[aria-label="${label}"]`); sel.value = value; app.dom.fire(sel, "change"); await app.settle(); };
+  await choose("라우팅 판정 모델", "clef"); await save();
   assert.match(notice(), /Cloudflare 계정 ID와 토큰/);
-  await press("Jev", kit()); await save();
+  await choose("라우팅 판정 모델", "jev"); await save();
   assert.match(notice(), /API 키가 필요/);
-  await press("내 모델", kit()); await save();
+  await choose("라우팅 판정 모델", "chat"); await save();
   assert.match(notice(), /주소와 모델 이름/);
-  kit().querySelector('[aria-label="판별 모델 주소"]').value = "http://example.com";
-  kit().querySelector('[aria-label="판별 모델"]').value = "qwen3:4b";
+  roles().querySelector('[aria-label="판별 모델 주소"]').value = "http://example.com";
+  roles().querySelector('[aria-label="판별 모델"]').value = "qwen3:4b";
   await save();
   assert.match(notice(), /https이거나/);
-  kit().querySelector('[aria-label="판별 모델 주소"]').value = "http://127.0.0.1:11434/v1";
+  roles().querySelector('[aria-label="판별 모델 주소"]').value = "http://127.0.0.1:11434/v1";
+  await choose("기억 추출 모델", "opus"); await choose("임베딩", "none");
   kit().querySelector('[aria-label="스킬 폴더"]').value = "relative/path";
   await save();
   assert.match(notice(), /전체 경로여야/);
@@ -211,6 +217,8 @@ test("에이전트 › 판정 모델과 폴더 위치는 빠진 값을 알려 �
   await press("저장", kit());
   await until(/^저장했어요/);
   assert.equal(cmd("set_model_roles").at(-1)[1].roles.skills_root, "C:\\skills");
+  assert.equal(cmd("set_model_roles").at(-1)[1].roles.extract_model, "opus");
+  assert.equal(cmd("set_model_roles").at(-1)[1].roles.embedder, "none");
   app.fake.set_model_roles = new Error("invalid model");
   await save();
   assert.match(notice(), /모델 이름이나 주소/);
@@ -218,34 +226,11 @@ test("에이전트 › 판정 모델과 폴더 위치는 빠진 값을 알려 �
   await save();
   assert.match(notice(), /저장하지 못했어요/);
   app.fake.set_model_roles = null;
-  const roles = app.fake.model_roles;
+  const saved = app.fake.model_roles;
   app.fake.model_roles = new Error("x");
   await settings("info"); await settings("agents");
-  assert.match(text(kit()), /모델 설정을 읽지 못했어요/);
-  app.fake.model_roles = roles;
-});
-
-test("역할별 모델 (이 PC): segments, defaults and save restart the built-in Arkism", async () => {
-  await settings("roles");
-  assert.match(text(app.$("#detail")), /qwen3-embedding:0\.6b · 자동/);
-  await press("Ollama"); await press("Opus"); await press("Haiku");
-  await press("기본값으로");
-  assert.match(notice(), /기본값으로 채웠어요/);
-  const starts = cmd("local_start").length;
-  await press("저장");
-  await until(/^저장했어요/);
-  assert.ok(cmd("local_start").length > starts);
-  await press("라우팅 모델은 ROUTER › 모델 설정 ›");
-  await settings("roles");
-  await press("판정 모델은 설정 › 에이전트 ›");
-  assert.ok(find("에이전트 추가"));
-  app.fake.model_roles = new Error("x");
-  await settings("roles");
-  assert.match(text(app.$("#table")), /모델 설정을 읽지 못했어요/);
-  app.fake.model_roles = { ...app.fake.model_roles, embedder: "none", judge: "clef" };
-  app.fake.model_roles = { embedder: "none", embed_model: "", judge: "clef", extract_model: "opus", reflect_model: "x" };
-  await settings("info"); await settings("roles");
-  assert.match(text(app.$("#detail")), /끄기/);
+  assert.match(text(app.$(".ag-roles")), /모델 설정을 읽지 못했어요/);
+  app.fake.model_roles = saved;
 });
 
 test("카테고리 › AI로 전부 다시 분류 proposes and applies before 저장", async () => {
@@ -428,9 +413,8 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   assert.ok(find("연결 끊기", app.$("#table")));
   await press("연결 끊기");
   await settings("connect");
-  await settings("roles");
-  assert.match(text(app.$("#table")), /서버가 정한 모델/);
   await settings("agents");
+  assert.match(text(app.$(".ag-roles")), /서버가 정함/);
   await settings("advanced");
   assert.doesNotMatch(text(app.$("#table")), /지금 백업/);
   await settings("connect");

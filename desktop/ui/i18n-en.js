@@ -6089,3 +6089,33 @@ Object.assign(window.ArkismI18nEN.strings, {
   "Claude Code에서 설치": "Install in Claude Code",
   "새 플러그인은 Claude Code에서 /plugin 으로 설치해요.": "Install new plugins in Claude Code with /plugin."
 });
+// 설정 › 에이전트 (Figma 1300:5254)
+Object.assign(window.ArkismI18nEN.strings, {
+  "목록 새로고침": "Refresh list",
+  "주간": "Weekly",
+  "다시 로그인해 주세요": "Sign in again",
+  "다음 차례": "Next up",
+  "한도 새로 확인": "Check limits again",
+  "로그인한 계정이 없어요.": "No signed-in accounts.",
+  "기억 연결됨": "Memory linked",
+  "Arkism 연결": "Arkism link",
+  "연결됨 · 기억·스킬 도구": "Connected · memory and skill tools",
+  "대화 수집": "Chat capture",
+  "폴더": "Folders",
+  "에이전트 제거": "Remove agent",
+  "라우팅 판정": "Routing judge",
+  "요청마다 맞는 모델과 스킬·MCP를 골라요.": "Picks the right model, skills and MCP for each request.",
+  "자동 (Ollama가 있으면)": "Auto (when Ollama is there)",
+  "에이전트가 함께 쓰는 스킬·MCP·플러그인 폴더예요.": "Skill, MCP and plugin folders the agents share.",
+  "프롬프트 칸 채우기, 글 다듬기, 분류에 써요.": "Fills prompt fields, polishes text and classifies.",
+  "대화에서 기억 후보를 뽑아요. 가벼운 모델이 좋아요.": "Pulls memory candidates from chats. A light model works best.",
+  "기억을 뜻으로 찾을 때 써요. 바꾸면 기억을 다시 색인해요.": "Finds memories by meaning. Changing it re-indexes memories."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}를 {1}로 업데이트": "Update {0} to {1}",
+  "새 버전 {0}: 이 설치 방식은 직접 업데이트해 주세요": "New version {0}: update this install yourself",
+  "{0}개 중 {1}개 사용": "{1} of {0} in use",
+  "{0} 한도 새로 확인": "Check {0} limits again",
+  "다른 {0} 계정 추가": "Add another {0} account",
+  "{0} 자세히": "{0} details"
+});

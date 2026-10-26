@@ -114,7 +114,6 @@ window.ArkismPages = (ctx) => {
     general: ["일반", "대화 수집과 앱 시작을 정해요."],
     connect: ["연결", "이 PC의 Arkism을 쓸지, 서버의 Arkism에 이을지 정해요."],
     messenger: ["메신저", "디스코드·텔레그램 같은 메신저에 봇을 연결해요. 메신저마다 봇은 1개예요."],
-    roles: ["역할별 모델", "기억을 찾고, 뽑고, 검토할 때 쓰는 모델이에요."],
     appearance: ["모양", "바꾸면 바로 적용돼요."],
     agents: ["에이전트", "스킬과 대화를 읽어 올 에이전트를 정해요."],
     workflow: ["페르소나", "AI 노드가 맡을 역할과 말투예요."],
@@ -208,61 +207,80 @@ window.ArkismPages = (ctx) => {
   const pendingAgent = (id) => (state.data.tools?.requests || []).filter((q) => q.status === "pending" && q.kind === "agent" && q.agent === id).pop();
   // A switch shows what the owner asked for at once; the server applies it within a minute ("적용 대기" until then).
   const agentWanted = (a) => { const q = pendingAgent(a.id); return q ? !!q.enabled : !!a.enabled; };
+  // 설정 › 에이전트 (Figma 1300:5254): the agents on the left, the chosen one's accounts, models and link to Arkism on the right.
+  // An agent with a subscription login and a stored API key gets two rows ("claude_code" and "claude_code:api").
+  let selAgent = null;
+  const AGENT_SITES = { anthropic: ["claude.ai", "https://claude.ai"], openai: ["chatgpt.com", "https://chatgpt.com"], google: ["gemini.google.com", "https://gemini.google.com"], zai: ["z.ai", "https://z.ai"], xai: ["grok.com", "https://grok.com"] };
   function tabAgents() {
-    const g = group("스킬·대화를 가져올 에이전트", "켜 둔 에이전트의 스킬 폴더와 대화 기록을 읽어 와요.");
-    g.classList.add("v4-plain");
-    // 에이전트 추가 sits at the right end of this heading, next to the list it adds to (the only entry point).
-    const gh = el("div", "pg-group-head"), h = g.firstChild;
-    h.replaceWith(gh);
-    gh.append(h, button("에이전트 추가", "primary", null, () => openAddAgent()));
-    toSide(sideSec("직접 추가한 에이전트", el("p", "", "서버가 스킬과 대화를 읽어요. 폴더는 에이전트 추가에서 정해요.")),
-    sideSec("스킬·MCP 관리", el("p", "", "에이전트가 쓸 스킬과 MCP는 각 화면에서 정해요."),
-      actionsRow(button("스킬", "", null, () => go("skills")), button("MCP", "", null, () => go("tools")))));
     const tools = state.data.tools;
     const host = tools?.agents || [];
-    const box = el("div", "pg-card");
+    const servers = tools?.servers || [];
     // Arkism reads these: the host's enabled agents.
-    const rows = host.filter(agentWanted);
-    if (!host.length) for (const [key, name] of AGENTS) rows.push({ id: key, name, skills_dirs: [(AGENT_PATHS[key] || [])[0]], chats_dir: (AGENT_PATHS[key] || [])[1], enabled: true, skills: null });
-    for (const a of rows) {
-      const shownKey = AGENTS.some(([k]) => k === a.id) ? a.id : null;
-      const on = shownKey ? !prefs.agentsOff.includes(shownKey) : agentWanted(a);
-      const n = a.skills === null || a.skills === undefined ? state.data.skills.filter((sk) => allowed(sk, a.id)).length : a.skills;
-      const row = el("div", `agent-line${on ? "" : " off"}`);
-      const info = el("div", "agent-info");
-      const head = el("div", "agent-title");
-      head.append(el("strong", "", a.name), el("span", "tag", `스킬 ${n}개`));
-      if (pendingAgent(a.id)) head.append(el("span", "tag warn", "적용 대기"));
-      if (a.custom) head.append(el("span", "tag", "직접 추가"));
-      info.append(head, el("div", "agent-path", [...(a.skills_dirs || []), ...(a.chats_dir ? [a.chats_dir] : [])].join("   ·   ")));
-      const right = el("div", "agent-actions");
-      right.append(sw(on, `${a.name} 켜기`, (next) => {
-        if (shownKey) {
-          if (!next && shownAgents().length === 1) { notice("에이전트가 하나는 켜져 있어야 해요."); return; }
-          prefs.agentsOff = next ? prefs.agentsOff.filter((k) => k !== shownKey) : [...prefs.agentsOff, shownKey];
-          savePrefs();
-          render(false);
-        } else {
-          void agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: next, skills_dir: next ? (a.skills_dirs || [])[0] : undefined }, next ? `${a.name}를 켰어요.` : `${a.name}를 껐어요. 스킬과 대화를 더 읽지 않아요.`);
-        }
-      }));
-      if (tools?.agents) {
-        const more = el("button", "icon-btn plain");
-        more.type = "button";
-        more.title = a.custom ? "빼기" : "Arkism이 읽지 않게 하기";
-        more.setAttribute("aria-label", `${a.name} 빼기`);
-        more.append(icon("trash"));
-        more.addEventListener("click", async () => { if (await ask(`${a.name}를 목록에서 뺄까요? 에이전트 쪽 파일은 그대로 둬요.`)) void agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: false }, `${a.name}를 뺐어요.`); });
-        right.append(more);
-      }
-      row.append(logoOf(a), info, right);
-      box.append(row);
+    const agents = host.filter(agentWanted);
+    if (!host.length) for (const [key, name] of AGENTS) agents.push({ id: key, name, skills_dirs: [(AGENT_PATHS[key] || [])[0]], chats_dir: (AGENT_PATHS[key] || [])[1], enabled: true, skills: null });
+    const entries = [];
+    for (const a of agents) {
+      const src = models.agentSource(a.id);
+      if (!src || src.accounts.length || !src.keys.length) entries.push({ key: a.id, a, src, api: false });
+      if (src?.keys.length) entries.push({ key: `${a.id}:api`, a, src, api: true });
     }
-    g.append(box);
-    if (!tools?.agents) g.append(el("p", "pg-hint", "서버가 아직 에이전트 목록을 보내지 않았어요. 잠시 뒤 다시 열어 보세요."));
+    const cur = entries.find((e) => e.key === selAgent) || entries[0] || null;
+    selAgent = cur?.key || null;
+    const isOn = (a) => {
+      const shownKey = AGENTS.some(([k]) => k === a.id) ? a.id : null;
+      return shownKey ? !prefs.agentsOff.includes(shownKey) : agentWanted(a);
+    };
+    const toggle = (a, next) => {
+      const shownKey = AGENTS.some(([k]) => k === a.id) ? a.id : null;
+      if (shownKey) {
+        if (!next && shownAgents().length === 1) { notice("에이전트가 하나는 켜져 있어야 해요."); return; }
+        prefs.agentsOff = next ? prefs.agentsOff.filter((k) => k !== shownKey) : [...prefs.agentsOff, shownKey];
+        savePrefs();
+        render(false);
+      } else {
+        void agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: next, skills_dir: next ? (a.skills_dirs || [])[0] : undefined }, next ? `${a.name}를 켰어요.` : `${a.name}를 껐어요. 스킬과 대화를 더 읽지 않아요.`);
+      }
+    };
+    // Arkism's own MCP server on for this agent = its memory and skill tools are linked.
+    const arkismOn = (id) => servers.some((x) => x.name === "arkism" && x.agents?.[id] === "on");
+    const mcpOn = (id) => servers.some((x) => x.agents?.[id] === "on");
+    const skillCount = (a) => (a.skills === null || a.skills === undefined ? state.data.skills.filter((sk) => allowed(sk, a.id)).length : a.skills);
+
+    const list = el("section", "ag-list");
+    for (const e of entries) {
+      const { a, src } = e;
+      const on = isOn(a);
+      const row = el("div", `ag-row${e === cur ? " on" : ""}${on ? "" : " off"}`);
+      const info = el("button", "ag-row-main");
+      info.type = "button";
+      const top = el("div", "ag-row-top");
+      top.append(el("strong", "", a.name));
+      const plan = e.api ? "API" : models.planName(src?.main?.plan);
+      if (plan) top.append(el("span", "ag-plan", plan));
+      if (!e.api && src) top.append(...models.cliBadge(src));
+      if (pendingAgent(a.id)) top.append(el("span", "tag warn", "적용 대기"));
+      if (a.custom) top.append(el("span", "tag", "직접 추가"));
+      const sub = [arkismOn(a.id) ? "기억 연결됨" : "", `스킬 ${skillCount(a)}`, mcpOn(a.id) ? "MCP" : ""].filter(Boolean).join(" · ");
+      info.append(top, el("small", "", sub));
+      info.addEventListener("click", () => { selAgent = e.key; render(false); });
+      const go = el("button", "icon-btn plain ag-chev");
+      go.type = "button";
+      go.setAttribute("aria-label", `${a.name} 자세히`);
+      go.append(icon("caret-right"));
+      go.addEventListener("click", () => { selAgent = e.key; render(false); });
+      row.append(logoOf(a), info, sw(on, `${a.name} 켜기`, (next) => toggle(a, next)), go);
+      list.append(row);
+    }
+    const add = el("button", "ag-add-agent");
+    add.type = "button";
+    add.append(icon("plus"), el("span", "", "에이전트 추가"));
+    add.addEventListener("click", () => openAddAgent());
+    list.append(add);
+    const out = [list];
+    if (!tools?.agents) out.push(el("p", "pg-hint", "서버가 아직 에이전트 목록을 보내지 않았어요. 잠시 뒤 다시 열어 보세요."));
+
     // 함께 읽는 공용 폴더
     const shared = group("함께 읽는 공용 폴더", "여러 에이전트가 함께 읽는 스킬 폴더예요. 한 번 넣으면 모두 써요.");
-    shared.classList.add("v4-plain");
     const sbox = el("div", "pg-card");
     for (const dir of tools?.shared_dirs || ["~/.agents/skills"]) {
       const row = el("div", "shared-line");
@@ -292,24 +310,53 @@ window.ArkismPages = (ctx) => {
     }));
     sbox.append(addDir);
     shared.append(sbox);
-    // AI 도구 기본 모델 first: the one choice here that changes how every agent's AI assist answers. Servers without 모델 설정 have nothing to pick.
-    const out = [g, shared, agentKitCard()];
-    if (state.data.providers != null) { // undefined after a failed load (emptyData): the saved model is unknown
-      const ai = group("AI 도구");
-      ai.append(line("AI 도구 기본 모델", "프롬프트 칸 채우기, 글 다듬기, 분류에 쓰는 모델이에요.", models.assistPicker()));
-      out.unshift(ai);
-    }
+
     const found = host.filter((a) => a.found && !agentWanted(a));
+    let foundBar = null;
     if (found.length) {
-      const f = el("button", "found-bar");
-      f.type = "button";
+      foundBar = el("button", "found-bar");
+      foundBar.type = "button";
       const logos = el("span", "crew-logos");
       found.forEach((a) => logos.append(logoOf(a)));
-      f.append(el("span", "", "이 PC에서 찾은 새 에이전트"), logos, el("strong", "", "추가하기 ›"));
-      f.addEventListener("click", () => openAddAgent(found[0].id));
-      out.push(f);
+      foundBar.append(el("span", "", "이 PC에서 찾은 새 에이전트"), logos, el("strong", "", "추가하기 ›"));
+      foundBar.addEventListener("click", () => openAddAgent(found[0].id));
     }
+    const [roles, kit] = agentRoleCards(foundBar);
+    out.push(roles, shared, kit);
+
+    if (cur) toSide(...agentDetail(cur, { isOn, toggle, arkismOn, tools }));
     return out;
+  }
+  // The right column for the chosen row: who it is, its accounts or keys, its models, and how it is linked to Arkism.
+  function agentDetail(e, { isOn, toggle, arkismOn, tools }) {
+    const { a, src } = e;
+    const head = el("div", "ag-detail-head");
+    head.append(logoOf(a), el("strong", "", e.api ? `${a.name} API` : a.name));
+    const site = src && AGENT_SITES[src.p.id];
+    if (site) {
+      const link = el("a", "ag-site", `${site[0]} ↗`);
+      link.href = site[1]; link.target = "_blank"; link.rel = "noreferrer";
+      head.append(link);
+    }
+    head.append(sw(isOn(a), `${a.name} 켜기`, (next) => toggle(a, next)));
+    const parts = [head];
+    if (src) parts.push(e.api ? models.agentKeys(src) : models.agentAccounts(src, a.name), models.modelsCard(src.p, true));
+    const link = el("section", "ag-card ag-link");
+    link.append(el("strong", "", "Arkism 연결"));
+    const age = tools?.collected_at ? Math.round((Date.now() - new Date(tools.collected_at).getTime()) / 60000) : null;
+    const dot = (ok, text) => { const s = el("span", `ag-state${ok ? " ok" : ""}`); s.append(el("i"), el("span", "", text)); return s; };
+    link.append(kvRow("MCP", dot(arkismOn(a.id), arkismOn(a.id) ? "연결됨 · 기억·스킬 도구" : "연결 안 됨")),
+      kvRow("대화 수집", isOn(a) ? `켜짐${age == null ? "" : ` · 마지막 ${age < 1 ? "방금" : `${age}분 전`}`}` : "꺼짐"));
+    const dirs = [...(a.skills_dirs || []).map((d) => kvRow("스킬", el("span", "mono", d))), ...(a.chats_dir ? [kvRow("대화", el("span", "mono", a.chats_dir))] : [])];
+    if (dirs.length) link.append(el("strong", "ag-sub", "폴더"), ...dirs);
+    parts.push(link);
+    if (tools?.agents) {
+      const rm = el("button", "link-btn ag-remove", "에이전트 제거");
+      rm.type = "button";
+      rm.addEventListener("click", async () => { if (await ask(`${a.name}를 목록에서 뺄까요? 에이전트 쪽 파일은 그대로 둬요.`)) void agentRequest({ agent: a.id, kind: "agent", name: a.name, enabled: false }, `${a.name}를 뺐어요.`); });
+      parts.push(rm);
+    }
+    return parts;
   }
   // 08 에이전트 추가
   function openAddAgent(preselect) {
@@ -583,31 +630,7 @@ window.ArkismPages = (ctx) => {
     toSide(sideSec("화면 배율 단축키", keys));
     return [card];
   }
-  // 설정 › 역할별 모델 (Figma 302:18838, 내장 모드): 의미 검색 임베딩·판정·기억 추출·반성을 어떤 모델이 맡을지.
-  const toRouterModels = () => { state.settingsTab = "models"; state.menu = "router"; go("settings"); };
-  function tabRoles() {
-    const link = el("button", "link-btn v4-link", "라우팅 모델은 ROUTER › 모델 설정 ›");
-    link.type = "button";
-    link.addEventListener("click", toRouterModels);
-    const summary = sideSec("지금 쓰는 모델");
-    const local = tauri && state.mode === "local";
-    toSide(summary, ...(local ? [sideNote("서버에 연결하면 서버 설정을 따라요.")] : []), link);
-    if (!local) {
-      // Figma 764:64196 shows "서버 기본값: …", but no server API reports its role models (they are env on the host),
-      // so naming a value here could be wrong; say only that the server decides.
-      const ROWS = [["임베딩 모델", "기억을 뜻으로 찾을 때 써요."],
-        ["판정 모델", "요청마다 맞는 모델과 스킬을 골라요."],
-        ["기억 추출 모델", "대화에서 기억 후보를 뽑아요. 자주 돌아서 가벼운 모델이 좋아요."],
-        ["반성·검토 모델", "3시간마다 교훈을 정리하고 검토할 기억을 골라요."]];
-      summary.append(el("p", "", "서버의 설정을 따르고 있어요."));
-      const card = el("section", "pg-group v4-rows v4-roles-server");
-      for (const [t, hint] of ROWS) card.append(roleBlock(line(t, hint, pill("서버가 정함"))));
-      card.append(el("p", "pg-hint", "서버에 연결된 동안은 서버가 정한 모델을 써요. 바꾸려면 연결에서 이 PC로 돌아오세요."));
-      return [card];
-    }
-    return [roleModelsGroup(summary)];
-  }
-  // Shared by 역할별 모델 and 라우팅 설정 › 스킬·MCP·플러그인: both edit models.json through set_model_roles.
+  // Edit models.json through set_model_roles (설정 › 에이전트: 역할별 모델 and 스킬·MCP·플러그인).
   const roleField = (value, label, placeholder, secret) => {
     const i = el("input", "mono");
     i.value = value || ""; i.placeholder = placeholder || ""; i.setAttribute("aria-label", label);
@@ -616,8 +639,14 @@ window.ArkismPages = (ctx) => {
   };
   const roleSub = (label, input) => { const r = el("label", "v4-subfield"); r.append(el("span", "", label), input); return r; };
   const roleBlock = (row, ...extra) => { const b = el("div", "v4-role"); b.append(row, ...extra); return b; };
-  const JUDGE = [["fixed", "고정"], ["chat", "내 모델"], ["clef", "Clef"], ["jev", "Jev"]];
-  const JUDGE_NAME = { fixed: "고정 규칙", chat: "내 모델", clef: "Clef", jev: "Jev" };
+  const pick = (list, value, label, onChange) => {
+    const s = el("select", "ag-select");
+    s.setAttribute("aria-label", label);
+    for (const [k, name] of list) { const o = el("option", "", name); o.value = k; o.selected = k === value; s.append(o); }
+    s.addEventListener("change", () => onChange(s.value));
+    return s;
+  };
+  const JUDGE = [["fixed", "고정 규칙"], ["chat", "내 모델"], ["clef", "Clef"], ["jev", "Jev"]];
   // Saves `patch` over the loaded roles and restarts the built-in Arkism. Empty secrets keep the saved ones.
   async function saveRoles(cur, patch) {
     notice("저장하고 Arkism을 다시 시작하는 중이에요.");
@@ -630,7 +659,7 @@ window.ArkismPages = (ctx) => {
       return true;
     } catch (e) { notice(String(e).includes("invalid") ? "모델 이름이나 주소를 확인해 주세요." : "저장하지 못했어요."); return false; }
   }
-  // 라우팅 판정 모델: its segment, the selected judge's fields, and read() → the patch, or null after telling what is missing.
+  // 라우팅 판정 모델: its select, the selected judge's fields, and read() → the patch, or null after telling what is missing.
   function judgeBlock(cur) {
     const savedHint = (k, placeholder) => (cur[`${k}_saved`] ? "저장됨 · 바꿀 때만 입력" : placeholder);
     const account = roleField(cur.cloudflare_account, "Cloudflare 계정 ID", "account id");
@@ -645,13 +674,12 @@ window.ArkismPages = (ctx) => {
       clef: [roleSub("Cloudflare 계정 ID", account), roleSub("Cloudflare API 토큰", token)],
       jev: [roleSub("Jev API 키", jevKey)],
     };
-    let judge = cur.judge;
+    let judge = cur.judge || "fixed";
     const judgeBox = el("div", "v4-judge-fields");
     const showJudge = (k) => judgeBox.replaceChildren(...(judgeFields[k] || []));
     showJudge(judge);
-    const node = roleBlock(line("라우팅 판정 모델", "고정은 내장 규칙, 내 모델은 OpenAI 호환 서버, Clef는 Cloudflare, Jev는 Jev API로 골라요.",
-      segment(JUDGE, judge, (k) => { judge = k; showJudge(k); })), judgeBox,
-      el("small", "v4-default", "기본값: 고정 · 키와 토큰은 이 PC에만 저장돼요"));
+    const node = roleBlock(line("라우팅 판정", "요청마다 맞는 모델과 스킬·MCP를 골라요.",
+      pick(JUDGE, judge, "라우팅 판정 모델", (k) => { judge = k; showJudge(k); })), judgeBox);
     const read = () => {
       const next = { judge, cloudflare_account: account.value.trim(), cloudflare_token: token.value.trim(), jev_key: jevKey.value.trim(),
         picker_url: pickerUrl.value.trim(), picker_model: pickerModel.value.trim(), picker_key: pickerKey.value.trim() };
@@ -664,67 +692,48 @@ window.ArkismPages = (ctx) => {
     };
     return { node, read };
   }
-  const toAgentSettings = () => { state.settingsTab = "agents"; go("settings"); }; // already in the 설정 menu
-  function roleModelsGroup(summary) {
-    const g = el("div", "v4-roles");
-    let cur = null, saved = null, busy = false;
-    const guard = (fn) => async () => { if (busy) return; busy = true; try { await fn(); } finally { busy = false; } };
-    const body = el("div", "v4-roles-body");
-    g.append(body);
-    const MODELS = [["haiku", "Haiku"], ["sonnet", "Sonnet"], ["opus", "Opus"]];
-    const EMBED = [["auto", "자동"], ["ollama", "Ollama"], ["none", "끄기"]];
-    const nameOf = (list, k) => list.find(([x]) => x === k)?.[1] || k || "—";
-    function draw() {
-      const next = {};
-      const embedModel = roleField(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b");
-      const toJudge = el("button", "link-btn v4-link", "판정 모델은 설정 › 에이전트 ›");
-      toJudge.type = "button";
-      toJudge.addEventListener("click", toAgentSettings);
-      const card = el("section", "pg-group v4-rows");
-      card.append(
-        roleBlock(line("임베딩 모델", "기억을 뜻으로 찾을 때 써요. ‘자동’은 이 PC에 Ollama 모델이 있으면 켜져요.",
-          segment(EMBED, cur.embedder, (k) => { next.embedder = k; })), roleSub("Ollama 모델 이름", embedModel), el("small", "v4-default", "기본값: 자동 · 바꾸면 기억을 한 번 다시 색인해요")),
-        roleBlock(toJudge),
-        roleBlock(line("기억 추출 모델", "대화에서 기억 후보를 뽑아요. 자주 돌아서 가벼운 모델이 좋아요.", segment(MODELS, cur.extract_model, (k) => { next.extract_model = k; })), el("small", "v4-default", "기본값: Haiku")),
-        roleBlock(line("반성·검토 모델", "3시간마다 교훈을 정리하고 검토할 기억을 골라요.", segment(MODELS, cur.reflect_model, (k) => { next.reflect_model = k; })), el("small", "v4-default", "기본값: Sonnet")));
-      const actions = el("div", "pg-actions");
-      body.replaceChildren(card, actions);
-      // 기본값으로 (Figma 302:18838): fills the form with the app defaults; the judge (라우팅 설정) stays. 저장 applies it.
-      const reset = button("기본값으로", "ghost", null, () => {
-        cur = { ...cur, embedder: "auto", embed_model: "qwen3-embedding:0.6b", extract_model: "haiku", reflect_model: "sonnet" };
-        draw(); notice("기본값으로 채웠어요. 저장해야 적용돼요.");
-      });
-      actions.append(button("저장", "primary", null, guard(async () => {
-        next.embed_model = embedModel.value.trim() || "qwen3-embedding:0.6b";
-        if (await saveRoles(cur, next)) load();
-      })), reset);
-      summary.replaceChildren(el("h3", "", "지금 쓰는 모델"),
-        kvRow("임베딩", saved.embedder === "none" ? "끄기" : `${saved.embed_model || "qwen3-embedding:0.6b"} · ${nameOf(EMBED, saved.embedder)}`),
-        kvRow("판정", JUDGE_NAME[saved.judge] || "고정 규칙"), kvRow("기억 추출", `Claude ${nameOf(MODELS, saved.extract_model)}`), kvRow("반성·검토", `Claude ${nameOf(MODELS, saved.reflect_model)}`));
-    }
-    function load() {
-      tauri.invoke("model_roles").then((r) => { cur = r; saved = r; draw(); }, () => body.replaceChildren(el("p", "pg-hint", "모델 설정을 읽지 못했어요.")));
-    }
-    load();
-    return g;
-  }
-  // 설정 › 에이전트 › 스킬·MCP·플러그인 (Figma 설정 › 에이전트, below 함께 읽는 공용 폴더): the judge, then where skills, MCP servers and plugins live.
-  // Kept across re-renders of the tab so typed paths survive; dropped when the tab changes.
+  // 역할별 모델 and 스킬·MCP·플러그인 share one models.json load and one 저장 (at the bottom of the second card, as in Figma).
+  // Kept across re-renders of the tab so typed values survive; dropped when the tab changes.
   let kitCard = null;
   const ROOTS = [["skills_root", "스킬 폴더"], ["mcp_root", "MCP 폴더"], ["plugins_root", "플러그인 폴더"]];
-  function agentKitCard() {
-    if (kitCard) return kitCard;
-    const c = kitCard = group("스킬·MCP·플러그인", "요청마다 판정 모델이 맞는 스킬·MCP·플러그인을 골라요.");
-    c.classList.add("v4-plain");
-    if (!(tauri && state.mode === "local")) { c.append(el("p", "pg-hint", "서버에 연결해 쓰는 동안에는 서버가 정한 위치와 모델을 써요.")); return c; }
-    const body = el("div", "v4-kit-body");
-    c.append(body);
+  const ROLE_MODELS = [["haiku", "Claude Haiku"], ["sonnet", "Claude Sonnet"], ["opus", "Claude Opus"]];
+  const EMBED = [["auto", "자동 (Ollama가 있으면)"], ["ollama", "Ollama"], ["none", "끄기"]];
+  function agentRoleCards(foundBar) {
+    if (kitCard) { kitCard[1].querySelector(".found-bar")?.remove(); if (foundBar) kitCard[1].querySelector(".v4-kit-body")?.before(foundBar); return kitCard; }
+    const roles = group("역할별 모델");
+    roles.classList.add("ag-roles");
+    const kit = group("스킬·MCP·플러그인", "에이전트가 함께 쓰는 스킬·MCP·플러그인 폴더예요.");
+    kitCard = [roles, kit];
+    // AI 도구 saves on its own (모델 설정); servers without 모델 설정 have nothing to pick.
+    if (state.data.providers != null) roles.append(roleBlock(line("AI 도구", "프롬프트 칸 채우기, 글 다듬기, 분류에 써요.", models.assistPicker())));
+    const ROWS = [["라우팅 판정", "요청마다 맞는 모델과 스킬·MCP를 골라요."],
+      ["기억 추출", "대화에서 기억 후보를 뽑아요. 가벼운 모델이 좋아요."],
+      ["반성·검토", "3시간마다 교훈을 정리하고 검토할 기억을 골라요."],
+      ["임베딩", "기억을 뜻으로 찾을 때 써요. 바꾸면 기억을 다시 색인해요."]];
+    const kitBody = el("div", "v4-kit-body");
+    if (foundBar) kit.append(foundBar);
+    kit.append(kitBody);
+    if (!(tauri && state.mode === "local")) {
+      // No server API reports its role models (they are env on the host), so say only that the server decides.
+      for (const [t, hint] of ROWS) roles.append(roleBlock(line(t, hint, pill("서버가 정함"))));
+      kitBody.append(el("p", "pg-hint", "서버에 연결해 쓰는 동안에는 서버가 정한 위치와 모델을 써요."));
+      return kitCard;
+    }
+    const roleBody = el("div", "v4-roles-body");
+    roles.append(roleBody);
     let busy = false;
     const draw = (cur) => {
+      const next = {};
       const judge = judgeBlock(cur);
+      const embedModel = roleField(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b");
+      const embedSub = roleSub("Ollama 모델 이름", embedModel);
+      embedSub.hidden = cur.embedder === "none";
+      roleBody.replaceChildren(judge.node,
+        roleBlock(line(...ROWS[1], pick(ROLE_MODELS, cur.extract_model || "haiku", "기억 추출 모델", (k) => { next.extract_model = k; }))),
+        roleBlock(line(...ROWS[2], pick(ROLE_MODELS, cur.reflect_model || "sonnet", "반성·검토 모델", (k) => { next.reflect_model = k; }))),
+        roleBlock(line(...ROWS[3], pick(EMBED, cur.embedder || "auto", "임베딩", (k) => { next.embedder = k; embedSub.hidden = k === "none"; })), embedSub));
       const inputs = ROOTS.map(([k, label]) => [k, roleField(cur[k], label, "기본 위치")]);
-      const folders = roleBlock(line("폴더 위치", "비워 두면 기본 위치를 써요", el("span")),
-        ...inputs.map(([, i], n) => roleSub(ROOTS[n][1], i)));
+      const folders = roleBlock(line("폴더 위치", "비워 두면 기본 위치를 써요", el("span")), ...inputs.map(([, i], n) => roleSub(ROOTS[n][1], i)));
       const actions = el("div", "pg-actions");
       actions.append(button("저장", "primary", null, async () => {
         if (busy) return;
@@ -735,14 +744,15 @@ window.ArkismPages = (ctx) => {
           if (v && !/^(\/|[A-Za-z]:[\\/])/.test(v)) { notice("폴더 위치는 / 또는 드라이브 문자(C:\\)로 시작하는 전체 경로여야 해요."); return; }
           patch[k] = v;
         }
+        Object.assign(patch, next, { embed_model: embedModel.value.trim() || "qwen3-embedding:0.6b" });
         busy = true;
         try { if (await saveRoles(cur, patch)) load(); } finally { busy = false; }
       }));
-      body.replaceChildren(judge.node, folders, actions);
+      kitBody.replaceChildren(folders, actions);
     };
-    const load = () => tauri.invoke("model_roles").then(draw, () => body.replaceChildren(el("p", "pg-hint", "모델 설정을 읽지 못했어요.")));
+    const load = () => tauri.invoke("model_roles").then(draw, () => roleBody.replaceChildren(el("p", "pg-hint", "모델 설정을 읽지 못했어요.")));
     load();
-    return c;
+    return kitCard;
   }
 
   // 설정 › 연결 (Figma 293:18786): 연결 방식 on the left; what is connected now, switching back and 진단 on the right.
@@ -1082,7 +1092,7 @@ window.ArkismPages = (ctx) => {
     $("#controls").replaceChildren();
     sideParts = []; headParts = [];
     const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote };
-    const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), roles: tabRoles, appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => routing.tab(kit),
+    const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), appearance: tabAppearance, agents: tabAgents, models: () => models.tab(kit), routing: () => routing.tab(kit),
       workflow: () => crew.settingsTab({ group }), categories: tabCategories, advanced: tabAdvanced, info: tabInfo }[tab]();
     if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고쳐요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
     const content = el("div", `pg-content v4-set v4-set-${tab}`);
