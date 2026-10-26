@@ -5483,7 +5483,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "기억을 뜻으로 찾을 때 써요.": "Used to find memories by meaning.",
   "3시간마다 교훈을 정리하고 검토할 기억을 골라요.": "Every 3 hours, sums up lessons and picks memories to review.",
   "서버에 연결된 동안은 서버가 정한 모델을 써요. 바꾸려면 연결에서 이 PC로 돌아오세요.": "While connected to a server, its models are used. To change them, switch back to this PC in Connection.",
-  "고정은 내장 규칙, 내 모델은 OpenAI 호환 서버, Clef는 Cloudflare, Jev는 Jev API로 골라요.": "Fixed uses built-in rules, My model an OpenAI-compatible server, Clef Cloudflare, Jev the Jev API.",
+  "고정은 내장 규칙, Clef는 Cloudflare, Jev는 Jev API로 모델과 스킬을 골라요. 내 모델(OpenAI 호환 서버)은 모델만 고르고, 스킬은 내장 규칙으로 골라요.": "Fixed uses built-in rules, Clef Cloudflare and Jev the Jev API to pick models and skills. My model (an OpenAI-compatible server) picks models only; skills are picked by the built-in rules.",
   "기본값: 고정 · 키와 토큰은 이 PC에만 저장돼요": "Default: Fixed · keys and tokens stay on this PC",
   "기억을 뜻으로 찾을 때 써요. ‘자동’은 이 PC에 Ollama 모델이 있으면 켜져요.": "Used to find memories by meaning. ‘Auto’ turns on when an Ollama model is on this PC.",
   "기본값: 자동 · 바꾸면 기억을 한 번 다시 색인해요": "Default: Auto · changing it re-indexes memories once",
