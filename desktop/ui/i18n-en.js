@@ -1380,6 +1380,7 @@ window.ArkismI18nEN = {
   "모델 목록": "Model list",
   "모델 추가": "Add model",
   "서버 실행기가 알려 준 모델이 없어요. '모델 추가'로 넣을 수 있어요.": "The server runner hasn't reported any models. You can add one with 'Add model'.",
+  "서버 실행기가 알려 준 모델이 없어요. '목록 새로고침'으로 다시 받아 보세요.": "The server runner hasn't reported any models. Try 'Refresh list' to fetch them again.",
   "모델 찾기": "Search models",
   "연결 시험": "Test connection",
   "AI 도움 기본 모델": "Default AI assist model",

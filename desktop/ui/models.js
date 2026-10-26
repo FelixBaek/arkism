@@ -381,7 +381,7 @@ window.ArkismModels = (ctx) => {
     c.append(tools, addRow);
     const ml = el("div", "mp-models");
     f.addEventListener("input", () => { filters[p.id] = f.value; ml.querySelectorAll(".mp-model-row").forEach((r) => { r.hidden = !!q() && !r.dataset.model.toLowerCase().includes(q()); }); });
-    if (!all.length) ml.append(el("p", "mp-empty", "서버 실행기가 알려 준 모델이 없어요. '모델 추가'로 넣을 수 있어요."));
+    if (!all.length) ml.append(el("p", "mp-empty", compact ? "서버 실행기가 알려 준 모델이 없어요. '목록 새로고침'으로 다시 받아 보세요." : "서버 실행기가 알려 준 모델이 없어요. '모델 추가'로 넣을 수 있어요."));
     let onCount = 0;
     for (const m of all) {
       const on = enabled(p.id, m);

@@ -76,20 +76,35 @@ pub fn general_set(app: tauri::AppHandle, keep_running: bool, shortcut: String) 
     let mut cur = CURRENT.lock().unwrap_or_else(|e| e.into_inner());
     let old = cur.clone().unwrap_or_default();
     let mut next = General { keep_running, shortcut, shortcut_error: String::new() };
-    if next.shortcut != old.shortcut || !old.shortcut_error.is_empty() {
+    let changed = next.shortcut != old.shortcut;
+    if changed || !old.shortcut_error.is_empty() {
         if let Err(e) = take_shortcut(&app, Some(&old.shortcut), &next.shortcut) {
-            // Keep the old key working when the new one is taken.
-            let _ = take_shortcut(&app, None, &old.shortcut);
-            return Err(e);
+            if changed {
+                // Keep the old key working when the new one is taken.
+                let _ = take_shortcut(&app, None, &old.shortcut);
+                return Err(e);
+            }
+            next.shortcut_error = e; // the same key is still taken: save the rest anyway
         }
     }
-    let path = PATH.get().ok_or("general_unavailable")?;
-    if let Some(dir) = path.parent() { std::fs::create_dir_all(dir).map_err(|e| e.to_string())?; }
-    std::fs::write(path, serde_json::to_vec_pretty(&next).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    if let Err(e) = save(&next) {
+        if changed { let _ = take_shortcut(&app, Some(&next.shortcut), &old.shortcut); }
+        return Err(e);
+    }
     KEEP_RUNNING.store(next.keep_running, Ordering::Relaxed);
-    next.shortcut_error.clear();
     *cur = Some(next.clone());
     Ok(next)
+}
+
+/// Writes general.json through a temporary file, so a failed write leaves the old one whole.
+fn save(g: &General) -> Result<(), String> {
+    let path = PATH.get().ok_or("general_unavailable")?;
+    if let Some(dir) = path.parent() { std::fs::create_dir_all(dir).map_err(|e| e.to_string())?; }
+    let tmp = path.with_extension("json.tmp");
+    let data = serde_json::to_vec_pretty(g).map_err(|e| e.to_string())?;
+    let result = std::fs::write(&tmp, data).and_then(|_| std::fs::rename(&tmp, path));
+    if result.is_err() { let _ = std::fs::remove_file(&tmp); }
+    result.map_err(|e| e.to_string())
 }
 
 /// 설정 › 일반 › 알림: a desktop notification while the window is hidden or unfocused.
