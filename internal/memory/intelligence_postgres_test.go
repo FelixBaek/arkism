@@ -247,6 +247,11 @@ func TestPostgresFailedUsageBecomesReflection(t *testing.T) {
 			t.Fatalf("lessons stay candidates: %+v", r)
 		}
 	}
+	// The skills table counts failure and validation_failed runs apart.
+	uses, err := p.SkillUsageSince(ctx, scope, now.Add(-time.Minute))
+	if err != nil || len(uses) != 1 || uses[0].Count != 4 || uses[0].Failures != 3 {
+		t.Fatalf("usage failures: %+v %v", uses, err)
+	}
 }
 
 // A runtime that reads skills from the operator's canonical scope records

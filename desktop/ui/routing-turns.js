@@ -2,6 +2,7 @@
 // ROUTER › 라우팅 현황: Claude Code calls through the :8099 gateway (overview `gateway`, see
 // internal/memory/routing_gateway_view.go). 본대화 and 부속 호출 (Claude Code's own side calls: titles,
 // summaries, compaction …) are counted apart, and the latest agent turns list each call of the turn.
+// Also the 스킬 판정 card: recent route_skills decisions.
 window.ArkismRoutingTurns = (ctx) => {
   "use strict";
   const { el, ago } = ctx;
@@ -66,5 +67,33 @@ window.ArkismRoutingTurns = (ctx) => {
     draw();
     return c;
   }
-  return { card };
+  // route_skills decisions (GET /v1/routing/skills): which skill, which judge, and why it fell back.
+  const DEGRADED = { jev_unavailable: "판정 모델 없음", jev_uncertain: "확신 낮음", transfer_denied: "보낼 수 없는 스킬" };
+  const judge = (p) => (p === "rules" ? "규칙" : /^clef/i.test(p) ? "Clef" : /^jev/i.test(p) ? "Jev" : p);
+  const SKILLS_SHOWN = 10;
+  function skillRow(d) {
+    const r = el("div", `rtg-call rtg-skill${d.confirmed ? "" : " bad"}`);
+    const why = (d.degraded || []).map((k) => DEGRADED[k] || k).join(" · ");
+    const name = raw(el("span", "rtg-model", d.selected_name || d.selected || "고른 스킬 없음"));
+    if (d.selected) name.title = d.selected;
+    r.append(el("span", "rtg-tag", judge(d.provider)), name, el("span", "rtg-ok", d.selected ? (why || "확정") : why || "후보 없음"),
+      el("span", "rtg-num", tr(`후보 ${d.candidates}`)), el("span", "rtg-num", ago ? ago(d.at) : ""));
+    return r;
+  }
+  // null when the server keeps no decisions yet.
+  function skillCard(items) {
+    if (!items?.length) return null;
+    const c = el("div", "rt-card wide rtg-card");
+    const head = el("div", "rt-card-head");
+    head.append(el("strong", "", "스킬 판정"), el("span", "", tr(`최근 ${num(items.length)}건`)));
+    const by = el("div", "rtg-sides");
+    const count = {};
+    for (const d of items) for (const k of [judge(d.provider), ...(d.degraded || []).map((x) => DEGRADED[x] || x)]) count[k] = (count[k] || 0) + 1;
+    for (const [k, n] of Object.entries(count).sort((a, b) => b[1] - a[1])) by.append(el("span", "rtg-chip", tr(`${k} ${num(n)}`)));
+    const list = el("div", "rtg-calls rtg-skills");
+    list.append(...items.slice(0, SKILLS_SHOWN).map(skillRow));
+    c.append(head, el("small", "", "route_skills가 고른 스킬과 판정기예요. 규칙은 판정 모델 없이 검색 1위를 고른 것이고, 확신 낮음은 판정기가 고르지 않은 것이에요."), by, list);
+    return c;
+  }
+  return { card, skillCard };
 };

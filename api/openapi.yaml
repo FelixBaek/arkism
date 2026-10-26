@@ -6442,6 +6442,30 @@
             }
           }}}
     },
+    "/v1/routing/skills": {
+      "get": {"summary": "Recent route_skills decisions (read:routing)", "description": "{items[]{at, selected?, selected_name?, confirmed, provider, degraded?, candidates, runtime?}}: newest 200, skill ids and names only, never the query.", "responses": {"200": {"description": "Decisions"}, "400": {"description": "invalid_request"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }}}
+    },
     "/v1/routing/policy": {
       "post": {"summary": "Change auto routing, auto failover, the fixed model or failover conditions (human principals only)", "description": "Body {scope, expected_revision, auto_routing?, auto_failover?, default_model?, failover?}.", "responses": {"200": {"description": "{policy, authority}"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"},
           "401": {

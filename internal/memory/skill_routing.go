@@ -144,6 +144,11 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 	}
 	candidates, records := s.skillRouteCandidates(ctx, in, criteria, bundle)
 	candidates, known := appendRouteExtras(candidates, records, extras)
+	defer func() { // registered first so it runs after the revocation check below
+		if err == nil {
+			s.recordSkillRoute(ctx, in.Scope, actor, newSkillRoute(out, candidates, in.Runtime))
+		}
+	}()
 	defer func() {
 		if err != nil || len(out.Judgments) == 0 {
 			return
