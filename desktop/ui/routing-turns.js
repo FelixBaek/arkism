@@ -74,7 +74,7 @@ window.ArkismRoutingTurns = (ctx) => {
   function skillRow(d) {
     const r = el("div", `rtg-call rtg-skill${d.confirmed ? "" : " bad"}`);
     const why = (d.degraded || []).map((k) => DEGRADED[k] || k).join(" · ");
-    const name = raw(el("span", "rtg-model", d.selected_name || d.selected || "고른 스킬 없음"));
+    const name = raw(el("span", "rtg-model", d.selected_name || d.selected || tr("고른 스킬 없음")));
     if (d.selected) name.title = d.selected;
     r.append(el("span", "rtg-tag", judge(d.provider)), name, el("span", "rtg-ok", d.selected ? (why || "확정") : why || "후보 없음"),
       el("span", "rtg-num", tr(`후보 ${d.candidates}`)), el("span", "rtg-num", ago ? ago(d.at) : ""));

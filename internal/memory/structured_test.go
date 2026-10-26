@@ -316,6 +316,10 @@ func TestJevRoundedAndUnsureAnswersAreKept(t *testing.T) {
 		!slices.Equal(logged[0].Degraded, []string{"jev_uncertain"}) || logged[0].SelectedName != "index helper" || logged[0].Candidates != 1 || logged[0].At.IsZero() {
 		t.Fatalf("skill decision not kept: %+v %v", logged, e)
 	}
+	// Decisions are read only through SkillRoutes (read:routing), never the generic record read.
+	if _, e := f.svc.Get(testCtx, f.human, colSkillRoutes, scopeA, ID()); !errors.Is(e, ErrInvalid) {
+		t.Fatalf("generic read of skill decisions: %v", e)
+	}
 }
 
 func TestRoutingUncertainDecisionDoesNotSelect(t *testing.T) {
