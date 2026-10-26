@@ -83,7 +83,7 @@ window.ArkismTeams = (ctx) => {
   function modelLabel(m) {
     const s = (m || "").trim();
     if (!s) return "모델 없음";
-    if (s === "auto") return "자동 (Clef)";
+    if (s === "auto") return "자동 (라우터)";
     const l = s.toLowerCase();
     if (/^(claude )?opus/.test(l)) return `Claude Opus ${s.match(/[\d.]+/)?.[0] || ""}`.trim();
     if (/^(claude )?sonnet/.test(l)) return `Claude Sonnet ${s.match(/[\d.]+/)?.[0] || ""}`.trim();

@@ -17,7 +17,7 @@ window.ArkismUsage = (ctx) => {
   // ROUTER counts only calls that went through the Arkism router (routing_calls: /v1/usage/summary .requests and
   // /v1/routing/overview). Agent sessions read from transcripts are MEMORY·CREW·TOOLS usage, never router usage.
   const OV_RANGE = { today: "24h", "7d": "7d", "30d": "30d" };
-  const DECISIONS = { clef: "Clef가 고름", fixed: "고정 모델", failover: "장애 때 넘김", "": "—" };
+  const DECISIONS = { clef: "판정 모델이 고름", fixed: "고정 모델", failover: "장애 때 넘김", "": "—" };
   const decisionLabel = (k) => DECISIONS[k ?? ""] || k;
   let epoch = 0;
 
