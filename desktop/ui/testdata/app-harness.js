@@ -44,6 +44,8 @@ async function boot(opts = {}) {
       local_backups: { backups: [] }, gateway_token_status: { state: "set", updated_ms: Date.UTC(2026, 9, 13, 3), from_env: false },
       update_check: { current: "0.1.1", latest: "0.1.2", newer: true },
       popout_destroy: null,
+      general_get: { keep_running: true, shortcut: "Ctrl+Shift+Space", shortcut_error: "" },
+      general_set: (a) => ({ keep_running: a.keepRunning, shortcut: a.shortcut, shortcut_error: "" }), notify: null,
       ...(opts.invoke || {})
     };
     const invoke = async (cmd, a = {}) => {

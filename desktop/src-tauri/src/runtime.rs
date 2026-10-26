@@ -887,6 +887,18 @@ impl Runtime {
             .env("ARKISM_SKILL_CACHE", state.join("skill-cache"))
             .env("ARKISM_USAGE_STATE", state.join("usage").join("state.json"));
         let roles = self.model_roles();
+        // 스킬 요약 (sync-skills): without a model each skill is listed from its own frontmatter.
+        if roles.summary == "chat" {
+            cmd.env("ARKISM_SKILL_LLM_URL", summary_endpoint(&roles.summary_url))
+                .env("ARKISM_SKILL_LLM_MODEL", &roles.summary_model)
+                .env("ARKISM_SKILL_LLM_KEY_FILE", self.data_dir().join("skill-llm.key"));
+        }
+        // 스킬 보안 검사: an empty program name turns an unchosen scanner off (exec finds nothing).
+        for (k, env) in SCANNERS {
+            if !roles.scanners.iter().any(|s| s == k) {
+                cmd.env(env, "");
+            }
+        }
         cmd.env("ARKISM_CAPTURE_MODEL", &roles.extract_model)
             .env("ARKISM_REFLECT_MODEL", &roles.reflect_model)
             .env("ARKISM_REVIEW_MODEL", &roles.reflect_model)
@@ -1058,7 +1070,7 @@ impl Runtime {
     pub fn set_model_roles(&self, mut roles: ModelRoles) -> Result<(), String> {
         let _activity = self.activity()?;
         let saved = self.model_roles(); // an empty secret field keeps the saved one
-        for (field, old) in [(&mut roles.cloudflare_token, saved.cloudflare_token), (&mut roles.jev_key, saved.jev_key), (&mut roles.picker_key, saved.picker_key)] {
+        for (field, old) in [(&mut roles.cloudflare_token, saved.cloudflare_token), (&mut roles.jev_key, saved.jev_key), (&mut roles.picker_key, saved.picker_key), (&mut roles.summary_key, saved.summary_key)] {
             if field.is_empty() {
                 *field = old;
             }
@@ -1068,6 +1080,8 @@ impl Runtime {
         }
         let text = serde_json::to_string_pretty(&roles).map_err(|e| e.to_string())?;
         write_private(&self.data_dir().join("models.json"), text.as_bytes()).map_err(|e| e.to_string())?;
+        // sync-skills reads the summary key from a file (empty for Ollama).
+        write_private(&self.data_dir().join("skill-llm.key"), roles.summary_key.as_bytes()).map_err(|e| e.to_string())?;
         let _turn = self.busy.lock().map_err(|_| "local_busy".to_string())?;
         if self.pgdata().join("PG_VERSION").exists() {
             self.stop_server();
@@ -1388,21 +1402,27 @@ impl Runtime {
         };
         // The judge that picks a model for 라우팅 (and skills): Clef on Cloudflare Workers AI, Jev, or a
         // chat model the user already has (Ollama, OpenAI…). Without one, tasks go to the fixed or first model.
-        match roles.judge.as_str() {
-            "clef" if !roles.cloudflare_account.is_empty() && !roles.cloudflare_token.is_empty() => {
-                embed_env.push(("CLOUDFLARE_ACCOUNT_ID", roles.cloudflare_account.clone()));
-                embed_env.push(("CLOUDFLARE_AI_TOKEN", roles.cloudflare_token.clone()));
-            }
-            "jev" if !roles.jev_key.is_empty() => embed_env.push(("TYPESAFE_API_KEY", roles.jev_key.clone())),
-            "chat" if !roles.picker_url.is_empty() && !roles.picker_model.is_empty() => {
-                embed_env.push(("ARKISM_ROUTING_PICKER_URL", roles.picker_url.clone()));
-                embed_env.push(("ARKISM_ROUTING_PICKER_MODEL", roles.picker_model.clone()));
-                if !roles.picker_key.is_empty() {
-                    embed_env.push(("ARKISM_ROUTING_PICKER_KEY", roles.picker_key.clone()));
-                }
-            }
-            _ => {}
+        // 스킬 판정 can use a different judge (memoryd reads ARKISM_SKILL_JUDGE / ARKISM_MODEL_JUDGE).
+        let skill_judge = roles.skill_judge().to_string();
+        let uses = |j: &str| roles.judge == j || skill_judge == j;
+        if uses("clef") && !roles.cloudflare_account.is_empty() && !roles.cloudflare_token.is_empty() {
+            embed_env.push(("CLOUDFLARE_ACCOUNT_ID", roles.cloudflare_account.clone()));
+            embed_env.push(("CLOUDFLARE_AI_TOKEN", roles.cloudflare_token.clone()));
         }
+        if uses("jev") && !roles.jev_key.is_empty() {
+            embed_env.push(("TYPESAFE_API_KEY", roles.jev_key.clone()));
+        }
+        if roles.judge == "chat" && !roles.picker_url.is_empty() && !roles.picker_model.is_empty() {
+            embed_env.push(("ARKISM_ROUTING_PICKER_URL", roles.picker_url.clone()));
+            embed_env.push(("ARKISM_ROUTING_PICKER_MODEL", roles.picker_model.clone()));
+            if !roles.picker_key.is_empty() {
+                embed_env.push(("ARKISM_ROUTING_PICKER_KEY", roles.picker_key.clone()));
+            }
+        }
+        let model_judge = if ["clef", "jev"].contains(&roles.judge.as_str()) { roles.judge.clone() } else { "fixed".into() };
+        embed_env.push(("ARKISM_MODEL_JUDGE", model_judge));
+        embed_env.push(("ARKISM_SKILL_JUDGE", skill_judge));
+        embed_env.push(("ARKISM_SKILL_CANDIDATES", roles.skill_candidates.to_string()));
         if embedder != "none" && secrets.embedder != embedder {
             let init_url = self.url("arkism_init", &secrets.init, secrets.pg_port);
             let mut reindex = Command::new(self.programs()?.join(exe("memoryd")));
@@ -1683,6 +1703,24 @@ pub struct ModelRoles {
     pub picker_model: String,
     #[serde(default)]
     pub picker_key: String,
+    /// 스킬 판정: "same" follows `judge` (Clef or Jev; anything else ranks by rules), or "fixed", "clef", "jev".
+    #[serde(default = "default_same")]
+    pub skill_judge: String,
+    /// 스킬 후보 찾기: how many skills the search hands the judge (1–8).
+    #[serde(default = "default_candidates")]
+    pub skill_candidates: u8,
+    /// 스킬 요약: "basic" (from each SKILL.md's own description) or "chat" (an OpenAI-compatible model).
+    #[serde(default = "default_basic")]
+    pub summary: String,
+    #[serde(default)]
+    pub summary_url: String,
+    #[serde(default)]
+    pub summary_model: String,
+    #[serde(default)]
+    pub summary_key: String,
+    /// 스킬 보안 검사: the optional scanners to run next to the built-in check, when installed.
+    #[serde(default = "default_scanners")]
+    pub scanners: Vec<String>,
     /// The Claude CLI model that extracts memories, and the one that reflects, reviews and suggests cleanups.
     #[serde(default = "default_haiku")]
     pub extract_model: String,
@@ -1706,11 +1744,23 @@ fn picker_url_ok(url: &str) -> bool {
         && (url.starts_with("https://") || ["http://127.0.0.1:", "http://localhost:", "http://127.0.0.1/", "http://localhost/"].iter().any(|p| url.starts_with(p)))
 }
 
+/// sync-skills posts to the chat completions URL itself; the screen asks for the base (…/v1) like 라우팅 판정.
+fn summary_endpoint(base: &str) -> String {
+    let base = base.trim_end_matches('/');
+    if base.ends_with("/chat/completions") { base.to_string() } else { format!("{base}/chat/completions") }
+}
+
 fn gateway_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}")
 }
 fn default_embed_model() -> String { OLLAMA_MODEL.into() }
 fn default_fixed() -> String { "fixed".into() }
+fn default_same() -> String { "same".into() }
+fn default_basic() -> String { "basic".into() }
+fn default_candidates() -> u8 { 8 }
+fn default_scanners() -> Vec<String> { SCANNERS.iter().map(|(k, _)| k.to_string()).collect() }
+/// 스킬 보안 검사 engines and the env that names each one's program (internal/host/skills/skillchecks.go).
+const SCANNERS: [(&str, &str); 3] = [("spector", "ARKISM_SKILLSPECTOR_BIN"), ("evaluator", "ARKISM_SKILLEVALUATOR_BIN"), ("cisco", "ARKISM_CISCO_SCANNER_BIN")];
 fn default_haiku() -> String { "haiku".into() }
 fn default_sonnet() -> String { "sonnet".into() }
 
@@ -1727,12 +1777,28 @@ impl ModelRoles {
             && model(&self.embed_model)
             && ["fixed", "clef", "jev", "chat"].contains(&self.judge.as_str())
             && self.cloudflare_account.len() <= 128
-            && [&self.cloudflare_token, &self.jev_key, &self.picker_key].iter().all(|k| k.len() <= 512 && !k.contains(['\n', '\r']))
+            && [&self.cloudflare_token, &self.jev_key, &self.picker_key, &self.summary_key].iter().all(|k| k.len() <= 512 && !k.contains(['\n', '\r']))
             && (self.picker_url.is_empty() || picker_url_ok(&self.picker_url))
             && (self.picker_model.is_empty() || model(&self.picker_model))
+            && ["same", "fixed", "clef", "jev"].contains(&self.skill_judge.as_str())
+            && (1..=8).contains(&self.skill_candidates)
+            && ["basic", "chat"].contains(&self.summary.as_str())
+            && (self.summary_url.is_empty() || picker_url_ok(&self.summary_url))
+            && (self.summary_model.is_empty() || model(&self.summary_model))
+            && (self.summary != "chat" || (!self.summary_url.is_empty() && !self.summary_model.is_empty()))
+            && self.scanners.iter().all(|k| SCANNERS.iter().any(|(s, _)| s == k))
             && model(&self.extract_model)
             && model(&self.reflect_model)
             && [&self.skills_root, &self.mcp_root, &self.plugins_root].iter().all(|p| p.is_empty() || root_ok(p))
+    }
+
+    /// The skill judge the server runs: `same` means Clef or Jev when 라우팅 판정 is one of them, else rules.
+    fn skill_judge(&self) -> &str {
+        match self.skill_judge.as_str() {
+            "same" if ["clef", "jev"].contains(&self.judge.as_str()) => &self.judge,
+            "same" => "fixed",
+            other => other,
+        }
     }
 
     /// The folder overrides the host reads (internal/host/client.go); unset ones keep its defaults.
@@ -3055,6 +3121,62 @@ mod tests {
         bad = rt.model_roles();
         bad.mcp_root = "relative/mcp".into();
         assert!(rt.set_model_roles(bad).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn skill_routing_roles_validate_and_pick_the_judge() {
+        let mut r = ModelRoles::default();
+        assert_eq!((r.skill_judge.as_str(), r.skill_candidates, r.summary.as_str(), r.scanners.len()), ("same", 8, "basic", 3));
+        assert_eq!(r.skill_judge(), "fixed"); // same + fixed 라우팅 판정 → rules
+        r.judge = "clef".into();
+        assert_eq!(r.skill_judge(), "clef");
+        r.skill_judge = "jev".into();
+        assert_eq!(r.skill_judge(), "jev");
+        assert!(r.valid());
+        for bad in [|r: &mut ModelRoles| r.skill_candidates = 0, |r: &mut ModelRoles| r.skill_candidates = 9,
+            |r: &mut ModelRoles| r.skill_judge = "chat".into(), |r: &mut ModelRoles| r.summary = "chat".into(),
+            |r: &mut ModelRoles| r.scanners.push("other".into()), |r: &mut ModelRoles| r.summary_url = "http://example.com/v1".into()] {
+            let mut b = r.clone();
+            bad(&mut b);
+            assert!(!b.valid());
+        }
+        r.summary = "chat".into();
+        r.summary_url = "http://127.0.0.1:11434/v1".into();
+        r.summary_model = "qwen3:4b".into();
+        assert!(r.valid());
+        assert_eq!(summary_endpoint("http://127.0.0.1:11434/v1/"), "http://127.0.0.1:11434/v1/chat/completions");
+        assert_eq!(summary_endpoint("https://x/v1/chat/completions"), "https://x/v1/chat/completions");
+    }
+
+    /// 스킬 요약 and 스킬 보안 검사 reach every host run (sync-skills, skill-checks).
+    #[cfg(unix)]
+    #[test]
+    fn summary_model_and_scanners_reach_the_host_run() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("arkism-skillenv-test-{}", secret().unwrap()));
+        let client = dir.join("programs").join("integration").join("arkism");
+        fs::create_dir_all(client.parent().unwrap()).unwrap();
+        fs::write(&client, "#!/bin/sh\necho \"url=$ARKISM_SKILL_LLM_URL model=$ARKISM_SKILL_LLM_MODEL key=$(cat \"$ARKISM_SKILL_LLM_KEY_FILE\" 2>/dev/null) spector=${ARKISM_SKILLSPECTOR_BIN-unset} cisco=${ARKISM_CISCO_SCANNER_BIN-unset}\"\n").unwrap();
+        fs::set_permissions(&client, fs::Permissions::from_mode(0o755)).unwrap();
+        let rt = Runtime::new(Some(dir.join("programs")), dir.join("data"));
+        fs::create_dir_all(dir.join("data")).unwrap();
+        rt.secrets().unwrap();
+        fs::write(dir.join("data").join("owner.token"), b"t").unwrap();
+        let run = || String::from_utf8(rt.host_command(&[]).unwrap().output().unwrap().stdout).unwrap();
+        assert_eq!(run().trim(), "url= model= key= spector=unset cisco=unset");
+        let mut roles = rt.model_roles();
+        roles.summary = "chat".into();
+        roles.summary_url = "https://llm.example/v1".into();
+        roles.summary_model = "qwen3.8-flash".into();
+        roles.summary_key = "sk".into();
+        roles.scanners = vec!["cisco".into()];
+        rt.set_model_roles(roles).unwrap();
+        assert_eq!(run().trim(), "url=https://llm.example/v1/chat/completions model=qwen3.8-flash key=sk spector= cisco=unset");
+        let mut keep = rt.model_roles();
+        keep.summary_key.clear(); // an empty field keeps the saved key
+        rt.set_model_roles(keep).unwrap();
+        assert!(run().contains("key=sk "));
         fs::remove_dir_all(dir).unwrap();
     }
 

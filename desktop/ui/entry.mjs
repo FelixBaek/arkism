@@ -52,6 +52,7 @@ import "./skill-review.js";
 import "./skill-generate.js";
 import "./catalog.js";
 import "./messenger.js";
+import "./alerts.js";
 import "./shell.js";
 import "./home-checks.js";
 import "./home.js";

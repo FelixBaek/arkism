@@ -135,8 +135,12 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 		return RouteResult{}, ErrInvalid
 	}
 	in.ExtraCandidates = nil
-	if in.Limit == 0 || in.Limit > 8-len(extras) {
-		in.Limit = 8 - len(extras)
+	most := 8
+	if s.SkillCandidates > 0 && s.SkillCandidates < most {
+		most = s.SkillCandidates
+	}
+	if in.Limit == 0 || in.Limit > most-len(extras) {
+		in.Limit = max(1, most-len(extras))
 	}
 	searchInput := in
 	searchInput.retrievalQuery = skillQueryVariants(in.Query)

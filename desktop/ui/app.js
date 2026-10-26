@@ -672,6 +672,7 @@ export function startApp() {
     if (event.target.closest("#detail") && event.target.matches("input, textarea, select, [contenteditable=true]")) event.target.dataset.syncDirty = "true";
   });
   setInterval(syncVisible, 10000);
+  setInterval(() => void window.ArkismAlerts?.check({ state, request: appApi.request, query: appApi.query, tauri }), 10000); // 설정 › 일반 › 알림 (alerts.js)
   window.addEventListener("focus", syncVisible);
   // 언어를 바꾸면 미리 번역한 글자(tr)와 날짜 형식도 새로 그린다.
   let drawnLang = window.ArkismI18n?.lang();

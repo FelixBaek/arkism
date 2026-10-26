@@ -14,6 +14,7 @@ use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent};
 
 mod agent_link;
 mod gateway_token;
+mod general;
 mod lifecycle;
 #[cfg(windows)]
 mod windows_process;
@@ -237,7 +238,7 @@ async fn doctor(rt: tauri::State<'_, Arc<runtime::Runtime>>, fix: bool) -> Resul
 fn model_roles(rt: tauri::State<Arc<runtime::Runtime>>) -> serde_json::Value {
     let roles = rt.model_roles();
     let mut v = serde_json::to_value(&roles).unwrap_or_default();
-    for (key, secret) in [("cloudflare_token", &roles.cloudflare_token), ("jev_key", &roles.jev_key), ("picker_key", &roles.picker_key)] {
+    for (key, secret) in [("cloudflare_token", &roles.cloudflare_token), ("jev_key", &roles.jev_key), ("picker_key", &roles.picker_key), ("summary_key", &roles.summary_key)] {
         v[key] = serde_json::Value::String(String::new());
         v[format!("{key}_saved")] = serde_json::Value::Bool(!secret.is_empty());
     }
@@ -868,6 +869,14 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _, _| show_main(app)));
         // Capture and the timers run only while the app does: it starts with the user's session,
         // in the tray (`--hidden`), unless the user turned that off in 설정 › 일반.
+    // 설정 › 일반: desktop notifications and the shortcut that brings the window forward (general.rs).
+    let app = app.plugin(tauri_plugin_notification::init()).plugin(
+        tauri_plugin_global_shortcut::Builder::new()
+            .with_handler(|app, _, event| {
+                if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed { show_main(app) }
+            })
+            .build(),
+    );
     #[cfg(not(windows))]
     let app = app.plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--hidden"])));
     let app = app.setup(|app| {
@@ -906,6 +915,7 @@ fn main() {
             // or a server: on the first start and after each update (the client they run is refreshed
             // then). Uninstalling the app disconnects them again.
             // Start at login by default, once: after that the user's choice in 설정 › 일반 stays.
+            general::init(app.handle(), default.clone());
             let autostart_marker = default.join("autostart-default");
             #[cfg(windows)]
             let _ = app_autostart::migrate_owned();
@@ -952,7 +962,8 @@ fn main() {
             tray.build(app)?;
             Ok(())
         })
-        // Closing the window keeps Arkism in the tray, so agents can keep saving memories.
+        // Closing the window keeps Arkism in the tray, so agents can keep saving memories
+        // (unless 설정 › 일반 › 창을 닫아도 계속 실행 is off: then it quits).
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if popout::is_popout(window.label()) {
@@ -961,10 +972,13 @@ fn main() {
                     return;
                 }
                 api.prevent_close();
+                if window.label() == "main" && !general::keep_running() {
+                    quit(window.app_handle()); // busy (an update or a move is running): it stays in the tray
+                }
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, popout::popout_destroy])
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, popout::popout_destroy])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {

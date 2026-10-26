@@ -438,3 +438,14 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .mp-cli .tag.warn { background: var(--nc-amber-bg); color: var(--nc-amber); }
 .mp-cli .btn { height: auto; padding: 5px 12px; font-size: calc(12px * var(--fs, 1)); }
 .mp-cli-err { flex-basis: 100%; color: var(--nc-amber); }
+/* 설정 › 일반 › 수집하지 않을 폴더 (Figma 칸/수집하지 않을 폴더): the add button inside the path box, on the right */
+.pg-input-act { position: relative; display: flex; align-items: center; }
+.pg-input-act input { flex: 1; min-width: 0; padding-right: 116px; }
+.v4-set .pg-group .pg-input-act > .btn { position: absolute; right: 4px; height: 26px; padding: 0 10px; font-size: calc(12px * var(--fs, 1)); line-height: 1; }
+.v4-set .pg-group .field.wide + .field.wide { margin-top: 10px; }
+/* .setting div { flex: 1 } would stretch a segment (화면 언어, 테마) across the row; it hugs its options instead */
+.v4-set .setting > .segment, .v4-set .setting > .zoom-control { flex: none; }
+/* 설정 › 일반 › Arkism 열기 단축키: the key as a chip, then 바꾸기 */
+.pg-shortcut { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pg-shortcut kbd { padding: 4px 10px; border-radius: var(--nc-radius-control); border: 1px solid var(--nc-line); background: var(--nc-surface); font-size: 12px; }
+.pg-shortcut small.warn { flex-basis: 100%; text-align: right; color: var(--warn, #d97706); }
