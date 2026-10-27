@@ -708,6 +708,37 @@ SELECT mid, count(DISTINCT jid), max(at), coalesce(jsonb_agg(DISTINCT jsonb_buil
 	return out, pgErr(rows.Err())
 }
 
+// MemoryWorkCounts joins each trace's context events (which memories it delivered)
+// to its behavior event's host-observed work; a trace counts once per memory.
+func (p *Postgres) MemoryWorkCounts(ctx context.Context, s Scope, ids []string) ([]MemoryWorkCount, error) {
+	if checkScope(s) != nil || len(ids) == 0 || len(ids) > memoryGraphMapNodes {
+		return nil, ErrInvalid
+	}
+	const live = ` JOIN memory_records src ON src.collection='sources' AND src.id=e.id AND src.workspace_id=$1 AND src.project_id=$2 AND src.user_id=$3 AND src.agent_id=$4
+ AND src.status='active' AND COALESCE((src.doc->>'content_erased')::boolean,false)=false AND COALESCE((src.doc->>'privacy_quarantined')::boolean,false)=false
+ WHERE e.organization_id=$1 AND e.project_id=$2 AND e.user_id=$3 AND e.agent_id=$4 AND NOT e.content_erased`
+	rows, err := p.q().Query(ctx, `WITH d AS (SELECT DISTINCT e.trace_id, r->>'id' AS mid FROM source_events e
+ CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(e.payload->'retrieved')='array' THEN e.payload->'retrieved' ELSE '[]'::jsonb END) r`+live+`
+ AND e.kind='context' AND r->>'collection'='memories' AND r->>'id'=ANY($5)),
+w AS (SELECT e.trace_id, bool_or(e.payload->'work'->'diff'='true'::jsonb) AS diff, max(e.payload->'work'->>'tests') AS tests, max(e.payload->'work'->>'ci') AS ci
+ FROM source_events e`+live+` AND e.kind='behavior' AND jsonb_typeof(e.payload->'work')='object' GROUP BY 1)
+SELECT d.mid, count(*), count(*) FILTER (WHERE w.diff), count(*) FILTER (WHERE w.tests='passed'), count(*) FILTER (WHERE w.tests='failed'),
+ count(*) FILTER (WHERE w.ci='passed'), count(*) FILTER (WHERE w.ci='failed') FROM d JOIN w USING (trace_id) GROUP BY 1 ORDER BY 1`, s.WorkspaceID, s.ProjectID, s.UserID, s.AgentID, ids)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	out := []MemoryWorkCount{}
+	for rows.Next() {
+		var c MemoryWorkCount
+		if err = rows.Scan(&c.MemoryID, &c.Sessions, &c.Diff, &c.TestsPassed, &c.TestsFailed, &c.CIPassed, &c.CIFailed); err != nil {
+			return nil, ErrUnavailable
+		}
+		out = append(out, c)
+	}
+	return out, pgErr(rows.Err())
+}
+
 func (p *Postgres) MemoryUsageWindow(ctx context.Context, s Scope, since, recent time.Time) ([]MemoryUsageCount, error) {
 	if checkScope(s) != nil || since.IsZero() || recent.Before(since) {
 		return nil, ErrInvalid
