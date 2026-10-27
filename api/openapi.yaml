@@ -32,6 +32,10 @@
         "method": "POST",
         "description": "Host gateway entrance, not a Go route. Explicit anthropic/model and routing-group Claude requests use host API credentials or the subscription CLI; bare Claude models retain legacy caller-auth passthrough. Host API preserves Messages body extensions and validated anthropic-beta only; CLI rejects unsupported beta/options before launch. Caller credentials and query strings never enter the host route. Enabled Anthropic models are included in model discovery. Explicit Anthropic count_tokens uses host API counting; CLI mode returns 501 without generation. Legacy group/custom count estimates remain unchanged. Custom Chat providers use the stdlib Messages-to-Chat bridge. Existing portable compatibility filtering precedes conversion. Tool IDs/arguments and disable_parallel_tool_use are preserved. Text streams immediately; validated tool calls and final usage/stop follow complete upstream EOF. Content-filter refusals are preserved, never replayed as HTTP failures."
       },
+      "/v1/messages/count_tokens": {
+        "method": "POST",
+        "description": "Host gateway entrance, not a Go route. Same Messages body and model forms as /v1/messages; no generation runs. Explicit anthropic/model forwards to host API counting; a subscription CLI target returns 501 without estimation. group/slug and custom-provider counts use the legacy estimate."
+      },
       "/v1/responses": {
         "method": "POST",
         "request": "Stateless Responses (explicit store:false), string/message input, user images, function calls/results, instructions, sampling, parallel tools, explicit strict:false function schemas and output limits. Uses existing Chat/Messages execution. Unsupported state/storage/background/reasoning/built-in tools/structured-output semantics fail before generation.",
@@ -63,7 +67,7 @@
       },
       "/v1/models": {
         "method": "GET",
-        "response": "{object:list,data:[{type:model,object:model,id,display_name,created_at,created,owned_by}],has_more:false,first_id:null,last_id:null} from the enabled host routing catalogue. The id is provider/model."
+        "response": "{object:list,data:[{type:model,object:model,id,display_name,created_at,created,owned_by}],has_more:false,first_id:null,last_id:null} from the enabled host routing catalogue. The id is provider/model for a model, or group/slug for an enabled routing group (including group/auto when any model is supported)."
       },
       "/v1/chat/completions": {
         "method": "POST",
