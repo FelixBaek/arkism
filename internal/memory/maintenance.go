@@ -36,7 +36,7 @@ var (
 	maintenanceReasons = []string{"same_meaning", "newer_replaces_older", "more_specific"}
 	// signal proposal type -> the memory kinds it may name
 	signalTypes          = map[string][]string{"rule_often_violated": {"user", "procedural", "decision"}, "lesson_often_failing": {"lesson"}}
-	maintenanceDecisions = map[string]string{"accept": "accepted", "swap": "swapped", "dismiss": "dismissed"}
+	maintenanceDecisions = map[string]string{"accept": "accepted", "swap": "swapped", "dismiss": "dismissed", "forget_both": "forgotten"}
 )
 
 type MaintenanceProposal struct {
@@ -252,7 +252,8 @@ func checkSignalEvidence(ctx context.Context, tx Tx, scope Scope, p *Maintenance
 }
 
 // DecideMaintenance is a person's answer: accept (keep stays, the other becomes
-// history), swap (the other way round) or dismiss (both stay). The memory
+// history), swap (the other way round), dismiss (both stay) or, for a
+// contradiction, forget_both (both become history, neither is deleted). The memory
 // change and the decision commit together. A memory that changed since the
 // proposal makes it stale instead.
 func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in MaintenanceDecision) (Record, error) {
@@ -275,7 +276,7 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 		return Record{}, ErrConflict
 	}
 	signal := isSignalProposal(*seen.Maintenance)
-	if signal && in.Decision == "swap" {
+	if signal && in.Decision == "swap" || in.Decision == "forget_both" && seen.Maintenance.Type != "contradiction" {
 		return Record{}, ErrInvalid
 	}
 	var mark *ConflictInput
@@ -333,18 +334,27 @@ func supersedeInput(scope Scope, r Record, decision string) ConflictInput {
 	if decision == "swap" {
 		keep, retire = retire, keep
 	}
-	return ConflictInput{Scope: scope, Memories: []Ref{retire, keep}, Action: "mark", Hold: "both", Reason: "기억 정리 제안 " + r.ID}
+	in := ConflictInput{Scope: scope, Memories: []Ref{retire, keep}, Action: "mark", Hold: "both", Reason: "기억 정리 제안 " + r.ID}
+	if decision == "forget_both" { // both become history (rejected), neither is deleted
+		in.Resolution = "reject_both"
+	}
+	return in
 }
 
-// supersedeInTx marks the pair as a conflict and resolves it with the second
-// superseding the first, in the caller's transaction: the conflict path's own
+// supersedeInTx marks the pair as a conflict and resolves it with mark.Resolution
+// (the second superseding the first, or both rejected), in the caller's transaction: the conflict path's own
 // history and audit, with no moment where both memories sit conflicted.
 func supersedeInTx(ctx context.Context, tx Tx, mark ConflictInput, principal string) error {
+	resolution := mark.Resolution
+	if resolution == "" {
+		resolution = "second_supersedes_first"
+	}
+	mark.Resolution = ""
 	marked, err := applyConflict(ctx, tx, mark, principal, -1)
 	if err == nil {
 		resolve := ConflictInput{Scope: mark.Scope, Memories: marked.Relation.Relations, Action: "resolve", Reason: mark.Reason,
-			ConflictID: marked.Relation.ID, ExpectedRevision: marked.Relation.Revision, Resolution: "second_supersedes_first"}
-		_, err = applyConflict(ctx, tx, resolve, principal, 1)
+			ConflictID: marked.Relation.ID, ExpectedRevision: marked.Relation.Revision, Resolution: resolution}
+		_, err = applyConflict(ctx, tx, resolve, principal, resolutionWinner[resolution])
 	}
 	if errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound) {
 		return errors.Join(errMemoryChanged, err)

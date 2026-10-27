@@ -24,7 +24,7 @@
     "reason": "newer_replaces_older",
     "keep": {
      "id": "m5",
-     "revision": 2
+     "revision": 1
     },
     "retire": {
      "id": "m4",

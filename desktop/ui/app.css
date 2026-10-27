@@ -358,6 +358,7 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .tag.warn { background: var(--warn-tint); color: var(--warn); }
 .btn.dashed { border-style: dashed; background: none; color: var(--text-2); }
 .btn.danger { color: var(--status-danger); }
+.btn.ghost.tidy-forget { color: var(--status-danger); } /* 정리 제안 둘 다 지우기: reads as destructive beside the quiet 둘 다 두기 */
 .dim { color: var(--text-3); }
 .dot-warn { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); margin-left: auto; }
 .cat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-right: 12px; }

@@ -365,6 +365,26 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   await closeAll();
 });
 
+test("overview: a contradiction can drop both memories after a confirm; a duplicate cannot", async () => {
+  await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
+  const d = win();
+  assert.equal(btn("둘 다 지우기", d), undefined, "the duplicate proposal has no 둘 다 지우기");
+  const rows = [...d.querySelectorAll(".ov-wide-row-dream")];
+  for (const r of rows) { r.click(); await app.settle(); if (/서로 다른 말을 하는 기억/.test(text(win()))) break; }
+  assert.match(text(win()), /서로 다른 말을 하는 기억/);
+  assert.match(text(win()), /넘기거나 지운 기억은 기억 이력에 남아요/);
+  const sent = () => app.apiCalls.filter(([m, p, b]) => m === "POST" && /\/v1\/maintenance_proposals\/.+\/decide$/.test(p) && /"forget_both"/.test(String(b)));
+  const before = sent().length;
+  await press("둘 다 지우기", win());
+  let ask = app.$("dialog.ov-ask[open]"); assert.match(text(ask), /두 기억을 다 지울까요/);
+  await press("취소", ask, 30);
+  assert.equal(sent().length, before, "cancel sends nothing");
+  await press("둘 다 지우기", win());
+  ask = app.$("dialog.ov-ask[open]"); await press("지우기", ask, 60);
+  assert.equal(sent().length, before + 1);
+  await closeAll();
+});
+
 test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", async () => {
   await openWindow({ wide: "active" }); await app.settle(50); let d = win();
   assert.match(text(d), /쓰는 중인 기억/);

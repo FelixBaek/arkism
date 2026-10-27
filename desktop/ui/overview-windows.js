@@ -309,7 +309,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (key === "extract" && s.badge?.[1] === "r") body.append(note("r", `${s.badge[0]}이에요`, "세션은 계속 들어오는데 새 후보가 만들어지지 않았어요. 서버의 분석 로그인·연결을 확인해 주세요."));
     if (key === "judge") body.append(note("a", "여러 번 건넸는데 답에 쓰였다는 표시가 없는 기억이에요", "에이전트가 썼다고 알려 온 적도, 답변에 그 문구가 보인 적도 없어요. 말없이 따른 경우는 셀 수 없어서, 틀렸는지·이제 필요 없는지는 직접 봐 주세요.",
       "맞아요, 유지: 그대로 두고 다시 묻지 않아요 · 고치기: 고친 문장을 승인 대기에 넣어요 · 잊기: 에이전트에게 더는 건네지 않아요")); // nothing changes on its own
-    if (key === "dream") body.append(note("n", "드리밍 제안은 여기서 바로 골라요", "바로 바뀌지 않아요. 사람이 고르면 반영되고, 지우는 일은 없어요. 승인 대기에도 [정리]로 같이 떠요."));
+    if (key === "dream") body.append(note("n", "드리밍 제안은 여기서 바로 골라요", "바로 바뀌지 않아요. 사람이 고르면 반영되고, 지운 기억도 기억 이력에 남아요. 승인 대기에도 [정리]로 같이 떠요."));
     if (key === "recall") body.append(recallBox());
     const rows = stageRows(key, body, expanded), total = expandTotal(key);
     const ul = el("div", "ov-win-list");
@@ -385,7 +385,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     return s;
   }
 
-  // A dreaming proposal: what stays, what goes to history, and the person's three choices (nothing is deleted); 승인 대기 and the 드리밍 window share it
+  // A dreaming proposal: what stays, what goes to history, and the person's choices (nothing is hard-deleted); 승인 대기 and the 드리밍 window share it
   function dreamDecision(c, done) { // done: after a decision, once the data is reloaded
     const p = c.dream, x = p.maintenance || {}, signal = !!x.memory, merge = x.type !== "contradiction";
     const h = el("div", "ov-detail-head"); h.append(tagEl("정리"), tagEl(c.label), el("small", "", `드리밍 제안${c.created_at ? ` · ${ago(c.created_at)}` : ""}`));
@@ -401,7 +401,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       catch (er) { st.textContent = er.message === "revision_conflict" ? "기억이 바뀌어 이 제안은 낡았어요." : `처리하지 못했어요: ${er.message}`; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); } };
     if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")));
     else act.append(button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "small primary", null, () => go2("accept")), button("반대로 남기기", "small", null, () => go2("swap")), button("둘 다 두기", "small", null, () => go2("dismiss")));
-    g.append(cmp, ...(why ? [el("p", "ov-detail-why", why)] : []), act, el("small", "ov-detail-hint", signal ? "어느 쪽을 골라도 기억은 그대로예요. 다시 볼게요를 누르면 사람이 보기로 한 것만 남아요." : "어느 쪽을 골라도 지우지 않아요. 넘긴 기억은 기억 이력에 남아요."), st);
+    if (!signal && !merge) act.append(button("둘 다 지우기", "small danger", null, () => askConfirm("두 기억을 다 지울까요?", "둘 다 더는 쓰이지 않아요. 기억 이력에는 남아요.", () => go2("forget_both"))));
+    g.append(cmp, ...(why ? [el("p", "ov-detail-why", why)] : []), act, el("small", "ov-detail-hint", signal ? "어느 쪽을 골라도 기억은 그대로예요. 다시 볼게요를 누르면 사람이 보기로 한 것만 남아요." : "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요."), st);
     return [head, g];
   }
   // 승인 대기 (580:49518 + improvements 592:51366 / 764:61615)

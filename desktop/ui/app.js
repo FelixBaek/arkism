@@ -999,10 +999,13 @@ export function startApp() {
       notice(done);
     });
     const foot = el("div", "actions");
+    if (!merge) foot.append(button("둘 다 지우기", "ghost danger tidy-forget", null, async () => { // both wrong: both go to history, not deleted
+      if (await ask("두 기억을 다 지울까요?\n\n둘 다 더는 쓰이지 않아요. 기억 이력에는 남아요.", "둘 다 지우기")) decide("forget_both", "둘 다 지웠어요. 기억 이력에는 남아요.");
+    }));
     foot.append(button("둘 다 두기", "ghost", null, () => decide("dismiss", "둘 다 그대로 뒀어요. 같은 제안은 다시 하지 않아요.")),
       button("반대로 남기기", "", null, () => decide("swap", "반대쪽 기억을 남겼어요. 다른 하나는 이력에 남아요.")),
       button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "primary", null, () => decide("accept", merge ? "합쳤어요. 옛 기억은 이력에 남아요." : "바꿨어요. 예전 기억은 이력에 남아요.")));
-    body.append(head, cards, why, plan, el("p", "meta", "어느 쪽을 골라도 지우지 않아요. 넘긴 기억은 기억 이력에 남아요." + (all.length > 1 ? ` · 남은 제안 ${all.length - 1}개` : "")), foot);
+    body.append(head, cards, why, plan, el("p", "meta", "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요." + (all.length > 1 ? ` · 남은 제안 ${all.length - 1}개` : "")), foot);
   }
 
   // 기억 검토: up to 5 candidates in one view, each set to keep or drop, sent as one review_batch.
