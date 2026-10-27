@@ -181,7 +181,9 @@ test("다시 분석 asks the AI for new skills, and a broken answer or failure i
 test("비슷한 스킬: 합쳐서 미리 보기 drafts one SKILL.md, the other goes to the trash, 다른 스킬이에요 hides the pair", async () => {
   await openAll(/비슷한 스킬/);
   if (byText("#detail button", /합쳐서 미리 보기/)) {
-    await press(/합쳐서 미리 보기/, 3000);
+    // the preview polls the assist every second: wait for its answer, not a fixed time (slow under coverage)
+    const drafted = async () => { await press(/합쳐서 미리 보기/, 300); for (let i = 0; i < 60 && /하나로 쓰는 중이에요/.test(t(app.$("#detail"))); i++) await app.settle(500); };
+    await drafted();
     const trash = byText("#detail button", /휴지통으로/);
     if (trash) {
       await app.click(trash, 100);
@@ -189,7 +191,7 @@ test("비슷한 스킬: 합쳐서 미리 보기 drafts one SKILL.md, the other g
       dlgButton("ok").click(); await app.settle(1000);
     }
     hook = (a) => (a.path.startsWith("/v1/crew/assists/") ? json(200, { crew_assist: { status: "failed", error: "x" } }) : null);
-    await press(/합쳐서 미리 보기/, 3000);
+    await drafted();
     hook = () => null;
     assert.match(t(app.$("#detail")), /AI가 답하지 못했어요/);
   }
