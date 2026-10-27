@@ -119,8 +119,8 @@ func managementHTTPResponses(t *testing.T) []apiContractCase {
 	contractHostAndSessions(c)
 	contractWikiAndKnowledge(c)
 	contractCatalogQueries(c)
-	if len(c.seen) != 69 {
-		t.Fatalf("management contract coverage: %d/69", len(c.seen))
+	if len(c.seen) != 70 {
+		t.Fatalf("management contract coverage: %d/70", len(c.seen))
 	}
 	t.Logf("all %d management operations exercised successfully and anonymously", len(c.seen))
 	return c.cases
