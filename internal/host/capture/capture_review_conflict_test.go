@@ -283,6 +283,21 @@ func TestWithJudgementKeepsAdviceOnly(t *testing.T) {
 	}
 }
 
+func TestWithJudgementSendsRelationOnlyWithItsMemory(t *testing.T) {
+	c := map[string]any{"id": "p", "revision": 1}
+	for _, rel := range []string{"duplicate", "contradiction", "newer_version"} {
+		if b := withJudgement(classifyRequest(c, "high", nil, "m1"), map[string]any{"relation": rel})["body"].(map[string]any); b["relation"] != rel {
+			t.Fatal(rel, b)
+		}
+	}
+	// no memory named, an empty answer, or a value the server does not know: nothing is sent
+	for _, tc := range []struct{ dup, rel string }{{"", "duplicate"}, {"m1", ""}, {"m1", "merge"}} {
+		if b := withJudgement(classifyRequest(c, "high", nil, tc.dup), map[string]any{"relation": tc.rel})["body"].(map[string]any); b["relation"] != nil {
+			t.Fatal(tc, b)
+		}
+	}
+}
+
 // The session processor runs as the harness, which holds no review grant: the waiting list is read as the reviewer.
 func TestCaptureAIReviewListsWaitingAsTheReviewer(t *testing.T) {
 	capFake(t)

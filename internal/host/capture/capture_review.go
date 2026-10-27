@@ -31,12 +31,15 @@ For each item give:
   basis inferred was guessed by a model: never low.
 - risk_reasons: short Korean phrases for that call (규칙 표현 포함, 출처가 사용자 발화 아님, 기존 기억과 모순, 진행 기록).
 - dup_hint: the id of the RELATED or OLD memory it repeats or contradicts, else "".
+- relation: how it stands to the dup_hint memory. duplicate = says the same thing (merge them); contradiction = both cannot hold
+  and nothing says which is newer (a conflict to settle); newer_version = updates or replaces it with newer information
+  (it supersedes the old one); "" when dup_hint is "".
 - verdict: what you would do. keep = store as is; fix = store after rewording (put the reworded text in verdict_text, same meaning,
   nothing the user did not say); merge = it repeats a RELATED or OLD memory; discard = not worth storing. verdict_reason: one short Korean sentence.
 - semantic: three checks of TEXT against what the user said. same_meaning, missing_content (ok=false when TEXT drops a condition the
   user stated), no_additions (ok=false when TEXT adds something the user did not say). note: a short Korean phrase when ok is false, else "".`
 
-const reviewSchema = `{"type": "object", "additionalProperties": false, "required": ["decisions"], "properties": {"decisions": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "risk", "risk_reasons", "dup_hint", "verdict", "verdict_text", "verdict_reason", "semantic"], "properties": {"id": {"type": "string"}, ` + riskProps + `, "verdict": {"type": "string", "enum": ["keep", "fix", "merge", "discard"]}, "verdict_text": {"type": "string"}, "verdict_reason": {"type": "string"}, "semantic": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["check", "ok", "note"], "properties": {"check": {"type": "string", "enum": ["same_meaning", "missing_content", "no_additions"]}, "ok": {"type": "boolean"}, "note": {"type": "string"}}}}}}}}}`
+const reviewSchema = `{"type": "object", "additionalProperties": false, "required": ["decisions"], "properties": {"decisions": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "risk", "risk_reasons", "dup_hint", "relation", "verdict", "verdict_text", "verdict_reason", "semantic"], "properties": {"id": {"type": "string"}, ` + riskProps + `, "relation": {"type": "string", "enum": ["", "duplicate", "contradiction", "newer_version"]}, "verdict": {"type": "string", "enum": ["keep", "fix", "merge", "discard"]}, "verdict_text": {"type": "string"}, "verdict_reason": {"type": "string"}, "semantic": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["check", "ok", "note"], "properties": {"check": {"type": "string", "enum": ["same_meaning", "missing_content", "no_additions"]}, "ok": {"type": "boolean"}, "note": {"type": "string"}}}}}}}}}`
 
 var errReviewerCredential = errors.New("reviewer_credential_required")
 
@@ -161,6 +164,10 @@ func withJudgement(req, d map[string]any) map[string]any {
 		if a != "fix" || v["text"] != nil || t == "" {
 			body["verdict"] = v
 		}
+	}
+	// the server refuses a relation without the memory it names, or one it does not know
+	if r, _ := d["relation"].(string); body["dup_hint"] != nil && (r == "duplicate" || r == "contradiction" || r == "newer_version") {
+		body["relation"] = r
 	}
 	var checks []any
 	for _, x := range listOf(d["semantic"]) {

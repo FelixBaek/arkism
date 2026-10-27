@@ -168,3 +168,42 @@ func TestRequestReclassifyClearsTheJudge(t *testing.T) {
 		t.Fatal("stale revision", e)
 	}
 }
+
+func TestClassifyCandidateRecordsRelationToTheSimilarMemory(t *testing.T) {
+	f, cls := classifierFixture(t)
+	src := f.source()
+	for _, rel := range []string{"duplicate", "contradiction", "newer_version"} {
+		c := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "proposal " + rel, Sources: refs(src)}))
+		r, e := f.svc.ClassifyCandidate(testCtx, cls, c.ID, CandidateClassifyInput{Scope: scopeA, ExpectedRevision: c.Revision, Risk: "high", DupHint: "m1", Relation: rel})
+		if e != nil || r.Status != "candidate" || r.Classification.Relation != rel || r.Classification.DupHint != "m1" {
+			t.Fatal(rel, r.Classification, e)
+		}
+		// a later call that names no memory keeps the pair and its relation
+		r, e = f.svc.ClassifyCandidate(testCtx, cls, c.ID, CandidateClassifyInput{Scope: scopeA, ExpectedRevision: r.Revision, Risk: "medium"})
+		if e != nil || r.Status != "candidate" || r.Classification.Relation != rel || r.Classification.DupHint != "m1" {
+			t.Fatal(rel, "kept", r.Classification, e)
+		}
+		// naming another memory without a relation drops the old one
+		r, e = f.svc.ClassifyCandidate(testCtx, cls, c.ID, CandidateClassifyInput{Scope: scopeA, ExpectedRevision: r.Revision, Risk: "medium", DupHint: "m2"})
+		if e != nil || r.Classification.Relation != "" || r.Classification.DupHint != "m2" {
+			t.Fatal(rel, "replaced", r.Classification, e)
+		}
+	}
+	c := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "bad", Sources: refs(src)}))
+	for _, in := range []CandidateClassifyInput{{Risk: "high", DupHint: "m1", Relation: "merge"}, {Risk: "high", Relation: "duplicate"}} {
+		in.Scope, in.ExpectedRevision = scopeA, c.Revision
+		if _, e := f.svc.ClassifyCandidate(testCtx, cls, c.ID, in); !errors.Is(e, ErrInvalid) {
+			t.Fatal(in, e)
+		}
+	}
+	// a candidate classified before relation existed reads and reclassifies without one
+	old := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "legacy", Sources: refs(src),
+		Classification: &CandidateClassification{Risk: "low", DupHint: "m1"}}))
+	if old.Classification.Relation != "" {
+		t.Fatal(old.Classification)
+	}
+	r, e := f.svc.ClassifyCandidate(testCtx, cls, old.ID, CandidateClassifyInput{Scope: scopeA, ExpectedRevision: old.Revision, Risk: "medium"})
+	if e != nil || r.Classification.DupHint != "m1" || r.Classification.Relation != "" {
+		t.Fatal(r.Classification, e)
+	}
+}

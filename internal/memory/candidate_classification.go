@@ -15,12 +15,15 @@ const roleClassifier = "classifier"
 var candidateRisks = map[string]int{"high": 0, "medium": 1, "low": 2}
 
 type CandidateClassification struct {
-	Risk         string     `json:"risk" bson:"risk"`
-	Reasons      []string   `json:"risk_reasons,omitempty" bson:"risk_reasons,omitempty"`
-	EvidenceSpan string     `json:"evidence_span,omitempty" bson:"evidence_span,omitempty"`
-	DupHint      string     `json:"dup_hint,omitempty" bson:"dup_hint,omitempty"`
-	By           string     `json:"by,omitempty" bson:"by,omitempty"`
-	At           *time.Time `json:"at,omitempty" bson:"at,omitempty"`
+	Risk         string   `json:"risk" bson:"risk"`
+	Reasons      []string `json:"risk_reasons,omitempty" bson:"risk_reasons,omitempty"`
+	EvidenceSpan string   `json:"evidence_span,omitempty" bson:"evidence_span,omitempty"`
+	DupHint      string   `json:"dup_hint,omitempty" bson:"dup_hint,omitempty"`
+	// Relation says how the candidate stands to the DupHint memory: duplicate (merge), contradiction (conflict) or
+	// newer_version (supersede). Advice only; candidates classified before it existed have none.
+	Relation string     `json:"relation,omitempty" bson:"relation,omitempty"`
+	By       string     `json:"by,omitempty" bson:"by,omitempty"`
+	At       *time.Time `json:"at,omitempty" bson:"at,omitempty"`
 	// Verdict and Semantic are the classifier's advice to the reviewer (Figma 592:51366 / 764:61615): they never
 	// change the candidate, the person still decides.
 	Verdict  *CandidateVerdict `json:"verdict,omitempty" bson:"verdict,omitempty"`
@@ -42,10 +45,14 @@ type SemanticCheck struct {
 }
 
 var verdictActions = map[string]bool{"keep": true, "fix": true, "merge": true, "discard": true}
+var candidateRelations = map[string]bool{"duplicate": true, "contradiction": true, "newer_version": true}
 var semanticChecks = map[string]bool{"same_meaning": true, "missing_content": true, "no_additions": true}
 
 func validJudgement(c CandidateClassification) bool {
 	if v := c.Verdict; v != nil && (!verdictActions[v.Action] || len(v.Text) > 2000 || len(v.Reason) > 1000) {
+		return false
+	}
+	if c.Relation != "" && (!candidateRelations[c.Relation] || c.DupHint == "") {
 		return false
 	}
 	if len(c.Semantic) > len(semanticChecks) {
@@ -77,13 +84,14 @@ type CandidateClassifyInput struct {
 	Risk             string            `json:"risk"`
 	RiskReasons      []string          `json:"risk_reasons,omitempty"`
 	DupHint          string            `json:"dup_hint,omitempty"`
+	Relation         string            `json:"relation,omitempty"`
 	Verdict          *CandidateVerdict `json:"verdict,omitempty"`
 	Semantic         []SemanticCheck   `json:"semantic,omitempty"`
 }
 
 // ClassifyCandidate records a reviewer's risk call on a waiting candidate. The extractor's evidence span is kept.
 func (s *Service) ClassifyCandidate(ctx context.Context, token, id string, in CandidateClassifyInput) (Record, error) {
-	c := CandidateClassification{Risk: in.Risk, Reasons: in.RiskReasons, DupHint: in.DupHint, Verdict: in.Verdict, Semantic: in.Semantic}
+	c := CandidateClassification{Risk: in.Risk, Reasons: in.RiskReasons, DupHint: in.DupHint, Relation: in.Relation, Verdict: in.Verdict, Semantic: in.Semantic}
 	if in.ExpectedRevision < 1 || id == "" || len(id) > 256 || !validClassification(c) {
 		return Record{}, ErrInvalid
 	}
@@ -110,8 +118,8 @@ func (s *Service) ClassifyCandidate(ctx context.Context, token, id string, in Ca
 		now := time.Now().UTC()
 		if r.Classification != nil {
 			c.EvidenceSpan = r.Classification.EvidenceSpan
-			if c.DupHint == "" {
-				c.DupHint = r.Classification.DupHint
+			if c.DupHint == "" { // the relation belongs to the memory it names, so both carry over together
+				c.DupHint, c.Relation = r.Classification.DupHint, r.Classification.Relation
 			}
 		}
 		c.By, c.At = d.PrincipalID, &now
