@@ -14,11 +14,8 @@ import (
 var digestErasureStatuses = []string{digestActive, digestCandidate, digestSuperseded, digestRejected, digestStale}
 
 func eraseMemoryFromDigests(ctx context.Context, tx Tx, scope Scope, memoryID, actor string) error {
-	lister, ok := tx.(statusLister)
-	if !ok {
-		lister, ok = ctx.Value(digestRepoKey{}).(statusLister)
-	}
-	if !ok {
+	lister := listerOf(ctx, tx)
+	if lister == nil {
 		return ErrUnavailable
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)

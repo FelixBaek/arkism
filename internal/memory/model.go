@@ -147,6 +147,12 @@ type Record struct {
 	// MemorySignal is the derived ST-813 trust signal on a jobs row (kind memory_signal).
 	MemorySignal *MemorySignal `json:"memory_signal,omitempty" bson:"memory_signal,omitempty"`
 
+	// StaleMark: written from a memory a person has since replaced (stale_cascade.go).
+	StaleMark *StaleMark `json:"stale_mark,omitempty" bson:"stale_mark,omitempty"`
+	// ProofCount and LastConfirmedAt: how often reflect saw this lesson hold again (memory_confirm.go).
+	ProofCount      int        `json:"proof_count,omitempty" bson:"proof_count,omitempty"`
+	LastConfirmedAt *time.Time `json:"last_confirmed_at,omitempty" bson:"last_confirmed_at,omitempty"`
+
 	RunCallFence       int64                    `json:"-" bson:"run_call_fence,omitempty"`
 	Run                *RunDetails              `json:"run,omitempty" bson:"run,omitempty"`
 	ToolCall           *ToolCall                `json:"tool_call,omitempty" bson:"tool_call,omitempty"`
@@ -354,6 +360,9 @@ type MeteredEmbedder interface {
 	EmbedMeasured(context.Context, []string, string) (EmbeddingBatch, error)
 }
 type Hit struct {
+	ProofCount      int        `json:"proof_count,omitempty" bson:"-"`
+	LastConfirmedAt *time.Time `json:"last_confirmed_at,omitempty" bson:"-"`
+
 	ApprovalOrigin     string         `json:"approval_origin,omitempty" bson:"-"`
 	MemoryContext      *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
 	Reach              string         `json:"reach,omitempty" bson:"reach,omitempty"`

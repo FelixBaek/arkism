@@ -491,6 +491,9 @@ func (p *Postgres) MemoryErasureBatch(ctx context.Context, s Scope, id string, p
 			}
 		}
 	}
+	if rows, e := p.usageReceiptBatch(ctx, s, id, kind); e != nil || len(rows) > 0 {
+		return rows, e
+	}
 	if after != "" {
 		w += fmt.Sprintf(" AND id>$%d", len(args)+6)
 		args = append(args, after)
@@ -737,4 +740,16 @@ GROUP BY 1 ORDER BY 1`, s.WorkspaceID, s.ProjectID, s.UserID, s.AgentID, since, 
 
 func pgDateOf(alias string) string {
 	return `((` + alias + `.doc->'created_at'->>'$date')::timestamptz)`
+}
+
+// usageReceiptBatch is the memory erasure's context_usage receipts that handed out the memory (none for a candidate).
+func (p *Postgres) usageReceiptBatch(ctx context.Context, s Scope, id, kind string) ([]Ref, error) {
+	if kind != memoryEvaluationErasureKind {
+		return nil, nil
+	}
+	rows, e := p.selectRecords(ctx, "jobs", s, `kind='context_usage' AND doc @> $6::jsonb`, []any{fmt.Sprintf(`{"usage":{"items":[{"memory":{"collection":"memories","id":%q}}]}}`, id)}, "id ASC", sourceMemoryErasureBatch)
+	if e != nil || len(rows) == 0 {
+		return nil, e
+	}
+	return memoryErasureRefs("jobs", rows), nil
 }

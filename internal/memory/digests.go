@@ -80,6 +80,9 @@ type DigestData struct {
 	Minor      int      `json:"minor,omitempty" bson:"minor,omitempty"`
 	Pending    string   `json:"pending,omitempty" bson:"pending,omitempty"`
 	Regenerate []string `json:"regenerate,omitempty" bson:"regenerate,omitempty"`
+	// Watermark is when the newest approved memory of the scope had last changed as this
+	// digest was proposed; an approved memory newer than it makes the digest stale.
+	Watermark *time.Time `json:"watermark,omitempty" bson:"watermark,omitempty"`
 }
 
 type DigestHeat struct {
@@ -105,20 +108,24 @@ type DigestDiff struct {
 
 // DigestView is what the API serves. Body is empty when the digest is not fresh.
 type DigestView struct {
-	ID        string          `json:"id"`
-	Kind      string          `json:"kind"`
-	Status    string          `json:"status"`
-	Revision  int64           `json:"revision"`
-	Title     string          `json:"title,omitempty"`
-	Body      string          `json:"body"`
-	Members   []Ref           `json:"members"`
-	Replaces  []Ref           `json:"replaces,omitempty"`
-	Proposal  string          `json:"proposal,omitempty"`
-	Judge     string          `json:"judge,omitempty"`
-	Tags      []string        `json:"tags,omitempty"`
-	Heat      DigestHeat      `json:"heat"`
-	Fresh     bool            `json:"fresh"`
-	Outdated  bool            `json:"outdated,omitempty"`
+	ID       string     `json:"id"`
+	Kind     string     `json:"kind"`
+	Status   string     `json:"status"`
+	Revision int64      `json:"revision"`
+	Title    string     `json:"title,omitempty"`
+	Body     string     `json:"body"`
+	Members  []Ref      `json:"members"`
+	Replaces []Ref      `json:"replaces,omitempty"`
+	Proposal string     `json:"proposal,omitempty"`
+	Judge    string     `json:"judge,omitempty"`
+	Tags     []string   `json:"tags,omitempty"`
+	Heat     DigestHeat `json:"heat"`
+	Fresh    bool       `json:"fresh"`
+	Outdated bool       `json:"outdated,omitempty"`
+	// Stale: an approved memory of the scope is newer than Watermark. StaleMark: a member was replaced.
+	Stale     bool            `json:"stale,omitempty"`
+	Watermark *time.Time      `json:"watermark,omitempty"`
+	StaleMark *StaleMark      `json:"stale_mark,omitempty"`
 	Diff      *DigestDiff     `json:"diff,omitempty"`
 	Generator *Generator      `json:"generator,omitempty"`
 	Review    *ReviewDecision `json:"review,omitempty"`
@@ -234,6 +241,26 @@ func (s *Service) digestAuthorize(ctx context.Context, token, verb, col string, 
 	return s.authorize(ctx, token, verb+":"+col, scope, id, "")
 }
 
+// digestBasis is what every view of one scope shares: the members' heat and the watermark to judge staleness by.
+type digestBasis struct {
+	heat   map[string]MemoryUseStat
+	latest time.Time
+}
+
+func (s *Service) digestBasis(ctx context.Context, scope Scope) digestBasis {
+	return digestBasis{heat: s.digestHeatTable(ctx, scope), latest: latestApprovedMemory(ctx, s.Repo, scope)}
+}
+
+// latestApprovedMemory is the watermark: when the scope's most recently changed active memory
+// changed (ListRecordsByStatus orders by updated_at), zero when there is none.
+func latestApprovedMemory(ctx context.Context, lister statusLister, scope Scope) time.Time {
+	rows, err := lister.ListRecordsByStatus(ctx, scope, colMemories, statusActive, 1)
+	if err != nil || len(rows) == 0 {
+		return time.Time{}
+	}
+	return rows[0].UpdatedAt
+}
+
 // digestHeat is the members' injected and used counts from the host's last memory-use report.
 func (s *Service) digestHeatTable(ctx context.Context, scope Scope) map[string]MemoryUseStat {
 	out := map[string]MemoryUseStat{}
@@ -280,13 +307,14 @@ func freshness(ctx context.Context, tx Tx, scope Scope, kind string, members []R
 	return true, outdated
 }
 
-func (s *Service) digestView(ctx context.Context, r Record, heat map[string]MemoryUseStat) DigestView {
+func (s *Service) digestView(ctx context.Context, r Record, basis digestBasis) DigestView {
 	d := DigestData{}
 	if r.Digest != nil {
 		d = *r.Digest
 	}
 	v := DigestView{ID: r.ID, Kind: r.Kind, Status: r.Status, Revision: r.Revision, Title: d.Title, Members: refsOrEmpty(d.Members), Replaces: d.Replaces,
-		Proposal: d.Proposal, Judge: d.Judge, Tags: r.Tags, Heat: heatOf(d.Members, heat), Generator: r.Generator, Review: r.Review,
+		Proposal: d.Proposal, Judge: d.Judge, Tags: r.Tags, Heat: heatOf(d.Members, basis.heat), Generator: r.Generator, Review: r.Review,
+		Watermark: d.Watermark, Stale: d.Watermark != nil && basis.latest.After(*d.Watermark), StaleMark: r.StaleMark,
 		CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Authority: AuthorityDataOnly}
 	if r.Status == digestActive || r.Status == digestCandidate {
 		v.Fresh, v.Outdated = freshness(ctx, s.Repo, r.Scope, r.Kind, d.Members)
@@ -359,11 +387,11 @@ func (s *Service) ListDigests(ctx context.Context, token string, scope Scope, ki
 	if err != nil {
 		return DigestPage{}, err
 	}
-	heat := s.digestHeatTable(ctx, scope)
+	basis := s.digestBasis(ctx, scope)
 	out := DigestPage{Items: []DigestView{}, Authority: AuthorityDataOnly}
 	for _, r := range rows {
 		if r.Digest != nil && r.Kind == kind && r.Scope == scope {
-			out.Items = append(out.Items, s.digestView(ctx, r, heat))
+			out.Items = append(out.Items, s.digestView(ctx, r, basis))
 		}
 	}
 	slices.SortStableFunc(out.Items, func(a, b DigestView) int { return b.Heat.Score - a.Heat.Score })
@@ -393,7 +421,7 @@ func (s *Service) GetDigest(ctx context.Context, token string, scope Scope, kind
 	if r.Digest == nil || r.Kind != kind || r.PrivacyQuarantined {
 		return DigestView{}, ErrNotFound
 	}
-	return s.digestView(ctx, r, s.digestHeatTable(ctx, scope)), nil
+	return s.digestView(ctx, r, s.digestBasis(ctx, scope)), nil
 }
 
 func validDigestText(kind, title, body string) bool {
@@ -469,10 +497,11 @@ func (s *Service) ProposeDigest(ctx context.Context, token string, in DigestProp
 		if in.Kind == digestKindUser {
 			judge = state.Digest.Pending
 		}
+		watermark := latestApprovedMemory(ctx, listerOf(ctx, tx), in.Scope)
 		out = Record{ID: "dg_" + ID(), Scope: in.Scope, Kind: in.Kind, Status: digestCandidate, Revision: 1, Text: in.Body, Summary: in.Title,
 			Sources: sources, Tags: tags, Generator: in.Generator, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
 			VerificationStatus: VerificationCandidate,
-			Digest:             &DigestData{Title: in.Title, Members: in.Members, Replaces: in.Replaces, Proposal: proposal, Judge: judge}}
+			Digest:             &DigestData{Title: in.Title, Members: in.Members, Replaces: in.Replaces, Proposal: proposal, Judge: judge, Watermark: &watermark}}
 		if err := tx.Insert(ctx, col, out); err != nil {
 			return err
 		}
@@ -491,7 +520,7 @@ func (s *Service) ProposeDigest(ctx context.Context, token string, in DigestProp
 	if err != nil {
 		return DigestView{}, err
 	}
-	return s.digestView(ctx, out, s.digestHeatTable(ctx, in.Scope)), nil
+	return s.digestView(ctx, out, s.digestBasis(ctx, in.Scope)), nil
 }
 
 // digestMembers checks every member and returns the union of their sources (at most 64).
@@ -682,7 +711,7 @@ func (s *Service) DecideDigest(ctx context.Context, token, id string, in DigestD
 	if err != nil {
 		return DigestView{}, err
 	}
-	return s.digestView(ctx, out, s.digestHeatTable(ctx, in.Scope)), nil
+	return s.digestView(ctx, out, s.digestBasis(ctx, in.Scope)), nil
 }
 
 // approveDigestTx rechecks the basis and supersedes the replaced digests.

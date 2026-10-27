@@ -1384,6 +1384,18 @@ func (x fakeTx) MemoryErasureBatch(_ context.Context, scope Scope, id string, pr
 			}
 		}
 	}
+	if kind == memoryEvaluationErasureKind {
+		var rows []Ref
+		for _, r := range x.store["jobs"] {
+			if r.Scope == scope && usageReceiptReferences(r, id) {
+				rows = append(rows, Ref{Collection: "jobs", ID: r.ID, Revision: r.Revision})
+			}
+		}
+		sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
+		if len(rows) > 0 {
+			return rows[:min(len(rows), sourceMemoryErasureBatch)], nil
+		}
+	}
 	out := []Ref{}
 	for _, r := range x.store["memory_relations"] {
 		if r.Scope == scope && r.ID > after && memoryRelationReferences(r, id, proposal, kind) {

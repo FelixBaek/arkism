@@ -177,6 +177,8 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/memories/{id}/reach":                    {action: "transition:memories", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/memories/{id}/reach-suggestion/dismiss": {action: "transition:memories", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/memories/{id}/review-due":               {action: "transition:memories", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
+	"POST /v1/memories/{id}/confirm":                  {action: "write:memories", scope: routeJSON, limit: 256 << 10},
+	"POST /v1/memory_candidates/{id}/confirm":         {action: "write:memory_candidates", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/memories/{id}/supersede":                {action: "transition:memories", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/memory-outcomes":                        {action: "write:evaluations", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/memory-outcomes/summary":                {action: "read:memories", scope: routeJSON, limit: 256 << 10},

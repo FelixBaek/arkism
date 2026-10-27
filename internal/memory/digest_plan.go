@@ -278,7 +278,7 @@ func (s *Service) PlanDigests(ctx context.Context, token string, in DigestPlanIn
 	if err != nil {
 		return DigestPlan{}, err
 	}
-	heat := s.digestHeatTable(ctx, in.Scope)
+	heat := s.digestBasis(ctx, in.Scope)
 	plan := DigestPlan{Kind: in.Kind, Active: len(active), Stale: stale, Open: len(open), Authority: AuthorityDataOnly}
 	if in.Kind == digestKindUser {
 		return s.planUser(ctx, plan, members, active, state, heat), nil
@@ -287,7 +287,7 @@ func (s *Service) PlanDigests(ctx context.Context, token string, in DigestPlanIn
 	return s.planTopics(ctx, plan, members, active, open, state, heat), nil
 }
 
-func (s *Service) planUser(ctx context.Context, plan DigestPlan, members, active []Record, state Record, heat map[string]MemoryUseStat) DigestPlan {
+func (s *Service) planUser(ctx context.Context, plan DigestPlan, members, active []Record, state Record, heat digestBasis) DigestPlan {
 	judged := map[string]int64{}
 	for _, r := range state.Digest.Judged {
 		judged[r.ID] = r.Revision
@@ -319,7 +319,7 @@ func memberIDs(refs []Ref) map[string]int64 {
 	return out
 }
 
-func (s *Service) planTopics(ctx context.Context, plan DigestPlan, members, active, open []Record, state Record, heat map[string]MemoryUseStat) DigestPlan {
+func (s *Service) planTopics(ctx context.Context, plan DigestPlan, members, active, open []Record, state Record, heat digestBasis) DigestPlan {
 	byID := map[string]Record{}
 	for _, m := range members {
 		byID[m.ID] = m
@@ -405,7 +405,7 @@ func openDigestClaims(open []Record) (map[string]bool, []map[string]int64) {
 	}
 	return busy, openSets
 }
-func (s *Service) activeDigestViews(ctx context.Context, active []Record, heat map[string]MemoryUseStat) map[string]DigestView {
+func (s *Service) activeDigestViews(ctx context.Context, active []Record, heat digestBasis) map[string]DigestView {
 	views := map[string]DigestView{}
 	for _, r := range active {
 		if r.Digest != nil {
