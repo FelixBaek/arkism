@@ -27,7 +27,9 @@ func TestPostgresWorkCheckpointHooksReadCurrentState(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := func(origin string) []string {
-		return arkismEnv(home, server.URL, token, "ARKISM_ORIGIN="+origin, "ARKISM_CLIENT=server", "ARKISM_WORK_SELECTION_STATE="+filepath.Join(home, "selections"))
+		// The large-work case needs the session index to fill its budget, far past the 10-line default.
+		return arkismEnv(home, server.URL, token, "ARKISM_ORIGIN="+origin, "ARKISM_CLIENT=server", "ARKISM_WORK_SELECTION_STATE="+filepath.Join(home, "selections"),
+			"ARKISM_SESSION_INDEX_LINES=1000", "ARKISM_SESSION_INDEX_CHARS=100000")
 	}
 	invoke := func(origin, event string, stored bool) string {
 		t.Helper()
