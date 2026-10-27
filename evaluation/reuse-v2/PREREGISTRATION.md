@@ -1,8 +1,9 @@
 # Memory reuse benchmark v2 preregistration draft
 
-**Status: DRAFT.** This document proposes a text contract for a future study.
-Decisions below not marked DECIDED remain pending; no v2 protocol has been preregistered or
-frozen, and no v2 runner, schema or validator is supplied by this document.
+**Status: DECISIONS SETTLED, NOT REGISTERED.** Every row of section 1 now has a value
+(section 1.1, 2026-10-27, #365). Registration still needs the manifest of section 5 with its
+hash recorded before any outcome exists; no v2 runner, schema or validator is supplied by
+this document, and no v2 run has happened.
 Publishing it does not authorize experiments, model calls or human recruitment.
 The scope is Arkism's own memory delivery and reuse in a coding workflow.
 
@@ -19,23 +20,125 @@ status until decisions, artifacts and analysis are reviewed before outcomes.
 
 | Decision | Status |
 | --- | --- |
-| Primary question, comparison and outcome; secondary comparisons | PENDING |
-| Task families, scenarios, held-out split and independent sample size | PENDING |
-| Repetitions, adapter directions, OS coverage and paired blocks | PENDING |
-| Randomization algorithm, order, seed and counterbalancing | PENDING |
-| Product, harness, fixture, adapter, judge and environment versions | PENDING |
-| Model/provider identifiers, supported settings and embedding configuration | PENDING |
-| Approved corpus, instruction revisions and changes/removal schedule | PENDING |
-| Whole-task context/token/output/tool/repair/time budgets | PENDING |
-| Currency, actual-charge evidence and whole-experiment spending/time limits | PENDING |
-| Executor, real human reviewers, independent judges and analysis owners | PENDING |
-| Meaningful effect, any noninferiority margin and uncertainty method | PENDING |
-| Retry, exclusion, stopping, amendment and resumption rules | PENDING |
+| Primary question, comparison and outcome; secondary comparisons | DECIDED (1.1 D1) |
+| Task families, scenarios, held-out split and independent sample size | DECIDED (1.1 D2) |
+| Repetitions, adapter directions, OS coverage and paired blocks | DECIDED (1.1 D3) |
+| Randomization algorithm, order, seed and counterbalancing | DECIDED (1.1 D4) |
+| Product, harness, fixture, adapter, judge and environment versions | DECIDED (1.1 D5) |
+| Model/provider identifiers, supported settings and embedding configuration | DECIDED (1.1 D6) |
+| Approved corpus, instruction revisions and changes/removal schedule | DECIDED (1.1 D7) |
+| Whole-task context/token/output/tool/repair/time budgets | DECIDED (1.1 D8) |
+| Currency, actual-charge evidence and whole-experiment spending/time limits | DECIDED (1.1 D9) |
+| Executor, real human reviewers, independent judges and analysis owners | DECIDED (1.1 D10) |
+| Meaningful effect, any noninferiority margin and uncertainty method | DECIDED (1.1 D11) |
+| Retry, exclusion, stopping, amendment and resumption rules | DECIDED (1.1 D12) |
 | Public/private evidence boundary ([evaluation guide](../../guide/memory-evaluation.md#2-freeze-the-experiment-before-collecting-results)) | DECIDED |
-| Evidence retention and review consent | PENDING |
+| Evidence retention and review consent | DECIDED (1.1 D13) |
 
 Record unavailable provider settings as unknown and unsupported caps as unenforced.
 Historical settings and exploratory thresholds are not defaults for these decisions.
+
+### 1.1 Decisions (2026-10-27, owner: FelixBaek)
+
+Each value's rationale cites only what this repository records. Where the repository
+records nothing, the value is a choice and says so. Changing a value after
+registration is an amendment under D12.
+
+**D1 Primary question.** Does automatic injection (B) match or beat maintained static
+instructions (A) on task correctness? Outcome: the cell-level pass rate of the hidden
+executable checks (one pass/fail per attempt, as the v0.1.0 judge counted it). Comparison:
+B − A, paired by block. Secondary, in this order: C − B on the same outcome; rule-violation
+count per attempt; delivered context bytes per attempt; whole-workflow elapsed time.
+Rationale: v0.1.0 reported static 15/15 and Arkism 15/15 against none 5/15
+([report](../reuse-v010/benchmark/REPORT.ko.md)), so B versus A is the open question,
+not memory versus none.
+
+**D2 Families, split, sample.** The nine declared scenarios of section 4 are the task
+families: persistent rule, exception, changed rule, removed evidence, irrelevant scope,
+misleading context, duplicate instructions, longer work, multiple repositories (the
+first five are the guide's minimum set, [guide §2](../../guide/memory-evaluation.md)).
+Development set: 2 tasks per family, published with the fixtures. Held-out set: 2 new
+tasks per family, kept under a `held-out` directory outside the repository
+(`tools/check_public_push.py` rejects that name). Independent sample: 18 held-out tasks,
+each one paired block. Development tasks are for pilots and tuning only and are never
+pooled with the held-out result.
+
+**D3 Repetitions, adapters, OS.** 3 repetitions per cell, as v0.1.0 ran
+([benchmark README](../reuse-v010/benchmark/README.md)). Adapters: Claude Code and
+Codex CLI, both directions, because those are the two hosts the capture hooks and the
+2026-10-15 live run cover ([live-agents](../reuse-20261015/live-agents.md)). OS: Linux
+only; the self-hosted runner is Linux and no adapter test exists for Windows or macOS.
+Paired block = one held-out task × one adapter; each block holds all three conditions.
+Planned attempts: 18 tasks × 2 adapters × 3 conditions × 3 repetitions = 324.
+
+**D4 Randomization.** The full attempt list is shuffled once with Python's
+`random.Random(seed).shuffle`, the v0.1.0 mechanism (`run.py`). The seed is the first
+eight hex digits of the registered manifest's SHA-256, read as an integer, so nobody can
+pick it. Condition order inside a block is whatever the shuffle gives; no further
+counterbalancing. The shuffle fixes order only, not provider sampling.
+
+**D5 Versions.** Product: the `main` commit the manifest names (full SHA). Harness: the
+v2 runner's commit (same repository, so the same SHA). Fixtures: new synthetic
+repositories, each pinned by commit in the manifest. Adapters: the Claude Code and Codex
+CLI version strings printed at registration. Judge: hidden executable checks run in an
+unprivileged, network-disabled Docker container as in v0.1.0, image pinned by digest.
+Environment: the self-hosted Linux runner (`arkism-self` in `checks.yml`), `uname -a`
+and Docker version recorded.
+
+**D6 Models and embedding.** Coding-agent models: whatever the two CLIs report in their
+own event logs; requested settings recorded, unavailable ones recorded as unknown.
+Arkism's own harness roles: the preset in `config/harness-models.json`
+(`arkism-runtime-v3-haiku-budget`: Sonnet for the consolidator, Haiku where the quality
+gate allows). Embedding: the local TEI model and revision frozen in
+`tools/evaluate_semantic_recall.py` (`microsoft/harrier-oss-v1-0.6b`,
+`f9b9dc8d367d443f2479d27aa5d8d2850c0774ee`, 1024 dimensions, cutoff 0.38). Recall
+budget: the host default in `internal/host/recall_budget.go`
+(`user=2:1500,procedural=3:1500,lesson=2:1500,decision=2:1500`).
+
+**D7 Corpus and schedule.** One approved synthetic fact per family (nine facts), approved
+by the owner in writing before registration, as the five v0.1.0 facts were. Revision
+schedule: the "changed rule" fact changes once, after the first repetition of its block;
+the "removed evidence" fact's source is deleted after the first repetition; every other
+fact stays fixed. A's static files are updated at the same moments by the executor.
+
+**D8 Budgets.** Per attempt: 90 seconds wall clock (v0.1.0), output cap 2048 tokens where
+the CLI supports it (unenforced otherwise, recorded), context budget = the recall budget
+of D6 plus the adapter's own default, at most 10 memory-tool calls in C, 0 repair rounds
+(as v0.1.0; a repair round would be a new treatment). Tool calls and extra model calls
+count inside the same 90 seconds.
+
+**D9 Money and time.** Currency USD, the unit `config/harness-quality.json` already
+records. Evidence: the provider's billing export for the run window, kept private, with
+request ids mapped to attempt ids; attempts without a matching line are reported as
+unknown cost, never zero. Limits (choices, since the repository records no larger spend
+than the probes' 0.25 USD): 100 USD provider charges and 30 operator hours for the whole
+experiment, pilots included; reaching either stops the run under D12.
+
+**D10 People.** Executor, human reviewer, analysis owner: FelixBaek, the repository's
+only maintainer (the ruleset needs no second approval). Independent judge: none human;
+the executable checks of D5 are the judge. This is a single-person study and the report
+says so; reviewer agreement cannot be measured.
+
+**D11 Effect and uncertainty.** Meaningful effect: B − A ≥ +3 passes out of 18 blocks
+(the v0.1.0 pre-set criterion, three more successes out of fifteen, scaled to the new
+denominator). Noninferiority margin for B against A: −1 pass out of 18. Uncertainty:
+paired bootstrap over blocks, 10,000 resamples, 95 % percentile interval, reported with
+the raw block table. No p-values.
+
+**D12 Retry, exclusion, stopping, amendment, resumption.** An attempt that fails before
+the model's first token (setup, sandbox, network) is retried once under a new attempt id;
+the first attempt with a recorded outcome decides the cell. No other retries. Exclusions:
+none after the fact; an attempt the executor stops for a section 7 violation is kept as
+"stopped" and its block is reported without that cell. Stopping: any section 7 trigger or a
+D9 limit stops the whole experiment. Amendments: a new numbered version of this file with
+its hash; anything changed after the first outcome is marked post-hoc in the report.
+Resumption: only the executor, only from a validated manifest, per section 5.
+
+**D13 Retention and consent.** Private evidence (transcripts, usage, billing lines,
+review timer intervals) is kept for 12 months under the owner-only storage rules of
+`evaluation/reuse-v010/benchmark/private_storage.py` and then deleted; public artifacts
+stay in the repository. Consent: the only person observed is the owner, who registers
+this document; no other reviewer or participant is recruited.
 
 ## 2. R: delivery of the same approved knowledge
 
